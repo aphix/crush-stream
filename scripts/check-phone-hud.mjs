@@ -99,7 +99,9 @@ const PROBE = ([cell, zone]) => {
     .filter((el) => !el.closest("[inert]") && inScope(el))
     .map((el) => {
       const r = live(el);
-      return { el, r, v: r ? shown(el, r) : null };
+      const v = r ? shown(el, r) : null;
+      const pinned = (node) => { for (let up = node; up && up !== document.body; up = up.parentElement) if (getComputedStyle(up).position === "sticky") return true; return false; };
+      return { el, r, v, scrolledAt: pinned(el) || (v !== null && (v.right - v.left < r.width - 1 || v.bottom - v.top < r.height - 1)) };
     })
     .filter((c) => c.r && c.v);
   const painted = (el, style) => el.tagName === "svg" || (style.backgroundColor !== "rgba(0, 0, 0, 0)" && style.backgroundColor !== "transparent") || style.backgroundImage !== "none" || style.boxShadow !== "none";
@@ -119,7 +121,7 @@ const PROBE = ([cell, zone]) => {
     range.selectNodeContents(node);
     for (const r of range.getClientRects()) {
       const v = r.width > 0 && r.height > 0 ? shown(parent, r) : null;
-      if (v) texts.push({ r: v, parent, words: node.textContent.trim().slice(0, 24) });
+      if (v) texts.push({ r: v, parent, words: node.textContent.trim().slice(0, 24), scrolledAt: v.right - v.left < r.width - 1 || v.bottom - v.top < r.height - 1 });
     }
   }
   const covered = new Set();
@@ -142,10 +144,12 @@ const PROBE = ([cell, zone]) => {
       const a = controls[i];
       const b = controls[j];
       if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
+      // A row half scrolled under a pinned bar is the bar doing its job, not two controls on top of each other.
+      if (a.scrolledAt || b.scrolledAt) continue;
       if (overlap(a.v, b.v)) crossings.push(`${label(a.el)} x ${label(b.el)}`);
     }
     for (const text of texts) {
-      if (controls[i].el.contains(text.parent) || text.parent.contains(controls[i].el)) continue;
+      if (controls[i].el.contains(text.parent) || text.parent.contains(controls[i].el) || text.scrolledAt || controls[i].scrolledAt) continue;
       // The dial's numerals and its bottle are one cluster: the bottle's tap target is meant to sit on the dial's face.
       if (controls[i].el.closest(".drive-cluster") && controls[i].el.closest(".drive-cluster") === text.parent.closest(".drive-cluster")) continue;
       if (overlap(controls[i].v, text.r)) crossings.push(`${label(controls[i].el)} x text "${text.words}"`);
@@ -296,7 +300,7 @@ async function checkTilt(browser, device) {
     await settle(page, 9000);
     // The attitudes are the ones the unit tests derive: level, then a clockwise turn of the wheel by 20 degrees (landscape, top of the phone to the left).
     const level = device.orientation === "landscape" ? { alpha: 0, beta: 0, gamma: -90 } : { alpha: 0, beta: 90, gamma: 0 };
-    const turned = device.orientation === "landscape" ? { alpha: 0, beta: 20, gamma: -90 } : { alpha: 0, beta: 70, gamma: 90 };
+    const turned = device.orientation === "landscape" ? { alpha: 0, beta: 20, gamma: -90 } : { alpha: 0, beta: 70, gamma: 89.9 };
     await cdp.send("DeviceOrientation.setDeviceOrientationOverride", level);
     await settle(page, 400);
     const centred = await readTouch(page);

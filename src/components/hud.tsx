@@ -328,7 +328,7 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
         </Button>
         {/* Not while driving: the pill is a thing to tap between runs. */}
         {onlineShown && race?.reel == null ? (
-          <div className={cn((driving || minimal) && "hidden")}>
+          <div className={cn((driving || minimal) && "hidden", state.seat !== "global" && "portrait:hidden")}>
             <OnlineEntry engine={engine} race={race} />
           </div>
         ) : null}

@@ -24,7 +24,7 @@ function ColourRow({ label, value, onColour }: { label: string; value: number; o
       <input
         type="color"
         aria-label={label}
-        className="h-10 w-12 cursor-pointer rounded border border-border bg-transparent pointer-fine:h-8"
+        className="h-11 w-12 cursor-pointer rounded border border-border bg-transparent pointer-fine:h-8"
         value={`#${hexOf(value)}`}
         onChange={(e) => onColour(parseInt(e.target.value.slice(1), 16))}
       />
