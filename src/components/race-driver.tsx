@@ -9,8 +9,8 @@ export function DriverRows() {
   const car = DRIVER_CARS.some((c) => c.id === driver.car) ? driver.car : DRIVER_CARS[0]!.id;
   return (
     <>
-      <label className={cn("flex min-h-11 items-center gap-2 rounded-md bg-surface-2 py-0.5 pl-2 pr-0.5 shadow-[var(--shadow-border)] pointer-fine:min-h-8", FOCUS_WITHIN)}>
-        <span className="hud-label w-24 shrink-0 text-muted sm:w-32">Name</span>
+      <label className={cn("flex min-h-11 items-center gap-2 rounded-md bg-surface-2 py-0 pl-2 pr-0.5 shadow-[var(--shadow-border)] pointer-fine:min-h-8 pointer-fine:py-0.5", FOCUS_WITHIN)}>
+        <span className="hud-label w-24 shrink-0 text-muted pointer-fine:w-32">Name</span>
         {/* 16 px text on phones: a smaller input makes iOS zoom the page on focus. */}
         <input
           data-nav
@@ -22,12 +22,12 @@ export function DriverRows() {
           enterKeyHint="done"
           spellCheck={false}
           onChange={(e) => driver.setName(e.target.value)}
-          className="h-10 min-w-0 flex-1 rounded-md bg-surface px-2 font-display text-base text-fg outline-none placeholder:text-muted pointer-fine:h-7 sm:text-sm"
+          className="h-11 min-w-0 flex-1 rounded-md bg-surface px-2 font-display text-base text-fg outline-none placeholder:text-muted pointer-fine:h-7 pointer-fine:text-sm"
         />
       </label>
       <div role="group" aria-label="Car" className="flex items-center gap-2 rounded-md bg-surface-2 py-1 pl-2 pr-1 shadow-[var(--shadow-border)]">
-        <span className="hud-label w-24 shrink-0 text-muted sm:w-32">Car</span>
-        <div className="grid flex-1 grid-cols-2 gap-0.5 rounded-md bg-surface p-0.5 min-[420px]:grid-cols-3 sm:grid-cols-4">
+        <span className="hud-label w-24 shrink-0 text-muted pointer-fine:w-32">Car</span>
+        <div className="grid flex-1 grid-cols-2 gap-0.5 rounded-md bg-surface p-0.5 pointer-fine:grid-cols-4">
           {DRIVER_CARS.map((c) => (
             <button
               key={c.id}

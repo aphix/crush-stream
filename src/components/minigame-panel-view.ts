@@ -1,6 +1,6 @@
 import { MINIGAME_MODE, MINIGAME_MODES, MODE_LABELS, THROWS_PER_SET, type MinigameMode } from "../game/scenes/minigame-constants.ts";
 import type { MinigameHudState } from "../game/scenes/minigame-session.ts";
-import { bailPromptText, bailResultText } from "../game/hud/bail-prompt.ts";
+import { bailArmed, bailPromptText, bailResultText } from "../game/hud/bail-prompt.ts";
 
 const MODE_UNITS: Readonly<Record<MinigameMode, string>> = { longJump: "m", highJump: "m", ringFling: "pts" };
 
@@ -46,6 +46,15 @@ type MinigamePanelView = {
   stepper: ThrowsStepperView | null;
 };
 
+/**
+ * Whether a touch screen shows the card short (header and bail prompt only): while the attempt is under way the player is looking at the
+ * road, not at buttons; once it is scored the card opens to Retry, which is what they want then. `toggled` is the player's flip of that
+ * default for this phase (the More button), so a card they opened mid-run or closed after a score stays so until the phase changes.
+ */
+export function minigamePanelCompact(phase: MinigameHudState["phase"], toggled: boolean): boolean {
+  return (phase !== "scored") !== toggled;
+}
+
 /** What the panel shows and which buttons work, from the session's card: pure, so the labels and enabled states are testable without a DOM. */
 export function minigamePanelView(state: MinigameHudState, bailControl: string): MinigamePanelView {
   const { mode, phase } = state;
@@ -57,10 +66,9 @@ export function minigamePanelView(state: MinigameHudState, bailControl: string):
   const scoreShown = phase === "scored" && !state.setComplete;
   const earlierScores = (scoreShown ? state.setScores.slice(0, -1) : state.setScores).map((score) => Math.round(score));
   const bail = state.bail;
-  const bailBeforeThrow = bail !== null && bail.verdict === null && (phase === "ready" || phase === "running");
   return {
     title: MODE_LABELS[mode],
-    bailPrompt: bail !== null && bailBeforeThrow ? bailPromptText(bailControl, bail.pressed) : null,
+    bailPrompt: bail !== null && bailArmed(state) ? bailPromptText(bailControl, bail.pressed) : null,
     bailResult: bail === null || bail.verdict === null ? null : bailResultText(bail.verdict),
     live: state.liveValue === null ? null : `${LIVE_CAPTIONS[mode]} ${isRing ? Math.round(state.liveValue) : valueText(mode, state.liveValue)}`,
     score: phase === "scored" && finishedScore !== null ? valueText(mode, finishedScore) : null,

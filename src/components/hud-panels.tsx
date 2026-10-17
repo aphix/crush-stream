@@ -1,21 +1,55 @@
-import { Fragment, type RefObject } from "react";
+import { Fragment, useState, type RefObject } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { STACK_RANGES } from "@/game/scenes/stack-rig";
 import { RangeRow } from "@/components/hud-controls";
 import { Button } from "@/components/ui/button";
+import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { useSpeedUnit } from "@/components/use-speed-unit";
 import type { DoorScenario } from "@/game/scenes/door-rig";
 import type { CrashEngine } from "@/game/engine/engine";
 import type { CrashHudState, DoorHud, LabHud, PistonHud, StackHud } from "@/game/hud/hud-store";
 import { LAB_PRESETS, type LabPresetId } from "@/game/scenes/lab";
+import { MINIGAME_MODES, MODE_LABELS } from "@/game/scenes/minigame-constants";
 import { formatSpeed } from "@/game/hud/speed-units";
 import { KPH_PER_MS } from "@/game/kernel/constants";
+import { cn } from "@/lib/utils";
+
+/** A scene panel folded to its header row: everything after the first child hides (the `idle:` panels already rely on the header being the first child). */
+const FOLDED = "[&>:not(:first-child)]:hidden";
+/** An unfolded phone panel scrolls inside instead of growing over the road. */
+const UNFOLDED_SCROLL = "pointer-coarse:max-h-[50dvh] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain";
+
+/** A phone panel's open state; null on a fine pointer, where every panel is always open and keeps its desktop header. */
+type PanelFold = { open: boolean; toggle: () => void };
+
+function usePanelFold(startOpen: boolean): PanelFold | null {
+  const touch = useCoarsePointer();
+  const [open, setOpen] = useState(startOpen);
+  return touch ? { open, toggle: () => setOpen(!open) } : null;
+}
+
+/** A phone panel's header: its title and 44 px chevron on one row, the one-line reading (when it has one) under them. */
+function PanelHeader({ title, reading, fold }: { title: string; reading?: string; fold: PanelFold }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="hud-label">{title}</p>
+        <Button size="icon" variant="ghost" aria-expanded={fold.open} aria-label={`${fold.open ? "Collapse" : "Expand"} ${title}`} onClick={fold.toggle}>
+          {fold.open ? <ChevronUp /> : <ChevronDown />}
+        </Button>
+      </div>
+      {reading === undefined ? null : <p className="font-display text-xs leading-snug tabular-nums text-muted">{reading}</p>}
+    </div>
+  );
+}
 
 /** Derby standings: name, score and seconds to a count-out; struck through once out. A name click follows that car. A phone on its side shows the three best scores and the watched car. */
 export function DerbyBoard({ board, engine }: { board: CrashHudState["derbyBoard"]; engine: RefObject<CrashEngine | null> }) {
   const best = new Set([...board].sort((a, b) => b.score - a.score || a.id - b.id).slice(0, 3).map((r) => r.id));
+  const fold = usePanelFold(false);
   return (
-    <div className="hud-panel pointer-events-auto flex min-h-0 w-44 flex-col p-2 idle:w-auto idle:opacity-70">
-      <p className="hud-label">Board</p>
+    <div className={cn("hud-panel pointer-events-auto flex min-h-0 w-44 flex-col p-2 pointer-coarse:max-h-[50dvh] idle:w-auto idle:opacity-70", fold?.open === false && FOLDED)}>
+      {fold ? <PanelHeader title="Board" fold={fold} /> : <p className="hud-label">Board</p>}
       <ul aria-label="Board" className="-mx-1.5 mt-2 min-h-0 space-y-0.5 overflow-y-auto overflow-x-hidden overscroll-contain idle:hidden">
         {board.map((row) => (
           <li key={row.id} className={!best.has(row.id) && !row.watched ? "phone-landscape:hidden" : undefined}>
@@ -49,14 +83,19 @@ const PISTON_NAMES = ["Front-left", "Front", "Front-right", "Right", "Rear-right
 /** Piston scene controls: fire pad plus the shot config, one movable block. */
 export function PistonPanel({ pistons, engine }: { pistons: PistonHud; engine: RefObject<CrashEngine | null> }) {
   const unit = useSpeedUnit();
+  const fold = usePanelFold(false);
   return (
-    <div className="hud-panel pointer-events-auto max-h-full w-56 space-y-1 overflow-y-auto p-2 idle:w-auto idle:opacity-70 idle:[&>:not(:first-child)]:hidden">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="hud-label">Pistons</p>
-        <p className="font-display text-xs tabular-nums text-muted">
-          {pistons.energyKj.toFixed(1)} kJ · EBS {formatSpeed(pistons.ebsKph / KPH_PER_MS, unit)} {unit}
-        </p>
-      </div>
+    <div className={cn("hud-panel pointer-events-auto max-h-full w-56 space-y-1 overflow-y-auto p-2 pointer-coarse:w-52 idle:w-auto idle:opacity-70 idle:[&>:not(:first-child)]:hidden", UNFOLDED_SCROLL, fold?.open === false && FOLDED)}>
+      {fold ? (
+        <PanelHeader title="Pistons" reading={`${pistons.energyKj.toFixed(1)} kJ · EBS ${formatSpeed(pistons.ebsKph / KPH_PER_MS, unit)} ${unit}`} fold={fold} />
+      ) : (
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="hud-label">Pistons</p>
+          <p className="font-display text-xs tabular-nums text-muted">
+            {pistons.energyKj.toFixed(1)} kJ · EBS {formatSpeed(pistons.ebsKph / KPH_PER_MS, unit)} {unit}
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-1" role="group" aria-label="Fire a piston">
         {PISTON_GRID.map((i) => (
           <Button
@@ -132,12 +171,17 @@ const DOOR_SHOTS: { id: DoorScenario; label: string; title: string }[] = [
 export function DoorPanel({ doors, engine }: { doors: DoorHud; engine: RefObject<CrashEngine | null> }) {
   const shot = doors.shot;
   const unit = useSpeedUnit();
+  const fold = usePanelFold(false);
   return (
-    <div className="hud-panel pointer-events-auto max-h-full w-56 space-y-1 overflow-y-auto p-2 idle:w-auto idle:opacity-70 idle:[&>:not(:first-child)]:hidden">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="hud-label">Doors</p>
-        <p className="font-display text-xs tabular-nums text-muted">{doors.energyJ.toFixed(0)} J</p>
-      </div>
+    <div className={cn("hud-panel pointer-events-auto max-h-full w-56 space-y-1 overflow-y-auto p-2 pointer-coarse:w-52 idle:w-auto idle:opacity-70 idle:[&>:not(:first-child)]:hidden", UNFOLDED_SCROLL, fold?.open === false && FOLDED)}>
+      {fold ? (
+        <PanelHeader title="Doors" reading={`${doors.energyJ.toFixed(0)} J`} fold={fold} />
+      ) : (
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="hud-label">Doors</p>
+          <p className="font-display text-xs tabular-nums text-muted">{doors.energyJ.toFixed(0)} J</p>
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-1" role="group" aria-label="Fire the door ram">
         {DOOR_SHOTS.map(({ id, label, title }) => (
           <Button key={id} className={RIG_BUTTON} disabled={doors.busy} onClick={() => engine.current?.fireDoorRam(id)} aria-label={title} title={title}>
@@ -197,14 +241,19 @@ export function DoorPanel({ doors, engine }: { doors: DoorHud; engine: RefObject
 /** Stack scene: the three settings (a change restarts the stack) and, top car first as it stands, each car's load (kN of the cars on it) and roof crush (mm). */
 export function StackPanel({ stack, engine }: { stack: StackHud; engine: RefObject<CrashEngine | null> }) {
   const rows = Array.from({ length: stack.dropped }, (_, i) => stack.dropped - 1 - i);
+  const fold = usePanelFold(false);
   return (
-    <div className="hud-panel pointer-events-auto max-h-full w-56 space-y-1 overflow-y-auto p-2 idle:w-auto idle:opacity-70">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="hud-label">Stack</p>
-        <p className="font-display text-xs tabular-nums text-muted">
-          {stack.dropped} / {stack.cars} cars
-        </p>
-      </div>
+    <div className={cn("hud-panel pointer-events-auto max-h-full w-56 space-y-1 overflow-y-auto p-2 pointer-coarse:w-52 idle:w-auto idle:opacity-70", UNFOLDED_SCROLL, fold?.open === false && FOLDED)}>
+      {fold ? (
+        <PanelHeader title="Stack" reading={`${stack.dropped} / ${stack.cars} cars`} fold={fold} />
+      ) : (
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="hud-label">Stack</p>
+          <p className="font-display text-xs tabular-nums text-muted">
+            {stack.dropped} / {stack.cars} cars
+          </p>
+        </div>
+      )}
       <div className="space-y-1 idle:hidden">
         <RangeRow label="Cars" name="Cars in the stack" value={stack.cars} min={STACK_RANGES.cars.min} max={STACK_RANGES.cars.max} step={1} digits={0} onValue={(v) => engine.current?.setStackConfig({ cars: v })} />
         <RangeRow
@@ -262,6 +311,27 @@ export function RangePanel({ range, onOpenMinigames }: { range: NonNullable<Cras
   );
 }
 
+/** The Range's Mini games pick: one button per mode, 44 px tall on phones. `onPicked` runs after the mode starts (the caller closes the pick). */
+export function MinigamePick({ engine, onPicked }: { engine: RefObject<CrashEngine | null>; onPicked: () => void }) {
+  return (
+    <div className="hud-panel pointer-events-auto mt-1 flex w-44 flex-col gap-1 p-2" role="group" aria-label="Mini games">
+      {MINIGAME_MODES.map((mode) => (
+        <Button
+          key={mode}
+          variant="secondary"
+          className={RIG_BUTTON}
+          onClick={() => {
+            engine.current?.startMinigame(mode);
+            onPicked();
+          }}
+        >
+          {MODE_LABELS[mode]}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 const LAB_SET_LABEL: Record<LabPresetId, string> = { pad: "Pad", wall: "Wall", cards: "Cards", glass: "Glass" };
 
 /**
@@ -270,9 +340,17 @@ const LAB_SET_LABEL: Record<LabPresetId, string> = { pad: "Pad", wall: "Wall", c
  */
 export function LabPanel({ lab, engine }: { lab: LabHud; engine: RefObject<CrashEngine | null> }) {
   const unit = useSpeedUnit();
+  const fold = usePanelFold(false);
   const shot = lab.shot;
+  const reading =
+    shot === null
+      ? "Swipe from a car or a dummy to throw it along the bench"
+      : shot.hit === null
+        ? `Flying at ${formatSpeed(shot.speed, unit)} ${unit}`
+        : `Hit the ${shot.hit} at ${formatSpeed(shot.speed, unit)} ${unit} · ${shot.fell} moved`;
   return (
-    <div className="hud-panel pointer-events-auto w-full max-w-xs space-y-1 p-1 sm:mt-auto idle:opacity-70">
+    <div className={cn("hud-panel pointer-events-auto w-full max-w-xs space-y-1 p-1 pointer-coarse:w-52 sm:pointer-fine:mt-auto idle:opacity-70", UNFOLDED_SCROLL, fold?.open === false && FOLDED)}>
+      {fold ? <PanelHeader title="Lab" reading={reading} fold={fold} /> : null}
       <div className="grid grid-cols-4 gap-0.5 rounded-md bg-surface-2/70 p-0.5" role="group" aria-label="Lab set">
         {LAB_PRESETS.map((id) => (
           <Button
@@ -286,13 +364,11 @@ export function LabPanel({ lab, engine }: { lab: LabHud; engine: RefObject<Crash
           </Button>
         ))}
       </div>
-      <p className="truncate px-1 font-display text-xs tabular-nums text-muted idle:hidden" role="status">
-        {shot === null
-          ? "Swipe from a car or a dummy to throw it along the bench"
-          : shot.hit === null
-            ? `Flying at ${formatSpeed(shot.speed, unit)} ${unit}`
-            : `Hit the ${shot.hit} at ${formatSpeed(shot.speed, unit)} ${unit} · ${shot.fell} moved`}
-      </p>
+      {fold ? null : (
+        <p className="truncate px-1 font-display text-xs tabular-nums text-muted idle:hidden" role="status">
+          {reading}
+        </p>
+      )}
     </div>
   );
 }
