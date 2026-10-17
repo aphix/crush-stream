@@ -12,6 +12,7 @@ import { BodyFit } from "./body-fit.ts";
 import { detSin, detCos, detAtan2, sinCosAt } from "../kernel/physics-core.js";
 import { CONTACT_REF_SLICE, MIN_IMPACT_ZONE, MIN_INERTIA, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { EPICENTER } from "./epicenter.ts";
 
 /** Engine slack (m) a hit too slow to pack the nose still allows (mounts, not crush).
  *  This replaces the old first-hit ENGINE_LIGHT_CAP: the block's reach now
@@ -759,6 +760,11 @@ export abstract class DeformContact extends DeformState {
     // Overlap becomes local crush. Amount tracks ½mv², never (overlap/dt) velocity.
     const crush = Math.min(Math.max(0, overlap) * (whole ? 1 : 0.4 + s * 0.35) * ke, 0.06 + ke * 0.2) * Math.min(1, 0.35 * slice) * live;
     if (crush < 1e-5 && eaten < 1e-5) return closing;
+    if (this.frozen && EPICENTER.feedMin > 0 && crush < EPICENTER.feedMin && eaten < EPICENTER.feedMin) {
+      // A resting contact's sub-millimetre feed: dropped, counted, and the wreck stays frozen (a feed over `feedMin` thaws it as ever).
+      this.crushDropped += crush + eaten;
+      return closing;
+    }
     this.thaw();
     this.impulse = Math.max(this.impulse, THREE.MathUtils.clamp(closing, 0, 70));
 

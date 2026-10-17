@@ -169,6 +169,8 @@ export abstract class DeformRig {
   protected matchedNodes = 0;
   freezes = 0;
   thaws = 0;
+  /** Metres of crush a frozen car dropped (`EPICENTER.feedMin`) since `stepWorld` last read it (it adds them to the step's work counter and zeroes them). */
+  crushDropped = 0;
   drivetrainAlive = true;
   /** Worst engine-block travel toward the cabin so far (m); only rises (updateDrivetrain). */
   engineTravel = 0;
@@ -511,6 +513,7 @@ export abstract class DeformRig {
     this.nodesLocked = 0;
     this.freezes = 0;
     this.thaws = 0;
+    this.crushDropped = 0;
     this.drivetrainAlive = true;
     this.engineTravel = 0;
     this.wear = -0;

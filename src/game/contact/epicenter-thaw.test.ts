@@ -73,6 +73,34 @@ describe("given a wreck that has been frozen", () => {
       assert.equal(d.frozen, true);
     });
   }
+
+  it("when epi.feedMin is 0 (today), then a small resting feed (a few millimetres of overlap) thaws the wreck, the cost of a pile that feeds crush every slice", () => {
+    assert.ok(frozen());
+    const kept = EPICENTER.feedMin;
+    try {
+      EPICENTER.feedMin = 0;
+      d.feedOverlap(AT, IN, 0.003, 0.001);
+      assert.equal(d.frozen, false);
+      assert.equal(d.crushDropped, 0);
+    } finally {
+      EPICENTER.feedMin = kept;
+    }
+  });
+
+  it("when epi.feedMin is 1 cm, then the same small feed is dropped and counted and the wreck stays frozen, and a real feed (over the limit) thaws it as ever", () => {
+    assert.ok(frozen());
+    const kept = EPICENTER.feedMin;
+    try {
+      EPICENTER.feedMin = 0.01;
+      d.feedOverlap(AT, IN, 0.003, 0.001);
+      assert.equal(d.frozen, true);
+      assert.ok(d.crushDropped > 1e-5 && d.crushDropped < 0.01, `dropped ${d.crushDropped} m`);
+      d.feedOverlap(AT, IN, 0.3, 8);
+      assert.equal(d.frozen, false);
+    } finally {
+      EPICENTER.feedMin = kept;
+    }
+  });
 });
 
 describe("given the guard that checks frozen cars", () => {

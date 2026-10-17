@@ -399,6 +399,8 @@ export function stepWorld(w: World, dt: number): void {
       work[WORK.thaws] = work[WORK.thaws]! + d.thaws;
       d.freezes = 0;
       d.thaws = 0;
+      work[WORK.crushDroppedUm] = work[WORK.crushDroppedUm]! + d.crushDropped * 1e6;
+      d.crushDropped = 0;
     }
     lap(ph, PHASE.structure);
     if (w.collide) for (let ci = 0; ci < n; ci++) if (i === 0 || !lonely.flag[ci]) w.collide(cars[ci]!, ci, lonely.flag[ci] ? dt : h);

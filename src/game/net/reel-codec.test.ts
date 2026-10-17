@@ -5,7 +5,7 @@ import { blankStrike } from "../scenes/figure-strike.ts";
 import { NET_VERSION, Reader, Writer } from "./codec.ts";
 import { carLayout } from "./car-pose.ts";
 import { clipBytes, decodeSaved, encodeSaved, packReel, readClip, savedPlayable, unpackReel, writeClip } from "./reel-codec.ts";
-import { epicenterValues } from "../deform/epicenter.ts";
+import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { makeClip, sameClip } from "./reel-clip.test-util.ts";
 import type { ClipVip } from "../match/highlights.ts";
 
@@ -157,6 +157,33 @@ describe("given a clip recorded with the epicenter activation on", () => {
     const w = new Writer(clipBytes(bad));
     writeClip(w, bad);
     assert.throws(() => readClip(new Reader().reset(w.done()), carLayout(car)), { name: "RangeError", message: "clip epicenter" });
+  });
+
+  it("when the clip carries fewer values than the object has knobs (recorded before the last knob existed), then it reads, and loading it sets the knobs it lacks to their defaults", () => {
+    const { clip, car } = makeClip();
+    const shorter = { ...clip, epicenter: [1, 0.5, 0, 0, 0, 0, 0] };
+    const w = new Writer(clipBytes(shorter));
+    writeClip(w, shorter);
+    const back = readClip(new Reader().reset(w.done()), carLayout(car));
+    assert.equal(back.epicenter?.length, 7, "the values it carries");
+    const saved = epicenterValues();
+    try {
+      loadEpicenter(back.epicenter!);
+      assert.equal(EPICENTER.on, 1);
+      assert.equal(EPICENTER.relockHold, 0.5);
+      assert.equal(EPICENTER.thawHold, 0, "a knob the clip lacks is off");
+      assert.equal(EPICENTER.feedMin, 0, "a knob the clip lacks is off");
+    } finally {
+      loadEpicenter(saved);
+    }
+  });
+
+  it("when the clip carries more values than the object has knobs (recorded by a newer build), then the decoder refuses it rather than replay without knobs the recording ran with", () => {
+    const { clip, car } = makeClip();
+    const longer = { ...clip, epicenter: [...epicenterValues(), 0.5] };
+    const w = new Writer(clipBytes(longer));
+    writeClip(w, longer);
+    assert.throws(() => readClip(new Reader().reset(w.done()), carLayout(car)), { name: "RangeError", message: "clip epicenter knobs" });
   });
 });
 

@@ -12,6 +12,7 @@ import { EPICENTER_KNOBS, loadEpicenter } from "../../src/game/deform/epicenter.
 import { EPICENTER_AT_LOAD } from "../../src/game/deform/epicenter.test-util.ts";
 import { DeformRig } from "../../src/game/deform/deform-rig.ts";
 import { DeformFreeze } from "../../src/game/deform/deform-freeze.ts";
+import { DeformContact } from "../../src/game/deform/deform-contact.ts";
 import * as THREE from "three";
 import { DeformableCar } from "../../src/game/vehicle/car.ts";
 import { PHASE_NAMES, WORK_NAMES } from "../../src/game/engine/sim-phases.ts";
@@ -31,6 +32,7 @@ const windowS = Number(process.env["BENCH_WINDOW"] ?? info.windowS);
 const sites = new Map<string, number>();
 const clampSites = new Map<string, number>();
 const offSites = new Map<string, number>();
+const feedBins = new Map<string, number>();
 if (process.env["BENCH_THAW_SITES"] === "1") {
   const thaw = DeformRig.prototype.thaw;
   DeformRig.prototype.thaw = function (this: DeformRig): void {
@@ -39,6 +41,18 @@ if (process.env["BENCH_THAW_SITES"] === "1") {
       sites.set(frame, (sites.get(frame) ?? 0) + 1);
     }
     thaw.call(this);
+  };
+  // What feeds a frozen car: closing speed x overlap of each `feedOverlap` call (the gate `epi.feedMin` has to be placed against these).
+  const feed = DeformContact.prototype.feedOverlap;
+  DeformContact.prototype.feedOverlap = function (this: DeformContact, ...args: Parameters<typeof feed>): number {
+    if (this.frozen) {
+      const [, , overlap, closing] = args;
+      const c = closing < 0.01 ? "closing under 1 cm/s" : closing < 0.1 ? "closing under 10 cm/s" : closing < 1 ? "closing under 1 m/s" : "closing 1 m/s and over";
+      const o = overlap < 0.001 ? "overlap under 1 mm" : overlap < 0.01 ? "under 1 cm" : overlap < 0.1 ? "under 10 cm" : "10 cm and over";
+      const key = `${c}, ${o}`;
+      feedBins.set(key, (feedBins.get(key) ?? 0) + 1);
+    }
+    return feed.apply(this, args);
   };
   // And who re-measured (`syncPose`: a `clampLocal`) a frozen car whose centre is cached: the freeze's invariant says nobody may (`DeformFreeze.settleFreeze`).
   const syncPose = DeformableCar.prototype.syncPose;
@@ -92,6 +106,11 @@ for (const [id, value] of Object.entries(knobs)) {
     sim.cars[2]!.deform.translateMasses(value, 0, 0, 0);
     continue;
   }
+  // `lone=0` is not a knob either: the world never reads `lone` as true (an accessor the engine's per-slice `w.lone = race.active` cannot overwrite), so every car of a multi-slice step runs every slice: the behaviour before the lone-car cut (REPLAY 110).
+  if (id === "lone") {
+    if (value === 0) Object.defineProperty(sim.world, "lone", { get: () => false, set: () => undefined, configurable: true });
+    continue;
+  }
   const knob = EPICENTER_KNOBS.find((k) => k.id === id);
   if (!knob) throw new Error(`knob ${id}: not one of ${EPICENTER_KNOBS.map((k) => k.id).join(", ")}`);
   knob.set(value);
@@ -124,6 +143,7 @@ advance(warmS);
 sites.clear();
 clampSites.clear();
 offSites.clear();
+feedBins.clear();
 
 /** `BENCH_CENSUS=1` (bench `--census`): the window runs step by step through the lone-car census (`census.ts`). */
 const census = process.env["BENCH_CENSUS"] === "1" ? new LoneCensus(sim) : null;
@@ -190,6 +210,7 @@ console.log(
     thawSites: Object.fromEntries([...sites].sort((a, b) => b[1] - a[1])),
     clampSites: Object.fromEntries([...clampSites].sort((a, b) => b[1] - a[1])),
     offSites: Object.fromEntries([...offSites].sort((a, b) => b[1] - a[1]).slice(0, 12)),
+    feedBins: Object.fromEntries([...feedBins].sort((a, b) => b[1] - a[1]).slice(0, 12)),
     loadStart,
     loadEnd: loadavg()[0]!,
   })}`,

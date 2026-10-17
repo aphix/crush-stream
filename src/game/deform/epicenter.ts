@@ -27,7 +27,12 @@ export const EPICENTER = {
   frozenCheck: 0,
   /** Seconds after a thaw before the car may freeze again, on top of `relockHold`'s quiet time. 0: the next quiet slice (a car a contact feeds every slice freezes and thaws every slice: the pending slice after each freeze takes the whole path, so it costs bookkeeping, not accuracy). The hold keeps such a car whole; the city's wrecks are touched about every 30 ms, so a long hold gives their relock away. */
   thawHold: 0,
+  /** Metres of crush a frozen car's resting contact may feed in one slice before it is let in (`feedOverlap`): under this the feed is dropped and counted (`crushDroppedUm`) and the wreck stays frozen; 0 lets in every feed over 10 um as today (each thaws the car). A resting pile feeds sub-millimetre crush every slice; the dropped total over a run is the bound to read. */
+  feedMin: 0,
 };
+
+/** Every knob as the module loaded it: the off values a clip recorded before a knob existed reads it at. */
+const DEFAULTS = { ...EPICENTER };
 
 export type EpicenterKnobId = `epi.${keyof typeof EPICENTER}`;
 
@@ -52,6 +57,7 @@ const ROWS: readonly [keyof typeof EPICENTER, string, number, number, number][] 
   ["nearPrune", "Skip belly crossings over wrecks", 0, 1, 1],
   ["frozenCheck", "Check frozen cars (debug)", 0, 1, 1],
   ["thawHold", "No refreeze after a thaw (s)", 0, 1, 0.05],
+  ["feedMin", "Frozen car drops feeds under (m, 0 off)", 0, 0.005, 0.0001],
 ];
 
 /** The knob rows, in panel order. */
@@ -74,15 +80,15 @@ export function epicenterOn(): boolean {
 }
 
 const KEYS = Object.keys(EPICENTER) as (keyof typeof EPICENTER)[];
-/** Numbers `epicenterValues` returns: the object's fields in declaration order (a saved clip's layout, `REPLAY_VERSION`, fixes it). */
+/** How many knobs there are: a clip carrying more was recorded by a build that knew knobs this one does not, and a replay without them would not be the sim it recorded (`readClip` refuses it). */
 export const EPICENTER_FIELDS = KEYS.length;
 
-/** The object's values in declaration order: what a clip records of a run that was on. */
+/** The object's values in declaration order: what a clip records of a run that was on (the clip carries however many there are, `REPLAY_VERSION` 114's count byte; a knob added later goes at the end with its off value as default). */
 export function epicenterValues(): number[] {
   return KEYS.map((k) => EPICENTER[k]);
 }
 
-/** Writes `values` (`epicenterValues`' order) over the object. */
+/** Writes `values` (`epicenterValues`' order) over the object; a knob a shorter list (a clip recorded before the knob existed) does not carry takes its default, which is its off value. */
 export function loadEpicenter(values: readonly number[]): void {
-  for (let i = 0; i < KEYS.length; i++) EPICENTER[KEYS[i]!] = values[i]!;
+  for (let i = 0; i < KEYS.length; i++) EPICENTER[KEYS[i]!] = values[i] ?? DEFAULTS[KEYS[i]!];
 }

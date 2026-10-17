@@ -90,6 +90,7 @@ export function summarize(runs) {
       breachKinds: list[0].breachKinds ?? null,
       breachOff: list[0].breachOff ?? null,
       offSites: list[0].offSites ?? {},
+      feedBins: list[0].feedBins ?? {},
       trace: list[0].trace ?? null,
       census: list[0].census ?? null,
       load: { start: Math.min(...list.map((r) => r.loadStart)), startMax: Math.max(...list.map((r) => r.loadStart)), end: Math.max(...list.map((r) => r.loadEnd)) },
@@ -207,6 +208,7 @@ export function table(name, first, arms) {
   for (const a of arms) if (Object.keys(a.thawSites).length) lines.push(`   thaws per sim-s by call site, ${a.name}: ${Object.entries(a.thawSites).map(([k, v]) => `${k} ${f1(v / first.windowS)}`).join(", ")}`);
   for (const a of arms) if (a.clampSites && Object.keys(a.clampSites).length) lines.push(`   re-measures (syncPose) of a cached frozen car per sim-s by caller (the freeze's invariant: none), ${a.name}: ${Object.entries(a.clampSites).map(([k, v]) => `${k} ${f1(v / first.windowS)}`).join(", ")}`);
   for (const a of arms) if (a.offSites && Object.keys(a.offSites).length) lines.push(`   frozen steps with a mass off its frame, ${a.name} (count in the window): ${Object.entries(a.offSites).map(([k, v]) => `[${k}] ${v}`).join("; ")}`);
+  for (const a of arms) if (a.feedBins && Object.keys(a.feedBins).length) lines.push(`   feedOverlap calls into a frozen car per sim-s by closing speed and overlap, ${a.name}: ${Object.entries(a.feedBins).map(([k, v]) => `[${k}] ${f1(v / first.windowS)}`).join("; ")}`);
   for (const a of arms) {
     const c = a.census;
     if (!c) continue;
@@ -215,6 +217,7 @@ export function table(name, first, arms) {
       `   lone-car census, ${a.name} (per sim-s; hull gap = separating-axis gap of the car boxes less the pair's relative travel over the step, closing within ${c.closeM} m): steps ${f1(c.stepsPerS)}, of which one slice ${f1(c.singleSliceStepsPerS)}; in the multi-slice steps car-steps ${Math.round(c.carStepsPerS)}: lone ${Math.round(c.loneCarStepsPerS)} (${pct(c.loneCarStepsPerS)}), near-and-not-lone ${Math.round(c.nearCarStepsPerS)} (${pct(c.nearCarStepsPerS)}) = closing ${Math.round(c.closingPerS)} + not closing ${Math.round(c.notClosingPerS)} (${pct(c.notClosingPerS)}); not-closing steps followed by a hull gap under ${c.closeM} m and a contact: ${f1(c.notClosingThenContactPerS)}/s; slices ${f1(c.slicesPerS)}/s, fineCuts ${f1(c.fineCutsPerS)}/s`,
     );
     lines.push(`   car-box overlap at the end of a step, ${a.name} (box-vs-box minimum translation, a lower bound for deformed wrecks; per sim-s): pair-steps over 5 cm ${f1(c.overlapPairStepsPerS)}, over 30 cm ${f1(c.deepOverlapPairStepsPerS)}, deepest ${f2(c.maxOverlapM)} m`);
+    lines.push(`   overlap over 5 cm by pair class, ${a.name} (pair-steps over 5 cm per sim-s / over 30 cm / deepest m): ${Object.entries(c.overlapBy ?? {}).map(([k, v]) => `${k} ${f1(v.overPerS)} / ${f1(v.deepPerS)} / ${f2(v.maxM)}`).join("; ") || "none"}; over 30 cm by relative speed: ${Object.entries(c.deepBySpeed ?? {}).map(([k, v]) => `${k} ${f1(v)}`).join("; ") || "none"}`);
   }
   if (arms.some((a) => a.flagged)) lines.push("   LOAD: a run started above the load limit (--force): the ms are not timing");
   for (const other of arms.slice(1)) if (arms[0].trace && other.trace) lines.push(...divergenceLines(arms[0], other));

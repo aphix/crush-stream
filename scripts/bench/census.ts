@@ -27,6 +27,7 @@ interface Snap {
   fx: number[];
   fz: number[];
   contact: number[];
+  crashed: boolean[];
 }
 
 /** The separating-axis gap (m) of two car boxes in plan: positive is clear air along some axis, so a lower bound of the hull distance; negative or zero: overlapping or touching on every axis. */
@@ -68,6 +69,8 @@ export class LoneCensus {
   private overlapSteps = 0;
   private deepSteps = 0;
   private maxOverlap = 0;
+  private readonly overlapBy: Record<string, { over: number; deep: number; max: number }> = {};
+  private readonly deepBySpeed: Record<string, number> = {};
   private readonly slices0: number;
   private readonly fineCuts0: number;
 
@@ -87,6 +90,7 @@ export class LoneCensus {
       fx: cars.map((c) => c.fwdFlat.x),
       fz: cars.map((c) => c.fwdFlat.z),
       contact: cars.map((c) => (c.deform as unknown as { lastContact: number }).lastContact),
+      crashed: cars.map((c) => c.crashed),
     };
   }
 
@@ -97,7 +101,7 @@ export class LoneCensus {
     const slices0 = this.sim.world.phases.work[WORK.slices]!;
     this.sim.run(dt);
     const after = this.snapshot();
-    // Car boxes interpenetrating at the end of the step (every step, every pair): the depth is the box-vs-box minimum translation (a lower bound for deformed wrecks).
+    // Car boxes interpenetrating at the end of the step (every step, every pair): the depth is the box-vs-box minimum translation (a lower bound for deformed wrecks); by pair class and by relative speed.
     for (let i = 0; i < this.sim.cars.length; i++) {
       for (let j = i + 1; j < this.sim.cars.length; j++) {
         if (Math.hypot(after.x[j]! - after.x[i]!, after.z[j]! - after.z[i]!) > 6) continue;
@@ -105,6 +109,17 @@ export class LoneCensus {
         if (depth > OVERLAP_M) this.overlapSteps++;
         if (depth > DEEP_OVERLAP_M) this.deepSteps++;
         if (depth > this.maxOverlap) this.maxOverlap = depth;
+        if (depth <= OVERLAP_M) continue;
+        const kind = after.crashed[i]! && after.crashed[j]! ? "wreck-wreck" : after.crashed[i]! || after.crashed[j]! ? "intact-wreck" : "intact-intact";
+        const row = (this.overlapBy[kind] ??= { over: 0, deep: 0, max: 0 });
+        row.over++;
+        if (depth > DEEP_OVERLAP_M) {
+          row.deep++;
+          const rel = Math.hypot(after.vx[j]! - after.vx[i]!, after.vz[j]! - after.vz[i]!);
+          const bucket = rel < 5 ? "relative speed under 5 m/s" : rel < 15 ? "5 to 15 m/s" : "over 15 m/s";
+          this.deepBySpeed[bucket] = (this.deepBySpeed[bucket] ?? 0) + 1;
+        }
+        if (depth > row.max) row.max = depth;
       }
     }
     const sliced = this.sim.world.phases.work[WORK.slices]! - slices0;
@@ -145,7 +160,7 @@ export class LoneCensus {
   }
 
   /** The window's counts per sim-second, and the assumptions behind them. */
-  result(simS: number): Record<string, number> {
+  result(simS: number): Record<string, unknown> {
     const per = (v: number): number => v / simS;
     return {
       stepsPerS: per(this.steps),
@@ -162,6 +177,8 @@ export class LoneCensus {
       overlapPairStepsPerS: per(this.overlapSteps),
       deepOverlapPairStepsPerS: per(this.deepSteps),
       maxOverlapM: this.maxOverlap,
+      overlapBy: Object.fromEntries(Object.entries(this.overlapBy).map(([k, v]) => [k, { overPerS: per(v.over), deepPerS: per(v.deep), maxM: v.max }])),
+      deepBySpeed: Object.fromEntries(Object.entries(this.deepBySpeed).map(([k, v]) => [k, per(v)])),
     };
 }
 }

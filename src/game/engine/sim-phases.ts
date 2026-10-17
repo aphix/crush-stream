@@ -4,8 +4,8 @@ export const PHASE_NAMES = ["drive", "plan", "integrate", "wreck", "pairs", "str
 export const PHASE_COUNT = PHASE_NAMES.length;
 
 /** The slots of the step's work counters: amounts, not times. */
-export const WORK = { slices: 0, liveCarSlices: 1, wreckCarSlices: 2, asleepCarSlices: 3, pairTests: 4, pairContacts: 5, partContacts: 6, nodesLoose: 7, nodesLocked: 8, frozenCarSlices: 9, freezes: 10, thaws: 11 } as const;
-export const WORK_NAMES = ["slices", "liveCarSlices", "wreckCarSlices", "asleepCarSlices", "pairTests", "pairContacts", "partContacts", "nodesLoose", "nodesLocked", "frozenCarSlices", "freezes", "thaws"] as const;
+export const WORK = { slices: 0, liveCarSlices: 1, wreckCarSlices: 2, asleepCarSlices: 3, pairTests: 4, pairContacts: 5, partContacts: 6, nodesLoose: 7, nodesLocked: 8, frozenCarSlices: 9, freezes: 10, thaws: 11, crushDroppedUm: 12 } as const;
+export const WORK_NAMES = ["slices", "liveCarSlices", "wreckCarSlices", "asleepCarSlices", "pairTests", "pairContacts", "partContacts", "nodesLoose", "nodesLocked", "frozenCarSlices", "freezes", "thaws", "crushDroppedUm"] as const;
 export const WORK_COUNT = WORK_NAMES.length;
 
 /**
