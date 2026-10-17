@@ -63,7 +63,8 @@ const SCREENS = {
   "fleet-drive": { hash: "", driving: true, setup: async (page) => { await evaluate(page, () => window.__crush.seat.focus(0)); await settle(page, 2500); }, expect: ["steer", "view"] },
   // The card with the score and the bail prompt stays up through the run, in the zone's upper left corner: it is what the player is playing for.
   "mini-longjump": { hash: "scene=range", driving: true, roadAllowancePct: 7, setup: async (page) => { await evaluate(page, () => window.__crush.startMinigame("longJump")); await settle(page, 3500); }, expect: ["steer", "boost"] },
-  "derby-drive": { hash: "scene=derby&cars=14&seed=7", driving: true, setup: async (page) => { await settle(page, 14000); }, expect: [] },
+  // The folded Board header (a 44 px strip, 11 rem wide) is the one thing a derby keeps on screen; upright it reaches into the zone's left edge.
+  "derby-drive": { hash: "scene=derby&cars=14&seed=7", driving: true, roadAllowancePct: 2, setup: async (page) => { await settle(page, 14000); }, expect: [] },
   "race-pause": { hash: "scene=race", sheet: true, setup: async (page) => { await startRace(page); await settle(page, 5000); await page.locator("[data-touch-control=pause]").tap(); await settle(page, 900); } },
   "race-results": { hash: "scene=race", sheet: true, setup: async (page) => { await startRace(page); await settle(page, 5000); await evaluate(page, () => window.__crush.raceCommand({ type: "end" })); await settle(page, 2500); } },
   "race-setup": { hash: "scene=race", sheet: true },

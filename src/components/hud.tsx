@@ -318,7 +318,7 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
   return (
     <div className="hud-grid pointer-events-none absolute inset-0 text-fg" data-focus={focus || undefined} data-calm={calm || undefined}>
       {/* The cluster is hidden, not unmounted, in a race: the online entry inside stays mounted because the race menus portal it into their own header (`online-slot.ts`). */}
-      <div className={cn("absolute hud-left hud-top max-w-[calc(100%_-_11rem)] flex-wrap items-start gap-2 calm:opacity-35 hud-fade", race === null ? "flex" : "hidden")}>
+      <div className={cn("absolute hud-left hud-top max-w-[calc(100%_-_13rem)] flex-wrap items-start gap-2 calm:opacity-35 hud-fade", race === null ? "flex" : "hidden")}>
         <Button variant="secondary" size="icon" className="pointer-events-auto" aria-label="Menu" title="Menu" onClick={() => setHomeOpen(true)}>
           <Menu />
         </Button>
