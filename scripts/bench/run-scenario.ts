@@ -38,7 +38,7 @@ if (process.env["BENCH_THAW_SITES"] === "1") {
 
 // Staged with every knob at its off value, so both arms start from the same state; the arm's knobs apply after.
 loadEpicenter(EPICENTER_AT_LOAD);
-const sim = scenario.build();
+const sim = await scenario.build();
 const label = scenario.label(sim);
 for (const [id, value] of Object.entries(knobs)) {
   // `nudge` (m) is not a knob: the sensitivity control, every mass of car 2 moved that far in x before the run (the sim's own response to a micrometre, with every knob off).
@@ -113,6 +113,8 @@ console.log(
     scenario: name,
     label,
     lone: info.lone,
+    race: info.race ?? false,
+    cars: sim.cars.length,
     knobs,
     warmS,
     windowS: simS,

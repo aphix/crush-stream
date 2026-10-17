@@ -12,6 +12,8 @@ export interface ScenarioInfo {
   /** Warm-up before the window opens (sim s: the relock hold and the first sleep checks pass), and the window itself. */
   warmS: number;
   windowS: number;
+  /** The race's step schedule (1/80 s steps, `World.loners` engaged) rather than the fine floor (1/240 s, one slice a step: nothing for the lone cut to skip). */
+  race?: boolean;
 }
 
 export const SCENARIO_INFO: Record<string, ScenarioInfo> = {
@@ -70,5 +72,36 @@ export const SCENARIO_INFO: Record<string, ScenarioInfo> = {
     lone: true,
     warmS: 2,
     windowS: 12,
+  },
+  "intact-alone-race": {
+    about: "intact-alone on the race's step schedule (1/80 s steps, cut to 1/240 s slices only in contact, lone cars once a step): 16 sedans 40 m apart; the race's per-sim-second cost of a lone intact car",
+    sizes: "the baseline the city actually pays (the lone-car cut engaged); intact-alone is the per-slice cost",
+    lone: true,
+    race: true,
+    warmS: 2,
+    windowS: 12,
+  },
+  "intact-convoy-race": {
+    about: "intact-convoy on the race's step schedule: 16 sedans in 2 columns inside the lone reach, so no car is lone and every step is cut to 3 slices only where a car is in contact (none here)",
+    sizes: "the near-car cost as the race pays it; against intact-alone-race it is nearness plus the lone cut lost",
+    lone: true,
+    race: true,
+    warmS: 2,
+    windowS: 12,
+  },
+  "wreck-driving-apart-race": {
+    about: "wreck-driving-apart on the race's step schedule: 8 driving wrecks 40 m apart (lone), 1/80 s steps",
+    sizes: "the relock on a driving wreck as the race pays it",
+    lone: true,
+    race: true,
+    warmS: 2,
+    windowS: 12,
+  },
+  city: {
+    about: "the in-app city bench through the real engine (BENCH_RACE: 15 AI racers and police, the bench's seed, nothing drawn, pacer pinned to the fine floor): AI drives, so the arms may do different work",
+    sizes: "end-to-end confirmation only: per-unit rows and the counters, never totals",
+    lone: true,
+    warmS: 20,
+    windowS: 30,
   },
 };

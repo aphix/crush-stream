@@ -14,6 +14,7 @@ const run = (arm: string, n: number, ms: number, digest: string, extra: Record<s
   n,
   scenario: "x",
   label: "8 wrecks",
+  cars: 8,
   knobs: {},
   wallMsPerS: ms,
   msPerS: { drive: 1, plan: 1, integrate: 10, wreck: ms - 20, pairs: 4, structure: 4, course: 0, bake: 0, rules: 0, settle: 0 },
@@ -63,7 +64,7 @@ describe("given the runs of one scenario", () => {
     assert.equal(on.digestsEqual, true);
     const text = table("x", { about: "about", sizes: "sizes", lone: true, label: "8 wrecks", windowS: 12, warmS: 2 }, [off, on]);
     assert.match(text, /frozen \/ \(wreck\+asleep\) slices\s+0\.00\s+1\.00/);
-    assert.match(text, /lone-car schedule ON/);
+    assert.match(text, /lone-car cut ON/);
     assert.match(text, /digest same in every run\s+yes\s+yes/);
     assert.match(text, /max \|pose or velocity difference\|, off vs on/);
   });
@@ -71,13 +72,13 @@ describe("given the runs of one scenario", () => {
   it("when one run of an arm gives another digest, then the table says so", () => {
     const text = table("x", { about: "a", sizes: "s", lone: false, label: "l", windowS: 1, warmS: 1 }, summarize([run("off", 1, 100, "aa"), run("off", 2, 100, "zz"), run("on", 3, 100, "aa")]));
     assert.match(text, /digest same in every run\s+NO\s+yes/);
-    assert.match(text, /lone-car schedule off/);
+    assert.match(text, /lone-car cut off/);
   });
 });
 
 describe("given the scenarios", () => {
   it("when the info and the builders are listed, then every scenario has both, and the convoy rows sit inside the lone reach", () => {
-    const names = "intact-alone intact-convoy intact-convoy-mixed wreck-dead-apart wreck-dead-piled wreck-driving-apart wreck-pile-pushed wreck-stopped-apart";
+    const names = "city intact-alone intact-alone-race intact-convoy intact-convoy-mixed intact-convoy-race wreck-dead-apart wreck-dead-piled wreck-driving-apart wreck-driving-apart-race wreck-pile-pushed wreck-stopped-apart";
     assert.equal(Object.keys(SCENARIO_INFO).sort().join(" "), names);
     assert.equal(Object.keys(SCENARIOS).sort().join(" "), names);
     assert.equal(CONTACT_REACH + LONE_MARGIN, 6.3, "the reach the convoy rows' text names");

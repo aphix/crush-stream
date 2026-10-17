@@ -81,6 +81,7 @@ export function summarize(runs) {
       perUnit,
       perUnitTotal: units > 0 ? (total * 1000) / units : 0,
       digest: list[0].digest,
+      cars: list[0].cars,
       digestsEqual: list.every((r) => r.digest === list[0].digest),
       poses: list[0].poses,
       breaches: Math.max(...list.map((r) => r.frozenBreaches)),
@@ -167,7 +168,7 @@ export function divergenceLines(a, b) {
 
 /** The text of a summary: one block per scenario. `first` is the scenario's config (`about`, `sizes`, `lone`, `label`). */
 export function table(name, first, arms) {
-  const lines = [`== ${name}: ${first.about}`, `   sizes: ${first.sizes}`, `   lone-car schedule ${first.lone ? "ON (the race's: World.lone)" : "off (the Fleet's)"}; ${first.label}; window ${f1(first.windowS)} s after ${first.warmS} s warm-up`];
+  const lines = [`== ${name}: ${first.about}`, `   sizes: ${first.sizes}`, `   step schedule: ${first.race ? "race (1/80 s steps, cut to 1/240 s slices in contact)" : "fine (1/240 s, one slice a step: the lone-car cut has nothing to skip)"}; lone-car cut ${first.lone ? "ON" : "off"} (World.lone: on in a race, off in the Fleet); ${first.label}; window ${f1(first.windowS)} s after ${first.warmS} s warm-up`];
   const w = Math.max(...arms.map((a) => a.name.length), 6);
   const head = ["", ...arms.map((a) => a.name.padStart(Math.max(9, w)))];
   if (arms.length === 2) head.push("change".padStart(8));
@@ -186,6 +187,7 @@ export function table(name, first, arms) {
   lines.push(row("us per car-slice, all (live+wreck+asleep)", arms.map((a) => f2(a.perUnitTotal))));
   for (const p of PHASES) if (arms.some((a) => a.perUnit[p] >= 0.05)) lines.push(row(`  ${p}`, arms.map((a) => f2(a.perUnit[p]))));
   for (const c of COUNTERS) if (arms.some((a) => a.work[c] > 0)) lines.push(row(`${c}/s`, arms.map((a) => String(Math.round(a.work[c])))));
+  lines.push(row("car-slices per car per sim-s", arms.map((a) => f1(a.units / a.cars)), false));
   const wreck = arms.map((a) => a.work.wreckCarSlices + a.work.asleepCarSlices);
   lines.push(row("frozen / (wreck+asleep) slices", arms.map((a, i) => (wreck[i] > 0 ? f2(a.work.frozenCarSlices / wreck[i]) : "-")), false));
   lines.push(row("frozen-state breaches", arms.map((a) => String(a.breaches)), false));
@@ -196,7 +198,7 @@ export function table(name, first, arms) {
     for (let i = 0; i < arms[0].poses.length; i++) delta = Math.max(delta, Math.abs(arms[0].poses[i] - arms[1].poses[i]));
     lines.push(`   max |pose or velocity difference|, ${arms[0].name} vs ${arms[1].name} first runs: ${delta.toExponential(2)}${arms[0].digest === arms[1].digest ? " (digests equal: bit-identical arms)" : ""}`);
   }
-  for (const a of arms) if (Object.keys(a.thawSites).length) lines.push(`   thaw call sites, ${a.name}: ${Object.entries(a.thawSites).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+  for (const a of arms) if (Object.keys(a.thawSites).length) lines.push(`   thaws per sim-s by call site, ${a.name}: ${Object.entries(a.thawSites).map(([k, v]) => `${k} ${f1(v / first.windowS)}`).join(", ")}`);
   if (arms.some((a) => a.flagged)) lines.push("   LOAD: a run started above the load limit (--force): the ms are not timing");
   for (const other of arms.slice(1)) if (arms[0].trace && other.trace) lines.push(...divergenceLines(arms[0], other));
   return lines.join("\n");
@@ -264,7 +266,7 @@ export async function main(argv, log = console.log) {
     }
     const summary = summarize(runs);
     const sc = SCENARIOS[name];
-    const text = table(name, { about: sc.about, sizes: sc.sizes, lone: runs[0].lone, label: runs[0].label, windowS: runs[0].windowS, warmS: runs[0].warmS }, summary);
+    const text = table(name, { about: sc.about, sizes: sc.sizes, lone: runs[0].lone, race: runs[0].race, label: runs[0].label, windowS: runs[0].windowS, warmS: runs[0].warmS }, summary);
     writeFileSync(path.join(out, `${name}.txt`), `${text}\n`);
     log(text);
   }

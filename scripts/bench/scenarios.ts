@@ -9,7 +9,7 @@ import { makeCar } from "../../src/game/vehicle/ground-probe.test-util.ts";
 import { idleDrive, type DriveInput } from "../../src/game/vehicle/car-drive.ts";
 import type { VehicleClassId } from "../../src/game/vehicle/vehicle-classes.ts";
 import type { DeformableCar } from "../../src/game/vehicle/car.ts";
-import { Sim } from "./sim.ts";
+import { Sim, type SimLike } from "./sim.ts";
 
 const HEAD_X = Math.PI / 2;
 /** Cruise speed of the intact rows and of a driving wreck (m/s). */
@@ -27,9 +27,9 @@ const neutral = (): DriveInput => ({ ...idleDrive(), neutral: true });
 
 export interface Scenario {
   /** Place the cars and give them their pedals (the sim's scripted inputs). */
-  build(): Sim;
+  build(): SimLike | Promise<SimLike>;
   /** Per-car labels printed with the row (class, state). */
-  label(sim: Sim): string;
+  label(sim: SimLike): string;
 }
 
 const cars = (n: number, cls: (i: number) => VehicleClassId): DeformableCar[] => Array.from({ length: n }, (_, i) => makeCar(cls(i)));
@@ -100,8 +100,8 @@ const sedan = (): VehicleClassId => "sedan";
 const MIX: readonly VehicleClassId[] = ["sedan", "muscle", "truck", "monster"];
 const mixed = (i: number): VehicleClassId => MIX[i % MIX.length]!;
 
-const wreckLabel = (sim: Sim): string => `${sim.cars.filter((c) => c.crashed).length}/${sim.cars.length} crashed, ${sim.cars.filter((c) => c.deform.drivetrainAlive).length} drivetrains alive`;
-const intactLabel = (sim: Sim): string => `${sim.cars.length} intact, ${sim.cars.filter((c) => c.crashed).length} crashed`;
+const wreckLabel = (sim: SimLike): string => `${sim.cars.filter((c) => c.crashed).length}/${sim.cars.length} crashed, ${sim.cars.filter((c) => c.deform.drivetrainAlive).length} drivetrains alive`;
+const intactLabel = (sim: SimLike): string => `${sim.cars.length} intact, ${sim.cars.filter((c) => c.crashed).length} crashed`;
 
 export const SCENARIOS: Record<string, Scenario> = {
   "intact-alone": { build: () => intactApart(16, 40, sedan), label: intactLabel },
@@ -112,4 +112,8 @@ export const SCENARIOS: Record<string, Scenario> = {
   "wreck-dead-apart": { build: () => place(stageWrecks(8, sedan, true), "dead", apart(40)), label: wreckLabel },
   "wreck-dead-piled": { build: () => place(stageWrecks(8, sedan, true), "dead", piled), label: wreckLabel },
   "wreck-pile-pushed": { build: () => place(stageWrecks(8, sedan, true), "dead", pushed), label: wreckLabel },
+  "intact-alone-race": { build: () => intactApart(16, 40, sedan).useRaceSchedule(), label: intactLabel },
+  "intact-convoy-race": { build: () => intactConvoy(16, 2, 5, 3.5, sedan).useRaceSchedule(), label: intactLabel },
+  "wreck-driving-apart-race": { build: () => place(stageWrecks(8, sedan, true), "driving", apart(40)).useRaceSchedule(), label: wreckLabel },
+  city: { build: async () => (await import("./engine-sim.ts")).EngineSim.city(), label: (sim) => `${sim.cars.length} cars, ${sim.cars.filter((c) => c.crashed).length} crashed at the start` },
 };

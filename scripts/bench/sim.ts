@@ -11,18 +11,28 @@ import { newWorld, settleStep, stepWorld, type World } from "../../src/game/engi
 import { lap, PHASE, startLaps } from "../../src/game/engine/sim-phases.ts";
 import { SimPacer } from "../../src/game/engine/sim-pace.ts";
 import { sliceSpeed } from "../../src/game/contact/sat.ts";
-import { FINE_HZ } from "../../src/game/kernel/constants.ts";
+import { FINE_HZ, QUIET_HZ } from "../../src/game/kernel/constants.ts";
 
 /** One step a frame: the pacer takes the 1/240 s slice, so no step meets a wall deadline. */
 export const STEP_S = 1 / FINE_HZ;
 
-export class Sim {
+/** What `run-scenario.ts` needs of a scenario's sim: the world whose phase clock it reads, the cars, the sim clock and a way to step it (the bare `Sim`, or the engine's city). */
+export interface SimLike {
+  readonly world: World;
+  readonly cars: readonly DeformableCar[];
+  /** Sim seconds run. */
+  readonly t: number;
+  run(seconds: number): void;
+}
+
+export class Sim implements SimLike {
   readonly cars: DeformableCar[];
   readonly world: World;
   readonly pace = new SimPacer(false);
   readonly pedals = new Map<DeformableCar, DriveInput>();
   /** Sim seconds run. */
   t = 0;
+  private step = STEP_S;
 
   /** `lone`: the race's lone-car schedule (`World.lone`, on in a race and off in the Fleet and the derby). */
   constructor(cars: DeformableCar[], lone: boolean) {
@@ -47,16 +57,26 @@ export class Sim {
     this.t += h;
   };
 
-  /** `seconds` of sim, one 1/240 s step at a time. */
+  /**
+   * The race's step schedule from here on (`QUIET_HZ`, the pacer's coarse floor: one 1/80 s step cut to 1/240 s slices only where a car is in contact), so the lone-car cut (`World.lone`)
+   * has slices to skip: at the fine floor every step is one slice and a lone car skips nothing. Staging runs at the fine floor either way, so both schedules start from the same bytes.
+   */
+  useRaceSchedule(): this {
+    this.pace.pin = true;
+    this.step = 1 / QUIET_HZ;
+    return this;
+  }
+
+  /** `seconds` of sim, one step at a time (1/240 s, or 1/80 s after `useRaceSchedule`). */
   run(seconds: number): void {
-    const steps = Math.round(seconds / STEP_S);
-    for (let i = 0; i < steps; i++) this.pace.run(STEP_S, 1, sliceSpeed(this.cars), true, Infinity, this.slice);
+    const steps = Math.round(seconds / this.step);
+    for (let i = 0; i < steps; i++) this.pace.run(this.step, 1, sliceSpeed(this.cars), true, Infinity, this.slice);
   }
 
   /** Steps until `done` or `limitS` of sim; the sim seconds it ran. */
   runUntil(done: () => boolean, limitS: number): number {
     const t0 = this.t;
-    while (!done() && this.t - t0 < limitS) this.pace.run(STEP_S, 1, sliceSpeed(this.cars), true, Infinity, this.slice);
+    while (!done() && this.t - t0 < limitS) this.pace.run(this.step, 1, sliceSpeed(this.cars), true, Infinity, this.slice);
     return this.t - t0;
   }
 }
