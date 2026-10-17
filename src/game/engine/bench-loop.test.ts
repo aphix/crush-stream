@@ -28,7 +28,7 @@ describe("given one cycle of the benchmark loop", () => {
     for (let i = 0; i < steps.length; i += 2) {
       const off = benchPlan(`?${steps[i]!.query}`)!;
       const on = benchPlan(`?${steps[i + 1]!.query}`)!;
-      assert.deepEqual({ ...off, epicenter: true }, on, steps[i]!.id);
+      assert.equal(JSON.stringify({ ...off, epicenter: true }), JSON.stringify(on), steps[i]!.id);
       assert.equal(off.epicenter, false, steps[i]!.id);
     }
   });
