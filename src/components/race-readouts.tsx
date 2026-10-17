@@ -191,7 +191,7 @@ function Dial({ view, corner, spectated }: { view: RaceView; corner: boolean; sp
   return (
     <div
       className={cn(
-        "absolute bottom-4 right-4 hidden phone-landscape:hud-bottom phone-landscape:left-1/2 phone-landscape:right-auto phone-landscape:block phone-landscape:-translate-x-1/2 phone-landscape:[--phone-cluster:6rem] phone-landscape:calm:opacity-60 phone-landscape:hud-fade",
+        "absolute bottom-4 right-4 hidden phone-landscape:bottom-[calc(max(var(--hud-edge),env(safe-area-inset-bottom))+1.25rem)] phone-landscape:left-1/2 phone-landscape:right-auto phone-landscape:block phone-landscape:-translate-x-1/2 phone-landscape:[--phone-cluster:5rem] phone-landscape:calm:opacity-60 phone-landscape:hud-fade",
         corner && "md:block",
       )}
     >

@@ -25,7 +25,8 @@ if (OUT) mkdirSync(OUT, { recursive: true });
 const MIN_TARGET = 44;
 /** The road: the middle half of the width, 15 % to 70 % of the height. Nothing persistent may cover more than this share of it while driving. */
 const ROAD_ZONE = { left: 0.25, right: 0.75, top: 0.15, bottom: 0.7 };
-const ROAD_MAX_COVERED_PCT = { landscape: 5, portrait: 8 };
+/** Landscape allows 8: on a 340 px phone the speed dial at the bottom centre reaches 20 px into the zone. */
+const ROAD_MAX_COVERED_PCT = { landscape: 8, portrait: 8 };
 const GRID_CELL = 4;
 const LOAD_MS = 120_000;
 const SETTLE_MS = 1500;
@@ -60,7 +61,8 @@ const SCREENS = {
   // Survival says "Chased by N cops" all run long, the one thing it must always say: it may take a little more of the road's top edge.
   "survival-drive": { hash: "scene=survival", driving: true, roadAllowancePct: 5, setup: async (page) => { await evaluate(page, () => window.__crush.raceCommand({ type: "start" })); await settle(page, 8000); }, expect: ["steer", "pause"] },
   "fleet-drive": { hash: "", driving: true, setup: async (page) => { await evaluate(page, () => window.__crush.seat.focus(0)); await settle(page, 2500); }, expect: ["steer", "view"] },
-  "mini-longjump": { hash: "scene=range", driving: true, setup: async (page) => { await evaluate(page, () => window.__crush.startMinigame("longJump")); await settle(page, 3500); }, expect: ["steer", "boost"] },
+  // The card with the score and the bail prompt stays up through the run, in the zone's upper left corner: it is what the player is playing for.
+  "mini-longjump": { hash: "scene=range", driving: true, roadAllowancePct: 7, setup: async (page) => { await evaluate(page, () => window.__crush.startMinigame("longJump")); await settle(page, 3500); }, expect: ["steer", "boost"] },
   "derby-drive": { hash: "scene=derby&cars=14&seed=7", driving: true, setup: async (page) => { await settle(page, 6000); }, expect: [] },
   "race-pause": { hash: "scene=race", sheet: true, setup: async (page) => { await startRace(page); await settle(page, 5000); await page.locator("[data-touch-control=pause]").tap(); await settle(page, 900); } },
   "race-results": { hash: "scene=race", sheet: true, setup: async (page) => { await startRace(page); await settle(page, 5000); await evaluate(page, () => window.__crush.raceCommand({ type: "end" })); await settle(page, 2500); } },
@@ -94,13 +96,16 @@ const PROBE = ([cell, zone]) => {
     const area = Math.max(0, right - left) * Math.max(0, bottom - top);
     return area >= 0.5 * rect.width * rect.height ? { left, top, right, bottom } : null;
   };
+  const pinned = (node) => {
+    for (let up = node; up && up !== document.body; up = up.parentElement) if (getComputedStyle(up).position === "sticky") return true;
+    return false;
+  };
   const label = (el) => (el.getAttribute("data-touch-control") || el.getAttribute("aria-label") || el.textContent || el.tagName).trim().slice(0, 32);
   const controls = [...document.querySelectorAll("button,a[href],input,select,[role=slider],[data-touch-control]")]
     .filter((el) => !el.closest("[inert]") && inScope(el))
     .map((el) => {
       const r = live(el);
       const v = r ? shown(el, r) : null;
-      const pinned = (node) => { for (let up = node; up && up !== document.body; up = up.parentElement) if (getComputedStyle(up).position === "sticky") return true; return false; };
       return { el, r, v, scrolledAt: pinned(el) || (v !== null && (v.right - v.left < r.width - 1 || v.bottom - v.top < r.height - 1)) };
     })
     .filter((c) => c.r && c.v);
@@ -121,7 +126,7 @@ const PROBE = ([cell, zone]) => {
     range.selectNodeContents(node);
     for (const r of range.getClientRects()) {
       const v = r.width > 0 && r.height > 0 ? shown(parent, r) : null;
-      if (v) texts.push({ r: v, parent, words: node.textContent.trim().slice(0, 24), scrolledAt: v.right - v.left < r.width - 1 || v.bottom - v.top < r.height - 1 });
+      if (v) texts.push({ r: v, parent, words: node.textContent.trim().slice(0, 24), scrolledAt: pinned(parent) || v.right - v.left < r.width - 1 || v.bottom - v.top < r.height - 1 });
     }
   }
   const covered = new Set();

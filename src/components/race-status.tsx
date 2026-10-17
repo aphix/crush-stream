@@ -11,7 +11,7 @@ const NEAR_GOAL = 500;
 const YARDS_PER_M = 1.0936;
 
 /** Top-centre column offset of the touch strips: the start-lights strip is 44 px (2.75 rem) tall, plus a 0.5 rem gap. */
-const BELOW_LIGHTS = "pt-[3.25rem]";
+const BELOW_LIGHTS = "pt-[3.25rem] phone-landscape:pt-0";
 
 /** The pursuit strip: police are chasing the viewed car. Cop count and, while the cops hold it slow beside one (the bust rule counting), the bust hold running out with the seconds left. Smaller on a `touch` screen, where it sits top centre. */
 function PursuitStrip({ chase, touch }: { chase: NonNullable<RaceView["chase"]>; touch: boolean }) {

@@ -283,9 +283,9 @@ const HOME_SEEN_KEY = "crush.home.seen";
 /** The left column hangs under the top-left cluster: its 44 px buttons and the 8 px gap (`gap-2`) before the next line. */
 const LEFT_COLUMN_TOP = "calc(max(var(--hud-edge), env(safe-area-inset-top)) + 3.75rem)";
 /** The left column's reach: the Menu cluster above it and the steering slider (72 px) with its clearance below it (`6.5rem`), so a long panel scrolls inside instead of running under the thumb. */
-const LEFT_COLUMN_HEIGHT = "calc(100dvh - 3.75rem - 6.5rem - 2 * var(--hud-edge))";
+const LEFT_COLUMN_HEIGHT = "calc(100dvh - max(var(--hud-edge), env(safe-area-inset-top)) - 3.75rem - 6.5rem - max(var(--hud-edge), env(safe-area-inset-bottom)))";
 /** The garage's column: the Menu cluster above it, and only the bottom edge's margin below. */
-const GARAGE_COLUMN_HEIGHT = "calc(100dvh - 3.75rem - 2 * max(var(--hud-edge), env(safe-area-inset-bottom)))";
+const GARAGE_COLUMN_HEIGHT = "calc(100dvh - max(var(--hud-edge), env(safe-area-inset-top)) - 3.75rem - max(var(--hud-edge), env(safe-area-inset-bottom)))";
 /** Top-centre moments of a derby (lights, reset prompt, winner): the top edge on a phone on its side, under the top strip's row upright, as the race moments are (`RaceOverlay`). */
 const DERBY_MOMENTS = "pointer-events-none absolute inset-x-0 z-10 flex flex-col items-center gap-1 px-3 top-[calc(max(var(--hud-edge),env(safe-area-inset-top))+3.5rem)] phone-landscape:hud-top";
 /** The boost bar and drift label sit just above the steering slider: its 72 px and an 8 px gap above the bottom edge. */
@@ -313,6 +313,8 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
   const sandboxDrive = driving && race === null && state.derbyView === null;
   // The race focus view's idea, for a Mini game: from the run-up through the flight to the score the HUD is the Menu and Reset buttons, the card's reading and the driving controls; the rest comes back once it is scored.
   const minimal = isMinigameRun(state);
+  // The Online chip shows (and, upright, wraps onto the cluster's second row) only between runs with nobody driven.
+  const onlineRow = onlineShown && race === null && !driving && !minimal && state.seat === "global";
   return (
     <div className="hud-grid pointer-events-none absolute inset-0 text-fg" data-focus={focus || undefined} data-calm={calm || undefined}>
       {/* The cluster is hidden, not unmounted, in a race: the online entry inside stays mounted because the race menus portal it into their own header (`online-slot.ts`). */}
@@ -336,9 +338,9 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
 
       {/* The scene's panels, one column under the cluster, stopping above the steering slider; the garage's panel docks itself to the bottom of it. */}
       <div
-        className={cn("pointer-events-none absolute hud-left flex w-52 max-w-[calc(100%_-_2rem)] flex-col gap-1 overflow-y-auto overscroll-contain", state.garage && "justify-end portrait:w-[min(22rem,calc(100%_-_2rem))]")}
+        className={cn("pointer-events-none absolute hud-left flex w-52 max-w-[calc(100%_-_2rem)] flex-col gap-1 overflow-y-auto overscroll-contain", state.garage && "justify-end portrait:w-[min(22rem,calc(100%_-_2rem))]", onlineRow && "top-[calc(max(var(--hud-edge),env(safe-area-inset-top))+3.75rem)] max-h-[calc(100dvh-max(var(--hud-edge),env(safe-area-inset-top))-3.75rem-6.5rem-max(var(--hud-edge),env(safe-area-inset-bottom)))] portrait:top-[calc(max(var(--hud-edge),env(safe-area-inset-top))+6.75rem)] portrait:max-h-[calc(100dvh-max(var(--hud-edge),env(safe-area-inset-top))-6.75rem-6.5rem-max(var(--hud-edge),env(safe-area-inset-bottom)))]")}
         // The garage's panel docks itself to the bottom (`mt-auto`), which needs a column of that height; the garage has no steering slider, so its column runs to the bottom edge. Every other scene's is as tall as its panels.
-        style={{ top: LEFT_COLUMN_TOP, maxHeight: state.garage ? GARAGE_COLUMN_HEIGHT : LEFT_COLUMN_HEIGHT, height: state.garage ? GARAGE_COLUMN_HEIGHT : undefined }}
+        style={{ top: onlineRow ? undefined : LEFT_COLUMN_TOP, maxHeight: state.garage ? GARAGE_COLUMN_HEIGHT : onlineRow ? undefined : LEFT_COLUMN_HEIGHT, height: state.garage ? GARAGE_COLUMN_HEIGHT : undefined }}
       >
         {race === null && !state.lab && !state.garage && !minimal ? <SandboxLine state={state} /> : null}
         <ScenePanels {...hud} touch />
