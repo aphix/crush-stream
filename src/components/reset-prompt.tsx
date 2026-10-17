@@ -3,8 +3,10 @@ import { resetPromptLabel, type ResetInput } from "@/game/hud/reset-prompt";
 import type { RaceView } from "@/game/match/types";
 import { cn } from "@/lib/utils";
 
-const PILL =
-  "flex items-center gap-2 rounded-xl bg-fg px-4 py-1.5 font-display text-xl font-semibold uppercase tracking-widest text-accent-fg shadow-lg motion-safe:animate-pulse sm:text-2xl";
+const PILL = "flex items-center gap-2 rounded-xl bg-fg font-display font-semibold uppercase tracking-widest text-accent-fg shadow-lg motion-safe:animate-pulse";
+/** The key-hint pill's size (a big view), and the touch pill's: one finger tall (44 px) and small enough to leave the road clear. */
+const PILL_KEY_SIZE = "px-4 py-1.5 text-xl sm:text-2xl";
+const PILL_TOUCH_SIZE = "h-11 px-3 text-base";
 
 /**
  * The glow of a reset control while its car needs a reset (`resetGlow`): a bright ring and halo in the accent
@@ -14,7 +16,7 @@ export const RESET_GLOW = "ring-4 ring-accent shadow-[0_0_24px_6px_color-mix(in_
 
 /**
  * "[R] to reset" once the view's car has lost two wheels: big, near-white and pulsing (not under reduced
- * motion), naming the control of the input in use. On touch the whole pill is a button that does what the
+ * motion), naming the control of the input in use. On touch the whole pill is a compact (44 px tall) button that does what the
  * thumb pad's wrench does (`onTap`). The caller places it (`className`): the race overlay and the derby HUD draw it in a
  * column that takes no pointer events, and on a phone the race HUD hangs it under its standings. Nothing where the game would refuse the reset, or `input` is null (no control on screen).
  */
@@ -24,14 +26,14 @@ export function ResetPrompt({ view, input, race, onTap, className }: { view: Rac
   if (label === null) return null;
   if (input === "touch") {
     return (
-      <button type="button" onClick={onTap} className={cn(PILL, "pointer-events-auto min-h-12 shrink-0 touch-manipulation", className)}>
+      <button type="button" onClick={onTap} className={cn(PILL, PILL_TOUCH_SIZE, "pointer-events-auto shrink-0 touch-manipulation", className)}>
         <Wrench className="size-5" />
         Tap to {label.toLowerCase()}
       </button>
     );
   }
   return (
-    <p role="status" className={cn(PILL, "shrink-0", className)}>
+    <p role="status" className={cn(PILL, PILL_KEY_SIZE, "shrink-0", className)}>
       <kbd className="rounded-md bg-accent-fg px-2 font-display text-fg">{label}</kbd>
       to reset
     </p>

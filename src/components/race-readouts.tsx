@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { showsDriveReadouts } from "@/components/drive-readouts";
 import { brakeTint } from "@/components/brake-tint";
 import { nitroGlowStyle } from "@/components/nitro-glow";
 import { DriveCluster } from "@/components/race-gauge";
 import { fmtGap, fmtTime } from "@/game/hud/race-clock";
+import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { useSpeedUnit } from "@/components/use-speed-unit";
 import { SurvivalReadout } from "@/components/survival-hud";
 import type { RaceHud, RaceView } from "@/game/match/types";
@@ -37,7 +38,8 @@ function useSplitFlash(split: number | null, time: number): boolean {
 /**
  * The race readouts of the driven car, or the watched car's while spectating (what its driver sees), drawn
  * straight on the view (`hud-ink`): position, lap and clocks top right, the speed, gear and boost gauge under
- * them, or in the bottom-right corner (`corner`, the arcade racers' spot) where no thumb pad sits there. None while
+ * them, or in the bottom-right corner (`corner`, the arcade racers' spot) where no thumb pad sits there. On a touch screen
+ * they are one band top left instead (position, lap and time, then a thin line of clocks), with the dial bottom centre. None while
  * the results reel plays: its cameras ride replayed wrecks, not a racer.
  */
 export function RaceReadouts({ race, corner }: { race: RaceHud; corner: boolean }) {
@@ -47,9 +49,98 @@ export function RaceReadouts({ race, corner }: { race: RaceHud; corner: boolean 
   return <Cluster key={view.id} race={race} view={view} corner={corner} />;
 }
 
+/**
+ * The phone's read-out band, top left (never the top right: the strip of buttons owns it): the whole group fades while the player drives (`calm:`).
+ * The first row stays narrow in portrait (the strip owns the rest of that row) and under 42 % of the width on a phone on its side.
+ */
+const PHONE_BAND =
+  "pointer-events-none absolute hud-left hud-top flex max-w-[10.5rem] flex-col items-start gap-0.5 font-display tabular-nums phone-landscape:max-w-[42vw] calm:opacity-35 hud-fade";
+
+/** The band's thin line: small clocks that wrap rather than grow wide. */
+const PHONE_THIN_LINE = "hud-ink flex flex-wrap items-center gap-x-2 text-[11px] leading-4";
+
+/** Speed and gear as text, for a phone held upright: there is no room for the dial there (a phone on its side has it, bottom centre). */
+function PhoneSpeed({ view }: { view: RaceView }) {
+  const unit = useSpeedUnit();
+  return (
+    <span className="flex items-baseline gap-1 text-sm font-semibold phone-landscape:hidden">
+      <span style={{ color: brakeTint(view.brakeCue) }} aria-label="Speed">
+        {formatSpeed(view.speedKph / KPH_PER_MS, unit)}
+        <span className="ml-0.5 text-[10px] font-medium text-fg/70">{unit}</span>
+      </span>
+      <span className="text-fg/70" aria-hidden>
+        ·
+      </span>
+      <span aria-label="Gear">{view.gear === 0 ? "R" : view.gear}</span>
+    </span>
+  );
+}
+
+/** The split vs the leader, in a slot that keeps its width while hidden so the line does not jump when it appears. */
+function SplitPill({ split, flash, className }: { split: number | null; flash: boolean; className: string }) {
+  return (
+    <p
+      className={cn("rounded-full bg-accent px-2 font-semibold text-accent-fg transition-opacity duration-[var(--motion-fast)]", className, flash ? "opacity-100" : "opacity-0")}
+      aria-live="polite"
+    >
+      {split === null ? "–" : split === 0 ? "Lead" : `Split ${fmtGap(split)}`}
+    </p>
+  );
+}
+
+/** The phone's race lines: place, lap and clock in one line; last, best, the split and (upright) the speed in a thin one under it. */
+function PhoneRaceLines({ race, racer, flash, speed }: { race: RaceHud; racer: NonNullable<RaceView["racer"]>; flash: boolean; speed: ReactNode }) {
+  return (
+    <>
+      <div className="hud-ink flex items-baseline gap-2 whitespace-nowrap">
+        <p className="text-2xl font-semibold leading-none tracking-tight phone-landscape:text-3xl">
+          P{racer.place}
+          <span className="text-sm font-medium text-fg/70">/{race.field}</span>
+        </p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-fg/70">
+          Lap <span className="text-sm text-fg">{racer.lap}</span>/{race.laps}
+        </p>
+        <p className="text-base font-semibold leading-none" aria-label="Race time">
+          {fmtTime(race.time)}
+        </p>
+      </div>
+      <div className={PHONE_THIN_LINE}>
+        {racer.done === null ? null : <span aria-label="Race completed">{Math.floor(racer.done * 100)}%</span>}
+        <dl className="flex gap-2">
+          <Clock label="Last" value={racer.lastLap === null ? "–" : fmtTime(racer.lastLap)} />
+          <Clock label="Best" value={racer.bestLap === null ? "–" : fmtTime(racer.bestLap)} />
+        </dl>
+        <SplitPill split={racer.split} flash={flash} className="text-xs leading-4" />
+        {speed}
+      </div>
+    </>
+  );
+}
+
 function Cluster({ race, view, corner }: { race: RaceHud; view: RaceView; corner: boolean }) {
+  const touch = useCoarsePointer();
   const r = view.racer;
   const flash = useSplitFlash(r?.split ?? null, race.time);
+  if (touch) {
+    const speed = <PhoneSpeed view={view} />;
+    return (
+      <>
+        <div className={PHONE_BAND}>
+          {race.survival ? (
+            <SurvivalReadout race={race} survival={race.survival} phone={speed} />
+          ) : r ? (
+            <PhoneRaceLines race={race} racer={r} flash={flash} speed={speed} />
+          ) : (
+            <div className={PHONE_THIN_LINE}>{speed}</div>
+          )}
+          <div className="phone-landscape:hidden">
+            <BoostMeter view={view} barClass="h-1.5 w-16" />
+          </div>
+        </div>
+        <Dial view={view} corner={false} spectated={race.spectating !== null} />
+      </>
+    );
+  }
   return (
     <div className="flex flex-col items-end gap-1 self-start text-right font-display tabular-nums" style={{ gridArea: "readouts" }}>
       {race.survival ? (
@@ -87,30 +178,58 @@ function Cluster({ race, view, corner }: { race: RaceHud; view: RaceView; corner
         </>
       ) : null}
       <Gauge view={view} corner={corner} spectated={race.spectating !== null} />
-      {race.survival ? null : (
-        <p
-          className={cn(
-            "rounded-full bg-accent px-2 text-sm font-semibold leading-5 text-accent-fg transition-opacity duration-[var(--motion-fast)]",
-            flash ? "opacity-100" : "opacity-0",
-          )}
-          aria-live="polite"
-        >
-          {r?.split == null ? "–" : r.split === 0 ? "Lead" : `Split ${fmtGap(r.split)}`}
-        </p>
-      )}
+      {race.survival ? null : <SplitPill split={r?.split ?? null} flash={flash} className="text-sm leading-5" />}
     </div>
   );
 }
 
-/** Speed and gear over the segmented boost meter (lit while burning) and the draft cue; the derby driver's readout too. A car with no nitrous (`boost` null: police, traffic, nobody driving) shows the meter empty and greyed. In `corner` mode a big window, and a phone on its side whatever `corner` says, gets the race's drive cluster (`DriveCluster`) in the bottom-right corner instead; there its bottle boosts when tapped, unless the car is a `spectated` one. */
-export function Gauge({ view, corner, spectated = false }: { view: RaceView; corner: boolean; spectated?: boolean }) {
-  const unit = useSpeedUnit();
+/**
+ * The drive cluster in its slot: bottom right in `corner` mode on a big window; bottom centre, 96 px, on a phone on its side, in the gap between the
+ * two thumb clusters (it fades with the rest while the player drives). Its bottle boosts when tapped, unless the car is a `spectated` one.
+ */
+function Dial({ view, corner, spectated }: { view: RaceView; corner: boolean; spectated: boolean }) {
+  return (
+    <div
+      className={cn(
+        "absolute bottom-4 right-4 hidden phone-landscape:hud-bottom phone-landscape:left-1/2 phone-landscape:right-auto phone-landscape:block phone-landscape:-translate-x-1/2 phone-landscape:[--phone-cluster:6rem] phone-landscape:calm:opacity-60 phone-landscape:hud-fade",
+        corner && "md:block",
+      )}
+    >
+      <DriveCluster view={view} boostable={!spectated} />
+    </div>
+  );
+}
+
+/** The segmented boost meter (lit while burning) with the draft cue; a car with no nitrous (`boost` null) shows it empty and greyed. `barClass` sizes the bar. */
+function BoostMeter({ view, barClass }: { view: RaceView; barClass: string }) {
   const boost = view.boost;
   return (
-    <>
-      <div className={cn("absolute bottom-4 right-4 hidden phone-landscape:bottom-3 phone-landscape:right-2 phone-landscape:block", corner && "md:block")}>
-        <DriveCluster view={view} boostable={!spectated} />
+    <div className={cn("flex items-center gap-2", boost === null && "opacity-30")}>
+      {view.racer?.drafting ? <span className="hud-ink text-[10px] font-semibold uppercase tracking-[0.12em] text-accent">Draft</span> : null}
+      <span className="hud-ink text-[10px] font-semibold uppercase tracking-[0.12em] text-fg/70">{boost === null ? "No boost" : "Boost"}</span>
+      <div
+        className={cn("flex gap-0.5 transition-[filter] duration-[var(--motion-fast)]", barClass)}
+        style={nitroGlowStyle("bar", boost, view.boosting)}
+        role="meter"
+        aria-label="Boost"
+        aria-valuenow={Math.round((boost ?? 0) * 100)}
+      >
+        {Array.from({ length: CELLS }, (_, i) => (
+          <div key={i} className="flex-1 overflow-hidden rounded-[2px] bg-fg/25 shadow-[var(--shadow-border)]">
+            <div className={cn("h-full", view.boosting > 0 ? "bg-fg" : "bg-accent")} style={{ width: `${Math.round(Math.min(1, Math.max(0, (boost ?? 0) * CELLS - i)) * 100)}%` }} />
+          </div>
+        ))}
       </div>
+    </div>
+  );
+}
+
+/** Speed and gear over the segmented boost meter (lit while burning) and the draft cue; the derby driver's readout too. In `corner` mode a big window, and a phone on its side whatever `corner` says, gets the race's drive cluster (`Dial`) instead; there its bottle boosts when tapped, unless the car is a `spectated` one. */
+export function Gauge({ view, corner, spectated = false }: { view: RaceView; corner: boolean; spectated?: boolean }) {
+  const unit = useSpeedUnit();
+  return (
+    <>
+      <Dial view={view} corner={corner} spectated={spectated} />
       <div className={cn("flex flex-col items-end gap-1 phone-landscape:hidden", corner && "md:hidden")}>
         <div className="hud-ink flex items-baseline gap-2">
           <p className="grid size-7 place-items-center self-center rounded-md text-lg font-semibold leading-none shadow-[var(--shadow-border)]" aria-label="Gear">
@@ -121,23 +240,7 @@ export function Gauge({ view, corner, spectated = false }: { view: RaceView; cor
             <span className="ml-0.5 text-xs font-medium text-fg/70">{unit}</span>
           </p>
         </div>
-        <div className={cn("flex items-center gap-2", boost === null && "opacity-30")}>
-          {view.racer?.drafting ? <span className="hud-ink text-[10px] font-semibold uppercase tracking-[0.12em] text-accent">Draft</span> : null}
-          <span className="hud-ink text-[10px] font-semibold uppercase tracking-[0.12em] text-fg/70">{boost === null ? "No boost" : "Boost"}</span>
-          <div
-            className="flex h-2 w-24 gap-0.5 transition-[filter] duration-[var(--motion-fast)]"
-            style={nitroGlowStyle("bar", boost, view.boosting)}
-            role="meter"
-            aria-label="Boost"
-            aria-valuenow={Math.round((boost ?? 0) * 100)}
-          >
-            {Array.from({ length: CELLS }, (_, i) => (
-              <div key={i} className="flex-1 overflow-hidden rounded-[2px] bg-fg/25 shadow-[var(--shadow-border)]">
-                <div className={cn("h-full", view.boosting > 0 ? "bg-fg" : "bg-accent")} style={{ width: `${Math.round(Math.min(1, Math.max(0, (boost ?? 0) * CELLS - i)) * 100)}%` }} />
-              </div>
-            ))}
-          </div>
-        </div>
+        <BoostMeter view={view} barClass="h-2 w-24" />
       </div>
     </>
   );
