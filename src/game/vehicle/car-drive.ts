@@ -101,6 +101,7 @@ const _turn = new Float64Array(4);
 const _yaw = new THREE.Quaternion();
 /** The point (x, z) driveMasses turned the masses about. */
 const turnAt = new Float64Array(2);
+const _freezeAt = new THREE.Vector3();
 /** [0]: the realism `_assist` was last filled for (NaN: never). */
 const _assistFor = new Float64Array([NaN]);
 /** `s` m/s less a slice's rolling resistance `drag` m/s: it works against the motion and never carries a car through rest. */
@@ -438,7 +439,16 @@ export function applyDrive(car: DeformableCar, input: DriveInput, dt: number, to
   _turn[1] = s;
   _turn[2] = nvx - vx;
   _turn[3] = nvz - vz;
-  if (driveMasses(car.deform.masses, _turn)) {
+  // A frozen wreck's masses stand in its frame (the rigid step places them from it each slice): only the body turns, about the masses' centre.
+  let turned: boolean;
+  if (car.deform.frozenReady) {
+    car.group.updateWorldMatrix(false, false);
+    _freezeAt.copy(car.deform.frozenCentre).applyMatrix4(car.group.matrixWorld);
+    turnAt[0] = _freezeAt.x;
+    turnAt[1] = _freezeAt.z;
+    turned = true;
+  } else turned = driveMasses(car.deform.masses, _turn);
+  if (turned) {
     const g = car.group;
     const px = g.position.x - turnAt[0]!;
     const pz = g.position.z - turnAt[1]!;

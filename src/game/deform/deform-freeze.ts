@@ -37,6 +37,7 @@ export abstract class DeformFreeze extends DeformContact {
       (EPICENTER.settleSpin <= 0 || this.bodyW.length() < EPICENTER.settleSpin);
     if (want === this.frozen) return;
     this.frozen = want;
+    this.frozenReady = false;
     if (want) {
       this.freezes++;
       this.frozenBased = false;

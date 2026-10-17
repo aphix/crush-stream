@@ -490,6 +490,11 @@ export const wreckInvI = new THREE.Vector3();
  * rest the car box's). Returns the centre.
  */
 export function wreckCentre(car: Pick<DeformableCar, "deform">): THREE.Vector3 {
+  // A frozen wreck's masses stand still in its frame: the centre and inertia it had when its rigid step last read them.
+  if (car.deform.frozenReady) {
+    wreckInvI.copy(car.deform.frozenInvI);
+    return _wreckCentre.copy(car.deform.frozenCentre);
+  }
   const ms = car.deform.masses;
   let m = 0;
   let cx = 0;

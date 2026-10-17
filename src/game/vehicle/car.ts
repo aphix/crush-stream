@@ -458,6 +458,10 @@ export class DeformableCar extends CarParts {
       }
       this.wake();
     }
+    if (this.deform.frozenReady) {
+      this.integrateFrozen(dt);
+      return;
+    }
     const g = this.group;
     const ms = this.deform.masses;
     g.updateWorldMatrix(false, false);
@@ -476,16 +480,7 @@ export class DeformableCar extends CarParts {
     this.invYaw = wreckInvI.y;
     this.flewDt = dt;
     stepFree(this, dt);
-    const rest = !this.moving;
-    if (!this.deform.crushing && this.contacts >= 3 && rest) {
-      if ((this.restS += dt) >= WRECK_REST_S) {
-        this.velocity.set(0, 0, 0);
-        this.angular.set(0, 0, 0);
-        this.asleep = true;
-        this.sleepX = g.position.x;
-        this.sleepZ = g.position.z;
-      }
-    } else this.restS = 0;
+    this.restOrSleep(dt);
     this.yaw = g.rotation.y;
     this.pitch = g.rotation.x;
     this.roll = g.rotation.z;
@@ -495,6 +490,57 @@ export class DeformableCar extends CarParts {
       m.world.copy(m.local).applyMatrix4(g.matrixWorld);
       _r.copy(m.world).sub(_c);
       m.vel.add(this.velocity).add(_v.crossVectors(this.angular, _r));
+    }
+    // A frozen wreck (`EPICENTER`) keeps what this step read: its masses stand still in the frame from here on.
+    if (this.deform.frozen) {
+      this.deform.frozenCentre.copy(centre);
+      this.deform.frozenInvI.copy(wreckInvI);
+      this.deform.frozenReady = true;
+    }
+    this.refreshBasis();
+    this.nudgeWheels(dt);
+    this.ride(dt);
+    this.stepLooseParts(dt, this.slot);
+  }
+
+  /** A wreck at rest for `WRECK_REST_S` on three wheels or more, and not crushing, falls asleep where it lies. */
+  private restOrSleep(dt: number): void {
+    const rest = !this.moving;
+    if (!this.deform.crushing && this.contacts >= 3 && rest) {
+      if ((this.restS += dt) >= WRECK_REST_S) {
+        this.velocity.set(0, 0, 0);
+        this.angular.set(0, 0, 0);
+        this.asleep = true;
+        this.sleepX = this.group.position.x;
+        this.sleepZ = this.group.position.z;
+      }
+    } else this.restS = 0;
+  }
+
+  /**
+   * `integrateWreck` for a frozen wreck whose centre and inertia are cached (`wreckCentre`): its masses stand still in the car's frame, so there is no motion
+   * relative to the body to take (`moveRelative`) and the frame places them (`world = local x matrixWorld`) with the body's rigid velocity field (what the
+   * carry gave them when the relative velocity was nothing). `local` is never written: a writer thaws first.
+   */
+  private integrateFrozen(dt: number): void {
+    const g = this.group;
+    const d = this.deform;
+    g.updateWorldMatrix(false, false);
+    this.invYaw = d.frozenInvI.y;
+    this.flewDt = dt;
+    stepFree(this, dt);
+    this.restOrSleep(dt);
+    this.yaw = g.rotation.y;
+    this.pitch = g.rotation.x;
+    this.roll = g.rotation.z;
+    g.updateWorldMatrix(false, false);
+    _c.copy(d.frozenCentre).applyMatrix4(g.matrixWorld);
+    const ms = d.masses;
+    for (let i = 0; i < ms.length; i++) {
+      const m = ms[i]!;
+      m.world.copy(m.local).applyMatrix4(g.matrixWorld);
+      _r.copy(m.world).sub(_c);
+      m.vel.copy(this.velocity).add(_v.crossVectors(this.angular, _r));
     }
     this.refreshBasis();
     this.nudgeWheels(dt);
