@@ -198,7 +198,7 @@ export function table(name, first, arms) {
   }
   for (const a of arms) if (Object.keys(a.thawSites).length) lines.push(`   thaw call sites, ${a.name}: ${Object.entries(a.thawSites).map(([k, v]) => `${k} ${v}`).join(", ")}`);
   if (arms.some((a) => a.flagged)) lines.push("   LOAD: a run started above the load limit (--force): the ms are not timing");
-  if (arms.length >= 2 && arms[0].trace && arms[1].trace) lines.push(...divergenceLines(arms[0], arms[1]));
+  for (const other of arms.slice(1)) if (arms[0].trace && other.trace) lines.push(...divergenceLines(arms[0], other));
   return lines.join("\n");
 }
 

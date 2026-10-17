@@ -91,8 +91,10 @@ function place(sim: Sim, state: Wreck, at: (i: number) => [number, number, numbe
 }
 
 const apart = (spacing: number) => (i: number): [number, number, number] => [0, (i - 3.5) * spacing, HEAD_X];
-/** A pile: 2 columns of 4, centres 3.0 m apart along x and 2.1 m across: the damaged hulls overlap and feed each other. */
-const piled = (i: number): [number, number, number] => [-(i >> 1) * 3.0, ((i & 1) - 0.5) * 2.1, HEAD_X];
+/** A pile: 2 columns of 4, centres 4.2 m apart along x (the hulls 4.44 m long: a 0.24 m overlap) and 2.1 m across: the wrecks touch and feed each other lightly, as a settled pile does. */
+const piled = (i: number): [number, number, number] => [-(i >> 1) * 4.2, ((i & 1) - 0.5) * 2.1, HEAD_X];
+/** The same 8 wrecks thrown together 3.0 m apart (a 1.4 m overlap): the pair pass pushes them apart every slice for a second, a car is thawed by a push in every slice. */
+const pushed = (i: number): [number, number, number] => [-(i >> 1) * 3.0, ((i & 1) - 0.5) * 2.1, HEAD_X];
 
 const sedan = (): VehicleClassId => "sedan";
 const MIX: readonly VehicleClassId[] = ["sedan", "muscle", "truck", "monster"];
@@ -109,4 +111,5 @@ export const SCENARIOS: Record<string, Scenario> = {
   "wreck-stopped-apart": { build: () => place(stageWrecks(8, sedan, true), "stopped", apart(40)), label: wreckLabel },
   "wreck-dead-apart": { build: () => place(stageWrecks(8, sedan, true), "dead", apart(40)), label: wreckLabel },
   "wreck-dead-piled": { build: () => place(stageWrecks(8, sedan, true), "dead", piled), label: wreckLabel },
+  "wreck-pile-pushed": { build: () => place(stageWrecks(8, sedan, true), "dead", pushed), label: wreckLabel },
 };

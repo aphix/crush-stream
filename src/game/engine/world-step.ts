@@ -394,7 +394,7 @@ export function stepWorld(w: World, dt: number): void {
       car.afterContacts(hc);
       w.afterCar?.(car, hc);
       // After this slice's solve, so the slice that crossed the quiet time still ran it: the next one freezes the car.
-      d.settleFreeze();
+      d.settleFreeze(hc);
       work[WORK.freezes] = work[WORK.freezes]! + d.freezes;
       work[WORK.thaws] = work[WORK.thaws]! + d.thaws;
       d.freezes = 0;

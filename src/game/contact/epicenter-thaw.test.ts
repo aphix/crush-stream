@@ -97,4 +97,44 @@ describe("given the guard that checks frozen cars", () => {
       loadEpicenter(saved);
     }
   });
+
+  it("when a car whose frozen centre is cached has its pose re-measured (followGroup: a clamp after the cache), then the check counts a breach: the invariant the freeze rests on (a planted hub's pin must not replace its stand)", () => {
+    const saved = epicenterValues();
+    try {
+      loadEpicenter(EPICENTER_AT_LOAD);
+      EPICENTER.on = 1;
+      EPICENTER.frozenCheck = 1;
+      const car = makeCar("shape");
+      launch(car, 6.2, 0, -Math.PI / 2, -50 * KPH, 0);
+      layOnGround(car);
+      const w = makeWorld([car], true, false, FREEWHEEL);
+      run(w, [new Probe(car, car.velocity)], 1.5);
+      const d = car.deform;
+      assert.ok(d.frozen && d.frozenReady, "the wreck froze with its centre cached");
+      assert.equal(d.frozenBreaches, 0, "the run itself breached");
+      car.syncPose(0);
+      assert.equal(d.frozenBreaches, 1, "a clamp after the cache went unnoticed");
+    } finally {
+      loadEpicenter(saved);
+    }
+  });
+
+  it("when a frozen wreck is put back on a spot (a respawn, a scene change: the rig scenes step through their own slice, which never settles a freeze), then it is not frozen", () => {
+    const saved = epicenterValues();
+    try {
+      loadEpicenter(EPICENTER_AT_LOAD);
+      EPICENTER.on = 1;
+      const car = makeCar("shape");
+      launch(car, 6.2, 0, -Math.PI / 2, -50 * KPH, 0);
+      layOnGround(car);
+      const w = makeWorld([car], true, false, FREEWHEEL);
+      run(w, [new Probe(car, car.velocity)], 1.5);
+      assert.ok(car.deform.frozen && car.deform.frozenReady, "the wreck froze with its centre cached");
+      car.spawnFacing(0, 0, 0, 0);
+      assert.equal(car.deform.frozen, false, "frozen after a respawn");
+      assert.equal(car.deform.frozenReady, false, "the cached centre survived a respawn");
+    } finally {
+      loadEpicenter(saved);
+    }
+  });
 });

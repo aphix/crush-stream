@@ -23,16 +23,23 @@ export abstract class DeformFreeze extends DeformContact {
 
   /**
    * End of a world slice, after the structure step (so the slice that crossed the quiet time still ran it: the window's one-shots, the plant): relocks the wreck
-   * under `epicenter` activation (`EPICENTER`) once its quiet time has reached `relockHold` (and, when set, its body is slower than `settleMps` and `settleSpin`),
-   * or thaws it when none of that holds any more. A contact thaws it at once (`thaw`), so a slice that meets one never skips its solve.
+   * under `epicenter` activation (`EPICENTER`) once its quiet time has reached `relockHold` (and, when set, its body is slower than `settleMps` and `settleSpin`,
+   * and `thawHold` s have passed since the last thaw), or thaws it when none of that holds any more. A contact thaws it at once (`thaw`), so a slice that meets one never skips its solve.
+   *
+   * INVARIANT the freeze rests on (measured: head-on, hubRL 15 cm off whole when it broke): after the whole-path `integrateWreck` that caches the frozen centre, no `clampLocal`
+   * (`syncPose`) may run until a thaw. `integrateWreck` re-derives every `local` from `world` first, and a planted hub's `clampLocal` pins `local` and leaves `world` alone, so `integrateFrozen`'s
+   * placement (`world = local x matrixWorld`) is only right while the last write to `local` was that re-derive. That is why the pre-pair and post-pair `syncPose` and the structure step all
+   * skip on `frozen`, the one slice after the flag is set (still the whole integrate) included.
    */
-  settleFreeze(): void {
+  settleFreeze(dt: number): void {
+    this.sinceThaw += dt;
     const want =
       this.massActive &&
       epicenterOn() &&
       this.mode === "shape" &&
       !this.bidirectional &&
       this.quietTime() >= EPICENTER.relockHold &&
+      this.sinceThaw >= EPICENTER.thawHold &&
       (EPICENTER.settleMps <= 0 || this.bodyV.length() < EPICENTER.settleMps) &&
       (EPICENTER.settleSpin <= 0 || this.bodyW.length() < EPICENTER.settleSpin);
     if (want === this.frozen) return;
@@ -81,6 +88,12 @@ export abstract class DeformFreeze extends DeformContact {
         m.vel.z = this.bodyV.z + wx * ry - wy * rx;
       }
     }
+  }
+
+  /** `EPICENTER.frozenCheck`: the invariant of `settleFreeze` as a check: a `followGroup` (so a `clampLocal`) on a frozen car whose centre is cached re-pins its planted hubs' `local` away from where they stand, and `integrateFrozen` then places them there (measured: hubRL 15 cm off whole). A breach is counted; the call goes on. */
+  override followGroup(group: THREE.Object3D, velocityOut: THREE.Vector3, angularOut: THREE.Vector3, dt: number): void {
+    if (EPICENTER.frozenCheck === 1 && this.frozenReady) this.frozenBreaches++;
+    super.followGroup(group, velocityOut, angularOut, dt);
   }
 
   /**

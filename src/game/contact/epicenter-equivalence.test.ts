@@ -29,7 +29,7 @@ type Ran = { results: CrashResult[]; frozenCarSlices: number; freezes: number; t
 
 type Kind = "owner head-on" | "t-bone" | "wall" | "re-hit";
 
-function stage(kind: Kind, on: boolean): Ran {
+function stage(kind: Kind, on: boolean, nudge = 0): Ran {
   loadEpicenter(EPICENTER_AT_LOAD);
   EPICENTER.on = on ? 1 : 0;
   EPICENTER.frozenCheck = 1;
@@ -46,6 +46,7 @@ function stage(kind: Kind, on: boolean): Ran {
   // The re-hit: a third car meets the parked one from the other side 1.5 s after the first, when its wreck has sat quiet and is frozen.
   if (c) launch(c, -(2.3 + 50 * KPH * 1.5), 0, Math.PI / 2, 50 * KPH, 0);
   layOnGround(a);
+  if (nudge) a.deform.translateMasses(nudge, 0, 0, 0);
   if (b) layOnGround(b);
   if (c) layOnGround(c);
   const cars = c ? [a, b!, c] : b ? [a, b] : [a];
@@ -90,6 +91,18 @@ describe("given a staged hit run once per activation mode", () => {
         assert.equal(e.drivetrainAlive, w.drivetrainAlive, `car ${i} drivetrain`);
         assert.equal(e.lampsOut.join(), w.lampsOut.join(), `car ${i} lamps`);
       }
+    });
+  }
+});
+
+describe("given the same staged hits run twice in whole mode, one with a car's masses nudged 1 micrometre", () => {
+  for (const kind of ["owner head-on", "t-bone", "wall", "re-hit"] as const) {
+    it(`when the ${kind} is run, then no mass ends more than 1 mm apart (the 1.2 cm bar of the epicenter rows is a real bar, not a chaotic one)`, () => {
+      const plain = stage(kind, false);
+      const nudged = stage(kind, false, 1e-6);
+      let worst = 0;
+      for (const [i, c] of plain.cars.entries()) for (const [k, m] of c.deform.masses.entries()) worst = Math.max(worst, m.world.distanceTo(nudged.cars[i]!.deform.masses[k]!.world));
+      assert.ok(worst <= 0.001, `a 1 um nudge moved a mass ${(worst * 1000).toFixed(3)} mm`);
     });
   }
 });

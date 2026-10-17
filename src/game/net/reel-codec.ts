@@ -215,9 +215,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * sandbox arm no wear limit and are unchanged: a replay of a clip of 110 or before of a derby drives its wrecks' drivetrains out differently.
  * 112: a clip records the epicenter activation it ran with (`HighlightClip.epicenter`: a flag byte, then the knobs' values when it was on) and a replay runs under it; with it on a wreck that has sat quiet past `relockHold` is frozen (its masses ride the car's frame,
  * no solve, no frame re-measure), which moves it within a few millimetres of where the whole solve leaves it: a replay of a clip of 111 or before runs `whole`, as it recorded, bit for bit.
+ * 113: the epicenter activation's knob list gains `thawHold` (seconds a thawed wreck waits before it may freeze again; 0 is the behaviour of 112), an eighth value after `frozenCheck` in a clip that ran with the activation on: a clip of 112 no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 112;
+const REPLAY_VERSION = 113;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

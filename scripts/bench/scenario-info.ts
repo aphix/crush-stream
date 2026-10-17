@@ -57,8 +57,15 @@ export const SCENARIO_INFO: Record<string, ScenarioInfo> = {
     warmS: 2,
     windowS: 12,
   },
+  "wreck-pile-pushed": {
+    about: "the same 8 dead wrecks thrown together 3.0 m apart (2 columns of 4, a 1.4 m overlap): the pair pass pushes them apart in every slice, so every wreck is touched every slice",
+    sizes: "correctness: a wreck that is pushed every slice must stay on the whole path (the arms are bit-identical); the freeze/thaw thrash",
+    lone: true,
+    warmS: 2,
+    windowS: 4,
+  },
   "wreck-dead-piled": {
-    about: "the same 8 dead wrecks in a pile (2 columns of 4, 3.0 m x 2.1 m): the one variable vs wreck-dead-apart is apart vs piled",
+    about: "the same 8 dead wrecks in a touching pile (2 columns of 4, 4.2 m x 2.1 m, a 0.24 m overlap): the one variable vs wreck-dead-apart is apart vs piled",
     sizes: "resting-pair work and the freeze/thaw thrash (feedOverlap): pairRestSkip, epi.feedMin",
     lone: true,
     warmS: 2,

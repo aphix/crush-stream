@@ -41,6 +41,11 @@ loadEpicenter(EPICENTER_AT_LOAD);
 const sim = scenario.build();
 const label = scenario.label(sim);
 for (const [id, value] of Object.entries(knobs)) {
+  // `nudge` (m) is not a knob: the sensitivity control, every mass of car 2 moved that far in x before the run (the sim's own response to a micrometre, with every knob off).
+  if (id === "nudge") {
+    sim.cars[2]!.deform.translateMasses(value, 0, 0, 0);
+    continue;
+  }
   const knob = EPICENTER_KNOBS.find((k) => k.id === id);
   if (!knob) throw new Error(`knob ${id}: not one of ${EPICENTER_KNOBS.map((k) => k.id).join(", ")}`);
   knob.set(value);

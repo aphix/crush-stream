@@ -77,7 +77,7 @@ describe("given the runs of one scenario", () => {
 
 describe("given the scenarios", () => {
   it("when the info and the builders are listed, then every scenario has both, and the convoy rows sit inside the lone reach", () => {
-    const names = "intact-alone intact-convoy intact-convoy-mixed wreck-dead-apart wreck-dead-piled wreck-driving-apart wreck-stopped-apart";
+    const names = "intact-alone intact-convoy intact-convoy-mixed wreck-dead-apart wreck-dead-piled wreck-driving-apart wreck-pile-pushed wreck-stopped-apart";
     assert.equal(Object.keys(SCENARIO_INFO).sort().join(" "), names);
     assert.equal(Object.keys(SCENARIOS).sort().join(" "), names);
     assert.equal(CONTACT_REACH + LONE_MARGIN, 6.3, "the reach the convoy rows' text names");
@@ -102,5 +102,17 @@ describe("given the scenarios", () => {
     assert.match(control!, /digests equal: bit-identical arms/);
     assert.match(wreck!, /frozen \/ \(wreck\+asleep\) slices\s+0\.00\s+1\.00/);
     assert.match(wreck!, /frozen-state breaches\s+0\s+0/);
+  });
+
+  it("when a pile of wrecks is pushed in every slice, then epicenter on and off drift apart no further than 2.5 times what the sim does to a 1 micrometre nudge with every knob off (the pile is chaotic: whole against whole nudged 1 um is centimetres)", async () => {
+    const out = mkdtempSync(path.join(tmpdir(), "bench-"));
+    const lines: string[] = [];
+    const arms = ["--arm", "off:", "--arm", "on:epi.on=1", "--arm", "nudge1um:nudge=1e-6", "--arm", "nudge10um:nudge=1e-5"];
+    const code = await main(["run", "wreck-pile-pushed", ...arms, "--warm", "0.25", "--window", "1.5", "--trace", "0.0416667", "--order", "abba", "--max-load", "1000", "--out", out], (l: string) => lines.push(l));
+    assert.equal(code, 0);
+    const worst = lines.join("\n").match(/worst over the run: body ([0-9.]+) cm/g)!.map((l) => Number(l.replace(/[^0-9.]/g, "").replace(/^0*/, "") || 0));
+    const [on, nudge1, nudge10] = worst as [number, number, number];
+    assert.ok(nudge1 > 1, `a 1 um nudge moved a body ${nudge1} cm: the pile is not the chaotic row it was`);
+    assert.ok(on <= 2.5 * nudge1, `epicenter on drifted ${on} cm from whole; a 1 um nudge (${nudge1} cm, 10 um: ${nudge10} cm) allows ${2.5 * nudge1}`);
   });
 });

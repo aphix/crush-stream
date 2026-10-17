@@ -158,6 +158,8 @@ export abstract class DeformRig {
   frozen = false;
   /** A frozen wreck whose rigid step has run once: its centre of mass and inertia (`frozenCentre`, `frozenInvI`, car frame) are cached, for its masses stand still in the frame (`DeformableCar.integrateWreck`, `wreckCentre`). */
   frozenReady = false;
+  /** Seconds since the last thaw (`settleFreeze` advances it): with `EPICENTER.thawHold` > 0 a wreck does not refreeze before that long has passed since a contact thawed it. */
+  sinceThaw = Infinity;
   readonly frozenCentre = new THREE.Vector3();
   readonly frozenInvI = new THREE.Vector3();
   /** Nodes the last structure step ran the solver on and the ones it left riding the body (`stepStructure`, `stepFrozen`), and how often this car froze and thawed since `stepWorld` last read them (it adds them to the step's work counters and zeroes them). */
@@ -203,6 +205,7 @@ export abstract class DeformRig {
     if (!this.frozen) return;
     this.frozen = false;
     this.frozenReady = false;
+    this.sinceThaw = 0;
     this.thaws++;
   }
 
@@ -503,6 +506,7 @@ export abstract class DeformRig {
     this.massActive = false;
     this.frozen = false;
     this.frozenReady = false;
+    this.sinceThaw = Infinity;
     this.nodesLoose = 0;
     this.nodesLocked = 0;
     this.freezes = 0;

@@ -25,6 +25,8 @@ export const EPICENTER = {
   nearPrune: 0,
   /** 1: a frozen car checks at every slice that nothing wrote to it: no mass's car-frame place moved, every mass is where the frame puts it and its contact clock did not restart; a writer that forgot `thaw` counts a breach (`frozenBreaches`). Debug and the rows only: 20 masses a slice. */
   frozenCheck: 0,
+  /** Seconds after a thaw before the car may freeze again, on top of `relockHold`'s quiet time. 0: the next quiet slice (a car a contact feeds every slice freezes and thaws every slice: the pending slice after each freeze takes the whole path, so it costs bookkeeping, not accuracy). The hold keeps such a car whole; the city's wrecks are touched about every 30 ms, so a long hold gives their relock away. */
+  thawHold: 0,
 };
 
 export type EpicenterKnobId = `epi.${keyof typeof EPICENTER}`;
@@ -49,6 +51,7 @@ const ROWS: readonly [keyof typeof EPICENTER, string, number, number, number][] 
   ["presentSkip", "Skip parts re-pose at rest", 0, 1, 1],
   ["nearPrune", "Skip belly crossings over wrecks", 0, 1, 1],
   ["frozenCheck", "Check frozen cars (debug)", 0, 1, 1],
+  ["thawHold", "No refreeze after a thaw (s)", 0, 1, 0.05],
 ];
 
 /** The knob rows, in panel order. */
