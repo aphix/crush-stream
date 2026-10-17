@@ -822,6 +822,9 @@ export class CrashEngine extends EngineGarage {
   private aimRigs(wallDt: number): void {
     // Driving is not spectating: the free view ends where a seat takes the wheel.
     if (this.seat.mode === "drive") this.view.leaveFree();
+    // The Lab is flicked, never followed or driven: a tap by a car would follow it (`watchCar`) and a pedal press then drive it,
+    // each taking the view off the side of the throw and onto the car.
+    if (this.showLab) this.seat.clear();
     if (this.highlights.playing) {
       // The reel frames its own shots: the crash cam over the hit while its window is open, then the subject's thrown driver's ride-along.
       this.reelFov ??= this.camera.fov;
@@ -883,8 +886,9 @@ export class CrashEngine extends EngineGarage {
       centroid(_v, n ? alive : live);
       look.set(_v.x, 0.7, _v.z);
     } else if (this.showLab) {
-      // A phone turned on its side (or back) gets that shape's shot, unless the user framed one.
-      if (this.camera.aspect < 1 !== this.labUpright && !this.view.userFramed) this.frameLab();
+      // A phone turned on its side (or back) gets that shape's shot: its lens and distance are fitted to the screen's width, so a
+      // view the player turned on the other shape means nothing on this one.
+      if (this.camera.aspect < 1 !== this.labUpright) this.frameLab();
       look.copy(this.labLook);
     } else if (this.showGarage) {
       look.set(GARAGE.shot.lookX, GARAGE.shot.lookY, GARAGE.shot.lookZ);

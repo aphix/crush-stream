@@ -1,18 +1,20 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { labRig, leaveLab, runLab, throwAt, type LabRig } from "./engine-lab.test-util.ts";
+import { labDollRig, labRig, leaveLab, runLab, throwAt, type LabRig } from "./engine-lab.test-util.ts";
 import type { LabShot } from "./engine-lab.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { COM_Y } from "../vehicle/car-air-body.ts";
 import { FLICK, LabFlick } from "./lab-flick.ts";
-import { aimLabShot, LAB_FOV, LAB_SHOT } from "./lab-shot.ts";
+import { LAB_SHOT, planLabShot } from "./lab-shot.ts";
+import { heldPose } from "../scenes/lab.ts";
 
 /**
  * The Lab's flick (`LabFlick`), headless: a landscape 844 × 390 screen looking at the house of cards from a bearing off the
  * bench's long axis (side-on, oblique, or straight down it); a press and a swipe are client px with their times (ms), as the
  * canvas's pointer events give them. The swipe is read on the throw plane: the upright plane through the item holding the bench axis.
- * The last suite looks through the camera the Lab opens with on a 414 × 757 phone held upright (`LAB_SHOT.upright`).
+ * The last suite looks through the camera the Lab opens with on a 414 × 757 phone held upright (`LAB_SHOT.upright`: the same side
+ * shot, fitted to the narrow width): a press off the cars and props is the camera's, and the picks take little of the screen.
  */
 
 afterEach(leaveLab);
@@ -51,8 +53,8 @@ function cameraAt(degrees: number): THREE.PerspectiveCamera {
 type View = { r: LabRig; flick: LabFlick; flicks: Flick[]; px: (v: THREE.Vector3) => Px; thrower: Px; along: Px; up: Px };
 
 /** A rig of `preset`, settled, seen through the camera `aim` makes for it on `screen`, and a flick on that screen; `along` and `up`: the thrower's metre along the bench and its metre up, in px on that screen. */
-function viewThrough(preset: "cards" | "pad", aim: (r: LabRig) => THREE.PerspectiveCamera, screen: typeof SCREEN): View {
-  const r = labRig(preset);
+function viewThrough(preset: "cards" | "pad" | "wall", aim: (r: LabRig) => THREE.PerspectiveCamera, screen: typeof SCREEN, rig: LabRig = labRig(preset)): View {
+  const r = rig;
   runLab(r, 2);
   const cam = aim(r);
   const flicks: Flick[] = [];
@@ -73,16 +75,18 @@ function view(preset: "cards" | "pad", degrees: number): View {
   return viewThrough(preset, () => cameraAt(degrees), SCREEN);
 }
 
-/** The camera the Lab opens with on an upright screen (`LAB_SHOT.upright`), placed on its orbit about the look point as the orbit rig places it. */
+/** The camera the Lab opens with on an upright screen (`LAB_SHOT.upright`, fitted to its width), placed on its orbit about the look point as the orbit rig places it. */
 function openingCameraUpright(r: LabRig): THREE.PerspectiveCamera {
   const shot = LAB_SHOT.upright;
+  const first = heldPose(r.lab.layout[0]!);
   const look = new THREE.Vector3();
-  const bearing = aimLabShot(r.lab.centre(0, new THREE.Vector3()), r.lab.focus, shot, false, look);
-  const cam = new THREE.PerspectiveCamera(LAB_FOV, PHONE_UPRIGHT.width / PHONE_UPRIGHT.height, 0.1, 400);
+  const aspect = PHONE_UPRIGHT.width / PHONE_UPRIGHT.height;
+  const { bearing, radius } = planLabShot(new THREE.Vector3(first.x, first.y, first.z), r.lab.focus, r.lab.layout.map(heldPose), shot, aspect, false, look);
+  const cam = new THREE.PerspectiveCamera(shot.fov, aspect, 0.1, 400);
   cam.position.set(
-    look.x + Math.sin(bearing) * shot.radius * Math.cos(shot.pitch),
-    look.y + shot.radius * Math.sin(shot.pitch),
-    look.z + Math.cos(bearing) * shot.radius * Math.cos(shot.pitch),
+    look.x + Math.sin(bearing) * radius * Math.cos(shot.pitch),
+    look.y + radius * Math.sin(shot.pitch),
+    look.z + Math.cos(bearing) * radius * Math.cos(shot.pitch),
   );
   cam.lookAt(look);
   cam.updateMatrixWorld(true);
@@ -261,10 +265,14 @@ describe("given the house of cards on the bench, its thrower swiped on the throw
   });
 });
 
-describe("given the house of cards seen on a 414 × 757 phone held upright, as the Lab opens", () => {
+describe("given the Lab opened on a 414 × 757 phone held upright, its side shot", () => {
   const screenSwipeMs = 120;
   const screenSwipeSpeedPx = 600;
-  const minDegreesOffUp = 30;
+  const minDegreesOffUp = 70;
+  /** The most of the screen (its share of its area) the picks of every item may take: the rest is the camera's to orbit with one finger. */
+  const maxPickedShare = 0.2;
+  const gridColumns = 41;
+  const gridRows = 75;
 
   /** The unit screen direction from the thrower to the roof car of the stack. */
   function towardStack(v: View): Px {
@@ -273,10 +281,26 @@ describe("given the house of cards seen on a 414 × 757 phone held upright, as t
     return [(roof[0] - v.thrower[0]) / length, (roof[1] - v.thrower[1]) / length];
   }
 
-  it("when the stack is looked for on the screen, then it lies at least 30° off straight up from the thrower, so a throw toward it is a diagonal swipe", () => {
+  /** The share of the screen's grid of presses `view`'s flick takes (every press is let go again, cancelled). */
+  function pickedShare(v: View): number {
+    let taken = 0;
+    for (let row = 0; row < gridRows; row++) {
+      for (let column = 0; column < gridColumns; column++) {
+        const x = ((column + 0.5) / gridColumns) * PHONE_UPRIGHT.width;
+        const y = ((row + 0.5) / gridRows) * PHONE_UPRIGHT.height;
+        if (v.flick.down(x, y, 0)) {
+          taken++;
+          v.flick.up(x, y, 0, true);
+        }
+      }
+    }
+    return taken / (gridRows * gridColumns);
+  }
+
+  it("when the stack is looked for on the screen, then it lies at least 70° off straight up from the thrower, so a throw toward it is a sideways swipe", () => {
     const v = viewThrough("cards", openingCameraUpright, PHONE_UPRIGHT);
     const direction = towardStack(v);
-    const degreesOffUp = (Math.atan2(direction[0], -direction[1]) * 180) / Math.PI;
+    const degreesOffUp = (Math.atan2(Math.abs(direction[0]), -direction[1]) * 180) / Math.PI;
     assert.ok(degreesOffUp >= minDegreesOffUp, `the stack reads ${degreesOffUp.toFixed(1)}° off straight up`);
   });
 
@@ -296,5 +320,23 @@ describe("given the house of cards seen on a 414 × 757 phone held upright, as t
     const screenY = out.x * v.along[1] + out.y * v.up[1];
     assert.ok(Math.abs(screenX - direction[0] * screenSwipeSpeedPx) < 1e-6, `the launch on the screen x ${screenX.toFixed(3)} px/s, the swipe's ${(direction[0] * screenSwipeSpeedPx).toFixed(3)} px/s`);
     assert.ok(Math.abs(screenY - direction[1] * screenSwipeSpeedPx) < 1e-6, `the launch on the screen y ${screenY.toFixed(3)} px/s, the swipe's ${(direction[1] * screenSwipeSpeedPx).toFixed(3)} px/s`);
+  });
+
+  it("when a finger presses the screen away from every car and swipes, then the press is left to the camera, so one finger turns the view", () => {
+    const v = viewThrough("cards", openingCameraUpright, PHONE_UPRIGHT);
+    for (const y of [0.15, 0.3, 0.85]) {
+      assert.equal(swipe(v.flick, [PHONE_UPRIGHT.width / 2, y * PHONE_UPRIGHT.height], [PHONE_UPRIGHT.width / 4, y * PHONE_UPRIGHT.height], 120), false, `a press ${y * 100} % down the screen`);
+    }
+    assert.equal(v.flicks.length, 0);
+  });
+
+  it("when the grid of presses over the cards' screen is tried, then the picks of the cars take at most a fifth of it", () => {
+    const share = pickedShare(viewThrough("cards", openingCameraUpright, PHONE_UPRIGHT));
+    assert.ok(share > 0 && share <= maxPickedShare, `${(share * 100).toFixed(1)} % of the screen is picked`);
+  });
+
+  it("when the grid of presses over the wall's screen is tried, then the picks of the cars and the knockable props take at most a fifth of it", async () => {
+    const share = pickedShare(viewThrough("wall", openingCameraUpright, PHONE_UPRIGHT, await labDollRig("wall")));
+    assert.ok(share > 0 && share <= maxPickedShare, `${(share * 100).toFixed(1)} % of the screen is picked`);
   });
 });
