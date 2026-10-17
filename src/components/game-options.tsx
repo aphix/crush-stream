@@ -4,7 +4,7 @@ import { GAME_KINDS, type GameKind } from "@/game/net/codec";
 import type { CourseMenu } from "@/game/net/net-ports";
 import { cn } from "@/lib/utils";
 
-/** Taps stay 44 px tall on phones, 32 px from `sm`. */
+/** Taps stay 44 px tall on touch, 32 px with a fine pointer. */
 const TAP = "h-11 pointer-fine:h-8";
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
 
@@ -35,7 +35,7 @@ export function GameOptions({ kind, onKind, course, onCourse, playlist, onPlayli
       {onKind ? (
         <div className="flex gap-1" role="group" aria-label="Game">
           {GAME_KINDS.map((k) => (
-            <Button key={k} className={cn(TAP, "flex-1 px-1 text-xs")} variant={kind === k ? "default" : "secondary"} aria-pressed={kind === k} onMouseDown={keepFocus} onClick={() => onKind(k)}>
+            <Button key={k} className={cn(TAP, "min-w-0 flex-1 px-1 text-xs")} variant={kind === k ? "default" : "secondary"} aria-pressed={kind === k} onMouseDown={keepFocus} onClick={() => onKind(k)}>
               {GAME_LABEL[k]}
             </Button>
           ))}
@@ -44,7 +44,7 @@ export function GameOptions({ kind, onKind, course, onCourse, playlist, onPlayli
       {kind === "race" || kind === "survival" ? (
         <label className="flex items-center gap-2">
           <span className="hud-label w-12 shrink-0">Course</span>
-          <select value={course} onChange={(e) => onCourse(e.target.value)} aria-label={kind === "race" ? "Race course" : "Survival course"} className={cn(TAP, "w-full rounded-md bg-surface-2 px-2")}>
+          <select value={course} onChange={(e) => onCourse(e.target.value)} aria-label={kind === "race" ? "Race course" : "Survival course"} className={cn(TAP, "w-full min-w-0 rounded-md bg-surface-2 px-2")}>
             {courses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -69,7 +69,7 @@ export function GameOptions({ kind, onKind, course, onCourse, playlist, onPlayli
               return (
                 <Button
                   key={c.id}
-                  className={cn(TAP, "justify-start truncate px-2 text-xs")}
+                  className={cn(TAP, "min-w-0 justify-start truncate px-2 text-xs")}
                   variant={place > 0 ? "default" : "secondary"}
                   aria-pressed={place > 0}
                   onMouseDown={keepFocus}

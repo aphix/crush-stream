@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-/** Number boxes and the time-scale field: 44 px tall on phones, 32 px from `sm`. */
+/** Number boxes and the time-scale field: 44 px tall on touch, 32 px with a fine pointer. */
 export const FIELD =
   "h-11 w-14 shrink-0 rounded-md bg-surface-2 px-1.5 text-right font-display text-xs tabular-nums text-fg shadow-[var(--shadow-border)] pointer-fine:h-8";
 /** A dot in the margin left of a label (or at the end of a chip): this setting differs from its default. Hidden from the page, the section's reset row names it. */
@@ -10,7 +10,7 @@ export function ChangedDot({ on, className }: { on: boolean; className?: string 
 
 /**
  * Label, range slider, then either a read-out (`shown`, the rig panels' narrow rows) or a typed number field
- * (`digits`, the settings column). 44 px tall on phones, 24 px from `sm`.
+ * (`digits`, the settings column). 44 px tall on touch, 24 px with a fine pointer.
  */
 export function RangeRow({
   label,
