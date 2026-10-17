@@ -67,7 +67,7 @@ export function summarize(runs) {
     const phase = Object.fromEntries(PHASES.map((p) => [p, mean(list.map((r) => r.msPerS[p]))]));
     const work = Object.fromEntries(COUNTERS.map((c) => [c, mean(list.map((r) => r.workPerS[c]))]));
     const total = PHASES.reduce((s, p) => s + phase[p], 0);
-    const units = work.liveCarSlices + work.wreckCarSlices;
+    const units = work.liveCarSlices + work.wreckCarSlices + work.asleepCarSlices;
     const perUnit = Object.fromEntries(PHASES.map((p) => [p, units > 0 ? (phase[p] * 1000) / units : 0]));
     out.push({
       name,
@@ -105,20 +105,20 @@ export function table(name, first, arms) {
   const row = (label, vals, change = true) => {
     const cells = vals.map((v) => v.padStart(Math.max(9, w)));
     const tail = change && arms.length === 2 ? [pct(Number(vals[0]), Number(vals[1])).padStart(8)] : [];
-    return `   ${label.padEnd(26)}${cells.join(" ")}${tail.length ? " " + tail[0] : ""}`;
+    return `   ${label.padEnd(36)}${cells.join(" ")}${tail.length ? " " + tail[0] : ""}`;
   };
-  lines.push(`   ${"".padEnd(26)}${head.slice(1).join(" ")}`);
+  lines.push(`   ${"".padEnd(36)}${head.slice(1).join(" ")}`);
   lines.push(row("runs", arms.map((a) => String(a.runs)), false));
   lines.push(row("load at start (min..max)", arms.map((a) => `${f1(a.load.start)}..${f1(a.load.startMax)}`), false));
   lines.push(row("load at end (max)", arms.map((a) => f1(a.load.end)), false));
   lines.push(row("ms/sim-s, wall (runs)", arms.map((a) => f1(mean(a.wall))), true));
   lines.push(row("ms/sim-s, phases total", arms.map((a) => f1(a.total))));
   for (const p of PHASES) if (arms.some((a) => a.phase[p] >= 0.05)) lines.push(row(`  ${p}`, arms.map((a) => f2(a.phase[p]))));
-  lines.push(row("us per car-slice, all", arms.map((a) => f2(a.perUnitTotal))));
+  lines.push(row("us per car-slice, all (live+wreck+asleep)", arms.map((a) => f2(a.perUnitTotal))));
   for (const p of PHASES) if (arms.some((a) => a.perUnit[p] >= 0.05)) lines.push(row(`  ${p}`, arms.map((a) => f2(a.perUnit[p]))));
   for (const c of COUNTERS) if (arms.some((a) => a.work[c] > 0)) lines.push(row(`${c}/s`, arms.map((a) => String(Math.round(a.work[c])))));
-  const wreck = arms.map((a) => a.work.wreckCarSlices);
-  lines.push(row("frozen / wreck car-slices", arms.map((a, i) => (wreck[i] > 0 ? f2(a.work.frozenCarSlices / wreck[i]) : "-")), false));
+  const wreck = arms.map((a) => a.work.wreckCarSlices + a.work.asleepCarSlices);
+  lines.push(row("frozen / (wreck+asleep) slices", arms.map((a, i) => (wreck[i] > 0 ? f2(a.work.frozenCarSlices / wreck[i]) : "-")), false));
   lines.push(row("frozen-state breaches", arms.map((a) => String(a.breaches)), false));
   lines.push(row("digest (first run)", arms.map((a) => a.digest.slice(0, 8)), false));
   lines.push(row("digest same in every run", arms.map((a) => (a.digestsEqual ? "yes" : "NO")), false));

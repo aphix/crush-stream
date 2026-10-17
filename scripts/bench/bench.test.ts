@@ -62,7 +62,7 @@ describe("given the runs of one scenario", () => {
     assert.equal(on.work.frozenCarSlices, 1000);
     assert.equal(on.digestsEqual, true);
     const text = table("x", { about: "about", sizes: "sizes", lone: true, label: "8 wrecks", windowS: 12, warmS: 2 }, [off, on]);
-    assert.match(text, /frozen \/ wreck car-slices\s+0\.00\s+1\.00/);
+    assert.match(text, /frozen \/ \(wreck\+asleep\) slices\s+0\.00\s+1\.00/);
     assert.match(text, /lone-car schedule ON/);
     assert.match(text, /digest same in every run\s+yes\s+yes/);
     assert.match(text, /max \|pose or velocity difference\|, off vs on/);
@@ -100,7 +100,7 @@ describe("given the scenarios", () => {
     const text = lines.join("\n");
     const [control, wreck] = text.split("== wreck-stopped-apart");
     assert.match(control!, /digests equal: bit-identical arms/);
-    assert.match(wreck!, /frozen \/ wreck car-slices\s+0\.00\s+1\.00/);
+    assert.match(wreck!, /frozen \/ \(wreck\+asleep\) slices\s+0\.00\s+1\.00/);
     assert.match(wreck!, /frozen-state breaches\s+0\s+0/);
   });
 });
