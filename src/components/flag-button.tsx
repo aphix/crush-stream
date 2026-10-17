@@ -20,7 +20,7 @@ export function FlagButton({ clip, className }: { clip: number | null; className
   return (
     <Button
       variant="secondary"
-      className={cn("h-8 min-w-8 px-0 font-display text-base font-bold leading-none", className)}
+      className={cn("h-8 min-w-8 px-0 font-display text-base font-bold leading-none pointer-coarse:h-11 pointer-coarse:min-w-11", className)}
       aria-label="Flag this replay"
       title="Flag this replay as wrong"
       disabled={clip === null}

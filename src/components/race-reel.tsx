@@ -137,7 +137,7 @@ export function SoloExit({ title, shown, onCommand }: { title: string; shown: nu
         className="pointer-events-auto absolute inset-0 z-30 cursor-pointer bg-transparent outline-none"
       />
       {/* Above the exit tap (its own element: a tap on [!] does not leave the view). */}
-      <div className="pointer-events-auto absolute right-3 top-3 z-40">
+      <div className="pointer-events-auto absolute right-3 top-3 z-40 pointer-coarse:hud-right pointer-coarse:hud-top">
         <FlagButton clip={flagButton({ reel: null, solo: title, shown }).clip} />
       </div>
     </>

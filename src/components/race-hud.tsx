@@ -7,6 +7,7 @@ import {
   Eye,
   Flag,
   Focus,
+  LayoutGrid,
   PanelsTopLeft,
   Play,
   RotateCcw,
@@ -17,9 +18,10 @@ import {
   Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SchemePicker } from "@/components/controls-section";
 import { copyText } from "@/lib/clipboard";
 import { DriverRows } from "@/components/race-driver";
-import { CARD, MenuShell, NavButton } from "@/components/race-menu-shell";
+import { CARD, MenuShell, NavButton, PINNED_BAR } from "@/components/race-menu-shell";
 import { BustedBanner } from "@/components/race-busted";
 import { AudioRows } from "@/components/race-audio";
 import type { AudioLevels } from "@/game/hud/audio-levels";
@@ -29,10 +31,11 @@ import { ResetPrompt } from "@/components/reset-prompt";
 import { StartLights } from "@/components/start-lights";
 import { SurvivalMenu, SurvivalResults } from "@/components/survival-hud";
 import { useReelCover } from "@/components/use-reel-cover";
+import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { AI_DIFFICULTIES } from "@/game/ai/constants";
 import { missedCheckpointText, type ResetInput } from "@/game/hud/reset-prompt";
 import { courseTap, selectAll } from "@/game/hud/setup-patch";
-import { LEAVE_MS, STANDING_LI, withLeavers, type StandingSlot } from "@/game/hud/standings-motion";
+import { LEAVE_MS, nextFlashUntil, STANDING_LI, standingsVisible, withLeavers, type StandingSlot } from "@/game/hud/standings-motion";
 import type { CarStatus, RaceCommand, RaceHud, RaceHudRow, RaceOptions } from "@/game/match/types";
 import { fmtGap, fmtTime } from "@/game/hud/race-clock";
 import { cn } from "@/lib/utils";
@@ -100,21 +103,59 @@ function StandingItem({ leaving, className, children }: { leaving: boolean; clas
 }
 
 /**
+ * Whether a phone's standings list is up (`standingsVisible`): the viewer's place is watched here for a pass either way, and a
+ * timer ends the pass flash (the race clock keeps ticking the HUD, but nothing re-renders it at the flash's end).
+ */
+function useStandingsVisible(race: RaceHud): boolean {
+  const place = race.you?.place ?? null;
+  const previousPlace = useRef<number | null>(null);
+  const [flashUntil, setFlashUntil] = useState(0);
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const before = previousPlace.current;
+    const at = Date.now();
+    previousPlace.current = place;
+    setFlashUntil((until) => nextFlashUntil(before, place, at, until));
+  }, [place]);
+  useEffect(() => {
+    if (flashUntil === 0) return;
+    // A timer can fire a hair early: the clock it sets is never before the end it waited for.
+    const timer = setTimeout(() => setNow(Math.max(Date.now(), flashUntil)), Math.max(0, flashUntil - Date.now()));
+    return () => clearTimeout(timer);
+  }, [flashUntil]);
+  return standingsVisible({ spectating: race.spectating !== null, phase: race.phase, raceTime: race.time, reel: race.reel !== null, flashUntil, now });
+}
+
+/**
  * Live order, panel-free. A name click follows that car (spectating or finished). Phones show P1, you, and the cars around
  * you (around the watched car while spectating). Over the results reel its box goes to the engine (`useReelCover`). A pass
- * slides the two rows past each other, a row that arrives or leaves fades (`STANDING_LI`).
+ * slides the two rows past each other, a row that arrives or leaves fades (`STANDING_LI`). On a phone the list sits under the
+ * read-outs and is up only when it is news (`standingsVisible`); otherwise it fades out and stops taking taps.
  */
 export function RaceStandings({ race, onCommand }: { race: RaceHud; onCommand: Send }) {
   const ref = useRef<HTMLOListElement>(null);
+  const touch = useCoarsePointer();
+  const up = useStandingsVisible(race);
   const shown = race.phase !== null && race.standings.length > 0;
   useReelCover(ref, "standings", shown && race.reel ? onCommand : null);
   useSlide(ref);
   const slots = useLeavers(race.standings);
   if (!shown) return null;
+  const faded = touch && !up;
   const watched = race.standings.find((r) => r.watched)?.place;
   const focusPlace = (race.spectating !== null ? watched : race.you?.place) ?? watched ?? 1;
   return (
-    <ol ref={ref} aria-label="Standings" className="pointer-events-auto max-h-full w-36 space-y-px overflow-y-auto sm:w-48 idle:opacity-60">
+    <ol
+      ref={ref}
+      aria-label="Standings"
+      inert={faded}
+      className={cn(
+        "max-h-full w-36 space-y-px overflow-y-auto sm:w-48",
+        // The 3rem is the read-out line above (`RaceReadouts`); the list never reaches into the road zone's middle.
+        "pointer-coarse:hud-fade pointer-coarse:hud-left pointer-coarse:absolute pointer-coarse:top-[calc(max(var(--hud-edge),env(safe-area-inset-top))+3rem)] pointer-coarse:w-36",
+        faded ? "pointer-events-none opacity-0" : "pointer-events-auto idle:opacity-60",
+      )}
+    >
       {race.spectating !== null ? (
         <li>
           <AutoRow on={race.auto} onWatch={() => onCommand({ type: "watch", id: -1 })} />
@@ -143,7 +184,7 @@ function AutoRow({ on, onWatch }: { on: boolean; onWatch: () => void }) {
       aria-pressed={on}
       aria-label="Watch Auto"
       className={cn(
-        "flex h-9 w-full items-center gap-2 rounded-md px-1.5 text-left font-display text-sm transition-colors duration-[var(--motion-quick)] pointer-fine:h-6 pointer-coarse:h-9",
+        "flex h-9 w-full items-center gap-2 rounded-md px-1.5 text-left font-display text-sm transition-colors duration-[var(--motion-quick)] pointer-fine:h-6 pointer-coarse:h-11",
         on ? "bg-surface/80 text-fg" : "hud-ink text-fg hover:bg-surface/60",
       )}
     >
@@ -172,7 +213,7 @@ function StandingRow({ row, lead, onWatch }: { row: RaceHudRow; lead: number; on
       aria-pressed={row.watched}
       aria-label={`Watch ${row.name}`}
       className={cn(
-        "flex h-9 w-full items-center gap-2 rounded-md px-1.5 text-left font-display text-sm transition-colors duration-[var(--motion-quick)] pointer-fine:h-6 pointer-coarse:h-9",
+        "flex h-9 w-full items-center gap-2 rounded-md px-1.5 text-left font-display text-sm transition-colors duration-[var(--motion-quick)] pointer-fine:h-6 pointer-coarse:h-11",
         row.you ? "bg-accent text-accent-fg" : row.watched ? "bg-surface/80 text-fg" : "hud-ink text-fg hover:bg-surface/60",
       )}
     >
@@ -187,17 +228,23 @@ function StandingRow({ row, lead, onWatch }: { row: RaceHudRow; lead: number; on
   );
 }
 
-/** Follow-cam chip above the dock while spectating: the car's name, previous / next, and the camera (`cam`, its name; `onCam` cycles it). In the free view `freeHelp` is its controls, in a line under the chip. */
+/**
+ * Follow-cam chip while spectating: the car's name, previous / next, and the camera (`cam`, its name; `onCam` cycles it). In the
+ * free view `freeHelp` is its controls, in a line under the chip. On a phone it is the one bottom-centre piece (nothing else
+ * sits there while spectating), with the help line above it.
+ */
 export function SpectateBar({ race, pad, cam, freeHelp, onCommand, onCam }: { race: RaceHud; pad: boolean; cam: string | null; freeHelp: string | null; onCommand: Send; onCam: () => void }) {
   if (race.spectating === null || race.menu !== null) return null;
   return (
-    <div className="flex flex-col items-start gap-1">
-      <div className="hud-panel pointer-events-auto flex shrink-0 items-center gap-1 p-1" role="status">
+    <div className="flex flex-col items-start gap-1 pointer-coarse:hud-bottom pointer-coarse:absolute pointer-coarse:inset-x-0 pointer-coarse:flex-col-reverse pointer-coarse:items-center">
+      <div className="hud-panel pointer-events-auto flex shrink-0 items-center gap-1 p-1 pointer-coarse:max-w-[calc(100%-2rem)]" role="status">
         <Button variant="ghost" size="icon" className="pointer-fine:size-8 pointer-coarse:size-11" aria-label="Previous car" onMouseDown={keepFocus} onClick={() => onCommand({ type: "cycle", dir: -1 })}>
           <ChevronLeft />
         </Button>
         <div className="min-w-0 px-1 text-center">
-          <p className="hud-label">Spectating · {pad ? "LB / RB" : "Q / E"}</p>
+          <p className="hud-label">
+            Spectating<span className="pointer-coarse:hidden"> · {pad ? "LB / RB" : "Q / E"}</span>
+          </p>
           <p className="truncate font-display text-base font-semibold leading-tight">{race.auto ? `Auto · ${race.spectating}` : race.spectating}</p>
         </div>
         <Button variant="ghost" size="icon" className="pointer-fine:size-8 pointer-coarse:size-11" aria-label="Next car" onMouseDown={keepFocus} onClick={() => onCommand({ type: "cycle", dir: 1 })}>
@@ -210,7 +257,7 @@ export function SpectateBar({ race, pad, cam, freeHelp, onCommand, onCam }: { ra
           </Button>
         ) : null}
       </div>
-      {freeHelp ? <p className="hud-ink max-w-md text-xs leading-snug text-fg/80">{freeHelp}</p> : null}
+      {freeHelp ? <p className="hud-ink max-w-md text-xs leading-snug text-fg/80 pointer-coarse:text-center">{freeHelp}</p> : null}
     </div>
   );
 }
@@ -233,14 +280,15 @@ export function RaceViewToggle({ race, onCommand, compact, bare }: { race: RaceH
     >
       {race.fullUi ? <Focus /> : <PanelsTopLeft />}
       <span className={cn(compact && "hidden sm:inline")}>{label}</span>
-      <kbd className="hidden rounded bg-surface-2 px-1.5 font-display text-xs text-muted shadow-[var(--shadow-border)] text-shadow-none sm:inline">H</kbd>
+      <kbd className="hidden rounded bg-surface-2 px-1.5 font-display text-xs text-muted shadow-[var(--shadow-border)] text-shadow-none sm:inline pointer-coarse:hidden">H</kbd>
     </Button>
   );
 }
 
 /**
- * Centre-screen race moments (lights, wrong way, respawn, finish) and the modal race menus. The reset prompt
- * heads the column, so it holds its spot while the banners come and go beneath it.
+ * Race moments (lights, wrong way, respawn, finish) and the modal race menus. The reset prompt heads the column, so it holds its
+ * spot while the banners come and go beneath it. On a phone the column hangs from the top centre, small banners stacked tight
+ * and never below the top third, so the road and the car stay clear.
  */
 export function RaceOverlay({
   race,
@@ -250,6 +298,7 @@ export function RaceOverlay({
   onCommand,
   inRoom,
   audio,
+  onOpenHome,
 }: {
   race: RaceHud;
   pad: boolean;
@@ -260,34 +309,37 @@ export function RaceOverlay({
   inRoom: boolean;
   /** The sound settings the setup and pause menus show (the modal covers the settings panel). */
   audio: AudioLevels;
+  /** Opens the Home menu (the mode cards): the touch Pause card's Modes button calls it, and the button is hidden when this is absent. */
+  onOpenHome?: () => void;
 }) {
-  if (race.menu !== null) return <RaceMenu race={race} pad={pad} onCommand={onCommand} inRoom={inRoom} audio={audio} />;
+  if (race.menu !== null) return <RaceMenu race={race} pad={pad} onCommand={onCommand} inRoom={inRoom} audio={audio} onOpenHome={onOpenHome} />;
   const you = race.you;
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-1/3 z-10 flex flex-col items-center gap-3 px-3 sm:top-1/4">
+    // Portrait drops the stack under the top strip (48 px buttons and a gap) so a banner never sits over the read-outs; a phone on its side has the width beside the read-outs.
+    <div className="pointer-events-none absolute inset-x-0 top-1/3 z-10 flex flex-col items-center gap-3 px-3 sm:top-1/4 pointer-coarse:top-[calc(max(var(--hud-edge),env(safe-area-inset-top))+3.5rem)] pointer-coarse:gap-1 phone-landscape:hud-top">
       <ResetPrompt view={race.view} input={reset} race onTap={onReset} className="max-sm:hidden" />
       {race.phase === null ? null : <StartLights time={race.time} />}
       {you?.driverOut && race.spectating === null ? (
         <div
-          className="flex items-center gap-2 rounded-xl bg-signal-red px-4 py-2 font-display text-2xl font-semibold uppercase tracking-widest text-fg shadow-lg sm:text-3xl"
+          className="flex items-center gap-2 rounded-xl bg-signal-red px-4 py-2 font-display text-2xl font-semibold uppercase tracking-widest text-fg shadow-lg sm:text-3xl pointer-coarse:py-1 pointer-coarse:text-lg"
           role="alert"
         >
-          <UserX className="size-6" />
+          <UserX className="size-6 pointer-coarse:size-5" />
           Driver out
         </div>
       ) : null}
       {you?.wrongWay ? (
         <div
-          className="flex items-center gap-2 rounded-xl bg-signal-red px-4 py-2 font-display text-2xl font-semibold uppercase tracking-widest text-fg shadow-lg sm:text-3xl"
+          className="flex items-center gap-2 rounded-xl bg-signal-red px-4 py-2 font-display text-2xl font-semibold uppercase tracking-widest text-fg shadow-lg sm:text-3xl pointer-coarse:py-1 pointer-coarse:text-lg"
           role="alert"
         >
-          <TriangleAlert className="size-6" />
+          <TriangleAlert className="size-6 pointer-coarse:size-5" />
           Wrong way
         </div>
       ) : null}
       {you?.missed && !you.wrongWay ? (
         <div
-          className="flex items-center gap-2 rounded-xl bg-signal-amber px-4 py-2 font-display text-xl font-semibold uppercase tracking-widest text-accent-fg shadow-lg sm:text-2xl"
+          className="flex items-center gap-2 rounded-xl bg-signal-amber px-4 py-2 font-display text-xl font-semibold uppercase tracking-widest text-accent-fg shadow-lg sm:text-2xl pointer-coarse:py-1 pointer-coarse:text-lg"
           role="alert"
         >
           <TriangleAlert className="size-5" />
@@ -296,23 +348,23 @@ export function RaceOverlay({
       ) : null}
       {race.view?.resetHold ? (
         <div
-          className="flex w-72 flex-col gap-2 rounded-xl bg-surface px-4 py-2 shadow-lg ring-2 ring-signal-amber"
+          className="flex w-72 flex-col gap-2 rounded-xl bg-surface px-4 py-2 shadow-lg ring-2 ring-signal-amber pointer-coarse:w-56 pointer-coarse:gap-1 pointer-coarse:py-1"
           role="progressbar"
           aria-label="Hold to reset"
           aria-valuemin={0}
           aria-valuemax={1}
           aria-valuenow={race.view.resetHold}
         >
-          <p className="font-display text-xl font-semibold uppercase leading-none tracking-widest text-fg sm:text-2xl">Hold to reset</p>
-          <div className="h-3 overflow-hidden rounded-full bg-fg/25">
+          <p className="font-display text-xl font-semibold uppercase leading-none tracking-widest text-fg sm:text-2xl pointer-coarse:text-base">Hold to reset</p>
+          <div className="h-3 overflow-hidden rounded-full bg-fg/25 pointer-coarse:h-2">
             <div className="h-full origin-left bg-signal-amber" style={{ transform: `scaleX(${race.view.resetHold})` }} />
           </div>
         </div>
       ) : null}
       {you?.respawnIn != null ? (
-        <div className={cn(CARD, "px-4 py-2 text-center")} role="status">
+        <div className={cn(CARD, "px-4 py-2 text-center pointer-coarse:flex pointer-coarse:items-baseline pointer-coarse:gap-2 pointer-coarse:py-1")} role="status">
           <p className="hud-label">Respawning</p>
-          <p className="font-display text-4xl font-semibold leading-none tabular-nums">{you.respawnIn.toFixed(1)}</p>
+          <p className="font-display text-4xl font-semibold leading-none tabular-nums pointer-coarse:text-2xl">{you.respawnIn.toFixed(1)}</p>
         </div>
       ) : null}
       {you?.status === "finished" ? <FinishCard race={race} /> : null}
@@ -336,25 +388,26 @@ function FinishCard({ race }: { race: RaceHud }) {
   const aheadGap = finishGap(ahead);
   const behindGap = finishGap(behind);
   return (
-    <div className={cn(CARD, "w-full max-w-xs px-4 py-3 text-center")} role="status">
-      <p className="hud-label">Finished</p>
-      <p className="mt-1 font-display text-5xl font-semibold leading-none tracking-tight">
+    <div className={cn(CARD, "w-full max-w-xs px-4 py-3 text-center", "pointer-coarse:flex pointer-coarse:flex-wrap pointer-coarse:items-baseline pointer-coarse:justify-center pointer-coarse:gap-x-3 pointer-coarse:px-3 pointer-coarse:py-1.5")} role="status">
+      <p className="hud-label pointer-coarse:hidden">Finished</p>
+      <p className="mt-1 font-display text-5xl font-semibold leading-none tracking-tight pointer-coarse:mt-0 pointer-coarse:text-3xl">
         P{you.place}
-        <span className="text-xl font-medium text-muted">/{race.field}</span>
+        <span className="text-xl font-medium text-muted pointer-coarse:text-base">/{race.field}</span>
       </p>
-      <p className="mt-1 font-display text-xl font-semibold tabular-nums">{you.finishTime === null ? "–" : fmtTime(you.finishTime)}</p>
-      <dl className="mt-3 grid grid-cols-2 gap-2 text-left">
-        <div className="min-w-0">
+      <p className="mt-1 font-display text-xl font-semibold tabular-nums pointer-coarse:mt-0 pointer-coarse:text-base">{you.finishTime === null ? "–" : fmtTime(you.finishTime)}</p>
+      {/* On a phone each neighbour is one line (label, name, gap) so the card stays within the top third. */}
+      <dl className="mt-3 grid grid-cols-2 gap-2 text-left pointer-coarse:mt-1 pointer-coarse:basis-full pointer-coarse:gap-1">
+        <div className="min-w-0 pointer-coarse:flex pointer-coarse:items-baseline pointer-coarse:gap-1.5">
           <dt className="hud-label">Ahead</dt>
-          <dd className="truncate font-display text-sm">{ahead ? ahead.name : "Nobody"}</dd>
-          <dd className="font-display text-lg font-semibold tabular-nums">
+          <dd className="truncate font-display text-sm pointer-coarse:min-w-0 pointer-coarse:flex-1">{ahead ? ahead.name : "Nobody"}</dd>
+          <dd className="font-display text-lg font-semibold tabular-nums pointer-coarse:shrink-0 pointer-coarse:text-sm">
             {ahead && mine !== null && aheadGap !== null ? fmtGap(mine - aheadGap) : "–"}
           </dd>
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 pointer-coarse:flex pointer-coarse:items-baseline pointer-coarse:gap-1.5">
           <dt className="hud-label">Behind</dt>
-          <dd className="truncate font-display text-sm">{behind ? behind.name : "Nobody"}</dd>
-          <dd className="font-display text-lg font-semibold tabular-nums">
+          <dd className="truncate font-display text-sm pointer-coarse:min-w-0 pointer-coarse:flex-1">{behind ? behind.name : "Nobody"}</dd>
+          <dd className="font-display text-lg font-semibold tabular-nums pointer-coarse:shrink-0 pointer-coarse:text-sm">
             {!behind ? "–" : behindGap !== null && mine !== null ? fmtGap(behindGap - mine) : STATUS_ICON[behind.status]?.label ?? "Racing"}
           </dd>
         </div>
@@ -363,7 +416,54 @@ function FinishCard({ race }: { race: RaceHud }) {
   );
 }
 
-function RaceMenu({ race, pad, onCommand, inRoom, audio }: { race: RaceHud; pad: boolean; onCommand: Send; inRoom: boolean; audio: AudioLevels }) {
+/**
+ * The Pause card's body on a phone: Resume, Restart, End, then Modes and Quit side by side; sound and the touch controls under
+ * them (the modal covers the settings panel, so the player changes how the car is driven without leaving the race). One column
+ * in portrait, two on a phone on its side (the buttons left, the settings right) so the card needs no scrolling at 340 px tall.
+ * No "Full menu" here: the phone's race view has no use for it.
+ */
+function PauseTouchBody({ race, onCommand, audio, onOpenHome }: { race: RaceHud; onCommand: Send; audio: AudioLevels; onOpenHome?: () => void }) {
+  const resume = () => onCommand({ type: "resume" });
+  return (
+    <div className="grid gap-2 phone-landscape:grid-cols-2 phone-landscape:items-start phone-landscape:gap-x-3">
+      <div className="grid content-start gap-2 phone-landscape:gap-1">
+        <NavButton onClick={resume}>
+          <Play />
+          Resume
+        </NavButton>
+        <NavButton variant="secondary" onClick={() => onCommand({ type: "retry" })}>
+          <RotateCcw />
+          Restart
+        </NavButton>
+        <NavButton variant="secondary" onClick={() => onCommand({ type: "end" })}>
+          <Flag />
+          {race.survival ? "End run" : "End race"}
+        </NavButton>
+        <div className="grid grid-cols-2 gap-2 phone-landscape:gap-1">
+          {onOpenHome ? (
+            <NavButton variant="secondary" onClick={onOpenHome}>
+              <LayoutGrid />
+              Modes
+            </NavButton>
+          ) : null}
+          <NavButton variant="ghost" className={onOpenHome ? undefined : "col-span-2"} onClick={() => onCommand({ type: "quit" })}>
+            Quit to menu
+          </NavButton>
+        </div>
+      </div>
+      <div className="grid content-start gap-2 phone-landscape:gap-1">
+        <AudioRows audio={audio} />
+        <div>
+          <p className="hud-label px-1 pb-1">Controls</p>
+          <SchemePicker />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RaceMenu({ race, pad, onCommand, inRoom, audio, onOpenHome }: { race: RaceHud; pad: boolean; onCommand: Send; inRoom: boolean; audio: AudioLevels; onOpenHome?: () => void }) {
+  const touch = useCoarsePointer();
   const quit = () => onCommand({ type: "quit" });
   const retry = () => onCommand({ type: "retry" });
   const end = () => onCommand({ type: "end" });
@@ -375,29 +475,43 @@ function RaceMenu({ race, pad, onCommand, inRoom, audio }: { race: RaceHud; pad:
     case "pause": {
       const resume = () => onCommand({ type: "resume" });
       return (
-        <MenuShell id="pause" eyebrow={race.survival ? `${race.trackName} · Survival` : `${race.trackName} · Lap ${race.you?.lap ?? 1}/${race.laps}`} title="Paused" pad={pad} adjust onBack={resume} onStart={resume}>
-          <div className="grid gap-2">
-            <NavButton onClick={resume}>
-              <Play />
-              Resume
-            </NavButton>
-            <NavButton variant="secondary" onClick={retry}>
-              <RotateCcw />
-              Restart
-            </NavButton>
-            <NavButton variant="secondary" onClick={end}>
-              <Flag />
-              {race.survival ? "End run" : "End race"}
-            </NavButton>
-            <NavButton variant="secondary" onClick={() => onCommand({ type: "fullUi", on: !race.fullUi })} aria-keyshortcuts="H">
-              {race.fullUi ? <Focus /> : <PanelsTopLeft />}
-              {race.fullUi ? "Race view" : "Full menu"}
-            </NavButton>
-            <AudioRows audio={audio} />
-            <NavButton variant="ghost" onClick={quit}>
-              Quit to menu
-            </NavButton>
-          </div>
+        <MenuShell
+          id="pause"
+          eyebrow={race.survival ? `${race.trackName} · Survival` : `${race.trackName} · Lap ${race.you?.lap ?? 1}/${race.laps}`}
+          title="Paused"
+          pad={pad}
+          twoColumns
+          online={false}
+          adjust
+          onBack={resume}
+          onStart={resume}
+        >
+          {touch ? (
+            <PauseTouchBody race={race} onCommand={onCommand} audio={audio} onOpenHome={onOpenHome} />
+          ) : (
+            <div className="grid gap-2">
+              <NavButton onClick={resume}>
+                <Play />
+                Resume
+              </NavButton>
+              <NavButton variant="secondary" onClick={retry}>
+                <RotateCcw />
+                Restart
+              </NavButton>
+              <NavButton variant="secondary" onClick={end}>
+                <Flag />
+                {race.survival ? "End run" : "End race"}
+              </NavButton>
+              <NavButton variant="secondary" onClick={() => onCommand({ type: "fullUi", on: !race.fullUi })} aria-keyshortcuts="H">
+                {race.fullUi ? <Focus /> : <PanelsTopLeft />}
+                {race.fullUi ? "Race view" : "Full menu"}
+              </NavButton>
+              <AudioRows audio={audio} />
+              <NavButton variant="ghost" onClick={quit}>
+                Quit to menu
+              </NavButton>
+            </div>
+          )}
         </MenuShell>
       );
     }
@@ -439,62 +553,69 @@ function SetupMenu({ race, pad, onCommand, audio }: { race: RaceHud; pad: boolea
   const all = race.courses.map((c) => c.id);
   const allOn = all.every((id) => o.campaign.includes(id));
   return (
-    <MenuShell id="setup" eyebrow="Race" title={campaign ? "Pick the campaign" : "Pick a course"} pad={pad} wide adjust onBack={() => onCommand({ type: "quit" })} onStart={null}>
-      <div className="mb-2 grid gap-1.5">
-        <Choice label="Mode" off="Single race" on="Campaign" value={campaign} onSet={(on) => options({ mode: on ? "campaign" : "single" })} />
-        {campaign ? (
-          <NavButton variant="secondary" onClick={() => options(selectAll(o, all))}>
-            {allOn ? "Unselect all" : "Select all"}
-          </NavButton>
-        ) : null}
+    <MenuShell id="setup" eyebrow="Race" title={campaign ? "Pick the campaign" : "Pick a course"} pad={pad} wide twoColumns adjust onBack={() => onCommand({ type: "quit" })} onStart={null}>
+      {/* A phone on its side: the course grid left, the options and the pinned Start right. */}
+      <div className="phone-landscape:grid phone-landscape:grid-cols-2 phone-landscape:items-start phone-landscape:gap-x-3">
+        <div>
+          <div className="mb-2 grid gap-1.5">
+            <Choice label="Mode" off="Single race" on="Campaign" value={campaign} onSet={(on) => options({ mode: on ? "campaign" : "single" })} />
+            {campaign ? (
+              <NavButton variant="secondary" onClick={() => options(selectAll(o, all))}>
+                {allOn ? "Unselect all" : "Select all"}
+              </NavButton>
+            ) : null}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3 phone-landscape:grid-cols-2">
+            {race.courses.map((c) => {
+              const place = o.campaign.indexOf(c.id) + 1;
+              return <CourseCard key={c.id} name={c.name} blurb={c.blurb} on={campaign ? place > 0 : c.id === o.trackId} round={campaign ? place : undefined} onPick={() => options(courseTap(o, c.id))} />;
+            })}
+          </div>
+        </div>
+        <div>
+          <div className="mt-3 grid grid-cols-1 gap-1.5 phone-landscape:mt-0">
+            <DriverRows />
+            <Choice label="You" off="Drive" on="Watch" value={o.spectate} onSet={(spectate) => options({ spectate })} />
+            <Stepper label="Laps" value={o.laps} min={1} max={5} step={1} shown={String(o.laps)} onSet={(laps) => options({ laps })} />
+            <Stepper label="AI cars" value={o.aiCount} min={1} max={15} step={1} shown={String(o.aiCount)} onSet={(aiCount) => options({ aiCount })} />
+            <Stepper
+              label="Max aggression"
+              value={o.aggression}
+              min={0}
+              max={1}
+              step={0.05}
+              shown={`${Math.round(o.aggression * 100)}%`}
+              slider
+              hint="Each rival rolls its own 0–max, kept all campaign · 0 avoids hits · 50% hits weaker cars when safe · 100% rams"
+              onSet={(aggression) => options({ aggression })}
+            />
+            <Stepper
+              label="AI difficulty"
+              value={AI_DIFFICULTIES.indexOf(o.aiDifficulty)}
+              min={0}
+              max={AI_DIFFICULTIES.length - 1}
+              step={1}
+              shown={o.aiDifficulty}
+              hint="How well rivals drive: hard never slips and reacts every physics step; easy brakes late, runs wide and drifts off the line"
+              onSet={(k) => options({ aiDifficulty: AI_DIFFICULTIES[k]! })}
+            />
+            <TimeOfDayRow value={o.timeOfDay} onSet={(timeOfDay) => options({ timeOfDay })} />
+            <Choice label="Wrecks" off="Respawn" on="No reset" value={o.noReset} onSet={(noReset) => options({ noReset })} />
+            <Choice label="Police" off="Off" on="Chase" value={o.police} onSet={(police) => options({ police })} />
+            <AudioRows audio={audio} />
+          </div>
+          <div className={cn("mt-3 grid grid-cols-2 gap-1.5 phone-landscape:grid-cols-[2fr_1fr]", PINNED_BAR)}>
+            <NavButton className="col-span-2 phone-landscape:col-span-1" disabled={campaign && o.campaign.length === 0} onClick={() => onCommand({ type: campaign ? "campaign" : "start" })}>
+              {campaign ? <Trophy /> : <Flag />}
+              {campaign ? `Start campaign (${o.campaign.length})` : "Start race"}
+            </NavButton>
+            <NavButton variant="ghost" className="col-span-2 phone-landscape:col-span-1" onClick={() => onCommand({ type: "quit" })}>
+              Back
+            </NavButton>
+          </div>
+          <SavedList saved={race.saved} outdated={race.outdated} autoPurge={race.autoPurge} onCommand={onCommand} />
+        </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {race.courses.map((c) => {
-          const place = o.campaign.indexOf(c.id) + 1;
-          return <CourseCard key={c.id} name={c.name} blurb={c.blurb} on={campaign ? place > 0 : c.id === o.trackId} round={campaign ? place : undefined} onPick={() => options(courseTap(o, c.id))} />;
-        })}
-      </div>
-      <div className="mt-3 grid grid-cols-1 gap-1.5">
-        <DriverRows />
-        <Choice label="You" off="Drive" on="Watch" value={o.spectate} onSet={(spectate) => options({ spectate })} />
-        <Stepper label="Laps" value={o.laps} min={1} max={5} step={1} shown={String(o.laps)} onSet={(laps) => options({ laps })} />
-        <Stepper label="AI cars" value={o.aiCount} min={1} max={15} step={1} shown={String(o.aiCount)} onSet={(aiCount) => options({ aiCount })} />
-        <Stepper
-          label="Max aggression"
-          value={o.aggression}
-          min={0}
-          max={1}
-          step={0.05}
-          shown={`${Math.round(o.aggression * 100)}%`}
-          slider
-          hint="Each rival rolls its own 0–max, kept all campaign · 0 avoids hits · 50% hits weaker cars when safe · 100% rams"
-          onSet={(aggression) => options({ aggression })}
-        />
-        <Stepper
-          label="AI difficulty"
-          value={AI_DIFFICULTIES.indexOf(o.aiDifficulty)}
-          min={0}
-          max={AI_DIFFICULTIES.length - 1}
-          step={1}
-          shown={o.aiDifficulty}
-          hint="How well rivals drive: hard never slips and reacts every physics step; easy brakes late, runs wide and drifts off the line"
-          onSet={(k) => options({ aiDifficulty: AI_DIFFICULTIES[k]! })}
-        />
-        <TimeOfDayRow value={o.timeOfDay} onSet={(timeOfDay) => options({ timeOfDay })} />
-        <Choice label="Wrecks" off="Respawn" on="No reset" value={o.noReset} onSet={(noReset) => options({ noReset })} />
-        <Choice label="Police" off="Off" on="Chase" value={o.police} onSet={(police) => options({ police })} />
-        <AudioRows audio={audio} />
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-1.5">
-        <NavButton className="col-span-2" disabled={campaign && o.campaign.length === 0} onClick={() => onCommand({ type: campaign ? "campaign" : "start" })}>
-          {campaign ? <Trophy /> : <Flag />}
-          {campaign ? `Start campaign (${o.campaign.length})` : "Start race"}
-        </NavButton>
-        <NavButton variant="ghost" className="col-span-2" onClick={() => onCommand({ type: "quit" })}>
-          Back
-        </NavButton>
-      </div>
-      <SavedList saved={race.saved} outdated={race.outdated} autoPurge={race.autoPurge} onCommand={onCommand} />
     </MenuShell>
   );
 }
@@ -503,9 +624,13 @@ const RESULT_STATUS: Record<CarStatus, string> = { racing: "Racing", respawning:
 
 /**
  * The results and standings buttons: stacked on phones, one row from `sm` with even shares, but never narrower than a button's
- * label (`min-w-fit`), so a long course name takes the room it needs and the rest share what is left.
+ * label (`min-w-fit`), so a long course name takes the room it needs and the rest share what is left. On touch the bar stays
+ * pinned to the card's bottom (`PINNED_BAR`) while the rows scroll.
  */
-const NAV_ROW = "mt-3 flex flex-col gap-1.5 sm:flex-row sm:*:min-w-fit sm:*:flex-1";
+const NAV_ROW = cn("mt-3 flex flex-col gap-1.5 sm:flex-row sm:*:min-w-fit sm:*:flex-1", PINNED_BAR);
+
+/** A results or standings row's cell: a 36 px row on touch. */
+const CELL = "py-1 pointer-coarse:py-2";
 
 /** The finished race's link (the address bar already holds this run's share fragment), copied on a tap: muted, under the results. */
 function RunLink() {
@@ -513,7 +638,7 @@ function RunLink() {
   return (
     <button
       type="button"
-      className="mt-2 h-10 w-full text-xs text-muted underline-offset-2 hover:underline pointer-fine:h-7"
+      className="mt-2 h-10 w-full text-xs text-muted underline-offset-2 hover:underline pointer-fine:h-7 pointer-coarse:hidden"
       onClick={() => void copyText(window.location.href).then((ok) => setSaid(ok ? "Link copied" : "Copy failed: the link is in the address bar"))}
     >
       {said ?? "Copy link to this run"}
@@ -534,6 +659,7 @@ function ResultsMenu({ race, pad, onCommand }: { race: RaceHud; pad: boolean; on
       title="Results"
       pad={pad}
       wide
+      online={false}
       sheet={race.reel ? onCommand : null}
       onBack={campaign ? null : quit}
       onStart={null}
@@ -562,19 +688,19 @@ function ResultsMenu({ race, pad, onCommand }: { race: RaceHud; pad: boolean; on
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} className={cn("border-t border-border", r.kind === "player" ? "bg-surface-2 font-semibold text-fg" : "text-fg")}>
-              <td className="py-1 pl-1 text-muted">{r.place}</td>
-              <td className="max-w-0 truncate py-1 pr-2">{r.name}</td>
-              <td className="py-1 text-right">{r.time === null ? (r.busted ? "Busted" : RESULT_STATUS[r.status]) : fmtTime(r.time)}</td>
-              <td className="py-1 text-right text-muted">
+              <td className={cn(CELL, "pl-1 text-muted")}>{r.place}</td>
+              <td className={cn(CELL, "max-w-0 truncate pr-2")}>{r.name}</td>
+              <td className={cn(CELL, "text-right")}>{r.time === null ? (r.busted ? "Busted" : RESULT_STATUS[r.status]) : fmtTime(r.time)}</td>
+              <td className={cn(CELL, "text-right text-muted")}>
                 {r.gap !== null ? (r.gap === 0 ? "" : fmtGap(r.gap)) : r.status === "finished" ? lapsDown(rows[0]!.laps, r.laps) : `${r.laps}/${race.laps} laps`}
               </td>
-              <td className="py-1 pr-1 text-right text-muted max-sm:hidden">{r.bestLap === null ? "–" : fmtTime(r.bestLap)}</td>
+              <td className={cn(CELL, "pr-1 text-right text-muted max-sm:hidden")}>{r.bestLap === null ? "–" : fmtTime(r.bestLap)}</td>
             </tr>
           ))}
         </tbody>
       </table>
       {/* The reel's side sheet is narrow: the long "next" label takes its own row. */}
-      <div className={race.reel ? "mt-3 grid grid-cols-2 gap-1.5" : NAV_ROW}>
+      <div className={race.reel ? cn("mt-3 grid grid-cols-2 gap-1.5", PINNED_BAR) : NAV_ROW}>
         {campaign ? (
           <NavButton className={race.reel ? "col-span-2" : undefined} onClick={() => onCommand({ type: "next" })}>
             {race.team?.won === false ? <RotateCcw /> : <Trophy />}
@@ -614,6 +740,7 @@ function StandingsMenu({ race, pad, onCommand }: { race: RaceHud; pad: boolean; 
       title="Championship"
       pad={pad}
       wide
+      online={false}
       sheet={race.reel ? onCommand : null}
       onBack={null}
       onStart={null}
@@ -646,15 +773,15 @@ function StandingsMenu({ race, pad, onCommand }: { race: RaceHud; pad: boolean; 
         <tbody>
           {rows.map((r, i) => (
             <tr key={r.id} className={cn("border-t border-border", r.kind === "player" ? "bg-surface-2 font-semibold text-fg" : "text-fg")}>
-              <td className="py-1 pl-1 text-muted">{i + 1}</td>
-              <td className="whitespace-nowrap py-1 pr-2">{r.name}</td>
+              <td className={cn(CELL, "pl-1 text-muted")}>{i + 1}</td>
+              <td className={cn(CELL, "whitespace-nowrap pr-2")}>{r.name}</td>
               {Array.from({ length: rounds }, (_, k) => (
-                <td key={k} className="py-1 text-center text-muted">
+                <td key={k} className={cn(CELL, "text-center text-muted")}>
                   {k < r.places.length ? (r.places[k] === 0 ? "–" : r.places[k]) : ""}
                 </td>
               ))}
-              <td className="py-1 text-right text-muted">{r.wins}</td>
-              <td className="py-1 pr-1 text-right font-semibold">{r.points}</td>
+              <td className={cn(CELL, "text-right text-muted")}>{r.wins}</td>
+              <td className={cn(CELL, "pr-1 text-right font-semibold")}>{r.points}</td>
             </tr>
           ))}
         </tbody>
