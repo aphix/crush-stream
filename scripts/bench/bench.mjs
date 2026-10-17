@@ -92,6 +92,7 @@ export function summarize(runs) {
       offSites: list[0].offSites ?? {},
       feedBins: list[0].feedBins ?? {},
       wakeSites: list[0].wakeSites ?? {},
+      speedBins: list[0].speedBins ?? {},
       trace: list[0].trace ?? null,
       census: list[0].census ?? null,
       load: { start: Math.min(...list.map((r) => r.loadStart)), startMax: Math.max(...list.map((r) => r.loadStart)), end: Math.max(...list.map((r) => r.loadEnd)) },
@@ -211,6 +212,7 @@ export function table(name, first, arms) {
   for (const a of arms) if (a.offSites && Object.keys(a.offSites).length) lines.push(`   frozen steps with a mass off its frame, ${a.name} (count in the window): ${Object.entries(a.offSites).map(([k, v]) => `[${k}] ${v}`).join("; ")}`);
   for (const a of arms) if (a.feedBins && Object.keys(a.feedBins).length) lines.push(`   feedOverlap calls into a frozen car per sim-s by closing speed and overlap, ${a.name}: ${Object.entries(a.feedBins).map(([k, v]) => `[${k}] ${f1(v / first.windowS)}`).join("; ")}`);
   for (const a of arms) if (a.wakeSites && Object.keys(a.wakeSites).length) lines.push(`   wake / rest-timer resets of crashed cars per sim-s by caller, ${a.name}: ${Object.entries(a.wakeSites).map(([k, v]) => `${k} ${f1(v / first.windowS)}`).join("; ")}`);
+  for (const a of arms) if (a.speedBins && Object.keys(a.speedBins).length) lines.push(`   rigid steps of awake wrecks per sim-s by speed (|v| + |w|), ${a.name}: ${Object.entries(a.speedBins).map(([k, v]) => `[${k}] ${f1(v / first.windowS)}`).join("; ")}`);
   for (const a of arms) {
     const c = a.census;
     if (!c) continue;

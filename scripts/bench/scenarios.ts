@@ -118,6 +118,7 @@ const mixed = (i: number): VehicleClassId => MIX[i % MIX.length]!;
 const wreckLabel = (sim: SimLike): string => `${sim.cars.filter((c) => c.crashed).length}/${sim.cars.length} crashed, ${sim.cars.filter((c) => c.deform.drivetrainAlive).length} drivetrains alive`;
 const intactLabel = (sim: SimLike): string => `${sim.cars.length} intact, ${sim.cars.filter((c) => c.crashed).length} crashed`;
 const cityLabel = (sim: SimLike): string => `${sim.cars.length} cars, ${sim.cars.filter((c) => c.crashed).length} crashed at the start`;
+const derbyLabel = (sim: SimLike): string => `${sim.cars.length} derby AI cars`;
 
 export const SCENARIOS: Record<string, Scenario> = {
   "intact-alone": { build: () => intactApart(16, 40, sedan), label: intactLabel },
@@ -135,4 +136,6 @@ export const SCENARIOS: Record<string, Scenario> = {
   "city-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.city(true), label: cityLabel },
   "sideswipe-15-race": { build: () => sideswipe(15).useRaceSchedule(), label: intactLabel },
   "sideswipe-30-race": { build: () => sideswipe(30).useRaceSchedule(), label: intactLabel },
+  "derby-8-s3": { build: async () => new (await import("./derby-sim.ts")).DerbySim(8, 3), label: derbyLabel },
+  "derby-8-s8": { build: async () => new (await import("./derby-sim.ts")).DerbySim(8, 8), label: derbyLabel },
 };

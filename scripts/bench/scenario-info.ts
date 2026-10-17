@@ -128,4 +128,18 @@ export const SCENARIO_INFO: Record<string, ScenarioInfo> = {
     warmS: 0,
     windowS: 4,
   },
+  "derby-8-s3": {
+    about: "a derby heat of 8 AI cars of the fleet's mix on the derby arena (seed 3), frame-sized slices through stepWorld, the derby's kill rules armed (`DerbySim`): wrecks pile up and rest; the AI drives, so arms may do different work",
+    sizes: "end-to-end confirmation for resting piles: thaws by site, who wakes a wreck, asleep share, per-unit rows",
+    lone: false,
+    warmS: 5,
+    windowS: 40,
+  },
+  "derby-8-s8": {
+    about: "the same derby heat with seed 8",
+    sizes: "end-to-end confirmation for resting piles (second seed)",
+    lone: false,
+    warmS: 5,
+    windowS: 40,
+  },
 };

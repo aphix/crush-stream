@@ -34,6 +34,7 @@ const clampSites = new Map<string, number>();
 const offSites = new Map<string, number>();
 const feedBins = new Map<string, number>();
 const wakeSites = new Map<string, number>();
+const speedBins = new Map<string, number>();
 if (process.env["BENCH_THAW_SITES"] === "1") {
   const thaw = DeformRig.prototype.thaw;
   DeformRig.prototype.thaw = function (this: DeformRig): void {
@@ -54,6 +55,17 @@ if (process.env["BENCH_THAW_SITES"] === "1") {
       feedBins.set(key, (feedBins.get(key) ?? 0) + 1);
     }
     return feed.apply(this, args);
+  };
+  // How fast the wrecks that take a rigid step are (translation and spin together): the share that stand still but are stepped anyway is what a rest skip could take.
+  const integrate = DeformableCar.prototype.integrate;
+  DeformableCar.prototype.integrate = function (this: DeformableCar, dt: number): void {
+    if (this.deform.massActive && !this.asleep) {
+      const v = Math.hypot(this.velocity.x, this.velocity.y, this.velocity.z) + this.angular.length();
+      const bin = v < 1e-9 ? "under 1e-9" : v < 1e-6 ? "under 1e-6" : v < 1e-3 ? "under 1e-3" : v < 0.16 ? "under rest speed 0.16" : v < 1 ? "under 1 m/s" : "1 m/s and over";
+      const key = `${bin}${this.deform.frozen ? ", frozen" : ", not frozen"}, ${this.driverOut ? "driver out" : "driver in"}, ${this.deform.drivetrainAlive ? "drivetrain alive" : "drivetrain dead"}`;
+      speedBins.set(key, (speedBins.get(key) ?? 0) + 1);
+    }
+    integrate.call(this, dt);
   };
   // Who wakes a crashed car, or resets its rest timer (`wake` does both): a wreck that is woken every slice never sleeps.
   const wake = DeformableCar.prototype.wake;
@@ -156,6 +168,7 @@ clampSites.clear();
 offSites.clear();
 feedBins.clear();
 wakeSites.clear();
+speedBins.clear();
 
 /** `BENCH_CENSUS=1` (bench `--census`): the window runs step by step through the lone-car census (`census.ts`). */
 const census = process.env["BENCH_CENSUS"] === "1" ? new LoneCensus(sim) : null;
@@ -224,6 +237,7 @@ console.log(
     offSites: Object.fromEntries([...offSites].sort((a, b) => b[1] - a[1]).slice(0, 12)),
     feedBins: Object.fromEntries([...feedBins].sort((a, b) => b[1] - a[1]).slice(0, 12)),
     wakeSites: Object.fromEntries([...wakeSites].sort((a, b) => b[1] - a[1]).slice(0, 10)),
+    speedBins: Object.fromEntries([...speedBins].sort((a, b) => b[1] - a[1])),
     loadStart,
     loadEnd: loadavg()[0]!,
   })}`,
