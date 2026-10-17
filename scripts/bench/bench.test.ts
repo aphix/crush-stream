@@ -77,9 +77,9 @@ describe("given the runs of one scenario", () => {
 
 describe("given the scenarios", () => {
   it("when the info and the builders are listed, then every scenario has both, and the convoy rows sit inside the lone reach", () => {
-    const names = ["intact-alone", "intact-convoy", "intact-convoy-mixed", "wreck-driving-apart", "wreck-stopped-apart", "wreck-dead-apart", "wreck-dead-piled"];
-    assert.deepEqual(Object.keys(SCENARIO_INFO).sort(), names.sort());
-    assert.deepEqual(Object.keys(SCENARIOS).sort(), names.sort());
+    const names = "intact-alone intact-convoy intact-convoy-mixed wreck-dead-apart wreck-dead-piled wreck-driving-apart wreck-stopped-apart";
+    assert.equal(Object.keys(SCENARIO_INFO).sort().join(" "), names);
+    assert.equal(Object.keys(SCENARIOS).sort().join(" "), names);
     assert.equal(CONTACT_REACH + LONE_MARGIN, 6.3, "the reach the convoy rows' text names");
     assert.match(SCENARIO_INFO["intact-convoy"]!.about, /5 m nose to tail and 3\.5 m across/);
     assert.ok(Math.hypot(5, 3.5) < CONTACT_REACH + LONE_MARGIN, "the diagonal neighbour is inside the reach");
