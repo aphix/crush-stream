@@ -7,6 +7,7 @@ import { FINE_HZ } from "../kernel/constants.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, Probe, run } from "./crash-scenarios.test-util.ts";
+import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
 
 /**
  * A frozen wreck (`epicenter` activation) rides its body and runs no solve, so whatever moves one of its masses or restarts its contact clock has to
@@ -133,6 +134,31 @@ describe("given the guard that checks frozen cars", () => {
       car.spawnFacing(0, 0, 0, 0);
       assert.equal(car.deform.frozen, false, "frozen after a respawn");
       assert.equal(car.deform.frozenReady, false, "the cached centre survived a respawn");
+    } finally {
+      loadEpicenter(saved);
+    }
+  });
+
+  it("when a wreck that is frozen and asleep is given a steering input (a race gives its AI wrecks pedals), then its masses turn with its frame: none ends off where the frame puts it and no breach is counted", () => {
+    const saved = epicenterValues();
+    try {
+      loadEpicenter(EPICENTER_AT_LOAD);
+      EPICENTER.on = 1;
+      EPICENTER.frozenCheck = 1;
+      const car = makeCar("shape");
+      launch(car, 6.2, 0, -Math.PI / 2, -50 * KPH, 0);
+      layOnGround(car);
+      const w = makeWorld([car], true, false, FREEWHEEL);
+      run(w, [new Probe(car, car.velocity)], 6);
+      const d = car.deform;
+      assert.ok(d.frozen && d.frozenReady && car.asleep, `the wreck froze (${d.frozen}) with its centre cached (${d.frozenReady}) and fell asleep (${car.asleep})`);
+      for (let i = 0; i < 50; i++) {
+        applyDrive(car, { ...idleDrive(), steer: 1 }, 1 / FINE_HZ);
+        car.integrate(1 / FINE_HZ);
+        d.stepFrozen(1 / FINE_HZ, car.group);
+      }
+      assert.ok(car.asleep, "the wreck woke: the row would not tell a frame turned alone from one turned with its masses");
+      assert.equal(d.frozenBreaches, 0, `a mass stood ${d.breachOffMax} m (${d.breachOffName}) off its frame`);
     } finally {
       loadEpicenter(saved);
     }

@@ -108,6 +108,14 @@ export abstract class DeformFreeze extends DeformContact {
     this.nodesLocked = this.matchedNodes;
   }
 
+  /** Why the breaches (`frozenCheck`) were counted: the contact clock restarted, a mass's car-frame place moved, a mass stood off where its frame puts it (a step can count in several). */
+  breachClock = 0;
+  breachMoved = 0;
+  breachOff = 0;
+  /** The largest distance (m) a mass stood off its frame at a breach, and which mass. */
+  breachOffMax = 0;
+  breachOffName = "";
+
   /** `EPICENTER.frozenCheck`: a frozen car's masses are where its frame puts them, as they stood when it froze, and its contact clock has not restarted; else a writer skipped `thaw`. */
   private checkFrozen(group: THREE.Object3D): void {
     group.updateWorldMatrix(false, false);
@@ -122,13 +130,25 @@ export abstract class DeformFreeze extends DeformContact {
       this.frozenContact = this.lastContact;
       return;
     }
-    let bad = this.lastContact !== this.frozenContact;
+    const clock = this.lastContact !== this.frozenContact;
+    let moved = false;
+    let off = false;
     for (let i = 0; i < this.masses.length; i++) {
       const m = this.masses[i]!;
-      if (Math.abs(m.local.x - this.frozenLocal[i * 3]!) + Math.abs(m.local.y - this.frozenLocal[i * 3 + 1]!) + Math.abs(m.local.z - this.frozenLocal[i * 3 + 2]!) > FROZEN_SLACK) bad = true;
-      if (_a.copy(m.local).applyMatrix4(group.matrixWorld).distanceTo(m.world) > FROZEN_SLACK) bad = true;
+      if (Math.abs(m.local.x - this.frozenLocal[i * 3]!) + Math.abs(m.local.y - this.frozenLocal[i * 3 + 1]!) + Math.abs(m.local.z - this.frozenLocal[i * 3 + 2]!) > FROZEN_SLACK) moved = true;
+      const stand = _a.copy(m.local).applyMatrix4(group.matrixWorld).distanceTo(m.world);
+      if (stand > FROZEN_SLACK) {
+        off = true;
+        if (stand > this.breachOffMax) {
+          this.breachOffMax = stand;
+          this.breachOffName = m.name;
+        }
+      }
     }
-    if (bad) this.frozenBreaches++;
+    if (clock || moved || off) this.frozenBreaches++;
+    if (clock) this.breachClock++;
+    if (moved) this.breachMoved++;
+    if (off) this.breachOff++;
   }
 
 }

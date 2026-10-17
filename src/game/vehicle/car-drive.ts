@@ -439,9 +439,11 @@ export function applyDrive(car: DeformableCar, input: DriveInput, dt: number, to
   _turn[1] = s;
   _turn[2] = nvx - vx;
   _turn[3] = nvz - vz;
-  // A frozen wreck's masses stand in its frame (the rigid step places them from it each slice): only the body turns, about the masses' centre.
+  // A frozen wreck's masses stand in its frame (the rigid step places them from it each slice): only the body turns, about the masses' centre. A sleeping one has no rigid step
+  // to place them (`integrateWreck` returns early), so it turns its masses with the body as any wreck does (a bench city run: a sleeping frozen wreck's frame turned 50 times with its
+  // rear bumper left 0.36 m behind it).
   let turned: boolean;
-  if (car.deform.frozenReady) {
+  if (car.deform.frozenReady && !car.asleep) {
     car.group.updateWorldMatrix(false, false);
     _freezeAt.copy(car.deform.frozenCentre).applyMatrix4(car.group.matrixWorld);
     turnAt[0] = _freezeAt.x;

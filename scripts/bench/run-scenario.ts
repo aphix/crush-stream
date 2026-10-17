@@ -11,6 +11,9 @@ import { loadavg } from "node:os";
 import { EPICENTER_KNOBS, loadEpicenter } from "../../src/game/deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../../src/game/deform/epicenter.test-util.ts";
 import { DeformRig } from "../../src/game/deform/deform-rig.ts";
+import { DeformFreeze } from "../../src/game/deform/deform-freeze.ts";
+import * as THREE from "three";
+import { DeformableCar } from "../../src/game/vehicle/car.ts";
 import { PHASE_NAMES, WORK_NAMES } from "../../src/game/engine/sim-phases.ts";
 import { SCENARIO_INFO } from "./scenario-info.ts";
 import { SCENARIOS } from "./scenarios.ts";
@@ -26,6 +29,8 @@ const windowS = Number(process.env["BENCH_WINDOW"] ?? info.windowS);
 
 /** Which function called `thaw`, counted: the stack's third frame names it. */
 const sites = new Map<string, number>();
+const clampSites = new Map<string, number>();
+const offSites = new Map<string, number>();
 if (process.env["BENCH_THAW_SITES"] === "1") {
   const thaw = DeformRig.prototype.thaw;
   DeformRig.prototype.thaw = function (this: DeformRig): void {
@@ -34,6 +39,46 @@ if (process.env["BENCH_THAW_SITES"] === "1") {
       sites.set(frame, (sites.get(frame) ?? 0) + 1);
     }
     thaw.call(this);
+  };
+  // And who re-measured (`syncPose`: a `clampLocal`) a frozen car whose centre is cached: the freeze's invariant says nobody may (`DeformFreeze.settleFreeze`).
+  const syncPose = DeformableCar.prototype.syncPose;
+  DeformableCar.prototype.syncPose = function (this: DeformableCar, dt: number): void {
+    if (this.deform.frozenReady) {
+      const frame = new Error().stack?.split("\n")[2]?.trim().replace(/^at /, "").replace(/\(?file:\/\/\/.*\/src\//, "(") ?? "?";
+      clampSites.set(frame, (clampSites.get(frame) ?? 0) + 1);
+    }
+    syncPose.call(this, dt);
+  };
+  // And when a frozen car's mass stands off its frame at a frozen step, which moved since the previous frozen step: the frame (the group's pose) or the mass (its world place).
+  const stepFrozen = DeformFreeze.prototype.stepFrozen;
+  const last = new WeakMap<object, { pos: THREE.Vector3; quat: THREE.Quaternion; world: THREE.Vector3[]; mw: number[]; local: THREE.Vector3[] }>();
+  const _p = new THREE.Vector3();
+  DeformFreeze.prototype.stepFrozen = function (this: DeformFreeze, dt: number, group: THREE.Object3D): void {
+    group.updateWorldMatrix(false, false);
+    const before = last.get(this);
+    let worst = 0;
+    let at = -1;
+    for (const [i, m] of this.masses.entries()) {
+      const d = _p.copy(m.local).applyMatrix4(group.matrixWorld).distanceTo(m.world);
+      if (d > worst) {
+        worst = d;
+        at = i;
+      }
+    }
+    if (worst > 1e-4 && before) {
+      const turn = (2 * Math.acos(Math.min(1, Math.abs(before.quat.dot(group.quaternion)))) * 180) / Math.PI;
+      const slide = before.pos.distanceTo(group.position);
+      const mass = before.world[at]!.distanceTo(this.masses[at]!.world);
+      const m = this.masses[at]!;
+      const mwDelta = Math.max(...before.mw.map((v, k) => Math.abs(v - group.matrixWorld.elements[k]!)));
+      const localDelta = before.local[at]!.distanceTo(m.local);
+      const yes = (v: number, eps: number): string => (v > eps ? "MOVED" : "still");
+      const car = sim.cars.find((c) => c.deform === this);
+      const key = `${m.name}: frame ${yes(slide, 1e-4)}/${yes(turn, 1e-3)} matrix ${yes(mwDelta, 1e-9)} mass ${yes(mass, 1e-4)} local ${yes(localDelta, 1e-4)}; car asleep ${car?.asleep} parked ${car?.parked} drivetrain ${this.drivetrainAlive} ready ${this.frozenReady} speed ${car ? car.velocity.length().toFixed(1) : "?"}`;
+      offSites.set(key, (offSites.get(key) ?? 0) + 1);
+    }
+    last.set(this, { pos: group.position.clone(), quat: group.quaternion.clone(), world: this.masses.map((m) => m.world.clone()), mw: Array.from(group.matrixWorld.elements), local: this.masses.map((m) => m.local.clone()) });
+    stepFrozen.call(this, dt, group);
   };
 }
 
@@ -77,6 +122,8 @@ const advance = (seconds: number): void => {
 };
 advance(warmS);
 sites.clear();
+clampSites.clear();
+offSites.clear();
 
 /** `BENCH_CENSUS=1` (bench `--census`): the window runs step by step through the lone-car census (`census.ts`). */
 const census = process.env["BENCH_CENSUS"] === "1" ? new LoneCensus(sim) : null;
@@ -110,7 +157,15 @@ for (const car of sim.cars) {
   for (const m of car.deform.masses) hash.update(new Uint8Array(new Float64Array([m.world.x, m.world.y, m.world.z, m.vel.x, m.vel.y, m.vel.z, m.local.x, m.local.y, m.local.z]).buffer));
 }
 let breaches = 0;
-for (const car of sim.cars) breaches += car.deform.frozenBreaches;
+const breachKinds = { clock: 0, moved: 0, off: 0 };
+let worstOff = { m: 0, name: "" };
+for (const car of sim.cars) {
+  breaches += car.deform.frozenBreaches;
+  breachKinds.clock += car.deform.breachClock;
+  breachKinds.moved += car.deform.breachMoved;
+  breachKinds.off += car.deform.breachOff;
+  if (car.deform.breachOffMax > worstOff.m) worstOff = { m: car.deform.breachOffMax, name: car.deform.breachOffName };
+}
 
 console.log(
   `BENCH_ARM ${JSON.stringify({
@@ -128,9 +183,13 @@ console.log(
     digest: hash.digest("hex"),
     poses,
     frozenBreaches: breaches,
+    breachKinds,
+    breachOff: worstOff,
     trace: traceDt > 0 ? { dt: traceDt, cars: sim.cars.length, masses: sim.cars.map((c) => c.deform.masses.length), rows: trace } : null,
     census: census ? census.result(simS) : null,
     thawSites: Object.fromEntries([...sites].sort((a, b) => b[1] - a[1])),
+    clampSites: Object.fromEntries([...clampSites].sort((a, b) => b[1] - a[1])),
+    offSites: Object.fromEntries([...offSites].sort((a, b) => b[1] - a[1]).slice(0, 12)),
     loadStart,
     loadEnd: loadavg()[0]!,
   })}`,

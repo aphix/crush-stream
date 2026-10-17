@@ -86,6 +86,10 @@ export function summarize(runs) {
       poses: list[0].poses,
       breaches: Math.max(...list.map((r) => r.frozenBreaches)),
       thawSites: list[0].thawSites,
+      clampSites: list[0].clampSites ?? {},
+      breachKinds: list[0].breachKinds ?? null,
+      breachOff: list[0].breachOff ?? null,
+      offSites: list[0].offSites ?? {},
       trace: list[0].trace ?? null,
       census: list[0].census ?? null,
       load: { start: Math.min(...list.map((r) => r.loadStart)), startMax: Math.max(...list.map((r) => r.loadStart)), end: Math.max(...list.map((r) => r.loadEnd)) },
@@ -199,7 +203,10 @@ export function table(name, first, arms) {
     for (let i = 0; i < arms[0].poses.length; i++) delta = Math.max(delta, Math.abs(arms[0].poses[i] - arms[1].poses[i]));
     lines.push(`   max |pose or velocity difference|, ${arms[0].name} vs ${arms[1].name} first runs: ${delta.toExponential(2)}${arms[0].digest === arms[1].digest ? " (digests equal: bit-identical arms)" : ""}`);
   }
+  for (const a of arms) if (a.breachKinds && a.breaches > 0) lines.push(`   frozen-state breaches by kind, ${a.name}: contact clock restarted ${a.breachKinds.clock}, a mass's frame place moved ${a.breachKinds.moved}, a mass off its frame ${a.breachKinds.off}${a.breachOff && a.breachOff.m > 0 ? ` (worst: ${a.breachOff.name} ${f1(a.breachOff.m * 1000)} mm)` : ""}`);
   for (const a of arms) if (Object.keys(a.thawSites).length) lines.push(`   thaws per sim-s by call site, ${a.name}: ${Object.entries(a.thawSites).map(([k, v]) => `${k} ${f1(v / first.windowS)}`).join(", ")}`);
+  for (const a of arms) if (a.clampSites && Object.keys(a.clampSites).length) lines.push(`   re-measures (syncPose) of a cached frozen car per sim-s by caller (the freeze's invariant: none), ${a.name}: ${Object.entries(a.clampSites).map(([k, v]) => `${k} ${f1(v / first.windowS)}`).join(", ")}`);
+  for (const a of arms) if (a.offSites && Object.keys(a.offSites).length) lines.push(`   frozen steps with a mass off its frame, ${a.name} (count in the window): ${Object.entries(a.offSites).map(([k, v]) => `[${k}] ${v}`).join("; ")}`);
   for (const a of arms) {
     const c = a.census;
     if (!c) continue;
