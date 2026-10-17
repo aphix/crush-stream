@@ -123,7 +123,7 @@ export type ChaseKnobId =
   | "cam.landing.fall" | "cam.landing.zetaUp" | "cam.landing.hold" | "cam.landing.wobble" | "cam.landing.wobbleHz"
   | "cam.shake" | "cam.shiftKick";
 
-type ChaseKnob = {
+export type ChaseKnob = {
   id: ChaseKnobId;
   group: ChaseGroup;
   label: string;

@@ -154,6 +154,15 @@ export abstract class DeformRig {
   impactLocal = new THREE.Vector3();
   impactInward = new THREE.Vector3(0, 0, -1);
   massActive = false;
+  /** Epicenter activation (`EPICENTER`): the wreck is relocked, its masses ride the body and its structure step is only a clock (`stepFrozen`). A contact thaws it (`thaw`). */
+  frozen = false;
+  /** Nodes the last structure step ran the solver on and the ones it left riding the body (`stepStructure`, `stepFrozen`), and how often this car froze and thawed since `stepWorld` last read them (it adds them to the step's work counters and zeroes them). */
+  nodesLoose = 0;
+  nodesLocked = 0;
+  /** Masses the solver matches (every one but the hubs, which ride the suspension). */
+  protected matchedNodes = 0;
+  freezes = 0;
+  thaws = 0;
   drivetrainAlive = true;
   /** Worst engine-block travel toward the cabin so far (m); only rises (updateDrivetrain). */
   engineTravel = 0;
@@ -184,6 +193,13 @@ export abstract class DeformRig {
   frameCrush = true;
   /** Wheels may separate (C4 corner hits, kerb launches, a face shoving the hub a wheel diameter). Off: never. */
   wheelsDetach = true;
+
+  /** Whatever moves a mass or restarts the contact clock calls this first: the cage runs the solve again from the next structure step. */
+  thaw(): void {
+    if (!this.frozen) return;
+    this.frozen = false;
+    this.thaws++;
+  }
 
   protected cages: Cage[];
   protected sensors: Sensor[];
@@ -416,6 +432,7 @@ export abstract class DeformRig {
     this._totalMass = 0;
     for (const m of this.masses) this._totalMass += m.mass;
     this.impulseW = new Float64Array(this.masses.length);
+    this.matchedNodes = this.masses.filter((m) => !m.hub).length;
     this.skinRest = this.masses.map((m) => m.rest);
     this.skinLocal = this.masses.map((m) => m.local);
     this.skinMassN = this.masses.map((m) => m.mass);
@@ -479,6 +496,7 @@ export abstract class DeformRig {
     this.massCornerX = NaN;
     this.impactInward.set(0, 0, -1);
     this.massActive = false;
+    this.frozen = false;
     this.drivetrainAlive = true;
     this.engineTravel = 0;
     this.wear = -0;

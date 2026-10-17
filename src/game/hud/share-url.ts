@@ -9,7 +9,7 @@ import { AI_DIFFICULTIES } from "../ai/constants.ts";
 import { INITIAL_HUD, KNOB_RANGES } from "./hud-store.ts";
 import { DEFAULT_RACE_OPTIONS, DRIVER_CARS, RACE_MODES, TIMES_OF_DAY } from "../match/types.ts";
 import { NET_TX } from "../net/net-ports.ts";
-import { CHASE_DEFAULTS, CHASE_KNOBS, type ChaseKnobId } from "../present/drive-cam.ts";
+import { KNOB_DEFAULTS, KNOBS, type KnobId } from "./knobs.ts";
 import { FX_TIERS } from "../present/engine-post.ts";
 import { SKY_MODES } from "../present/sky-dome.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
@@ -142,9 +142,9 @@ const BASE_FIELDS = {
   seed: hex,
 };
 
-/** The camera sliders, each under its own id (`cam.pos.lon`), clamped to its range like the other knobs. The cast holds: a row per `ChaseKnobId` (pinned by test). */
-const CAMERA_FIELDS = {} as Record<ChaseKnobId, Field<number>>;
-for (const k of CHASE_KNOBS) CAMERA_FIELDS[k.id] = num(k.min, k.max, CHASE_DEFAULTS[k.id]);
+/** The Debug sliders, each under its own id (`cam.pos.lon`, `epi.on`), clamped to its range like the other knobs. The cast holds: a row per `KnobId` (pinned by test). */
+const CAMERA_FIELDS = {} as Record<KnobId, Field<number>>;
+for (const k of KNOBS) CAMERA_FIELDS[k.id] = num(k.min, k.max, KNOB_DEFAULTS[k.id]);
 
 const FIELDS = { ...BASE_FIELDS, ...CAMERA_FIELDS };
 

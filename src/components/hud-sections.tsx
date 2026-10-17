@@ -27,7 +27,7 @@ import { copyText } from "@/lib/clipboard";
 import { sendSubmission, type Parcel } from "@/lib/submissions/status";
 import { ChangedDot, FIELD, NumberField, RangeRow } from "@/components/hud-controls";
 import type { CrashEngine } from "@/game/engine/engine";
-import { CHASE_KNOBS } from "@/game/present/drive-cam";
+import { KNOBS } from "@/game/hud/knobs";
 import { DRIVER_CARS } from "@/game/match/types";
 import { Button } from "@/components/ui/button";
 import { FX_TIERS } from "@/game/present/engine-post";
@@ -506,27 +506,27 @@ function DebugSection({ state, engine }: HudProps) {
   );
 }
 
-/** The chase camera's tunables under the talk's three names (convergence, momentum, damping), then look-ahead, slide and landing; settings like the rest (`CHASE_KNOBS`): dot, reset chip, share URL. */
+/** The chase camera's tunables under the talk's three names (convergence, momentum, damping), then look-ahead, slide and landing, and the epicenter activation's (`KNOBS`); settings like the rest: dot, reset chip, share URL. */
 function ChaseKnobs({ state, engine }: Pick<HudProps, "state" | "engine">) {
-  const groups = [...new Set(CHASE_KNOBS.map((k) => k.group))];
+  const groups = [...new Set(KNOBS.map((k) => k.group))];
   return (
     <>
       {groups.map((group) => (
         <div key={group}>
-          <p className="hud-label mt-1">Camera: {group.toLowerCase()}</p>
-          {CHASE_KNOBS.map((k) =>
+          <p className="hud-label mt-1">{group === "Epicenter" ? group : `Camera: ${group.toLowerCase()}`}</p>
+          {KNOBS.map((k) =>
             k.group === group ? (
               <RangeRow
                 key={k.id}
                 label={k.label}
-                name={`Camera ${group.toLowerCase()} ${k.label}`}
+                name={group === "Epicenter" ? `Epicenter ${k.label}` : `Camera ${group.toLowerCase()} ${k.label}`}
                 value={state[k.id]}
                 min={k.min}
                 max={k.max}
                 step={k.step}
                 digits={Math.max(0, Math.ceil(-Math.log10(k.step)))}
                 changed={isChanged(state, k.id)}
-                onValue={(v) => engine.current?.setChaseKnob(k.id, v)}
+                onValue={(v) => engine.current?.setKnob(k.id, v)}
               />
             ) : null,
           )}

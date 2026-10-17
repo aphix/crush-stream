@@ -338,8 +338,9 @@ export function stepWorld(w: World, dt: number): void {
     for (let ci = 0; ci < n; ci++) {
       if (i > 0 && lonely.flag[ci]) continue;
       const car = cars[ci]!;
-      if (car.deform.massActive) car.syncPose(0);
-      else car.refreshBasis();
+      if (car.deform.massActive) {
+        if (!car.deform.frozen) car.syncPose(0);
+      } else car.refreshBasis();
     }
     if (barrier) {
       for (let ci = 0; ci < n; ci++) {
@@ -368,7 +369,7 @@ export function stepWorld(w: World, dt: number): void {
     // The pair pass moved the wrecks' masses (a tilted wreck's frame jumped 0.35 m in one re-measure): their pose and velocity are derived
     // from them now, before the structure step reads them, as the second pass's start did (the mixed fleet's column read a wreck at
     // -7.4 m/s against its masses' -2.8 without it: stack-column 'owner's drops').
-    for (let ci = 0; ci < n; ci++) if (cars[ci]!.deform.massActive && (i === 0 || !lonely.flag[ci])) cars[ci]!.syncPose(0);
+    for (let ci = 0; ci < n; ci++) if (cars[ci]!.deform.massActive && !cars[ci]!.deform.frozen && (i === 0 || !lonely.flag[ci])) cars[ci]!.syncPose(0);
     armCrushRows(h);
     lap(ph, PHASE.pairs);
 
@@ -376,11 +377,28 @@ export function stepWorld(w: World, dt: number): void {
       if (i > 0 && lonely.flag[ci]) continue;
       const car = cars[ci]!;
       const hc = lonely.flag[ci] ? dt : h;
-      if (car.deform.massActive) car.deform.stepStructure(hc, car.group.quaternion);
-      if (car.deform.massActive) car.syncPose(hc);
+      const d = car.deform;
+      if (d.massActive) {
+        // A relocked wreck (`epicenter` activation) runs its clock and rides its body: no solve, no frame re-measure.
+        if (d.frozen) {
+          d.stepFrozen(hc, car.group);
+          work[WORK.frozenCarSlices] = work[WORK.frozenCarSlices]! + 1;
+        } else {
+          d.stepStructure(hc, car.group.quaternion);
+          car.syncPose(hc);
+        }
+        work[WORK.nodesLoose] = work[WORK.nodesLoose]! + d.nodesLoose;
+        work[WORK.nodesLocked] = work[WORK.nodesLocked]! + d.nodesLocked;
+      }
       if (barrier) barrier.clip(car);
       car.afterContacts(hc);
       w.afterCar?.(car, hc);
+      // After this slice's solve, so the slice that crossed the quiet time still ran it: the next one freezes the car.
+      d.settleFreeze();
+      work[WORK.freezes] = work[WORK.freezes]! + d.freezes;
+      work[WORK.thaws] = work[WORK.thaws]! + d.thaws;
+      d.freezes = 0;
+      d.thaws = 0;
     }
     lap(ph, PHASE.structure);
     if (w.collide) for (let ci = 0; ci < n; ci++) if (i === 0 || !lonely.flag[ci]) w.collide(cars[ci]!, ci, lonely.flag[ci] ? dt : h);

@@ -339,6 +339,7 @@ export abstract class DeformHit extends DeformRig {
     worldVel: THREE.Vector3,
     worldOmega: THREE.Vector3,
   ): void {
+    this.thaw();
     this.impactLocal.copy(localPoint);
     this.impactInward.copy(localInward).normalize();
     const clamped = THREE.MathUtils.clamp(impulse, 4, 70);
@@ -383,7 +384,9 @@ export abstract class DeformHit extends DeformRig {
    * read "just touched" for good, in `collideWith` and the parts' touch timing, and no keyframe carries it for a car that is no wreck.
    */
   notifyContact(): void {
-    if (this.massActive) this.lastContact = this.elapsed;
+    if (!this.massActive) return;
+    this.thaw();
+    this.lastContact = this.elapsed;
   }
 
   quietTime(): number {
@@ -398,6 +401,7 @@ export abstract class DeformHit extends DeformRig {
    */
   rearmHit(localPoint: THREE.Vector3, localInward: THREE.Vector3, impulse: number, ebs: number): boolean {
     if (!this.massActive || ebs < REARM_EBS || this.quietTime() < REARM_QUIET) return false;
+    this.thaw();
     this.impactLocal.copy(localPoint);
     this.impactInward.copy(localInward).normalize();
     this.snapImpactToNearestMass();
@@ -488,6 +492,7 @@ export abstract class DeformHit extends DeformRig {
    * lifted the frame by it in the slice the masses took it.
    */
   armMasses(group: THREE.Object3D, worldVel: THREE.Vector3, worldOmega: THREE.Vector3): void {
+    this.thaw();
     if (this.massActive) return;
     this.massActive = true;
     group.updateWorldMatrix(false, false);
@@ -542,6 +547,7 @@ export abstract class DeformHit extends DeformRig {
    * twice its speed). `h` is 0 between slices.
    */
   unstep(h: number): void {
+    this.thaw();
     for (const m of this.masses) m.world.addScaledVector(m.vel, -h);
     this.frameY -= this.frameVy * h;
   }
@@ -596,6 +602,7 @@ export abstract class DeformHit extends DeformRig {
    */
   applyImpulse(nx: number, ny: number, nz: number, j: number): void {
     if (!this.massActive || j === 0) return;
+    this.thaw();
     const pass = this.frontTransfer();
     const masses = this.masses;
     const n = masses.length;

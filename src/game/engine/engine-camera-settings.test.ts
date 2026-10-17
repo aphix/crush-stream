@@ -5,6 +5,8 @@ import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
 import { changedSettings } from "../hud/settings-changes.ts";
 import { decodeShare, encodeShare } from "../hud/share-url.ts";
 import { CHASE, CHASE_KNOBS } from "../present/drive-cam.ts";
+import { EPICENTER, EPICENTER_KNOBS } from "../deform/epicenter.ts";
+import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
@@ -31,7 +33,7 @@ describe("given the real engine and a camera slider of the debug panel", () => {
 
   it("when a slider is moved, then the camera reads it, the HUD shows it changed, the share state carries its key, and its reset puts all of that back", () => {
     assert.deepEqual(camKeys(), [], "no camera key at the defaults");
-    engine.setChaseKnob("cam.pos.lon", 12);
+    engine.setKnob("cam.pos.lon", 12);
     assert.equal(CHASE.pos.lon, 12, "the camera's own value");
     assert.equal(hud.get()["cam.pos.lon"], 12, "the HUD field");
     assert.deepEqual(changedSettings(hud.get(), "debug"), ["cam.pos.lon"], "the dot, the count and the reset chip");
@@ -43,7 +45,7 @@ describe("given the real engine and a camera slider of the debug panel", () => {
   });
 
   it("when a slider is set past its range, then it clamps to the range", () => {
-    engine.setChaseKnob("cam.zeta.lat", 0);
+    engine.setKnob("cam.zeta.lat", 0);
     assert.equal(CHASE.zeta.lat, 0.3);
     engine.resetSetting("cam.zeta.lat");
   });
@@ -58,5 +60,19 @@ describe("given the real engine and a camera slider of the debug panel", () => {
     assert.deepEqual(changedSettings(hud.get(), "debug"), [], "Defaults: no slider changed");
     for (const k of CHASE_KNOBS) assert.equal(k.get(), INITIAL_HUD[k.id], `${k.id} is at its default`);
     assert.deepEqual(camKeys(), []);
+  });
+
+  it("when a link carrying the epicenter keys is applied, then the activation and its thresholds take them, a link without them puts them back, and the phone's #epi.on=1 is the whole of what turns it on", () => {
+    engine["applyShare"](decodeShare("#epi.on=1&epi.relockHold=0.5"), false);
+    assert.equal(EPICENTER.on, 1, "on");
+    assert.equal(EPICENTER.relockHold, 0.5, "relockHold");
+    assert.deepEqual(changedSettings(hud.get(), "debug"), ["epi.on", "epi.relockHold"], "the dots");
+    assert.deepEqual(
+      encodeShare(engine["shareState"]()).split("&").filter((kv) => kv.startsWith("epi.")),
+      ["epi.on=1", "epi.relockHold=0.5"],
+      "the share URL carries them, so the bar the engine writes keeps them through a race start",
+    );
+    engine["applyShare"](decodeShare("#"), false);
+    for (const [i, k] of EPICENTER_KNOBS.entries()) assert.equal(k.get(), EPICENTER_AT_LOAD[i], `${k.id} back to its default`);
   });
 });

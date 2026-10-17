@@ -636,6 +636,8 @@ export type HighlightClip = {
   squash: number;
   buckle: number;
   deformMode: DeformMode;
+  /** The epicenter activation the recording ran with (`epicenterValues`), or null for `whole`: every peer replays with the recording's, not its own. */
+  epicenter: number[] | null;
   /** The race's driver-look seed (`driverLook`): every peer, and a clip saved for another day, replays the same tees, hair and women. */
   look: number;
   cars: ReelCar[];

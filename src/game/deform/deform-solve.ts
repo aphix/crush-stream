@@ -13,13 +13,14 @@ import {
   goalAlpha,
   deformBeta,
 } from "./shape-match.ts";
-import { DeformContact, ENGINE_SLACK } from "./deform-contact.ts";
+import { ENGINE_SLACK } from "./deform-contact.ts";
+import { DeformFreeze } from "./deform-freeze.ts";
 import { HUB_OVERRUN, type MassNode } from "./deform-rig.ts";
 import { FACE_TOP } from "./load-crush.ts";
 import { ENGINE_PACK_GAP, PLANT_QUIET, TYRE_R, WHEEL_DIAMETER } from "./deform-state.ts";
 import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn-hold.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
-import { CONTACT_WINDOW, MIN_INV_MASS, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
+ import { CONTACT_WINDOW, MIN_INV_MASS, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
 
 /** Elastic part (m) of a crushed node's travel; the rest is permanent set. */
 const SPRINGBACK = 0.08;
@@ -74,7 +75,7 @@ function maxLift(m: MassNode, deep: boolean, sunk: number): number {
         : 0.11;
 }
 
-export abstract class DeformSolve extends DeformContact {
+export abstract class DeformSolve extends DeformFreeze {
 
   protected clampLocal(group: THREE.Object3D): void {
     const ix = this.impactInward.x;
@@ -659,41 +660,7 @@ export abstract class DeformSolve extends DeformContact {
     this.yawMomentum(2, false);
     this.holdEngineBlock();
     this.yawMomentum(2, true);
-    if (!live && !this.bidirectional) {
-      // The body is rigid now: every mass takes the rigid body's velocity and spin (`followGroup`'s `bodyV`, `bodyW`) about their centroid.
-      let cx = 0,
-        cy = 0,
-        cz = 0,
-        msum = 0;
-      for (let mi = 0; mi < this.masses.length; mi++) {
-        const m = this.masses[mi]!;
-        if (!m.dynamic) continue;
-        cx += m.world.x * m.mass;
-        cy += m.world.y * m.mass;
-        cz += m.world.z * m.mass;
-        msum += m.mass;
-      }
-      if (msum > MIN_MASS_SUM) {
-        cx /= msum;
-        cy /= msum;
-        cz /= msum;
-        // A driven wreck's turn is applyDrive's (its tyres, not this rule, stop a wreck's spin): the body keeps none of its own.
-        if (rigid) this.bodyW.y = 0;
-        const wx = this.bodyW.x;
-        const wy = this.bodyW.y;
-        const wz = this.bodyW.z;
-        for (let mi = 0; mi < this.masses.length; mi++) {
-          const m = this.masses[mi]!;
-          if (!m.dynamic) continue;
-          const rx = m.world.x - cx;
-          const ry = m.world.y - cy;
-          const rz = m.world.z - cz;
-          m.vel.x = this.bodyV.x + wy * rz - wz * ry;
-          m.vel.y = this.bodyV.y + wz * rx - wx * rz;
-          m.vel.z = this.bodyV.z + wx * ry - wy * rx;
-        }
-      }
-    }
+    if (!live && !this.bidirectional) this.rideBody(rigid);
     if (this.bidirectional && this.deepCrush) {
       if (this.mode === "shape") this.foldCabin(dt);
       else this.nudgeLatticeRails(dt);

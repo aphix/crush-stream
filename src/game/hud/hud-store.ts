@@ -9,7 +9,7 @@ import { NO_DRIFT, type DriftView } from "../vehicle/car-drive.ts";
 import { DRIVER_CARS, type RaceHud, type RaceView } from "../match/types.ts";
 import type { CrashPhase } from "../match/phase.ts";
 import type { PadFamily } from "../vehicle/gamepad.ts";
-import { CHASE_DEFAULTS, type ChaseKnobId } from "../present/drive-cam.ts";
+import { KNOB_DEFAULTS, type KnobId } from "./knobs.ts";
 import type { SpecView } from "../present/engine-camera.ts";
 import type { CarPart, PersonPick } from "../match/look-data.ts";
 import type { DriverLook } from "../present/driver-look.ts";
@@ -183,8 +183,8 @@ export type CrashHudState = {
   playerCar: string;
   /** Mouse look (pointer lock) is on. */
   mouseLook: boolean;
-  /** The debug panel's camera sliders (`CHASE_KNOBS`), keyed `cam.<path>`. */
-} & Record<ChaseKnobId, number>;
+  /** The debug panel's sliders (`KNOBS`: the camera's, keyed `cam.<path>`, and the epicenter activation's, `epi.<name>`). */
+} & Record<KnobId, number>;
 
 /** The stroke slider reads out at 56 km/h, the NCAP full-frontal barrier speed. */
 const STROKE_REF_MPS = 56 / 3.6;
@@ -298,7 +298,7 @@ export const INITIAL_HUD: CrashHudState = {
   rumble: true,
   playerCar: DRIVER_CARS[0]!.id,
   mouseLook: false,
-  ...CHASE_DEFAULTS,
+  ...KNOB_DEFAULTS,
 };
 
 /** The HUD's read model: the engine publishes a fresh snapshot, the UI subscribes. CrashLab makes one per engine. */

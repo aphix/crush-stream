@@ -104,7 +104,7 @@ describe("given the real engine and a hit on the car the camera follows", () => 
     const t = after1(() => e.race.propHits.wall(0, a, 15, 0, 0, 1, 0));
     assert.ok(t > 0.6, `wall hit leaves trauma ${t.toFixed(2)}`);
     assert.equal(after1(() => e.race.propHits.wall(0, b, 15, 0, 0, 1, 0)), 0, "another car's wall hit");
-    engine.setChaseKnob("cam.shake", 0);
+    engine.setKnob("cam.shake", 0);
     try {
       assert.equal(after1(() => e.race.propHits.wall(0, a, 15, 0, 0, 1, 0)), 0, "strength 0");
       assert.equal(after1(() => e.pairHit(a, b, hit(15))), 0, "strength 0, pair hit");

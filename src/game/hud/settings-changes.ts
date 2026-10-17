@@ -1,4 +1,4 @@
-import { CHASE_KNOBS, type ChaseKnobId } from "../present/drive-cam.ts";
+import { KNOBS, type KnobId } from "./knobs.ts";
 import { INITIAL_HUD, type CrashHudState } from "./hud-store.ts";
 
 /** The settings menu's sections (`HudSections`). */
@@ -48,11 +48,11 @@ const BASE_SETTINGS = {
   capture: { section: "debug", label: "Capture", defaults: { captureTrace: D.captureTrace } },
 } as const satisfies Record<string, Setting>;
 
-/** One setting per camera slider (`CHASE_KNOBS`), under the knob's own id: its HUD field is the one at its default. The cast holds: a row per `ChaseKnobId` (pinned by test). */
-const CAMERA_SETTINGS = {} as Record<ChaseKnobId, Setting>;
-for (const k of CHASE_KNOBS) CAMERA_SETTINGS[k.id] = { section: "debug", label: `Camera ${k.group.toLowerCase()} ${k.label}`, defaults: { [k.id]: D[k.id] } };
+/** One setting per Debug slider (`KNOBS`), under the knob's own id: its HUD field is the one at its default. The cast holds: a row per `KnobId` (pinned by test). */
+const CAMERA_SETTINGS = {} as Record<KnobId, Setting>;
+for (const k of KNOBS) CAMERA_SETTINGS[k.id] = { section: "debug", label: k.group === "Epicenter" ? `Epicenter ${k.label}` : `Camera ${k.group.toLowerCase()} ${k.label}`, defaults: { [k.id]: D[k.id] } };
 
-export const SETTINGS: typeof BASE_SETTINGS & Record<ChaseKnobId, Setting> = { ...BASE_SETTINGS, ...CAMERA_SETTINGS };
+export const SETTINGS: typeof BASE_SETTINGS & Record<KnobId, Setting> = { ...BASE_SETTINGS, ...CAMERA_SETTINGS };
 export type SettingId = keyof typeof SETTINGS;
 export const SETTING_IDS = Object.keys(SETTINGS) as SettingId[];
 

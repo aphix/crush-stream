@@ -133,6 +133,7 @@ export function makeClip(): { clip: HighlightClip; car: DeformableCar } {
     squash: 0.4,
     buckle: 0.55,
     deformMode: "lattice",
+    epicenter: null,
     look: 0xdeadbeef,
     cars: [
       { slot: 3, style: a.style.id, cls: "sedan", name: "Ayla" },
@@ -156,6 +157,8 @@ export function sameClip(got: HighlightClip, want: HighlightClip): void {
     assert.equal(got[k], want[k], k);
   }
   for (const k of ["score", "peakKph", "hitKph", "deform", "x", "z"] as const) assert.equal(got[k], Math.fround(want[k]), k);
+  assert.equal(got.epicenter?.length ?? -1, want.epicenter?.length ?? -1, "epicenter fields");
+  if (want.epicenter) assertSameNumbers(got.epicenter!, want.epicenter, "epicenter");
   assert.equal(got.cars.length, want.cars.length);
   for (const [i, c] of got.cars.entries()) {
     for (const k of ["slot", "style", "cls", "name"] as const) assert.equal(c[k], want.cars[i]![k], `car ${i} ${k}`);

@@ -1,4 +1,5 @@
 import { FLIGHT } from "../vehicle/car-flight.ts";
+import { EPICENTER_FIELDS } from "../deform/epicenter.ts";
 import { CAR_STYLE_IDS } from "../vehicle/car-variants.ts";
 import { VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
 import { CLIP_NO_CAR, CLIP_OUT_CAR, INPUT_BYTES, MAX_HITS, MAX_KNOCKS, MAX_PART_STIRS, MAX_SQUAD, MAX_SQUAD_EVENTS, MAX_STIRS, MAX_STRIKES, MAX_VIP_EVENTS, MEMORY, simFingerprint, type ClipEjection, type ClipHit, type ClipKnock, type ClipPartStir, type ClipSquad, type ClipStir, type ClipStrike, type ClipVip, type HighlightClip, type Reel, type ReelCar } from "../match/highlights.ts";
@@ -212,9 +213,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * slice of its whole length (`World.loners`), as a car of a quiet step does, instead of 3 slices at 1/240 s; a clip carries each step's lone cars (`HighlightClip.lone`, after the step schedule) and a replay runs them as recorded: a clip of 109 or before no longer reads.
  * 111: a derby car's wear limit is `DERBY_WRECK_ENERGY / DERBY_WEAR_GAIN` (250 / 1.35 m²/s², so every hit wears 1.35 times what it did): a derby wreck's drivetrain dies sooner and its drive and handling grade with it; race, fleet, survival, range and the
  * sandbox arm no wear limit and are unchanged: a replay of a clip of 110 or before of a derby drives its wrecks' drivetrains out differently.
+ * 112: a clip records the epicenter activation it ran with (`HighlightClip.epicenter`: a flag byte, then the knobs' values when it was on) and a replay runs under it; with it on a wreck that has sat quiet past `relockHold` is frozen (its masses ride the car's frame,
+ * no solve, no frame re-measure), which moves it within a few millimetres of where the whole solve leaves it: a replay of a clip of 111 or before runs `whole`, as it recorded, bit for bit.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 111;
+const REPLAY_VERSION = 112;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
@@ -253,7 +256,7 @@ function loneSteps(c: HighlightClip): number {
 /** Exact encoded size of `clip` (`writeClip`). */
 export function clipBytes(c: HighlightClip): number {
   const nc = c.cars.length;
-  let n = 1 + utf8(c.trackId) + 91 + c.cars.reduce((a, car) => a + 4 + utf8(car.name), 0);
+  let n = 1 + utf8(c.trackId) + 92 + (c.epicenter ? c.epicenter.length * 8 : 0) + c.cars.reduce((a, car) => a + 4 + utf8(car.name), 0);
   n += 4 + c.h.length * (8 + nc * INPUT_BYTES) + 2 + 2 + loneSteps(c) * LONE_BYTES;
   for (const k of c.keys) n += 12 + k.length;
   const squad = c.squad ? 1 + c.squad.state.length * 4 + 2 + c.squad.events.length * SQUAD_EVENT_BYTES : 1;
@@ -285,6 +288,8 @@ export function writeClip(w: Writer, c: HighlightClip): void {
   w.f64(c.squash);
   w.f64(c.buckle);
   w.u8(c.deformMode === "lattice" ? 1 : 0);
+  w.u8(c.epicenter ? 1 : 0);
+  if (c.epicenter) for (const v of c.epicenter) w.f64(v);
   w.u32(c.look);
   w.u8(c.cars.length);
   for (const car of c.cars) {
@@ -415,6 +420,11 @@ export function readClip(r: Reader, L: NetLayout): HighlightClip {
   const buckle = r.f64();
   if (!Number.isFinite(squash) || !Number.isFinite(buckle)) throw new RangeError("clip crumple");
   const deformMode = r.u8() === 1 ? "lattice" : "shape";
+  let epicenter: number[] | null = null;
+  if (r.u8() === 1) {
+    epicenter = Array.from({ length: EPICENTER_FIELDS }, () => r.f64());
+    if (!epicenter.every(Number.isFinite)) throw new RangeError("clip epicenter");
+  }
   const look = r.u32();
   const nc = r.u8();
   if (nc < 1 || nc > MAX_NET_CARS || focus >= nc || firstA >= nc || firstB >= nc) throw new RangeError("clip cars");
@@ -573,7 +583,7 @@ export function readClip(r: Reader, L: NetLayout): HighlightClip {
     if (!Number.isFinite(t) || a >= nc || b >= nc || (k > 0 && t < hits[k - 1]!.t)) throw new RangeError("clip hit");
     hits.push({ t, x: hx, y: hy, z: hz, a, b });
   }
-  return { trackId, score, impacts, kills, ejects, hit, ejections, knocks, stirs, partStirs, strikes, squad, vip, peakKph, hitKph, deform, hits, t0, firstImpact, lastImpact, firstStep, x, z, focus, firstA, firstB, realism, bleed, squash, buckle, deformMode, look, cars, h, shape, lone, inputs, keyStep, keyCars, keys };
+  return { trackId, score, impacts, kills, ejects, hit, ejections, knocks, stirs, partStirs, strikes, squad, vip, peakKph, hitKph, deform, hits, t0, firstImpact, lastImpact, firstStep, x, z, focus, firstA, firstB, realism, bleed, squash, buckle, deformMode, epicenter, look, cars, h, shape, lone, inputs, keyStep, keyCars, keys };
 }
 
 /** A clip's squad block (`squadBytes`); throws RangeError on one that names a guard, a car or a step the clip has not. */

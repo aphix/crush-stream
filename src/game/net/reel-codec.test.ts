@@ -5,6 +5,7 @@ import { blankStrike } from "../scenes/figure-strike.ts";
 import { NET_VERSION, Reader, Writer } from "./codec.ts";
 import { carLayout } from "./car-pose.ts";
 import { clipBytes, decodeSaved, encodeSaved, packReel, readClip, savedPlayable, unpackReel, writeClip } from "./reel-codec.ts";
+import { epicenterValues } from "../deform/epicenter.ts";
 import { makeClip, sameClip } from "./reel-clip.test-util.ts";
 import type { ClipVip } from "../match/highlights.ts";
 
@@ -138,6 +139,25 @@ describe("given a clip that carries the guard squad", () => {
       assert.throws(() => readClip(new Reader().reset(w.done()), carLayout(car)), { name: "RangeError", message: testCase.expectedMessage });
     });
   }
+});
+
+describe("given a clip recorded with the epicenter activation on", () => {
+  it("when it is written and read back, then its size is the bytes written and the activation's values come back bit for bit", () => {
+    const { clip, car } = makeClip();
+    const on = { ...clip, epicenter: epicenterValues() };
+    const w = new Writer(clipBytes(on));
+    writeClip(w, on);
+    assert.equal(w.off, clipBytes(on), "bytes written");
+    sameClip(readClip(new Reader().reset(w.done()), carLayout(car)), on);
+  });
+
+  it("when a value of it is not a number, then the decoder refuses the clip", () => {
+    const { clip, car } = makeClip();
+    const bad = { ...clip, epicenter: epicenterValues().map((v, i) => (i === 1 ? Number.NaN : v)) };
+    const w = new Writer(clipBytes(bad));
+    writeClip(w, bad);
+    assert.throws(() => readClip(new Reader().reset(w.done()), carLayout(car)), { name: "RangeError", message: "clip epicenter" });
+  });
 });
 
 const refusedVips: { it: string; vip: ClipVip; expectedMessage: string }[] = [

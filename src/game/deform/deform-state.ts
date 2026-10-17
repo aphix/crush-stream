@@ -90,6 +90,7 @@ export abstract class DeformState extends DeformHit {
 
   kickNearest(worldPoint: THREE.Vector3, nx: number, ny: number, nz: number, j: number): void {
     if (!this.massActive || j === 0) return;
+    this.thaw();
     let best: MassNode | null = null;
     let bestD = Infinity;
     for (const m of this.masses) {
@@ -108,6 +109,7 @@ export abstract class DeformState extends DeformHit {
 
   kickNearestHub(worldPoint: THREE.Vector3, jUp: number): string | null {
     if (!this.massActive || jUp === 0) return null;
+    this.thaw();
     let best: MassNode | null = null;
     let bestD = Infinity;
     for (const m of this.masses) {
@@ -132,6 +134,7 @@ export abstract class DeformState extends DeformHit {
   }
 
   popHub(m: MassNode): void {
+    this.thaw();
     if (this.wheelsDetach) m.popped = true;
   }
 
@@ -140,6 +143,7 @@ export abstract class DeformState extends DeformHit {
    * pin clampLocal holds it at. Without detachable wheels the shove stops at a wheel diameter.
    */
   shoveHub(m: MassNode, dx: number, dz: number): void {
+    this.thaw();
     const gc = detCos(this.prevYaw);
     const gs = detSin(this.prevYaw);
     m.shoveX += dx * gc - dz * gs;
@@ -174,7 +178,8 @@ export abstract class DeformState extends DeformHit {
   }
 
   cutDrive(dt: number): void {
-    if (!this.massActive || this.drivetrainAlive) return;
+    // A frozen wreck's hubs ride its frame: scaling their speed would move them against it (moveRelative), and nothing pins them back (clampLocal does not run).
+    if (!this.massActive || this.drivetrainAlive || this.frozen) return;
     // Unpowered hubs only — cabin inertia keeps piling into the crumple.
     const k = Math.pow(0.55, Math.min(dt, 0.05));
     for (const m of this.masses) {
@@ -358,6 +363,7 @@ export abstract class DeformState extends DeformHit {
 
   impulseAt(worldPoint: THREE.Vector3, worldNormal: THREE.Vector3, closing: number): void {
     if (!this.massActive) return;
+    this.thaw();
     const seed = THREE.MathUtils.clamp(Math.abs(closing) * 0.0025 * this.squash, 0.01, 0.08);
     const kick = Math.abs(closing) * 0.45;
     const lift = Math.max(0.22, 0.82 - worldPoint.y) * Math.abs(closing) * 0.55;

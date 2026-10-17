@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { beginFakeFall, type DeformableCar } from "../vehicle/car.ts";
 import { FLIGHT, FLIGHT_EULER, FLIGHT_POSITION, FLIGHT_VELOCITY } from "../vehicle/car-flight.ts";
 import { looseStateLength, PART_STATE } from "../vehicle/part-state.ts";
@@ -356,6 +357,10 @@ export class ClipSim {
     const nc = cars.length;
     const saved = HANDLING.realism;
     HANDLING.realism = clip.realism;
+    // The recording's activation, not this browser's: put back after the steps.
+    const savedEpicenter = epicenterValues();
+    if (clip.epicenter) loadEpicenter(clip.epicenter);
+    else EPICENTER.on = 0;
     const s0 = this.step;
     while (this.step < clip.h.length && this.time < until - 1e-9 && (this.step === s0 || performance.now() < deadline)) {
       const s = this.step;
@@ -404,6 +409,7 @@ export class ClipSim {
       this.blend.end(cars);
       foldHeading(this.heading, this.cars[this.subject]!, h);
     }
+    loadEpicenter(savedEpicenter);
     HANDLING.realism = saved;
   }
 

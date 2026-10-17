@@ -1,6 +1,7 @@
 import { hypot2, detSin, detCos, PART_FAMILY } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { TYRE_R } from "../deform/deform-state.ts";
+import { EPICENTER } from "../deform/epicenter.ts";
 import { BUMPER_F } from "./constants.ts";
 import { BUMPER_SEAT } from "./car-mesh.ts";
 import { DOOR } from "./car-door-mesh.ts";
@@ -123,6 +124,11 @@ function foldAt(p: DetachPart): number {
   return p.region ? PANEL_OPEN : Infinity;
 }
 
+/** The bumpers' masses `posePart` reads, and the signature of a pose being built (`poseInputsChanged`; a car has at most 20 attached parts). */
+const POSE_BUMPERS = ["bumperFL", "bumperFR", "bumperRL", "bumperRR"] as const;
+const _poseSig = new Float64Array(7 * 20 + 20);
+/** An input moved less than this (m, rad or the unit of the value) from what the parts were last posed at is no change: a resting wreck's masses are re-derived through the frame's inverse each slice and differ by 1e-13. A nanometre moves no pixel; a slow creep is seen once it adds up, as the comparison is against the last pose, not the last slice. */
+const POSE_EPSILON = 1e-9;
 const _hinge = new Float64Array(7);
 
 /** Back on the camera's layer 0 (`traverse` callback, one function for every tear). */
@@ -216,12 +222,64 @@ export abstract class CarParts extends CarGlass {
    */
   protected partsDirty = false;
 
+/** What the parts were last posed from (`poseInputsChanged`): null before the first pose of a crash. */
+  private poseSig: Float64Array | null = null;
+
+  /**
+   * Whether anything `posePart` reads differs from the last pose: each part's hinge, swing, flap and attach sensors, the car's own position and turn (the ground the
+   * doors and bumpers clear, the world matrix), the struck direction, the bumpers' masses. The crush skin the panels bend over is the caller's check (`skinnedThisFrame`).
+   * Inputs within `POSE_EPSILON` of the last pose are the same; it records the inputs it read when they differ.
+   */
+  private poseInputsChanged(): boolean {
+    const parts = this.parts;
+    const n = parts.length * 7 + 20;
+    const now = _poseSig;
+    let k = 0;
+    for (let pi = 0; pi < parts.length; pi++) {
+      const p = parts[pi]!;
+      now[k++] = p.detached ? 1 : 0;
+      now[k++] = p.hingeT;
+      now[k++] = p.swing === null ? 0 : p.swing.theta;
+      now[k++] = p.swing === null ? 0 : p.swing.mirrorFold;
+      now[k++] = this.flapAngle(p);
+      now[k++] = this.deform.sensorCompression(p.attachL);
+      now[k++] = this.deform.sensorCompression(p.attachR);
+    }
+    const g = this.group;
+    now[k++] = g.position.x;
+    now[k++] = g.position.y;
+    now[k++] = g.position.z;
+    now[k++] = g.quaternion.x;
+    now[k++] = g.quaternion.y;
+    now[k++] = g.quaternion.z;
+    now[k++] = g.quaternion.w;
+    now[k++] = this.deform.impactInward.x;
+    for (let m = 0; m < 4; m++) {
+      const l = this.deform.massLocal(POSE_BUMPERS[m]!);
+      now[k++] = l.x;
+      now[k++] = l.y;
+      now[k++] = l.z;
+    }
+    const last = this.poseSig;
+    let same = last !== null && last.length === n;
+    if (same) for (let i = 0; i < n; i++) if (Math.abs(last![i]! - now[i]!) > POSE_EPSILON) same = false;
+    if (!same) {
+      if (last === null || last.length !== n) this.poseSig = new Float64Array(n);
+      this.poseSig!.set(now.subarray(0, n));
+    }
+    return !same;
+  }
+
   /** Every attached part posed from its current state, if a step moved any (`updateSkin`, before lamps, panels and glass follow). */
   protected poseParts(): void {
     if (!this.partsDirty) return;
     this.partsDirty = false;
-    // A car reset since the step that set the flag has its parts back at rest: nothing to pose.
-    if (!this.crashed) return;
+    // A car reset since the step that set the flag has its parts back at rest: nothing to pose (and the last signature no longer describes them).
+    if (!this.crashed) {
+      this.poseSig = null;
+      return;
+    }
+    if (EPICENTER.presentSkip === 1 && !this.deform.skinnedThisFrame && !this.poseInputsChanged()) return;
     const parts = this.parts;
     for (let pi = 0; pi < parts.length; pi++) if (!parts[pi]!.detached) this.posePart(parts[pi]!);
   }

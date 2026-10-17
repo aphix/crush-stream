@@ -77,6 +77,8 @@ export abstract class DeformContact extends DeformState {
     const h = dt / slices;
     this.shapeRan = false;
     for (let s = 0; s < slices; s++) this.stepMassSlice(h);
+    this.nodesLoose = this.shapeRan ? this.matchedNodes : 0;
+    this.nodesLocked = this.shapeRan ? 0 : this.matchedNodes;
     // The solver window closed this step: the shape the contacts left becomes every cluster's
     // rest (Sp folded in), so a later hit cannot spring earlier damage back. Nothing restores that
     // shape any more, so a body mass's vertical bounce relative to the others would drift on until
@@ -421,6 +423,7 @@ export abstract class DeformContact extends DeformState {
 
   /** Move the whole wreck, including planted hubs, so a bowl clip is not undone next frame. */
   translateMasses(dx: number, dz: number, dvx: number, dvz: number): void {
+    if (dx !== 0 || dz !== 0 || dvx !== 0 || dvz !== 0) this.thaw();
     this.push.debit(this.budgetAt(), dx, dz);
     for (const m of this.masses) {
       m.world.x += dx;
@@ -463,6 +466,7 @@ export abstract class DeformContact extends DeformState {
    */
   shiftBody(velocity: THREE.Vector3, angular: THREE.Vector3, dvx: number, dvz: number, dw: number, cx: number, cz: number, nx: number, nz: number, refVn: number): number {
     if (!this.massActive) return 0;
+    this.thaw();
     let all = 0;
     let driving = 0;
     let inertia = 0;
@@ -578,6 +582,7 @@ export abstract class DeformContact extends DeformState {
 
   /** Move mass `mi` by (`dx`, `dz`) in the world and in the car's frame; a planted hub the face meets is shoved (`shoveHub`). */
   pushMass(mi: number, dx: number, dz: number): void {
+    this.thaw();
     const m = this.masses[mi]!;
     const gc = detCos(this.prevYaw);
     const gs = detSin(this.prevYaw);
@@ -603,6 +608,7 @@ export abstract class DeformContact extends DeformState {
     const gs = detSin(this.prevYaw);
     const into = -(cell.vel.x * rx + cell.vel.z * rz) * side;
     if (into < 0.3 && !this.bidirectional && this.hitSpeed >= 0 && -this.impactInward.z > Math.abs(this.impactInward.x)) {
+      this.thaw();
       const front = Math.min(this.at.bumperFL.local.z, this.at.bumperFR.local.z) - ENGINE_PACK_GAP;
       const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(this.at.engineL.rest.z, this.at.engineR.rest.z) - ENGINE_PACK_GAP;
       const reach = Math.max(ENGINE_SLACK, this.hitStroke() - crumple);
@@ -644,6 +650,7 @@ export abstract class DeformContact extends DeformState {
    */
   separateAlong(nx: number, ny: number, nz: number, amount: number, dv = 0): void {
     if (!this.massActive || (amount === 0 && dv === 0)) return;
+    this.thaw();
     this.yawMomentum(1, false);
     const gc = detCos(this.prevYaw);
     const gs = detSin(this.prevYaw);
@@ -675,6 +682,7 @@ export abstract class DeformContact extends DeformState {
   /** Kill incoming speed on the cabin only — crumple zones keep their inertia. */
   kickCore(nx: number, ny: number, nz: number, dv: number): void {
     if (!this.massActive || dv === 0) return;
+    this.thaw();
     for (const m of this.masses) {
       if (!m.dynamic) continue;
       const w = 1 - this.crumpleWeight(m);
@@ -751,6 +759,7 @@ export abstract class DeformContact extends DeformState {
     // Overlap becomes local crush. Amount tracks ½mv², never (overlap/dt) velocity.
     const crush = Math.min(Math.max(0, overlap) * (whole ? 1 : 0.4 + s * 0.35) * ke, 0.06 + ke * 0.2) * Math.min(1, 0.35 * slice) * live;
     if (crush < 1e-5 && eaten < 1e-5) return closing;
+    this.thaw();
     this.impulse = Math.max(this.impulse, THREE.MathUtils.clamp(closing, 0, 70));
 
     const cell = this.at.cell;
@@ -787,6 +796,7 @@ export abstract class DeformContact extends DeformState {
   }
 
   applyImpact(localPoint: THREE.Vector3, localInward: THREE.Vector3, impulse: number): void {
+    this.thaw();
     this.impactLocal.copy(localPoint);
     this.impactInward.copy(localInward).normalize();
     const clamped = THREE.MathUtils.clamp(impulse, 4, 70);

@@ -9,7 +9,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { EngineWarm } from "./engine-warm.ts";
 import type { RaceHud } from "../match/types.ts";
 import { WALL } from "./engine-lab.ts";
-import { chaseValues } from "../present/drive-cam.ts";
+import { knobValues } from "../hud/knobs.ts";
 import { lookColours } from "../present/car-look.ts";
 import { pickedLook } from "../present/driver-look.ts";
 import { GARAGE } from "../present/garage-art.ts";
@@ -171,7 +171,7 @@ export abstract class EngineHud extends EngineWarm {
       rumble: this.rumble,
       playerCar: this.playerCar.id,
       mouseLook: this.view.locked,
-      ...chaseValues(),
+      ...knobValues(),
     });
     this.syncShareUrl();
   }

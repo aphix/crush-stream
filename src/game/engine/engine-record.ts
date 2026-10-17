@@ -1,4 +1,5 @@
 import { hypot3 } from "../kernel/physics-core.js";
+import { epicenterOn, epicenterValues } from "../deform/epicenter.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { FLIGHT } from "../vehicle/car-flight.ts";
 import { LOOSE_BODIES, LOOSE_STATE_MAX, PART_STATE } from "../vehicle/part-state.ts";
@@ -945,6 +946,7 @@ export class CrashRecorder {
       squash: this.cars[c.a0]!.deform.squash,
       buckle: this.cars[c.a0]!.deform.buckle,
       deformMode: this.cars[c.a0]!.deform.mode,
+      epicenter: epicenterOn() ? epicenterValues() : null,
       look: this.look,
       cars,
       h,

@@ -5,7 +5,7 @@ import { SEEDED_SCENES } from "../scenes/scene-id.ts";
 import { HANDLING } from "../vehicle/vehicle-classes.ts";
 import { EngineReel } from "./engine-reel.ts";
 import { carPickText, NO_CAR_PICK, NO_PERSON_PICK, parseCarPick, parsePersonPick, personPickText, type CarPick, type PersonPick } from "../match/look-data.ts";
-import { CHASE_KNOBS, chaseValues } from "../present/drive-cam.ts";
+import { KNOBS, knobValues } from "../hud/knobs.ts";
 import { pickedLook } from "../present/driver-look.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import { shareHashOf } from "./bench-loop.ts";
@@ -88,7 +88,7 @@ export abstract class EngineShare extends EngineReel {
       noreset: o.noReset,
       spectate: o.spectate,
       seed: SEEDED_SCENES[sc] ? this.sceneSeed : null,
-      ...chaseValues(),
+      ...knobValues(),
     };
   }
 
@@ -129,7 +129,7 @@ export abstract class EngineShare extends EngineReel {
       if (differs("cel")) this.setCelLook(t.cel);
       if (differs("squash")) this.setSquash(t.squash);
       if (differs("buckle")) this.setBuckle(t.buckle);
-      for (const k of CHASE_KNOBS) if (differs(k.id)) this.setChaseKnob(k.id, t[k.id]);
+      for (const k of KNOBS) if (differs(k.id)) this.setKnob(k.id, t[k.id]);
       // A tier only ever gets picked: leaving `fx=` out keeps the automatic one (or a `?fx=` bench pick).
       if (t.fx !== null && differs("fx")) this.setFxTier(t.fx);
       if (differs("ts")) this.setTimeScale(t.ts);

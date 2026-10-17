@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { INITIAL_HUD, type CrashHudState } from "./hud-store.ts";
 import { changedSettings, isChanged, SETTING_IDS, SETTINGS, type SettingId } from "./settings-changes.ts";
 import { DRIVER_CARS } from "../match/types.ts";
-import { CHASE_KNOBS, type ChaseKnobId } from "../present/drive-cam.ts";
+import { KNOBS, type KnobId } from "./knobs.ts";
 
 /** The menu after the user moved a Cinematic FX pick (Auto off) and the crumple stroke. */
 const touched: CrashHudState = { ...INITIAL_HUD, fxAuto: false, fxTier: "high", squash: 0.2 };
@@ -61,8 +61,8 @@ describe("given the settings menu, where each setting is a group of HUD fields w
   });
 
   it("when every setting is changed and then each is reset in turn, then each reads as unchanged right after its reset and the menu ends as the defaults", () => {
-    const camera: Partial<Record<ChaseKnobId, number>> = {};
-    for (const k of CHASE_KNOBS) camera[k.id] = INITIAL_HUD[k.id] === k.max ? k.min : k.max;
+    const camera: Partial<Record<KnobId, number>> = {};
+    for (const k of KNOBS) camera[k.id] = INITIAL_HUD[k.id] === k.max ? k.min : k.max;
     const all: CrashHudState = {
       ...INITIAL_HUD,
       looping: !INITIAL_HUD.looping,

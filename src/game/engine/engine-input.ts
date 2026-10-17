@@ -11,7 +11,7 @@ import { cleanName, DRIVER_CARS, type DriverCar, type SubmitContext } from "../m
 import { driverCarApplies } from "../match/driver-pick.ts";
 import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
-import { CHASE_KNOBS, type ChaseKnobId } from "../present/drive-cam.ts";
+import { KNOBS, type KnobId } from "../hud/knobs.ts";
 import { loadUltra as fetchUltra } from "../present/ultra/load.ts";
 import { boostPadButton, gameKey } from "../vehicle/drive-input.ts";
 import { MINIGAME_MODE } from "../scenes/minigame-constants.ts";
@@ -297,9 +297,9 @@ export abstract class EngineInput extends EngineRigs {
     this.emitHud();
   }
 
-  /** The camera slider `id` (`CHASE_KNOBS`) to `value`, clamped to its range; the camera reads it live, the HUD and the share URL follow. */
-  setChaseKnob(id: ChaseKnobId, value: number): void {
-    const knob = CHASE_KNOBS.find((k) => k.id === id);
+  /** The Debug slider `id` (`KNOBS`) to `value`, clamped to its range; the camera and the solver read it live, the HUD and the share URL follow. */
+  setKnob(id: KnobId, value: number): void {
+    const knob = KNOBS.find((k) => k.id === id);
     if (!knob || !Number.isFinite(value)) return;
     knob.set(THREE.MathUtils.clamp(value, knob.min, knob.max));
     this.emitHud();
@@ -465,7 +465,7 @@ export abstract class EngineInput extends EngineRigs {
         if (this.captureTrace) this.toggleCapture();
         break;
       default:
-        this.setChaseKnob(id, D[id]);
+        this.setKnob(id, D[id]);
         break;
     }
   }
