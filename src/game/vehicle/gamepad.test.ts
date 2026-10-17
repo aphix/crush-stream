@@ -171,7 +171,7 @@ describe("given a gamepad driving a car", () => {
 
   it("when the touch stick is held up-left with no pad plugged in, then it is gas and a left wheel, and a sub-frame tap still presses once", () => {
     const s = blankPad();
-    const t = { x: -0.7, y: -0.7, held: 0, tapped: 0 };
+    const t = { x: -0.7, y: -0.7, gas: 0, brake: 0, held: 0, tapped: 0 };
     readPad(null, s);
     mergeTouch(t, s, 0);
     const i = readIntent(new Set(), s, blankIntent());
@@ -194,5 +194,59 @@ describe("given a gamepad driving a car", () => {
     readPad(null, s);
     mergeTouch(t, s, prev);
     assert.equal(s.pressed, 0, "one tap, one press");
+  });
+});
+
+describe("given the touch pedals", () => {
+  const resting = () => ({ x: 0, y: 0, gas: 0, brake: 0, held: 0, tapped: 0 });
+
+  it("when only the gas pedal is down with no pad plugged in, then it is full gas, no brake and a centred wheel, and it connects the touch pad", () => {
+    const s = blankPad();
+    readPad(null, s);
+    mergeTouch({ ...resting(), gas: 1 }, s, 0);
+    const i = readIntent(new Set(), s, blankIntent());
+    assert.ok(s.connected, "a pedal alone counts as the touch pad being in use");
+    assert.equal(i.gas, 1);
+    assert.equal(i.brake, 0);
+    assert.equal(i.wheel, 0);
+  });
+
+  it("when the brake pedal is down, then it is full brake and, once stopped, reverse like the stick's down", () => {
+    const s = blankPad();
+    readPad(null, s);
+    mergeTouch({ ...resting(), brake: 1 }, s, 0);
+    const i = readIntent(new Set(), s, blankIntent());
+    assert.equal(i.brake, 1);
+    assert.equal(i.gas, 0);
+    const out = idleDrive();
+    shapeDrive(i, { wheel: 0, gas: 0, brake: 0, brakeHeld: 0, pulse: 0 }, 0, 1 / FRAME_HZ, out);
+    assert.ok(out.throttle < 0 && out.brake === 0, `standing still reverses: throttle ${out.throttle} brake ${out.brake}`);
+  });
+
+  it("when the stick steers half right while the gas pedal is down, then the steering is the stick's own scaled value and the gas is full", () => {
+    const s = blankPad();
+    readPad(null, s);
+    mergeTouch({ ...resting(), x: 0.5, gas: 1 }, s, 0);
+    assert.ok(Math.abs(s.lx - 0.5 * stickScale(0.5, 0)) < 1e-9, `lx ${s.lx}`);
+    assert.equal(s.rt, 1);
+    assert.equal(s.lt, 0);
+  });
+
+  it("when the stick is pushed up and the gas pedal is half down, then the larger of the two wins", () => {
+    const s = blankPad();
+    readPad(null, s);
+    mergeTouch({ ...resting(), y: -1, gas: 0.25 }, s, 0);
+    assert.equal(s.rt, 1);
+    readPad(null, s);
+    mergeTouch({ ...resting(), y: -0.1, gas: 0.25 }, s, 0);
+    assert.equal(s.rt, 0.25);
+  });
+
+  it("when nothing is touched, then the pad stays disconnected", () => {
+    const s = blankPad();
+    readPad(null, s);
+    mergeTouch(resting(), s, 0);
+    assert.equal(s.connected, false);
+    assert.equal(s.rt + s.lt, 0);
   });
 });

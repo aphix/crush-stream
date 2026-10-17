@@ -1,6 +1,12 @@
 import type { BailVerdict } from "../scenes/minigame-bail.ts";
+import type { MinigameHudState } from "../scenes/minigame-session.ts";
 import { boostPadButton, DRIVE_KEYS } from "../vehicle/drive-input.ts";
 import { padButtonName, type PadFamily } from "../vehicle/gamepad.ts";
+
+/** The Long jump's bail can still be pressed: the run-up is ready or running and the throw has not produced a verdict. Only then does the touch pad enlarge its Boost button into the thumb zone. */
+export function bailArmed(state: Pick<MinigameHudState, "bail" | "phase">): boolean {
+  return state.bail !== null && state.bail.verdict === null && (state.phase === "ready" || state.phase === "running");
+}
 
 /** The thumb pad's button on a touch screen: it is labelled Boost. */
 const TOUCH_BUTTON_NAME = "Boost";

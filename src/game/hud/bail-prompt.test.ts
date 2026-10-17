@@ -1,8 +1,21 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { bailControlName, bailPromptText, bailResultText } from "./bail-prompt.ts";
+import { bailArmed, bailControlName, bailPromptText, bailResultText } from "./bail-prompt.ts";
 import { blankIntent, boostPadButton, DRIVE_KEYS, readIntent } from "../vehicle/drive-input.ts";
 import { blankPad, PAD_BUTTON_COUNT, padButtonName, type PadFamily } from "../vehicle/gamepad.ts";
+
+describe("given the Long jump's bail state", () => {
+  const cases = [
+    { it: "when it is ready with no verdict, then the bail is armed", state: { bail: { pressed: false, verdict: null }, phase: "ready" }, expected: true },
+    { it: "when it is running with no verdict, then the bail is armed", state: { bail: { pressed: true, verdict: null }, phase: "running" }, expected: true },
+    { it: "when the throw has gone, then it is not armed", state: { bail: { pressed: true, verdict: null }, phase: "thrown" }, expected: false },
+    { it: "when a verdict is in, then it is not armed", state: { bail: { pressed: true, verdict: { kind: "perfect", offsetSeconds: 0 } }, phase: "running" }, expected: false },
+    { it: "when the mode has no bail, then it is not armed", state: { bail: null, phase: "ready" }, expected: false },
+  ] as const;
+  for (const testCase of cases) {
+    it(testCase.it, () => assert.equal(bailArmed(testCase.state as Parameters<typeof bailArmed>[0]), testCase.expected));
+  }
+});
 
 describe("given the pad button the drive input binds to Boost", () => {
   it("when every button is held in turn, then exactly the found one boosts, and no key does", () => {
