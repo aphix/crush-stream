@@ -16,7 +16,7 @@ import { Showcase } from "./showcase.ts";
 import { SHOWCASE_CAR, SHOWCASE_EYE, SHOWCASE_KNOCK } from "../present/showcase-art.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
 import { pickedLook } from "../present/driver-look.ts";
-import type { LabPresetId } from "../scenes/lab.ts";
+import { heldPose, type LabPresetId } from "../scenes/lab.ts";
 import { CORKSCREW } from "../scenes/corkscrew.ts";
 import { stackShot } from "../scenes/stack-rig.ts";
 import { activeGround, DISC_GROUND, setGround } from "../world/ground.ts";
@@ -32,8 +32,7 @@ import { mulberry32 } from "../world/placements.ts";
 import { celStrength } from "../present/scene-fade.ts";
 import { EngineMinigames } from "./engine-minigame-commands.ts";
 import type { DerbyCarFlag } from "../match/derby.ts";
-import { aimLabShot, LAB_FOV, LAB_SHOT } from "./lab-shot.ts";
-import { detSin, detCos } from "../kernel/physics-core.js";
+import { LAB_SHOT, planLabShot } from "./lab-shot.ts";
 import { SLOMO_HELD } from "../match/phase.ts";
 import { MINIGAME_MODE } from "../scenes/minigame-constants.ts";
 
@@ -174,7 +173,6 @@ export abstract class EngineScenes extends EngineMinigames {
     if (next === "stack") this.frameStack();
     if (next === "lab") {
       this.stage.look(LAB_LIGHT);
-      this.view.setLens(LAB_FOV);
       this.frameLab();
     } else if (wasLab) this.view.setLens(null);
     if (next === "garage") {
@@ -230,33 +228,32 @@ export abstract class EngineScenes extends EngineMinigames {
   protected readonly labLook = new THREE.Vector3();
   protected labUpright = false;
 
+  /**
+   * The Lab's shot (`LAB_SHOT`): from the side of the throw, fitted to the screen's shape and width, from where the layout puts
+   * its thrower and its items (never from where a throw has since left them: a screen turned mid-flight gets the same shot).
+   */
   protected frameLab(): void {
-    const from = this.lab.centre(0, _v);
-    const f = this.lab.focus;
+    const first = heldPose(this.lab.layout[0]!);
+    const from = _v.set(first.x, first.y, first.z);
     const upright = this.camera.aspect < 1;
     this.labUpright = upright;
     const shot = upright ? LAB_SHOT.upright : LAB_SHOT.wide;
     const short = !upright && this.canvas.clientHeight <= LAB_SHOT.wide.shortPx;
     const look = this.labLook;
-    const bearing = aimLabShot(from, f, shot, short, look);
-    let radius = LAB_SHOT.upright.radius;
-    if (!upright) {
-      // The farthest item off the look point across the screen (along the camera's right), and the distance that fits it.
-      let span = 0;
-      for (let k = 0; k < this.lab.layout.length; k++) {
-        this.lab.centre(k, _w).sub(look);
-        span = Math.max(span, Math.abs(_w.x * detCos(bearing) - _w.z * detSin(bearing)));
-      }
-      radius = (span + LAB_SHOT.wide.fit) / (Math.tan(THREE.MathUtils.degToRad(LAB_FOV) / 2) * this.camera.aspect);
-      look.y = Math.min(look.y, from.y + LAB_SHOT.wide.low * radius * Math.tan(THREE.MathUtils.degToRad(LAB_FOV) / 2));
-    }
+    const { bearing, radius } = planLabShot(from, this.lab.focus, this.lab.layout.map(heldPose), shot, this.camera.aspect, short, look);
+    this.view.setLens(shot.fov);
     this.view.frameReset(true, this.live(), bearing, { lookX: look.x, lookY: look.y, lookZ: look.z, radius, pitch: shot.pitch });
   }
 
-  /** A flick let go (`LabFlick`, or the `?bench=lab` page's throws): the thing leaves at `velocity`, and the crash starts over so the slow-mo and the crash cam catch its hit. */
+  /**
+   * A flick let go (`LabFlick`, or the `?bench=lab` page's throws): the thing leaves at `velocity`, and the crash starts over so
+   * the slow-mo catches its hit. The view stays where the player has it: the Lab's shot is the side of the throw, and the crash
+   * cam's cuts, a thrown driver's ride-along and the impact's re-aim (`ChaseCamera.kick`) all run only while the view is not
+   * `userFramed`, each carrying the camera round behind the car to follow the hit.
+   */
   flickLab(thing: number, velocity: THREE.Vector3): void {
     this.restartCrash();
-    this.view.userFramed = false;
+    this.view.userFramed = true;
     this.lab.launch(thing, velocity);
     this.tryUnlockAudio();
     this.emitHud();

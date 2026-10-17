@@ -335,40 +335,41 @@ export function MinigamePick({ engine, onPicked }: { engine: RefObject<CrashEngi
 const LAB_SET_LABEL: Record<LabPresetId, string> = { pad: "Pad", wall: "Wall", cards: "Cards", glass: "Glass" };
 
 /**
- * The Lab: its set (a pick puts it up afresh) and the last throw's readout; the throw is a swipe from a car. An upright phone
- * holds it at the top, where the Lab hides the readouts: low in the view it sat over the thrower; wider screens keep it low.
+ * The Lab: its set (a pick puts it up afresh) and the last throw's readout; the throw is a swipe from a car. On a phone it is
+ * always open and two rows tall at most: the four set chips (44 px, one row of four in the 13 rem scene column, two by two if the
+ * column is ever narrower) and the readout on one line (cut short, never wrapped), so the set is one tap away and the panel,
+ * at the top of the left column, stays well clear of the thrower and the set, which the Lab's side shot holds mid-screen.
  */
 export function LabPanel({ lab, engine }: { lab: LabHud; engine: RefObject<CrashEngine | null> }) {
   const unit = useSpeedUnit();
-  const fold = usePanelFold(false);
+  const touch = useCoarsePointer();
   const shot = lab.shot;
   const reading =
     shot === null
-      ? "Swipe from a car or a dummy to throw it along the bench"
+      ? touch
+        ? "Swipe an item to throw it"
+        : "Swipe from a car or a dummy to throw it along the bench"
       : shot.hit === null
         ? `Flying at ${formatSpeed(shot.speed, unit)} ${unit}`
         : `Hit the ${shot.hit} at ${formatSpeed(shot.speed, unit)} ${unit} · ${shot.fell} moved`;
   return (
-    <div className={cn("hud-panel pointer-events-auto w-full max-w-xs space-y-1 p-1 pointer-coarse:w-52 sm:pointer-fine:mt-auto idle:opacity-70", UNFOLDED_SCROLL, fold?.open === false && FOLDED)}>
-      {fold ? <PanelHeader title="Lab" reading={reading} fold={fold} /> : null}
-      <div className="grid grid-cols-4 gap-0.5 rounded-md bg-surface-2/70 p-0.5" role="group" aria-label="Lab set">
+    <div className={cn("hud-panel pointer-events-auto w-full max-w-xs space-y-1 p-1 pointer-coarse:w-52 sm:pointer-fine:mt-auto idle:opacity-70", UNFOLDED_SCROLL)}>
+      <div className="grid grid-cols-4 gap-0.5 rounded-md bg-surface-2/70 p-0.5 pointer-coarse:flex pointer-coarse:flex-wrap" role="group" aria-label="Lab set">
         {LAB_PRESETS.map((id) => (
           <Button
             key={id}
             variant={lab.preset === id ? "default" : "ghost"}
             aria-pressed={lab.preset === id}
-            className="h-11 px-1 text-xs pointer-fine:h-8"
+            className="h-11 px-1 text-xs pointer-coarse:min-w-11 pointer-coarse:flex-1 pointer-fine:h-8"
             onClick={() => engine.current?.setLabPreset(id)}
           >
             {LAB_SET_LABEL[id]}
           </Button>
         ))}
       </div>
-      {fold ? null : (
-        <p className="truncate px-1 font-display text-xs tabular-nums text-muted idle:hidden" role="status">
-          {reading}
-        </p>
-      )}
+      <p className="truncate px-1 font-display text-xs tabular-nums text-muted idle:hidden" role="status">
+        {reading}
+      </p>
     </div>
   );
 }
