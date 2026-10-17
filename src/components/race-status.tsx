@@ -1,5 +1,6 @@
 import { Siren } from "lucide-react";
 import { copCount } from "@/components/cop-count";
+import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { useSpeedUnit } from "@/components/use-speed-unit";
 import type { RaceHud, RaceView } from "@/game/match/types";
 import type { SpeedUnit } from "@/game/hud/speed-units";
@@ -9,18 +10,21 @@ import { cn } from "@/lib/utils";
 const NEAR_GOAL = 500;
 const YARDS_PER_M = 1.0936;
 
-/** The pursuit strip: police are chasing the viewed car. Cop count and, while the cops hold it slow beside one (the bust rule counting), the bust hold running out with the seconds left. */
-function PursuitStrip({ chase }: { chase: NonNullable<RaceView["chase"]> }) {
+/** Top-centre column offset of the touch strips: the start-lights strip is 44 px (2.75 rem) tall, plus a 0.5 rem gap. */
+const BELOW_LIGHTS = "pt-[3.25rem]";
+
+/** The pursuit strip: police are chasing the viewed car. Cop count and, while the cops hold it slow beside one (the bust rule counting), the bust hold running out with the seconds left. Smaller on a `touch` screen, where it sits top centre. */
+function PursuitStrip({ chase, touch }: { chase: NonNullable<RaceView["chase"]>; touch: boolean }) {
   return (
-    <div className="hud-ink relative flex flex-col items-center gap-1 whitespace-nowrap px-8 py-1 font-display md:min-w-80 md:px-16 md:py-1.5" role="status">
+    <div className={cn("hud-ink relative flex flex-col items-center gap-1 whitespace-nowrap font-display", touch ? "px-6 py-0.5" : "px-8 py-1 md:min-w-80 md:px-16 md:py-1.5")} role="status">
       <div className="absolute inset-0 bg-linear-to-r from-transparent via-signal-red/60 to-transparent" aria-hidden />
-      <p className="relative flex items-center gap-2 text-lg font-semibold uppercase tracking-[0.2em] text-fg md:text-2xl">
-        <Siren className={cn("size-5 md:size-6", chase.hold > 0.6 && "motion-safe:animate-pulse")} />
+      <p className={cn("relative flex items-center gap-2 font-semibold uppercase tracking-[0.2em] text-fg", touch ? "text-base" : "text-lg md:text-2xl")}>
+        <Siren className={cn(touch ? "size-4" : "size-5 md:size-6", chase.hold > 0.6 && "motion-safe:animate-pulse")} />
         Chased by {copCount(chase.cops)}
       </p>
       {chase.hold > 0 ? (
         <div className="relative flex items-center gap-2">
-          <div className="h-2 w-48 overflow-hidden rounded-full bg-fg/25 shadow-[var(--shadow-border)]" role="meter" aria-label="Bust hold" aria-valuenow={Math.round(chase.hold * 100)}>
+          <div className={cn("h-2 overflow-hidden rounded-full bg-fg/25 shadow-[var(--shadow-border)]", touch ? "w-32" : "w-48")} role="meter" aria-label="Bust hold" aria-valuenow={Math.round(chase.hold * 100)}>
             <div className="h-full w-full origin-left bg-signal-red transition-transform duration-150 ease-linear will-change-transform" style={{ transform: `scaleX(${chase.hold})` }} />
           </div>
           <span className="w-12 text-sm font-semibold tabular-nums">{chase.left.toFixed(1)} s</span>
@@ -41,13 +45,32 @@ function remaining(race: RaceHud, view: RaceView, unit: SpeedUnit): number | nul
 /**
  * The race's status strips, over the 3D view and clear of every control: the pursuit strip (bottom centre) while police chase
  * the viewed car, and the near-goal banner (top centre) for the last stretch of the last lap. With a touch pad (`!corner`) both
- * ride above it instead, in the gap between the standings and the thumb controls. None under a menu or the reel.
+ * ride above it instead, in the gap between the standings and the thumb controls. On a touch screen (`useCoarsePointer`) both
+ * stack in the top-centre column under the start lights instead, smaller, never in the road zone; they are events, so `calm`
+ * never fades them. None under a menu or the reel.
  */
 export function RaceStatus({ race, corner }: { race: RaceHud; corner: boolean }) {
   const unit = useSpeedUnit();
+  const touch = useCoarsePointer();
   const view = race.view;
   if (!view || race.phase !== "racing" || race.menu !== null || race.reel !== null) return null;
   const left = remaining(race, view, unit);
+  if (touch) {
+    if (left === null && view.chase === null) return null;
+    return (
+      <div className={cn("pointer-events-none absolute inset-x-0 hud-top z-10 flex flex-col items-center gap-1", BELOW_LIGHTS)}>
+        {left === null ? null : (
+          <p
+            className="hud-ink whitespace-nowrap bg-linear-to-r from-transparent via-scene-race/75 to-transparent px-6 py-0.5 font-display text-base font-semibold uppercase tracking-wide tabular-nums text-fg"
+            role="status"
+          >
+            {left} {unit === "mph" ? "yd" : "m"} remaining
+          </p>
+        )}
+        {view.chase === null ? null : <PursuitStrip chase={view.chase} touch />}
+      </div>
+    );
+  }
   return (
     <>
       {left === null ? null : (
@@ -62,7 +85,7 @@ export function RaceStatus({ race, corner }: { race: RaceHud; corner: boolean })
       )}
       {view.chase === null ? null : (
         <div className={cn("pointer-events-none absolute inset-x-0 z-10 flex justify-center", corner ? "bottom-[7%]" : "bottom-[30%]")}>
-          <PursuitStrip chase={view.chase} />
+          <PursuitStrip chase={view.chase} touch={false} />
         </div>
       )}
     </>

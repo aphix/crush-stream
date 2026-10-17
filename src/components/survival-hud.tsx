@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { MapPinned, RotateCcw, Siren, Trophy } from "lucide-react";
 import { AudioRows } from "@/components/race-audio";
 import { DriverRows } from "@/components/race-driver";
@@ -23,9 +24,31 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 /**
  * Survival's readouts, top right (Driver 2's): the stopwatch that is the score, the best time, the cops chasing and the cops
- * wrecked. The bust hold counting down has the pursuit strip (`race-status.tsx`).
+ * wrecked. The bust hold counting down has the pursuit strip (`race-status.tsx`). On a phone (`phone`: the speed text for an
+ * upright screen, which the race band lines up with the clocks) it is the band's top left: the stopwatch big, then one thin line.
  */
-export function SurvivalReadout({ race, survival }: { race: RaceHud; survival: SurvivalHud }) {
+export function SurvivalReadout({ race, survival, phone }: { race: RaceHud; survival: SurvivalHud; phone?: ReactNode }) {
+  if (phone !== undefined) {
+    return (
+      <>
+        <p className="hud-ink text-3xl font-semibold leading-none tracking-tight phone-landscape:text-4xl" aria-label="Survived">
+          {fmtTime(race.time)}
+        </p>
+        <div className="hud-ink flex flex-wrap items-center gap-x-2 text-[11px] leading-4">
+          <p aria-label="Best time">
+            <span className="uppercase tracking-[0.12em] text-fg/70">Best </span>
+            <span className="font-semibold">{survival.best === null ? "–" : fmtTime(survival.best)}</span>
+          </p>
+          <dl className="flex gap-2">
+            <Stat label="Cops" value={String(survival.cops)} />
+            <Stat label="Wrecked" value={String(survival.wrecked)} />
+            {race.team ? <Stat label="Free" value={`${race.team.free}/${race.team.humans}`} /> : null}
+          </dl>
+          {phone}
+        </div>
+      </>
+    );
+  }
   return (
     <>
       <p className="hud-ink text-5xl font-semibold leading-none tracking-tight" aria-label="Survived">
