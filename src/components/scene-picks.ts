@@ -17,8 +17,9 @@ export const SCENES: SceneDef[] = [
   { id: "race", label: "Race", aria: "Race scene", tone: "[--tone:var(--color-scene-race)]" },
   { id: "range", label: "Range", aria: "Ejection range scene", tone: "[--tone:var(--color-scene-range)]" },
   { id: "survival", label: "Survival", aria: "Survival scene: how long can you last", tone: "[--tone:var(--color-scene-survival)]" },
-  { id: "lab", label: "Lab", aria: "Lab scene: flick a toy car at a stack of cars on a workbench", tone: "[--tone:var(--color-scene-lab)]" },
   { id: "garage", label: "Garage", aria: "Garage: pick your car's and driver's colours and spray-paint them", tone: "[--tone:var(--color-scene-garage)]" },
+  // A test bench for flings and crash forces, not a game mode: muted with the rigs so the menu does not point at it.
+  { id: "lab", label: "Lab", aria: "Lab scene: flick a toy car at a stack of cars on a workbench", quiet: true },
   { id: "press", label: "Press", aria: "Car compactor scene", quiet: true },
   { id: "pistons", label: "Pistons", aria: "Piston rig scene", quiet: true },
   { id: "doors", label: "Doors", aria: "Door and mirror knock scene", quiet: true },
@@ -29,7 +30,7 @@ export const SCENES: SceneDef[] = [
 export const sceneLabel = (id: SceneId): string => SCENES.find((scene) => scene.id === id)?.label ?? id;
 
 /** The phone's Home sheet leads with these six, in this order; Fleet is its own "Free play" row and the test rigs fold away. */
-const HOME_MODE_ORDER: readonly SceneId[] = ["race", "derby", "survival", "range", "garage", "lab"];
+const HOME_MODE_ORDER: readonly SceneId[] = ["race", "derby", "survival", "range", "garage"];
 
 /** The scenes a netplay room cannot be in (the single-player ones) drop out of the pickers while the browser is in a room. */
 export const scenesFor = (inRoom: boolean): SceneDef[] => SCENES.filter((scene) => !(SOLO_SCENES[scene.id] && inRoom));
