@@ -51,6 +51,10 @@ function hullGap(s: Snap, i: number, j: number): number {
   return gap;
 }
 
+/** Pair-steps counted as overlapping, and as deeply overlapping, by the boxes' minimum translation (m). */
+const OVERLAP_M = 0.05;
+const DEEP_OVERLAP_M = 0.3;
+
 export class LoneCensus {
   private readonly sim: SimLike;
   private steps = 0;
@@ -61,6 +65,9 @@ export class LoneCensus {
   private closing = 0;
   private notClosing = 0;
   private falseNegative = 0;
+  private overlapSteps = 0;
+  private deepSteps = 0;
+  private maxOverlap = 0;
   private readonly slices0: number;
   private readonly fineCuts0: number;
 
@@ -90,6 +97,16 @@ export class LoneCensus {
     const slices0 = this.sim.world.phases.work[WORK.slices]!;
     this.sim.run(dt);
     const after = this.snapshot();
+    // Car boxes interpenetrating at the end of the step (every step, every pair): the depth is the box-vs-box minimum translation (a lower bound for deformed wrecks).
+    for (let i = 0; i < this.sim.cars.length; i++) {
+      for (let j = i + 1; j < this.sim.cars.length; j++) {
+        if (Math.hypot(after.x[j]! - after.x[i]!, after.z[j]! - after.z[i]!) > 6) continue;
+        const depth = -hullGap(after, i, j);
+        if (depth > OVERLAP_M) this.overlapSteps++;
+        if (depth > DEEP_OVERLAP_M) this.deepSteps++;
+        if (depth > this.maxOverlap) this.maxOverlap = depth;
+      }
+    }
     const sliced = this.sim.world.phases.work[WORK.slices]! - slices0;
     const mask = this.sim.world.loners;
     const n = Math.min(this.sim.cars.length, 32);
@@ -142,6 +159,9 @@ export class LoneCensus {
       slicesPerS: per(this.sim.world.phases.work[WORK.slices]! - this.slices0),
       fineCutsPerS: per(this.sim.world.fineCuts - this.fineCuts0),
       closeM: CLOSE_M,
+      overlapPairStepsPerS: per(this.overlapSteps),
+      deepOverlapPairStepsPerS: per(this.deepSteps),
+      maxOverlapM: this.maxOverlap,
     };
-  }
+}
 }

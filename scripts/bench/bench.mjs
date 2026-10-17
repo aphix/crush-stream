@@ -214,6 +214,7 @@ export function table(name, first, arms) {
     lines.push(
       `   lone-car census, ${a.name} (per sim-s; hull gap = separating-axis gap of the car boxes less the pair's relative travel over the step, closing within ${c.closeM} m): steps ${f1(c.stepsPerS)}, of which one slice ${f1(c.singleSliceStepsPerS)}; in the multi-slice steps car-steps ${Math.round(c.carStepsPerS)}: lone ${Math.round(c.loneCarStepsPerS)} (${pct(c.loneCarStepsPerS)}), near-and-not-lone ${Math.round(c.nearCarStepsPerS)} (${pct(c.nearCarStepsPerS)}) = closing ${Math.round(c.closingPerS)} + not closing ${Math.round(c.notClosingPerS)} (${pct(c.notClosingPerS)}); not-closing steps followed by a hull gap under ${c.closeM} m and a contact: ${f1(c.notClosingThenContactPerS)}/s; slices ${f1(c.slicesPerS)}/s, fineCuts ${f1(c.fineCutsPerS)}/s`,
     );
+    lines.push(`   car-box overlap at the end of a step, ${a.name} (box-vs-box minimum translation, a lower bound for deformed wrecks; per sim-s): pair-steps over 5 cm ${f1(c.overlapPairStepsPerS)}, over 30 cm ${f1(c.deepOverlapPairStepsPerS)}, deepest ${f2(c.maxOverlapM)} m`);
   }
   if (arms.some((a) => a.flagged)) lines.push("   LOAD: a run started above the load limit (--force): the ms are not timing");
   for (const other of arms.slice(1)) if (arms[0].trace && other.trace) lines.push(...divergenceLines(arms[0], other));
