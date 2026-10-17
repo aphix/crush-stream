@@ -83,7 +83,7 @@ const STRIP_BUTTON = "size-12 px-0";
  * nobody drives, and the reset control only while the car needs it. Each is held through the pad (`engine.touch`), so the pad bindings
  * run them: the race's pause and respawn, look back. Capped at 62 % of the screen, so a portrait phone wraps it to a second row.
  */
-function TopStrip({ state, engine }: HudProps) {
+function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
   const race = state.race;
   const driving = state.seat === "drive";
   const flying = state.cam === "free";
