@@ -15,7 +15,7 @@ const SLIDE_MS = 240;
 export const CARD = "rounded-2xl bg-surface shadow-[var(--shadow-border)]";
 
 export function NavButton({ className, ...props }: ButtonProps) {
-  return <Button data-nav className={cn("w-full sm:h-8", FOCUS, className)} {...props} />;
+  return <Button data-nav className={cn("w-full pointer-fine:h-8", FOCUS, className)} {...props} />;
 }
 
 export function MenuShell({

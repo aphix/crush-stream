@@ -4,7 +4,7 @@ import { ROOM_MAX } from "@/lib/multiplayer/rooms";
 import { cn } from "@/lib/utils";
 
 /** Taps stay 44 px tall on phones, 32 px from `sm`. */
-const TAP = "h-11 sm:h-8";
+const TAP = "h-11 pointer-fine:h-8";
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
 
 /**

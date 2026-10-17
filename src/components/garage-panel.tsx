@@ -10,7 +10,7 @@ import { CAR_PARTS, hexOf, SPRAY_PALETTE, type CarPart } from "@/game/match/look
 import { cn } from "@/lib/utils";
 
 const PART_LABEL: Record<CarPart, string> = { body: "Body", doors: "Doors", hood: "Hood", trunk: "Trunk", bumpers: "Bumpers", rims: "Rims", glass: "Glass tint" };
-const SEGMENT = "h-11 px-1 text-xs sm:h-8";
+const SEGMENT = "h-11 px-1 text-xs pointer-fine:h-8";
 const ROW = "flex items-center justify-between gap-2 px-1";
 
 /** A native colour picker for `value` (sRGB) under `label`, live while it is dragged. */

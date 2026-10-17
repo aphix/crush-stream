@@ -24,7 +24,7 @@ export function DerbyBoard({ board, engine }: { board: CrashHudState["derbyBoard
               onClick={() => engine.current?.watchCar(row.id)}
               aria-pressed={row.watched}
               aria-label={`Follow ${row.name}`}
-              className={`flex h-11 w-full items-center justify-between gap-2 rounded px-1.5 text-left font-display text-sm hover:bg-surface-2 sm:h-6 pointer-coarse:h-11 ${row.watched ? "bg-surface-2" : ""}`}
+              className={`flex h-11 w-full items-center justify-between gap-2 rounded px-1.5 text-left font-display text-sm hover:bg-surface-2 pointer-fine:h-6 pointer-coarse:h-11 ${row.watched ? "bg-surface-2" : ""}`}
             >
               <span className={`min-w-0 truncate ${row.alive ? "text-fg" : "text-subtle line-through"}`}>{row.name}</span>
               <span className="flex shrink-0 gap-2 tabular-nums">
@@ -40,7 +40,7 @@ export function DerbyBoard({ board, engine }: { board: CrashHudState["derbyBoard
 }
 
 /** Rig fire pads and toggles: 44 px tall on phones, 28 px from `sm`. */
-const RIG_BUTTON = "h-11 px-2 text-xs sm:h-7";
+const RIG_BUTTON = "h-11 px-2 text-xs pointer-fine:h-7";
 
 /** Compass order on screen (front at the top): index into the rig's key order, 8 = all. */
 const PISTON_GRID = [0, 1, 2, 7, 8, 3, 6, 5, 4] as const;
@@ -279,7 +279,7 @@ export function LabPanel({ lab, engine }: { lab: LabHud; engine: RefObject<Crash
             key={id}
             variant={lab.preset === id ? "default" : "ghost"}
             aria-pressed={lab.preset === id}
-            className="h-11 px-1 text-xs sm:h-8"
+            className="h-11 px-1 text-xs pointer-fine:h-8"
             onClick={() => engine.current?.setLabPreset(id)}
           >
             {LAB_SET_LABEL[id]}

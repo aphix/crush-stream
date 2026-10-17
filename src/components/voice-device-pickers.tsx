@@ -3,7 +3,7 @@ import type { CrashEngine } from "@/game/engine/engine";
 import { outputChoiceSupported } from "@/game/net/voice";
 import { useAudioDevices, useVoice, useVoiceDeviceChoice } from "@/components/use-voice";
 
-const SELECT = "h-11 min-w-0 flex-1 rounded-md bg-surface-2 px-1.5 text-xs text-fg shadow-[var(--shadow-border)] sm:h-8";
+const SELECT = "h-11 min-w-0 flex-1 rounded-md bg-surface-2 px-1.5 text-xs text-fg shadow-[var(--shadow-border)] pointer-fine:h-8";
 
 function DevicePicker({ label, devices, value, fallbackName, onPick }: { label: string; devices: MediaDeviceInfo[]; value: string; fallbackName: string; onPick: (deviceId: string) => void }) {
   return (

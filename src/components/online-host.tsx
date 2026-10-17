@@ -11,7 +11,7 @@ import { ROOM_MAX } from "@/lib/multiplayer/rooms";
 import { cn } from "@/lib/utils";
 
 /** Buttons and fields: 44 px tall on phones, 32 px from `sm`. */
-const CONTROL = "h-11 sm:h-8";
+const CONTROL = "h-11 pointer-fine:h-8";
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
 /** Generated passwords: 8 of these 32 characters (no I, O, 0 or 1) from `crypto.getRandomValues`, 40 bits, unguessable. */
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

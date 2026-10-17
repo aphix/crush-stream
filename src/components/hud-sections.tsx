@@ -38,7 +38,7 @@ import { useDriver } from "@/components/use-driver";
 import { cn } from "@/lib/utils";
 
 /** Option buttons inside a segmented track. Five-option tracks wrap at three per row: one row of five overflows the panel. */
-const SEGMENT = "h-10 px-1 text-xs sm:h-7";
+const SEGMENT = "h-10 px-1 text-xs pointer-fine:h-7";
 const TRACK = "grid flex-1 gap-0.5 rounded-md bg-surface-2 p-0.5";
 
 /** The storage key of the open sections: the menu reads it to know whether any is open (`HudSections` writes it). */
@@ -86,7 +86,7 @@ function Section({ id, title, changed, engine, children }: { id: SectionId; titl
       <Accordion.Header>
         <Accordion.Trigger
           data-hud-section={id}
-          className="group flex h-11 w-full items-center justify-between rounded-lg px-2 font-display text-xs font-medium uppercase tracking-[0.16em] text-muted transition-colors duration-[var(--motion-quick)] hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:text-fg sm:h-8"
+          className="group flex h-11 w-full items-center justify-between rounded-lg px-2 font-display text-xs font-medium uppercase tracking-[0.16em] text-muted transition-colors duration-[var(--motion-quick)] hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:text-fg pointer-fine:h-8"
         >
           <span className="flex items-center gap-2">
             {title}
@@ -111,7 +111,7 @@ function Section({ id, title, changed, engine, children }: { id: SectionId; titl
               <Button
                 key={s}
                 variant="ghost"
-                className="h-11 gap-1 px-1.5 text-xs sm:h-8"
+                className="h-11 gap-1 px-1.5 text-xs pointer-fine:h-8"
                 aria-label={`Reset ${SETTINGS[s].label} to its default`}
                 onClick={() => {
                   if (s === "car") driver.setCar(INITIAL_HUD.playerCar);
@@ -138,7 +138,7 @@ function Toggle({ on, label, onClick, changed, children }: { on: boolean; label:
       variant={on ? "default" : "ghost"}
       aria-pressed={on}
       aria-label={label}
-      className="h-11 justify-start gap-1.5 px-1.5 text-xs sm:h-8"
+      className="h-11 justify-start gap-1.5 px-1.5 text-xs pointer-fine:h-8"
     >
       {children}
       <ChangedDot on={changed} className="ml-auto size-1.5 shrink-0 rounded-full bg-current" />
@@ -249,7 +249,7 @@ function PlaybackSection({ state, engine }: HudProps) {
           />
         </div>
         <Button
-          className="h-11 shrink-0 px-2 text-xs sm:h-8"
+          className="h-11 shrink-0 px-2 text-xs pointer-fine:h-8"
           variant={state.celLook === null ? "default" : "ghost"}
           aria-pressed={state.celLook === null}
           aria-label="Cel look automatic"
@@ -406,7 +406,7 @@ function TuningSection({ state, engine }: HudProps) {
           engine.current?.resetDefaults();
         }}
         variant="secondary"
-        className="h-11 w-full text-xs sm:h-8"
+        className="h-11 w-full text-xs pointer-fine:h-8"
         aria-label="Reset all settings to defaults"
       >
         <Undo2 />
@@ -457,7 +457,7 @@ function DebugSection({ state, engine }: HudProps) {
           }}
           variant="secondary"
           aria-label="Copy spawn JSON"
-          className="h-11 justify-start gap-1.5 px-1.5 text-xs sm:h-8"
+          className="h-11 justify-start gap-1.5 px-1.5 text-xs pointer-fine:h-8"
         >
           <ClipboardCopy />
           {copied ? "Copied" : `JSON ${state.traceSamples}`}
@@ -468,7 +468,7 @@ function DebugSection({ state, engine }: HudProps) {
             variant="secondary"
             aria-label="Submit capture JSON"
             title="Send this capture to the developer; you get a receipt id"
-            className="col-span-2 h-11 justify-start gap-1.5 px-1.5 text-xs sm:h-8"
+            className="col-span-2 h-11 justify-start gap-1.5 px-1.5 text-xs pointer-fine:h-8"
           >
             <ArrowUp />
             Submit {state.traceSamples} samples

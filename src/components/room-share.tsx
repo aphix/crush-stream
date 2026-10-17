@@ -7,7 +7,7 @@ import type { NetStatus } from "@/game/net/net-ports";
 import { cn } from "@/lib/utils";
 
 /** 44 px tall on phones, 32 px from `sm`. */
-const CONTROL = "h-11 sm:h-8";
+const CONTROL = "h-11 pointer-fine:h-8";
 
 /**
  * The room this browser hosts or has joined, as something to read out and pass on: its password (the room code) big, a one-tap Copy link
@@ -56,7 +56,7 @@ export function RoomShare({ engine, status }: { engine: RefObject<CrashEngine | 
           {copy === "copied" ? "Copied" : "Copy link"}
         </Button>
         {canShare ? (
-          <Button variant="secondary" className={cn(CONTROL, "w-11 shrink-0 px-0 sm:w-8")} onClick={share} aria-label="Share room link">
+          <Button variant="secondary" className={cn(CONTROL, "w-11 shrink-0 px-0 pointer-fine:w-8")} onClick={share} aria-label="Share room link">
             <Share2 />
           </Button>
         ) : null}

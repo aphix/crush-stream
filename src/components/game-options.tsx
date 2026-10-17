@@ -5,7 +5,7 @@ import type { CourseMenu } from "@/game/net/net-ports";
 import { cn } from "@/lib/utils";
 
 /** Taps stay 44 px tall on phones, 32 px from `sm`. */
-const TAP = "h-11 sm:h-8";
+const TAP = "h-11 pointer-fine:h-8";
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
 
 export const GAME_LABEL: Record<GameKind, string> = { race: "Race", campaign: "Campaign", survival: "Survival", derby: "Derby" };

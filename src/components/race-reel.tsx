@@ -80,7 +80,7 @@ export function SavedList({ saved, outdated, autoPurge, onCommand }: { saved: Sa
             </NavButton>
           </div>
         ) : null}
-        <label className="ml-auto flex h-11 items-center gap-2 text-xs sm:h-8">
+        <label className="ml-auto flex h-11 items-center gap-2 text-xs pointer-fine:h-8">
           <input
             type="checkbox"
             data-nav
@@ -106,7 +106,7 @@ export function SavedList({ saved, outdated, autoPurge, onCommand }: { saved: Sa
             </NavButton>
             <NavButton
               variant="ghost"
-              className="w-11 px-0 sm:w-8"
+              className="w-11 px-0 pointer-fine:w-8"
               aria-label={`Delete ${s.title}`}
               title="Delete"
               onClick={() => onCommand({ type: "savedDelete", key: s.key })}

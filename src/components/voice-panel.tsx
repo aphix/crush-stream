@@ -8,7 +8,7 @@ import { VOICE_MAX_RANGE_M } from "@/game/net/voice-range";
 import { cn } from "@/lib/utils";
 
 /** Taps stay 44 px tall on phones, 32 px from `sm`. */
-const TAP = "h-11 sm:h-8";
+const TAP = "h-11 pointer-fine:h-8";
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
 
 function SpeakingDot({ speaking, label }: { speaking: boolean; label: string }) {
@@ -69,7 +69,7 @@ export function PeerName({ voice, peer }: { voice: Voice; peer: VoicePeerStatus 
   return (
     <button
       type="button"
-      className={cn("inline-flex min-h-11 min-w-11 items-center gap-1 rounded px-0.5 text-left hover:bg-fg/10 sm:min-h-0 sm:min-w-0 sm:items-baseline", peer.muted ? "text-muted line-through" : "font-display")}
+      className={cn("inline-flex min-h-11 min-w-11 items-center gap-1 rounded px-0.5 text-left hover:bg-fg/10 pointer-fine:min-h-0 pointer-fine:min-w-0 sm:items-baseline", peer.muted ? "text-muted line-through" : "font-display")}
       aria-pressed={peer.muted}
       aria-label={peer.muted ? `Unmute ${who}` : `Mute ${who}`}
       title={peer.muted ? `${who} is muted for you. Click to unmute.` : `Click to mute ${who} for you.`}

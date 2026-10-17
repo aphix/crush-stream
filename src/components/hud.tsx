@@ -203,7 +203,7 @@ export function Hud(props: HudProps) {
               <Button
                 key={mode}
                 variant="secondary"
-                className="h-11 px-2 text-xs sm:h-7"
+                className="h-11 px-2 text-xs pointer-fine:h-7"
                 onClick={() => {
                   setMinigamePickOpen(false);
                   engine.current?.startMinigame(mode);
@@ -247,8 +247,8 @@ export function Hud(props: HudProps) {
           state.race.menu === null ? (
             <div className="flex items-center gap-1 phone-landscape:absolute phone-landscape:bottom-2 phone-landscape:left-1/2 phone-landscape:-translate-x-1/2">
               <RaceViewToggle race={state.race} onCommand={raceCommand} bare />
-              <MouseLookButton engine={engine} on={state.mouseLook} className="hud-ink pointer-events-auto text-fg/80 hover:bg-surface/60 hover:text-fg sm:h-8" />
-              <FullscreenButton className="hud-ink pointer-events-auto text-fg/80 hover:bg-surface/60 hover:text-fg sm:h-8" />
+              <MouseLookButton engine={engine} on={state.mouseLook} className="hud-ink pointer-events-auto text-fg/80 hover:bg-surface/60 hover:text-fg pointer-fine:h-8" />
+              <FullscreenButton className="hud-ink pointer-events-auto text-fg/80 hover:bg-surface/60 hover:text-fg pointer-fine:h-8" />
             </div>
           ) : null
         ) : (
@@ -395,7 +395,7 @@ function DriveHint({ state, touch, engine }: { state: CrashHudState; touch: bool
   );
 }
 
-const BAR_BUTTON = "h-11 min-w-11 px-2.5 text-xs sm:h-8 sm:min-w-8";
+const BAR_BUTTON = "h-11 min-w-11 px-2.5 text-xs pointer-fine:h-8 pointer-fine:min-w-8";
 
 /** The scene in play: Fleet is "none of the others". */
 function sceneInPlay(state: CrashHudState): Scene {
@@ -467,7 +467,7 @@ function Dock(props: HudProps & { raceCommand: (cmd: RaceCommand) => void; setti
             variant={scene === id ? "default" : "ghost"}
             aria-pressed={scene === id}
             aria-label={aria}
-            className={cn("h-10 px-1 text-xs sm:h-7 sm:px-2.5", tone, tone && "scene-chip", quiet && scene !== id && "font-normal text-muted", scene !== id && "idle:hidden")}
+            className={cn("h-10 px-1 text-xs pointer-fine:h-7 sm:px-2.5", tone, tone && "scene-chip", quiet && scene !== id && "font-normal text-muted", scene !== id && "idle:hidden")}
             onClick={() => {
               if (menu.idle) return menu.expand();
               if (id === scene) return;

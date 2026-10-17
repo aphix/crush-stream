@@ -42,7 +42,7 @@ export function Stepper({
       aria-valuenow={value}
       aria-valuetext={shown}
       aria-describedby={hint ? hintId : undefined}
-      className={cn("flex min-h-11 flex-wrap items-center gap-x-2 rounded-md bg-surface-2 py-0.5 pl-2 pr-0.5 shadow-[var(--shadow-border)] sm:min-h-8", FOCUS_WITHIN)}
+      className={cn("flex min-h-11 flex-wrap items-center gap-x-2 rounded-md bg-surface-2 py-0.5 pl-2 pr-0.5 shadow-[var(--shadow-border)] pointer-fine:min-h-8", FOCUS_WITHIN)}
     >
       <span className="hud-label w-24 shrink-0 text-muted sm:w-32">{label}</span>
       {slider ? (
@@ -60,11 +60,11 @@ export function Stepper({
       ) : (
         <span className="flex-1" />
       )}
-      <Button variant="ghost" size="icon" className="sm:size-8" tabIndex={-1} data-step="-1" aria-label={`Less ${label.toLowerCase()}`} disabled={value <= min} onClick={() => set(value - step)}>
+      <Button variant="ghost" size="icon" className="pointer-fine:size-8" tabIndex={-1} data-step="-1" aria-label={`Less ${label.toLowerCase()}`} disabled={value <= min} onClick={() => set(value - step)}>
         <Minus />
       </Button>
       <span className="w-10 shrink-0 text-center font-display text-lg font-semibold tabular-nums">{shown}</span>
-      <Button variant="ghost" size="icon" className="sm:size-8" tabIndex={-1} data-step="1" aria-label={`More ${label.toLowerCase()}`} disabled={value >= max} onClick={() => set(value + step)}>
+      <Button variant="ghost" size="icon" className="pointer-fine:size-8" tabIndex={-1} data-step="1" aria-label={`More ${label.toLowerCase()}`} disabled={value >= max} onClick={() => set(value + step)}>
         <Plus />
       </Button>
       {hint ? (
@@ -83,7 +83,7 @@ export function Choice({ label, off, on, value, onSet }: { label: string; off: s
   };
   const segment = (lit: boolean) =>
     cn(
-      "h-11 rounded-md px-2 font-display text-sm font-medium transition-colors duration-[var(--motion-quick)] sm:h-7",
+      "h-11 rounded-md px-2 font-display text-sm font-medium transition-colors duration-[var(--motion-quick)] pointer-fine:h-7",
       lit ? "bg-accent text-accent-fg" : "text-muted hover:text-fg",
     );
   return (
@@ -96,7 +96,7 @@ export function Choice({ label, off, on, value, onSet }: { label: string; off: s
       onClick={(e) => {
         if (e.target === e.currentTarget) set(!value);
       }}
-      className={cn("flex min-h-11 items-center gap-2 rounded-md bg-surface-2 py-0.5 pl-2 pr-0.5 shadow-[var(--shadow-border)] sm:min-h-8", FOCUS_WITHIN)}
+      className={cn("flex min-h-11 items-center gap-2 rounded-md bg-surface-2 py-0.5 pl-2 pr-0.5 shadow-[var(--shadow-border)] pointer-fine:min-h-8", FOCUS_WITHIN)}
     >
       <span className="hud-label w-24 shrink-0 text-muted sm:w-32">{label}</span>
       <div className="grid flex-1 grid-cols-2 gap-0.5 rounded-md bg-surface p-0.5">

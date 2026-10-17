@@ -2,7 +2,7 @@ import { useState } from "react";
 
 /** Number boxes and the time-scale field: 44 px tall on phones, 32 px from `sm`. */
 export const FIELD =
-  "h-11 w-14 shrink-0 rounded-md bg-surface-2 px-1.5 text-right font-display text-xs tabular-nums text-fg shadow-[var(--shadow-border)] sm:h-8";
+  "h-11 w-14 shrink-0 rounded-md bg-surface-2 px-1.5 text-right font-display text-xs tabular-nums text-fg shadow-[var(--shadow-border)] pointer-fine:h-8";
 /** A dot in the margin left of a label (or at the end of a chip): this setting differs from its default. Hidden from the page, the section's reset row names it. */
 export function ChangedDot({ on, className }: { on: boolean; className?: string }) {
   return on ? <span aria-hidden className={className ?? "absolute -left-1.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-accent"} data-changed /> : null;
@@ -55,7 +55,7 @@ export function RangeRow({
         onChange={(e) => onValue(Number(e.target.value))}
         aria-label={name}
         disabled={disabled}
-        className="h-11 w-full min-w-0 cursor-pointer accent-current disabled:cursor-not-allowed disabled:opacity-40 sm:h-6"
+        className="h-11 w-full min-w-0 cursor-pointer accent-current disabled:cursor-not-allowed disabled:opacity-40 pointer-fine:h-6"
       />
       {"shown" in end ? (
         <span className="w-14 shrink-0 text-right font-display text-xs tabular-nums text-fg">{end.shown}</span>

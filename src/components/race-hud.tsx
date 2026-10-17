@@ -143,7 +143,7 @@ function AutoRow({ on, onWatch }: { on: boolean; onWatch: () => void }) {
       aria-pressed={on}
       aria-label="Watch Auto"
       className={cn(
-        "flex h-9 w-full items-center gap-2 rounded-md px-1.5 text-left font-display text-sm transition-colors duration-[var(--motion-quick)] sm:h-6 pointer-coarse:h-9",
+        "flex h-9 w-full items-center gap-2 rounded-md px-1.5 text-left font-display text-sm transition-colors duration-[var(--motion-quick)] pointer-fine:h-6 pointer-coarse:h-9",
         on ? "bg-surface/80 text-fg" : "hud-ink text-fg hover:bg-surface/60",
       )}
     >
@@ -172,7 +172,7 @@ function StandingRow({ row, lead, onWatch }: { row: RaceHudRow; lead: number; on
       aria-pressed={row.watched}
       aria-label={`Watch ${row.name}`}
       className={cn(
-        "flex h-9 w-full items-center gap-2 rounded-md px-1.5 text-left font-display text-sm transition-colors duration-[var(--motion-quick)] sm:h-6 pointer-coarse:h-9",
+        "flex h-9 w-full items-center gap-2 rounded-md px-1.5 text-left font-display text-sm transition-colors duration-[var(--motion-quick)] pointer-fine:h-6 pointer-coarse:h-9",
         row.you ? "bg-accent text-accent-fg" : row.watched ? "bg-surface/80 text-fg" : "hud-ink text-fg hover:bg-surface/60",
       )}
     >
@@ -193,18 +193,18 @@ export function SpectateBar({ race, pad, cam, freeHelp, onCommand, onCam }: { ra
   return (
     <div className="flex flex-col items-start gap-1">
       <div className="hud-panel pointer-events-auto flex shrink-0 items-center gap-1 p-1" role="status">
-        <Button variant="ghost" size="icon" className="sm:size-8 pointer-coarse:size-11" aria-label="Previous car" onMouseDown={keepFocus} onClick={() => onCommand({ type: "cycle", dir: -1 })}>
+        <Button variant="ghost" size="icon" className="pointer-fine:size-8 pointer-coarse:size-11" aria-label="Previous car" onMouseDown={keepFocus} onClick={() => onCommand({ type: "cycle", dir: -1 })}>
           <ChevronLeft />
         </Button>
         <div className="min-w-0 px-1 text-center">
           <p className="hud-label">Spectating · {pad ? "LB / RB" : "Q / E"}</p>
           <p className="truncate font-display text-base font-semibold leading-tight">{race.auto ? `Auto · ${race.spectating}` : race.spectating}</p>
         </div>
-        <Button variant="ghost" size="icon" className="sm:size-8 pointer-coarse:size-11" aria-label="Next car" onMouseDown={keepFocus} onClick={() => onCommand({ type: "cycle", dir: 1 })}>
+        <Button variant="ghost" size="icon" className="pointer-fine:size-8 pointer-coarse:size-11" aria-label="Next car" onMouseDown={keepFocus} onClick={() => onCommand({ type: "cycle", dir: 1 })}>
           <ChevronRight />
         </Button>
         {cam ? (
-          <Button variant="ghost" className="h-10 gap-1.5 px-2 sm:h-8 pointer-coarse:h-11" aria-label="Camera view" title={`Camera view · ${pad ? "Y" : "V"}`} onMouseDown={keepFocus} onClick={onCam}>
+          <Button variant="ghost" className="h-10 gap-1.5 px-2 pointer-fine:h-8 pointer-coarse:h-11" aria-label="Camera view" title={`Camera view · ${pad ? "Y" : "V"}`} onMouseDown={keepFocus} onClick={onCam}>
             <Video />
             <span className="text-xs">{cam}</span>
           </Button>
@@ -229,7 +229,7 @@ export function RaceViewToggle({ race, onCommand, compact, bare }: { race: RaceH
       aria-label={label}
       aria-keyshortcuts="H"
       title={`${label} (H)`}
-      className={cn(bare ? "hud-ink pointer-events-auto px-2 text-fg/80 hover:bg-surface/60 hover:text-fg sm:h-8" : "text-muted hover:text-fg")}
+      className={cn(bare ? "hud-ink pointer-events-auto px-2 text-fg/80 hover:bg-surface/60 hover:text-fg pointer-fine:h-8" : "text-muted hover:text-fg")}
     >
       {race.fullUi ? <Focus /> : <PanelsTopLeft />}
       <span className={cn(compact && "hidden sm:inline")}>{label}</span>
@@ -513,7 +513,7 @@ function RunLink() {
   return (
     <button
       type="button"
-      className="mt-2 h-10 w-full text-xs text-muted underline-offset-2 hover:underline sm:h-7"
+      className="mt-2 h-10 w-full text-xs text-muted underline-offset-2 hover:underline pointer-fine:h-7"
       onClick={() => void copyText(window.location.href).then((ok) => setSaid(ok ? "Link copied" : "Copy failed: the link is in the address bar"))}
     >
       {said ?? "Copy link to this run"}

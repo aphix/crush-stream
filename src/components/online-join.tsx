@@ -8,7 +8,7 @@ import { ROOM_MAX } from "@/lib/multiplayer/rooms";
 import { cn } from "@/lib/utils";
 
 /** Buttons and fields: 44 px tall on phones, 32 px from `sm`. */
-const CONTROL = "h-11 sm:h-8";
+const CONTROL = "h-11 pointer-fine:h-8";
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
 
 const STAGE: Record<string, string> = { lobby: "Starting soon", over: "Results", running: "Racing" };

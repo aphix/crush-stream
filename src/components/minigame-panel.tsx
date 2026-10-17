@@ -5,7 +5,7 @@ import { bailControlName } from "@/game/hud/bail-prompt";
 import type { PadFamily } from "@/game/vehicle/gamepad";
 import { minigamePanelView } from "@/components/minigame-panel-view";
 
-const RIG_BUTTON = "h-11 px-2 text-xs sm:h-7";
+const RIG_BUTTON = "h-11 px-2 text-xs pointer-fine:h-7";
 
 /** The Range minigame card: the mode's reading, score, bests and the retry / reset / switch / exit buttons. The engine's commands arrive as props. */
 export function MinigamePanel({
