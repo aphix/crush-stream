@@ -317,7 +317,7 @@ export function RaceOverlay({
   return (
     // Portrait drops the stack under the top strip (48 px buttons and a gap) so a banner never sits over the read-outs; a phone on its side has the width beside the read-outs.
     <div className="pointer-events-none absolute inset-x-0 top-1/3 z-10 flex flex-col items-center gap-3 px-3 sm:top-1/4 pointer-coarse:top-[calc(max(var(--hud-edge),env(safe-area-inset-top))+3.5rem)] pointer-coarse:gap-1 phone-landscape:hud-top">
-      <ResetPrompt view={race.view} input={reset} race onTap={onReset} className="max-sm:hidden" />
+      <ResetPrompt view={race.view} input={reset} race onTap={onReset} className="max-sm:hidden pointer-coarse:hidden" />
       {race.phase === null ? null : <StartLights time={race.time} />}
       {you?.driverOut && race.spectating === null ? (
         <div
