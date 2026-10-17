@@ -2,6 +2,7 @@ import { ChevronRight } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { activateIn, usePadMenu } from "@/components/use-pad-menu";
+import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { useReelCover } from "@/components/use-reel-cover";
 import { FOCUS } from "@/components/race-menu-styles";
 import { setOnlineSlot } from "@/components/online-slot";
@@ -14,8 +15,21 @@ const SLIDE_MS = 240;
 /** Opaque card for centre-screen moments and menus (the translucent `hud-panel` lets panels behind bleed through). */
 export const CARD = "rounded-2xl bg-surface shadow-[var(--shadow-border)]";
 
+/**
+ * A touch menu's padding from the screen: the HUD's own margin, or the notch / home bar where that is larger (`hud-top` and its
+ * kin are offsets for `absolute` pieces, not padding). The card's `max-h-full` then ends at the same edges, so it never clips.
+ */
+const TOUCH_INSET =
+  "pointer-coarse:pb-[max(var(--hud-edge),env(safe-area-inset-bottom))] pointer-coarse:pl-[max(var(--hud-edge),env(safe-area-inset-left))] pointer-coarse:pr-[max(var(--hud-edge),env(safe-area-inset-right))] pointer-coarse:pt-[max(var(--hud-edge),env(safe-area-inset-top))]";
+
+/**
+ * A menu's action bar (Next / Retry / Menu, Start / Back): on touch it stays at the bottom of the card's scrolling part, whatever
+ * the list above it has scrolled to, on the card's own colour so rows slide under it instead of through it.
+ */
+export const PINNED_BAR = "pointer-coarse:sticky pointer-coarse:bottom-0 pointer-coarse:z-10 pointer-coarse:mt-0 pointer-coarse:bg-surface pointer-coarse:pb-2 pointer-coarse:pt-3";
+
 export function NavButton({ className, ...props }: ButtonProps) {
-  return <Button data-nav className={cn("w-full pointer-fine:h-8", FOCUS, className)} {...props} />;
+  return <Button data-nav className={cn("w-full pointer-fine:h-8 pointer-coarse:h-12", FOCUS, className)} {...props} />;
 }
 
 export function MenuShell({
@@ -24,6 +38,8 @@ export function MenuShell({
   title,
   pad,
   wide,
+  twoColumns,
+  online = true,
   sheet,
   adjust,
   onBack,
@@ -35,6 +51,10 @@ export function MenuShell({
   title: string;
   pad: boolean;
   wide?: boolean;
+  /** The body is two columns on a phone on its side, so the card is as wide as a `wide` one there. */
+  twoColumns?: boolean;
+  /** The menu offers the online entry (its header corner, `online-slot.ts`). On touch only the menus where a room is hosted do; a pause or results card is no place for it. Desktop always has the corner. */
+  online?: boolean;
   /**
    * Leave the view visible (the results reel plays behind): a right-side panel on wide screens, a bottom sheet on phones, no
    * backdrop. Its box on the page goes to the engine through this (`useReelCover`), so the reel frames its shots in the
@@ -48,6 +68,7 @@ export function MenuShell({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const touch = useCoarsePointer();
   const [hidden, setHidden] = useState(false);
   // The panel's box moves while it slides back in: report it as the cover only once it has settled.
   const [settled, setSettled] = useState(true);
@@ -65,13 +86,19 @@ export function MenuShell({
   const keep = (e: { preventDefault(): void }) => e.preventDefault();
   const select = () => ref.current && activateIn(ref.current);
   return (
-    <div className={cn("absolute inset-0 z-30 flex", sheet ? "pointer-events-none items-end p-2 sm:items-start sm:justify-end sm:p-4" : "pointer-events-auto items-center justify-center bg-bg/60 p-3 sm:p-6")}>
+    <div
+      className={cn(
+        "absolute inset-0 z-30 flex",
+        sheet ? "pointer-events-none items-end p-2 sm:items-start sm:justify-end sm:p-4" : "pointer-events-auto items-center justify-center bg-bg/60 p-3 sm:p-6",
+        TOUCH_INSET,
+      )}
+    >
       <div
         className={cn(
           "relative flex w-full flex-col transition-transform duration-200 ease-out motion-reduce:transition-none",
           sheet
-            ? cn("pointer-events-none max-h-[45dvh] sm:max-h-full sm:max-w-md", hidden && "translate-y-[calc(100%+0.5rem)] sm:translate-x-[calc(100%+1rem)] sm:translate-y-0")
-            : cn("max-h-full", wide ? "max-w-2xl" : "max-w-sm"),
+            ? cn("pointer-events-none max-h-[45dvh] sm:max-h-full sm:max-w-md phone-landscape:max-w-80", hidden && "translate-y-[calc(100%+0.5rem)] sm:translate-x-[calc(100%+1rem)] sm:translate-y-0")
+            : cn("max-h-full", wide ? "max-w-2xl" : "max-w-sm", twoColumns && "phone-landscape:max-w-3xl"),
         )}
       >
         {toggle ? (
@@ -85,27 +112,30 @@ export function MenuShell({
               FOCUS,
               "pointer-events-auto absolute bottom-full left-1/2 flex h-7 w-16 -translate-x-1/2 items-center justify-center rounded-b-none text-muted",
               "sm:bottom-auto sm:left-auto sm:right-full sm:top-3 sm:h-16 sm:w-7 sm:translate-x-0 sm:rounded-b-2xl sm:rounded-r-none",
+              // 44 px to grab on a phone: tall in portrait, wide on a side-docked sheet (a tablet keeps the desktop handle's height).
+              "pointer-coarse:max-sm:h-11 pointer-coarse:sm:w-11",
             )}
           >
             <ChevronRight className={cn("size-5 transition-transform duration-200", hidden ? "-rotate-90 sm:rotate-180" : "rotate-90 sm:rotate-0")} aria-hidden />
           </button>
         ) : null}
         <div ref={ref} role="dialog" aria-modal={!sheet} aria-labelledby={`race-menu-${id}`} inert={hidden} className={cn(CARD, "flex min-h-0 w-full flex-col overflow-hidden", sheet && "pointer-events-auto")}>
-          <div className="flex shrink-0 items-start justify-between gap-2 px-3 pb-2 pt-3 sm:px-4 sm:pt-4">
-            <div className="min-w-0">
+          <div className="flex shrink-0 items-start justify-between gap-2 px-3 pb-2 pt-3 sm:px-4 sm:pt-4 phone-landscape:pb-1 phone-landscape:pt-2">
+            {/* On a phone on its side the eyebrow sits beside the title: one line of the card's 300-odd pixels saved. */}
+            <div className="min-w-0 phone-landscape:flex phone-landscape:flex-row-reverse phone-landscape:items-baseline phone-landscape:justify-end phone-landscape:gap-3">
               <p className="hud-label">{eyebrow}</p>
               <h2 id={`race-menu-${id}`} className="mt-0.5 font-display text-2xl font-semibold leading-none tracking-tight">
                 {title}
               </h2>
             </div>
             {/* The online entry's place while this menu is up (`online-slot.ts`). */}
-            <div ref={setOnlineSlot} className="shrink-0" />
+            {online || !touch ? <div ref={setOnlineSlot} className="shrink-0" /> : null}
           </div>
           {/* The header stays put; the rest scrolls (a short phone screen scrolls the focused button into view, its focus
             ring's 4 px kept in view by the scroll padding). */}
-          <div className="min-h-0 scroll-py-1 overflow-y-auto px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
+          <div className="min-h-0 scroll-py-1 overflow-y-auto px-3 pb-3 pt-1 sm:px-4 sm:pb-4 phone-landscape:pb-2">
             <div>{children}</div>
-            <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+            <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted pointer-coarse:hidden">
               {pad ? (
                 <>
                   <button type="button" aria-label="Select" onMouseDown={keep} onClick={select} className={hint}>

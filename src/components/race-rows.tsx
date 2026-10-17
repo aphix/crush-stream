@@ -44,7 +44,7 @@ export function Stepper({
       aria-describedby={hint ? hintId : undefined}
       className={cn("flex min-h-11 flex-wrap items-center gap-x-2 rounded-md bg-surface-2 py-0.5 pl-2 pr-0.5 shadow-[var(--shadow-border)] pointer-fine:min-h-8", FOCUS_WITHIN)}
     >
-      <span className="hud-label w-24 shrink-0 text-muted sm:w-32">{label}</span>
+      <span className="hud-label w-24 shrink-0 text-muted sm:w-32 phone-landscape:w-16">{label}</span>
       {slider ? (
         <input
           type="range"
@@ -55,7 +55,7 @@ export function Stepper({
           value={value}
           onChange={(e) => set(Number(e.target.value))}
           aria-label={label}
-          className="h-8 min-w-0 flex-1 cursor-pointer accent-current"
+          className="h-8 min-w-0 flex-1 cursor-pointer accent-current pointer-coarse:h-11"
         />
       ) : (
         <span className="flex-1" />
@@ -98,7 +98,7 @@ export function Choice({ label, off, on, value, onSet }: { label: string; off: s
       }}
       className={cn("flex min-h-11 items-center gap-2 rounded-md bg-surface-2 py-0.5 pl-2 pr-0.5 shadow-[var(--shadow-border)] pointer-fine:min-h-8", FOCUS_WITHIN)}
     >
-      <span className="hud-label w-24 shrink-0 text-muted sm:w-32">{label}</span>
+      <span className="hud-label w-24 shrink-0 text-muted sm:w-32 phone-landscape:w-16">{label}</span>
       <div className="grid flex-1 grid-cols-2 gap-0.5 rounded-md bg-surface p-0.5">
         <button type="button" tabIndex={-1} data-step="-1" aria-pressed={!value} onClick={() => set(false)} className={segment(!value)}>
           {off}

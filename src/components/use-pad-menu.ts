@@ -43,6 +43,15 @@ function focusedNav(menu: HTMLElement): HTMLElement | null {
   return active instanceof HTMLElement && menu.contains(active) ? active.closest<HTMLElement>("[data-nav]") : null;
 }
 
+/** True while a modal dialog other than `menu` holds focus (the Online sheet, portaled to the body above a menu): its fields are not ours to take back or to type over. */
+function focusInOtherModal(menu: HTMLElement): boolean {
+  const modal = document.activeElement?.closest('[aria-modal="true"]');
+  return modal != null && !menu.contains(modal);
+}
+
+/** A touch screen has no focus ring to show, so a menu opening there keeps its scroll at the top instead of scrolling to the first item (a results list's action bar sits below its rows). */
+const COARSE_POINTER = "(pointer: coarse)";
+
 function focusItem(el: HTMLElement | undefined, scroll = true): void {
   if (!el) return;
   el.focus({ preventScroll: true });
@@ -124,10 +133,12 @@ export function usePadMenu(root: RefObject<HTMLElement | null>, id: string, acti
     };
 
     // Back from hidden: focus the first item where it stands (the panel is still sliding in).
-    if (!hidden) focus(items()[0], !wasHidden.current);
+    if (!hidden) focus(items()[0], !wasHidden.current && !matchMedia(COARSE_POINTER).matches);
     wasHidden.current = hidden;
 
     const onKeyDown = (e: KeyboardEvent): void => {
+      // Typing in another open modal (the Online sheet) must not move, close or cycle this menu.
+      if (focusInOtherModal(menu)) return;
       // A text field (the race setup's name) keeps typing, deleting and caret ←/→; ↑/↓, Tab, Enter and Esc still drive the menu.
       if (e.target instanceof HTMLInputElement && e.target.type === "text" && textKeepsKey(e.key)) return;
       // Hidden: a menu key brings the menu back and nothing else acts on it.
@@ -169,7 +180,7 @@ export function usePadMenu(root: RefObject<HTMLElement | null>, id: string, acti
       raf = requestAnimationFrame(frame);
       // The focused item can unmount under us (a deleted row, menu content swapped): focus the item now where it was,
       // without scrolling, so the list keeps its place. A hidden menu has nothing to focus.
-      if (!hidden && !menu.contains(document.activeElement)) recover();
+      if (!hidden && !menu.contains(document.activeElement) && !focusInOtherModal(menu)) recover();
       const s = pad.poll();
       const held = s.held;
       const dir: NavDir | null = held & bit(PAD_BUTTON.up) ? "up" : held & bit(PAD_BUTTON.down) ? "down" : held & bit(PAD_BUTTON.left) ? "left" : held & bit(PAD_BUTTON.right) ? "right" : stickDir(s.lx, s.ly);
