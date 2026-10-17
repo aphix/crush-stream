@@ -12,6 +12,8 @@ import { FREEWHEEL, launch, makeCar, makeWorld, PARKED, Probe, run, type CrashRe
  * `activation: epicenter` against `whole` on the crash rows: the same staged hit run twice, once per mode, through the engine's own step. A wreck that
  * has sat quiet past `relockHold` is frozen (its structure step is only a clock), so what the player sees of the crash (crush depth per region,
  * the parts torn off, the engine's travel, the wheels popped) must come out as it does when every wreck runs the whole solve.
+ *
+ * Mutations seen (the row each one fails): `relockHold` 0.2 fails only the re-hit row (car 2's nose crush 0.022 against 0.043: the window's one-shots a freeze inside it skips show on the next hit, not the first); `thaw` leaving the cached centre and inertia fails the re-hit row (tail crush 0.004 against 0.020); `feedOverlap` without its `thaw` fails the thaw row (`epicenter-thaw.test.ts`).
  */
 
 const KPH = 1 / 3.6;

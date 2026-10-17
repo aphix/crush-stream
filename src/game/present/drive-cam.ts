@@ -168,9 +168,6 @@ export function chaseValues(): Record<ChaseKnobId, number> {
   return out;
 }
 
-/** The knobs' values at module load, before anything mutates `CHASE` or `LOAD_FEEL`: the defaults of `INITIAL_HUD`, the settings and the share URL. */
-export const CHASE_DEFAULTS = chaseValues();
-
 /**
  * Camera ride (visual): a small share of the followed car's drawn body heave and pitch (`Suspension`): a squat at launch or a
  * landing drops the eye and tilts it up, a dive lifts and tips it down. A chase eye sits behind the body's pivot (nose up sinks it

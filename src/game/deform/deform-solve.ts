@@ -20,7 +20,7 @@ import { FACE_TOP } from "./load-crush.ts";
 import { ENGINE_PACK_GAP, PLANT_QUIET, TYRE_R, WHEEL_DIAMETER } from "./deform-state.ts";
 import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn-hold.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
- import { CONTACT_WINDOW, MIN_INV_MASS, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
+ import { CONTACT_WINDOW, MIN_INV_MASS, SQUASH_REACH } from "./constants.ts";
 
 /** Elastic part (m) of a crushed node's travel; the rest is permanent set. */
 const SPRINGBACK = 0.08;
