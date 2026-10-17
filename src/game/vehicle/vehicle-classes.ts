@@ -307,7 +307,7 @@ const DERBY_WRECK_ENERGY = 250;
  * (its comment measured 14/20 on 765d53e and 13/20 on the airborne lane; b8422485 read 9/20). Over those 60 seeds at 1.35 against 1.0 the median match ends at 68 s, not 88 s, the median first death is at 23 s, not 28 s,
  * and none comes before 8 s (the earliest 13 s). A single 20-seed window is chaotic (seeds 1-20: 5, 6, 6, 6 at 1.0, 1.05, 1.075, 1.1 and 12, 10, 14, 14 at 1.2, 1.35, 1.5, 1.7), so the rate is read over 60.
  */
-export const DERBY_WEAR_GAIN = 1.35;
+const DERBY_WEAR_GAIN = 1.35;
 
 /** Engine-kill travel (m) for a class at `realism`, in a derby or anywhere else. */
 export function killTravel(id: VehicleClassId, realism: number, ctx: "derby" | "default"): number {
