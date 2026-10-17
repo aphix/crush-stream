@@ -4,11 +4,11 @@
  * nothing here knows about the DOM.
  */
 
-export const TOUCH_SCHEMES = ["easy", "pedals", "stick", "tilt"] as const;
+export const TOUCH_SCHEMES = ["autogas", "pedals", "stick", "tilt"] as const;
 export type TouchScheme = (typeof TOUCH_SCHEMES)[number];
 
 /** Easy: one thumb steers and the car pulls by itself; the other brakes, boosts and handbrakes. The research's common first scheme (Real Racing 3 Tilt A, Asphalt TouchDrive, GRID Arrow Touch). */
-export const DEFAULT_TOUCH_SCHEME: TouchScheme = "easy";
+export const DEFAULT_TOUCH_SCHEME: TouchScheme = TOUCH_SCHEMES[0];
 
 /** localStorage keys (through `useStoredString`). */
 export const TOUCH_SCHEME_KEY = "crush.touch.scheme";
@@ -16,11 +16,11 @@ export const TOUCH_MIRROR_KEY = "crush.touch.mirror";
 export const TILT_FULL_LOCK_KEY = "crush.touch.tilt.fullLock";
 export const TILT_DEAD_ZONE_KEY = "crush.touch.tilt.deadZone";
 
-export const TOUCH_SCHEME_LABEL: Readonly<Record<TouchScheme, string>> = { easy: "Easy", pedals: "Pedals", stick: "Stick", tilt: "Tilt" };
+export const TOUCH_SCHEME_LABEL: Readonly<Record<TouchScheme, string>> = { autogas: "Easy", pedals: "Pedals", stick: "Stick", tilt: "Tilt" };
 
 /** One line under each scheme in the Controls section. */
 export const TOUCH_SCHEME_HINT: Readonly<Record<TouchScheme, string>> = {
-  easy: "Slide to steer. The car drives itself; hold Brake to slow and reverse.",
+  autogas: "Slide to steer. The car drives itself; hold Brake to slow and reverse.",
   pedals: "Slide to steer, with a Gas and a Brake pedal of your own.",
   stick: "One stick: up is gas, down brakes, left and right steer.",
   tilt: "Tilt the phone like a wheel. The car drives itself; hold Brake to slow and reverse.",
@@ -39,7 +39,7 @@ export type SchemeLayout = {
 };
 
 const LAYOUT: Readonly<Record<TouchScheme, SchemeLayout>> = {
-  easy: { steer: "slider", gasPedal: false, brakePedal: true, autoGas: true },
+  autogas: { steer: "slider", gasPedal: false, brakePedal: true, autoGas: true },
   pedals: { steer: "slider", gasPedal: true, brakePedal: true, autoGas: false },
   stick: { steer: "stick", gasPedal: false, brakePedal: false, autoGas: false },
   tilt: { steer: "tilt", gasPedal: false, brakePedal: true, autoGas: true },

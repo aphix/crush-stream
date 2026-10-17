@@ -185,8 +185,9 @@ function DriveControls({ state, engine }: HudProps) {
   const applyPedals = useEffectEvent(writePedals);
   useEffect(() => {
     applyPedals();
+    // The pad is the engine's, one object for its life: the cleanup lets go of it even after the ref has moved on.
+    const touch = engine.current?.touch;
     return () => {
-      const touch = engine.current?.touch;
       if (touch) touch.gas = touch.brake = 0;
     };
   }, [engine, scheme, canDrive, driving, raceLive, minigameReady]);

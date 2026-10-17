@@ -18,7 +18,7 @@ export const GARAGE = {
   angle: 0.75,
   shot: { lookX: 0.7, lookY: 0.8, lookZ: 0.2, radius: 8.5, pitch: 0.3 },
   /** The driver's close shot (`EngineGarage.frameGarage`): the orbit circles him, not the car, so a phone can reach his shirt, his hair and his back. */
-  driverShot: { lookX: 1.9, lookY: 0.95, lookZ: 0.6, radius: 3.6, pitch: 0.12 },
+  driverShot: { lookX: 1.9, lookY: 0.95, lookZ: 0.6, radius: 3.5, pitch: 0.14 },
   /** The driver the garage shows under the player's picks (a race draws his unpicked clothes from its own seed). */
   driver: driverLook(0, 0),
 } as const;

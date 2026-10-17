@@ -55,6 +55,7 @@ export function RaceStatus({ race, corner }: { race: RaceHud; corner: boolean })
   const view = race.view;
   if (!view || race.phase !== "racing" || race.menu !== null || race.reel !== null) return null;
   const left = remaining(race, view, unit);
+  const distanceUnit = unit === "mph" ? "yd" : "m";
   if (touch) {
     if (left === null && view.chase === null) return null;
     return (
@@ -64,7 +65,7 @@ export function RaceStatus({ race, corner }: { race: RaceHud; corner: boolean })
             className="hud-ink whitespace-nowrap bg-linear-to-r from-transparent via-scene-race/75 to-transparent px-6 py-0.5 font-display text-base font-semibold uppercase tracking-wide tabular-nums text-fg"
             role="status"
           >
-            {left} {unit === "mph" ? "yd" : "m"} remaining
+            {left} {distanceUnit} remaining
           </p>
         )}
         {view.chase === null ? null : <PursuitStrip chase={view.chase} touch />}
@@ -79,7 +80,7 @@ export function RaceStatus({ race, corner }: { race: RaceHud; corner: boolean })
             className="hud-ink whitespace-nowrap bg-linear-to-r from-transparent via-scene-race/75 to-transparent px-10 py-1 font-display text-2xl font-semibold uppercase tracking-wide tabular-nums text-fg md:px-16 md:text-4xl"
             role="status"
           >
-            {left} {unit === "mph" ? "yd" : "m"} remaining
+            {left} {distanceUnit} remaining
           </p>
         </div>
       )}

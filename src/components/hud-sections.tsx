@@ -45,7 +45,7 @@ const SEGMENT = "h-11 px-1 text-xs pointer-fine:h-7";
 const TRACK = "grid min-w-0 flex-1 gap-0.5 rounded-md bg-surface-2 p-0.5";
 
 /** The storage key of the open sections: the menu reads it to know whether any is open (`HudSections` writes it). */
-export const HUD_SECTIONS_KEY = "crush.hud.sections";
+const HUD_SECTIONS_KEY = "crush.hud.sections";
 
 /** The accordion's sections: the settings' own plus the touch-only Controls (the scheme, left-handed, tilt). */
 type AccordionId = SectionId | "controls";

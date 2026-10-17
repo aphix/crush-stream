@@ -7,7 +7,7 @@ import { homeModes, pickScene, sceneInPlay, TEST_RIGS } from "@/components/scene
 import { Sheet } from "@/components/sheet";
 import { FullscreenButton } from "@/components/touch-controls";
 import { Button } from "@/components/ui/button";
-import type { SceneId } from "@/game/scenes/scene-id";
+import { SCENE, type SceneId } from "@/game/scenes/scene-id";
 import { cn } from "@/lib/utils";
 
 /** A mode card: big enough to hit with a thumb at a glance. */
@@ -45,7 +45,7 @@ export function HomeSheet({ state, engine, onClose, onOpenSettings }: Pick<HudPr
             ))}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant={inPlay === "fleet" ? "default" : "secondary"} aria-pressed={inPlay === "fleet"} aria-label="Fleet scene: free play" className={ROW_BUTTON} onClick={() => pick("fleet")}>
+            <Button variant={inPlay === SCENE.fleet ? "default" : "secondary"} aria-pressed={inPlay === SCENE.fleet} aria-label="Fleet scene: free play" className={ROW_BUTTON} onClick={() => pick(SCENE.fleet)}>
               Free play
             </Button>
             <Button variant="secondary" aria-expanded={rigsOpen} className={ROW_BUTTON} onClick={() => setRigsOpen(!rigsOpen)}>

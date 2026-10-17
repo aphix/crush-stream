@@ -6,9 +6,9 @@ const none = { gas: false, brake: false };
 
 describe("given the stored touch scheme", () => {
   it("when nothing or an unknown value is stored, then it is Easy", () => {
-    assert.equal(DEFAULT_TOUCH_SCHEME, "easy");
-    assert.equal(parseTouchScheme(""), "easy");
-    assert.equal(parseTouchScheme("wheel"), "easy");
+    assert.equal(DEFAULT_TOUCH_SCHEME, "autogas");
+    assert.equal(parseTouchScheme(""), "autogas");
+    assert.equal(parseTouchScheme("wheel"), "autogas");
   });
 
   it("when each scheme's id is stored, then it reads back as itself, with a label and a hint", () => {
@@ -27,9 +27,9 @@ describe("given the stored touch scheme", () => {
 
 describe("given a scheme's pedals", () => {
   const cases = [
-    { it: "when Easy has no finger down, then the gas is on by itself", scheme: "easy", fingers: none, expected: { gas: 1, brake: 0 } },
-    { it: "when Easy's Brake is held, then the gas lifts and the brake is full", scheme: "easy", fingers: { gas: false, brake: true }, expected: { gas: 0, brake: 1 } },
-    { it: "when Easy is shown a Gas finger, then there is no Gas pedal to hold and nothing changes", scheme: "easy", fingers: { gas: true, brake: false }, expected: { gas: 1, brake: 0 } },
+    { it: "when Easy has no finger down, then the gas is on by itself", scheme: "autogas", fingers: none, expected: { gas: 1, brake: 0 } },
+    { it: "when Easy's Brake is held, then the gas lifts and the brake is full", scheme: "autogas", fingers: { gas: false, brake: true }, expected: { gas: 0, brake: 1 } },
+    { it: "when Easy is shown a Gas finger, then there is no Gas pedal to hold and nothing changes", scheme: "autogas", fingers: { gas: true, brake: false }, expected: { gas: 1, brake: 0 } },
     { it: "when Tilt has no finger down, then the gas is on by itself", scheme: "tilt", fingers: none, expected: { gas: 1, brake: 0 } },
     { it: "when Tilt's Brake is held, then the gas lifts and the brake is full", scheme: "tilt", fingers: { gas: false, brake: true }, expected: { gas: 0, brake: 1 } },
     { it: "when Pedals has no finger down, then there is no gas and no brake", scheme: "pedals", fingers: none, expected: { gas: 0, brake: 0 } },
@@ -39,7 +39,11 @@ describe("given a scheme's pedals", () => {
     { it: "when Stick has fingers on screen, then the pedals stay at zero (the stick owns them)", scheme: "stick", fingers: { gas: true, brake: true }, expected: { gas: 0, brake: 0 } },
   ] as const;
   for (const testCase of cases) {
-    it(testCase.it, () => assert.deepEqual(pedalsFor(testCase.scheme, testCase.fingers, true), testCase.expected));
+    it(testCase.it, () => {
+      const pedals = pedalsFor(testCase.scheme, testCase.fingers, true);
+      assert.equal(pedals.gas, testCase.expected.gas, "gas");
+      assert.equal(pedals.brake, testCase.expected.brake, "brake");
+    });
   }
 
   it("when the car is not the player's to drive, then no scheme writes a pedal", () => {
@@ -49,7 +53,7 @@ describe("given a scheme's pedals", () => {
 
 describe("given each scheme's layout", () => {
   it("when Easy and Tilt are drawn, then they have a Brake and no Gas pedal, and Pedals has both", () => {
-    assert.deepEqual([schemeLayout("easy").gasPedal, schemeLayout("easy").brakePedal], [false, true]);
+    assert.deepEqual([schemeLayout("autogas").gasPedal, schemeLayout("autogas").brakePedal], [false, true]);
     assert.deepEqual([schemeLayout("tilt").gasPedal, schemeLayout("tilt").brakePedal], [false, true]);
     assert.deepEqual([schemeLayout("pedals").gasPedal, schemeLayout("pedals").brakePedal], [true, true]);
   });

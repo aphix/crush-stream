@@ -21,9 +21,8 @@ const BASE = (flags.url ?? "http://127.0.0.1:8081/").replace(/\/?$/, "/");
 const OUT = flags.out ?? null;
 if (OUT) mkdirSync(OUT, { recursive: true });
 
-/** The smallest hit target: Apple's 44 pt, in CSS px (0.5 of rounding slack). */
+/** The smallest hit target: Apple's 44 pt, in CSS px (the probe allows 0.5 px of rounding). */
 const MIN_TARGET = 44;
-const TARGET_SLACK = 0.5;
 /** The road: the middle half of the width, 15 % to 70 % of the height. Nothing persistent may cover more than this share of it while driving. */
 const ROAD_ZONE = { left: 0.25, right: 0.75, top: 0.15, bottom: 0.7 };
 const ROAD_MAX_COVERED_PCT = { landscape: 5, portrait: 8 };
@@ -42,7 +41,6 @@ const DEVICES = [
 
 const evaluate = (page, fn, arg) => page.evaluate(fn, arg);
 const settle = (page, ms) => page.waitForTimeout(ms);
-const holdGas = (page) => evaluate(page, () => window.__crush.keys.add("KeyW"));
 const startRace = async (page) => {
   await evaluate(page, () => window.__crush.race.reseed(1));
   await evaluate(page, () => window.__crush.raceCommand({ type: "options", options: { trackId: "city", aiCount: 7 } }));

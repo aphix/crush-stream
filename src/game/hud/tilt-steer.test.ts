@@ -59,13 +59,20 @@ describe("given the wheel angle and the tilt settings", () => {
 
 describe("given the stored tilt settings", () => {
   it("when nothing is stored, then the defaults apply", () => {
-    assert.deepEqual(parseTiltSettings("", ""), { fullLockDegrees: TILT.fullLockDegrees.default, deadZoneDegrees: TILT.deadZoneDegrees.default });
-    assert.deepEqual(parseTiltSettings("nope", "NaN"), { fullLockDegrees: TILT.fullLockDegrees.default, deadZoneDegrees: TILT.deadZoneDegrees.default });
+    for (const [fullLock, deadZone] of [["", ""], ["nope", "NaN"]]) {
+      const settings = parseTiltSettings(fullLock, deadZone);
+      assert.equal(settings.fullLockDegrees, TILT.fullLockDegrees.default);
+      assert.equal(settings.deadZoneDegrees, TILT.deadZoneDegrees.default);
+    }
   });
 
   it("when a value is out of range, then it clamps to the nearest bound", () => {
-    assert.deepEqual(parseTiltSettings("500", "-3"), { fullLockDegrees: TILT.fullLockDegrees.max, deadZoneDegrees: TILT.deadZoneDegrees.min });
-    assert.deepEqual(parseTiltSettings("1", "99"), { fullLockDegrees: TILT.fullLockDegrees.min, deadZoneDegrees: TILT.deadZoneDegrees.max });
+    const high = parseTiltSettings("500", "-3");
+    assert.equal(high.fullLockDegrees, TILT.fullLockDegrees.max);
+    assert.equal(high.deadZoneDegrees, TILT.deadZoneDegrees.min);
+    const low = parseTiltSettings("1", "99");
+    assert.equal(low.fullLockDegrees, TILT.fullLockDegrees.min);
+    assert.equal(low.deadZoneDegrees, TILT.deadZoneDegrees.max);
   });
 
   it("when a value is in range, then it is kept", () => {

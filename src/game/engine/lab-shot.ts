@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 
 /** The wide screens' lens (deg). */
-export const LAB_FOV = 60;
+const LAB_FOV = 60;
 
 /**
  * The Lab's opening orbit: always from the side of the throw, low over the bench at toy height, so the thrown car and what it
@@ -46,7 +46,7 @@ export function planLabShot(thrower: THREE.Vector3, setMiddle: THREE.Vector3, it
     const offZ = item.z - look.z;
     // Across the screen along the camera's right (cos, -sin of the bearing); beyond the look point along its view, in plan (the view's pitch shortens it).
     const across = Math.abs(offX * detCos(bearing) - offZ * detSin(bearing));
-    const beyond = -(offX * detSin(bearing) + offZ * detCos(bearing)) * Math.cos(shot.pitch);
+    const beyond = -(offX * detSin(bearing) + offZ * detCos(bearing)) * detCos(shot.pitch);
     radius = Math.max(radius, (across + shot.fit) / halfWidthPerMetre - beyond);
   }
   look.y = Math.min(look.y, thrower.y + shot.low * radius * halfHeightPerMetre);

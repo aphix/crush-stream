@@ -32,7 +32,7 @@ export function PadButton({ engine, button, name, label, caption, className, chi
   );
 }
 
-export type PedalName = "gas" | "brake";
+type PedalName = "gas" | "brake";
 
 /**
  * One pedal: held while any finger is on it. Fingers are counted per pointer (capture keeps a drag that leaves the pedal on it), so a

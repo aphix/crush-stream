@@ -4,6 +4,9 @@ import { aroundCentre, tiltSteer, wheelAngle, type TiltSettings } from "@/game/h
 /** iOS Safari (13+) asks before it sends orientation events, and only from a tap; other browsers have no `requestPermission`. */
 type OrientationWithPermission = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<"granted" | "denied"> };
 
+/** The browser event that carries the phone's attitude. */
+const ORIENTATION_EVENT = "deviceorientation";
+
 export type TiltAccess = "granted" | "denied" | "unsupported";
 
 /** Ask for the orientation events from a tap. "granted" where the browser needs no asking and has the events. */
@@ -46,9 +49,9 @@ export function useTilt(active: boolean, settings: TiltSettings, onSteer: (steer
       centre.current ??= angle;
       latest.current.onSteer(tiltSteer(aroundCentre(angle, centre.current), latest.current.settings));
     };
-    window.addEventListener("deviceorientation", onOrientation);
+    window.addEventListener(ORIENTATION_EVENT, onOrientation);
     return () => {
-      window.removeEventListener("deviceorientation", onOrientation);
+      window.removeEventListener(ORIENTATION_EVENT, onOrientation);
       latest.current.onSteer(0);
     };
   }, [active]);

@@ -1,6 +1,24 @@
 /** The scene picker's scenes (`CrashEngine.setScene`), and the values of the share URL's `scene=`. `showcase` is by link only: no scene button, key or menu opens it. */
-export const SCENE_IDS = ["fleet", "press", "pistons", "doors", "corkscrew", "stack", "derby", "race", "range", "survival", "lab", "garage", "showcase"] as const;
-export type SceneId = (typeof SCENE_IDS)[number];
+export const SCENE_IDS = ["fleet", "press", "pistons", "doors", "corkscrew", "stack", "derby", "race", "range", "survival", "lab", "garage", "showcase"] as const satisfies readonly SceneId[];
+/** The same ids as a union a typo cannot slip past (`SCENE` below fails to compile if the two lists drift apart). */
+export type SceneId = "fleet" | "press" | "pistons" | "doors" | "corkscrew" | "stack" | "derby" | "race" | "range" | "survival" | "lab" | "garage" | "showcase";
+
+/** Each scene's id by name, for code that must say one without typing the string again (the pickers, the Home sheet). */
+export const SCENE = {
+  fleet: SCENE_IDS[0],
+  press: SCENE_IDS[1],
+  pistons: SCENE_IDS[2],
+  doors: SCENE_IDS[3],
+  corkscrew: SCENE_IDS[4],
+  stack: SCENE_IDS[5],
+  derby: SCENE_IDS[6],
+  race: SCENE_IDS[7],
+  range: SCENE_IDS[8],
+  survival: SCENE_IDS[9],
+  lab: SCENE_IDS[10],
+  garage: SCENE_IDS[11],
+  showcase: SCENE_IDS[12],
+} as const satisfies Record<SceneId, SceneId>;
 
 /**
  * Scenes whose spawns roll random picks, drawn from the run's seed: the fleet's spots, speeds and balls, the
