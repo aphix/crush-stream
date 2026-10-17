@@ -207,7 +207,7 @@ function DriveControls({ state, engine }: HudProps) {
           engine={engine}
           layout={layout}
           canDrive={canDrive}
-          driving={driving}
+          driving={driving || state.minigame !== null}
           mirror={mirror}
           bail={bail}
           onPedal={(pedal, down) => {

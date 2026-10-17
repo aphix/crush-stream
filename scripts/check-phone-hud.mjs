@@ -59,7 +59,8 @@ const driveRace = async (page) => {
  */
 const SCREENS = {
   "race-drive": { hash: "scene=race", driving: true, setup: driveRace, expect: ["steer", "pause", "view"] },
-  "survival-drive": { hash: "scene=survival", driving: true, setup: async (page) => { await evaluate(page, () => window.__crush.raceCommand({ type: "start" })); await settle(page, 8000); }, expect: ["steer", "pause"] },
+  // Survival says "Chased by N cops" all run long, the one thing it must always say: it may take a little more of the road's top edge.
+  "survival-drive": { hash: "scene=survival", driving: true, roadAllowancePct: 5, setup: async (page) => { await evaluate(page, () => window.__crush.raceCommand({ type: "start" })); await settle(page, 8000); }, expect: ["steer", "pause"] },
   "fleet-drive": { hash: "", driving: true, setup: async (page) => { await evaluate(page, () => window.__crush.seat.focus(0)); await settle(page, 2500); }, expect: ["steer", "view"] },
   "mini-longjump": { hash: "scene=range", driving: true, setup: async (page) => { await evaluate(page, () => window.__crush.startMinigame("longJump")); await settle(page, 3500); }, expect: ["steer", "boost"] },
   "derby-drive": { hash: "scene=derby&cars=14&seed=7", driving: true, setup: async (page) => { await settle(page, 6000); }, expect: [] },
@@ -80,11 +81,29 @@ const PROBE = ([cell, zone]) => {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < vw && r.top < vh ? r : null;
   };
+  // A dialog (a sheet, a race menu) owns the screen: what sits under it is not what the player sees, so only its own content is checked.
+  const modal = [...document.querySelectorAll("[role=dialog]")].find((el) => live(el));
+  const inScope = (el) => !modal || modal.contains(el);
+  /** The part of `rect` that shows through every scrolling or clipping ancestor of `el`; null when under half of it does (scrolled away). */
+  const shown = (el, rect) => {
+    let [left, top, right, bottom] = [rect.left, rect.top, rect.right, rect.bottom];
+    for (let ancestor = el.parentElement; ancestor && ancestor !== document.body; ancestor = ancestor.parentElement) {
+      const style = getComputedStyle(ancestor);
+      if (!/(auto|scroll|hidden|clip)/.test(`${style.overflowX} ${style.overflowY}`)) continue;
+      const box = ancestor.getBoundingClientRect();
+      [left, top, right, bottom] = [Math.max(left, box.left), Math.max(top, box.top), Math.min(right, box.right), Math.min(bottom, box.bottom)];
+    }
+    const area = Math.max(0, right - left) * Math.max(0, bottom - top);
+    return area >= 0.5 * rect.width * rect.height ? { left, top, right, bottom } : null;
+  };
   const label = (el) => (el.getAttribute("data-touch-control") || el.getAttribute("aria-label") || el.textContent || el.tagName).trim().slice(0, 32);
   const controls = [...document.querySelectorAll("button,a[href],input,select,[role=slider],[data-touch-control]")]
-    .filter((el) => !el.closest("[inert]"))
-    .map((el) => ({ el, r: live(el) }))
-    .filter((c) => c.r);
+    .filter((el) => !el.closest("[inert]") && inScope(el))
+    .map((el) => {
+      const r = live(el);
+      return { el, r, v: r ? shown(el, r) : null };
+    })
+    .filter((c) => c.r && c.v);
   const painted = (el, style) => el.tagName === "svg" || (style.backgroundColor !== "rgba(0, 0, 0, 0)" && style.backgroundColor !== "transparent") || style.backgroundImage !== "none" || style.boxShadow !== "none";
   const surfaces = [];
   for (const el of document.body.querySelectorAll("*")) {
@@ -97,10 +116,13 @@ const PROBE = ([cell, zone]) => {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const parent = node.parentElement;
-    if (!node.textContent.trim() || !parent || parent.closest("#boot-loader,script,style,canvas,[inert]") || !live(parent)) continue;
+    if (!node.textContent.trim() || !parent || parent.closest("#boot-loader,script,style,canvas,[inert]") || !live(parent) || !inScope(parent)) continue;
     const range = document.createRange();
     range.selectNodeContents(node);
-    for (const r of range.getClientRects()) if (r.width > 0 && r.height > 0) texts.push({ r, parent, words: node.textContent.trim().slice(0, 24) });
+    for (const r of range.getClientRects()) {
+      const v = r.width > 0 && r.height > 0 ? shown(parent, r) : null;
+      if (v) texts.push({ r: v, parent, words: node.textContent.trim().slice(0, 24) });
+    }
   }
   const covered = new Set();
   const mark = (r) => {
@@ -122,11 +144,13 @@ const PROBE = ([cell, zone]) => {
       const a = controls[i];
       const b = controls[j];
       if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
-      if (overlap(a.r, b.r)) crossings.push(`${label(a.el)} x ${label(b.el)}`);
+      if (overlap(a.v, b.v)) crossings.push(`${label(a.el)} x ${label(b.el)}`);
     }
     for (const text of texts) {
       if (controls[i].el.contains(text.parent) || text.parent.contains(controls[i].el)) continue;
-      if (overlap(controls[i].r, text.r)) crossings.push(`${label(controls[i].el)} x text "${text.words}"`);
+      // The dial's numerals and its bottle are one cluster: the bottle's tap target is meant to sit on the dial's face.
+      if (controls[i].el.closest(".drive-cluster") && controls[i].el.closest(".drive-cluster") === text.parent.closest(".drive-cluster")) continue;
+      if (overlap(controls[i].v, text.r)) crossings.push(`${label(controls[i].el)} x text "${text.words}"`);
     }
   }
   return {
@@ -134,8 +158,8 @@ const PROBE = ([cell, zone]) => {
     roadCoveredPct: Math.round((hit / cells) * 1000) / 10,
     names: controls.map((c) => c.el.getAttribute("data-touch-control")).filter(Boolean),
     small: controls.filter((c) => Math.min(c.r.width, c.r.height) < 44 - 0.5 && !c.el.closest("[data-target-exempt]")).map((c) => `${label(c.el)} ${Math.round(c.r.width)}x${Math.round(c.r.height)}`),
-    clipped: controls.filter((c) => c.r.left < -1 || c.r.top < -1 || c.r.right > vw + 1 || c.r.bottom > vh + 1).map((c) => label(c.el)),
-    rects: controls.map((c) => ({ name: label(c.el), left: c.r.left, top: c.r.top, right: c.r.right, bottom: c.r.bottom })),
+    clipped: controls.filter((c) => c.v.left < -1 || c.v.top < -1 || c.v.right > vw + 1 || c.v.bottom > vh + 1).map((c) => label(c.el)),
+    rects: controls.map((c) => ({ name: label(c.el), left: c.v.left, top: c.v.top, right: c.v.right, bottom: c.v.bottom })),
     crossings,
   };
 };
@@ -186,7 +210,7 @@ async function checkScreen(browser, device, name, screen) {
     if (probe.clipped.length > 0) fail(context, `controls off the screen: ${probe.clipped.join("; ")}`);
     if (probe.crossings.length > 0) fail(context, `overlaps: ${[...new Set(probe.crossings)].join("; ")}`);
     if (screen.driving) {
-      const limit = ROAD_MAX_COVERED_PCT[device.orientation];
+      const limit = ROAD_MAX_COVERED_PCT[device.orientation] + (screen.roadAllowancePct ?? 0);
       if (probe.roadCoveredPct > limit) fail(context, `the road zone is ${probe.roadCoveredPct}% covered (limit ${limit}%)`);
       for (const expected of screen.expect) if (!probe.names.includes(expected)) fail(context, `control "${expected}" is missing`);
     }

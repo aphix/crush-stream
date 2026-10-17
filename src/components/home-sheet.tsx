@@ -74,7 +74,7 @@ export function HomeSheet({ state, engine, onClose, onOpenSettings }: Pick<HudPr
             Settings
           </Button>
           <div className="flex gap-2">
-            <Button variant="ghost" className={cn(COMMAND_BUTTON, "flex-1")} onClick={() => setCreditsOpen(true)}>
+            <Button variant="secondary" className={cn(COMMAND_BUTTON, "flex-1")} onClick={() => setCreditsOpen(true)}>
               Credits
             </Button>
             {/* Hidden where the browser has no Fullscreen API (iPhone Safari): Credits then has the row. */}

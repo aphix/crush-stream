@@ -22,7 +22,7 @@ const SAFE_PADDING = {
 export function Sheet({ title, edge, onClose, children, className }: { title: string; edge: "full" | "dock"; onClose: () => void; children: ReactNode; className?: string }) {
   return (
     <div className="hud-sheet-in pointer-events-none absolute inset-0 z-40" data-keep-idle>
-      {edge === "full" ? <div className="pointer-events-auto absolute inset-0 bg-bg/90" /> : null}
+      {edge === "full" ? <div className="pointer-events-auto absolute inset-0 bg-bg/95" /> : null}
       <section
         role="dialog"
         aria-label={title}
