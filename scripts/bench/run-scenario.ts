@@ -45,7 +45,31 @@ for (const [id, value] of Object.entries(knobs)) {
   if (!knob) throw new Error(`knob ${id}: not one of ${EPICENTER_KNOBS.map((k) => k.id).join(", ")}`);
   knob.set(value);
 }
-sim.run(warmS);
+/**
+ * `BENCH_TRACE=<dt>`: every `dt` sim seconds from the start of the warm-up, each car's pose (position, quaternion), velocity and every mass's world position, so the arms of an A/B can
+ * be compared over time (`bench.mjs` prints the divergence: how far, of what, and when). The recording costs time: a run for the divergence, never for ms.
+ */
+const traceDt = Number(process.env["BENCH_TRACE"] ?? 0);
+const trace: number[][] = [];
+const record = (): void => {
+  const row: number[] = [sim.t];
+  for (const car of sim.cars) {
+    const p = car.group.position;
+    const q = car.group.quaternion;
+    row.push(p.x, p.y, p.z, q.x, q.y, q.z, q.w, car.velocity.x, car.velocity.y, car.velocity.z);
+    for (const m of car.deform.masses) row.push(m.world.x, m.world.y, m.world.z);
+  }
+  trace.push(row);
+};
+const advance = (seconds: number): void => {
+  if (traceDt <= 0) return sim.run(seconds);
+  for (let left = seconds; left > 1e-9; left -= traceDt) {
+    if (trace.length === 0) record();
+    sim.run(Math.min(traceDt, left));
+    record();
+  }
+};
+advance(warmS);
 sites.clear();
 
 const phases = sim.world.phases;
@@ -55,7 +79,7 @@ const work0 = phases.work.slice();
 const loadStart = loadavg()[0]!;
 const t0 = performance.now();
 const clock0 = sim.t;
-sim.run(windowS);
+advance(windowS);
 const wallMs = performance.now() - t0;
 const simS = sim.t - clock0;
 phases.on = false;
@@ -93,6 +117,7 @@ console.log(
     digest: hash.digest("hex"),
     poses,
     frozenBreaches: breaches,
+    trace: traceDt > 0 ? { dt: traceDt, cars: sim.cars.length, masses: sim.cars.map((c) => c.deform.masses.length), rows: trace } : null,
     thawSites: Object.fromEntries([...sites].sort((a, b) => b[1] - a[1])),
     loadStart,
     loadEnd: loadavg()[0]!,

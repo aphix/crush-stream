@@ -85,6 +85,7 @@ export function summarize(runs) {
       poses: list[0].poses,
       breaches: Math.max(...list.map((r) => r.frozenBreaches)),
       thawSites: list[0].thawSites,
+      trace: list[0].trace ?? null,
       load: { start: Math.min(...list.map((r) => r.loadStart)), startMax: Math.max(...list.map((r) => r.loadStart)), end: Math.max(...list.map((r) => r.loadEnd)) },
       flagged: list.some((r) => r.flagged),
     });
@@ -95,6 +96,74 @@ export function summarize(runs) {
 const f1 = (v) => v.toFixed(1);
 const f2 = (v) => v.toFixed(2);
 const pct = (a, b) => (a > 0 ? `${b >= a ? "+" : ""}${f1((100 * (b - a)) / a)}%` : "");
+
+/** A body this far off (m) or turned this far (degrees) from where the other arm has it: a difference a player watching the car may see (a judgement, printed beside the numbers, not a measured limit). */
+export const VISIBLE_M = 0.02;
+export const VISIBLE_DEG = 1;
+
+/**
+ * How far two arms' traces (`--trace`: per `dt` sim seconds each car's pose and every mass's world position) drift apart, and in what: per checkpoint the worst car's body position, body
+ * turn and worst hull point (crush shape and place together), with the car.
+ */
+export function divergence(a, b) {
+  const out = [];
+  const { cars, masses } = a.trace;
+  const offsets = [];
+  let at = 1;
+  for (let c = 0; c < cars; c++) {
+    offsets.push(at);
+    at += 10 + 3 * masses[c];
+  }
+  for (let k = 0; k < Math.min(a.trace.rows.length, b.trace.rows.length); k++) {
+    const ra = a.trace.rows[k];
+    const rb = b.trace.rows[k];
+    let body = 0;
+    let turn = 0;
+    let hull = 0;
+    let bodyCar = -1;
+    let turnCar = -1;
+    let hullCar = -1;
+    for (let c = 0; c < cars; c++) {
+      const o = offsets[c];
+      const d = Math.hypot(ra[o] - rb[o], ra[o + 1] - rb[o + 1], ra[o + 2] - rb[o + 2]);
+      if (d > body) {
+        body = d;
+        bodyCar = c;
+      }
+      const dot = Math.min(1, Math.abs(ra[o + 3] * rb[o + 3] + ra[o + 4] * rb[o + 4] + ra[o + 5] * rb[o + 5] + ra[o + 6] * rb[o + 6]));
+      const deg = (2 * Math.acos(dot) * 180) / Math.PI;
+      if (deg > turn) {
+        turn = deg;
+        turnCar = c;
+      }
+      for (let m = 0; m < masses[c]; m++) {
+        const p = o + 10 + 3 * m;
+        const h = Math.hypot(ra[p] - rb[p], ra[p + 1] - rb[p + 1], ra[p + 2] - rb[p + 2]);
+        if (h > hull) {
+          hull = h;
+          hullCar = c;
+        }
+      }
+    }
+    out.push({ t: ra[0], body, bodyCar, turn, turnCar, hull, hullCar });
+  }
+  return out;
+}
+
+const divergenceRow = (r) => `   ${f2(r.t).padStart(7)} | ${f1(100 * r.body).padStart(6)} (${r.bodyCar}) | ${f2(r.turn).padStart(6)} (${r.turnCar}) | ${f1(100 * r.hull).padStart(6)} (${r.hullCar})`;
+
+/** The text of `divergence`: about twelve checkpoints, the first time each measure passes the visible guide, and the worst of the run. */
+export function divergenceLines(a, b) {
+  const rows = divergence(a, b);
+  const lines = [`   divergence ${a.name} vs ${b.name} (guide: body > ${VISIBLE_M * 100} cm, turn > ${VISIBLE_DEG} deg, hull point > ${VISIBLE_M * 100} cm): t s | body cm (car) | turn deg (car) | hull cm (car)`];
+  const step = Math.max(1, Math.ceil(rows.length / 12));
+  for (let k = 0; k < rows.length; k += step) lines.push(divergenceRow(rows[k]));
+  if ((rows.length - 1) % step !== 0) lines.push(divergenceRow(rows[rows.length - 1]));
+  const first = (key, limit) => rows.find((r) => r[key] > limit);
+  const when = (r) => (r ? `${f2(r.t)} s` : "never");
+  lines.push(`   first past the guide: body ${when(first("body", VISIBLE_M))}, turn ${when(first("turn", VISIBLE_DEG))}, hull ${when(first("hull", VISIBLE_M))}; worst over the run: body ${f1(100 * Math.max(...rows.map((r) => r.body)))} cm, turn ${f2(Math.max(...rows.map((r) => r.turn)))} deg, hull ${f1(100 * Math.max(...rows.map((r) => r.hull)))} cm`);
+  return lines;
+}
 
 /** The text of a summary: one block per scenario. `first` is the scenario's config (`about`, `sizes`, `lone`, `label`). */
 export function table(name, first, arms) {
@@ -129,6 +198,7 @@ export function table(name, first, arms) {
   }
   for (const a of arms) if (Object.keys(a.thawSites).length) lines.push(`   thaw call sites, ${a.name}: ${Object.entries(a.thawSites).map(([k, v]) => `${k} ${v}`).join(", ")}`);
   if (arms.some((a) => a.flagged)) lines.push("   LOAD: a run started above the load limit (--force): the ms are not timing");
+  if (arms.length >= 2 && arms[0].trace && arms[1].trace) lines.push(...divergenceLines(arms[0], arms[1]));
   return lines.join("\n");
 }
 
@@ -144,6 +214,7 @@ function parseArgs(argv) {
     else if (a === "--out") args.out = argv[++i];
     else if (a === "--force") args.force = true;
     else if (a === "--thaw-sites") args.thawSites = true;
+    else if (a === "--trace") args.trace = argv[++i];
     else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else args.scenarios.push(a);
   }
@@ -166,7 +237,7 @@ export async function main(argv, log = console.log) {
     for (const [name, s] of Object.entries(SCENARIOS)) log(`${name}\n   ${s.about}\n   sizes: ${s.sizes}\n   lone ${s.lone ? "on" : "off"}, warm ${s.warmS} s, window ${s.windowS} s`);
     return 0;
   }
-  if (command !== "run") throw new Error("usage: bench.mjs list | run <scenario>... [--arm name:knob=v,...]... [--order abba|baab|both] [--warm s] [--window s] [--max-load 2] [--force] [--thaw-sites] [--out dir]");
+  if (command !== "run") throw new Error("usage: bench.mjs list | run <scenario>... [--arm name:knob=v,...]... [--order abba|baab|both] [--warm s] [--window s] [--max-load 2] [--force] [--thaw-sites] [--trace dt] [--out dir]");
   const args = parseArgs(rest);
   if (!args.scenarios.length) throw new Error(`run which scenario? ${Object.keys(SCENARIOS).join(", ")}`);
   const sequence = armSequence(args.arms, args.order);
@@ -186,6 +257,7 @@ export async function main(argv, log = console.log) {
       if (args.warm) env.BENCH_WARM = args.warm;
       if (args.window) env.BENCH_WINDOW = args.window;
       if (args.thawSites) env.BENCH_THAW_SITES = "1";
+      if (args.trace) env.BENCH_TRACE = args.trace;
       const run = { ...child(env), arm: arm.name, flagged, n: n + 1 };
       writeFileSync(path.join(out, `${name}-${n + 1}-${arm.name}.json`), JSON.stringify(run));
       runs.push(run);
