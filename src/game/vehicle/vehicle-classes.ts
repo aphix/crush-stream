@@ -298,6 +298,16 @@ const KILL_CEILING = 0.63;
  */
 const DERBY_KILL_SCALE = 0.7935;
 const DERBY_WRECK_ENERGY = 250;
+/**
+ * A derby hit wears a car this many times what the same hit wears it in the formula the races use (every hit's EBS² capped at 36, `DeformHit`): the wear share
+ * is `wear / wreckEnergy`, so the gain divides the limit (`armKill`) and no hit, state byte or race changes. 4b2c1dec (a wreck at a prism is shoved out of
+ * its overlap no further than it sank in) took 3-6.4 % of the wear the derby's cars dealt each other and the props (seeds 1-20, summed over the matches: wear 24148 → 23391,
+ * 6414 → 6033 of it from props and walls) and six-car matches ending by elimination in 90 s (5 of 6 cars dead) fell from 9/20 to 5/20, against `derby-matches.ai-long-run.ts`'s 10/20 bar.
+ * The owner took 1.35. Six-car matches ending by elimination, seeds 1-60 pooled, at gain 1.0 / 1.1 / 1.2 / 1.35: 14 / 20 / 27 / 39 of 60 (23 / 33 / 45 / 65 %); a 10/20 bar clears with margin at about 65 %
+ * (its comment measured 14/20 on 765d53e and 13/20 on the airborne lane; b8422485 read 9/20). Over those 60 seeds at 1.35 against 1.0 the median match ends at 68 s, not 88 s, the median first death is at 23 s, not 28 s,
+ * and none comes before 8 s (the earliest 13 s). A single 20-seed window is chaotic (seeds 1-20: 5, 6, 6, 6 at 1.0, 1.05, 1.075, 1.1 and 12, 10, 14, 14 at 1.2, 1.35, 1.5, 1.7), so the rate is read over 60.
+ */
+export const DERBY_WEAR_GAIN = 1.35;
 
 /** Engine-kill travel (m) for a class at `realism`, in a derby or anywhere else. */
 export function killTravel(id: VehicleClassId, realism: number, ctx: "derby" | "default"): number {
@@ -310,7 +320,7 @@ export function killTravel(id: VehicleClassId, realism: number, ctx: "derby" | "
 /** A car's kill limits for its context: engine travel, plus the wreck energy in a derby. */
 export function armKill(deform: { killTravel: number; wreckEnergy: number }, id: VehicleClassId, realism: number, ctx: "derby" | "default"): void {
   deform.killTravel = killTravel(id, realism, ctx);
-  deform.wreckEnergy = ctx === "derby" ? DERBY_WRECK_ENERGY : Infinity;
+  deform.wreckEnergy = ctx === "derby" ? DERBY_WRECK_ENERGY / DERBY_WEAR_GAIN : Infinity;
 }
 
 /** Lateral grip share kept at the realistic end (the arcade end is 1). */

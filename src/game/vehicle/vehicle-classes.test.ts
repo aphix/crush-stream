@@ -494,5 +494,32 @@ for (const H of RATES) {
         assert.equal(hitsToKill("default"), Infinity, "a race / fleet sedan died of side hits");
       });
     });
+
+    describe("given the same 25 km/h side hit taken by a sedan armed for a derby, one armed for a race or fleet and one never armed (every engine travel limit lifted, so the wear share is all the drivetrain loses)", () => {
+      // The race formula is `DeformHit`'s: the hit's EBS² capped at 36, over the 250 m²/s² limit the derby arms. The derby's limit is that over DERBY_WEAR_GAIN (1.35, the owner's: the prism cap of 4b2c1dec took 3-6.4 % of the derby's wear and eliminations fell from 9/20 to 5/20).
+      /** The hit's wear share (1 - drivetrain health) on a sedan armed for `ctx` (null: never armed), its wear limit set to `limit` when given. */
+      const share = (ctx: "derby" | "default" | null, limit?: number): number => {
+        const car = makeCar();
+        if (ctx) armKill(car.deform, "sedan", DEFAULT_REALISM, ctx);
+        if (limit !== undefined) car.deform.wreckEnergy = limit;
+        car.deform.killTravel = Infinity;
+        runWall(25, 1, "side", { car });
+        return 1 - car.deform.drivetrainHealth;
+      };
+      it("when the derby sedan's wear share is read against the race formula's over the same 250 limit, then the derby's is 1.35 times it", () => {
+        const derby = share("derby");
+        const formula = share("derby", 250);
+        assert.ok(formula > 0.01, `the hit wore ${formula.toFixed(4)} of 250: nothing to scale`);
+        assert.ok(Math.abs(derby / formula - 1.35) < 1e-9, `derby ${derby.toFixed(5)} vs formula ${formula.toFixed(5)}: ${(derby / formula).toFixed(4)} times`);
+      });
+      it("when the race or fleet sedan and the never armed one take it, then neither has a wear limit or loses any of its drivetrain to wear", () => {
+        for (const ctx of ["default", null] as const) {
+          const car = makeCar();
+          if (ctx) armKill(car.deform, "sedan", DEFAULT_REALISM, ctx);
+          assert.equal(car.deform.wreckEnergy, Infinity, `${ctx}: wear limit`);
+          assert.equal(share(ctx), 0, `${ctx}: wear share`);
+        }
+      });
+    });
   });
 }

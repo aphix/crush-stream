@@ -183,8 +183,8 @@ at the arcade end, capped at 0.63 m (`KILL_CEILING`): the engine block reaches a
 a monster truck can still be killed. At the realistic end a sedan dies on the first wall hit over about 50 km/h.
 
 A derby car's kill limits (`armKill(deform, cls, realism, "derby")`) are `DERBY_KILL_SCALE` (0.7935) of that travel plus a
-wear limit, `DERBY_WRECK_ENERGY` (250 m²/s²: every hit's EBS² capped at 36, summed over all ends); the travel share and the
-wear share add. Race and fleet keep the travel alone and no wear limit.
+wear limit, `DERBY_WRECK_ENERGY` (250 m²/s²: every hit's EBS² capped at 36, summed over all ends) over `DERBY_WEAR_GAIN` (1.35: a derby hit wears
+a car 1.35 times what the race formula says, `vehicle-classes.ts`); the travel share and the wear share add. Race and fleet keep the travel alone and no wear limit.
 
 ## Damage → drivability
 
