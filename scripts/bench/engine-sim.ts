@@ -1,21 +1,29 @@
 /**
- * The city bench through the real engine, for the scenario bench's end-to-end confirmation row: `benchRaceEngine` (the in-app card's `BENCH_RACE`: 15 AI racers and police on the city course,
- * the bench's seed, nothing drawn, the pacer pinned to the 1/240 s floor, one step a frame), stepped in sim seconds. One per process (a second `CrashEngine` never resolves `ready`), which is
- * how `run-scenario.ts` runs an arm anyway. The AI drives, so unlike the bare-world rows the arms may do different work: read per-unit rows and the counters, as for the in-app card.
+ * The city bench through the real engine, for the scenario bench's end-to-end confirmation rows: `benchRaceEngine` (the in-app card's `BENCH_RACE`: 15 AI racers and police on the city course,
+ * the bench's seed, nothing drawn), stepped in sim seconds, either at the fine floor (`pace.pin` false: 1/240 s a frame, one slice a step, so the lone-car cut has nothing to skip) or on the race's
+ * schedule (`pace.pin` true: 1/80 s steps, cut to 1/240 s slices in contact, lone cars once a step: what a phone that keeps up runs). One per process (a second `CrashEngine` never resolves `ready`),
+ * which is how `run-scenario.ts` runs an arm anyway. The AI drives, so unlike the bare-world rows the arms may do different work: read per-unit rows and the counters, as for the in-app card.
  */
 import { benchRaceEngine, FRAME_S } from "../../src/game/engine/engine-bench-headless.test-util.ts";
 import type { CrashEngine } from "../../src/game/engine/engine.ts";
+import { QUIET_HZ } from "../../src/game/kernel/constants.ts";
 import type { DeformableCar } from "../../src/game/vehicle/car.ts";
 import type { World } from "../../src/game/engine/world-step.ts";
 import type { SimLike } from "./sim.ts";
 
 export class EngineSim implements SimLike {
   t = 0;
+  readonly stepS: number;
+  private readonly engine: CrashEngine;
 
-  private constructor(private readonly engine: CrashEngine) {}
+  private constructor(engine: CrashEngine, race: boolean) {
+    this.engine = engine;
+    this.stepS = race ? 1 / QUIET_HZ : FRAME_S;
+    engine.pace.pin = race;
+  }
 
-  static async city(): Promise<EngineSim> {
-    return new EngineSim(await benchRaceEngine());
+  static async city(race: boolean): Promise<EngineSim> {
+    return new EngineSim(await benchRaceEngine(), race);
   }
 
   get world(): World {
@@ -28,8 +36,8 @@ export class EngineSim implements SimLike {
   }
 
   run(seconds: number): void {
-    const steps = Math.round(seconds / FRAME_S);
-    for (let i = 0; i < steps; i++) this.engine.advance(FRAME_S, { frameDt: FRAME_S });
-    this.t += steps * FRAME_S;
+    const steps = Math.round(seconds / this.stepS);
+    for (let i = 0; i < steps; i++) this.engine.advance(this.stepS, { frameDt: this.stepS });
+    this.t += steps * this.stepS;
   }
 }

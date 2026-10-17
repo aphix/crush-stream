@@ -23,6 +23,8 @@ export interface SimLike {
   /** Sim seconds run. */
   readonly t: number;
   run(seconds: number): void;
+  /** The step (s) a `run` of one step advances: 1/240 s at the fine floor, 1/80 s on the race's schedule. */
+  readonly stepS: number;
 }
 
 export class Sim implements SimLike {
@@ -33,6 +35,11 @@ export class Sim implements SimLike {
   /** Sim seconds run. */
   t = 0;
   private step = STEP_S;
+
+  /** The step (s) `run` advances by. */
+  get stepS(): number {
+    return this.step;
+  }
 
   /** `lone`: the race's lone-car schedule (`World.lone`, on in a race and off in the Fleet and the derby). */
   constructor(cars: DeformableCar[], lone: boolean) {

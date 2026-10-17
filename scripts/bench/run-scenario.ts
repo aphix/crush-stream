@@ -14,6 +14,7 @@ import { DeformRig } from "../../src/game/deform/deform-rig.ts";
 import { PHASE_NAMES, WORK_NAMES } from "../../src/game/engine/sim-phases.ts";
 import { SCENARIO_INFO } from "./scenario-info.ts";
 import { SCENARIOS } from "./scenarios.ts";
+import { LoneCensus } from "./census.ts";
 
 const name = process.env["BENCH_SCENARIO"] ?? "";
 const scenario = SCENARIOS[name];
@@ -77,6 +78,8 @@ const advance = (seconds: number): void => {
 advance(warmS);
 sites.clear();
 
+/** `BENCH_CENSUS=1` (bench `--census`): the window runs step by step through the lone-car census (`census.ts`). */
+const census = process.env["BENCH_CENSUS"] === "1" ? new LoneCensus(sim) : null;
 const phases = sim.world.phases;
 phases.on = true;
 const ms0 = phases.ms.slice();
@@ -84,7 +87,8 @@ const work0 = phases.work.slice();
 const loadStart = loadavg()[0]!;
 const t0 = performance.now();
 const clock0 = sim.t;
-advance(windowS);
+if (census) for (let i = 0, n = Math.round(windowS / sim.stepS); i < n; i++) census.step();
+else advance(windowS);
 const wallMs = performance.now() - t0;
 const simS = sim.t - clock0;
 phases.on = false;
@@ -125,6 +129,7 @@ console.log(
     poses,
     frozenBreaches: breaches,
     trace: traceDt > 0 ? { dt: traceDt, cars: sim.cars.length, masses: sim.cars.map((c) => c.deform.masses.length), rows: trace } : null,
+    census: census ? census.result(simS) : null,
     thawSites: Object.fromEntries([...sites].sort((a, b) => b[1] - a[1])),
     loadStart,
     loadEnd: loadavg()[0]!,

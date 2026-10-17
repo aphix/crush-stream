@@ -78,7 +78,7 @@ describe("given the runs of one scenario", () => {
 
 describe("given the scenarios", () => {
   it("when the info and the builders are listed, then every scenario has both, and the convoy rows sit inside the lone reach", () => {
-    const names = "city intact-alone intact-alone-race intact-convoy intact-convoy-mixed intact-convoy-race wreck-dead-apart wreck-dead-piled wreck-driving-apart wreck-driving-apart-race wreck-pile-pushed wreck-stopped-apart";
+    const names = "city city-race intact-alone intact-alone-race intact-convoy intact-convoy-mixed intact-convoy-race sideswipe-15-race sideswipe-30-race wreck-dead-apart wreck-dead-piled wreck-driving-apart wreck-driving-apart-race wreck-pile-pushed wreck-stopped-apart";
     assert.equal(Object.keys(SCENARIO_INFO).sort().join(" "), names);
     assert.equal(Object.keys(SCENARIOS).sort().join(" "), names);
     assert.equal(CONTACT_REACH + LONE_MARGIN, 6.3, "the reach the convoy rows' text names");

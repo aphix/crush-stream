@@ -104,4 +104,28 @@ export const SCENARIO_INFO: Record<string, ScenarioInfo> = {
     warmS: 20,
     windowS: 30,
   },
+  "city-race": {
+    about: "the same city bench race on the race's step schedule (pace pinned coarse: 1/80 s steps, cut to 1/240 s slices in contact, lone cars once a step): what a phone that keeps up runs; AI drives",
+    sizes: "end-to-end confirmation of the lone-car and relock cuts: per-unit rows, the counters and fineCuts, never totals",
+    lone: true,
+    race: true,
+    warmS: 20,
+    windowS: 30,
+  },
+  "sideswipe-15-race": {
+    about: "two sedans abeam 3.5 m apart (hulls 1.6 m clear) at 15 m/s on the race's step schedule, the far one steering across at full lock: near and not closing, then closing, then in contact",
+    sizes: "SAFETY row of a tighter lone test: the census's false negatives (not-closing car-steps followed by a contact) and the arms' end states",
+    lone: true,
+    race: true,
+    warmS: 0,
+    windowS: 4,
+  },
+  "sideswipe-30-race": {
+    about: "the same side-swipe at 30 m/s: the closing begins later in the step count and the contact is harder",
+    sizes: "SAFETY row of a tighter lone test at highway speed",
+    lone: true,
+    race: true,
+    warmS: 0,
+    windowS: 4,
+  },
 };

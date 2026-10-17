@@ -87,6 +87,7 @@ export function summarize(runs) {
       breaches: Math.max(...list.map((r) => r.frozenBreaches)),
       thawSites: list[0].thawSites,
       trace: list[0].trace ?? null,
+      census: list[0].census ?? null,
       load: { start: Math.min(...list.map((r) => r.loadStart)), startMax: Math.max(...list.map((r) => r.loadStart)), end: Math.max(...list.map((r) => r.loadEnd)) },
       flagged: list.some((r) => r.flagged),
     });
@@ -199,6 +200,14 @@ export function table(name, first, arms) {
     lines.push(`   max |pose or velocity difference|, ${arms[0].name} vs ${arms[1].name} first runs: ${delta.toExponential(2)}${arms[0].digest === arms[1].digest ? " (digests equal: bit-identical arms)" : ""}`);
   }
   for (const a of arms) if (Object.keys(a.thawSites).length) lines.push(`   thaws per sim-s by call site, ${a.name}: ${Object.entries(a.thawSites).map(([k, v]) => `${k} ${f1(v / first.windowS)}`).join(", ")}`);
+  for (const a of arms) {
+    const c = a.census;
+    if (!c) continue;
+    const pct = (v) => (c.carStepsPerS > 0 ? `${f1((100 * v) / c.carStepsPerS)}%` : "-");
+    lines.push(
+      `   lone-car census, ${a.name} (per sim-s; hull gap = separating-axis gap of the car boxes less the pair's relative travel over the step, closing within ${c.closeM} m): steps ${f1(c.stepsPerS)}, of which one slice ${f1(c.singleSliceStepsPerS)}; in the multi-slice steps car-steps ${Math.round(c.carStepsPerS)}: lone ${Math.round(c.loneCarStepsPerS)} (${pct(c.loneCarStepsPerS)}), near-and-not-lone ${Math.round(c.nearCarStepsPerS)} (${pct(c.nearCarStepsPerS)}) = closing ${Math.round(c.closingPerS)} + not closing ${Math.round(c.notClosingPerS)} (${pct(c.notClosingPerS)}); not-closing steps followed by a hull gap under ${c.closeM} m and a contact: ${f1(c.notClosingThenContactPerS)}/s; slices ${f1(c.slicesPerS)}/s, fineCuts ${f1(c.fineCutsPerS)}/s`,
+    );
+  }
   if (arms.some((a) => a.flagged)) lines.push("   LOAD: a run started above the load limit (--force): the ms are not timing");
   for (const other of arms.slice(1)) if (arms[0].trace && other.trace) lines.push(...divergenceLines(arms[0], other));
   return lines.join("\n");
@@ -216,6 +225,7 @@ function parseArgs(argv) {
     else if (a === "--out") args.out = argv[++i];
     else if (a === "--force") args.force = true;
     else if (a === "--thaw-sites") args.thawSites = true;
+    else if (a === "--census") args.census = true;
     else if (a === "--trace") args.trace = argv[++i];
     else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else args.scenarios.push(a);
@@ -239,7 +249,7 @@ export async function main(argv, log = console.log) {
     for (const [name, s] of Object.entries(SCENARIOS)) log(`${name}\n   ${s.about}\n   sizes: ${s.sizes}\n   lone ${s.lone ? "on" : "off"}, warm ${s.warmS} s, window ${s.windowS} s`);
     return 0;
   }
-  if (command !== "run") throw new Error("usage: bench.mjs list | run <scenario>... [--arm name:knob=v,...]... [--order abba|baab|both] [--warm s] [--window s] [--max-load 2] [--force] [--thaw-sites] [--trace dt] [--out dir]");
+  if (command !== "run") throw new Error("usage: bench.mjs list | run <scenario>... [--arm name:knob=v,...]... [--order abba|baab|both] [--warm s] [--window s] [--max-load 2] [--force] [--thaw-sites] [--trace dt] [--census] [--out dir]");
   const args = parseArgs(rest);
   if (!args.scenarios.length) throw new Error(`run which scenario? ${Object.keys(SCENARIOS).join(", ")}`);
   const sequence = armSequence(args.arms, args.order);
@@ -260,6 +270,7 @@ export async function main(argv, log = console.log) {
       if (args.window) env.BENCH_WINDOW = args.window;
       if (args.thawSites) env.BENCH_THAW_SITES = "1";
       if (args.trace) env.BENCH_TRACE = args.trace;
+      if (args.census) env.BENCH_CENSUS = "1";
       const run = { ...child(env), arm: arm.name, flagged, n: n + 1 };
       writeFileSync(path.join(out, `${name}-${n + 1}-${arm.name}.json`), JSON.stringify(run));
       runs.push(run);
