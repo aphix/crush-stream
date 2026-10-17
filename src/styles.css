@@ -116,15 +116,17 @@
   transition: opacity 350ms var(--ease-out);
 }
 
-/* A drag that starts on the view and crosses the HUD (spraying, orbiting) must not select its labels (a long press does the same on a phone): the HUD is controls, not text. Fields stay selectable. */
-.hud-grid {
-  -webkit-user-select: none;
-  user-select: none;
-}
-.hud-grid input,
-.hud-grid textarea {
-  -webkit-user-select: text;
-  user-select: text;
+/* On a touch screen a drag that starts on the view and crosses the HUD (spraying, orbiting) must not select its labels (a long press does the same): the HUD is controls, not text. Fields stay selectable; a desktop keeps its text selection. */
+@media (pointer: coarse) {
+  .hud-grid {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .hud-grid input,
+  .hud-grid textarea {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }
 
 /* A sheet (`sheet.tsx`): fades in over the live view. */
