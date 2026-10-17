@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ROOM_MAX } from "@/lib/multiplayer/rooms";
 import { cn } from "@/lib/utils";
 
-/** Taps stay 44 px tall on phones, 32 px from `sm`. */
+/** Taps stay 44 px tall on phones, 32 px with a mouse. */
 const TAP = "h-11 pointer-fine:h-8";
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
 
@@ -17,7 +17,7 @@ export function PlayersStepper({ value, onStep }: { value: number; onStep: (by: 
       <Button className={cn(TAP, "px-2")} variant="secondary" disabled={value <= 1} aria-label="Fewer players needed" onMouseDown={keepFocus} onClick={() => onStep(-1)}>
         <Minus />
       </Button>
-      <span className="min-w-6 text-center font-display tabular-nums" aria-live="polite">
+      <span className="min-w-6 text-center font-display tabular-nums pointer-coarse:min-w-8 pointer-coarse:text-base" aria-live="polite">
         {value}
       </span>
       <Button className={cn(TAP, "px-2")} variant="secondary" disabled={value >= ROOM_MAX} aria-label="More players needed" onMouseDown={keepFocus} onClick={() => onStep(1)}>

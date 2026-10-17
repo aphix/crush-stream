@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronUp, Globe, LogOut } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Globe, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Sheet } from "@/components/sheet";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { HostForm, newDraft, type HostDraft } from "@/components/online-host";
 import { JoinForm } from "@/components/online-join";
@@ -16,12 +17,10 @@ import type { RaceHud } from "@/game/match/types";
 import { NET_TX, type NetTx } from "@/game/net/net-ports";
 import { cn } from "@/lib/utils";
 
-/** Taps stay 44 px tall on phones, 32 px from `sm`. */
+/** Taps stay 44 px tall on phones, 32 px with a mouse. */
 const TAP = "h-11 pointer-fine:h-8";
-/** What the open panel leaves free at the screen edge and between it and the pill. */
+/** What the open desktop panel leaves free at the screen edge and between it and the pill. */
 const PANEL_GAP_PX = 8;
-/** The thumb pad's reach up the screen (px) on a phone held upright (the Camera view button's top edge stands 180 px above the bottom on a 390 x 844 screen): the panel ends above it. */
-const THUMB_PAD_PX = 180;
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
 
 type Tab = "host" | "join";
@@ -59,16 +58,15 @@ export function OnlineEntry({ engine, race }: { engine: RefObject<CrashEngine | 
     setSeed({ code: link.code, tx: link.tx });
   }, []);
 
-  // The panel hangs from the pill, fixed to the screen (a menu's box clips anything absolute) and scrolling inside the space left below it, so it never runs off a short screen or over the thumb pad.
+  // The desktop panel hangs from the pill, fixed to the screen (a menu's box clips anything absolute) and scrolling inside the space left below it, so it never runs off a short screen. A phone gets a full-screen sheet instead and needs none of this.
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open || coarse) return;
     const fit = (): void => {
       const pill = anchor.current;
       if (!pill) return;
       const r = pill.getBoundingClientRect();
-      const padReach = coarse && window.innerHeight > window.innerWidth ? THUMB_PAD_PX : 0;
       const side = slot ? { right: Math.max(PANEL_GAP_PX, window.innerWidth - r.right) } : { left: Math.max(PANEL_GAP_PX, r.left) };
-      setPlace({ top: r.bottom + 4, maxHeight: Math.max(0, window.innerHeight - r.bottom - 2 * PANEL_GAP_PX - padReach), ...side });
+      setPlace({ top: r.bottom + 4, maxHeight: Math.max(0, window.innerHeight - r.bottom - 2 * PANEL_GAP_PX), ...side });
     };
     fit();
     window.addEventListener("resize", fit);
@@ -88,15 +86,40 @@ export function OnlineEntry({ engine, race }: { engine: RefObject<CrashEngine | 
   const menu = open && !hasSession ? engine.current?.net.courseMenu() : undefined;
   const hosting = draft ?? (menu ? { ...newDraft(menu), ...(seed ? { visibility: "private" as const, code: seed.code, tx: seed.tx } : {}) } : null);
   const tabButton = (t: Tab, label: string) => (
-    <Button key={t} className={cn(TAP, "flex-1 px-2 text-xs")} variant={tab === t ? "default" : "secondary"} aria-pressed={tab === t} onMouseDown={keepFocus} onClick={() => setTab(t)}>
+    <Button key={t} className={cn(TAP, "flex-1 px-2 text-xs pointer-coarse:text-sm")} variant={tab === t ? "default" : "secondary"} aria-pressed={tab === t} onMouseDown={keepFocus} onClick={() => setTab(t)}>
       {label}
     </Button>
   );
+  // The panel is a form of its own: its keys never reach the open menu's (Esc, Enter, arrows) or the game's.
+  const panelKeys = {
+    onKeyDown: (e: KeyboardEvent<HTMLElement>): void => {
+      if (e.key === "Escape") setOpen(false);
+      e.nativeEvent.stopPropagation();
+    },
+    onKeyUp: (e: KeyboardEvent<HTMLElement>): void => e.nativeEvent.stopPropagation(),
+  };
+  const body = hasSession ? (
+    // On a phone the chip carries no Leave (a stray tap on it must not drop the room): the sheet does.
+    <SessionDetails engine={engine} status={status} onLeave={coarse ? leave : undefined} />
+  ) : (
+    <div className="space-y-2">
+      <div className="flex gap-1" role="group" aria-label="Online">
+        {tabButton("host", "Host")}
+        {tabButton("join", "Join")}
+      </div>
+      {tab === "host" && hosting ? (
+        <HostForm engine={engine} draft={hosting} onDraft={setDraft} onHosted={() => setOpen(false)} />
+      ) : (
+        <JoinForm engine={engine} rooms={rooms} code={joinCode} onCode={setJoinCode} tx={joinTx} onTx={setJoinTx} onJoined={() => setOpen(false)} />
+      )}
+    </div>
+  );
+  const panelOpen = open && (hasSession || !online);
 
   const entry = (
     <div ref={anchor} className="pointer-events-auto relative w-fit max-w-[calc(100vw-1rem)]">
       {online ? (
-        <div className="hud-panel flex items-center gap-1 py-1 pl-1 pr-1">
+        <div className="hud-panel flex items-center gap-1 py-1 pl-1 pr-1 pointer-coarse:p-0">
           <button
             type="button"
             disabled={!hasSession}
@@ -107,54 +130,44 @@ export function OnlineEntry({ engine, race }: { engine: RefObject<CrashEngine | 
             aria-label="Online session details"
           >
             <span className="size-2 shrink-0 rounded-full bg-signal-green" aria-hidden />
-            <p className="min-w-0 font-display text-xs leading-tight tabular-nums sm:text-sm" aria-hidden>
+            <p className="min-w-0 font-display text-sm leading-tight tabular-nums pointer-fine:max-sm:text-xs" aria-hidden>
               {sessionText(status)}
             </p>
-            {hasSession ? open ? <ChevronUp className="shrink-0" /> : <ChevronDown className="shrink-0" /> : null}
+            {hasSession ? coarse ? <ChevronRight className="shrink-0" /> : open ? <ChevronUp className="shrink-0" /> : <ChevronDown className="shrink-0" /> : null}
           </button>
           <span className="sr-only" role="status" aria-live="polite">
             {sessionText(status, false)}
           </span>
-          <Button variant="ghost" size="sm" className={cn(TAP, "shrink-0 px-2")} onMouseDown={keepFocus} onClick={leave} aria-label="Leave online match">
-            <LogOut />
-            <span className="hidden sm:inline">Leave</span>
-          </Button>
+          {coarse ? null : (
+            <Button variant="ghost" size="sm" className={cn(TAP, "shrink-0 px-2")} onMouseDown={keepFocus} onClick={leave} aria-label="Leave online match">
+              <LogOut />
+              <span className="hidden sm:inline">Leave</span>
+            </Button>
+          )}
         </div>
       ) : (
         <Button variant="secondary" size="sm" className={cn(TAP, "gap-1.5 px-3")} onMouseDown={keepFocus} onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Online: host or join a room">
           <Globe />
           Online
-          {open ? <ChevronUp /> : <ChevronDown />}
+          {coarse ? null : open ? <ChevronUp /> : <ChevronDown />}
         </Button>
       )}
-      {open && (hasSession || !online) ? (
-        <div
-          className="hud-panel fixed z-50 w-[min(20rem,calc(100vw-1rem))] overflow-y-auto p-2 text-xs"
-          style={{ background: "var(--color-surface)", ...place }}
-          // The panel is a form of its own: its keys never reach the open menu's (Esc, Enter, arrows) or the game's.
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setOpen(false);
-            e.nativeEvent.stopPropagation();
-          }}
-          onKeyUp={(e) => e.nativeEvent.stopPropagation()}
-        >
-          {hasSession ? (
-            <SessionDetails engine={engine} status={status} />
-          ) : (
-            <div className="space-y-2">
-              <div className="flex gap-1" role="group" aria-label="Online">
-                {tabButton("host", "Host")}
-                {tabButton("join", "Join")}
-              </div>
-              {tab === "host" && hosting ? (
-                <HostForm engine={engine} draft={hosting} onDraft={setDraft} onHosted={() => setOpen(false)} />
-              ) : (
-                <JoinForm engine={engine} rooms={rooms} code={joinCode} onCode={setJoinCode} tx={joinTx} onTx={setJoinTx} onJoined={() => setOpen(false)} />
-              )}
-            </div>
-          )}
+      {panelOpen && !coarse ? (
+        <div className="hud-panel fixed z-50 w-[min(20rem,calc(100vw-1rem))] overflow-y-auto p-2 text-xs" style={{ background: "var(--color-surface)", ...place }} {...panelKeys}>
+          {body}
         </div>
       ) : null}
+      {/* The phone's panel is a full-screen sheet on the page itself: the pill may sit in a menu card whose transform would make `fixed` relative to the card. */}
+      {panelOpen && coarse
+        ? createPortal(
+            <div className="fixed inset-0 z-50" {...panelKeys}>
+              <Sheet edge="full" title="Online" onClose={() => setOpen(false)}>
+                <div className="mx-auto w-full max-w-md space-y-2 pb-2 pr-2 text-sm phone-landscape:max-w-3xl">{body}</div>
+              </Sheet>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
   return slot ? createPortal(entry, slot) : <div className="pointer-events-none relative z-20 mt-1">{entry}</div>;

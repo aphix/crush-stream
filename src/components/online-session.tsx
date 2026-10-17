@@ -1,8 +1,10 @@
 import { useMemo, type RefObject } from "react";
+import { LogOut } from "lucide-react";
 import { AutoNextToggle } from "@/components/auto-next";
 import { RoomShare } from "@/components/room-share";
 import { useVoice } from "@/components/use-voice";
 import { LobbyGate } from "@/components/lobby-gate";
+import { Button } from "@/components/ui/button";
 import { PeerName, VoicePanel, VoicePeerControls } from "@/components/voice-panel";
 import type { CrashEngine } from "@/game/engine/engine";
 import { roomLink } from "@/game/hud/share-url";
@@ -19,7 +21,7 @@ function InviteQr({ link }: { link: string }) {
     return { view: size + 8, d };
   }, [link]);
   return (
-    <svg viewBox={`0 0 ${qr.view} ${qr.view}`} className="mx-auto block h-40 w-40 rounded bg-white" role="img" aria-label="QR code of the invite link" shapeRendering="crispEdges">
+    <svg viewBox={`0 0 ${qr.view} ${qr.view}`} className="mx-auto block size-40 rounded bg-white" role="img" aria-label="QR code of the invite link" shapeRendering="crispEdges">
       <path d={qr.d} fill="#000" />
     </svg>
   );
@@ -28,13 +30,16 @@ function InviteQr({ link }: { link: string }) {
 /**
  * The session behind the chip (docs/MULTIPLAYER.md): a private room's code with Copy link and Share (`RoomShare`) and its QR
  * code; for every session the players, this peer's car, the snapshot rate, the lobby countdown and each peer's ping.
+ * On a phone the chip has no Leave (a stray tap on it must not drop the room), so `onLeave` puts a Leave button above the QR code
+ * here; a phone on its side sets that column beside the details, so neither scrolls the other away.
  */
-export function SessionDetails({ engine, status }: { engine: RefObject<CrashEngine | null>; status: NetStatus }) {
+export function SessionDetails({ engine, status, onLeave }: { engine: RefObject<CrashEngine | null>; status: NetStatus; onLeave?: () => void }) {
   const { voice, status: voiceStatus } = useVoice(engine);
   // The link under the app's base path (the VPS serves it below /crush/); the QR code carries it.
   const invite = roomLink(`${window.location.origin}${import.meta.env.BASE_URL}`, status.room, status.tx);
+  const showQr = !status.public && status.tx === NET_TX.rtc;
   return (
-    <>
+    <div className="pointer-coarse:grid pointer-coarse:gap-2 phone-landscape:grid-cols-[minmax(0,1fr)_auto] phone-landscape:items-start phone-landscape:gap-x-4">
       <div className="space-y-2">
         {status.public ? null : <RoomShare engine={engine} status={status} />}
         <p className="text-muted">
@@ -62,7 +67,17 @@ export function SessionDetails({ engine, status }: { engine: RefObject<CrashEngi
         </ul>
         {status.tx === NET_TX.rtc ? <VoicePanel engine={engine} /> : null}
       </div>
-      {status.public || status.tx !== NET_TX.rtc ? null : <InviteQr link={invite} />}
-    </>
+      {onLeave || showQr ? (
+        <div className="space-y-2">
+          {onLeave ? (
+            <Button variant="secondary" className="h-11 w-full gap-1.5 px-3 text-sm" onMouseDown={(e) => e.preventDefault()} onClick={onLeave} aria-label="Leave online match">
+              <LogOut />
+              Leave match
+            </Button>
+          ) : null}
+          {showQr ? <InviteQr link={invite} /> : null}
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -7,7 +7,7 @@ import type { CrashEngine } from "@/game/engine/engine";
 import type { NetStatus } from "@/game/net/net-ports";
 import { cn } from "@/lib/utils";
 
-/** Taps stay 44 px tall on phones, 32 px from `sm`. */
+/** Taps stay 44 px tall on phones, 32 px with a mouse. */
 const TAP = "h-11 pointer-fine:h-8";
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
 
@@ -58,11 +58,11 @@ export function LobbyGate({ engine, status }: { engine: RefObject<CrashEngine | 
             menu={menu}
           />
           <div className="flex gap-1">
-            <Button className={cn(TAP, "flex-1 gap-1.5 px-3 text-xs")} disabled={!canGo} onMouseDown={keepFocus} onClick={() => net.go()}>
+            <Button className={cn(TAP, "flex-1 gap-1.5 px-3 text-xs pointer-coarse:text-sm")} disabled={!canGo} onMouseDown={keepFocus} onClick={() => net.go()}>
               <Play />
               Go
             </Button>
-            <Button className={cn(TAP, "flex-1 gap-1.5 px-3 text-xs")} variant="secondary" onMouseDown={keepFocus} onClick={() => net.resetScene()}>
+            <Button className={cn(TAP, "flex-1 gap-1.5 px-3 text-xs pointer-coarse:text-sm")} variant="secondary" onMouseDown={keepFocus} onClick={() => net.resetScene()}>
               <RotateCcw />
               Reset scene
             </Button>

@@ -6,7 +6,7 @@ import { roomLink } from "@/game/hud/share-url";
 import type { NetStatus } from "@/game/net/net-ports";
 import { cn } from "@/lib/utils";
 
-/** 44 px tall on phones, 32 px from `sm`. */
+/** 44 px tall on phones, 32 px with a mouse. */
 const CONTROL = "h-11 pointer-fine:h-8";
 
 /**
@@ -51,7 +51,7 @@ export function RoomShare({ engine, status }: { engine: RefObject<CrashEngine | 
         <p className={codeClass} aria-label="Room password">
           {label}
         </p>
-        <Button variant="secondary" className={cn(CONTROL, "shrink-0 gap-1.5 px-3 text-xs")} onClick={write} aria-label="Copy room link" aria-live="polite">
+        <Button variant="secondary" className={cn(CONTROL, "shrink-0 gap-1.5 px-3 text-xs pointer-coarse:text-sm")} onClick={write} aria-label="Copy room link" aria-live="polite">
           {copy === "copied" ? <Check /> : <Copy />}
           {copy === "copied" ? "Copied" : "Copy link"}
         </Button>
@@ -68,11 +68,11 @@ export function RoomShare({ engine, status }: { engine: RefObject<CrashEngine | 
           value={link}
           onFocus={(e) => e.currentTarget.select()}
           aria-label="Room link: select and copy"
-          className={cn(CONTROL, "w-full rounded-md bg-surface-2 px-2 text-xs")}
+          className={cn(CONTROL, "w-full rounded-md bg-surface-2 px-2 text-xs pointer-coarse:text-base")}
         />
       ) : null}
       {status.problem === "no-host" ? (
-        <Button className={cn(CONTROL, "w-full text-xs")} onClick={() => engine.current?.net.host(status.room, status.tx)}>
+        <Button className={cn(CONTROL, "w-full text-xs pointer-coarse:text-sm")} onClick={() => engine.current?.net.host(status.room, status.tx)}>
           Host this room
         </Button>
       ) : null}
