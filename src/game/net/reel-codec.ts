@@ -210,9 +210,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * a replay of a clip of 108 or before moves a wreck at a prism or on its roof differently.
  * 110: a step cut to fine slices for contact cuts only the cars in contact: a car with no hit about to land, no crush running, no body contact and no other car within 5.3 m (7.07 m of a sleeping wreck) + 1 m + both cars' travel over the step runs the step as one
  * slice of its whole length (`World.loners`), as a car of a quiet step does, instead of 3 slices at 1/240 s; a clip carries each step's lone cars (`HighlightClip.lone`, after the step schedule) and a replay runs them as recorded: a clip of 109 or before no longer reads.
+ * 111: a derby car's wear limit is `DERBY_WRECK_ENERGY / DERBY_WEAR_GAIN` (250 / 1.35 m²/s², so every hit wears 1.35 times what it did): a derby wreck's drivetrain dies sooner and its drive and handling grade with it; race, fleet, survival, range and the
+ * sandbox arm no wear limit and are unchanged: a replay of a clip of 110 or before of a derby drives its wrecks' drivetrains out differently.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 110;
+const REPLAY_VERSION = 111;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
