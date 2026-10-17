@@ -208,9 +208,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 109: a wreck on or against a solid prism (a derby tyre stack, K-rail or wall) is no longer pushed out of its whole plan overlap in one slice: the footprint's over and sunk shoves are capped at the wreck's own arrival into the face plus the push-out speed, masses
  * standing within a skin of the top are not held on the face, and a landing stops the wreck's masses' fall with its body's (it was shoved 0.4-1 m in a slice). A wreck lying on its roof takes no world-vertical part from the seat step (it sank into the floor at up to 0.28 m/s):
  * a replay of a clip of 108 or before moves a wreck at a prism or on its roof differently.
+ * 110: a step cut to fine slices for contact cuts only the cars in contact: a car with no hit about to land, no crush running, no body contact and no other car within 5.3 m (7.07 m of a sleeping wreck) + 1 m + both cars' travel over the step runs the step as one
+ * slice of its whole length (`World.loners`), as a car of a quiet step does, instead of 3 slices at 1/240 s; a clip carries each step's lone cars (`HighlightClip.lone`, after the step schedule) and a replay runs them as recorded: a clip of 109 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 109;
+const REPLAY_VERSION = 110;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
