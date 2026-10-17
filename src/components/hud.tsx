@@ -309,6 +309,8 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
   // Free fly's gestures have no button, so its line stays; a sandbox drive keeps its boost bar. Everything else the old hint said is on the buttons' captions.
   const freeView = race === null && state.cam === "free";
   const sandboxDrive = driving && race === null && state.derbyView === null;
+  // The race focus view's idea, for a Mini game: from the run-up through the flight to the score the HUD is the Menu and Reset buttons, the card's reading and the driving controls; the rest comes back once it is scored.
+  const minimal = isMinigameRun(state);
   return (
     <div className="hud-grid pointer-events-none absolute inset-0 text-fg" data-focus={focus || undefined} data-calm={calm || undefined}>
       {/* The cluster is hidden, not unmounted, in a race: the online entry inside stays mounted because the race menus portal it into their own header (`online-slot.ts`). */}
@@ -319,12 +321,12 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
         <Button variant="secondary" size="icon" className={cn("pointer-events-auto", state.fleetView && glow && RESET_GLOW)} aria-label="Reset crash" title="Reset" onClick={() => engine.current?.reset()}>
           <RotateCcw />
         </Button>
-        <Button size="icon" className="pointer-events-auto" aria-label={state.playing ? "Pause" : "Play"} title={state.playing ? "Pause" : "Play"} onClick={() => engine.current?.togglePlay()}>
+        <Button size="icon" className={cn("pointer-events-auto", minimal && "hidden")} aria-label={state.playing ? "Pause" : "Play"} title={state.playing ? "Pause" : "Play"} onClick={() => engine.current?.togglePlay()}>
           {state.playing ? <Pause /> : <Play className="ml-0.5" />}
         </Button>
         {/* Not while driving: the pill is a thing to tap between runs. */}
         {onlineShown && race?.reel == null ? (
-          <div className={cn(driving && "hidden")}>
+          <div className={cn((driving || minimal) && "hidden")}>
             <OnlineEntry engine={engine} race={race} />
           </div>
         ) : null}
@@ -336,7 +338,7 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
         // The garage's panel docks itself to the bottom (`mt-auto`), which needs a column of that height; every other scene's is as tall as its panels.
         style={{ top: LEFT_COLUMN_TOP, maxHeight: LEFT_COLUMN_HEIGHT, height: state.garage ? LEFT_COLUMN_HEIGHT : undefined }}
       >
-        {race === null && !state.lab && !state.garage ? <SandboxLine state={state} /> : null}
+        {race === null && !state.lab && !state.garage && !minimal ? <SandboxLine state={state} /> : null}
         <ScenePanels {...hud} touch />
       </div>
 
@@ -403,14 +405,19 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
   );
 }
 
+/** A Mini game's attempt is under way: parked, driving or flying, not yet scored. */
+function isMinigameRun(state: CrashHudState): boolean {
+  return state.minigame !== null && state.minigame.phase !== "scored";
+}
+
 /**
- * Whether the driving phone's HUD is calm. Driving = a live race with no menu over it, or a seat at the wheel. Calm comes after `CALM_MS` of
+ * Whether the driving phone's HUD is calm. Driving = a live race with no menu over it, a seat at the wheel, or a Mini game's attempt. Calm comes after `CALM_MS` of
  * nothing new; a tap outside the driving controls clears it (`watchCalm`), and so does news: a place or lap change, a banner (wrong way,
  * missed checkpoint, driver out, respawn), a chase starting, a new race / derby / Mini game phase, the reset control starting to glow.
  */
 function useCalm(state: CrashHudState): boolean {
   const race = state.race;
-  const driving = race?.menu == null && (race?.phase === "racing" || state.seat === "drive");
+  const driving = race?.menu == null && (race?.phase === "racing" || state.seat === "drive" || isMinigameRun(state));
   const [calm, setCalm] = useState(false);
   const watch = useRef<CalmWatch | null>(null);
   useEffect(() => {

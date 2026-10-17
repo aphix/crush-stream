@@ -68,7 +68,17 @@ export function GaragePanel({ garage, playerCar, engine }: { garage: GarageHud; 
     window.addEventListener("pointerdown", foldOnViewPress, { capture: true });
     return () => window.removeEventListener("pointerdown", foldOnViewPress, { capture: true });
   }, [touch, spray.on]);
-  const edit = <Segments label="Edit" value={target} options={[["car", "Car"], ["person", "Driver"]]} onPick={setTarget} />;
+  const edit = (
+    <Segments
+      label="Edit"
+      value={target}
+      options={[["car", "Car"], ["person", "Driver"]]}
+      onPick={(picked) => {
+        setTarget(picked);
+        engine.current?.frameGarage(picked);
+      }}
+    />
+  );
   const can = <Segments label="Spray can" value={spray.on ? "on" : "off"} options={[["off", "Look"], ["on", "Spray"]]} onPick={(v) => engine.current?.setSprayTool({ on: v === "on" })} />;
   const size = (
     <RangeRow

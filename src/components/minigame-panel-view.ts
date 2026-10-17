@@ -17,7 +17,7 @@ function bestText(mode: MinigameMode, best: number | null): string {
 
 type ThrowsStepperView = { value: number; canDecrease: boolean; canIncrease: boolean };
 
-type MinigamePanelView = {
+export type MinigamePanelView = {
   title: string;
   /** The Long jump's prompt before the throw ("Press Shift as you hit the barrier"), else null. */
   bailPrompt: string | null;
@@ -45,15 +45,6 @@ type MinigamePanelView = {
   /** Ring Fling only, else null. Disabled mid-set (a set in progress keeps its length) so `canDecrease`/`canIncrease` are both false there. */
   stepper: ThrowsStepperView | null;
 };
-
-/**
- * Whether a touch screen shows the card short (header and bail prompt only): while the attempt is under way the player is looking at the
- * road, not at buttons; once it is scored the card opens to Retry, which is what they want then. `toggled` is the player's flip of that
- * default for this phase (the More button), so a card they opened mid-run or closed after a score stays so until the phase changes.
- */
-export function minigamePanelCompact(phase: MinigameHudState["phase"], toggled: boolean): boolean {
-  return (phase !== "scored") !== toggled;
-}
 
 /** What the panel shows and which buttons work, from the session's card: pure, so the labels and enabled states are testable without a DOM. */
 export function minigamePanelView(state: MinigameHudState, bailControl: string): MinigamePanelView {

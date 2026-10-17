@@ -17,6 +17,8 @@ export const GARAGE = {
   /** The opening shot (`ChaseCamera.frameReset`): from the front right, the car and the driver beside it in view, and the point the orbit circles. */
   angle: 0.75,
   shot: { lookX: 0.7, lookY: 0.8, lookZ: 0.2, radius: 8.5, pitch: 0.3 },
+  /** The driver's close shot (`EngineGarage.frameGarage`): the orbit circles him, not the car, so a phone can reach his shirt, his hair and his back. */
+  driverShot: { lookX: 1.9, lookY: 0.95, lookZ: 0.6, radius: 3.6, pitch: 0.12 },
   /** The driver the garage shows under the player's picks (a race draws his unpicked clothes from its own seed). */
   driver: driverLook(0, 0),
 } as const;

@@ -577,6 +577,8 @@ export class DriverSeat {
   mode: SeatMode = "global";
   view: SeatView = "third";
   carIndex = -1;
+  /** The player has chosen a drive view (V, Y, the View button): a scene's own default view (the tight modes' far chase) never overrides it again. */
+  viewPicked = false;
   boost = 1;
   /** The boost push the driven car applied last slice (`drive.boostK`, 0 or 1): the meter drains by it. */
   private thrust = 0;
@@ -652,6 +654,7 @@ export class DriverSeat {
 
   cycleView(): void {
     this.view = VIEWS[(VIEWS.indexOf(this.view) + 1) % VIEWS.length]!;
+    this.viewPicked = true;
   }
 
   step(dt: number): void {

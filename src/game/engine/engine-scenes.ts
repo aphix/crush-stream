@@ -163,6 +163,8 @@ export abstract class EngineScenes extends EngineMinigames {
     }
     if (next === "race" || next === "survival") this.setRace(true, next === "survival", false, next === "survival" && menu && this.net.role === "off");
     else this.sceneId = next;
+    // The smaller, tighter modes (the Range with its Mini games, the derby) default to the far chase: more of the place in view. A view the player picked stays.
+    if (!this.seat.viewPicked) this.seat.view = next === "range" || next === "derby" ? "far" : "third";
     this.followSceneTypes();
     this.tryUnlockAudio();
     this.randomizeAndReset();

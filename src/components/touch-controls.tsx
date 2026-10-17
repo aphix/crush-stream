@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useEffectEvent, useRef, useSyncExternalStore } from "react";
 import { ChevronLeft, ChevronRight, LockOpen, LogOut, Maximize, Minimize, Mouse, Pause, SwitchCamera, Video, Wrench } from "lucide-react";
 import type { HudProps } from "@/components/hud";
 import { RESET_GLOW } from "@/components/reset-prompt";
@@ -88,6 +88,8 @@ function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
   const driving = state.seat === "drive";
   const flying = state.cam === "free";
   const watching = state.seat !== "global" || flying;
+  // A scene with one car (a Mini game, the garage, the range) has nobody to cycle to and nowhere to step out to.
+  const others = state.carCount > 1;
   return (
     <div className="pointer-events-none absolute hud-top hud-right flex max-w-[62%] flex-wrap justify-end gap-2">
       {/* The glow is the prompt: the button exists only while the car needs a reset, so the strip is three buttons the rest of the time. */}
@@ -96,7 +98,7 @@ function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
           <Wrench />
         </PadButton>
       ) : null}
-      {!race && !driving ? (
+      {!race && !driving && others ? (
         <>
           <PadButton engine={engine} button={PAD_BUTTON.lb} name="prev" label="Previous car" caption="Prev" className={STRIP_BUTTON}>
             <ChevronLeft />
@@ -121,7 +123,7 @@ function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
         <PadButton engine={engine} button={PAD_BUTTON.back} name="pause" label="Pause race" caption="Pause" className={STRIP_BUTTON}>
           <Pause />
         </PadButton>
-      ) : watching ? (
+      ) : watching && (others || !driving || flying) ? (
         <PadButton
           engine={engine}
           button={PAD_BUTTON.back}
@@ -176,15 +178,13 @@ function DriveControls({ state, engine }: HudProps) {
     touch.brake = brake;
   };
   // The pedals unmount with the seat or the scheme: a finger on one is gone with it.
-  useEffect(
-    () => () => {
-      fingers.current = { gas: false, brake: false };
-    },
-    [scheme, canDrive],
-  );
-  // Auto-gas has no finger to write it: it starts with the seat (a fresh race driver, a re-armed car) and stops with it, never stuck on after.
   useEffect(() => {
-    writePedals();
+    fingers.current = { gas: false, brake: false };
+  }, [scheme, canDrive]);
+  // Auto-gas has no finger to write it: it starts with the seat (a fresh race driver, a re-armed car) and stops with it, never stuck on after.
+  const applyPedals = useEffectEvent(writePedals);
+  useEffect(() => {
+    applyPedals();
     return () => {
       const touch = engine.current?.touch;
       if (touch) touch.gas = touch.brake = 0;

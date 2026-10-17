@@ -1,4 +1,5 @@
 import type { SprayTool } from "../hud/hud-store.ts";
+import { GARAGE } from "../present/garage-art.ts";
 import type { LookData } from "../net/look-codec.ts";
 import { SPRAY_PALETTE, type CarPart, type PersonPick } from "../match/look-data.ts";
 import { EngineShare } from "./engine-share.ts";
@@ -29,6 +30,12 @@ export abstract class EngineGarage extends EngineShare {
     if (tool.radius !== undefined) t.radius = Math.min(SPRAY_RADIUS.max, Math.max(SPRAY_RADIUS.min, tool.radius));
     if (tool.colour !== undefined && tool.colour >= 1 && tool.colour < SPRAY_PALETTE.length) t.colour = Math.floor(tool.colour);
     this.emitHud();
+  }
+
+  /** The garage camera frames what is being edited: the driver close up (the orbit circles him) while his look or spray is picked, the car and the driver beside it otherwise. */
+  frameGarage(target: SprayTarget): void {
+    if (!this.showGarage) return;
+    this.view.frameReset(true, this.live(), GARAGE.angle, target === "person" ? GARAGE.driverShot : GARAGE.shot);
   }
 
   /** `target`'s spray comes off, here and in storage. */

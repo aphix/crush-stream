@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { INITIAL_HUD } from "../game/hud/hud-store.ts";
 import { MINIGAME_MODES, MODE_LABELS, THROWS_PER_SET } from "../game/scenes/minigame-constants.ts";
 import type { MinigameHudState } from "../game/scenes/minigame-session.ts";
-import { minigamePanelCompact, minigamePanelView } from "./minigame-panel-view.ts";
+import { minigamePanelView } from "./minigame-panel-view.ts";
 
 const LONG_JUMP_READY: MinigameHudState = {
   mode: "longJump",
@@ -197,24 +197,13 @@ describe("given a long jump with its bail", () => {
   }
 });
 
-describe("given the card on a touch screen", () => {
-  const underWayPhases = ["ready", "running", "thrown"] as const;
-  for (const phase of underWayPhases) {
-    it(`when the attempt is ${phase} and the player has not touched More, then the card is compact`, () => {
-      assert.equal(minigamePanelCompact(phase, false), true);
-    });
-    it(`when the attempt is ${phase} and the player taps More, then the card opens`, () => {
-      assert.equal(minigamePanelCompact(phase, true), false);
+describe("given the card on a touch screen, which shows Retry inline only once the attempt is scored", () => {
+  const phases = ["ready", "running", "thrown", "scored"] as const;
+  for (const phase of phases) {
+    it(`when the attempt is ${phase}, then Retry is ${phase === "scored" ? "enabled" : "disabled"}`, () => {
+      assert.equal(minigamePanelView({ ...LONG_JUMP_READY, phase }, "Boost").retryEnabled, phase === "scored");
     });
   }
-
-  it("when the attempt is scored and the player has not touched More, then the card is open for Retry", () => {
-    assert.equal(minigamePanelCompact("scored", false), false);
-  });
-
-  it("when the attempt is scored and the player taps More, then the card collapses again", () => {
-    assert.equal(minigamePanelCompact("scored", true), true);
-  });
 });
 
 describe("given a long jump whose bail is armed", () => {
