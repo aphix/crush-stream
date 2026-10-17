@@ -29,6 +29,8 @@ export const EPICENTER = {
   thawHold: 0,
   /** Metres of crush a frozen car's resting contact may feed in one slice before it is let in (`feedOverlap`): under this the feed is dropped and counted (`crushDroppedUm`) and the wreck stays frozen; 0 lets in every feed over 10 um as today (each thaws the car). A resting pile feeds sub-millimetre crush every slice; the dropped total over a run is the bound to read. */
   feedMin: 0,
+  /** 1: a brake (or handbrake) held on a wreck that is at rest (`!moving`, no throttle) neither wakes it nor restarts its rest timer, so it falls asleep like an unbraked one (`applyDrive`). 0 is today: a held brake resets the timer every slice and a braked, standing wreck never sleeps. Not exact: a sleeping wreck skips the rigid step a braked one ran; it stands still either way. */
+  holdWakes: 0,
 };
 
 /** Every knob as the module loaded it: the off values a clip recorded before a knob existed reads it at. */
@@ -58,6 +60,7 @@ const ROWS: readonly [keyof typeof EPICENTER, string, number, number, number][] 
   ["frozenCheck", "Check frozen cars (debug)", 0, 1, 1],
   ["thawHold", "No refreeze after a thaw (s)", 0, 1, 0.05],
   ["feedMin", "Frozen car drops feeds under (m, 0 off)", 0, 0.005, 0.0001],
+  ["holdWakes", "Brake on a wreck at rest lets it sleep", 0, 1, 1],
 ];
 
 /** The knob rows, in panel order. */

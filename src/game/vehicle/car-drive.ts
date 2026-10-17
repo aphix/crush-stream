@@ -1,3 +1,4 @@
+import { EPICENTER } from "../deform/epicenter.ts";
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import { blankIntent, readIntent, shapeDrive, type DriveFeel } from "./drive-input.ts";
@@ -262,7 +263,9 @@ export function applyDrive(car: DeformableCar, input: DriveInput, dt: number, to
   const tyreShare = standingBite(car);
   if (tyreShare === 0) return idleDriveState(d);
   // A pedal wakes a sleeping wreck only where it acts: the clip records the outputs (`idleDriveState` zeroes a dead or wheel-less car's), so a wake on the raw input would be one the replay never sees.
-  if (throttle !== 0 || brake !== 0 || input.ebrake) car.wake();
+  // `EPICENTER.holdWakes`: a brake held on a wreck at rest acts on nothing (there is no speed to take off), so it neither wakes the wreck nor restarts its rest timer: without this a
+  // braked wreck that stands still never sleeps (the timer is reset by every slice's pedal: 914 resets a second for 8 wrecks in the bench).
+  if ((throttle !== 0 || brake !== 0 || input.ebrake) && !(EPICENTER.holdWakes === 1 && throttle === 0 && car.deform.massActive && !car.moving)) car.wake();
   const k = CLASSES[carClass(car)];
   const realism = HANDLING.realism;
   // assists() reads only realism, so it reruns when that changes: called out of line, it boxed realism per step.

@@ -33,6 +33,7 @@ const sites = new Map<string, number>();
 const clampSites = new Map<string, number>();
 const offSites = new Map<string, number>();
 const feedBins = new Map<string, number>();
+const wakeSites = new Map<string, number>();
 if (process.env["BENCH_THAW_SITES"] === "1") {
   const thaw = DeformRig.prototype.thaw;
   DeformRig.prototype.thaw = function (this: DeformRig): void {
@@ -53,6 +54,16 @@ if (process.env["BENCH_THAW_SITES"] === "1") {
       feedBins.set(key, (feedBins.get(key) ?? 0) + 1);
     }
     return feed.apply(this, args);
+  };
+  // Who wakes a crashed car, or resets its rest timer (`wake` does both): a wreck that is woken every slice never sleeps.
+  const wake = DeformableCar.prototype.wake;
+  DeformableCar.prototype.wake = function (this: DeformableCar): void {
+    if (this.deform.massActive) {
+      const frame = new Error().stack?.split("\n")[2]?.trim().replace(/^at /, "").replace(/\(?file:\/\/\/.*\/src\//, "(") ?? "?";
+      const key = `${frame}${this.asleep ? " (asleep)" : " (awake: rest timer reset)"}`;
+      wakeSites.set(key, (wakeSites.get(key) ?? 0) + 1);
+    }
+    wake.call(this);
   };
   // And who re-measured (`syncPose`: a `clampLocal`) a frozen car whose centre is cached: the freeze's invariant says nobody may (`DeformFreeze.settleFreeze`).
   const syncPose = DeformableCar.prototype.syncPose;
@@ -144,6 +155,7 @@ sites.clear();
 clampSites.clear();
 offSites.clear();
 feedBins.clear();
+wakeSites.clear();
 
 /** `BENCH_CENSUS=1` (bench `--census`): the window runs step by step through the lone-car census (`census.ts`). */
 const census = process.env["BENCH_CENSUS"] === "1" ? new LoneCensus(sim) : null;
@@ -211,6 +223,7 @@ console.log(
     clampSites: Object.fromEntries([...clampSites].sort((a, b) => b[1] - a[1])),
     offSites: Object.fromEntries([...offSites].sort((a, b) => b[1] - a[1]).slice(0, 12)),
     feedBins: Object.fromEntries([...feedBins].sort((a, b) => b[1] - a[1]).slice(0, 12)),
+    wakeSites: Object.fromEntries([...wakeSites].sort((a, b) => b[1] - a[1]).slice(0, 10)),
     loadStart,
     loadEnd: loadavg()[0]!,
   })}`,

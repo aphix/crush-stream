@@ -105,6 +105,16 @@ describe("given the scenarios", () => {
     assert.match(wreck!, /frozen-state breaches\s+0\s+0/);
   });
 
+  it("when 8 wrecks stand still with the brake held, then none ever sleeps (the held brake restarts every rest timer each slice), and with epi.holdWakes every one sleeps from the first slice of the window", async () => {
+    const out = mkdtempSync(path.join(tmpdir(), "bench-"));
+    const lines: string[] = [];
+    const code = await main(["run", "wreck-stopped-apart", "--arm", "today:", "--arm", "hold:epi.holdWakes=1", "--warm", "3", "--window", "1", "--order", "abba", "--max-load", "1000", "--out", out], (l: string) => lines.push(l));
+    assert.equal(code, 0);
+    const text = lines.join("\n");
+    assert.match(text, /asleepCarSlices\/s\s+0\s+\d{3}/, "no wreck slept today, every one did with the knob");
+    assert.match(text, /wreckCarSlices\/s\s+\d{3}\s+0/, "the awake wreck slices of today are the asleep ones of the knob");
+  });
+
   it("when a pile of wrecks is pushed in every slice, then epicenter on and off drift apart no further than 2.5 times what the sim does to a 1 micrometre nudge with every knob off (the pile is chaotic: whole against whole nudged 1 um is centimetres)", async () => {
     const out = mkdtempSync(path.join(tmpdir(), "bench-"));
     const lines: string[] = [];
