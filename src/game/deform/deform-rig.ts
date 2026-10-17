@@ -503,6 +503,10 @@ export abstract class DeformRig {
     this.massActive = false;
     this.frozen = false;
     this.frozenReady = false;
+    this.nodesLoose = 0;
+    this.nodesLocked = 0;
+    this.freezes = 0;
+    this.thaws = 0;
     this.drivetrainAlive = true;
     this.engineTravel = 0;
     this.wear = -0;
