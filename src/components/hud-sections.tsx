@@ -19,6 +19,9 @@ import {
   VolumeX,
 } from "lucide-react";
 import type { HudProps } from "@/components/hud";
+import { ControlsSection } from "@/components/controls-section";
+import { Sheet } from "@/components/sheet";
+import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { captureSubmitShown } from "@/game/hud/submit-rules";
 import { copyText } from "@/lib/clipboard";
 import { sendSubmission, type Parcel } from "@/lib/submissions/status";
@@ -37,25 +40,40 @@ import { VoiceDevicePickers } from "@/components/voice-device-pickers";
 import { useDriver } from "@/components/use-driver";
 import { cn } from "@/lib/utils";
 
-/** Option buttons inside a segmented track. Five-option tracks wrap at three per row: one row of five overflows the panel. */
-const SEGMENT = "h-10 px-1 text-xs pointer-fine:h-7";
-const TRACK = "grid flex-1 gap-0.5 rounded-md bg-surface-2 p-0.5";
+/** Option buttons inside a segmented track: 44 px on touch. Five-option tracks wrap at three per row: one row of five overflows the panel. */
+const SEGMENT = "h-11 px-1 text-xs pointer-fine:h-7";
+const TRACK = "grid min-w-0 flex-1 gap-0.5 rounded-md bg-surface-2 p-0.5";
 
 /** The storage key of the open sections: the menu reads it to know whether any is open (`HudSections` writes it). */
 export const HUD_SECTIONS_KEY = "crush.hud.sections";
 
-export function HudSections(props: HudProps) {
+/** The accordion's sections: the settings' own plus the touch-only Controls (the scheme, left-handed, tilt). */
+type AccordionId = SectionId | "controls";
+
+/**
+ * The settings accordion. On a desktop it is the panel in the HUD grid's `settings` area. On touch (and given `onClose`) it is a docked
+ * `Sheet` (right half on a phone on its side, bottom 70 % upright) so a slider's effect shows beside it; the sheet owns Back and the
+ * scroll, and Controls is its first section.
+ */
+export function HudSections({ onClose, ...props }: HudProps & { onClose?: () => void }) {
+  const touch = useCoarsePointer();
   // Every section starts closed: the 3D view comes first, settings are a click away.
   const [open, setOpen] = useStoredString(HUD_SECTIONS_KEY, "", "");
   const section = (id: SectionId) => ({ id, changed: changedSettings(props.state, id), engine: props.engine });
-  return (
+  const sheeted = touch && onClose !== undefined;
+  const accordion = (
     <Accordion.Root
       type="multiple"
       value={open.split(",").filter(Boolean)}
       onValueChange={(v) => setOpen(v.join(","))}
-      className="hud-panel hud-settings pointer-events-auto divide-y divide-border self-end overflow-y-auto idle:hidden"
-      style={{ gridArea: "settings" }}
+      className={sheeted ? "min-w-0 divide-y divide-border pr-2" : "hud-panel hud-settings pointer-events-auto divide-y divide-border self-end overflow-y-auto idle:hidden"}
+      style={sheeted ? undefined : { gridArea: "settings" }}
     >
+      {touch ? (
+        <Section id="controls" changed={[]} engine={props.engine} title="Controls">
+          <ControlsSection />
+        </Section>
+      ) : null}
       <Section {...section("playback")} title="Playback">
         <PlaybackSection {...props} />
       </Section>
@@ -73,13 +91,20 @@ export function HudSections(props: HudProps) {
       </Section>
     </Accordion.Root>
   );
+  return sheeted ? (
+    <Sheet edge="dock" title="Settings" onClose={onClose}>
+      {accordion}
+    </Sheet>
+  ) : (
+    accordion
+  );
 }
 
 /**
  * One section: its header counts the settings changed from their defaults, and a row of reset chips undoes each on its
  * own (the Defaults button resets them all).
  */
-function Section({ id, title, changed, engine, children }: { id: SectionId; title: string; changed: SettingId[]; engine: HudProps["engine"]; children: ReactNode }) {
+function Section({ id, title, changed, engine, children }: { id: AccordionId; title: string; changed: SettingId[]; engine: HudProps["engine"]; children: ReactNode }) {
   const driver = useDriver();
   return (
     <Accordion.Item value={id}>
@@ -138,7 +163,7 @@ function Toggle({ on, label, onClick, changed, children }: { on: boolean; label:
       variant={on ? "default" : "ghost"}
       aria-pressed={on}
       aria-label={label}
-      className="h-11 justify-start gap-1.5 px-1.5 text-xs pointer-fine:h-8"
+      className="h-11 min-w-0 justify-start gap-1.5 px-1.5 text-xs pointer-fine:h-8"
     >
       {children}
       <ChangedDot on={changed} className="ml-auto size-1.5 shrink-0 rounded-full bg-current" />

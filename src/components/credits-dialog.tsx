@@ -13,6 +13,14 @@ function ExternalLink({ href, children }: { href: string; children: string }) {
 }
 
 /**
+ * On touch the dialog's box stays out of the notch, the rounded corners and the home indicator: each side keeps the larger of the HUD
+ * edge and the device's safe-area inset (the rule of `hud-top` and friends in styles.css). Underscores are the spaces calc() needs.
+ */
+const TOUCH_FIT =
+  "pointer-coarse:max-h-[calc(100dvh_-_max(var(--hud-edge),env(safe-area-inset-top))_-_max(var(--hud-edge),env(safe-area-inset-bottom)))] " +
+  "pointer-coarse:w-[min(32rem,calc(100vw_-_max(var(--hud-edge),env(safe-area-inset-left))_-_max(var(--hud-edge),env(safe-area-inset-right))))]";
+
+/**
  * The credits: the soundtrack as its manifest credits it (each song's lines and links verbatim, so adding a song to the
  * music folder adds its credit) and the engine sound generator's MIT notice. A native `<dialog>`: Esc and the Close button
  * dismiss it, and `onClose` fires either way. A missing manifest leaves the engine credit alone.
@@ -45,7 +53,7 @@ export function CreditsDialog({ open, onClose }: { open: boolean; onClose: () =>
       ref={dialogRef}
       onClose={onClose}
       aria-label="Credits"
-      className="m-auto max-h-[calc(100dvh-2rem)] w-[min(32rem,calc(100vw-1rem))] overflow-y-auto rounded-lg bg-surface p-4 text-fg shadow-[var(--shadow-border)] backdrop:bg-black/60"
+      className={`m-auto max-h-[calc(100dvh-2rem)] w-[min(32rem,calc(100vw-1rem))] overflow-y-auto rounded-lg bg-surface p-4 text-fg shadow-[var(--shadow-border)] backdrop:bg-black/60 ${TOUCH_FIT}`}
     >
       <h2 className="font-display text-lg font-semibold">Credits</h2>
       {tracks.length > 0 ? (
@@ -83,7 +91,7 @@ export function CreditsDialog({ open, onClose }: { open: boolean; onClose: () =>
         </p>
       </section>
       <form method="dialog" className="mt-4 flex justify-end">
-        <Button type="submit" variant="secondary">
+        <Button type="submit" variant="secondary" className="pointer-coarse:h-12 pointer-coarse:min-w-24">
           Close
         </Button>
       </form>

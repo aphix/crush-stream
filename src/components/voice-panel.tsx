@@ -7,7 +7,7 @@ import type { Voice, VoicePeerStatus } from "@/game/net/voice";
 import { VOICE_MAX_RANGE_M } from "@/game/net/voice-range";
 import { cn } from "@/lib/utils";
 
-/** Taps stay 44 px tall on phones, 32 px from `sm`. */
+/** Taps stay 44 px tall on touch, 32 px with a fine pointer. */
 const TAP = "h-11 pointer-fine:h-8";
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
 
@@ -37,13 +37,13 @@ export function VoicePanel({ engine }: { engine: RefObject<CrashEngine | null> }
         </>
       ) : null}
       {status.on ? (
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 items-center gap-1">
           <SpeakingDot speaking={status.speaking} label="You" />
-          <Button className={cn(TAP, "flex-1 gap-1.5 px-3 text-xs")} variant={status.muted ? "default" : "secondary"} aria-pressed={status.muted} onMouseDown={keepFocus} onClick={() => voice.setMuted(!status.muted)}>
+          <Button className={cn(TAP, "min-w-0 flex-1 gap-1.5 px-3 text-xs")} variant={status.muted ? "default" : "secondary"} aria-pressed={status.muted} onMouseDown={keepFocus} onClick={() => voice.setMuted(!status.muted)}>
             {status.muted ? <MicOff /> : <Mic />}
             {status.muted ? "Unmute" : "Mute"}
           </Button>
-          <Button className={cn(TAP, "flex-1 px-3 text-xs")} variant="secondary" onMouseDown={keepFocus} onClick={() => voice.stop()}>
+          <Button className={cn(TAP, "min-w-0 flex-1 px-3 text-xs")} variant="secondary" onMouseDown={keepFocus} onClick={() => voice.stop()}>
             Leave voice
           </Button>
         </div>
@@ -95,7 +95,7 @@ export function VoicePeerControls({ voice, peer }: { voice: Voice; peer: VoicePe
         step={0.05}
         value={peer.volume}
         onChange={(e) => voice.setPeerVolume(peer.id, Number(e.target.value))}
-        className="min-w-0 flex-1"
+        className="h-11 min-w-0 flex-1 pointer-fine:h-auto"
         aria-label={`Voice volume of ${who}`}
       />
       <Button className={cn(TAP, "shrink-0 px-2")} variant={peer.muted ? "default" : "ghost"} aria-pressed={peer.muted} aria-label={peer.muted ? `Unmute ${who}'s voice` : `Mute ${who}'s voice`} onMouseDown={keepFocus} onClick={() => voice.setPeerMuted(peer.id, !peer.muted)}>
