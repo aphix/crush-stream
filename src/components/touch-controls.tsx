@@ -1,13 +1,16 @@
-import { useEffect, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, CircleParking, LockOpen, LogOut, Maximize, Minimize, Mouse, Pause, SwitchCamera, Video, Wrench, Zap } from "lucide-react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { ChevronLeft, ChevronRight, LockOpen, LogOut, Maximize, Minimize, Mouse, Pause, SwitchCamera, Video, Wrench } from "lucide-react";
 import type { HudProps } from "@/components/hud";
 import { RESET_GLOW } from "@/components/reset-prompt";
-import { showsDriveReadouts } from "@/components/drive-readouts";
 import { Button } from "@/components/ui/button";
-import { usePadHold } from "@/components/use-pad-hold";
-import { PAD_BUTTON } from "@/game/vehicle/gamepad";
+import { PadButton, TouchPedals } from "@/components/touch-pedals";
+import { TouchSteer } from "@/components/touch-steer";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
+import { useTouchScheme } from "@/components/use-touch-scheme";
+import { bailArmed } from "@/game/hud/bail-prompt";
 import { resetGlow } from "@/game/hud/reset-prompt";
+import { pedalsFor, schemeLayout } from "@/game/hud/touch-scheme";
+import { PAD_BUTTON } from "@/game/vehicle/gamepad";
 import { cn } from "@/lib/utils";
 
 /** The webkit prefixes Safari on iPad still ships (iPhone Safari has neither, so the button hides there). */
@@ -72,155 +75,158 @@ export function MouseLookButton({ engine, on, className }: Pick<HudProps, "engin
   );
 }
 
-/** Knob travel (px) at full throw: the 56 px knob just reaches the 128 px base's rim. */
-const STICK_TRAVEL = 36;
+/** The top strip's buttons: 48 square, the caption (text-xs) under the icon. */
+const STRIP_BUTTON = "size-12 px-0";
 
-/** Left thumb: x steers (left = LEFT), up is gas, down brakes then reverses, through the pad's left stick and triggers. */
-function Stick({ engine }: Pick<HudProps, "engine">) {
-  const knob = useRef<HTMLDivElement>(null);
-  /** The finger on the stick and the base centre it is measured from. */
-  const finger = useRef({ id: -1, x: 0, y: 0 });
-  const put = (x: number, y: number): void => {
-    const t = engine.current?.touch;
-    if (t) {
-      t.x = x;
-      t.y = y;
-    }
-    if (knob.current) knob.current.style.transform = `translate(${x * STICK_TRAVEL}px, ${y * STICK_TRAVEL}px)`;
-  };
-  useEffect(
-    () => () => {
-      const t = engine.current?.touch;
-      if (t) t.x = t.y = 0;
-    },
-    [engine],
-  );
-  const move = (e: ReactPointerEvent<HTMLDivElement>): void => {
-    const f = finger.current;
-    if (e.pointerId !== f.id) return;
-    let x = (e.clientX - f.x) / STICK_TRAVEL;
-    let y = (e.clientY - f.y) / STICK_TRAVEL;
-    const m = Math.hypot(x, y);
-    if (m > 1) {
-      x /= m;
-      y /= m;
-    }
-    put(x, y);
-  };
-  const release = (e: ReactPointerEvent<HTMLDivElement>): void => {
-    if (e.pointerId !== finger.current.id) return;
-    finger.current.id = -1;
-    put(0, 0);
-  };
+/**
+ * The top-right strip: View, Rear and the way out (Pause in a race, Exit at the wheel, Free in a watched scene), Prev / Next while
+ * nobody drives, and the reset control only while the car needs it. Each is held through the pad (`engine.touch`), so the pad bindings
+ * run them: the race's pause and respawn, look back. Capped at 62 % of the screen, so a portrait phone wraps it to a second row.
+ */
+function TopStrip({ state, engine }: HudProps) {
+  const race = state.race;
+  const driving = state.seat === "drive";
+  const flying = state.cam === "free";
+  const watching = state.seat !== "global" || flying;
   return (
-    <div
-      role="group"
-      aria-label="Drive stick"
-      className="pointer-events-auto grid size-32 shrink-0 touch-none select-none place-items-center rounded-full bg-surface/60 shadow-[var(--shadow-border)]"
-      onPointerDown={(e) => {
-        const f = finger.current;
-        if (f.id !== -1) return;
-        const r = e.currentTarget.getBoundingClientRect();
-        f.id = e.pointerId;
-        f.x = r.left + r.width / 2;
-        f.y = r.top + r.height / 2;
-        e.currentTarget.setPointerCapture(e.pointerId);
-        move(e);
-      }}
-      onPointerMove={move}
-      onPointerUp={release}
-      onPointerCancel={release}
-      onLostPointerCapture={release}
-    >
-      <div ref={knob} className="pointer-events-none size-14 rounded-full bg-accent/70 shadow-[var(--shadow-border)]" />
+    <div className="pointer-events-none absolute hud-top hud-right flex max-w-[62%] flex-wrap justify-end gap-2">
+      {/* The glow is the prompt: the button exists only while the car needs a reset, so the strip is three buttons the rest of the time. */}
+      {driving && resetGlow(state) ? (
+        <PadButton engine={engine} button={PAD_BUTTON.down} name="respawn" label={race ? "Respawn" : "Recover car"} caption={race ? "Respawn" : "Recover"} className={cn(STRIP_BUTTON, RESET_GLOW)}>
+          <Wrench />
+        </PadButton>
+      ) : null}
+      {!race && !driving ? (
+        <>
+          <PadButton engine={engine} button={PAD_BUTTON.lb} name="prev" label="Previous car" caption="Prev" className={STRIP_BUTTON}>
+            <ChevronLeft />
+          </PadButton>
+          <PadButton engine={engine} button={PAD_BUTTON.rb} name="next" label="Next car" caption="Next" className={STRIP_BUTTON}>
+            <ChevronRight />
+          </PadButton>
+        </>
+      ) : null}
+      {/* View cycles the spectator cam (the whole field's: orbit and free fly); a spectated race car has it on the Spectating bar. */}
+      {!race?.spectating ? (
+        <PadButton engine={engine} button={PAD_BUTTON.north} name="view" label="Camera view" caption="View" className={STRIP_BUTTON}>
+          <Video />
+        </PadButton>
+      ) : null}
+      {watching ? (
+        <PadButton engine={engine} button={PAD_BUTTON.r3} name="rear" label="Look back (hold)" caption="Rear" className={STRIP_BUTTON}>
+          <SwitchCamera />
+        </PadButton>
+      ) : null}
+      {race ? (
+        <PadButton engine={engine} button={PAD_BUTTON.back} name="pause" label="Pause race" caption="Pause" className={STRIP_BUTTON}>
+          <Pause />
+        </PadButton>
+      ) : watching ? (
+        <PadButton
+          engine={engine}
+          button={PAD_BUTTON.back}
+          name={flying || !driving ? "free" : "exit"}
+          label={flying ? "Leave free fly" : driving ? "Step out of the car" : "Free camera"}
+          caption={flying ? "Back" : driving ? "Exit" : "Free"}
+          className={STRIP_BUTTON}
+        >
+          {driving && !flying ? <LogOut /> : <LockOpen />}
+        </PadButton>
+      ) : null}
     </div>
   );
 }
 
-/** One pad button (`PAD_BUTTON` index): held while a finger is on it, and a tap shorter than a frame still presses. */
-function PadButton({ engine, button, label, caption, className, children }: Pick<HudProps, "engine"> & { button: number; label: string; caption: string; className: string; children: ReactNode }) {
+function DriveControls({ state, engine }: HudProps) {
+  const { scheme, mirror, tilt } = useTouchScheme();
+  const layout = schemeLayout(scheme);
+  const race = state.race;
+  const driving = state.seat === "drive";
+  // A spectated race car is never this player's to drive.
+  const canDrive = driving || (state.seat === "follow" && !race?.spectating);
+  const raceLive = race !== null && race.phase !== null && race.phase !== "finished";
+  const minigameReady = state.minigame?.phase === "ready";
+  const bail = state.minigame !== null && bailArmed(state.minigame);
+
+  /**
+   * ARMING (Easy and Tilt, whose gas is automatic). In a live race the car pulls whenever the player drives. Everywhere else (sandbox, derby, range,
+   * Mini games) the seat can be "drive" without the player having decided to move: a Mini game starts its run when the pedal goes down, and gas
+   * on a car that is only being followed would take the wheel. So there auto-gas waits for the first finger on the steering control or on
+   * Brake, and drops again when the player stops driving, a Mini game is ready for its next run, or the race ends.
+   */
+  const armed = useRef(false);
+  useEffect(() => {
+    if (!driving) armed.current = false;
+  }, [driving]);
+  useEffect(() => {
+    if (minigameReady) armed.current = false;
+  }, [minigameReady]);
+  useEffect(() => {
+    armed.current = false;
+  }, [raceLive]);
+  const autoGasLive = (): boolean => (raceLive ? driving : armed.current);
+
+  /** The fingers on the two pedals, and the pad's pedals written from them on every change. */
+  const fingers = useRef({ gas: false, brake: false });
+  const writePedals = (): void => {
+    const touch = engine.current?.touch;
+    if (!touch) return;
+    const { gas, brake } = pedalsFor(scheme, fingers.current, canDrive && (!layout.autoGas || autoGasLive()));
+    touch.gas = gas;
+    touch.brake = brake;
+  };
+  // The pedals unmount with the seat or the scheme: a finger on one is gone with it.
+  useEffect(
+    () => () => {
+      fingers.current = { gas: false, brake: false };
+    },
+    [scheme, canDrive],
+  );
+  // Auto-gas has no finger to write it: it starts with the seat (a fresh race driver, a re-armed car) and stops with it, never stuck on after.
+  useEffect(() => {
+    writePedals();
+    return () => {
+      const touch = engine.current?.touch;
+      if (touch) touch.gas = touch.brake = 0;
+    };
+  }, [engine, scheme, canDrive, driving, raceLive, minigameReady]);
+  const arm = (): void => {
+    armed.current = true;
+    writePedals();
+  };
+
   return (
-    <Button
-      variant="secondary"
-      aria-label={label}
-      title={label}
-      className={cn("pointer-events-auto h-14 min-w-14 touch-none select-none flex-col gap-0.5 bg-surface/60 px-1 data-[held]:bg-accent data-[held]:text-accent-fg [&_svg]:size-5", className)}
-      {...usePadHold(engine, button)}
-    >
-      {children}
-      <span className="font-display text-xs leading-none">{caption}</span>
-    </Button>
+    <>
+      {canDrive ? (
+        <div role="group" aria-label="Steering" className={cn("pointer-events-none absolute hud-bottom", mirror ? "hud-right" : "hud-left")}>
+          <TouchSteer steer={layout.steer} tilt={tilt} engine={engine} onArm={arm} steerLive={() => raceLive || armed.current} />
+        </div>
+      ) : null}
+      {canDrive ? (
+        <TouchPedals
+          engine={engine}
+          layout={layout}
+          canDrive={canDrive}
+          driving={driving}
+          mirror={mirror}
+          bail={bail}
+          onPedal={(pedal, down) => {
+            fingers.current[pedal] = down;
+            writePedals();
+          }}
+          onArm={arm}
+        />
+      ) : null}
+      <TopStrip state={state} engine={engine} />
+    </>
   );
 }
 
 /**
- * Thumb pad for touch screens, above the dock: the stick lower left, buttons lower right. Both write the engine's
- * pad (`engine.touch`), so the pad bindings run them: sandbox and race edges, the race's pause and respawn, look back.
+ * The thumb controls of a touch screen, three clusters at fixed screen offsets (the safe areas are kept): steering lower left, pedals and
+ * buttons lower right (the scheme and Mirror say which is which), View / Rear / Pause on the top right. They write the engine's pad
+ * (`engine.touch`), so the pad bindings run them. Nothing here takes pointer events but the controls themselves.
  */
-export function TouchControls({ state, engine }: HudProps) {
-  const race = state.race;
-  if (race && race.menu !== null) return null;
-  const driving = state.seat === "drive";
-  const watching = state.seat !== "global";
-  const flying = state.cam === "free";
-  // A spectated race car is never this player's to drive.
-  const canDrive = driving || (state.seat === "follow" && !race?.spectating);
-  // Whole field, no stick: the Prev / Next pair is the only thing here. Landscape puts it in the stick's corner, not mid-screen over the action.
-  const pair = !watching && !race;
-  // The drive cluster sits bottom right on a phone on its side: the buttons go above it, each still 40 px tall.
-  const aboveCluster = race ? showsDriveReadouts(race) : state.derbyView !== null;
-  return (
-    <div data-keep-idle className={cn("pointer-events-none flex w-full items-end justify-between gap-2", pair && "landscape:flex-row-reverse")}>
-      {canDrive ? <Stick engine={engine} /> : <span />}
-      <div className={cn("grid grid-cols-3 gap-2", aboveCluster && "pad-above-cluster")}>
-        {race ? null : (
-          <>
-            <PadButton engine={engine} button={PAD_BUTTON.lb} label="Previous car" caption="Prev" className="col-start-1 row-start-1">
-              <ChevronLeft />
-            </PadButton>
-            <PadButton engine={engine} button={PAD_BUTTON.rb} label="Next car" caption="Next" className="col-start-2 row-start-1">
-              <ChevronRight />
-            </PadButton>
-          </>
-        )}
-        {race || watching ? (
-          <PadButton
-            engine={engine}
-            button={PAD_BUTTON.back}
-            label={race ? "Pause race" : flying ? "Leave free fly" : driving ? "Step out of the car" : "Free camera"}
-            caption={race ? "Pause" : flying ? "Back" : driving ? "Exit" : "Free"}
-            className="col-start-3 row-start-1"
-          >
-            {race ? <Pause /> : driving ? <LogOut /> : <LockOpen />}
-          </PadButton>
-        ) : null}
-        {/* View cycles the spectator cam (the whole field's: orbit and free fly); a spectated race car has it on the Spectating bar. */}
-        {!race?.spectating ? (
-          <PadButton engine={engine} button={PAD_BUTTON.north} label="Camera view" caption="View" className="col-start-1 row-start-2">
-            <Video />
-          </PadButton>
-        ) : null}
-        {driving ? (
-          <PadButton engine={engine} button={PAD_BUTTON.down} label={race ? "Respawn" : "Recover car"} caption={race ? "Respawn" : "Recover"} className={cn("col-start-2 row-start-2", resetGlow(state) && RESET_GLOW)}>
-            <Wrench />
-          </PadButton>
-        ) : null}
-        {watching ? (
-          <PadButton engine={engine} button={PAD_BUTTON.r3} label="Look back (hold)" caption="Rear" className="col-start-3 row-start-2">
-            <SwitchCamera />
-          </PadButton>
-        ) : null}
-        {driving ? (
-          <>
-            <PadButton engine={engine} button={PAD_BUTTON.south} label="Boost (hold)" caption="Boost" className="col-start-1 row-start-3">
-              <Zap />
-            </PadButton>
-            <PadButton engine={engine} button={PAD_BUTTON.west} label="Handbrake (hold)" caption="Handbrake" className="col-span-2 col-start-2 row-start-3">
-              <CircleParking />
-            </PadButton>
-          </>
-        ) : null}
-      </div>
-    </div>
-  );
+export function TouchControls(props: HudProps) {
+  return props.state.race !== null && props.state.race.menu !== null ? null : <DriveControls {...props} />;
 }
