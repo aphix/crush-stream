@@ -668,15 +668,15 @@ export class RaceDirector extends RaceHudLayer {
     propContact(car, i, this.solids, this.knocked, this.propHits, h);
   }
 
-  /** End of a physics step of `dt` s, which the world ran on the schedule `shape` (`World.shape`): rules step, deaths, respawns. */
-  step(dt: number, shape: number): void {
+  /** End of a physics step of `dt` s, which the world ran on the schedule `shape` with the lone cars `lone` (`World.shape`, `World.loners`): rules step, deaths, respawns. */
+  step(dt: number, shape: number, lone: number): void {
     const s = this.session;
     if (!s) return;
     const cars = this.host.live();
     if (s.phase === "finished") {
       // Over: the recorder runs on for the last thrown driver's hold (`CrashRecorder.over`), and the reel goes out when it ends.
       if (!this.recorder.on) return;
-      this.recorder.endStep(cars, dt, shape);
+      this.recorder.endStep(cars, dt, shape, lone);
       this.reelIfRecorded();
       return;
     }
@@ -711,7 +711,7 @@ export class RaceDirector extends RaceHudLayer {
     // The units chasing (this slice's start positions; a parked or knocked-out unit never busts anyone).
     s.step(dt, this.poses, this.police?.chasers(this.snaps, this.cops));
     this.credit(s);
-    this.recorder.endStep(cars, dt, shape);
+    this.recorder.endStep(cars, dt, shape, lone);
     if (racing) this.stalls(s);
     this.drain();
     this.bubbleAcc += dt;

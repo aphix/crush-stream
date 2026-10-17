@@ -388,8 +388,9 @@ export class ClipSim {
         d.neutral = (inp[o + 3]! & 8) !== 0;
         applyDrive(cars[j]!, d, h, inp[o + 3]! & 4 ? DRAFT.top : 1);
       }
-      // The schedule the live world ran this step on: it depends on every car in it, the clip's or not.
+      // The schedule the live world ran this step on, and the cars it ran as lone cars: they depend on every car in it, the clip's or not.
       this.world.plan = clip.shape[s]!;
+      this.world.planLoners = clip.lone[s]!;
       stepWorld(this.world, h);
       settleStep(cars, h, clip.bleed);
       this.fire(s);

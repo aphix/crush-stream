@@ -105,7 +105,7 @@ function race(crashAt: { x: number; z: number }, runner: number): Run {
       mask = shown(people);
     }
     trace.push({ mode: Array.from(guard.mode), x: Array.from(guard.guardX), z: Array.from(guard.guardZ), mask });
-    rec.endStep(cars, H, w.world.shape);
+    rec.endStep(cars, H, w.world.shape, w.world.loners);
     settleStep(cars, H, false);
     for (const car of cars) car.updateSkin();
   }

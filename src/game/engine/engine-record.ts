@@ -142,6 +142,8 @@ export class CrashRecorder {
   private readonly inputs = new Uint8Array(RING * MAX_CARS * INPUT_BYTES);
   /** Per ring step: the world's schedule for it (`World.shape`). */
   private readonly shapes = new Uint32Array(RING);
+  /** Per ring step: the cars the world ran as lone cars in it (`World.loners`, bit i: race slot i). */
+  private readonly lones = new Uint32Array(RING);
   /** Every car at the start of the current step (wreck sections only on a keyframe step). */
   private readonly pre: Snapshot = makeSnapshot();
   /** Scratch for one car's flight block (and its bytes) and one wreck's solver state (sized at the first race: `simState`). */
@@ -362,15 +364,16 @@ export class CrashRecorder {
   }
 
   /**
-   * End of a fixed step of `h` s whose world ran the schedule `shape` (`World.shape`): the drive outputs it ran on, engine
+   * End of a fixed step of `h` s whose world ran the schedule `shape` and the lone cars `lone` (`World.shape`, `World.loners`): the drive outputs it ran on, engine
    * kills, any cluster now due, and, once the race is over (`over`), the end when the last throw's hold is recorded.
    */
-  endStep(cars: readonly DeformableCar[], h: number, shape: number): void {
+  endStep(cars: readonly DeformableCar[], h: number, shape: number, lone: number): void {
     if (!this.on) return;
     const n = Math.min(cars.length, MAX_CARS);
     const s = this.step % RING;
     this.h[s] = h;
     this.shapes[s] = shape;
+    this.lones[s] = lone;
     this.at[s] = this.time;
     this.sliceAt[s] = this.sliceCount;
     const inp = this.inputs;
@@ -852,6 +855,7 @@ export class CrashRecorder {
     const nc = slots.length;
     const h = new Float32Array(steps);
     const shape = new Uint32Array(steps);
+    const lone = new Uint32Array(steps);
     const inputs = new Uint8Array(steps * nc * INPUT_BYTES);
     let firstStep = 0;
     for (let s = 0; s < steps; s++) {
@@ -864,6 +868,8 @@ export class CrashRecorder {
         const src = (r * MAX_CARS + slots[j]!) * INPUT_BYTES;
         inputs.set(this.inputs.subarray(src, src + INPUT_BYTES), (s * nc + j) * INPUT_BYTES);
       }
+      const mask = this.lones[r]!;
+      for (let j = 0; j < nc; j++) if (slots[j]! < 32 && (mask >>> slots[j]!) & 1) lone[s]! |= 1 << j;
     }
     // Keyframes: the clip's start with every clip car, then each step after it that put some of them on a spot, with those cars.
     const placedKeys: number[] = [];
@@ -943,6 +949,7 @@ export class CrashRecorder {
       cars,
       h,
       shape,
+      lone,
       inputs,
       keyStep: Uint32Array.from(keyStep),
       keyCars: Uint32Array.from(keyCars),

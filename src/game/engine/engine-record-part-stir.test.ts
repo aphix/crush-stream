@@ -82,7 +82,7 @@ function record(passer: boolean): Recorded {
       applyDrive(car, input, H);
     }
     stepWorld(world, H);
-    rec.endStep(cars, H, world.shape);
+    rec.endStep(cars, H, world.shape, world.loners);
     settleStep(cars, H, false);
     if (cars.length > PASSER) {
       const p = cars[PASSER]!.group.position;

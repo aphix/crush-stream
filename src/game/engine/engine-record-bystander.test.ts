@@ -105,7 +105,7 @@ function record(): Recorded {
       applyDrive(car, input, H);
     }
     stepWorld(world, H);
-    rec.endStep(cars, H, world.shape);
+    rec.endStep(cars, H, world.shape, world.loners);
     settleStep(cars, H, false);
     trace.push(Float64Array.from(cars.flatMap((c) => c.group.position.toArray())));
     t += H;
@@ -254,7 +254,7 @@ function recordStack(): Recorded {
       applyDrive(car, input, H);
     }
     stepWorld(world, H);
-    rec.endStep(cars, H, world.shape);
+    rec.endStep(cars, H, world.shape, world.loners);
     settleStep(cars, H, false);
     trace.push(Float64Array.from(cars.flatMap((c) => c.group.position.toArray())));
   }
@@ -322,7 +322,7 @@ function recordArrival(): Recorded {
       applyDrive(car, input, H);
     }
     stepWorld(world, H);
-    rec.endStep(cars, H, world.shape);
+    rec.endStep(cars, H, world.shape, world.loners);
     settleStep(cars, H, false);
     trace.push(Float64Array.from(cars.flatMap((c) => c.group.position.toArray())));
   }

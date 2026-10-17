@@ -93,7 +93,7 @@ function record(keyStep: number): Recorded {
       applyDrive(car, input, H);
     }
     stepWorld(world, H);
-    rec.endStep(cars, H, world.shape);
+    rec.endStep(cars, H, world.shape, world.loners);
     settleStep(cars, H, false);
     trace.push(looseBodies(parked));
   }

@@ -52,7 +52,7 @@ function record(strikes: typeof STRIKES, crash: boolean, rec = new CrashRecorder
     rec.startStep(cars);
     for (const x of strikes) if (x.step === s) rec.strike(Object.assign(scratch, figure(x.guard, x.car, x.x)));
     stepWorld(w.world, H);
-    rec.endStep(cars, H, w.world.shape);
+    rec.endStep(cars, H, w.world.shape, w.world.loners);
     settleStep(cars, H, false);
     for (const car of cars) car.updateSkin();
   }

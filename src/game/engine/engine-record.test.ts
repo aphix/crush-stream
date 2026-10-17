@@ -53,7 +53,7 @@ describe(`given the highlight recorder fed a ${MAX_CARS}-car race with a third o
       rec.startStep(cars);
       for (let i = 0; i + 1 < MAX_CARS; i += 2) rec.pairHit(i, i + 1, grind);
       rec.wallHit(5, 1, 0, 0);
-      rec.endStep(cars, H, 0);
+      rec.endStep(cars, H, 0, 0);
     };
     for (let s = 0; s < WARM; s++) step();
     // Read the heap once a recorded second (`memoryUsage` allocates its own result), positive deltas only.
@@ -127,7 +127,7 @@ function firstImpacts(racers: readonly number[]): number[][][] {
     if (s === 2 * 240) for (const rec of recs) rec.wallHit(WALLER, 40, 30, z + LANE);
     for (const car of cars) applyDrive(car, input, H);
     stepWorld(world, H);
-    for (const rec of recs) rec.endStep(cars, H, world.shape);
+    for (const rec of recs) rec.endStep(cars, H, world.shape, world.loners);
     settleStep(cars, H, false);
   }
   return recs.map((rec) => {
@@ -187,7 +187,7 @@ describe("given a racer that hits a cop, and the cop being destroyed later", () 
         rec.startStep(cars);
         if (s === 0) rec.pairHit(0, 2, hit);
         if (s === Math.round(killAt / H)) cars[2]!.deform.drivetrainAlive = false;
-        rec.endStep(cars, H, 0);
+        rec.endStep(cars, H, 0, 0);
       }
       return { open: rec.ledger.open.length, kills: rec.ledger.open.reduce((n, c) => n + c.kills, 0) };
     };
@@ -273,7 +273,7 @@ describe("given a crashed car the recorder tracks, whose engine is then killed f
     rec.begin("oval", HANDLING.realism, false, 2, (i) => `c${i}`, 1);
     for (let s = 0; s < 5; s++) {
       rec.startStep(cars);
-      rec.endStep(cars, H, 0);
+      rec.endStep(cars, H, 0, 0);
     }
     assert.equal(rec["strainCar"][0], cars[0], "the wreck's strain baseline is held");
     assert.equal(rec["keyCount"], 1, "one keyframe (the first step's)");

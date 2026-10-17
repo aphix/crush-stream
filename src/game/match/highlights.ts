@@ -646,6 +646,11 @@ export type HighlightClip = {
    * the world sets it, the ones outside the clip too (a pair hit anywhere keeps the passes going), so the replay runs it as recorded.
    */
   shape: Uint32Array;
+  /**
+   * Per step: the clip's cars the live world ran as lone cars in it (`World.loners`, bit j: `cars[j]`): a car nothing was in reach of ran the step as one slice
+   * (`stepWorld`), which depends on every car of the race, the clip's or not, so the replay runs it as recorded.
+   */
+  lone: Uint32Array;
   /** Per step × car: `INPUT_BYTES`. */
   inputs: Uint8Array;
   /**

@@ -158,7 +158,7 @@ export function recordFlat(spawns: readonly Spawn[], seconds: number, derby: boo
       stepWorld(world, h);
       // A guard's gunfire (`LawnGuard.step`, after the world, ahead of the recorder's end of step): the car's engine dies from outside the crash sim.
       if (shot && rec.now >= shot.at && cars[shot.car]!.kills === 0) cars[shot.car]!.disable();
-      rec.endStep(cars, h, world.shape);
+      rec.endStep(cars, h, world.shape, world.loners);
       settleStep(cars, h, false);
       acc -= h;
     }

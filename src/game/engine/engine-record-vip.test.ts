@@ -109,7 +109,7 @@ async function race(secretOut: boolean): Promise<Run> {
       rec.eject(e);
       if (ejectedAt < 0) ejectedAt = s;
     }
-    rec.endStep(cars, H, w.world.shape);
+    rec.endStep(cars, H, w.world.shape, w.world.loners);
     settleStep(cars, H, false);
     if (s % FRAME_STEPS !== FRAME_STEPS - 1) continue;
     vip.frame(FRAME, secretOut, 0, cars, throwPassenger, () => {});

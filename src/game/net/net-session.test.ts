@@ -714,7 +714,8 @@ describe("given a guest whose host sends the highlight reel", () => {
     const noise = (n: number): Uint8Array => Uint8Array.from({ length: n }, () => next() >>> 24);
     const steps = 8000;
     const shape = Uint32Array.from({ length: steps }, () => next() >>> 13);
-    const big = { ...clip, h: new Float32Array(steps).fill(1 / FINE_HZ), shape, inputs: noise(steps * 2 * INPUT_BYTES) };
+    const lone = Uint32Array.from({ length: steps }, () => (next() >>> 24) & 3);
+    const big = { ...clip, h: new Float32Array(steps).fill(1 / FINE_HZ), shape, lone, inputs: noise(steps * 2 * INPUT_BYTES) };
     const clips = [big, { ...big, score: 9 }, { ...big, score: 8 }, { ...big, score: 7 }, { ...big, score: 6 }];
     const msg = await packReel({ seed: 5, clips }, s.clock() / 1000 + 3);
     assert.ok(msg.length > RELAY_MSG_MAX, `precondition: the reel is ${msg.length} bytes, over the cap`);
