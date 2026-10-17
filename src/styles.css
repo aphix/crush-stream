@@ -85,6 +85,47 @@
     0 0 8px rgb(0 0 0 / 0.5);
 }
 
+/*
+ * The phone HUD's edges. Every piece that sits at the screen's edge (thumb controls, the top strip, read-outs, sheets' Back) is
+ * `absolute` inside `.hud-grid` (which covers the screen) and takes its offset from one of these four, so a notch, a rounded
+ * corner or the home-indicator bar is never under a control: the larger of the HUD's own margin and the safe-area inset.
+ */
+:root {
+  --hud-edge: 0.75rem;
+}
+@utility hud-top {
+  top: max(var(--hud-edge), env(safe-area-inset-top));
+}
+@utility hud-bottom {
+  bottom: max(var(--hud-edge), env(safe-area-inset-bottom));
+}
+@utility hud-left {
+  left: max(var(--hud-edge), env(safe-area-inset-left));
+}
+@utility hud-right {
+  right: max(var(--hud-edge), env(safe-area-inset-right));
+}
+
+/*
+ * Calm: while the player drives, `.hud-grid` carries `data-calm` once nothing has changed for a few seconds (`hud-collapse.ts`).
+ * `calm:` classes fade what is only to be read (read-outs, the title) so the road is all there is; a pass, a lap, a crash or a tap
+ * on the top strip clears it. Opacity only, so it is a fade, never a pop; reduced motion makes it instant (the rule below).
+ */
+@custom-variant calm (.hud-grid[data-calm] &);
+@utility hud-fade {
+  transition: opacity 350ms var(--ease-out);
+}
+
+/* A sheet (`sheet.tsx`): fades in over the live view. */
+@keyframes hud-sheet-in {
+  from {
+    opacity: 0;
+  }
+}
+@utility hud-sheet-in {
+  animation: hud-sheet-in var(--motion-quick) var(--ease-out) both;
+}
+
 /* The race drive cluster (race-gauge.tsx): one size var, so the dial scales with the window height (a 768 px window gets a smaller dial); the bottle is sized in em of it. */
 .drive-cluster {
   --g: clamp(10rem, 25dvh, 18rem);
