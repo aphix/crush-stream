@@ -148,7 +148,7 @@ export function GaragePanel({ garage, playerCar, engine }: { garage: GarageHud; 
         <div className={cn("pointer-fine:space-y-1 pointer-coarse:gap-1", spray.on ? "pointer-coarse:grid pointer-coarse:grid-cols-1" : "pointer-coarse:hidden")}>
           {size}
           {/* Phone-landscape: one row of 44 px swatches that scrolls sideways (the strip is 13 rem wide); else the 8-column grid. */}
-          <div className="grid grid-cols-8 gap-0.5 px-1 phone-landscape:flex phone-landscape:snap-x phone-landscape:overflow-x-auto phone-landscape:overscroll-x-contain" role="group" aria-label="Spray colour">
+          <div className="grid grid-cols-8 gap-0.5 px-1 portrait:pointer-coarse:grid-cols-7 phone-landscape:flex phone-landscape:snap-x phone-landscape:overflow-x-auto phone-landscape:overscroll-x-contain" role="group" aria-label="Spray colour">
             {SPRAY_PALETTE.slice(1).map((c, k) => (
               <button
                 key={c}
