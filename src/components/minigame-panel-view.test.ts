@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { INITIAL_HUD } from "../game/hud/hud-store.ts";
 import { MINIGAME_MODES, MODE_LABELS, THROWS_PER_SET } from "../game/scenes/minigame-constants.ts";
 import type { MinigameHudState } from "../game/scenes/minigame-session.ts";
-import { minigamePanelView } from "./minigame-panel-view.ts";
+import { minigamePanelCompact, minigamePanelView } from "./minigame-panel-view.ts";
 
 const LONG_JUMP_READY: MinigameHudState = {
   mode: "longJump",
@@ -195,4 +195,37 @@ describe("given a long jump with its bail", () => {
       assert.equal(view.bailResult, testCase.expectedResult, "result");
     });
   }
+});
+
+describe("given the card on a touch screen", () => {
+  const underWayPhases = ["ready", "running", "thrown"] as const;
+  for (const phase of underWayPhases) {
+    it(`when the attempt is ${phase} and the player has not touched More, then the card is compact`, () => {
+      assert.equal(minigamePanelCompact(phase, false), true);
+    });
+    it(`when the attempt is ${phase} and the player taps More, then the card opens`, () => {
+      assert.equal(minigamePanelCompact(phase, true), false);
+    });
+  }
+
+  it("when the attempt is scored and the player has not touched More, then the card is open for Retry", () => {
+    assert.equal(minigamePanelCompact("scored", false), false);
+  });
+
+  it("when the attempt is scored and the player taps More, then the card collapses again", () => {
+    assert.equal(minigamePanelCompact("scored", true), true);
+  });
+});
+
+describe("given a long jump whose bail is armed", () => {
+  const BAILING: MinigameHudState = { ...LONG_JUMP_READY, bail: { pressed: false, verdict: null } };
+
+  it("when the verdict is in but the phase is still running, then the prompt is gone", () => {
+    const state: MinigameHudState = { ...BAILING, phase: "running", bail: { pressed: true, verdict: { kind: "perfect", offsetSeconds: 0, quality: 1 } } };
+    assert.equal(minigamePanelView(state, KEYBOARD_CONTROL).bailPrompt, null);
+  });
+
+  it("when the phase is thrown with no verdict yet, then the prompt is gone", () => {
+    assert.equal(minigamePanelView({ ...BAILING, phase: "thrown" }, KEYBOARD_CONTROL).bailPrompt, null);
+  });
 });
