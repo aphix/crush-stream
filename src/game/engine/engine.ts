@@ -698,6 +698,7 @@ export class CrashEngine extends EngineGarage {
     w.pairHit = this.pairHit;
     w.partTouch = this.partTouch;
     w.collide = this.collide;
+    w.lone = this.race.active;
     if (!this.race.active && !this.showLab) this.syncRigs();
     this.ejection.ctx = this.derbyMode ? "derby" : "default";
     w.fine = this.pace.fine;
@@ -720,7 +721,7 @@ export class CrashEngine extends EngineGarage {
     }
     const bailed = this.minigameMode === MINIGAME_MODE.longJump ? this.minigames.bailThrowDue(this.elapsedSim + dt) : null;
     if (bailed !== null) this.throwDriver(bailed.event, cars, bailed.release);
-    if (this.race.active) this.race.step(dt, w.shape);
+    if (this.race.active) this.race.step(dt, w.shape, w.loners);
 
     const { impulse, contact, normal } = w.strongest;
     // The Lab's crash is its throw's first contact (`Lab.shot`): a stack settling before any throw is no crash.

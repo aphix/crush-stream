@@ -137,9 +137,22 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
   };
 
   describe(title, () => {
-    before(() => staging(stage));
+    // A staging that throws (a field with no clip, a harness that ran nothing) would only cancel the rows, which node:test counts as neither passed nor failed: every row starts with `staged()`, so each fails with the staging's own error instead.
+    let stagingError: unknown = null;
+    before(async () => {
+      try {
+        await staging(stage);
+      } catch (e) {
+        stagingError = e;
+      }
+    });
+    const staged = (): void => {
+      if (stagingError) throw stagingError;
+      assert.ok(views.length > 0, "the staging played no clip: nothing to judge");
+    };
 
     it("when each clip plays through the reel's cameras, then at every first impact, later hit of its scope, thrown driver and take-off the moment's point is inside the frame with a margin, no wall or building stands on the line to it, and the subject is not tiny", (t) => {
+      staged();
       const kinds = new Map<string, [number, number]>();
       for (const v of views) {
         const k = kinds.get(v.kind) ?? [0, 0];
@@ -158,6 +171,7 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
     });
 
     it("when each clip plays behind the results sheet and the standings list (a desktop side panel, a phone's side panel in landscape, its bottom sheet in portrait), then at every first impact, later hit, thrown driver and take-off the moment's point is in the frame with the margin and clear of both panels by it, unblocked, and not tiny", (t) => {
+      staged();
       const missed: string[] = [];
       for (const [i, { name }] of LAYOUTS.entries()) {
         const seen = covered[i]!.filter((v) => v.seen).length;
@@ -172,6 +186,7 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
     });
 
     it("when a hit of a clip's scope comes after its camera changed, then the earlier impact's point is still in the frame at that hit, so the viewer keeps the place", (t) => {
+      staged();
       const later = views.filter((v) => v.kind === "hit");
       const cuts = later.filter((v) => v.back?.cut);
       const lost = cuts.filter((v) => !v.back!.inFrame);
@@ -182,6 +197,7 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
     });
 
     it("when each clip plays, then its slow-mo holds 6.3 s of wall clock past the cars meeting and 7.3 s past each driver thrown while it runs, every hold plays out in full before the clip ends, it hands back to 1× when the last of those is up, and a driver thrown after that plays at 1×", (t) => {
+      staged();
       const held = views.filter((v) => v.kind !== "takeoff" && v.kind !== "hit" && v.at >= v.hitAt);
       const key = (v: MomentView): string => `${v.scene}|${v.title}|${v.hitAt}`;
       // The hand-back each clip owes, from its moments in order (wall s into the clip).

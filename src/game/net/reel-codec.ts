@@ -208,9 +208,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 109: a wreck on or against a solid prism (a derby tyre stack, K-rail or wall) is no longer pushed out of its whole plan overlap in one slice: the footprint's over and sunk shoves are capped at the wreck's own arrival into the face plus the push-out speed, masses
  * standing within a skin of the top are not held on the face, and a landing stops the wreck's masses' fall with its body's (it was shoved 0.4-1 m in a slice). A wreck lying on its roof takes no world-vertical part from the seat step (it sank into the floor at up to 0.28 m/s):
  * a replay of a clip of 108 or before moves a wreck at a prism or on its roof differently.
+ * 110: a step cut to fine slices for contact cuts only the cars in contact: a car with no hit about to land, no crush running, no body contact and no other car within 5.3 m (7.07 m of a sleeping wreck) + 1 m + both cars' travel over the step runs the step as one
+ * slice of its whole length (`World.loners`), as a car of a quiet step does, instead of 3 slices at 1/240 s; a clip carries each step's lone cars (`HighlightClip.lone`, after the step schedule) and a replay runs them as recorded: a clip of 109 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 109;
+const REPLAY_VERSION = 110;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
@@ -236,11 +238,21 @@ const VIP_EVENT_BYTES = 4 + 1;
 /** A clip's scope hit: its time (f64), position (3 x f32) and cars (2 x u8). */
 const HIT_BYTES = 8 + 4 + 4 + 4 + 2;
 
+/** One lone step on the wire: its step (u16) and its mask (u32). */
+const LONE_BYTES = 6;
+
+/** The steps of `c` that ran lone cars. */
+function loneSteps(c: HighlightClip): number {
+  let n = 0;
+  for (const m of c.lone) if (m !== 0) n++;
+  return n;
+}
+
 /** Exact encoded size of `clip` (`writeClip`). */
 export function clipBytes(c: HighlightClip): number {
   const nc = c.cars.length;
   let n = 1 + utf8(c.trackId) + 91 + c.cars.reduce((a, car) => a + 4 + utf8(car.name), 0);
-  n += 4 + c.h.length * (8 + nc * INPUT_BYTES) + 2;
+  n += 4 + c.h.length * (8 + nc * INPUT_BYTES) + 2 + 2 + loneSteps(c) * LONE_BYTES;
   for (const k of c.keys) n += 12 + k.length;
   const squad = c.squad ? 1 + c.squad.state.length * 4 + 2 + c.squad.events.length * SQUAD_EVENT_BYTES : 1;
   const vip = 2 + c.vip.events.length * VIP_EVENT_BYTES;
@@ -283,6 +295,12 @@ export function writeClip(w: Writer, c: HighlightClip): void {
   // Each step's dt as the recorder's ring holds it (float32): whole microseconds moved a 2 x 20 m/s head-on's wreck 8 mm and its crush 10 mm.
   for (const h of c.h) w.f32(h);
   for (const s of c.shape) w.u32(s);
+  w.u16(loneSteps(c));
+  for (let s = 0; s < c.lone.length; s++) {
+    if (c.lone[s] === 0) continue;
+    w.u16(s);
+    w.u32(c.lone[s]!);
+  }
   w.bytes.set(c.inputs, w.off);
   w.off += c.inputs.length;
   w.u16(c.keys.length);
@@ -421,6 +439,17 @@ export function readClip(r: Reader, L: NetLayout): HighlightClip {
     shape[s] = r.u32();
     if (shape[s]! >>> 19 !== 0) throw new RangeError("clip step shape");
   }
+  // The steps that ran lone cars (`World.loners`), each with its mask: bit j the clip's car j, so none above the clip's cars. A step in one slice and a step with none lone are left out.
+  const lone = new Uint32Array(steps);
+  const nl = r.u16();
+  if (nl > steps) throw new RangeError("clip lone steps");
+  for (let k = 0, last = -1; k < nl; k++) {
+    const s = r.u16();
+    const m = r.u32();
+    if (s <= last || s >= steps || m === 0 || (nc < 32 && m >>> nc !== 0)) throw new RangeError("clip step lone cars");
+    lone[s] = m;
+    last = s;
+  }
   const inputs = new Uint8Array(steps * nc * INPUT_BYTES);
   for (let i = 0; i < inputs.length; i++) inputs[i] = r.u8();
   const nk = r.u16();
@@ -542,7 +571,7 @@ export function readClip(r: Reader, L: NetLayout): HighlightClip {
     if (!Number.isFinite(t) || a >= nc || b >= nc || (k > 0 && t < hits[k - 1]!.t)) throw new RangeError("clip hit");
     hits.push({ t, x: hx, y: hy, z: hz, a, b });
   }
-  return { trackId, score, impacts, kills, ejects, hit, ejections, knocks, stirs, partStirs, strikes, squad, vip, peakKph, hitKph, deform, hits, t0, firstImpact, lastImpact, firstStep, x, z, focus, firstA, firstB, realism, bleed, squash, buckle, deformMode, look, cars, h, shape, inputs, keyStep, keyCars, keys };
+  return { trackId, score, impacts, kills, ejects, hit, ejections, knocks, stirs, partStirs, strikes, squad, vip, peakKph, hitKph, deform, hits, t0, firstImpact, lastImpact, firstStep, x, z, focus, firstA, firstB, realism, bleed, squash, buckle, deformMode, look, cars, h, shape, lone, inputs, keyStep, keyCars, keys };
 }
 
 /** A clip's squad block (`squadBytes`); throws RangeError on one that names a guard, a car or a step the clip has not. */

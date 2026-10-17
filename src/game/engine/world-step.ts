@@ -7,7 +7,7 @@ import { bandsMeet } from "../contact/cage-outline.ts";
 import type { EjectionWatch } from "../vehicle/ejection.ts";
 import { armCrushRows } from "../vehicle/car-air.ts";
 import { contactHz } from "../vehicle/car-air-points.ts";
-import { CarSurfaces } from "../vehicle/car-surfaces.ts";
+import { CarSurfaces, REACH } from "../vehicle/car-surfaces.ts";
 import { armTops } from "../world/surfaces.ts";
 import { STOCK_PAINT } from "../vehicle/constants.ts";
 import { FINE_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
@@ -63,6 +63,12 @@ export type World = {
    * Empty live (`DeformableCar.stirredBodies` says which slices woke each) and where a clip records none.
    */
   partStirs: number[];
+  /** The scene lets a car with nothing in its reach run the step as one slice of the step's whole length (`loneCars`): the race. Off, every car runs the step's slices (a derby bowl and the slab hold a car per slice). */
+  lone: boolean;
+  /** The cars the last `stepWorld` ran as lone cars (bit i: `cars[i]`, the first 32): the recorder keeps it (`HighlightClip.lone`), next to `shape`. */
+  loners: number;
+  /** A recorded `loners` the next `stepWorld` runs to the letter (a highlight replay, with `plan`). */
+  planLoners: number;
   /** The slice (s) the pacer's 1/240 s floor takes now (`SimPacer.fine`), which a step in contact is cut to; 0 where no pacer steps the world (a harness: contact is cut to `FINE_SLICE`; a replay: the recorded `shape` decides). */
   fine: number;
   /** Steps in contact that `stepWorld` ran in more slices than a step of that length out of contact takes (1, or 2 for a step longer than the quiet step), counted up for ever where `fine` is set (the bench reads differences). */
@@ -78,6 +84,9 @@ export function newWorld(cars: readonly DeformableCar[], barrier: JerseyBarrier 
     barrierHits: [],
     strongest: new StrongestContact(),
     beforeSlice: null,
+    lone: false,
+    loners: 0,
+    planLoners: 0,
     pairHit: null,
     partTouch: null,
     afterCar: null,
@@ -104,6 +113,24 @@ const NEAR_PAIR2 = 64;
 /** Pairs the slice visits, as car index pairs (a, b), a < b, in the order a plain double loop would reach them.
  *  A module scratch like the file's other per-step temporaries; `collectNear` grows it when a field outgrows it. */
 const near = { pairs: new Int32Array(2 * 496) };
+
+/** Cars the lone mask names (a `Uint32`'s width). */
+const LONE_CARS = 32;
+/**
+ * Plan distance (m) within which the slice's contact passes read a pair of cars: `partContactPair`'s and `resolveCarPair`'s reach (28 m^2 of plan, 5.29 m).
+ * A hard approach inside the look-ahead is `nearHit` (`markApproach`), a car that touches something `contactHz`; this is the distance of the rest.
+ */
+export const CONTACT_REACH = 5.3;
+/** A sleeping wreck wakes when a car's top box is over its `REACH` square (`stirNear`): up to `REACH` + `REACH` per axis, the diagonal of it between centres (m). */
+const WAKE_REACH = 2 * Math.SQRT2 * REACH;
+/**
+ * Slack (m) added to a car's reach over the step in the lone test: the capped pushes a slice's contacts may give a car (`PUSH_SPEED` 1 m/s
+ * of a 1/80 s step, 1.3 cm) and a drive's acceleration over the step are a few cm; a metre is far more than both, so a car meeting
+ * another one inside the step is never run as lone.
+ */
+export const LONE_MARGIN = 1;
+/** Per car, a module scratch: its plan speed (m/s) at the step's start, and whether it runs the step as a lone car (1). */
+const lonely = { speed: new Float64Array(LONE_CARS), flag: new Uint8Array(LONE_CARS) };
 
 /** Fills `near.pairs` with the pairs of `cars` within `NEAR_PAIR2` of each other in plan; the count of ints written. */
 function collectNear(cars: readonly DeformableCar[]): number {
@@ -138,6 +165,49 @@ function carsInReach(cars: readonly DeformableCar[]): boolean {
   return false;
 }
 
+/** `lonely`'s rows hold `n` cars. */
+function growLonely(n: number): void {
+  if (lonely.flag.length >= n) return;
+  lonely.speed = new Float64Array(n);
+  lonely.flag = new Uint8Array(n);
+}
+
+/**
+ * The cars of `cars` that nothing can reach this step, as a mask (bit i: `cars[i]`, the first `LONE_CARS`): each runs the step as one slice of its
+ * whole length (`stepWorld`), the length a quiet step takes every car at, where the slices of a step in contact are for the cars in it. A car is
+ * in the step's contact, so not lone, when a hit is about to land on it (`nearHit`: the course's solids and the pairs, `markApproach`), when its
+ * crush runs on (`crushing`), when its body touches something (`contactHz`), and when another car is within `CONTACT_REACH` m of it in plan (what the
+ * pair pass and the part contacts read; `WAKE_REACH` where one is a sleeping wreck, which a mover's top wakes) plus the two cars' travel over the step and
+ * `LONE_MARGIN`: at any time of the step, whatever slice each car is at, no other car is nearer than that. A lone car meets the course as a car of
+ * a quiet step does (the hard approaches are `nearHit`).
+ */
+function loneCars(cars: readonly DeformableCar[], dt: number): number {
+  const n = cars.length;
+  growLonely(n);
+  const { speed, flag } = lonely;
+  for (let i = 0; i < n; i++) {
+    const car = cars[i]!;
+    const v = car.velocity;
+    speed[i] = Math.sqrt(v.x * v.x + v.z * v.z);
+    flag[i] = car.nearHit || car.deform.crushing || contactHz(car) > 0 ? 0 : 1;
+  }
+  for (let a = 0; a < n; a++) {
+    const pa = cars[a]!.group.position;
+    for (let b = a + 1; b < n; b++) {
+      const pb = cars[b]!.group.position;
+      const dx = pa.x - pb.x;
+      const dz = pa.z - pb.z;
+      const reach = (cars[a]!.asleep || cars[b]!.asleep ? WAKE_REACH : CONTACT_REACH) + LONE_MARGIN + (speed[a]! + speed[b]!) * dt;
+      if (dx * dx + dz * dz > reach * reach) continue;
+      flag[a] = 0;
+      flag[b] = 0;
+    }
+  }
+  let mask = 0;
+  for (let i = 0; i < Math.min(n, LONE_CARS); i++) if (flag[i]) mask |= 1 << i;
+  return mask >>> 0;
+}
+
 /**
  * One fixed step of the world (`dt` from `physicsSlice`), split into 1–8 slices: integrate or pose, part contact, one pass over the
  * slice's contacts (slab, car pairs), then the structure step, slab clip and `afterContacts` per car. The pair loops visit the
@@ -160,8 +230,11 @@ export function stepWorld(w: World, dt: number): void {
     }
   }
   let slices: number;
-  if (w.plan >= 0) slices = (w.plan & 7) + 1;
-  else {
+  let mask = 0;
+  if (w.plan >= 0) {
+    slices = (w.plan & 7) + 1;
+    mask = w.planLoners;
+  } else {
     // Contact (the barrier's reach, a car in reach, a hit about to land: the pairs are marked here, the solids by the course's collide pass of the step before) is solved in slices of the pacer's fine floor (`fine`, `FINE_SLICE` where none is set), whatever the step: one law for a hit at the quiet step and at the 1/240 s one. A step is solved at the rate a car in it asks for (`contactHz`): a body in flight touching something.
     if (w.fine > 0) {
       const count = collectNear(cars);
@@ -180,9 +253,15 @@ export function stepWorld(w: World, dt: number): void {
     slices = contact ? cut : quiet;
     if (dt * hz > slices + 1e-6) slices = Math.min(8, Math.ceil(dt * hz - 1e-6));
     if (contact && w.fine > 0 && slices > quiet) w.fineCuts++;
+    // A lone car's one slice is the step: no cut to ask when every slice is one (`slices` 1).
+    if (w.lone && !barrier && slices > 1) mask = loneCars(cars, dt);
   }
   // Read once: this step's collide passes mark the next.
   for (let i = 0; i < n; i++) cars[i]!.nearHit = false;
+  w.loners = mask;
+  // Per car, whether it runs the step as a lone car: it takes the step whole in slice 0 and stands out of the rest.
+  growLonely(n);
+  for (let i = 0; i < n; i++) lonely.flag[i] = i < LONE_CARS ? (mask >>> i) & 1 : 0;
   const h = dt / slices;
   strongest.clear();
   // Every roof stands where its car's state puts it as the step begins: a car stepped before its neighbour reads that neighbour's roof, which a keyframe does not hold.
@@ -207,8 +286,10 @@ export function stepWorld(w: World, dt: number): void {
     w.surfaces.cars = cars;
     w.surfaces.met = w.partTouch;
     for (let ci = 0; ci < n; ci++) {
+      if (i > 0 && lonely.flag[ci]) continue;
       const car = cars[ci]!;
-      car.deform.beginSlice(h);
+      const hc = lonely.flag[ci] ? dt : h;
+      car.deform.beginSlice(hc);
       car.surfaces = w.surfaces;
       car.slot = ci;
       // A wreck is its rigid body's: `integrate` steps the body and carries its masses.
@@ -220,10 +301,10 @@ export function stepWorld(w: World, dt: number): void {
       const sleeper = wreck && car.asleep && car.velocity.lengthSq() + car.angular.lengthSq() === 0;
       const slot = car.asleep ? WORK.asleepCarSlices : wreck ? WORK.wreckCarSlices : WORK.liveCarSlices;
       work[slot] = work[slot]! + 1;
-      car.integrate(h);
+      car.integrate(hc);
       if (sleeper && !car.asleep) car.stirSlice = i;
       if (!wreck) {
-        if (car.deform.massActive) car.syncPose(h);
+        if (car.deform.massActive) car.syncPose(hc);
         else car.refreshBasis();
       }
       lap(ph, wreck ? PHASE.wreck : PHASE.integrate);
@@ -231,7 +312,7 @@ export function stepWorld(w: World, dt: number): void {
     // Every roof moves to where its car now is once all the cars have stepped: each car stepped against the roofs as the slice began,
     // whichever order the list has them in. Synced as each car stepped, the cars after it read its new roof and those before it its
     // old one, and a mirror-symmetric 150 km/h head-on came out 10.6 mm apart by which car was first.
-    for (let ci = 0; ci < n; ci++) w.surfaces.sync(ci, cars[ci]!);
+    for (let ci = 0; ci < n; ci++) if (i === 0 || !lonely.flag[ci]) w.surfaces.sync(ci, cars[ci]!);
 
     const pairs = collectNear(cars);
     const nearList = near.pairs;
@@ -255,6 +336,7 @@ export function stepWorld(w: World, dt: number): void {
     // One pass over the slice's contacts: the barrier, then every near pair through the one kernel, then the barrier's clip; accuracy
     // comes from the slice (substeps, `CONTACT_HZ`), not from passes over it.
     for (let ci = 0; ci < n; ci++) {
+      if (i > 0 && lonely.flag[ci]) continue;
       const car = cars[ci]!;
       if (car.deform.massActive) car.syncPose(0);
       else car.refreshBasis();
@@ -286,25 +368,27 @@ export function stepWorld(w: World, dt: number): void {
     // The pair pass moved the wrecks' masses (a tilted wreck's frame jumped 0.35 m in one re-measure): their pose and velocity are derived
     // from them now, before the structure step reads them, as the second pass's start did (the mixed fleet's column read a wreck at
     // -7.4 m/s against its masses' -2.8 without it: stack-column 'owner's drops').
-    for (let ci = 0; ci < n; ci++) if (cars[ci]!.deform.massActive) cars[ci]!.syncPose(0);
+    for (let ci = 0; ci < n; ci++) if (cars[ci]!.deform.massActive && (i === 0 || !lonely.flag[ci])) cars[ci]!.syncPose(0);
     armCrushRows(h);
     lap(ph, PHASE.pairs);
 
     for (let ci = 0; ci < n; ci++) {
+      if (i > 0 && lonely.flag[ci]) continue;
       const car = cars[ci]!;
-      if (car.deform.massActive) car.deform.stepStructure(h, car.group.quaternion);
-      if (car.deform.massActive) car.syncPose(h);
+      const hc = lonely.flag[ci] ? dt : h;
+      if (car.deform.massActive) car.deform.stepStructure(hc, car.group.quaternion);
+      if (car.deform.massActive) car.syncPose(hc);
       if (barrier) barrier.clip(car);
-      car.afterContacts(h);
-      w.afterCar?.(car, h);
+      car.afterContacts(hc);
+      w.afterCar?.(car, hc);
     }
     lap(ph, PHASE.structure);
-    if (w.collide) for (let ci = 0; ci < n; ci++) w.collide(cars[ci]!, ci, h);
+    if (w.collide) for (let ci = 0; ci < n; ci++) if (i === 0 || !lonely.flag[ci]) w.collide(cars[ci]!, ci, lonely.flag[ci] ? dt : h);
     lap(ph, PHASE.course);
-    for (let ci = 0; ci < n; ci++) cars[ci]!.deform.endSlice();
+    for (let ci = 0; ci < n; ci++) if (i === 0 || !lonely.flag[ci]) cars[ci]!.deform.endSlice();
     // A step's last slice is baked by its caller (`stepBreakage`); the slices before it take their own, so the next slice reads the body
-    // as this one's crush left it, not as the step began (a hit cut in two slices crushed what its first slice did not see).
-    if (i < slices - 1) for (let ci = 0; ci < n; ci++) cars[ci]!.bakeBetweenSlices(h);
+    // as this one's crush left it, not as the step began (a hit cut in two slices crushed what its first slice did not see). A lone car's one slice is its last.
+    if (i < slices - 1) for (let ci = 0; ci < n; ci++) if (!lonely.flag[ci]) cars[ci]!.bakeBetweenSlices(h);
     lap(ph, PHASE.bake);
   }
   w.ejection?.step(cars, dt);

@@ -148,6 +148,7 @@ export function makeWorld(survivalCourse?: unknown, tracks?: Map<string, Track>)
     w.onPairContact?.(a, b);
   };
   step.partTouch = race.partTouch;
+  step.lone = true;
   return w;
 }
 
@@ -160,7 +161,7 @@ function fixedStep(w: World, dt: number): void {
     w.ejections.push(e);
     w.race.recorder.eject(e);
   }
-  w.race.step(dt, w.step.shape);
+  w.race.step(dt, w.step.shape, w.step.loners);
 }
 
 /**

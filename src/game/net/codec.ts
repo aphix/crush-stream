@@ -55,8 +55,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 25: a car's snapshot record carries its wheelspin byte after the meter, so a 24 peer would read the pose one byte early.
 26: one hosting flow for every game: the lobby's game kinds gain "campaign" (the host's course playlist rides the start gate, `gate.playlist`, with the course Go starts, `gate.course`), a race message carries the seconds left before a campaign moves on from its results (`next`), and public rooms of all four games are named `pub-<kind>-v<N>-…`; peers on 25 would refuse the gate of a campaign lobby and show no between-rounds clock.
 27: `MSG.race` carries its cars as a shape header (`{ cols, rows }`, not an array of objects), its fractions to the millimetre, and is sent only when its state changed (`raceKey`) and with each keyframe; a client runs the race clock on between messages, so peers on 26 would read no cars and a clock that jumps.
+28: a reel's clips (`MSG.reel`) carry each step's lone cars after the step schedule (`HighlightClip.lone`, REPLAY 110), so peers on 27 would misread a host's clip.
 */
-export const NET_VERSION = 27;
+export const NET_VERSION = 28;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 58.3 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;

@@ -60,7 +60,7 @@ The card's `simMsPerSimS` is one number; `result.phases` says where it went, so 
 |---|---|---|
 | `drive` | the slice's start to `stepWorld` (`engine.ts` `slice`, `fixedStep`) | pose blend begin, every car's input: the race AI, police and traffic `think`s, the seat, netplay's drive, a wreck's coast, rig sync |
 | `plan` | `stepWorld`'s start to its first slice (`world-step.ts`) | roof surfaces, near pairs (`collectNear`, `markApproaches`, `carsInReach`), the slice count, the cars' surface sync |
-| `integrate` | per car, per slice: `beginSlice` to its pose refresh | a car on its drive's law: `integrate`, `syncPose` / `refreshBasis` (also the slice a rig steps itself) |
+| `integrate` | per car, per slice: `beginSlice` to its pose refresh | a car on its drive's law: `integrate`, `syncPose` / `refreshBasis` (also the slice a rig steps itself). A step cut to fine slices runs a lone car (`loneCars`, [`CONTACT_PARITY.md`](CONTACT_PARITY.md) "Lone cars") once, at the step's length, in its first slice: one lap for it where a car in contact has `slices` |
 | `wreck` | the same window, for a car whose rigid body steps (`deform.massActive`) | `integrateWreck`: the rigid step of crashed cars |
 | `pairs` | after the integrates to `armCrushRows` | roof sync, part contact (`partContactPair`), the barrier, every near pair through `resolveCarPair`, the wrecks' pose sync |
 | `structure` | the structure loop | `stepStructure` (the crush solve), `syncPose`, the barrier's clip, `afterContacts`, `afterCar` |

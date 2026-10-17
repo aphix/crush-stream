@@ -140,6 +140,7 @@ export function makeClip(): { clip: HighlightClip; car: DeformableCar } {
     ],
     h: new Float32Array(steps).fill(1 / FINE_HZ),
     shape: new Uint32Array(steps).map((_, i) => (i % 5 === 0 ? (0b100111 << 3) | 2 : 0b1 << 3)),
+    lone: new Uint32Array(steps).map((_, i) => i % 4),
     inputs: new Uint8Array(steps * 2 * INPUT_BYTES).map((_, i) => (i * 37) & 255),
     keyStep: Uint32Array.of(0, 240),
     keyCars: Uint32Array.of(0b11, 0b10),
@@ -161,6 +162,7 @@ export function sameClip(got: HighlightClip, want: HighlightClip): void {
   }
   assertSameNumbers(got.h, want.h, "step dt");
   assertSameNumbers(got.shape, want.shape, "step schedule");
+  assertSameNumbers(got.lone, want.lone, "step lone cars");
   assertSameNumbers(got.inputs, want.inputs, "inputs");
   assertSameNumbers(got.keyStep, want.keyStep, "keyframe steps");
   assertSameNumbers(got.keyCars, want.keyCars, "keyframe car masks");
