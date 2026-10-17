@@ -15,6 +15,7 @@ import { SETTING_KEY } from "./constants.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
 import { hudSettings, roundCard } from "./bench-card.ts";
 import { INITIAL_HUD, type CrashHudState } from "../hud/hud-store.ts";
+import type { KnobId } from "../hud/knobs.ts";
 
 /** What `runBench` drives: the real engine, by its public face. */
 interface BenchEngine {
@@ -34,6 +35,8 @@ interface BenchEngine {
   advance(seconds: number, opts?: { frameDt?: number; render?: boolean }): void;
   start(): void;
   setFxTier(tier: FxTier): void;
+  /** The Debug slider `id` to `value` (the epicenter arm sets `epi.on` once the race is up: the race setup puts every knob back to its default). */
+  setKnob(id: KnobId, value: number): void;
   setFxAuto(): void;
   /** The Sky setting. */
   setSky(mode: SkyMode): void;
@@ -456,6 +459,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
     const t1 = performance.now();
     parts.race.reseed(BENCH.seed);
     engine.raceCommand({ type: "start" });
+    if (plan.epicenter) engine.setKnob("epi.on", 1);
     setupMs.options = t1 - t0;
     setupMs.start = performance.now() - t1;
     parts.seat.mode = "follow";

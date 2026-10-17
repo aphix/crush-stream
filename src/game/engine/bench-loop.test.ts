@@ -19,13 +19,23 @@ describe("given the race courses of the game", () => {
 });
 
 describe("given one cycle of the benchmark loop", () => {
-  it("when the cycle is listed, then it runs the strip, the city, the biggest course and the National Mall, in that order", () => {
-    assert.equal(cycleOf(false).map((s) => s.id).join(" "), "strip city dam-spine national-mall");
+  it("when the cycle is listed, then it runs the strip, the city, the biggest course and the National Mall, in that order, each map twice: the epicenter activation off, then on", () => {
+    assert.equal(cycleOf(false).map((s) => s.id).join(" "), "strip strip:epi city city:epi dam-spine dam-spine:epi national-mall national-mall:epi");
+  });
+
+  it("when the two steps of a map are read as benches, then they differ in the activation alone", () => {
+    const steps = cycleOf(false);
+    for (let i = 0; i < steps.length; i += 2) {
+      const off = benchPlan(`?${steps[i]!.query}`)!;
+      const on = benchPlan(`?${steps[i + 1]!.query}`)!;
+      assert.deepEqual({ ...off, epicenter: true }, on, steps[i]!.id);
+      assert.equal(off.epicenter, false, steps[i]!.id);
+    }
   });
 
   it("when each step's page query is read as a bench, then every step is a bench the game knows, on the course its name says", () => {
     const plans = cycleOf(false).map((s) => benchPlan(`?${s.query}`)?.id);
-    assert.equal(plans.join(" "), "bench city dam-spine national-mall");
+    assert.equal(plans.join(" "), "bench bench city city dam-spine dam-spine national-mall national-mall");
   });
 
   it("when a bench is asked for a course that does not exist, then it benches the city instead", () => {
@@ -33,9 +43,9 @@ describe("given one cycle of the benchmark loop", () => {
     assert.equal(benchPlan("?bench=city&course=../../etc")?.id, "city");
   });
 
-  it("when Ultra is included, then the cycle has the same four steps and no twin: each step's page runs its Ultra arm if this build has Ultra", () => {
+  it("when Ultra is included, then the cycle has the same eight steps and no Ultra twin: each step's page runs its Ultra arm if this build has Ultra", () => {
     const steps = cycleOf(true);
-    assert.equal(steps.map((s) => s.id).join(" "), "strip city dam-spine national-mall");
+    assert.equal(steps.map((s) => s.id).join(" "), "strip strip:epi city city:epi dam-spine dam-spine:epi national-mall national-mall:epi");
     assert.ok(!steps.some((s) => s.id.includes("+")), "no twin step");
     for (const s of steps) assert.equal(benchPlan(`?${s.query}`)!.ultra, ULTRA_AVAILABLE, s.id);
   });
@@ -50,9 +60,9 @@ describe("given a loop that has just finished a step", () => {
     { it: "it is on the first step", loop: 1, step: 0, keep: false, expectedLoop: 1, expectedStep: 1 },
     { it: "it is on the second step", loop: 1, step: 1, keep: true, expectedLoop: 1, expectedStep: 2 },
     { it: "it is on the third step", loop: 1, step: 2, keep: true, expectedLoop: 1, expectedStep: 3 },
-    { it: "it is on the last step and keep is set", loop: 1, step: 3, keep: true, expectedLoop: 2, expectedStep: 0 },
-    { it: "it is on the last step of the third cycle and keep is set", loop: 3, step: 3, keep: true, expectedLoop: 4, expectedStep: 0 },
-    { it: "it is on the last step and keep is not set", loop: 1, step: 3, keep: false, expectedLoop: null, expectedStep: null },
+    { it: "it is on the last step and keep is set", loop: 1, step: 7, keep: true, expectedLoop: 2, expectedStep: 0 },
+    { it: "it is on the last step of the third cycle and keep is set", loop: 3, step: 7, keep: true, expectedLoop: 4, expectedStep: 0 },
+    { it: "it is on the last step and keep is not set", loop: 1, step: 7, keep: false, expectedLoop: null, expectedStep: null },
   ];
   for (const testCase of cases) {
     it(`when ${testCase.it}, then the loop goes on to ${testCase.expectedLoop ? `cycle ${testCase.expectedLoop} step ${testCase.expectedStep}` : "nothing: it is over"}`, () => {
@@ -69,8 +79,8 @@ describe("given a loop that has just finished a step", () => {
       const s = loopSettings(run, stepOf(run));
       seen.push(`${s.session} ${s.loop} ${s.step}`);
     }
-    assert.equal(seen.length, 12);
-    assert.equal(seen.slice(0, 5).join(" | "), "k3x9q2 1 strip | k3x9q2 1 city | k3x9q2 1 dam-spine | k3x9q2 1 national-mall | k3x9q2 2 strip");
+    assert.equal(seen.length, 24);
+    assert.equal(seen.slice(0, 9).join(" | "), "k3x9q2 1 strip | k3x9q2 1 strip:epi | k3x9q2 1 city | k3x9q2 1 city:epi | k3x9q2 1 dam-spine | k3x9q2 1 dam-spine:epi | k3x9q2 1 national-mall | k3x9q2 1 national-mall:epi | k3x9q2 2 strip");
     assert.equal(new Set(seen.map((s) => s.split(" ")[0])).size, 1);
   });
 
@@ -87,7 +97,7 @@ describe("given a loop whose state is in the address of its bench page", () => {
   const base = "https://game.test/crush/";
   const searchOf = (href: string): string => new URL(href).search;
 
-  it("when the address's loopultra is turned on during a cycle, then that cycle's benches run unchanged and the next cycle's benches each run their Ultra arm, as the same four steps", { skip: !ULTRA_AVAILABLE && "this build has no Ultra" }, () => {
+  it("when the address's loopultra is turned on during a cycle, then that cycle's benches run unchanged and the next cycle's benches each run their Ultra arm, as the same eight steps", { skip: !ULTRA_AVAILABLE && "this build has no Ultra" }, () => {
     const ran: string[] = [];
     let href = stepHref(base, { ...RUN, keep: true });
     for (let run = parseRun(searchOf(href)); run !== null && run.loop <= 2; run = parseRun(searchOf(href))) {
@@ -101,7 +111,7 @@ describe("given a loop whose state is in the address of its bench page", () => {
         href = edited.toString();
       }
     }
-    assert.equal(ran.join(" | "), "1 strip plain | 1 city plain | 1 dam-spine plain | 1 national-mall plain | 2 strip ultra | 2 city ultra | 2 dam-spine ultra | 2 national-mall ultra");
+    assert.equal(ran.join(" | "), [...["strip", "city", "dam-spine", "national-mall"].flatMap((m) => [`1 ${m} plain`, `1 ${m}:epi plain`]), ...["strip", "city", "dam-spine", "national-mall"].flatMap((m) => [`2 ${m} ultra`, `2 ${m}:epi ultra`])].join(" | "));
   });
 
   it("when a loop starts from a custom strip address (len, cars, props), then every strip step of every cycle builds the same strip", () => {
@@ -129,10 +139,10 @@ describe("given a loop whose state is in the address of its bench page", () => {
     second.searchParams.set("keep", "0");
     const secondRun = parseRun(second.search);
     assert.equal(secondRun?.keep, false, "the edited address reads as keep off");
-    const third = advance(secondRun!);
-    assert.equal(third?.step, 2, "the step after the edit still runs");
-    const last = advance(third!);
-    assert.equal(last?.step, 3, "the cycle's last step still runs");
+    let last = advance(secondRun!);
+    assert.equal(last?.step, 2, "the step after the edit still runs");
+    while (last!.step < 7) last = advance(last!);
+    assert.equal(last?.step, 7, "the cycle's last step still runs");
     assert.equal(last?.loop, 1, "the cycle after the edit");
     assert.equal(advance(last!), null, "the loop ends at the cycle's end");
   });
@@ -148,7 +158,7 @@ describe("given a loop whose state is in the address of its bench page", () => {
   });
 
   const hrefCases = [
-    { it: "the address has a share fragment and a leftover v", from: `${base}?v=old#seed=7`, run: { ...RUN, step: 2 }, expected: `${base}?bench=city&course=dam-spine&loop=k3x9q2&cycle=1&step=2&keep=0&auto=0&loopultra=0&cycleultra=0` },
+    { it: "the address has a share fragment and a leftover v", from: `${base}?v=old#seed=7`, run: { ...RUN, step: 4 }, expected: `${base}?bench=city&course=dam-spine&loop=k3x9q2&cycle=1&step=4&keep=0&auto=0&loopultra=0&cycleultra=0` },
     {
       it: "every option is on",
       from: base,
@@ -262,7 +272,7 @@ describe("given the address of a page", () => {
   }
 
   it("when a loop is at the second step of its second cycle, then the bench card reads where it is", () => {
-    assert.equal(loopProgress({ ...RUN, loop: 2, step: 1 }), "loop 2, step 2/4");
+    assert.equal(loopProgress({ ...RUN, loop: 2, step: 1 }), "loop 2, step 2/8");
   });
 });
 

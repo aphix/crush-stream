@@ -8,6 +8,10 @@ export const BENCH_QUERY = BENCH_STRIP_ID;
 export const BENCH_KIND = { city: TRACK_ID.city, lab: "lab", strip: "strip" } as const;
 /** The page query that adds a bench's Ultra arm (`?ultra=1`). */
 export const ULTRA_QUERY = "ultra";
+/** The page query that runs a bench with the epicenter activation on (`?epi=1`; absent or 0: `whole`): the loop runs every map twice, off then on, same seed and car count. */
+export const EPI_QUERY = "epi";
+/** The step id suffix of a loop step that runs with the activation on (`city:epi`): the card's `loop.step` says which arm it is. */
+export const EPI_STEP_SUFFIX = ":epi";
 /** The page query that picks the city bench's course (`?course=dam-spine`). */
 export const COURSE_QUERY = "course";
 /** The page queries that shape the strip bench (`benchPlan`): a loop carries them onto every step. */

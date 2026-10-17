@@ -125,6 +125,33 @@ describe("given the owner asks for each bench card's phase table (--phases)", ()
   });
 });
 
+describe("given the bench loop ran a map twice, the epicenter activation off and then on (--ab)", () => {
+  const arm = (id, step, on, ms, wreck, frozen) => ({
+    id, kind: "bench", receivedAt: "2026-10-17T10:00:00Z", sha: "3e214dff", size: 20000,
+    submission: {
+      kind: "bench",
+      context: { settings: { session: "k3x9q2", loop: 1, step } },
+      payload: { result: { course: "city", simMsPerSimS: ms, settings: { epicenter: on }, phases: { msPerSimS: { wreck, structure: ms - wreck }, unattributedMsPerSimS: 0, workPerSimS: { wreckCarSlices: 4000, frozenCarSlices: frozen } } } },
+    },
+  });
+  it("when the two cards of a map are fetched, then each carries its arm and one block puts off and on side by side with the change; a card without its twin prints no block", async () => {
+    const rows = [arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500), arm("CCCC-3333", "strip", false, 100, 40, 0)];
+    const lines = [];
+    await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server(rows).fetchImpl, pause: noPause, phases: true, ab: true, log: (l) => lines.push(l) });
+    assert.ok(lines.some((l) => l.includes("city, epicenter off 600.0")), "the off card says so");
+    assert.ok(lines.some((l) => l.includes("city, epicenter ON 540.0")), "the on card says so");
+    const block = lines.slice(lines.findIndex((l) => l.startsWith("k3x9q2 cycle 1 city")));
+    assert.deepEqual(block.map((l) => l.trim().split(/\s+/).join(" ")), [
+      "k3x9q2 cycle 1 city: epicenter off | on",
+      "sim ms/sim-s 600.0 540.0 -10.0 %",
+      "wreck 300.0 270.0 -10.0 %",
+      "structure 300.0 270.0 -10.0 %",
+      "wreckCarSlices 4000.0 4000.0 +0.0 %",
+      "frozenCarSlices 0.0 3500.0",
+    ]);
+  });
+});
+
 describe("given a bench card from before the card was shortened and the same card as it is sent now", () => {
   const fixture = JSON.parse(readFileSync(new URL("../src/game/engine/bench-card.fixture.json", import.meta.url), "utf8"));
   const phases = { msPerSimS: { drive: 30.2512, wreck: 80.0444 }, unattributedMsPerSimS: 5.0321, workPerSimS: { steps: 240.4, skins: 479.6 } };

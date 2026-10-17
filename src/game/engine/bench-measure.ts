@@ -388,6 +388,7 @@ export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top:
     squash: Number(hud["squash"]),
     buckle: Number(hud["buckle"]),
     deformMode: String(hud["deformMode"]),
+    epicenter: hud["epi.on"] === 1,
     depth: depthOf(renderer, camera),
   };
 }

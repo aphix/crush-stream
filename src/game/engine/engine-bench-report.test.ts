@@ -77,6 +77,7 @@ const RESULT: BenchResult = {
     squash: 1,
     buckle: 1,
     deformMode: "shape",
+    epicenter: false,
     depth: {
       bits: 24,
       subpixelBits: 8,

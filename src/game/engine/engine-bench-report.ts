@@ -68,6 +68,8 @@ export interface BenchSettings {
   squash: number;
   buckle: number;
   deformMode: string;
+  /** The epicenter activation was on (`epi.on` = 1) for the run: the loop runs every map twice, off then on. */
+  epicenter: boolean;
   depth: { bits: number; subpixelBits: number; contextDepth: boolean; fragmentHighFloat: { precision: number; rangeMin: number; rangeMax: number } | null; near: number; far: number; logarithmicDepthBuffer: boolean; probe: DepthProbe };
 }
 
@@ -355,7 +357,7 @@ export function describeBench(r: BenchResult): string[] {
   const s = r.settings;
   const tiers = Object.entries(r.tierPct).sort((a, b) => b[1] - a[1]).map(([t, p]) => `${t} ${Math.round(p)} %`).join(", ");
   return [
-    `CRUSH BENCH  ${r.course}  ${r.cars} cars  ${f1(r.wallS)} s  ${r.frames} frames  (${d.browser})  build ${r.build}`,
+    `CRUSH BENCH  ${r.course}  ${r.cars} cars  epicenter ${s.epicenter ? "ON" : "off"}  ${f1(r.wallS)} s  ${r.frames} frames  (${d.browser})  build ${r.build}`,
     ...(r.strip ? stripLines(r.strip) : []),
     ...(r.labThrown !== null ? [labLine(r.labThrown)] : []),
     `${f1(r.fps)} FPS   1% low ${f1(r.fpsLow1)}   by thirds ${r.fpsThirds.map(f1).join(" / ")}`,

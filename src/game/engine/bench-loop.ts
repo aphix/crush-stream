@@ -1,7 +1,7 @@
 import { FX_TIER_ULTRA } from "../present/constants.ts";
 import { FX_TIERS } from "../present/engine-post.ts";
 import { TRACK_ID } from "../world/constants.ts";
-import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
+import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, EPI_STEP_SUFFIX, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
 
 /**
  * The benchmark loop: one cycle of benches, each its own page load (`?bench=…&loop=<session>&cycle=<n>&step=<i>`, so every bench
@@ -26,12 +26,16 @@ const MOST_PROPS_COURSE = TRACK_ID.nationalMall;
 
 const benchQuery = (kind: string): string => `${BENCH_QUERY}=${kind}`;
 
-const CYCLE: readonly BenchStep[] = [
+/** The four maps of a cycle. */
+const MAPS: readonly BenchStep[] = [
   { id: BENCH_KIND.strip, query: benchQuery(BENCH_KIND.strip) },
   { id: BENCH_KIND.city, query: benchQuery(BENCH_KIND.city) },
   { id: BIGGEST_COURSE, query: `${benchQuery(BENCH_KIND.city)}&${COURSE_QUERY}=${BIGGEST_COURSE}` },
   { id: MOST_PROPS_COURSE, query: `${benchQuery(BENCH_KIND.city)}&${COURSE_QUERY}=${MOST_PROPS_COURSE}` },
 ];
+
+/** Every map twice, the epicenter activation off and then on (`&epi=1`; same seed, same cars): the cards of a pair differ in nothing else, so a cycle is its own A/B. */
+const CYCLE: readonly BenchStep[] = MAPS.flatMap((s) => [s, { id: `${s.id}${EPI_STEP_SUFFIX}`, query: `${s.query}&${EPI_QUERY}=1` }]);
 
 /** The Ultra tier exists in this build (`FX_TIERS`): the loop's Ultra arm (`loopultra=1`) exists only then. */
 const FX_TIER_IDS: readonly string[] = FX_TIERS;
@@ -59,7 +63,7 @@ export interface BenchRun {
   ultraNext: boolean;
 }
 
-/** The benches of one cycle: always the same four steps; with `ultra` set and Ultra in the build, each page also runs its Ultra arm (no second pass for it). */
+/** The benches of one cycle: always the same eight steps (four maps, each off then on); with `ultra` set and Ultra in the build, each page also runs its Ultra arm (no second pass for it). */
 export function cycleOf(ultra: boolean): BenchStep[] {
   const arm = ultra && ULTRA_AVAILABLE;
   return CYCLE.map((s) => (arm ? { id: s.id, query: `${s.query}&${ULTRA_QUERY}=1` } : s));
@@ -90,7 +94,7 @@ export function runFromPage(search: string, session: string): BenchRun | null {
   const steps = cycleOf(run.ultra);
   for (let i = 0; i < steps.length; i++) {
     const s = new URLSearchParams(steps[i]!.query);
-    if (s.get(BENCH_QUERY) === q.get(BENCH_QUERY) && s.get(COURSE_QUERY) === q.get(COURSE_QUERY)) return { ...run, step: i };
+    if (s.get(BENCH_QUERY) === q.get(BENCH_QUERY) && s.get(COURSE_QUERY) === q.get(COURSE_QUERY) && (s.get(EPI_QUERY) === "1") === (q.get(EPI_QUERY) === "1")) return { ...run, step: i };
   }
   return null;
 }
