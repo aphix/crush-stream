@@ -21,6 +21,8 @@ export const EPICENTER = {
   settleSpin: 0,
   /** 1: a crashed car re-poses its parts on a rendered frame only when something their pose reads changed (hinge values, door swing, flap, the bumper masses and the sensors under them, the car's own pose, the skin): `partsDirty` is set by every step, so a car sitting still re-posed every part, doors' ground probes and bumpers' searches included, 60 times a second. Drawing only: the poses are those of 0 to a nanometre (`POSE_EPSILON`). */
   presentSkip: 0,
+  /** 1: a wreck's belly-segment pass (`stepFree`) skips the segments that run over another wreck's top: their ridge and edge crossings always end in the row being dropped (a wreck takes no support from another wreck's top), so the answer is the same and the crossings (a full surface query per step along each segment) are not made. 0 is today. Result-exact: the rows and the pose are bit for bit those of 0. */
+  nearPrune: 0,
   /** 1: a frozen car checks at every slice that nothing wrote to it: no mass's car-frame place moved, every mass is where the frame puts it and its contact clock did not restart; a writer that forgot `thaw` counts a breach (`frozenBreaches`). Debug and the rows only: 20 masses a slice. */
   frozenCheck: 0,
 };
@@ -45,6 +47,7 @@ const ROWS: readonly [keyof typeof EPICENTER, string, number, number, number][] 
   ["settleMps", "Freeze below speed (m/s, 0 off)", 0, 40, 0.5],
   ["settleSpin", "Freeze below spin (rad/s, 0 off)", 0, 6, 0.1],
   ["presentSkip", "Skip parts re-pose at rest", 0, 1, 1],
+  ["nearPrune", "Skip belly crossings over wrecks", 0, 1, 1],
   ["frozenCheck", "Check frozen cars (debug)", 0, 1, 1],
 ];
 

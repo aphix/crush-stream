@@ -6,8 +6,17 @@ import { MIN_SLIDE } from "../deform/constants.ts";
 import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-util.ts";
 import { droop, PAN, SPRINGS } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
+import { EPICENTER } from "../deform/epicenter.ts";
 import { G, COM_Y, INV_I, BELLY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, CAR_CENTRE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
 import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, WX, WZ, wheelsAt, worldWheels, hardContactNear, landing } from "./car-air-points.ts";
+
+/**
+ * Whether the belly crossing that starts on car-top patch `id` (owner * 1e6 + patch) may be skipped: the asker is a wreck and the top is another wreck's, so the
+ * crossing's row would be dropped below (`EDGE_HIT` is the top of patch `id`). Only with `EPICENTER.nearPrune`.
+ */
+function wreckTop(id: number): boolean {
+  return EPICENTER.nearPrune === 1 && body.wreck && !body.part && body.surf.cars[Math.floor(id / 1e6)]!.deform.massActive;
+}
 
 /**
  * How a car meets the surfaces under it, one pass per slice: three or more wheels standing on the world fix the body to the rest
@@ -722,6 +731,7 @@ export function stepFree(car: DeformableCar, dt: number): boolean {
     let pen: number;
     if (BPATCH[a] === BPATCH[b]) {
       if (!(BPATCH[a]! >= 0) || a < panFrom || b < panFrom) continue;
+      if (wreckTop(BPATCH[a]!)) continue;
       pen = ridgeCross(BX[a]!, BY[a]!, BZ[a]!, BX[b]!, BY[b]!, BZ[b]!, car.slot, BPATCH[a]!);
       if (!(pen > 0 && pen > BRISE[a]! && pen > BRISE[b]!)) continue;
       EDGE_HIT[C_NX] = _up.x;
@@ -733,6 +743,7 @@ export function stepFree(car: DeformableCar, dt: number): boolean {
         b = bellyFrom + SEGS[s]!;
       }
       if (BRISE[a] === NO_FLOOR) continue;
+      if (BPATCH[a]! >= 0 && wreckTop(BPATCH[a]!)) continue;
       pen = edgeCross(BX[a]!, BY[a]!, BZ[a]!, BX[b]!, BY[b]!, BZ[b]!, 0, 0, 0, 0, NaN, car.slot, BPATCH[a]!);
       if (!(pen > 0)) continue;
     }
