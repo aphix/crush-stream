@@ -6,11 +6,12 @@ import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { WORK } from "./sim-phases.ts";
 import { newWorld, stepWorld, type World } from "./world-step.ts";
+import { QUIET_HZ } from "../kernel/constants.ts";
 
 const saved = epicenterValues();
 afterEach(() => loadEpicenter(saved));
 
-const STEP = 1 / 80;
+const STEP = 1 / QUIET_HZ;
 
 /** A car driving on at 25 m/s and one the race put away, 4 km off: the two cars `stepWorld` is given. */
 function field(): { cars: DeformableCar[]; w: World } {
@@ -39,7 +40,9 @@ describe("given a car the race put away (`stored`) beside a car driving on, with
     const y = parked.group.position.y;
     for (let s = 0; s < 80; s++) stepWorld(w, STEP);
     assert.equal(carSlices(w), 80, "one car-slice a step: the driving car's");
-    assert.deepEqual([parked.group.position.x, parked.group.position.y, parked.group.position.z], [x, y, z], "the put-away car stands where it was");
+    assert.equal(parked.group.position.x, x, "the put-away car stands where it was (x)");
+    assert.equal(parked.group.position.y, y, "(y)");
+    assert.equal(parked.group.position.z, z, "(z)");
     assert.ok(cars[0]!.group.position.z > 20, "the driving car drove on");
     for (const car of cars) car.dispose();
   });
