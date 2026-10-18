@@ -188,7 +188,7 @@ if playing:  simDt = wallDt × timeScale × cine.timeWarp
                           stepStructure, clips) → ejections → race.step → cinematic trigger
              stepEdge → scheduleSkins (Witness: off-camera cars defer, small ones stride) → updateSkin
              updatePhase → rigs → FX, ragdolls, smoke, trace → stepDerby → seat.step → cine.update
-always:      net.frame → PoseBlend.present (bodies, loose parts and the crush skin drawn at the frame's time between
+always:      net.frame → PoseBlend.present (bodies, loose parts, attached parts and the crush skin drawn at the frame's time between
              the last two sim states) → race.frame → updateCamera → flushVisibleSkins → detail / lamps → audio frame
              (audio on) → cine.render → PoseBlend.restore (the sim's own poses and skin back) → emitHud every 0.05–0.12 s
              The thrown drivers' world (`RagdollRemote` ↔ `ragdoll-worker.ts`, a module Web Worker, race courses only) is posted its

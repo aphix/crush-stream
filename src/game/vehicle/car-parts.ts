@@ -908,6 +908,16 @@ export abstract class CarParts extends CarGlass {
     return n;
   }
 
+  /** Every part's object, torn or not, in `parts` order: what `PoseBlend` draws between two poses while the part is on the car (`partOn`). */
+  partObjects(): THREE.Object3D[] {
+    return this.parts.map((p) => p.object);
+  }
+
+  /** Part `i` of `partObjects` is still on the car (a torn one is a `freeObjects` body). */
+  partOn(i: number): boolean {
+    return !this.parts[i]!.detached;
+  }
+
   /** A popped hub's wheel leaves the car: a world object launched at the hub's speed, out and up. */
   protected dropWheel(i: number, hub: MassName): void {
     const w = this.looseWheels[i]!;

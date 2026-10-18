@@ -30,24 +30,41 @@ const EPS_ROT = 1e-6;
 const MOVING = 0.005;
 const BAR = 0.95;
 
-type Class = "group" | "classLift" | "wheel" | "part";
-type Pose = { p: THREE.Vector3; q: THREE.Quaternion };
+type Class = "group" | "classLift" | "wheel" | "part" | "hinged";
+/** `on`: for a hinged sample, the part is still on the car (its local pose is what is drawn). */
+type Pose = { p: THREE.Vector3; q: THREE.Quaternion; on: boolean };
 
-function entities(cars: readonly DeformableCar[]): { cls: Class; object: THREE.Object3D }[] {
-  const out: { cls: Class; object: THREE.Object3D }[] = [];
+/** A part's local pose changes by more than this (rad) over 3 frames either side: a hinge swinging in place has no travel to measure. */
+const MOVING_ROT = 0.005;
+
+type Entity = { cls: Class; object: THREE.Object3D; part?: { detached: boolean } };
+
+function entities(cars: readonly DeformableCar[]): Entity[] {
+  const out: Entity[] = [];
   for (const c of cars) {
     out.push({ cls: "group", object: c.group });
     const body = c["classBodyObject"]();
     if (body) out.push({ cls: "classLift", object: body });
     for (const w of c.wheels) out.push({ cls: "wheel", object: w });
-    for (const p of c["parts"]) out.push({ cls: "part", object: p.object });
+    for (const p of c["parts"]) {
+      out.push({ cls: "part", object: p.object });
+      out.push({ cls: "hinged", object: p.object, part: p });
+    }
   }
   return out;
 }
 
-function sample(object: THREE.Object3D): Pose {
-  object.updateWorldMatrix(true, false);
-  return { p: object.getWorldPosition(new THREE.Vector3()), q: object.getWorldQuaternion(new THREE.Quaternion()) };
+/** World pose, except a hinged part's: its pose on the car, since the car's own motion would move it on every frame whatever its hinge did. */
+function sample(e: Entity): Pose {
+  const o = e.object;
+  if (e.cls === "hinged") return { p: o.position.clone(), q: o.quaternion.clone(), on: !e.part!.detached };
+  o.updateWorldMatrix(true, false);
+  return { p: o.getWorldPosition(new THREE.Vector3()), q: o.getWorldQuaternion(new THREE.Quaternion()), on: true };
+}
+
+/** The two poses differ by more than the bar's own threshold for a frame to have changed. */
+function moved(a: Pose, b: Pose): boolean {
+  return a.p.distanceTo(b.p) > EPS_POS || a.q.angleTo(b.q) > EPS_ROT;
 }
 
 /** Per class: the frames on which an entity moves, and the ones among them on which its drawn pose changed since the frame before. */
@@ -64,16 +81,27 @@ function shares(dt: number): Record<Class, { moving: number; changed: number }> 
     t += dt;
     sim.advanceTo(t);
     sim.present(t);
-    for (let i = 0; i < ents.length; i++) series[i]!.push(sample(ents[i]!.object));
+    // The reel's order (`Engine.frame`): the cars skin and pose their parts after the blend, which then draws those writes.
+    for (const c of cars) c.updateSkin();
+    blend.refresh();
+    for (let i = 0; i < ents.length; i++) series[i]!.push(sample(ents[i]!));
     blend.restore();
   }
-  const out: Record<Class, { moving: number; changed: number }> = { group: { moving: 0, changed: 0 }, classLift: { moving: 0, changed: 0 }, wheel: { moving: 0, changed: 0 }, part: { moving: 0, changed: 0 } };
+  const none = (): { moving: number; changed: number } => ({ moving: 0, changed: 0 });
+  const out: Record<Class, { moving: number; changed: number }> = { group: none(), classLift: none(), wheel: none(), part: none(), hinged: none() };
   for (let i = 0; i < ents.length; i++) {
     const s = series[i]!;
+    const hinged = ents[i]!.cls === "hinged";
     for (let f = 3; f < s.length - 3; f++) {
-      if (s[f - 3]!.p.distanceTo(s[f + 3]!.p) <= MOVING) continue;
+      if (hinged) {
+        // Attached over the whole window, or the part is a free body and counted in `part`.
+        if (!s.slice(f - 3, f + 4).every((x) => x.on)) continue;
+        if (s[f - 3]!.p.distanceTo(s[f + 3]!.p) <= MOVING && s[f - 3]!.q.angleTo(s[f + 3]!.q) <= MOVING_ROT) continue;
+        // A hinge starts and stops: the 3 frames before its first move and after its last are not frames it moves on (a part's world pose moves with the car from the first frame, so `part` has no such edge).
+        if (!moved(s[f]!, s[f - 3]!) || !moved(s[f]!, s[f + 3]!)) continue;
+      } else if (s[f - 3]!.p.distanceTo(s[f + 3]!.p) <= MOVING) continue;
       out[ents[i]!.cls].moving++;
-      if (s[f]!.p.distanceTo(s[f - 1]!.p) > EPS_POS || s[f]!.q.angleTo(s[f - 1]!.q) > EPS_ROT) out[ents[i]!.cls].changed++;
+      if (moved(s[f]!, s[f - 1]!)) out[ents[i]!.cls].changed++;
     }
   }
   return out;
@@ -85,6 +113,7 @@ describe("given a crash replayed in slow motion from its clip", () => {
       const s = shares(frame);
       const rows = (Object.keys(s) as Class[]).map((c) => `${c} ${s[c].changed}/${s[c].moving}`).join(", ");
       assert.ok(s.part.moving > 100, `the clip sheds parts that move (${rows})`);
+      assert.ok(s.hinged.moving > 20, `the clip moves parts that are still on the car (${rows})`);
       assert.ok(s.wheel.moving > 100 && s.classLift.moving > 100 && s.group.moving > 100, rows);
       for (const c of Object.keys(s) as Class[]) assert.ok(s[c].changed >= BAR * s[c].moving, `${c}: ${(s[c].changed / s[c].moving).toFixed(3)} of its moving frames change (${rows})`);
     });
@@ -96,7 +125,12 @@ describe("given a crash replayed in slow motion from its clip", () => {
     const sim = new ClipSim(rec.clip, cars, rec.scene);
     sim.restart();
     sim.advanceTo(2.3);
-    const poses = (): number[] => cars.flatMap((c) => [...c.group.position.toArray(), ...c.group.quaternion.toArray()]);
+    const poses = (): number[] =>
+      cars.flatMap((c) => [
+        ...c.group.position.toArray(),
+        ...c.group.quaternion.toArray(),
+        ...c["parts"].filter((p) => !p.detached).flatMap((p) => [...p.object.position.toArray(), ...p.object.quaternion.toArray(), ...p.object.scale.toArray()]),
+      ]);
     const before = poses();
     sim.present(sim.time - 0.001);
     const drawn = poses();

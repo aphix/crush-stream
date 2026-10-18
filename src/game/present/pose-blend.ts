@@ -111,7 +111,81 @@ class SkinTrack {
   }
 }
 
-/** One car's bodies (its group first, then the parts and wheels it has put in the world) and their poses around the last step, and its skin's last two writes. */
+/** Floats per tracked part: the body layout (`read`) and the scale (3). */
+const S = N + 3;
+
+/**
+ * One attached part's local pose (hood, boot, doors, mirrors, bumpers: `posePart`, written once a frame by `updateSkin` and, on
+ * swinging doors, every step) and its last two writes, `SkinTrack`'s way: `cur` the latest, `prev` the one before, at step counts
+ * `from` and `to`. `out` is what `show` put in the object, so a write after it (the reel skins after `present`) is told from the blend.
+ */
+class PartTrack {
+  readonly object: THREE.Object3D;
+  prev = new Float64Array(S);
+  cur = new Float64Array(S);
+  private out = new Float64Array(S);
+  from = 0;
+  to = 0;
+  private drawn = false;
+  private order: THREE.EulerOrder = "XYZ";
+
+  constructor(object: THREE.Object3D) {
+    this.object = object;
+    this.grab(this.cur);
+    this.prev.set(this.cur);
+  }
+
+  private grab(a: Float64Array): void {
+    read(this.object, a, 0);
+    const s = this.object.scale;
+    a[N] = s.x;
+    a[N + 1] = s.y;
+    a[N + 2] = s.z;
+  }
+
+  private is(a: Float64Array): boolean {
+    const s = this.object.scale;
+    return same(this.object, a, 0) && a[N] === s.x && a[N + 1] === s.y && a[N + 2] === s.z;
+  }
+
+  /** A write since the last frame (the object is not as `cur`, or as `show` left it) becomes `cur`, as of step `steps`. */
+  take(steps: number): void {
+    if (this.is(this.drawn ? this.out : this.cur)) return;
+    const last = this.prev;
+    this.prev = this.cur;
+    this.cur = last;
+    this.grab(last);
+    this.from = this.to;
+    this.to = steps;
+    this.drawn = false; // a write over the blend stands; `show` draws again
+  }
+
+  /** Draw the part at step time `now`: as written once `now` reaches `to`, else that far between `prev` and `cur`. */
+  show(now: number): void {
+    if (this.to === this.from || !(now < this.to)) return;
+    const t = (now - this.from) / (this.to - this.from);
+    const { prev: p, cur: c, object: o } = this;
+    this.order = o.rotation.order;
+    o.position.set(p[0]! + (c[0]! - p[0]!) * t, p[1]! + (c[1]! - p[1]!) * t, p[2]! + (c[2]! - p[2]!) * t);
+    _q0.set(p[3]!, p[4]!, p[5]!, p[6]!);
+    _q1.set(c[3]!, c[4]!, c[5]!, c[6]!);
+    o.quaternion.copy(_q0.slerp(_q1, t));
+    o.scale.set(p[N]! + (c[N]! - p[N]!) * t, p[N + 1]! + (c[N + 1]! - p[N + 1]!) * t, p[N + 2]! + (c[N + 2]! - p[N + 2]!) * t);
+    this.grab(this.out);
+    this.drawn = true;
+  }
+
+  /** The written pose back, unless something wrote the object while the blend was on show (that write stands). */
+  restore(): void {
+    if (!this.drawn) return;
+    this.drawn = false;
+    if (!this.is(this.out)) return;
+    write(this.object, this.cur, 0, this.order);
+    this.object.scale.set(this.cur[N]!, this.cur[N + 1]!, this.cur[N + 2]!);
+  }
+}
+
+/** One car's bodies (its group first, then the parts and wheels it has put in the world) and their poses around the last step, and its skin's and attached parts' last two writes. */
 class CarBlend {
   /** The car's group, then its free objects (`DeformableCar.freeObjects`), then the objects its ride writes each slice (`rideObjects`): `count` of them live. */
   readonly bodies: THREE.Object3D[] = [];
@@ -127,16 +201,46 @@ class CarBlend {
   private skip = new Uint8Array(1);
   /** Positions and normals of every mesh the skin writes (`DeformableCar.skinGeometries`). */
   private readonly skin: SkinTrack[] = [];
+  /** The local pose of every attached part (`DeformableCar.partObjects`); a torn one is a free body instead. */
+  private readonly parts: PartTrack[];
+  private readonly car: DeformableCar;
+  /** The car was placed (`stays(0)`) and was drawn (visible), as `present` last found it. */
+  private placed = false;
+  private shown = false;
   /** The last step ran on these bodies. */
   stepped = false;
   drawn = false;
 
   constructor(car: DeformableCar) {
+    this.car = car;
+    this.parts = car.partObjects().map((o) => new PartTrack(o));
     for (const geometry of car.skinGeometries()) {
       for (const name of ["position", "normal"]) {
         const attr = geometry.getAttribute(name);
         if (attr instanceof THREE.BufferAttribute && attr.array instanceof Float32Array) this.skin.push(new SkinTrack(attr));
       }
+    }
+  }
+
+  /**
+   * The skin's and the parts' writes since the last frame, at step count `steps`; drawn at step time `now` unless the car
+   * was placed (as written) or is hidden. `placed` and `shown` are as `present` found them: a reel `refresh` runs after the
+   * group is drawn blended, which `stays(0)` would take for a placement.
+   */
+  tracks(steps: number, now: number): void {
+    const { placed, shown } = this;
+    for (let i = 0; i < this.skin.length; i++) {
+      const track = this.skin[i]!;
+      track.take(steps);
+      if (placed) track.from = track.to;
+      else if (shown) track.show(now);
+    }
+    for (let i = 0; i < this.parts.length; i++) {
+      if (!this.car.partOn(i)) continue;
+      const track = this.parts[i]!;
+      track.take(steps);
+      if (placed) track.from = track.to;
+      else if (shown) track.show(now);
     }
   }
 
@@ -170,18 +274,17 @@ class CarBlend {
   }
 
   /**
-   * The skin's writes since the last frame taken at step count `steps`, and, `shown`, drawn at step time `now` (a placed
-   * car's as written); with `alpha` < 1 the bodies too, `alpha` of the way through the last step.
+   * The skin's and the attached parts' writes since the last frame taken at step count `steps`, and, the car `shown`,
+   * drawn at step time `now` (a placed car's as written); with `alpha` < 1 the bodies too, `alpha` of the way through the
+   * last step.
    */
-  present(group: THREE.Object3D, alpha: number, steps: number, now: number, shown: boolean): void {
-    const placed = this.stays(0);
-    for (let i = 0; i < this.skin.length; i++) {
-      const track = this.skin[i]!;
-      track.take(steps);
-      if (placed) track.from = track.to;
-      else if (shown) track.show(now);
-    }
-    if (!shown || !(alpha < 1)) return;
+  present(alpha: number, steps: number, now: number): void {
+    const car = this.car;
+    const group = car.group;
+    this.placed = this.stays(0);
+    this.shown = group.visible;
+    this.tracks(steps, now);
+    if (!this.shown || !(alpha < 1)) return;
     const { bodies, from, to, kept } = this;
     this.group = group;
     for (let i = 0; i < this.count; i++) {
@@ -204,6 +307,7 @@ class CarBlend {
 
   restore(): void {
     for (let i = 0; i < this.skin.length; i++) this.skin[i]!.restore();
+    for (let i = 0; i < this.parts.length; i++) this.parts[i]!.restore();
     if (!this.drawn) return;
     for (let i = 0; i < this.count; i++) if (this.skip[i] === 0) write(this.bodies[i]!, this.kept, i, this.orders[i]!);
     this.group!.updateWorldMatrix(false, false);
@@ -217,10 +321,10 @@ class CarBlend {
  * time puts it between the pose before the last step and the one it left, `alpha` of the way, and `restore` hands the
  * sim its own poses back, exactly (`write`), once the frame is drawn. The sim never runs from, or is changed by, a drawn pose.
  *
- * The crush skin is written once a frame, after its steps (`DeformableCar.updateSkin`): `present` draws each skinned
- * mesh's positions and normals at the frame's time between that write and the one before it, on the steps counted
- * between them (`SkinTrack`); a frame that ran one step draws `alpha` of the way, as the bodies. `restore` puts the
- * written skin back.
+ * The crush skin and the attached parts (hood, boot, doors, mirrors, bumpers) are written once a frame, after the steps
+ * (`DeformableCar.updateSkin`): `present` draws each skinned mesh's positions and normals, and each part's local pose, at
+ * the frame's time between that write and the one before it, on the steps counted between them (`SkinTrack`, `PartTrack`);
+ * a frame that ran one step draws `alpha` of the way, as the bodies. `restore` puts the written skin and parts back.
  *
  * Per step: `begin` before it and `end` after it. A body that was placed (> `TELEPORT`) or moved since the step (a respawn
  * between frames) is drawn as it stands, and a placed car's skin as written.
@@ -230,8 +334,10 @@ export class PoseBlend {
   /** The blends `present` drew this frame (`shownCount` of them), for `restore`. */
   private readonly shown: CarBlend[] = [];
   private shownCount = 0;
-  /** Steps run so far (`end` calls): the clock the skin's writes are placed on. */
+  /** Steps run so far (`end` calls): the clock the skin's and the parts' writes are placed on. */
   private steps = 0;
+  /** The step time of the last `present`, which `refresh` draws at. */
+  private now = 0;
 
   begin(cars: readonly DeformableCar[]): void {
     for (let i = 0; i < cars.length; i++) {
@@ -250,13 +356,18 @@ export class PoseBlend {
   present(cars: readonly DeformableCar[], alpha: number): void {
     const a = alpha < 1 ? Math.max(0, alpha) : 1;
     const now = this.steps - 1 + a;
+    this.now = now;
     for (let i = 0; i < cars.length; i++) {
-      const car = cars[i]!;
-      const c = this.cars.get(car);
+      const c = this.cars.get(cars[i]!);
       if (!c?.stepped) continue;
-      c.present(car.group, a, this.steps, now, car.group.visible);
+      c.present(a, this.steps, now);
       this.shown[this.shownCount++] = c;
     }
+  }
+
+  /** The reel skins after `present`: take those writes and draw them at the frame's time (the live order needs none). */
+  refresh(): void {
+    for (let i = 0; i < this.shownCount; i++) this.shown[i]!.tracks(this.steps, this.now);
   }
 
   restore(): void {

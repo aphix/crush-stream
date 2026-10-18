@@ -476,6 +476,8 @@ export class CrashEngine extends EngineGarage {
           if (reelDt !== null || this.showStack ? car.group.visible : !this.rigScene || car === this.carA) car.updateSkin();
         }
       }
+      // The reel's skins and parts were written after `ClipSim.present`: draw them at the frame's time too.
+      if (reelDt !== null) this.blend.refresh();
       if (reelDt === null && !this.net.client) this.updatePhase(wallDt);
       if (this.showStack) this.stepStack(); else if (this.showPistons && this.looping) this.stepPistonLoop(wallDt);
       if (reelDt === null && this.clock.phase !== "approach") this.emitContactFx();
