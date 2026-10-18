@@ -232,9 +232,9 @@ describe("given a race on its last lap", () => {
       f.raceFrame(race, 0, SPEED);
       assert.equal(f.jets.jets, 2 * (4 - k), `row ${k} lit, the rows behind it already burning`);
     }
-    assert.deepEqual(
-      asked.map((a) => a.behind),
-      [3, 3, 2, 2, 1, 1, 0, 0].map((k) => k * ROW_GAP),
+    assert.equal(
+      JSON.stringify(asked.map((a) => a.behind)),
+      JSON.stringify([3, 3, 2, 2, 1, 1, 0, 0].map((k) => k * ROW_GAP)),
     );
     assert.deepEqual(
       asked.map((a) => a.side),
@@ -277,7 +277,7 @@ describe("given a race on its last lap", () => {
     const f = fountains("ultra");
     f.raceFrame(standIn(() => 0).race, 0, SPEED);
     const powers = [...f.jets["power"]].slice(0, 8);
-    assert.deepEqual(powers.slice(0, 2).map((p) => Math.round(p * 10) / 10), [LINE_POWER, LINE_POWER]);
+    assert.equal(JSON.stringify(powers.slice(0, 2).map((p) => Math.round(p * 10) / 10)), JSON.stringify([LINE_POWER, LINE_POWER]));
     assert.ok(powers.slice(2).every((p) => p === 1));
   });
 
@@ -317,7 +317,7 @@ describe("given the Range's ragdoll launched", () => {
     assert.equal(edge, RANGE.halfWidth + 1);
     for (let row = 0; row < RANGE_ROWS; row++) {
       const pair = placed.filter((j) => Math.abs(j.x - rangeRowX(row, RANGE_ROWS)) < 1e-3);
-      assert.deepEqual(pair.map((j) => j.z).sort(), [-edge, edge], `row ${row}: one jet each edge`);
+      assert.equal(JSON.stringify(pair.map((j) => j.z).sort()), JSON.stringify([-edge, edge]), `row ${row}: one jet each edge`);
       assert.ok(pair.every((j) => Math.abs(j.wait - row * RANGE_STAGGER_S) < 1e-4), `row ${row} starts ${row * RANGE_STAGGER_S} s after the launch`);
     }
     assert.ok(placed.every((j) => j.x > 0 && j.x < RANGE.length), "the rows stand inside the field's length");
@@ -330,7 +330,7 @@ describe("given the Range's ragdoll launched", () => {
       const edge = rangeEdge(mode);
       const placed = jets(f);
       assert.equal(placed.length, 6);
-      assert.deepEqual([...new Set(placed.map((j) => j.z))].sort((a, b) => a - b), [STATION_ANCHORS[mode].z - edge, STATION_ANCHORS[mode].z + edge], mode);
+      assert.equal(JSON.stringify([...new Set(placed.map((j) => j.z))].sort((a, b) => a - b)), JSON.stringify([STATION_ANCHORS[mode].z - edge, STATION_ANCHORS[mode].z + edge]), mode);
     }
   });
 

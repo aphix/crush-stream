@@ -177,7 +177,7 @@ for (const layoutCase of LAYOUT_CASES) {
 
     it("when the layout is made, then a sign stands on the slat at every SIGN_EVERY_METRES from the lip, in the room under the next slat", () => {
       const expectedHeights = layout.boards.filter((board) => board.heightAboveLip % SIGN_EVERY_METRES === 0).map((board) => board.heightAboveLip);
-      assert.deepEqual(layout.signs.map((sign) => sign.heightAboveLip), expectedHeights, "the signs' heights");
+      assert.equal(JSON.stringify(layout.signs.map((sign) => sign.heightAboveLip)), JSON.stringify(expectedHeights), "the signs' heights");
       assert.equal(layout.signs.length, Math.ceil(layout.frameTop / SIGN_EVERY_METRES), "one per SIGN_EVERY_METRES below the frame top");
       assert.equal(layout.signs[0]!.heightAboveLip, 0, "the lip line has the first");
       for (const sign of layout.signs) {

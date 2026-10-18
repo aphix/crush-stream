@@ -69,7 +69,7 @@ describe("given the real engine", () => {
       const edge = rangeEdge(null);
       const placed = jetsAt();
       assert.equal(placed.length, 6, "three rows of two at the high tier");
-      assert.deepEqual([...new Set(placed.map((j) => j.z))].sort((a, b) => a - b), [-edge, edge]);
+      assert.equal(JSON.stringify([...new Set(placed.map((j) => j.z))].sort((a, b) => a - b)), JSON.stringify([-edge, edge]));
       advance(3 * FRAME_HZ);
       assert.ok(fountains().jets["life"].some((life) => life > 0), "sparks are in the air while the dummy flies");
       engine["clearLocal"]();

@@ -173,12 +173,12 @@ describe("given the High jump's art built from a layout", () => {
     it(`when it is built for ${name}, then a sign carries its height: "LIP = 0" at the lip then "10 m", "20 m" ... every ${SIGN_EVERY_METRES} m up the frame`, () => {
       makeHighJumpArt(layout, LIP_Y);
       const labelled = recordedCanvases.filter((canvas) => canvas.texts.length > 0).at(-1)!;
-      assert.deepEqual(
-        labelled.texts,
-        layout.signs.map((sign) => (sign.heightAboveLip === 0 ? "LIP = 0" : `${sign.heightAboveLip} m`)),
+      assert.equal(
+        JSON.stringify(labelled.texts),
+        JSON.stringify(layout.signs.map((sign) => (sign.heightAboveLip === 0 ? "LIP = 0" : `${sign.heightAboveLip} m`))),
         "the atlas's labels, one per sign in sign order",
       );
-      assert.deepEqual(layout.signs.map((sign) => sign.heightAboveLip % SIGN_EVERY_METRES), layout.signs.map(() => 0), "signs only at multiples of SIGN_EVERY_METRES");
+      assert.ok(layout.signs.every((sign) => sign.heightAboveLip % SIGN_EVERY_METRES === 0), "signs only at multiples of SIGN_EVERY_METRES");
     });
 
     it(`when it is built for ${name}, then a slat's brass plates are bigger at the major boards than the minor ones`, () => {
