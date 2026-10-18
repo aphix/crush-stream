@@ -150,6 +150,14 @@ export const SCENARIO_INFO: Record<string, ScenarioInfo> = {
     warmS: 10,
     windowS: 30,
   },
+  "strip-crash": {
+    about: "`strip` with crashes forced: after the start's 8 s the first eight racers stand in four head-on pairs 90 m apart, each driving at 25 m/s into the other (the racing AI's hands keep the plain strip free of crashes, so it no longer exercises the wreck path)",
+    sizes: "the guard's strip row with wrecks: per-state counters (wreck, frozen, freezes), the 40-contact piles the stored-car and relock cuts were found on; end-to-end, per-unit rows and counters",
+    lone: true,
+    race: true,
+    warmS: 0,
+    windowS: 30,
+  },
   "sideswipe-15-race": {
     about: "two sedans abeam 3.5 m apart (hulls 1.6 m clear) at 15 m/s on the race's step schedule, the far one steering across at full lock: near and not closing, then closing, then in contact",
     sizes: "SAFETY row of a tighter lone test: the census's false negatives (not-closing car-steps followed by a contact) and the arms' end states",

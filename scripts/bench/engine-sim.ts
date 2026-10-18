@@ -9,7 +9,13 @@ import type { CrashEngine } from "../../src/game/engine/engine.ts";
 import { QUIET_HZ } from "../../src/game/kernel/constants.ts";
 import type { DeformableCar } from "../../src/game/vehicle/car.ts";
 import type { World } from "../../src/game/engine/world-step.ts";
+import { launch } from "../../src/game/contact/crash-scenarios.test-util.ts";
 import type { SimLike } from "./sim.ts";
+
+/** The speed each car of a forced crash drives at (m/s), the head-on pairs' distance (m) and their number. */
+const CRASH_MPS = 35;
+const PAIR_GAP = 30;
+const PAIRS = 8;
 
 export class EngineSim implements SimLike {
   t = 0;
@@ -34,6 +40,28 @@ export class EngineSim implements SimLike {
   /** A bench page of the in-app card through the real engine on the race's step schedule (`?bench=strip`: 16 racers and traffic on the 6 km straight, one sedan body; `?bench=city&course=national-mall`: the mall), the bench's seed, nothing drawn: the headless twin of the owner's off/on cards. */
   static async plan(search: string): Promise<EngineSim> {
     return new EngineSim(await benchPlanEngine(search), true);
+  }
+
+  /**
+   * `?bench=strip` with crashes forced: after the start's 8 s (the countdown and the pack leaving the grid), the first sixteen racers are stood in eight head-on pairs 50 m apart, the first of
+   * each pair where it is, each driving at 30 m/s into the other. The racing AI's hands steer a field clear of a crash on its own (the plain strip has none); the epicenter's guard needs wrecks.
+   */
+  static async crashStrip(): Promise<EngineSim> {
+    const sim = new EngineSim(await benchPlanEngine("?bench=strip"), true);
+    sim.run(8);
+    const cars = sim.cars;
+    for (let k = 0; k < PAIRS; k++) {
+      const a = cars[2 * k]!;
+      const b = cars[2 * k + 1]!;
+      const x = a.group.position.x;
+      const z = a.group.position.z;
+      const yaw = a.yaw;
+      const fx = Math.sin(yaw);
+      const fz = Math.cos(yaw);
+      launch(a, x, z, yaw, fx * CRASH_MPS, fz * CRASH_MPS);
+      launch(b, x + fx * PAIR_GAP, z + fz * PAIR_GAP, yaw + Math.PI, -fx * CRASH_MPS, -fz * CRASH_MPS);
+    }
+    return sim;
   }
 
   get world(): World {

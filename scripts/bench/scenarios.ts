@@ -159,6 +159,7 @@ export const SCENARIOS: Record<string, Scenario> = {
   city: { build: async () => (await import("./engine-sim.ts")).EngineSim.city(false), label: cityLabel },
   "city-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.city(true), label: cityLabel },
   strip: { build: async () => (await import("./engine-sim.ts")).EngineSim.plan("?bench=strip"), label: cityLabel },
+  "strip-crash": { build: async () => (await import("./engine-sim.ts")).EngineSim.crashStrip(), label: cityLabel },
   mall: { build: async () => (await import("./engine-sim.ts")).EngineSim.plan("?bench=city&course=national-mall"), label: cityLabel },
   "dam-spine": { build: async () => (await import("./engine-sim.ts")).EngineSim.plan("?bench=city&course=dam-spine"), label: cityLabel },
   "sideswipe-15-race": { build: () => sideswipe(15).useRaceSchedule(), label: intactLabel },
