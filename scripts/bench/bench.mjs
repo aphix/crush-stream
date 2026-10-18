@@ -90,6 +90,7 @@ export function summarize(runs) {
       clampSites: list[0].clampSites ?? {},
       breachKinds: list[0].breachKinds ?? null,
       breachOff: list[0].breachOff ?? null,
+      hubsOff: list[0].hubsOff ?? null,
       offSites: list[0].offSites ?? {},
       feedBins: list[0].feedBins ?? {},
       wakeSites: list[0].wakeSites ?? {},
@@ -259,6 +260,10 @@ export function table(name, first, arms) {
   const wreck = arms.map((a) => a.work.wreckCarSlices + a.work.asleepCarSlices);
   lines.push(row("frozen / (wreck+asleep) slices", arms.map((a, i) => (wreck[i] > 0 ? f2(a.work.frozenCarSlices / wreck[i]) : "-")), false));
   lines.push(row("frozen-state breaches", arms.map((a) => String(a.breaches)), false));
+  if (arms.some((a) => a.hubsOff)) {
+    lines.push(row("frozen wrecks' hubs off their frame, worst (m)", arms.map((a) => (a.hubsOff ? f2(a.hubsOff.worst) : "-")), false));
+    for (const a of arms) if (a.hubsOff && a.hubsOff.over > 0) lines.push(`   FLAG: ${a.name}: ${a.hubsOff.over} of ${a.hubsOff.checks} hub checks of a frozen wreck found a hub more than 0.5 m off its place in the car frame (the drawn wheel sits there): the freeze froze a wreck with its hubs off the frame`);
+  }
   if (arms.every((a) => a.ground)) {
     lines.push(`   ground queries (calls per car-slice for every query; us per car-slice and share of the phases' total for the timed sections: inclusive, a query inside another counts for the outer one only, net of the clock's own ${arms.map((a) => f1(a.ground.clockNs)).join("/")} ns per timed call; the clock inflates every phase: read shares, never the phases' ms)`);
     for (const n of Object.keys(arms[0].ground.sections)) {

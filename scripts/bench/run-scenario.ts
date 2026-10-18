@@ -157,7 +157,10 @@ for (const method of ["posePart", "followGlass"] as const) {
 loadEpicenter(EPICENTER_AT_LOAD);
 const sim = await scenario.build();
 const label = scenario.label(sim);
-for (const [id, value] of Object.entries(knobs)) {
+// An epicenter arm runs with `frozenCheck` on unless its own knobs say otherwise (`epi.frozenCheck=0`: the timing arms): a write to a frozen car without a thaw is then counted (`frozenBreaches`) and cannot hide.
+const armKnobs: Record<string, number> = { ...knobs };
+if (armKnobs["epi.on"] && armKnobs["epi.frozenCheck"] === undefined) armKnobs["epi.frozenCheck"] = 1;
+for (const [id, value] of Object.entries(armKnobs)) {
   // `nudge` (m) is not a knob: the sensitivity control, every mass of car 2 moved that far in x before the run (the sim's own response to a micrometre, with every knob off).
   if (id === "nudge") {
     sim.cars[2]!.deform.translateMasses(value, 0, 0, 0);
@@ -193,12 +196,40 @@ const record = (): void => {
   }
   trace.push(row);
 };
+/**
+ * The epicenter arms' monitor of the frozen wrecks: every `HUB_CHECK_S` of sim time a frozen wreck's hubs are read against their car-frame rest places (a hub stands a face's shove or a squeeze off it, never more than
+ * `HUB_BOUND`; the wheels are drawn at their hubs' frame x and z): the worst distance and how many car-checks exceeded the bound go in the result (`hubsOff`), and the table flags them. A frozen wreck keeps whatever frame
+ * place its hubs had at the freeze, so a bad one persists and a check every half second finds it.
+ */
+const HUB_CHECK_S = 0.5;
+const HUB_BOUND = 0.5;
+const hubsOff = { worst: 0, over: 0, checks: 0 };
+const checkHubs = (): void => {
+  for (const car of sim.cars) {
+    if (!car.deform.frozen || !car.deform.frozenReady) continue;
+    for (const m of car.deform.masses) {
+      if (!m.hub || m.popped) continue;
+      const d = Math.hypot(m.local.x - m.rest.x, m.local.z - m.rest.z);
+      hubsOff.checks++;
+      hubsOff.worst = Math.max(hubsOff.worst, d);
+      if (d > HUB_BOUND) hubsOff.over++;
+    }
+  }
+};
 const advance = (seconds: number): void => {
-  if (traceDt <= 0) return sim.run(seconds);
+  if (traceDt <= 0) {
+    if (!armKnobs["epi.on"]) return sim.run(seconds);
+    for (let left = seconds; left > 1e-9; left -= HUB_CHECK_S) {
+      sim.run(Math.min(HUB_CHECK_S, left));
+      checkHubs();
+    }
+    return;
+  }
   for (let left = seconds; left > 1e-9; left -= traceDt) {
     if (trace.length === 0) record();
     sim.run(Math.min(traceDt, left));
     record();
+    checkHubs();
   }
 };
 /**
@@ -343,6 +374,7 @@ console.log(
     frozenBreaches: breaches,
     breachKinds,
     breachOff: worstOff,
+    hubsOff: armKnobs["epi.on"] ? hubsOff : null,
     trace: traceDt > 0 ? { dt: traceDt, cars: sim.cars.length, masses: sim.cars.map((c) => c.deform.masses.length), rows: trace } : null,
     census: census ? census.result(simS) : null,
     freezeRecord: recorder ? recorder.result() : null,

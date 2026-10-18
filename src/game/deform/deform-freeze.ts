@@ -29,7 +29,8 @@ export abstract class DeformFreeze extends DeformContact {
    * INVARIANT the freeze rests on (measured: head-on, hubRL 15 cm off whole when it broke): after the whole-path `integrateWreck` that caches the frozen centre, no `clampLocal`
    * (`syncPose`) may run until a thaw. `integrateWreck` re-derives every `local` from `world` first, and a planted hub's `clampLocal` pins `local` and leaves `world` alone, so `integrateFrozen`'s
    * placement (`world = local x matrixWorld`) is only right while the last write to `local` was that re-derive. That is why the pre-pair and post-pair `syncPose` and the structure step all
-   * skip on `frozen`, the one slice after the flag is set (still the whole integrate) included.
+   * skip on `frozen`, the one slice after the flag is set (still the whole integrate) included. The re-derive has one exception, in that freeze slice: a hub that stands more than `HUB_PIN_MAX`
+   * from its pin keeps the pin (`integrateWreck`), since a planted hub of a spinning wreck stands up to 1.5 m off its frame place at that moment (derby seed 7, 13.2 s) and the re-derive froze it there.
    */
   settleFreeze(dt: number): void {
     this.sinceThaw += dt;

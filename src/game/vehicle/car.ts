@@ -34,6 +34,8 @@ const _wantQuaternion = new THREE.Quaternion();
 
 /** A wreck rests this long (s) before it sleeps: a toppling pile pauses on the way over, and a monster settling on a bank creeps to its pose for most of a second after it first slows under `REST_SPEED`. */
 const WRECK_REST_S = 1;
+/** How far (m) a hub's car-frame place re-derived from its world place may be from the place its clamp pinned, in the slice a freeze starts in, before the pin is kept (`integrateWreck`). */
+const HUB_PIN_MAX = 0.3;
 /** Each wheel's contact standing on level road, as built and at a spawn (`resetContact`): no lift, the normal up, full grip, the world's. */
 const STANDING = new Float64Array(4 * HIT_SIZE);
 for (let i = 0; i < 4; i++) {
@@ -471,7 +473,18 @@ export class DeformableCar extends CarParts {
     _c.copy(wreckCentre(this)).applyMatrix4(g.matrixWorld);
     this.deform.moveRelative(dt, this.velocity, this.angular, _c);
     const toLocal = _m.copy(g.matrixWorld).invert();
-    for (const m of ms) m.local.copy(m.world).applyMatrix4(toLocal);
+    // The slice a freeze starts in (`DeformFreeze.settleFreeze` set `frozen`, the rigid step has not cached it yet): a hub that stands far off the car-frame place its clamp pinned keeps that place, which is what the whole path
+    // draws (a wheel sits at its hub's frame x and z). Re-derived from its world place, as every other mass is, a wreck that spins on a running drivetrain has hubs standing up to 1.5 m off the frame (planted where the world
+    // left them), and the frozen wreck kept them there for good: a wheel drawn at the other end of the car. A hub within `HUB_PIN_MAX` of its pin (the 2 cm a planted hub stands off it in a quiet wreck) is re-derived like
+    // every other mass: it stays where the whole path leaves it.
+    const pin = this.deform.frozen && !this.deform.frozenReady;
+    for (const m of ms) {
+      if (pin && m.hub && !m.popped) {
+        const keep = _r.copy(m.world).applyMatrix4(toLocal).distanceTo(m.local) > HUB_PIN_MAX;
+        if (keep) continue;
+      }
+      m.local.copy(m.world).applyMatrix4(toLocal);
+    }
     const centre = wreckCentre(this);
     _c.copy(centre).applyMatrix4(g.matrixWorld);
     for (const m of ms) {
