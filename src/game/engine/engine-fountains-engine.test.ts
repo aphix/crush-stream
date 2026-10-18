@@ -6,22 +6,26 @@ import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { JET_SLOTS } from "../present/engine-fx.ts";
-import { rangeEdge } from "../present/fountain-plan.ts";
+import { ROAD_MARGIN, ROW_GAP, RUNUP_ROW_GAP } from "../present/fountain-plan.ts";
+import { MINIGAME_MODES, STATION_ANCHORS, STATION_HALF_WIDTH } from "../scenes/minigame-constants.ts";
+import { RANGE } from "../scenes/range.ts";
 import { blankPoint, pointOn } from "../world/track.ts";
 import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
- * The celebration fountains in the real engine: the Range's launch lights the rows, a race's last lap lights the finish line's as the
- * car nears it, and the race director's two readings (the metres left on the last lap, the road's edge at a distance back from the
- * line) answer for a real course.
+ * The celebration fountains in the real engine: the Range's car (plain, and in each minigame) is led up its run-up to the lip by rows that
+ * light as it comes and burn through the throw, a race's last lap lights the finish line's as the car nears it, and the race
+ * director's two readings (the metres left on the last lap, the road's edge at a distance back from the line) answer for a real course.
  */
 
 const FRAME = 1 / FRAME_HZ;
 const LAPS = 2;
 /** Seconds of sim a Range launch may take from the engine's start (the attract run throws within the loop's first seconds). */
 const LAUNCH_TIMEOUT_S = 20;
+/** Sim seconds a full-throttle minigame run may take from the pedal to the throw (the slowest, the Ring Fling hill, takes well under this). */
+const MINIGAME_DRIVE_TIMEOUT_S = 60;
 
 describe("given the real engine", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -56,26 +60,63 @@ describe("given the real engine", () => {
   });
 
   describe("given the Range", () => {
-    it("when the car meets the barrier and its driver is thrown, then three rows of jets stand along the field's edges, sparks fly, and the loop's reset clears them", () => {
-      engine["setScene"]("range");
-      let thrown = false;
-      const rangeThrow = fountains().rangeThrow.bind(fountains());
-      fountains().rangeThrow = (mode) => {
-        thrown = true;
-        rangeThrow(mode);
+    const launches: number[] = [];
+    before(() => {
+      const ragdolls = engine["ragdolls"];
+      const launch = ragdolls.launch.bind(ragdolls);
+      ragdolls.launch = (e, cars, rides, releaseScale) => {
+        launches.push(launches.length);
+        launch(e, cars, rides, releaseScale);
       };
-      for (let frame = 0; frame < LAUNCH_TIMEOUT_S * FRAME_HZ && !thrown; frame++) advance(1);
-      assert.ok(thrown, "the launch lit the fountains");
-      const edge = rangeEdge(null);
+    });
+
+    it("when the plain Range's car runs up to the barrier, then the rows stand along both sides of the run-up before the throw, none past the barrier, and the loop's reset clears them", () => {
+      engine["setScene"]("range");
+      launches.length = 0;
+      for (let frame = 0; frame < LAUNCH_TIMEOUT_S * FRAME_HZ && fountains().jets.jets === 0; frame++) advance(1);
+      assert.ok(fountains().jets.jets > 0, "the jets lit");
+      assert.equal(launches.length, 0, "before the throw: the run-up's fountains lead the car in");
+      advance(1);
+      const edge = RANGE.halfWidth + 1;
       const placed = jetsAt();
       assert.equal(placed.length, 6, "three rows of two at the high tier");
-      assert.equal(JSON.stringify([...new Set(placed.map((j) => j.z))].sort((a, b) => a - b)), JSON.stringify([-edge, edge]));
-      advance(3 * FRAME_HZ);
+      assert.equal(new Set(placed.map((j) => j.z)).size, 2, "a jet on each side");
+      assert.ok(placed.every((j) => Math.abs(Math.abs(j.z) - edge) < 1e-6), "each stands on the field's edge");
+      assert.ok(placed.every((j) => j.x <= 0), "none past the barrier");
+      for (let frame = 0; frame < LAUNCH_TIMEOUT_S * FRAME_HZ && launches.length === 0; frame++) advance(1);
+      assert.equal(launches.length, 1, "the driver was thrown");
+      assert.equal(fountains().jets.jets, 6, "the jets keep going through the launch");
+      advance(FRAME_HZ);
       assert.ok(fountains().jets["life"].some((life) => life > 0), "sparks are in the air while the dummy flies");
       engine["clearLocal"]();
       assert.equal(fountains().jets.jets, 0, "a reset stops the jets");
       assert.ok(fountains().jets["life"].every((life) => life <= 0), "and clears their sparks");
     });
+
+    for (const mode of MINIGAME_MODES) {
+      it(`when the ${mode} car is driven at the lip, then nothing fires while it stands parked, the rows light on the ramp back to front as it comes, and the throw finds all three rows burning`, () => {
+        launches.length = 0;
+        engine.startMinigame(mode);
+        advance(FRAME_HZ);
+        assert.equal(fountains().jets.jets, 0, "parked at the start: nothing");
+        const lip = STATION_ANCHORS[mode];
+        const lit: number[] = [];
+        engine["keys"].add("KeyW");
+        for (let frame = 0; frame < MINIGAME_DRIVE_TIMEOUT_S * FRAME_HZ && launches.length === 0; frame++) {
+          advance(1);
+          for (const j of jetsAt()) {
+            const row = Math.round((lip.x - j.x) / RUNUP_ROW_GAP);
+            if (!lit.includes(row)) lit.push(row);
+            assert.ok(j.x <= lip.x + 1e-6, `${mode}: a jet stands past the lip`);
+            assert.ok(Math.abs(Math.abs(j.z - lip.z) - STATION_HALF_WIDTH) < 1e-6, `${mode}: a jet stands off the ramp's edge`);
+          }
+        }
+        engine["keys"].delete("KeyW");
+        assert.equal(launches.length, 1, `${mode}: the driver was thrown`);
+        assert.deepEqual(lit, [2, 1, 0], `${mode}: back row first, the lip's pair last, all before the throw`);
+        assert.equal(fountains().jets.jets, 6, `${mode}: three rows burn through the launch`);
+      });
+    }
   });
 
   describe("given a two-lap race", () => {
@@ -125,15 +166,49 @@ describe("given the real engine", () => {
       assert.ok(Math.abs(apart - 2 * (centre.half + 2)) < 1e-6, `${apart.toFixed(2)} m apart: the road's width and a margin each side`);
     });
 
-    it("when the player nears the line on the last lap, then the frame lights the finish line's rows; on an earlier lap it does not", () => {
+    it("when a row is placed back from the line, then it stands before the line along the road, the first on it", () => {
+      const g = session().track.gates[0]!;
+      const cx = (g.ax + g.bx) / 2;
+      const cz = (g.az + g.bz) / 2;
+      const spot = new THREE.Vector3();
+      for (const k of [0, 1, 2, 3]) {
+        for (const side of [-1, 1]) {
+          assert.ok(director().roadsideAt(k * ROW_GAP, side, ROAD_MARGIN, spot));
+          const along = (spot.x - cx) * g.nx + (spot.z - cz) * g.nz;
+          assert.ok(Math.abs(along + k * ROW_GAP) < 0.5, `row ${k} stands ${along.toFixed(2)} m along the road from the line, wanted ${-k * ROW_GAP}`);
+        }
+      }
+    });
+
+    it("when the player nears the line on the last lap, then the rows light back to front before the line, the line's pair last, and none starts once he is across; on an earlier lap nothing does", () => {
       fountains().reset();
       director().lastLapLeft = () => NaN;
       advance(2);
       assert.equal(fountains().jets.jets, 0, "an earlier lap: no jets");
-      director().lastLapLeft = () => 10;
-      advance(2);
-      assert.equal(fountains().jets.jets, 6, "last lap, 10 m out: every row of the high tier is due");
-      assert.equal(jetsAt().length, 6);
+      const track = session().track;
+      const g = track.gates[0]!;
+      const cx = (g.ax + g.bx) / 2;
+      const cz = (g.az + g.bz) / 2;
+      /** Metres the jet stands before the line along the way the cars drive (negative: before it). */
+      const along = (x: number, z: number): number => (x - cx) * g.nx + (z - cz) * g.nz;
+      let left = 4 * ROW_GAP;
+      director().lastLapLeft = () => left;
+      const lit: number[] = [];
+      const lastLit: number[] = [];
+      for (; left > -10; left -= 1) {
+        advance(1);
+        for (const j of jetsAt()) {
+          const row = Math.round(Math.abs(along(j.x, j.z)) / ROW_GAP);
+          assert.ok(along(j.x, j.z) <= 0.05, `a jet stands ${along(j.x, j.z).toFixed(2)} m past the line`);
+          if (!lit.includes(row)) {
+            lit.push(row);
+            lastLit.push(left);
+          }
+        }
+      }
+      assert.deepEqual(lit, [2, 1, 0], "the farthest row first, the line's pair last");
+      assert.ok(lastLit.every((at) => at > 0), `every row lit while the car was still short of the line (at ${lastLit.join(", ")} m to go)`);
+      assert.equal(jetsAt().length, 6, "three rows of two at the high tier");
     });
   });
 });

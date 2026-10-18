@@ -588,6 +588,10 @@ export class CrashEngine extends EngineGarage {
         const car = this.followedCar() ? this.seat.carIndex : this.race.self;
         this.fountains.raceFrame(this.race, car, this.cars[car]?.velocity.length() ?? 0);
       }
+    } else if (this.showRange && !this.highlights.playing) {
+      // The Range's jets lead car A (the player's in a minigame) up the run-up to the lip: its presented place, before the throw.
+      const car = this.carA;
+      this.fountains.runUpFrame(this.minigameMode, car.group.position.x, Math.max(0, car.velocity.x));
     }
     const focus = this.highlights.playing ? this.highlights.focus() : null;
     if (focus) this.race.followSun(focus);

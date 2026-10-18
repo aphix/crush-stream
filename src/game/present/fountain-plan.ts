@@ -4,8 +4,9 @@ import type { FxTier } from "./engine-post.ts";
 
 /**
  * Where and when the celebration fountains (`FountainSystem`) go: pure numbers, no scene. A pair is one jet each side of the road (a
- * race) or of the field (the Range and its minigames). The tier says how many pairs and how thick a spray: `off` throws none,
- * `minimal` a single thin pair, `ultra` the full show; the density knob scales the spray on top.
+ * race) or of the run-up (the Range and its minigames); the rows lead up to the finish line or the lip and none stands past it. The tier
+ * says how many pairs and how thick a spray: `off` throws none, `minimal` a single thin pair, `ultra` the full show; the density knob
+ * scales the spray on top.
  */
 export const FOUNTAIN_TIER: Readonly<Record<FxTier, { pairs: number; spray: number }>> = {
   off: { pairs: 0, spray: 0 },
@@ -15,7 +16,7 @@ export const FOUNTAIN_TIER: Readonly<Record<FxTier, { pairs: number; spray: numb
   ultra: { pairs: 4, spray: 1 },
 };
 
-/** A race: the pair at the finish line is the big one (`LINE_POWER`); each further pair (`ROW_POWER`) stands `ROW_GAP` m further back on the run-in. */
+/** The big pair stands at the finish line or the lip (`LINE_POWER`); each further pair (`ROW_POWER`) stands back from it on the way in. */
 export const LINE_POWER = 1.5;
 export const ROW_POWER = 1;
 export const ROW_GAP = 22;
@@ -24,37 +25,29 @@ export const ROW_GAP = 22;
 export const ROAD_MARGIN = 2;
 
 /**
- * Seconds before the player reaches a jet that it starts: a spark's flight is about 2 s, so the column stands in full spray as he arrives.
- * It runs `RACE_AFTER_S` more seconds past his arrival (the celebration after the line).
+ * Seconds before the watched car reaches a row that it starts: a spark's flight is about 2 s, so the column stands in full spray as the
+ * car passes it. It runs `AFTER_S` more seconds past the car's arrival (a race's celebration after the line, a throw's flight).
  */
-export const RACE_LEAD_S = 2.2;
-const RACE_AFTER_S = 5;
-/** Seconds a race jet throws for once started: the lead, the arrival and `RACE_AFTER_S`. */
-export const RACE_RUN_S = RACE_LEAD_S + RACE_AFTER_S;
+export const APPROACH_LEAD_S = 2.2;
+const AFTER_S = 5;
+/** Seconds a jet throws for once started: the lead, the arrival and `AFTER_S`. */
+export const APPROACH_RUN_S = APPROACH_LEAD_S + AFTER_S;
 
-/** The speed (m/s) a run-in is timed at at the least: a car crawling or stopped far from the line does not start the show. */
+/** The speed (m/s) an approach is timed at at the least: a car crawling or stopped far from a row does not start it. */
 const MIN_SPEED = 8;
 
-/** Whether a car `toGo` m from a jet, at `speed` m/s, is within `RACE_LEAD_S` of it (at or past the jet: yes). */
-export function raceJetDue(toGo: number, speed: number): boolean {
-  return toGo / Math.max(speed, MIN_SPEED) <= RACE_LEAD_S;
+/** Whether a row `toGo` m ahead of a car at `speed` m/s is within `APPROACH_LEAD_S` of it: a row the car has passed never starts (nothing fires once it is by). */
+export function approachDue(toGo: number, speed: number): boolean {
+  return toGo >= 0 && toGo / Math.max(speed, MIN_SPEED) <= APPROACH_LEAD_S;
 }
 
-/** The Range: rows of pairs along the field, at most this many (2 or 3 rows is the look; the tier cuts them). */
-export const RANGE_ROWS = 3;
-/** Seconds between one row's start and the next's: the first fires with the launch, the last while the dummy is still in the air. */
-export const RANGE_STAGGER_S = 0.55;
-export const RANGE_RUN_S = 4;
-export const RANGE_POWER = 1.25;
-/** Metres a Range jet stands outside the field's edge. */
+/** The Range's run-up: at most this many rows (2 or 3 is the look; the tier cuts them), the first at the lip (or the barrier), `RUNUP_ROW_GAP` m apart back down the ramp. */
+export const RUNUP_ROWS = 3;
+export const RUNUP_ROW_GAP = 9;
+/** Metres the plain Range's jets stand outside its field's half-width; a station's stand on its lane's edge (`STATION_HALF_WIDTH`), the ramp's side. */
 const RANGE_MARGIN = 1;
 
-/** World x of Range row `row` of `rows`: evenly spread down the field. */
-export function rangeRowX(row: number, rows: number): number {
-  return (RANGE.length * (row + 1)) / (rows + 1);
-}
-
-/** The field's edge (m from the lane's middle) a Range jet stands at: the plain Range's, or the station's (`mode`). */
-export function rangeEdge(mode: MinigameMode | null): number {
-  return (mode === null ? RANGE.halfWidth : STATION_HALF_WIDTH) + RANGE_MARGIN;
+/** The run-up's edge (m from the lane's middle) a jet stands at: the plain Range's, or the station's (`mode`). */
+export function runUpEdge(mode: MinigameMode | null): number {
+  return mode === null ? RANGE.halfWidth + RANGE_MARGIN : STATION_HALF_WIDTH;
 }

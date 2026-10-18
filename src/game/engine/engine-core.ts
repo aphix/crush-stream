@@ -747,10 +747,8 @@ export abstract class EngineCore {
    * slow-mo `THROW_ONSET` on (`holdForThrow`, unless the hit's was held already), and the camera rides with the
    * thrown drivers from that moment (the crash cam's cuts wait), unless it follows another car or the user framed it.
    * A minigame's throw is the score the player reads off the dummy: its camera takes him whatever the user framed.
-   * At the Range (and in its minigames) the launch lights the field's fountains.
    */
   protected onThrow(i: number): void {
-    if (this.showRange) this.fountains.rangeThrow(this.minigameMode);
     if (!this.net.client && !this.rigScene) holdForThrow(this.clock);
     const followed = this.followedCar();
     const userHasTheCamera = this.view.userFramed && this.minigameMode === null;

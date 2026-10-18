@@ -111,7 +111,7 @@ The only sim change is in `vehicle/ejection.ts`. REPLAY entry:
 
 Everything else (session state, bests, boosts, boxes, boards, panel) is local presentation: not in replay or snapshots; netplay clients do not see minigame state.
 
-The launch lights the field's fountains too (`engine-fountains.ts`, `Fountains.rangeThrow`, from the engine's `onThrow`): up to three rows of two jets along the station's edges (`rangeEdge`, 1 m outside `STATION_HALF_WIDTH`; the plain Range's `RANGE.halfWidth`), evenly down the field and each row `RANGE_STAGGER_S` after the last, so they fire while the dummy flies. Cosmetic like everything else here; the FX tier sets the rows.
+The fountains lead the car up to the lip (`engine-fountains.ts`, `Fountains.runUpFrame`, once a frame from the engine; the plain Range does the same up to its barrier): up to three rows of two jets along both edges of the run-up (`STATION_HALF_WIDTH` from the lane's middle; the plain Range's `RANGE.halfWidth` + 1 m), the big pair at the lip itself (the Long jump's barrier) and the others `RUNUP_ROW_GAP` m apart back down the ramp, each on the floor under it. Each row starts so it is in full spray as the player's car passes it (the rows back from the lip first, the lip's pair as the car leaves the lip, `APPROACH_LEAD_S` ahead at its current speed), and burns on through the throw (`APPROACH_RUN_S`). None stands past the lip, none starts once the car is by, and a parked car starts none; Retry, Reset and Exit clear them. Cosmetic like everything else here; the FX tier sets the rows.
 
 ## 9. Re-sizing and files
 
