@@ -15,7 +15,7 @@
  * only where the arms did the same work (the work counters beside them say); otherwise quote the per-unit rows. `docs/PERF_BENCH.md` has the protocol.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { loadavg } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -292,7 +292,7 @@ export function table(name, first, arms) {
   for (const a of arms) {
     const w = a.wreckTops;
     if (!w) continue;
-    lines.push(`   wreckTops check, ${a.name} (summed over runs): points skipped ${w.skipped}; of those the old path would have made a contact row ${w.wouldRow}, set nearing ${w.wouldNear}, answered a wreck's top (dropped) ${w.wreckTop}; DISAGREEMENTS ${w.wouldRow + w.wouldNear}`);
+    lines.push(`   wreckTops check, ${a.name} (summed over runs): points skipped ${w.skipped}; of those the old path would have made a contact row ${w.wouldRow} (DISAGREEMENTS: must be 0), answered a wreck's top (dropped) ${w.wreckTop}, set nearing ${w.wouldNear} (only \`hardTouch\`, which nothing of a wreck reads: the slice log says whether anything physical followed)`);
   }
   for (const a of arms) {
     const r = a.freezeRecord;
@@ -338,6 +338,7 @@ function parseArgs(argv) {
     else if (a === "--verify") args.verify = true;
     else if (a === "--prof") args.prof = true;
     else if (a === "--record") args.record = true;
+    else if (a === "--slices") args.slices = true;
     else if (a === "--trace") args.trace = argv[++i];
     else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else args.scenarios.push(a);
@@ -351,6 +352,27 @@ function child(env) {
   const line = r.stdout.split("\n").find((l) => l.startsWith("BENCH_ARM "));
   if (!line) throw new Error(`the arm process printed no result (exit ${r.status}):\n${r.stderr.slice(-2000)}${r.stdout.slice(-500)}`);
   return JSON.parse(line.slice("BENCH_ARM ".length));
+}
+
+/**
+ * `--slices`: the first run of every arm logged each car's rigid step (`slice-log.ts`); the first arm's log is compared with each other arm's: the first slice that differs in anything physical
+ * (contact rows, velocity, spin, pose) or none (the arms did the same physics, to the bit, for the whole run, warm-up included; `hardTouch` alone is counted apart).
+ */
+async function sliceComparison(name, runs, out) {
+  const { compareSlices } = await import("./slice-log.ts");
+  const firsts = new Map();
+  for (const r of runs) if (!firsts.has(r.arm)) firsts.set(r.arm, r);
+  const read = (r) => {
+    const buf = readFileSync(path.join(out, `${name}-${r.n}-${r.arm}.slices`));
+    return new Float64Array(buf.buffer, buf.byteOffset, buf.byteLength / 8);
+  };
+  const [base, ...others] = [...firsts.values()];
+  const lines = [];
+  for (const o of others) {
+    const c = compareSlices(read(base), read(o));
+    lines.push(`   slice-by-slice, ${base.arm} vs ${o.arm}: ${c.records[0]} / ${c.records[1]} car-slices logged; ${c.first < 0 ? `IDENTICAL in every physical field (hardTouch alone differs in ${c.hardOnly})` : `FIRST DIFFERENCE at record ${c.first}: ${c.fields.join(", ")} (hardTouch alone differed before it in ${c.hardOnly})`}`);
+  }
+  return lines.join("\n");
 }
 
 /** List the scenarios, or run `scenarios` as A/B arms. Returns the exit code. */
@@ -387,13 +409,15 @@ export async function main(argv, log = console.log) {
       if (args.verify) env.BENCH_VERIFY = "1";
       if (args.prof) env.BENCH_PROF = "1";
       if (args.record) env.BENCH_RECORD = "1";
+      if (args.slices) env.BENCH_SLICES = path.join(out, `${name}-${n + 1}-${arm.name}.slices`);
       const run = { ...child(env), arm: arm.name, flagged, n: n + 1 };
       writeFileSync(path.join(out, `${name}-${n + 1}-${arm.name}.json`), JSON.stringify(run));
       runs.push(run);
     }
     const summary = summarize(runs);
     const sc = SCENARIOS[name];
-    const text = table(name, { about: sc.about, sizes: sc.sizes, lone: runs[0].lone, race: runs[0].race, label: runs[0].label, windowS: runs[0].windowS, warmS: runs[0].warmS }, summary);
+    let text = table(name, { about: sc.about, sizes: sc.sizes, lone: runs[0].lone, race: runs[0].race, label: runs[0].label, windowS: runs[0].windowS, warmS: runs[0].warmS }, summary);
+    if (args.slices) text += `\n${await sliceComparison(name, runs, out)}`;
     writeFileSync(path.join(out, `${name}.txt`), `${text}\n`);
     log(text);
   }

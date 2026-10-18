@@ -8,6 +8,7 @@ import { EPICENTER_KNOBS } from "../../src/game/deform/epicenter.ts";
 import { armSequence, DEFAULT_ARMS, main, parseArm, summarize, table } from "./bench.mjs";
 import { SCENARIO_INFO } from "./scenario-info.ts";
 import { SCENARIOS } from "./scenarios.ts";
+import { compareSlices } from "./slice-log.ts";
 
 const run = (arm: string, n: number, ms: number, digest: string, extra: Record<string, number> = {}) => ({
   arm,
@@ -125,5 +126,29 @@ describe("given the scenarios", () => {
     const [on, nudge1, nudge10] = worst as [number, number, number];
     assert.ok(nudge1 > 1, `a 1 um nudge moved a body ${nudge1} cm: the pile is not the chaotic row it was`);
     assert.ok(on <= 2.5 * nudge1, `epicenter on drifted ${on} cm from whole; a 1 um nudge (${nudge1} cm, 10 um: ${nudge10} cm) allows ${2.5 * nudge1}`);
+  });
+});
+
+describe("given two logs of the rigid steps of a run (`--slices`)", () => {
+  it("when they differ in a pose, then the first differing record and field are named, and a differing hardTouch alone is only counted", () => {
+    const rec = (slot: number, hard: number, px: number): number[] => [slot, 2, hard, 0, 1, 2, 3, 0, 0, 0, px, 0, 0, 0, 0, 0, 1];
+    const a = new Float64Array([...rec(0, 0, 1), ...rec(1, 0, 2), ...rec(0, 0, 3)]);
+    const hardOnly = new Float64Array([...rec(0, 1, 1), ...rec(1, 0, 2), ...rec(0, 0, 3)]);
+    assert.deepEqual(compareSlices(a, hardOnly), { records: [3, 3], first: -1, fields: [], hardOnly: 1 });
+    const moved = new Float64Array([...rec(0, 1, 1), ...rec(1, 0, 2), ...rec(0, 0, 3.0000001)]);
+    assert.deepEqual(compareSlices(a, moved), { records: [3, 3], first: 2, fields: ["px"], hardOnly: 1 });
+  });
+
+  it("when a derby heat is run with `epi.wreckTops` off and on, then every car's every rigid step is the same to the bit, points were skipped, and the old path would have made no contact row for them", async () => {
+    const out = mkdtempSync(path.join(tmpdir(), "bench-"));
+    const lines: string[] = [];
+    const code = await main(["run", "derby-8-s3", "--arm", "base:", "--arm", "wt:epi.wreckTops=1", "--warm", "5", "--window", "6", "--order", "abba", "--max-load", "1000", "--slices", "--verify", "--out", out], (l) => lines.push(l));
+    assert.equal(code, 0);
+    const text = lines.join("\n");
+    assert.match(text, /IDENTICAL in every physical field/, "the two arms ran the same physics");
+    const skipped = [...text.matchAll(/wreckTops check, wt \(summed over runs\): points skipped (\d+); of those the old path would have made a contact row (\d+)/g)];
+    assert.equal(skipped.length, 1);
+    assert.ok(Number(skipped[0]![1]) > 0, "the knob skipped no point: the comparison proves nothing");
+    assert.equal(Number(skipped[0]![2]), 0, `the old path would have made a contact row for a skipped point: ${skipped[0]![0]}`);
   });
 });

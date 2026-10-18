@@ -23,6 +23,7 @@ import { SCENARIO_INFO } from "./scenario-info.ts";
 import { SCENARIOS } from "./scenarios.ts";
 import { LoneCensus } from "./census.ts";
 import { FreezeRecorder } from "./freeze-record.ts";
+import { recordSlices } from "./slice-log.ts";
 
 const name = process.env["BENCH_SCENARIO"] ?? "";
 const scenario = SCENARIOS[name];
@@ -206,6 +207,8 @@ const advance = (seconds: number): void => {
 const verify = process.env["BENCH_VERIFY"] === "1";
 GQ.on = verify;
 GQ.check = verify;
+/** `BENCH_SLICES=<file>` (bench `--slices`): every car's rigid step is logged (`slice-log.ts`) from the first step of the warm-up, for the slice-by-slice comparison of two arms. */
+if (process.env["BENCH_SLICES"]) recordSlices(process.env["BENCH_SLICES"]);
 advance(warmS);
 sites.clear();
 clampSites.clear();
