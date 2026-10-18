@@ -52,27 +52,59 @@ function armLabel(result) {
 }
 
 const ARM = ":epi";
+const PHASE_WINDOW = "window";
+
+/** The arm a bench card ran: the epicenter setting the card records, else the loop step's suffix (a card from before the field). */
+function armOf(settings, result) {
+  return typeof result.settings?.epicenter === "boolean" ? result.settings.epicenter : settings.step.endsWith(ARM);
+}
+
+/** What was wrong with the page during the window: unfocused, hidden or out of fullscreen at any entry of its `pageEvents` (the entry that opens the window counts). */
+function windowFaults(result) {
+  const faults = new Set();
+  for (const e of result.pageEvents ?? []) {
+    if (e.phase !== PHASE_WINDOW) continue;
+    if (!e.visible) faults.add("hidden");
+    else if (!e.focused) faults.add("unfocused");
+    if (!e.fullscreen) faults.add("not fullscreen");
+  }
+  return [...faults];
+}
+
+/** The FX tier the most window frames ran. */
+const topTier = (result) => Object.entries(result.tierPct ?? {}).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "?";
 
 /**
- * The off/on pairs of the bench loop in `ones` (submissions as `readOne` answers them): the loop runs every map twice in a row (step `city`, then `city:epi`), and the cards of a pair share session, cycle and
- * map. One block per pair: ms per sim-second by phase and the epicenter counters, off | on | change. The two arms run different workloads once the sim diverges (a wreck in one is not a wreck in the other), so a
- * total is not an A/B: read the per-unit numbers (`scripts/bench`) before quoting a gain.
+ * The off/on pairs of the bench loop in `ones` (submissions as `readOne` answers them: the card's loop settings are `submission.settings`): the loop runs every map twice, and
+ * the cards of a pair share session, loop cycle and map (step `city`, `city:epi`). One block per pair: ms per sim-second by phase, the counters, the cost per unit
+ * of work (the arms do different work once the sim diverges, so a total is not an A/B), hitches, and a FLAG line for each arm whose window lost focus,
+ * was hidden or left fullscreen, and for a pair whose arms ran different FX tiers: such a pair says little about the activation.
  */
 export function abTable(ones) {
   const cards = new Map();
   for (const one of ones) {
-    const settings = one.submission?.context?.settings;
+    const settings = one.submission?.settings;
     const result = one.submission?.payload?.result;
     if (one.kind !== "bench" || !settings?.step || !result?.phases) continue;
-    const on = settings.step.endsWith(ARM);
-    const key = `${settings.session} cycle ${settings.loop} ${on ? settings.step.slice(0, -ARM.length) : settings.step}`;
+    const on = armOf(settings, result);
+    const key = `${settings.session} cycle ${settings.loop} ${settings.step.endsWith(ARM) ? settings.step.slice(0, -ARM.length) : settings.step}`;
     cards.set(key, { ...cards.get(key), [on ? "on" : "off"]: result });
   }
   const lines = [];
   for (const [key, pair] of cards) {
     if (!pair.off || !pair.on) continue;
     const change = (a, b) => (a > 0 ? `${b >= a ? "+" : ""}${f1((100 * (b - a)) / a)} %` : "");
-    const row = (name, a, b) => `    ${name.padEnd(16)} ${f1(a).padStart(9)} ${f1(b).padStart(9)} ${change(a, b).padStart(9)}`;
+    const row = (name, a, b) => `    ${name.padEnd(22)} ${f1(a).padStart(9)} ${f1(b).padStart(9)} ${change(a, b).padStart(9)}`;
+    const perUnit = (result, phase, units) => {
+      const per = result.phases.workPerSimS;
+      const n = units.reduce((sum, name) => sum + (per[name] ?? 0), 0);
+      return n > 0 ? (1000 * result.phases.msPerSimS[phase]) / n : null;
+    };
+    const share = (result) => {
+      const per = result.phases.workPerSimS;
+      const wrecks = (per.wreckCarSlices ?? 0) + (per.asleepCarSlices ?? 0);
+      return wrecks > 0 ? (100 * (per.frozenCarSlices ?? 0)) / wrecks : null;
+    };
     lines.push(`${key}: epicenter off | on`, row("sim ms/sim-s", pair.off.simMsPerSimS, pair.on.simMsPerSimS));
     for (const name of Object.keys(pair.off.phases.msPerSimS)) lines.push(row(name, pair.off.phases.msPerSimS[name], pair.on.phases.msPerSimS[name] ?? 0));
     for (const name of ["wreckCarSlices", "frozenCarSlices", "freezes", "thaws", "liveCarSlices"]) {
@@ -80,6 +112,23 @@ export function abTable(ones) {
       const b = pair.on.phases.workPerSimS[name];
       if (a !== undefined || b !== undefined) lines.push(row(name, a ?? 0, b ?? 0));
     }
+    const units = [
+      ["integrate us/live slice", (r) => perUnit(r, "integrate", ["liveCarSlices"])],
+      ["wreck us/wreck slice", (r) => perUnit(r, "wreck", ["wreckCarSlices"])],
+      ["structure us/wreck slice", (r) => perUnit(r, "structure", ["wreckCarSlices"])],
+      ["frozen % of wreck+asleep", share],
+    ];
+    for (const [name, of] of units) {
+      const a = of(pair.off);
+      const b = of(pair.on);
+      if (a !== null && b !== null) lines.push(row(name, a, b));
+    }
+    if (pair.off.hitches && pair.on.hitches) lines.push(row("hitched frames", pair.off.hitches.count, pair.on.hitches.count), row("hitch ms over median", pair.off.hitches.excessMs, pair.on.hitches.excessMs));
+    for (const [arm, result] of [["off", pair.off], ["on", pair.on]]) {
+      const faults = windowFaults(result);
+      if (faults.length) lines.push(`    FLAG epicenter ${arm}: the window ran ${faults.join(", ")}`);
+    }
+    if (topTier(pair.off) !== topTier(pair.on)) lines.push(`    FLAG the arms ran different FX tiers: off ${topTier(pair.off)}, on ${topTier(pair.on)}`);
   }
   return lines;
 }

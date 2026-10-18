@@ -126,29 +126,68 @@ describe("given the owner asks for each bench card's phase table (--phases)", ()
 });
 
 describe("given the bench loop ran a map twice, the epicenter activation off and then on (--ab)", () => {
-  const arm = (id, step, on, ms, wreck, frozen) => ({
+  /** A card as the server stores it: the loop's settings at `submission.settings`, the arm in the result's own settings. */
+  const arm = (id, step, on, ms, wreck, frozen, extra = {}) => ({
     id, kind: "bench", receivedAt: "2026-10-17T10:00:00Z", sha: "3e214dff", size: 20000,
     submission: {
       kind: "bench",
-      context: { settings: { session: "k3x9q2", loop: 1, step } },
-      payload: { result: { course: "city", simMsPerSimS: ms, settings: { epicenter: on }, phases: { msPerSimS: { wreck, structure: ms - wreck }, unattributedMsPerSimS: 0, workPerSimS: { wreckCarSlices: 4000, frozenCarSlices: frozen } } } },
+      settings: { session: "k3x9q2", loop: 1, step },
+      payload: {
+        url: `https://game.test/crush/?bench=city${on ? "&epi=1" : ""}&loop=k3x9q2&cycle=1`,
+        result: {
+          course: "city",
+          simMsPerSimS: ms,
+          tierPct: { high: 100 },
+          settings: { epicenter: on },
+          pageEvents: [{ phase: "window", atS: 0, visible: true, focused: true, fullscreen: true }],
+          phases: { msPerSimS: { integrate: 100, wreck, structure: ms - wreck }, unattributedMsPerSimS: 0, workPerSimS: { liveCarSlices: 5000, wreckCarSlices: 4000, asleepCarSlices: 1000, frozenCarSlices: frozen } },
+          ...extra,
+        },
+      },
     },
   });
-  it("when the two cards of a map are fetched, then each carries its arm and one block puts off and on side by side with the change; a card without its twin prints no block", async () => {
-    const rows = [arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500), arm("CCCC-3333", "strip", false, 100, 40, 0)];
+  const fetchLines = async (rows) => {
     const lines = [];
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server(rows).fetchImpl, pause: noPause, phases: true, ab: true, log: (l) => lines.push(l) });
+    return lines;
+  };
+  const squash = (lines) => lines.map((l) => l.trim().split(/\s+/).join(" "));
+
+  it("when the two cards of a map are fetched, then each carries its arm and one block puts off and on side by side with the change and the cost per unit of work; a card without its twin prints no block", async () => {
+    const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500), arm("CCCC-3333", "strip", false, 100, 40, 0)]);
     assert.ok(lines.some((l) => l.includes("city, epicenter off 600.0")), "the off card says so");
     assert.ok(lines.some((l) => l.includes("city, epicenter ON 540.0")), "the on card says so");
     const block = lines.slice(lines.findIndex((l) => l.startsWith("k3x9q2 cycle 1 city")));
-    assert.deepEqual(block.map((l) => l.trim().split(/\s+/).join(" ")), [
+    assert.deepEqual(squash(block), [
       "k3x9q2 cycle 1 city: epicenter off | on",
       "sim ms/sim-s 600.0 540.0 -10.0 %",
+      "integrate 100.0 100.0 +0.0 %",
       "wreck 300.0 270.0 -10.0 %",
       "structure 300.0 270.0 -10.0 %",
       "wreckCarSlices 4000.0 4000.0 +0.0 %",
       "frozenCarSlices 0.0 3500.0",
+      "liveCarSlices 5000.0 5000.0 +0.0 %",
+      "integrate us/live slice 20.0 20.0 +0.0 %",
+      "wreck us/wreck slice 75.0 67.5 -10.0 %",
+      "structure us/wreck slice 75.0 67.5 -10.0 %",
+      "frozen % of wreck+asleep 0.0 70.0",
     ]);
+  });
+
+  it("when one arm's window lost focus and left fullscreen and the arms ran different FX tiers, then the block flags each fault and the tiers", async () => {
+    const unfocused = { pageEvents: [{ phase: "warm", atS: 0, visible: true, focused: true, fullscreen: true }, { phase: "window", atS: 0, visible: true, focused: false, fullscreen: false }], tierPct: { ultra: 100 } };
+    const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, unfocused)]);
+    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran unfocused, not fullscreen", "FLAG the arms ran different FX tiers: off high, on ultra"]);
+  });
+
+  it("when a pair of cards as the owner's phone sent them (the arm only in the step and the url, the card's settings one level up) is fetched, then it pairs by session, cycle and map", async () => {
+    const phone = (id, step, on) => {
+      const card = arm(id, step, on, 3000, 1200, 0);
+      delete card.submission.payload.result.settings;
+      return card;
+    };
+    const lines = await fetchLines([phone("PPPP-1111", "strip", false), phone("QQQQ-2222", "strip:epi", true)]);
+    assert.ok(lines.includes("k3x9q2 cycle 1 strip: epicenter off | on"), "the pair is printed");
   });
 });
 
