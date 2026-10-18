@@ -1,6 +1,4 @@
-import type { RaceCommand } from "../match/types.ts";
 import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
-import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { benchPlan, leaderAhead } from "./engine-bench-plan.ts";
 import { watchPage } from "./engine-bench-page.ts";
 import { warmUp } from "./engine-bench-warm.ts";
@@ -14,30 +12,23 @@ import type { SkyMode } from "../present/sky-dome.ts";
 import { hudSettings, roundCard } from "./bench-card.ts";
 import { alternate, enterPhase, frame, FRAME_CPU, FRAME_DRAW, FRAME_DT, FRAME_SIM, newBeat, nextFrame, type Beat, type FrameEngine } from "./bench-frame.ts";
 import { INITIAL_HUD, type CrashHudState } from "../hud/hud-store.ts";
-import type { KnobId } from "../hud/knobs.ts";
+import { enterBenchScene, type SceneEngine } from "./bench-scene.ts";
 
 /** What `runBench` drives: the real engine, by its public face. */
-interface BenchEngine extends FrameEngine {
+interface BenchEngine extends FrameEngine, SceneEngine {
   readonly ready: Promise<void>;
   readonly pace: SimPacer;
   fadeScenes: boolean;
-  toggleRace(): void;
-  raceCommand(cmd: RaceCommand): void;
-  toggleLab(): void;
-  /** The HUD's time scale: a fixed one, or null for the automatic slow-mo. */
-  setTimeScale(value: number | null): void;
   start(): void;
   setFxTier(tier: FxTier): void;
-  /** The Debug slider `id` to `value` (the epicenter arm sets `epi.on` once the race is up: the race setup puts every knob back to its default). */
-  setKnob(id: KnobId, value: number): void;
   setFxAuto(): void;
   /** The Sky setting. */
   setSky(mode: SkyMode): void;
   /** Fetch the Ultra look (the `ultra=1` arm needs it in before its first block); false when it did not load. */
   loadUltra(): Promise<boolean>;
   benchParts(): BenchParts;
-  /** Every non-police car wears `style` (null: the fleet's mix). */
-  useOneBody(style: CarStyleId | null): void;
+  /** The page's adaptive quality as it booted (a loop runs every step in one page). */
+  resetAdaptiveQuality(): void;
   /** The run's crash as the reel plays it from this frame on (the clip's size on the wire), and the end of that reel; the reel's sim step ms since the last read. */
   playBenchReel(clip: HighlightClip): Promise<number>;
   stopBenchReel(): void;
@@ -71,6 +62,9 @@ type BenchReceipt = { id: string } | { error: string };
 /** What posts a bench card's JSON (the page owns the server's address and the loop's context). */
 type SubmitBench = (payload: object) => Promise<BenchReceipt>;
 
+/** The attribute that marks a bench card's element, so the next bench of a page can remove it. */
+const CARD_ATTRIBUTE = "data-bench-card";
+
 /**
  * A text card over the canvas; `set` rewrites it while the bench runs, `done` swaps in the results and the buttons that copy
  * the full details as JSON and submit them, `receipt` shows how a submit went.
@@ -80,7 +74,10 @@ function overlay(loopProgress: string | null): {
   done(lines: string[], details: () => string, submit: () => void): void;
   receipt(state: "sending" | BenchReceipt): void;
 } {
+  // A loop that runs its next bench in this page puts the last card away.
+  for (const old of document.querySelectorAll(`[${CARD_ATTRIBUTE}]`)) old.remove();
   const root = document.createElement("div");
+  root.setAttribute(CARD_ATTRIBUTE, "");
   root.style.cssText =
     "position:fixed;left:8px;top:8px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;z-index:99999;padding:8px 10px;" +
     "background:rgba(8,10,14,.92);color:#e8f0ff;font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;border-radius:8px;pointer-events:none";
@@ -283,7 +280,7 @@ async function replayTiers(engine: BenchEngine, parts: BenchParts, t: Tap, beat:
  * detail, FX tier), then the crash replay. Afterwards the settings go back to automatic and the scene plays on under the card.
  * `hud` reads the HUD's state (the card keeps the settings that differ from the defaults, `bench-card.ts`); `opts.submit` posts the card's JSON (Submit button, and the bench loop's `auto` post). Null: no such bench.
  */
-export async function runBench(engine: BenchEngine, hud: () => CrashHudState, search: string, opts: { submit: SubmitBench; auto: boolean; loopProgress: string | null }): Promise<BenchResult | null> {
+export async function runBench(engine: BenchEngine, hud: () => CrashHudState, search: string, opts: { submit: SubmitBench; auto: boolean; loopProgress: string | null; wake: { readonly held: boolean } | null }): Promise<BenchResult | null> {
   const plan = benchPlan(search);
   if (!plan) return null;
   const ui = overlay(opts.loopProgress);
@@ -292,35 +289,17 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   const batteryStart = await readBattery();
   await engine.ready;
   if (plan.ultra && !(await engine.loadUltra())) throw new Error("CRUSH BENCH: ultra=1, but the Ultra look did not load (see the console)");
+  engine.resetAdaptiveQuality();
   const parts = engine.benchParts();
   parts.renderer.setAnimationLoop(null);
   engine.fadeScenes = false;
-  // The Lab bench throws on the Lab's own sets (`LAB_BENCH`) at 1x: the slow-mo would stretch each hit over a different share
-  // of each block. A race bench enters the race scene (no slow-mo in a race).
-  if (plan.lab) {
-    engine.toggleLab();
-    engine.setTimeScale(1);
-  } else engine.toggleRace();
-  // The strip is built now, handed to the race field as an off-menu course, and every non-police car wears the one body asked for.
-  if (plan.course) parts.race.loadBenchCourse(plan.course);
-  engine.useOneBody(plan.body);
-  const setupMs = { options: 0, start: 0 };
-  if (plan.race) {
-    const t0 = performance.now();
-    engine.raceCommand(plan.race);
-    const t1 = performance.now();
-    parts.race.reseed(BENCH.seed);
-    engine.raceCommand({ type: "start" });
-    if (plan.epicenter) engine.setKnob("epi.on", 1);
-    setupMs.options = t1 - t0;
-    setupMs.start = performance.now() - t1;
-    parts.seat.mode = "follow";
-  }
+  const setupMs = enterBenchScene(engine, parts, plan);
 
   const t = tap(engine.pace, parts);
   const beat = newBeat(parts, await nextFrame(), plan.lab, PHASE_WARM);
   const page = watchPage();
   beat.page = page;
+  beat.wake = opts.wake;
   enterPhase(beat, page, PHASE_WARM);
   await warmUp(() => frame(engine, parts.renderer, t, beat), { race: parts.race, simS: () => t.simS, plan, ui });
   enterPhase(beat, page, PHASE_WINDOW);
@@ -364,6 +343,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
     }
   }
   const pageEvents = page.stop();
+  const pageSeconds = page.seconds();
   engine.setFxAuto();
   if (plan.lab) engine.setTimeScale(null);
 
@@ -379,6 +359,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
     replay: replayRun && replayResult(replayRun, gpu),
     replayWhy,
     pageEvents,
+    pageSeconds,
     longTasks,
     hitches: beat.hitches.table(),
     switches: [...pace.switches, ...detail.switches, ...fx.switches, ...(sky?.switches ?? [])],

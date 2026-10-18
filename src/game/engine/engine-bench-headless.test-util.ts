@@ -5,6 +5,7 @@ import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { BENCH } from "./bench-measure.ts";
 import { BENCH_RACE, benchPlan, benchRace } from "./engine-bench-plan.ts";
+import { enterBenchScene } from "./bench-scene.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 
@@ -17,13 +18,13 @@ async function benchEngine(): Promise<CrashEngine> {
   Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
   await engine.ready;
   engine.fadeScenes = false;
-  engine.toggleRace();
   return engine;
 }
 
 /** The real engine on the city bench's race (`BENCH_RACE`, the bench's seed; with `course` the same field on another course, off-menu ones too), nothing drawn, the pacer pinned to the 1/240 s floor. One per process (a second `CrashEngine` never resolves `ready`). */
 export async function benchRaceEngine(course?: string): Promise<CrashEngine> {
   const engine = await benchEngine();
+  engine.toggleRace();
   engine.raceCommand(course === undefined ? BENCH_RACE : benchRace(course));
   engine["race"].reseed(BENCH.seed);
   engine.raceCommand({ type: "start" });
@@ -32,16 +33,10 @@ export async function benchRaceEngine(course?: string): Promise<CrashEngine> {
   return engine;
 }
 
-/** The real engine on the bench page `search` (`?bench=strip`, `?bench=city&course=national-mall`, ...) as the in-app card sets it up (its course, body, race, the bench's seed), nothing drawn, the pacer pinned to the 1/240 s floor. */
+/** The real engine on the bench page `search` (`?bench=strip`, `?bench=city&course=national-mall`, ...) as the in-app card sets it up (`enterBenchScene`: its course, body, race, the bench's seed), nothing drawn, the pacer pinned to the 1/240 s floor. */
 export async function benchPlanEngine(search: string): Promise<CrashEngine> {
-  const plan = benchPlan(search)!;
   const engine = await benchEngine();
-  if (plan.course) engine["race"].loadBenchCourse(plan.course);
-  engine.useOneBody(plan.body);
-  engine.raceCommand(plan.race!);
-  engine["race"].reseed(BENCH.seed);
-  engine.raceCommand({ type: "start" });
-  engine["seat"].mode = "follow";
+  enterBenchScene(engine, engine.benchParts(), benchPlan(search)!);
   engine.pace.pin = false;
   return engine;
 }
@@ -56,8 +51,11 @@ export function runFrames(engine: CrashEngine, frames: number): void {
   for (let i = 0; i < frames; i++) engine.advance(FRAME_S, { frameDt: FRAME_S });
 }
 
-/** A hash of every car's pose and motion, and the pacer's step count: equal for two runs only when the sim ran bit for bit alike. */
-export function simDigest(engine: CrashEngine): string {
+/**
+ * A hash of every car's pose and motion, and the pacer's steps and the world's fine cuts since `since` (the counters `simCounters` read when the run began; none: since the engine
+ * was made): equal for two runs only when the sim ran bit for bit alike.
+ */
+export function simDigest(engine: CrashEngine, since: SimCounters = { steps: 0, fineCuts: 0 }): string {
   const hash = createHash("sha1");
   const cars = engine["live"]();
   const numbers = new Float64Array(cars.length * 14 + 2);
@@ -70,8 +68,18 @@ export function simDigest(engine: CrashEngine): string {
     numbers.set([p.x, p.y, p.z, q.x, q.y, q.z, q.w, v.x, v.y, v.z, a.x, a.y, a.z, car.crashed ? 1 : 0], k);
     k += 14;
   }
-  numbers[k++] = engine.pace.total;
-  numbers[k] = engine["world"].fineCuts;
+  numbers[k++] = engine.pace.total - since.steps;
+  numbers[k] = engine["world"].fineCuts - since.fineCuts;
   hash.update(new Uint8Array(numbers.buffer));
   return hash.digest("hex");
+}
+
+/** The sim's counters that only count up: the pacer's steps and the world's fine cuts. */
+export interface SimCounters {
+  steps: number;
+  fineCuts: number;
+}
+
+export function simCounters(engine: CrashEngine): SimCounters {
+  return { steps: engine.pace.total, fineCuts: engine["world"].fineCuts };
 }

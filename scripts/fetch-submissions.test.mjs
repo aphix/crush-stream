@@ -180,6 +180,13 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
     assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran unfocused, not fullscreen", "FLAG the arms ran different FX tiers: off high, on ultra"]);
   });
 
+  it("when a card carries the per-second series, then the flag counts the window's seconds that were hidden, unfocused, out of fullscreen or had no screen wake lock held, and says nothing of a second that was fine", async () => {
+    // Six seconds: warm (stretch 0) shown, focused, fullscreen, awake (f); then window seconds (stretch 1): f, d (no focus... d = 1+4+8: focused 2 missing), 5 (1+4: focused and awake missing), 0 (hidden, nothing).
+    const series = { pageSeconds: { flags: "ffd50" + "f", phases: "0011" + "11" } };
+    const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, series)]);
+    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran hidden 1 of 4 s, unfocused 2 of 4 s, not fullscreen 1 of 4 s, screen not held 2 of 4 s"]);
+  });
+
   it("when a pair of cards as the owner's phone sent them (the arm only in the step and the url, the card's settings one level up) is fetched, then it pairs by session, cycle and map", async () => {
     const phone = (id, step, on) => {
       const card = arm(id, step, on, 3000, 1200, 0);

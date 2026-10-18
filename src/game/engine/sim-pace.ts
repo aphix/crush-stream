@@ -87,6 +87,26 @@ export class SimPacer {
   }
 
   /**
+   * The pacer as a fresh page has it: no sim time owed or overdrawn from the frame before, the 1/240 s floor, no step cost, demand or dwell learned and no clock
+   * resolution judged (the counters `lost`, `cut`, `total` and `coarseSteps` keep counting: a reader takes differences, and the pin is the caller's). A bench loop runs
+   * every step in one page; a step that began on the last one's overdrawn frame took its steps a frame off, and a replay of the same race did not match.
+   */
+  reset(): void {
+    this.owed = 0;
+    this.lastStep = FINE_SLICE;
+    this.alpha = 1;
+    this.steps = 0;
+    this.coarse = false;
+    this.fine = FINE_SLICE;
+    this.cost = 0;
+    this.need = 0;
+    this.dwell = 0;
+    this.tick = Infinity;
+    this.repeats = false;
+    this.blind = false;
+  }
+
+  /**
    * One frame: `simDt` sim seconds (the frame's wall time at the time scale `scale`) in steps of `vmax`'s slice, each handed
    * to `step`. `deadline` (a `now()` ms) ends the loop once two steps have run, on a clock fine enough to time a step.
    * `fineNeeded`: a crush window is open on some car, so quiet steps take the fine slice; otherwise 1/80 is the floor

@@ -45,7 +45,7 @@ export interface BenchParts {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   sun: THREE.DirectionalLight;
-  race: Pick<RaceDirector, "phase" | "time" | "reseed" | "policeStats" | "loadBenchCourse" | "crashAtStart" | "recorder">;
+  race: Pick<RaceDirector, "active" | "phase" | "time" | "reseed" | "policeStats" | "loadBenchCourse" | "crashAtStart" | "recorder">;
   seat: DriverSeat;
   live(): readonly DeformableCar[];
   /** The distance detail and the rung its governor holds: the bench pins rungs for its A/B and puts the governor's back. */
@@ -400,7 +400,7 @@ function sharesOf(counts: Float64Array, order: Uint8Array, seen: number, frames:
   return shares;
 }
 
-export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "device" | "pageEvents" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "switches"> {
+export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "device" | "pageEvents" | "pageSeconds" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "switches"> {
   const { race } = parts;
   const { n, iv } = s;
   const third = Math.floor(n / 3);

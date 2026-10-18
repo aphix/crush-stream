@@ -130,6 +130,16 @@ export interface ReplayResult {
   tiers: Record<string, ReplayTier>;
 }
 
+/**
+ * The page's state each second from the run's first frame, as two strings of one hex digit a second: `flags` (bits: shown 1, focused 2, fullscreen 4, the screen
+ * wake lock held 8; `f` is all four) and `phases` (the `PAGE_PHASES` index of the stretch the second fell in), so a card says in which seconds of which
+ * stretch the screen was not held, the window not focused or the page left fullscreen.
+ */
+export interface PageSeconds {
+  flags: string;
+  phases: string;
+}
+
 /** The page's state `atS` seconds into `phase` (`BenchResult.pageEvents`). */
 export interface PageEvent {
   phase: (typeof PAGE_PHASES)[number];
@@ -223,6 +233,8 @@ export interface BenchResult {
    * unfocused page is throttled by the browser, so frames in those spans are not the device's speed.
    */
   pageEvents: PageEvent[];
+  /** The page's state each second of the run (`PageSeconds`). */
+  pageSeconds: PageSeconds;
   /** Where the window's sim time went, by phase of a step, and the work done (`PhaseCard`). */
   phases: PhaseCard;
   /** Long tasks during the window; null where the browser has no "longtask" entries (not Chrome). */

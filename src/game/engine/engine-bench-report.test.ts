@@ -57,6 +57,7 @@ const RESULT: BenchResult = {
   replay: null,
   replayWhy: "no clip yet",
   pageEvents: [{ phase: "warm", atS: 0, visible: true, focused: true, fullscreen: false }],
+  pageSeconds: { flags: "ffffd5", phases: "001111" },
   phases: PHASES,
   longTasks: { count: 4, totalMs: 312.5, maxMs: 120.25 },
   hitches: { factor: 3, minMs: 25, frames: 7200, count: 3, excessMs: 612, rows: [{ atS: 3.2, phase: 1, ms: 412, cpuMs: 380, simMs: 20, drawMs: 350, causes: ["focus"] }, { atS: 0.4, phase: 4, ms: 180, cpuMs: 150, simMs: 10, drawMs: 140, causes: ["setting-switch", "gpu-resources"] }, { atS: 7.7, phase: 4, ms: 60, cpuMs: 8, simMs: 4, drawMs: 3, causes: [] }] },

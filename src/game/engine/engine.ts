@@ -409,6 +409,20 @@ export class CrashEngine extends EngineGarage {
   }
 
 
+  /**
+   * The adaptive quality and the pacer as the page booted them: the FX tier on its first tier, a new tier policy (`AutoFx`: its learned ceiling and climb streak), a new
+   * detail governor at its start rung and a pacer with nothing owed or learned (`SimPacer.reset`). A bench loop runs every step in one page; each step starts from here,
+   * so what an earlier step taught the policy, the governor or the pacer never decides a later one. Call it before `benchParts()`: the parts hold the governor.
+   */
+  resetAdaptiveQuality(): void {
+    const desktop = this.deviceClass === "desktop";
+    this.setFxTier(INITIAL_HUD.fxTier);
+    this.autoFx = new AutoFx(this.deviceClass !== "software", true, desktop);
+    this.detailGov = new DetailGovernor(desktop ? 0 : PHONE_LEVEL);
+    this.detail.setLevel(this.detailGov.level);
+    this.pace.reset();
+  }
+
   private tick = (now: number): void => {
     if (this.disposed) return;
     this.stats?.begin();

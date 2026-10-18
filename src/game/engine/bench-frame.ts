@@ -4,7 +4,7 @@ import { BENCH, emptyAcc, wrecks, type Acc, type BenchParts, type Tap } from "./
 import { CAUSE, FRAME, HitchLog } from "./bench-hitch.ts";
 import { SettleWatch, type SwitchHitch } from "./bench-settle.ts";
 import type { BenchPlan } from "./engine-bench-plan.ts";
-import type { watchPage } from "./engine-bench-page.ts";
+import type { PageWatch } from "./engine-bench-page.ts";
 
 /** What one frame of the bench drives: the engine's own frame (`advance`), the pacer it reads steps from, and the Lab's sets and throws. */
 export interface FrameEngine {
@@ -62,10 +62,12 @@ export interface Beat {
   lab: LabRun | null;
   parts: BenchParts;
   hitches: HitchLog;
-  page: ReturnType<typeof watchPage> | null;
+  page: PageWatch | null;
   phase: number;
   phaseStart: number;
   switching: boolean;
+  /** The loop's screen wake lock (null: none held), read once a frame for the per-second series. */
+  wake: { readonly held: boolean } | null;
   seen: { wrecks: number; programs: number; textures: number; geometries: number; ragdollMessages: number };
 }
 
@@ -81,6 +83,7 @@ export function newBeat(parts: BenchParts, prev: number, lab: BenchPlan["lab"], 
     phase,
     phaseStart: performance.now(),
     switching: false,
+    wake: null,
     seen: { wrecks: 0, programs: 0, textures: 0, geometries: 0, ragdollMessages: 0 },
   };
 }
@@ -141,7 +144,7 @@ function readCauses(beat: Beat, t: Tap): number {
 }
 
 /** A new stretch of the run (`PAGE_PHASES` index): the page watch and the hitch log's clock follow. */
-export function enterPhase(beat: Beat, page: ReturnType<typeof watchPage>, phase: number): void {
+export function enterPhase(beat: Beat, page: PageWatch, phase: number): void {
   page.phase(phase);
   beat.phase = phase;
   beat.phaseStart = performance.now();
@@ -168,6 +171,7 @@ export async function frame(engine: FrameEngine, renderer: THREE.WebGLRenderer, 
   beat.frame[FRAME_DRAW] = t.drawMs;
   beat.frame[FRAME.atS] = (f1 - beat.phaseStart) / 1000;
   beat.hitches.frame(beat.frame, beat.phase, readCauses(beat, t));
+  beat.page?.tick(beat.frame, beat.phase, beat.wake?.held === true);
 }
 
 /** One setting of an A/B: `set` flips it before its block. */

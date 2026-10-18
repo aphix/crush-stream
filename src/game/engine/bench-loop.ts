@@ -4,9 +4,10 @@ import { TRACK_ID } from "../world/constants.ts";
 import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, EPI_STEP_SUFFIX, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
 
 /**
- * The benchmark loop: one cycle of benches, each its own page load (`?bench=…&loop=<session>&cycle=<n>&step=<i>`, so every bench
- * starts on a clean engine), posting its card before the page moves on. The address is the loop's whole state. This file is the
- * loop's rules; `components/bench-run.ts` holds its navigation.
+ * The benchmark loop: one cycle of benches (`?bench=…&loop=<session>&cycle=<n>&step=<i>`), all run in the one page (`driveLoop`: no
+ * navigation between steps, so the page keeps its fullscreen and its screen wake lock), each posting its card before the next begins. The address says
+ * which step the page is on, and is the loop's whole state: a reload resumes there. This file is the loop's rules; `components/bench-run.ts`
+ * holds the page's side.
  */
 
 /** One bench of a cycle: the page query that runs it (`benchPlan`). */
@@ -196,4 +197,32 @@ export function parseRun(search: string): BenchRun | null {
   if (loop === null || loop < 1 || step === null) return null;
   const on = (name: string): boolean => q.get(name) !== "0";
   return { session, loop, step, ultra: q.get(LOOP_QUERY.ultraCycle) === "1", keep: on(LOOP_QUERY.keep), auto: on(LOOP_QUERY.auto), ultraNext: on(LOOP_QUERY.ultraNext) && ULTRA_AVAILABLE };
+}
+
+/** What the loop's driver asks of the page it runs in. */
+interface LoopPage {
+  /** Points the page's address at `run`'s step (no navigation: a reload resumes there) and returns the address's query, which names the bench. */
+  show(run: BenchRun): string;
+  /** Runs the step's bench and posts its card; false when the address names no bench the game knows, which ends the loop. */
+  runStep(run: BenchRun, search: string): Promise<boolean>;
+  /** The pause between steps, the card and receipt on screen. */
+  pause(): Promise<void>;
+  /** With `run.auto` set and a newer build deployed, moves the page onto it at `run`'s step and answers true: the loop ends here, the new page continues it. The one navigation. */
+  reload(run: BenchRun): Promise<boolean>;
+}
+
+/**
+ * The whole loop in the page it started in: every step (each map, both arms of it, every cycle while `keep` is set) runs in turn with no navigation
+ * between them, so the page stays fullscreen and keeps its wake lock, and the JIT and the heap carry from one step to the next (a step cleans the scene
+ * it finds: `enterBenchScene`). Returns when the cycle is over, a step has no bench, or the page was sent onto a newer build.
+ */
+export async function driveLoop(first: BenchRun, page: LoopPage): Promise<void> {
+  let run = first;
+  for (;;) {
+    if (!(await page.runStep(run, page.show(run)))) return;
+    const next = advance(run);
+    if (next === null || (await page.reload(next))) return;
+    await page.pause();
+    run = next;
+  }
 }

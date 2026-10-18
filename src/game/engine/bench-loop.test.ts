@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
-import { advance, autoReloadAsked, BIGGEST_COURSE, cycleOf, isBenchPage, loopProgress, loopSettings, newSession, parseRun, runFromPage, shareHashOf, startRun, stepHref, stepOf, ULTRA_AVAILABLE, type BenchRun } from "./bench-loop.ts";
+import { advance, autoReloadAsked, BIGGEST_COURSE, cycleOf, driveLoop, isBenchPage, loopProgress, loopSettings, newSession, parseRun, runFromPage, shareHashOf, startRun, stepHref, stepOf, ULTRA_AVAILABLE, type BenchRun } from "./bench-loop.ts";
 
 const RUN: BenchRun = { session: "k3x9q2", loop: 1, step: 0, ultra: false, keep: false, auto: false, ultraNext: false };
 
@@ -304,5 +304,64 @@ describe("given a page outside a secure context (a build opened over plain http 
     const run = startRun(newSession());
     const back = parseRun(new URL(stepHref("http://192.168.1.20:3000/", run)).search);
     assert.ok(back !== null && back.session === run.session && back.step === run.step, "the bench page reads its own loop back");
+  });
+});
+
+describe("given the loop driven in one page", () => {
+  /** A page that only notes what it was asked: the steps it ran with their queries, the addresses shown, the pauses and the reload asks: the driver has no other way out of the page. */
+  function fakePage(options: { noBenchAt?: number; reloadAt?: number } = {}) {
+    const log = { ran: [] as string[], shown: [] as string[], pauses: 0, reloads: 0 };
+    return {
+      log,
+      page: {
+        show: (run: BenchRun) => {
+          const href = stepHref("http://game.test/crush/", run);
+          log.shown.push(href);
+          return new URL(href).search;
+        },
+        runStep: async (run: BenchRun, search: string) => {
+          log.ran.push(`${stepOf(run).id} cycle ${run.loop} ${search.includes("epi=1") ? "epi" : "off"}`);
+          return log.ran.length - 1 !== options.noBenchAt;
+        },
+        pause: async () => void log.pauses++,
+        reload: async (run: BenchRun) => {
+          log.reloads++;
+          return run.step === options.reloadAt;
+        },
+      },
+    };
+  }
+
+  it("when one cycle is driven, then every map and both arms run in the one page, in order, each shown at its own address, with a pause between steps (the driver has no way to navigate: only a reload hand-over leaves the page)", async () => {
+    const { log, page } = fakePage();
+    await driveLoop({ ...RUN, keep: false }, page);
+    assert.equal(log.ran.map((r) => r.split(" ")[0]).join(" "), cycleOf(false).map((s) => s.id).join(" "));
+    assert.equal(log.ran.length, 8, "steps: four maps, each off and on");
+    assert.equal(log.shown.length, 8, "addresses shown");
+    assert.equal(new Set(log.shown).size, 8, "each at its own address");
+    assert.equal(log.pauses, 7, "a pause between steps, none after the last");
+    assert.equal(log.ran.filter((r) => r.endsWith("epi")).length, 4, "four arms with the epicenter on");
+  });
+
+  it("when the loop keeps going, then the next cycle runs in the same page with its pairs the other way round", async () => {
+    const { log, page } = fakePage({ noBenchAt: 11 });
+    await driveLoop({ ...RUN, keep: true }, page);
+    assert.equal(log.ran.length, 12, "the page that names no bench ends the loop at the twelfth step");
+    assert.equal(log.ran[8], "strip:epi cycle 2 epi", "cycle 2 opens on the epicenter arm");
+  });
+
+  it("when a step names no bench the game knows, then the loop ends there", async () => {
+    const { log, page } = fakePage({ noBenchAt: 2 });
+    await driveLoop({ ...RUN, keep: false }, page);
+    assert.equal(log.ran.length, 3, "steps run");
+    assert.equal(log.pauses, 2, "pauses");
+  });
+
+  it("when a newer build is deployed after the third step, then the loop hands over to the reload there and runs no step after it", async () => {
+    const { log, page } = fakePage({ reloadAt: 3 });
+    await driveLoop({ ...RUN, keep: false }, page);
+    assert.equal(log.ran.length, 3, "steps run before the reload");
+    assert.equal(log.reloads, 3, "the reload was asked before the pause of each step it reached");
+    assert.equal(log.pauses, 2, "the pause before the reload belongs to the reload");
   });
 });

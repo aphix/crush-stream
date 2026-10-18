@@ -59,8 +59,34 @@ function armOf(settings, result) {
   return typeof result.settings?.epicenter === "boolean" ? result.settings.epicenter : settings.step.endsWith(ARM);
 }
 
-/** What was wrong with the page during the window: unfocused, hidden or out of fullscreen at any entry of its `pageEvents` (the entry that opens the window counts). */
+/** `PAGE_PHASES` index of the window, as the card's per-second series writes it (one hex digit a second). */
+const WINDOW_INDEX = "1";
+/** The bits of a second's flags digit in the card's series: shown, focused, fullscreen, the screen wake lock held. */
+const BIT_SHOWN = 1;
+const BIT_FOCUSED = 2;
+const BIT_FULLSCREEN = 4;
+const BIT_AWAKE = 8;
+
+/**
+ * What was wrong with the page during the window. A card with the per-second series says how many of the window's seconds the page was hidden, unfocused, out of
+ * fullscreen or had no screen wake lock held; an older one only has the entries of its `pageEvents` (the entry that opens the window counts), which name the fault without a count.
+ */
 function windowFaults(result) {
+  const series = result.pageSeconds;
+  if (series) {
+    const counts = { hidden: 0, unfocused: 0, "not fullscreen": 0, "screen not held": 0 };
+    let seconds = 0;
+    for (let i = 0; i < series.flags.length; i++) {
+      if (series.phases[i] !== WINDOW_INDEX) continue;
+      seconds++;
+      const flags = Number.parseInt(series.flags[i], 16);
+      if ((flags & BIT_SHOWN) === 0) counts.hidden++;
+      else if ((flags & BIT_FOCUSED) === 0) counts.unfocused++;
+      if ((flags & BIT_FULLSCREEN) === 0) counts["not fullscreen"]++;
+      if ((flags & BIT_AWAKE) === 0) counts["screen not held"]++;
+    }
+    return Object.entries(counts).filter(([, n]) => n > 0).map(([name, n]) => `${name} ${n} of ${seconds} s`);
+  }
   const faults = new Set();
   for (const e of result.pageEvents ?? []) {
     if (e.phase !== PHASE_WINDOW) continue;

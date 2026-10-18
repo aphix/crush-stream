@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, mock, test } from "node:test";
 import { PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_WARM, PHASE_WINDOW } from "./engine-bench-report.ts";
 import { watchPage } from "./engine-bench-page.ts";
+import { FRAME } from "./bench-hitch.ts";
 
 type Listener = () => void;
 
@@ -131,5 +132,46 @@ describe("given the bench page with a stub document and window (watchPage record
     watch.phase(PHASE_REPLAY);
     const events = watch.stop();
     assert.deepEqual(events.filter((e) => e.atS === 0).map((e) => e.phase), ["ab-fx", "replay"]);
+  });
+
+  /** One frame at `stamp` ms into the series (a frame row as the bench loop writes it) and the state `watch` keeps for that second. */
+  const tick = (watch: ReturnType<typeof watchPage>, stamp: number, phase: number, awake: boolean): void => {
+    const row = new Float64Array(FRAME.fields);
+    row[FRAME.now] = stamp;
+    watch.tick(row, phase, awake);
+  };
+
+  test("when frames tick the series with the page's state, then each second holds one hex digit of shown 1, focused 2, fullscreen 4 and the wake lock held 8, and the stretch's index", () => {
+    stub.page.fullscreen = true;
+    const watch = watchPage();
+    watch.phase(PHASE_WINDOW);
+    tick(watch, 5000, PHASE_WINDOW, true);
+    tick(watch, 5400, PHASE_WINDOW, true);
+    stub.page.focused = false;
+    stub.fire("blur");
+    tick(watch, 6100, PHASE_WINDOW, true);
+    tick(watch, 7200, PHASE_AB_PACE, false);
+    const series = watch.seconds();
+    assert.equal(series.flags, "fd5", "flags");
+    assert.equal(series.phases, "112", "stretches");
+  });
+
+  test("when the page draws no frame for 3 s (hidden), then the seconds between its frames each hold the state of the last event, so the gap is in the series", () => {
+    const watch = watchPage();
+    watch.phase(PHASE_WINDOW);
+    tick(watch, 1000, PHASE_WINDOW, true);
+    stub.page.hidden = true;
+    stub.fire("visibilitychange");
+    tick(watch, 4100, PHASE_WINDOW, false);
+    assert.equal(watch.seconds().flags, "b" + "2".repeat(3), "second 0 shown, focused, wake held: b (1+2+8); the next three: focused only (the wake lock was released with the page)");
+    assert.equal(watch.seconds().phases, "1111", "the stretch of each second");
+  });
+
+  test("when a run is longer than the series holds, then the series stops at its capacity and writes nothing past it", () => {
+    const watch = watchPage();
+    watch.phase(PHASE_WINDOW);
+    tick(watch, 0, PHASE_WINDOW, true);
+    tick(watch, 5_000_000, PHASE_WINDOW, true);
+    assert.equal(watch.seconds().flags.length, 1800, "seconds kept");
   });
 });
