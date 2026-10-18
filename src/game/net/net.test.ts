@@ -5,6 +5,8 @@ import { DerbyMatch } from "../match/derby.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { assertSameDigest, assertSameNumbers, forModes } from "../vehicle/test-support.ts";
+import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
+import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import {
   ensureFrames,
   makeCarFrame,
@@ -361,6 +363,30 @@ describe("given a client car that applies the host car's state from the wire", (
     apply(client, wire(host));
     client.readPartNetState(f.parts);
     assert.equal(f.parts.wheelLoose, 0, "the next wreck has all four wheels on");
+  });
+});
+
+describe("given a host wreck the epicenter freeze holds (the activation on) and a client that applies its state from the wire", () => {
+  it("when the host hits a wall at 64 km/h and sits 9 s, then the client's skin, cage and engine damage match the host's, as for a wreck that never froze", () => {
+    const saved = epicenterValues();
+    try {
+      loadEpicenter(EPICENTER_AT_LOAD);
+      EPICENTER.on = 1;
+      const host = makeCar();
+      host.deform.killTravel = 0.5;
+      runWall(64, 0.4, "front", { car: host, after: 9 });
+      assert.ok(host.crashed && host.deform.massActive && host.deform.frozen, "the host wreck is frozen: the row proves nothing otherwise");
+      const client = apply(makeCar(), wire(host));
+      const hv = host.body.geometry.getAttribute("position").array;
+      const cv = client.body.geometry.getAttribute("position").array;
+      assert.ok(maxDiff(hv, cv) < 0.002, `skin vertices within 2 mm (${maxDiff(hv, cv).toFixed(4)})`);
+      host.refitCage();
+      client.refitCage();
+      assert.ok(maxDiff(host.cage.fields.planBox, client.cage.fields.planBox) < 0.001, "cage plan box within 1 mm");
+      assert.ok(Math.abs(client.deform.drivetrainHealth - host.deform.drivetrainHealth) < 0.01, "graded damage matches");
+    } finally {
+      loadEpicenter(saved);
+    }
   });
 });
 
