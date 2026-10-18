@@ -134,6 +134,7 @@ export const SCENARIOS: Record<string, Scenario> = {
   "wreck-driving-apart-race": { build: () => place(stageWrecks(8, sedan, true), "driving", apart(40)).useRaceSchedule(), label: wreckLabel },
   city: { build: async () => (await import("./engine-sim.ts")).EngineSim.city(false), label: cityLabel },
   "city-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.city(true), label: cityLabel },
+  strip: { build: async () => (await import("./engine-sim.ts")).EngineSim.strip(), label: cityLabel },
   "sideswipe-15-race": { build: () => sideswipe(15).useRaceSchedule(), label: intactLabel },
   "sideswipe-30-race": { build: () => sideswipe(30).useRaceSchedule(), label: intactLabel },
   "derby-8-s3": { build: async () => new (await import("./derby-sim.ts")).DerbySim(8, 3), label: derbyLabel },

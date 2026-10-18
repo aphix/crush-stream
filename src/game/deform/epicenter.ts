@@ -19,10 +19,10 @@ export const EPICENTER = {
   settleMps: 0,
   /** The body must turn slower than this (rad/s) to freeze; 0 is off. */
   settleSpin: 0,
-  /** 1: a crashed car re-poses its parts on a rendered frame only when something their pose reads changed (hinge values, door swing, flap, the bumper masses and the sensors under them, the car's own pose, the skin): `partsDirty` is set by every step, so a car sitting still re-posed every part, doors' ground probes and bumpers' searches included, 60 times a second. Drawing only: the poses are those of 0 to a nanometre (`POSE_EPSILON`). */
-  presentSkip: 0,
-  /** 1: a wreck's belly-segment pass (`stepFree`) skips the segments that run over another wreck's top: their ridge and edge crossings always end in the row being dropped (a wreck takes no support from another wreck's top), so the answer is the same and the crossings (a full surface query per step along each segment) are not made. 0 is today. Result-exact: the rows and the pose are bit for bit those of 0. */
-  nearPrune: 0,
+  /** 1: a crashed car re-poses its parts on a rendered frame only when something their pose reads changed (hinge values, door swing, flap, the bumper masses and the sensors under them, the car's own pose, the skin): `partsDirty` is set by every step, so a car sitting still re-posed every part, doors' ground probes and bumpers' searches included, 60 times a second. Drawing only: the poses are those of 0 to a nanometre (`POSE_EPSILON`), and a crash drawn every frame runs the same sim, door swing and part state either way (`cage-draw-independence.test.ts`: head-on and door ajar). Independent of `on`; 0 re-poses every frame as before. */
+  presentSkip: 1,
+  /** 1: a wreck's belly-segment pass (`stepFree`) skips the segments that run over another wreck's top: their ridge and edge crossings always end in the row being dropped (a wreck takes no support from another wreck's top), so the answer is the same and the crossings (a full surface query per step along each segment) are not made. Result-exact: the rows and the pose are bit for bit those of 0 (the bench's digests on the city race, the derby and a pile). Independent of `on`; 0 makes the crossings as before. */
+  nearPrune: 1,
   /** 1: a frozen car checks at every slice that nothing wrote to it: no mass's car-frame place moved, every mass is where the frame puts it and its contact clock did not restart; a writer that forgot `thaw` counts a breach (`frozenBreaches`). Debug and the rows only: 20 masses a slice. */
   frozenCheck: 0,
   /** Seconds after a thaw before the car may freeze again, on top of `relockHold`'s quiet time. 0: the next quiet slice (a car a contact feeds every slice freezes and thaws every slice: the pending slice after each freeze takes the whole path, so it costs bookkeeping, not accuracy). The hold keeps such a car whole; the city's wrecks are touched about every 30 ms, so a long hold gives their relock away. */
@@ -33,7 +33,7 @@ export const EPICENTER = {
   holdWakes: 0,
 };
 
-/** Every knob as the module loaded it: the off values a clip recorded before a knob existed reads it at. */
+/** Every knob as the module loaded it: the values a clip recorded before a knob existed reads it at (a knob added later goes at the end of `EPICENTER` with a default that changes nothing). */
 const DEFAULTS = { ...EPICENTER };
 
 export type EpicenterKnobId = `epi.${keyof typeof EPICENTER}`;

@@ -4,22 +4,41 @@ import { HudStore } from "../hud/hud-store.ts";
 import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { BENCH } from "./bench-measure.ts";
-import { BENCH_RACE } from "./engine-bench-plan.ts";
+import { BENCH_RACE, benchPlan } from "./engine-bench-plan.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 
 /** One step a frame: the pacer takes the fine slice, never more than one step a frame, so no frame meets its wall deadline and the steps do not depend on how fast the machine runs. */
 export const FRAME_S = 1 / FINE_HZ;
 
-/** The real engine on the city bench's race (`BENCH_RACE`, the bench's seed), nothing drawn, the pacer pinned to the 1/240 s floor. One per process (a second `CrashEngine` never resolves `ready`). */
-export async function benchRaceEngine(): Promise<CrashEngine> {
+async function benchEngine(): Promise<CrashEngine> {
   stubBrowser();
   const engine = new CrashEngine(element(), new HudStore(), element());
   Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
   await engine.ready;
   engine.fadeScenes = false;
   engine.toggleRace();
+  return engine;
+}
+
+/** The real engine on the city bench's race (`BENCH_RACE`, the bench's seed), nothing drawn, the pacer pinned to the 1/240 s floor. One per process (a second `CrashEngine` never resolves `ready`). */
+export async function benchRaceEngine(): Promise<CrashEngine> {
+  const engine = await benchEngine();
   engine.raceCommand(BENCH_RACE);
+  engine["race"].reseed(BENCH.seed);
+  engine.raceCommand({ type: "start" });
+  engine["seat"].mode = "follow";
+  engine.pace.pin = false;
+  return engine;
+}
+
+/** The real engine on `?bench=strip` as the in-app card sets it up (the strip course, its one body, its race, the bench's seed), nothing drawn, the pacer pinned to the 1/240 s floor. */
+export async function benchStripEngine(): Promise<CrashEngine> {
+  const plan = benchPlan("?bench=strip")!;
+  const engine = await benchEngine();
+  engine["race"].loadBenchCourse(plan.course!);
+  engine.useOneBody(plan.body);
+  engine.raceCommand(plan.race!);
   engine["race"].reseed(BENCH.seed);
   engine.raceCommand({ type: "start" });
   engine["seat"].mode = "follow";

@@ -198,7 +198,21 @@ const loadStart = loadavg()[0]!;
 const t0 = performance.now();
 const clock0 = sim.t;
 if (census) for (let i = 0, n = Math.round(windowS / sim.stepS); i < n; i++) census.step();
-else advance(windowS);
+else if (process.env["BENCH_SECONDS"] === "1") {
+  // Each sim second of the window on its own (wall ms, the phase clock's ms, freezes and thaws): a start that is slow and then settles shows as a row that falls, and a JIT or deopt storm as one that spikes.
+  const fz = WORK_NAMES.indexOf("freezes");
+  const th = WORK_NAMES.indexOf("thaws");
+  const seconds: string[] = [];
+  for (let s = 0; s < windowS; s++) {
+    const w0 = performance.now();
+    const p0 = phases.ms.slice();
+    const k0 = [phases.work[fz]!, phases.work[th]!];
+    advance(1);
+    const row = PHASE_NAMES.map((n, i) => `${n} ${(phases.ms[i]! - p0[i]!).toFixed(0)}`).join(" ");
+    seconds.push(`second ${s + 1}: wall ${(performance.now() - w0).toFixed(0)} ms | ${row} | freezes ${phases.work[fz]! - k0[0]!} thaws ${phases.work[th]! - k0[1]!}`);
+  }
+  console.log(`BENCH_SECONDS\n${seconds.join("\n")}`);
+} else advance(windowS);
 const wallMs = performance.now() - t0;
 const simS = sim.t - clock0;
 phases.on = false;

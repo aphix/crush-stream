@@ -112,6 +112,14 @@ export const SCENARIO_INFO: Record<string, ScenarioInfo> = {
     warmS: 20,
     windowS: 30,
   },
+  strip: {
+    about: "the in-app `?bench=strip` card through the real engine (16 racers and the traffic on the 6 km straight, one sedan body, the bench's seed, nothing drawn) on the race's step schedule: the headless twin of the owner's off/on cards",
+    sizes: "does the activation touch intact cars (per-unit integrate and drive on both arms, run in alternating order); end-to-end, per-unit rows and counters, never totals",
+    lone: true,
+    race: true,
+    warmS: 10,
+    windowS: 30,
+  },
   "sideswipe-15-race": {
     about: "two sedans abeam 3.5 m apart (hulls 1.6 m clear) at 15 m/s on the race's step schedule, the far one steering across at full lock: near and not closing, then closing, then in contact",
     sizes: "SAFETY row of a tighter lone test: the census's false negatives (not-closing car-steps followed by a contact) and the arms' end states",
