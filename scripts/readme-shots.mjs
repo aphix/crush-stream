@@ -387,11 +387,12 @@ SCENES["car-race-mid"] = {
 };
 /**
  * Two cars after a head-on hit (seed 1), paused. `car-crushed` orbits the pile; the close views fly the free eye (`view.enterFree`) to
- * `eyeMetres` = [right, up, ahead] of the first car's nose, in that car's own frame, and look at the crushed nose.
+ * `eyeMetres` = [right, up, ahead] of the first car's nose, in that car's own frame, and look at the crushed nose. `aim` = [ahead, up] is the
+ * spot it looks at, from the first car's origin (the nose by default); `hash` states another set-up.
  */
-const crushedView = (eyeMetres) => ({
+const crushedView = (eyeMetres, { hash = "cars=2&smin=24&smax=28&seed=1", aim = [2.1, 0.6] } = {}) => ({
   survey: true,
-  hash: "cars=2&smin=24&smax=28&seed=1",
+  hash,
   seed: 1,
   setup: async (p) => {
     await run(p, () => {
@@ -409,11 +410,11 @@ const crushedView = (eyeMetres) => ({
     await stepSim(p, 0.1);
     await run(
       p,
-      ([right, up, ahead]) => {
+      ([[right, up, ahead], [aimAhead, aimUp]]) => {
         const e = window.__crush;
         const car = e.cars[0];
         const forward = car.forward;
-        const nose = { x: car.group.position.x + forward.x * 2.1, y: car.group.position.y + 0.6, z: car.group.position.z + forward.z * 2.1 };
+        const nose = { x: car.group.position.x + forward.x * aimAhead, y: car.group.position.y + aimUp, z: car.group.position.z + forward.z * aimAhead };
         const eye = { x: nose.x + forward.x * ahead + forward.z * right, y: nose.y + up, z: nose.z + forward.z * ahead - forward.x * right };
         const free = e.view.free;
         free.eye.set(eye.x, eye.y, eye.z);
@@ -422,7 +423,7 @@ const crushedView = (eyeMetres) => ({
         free.yaw = Math.atan2(-dx, -dz);
         free.pitch = Math.atan2(nose.y - eye.y, Math.hypot(dx, dz));
       },
-      eyeMetres,
+      [eyeMetres, aim],
     );
     await stepSim(p, 0.1);
   },
@@ -431,6 +432,8 @@ const crushedView = (eyeMetres) => ({
 SCENES["car-crushed"] = crushedView(null);
 SCENES["car-crushed-left"] = crushedView([-2.2, 1.1, 1.8]);
 SCENES["car-crushed-right"] = crushedView([2.2, 1.1, 1.8]);
+/** The police car (`car=police`, car 0) after a head-on hit at about 50 km/h (seed 1): the free eye behind it and to its right over the roof, looking at the light bar (docs/PANEL_FLAP.md "Police light bar"). */
+SCENES["bar-crushed"] = crushedView([2.6, 1.0, -1.2], { hash: "cars=1&smin=14&smax=15&seed=1&car=police&barrier=1", aim: [0, 1.4] });
 
 /** The crash animation: two cars head-on, the engine's own crash cam (not framed by hand), from just before the hit through the slow-mo. */
 const ANIMATION = { out: "crash-slowmo", size: [1440, 576], hash: "cars=2&smin=24&smax=28&seed=1", seed: 1 };

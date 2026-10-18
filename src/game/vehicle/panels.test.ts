@@ -160,18 +160,18 @@ describe("given the standard crashes into a wall, body panels hinge, then tear",
     assert.ok(car.allParts.every((p) => !p.region || !p.open));
   });
 
-  it("when a police car hits a wall at 56 km/h, then its light bar tilts on one mount, stays on the roof it rides (not through it), and does not shear off (it shears off at 64)", () => {
+  it("when a police car hits a wall at 56 km/h, then its light bar folds on its base hinge, stays on the roof it rides (not through it), and does not shear off (it shears off at 64)", () => {
     const car = probe("police");
     const r = runWall(56, 1, "front", { car });
     assert.ok(!r.detached.includes("lightBar"));
     assert.ok(r.hinge.lightBar! > 0.3 && r.hinge.lightBar! < 0.95, `bar hinge ${r.hinge.lightBar}`);
     const bar = car.part("lightBar");
-    assert.ok(Math.abs(bar.object.rotation.z) > 0.1, `bar rolled ${bar.object.rotation.z} rad`);
+    assert.ok(Math.abs(bar.object.rotation.x) > 0.1, `bar folded ${bar.object.rotation.x} rad`);
     const rest = probe("police");
     rest.spawnFacing(0, 0, 0, 0);
     const atRest = barDepth(rest);
     const struck = barDepth(car);
-    // Tipped about its far mount with the struck side going down, the bar stood 0.35 m through the roof for the rest of the run.
+    // Tipped about its far foot with the struck side going down, the bar stood 0.35 m through the roof for the rest of the run (light-bar.test.ts holds the gaps of its edges).
     assert.ok(struck <= atRest + BAR_SEAT_M, `the struck bar is ${struck.toFixed(3)} m into the roof under it, ${atRest.toFixed(3)} at rest`);
   });
 });

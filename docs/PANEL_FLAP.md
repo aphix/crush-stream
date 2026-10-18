@@ -75,6 +75,18 @@ latched (C1).
   the same `partContact` with the same relative velocity: `door-frame.test.ts` tables every scenario × both directions × {ram
   moves, car moves} × both sides, and drives the contact with a world-fixed box and real car positions.
 
+## Police light bar
+
+The bar is a hinged part (`hinge: "bar"`, `hingePose` in `part-pose.ts`, the one pose the drawn mesh and the cage both take). It stands on two
+feet 0.8 m apart across the roof, skinned with the roof cage, so its feet ride the crushed skin; the hinge is a **horizontal line along its
+base, across the car** (axis x), on the edge the car's inertia sends it toward (a nose hit tips it forward, a tail hit back; `impactInward.z`).
+The hinge edge of both soles stays put and the other edge rises, like a door's free edge: the free edge lifts `0.18 m × sin(0.45 · hingeT)`,
+7.5 cm at the last hinge value (0.95). A clamped pair of feet can fold only on that line (a turn about one foot, along the car, lifted the far
+end 0.35 m off the roof). The hinge value is the crash target `max(roof sink / 0.12 m, hit EBS / 60 km/h)`, at most 0.95 (`barLoad`).
+It shears off at 1: the roof mass 0.12 m under its rest height, or a hit at 60 km/h EBS (`BAR_TEAR_SINK`, `BAR_TEAR_MPS`), and is then a
+loose part (`stepLoose`) with its sirens dark. `light-bar.test.ts` holds the hinge line, both edges' gap to the roof skin through a 56 km/h
+crush, the shear depth and the replay's bits.
+
 ## Sim state and versions
 
 Netted already: `hingeT` (also a smushed panel's), door `theta` and latch, part flags. A part with no swing leaves two of its

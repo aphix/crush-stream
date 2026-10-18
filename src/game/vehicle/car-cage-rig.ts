@@ -174,7 +174,7 @@ function readCageLive(car: DeformableCar, panels: readonly Panel[], live: CageLi
   for (let k = 0; k < panels.length; k++) {
     const panel = panels[k]!;
     live.panelOn[k] = panel.on() ? 1 : 0;
-    if (panel.hinged !== null) hingePose(panel.hinged, rig.impactInward.x, live.panelPose, k * 7);
+    if (panel.hinged !== null) hingePose(panel.hinged, rig, live.panelPose, k * 7);
     else {
       panel.seat.toArray(live.panelPose, k * 7);
       live.panelPose.fill(0, k * 7 + 3, k * 7 + 6);

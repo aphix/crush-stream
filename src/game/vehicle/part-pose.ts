@@ -1,22 +1,34 @@
+import * as THREE from "three";
 import { detCos, detSin } from "../kernel/physics-core.js";
+import type { StreamedDeformation } from "../deform/streamed-deform.ts";
 import type { DetachPart } from "./car-core.ts";
 import { LIGHT_BAR_FOOT } from "./car-materials.ts";
 
-/** The light bar's tilt on its far mount at full load (rad). */
-const BAR_ROLL = 0.5;
+const _seat = new THREE.Vector3();
+const _rest = new THREE.Vector3();
 
 /**
- * Where a hinged lid (`cowl` hood, `tail` boot) or the light bar (`bar`, tilting on its far mount, the struck side lifting off its mount with `inwardX`'s
- * sign: a push on a bar standing on two feet tips it about the foot away from the hit, and turned the other way its struck end went 0.38 m down through
- * the roof it rides on) stands at hinge value `t = p.hingeT` (from rest, which turns nothing): position x, y, z then quaternion x, y, z, w into `out` at `o`.
- * The one pose the drawn mesh (`CarParts.posePart`) and the car's cage (`CageRig`) both take, from the part's state alone.
+ * The light bar's fold at full hinge value (rad). Its free edge lifts `2 · LIGHT_BAR_FOOT.z · sin(BAR_FOLD · hinge)` off the roof: 7.5 cm at the
+ * last hinge value (0.95), where the bar shears off at 1. Small on purpose: a bar that stands further off the roof it rides reads as floating.
  */
-export function hingePose(p: DetachPart, inwardX: number, out: Float64Array, o: number): void {
+export const BAR_FOLD = 0.45;
+
+/**
+ * Where a hinged lid (`cowl` hood, `tail` boot) or the light bar stands at hinge value `t = p.hingeT` (from rest, which turns nothing): position x, y, z
+ * then quaternion x, y, z, w into `out` at `o`. The lids turn about x through their rest origin. The bar (`bar`) turns about x too, but about the line
+ * along its base's edge on the side the car's inertia sends it (`deform.impactInward.z`: a hit on the nose, inward −z, tips it forward, a hit on the tail back):
+ * the edge of both feet's soles stays where it is and the other edge rises, as a door's hinge side stays and its free edge swings. The bar is skinned
+ * with the roof (`skinPanel`), which carries that edge down and back with the crushed roof (0.15 m back in a frontal crush: turning about its rest place
+ * stood the edge 5 cm off the skin), so the line it turns about is where the roof's lattice puts the edge now (`panelPoint`). The bar spans the roof across the car
+ * (feet 0.8 m apart on the gutters), so a hinge along that line is the one a clamped pair of feet can fold on; the old turn about one foot, along the car,
+ * lifted the far end 0.35 m off the roof. The one pose the drawn mesh (`CarParts.posePart`) and the car's cage (`CageRig`) both take, from the part's
+ * state and the deformation's lattice alone.
+ */
+export function hingePose(p: DetachPart, deform: StreamedDeformation, out: Float64Array, o: number): void {
   const t = p.hingeT;
-  let x = p.restPos.x;
+  const x = p.restPos.x;
   let y = p.restPos.y;
   let z = p.restPos.z;
-  const bar = p.hinge === "bar";
   let turn: number;
   if (p.hinge === "cowl") {
     z -= t * 0.08;
@@ -27,19 +39,24 @@ export function hingePose(p: DetachPart, inwardX: number, out: Float64Array, o: 
     y += t * 0.22;
     turn = t * 0.5;
   } else {
-    const dir = inwardX < 0 ? -1 : 1;
-    turn = -dir * t * BAR_ROLL;
-    const px = dir * LIGHT_BAR_FOOT.x;
-    x += px * (1 - detCos(turn));
-    y -= px * detSin(turn);
+    const side = deform.impactInward.z > 0 ? -1 : 1;
+    turn = side * t * BAR_FOLD;
+    // The hinge line's place in the bar's own frame: its rest place, carried by the roof.
+    _rest.set(0, LIGHT_BAR_FOOT.sole, side * LIGHT_BAR_FOOT.z);
+    deform.panelPoint("roof", _rest, p.restPos, _seat);
+    const py = _seat.y;
+    const pz = _seat.z;
+    const c = detCos(turn);
+    const s = detSin(turn);
+    y += py * (1 - c) + pz * s;
+    z += pz * (1 - c) - py * s;
   }
   out[o] = x;
   out[o + 1] = y;
   out[o + 2] = z;
-  // The lids turn about x, the bar about z.
-  out[o + 3] = bar ? 0 : detSin(turn / 2);
+  out[o + 3] = detSin(turn / 2);
   out[o + 4] = 0;
-  out[o + 5] = bar ? detSin(turn / 2) : 0;
+  out[o + 5] = 0;
   out[o + 6] = detCos(turn / 2);
 }
 

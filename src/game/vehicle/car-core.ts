@@ -203,7 +203,7 @@ export interface DetachPart {
     | "wingRR";
   attachL: number;
   attachR: number;
-  /** "bar": the police light bar, skinned with the roof cage, tilts on its mount. "quarter", "arch": patches of the body skin (`car-panels.ts`). */
+  /** "bar": the police light bar, skinned with the roof cage, folds on a hinge along its base across the car (`hingePose`). "quarter", "arch": patches of the body skin (`car-panels.ts`). */
   hinge: "cowl" | "tail" | "two-point" | "door" | "bar" | "quarter" | "arch";
   detached: boolean;
   folding: boolean;

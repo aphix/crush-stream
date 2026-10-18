@@ -253,7 +253,7 @@ export abstract class CarParts extends CarGlass {
     now[k++] = g.quaternion.y;
     now[k++] = g.quaternion.z;
     now[k++] = g.quaternion.w;
-    now[k++] = this.deform.impactInward.x;
+    now[k++] = this.deform.impactInward.z;
     for (let m = 0; m < 4; m++) {
       const l = this.deform.massLocal(POSE_BUMPERS[m]!);
       now[k++] = l.x;
@@ -317,7 +317,7 @@ export abstract class CarParts extends CarGlass {
         p.object.position.x += side * t * 0.18;
       }
     } else if (p.hinge === "cowl" || p.hinge === "tail" || p.hinge === "bar") {
-      hingePose(p, this.deform.impactInward.x, _hinge, 0);
+      hingePose(p, this.deform, _hinge, 0);
       p.object.position.set(_hinge[0]!, _hinge[1]!, _hinge[2]!);
       p.object.quaternion.set(_hinge[3]!, _hinge[4]!, _hinge[5]!, _hinge[6]!);
     } else if (p.hinge === "door") {

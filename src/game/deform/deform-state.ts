@@ -532,6 +532,24 @@ export abstract class DeformState extends DeformHit {
     computeNormalsFast(geometry);
   }
 
+  /**
+   * Where one rest point of a panel mesh skinned about `origin` (`skinPanel`) stands now, in the mesh's own frame, into `out`: `skinPanel`'s map of a
+   * single vertex. A panel whose cage is not built stays where it is.
+   */
+  panelPoint(name: BodyPartName, rest: THREE.Vector3, origin: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+    const cage = this.cageByPart.get(name);
+    if (!cage) return out.copy(rest);
+    const co = _panelCo;
+    cageCoeffs(cage.corners, co, 0);
+    co[0]! -= origin.x;
+    co[8]! -= origin.y;
+    co[16]! -= origin.z;
+    const u = THREE.MathUtils.clamp((rest.x + origin.x - cage.min.x) / (cage.size.x || 1), -0.15, 1.15);
+    const v = THREE.MathUtils.clamp((rest.y + origin.y - cage.min.y) / (cage.size.y || 1), -0.15, 1.15);
+    const w = THREE.MathUtils.clamp((rest.z + origin.z - cage.min.z) / (cage.size.z || 1), -0.15, 1.15);
+    return out.set(cageAxis(co, 0, u, v, w), cageAxis(co, 8, u, v, w), cageAxis(co, 16, u, v, w));
+  }
+
   createHelper(parent: THREE.Object3D): void {
     this.helper ??= new DeformRigHelper(parent, {
       cages: this.cages,
