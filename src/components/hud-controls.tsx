@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 /** Number boxes and the time-scale field: 44 px tall on touch, 32 px with a fine pointer. */
 export const FIELD =
@@ -23,6 +24,7 @@ export function RangeRow({
   onValue,
   disabled,
   changed = false,
+  stacked = false,
   ...end
 }: {
   label: string;
@@ -39,10 +41,12 @@ export function RangeRow({
   disabled?: boolean;
   /** Marks the row: the value differs from its default. */
   changed?: boolean;
+  /** The label on a line of its own above the slider, for a long one (the Epicenter knobs': a narrow column wraps them a word to a line). */
+  stacked?: boolean;
 } & ({ shown: string } | { digits: number })) {
   return (
-    <label className="flex items-center gap-2" title={title}>
-      <span className={"shown" in end ? "hud-label relative w-10 shrink-0" : "hud-label relative w-12 shrink-0"}>
+    <label className={stacked ? "flex flex-wrap items-center gap-x-2" : "flex items-center gap-2"} title={title}>
+      <span className={stacked ? "hud-label relative w-full" : "shown" in end ? "hud-label relative w-10 shrink-0" : "hud-label relative w-12 shrink-0"}>
         {label}
         <ChangedDot on={changed} />
       </span>
@@ -55,7 +59,7 @@ export function RangeRow({
         onChange={(e) => onValue(Number(e.target.value))}
         aria-label={name}
         disabled={disabled}
-        className="h-11 w-full min-w-0 cursor-pointer accent-current disabled:cursor-not-allowed disabled:opacity-40 pointer-fine:h-6"
+        className={cn("h-11 min-w-0 cursor-pointer accent-current disabled:cursor-not-allowed disabled:opacity-40 pointer-fine:h-6", stacked ? "flex-1" : "w-full")}
       />
       {"shown" in end ? (
         <span className="w-14 shrink-0 text-right font-display text-xs tabular-nums text-fg">{end.shown}</span>

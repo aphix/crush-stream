@@ -2,7 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
-import { changedSettings } from "../hud/settings-changes.ts";
+import { changedSettings, SETTINGS } from "../hud/settings-changes.ts";
 import { decodeShare, encodeShare } from "../hud/share-url.ts";
 import { CHASE, CHASE_KNOBS, type ChaseKnobId } from "../present/drive-cam.ts";
 import { activeCameraPreset, CAMERA_PRESETS, cameraPresetValues } from "../hud/camera-presets.ts";
@@ -67,7 +67,9 @@ describe("given the real engine and a camera slider of the debug panel", () => {
     engine["applyShare"](decodeShare("#epi.on=1&epi.relockHold=0.5"), false);
     assert.equal(EPICENTER.on, 1, "on");
     assert.equal(EPICENTER.relockHold, 0.5, "relockHold");
-    assert.deepEqual(changedSettings(hud.get(), "debug"), ["epi.on", "epi.relockHold"], "the dots");
+    assert.deepEqual(changedSettings(hud.get(), "debug"), ["epi.relockHold"], "the Debug views list the threshold, not the activation");
+    assert.deepEqual(changedSettings(hud.get(), "tuning"), ["epi.on"], "Cars & crash lists the activation beside Solver");
+    assert.equal(SETTINGS["epi.on"].label, "Activation");
     assert.deepEqual(
       encodeShare(engine["shareState"]()).split("&").filter((kv) => kv.startsWith("epi.")),
       ["epi.on=1", "epi.relockHold=0.5"],

@@ -51,6 +51,9 @@ const BASE_SETTINGS = {
 /** One setting per Debug slider (`KNOBS`), under the knob's own id: its HUD field is the one at its default. The cast holds: a row per `KnobId` (pinned by test). */
 const CAMERA_SETTINGS = {} as Record<KnobId, Setting>;
 for (const k of KNOBS) CAMERA_SETTINGS[k.id] = { section: "debug", label: k.group === "Epicenter" ? `Epicenter ${k.label}` : `Camera ${k.group.toLowerCase()} ${k.label}`, defaults: { [k.id]: D[k.id] } };
+// The epicenter's on/off is the Activation row beside Solver (Cars & crash), listed and counted there, not among the Debug views' sliders (whose first row is the same knob).
+const ACTIVATION_KNOB: KnobId = "epi.on";
+CAMERA_SETTINGS[ACTIVATION_KNOB] = { section: "tuning", label: "Activation", defaults: { [ACTIVATION_KNOB]: D[ACTIVATION_KNOB] } };
 
 export const SETTINGS: typeof BASE_SETTINGS & Record<KnobId, Setting> = { ...BASE_SETTINGS, ...CAMERA_SETTINGS };
 export type SettingId = keyof typeof SETTINGS;
