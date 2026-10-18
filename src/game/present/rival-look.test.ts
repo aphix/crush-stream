@@ -196,7 +196,7 @@ describe("given the rivals' bitmaps follow the FX tier", () => {
     looks.dispose();
   });
 
-  it("when the tier changes the bitmap's size, then the bitmaps drawn so far are freed and the next ask is a new one of that size; a tier of the same size changes nothing", () => {
+  it("when the tier changes the bitmap's size, then the bitmaps drawn so far are freed and the next ask is a new one of that size; a tier of the same size changes nothing, and a step to a coarser tier keeps the finer bitmaps", () => {
     const looks = new RivalLooks();
     assert.equal(looks.useTier("minimal", "desktop"), false, "nothing was drawn and the size is the same");
     const standard = looks.of(3, 1, 0x336699);
@@ -206,7 +206,14 @@ describe("given the rivals' bitmaps follow the FX tier", () => {
     const fine = looks.of(3, 1, 0x336699);
     assert.notEqual(fine, standard, "a new bitmap");
     assert.equal(fine.layout.w, CAR_SPRAY.w * 2, "of the finer size");
+    assert.equal(looks.useTier("low", "desktop"), false, "a step down to Low frees and redraws nothing");
+    assert.equal(looks.of(3, 1, 0x336699), fine, "the High bitmap is kept at Low");
+    assert.equal(looks.useTier("high", "desktop"), false, "and the rise back to High asks for no redraw either");
+    assert.equal(looks.of(3, 1, 0x336699), fine, "the same bitmap");
     assert.equal(looks.useTier("ultra", "desktop"), true, "Ultra changes it again");
+    assert.equal(looks.of(3, 1, 0x336699).layout.w, CAR_SPRAY.w * 4, "to the finest size");
+    assert.equal(looks.useTier("minimal", "desktop"), false, "a step down from Ultra keeps it");
+    assert.equal(looks.of(3, 1, 0x336699).layout.w, CAR_SPRAY.w * 4, "at the finest size");
     looks.dispose();
     assert.equal(looks.useTier("off", "desktop"), false, "with nothing drawn there is nothing to dress again");
   });

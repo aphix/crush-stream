@@ -327,6 +327,26 @@ export class PostFX {
     return Promise.all(jobs);
   }
 
+  /**
+   * Draws every pass of the chain once, to nothing (the caller holds a zero scissor on the canvas): each bloom target gets its storage and each
+   * pass its first-draw link check and uniform lookup here, under the boot veil, not in the frame a tier with the chain is first picked
+   * (measured in a browser on a software GL: that frame took 330-690 ms to draw at Low and High, a hundred ms of it the passes' first draw).
+   */
+  prime(): void {
+    const source = this.sceneRT.texture;
+    for (const pass of [this.downPre, this.down, this.up]) {
+      pass.uniforms.tSrc!.value = source;
+      (pass.uniforms.uTexel!.value as THREE.Vector2).set(1 / this.width, 1 / this.height);
+    }
+    for (let i = 0; i < this.mips.length; i++) this.blit(i === 0 ? this.downPre : this.down, this.mips[i]!);
+    this.blit(this.up, this.mips[0]!);
+    for (const composite of Object.values(this.composites)) {
+      composite.uniforms.tScene!.value = source;
+      composite.uniforms.tBloom!.value = this.mips[0]!.texture;
+      this.blit(composite, null);
+    }
+  }
+
   /** `dt`: the frame's wall seconds, for the strengths' ease after a tier switch. */
   render(scene: THREE.Scene, camera: THREE.Camera, dt: number): void {
     const r = this.renderer;

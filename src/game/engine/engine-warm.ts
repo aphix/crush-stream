@@ -105,6 +105,7 @@ export abstract class EngineWarm extends EngineCore {
       r.setRenderTarget(target);
       r.render(this.scene, this.camera);
     }
+    this.cine.post.prime();
     hdr.scissorTest = false;
     r.setScissorTest(false);
     this.cine.marks.warm(r);

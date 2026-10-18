@@ -208,11 +208,10 @@ describe("given the real engine headless", () => {
     assert.ok(wornBy(AI_SLOTS).every((spray) => spray === null), "bare in the fleet");
   });
 
-  it("when the FX tier rises to High during a race and falls back, then the opponents' sprays are redrawn twice as fine and then as the garage's again, each the oracle's at that tier, and the player's car keeps its own", () => {
+  it("when the FX tier rises to High during a race and falls back, then the opponents' sprays are redrawn twice as fine once, keep that size at the lower tier, each the oracle's, and the player's car keeps its own", () => {
     engine.toggleRace();
     startSingle();
     run(1);
-    const standard = wornBy(AI_SLOTS);
     const own = ownDigest();
     const sides = (): string => AI_SLOTS.map((slot) => wornMap(cars()[slot]!)?.image.width).join(",");
     const sidesOf = (width: number): string => AI_SLOTS.map(() => width).join(",");
@@ -228,11 +227,11 @@ describe("given the real engine headless", () => {
       assert.equal(sprayOn(cars()[0]!), own, "the player's own spray is as it was");
     } finally {
       engine["cine"].setTier("minimal");
-      rivalsOracle.useTier("minimal", "desktop");
     }
     run(0.1);
-    assert.equal(sides(), sidesOf(CAR_SPRAY.w), "the garage's size again");
-    assertSameDigest(wornBy(AI_SLOTS), standard, "the same sprays as before the rise");
+    assert.equal(sides(), sidesOf(CAR_SPRAY.w * 2), "the finer size is kept after the fall: no redraw on a step down");
+    assertRivals(race().look, "after falling back");
+    assert.equal(sprayOn(cars()[0]!), own, "the player's own spray is still as it was");
     engine.toggleRace();
   });
 

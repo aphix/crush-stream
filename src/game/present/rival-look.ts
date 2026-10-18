@@ -101,11 +101,13 @@ type Drawn = { readonly bitmap: SprayBitmap; seed: number; body: number };
 
 /**
  * The rivals' bitmaps, one per slot, drawn on first ask and redrawn in place (the same bitmap, so its texture stays the one the
- * car's paint samples) only when the slot's seed or paint changes. The bitmap's size follows the FX tier (`useTier`,
- * `RIVAL_SPRAY_SCALE`); the finer ones are mip-mapped, so a far car's paint does not shimmer. Memory for the engine's 32 slots
- * (texels + CPU rgba + GPU, the GPU copy a third bigger with its mips): below High 144 KiB a car, 4.5 MiB a field; High (256 x 256)
- * 661 KiB a car, 20.6 MiB a field; Ultra (512 x 512) 2.6 MiB a car, 82.7 MiB a field. Drawing all 31 rivals of a full field takes
- * about 55 ms at High and 170 ms at Ultra (node), once when a race starts and once more when the tier changes.
+ * car's paint samples) only when the slot's seed or paint changes. The bitmap's size follows the FX tier upward (`useTier`,
+ * `RIVAL_SPRAY_SCALE`) and never back down: a step to a coarser tier keeps the finer bitmaps, so a tier that flaps (the auto tier, a
+ * bench's A/B, a player trying tiers) pays the redraw and the texture upload once, on its first rise to a size, not on each rise. The finer ones are
+ * mip-mapped, so a far car's paint does not shimmer. Memory for the engine's 32 slots (texels + CPU rgba + GPU, the GPU copy a third
+ * bigger with its mips): at the garage's size 144 KiB a car, 4.5 MiB a field; High (256 x 256) 661 KiB a car, 20.6 MiB a field; Ultra (512 x 512)
+ * 2.6 MiB a car, 82.7 MiB a field; held at the finest size the page has asked for until the page closes. Drawing all 31 rivals of a full field takes
+ * about 55 ms at High and 170 ms at Ultra (node), once when a race starts and once more when the tier first rises to a size.
  */
 export class RivalLooks {
   private readonly drawn = new Map<number, Drawn>();
@@ -113,15 +115,15 @@ export class RivalLooks {
   private layout = CAR_SPRAY;
 
   /**
-   * Draw for FX tier `tier` on a `klass` device from now on (a mobile device stops at 2x: `RIVAL_SPRAY_MAX_SCALE`). Every bitmap
-   * drawn so far is freed when that changes the size: true then, and the cars wearing one must be dressed again (their paint
-   * samples a freed texture until they are).
+   * Draw for FX tier `tier` on a `klass` device from now on (a mobile device stops at 2x: `RIVAL_SPRAY_MAX_SCALE`), at the finest size asked for so far.
+   * Every bitmap drawn so far is freed when that makes the size finer: true then, and the cars wearing one must be dressed again (their paint
+   * samples a freed texture until they are). A tier that asks for the size already drawn, or a coarser one, changes nothing.
    */
   useTier(tier: FxTier, klass: DeviceClass): boolean {
     const scale = Math.min(RIVAL_SPRAY_SCALE[tier], RIVAL_SPRAY_MAX_SCALE[klass]);
-    if (scale === this.scale) return false;
+    if (scale <= this.scale) return false;
     this.scale = scale;
-    this.layout = scale === 1 ? CAR_SPRAY : scaledLayout(scale);
+    this.layout = scaledLayout(scale);
     const wasWorn = this.drawn.size > 0;
     this.dispose();
     return wasWorn;
