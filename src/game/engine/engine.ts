@@ -15,7 +15,7 @@ import { lap, PHASE, startLaps } from "./sim-phases.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { GROUND_LEVEL, LAB_PRESET } from "../scenes/constants.ts";
 import { groundMaterial, levelOrder } from "../scenes/ground-stack.ts";
-import { damageStage } from "../vehicle/vehicle-classes.ts";
+import { carClass, damageStage } from "../vehicle/vehicle-classes.ts";
 import { makeJerseyBarrier, makePoolTexture } from "../present/engine-world.ts";
 import { Cinematics } from "../present/engine-cine.ts";
 import { FX_TIERS } from "../present/engine-post.ts";
@@ -51,6 +51,7 @@ import { makeDerbyArena, WinnerSpot } from "../scenes/derby-arena.ts";
 import { NetPlay } from "../net/net-play.ts";
 import { RaceDirector } from "./engine-race.ts";
 import { ReelDirector } from "./engine-highlights.ts";
+import { PodiumDirector } from "./engine-podium.ts";
 import { TrackArt } from "../present/track-art.ts";
 import { EngineGarage } from "./engine-garage.ts";
 import { GARAGE } from "../present/garage-art.ts";
@@ -138,6 +139,8 @@ export class CrashEngine extends EngineGarage {
   });
   /** The results reel and its solo view. */
   protected readonly highlights: ReelDirector;
+  /** The podium over the course (docs/PODIUM.md). */
+  protected readonly podium: PodiumDirector;
   readonly pace = new SimPacer(true);
   private readonly blend = new PoseBlend();
   /** What a crashed car nobody drives rolls on: its drive's idle pedals (engine braking, the test world's IDLE). */
@@ -259,6 +262,7 @@ export class CrashEngine extends EngineGarage {
     this.lampLights.pools.renderOrder = levelOrder(GROUND_LEVEL.decal);
     this.race = this.makeRace();
     this.highlights = this.makeHighlights();
+    this.podium = this.makePodium();
 
     this.resize();
     this.resizeObs = new ResizeObserver(() => this.resize());
@@ -356,6 +360,30 @@ export class CrashEngine extends EngineGarage {
     });
   }
 
+  private makePodium(): PodiumDirector {
+    return new PodiumDirector({
+      spot: () => this.race.podiumSpot(),
+      carFor: (id, reuse) => {
+        const racer = this.cars[id];
+        if (!racer) return null;
+        const type = { cls: carClass(racer), style: racer.style.id };
+        if (reuse && reuse.group.userData.carIndex === id && reuse.style.id === type.style && carClass(reuse) === type.cls) return reuse;
+        if (reuse) this.discardPodiumCar(reuse);
+        return this.buildCar(id, type);
+      },
+      dress: (car) => this.dressCar(car),
+      discard: (car) => this.discardPodiumCar(car),
+      damageOf: (id) => this.race.endedDamage(id),
+      scene: this.scene,
+      jet: (x, y, z, startIn, runFor, power, color) => this.fountains.jets.jet(x, y, z, startIn, runFor, power, color),
+    });
+  }
+
+  private discardPodiumCar(car: DeformableCar): void {
+    this.scene.remove(car.group);
+    car.dispose();
+  }
+
   /**
    * The loop runs from here, but until `ready` it only reads input (keys, pad, the seat's follow → drive), so a
    * press during the warm-up still counts; it simulates and draws once every program is linked.
@@ -378,6 +406,7 @@ export class CrashEngine extends EngineGarage {
     this.view.detach();
     this.resizeObs.disconnect();
     for (const car of this.cars) car.dispose();
+    this.podium.dispose();
     this.race.dispose();
     this.labArt?.dispose();
     this.garage?.dispose();

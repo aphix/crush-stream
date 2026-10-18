@@ -511,6 +511,7 @@ export class RaceDirector extends RaceHudLayer {
     this.stowSecret();
     this.menu = null;
     this.overFor = 0;
+    this.ended.clear();
     this.spectating = !seated;
     this.auto = false;
     const seat = this.host.seat;
@@ -752,6 +753,7 @@ export class RaceDirector extends RaceHudLayer {
       grounds.frame(wallDt, replay ? replay.squad : this.mirrored ? null : this.guard, this.secretOut, this.host.live(), player, this.grounds, replay);
       if (!replay) this.recorder.vipRides(grounds.vipRide);
     }
+    if (s && s.phase === "finished") this.ended.take(this.host.live(), this.entrants.length);
     if (s && s.phase === "finished" && (this.menu == null || this.menu === "dead")) {
       this.overFor += wallDt;
       if (this.overFor >= RESULTS_DELAY) {

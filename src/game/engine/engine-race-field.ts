@@ -32,8 +32,7 @@ import { carClass, classStats, HANDLING } from "../vehicle/vehicle-classes.ts";
 import { FLIPPED_UP_Y } from "../vehicle/constants.ts";
 import { DEFAULT_RACE_OPTIONS, type CarPose, type Entrant, type RaceMenu, type RaceOptions, type RaceSnapshot, type SurvivalHud, type TimeOfDay } from "../match/types.ts";
 import { CrashRecorder } from "./engine-record.ts";
-import { makeCarFrame, type CarFrame } from "../net/codec.ts";
-import { carLayout } from "../net/car-pose.ts";
+import { CarDamage, FinalDamage } from "./car-damage.ts";
 import type { CourseMenu } from "../net/net-ports.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 
@@ -453,6 +452,7 @@ export abstract class RaceField {
     this.copTime.fill(-1);
     this.knocked.fill(0);
     this.overFor = 0;
+    this.ended.clear();
     this.menu = null;
     const seat = this.host.seat;
     if (this.entrants[this.self]?.kind === "player") {
@@ -761,30 +761,16 @@ export abstract class RaceField {
     return true;
   }
 
-  /** The scratch a held reset captures a car's damage into (`placeKeeping`): one layout for every car. */
-  private keepFrame: CarFrame | null = null;
+  /** The scratch a held reset captures a car's damage into (`placeKeeping`). */
+  private readonly kept = new CarDamage();
+  /** The racers' damage as the race ended: what the podium shows (`FinalDamage`). */
+  protected readonly ended = new FinalDamage();
 
-  /**
-   * Put a car at (x, z) facing `yaw` at rest with its damage as it is: the dents and the packed engine block, the parts torn off, the
-   * lost wheels, the broken lamps and glass, the engine's travel (`DeformableCar.writeNetState` takes them as a netplay client takes
-   * the host's, over a fresh car). The wreck state that is not damage (velocity, the solver's contacts) starts again.
-   */
+  /** Put a car at (x, z) facing `yaw` at rest with its damage as it is (`CarDamage`). The wreck state that is not damage (velocity, the solver's contacts) starts again. */
   private placeKeeping(car: DeformableCar, x: number, z: number, yaw: number, y: number): void {
-    const f = (this.keepFrame ??= makeCarFrame(carLayout(car)));
-    car.deform.readNetState(f.deform);
-    car.readPartNetState(f.parts);
-    const { crashed } = car;
-    const { squash, buckle, mode } = car.deform;
+    this.kept.read(car);
     this.place(car, x, z, yaw, y, 0, true);
-    car.crashed = crashed;
-    // A wreck stays one (its net state's `massActive`): its masses run again from the new place, at rest, before the net state lays its
-    // dents on them. The net state sets the flag alone, and a wreck's rigid step and contact rows over masses never armed read NaN.
-    if ((f.deform.flags & 1) !== 0) car.deform.armMasses(car.group, car.velocity, car.angular);
-    car.writeNetState(f.deform, f.parts);
-    // The net state carries no crumple settings: the car's own again.
-    car.deform.squash = squash;
-    car.deform.buckle = buckle;
-    car.deform.setMode(mode);
+    this.kept.lay(car);
   }
 
   /** This browser's driver has car `i` (its own car, in drive mode, not spectating); otherwise the race AI or a peer does. */

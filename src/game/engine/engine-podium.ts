@@ -1,0 +1,212 @@
+import * as THREE from "three";
+import type { DeformableCar } from "../vehicle/car.ts";
+import { PODIUM_BLOCKS, type PodiumPlace } from "../match/podium.ts";
+import type { PodiumHud } from "../match/types.ts";
+import { PodiumStage } from "../present/podium-stage.ts";
+import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
+import type { CarDamage } from "./car-damage.ts";
+
+/** What the podium needs from the engine. */
+export type PodiumHost = {
+  /** Where the stage floats (its platform's top, at its middle); null without a course. */
+  spot(): { x: number; y: number; z: number } | null;
+  /** The podium's car for racer `id`: `reuse` when it already is a car of that racer's body and class, else one built (and `reuse` let go). Null when the field has no such car. Hidden, outside the field, not yet dressed. */
+  carFor(id: number, reuse: DeformableCar | null): DeformableCar | null;
+  /** Dress `car` as racer `id` wore it in the race: paint and spray, the crumple settings, the class's parts. */
+  dress(car: DeformableCar): void;
+  /** A car the podium built is let go. */
+  discard(car: DeformableCar): void;
+  /** Racer `id`'s damage as the race ended. */
+  damageOf(id: number): CarDamage | null;
+  /** The stage joins this. */
+  scene: THREE.Object3D;
+  /** One fountain jet (`FountainSystem.jet`): at (x, y, z) in `startIn` wall s, firing for `runFor` s at `power`, in `color`. */
+  jet(x: number, y: number, z: number, startIn: number, runFor: number, power: number, color: THREE.Color): void;
+};
+
+/** What the reel director asks of a podium while it has the screen (`ReelDirector.showPodium`). */
+export type PodiumShow = {
+  /** Once per rendered frame at `now` (wall s): the wall seconds the effects advance by. */
+  frame(now: number): number;
+  /** The camera's pose for this frame. */
+  aim(camera: THREE.PerspectiveCamera): void;
+  /** The car the sun's shadow box follows: the winner's. */
+  focus(): DeformableCar | null;
+  /** The cars on show (the lamp pool lights them). */
+  cars(): readonly DeformableCar[];
+};
+
+/** The swing of the camera around the stand: how far either side of dead ahead (rad), and the wall seconds of a full there-and-back. A pendulum, so the banner stays behind the cars. */
+const SWEEP_ARC = 0.8;
+const SWEEP_PERIOD = 30;
+/** The camera's distance from the stand's middle (m) at the start and settled, and its height over the platform. */
+const RADIUS_START = 34;
+const RADIUS_SETTLED = 19;
+const EYE_ABOVE = 8.5;
+/** What the camera aims at over the platform (m), and the half-width of the stand it keeps in view (m: the three blocks and the cars' overhang). */
+const AIM_UP = 2.8;
+const STAND_HALF_WIDTH = 9;
+/** Slots of the show's clock (`PodiumDirector.clock`). */
+const BEGAN = 0;
+const LAST = 1;
+const AGE = 2;
+const NEXT_JETS = 3;
+/** Wall seconds the camera takes to dolly in. */
+const INTRO_S = 3.5;
+/** Frames after a raise the cars' skins are drawn: the dents, parts and glass settle in the first, and a car that does not move needs no more (`updateSkin` allocates, and the stand is still). */
+const SKIN_FRAMES = 3;
+/** The fountains: a round of jets every `JET_GAP` wall s, each firing `JET_RUN` s, at these spots on the platform (x, z) and in these colours in turn. */
+const JET_GAP = 3;
+const JET_RUN = 2.2;
+const JET_POWER = 1;
+const JET_SPOTS: readonly (readonly [number, number])[] = [
+  [-8.4, 3.5],
+  [8.4, 3.5],
+  [-10, -3.6],
+  [10, -3.6],
+];
+const JET_COLOURS = [0xffd34d, 0xff5a5f, 0x5aa9ff, 0xffffff].map((hex) => new THREE.Color(hex));
+
+/**
+ * The podium (docs/PODIUM.md): the top three of a finished race or campaign, their cars as the race left them (`CarDamage`: the dents, the torn parts and lost wheels) standing on a stage that floats over
+ * the course, with a slow camera swing and fountains. It owns three cars of its own (built beside the field, never in it): the field's cars are the reel's to respawn, and a race that goes on after the podium
+ * finds them as it left them.
+ */
+export class PodiumDirector {
+  private readonly host: PodiumHost;
+  private stage: PodiumStage | null = null;
+  private readonly built: (DeformableCar | null)[] = PODIUM_BLOCKS.map(() => null);
+  /** The cars standing now (the winner's first), in place of a place nobody holds. */
+  private readonly standing: DeformableCar[] = [];
+  private names: string[] = [];
+  private kind: PodiumHud["kind"] = "race";
+  private up = false;
+  private readonly spot = new THREE.Vector3();
+  /** The show's clock in a typed array (a double stored in a field of the class is a heap number every frame): when it began, the last frame, seconds in, when the next jets fire. */
+  private readonly clock = new Float64Array(4).fill(NaN);
+  private round = 0;
+  private skinFrames = 0;
+
+  constructor(host: PodiumHost) {
+    this.host = host;
+  }
+
+  get open(): boolean {
+    return this.up;
+  }
+
+  /** Raise the stage over the course with `places` on it. False (nothing raised) with no course or nobody to show. */
+  raise(places: readonly PodiumPlace[], kind: PodiumHud["kind"]): boolean {
+    const spot = this.host.spot();
+    if (!spot || places.length === 0) return false;
+    if (!this.stage) {
+      this.stage = new PodiumStage();
+      this.host.scene.add(this.stage.group);
+    }
+    this.spot.set(spot.x, spot.y, spot.z);
+    this.stage.group.position.copy(this.spot);
+    this.stage.group.visible = true;
+    this.stage.setNames(places, kind === "campaign" ? "CHAMPIONSHIP" : "PODIUM");
+    this.standing.length = 0;
+    for (let k = 0; k < PODIUM_BLOCKS.length; k++) {
+      const place = places[k];
+      const car = place ? this.host.carFor(place.id, this.built[k]!) : null;
+      this.built[k] = car;
+      if (!place || !car) continue;
+      this.stand(car, place.id, PODIUM_BLOCKS[k]!);
+      this.standing.push(car);
+    }
+    this.skinFrames = SKIN_FRAMES;
+    this.names = places.map((p) => p.name);
+    this.kind = kind;
+    this.clock.fill(NaN);
+    this.round = 0;
+    this.up = true;
+    return true;
+  }
+
+  /** The stage and its cars go away. */
+  lower(): void {
+    this.up = false;
+    if (this.stage) this.stage.group.visible = false;
+    for (const car of this.built) if (car) car.group.visible = false;
+    this.standing.length = 0;
+  }
+
+  /** The cars and the stage are let go for good (the engine ends). */
+  dispose(): void {
+    this.lower();
+    for (const car of this.built) if (car) this.host.discard(car);
+    this.built.fill(null);
+    this.stage?.dispose();
+    this.stage = null;
+  }
+
+  /** What the HUD draws while the stage is up; `reel` is the campaign reel option's clip count (`RaceHud.campaignReel`). */
+  hud(reel: number): PodiumHud | null {
+    return this.up ? { kind: this.kind, names: this.names, reel } : null;
+  }
+
+  frame(now: number): number {
+    const c = this.clock;
+    if (Number.isNaN(c[BEGAN]!)) {
+      c[BEGAN] = now;
+      c[LAST] = now;
+      c[NEXT_JETS] = 0;
+    }
+    const dt = Math.min(Math.max(now - c[LAST]!, 0), 0.1);
+    c[LAST] = now;
+    c[AGE] = now - c[BEGAN]!;
+    if (c[AGE]! >= c[NEXT_JETS]!) {
+      c[NEXT_JETS] = c[AGE]! + JET_GAP;
+      this.fire();
+    }
+    if (this.skinFrames > 0) {
+      this.skinFrames--;
+      for (let k = 0; k < this.standing.length; k++) this.standing[k]!.updateSkin();
+    }
+    return dt;
+  }
+
+  aim(camera: THREE.PerspectiveCamera): void {
+    const settle = Math.min(1, this.clock[AGE]! / INTRO_S);
+    const ease = 1 - (1 - settle) * (1 - settle) * (1 - settle);
+    // Far enough that the whole stand fits the view's width, whatever its shape (a phone upright sees a narrow slice).
+    const fits = STAND_HALF_WIDTH / (Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect);
+    const radius = Math.max(RADIUS_START + (RADIUS_SETTLED - RADIUS_START) * ease, fits);
+    const swing = detSin((this.clock[AGE]! * 2 * Math.PI) / SWEEP_PERIOD) * SWEEP_ARC * ease;
+    const s = this.spot;
+    camera.position.set(s.x + detSin(swing) * radius, s.y + EYE_ABOVE, s.z + detCos(swing) * radius);
+    // Turned to the stand by yaw and pitch (no roll): `lookAt` allocates every call.
+    camera.rotation.set(-detAtan2(EYE_ABOVE - AIM_UP, radius), swing, 0, "YXZ");
+  }
+
+  focus(): DeformableCar | null {
+    return this.standing[0] ?? null;
+  }
+
+  cars(): readonly DeformableCar[] {
+    return this.standing;
+  }
+
+  /** Car `car` (racer `id`) on `block`'s top, nose turned as the block says, wearing the damage the race ended with. */
+  private stand(car: DeformableCar, id: number, block: (typeof PODIUM_BLOCKS)[number]): void {
+    const s = this.spot;
+    car.spawnFacing(s.x + block.x, s.z, block.yaw, 0);
+    car.group.position.y = s.y + block.top;
+    this.host.dress(car);
+    this.host.damageOf(id)?.lay(car);
+    car.hideLoose();
+    car.group.visible = true;
+    car.group.updateMatrixWorld(true);
+  }
+
+  /** A round of fountain jets at the platform's spots, each in the next colour. */
+  private fire(): void {
+    const s = this.spot;
+    for (let k = 0; k < JET_SPOTS.length; k++) {
+      const at = JET_SPOTS[k]!;
+      this.host.jet(s.x + at[0], s.y, s.z + at[1], 0, JET_RUN, JET_POWER, JET_COLOURS[this.round++ % JET_COLOURS.length]!);
+    }
+  }
+}

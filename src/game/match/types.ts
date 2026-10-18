@@ -283,6 +283,13 @@ export type RaceCommand =
   | { type: "savedPurge" }
   | { type: "savedAutoPurge"; on: boolean }
   /**
+   * The podium (docs/PODIUM.md; this browser only): `on` raises the top three of what is finished (a race's results, a finished campaign's standings) over the map just raced, `on` false takes it
+   * down again (skip), back to the sheet it came from.
+   */
+  | { type: "podium"; on: boolean }
+  /** A finished campaign's best three highlights, from all its courses, played in order (this browser only; the setup menu follows). */
+  | { type: "campaignReel" }
+  /**
    * Panel `id`'s box on the page while the reel plays behind it (null: gone): the reel frames its shots in the part of the
    * view every open panel leaves free (this browser only).
    */
@@ -315,6 +322,9 @@ export type FlagClip = { title: string; course: string; from: "reel" | "saved"; 
 
 /** What a submission says about where it came from: the scene and its flat settings (`EngineInput.submitContext`; the server stores both). */
 export type SubmitContext = { scene: string; settings: Record<string, string | number | boolean | null> };
+
+/** The podium while it is up: which finish it shows (a race's results or a campaign's standings), the names under its cars, and how many highlights the campaign's reel option would play (0: none to offer). */
+export type PodiumHud = { kind: "race" | "campaign"; names: string[]; reel: number };
 
 export type RaceMenu = "setup" | "survival" | "pause" | "dead" | "results" | "standings" | null;
 
@@ -462,6 +472,10 @@ export type RaceHud = {
   nextCourse: string | null;
   /** The full sandbox HUD (and its hotkeys) is shown; false = race focus view. */
   fullUi: boolean;
+  /** The podium over the map while it is up (`RaceCommand` `podium`): the HUD draws nothing but its buttons. Null otherwise. */
+  podium: PodiumHud | null;
+  /** A finished campaign's highlights the "View the highlight reel" option plays (the best three from all its courses); 0 when the campaign is not over or none was recorded. */
+  campaignReel: number;
   /** The results reel, null when none plays. */
   reel: ReelHud | null;
   /** Solo view: the title of the clip shown alone; the HUD draws nothing but its exit (tap anywhere, Esc). Null otherwise. */

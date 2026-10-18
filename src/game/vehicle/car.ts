@@ -803,6 +803,12 @@ export class DeformableCar extends CarParts {
     this.stepLooseParts(dt, this.slot, false);
   }
 
+  /** The torn parts and popped wheels are not drawn: a car shown with no world for them to fall in (the podium's) is missing them, rather than trailed by them hanging where they came off. `resetVisual` brings them back. */
+  hideLoose(): void {
+    for (const p of this.parts) if (p.detached) p.object.visible = false;
+    for (let i = 0; i < this.wheels.length; i++) if (this.looseWheels[i]!.loose) this.wheels[i]!.visible = false;
+  }
+
   /**
    * The body on its springs (`Suspension`) over this slice's ground pose: no input while flying or not upright
    * (tumbling, on the roof); a crashed car's body back on its stock ride.

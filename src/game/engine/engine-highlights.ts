@@ -14,6 +14,7 @@ import { crashCamEnd, CUTS, hitAim, laterHits, type CrashCam, type CrashHold } f
 import { contextEye, contextPose, overheadPose } from "../present/highlight-cam.ts";
 import { ClipSim, NO_RIDE, type ReplayScene } from "./engine-replay.ts";
 import { SPARK_MIN_IMPULSE, TIMELINE_HZ } from "./constants.ts";
+import type { PodiumShow } from "./engine-podium.ts";
 
 /** Wall seconds of the far-overhead flight into each clip. */
 export const FLIGHT_S = 3;
@@ -275,7 +276,8 @@ export type ReelHost = {
 
 /** A clip ready to play. `id` names it for as long as the director holds it (every loop of a reel, and its solo view, are the same id); `from` is how it came (the results reel, a saved highlight). */
 type Prepared = { id: number; from: "reel" | "saved"; clip: HighlightClip; sim: ClipSim; tl: Timeline; shots: Shot[]; beat: number };
-type Solo = Prepared & { startAt: number; back: () => void };
+/** `passes`: how many times the clip plays before the view ends by itself (Infinity: until `back`); `back` hears whether it ended that way. */
+type Solo = Prepared & { startAt: number; back: (ended: boolean) => void; passes: number };
 
 const NO_CARS: readonly DeformableCar[] = [];
 const _c = new THREE.Vector3();
@@ -299,6 +301,8 @@ export class ReelDirector {
   private startAt = Infinity;
   private loopWall = 0;
   private solo: Solo | null = null;
+  /** The podium that has the screen (docs/PODIUM.md), over a reel that keeps its clock; null when none does. */
+  private podium: PodiumShow | null = null;
   /** Each reel clip's last Save result (the HUD shows it). */
   private readonly saved = new Map<number, SaveResult>();
   /** The clip being replayed, and which pass of it (a new pass restarts it). */
@@ -372,22 +376,47 @@ export class ReelDirector {
   /** The reel's clip `i` alone (solo view), from `now`; the reel resumes at its next flight after `back`. */
   view(i: number, now: number): void {
     const p = this.clips[i];
-    if (p) this.soloOf(p, now, () => {});
+    if (p) this.soloOf(p, now, () => {}, Infinity);
   }
 
-  /** A saved clip alone from `now`, on cars `cars`; `back` gives the field back when the solo view ends. */
-  viewSaved(clip: HighlightClip, now: number, back: () => void): void {
-    this.soloOf(this.prepare(clip, mulberry32(Math.floor(clip.score * 1000)), "saved"), now, back);
+  /** A saved clip alone from `now`, `passes` times over (Infinity: until `back`); `back` gives the field back when the solo view ends, and hears whether it ran its passes out (false: left early). */
+  viewSaved(clip: HighlightClip, now: number, back: (ended: boolean) => void, passes = Infinity): void {
+    this.soloOf(this.prepare(clip, mulberry32(Math.floor(clip.score * 1000)), "saved"), now, back, passes);
   }
 
-  /** Leave the solo view (to the reel, or nothing). */
+  /** Leave the solo view early (to the reel, or nothing). */
   back(): void {
+    this.leave(false);
+  }
+
+  private leave(ended: boolean): void {
     const s = this.solo;
     if (!s) return;
     this.solo = null;
     this.cur = null;
     if (this.clips.length === 0) this.stop();
-    s.back();
+    s.back(ended);
+  }
+
+  /** A podium takes the screen: the field is hidden (the reel, if one runs, goes on counting its time), the show owns the camera and the cars. */
+  showPodium(show: PodiumShow): void {
+    this.shown ??= this.host.live().map((c) => c.group.visible);
+    for (const c of this.host.live()) c.group.visible = false;
+    this.podium = show;
+    this.cur = null;
+    this.pass = -1;
+    this.showing = -1;
+  }
+
+  /** The podium is down: a reel that runs sets its clip up again at its next flight; with none running, the field is given back as it was. */
+  endPodium(): void {
+    if (!this.podium) return;
+    this.podium = null;
+    this.playing = false;
+    this.cur = null;
+    this.pass = -1;
+    const reeling = this.solo !== null || (this.clips.length > 0 && performance.now() / 1000 >= this.startAt);
+    if (!reeling) this.giveBack();
   }
 
   /** Reel clip `i`'s Save came back `res` (the HUD marks it saved, or says why not). */
@@ -409,6 +438,7 @@ export class ReelDirector {
   stop(): void {
     const s = this.solo;
     this.solo = null;
+    this.podium = null;
     this.clips = [];
     this.saved.clear();
     this.startAt = Infinity;
@@ -416,21 +446,24 @@ export class ReelDirector {
     this.hovering = false;
     this.showing = -1;
     this.playing = false;
-    const shown = this.shown;
-    this.shown = null;
-    if (shown) {
-      const live = this.host.live();
-      for (let i = 0; i < live.length && i < shown.length; i++) live[i]!.group.visible = shown[i]!;
-      // What the clips left (torn parts, dummies, sparks) must not reach the race or setup the player returns to.
-      this.host.clear();
-    }
+    this.giveBack();
     const c = this.host.clock;
     c.phase = "approach";
     c.timeScale = 1;
     c.targetScale = 1;
     c.wallSinceImpact = 0;
     c.hold = SLOMO_HOLD;
-    s?.back();
+    s?.back(false);
+  }
+
+  /** The cars' visibility as the reel or the podium took them, and what the clips left (torn parts, dummies, sparks) swept out: it must not reach the race or setup the player returns to. */
+  private giveBack(): void {
+    const shown = this.shown;
+    this.shown = null;
+    if (!shown) return;
+    const live = this.host.live();
+    for (let i = 0; i < live.length && i < shown.length; i++) live[i]!.group.visible = shown[i]!;
+    this.host.clear();
   }
 
   /**
@@ -438,6 +471,10 @@ export class ReelDirector {
    * the crash clock. The sim seconds it advanced (the frame's sim dt), or null when no reel plays (the engine simulates).
    */
   frame(now: number): number | null {
+    if (this.podium) {
+      this.playing = true;
+      return this.podium.frame(now);
+    }
     const solo = this.solo;
     const live = solo !== null || (this.clips.length > 0 && now >= this.startAt);
     this.playing = live;
@@ -448,6 +485,10 @@ export class ReelDirector {
       // A frame's timestamp can precede the click that set `startAt`: a negative t would run pass −1 to its end (its hit).
       const t = Math.max(0, now - solo.startAt);
       const pass = Math.floor(t / lap);
+      if (pass >= solo.passes) {
+        this.leave(true);
+        return this.frame(now);
+      }
       if (this.cur !== solo || this.pass !== pass) this.setup(solo, pass);
       this.showing = -1;
       return this.run(solo, Math.min(t - pass * lap, solo.tl.wall));
@@ -495,6 +536,10 @@ export class ReelDirector {
    * shot or the flight.
    */
   aim(camera: THREE.PerspectiveCamera, wallDt: number, crash: Pick<CrashCam, "direct" | "holding">): void {
+    if (this.podium) {
+      this.podium.aim(camera);
+      return;
+    }
     if (crash.direct(camera, wallDt, true, this.crashHold())) return;
     const subject = this.focus();
     if (crash.holding || subject === null || this.wall < this.cur!.beat || !this.host.ride(camera, wallDt, subject)) this.camera(camera);
@@ -517,12 +562,14 @@ export class ReelDirector {
 
   /** The car the shot follows (the sun's shadow box goes with it): the clip's subject (`ClipSim.subject`); null in a flight. */
   focus(): DeformableCar | null {
+    if (this.podium) return this.podium.focus();
     const p = this.cur;
     return p && !this.flying ? p.sim.cars[p.sim.subject]! : null;
   }
 
   /** The cars of the clip being played (the lamp pool lights them for real); none when no clip is. */
   cars(): readonly DeformableCar[] {
+    if (this.podium) return this.podium.cars();
     return this.cur ? this.cur.sim.cars : NO_CARS;
   }
 
@@ -567,8 +614,8 @@ export class ReelDirector {
     return { id: ++this.serial, from, clip, sim, tl, shots: shotsFor(clip, tl, rand, () => this.host.still()), beat };
   }
 
-  private soloOf(p: Prepared, now: number, back: () => void): void {
-    this.solo = { ...p, startAt: now, back };
+  private soloOf(p: Prepared, now: number, back: (ended: boolean) => void, passes: number): void {
+    this.solo = { ...p, startAt: now, back, passes };
     this.cur = null;
   }
 

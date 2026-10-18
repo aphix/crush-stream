@@ -7,7 +7,12 @@ import { brakeCueAt } from "../ai/brake-cue.ts";
 import { projectPath, type TrackPath } from "../world/track.ts";
 import { carClass, classStats } from "../vehicle/vehicle-classes.ts";
 import { RACE_MODE, type RaceHud, type RaceHudRow, type RaceView } from "../match/types.ts";
+import { podiumPlaces, type PodiumPlace } from "../match/podium.ts";
+import type { CarDamage } from "./car-damage.ts";
 import { RaceWatch } from "./engine-race-watch.ts";
+
+/** How high over the course's start line the podium floats (m): clear of the tallest props and the tracks' decks, low enough that the course reads below it. */
+const PODIUM_HOVER = 40;
 
 /** A police unit's boost meter as the gauge shows it: always full (police boost with no meter, `cop-brain.ts`). */
 const POLICE_METER = 1;
@@ -43,7 +48,7 @@ export abstract class RaceHudLayer extends RaceWatch {
   }
 
   /** The race's part of the HUD read model; the engine adds the reel's (`reel`, `solo`, `shown`, `saved`, `outdated`, `autoPurge`). */
-  hud(): Omit<RaceHud, "reel" | "solo" | "shown" | "saved" | "outdated" | "autoPurge"> {
+  hud(): Omit<RaceHud, "reel" | "solo" | "shown" | "saved" | "outdated" | "autoPurge" | "podium" | "campaignReel"> {
     const s = this.session;
     const tr = this.track;
     const cars = this.host.live();
@@ -196,6 +201,39 @@ export abstract class RaceHudLayer extends RaceWatch {
       this.next();
     }
     if (this.menu === "standings") this.next();
+  }
+
+  /** A campaign is running or just over (its standings still up). */
+  get inCampaign(): boolean {
+    return this.campaign !== null;
+  }
+
+  /** The campaign is over and its standings are up: the finale, which the podium opens on by itself. */
+  get campaignFinale(): boolean {
+    return this.campaign?.done === true && this.menu === "standings";
+  }
+
+  /** The car ids of the campaign's top three, who the campaign reel's ranking leans toward (`WINNER_LEAN`). */
+  campaignWinners(): ReadonlySet<number> {
+    return new Set(podiumPlaces(this.campaign?.standings() ?? []).map((p) => p.id));
+  }
+
+  /** The podium of what is finished: a finished campaign's standings, else the race's results; null while the race runs. */
+  podium(): { kind: "race" | "campaign"; places: PodiumPlace[] } | null {
+    if (this.campaignFinale) return { kind: "campaign", places: podiumPlaces(this.campaign!.standings()) };
+    const s = this.session;
+    return s && s.phase === "finished" ? { kind: "race", places: podiumPlaces(s.results()) } : null;
+  }
+
+  /** Racer `id`'s damage as the race ended (the podium's car shows it); null before one has. */
+  endedDamage(id: number): CarDamage | null {
+    return this.ended.of(id);
+  }
+
+  /** Where the podium floats: over the course's start line, `PODIUM_HOVER` m above it. Null without a course. */
+  podiumSpot(): { x: number; y: number; z: number } | null {
+    const slot = this.track?.gridSlot(0);
+    return slot ? { x: slot.x, y: slot.y + PODIUM_HOVER, z: slot.z } : null;
   }
 
   /** Each rival keeps the aggression it rolled when the campaign began. */

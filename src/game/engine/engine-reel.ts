@@ -12,6 +12,8 @@ import { NO_CAR_PICK } from "../match/look-data.ts";
 import { coverLens, type ReelDirector } from "./engine-highlights.ts";
 import { autoPurge, deleteSaved, listSaved, loadSaved, purgeOutdated, saveClip, setAutoPurge } from "./highlight-store.ts";
 import { EngineInput } from "./engine-input.ts";
+import { CAMPAIGN_REEL_CLIPS, CampaignReel } from "../match/campaign-reel.ts";
+import type { PodiumDirector } from "./engine-podium.ts";
 
 /** The trace's `camera.rig` while a crash cut holds the camera. */
 const CRASH_CAM_RIG = "crash-cam";
@@ -20,6 +22,12 @@ const CRASH_CAM_RIG = "crash-cam";
 export abstract class EngineReel extends EngineInput {
   /** The results reel and its solo view. */
   protected abstract readonly highlights: ReelDirector;
+  /** The podium over the course (docs/PODIUM.md). */
+  protected abstract readonly podium: PodiumDirector;
+  /** The clips of the campaign running, kept round to round (`CampaignReel`) for the finale's reel option. */
+  private readonly campaignClips = new CampaignReel();
+  /** The finale's podium was raised by itself for the standings now up (it comes once; the sheet's Podium button raises it again). */
+  private finaleShown = false;
   /** The camera's field of view before the reel took it. */
   protected reelFov: number | null = null;
   /** `listSaved()` and the auto-purge preference, re-read after a save, a delete, a purge or a change of the preference. */
@@ -32,6 +40,7 @@ export abstract class EngineReel extends EngineInput {
   /** Race over (host or offline) `since` wall s ago: the reel from the results' first moment. Every peer, this one too, replays the decoded bytes. */
   protected startReel(clips: readonly HighlightClip[], since: number): void {
     if (clips.length === 0 || this.net.client) return;
+    if (this.race.inCampaign) this.campaignClips.note(clips);
     const lay = carLayout(this.cars[0]!);
     const reel = { seed: (Math.random() * 2 ** 32) >>> 0, clips: [...clips] };
     const startAt = performance.now() / 1000 + RESULTS_DELAY - since;
@@ -87,12 +96,20 @@ export abstract class EngineReel extends EngineInput {
         setAutoPurge(cmd.on);
         this.savedList = null;
         return true;
+      case "podium":
+        if (cmd.on) this.raisePodium();
+        else this.lowerPodium();
+        return true;
+      case "campaignReel":
+        void this.playCampaignReel();
+        return true;
       case "start":
       case "campaign":
       case "retry":
       case "next":
       case "quit":
-        // Leaving the results: the cars go back before the race moves them.
+        // Leaving the results: the cars go back before the race moves them. A campaign's kept highlights go with the campaign that ends or the one that begins.
+        if (cmd.type === "start" || cmd.type === "campaign" || cmd.type === "quit") this.campaignClips.clear();
         this.stopReel();
         return false;
       default:
@@ -101,8 +118,32 @@ export abstract class EngineReel extends EngineInput {
   }
 
   protected stopReel(): void {
+    this.podium.lower();
     this.highlights.stop();
     this.cine.direct(this.camera, 0, false);
+  }
+
+  /** Raise the podium of what is finished over the course (the results' top three, a finished campaign's standings), unless it is up. */
+  private raisePodium(): void {
+    const finish = this.race.podium();
+    if (!finish || this.podium.open) return;
+    if (this.podium.raise(finish.places, finish.kind)) this.highlights.showPodium(this.podium);
+  }
+
+  private lowerPodium(): void {
+    this.podium.lower();
+    this.highlights.endPodium();
+  }
+
+  /** A campaign's finale (its standings up after the last round) raises the podium by itself, once. */
+  private raiseFinale(): void {
+    if (!this.race.campaignFinale) {
+      this.finaleShown = false;
+      return;
+    }
+    if (this.finaleShown) return;
+    this.finaleShown = true;
+    this.raisePodium();
   }
 
   /**
@@ -135,6 +176,38 @@ export abstract class EngineReel extends EngineInput {
       return;
     }
     if (!this.race.active || this.race.menu !== "setup") return;
+    const undo = this.dressForClip(clip);
+    this.highlights.viewSaved(clip, performance.now() / 1000, () => {
+      undo();
+      this.leaveClipCourse();
+    });
+    this.emitHud();
+  }
+
+  /**
+   * A finished campaign's best clips from all its courses (`CampaignReel.top`), each once and in order on its own course, then the setup menu. Leaving the campaign
+   * is part of it: its standings are gone, so the reel option is not offered where the campaign is shared (a room). A tap, Esc or B leaves the reel at once.
+   */
+  private async playCampaignReel(): Promise<void> {
+    if (!this.race.campaignFinale || this.net.role !== "off") return;
+    const clips = this.campaignClips.top(this.race.campaignWinners());
+    if (clips.length === 0) return;
+    this.lowerPodium();
+    this.raceCommand({ type: "quit" });
+    if (!this.race.active || this.race.menu !== "setup") return;
+    const undo: (() => void)[] = [];
+    for (const clip of clips) {
+      undo.push(this.dressForClip(clip));
+      const ended = await new Promise<boolean>((resolve) => this.highlights.viewSaved(clip, performance.now() / 1000, resolve, 1));
+      if (!ended) break;
+    }
+    for (const putBack of undo.reverse()) putBack();
+    this.leaveClipCourse();
+    this.emitHud();
+  }
+
+  /** The setup menu's field on `clip`'s course, its cars as that race had them (body and class, the rivals' spray); the returned call puts the cars' looks back. */
+  private dressForClip(clip: HighlightClip): () => void {
     this.race.command({ type: "program", options: { trackId: clip.trackId } });
     this.race.reset();
     this.ensureCars(Math.max(this.carCount, ...clip.cars.map((c) => c.slot + 1)));
@@ -146,18 +219,22 @@ export abstract class EngineReel extends EngineInput {
       const car = this.cars[c.slot]!;
       wearCarLook(car, NO_CAR_PICK, this.rivals.of(clip.look, c.slot, lookColours(car, NO_CAR_PICK).body));
     }
-    this.highlights.viewSaved(clip, performance.now() / 1000, () => {
+    return () => {
       for (const l of looks) this.matchCar(l.slot, l.style, l.cls);
       // The setup field has no race, so the cars are bare again.
       for (const c of rivals) this.dressCar(this.cars[c.slot]!);
-      this.race.command({ type: "program", options: null });
-      this.race.reset();
-    });
-    this.emitHud();
+    };
+  }
+
+  /** The course a clip was played on is let go: the setup menu's own course and field come back. */
+  private leaveClipCourse(): void {
+    this.race.command({ type: "program", options: null });
+    this.race.reset();
   }
 
   /** Per frame: the reel's lens while it plays; once the reel is over, the camera's lens comes back. */
   protected reelFrame(on: boolean): void {
+    this.raiseFinale();
     if (on !== this.reelOn) {
       this.reelOn = on;
       this.fitLens();
@@ -173,9 +250,10 @@ export abstract class EngineReel extends EngineInput {
     coverLens(this.camera, this.canvas.getBoundingClientRect(), open);
   }
 
-  protected reelHud(): Pick<RaceHud, "reel" | "solo" | "shown" | "saved" | "outdated" | "autoPurge"> {
+  protected reelHud(): Pick<RaceHud, "reel" | "solo" | "shown" | "saved" | "outdated" | "autoPurge" | "podium" | "campaignReel"> {
     this.savedList ??= { ...listSaved(), autoPurge: autoPurge() };
-    return { ...this.highlights.hud(), ...this.savedList };
+    const reel = this.race.campaignFinale && this.net.role === "off" ? Math.min(CAMPAIGN_REEL_CLIPS, this.campaignClips.clips.length) : 0;
+    return { ...this.highlights.hud(), ...this.savedList, podium: this.podium.hud(reel), campaignReel: reel };
   }
 
   /**
@@ -194,7 +272,7 @@ export abstract class EngineReel extends EngineInput {
   /** Which rig holds the camera, mirroring `aimRigs`' and `updateCamera`'s precedence from the state they read (the trace's `camera.rig`). */
   protected cameraRig(): string {
     if (this.view.flying) return "free";
-    if (this.highlights.playing) return this.cine.cutting ? CRASH_CAM_RIG : "reel";
+    if (this.highlights.playing) return this.podium.open ? "podium" : this.cine.cutting ? CRASH_CAM_RIG : "reel";
     const followed = this.followedCar();
     const shown = followed?.group.visible === true;
     if (shown && this.view.rear) return "rear-view";

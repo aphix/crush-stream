@@ -192,6 +192,6 @@ export abstract class EngineHud extends EngineWarm {
     return { hit, speed: s.speedBefore, fell: s.fell.length };
   }
 
-  /** The results reel's part of the race HUD (docs/HIGHLIGHTS.md). */
-  protected abstract reelHud(): Pick<RaceHud, "reel" | "solo" | "shown" | "saved" | "outdated" | "autoPurge">;
+  /** The results reel's and the podium's part of the race HUD (docs/HIGHLIGHTS.md, docs/PODIUM.md). */
+  protected abstract reelHud(): Pick<RaceHud, "reel" | "solo" | "shown" | "saved" | "outdated" | "autoPurge" | "podium" | "campaignReel">;
 }

@@ -21,6 +21,7 @@ plays one clip alone with no HUD; **Save** keeps it in this browser.
 | `present/gpu-timer.ts` | `GpuTimer`: the draw's GPU time from `EXT_disjoint_timer_query_webgl2` (none where the browser lacks it). |
 | `net/reel-codec.ts` | One byte layout for a clip on the wire (`MSG.reel`) and in storage. |
 | `engine/highlight-store.ts` | Saved clips in `localStorage`. |
+| `match/campaign-reel.ts` | `CampaignReel`: a campaign's highlights kept round to round, the best three picked for its finale ([`PODIUM.md`](PODIUM.md)). |
 
 ## Recording
 

@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Crown,
   Eye,
+  Film,
   Flag,
   Focus,
   LayoutGrid,
@@ -720,6 +721,10 @@ function ResultsMenu({ race, pad, onCommand }: { race: RaceHud; pad: boolean; on
             Next course: {race.nextCourse}
           </NavButton>
         ) : null}
+        <NavButton variant="secondary" className={race.reel ? "col-span-2" : undefined} onClick={() => onCommand({ type: "podium", on: true })}>
+          <Trophy />
+          Podium
+        </NavButton>
         <NavButton variant="secondary" onClick={() => onCommand({ type: "retry" })}>
           <RotateCcw />
           Retry
@@ -800,7 +805,20 @@ function StandingsMenu({ race, pad, onCommand }: { race: RaceHud; pad: boolean; 
             <ChevronRight />
             Next round: {race.nextCourse}
           </NavButton>
-        ) : null}
+        ) : (
+          <>
+            <NavButton variant="secondary" onClick={() => onCommand({ type: "podium", on: true })}>
+              <Trophy />
+              Podium
+            </NavButton>
+            {race.campaignReel > 0 ? (
+              <NavButton variant="secondary" onClick={() => onCommand({ type: "campaignReel" })}>
+                <Film />
+                View the highlight reel
+              </NavButton>
+            ) : null}
+          </>
+        )}
         <NavButton variant={race.nextCourse === null ? "default" : "ghost"} onClick={quit}>
           Menu
         </NavButton>

@@ -12,6 +12,7 @@ import { OnlineEntry } from "@/components/online-entry";
 import { Gauge, RaceReadouts } from "@/components/race-readouts";
 import { RaceStatus } from "@/components/race-status";
 import { SoloExit } from "@/components/race-reel";
+import { PodiumView } from "@/components/race-podium";
 import { DriftLabel, DriftOverlay } from "@/components/drift-charge";
 import { RESET_GLOW, ResetPrompt } from "@/components/reset-prompt";
 import { pickScene, sceneInPlay, sceneLabel, scenesFor } from "@/components/scene-picks";
@@ -151,6 +152,8 @@ export function Hud(props: HudProps) {
   };
   // Race focus view: race panels only; the sandbox HUD comes back with the Full menu toggle (H). A phone has no such toggle, so its race is always the focus view.
   const focus = state.race !== null && (touch || !state.race.fullUi);
+  // The podium over the course: the HUD is a title and its pills, the view between them the stand's.
+  if (state.race?.podium) return <PodiumView podium={state.race.podium} onCommand={raceCommand} />;
   // Solo view: one clip alone, full screen; the HUD is nothing but its exit.
   if (state.race?.solo != null) return <SoloExit title={state.race.solo} shown={state.race.shown} onCommand={raceCommand} />;
   const shell: HudShell = { hud: props, reset, raceCommand, tapReset, focus };
