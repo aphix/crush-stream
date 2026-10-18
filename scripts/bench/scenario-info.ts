@@ -97,6 +97,20 @@ export const SCENARIO_INFO: Record<string, ScenarioInfo> = {
     warmS: 2,
     windowS: 12,
   },
+  "present-asleep": {
+    about: "8 dead wrecks standing apart (asleep within a second), a rendered frame every 1/60 sim-s drawing every car (`updateSkin`: skin, lamps, panels, glass, the parts' pose): what presentSkip is for",
+    sizes: "presentSkip: posePart and followGlass calls per drawn frame and us per drawn frame, `--arm ps0:epi.presentSkip=0` against the default; a still scene should pose nothing",
+    lone: false,
+    warmS: 3,
+    windowS: 10,
+  },
+  "present-stopped": {
+    about: "8 braked wrecks standing apart with the drivetrain alive (awake: frozen with `epi.on`), drawn every 1/60 sim-s as present-asleep",
+    sizes: "presentSkip on awake wrecks: the frames still carry the sim's tiny motion, so the calls per frame show what the nanometre tolerance (`POSE_EPSILON`) lets through",
+    lone: false,
+    warmS: 3,
+    windowS: 10,
+  },
   city: {
     about: "the in-app city bench through the real engine (BENCH_RACE: 15 AI racers and police, the bench's seed, nothing drawn, pacer pinned to the fine floor): AI drives, so the arms may do different work",
     sizes: "end-to-end confirmation only: per-unit rows and the counters, never totals",
@@ -107,6 +121,22 @@ export const SCENARIO_INFO: Record<string, ScenarioInfo> = {
   "city-race": {
     about: "the same city bench race on the race's step schedule (pace pinned coarse: 1/80 s steps, cut to 1/240 s slices in contact, lone cars once a step): what a phone that keeps up runs; AI drives",
     sizes: "end-to-end confirmation of the lone-car and relock cuts: per-unit rows, the counters and fineCuts, never totals",
+    lone: true,
+    race: true,
+    warmS: 20,
+    windowS: 30,
+  },
+  mall: {
+    about: "the in-app National Mall bench (`?bench=city&course=national-mall`: 16 racers, the bench's seed) through the real engine on the race's step schedule, nothing drawn: the map where the owner's epi card lost (wreck per unit 101 -> 158 us, freezes = thaws 638/s)",
+    sizes: "the freeze/thaw thrash on piles: thawHold / feedMin sweeps, thaws by site, per-unit wreck us against off",
+    lone: true,
+    race: true,
+    warmS: 20,
+    windowS: 30,
+  },
+  "dam-spine": {
+    about: "the in-app dam-spine bench (`?bench=city&course=dam-spine`: the longest course, 16 racers, the bench's seed) through the real engine on the race's step schedule, nothing drawn",
+    sizes: "end-to-end: per-unit wreck us and freezes against off on the map where the owner's epi card won",
     lone: true,
     race: true,
     warmS: 20,

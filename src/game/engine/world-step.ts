@@ -5,7 +5,7 @@ import { partContactPair } from "../contact/external-contact.ts";
 import { markApproaches, resolveCarPair } from "../contact/pair-contact.ts";
 import { bandsMeet } from "../contact/cage-outline.ts";
 import type { EjectionWatch } from "../vehicle/ejection.ts";
-import { armCrushRows } from "../vehicle/car-air.ts";
+import { armCrushRows, takeCrossingsSkipped } from "../vehicle/car-air.ts";
 import { contactHz } from "../vehicle/car-air-points.ts";
 import { CarSurfaces, REACH } from "../vehicle/car-surfaces.ts";
 import { armTops } from "../world/surfaces.ts";
@@ -309,6 +309,7 @@ export function stepWorld(w: World, dt: number): void {
       }
       lap(ph, wreck ? PHASE.wreck : PHASE.integrate);
     }
+    work[WORK.crossingsSkipped] = work[WORK.crossingsSkipped]! + takeCrossingsSkipped();
     // Every roof moves to where its car now is once all the cars have stepped: each car stepped against the roofs as the slice began,
     // whichever order the list has them in. Synced as each car stepped, the cars after it read its new roof and those before it its
     // old one, and a mirror-symmetric 150 km/h head-on came out 10.6 mm apart by which car was first.

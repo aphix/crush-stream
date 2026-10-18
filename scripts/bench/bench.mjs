@@ -23,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "../..");
 const PHASES = ["drive", "plan", "integrate", "wreck", "pairs", "structure", "course", "bake", "rules", "settle"];
-const COUNTERS = ["slices", "liveCarSlices", "wreckCarSlices", "asleepCarSlices", "pairTests", "pairContacts", "partContacts", "nodesLoose", "nodesLocked", "frozenCarSlices", "freezes", "thaws"];
+const COUNTERS = ["slices", "liveCarSlices", "wreckCarSlices", "asleepCarSlices", "pairTests", "pairContacts", "partContacts", "nodesLoose", "nodesLocked", "frozenCarSlices", "freezes", "thaws", "crossingsSkipped"];
 export const DEFAULT_ARMS = [
   { name: "off", knobs: {} },
   { name: "on", knobs: { "epi.on": 1 } },
@@ -94,6 +94,7 @@ export function summarize(runs) {
       wakeSites: list[0].wakeSites ?? {},
       speedBins: list[0].speedBins ?? {},
       bakeBins: list[0].bakeBins ?? {},
+      drawn: list[0].drawn ? { frames: mean(list.map((r) => r.drawn.frames)), ms: mean(list.map((r) => r.drawn.ms)), posePart: mean(list.map((r) => r.drawn.posePart)), followGlass: mean(list.map((r) => r.drawn.followGlass)) } : null,
       trace: list[0].trace ?? null,
       census: list[0].census ?? null,
       ground: groundOf(list),
@@ -279,6 +280,12 @@ export function table(name, first, arms) {
   for (const a of arms) if (a.wakeSites && Object.keys(a.wakeSites).length) lines.push(`   wake / rest-timer resets of crashed cars per sim-s by caller, ${a.name}: ${Object.entries(a.wakeSites).map(([k, v]) => `${k} ${f1(v / first.windowS)}`).join("; ")}`);
   for (const a of arms) if (a.speedBins && Object.keys(a.speedBins).length) lines.push(`   rigid steps of awake wrecks per sim-s by speed (|v| + |w|), ${a.name}: ${Object.entries(a.speedBins).map(([k, v]) => `[${k}] ${f1(v / first.windowS)}`).join("; ")}`);
   for (const a of arms) if (a.bakeBins && Object.keys(a.bakeBins).length) lines.push(`   bakeBetweenSlices by car state, ${a.name} (calls per sim-s, ms per sim-s, us per call; the timer adds its own cost): ${Object.entries(a.bakeBins).map(([k, v]) => `${k} ${f1(v.n / first.windowS)} calls, ${f2(v.ms / first.windowS)} ms, ${f2((1000 * v.ms) / Math.max(1, v.n))} us`).join("; ")}`);
+  if (arms.some((a) => a.drawn)) {
+    lines.push(row("drawn frames/s", arms.map((a) => (a.drawn ? f1(a.drawn.frames / first.windowS) : ""))));
+    lines.push(row("posePart calls per drawn frame", arms.map((a) => (a.drawn ? f2(a.drawn.posePart / Math.max(1, a.drawn.frames)) : ""))));
+    lines.push(row("followGlass calls per drawn frame", arms.map((a) => (a.drawn ? f2(a.drawn.followGlass / Math.max(1, a.drawn.frames)) : ""))));
+    lines.push(row("us per drawn frame (updateSkin of every car)", arms.map((a) => (a.drawn ? f2((1000 * a.drawn.ms) / Math.max(1, a.drawn.frames)) : ""))));
+  }
   for (const a of arms) {
     const c = a.census;
     if (!c) continue;

@@ -32,11 +32,11 @@ export async function benchRaceEngine(course?: string): Promise<CrashEngine> {
   return engine;
 }
 
-/** The real engine on `?bench=strip` as the in-app card sets it up (the strip course, its one body, its race, the bench's seed), nothing drawn, the pacer pinned to the 1/240 s floor. */
-export async function benchStripEngine(): Promise<CrashEngine> {
-  const plan = benchPlan("?bench=strip")!;
+/** The real engine on the bench page `search` (`?bench=strip`, `?bench=city&course=national-mall`, ...) as the in-app card sets it up (its course, body, race, the bench's seed), nothing drawn, the pacer pinned to the 1/240 s floor. */
+export async function benchPlanEngine(search: string): Promise<CrashEngine> {
+  const plan = benchPlan(search)!;
   const engine = await benchEngine();
-  engine["race"].loadBenchCourse(plan.course!);
+  if (plan.course) engine["race"].loadBenchCourse(plan.course);
   engine.useOneBody(plan.body);
   engine.raceCommand(plan.race!);
   engine["race"].reseed(BENCH.seed);

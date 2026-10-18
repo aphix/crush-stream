@@ -11,7 +11,7 @@ import { newWorld, settleStep, stepWorld, type World } from "../../src/game/engi
 import { lap, PHASE, startLaps } from "../../src/game/engine/sim-phases.ts";
 import { SimPacer } from "../../src/game/engine/sim-pace.ts";
 import { sliceSpeed } from "../../src/game/contact/sat.ts";
-import { FINE_HZ, QUIET_HZ } from "../../src/game/kernel/constants.ts";
+import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../../src/game/kernel/constants.ts";
 
 /** One step a frame: the pacer takes the 1/240 s slice, so no step meets a wall deadline. */
 export const STEP_S = 1 / FINE_HZ;
@@ -25,6 +25,8 @@ export interface SimLike {
   run(seconds: number): void;
   /** The step (s) a `run` of one step advances: 1/240 s at the fine floor, 1/80 s on the race's schedule. */
   readonly stepS: number;
+  /** A sim that draws frames (`Sim.drawFrames`): the window's frame count and ms, zeroed by the runner as the window starts. */
+  readonly drawn?: { frames: number; ms: number };
 }
 
 export class Sim implements SimLike {
@@ -74,10 +76,38 @@ export class Sim implements SimLike {
     return this;
   }
 
+  /**
+   * The frames a rendered second would draw (`FRAME_HZ` of them): after the step that reaches each, every car's `updateSkin` (what the engine's frame runs per car: the skin, lamps, panels, glass and the
+   * parts' pose). `drawn` counts the frames and the ms they took; the rows of a still scene (`present`) read them with the calls per frame the scenario probe counts.
+   */
+  drawFrames(): this {
+    this.drawing = true;
+    return this;
+  }
+
+  /** Frames drawn and the ms their `updateSkin` calls took, since the last `drawn.frames = 0` (the window starts there). */
+  readonly drawn = { frames: 0, ms: 0 };
+  private drawing = false;
+  private drawDue = 0;
+
+  private draw(): void {
+    this.drawDue += this.step;
+    while (this.drawDue >= 1 / FRAME_HZ) {
+      this.drawDue -= 1 / FRAME_HZ;
+      const t0 = performance.now();
+      for (const car of this.cars) car.updateSkin();
+      this.drawn.ms += performance.now() - t0;
+      this.drawn.frames++;
+    }
+  }
+
   /** `seconds` of sim, one step at a time (1/240 s, or 1/80 s after `useRaceSchedule`). */
   run(seconds: number): void {
     const steps = Math.round(seconds / this.step);
-    for (let i = 0; i < steps; i++) this.pace.run(this.step, 1, sliceSpeed(this.cars), true, Infinity, this.slice);
+    for (let i = 0; i < steps; i++) {
+      this.pace.run(this.step, 1, sliceSpeed(this.cars), true, Infinity, this.slice);
+      if (this.drawing) this.draw();
+    }
   }
 
   /** Steps until `done` or `limitS` of sim; the sim seconds it ran. */

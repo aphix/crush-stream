@@ -139,6 +139,17 @@ if (process.env["BENCH_THAW_SITES"] === "1") {
   };
 }
 
+// How often the drawn frames pose a part and follow the glass (`present` rows: a still wreck should pose nothing once `presentSkip` has seen nothing change).
+const drawCalls = { posePart: 0, followGlass: 0 };
+for (const method of ["posePart", "followGlass"] as const) {
+  const proto = DeformableCar.prototype as unknown as Record<string, (...args: unknown[]) => unknown>;
+  const real = proto[method]!;
+  proto[method] = function (this: DeformableCar, ...args: unknown[]): unknown {
+    drawCalls[method]++;
+    return real.apply(this, args);
+  };
+}
+
 // Staged with every knob at its off value, so both arms start from the same state; the arm's knobs apply after.
 loadEpicenter(EPICENTER_AT_LOAD);
 const sim = await scenario.build();
@@ -202,6 +213,12 @@ feedBins.clear();
 wakeSites.clear();
 speedBins.clear();
 bakeBins.clear();
+drawCalls.posePart = 0;
+drawCalls.followGlass = 0;
+if (sim.drawn) {
+  sim.drawn.frames = 0;
+  sim.drawn.ms = 0;
+}
 
 /** `BENCH_CENSUS=1` (bench `--census`): the window runs step by step through the lone-car census (`census.ts`). */
 const census = process.env["BENCH_CENSUS"] === "1" ? new LoneCensus(sim) : null;
@@ -313,6 +330,7 @@ console.log(
     wakeSites: Object.fromEntries([...wakeSites].sort((a, b) => b[1] - a[1]).slice(0, 10)),
     speedBins: Object.fromEntries([...speedBins].sort((a, b) => b[1] - a[1])),
     bakeBins: Object.fromEntries([...bakeBins]),
+    drawn: sim.drawn ? { frames: sim.drawn.frames, ms: sim.drawn.ms, posePart: drawCalls.posePart, followGlass: drawCalls.followGlass } : null,
     loadStart,
     loadEnd: loadavg()[0]!,
   })}`,

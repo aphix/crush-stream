@@ -4,7 +4,7 @@
  * schedule (`pace.pin` true: 1/80 s steps, cut to 1/240 s slices in contact, lone cars once a step: what a phone that keeps up runs). One per process (a second `CrashEngine` never resolves `ready`),
  * which is how `run-scenario.ts` runs an arm anyway. The AI drives, so unlike the bare-world rows the arms may do different work: read per-unit rows and the counters, as for the in-app card.
  */
-import { benchRaceEngine, benchStripEngine, FRAME_S } from "../../src/game/engine/engine-bench-headless.test-util.ts";
+import { benchPlanEngine, benchRaceEngine, FRAME_S } from "../../src/game/engine/engine-bench-headless.test-util.ts";
 import type { CrashEngine } from "../../src/game/engine/engine.ts";
 import { QUIET_HZ } from "../../src/game/kernel/constants.ts";
 import type { DeformableCar } from "../../src/game/vehicle/car.ts";
@@ -31,9 +31,9 @@ export class EngineSim implements SimLike {
     return new EngineSim(await benchRaceEngine(id), true);
   }
 
-  /** The in-app card's `?bench=strip` (16 racers and the traffic on the 6 km straight, one sedan body, the bench's seed) on the race's step schedule: the headless twin of the page the owner's off/on cards run. */
-  static async strip(): Promise<EngineSim> {
-    return new EngineSim(await benchStripEngine(), true);
+  /** A bench page of the in-app card through the real engine on the race's step schedule (`?bench=strip`: 16 racers and traffic on the 6 km straight, one sedan body; `?bench=city&course=national-mall`: the mall), the bench's seed, nothing drawn: the headless twin of the owner's off/on cards. */
+  static async plan(search: string): Promise<EngineSim> {
+    return new EngineSim(await benchPlanEngine(search), true);
   }
 
   get world(): World {
