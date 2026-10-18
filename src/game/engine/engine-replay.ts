@@ -393,6 +393,8 @@ export class ClipSim {
         d.neutral = (inp[o + 3]! & 8) !== 0;
         applyDrive(cars[j]!, d, h, inp[o + 3]! & 4 ? DRAFT.top : 1);
       }
+      // A car standing at its put-away spot is the one the live sim left unstepped (`EPICENTER.storedSkip`: `RaceDirector.putAway` stands it there, nothing else does): a replay skips it too.
+      if (this.stored) for (let j = 0; j < nc; j++) cars[j]!.stored = this.stored(clip.cars[j]!.slot, cars[j]!.group.position.x, cars[j]!.group.position.z);
       // The schedule the live world ran this step on, and the cars it ran as lone cars: they depend on every car in it, the clip's or not.
       this.world.plan = clip.shape[s]!;
       this.world.planLoners = clip.lone[s]!;

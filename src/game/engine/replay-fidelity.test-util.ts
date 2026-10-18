@@ -321,7 +321,7 @@ export function recordField(w: World, f: Field): Recording[] {
     rec.startStep = startStep;
   }
   const L = carLayout(w.cars[0]!);
-  const scene: ReplayScene = { dress: w.dress, collide: (car, slot, h) => r.courseHit(car, slot, h), restore: (slot, mem, at) => r.remember(slot, mem, at), knocks: (bits) => r.knockTo(bits), blend: new PoseBlend() };
+  const scene: ReplayScene = { dress: w.dress, collide: (car, slot, h) => r.courseHit(car, slot, h), restore: (slot, mem, at) => r.remember(slot, mem, at), stored: (slot, x, z) => r.stored(slot, x, z), knocks: (bits) => r.knockTo(bits), blend: new PoseBlend() };
   return rec.ledger.kept.map((kept) => {
     const wr = new Writer(clipBytes(kept));
     writeClip(wr, kept);
