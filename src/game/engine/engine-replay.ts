@@ -339,6 +339,8 @@ export class ClipSim {
     this.firstHit = -1;
     this.pairAt.fill(-Infinity);
     this.wallAt.fill(-Infinity);
+    // The last step's hardest contact belongs to the play that just ended: a restart must not hand it to the next play's sparks (`ReelDirector.run`) before its first step.
+    this.world.strongest.clear();
     for (let j = 0; j < this.cars.length; j++) this.spawn(j, 0);
     this.restoreKnocks?.(this.knocked[0]!);
     foldHeading(this.heading, this.cars[this.subject]!, 0);

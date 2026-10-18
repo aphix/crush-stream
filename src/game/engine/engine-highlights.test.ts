@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { after, before, describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { setGround } from "../world/ground.ts";
@@ -9,7 +9,7 @@ import { frame, makeWorld, type World } from "../world/race-world.test-util.ts";
 import { FUDGE_GAP, impactScale, phaseClock, PRE_IMPACT_LEAD } from "../match/phase.ts";
 import { carLayout } from "../net/car-pose.ts";
 import { packReel, unpackReel } from "../net/reel-codec.ts";
-import { clipTimeline, FLIGHT_S, ReelDirector, simAt, type ReelHost } from "./engine-highlights.ts";
+import { clipTimeline, FLIGHT_S, FUDGE_FULL, FUDGE_REACH, ReelDirector, simAt, type ReelHost } from "./engine-highlights.ts";
 import { ClipSim } from "./engine-replay.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { Reel } from "../match/highlights.ts";
@@ -22,6 +22,8 @@ import { TIMELINE_HZ } from "./constants.ts";
 /** The city course with the staged head-on's cars (2 and 3) and the player's and car 1: no field around them to crash into. */
 const FIELD = { trackId: "city", laps: 1, aiCount: 3, noReset: false, aggression: 1 };
 const SEED = 5;
+/** A hit's sparks lie within this many metres of a clip car's centre: a car's nose is about 2.3 m from its centre, and the sparks leave from where two cars touch. */
+const HIT_NEAR = 3;
 /**
  * A deliberate first crash on intact cars, a second into the race: cars 2 and 3 put head-on 8 m apart on the city road at `aMps` and
  * `bMps` m/s. No seed's natural field guarantees one (any change to the car sim moves a seed's whole race, and slow bumps tear parts
@@ -348,6 +350,63 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
     assert.equal(wrong, 0, `${wrong} frames returned a sim time other than the clip time they drew less the last frame's`);
     assert.ok(slowFrames > 100, `${slowFrames} frames in the slow-motion`);
     assert.ok(advancing >= slowFrames * 0.95, `${advancing} of ${slowFrames} slow-motion frames advanced the dummies and FX`);
+  });
+
+  it("when its reel plays twice, then on each play the fudge's sparks fade in as the cars close on the point (none while the farthest is FUDGE_REACH off, full once they touch), every hit's sparks lie by a clip car, and the second play throws what the first did", () => {
+    const { reel } = fast;
+    const clip = reel.clips[0]!;
+    // The clock the reel's spark throttle reads: a frame is 1/60 s on it, whatever the test box's speed.
+    let clockS = 0;
+    mock.method(performance, "now", () => clockS * 1000);
+    type Call = { w: number; strength: number; far: number; near: number };
+    const plays: { fudge: Call[]; hit: Call[] }[] = [{ fudge: [], hit: [] }, { fudge: [], hit: [] }];
+    try {
+      const d: ReelDirector = new ReelDirector({
+        ...hostOf(fast.w),
+        fudge: (_at, _n, strength) => plays[d["pass"]]!.fudge.push({ w: d["wall"], strength, far: farthest(), near: 0 }),
+        hit: (at) => plays[d["pass"]]!.hit.push({ w: d["wall"], strength: 0, far: 0, near: nearest(at) }),
+      });
+      /** The first impact's cars as drawn: the farthest from the recorded point, and the clip car nearest a point. */
+      const farthest = (): number => Math.max(...[clip.firstA, clip.firstB].filter((j) => j >= 0).map((j) => Math.hypot(d["cur"]!.sim.cars[j]!.group.position.x - clip.x, d["cur"]!.sim.cars[j]!.group.position.z - clip.z)));
+      const nearest = (at: THREE.Vector3): number => Math.min(...d["cur"]!.sim.cars.map((c) => Math.hypot(c.group.position.x - at.x, c.group.position.z - at.z)));
+      d.stepBudgetMs = Infinity;
+      d.play(reel, 0);
+      const loop = d["loopWall"] as number;
+      for (let n = 1; (clockS = n / 60) < 2 * loop - 1; n++) d.frame(clockS);
+    } finally {
+      mock.restoreAll();
+    }
+    for (const [pass, p] of plays.entries()) {
+      const label = `play ${pass + 1}`;
+      assert.ok(p.fudge.length >= 8, `${label}: ${p.fudge.length} fudge calls`);
+      for (const f of p.fudge) {
+        if (f.far >= FUDGE_REACH) assert.equal(f.strength, 0, `${label}: sparks at strength ${f.strength} with the cars ${f.far.toFixed(2)} m from their point (reach ${FUDGE_REACH} m)`);
+        if (f.far <= FUDGE_FULL) assert.equal(f.strength, 1, `${label}: sparks at strength ${f.strength} with the cars ${f.far.toFixed(2)} m from their point (full at ${FUDGE_FULL} m)`);
+      }
+      for (let k = 1; k < p.fudge.length; k++) assert.ok(p.fudge[k]!.strength >= p.fudge[k - 1]!.strength, `${label}: fudge ${k} fell from ${p.fudge[k - 1]!.strength.toFixed(2)} to ${p.fudge[k]!.strength.toFixed(2)}`);
+      assert.ok(p.fudge[0]!.far >= FUDGE_REACH && p.fudge[0]!.strength === 0, `${label}: the slow-mo's first burst has the cars ${p.fudge[0]!.far.toFixed(2)} m off at strength ${p.fudge[0]!.strength.toFixed(2)}`);
+      assert.equal(p.fudge.at(-1)!.strength, 1, `${label}: the last burst before the cars meet is at ${p.fudge.at(-1)!.strength.toFixed(2)}`);
+      assert.ok(p.hit.length >= 1, `${label}: no hit sparks`);
+      for (const h of p.hit) assert.ok(h.near <= HIT_NEAR, `${label}: hit sparks ${h.near.toFixed(2)} m from the nearest clip car at ${h.w.toFixed(2)} s (a car is ${HIT_NEAR} m or less from a contact it makes)`);
+    }
+    const [first, second] = plays as [(typeof plays)[0], (typeof plays)[0]];
+    assert.equal(second.fudge.length, first.fudge.length, "fudge calls on the second play against the first");
+    assert.equal(second.hit.length, first.hit.length, "hit sparks on the second play against the first");
+    // A play's frames land a different fraction of a frame into it: the same burst may differ by a frame's worth of approach.
+    for (const [k, f] of first.fudge.entries()) assert.ok(Math.abs(second.fudge[k]!.strength - f.strength) < 0.2, `fudge ${k}: strength ${second.fudge[k]!.strength.toFixed(2)} on the second play, ${f.strength.toFixed(2)} on the first`);
+  });
+
+  it("when a replay that made a contact is restarted, then the last step's contact is gone before its first step", () => {
+    const { w: a, reel } = fast;
+    const clip = reel.clips[0]!;
+    const sim = new ClipSim(clip, clip.cars.map((c) => a.cars[c.slot]!), hostOf(a).scene);
+    a.race.resetProps();
+    sim.restart();
+    while (sim.world.strongest.impulse <= 0 && sim.time < sim.length) sim.advanceTo(sim.time + 1e-6);
+    assert.ok(sim.world.strongest.impulse > 0, "the clip made no contact: nothing to clear");
+    sim.restart();
+    assert.equal(sim.world.strongest.impulse, 0, "a restarted replay still holds the last play's contact");
+    assert.equal(sim.world.strongest.contact, null);
   });
 });
 

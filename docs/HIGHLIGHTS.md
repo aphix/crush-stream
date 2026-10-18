@@ -274,8 +274,12 @@ the shot. A peer at 45 Hz and one at 60 Hz therefore frame the same camera at th
   then files: every hold plays whole on recorded motion.
 - **Fudge.** The crash starts `PRE_IMPACT_LEAD` before the cars meet, where the replay's contact is still being worked
   out. From the slow-mo's start until the meeting the reel calls `ReelHost.fudge` every `FUDGE_GAP` (0.08 wall s) with the
-  clip's recorded first-impact point: `SparkSystem.poof` and `DebrisSystem.burst`, nothing else. The live sandbox does the
-  same on the point `pairEta` (or the slab's `contactEta`) predicts. Race and derby have no live slow-mo, so no fudge.
+  clip's recorded first-impact point and a strength: `SparkSystem.poof` and `DebrisSystem.burst` scaled by it, nothing else.
+  The strength fades in as the first impact's cars (as drawn) close on the point, from 0 while the farther of them is
+  `FUDGE_REACH` (5 m, centre to point) off to 1 at `FUDGE_FULL` (2.5 m: a car's nose), so no burst hangs in empty air ahead of cars still
+  metres away (owner 2026-10-18). The live sandbox does the same, at full strength, on the point `pairEta` (or the slab's
+  `contactEta`) predicts. Race and derby have no live slow-mo, so no fudge. A restart of a clip (`ClipSim.restart`) also drops
+  the last step's contact (`World.strongest`), which `ReelDirector.run` turns into hit sparks, so a play never starts on the last one's.
 - **Stepping.** The replay runs up to 6 ms per frame (`stepBudgetMs`). A frame that falls behind catches up over the
   next ones.
 - **Late join.** A peer that reaches a clip more than `JOIN_LATE` (0.25 s) in (a late join, back from the solo view, a
