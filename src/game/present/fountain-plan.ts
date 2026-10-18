@@ -16,7 +16,7 @@ export const FOUNTAIN_TIER: Readonly<Record<FxTier, { pairs: number; spray: numb
 };
 
 /** A race: the pair at the finish line is the big one (`LINE_POWER`); each further pair (`ROW_POWER`) stands `ROW_GAP` m further back on the run-in. */
-export const LINE_POWER = 1.7;
+export const LINE_POWER = 1.5;
 export const ROW_POWER = 1;
 export const ROW_GAP = 22;
 

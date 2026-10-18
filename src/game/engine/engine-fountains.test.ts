@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { setImmediate as yieldToLoop } from "node:timers/promises";
 import { PerformanceObserver } from "node:perf_hooks";
 import * as THREE from "three";
-import { GRAVITY } from "../kernel/constants.ts";
+import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { FountainSystem, JET_FADE_S, JET_RATE, JET_SLOTS, JET_UP_MAX } from "../present/engine-fx.ts";
 import type { FxTier } from "../present/engine-post.ts";
 import { FOUNTAIN_TIER, LINE_POWER, RACE_LEAD_S, RACE_RUN_S, RANGE_ROWS, RANGE_STAGGER_S, ROAD_MARGIN, ROW_GAP, rangeEdge, rangeRowX } from "../present/fountain-plan.ts";
@@ -21,7 +21,9 @@ import type { RaceField } from "./engine-race-field.ts";
 const ctx = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}, fillStyle: "" };
 const CANVAS = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
 
-const STEP = 1 / 60;
+const STEP = 1 / FRAME_HZ;
+/** The explicit step runs a spark's position before its speed, so its path overshoots the true apex by up to half a step of its launch speed (16 m/s x 1/60 s / 2 = 0.14 m). */
+const APEX_OVERSHOOT = 0.2;
 const TIERS: readonly FxTier[] = ["off", "minimal", "low", "high", "ultra"];
 /** What each tier throws, as the brief reads: off none, minimal a single thin pair, ultra the full show; stated here, not read back from the plan's table. */
 const RACE_JETS: Readonly<Record<FxTier, number>> = { off: 0, minimal: 2, low: 4, high: 6, ultra: 8 };
@@ -76,7 +78,7 @@ describe("given a fountain jet", () => {
     assert.equal(alive(none), 0, "no spark at density 0");
   });
 
-  it("when a power 1.7 jet runs beside a plain one, then it throws 1.7 times the sparks", () => {
+  it("when the line's big jet runs beside a plain one, then it throws LINE_POWER times the sparks", () => {
     const plain = pool();
     plain.jet(0, 0, 0, 0, 1.2);
     run(plain, 1.2);
@@ -93,7 +95,7 @@ describe("given a fountain jet", () => {
     const apex = nozzleY + (JET_UP_MAX * JET_UP_MAX) / (2 * GRAVITY);
     let top = nozzleY;
     let low = nozzleY;
-    for (let i = 0; i < Math.round(5 / STEP); i++) {
+    for (let i = 0; i < Math.round(6 / STEP); i++) {
       sys.update(STEP);
       for (let k = 0; k < sys["n"]; k++) {
         if (sys["life"][k]! <= 0) continue;
@@ -101,7 +103,7 @@ describe("given a fountain jet", () => {
         low = Math.min(low, sys["pos"][k * 3 + 1]!);
       }
     }
-    assert.ok(top > nozzleY + 3 && top <= apex + 0.1, `the highest spark reached ${top.toFixed(2)} m, the arc's apex is ${apex.toFixed(2)} m`);
+    assert.ok(top > nozzleY + 3 && top <= apex + APEX_OVERSHOOT, `the highest spark reached ${top.toFixed(2)} m, the arc's apex is ${apex.toFixed(2)} m`);
     assert.ok(low >= nozzleY - 0.2, `a spark fell to ${low.toFixed(2)} m below the nozzle`);
     assert.equal(alive(sys), 0, "every spark has landed");
     assert.equal(sys.jets, 0, "the jet is spent");
@@ -110,7 +112,7 @@ describe("given a fountain jet", () => {
   it("when sparks are in the air, then each fades to nothing over its last JET_FADE_S and is full before", () => {
     const sys = pool();
     sys.jet(0, 0, 0, 0, 1);
-    run(sys, 1.5);
+    run(sys, 2.6);
     let fading = 0;
     let full = 0;
     for (let k = 0; k < sys["n"]; k++) {
@@ -122,7 +124,7 @@ describe("given a fountain jet", () => {
       if (want < 1) fading++;
       else full++;
     }
-    assert.ok(fading > 0 && full > 0, `${fading} fading, ${full} full: both must exist at 1.5 s`);
+    assert.ok(fading > 0 && full > 0, `${fading} fading, ${full} full: both must exist at 2.6 s`);
   });
 
   it("when a colour is given, then its sparks carry that colour", () => {
@@ -165,9 +167,10 @@ describe("given a fountain jet", () => {
   it("when eight jets run at 60 Hz, then no frame allocates (no collection runs)", async () => {
     const sys = pool();
     for (let k = 0; k < 8; k++) sys.jet(k * 4, 0, 0, 0, 1000, k < 2 ? LINE_POWER : 1);
-    run(sys, 3);
     const watch = new PerformanceObserver(() => {});
     watch.observe({ entryTypes: ["gc"] });
+    // The earlier rows left garbage (each built a pool): a first stretch lets the collector take it, and only the second is counted.
+    run(sys, 120);
     await yieldToLoop();
     watch.takeRecords();
     run(sys, 600);

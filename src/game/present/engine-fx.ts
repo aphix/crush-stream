@@ -424,21 +424,28 @@ export class SparkSystem extends DotPoints {
 
 /** Jets a `FountainSystem` runs at once: a race's finish line at its fullest (2 sides x 4 rows) with room to spare for a podium's. */
 export const JET_SLOTS = 16;
-/** Sparks a power-1 jet throws each second at density 1 (set by eye: a column thick enough to read as a fountain, not a sprinkler). */
-export const JET_RATE = 70;
-/** Launch speed (m/s, up) of a power-1 spark: apexes from 3.3 to 7.5 m at `GRAVITY`; a stronger jet scales it by the root of its power (height goes with the power). */
-export const JET_UP_MIN = 8;
-export const JET_UP_MAX = 12;
-/** A spark's sideways launch speed as a share of its upward speed (a cone of about 16 degrees: a fountain's bell, not a column). */
-const JET_SPREAD = 0.28;
+/** Sparks a power-1 jet throws each second at density 1 (set by eye from shots at ultra: thick enough to read as a fountain at 50 m, not a sprinkler). */
+export const JET_RATE = 120;
+/** Launch speed (m/s, up) of a power-1 spark: apexes from 6.3 to 13.3 m at `GRAVITY`, above the stands and the gantry; a stronger jet scales it by the root of its power (height goes with the power). */
+export const JET_UP_MIN = 11;
+export const JET_UP_MAX = 16;
+/** A spark's sideways launch speed as a share of its upward speed (a cone of about 19 degrees: a fountain's bell, not a column). */
+const JET_SPREAD = 0.35;
 /** Radius (m) of a jet's nozzle: sparks start scattered over it. */
 const JET_NOZZLE = 0.18;
 /** Seconds a spark is at full brightness before it fades out to nothing as it lands. */
 export const JET_FADE_S = 0.7;
 /** The most sparks one jet spawns in a single update (a stalled frame's dt must not dump a second's worth at once). */
 const JET_BURST_MAX = 24;
-/** The pool: a full ultra race (2 jets at power 1.7, 6 at 1: about 320 and 150 live sparks each) holds about 1500; the ring overwrites its oldest past 2400 (a density near 1.6). */
-const FOUNTAIN_DOTS = 2400;
+/**
+ * Each spark's launch scatter is read from a table drawn once at construction (`Math.random` boxes a number on every call, a collection
+ * every few thousand sparks): LOT_ENTRIES prime so the pattern of directions repeats only after that many sparks, LOT_STRIDE floats an
+ * entry: a unit direction (x, z), two radii in the unit disc (square roots of uniforms: the nozzle's and the cone's), and a speed share.
+ */
+const LOT_ENTRIES = 4099;
+const LOT_STRIDE = 5;
+/** The pool: a full ultra race (2 jets at power 1.5, 6 at 1: about 600 and 340 live sparks each) holds about 3200; the ring overwrites its oldest past 3600 (a density near 1.1). */
+const FOUNTAIN_DOTS = 3600;
 const JET_GOLD = new THREE.Color(1, 0.86, 0.55);
 
 /**
@@ -461,12 +468,17 @@ export class FountainSystem extends DotPoints {
   private readonly owed = new Float32Array(JET_SLOTS);
   /** Each live dot's own colour, which its fade scales into `tint`. */
   private readonly base: Float32Array;
+  /** The launch scatter (`LOT_ENTRIES` x `LOT_STRIDE`) and the entry the next spark reads. */
+  private readonly lot = new Float32Array(LOT_ENTRIES * LOT_STRIDE);
+  private lotAt = 0;
+  /** Each jet's lift: the square root of its power, worked out when the jet is set. */
+  private readonly lift = new Float32Array(JET_SLOTS);
 
   constructor(scene: THREE.Scene, n = FOUNTAIN_DOTS) {
     super(scene, n, {
       core: "rgba(255,248,220,1)",
       glow: "rgba(255,170,70,0.7)",
-      size: 0.22,
+      size: 0.6,
       opacity: 1,
       gravity: GRAVITY,
       radius: 0,
@@ -474,6 +486,14 @@ export class FountainSystem extends DotPoints {
       tinted: true,
     });
     this.base = new Float32Array(n * 3);
+    for (let e = 0; e < LOT_ENTRIES; e++) {
+      const around = Math.random() * Math.PI * 2;
+      this.lot[e * LOT_STRIDE] = Math.cos(around);
+      this.lot[e * LOT_STRIDE + 1] = Math.sin(around);
+      this.lot[e * LOT_STRIDE + 2] = Math.sqrt(Math.random());
+      this.lot[e * LOT_STRIDE + 3] = Math.sqrt(Math.random());
+      this.lot[e * LOT_STRIDE + 4] = Math.random();
+    }
     this.points.visible = false;
   }
 
@@ -492,6 +512,7 @@ export class FountainSystem extends DotPoints {
     this.wait[s] = Math.max(0, startIn);
     this.run[s] = runFor;
     this.power[s] = power;
+    this.lift[s] = Math.sqrt(power);
     this.hue[s * 3] = color.r;
     this.hue[s * 3 + 1] = color.g;
     this.hue[s * 3 + 2] = color.b;
@@ -542,19 +563,25 @@ export class FountainSystem extends DotPoints {
   }
 
   private spray(s: number, count: number): void {
-    const lift = Math.sqrt(this.power[s]!);
+    const lift = this.lift[s]!;
+    const x = this.jx[s]!;
+    const y = this.jy[s]!;
+    const z = this.jz[s]!;
     for (let i = 0; i < count; i++) {
       const k = this.claim();
-      const up = (JET_UP_MIN + Math.random() * (JET_UP_MAX - JET_UP_MIN)) * lift;
-      const around = Math.random() * Math.PI * 2;
-      const out = up * JET_SPREAD * Math.sqrt(Math.random());
-      const nozzle = JET_NOZZLE * Math.sqrt(Math.random());
-      this.pos[k * 3] = this.jx[s]! + Math.cos(around) * nozzle;
-      this.pos[k * 3 + 1] = this.jy[s]!;
-      this.pos[k * 3 + 2] = this.jz[s]! + Math.sin(around) * nozzle;
-      this.vx[k] = Math.cos(around) * out;
+      const e = this.lotAt * LOT_STRIDE;
+      this.lotAt = this.lotAt + 1 === LOT_ENTRIES ? 0 : this.lotAt + 1;
+      const dirX = this.lot[e]!;
+      const dirZ = this.lot[e + 1]!;
+      const up = (JET_UP_MIN + this.lot[e + 4]! * (JET_UP_MAX - JET_UP_MIN)) * lift;
+      const out = up * JET_SPREAD * this.lot[e + 2]!;
+      const nozzle = JET_NOZZLE * this.lot[e + 3]!;
+      this.pos[k * 3] = x + dirX * nozzle;
+      this.pos[k * 3 + 1] = y;
+      this.pos[k * 3 + 2] = z + dirZ * nozzle;
+      this.vx[k] = dirX * out;
       this.vy[k] = up;
-      this.vz[k] = Math.sin(around) * out;
+      this.vz[k] = dirZ * out;
       this.life[k] = (2 * up) / GRAVITY;
       this.base[k * 3] = this.hue[s * 3]!;
       this.base[k * 3 + 1] = this.hue[s * 3 + 1]!;
