@@ -5,6 +5,7 @@ import { nitroGlowStyle } from "@/components/nitro-glow";
 import { DriveCluster } from "@/components/race-gauge";
 import { fmtGap, fmtTime } from "@/game/hud/race-clock";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
+import { useTouchScheme } from "@/components/use-touch-scheme";
 import { useSpeedUnit } from "@/components/use-speed-unit";
 import { SurvivalReadout } from "@/components/survival-hud";
 import type { RaceHud, RaceView } from "@/game/match/types";
@@ -59,23 +60,6 @@ const PHONE_BAND =
 /** The band's thin line: small clocks that wrap rather than grow wide. */
 const PHONE_THIN_LINE = "hud-ink flex flex-wrap items-center gap-x-2 text-[11px] leading-4";
 
-/** Speed and gear as text, for a phone held upright: there is no room for the dial there (a phone on its side has it, bottom centre). */
-function PhoneSpeed({ view }: { view: RaceView }) {
-  const unit = useSpeedUnit();
-  return (
-    <span className="flex items-baseline gap-1 text-sm font-semibold phone-landscape:hidden">
-      <span style={{ color: brakeTint(view.brakeCue) }} aria-label="Speed">
-        {formatSpeed(view.speedKph / KPH_PER_MS, unit)}
-        <span className="ml-0.5 text-[10px] font-medium text-fg/70">{unit}</span>
-      </span>
-      <span className="text-fg/70" aria-hidden>
-        ·
-      </span>
-      <span aria-label="Gear">{view.gear === 0 ? "R" : view.gear}</span>
-    </span>
-  );
-}
-
 /** The split vs the leader, in a slot that keeps its width while hidden so the line does not jump when it appears. */
 function SplitPill({ split, flash, className }: { split: number | null; flash: boolean; className: string }) {
   return (
@@ -88,8 +72,8 @@ function SplitPill({ split, flash, className }: { split: number | null; flash: b
   );
 }
 
-/** The phone's race lines: place, lap and clock in one line; last, best, the split and (upright) the speed in a thin one under it. */
-function PhoneRaceLines({ race, racer, flash, speed }: { race: RaceHud; racer: NonNullable<RaceView["racer"]>; flash: boolean; speed: ReactNode }) {
+/** The phone's race lines: place, lap and clock in one line; last, best and the split in a thin one under it. */
+function PhoneRaceLines({ race, racer, flash }: { race: RaceHud; racer: NonNullable<RaceView["racer"]>; flash: boolean }) {
   return (
     <>
       <div className="hud-ink flex items-baseline gap-2 whitespace-nowrap">
@@ -111,7 +95,6 @@ function PhoneRaceLines({ race, racer, flash, speed }: { race: RaceHud; racer: N
           <Clock label="Best" value={racer.bestLap === null ? "–" : fmtTime(racer.bestLap)} />
         </dl>
         <SplitPill split={racer.split} flash={flash} className="text-xs leading-4" />
-        {speed}
       </div>
     </>
   );
@@ -122,20 +105,14 @@ function Cluster({ race, view, corner }: { race: RaceHud; view: RaceView; corner
   const r = view.racer;
   const flash = useSplitFlash(r?.split ?? null, race.time);
   if (touch) {
-    const speed = <PhoneSpeed view={view} />;
     return (
       <>
         <div className={PHONE_BAND}>
           {race.survival ? (
-            <SurvivalReadout race={race} survival={race.survival} phone={speed} />
+            <SurvivalReadout race={race} survival={race.survival} phone />
           ) : r ? (
-            <PhoneRaceLines race={race} racer={r} flash={flash} speed={speed} />
-          ) : (
-            <div className={PHONE_THIN_LINE}>{speed}</div>
-          )}
-          <div className="phone-landscape:hidden">
-            <BoostMeter view={view} barClass="h-1.5 w-16" />
-          </div>
+            <PhoneRaceLines race={race} racer={r} flash={flash} />
+          ) : null}
         </div>
         <Dial view={view} corner={false} spectated={race.spectating !== null} />
       </>
@@ -184,14 +161,17 @@ function Cluster({ race, view, corner }: { race: RaceHud; view: RaceView; corner
 }
 
 /**
- * The drive cluster in its slot: bottom right in `corner` mode on a big window; bottom centre, 96 px, on a phone on its side, in the gap between the
- * two thumb clusters (it fades with the rest while the player drives). Its bottle boosts when tapped, unless the car is a `spectated` one.
+ * The drive cluster in its slot: the bottom right corner, as it always was (on a phone 80 px, in either orientation, the right thumb's pedals standing
+ * above it and Boost and Handbrake beside it; the left corner when the controls are mirrored). It fades with the rest while the player drives.
+ * Its bottle boosts when tapped, unless the car is a `spectated` one.
  */
 function Dial({ view, corner, spectated }: { view: RaceView; corner: boolean; spectated: boolean }) {
+  const { mirror } = useTouchScheme();
   return (
     <div
       className={cn(
-        "absolute bottom-4 right-4 hidden phone-landscape:bottom-[calc(max(var(--hud-edge),env(safe-area-inset-bottom))+1.25rem)] phone-landscape:left-1/2 phone-landscape:right-auto phone-landscape:block phone-landscape:-translate-x-1/2 phone-landscape:[--phone-cluster:5rem] phone-landscape:calm:opacity-60 phone-landscape:hud-fade",
+        "absolute bottom-4 right-4 hidden pointer-coarse:hud-bottom pointer-coarse:block pointer-coarse:[--phone-cluster:5rem] pointer-coarse:calm:opacity-60 pointer-coarse:hud-fade",
+        mirror ? "pointer-coarse:hud-left pointer-coarse:right-auto" : "pointer-coarse:hud-right",
         corner && "md:block",
       )}
     >

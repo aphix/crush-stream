@@ -4,10 +4,16 @@
  * nothing here knows about the DOM.
  */
 
-export const TOUCH_SCHEMES = ["autogas", "pedals", "stick", "tilt"] as const;
+import { PAD_DEAD } from "../vehicle/gamepad.ts";
+
+export const TOUCH_SCHEMES = ["stick", "pedals", "autogas", "tilt"] as const;
 export type TouchScheme = (typeof TOUCH_SCHEMES)[number];
 
-/** Easy: one thumb steers and the car pulls by itself; the other brakes, boosts and handbrakes. The research's common first scheme (Real Racing 3 Tilt A, Asphalt TouchDrive, GRID Arrow Touch). */
+/**
+ * The driving disc is what a phone opens with (the owner's pick, after trying a slider with pedals and one with auto-gas: with a disc, forward, back
+ * and a little of either are all one thumb on one thing). Pedals (a slider, a Gas and a Brake), Easy (id `autogas`: one thumb steers and the car pulls
+ * by itself, an "Auto gas" light says so; Real Racing 3 Tilt A, Asphalt TouchDrive, GRID Arrow Touch) and Tilt are options in Controls.
+ */
 export const DEFAULT_TOUCH_SCHEME: TouchScheme = TOUCH_SCHEMES[0];
 
 /** localStorage keys (through `useStoredString`). */
@@ -20,10 +26,10 @@ export const TOUCH_SCHEME_LABEL: Readonly<Record<TouchScheme, string>> = { autog
 
 /** One line under each scheme in the Controls section. */
 export const TOUCH_SCHEME_HINT: Readonly<Record<TouchScheme, string>> = {
-  autogas: "Slide to steer. The car drives itself; hold Brake to slow and reverse.",
+  autogas: "Slide to steer. Gas is automatic (the green Auto gas light); hold Brake to slow and reverse.",
   pedals: "Slide to steer, with a Gas and a Brake pedal of your own.",
-  stick: "One stick: up is gas, down brakes, left and right steer.",
-  tilt: "Tilt the phone like a wheel. The car drives itself; hold Brake to slow and reverse.",
+  stick: "One disc under the thumb: push up to go (a little or a lot), down to brake and then reverse, sideways to steer.",
+  tilt: "Tilt the phone like a wheel. Gas is automatic (the green Auto gas light); hold Brake to slow and reverse.",
 };
 
 /** What a scheme draws and what it drives for itself. */
@@ -66,6 +72,22 @@ export function pedalsFor(scheme: TouchScheme, fingers: { gas: boolean; brake: b
   const brake = layout.brakePedal && fingers.brake ? 1 : 0;
   if (layout.autoGas) return { gas: brake === 1 ? 0 : 1, brake };
   return { gas: layout.gasPedal && fingers.gas && brake === 0 ? 1 : 0, brake };
+}
+
+/** How far (a fraction of the disc's radius) the knob must move before the disc reads anything: a resting thumb is not a nudge. */
+const DISC_DEAD = 0.04;
+
+/**
+ * The driving disc's reading for a knob offset (`x`, `y`: fractions of its radius), as the pad's stick value. The pad's own stick curve
+ * (a deadzone and a power curve, `stickScale`) is made for a controller's sprung stick and swallows a small push of a thumb, so the offset is
+ * warped to the stick value that curve turns back into the offset itself: a quarter of the way is a quarter of the gas, the brake, the wheel.
+ * Only a resting thumb (`DISC_DEAD`) reads zero.
+ */
+export function discReading(x: number, y: number): { x: number; y: number } {
+  const offset = Math.hypot(x, y);
+  if (offset < DISC_DEAD) return { x: 0, y: 0 };
+  const warped = PAD_DEAD.stick + (1 - PAD_DEAD.stick) * Math.pow(Math.min(1, offset), 1 / PAD_DEAD.curve);
+  return { x: (x / offset) * warped, y: (y / offset) * warped };
 }
 
 /**

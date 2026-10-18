@@ -24,11 +24,11 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 /**
  * Survival's readouts, top right (Driver 2's): the stopwatch that is the score, the best time, the cops chasing and the cops
- * wrecked. The bust hold counting down has the pursuit strip (`race-status.tsx`). On a phone (`phone`: the speed text for an
- * upright screen, which the race band lines up with the clocks) it is the band's top left: the stopwatch big, then one thin line.
+ * wrecked. The bust hold counting down has the pursuit strip (`race-status.tsx`). On a phone (`phone`) it is the band's top left: the
+ * stopwatch big, then one thin line.
  */
-export function SurvivalReadout({ race, survival, phone }: { race: RaceHud; survival: SurvivalHud; phone?: ReactNode }) {
-  if (phone !== undefined) {
+export function SurvivalReadout({ race, survival, phone = false }: { race: RaceHud; survival: SurvivalHud; phone?: boolean }) {
+  if (phone) {
     return (
       <>
         <p className="hud-ink text-3xl font-semibold leading-none tracking-tight phone-landscape:text-4xl" aria-label="Survived">
@@ -44,7 +44,6 @@ export function SurvivalReadout({ race, survival, phone }: { race: RaceHud; surv
             <Stat label="Wrecked" value={String(survival.wrecked)} />
             {race.team ? <Stat label="Free" value={`${race.team.free}/${race.team.humans}`} /> : null}
           </dl>
-          {phone}
         </div>
       </>
     );

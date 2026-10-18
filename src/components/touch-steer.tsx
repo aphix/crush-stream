@@ -1,10 +1,11 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronUp } from "lucide-react";
 import type { HudProps } from "@/components/hud";
 import { Button } from "@/components/ui/button";
 import { requestTiltAccess, useTilt } from "@/components/use-tilt";
 import type { TiltSettings } from "@/game/hud/tilt-steer";
 import { cn } from "@/lib/utils";
-import { sliderSteer, STEER_SLIDER, type SchemeLayout } from "@/game/hud/touch-scheme";
+import { discReading, sliderSteer, STEER_SLIDER, type SchemeLayout } from "@/game/hud/touch-scheme";
 
 /** Knob travel (px) at full throw: the 56 px knob just reaches the 128 px base's rim. */
 const STICK_TRAVEL = 36;
@@ -19,7 +20,9 @@ const TILT_MARKER_MARGIN = 8;
 const TILT_MARKER_TRAVEL = (STEER_SLIDER.length - TILT_MARKER_WIDTH) / 2 - TILT_MARKER_MARGIN;
 
 const BAR_SIZE = { width: STEER_SLIDER.length, height: STEER_SLIDER.height };
-const BAR = "relative shrink-0 rounded-full bg-surface/60 shadow-[var(--shadow-border)]";
+/** The disc's two words and arrows on its ring, so nobody wonders what up and down do. */
+const DISC_MARK = "pointer-events-none absolute left-1/2 flex -translate-x-1/2 flex-col items-center font-display text-[10px] font-semibold uppercase leading-none tracking-wider text-fg/60";
+const BAR = "relative shrink-0 rounded-full bg-surface/35 ring-1 ring-inset ring-fg/30";
 
 type SteerProps = Pick<HudProps, "engine"> & {
   /** The first finger on the steering control: the seat's auto-gas arms (see `touch-controls.tsx`). */
@@ -34,8 +37,9 @@ function Stick({ engine, onArm }: SteerProps) {
   const put = (x: number, y: number): void => {
     const t = engine.current?.touch;
     if (t) {
-      t.x = x;
-      t.y = y;
+      const reading = discReading(x, y);
+      t.x = reading.x;
+      t.y = reading.y;
     }
     if (knob.current) knob.current.style.transform = `translate(${x * STICK_TRAVEL}px, ${y * STICK_TRAVEL}px)`;
   };
@@ -67,7 +71,7 @@ function Stick({ engine, onArm }: SteerProps) {
     <div
       data-touch-control="steer"
       data-keep-idle
-      className="pointer-events-auto grid size-32 shrink-0 touch-none select-none place-items-center rounded-full bg-surface/60 shadow-[var(--shadow-border)]"
+      className="pointer-events-auto relative grid size-32 shrink-0 touch-none select-none place-items-center rounded-full bg-surface/35 ring-1 ring-inset ring-fg/30"
       onPointerDown={(e) => {
         const f = finger.current;
         if (f.id !== -1) return;
@@ -84,7 +88,15 @@ function Stick({ engine, onArm }: SteerProps) {
       onPointerCancel={release}
       onLostPointerCapture={release}
     >
-      <div ref={knob} className="pointer-events-none size-14 rounded-full bg-accent/70 shadow-[var(--shadow-border)]" />
+      <span className={cn(DISC_MARK, "top-1.5")}>
+        <ChevronUp aria-hidden className="size-4" />
+        Go
+      </span>
+      <span className={cn(DISC_MARK, "bottom-1.5")}>
+        Brake
+        <ChevronDown aria-hidden className="size-4" />
+      </span>
+      <div ref={knob} className="pointer-events-none size-14 rounded-full bg-accent/60 ring-1 ring-inset ring-fg/40" />
     </div>
   );
 }
@@ -124,7 +136,7 @@ function Slider({ engine, onArm }: SteerProps) {
     <div
       data-touch-control="steer"
       data-keep-idle
-      className={cn(BAR, "pointer-events-auto flex touch-none select-none items-center justify-center")}
+      className={cn(BAR, "pointer-events-auto relative flex touch-none select-none items-center justify-center")}
       style={BAR_SIZE}
       onPointerDown={(e) => {
         const f = finger.current;
@@ -142,9 +154,12 @@ function Slider({ engine, onArm }: SteerProps) {
       onPointerCancel={release}
       onLostPointerCapture={release}
     >
+      {/* The two ends say which way is which, so a bar with a knob reads as a wheel. */}
+      <ChevronsLeft aria-hidden className="pointer-events-none absolute left-2 size-5 text-fg/50" />
+      <ChevronsRight aria-hidden className="pointer-events-none absolute right-2 size-5 text-fg/50" />
       <div
         ref={knob}
-        className="pointer-events-none rounded-full bg-accent/70 shadow-[var(--shadow-border)] transition-transform duration-[var(--motion-quick)] data-[drag]:transition-none"
+        className="pointer-events-none rounded-full bg-accent/60 ring-1 ring-inset ring-fg/40 transition-transform duration-[var(--motion-quick)] data-[drag]:transition-none"
         style={{ width: SLIDER_KNOB, height: SLIDER_KNOB }}
       />
     </div>

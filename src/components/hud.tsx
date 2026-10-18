@@ -16,7 +16,8 @@ import { DriftLabel, DriftOverlay } from "@/components/drift-charge";
 import { RESET_GLOW, ResetPrompt } from "@/components/reset-prompt";
 import { pickScene, sceneInPlay, sceneLabel, scenesFor } from "@/components/scene-picks";
 import { StartLights } from "@/components/start-lights";
-import { FullscreenButton, MouseLookButton, TouchControls } from "@/components/touch-controls";
+import { FullscreenButton, MouseLookButton, PhoneFullscreenButton, TouchControls } from "@/components/touch-controls";
+import { ZONE } from "@/components/touch-pedals";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { useSpeedUnit } from "@/components/use-speed-unit";
 import { useStoredString } from "@/components/use-stored-string";
@@ -319,13 +320,13 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
     <div className="hud-grid pointer-events-none absolute inset-0 text-fg" data-focus={focus || undefined} data-calm={calm || undefined}>
       {/* The cluster is hidden, not unmounted, in a race: the online entry inside stays mounted because the race menus portal it into their own header (`online-slot.ts`). */}
       <div className={cn("absolute hud-left hud-top max-w-[calc(100%_-_13rem)] flex-wrap items-start gap-2 calm:opacity-35 hud-fade", race === null ? "flex" : "hidden")}>
-        <Button variant="secondary" size="icon" className="pointer-events-auto" aria-label="Menu" title="Menu" onClick={() => setHomeOpen(true)}>
+        <Button variant="ghost" size="icon" className={cn(ZONE, "pointer-events-auto")} aria-label="Menu" title="Menu" onClick={() => setHomeOpen(true)}>
           <Menu />
         </Button>
-        <Button variant="secondary" size="icon" className={cn("pointer-events-auto", state.fleetView && glow && RESET_GLOW)} aria-label="Reset crash" title="Reset" onClick={() => engine.current?.reset()}>
+        <Button variant="ghost" size="icon" className={cn(ZONE, "pointer-events-auto", state.fleetView && glow && RESET_GLOW)} aria-label="Reset crash" title="Reset" onClick={() => engine.current?.reset()}>
           <RotateCcw />
         </Button>
-        <Button size="icon" className={cn("pointer-events-auto", minimal && "hidden")} aria-label={state.playing ? "Pause" : "Play"} title={state.playing ? "Pause" : "Play"} onClick={() => engine.current?.togglePlay()}>
+        <Button variant="ghost" size="icon" className={cn(ZONE, "pointer-events-auto", minimal && "hidden")} aria-label={state.playing ? "Pause" : "Play"} title={state.playing ? "Pause" : "Play"} onClick={() => engine.current?.togglePlay()}>
           {state.playing ? <Pause /> : <Play className="ml-0.5" />}
         </Button>
         {/* Not while driving: the pill is a thing to tap between runs. */}
@@ -360,7 +361,7 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
       ) : null}
 
       {state.derbyView ? (
-        // The dial (bottom centre on a phone on its side) takes its place from this full-screen box; Gauge's speed text is the desktop's, the sandbox line carries the speed upright.
+        // The dial (the screen's bottom corner on a phone) takes its place from this full-screen box; Gauge's speed text is the desktop's, the sandbox line carries the speed upright.
         <div className="pointer-events-none absolute inset-0 [&>div:last-child]:hidden">
           <Gauge view={state.derbyView} corner={false} />
         </div>
@@ -392,6 +393,8 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
         />
       ) : null}
       {race ? <RaceStatus race={race} corner={false} /> : null}
+      {/* Fullscreen is one tap from every screen (the sheets and race menus cover it, as they cover the rest). */}
+      <PhoneFullscreenButton />
 
       {homeOpen ? (
         <HomeSheet

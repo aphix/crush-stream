@@ -57,14 +57,15 @@ const driveRace = async (page) => {
  * target, overlap and clip checks. `setup` runs after load.
  */
 const SCREENS = {
-  "race-drive": { hash: "scene=race", driving: true, setup: driveRace, expect: ["steer", "pause", "view"] },
+  // The default scheme is the driving disc (Boost and Handbrake beside the dial's corner); the fullscreen toggle is one tap from every driving screen.
+  "race-drive": { hash: "scene=race", driving: true, setup: driveRace, expect: ["steer", "boost", "pause", "view", "fullscreen"] },
   // Survival says "Chased by N cops" all run long, the one thing it must always say: it may take a little more of the road's top edge.
-  "survival-drive": { hash: "scene=survival", driving: true, roadAllowancePct: 5, setup: async (page) => { await evaluate(page, () => window.__crush.raceCommand({ type: "start" })); await settle(page, 8000); }, expect: ["steer", "pause"] },
-  "fleet-drive": { hash: "", driving: true, setup: async (page) => { await evaluate(page, () => window.__crush.seat.focus(0)); await settle(page, 2500); }, expect: ["steer", "view"] },
+  "survival-drive": { hash: "scene=survival", driving: true, roadAllowancePct: 5, setup: async (page) => { await evaluate(page, () => window.__crush.raceCommand({ type: "start" })); await settle(page, 8000); }, expect: ["steer", "pause", "fullscreen"] },
+  "fleet-drive": { hash: "", driving: true, setup: async (page) => { await evaluate(page, () => window.__crush.seat.focus(0)); await settle(page, 2500); }, expect: ["steer", "view", "fullscreen"] },
   // The card with the score and the bail prompt stays up through the run, in the zone's upper left corner: it is what the player is playing for.
-  "mini-longjump": { hash: "scene=range", driving: true, roadAllowancePct: 7, setup: async (page) => { await evaluate(page, () => window.__crush.startMinigame("longJump")); await settle(page, 3500); }, expect: ["steer", "boost"] },
+  "mini-longjump": { hash: "scene=range", driving: true, roadAllowancePct: 7, setup: async (page) => { await evaluate(page, () => window.__crush.startMinigame("longJump")); await settle(page, 3500); }, expect: ["steer", "boost", "fullscreen"] },
   // The folded Board header (a 44 px strip, 11 rem wide) is the one thing a derby keeps on screen; upright it reaches into the zone's left edge.
-  "derby-drive": { hash: "scene=derby&cars=14&seed=7", driving: true, roadAllowancePct: 2, setup: async (page) => { await settle(page, 14000); }, expect: [] },
+  "derby-drive": { hash: "scene=derby&cars=14&seed=7", driving: true, roadAllowancePct: 2, setup: async (page) => { await settle(page, 14000); }, expect: ["fullscreen"] },
   "race-pause": { hash: "scene=race", sheet: true, setup: async (page) => { await startRace(page); await settle(page, 5000); await page.locator("[data-touch-control=pause]").tap(); await settle(page, 900); } },
   "race-results": { hash: "scene=race", sheet: true, setup: async (page) => { await startRace(page); await settle(page, 5000); await evaluate(page, () => window.__crush.raceCommand({ type: "end" })); await settle(page, 2500); } },
   "race-setup": { hash: "scene=race", sheet: true },
@@ -178,7 +179,7 @@ const fail = (context, message) => {
   console.log(`  FAIL ${message}`);
 };
 
-async function open(browser, device, hash, { scheme } = {}) {
+async function open(browser, device, hash, { scheme, query = "" } = {}) {
   const context = await browser.newContext({ ...devices[device.descriptor], hasTouch: true });
   if (scheme) await context.addInitScript((value) => localStorage.setItem("crush.touch.scheme", value), scheme);
   await context.addInitScript(() => localStorage.setItem("crush.home.seen", "1"));
@@ -187,7 +188,7 @@ async function open(browser, device, hash, { scheme } = {}) {
   if (device.insets) await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: device.insets });
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
-  await page.goto(`${BASE}?fx=low#${hash}`, { waitUntil: "commit" });
+  await page.goto(`${BASE}?fx=low${query}#${hash}`, { waitUntil: "commit" });
   await page.waitForFunction(() => window.__crush && !window.__crush.fxLoading, null, { timeout: LOAD_MS });
   await page.waitForFunction(() => { const fade = window.__crush.sceneFade; return fade.pending === null && fade.black === 0 && fade.cel === 0; }, null, { timeout: 60_000 });
   await page.waitForFunction(() => document.getElementById("boot-loader") === null, null, { timeout: 60_000 });
@@ -202,7 +203,7 @@ const rectOf = async (page, name) => {
 };
 /** Real touch points through CDP: `points` = [{ id, x, y }]. */
 const touch = (cdp, type, points) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: points.map(({ id, x, y }) => ({ id, x, y, radiusX: 2, radiusY: 2, force: 1 })) });
-const readTouch = (page) => evaluate(page, () => ({ x: window.__crush.touch.x, gas: window.__crush.touch.gas, brake: window.__crush.touch.brake, held: window.__crush.touch.held }));
+const readTouch = (page) => evaluate(page, () => ({ x: window.__crush.touch.x, y: window.__crush.touch.y, gas: window.__crush.touch.gas, brake: window.__crush.touch.brake, held: window.__crush.touch.held }));
 
 async function checkScreen(browser, device, name, screen) {
   const context = `${device.id} ${name}`;
@@ -239,7 +240,7 @@ async function checkScreen(browser, device, name, screen) {
 async function checkTwoFingers(browser, device) {
   const context = `${device.id} two fingers (Easy)`;
   console.log(context);
-  const { context: browserContext, page, cdp } = await open(browser, device, "scene=race");
+  const { context: browserContext, page, cdp } = await open(browser, device, "scene=race", { scheme: "autogas" });
   try {
     await startRace(page);
     await settle(page, 9000);
@@ -248,6 +249,7 @@ async function checkTwoFingers(browser, device) {
     if (!steer || !brake) return fail(context, "no steer or brake control on the race screen");
     const idle = await readTouch(page);
     if (idle.gas !== 1) fail(context, `Easy drives itself: expected gas 1 with no finger down, got ${idle.gas}`);
+    if ((await page.getByRole("status", { name: "Gas: automatic, on" }).count()) === 0) fail(context, "no lit Auto gas indicator while the car pulls by itself");
     const steerPoint = { id: 1, x: steer.right - 12, y: centre(steer).y };
     const brakePoint = { id: 2, ...centre(brake) };
     await touch(cdp, "touchStart", [steerPoint]);
@@ -292,6 +294,62 @@ async function checkPedalsScheme(browser, device) {
     if (both.gas !== 1 || !(both.x < -0.3)) fail(context, `Gas + steering left: expected gas 1 and x < -0.3, got gas ${both.gas} x ${both.x}`);
     await touch(cdp, "touchEnd", []);
     console.log(`  idle ${JSON.stringify(idle)}  both ${JSON.stringify(both)}`);
+  } finally {
+    await browserContext.close();
+  }
+}
+
+/** The default driving disc: a small push up is a little gas, a small push down a little brake, sideways a little wheel, none of them swallowed. */
+async function checkDisc(browser, device) {
+  const context = `${device.id} driving disc (default)`;
+  console.log(context);
+  const { context: browserContext, page, cdp } = await open(browser, device, "scene=race");
+  try {
+    await startRace(page);
+    await settle(page, 9000);
+    const disc = await rectOf(page, "steer");
+    if (!disc) return fail(context, "no driving disc on the race screen");
+    if (Math.abs(disc.right - disc.left - (disc.bottom - disc.top)) > 1) fail(context, "the default control is not a round disc");
+    const at = centre(disc);
+    const reads = [];
+    for (const [label, dx, dy] of [["up", 0, -12], ["down", 0, 12], ["right", 12, 0], ["up-full", 0, -40]]) {
+      await touch(cdp, "touchStart", [{ id: 1, x: at.x, y: at.y }]);
+      await touch(cdp, "touchMove", [{ id: 1, x: at.x + dx, y: at.y + dy }]);
+      await settle(page, 200);
+      reads.push([label, await readTouch(page)]);
+      await touch(cdp, "touchEnd", []);
+      await settle(page, 150);
+    }
+    const read = Object.fromEntries(reads);
+    console.log(`  ${reads.map(([label, value]) => `${label} x ${value.x.toFixed(2)} y ${value.y.toFixed(2)}`).join("  ")}`);
+    if (!(read.up.y < -0.2 && read.up.y > -0.5 && Math.abs(read.up.x) < 0.05)) fail(context, `a small push up: expected a little gas (y between -0.2 and -0.5), got y ${read.up.y}`);
+    if (!(read.down.y > 0.2 && read.down.y < 0.5)) fail(context, `a small push down: expected a little brake / reverse (y between 0.2 and 0.5), got y ${read.down.y}`);
+    if (!(read.right.x > 0.2 && read.right.x < 0.5)) fail(context, `a small push right: expected a little right wheel, got x ${read.right.x}`);
+    if (!(read["up-full"].y < -0.95)) fail(context, `a full push up: expected full gas, got y ${read["up-full"].y}`);
+    const released = await readTouch(page);
+    if (Math.abs(released.x) > 0.01 || Math.abs(released.y) > 0.01) fail(context, `thumb up: expected the disc to rest at 0, got x ${released.x} y ${released.y}`);
+  } finally {
+    await browserContext.close();
+  }
+}
+
+/** A real tap on the fullscreen control enters fullscreen and a second one leaves it, on the race screen and on a bench page. */
+async function checkFullscreen(browser, device, { name, hash, query }) {
+  const context = `${device.id} fullscreen (${name})`;
+  console.log(context);
+  const { context: browserContext, page } = await open(browser, device, hash, { query });
+  try {
+    const button = await rectOf(page, "fullscreen");
+    if (!button) return fail(context, "no fullscreen control on the page");
+    const at = centre(button);
+    const state = () => evaluate(page, () => document.fullscreenElement !== null);
+    await page.touchscreen.tap(at.x, at.y);
+    await settle(page, 600);
+    if (!(await state())) fail(context, "a tap on the fullscreen control did not enter fullscreen");
+    const after = await rectOf(page, "fullscreen");
+    if (after) await page.touchscreen.tap(centre(after).x, centre(after).y);
+    await settle(page, 600);
+    if (await state()) fail(context, "a second tap did not leave fullscreen");
   } finally {
     await browserContext.close();
   }
@@ -343,7 +401,7 @@ try {
       }
     }
     if (only && !only.includes("touch")) continue;
-    for (const check of [checkTwoFingers, checkPedalsScheme, checkTilt]) {
+    for (const check of [checkDisc, checkTwoFingers, checkPedalsScheme, checkTilt, (b, d) => checkFullscreen(b, d, { name: "race", hash: "scene=race", query: "" }), (b, d) => checkFullscreen(b, d, { name: "bench page", hash: "", query: "&bench=city" })]) {
       try {
         await check(browser, device);
       } catch (error) {

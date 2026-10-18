@@ -150,7 +150,7 @@
 .hud-grid {
   --phone-cluster: clamp(6rem, 24dvh, 8rem);
 }
-@media (pointer: coarse) and (max-height: 500px) {
+@media (pointer: coarse) {
   .drive-cluster {
     --g: var(--phone-cluster);
     --g-em: calc(var(--g) * 0.08);

@@ -1,9 +1,10 @@
-import { useEffect, useEffectEvent, useRef, useSyncExternalStore } from "react";
+import { useEffect, useEffectEvent, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronLeft, ChevronRight, LockOpen, LogOut, Maximize, Minimize, Mouse, Pause, SwitchCamera, Video, Wrench } from "lucide-react";
 import type { HudProps } from "@/components/hud";
+import { showsDriveReadouts } from "@/components/drive-readouts";
 import { RESET_GLOW } from "@/components/reset-prompt";
 import { Button } from "@/components/ui/button";
-import { PadButton, TouchPedals } from "@/components/touch-pedals";
+import { PadButton, TouchPedals, ZONE } from "@/components/touch-pedals";
 import { TouchSteer } from "@/components/touch-steer";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { useTouchScheme } from "@/components/use-touch-scheme";
@@ -63,6 +64,29 @@ export function FullscreenButton({ className }: { className?: string }) {
   );
 }
 
+/** Whether this browser can go fullscreen at all (not iPhone Safari): the strip makes room for the button only where it will be drawn. */
+function useFullscreenAvailable(): boolean {
+  return useSyncExternalStore(subscribeFullscreen, fullscreenEnabled, () => false);
+}
+
+/**
+ * The phone's fullscreen toggle, the top-right corner of every screen (a menu, a bench page, a race): 48 px, icon and caption like the strip's
+ * buttons, never behind a menu. A tap enters or leaves fullscreen; absent where the browser can't.
+ */
+export function PhoneFullscreenButton() {
+  const enabled = useFullscreenAvailable();
+  const on = useSyncExternalStore(subscribeFullscreen, inFullscreen, () => false);
+  if (!enabled) return null;
+  const label = on ? "Exit fullscreen" : "Fullscreen";
+  return (
+    <div className="pointer-events-none absolute hud-top hud-right z-20">
+      <Button variant="ghost" className={cn(ZONE, STRIP_BUTTON, "pointer-events-auto flex-col gap-0.5 [&_svg]:size-6")} data-touch-control="fullscreen" data-keep-idle aria-label={label} aria-pressed={on} title={label} onClick={toggleFullscreen}>
+        {on ? <Minimize /> : <Maximize />}
+      </Button>
+    </div>
+  );
+}
+
 /** Mouse look (pointer lock): the pointer hides and mouse movement looks round, no drag. A fine pointer only; Esc or this button ends it. */
 export function MouseLookButton({ engine, on, className }: Pick<HudProps, "engine"> & { on: boolean; className?: string }) {
   const coarse = useCoarsePointer();
@@ -84,6 +108,7 @@ const STRIP_BUTTON = "size-12 px-0";
  * run them: the race's pause and respawn, look back. Capped at 62 % of the screen, so a portrait phone wraps it to a second row.
  */
 function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
+  const fullscreen = useFullscreenAvailable();
   const race = state.race;
   const driving = state.seat === "drive";
   const flying = state.cam === "free";
@@ -91,10 +116,10 @@ function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
   // A scene with one car (a Mini game, the garage, the range) has nobody to cycle to and nowhere to step out to.
   const others = state.carCount > 1;
   return (
-    <div className="pointer-events-none absolute hud-top hud-right flex max-w-[62%] flex-wrap justify-end gap-2">
+    <div className={cn("pointer-events-none absolute hud-top hud-right flex max-w-[62%] flex-wrap justify-end gap-2", fullscreen && "mr-14")}>
       {/* The glow is the prompt: the button exists only while the car needs a reset, so the strip is three buttons the rest of the time. */}
       {driving && resetGlow(state) ? (
-        <PadButton engine={engine} button={PAD_BUTTON.down} name="respawn" label={race ? "Respawn" : "Recover car"} caption={race ? "Respawn" : "Recover"} className={cn(STRIP_BUTTON, RESET_GLOW)}>
+        <PadButton engine={engine} button={PAD_BUTTON.down} name="respawn" label={race ? "Respawn" : "Recover car"} caption={race ? "Respawn" : "Recover"} showCaption className={cn(STRIP_BUTTON, RESET_GLOW)}>
           <Wrench />
         </PadButton>
       ) : null}
@@ -115,7 +140,7 @@ function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
         </PadButton>
       ) : null}
       {watching ? (
-        <PadButton engine={engine} button={PAD_BUTTON.r3} name="rear" label="Look back (hold)" caption="Rear" className={STRIP_BUTTON}>
+        <PadButton engine={engine} button={PAD_BUTTON.r3} name="rear" label="Look back (hold)" caption="Rear" showCaption className={STRIP_BUTTON}>
           <SwitchCamera />
         </PadButton>
       ) : null}
@@ -130,6 +155,7 @@ function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
           name={flying || !driving ? "free" : "exit"}
           label={flying ? "Leave free fly" : driving ? "Step out of the car" : "Free camera"}
           caption={flying ? "Back" : driving ? "Exit" : "Free"}
+          showCaption
           className={STRIP_BUTTON}
         >
           {driving && !flying ? <LogOut /> : <LockOpen />}
@@ -157,15 +183,23 @@ function DriveControls({ state, engine }: HudProps) {
    * Brake, and drops again when the player stops driving, a Mini game is ready for its next run, or the race ends.
    */
   const armed = useRef(false);
+  const [, redraw] = useReducer((count: number) => count + 1, 0);
+  const disarm = (): void => {
+    if (!armed.current) return;
+    armed.current = false;
+    redraw();
+  };
   useEffect(() => {
-    if (!driving) armed.current = false;
+    if (!driving) disarm();
   }, [driving]);
   useEffect(() => {
-    if (minigameReady) armed.current = false;
+    if (minigameReady) disarm();
   }, [minigameReady]);
   useEffect(() => {
-    armed.current = false;
+    disarm();
   }, [raceLive]);
+  /** A finger is on Brake: the "Auto gas" light goes out while it is. */
+  const [braking, setBraking] = useState(false);
   const autoGasLive = (): boolean => (raceLive ? driving : armed.current);
 
   /** The fingers on the two pedals, and the pad's pedals written from them on every change. */
@@ -192,9 +226,15 @@ function DriveControls({ state, engine }: HudProps) {
     };
   }, [engine, scheme, canDrive, driving, raceLive, minigameReady]);
   const arm = (): void => {
-    armed.current = true;
+    if (!armed.current) {
+      armed.current = true;
+      redraw();
+    }
     writePedals();
   };
+  const gasOn = layout.autoGas && canDrive && !braking && autoGasLive();
+  // The drive dial (race, derby) takes the bottom row's outer corner; Boost and Handbrake stand beside it.
+  const dial = race !== null ? showsDriveReadouts(race) : state.derbyView !== null;
 
   return (
     <>
@@ -211,8 +251,11 @@ function DriveControls({ state, engine }: HudProps) {
           driving={driving || state.minigame !== null}
           mirror={mirror}
           bail={bail}
+          dial={dial}
+          gasOn={gasOn}
           onPedal={(pedal, down) => {
             fingers.current[pedal] = down;
+            if (pedal === "brake") setBraking(down);
             writePedals();
           }}
           onArm={arm}
