@@ -68,10 +68,34 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     Object.assign(globalThis, { requestAnimationFrame: (callback: (stamp: number) => void) => void setImmediate(() => callback((clock += 1000 / 60))) });
     const t = tap(engine.pace, parts);
     const beat = newBeat(parts, clock, null, PHASE_SWEEP);
-    await sweep(engine, parts, plan, ["minimal", "low", "high", "ultra"], true, t, beat, { set() {} });
-    assert.ok(beat.hitches.frames > 4 * 180, `the sweep ran its frames (${beat.hitches.frames})`);
-    endSweep(engine, "auto");
-    step("city after the sweep", "?bench=city", true);
-    assert.equal(digests["city after the sweep"], digests["city first"]);
+    // The sky's strip is a picture the page decodes (`loadUprightBitmap`: fetch, then createImageBitmap); node has neither for a relative url, so the row hands it a one-pixel stand-in and the sweep's `sky full` stop is a real load that finishes.
+    const real = { fetch: globalThis.fetch, createImageBitmap: (globalThis as { createImageBitmap?: unknown }).createImageBitmap };
+    Object.assign(globalThis, {
+      fetch: async () => ({ ok: true, status: 200, blob: async () => new Blob([]) }),
+      createImageBitmap: async () => ({ width: 1, height: 1, close() {} }),
+    });
+    // The strip is held between the sweep's `full` and `off` stops: read it as `off` is set.
+    const setSky = engine.setSky.bind(engine);
+    let stripBytesAtOff = 0;
+    engine.setSky = (mode) => {
+      if (mode === "off") stripBytesAtOff = parts.sky.textureBytes;
+      setSky(mode);
+    };
+    try {
+      // A page without `ultra=1` (its FX tiers are the three; Ultra's look is fetched by the page before the bench, not by the sweep).
+      await sweep(engine, parts, plan, ["minimal", "low", "high"], true, t, beat, { set() {} });
+      assert.ok(stripBytesAtOff > 0, "the sweep's sky stop loaded the strip before the off stop");
+      assert.ok(beat.hitches.frames > 3 * 180, `the sweep ran its frames (${beat.hitches.frames})`);
+      endSweep(engine, "auto");
+      // The step that follows asks for the sky again (auto, at its tier): still the stand-in's.
+      step("city after the sweep", "?bench=city", true);
+      assert.equal(digests["city after the sweep"], digests["city first"]);
+      // A load the step began is still in flight (its decode is a promise chain): let it land on the stand-in.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    } finally {
+      engine.setSky = setSky;
+      Object.assign(globalThis, real);
+      if (real.createImageBitmap === undefined) Reflect.deleteProperty(globalThis, "createImageBitmap");
+    }
   });
 });
