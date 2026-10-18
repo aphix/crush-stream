@@ -57,8 +57,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 27: `MSG.race` carries its cars as a shape header (`{ cols, rows }`, not an array of objects), its fractions to the millimetre, and is sent only when its state changed (`raceKey`) and with each keyframe; a client runs the race clock on between messages, so peers on 26 would read no cars and a clock that jumps.
 28: a reel's clips (`MSG.reel`) carry each step's lone cars after the step schedule (`HighlightClip.lone`, REPLAY 110), so peers on 27 would misread a host's clip.
 29: a reel's clips carry the epicenter activation they ran with (a flag byte, then its knobs' values when on: REPLAY 112 and 113), so peers on 28 would misread a host's clip.
+30: a clip's epicenter byte is the count of knob values that follow, not a flag (REPLAY 114), so peers on 29 would misread a host's clip that ran with the activation on.
 */
-export const NET_VERSION = 29;
+export const NET_VERSION = 30;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 58.3 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
