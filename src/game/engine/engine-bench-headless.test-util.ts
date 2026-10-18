@@ -4,7 +4,7 @@ import { HudStore } from "../hud/hud-store.ts";
 import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { BENCH } from "./bench-measure.ts";
-import { BENCH_RACE, benchPlan } from "./engine-bench-plan.ts";
+import { BENCH_RACE, benchPlan, benchRace } from "./engine-bench-plan.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 
@@ -21,10 +21,10 @@ async function benchEngine(): Promise<CrashEngine> {
   return engine;
 }
 
-/** The real engine on the city bench's race (`BENCH_RACE`, the bench's seed), nothing drawn, the pacer pinned to the 1/240 s floor. One per process (a second `CrashEngine` never resolves `ready`). */
-export async function benchRaceEngine(): Promise<CrashEngine> {
+/** The real engine on the city bench's race (`BENCH_RACE`, the bench's seed; with `course` the same field on another course, off-menu ones too), nothing drawn, the pacer pinned to the 1/240 s floor. One per process (a second `CrashEngine` never resolves `ready`). */
+export async function benchRaceEngine(course?: string): Promise<CrashEngine> {
   const engine = await benchEngine();
-  engine.raceCommand(BENCH_RACE);
+  engine.raceCommand(course === undefined ? BENCH_RACE : benchRace(course));
   engine["race"].reseed(BENCH.seed);
   engine.raceCommand({ type: "start" });
   engine["seat"].mode = "follow";

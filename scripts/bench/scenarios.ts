@@ -9,6 +9,11 @@ import { makeCar } from "../../src/game/vehicle/ground-probe.test-util.ts";
 import { idleDrive, type DriveInput } from "../../src/game/vehicle/car-drive.ts";
 import type { VehicleClassId } from "../../src/game/vehicle/vehicle-classes.ts";
 import type { DeformableCar } from "../../src/game/vehicle/car.ts";
+import * as THREE from "three";
+import { DeformableCar as DeformableCarClass } from "../../src/game/vehicle/car.ts";
+import { paint } from "../../src/game/vehicle/test-support.ts";
+import { scene as rampScene } from "../../src/game/scenes/fleet-ramps.test-util.ts";
+import { collideOn } from "../../src/game/scenes/ramp-collide.test-util.ts";
 import { Sim, type SimLike } from "./sim.ts";
 
 const HEAD_X = Math.PI / 2;
@@ -105,6 +110,18 @@ function place(sim: Sim, state: Wreck, at: (i: number) => [number, number, numbe
   return sim;
 }
 
+/** The Fleet's two ramps (the ground's moving prisms: `moves` patches in the store, which the bake leaves to the layered path), two cars head-on up them at `CRUISE` with the throttle held: they meet, crash and roll on the ramps. */
+function fleetRamps(): Sim {
+  const { ramps, car } = rampScene(false);
+  const other = new DeformableCarClass(paint(), new THREE.Scene());
+  car.spawnFacing(0, -14, 0, CRUISE);
+  other.spawnFacing(0.4, 14, Math.PI, CRUISE);
+  const sim = new Sim([car, other], false);
+  sim.world.collide = collideOn(ramps);
+  for (const c of [car, other]) sim.pedals.set(c, gas());
+  return sim;
+}
+
 const apart = (spacing: number) => (i: number): [number, number, number] => [0, (i - 3.5) * spacing, HEAD_X];
 /** A pile: 2 columns of 4, centres 4.2 m apart along x (the hulls 4.44 m long: a 0.24 m overlap) and 2.1 m across: the wrecks touch and feed each other lightly, as a settled pile does. */
 const piled = (i: number): [number, number, number] => [-(i >> 1) * 4.2, ((i & 1) - 0.5) * 2.1, HEAD_X];
@@ -139,4 +156,8 @@ export const SCENARIOS: Record<string, Scenario> = {
   "sideswipe-30-race": { build: () => sideswipe(30).useRaceSchedule(), label: intactLabel },
   "derby-8-s3": { build: async () => new (await import("./derby-sim.ts")).DerbySim(8, 3), label: derbyLabel },
   "derby-8-s8": { build: async () => new (await import("./derby-sim.ts")).DerbySim(8, 8), label: derbyLabel },
+  "dam-spine-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("dam-spine"), label: cityLabel },
+  "national-mall-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("national-mall"), label: cityLabel },
+  "havana-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("havana"), label: cityLabel },
+  "fleet-ramps": { build: () => fleetRamps(), label: intactLabel },
 };

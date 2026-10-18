@@ -11,7 +11,7 @@ import { BENCH_STRIP_ID, TRACK_ID } from "../world/constants.ts";
 import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
 
 /** The city bench's race on course `trackId`: its own field and rules as a program over the player's options, which it never touches. */
-function benchRace(trackId: string): RaceCommand {
+export function benchRace(trackId: string): RaceCommand {
   return { type: "program", options: { trackId, laps: 9, aiCount: 15, police: true, aggression: 1, aiDifficulty: AI_EVERY_SLICE, spectate: false, noReset: false } };
 }
 export const BENCH_RACE: RaceCommand = benchRace(TRACK_ID.city);
