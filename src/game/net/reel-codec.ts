@@ -219,9 +219,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 114: a clip's epicenter byte is the NUMBER of knob values that follow (0: `whole`), not a flag: a knob added later takes the end of the list with its off value as the default, so a clip recorded before it reads that knob as off and replays as it recorded, and adding one needs no new version; a clip of 113 no longer reads (the byte was 1 for any knob count). `feedMin` (metres of crush a frozen car's resting contact may feed in a slice before it thaws; 0 is off, as 113) is the ninth value.
  * 115: a quarter panel a hit has folded takes contacts as soon as the step folds it (`hitPanel` gates on `folding`, the sim's, not on `open`, which the frame's pose set on the first drawn frame after the fold): a car no frame ever drew (a replay re-simulated
  * headless, a hidden tab) now meets a striker's panel contact, and a drawn car meets it from the folding step instead of from the next drawn frame: a clip of 114 or before no longer reads.
+ * 116: the police light bar folds about a hinge line along its base across the car (the roof lattice's image of the rest hinge edge, on the edge the struck end's inertia sends it toward; `BAR_FOLD` 0.45 rad times the hinge value, the free edge up at most
+ * 7.5 cm) where it turned about one foot along the car with the far end rising up to 0.35 m, so its cage pose, and the contact shape over a struck police car's roof, differ: a clip of 115 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 115;
+const REPLAY_VERSION = 116;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
