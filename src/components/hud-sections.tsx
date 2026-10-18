@@ -405,7 +405,7 @@ function TuningSection({ state, engine }: HudProps) {
       />
       <RangeRow label="FX" name="Particle density" value={state.fxDensity} min={KNOB_RANGES.fxDensity.min} max={KNOB_RANGES.fxDensity.max} step={0.01} digits={2} changed={ch("fxd")} onValue={(v) => engine.current?.setFxDensity(v)} />
       <div className="flex items-center gap-2">
-        <span className="hud-label relative w-12 shrink-0">
+        <span className="hud-label relative w-16 shrink-0">
           Solver
           <ChangedDot on={ch("deform")} />
         </span>
@@ -428,7 +428,7 @@ function TuningSection({ state, engine }: HudProps) {
       </div>
       {/* The epicenter activation's own switch (`epi.on`, the Debug panel's Epicenter group row and the link's `#epi.on=1`): whole = every crashed car solves every slice, epicenter = a quiet wreck freezes. */}
       <div className="flex items-center gap-2">
-        <span className="hud-label relative w-12 shrink-0">
+        <span className="hud-label relative w-16 shrink-0">
           Activation
           <ChangedDot on={ch("epi.on")} />
         </span>
