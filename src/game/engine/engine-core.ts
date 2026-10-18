@@ -34,6 +34,7 @@ import { BARRIER_HALF } from "../contact/sat.ts";
 import type { AutoFx } from "../present/auto-fx.ts";
 import type { DetailGovernor } from "../present/detail-governor.ts";
 import { DebrisSystem, SparkSystem, GlassDotSystem, TireSmokeSystem } from "../present/engine-fx.ts";
+import type { Fountains } from "./engine-fountains.ts";
 import type { GameAudio } from "../present/game-audio.ts";
 import { FX_REACH, Witness } from "../present/witness.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
@@ -230,6 +231,7 @@ export abstract class EngineCore {
   protected readonly lampBatch = new LampBatch(MAX_CARS * 2);
   protected lampLights!: LampLights;
   protected sparks!: SparkSystem;
+  protected fountains!: Fountains;
   protected glassDots!: GlassDotSystem;
   protected smoke!: TireSmokeSystem;
   protected ragdolls!: RagdollSystem;
@@ -359,7 +361,7 @@ export abstract class EngineCore {
 
   /** Empties every system a run leaves behind (`clearTransients`). Add a new debris-like system here and to `Transients`. */
   protected clearLocal(): void {
-    clearTransients({ cars: this.cars, poles: this.poles, debris: this.debris, sparks: this.sparks, glassDots: this.glassDots, smoke: this.smoke, ragdolls: this.ragdolls, rangeRun: this.rangeRun, cine: this.cine });
+    clearTransients({ cars: this.cars, poles: this.poles, debris: this.debris, sparks: this.sparks, fountains: this.fountains, glassDots: this.glassDots, smoke: this.smoke, ragdolls: this.ragdolls, rangeRun: this.rangeRun, cine: this.cine });
   }
 
   /** A scene change, loop, reset or race start: the scene is emptied, the ejection watch forgets its history and netplay clients are told (their snapshots carry `clearGen`). */
@@ -745,8 +747,10 @@ export abstract class EngineCore {
    * slow-mo `THROW_ONSET` on (`holdForThrow`, unless the hit's was held already), and the camera rides with the
    * thrown drivers from that moment (the crash cam's cuts wait), unless it follows another car or the user framed it.
    * A minigame's throw is the score the player reads off the dummy: its camera takes him whatever the user framed.
+   * At the Range (and in its minigames) the launch lights the field's fountains.
    */
   protected onThrow(i: number): void {
+    if (this.showRange) this.fountains.rangeThrow(this.minigameMode);
     if (!this.net.client && !this.rigScene) holdForThrow(this.clock);
     const followed = this.followedCar();
     const userHasTheCamera = this.view.userFramed && this.minigameMode === null;

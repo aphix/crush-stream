@@ -15,6 +15,7 @@ export interface Transients {
   readonly poles: readonly LampPole[];
   readonly debris: Clearable;
   readonly sparks: Clearable;
+  readonly fountains: Clearable;
   readonly glassDots: Clearable;
   readonly smoke: Clearable;
   readonly ragdolls: Clearable;
@@ -28,6 +29,7 @@ export function clearTransients(t: Transients): void {
   resetLampPoles(t.poles);
   t.debris.reset();
   t.sparks.reset();
+  t.fountains.reset();
   t.glassDots.reset();
   t.smoke.reset();
   t.ragdolls.reset();

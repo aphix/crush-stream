@@ -111,6 +111,8 @@ The only sim change is in `vehicle/ejection.ts`. REPLAY entry:
 
 Everything else (session state, bests, boosts, boxes, boards, panel) is local presentation: not in replay or snapshots; netplay clients do not see minigame state.
 
+The launch lights the field's fountains too (`engine-fountains.ts`, `Fountains.rangeThrow`, from the engine's `onThrow`): up to three rows of two jets along the station's edges (`rangeEdge`, 1 m outside `STATION_HALF_WIDTH`; the plain Range's `RANGE.halfWidth`), evenly down the field and each row `RANGE_STAGGER_S` after the last, so they fire while the dummy flies. Cosmetic like everything else here; the FX tier sets the rows.
+
 ## 9. Re-sizing and files
 
 Change a number in `scenes/minigame-constants.ts`, then run the tests that print the tables: `minigame-sizing.test.ts` (boost and bars on the free pad, pins `HIGH_JUMP_MEASURED` within 2%; its framed rows print the best runs with the posts and slats in the world), `minigame-profile.test.ts` (hill and kicker speeds), `minigame-lip.test.ts` (lip throw and `LIP_CAR_SPEED_KEEP`). Update `HIGH_JUMP_MEASURED` and this doc's tables with what they print.

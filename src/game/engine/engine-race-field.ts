@@ -5,7 +5,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import { blankAiCar, type AiCar } from "../ai/derby-ai.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
-import { setGround } from "../world/ground.ts";
+import { NO_FLOOR, setGround } from "../world/ground.ts";
 import type { PropHits } from "../contact/prop-contact.ts";
 import { Campaign } from "../match/campaign.ts";
 import { placeProps, propColliders, solidsOf, type Placed, type PropCollider } from "../world/placements.ts";
@@ -25,7 +25,7 @@ import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import { raceSight, sightLine, type Sight } from "../present/spectate-cam.ts";
 import { parseTrack, type TrackJson } from "../world/track-schema.ts";
-import { Track, blankProjection } from "../world/track.ts";
+import { Track, blankPoint, blankProjection, pointOn } from "../world/track.ts";
 import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
 import { HAVANA } from "../world/tracks/havana.ts";
 import { carClass, classStats, HANDLING } from "../vehicle/vehicle-classes.ts";
@@ -118,6 +118,7 @@ const parkX = (i: number): number => PARK_X + i * 12;
 /** A Survival drop-in must be this many metres outside the camera's view (or behind a solid): the view swings while the cop is already on the road. */
 const HIDE_MARGIN = 8;
 const _c = new THREE.Vector3();
+const _roadPt = blankPoint();
 
 /**
  * The race field: course loading (track, art, ground, props), the grid, spawns and respawns, the traffic bubble and
@@ -315,6 +316,33 @@ export abstract class RaceField {
   /** The loaded course's bounds (m); null off a race. */
   courseBounds(): Track["bounds"] | null {
     return this.track?.bounds ?? null;
+  }
+
+  /**
+   * Metres of the race car `i` has left on the lap that ends it (a lap race, the car racing, past the line once, on the last lap);
+   * NaN otherwise: before then, finished or out, a car that is no racer, and Survival, which has no laps.
+   */
+  lastLapLeft(i: number): number {
+    const s = this.session;
+    const c = s && this.entrants[i] ? s.cars[this.rowOf[i]!] : undefined;
+    if (!s || !c || s.endless || s.phase !== "racing" || c.status !== "racing" || !c.armed || c.lap !== s.laps - 1) return NaN;
+    return s.laps * s.track.length - c.progress;
+  }
+
+  /**
+   * The point `behind` m before the finish line on the road's run-in and `margin` m outside its edge on `side` (-1 or 1: the road's two
+   * sides), on the ground there, into `out`. False off a course.
+   */
+  roadsideAt(behind: number, side: number, margin: number, out: THREE.Vector3): boolean {
+    const tr = this.track;
+    if (!tr) return false;
+    const p = pointOn(tr.path, tr.length - behind, _roadPt);
+    const lateral = (p.half + margin) * side;
+    out.x = p.x + p.tz * lateral;
+    out.z = p.z - p.tx * lateral;
+    const ground = tr.ground().heightAt(out.x, out.z, p.y + 1);
+    out.y = ground === NO_FLOOR ? p.y : ground;
+    return true;
   }
 
 

@@ -25,6 +25,7 @@ import { PHONE_LEVEL } from "../present/car-detail.ts";
 import { DetailGovernor } from "../present/detail-governor.ts";
 import { makeRenderer } from "./engine-renderer.ts";
 import { DebrisSystem, SparkSystem, GlassDotSystem, TireSmokeSystem } from "../present/engine-fx.ts";
+import { Fountains } from "./engine-fountains.ts";
 import { GameAudio } from "../present/game-audio.ts";
 import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
@@ -215,12 +216,13 @@ export class CrashEngine extends EngineGarage {
 
     this.debris = new DebrisSystem(this.scene);
     this.sparks = new SparkSystem(this.scene);
+    this.fountains = new Fountains(this.scene);
     this.smoke = new TireSmokeSystem(this.scene);
     this.ragdolls = new RagdollSystem(this.scene, (i) => this.onThrow(i), (at, frame, inherit) => this.onExit(at, frame, inherit));
     this.ragdolls.poles = this.poles;
     this.ragdolls.lookOf = (car) => this.looks.of(car, this.ownCar());
     this.lab.dolls = this.ragdolls;
-    this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion);
+    this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion);
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
     const fxParam = FX_TIERS.find((t) => t === new URLSearchParams(window.location.search).get(SETTING_KEY.fx));
     this.cine.setTier(fxParam === "ultra" ? "high" : (fxParam ?? INITIAL_HUD.fxTier));
@@ -384,6 +386,7 @@ export class CrashEngine extends EngineGarage {
     this.wheels.dispose();
     this.lampBatch.dispose();
     this.sparks.dispose();
+    this.fountains.dispose();
     this.debris.dispose();
     this.cine.dispose();
     this.glassDots.dispose();
@@ -509,6 +512,8 @@ export class CrashEngine extends EngineGarage {
       this.sparks.update(fxDt);
       this.glassDots.update(fxDt);
       armTops(null);
+      this.fountains.setLook(this.cine.tier, this.fxDensity);
+      this.fountains.update(fxDt);
       this.smoke.update(fxDt, this.camera);
       const sandbox = !this.race.active && !this.derbyMode;
       // Who the drivers look like: the clip on screen's race, else this race's, this derby round's, or this run's scene seed.
@@ -550,7 +555,14 @@ export class CrashEngine extends EngineGarage {
     this.net.frame(wallDt);
     // The reel's replay presents its own steps through the same blend (`ClipSim.present`, before the skins above): the world's pace has no step to show.
     if (!this.highlights.playing) this.blend.present(this.live(), this.pace.alpha);
-    if (this.race.active) this.race.frame(this.playing && !held ? wallDt : 0, this.highlights.people);
+    if (this.race.active) {
+      this.race.frame(this.playing && !held ? wallDt : 0, this.highlights.people);
+      // A reel plays a clip, not the race: its finish is not this race's last lap.
+      if (!this.highlights.playing) {
+        const car = this.followedCar() ? this.seat.carIndex : this.race.self;
+        this.fountains.raceFrame(this.race, car, this.cars[car]?.velocity.length() ?? 0);
+      }
+    }
     const focus = this.highlights.playing ? this.highlights.focus() : null;
     if (focus) this.race.followSun(focus);
     this.updateCamera(wallDt);

@@ -127,6 +127,8 @@ deadline is `dnf` and keeps its laps: the deadline is the winner + 30 s (`FINISH
 when no car is still running. No-reset: the last car running wins at once. `end()` closes the race now (running cars
 `dnf`). Results: place, name, status, time, gap (or laps down, or laps done for DNF / out), best lap, laps.
 
+**Finish-line fountains** (cosmetic: nothing here feeds the sim or a replay). On the lap that ends a lap race, the car the camera follows (the player's, or the spectated one) has `lastLapLeft` metres to go (the race's distance less its `progress`), and each pair of spark jets (`engine-fountains.ts`; one on each side of the road, outside its wall) starts once that car is within `RACE_LEAD_S` of it at its current speed (floored at `MIN_SPEED`): a big pair at the line (`LINE_POWER`) and, per FX tier, up to three more `ROW_GAP` m apart down the run-in, so the farthest row lights first and the line is in full spray as the car arrives. Each runs `RACE_RUN_S`, past the line. Each pair starts once per race (a run start clears them), never while a highlight reel plays.
+
 ## Spectate
 
 Dead menu (no-reset, player out): Restart, End race, Spectate. Spectating chases a live car (LB/RB, Q/E, the touch prev /

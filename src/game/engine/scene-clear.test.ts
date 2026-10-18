@@ -6,7 +6,7 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { armKill, assignClass, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
 import { paint } from "../vehicle/test-support.ts";
-import { DebrisSystem, GlassDotSystem, SparkSystem, TireSmokeSystem } from "../present/engine-fx.ts";
+import { DebrisSystem, FountainSystem, GlassDotSystem, SparkSystem, TireSmokeSystem } from "../present/engine-fx.ts";
 import { SkidMarks } from "../present/engine-marks.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { RangeRun } from "../scenes/range.ts";
@@ -33,6 +33,7 @@ type Rig = {
   poles: LampPole[];
   debris: DebrisSystem;
   sparks: SparkSystem;
+  fountains: FountainSystem;
   glassDots: GlassDotSystem;
   smoke: TireSmokeSystem;
   ragdolls: RagdollSystem;
@@ -58,6 +59,7 @@ function rig(): Rig {
   Object.defineProperty(globalThis, "document", { value: CANVAS, configurable: true });
   const debris = new DebrisSystem(scene);
   const sparks = new SparkSystem(scene);
+  const fountains = new FountainSystem(scene);
   const glassDots = new GlassDotSystem(scene);
   const smoke = new TireSmokeSystem(scene);
   const ragdolls = new RagdollSystem(scene, () => {}, () => {});
@@ -67,8 +69,8 @@ function rig(): Rig {
   const marks = new SkidMarks(MAX_CARS);
   // `Cinematics` needs a WebGL renderer; its reset is these two clears.
   const cine = { reset: () => (marks.clear(), tyreSmoke.reset()) };
-  const t: Transients = { cars, poles, debris, sparks, glassDots, smoke, ragdolls, rangeRun, cine };
-  return { scene, base: scene.children.length, t, marks, cars, poles, debris, sparks, glassDots, smoke, ragdolls, rangeRun, tyreSmoke };
+  const t: Transients = { cars, poles, debris, sparks, fountains, glassDots, smoke, ragdolls, rangeRun, cine };
+  return { scene, base: scene.children.length, t, marks, cars, poles, debris, sparks, fountains, glassDots, smoke, ragdolls, rangeRun, tyreSmoke };
 }
 
 const alive = (life: Float32Array): number => life.filter((l) => l > 0).length;
@@ -104,6 +106,16 @@ const ROWS: Record<keyof Transients, Row> = {
   },
   debris: { label: "crash debris", seed: (r) => r.debris.burst(V, UP, 40), left: (r) => alive(r.debris["life"]) },
   sparks: { label: "sparks", seed: (r) => r.sparks.poof(V, UP, 40), left: (r) => alive(r.sparks["life"]) },
+  // A jet waiting to start and one in full spray: both the table's slots and the sparks in the air.
+  fountains: {
+    label: "fountain jets and their sparks",
+    seed: (r) => {
+      r.fountains.jet(0, 0, 0, 0, 3);
+      r.fountains.jet(5, 0, 0, 9, 3);
+      r.fountains.update(0.3);
+    },
+    left: (r) => alive(r.fountains["life"]) + r.fountains.jets,
+  },
   glassDots: { label: "glass chips", seed: (r) => r.glassDots.burst(V, UP, 40), left: (r) => alive(r.glassDots["life"]) },
   smoke: { label: "tyre smoke plumes", seed: (r) => r.smoke.plume(V, UP, 40), left: (r) => alive(r.smoke["life"]) },
   // A head-on's two thrown drivers: the dummies out, and their Rapier bodies enabled.

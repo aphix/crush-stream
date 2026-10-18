@@ -182,6 +182,10 @@ type DotLook = {
   gravity: number;
   /** Collision radius the bit meets the world with (`landBit`). */
   radius: number;
+  /** False: the bit is a free arc that lives out its `life` and never meets the world (`FountainSystem`: its life is its flight time). Default true. */
+  lands?: boolean;
+  /** True: a per-dot colour attribute (`tint`) multiplies the look, so a dot can fade by brightness. Default false. */
+  tinted?: boolean;
 };
 
 /** Ring buffer of additive billboard dots that fall, land on the world (`landBit`), and park at y=250 when dead. */
@@ -192,19 +196,23 @@ class DotPoints {
   protected readonly vz: Float32Array;
   protected readonly life: Float32Array;
   protected readonly n: number;
-  private points: THREE.Points;
-  private geo: THREE.BufferGeometry;
+  protected readonly points: THREE.Points;
+  protected readonly geo: THREE.BufferGeometry;
+  /** Per-dot RGB multiplier (present when the look is `tinted`); a dead dot's entry is stale, it draws parked at y=250. */
+  protected readonly tint: Float32Array | null;
   private tmp = new THREE.Vector3();
   private vel = new THREE.Vector3();
   private cursor = 0;
-  private anyAlive = false;
+  protected anyAlive = false;
   private gravity: number;
   private radius: number;
+  private lands: boolean;
 
   constructor(scene: THREE.Scene, n: number, look: DotLook) {
     this.n = n;
     this.gravity = look.gravity;
     this.radius = look.radius;
+    this.lands = look.lands ?? true;
     this.pos = new Float32Array(n * 3);
     this.vx = new Float32Array(n);
     this.vy = new Float32Array(n);
@@ -213,10 +221,13 @@ class DotPoints {
     for (let i = 0; i < n; i++) this.pos[i * 3 + 1] = 250;
     this.geo = new THREE.BufferGeometry();
     this.geo.setAttribute("position", new THREE.BufferAttribute(this.pos, 3));
+    this.tint = look.tinted ? new Float32Array(n * 3) : null;
+    if (this.tint) this.geo.setAttribute("color", new THREE.BufferAttribute(this.tint, 3));
     this.geo.setDrawRange(0, n);
     const mat = new THREE.PointsMaterial({
       map: makeDotTexture(look.core, look.glow),
       color: 0xffffff,
+      vertexColors: this.tint !== null,
       size: look.size,
       transparent: true,
       opacity: look.opacity,
@@ -261,6 +272,13 @@ class DotPoints {
       this.life[i]! -= dt;
       if (this.life[i]! <= 0) {
         this.pos[i * 3 + 1] = 250;
+        continue;
+      }
+      if (!this.lands) {
+        this.pos[i * 3]! += this.vx[i]! * dt;
+        this.pos[i * 3 + 1]! += this.vy[i]! * dt;
+        this.pos[i * 3 + 2]! += this.vz[i]! * dt;
+        this.vy[i]! -= this.gravity * dt;
         continue;
       }
       this.tmp.set(this.pos[i * 3]!, this.pos[i * 3 + 1]!, this.pos[i * 3 + 2]!);
@@ -401,6 +419,149 @@ export class SparkSystem extends DotPoints {
 
   snapshot() {
     return snapshotPoints(this.pos, null, null, this.life, true);
+  }
+}
+
+/** Jets a `FountainSystem` runs at once: a race's finish line at its fullest (2 sides x 4 rows) with room to spare for a podium's. */
+export const JET_SLOTS = 16;
+/** Sparks a power-1 jet throws each second at density 1 (set by eye: a column thick enough to read as a fountain, not a sprinkler). */
+export const JET_RATE = 70;
+/** Launch speed (m/s, up) of a power-1 spark: apexes from 3.3 to 7.5 m at `GRAVITY`; a stronger jet scales it by the root of its power (height goes with the power). */
+export const JET_UP_MIN = 8;
+export const JET_UP_MAX = 12;
+/** A spark's sideways launch speed as a share of its upward speed (a cone of about 16 degrees: a fountain's bell, not a column). */
+const JET_SPREAD = 0.28;
+/** Radius (m) of a jet's nozzle: sparks start scattered over it. */
+const JET_NOZZLE = 0.18;
+/** Seconds a spark is at full brightness before it fades out to nothing as it lands. */
+export const JET_FADE_S = 0.7;
+/** The most sparks one jet spawns in a single update (a stalled frame's dt must not dump a second's worth at once). */
+const JET_BURST_MAX = 24;
+/** The pool: a full ultra race (2 jets at power 1.7, 6 at 1: about 320 and 150 live sparks each) holds about 1500; the ring overwrites its oldest past 2400 (a density near 1.6). */
+const FOUNTAIN_DOTS = 2400;
+const JET_GOLD = new THREE.Color(1, 0.86, 0.55);
+
+/**
+ * Ground-mounted spark fountains: a scheduled jet (`jet`) throws bright sparks up in a bell-shaped arc from a nozzle point, they fall back
+ * under gravity and fade, each one gone as it is back at the nozzle's height (its life is its flight time: no world query). Pooled like
+ * the crash sparks (one ring of dots, jets in a fixed table, nothing allocated in a frame). Cosmetic: nothing reads it back.
+ */
+export class FountainSystem extends DotPoints {
+  /** Share of the full spray every jet throws: the FX tier and the density knob set it (0: nothing spawns; sparks in the air still finish). */
+  density = 1;
+  private readonly jx = new Float32Array(JET_SLOTS);
+  private readonly jy = new Float32Array(JET_SLOTS);
+  private readonly jz = new Float32Array(JET_SLOTS);
+  /** Seconds until the jet starts; then seconds it still runs (a spent jet has `run` 0 and its slot is free). */
+  private readonly wait = new Float32Array(JET_SLOTS);
+  private readonly run = new Float32Array(JET_SLOTS);
+  private readonly power = new Float32Array(JET_SLOTS);
+  private readonly hue = new Float32Array(JET_SLOTS * 3);
+  /** Fractional sparks owed to each jet: its rate is per second, a frame spawns whole sparks. */
+  private readonly owed = new Float32Array(JET_SLOTS);
+  /** Each live dot's own colour, which its fade scales into `tint`. */
+  private readonly base: Float32Array;
+
+  constructor(scene: THREE.Scene, n = FOUNTAIN_DOTS) {
+    super(scene, n, {
+      core: "rgba(255,248,220,1)",
+      glow: "rgba(255,170,70,0.7)",
+      size: 0.22,
+      opacity: 1,
+      gravity: GRAVITY,
+      radius: 0,
+      lands: false,
+      tinted: true,
+    });
+    this.base = new Float32Array(n * 3);
+    this.points.visible = false;
+  }
+
+  /**
+   * A jet at (x, y, z), the ground under it: it starts `startIn` s from now (0: at once), throws for `runFor` s, and its last sparks land
+   * a flight time later. `power` 1 is the plain jet; a bigger one throws more and higher. `color` tints it (default hot gold).
+   * A full table (`JET_SLOTS` running jets) drops the new jet.
+   */
+  jet(x: number, y: number, z: number, startIn: number, runFor: number, power = 1, color: THREE.Color = JET_GOLD): void {
+    let s = 0;
+    while (s < JET_SLOTS && this.run[s]! > 0) s++;
+    if (s === JET_SLOTS || runFor <= 0) return;
+    this.jx[s] = x;
+    this.jy[s] = y;
+    this.jz[s] = z;
+    this.wait[s] = Math.max(0, startIn);
+    this.run[s] = runFor;
+    this.power[s] = power;
+    this.hue[s * 3] = color.r;
+    this.hue[s * 3 + 1] = color.g;
+    this.hue[s * 3 + 2] = color.b;
+    this.owed[s] = 0;
+  }
+
+  /** Jets scheduled or running (a spent jet is not counted; sparks still in the air are not jets). */
+  get jets(): number {
+    let count = 0;
+    for (let s = 0; s < JET_SLOTS; s++) if (this.run[s]! > 0) count++;
+    return count;
+  }
+
+  override update(dt: number): void {
+    for (let s = 0; s < JET_SLOTS; s++) {
+      if (this.run[s]! <= 0) continue;
+      if (this.wait[s]! > 0) {
+        this.wait[s]! -= dt;
+        continue;
+      }
+      const on = Math.min(dt, this.run[s]!);
+      this.run[s]! -= dt;
+      this.owed[s]! += on * JET_RATE * this.power[s]! * this.density;
+      const count = Math.min(JET_BURST_MAX, Math.floor(this.owed[s]!));
+      this.owed[s]! -= count;
+      if (count > 0) this.spray(s, count);
+    }
+    if (!this.anyAlive) return;
+    super.update(dt);
+    const tint = this.tint!;
+    for (let i = 0; i < this.n; i++) {
+      const life = this.life[i]!;
+      if (life <= 0) continue;
+      const fade = Math.min(1, life / JET_FADE_S);
+      tint[i * 3] = this.base[i * 3]! * fade;
+      tint[i * 3 + 1] = this.base[i * 3 + 1]! * fade;
+      tint[i * 3 + 2] = this.base[i * 3 + 2]! * fade;
+    }
+    (this.geo.getAttribute("color") as THREE.BufferAttribute).needsUpdate = true;
+    this.points.visible = this.anyAlive;
+  }
+
+  override reset(): void {
+    super.reset();
+    this.run.fill(0);
+    this.wait.fill(0);
+    this.points.visible = false;
+  }
+
+  private spray(s: number, count: number): void {
+    const lift = Math.sqrt(this.power[s]!);
+    for (let i = 0; i < count; i++) {
+      const k = this.claim();
+      const up = (JET_UP_MIN + Math.random() * (JET_UP_MAX - JET_UP_MIN)) * lift;
+      const around = Math.random() * Math.PI * 2;
+      const out = up * JET_SPREAD * Math.sqrt(Math.random());
+      const nozzle = JET_NOZZLE * Math.sqrt(Math.random());
+      this.pos[k * 3] = this.jx[s]! + Math.cos(around) * nozzle;
+      this.pos[k * 3 + 1] = this.jy[s]!;
+      this.pos[k * 3 + 2] = this.jz[s]! + Math.sin(around) * nozzle;
+      this.vx[k] = Math.cos(around) * out;
+      this.vy[k] = up;
+      this.vz[k] = Math.sin(around) * out;
+      this.life[k] = (2 * up) / GRAVITY;
+      this.base[k * 3] = this.hue[s * 3]!;
+      this.base[k * 3 + 1] = this.hue[s * 3 + 1]!;
+      this.base[k * 3 + 2] = this.hue[s * 3 + 2]!;
+    }
+    this.commit(count);
+    this.points.visible = true;
   }
 }
 

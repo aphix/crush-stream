@@ -4,7 +4,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { DRIVE } from "../vehicle/car-drive.ts";
 import { applyCarFinish, finishForTier } from "../vehicle/car-finish.ts";
 import type { ChaseCamera } from "./engine-camera.ts";
-import { TireSmokeSystem, type GlassDotSystem, type SparkSystem } from "./engine-fx.ts";
+import { TireSmokeSystem, type FountainSystem, type GlassDotSystem, type SparkSystem } from "./engine-fx.ts";
 import { SkidMarks } from "./engine-marks.ts";
 import { PostFX, type FxTier } from "./engine-post.ts";
 import { GpuTimer } from "./gpu-timer.ts";
@@ -441,7 +441,7 @@ export class CrashCam {
   }
 }
 
-type FxRefs = { sparks: SparkSystem; glass: GlassDotSystem; witness: Witness };
+type FxRefs = { sparks: SparkSystem; fountains: FountainSystem; glass: GlassDotSystem; witness: Witness };
 
 /**
  * Cinematic director: the quality tier, the post chain, the tyre-mark map and every effect that only reads
@@ -510,6 +510,7 @@ export class Cinematics {
     const bloom = tier === "low" || tier === "high" || tier === "ultra";
     this.fx.sparks.streaked = bloom;
     this.fx.sparks.glow(bloom ? 2.6 : 1);
+    this.fx.fountains.glow(bloom ? 2.2 : 1);
     this.fx.glass.glow(bloom ? 1.8 : 1);
     if (tier === "ultra") this.ultra!.enable();
     else if (was === "ultra") this.ultra?.disable();
