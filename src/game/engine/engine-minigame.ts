@@ -93,7 +93,7 @@ export class Minigames {
   }
 
   private build(start: MinigameStart): void {
-    this.ground = new MinigameGround({ highJump: { netX: this.highJump.netX, netHalfWidth: NET_HALF_WIDTH, netHeight: this.highJump.netHeight } });
+    this.ground = new MinigameGround({ highJump: { netX: this.highJump.netX, netHalfWidth: NET_HALF_WIDTH, netHeight: this.highJump.netHeight, frame: this.highJump } });
     this.collideHook = this.ground.collideHook(start.cars, start.ejection);
     this.art = new MinigameArt();
     this.boxPlacements = { highJump: this.art.setHighJumpLayout(this.highJump, this.highJumpLipY) };

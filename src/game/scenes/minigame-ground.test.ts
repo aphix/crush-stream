@@ -10,19 +10,24 @@ import { GROUND_REACH, RagdollSystem } from "../present/engine-ragdoll.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { EjectionWatch } from "../vehicle/ejection.ts";
-import { FRAME, frame } from "../vehicle/ground-probe.test-util.ts";
+import { FRAME as PROBE_FRAME, frame } from "../vehicle/ground-probe.test-util.ts";
 import { activeGround, FLAT_GROUND, setGround, type Ground } from "../world/ground.ts";
 import { PR_ID } from "../world/prism.ts";
 import { GRID, P_OX, P_STRIDE, PRISM, Q_KIND, Q_STRIDE } from "../world/surfaces.ts";
-import { MINIGAME_MODES, REST_HOLD, STATION_ANCHORS, STATION_HALF_WIDTH, type MinigameMode } from "./minigame-constants.ts";
+import { HIGH_JUMP_MEASURED, LANDING_HEIGHT, MINIGAME_MODES, REST_HOLD, STATION_ANCHORS, STATION_HALF_WIDTH, type MinigameMode } from "./minigame-constants.ts";
+import { highJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS } from "./minigame-high-jump.ts";
 import { MinigameGround } from "./minigame-ground.ts";
+import { FRAME_BOX_FLOATS, frameMeshOf, withoutFrame } from "./minigame-frame.test-util.ts";
 import { climbFootX, floorHeightAt, lipHeight, stationBackX, stationFrontX, stationStartPose } from "./minigame-profile.ts";
 import { dressedDriverCar } from "./minigame-profile.test-util.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_CUPS, RING_MESH_STEP, ringBoardMesh, ringHeightAt, ringScore } from "./minigame-ring.ts";
 import { RANGE } from "./range.ts";
 
-/** The net the rows hang: synthetic numbers (the real layout comes from a measurement made later): 45 m past the lip, 12 m wide, 14 m tall. */
-const NET = { netX: 45, netHalfWidth: 6, netHeight: 14 } as const;
+/** The posts' and slats' layout: the real one, for the pinned best run. */
+const FRAME = highJumpLayout(HIGH_JUMP_MEASURED, lipHeight("highJump"));
+
+/** The net the rows hang: synthetic numbers (the real layout comes from a measurement made later): 45 m past the lip, 12 m wide, 14 m tall, on the real posts and slats. */
+const NET = { netX: 45, netHalfWidth: 6, netHeight: 14, frame: FRAME } as const;
 
 /** The grid may be this far (m) from the analytic floor, and the coarsest grid that keeps to it is not under this far from it (a finer cell than needed is wasted nodes). */
 const HEIGHT_TOLERANCE = 0.002;
@@ -260,7 +265,7 @@ function driveFromStart(type: DriverCar, mode: MinigameMode, assignHook = true):
     const world = newWorld([car], null, watch);
     if (assignHook) world.collide = ground.collideHook([car], watch);
     const clock = { acc: 0 };
-    for (let step = 0; step < HOLD_SECONDS / FRAME; step++) frame(world, null, clock);
+    for (let step = 0; step < HOLD_SECONDS / PROBE_FRAME; step++) frame(world, null, clock);
     const drive: Drive = { heldSlide: Math.abs(car.group.position.x - start.x), ejections: 0, footSpeed: 0, lipSpeed: 0, slowestOnClimb: Infinity, reachedLongJumpBar: false, reachedLip: false };
     const input: DriveInput = { ...idleDrive(), throttle: 1 };
     const position = car.group.position;
@@ -277,7 +282,7 @@ function driveFromStart(type: DriverCar, mode: MinigameMode, assignHook = true):
       drive.lipSpeed = Math.hypot(events[0]!.carVel.x, events[0]!.carVel.z);
       Object.assign(input, FREEWHEEL);
     };
-    for (let step = 0; step < RUN_SECONDS / FRAME; step++) {
+    for (let step = 0; step < RUN_SECONDS / PROBE_FRAME; step++) {
       if (!thrown) {
         const aheadX = position.x + STEER_LOOK_AHEAD + car.speed * STEER_LOOK_PER_SPEED;
         const error = Math.atan2(aheadX - position.x, anchor.z - position.z) - car.yaw;
@@ -295,9 +300,9 @@ function driveFromStart(type: DriverCar, mode: MinigameMode, assignHook = true):
         if (!thrown) drive.lipSpeed = car.speed;
         if (mode === "longJump") break;
       }
-      stalledFor = car.speed < STALLED_SPEED ? stalledFor + FRAME : 0;
+      stalledFor = car.speed < STALLED_SPEED ? stalledFor + PROBE_FRAME : 0;
       if (stalledFor > STALL_SECONDS) break;
-      if (thrown) secondsSinceThrow += FRAME;
+      if (thrown) secondsSinceThrow += PROBE_FRAME;
       if (secondsSinceThrow >= AFTER_THROW_SECONDS) break;
     }
     return drive;
@@ -493,6 +498,77 @@ describe("given a dummy thrown at the high jump's net", () => {
     disposeSystems();
     const control = throwDummy(await ragdollOn(withoutPrism(buildGround(), NET_PRISM_ID)), seat, velocity);
     assert.ok(control.furthestPartX > netBackFaceX + 3, `without the net he got to x ${control.furthestPartX - anchor.x}`);
+  });
+});
+
+/** The bounds of each box of the frame's mesh (the two posts, then one slat per board), in that order. */
+function frameBoxes(ground: MinigameGround): THREE.Box3[] {
+  const mesh = frameMeshOf(ground, FRAME);
+  return Array.from({ length: 2 + FRAME.boards.length }, (_, box) => new THREE.Box3().setFromArray(Array.from(mesh.vertices.subarray(box * FRAME_BOX_FLOATS, (box + 1) * FRAME_BOX_FLOATS))));
+}
+
+describe("given the high jump's posts and slats", () => {
+  const anchor = STATION_ANCHORS.highJump;
+
+  it("when the frame's solids are read, then two posts stand 0.25 m square from the pad to the frame's top and a slat thinner than a post stands between them at every board, every 5 m up the frame", () => {
+    const boxes = frameBoxes(buildGround());
+    const size = new THREE.Vector3();
+    assert.equal(boxes.length, 2 + FRAME.boards.length);
+    for (const [side, post] of [-1, 1].map((sign, index) => [sign, boxes[index]!] as const)) {
+      post.getSize(size);
+      assert.ok(Math.abs(size.x - POST_THICKNESS) < HEIGHT_TOLERANCE && Math.abs(size.z - POST_THICKNESS) < HEIGHT_TOLERANCE, `post ${side} is ${size.x} x ${size.z}`);
+      assert.equal(POST_THICKNESS, 0.25);
+      assert.ok(Math.abs(post.min.y - LANDING_HEIGHT) < HEIGHT_TOLERANCE && Math.abs(post.max.y - (lipHeight("highJump") + FRAME.frameTop)) < HEIGHT_TOLERANCE, `post ${side} spans ${post.min.y}..${post.max.y}`);
+      assert.ok(Math.abs(post.getCenter(new THREE.Vector3()).x - (anchor.x + FRAME.postsX)) < HEIGHT_TOLERANCE && Math.abs(post.getCenter(new THREE.Vector3()).z - (anchor.z + side * POST_HALF_SPAN)) < HEIGHT_TOLERANCE, `post ${side} stands at its place`);
+    }
+    for (const [index, board] of FRAME.boards.entries()) {
+      const slat = boxes[2 + index]!;
+      slat.getSize(size);
+      assert.ok(size.x < POST_THICKNESS && size.y < POST_THICKNESS, `slat ${index} is ${size.x} x ${size.y}, thinner than a post`);
+      assert.ok(Math.abs(slat.getCenter(new THREE.Vector3()).y - board.y) < HEIGHT_TOLERANCE, `slat ${index} at ${slat.getCenter(new THREE.Vector3()).y}, board ${board.y}`);
+      assert.ok(Math.abs(slat.min.z - (anchor.z - POST_HALF_SPAN + POST_THICKNESS / 2)) < HEIGHT_TOLERANCE && Math.abs(slat.max.z - (anchor.z + POST_HALF_SPAN - POST_THICKNESS / 2)) < HEIGHT_TOLERANCE, `slat ${index} spans the gap between the posts`);
+      if (index > 0) assert.ok(Math.abs(board.y - FRAME.boards[index - 1]!.y - 5) < HEIGHT_TOLERANCE, `slat ${index} is 5 m over the one below`);
+    }
+  });
+});
+
+const GRAVITY = 9.80665;
+/**
+ * The frame shots: a dummy flung along +x at this speed (m/s) from this far (m) before the posts' plane, at the slat that stands
+ * `slatMetresOverLip` m over the lip, and at a post half way between two slats (`gapOffset` m above that slat, so nothing but the post is in his way).
+ */
+const FRAME_SHOT = { speed: 10, distanceBefore: 4, slatMetresOverLip: 5, gapOffset: 2.5 } as const;
+/** The control (no frame in the ground) sails on: it must end at least this much (m) further out than the dummy the frame meets. */
+const FRAME_STOPS_BY = 5;
+
+describe("given a dummy flung into the high jump's frame", () => {
+  const anchor = STATION_ANCHORS.highJump;
+  const slat = FRAME.boards.find((board) => board.heightAboveLip === FRAME_SHOT.slatMetresOverLip)!;
+  const flightSeconds = FRAME_SHOT.distanceBefore / FRAME_SHOT.speed;
+  const drop = 0.5 * GRAVITY * flightSeconds * flightSeconds;
+  const velocity = new THREE.Vector3(FRAME_SHOT.speed, 0, 0);
+  const seatAt = (z: number, y: number) => new THREE.Vector3(anchor.x + FRAME.postsX - FRAME_SHOT.distanceBefore, y + drop, anchor.z + z);
+
+  /** The dummy flung from `seat` with the frame in the ground and without it: where each rests (and the part furthest out of the first). */
+  async function flung(seat: THREE.Vector3): Promise<{ caught: ThrowResult; control: ThrowResult }> {
+    const caught = throwDummy(await ragdollOn(buildGround()), seat, velocity);
+    disposeSystems();
+    const control = throwDummy(await ragdollOn(withoutFrame(buildGround(), FRAME)), seat, velocity);
+    return { caught, control };
+  }
+
+  it("when he is flung at a slat, then it stops him at its back face and catches him short of where he lands without the frame", async (t) => {
+    const { caught, control } = await flung(seatAt(0, slat.y));
+    t.diagnostic(`slat at ${slat.y} m: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
+    assert.ok(caught.furthestPartX <= anchor.x + FRAME.postsX + SLAT_THICKNESS / 2 + SOAK, `a part reached x ${caught.furthestPartX - anchor.x} past the slat's back face at ${FRAME.postsX + SLAT_THICKNESS / 2}`);
+    assert.ok(control.torso.x - caught.torso.x >= FRAME_STOPS_BY, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`);
+  });
+
+  it("when he is flung at a post between two slats, then it stops him at its back face and catches him short of where he lands without the frame", async (t) => {
+    const { caught, control } = await flung(seatAt(POST_HALF_SPAN, slat.y + FRAME_SHOT.gapOffset));
+    t.diagnostic(`post: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
+    assert.ok(caught.furthestPartX <= anchor.x + FRAME.postsX + POST_THICKNESS / 2 + SOAK, `a part reached x ${caught.furthestPartX - anchor.x} past the post's back face at ${FRAME.postsX + POST_THICKNESS / 2}`);
+    assert.ok(control.torso.x - caught.torso.x >= FRAME_STOPS_BY, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`);
   });
 });
 

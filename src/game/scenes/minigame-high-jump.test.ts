@@ -2,9 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import {
-  BOARD_COARSE_STEP,
-  BOARD_FINE_STEP,
-  BOARD_FINE_UNTIL,
+  BOARD_STEP,
   BOX_CELL_PITCH,
   BOX_COUNT,
   BOX_NET_CLEARANCE,
@@ -19,6 +17,7 @@ import {
   MAJOR_BOARD_EVERY_METRES,
   POSTS_DISTANCE,
   POST_HALF_SPAN,
+  POST_THICKNESS,
   highJumpLayout,
   type BoxPlacement,
   type HighJumpMeasured,
@@ -187,13 +186,13 @@ describe("given the capture band beside the posts", () => {
 });
 
 const LAYOUT_CASES = [
-  { name: "a record-sized best case", measured: { crossingHeight: 230, landingDistance: 300 }, expectedFrameTop: 300, expectedBoardCount: 35, expectedMajorHeights: [0, 50, 100, 150, 200, 250], expectedNetHeight: 115 },
-  { name: "the sizing measurement's best run (156.4 m over the posts, landing 32.2 m)", measured: { crossingHeight: 156.4, landingDistance: 32.2 }, expectedFrameTop: 210, expectedBoardCount: 26, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 78.2 },
-  { name: "a best case in the coarse zone", measured: { crossingHeight: 157, landingDistance: 240 }, expectedFrameTop: 210, expectedBoardCount: 26, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 78.5 },
-  { name: "a best case whose headroom lands exactly on a board", measured: { crossingHeight: 100, landingDistance: 160 }, expectedFrameTop: 130, expectedBoardCount: 18, expectedMajorHeights: [0, 50, 100], expectedNetHeight: 50 },
-  { name: "a best case whose headroom just passes the fine zone", measured: { crossingHeight: 38.5, landingDistance: 25 }, expectedFrameTop: 60, expectedBoardCount: 11, expectedMajorHeights: [0, 50], expectedNetHeight: 30 },
-  { name: "a best case whose headroom just reaches the fine zone's end", measured: { crossingHeight: 38.4, landingDistance: 25 }, expectedFrameTop: 50, expectedBoardCount: 10, expectedMajorHeights: [0], expectedNetHeight: 30 },
-  { name: "a best case in the fine zone", measured: { crossingHeight: 20, landingDistance: 30 }, expectedFrameTop: 30, expectedBoardCount: 6, expectedMajorHeights: [0], expectedNetHeight: 30 },
+  { name: "a record-sized best case", measured: { crossingHeight: 230, landingDistance: 300 }, expectedFrameTop: 300, expectedBoardCount: 60, expectedMajorHeights: [0, 50, 100, 150, 200, 250], expectedNetHeight: 115 },
+  { name: "the sizing measurement's best run (156.4 m over the posts, landing 32.2 m)", measured: { crossingHeight: 156.4, landingDistance: 32.2 }, expectedFrameTop: 205, expectedBoardCount: 41, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 78.2 },
+  { name: "a best case a little over it", measured: { crossingHeight: 157, landingDistance: 240 }, expectedFrameTop: 205, expectedBoardCount: 41, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 78.5 },
+  { name: "a best case whose headroom lands exactly on a board", measured: { crossingHeight: 100, landingDistance: 160 }, expectedFrameTop: 130, expectedBoardCount: 26, expectedMajorHeights: [0, 50, 100], expectedNetHeight: 50 },
+  { name: "a best case whose headroom just passes a big board", measured: { crossingHeight: 38.5, landingDistance: 25 }, expectedFrameTop: 55, expectedBoardCount: 11, expectedMajorHeights: [0, 50], expectedNetHeight: 30 },
+  { name: "a best case whose headroom just reaches a big board", measured: { crossingHeight: 38.4, landingDistance: 25 }, expectedFrameTop: 50, expectedBoardCount: 10, expectedMajorHeights: [0], expectedNetHeight: 30 },
+  { name: "a mid-sized best case", measured: { crossingHeight: 20, landingDistance: 30 }, expectedFrameTop: 30, expectedBoardCount: 6, expectedMajorHeights: [0], expectedNetHeight: 30 },
   { name: "a tiny best case (the headroom factor alone would give under one board)", measured: { crossingHeight: 3, landingDistance: 15 }, expectedFrameTop: 10, expectedBoardCount: 2, expectedMajorHeights: [0], expectedNetHeight: 30 },
   { name: "a landing beyond the net", measured: { crossingHeight: 12, landingDistance: 90 }, expectedFrameTop: 20, expectedBoardCount: 4, expectedMajorHeights: [0], expectedNetHeight: 30 },
 ] as const;
@@ -220,22 +219,18 @@ for (const layoutCase of LAYOUT_CASES) {
     it("when the layout is made, then the frame top is the best crossing height times the headroom, rounded up to a board", () => {
       assert.equal(layout.frameTop, layoutCase.expectedFrameTop, "frame top");
       assert.ok(layout.frameTop >= measured.crossingHeight * FRAME_HEADROOM_FACTOR, "headroom factor kept");
-      const onFineBoard = layout.frameTop <= BOARD_FINE_UNTIL && layout.frameTop % BOARD_FINE_STEP === 0;
-      const onCoarseBoard = layout.frameTop > BOARD_FINE_UNTIL && (layout.frameTop - BOARD_FINE_UNTIL) % BOARD_COARSE_STEP === 0;
-      assert.ok(onFineBoard || onCoarseBoard, `frame top ${layout.frameTop} stands on a board height`);
-      const boardAtCrossing = measured.crossingHeight < BOARD_FINE_UNTIL ? BOARD_FINE_STEP : BOARD_COARSE_STEP;
-      assert.ok(layout.frameTop >= measured.crossingHeight + boardAtCrossing, "at least one board above the crossing height");
+      assert.equal(layout.frameTop % BOARD_STEP, 0, `frame top ${layout.frameTop} stands on a board height`);
+      assert.ok(layout.frameTop >= measured.crossingHeight + BOARD_STEP, "at least one board above the crossing height");
     });
 
-    it("when the layout is made, then the boards are spaced by the zone they stand in from the lip up to under the frame top", () => {
+    it("when the layout is made, then a board stands every BOARD_STEP (5) m from the lip up to under the frame top", () => {
       assert.equal(layout.boards.length, layoutCase.expectedBoardCount, "board count");
       assert.equal(layout.boards[0].heightAboveLip, 0, "the first board is the lip line");
       for (let index = 0; index < layout.boards.length; index++) {
         const board = layout.boards[index];
         assert.equal(board.y, LIP_Y + board.heightAboveLip, `board ${index} height above the pad`);
-        const step = board.heightAboveLip < BOARD_FINE_UNTIL ? BOARD_FINE_STEP : BOARD_COARSE_STEP;
         const nextHeight = layout.boards.at(index + 1)?.heightAboveLip ?? layout.frameTop;
-        assert.equal(nextHeight - board.heightAboveLip, step, `board ${index} is ${step} m under the next board or the frame top`);
+        assert.equal(nextHeight - board.heightAboveLip, BOARD_STEP, `board ${index} is ${BOARD_STEP} m under the next board or the frame top`);
       }
     });
 
@@ -262,6 +257,16 @@ for (const layoutCase of LAYOUT_CASES) {
       }
       const distinctWidths = new Set(layout.boxes.map((box) => box.width));
       assert.ok(distinctWidths.size > BOX_COUNT / 2, `box widths vary (${distinctWidths.size} distinct)`);
+    });
+
+    it("when the boxes are laid out, then no box stands over a post (a post is a ragdoll collider: a box laid on it would be shoved out of the world)", () => {
+      for (const [boxIndex, box] of layout.boxes.entries()) {
+        for (const side of [-1, 1]) {
+          const nearestX = Math.min(Math.max(box.x, layout.postsX - POST_THICKNESS / 2), layout.postsX + POST_THICKNESS / 2);
+          const nearestZ = Math.min(Math.max(box.z, side * POST_HALF_SPAN - POST_THICKNESS / 2), side * POST_HALF_SPAN + POST_THICKNESS / 2);
+          assert.ok(Math.hypot(box.x - nearestX, box.z - nearestZ) >= boundingRadius(box) - 1e-9, `box ${boxIndex} reaches the ${side} post`);
+        }
+      }
     });
 
     it("when the boxes are laid out, then none overlaps another (stacked ones only touch), within one nanometre", () => {

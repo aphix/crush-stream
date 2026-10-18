@@ -43,7 +43,7 @@ Class lip speeds at full throttle (horizontal m/s): High jump sedan/hatchback/wa
 
 ## 5. The high jump frame
 
-Posts at `POSTS_DISTANCE` 11 m (half-span `POST_HALF_SPAN`). Distance boards every 5 m to 50 m then every 10 m (`BOARD_FINE_STEP`, `BOARD_FINE_UNTIL`, `BOARD_COARSE_STEP`), big labelled boards every 50 m (`MAJOR_BOARD_EVERY_METRES`). Frame top = `FRAME_HEADROOM_FACTOR` 1.3 x the best measured crossing height (`HIGH_JUMP_MEASURED.crossingHeight` 156.4 m, so 210 m). A tall net stands `NET_DISTANCE_PAST_POSTS` 30 m past the posts (41 m). Between them, cardboard box piles end 35 m out: `BOX_COUNT` 48 dynamic cuboids (4x4 towers of 3, 0.9 m cartons in the cost test) in the ragdoll's own Rapier world (`present/ragdoll-boxes.ts`, art `cardboard-art.ts`). Cost per 60 Hz frame (8 Rapier steps): +0.03-0.05 ms asleep, +1.1 ms awake (budgets 0.5 / 3 ms).
+Posts at `POSTS_DISTANCE` 11 m (half-span `POST_HALF_SPAN`): two black posts `POST_THICKNESS` 0.25 m square from the pad to the frame top, whatever its height. Between them a slat `SLAT_THICKNESS` 0.1 m square (thinner than a post) stands at every board, one every `BOARD_STEP` 5 m up from the lip (the lip line at 0), the bright ones every 50 m (`MAJOR_BOARD_EVERY_METRES`) with a big labelled sign on them (art only: a dummy passes through the signs). No pane or back-board hangs between the posts. The posts and slats are ragdoll colliders: `MinigameGround.addHighJumpFrame` builds them as one static triangle mesh (posts first, then one slat per board) in the dummy's Rapier world with the ground's other meshes, so they share the ground's collision groups; a dummy can hit a slat, catch on it and tumble through. They are deliberately not prisms: a prism is a floor to every height read and sight probe, 200 m up, and a wall to cars. Frame top = `FRAME_HEADROOM_FACTOR` 1.3 x the best measured crossing height (`HIGH_JUMP_MEASURED.crossingHeight` 156.4 m, so 205 m: boards are 5 m apart all the way, 41 slats). A tall net stands `NET_DISTANCE_PAST_POSTS` 30 m past the posts (41 m). Between them, cardboard box piles end 35 m out: `BOX_COUNT` 48 dynamic cuboids (4x4 towers of 3, 0.9 m cartons in the cost test) in the ragdoll's own Rapier world (`present/ragdoll-boxes.ts`, art `cardboard-art.ts`). Cost per 60 Hz frame (8 Rapier steps): +0.03-0.05 ms asleep, +1.1 ms awake (budgets 0.5 / 3 ms). The frame adds one 43-box mesh collider (516 triangles) to the world, built once with the ground, and the slats are one draw (the `boards` mesh, signs included).
 
 ## 6. The dummy boost
 
@@ -73,7 +73,9 @@ Worst of 3 repeats, from `minigame-sizing.test.ts`.
 | muscle | 129.0 / 130.3 @ 12.2 / 23.7 |
 | monster | 156.4 / 178.2 @ 17.0 / 32.2 |
 
-70% run: the sedan family, truck and police do not cross the posts (they land 9.1-9.4 m, short of the 11 m posts); muscle crosses at 4.3 m; monster at 75.2 m. The lowest share of full-throttle lip speed that still crosses: sedan family 0.75, police 0.75, truck 0.77, muscle 0.69, monster 0.59. Frame top 210 m, posts 11 m, net 41 m, box piles end 35 m.
+70% run: the sedan family, truck and police do not cross the posts (they land 9.1-9.4 m, short of the 11 m posts); muscle crosses at 4.3 m; monster at 75.2 m. The lowest share of full-throttle lip speed that still crosses: sedan family 0.75, police 0.75, truck 0.77, muscle 0.69, monster 0.59. Frame top 205 m, posts 11 m, net 41 m, box piles end 35 m.
+
+The table above and its bars are measured on the free pad: the posts and slats are taken out of the ragdoll's world (`rangeFor` in the sizing test), so they size the launch alone. With the frame in (the sizing test's framed row, one throw per class's best run at the steady 60 Hz; crossing / lands, m): sedan 110 / 21, hatchback and wagon 110 / 22, police 110 / 15, truck 106 / 19, muscle 129 / 17, monster 159 / 16. Every best run still crosses there (the monster at 159 against 156.4); the farthest best landing falls from 32.2 to 22 m because a slat catches a run at the plane and it drops short (the monster lands 16 m instead of 32). Whether a run clears the plane is a lottery that a browser's own frame times change: a monster best run in headless Chromium was caught by the slat 160 m over the lip (170 m up) and fell back (0). Slower runs: in one sweep of lip-speed shares (seed 0), the sedan family, police, muscle and truck, which cross at 76-80% on the free pad, are caught by a slat there and score 0 (the monster crosses at 76-80% but is caught at 60-72%, where it crosses on the free pad); from 84% most cross, and a few shares are caught (88% sedan family and truck, 92% monster, 96% police). `HIGH_JUMP_MEASURED` and the 80%-share bar stay the free pad's.
 
 **Ring Fling** (boost 0.4 / 0.7; lip h/v m/s -> rest x, cup)
 
@@ -111,7 +113,7 @@ Everything else (session state, bests, boosts, boxes, boards, panel) is local pr
 
 ## 9. Re-sizing and files
 
-Change a number in `scenes/minigame-constants.ts`, then run the tests that print the tables: `minigame-sizing.test.ts` (boost and bars, pins `HIGH_JUMP_MEASURED` within 2%), `minigame-profile.test.ts` (hill and kicker speeds), `minigame-lip.test.ts` (lip throw and `LIP_CAR_SPEED_KEEP`). Update `HIGH_JUMP_MEASURED` and this doc's tables with what they print.
+Change a number in `scenes/minigame-constants.ts`, then run the tests that print the tables: `minigame-sizing.test.ts` (boost and bars on the free pad, pins `HIGH_JUMP_MEASURED` within 2%; its framed rows print the best runs with the posts and slats in the world), `minigame-profile.test.ts` (hill and kicker speeds), `minigame-lip.test.ts` (lip throw and `LIP_CAR_SPEED_KEEP`). Update `HIGH_JUMP_MEASURED` and this doc's tables with what they print.
 
 | File | Role |
 |---|---|

@@ -21,12 +21,16 @@ const UP = new THREE.Vector3(0, 1, 0);
 const layout = highJumpLayout(HIGH_JUMP_MEASURED, lipHeight(MINIGAME_MODE.highJump));
 const anchor = STATION_ANCHORS.highJump;
 const PLACEMENTS: readonly BoxPlacement[] = layout.boxes.map((box) => ({ ...box, x: box.x + anchor.x, z: box.z + anchor.z }));
-const ground = new MinigameGround({ highJump: { netX: layout.netX, netHalfWidth: NET_HALF_WIDTH, netHeight: layout.netHeight } });
+const ground = new MinigameGround({ highJump: { netX: layout.netX, netHalfWidth: NET_HALF_WIDTH, netHeight: layout.netHeight, frame: layout } });
 
 /** A stack: where its top box stands (world), its top (m above the pad) and how many boxes it holds. */
 type Stack = { x: number; z: number; top: number; boxCount: number };
 
-/** The pile's stacks, tallest first: a base box is one that sits on the pad, its stack every box within half a cell of it. */
+/**
+ * The pile's stacks, tallest first: a base box is one that sits on the pad, its stack every box within half a cell of it. A stack within
+ * a cell of the posts' plane is left out: the frame's lip slat hangs over it (and catches a dummy dropped from above, as the High jump
+ * rows in `minigame-ground.test.ts` pin), so the drop never reaches the boxes.
+ */
 function stacksTallestFirst(): Stack[] {
   const baseTolerance = 1e-6;
   const bases = PLACEMENTS.filter((box) => box.y - box.height / 2 < baseTolerance);
@@ -35,7 +39,7 @@ function stacksTallestFirst(): Stack[] {
     const highest = members.reduce((best, box) => (box.y + box.height / 2 > best.y + best.height / 2 ? box : best));
     return { x: highest.x, z: highest.z, top: highest.y + highest.height / 2, boxCount: members.length };
   });
-  return stacks.sort((first, second) => second.top - first.top);
+  return stacks.filter((stack) => Math.abs(stack.x - (anchor.x + layout.postsX)) >= BOX_CELL_PITCH).sort((first, second) => second.top - first.top);
 }
 const STACKS = stacksTallestFirst();
 const PILE_TOP = STACKS[0]!.top;

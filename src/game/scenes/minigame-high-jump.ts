@@ -5,11 +5,9 @@
  * Every layout number derives from a measurement (`HighJumpMeasured`) the sizing lane takes; none is committed here.
  */
 
-/** Height boards stand every this many metres up to `BOARD_FINE_UNTIL` above the lip, every `BOARD_COARSE_STEP` beyond it. */
-export const BOARD_FINE_STEP = 5;
-export const BOARD_FINE_UNTIL = 50;
-export const BOARD_COARSE_STEP = 10;
-/** A big labelled board stands at every multiple of this many metres above the lip (it divides both steps and `BOARD_FINE_UNTIL`). */
+/** Height boards (the slats between the posts, each a ragdoll collider) stand every this many metres above the lip, all the way up the frame. */
+export const BOARD_STEP = 5;
+/** A big labelled board stands at every multiple of this many metres above the lip (a multiple of `BOARD_STEP`). */
 export const MAJOR_BOARD_EVERY_METRES = 50;
 /** The frame's top is the best measured crossing height times this, rounded up to a board: a perfect run falls well short of it. */
 export const FRAME_HEADROOM_FACTOR = 1.3;
@@ -26,10 +24,10 @@ const NET_CROSSING_SHARE = 0.5;
 
 /** Half the distance (m) between the two posts. */
 export const POST_HALF_SPAN = 3;
-/** A post's square cross-section side (m). */
-export const POST_THICKNESS = 0.4;
-/** A height board's thickness (m) along the throw. */
-export const FRAME_BOARD_THICKNESS = 0.15;
+/** A post's square cross-section side (m): 0.25 m whatever the frame's height. */
+export const POST_THICKNESS = 0.25;
+/** A slat's square cross-section side (m): thinner than a post, so a dummy catches on it and tumbles through. */
+export const SLAT_THICKNESS = 0.1;
 
 /** The score counts when he passes the posts' plane this far (m) beside the posts: "he doesn't need to be between the posts". */
 const CAPTURE_MARGIN_BESIDE_POSTS = 3;
@@ -93,46 +91,44 @@ function boxSide(boxIndex: number, irrationalBasis: number): number {
   return BOX_SIZE_MIN + deterministicFraction(boxIndex, irrationalBasis) * (BOX_SIZE_MAX - BOX_SIZE_MIN);
 }
 
-function boardStepAt(heightAboveLip: number): number {
-  return heightAboveLip < BOARD_FINE_UNTIL ? BOARD_FINE_STEP : BOARD_COARSE_STEP;
-}
-
-/** The lowest board height at or above `height`: boards stand every fine step up to `BOARD_FINE_UNTIL`, every coarse step beyond. */
-function roundUpToBoard(height: number): number {
-  if (height <= BOARD_FINE_UNTIL) return Math.ceil(height / BOARD_FINE_STEP) * BOARD_FINE_STEP;
-  return BOARD_FINE_UNTIL + Math.ceil((height - BOARD_FINE_UNTIL) / BOARD_COARSE_STEP) * BOARD_COARSE_STEP;
-}
-
 /** The frame's top above the lip: the best crossing height times the headroom (and never under one board over it), on a board's height. */
 function frameTopFor(crossingHeight: number): number {
-  return roundUpToBoard(Math.max(crossingHeight * FRAME_HEADROOM_FACTOR, crossingHeight + boardStepAt(crossingHeight)));
+  return Math.ceil(Math.max(crossingHeight * FRAME_HEADROOM_FACTOR, crossingHeight + BOARD_STEP) / BOARD_STEP) * BOARD_STEP;
 }
 
 /** One board per height from the lip line up to, not including, the frame top. */
 function heightBoards(frameTop: number, lipY: number): HeightBoard[] {
   const boards: HeightBoard[] = [];
-  for (let heightAboveLip = 0; heightAboveLip < frameTop; heightAboveLip += boardStepAt(heightAboveLip)) {
+  for (let heightAboveLip = 0; heightAboveLip < frameTop; heightAboveLip += BOARD_STEP) {
     boards.push({ heightAboveLip, y: lipY + heightAboveLip, major: heightAboveLip % MAJOR_BOARD_EVERY_METRES === 0 });
   }
   return boards;
 }
 
-/** Box piles over the footprint from `pileStartX` to `pileEndX`: a grid of stacks, each in its own cell, spread evenly through the cells. */
-function boxPiles(pileStartX: number, pileEndX: number): BoxPlacement[] {
+/**
+ * Box piles over the footprint from `pileStartX` to `pileEndX`: a grid of stacks, each in its own cell, spread evenly through the cells. A
+ * cell a post (at `postsX`, `POST_HALF_SPAN` either side of the lane) stands in over any part of holds no stack: a post is a ragdoll
+ * collider, and a box laid on one would be shoved out of the world.
+ */
+function boxPiles(pileStartX: number, pileEndX: number, postsX: number): BoxPlacement[] {
   const rowCount = Math.floor((pileEndX - pileStartX) / BOX_CELL_PITCH);
   if (rowCount < 1) {
     throw new RangeError(`the box piles' footprint (${pileEndX - pileStartX} m) is narrower than one cell (${BOX_CELL_PITCH} m)`);
   }
   const columnCount = Math.floor((2 * BOX_PILE_HALF_WIDTH) / BOX_CELL_PITCH);
-  const cellCount = rowCount * columnCount;
-  const stackCount = Math.min(cellCount, Math.ceil(BOX_COUNT / BOX_STACK_LAYERS_TARGET));
   const gridStartX = pileStartX + (pileEndX - pileStartX - rowCount * BOX_CELL_PITCH) / 2;
+  const cellReach = (BOX_CELL_PITCH + POST_THICKNESS) / 2;
+  const cells = Array.from({ length: rowCount * columnCount }, (_, cellIndex) => ({ row: Math.floor(cellIndex / columnCount), column: cellIndex % columnCount })).filter(
+    ({ row, column }) =>
+      Math.abs(gridStartX + (row + 0.5) * BOX_CELL_PITCH - postsX) >= cellReach ||
+      [-1, 1].every((side) => Math.abs((column + 0.5 - columnCount / 2) * BOX_CELL_PITCH - side * POST_HALF_SPAN) >= cellReach),
+  );
+  const cellCount = cells.length;
+  const stackCount = Math.min(cellCount, Math.ceil(BOX_COUNT / BOX_STACK_LAYERS_TARGET));
   const stackTops = Array.from({ length: stackCount }, () => 0);
   return Array.from({ length: BOX_COUNT }, (_, boxIndex) => {
     const stackIndex = boxIndex % stackCount;
-    const cellIndex = Math.floor((stackIndex * cellCount) / stackCount);
-    const row = Math.floor(cellIndex / columnCount);
-    const column = cellIndex % columnCount;
+    const { row, column } = cells[Math.floor((stackIndex * cellCount) / stackCount)]!;
     const width = boxSide(boxIndex, WIDTH_BASIS);
     const height = boxSide(boxIndex, HEIGHT_BASIS);
     const depth = boxSide(boxIndex, DEPTH_BASIS);
@@ -163,7 +159,7 @@ export function highJumpLayout(measured: HighJumpMeasured, lipY: number): HighJu
     boards: heightBoards(frameTop, lipY),
     netX,
     netHeight: Math.max(NET_MIN_HEIGHT, measured.crossingHeight * NET_CROSSING_SHARE),
-    boxes: boxPiles(postsX - BOX_PILE_LEAD, pileEndX),
+    boxes: boxPiles(postsX - BOX_PILE_LEAD, pileEndX, postsX),
   };
 }
 

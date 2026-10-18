@@ -3,16 +3,16 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { LANDING_HEIGHT, STATION_HALF_WIDTH } from "../scenes/minigame-constants.ts";
-import { CAPTURE_HALF_WIDTH, highJumpLayout, POST_HALF_SPAN, POST_THICKNESS } from "../scenes/minigame-high-jump.ts";
+import { CAPTURE_HALF_WIDTH, highJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS } from "../scenes/minigame-high-jump.ts";
 import { climbFootX, floorHeightAt, stationFrontX } from "../scenes/minigame-profile.ts";
-import { makeHighJumpArt, NET_HALF_WIDTH, POST_THICKNESS_PER_METRE } from "./high-jump-art.ts";
+import { makeHighJumpArt, NET_HALF_WIDTH } from "./high-jump-art.ts";
 
-/** Most draw calls the High jump's whole art may cost: timber, boards, trim, back-board, net, with room for the composer's own. */
+/** Most draw calls the High jump's whole art may cost: posts, boards, trim, net, with room for the composer's own. */
 const HIGH_JUMP_DRAW_BUDGET = 12;
 const LIP_Y = 7;
 /**
- * Made-up measurements (m), the layout's own functions turn them into posts, boards, net and boxes: a short frame whose posts keep the
- * base thickness, the owner's best run (about 155 m) and a frame taller than any run (230 m).
+ * Made-up measurements (m), the layout's own functions turn them into posts, boards, net and boxes: a short frame,
+ * the owner's best run (about 155 m) and a frame taller than any run (230 m).
  */
 const CASES = [
   { name: "a 18 m crossing", measured: { crossingHeight: 18, landingDistance: 22 } },
@@ -22,19 +22,17 @@ const CASES = [
 /** Geometry is built from f32 buffers: a position of up to a few hundred metres is good to about 30 micrometres. */
 const POSITION_TOLERANCE = 1e-4;
 const VERTICES_PER_BOX = new THREE.BoxGeometry().getAttribute("position").count;
-const VERTICES_PER_FACE = 4;
 /** `BoxGeometry`'s second face is -x: the one the approaching car sees. */
 const FRONT_FACE_FIRST_VERTEX = VERTICES_PER_BOX / 6;
 
 /**
- * What a viewer needs to see each part. A pane under this opacity vanishes against a dark sky (the QA shots showed 0.28 as a sliver);
- * a net line under 10 cm is under 2 px at 40 m (60 degrees over 720 px is 6.4 cm per px there); a dash under 20 cm is lost against the
- * strip; a wood grain tile over 10 m is one texture stretched down a pole.
+ * What a viewer needs to see each part: a net line under 10 cm is under 2 px at 40 m (60 degrees over 720 px is 6.4 cm per px there);
+ * a dash under 20 cm is lost against the strip.
  */
-const MIN_BACKBOARD_OPACITY = 0.3;
 const MIN_NET_LINE_METRES = 0.1;
 const MIN_DASH_THICKNESS = 0.2;
-const MAX_TIMBER_TILE_METRES = 10;
+/** A black post's brightest colour channel (0 to 1). */
+const MAX_BLACK_CHANNEL = 0.1;
 /** The brief's numbers: net poles every 15 m at most, cables every 20 m, kicker ribs every 3 m; poles under 40 cm thick vanish at 40 m; boards over 60 cm deep swallow a camera. */
 const NET_POLE_SPACING_METRES = 15;
 const NET_CABLE_SPACING_METRES = 20;
@@ -103,8 +101,6 @@ function drawCalls(group: THREE.Group): number {
   return calls;
 }
 
-/** The thickness the frame's posts must have by the rule written in the constants: a slender-ratio of the height, never under the base. */
-const expectedPostThickness = (frameTop: number): number => Math.max(POST_THICKNESS, frameTop * POST_THICKNESS_PER_METRE);
 
 describe("given the High jump's art built from a layout", () => {
   before(() => {
@@ -114,32 +110,31 @@ describe("given the High jump's art built from a layout", () => {
 
   for (const { name, measured } of CASES) {
     const layout = highJumpLayout(measured, LIP_Y);
-    const thickness = expectedPostThickness(layout.frameTop);
     const majorBoards = layout.boards.filter((board) => board.major);
 
-    it(`when it is built for ${name}, then each post stands at postsX and one side of the lane, from the pad up to the frame's top (lip + frameTop), as thick as the height rule says`, () => {
-      const timber = vertices(meshNamed(makeHighJumpArt(layout, LIP_Y), "timber"));
+    it(`when it is built for ${name}, then each post stands at postsX and one side of the lane, from the pad up to the frame's top (lip + frameTop), ${POST_THICKNESS} m square whatever the height`, () => {
+      const posts = vertices(meshNamed(makeHighJumpArt(layout, LIP_Y), "posts"));
       for (const side of [-1, 1]) {
         const shaft = boundsOf(
-          timber.filter((point) => Math.abs(point.x - layout.postsX) <= thickness / 2 + POSITION_TOLERANCE && Math.sign(point.z) === side && Math.abs(point.z) < 2 * POST_HALF_SPAN),
+          posts.filter((point) => Math.abs(point.x - layout.postsX) <= POST_THICKNESS / 2 + POSITION_TOLERANCE && Math.sign(point.z) === side && Math.abs(point.z) < 2 * POST_HALF_SPAN),
         );
         assert.ok(Math.abs((shaft.min.x + shaft.max.x) / 2 - layout.postsX) < POSITION_TOLERANCE, `post x centre ${(shaft.min.x + shaft.max.x) / 2}`);
         assert.ok(Math.abs((shaft.min.z + shaft.max.z) / 2 - side * POST_HALF_SPAN) < POSITION_TOLERANCE, `post z centre ${(shaft.min.z + shaft.max.z) / 2}`);
         assert.ok(Math.abs(shaft.min.y - LANDING_HEIGHT) < POSITION_TOLERANCE, `post foot ${shaft.min.y}`);
         assert.ok(Math.abs(shaft.max.y - (LIP_Y + layout.frameTop)) < POSITION_TOLERANCE, `post top ${shaft.max.y}, frame top ${LIP_Y + layout.frameTop}`);
-        assert.ok(Math.abs(shaft.max.x - shaft.min.x - thickness) < POSITION_TOLERANCE, `post thickness ${shaft.max.x - shaft.min.x}, rule ${thickness}`);
+        assert.ok(Math.abs(shaft.max.x - shaft.min.x - POST_THICKNESS) < POSITION_TOLERANCE, `post thickness ${shaft.max.x - shaft.min.x}`);
+        assert.ok(Math.abs(shaft.max.z - shaft.min.z - POST_THICKNESS) < POSITION_TOLERANCE, `post depth ${shaft.max.z - shaft.min.z}`);
       }
     });
 
-    it(`when it is built for ${name}, then the posts' grain is in metres, not one texture stretched down the pole`, () => {
-      const timber = meshNamed(makeHighJumpArt(layout, LIP_Y), "timber");
-      const uv = timber.geometry.getAttribute("uv");
-      const frontFace = Array.from({ length: VERTICES_PER_FACE }, (_, corner) => uv.getY(FRONT_FACE_FIRST_VERTEX + corner));
-      const postHeight = LIP_Y + layout.frameTop - LANDING_HEIGHT;
-      assert.ok((Math.max(...frontFace) - Math.min(...frontFace)) * MAX_TIMBER_TILE_METRES >= postHeight, `the post's front face spans ${Math.max(...frontFace) - Math.min(...frontFace)} tiles over ${postHeight} m`);
+
+    it(`when it is built for ${name}, then the posts are black`, () => {
+      const material = meshNamed(makeHighJumpArt(layout, LIP_Y), "posts").material as THREE.MeshStandardMaterial;
+      assert.ok(Math.max(material.color.r, material.color.g, material.color.b) <= MAX_BLACK_CHANNEL, `post colour ${material.color.getHexString()}`);
+      assert.equal(material.map, null, "no wood grain on a black post");
     });
 
-    it(`when it is built for ${name}, then each layout board has a bar centred between the posts at its y, and a labelled sign stands above every major bar and never reaches below its line`, () => {
+    it(`when it is built for ${name}, then each layout board has a slat centred between the posts at its y, and a labelled sign stands above every major slat and never reaches below its line`, () => {
       const boards = meshNamed(makeHighJumpArt(layout, LIP_Y), "boards");
       const points = vertices(boards);
       assert.equal(points.length, (layout.boards.length + majorBoards.length) * VERTICES_PER_BOX, "one bar per board, then one sign per major board");
@@ -154,11 +149,11 @@ describe("given the High jump's art built from a layout", () => {
         assert.ok(Math.abs((bar.min.y + bar.max.y) / 2 - board.y) < POSITION_TOLERANCE, `bar ${boardIndex} centre y ${(bar.min.y + bar.max.y) / 2}, expected ${board.y}`);
         assert.ok(Math.abs((bar.min.x + bar.max.x) / 2 - layout.postsX) < POSITION_TOLERANCE, `bar ${boardIndex} sits at the posts' x`);
         assert.ok(Math.abs(bar.min.z + bar.max.z) < POSITION_TOLERANCE, `bar ${boardIndex} is centred on the lane`);
-        assert.ok(bar.max.z - bar.min.z <= 2 * POST_HALF_SPAN - thickness + POSITION_TOLERANCE, `bar ${boardIndex} fits between the posts`);
-        assert.ok(bar.max.x - bar.min.x <= MAX_BOARD_DEPTH, `bar ${boardIndex} is ${bar.max.x - bar.min.x} m deep: a camera inside a deep bar loses the view`);
+        assert.ok(bar.max.z - bar.min.z <= 2 * POST_HALF_SPAN - POST_THICKNESS + POSITION_TOLERANCE, `slat ${boardIndex} fits between the posts`);
+        assert.ok(bar.max.x - bar.min.x < POST_THICKNESS && bar.max.y - bar.min.y < POST_THICKNESS, `slat ${boardIndex} is ${bar.max.x - bar.min.x} deep and ${bar.max.y - bar.min.y} tall, thinner than a ${POST_THICKNESS} m post`);
+        assert.ok(Math.abs(bar.max.x - bar.min.x - SLAT_THICKNESS) < POSITION_TOLERANCE && Math.abs(bar.max.y - bar.min.y - SLAT_THICKNESS) < POSITION_TOLERANCE, `slat ${boardIndex} is ${SLAT_THICKNESS} m square`);
         (board.major ? majorBarHeights : minorBarHeights).push(bar.max.y - bar.min.y);
       }
-      assert.ok(Math.min(...majorBarHeights) > Math.max(...minorBarHeights), "the major bars are thicker than the minor ones");
       const signCells = new Set<string>();
       for (const [signIndex, board] of majorBoards.entries()) {
         const sign = boxAt(layout.boards.length + signIndex);
@@ -174,13 +169,13 @@ describe("given the High jump's art built from a layout", () => {
       assert.ok(![...signCells].some((cell) => barCells.has(`true:${cell}`) || barCells.has(`false:${cell}`)), "a sign's label is not a bar's cell");
     });
 
-    it(`when it is built for ${name}, then a bar's brass plates are bigger at the major boards than the minor ones`, () => {
+    it(`when it is built for ${name}, then a slat's brass plates are bigger at the major boards than the minor ones`, () => {
       const trim = vertices(meshNamed(makeHighJumpArt(layout, LIP_Y), "trim"));
-      /** The room (m) in front of a post's front face that holds a plate's depth (0.24 m at 6 times the base) but not the lip line's last dash. */
+      /** The room (m) in front of a post's front face that holds a plate's depth but not the lip line's last dash. */
       const PLATE_WINDOW = 0.5;
       /** A plate is a box on the +z post: a box's vertices, which sorted by height make one board's plate each (plates of neighbouring boards do not overlap in height). */
       const plateHeights = trim
-        .filter((point) => point.x > layout.postsX - thickness / 2 - PLATE_WINDOW && point.x < layout.postsX - thickness / 2 + POSITION_TOLERANCE && point.z > 0)
+        .filter((point) => point.x > layout.postsX - POST_THICKNESS / 2 - PLATE_WINDOW && point.x < layout.postsX - POST_THICKNESS / 2 + POSITION_TOLERANCE && point.z > 0)
         .map((point) => point.y)
         .sort((lower, higher) => lower - higher)
         .reduce<number[][]>((plates, y, vertexIndex) => {
@@ -297,41 +292,20 @@ describe("given the High jump's art built from a layout", () => {
       assert.ok(calls <= HIGH_JUMP_DRAW_BUDGET, `${calls} draws, budget ${HIGH_JUMP_DRAW_BUDGET}`);
     });
 
-    it(`when it is built for ${name}, then the back-board is a visibly tinted translucent pane exactly as wide as the gap between the posts' centres, from the lip's height to the frame's top, drawn after the net and not hiding it`, () => {
+    it(`when it is built for ${name}, then there is no pane between the posts: no back-board mesh and nothing translucent but the net`, () => {
       const art = makeHighJumpArt(layout, LIP_Y);
-      const backboard = meshNamed(art, "backboard");
-      const material = backboard.material as THREE.MeshStandardMaterial;
-      assert.ok(material.transparent && material.forceSinglePass, "translucent glass, one pass");
-      assert.ok(material.opacity >= MIN_BACKBOARD_OPACITY && material.opacity < 1, `pane opacity ${material.opacity}`);
-      assert.ok(material.color.getHex() !== 0x1a2832 && material.emissiveIntensity > 0 && material.emissive.getHex() !== 0, "tinted and lit, not the car glass's near-black");
-      assert.equal(material.depthWrite, false, "a translucent pane does not write depth over the net behind it");
-      assert.ok(backboard.renderOrder > meshNamed(art, "net").renderOrder, "the net draws first, the pane over it");
-      const box = boundsOf(vertices(backboard));
-      assert.ok(box.min.x >= layout.postsX + thickness / 2, `back-board x ${box.min.x} is behind the posts`);
-      assert.ok(box.min.x < layout.postsX + thickness / 2 + 1, "and just behind them");
-      assert.ok(Math.abs(box.max.z - POST_HALF_SPAN) < POSITION_TOLERANCE && Math.abs(box.min.z + POST_HALF_SPAN) < POSITION_TOLERANCE, `back-board z ${box.min.z}..${box.max.z}`);
-      assert.ok(Math.abs(box.min.y - LIP_Y) < POSITION_TOLERANCE && Math.abs(box.max.y - (LIP_Y + layout.frameTop)) < POSITION_TOLERANCE, `back-board y ${box.min.y}..${box.max.y}`);
+      assert.equal(art.getObjectByName("high-jump:backboard"), undefined, "the forcefield-looking back-board is gone");
+      const translucent: string[] = [];
+      art.traverse((object) => {
+        if (object instanceof THREE.Mesh && object.material.transparent) translucent.push(object.name);
+      });
+      assert.deepEqual(translucent, ["high-jump:net"]);
     });
 
-    it(`when it is built for ${name}, then steel edge rails frame the pane inside the posts, the boards stand in front of it, and the net behind it`, () => {
-      const art = makeHighJumpArt(layout, LIP_Y);
-      const pane = boundsOf(vertices(meshNamed(art, "backboard")));
-      const trim = vertices(meshNamed(art, "trim"));
-      const rails = trim.filter((point) => point.x > pane.min.x - POSITION_TOLERANCE && point.x < pane.min.x + thickness && point.y >= LIP_Y - POSITION_TOLERANCE && point.y <= LIP_Y + layout.frameTop + POSITION_TOLERANCE);
-      for (const side of [-1, 1]) {
-        const railsBeside = rails.filter((point) => Math.sign(point.z) === side);
-        assert.ok(railsBeside.length > 0, `a rail on side ${side}`);
-        assert.ok(boundsOf(railsBeside).max.z * side <= POST_HALF_SPAN - thickness / 2 + POSITION_TOLERANCE, "inside the post's inner face");
-        assert.ok(Math.abs(boundsOf(railsBeside).max.y - (LIP_Y + layout.frameTop)) < POSITION_TOLERANCE && Math.abs(boundsOf(railsBeside).min.y - LIP_Y) < POSITION_TOLERANCE, "the rail spans the pane's height");
-      }
-      const boards = boundsOf(vertices(meshNamed(art, "boards")));
-      assert.ok(boards.max.x <= pane.min.x + POSITION_TOLERANCE, "the boards are in front of the pane");
-      assert.ok(boundsOf(vertices(meshNamed(art, "net"))).min.x > pane.max.x, "the net is behind the pane");
-    });
 
     it(`when it is built for ${name}, then a thick dashed line at the lip's height runs from the lip toward the posts, a stop block stands at the lip, and barrels flank the kicker's foot`, () => {
       const trim = vertices(meshNamed(makeHighJumpArt(layout, LIP_Y), "trim"));
-      const lipLine = trim.filter((point) => Math.abs(point.y - LIP_Y) <= MIN_DASH_THICKNESS && Math.abs(Math.abs(point.z) - POST_HALF_SPAN) <= MIN_DASH_THICKNESS && point.x >= 0 && point.x < layout.postsX - thickness);
+      const lipLine = trim.filter((point) => Math.abs(point.y - LIP_Y) <= MIN_DASH_THICKNESS && Math.abs(Math.abs(point.z) - POST_HALF_SPAN) <= MIN_DASH_THICKNESS && point.x >= 0 && point.x < layout.postsX - POST_THICKNESS);
       const firstDash = boundsOf(lipLine.filter((point) => point.x < POSITION_TOLERANCE + 1));
       assert.ok(firstDash.max.y - firstDash.min.y >= MIN_DASH_THICKNESS && firstDash.max.z - firstDash.min.z >= MIN_DASH_THICKNESS, `dash cross-section ${firstDash.getSize(new THREE.Vector3()).toArray()}`);
       assert.ok(Math.abs(firstDash.min.x) < POSITION_TOLERANCE, "the line starts at the lip");

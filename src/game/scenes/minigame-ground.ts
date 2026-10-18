@@ -1,9 +1,10 @@
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { EjectionWatch } from "../vehicle/ejection.ts";
 import { Ground, STEP_UP } from "../world/ground.ts";
-import { LONG_JUMP_INCLINE, MINIGAME_MODE, MINIGAME_MODES, STATION_ANCHORS, STATION_HALF_WIDTH, type MinigameMode } from "./minigame-constants.ts";
+import { LANDING_HEIGHT, LONG_JUMP_INCLINE, MINIGAME_MODE, MINIGAME_MODES, STATION_ANCHORS, STATION_HALF_WIDTH, type MinigameMode } from "./minigame-constants.ts";
+import { type HighJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS } from "./minigame-high-jump.ts";
 import { LipThrow } from "./minigame-lip.ts";
-import { floorHeightAt, stationBackX, stationFrontX, stationStartPose } from "./minigame-profile.ts";
+import { floorHeightAt, lipHeight, stationBackX, stationFrontX, stationStartPose } from "./minigame-profile.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_MESH_STEP, RING_RAIL_PROFILE, ringBoardMesh, ringHeightAt } from "./minigame-ring.ts";
 import { RANGE } from "./range.ts";
 
@@ -14,11 +15,14 @@ import { RANGE } from "./range.ts";
 const GRID_CELL = 0.2;
 /** The level pad reaches this far (m) from the origin each way: what a ragdoll's flat collider covers. */
 const PAD_HALF_EXTENT = 1000;
-/** Half the thickness (m) of the high jump's net wall: more than a part travels in one physics step at a throw's top speed. */
+/** Half the thickness (m) of the high jump's net wall: more than a part travels in one physics step at a top speed. */
 const NET_HALF_THICKNESS = 0.25;
 
-/** Where the high jump's net hangs, station-local: its plane's x, half its width across the lane and its height above the pad. */
-type HighJumpNet = { netX: number; netHalfWidth: number; netHeight: number };
+/** The high jump's posts and slats (`HighJumpLayout`'s own numbers). */
+export type HighJumpFrame = Pick<HighJumpLayout, "postsX" | "frameTop" | "boards">;
+
+/** Where the high jump's net hangs, station-local: its plane's x, half its width across the lane and its height above the pad; and its frame. */
+type HighJumpStructure = { netX: number; netHalfWidth: number; netHeight: number; frame: HighJumpFrame };
 
 /** The world pose of a parked start: `y` is the ground's height there, what the engine sets before `layOnGround`. */
 export type StationStart = { x: number; y: number; z: number; yaw: number };
@@ -59,6 +63,25 @@ function latticeMesh(heights: Float32Array, columns: number, rows: number, origi
   return { vertices, indices };
 }
 
+/** A box solid: its centre and half extents (world). */
+type SolidBox = { x: number; y: number; z: number; hx: number; hy: number; hz: number };
+
+/** Corner `c` of a box is at +half extent on x if bit 0 of `c` is set, on y if bit 1, on z if bit 2, else at -half extent. Two outward triangles per face, six faces. */
+const BOX_TRIANGLES = [0, 6, 2, 0, 4, 6, 1, 3, 7, 1, 7, 5, 0, 1, 5, 0, 5, 4, 2, 7, 3, 2, 6, 7, 0, 3, 1, 0, 2, 3, 4, 5, 7, 4, 7, 6] as const;
+
+/** One triangle mesh of `boxes`, each its 8 corners and 12 triangles, in order. */
+function boxesMesh(boxes: readonly SolidBox[]): { vertices: Float32Array; indices: Uint32Array } {
+  const vertices = new Float32Array(boxes.length * 24);
+  const indices = new Uint32Array(boxes.length * BOX_TRIANGLES.length);
+  for (const [boxIndex, box] of boxes.entries()) {
+    for (let corner = 0; corner < 8; corner++) {
+      vertices.set([box.x + (corner & 1 ? box.hx : -box.hx), box.y + (corner & 2 ? box.hy : -box.hy), box.z + (corner & 4 ? box.hz : -box.hz)], boxIndex * 24 + corner * 3);
+    }
+    for (const [at, corner] of BOX_TRIANGLES.entries()) indices[boxIndex * BOX_TRIANGLES.length + at] = boxIndex * 8 + corner;
+  }
+  return { vertices, indices };
+}
+
 /**
  * The Range's physics ground while a minigame mode is active: the three stations side by side (each its anchor's world x, z, every
  * throw down +x). A level pad at y = 0 lies everywhere but under the stations' lanes (a lane's floor is below it in places, and a plane
@@ -71,7 +94,7 @@ export class MinigameGround extends Ground {
   /** World x of the far face of the Ring Fling backstop or the net, whichever stands further out. */
   private readonly farthestStructureX: number;
 
-  constructor(options: { highJump: HighJumpNet }) {
+  constructor(options: { highJump: HighJumpStructure }) {
     super();
     this.farthestStructureX = Math.max(
       STATION_ANCHORS.ringFling.x + RING_BOARD_BOUNDS.maxX + RING_BACKSTOP.distancePastBoard + RING_BACKSTOP.thickness,
@@ -82,6 +105,7 @@ export class MinigameGround extends Ground {
     this.addRingBoard();
     this.addRingBackstop();
     this.addHighJumpNet(options.highJump);
+    this.addHighJumpFrame(options.highJump.frame);
     this.seal();
   }
 
@@ -156,9 +180,22 @@ export class MinigameGround extends Ground {
   }
 
   /** The net: a thin tall wall across the lane at `netX`, so a flying dummy stops at it and slides down. */
-  private addHighJumpNet(net: HighJumpNet): void {
+  private addHighJumpNet(net: HighJumpStructure): void {
     const anchor = STATION_ANCHORS.highJump;
     this.addPrism({ x: anchor.x + net.netX, z: anchor.z, yaw: 0, hx: NET_HALF_THICKNESS, hz: net.netHalfWidth, base: 0, top: net.netHeight, id: 1 });
+  }
+
+  /**
+   * The posts and the slats between them as one static triangle mesh the dummy meets and the cars' height reads never see (a prism
+   * would be a floor 200 m up to every eye and sight probe): the two posts first, then one slat per board in board order.
+   */
+  private addHighJumpFrame(frame: HighJumpFrame): void {
+    const anchor = STATION_ANCHORS.highJump;
+    const x = anchor.x + frame.postsX;
+    const frameTopY = lipHeight(MINIGAME_MODE.highJump) + frame.frameTop;
+    const boxes: SolidBox[] = [-1, 1].map((side) => ({ x, y: (LANDING_HEIGHT + frameTopY) / 2, z: anchor.z + side * POST_HALF_SPAN, hx: POST_THICKNESS / 2, hy: (frameTopY - LANDING_HEIGHT) / 2, hz: POST_THICKNESS / 2 }));
+    for (const board of frame.boards) boxes.push({ x, y: board.y, z: anchor.z, hx: SLAT_THICKNESS / 2, hy: SLAT_THICKNESS / 2, hz: POST_HALF_SPAN - POST_THICKNESS / 2 });
+    this.meshes.push(boxesMesh(boxes));
   }
 
   /** The per-car, per-slice function the engine assigns to `world.collide`: the lip throws of the high jump and Ring Fling (the long jump's barrier throws by a hit). */

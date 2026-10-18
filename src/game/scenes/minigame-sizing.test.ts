@@ -21,6 +21,7 @@ import { MinigameGround } from "./minigame-ground.ts";
 import { BOX_NET_CLEARANCE, BOX_PILE_TRAIL, HighJumpCapture, highJumpLayout, POSTS_DISTANCE, type HighJumpMeasured, type TorsoSample } from "./minigame-high-jump.ts";
 import { lipHeight } from "./minigame-profile.ts";
 import { dressedDriverCar } from "./minigame-profile.test-util.ts";
+import { withoutFrame } from "./minigame-frame.test-util.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_CUPS, ringScore } from "./minigame-ring.ts";
 
 /**
@@ -30,8 +31,8 @@ import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_CUPS, ringScore } from "./miniga
  * throttle) or its mid run (its throttle and brake hold its horizontal speed to `MID_RUN_SPEED_SHARE` of the best run's speed at the lip).
  */
 
-/** The net the measurement ground hangs: far past every landing, so it never touches the throws it measures. */
-const FAR_NET = { netX: 400, netHalfWidth: 6, netHeight: 14 } as const;
+/** The net the measurement ground hangs: far past every landing, so it never touches the throws it measures. The posts and slats are the real ones (the pinned best run's layout): a throw meets what the player meets. */
+const FAR_NET = { netX: 400, netHalfWidth: 6, netHeight: 14, frame: highJumpLayout(HIGH_JUMP_MEASURED, lipHeight("highJump")) } as const;
 
 const FRAME = 1 / FRAME_HZ;
 /** How long (s) a parked car is left alone before the release, and how long a run may last. */
@@ -202,10 +203,11 @@ async function ragdollOn(ground: Ground): Promise<RagdollRange> {
 
 const ranges = new Map<MinigameMode, Promise<RagdollRange>>();
 
+/** The boost is sized on the free pad (the posts and slats taken out of the ragdoll's world: the launch's own numbers); their effect has its own rows. */
 function rangeFor(mode: MinigameMode): Promise<RagdollRange> {
   let range = ranges.get(mode);
   if (range === undefined) {
-    range = ragdollOn(new MinigameGround({ highJump: FAR_NET }));
+    range = ragdollOn(withoutFrame(new MinigameGround({ highJump: FAR_NET }), FAR_NET.frame));
     ranges.set(mode, range);
   }
   return range;
@@ -330,12 +332,13 @@ function measuredBest(rows: readonly Measurement[], repeat: number): HighJumpMea
 function highJumpViolations(rows: readonly Measurement[]): string[] {
   const violations: string[] = [];
   const bestClass = bestClassRun(rows);
-  const layout = highJumpLayout(measuredBest(rows, 0), lipHeight("highJump"));
+  // The net's distance past the posts does not depend on any measurement; a boost that never lands the dummy (a NaN landing) has no layout to build.
+  const { netX } = highJumpLayout(HIGH_JUMP_MEASURED, lipHeight("highJump"));
   if (lowest(bestClass, crossingOf) < BEST_CROSSING_BAND.minimum) violations.push(`the ${bestClass.type.id}'s best crossing is ${metres(lowest(bestClass, crossingOf))} m, under ${BEST_CROSSING_BAND.minimum}`);
   if (highest(bestClass, crossingOf) > BEST_CROSSING_BAND.maximum) violations.push(`the ${bestClass.type.id}'s best crossing is ${metres(highest(bestClass, crossingOf))} m, over ${BEST_CROSSING_BAND.maximum}`);
   for (const row of bestRunsOf(rows)) {
     if (lowest(row, crossingOf) < BEST_RUN_CROSSING_MINIMUM) violations.push(`the ${row.type.id}'s best run crosses at only ${metres(lowest(row, crossingOf))} m`);
-    if (highest(row, landingOf) + BOX_PILE_TRAIL > layout.netX - BOX_NET_CLEARANCE) violations.push(`the ${row.type.id}'s best run lands at ${metres(highest(row, landingOf))} m, past the box piles' end (net at ${metres(layout.netX)})`);
+    if (highest(row, landingOf) + BOX_PILE_TRAIL > netX - BOX_NET_CLEARANCE) violations.push(`the ${row.type.id}'s best run lands at ${metres(highest(row, landingOf))} m, past the box piles' end (net at ${metres(netX)})`);
   }
   return violations;
 }
@@ -491,6 +494,29 @@ describe("given the high jump with THROW_BOOST.highJump on the real ground, car 
         assert.ok(Math.abs(measured[key] - HIGH_JUMP_MEASURED[key]) <= MEASURED_TOLERANCE * HIGH_JUMP_MEASURED[key], `${key}: measured ${metres(measured[key])} against pinned ${HIGH_JUMP_MEASURED[key]}`);
       }
     }
+  });
+});
+
+/** The slats catch: at least one class's best run lands this much (m) nearer with the posts and slats in the ragdoll's world than on the free pad. */
+const SLATS_CATCH_BY = 5;
+
+/** Every class's best run thrown at the framed ground (the real posts and slats are colliders), once at the ragdoll's steady 60 Hz. */
+async function framedBestRuns(): Promise<Measurement[]> {
+  const range = await ragdollOn(new MinigameGround({ highJump: FAR_NET }));
+  return DRIVER_CARS.map((type) => {
+    const thrown = capture(type, "highJump", "best");
+    return { type, run: "best", thrown, flights: [fly(range, "highJump", thrown, THROW_BOOST.highJump, 0)] };
+  });
+}
+
+describe("given the high jump's posts and slats as ragdoll colliders, with the real car and ragdoll", () => {
+  it("when each class's best run is thrown at them, then the best class still crosses at 150-160 m, every class's best run still crosses well up the boards and lands in the box field, and the slats catch at least one run short of where it lands on the free pad", async (t) => {
+    const framed = await framedBestRuns();
+    const free = bestRunsOf(await measure("highJump", THROW_BOOST.highJump, 1));
+    const shortBy = framed.map((row) => free.find((candidate) => candidate.type.id === row.type.id)!.flights[0]!.landingDistance - row.flights[0]!.landingDistance);
+    t.diagnostic(`with the frame (landing on the free pad minus landing with it: ${framed.map((row, index) => `${row.type.id} ${metres(shortBy[index]!)} m`).join(", ")})\n${TABLE_HEADER}\n${tableOf(framed, (flight) => `crosses at ${metres(flight.crossingHeight)} m`)}`);
+    assert.deepEqual(highJumpViolations(framed), []);
+    assert.ok(Math.max(...shortBy) >= SLATS_CATCH_BY, `no best run lands ${SLATS_CATCH_BY} m nearer with the frame: ${shortBy.map((gap) => metres(gap)).join(", ")}`);
   });
 });
 
