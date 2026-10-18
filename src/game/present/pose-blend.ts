@@ -127,10 +127,11 @@ class PartTrack {
   from = 0;
   to = 0;
   private drawn = false;
-  private order: THREE.EulerOrder = "XYZ";
+  private order: THREE.EulerOrder;
 
   constructor(object: THREE.Object3D) {
     this.object = object;
+    this.order = object.rotation.order;
     this.grab(this.cur);
     this.prev.set(this.cur);
   }
