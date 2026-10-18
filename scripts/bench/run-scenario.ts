@@ -219,9 +219,13 @@ const checkHubs = (): void => {
 const advance = (seconds: number): void => {
   if (traceDt <= 0) {
     if (!armKnobs["epi.on"]) return sim.run(seconds);
-    for (let left = seconds; left > 1e-9; left -= HUB_CHECK_S) {
-      sim.run(Math.min(HUB_CHECK_S, left));
+    // Each chunk runs to an absolute time, the window's own end the last: a chunk of its own length would end each run on its own step's overshoot, and a derby's variable steps would then end the window at another time than the arm without the monitor (a different digest).
+    const end = sim.t + seconds;
+    for (let target = sim.t + HUB_CHECK_S; ; target += HUB_CHECK_S) {
+      const last = target >= end - 1e-9;
+      sim.run((last ? end : target) - sim.t);
       checkHubs();
+      if (last) break;
     }
     return;
   }
