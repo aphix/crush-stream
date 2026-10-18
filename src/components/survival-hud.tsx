@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { MapPinned, RotateCcw, Siren, Trophy } from "lucide-react";
 import { AudioRows } from "@/components/race-audio";
 import { DriverRows } from "@/components/race-driver";

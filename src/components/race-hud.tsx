@@ -205,7 +205,8 @@ function lapsDown(lead: number, laps: number): string {
 function StandingRow({ row, lead, onWatch }: { row: RaceHudRow; lead: number; onWatch: () => void }) {
   const status = STATUS_ICON[row.status];
   const gone = row.status === "out" || row.status === "dnf";
-  const dim = row.you ? "text-accent-fg" : "text-fg/85";
+  // On a phone the viewer's row is a pill of translucent light with a ring, not a solid white block: readable on any road, and in the HUD's round, see-through style. Elsewhere it keeps the solid accent.
+  const dim = row.you ? "text-accent-fg pointer-coarse:text-fg/85" : "text-fg/85";
   return (
     <button
       type="button"
@@ -215,7 +216,7 @@ function StandingRow({ row, lead, onWatch }: { row: RaceHudRow; lead: number; on
       aria-label={`Watch ${row.name}`}
       className={cn(
         "flex h-9 w-full items-center gap-2 rounded-md px-1.5 text-left font-display text-sm transition-colors duration-[var(--motion-quick)] pointer-fine:h-6 pointer-coarse:h-11",
-        row.you ? "bg-accent text-accent-fg" : row.watched ? "bg-surface/80 text-fg" : "hud-ink text-fg hover:bg-surface/60",
+        row.you ? "bg-accent text-accent-fg pointer-coarse:rounded-full pointer-coarse:bg-surface/55 pointer-coarse:px-3 pointer-coarse:text-fg pointer-coarse:ring-1 pointer-coarse:ring-inset pointer-coarse:ring-fg/40" : row.watched ? "bg-surface/80 text-fg pointer-coarse:rounded-full" : "hud-ink text-fg hover:bg-surface/60",
       )}
     >
       <span className={cn("w-4 shrink-0 tabular-nums", dim)}>{row.place}</span>
