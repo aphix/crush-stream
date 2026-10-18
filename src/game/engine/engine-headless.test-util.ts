@@ -58,7 +58,7 @@ export function stubBrowser(): void {
     cancelAnimationFrame() {},
     matchMedia: () => ({ matches: false, addEventListener() {} }),
     location: { search: "", hash: "", href: "http://x/", origin: "http://x" },
-    history: { state: null, replaceState() {} },
+    history: { state: null, replaceState() {}, pushState() {} },
     ResizeObserver: class {
       observe() {}
       disconnect() {}

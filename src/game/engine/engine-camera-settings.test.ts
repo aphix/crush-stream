@@ -4,7 +4,8 @@ import "../kernel/rapier-node.test-util.ts";
 import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
 import { changedSettings } from "../hud/settings-changes.ts";
 import { decodeShare, encodeShare } from "../hud/share-url.ts";
-import { CHASE, CHASE_KNOBS } from "../present/drive-cam.ts";
+import { CHASE, CHASE_KNOBS, type ChaseKnobId } from "../present/drive-cam.ts";
+import { activeCameraPreset, CAMERA_PRESETS, cameraPresetValues } from "../hud/camera-presets.ts";
 import { EPICENTER, EPICENTER_KNOBS } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import { setGround } from "../world/ground.ts";
@@ -74,5 +75,38 @@ describe("given the real engine and a camera slider of the debug panel", () => {
     );
     engine["applyShare"](decodeShare("#"), false);
     for (const [i, k] of EPICENTER_KNOBS.entries()) assert.equal(k.get(), EPICENTER_AT_LOAD[i], `${k.id} back to its default`);
+  });
+
+  it("when a camera preset is applied, then every value it names is on the camera, the HUD and the share URL in one publish, Default puts today's values back, and a link carrying the preset's keys picks the same preset", () => {
+    for (const p of CAMERA_PRESETS) {
+      engine.setKnobs({ "cam.pos.lon": 14, "cam.shake": 2 });
+      engine.setKnobs(cameraPresetValues(p));
+      for (const [id, want] of Object.entries(cameraPresetValues(p))) {
+        assert.equal(hud.get()[id as ChaseKnobId], want, `${p.label}: ${id} on the HUD`);
+      }
+      assert.equal(activeCameraPreset(hud.get()), p, `${p.label} is the one the HUD reads as picked`);
+      for (const k of CHASE_KNOBS) assert.equal(k.get(), cameraPresetValues(p)[k.id], `${p.label}: ${k.id} on the camera`);
+      const link = encodeShare(engine["shareState"]());
+      engine.resetDefaults();
+      engine["applyShare"](decodeShare(`#${link}`), false);
+      assert.equal(activeCameraPreset(hud.get()), p, `${p.label}: restored from its link (${link})`);
+    }
+    engine.setKnobs(cameraPresetValues(CAMERA_PRESETS[0]!));
+    assert.deepEqual(changedSettings(hud.get(), "debug"), [], "Default: nothing changed");
+    assert.deepEqual(camKeys(), [], "Default: no camera key in the URL");
+    engine.resetDefaults();
+  });
+
+  it("when the activation toggle's knob (epi.on) is set, then the HUD field the toggle reads follows, the link carries it, and a link restores it", () => {
+    engine.setKnob("epi.on", 1);
+    assert.equal(hud.get()["epi.on"], 1);
+    assert.equal(EPICENTER.on, 1);
+    assert.match(encodeShare(engine["shareState"]()), /(^|&)epi\.on=1(&|$)/);
+    engine.resetDefaults();
+    assert.equal(hud.get()["epi.on"], 0, "Defaults: whole");
+    engine["applyShare"](decodeShare("#epi.on=1"), false);
+    assert.equal(hud.get()["epi.on"], 1, "the link");
+    engine["applyShare"](decodeShare("#"), false);
+    assert.equal(hud.get()["epi.on"], 0);
   });
 });

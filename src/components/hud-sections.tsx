@@ -28,6 +28,8 @@ import { sendSubmission, type Parcel } from "@/lib/submissions/status";
 import { ChangedDot, FIELD, NumberField, RangeRow } from "@/components/hud-controls";
 import type { CrashEngine } from "@/game/engine/engine";
 import { KNOBS } from "@/game/hud/knobs";
+import { CHASE_KNOBS } from "@/game/present/drive-cam";
+import { activeCameraPreset, CAMERA_PRESETS, cameraPresetValues } from "@/game/hud/camera-presets";
 import { DRIVER_CARS } from "@/game/match/types";
 import { Button } from "@/components/ui/button";
 import { FX_TIERS } from "@/game/present/engine-post";
@@ -424,6 +426,27 @@ function TuningSection({ state, engine }: HudProps) {
           ))}
         </div>
       </div>
+      {/* The epicenter activation's own switch (`epi.on`, the Debug panel's Epicenter group row and the link's `#epi.on=1`): whole = every crashed car solves every slice, epicenter = a quiet wreck freezes. */}
+      <div className="flex items-center gap-2">
+        <span className="hud-label relative w-12 shrink-0">
+          Activation
+          <ChangedDot on={ch("epi.on")} />
+        </span>
+        <div className={cn(TRACK, "grid-cols-2")} role="group" aria-label="Deformation activation">
+          {([0, 1] as const).map((on) => (
+            <Button
+              key={on}
+              className={SEGMENT}
+              variant={state["epi.on"] === on ? "default" : "ghost"}
+              aria-pressed={state["epi.on"] === on}
+              aria-label={on === 0 ? "Whole-car activation" : "Epicenter activation"}
+              onClick={() => engine.current?.setKnob("epi.on", on)}
+            >
+              {on === 0 ? "Whole" : "Epicenter"}
+            </Button>
+          ))}
+        </div>
+      </div>
       <Button
         onClick={() => {
           // Defaults is the player's own action, so it puts the saved car pick back too.
@@ -506,32 +529,83 @@ function DebugSection({ state, engine }: HudProps) {
   );
 }
 
-/** The chase camera's tunables under the talk's three names (convergence, momentum, damping), then look-ahead, slide and landing, and the epicenter activation's (`KNOBS`); settings like the rest: dot, reset chip, share URL. */
+/** The storage key of the camera sub-section's open state (closed until the user opens it): the same preference store as the accordion's sections. */
+const CAMERA_OPEN_KEY = "crush.hud.camera";
+
+/** One slider row per knob of `group`: settings like the rest (dot, reset chip, share URL). */
+function KnobGroup({ group, state, engine }: Pick<HudProps, "state" | "engine"> & { group: string }) {
+  return (
+    <div>
+      <p className="hud-label mt-1">{group === "Epicenter" ? group : `Camera: ${group.toLowerCase()}`}</p>
+      {KNOBS.map((k) =>
+        k.group === group ? (
+          <RangeRow
+            key={k.id}
+            label={k.label}
+            name={group === "Epicenter" ? `Epicenter ${k.label}` : `Camera ${group.toLowerCase()} ${k.label}`}
+            value={state[k.id]}
+            min={k.min}
+            max={k.max}
+            step={k.step}
+            digits={Math.max(0, Math.ceil(-Math.log10(k.step)))}
+            changed={isChanged(state, k.id)}
+            onValue={(v) => engine.current?.setKnob(k.id, v)}
+          />
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+/**
+ * The chase camera's tunables under the talk's three names (convergence, momentum, damping), then look-ahead, slide and landing, in a
+ * sub-section that starts closed (they are tall), led by the presets; then the epicenter activation's (`KNOBS`).
+ */
 function ChaseKnobs({ state, engine }: Pick<HudProps, "state" | "engine">) {
   const groups = [...new Set(KNOBS.map((k) => k.group))];
+  const [open, setOpen] = useStoredString(CAMERA_OPEN_KEY, "", "");
+  const camOpen = open === "1";
+  const picked = activeCameraPreset(state);
+  const changed = CHASE_KNOBS.filter((k) => isChanged(state, k.id)).length;
   return (
     <>
-      {groups.map((group) => (
-        <div key={group}>
-          <p className="hud-label mt-1">{group === "Epicenter" ? group : `Camera: ${group.toLowerCase()}`}</p>
-          {KNOBS.map((k) =>
-            k.group === group ? (
-              <RangeRow
-                key={k.id}
-                label={k.label}
-                name={group === "Epicenter" ? `Epicenter ${k.label}` : `Camera ${group.toLowerCase()} ${k.label}`}
-                value={state[k.id]}
-                min={k.min}
-                max={k.max}
-                step={k.step}
-                digits={Math.max(0, Math.ceil(-Math.log10(k.step)))}
-                changed={isChanged(state, k.id)}
-                onValue={(v) => engine.current?.setKnob(k.id, v)}
-              />
-            ) : null,
-          )}
+      <button
+        type="button"
+        data-hud-camera
+        aria-expanded={camOpen}
+        onClick={() => setOpen(camOpen ? "" : "1")}
+        className="group mt-1 flex h-11 w-full items-center justify-between rounded-lg px-1 font-display text-xs font-medium uppercase tracking-[0.16em] text-muted transition-colors duration-[var(--motion-quick)] hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-expanded:text-fg pointer-fine:h-8"
+      >
+        <span className="flex items-center gap-2">
+          Camera convergence
+          {changed > 0 ? (
+            <span aria-label={`${changed} changed from the default`} className="rounded-sm bg-accent px-1 tracking-normal text-accent-fg tabular-nums">
+              {changed}
+            </span>
+          ) : null}
+        </span>
+        <ChevronDown className={cn("size-4 transition-transform duration-[var(--motion-fast)] ease-[var(--ease-out)]", camOpen && "rotate-180")} />
+      </button>
+      {camOpen ? (
+        <div data-hud-camera-body className="space-y-1.5">
+          <div className={cn(TRACK, "grid-cols-3")} role="group" aria-label="Camera presets">
+            {CAMERA_PRESETS.map((p) => (
+              <Button
+                key={p.label}
+                className={SEGMENT}
+                variant={picked === p ? "default" : "ghost"}
+                aria-pressed={picked === p}
+                aria-label={`Camera preset ${p.label}`}
+                onClick={() => engine.current?.setKnobs(cameraPresetValues(p))}
+              >
+                {p.label}
+              </Button>
+            ))}
+          </div>
+          {groups.map((group) => (group === "Epicenter" ? null : <KnobGroup key={group} group={group} state={state} engine={engine} />))}
         </div>
-      ))}
+      ) : null}
+      <KnobGroup group="Epicenter" state={state} engine={engine} />
     </>
   );
 }

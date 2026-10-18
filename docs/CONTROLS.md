@@ -107,8 +107,9 @@ On a touch screen the read-outs are text straight on the view in the top left (p
 | Audio (U: crash thumps, engine sound and the music playlist) | U | | Audio section (collapsible, its open state kept like the other sections): the Audio on/off toggle, the Music (0-0.6) and Engines (0-1, default 0.25) sliders and the voice chat Mic / Output pickers. The toggle, the sliders and the `mvol` / `evol` share keys are the one setting the race setup and pause menus' Sound, Music and Engines rows also set |
 | Night, wet asphalt, cinematic FX tier (off → minimal → low → high → ultra; turns Auto off) | H (outside a race), X, F | | Playback section (FX Auto button too) |
 | Cel look: Auto (the cel look plays only as the scene-switch pulse) or a 0-100 % slider that holds it on, the pulse still playing over it | | | Playback section, Cel row (needs FX low / high / ultra; greyed with a hint on minimal / off) |
-| Shape ↔ lattice | Y | | Cars & crash section |
-| Deform rig, control particles, JSON capture; the chase camera's sliders (changed dot, reset chip, Defaults and the share URL like every other setting) | G, P, J | | Debug views section |
+| Shape ↔ lattice | Y | | Cars & crash section, Solver row |
+| Whole ↔ epicenter activation (a crashed car solves every slice, or a quiet wreck freezes: `epi.on`, the same knob as the Epicenter group's first slider and the link's `#epi.on=1`) | | | Cars & crash section, Activation row under Solver (changed dot; in the link like the Solver) |
+| Deform rig, control particles, JSON capture; the chase camera's sliders (changed dot, reset chip, Defaults and the share URL like every other setting) | G, P, J | | Debug views section; the camera sliders sit in a **Camera convergence** sub-section that starts closed (its open state is kept, `crush.hud.camera`), led by a row of presets: **Default** (today's values) and the variants **Tight**, **Cinematic**, **Drift** and **Steady**, each setting several camera sliders at once (`CAMERA_PRESETS`, `src/game/hud/camera-presets.ts`); a variant sets every camera slider (the ones it does not name at their defaults), the sliders still move after, and the lit preset is whichever one the sliders match, so a link carrying its `cam.*` keys shows it lit |
 | Stats overlay | \ (Backslash), or `?stats=1` | | |
 | Pistons: fire one ram (clockwise from front-left) / all eight | 1–8 / 0 | | piston panel |
 | Doors: fire A / B / C, open or shut the door, swap side, fire D / E (panel) | 1–3, 4, 5, 6, 7 | | door panel |
@@ -121,7 +122,7 @@ Control particles (P): size = mass, lime → red = plastic travel, magenta = con
 
 ## Shareable URL
 
-The page's `#` records what you changed: change a scene or setting and the address bar updates (no history entry, no reload); copy it, and anyone who opens it gets the same scene, settings and initial conditions. Only what differs from the defaults is written. **A page opened with no `#` keeps none**, and one opened with a partial `#` keeps it exactly as it is: loading never writes defaults, the run's seed, or anything a scene sets for itself. The first change writes the changed settings with the run's seed:
+The page's `#` records what you changed: change a scene or setting and the address bar updates (no reload; no history entry for a change inside the scene, **one entry when you enter another scene**, so Back returns to the scene before with the settings it was left with, instead of stepping through slider moves); copy it, and anyone who opens it gets the same scene, settings and initial conditions. Only what differs from the defaults is written. **A page opened with no `#` keeps none**, and one opened with a partial `#` keeps it exactly as it is: loading never writes defaults, the run's seed, or anything a scene sets for itself. The first change writes the changed settings with the run's seed:
 
 ```
 #cars=5&smin=12&ramps=1&night=1&seed=3fa2c1

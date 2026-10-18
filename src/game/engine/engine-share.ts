@@ -10,6 +10,9 @@ import { pickedLook } from "../present/driver-look.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import { shareHashOf } from "./bench-loop.ts";
 
+/** The key `@tanstack/history` keeps a history entry's place in its stack under (`history.state`); a pushed entry carries the next one. */
+const ROUTER_INDEX = "__TSR_index";
+
 /**
  * The shareable URL (docs/CONTROLS.md): the page's `#` follows the HUD state (scene, settings that differ from the
  * defaults, the run's spawn seed, the netplay room hosted or joined), and a pasted or edited `#` sets it. The hash is
@@ -92,15 +95,22 @@ export abstract class EngineShare extends EngineReel {
     };
   }
 
-  /** Called by every HUD publish: the page URL follows the state. A netplay client's scene is the host's, so its URL keeps the room alone. */
+  /**
+   * Called by every HUD publish: the page URL follows the state. A netplay client's scene is the host's, so its URL keeps the room alone.
+   * Entering another scene pushes one history entry (Back returns to the scene before, with the settings it was left with); every other
+   * change (a setting, a slider, a preset, a toggle) rewrites the current entry, so a session's slider moves never pile up in Back.
+   */
   protected syncShareUrl(): void {
     if (!this.shareOn || this.sharing || !this.followUrl) return;
     const { pathname, search, hash } = window.location;
     const bar = hash.replace(/^#/, "");
     const frag = followShare(this.shareState(), this.net.client, bar);
     if (frag === bar) return;
-    // replaceState: no history entry, no reload (and the router's history.state stays).
-    window.history.replaceState(window.history.state, "", pathname + search + (frag ? `#${frag}` : ""));
+    const url = pathname + search + (frag ? `#${frag}` : "");
+    const state = window.history.state as Record<string, unknown> | null;
+    // No reload either way (and the router's history.state stays; a pushed entry takes the next index of its stack, which is how the router tells Back from Forward).
+    if (decodeShare(frag).scene === decodeShare(bar).scene) window.history.replaceState(state, "", url);
+    else window.history.pushState({ ...state, [ROUTER_INDEX]: (typeof state?.[ROUTER_INDEX] === "number" ? state[ROUTER_INDEX] : 0) + 1 }, "", url);
   }
 
   /**

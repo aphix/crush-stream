@@ -305,6 +305,15 @@ export abstract class EngineInput extends EngineRigs {
     this.emitHud();
   }
 
+  /** Several Debug sliders at once (a camera preset): each as `setKnob` sets it, with one HUD publish and one URL write for all of them. */
+  setKnobs(values: Partial<Record<KnobId, number>>): void {
+    for (const k of KNOBS) {
+      const v = values[k.id];
+      if (v !== undefined && Number.isFinite(v)) k.set(THREE.MathUtils.clamp(v, k.min, k.max));
+    }
+    this.emitHud();
+  }
+
   /** The player's car (slot 0; every car in the Stack) becomes the `DRIVER_CARS` entry `id`; the field respawns and the camera follows it. */
   setPlayerCar(id: string): void {
     const type = DRIVER_CARS.find((c) => c.id === id);

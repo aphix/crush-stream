@@ -26,7 +26,7 @@ describe("given the real engine booted on #scene=survival&track=national-mall", 
     stubBrowser();
     globalThis.location.hash = "#scene=survival&track=national-mall";
     // The address bar as the browser keeps it: a write lands in `location.hash`.
-    globalThis.history.replaceState = (_state, _unused, url) => {
+    globalThis.history.pushState = globalThis.history.replaceState = (_state, _unused, url) => {
       bar.push(String(url));
       globalThis.location.hash = String(url).slice(String(url).indexOf("#"));
     };
