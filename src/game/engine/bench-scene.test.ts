@@ -6,7 +6,9 @@ import { FINE_HZ } from "../kernel/constants.ts";
 import { enterBenchScene } from "./bench-scene.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
 import { benchPlanEngine, disposeBenchEngine, FRAME_S, runFrames, simCounters, simDigest } from "./engine-bench-headless.test-util.ts";
+import { SKY_DRAWN } from "../present/sky-dome.ts";
 import { newBeat } from "./bench-frame.ts";
+import { ArmBadge } from "./bench-badge.ts";
 import { tap, watchWork } from "./bench-measure.ts";
 import { PHASE_SWEEP } from "./engine-bench-report.ts";
 import { endSweep, sweep } from "./bench-sweep.ts";
@@ -59,6 +61,18 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     for (const knob of KNOBS) assert.equal(knob.get(), KNOB_DEFAULTS[knob.id], `${knob.id} at its default`);
   });
 
+  it("when the loop's steps are entered in turn (city, city with the activation, strip, city), then the card's arm label follows the knob each time: off, ON, off, off", () => {
+    const element = { textContent: "" as string | null, style: { cssText: "" } };
+    const badge = new ArmBadge(element, epicenterOn);
+    const labels: (string | null)[] = [];
+    for (const query of ["?bench=city", "?bench=city&epi=1", "?bench=strip", "?bench=city"]) {
+      enterBenchScene(engine, engine.benchParts(), benchPlan(query)!);
+      badge.sync();
+      labels.push(element.textContent);
+    }
+    assert.deepEqual(labels, ["epicenter off", "EPICENTER ON", "epicenter off", "epicenter off"]);
+  });
+
   it("when a full warm-up sweep (every FX tier, both pacer pins, every detail rung, the sky, the epicenter on and off) runs on the city and the page is reset as a step does, then the city's sim after it is bit for bit the first one's", async () => {
     const parts = engine.benchParts();
     const plan = benchPlan("?bench=city")!;
@@ -74,26 +88,18 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
       fetch: async () => ({ ok: true, status: 200, blob: async () => new Blob([]) }),
       createImageBitmap: async () => ({ width: 1, height: 1, close() {} }),
     });
-    // The strip is held between the sweep's `full` and `off` stops: read it as `off` is set.
-    const setSky = engine.setSky.bind(engine);
-    let stripBytesAtOff = 0;
-    engine.setSky = (mode) => {
-      if (mode === "off") stripBytesAtOff = parts.sky.textureBytes;
-      setSky(mode);
-    };
     try {
       // A page without `ultra=1` (its FX tiers are the three; Ultra's look is fetched by the page before the bench, not by the sweep).
       await sweep(engine, parts, plan, ["minimal", "low", "high"], true, t, beat, { set() {} });
-      assert.ok(stripBytesAtOff > 0, "the sweep's sky stop loaded the strip before the off stop");
+      assert.equal(parts.sky.drawn, SKY_DRAWN.full, "the sweep ends on the sky the bench pins: the strip drawn");
+      assert.ok(parts.sky.textureBytes > 0, "the strip is held");
       assert.ok(beat.hitches.frames > 3 * 180, `the sweep ran its frames (${beat.hitches.frames})`);
-      endSweep(engine, "auto");
-      // The step that follows asks for the sky again (auto, at its tier): still the stand-in's.
+      endSweep(engine, "full");
       step("city after the sweep", "?bench=city", true);
       assert.equal(digests["city after the sweep"], digests["city first"]);
       // A load the step began is still in flight (its decode is a promise chain): let it land on the stand-in.
       await new Promise<void>((resolve) => setImmediate(resolve));
     } finally {
-      engine.setSky = setSky;
       Object.assign(globalThis, real);
       if (real.createImageBitmap === undefined) Reflect.deleteProperty(globalThis, "createImageBitmap");
     }

@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import type { SkyMode } from "../present/sky-dome.ts";
+import { SKY_DRAWN, type SkyMode } from "../present/sky-dome.ts";
 import type { LabPresetId } from "../scenes/lab.ts";
-import { BENCH, emptyAcc, wrecks, type Acc, type BenchParts, type Tap } from "./bench-measure.ts";
+import { BENCH, emptyAcc, wrecks, type Acc, type BenchParts, type SkyPin, type Tap } from "./bench-measure.ts";
 import { CAUSE, FRAME, HitchLog } from "./bench-hitch.ts";
 import { SettleWatch, type SettleResult, type SwitchHitch } from "./bench-settle.ts";
 import type { BenchPlan } from "./engine-bench-plan.ts";
@@ -69,6 +69,8 @@ export interface Beat {
   switching: boolean;
   /** The loop's screen wake lock (null: none held), read once a frame for the per-second series. */
   wake: { readonly held: boolean } | null;
+  /** The card's live arm label, brought up to date every frame (`ArmBadge.sync`); null: none. */
+  arm: { sync(): void } | null;
   seen: { wrecks: number; programs: number; textures: number; geometries: number; ragdollMessages: number };
 }
 
@@ -85,6 +87,7 @@ export function newBeat(parts: BenchParts, prev: number, lab: BenchPlan["lab"], 
     phaseStart: performance.now(),
     switching: false,
     wake: null,
+    arm: null,
     seen: { wrecks: 0, programs: 0, textures: 0, geometries: 0, ragdollMessages: 0 },
   };
 }
@@ -172,13 +175,14 @@ export async function frame(engine: FrameEngine, renderer: THREE.WebGLRenderer, 
   beat.frame[FRAME_DRAW] = t.drawMs;
   beat.frame[FRAME.atS] = (f1 - beat.phaseStart) / 1000;
   beat.hitches.frame(beat.frame, beat.phase, readCauses(beat, t));
-  beat.page?.tick(beat.frame, beat.phase, beat.wake?.held === true);
+  beat.arm?.sync();
+  beat.page?.tick(beat.frame, beat.phase, beat.wake?.held === true, beat.parts.sky.drawn);
 }
 
 /** One setting of an A/B: `set` flips it before its block. */
 interface Arm {
   key: string;
-  set(): void | Promise<void>;
+  set(): unknown;
 }
 
 /**
@@ -286,8 +290,11 @@ export async function waitFor(engine: FrameEngine, parts: BenchParts, t: Tap, be
   return true;
 }
 
-/** The Sky setting `full`, then frames until the strip is in the dome (`BENCH.skyWaitS` at most): its decode is the page's first ask, not the arm's cost. */
-export async function showFullSky(engine: FrameEngine & { setSky(mode: SkyMode): void }, parts: BenchParts, t: Tap, beat: Beat): Promise<void> {
-  engine.setSky("full");
-  await waitFor(engine, parts, t, beat, BENCH.skyWaitS, () => parts.sky.textureBytes > 0);
+/**
+ * The Sky setting put in force explicitly (`pin`: `full` or `off`, never `auto`: an auto sky follows the FX tier, which the engine's own policy changes mid-run), then frames until the dome draws it (`BENCH.skyWaitS` at
+ * most): a strip's decode is the page's first ask, not the arm's cost. True when it is drawn.
+ */
+export async function pinSky(engine: FrameEngine & { setSky(mode: SkyMode): void }, parts: BenchParts, t: Tap, beat: Beat, pin: SkyPin): Promise<boolean> {
+  engine.setSky(pin);
+  return waitFor(engine, parts, t, beat, BENCH.skyWaitS, () => parts.sky.drawn === (pin === "off" ? SKY_DRAWN.off : SKY_DRAWN.full));
 }

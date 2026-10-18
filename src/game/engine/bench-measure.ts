@@ -1,4 +1,5 @@
 import type * as THREE from "three";
+import { epicenterOn } from "../deform/epicenter.ts";
 import { skinKernel } from "../deform/skin-kernel.ts";
 import { DETAIL_LEVELS, type CarDetail } from "../present/car-detail.ts";
 import { gpuRenderer } from "../present/auto-fx.ts";
@@ -56,7 +57,7 @@ export interface BenchParts {
   /** The cosmetic Rapier world (the thrown drivers' and knocked props'): its step cost is its own row, not part of the engine's cpu; `traffic` is what the sim posted to its worker. */
   ragdoll: Pick<RagdollSystem, "stats" | "traffic" | "placement">;
   /** The race's sky: the bytes of the picture it holds (0 until the strip is in, and for no sky). */
-  sky: Pick<SkyDome, "textureBytes">;
+  sky: Pick<SkyDome, "textureBytes" | "drawn">;
 }
 
 /** The smallest step `performance.now()` takes over a 25 ms spin (ms): the browser's timer resolution as this page sees it. */
@@ -456,13 +457,22 @@ function depthOf(renderer: THREE.WebGLRenderer, camera: THREE.PerspectiveCamera)
   };
 }
 
+/**
+ * The Sky setting a bench runs under, put in force explicitly: `full` on a race (the strip the sweep loaded stays in, the same on every FX tier), `off` on the Lab (it has no sky). Never `auto`: an auto sky
+ * follows the FX tier, which the engine's own policy (`AutoFx`) and the A/Bs change, so the sky's cost would move with the arm under test. The player's own setting is put back when the run ends.
+ */
+export type SkyPin = Extract<SkyMode, "full" | "off">;
+
+/** The sky pin of `plan`'s bench. */
+export const skyPinOf = (plan: BenchPlan): SkyPin => (plan.lab ? "off" : "full");
+
 /** The Sky setting the HUD holds (`auto` when it holds none the game knows). */
 export function skyModeOf(hud: Record<string, unknown>): SkyMode {
   return SKY_MODES.find((mode) => mode === hud[SETTING_KEY.sky]) ?? "auto";
 }
 
 /** What was switched on, read off the renderer, the sun and the HUD's own state. */
-export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top: string): BenchSettings {
+export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top: string): Omit<BenchSettings, "skyPlayer"> {
   const { renderer, scene, sun, camera } = parts;
   const size = renderer.domElement;
   let casters = 0;
@@ -491,7 +501,7 @@ export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top:
     squash: Number(hud["squash"]),
     buckle: Number(hud["buckle"]),
     deformMode: String(hud["deformMode"]),
-    epicenter: hud["epi.on"] === 1,
+    epicenter: epicenterOn(),
     depth: depthOf(renderer, camera),
   };
 }

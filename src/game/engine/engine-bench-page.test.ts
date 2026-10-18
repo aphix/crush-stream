@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, mock, test } from "node:test";
 import { PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_WARM, PHASE_WINDOW } from "./engine-bench-report.ts";
 import { watchPage } from "./engine-bench-page.ts";
 import { FRAME } from "./bench-hitch.ts";
+import { SKY_DRAWN } from "../present/sky-dome.ts";
 
 type Listener = () => void;
 
@@ -135,10 +136,10 @@ describe("given the bench page with a stub document and window (watchPage record
   });
 
   /** One frame at `stamp` ms into the series (a frame row as the bench loop writes it) and the state `watch` keeps for that second. */
-  const tick = (watch: ReturnType<typeof watchPage>, stamp: number, phase: number, awake: boolean): void => {
+  const tick = (watch: ReturnType<typeof watchPage>, stamp: number, phase: number, awake: boolean, sky = 0): void => {
     const row = new Float64Array(FRAME.fields);
     row[FRAME.now] = stamp;
-    watch.tick(row, phase, awake);
+    watch.tick(row, phase, awake, sky);
   };
 
   test("when frames tick the series with the page's state, then each second holds one hex digit of shown 1, focused 2, fullscreen 4 and the wake lock held 8, and the stretch's index", () => {
@@ -154,6 +155,16 @@ describe("given the bench page with a stub document and window (watchPage record
     const series = watch.seconds();
     assert.equal(series.flags, "fd5", "flags");
     assert.equal(series.phases, "112", "stretches");
+  });
+
+  test("when the sky as drawn changes during the series, then each second holds the digit of the frame that closed it, the loading digit included", () => {
+    const watch = watchPage();
+    watch.phase(PHASE_WINDOW);
+    tick(watch, 5000, PHASE_WINDOW, true, SKY_DRAWN.off);
+    tick(watch, 6100, PHASE_WINDOW, true, SKY_DRAWN.loading);
+    tick(watch, 7200, PHASE_WINDOW, true, SKY_DRAWN.full);
+    tick(watch, 8300, PHASE_WINDOW, true, SKY_DRAWN.half);
+    assert.equal(watch.seconds().sky, "0432", "off, loading, full, half");
   });
 
   test("when the page draws no frame for 3 s (hidden), then the seconds between its frames each hold the state of the last event, so the gap is in the series", () => {

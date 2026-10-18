@@ -60,7 +60,7 @@ const RESULT: BenchResult = {
   replay: null,
   replayWhy: "no clip yet",
   pageEvents: [{ phase: "warm", atS: 0, visible: true, focused: true, fullscreen: false }],
-  pageSeconds: { flags: "ffffd5", phases: "001111" },
+  pageSeconds: { flags: "ffffd5", phases: "001111", sky: "003333" },
   pageState: { stepOfPage: 2, keep: true, heapUsedMB: 118, heapLimitMB: 4096, ragdollHost: "remote" },
   phases: PHASES,
   longTasks: { count: 4, totalMs: 312.5, maxMs: 120.25 },
@@ -81,7 +81,8 @@ const RESULT: BenchResult = {
     toneMapping: 4,
     night: false,
     wet: false,
-    sky: "auto",
+    sky: "full",
+    skyPlayer: "auto",
     skyDetail: "full",
     realism: 0.35,
     squash: 1,
@@ -212,10 +213,27 @@ describe("given the bench result of a page that asked for the Ultra arm (?ultra=
   });
 });
 
+describe("given the bench result with the sky as drawn each second", () => {
+  const skyLine = (series: { flags: string; phases: string; sky: string }): string => describeBench({ ...RESULT, pageSeconds: series }).find((l) => l.includes("pinned by the bench"))!;
+
+  test("when every window second drew the strip, then the settings line says the strip was drawn for all of them, counting the window's seconds only", () => {
+    // Two warm-up seconds (stretch 0) with the strip still loading, then four window seconds (stretch 1) all drawing it.
+    assert.ok(skyLine({ flags: "ffffff", phases: "001111", sky: "443333" }).endsWith("drawn full 4 of 4 window s"));
+  });
+
+  test("when the window drew the strip for three seconds and nothing for one, then the line gives both, the larger first", () => {
+    assert.ok(skyLine({ flags: "ffffff", phases: "001111", sky: "003303" }).endsWith("drawn full 3 of 4 window s, none 1 of 4 window s"));
+  });
+
+  test("when the series has no window second, then the line says so", () => {
+    assert.ok(skyLine({ flags: "ff", phases: "00", sky: "33" }).endsWith("drawn no window seconds"));
+  });
+});
+
 describe("given the bench result of a race that ran the sky A/B", () => {
   test("when the card is written, then it names the Sky setting and what it drew at the top tier, and the sky arms give their fps and draw calls with the full strip first; the Lab's card has no sky arms", () => {
     const lines = describeBench({ ...RESULT, abSky: { full: { ...B(52, null), calls: 160 }, off: { ...B(57, null), calls: 159 } } });
-    assert.ok(lines.some((l) => l.endsWith("deform shape, sky auto (full at the top tier)")), "the setting in effect");
+    assert.ok(lines.some((l) => l.includes("deform shape, sky full pinned by the bench (your setting auto, put back after; full on every tier), drawn ")), "the setting in effect");
     const at = lines.findIndex((l) => l.startsWith("A/B sky pinned: full 52.0 fps"));
     assert.ok(at >= 0 && lines[at]!.endsWith("160 calls"), "the full arm");
     assert.match(lines[at + 1]!, /^ +off 57\.0 fps, .*159 calls$/);

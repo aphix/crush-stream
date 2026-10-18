@@ -16,19 +16,24 @@ const ui = { set() {} };
 function sweepRig(): { engine: SweepEngine; parts: BenchParts; beat: ReturnType<typeof rig>["beat"]; t: ReturnType<typeof rig>["t"]; log: { what: string; frame: number }[]; frames: () => number } {
   const base = rig();
   const log: { what: string; frame: number }[] = [];
+  /** The Sky setting in force: the stand-in dome draws the strip (3) unless it is off (0), as soon as it is asked. */
+  let skyMode = "auto";
   const pace = { steps: 1, set pin(value: boolean | null) { log.push({ what: `pace ${value}`, frame: display.shown }); }, get pin(): boolean | null { return null; } };
   const engine: SweepEngine = {
     ...base.engine,
     resetAdaptiveQuality() {},
     pace,
     setFxTier: (tier) => void log.push({ what: `fx ${tier}`, frame: display.shown }),
-    setSky: (mode) => void log.push({ what: `sky ${mode}`, frame: display.shown }),
+    setSky: (mode) => {
+      skyMode = mode;
+      log.push({ what: `sky ${mode}`, frame: display.shown });
+    },
     setKnob: (id, value) => void log.push({ what: `${id} ${value}`, frame: display.shown }),
   };
   const parts = {
     ...base.parts,
     detail: { setLevel: (level: number) => void log.push({ what: `rung ${level}`, frame: display.shown }), setDistances: () => void log.push({ what: "rung off", frame: display.shown }) },
-    sky: { textureBytes: 1 },
+    sky: { textureBytes: 1, get drawn() { return skyMode === "off" ? 0 : 3; } },
   } as unknown as BenchParts;
   return { engine, parts, beat: base.beat, t: base.t, log, frames: () => display.shown };
 }
@@ -37,12 +42,12 @@ const RACE = { lab: null, race: {} } as unknown as BenchPlan;
 const LAB = { lab: {}, race: null } as unknown as BenchPlan;
 
 describe("given a sweep over every setting at a page's first step, on a race", () => {
-  it("when it runs, then each FX tier, both pacer pins, every detail rung, the sky full and off and the epicenter on and off are put in force once, in that order", async () => {
+  it("when it runs, then each FX tier, both pacer pins, every detail rung, the sky off then full and the epicenter on and off are put in force once, in that order", async () => {
     const { engine, parts, beat, t, log } = sweepRig();
     await sweep(engine, parts, RACE, TIERS, true, t, beat, ui);
     assert.deepEqual(
       log.map((l) => l.what),
-      ["fx minimal", "fx low", "fx high", "fx ultra", "pace true", "pace false", "rung off", "rung 2", "rung 4", "sky full", "sky off", "epi.on 1", "epi.on 0"],
+      ["fx minimal", "fx low", "fx high", "fx ultra", "pace true", "pace false", "rung off", "rung 2", "rung 4", "sky off", "sky full", "epi.on 1", "epi.on 0"],
     );
   });
 

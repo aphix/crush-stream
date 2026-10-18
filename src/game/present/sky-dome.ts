@@ -76,6 +76,10 @@ export function skyDetailFor(mode: SkyMode, tier: FxTier): SkyDetail {
   return mode === "on" ? "gradient" : "off";
 }
 
+/** The sky as drawn: a small whole number a second of a bench's page series holds (`SkyDome.drawn`). */
+export const SKY_DRAWN = { off: 0, gradient: 1, half: 2, full: 3, loading: 4 } as const;
+export type SkyDrawn = (typeof SKY_DRAWN)[keyof typeof SKY_DRAWN];
+
 /** Clip-space depth of the dome, as a share of w: past every surface the far plane keeps (the backdrop's, nearer, draws over it). */
 const FAR_DEPTH = 0.9999995;
 
@@ -206,6 +210,16 @@ export class SkyDome {
   get textureBytes(): number {
     const image = this.held?.texture.image as ImageBitmap | undefined;
     return image ? Math.round(image.width * image.height * 4 * (4 / 3)) : 0;
+  }
+
+  /**
+   * What the dome is drawing this frame, as one of `SKY_DRAWN`: nothing, the gradient, the half or the full picture, or `loading` (a picture is asked for and not in yet, so the flat colour
+   * shows). The bench writes it down each second: it is the sky's state as drawn, not the setting that asks for it.
+   */
+  get drawn(): SkyDrawn {
+    if (!this.mesh.visible) return this.time === null || this.detail === "off" ? SKY_DRAWN.off : SKY_DRAWN.loading;
+    if (this.detail === "gradient") return SKY_DRAWN.gradient;
+    return this.detail === "half" ? SKY_DRAWN.half : SKY_DRAWN.full;
   }
 
   private refresh(): void {

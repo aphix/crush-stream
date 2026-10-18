@@ -76,6 +76,8 @@ export interface BenchSettings {
   deformMode: string;
   /** The epicenter activation was on (`epi.on` = 1) for the run: the loop runs every map twice, off then on. */
   epicenter: boolean;
+  /** The player's own Sky setting, put back when the run ended: during it `sky` is the bench's pin (`skyPinOf`), never `auto`. */
+  skyPlayer: SkyMode;
   depth: { bits: number; subpixelBits: number; contextDepth: boolean; fragmentHighFloat: { precision: number; rangeMin: number; rangeMax: number } | null; near: number; far: number; logarithmicDepthBuffer: boolean; probe: DepthProbe };
 }
 
@@ -143,6 +145,8 @@ export interface ReplayResult {
 export interface PageSeconds {
   flags: string;
   phases: string;
+  /** The sky as drawn each second, a digit of `SKY_DRAWN` (0 none, 1 gradient, 2 half, 3 full, 4 loading): the bench pins the Sky setting, so a window's seconds all read the pinned one. */
+  sky: string;
 }
 
 /** The page's state `atS` seconds into `phase` (`BenchResult.pageEvents`). */
@@ -393,6 +397,22 @@ const leftPage = (events: readonly PageEvent[]): string[] => {
   return changes.length ? [`PAGE LEFT during the window: ${changes.join(", ")}. Read max and p99 with that in mind: a phone holds a page it is leaving`] : [];
 };
 
+/** The names of `SKY_DRAWN`'s digits, as the series writes them. */
+const SKY_DRAWN_NAMES = ["none", "gradient", "half", "full", "loading"] as const;
+
+/** What the sky was drawn as in the window's seconds (`pageSeconds`): each state with its seconds, most first, `6 of 40 s` style: a pinned sky reads one state for every second. */
+const windowSky = (series: PageSeconds): string => {
+  const counts = new Map<string, number>();
+  let total = 0;
+  for (let i = 0; i < series.phases.length; i++) {
+    if (series.phases[i] !== PHASE_WINDOW.toString(16)) continue;
+    const name = SKY_DRAWN_NAMES[Number.parseInt(series.sky[i] ?? "0", 16)] ?? "?";
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+    total++;
+  }
+  return total === 0 ? "no window seconds" : [...counts].sort((a, b) => b[1] - a[1]).map(([name, n]) => `${name} ${n} of ${total} window s`).join(", ");
+};
+
 /** The window's phase table (ms per sim second) and work counts on one line: the sum names how much of the headline the phases account for. */
 const phaseLine = (p: PhaseCard, simMsPerSimS: number, spread: number): string => {
   const phases = Object.entries(p.msPerSimS);
@@ -449,7 +469,7 @@ export function describeBench(r: BenchResult): string[] {
     `draw ${r.calls} calls  ${Math.round(r.triangles / 1000)}k tris   cops: ${r.cops ? `${r.cops.stakeouts} stakeouts, ${r.cops.pursuits} pursuits, pack of ${r.cops.maxPack}` : "none"}`,
     `fx tier: ${tiers}${s.fxAuto ? " (auto)" : ""}   post chain at the top tier: ${s.post}`,
     `detail: only the body drawn beyond ${Object.entries(r.detailPct).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} for ${Math.round(v)} %`).join(", ")} of the window`,
-    `shadows ${s.shadows.enabled ? `${s.shadows.type} ${s.shadows.map}, ${s.shadows.casters} casters` : "off"}   pixel ratio ${s.pixelRatio} of device ${s.deviceRatio}, canvas ${s.canvas}, ${s.antialias ? "MSAA" : "no MSAA"}   fx density ${f1(s.fxDensity)}, cel ${s.celLook === null ? "auto" : f1(s.celLook)}   night ${s.night ? "on" : "off"}, wet ${s.wet ? "on" : "off"}, realism ${f1(s.realism)}, squash ${f1(s.squash)}, buckle ${f1(s.buckle)}, deform ${s.deformMode}, sky ${s.sky} (${s.skyDetail} at the top tier)`,
+    `shadows ${s.shadows.enabled ? `${s.shadows.type} ${s.shadows.map}, ${s.shadows.casters} casters` : "off"}   pixel ratio ${s.pixelRatio} of device ${s.deviceRatio}, canvas ${s.canvas}, ${s.antialias ? "MSAA" : "no MSAA"}   fx density ${f1(s.fxDensity)}, cel ${s.celLook === null ? "auto" : f1(s.celLook)}   night ${s.night ? "on" : "off"}, wet ${s.wet ? "on" : "off"}, realism ${f1(s.realism)}, squash ${f1(s.squash)}, buckle ${f1(s.buckle)}, deform ${s.deformMode}, sky ${s.sky} pinned by the bench (your setting ${s.skyPlayer}, put back after; ${s.skyDetail} on every tier), drawn ${windowSky(r.pageSeconds)}`,
     `depth: ${s.depth.bits} bits (drawing buffer${s.depth.contextDepth ? "" : ", none requested"}), subpixel ${s.depth.subpixelBits} bits, fragment highp ${s.depth.fragmentHighFloat ? `${s.depth.fragmentHighFloat.precision} bits, range 2^${s.depth.fragmentHighFloat.rangeMin}..2^${s.depth.fragmentHighFloat.rangeMax}` : "not supported"}, camera near ${s.depth.near} far ${s.depth.far}, log depth ${s.depth.logarithmicDepthBuffer ? "on" : "off"}, ${describeDepthProbe(s.depth.probe)}`,
     `A/B pacer pinned: ${arm("1/240 s", r.abPace.fine)}, ${f1(r.abPace.fine.fineCutsPerSimS)} fine-slice cuts/sim-s`,
     `                  ${arm(COARSE_LABEL, r.abPace.coarse)}, ${f1(r.abPace.coarse.fineCutsPerSimS)} fine-slice cuts/sim-s`,

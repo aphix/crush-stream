@@ -90,6 +90,8 @@ const BIT_SHOWN = 1;
 const BIT_FOCUSED = 2;
 const BIT_FULLSCREEN = 4;
 const BIT_AWAKE = 8;
+/** The digit of the card's sky series (`SKY_DRAWN`) that each Sky setting the bench pins draws: the full strip, or nothing. */
+const SKY_PIN_DIGIT = { full: "3", off: "0" };
 
 /**
  * What was wrong with the page during the window. A card with the per-second series says how many of the window's seconds the page was hidden, unfocused, out of
@@ -98,7 +100,8 @@ const BIT_AWAKE = 8;
 function windowFaults(result) {
   const series = result.pageSeconds;
   if (series) {
-    const counts = { hidden: 0, unfocused: 0, "not fullscreen": 0, "screen not held": 0 };
+    const counts = { hidden: 0, unfocused: 0, "not fullscreen": 0, "screen not held": 0, "sky not as pinned": 0 };
+    const pinned = SKY_PIN_DIGIT[result.settings?.sky];
     let seconds = 0;
     for (let i = 0; i < series.flags.length; i++) {
       if (series.phases[i] !== WINDOW_INDEX) continue;
@@ -108,6 +111,7 @@ function windowFaults(result) {
       else if ((flags & BIT_FOCUSED) === 0) counts.unfocused++;
       if ((flags & BIT_FULLSCREEN) === 0) counts["not fullscreen"]++;
       if ((flags & BIT_AWAKE) === 0) counts["screen not held"]++;
+      if (pinned !== undefined && series.sky !== undefined && series.sky[i] !== pinned) counts["sky not as pinned"]++;
     }
     return Object.entries(counts).filter(([, n]) => n > 0).map(([name, n]) => `${name} ${n} of ${seconds} s`);
   }

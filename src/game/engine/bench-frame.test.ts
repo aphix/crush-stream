@@ -4,6 +4,10 @@ import { BENCH, blocksOf } from "./bench-measure.ts";
 import { alternate } from "./bench-frame.ts";
 import { display, restoreFrame, rig, STEADY_MS, STEADY_SIM_MS, STRETCH } from "./bench-frame.test-util.ts";
 import { CAUSE_NAMES } from "./bench-hitch.ts";
+import { ArmBadge } from "./bench-badge.ts";
+import { frame } from "./bench-frame.ts";
+import { epicenterOn } from "../deform/epicenter.ts";
+import { KNOBS } from "../hud/knobs.ts";
 import { SETTLE } from "./bench-settle.ts";
 
 /** The clock's float rounding in a mean of 500 frames' sim ms. */
@@ -98,5 +102,27 @@ describe("given an A/B's arm whose sim cost swings from one second to the next, 
     const { engine, parts, t, beat } = rig();
     const result = await alternate(engine, parts, t, beat, ui, "fx", [{ key: "never", set: () => display.use((since) => STEADY_MS * 1.1 ** since) }], 2);
     assert.equal(result.accs.get("never")!.unsettled, 2, "two rounds, two switches");
+  });
+});
+
+describe("given the bench card's arm label, kept up to date by the bench's frames", () => {
+  const knob = KNOBS.find((k) => k.id === "epi.on")!;
+
+  it("when the epicenter knob is turned on between two frames, then the label reads ON after the next frame, and off again after the knob goes back", async () => {
+    const { engine, parts, t, beat } = rig();
+    const element = { textContent: "" as string | null, style: { cssText: "" } };
+    beat.arm = new ArmBadge(element, epicenterOn);
+    try {
+      await frame(engine, parts.renderer, t, beat);
+      assert.equal(element.textContent, "epicenter off", "the first frame");
+      knob.set(1);
+      await frame(engine, parts.renderer, t, beat);
+      assert.equal(element.textContent, "EPICENTER ON", "the frame after the knob went on");
+      knob.set(0);
+      await frame(engine, parts.renderer, t, beat);
+      assert.equal(element.textContent, "epicenter off", "the frame after it went back");
+    } finally {
+      knob.set(0);
+    }
   });
 });

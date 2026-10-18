@@ -4,14 +4,16 @@ import { watchPage } from "./engine-bench-page.ts";
 import { warmUp } from "./engine-bench-warm.ts";
 import { describeBench, DETAIL_ARMS, PACE_ARM, PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_SWEEP, PHASE_WARM, PHASE_WINDOW, SKY_ARM, stat, type BenchResult, type LongTasks } from "./engine-bench-report.ts";
 import { CLIP_WAIT_S, CRASH_GAP, CRASH_SPEED, ragdollCost, REPLAY_SETTLE_S, REPLAY_TIER_S, START_WAIT_S, type ReplayFrames } from "./engine-bench-replay.ts";
-import { BENCH, blocksOf, CAP, deviceOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type Samples, type Tap, type Window } from "./bench-measure.ts";
+import { BENCH, blocksOf, CAP, deviceOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, skyPinOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type Samples, type Tap, type Window } from "./bench-measure.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import type { SimPacer } from "./sim-pace.ts";
 import { SETTING_KEY } from "./constants.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
 import { hudSettings, roundCard } from "./bench-card.ts";
-import { alternate, enterPhase, frame, FRAME_CPU, FRAME_DRAW, FRAME_DT, FRAME_SIM, newBeat, nextFrame, restartLab, settleFrames, showFullSky, waitFor, type Beat } from "./bench-frame.ts";
+import { alternate, enterPhase, frame, FRAME_CPU, FRAME_DRAW, FRAME_DT, FRAME_SIM, newBeat, nextFrame, restartLab, pinSky, settleFrames, waitFor, type Beat } from "./bench-frame.ts";
 import { INITIAL_HUD, type CrashHudState } from "../hud/hud-store.ts";
+import { ArmBadge } from "./bench-badge.ts";
+import { epicenterOn } from "../deform/epicenter.ts";
 import { enterBenchScene, type SceneEngine } from "./bench-scene.ts";
 import { HitchLog } from "./bench-hitch.ts";
 import { SettleWatch } from "./bench-settle.ts";
@@ -72,6 +74,8 @@ const CARD_ATTRIBUTE = "data-bench-card";
  */
 function overlay(loopProgress: string | null): {
   set(text: string): void;
+  /** The label of the arm the page is running (epicenter on or off): kept up to date by the bench's frames and by every `set`. */
+  badge: ArmBadge;
   done(lines: string[], details: () => string, submit: () => void): void;
   receipt(state: "sending" | BenchReceipt): void;
 } {
@@ -86,12 +90,19 @@ function overlay(loopProgress: string | null): {
   pre.style.cssText = "margin:0;white-space:pre-wrap";
   const status = document.createElement("div");
   status.style.cssText = "margin-top:6px";
-  root.append(pre, status);
+  const armLine = document.createElement("div");
+  const badge = new ArmBadge(armLine, epicenterOn);
+  badge.sync();
+  root.append(armLine, pre, status);
   document.body.append(root);
   const buttonStyle = "margin:6px 6px 0 0;padding:6px 10px;font:inherit;border-radius:6px;border:1px solid #7ee787;background:#14301c;color:#e8f0ff";
   const submitButton = document.createElement("button");
   return {
-    set: (text) => void (pre.textContent = loopProgress === null ? text : `${text} · ${loopProgress}`),
+    badge,
+    set: (text) => {
+      pre.textContent = loopProgress === null ? text : `${text} · ${loopProgress}`;
+      badge.sync();
+    },
     done: (lines, details, submit) => {
       pre.textContent = lines.join("\n");
       root.style.pointerEvents = "auto";
@@ -275,7 +286,9 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   const batteryStart = await readBattery();
   await engine.ready;
   if (plan.ultra && !(await engine.loadUltra())) throw new Error("CRUSH BENCH: ultra=1, but the Ultra look did not load (see the console)");
+  // The player's Sky setting, put back when the run ends; the run itself pins the sky explicitly (`skyPinOf`).
   const sky0 = skyModeOf(hud() as unknown as Record<string, unknown>);
+  const pin = skyPinOf(plan);
   const fxTiers: FxTier[] = plan.ultra ? ["minimal", "low", "high", "ultra"] : ["minimal", "low", "high"];
   engine.resetAdaptiveQuality();
   let parts = engine.benchParts();
@@ -283,26 +296,30 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   engine.fadeScenes = false;
   // The step's own cold load (the card's `load:` line), then the sweep warms the page on that scene, then the step starts over from a fresh page's state.
   const setupMs = enterBenchScene(engine, parts, plan);
+  ui.badge.sync();
 
   const t = tap(engine.pace, parts);
   const beat = newBeat(parts, await nextFrame(), plan.lab, PHASE_SWEEP);
   const page = watchPage();
   beat.page = page;
   beat.wake = opts.wake;
+  beat.arm = ui.badge;
   enterPhase(beat, page, PHASE_SWEEP);
   await sweep(engine, parts, plan, fxTiers, opts.stepOfPage === 0, t, beat, ui);
   // The sweep's hitches are its own table (every setting it visits is a switch); the run's log starts over for the warm-up, window and A/Bs.
   const sweepHitches = beat.hitches.table();
   beat.hitches = new HitchLog();
-  endSweep(engine, sky0);
+  endSweep(engine, pin);
   parts = engine.benchParts();
   beat.parts = parts;
   enterBenchScene(engine, parts, plan);
+  ui.badge.sync();
   const sequenceStart = t.simS;
   if (beat.lab) restartLab(beat.lab, sequenceStart, 0);
   enterPhase(beat, page, PHASE_WARM);
   await warmUp(() => frame(engine, parts.renderer, t, beat), { race: parts.race, simS: () => t.simS - sequenceStart, plan, ui });
-  // The window opens on a settled page: the warm-up's last frames are watched like an A/B switch's.
+  // The sky the window runs under is drawn before it opens (a step after the first may have to bring its strip back), then the page must settle: the warm-up's last frames are watched like an A/B switch's.
+  await pinSky(engine, parts, t, beat, pin);
   beat.switching = true;
   const windowStart = await settleFrames(engine, parts.renderer, t, beat, new SettleWatch());
   enterPhase(beat, page, PHASE_WINDOW);
@@ -310,7 +327,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   const { s, w, longTasks } = await sample(engine, parts, t, beat, ui);
   const leaderWindowM = leaderAhead(parts, plan);
   const top = topTier(s, parts.cine.tier);
-  const settings = settingsOf(parts, hud() as unknown as Record<string, unknown>, top);
+  const settings = { ...settingsOf(parts, hud() as unknown as Record<string, unknown>, top), skyPlayer: sky0 };
 
   // The A/Bs hold the tier the window mostly ran, so the pacer arms differ in the pacer alone.
   engine.setFxTier(top);
@@ -323,11 +340,11 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   parts.detail.setLevel(parts.governor.level);
   enterPhase(beat, page, PHASE_AB_FX);
   const fx = await alternate(engine, parts, t, beat, ui, SETTING_KEY.fx, fxTiers.map((tier) => ({ key: tier, set: () => engine.setFxTier(tier) })), BENCH.fxCycles);
-  // The sky arms hold the window's tier too, with the Sky setting `full` (the whole strip, waited for: it loads when first asked) against `off`; the player's setting goes back after.
+  // The sky arms hold the window's tier too, with the Sky setting put in force explicitly both ways, `full` (the whole strip, waited for) against `off`; the bench's pin goes back after, drawn, and the player's own setting when the run ends.
   enterPhase(beat, page, PHASE_AB_SKY);
   engine.setFxTier(top);
-  const sky = plan.lab ? null : await alternate(engine, parts, t, beat, ui, SETTING_KEY.sky, [{ key: SKY_ARM.full, set: () => showFullSky(engine, parts, t, beat) }, { key: SKY_ARM.off, set: () => engine.setSky("off") }], BENCH.skyCycles);
-  engine.setSky(settings.sky);
+  const sky = plan.lab ? null : await alternate(engine, parts, t, beat, ui, SETTING_KEY.sky, [{ key: SKY_ARM.full, set: () => pinSky(engine, parts, t, beat, "full") }, { key: SKY_ARM.off, set: () => pinSky(engine, parts, t, beat, "off") }], BENCH.skyCycles);
+  await pinSky(engine, parts, t, beat, pin);
   // What the run was like at its end is read now: the replay starts the race over.
   const leaderEndM = leaderAhead(parts, plan);
   const summary = summarize(parts, plan, s, w, setupMs);
@@ -348,6 +365,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   const pageEvents = page.stop();
   const pageSeconds = page.seconds();
   engine.setFxAuto();
+  engine.setSky(sky0);
   if (plan.lab) engine.setTimeScale(null);
 
   const gpu = await t.finish();
