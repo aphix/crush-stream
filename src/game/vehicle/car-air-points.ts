@@ -2,7 +2,8 @@ import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import type { LooseShape } from "./car-core.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, patchOf, pointContact, pointContactHeld, pointContactNear, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, topsTop, topsTopNear, wheelContact } from "../world/surfaces.ts";
+import { C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, patchOf, pointContact, pointContactHeld, pointContactNear, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, topsTop, topsTopLive, topsTopNear, wheelContact } from "../world/surfaces.ts";
+import { EPICENTER } from "../deform/epicenter.ts";
 import { G, GQ } from "../world/ground-clock.ts";
 import { TYRE_R } from "../deform/deform-state.ts";
 import { CRASH, hypot2 } from "../deform/physics-util.ts";
@@ -57,6 +58,34 @@ export function bodyContact(n: number, hit: Float64Array, hull: boolean): void {
 const PART_PQ = new Float64Array(PQ_SIZE);
 PART_PQ[PQ_BODY] = 1;
 
+const CHK_Q = new Float64Array(PQ_SIZE);
+const CHK_H = new Float64Array(HIT_SIZE);
+const CHK_V = new THREE.Vector3();
+
+/** `--verify` of `wreckTops`: the old path's answer for a point it skipped (`GQ.wreckTops`): the row it would have made, the `nearing` it would have set, the wreck top it would have been dropped by. */
+function checkSkipped(own: boolean, px: number, py: number, pz: number, r: THREE.Vector3): void {
+  const c = GQ.wreckTops;
+  c.skipped++;
+  CHK_Q[PQ_X] = px;
+  CHK_Q[PQ_Z] = pz;
+  CHK_Q[PQ_Y] = py;
+  CHK_Q[PQ_BODY] = 0;
+  if (own) pointContactNear(CHK_Q, body.skip, CHK_H, NaN, SPECULATIVE_GAP);
+  else pointContact(CHK_Q, body.skip, CHK_H, NaN, SPECULATIVE_GAP);
+  const gy = CHK_H[C_H]!;
+  if (gy === NO_FLOOR) return;
+  const pen = gy - py;
+  if (pen <= 0 && -pen > SPECULATIVE_GAP) {
+    CHK_V.crossVectors(body.w, r).add(body.v);
+    if (!body.nearing && (CHK_V.x * CHK_H[C_NX]! + CHK_V.y * CHK_H[C_NY]! + CHK_V.z * CHK_H[C_NZ]!) * -body.dt >= -pen * CHK_H[C_NY]!) c.wouldNear++;
+    return;
+  }
+  if (CHK_H[C_OWNER]! >= 0 && body.surf.cars[CHK_H[C_OWNER]!]!.deform.massActive) {
+    c.wreckTop++;
+    return;
+  }
+  c.wouldRow++;
+}
 /**
  * Whether a body point (arm `r` from the centre of mass) at crash speed against another car's top `hit` (depth `pen` under it) got there
  * from the side: deeper along the face than `SIDE_ENTRY_SLICES` slices of its closing carry it. Left to the cage top, it is lifted out of
@@ -79,7 +108,7 @@ export function crossedPlanFromSide(hit: Float64Array, pen: number, r: THREE.Vec
  * also meets a prism's side face (`C_H` NO_FLOOR: the depth it is in, out along the face's normal), asks the car tops its caller held
  * (`holdTops`) and gives the point's own velocity for the way out.
  */
-export function readPoints(from: number, to: number, bellyFrom: number, n: number, gate: boolean, bound = Infinity, tops = false, solidReach = 0, travel = 0): number {
+export function readPoints(from: number, to: number, bellyFrom: number, n: number, gate: boolean, bound = Infinity, tops = false, solidReach = 0, travel = 0, checkTops = false): number {
   const { q, v, w, dt, skip, part, pos } = body;
   const statics = activeGround();
   // The solids' highest over the square of half side `solidReach` about the centre of mass (every point's slice travel): read once, when a
@@ -87,6 +116,7 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
   let solids = NaN;
   // The car tops a point within `REACH` of the car asks (`near`), cut once to those over the square every such point's box lies in.
   let held = false;
+  const wreckTops = EPICENTER.wreckTops === 1 && body.wreck && !part;
   for (let i = from; i < to; i++) {
     if (i >= bellyFrom && BELLY_ABSENT[i - bellyFrom] === 1) continue;
     const r = armOf(i, q, R[n]!);
@@ -105,7 +135,13 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
     if (clear) {
       if (solids !== solids) solids = solidTop(centreOfMass.x - solidReach, centreOfMass.x + solidReach, centreOfMass.z - solidReach, centreOfMass.z + solidReach);
       clear = solids < low || solidTop(px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low;
-      if (clear && tops) clear = i < bellyFrom && (own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low;
+      // A wreck takes no contact row from another wreck's top (the answer is dropped below), so with `EPICENTER.wreckTops` only the other tops can keep such a point from being clear.
+      if (clear && tops) {
+        const reachable = i < bellyFrom;
+        clear = reachable && (wreckTops ? topsTopLive(skip, body.surf.cars, own, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) : (own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel)) < low;
+        // `--verify`: a point only `wreckTops` cleared is asked the old way too, and what that would have done is counted (nothing may be: no row, no `nearing`).
+        if (clear && wreckTops && GQ.check && !((own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low)) checkSkipped(own, px, py, pz, r);
+      } else if (clear && checkTops && i < bellyFrom && !((own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low)) checkSkipped(own, px, py, pz, r);
     }
     // A point the slice cannot bring to the surface needs no normal: with `nearing` set already none at all, else the square of the distance it moves (`pointContact`'s far answer).
     const travel2 = body.nearing ? -1 : (_vp.x * _vp.x + _vp.y * _vp.y + _vp.z * _vp.z) * dt * dt;

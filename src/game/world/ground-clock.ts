@@ -23,6 +23,8 @@ export const GQ = {
   outer: new Float64Array(GQ_NAMES.length),
   /** What `check` found: per kind (the three point queries, the wheel's contact) the answers compared and the mismatches, the far answers among them, and the first mismatch's text. */
   verify: { compared: new Float64Array(4), mismatches: new Float64Array(4), far: 0, first: "" },
+  /** `--verify` with `epi.wreckTops`: the points it skipped (the old test would have asked them), and of those the ones the old path would have turned into a contact row, set `nearing` or answered a wreck's top. */
+  wreckTops: { skipped: 0, wouldRow: 0, wouldNear: 0, wreckTop: 0 },
 };
 
 /** A timed query starts (clock on): counts the call and returns the time when it is the outermost, else 0. */

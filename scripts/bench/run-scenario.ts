@@ -330,6 +330,7 @@ console.log(
     trace: traceDt > 0 ? { dt: traceDt, cars: sim.cars.length, masses: sim.cars.map((c) => c.deform.masses.length), rows: trace } : null,
     census: census ? census.result(simS) : null,
     freezeRecord: recorder ? recorder.result() : null,
+    wreckTops: verify ? { ...GQ.wreckTops } : null,
     thawSites: Object.fromEntries([...sites].sort((a, b) => b[1] - a[1])),
     clampSites: Object.fromEntries([...clampSites].sort((a, b) => b[1] - a[1])),
     offSites: Object.fromEntries([...offSites].sort((a, b) => b[1] - a[1]).slice(0, 12)),

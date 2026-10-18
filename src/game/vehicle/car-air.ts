@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { C_AUX, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_PX, C_PY, C_PZ, EDGE_HIT, edgeCross, HIT_SIZE, MU_TYRE, ridgeCross, solidTop, staticTop, topsTop, type Surface } from "../world/surfaces.ts";
+import { C_AUX, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_PX, C_PY, C_PZ, EDGE_HIT, edgeCross, HIT_SIZE, MU_TYRE, ridgeCross, solidTop, staticTop, topsTop, topsTopLive, type Surface } from "../world/surfaces.ts";
+import { GQ } from "../world/ground-clock.ts";
 import { MIN_SLIDE } from "../deform/constants.ts";
 import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-util.ts";
 import { droop, PAN, SPRINGS } from "./car-suspension.ts";
@@ -675,7 +676,11 @@ export function stepFree(car: DeformableCar, dt: number): boolean {
   const pointEnd = bellyFrom + BELLY.length;
   const pointReach = _s[S_POINT_REACH]!;
   const bodyReach = pointReach + (speed + turnRate * pointReach) * dt;
-  const readAll = topsTop(car.slot, centreOfMass.x - bodyReach, centreOfMass.x + bodyReach, centreOfMass.z - bodyReach, centreOfMass.z + bodyReach) > -Infinity;
+  // `EPICENTER.wreckTops`: a wreck takes no row from another wreck's top (`readPoints`, the belly's edges below drop that answer), so only the tops of cars that are not wrecks make it read every point.
+  const oldAll = topsTop(car.slot, centreOfMass.x - bodyReach, centreOfMass.x + bodyReach, centreOfMass.z - bodyReach, centreOfMass.z + bodyReach) > -Infinity;
+  const readAll = oldAll && !(wreck && EPICENTER.wreckTops === 1 && !(topsTopLive(car.slot, surf.cars, false, centreOfMass.x - bodyReach, centreOfMass.x + bodyReach, centreOfMass.z - bodyReach, centreOfMass.z + bodyReach) > -Infinity));
+  // Where it flipped, every point still goes through its own test (no whole-body skip): the body-level `allClear` measures a wreck about the car's stock centre, not its masses', and clears a wreck resting on the ground by a millimetre the point test asks.
+  const flipped = oldAll && !readAll;
   // Every point's slice travel lies within this of the centre of mass: its reach about the body's own centre is at most the stock reach
   // plus that centre's offset from the car's (`readPoints` reads the solids over that square once, if a point needs them).
   const c = body.centre;
@@ -715,10 +720,12 @@ export function stepFree(car: DeformableCar, dt: number): boolean {
     const z0 = centreOfMass.z + zMin - pad;
     const z1 = centreOfMass.z + zMax + pad;
     const top = Math.max(staticTop(statics, x0, x1, z0, z1, true), solidTop(x0, x1, z0, z1));
-    allClear = top < centreOfMass.y + low - descent;
+    allClear = !flipped && top < centreOfMass.y + low - descent;
     bodyTop = allClear || body.centre === CAR_CENTRE ? top : centredTop(statics, turnRate, dt, pointEnd);
   }
-  n = readPoints(allClear ? pointEnd : 0, pointEnd, bellyFrom, n, true, bodyTop, readAll, solidReach, solidReach - shiftedReach);
+  // `--verify`: with `wreckTops` a point it cleared that the old test would have asked is asked the old way too (`GQ.wreckTops`), every point is visited for it (no whole-body skip).
+  const checkOld = GQ.check && flipped;
+  n = readPoints(allClear ? pointEnd : 0, pointEnd, bellyFrom, n, true, bodyTop, readAll, solidReach, solidReach - shiftedReach, checkOld);
   // Between two belly points on different patches the belly meets that edge where it crosses (`edgeCross`, the tyres' rule): a car
   // dropped level across a ramp's crest balanced on the row in front of it, the crest 17 cm inside the belly half a metre behind.
   // Over one car's top (one patch) the pan's lines rest on the top's ridge between their points where that stands above both

@@ -31,6 +31,8 @@ export const EPICENTER = {
   feedMin: 0,
   /** 1: a brake (or handbrake) held on a wreck that is at rest (`!moving`, no throttle) neither wakes it nor restarts its rest timer, so it falls asleep like an unbraked one (`applyDrive`). 0 is today: a held brake resets the timer every slice and a braked, standing wreck never sleeps. Not exact: a sleeping wreck skips the rigid step a braked one ran; it stands still either way. */
   holdWakes: 0,
+  /** 1: a wreck's body points (`readPoints`) are clear of the car tops when the tops of cars that are not wrecks are clear of them: a wreck takes no contact row from another wreck's top (that answer is dropped), so such a point was asked for nothing. The rows are the same ones; the points asked are fewer (a pile's wrecks no longer make each other's hulls ask). Only `hardTouch`, a bit no wreck's behaviour reads, can differ. Independent of `on`. */
+  wreckTops: 0,
 };
 
 /** Every knob as the module loaded it: the values a clip recorded before a knob existed reads it at (a knob added later goes at the end of `EPICENTER` with a default that changes nothing). */
@@ -61,6 +63,7 @@ const ROWS: readonly [keyof typeof EPICENTER, string, number, number, number][] 
   ["thawHold", "No refreeze after a thaw (s)", 0, 1, 0.05],
   ["feedMin", "Frozen car drops feeds under (m, 0 off)", 0, 0.005, 0.0001],
   ["holdWakes", "Brake on a wreck at rest lets it sleep", 0, 1, 1],
+  ["wreckTops", "Wreck points skip wreck tops", 0, 1, 1],
 ];
 
 /** The knob rows, in panel order. */

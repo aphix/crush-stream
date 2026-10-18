@@ -101,6 +101,7 @@ export function summarize(runs) {
       verify: verifyOf(list),
       prof: profOf(list),
       freezeRecord: list[0].freezeRecord ?? null,
+      wreckTops: list.every((r) => r.wreckTops) ? Object.fromEntries(["skipped", "wouldRow", "wouldNear", "wreckTop"].map((k) => [k, list.reduce((s, r) => s + r.wreckTops[k], 0)])) : null,
       load: { start: Math.min(...list.map((r) => r.loadStart)), startMax: Math.max(...list.map((r) => r.loadStart)), end: Math.max(...list.map((r) => r.loadEnd)) },
       flagged: list.some((r) => r.flagged),
     });
@@ -287,6 +288,11 @@ export function table(name, first, arms) {
     lines.push(row("followGlass calls per drawn frame", arms.map((a) => (a.drawn ? f2(a.drawn.followGlass / Math.max(1, a.drawn.frames)) : ""))));
     lines.push(row("us per drawn frame (updateSkin of every car + blend present + restore)", arms.map((a) => (a.drawn ? f2((1000 * a.drawn.ms) / Math.max(1, a.drawn.frames)) : ""))));
     lines.push(row("us per slice (PoseBlend begin + end)", arms.map((a) => (a.drawn ? f2((1000 * a.drawn.stepMs) / Math.max(1, a.drawn.slices)) : ""))));
+  }
+  for (const a of arms) {
+    const w = a.wreckTops;
+    if (!w) continue;
+    lines.push(`   wreckTops check, ${a.name} (summed over runs): points skipped ${w.skipped}; of those the old path would have made a contact row ${w.wouldRow}, set nearing ${w.wouldNear}, answered a wreck's top (dropped) ${w.wreckTop}; DISAGREEMENTS ${w.wouldRow + w.wouldNear}`);
   }
   for (const a of arms) {
     const r = a.freezeRecord;

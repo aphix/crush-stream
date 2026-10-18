@@ -1554,6 +1554,39 @@ export function topsTopNear(skip: number, xMin: number, xMax: number, zMin: numb
   return top;
 }
 
+/** What `topsTopLive` asks of the world's cars: whether one is a wreck (its masses run). */
+interface WreckCar {
+  readonly deform: { readonly massActive: boolean };
+}
+
+/**
+ * `topsTop` (`near` false: the tops near body `skip`) or `topsTopNear` (`near` true: the tops `holdNearTops` readied) over the car tops of cars that are not wrecks (`cars[owner].deform.massActive`):
+ * a wreck asking never takes a contact row from a wreck's top (`readPoints` drops that answer), so for the "is this point clear" test only the other tops can reach it.
+ */
+export function topsTopLive(skip: number, cars: readonly WreckCar[], near: boolean, xMin: number, xMax: number, zMin: number, zMax: number): number {
+  if (GQ.on) GQ.calls[near ? G.topsTopNear : G.topsTop] = GQ.calls[near ? G.topsTopNear : G.topsTop]! + 1;
+  const tops = live.tops;
+  if (tops === null) return -Infinity;
+  let top = -Infinity;
+  if (near) {
+    for (let k = 0; k < nearTops.count; k++) {
+      const i = nearTops.list[k]!;
+      const owner = tops.q[i * Q_STRIDE + Q_OWNER]!;
+      if (owner >= 0 && cars[owner]!.deform.massActive) continue;
+      top = Math.max(top, patchTop(tops, i, xMin, xMax, zMin, zMax, skip));
+    }
+    return top;
+  }
+  tops.near(skip, (xMin + xMax) / 2, (zMin + zMax) / 2);
+  for (let k = 0; k < tops.nAlways; k++) {
+    const i = tops.always[k]!;
+    const owner = tops.q[i * Q_STRIDE + Q_OWNER]!;
+    if (owner >= 0 && cars[owner]!.deform.massActive) continue;
+    top = Math.max(top, patchTop(tops, i, xMin, xMax, zMin, zMax, skip));
+  }
+  return top;
+}
+
 /** `out` from what `seek` found for the point `q`. */
 function answer(q: Float64Array, out: Float64Array): void {
   report(out);
