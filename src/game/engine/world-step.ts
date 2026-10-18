@@ -133,10 +133,14 @@ export const LONE_MARGIN = 1;
 /** Per car, a module scratch: its plan speed (m/s) at the step's start, and whether it runs the step as a lone car (1). */
 const lonely = { speed: new Float64Array(LONE_CARS), flag: new Uint8Array(LONE_CARS) };
 
-/** A car the race put away takes no step (`EPICENTER.storedSkip` 1): the knob and the car's flag. */
+/** A car the race put away takes no step (`EPICENTER.storedSkip`): the knob and the car's flag. */
 function idle(car: DeformableCar): boolean {
   return car.stored && EPICENTER.storedSkip === 1;
 }
+
+/** Scratch for the weight an unstepped car's roof drops (`stepWorld`). */
+const _borneV = new THREE.Vector3();
+const _borneW = new THREE.Vector3();
 
 /** Fills `near.pairs` with the pairs of `cars` within `NEAR_PAIR2` of each other in plan; the count of ints written. */
 function collectNear(cars: readonly DeformableCar[]): number {
@@ -294,8 +298,12 @@ export function stepWorld(w: World, dt: number): void {
     for (let ci = 0; ci < n; ci++) {
       if (i > 0 && lonely.flag[ci]) continue;
       const car = cars[ci]!;
-      // A put-away car (`EPICENTER.storedSkip`) is not stepped: reset, hidden and still 4 km off the course until the race places it again.
-      if (idle(car)) continue;
+      // A put-away car (`EPICENTER.storedSkip`) is not stepped: reset, hidden and still 4 km off the course until the race places it again. What a stepped one takes of
+      // the weight carried on its roof (`takeBorne`, zeroed by the take) is taken and dropped: left in the slot it would reach the car's first step after it is placed again.
+      if (idle(car)) {
+        w.surfaces.takeBorne(ci, _borneV, _borneW);
+        continue;
+      }
       const hc = lonely.flag[ci] ? dt : h;
       car.deform.beginSlice(hc);
       car.surfaces = w.surfaces;

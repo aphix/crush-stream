@@ -35,8 +35,8 @@ export const EPICENTER = {
   wreckTops: 1,
   /** 1: a cage point of a body (`readPoints`) that stands over the bound of the surfaces below it by what it can fall in the slice, the speculative gap and `CLEAR_ROUND`, judged from the body's axes (three products) instead of its arm (`armOf`'s rotation, its velocity and its boxes), is cleared as the point test would clear it: the same points are read, the cleared ones cost a third. Exact: the margin covers the two ways of rounding the height (`--verify`: least margin 1 um, no point the own test would not clear; 22 slice-by-slice comparisons identical). Independent of `on`; 0 clears each point by its own test as before. */
   preClear: 1,
-  /** The cars the race put away (`DeformableCar.stored`: traffic the observer bubble stored, police not on the road, a Survival AI no human drives; reset, hidden and still at a spot 4 km off the course, touching no car) are 8-16 in every race with traffic or police and cost 3-10 % of the sim. 0: stepped every slice, as before, and woken with the drive integrators and suspension rise of the steps they stood through (a wheelspin of 1.7 m/s from standing off the ground reaches the road: not what a car put on it is meant to start with). 2: woken fresh (`placeAt`: the drive's spin, lock, slide, drift and hold, the suspension's rise and the motion sample at rest) but still stepped. 1: woken fresh and not stepped (`stepWorld` leaves it out until it is placed again). 1 and 2 give the same race to the bit (the cars not put away end every bench row with equal digests), 0 differs from them at the first waking of a car whose standing steps had left a non-zero integrator. */
-  storedSkip: 0,
+  /** 1: a car the race put away (`DeformableCar.stored`: traffic the observer bubble stored, police not on the road, a Survival AI no human drives; reset, hidden and still at a spot 4 km off the course, touching no car: 8-16 of them in every race with traffic or police, 3-17 % of the sim) takes no step (`stepWorld` leaves it out of every per-car loop and only drops the weight carried on its roof, as a step would) until the race places it again. Exact for every car that is not put away: slice by slice, every physical field of every live car of the city race, the mall, the dam spine and the strip is bit for bit that of 0 over 40 s (`bench.mjs run <row> --arm main:epi.storedSkip=0 --arm skip: --slices`, and the `digest of the cars not put away`); a put-away car's own state is not part of the claim: it is placed afresh when it wakes. Independent of `on`; 0 steps it every slice as before. */
+  storedSkip: 1,
 };
 
 /** Every knob as the module loaded it: the values a clip recorded before a knob existed reads it at (a knob added later goes at the end of `EPICENTER` with a default that changes nothing). */
@@ -69,7 +69,7 @@ const ROWS: readonly [keyof typeof EPICENTER, string, number, number, number][] 
   ["holdWakes", "Brake on a wreck at rest lets it sleep", 0, 1, 1],
   ["wreckTops", "Wreck points skip wreck tops", 0, 1, 1],
   ["preClear", "Clear high cage points from the axes", 0, 1, 1],
-  ["storedSkip", "Put-away cars: 1 not stepped, 2 only woken fresh", 0, 2, 1],
+  ["storedSkip", "Do not step put-away cars", 0, 1, 1],
 ];
 
 /** The knob rows, in panel order. */

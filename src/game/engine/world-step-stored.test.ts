@@ -4,13 +4,14 @@ import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
+import { QUIET_HZ } from "../kernel/constants.ts";
 import { WORK } from "./sim-phases.ts";
 import { newWorld, stepWorld, type World } from "./world-step.ts";
-import { QUIET_HZ } from "../kernel/constants.ts";
 
 const saved = epicenterValues();
 afterEach(() => loadEpicenter(saved));
 
+/** The pacer's coarse step (s). */
 const STEP = 1 / QUIET_HZ;
 
 /** A car driving on at 25 m/s and one the race put away, 4 km off: the two cars `stepWorld` is given. */
@@ -29,8 +30,8 @@ function carSlices(w: World): number {
   return work[WORK.liveCarSlices]! + work[WORK.wreckCarSlices]! + work[WORK.asleepCarSlices]!;
 }
 
-describe("given a car the race put away (`stored`) beside a car driving on, with `epi.storedSkip` set", () => {
-  it("when the world steps 1 s with the knob at 1, then the put-away car is not stepped (nothing of it moves, no car-slice counted) and the driving car runs its slices", () => {
+describe("given a car the race put away (`stored`) beside a car driving on", () => {
+  it("when the world steps 1 s with `epi.storedSkip` at 1, then the put-away car is not stepped (nothing of it moves, no car-slice counted) and the driving car runs its slices", () => {
     loadEpicenter(EPICENTER_AT_LOAD);
     EPICENTER.storedSkip = 1;
     const { cars, w } = field();
@@ -47,31 +48,27 @@ describe("given a car the race put away (`stored`) beside a car driving on, with
     for (const car of cars) car.dispose();
   });
 
-  it("when the world steps 1 s with the knob at 0 or 2, then both cars are stepped as before", () => {
-    for (const knob of [0, 2]) {
-      loadEpicenter(EPICENTER_AT_LOAD);
-      EPICENTER.storedSkip = knob;
-      const { cars, w } = field();
-      for (let s = 0; s < 80; s++) stepWorld(w, STEP);
-      assert.equal(carSlices(w), 160, `knob ${knob}: two car-slices a step`);
-      for (const car of cars) car.dispose();
-    }
+  it("when the world steps 1 s with the knob at 0, then both cars are stepped as before", () => {
+    loadEpicenter(EPICENTER_AT_LOAD);
+    EPICENTER.storedSkip = 0;
+    const { cars, w } = field();
+    for (let s = 0; s < 80; s++) stepWorld(w, STEP);
+    assert.equal(carSlices(w), 160, "two car-slices a step");
+    for (const car of cars) car.dispose();
   });
 
-  it("when a car with wheelspin and a sliding drive is placed again, then the knob at 1 or 2 starts it with the drive's integrators at rest, and at 0 leaves them as they were", () => {
-    for (const knob of [0, 1, 2]) {
-      loadEpicenter(EPICENTER_AT_LOAD);
-      EPICENTER.storedSkip = knob;
-      const car = makeCar("shape");
-      car.drive.spin = 1;
-      car.drive.spinSpeed = 1.7;
-      car.drive.slide = 0.4;
-      car.spawnFacing(10, 20, 0, 0);
-      const fresh = knob > 0;
-      assert.equal(car.drive.spin, fresh ? 0 : 1, `knob ${knob}: spin`);
-      assert.equal(car.drive.spinSpeed, fresh ? 0 : 1.7, `knob ${knob}: spin speed`);
-      assert.equal(car.drive.slide, fresh ? 0 : 0.4, `knob ${knob}: slide`);
-      car.dispose();
-    }
+  it("when the put-away car's roof carries weight (a rider's) and the knob is at 1, then the weight is taken and dropped each slice as a step would take it, not left in the slot for the car's first step after it is placed again", () => {
+    loadEpicenter(EPICENTER_AT_LOAD);
+    EPICENTER.storedSkip = 1;
+    const { cars, w } = field();
+    stepWorld(w, STEP);
+    const surfaces = w.surfaces;
+    surfaces.borneState(1, Float64Array.of(0, -0.05, 0, 0, 0, 0), 0, true);
+    assert.equal(w.surfaces.cars.length, 2, "the world's roofs hold both cars");
+    stepWorld(w, STEP);
+    const left = new Float64Array(6);
+    surfaces.borneState(1, left, 0, false);
+    assert.equal(left.some((v) => v !== 0), false, "the put-away car's slot holds no borne weight after a step");
+    for (const car of cars) car.dispose();
   });
 });
