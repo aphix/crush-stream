@@ -642,11 +642,11 @@ export abstract class EngineCore {
   }
   /**
    * Sparks and dust on a hit's point before the cars meet, where the contact is still being worked out: the slow-mo has
-   * eased in (the sandbox's `fudgePredicted`, the reel's `fudge`). `strength` (0..1) scales the burst: the reel fades it in as the cars close.
+   * eased in (the sandbox's `fudgePredicted`, the reel's `fudge`).
    */
-  protected fudgeContact(at: THREE.Vector3, normal: THREE.Vector3, strength = 1): void {
-    this.sparks.poof(at, normal, 10 * this.fxDensity * strength);
-    this.debris.burst(at, normal, 4 * this.fxDensity * strength);
+  protected fudgeContact(at: THREE.Vector3, normal: THREE.Vector3): void {
+    this.sparks.poof(at, normal, 10 * this.fxDensity);
+    this.debris.burst(at, normal, 4 * this.fxDensity);
   }
   /** While the pre-impact slow-mo eases in, every `FUDGE_GAP` wall s: the fudge on the predicted contact point. */
   protected fudgePredicted(): void {

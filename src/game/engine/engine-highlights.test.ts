@@ -9,7 +9,7 @@ import { frame, makeWorld, type World } from "../world/race-world.test-util.ts";
 import { FUDGE_GAP, impactScale, phaseClock, PRE_IMPACT_LEAD } from "../match/phase.ts";
 import { carLayout } from "../net/car-pose.ts";
 import { packReel, unpackReel } from "../net/reel-codec.ts";
-import { clipTimeline, FLIGHT_S, FUDGE_FULL, FUDGE_REACH, ReelDirector, simAt, type ReelHost } from "./engine-highlights.ts";
+import { clipTimeline, FLIGHT_S, ReelDirector, simAt, type ReelHost } from "./engine-highlights.ts";
 import { ClipSim } from "./engine-replay.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { Reel } from "../match/highlights.ts";
@@ -22,8 +22,6 @@ import { TIMELINE_HZ } from "./constants.ts";
 /** The city course with the staged head-on's cars (2 and 3) and the player's and car 1: no field around them to crash into. */
 const FIELD = { trackId: "city", laps: 1, aiCount: 3, noReset: false, aggression: 1 };
 const SEED = 5;
-/** A hit's sparks lie within this many metres of a clip car's centre: a car's nose is about 2.3 m from its centre, and the sparks leave from where two cars touch. */
-const HIT_NEAR = 3;
 /**
  * A deliberate first crash on intact cars, a second into the race: cars 2 and 3 put head-on 8 m apart on the city road at `aMps` and
  * `bMps` m/s. No seed's natural field guarantees one (any change to the car sim moves a seed's whole race, and slow bumps tear parts
@@ -352,48 +350,97 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
     assert.ok(advancing >= slowFrames * 0.95, `${advancing} of ${slowFrames} slow-motion frames advanced the dummies and FX`);
   });
 
-  it("when its reel plays twice, then on each play the fudge's sparks fade in as the cars close on the point (none while the farthest is FUDGE_REACH off, full once they touch), every hit's sparks lie by a clip car, and the second play throws what the first did", () => {
-    const { reel } = fast;
-    const clip = reel.clips[0]!;
-    // The clock the reel's spark throttle reads: a frame is 1/60 s on it, whatever the test box's speed.
+  /** The reel's host with its FX counted as the pools hold them: bursts thrown (fudge, hit, flash and burst) since the pools were last cleared (`clear`). */
+  function countedHost(w: World, fx: { live: number; hits: number }): ReelHost {
+    return {
+      ...hostOf(w),
+      clear: () => void (fx.live = 0),
+      fudge: () => void fx.live++,
+      impact: () => void fx.live++,
+      hit: () => void (fx.live++, fx.hits++),
+    };
+  }
+
+  it("when its reel loops and a clip is watched alone and put back, then no spark or debris of one play is alive on the next play's first frame, and a reel that rejoins a clip late hovers over its opening with none", () => {
+    const { w: a, reel } = fast;
     let clockS = 0;
     mock.method(performance, "now", () => clockS * 1000);
-    type Call = { w: number; strength: number; far: number; near: number };
-    const plays: { fudge: Call[]; hit: Call[] }[] = [{ fudge: [], hit: [] }, { fudge: [], hit: [] }];
+    const fx = { live: 0, hits: 0 };
+    const starts: { pass: number; before: number; after: number }[] = [];
     try {
-      const d: ReelDirector = new ReelDirector({
-        ...hostOf(fast.w),
-        fudge: (_at, _n, strength) => plays[d["pass"]]!.fudge.push({ w: d["wall"], strength, far: farthest(), near: 0 }),
-        hit: (at) => plays[d["pass"]]!.hit.push({ w: d["wall"], strength: 0, far: 0, near: nearest(at) }),
-      });
-      /** The first impact's cars as drawn: the farthest from the recorded point, and the clip car nearest a point. */
-      const farthest = (): number => Math.max(...[clip.firstA, clip.firstB].filter((j) => j >= 0).map((j) => Math.hypot(d["cur"]!.sim.cars[j]!.group.position.x - clip.x, d["cur"]!.sim.cars[j]!.group.position.z - clip.z)));
-      const nearest = (at: THREE.Vector3): number => Math.min(...d["cur"]!.sim.cars.map((c) => Math.hypot(c.group.position.x - at.x, c.group.position.z - at.z)));
+      const d = new ReelDirector(countedHost(a, fx));
       d.stepBudgetMs = Infinity;
       d.play(reel, 0);
       const loop = d["loopWall"] as number;
-      for (let n = 1; (clockS = n / 60) < 2 * loop - 1; n++) d.frame(clockS);
+      const run = (from: number, to: number): void => {
+        let pass = d["pass"] as number;
+        let before = fx.live;
+        for (let n = 1; (clockS = from + n / 60) < to; n++) {
+          d.frame(clockS);
+          if (d["pass"] !== pass) starts.push({ pass: d["pass"], before, after: fx.live });
+          pass = d["pass"];
+          before = fx.live;
+        }
+      };
+      // The reel's two plays; then the clip watched alone for two laps (a click on its Watch button).
+      run(0, 2 * loop - 1);
+      const watchAt = 2 * loop + FLIGHT_S + 6;
+      d.view(0, watchAt);
+      const lap = d["solo"]!.tl.wall + 1.5;
+      run(watchAt, watchAt + 2 * lap - 1);
+      const throwing = fx.live;
+      assert.ok(throwing > 0, "the watched clip threw nothing: nothing to carry over");
+      // Put back: the reel rejoins the clip a stall's worth late and hovers over it.
+      d.back();
+      const lateAt = 6 * loop + FLIGHT_S + 6;
+      const hover: number[] = [];
+      for (let k = 0; k < 30; k++) {
+        clockS = lateAt + k / 60;
+        d.frame(clockS);
+        hover.push(fx.live);
+      }
+      assert.equal(d["hovering"], true, "the reel did not hover over the clip it rejoined late");
+      assert.deepEqual(hover.filter((n) => n > 0), [], `${throwing} bursts of the watched clip were still alive in the hover (${hover.join(",")})`);
+      assert.equal(d["cur"]!.sim.time, 0, "the hover shows the clip's opening, not where the watched clip ended");
     } finally {
       mock.restoreAll();
     }
-    for (const [pass, p] of plays.entries()) {
-      const label = `play ${pass + 1}`;
-      assert.ok(p.fudge.length >= 8, `${label}: ${p.fudge.length} fudge calls`);
-      for (const f of p.fudge) {
-        if (f.far >= FUDGE_REACH) assert.equal(f.strength, 0, `${label}: sparks at strength ${f.strength} with the cars ${f.far.toFixed(2)} m from their point (reach ${FUDGE_REACH} m)`);
-        if (f.far <= FUDGE_FULL) assert.equal(f.strength, 1, `${label}: sparks at strength ${f.strength} with the cars ${f.far.toFixed(2)} m from their point (full at ${FUDGE_FULL} m)`);
-      }
-      for (let k = 1; k < p.fudge.length; k++) assert.ok(p.fudge[k]!.strength >= p.fudge[k - 1]!.strength, `${label}: fudge ${k} fell from ${p.fudge[k - 1]!.strength.toFixed(2)} to ${p.fudge[k]!.strength.toFixed(2)}`);
-      assert.ok(p.fudge[0]!.far >= FUDGE_REACH && p.fudge[0]!.strength === 0, `${label}: the slow-mo's first burst has the cars ${p.fudge[0]!.far.toFixed(2)} m off at strength ${p.fudge[0]!.strength.toFixed(2)}`);
-      assert.equal(p.fudge.at(-1)!.strength, 1, `${label}: the last burst before the cars meet is at ${p.fudge.at(-1)!.strength.toFixed(2)}`);
-      assert.ok(p.hit.length >= 1, `${label}: no hit sparks`);
-      for (const h of p.hit) assert.ok(h.near <= HIT_NEAR, `${label}: hit sparks ${h.near.toFixed(2)} m from the nearest clip car at ${h.w.toFixed(2)} s (a car is ${HIT_NEAR} m or less from a contact it makes)`);
+    assert.ok(starts.length >= 3, `${starts.length} play starts seen`);
+    for (const s of starts) {
+      assert.ok(s.before > 0 || s.pass === 0, `play ${s.pass}: the play before threw nothing`);
+      assert.equal(s.after, 0, `play ${s.pass} started with ${s.after} bursts of the last play alive (${s.before} before it)`);
     }
-    const [first, second] = plays as [(typeof plays)[0], (typeof plays)[0]];
-    assert.equal(second.fudge.length, first.fudge.length, "fudge calls on the second play against the first");
-    assert.equal(second.hit.length, first.hit.length, "hit sparks on the second play against the first");
-    // A play's frames land a different fraction of a frame into it: the same burst may differ by a frame's worth of approach.
-    for (const [k, f] of first.fudge.entries()) assert.ok(Math.abs(second.fudge[k]!.strength - f.strength) < 0.2, `fudge ${k}: strength ${second.fudge[k]!.strength.toFixed(2)} on the second play, ${f.strength.toFixed(2)} on the first`);
+  });
+
+  it("when a clip watched alone has run its last step and its view holds the last frame, then the hold throws no sparks of that step again", () => {
+    const { w: a, reel } = fast;
+    let clockS = 0;
+    mock.method(performance, "now", () => clockS * 1000);
+    const fx = { live: 0, hits: 0 };
+    let held = 0;
+    let heldFrames = 0;
+    try {
+      const d = new ReelDirector(countedHost(a, fx));
+      d.stepBudgetMs = Infinity;
+      d.play(reel, 0);
+      d.view(0, 0);
+      const wall = d["solo"]!.tl.wall as number;
+      let n = 1;
+      for (; (clockS = n / 60) <= wall; n++) d.frame(clockS);
+      // The frame that draws the clip's last moment has looked at its last step: the contact that step left (a pile pressed together at the end) stays the world's last.
+      d.frame((clockS = ++n / 60));
+      d["cur"]!.sim.world.strongest.offer({ impulse: 10, contact: new THREE.Vector3(1, 0.4, 1), normal: new THREE.Vector3(1, 0, 0) });
+      const before = fx.hits;
+      for (n++; (clockS = n / 60) < wall + 1.4; n++) {
+        d.frame(clockS);
+        heldFrames++;
+      }
+      held = fx.hits - before;
+    } finally {
+      mock.restoreAll();
+    }
+    assert.ok(heldFrames > 60, `${heldFrames} frames of the hold`);
+    assert.equal(held, 0, `${held} spark showers over the ${heldFrames}-frame hold after the last step, for a contact that step left`);
   });
 
   it("when a replay that made a contact is restarted, then the last step's contact is gone before its first step", () => {
@@ -407,6 +454,53 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
     sim.restart();
     assert.equal(sim.world.strongest.impulse, 0, "a restarted replay still holds the last play's contact");
     assert.equal(sim.world.strongest.contact, null);
+  });
+
+  it("when its reel plays twice, then every frame of the second play (its first frames after the flight included) has the camera, the focus car and the crash and impact calls where the first play had them", () => {
+    const { w: a, reel } = fast;
+    let clockS = 0;
+    mock.method(performance, "now", () => clockS * 1000);
+    type Frame = { eye: number[]; focus: boolean; crash: number; impact: number };
+    const plays: Frame[][] = [[], []];
+    try {
+      const seen = { crash: 0, impact: 0 };
+      const d = new ReelDirector({ ...hostOf(a), crash: () => void seen.crash++, impact: () => void seen.impact++ });
+      d.stepBudgetMs = Infinity;
+      d.play(reel, 0);
+      const loop = d["loopWall"] as number;
+      const cam = new THREE.PerspectiveCamera(50, 1.6, 0.1, 900);
+      for (const [pass, frames] of plays.entries()) {
+        seen.crash = 0;
+        seen.impact = 0;
+        for (let n = 1; n / 60 < loop; n++) {
+          clockS = pass * loop + n / 60;
+          d.frame(clockS);
+          d.camera(cam);
+          frames.push({ eye: [cam.position.x, cam.position.y, cam.position.z, cam.quaternion.x, cam.quaternion.y, cam.quaternion.z, cam.quaternion.w, cam.fov], focus: d.focus() !== null, crash: seen.crash, impact: seen.impact });
+        }
+      }
+    } finally {
+      mock.restoreAll();
+    }
+    const [first, second] = plays as [Frame[], Frame[]];
+    assert.ok(first.length > 600, `${first.length} frames compared`);
+    assert.equal(second.length, first.length);
+    let worst = 0;
+    let at = -1;
+    for (const [n, f] of first.entries()) {
+      const g = second[n]!;
+      assert.equal(g.focus, f.focus, `frame ${n}: focus car ${g.focus} on the second play, ${f.focus} on the first`);
+      assert.equal(g.crash, f.crash, `frame ${n}: ${g.crash} crash cam begins on the second play, ${f.crash} on the first`);
+      assert.equal(g.impact, f.impact, `frame ${n}: ${g.impact} impacts on the second play, ${f.impact} on the first`);
+      for (let k = 0; k < f.eye.length; k++) {
+        const off = Math.abs(g.eye[k]! - f.eye[k]!);
+        if (off > worst) {
+          worst = off;
+          at = n;
+        }
+      }
+    }
+    assert.ok(worst < 1e-6, `the second play's camera differs from the first's by ${worst.toExponential(2)} (m, quaternion or deg) at frame ${at} (${((at + 1) / 60).toFixed(2)} s into the loop)`);
   });
 });
 

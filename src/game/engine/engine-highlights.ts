@@ -13,7 +13,6 @@ import { CINE, withCars, type Sight } from "../present/spectate-cam.ts";
 import { crashCamEnd, CUTS, hitAim, laterHits, type CrashCam, type CrashHold } from "../present/engine-cine.ts";
 import { contextEye, contextPose, overheadPose } from "../present/highlight-cam.ts";
 import { ClipSim, NO_RIDE, type ReplayScene } from "./engine-replay.ts";
-import { hypot2 } from "../kernel/physics-core.js";
 import { SPARK_MIN_IMPULSE, TIMELINE_HZ } from "./constants.ts";
 
 /** Wall seconds of the far-overhead flight into each clip. */
@@ -29,15 +28,6 @@ const TL_DT = 1 / TIMELINE_HZ;
 const JOIN_LATE = 0.25;
 /** A car–car hit in a replay throws sparks at most this often (wall s), as a race does. */
 const SPARK_GAP = 0.16;
-/**
- * The fudge's sparks and dust (`ReelHost.fudge`) fade in as the first impact's cars close on its point: none while the farthest of
- * them stands this far (m, centre to the point) off, full at `FUDGE_FULL`. The slow-mo eases in `PRE_IMPACT_LEAD` before the cars
- * meet, and a burst at its start hung in empty air 5-6 m ahead of both cars (owner 2026-10-18: "sparks in the air where the
- * collision will be but the cars haven't arrived yet").
- */
-export const FUDGE_REACH = 5;
-/** A car's nose is about 2.3 m from its centre: the cars this close to the point are touching it, and the fudge is at full strength. */
-export const FUDGE_FULL = 2.5;
 /**
  * The held crash cam keeps a cut whose eye sees the hit this long (wall s) past the cars meeting, the car in its sight or
  * not (`CrashHold.hit`): longer than its re-ask (`HOLD_CHECK`), so an ask just before the hit cannot hand the shot off on it.
@@ -269,8 +259,8 @@ export type ReelHost = {
   crash(contact: THREE.Vector3, normal: THREE.Vector3): void;
   /** A clip's first impact, the cars meet: the kick, flash and burst. */
   impact(contact: THREE.Vector3, normal: THREE.Vector3, closing: number): void;
-  /** The clip's first impact is still ahead, the slow-mo easing in: sparks and dust on its point, `strength` (0..1) of a full burst as the cars close on it (`FUDGE_REACH`; called every `FUDGE_GAP` wall s until the cars meet). */
-  fudge(contact: THREE.Vector3, normal: THREE.Vector3, strength: number): void;
+  /** The clip's first impact is still ahead, the slow-mo easing in: sparks and dust on its point (called every `FUDGE_GAP` wall s until the cars meet). */
+  fudge(contact: THREE.Vector3, normal: THREE.Vector3): void;
   /** A replay's car–car hit: sparks. */
   hit(contact: THREE.Vector3, normal: THREE.Vector3, impulse: number): void;
   /** A driver in the clip was thrown out (`ClipSim.take`, `e.car` the engine slot): his dummy flies, from the recording's numbers; `ride`: he was thrown in the clip's own crash, so the camera follows his flight (only such a driver is ever framed by the ride). */
@@ -325,6 +315,10 @@ export class ReelDirector {
   /** The clip time (s) the replay was last drawn at: what the ragdolls, debris and FX advance by, not the steps the replay ran to get there. */
   private presentedAt = 0;
   private sparkAt = -Infinity;
+  /** The step of the replay whose contact has been offered to the sparks (`run`): a step's contact is thrown once, not again for as long as the replay stands on it. */
+  private hitStep = -1;
+  /** The reel hovers over a clip it reached late (`JOIN_LATE`), set up at its opening and not playing. */
+  private hovering = false;
   /** Reel clip on screen, −1 in a flight. */
   private showing = -1;
   /** The last clip id handed out (`prepare`). */
@@ -419,6 +413,7 @@ export class ReelDirector {
     this.saved.clear();
     this.startAt = Infinity;
     this.cur = null;
+    this.hovering = false;
     this.showing = -1;
     this.playing = false;
     const shown = this.shown;
@@ -475,6 +470,11 @@ export class ReelDirector {
       if (t < p.tl.wall) {
         if (this.cur !== p || this.pass !== pass) {
           if (t > JOIN_LATE) {
+            // Hovering shows the clip's opening, set up once: the clip or view played before (its sparks, debris, dummies and wrecks) is gone, and nothing stale hangs frozen over the point (the FX advance by the frame's sim time, which a hover has none of).
+            if (!this.hovering) {
+              this.setup(p, -1);
+              this.hovering = true;
+            }
             this.fly(p.clip, p.clip, 1);
             this.showing = -1;
             return 0;
@@ -590,6 +590,8 @@ export class ReelDirector {
     this.began = false;
     this.met = false;
     this.fudgedAt = -Infinity;
+    this.hitStep = -1;
+    this.hovering = false;
     this.host.resetProps();
     // The race's leftovers, torn parts of the cars hidden next and any dummy included, stay out of the clip; the clip's cars respawn after.
     this.host.clear();
@@ -626,7 +628,7 @@ export class ReelDirector {
     if (w >= tl.onset && w < tl.contact && w - this.fudgedAt >= FUDGE_GAP) {
       this.fudgedAt = w;
       this.firstHit(p);
-      this.host.fudge(_c.setY(_c.y + 0.4), _n, this.fudgeStrength(p));
+      this.host.fudge(_c.setY(_c.y + 0.4), _n);
     }
     const target = simAt(tl, w);
     const deadline = performance.now() + this.stepBudgetMs;
@@ -648,7 +650,10 @@ export class ReelDirector {
     const shown = shownTo >= this.presentedAt ? shownTo - this.presentedAt : 0;
     this.presentedAt = shownTo;
     const hit = sim.world.strongest;
-    if (hit.contact && hit.normal && hit.impulse > SPARK_MIN_IMPULSE && performance.now() / 1000 - this.sparkAt > SPARK_GAP) {
+    // The last step's hardest contact is the step's own: thrown once when a step has run since the last look, not again every `SPARK_GAP` while the replay stands on it (slow-mo between steps, the hold after the clip's last).
+    const stepped = sim.step !== this.hitStep;
+    this.hitStep = sim.step;
+    if (stepped && hit.contact && hit.normal && hit.impulse > SPARK_MIN_IMPULSE && performance.now() / 1000 - this.sparkAt > SPARK_GAP) {
       this.sparkAt = performance.now() / 1000;
       this.host.hit(hit.contact, hit.normal, hit.impulse);
     }
@@ -709,18 +714,6 @@ export class ReelDirector {
     if (!shot.hit) return;
     // The shot the cars meet in: its spot must see where they will meet (the record says where), else it is the chase.
     if (!cam.sees(still, hitAim(_c, clip.x, sim.cars[clip.firstA]!.group.position.y, clip.z, still))) cam.found = false;
-  }
-
-  /** How much of a full fudge burst clip `p` throws now (0..1): the first impact's cars as drawn, the farthest of them from its recorded point (`FUDGE_REACH`). */
-  private fudgeStrength(p: Prepared): number {
-    const { clip, sim } = p;
-    const a = sim.cars[clip.firstA]!.group.position;
-    let far = hypot2(a.x - clip.x, a.z - clip.z);
-    if (clip.firstB >= 0) {
-      const b = sim.cars[clip.firstB]!.group.position;
-      far = Math.max(far, hypot2(b.x - clip.x, b.z - clip.z));
-    }
-    return THREE.MathUtils.clamp((FUDGE_REACH - far) / (FUDGE_REACH - FUDGE_FULL), 0, 1);
   }
 
   /** Clip `p`'s first impact: `_c` its recorded point (its height from the record, `ClipHit.y`, not the first car's: the crash cam begins well before the hit, with the car still on its way up a kicker), `_n` the flat line the cars meet along (the car's heading if it hit alone). */

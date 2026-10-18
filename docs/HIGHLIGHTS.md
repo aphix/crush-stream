@@ -274,16 +274,19 @@ the shot. A peer at 45 Hz and one at 60 Hz therefore frame the same camera at th
   then files: every hold plays whole on recorded motion.
 - **Fudge.** The crash starts `PRE_IMPACT_LEAD` before the cars meet, where the replay's contact is still being worked
   out. From the slow-mo's start until the meeting the reel calls `ReelHost.fudge` every `FUDGE_GAP` (0.08 wall s) with the
-  clip's recorded first-impact point and a strength: `SparkSystem.poof` and `DebrisSystem.burst` scaled by it, nothing else.
-  The strength fades in as the first impact's cars (as drawn) close on the point, from 0 while the farther of them is
-  `FUDGE_REACH` (5 m, centre to point) off to 1 at `FUDGE_FULL` (2.5 m: a car's nose), so no burst hangs in empty air ahead of cars still
-  metres away (owner 2026-10-18). The live sandbox does the same, at full strength, on the point `pairEta` (or the slab's
-  `contactEta`) predicts. Race and derby have no live slow-mo, so no fudge. A restart of a clip (`ClipSim.restart`) also drops
-  the last step's contact (`World.strongest`), which `ReelDirector.run` turns into hit sparks, so a play never starts on the last one's.
+  clip's recorded first-impact point: `SparkSystem.poof` and `DebrisSystem.burst`, nothing else. The live sandbox does the
+  same on the point `pairEta` (or the slab's `contactEta`) predicts. Race and derby have no live slow-mo, so no fudge.
+- **Hit sparks.** `ReelHost.hit` throws the sparks of the replay's strongest contact (`World.strongest`, the last step's
+  hardest), at most every `SPARK_GAP`, and only when a step has run since the last look: the slow-mo between steps and a
+  solo view's hold on the last frame never throw one step's contact again (owner 2026-10-18: sparks "continuing post reset
+  for the loop"). `ClipSim.restart` drops the last step's contact too, so a play never starts on the last one's.
 - **Stepping.** The replay runs up to 6 ms per frame (`stepBudgetMs`). A frame that falls behind catches up over the
   next ones.
 - **Late join.** A peer that reaches a clip more than `JOIN_LATE` (0.25 s) in (a late join, back from the solo view, a
-  stalled tab) hovers over it until the next flight instead of replaying seconds in one frame.
+  stalled tab) hovers over it until the next flight instead of replaying seconds in one frame. The hover is set up once
+  at the clip's opening (`setup`: sparks, debris, dummies and wrecks of whatever played before are cleared, cars at the
+  clip's start): the FX advance by the frame's sim time, which a hover has none of, so the sparks and debris of the
+  watched clip left behind (18 sparks and 12 debris pieces after a Watch put back, measured) hung frozen over the point.
 - **Cars.** While the reel plays, the engine's own sim is paused. Every car but the clip's is hidden, and all of them
   are restored when the reel stops. A clip car the record had put away (a Survival cop waiting off the course until it drops in: `RaceField.putAway`
   parks it at a spot `RaceDirector.stored` knows) is hidden where it waits, until the keyframe of its placement puts it on the road (`ClipSim.pose`,
