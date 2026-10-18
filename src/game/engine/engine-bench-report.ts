@@ -3,6 +3,8 @@ import { FX_TIER_ULTRA } from "../present/constants.ts";
 import type { SkyDetail, SkyMode } from "../present/sky-dome.ts";
 import { labLine, stripLines, type StripResult } from "./engine-bench-plan.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
+import type { HitchTable } from "./bench-hitch.ts";
+import type { SwitchHitch } from "./bench-settle.ts";
 
 const COARSE_LABEL = `1/${QUIET_HZ} s`;
 
@@ -225,6 +227,10 @@ export interface BenchResult {
   phases: PhaseCard;
   /** Long tasks during the window; null where the browser has no "longtask" entries (not Chrome). */
   longTasks: LongTasks | null;
+  /** Every frame of the run over 3x the running median interval (and 25 ms), with its stretch, time, what ran in it and what changed (`HitchTable`). The warm-up's are expected; the arms' scored frames never include a switch's hang. */
+  hitches: HitchTable;
+  /** Each A/B switch's frames after it (`SwitchHitch`): the longest frame and the time to settle, unscored. */
+  switches: SwitchHitch[];
   settings: BenchSettings;
   /** The pacer pinned to 1/240 s and to 1/80 s in alternating blocks (same tier), then the FX tier alternated minimal / low / high (and ultra when the page asked: `&ultra=1`). */
   abPace: { fine: Block; coarse: Block };
@@ -344,6 +350,22 @@ const phaseLine = (p: PhaseCard, simMsPerSimS: number): string => {
   return `  sim phases, ms per sim-second: ${phases.map(([name, ms]) => `${name} ${f1(ms)}`).join(", ")}, unattributed ${f1(p.unattributedMsPerSimS)}  (sum ${f1(sum)} of ${f1(simMsPerSimS)});  work per sim-second: ${work}`;
 };
 
+/** The switch hitches on one line, grouped by A/B: `arm longest frame ms / s to settle`, `!` where the arm never settled within the cap. */
+const switchLine = (switches: readonly SwitchHitch[]): string => {
+  const stretches = [...new Set(switches.map((s) => s.stretch))];
+  const groups = stretches.map((stretch) => `${stretch}: ${switches.filter((s) => s.stretch === stretch).map((s) => `${s.arm} ${Math.round(s.longestMs)}/${f1(s.settleS)}${s.settled ? "" : "!"}`).join(", ")}`);
+  return `switch hitches (longest frame ms / s to settle, scored after it, ! never settled): ${groups.join("; ")}`;
+};
+
+/** How many of the worst hitches the card's line names. */
+const HITCH_LINE_ROWS = 4;
+/** The hitch log on one line: how many frames ran over, and the worst few with their stretch, time, ms and what changed in them. */
+const hitchLine = (h: HitchTable): string => {
+  const worst = [...h.rows].sort((a, b) => b.ms - a.ms).slice(0, HITCH_LINE_ROWS);
+  const rows = worst.map((r) => `${PAGE_PHASES[r.phase]} ${f1(r.atS)} s ${Math.round(r.ms)} ms (cpu ${Math.round(r.cpuMs)}, draw ${Math.round(r.drawMs)}; ${r.causes.length ? r.causes.join("+") : "no visible cause"})`);
+  return `hitches: ${h.count} of ${h.frames} frames over ${h.factor}x the median (and ${h.minMs} ms), ${Math.round(h.excessMs)} ms over in all${rows.length ? `; worst: ${rows.join(", ")}` : ""}`;
+};
+
 /** What the device was doing besides the game: long tasks over the window, the battery before and after. */
 const deviceStateText = (longTasks: LongTasks | null, battery: BenchResult["device"]["battery"]): string => {
   const level = (b: Battery): string => `${Math.round(100 * b.level)} %${b.charging ? " charging" : " on battery"}`;
@@ -369,14 +391,14 @@ export function describeBench(r: BenchResult): string[] {
     row("CPU", r.cpuMs),
     row("  sim", r.simMs) + `   ${f1(r.stepsPerFrame)} steps/frame, ${r.msPerStep.toFixed(2)} ms/step, ${Math.round(r.simMsPerSimS)} ms per sim-second, ${f1(r.fineCutsPerSimS)} fine-slice cuts/sim-s`,
     phaseLine(r.phases, r.simMsPerSimS),
+    `${hitchLine(r.hitches)}   ${switchLine(r.switches)}`,
     row("  draw", r.renderMs),
     r.gpuMs ? row("GPU", r.gpuMs) + (waited(r.gpuMs, r.frameMs) ? "   p95 is one frame long: a wait on the display, p50 is the work" : "") : "GPU       no timer query on this device",
     ragdollLine(r.ragdoll),
     `draw ${r.calls} calls  ${Math.round(r.triangles / 1000)}k tris   cops: ${r.cops ? `${r.cops.stakeouts} stakeouts, ${r.cops.pursuits} pursuits, pack of ${r.cops.maxPack}` : "none"}`,
     `fx tier: ${tiers}${s.fxAuto ? " (auto)" : ""}   post chain at the top tier: ${s.post}`,
     `detail: only the body drawn beyond ${Object.entries(r.detailPct).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} for ${Math.round(v)} %`).join(", ")} of the window`,
-    `shadows ${s.shadows.enabled ? `${s.shadows.type} ${s.shadows.map}, ${s.shadows.casters} casters` : "off"}   pixel ratio ${s.pixelRatio} of device ${s.deviceRatio}, canvas ${s.canvas}, ${s.antialias ? "MSAA" : "no MSAA"}   fx density ${f1(s.fxDensity)}, cel ${s.celLook === null ? "auto" : f1(s.celLook)}`,
-    `night ${s.night ? "on" : "off"}, wet ${s.wet ? "on" : "off"}, realism ${f1(s.realism)}, squash ${f1(s.squash)}, buckle ${f1(s.buckle)}, deform ${s.deformMode}, sky ${s.sky} (${s.skyDetail} at the top tier)`,
+    `shadows ${s.shadows.enabled ? `${s.shadows.type} ${s.shadows.map}, ${s.shadows.casters} casters` : "off"}   pixel ratio ${s.pixelRatio} of device ${s.deviceRatio}, canvas ${s.canvas}, ${s.antialias ? "MSAA" : "no MSAA"}   fx density ${f1(s.fxDensity)}, cel ${s.celLook === null ? "auto" : f1(s.celLook)}   night ${s.night ? "on" : "off"}, wet ${s.wet ? "on" : "off"}, realism ${f1(s.realism)}, squash ${f1(s.squash)}, buckle ${f1(s.buckle)}, deform ${s.deformMode}, sky ${s.sky} (${s.skyDetail} at the top tier)`,
     `depth: ${s.depth.bits} bits (drawing buffer${s.depth.contextDepth ? "" : ", none requested"}), subpixel ${s.depth.subpixelBits} bits, fragment highp ${s.depth.fragmentHighFloat ? `${s.depth.fragmentHighFloat.precision} bits, range 2^${s.depth.fragmentHighFloat.rangeMin}..2^${s.depth.fragmentHighFloat.rangeMax}` : "not supported"}, camera near ${s.depth.near} far ${s.depth.far}, log depth ${s.depth.logarithmicDepthBuffer ? "on" : "off"}, ${describeDepthProbe(s.depth.probe)}`,
     `A/B pacer pinned: ${arm("1/240 s", r.abPace.fine)}, ${f1(r.abPace.fine.fineCutsPerSimS)} fine-slice cuts/sim-s`,
     `                  ${arm(COARSE_LABEL, r.abPace.coarse)}, ${f1(r.abPace.coarse.fineCutsPerSimS)} fine-slice cuts/sim-s`,

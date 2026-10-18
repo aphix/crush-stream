@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { browserName, describeBench, perSecond, stat, type Block, type BenchResult, type PhaseCard, type RagdollCost, type ReplayResult, type ReplayTier } from "./engine-bench-report.ts";
+import { HITCH } from "./bench-hitch.ts";
+import { roundCard } from "./bench-card.ts";
 import { MAX_JSON_BYTES } from "../../lib/submissions/kinds.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
@@ -57,6 +59,8 @@ const RESULT: BenchResult = {
   pageEvents: [{ phase: "warm", atS: 0, visible: true, focused: true, fullscreen: false }],
   phases: PHASES,
   longTasks: { count: 4, totalMs: 312.5, maxMs: 120.25 },
+  hitches: { factor: 3, minMs: 25, frames: 7200, count: 3, excessMs: 612, rows: [{ atS: 3.2, phase: 1, ms: 412, cpuMs: 380, simMs: 20, drawMs: 350, causes: ["focus"] }, { atS: 0.4, phase: 4, ms: 180, cpuMs: 150, simMs: 10, drawMs: 140, causes: ["setting-switch", "gpu-resources"] }, { atS: 7.7, phase: 4, ms: 60, cpuMs: 8, simMs: 4, drawMs: 3, causes: [] }] },
+  switches: [{ stretch: "fx", arm: "minimal", round: 1, settled: true, frames: 62, settleS: 0.4, longestMs: 412, longestAt: 0, longestCpuMs: 380 }, { stretch: "fx", arm: "high", round: 1, settled: false, frames: 600, settleS: 6, longestMs: 90, longestAt: 3, longestCpuMs: 20 }],
   settings: {
     fxTier: "high",
     fxAuto: true,
@@ -152,7 +156,7 @@ describe("given the bench result of a phone running the city course (describeBen
     // The owner's 165 Hz desktop card: frame p50 6.1 ms, GPU p50 1.5 ms and p95 5.96 ms: one refresh long, so a wait.
     const waiting = describeBench({ ...RESULT, frameMs: S(6.1), gpuMs: { mean: 2.9, p50: 1.5, p95: 5.96, p99: 6.2, max: 10.6 } });
     assert.ok(waiting.some((l) => /^GPU {7}p50 1\.5 {2}p95 6\.0 {2}p99 6\.2 {2}max 10\.6 ms {3}p95 is one frame long: a wait on the display, p50 is the work$/.test(l)));
-    assert.ok(lines.length <= 30, "the card scrolls on a 412 px tall phone screen at 11 px type");
+    assert.ok(lines.length <= 30, `${lines.length} lines: the card scrolls on a 412 px tall phone screen at 11 px type`);
   });
 });
 
@@ -285,5 +289,29 @@ describe("given the bench result with the sim's phase table, its work counts, lo
   test("when the new fields are added to a card, then they come to under 1.5 kB of JSON", () => {
     const added = JSON.stringify({ phases: RESULT.phases, longTasks: RESULT.longTasks, battery: RESULT.device.battery }).length;
     assert.ok(added < 1536, `${added} bytes added to a card`);
+  });
+});
+
+describe("given the bench result with the hitch log and the A/B switches' hitches", () => {
+  test("when the card is written, then one line counts the hitches and names the worst with their stretch, time, cpu and draw ms and causes, and one line gives each switch's longest frame and time to settle, marking an arm that never settled", () => {
+    const lines = describeBench(RESULT);
+    const line = lines.find((l) => l.startsWith("hitches:"));
+    assert.equal(line, "hitches: 3 of 7200 frames over 3x the median (and 25 ms), 612 ms over in all; worst: window 3.2 s 412 ms (cpu 380, draw 350; focus), ab-fx 0.4 s 180 ms (cpu 150, draw 140; setting-switch+gpu-resources), ab-fx 7.7 s 60 ms (cpu 8, draw 3; no visible cause)   switch hitches (longest frame ms / s to settle, scored after it, ! never settled): fx: minimal 412/0.4, high 90/6.0!");
+  });
+
+  test("when no frame hitched, then the line says none and names no rows", () => {
+    const lines = describeBench({ ...RESULT, hitches: { ...RESULT.hitches, count: 0, excessMs: 0, rows: [] } });
+    assert.ok(lines.some((l) => l.startsWith("hitches: 0 of 7200 frames over 3x the median (and 25 ms), 0 ms over in all   switch hitches")));
+  });
+});
+
+describe("given a run that hitched as often as the table holds, over every A/B switch of the longest cycle", () => {
+  test("when the card is rounded for the wire, then its JSON stays 12 kB under the submission cap (room for the HUD's settings and the envelope)", () => {
+    const digits = 0.123456789012345;
+    const rows = Array.from({ length: HITCH.cap }, (_, i) => ({ atS: i + digits, phase: i % 7, ms: 300 + digits, cpuMs: 120 + digits, simMs: 40 + digits, drawMs: 90 + digits, causes: ["setting-switch", "gpu-resources", "focus"] }));
+    const switches = Array.from({ length: 30 }, (_, i) => ({ stretch: "fx", arm: i % 2 ? "high" : "minimal", round: 1 + (i >> 1), settled: i % 3 !== 0, frames: 60 + i, settleS: 3 + digits, longestMs: 400 + digits, longestAt: i, longestCpuMs: 200 + digits }));
+    const full = { ...RESULT, hitches: { ...RESULT.hitches, count: 4000, excessMs: 123456 + digits, rows }, switches };
+    const bytes = JSON.stringify(roundCard(full)).length;
+    assert.ok(bytes < MAX_JSON_BYTES.bench - 12 * 1024, `${bytes} bytes against the cap of ${MAX_JSON_BYTES.bench}`);
   });
 });

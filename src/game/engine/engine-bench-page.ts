@@ -23,11 +23,12 @@ function isFullscreen(): boolean {
  * change (`BenchResult.pageEvents`). Listeners, not per-frame reads: a hidden page draws no frames, so only its events see it go and
  * come back. The listener writes into preallocated arrays (nothing allocates while the bench measures); `stop` builds the entries.
  */
-export function watchPage(): { phase(index: number): void; stop(): PageEvent[] } {
+export function watchPage(): { phase(index: number): void; stop(): PageEvent[]; changedWithin(ms: number): boolean } {
   const phaseAtS = new Float64Array(PAGE_CAP);
   const phaseOf = new Uint8Array(PAGE_CAP);
   const flags = new Uint8Array(PAGE_CAP);
   let n = 0;
+  let lastChangeMs = -Infinity;
   let phase = 0;
   let phaseStart = performance.now();
   const record = (): void => {
@@ -36,11 +37,13 @@ export function watchPage(): { phase(index: number): void; stop(): PageEvent[] }
     flags[n++] = (document.hidden ? 0 : PAGE_VISIBLE) | (document.hasFocus() ? PAGE_FOCUSED : 0) | (isFullscreen() ? PAGE_FULLSCREEN : 0);
   };
   const note = (): void => {
+    lastChangeMs = performance.now();
     if (n < PAGE_CAP - PAGE_PHASES.length) record();
   };
   for (const e of PAGE_DOC_EVENTS) document.addEventListener(e, note);
   for (const e of PAGE_WIN_EVENTS) window.addEventListener(e, note);
   return {
+    changedWithin: (ms) => performance.now() - lastChangeMs <= ms,
     phase: (index) => {
       phase = index;
       phaseStart = performance.now();
