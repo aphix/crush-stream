@@ -29,6 +29,8 @@ export const GQ = {
   allClear: { slices: 0, wreckSlices: 0, rowSlices: 0, rows: 0, wreckRowSlices: 0 },
   /** `--verify` with `epi.preClear`: the points it cleared from the body's axes, the least its cheap `low` fell short of the point's own (m, never negative), and the points the point's own test would not have cleared. */
   preClear: { cleared: 0, minSlack: Infinity, wrong: 0 },
+  /** `--ground`: the cell-sharing census (`surfaces.ts` `seek`): per car-slice of `stepFree` (`epoch`) the statics' plain cell each seek landed in (`seen`: cell key to the epoch that last read it), the seeks, those on a plain cell, those on a cell an earlier seek of the same car-slice already read, the same split on the road's crease, and the distinct cells. */
+  cells: { epoch: 0, inFree: false, seen: new Map<number, number>(), seeks: 0, plain: 0, shared: 0, creased: 0, creasedShared: 0, distinct: 0 },
 };
 
 /** A timed query starts (clock on): counts the call and returns the time when it is the outermost, else 0. */

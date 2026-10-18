@@ -101,6 +101,7 @@ export function summarize(runs) {
       ground: groundOf(list),
       verify: verifyOf(list),
       prof: profOf(list),
+      matrix: list.every((r) => r.matrix) ? matrixOf(list) : null,
       freezeRecord: list[0].freezeRecord ?? null,
       wreckTops: list.every((r) => r.wreckTops) ? Object.fromEntries(["skipped", "wouldRow", "wouldNear", "wreckTop"].map((k) => [k, list.reduce((s, r) => s + r.wreckTops[k], 0)])) : null,
       allClear: list.every((r) => r.allClear) ? Object.fromEntries(["slices", "wreckSlices", "rowSlices", "rows", "wreckRowSlices"].map((k) => [k, list.reduce((s, r) => s + r.allClear[k], 0)])) : null,
@@ -128,6 +129,16 @@ function profOf(list) {
   return [...sums.values()].sort((a, b) => b.incl - a.incl);
 }
 
+/** The matrix census (`--matrix`) as per-sim-second means of the runs. */
+function matrixOf(list) {
+  const m = (f) => mean(list.map(f));
+  return {
+    depth: list[0].matrix.depth.map((_, i) => ({ calls: m((r) => r.matrix.depth[i].calls / r.windowS), repeats: m((r) => r.matrix.depth[i].repeats / r.windowS) })),
+    boxCalls: m((r) => r.matrix.boxCalls / r.windowS),
+    boxNodes: m((r) => r.matrix.boxNodes / r.windowS),
+  };
+}
+
 /** Functions the profile table lists per arm by inclusive time, and by self time with their heaviest lines. */
 const PROF_LINES = 45;
 const PROF_SELF = 25;
@@ -139,6 +150,7 @@ function groundOf(list) {
   return {
     clockNs: mean(list.map((r) => r.ground.clockNs)),
     sections: Object.fromEntries(names.map((n) => [n, Object.fromEntries(["msPerS", "callsPerS", "outerPerS"].map((k) => [k, mean(list.map((r) => r.ground.sections[n][k]))]))])),
+    cells: Object.fromEntries(["seeks", "plain", "shared", "creased", "creasedShared", "distinct", "epochs"].map((k) => [k, list.reduce((s, r) => s + (r.ground.cells?.[k] ?? 0), 0)])),
   };
 }
 
@@ -256,12 +268,24 @@ export function table(name, first, arms) {
       lines.push(row(`    us per car-slice`, arms.map((a) => f2(net(a)))));
       lines.push(row(`    share of the phases' total`, arms.map((a) => `${f1((100 * net(a) * a.units) / 1000 / a.total)}%`), false));
     }
+    for (const a of arms) {
+      const c = a.ground.cells;
+      if (!c || c.seeks === 0) continue;
+      const p = (x, of) => (of > 0 ? `${f1((100 * x) / of)}%` : "-");
+      lines.push(`   cell sharing, ${a.name} (seeks inside a car's rigid step: ${f1(c.seeks / c.epochs)} per step; plain cell ${p(c.plain, c.seeks)} of seeks, creased ${p(c.creased, c.seeks)}; seeks on a cell an earlier seek of the same car-step already read: ${p(c.shared, c.seeks)} of all seeks (${p(c.creasedShared, c.seeks)} on the crease); distinct cells ${f1(c.distinct / c.epochs)} per step)`);
+    }
   }
   for (const a of arms) {
     if (!a.verify) continue;
     const [all, held, near, wheel] = a.verify.compared;
     const bad = a.verify.mismatches.reduce((s, v) => s + v, 0);
     lines.push(`   baked-vs-live check, ${a.name}: answers compared bit for bit: point ${all} + held ${held} + near ${near}, wheel contacts ${wheel}, of the point ones ${a.verify.far} far answers (C_H, C_OWNER, C_ARG and the travel proof only); MISMATCHES ${bad}${bad > 0 ? `: ${a.verify.first}` : ""}`);
+  }
+  for (const a of arms) {
+    if (!a.matrix) continue;
+    const per = (x) => (a.units > 0 ? f1(x / a.units) : "-");
+    const names = ["scene", "car group", "depth 2", "depth 3+"];
+    lines.push(`   three.js matrix census, ${a.name} (composes per car-slice, of which repeats: the node's position, quaternion and scale are the bits of its last compose, so the compose is dedupable exactly): ${a.matrix.depth.map((d, i) => `${names[i]} ${per(d.calls)} (${per(d.repeats)} repeats)`).join("; ")}; total ${per(a.matrix.depth.reduce((s, d) => s + d.calls, 0))} (${per(a.matrix.depth.reduce((s, d) => s + d.repeats, 0))} repeats); Box3.expandByObject calls ${per(a.matrix.boxCalls)} walking ${per(a.matrix.boxNodes)} nodes`);
   }
   for (const a of arms) {
     if (!a.prof) continue;
@@ -351,6 +375,7 @@ function parseArgs(argv) {
     else if (a === "--ground") args.ground = true;
     else if (a === "--verify") args.verify = true;
     else if (a === "--prof") args.prof = true;
+    else if (a === "--matrix") args.matrix = true;
     else if (a === "--record") args.record = true;
     else if (a === "--slices") args.slices = true;
     else if (a === "--trace") args.trace = argv[++i];
@@ -422,6 +447,7 @@ export async function main(argv, log = console.log) {
       if (args.ground) env.BENCH_GROUND = "1";
       if (args.verify) env.BENCH_VERIFY = "1";
       if (args.prof) env.BENCH_PROF = "1";
+      if (args.matrix) env.BENCH_MATRIX = "1";
       if (args.record) env.BENCH_RECORD = "1";
       if (args.slices) env.BENCH_SLICES = path.join(out, `${name}-${n + 1}-${arm.name}.slices`);
       const run = { ...child(env), arm: arm.name, flagged, n: n + 1 };

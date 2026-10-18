@@ -1743,8 +1743,30 @@ function seek(q: Float64Array, skip: number, tops: Surface | null, list: Int32Ar
     if (tops !== null && count > 0) GQ.calls[G.seekTops] = GQ.calls[G.seekTops]! + 1;
   }
   if (live.statics !== null) find(live.statics, q, skip, NEED_ALL);
+  if (GQ.on && GQ.cells.inFree) sharedCells(live.statics);
   if (live.solids !== null) find(live.solids, q, skip, NEED_ALL);
   if (tops !== null) for (let k = 0; k < count; k++) offer(tops, list[k]!, q, skip, NEED_ALL);
+}
+
+/** The cell-sharing census (`--ground`, `GQ.cells`): the plain cell `find` left its best in (`S_PFU`/`S_PFV`) and whether an earlier seek of this car-slice already read it. */
+function sharedCells(s: Surface | null): void {
+  const c = GQ.cells;
+  c.seeks++;
+  if (s === null || _s[S_PFU]! < 0) return;
+  const i = _s[S_PATCH]!;
+  const nu = s.q[i * Q_STRIDE + Q_NU]!;
+  const cell = Math.floor(_s[S_PFV]!) * nu + Math.floor(_s[S_PFU]!);
+  const key = i * 4194304 + cell;
+  const road = creased(s.lat[i]!, cell, nu);
+  c.plain++;
+  if (road) c.creased++;
+  if (c.seen.get(key) === c.epoch) {
+    c.shared++;
+    if (road) c.creasedShared++;
+    return;
+  }
+  c.seen.set(key, c.epoch);
+  c.distinct++;
 }
 
 /** `seek` over every top near the asker `skip`. */

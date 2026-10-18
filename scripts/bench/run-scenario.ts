@@ -19,6 +19,7 @@ import { PHASE_NAMES, WORK_NAMES } from "../../src/game/engine/sim-phases.ts";
 import { GQ, GQ_NAMES, gqEnter, gqLeave } from "../../src/game/world/ground-clock.ts";
 import { BAKE } from "../../src/game/world/surfaces.ts";
 import { startProfile, stopProfile } from "./prof.ts";
+import { startMatrixCensus } from "./matrix-census.ts";
 import { SCENARIO_INFO } from "./scenario-info.ts";
 import { SCENARIOS } from "./scenarios.ts";
 import { LoneCensus } from "./census.ts";
@@ -252,6 +253,8 @@ const ms0 = phases.ms.slice();
 const work0 = phases.work.slice();
 const loadStart = loadavg()[0]!;
 const profiler = process.env["BENCH_PROF"] === "1" ? startProfile() : null;
+/** `BENCH_MATRIX=1` (bench `--matrix`): the three.js compose census over the window (`matrix-census.ts`); started here so the warm-up's calls are not counted. */
+const matrixCensus = process.env["BENCH_MATRIX"] === "1" ? startMatrixCensus() : null;
 const t0 = performance.now();
 const clock0 = sim.t;
 if (census) for (let i = 0, n = Math.round(windowS / sim.stepS); i < n; i++) census.step();
@@ -286,6 +289,7 @@ const ground = {
   clockNs,
   sections: Object.fromEntries(GQ_NAMES.map((n, i) => [n, { msPerS: GQ.ms[i]! / simS, callsPerS: GQ.calls[i]! / simS, outerPerS: GQ.outer[i]! / simS }])),
   verify: verify ? { compared: [...GQ.verify.compared], mismatches: [...GQ.verify.mismatches], far: GQ.verify.far, first: GQ.verify.first } : null,
+  cells: { seeks: GQ.cells.seeks, plain: GQ.cells.plain, shared: GQ.cells.shared, creased: GQ.cells.creased, creasedShared: GQ.cells.creasedShared, distinct: GQ.cells.distinct, epochs: GQ.cells.epoch },
 };
 
 const hash = createHash("sha1");
@@ -325,6 +329,7 @@ console.log(
     race: info.race ?? false,
     cars: sim.cars.length,
     ground,
+    matrix: matrixCensus,
     prof,
     knobs,
     warmS,

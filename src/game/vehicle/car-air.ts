@@ -581,6 +581,14 @@ function centredTop(statics: Surface, turnRate: number, dt: number, pointEnd: nu
  * `car.airborne`, `wheelsDown` and `restsOn` are derived from the contacts.
  */
 export function stepFree(car: DeformableCar, dt: number): boolean {
+  if (GQ.on) GQ.cells.epoch++;
+  if (GQ.on) GQ.cells.inFree = true;
+  const landed = stepFreeBody(car, dt);
+  GQ.cells.inFree = false;
+  return landed;
+}
+
+function stepFreeBody(car: DeformableCar, dt: number): boolean {
   const q = car.group.quaternion;
   const pos = car.group.position;
   const v = car.velocity;
