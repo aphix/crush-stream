@@ -17,6 +17,8 @@ export function recordSlices(file: string): void {
   const integrate = DeformableCar.prototype.integrate;
   DeformableCar.prototype.integrate = function (this: DeformableCar, dt: number): void {
     integrate.call(this, dt);
+    // A car the race put away (`epi.storedSkip` leaves it unstepped) is not part of the comparison.
+    if (this.stored) return;
     const p = this.group.position;
     const q = this.group.quaternion;
     log.push(this.slot, this.contacts, this.hardTouch ? 1 : 0, this.deform.frozen ? 1 : 0, this.velocity.x, this.velocity.y, this.velocity.z, this.angular.x, this.angular.y, this.angular.z, p.x, p.y, p.z, q.x, q.y, q.z, q.w);
