@@ -9,11 +9,11 @@ import { cn } from "@/lib/utils";
 
 /**
  * Every size of the right-hand cluster, in one place (CSS px; Tailwind's unit is 4): the corner pedal 96, the Pedals scheme's Brake 72,
- * Boost and Handbrake 64, and Boost 88 x 72 while the Long jump's bail is armed. Every control is past the 44 floor, gaps of 8 (`gap-2`).
- * `slot` is the bottom row's height: the drive dial's box (80 px wide, 250/220 of that tall, `race-readouts.tsx`), so the pedals above it
+ * Boost and Handbrake 64 (56 on an upright phone, where the bottom row must leave the slider its room), and Boost 88 x 72 while the Long jump's bail is armed. Every control is past the 44 floor, gaps of 8 (`gap-2`).
+ * `slot` is the bottom row's height: the drive dial's box (80 px wide, 250/220 of that tall, and the padding that keeps its bottle's finger-sized hit area inside the safe area, `race-readouts.tsx`), so the pedals above it
  * stand at one height in every scene, dial or not, and the dial sits in the screen's corner as it always did.
  */
-const SIZE = { corner: "size-24", brake: "size-18", button: "size-16", bail: "h-18 w-22", dial: "w-20", slot: "min-h-[5.7rem]" } as const;
+const SIZE = { corner: "size-24", brake: "size-18", button: "size-14 phone-landscape:size-16", bail: "h-18 w-22", dial: "w-23", slot: "min-h-[6.5rem]" } as const;
 
 /** One pad button (`PAD_BUTTON` index): held while a finger is on it, and a tap shorter than a frame still presses. The caller sizes it. */
 /**

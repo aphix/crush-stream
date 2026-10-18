@@ -170,7 +170,7 @@ function Dial({ view, corner, spectated }: { view: RaceView; corner: boolean; sp
   return (
     <div
       className={cn(
-        "absolute bottom-4 right-4 hidden pointer-coarse:hud-bottom pointer-coarse:block pointer-coarse:[--phone-cluster:5rem] pointer-coarse:calm:opacity-60 pointer-coarse:hud-fade",
+        "absolute bottom-4 right-4 hidden pointer-coarse:hud-bottom pointer-coarse:block pointer-coarse:pb-3 pointer-coarse:pr-3 pointer-coarse:[--phone-cluster:5rem] pointer-coarse:calm:opacity-60 pointer-coarse:hud-fade",
         mirror ? "pointer-coarse:hud-left pointer-coarse:right-auto" : "pointer-coarse:hud-right",
         corner && "md:block",
       )}

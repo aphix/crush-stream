@@ -132,7 +132,7 @@ const PROBE = ([cell, zone]) => {
     range.selectNodeContents(node);
     for (const r of range.getClientRects()) {
       // Screen-reader-only text (a 1 px clipped box) is not on the screen.
-      const v = r.width > 2 && r.height > 2 ? shown(parent, r) : null;
+      const v = r.width > 2 && r.height > 2 && parent.getBoundingClientRect().width > 2 ? shown(parent, r) : null;
       if (v) texts.push({ r: v, parent, words: node.textContent.trim().slice(0, 24), scrolledAt: pinned(parent) || v.right - v.left < r.width - 1 || v.bottom - v.top < r.height - 1 });
     }
   }
@@ -234,7 +234,7 @@ async function checkScreen(browser, device, name, screen) {
       const [vw, vh] = probe.viewport;
       const inside = probe.rects.filter((rect) => rect.left < left - 1 || rect.right > vw - right + 1 || rect.top < top - 1 || rect.bottom > vh - bottom + 1);
       const covering = inside.filter((rect) => !/^(Back|Close|Done)/.test(rect.name) && rect.right - rect.left < vw * 0.8);
-      if (covering.length > 0) fail(context, `controls inside the safe-area insets: ${covering.map((rect) => rect.name).join("; ")}`);
+      if (covering.length > 0) fail(context, `controls inside the safe-area insets (screen ${vw} x ${vh}, insets ${JSON.stringify(device.insets)}): ${covering.map((rect) => `${rect.name} at ${Math.round(rect.left)},${Math.round(rect.top)} to ${Math.round(rect.right)},${Math.round(rect.bottom)}`).join("; ")}`);
     }
     if (errors.length > 0) fail(context, `page errors: ${errors.join(" | ")}`);
   } finally {

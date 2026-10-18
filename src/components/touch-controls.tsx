@@ -124,7 +124,7 @@ function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
   // A scene with one car (a Mini game, the garage, the range) has nobody to cycle to and nowhere to step out to.
   const others = state.carCount > 1;
   return (
-    <div className={cn("pointer-events-none absolute hud-top hud-right flex max-w-[62%] flex-wrap justify-end gap-2", fullscreen && (fullscreenOn ? STRIP_ROOM_ROUND : STRIP_ROOM_PILL))}>
+    <div className={cn("pointer-events-none absolute hud-top hud-right flex max-w-[calc(100%-15rem)] flex-wrap justify-end gap-2 phone-landscape:max-w-[62%]", fullscreen && (fullscreenOn ? STRIP_ROOM_ROUND : STRIP_ROOM_PILL))}>
       {/* The glow is the prompt: the button exists only while the car needs a reset, so the strip is three buttons the rest of the time. */}
       {driving && resetGlow(state) ? (
         <PadButton engine={engine} button={PAD_BUTTON.down} name="respawn" label={race ? "Respawn" : "Recover car"} caption={race ? "Respawn" : "Recover"} showCaption className={cn(STRIP_BUTTON, RESET_GLOW)}>

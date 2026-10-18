@@ -12,14 +12,16 @@ const STICK_TRAVEL = 36;
 
 /** The slider's knob (px) and how far its centre travels from the bar's centre: the knob stays inside the bar's ends. */
 const SLIDER_KNOB = 56;
-const SLIDER_HALF_TRAVEL = (STEER_SLIDER.length - SLIDER_KNOB) / 2;
+/** The bar's width: 176 px, or less on a narrow screen, where the right thumb's row (the dial's box, Boost and Handbrake: 220 px, with both screen margins and a gap: 256 px) must keep its room. */
+const BAR_WIDTH = `min(${STEER_SLIDER.length}px, calc(100vw - 256px))`;
 
 /** The tilt level marker (px): a thin tick, so it reads as a level and not as a knob to drag; it keeps a small margin to the bar's ends. */
 const TILT_MARKER_WIDTH = 8;
 const TILT_MARKER_MARGIN = 8;
-const TILT_MARKER_TRAVEL = (STEER_SLIDER.length - TILT_MARKER_WIDTH) / 2 - TILT_MARKER_MARGIN;
+/** How far the marker may travel from the bar's middle, for the bar's drawn width. */
+const markerTravel = (barWidth: number): number => (barWidth - TILT_MARKER_WIDTH) / 2 - TILT_MARKER_MARGIN;
 
-const BAR_SIZE = { width: STEER_SLIDER.length, height: STEER_SLIDER.height };
+const BAR_SIZE = { width: BAR_WIDTH, height: STEER_SLIDER.height };
 /** The disc's two words and arrows on its ring, so nobody wonders what up and down do. */
 const DISC_MARK = "pointer-events-none absolute left-1/2 flex -translate-x-1/2 flex-col items-center font-display text-[10px] font-semibold uppercase leading-none tracking-wider text-fg/60";
 const BAR = "relative shrink-0 rounded-full bg-surface/35 ring-1 ring-inset ring-fg/30";
@@ -109,11 +111,12 @@ function Stick({ engine, onArm }: SteerProps) {
 function Slider({ engine, onArm }: SteerProps) {
   const knob = useRef<HTMLDivElement>(null);
   /** The finger on the bar and the bar centre (screen x) it is measured from. */
-  const finger = useRef({ id: -1, centre: 0 });
+  const finger = useRef({ id: -1, centre: 0, halfTravel: (STEER_SLIDER.length - SLIDER_KNOB) / 2 });
   const put = (offset: number): void => {
     const t = engine.current?.touch;
-    if (t) t.x = sliderSteer(offset, SLIDER_HALF_TRAVEL);
-    if (knob.current) knob.current.style.transform = `translateX(${Math.max(-SLIDER_HALF_TRAVEL, Math.min(SLIDER_HALF_TRAVEL, offset))}px)`;
+    const halfTravel = finger.current.halfTravel;
+    if (t) t.x = sliderSteer(offset, halfTravel);
+    if (knob.current) knob.current.style.transform = `translateX(${Math.max(-halfTravel, Math.min(halfTravel, offset))}px)`;
   };
   useEffect(
     () => () => {
@@ -145,6 +148,7 @@ function Slider({ engine, onArm }: SteerProps) {
         const r = e.currentTarget.getBoundingClientRect();
         f.id = e.pointerId;
         f.centre = r.left + r.width / 2;
+        f.halfTravel = (r.width - SLIDER_KNOB) / 2;
         e.currentTarget.setPointerCapture(e.pointerId);
         if (knob.current) knob.current.dataset.drag = "";
         move(e);
@@ -176,7 +180,8 @@ function TiltBar({ engine, tilt, onArm, steerLive }: SteerProps & { tilt: TiltSe
   const { available, recentre } = useTilt(true, tilt, (steer) => {
     const t = engine.current?.touch;
     if (t) t.x = steerLive() ? steer : 0;
-    if (marker.current) marker.current.style.transform = `translateX(${steer * TILT_MARKER_TRAVEL}px)`;
+    const bar = marker.current?.parentElement;
+    if (marker.current && bar) marker.current.style.transform = `translateX(${steer * markerTravel(bar.offsetWidth)}px)`;
   });
   if (!available) {
     return (
