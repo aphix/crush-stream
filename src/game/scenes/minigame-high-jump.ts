@@ -12,8 +12,8 @@ export const MAJOR_BOARD_EVERY_METRES = 50;
 /** The frame's top is the best measured height times this, rounded up to a board: a perfect run falls well short of it. */
 export const FRAME_HEADROOM_FACTOR = 1.3;
 /**
- * The posts stand this far (m) past the lip, always: the slowest class's 70% run lands 12.0 m out in the sizing table, so the
- * posts are the frame every run climbs beside (the score does not need a run to cross them: it is the highest point he reaches).
+ * The posts stand this far (m) past the lip, always: the box piles, the net and the score band (`SCORE_BAND_HALF_DEPTH` either side)
+ * are laid out from them. The sizing table's 70% runs land 9.1-9.4 m out, at the band's near edge, so a run that slow scores about 0.
  */
 export const POSTS_DISTANCE = 11;
 /** The net hangs this far (m) past the posts. */
@@ -189,14 +189,24 @@ export function highJumpLayout(measured: HighJumpMeasured, lipY: number): HighJu
 export type TorsoSample = { x: number; y: number; z: number; still: number };
 
 /**
- * Reads the score: the highest point his torso reached above the lip, from the throw until he lies still, wherever it was (over the
- * posts, caught on a slat or a sign, beside the frame). The torso is sampled once per render frame and nothing between two samples is
- * read: a ballistic apex between frames is under a millimetre above the higher sample (g/8 times the frame's square at 60 Hz).
+ * The score is read only while the torso is within this far (m) in front of or behind the posts' plane (`SCORE_BAND_HALF_DEPTH`, along
+ * the throw). Owner: "just use the highest height within a meter or two in front of or behind the bars", so a dummy that taps a post or
+ * a slat and falls back is not a total failure. 2 m (the top of "a meter or two"): the sizing table's apexes of the best runs fall 9.7-17 m
+ * out, so a run that climbs at the bars is read at its height there, and a peak far before the bars (a slow run's apex 4-8 m out) is not.
+ */
+export const SCORE_BAND_HALF_DEPTH = 2;
+
+/**
+ * Reads the score: the highest point his torso reached above the lip while it was inside the band `SCORE_BAND_HALF_DEPTH` either side
+ * of the posts' plane, from the throw until he lies still, wherever across the lane and whether he went through the posts or was caught
+ * on them and fell back. The torso is sampled once per render frame and nothing between two samples is read: a ballistic apex between
+ * frames is under a millimetre above the higher sample (g/8 times the frame's square at 60 Hz), and a band edge is read at the first
+ * frame inside it.
  */
 export class HighJumpPeak {
   private peakHeight = 0;
 
-  /** The highest point so far, metres above the lip (0 until he rises above it). */
+  /** The highest point in the band so far, metres above the lip (0 until he rises above it inside the band). */
   get height(): number {
     return this.peakHeight;
   }
@@ -205,9 +215,9 @@ export class HighJumpPeak {
     this.peakHeight = 0;
   }
 
-  /** Takes this frame's torso; returns the highest point so far. */
-  step(torso: TorsoSample, lipY: number): number {
-    this.peakHeight = Math.max(this.peakHeight, torso.y - lipY);
+  /** Takes this frame's torso (read only inside the band around `postsX`); returns the highest point so far. */
+  step(torso: TorsoSample, postsX: number, lipY: number): number {
+    if (Math.abs(torso.x - postsX) <= SCORE_BAND_HALF_DEPTH) this.peakHeight = Math.max(this.peakHeight, torso.y - lipY);
     return this.peakHeight;
   }
 }

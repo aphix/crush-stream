@@ -124,7 +124,7 @@ export class Minigames {
   }
 
   private beginSession(mode: MinigameMode): void {
-    this.session.begin(mode, { carType: this.carType, throwsPerSet: this.throwsPerSet, highJumpLipY: this.highJumpLipY });
+    this.session.begin(mode, { carType: this.carType, throwsPerSet: this.throwsPerSet, highJump: { postsX: this.highJump.postsX, lipY: this.highJumpLipY } });
   }
 
   /** A new attempt's scene (after `ragdolls.reset`, which drops both): the dummy lives until released, the boxes stand again, no bail yet. */

@@ -99,7 +99,8 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     const atRest = samples[restAt]!;
     if (mode === "highJump") {
       const peak = new HighJumpPeak();
-      for (const sample of samples.slice(0, restAt + 1)) peak.step(sample, lipHeight("highJump"));
+      const { postsX } = engine["minigames"]["highJump"];
+      for (const sample of samples.slice(0, restAt + 1)) peak.step(sample, postsX, lipHeight("highJump"));
       return peak.height;
     }
     return mode === "longJump" ? Math.max(0, atRest.x) : ringScore(atRest.x, atRest.z);
@@ -237,7 +238,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
       it("when the best was stored, then a new session on the same storage reads it as this car's and the overall best", () => {
         const fresh = new MinigameSession(minigameStore());
-        fresh.begin(mode, { carType: "sedan", throwsPerSet: scoredHud.throwsPerSet ?? undefined, highJumpLipY: lipHeight("highJump") });
+        fresh.begin(mode, { carType: "sedan", throwsPerSet: scoredHud.throwsPerSet ?? undefined, highJump: { postsX: engine["minigames"]["highJump"].postsX, lipY: lipHeight("highJump") } });
         // A Ring Fling set keeps its total only once the set is complete; the other modes keep each throw.
         const recorded = scoredHud.throwsPerSet === null ? scoredHud.lastScore! : scoredHud.setComplete ? scoredHud.setTotal : 0;
         const score = recorded;

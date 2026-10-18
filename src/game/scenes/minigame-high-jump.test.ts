@@ -17,6 +17,7 @@ import {
   MAJOR_BOARD_EVERY_METRES,
   SIGN_EVERY_METRES,
   SIGN_HEIGHT,
+  SCORE_BAND_HALF_DEPTH,
   SLAT_THICKNESS,
   POSTS_DISTANCE,
   POST_HALF_SPAN,
@@ -32,6 +33,8 @@ const FRAME_SECONDS = 1 / FRAME_HZ;
 const LIP_Y = 2.5;
 const MILLIMETRE = 0.001;
 const BOX_OVERLAP_TOLERANCE = 1e-9;
+/** The arcs' horizontal speed (m/s): a best run's 3-4 m/s past the posts. */
+const ARC_SPEED = 3;
 
 /** A synthetic best case: the numbers the real measurement would fill in. */
 const SYNTHETIC_MEASURED: HighJumpMeasured = { bestHeight: 31.3, landingDistance: 28 };
@@ -41,84 +44,140 @@ function torso(x: number, y: number, z = 0): TorsoSample {
 }
 
 /**
- * A ballistic torso whose apex (height `apexY`) falls at frame `apexFrame` (a half-integer lies between two frames, where a
- * sample is furthest from the apex), sampled once per 60 Hz frame as the ragdoll's `latest()` is: no interpolation between frames.
+ * A ballistic torso whose apex (height `apexY`) falls at frame `apexFrame` (a half-integer lies between two frames, where a sample is
+ * furthest from the apex), sampled once per 60 Hz frame as the ragdoll's `latest()` is: no interpolation between frames. It flies along
+ * the throw at `ARC_SPEED` and is at `apexX` at its apex.
  */
-function arcFrames(apexY: number, apexFrame: number, frameCount: number): TorsoSample[] {
+function arcFrames(apexY: number, apexFrame: number, apexX: number, frameCount: number): TorsoSample[] {
   return Array.from({ length: frameCount }, (_, frame) => {
     const seconds = (frame - apexFrame) * FRAME_SECONDS;
-    return torso(frame, apexY - (GRAVITY * seconds * seconds) / 2);
+    return torso(apexX + ARC_SPEED * seconds, apexY - (GRAVITY * seconds * seconds) / 2);
   });
 }
 
-describe("given a torso flying a ballistic arc, sampled once per 60 Hz frame", () => {
-  const apexY = 60;
-  const apexFrame = 30.5;
-  const frames = arcFrames(apexY, apexFrame, 150);
-  const analyticApexHeight = apexY - LIP_Y;
+/** The highest the frames get above the lip inside the band, worked out here without the class: the filter and the maximum. */
+function bandMaximum(frames: readonly TorsoSample[]): number {
+  return Math.max(0, ...frames.filter((frame) => Math.abs(frame.x - POSTS_DISTANCE) <= SCORE_BAND_HALF_DEPTH).map((frame) => frame.y - LIP_Y));
+}
 
-  it("when the apex falls half way between two frames, then the highest point is the analytic apex to under a millimetre", () => {
-    const peak = new HighJumpPeak();
-    for (const frame of frames) peak.step(frame, LIP_Y);
+function peakOf(frames: readonly TorsoSample[]): HighJumpPeak {
+  const peak = new HighJumpPeak();
+  for (const frame of frames) peak.step(frame, POSTS_DISTANCE, LIP_Y);
+  return peak;
+}
+
+describe("given a torso flying a ballistic arc over the posts, sampled once per 60 Hz frame", () => {
+  const apexY = 60;
+  const analyticApexHeight = apexY - LIP_Y;
+  /** The apex falls half way between two frames, at the posts' plane. */
+  const overThePosts = arcFrames(apexY, 100.5, POSTS_DISTANCE, 200);
+
+  it("when the apex falls half way between two frames inside the band, then the highest point is the analytic apex to under a millimetre", () => {
+    const peak = peakOf(overThePosts);
     assert.ok(Math.abs(peak.height - analyticApexHeight) < MILLIMETRE, `peak ${peak.height} vs analytic ${analyticApexHeight}`);
   });
 
   it("when he has fallen back well below the apex, then the score is still the apex, not where he is now", () => {
-    const peak = new HighJumpPeak();
-    for (const frame of frames) peak.step(frame, LIP_Y);
-    assert.ok(frames.at(-1)!.y - LIP_Y < analyticApexHeight - 10, "the last frame is far below the apex");
-    assert.ok(peak.height > analyticApexHeight - MILLIMETRE, `peak ${peak.height}`);
+    assert.ok(overThePosts.at(-1)!.y - LIP_Y < analyticApexHeight - 10, "the last frame is far below the apex");
+    assert.ok(peakOf(overThePosts).height > analyticApexHeight - MILLIMETRE);
   });
 
   it("when the frames are read in order, then the running value never drops and each answer is the highest so far", () => {
     const peak = new HighJumpPeak();
     let previous = 0;
-    for (const [index, frame] of frames.entries()) {
-      const answer = peak.step(frame, LIP_Y);
+    for (const [index, frame] of overThePosts.entries()) {
+      const answer = peak.step(frame, POSTS_DISTANCE, LIP_Y);
       assert.ok(answer >= previous, `frame ${index}: ${answer} after ${previous}`);
       assert.equal(peak.height, answer, "the getter reads the same");
       previous = answer;
     }
   });
 
-  it("when he stops short of the apex (caught on a slat on the way up), then the score is the highest frame he reached", () => {
-    const peak = new HighJumpPeak();
-    const caught = frames.slice(0, 20);
-    for (const frame of caught) peak.step(frame, LIP_Y);
-    assert.equal(peak.height, caught.at(-1)!.y - LIP_Y, "the last frame he was on the way up");
+  it("when he peaks well before the band and drops, then he scores only the height he had inside the band", () => {
+    const early = arcFrames(apexY, 300.5, POSTS_DISTANCE - 9, 500);
+    const score = peakOf(early).height;
+    assert.equal(score, bandMaximum(early), "the highest frame inside the band");
+    assert.ok(score > 0, "he is still above the lip when he enters the band");
+    assert.ok(score < analyticApexHeight - 10, `scored ${score}: far under the apex ${analyticApexHeight} he reached before the band`);
+  });
+
+  it("when he peaks well past the band, then he scores the height he had as he left it, not the apex beyond", () => {
+    const late = arcFrames(apexY, 300.5, POSTS_DISTANCE + 9, 500);
+    const score = peakOf(late).height;
+    assert.equal(score, bandMaximum(late), "the highest frame inside the band");
+    assert.ok(score > 0, "he was above the lip as he climbed through the band");
+    assert.ok(score < analyticApexHeight - 10, `scored ${score}: far under the apex ${analyticApexHeight} he reached beyond the band`);
   });
 });
 
-describe("given single torso samples", () => {
-  it("when the first sample is read, then it counts: no earlier sample is needed", () => {
-    assert.equal(new HighJumpPeak().step(torso(3, LIP_Y + 8.5), LIP_Y), 8.5);
+describe("given a dummy that taps a post and falls back", () => {
+  /** Up the lane to a tap 0.3 m short of the posts' plane at 100 m up, then straight back down and away from the posts. */
+  const climbFrames = 90;
+  const tapped: TorsoSample[] = [
+    ...Array.from({ length: climbFrames }, (_, frame) => torso(POSTS_DISTANCE - 5 + (4.7 * frame) / climbFrames, LIP_Y + 100 * Math.sin((Math.PI / 2) * (frame / climbFrames)))),
+    ...Array.from({ length: 200 }, (_, frame) => torso(POSTS_DISTANCE - 0.3 - 0.04 * frame, LIP_Y + 100 - (GRAVITY * (frame * FRAME_SECONDS) ** 2) / 2)),
+  ];
+
+  it("when he is thrown back out of the band, then he scores the height he reached at the post, not 0", () => {
+    const peak = peakOf(tapped);
+    assert.equal(peak.height, bandMaximum(tapped), "the highest frame inside the band");
+    assert.ok(peak.height > 95, `scored ${peak.height}: the tap's height`);
+    assert.ok(Math.min(...tapped.map((frame) => Math.abs(frame.x - POSTS_DISTANCE))) > 0.25, "he never reached the plane: nothing crossed it");
+  });
+});
+
+describe("given the score band's width", () => {
+  it("when it is read, then it is a meter or two either side of the bars, as the owner asked", () => {
+    assert.ok(SCORE_BAND_HALF_DEPTH >= 1 && SCORE_BAND_HALF_DEPTH <= 2, `${SCORE_BAND_HALF_DEPTH} m`);
+  });
+});
+
+describe("given torso samples at the band's edges and beside it", () => {
+  const EDGE_NUDGE = 1e-6;
+  const edgeCases = [
+    { it: "when he is exactly at the band's front edge, then the sample counts", x: POSTS_DISTANCE - SCORE_BAND_HALF_DEPTH, counts: true },
+    { it: "when he is exactly at the band's back edge, then the sample counts", x: POSTS_DISTANCE + SCORE_BAND_HALF_DEPTH, counts: true },
+    { it: "when he is just in front of the band, then the sample does not count", x: POSTS_DISTANCE - SCORE_BAND_HALF_DEPTH - EDGE_NUDGE, counts: false },
+    { it: "when he is just behind the band, then the sample does not count", x: POSTS_DISTANCE + SCORE_BAND_HALF_DEPTH + EDGE_NUDGE, counts: false },
+    { it: "when he is at the posts' plane, then the sample counts", x: POSTS_DISTANCE, counts: true },
+  ] as const;
+  for (const testCase of edgeCases) {
+    it(testCase.it, () => {
+      assert.equal(new HighJumpPeak().step(torso(testCase.x, LIP_Y + 12), POSTS_DISTANCE, LIP_Y), testCase.counts ? 12 : 0);
+    });
+  }
+
+  it("when he is in the band anywhere across the lane or between, beside or past the posts, then the height counts", () => {
+    for (const z of [0, POST_HALF_SPAN, FIELD_HALF_WIDTH + 40, -FIELD_HALF_WIDTH - 40]) {
+      assert.equal(new HighJumpPeak().step(torso(POSTS_DISTANCE + 1, LIP_Y + 12, z), POSTS_DISTANCE, LIP_Y), 12, `at z ${z}`);
+    }
   });
 
-  it("when he stays below the lip, then the score is 0, not negative", () => {
+  it("when he stays below the lip inside the band, then the score is 0, not negative", () => {
     const peak = new HighJumpPeak();
-    assert.equal(peak.step(torso(5, LIP_Y - 3), LIP_Y), 0, "below the lip");
+    assert.equal(peak.step(torso(POSTS_DISTANCE, LIP_Y - 3), POSTS_DISTANCE, LIP_Y), 0, "below the lip");
     assert.equal(peak.height, 0, "the getter");
   });
 
-  it("when he flies beside the frame or short of the posts or past them, then the position does not change the height", () => {
-    for (const [x, z] of [[2, 0], [POSTS_DISTANCE - 3, 0], [POSTS_DISTANCE + 20, FIELD_HALF_WIDTH + 40], [-40, -FIELD_HALF_WIDTH - 40]] as const) {
-      assert.equal(new HighJumpPeak().step(torso(x, LIP_Y + 12, z), LIP_Y), 12, `at (${x}, ${z})`);
-    }
+  it("when he never comes inside the band, then the score is 0 whatever his height", () => {
+    const peak = new HighJumpPeak();
+    for (const x of [2, POSTS_DISTANCE - 5, POSTS_DISTANCE + 20]) peak.step(torso(x, LIP_Y + 50), POSTS_DISTANCE, LIP_Y);
+    assert.equal(peak.height, 0);
   });
 
   it("when the peak is reset, then it starts from nothing again", () => {
     const peak = new HighJumpPeak();
-    peak.step(torso(5, LIP_Y + 20), LIP_Y);
+    peak.step(torso(POSTS_DISTANCE, LIP_Y + 20), POSTS_DISTANCE, LIP_Y);
     peak.reset();
     assert.equal(peak.height, 0, "cleared");
-    assert.equal(peak.step(torso(5, LIP_Y + 4), LIP_Y), 4, "the next throw's own highest");
+    assert.equal(peak.step(torso(POSTS_DISTANCE, LIP_Y + 4), POSTS_DISTANCE, LIP_Y), 4, "the next throw's own highest");
   });
 });
 
 const LAYOUT_CASES = [
   { name: "a record-sized best case", measured: { bestHeight: 230, landingDistance: 300 }, expectedFrameTop: 300, expectedBoardCount: 60, expectedMajorHeights: [0, 50, 100, 150, 200, 250], expectedNetHeight: 115 },
   { name: "a best case of 156.4 m, landing 32.2 m", measured: { bestHeight: 156.4, landingDistance: 32.2 }, expectedFrameTop: 205, expectedBoardCount: 41, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 78.2 },
-  { name: "the sizing measurement's best run (178.2 m, landing 32.2 m)", measured: { bestHeight: 178.2, landingDistance: 32.2 }, expectedFrameTop: 235, expectedBoardCount: 47, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 89.1 },
+  { name: "the sizing measurement's best run (169.1 m, landing 32.2 m)", measured: { bestHeight: 169.1, landingDistance: 32.2 }, expectedFrameTop: 220, expectedBoardCount: 44, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 84.55 },
   { name: "a best case a little over it", measured: { bestHeight: 157, landingDistance: 240 }, expectedFrameTop: 205, expectedBoardCount: 41, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 78.5 },
   { name: "a best case whose headroom lands exactly on a board", measured: { bestHeight: 100, landingDistance: 160 }, expectedFrameTop: 130, expectedBoardCount: 26, expectedMajorHeights: [0, 50, 100], expectedNetHeight: 50 },
   { name: "a best case whose headroom just passes a big board", measured: { bestHeight: 38.5, landingDistance: 25 }, expectedFrameTop: 55, expectedBoardCount: 11, expectedMajorHeights: [0, 50], expectedNetHeight: 30 },

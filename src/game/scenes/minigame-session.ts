@@ -32,7 +32,7 @@ export type MinigameHudState = {
   attempt: number;
   /** Ring Fling only, else null. */
   throwsPerSet: number | null;
-  /** Metres past the lip (long jump), the highest point so far in metres above the lip (high jump), the ring zone under him (Ring Fling); null while he is not flying. */
+  /** Metres past the lip (long jump), the highest point so far within `SCORE_BAND_HALF_DEPTH` of the posts in metres above the lip (high jump), the ring zone under him (Ring Fling); null while he is not flying. */
   liveValue: number | null;
   lastScore: number | null;
   /** Ring Fling only: the scores of this set's finished throws; empty in the other modes. */
@@ -52,8 +52,8 @@ type MinigameBeginOptions = {
   carType: string;
   /** Ring Fling only. */
   throwsPerSet?: number;
-  /** High jump only: the lip's height above the pad (the score is the highest point above it). */
-  highJumpLipY?: number;
+  /** High jump only: the posts' plane (m past the lip) the score is read around, and the lip's height above the pad. */
+  highJump?: { postsX: number; lipY: number };
 };
 
 /** One render frame's input to the session. */
@@ -73,8 +73,8 @@ export class MinigameSession {
   private mode: MinigameMode = MINIGAME_MODE.longJump;
   private carType = "";
   private throwsPerSetCount: number = THROWS_PER_SET.default;
-  /** High jump only: the lip's height above the pad, the zero of the score. */
-  private highJumpLipY = 0;
+  /** High jump only: the posts' plane (the score is read around it) and the lip's height above the pad, the zero of the score. */
+  private highJump = { postsX: 0, lipY: 0 };
   private phase: MinigamePhase = "ready";
   private attempt = 1;
   private liveValue: number | null = null;
@@ -91,11 +91,11 @@ export class MinigameSession {
 
   /** Start the mode's first attempt (a new set in a Ring Fling). */
   begin(mode: MinigameMode, options: MinigameBeginOptions): void {
-    if (mode === MINIGAME_MODE.highJump && options.highJumpLipY === undefined) throw new Error("the high jump needs its lip height");
+    if (mode === MINIGAME_MODE.highJump && options.highJump === undefined) throw new Error("the high jump needs its posts' plane and lip height");
     this.mode = mode;
     this.carType = options.carType;
     this.throwsPerSetCount = clampThrowsPerSet(options.throwsPerSet ?? THROWS_PER_SET.default);
-    this.highJumpLipY = options.highJumpLipY ?? 0;
+    this.highJump = options.highJump ?? this.highJump;
     this.attempt = 1;
     this.setScores = [];
     this.lastScore = null;
@@ -110,7 +110,7 @@ export class MinigameSession {
     if (this.phase !== "thrown") return null;
     const { torso } = frame;
     if (torso === null) return null;
-    if (this.mode === MINIGAME_MODE.highJump) this.peak.step(torso, this.highJumpLipY);
+    if (this.mode === MINIGAME_MODE.highJump) this.peak.step(torso, this.highJump.postsX, this.highJump.lipY);
     this.liveValue = this.liveValueAt(torso);
     const score = this.scoreAt(torso);
     if (score === null) return null;

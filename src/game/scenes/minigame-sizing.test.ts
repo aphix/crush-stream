@@ -18,7 +18,7 @@ import { BAIL_ELEVATION_DEGREES, BAIL_PERFECT_SECONDS, BAIL_WINDOW_SECONDS, bail
 import { JerseyBarrier } from "./engine-props.ts";
 import { RANGE } from "./range.ts";
 import { MinigameGround } from "./minigame-ground.ts";
-import { BOX_NET_CLEARANCE, BOX_PILE_TRAIL, HighJumpPeak, highJumpLayout, type HighJumpMeasured } from "./minigame-high-jump.ts";
+import { BOX_NET_CLEARANCE, BOX_PILE_TRAIL, HighJumpPeak, highJumpLayout, POSTS_DISTANCE, type HighJumpMeasured } from "./minigame-high-jump.ts";
 import { lipHeight } from "./minigame-profile.ts";
 import { dressedDriverCar } from "./minigame-profile.test-util.ts";
 import { withoutFrame } from "./minigame-frame.test-util.ts";
@@ -65,18 +65,20 @@ const UPWARD_MUTATION_FACTOR = 1.1;
 const MEASURED_TOLERANCE = 0.02;
 
 /**
- * The high jump's bars, on the score: the highest point his torso reaches above the lip (`HighJumpPeak`), measured on the free pad (the
- * posts, slats and signs are taken out of the ragdoll's world: the launch alone). The best class's best run (the frame is set from it)
- * scores in `BEST_HEIGHT_BAND`: the owner's accepted 150-160 m was the crossing height at the posts' plane of this same throw (156.4 m),
- * whose highest point is 178.2 m, so the band is the old one times 178.2 / 156.4 = 1.14 (171-182 m), not a loosening. Every best run
- * scores at least `BEST_RUN_HEIGHT_MINIMUM` (well up the boards). A run at `SLOW_RUN_SHARE` of the full-throttle lip speed used to have to
- * cross the posts' plane or score 0; now every run scores its highest point, so the bar is that an 80% run still scores
- * `SLOW_RUN_HEIGHT_MINIMUM`, the best runs' own floor.
+ * The high jump's bars, on the score: the highest point his torso reaches above the lip inside the band `SCORE_BAND_HALF_DEPTH` either
+ * side of the posts' plane (`HighJumpPeak`), measured on the free pad (the posts, slats and signs are taken out of the ragdoll's world:
+ * the launch alone). The best class's best run (the frame is set from it) scores in `BEST_HEIGHT_BAND`: the owner's accepted 150-160 m was
+ * the crossing height at the posts' plane of this same throw (156.4 m); its score under the band rule is 169.1 m (its apex, 178.2 m at
+ * 17 m out, lies past the band), so the band is the old one times 169.1 / 156.4 = 1.08 (162-173 m), not a loosening. Every best run scores
+ * at least `BEST_RUN_HEIGHT_MINIMUM` (well up the boards). The old bar was that every class's run at `SLOW_RUN_SHARE` of the full-throttle
+ * lip speed still crosses the posts' plane (scores above 0); with the band an 80% run scores 56-119 m (the truck's 56 m the least: its
+ * apex is 9 m out, only just in the band), so the bar is that an 80% run still scores `SLOW_RUN_HEIGHT_MINIMUM`, under the least of them
+ * and well over 0.
  */
-const BEST_HEIGHT_BAND = { minimum: 171, maximum: 182 } as const;
+const BEST_HEIGHT_BAND = { minimum: 162, maximum: 173 } as const;
 const BEST_RUN_HEIGHT_MINIMUM = 60;
 const SLOW_RUN_SHARE = 0.8;
-const SLOW_RUN_HEIGHT_MINIMUM = BEST_RUN_HEIGHT_MINIMUM;
+const SLOW_RUN_HEIGHT_MINIMUM = 50;
 /** With the posts, slats and signs in the world a catch may cost the best class some height, never below the owner's accepted 150 m. */
 const FRAMED_BEST_HEIGHT_MINIMUM = 150;
 /** The mutation that shrinks the slow runs: upward times this must put an 80% run under the bar. */
@@ -266,7 +268,7 @@ function fly(range: RagdollRange, mode: MinigameMode, thrown: Capture, scale: Re
     system.update(frameDuration, [], true, false, null);
     flight.still = system.latest(torso);
     const distance = torso.x - anchor.x;
-    flight.height = peak.step({ x: distance, y: torso.y, z: torso.z - anchor.z, still: flight.still }, lip);
+    flight.height = peak.step({ x: distance, y: torso.y, z: torso.z - anchor.z, still: flight.still }, POSTS_DISTANCE, lip);
     if (torso.y - lip > flight.apexHeight) {
       flight.apexHeight = torso.y - lip;
       flight.apexDistance = distance;
@@ -446,7 +448,7 @@ function tableOf(rows: readonly Measurement[], zone: (flight: Flight) => string)
 const TABLE_HEADER = "| class | run | lip h/v (m/s) | release h/v (m/s) | apex (m @ m) | lands (m) | rests (m) | zone |";
 
 describe("given the high jump with THROW_BOOST.highJump on the free pad (no frame in the ragdoll's world), with the real car, ground and ragdoll", () => {
-  it("when each of the 7 classes' best and mid runs is thrown, then the best class scores 171-182 m, every class's best run is well up the boards and lands in the box field, and every class's 80% run still scores 60 m", async (t) => {
+  it("when each of the 7 classes' best and mid runs is thrown, then the best class scores 162-173 m, every class's best run is well up the boards and lands in the box field, and every class's 80% run still scores 50 m", async (t) => {
     const rows = await measure("highJump", THROW_BOOST.highJump, REPEATS);
     const slowRuns = await slowRunHeights(THROW_BOOST.highJump);
     const layout = highJumpLayout(measuredBest(rows, 0), lipHeight("highJump"));
