@@ -104,7 +104,7 @@ describe("given the clips of a campaign's rounds", () => {
     for (let mask = 0; mask < 64; mask++) {
       const winners = new Set([0, 1, 2, 3, 4, 5].filter((id) => (mask >> id) & 1));
       if (winners.size > CAMPAIGN_REEL_CLIPS) continue;
-      assert.deepEqual(reel.top(winners), rankAll(all, winners), `winners ${[...winners].join(",") || "none"}`);
+      assert.equal(JSON.stringify(reel.top(winners)), JSON.stringify(rankAll(all, winners)), `winners ${[...winners].join(",") || "none"}`);
       checked++;
     }
     assert.ok(checked >= 40, `${checked} winner sets checked`);
