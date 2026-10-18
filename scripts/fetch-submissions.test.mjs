@@ -227,17 +227,79 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
     ]);
   });
 
-  it("when one arm's window lost focus and left fullscreen and the arms ran different FX tiers, then the block flags each fault and the tiers", async () => {
+  it("when one arm's window was unfocused and out of fullscreen on a desktop and the arms ran different FX tiers, then the block flags only the tiers and says the focus and fullscreen as a note", async () => {
     const unfocused = { pageEvents: [{ phase: "warm", atS: 0, visible: true, focused: true, fullscreen: true }, { phase: "window", atS: 0, visible: true, focused: false, fullscreen: false }], tierPct: { ultra: 100 } };
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, unfocused)]);
-    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran unfocused, not fullscreen", "FLAG the arms ran different FX tiers: off high, on ultra"]);
+    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG the arms ran different FX tiers: off high, on ultra"]);
+    assert.deepEqual(squash(lines.filter((l) => l.includes("note epicenter"))), ["note epicenter on: not fullscreen (desktop); unfocused (visible)"]);
   });
 
-  it("when a card carries the per-second series, then the flag counts the window's seconds that were hidden, unfocused, out of fullscreen or had no screen wake lock held, and says nothing of a second that was fine", async () => {
-    // Six seconds: warm (stretch 0) shown, focused, fullscreen, awake (f); then window seconds (stretch 1): f, d (no focus... d = 1+4+8: focused 2 missing), 5 (1+4: focused and awake missing), 0 (hidden, nothing).
+  const PHONE = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/149.0.0.0 Mobile Safari/537.36";
+
+  it("when the same window is a phone's, then the loss of fullscreen is a FLAG, and a window that stayed fullscreen has none", async () => {
+    const out = { pageEvents: [{ phase: "window", atS: 0, visible: true, focused: true, fullscreen: false }], device: { userAgent: PHONE } };
+    const kept = { pageEvents: [{ phase: "window", atS: 0, visible: true, focused: true, fullscreen: true }], device: { userAgent: PHONE } };
+    const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, kept), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, out)]);
+    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran not fullscreen"]);
+  });
+
+  it("when a phone's card carries the per-second series with two window seconds out of fullscreen, then they are a FLAG with their count, and the same seconds on a desktop are only a note", async () => {
+    const series = { pageSeconds: { flags: "ffbb", phases: "1111" } };
+    const phone = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, { ...series, device: { userAgent: PHONE } })]);
+    assert.deepEqual(squash(phone.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran not fullscreen 2 of 4 s"]);
+    const desktop = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, series)]);
+    assert.deepEqual(desktop.filter((l) => l.includes("FLAG")), []);
+  });
+
+  it("when a card carries the per-second series, then hidden and screen-not-held seconds are FLAGs with their counts, and the unfocused and (desktop) out-of-fullscreen seconds are a note", async () => {
+    // Six seconds: warm (stretch 0) f; window seconds (stretch 1): f, d (shown, fullscreen, awake: unfocused), 5 (shown, fullscreen: unfocused, no wake lock), 0 (hidden), f.
     const series = { pageSeconds: { flags: "ffd50" + "f", phases: "0011" + "11" } };
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, series)]);
-    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran hidden 1 of 4 s, unfocused 2 of 4 s, not fullscreen 1 of 4 s, screen not held 2 of 4 s"]);
+    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran hidden 1 of 4 s, screen not held 2 of 4 s"]);
+    assert.deepEqual(squash(lines.filter((l) => l.includes("note epicenter"))), ["note epicenter on: not fullscreen 1 of 4 s (desktop); unfocused 2 of 4 s (visible)"]);
+  });
+
+  describe("and the window's frame time in its focused and unfocused seconds", () => {
+    /** Ten window seconds: the first four focused, then six visible but unfocused (the owner typed elsewhere); `fps` is each second's frame rate. */
+    const focusWindow = (fps) => ({
+      pageEvents: [
+        { phase: "window", atS: 0, visible: true, focused: true, fullscreen: true },
+        { phase: "window", atS: 4, visible: true, focused: false, fullscreen: true },
+      ],
+      fpsPerSecond: fps,
+    });
+    const flags = (lines) => squash(lines.filter((l) => l.includes("FLAG")));
+    const notes = (lines) => squash(lines.filter((l) => l.includes("note epicenter on")));
+
+    it("when the unfocused seconds ran at the same frame time, then there is no FLAG for focus, and the note gives both frame times and says no cost", async () => {
+      const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, focusWindow([60, 59, 61, 60, 60, 61, 59, 60, 60, 61]))]);
+      assert.deepEqual(flags(lines), []);
+      assert.equal(notes(lines).length, 1);
+      assert.ok(notes(lines)[0].includes("unfocused (visible)") && notes(lines)[0].includes("frame time 16.6 ms unfocused (6 s) against 16.7 ms focused (4 s)") && notes(lines)[0].endsWith(": no cost"), notes(lines)[0]);
+    });
+
+    it("when the unfocused seconds ran at half the frame rate, then focus loss is a FLAG with the two frame times and the window's own spread", async () => {
+      const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, focusWindow([60, 60, 60, 60, 30, 30, 30, 30, 30, 30]))]);
+      assert.equal(flags(lines).length, 1);
+      assert.ok(flags(lines)[0].startsWith("FLAG epicenter on: losing focus cost frame time: frame time 33.3 ms unfocused (6 s) against 16.7 ms focused (4 s): 100.0 % apart, the window's own spread"), flags(lines)[0]);
+    });
+
+    it("when the frame time differs by less than the window's own spread (a noisy window), then there is no FLAG", async () => {
+      const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, focusWindow([50, 70, 45, 75, 52, 68, 47, 73, 50, 70]))]);
+      assert.deepEqual(flags(lines), []);
+    });
+
+    it("when the frame rate falls to 1 fps for two window seconds, then they are throttled seconds and a FLAG, in a window that was never unfocused", async () => {
+      const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, { fpsPerSecond: [60, 60, 1, 1, 60, 60] })]);
+      assert.deepEqual(flags(lines), ["FLAG epicenter on: the window ran frame rate throttled (2 fps or less) 2 of 6 s"]);
+    });
+
+    it("when a window second was hidden, then it is a FLAG whatever the frame time was", async () => {
+      const hidden = { pageSeconds: { flags: "ffff", phases: "1111" }, fpsPerSecond: [60, 60, 60, 60] };
+      hidden.pageSeconds.flags = "f0ff";
+      const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, hidden)]);
+      assert.deepEqual(flags(lines), ["FLAG epicenter on: the window ran hidden 1 of 4 s, screen not held 1 of 4 s"]);
+    });
   });
 
   it("when a card pinned the sky to the full strip and one window second drew it loading, then the flag counts that second, and a window that drew the strip all through says nothing of the sky", async () => {

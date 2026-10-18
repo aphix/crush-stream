@@ -93,12 +93,24 @@ const BIT_AWAKE = 8;
 /** The digit of the card's sky series (`SKY_DRAWN`) that each Sky setting the bench pins draws: the full strip, or nothing. */
 const SKY_PIN_DIGIT = { full: "3", off: "0" };
 
+/** A window second at or under this many frames was throttled (a browser holds a page it does not draw to about one frame a second): a phone's or a software GL's steady 10 fps is not. */
+const THROTTLED_FPS = 2;
+/** A device whose user agent says it is a phone or tablet: fullscreen matters there (the browser's bars and the screen timing out change the page); on a desktop a window that is not fullscreen is a note. */
+const TOUCH_DEVICE = /Android|iPhone|iPad|iPod|Mobile/i;
+/** Frame time in unfocused window seconds is compared with the focused ones' only above this many percent, whatever a very steady window's own spread says (a rounding difference is not a cost). */
+const MIN_FOCUS_DIFF_PCT = 5;
+
 /**
- * What was wrong with the page during the window. A card with the per-second series says how many of the window's seconds the page was hidden, unfocused, out of
- * fullscreen or had no screen wake lock held; an older one only has the entries of its `pageEvents` (the entry that opens the window counts), which name the fault without a count.
+ * What was wrong with the page during the window, as faults (they spoil it: `FLAG`) and notes (they are only said). A card with the per-second series counts the window's seconds: faults
+ * are hidden, not fullscreen on a phone or tablet, the screen wake lock not held, the sky not as pinned, and frame-rate throttled seconds (`fpsPerSecond`); notes are the seconds visible but
+ * unfocused (a desktop with two monitors loses focus whenever its owner types elsewhere, and a visible page draws at full rate) and, on a desktop, seconds out of fullscreen. An older card
+ * has only the entries of its `pageEvents` (the entry that opens the window counts) and names the same without a count.
  */
-function windowFaults(result) {
+function windowReading(result) {
+  const touch = TOUCH_DEVICE.test(result.device?.userAgent ?? "");
   const series = result.pageSeconds;
+  const faults = [];
+  const notes = [];
   if (series) {
     const counts = { hidden: 0, unfocused: 0, "not fullscreen": 0, "screen not held": 0, "sky not as pinned": 0 };
     const pinned = SKY_PIN_DIGIT[result.settings?.sky];
@@ -113,16 +125,65 @@ function windowFaults(result) {
       if ((flags & BIT_AWAKE) === 0) counts["screen not held"]++;
       if (pinned !== undefined && series.sky !== undefined && series.sky[i] !== pinned) counts["sky not as pinned"]++;
     }
-    return Object.entries(counts).filter(([, n]) => n > 0).map(([name, n]) => `${name} ${n} of ${seconds} s`);
+    const say = (name) => `${name} ${counts[name]} of ${seconds} s`;
+    for (const name of ["hidden", "screen not held", "sky not as pinned"]) if (counts[name] > 0) faults.push(say(name));
+    if (counts["not fullscreen"] > 0) (touch ? faults : notes).push(say("not fullscreen") + (touch ? "" : " (desktop)"));
+    if (counts.unfocused > 0) notes.push(`${say("unfocused")} (visible)`);
+  } else {
+    const seen = new Set();
+    for (const e of result.pageEvents ?? []) {
+      if (e.phase !== PHASE_WINDOW) continue;
+      if (!e.visible) seen.add("hidden");
+      else if (!e.focused) seen.add("unfocused");
+      if (!e.fullscreen) seen.add("not fullscreen");
+    }
+    if (seen.has("hidden")) faults.push("hidden");
+    if (seen.has("not fullscreen")) (touch ? faults : notes).push(touch ? "not fullscreen" : "not fullscreen (desktop)");
+    if (seen.has("unfocused")) notes.push("unfocused (visible)");
   }
-  const faults = new Set();
-  for (const e of result.pageEvents ?? []) {
-    if (e.phase !== PHASE_WINDOW) continue;
-    if (!e.visible) faults.add("hidden");
-    else if (!e.focused) faults.add("unfocused");
-    if (!e.fullscreen) faults.add("not fullscreen");
+  const fps = result.fpsPerSecond;
+  if (Array.isArray(fps) && fps.length > 0) {
+    const throttled = fps.filter((v) => v <= THROTTLED_FPS).length;
+    if (throttled > 0) faults.push(`frame rate throttled (${THROTTLED_FPS} fps or less) ${throttled} of ${fps.length} s`);
   }
-  return [...faults];
+  return { faults, notes };
+}
+
+/** The window's focus state each of its seconds (true: visible and focused, false: visible and not, null: hidden), from the card's page events, which count their time from the window's start like `fpsPerSecond`. */
+function focusPerSecond(events, seconds) {
+  const window = events.filter((e) => e.phase === PHASE_WINDOW).sort((a, b) => a.atS - b.atS);
+  const states = [];
+  for (let second = 0; second < seconds; second++) {
+    let at = null;
+    for (const e of window) if (e.atS <= second + 0.5) at = e;
+    states.push(at === null || !at.visible ? null : at.focused);
+  }
+  return states;
+}
+
+/**
+ * Whether losing focus cost the page frame time: the mean frame time of the window's visible-but-unfocused seconds against its focused ones (1000 / `fpsPerSecond`). `flag` says so when
+ * the two differ by more than the window's own spread (the coefficient of variation of its seconds' frame time) and at least `MIN_FOCUS_DIFF_PCT`; `note` gives the two numbers when
+ * there are unfocused seconds to compare (at least two of each kind), either way. A card with no per-second frame rate or no page events has neither.
+ */
+function focusCost(result) {
+  const fps = result.fpsPerSecond;
+  if (!Array.isArray(fps) || fps.length === 0 || !Array.isArray(result.pageEvents)) return {};
+  const states = focusPerSecond(result.pageEvents, fps.length);
+  const ms = fps.map((v) => (v > 0 ? 1000 / v : null));
+  const mean = (values) => values.reduce((sum, v) => sum + v, 0) / values.length;
+  const focused = ms.filter((v, i) => v !== null && states[i] === true);
+  const unfocused = ms.filter((v, i) => v !== null && states[i] === false);
+  if (unfocused.length === 0) return {};
+  if (focused.length < 2 || unfocused.length < 2) return { note: `frame time unfocused against focused: too few seconds to compare (${unfocused.length} unfocused, ${focused.length} focused)` };
+  const all = ms.filter((v) => v !== null);
+  const avg = mean(all);
+  const spread = (100 * Math.sqrt(mean(all.map((v) => (v - avg) ** 2)))) / avg;
+  const a = mean(focused);
+  const b = mean(unfocused);
+  const apart = (100 * Math.abs(b - a)) / a;
+  const said = `frame time ${f1(b)} ms unfocused (${unfocused.length} s) against ${f1(a)} ms focused (${focused.length} s): ${f1(apart)} % apart, the window's own spread ${f1(spread)} %`;
+  return apart > Math.max(spread, MIN_FOCUS_DIFF_PCT) ? { flag: `losing focus cost frame time: ${said}`, note: said } : { note: `${said}: no cost` };
 }
 
 /** The FX tier the most window frames ran. */
@@ -131,8 +192,9 @@ const topTier = (result) => Object.entries(result.tierPct ?? {}).sort((a, b) => 
 /**
  * The off/on pairs of the bench loop in `ones` (submissions as `readOne` answers them: the card's loop settings are `submission.settings`): the loop runs every map twice, and
  * the cards of a pair share session, loop cycle and map (step `city`, `city:epi`). One block per pair: ms per sim-second by phase, the counters, the cost per unit
- * of work (the arms do different work once the sim diverges, so a total is not an A/B), hitches, and a FLAG line for each arm whose window lost focus,
- * was hidden or left fullscreen, and for a pair whose arms ran different FX tiers: such a pair says little about the activation.
+ * of work (the arms do different work once the sim diverges, so a total is not an A/B), hitches, and a FLAG line for each arm whose window was spoiled
+ * (hidden, not fullscreen on a phone, the screen lock lost, the frame rate throttled, the sky off its pin, focus loss that cost frame time) and for a pair whose arms ran different FX tiers:
+ * such a pair says little about the activation. Visible-but-unfocused seconds are a `note` line, not a FLAG (`windowReading`, `focusCost`).
  */
 export function abTable(ones) {
   const cards = new Map();
@@ -189,8 +251,12 @@ export function abTable(ones) {
       if (opened && !opened.settled) lines.push(`    FLAG epicenter ${arm}: the page never settled before the window opened (${f1(opened.settleS)} s watched, longest frame ${Math.round(opened.longestMs)} ms)`);
     }
     for (const [arm, result] of [["off", pair.off], ["on", pair.on]]) {
-      const faults = windowFaults(result);
+      const { faults, notes } = windowReading(result);
       if (faults.length) lines.push(`    FLAG epicenter ${arm}: the window ran ${faults.join(", ")}`);
+      const cost = focusCost(result);
+      if (cost.flag) lines.push(`    FLAG epicenter ${arm}: ${cost.flag}`);
+      if (cost.note) notes.push(cost.note);
+      if (notes.length) lines.push(`    note epicenter ${arm}: ${notes.join("; ")}`);
     }
     if (topTier(pair.off) !== topTier(pair.on)) lines.push(`    FLAG the arms ran different FX tiers: off ${topTier(pair.off)}, on ${topTier(pair.on)}`);
   }
