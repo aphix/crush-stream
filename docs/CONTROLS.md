@@ -110,7 +110,7 @@ On a touch screen the read-outs are text straight on the view in the top left (p
 | Shape ↔ lattice | Y | | Cars & crash section, Solver row |
 | Whole ↔ epicenter activation (a crashed car solves every slice, or a quiet wreck freezes: `epi.on`, the same knob as the Epicenter group's first slider and the link's `#epi.on=1`) | | | Cars & crash section, Activation row under Solver (changed dot; in the link like the Solver) |
 | Deform rig, control particles, JSON capture; the chase camera's sliders (changed dot, reset chip, Defaults and the share URL like every other setting) | G, P, J | | Debug views section; the camera sliders sit in a **Camera convergence** sub-section that starts closed (its open state is kept, `crush.hud.camera`), led by a row of presets: **Default** (today's values) and the variants **Tight**, **Cinematic**, **Drift** and **Steady**, each setting several camera sliders at once (`CAMERA_PRESETS`, `src/game/hud/camera-presets.ts`); a variant sets every camera slider (the ones it does not name at their defaults), the sliders still move after, and the lit preset is whichever one the sliders match, so a link carrying its `cam.*` keys shows it lit |
-| Stats overlay | \ (Backslash), or `?stats=1` | | |
+| Stats overlay: frames per second, then ms per frame and heap MB on a click of the panel; fed on every frame the page draws, the bench pages' too | \ (Backslash), or `?stats=1` | | |
 | Pistons: fire one ram (clockwise from front-left) / all eight | 1–8 / 0 | | piston panel |
 | Doors: fire A / B / C, open or shut the door, swap side, fire D / E (panel) | 1–3, 4, 5, 6, 7 | | door panel |
 | Fullscreen | (the browser's own F11) | | Fullscreen |

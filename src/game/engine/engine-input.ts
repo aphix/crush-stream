@@ -33,6 +33,9 @@ const BOOST_PAD_MASK = BOOST_PAD_BUTTON === null ? 0 : 1 << BOOST_PAD_BUTTON;
 /** A press that misses every hull still follows the car whose centre shows this near it (share of the canvas width): the derby's far, small cars. */
 const PICK_NEAR = 0.03;
 
+/** The panel `Stats` opens on (its panels in order: 0 frames per second, 1 ms per frame, 2 heap MB; a click on the panel cycles them). */
+const STATS_FPS_PANEL = 0;
+
 /**
  * Player input: keyboard, gamepad, pointer picks and the HUD's commands and settings.
  */
@@ -56,7 +59,7 @@ export abstract class EngineInput extends EngineRigs {
       for (let i = 0; i < frames; i++) {
         t += dt;
         this.skipDraw = !opts.render && i < frames - 1;
-        this.tickInner(t);
+        this.frame(t);
       }
     } finally {
       this.skipDraw = false;
@@ -215,8 +218,18 @@ export abstract class EngineInput extends EngineRigs {
     this.setFxTier(FX_TIERS[(FX_TIERS.indexOf(this.cine.tier) + 1) % FX_TIERS.length]!);
   }
 
-  /** The frame-time panel over the canvas (`\` or `?stats=1`): three's `Stats`, measured round `tickInner`. */
+  /** The frame-time panel over the canvas (`\` or `?stats=1`): three's `Stats`, fed by `frame`, so every loop that runs frames (the page's own, `advance`, the bench's) reads it. */
   protected stats: Stats | null = null;
+
+  /** One frame of the loop: `tickInner` timed by the stats panel when it is up. The one path `tick`, `advance` and the bench's frames share. */
+  protected frame(now: number): void {
+    this.stats?.begin();
+    try {
+      this.tickInner(now);
+    } finally {
+      this.stats?.end();
+    }
+  }
 
   toggleStats(): void {
     if (this.stats !== null) {
@@ -225,7 +238,7 @@ export abstract class EngineInput extends EngineRigs {
       return;
     }
     this.stats = new Stats();
-    this.stats.showPanel(1);
+    this.stats.showPanel(STATS_FPS_PANEL);
     this.stats.dom.style.left = "calc(50% - 40px)";
     (this.canvas.parentElement ?? document.body).appendChild(this.stats.dom);
   }

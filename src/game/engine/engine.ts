@@ -457,16 +457,14 @@ export class CrashEngine extends EngineGarage {
 
   private tick = (now: number): void => {
     if (this.disposed) return;
-    this.stats?.begin();
     try {
-      this.tickInner(now);
+      this.frame(now);
     } catch (err) {
       console.error("Crush Stream tick failed", err);
       this.renderer.setRenderTarget(null);
       this.renderer.render(this.scene, this.camera);
       this.blend.restore();
     }
-    this.stats?.end();
   };
 
   protected tickInner(now: number): void {
