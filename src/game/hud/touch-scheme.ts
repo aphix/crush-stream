@@ -22,7 +22,7 @@ export const TOUCH_MIRROR_KEY = "crush.touch.mirror";
 export const TILT_FULL_LOCK_KEY = "crush.touch.tilt.fullLock";
 export const TILT_DEAD_ZONE_KEY = "crush.touch.tilt.deadZone";
 
-export const TOUCH_SCHEME_LABEL: Readonly<Record<TouchScheme, string>> = { autogas: "Easy", pedals: "Pedals", stick: "Stick", tilt: "Tilt" };
+export const TOUCH_SCHEME_LABEL: Readonly<Record<TouchScheme, string>> = { autogas: "Easy", pedals: "Pedals", stick: "Disc", tilt: "Tilt" };
 
 /** One line under each scheme in the Controls section. */
 export const TOUCH_SCHEME_HINT: Readonly<Record<TouchScheme, string>> = {
