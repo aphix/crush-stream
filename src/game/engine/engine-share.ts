@@ -90,6 +90,7 @@ export abstract class EngineShare extends EngineReel {
       tod: o.timeOfDay,
       noreset: o.noReset,
       spectate: o.spectate,
+      stats: this.statsPanel(),
       seed: SEEDED_SCENES[sc] ? this.sceneSeed : null,
       ...knobValues(),
     };
@@ -144,6 +145,7 @@ export abstract class EngineShare extends EngineReel {
       if (t.fx !== null && differs("fx")) this.setFxTier(t.fx);
       if (differs("ts")) this.setTimeScale(t.ts);
       if (differs("loop")) this.toggleLoop();
+      if (differs("stats")) this.setStats(t.stats);
       if (differs("slomo")) this.toggleSlomo();
       if (differs("mvol")) this.setMusicVolume(t.mvol);
       if (differs("evol")) this.setEngineVolume(t.evol);
@@ -208,6 +210,8 @@ export abstract class EngineShare extends EngineReel {
     // The stored car pick arrives after this (crash-lab's effect): a `#` that names a car keeps it (`driverCarApplies`).
     this.linkNamedCar = t.car !== decodeShare("").car;
     this.arrive(t, true);
+    // `?stats=1` is the panel up on FPS, for a bench page (no `#`) and a link without `stats=` alike.
+    if (new URLSearchParams(window.location.search).get("stats") === "1" && this.stats === null) this.toggleStats();
     if (hash !== null) window.addEventListener("hashchange", this.onShareHash);
   }
 

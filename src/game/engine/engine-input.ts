@@ -231,16 +231,33 @@ export abstract class EngineInput extends EngineRigs {
     }
   }
 
-  toggleStats(): void {
-    if (this.stats !== null) {
-      this.stats.dom.remove();
+  /** The panel the page shows (an index into `Stats`' panels: 0 FPS, 1 ms, 2 heap), or null with the panel down: the share URL's `stats=`. A click on the panel changes it. */
+  statsPanel(): number | null {
+    if (this.stats === null) return null;
+    const shown = Array.from(this.stats.dom.children).findIndex((c) => (c as HTMLElement).style.display !== "none");
+    return Math.max(0, shown);
+  }
+
+  /** The frame-time panel up on `panel` (clamped to the panels this browser has: the heap one is Chromium's), or down for null. The HUD publishes, so the URL follows. */
+  setStats(panel: number | null): void {
+    if (panel === null) {
+      this.stats?.dom.remove();
       this.stats = null;
-      return;
+    } else {
+      if (this.stats === null) {
+        this.stats = new Stats();
+        this.stats.dom.style.left = "calc(50% - 40px)";
+        // The panel's own click handler cycles its panels first; the URL follows the one it lands on.
+        this.stats.dom.addEventListener("click", () => this.emitHud());
+        (this.canvas.parentElement ?? document.body).appendChild(this.stats.dom);
+      }
+      this.stats.showPanel(Math.min(panel, this.stats.dom.children.length - 1));
     }
-    this.stats = new Stats();
-    this.stats.showPanel(STATS_FPS_PANEL);
-    this.stats.dom.style.left = "calc(50% - 40px)";
-    (this.canvas.parentElement ?? document.body).appendChild(this.stats.dom);
+    this.emitHud();
+  }
+
+  toggleStats(): void {
+    this.setStats(this.stats === null ? STATS_FPS_PANEL : null);
   }
 
   setNight(on: boolean): void {

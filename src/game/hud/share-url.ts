@@ -80,6 +80,9 @@ const R = KNOB_RANGES;
 const D = INITIAL_HUD;
 const O = DEFAULT_RACE_OPTIONS;
 
+/** The last of the frame-time panel's three panels (`Stats`: 0 FPS, 1 ms, 2 heap MB). */
+const STATS_PANEL_LAST = 2;
+
 /**
  * Every shared setting but the camera sliders, in URL order: the trace JSON's settings (`engine-trace.ts`) plus the piston and door
  * rigs' knobs and the race setup. The piston and door ranges mirror the rigs' own setter clamps, which apply again.
@@ -139,6 +142,8 @@ const BASE_FIELDS = {
   tod: pick(TIMES_OF_DAY, O.timeOfDay),
   noreset: flag(O.noReset),
   spectate: flag(O.spectate),
+  // null = the frame-time panel is down; a number is the panel it shows (0 frames per second, 1 ms per frame, 2 heap: `Stats`' own order).
+  stats: orNull(num(0, STATS_PANEL_LAST, 0, true)),
   seed: hex,
 };
 
