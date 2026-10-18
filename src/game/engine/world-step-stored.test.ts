@@ -71,4 +71,28 @@ describe("given a car the race put away (`stored`) beside a car driving on", () 
     assert.equal(left.some((v) => v !== 0), false, "the put-away car's slot holds no borne weight after a step");
     for (const car of cars) car.dispose();
   });
+
+  it("when the put-away car has stood 2 s with wheelspin in its drive and a rider's weight on its roof and is then placed on the road beside the driving car, then the world with the knob at 1 runs the next 3 s to the bit as the one with it at 0", () => {
+    const run = (knob: number): number[] => {
+      loadEpicenter(EPICENTER_AT_LOAD);
+      EPICENTER.storedSkip = knob;
+      const { cars, w } = field();
+      cars[1]!.drive.spin = 1;
+      cars[1]!.drive.spinSpeed = 1.7;
+      for (let s = 0; s < 160; s++) stepWorld(w, STEP);
+      w.surfaces.borneState(1, Float64Array.of(0, -0.05, 0, 0, 0, 0), 0, true);
+      stepWorld(w, STEP);
+      cars[1]!.stored = false;
+      cars[1]!.spawnFacing(6, 5, 0, 12);
+      for (let s = 0; s < 240; s++) stepWorld(w, STEP);
+      const out: number[] = [];
+      for (const c of cars) out.push(c.group.position.x, c.group.position.y, c.group.position.z, c.group.quaternion.x, c.group.quaternion.y, c.group.quaternion.z, c.group.quaternion.w, c.velocity.x, c.velocity.y, c.velocity.z, c.angular.x, c.angular.y, c.angular.z);
+      for (const c of cars) c.dispose();
+      return out;
+    };
+    const off = run(0);
+    const on = run(1);
+    const differ = off.filter((v, i) => !Object.is(v, on[i]!)).length;
+    assert.equal(differ, 0, `${differ} of ${off.length} numbers differ between the stepped and the skipped put-away car's world`);
+  });
 });
