@@ -27,6 +27,7 @@ import type { CrashEngine } from "@/game/engine/engine";
 import { SCENE_KEY_BINDINGS } from "@/game/engine/engine-keys";
 import { audioLevels } from "@/game/hud/audio-levels";
 import { driveKeys } from "@/game/hud/drive-keys";
+import { showsPrevNext } from "@/game/hud/watch-cycle";
 import { freeHelp } from "@/game/hud/free-help";
 import { watchCalm, type CalmWatch } from "@/game/hud/hud-collapse";
 import { resetGlow, resetInput, type ResetInput } from "@/game/hud/reset-prompt";
@@ -225,7 +226,7 @@ function DesktopHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
       {focus || !settingsShown ? null : <HudSections {...hud} />}
 
       <div className="flex min-w-0 flex-col items-start gap-2 self-end" style={{ gridArea: "dock" }}>
-        {state.race ? <SpectateBar race={state.race} pad={state.pad !== null} cam={state.cam && CAM_LABEL[state.cam]} freeHelp={state.cam === "free" ? freeHelp(state.pad !== null, false) : null} onCommand={raceCommand} onCam={() => engine.current?.cycleCamera()} /> : null}
+        {state.race ? <SpectateBar race={state.race} cycles={showsPrevNext(state)} pad={state.pad !== null} cam={state.cam && CAM_LABEL[state.cam]} freeHelp={state.cam === "free" ? freeHelp(state.pad !== null, false) : null} onCommand={raceCommand} onCam={() => engine.current?.cycleCamera()} /> : null}
         {!focus && (state.seat !== "global" || state.pad || state.cam) && !state.race?.spectating ? <DriveHint state={state} engine={engine} /> : null}
         {focus && state.race ? (
           // Under a race menu these would only peek out beside the card.
@@ -289,8 +290,8 @@ const LEFT_COLUMN_HEIGHT = "calc(100dvh - max(var(--hud-edge), env(safe-area-ins
 const GARAGE_COLUMN_HEIGHT = "calc(100dvh - max(var(--hud-edge), env(safe-area-inset-top)) - 3.75rem - max(var(--hud-edge), env(safe-area-inset-bottom)))";
 /** Top-centre moments of a derby (lights, reset prompt, winner): the top edge on a phone on its side, under the top strip's row upright, as the race moments are (`RaceOverlay`). */
 const DERBY_MOMENTS = "pointer-events-none absolute inset-x-0 z-10 flex flex-col items-center gap-1 px-3 top-[calc(max(var(--hud-edge),env(safe-area-inset-top))+3.5rem)] phone-landscape:hud-top";
-/** The boost bar and drift label sit just above the steering slider: its 72 px and an 8 px gap above the bottom edge. */
-const ABOVE_STEERING = "bottom-[calc(max(var(--hud-edge),env(safe-area-inset-bottom))+5rem)]";
+/** The boost bar and drift label sit just above the steering control: the 128 px disc (the tallest) and an 8 px gap above the bottom edge. */
+const ABOVE_STEERING = "bottom-[calc(max(var(--hud-edge),env(safe-area-inset-bottom))+8.75rem)]";
 
 /**
  * The phone HUD. Every piece is `absolute` at a screen edge (`hud-*`), so the middle of the screen, where the road and the car are, stays
@@ -349,7 +350,7 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
 
       {race ? <RaceReadouts race={race} corner={false} /> : null}
       {race && !race.survival ? <RaceStandings race={race} onCommand={raceCommand} /> : null}
-      {race ? <SpectateBar race={race} pad={state.pad !== null} cam={state.cam && CAM_LABEL[state.cam]} freeHelp={state.cam === "free" ? freeHelp(state.pad !== null, true) : null} onCommand={raceCommand} onCam={() => engine.current?.cycleCamera()} /> : null}
+      {race ? <SpectateBar race={race} cycles={showsPrevNext(state)} pad={state.pad !== null} cam={state.cam && CAM_LABEL[state.cam]} freeHelp={state.cam === "free" ? freeHelp(state.pad !== null, true) : null} onCommand={raceCommand} onCam={() => engine.current?.cycleCamera()} /> : null}
       {/* The Lab's control is the flick on the view itself, the garage's the pickers and the can: no stick, no car buttons. */}
       {!state.lab && !state.garage ? <TouchControls {...hud} /> : null}
 

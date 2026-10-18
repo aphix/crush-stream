@@ -137,6 +137,7 @@ export abstract class EngineHud extends EngineWarm {
       trackSerial: this.audio.trackSerial,
       nowPlaying: this.audio.nowPlaying,
       carCount: this.carCount,
+      watchTargets: this.race.active ? this.race.watchTargets() : this.carCount,
       speedMin: this.speedMin,
       speedMax: this.speedMax,
       traceSamples: this.captureTrace ? this.trace.samples.length : this.trace.setupCopied ? 1 : 0,

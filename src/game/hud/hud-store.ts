@@ -143,6 +143,8 @@ export type CrashHudState = {
   buckle: number;
   fxDensity: number;
   carCount: number;
+  /** How many cars Previous / Next reach while watching (the sandbox's cars; in a race the racers still on track and Auto): Previous / Next show for two or more. */
+  watchTargets: number;
   speedMin: number;
   speedMax: number;
   traceSamples: number;
@@ -272,6 +274,7 @@ export const INITIAL_HUD: CrashHudState = {
   buckle: DEFAULT_BUCKLE,
   fxDensity: 0.7,
   carCount: 5,
+  watchTargets: 5,
   speedMin: 10,
   speedMax: 32,
   traceSamples: 0,

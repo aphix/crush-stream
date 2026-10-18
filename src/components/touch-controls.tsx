@@ -9,6 +9,7 @@ import { TouchSteer } from "@/components/touch-steer";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { useTouchScheme } from "@/components/use-touch-scheme";
 import { bailArmed } from "@/game/hud/bail-prompt";
+import { showsPrevNext } from "@/game/hud/watch-cycle";
 import { resetGlow } from "@/game/hud/reset-prompt";
 import { pedalsFor, schemeLayout } from "@/game/hud/touch-scheme";
 import { PAD_BUTTON } from "@/game/vehicle/gamepad";
@@ -80,8 +81,10 @@ export function PhoneFullscreenButton() {
   const label = on ? "Exit fullscreen" : "Fullscreen";
   return (
     <div className="pointer-events-none absolute hud-top hud-right z-20">
-      <Button variant="ghost" className={cn(ZONE, STRIP_BUTTON, "pointer-events-auto flex-col gap-0.5 [&_svg]:size-6")} data-touch-control="fullscreen" data-keep-idle aria-label={label} aria-pressed={on} title={label} onClick={toggleFullscreen}>
+      {/* Out of fullscreen, on a phone on its side, the button says its word (a pill): nobody has to guess what the corner icon is, and a browser that dropped fullscreen shows it again this plainly. */}
+      <Button variant="ghost" className={cn(ZONE, STRIP_BUTTON, "pointer-events-auto gap-1.5 [&_svg]:size-6", !on && FULLSCREEN_PILL)} data-touch-control="fullscreen" data-keep-idle aria-label={label} aria-pressed={on} title={label} onClick={toggleFullscreen}>
         {on ? <Minimize /> : <Maximize />}
+        {on ? null : <span className="hidden font-display text-sm font-semibold uppercase tracking-wider phone-landscape:inline">Fullscreen</span>}
       </Button>
     </div>
   );
@@ -101,6 +104,10 @@ export function MouseLookButton({ engine, on, className }: Pick<HudProps, "engin
 
 /** The top strip's buttons: 48 square, the caption (text-xs) under the icon. */
 const STRIP_BUTTON = "size-12 px-0";
+/** The fullscreen button out of fullscreen on a phone on its side: a 48 px pill with its word, and the room the top strip leaves it (its 9.25 rem: the pill and a gap). */
+const FULLSCREEN_PILL = "phone-landscape:w-auto phone-landscape:px-4";
+const STRIP_ROOM_ROUND = "mr-14";
+const STRIP_ROOM_PILL = "mr-14 phone-landscape:mr-[9.25rem]";
 
 /**
  * The top-right strip: View, Rear and the way out (Pause in a race, Exit at the wheel, Free in a watched scene), Prev / Next while
@@ -109,6 +116,7 @@ const STRIP_BUTTON = "size-12 px-0";
  */
 function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
   const fullscreen = useFullscreenAvailable();
+  const fullscreenOn = useSyncExternalStore(subscribeFullscreen, inFullscreen, () => false);
   const race = state.race;
   const driving = state.seat === "drive";
   const flying = state.cam === "free";
@@ -116,14 +124,14 @@ function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
   // A scene with one car (a Mini game, the garage, the range) has nobody to cycle to and nowhere to step out to.
   const others = state.carCount > 1;
   return (
-    <div className={cn("pointer-events-none absolute hud-top hud-right flex max-w-[62%] flex-wrap justify-end gap-2", fullscreen && "mr-14")}>
+    <div className={cn("pointer-events-none absolute hud-top hud-right flex max-w-[62%] flex-wrap justify-end gap-2", fullscreen && (fullscreenOn ? STRIP_ROOM_ROUND : STRIP_ROOM_PILL))}>
       {/* The glow is the prompt: the button exists only while the car needs a reset, so the strip is three buttons the rest of the time. */}
       {driving && resetGlow(state) ? (
         <PadButton engine={engine} button={PAD_BUTTON.down} name="respawn" label={race ? "Respawn" : "Recover car"} caption={race ? "Respawn" : "Recover"} showCaption className={cn(STRIP_BUTTON, RESET_GLOW)}>
           <Wrench />
         </PadButton>
       ) : null}
-      {!race && !driving && others ? (
+      {!race && showsPrevNext(state) ? (
         <>
           <PadButton engine={engine} button={PAD_BUTTON.lb} name="prev" label="Previous car" caption="Prev" className={STRIP_BUTTON}>
             <ChevronLeft />

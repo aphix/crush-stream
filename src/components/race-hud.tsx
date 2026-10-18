@@ -18,6 +18,7 @@ import {
   Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FullscreenButton } from "@/components/touch-controls";
 import { SchemePicker } from "@/components/controls-section";
 import { copyText } from "@/lib/clipboard";
 import { DriverRows } from "@/components/race-driver";
@@ -233,23 +234,27 @@ function StandingRow({ row, lead, onWatch }: { row: RaceHudRow; lead: number; on
  * free view `freeHelp` is its controls, in a line under the chip. On a phone it is the one bottom-centre piece (nothing else
  * sits there while spectating), with the help line above it.
  */
-export function SpectateBar({ race, pad, cam, freeHelp, onCommand, onCam }: { race: RaceHud; pad: boolean; cam: string | null; freeHelp: string | null; onCommand: Send; onCam: () => void }) {
+export function SpectateBar({ race, pad, cam, freeHelp, cycles, onCommand, onCam }: { race: RaceHud; pad: boolean; cam: string | null; freeHelp: string | null; cycles: boolean; onCommand: Send; onCam: () => void }) {
   if (race.spectating === null || race.menu !== null) return null;
   return (
     <div className="flex flex-col items-start gap-1 pointer-coarse:hud-bottom pointer-coarse:absolute pointer-coarse:inset-x-0 pointer-coarse:flex-col-reverse pointer-coarse:items-center">
       <div className="hud-panel pointer-events-auto flex shrink-0 items-center gap-1 p-1 pointer-coarse:max-w-[calc(100%-2rem)]" role="status">
-        <Button variant="ghost" size="icon" className="pointer-fine:size-8 pointer-coarse:size-11" aria-label="Previous car" onMouseDown={keepFocus} onClick={() => onCommand({ type: "cycle", dir: -1 })}>
-          <ChevronLeft />
-        </Button>
+        {cycles ? (
+          <Button variant="ghost" size="icon" className="pointer-fine:size-8 pointer-coarse:size-11" aria-label="Previous car" onMouseDown={keepFocus} onClick={() => onCommand({ type: "cycle", dir: -1 })}>
+            <ChevronLeft />
+          </Button>
+        ) : null}
         <div className="min-w-0 px-1 text-center">
           <p className="hud-label">
-            Spectating<span className="pointer-coarse:hidden"> · {pad ? "LB / RB" : "Q / E"}</span>
+            Spectating<span className="pointer-coarse:hidden">{cycles ? ` · ${pad ? "LB / RB" : "Q / E"}` : ""}</span>
           </p>
           <p className="truncate font-display text-base font-semibold leading-tight">{race.auto ? `Auto · ${race.spectating}` : race.spectating}</p>
         </div>
-        <Button variant="ghost" size="icon" className="pointer-fine:size-8 pointer-coarse:size-11" aria-label="Next car" onMouseDown={keepFocus} onClick={() => onCommand({ type: "cycle", dir: 1 })}>
-          <ChevronRight />
-        </Button>
+        {cycles ? (
+          <Button variant="ghost" size="icon" className="pointer-fine:size-8 pointer-coarse:size-11" aria-label="Next car" onMouseDown={keepFocus} onClick={() => onCommand({ type: "cycle", dir: 1 })}>
+            <ChevronRight />
+          </Button>
+        ) : null}
         {cam ? (
           <Button variant="ghost" className="h-10 gap-1.5 px-2 pointer-fine:h-8 pointer-coarse:h-11" aria-label="Camera view" title={`Camera view · ${pad ? "Y" : "V"}`} onMouseDown={keepFocus} onClick={onCam}>
             <Video />
@@ -439,14 +444,16 @@ function PauseTouchBody({ race, onCommand, audio, onOpenHome }: { race: RaceHud;
           <Flag />
           {race.survival ? "End run" : "End race"}
         </NavButton>
-        <div className="grid grid-cols-2 gap-2 phone-landscape:gap-1">
+        <div className="flex gap-2 phone-landscape:gap-1">
+          {/* Fullscreen is also the top-right corner's button while the race runs; the card covers that corner, so it has its own here. */}
+          <FullscreenButton className="h-12 w-12 shrink-0 rounded-md bg-surface-2 shadow-[var(--shadow-border)] phone-landscape:h-11" />
           {onOpenHome ? (
-            <NavButton variant="secondary" onClick={onOpenHome}>
+            <NavButton variant="secondary" className="min-w-0 flex-1" onClick={onOpenHome}>
               <LayoutGrid />
               Modes
             </NavButton>
           ) : null}
-          <NavButton variant="ghost" className={onOpenHome ? undefined : "col-span-2"} onClick={() => onCommand({ type: "quit" })}>
+          <NavButton variant="ghost" className="min-w-0 flex-1" onClick={() => onCommand({ type: "quit" })}>
             Quit to menu
           </NavButton>
         </div>

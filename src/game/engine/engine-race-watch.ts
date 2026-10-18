@@ -62,6 +62,21 @@ export abstract class RaceWatch extends RaceField {
     }
   }
 
+  /**
+   * How many things Q/E, LB/RB and the Previous / Next buttons reach, as `cycle` walks them: the racers still on track that are not ours, plus Auto,
+   * and none while watching is not allowed. The HUD shows Previous / Next only for two or more.
+   */
+  watchTargets(): number {
+    const s = this.session;
+    if (!s || !this.mayWatch()) return 0;
+    let racers = 0;
+    for (let i = 0; i < this.entrants.length; i++) {
+      const st = s.cars[this.rowOf[i]!]!.status;
+      if (!this.mine(i) && (st === "racing" || st === "respawning" || st === "finished")) racers++;
+    }
+    return racers === 0 ? 0 : racers + 1;
+  }
+
   /** Auto on: the car in view stays until `autoStep` picks another; a fresh Auto starts its clocks over. */
   protected goAuto(): void {
     this.spectating = true;

@@ -21,7 +21,7 @@ const SIZE = { corner: "size-24", brake: "size-18", button: "size-16", bail: "h-
  * never a bordered box with a text label: the glyph says what it is, `caption` (a word under it) is for the ones whose glyph is not obvious, and
  * every button keeps its accessible name. Held, the disc fills.
  */
-export const ZONE = "rounded-full bg-surface/35 ring-1 ring-inset ring-fg/30 shadow-none hover:bg-surface/35 data-[held]:bg-accent data-[held]:text-accent-fg data-[held]:ring-0";
+export const ZONE = "relative rounded-full bg-surface/35 ring-1 ring-inset ring-fg/30 shadow-none hover:bg-surface/35 data-[held]:bg-accent data-[held]:text-accent-fg data-[held]:ring-0";
 
 export function PadButton({ engine, button, name, label, caption, showCaption = false, className, children }: Pick<HudProps, "engine"> & { button: number; name: string; label: string; caption: string; showCaption?: boolean; className: string; children: ReactNode }) {
   return (
