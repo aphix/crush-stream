@@ -15,7 +15,7 @@ Object.assign(globalThis, { __BUILD_SHA__: "test" });
 
 const f = (): Float64Array => new Float64Array(0);
 const SAMPLES: Samples = { n: 0, iv: f(), cpu: f(), sim: f(), draw: f(), steps: f(), coarse: f(), wrecks: f(), calls: f(), tris: f(), tierCounts: f(), tierOrder: new Uint8Array(0), tiersSeen: 0, levelCounts: f(), levelOrder: new Uint8Array(0), levelsSeen: 0 };
-const WINDOW: Window = { wallS: 0, lostSimS: 0, cutFrames: 0, fineCuts: 0, clockS: 0, thrown: 0, ragdoll: { steps: 0, stepMs: { mean: 0, p95: 0 }, colliders: 0, bodies: 0 }, phaseMs: new Float64Array(PHASE_COUNT), counts: new Float64Array(COUNTER_COUNT) };
+const WINDOW: Window = { wallS: 0, lostSimS: 0, cutFrames: 0, fineCuts: 0, clockS: 0, thrown: 0, ragdoll: { steps: 0, stepMs: { mean: 0, p95: 0 }, colliders: 0, bodies: 0 }, phaseMs: new Float64Array(PHASE_COUNT), counts: new Float64Array(COUNTER_COUNT), series: { seconds: 0, wallS: f(), clockS: f(), phaseMs: f(), counts: f() } };
 const PARTS = { live: () => [], race: { policeStats: null } } as unknown as BenchParts;
 const PLAN = { id: "test" } as BenchPlan;
 const card = () => summarize(PARTS, PLAN, SAMPLES, WINDOW, {} as never);

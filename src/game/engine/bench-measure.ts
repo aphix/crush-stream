@@ -9,20 +9,20 @@ import { describePost, FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import type { DriverSeat } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { BenchPlan } from "./engine-bench-plan.ts";
-import { browserName, perSecond, stat, type Battery, type BenchResult, type BenchSettings, type Block, type LongTasks, type PhaseCard, type RagdollCost, type ReplayResult } from "./engine-bench-report.ts";
+import { browserName, perSecond, stat, type Battery, type BenchResult, type BenchSettings, type Block, type LongTasks, type PhaseCard, type PageState, type PhaseSeconds, type RagdollCost, type ReplayResult } from "./engine-bench-report.ts";
 import { REPLAY_TIER_S, replayTier, type ReplayFrames } from "./engine-bench-replay.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
-import { SKY_MODES, skyDetailFor, type SkyDome } from "../present/sky-dome.ts";
+import { SKY_MODES, skyDetailFor, type SkyDome, type SkyMode } from "../present/sky-dome.ts";
 import type { RaceDirector } from "./engine-race.ts";
 import type { SimPacer } from "./sim-pace.ts";
 import { SETTING_KEY } from "./constants.ts";
 import type { World } from "./world-step.ts";
 import { armedSolids } from "../world/surfaces.ts";
-import { PHASE_NAMES, WORK_COUNT, WORK_NAMES } from "./sim-phases.ts";
+import { PHASE, PHASE_COUNT, PHASE_NAMES, WORK, WORK_COUNT, WORK_NAMES } from "./sim-phases.ts";
 
 /** The timings both benches share: the window, the A/B blocks. The warm-up and the course are the plan's. */
-export const BENCH = { seed: 1, measureS: 30, blockS: 3, paceCycles: 3, fxCycles: 2, detailCycles: 2, skyCycles: 2, skyWaitS: 10, settleFrames: 10 } as const;
+export const BENCH = { seed: 1, measureS: 40, blockS: 8, paceCycles: 2, fxCycles: 2, detailCycles: 2, skyCycles: 1, skyWaitS: 10, sweepS: 3, sweepShortS: 1, sweepMinFrames: 60, sweepCapS: 8 } as const;
 /** The key a rung's share of the window is kept under. */
 const rungKey = (level: number): string => `${DETAIL_LEVELS[level]?.far ?? "?"} m`;
 /** Samples kept: far above any display rate, so the window always fits. */
@@ -54,7 +54,7 @@ export interface BenchParts {
   /** The live world: the steps it cut to fine slices for a hit about to land, and where its step's time and work are counted (`phases`: the clock reads go on for the window only). */
   world: Pick<World, "fineCuts" | "phases">;
   /** The cosmetic Rapier world (the thrown drivers' and knocked props'): its step cost is its own row, not part of the engine's cpu; `traffic` is what the sim posted to its worker. */
-  ragdoll: Pick<RagdollSystem, "stats" | "traffic">;
+  ragdoll: Pick<RagdollSystem, "stats" | "traffic" | "placement">;
   /** The race's sky: the bytes of the picture it holds (0 until the strip is in, and for no sky). */
   sky: Pick<SkyDome, "textureBytes">;
 }
@@ -198,8 +198,26 @@ function readCounters(parts: BenchParts, pace: Pick<SimPacer, "total">, out: Flo
   out[k] = parts.ragdoll.traffic.bytes;
 }
 
-/** The phase table of a window of `clockS` sim seconds whose sim cost `simMs` ms: `phaseMs` and `counts` are the window's differences. */
-export function phaseCard(phaseMs: Float64Array, counts: Float64Array, simMs: number, clockS: number): PhaseCard {
+/** The counters' slots in `COUNTER_NAMES` order: the pacer's `steps` first, then the world's work (`WORK` slot + 1), then the contact surface's. */
+const COUNTER_SLOT = { workBase: 1, prismQueries: 1 + WORK_COUNT } as const;
+
+/**
+ * What the window's cost divides by to say what a unit of work cost: the phase's ms over the sum of these counters, in us. A name is the card's `unitUs` key: the cost of one live
+ * car's slice (`drive`'s ask and `integrate`'s), of one wreck's (`wreck`, `structure`), of a car-slice of any class (`integrate`), a near pair, and a ground query. Arms that do
+ * different work compare on these, not on totals.
+ */
+const UNIT_COSTS: readonly { name: string; phase: number; units: readonly number[] }[] = [
+  { name: "drive us/live slice", phase: PHASE.drive, units: [COUNTER_SLOT.workBase + WORK.liveCarSlices] },
+  { name: "integrate us/live slice", phase: PHASE.integrate, units: [COUNTER_SLOT.workBase + WORK.liveCarSlices] },
+  { name: "integrate us/car slice", phase: PHASE.integrate, units: [COUNTER_SLOT.workBase + WORK.liveCarSlices, COUNTER_SLOT.workBase + WORK.wreckCarSlices, COUNTER_SLOT.workBase + WORK.asleepCarSlices] },
+  { name: "wreck us/wreck slice", phase: PHASE.wreck, units: [COUNTER_SLOT.workBase + WORK.wreckCarSlices] },
+  { name: "structure us/wreck slice", phase: PHASE.structure, units: [COUNTER_SLOT.workBase + WORK.wreckCarSlices] },
+  { name: "pairs us/pair test", phase: PHASE.pairs, units: [COUNTER_SLOT.workBase + WORK.pairTests] },
+  { name: "course us/prism query", phase: PHASE.course, units: [COUNTER_SLOT.prismQueries] },
+];
+
+/** The phase table of a window of `clockS` sim seconds whose sim cost `simMs` ms: `phaseMs` and `counts` are the window's differences, `series` its seconds. */
+export function phaseCard(phaseMs: Float64Array, counts: Float64Array, simMs: number, clockS: number, series: WorkSeries): PhaseCard {
   const perS = (v: number): number => (clockS ? v / clockS : 0);
   const msPerSimS: Record<string, number> = {};
   let attributed = 0;
@@ -209,17 +227,80 @@ export function phaseCard(phaseMs: Float64Array, counts: Float64Array, simMs: nu
   }
   const workPerSimS: Record<string, number> = {};
   for (let i = 0; i < COUNTER_COUNT; i++) workPerSimS[COUNTER_NAMES[i]!] = perS(counts[i]!);
-  return { msPerSimS, unattributedMsPerSimS: perS(simMs - attributed), workPerSimS };
+  return { msPerSimS, unattributedMsPerSimS: perS(simMs - attributed), workPerSimS, unitUs: unitCostsOf(phaseMs, counts), perSecond: perSecondOf(series) };
 }
 
-/** The sim's phase clock and counters over one window: the clock reads go on at the call and off at `end`, which returns the differences (`Window.phaseMs`, `Window.counts`). */
-export function watchWork(parts: BenchParts, pace: Pick<SimPacer, "total">): { end(): { phaseMs: Float64Array; counts: Float64Array } } {
+/** `UNIT_COSTS` over the window: us per unit of work, for each unit with any work in the window (no key for a unit the window never stepped). */
+function unitCostsOf(phaseMs: Float64Array, counts: Float64Array): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const cost of UNIT_COSTS) {
+    let units = 0;
+    for (const slot of cost.units) units += counts[slot]!;
+    if (units > 0) out[cost.name] = (1000 * phaseMs[cost.phase]!) / units;
+  }
+  return out;
+}
+
+/** The series as the card carries it: for each second its wall span and sim seconds, and each phase's and counter's value per sim second in it, an array a name. */
+function perSecondOf(series: WorkSeries): PhaseSeconds {
+  const n = series.seconds;
+  const per = (values: Float64Array, stride: number, k: number, i: number): number => (series.clockS[i]! > 0 ? values[i * stride + k]! / series.clockS[i]! : 0);
+  const msPerSimS: Record<string, number[]> = {};
+  for (let k = 0; k < PHASE_COUNT; k++) msPerSimS[PHASE_NAMES[k]!] = Array.from({ length: n }, (_, i) => per(series.phaseMs, PHASE_COUNT, k, i));
+  const workPerSimS: Record<string, number[]> = {};
+  for (let k = 0; k < COUNTER_COUNT; k++) workPerSimS[COUNTER_NAMES[k]!] = Array.from({ length: n }, (_, i) => per(series.counts, COUNTER_COUNT, k, i));
+  return { wallS: Array.from(series.wallS.subarray(0, n)), clockS: Array.from(series.clockS.subarray(0, n)), msPerSimS, workPerSimS };
+}
+
+/** Seconds the window's per-second series holds: the window's length with a margin (a frame may carry a second past `measureS`). */
+const SERIES_CAP = BENCH.measureS + 10;
+
+/**
+ * The window's cost and work for each wall second, in flat arrays sized once: second `i` (one entry per wall second the window's frames crossed; a frame that carried it
+ * over two seconds makes one entry that spans both, `wallS` says how long) has its wall span, the sim seconds it covered, and the differences of the phase clock (`phaseMs`,
+ * `PHASE_COUNT` a second) and the counters (`counts`, `COUNTER_COUNT` a second).
+ */
+export interface WorkSeries {
+  seconds: number;
+  wallS: Float64Array;
+  clockS: Float64Array;
+  phaseMs: Float64Array;
+  counts: Float64Array;
+}
+
+/** The sim's phase clock and counters over one window: the clock reads go on at the call and off at `end`, which returns the differences (`Window.phaseMs`, `Window.counts`) and the per-second series. `tick` is called once a frame. */
+export function watchWork(parts: BenchParts, pace: Pick<SimPacer, "total">): { tick(wallS: number, simS: number): void; end(): { phaseMs: Float64Array; counts: Float64Array; series: WorkSeries } } {
   const phases = parts.world.phases;
   const phaseMs0 = phases.ms.slice();
   const counts0 = new Float64Array(COUNTER_COUNT);
   readCounters(parts, pace, counts0);
+  const series: WorkSeries = { seconds: 0, wallS: new Float64Array(SERIES_CAP), clockS: new Float64Array(SERIES_CAP), phaseMs: new Float64Array(SERIES_CAP * PHASE_COUNT), counts: new Float64Array(SERIES_CAP * COUNTER_COUNT) };
+  const lastPhase = phases.ms.slice();
+  const lastCounts = counts0.slice();
+  const nowCounts = new Float64Array(COUNTER_COUNT);
+  let lastWall = 0;
+  let lastSim = 0;
+  let next = 1;
   phases.on = true;
   return {
+    tick: (wallS, simS) => {
+      if (wallS < next || series.seconds >= SERIES_CAP) return;
+      const i = series.seconds++;
+      next = Math.floor(wallS) + 1;
+      series.wallS[i] = wallS - lastWall;
+      series.clockS[i] = simS - lastSim;
+      lastWall = wallS;
+      lastSim = simS;
+      for (let k = 0; k < PHASE_COUNT; k++) {
+        series.phaseMs[i * PHASE_COUNT + k] = phases.ms[k]! - lastPhase[k]!;
+        lastPhase[k] = phases.ms[k]!;
+      }
+      readCounters(parts, pace, nowCounts);
+      for (let k = 0; k < COUNTER_COUNT; k++) {
+        series.counts[i * COUNTER_COUNT + k] = nowCounts[k]! - lastCounts[k]!;
+        lastCounts[k] = nowCounts[k]!;
+      }
+    },
     end: () => {
       phases.on = false;
       const counts = new Float64Array(COUNTER_COUNT);
@@ -227,7 +308,7 @@ export function watchWork(parts: BenchParts, pace: Pick<SimPacer, "total">): { e
       const phaseMs = phases.ms.slice();
       for (let i = 0; i < phaseMs.length; i++) phaseMs[i] = phaseMs[i]! - phaseMs0[i]!;
       for (let i = 0; i < COUNTER_COUNT; i++) counts[i] = counts[i]! - counts0[i]!;
-      return { phaseMs, counts };
+      return { phaseMs, counts, series };
     },
   };
 }
@@ -303,6 +384,8 @@ export interface Window {
   /** The differences of the sim's phase clock (`PHASE_NAMES` order, ms) and counters (`COUNTER_NAMES` order) over the window. */
   phaseMs: Float64Array;
   counts: Float64Array;
+  /** Each wall second of the window: the same two, per second (`WorkSeries`). */
+  series: WorkSeries;
 }
 
 /** Sums over the frames of one arm (all its blocks). */
@@ -319,9 +402,22 @@ export interface Acc {
   tris: number;
   gpuSum: number;
   gpuCount: number;
+  /** The arm's whole scored seconds: how many, and the sums of each second's sim ms per sim-second and of its square (`spreadPct`). */
+  binN: number;
+  binSum: number;
+  binSumSq: number;
+  /** The arm's switches that never settled (`SettleResult.settled`). */
+  unsettled: number;
 }
 
-export const emptyAcc = (): Acc => ({ frames: 0, wallS: 0, clockS: 0, sim: 0, cpu: 0, draw: 0, steps: 0, fineCuts: 0, calls: 0, tris: 0, gpuSum: 0, gpuCount: 0 });
+export const emptyAcc = (): Acc => ({ frames: 0, wallS: 0, clockS: 0, sim: 0, cpu: 0, draw: 0, steps: 0, fineCuts: 0, calls: 0, tris: 0, gpuSum: 0, gpuCount: 0, binN: 0, binSum: 0, binSumSq: 0, unsettled: 0 });
+
+/** The spread of an arm's per-second sim cost as a share of its mean (coefficient of variation, %): 0 with fewer than two seconds. */
+function spreadPct(n: number, sum: number, sumSq: number): number {
+  if (n < 2 || sum <= 0) return 0;
+  const mean = sum / n;
+  return (100 * Math.sqrt(Math.max(0, sumSq / n - mean * mean))) / mean;
+}
 
 function toBlock(a: Acc): Block {
   const n = Math.max(1, a.frames);
@@ -331,6 +427,8 @@ function toBlock(a: Acc): Block {
     fps: a.wallS ? a.frames / a.wallS : 0,
     simSpeedPct: a.wallS ? (100 * a.clockS) / a.wallS : 0,
     simMsPerSimS: a.clockS ? a.sim / a.clockS : 0,
+    simSpreadPct: spreadPct(a.binN, a.binSum, a.binSumSq),
+    unsettled: a.unsettled,
     msPerStep: a.steps ? a.sim / a.steps : 0,
     stepsPerFrame: a.steps / n,
     cpuMs: a.cpu / n,
@@ -358,6 +456,11 @@ function depthOf(renderer: THREE.WebGLRenderer, camera: THREE.PerspectiveCamera)
   };
 }
 
+/** The Sky setting the HUD holds (`auto` when it holds none the game knows). */
+export function skyModeOf(hud: Record<string, unknown>): SkyMode {
+  return SKY_MODES.find((mode) => mode === hud[SETTING_KEY.sky]) ?? "auto";
+}
+
 /** What was switched on, read off the renderer, the sun and the HUD's own state. */
 export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top: string): BenchSettings {
   const { renderer, scene, sun, camera } = parts;
@@ -367,7 +470,7 @@ export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top:
     if ((o as THREE.Mesh).isMesh && o.castShadow) casters++;
   });
   const cel = hud[SETTING_KEY.celLook];
-  const sky = SKY_MODES.find((mode) => mode === hud[SETTING_KEY.sky]) ?? "auto";
+  const sky = skyModeOf(hud);
   return {
     fxTier: parts.cine.tier,
     fxAuto: hud["fxAuto"] === true,
@@ -400,7 +503,7 @@ function sharesOf(counts: Float64Array, order: Uint8Array, seen: number, frames:
   return shares;
 }
 
-export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "device" | "pageEvents" | "pageSeconds" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "switches"> {
+export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "device" | "pageEvents" | "pageSeconds" | "pageState" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "sweepHitches" | "switches"> {
   const { race } = parts;
   const { n, iv } = s;
   const third = Math.floor(n / 3);
@@ -439,6 +542,7 @@ export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Win
     stepsPerFrame: n ? stepSum / n : 0,
     msPerStep: stepSum ? simSum / stepSum : 0,
     simMsPerSimS: w.clockS ? simSum / w.clockS : 0,
+    simSpreadPct: spreadPct(perS.workMs.length, perS.workMs.reduce((total, ms) => total + ms, 0), perS.workMs.reduce((total, ms) => total + ms * ms, 0)),
     fineCutsPerSimS: w.clockS ? w.fineCuts / w.clockS : 0,
     cutFrames: w.cutFrames,
     lostSimS: w.lostSimS,
@@ -450,7 +554,26 @@ export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Win
     detailPct: sharesOf(s.levelCounts, s.levelOrder, s.levelsSeen, n, (slot) => rungKey(slot - 1)),
     setupMs,
     ragdoll: w.ragdoll,
-    phases: phaseCard(w.phaseMs, w.counts, simSum, w.clockS),
+    phases: phaseCard(w.phaseMs, w.counts, simSum, w.clockS, w.series),
+  };
+}
+
+/** Chrome's heap figures (`performance.memory`): absent elsewhere. */
+interface HeapReading {
+  memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number };
+}
+
+const MIB = 1024 * 1024;
+
+/** The page as the window opens: how many steps it ran before, the loop's keep, its heap (Chrome only) and where its ragdoll dummies are simulated. */
+export function pageStateOf(parts: BenchParts, stepOfPage: number, keep: boolean | null): PageState {
+  const heap = (performance as Performance & HeapReading).memory;
+  return {
+    stepOfPage,
+    keep,
+    heapUsedMB: heap ? Math.round(heap.usedJSHeapSize / MIB) : null,
+    heapLimitMB: heap ? Math.round(heap.jsHeapSizeLimit / MIB) : null,
+    ragdollHost: parts.ragdoll.placement,
   };
 }
 

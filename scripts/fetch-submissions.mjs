@@ -2,12 +2,12 @@
 /**
  * Pull what players sent from the game (benchmark cards, JSON captures, flagged replay clips) down from the server.
  *
- *   SUBMISSIONS_OWNER_TOKEN=<token> node scripts/fetch-submissions.mjs <app url> [--kind bench|capture|flag] [--limit 50] [--id XXXX-XXXX] [--out dir] [--phases] [--ab]
+ *   SUBMISSIONS_OWNER_TOKEN=<token> node scripts/fetch-submissions.mjs <app url> [--kind bench|capture|flag] [--limit 50] [--id XXXX-XXXX] [--out dir] [--phases] [--series] [--ab]
  *
  * `<app url>` is where the game is served, e.g. https://example.org/crush/ . Each submission is saved as `<out>/<receipt id>.json` (default
  * `.bench/submissions`, which git ignores); one already saved is not fetched again. The token is read from the environment only, so it
  * never appears in a process list or a shell history line. `--phases` prints each bench card's sim phase table (ms per sim-second by phase, the work
- * counts, long tasks and battery) under its line, for cards already saved too. `--ab` prints, for each loop cycle and map, the two cards the loop ran (epicenter off, then on) side by side. Exit 0 when every request went; 1 otherwise.
+ * counts, long tasks and battery) under its line, for cards already saved too. `--series` prints the window's per-second phases and work counters, a row a second. `--ab` prints, for each loop cycle and map, the two cards the loop ran (epicenter off, then on) side by side. Exit 0 when every request went; 1 otherwise.
  */
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -39,10 +39,31 @@ export function phaseTable(one) {
   const battery = result.device?.battery;
   const level = (b) => `${Math.round(100 * b.level)} %${b.charging ? " charging" : ""}`;
   return [
-    `    ${result.course}${armLabel(result)} ${f1(result.simMsPerSimS)} ms/sim-s = ${phases}  unattributed ${f1(p.unattributedMsPerSimS)}`,
+    `    ${result.course}${armLabel(result)} ${f1(result.simMsPerSimS)} ms/sim-s${result.simSpreadPct === undefined ? "" : ` (spread ${f1(result.simSpreadPct)} %)`} = ${phases}  unattributed ${f1(p.unattributedMsPerSimS)}`,
     `    per sim-s: ${work}`,
+    ...(p.unitUs ? [`    per unit (us): ${Object.entries(p.unitUs).map(([name, us]) => `${name} ${f1(us)}`).join("  ")}`] : []),
+    ...(result.pageState ? [`    page: step ${result.pageState.stepOfPage} of the page, keep ${result.pageState.keep}, heap ${result.pageState.heapUsedMB ?? "n/a"} of ${result.pageState.heapLimitMB ?? "n/a"} MiB, ragdoll ${result.pageState.ragdollHost}`] : []),
     `    ${tasks}; battery ${battery ? `${level(battery.start)} -> ${level(battery.end)}` : "n/a"}`,
   ];
+}
+
+/**
+ * The per-second series of a bench card's window (`phases.perSecond`): one row a second with its wall span and sim seconds, then each phase's ms per sim-second and
+ * each work counter's count per sim-second; a card from before the series says so. The page's per-second state (`pageSeconds`) is the first column's hex digit.
+ */
+export function seriesTable(one) {
+  const result = one.submission?.payload?.result;
+  if (one.kind !== "bench" || !result) return [];
+  const s = result.phases?.perSecond;
+  if (!s) return ["    per-second series: none (a card from before the series)"];
+  const names = (record) => Object.keys(record);
+  const row = (cells) => `    ${cells.map((c, i) => String(c).padStart(i === 0 ? 4 : 9)).join("")}`;
+  const lines = [`    ${result.course}${armLabel(result)} per-second series (the window: ${f1(result.wallS)} s, ${f1(result.simMsPerSimS)} ms/sim-s, spread ${f1(result.simSpreadPct ?? 0)} %)`];
+  lines.push(row(["s", "wall s", "sim s", ...names(s.msPerSimS)]));
+  for (let i = 0; i < s.wallS.length; i++) lines.push(row([i + 1, s.wallS[i].toFixed(2), s.clockS[i].toFixed(2), ...names(s.msPerSimS).map((n) => f1(s.msPerSimS[n][i]))]));
+  lines.push(row(["s", "", "", ...names(s.workPerSimS)]));
+  for (let i = 0; i < s.wallS.length; i++) lines.push(row([i + 1, "", "", ...names(s.workPerSimS).map((n) => Math.round(s.workPerSimS[n][i]))]));
+  return lines;
 }
 
 /** `, epicenter ON` or `, epicenter off` for a card that says which arm it ran; empty for one from before the switch. */
@@ -61,6 +82,9 @@ function armOf(settings, result) {
 
 /** `PAGE_PHASES` index of the window, as the card's per-second series writes it (one hex digit a second). */
 const WINDOW_INDEX = "1";
+
+/** A window or arm whose per-second sim cost has a spread (coefficient of variation) over this share of its mean never ran steady. */
+const UNSTEADY_SPREAD_PCT = 25;
 /** The bits of a second's flags digit in the card's series: shown, focused, fullscreen, the screen wake lock held. */
 const BIT_SHOWN = 1;
 const BIT_FOCUSED = 2;
@@ -150,6 +174,16 @@ export function abTable(ones) {
       if (a !== null && b !== null) lines.push(row(name, a, b));
     }
     if (pair.off.hitches && pair.on.hitches) lines.push(row("hitched frames", pair.off.hitches.count, pair.on.hitches.count), row("hitch ms over median", pair.off.hitches.excessMs, pair.on.hitches.excessMs));
+    if (pair.off.simSpreadPct !== undefined && pair.on.simSpreadPct !== undefined) lines.push(row("window spread %", pair.off.simSpreadPct, pair.on.simSpreadPct));
+    for (const name of Object.keys(pair.off.phases.unitUs ?? {})) {
+      const b = pair.on.phases.unitUs?.[name];
+      if (b !== undefined && !units.some(([known]) => known === name)) lines.push(row(name, pair.off.phases.unitUs[name], b));
+    }
+    for (const [arm, result] of [["off", pair.off], ["on", pair.on]]) {
+      if (result.simSpreadPct > UNSTEADY_SPREAD_PCT) lines.push(`    FLAG epicenter ${arm}: the window's sim cost swung ${f1(result.simSpreadPct)} % second to second (over ${UNSTEADY_SPREAD_PCT} %): its mean says little, read the per-second series (--series)`);
+      const opened = result.switches?.find((s) => s.stretch === "window");
+      if (opened && !opened.settled) lines.push(`    FLAG epicenter ${arm}: the page never settled before the window opened (${f1(opened.settleS)} s watched, longest frame ${Math.round(opened.longestMs)} ms)`);
+    }
     for (const [arm, result] of [["off", pair.off], ["on", pair.on]]) {
       const faults = windowFaults(result);
       if (faults.length) lines.push(`    FLAG epicenter ${arm}: the window ran ${faults.join(", ")}`);
@@ -184,7 +218,7 @@ async function get(url, token, fetchImpl, pause) {
  * already there; rejects on the first request the server refuses.
  */
 export async function fetchSubmissions(options) {
-  const { base, token, out, kind, limit, id, phases = false, ab = false, fetchImpl = fetch, pause = sleep, log = () => {} } = options;
+  const { base, token, out, kind, limit, id, phases = false, series = false, ab = false, fetchImpl = fetch, pause = sleep, log = () => {} } = options;
   if (!token || token.length < 24) throw new Error("SUBMISSIONS_OWNER_TOKEN is not set (24 characters or more)");
   if (kind !== undefined && !KINDS.includes(kind)) throw new Error(`--kind is one of ${KINDS.join(", ")}`);
   if (id !== undefined && !RECEIPT.test(id)) throw new Error("--id is a receipt id like K7QM-2XWD");
@@ -210,6 +244,7 @@ export async function fetchSubmissions(options) {
       const again = JSON.parse(await readFile(file, "utf8"));
       seen.push(again);
       if (phases) for (const line of phaseTable(again)) log(line);
+      if (series) for (const line of seriesTable(again)) log(line);
       continue;
     }
     const one = await get(`${api}?id=${receipt}`, token, fetchImpl, pause);
@@ -218,6 +253,7 @@ export async function fetchSubmissions(options) {
     log(`${receipt}  ${one.kind.padEnd(7)} ${one.receivedAt}  build ${one.sha}  ${file}`);
     seen.push(one);
     if (phases) for (const line of phaseTable(one)) log(line);
+    if (series) for (const line of seriesTable(one)) log(line);
   }
   if (ab) for (const line of abTable(seen)) log(line);
   return { saved, skipped };
@@ -234,10 +270,11 @@ function parseArgs(argv) {
     else if (a === "--out") args.out = argv[++i];
     else if (a === "--phases") args.phases = true;
     else if (a === "--ab") args.ab = true;
+    else if (a === "--series") args.series = true;
     else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else positional.push(a);
   }
-  if (positional.length !== 1) throw new Error("usage: fetch-submissions.mjs <app url> [--kind k] [--limit n] [--id receipt] [--out dir] [--phases] [--ab]");
+  if (positional.length !== 1) throw new Error("usage: fetch-submissions.mjs <app url> [--kind k] [--limit n] [--id receipt] [--out dir] [--phases] [--series] [--ab]");
   return { ...args, base: positional[0] };
 }
 

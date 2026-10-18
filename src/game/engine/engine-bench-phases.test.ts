@@ -1,6 +1,6 @@
 import { after, afterEach, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { COUNTER_NAMES, phaseCard, readBattery, watchLongTasks, watchWork } from "./bench-measure.ts";
+import { COUNTER_NAMES, phaseCard, readBattery, watchLongTasks, watchWork, type WorkSeries } from "./bench-measure.ts";
 import { benchRaceEngine, disposeBenchEngine, FRAME_S, runFrames } from "./engine-bench-headless.test-util.ts";
 import type { CrashEngine } from "./engine.ts";
 import { PHASE_NAMES, WORK_NAMES } from "./sim-phases.ts";
@@ -12,19 +12,35 @@ const WINDOW_FRAMES = 480;
 /** The most of the window's sim ms the phases may leave unattributed: the pacer's loop and the pose blend between steps (measured 0.7 %, 10 s warm, 2 s window). */
 const MAX_UNATTRIBUTED = 0.08;
 
+const emptySeries = (): WorkSeries => ({ seconds: 0, wallS: new Float64Array(0), clockS: new Float64Array(0), phaseMs: new Float64Array(0), counts: new Float64Array(0) });
 describe("given a phase table made of a window's phase ms and counter differences", () => {
   const phaseMs = new Float64Array(PHASE_NAMES.length).fill(10);
   const counts = new Float64Array(COUNTER_NAMES.length).fill(50);
 
   it("when the window covered 2 sim seconds and cost 250 ms, then each phase and counter is per sim second and what the phases leave over is unattributed", () => {
-    const card = phaseCard(phaseMs, counts, 250, 2);
+    const card = phaseCard(phaseMs, counts, 250, 2, emptySeries());
     for (const name of PHASE_NAMES) assert.equal(card.msPerSimS[name], 5, `${name} ms per sim-second`);
     assert.equal(card.unattributedMsPerSimS, 75, "(250 - 10 phases of 10) / 2");
     for (const name of COUNTER_NAMES) assert.equal(card.workPerSimS[name], 25, `${name} per sim-second`);
   });
 
+  it("when the window stepped 50 of each unit and each phase cost 10 ms, then a unit costs the phase's ms over the units it stepped, in us, and a car-slice of any class divides by all three classes", () => {
+    const card = phaseCard(phaseMs, counts, 250, 2, emptySeries());
+    assert.equal(card.unitUs["wreck us/wreck slice"], 200, "10 ms over 50 wreck slices");
+    assert.ok(Math.abs(card.unitUs["integrate us/car slice"]! - 1000 * 10 / 150) < 1e-9, "10 ms over live + wreck + asleep slices");
+  });
+
+  it("when the window stepped no wreck, then the wreck units have no entry rather than an infinite cost", () => {
+    const noWrecks = counts.slice();
+    noWrecks[COUNTER_NAMES.indexOf("wreckCarSlices")] = 0;
+    const card = phaseCard(phaseMs, noWrecks, 250, 2, emptySeries());
+    assert.equal("wreck us/wreck slice" in card.unitUs, false, "no wreck units");
+    assert.equal("structure us/wreck slice" in card.unitUs, false, "no wreck units");
+    assert.ok(card.unitUs["integrate us/live slice"]! > 0, "the live units remain");
+  });
+
   it("when the window covered no sim time, then every figure is zero rather than infinite", () => {
-    const card = phaseCard(phaseMs, counts, 250, 0);
+    const card = phaseCard(phaseMs, counts, 250, 0, emptySeries());
     assert.equal(card.unattributedMsPerSimS, 0, "unattributed");
     assert.equal(Object.values(card.msPerSimS).every((ms) => ms === 0), true, "phases");
     assert.equal(Object.values(card.workPerSimS).every((n) => n === 0), true, "counters");
@@ -55,11 +71,27 @@ describe("given the real engine on the city bench's race, headless", () => {
     };
     const stepsBefore = pace.total;
     const work = watchWork(parts, pace);
-    runFrames(engine, WINDOW_FRAMES);
-    const { phaseMs, counts } = work.end();
+    for (let i = 1; i <= WINDOW_FRAMES; i++) {
+      runFrames(engine, 1);
+      work.tick(i * FRAME_S, i * FRAME_S);
+    }
+    const { phaseMs, counts, series } = work.end();
     pace.run = run;
     const clockS = WINDOW_FRAMES * FRAME_S;
-    const card = phaseCard(phaseMs, counts, simMs, clockS);
+    const card = phaseCard(phaseMs, counts, simMs, clockS, series);
+    assert.ok(series.seconds >= 1 && series.seconds <= 2, `one entry a whole second the window crossed (2 s of frames), got ${series.seconds}`);
+    for (let k = 0; k < PHASE_NAMES.length; k++) {
+      let seconds = 0;
+      for (let i = 0; i < series.seconds; i++) seconds += series.phaseMs[i * PHASE_NAMES.length + k]!;
+      assert.ok(seconds <= phaseMs[k]! + 1e-9, `${PHASE_NAMES[k]}: the seconds' ms cannot exceed the window's`);
+    }
+    for (let k = 0; k < COUNTER_NAMES.length; k++) {
+      let seconds = 0;
+      for (let i = 0; i < series.seconds; i++) seconds += series.counts[i * COUNTER_NAMES.length + k]!;
+      assert.ok(seconds <= counts[k]!, `${COUNTER_NAMES[k]}: the seconds' counts cannot exceed the window's`);
+    }
+    assert.equal(card.perSecond.wallS.length, series.seconds, "the card carries one entry a second");
+    assert.equal(card.perSecond.workPerSimS["steps"]!.length, series.seconds, "each counter has an entry each second");
     let sum = card.unattributedMsPerSimS;
     for (const name of PHASE_NAMES) {
       assert.ok(card.msPerSimS[name]! >= 0, `${name} is negative`);

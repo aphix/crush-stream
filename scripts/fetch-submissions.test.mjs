@@ -125,6 +125,59 @@ describe("given the owner asks for each bench card's phase table (--phases)", ()
   });
 });
 
+describe("given the owner asks for a card's per-second series and its page and unit-cost lines", () => {
+  const rich = {
+    ...PHASED,
+    id: "EEEE-5555",
+    submission: {
+      kind: "bench",
+      payload: {
+        result: {
+          ...PHASED.submission.payload.result,
+          wallS: 2,
+          simSpreadPct: 12.34,
+          pageState: { stepOfPage: 2, keep: true, heapUsedMB: 118, heapLimitMB: 4096, ragdollHost: "remote" },
+          phases: {
+            msPerSimS: { drive: 30.25, wreck: 80 },
+            unattributedMsPerSimS: 5,
+            workPerSimS: { steps: 240, skins: 479.6 },
+            unitUs: { "wreck us/wreck slice": 42.1, "integrate us/live slice": 9.5 },
+            perSecond: { wallS: [1, 1.04], clockS: [1, 0.98], msPerSimS: { drive: [30, 30.5], wreck: [70, 90] }, workPerSimS: { steps: [240, 235], skins: [480, 479] } },
+          },
+        },
+      },
+    },
+  };
+
+  it("when --phases is given, then the headline carries the window's spread and the card adds its unit costs and its page's state", async () => {
+    const lines = [];
+    await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([rich]).fetchImpl, pause: noPause, phases: true, log: (l) => lines.push(l) });
+    assert.deepEqual(lines.filter((l) => l.startsWith("    ")), [
+      "    city 215.5 ms/sim-s (spread 12.3 %) = drive 30.3  wreck 80.0  unattributed 5.0",
+      "    per sim-s: steps 240  skins 480",
+      "    per unit (us): wreck us/wreck slice 42.1  integrate us/live slice 9.5",
+      "    page: step 2 of the page, keep true, heap 118 of 4096 MiB, ragdoll remote",
+      "    4 long tasks, 312.5 ms; battery 83 % -> 81 % charging",
+    ]);
+  });
+
+  it("when --series is given, then each second of the window is a row of its wall span, sim seconds, phases and counters, and a card from before the series says so", async () => {
+    const lines = [];
+    await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([rich, PHASED]).fetchImpl, pause: noPause, series: true, log: (l) => lines.push(l) });
+    const table = lines.filter((l) => l.startsWith("    ")).map((l) => l.trim().split(/\s+/).join(" "));
+    assert.deepEqual(table, [
+      "per-second series: none (a card from before the series)",
+      "city per-second series (the window: 2.0 s, 215.5 ms/sim-s, spread 12.3 %)",
+      "s wall s sim s drive wreck",
+      "1 1.00 1.00 30.0 70.0",
+      "2 1.04 0.98 30.5 90.0",
+      "s steps skins",
+      "1 240 480",
+      "2 235 479",
+    ]);
+  });
+});
+
 describe("given the bench loop ran a map twice, the epicenter activation off and then on (--ab)", () => {
   /** A card as the server stores it: the loop's settings at `submission.settings`, the arm in the result's own settings. */
   const arm = (id, step, on, ms, wreck, frozen, extra = {}) => ({
@@ -185,6 +238,23 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
     const series = { pageSeconds: { flags: "ffd50" + "f", phases: "0011" + "11" } };
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, series)]);
     assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran hidden 1 of 4 s, unfocused 2 of 4 s, not fullscreen 1 of 4 s, screen not held 2 of 4 s"]);
+  });
+
+  it("when a window's cost swung over 25 % a second and the page had not settled when it opened, then the block gives the window spread of both arms and flags each", async () => {
+    const swung = { simSpreadPct: 40, switches: [{ stretch: "window", arm: "start", round: 1, settled: false, settleS: 6, longestMs: 812 }] };
+    const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, { simSpreadPct: 5 }), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, swung)]);
+    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), [
+      "FLAG epicenter on: the window's sim cost swung 40.0 % second to second (over 25 %): its mean says little, read the per-second series (--series)",
+      "FLAG epicenter on: the page never settled before the window opened (6.0 s watched, longest frame 812 ms)",
+    ]);
+    assert.ok(squash(lines).includes("window spread % 5.0 40.0 +700.0 %"), "the spread row");
+  });
+
+  it("when both cards carry the cost per unit of work by class, then a class the block does not already print gets its own row", async () => {
+    const unit = (us) => ({ phases: { msPerSimS: { integrate: 100, wreck: 300, structure: 300 }, unattributedMsPerSimS: 0, workPerSimS: { liveCarSlices: 5000, wreckCarSlices: 4000, asleepCarSlices: 1000, frozenCarSlices: 0 }, unitUs: { "pairs us/pair test": us, "wreck us/wreck slice": 75 } } });
+    const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, unit(2)), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, unit(3))]);
+    assert.ok(squash(lines).includes("pairs us/pair test 2.0 3.0 +50.0 %"), "the new class's row");
+    assert.equal(squash(lines).filter((l) => l.startsWith("wreck us/wreck slice")).length, 1, "a class the block prints already is not printed twice");
   });
 
   it("when a pair of cards as the owner's phone sent them (the arm only in the step and the url, the card's settings one level up) is fetched, then it pairs by session, cycle and map", async () => {

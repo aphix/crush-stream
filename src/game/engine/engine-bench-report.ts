@@ -8,8 +8,8 @@ import type { SwitchHitch } from "./bench-settle.ts";
 
 const COARSE_LABEL = `1/${QUIET_HZ} s`;
 
-/** The detail A/B's arms: no cuts at all, then the ladder's rungs for 75, 50 and 30 m (`DETAIL_LEVELS`). */
-export const DETAIL_ARMS: readonly { key: string; level: number | null }[] = [{ key: "off", level: null }, { key: "75 m", level: 0 }, { key: "50 m", level: 2 }, { key: "30 m", level: 4 }];
+/** The detail A/B's arms: no cuts at all, then the ladder's rungs for 50 and 30 m (`DETAIL_LEVELS`). */
+export const DETAIL_ARMS: readonly { key: string; level: number | null }[] = [{ key: "off", level: null }, { key: "50 m", level: 2 }, { key: "30 m", level: 4 }];
 
 /** The pacer A/B's arms, the keys of `BenchResult.abPace`: the 1/240 s slice pinned, the 1/80 s slice pinned. */
 export const PACE_ARM = { fine: "fine", coarse: "coarse" } as const;
@@ -34,6 +34,10 @@ export interface Block {
   simSpeedPct: number;
   /** Wall ms of sim per race-clock second: the cost of a second of the game whatever the step. */
   simMsPerSimS: number;
+  /** The spread of the arm's sim ms per sim-second over its scored seconds (coefficient of variation, %): high says the arm never ran steady, read its mean with that in mind. */
+  simSpreadPct: number;
+  /** The arm's switches that never settled within the cap (their frames were scored all the same). */
+  unsettled: number;
   msPerStep: number;
   stepsPerFrame: number;
   cpuMs: number;
@@ -76,7 +80,7 @@ export interface BenchSettings {
 }
 
 /** The stretches of a run in order: the grid and warm-up, the sampled window, the four A/Bs, then the replay of the run's own crash (`PAGE_PHASES[PHASE_WARM]` ...). */
-export const PAGE_PHASES = ["warm", "window", "ab-pace", "ab-detail", "ab-fx", "ab-sky", "replay"] as const;
+export const PAGE_PHASES = ["warm", "window", "ab-pace", "ab-detail", "ab-fx", "ab-sky", "replay", "sweep"] as const;
 export const PHASE_WARM = 0;
 export const PHASE_WINDOW = 1;
 export const PHASE_AB_PACE = 2;
@@ -84,6 +88,7 @@ export const PHASE_AB_DETAIL = 3;
 export const PHASE_AB_FX = 4;
 export const PHASE_AB_SKY = 5;
 export const PHASE_REPLAY = 6;
+export const PHASE_SWEEP = 7;
 
 /** Mean and 95th percentile of one reading (ms). */
 export interface Pair {
@@ -158,6 +163,34 @@ export interface PhaseCard {
   msPerSimS: Record<string, number>;
   unattributedMsPerSimS: number;
   workPerSimS: Record<string, number>;
+  /** The window's cost per unit of work by class of unit (us;  in bench-measure): a live car's slice, a wreck's, a near pair, a ground query. The number arms that do different work compare on. */
+  unitUs: Record<string, number>;
+  /** The same, for each wall second of the window (`PhaseSeconds`): when the cost rose and with which work. */
+  perSecond: PhaseSeconds;
+}
+
+/**
+ * The window's phases and work counters for each wall second it crossed (a frame that carried the window over two seconds makes one entry that spans both): the entry's wall
+ * seconds and the sim seconds it covered, and each phase's ms and each counter's count per sim second of the entry, an array a name (`PHASE_NAMES`, `COUNTER_NAMES`).
+ */
+export interface PhaseSeconds {
+  wallS: number[];
+  clockS: number[];
+  msPerSimS: Record<string, number[]>;
+  workPerSimS: Record<string, number[]>;
+}
+
+/**
+ * The page as the window opened (docs/PERF_BENCH.md): `stepOfPage` the steps this page ran before (0: the page's first, its coldest), `keep` whether the loop starts the next cycle
+ * when this one ends (null: not a loop), the JS heap in use and its limit in MiB (Chrome only, else null), and where the ragdoll dummies are simulated: the page's worker (`remote`), the
+ * page's own thread (`inline`) or neither yet (`none`).
+ */
+export interface PageState {
+  stepOfPage: number;
+  keep: boolean | null;
+  heapUsedMB: number | null;
+  heapLimitMB: number | null;
+  ragdollHost: "remote" | "inline" | "none";
 }
 
 /** Long tasks (`PerformanceObserver` "longtask": main-thread tasks of 50 ms or more) over the window: how many, their total and longest ms. */
@@ -207,6 +240,8 @@ export interface BenchResult {
   msPerStep: number;
   /** Wall ms of sim per race-clock second. */
   simMsPerSimS: number;
+  /** The spread of the window's sim ms over its seconds (`simMsPerSecond`; coefficient of variation, %): a window whose seconds swing says the cost is the race's (a pile-up) before it is the build's. */
+  simSpreadPct: number;
   /** Steps cut to the pacer's fine slice for a hit about to land (`World.fineCuts`), per race-clock second. */
   fineCutsPerSimS: number;
   /** Frames the pacer stopped early, and the sim seconds it gave up (never stepped). */
@@ -235,12 +270,16 @@ export interface BenchResult {
   pageEvents: PageEvent[];
   /** The page's state each second of the run (`PageSeconds`). */
   pageSeconds: PageSeconds;
+  /** The page as the window opened. */
+  pageState: PageState;
   /** Where the window's sim time went, by phase of a step, and the work done (`PhaseCard`). */
   phases: PhaseCard;
   /** Long tasks during the window; null where the browser has no "longtask" entries (not Chrome). */
   longTasks: LongTasks | null;
   /** Every frame of the run over 3x the running median interval (and 25 ms), with its stretch, time, what ran in it and what changed (`HitchTable`). The warm-up's are expected; the arms' scored frames never include a switch's hang. */
   hitches: HitchTable;
+  /** The warm-up sweep's hitches (every frame of it is a setting switch, `PAGE_PHASES` "sweep"): kept apart so they are not in `hitches`. */
+  sweepHitches: HitchTable;
   /** Each A/B switch's frames after it (`SwitchHitch`): the longest frame and the time to settle, unscored. */
   switches: SwitchHitch[];
   settings: BenchSettings;
@@ -330,7 +369,7 @@ const row = (label: string, s: Stat): string => `${label.padEnd(10)}p50 ${f1(s.p
 /** The GPU timer spans the draw, so a wait inside it (the display's back buffer, another process) counts: a p95 within 15 % of a frame's length is that wait, and p50 is the work. */
 const waited = (gpu: Stat, frame: Stat): boolean => gpu.p95 >= 0.85 * frame.p50 && gpu.p95 <= 1.15 * frame.p50;
 const gpuOf = (b: Block): string => (b.gpuMs === null ? "gpu n/a" : `gpu ${f1(b.gpuMs)}`);
-const arm = (label: string, b: Block): string => `${label} ${f1(b.fps)} fps, sim ${Math.round(b.simSpeedPct)} %, ${Math.round(b.simMsPerSimS)} ms/sim-s, cpu ${f1(b.cpuMs)}, draw ${f1(b.drawMs)}, ${gpuOf(b)}, ${Math.round(b.calls)} calls`;
+const arm = (label: string, b: Block): string => `${label} ${f1(b.fps)} fps, sim ${Math.round(b.simSpeedPct)} %, ${Math.round(b.simMsPerSimS)} ms/sim-s ±${Math.round(b.simSpreadPct)} %${b.unsettled ? ` (${b.unsettled} switches never settled!)` : ""}, cpu ${f1(b.cpuMs)}, draw ${f1(b.drawMs)}, ${gpuOf(b)}, ${Math.round(b.calls)} calls`;
 const pair = (p: Pair): string => `${f1(p.mean)}/${f1(p.p95)}`;
 const ragdollLine = (g: RagdollCost): string => `ragdoll world: ${g.steps} steps, step ${g.stepMs.mean.toFixed(2)} ms mean / ${g.stepMs.p95.toFixed(2)} p95, ${g.colliders} colliders, ${g.bodies} bodies`;
 /** The replay's lines: the clip and a row per FX tier (mean/p95 ms), or why there is none. */
@@ -355,11 +394,11 @@ const leftPage = (events: readonly PageEvent[]): string[] => {
 };
 
 /** The window's phase table (ms per sim second) and work counts on one line: the sum names how much of the headline the phases account for. */
-const phaseLine = (p: PhaseCard, simMsPerSimS: number): string => {
+const phaseLine = (p: PhaseCard, simMsPerSimS: number, spread: number): string => {
   const phases = Object.entries(p.msPerSimS);
   const sum = phases.reduce((total, [, ms]) => total + ms, 0) + p.unattributedMsPerSimS;
   const work = Object.entries(p.workPerSimS).map(([name, n]) => `${name} ${Math.round(n)}`).join(", ");
-  return `  sim phases, ms per sim-second: ${phases.map(([name, ms]) => `${name} ${f1(ms)}`).join(", ")}, unattributed ${f1(p.unattributedMsPerSimS)}  (sum ${f1(sum)} of ${f1(simMsPerSimS)});  work per sim-second: ${work}`;
+  return `  sim phases, ms per sim-second: ${phases.map(([name, ms]) => `${name} ${f1(ms)}`).join(", ")}, unattributed ${f1(p.unattributedMsPerSimS)}  (sum ${f1(sum)} of ${f1(simMsPerSimS)}, ${f1(spread)} % spread over its seconds);  work per sim-second: ${work}`;
 };
 
 /** The switch hitches on one line, grouped by A/B: `arm longest frame ms / s to settle`, `!` where the arm never settled within the cap. */
@@ -402,8 +441,8 @@ export function describeBench(r: BenchResult): string[] {
     row("frame", r.frameMs),
     row("CPU", r.cpuMs),
     row("  sim", r.simMs) + `   ${f1(r.stepsPerFrame)} steps/frame, ${r.msPerStep.toFixed(2)} ms/step, ${Math.round(r.simMsPerSimS)} ms per sim-second, ${f1(r.fineCutsPerSimS)} fine-slice cuts/sim-s`,
-    phaseLine(r.phases, r.simMsPerSimS),
-    `${hitchLine(r.hitches)}   ${switchLine(r.switches)}`,
+    phaseLine(r.phases, r.simMsPerSimS, r.simSpreadPct),
+    `${hitchLine(r.hitches)}   ${switchLine(r.switches)}   warm-up sweep: ${r.sweepHitches.count} hitched of ${r.sweepHitches.frames} frames, ${Math.round(r.sweepHitches.excessMs)} ms over`,
     row("  draw", r.renderMs),
     r.gpuMs ? row("GPU", r.gpuMs) + (waited(r.gpuMs, r.frameMs) ? "   p95 is one frame long: a wait on the display, p50 is the work" : "") : "GPU       no timer query on this device",
     ragdollLine(r.ragdoll),

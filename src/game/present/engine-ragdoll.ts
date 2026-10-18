@@ -181,6 +181,12 @@ export class RagdollSystem {
     if (this.mode === "remote") return { steps: this.steps, log: this.stepMs, ...this.remoteSize };
     return { steps: this.steps, log: this.stepMs, colliders: this.world?.colliders.len() ?? 0, bodies: this.world?.bodies.len() ?? 0 };
   }
+
+  /** Where this run's dummies are simulated: the worker (`remote`), this thread (`inline`) or not yet chosen (`none`): the bench card says whether the page's worker was in use. */
+  get placement(): "remote" | "inline" | "none" {
+    return this.mode ?? "none";
+  }
+
   private readonly dolls: Doll[] = [];
   private live = 0;
   /** Throws judged before Rapier was in (`PENDING_MAX`). */

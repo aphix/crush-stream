@@ -2,20 +2,23 @@ import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import { benchPlan, leaderAhead } from "./engine-bench-plan.ts";
 import { watchPage } from "./engine-bench-page.ts";
 import { warmUp } from "./engine-bench-warm.ts";
-import { describeBench, DETAIL_ARMS, PACE_ARM, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_WARM, PHASE_WINDOW, SKY_ARM, stat, type BenchResult, type LongTasks } from "./engine-bench-report.ts";
+import { describeBench, DETAIL_ARMS, PACE_ARM, PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_SWEEP, PHASE_WARM, PHASE_WINDOW, SKY_ARM, stat, type BenchResult, type LongTasks } from "./engine-bench-report.ts";
 import { CLIP_WAIT_S, CRASH_GAP, CRASH_SPEED, ragdollCost, REPLAY_SETTLE_S, REPLAY_TIER_S, START_WAIT_S, type ReplayFrames } from "./engine-bench-replay.ts";
-import { BENCH, blocksOf, CAP, deviceOf, readBattery, replayResult, RUNG_SLOTS, rungSlot, settingsOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type Samples, type Tap, type Window } from "./bench-measure.ts";
+import { BENCH, blocksOf, CAP, deviceOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type Samples, type Tap, type Window } from "./bench-measure.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import type { SimPacer } from "./sim-pace.ts";
 import { SETTING_KEY } from "./constants.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
 import { hudSettings, roundCard } from "./bench-card.ts";
-import { alternate, enterPhase, frame, FRAME_CPU, FRAME_DRAW, FRAME_DT, FRAME_SIM, newBeat, nextFrame, type Beat, type FrameEngine } from "./bench-frame.ts";
+import { alternate, enterPhase, frame, FRAME_CPU, FRAME_DRAW, FRAME_DT, FRAME_SIM, newBeat, nextFrame, restartLab, settleFrames, showFullSky, waitFor, type Beat } from "./bench-frame.ts";
 import { INITIAL_HUD, type CrashHudState } from "../hud/hud-store.ts";
 import { enterBenchScene, type SceneEngine } from "./bench-scene.ts";
+import { HitchLog } from "./bench-hitch.ts";
+import { SettleWatch } from "./bench-settle.ts";
+import { endSweep, setDetailArm, sweep, type SweepEngine } from "./bench-sweep.ts";
 
 /** What `runBench` drives: the real engine, by its public face. */
-interface BenchEngine extends FrameEngine, SceneEngine {
+interface BenchEngine extends SweepEngine, SceneEngine {
   readonly ready: Promise<void>;
   readonly pace: SimPacer;
   fadeScenes: boolean;
@@ -27,8 +30,6 @@ interface BenchEngine extends FrameEngine, SceneEngine {
   /** Fetch the Ultra look (the `ultra=1` arm needs it in before its first block); false when it did not load. */
   loadUltra(): Promise<boolean>;
   benchParts(): BenchParts;
-  /** The page's adaptive quality as it booted (a loop runs every step in one page). */
-  resetAdaptiveQuality(): void;
   /** The run's crash as the reel plays it from this frame on (the clip's size on the wire), and the end of that reel; the reel's sim step ms since the last read. */
   playBenchReel(clip: HighlightClip): Promise<number>;
   stopBenchReel(): void;
@@ -195,34 +196,19 @@ async function sample(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat
     s.tris[i] = renderer.info.render.triangles;
     s.tiersSeen = countSlot(s.tierCounts, s.tierOrder, s.tiersSeen, FX_TIERS.indexOf(cine.tier));
     s.levelsSeen = countSlot(s.levelCounts, s.levelOrder, s.levelsSeen, rungSlot(parts.detail.level));
+    work.tick(wall, t.simS - clock0);
     const second = Math.round(wall);
     if (second === shownSecond) continue;
     shownSecond = second;
     ui.set(`CRUSH BENCH: measuring ${second} / ${BENCH.measureS} s`);
   }
   t.timing = false;
-  const { phaseMs, counts } = work.end();
+  const { phaseMs, counts, series } = work.end();
   return {
     s,
-    w: { wallS: wall, lostSimS: pace.lost - lost0, cutFrames: pace.cut - cut0, fineCuts: parts.world.fineCuts - fine0, clockS: t.simS - clock0, thrown: (beat.lab?.throws ?? 0) - thrown0, ragdoll: ragdollCost(parts.ragdoll.stats, ragdoll0), phaseMs, counts },
+    w: { wallS: wall, lostSimS: pace.lost - lost0, cutFrames: pace.cut - cut0, fineCuts: parts.world.fineCuts - fine0, clockS: t.simS - clock0, thrown: (beat.lab?.throws ?? 0) - thrown0, ragdoll: ragdollCost(parts.ragdoll.stats, ragdoll0), phaseMs, counts, series },
     longTasks: longTasks.stop(),
   };
-}
-
-/** The Sky setting `full`, then frames until the strip is in the dome (`BENCH.skyWaitS` at most): its decode is the page's first ask, not the arm's cost. */
-async function showFullSky(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat): Promise<void> {
-  engine.setSky("full");
-  await waitFor(engine, parts, t, beat, BENCH.skyWaitS, () => parts.sky.textureBytes > 0);
-}
-
-/** Frames of a wait: one `frame` each, with no samples, until `done` or `limitS` wall seconds. True when `done` came first. */
-async function waitFor(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat, limitS: number, done: () => boolean): Promise<boolean> {
-  t.timing = false;
-  for (let wall = 0; !done(); wall += beat.frame[FRAME_DT]!) {
-    if (wall >= limitS) return false;
-    await frame(engine, parts.renderer, t, beat);
-  }
-  return true;
 }
 
 /** The run's own crash: the race restarts, then the first two grid cars go head-on (`RaceField.crashAtStart`) and the recorder files it. The clip, or why there is none. */
@@ -280,7 +266,7 @@ async function replayTiers(engine: BenchEngine, parts: BenchParts, t: Tap, beat:
  * detail, FX tier), then the crash replay. Afterwards the settings go back to automatic and the scene plays on under the card.
  * `hud` reads the HUD's state (the card keeps the settings that differ from the defaults, `bench-card.ts`); `opts.submit` posts the card's JSON (Submit button, and the bench loop's `auto` post). Null: no such bench.
  */
-export async function runBench(engine: BenchEngine, hud: () => CrashHudState, search: string, opts: { submit: SubmitBench; auto: boolean; loopProgress: string | null; wake: { readonly held: boolean } | null }): Promise<BenchResult | null> {
+export async function runBench(engine: BenchEngine, hud: () => CrashHudState, search: string, opts: { submit: SubmitBench; auto: boolean; loopProgress: string | null; wake: { readonly held: boolean } | null; stepOfPage: number; keep: boolean | null }): Promise<BenchResult | null> {
   const plan = benchPlan(search);
   if (!plan) return null;
   const ui = overlay(opts.loopProgress);
@@ -289,20 +275,38 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   const batteryStart = await readBattery();
   await engine.ready;
   if (plan.ultra && !(await engine.loadUltra())) throw new Error("CRUSH BENCH: ultra=1, but the Ultra look did not load (see the console)");
+  const sky0 = skyModeOf(hud() as unknown as Record<string, unknown>);
+  const fxTiers: FxTier[] = plan.ultra ? ["minimal", "low", "high", "ultra"] : ["minimal", "low", "high"];
   engine.resetAdaptiveQuality();
-  const parts = engine.benchParts();
+  let parts = engine.benchParts();
   parts.renderer.setAnimationLoop(null);
   engine.fadeScenes = false;
+  // The step's own cold load (the card's `load:` line), then the sweep warms the page on that scene, then the step starts over from a fresh page's state.
   const setupMs = enterBenchScene(engine, parts, plan);
 
   const t = tap(engine.pace, parts);
-  const beat = newBeat(parts, await nextFrame(), plan.lab, PHASE_WARM);
+  const beat = newBeat(parts, await nextFrame(), plan.lab, PHASE_SWEEP);
   const page = watchPage();
   beat.page = page;
   beat.wake = opts.wake;
+  enterPhase(beat, page, PHASE_SWEEP);
+  await sweep(engine, parts, plan, fxTiers, opts.stepOfPage === 0, t, beat, ui);
+  // The sweep's hitches are its own table (every setting it visits is a switch); the run's log starts over for the warm-up, window and A/Bs.
+  const sweepHitches = beat.hitches.table();
+  beat.hitches = new HitchLog();
+  endSweep(engine, sky0);
+  parts = engine.benchParts();
+  beat.parts = parts;
+  enterBenchScene(engine, parts, plan);
+  const sequenceStart = t.simS;
+  if (beat.lab) restartLab(beat.lab, sequenceStart, 0);
   enterPhase(beat, page, PHASE_WARM);
-  await warmUp(() => frame(engine, parts.renderer, t, beat), { race: parts.race, simS: () => t.simS, plan, ui });
+  await warmUp(() => frame(engine, parts.renderer, t, beat), { race: parts.race, simS: () => t.simS - sequenceStart, plan, ui });
+  // The window opens on a settled page: the warm-up's last frames are watched like an A/B switch's.
+  beat.switching = true;
+  const windowStart = await settleFrames(engine, parts.renderer, t, beat, new SettleWatch());
   enterPhase(beat, page, PHASE_WINDOW);
+  const pageState = pageStateOf(parts, opts.stepOfPage, opts.keep);
   const { s, w, longTasks } = await sample(engine, parts, t, beat, ui);
   const leaderWindowM = leaderAhead(parts, plan);
   const top = topTier(s, parts.cine.tier);
@@ -315,10 +319,9 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   engine.pace.pin = null;
   enterPhase(beat, page, PHASE_AB_DETAIL);
   // The detail arms run at the window's tier too (the governor is off with the tier pinned), then the governor's rung is put back.
-  const detail = await alternate(engine, parts, t, beat, ui, "detail", DETAIL_ARMS.map((a) => ({ key: a.key, set: () => (a.level === null ? parts.detail.setDistances(Infinity, Infinity) : parts.detail.setLevel(a.level)) })), BENCH.detailCycles);
+  const detail = await alternate(engine, parts, t, beat, ui, "detail", DETAIL_ARMS.map((a) => ({ key: a.key, set: () => setDetailArm(parts, a.level) })), BENCH.detailCycles);
   parts.detail.setLevel(parts.governor.level);
   enterPhase(beat, page, PHASE_AB_FX);
-  const fxTiers: FxTier[] = plan.ultra ? ["minimal", "low", "high", "ultra"] : ["minimal", "low", "high"];
   const fx = await alternate(engine, parts, t, beat, ui, SETTING_KEY.fx, fxTiers.map((tier) => ({ key: tier, set: () => engine.setFxTier(tier) })), BENCH.fxCycles);
   // The sky arms hold the window's tier too, with the Sky setting `full` (the whole strip, waited for: it loads when first asked) against `off`; the player's setting goes back after.
   enterPhase(beat, page, PHASE_AB_SKY);
@@ -360,9 +363,11 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
     replayWhy,
     pageEvents,
     pageSeconds,
+    pageState,
     longTasks,
     hitches: beat.hitches.table(),
-    switches: [...pace.switches, ...detail.switches, ...fx.switches, ...(sky?.switches ?? [])],
+    sweepHitches,
+    switches: [{ stretch: PAGE_PHASES[PHASE_WINDOW], arm: "start", round: 1, ...windowStart }, ...pace.switches, ...detail.switches, ...fx.switches, ...(sky?.switches ?? [])],
     strip: plan.strip ? { spec: plan.strip, body: plan.body, racers: plan.racers, leaderWindowM, leaderEndM } : null,
     labThrown: plan.lab ? w.thrown : null,
     settings,

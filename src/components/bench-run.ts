@@ -35,9 +35,12 @@ export async function runBenchPage(engine: CrashEngine, hud: () => CrashHudState
   const bench: { runBench: typeof runBench } = await import("@/game/engine/engine-bench");
   const wake = new WakeHold();
   await wake.acquire();
+  let stepsRun = 0;
   const runStep = async (run: BenchRun | null, query: string): Promise<boolean> => {
     const result = await bench.runBench(engine, hud, query, {
       auto: true,
+      stepOfPage: stepsRun++,
+      keep: run?.keep ?? null,
       loopProgress: run === null ? null : loopProgress(run),
       wake,
       submit: (payload) =>

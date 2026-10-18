@@ -1,8 +1,9 @@
 import * as THREE from "three";
+import type { SkyMode } from "../present/sky-dome.ts";
 import type { LabPresetId } from "../scenes/lab.ts";
 import { BENCH, emptyAcc, wrecks, type Acc, type BenchParts, type Tap } from "./bench-measure.ts";
 import { CAUSE, FRAME, HitchLog } from "./bench-hitch.ts";
-import { SettleWatch, type SwitchHitch } from "./bench-settle.ts";
+import { SettleWatch, type SettleResult, type SwitchHitch } from "./bench-settle.ts";
 import type { BenchPlan } from "./engine-bench-plan.ts";
 import type { PageWatch } from "./engine-bench-page.ts";
 
@@ -112,7 +113,7 @@ function driveLab(engine: FrameEngine, t: Tap, run: LabRun): void {
 }
 
 /** The Lab's sequence starts over now at throw `first` (an A/B block: every arm of a round replays the same throw from its set's load). */
-function restartLab(run: LabRun, simS: number, first: number): void {
+export function restartLab(run: LabRun, simS: number, first: number): void {
   run.origin = simS;
   run.first = first;
   run.segment = -1;
@@ -181,10 +182,29 @@ interface Arm {
 }
 
 /**
- * The arms in turn, `cycles` times round. Each arm is scored for `blockS` wall seconds, after its switch has settled (`SettleWatch`: frames
+ * Frames (unscored) until the setting just switched has settled (`SettleWatch`), or its cap: the caller has set `beat.switching` and made the switch. Returns how the frames
+ * after the switch went; `beat.switching` is cleared.
+ */
+export async function settleFrames(engine: FrameEngine, renderer: THREE.WebGLRenderer, t: Tap, beat: Beat, settle: SettleWatch): Promise<SettleResult> {
+  settle.reset();
+  t.timing = false;
+  do await frame(engine, renderer, t, beat);
+  while (!settle.push(beat.frame[FRAME_INTERVAL]!, beat.frame[FRAME_CPU]!));
+  beat.switching = false;
+  return settle.result();
+}
+
+/** A scored second is counted in an arm's spread when the block covered at least this much of it (the last second of a block is a part). */
+const MIN_BIN_WALL_S = 0.5;
+/** Seconds a block's bins hold: `blockS` and the second a hang may carry it into. */
+const BIN_CAP = Math.ceil(BENCH.blockS) + 2;
+
+/**
+ * The arms in turn, `cycles` times round. Each arm is scored for `blockS` wall seconds, after its switch has settled (`settleFrames`: frames
  * unscored until the newest ones are steady, `SETTLE.capS` at most), so a hang at the switch is never in an arm's numbers; it is the arm's
- * `SwitchHitch` instead. The race drifts under every arm alike, so the arms are compared on the same stretch. Returns each arm's sums, which arm each
- * timer query block (numbered from 1) belonged to, and the switches' hitches in the order they were made.
+ * `SwitchHitch` instead, and a switch that never settled is counted in the arm's `unsettled`. The block's seconds are binned (arrays sized once) for the arm's
+ * spread: the sim ms per sim-second of each whole second, so a card says whether an arm ran steady. The race drifts under every arm alike, so the arms are compared on the
+ * same stretch. Returns each arm's sums, which arm each timer query block (numbered from 1) belonged to, and the switches' hitches in the order they were made.
  */
 export async function alternate(
   engine: FrameEngine,
@@ -201,29 +221,37 @@ export async function alternate(
   const blockKeys = new Map<number, string>();
   const switches: SwitchHitch[] = [];
   const settle = new SettleWatch();
+  const binSim = new Float64Array(BIN_CAP);
+  const binClock = new Float64Array(BIN_CAP);
+  const binWall = new Float64Array(BIN_CAP);
   for (let c = 0; c < cycles; c++) {
     for (const a of arms) {
-      settle.reset();
       beat.switching = true;
       await a.set();
       ui.set(`CRUSH BENCH: ${title} ${a.key}, round ${c + 1} / ${cycles}`);
       if (beat.lab) restartLab(beat.lab, t.simS, c);
-      t.timing = false;
-      do await frame(engine, renderer, t, beat);
-      while (!settle.push(beat.frame[FRAME_INTERVAL]!, beat.frame[FRAME_CPU]!));
-      beat.switching = false;
-      switches.push({ stretch: title, arm: a.key, round: c + 1, ...settle.result() });
+      const settled = await settleFrames(engine, renderer, t, beat, settle);
+      switches.push({ stretch: title, arm: a.key, round: c + 1, ...settled });
       t.block = ++t.blocks;
       blockKeys.set(t.block, a.key);
       t.timing = true;
       const acc = accs.get(a.key)!;
+      if (!settled.settled) acc.unsettled++;
       const clock0 = t.simS;
       const fine0 = parts.world.fineCuts;
+      binSim.fill(0);
+      binClock.fill(0);
+      binWall.fill(0);
       let wall = 0;
       while (wall < BENCH.blockS) {
+        const clockBefore = t.simS;
         await frame(engine, renderer, t, beat);
         const f = beat.frame;
+        const bin = Math.min(BIN_CAP - 1, Math.floor(wall));
         wall += f[FRAME_DT]!;
+        binSim[bin] = binSim[bin]! + f[FRAME_SIM]!;
+        binClock[bin] = binClock[bin]! + (t.simS - clockBefore);
+        binWall[bin] = binWall[bin]! + f[FRAME_DT]!;
         acc.frames++;
         acc.sim += f[FRAME_SIM]!;
         acc.cpu += f[FRAME_CPU]!;
@@ -232,6 +260,13 @@ export async function alternate(
         acc.calls += renderer.info.render.calls;
         acc.tris += renderer.info.render.triangles;
       }
+      for (let b = 0; b < BIN_CAP; b++) {
+        if (binWall[b]! < MIN_BIN_WALL_S || binClock[b]! <= 0) continue;
+        const perSimS = binSim[b]! / binClock[b]!;
+        acc.binN++;
+        acc.binSum += perSimS;
+        acc.binSumSq += perSimS * perSimS;
+      }
       acc.wallS += wall;
       acc.clockS += t.simS - clock0;
       acc.fineCuts += parts.world.fineCuts - fine0;
@@ -239,4 +274,20 @@ export async function alternate(
   }
   t.timing = false;
   return { accs, blockKeys, switches };
+}
+
+/** Frames of a wait: one `frame` each, with no samples, until `done` or `limitS` wall seconds. True when `done` came first. */
+export async function waitFor(engine: FrameEngine, parts: BenchParts, t: Tap, beat: Beat, limitS: number, done: () => boolean): Promise<boolean> {
+  t.timing = false;
+  for (let wall = 0; !done(); wall += beat.frame[FRAME_DT]!) {
+    if (wall >= limitS) return false;
+    await frame(engine, parts.renderer, t, beat);
+  }
+  return true;
+}
+
+/** The Sky setting `full`, then frames until the strip is in the dome (`BENCH.skyWaitS` at most): its decode is the page's first ask, not the arm's cost. */
+export async function showFullSky(engine: FrameEngine & { setSky(mode: SkyMode): void }, parts: BenchParts, t: Tap, beat: Beat): Promise<void> {
+  engine.setSky("full");
+  await waitFor(engine, parts, t, beat, BENCH.skyWaitS, () => parts.sky.textureBytes > 0);
 }

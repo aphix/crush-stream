@@ -1,64 +1,20 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { BENCH, type BenchParts, type Tap } from "./bench-measure.ts";
-import { alternate, newBeat, type Beat, type FrameEngine } from "./bench-frame.ts";
+import { BENCH, blocksOf } from "./bench-measure.ts";
+import { alternate } from "./bench-frame.ts";
+import { display, restoreFrame, rig, STEADY_MS, STEADY_SIM_MS, STRETCH } from "./bench-frame.test-util.ts";
 import { CAUSE_NAMES } from "./bench-hitch.ts";
 import { SETTLE } from "./bench-settle.ts";
 
-const STEADY_MS = 6;
-/** The engine's ms in a steady frame; `advance` adds half of what a frame ran over `STEADY_MS`, so a hang costs the engine too. */
-const STEADY_SIM_MS = 3;
 /** The clock's float rounding in a mean of 500 frames' sim ms. */
 const SIM_TOLERANCE_MS = 1e-3;
 /** A block ends on the frame that carries its wall time past `blockS`: the float sum of the frames' times puts that frame within one of the exact count. */
 const FRAME_COUNT_SLACK = 1;
-/** The stretch (`PAGE_PHASES` index) the rig's frames are logged under. */
-const STRETCH = 4;
 
-/** What the page's rAF hands the bench: the interval of each frame (ms) from a script of the frames since the arm's switch. */
-class Display {
-  private clock = 1000;
-  private since = 0;
-  private script: (sinceSwitch: number) => number = () => STEADY_MS;
-  /** A fresh page: the clock at 1000 ms (the beat's first stamp), steady frames. */
-  reset(): void {
-    this.clock = 1000;
-    this.use(() => STEADY_MS);
-  }
-  /** The frames from here on follow `script`, counted from 0. */
-  use(script: (sinceSwitch: number) => number): void {
-    this.script = script;
-    this.since = 0;
-  }
-  next(): number {
-    this.clock += this.script(this.since++);
-    return this.clock;
-  }
-}
+afterEach(restoreFrame);
 
-const display = new Display();
-const originalFrame = Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame");
-afterEach(() => {
-  if (originalFrame) Object.defineProperty(globalThis, "requestAnimationFrame", originalFrame);
-  else Reflect.deleteProperty(globalThis, "requestAnimationFrame");
-});
-
-/** A bench with nothing to draw: the parts a frame reads, a tap whose sim ms `advance` fills, and the display's frames. */
-function rig(): { engine: FrameEngine; parts: BenchParts; t: Tap; beat: Beat } {
-  Object.defineProperty(globalThis, "requestAnimationFrame", { value: (callback: (stamp: number) => void) => void setImmediate(() => callback(display.next())), configurable: true });
-  const info = { reset() {}, render: { calls: 1, triangles: 10 }, programs: [], memory: { textures: 0, geometries: 0 } };
-  const parts = { renderer: { info }, live: () => [], ragdoll: { traffic: { messages: 0, bytes: 0 } }, world: { fineCuts: 0 } } as unknown as BenchParts;
-  const t = { simMs: 0, drawMs: 0, simS: 100, timing: false, block: 0, blocks: 0, collect() {} } as unknown as Tap;
-  const engine: FrameEngine = {
-    pace: { steps: 1 },
-    advance: (seconds) => void (t.simMs = STEADY_SIM_MS + Math.max(0, seconds * 1000 - STEADY_MS) / 2),
-    reset() {},
-    setLabPreset() {},
-    flickLab() {},
-  };
-  display.reset();
-  return { engine, parts, t, beat: newBeat(parts, 1000, null, STRETCH) };
-}
+/** A device that returned no timer queries: the blocks carry the arms' sums alone. */
+const NO_GPU_QUERIES = { n: 0, block: new Uint32Array(0), ms: new Float64Array(0) } as unknown as Parameters<typeof blocksOf>[1];
 
 const ui = { set() {} };
 
@@ -97,7 +53,7 @@ describe("given an A/B whose second arm opens with a decaying hang (400 ms, fall
     const a = result.accs.get("a")!;
     const b = result.accs.get("b")!;
     assert.ok(Math.abs(a.frames - b.frames) <= 2 * FRAME_COUNT_SLACK, `frames scored by each arm: ${a.frames} against ${b.frames}`);
-    assert.ok(Math.abs(a.frames - 2 * (BENCH.blockS / (STEADY_MS / 1000))) <= 2 * FRAME_COUNT_SLACK, `two blocks of 3 s at 6 ms: ${a.frames} frames`);
+    assert.ok(Math.abs(a.frames - 2 * (BENCH.blockS / (STEADY_MS / 1000))) <= 2 * FRAME_COUNT_SLACK, `two blocks of the block length at 6 ms: ${a.frames} frames`);
   });
 
   it("when a frame time never levels (it grows 10 % a frame), then the arm is scored after the cap and its switch says it never settled", async () => {
@@ -116,5 +72,31 @@ describe("given an A/B whose second arm opens with a decaying hang (400 ms, fall
     assert.equal(table.rows[0]!.ms, 450, "the hang's ms");
     assert.equal(table.rows[0]!.phase, STRETCH, "its stretch");
     assert.ok(table.rows[0]!.causes.includes(CAUSE_NAMES[0]), "the setting-switch cause");
+  });
+});
+
+describe("given an A/B's arm whose sim cost swings from one second to the next, and one whose cost holds", () => {
+  /** The sim's cost a frame in the swinging arm: 1x in its even seconds, 4x in its odd (6 ms frames, 166 a second), counted from where the arm's scored block begins (after its settle watch). */
+  const swinging = (since: number): number => (Math.floor(Math.max(0, since - 2 * SETTLE.frames) / 166) % 2 === 0 ? 1 : 4);
+
+  it("when the arms are scored, then the swinging arm's spread reads high, the steady arm's reads zero, and neither counts a switch that never settled", async () => {
+    const { engine, parts, t, beat } = rig();
+    const result = await alternate(engine, parts, t, beat, ui, "fx", [
+      { key: "steady", set: () => display.use(() => STEADY_MS) },
+      { key: "swing", set: () => display.use(() => STEADY_MS, swinging) },
+    ], 1);
+    const steady = result.accs.get("steady")!;
+    const swing = result.accs.get("swing")!;
+    assert.ok(steady.binN >= BENCH.blockS - 1, `${steady.binN} whole seconds binned for a ${BENCH.blockS} s block`);
+    const blocks = blocksOf(result, NO_GPU_QUERIES);
+    assert.ok(blocks["steady"]!.simSpreadPct < 1, "the steady arm's spread");
+    assert.ok(blocks["swing"]!.simSpreadPct > 40, `the swinging arm's spread: ${blocks["swing"]!.simSpreadPct} %`);
+    assert.equal(steady.unsettled + swing.unsettled, 0, "every switch settled");
+  });
+
+  it("when a switch never settles, then its arm counts it", async () => {
+    const { engine, parts, t, beat } = rig();
+    const result = await alternate(engine, parts, t, beat, ui, "fx", [{ key: "never", set: () => display.use((since) => STEADY_MS * 1.1 ** since) }], 2);
+    assert.equal(result.accs.get("never")!.unsettled, 2, "two rounds, two switches");
   });
 });

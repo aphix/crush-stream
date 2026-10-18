@@ -10,13 +10,15 @@ import { QUIET_HZ } from "../kernel/constants.ts";
 const COARSE_LABEL = `1/${QUIET_HZ} s`;
 
 const S = (p50: number) => ({ mean: p50, p50, p95: p50 * 2, p99: p50 * 3, max: p50 * 4 });
-const B = (fps: number, gpuMs: number | null, fineCutsPerSimS = 0): Block => ({ frames: 270, wallS: 9, fps, simSpeedPct: 99, simMsPerSimS: 212, msPerStep: 0.9, stepsPerFrame: 2.7, cpuMs: 7.5, drawMs: 2.1, gpuMs, fineCutsPerSimS, calls: 640, triangles: 410000 });
+const B = (fps: number, gpuMs: number | null, fineCutsPerSimS = 0): Block => ({ frames: 270, wallS: 9, fps, simSpeedPct: 99, simMsPerSimS: 212, simSpreadPct: 6.2, unsettled: 0, msPerStep: 0.9, stepsPerFrame: 2.7, cpuMs: 7.5, drawMs: 2.1, gpuMs, fineCutsPerSimS, calls: 640, triangles: 410000 });
 
 /** The phases of a 212 ms per sim-second window: ten phases and the rest sum to the headline. */
 const PHASES: PhaseCard = {
   msPerSimS: { drive: 30, plan: 5, integrate: 25, wreck: 80, pairs: 20, structure: 18, course: 8, bake: 1, rules: 3, settle: 17 },
   unattributedMsPerSimS: 5,
   workPerSimS: { steps: 240, slices: 330, liveCarSlices: 3000, wreckCarSlices: 1900, asleepCarSlices: 40, pairTests: 1500, pairContacts: 210, partContacts: 3, prismQueries: 5200, prismsVisited: 21000, prismTouches: 160, skins: 480, skinVerts: 2_400_000, ragdollMessages: 0, ragdollBytes: 0 },
+  unitUs: { "integrate us/live slice": 9.5, "wreck us/wreck slice": 42.1 },
+  perSecond: { wallS: [1, 1], clockS: [1, 1], msPerSimS: { wreck: [70, 90] }, workPerSimS: { steps: [240, 240] } },
 };
 
 const RESULT: BenchResult = {
@@ -41,6 +43,7 @@ const RESULT: BenchResult = {
   stepsPerFrame: 2.7,
   msPerStep: 1.56,
   simMsPerSimS: 212,
+  simSpreadPct: 38.4,
   fineCutsPerSimS: 3.4,
   cutFrames: 40,
   lostSimS: 0.5,
@@ -58,9 +61,11 @@ const RESULT: BenchResult = {
   replayWhy: "no clip yet",
   pageEvents: [{ phase: "warm", atS: 0, visible: true, focused: true, fullscreen: false }],
   pageSeconds: { flags: "ffffd5", phases: "001111" },
+  pageState: { stepOfPage: 2, keep: true, heapUsedMB: 118, heapLimitMB: 4096, ragdollHost: "remote" },
   phases: PHASES,
   longTasks: { count: 4, totalMs: 312.5, maxMs: 120.25 },
   hitches: { factor: 3, minMs: 25, frames: 7200, count: 3, excessMs: 612, rows: [{ atS: 3.2, phase: 1, ms: 412, cpuMs: 380, simMs: 20, drawMs: 350, causes: ["focus"] }, { atS: 0.4, phase: 4, ms: 180, cpuMs: 150, simMs: 10, drawMs: 140, causes: ["setting-switch", "gpu-resources"] }, { atS: 7.7, phase: 4, ms: 60, cpuMs: 8, simMs: 4, drawMs: 3, causes: [] }] },
+  sweepHitches: { factor: 3, minMs: 25, frames: 2400, count: 9, excessMs: 2100, rows: [] },
   switches: [{ stretch: "fx", arm: "minimal", round: 1, settled: true, frames: 62, settleS: 0.4, longestMs: 412, longestAt: 0, longestCpuMs: 380 }, { stretch: "fx", arm: "high", round: 1, settled: false, frames: 600, settleS: 6, longestMs: 90, longestAt: 3, longestCpuMs: 20 }],
   settings: {
     fxTier: "high",
@@ -277,7 +282,7 @@ describe("given the bench result with the sim's phase table, its work counts, lo
     const lines = describeBench(RESULT);
     const phaseLine = lines.find((l) => l.startsWith("  sim phases"));
     assert.ok(phaseLine !== undefined, "no phase line");
-    assert.ok(phaseLine.startsWith("  sim phases, ms per sim-second: drive 30.0, plan 5.0, integrate 25.0, wreck 80.0, pairs 20.0, structure 18.0, course 8.0, bake 1.0, rules 3.0, settle 17.0, unattributed 5.0  (sum 212.0 of 212.0);  work per sim-second: steps 240, slices 330, liveCarSlices 3000, wreckCarSlices 1900"));
+    assert.ok(phaseLine.startsWith("  sim phases, ms per sim-second: drive 30.0, plan 5.0, integrate 25.0, wreck 80.0, pairs 20.0, structure 18.0, course 8.0, bake 1.0, rules 3.0, settle 17.0, unattributed 5.0  (sum 212.0 of 212.0, 38.4 % spread over its seconds);  work per sim-second: steps 240, slices 330, liveCarSlices 3000, wreckCarSlices 1900"));
     assert.ok(phaseLine.endsWith("ragdollMessages 0, ragdollBytes 0"));
     assert.ok(lines.some((l) => l.startsWith("9 cores, 8 GB") && l.includes("long tasks in the window: 4, 312.5 ms in all, longest 120.3 ms   battery: 83 % on battery at the start, 81 % on battery at the end")));
   });
@@ -297,7 +302,7 @@ describe("given the bench result with the hitch log and the A/B switches' hitche
   test("when the card is written, then one line counts the hitches and names the worst with their stretch, time, cpu and draw ms and causes, and one line gives each switch's longest frame and time to settle, marking an arm that never settled", () => {
     const lines = describeBench(RESULT);
     const line = lines.find((l) => l.startsWith("hitches:"));
-    assert.equal(line, "hitches: 3 of 7200 frames over 3x the median (and 25 ms), 612 ms over in all; worst: window 3.2 s 412 ms (cpu 380, draw 350; focus), ab-fx 0.4 s 180 ms (cpu 150, draw 140; setting-switch+gpu-resources), ab-fx 7.7 s 60 ms (cpu 8, draw 3; no visible cause)   switch hitches (longest frame ms / s to settle, scored after it, ! never settled): fx: minimal 412/0.4, high 90/6.0!");
+    assert.equal(line, "hitches: 3 of 7200 frames over 3x the median (and 25 ms), 612 ms over in all; worst: window 3.2 s 412 ms (cpu 380, draw 350; focus), ab-fx 0.4 s 180 ms (cpu 150, draw 140; setting-switch+gpu-resources), ab-fx 7.7 s 60 ms (cpu 8, draw 3; no visible cause)   switch hitches (longest frame ms / s to settle, scored after it, ! never settled): fx: minimal 412/0.4, high 90/6.0!   warm-up sweep: 9 hitched of 2400 frames, 2100 ms over");
   });
 
   test("when no frame hitched, then the line says none and names no rows", () => {
@@ -312,6 +317,22 @@ describe("given a run that hitched as often as the table holds, over every A/B s
     const rows = Array.from({ length: HITCH.cap }, (_, i) => ({ atS: i + digits, phase: i % 7, ms: 300 + digits, cpuMs: 120 + digits, simMs: 40 + digits, drawMs: 90 + digits, causes: ["setting-switch", "gpu-resources", "focus"] }));
     const switches = Array.from({ length: 30 }, (_, i) => ({ stretch: "fx", arm: i % 2 ? "high" : "minimal", round: 1 + (i >> 1), settled: i % 3 !== 0, frames: 60 + i, settleS: 3 + digits, longestMs: 400 + digits, longestAt: i, longestCpuMs: 200 + digits }));
     const full = { ...RESULT, hitches: { ...RESULT.hitches, count: 4000, excessMs: 123456 + digits, rows }, switches };
+    const bytes = JSON.stringify(roundCard(full)).length;
+    assert.ok(bytes < MAX_JSON_BYTES.bench - 12 * 1024, `${bytes} bytes against the cap of ${MAX_JSON_BYTES.bench}`);
+  });
+
+  test("when the window carries its per-second phases and counters for every second it can hold, with the page's per-second state of the longest page, then the card's JSON still stays 12 kB under the cap", () => {
+    const digits = 0.123456789012345;
+    const seconds = 50;
+    const column = (base: number): number[] => Array.from({ length: seconds }, (_, i) => base + i + digits);
+    const perSecond = {
+      wallS: column(1),
+      clockS: column(1),
+      msPerSimS: Object.fromEntries(Object.keys(PHASES.msPerSimS).map((name) => [name, column(30)])),
+      workPerSimS: Object.fromEntries(Object.keys(PHASES.workPerSimS).map((name) => [name, column(2_400_000)])),
+    };
+    const hex = "fd".repeat(900);
+    const full = { ...RESULT, phases: { ...PHASES, perSecond }, pageSeconds: { flags: hex, phases: hex } };
     const bytes = JSON.stringify(roundCard(full)).length;
     assert.ok(bytes < MAX_JSON_BYTES.bench - 12 * 1024, `${bytes} bytes against the cap of ${MAX_JSON_BYTES.bench}`);
   });
