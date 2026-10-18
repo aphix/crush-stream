@@ -22,7 +22,9 @@ function fakeStats(shown = FPS) {
   const panel = {
     begin: () => void fed.begins++,
     end: () => void fed.ends++,
-    showPanel: (id: number) => children.forEach((c, i) => void (c.style.display = i === id ? "block" : "none")),
+    showPanel: (id: number) => {
+      for (const [i, c] of children.entries()) c.style.display = i === id ? "block" : "none";
+    },
     dom: { remove: () => void (fed.removed = true), children },
   };
   return { fed, panel };
