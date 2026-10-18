@@ -725,6 +725,20 @@ export function stepFree(car: DeformableCar, dt: number): boolean {
   }
   // `--verify`: with `wreckTops` a point it cleared that the old test would have asked is asked the old way too (`GQ.wreckTops`), every point is visited for it (no whole-body skip).
   const checkOld = GQ.check && flipped;
+  // `--verify`: where the whole-body gate cleared every point, the points are read anyway and the rows they would have made are counted (`GQ.allClear`), then forgotten: the run is the one it was.
+  if (GQ.check && allClear) {
+    const nearing = body.nearing;
+    const rows = readPoints(0, pointEnd, bellyFrom, n, true, bodyTop, readAll, solidReach, solidReach - shiftedReach, false);
+    body.nearing = nearing;
+    const c = GQ.allClear;
+    c.slices++;
+    if (wreck) c.wreckSlices++;
+    if (rows > n) {
+      c.rowSlices++;
+      c.rows += rows - n;
+      if (wreck) c.wreckRowSlices++;
+    }
+  }
   n = readPoints(allClear ? pointEnd : 0, pointEnd, bellyFrom, n, true, bodyTop, readAll, solidReach, solidReach - shiftedReach, checkOld);
   // Between two belly points on different patches the belly meets that edge where it crosses (`edgeCross`, the tyres' rule): a car
   // dropped level across a ramp's crest balanced on the row in front of it, the crest 17 cm inside the belly half a metre behind.

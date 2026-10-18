@@ -23,8 +23,8 @@ import { FINE_HZ } from "../kernel/constants.ts";
  * step for step against what the live sim did. Not a test file itself.
  */
 
-/** Numbers per car in a trace: x, y, z, vx, vy, vz, crush, wreck flag, how many times the car was put on a spot (`DeformableCar.placements`) and had its engine killed from outside the crash sim (`kills`). */
-const STATE = 10;
+/** Numbers per car in a trace: x, y, z, vx, vy, vz, crush, wreck flag, how many times the car was put on a spot (`DeformableCar.placements`) and had its engine killed from outside the crash sim (`kills`), and whether the epicenter freeze held it. */
+const STATE = 11;
 
 /** A crash recorded: the clip, the world's cars, and every car's state at the start of every recorder step. */
 export interface Recording {
@@ -62,6 +62,7 @@ function capture(cars: readonly DeformableCar[], out: Float64Array): void {
     out[o + 7] = c.deform.massActive ? 1 : 0;
     out[o + 8] = c.placements;
     out[o + 9] = c.kills;
+    out[o + 10] = c.deform.frozen ? 1 : 0;
   }
 }
 
@@ -80,10 +81,10 @@ function clipStart(clip: HighlightClip, times: Map<number, number>): number {
 }
 
 /** Car `slot` as the live sim had it at the clip's step `step` (its first by default): a wreck or not, and its speed (m/s). */
-export function atClipStart(rec: Recording, slot: number, step = 0): { wreck: boolean; speed: number } {
+export function atClipStart(rec: Recording, slot: number, step = 0): { wreck: boolean; speed: number; frozen: boolean } {
   const o = slot * STATE;
   const live = rec.trace[rec.s0 + step]!;
-  return { wreck: live[o + 7] === 1, speed: Math.hypot(live[o + 3]!, live[o + 4]!, live[o + 5]!) };
+  return { wreck: live[o + 7] === 1, speed: Math.hypot(live[o + 3]!, live[o + 4]!, live[o + 5]!), frozen: live[o + 10] === 1 };
 }
 
 /** One car of a flat-field crash: where it starts, which way it heads (yaw: heading is (sin, cos)), how fast, and its pedals. */
@@ -118,7 +119,7 @@ function dresser(derby: boolean): (car: DeformableCar) => void {
  * does: frames of 1/60 s cut into `physicsSlice` steps (never shorter than `floor`: 1/80 s is the adaptive pacer's coarse
  * slice), every car on its own pedals, the clip the best the ledger kept.
  */
-export function recordFlat(spawns: readonly Spawn[], seconds: number, derby: boolean, touched: readonly number[] = [], floor = 1 / FINE_HZ, shot: Shot | null = null): Recording {
+export function recordFlat(spawns: readonly Spawn[], seconds: number, derby: boolean, touched: readonly number[] = [], floor = 1 / FINE_HZ, shot: Shot | null = null, latest = false): Recording {
   const scene = new THREE.Scene();
   const dress = dresser(derby);
   const cars = spawns.map((s, i) => {
@@ -166,7 +167,7 @@ export function recordFlat(spawns: readonly Spawn[], seconds: number, derby: boo
     for (const car of cars) car.updateSkin();
   }
   rec.end();
-  const clip = rec.ledger.kept[0];
+  const clip = latest ? rec.ledger.kept.reduce<HighlightClip | undefined>((a, b) => (a === undefined || b.t0 > a.t0 ? b : a), undefined) : rec.ledger.kept[0];
   if (!clip) throw new Error("the crash did not rank as a highlight");
   return { clip, cars, scene: { dress, collide: () => {}, blend: new PoseBlend() }, trace, s0: clipStart(clip, times), frameEnd };
 }

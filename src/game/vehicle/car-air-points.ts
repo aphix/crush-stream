@@ -13,7 +13,7 @@ import { carClass } from "./vehicle-classes.ts";
 import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift } from "./car-cage-rig.ts";
-import { COM_Y, BELLY, POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, body, carrier, pointVel } from "./car-air-body.ts";
+import { COM_Y, BELLY, POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
 export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
@@ -117,8 +117,29 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
   // The car tops a point within `REACH` of the car asks (`near`), cut once to those over the square every such point's box lies in.
   let held = false;
   const wreckTops = EPICENTER.wreckTops === 1 && body.wreck && !part;
+  // `EPICENTER.preClear`: a cage point whose height from the body's axes (`_e`, `wheelsAt` set them from `q`: three products, not `armOf`'s rotation) stands over `bound` by the most it can fall in the slice and the
+  // gap, with `CLEAR_ROUND` over the two ways of rounding it, is clear by `bound < low` below too: the same answer for it without its arm, its velocity or its box. Only with a finite `bound` and no tops asked (`tops`).
+  const cc = body.centre;
+  const preClear = EPICENTER.preClear === 1 && gate && !part && !tops && solidReach > 0 && bound < Infinity;
+  const preFall = preClear ? (Math.max(0, -v.y) + w.length() * solidReach) * dt + SPECULATIVE_GAP + CLEAR_ROUND : 0;
   for (let i = from; i < to; i++) {
     if (i >= bellyFrom && BELLY_ABSENT[i - bellyFrom] === 1) continue;
+    if (preClear && i < bellyFrom) {
+      const cheap = centreOfMass.y + _e[1]! * (POINT_X[i]! - cc.x) + _e[4]! * (POINT_Y[i]! - cc.y) + _e[7]! * (POINT_Z[i]! - cc.z) - preFall;
+      if (bound < cheap) {
+        if (GQ.on) GQ.calls[G.ptClear] = GQ.calls[G.ptClear]! + 1;
+        // `--verify`: what the point's own `low` has over the cheap one (it must never be less: the margin that held, and how many points it cleared).
+        if (GQ.check) {
+          const rr = armOf(i, q, R[n]!);
+          _vp.crossVectors(w, rr).add(v);
+          const slack = centreOfMass.y + rr.y - (Math.max(0, -_vp.y) * dt + SPECULATIVE_GAP) - cheap;
+          GQ.preClear.cleared++;
+          if (slack < GQ.preClear.minSlack) GQ.preClear.minSlack = slack;
+          if (!(bound < centreOfMass.y + rr.y - (Math.max(0, -_vp.y) * dt + SPECULATIVE_GAP))) GQ.preClear.wrong++;
+        }
+        continue;
+      }
+    }
     const r = armOf(i, q, R[n]!);
     const px = centreOfMass.x + r.x;
     const py = centreOfMass.y + r.y;

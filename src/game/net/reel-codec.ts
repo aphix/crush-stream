@@ -221,9 +221,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * headless, a hidden tab) now meets a striker's panel contact, and a drawn car meets it from the folding step instead of from the next drawn frame: a clip of 114 or before no longer reads.
  * 116: the police light bar folds about a hinge line along its base across the car (the roof lattice's image of the rest hinge edge, on the edge the struck end's inertia sends it toward; `BAR_FOLD` 0.45 rad times the hinge value, the free edge up at most
  * 7.5 cm) where it turned about one foot along the car with the far end rising up to 0.35 m, so its cage pose, and the contact shape over a struck police car's roof, differ: a clip of 115 or before no longer reads.
+ * 117: a wreck's solver state in a keyframe carries the epicenter freeze (nine more doubles: `frozen`, `frozenReady`, `sinceThaw`, the cached centre and inertia), so a clip whose first keyframe finds a wreck frozen replays it frozen,
+ * bit for bit, instead of whole (15 m of pose error after a second crash beside it): the solver state is nine numbers longer, and a clip of 116 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 116;
+const REPLAY_VERSION = 117;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

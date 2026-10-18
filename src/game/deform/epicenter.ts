@@ -33,6 +33,8 @@ export const EPICENTER = {
   holdWakes: 0,
   /** 1: a wreck's body points (`readPoints`) are clear of the car tops when the tops of cars that are not wrecks are clear of them: a wreck takes no contact row from another wreck's top (that answer is dropped), so such a point was asked for nothing. The rows are the same ones; the points asked are fewer (a pile's wrecks no longer make each other's hulls ask). Only `hardTouch`, a bit no wreck's behaviour reads, can differ. Independent of `on`. */
   wreckTops: 0,
+  /** 1: a cage point of a body (`readPoints`) that stands over the bound of the surfaces below it by what it can fall in the slice, the speculative gap and `CLEAR_ROUND`, judged from the body's axes (three products) instead of its arm (`armOf`'s rotation, its velocity and its boxes), is cleared as the point test would clear it: the same points are read, the cleared ones cost a third. Exact: the margin covers the two ways of rounding the height. Independent of `on`. */
+  preClear: 0,
 };
 
 /** Every knob as the module loaded it: the values a clip recorded before a knob existed reads it at (a knob added later goes at the end of `EPICENTER` with a default that changes nothing). */
@@ -64,6 +66,7 @@ const ROWS: readonly [keyof typeof EPICENTER, string, number, number, number][] 
   ["feedMin", "Frozen car drops feeds under (m, 0 off)", 0, 0.005, 0.0001],
   ["holdWakes", "Brake on a wreck at rest lets it sleep", 0, 1, 1],
   ["wreckTops", "Wreck points skip wreck tops", 0, 1, 1],
+  ["preClear", "Clear high cage points from the axes", 0, 1, 1],
 ];
 
 /** The knob rows, in panel order. */

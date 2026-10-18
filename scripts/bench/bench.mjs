@@ -102,6 +102,8 @@ export function summarize(runs) {
       prof: profOf(list),
       freezeRecord: list[0].freezeRecord ?? null,
       wreckTops: list.every((r) => r.wreckTops) ? Object.fromEntries(["skipped", "wouldRow", "wouldNear", "wreckTop"].map((k) => [k, list.reduce((s, r) => s + r.wreckTops[k], 0)])) : null,
+      allClear: list.every((r) => r.allClear) ? Object.fromEntries(["slices", "wreckSlices", "rowSlices", "rows", "wreckRowSlices"].map((k) => [k, list.reduce((s, r) => s + r.allClear[k], 0)])) : null,
+      preClear: list.every((r) => r.preClear) ? { cleared: list.reduce((s, r) => s + r.preClear.cleared, 0), minSlack: Math.min(...list.map((r) => r.preClear.minSlack)), wrong: list.reduce((s, r) => s + r.preClear.wrong, 0) } : null,
       load: { start: Math.min(...list.map((r) => r.loadStart)), startMax: Math.max(...list.map((r) => r.loadStart)), end: Math.max(...list.map((r) => r.loadEnd)) },
       flagged: list.some((r) => r.flagged),
     });
@@ -293,6 +295,16 @@ export function table(name, first, arms) {
     const w = a.wreckTops;
     if (!w) continue;
     lines.push(`   wreckTops check, ${a.name} (summed over runs): points skipped ${w.skipped}; of those the old path would have made a contact row ${w.wouldRow} (DISAGREEMENTS: must be 0), answered a wreck's top (dropped) ${w.wreckTop}, set nearing ${w.wouldNear} (only \`hardTouch\`, which nothing of a wreck reads: the slice log says whether anything physical followed)`);
+  }
+  for (const a of arms) {
+    const c = a.allClear;
+    if (!c) continue;
+    lines.push(`   whole-body gate check, ${a.name} (summed over runs): slices where allClear skipped every point ${c.slices} (wrecks ${c.wreckSlices}); reading the points anyway made contact rows in ${c.rowSlices} of them (wrecks ${c.wreckRowSlices}), ${c.rows} rows in all`);
+  }
+  for (const a of arms) {
+    const p = a.preClear;
+    if (!p || p.cleared === 0) continue;
+    lines.push(`   preClear check, ${a.name}: points cleared from the axes ${p.cleared}; least margin of the point's own low over the cheap bound ${(p.minSlack * 1e6).toFixed(3)} um (CLEAR_ROUND, 1 um, is in it: must be >= 0); points the point's own test would not have cleared (must be 0): ${p.wrong}`);
   }
   for (const a of arms) {
     const r = a.freezeRecord;

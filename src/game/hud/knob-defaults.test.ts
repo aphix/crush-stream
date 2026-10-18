@@ -36,7 +36,7 @@ describe("given the calibrated crash knob defaults (squash, buckle and realism)"
       "cam.fovSlide": true, "cam.driftTilt": true, "cam.driftLean": true,
       "cam.landing.fall": true, "cam.landing.zetaUp": true, "cam.landing.hold": true, "cam.landing.wobble": true, "cam.landing.wobbleHz": true,
       "cam.shake": true, "cam.shiftKick": true,
-      "epi.on": true, "epi.relockHold": true, "epi.settleMps": true, "epi.settleSpin": true, "epi.presentSkip": true, "epi.nearPrune": true, "epi.frozenCheck": true, "epi.thawHold": true, "epi.feedMin": true, "epi.holdWakes": true, "epi.wreckTops": true,
+      "epi.on": true, "epi.relockHold": true, "epi.settleMps": true, "epi.settleSpin": true, "epi.presentSkip": true, "epi.nearPrune": true, "epi.frozenCheck": true, "epi.thawHold": true, "epi.feedMin": true, "epi.holdWakes": true, "epi.wreckTops": true, "epi.preClear": true,
     };
     assert.equal(KNOBS.map((k) => k.id).sort().join(" "), Object.keys(ids).sort().join(" "), "the rows are exactly the KnobId union");
   });

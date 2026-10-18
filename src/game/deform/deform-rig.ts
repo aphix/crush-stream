@@ -17,8 +17,8 @@ import { FACES, faceFollow, IMPRINT_NONE } from "./load-crush.ts";
 import { PushBudget } from "./push-budget.ts";
 import { hypot3, hypot2 } from "../kernel/physics-core.js";
 
-/** Numbers a `simState` block spends on the rig’s scalar fields (`simScalarsOut`: 47 fields, one double each). */
-export const SIM_SCALAR_NUMBERS = 47;
+/** Numbers a `simState` block spends on the rig’s scalar fields (`simScalarsOut`: 56 fields, one double each: the last nine are the epicenter freeze: `frozen`, `frozenReady`, `sinceThaw`, the cached centre and inertia). */
+export const SIM_SCALAR_NUMBERS = 56;
 
 export type DeformMode = "shape" | "lattice";
 
@@ -777,6 +777,15 @@ export abstract class DeformRig {
     buf[o + 44] = this.netPopped;
     buf[o + 45] = this.netFlags;
     buf[o + 46] = this.push.z;
+    buf[o + 47] = this.frozen ? 1 : 0;
+    buf[o + 48] = this.frozenReady ? 1 : 0;
+    buf[o + 49] = this.sinceThaw;
+    buf[o + 50] = this.frozenCentre.x;
+    buf[o + 51] = this.frozenCentre.y;
+    buf[o + 52] = this.frozenCentre.z;
+    buf[o + 53] = this.frozenInvI.x;
+    buf[o + 54] = this.frozenInvI.y;
+    buf[o + 55] = this.frozenInvI.z;
     return o + SIM_SCALAR_NUMBERS;
   }
 
@@ -828,6 +837,11 @@ export abstract class DeformRig {
     this.netPopped = buf[o + 44]!;
     this.netFlags = buf[o + 45]!;
     this.push.z = buf[o + 46]!;
+    this.frozen = buf[o + 47]! !== 0;
+    this.frozenReady = buf[o + 48]! !== 0;
+    this.sinceThaw = buf[o + 49]!;
+    this.frozenCentre.set(buf[o + 50]!, buf[o + 51]!, buf[o + 52]!);
+    this.frozenInvI.set(buf[o + 53]!, buf[o + 54]!, buf[o + 55]!);
     return o + SIM_SCALAR_NUMBERS;
   }
 }
