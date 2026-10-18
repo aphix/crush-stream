@@ -143,6 +143,35 @@ describe("given every solid and knock prefab at scale 1: the colliders the game 
   }
 });
 
+/**
+ * A prop stretched unevenly is not its scale-1 self: a circle collider under x and z scales that differ is an ellipse. The Mall's basin (320 x 96 m) had a circle of r 160 m under the drawn 160 x 48 m ellipse:
+ * 56 300 m2 of invisible 0.5 m wall, which ended a survival run. Each placed solid or knock prop whose scales differ is measured as placed, the scallops of its circles inside the curve its only gap.
+ */
+const STRETCHED_TOL = 0.15;
+
+describe("given every solid and knock prop a course places at uneven scales, as placed", () => {
+  const stretched = new Map<string, { id: PrefabId; scale: [number, number, number] }>();
+  for (const course of COURSES) {
+    for (const p of placeProps(new Track(course.json))) {
+      if (PREFABS[p.prefab].body === "none" || (p.sx === p.sy && p.sy === p.sz)) continue;
+      stretched.set(`${p.prefab} ${p.sx.toFixed(3)} ${p.sy.toFixed(3)} ${p.sz.toFixed(3)}`, { id: p.prefab, scale: [p.sx, p.sy, p.sz] });
+    }
+  }
+  for (const [key, { id, scale }] of stretched) {
+    if (!PREFABS[id].collider.some((c) => c.kind === "circle") || scale[0] === scale[2]) continue;
+    const { inward, outward } = prefabGap(id, scale);
+    const tol = (KIND_TOL[id] ?? 0) + STRETCHED_TOL;
+
+    it(`when a ${key} (scale x y z) is measured as placed, then its drawn points stand no more than ${tol} m out of its colliders and its collider faces no more than ${tol} m off the drawn shape`, () => {
+      assert.ok(inward.d <= tol, `the ${id} is drawn ${inward.d.toFixed(3)} m outside its colliders at ${inward.at}`);
+      assert.ok(outward.d <= tol, `a ${id} collider point at ${outward.at} is ${outward.d.toFixed(3)} m off the drawn shape`);
+    });
+  }
+  it("when the courses' placements are scanned, then at least one circle-collider prop stretched unevenly is measured (the Mall's basin): the rows above are not empty", () => {
+    assert.ok([...stretched.values()].some((s) => PREFABS[s.id].collider.some((c) => c.kind === "circle") && s.scale[0] !== s.scale[2]), "no stretched circle prop in any course");
+  });
+});
+
 describe("given the colliders the cars meet and the solids the cosmetic Rapier world builds from them", () => {
   for (const course of COURSES) {
     it(`when the ${course.id} course's Rapier solids are built, then each is the very box or cylinder of a wall piece or a prop piece, at its place`, async () => {

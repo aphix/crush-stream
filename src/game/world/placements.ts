@@ -321,10 +321,38 @@ export function placeProps(track: Track): Placed[] {
   return out;
 }
 
+/** A circle collider whose placement's x and z scales differ by more than this share of the larger is an ellipse (`ellipseCircles`). */
+const ELLIPSE_FROM = 0.01;
+/** How far (m) the circles of an ellipse may fall inside its curve between two neighbours (the scallop), before the test's own measure of it (`collider-drawn.test.ts`, 0.15 m). */
+const ELLIPSE_SCALLOP = 0.12;
+
+/**
+ * An ellipse of semi-axes `semiX` (local x) and `semiZ` as circles, triples of the offset of the middle along x, along z and the radius: along the long axis, each the largest circle that fits the ellipse about its middle
+ * (radius b sqrt(1 - x^2 / (a^2 - b^2)), a and b the long and short semi-axes, on the axis between its two centres of curvature), spaced so the scallop between two neighbours is `ELLIPSE_SCALLOP`. Each touches the curve from inside
+ * and none leaves it: no wall stands where nothing is drawn. The prism has circles and boxes only, and a circle takes the contact code's smooth normals along the whole edge.
+ */
+function ellipseCircles(semiX: number, semiZ: number): number[] {
+  const alongX = semiX >= semiZ;
+  const a = Math.max(semiX, semiZ);
+  const b = Math.min(semiX, semiZ);
+  const reach = a - (b * b) / a;
+  const radius = (u: number): number => b * Math.sqrt(Math.max(0, 1 - (u * u) / (a * a - b * b)));
+  const out: number[] = [];
+  let u = -reach;
+  for (;;) {
+    out.push(alongX ? u : 0, alongX ? 0 : u, radius(u));
+    if (u >= reach) break;
+    const r = Math.max(radius(u), 1e-6);
+    const next = Math.min(reach, u + 2 * Math.sqrt(2 * Math.min(r, radius(Math.min(reach, u + 2 * Math.sqrt(2 * r * ELLIPSE_SCALLOP)))) * ELLIPSE_SCALLOP));
+    u = Math.max(next, u + ELLIPSE_SCALLOP);
+  }
+  return out;
+}
+
 /**
  * Colliders of the solid / knock placements, scaled by each placement's sx / sy / sz: one per piece of the prefab's `collider`
  * union, all with the placement's `index` (a knock prop is knocked as one), each piece's offset turned by the placement's yaw
- * (a box also by its own).
+ * (a box also by its own; a circle stretched unevenly is an ellipse of circles).
  */
 export function propColliders(placed: readonly Placed[]): PropCollider[] {
   const out: PropCollider[] = [];
@@ -336,6 +364,32 @@ export function propColliders(placed: readonly Placed[]): PropCollider[] {
     for (const c of spec.collider) {
       const ox = (c.x ?? 0) * p.sx;
       const oz = (c.z ?? 0) * p.sz;
+      if (c.kind === "circle" && Math.abs(p.sx - p.sz) > ELLIPSE_FROM * Math.max(p.sx, p.sz)) {
+        // A circle stretched unevenly is an ellipse (the Mall's basin, drawn 320 x 96 m): a prism has circle or box only, so its footprint is circles along its long axis.
+        const circles = ellipseCircles(c.r * p.sx, c.r * p.sz);
+        for (let k = 0; k < circles.length; k += 3) {
+          const px = ox + circles[k]!;
+          const pz = oz + circles[k + 1]!;
+          out.push({
+            index,
+            prefab: p.prefab,
+            body: spec.body,
+            x: p.x + px * cos + pz * sin,
+            z: p.z - px * sin + pz * cos,
+            yaw: p.yaw,
+            kind: "circle",
+            r: circles[k + 2]!,
+            hx: circles[k + 2]!,
+            hz: circles[k + 2]!,
+            mass: spec.mass * p.sx * p.sy * p.sz,
+            base: p.y + (c.y0 ?? 0) * p.sy,
+            top: p.y + (c.y1 ?? spec.size[1]) * p.sy,
+            ends: 3,
+            hardness: spec.hardness,
+          });
+        }
+        continue;
+      }
       const hx = c.kind === "circle" ? c.r * Math.max(p.sx, p.sz) : c.hx * p.sx;
       const hz = c.kind === "circle" ? hx : c.hz * p.sz;
       out.push({

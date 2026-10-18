@@ -46,6 +46,18 @@ export function triangles(g: THREE.BufferGeometry): Float32Array {
   return out;
 }
 
+/** `tris` stretched by a placement's scale about its foot. */
+function scaled(tris: Float32Array, scale: readonly [number, number, number]): Float32Array {
+  if (scale[0] === 1 && scale[1] === 1 && scale[2] === 1) return tris;
+  const out = new Float32Array(tris.length);
+  for (let i = 0; i < tris.length; i += 3) {
+    out[i] = tris[i]! * scale[0];
+    out[i + 1] = tris[i + 1]! * scale[1];
+    out[i + 2] = tris[i + 2]! * scale[2];
+  }
+  return out;
+}
+
 /** Every vertex of `tris` and the points where every `SLICE`-spaced horizontal plane crosses its triangle edges: the shape's plan at each height. */
 function drawnPoints(tris: Float32Array): P3[] {
   const out: P3[] = [];
@@ -150,17 +162,17 @@ export function pieceGrid(pieces: readonly PropCollider[], margin: number): (x: 
 export type Worst = { d: number; at: string };
 
 /**
- * A prop's colliders against its drawn geometry, both ways, at scale 1 and yaw 0. `inward`: how far drawn points over the ground
+ * A prop's colliders against its drawn geometry, both ways, at `scale` (1: its own size) and yaw 0. `inward`: how far drawn points over the ground
  * stand out of the colliders (a part you drive into). `outward`: how far points over the faces of the collider pieces, up to `BAND`
  * over the foot, stand off the drawn shape (a wall you hit in the air); a point inside another piece of the prop is inside the
  * union and not a face of it.
  */
-export function prefabGap(id: PrefabId): { pieces: number; inward: Worst; outward: Worst } {
-  const pieces = propColliders([{ prefab: id, x: 0, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 }]);
+export function prefabGap(id: PrefabId, scale: readonly [number, number, number] = [1, 1, 1]): { pieces: number; inward: Worst; outward: Worst } {
+  const pieces = propColliders([{ prefab: id, x: 0, y: 0, z: 0, yaw: 0, sx: scale[0], sy: scale[1], sz: scale[2] }]);
   const plain = new THREE.MeshBasicMaterial();
   const mats = { plain, concrete: plain, building: plain, billboard: plain, water: plain };
   // The art's own geometry: every part but a flat decal on the ground (a lamp's light pool).
-  const parts = prefabParts(id, mats).map((p) => triangles(p.geometry));
+  const parts = prefabParts(id, mats).map((p) => scaled(triangles(p.geometry), scale));
   const solid = parts.filter((t) => {
     let lo = Infinity;
     let hi = -Infinity;
