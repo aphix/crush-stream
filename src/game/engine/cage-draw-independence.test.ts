@@ -27,11 +27,9 @@ const STAGED_AT_S = 1;
 const START_S = GRID_TIME + COUNTDOWN;
 /** Race time the run goes on for after the hit is staged: the impact, the crush settling and the cage refits. */
 const AFTER_STAGED_S = 3;
-/** Numbers per car: x, y, z, vx, vy, vz, total crush, wreck flag, the cage's refits and a sum of its top field; both doors' swing and spin; then hinge value and flags of up to `PARTS_MAX` parts. */
+/** Numbers per car: x, y, z, vx, vy, vz, total crush, wreck flag, the cage's refits and a sum of its top field; both doors' swing and spin; then hinge value and flags of up to `PARTS_MAX` parts (not `open`: that is the drawn shell, which only a frame sets). */
 const PARTS_MAX = 20;
 const STATE = 14 + 2 * PARTS_MAX;
-/** The first ten numbers of a car are what the sim does; the rest are part state, where drawing writes `open` (a drawn quarter panel opens; `hitPanel` reads it). */
-const SIM_FIELDS = 10;
 /** The angle (rad) the door-ajar stage opens car 3's doors to. */
 const DOOR_AJAR_RAD = 0.9;
 
@@ -45,9 +43,9 @@ function stageHeadOn(w: World): void {
   w.cars[3]!.spawnFacing(pt.x, pt.z, Math.atan2(pt.tx, pt.tz) + Math.PI, HEAD_ON_MPS.b);
 }
 
-/** The first step and number at which two runs of a race differ in the first `fields` numbers of a car (step -1: none). */
-function firstDifference(a: Float64Array[], b: Float64Array[], fields = STATE): { step: number; at: number } {
-  for (let s = 0; s < a.length; s++) for (let k = 0; k < a[s]!.length; k++) if (k % STATE < fields && a[s]![k] !== b[s]![k]) return { step: s, at: k };
+/** The first step and number at which two runs of a race differ (step -1: none). */
+function firstDifference(a: Float64Array[], b: Float64Array[]): { step: number; at: number } {
+  for (let s = 0; s < a.length; s++) for (let k = 0; k < a[s]!.length; k++) if (a[s]![k] !== b[s]![k]) return { step: s, at: k };
   return { step: -1, at: -1 };
 }
 
@@ -103,10 +101,10 @@ function run(draw: boolean, opts: { skip?: boolean; stage?: "head-on" | "door aj
                 out[o + 10 + 2 * d] = door.theta;
                 out[o + 11 + 2 * d] = door.omega;
               }
-              const parts = c["parts"] as readonly { hingeT: number; detached: boolean; folding: boolean; open: boolean }[];
+              const parts = c["parts"] as readonly { hingeT: number; detached: boolean; folding: boolean }[];
               for (let p = 0; p < parts.length; p++) {
                 out[o + 14 + 2 * p] = parts[p]!.hingeT;
-                out[o + 15 + 2 * p] = (parts[p]!.detached ? 1 : 0) + (parts[p]!.folding ? 2 : 0) + (parts[p]!.open ? 4 : 0);
+                out[o + 15 + 2 * p] = (parts[p]!.detached ? 1 : 0) + (parts[p]!.folding ? 2 : 0);
               }
             }
             trace.push(out);
@@ -130,21 +128,26 @@ function run(draw: boolean, opts: { skip?: boolean; stage?: "head-on" | "door aj
   }
 }
 
-describe("given a staged head-on between two cars run twice, the second drawing every car before every step", () => {
-  it("when both are done, then every car's pose, velocity, crush and cage fields are the same numbers at every step", () => {
-    const plain = run(false);
-    const drawn = run(true);
-    assert.equal(drawn.length, plain.length, "the two races ran a different number of steps");
-    let wrecked = 0;
-    let refits = 0;
-    const first = firstDifference(plain, drawn, SIM_FIELDS);
-    for (const row of plain) for (let o = 0; o < row.length; o += STATE) {
-      wrecked = Math.max(wrecked, row[o + 7]!);
-      refits = Math.max(refits, row[o + 8]!);
-    }
-    assert.ok(wrecked === 1 && refits >= 2, `the race crushed no car (${wrecked}) or fitted no cage twice (${refits}): the comparison proves nothing`);
-    assert.equal(first.step, -1, `a car differs at step ${first.step}, car ${Math.floor(first.at / STATE)}, number ${first.at % STATE}: ${plain[first.step]?.[first.at]} against ${drawn[first.step]?.[first.at]}`);
-  });
+describe("given a staged crash run twice, the second drawing every car before every step", () => {
+  for (const stage of ["head-on", "door ajar"] as const) {
+    it(`when the ${stage} is done, then every car's pose, velocity, crush, cage fields, door swing and every part's hinge value and state are the same numbers at every step`, () => {
+      const plain = run(false, { stage });
+      const drawn = run(true, { stage });
+      assert.equal(drawn.length, plain.length, "the two races ran a different number of steps");
+      let wrecked = 0;
+      let refits = 0;
+      let doorMoved = 0;
+      for (const row of plain) for (let o = 0; o < row.length; o += STATE) {
+        wrecked = Math.max(wrecked, row[o + 7]!);
+        refits = Math.max(refits, row[o + 8]!);
+        for (let d = 0; d < 2; d++) doorMoved = Math.max(doorMoved, Math.abs(row[o + 10 + 2 * d]! - DOOR_AJAR_RAD));
+      }
+      assert.ok(wrecked === 1 && refits >= 2, `the race crushed no car (${wrecked}) or fitted no cage twice (${refits}): the comparison proves nothing`);
+      if (stage === "door ajar") assert.ok(doorMoved > 0.01, `no open door was struck or swung (${doorMoved} rad): the comparison proves nothing about part contacts`);
+      const first = firstDifference(plain, drawn);
+      assert.equal(first.step, -1, `a car differs at step ${first.step}, car ${Math.floor(first.at / STATE)}, number ${first.at % STATE}: ${plain[first.step]?.[first.at]} against ${drawn[first.step]?.[first.at]}`);
+    });
+  }
 });
 
 describe("given a staged crash drawn every frame with `presentSkip` off and then on", () => {

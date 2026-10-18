@@ -97,14 +97,21 @@ describe("given a quarter panel smushed back by a 56 km/h rear crash into a wall
  * The shared contact itself, with world positions: a box standing still and the car driven at it (the box takes the speed the
  * striker loses), against the box driven along a parked car. No rig between them.
  */
-function strike(part: "door" | "panel", dir: 1 | -1, kph: number, kg: number, carMoves: boolean): { off: string[]; door: number; latched: boolean; panel: number } {
+function strike(part: "door" | "panel", dir: 1 | -1, kph: number, kg: number, carMoves: boolean, drawn = true): { off: string[]; door: number; latched: boolean; panel: number } {
   const car = makeCar();
   const u = kph / 3.6;
   car.spawnFacing(0, 0, 0, 0);
   car.velocity.set(0, 0, carMoves ? -dir * u : 0);
   car.sampleMotion();
   if (part === "door") car.setDoorOpen(1, (55 * Math.PI) / 180);
-  else car.setPanelOpen(1, 0.45);
+  else if (drawn) car.setPanelOpen(1, 0.45);
+  else {
+    // What the sim's step leaves of a folded panel (`syncAttachedParts`), with no frame's pose: `open` (the drawn shell) is still false.
+    const p = car.quarterPanel(1);
+    p.hingeMax = 1;
+    p.hingeT = 0.45;
+    p.folding = true;
+  }
   const box = makeBox();
   const inner = part === "door" ? 1.1 : 0.91;
   box.hx = 0.3;
@@ -153,6 +160,18 @@ describe("given a still box with the car driven at it, and the same box driven a
       assert.equal(car.latched, box.latched, "latch");
       assert.ok(Math.abs(car.door - box.door) < 0.01, `door ${car.door} vs ${box.door} rad`);
       assert.ok(Math.abs(car.panel - box.panel) < 0.01, `panel ${car.panel} vs ${box.panel}`);
+    });
+  }
+});
+
+describe("given a panel folded by the sim's step on a car no frame ever drew", () => {
+  for (const [name, dir, kph, kg] of [["pushed back", 1, 3, 120], ["torn off from behind", 1, 12, 300], ["pulled out, soft", -1, 1.5, 60]] as const) {
+    it(`when it is struck and ${name}, then it ends as the same panel posed by a frame does`, () => {
+      const drawn = strike("panel", dir, kph, kg, true);
+      const sim = strike("panel", dir, kph, kg, true, false);
+      assert.ok(drawn.panel !== 0.45 || drawn.off.length > 0, "the strike changed nothing: the comparison proves nothing");
+      assertSameDigest(sim.off, drawn.off, "parts off");
+      assert.equal(sim.panel, drawn.panel, "panel hinge");
     });
   }
 });

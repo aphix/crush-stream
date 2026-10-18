@@ -153,7 +153,8 @@ export function hitDoor(car: DeformableCar, side: -1 | 1, lane: Lane): void {
  */
 export function hitPanel(car: DeformableCar, side: -1 | 1, lane: Lane): void {
   const p = car.quarterPanel(side);
-  if (p.detached || !p.open) return;
+  // `folding` is the sim's (`syncAttachedParts`); `open` is the drawn shell's, set by the frame's pose: gating on it made a car's panel hit depend on whether it was drawn.
+  if (p.detached || !p.folding) return;
   const r = p.region!;
   if (lane.bottom > r.span[1] || lane.top < r.span[0]) return;
   const t = p.hingeT;
