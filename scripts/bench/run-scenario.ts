@@ -35,6 +35,7 @@ const offSites = new Map<string, number>();
 const feedBins = new Map<string, number>();
 const wakeSites = new Map<string, number>();
 const speedBins = new Map<string, number>();
+const bakeBins = new Map<string, { n: number; ms: number }>();
 if (process.env["BENCH_THAW_SITES"] === "1") {
   const thaw = DeformRig.prototype.thaw;
   DeformRig.prototype.thaw = function (this: DeformRig): void {
@@ -66,6 +67,17 @@ if (process.env["BENCH_THAW_SITES"] === "1") {
       speedBins.set(key, (speedBins.get(key) ?? 0) + 1);
     }
     integrate.call(this, dt);
+  };
+  // What `bakeBetweenSlices` is called for and what it costs, by car state: a frozen wreck, a wreck in its crush window, an intact car (the call returns at once for those without masses).
+  const bake = DeformableCar.prototype.bakeBetweenSlices;
+  DeformableCar.prototype.bakeBetweenSlices = function (this: DeformableCar, h: number): void {
+    const state = !this.deform.massActive ? "intact (no masses)" : this.deform.frozen ? "frozen wreck" : this.deform.crushing ? "wreck crushing" : "wreck in no crush";
+    const t0 = performance.now();
+    bake.call(this, h);
+    const row = bakeBins.get(state) ?? { n: 0, ms: 0 };
+    row.n++;
+    row.ms += performance.now() - t0;
+    bakeBins.set(state, row);
   };
   // Who wakes a crashed car, or resets its rest timer (`wake` does both): a wreck that is woken every slice never sleeps.
   const wake = DeformableCar.prototype.wake;
@@ -169,6 +181,7 @@ offSites.clear();
 feedBins.clear();
 wakeSites.clear();
 speedBins.clear();
+bakeBins.clear();
 
 /** `BENCH_CENSUS=1` (bench `--census`): the window runs step by step through the lone-car census (`census.ts`). */
 const census = process.env["BENCH_CENSUS"] === "1" ? new LoneCensus(sim) : null;
@@ -238,6 +251,7 @@ console.log(
     feedBins: Object.fromEntries([...feedBins].sort((a, b) => b[1] - a[1]).slice(0, 12)),
     wakeSites: Object.fromEntries([...wakeSites].sort((a, b) => b[1] - a[1]).slice(0, 10)),
     speedBins: Object.fromEntries([...speedBins].sort((a, b) => b[1] - a[1])),
+    bakeBins: Object.fromEntries([...bakeBins]),
     loadStart,
     loadEnd: loadavg()[0]!,
   })}`,
