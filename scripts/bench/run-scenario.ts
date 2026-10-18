@@ -16,6 +16,9 @@ import { DeformContact } from "../../src/game/deform/deform-contact.ts";
 import * as THREE from "three";
 import { DeformableCar } from "../../src/game/vehicle/car.ts";
 import { PHASE_NAMES, WORK_NAMES } from "../../src/game/engine/sim-phases.ts";
+import { GQ, GQ_NAMES, gqEnter, gqLeave } from "../../src/game/world/ground-clock.ts";
+import { BAKE } from "../../src/game/world/surfaces.ts";
+import { startProfile, stopProfile } from "./prof.ts";
 import { SCENARIO_INFO } from "./scenario-info.ts";
 import { SCENARIOS } from "./scenarios.ts";
 import { LoneCensus } from "./census.ts";
@@ -151,6 +154,11 @@ for (const [id, value] of Object.entries(knobs)) {
     if (value === 0) Object.defineProperty(sim.world, "lone", { get: () => false, set: () => undefined, configurable: true });
     continue;
   }
+  // `bake=0` is not a knob either: the ground bake off (`surfaces.ts` `BAKE`), every query on the layered path the bake replaces; the bake is exact, so the arms' digests must be equal.
+  if (id === "bake") {
+    BAKE.on = value !== 0;
+    continue;
+  }
   const knob = EPICENTER_KNOBS.find((k) => k.id === id);
   if (!knob) throw new Error(`knob ${id}: not one of ${EPICENTER_KNOBS.map((k) => k.id).join(", ")}`);
   knob.set(value);
@@ -179,6 +187,13 @@ const advance = (seconds: number): void => {
     record();
   }
 };
+/**
+ * `BENCH_VERIFY=1` (bench `--verify`): from the first step of the warm-up every point query and wheel contact is answered twice, by the baked path and by the layered path the bake replaces, and compared bit for bit
+ * (`world/ground-clock.ts` `GQ.check`): the counts and the first mismatch go in the result. A run for the proof, never for the ms.
+ */
+const verify = process.env["BENCH_VERIFY"] === "1";
+GQ.on = verify;
+GQ.check = verify;
 advance(warmS);
 sites.clear();
 clampSites.clear();
@@ -190,11 +205,27 @@ bakeBins.clear();
 
 /** `BENCH_CENSUS=1` (bench `--census`): the window runs step by step through the lone-car census (`census.ts`). */
 const census = process.env["BENCH_CENSUS"] === "1" ? new LoneCensus(sim) : null;
+
+/**
+ * `BENCH_GROUND=1` (bench `--ground`): the window runs with the ground queries' section clock on (`world/ground-clock.ts`), which costs two clock reads per outermost query: a run for the
+ * share of each query, never for the ms of the phases. What one outermost timed query costs the clock itself (ns) is measured first, so the table can subtract it.
+ */
+const groundOn = process.env["BENCH_GROUND"] === "1";
+const CALIBRATE = 2_000_000;
+const cal0 = performance.now();
+if (groundOn) for (let i = 0; i < CALIBRATE; i++) gqLeave(0, gqEnter(0));
+const clockNs = groundOn ? ((performance.now() - cal0) * 1e6) / CALIBRATE : 0;
+GQ.ms.fill(0);
+GQ.outer.fill(0);
+GQ.depth = 0;
+GQ.calls.fill(0);
+GQ.on = groundOn || verify;
 const phases = sim.world.phases;
 phases.on = true;
 const ms0 = phases.ms.slice();
 const work0 = phases.work.slice();
 const loadStart = loadavg()[0]!;
+const profiler = process.env["BENCH_PROF"] === "1" ? startProfile() : null;
 const t0 = performance.now();
 const clock0 = sim.t;
 if (census) for (let i = 0, n = Math.round(windowS / sim.stepS); i < n; i++) census.step();
@@ -215,12 +246,21 @@ else if (process.env["BENCH_SECONDS"] === "1") {
 } else advance(windowS);
 const wallMs = performance.now() - t0;
 const simS = sim.t - clock0;
+const profAll = profiler === null ? null : stopProfile(profiler, simS);
+/** The rows the bench keeps of a profile: the most inclusive and the heaviest by self time (their union), the rest is the long tail. */
+const prof = profAll === null ? null : [...new Set([...profAll.slice(0, 80), ...profAll.toSorted((a, b) => b.selfMsPerS - a.selfMsPerS).slice(0, 40)])];
 phases.on = false;
+GQ.on = false;
 
 const msPerS: Record<string, number> = {};
 for (const [i, n] of PHASE_NAMES.entries()) msPerS[n] = (phases.ms[i]! - ms0[i]!) / simS;
 const workPerS: Record<string, number> = {};
 for (const [i, n] of WORK_NAMES.entries()) workPerS[n] = (phases.work[i]! - work0[i]!) / simS;
+const ground = {
+  clockNs,
+  sections: Object.fromEntries(GQ_NAMES.map((n, i) => [n, { msPerS: GQ.ms[i]! / simS, callsPerS: GQ.calls[i]! / simS, outerPerS: GQ.outer[i]! / simS }])),
+  verify: verify ? { compared: [...GQ.verify.compared], mismatches: [...GQ.verify.mismatches], far: GQ.verify.far, first: GQ.verify.first } : null,
+};
 
 const hash = createHash("sha1");
 const poses: number[] = [];
@@ -251,6 +291,8 @@ console.log(
     lone: info.lone,
     race: info.race ?? false,
     cars: sim.cars.length,
+    ground,
+    prof,
     knobs,
     warmS,
     windowS: simS,

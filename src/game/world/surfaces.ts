@@ -2,6 +2,7 @@ import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { SURFACE_IDS, SURFACES } from "./catalog.ts";
 import { SURFACE } from "./constants.ts";
 import { exitFace, F_DEPTH, F_NX, F_NZ, F_SIZE, IN_SIDE, IN_TOP, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, topAt } from "./prism.ts";
+import { G, GQ, gqEnter, gqLeave } from "./ground-clock.ts";
 
 /**
  * The one store of solid surfaces (docs/UNIFIED_CONTACT.md, Stage 1): everything a body can stand on answers one question,
@@ -250,6 +251,8 @@ export class Surface {
   hills: Float64Array[] = [];
   /** Per patch whose heights never change (a grid added without `hmax`): the highest its surface stands in each cell (`cellTopsOf`); empty otherwise. */
   cellTops: Float64Array[] = [];
+  /** Per patch whose heights never change: a lower bound on the y of the normal in each cell (`cellNyOf`), in 1/255s; empty otherwise. */
+  cellNy: Uint8Array[] = [];
   /** The cell index (built by `seal`, read by the query): per cell the patches listed, and the patches every query tests (`always[0 .. nAlways)`). */
   cellStart = new Int32Array(0);
   cellList = new Int32Array(0);
@@ -334,6 +337,7 @@ export class Surface {
     this.auxs[i] = EMPTY32;
     this.hills[i] = EMPTY64;
     this.cellTops[i] = EMPTY64;
+    this.cellNy[i] = EMPTY8;
     this.sealed = false;
     this.rasterBuilt = false;
     return i;
@@ -379,7 +383,10 @@ export class Surface {
       this.q[qo + Q_SURF2] = g.outside.surface;
       this.hills[i] = g.outside.hills;
     }
-    if (g.hmax === undefined) this.cellTops[i] = cellTopsOf(g.nu, g.nv, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!);
+    if (g.hmax === undefined) {
+      this.cellTops[i] = cellTopsOf(g.nu, g.nv, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!);
+      this.cellNy[i] = cellNyOf(g.nu, g.nv, g.step, g.stepV, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!);
+    }
     this.setFrame(i, g.ox, g.oy, g.oz, g.axes ?? YAW0);
     return i;
   }
@@ -750,6 +757,7 @@ export class Surface {
     this.nodes[i] = heights;
     this.auxs[i] = aux;
     this.cellTops[i] = EMPTY64;
+    this.cellNy[i] = EMPTY8;
     this.box(i);
   }
 
@@ -811,7 +819,8 @@ export class Surface {
       const start = this.cellStart[c]!;
       const listed = this.cellStart[c + 1]! - start;
       if (listed === 0) this.plainCells[c] = this.plainOutside;
-      else this.plainCells[c] = listed === 1 && this.nAlways === 0 && this.plain(this.cellList[start]!) ? this.cellList[start]! : -1;
+      else if (listed === 1 && this.nAlways === 0 && this.plain(this.cellList[start]!)) this.plainCells[c] = this.cellList[start]!;
+      else this.plainCells[c] = this.plainOutside >= 0 && !this.plainChecks && this.nAlways === 1 ? PLAIN_LISTED : -1;
     }
   }
 
@@ -906,6 +915,12 @@ export class Surface {
 const YAW0 = [1, 0, 0, 0, 1, 0, 0, 0, 1] as const;
 
 /**
+ * The ground bake's switch: with it off every query takes the layered path the bake replaces (`find` over every candidate), the bench's A/B arm (`bake=0`) and the
+ * baked-against-live proof's other side. Both paths answer the same to the bit (`ground-bake.test.ts`); it is on in the game.
+ */
+export const BAKE = { on: true };
+
+/**
  * The static surface in force (a scene's ground) and the cars' tops while a step runs; `surf` is `offer`'s best candidate's surface; `topCap`
  * the height (m) over the asker a car's top may stand and still count: each top's own reach (`Infinity` here), 0 while a tyre's footprint asks (`wheelContact`).
  */
@@ -971,6 +986,8 @@ const S_SPATCH = 21;
 const S_CREACH = 22;
 /** `Surface.plainOne`: read `Surface.plainCells` per index cell. */
 const PLAIN_BY_CELL = -2;
+/** A `Surface.plainCells` entry: the index cell lists patches besides the one always-tested plain grid (`plainOutside`): `find` reads that grid plain, then offers the cell's patches in list order, as `offerAll` does. */
+const PLAIN_LISTED = -3;
 
 /** What a query works out past the height: also the nearest node (a per-node surface's grip, `heightGrip`), or that and the slopes (`report`'s normal). */
 const NEED_HEIGHT = 0;
@@ -1183,6 +1200,10 @@ function offer(s: Surface, i: number, q: Float64Array, skip: number, need: numbe
   if (leftOut(s, o, owner, skip)) return;
   _s[S_CAUX] = 1;
   const kind = s.q[qo + Q_KIND];
+  if (GQ.on) {
+    const slot = s === live.tops ? G.offerTop : kind === PRISM ? G.offerPrism : kind === DECK ? G.offerDeck : G.offerGrid;
+    GQ.calls[slot] = GQ.calls[slot]! + 1;
+  }
   if (kind === DECK) deckAt(s, i, q);
   else if (kind === PRISM) prismAt(s, i, q);
   else gridAt(s, i, q, need);
@@ -1312,11 +1333,19 @@ function plainRest(w: Surface, slopes: boolean): void {
   _s[S_NODE] = (cj + (tv >= 0.5 ? 1 : 0)) * nu + ci + (tu >= 0.5 ? 1 : 0);
   _s[S_AUX] = 1;
   if (!slopes) return;
+  if (GQ.on) cellCensus(w, i, (cj | 0) * nu + (ci | 0), nu);
   _s[S_TU] = tu;
   _s[S_TV] = tv;
   cellSlopes(w, i, (cj | 0) * nu + (ci | 0), nu);
   _s[S_G0] = _s[S_PU] / w.p[o + P_STEP]!;
   _s[S_G1] = _s[S_PV] / w.p[o + P_STEPV]!;
+}
+
+/** What a plain query's cell is, counted while the section clock is on (`--ground`): the share of the queries a baked constant could answer (flat), and the ones on the road's crease. */
+function cellCensus(w: Surface, i: number, c: number, nu: number): void {
+  const nodes = w.nodes[i]!;
+  const slot = creased(w.lat[i]!, c, nu) ? G.cellCreased : nodes[c] === nodes[c + 1] && nodes[c] === nodes[c + nu] && nodes[c] === nodes[c + nu + 1] ? G.cellFlat : G.cellSloped;
+  GQ.calls[slot] = GQ.calls[slot]! + 1;
 }
 
 /** The plain grid that is the point's one candidate on `s` by index cell (`Surface.plainCells`, past the index `plainOutside`), else −1. */
@@ -1329,7 +1358,16 @@ function plainCell(s: Surface, q: Float64Array): number {
 /** The highest surface at the point over `s`'s patches, into the best-candidate scratch (`need`: what to work out past its height). */
 function find(s: Surface, q: Float64Array, skip: number, need: number): void {
   const i = s.plainOne === PLAIN_BY_CELL ? plainCell(s, q) : s.plainOne;
-  if (i < 0 || !plainOffer(s, i, q)) offerAll(s, q, skip, need);
+  if (i >= 0 || (i === PLAIN_LISTED && BAKE.on)) {
+    const grid = i >= 0 ? i : s.plainOutside;
+    if (grid >= 0 && plainOffer(s, grid, q)) {
+      if (GQ.on) GQ.calls[G.findPlain] = GQ.calls[G.findPlain]! + 1;
+      if (i === PLAIN_LISTED) offerCell(s, q, skip, need);
+      return;
+    }
+  }
+  if (GQ.on) GQ.calls[G.findAll] = GQ.calls[G.findAll]! + 1;
+  offerAll(s, q, skip, need);
 }
 
 /** `find` over every candidate patch. */
@@ -1346,6 +1384,11 @@ function offerAll(s: Surface, q: Float64Array, skip: number, need: number): void
       } else for (let k = 0; k < s.aNWide; k++) offer(s, s.aWide[k]!, q, skip, need);
     }
   }
+  offerCell(s, q, skip, need);
+}
+
+/** `offerAll`'s second half: the patches listed in the index cell of the point, in list order. */
+function offerCell(s: Surface, q: Float64Array, skip: number, need: number): void {
   if (s.cellList.length === 0) return;
   const ci = Math.floor(q[PQ_X]! / CELL) - s.cx0;
   const cj = Math.floor(q[PQ_Z]! / CELL) - s.cz0;
@@ -1446,16 +1489,22 @@ export const PQ_BODY = 6;
  * above y, into `out` (see `report`). `skip` is the slot the body is itself (its own roof is not under it, nor is a roof of a car
  * higher than it), −1 none. A point inside a prism deeper than its top's reach is answered that prism's face it came in by
  * (`C_H` −Infinity, `C_NY` 0, `C_DEPTH` the way back out): a side is a wall, a top a floor, by the one rule.
+ *
+ * With `travel2` (the square of the distance, m, the point moves in the slice; −1: it needs no normal) a caller that only wants to know
+ * whether the point touches is answered less: a point more than `gap` above a plain static cell that it cannot reach along the cell's
+ * normal in its travel (`farOnPlain`) gets `C_H`, `C_OWNER` and `C_ARG` alone, and the call returns true. Every other point gets the whole answer.
  */
-export function pointContact(q: Float64Array, skip: number, out: Float64Array): void {
+export function pointContact(q: Float64Array, skip: number, out: Float64Array, travel2 = NaN, gap = 0): boolean {
+  if (GQ.on) return pointOn(POINT_ALL, q, skip, out, travel2, gap);
   seekAll(q, skip);
-  answer(q, out);
+  return finish(q, out, travel2, gap);
 }
 
 /** `pointContact` over the car tops `holdTops` readied last, not those near the point: a body asks the tops once for all its points. */
-export function pointContactHeld(q: Float64Array, skip: number, out: Float64Array): void {
+export function pointContactHeld(q: Float64Array, skip: number, out: Float64Array, travel2 = NaN, gap = 0): boolean {
+  if (GQ.on) return pointOn(POINT_HELD, q, skip, out, travel2, gap);
   seek(q, skip, live.tops, held.list, held.count);
-  answer(q, out);
+  return finish(q, out, travel2, gap);
 }
 
 /** The car tops `holdNearTops` readied: `near`'s list for its body, cut to those over its square (`list`: `topsTopNear`'s), and of those the ones `offer` asks for the body's slot (`ask`: `pointContactNear`'s). */
@@ -1489,13 +1538,15 @@ export function holdNearTops(skip: number, x: number, z: number, r: number): num
 }
 
 /** `pointContact` over the tops `holdNearTops` readied. */
-export function pointContactNear(q: Float64Array, skip: number, out: Float64Array): void {
+export function pointContactNear(q: Float64Array, skip: number, out: Float64Array, travel2 = NaN, gap = 0): boolean {
+  if (GQ.on) return pointOn(POINT_NEAR, q, skip, out, travel2, gap);
   seek(q, skip, live.tops, nearTops.ask, nearTops.askCount);
-  answer(q, out);
+  return finish(q, out, travel2, gap);
 }
 
 /** `topsTop` over the tops `holdNearTops` readied. */
 export function topsTopNear(skip: number, xMin: number, xMax: number, zMin: number, zMax: number): number {
+  if (GQ.on) GQ.calls[G.topsTopNear] = GQ.calls[G.topsTopNear]! + 1;
   const tops = live.tops;
   if (tops === null) return -Infinity;
   let top = -Infinity;
@@ -1523,6 +1574,93 @@ function answer(q: Float64Array, out: Float64Array): void {
   out[C_OWNER] = -1;
   out[C_ARG] = _s[S_SPATCH]!;
   out[C_AUX] = 1;
+}
+
+/** The point queries' kinds, by the car tops each asks (`seekPoint`), and `GQ.verify`'s slot of the wheel's contact after them. */
+const POINT_ALL = 0;
+const POINT_HELD = 1;
+const POINT_NEAR = 2;
+const WHEEL_KIND = 3;
+const POINT_SLOTS = [G.pointContact, G.pointContactHeld, G.pointContactNear] as const;
+
+/** `seek` for a kind of point query. */
+function seekPoint(kind: number, q: Float64Array, skip: number): void {
+  if (kind === POINT_ALL) seekAll(q, skip);
+  else if (kind === POINT_HELD) seek(q, skip, live.tops, held.list, held.count);
+  else seek(q, skip, live.tops, nearTops.ask, nearTops.askCount);
+}
+
+/** What a point query does with what its `seek` found: the far answer (`farOnPlain`) where the caller allows it and the bake is on, else the whole one. Returns whether the answer is the far one. */
+function finish(q: Float64Array, out: Float64Array, travel2: number, gap: number): boolean {
+  if (BAKE.on && travel2 === travel2 && farOnPlain(q, out, travel2, gap)) return true;
+  answer(q, out);
+  return false;
+}
+
+/**
+ * Whether the point `seek` found over a plain static cell (`plainOffer`: `S_PFU` set, no prism side, the cell's patch the best) lies more than `gap` above it and cannot
+ * reach it along its normal in its travel: then a caller that only closes on a surface (`readPoints`' `nearing`: the point's velocity along the normal, times the slice,
+ * against its height over the surface along that normal) learns nothing from the normal, and `out` gets only what its other readers take of a far point: `C_H`, `C_OWNER`,
+ * `C_ARG`. The travel is the point's speed times the slice, which no velocity along a unit normal beats, and the normal's y is at least the cell's baked bound
+ * (`cellNyOf`), so a travel under the height times that bound (with `NY_MARGIN` against the roundings) is under the height along the normal. A negative `travel2` asks no normal at all.
+ */
+function farOnPlain(q: Float64Array, out: Float64Array, travel2: number, gap: number): boolean {
+  const w = live.surf;
+  if (w === null || _s[S_PFU]! < 0 || _s[S_SDEPTH]! > 0) return false;
+  const pen = _s[S_BEST]! - q[PQ_Y]!;
+  if (!(pen < -gap)) return false;
+  const patch = _s[S_PATCH]!;
+  if (travel2 >= 0) {
+    const bound = w.cellNy[patch]!;
+    if (bound.length === 0) return false;
+    const ny = bound[Math.floor(_s[S_PFV]!) * (w.q[patch * Q_STRIDE + Q_NU]! - 1) + Math.floor(_s[S_PFU]!)]! / NY_UNIT;
+    if (!(travel2 * (1 + NY_MARGIN) < pen * pen * ny * ny)) return false;
+  }
+  out[C_H] = _s[S_BEST]!;
+  out[C_OWNER] = -1;
+  out[C_ARG] = patch;
+  return true;
+}
+
+/** The reference answer of a checked point query (`GQ.check`): the layered path the bake replaces, bit for bit. */
+const _live = new Float64Array(HIT_SIZE);
+
+/**
+ * A point query with the ground clock on (`--ground`): counted and timed and, with `GQ.check` (`--verify`), answered a second time by the layered path with the bake off and the two
+ * compared: every entry the caller can read (all of them for a whole answer; `C_H`, `C_OWNER` and `C_ARG`, and the far answer's own proof, for a far one) must be the same bits.
+ */
+function pointOn(kind: number, q: Float64Array, skip: number, out: Float64Array, travel2: number, gap: number): boolean {
+  const t = gqEnter(POINT_SLOTS[kind]!);
+  if (GQ.check) {
+    const baked = BAKE.on;
+    BAKE.on = false;
+    seekPoint(kind, q, skip);
+    answer(q, _live);
+    BAKE.on = baked;
+  }
+  seekPoint(kind, q, skip);
+  const far = finish(q, out, travel2, gap);
+  if (GQ.check) checkPoint(kind, q, out, far, travel2);
+  gqLeave(POINT_SLOTS[kind]!, t);
+  return far;
+}
+
+/** `pointOn`'s comparison of `out` with the reference `_live`, counted in `GQ.verify`. */
+function checkPoint(kind: number, q: Float64Array, out: Float64Array, far: boolean, travel2: number): void {
+  const v = GQ.verify;
+  v.compared[kind] = v.compared[kind]! + 1;
+  let bad = -1;
+  if (far) {
+    v.far++;
+    for (const k of [C_H, C_OWNER, C_ARG]) if (!Object.is(out[k], _live[k])) bad = k;
+    // The proof of the far answer on the reference's own normal: the travel (a speed times the slice) bounds the closing along it, and the height along it is more.
+    if (travel2 >= 0 && !(Math.sqrt(travel2) < -(_live[C_H]! - q[PQ_Y]!) * _live[C_NY]!)) bad = C_NY;
+  } else {
+    for (let k = 0; k < HIT_SIZE; k++) if ((k <= C_AUX || k === C_DEPTH) && !Object.is(out[k], _live[k])) bad = k;
+  }
+  if (bad < 0) return;
+  v.mismatches[kind] = v.mismatches[kind]! + 1;
+  if (v.first === "") v.first = `point kind ${kind} entry ${bad} far ${far}: baked ${out[bad]} live ${_live[bad]} at ${q[PQ_X]}, ${q[PQ_Z]}, ${q[PQ_Y]}`;
 }
 
 /** What `stirNear` asks of a car: whether it moves (speed or spin at or above rest). */
@@ -1567,6 +1705,10 @@ function seek(q: Float64Array, skip: number, tops: Surface | null, list: Int32Ar
   _s[S_SDEPTH] = 0;
   live.surf = null;
   live.side = null;
+  if (GQ.on) {
+    GQ.calls[G.seek] = GQ.calls[G.seek]! + 1;
+    if (tops !== null && count > 0) GQ.calls[G.seekTops] = GQ.calls[G.seekTops]! + 1;
+  }
   if (live.statics !== null) find(live.statics, q, skip, NEED_ALL);
   if (live.solids !== null) find(live.solids, q, skip, NEED_ALL);
   if (tops !== null) for (let k = 0; k < count; k++) offer(tops, list[k]!, q, skip, NEED_ALL);
@@ -1604,6 +1746,7 @@ export function holdTops(skip: number, x: number, z: number, r: number): number 
  * solid and no car top but `skip`'s own stands over that square at `y` or higher (`staticTop`, the raster; the tops: none near at all).
  */
 export function clearOf(skip: number, x: number, z: number, r: number, y: number): boolean {
+  if (GQ.on) GQ.calls[G.clearOf] = GQ.calls[G.clearOf]! + 1;
   const s = live.statics;
   const o = live.solids;
   return (s === null || staticTop(s, x - r, x + r, z - r, z + r) < y) && (o === null || staticTop(o, x - r, x + r, z - r, z + r) < y) && topsTop(skip, x - r, x + r, z - r, z + r) === -Infinity;
@@ -1611,6 +1754,7 @@ export function clearOf(skip: number, x: number, z: number, r: number, y: number
 
 /** `staticTop` over the armed solids alone (-Infinity: none armed). */
 export function solidTop(xMin: number, xMax: number, zMin: number, zMax: number): number {
+  if (GQ.on) GQ.calls[G.solidTop] = GQ.calls[G.solidTop]! + 1;
   return live.solids === null ? -Infinity : staticTop(live.solids, xMin, xMax, zMin, zMax);
 }
 
@@ -1622,13 +1766,18 @@ function seekPatch(): number {
 
 /** `pointContact` over one surface alone: no other static and no car tops (a `Ground`'s own point queries). */
 export function contactIn(s: Surface, q: Float64Array, out: Float64Array): void {
+  const t = GQ.on ? gqEnter(G.contactIn) : -1;
   look(s, q, NEED_ALL);
   report(out);
+  if (t >= 0) gqLeave(G.contactIn, t);
 }
 
 /** `contactIn`'s height alone (`C_H`), its normal, grip and owner never worked out; with `grip`, `heightGrip` then reads the grip there. */
 export function heightIn(s: Surface, q: Float64Array, grip = false): number {
-  return look(s, q, grip ? NEED_GRIP : NEED_HEIGHT);
+  const t = GQ.on ? gqEnter(G.heightIn) : -1;
+  const h = look(s, q, grip ? NEED_GRIP : NEED_HEIGHT);
+  if (t >= 0) gqLeave(G.heightIn, t);
+  return h;
 }
 
 /** The best candidate over `s` alone into the scratch, working out what `need` asks past its height; returns that height. */
@@ -1786,6 +1935,48 @@ function cellTopsOf(nu: number, nv: number, nodes: Float32Array, centre: Float32
   return tops;
 }
 
+/** The unit `cellNyOf` stores a cell's normal bound in (a byte: 255 is straight up), and the margin its bound keeps against the rounding of `normalOf`'s hypot and quotient. */
+const NY_UNIT = 255;
+const NY_MARGIN = 1e-6;
+
+/**
+ * Per cell of a static grid (`cellTopsOf`'s layout) a lower bound on the y of the normal `normalOf` answers anywhere in it, in 1/`NY_UNIT`s, 0 where it cannot tell
+ * (a NaN node, or a cell steeper than 1/`NY_UNIT`). The normal is (-g0, 1, -g1) over its length, so its y is 1 / sqrt(1 + g0² + g1²), and each partial of the bilinear cell
+ * (`bilSlopes`) is a mix of two corner differences, so it stays under the larger of them; on the road (`cellSlopes`) the centre's and the lateral's and the drop's partials
+ * add, the clamped lateral share at most 1 and the drop at most its largest corner. The bound reads only the nodes, so it holds at every point of the cell.
+ */
+function cellNyOf(nu: number, nv: number, step: number, stepV: number, nodes: Float32Array, centre: Float32Array, lat: Float32Array, drop: Float32Array): Uint8Array {
+  const bound = new Uint8Array((nu - 1) * (nv - 1));
+  for (let cj = 0; cj < nv - 1; cj++) {
+    for (let ci = 0; ci < nu - 1; ci++) {
+      const c = cj * nu + ci;
+      let su: number;
+      let sv: number;
+      if (creased(lat, c, nu)) {
+        const dm = Math.max(Math.abs(drop[c]!), Math.abs(drop[c + 1]!), Math.abs(drop[c + nu]!), Math.abs(drop[c + nu + 1]!));
+        su = (partialU(centre, c, nu) + partialU(drop, c, nu) + partialU(lat, c, nu) * dm) / step;
+        sv = (partialV(centre, c, nu) + partialV(drop, c, nu) + partialV(lat, c, nu) * dm) / stepV;
+      } else {
+        su = partialU(nodes, c, nu) / step;
+        sv = partialV(nodes, c, nu) / stepV;
+      }
+      const ny = (1 / Math.sqrt(1 + (su * su + sv * sv) * (1 + NY_MARGIN))) * (1 - NY_MARGIN);
+      bound[cj * (nu - 1) + ci] = ny > 0 ? Math.floor(ny * NY_UNIT) : 0;
+    }
+  }
+  return bound;
+}
+
+/** The larger of cell `c`'s two corner differences along the frame's x (`bilSlopes`' PU is a mix of them), NaN with a NaN node. */
+function partialU(f: Float32Array, c: number, nu: number): number {
+  return Math.max(Math.abs(f[c + 1]! - f[c]!), Math.abs(f[c + nu + 1]! - f[c + nu]!));
+}
+
+/** The larger of cell `c`'s two corner differences along the frame's z (`bilSlopes`' PV), NaN with a NaN node. */
+function partialV(f: Float32Array, c: number, nu: number): number {
+  return Math.max(Math.abs(f[c + nu]! - f[c]!), Math.abs(f[c + nu + 1]! - f[c + 1]!));
+}
+
 /**
  * The highest patch `i` of `s` stands anywhere over the plan box [xMin, xMax] × [zMin, zMax] (m, world y; -Infinity: nowhere there):
  * a level frame with fixed heights reads its cells under the box (`cellTops`), any other its whole extent (a crease or hills on one:
@@ -1922,6 +2113,7 @@ function buildRaster(s: Surface): void {
  * or with `cellsOnly` no bound at all (Infinity): the raster's answer never falls as the box grows, the patch by patch one can.
  */
 export function staticTop(s: Surface, xMin: number, xMax: number, zMin: number, zMax: number, cellsOnly = false): number {
+  if (GQ.on) GQ.calls[G.staticTop] = GQ.calls[G.staticTop]! + 1;
   if (!s.rasterBuilt) buildRaster(s);
   const i0 = Math.floor((xMin - s.rasterX0) / RASTER);
   const i1 = Math.floor((xMax - s.rasterX0) / RASTER);
@@ -1941,6 +2133,7 @@ export function staticTop(s: Surface, xMin: number, xMax: number, zMin: number, 
 
 /** The highest the car tops near body `skip` (`CarSurfaces.near`) stand over the plan box (m, world y; -Infinity: none there). */
 export function topsTop(skip: number, xMin: number, xMax: number, zMin: number, zMax: number): number {
+  if (GQ.on) GQ.calls[G.topsTop] = GQ.calls[G.topsTop]! + 1;
   const tops = live.tops;
   if (tops === null) return -Infinity;
   tops.near(skip, (xMin + xMax) / 2, (zMin + zMax) / 2);
@@ -1990,6 +2183,13 @@ export const EDGE_HIT = new Float64Array(HIT_SIZE);
  * `-Infinity` if none; that point's contact is in `EDGE_HIT`.
  */
 export function edgeCross(ax: number, ay: number, az: number, bx: number, by: number, bz: number, ox: number, oy: number, oz: number, rad: number, ask: number, skip: number, id: number): number {
+  const t = GQ.on ? gqEnter(G.edgeCross) : -1;
+  const best = edgeCrossRead(ax, ay, az, bx, by, bz, ox, oy, oz, rad, ask, skip, id);
+  if (t >= 0) gqLeave(G.edgeCross, t);
+  return best;
+}
+
+function edgeCrossRead(ax: number, ay: number, az: number, bx: number, by: number, bz: number, ox: number, oy: number, oz: number, rad: number, ask: number, skip: number, id: number): number {
   let best = NONE;
   let t0 = 0;
   let t1 = 1;
@@ -2060,6 +2260,13 @@ function ridgeAt(ax: number, ay: number, az: number, dx: number, dy: number, dz:
  * on `id` strictly between A and B, `-Infinity` if none; that point's contact is in `EDGE_HIT`.
  */
 export function ridgeCross(ax: number, ay: number, az: number, bx: number, by: number, bz: number, skip: number, id: number): number {
+  const t = GQ.on ? gqEnter(G.ridgeCross) : -1;
+  const top = ridgeCrossRead(ax, ay, az, bx, by, bz, skip, id);
+  if (t >= 0) gqLeave(G.ridgeCross, t);
+  return top;
+}
+
+function ridgeCrossRead(ax: number, ay: number, az: number, bx: number, by: number, bz: number, skip: number, id: number): number {
   const dx = bx - ax;
   const dy = by - ay;
   const dz = bz - az;
@@ -2209,6 +2416,28 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
  * the tread, how far that is in it.
  */
 export function wheelContact(hub: Float64Array, axes: Float64Array, scale: number, skip: number, out: Float64Array): void {
+  const t = GQ.on ? gqEnter(G.wheelContact) : -1;
+  if (GQ.check) {
+    const baked = BAKE.on;
+    BAKE.on = false;
+    wheelContactRead(hub, axes, scale, skip, _live);
+    BAKE.on = baked;
+  }
+  wheelContactRead(hub, axes, scale, skip, out);
+  if (GQ.check) {
+    const v = GQ.verify;
+    v.compared[WHEEL_KIND] = v.compared[WHEEL_KIND]! + 1;
+    for (let k = 0; k <= C_TOUCH; k++) {
+      if (Object.is(out[k], _live[k])) continue;
+      v.mismatches[WHEEL_KIND] = v.mismatches[WHEEL_KIND]! + 1;
+      if (v.first === "") v.first = `wheel entry ${k}: baked ${out[k]} live ${_live[k]} hub ${hub[0]}, ${hub[1]}, ${hub[2]}`;
+      break;
+    }
+  }
+  if (t >= 0) gqLeave(G.wheelContact, t);
+}
+
+function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, skip: number, out: Float64Array): void {
   out[C_NX] = 0;
   out[C_NY] = 1;
   out[C_NZ] = 0;

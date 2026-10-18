@@ -96,11 +96,51 @@ export function summarize(runs) {
       bakeBins: list[0].bakeBins ?? {},
       trace: list[0].trace ?? null,
       census: list[0].census ?? null,
+      ground: groundOf(list),
+      verify: verifyOf(list),
+      prof: profOf(list),
       load: { start: Math.min(...list.map((r) => r.loadStart)), startMax: Math.max(...list.map((r) => r.loadStart)), end: Math.max(...list.map((r) => r.loadEnd)) },
       flagged: list.some((r) => r.flagged),
     });
   }
   return out;
+}
+
+/** The window profiles (`--prof`) as the mean of the runs: per function self and inclusive ms per sim-second and its heaviest source lines, the most inclusive first. */
+function profOf(list) {
+  if (!list.every((r) => r.prof)) return null;
+  const sums = new Map();
+  for (const r of list) {
+    for (const row of r.prof) {
+      const s = sums.get(row.fn) ?? { fn: row.fn, self: 0, incl: 0, lines: new Map() };
+      s.self += row.selfMsPerS / list.length;
+      s.incl += row.inclMsPerS / list.length;
+      for (const [line, ms] of row.lines) s.lines.set(line, (s.lines.get(line) ?? 0) + ms / list.length);
+      sums.set(row.fn, s);
+    }
+  }
+  return [...sums.values()].sort((a, b) => b.incl - a.incl);
+}
+
+/** Functions the profile table lists per arm by inclusive time, and by self time with their heaviest lines. */
+const PROF_LINES = 45;
+const PROF_SELF = 25;
+
+/** The ground queries' sections (`--ground`) as the mean of the runs: per section ms and calls per sim-second, and the outermost calls the clock read twice for; `clockNs` what one of those costs the clock. */
+function groundOf(list) {
+  if (!list.every((r) => r.ground && r.ground.clockNs > 0)) return null;
+  const names = Object.keys(list[0].ground.sections);
+  return {
+    clockNs: mean(list.map((r) => r.ground.clockNs)),
+    sections: Object.fromEntries(names.map((n) => [n, Object.fromEntries(["msPerS", "callsPerS", "outerPerS"].map((k) => [k, mean(list.map((r) => r.ground.sections[n][k]))]))])),
+  };
+}
+
+/** The baked-against-live check (`--verify`) summed over the runs: answers compared and mismatches per query kind, the far answers, the first mismatch. */
+function verifyOf(list) {
+  if (!list.every((r) => r.ground && r.ground.verify)) return null;
+  const sum = (k) => list[0].ground.verify[k].map((_, i) => list.reduce((s, r) => s + r.ground.verify[k][i], 0));
+  return { compared: sum("compared"), mismatches: sum("mismatches"), far: list.reduce((s, r) => s + r.ground.verify.far, 0), first: list.map((r) => r.ground.verify.first).find((t) => t !== "") ?? "" };
 }
 
 const f1 = (v) => v.toFixed(1);
@@ -200,6 +240,30 @@ export function table(name, first, arms) {
   const wreck = arms.map((a) => a.work.wreckCarSlices + a.work.asleepCarSlices);
   lines.push(row("frozen / (wreck+asleep) slices", arms.map((a, i) => (wreck[i] > 0 ? f2(a.work.frozenCarSlices / wreck[i]) : "-")), false));
   lines.push(row("frozen-state breaches", arms.map((a) => String(a.breaches)), false));
+  if (arms.every((a) => a.ground)) {
+    lines.push(`   ground queries (calls per car-slice for every query; us per car-slice and share of the phases' total for the timed sections: inclusive, a query inside another counts for the outer one only, net of the clock's own ${arms.map((a) => f1(a.ground.clockNs)).join("/")} ns per timed call; the clock inflates every phase: read shares, never the phases' ms)`);
+    for (const n of Object.keys(arms[0].ground.sections)) {
+      if (!arms.some((a) => a.ground.sections[n].callsPerS > 0)) continue;
+      lines.push(row(`  ${n}: calls per car-slice`, arms.map((a) => f1(a.units > 0 ? a.ground.sections[n].callsPerS / a.units : 0)), false));
+      if (!arms.some((a) => a.ground.sections[n].outerPerS > 0)) continue;
+      const net = (a) => (a.units > 0 ? ((a.ground.sections[n].msPerS - (a.ground.sections[n].outerPerS * a.ground.clockNs) / 1e6) * 1000) / a.units : 0);
+      lines.push(row(`    us per car-slice`, arms.map((a) => f2(net(a)))));
+      lines.push(row(`    share of the phases' total`, arms.map((a) => `${f1((100 * net(a) * a.units) / 1000 / a.total)}%`), false));
+    }
+  }
+  for (const a of arms) {
+    if (!a.verify) continue;
+    const [all, held, near, wheel] = a.verify.compared;
+    const bad = a.verify.mismatches.reduce((s, v) => s + v, 0);
+    lines.push(`   baked-vs-live check, ${a.name}: answers compared bit for bit: point ${all} + held ${held} + near ${near}, wheel contacts ${wheel}, of the point ones ${a.verify.far} far answers (C_H, C_OWNER, C_ARG and the travel proof only); MISMATCHES ${bad}${bad > 0 ? `: ${a.verify.first}` : ""}`);
+  }
+  for (const a of arms) {
+    if (!a.prof) continue;
+    lines.push(`   window CPU profile, ${a.name} (ms per sim-s, the sampler on: inclusive / self; the phases' total ${f1(a.total)}):`);
+    for (const r of a.prof.slice(0, PROF_LINES)) lines.push(`     ${f2(r.incl).padStart(8)} / ${f2(r.self).padStart(7)}  ${r.fn}`);
+    lines.push(`   window CPU profile by self time, ${a.name} (self ms per sim-s; the function's heaviest lines: line ms):`);
+    for (const r of a.prof.toSorted((x, y) => y.self - x.self).slice(0, PROF_SELF)) lines.push(`     ${f2(r.self).padStart(7)}  ${r.fn}   ${[...r.lines].sort((x, y) => y[1] - x[1]).slice(0, 5).map(([l, m]) => `${l}:${f2(m)}`).join(" ")}`);
+  }
   lines.push(row("digest (first run)", arms.map((a) => a.digest.slice(0, 8)), false));
   lines.push(row("digest same in every run", arms.map((a) => (a.digestsEqual ? "yes" : "NO")), false));
   if (arms.length >= 2 && arms[0].poses.length === arms[1].poses.length) {
@@ -243,6 +307,9 @@ function parseArgs(argv) {
     else if (a === "--force") args.force = true;
     else if (a === "--thaw-sites") args.thawSites = true;
     else if (a === "--census") args.census = true;
+    else if (a === "--ground") args.ground = true;
+    else if (a === "--verify") args.verify = true;
+    else if (a === "--prof") args.prof = true;
     else if (a === "--trace") args.trace = argv[++i];
     else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else args.scenarios.push(a);
@@ -266,7 +333,7 @@ export async function main(argv, log = console.log) {
     for (const [name, s] of Object.entries(SCENARIOS)) log(`${name}\n   ${s.about}\n   sizes: ${s.sizes}\n   lone ${s.lone ? "on" : "off"}, warm ${s.warmS} s, window ${s.windowS} s`);
     return 0;
   }
-  if (command !== "run") throw new Error("usage: bench.mjs list | run <scenario>... [--arm name:knob=v,...]... [--order abba|baab|both] [--warm s] [--window s] [--max-load 2] [--force] [--thaw-sites] [--trace dt] [--census] [--out dir]");
+  if (command !== "run") throw new Error("usage: bench.mjs list | run <scenario>... [--arm name:knob=v,...]... [--order abba|baab|both] [--warm s] [--window s] [--max-load 2] [--force] [--thaw-sites] [--trace dt] [--census] [--ground] [--prof] [--verify] [--out dir]");
   const args = parseArgs(rest);
   if (!args.scenarios.length) throw new Error(`run which scenario? ${Object.keys(SCENARIOS).join(", ")}`);
   const sequence = armSequence(args.arms, args.order);
@@ -288,6 +355,9 @@ export async function main(argv, log = console.log) {
       if (args.thawSites) env.BENCH_THAW_SITES = "1";
       if (args.trace) env.BENCH_TRACE = args.trace;
       if (args.census) env.BENCH_CENSUS = "1";
+      if (args.ground) env.BENCH_GROUND = "1";
+      if (args.verify) env.BENCH_VERIFY = "1";
+      if (args.prof) env.BENCH_PROF = "1";
       const run = { ...child(env), arm: arm.name, flagged, n: n + 1 };
       writeFileSync(path.join(out, `${name}-${n + 1}-${arm.name}.json`), JSON.stringify(run));
       runs.push(run);

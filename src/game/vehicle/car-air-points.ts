@@ -3,6 +3,7 @@ import type { DeformableCar } from "./car.ts";
 import type { LooseShape } from "./car-core.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, patchOf, pointContact, pointContactHeld, pointContactNear, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, topsTop, topsTopNear, wheelContact } from "../world/surfaces.ts";
+import { G, GQ } from "../world/ground-clock.ts";
 import { TYRE_R } from "../deform/deform-state.ts";
 import { CRASH, hypot2 } from "../deform/physics-util.ts";
 import { WHEEL_POS } from "./car-mesh.ts";
@@ -13,15 +14,16 @@ import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift } from "./car-cage-rig.ts";
 import { COM_Y, BELLY, POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, body, carrier, pointVel } from "./car-air-body.ts";
 
-/** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. */
-export function readBelly(i: number, slot: number): void {
+/** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
+export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
   PQ[PQ_X] = BX[i]!;
   PQ[PQ_Z] = BZ[i]!;
   PQ[PQ_Y] = BY[i]!;
-  pointContact(PQ, slot, HIT);
+  const far = pointContact(PQ, slot, HIT, travel2, SPECULATIVE_GAP);
   BRISE[i] = HIT[C_H]! - BY[i]!;
   BPATCH[i] = patchOf(HIT);
   UNREAD[i] = 0;
+  return far;
 }
 
 /** Contact `n`, a body point at `R[n]` from the centre `_s[S_PEN]` m under the surface in `hit` (`pointContact`): `hull` a cage vertex, else a belly point. Both are the drawn body, so both press the face their contact normal falls on (a belly point of the nose meets the ground nose-first as much as a vertex of it does). */
@@ -105,17 +107,24 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
       clear = solids < low || solidTop(px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low;
       if (clear && tops) clear = i < bellyFrom && (own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low;
     }
+    // A point the slice cannot bring to the surface needs no normal: with `nearing` set already none at all, else the square of the distance it moves (`pointContact`'s far answer).
+    const travel2 = body.nearing ? -1 : (_vp.x * _vp.x + _vp.y * _vp.y + _vp.z * _vp.z) * dt * dt;
+    let far: boolean;
     if (i >= bellyFrom) {
       BX[i] = px;
       BY[i] = py;
       BZ[i] = pz;
       if (clear) {
         UNREAD[i] = 1;
+        if (GQ.on) GQ.calls[G.ptClear] = GQ.calls[G.ptClear]! + 1;
         continue;
       }
-      readBelly(i, skip);
+      far = readBelly(i, skip, travel2);
     } else {
-      if (clear) continue;
+      if (clear) {
+        if (GQ.on) GQ.calls[G.ptClear] = GQ.calls[G.ptClear]! + 1;
+        continue;
+      }
       if (part) {
         PART_PQ[PQ_X] = px;
         PART_PQ[PQ_Z] = pz;
@@ -123,19 +132,23 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
         PART_PQ[PQ_VX] = _vp.x;
         PART_PQ[PQ_VY] = _vp.y;
         PART_PQ[PQ_VZ] = _vp.z;
-        pointContactHeld(PART_PQ, skip, HIT);
+        far = pointContactHeld(PART_PQ, skip, HIT, travel2, SPECULATIVE_GAP);
       } else {
         PQ[PQ_X] = px;
         PQ[PQ_Z] = pz;
         PQ[PQ_Y] = py;
-        if (own) pointContactNear(PQ, skip, HIT);
-        else pointContact(PQ, skip, HIT);
+        far = own ? pointContactNear(PQ, skip, HIT, travel2, SPECULATIVE_GAP) : pointContact(PQ, skip, HIT, travel2, SPECULATIVE_GAP);
       }
+    }
+    if (far) {
+      if (GQ.on) GQ.calls[G.ptFarSkipped] = GQ.calls[G.ptFarSkipped]! + 1;
+      continue;
     }
     const gy = HIT[C_H]!;
     if (gy === NO_FLOOR && !(part && HIT[C_DEPTH]! > 0)) continue;
     const pen = gy === NO_FLOOR ? HIT[C_DEPTH]! : gy - py;
     if (pen <= 0 && -pen > SPECULATIVE_GAP) {
+      if (GQ.on) GQ.calls[G.ptFar] = GQ.calls[G.ptFar]! + 1;
       // A point that reaches the surface within this slice's travel at its closing speed: the next slice is cut finer.
       if (!body.nearing) {
         _vp.crossVectors(w, r).add(v);
@@ -155,6 +168,7 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
       if (i < bellyFrom && HIT[C_NY]! < HOLDING_NY && -(_vp.x * HIT[C_NX]! + _vp.y * HIT[C_NY]! + _vp.z * HIT[C_NZ]!) > WALL_CRUSH) continue;
       if (crossedPlanFromSide(HIT, pen, r)) continue;
     }
+    if (GQ.on) GQ.calls[G.ptRow] = GQ.calls[G.ptRow]! + 1;
     _s[S_PEN] = pen;
     bodyContact(n, HIT, i < bellyFrom);
     if (pen <= 0) GAPV[n] = (-pen * HIT[C_NY]!) / dt;
