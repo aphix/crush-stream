@@ -100,6 +100,7 @@ export function summarize(runs) {
       ground: groundOf(list),
       verify: verifyOf(list),
       prof: profOf(list),
+      freezeRecord: list[0].freezeRecord ?? null,
       load: { start: Math.min(...list.map((r) => r.loadStart)), startMax: Math.max(...list.map((r) => r.loadStart)), end: Math.max(...list.map((r) => r.loadEnd)) },
       flagged: list.some((r) => r.flagged),
     });
@@ -287,6 +288,18 @@ export function table(name, first, arms) {
     lines.push(row("us per drawn frame (updateSkin of every car)", arms.map((a) => (a.drawn ? f2((1000 * a.drawn.ms) / Math.max(1, a.drawn.frames)) : ""))));
   }
   for (const a of arms) {
+    const r = a.freezeRecord;
+    if (!r) continue;
+    const share = (v) => `${f1((100 * v) / Math.max(1, r.slices))}%`;
+    lines.push(`   freeze recorder, ${a.name} (first run): ${r.slices} car-slices; ${Object.entries(r.byState).map(([k, v]) => `${k} ${share(v.slices)} at ${f2(v.usPerSlice)} us (incl. the timer)`).join("; ")}`);
+    lines.push(`   thaws by cause (count; mean integrate rows at the thaw), ${a.name}: ${Object.entries(r.thawsByCause).map(([k, v]) => `${k} ${v} (${f1(r.contactsAtThaw[k])} rows)`).join("; ")}`);
+    lines.push(`   how long a car stayed frozen before each thaw, slices of 1/240 s [${r.binLabels.join(" | ")}], ${a.name}:`);
+    for (const [k, h] of Object.entries(r.frozenHoldBySecondsBins)) lines.push(`      ${k.padEnd(16)} ${r.binLabels.map((l) => String(h[l]).padStart(5)).join(" ")}`);
+    lines.push(`   how long a thawed car ran whole before it froze again, ${a.name}: ${r.binLabels.map((l) => `${l}: ${r.refreezeGapBins[l]}`).join("  ")}`);
+    lines.push(`   cars with the most thaws, ${a.name}: ${[...r.cars].sort((x, y) => y.thaws - x.thaws).slice(0, 6).map((c) => `slot ${c.slot}: ${c.thaws} thaws, ${c.freezes} freezes, ${f1(100 * c.frozenShare)}% frozen`).join("; ")}`);
+    for (const t of r.timelines.slice(0, 2)) lines.push(`   slot ${t.slot} timeline (. whole, F frozen cached, R frozen re-cache slice, - not a wreck; state x slices): ${t.runs.slice(0, 60).map(([s, n]) => `${s === "wreck whole" ? "." : s === "wreck frozen (cached)" ? "F" : s === "wreck frozen (re-cache slice)" ? "R" : "-"}${n}`).join(" ")}`);
+  }
+  for (const a of arms) {
     const c = a.census;
     if (!c) continue;
     const pct = (v) => (c.carStepsPerS > 0 ? `${f1((100 * v) / c.carStepsPerS)}%` : "-");
@@ -317,6 +330,7 @@ function parseArgs(argv) {
     else if (a === "--ground") args.ground = true;
     else if (a === "--verify") args.verify = true;
     else if (a === "--prof") args.prof = true;
+    else if (a === "--record") args.record = true;
     else if (a === "--trace") args.trace = argv[++i];
     else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else args.scenarios.push(a);
@@ -365,6 +379,7 @@ export async function main(argv, log = console.log) {
       if (args.ground) env.BENCH_GROUND = "1";
       if (args.verify) env.BENCH_VERIFY = "1";
       if (args.prof) env.BENCH_PROF = "1";
+      if (args.record) env.BENCH_RECORD = "1";
       const run = { ...child(env), arm: arm.name, flagged, n: n + 1 };
       writeFileSync(path.join(out, `${name}-${n + 1}-${arm.name}.json`), JSON.stringify(run));
       runs.push(run);

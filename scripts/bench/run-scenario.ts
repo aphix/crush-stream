@@ -22,6 +22,7 @@ import { startProfile, stopProfile } from "./prof.ts";
 import { SCENARIO_INFO } from "./scenario-info.ts";
 import { SCENARIOS } from "./scenarios.ts";
 import { LoneCensus } from "./census.ts";
+import { FreezeRecorder } from "./freeze-record.ts";
 
 const name = process.env["BENCH_SCENARIO"] ?? "";
 const scenario = SCENARIOS[name];
@@ -237,6 +238,9 @@ GQ.outer.fill(0);
 GQ.depth = 0;
 GQ.calls.fill(0);
 GQ.on = groundOn || verify;
+/** `BENCH_RECORD=1` (bench `--record`): the freeze/thaw recorder (`freeze-record.ts`), armed as the window starts. */
+const recorder = process.env["BENCH_RECORD"] === "1" ? new FreezeRecorder(sim) : null;
+recorder?.start();
 const phases = sim.world.phases;
 phases.on = true;
 const ms0 = phases.ms.slice();
@@ -323,6 +327,7 @@ console.log(
     breachOff: worstOff,
     trace: traceDt > 0 ? { dt: traceDt, cars: sim.cars.length, masses: sim.cars.map((c) => c.deform.masses.length), rows: trace } : null,
     census: census ? census.result(simS) : null,
+    freezeRecord: recorder ? recorder.result() : null,
     thawSites: Object.fromEntries([...sites].sort((a, b) => b[1] - a[1])),
     clampSites: Object.fromEntries([...clampSites].sort((a, b) => b[1] - a[1])),
     offSites: Object.fromEntries([...offSites].sort((a, b) => b[1] - a[1]).slice(0, 12)),
