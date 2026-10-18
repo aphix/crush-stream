@@ -284,8 +284,12 @@ export abstract class CarParts extends CarGlass {
     for (let pi = 0; pi < parts.length; pi++) if (!parts[pi]!.detached) this.posePart(parts[pi]!);
   }
 
+  /** Counts every write of an attached part's pose (`posePart`, the reset): a car whose count has not moved has nothing new for `PoseBlend` to take. */
+  partWrites = 0;
+
   /** Rest pose plus the hinge value `hingeT` (crash) and, on doors and mirrors, the free swing. */
   protected posePart(p: DetachPart): void {
+    this.partWrites++;
     const t = p.hingeT;
     p.folding = t > foldAt(p);
     p.object.position.copy(p.restPos);

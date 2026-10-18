@@ -204,6 +204,9 @@ class CarBlend {
   /** The local pose of every attached part (`DeformableCar.partObjects`); a torn one is a free body instead. */
   private readonly parts: PartTrack[];
   private readonly car: DeformableCar;
+  /** `DeformableCar.partWrites` as `tracks` last looked, and the latest step count a part's segment ends at (`PartTrack.to`). */
+  private stamp = -1;
+  private liveTo = 0;
   /** The car was placed (`stays(0)`) and was drawn (visible), as `present` last found it. */
   private placed = false;
   private shown = false;
@@ -235,13 +238,20 @@ class CarBlend {
       if (placed) track.from = track.to;
       else if (shown) track.show(now);
     }
+    // A car that wrote no part since the last frame, and whose last segment is over, has nothing to take or draw.
+    const stamp = this.car.partWrites;
+    if (stamp === this.stamp && now >= this.liveTo) return;
+    this.stamp = stamp;
+    let liveTo = 0;
     for (let i = 0; i < this.parts.length; i++) {
       if (!this.car.partOn(i)) continue;
       const track = this.parts[i]!;
       track.take(steps);
       if (placed) track.from = track.to;
       else if (shown) track.show(now);
+      if (track.to > liveTo) liveTo = track.to;
     }
+    this.liveTo = liveTo;
   }
 
   begin(car: DeformableCar): void {

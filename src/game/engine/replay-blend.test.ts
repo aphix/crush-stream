@@ -1,9 +1,10 @@
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { recordFlat, type Spawn } from "./replay-fidelity.test-util.ts";
 import { ClipSim } from "./engine-replay.ts";
-import type { DeformableCar } from "../vehicle/car.ts";
+import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
+import { DeformableCar } from "../vehicle/car.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 
 /**
@@ -68,24 +69,37 @@ function moved(a: Pose, b: Pose): boolean {
 }
 
 /** Per class: the frames on which an entity moves, and the ones among them on which its drawn pose changed since the frame before. */
-function shares(dt: number): Record<Class, { moving: number; changed: number }> {
+/** `skip`: `EPICENTER.presentSkip`, which poses the parts only when what the pose reads changed (so not on the frames between two steps); `calls` counts the poses written. */
+function shares(dt: number, skip: 0 | 1): { rows: Record<Class, { moving: number; changed: number }>; calls: number } {
   const rec = recordFlat(PILE, 8, false);
   const cars = rec.clip.cars.map((c) => rec.cars[c.slot]!);
   const blend = rec.scene.blend;
   const sim = new ClipSim(rec.clip, cars, rec.scene);
   sim.restart();
+  EPICENTER.presentSkip = skip;
+  const proto = DeformableCar.prototype as unknown as { posePart: (p: unknown) => void };
+  const real = proto.posePart;
+  let calls = 0;
+  proto.posePart = function (this: DeformableCar, p: unknown) {
+    calls++;
+    real.call(this, p);
+  };
   const ents = entities(cars);
   const series: Pose[][] = ents.map(() => []);
   let t = 0;
-  while (t < sim.length - dt) {
-    t += dt;
-    sim.advanceTo(t);
-    sim.present(t);
-    // The reel's order (`Engine.frame`): the cars skin and pose their parts after the blend, which then draws those writes.
-    for (const c of cars) c.updateSkin();
-    blend.refresh();
-    for (let i = 0; i < ents.length; i++) series[i]!.push(sample(ents[i]!));
-    blend.restore();
+  try {
+    while (t < sim.length - dt) {
+      t += dt;
+      sim.advanceTo(t);
+      sim.present(t);
+      // The reel's order (`Engine.frame`): the cars skin and pose their parts after the blend, which then draws those writes.
+      for (const c of cars) c.updateSkin();
+      blend.refresh();
+      for (let i = 0; i < ents.length; i++) series[i]!.push(sample(ents[i]!));
+      blend.restore();
+    }
+  } finally {
+    proto.posePart = real;
   }
   const none = (): { moving: number; changed: number } => ({ moving: 0, changed: 0 });
   const out: Record<Class, { moving: number; changed: number }> = { group: none(), classLift: none(), wheel: none(), part: none(), hinged: none() };
@@ -104,18 +118,26 @@ function shares(dt: number): Record<Class, { moving: number; changed: number }> 
       if (moved(s[f]!, s[f - 1]!)) out[ents[i]!.cls].changed++;
     }
   }
-  return out;
+  return { rows: out, calls };
 }
+
+const saved = epicenterValues();
+afterEach(() => loadEpicenter(saved));
 
 describe("given a crash replayed in slow motion from its clip", () => {
   for (const frame of FRAME_S) {
-    it(`when frames of ${(frame * 1000).toFixed(2)} ms of the clip (a 1/60 s frame at ${(frame * 60).toFixed(1)}x) are drawn, then every class of drawn part changes pose on at least ${BAR * 100} % of the frames it moves on`, () => {
-      const s = shares(frame);
-      const rows = (Object.keys(s) as Class[]).map((c) => `${c} ${s[c].changed}/${s[c].moving}`).join(", ");
-      assert.ok(s.part.moving > 100, `the clip sheds parts that move (${rows})`);
-      assert.ok(s.hinged.moving > 20, `the clip moves parts that are still on the car (${rows})`);
-      assert.ok(s.wheel.moving > 100 && s.classLift.moving > 100 && s.group.moving > 100, rows);
-      for (const c of Object.keys(s) as Class[]) assert.ok(s[c].changed >= BAR * s[c].moving, `${c}: ${(s[c].changed / s[c].moving).toFixed(3)} of its moving frames change (${rows})`);
+    it(`when frames of ${(frame * 1000).toFixed(2)} ms of the clip (a 1/60 s frame at ${(frame * 60).toFixed(1)}x) are drawn, with presentSkip off and on, then every class of drawn part changes pose on at least ${BAR * 100} % of the frames it moves on`, () => {
+      const every = shares(frame, 0);
+      const skipping = shares(frame, 1);
+      // The skipping run must be one that skips (parts posed only when their inputs changed), or it proves nothing about presentSkip. The cars move all through this clip, so it skips little (a still wreck skips almost every pose: pose-skip.test.ts).
+      assert.ok(skipping.calls < every.calls, `${skipping.calls} part poses with presentSkip against ${every.calls} without`);
+      for (const [name, { rows: s }] of [["presentSkip 0", every], ["presentSkip 1", skipping]] as const) {
+        const rows = (Object.keys(s) as Class[]).map((c) => `${c} ${s[c].changed}/${s[c].moving}`).join(", ");
+        assert.ok(s.part.moving > 100, `${name}: the clip sheds parts that move (${rows})`);
+        assert.ok(s.hinged.moving > 20, `${name}: the clip moves parts that are still on the car (${rows})`);
+        assert.ok(s.wheel.moving > 100 && s.classLift.moving > 100 && s.group.moving > 100, `${name}: ${rows}`);
+        for (const c of Object.keys(s) as Class[]) assert.ok(s[c].changed >= BAR * s[c].moving, `${name}, ${c}: ${(s[c].changed / s[c].moving).toFixed(3)} of its moving frames change (${rows})`);
+      }
     });
   }
 
