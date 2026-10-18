@@ -223,9 +223,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 7.5 cm) where it turned about one foot along the car with the far end rising up to 0.35 m, so its cage pose, and the contact shape over a struck police car's roof, differ: a clip of 115 or before no longer reads.
  * 117: a wreck's solver state in a keyframe carries the epicenter freeze (nine more doubles: `frozen`, `frozenReady`, `sinceThaw`, the cached centre and inertia), so a clip whose first keyframe finds a wreck frozen replays it frozen,
  * bit for bit, instead of whole (15 m of pose error after a second crash beside it): the solver state is nine numbers longer, and a clip of 116 or before no longer reads.
+ * 118: the epicenter freeze keeps a wheel hub that stands more than 0.3 m off its pinned frame place at the freeze slice (`HUB_PIN_MAX`; it was re-derived from its world place, up to 1.5 m off on a spinning driven wreck, and its wheel was drawn there):
+ * a clip recorded with the epicenter on replays its frozen wrecks' hubs differently; with it off nothing changes. A clip of 117 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 117;
+const REPLAY_VERSION = 118;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
