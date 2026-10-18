@@ -217,9 +217,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * no solve, no frame re-measure), which moves it within a few millimetres of where the whole solve leaves it: a clip of 111 or before no longer reads (layout).
  * 113: the epicenter activation's knob list gains `thawHold` (seconds a thawed wreck waits before it may freeze again; 0 is the behaviour of 112), an eighth value after `frozenCheck` in a clip that ran with the activation on: a clip of 112 no longer reads.
  * 114: a clip's epicenter byte is the NUMBER of knob values that follow (0: `whole`), not a flag: a knob added later takes the end of the list with its off value as the default, so a clip recorded before it reads that knob as off and replays as it recorded, and adding one needs no new version; a clip of 113 no longer reads (the byte was 1 for any knob count). `feedMin` (metres of crush a frozen car's resting contact may feed in a slice before it thaws; 0 is off, as 113) is the ninth value.
+ * 115: a quarter panel a hit has folded takes contacts as soon as the step folds it (`hitPanel` gates on `folding`, the sim's, not on `open`, the drawn shell's): a car no frame ever drew (a replay re-simulated headless, a hidden tab) now meets a striker's panel
+ * contact as a drawn one did; a replay of a clip of 114 or before of a car with a folded panel that was struck while undrawn plays out differently.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 114;
+const REPLAY_VERSION = 115;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
