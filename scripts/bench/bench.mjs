@@ -81,6 +81,7 @@ export function summarize(runs) {
       perUnit,
       perUnitTotal: units > 0 ? (total * 1000) / units : 0,
       digest: list[0].digest,
+      digestLive: list[0].digestLive ?? "",
       cars: list[0].cars,
       digestsEqual: list.every((r) => r.digest === list[0].digest),
       poses: list[0].poses,
@@ -271,6 +272,7 @@ export function table(name, first, arms) {
   }
   lines.push(row("digest (first run)", arms.map((a) => a.digest.slice(0, 8)), false));
   lines.push(row("digest same in every run", arms.map((a) => (a.digestsEqual ? "yes" : "NO")), false));
+  lines.push(row("digest of the cars not put away", arms.map((a) => a.digestLive.slice(0, 8)), false));
   if (arms.length >= 2 && arms[0].poses.length === arms[1].poses.length) {
     let delta = 0;
     for (let i = 0; i < arms[0].poses.length; i++) delta = Math.max(delta, Math.abs(arms[0].poses[i] - arms[1].poses[i]));

@@ -9,6 +9,7 @@ import { armCrushRows, takeCrossingsSkipped } from "../vehicle/car-air.ts";
 import { contactHz } from "../vehicle/car-air-points.ts";
 import { CarSurfaces, REACH } from "../vehicle/car-surfaces.ts";
 import { armTops } from "../world/surfaces.ts";
+import { EPICENTER } from "../deform/epicenter.ts";
 import { STOCK_PAINT } from "../vehicle/constants.ts";
 import { FINE_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
 import { FINE_SLICE } from "./sim-pace.ts";
@@ -131,6 +132,11 @@ const WAKE_REACH = 2 * Math.SQRT2 * REACH;
 export const LONE_MARGIN = 1;
 /** Per car, a module scratch: its plan speed (m/s) at the step's start, and whether it runs the step as a lone car (1). */
 const lonely = { speed: new Float64Array(LONE_CARS), flag: new Uint8Array(LONE_CARS) };
+
+/** A car the race put away takes no step (`EPICENTER.storedSkip` 1): the knob and the car's flag. */
+function idle(car: DeformableCar): boolean {
+  return car.stored && EPICENTER.storedSkip === 1;
+}
 
 /** Fills `near.pairs` with the pairs of `cars` within `NEAR_PAIR2` of each other in plan; the count of ints written. */
 function collectNear(cars: readonly DeformableCar[]): number {
@@ -288,6 +294,8 @@ export function stepWorld(w: World, dt: number): void {
     for (let ci = 0; ci < n; ci++) {
       if (i > 0 && lonely.flag[ci]) continue;
       const car = cars[ci]!;
+      // A put-away car (`EPICENTER.storedSkip`) is not stepped: reset, hidden and still 4 km off the course until the race places it again.
+      if (idle(car)) continue;
       const hc = lonely.flag[ci] ? dt : h;
       car.deform.beginSlice(hc);
       car.surfaces = w.surfaces;
@@ -339,6 +347,7 @@ export function stepWorld(w: World, dt: number): void {
     for (let ci = 0; ci < n; ci++) {
       if (i > 0 && lonely.flag[ci]) continue;
       const car = cars[ci]!;
+      if (idle(car)) continue;
       if (car.deform.massActive) {
         if (!car.deform.frozen) car.syncPose(0);
       } else car.refreshBasis();
@@ -377,6 +386,7 @@ export function stepWorld(w: World, dt: number): void {
     for (let ci = 0; ci < n; ci++) {
       if (i > 0 && lonely.flag[ci]) continue;
       const car = cars[ci]!;
+      if (idle(car)) continue;
       const hc = lonely.flag[ci] ? dt : h;
       const d = car.deform;
       if (d.massActive) {
@@ -406,10 +416,10 @@ export function stepWorld(w: World, dt: number): void {
     lap(ph, PHASE.structure);
     if (w.collide) for (let ci = 0; ci < n; ci++) if (i === 0 || !lonely.flag[ci]) w.collide(cars[ci]!, ci, lonely.flag[ci] ? dt : h);
     lap(ph, PHASE.course);
-    for (let ci = 0; ci < n; ci++) if (i === 0 || !lonely.flag[ci]) cars[ci]!.deform.endSlice();
+    for (let ci = 0; ci < n; ci++) if ((i === 0 || !lonely.flag[ci]) && !idle(cars[ci]!)) cars[ci]!.deform.endSlice();
     // A step's last slice is baked by its caller (`stepBreakage`); the slices before it take their own, so the next slice reads the body
     // as this one's crush left it, not as the step began (a hit cut in two slices crushed what its first slice did not see). A lone car's one slice is its last.
-    if (i < slices - 1) for (let ci = 0; ci < n; ci++) if (!lonely.flag[ci]) cars[ci]!.bakeBetweenSlices(h);
+    if (i < slices - 1) for (let ci = 0; ci < n; ci++) if (!lonely.flag[ci] && !idle(cars[ci]!)) cars[ci]!.bakeBetweenSlices(h);
     lap(ph, PHASE.bake);
   }
   w.ejection?.step(cars, dt);

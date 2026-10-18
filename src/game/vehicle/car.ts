@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { detAtan2 } from "../kernel/physics-core.js";
 import type { DeformNetState } from "../deform/streamed-deform.ts";
+import { EPICENTER } from "../deform/epicenter.ts";
 import { applyGroundFriction, CRASH, FRICTION_G, hypot2 } from "../deform/physics-util.ts";
 import { CAR_HALF, WHEEL_POS } from "./car-mesh.ts";
 import { DOOR } from "./car-door-mesh.ts";
@@ -47,6 +48,8 @@ export class DeformableCar extends CarParts {
   airborne = false;
   /** A parked car's tyres grip the ground both ways (their wheels do not turn): set where a scene stands a car, cleared by any drive input. */
   parked = false;
+  /** The race put this car away (`EngineRaceField.putAway`): reset, hidden and still at its spot off the course until the race places it again (`stepWorld` leaves it unstepped with `EPICENTER.storedSkip`). */
+  stored = false;
   /** Seconds the fuel stays cut after a side hit (`stallOnSideHit`): `applyDrive` counts it down and zeroes the gas and boost meanwhile. */
   stalledS = 0;
   /** Moved by the rigid contact solve (`stepFree`), not by its crush masses: derived, never stored. `velocity` is then its centre of mass's. */
@@ -162,13 +165,27 @@ export class DeformableCar extends CarParts {
     this.stalledS = 0;
     this.crashed = false;
     this.resetContact();
-    this.suspension.reset();
+    const fresh = EPICENTER.storedSkip > 0;
+    this.suspension.reset(fresh);
     this.angular.set(0, 0, 0);
     this.refreshBasis();
     this.velocity.copy(dir).multiplyScalar(speed);
     this.deform.bindKinematic(this.group, this.velocity, this.angular);
     this.resetLamps();
     this.settleCasters();
+    // `EPICENTER.storedSkip`: a placed car starts with the drive's integrators and its motion sample at rest, as one that was never stepped between its put-away and its waking is: the state they otherwise carry from the steps it stood through (a wheelspin of 1.7 m/s from standing off the ground) is not what a car put on the road is meant to start with.
+    if (fresh) {
+      const d = this.drive;
+      d.spin = 0;
+      d.spinSpeed = 0;
+      d.lock = 0;
+      d.slide = 0;
+      d.drift = 0;
+      d.hold = 0;
+      d.ebrakeK = 0;
+      d.boostK = 0;
+      this.restoreWear();
+    }
   }
 
   resetVisual(keepTorn = false): void {

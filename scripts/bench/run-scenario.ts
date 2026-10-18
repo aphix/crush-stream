@@ -289,6 +289,8 @@ const ground = {
 };
 
 const hash = createHash("sha1");
+/** The same digest over the cars the race has not put away (`DeformableCar.stored`): what `epi.storedSkip` must leave bit for bit. */
+const live = createHash("sha1");
 const poses: number[] = [];
 for (const car of sim.cars) {
   const p = car.group.position;
@@ -297,7 +299,12 @@ for (const car of sim.cars) {
   poses.push(...row);
   const nums = new Float64Array(row);
   hash.update(new Uint8Array(nums.buffer));
-  for (const m of car.deform.masses) hash.update(new Uint8Array(new Float64Array([m.world.x, m.world.y, m.world.z, m.vel.x, m.vel.y, m.vel.z, m.local.x, m.local.y, m.local.z]).buffer));
+  if (!car.stored) live.update(new Uint8Array(nums.buffer));
+  for (const m of car.deform.masses) {
+    const bytes = new Uint8Array(new Float64Array([m.world.x, m.world.y, m.world.z, m.vel.x, m.vel.y, m.vel.z, m.local.x, m.local.y, m.local.z]).buffer);
+    hash.update(bytes);
+    if (!car.stored) live.update(bytes);
+  }
 }
 let breaches = 0;
 const breachKinds = { clock: 0, moved: 0, off: 0 };
@@ -326,6 +333,7 @@ console.log(
     msPerS,
     workPerS,
     digest: hash.digest("hex"),
+    digestLive: live.digest("hex"),
     poses,
     frozenBreaches: breaches,
     breachKinds,

@@ -594,7 +594,10 @@ export class RaceDirector extends RaceHudLayer {
       return;
     }
     if (!s || !brain || !ground) {
-      for (let i = 0; i < cars.length; i++) applyDrive(cars[i]!, this.hold, dt);
+      for (let i = 0; i < cars.length; i++) {
+        cars[i]!.stored = false;
+        applyDrive(cars[i]!, this.hold, dt);
+      }
       return;
     }
     this.recorder.startStep(cars);
@@ -609,6 +612,7 @@ export class RaceDirector extends RaceHudLayer {
     const police = s.phase === "finished" ? null : this.police;
     for (let i = 0; i < cars.length; i++) {
       const car = cars[i]!;
+      car.stored = this.dormant[i] === 1;
       if (i >= racers) {
         // A thrown-out driver is nobody's input: the car coasts (`coast`), police and traffic units too.
         const input =

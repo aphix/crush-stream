@@ -184,8 +184,8 @@ export class Suspension {
   /** The class `lift` the body was last posed at (`NaN` before the first pose): the lift fades as the body rolls onto its side, however still its springs are. */
   private posedLift = NaN;
 
-  /** At rest on a new spawn: the body back on its stock ride. */
-  reset(): void {
+  /** At rest on a new spawn: the body back on its stock ride. `forgetRise`: the drawn body's lift off a low corner (`rise`) goes too, not carried into the next ride (`EPICENTER.storedSkip`: a car put away and woken starts as fresh as one never stepped in between). */
+  reset(forgetRise = false): void {
     const o = this.offset;
     if (this.body) {
       this.body.position.y -= (o[0]! + o[1]! + o[2]! + o[3]!) / 4 + this.rise;
@@ -198,6 +198,7 @@ export class Suspension {
     this.posedLift = NaN;
     this.riding = false;
     this.body = undefined;
+    if (forgetRise) this.rise = 0;
   }
 
   /**
