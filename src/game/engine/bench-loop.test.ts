@@ -23,6 +23,13 @@ describe("given one cycle of the benchmark loop", () => {
     assert.equal(cycleOf(false).map((s) => s.id).join(" "), "strip strip:epi city city:epi dam-spine dam-spine:epi national-mall national-mall:epi");
   });
 
+  it("when the second cycle is listed, then each pair runs on then off, the same eight steps, and stepOf follows the cycle", () => {
+    assert.equal(cycleOf(false, 2).map((s) => s.id).join(" "), "strip:epi strip city:epi city dam-spine:epi dam-spine national-mall:epi national-mall");
+    assert.equal(cycleOf(false, 3).map((s) => s.id).join(" "), cycleOf(false, 1).map((s) => s.id).join(" "));
+    const run = { ...startRun("k3x9q2"), loop: 2, step: 0 };
+    assert.equal(stepOf(run).id, "strip:epi");
+  });
+
   it("when the two steps of a map are read as benches, then they differ in the activation alone", () => {
     const steps = cycleOf(false);
     for (let i = 0; i < steps.length; i += 2) {
@@ -80,7 +87,7 @@ describe("given a loop that has just finished a step", () => {
       seen.push(`${s.session} ${s.loop} ${s.step}`);
     }
     assert.equal(seen.length, 24);
-    assert.equal(seen.slice(0, 9).join(" | "), "k3x9q2 1 strip | k3x9q2 1 strip:epi | k3x9q2 1 city | k3x9q2 1 city:epi | k3x9q2 1 dam-spine | k3x9q2 1 dam-spine:epi | k3x9q2 1 national-mall | k3x9q2 1 national-mall:epi | k3x9q2 2 strip");
+    assert.equal(seen.slice(0, 9).join(" | "), "k3x9q2 1 strip | k3x9q2 1 strip:epi | k3x9q2 1 city | k3x9q2 1 city:epi | k3x9q2 1 dam-spine | k3x9q2 1 dam-spine:epi | k3x9q2 1 national-mall | k3x9q2 1 national-mall:epi | k3x9q2 2 strip:epi");
     assert.equal(new Set(seen.map((s) => s.split(" ")[0])).size, 1);
   });
 
@@ -111,7 +118,7 @@ describe("given a loop whose state is in the address of its bench page", () => {
         href = edited.toString();
       }
     }
-    assert.equal(ran.join(" | "), [...["strip", "city", "dam-spine", "national-mall"].flatMap((m) => [`1 ${m} plain`, `1 ${m}:epi plain`]), ...["strip", "city", "dam-spine", "national-mall"].flatMap((m) => [`2 ${m} ultra`, `2 ${m}:epi ultra`])].join(" | "));
+    assert.equal(ran.join(" | "), [...["strip", "city", "dam-spine", "national-mall"].flatMap((m) => [`1 ${m} plain`, `1 ${m}:epi plain`]), ...["strip", "city", "dam-spine", "national-mall"].flatMap((m) => [`2 ${m}:epi ultra`, `2 ${m} ultra`])].join(" | "));
   });
 
   it("when a loop starts from a custom strip address (len, cars, props), then every strip step of every cycle builds the same strip", () => {

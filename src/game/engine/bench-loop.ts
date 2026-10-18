@@ -63,10 +63,16 @@ export interface BenchRun {
   ultraNext: boolean;
 }
 
-/** The benches of one cycle: always the same eight steps (four maps, each off then on); with `ultra` set and Ultra in the build, each page also runs its Ultra arm (no second pass for it). */
-export function cycleOf(ultra: boolean): BenchStep[] {
+/**
+ * The benches of one cycle: always the same eight steps (four maps, each off and on); with `ultra` set and Ultra in the build, each page also runs its Ultra arm (no second pass for it).
+ * The pair's order alternates with the cycle (off then on in cycle 1, on then off in cycle 2, ...): the second page of a pair loads onto a warm device and a collected heap,
+ * so a fixed order would charge that to one arm.
+ */
+export function cycleOf(ultra: boolean, loop = 1): BenchStep[] {
   const arm = ultra && ULTRA_AVAILABLE;
-  return CYCLE.map((s) => (arm ? { id: s.id, query: `${s.query}&${ULTRA_QUERY}=1` } : s));
+  const steps = CYCLE.map((s) => (arm ? { id: s.id, query: `${s.query}&${ULTRA_QUERY}=1` } : s));
+  if (loop % 2 === 1) return steps;
+  return steps.map((_, i) => steps[i ^ 1]!);
 }
 
 /** The first step of a new loop (the Benchmark entry): it keeps benching and reloads onto new builds, with Ultra where the build has it. */
@@ -91,7 +97,7 @@ export function runFromPage(search: string, session: string): BenchRun | null {
     auto: option(LOOP_QUERY.auto, fresh.auto),
     ultraNext: option(LOOP_QUERY.ultraNext, fresh.ultraNext) && ULTRA_AVAILABLE,
   };
-  const steps = cycleOf(run.ultra);
+  const steps = cycleOf(run.ultra, run.loop);
   for (let i = 0; i < steps.length; i++) {
     const s = new URLSearchParams(steps[i]!.query);
     if (s.get(BENCH_QUERY) === q.get(BENCH_QUERY) && s.get(COURSE_QUERY) === q.get(COURSE_QUERY) && (s.get(EPI_QUERY) === "1") === (q.get(EPI_QUERY) === "1")) return { ...run, step: i };
@@ -101,13 +107,13 @@ export function runFromPage(search: string, session: string): BenchRun | null {
 
 /** The step a run is at. */
 export function stepOf(run: BenchRun): BenchStep {
-  const cycle = cycleOf(run.ultra);
+  const cycle = cycleOf(run.ultra, run.loop);
   return cycle[run.step % cycle.length]!;
 }
 
 /** The run after its current step is done: the next step, the next cycle (taking `ultraNext` as it is now) when `keep` is set, or null when the loop is over. */
 export function advance(run: BenchRun): BenchRun | null {
-  if (run.step + 1 < cycleOf(run.ultra).length) return { ...run, step: run.step + 1 };
+  if (run.step + 1 < cycleOf(run.ultra, run.loop).length) return { ...run, step: run.step + 1 };
   return run.keep ? { ...run, loop: run.loop + 1, step: 0, ultra: run.ultraNext } : null;
 }
 
@@ -164,7 +170,7 @@ export function loopSettings(run: BenchRun, step: BenchStep): { session: string;
 
 /** The loop's place on the bench card: its cycle count and the step in the cycle, e.g. `loop 2, step 1/3`. */
 export function loopProgress(run: BenchRun): string {
-  const stepCount = cycleOf(run.ultra).length;
+  const stepCount = cycleOf(run.ultra, run.loop).length;
   return `loop ${run.loop}, step ${(run.step % stepCount) + 1}/${stepCount}`;
 }
 

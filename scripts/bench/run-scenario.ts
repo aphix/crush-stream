@@ -65,6 +65,11 @@ if (process.env["BENCH_THAW_SITES"] === "1") {
       const bin = v < 1e-9 ? "under 1e-9" : v < 1e-6 ? "under 1e-6" : v < 1e-3 ? "under 1e-3" : v < 0.16 ? "under rest speed 0.16" : v < 1 ? "under 1 m/s" : "1 m/s and over";
       const key = `${bin}${this.deform.frozen ? ", frozen" : ", not frozen"}, ${this.driverOut ? "driver out" : "driver in"}, ${this.deform.drivetrainAlive ? "drivetrain alive" : "drivetrain dead"}`;
       speedBins.set(key, (speedBins.get(key) ?? 0) + 1);
+      if (v < 0.16) {
+        // The gates of `restOrSleep` for a wreck slow enough to sleep: contacts (>= 3), not crushing, and how long its timer has run (it sleeps at WRECK_REST_S).
+        const rest = `REST candidate: contacts ${this.contacts}, ${this.deform.crushing ? "crushing" : "not crushing"}, restS ${this.restS === 0 ? "0" : this.restS < 0.25 ? "under 0.25 s" : this.restS < 0.5 ? "under 0.5 s" : "0.5 s and over"}`;
+        speedBins.set(rest, (speedBins.get(rest) ?? 0) + 1);
+      }
     }
     integrate.call(this, dt);
   };
