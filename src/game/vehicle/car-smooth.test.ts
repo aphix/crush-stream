@@ -409,7 +409,10 @@ const SIM_DIGEST_BY_STYLE = [
   { id: "wagon", digest: "42909afed5b013778570c85034bc78f81e61c47cc96bcc2675210b57b6699d7a" },
   { id: "coupe", digest: "4ace2c0f6b1b519e5e837f1cabb74c900203f5433898cd8246f2a0f7b8d47058" },
   { id: "pickup", digest: "e539bc70cbf2dcf6f7a74f9ff57f0b5649c6f018d51946e534069a20f968f56c" },
-  { id: "police", digest: "12fb33c481b40c8b5e3386d942ac3c04476de00660bc454a307eefd09a092534" },
+  // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
+  // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
+  // pose that moves it; the five bar-less styles above are unchanged to the bit.
+  { id: "police", digest: "c144697c21cb4106c16fbff9917561fae0a757d478486b4d88282ea27b07aa1a" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style crashed into the wall at 48 km/h by the engine's own step", () => {
