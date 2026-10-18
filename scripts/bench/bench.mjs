@@ -94,7 +94,7 @@ export function summarize(runs) {
       wakeSites: list[0].wakeSites ?? {},
       speedBins: list[0].speedBins ?? {},
       bakeBins: list[0].bakeBins ?? {},
-      drawn: list[0].drawn ? { frames: mean(list.map((r) => r.drawn.frames)), ms: mean(list.map((r) => r.drawn.ms)), posePart: mean(list.map((r) => r.drawn.posePart)), followGlass: mean(list.map((r) => r.drawn.followGlass)) } : null,
+      drawn: list[0].drawn ? { frames: mean(list.map((r) => r.drawn.frames)), ms: mean(list.map((r) => r.drawn.ms)), slices: mean(list.map((r) => r.drawn.slices)), stepMs: mean(list.map((r) => r.drawn.stepMs)), posePart: mean(list.map((r) => r.drawn.posePart)), followGlass: mean(list.map((r) => r.drawn.followGlass)) } : null,
       trace: list[0].trace ?? null,
       census: list[0].census ?? null,
       ground: groundOf(list),
@@ -285,7 +285,8 @@ export function table(name, first, arms) {
     lines.push(row("drawn frames/s", arms.map((a) => (a.drawn ? f1(a.drawn.frames / first.windowS) : ""))));
     lines.push(row("posePart calls per drawn frame", arms.map((a) => (a.drawn ? f2(a.drawn.posePart / Math.max(1, a.drawn.frames)) : ""))));
     lines.push(row("followGlass calls per drawn frame", arms.map((a) => (a.drawn ? f2(a.drawn.followGlass / Math.max(1, a.drawn.frames)) : ""))));
-    lines.push(row("us per drawn frame (updateSkin of every car)", arms.map((a) => (a.drawn ? f2((1000 * a.drawn.ms) / Math.max(1, a.drawn.frames)) : ""))));
+    lines.push(row("us per drawn frame (updateSkin of every car + blend present + restore)", arms.map((a) => (a.drawn ? f2((1000 * a.drawn.ms) / Math.max(1, a.drawn.frames)) : ""))));
+    lines.push(row("us per slice (PoseBlend begin + end)", arms.map((a) => (a.drawn ? f2((1000 * a.drawn.stepMs) / Math.max(1, a.drawn.slices)) : ""))));
   }
   for (const a of arms) {
     const r = a.freezeRecord;

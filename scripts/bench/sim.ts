@@ -9,6 +9,7 @@ import { DeformableCar } from "../../src/game/vehicle/car.ts";
 import { applyDrive, type DriveInput } from "../../src/game/vehicle/car-drive.ts";
 import { newWorld, settleStep, stepWorld, type World } from "../../src/game/engine/world-step.ts";
 import { lap, PHASE, startLaps } from "../../src/game/engine/sim-phases.ts";
+import { PoseBlend } from "../../src/game/present/pose-blend.ts";
 import { SimPacer } from "../../src/game/engine/sim-pace.ts";
 import { sliceSpeed } from "../../src/game/contact/sat.ts";
 import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../../src/game/kernel/constants.ts";
@@ -26,7 +27,7 @@ export interface SimLike {
   /** The step (s) a `run` of one step advances: 1/240 s at the fine floor, 1/80 s on the race's schedule. */
   readonly stepS: number;
   /** A sim that draws frames (`Sim.drawFrames`): the window's frame count and ms, zeroed by the runner as the window starts. */
-  readonly drawn?: { frames: number; ms: number };
+  readonly drawn?: { frames: number; ms: number; slices: number; stepMs: number };
 }
 
 export class Sim implements SimLike {
@@ -54,6 +55,11 @@ export class Sim implements SimLike {
   private readonly slice = (h: number): void => {
     const phases = this.world.phases;
     startLaps(phases);
+    if (this.blend) {
+      const t0 = performance.now();
+      this.blend.begin(this.cars);
+      this.drawn.stepMs += performance.now() - t0;
+    }
     for (const car of this.cars) {
       const pedal = this.pedals.get(car);
       if (pedal) applyDrive(car, pedal, h);
@@ -63,6 +69,12 @@ export class Sim implements SimLike {
     lap(phases, PHASE.rules);
     settleStep(this.cars, h, true);
     lap(phases, PHASE.settle);
+    if (this.blend) {
+      const t0 = performance.now();
+      this.blend.end(this.cars);
+      this.drawn.stepMs += performance.now() - t0;
+      this.drawn.slices++;
+    }
     this.t += h;
   };
 
@@ -77,18 +89,21 @@ export class Sim implements SimLike {
   }
 
   /**
-   * The frames a rendered second would draw (`FRAME_HZ` of them): after the step that reaches each, every car's `updateSkin` (what the engine's frame runs per car: the skin, lamps, panels, glass and the
-   * parts' pose). `drawn` counts the frames and the ms they took; the rows of a still scene (`present`) read them with the calls per frame the scenario probe counts.
+   * The frames a rendered second would draw (`FRAME_HZ` of them), as the engine draws them: `PoseBlend` begins and ends around every slice (`stepMs` counts what that costs), and after the step that
+   * reaches a frame every car's `updateSkin` (the skin, lamps, panels, glass and the parts' pose), then the blend presents the cars between their last two poses and restores them. `drawn` counts the
+   * frames and the ms those took; the rows of a still scene (`present`) read them with the calls per frame the scenario probe counts.
    */
   drawFrames(): this {
     this.drawing = true;
+    this.blend = new PoseBlend();
     return this;
   }
 
-  /** Frames drawn and the ms their `updateSkin` calls took, since the last `drawn.frames = 0` (the window starts there). */
-  readonly drawn = { frames: 0, ms: 0 };
+  /** Frames drawn, the ms of their updateSkin + present + restore, and the slices the blend ran its begin/end for with their ms, since the runner last zeroed them (the window starts there). */
+  readonly drawn = { frames: 0, ms: 0, slices: 0, stepMs: 0 };
   private drawing = false;
   private drawDue = 0;
+  private blend: PoseBlend | null = null;
 
   private draw(): void {
     this.drawDue += this.step;
@@ -96,6 +111,8 @@ export class Sim implements SimLike {
       this.drawDue -= 1 / FRAME_HZ;
       const t0 = performance.now();
       for (const car of this.cars) car.updateSkin();
+      this.blend!.present(this.cars, this.pace.alpha);
+      this.blend!.restore();
       this.drawn.ms += performance.now() - t0;
       this.drawn.frames++;
     }

@@ -219,6 +219,8 @@ drawCalls.followGlass = 0;
 if (sim.drawn) {
   sim.drawn.frames = 0;
   sim.drawn.ms = 0;
+  sim.drawn.slices = 0;
+  sim.drawn.stepMs = 0;
 }
 
 /** `BENCH_CENSUS=1` (bench `--census`): the window runs step by step through the lone-car census (`census.ts`). */
@@ -335,7 +337,7 @@ console.log(
     wakeSites: Object.fromEntries([...wakeSites].sort((a, b) => b[1] - a[1]).slice(0, 10)),
     speedBins: Object.fromEntries([...speedBins].sort((a, b) => b[1] - a[1])),
     bakeBins: Object.fromEntries([...bakeBins]),
-    drawn: sim.drawn ? { frames: sim.drawn.frames, ms: sim.drawn.ms, posePart: drawCalls.posePart, followGlass: drawCalls.followGlass } : null,
+    drawn: sim.drawn ? { frames: sim.drawn.frames, ms: sim.drawn.ms, slices: sim.drawn.slices, stepMs: sim.drawn.stepMs, posePart: drawCalls.posePart, followGlass: drawCalls.followGlass } : null,
     loadStart,
     loadEnd: loadavg()[0]!,
   })}`,
