@@ -142,7 +142,7 @@ describe("given two logs of the rigid steps of a run (`--slices`)", () => {
   it("when a derby heat is run with `epi.wreckTops` off and on, then every car's every rigid step is the same to the bit, points were skipped, and the old path would have made no contact row for them", async () => {
     const out = mkdtempSync(path.join(tmpdir(), "bench-"));
     const lines: string[] = [];
-    const code = await main(["run", "derby-8-s3", "--arm", "base:", "--arm", "wt:epi.wreckTops=1", "--warm", "5", "--window", "6", "--order", "abba", "--max-load", "1000", "--slices", "--verify", "--out", out], (l) => lines.push(l));
+    const code = await main(["run", "derby-8-s3", "--arm", "off:epi.wreckTops=0", "--arm", "wt:epi.wreckTops=1", "--warm", "5", "--window", "6", "--order", "abba", "--max-load", "1000", "--slices", "--verify", "--out", out], (l) => lines.push(l));
     assert.equal(code, 0);
     const text = lines.join("\n");
     assert.match(text, /IDENTICAL in every physical field/, "the two arms ran the same physics");
