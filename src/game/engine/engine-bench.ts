@@ -1,22 +1,23 @@
 import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
-import { benchPlan, leaderAhead } from "./engine-bench-plan.ts";
-import { watchPage } from "./engine-bench-page.ts";
+import { benchPlan, leaderAhead, type BenchPlan } from "./engine-bench-plan.ts";
+import { watchPage, type PageWatch } from "./engine-bench-page.ts";
 import { warmUp } from "./engine-bench-warm.ts";
 import { describeBench, DETAIL_ARMS, PACE_ARM, PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_SWEEP, PHASE_WARM, PHASE_WINDOW, SKY_ARM, stat, type BenchResult, type LongTasks } from "./engine-bench-report.ts";
 import { CLIP_WAIT_S, CRASH_GAP, CRASH_SPEED, ragdollCost, REPLAY_SETTLE_S, REPLAY_TIER_S, START_WAIT_S, type ReplayFrames } from "./engine-bench-replay.ts";
-import { BENCH, blocksOf, CAP, deviceOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, skyPinOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type Samples, type Tap, type Window } from "./bench-measure.ts";
+import { BENCH, QUICK, blocksOf, CAP, deviceOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, skyPinOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type SkyPin, type Samples, type Tap, type Window } from "./bench-measure.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import type { SimPacer } from "./sim-pace.ts";
 import { SETTING_KEY } from "./constants.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
-import { hudSettings, roundCard } from "./bench-card.ts";
+import { hudSettings, wireCard } from "./bench-card.ts";
+import { analyzeFrames, FrameRecord, type FrameStats } from "./bench-frames.ts";
 import { alternate, enterPhase, frame, FRAME_CPU, FRAME_DRAW, FRAME_DT, FRAME_SIM, newBeat, nextFrame, restartLab, pinSky, settleFrames, waitFor, type Beat } from "./bench-frame.ts";
 import { INITIAL_HUD, type CrashHudState } from "../hud/hud-store.ts";
 import { ArmBadge } from "./bench-badge.ts";
 import { epicenterOn } from "../deform/epicenter.ts";
 import { enterBenchScene, type SceneEngine } from "./bench-scene.ts";
 import { HitchLog } from "./bench-hitch.ts";
-import { SettleWatch } from "./bench-settle.ts";
+import { SettleWatch, type SettleResult } from "./bench-settle.ts";
 import { endSweep, setDetailArm, sweep, type SweepEngine } from "./bench-sweep.ts";
 
 /** What `runBench` drives: the real engine, by its public face. */
@@ -157,7 +158,7 @@ function countSlot(counts: Float64Array, order: Uint8Array, seen: number, slot: 
 }
 
 /** `measureS` wall seconds of one sample per frame, the engine's own auto FX tier and pacer as they are. */
-async function sample(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat, ui: { set(text: string): void }): Promise<{ s: Samples; w: Window; longTasks: LongTasks | null }> {
+async function sample(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat, ui: { set(text: string): void }, windowS: number): Promise<{ s: Samples; w: Window; longTasks: LongTasks | null; frameStats: FrameStats }> {
   const { renderer, cine } = parts;
   const arr = (): Float64Array => new Float64Array(CAP);
   const s: Samples = {
@@ -186,12 +187,15 @@ async function sample(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat
   const thrown0 = beat.lab?.throws ?? 0;
   const ragdoll0 = parts.ragdoll.stats.steps;
   const work = watchWork(parts, pace);
+  // Every frame of the window, for the stats (percentiles, lows, spikes, the series): rows of one flat array, read where each frame ends.
+  const rec = new FrameRecord(CAP, { row: beat.frame, pace, phases: parts.world.phases, traffic: parts.ragdoll.traffic, crashed: () => s.wrecks[s.n - 1]! });
+  rec.begin();
   const longTasks = watchLongTasks();
   let wall = 0;
   let shownSecond = NaN;
   t.timing = true;
   t.block = WINDOW_BLOCK;
-  while (wall < BENCH.measureS && s.n < CAP) {
+  while (wall < windowS && s.n < CAP) {
     await frame(engine, renderer, t, beat);
     const f = beat.frame;
     const i = s.n++;
@@ -207,11 +211,12 @@ async function sample(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat
     s.tris[i] = renderer.info.render.triangles;
     s.tiersSeen = countSlot(s.tierCounts, s.tierOrder, s.tiersSeen, FX_TIERS.indexOf(cine.tier));
     s.levelsSeen = countSlot(s.levelCounts, s.levelOrder, s.levelsSeen, rungSlot(parts.detail.level));
+    rec.push();
     work.tick(wall, t.simS - clock0);
     const second = Math.round(wall);
     if (second === shownSecond) continue;
     shownSecond = second;
-    ui.set(`CRUSH BENCH: measuring ${second} / ${BENCH.measureS} s`);
+    ui.set(`CRUSH BENCH: measuring ${second} / ${windowS} s`);
   }
   t.timing = false;
   const { phaseMs, counts, series } = work.end();
@@ -219,6 +224,7 @@ async function sample(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat
     s,
     w: { wallS: wall, lostSimS: pace.lost - lost0, cutFrames: pace.cut - cut0, fineCuts: parts.world.fineCuts - fine0, clockS: t.simS - clock0, thrown: (beat.lab?.throws ?? 0) - thrown0, ragdoll: ragdollCost(parts.ragdoll.stats, ragdoll0), phaseMs, counts, series },
     longTasks: longTasks.stop(),
+    frameStats: analyzeFrames(rec),
   };
 }
 
@@ -270,6 +276,57 @@ async function replayTiers(engine: BenchEngine, parts: BenchParts, t: Tap, beat:
   return { bytes, arms };
 }
 
+/** What the bench writes its progress to (the card's status line). */
+type Ui = { set(text: string): void };
+
+/** What the extended bench runs after the window: the four A/Bs and the replay of the run's own crash. */
+interface ExtendedTail {
+  pace: Awaited<ReturnType<typeof alternate>>;
+  detail: Awaited<ReturnType<typeof alternate>>;
+  fx: Awaited<ReturnType<typeof alternate>>;
+  sky: Awaited<ReturnType<typeof alternate>> | null;
+  replayRun: { bytes: number; arms: ReplayArm[]; clip: HighlightClip } | null;
+  replayWhy: string | null;
+  leaderEndM: number;
+}
+
+/** The extended bench's A/Bs and replay, in order; `top` is the FX tier the window mostly ran (they hold it), `pin` the sky the bench pinned. */
+async function extendedTail(engine: BenchEngine, parts: BenchParts, plan: BenchPlan, t: Tap, beat: Beat, page: PageWatch, ui: Ui, fxTiers: readonly FxTier[], top: FxTier, pin: SkyPin): Promise<ExtendedTail> {
+  // The A/Bs hold the tier the window mostly ran, so the pacer arms differ in the pacer alone.
+  engine.setFxTier(top);
+  enterPhase(beat, page, PHASE_AB_PACE);
+  const pace = await alternate(engine, parts, t, beat, ui, "pacer", [{ key: PACE_ARM.fine, set: () => void (engine.pace.pin = false) }, { key: PACE_ARM.coarse, set: () => void (engine.pace.pin = true) }], BENCH.paceCycles);
+  engine.pace.pin = null;
+  enterPhase(beat, page, PHASE_AB_DETAIL);
+  // The detail arms run at the window's tier too (the governor is off with the tier pinned), then the governor's rung is put back.
+  const detail = await alternate(engine, parts, t, beat, ui, "detail", DETAIL_ARMS.map((a) => ({ key: a.key, set: () => setDetailArm(parts, a.level) })), BENCH.detailCycles);
+  parts.detail.setLevel(parts.governor.level);
+  enterPhase(beat, page, PHASE_AB_FX);
+  const fx = await alternate(engine, parts, t, beat, ui, SETTING_KEY.fx, fxTiers.map((tier) => ({ key: tier, set: () => engine.setFxTier(tier) })), BENCH.fxCycles);
+  // The sky arms hold the window's tier too, with the Sky setting put in force explicitly both ways, `full` (the whole strip, waited for) against `off`; the bench's pin goes back after, drawn, and the player's own setting when the run ends.
+  enterPhase(beat, page, PHASE_AB_SKY);
+  engine.setFxTier(top);
+  const sky = plan.lab ? null : await alternate(engine, parts, t, beat, ui, SETTING_KEY.sky, [{ key: SKY_ARM.full, set: () => pinSky(engine, parts, t, beat, "full") }, { key: SKY_ARM.off, set: () => pinSky(engine, parts, t, beat, "off") }], BENCH.skyCycles);
+  await pinSky(engine, parts, t, beat, pin);
+  // What the run was like at its end is read now: the replay starts the race over.
+  const leaderEndM = leaderAhead(parts, plan);
+  enterPhase(beat, page, PHASE_REPLAY);
+  let replayRun: ExtendedTail["replayRun"] = null;
+  let replayWhy: string | null = null;
+  if (plan.lab) replayWhy = "the Lab has no race to crash";
+  else {
+    try {
+      const clip = await recordCrash(engine, parts, t, beat, ui);
+      if (typeof clip === "string") replayWhy = clip;
+      else replayRun = { ...(await replayTiers(engine, parts, t, beat, ui, clip, fxTiers)), clip };
+    } catch (err) {
+      engine.stopBenchReel();
+      replayWhy = err instanceof Error ? err.message : String(err);
+    }
+  }
+  return { pace, detail, fx, sky, replayRun, replayWhy, leaderEndM };
+}
+
 /**
  * `?bench=city`, `?bench=strip&…` or `?bench=lab` (`benchPlan`): the real game on the real clock for a fixed run, then a card of what it
  * cost. The engine's loop is stopped and each rAF hands it the measured wall time through `advance` (the real pacer deadline included),
@@ -304,64 +361,44 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   beat.page = page;
   beat.wake = opts.wake;
   beat.arm = ui.badge;
-  enterPhase(beat, page, PHASE_SWEEP);
-  await sweep(engine, parts, plan, fxTiers, opts.stepOfPage === 0, t, beat, ui);
-  // The sweep's hitches are its own table (every setting it visits is a switch); the run's log starts over for the warm-up, window and A/Bs.
-  const sweepHitches = beat.hitches.table();
-  beat.hitches = new HitchLog();
-  endSweep(engine, pin);
-  parts = engine.benchParts();
-  beat.parts = parts;
-  enterBenchScene(engine, parts, plan);
-  ui.badge.sync();
+  // The extended bench sweeps on every page (the loop's first in full); the quick one sweeps once, on the loop's first page, and a later page's JIT, programs and heap are warm.
+  const first = opts.stepOfPage === 0;
+  const sweeps = plan.extended || first;
+  let sweepHitches = beat.hitches.table();
+  if (sweeps) {
+    enterPhase(beat, page, PHASE_SWEEP);
+    await sweep(engine, parts, plan, fxTiers, plan.extended ? (first ? "full" : "short") : "quick", t, beat, ui);
+    // The sweep's hitches are its own table (every setting it visits is a switch); the run's log starts over for the warm-up, window and A/Bs.
+    sweepHitches = beat.hitches.table();
+    beat.hitches = new HitchLog();
+    endSweep(engine, pin);
+    parts = engine.benchParts();
+    beat.parts = parts;
+    enterBenchScene(engine, parts, plan);
+    ui.badge.sync();
+  }
   const sequenceStart = t.simS;
   if (beat.lab) restartLab(beat.lab, sequenceStart, 0);
   enterPhase(beat, page, PHASE_WARM);
-  await warmUp(() => frame(engine, parts.renderer, t, beat), { race: parts.race, simS: () => t.simS - sequenceStart, plan, ui });
-  // The sky the window runs under is drawn before it opens (a step after the first may have to bring its strip back), then the page must settle: the warm-up's last frames are watched like an A/B switch's.
+  // The sky the window runs under is drawn before the race goes green (a step after the first brings its strip back as its scene is entered).
   await pinSky(engine, parts, t, beat, pin);
-  beat.switching = true;
-  const windowStart = await settleFrames(engine, parts.renderer, t, beat, new SettleWatch());
+  // Quick: the grid only, and the window opens on the staged crash. Extended: `warmS` of race clock, then the page must settle (the warm-up's last frames are watched like an A/B switch's).
+  await warmUp(() => frame(engine, parts.renderer, t, beat), { race: parts.race, simS: () => t.simS - sequenceStart, plan: { lab: plan.lab, warmS: plan.extended || plan.lab ? plan.warmS : 0 }, ui });
+  let windowStart: SettleResult | null = null;
+  let staged = false;
+  if (plan.extended) {
+    beat.switching = true;
+    windowStart = await settleFrames(engine, parts.renderer, t, beat, new SettleWatch());
+  } else if (!plan.lab) staged = parts.race.crashAtStart(CRASH_GAP, CRASH_SPEED);
   enterPhase(beat, page, PHASE_WINDOW);
   const pageState = pageStateOf(parts, opts.stepOfPage, opts.keep);
-  const { s, w, longTasks } = await sample(engine, parts, t, beat, ui);
+  const { s, w, longTasks, frameStats } = await sample(engine, parts, t, beat, ui, plan.extended ? BENCH.measureS : QUICK.windowS);
   const leaderWindowM = leaderAhead(parts, plan);
   const top = topTier(s, parts.cine.tier);
   const settings = { ...settingsOf(parts, hud() as unknown as Record<string, unknown>, top), skyPlayer: sky0 };
-
-  // The A/Bs hold the tier the window mostly ran, so the pacer arms differ in the pacer alone.
-  engine.setFxTier(top);
-  enterPhase(beat, page, PHASE_AB_PACE);
-  const pace = await alternate(engine, parts, t, beat, ui, "pacer", [{ key: PACE_ARM.fine, set: () => void (engine.pace.pin = false) }, { key: PACE_ARM.coarse, set: () => void (engine.pace.pin = true) }], BENCH.paceCycles);
-  engine.pace.pin = null;
-  enterPhase(beat, page, PHASE_AB_DETAIL);
-  // The detail arms run at the window's tier too (the governor is off with the tier pinned), then the governor's rung is put back.
-  const detail = await alternate(engine, parts, t, beat, ui, "detail", DETAIL_ARMS.map((a) => ({ key: a.key, set: () => setDetailArm(parts, a.level) })), BENCH.detailCycles);
-  parts.detail.setLevel(parts.governor.level);
-  enterPhase(beat, page, PHASE_AB_FX);
-  const fx = await alternate(engine, parts, t, beat, ui, SETTING_KEY.fx, fxTiers.map((tier) => ({ key: tier, set: () => engine.setFxTier(tier) })), BENCH.fxCycles);
-  // The sky arms hold the window's tier too, with the Sky setting put in force explicitly both ways, `full` (the whole strip, waited for) against `off`; the bench's pin goes back after, drawn, and the player's own setting when the run ends.
-  enterPhase(beat, page, PHASE_AB_SKY);
-  engine.setFxTier(top);
-  const sky = plan.lab ? null : await alternate(engine, parts, t, beat, ui, SETTING_KEY.sky, [{ key: SKY_ARM.full, set: () => pinSky(engine, parts, t, beat, "full") }, { key: SKY_ARM.off, set: () => pinSky(engine, parts, t, beat, "off") }], BENCH.skyCycles);
-  await pinSky(engine, parts, t, beat, pin);
-  // What the run was like at its end is read now: the replay starts the race over.
-  const leaderEndM = leaderAhead(parts, plan);
   const summary = summarize(parts, plan, s, w, setupMs);
-  enterPhase(beat, page, PHASE_REPLAY);
-  let replayRun: { bytes: number; arms: ReplayArm[]; clip: HighlightClip } | null = null;
-  let replayWhy: string | null = null;
-  if (plan.lab) replayWhy = "the Lab has no race to crash";
-  else {
-    try {
-      const clip = await recordCrash(engine, parts, t, beat, ui);
-      if (typeof clip === "string") replayWhy = clip;
-      else replayRun = { ...(await replayTiers(engine, parts, t, beat, ui, clip, fxTiers)), clip };
-    } catch (err) {
-      engine.stopBenchReel();
-      replayWhy = err instanceof Error ? err.message : String(err);
-    }
-  }
+  const tail = plan.extended ? await extendedTail(engine, parts, plan, t, beat, page, ui, fxTiers, top, pin) : null;
+  const leaderEndM = tail ? tail.leaderEndM : leaderWindowM;
   const pageEvents = page.stop();
   const pageSeconds = page.seconds();
   engine.setFxAuto();
@@ -369,33 +406,35 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   if (plan.lab) engine.setTimeScale(null);
 
   const gpu = await t.finish();
-  const abPace = blocksOf(pace, gpu);
-  const abSky = sky && blocksOf(sky, gpu);
-  const abFx = blocksOf(fx, gpu);
+  const abPace = tail && blocksOf(tail.pace, gpu);
+  const abSky = tail?.sky ? blocksOf(tail.sky, gpu) : null;
+  const abFx = tail && blocksOf(tail.fx, gpu);
   const device = await deviceOf(parts, timerStepMs, batteryStart);
   const windowGpu = windowGpuMs(gpu);
   const result: BenchResult = {
     ...summary,
     gpuMs: windowGpu.length ? stat(windowGpu) : null,
-    replay: replayRun && replayResult(replayRun, gpu),
-    replayWhy,
+    replay: tail?.replayRun ? replayResult(tail.replayRun, gpu) : null,
+    replayWhy: tail ? tail.replayWhy : "the quick bench has no replay",
+    run: { extended: plan.extended, staged },
     pageEvents,
     pageSeconds,
     pageState,
     longTasks,
+    frameStats,
     hitches: beat.hitches.table(),
     sweepHitches,
-    switches: [{ stretch: PAGE_PHASES[PHASE_WINDOW], arm: "start", round: 1, ...windowStart }, ...pace.switches, ...detail.switches, ...fx.switches, ...(sky?.switches ?? [])],
+    switches: tail && windowStart ? [{ stretch: PAGE_PHASES[PHASE_WINDOW], arm: "start", round: 1, ...windowStart }, ...tail.pace.switches, ...tail.detail.switches, ...tail.fx.switches, ...(tail.sky?.switches ?? [])] : [],
     strip: plan.strip ? { spec: plan.strip, body: plan.body, racers: plan.racers, leaderWindowM, leaderEndM } : null,
     labThrown: plan.lab ? w.thrown : null,
     settings,
-    abPace: { fine: abPace[PACE_ARM.fine]!, coarse: abPace[PACE_ARM.coarse]! },
-    abFx: { minimal: abFx["minimal"]!, low: abFx["low"]!, high: abFx["high"]!, ...(plan.ultra ? { ultra: abFx["ultra"]! } : {}) },
-    abDetail: blocksOf(detail, gpu),
+    abPace: abPace && { fine: abPace[PACE_ARM.fine]!, coarse: abPace[PACE_ARM.coarse]! },
+    abFx: abFx && { minimal: abFx["minimal"]!, low: abFx["low"]!, high: abFx["high"]!, ...(plan.ultra ? { ultra: abFx["ultra"]! } : {}) },
+    abDetail: tail && blocksOf(tail.detail, gpu),
     abSky: abSky && { full: abSky[SKY_ARM.full]!, off: abSky[SKY_ARM.off]! },
     device,
   };
-  const payload = (): object => ({ at: new Date().toISOString(), url: location.href, userAgent: navigator.userAgent, hud: hudSettings(hud(), INITIAL_HUD), result: roundCard(result) });
+  const payload = (): object => ({ at: new Date().toISOString(), url: location.href, userAgent: navigator.userAgent, hud: hudSettings(hud(), INITIAL_HUD), result: wireCard(result as unknown as Record<string, unknown>) });
   const send = async (): Promise<BenchReceipt> => {
     ui.receipt("sending");
     const receipt = await opts.submit(payload());

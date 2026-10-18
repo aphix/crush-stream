@@ -259,6 +259,13 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
     assert.deepEqual(squash(lines.filter((l) => l.includes("note epicenter"))), ["note epicenter on: not fullscreen 1 of 4 s (desktop); unfocused 2 of 4 s (visible)"]);
   });
 
+  it("when the epicenter knob read on in the last warm second and off in the window's first, then it is a FLAG; read the same, there is none", async () => {
+    const changed = { pageSeconds: { flags: "ffff", phases: "0011", epi: "1100" } };
+    const kept = { pageSeconds: { flags: "ffff", phases: "0011", epi: "1111" } };
+    const flagged = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, kept), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, changed)]);
+    assert.deepEqual(squash(flagged.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran the epicenter knob changed between the warm-up's last second and the window's first"]);
+  });
+
   describe("and the window's frame time in its focused and unfocused seconds", () => {
     /** Ten window seconds: the first four focused, then six visible but unfocused (the owner typed elsewhere); `fps` is each second's frame rate. */
     const focusWindow = (fps) => ({
@@ -379,5 +386,95 @@ describe("given a pull that must fail loudly", () => {
     const result = await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out, fetchImpl: server(rows).fetchImpl, pause: noPause });
     assert.deepEqual(result.saved, ["AAAA-1111"]);
     assert.deepEqual(await readdir(out), ["AAAA-1111.json"]);
+  });
+});
+
+describe("given a card whose frames the device summarised, and the card as the wire carries its lists", () => {
+  const FRAME_STATS = {
+    n: 2700,
+    medianMs: 11.1,
+    p95Ms: 14.2,
+    p99Ms: 31.4,
+    p999Ms: 88.8,
+    maxMs: 120.5,
+    fpsLow1: 28.6,
+    fpsLow01: 11.3,
+    series: { cols: ["atS", "frames", "meanMs", "maxMs", "simMs", "crashed", "wreckCarSlices", "pairContacts", "freezes", "thaws", "ragdollMessages"], dp: [], n: 2, data: [[0, 0.2], [18, 17], [11.1, 12.5], [14.1, 31.2], [3.1, 4.4], [1, 5], [20, 61], [9, 70], [0, 2], [0, 1], [0, 6]] },
+    spikes: {
+      count: 12,
+      factor: 3,
+      minMs: 25,
+      thresholdMs: 33.3,
+      rows: { cols: ["atS", "intervalMs", "simMs", "drawMs", "steps", "crashed", "wreckCarSlices", "pairContacts", "freezes", "thaws", "ragdollMessages", "wreckMs", "pairsMs"], dp: [], n: 1, data: [[3.2], [88.8], [60.5], [10.2], [4], [6], [40], [44], [1], [0], [3], [41.25], [9.5]] },
+      activity: { cols: ["crashed", "ragdollMessages", "wreckCarSlices", "asleepCarSlices", "frozenCarSlices", "pairContacts", "partContacts", "freezes", "thaws", "steps"], inSpikes: [6, 4, 31, 2, 8, 44, 12, 1.5, 0.5, 3], otherwise: [3, 0.5, 11, 1, 3, 9, 2, 0.1, 0.1, 2.7], correlation: [0.41, 0.2, 0.55, 0.1, 0.3, 0.72, 0.4, 0.2, 0.1, 0.3] },
+      dominantPhase: [0, 0, 1, 9, 1, 1, 0, 0, 0, 0],
+    },
+  };
+  const card = (extra = {}) => ({ id: "FFFF-6666", kind: "bench", receivedAt: "2026-10-18T10:00:00Z", sha: "d2c53024", size: 90000, submission: { kind: "bench", payload: { result: { course: "city", simMsPerSimS: 215.5, settings: { epicenter: false }, phases: { msPerSimS: { drive: 30 }, unattributedMsPerSimS: 5, workPerSimS: { steps: 240 } }, frameStats: FRAME_STATS, ...extra } } } });
+
+  it("when --phases is given, then the card's line has the percentiles and lows and the next line says what the sim was doing in the spikes against elsewhere", async () => {
+    const lines = [];
+    await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([card()]).fetchImpl, pause: noPause, phases: true, log: (l) => lines.push(l) });
+    const said = lines.map((l) => l.trim());
+    assert.ok(said.includes("city, epicenter off frames: 2700, median 11.1 ms, p95 14.2, p99 31.4, p99.9 88.8, max 120.5; lows: 1 % 28.6 fps, 0.1 % 11.3 fps"), said.join("\n"));
+    assert.ok(said.includes("12 spikes over 3x the median (33.3 ms); in a spike against elsewhere: crashed 6.0 vs 3.0 (r 0.41), wreckCarSlices 31.0 vs 11.0 (r 0.55), pairContacts 44.0 vs 9.0 (r 0.72), freezes 1.5 vs 0.1 (r 0.20), ragdollMessages 4.0 vs 0.5 (r 0.20); phase wreck largest in 9"));
+  });
+
+  it("when --frames is given, then every listed spike is a row with its activity and its largest phase, and the window's buckets follow", async () => {
+    const lines = [];
+    await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([card()]).fetchImpl, pause: noPause, frames: true, log: (l) => lines.push(l) });
+    const said = lines.map((l) => l.trim().split(/\s+/).join(" "));
+    assert.ok(said.includes("3.2 88.8 60.5 10.2 4 6 40 44 1 0 3 wreck 41.3 ms"), said.join("\n"));
+    assert.ok(said.includes("0.2 17 12.5 31.2 4.4 5 61 70 2 1 6"), "the second bucket's row");
+    assert.ok(said.some((l) => l.endsWith("(2 buckets)")));
+  });
+
+  it("when a card from before the frame stats is printed with --frames, then it says so", async () => {
+    const lines = [];
+    await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([PHASED]).fetchImpl, pause: noPause, frames: true, log: (l) => lines.push(l) });
+    assert.ok(lines.includes("    frames: none (a card from before the frame stats)"));
+  });
+
+  it("when a card carries its switches and page entries as the wire's tables, then --ab reads them as it reads the old lists: a window that never settled is flagged", async () => {
+    const wire = { switches: { keys: ["stretch", "arm", "round", "settled", "settleS", "longestMs"], rows: [["window", "start", 1, false, 6, 812]] }, pageEvents: { keys: ["phase", "atS", "visible", "focused", "fullscreen"], rows: [["window", 0, true, true, true]] } };
+    const arm = (id, step, on, extra) => ({ id, kind: "bench", receivedAt: "2026-10-18T10:00:00Z", sha: "d2c53024", size: 9000, submission: { kind: "bench", settings: { session: "k3x9q2", loop: 1, step }, payload: { result: { course: "city", simMsPerSimS: 500, tierPct: { high: 100 }, settings: { epicenter: on }, phases: { msPerSimS: { integrate: 100 }, unattributedMsPerSimS: 0, workPerSimS: { liveCarSlices: 1000 } }, ...extra } } } });
+    const lines = [];
+    await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([arm("AAAA-1111", "city", false, {}), arm("BBBB-2222", "city:epi", true, wire)]).fetchImpl, pause: noPause, ab: true, log: (l) => lines.push(l) });
+    assert.ok(lines.some((l) => l.trim() === "FLAG epicenter on: the page never settled before the window opened (6.0 s watched, longest frame 812 ms)"), lines.join("\n"));
+  });
+});
+
+describe("given the quick bench's cards, one arm of each map a run, the other arm in the next run", () => {
+  const quick = (id, session, step, on, ms) => ({
+    id, kind: "bench", receivedAt: "2026-10-18T10:00:00Z", sha: "d2c53024", size: 9000,
+    submission: {
+      kind: "bench",
+      settings: { session, loop: 1, step },
+      payload: { result: { course: "city", build: "d2c53024", simMsPerSimS: ms, tierPct: { high: 100 }, run: { extended: false, staged: true }, device: { userAgent: "Mozilla/5.0 (X11; Linux x86_64)" }, settings: { epicenter: on }, phases: { msPerSimS: { integrate: 100, wreck: ms - 100 }, unattributedMsPerSimS: 0, workPerSimS: { liveCarSlices: 1000, wreckCarSlices: 500 } } } },
+    },
+  });
+  const lines = async (rows) => {
+    const out = [];
+    await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server(rows).fetchImpl, pause: noPause, ab: true, log: (l) => out.push(l) });
+    return out.map((l) => l.trim().split(/\s+/).join(" "));
+  };
+
+  it("when the off run and the on run are two sessions of one device and build, then the map's cards pair across them in the order the runs came, and a run with no partner prints no block", async () => {
+    // The server lists the newest first (the fetch walks them oldest first): run 3, then 2, then 1.
+    const said = await lines([
+      quick("CCCC-3333", "run3", "city", false, 580),
+      quick("BBBB-2222", "run2", "city:epi", true, 540),
+      quick("AAAA-1111", "run1", "city", false, 600),
+    ]);
+    const heads = said.filter((l) => l.endsWith("epicenter off | on"));
+    assert.deepEqual(heads, ["quick d2c53024 Mozilla/5.0 (X11; Linux x86_64) city, run 1: epicenter off | on"]);
+    assert.ok(said.includes("sim ms/sim-s 600.0 540.0 -10.0 %"), said.join("\n"));
+  });
+
+  it("when two devices ran the quick bench, then their cards are never paired with each other's", async () => {
+    const phone = quick("DDDD-4444", "run9", "city:epi", true, 900);
+    phone.submission.payload.result.device.userAgent = "Mozilla/5.0 (Android 17; Mobile)";
+    const said = await lines([quick("AAAA-1111", "run1", "city", false, 600), phone]);
+    assert.deepEqual(said.filter((l) => l.endsWith("epicenter off | on")), []);
   });
 });

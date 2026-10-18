@@ -37,6 +37,13 @@ export const DECIMALS: Readonly<Record<string, number>> = {
   simMsPerSecond: 1,
   fps: 1,
   fpsLow1: 1,
+  fpsLow01: 1,
+  medianMs: 2,
+  p95Ms: 2,
+  p99Ms: 2,
+  p999Ms: 2,
+  maxMs: 2,
+  thresholdMs: 1,
   fpsThirds: 1,
   fpsPerSecond: 1,
   stepsPerFrame: 2,
@@ -79,4 +86,27 @@ export function hudSettings(hud: CrashHudState, defaults: CrashHudState): Partia
     if (!readout.includes(key) && JSON.stringify(value) !== JSON.stringify(defaults[key as keyof CrashHudState])) kept[key] = value;
   }
   return kept as Partial<CrashHudState>;
+}
+
+/** A list of flat records as the wire carries it: the keys once, then one array of values a record, in the keys' order (no key is repeated per record). */
+interface Table {
+  keys: string[];
+  rows: unknown[][];
+}
+
+/** `records` as a `Table` (the keys of the first record, which every record of a list shares); a value that is a list of strings is written joined with `+`. */
+export function tabulate(records: readonly Record<string, unknown>[]): Table {
+  const keys = records.length ? Object.keys(records[0]!) : [];
+  return { keys, rows: records.map((r) => keys.map((k) => (Array.isArray(r[k]) && (r[k] as unknown[]).every((v) => typeof v === "string") ? (r[k] as string[]).join("+") : r[k]))) };
+}
+
+/**
+ * The card as it goes on the wire: rounded (`roundCard`), and the lists of records that a card carries (the A/B switches, the hitch rows, the page's entries) as `Table`s so no
+ * key repeats per record; the `Columns` the frame series is already in are left as they are.
+ */
+export function wireCard(result: Record<string, unknown>): unknown {
+  const rounded = roundCard(result) as Record<string, unknown>;
+  const asTable = (list: unknown): unknown => (Array.isArray(list) ? tabulate(list as Record<string, unknown>[]) : list);
+  const hitches = (h: unknown): unknown => (h && typeof h === "object" ? { ...(h as Record<string, unknown>), rows: asTable((h as { rows: unknown }).rows) } : h);
+  return { ...rounded, switches: asTable(rounded["switches"]), pageEvents: asTable(rounded["pageEvents"]), hitches: hitches(rounded["hitches"]), sweepHitches: hitches(rounded["sweepHitches"]) };
 }

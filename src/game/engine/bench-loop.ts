@@ -1,7 +1,7 @@
 import { FX_TIER_ULTRA } from "../present/constants.ts";
 import { FX_TIERS } from "../present/engine-post.ts";
 import { TRACK_ID } from "../world/constants.ts";
-import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, EPI_STEP_SUFFIX, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
+import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, EPI_STEP_SUFFIX, EXTENDED_QUERY, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
 
 /**
  * The benchmark loop: one cycle of benches (`?bench=…&loop=<session>&cycle=<n>&step=<i>`), all run in the one page (`driveLoop`: no
@@ -35,7 +35,7 @@ const MAPS: readonly BenchStep[] = [
   { id: MOST_PROPS_COURSE, query: `${benchQuery(BENCH_KIND.city)}&${COURSE_QUERY}=${MOST_PROPS_COURSE}` },
 ];
 
-/** Every map twice, the epicenter activation off and then on (`&epi=1`; same seed, same cars): the cards of a pair differ in nothing else, so a cycle is its own A/B. */
+/** The extended cycle: every map twice, the epicenter activation off and then on (`&epi=1`; same seed, same cars): the cards of a pair differ in nothing else, so a cycle is its own A/B. */
 const CYCLE: readonly BenchStep[] = MAPS.flatMap((s) => [s, { id: `${s.id}${EPI_STEP_SUFFIX}`, query: `${s.query}&${EPI_QUERY}=1` }]);
 
 /** The Ultra tier exists in this build (`FX_TIERS`): the loop's Ultra arm (`loopultra=1`) exists only then. */
@@ -43,7 +43,7 @@ const FX_TIER_IDS: readonly string[] = FX_TIERS;
 export const ULTRA_AVAILABLE: boolean = FX_TIER_IDS.includes(FX_TIER_ULTRA);
 
 /** The query names that carry a loop through the bench pages' addresses (`?bench=…` is the step's own query, `ultra=1` the Ultra arm's). */
-const LOOP_QUERY = { session: "loop", cycle: "cycle", step: "step", keep: "keep", auto: "auto", ultraNext: "loopultra", ultraCycle: "cycleultra" } as const;
+const LOOP_QUERY = { session: "loop", cycle: "cycle", step: "step", keep: "keep", auto: "auto", ultraNext: "loopultra", ultraCycle: "cycleultra", extended: EXTENDED_QUERY, arm: "arm" } as const;
 
 /**
  * The loop's whole state, read from the address of the bench page it is on: its session (every submission of the loop carries
@@ -62,6 +62,10 @@ export interface BenchRun {
   auto: boolean;
   /** The next cycle's benches each run their Ultra arm (this cycle's own choice is `ultra`). */
   ultraNext: boolean;
+  /** The extended bench (A/B blocks and the replay on each page, every map under both arms): false is the quick bench, one arm of each map, the window alone. */
+  extended: boolean;
+  /** A quick loop's epicenter arm in its first cycle (true: on); each later cycle runs the other arm (`quickArm`). */
+  arm: boolean;
 }
 
 /**
@@ -76,9 +80,28 @@ export function cycleOf(ultra: boolean, loop = 1): BenchStep[] {
   return steps.map((_, i) => steps[i ^ 1]!);
 }
 
-/** The first step of a new loop (the Benchmark entry): it keeps benching and reloads onto new builds, with Ultra where the build has it. */
-export function startRun(session: string): BenchRun {
-  return { session, loop: 1, step: 0, ultra: ULTRA_AVAILABLE, keep: true, auto: true, ultraNext: ULTRA_AVAILABLE };
+/** The arm a quick loop's cycle `loop` runs: `arm` in the first, the other in the second, and so on. */
+export const quickArm = (arm: boolean, loop: number): boolean => arm !== (loop % 2 === 0);
+
+/** The quick cycle: each map once, under the epicenter arm `on` (`&epi=1`) or without; Ultra's look on every page when `ultra` is set and the build has it. */
+function quickCycleOf(ultra: boolean, on: boolean): BenchStep[] {
+  return MAPS.map((s) => {
+    const ultraArm = ultra && ULTRA_AVAILABLE ? `&${ULTRA_QUERY}=1` : "";
+    return on ? { id: `${s.id}${EPI_STEP_SUFFIX}`, query: `${s.query}&${EPI_QUERY}=1${ultraArm}` } : { id: s.id, query: `${s.query}${ultraArm}` };
+  });
+}
+
+/** The benches `run` is on the cycle of: the extended cycle, or the quick one under the arm this cycle runs. */
+function stepsOf(run: BenchRun): BenchStep[] {
+  return run.extended ? cycleOf(run.ultra, run.loop) : quickCycleOf(run.ultra, quickArm(run.arm, run.loop));
+}
+
+/**
+ * The first step of a new loop (the Benchmark entry). The quick bench (default) is one cycle of the four maps under one epicenter arm (`arm`: on when true), with Ultra where the build has it; it ends
+ * there unless kept (the arm of the next run is the other: `quickArm`, which the entry alternates from run to run). The extended bench keeps benching and reloads onto new builds.
+ */
+export function startRun(session: string, extended = false, arm = false): BenchRun {
+  return { session, loop: 1, step: 0, ultra: ULTRA_AVAILABLE, keep: extended, auto: true, ultraNext: ULTRA_AVAILABLE, extended, arm };
 }
 
 /**
@@ -89,7 +112,10 @@ export function startRun(session: string): BenchRun {
  */
 export function runFromPage(search: string, session: string): BenchRun | null {
   const q = new URLSearchParams(search);
-  const fresh = startRun(session);
+  const extended = q.get(LOOP_QUERY.extended) === "1";
+  // A quick page opened by hand runs the arm its own address names (`&epi=1`); the loop it starts alternates from there.
+  const arm = q.get(EPI_QUERY) === "1";
+  const fresh = startRun(session, extended, arm);
   const option = (name: string, absent: boolean): boolean => (q.has(name) ? q.get(name) !== "0" : absent);
   const run: BenchRun = {
     ...fresh,
@@ -98,23 +124,23 @@ export function runFromPage(search: string, session: string): BenchRun | null {
     auto: option(LOOP_QUERY.auto, fresh.auto),
     ultraNext: option(LOOP_QUERY.ultraNext, fresh.ultraNext) && ULTRA_AVAILABLE,
   };
-  const steps = cycleOf(run.ultra, run.loop);
+  const steps = stepsOf(run);
   for (let i = 0; i < steps.length; i++) {
     const s = new URLSearchParams(steps[i]!.query);
-    if (s.get(BENCH_QUERY) === q.get(BENCH_QUERY) && s.get(COURSE_QUERY) === q.get(COURSE_QUERY) && (s.get(EPI_QUERY) === "1") === (q.get(EPI_QUERY) === "1")) return { ...run, step: i };
+    if (s.get(BENCH_QUERY) === q.get(BENCH_QUERY) && s.get(COURSE_QUERY) === q.get(COURSE_QUERY) && (!run.extended || (s.get(EPI_QUERY) === "1") === (q.get(EPI_QUERY) === "1"))) return { ...run, step: i };
   }
   return null;
 }
 
 /** The step a run is at. */
 export function stepOf(run: BenchRun): BenchStep {
-  const cycle = cycleOf(run.ultra, run.loop);
+  const cycle = stepsOf(run);
   return cycle[run.step % cycle.length]!;
 }
 
 /** The run after its current step is done: the next step, the next cycle (taking `ultraNext` as it is now) when `keep` is set, or null when the loop is over. */
 export function advance(run: BenchRun): BenchRun | null {
-  if (run.step + 1 < cycleOf(run.ultra, run.loop).length) return { ...run, step: run.step + 1 };
+  if (run.step + 1 < stepsOf(run).length) return { ...run, step: run.step + 1 };
   return run.keep ? { ...run, loop: run.loop + 1, step: 0, ultra: run.ultraNext } : null;
 }
 
@@ -126,6 +152,8 @@ export function stepHref(href: string, run: BenchRun): string {
     [LOOP_QUERY.auto, run.auto],
     [LOOP_QUERY.ultraNext, run.ultraNext],
     [LOOP_QUERY.ultraCycle, run.ultra],
+    [LOOP_QUERY.extended, run.extended],
+    [LOOP_QUERY.arm, run.arm],
   ] as const;
   const query = [stepOf(run).query, `${LOOP_QUERY.session}=${run.session}`, `${LOOP_QUERY.cycle}=${run.loop}`, `${LOOP_QUERY.step}=${run.step}`];
   for (const name of Object.values(STRIP_QUERY)) {
@@ -171,7 +199,7 @@ export function loopSettings(run: BenchRun, step: BenchStep): { session: string;
 
 /** The loop's place on the bench card: its cycle count and the step in the cycle, e.g. `loop 2, step 1/3`. */
 export function loopProgress(run: BenchRun): string {
-  const stepCount = cycleOf(run.ultra, run.loop).length;
+  const stepCount = stepsOf(run).length;
   return `loop ${run.loop}, step ${(run.step % stepCount) + 1}/${stepCount}`;
 }
 
@@ -196,7 +224,7 @@ export function parseRun(search: string): BenchRun | null {
   const step = countOf(q, LOOP_QUERY.step, 0);
   if (loop === null || loop < 1 || step === null) return null;
   const on = (name: string): boolean => q.get(name) !== "0";
-  return { session, loop, step, ultra: q.get(LOOP_QUERY.ultraCycle) === "1", keep: on(LOOP_QUERY.keep), auto: on(LOOP_QUERY.auto), ultraNext: on(LOOP_QUERY.ultraNext) && ULTRA_AVAILABLE };
+  return { session, loop, step, ultra: q.get(LOOP_QUERY.ultraCycle) === "1", keep: on(LOOP_QUERY.keep), auto: on(LOOP_QUERY.auto), ultraNext: on(LOOP_QUERY.ultraNext) && ULTRA_AVAILABLE, extended: q.get(LOOP_QUERY.extended) === "1", arm: q.get(LOOP_QUERY.arm) === "1" };
 }
 
 /** What the loop's driver asks of the page it runs in. */

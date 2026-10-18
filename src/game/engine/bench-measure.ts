@@ -1,5 +1,6 @@
 import type * as THREE from "three";
 import { epicenterOn } from "../deform/epicenter.ts";
+import { NAME } from "./bench-frames.ts";
 import { skinKernel } from "../deform/skin-kernel.ts";
 import { DETAIL_LEVELS, type CarDetail } from "../present/car-detail.ts";
 import { gpuRenderer } from "../present/auto-fx.ts";
@@ -23,11 +24,19 @@ import { armedSolids } from "../world/surfaces.ts";
 import { PHASE, PHASE_COUNT, PHASE_NAMES, WORK, WORK_COUNT, WORK_NAMES } from "./sim-phases.ts";
 
 /** The timings both benches share: the window, the A/B blocks. The warm-up and the course are the plan's. */
-export const BENCH = { seed: 1, measureS: 40, blockS: 8, paceCycles: 2, fxCycles: 2, detailCycles: 2, skyCycles: 1, skyWaitS: 10, sweepS: 3, sweepShortS: 1, sweepMinFrames: 60, sweepCapS: 8 } as const;
+export const BENCH = { seed: 1, measureS: 30, blockS: 5, paceCycles: 2, fxCycles: 2, detailCycles: 2, skyCycles: 1, skyWaitS: 10, sweepS: 3, sweepShortS: 1, sweepMinFrames: 60, sweepCapS: 8 } as const;
 /** The key a rung's share of the window is kept under. */
 const rungKey = (level: number): string => `${DETAIL_LEVELS[level]?.far ?? "?"} m`;
 /** Samples kept: far above any display rate, so the window always fits. */
-export const CAP = BENCH.measureS * 400;
+/**
+ * The quick bench (the default: the window alone, no A/Bs, no replay), in seconds, for a run of 4 maps to take 2-4 minutes. `windowS`: the measured window, which opens on the staged crash (`crashAtStart`) so the
+ * arms of a map do the same work and its spread settles; `sweepStopS`: how long each setting of the one warm-up sweep (a loop's first page) is held, at least `sweepStopMinFrames` frames and at most
+ * `sweepStopCapS`; `loadS` and `countdownS`: what a page spends loading its scene and on the grid before green, for the planned total (`quickPlanS`: measured on the desktop, 2026-10).
+ */
+export const QUICK = { windowS: 25, sweepStopS: 2.5, sweepStopMinFrames: 45, sweepStopCapS: 5, loadS: 3, countdownS: 5 } as const;
+
+/** The most frames a window records: its seconds at a 400 fps ceiling. */
+export const CAP = Math.max(BENCH.measureS, QUICK.windowS) * 400;
 /** The timer-query block of the main window (the A/B arms' blocks count up from 1). */
 export const WINDOW_BLOCK = 0;
 /** Timer queries in flight at most (a draw finding them all out goes untimed); the results kept: the window and every A/B block at the sample rate cap. */
@@ -180,7 +189,7 @@ export function wrecks(parts: BenchParts): number {
 }
 
 /** The deterministic counters of a window, in the order `readCounters` fills them: the pacer's steps, the world's work (`WORK_NAMES`), then the counters of the contact surface, the skin kernel and the ragdoll worker's posts. */
-export const COUNTER_NAMES = ["steps", ...WORK_NAMES, "prismQueries", "prismsVisited", "prismTouches", "skins", "skinVerts", "ragdollMessages", "ragdollBytes"] as const;
+export const COUNTER_NAMES = [NAME.steps, ...WORK_NAMES, "prismQueries", "prismsVisited", "prismTouches", "skins", "skinVerts", NAME.ragdoll, "ragdollBytes"] as const;
 export const COUNTER_COUNT = COUNTER_NAMES.length;
 
 /** The counters as they stand now, into `out` (`COUNTER_COUNT` long). Each only counts up: a window's work is the difference of two reads. */
@@ -513,7 +522,7 @@ function sharesOf(counts: Float64Array, order: Uint8Array, seen: number, frames:
   return shares;
 }
 
-export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "device" | "pageEvents" | "pageSeconds" | "pageState" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "sweepHitches" | "switches"> {
+export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "device" | "pageEvents" | "pageSeconds" | "pageState" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "sweepHitches" | "switches" | "frameStats" | "run"> {
   const { race } = parts;
   const { n, iv } = s;
   const third = Math.floor(n / 3);

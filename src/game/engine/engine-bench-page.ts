@@ -32,8 +32,8 @@ export interface PageWatch {
    * One frame of the per-second series: reads the frame's stamp from `row` (`FRAME.now`) and writes the page's state (the last event's, plus whether
    * the screen is `awake`) for every second the run has reached since its first frame, so a second the page drew no frame in (hidden) still has its entry.
    */
-  tick(row: Float64Array, phase: number, awake: boolean, sky: number): void;
-  /** The series as the card carries it: a hex digit a second (bits visible 1, focused 2, fullscreen 4, awake 8), the stretch's index a second and the sky as drawn (`SKY_DRAWN`) a second. */
+  tick(row: Float64Array, phase: number, awake: boolean, sky: number, epi: number): void;
+  /** The series as the card carries it: a hex digit a second (bits visible 1, focused 2, fullscreen 4, awake 8), the stretch's index a second and the sky as drawn (`SKY_DRAWN`) and the epicenter knob (0 off, 1 on) a second. */
   seconds(): PageSeconds;
 }
 
@@ -49,6 +49,7 @@ export function watchPage(): PageWatch {
   const secondFlags = new Uint8Array(SECONDS_CAP);
   const secondPhase = new Uint8Array(SECONDS_CAP);
   const secondSky = new Uint8Array(SECONDS_CAP);
+  const secondEpi = new Uint8Array(SECONDS_CAP);
   let n = 0;
   let seconds = 0;
   let firstStamp = -1;
@@ -75,13 +76,14 @@ export function watchPage(): PageWatch {
       phaseStart = performance.now();
       record();
     },
-    tick: (row, index, awake, sky) => {
+    tick: (row, index, awake, sky, epi) => {
       if (firstStamp < 0) firstStamp = row[FRAME.now]!;
       const reached = Math.floor((row[FRAME.now]! - firstStamp) / 1000);
       const state = awake ? current | PAGE_AWAKE : current;
       while (seconds <= reached && seconds < SECONDS_CAP) {
         secondFlags[seconds] = state;
         secondSky[seconds] = sky;
+        secondEpi[seconds] = epi;
         secondPhase[seconds++] = index;
       }
     },
@@ -89,12 +91,14 @@ export function watchPage(): PageWatch {
       let states = "";
       let phases = "";
       let skies = "";
+      let epis = "";
       for (let i = 0; i < seconds; i++) {
         states += secondFlags[i]!.toString(16);
         phases += secondPhase[i]!.toString(16);
         skies += secondSky[i]!.toString(16);
+        epis += secondEpi[i]!.toString(16);
       }
-      return { flags: states, phases, sky: skies };
+      return { flags: states, phases, sky: skies, epi: epis };
     },
     stop: () => {
       for (const e of PAGE_DOC_EVENTS) document.removeEventListener(e, note);

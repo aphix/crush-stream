@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
-import { advance, autoReloadAsked, BIGGEST_COURSE, cycleOf, driveLoop, isBenchPage, loopProgress, loopSettings, newSession, parseRun, runFromPage, shareHashOf, startRun, stepHref, stepOf, ULTRA_AVAILABLE, type BenchRun } from "./bench-loop.ts";
+import { advance, autoReloadAsked, BIGGEST_COURSE, cycleOf, driveLoop, isBenchPage, loopProgress, loopSettings, newSession, parseRun, quickArm, runFromPage, shareHashOf, startRun, stepHref, stepOf, ULTRA_AVAILABLE, type BenchRun } from "./bench-loop.ts";
 
-const RUN: BenchRun = { session: "k3x9q2", loop: 1, step: 0, ultra: false, keep: false, auto: false, ultraNext: false };
+const RUN: BenchRun = { session: "k3x9q2", loop: 1, step: 0, ultra: false, keep: false, auto: false, ultraNext: false, extended: true, arm: false };
 
 describe("given the race courses of the game", () => {
   it("when their roads are measured, then the course the benchmark loop calls the biggest has the longest road", () => {
@@ -82,7 +82,7 @@ describe("given a loop that has just finished a step", () => {
 
   it("when the loop runs three cycles from the start, then each submission's loop counter counts the cycle from 1 and the session never changes", () => {
     const seen: string[] = [];
-    for (let run: BenchRun | null = { ...startRun("k3x9q2"), ultra: false, ultraNext: false }; run !== null && run.loop <= 3; run = advance(run)) {
+    for (let run: BenchRun | null = { ...startRun("k3x9q2", true), ultra: false, ultraNext: false }; run !== null && run.loop <= 3; run = advance(run)) {
       const s = loopSettings(run, stepOf(run));
       seen.push(`${s.session} ${s.loop} ${s.step}`);
     }
@@ -91,8 +91,8 @@ describe("given a loop that has just finished a step", () => {
     assert.equal(new Set(seen.map((s) => s.split(" ")[0])).size, 1);
   });
 
-  it("when a new loop is started, then it keeps benching and reloads onto new builds, with Ultra if this build has it", () => {
-    const run = startRun("k3x9q2");
+  it("when a new extended loop is started, then it keeps benching and reloads onto new builds, with Ultra if this build has it", () => {
+    const run = startRun("k3x9q2", true);
     assert.equal(run.keep, true, "keep");
     assert.equal(run.auto, true, "auto");
     assert.equal(run.ultra, ULTRA_AVAILABLE, "this cycle's Ultra");
@@ -122,7 +122,7 @@ describe("given a loop whose state is in the address of its bench page", () => {
   });
 
   it("when a loop starts from a custom strip address (len, cars, props), then every strip step of every cycle builds the same strip", () => {
-    const custom = "?bench=strip&len=2500&cars=4&props=rock:7&same=off&traffic=off";
+    const custom = "?bench=strip&len=2500&cars=4&props=rock:7&same=off&traffic=off&extended=1";
     const wanted = benchPlan(custom)!;
     const shape = { len: "2500", cars: "4", props: "rock:7", same: "off", traffic: "off" } as const;
     let href = new URL(custom, base).toString();
@@ -165,12 +165,12 @@ describe("given a loop whose state is in the address of its bench page", () => {
   });
 
   const hrefCases = [
-    { it: "the address has a share fragment and a leftover v", from: `${base}?v=old#seed=7`, run: { ...RUN, step: 4 }, expected: `${base}?bench=city&course=dam-spine&loop=k3x9q2&cycle=1&step=4&keep=0&auto=0&loopultra=0&cycleultra=0` },
+    { it: "the address has a share fragment and a leftover v", from: `${base}?v=old#seed=7`, run: { ...RUN, step: 4 }, expected: `${base}?bench=city&course=dam-spine&loop=k3x9q2&cycle=1&step=4&keep=0&auto=0&loopultra=0&cycleultra=0&extended=1&arm=0` },
     {
       it: "every option is on",
       from: base,
       run: { ...RUN, loop: 3, step: 0, keep: true, auto: true, ultra: true, ultraNext: true },
-      expected: `${base}?bench=strip${ULTRA_AVAILABLE ? "&ultra=1" : ""}&loop=k3x9q2&cycle=3&step=0&keep=1&auto=1&loopultra=1&cycleultra=1`,
+      expected: `${base}?bench=strip${ULTRA_AVAILABLE ? "&ultra=1" : ""}&loop=k3x9q2&cycle=3&step=0&keep=1&auto=1&loopultra=1&cycleultra=1&extended=1&arm=0`,
     },
   ];
   for (const testCase of hrefCases) {
@@ -180,7 +180,7 @@ describe("given a loop whose state is in the address of its bench page", () => {
   }
 
   it("when a step's address is read back, then it is the run it was built from", () => {
-    const run: BenchRun = { session: "k3x9q2", loop: 7, step: 1, ultra: true, keep: true, auto: false, ultraNext: true };
+    const run: BenchRun = { session: "k3x9q2", loop: 7, step: 1, ultra: true, keep: true, auto: false, ultraNext: true, extended: true, arm: false };
     const back = parseRun(searchOf(stepHref(base, run)));
     assert.equal(back?.session, run.session, "session");
     assert.equal(back?.loop, run.loop, "cycle count");
@@ -213,8 +213,8 @@ describe("given a loop whose state is in the address of its bench page", () => {
 
 describe("given a bench page opened by its address alone, with no loop in it", () => {
   for (const step of cycleOf(ULTRA_AVAILABLE)) {
-    it(`when the page is ${step.query}, then it runs as a loop with every option on, at the step that runs that same bench, and moves on after it`, () => {
-      const run = runFromPage(`?${step.query}`, "k3x9q2");
+    it(`when the page is ${step.query} with extended=1, then it runs as an extended loop with every option on, at the step that runs that same bench, and moves on after it`, () => {
+      const run = runFromPage(`?${step.query}&extended=1`, "k3x9q2");
       assert.ok(run !== null, "a cycle bench becomes a loop");
       assert.equal(stepOf(run).id, step.id);
       assert.equal(run.keep && run.auto, true, "keep benching and auto-reload on");
@@ -363,5 +363,74 @@ describe("given the loop driven in one page", () => {
     assert.equal(log.ran.length, 3, "steps run before the reload");
     assert.equal(log.reloads, 3, "the reload was asked before the pause of each step it reached");
     assert.equal(log.pauses, 2, "the pause before the reload belongs to the reload");
+  });
+});
+
+describe("given the quick bench, the default: one arm of each map in a cycle, the other arm the next run", () => {
+  const base = "https://game.test/crush/";
+  const search = (run: BenchRun): string => new URL(stepHref(base, run)).search;
+  const idsOf = (run: BenchRun): string => {
+    const ids: string[] = [];
+    for (let at: BenchRun | null = run; at !== null && at.loop === run.loop; at = advance(at)) ids.push(stepOf(at).id);
+    return ids.join(" ");
+  };
+
+  it("when a quick loop starts with the activation off, then its cycle is the four maps once each, none under the activation, and it ends after them", () => {
+    const run = startRun("k3x9q2", false, false);
+    assert.equal(idsOf(run), "strip city dam-spine national-mall");
+    assert.equal(run.keep, false, "a quick run is one cycle");
+    assert.equal(advance({ ...run, step: 3 }), null, "the loop ends after the fourth map");
+  });
+
+  it("when a quick loop starts with the activation on, then every step is the map's epicenter arm: the id says epi and the page query asks for it", () => {
+    const run = startRun("k3x9q2", false, true);
+    assert.equal(idsOf(run), "strip:epi city:epi dam-spine:epi national-mall:epi");
+    for (let at: BenchRun | null = run; at !== null; at = advance(at)) assert.equal(new URLSearchParams(stepOf(at).query).get("epi"), "1", stepOf(at).id);
+  });
+
+  it("when a quick loop is kept, then its next cycle runs the other arm, and the one after it the first again", () => {
+    const kept = { ...startRun("k3x9q2", false, false), keep: true };
+    const second = advance({ ...kept, step: 3 })!;
+    const third = advance({ ...second, step: 3 })!;
+    assert.deepEqual([second.loop, third.loop], [2, 3]);
+    assert.equal(idsOf(second), "strip:epi city:epi dam-spine:epi national-mall:epi");
+    assert.equal(idsOf(third), "strip city dam-spine national-mall");
+    assert.equal(quickArm(false, 1) === quickArm(false, 3) && quickArm(false, 1) !== quickArm(false, 2), true, "odd cycles one arm, even the other");
+  });
+
+  it("when a quick step's address is built and read back, then it carries the arm and the bench kind, and the page's plan reads quick from it; an extended step's reads extended", () => {
+    const run = { ...startRun("k3x9q2", false, true), step: 2 };
+    const back = parseRun(search(run))!;
+    assert.deepEqual([back.extended, back.arm, back.step, back.loop], [false, true, 2, 1]);
+    assert.equal(benchPlan(search(run))!.extended, false);
+    assert.equal(benchPlan(search(run))!.epicenter, true, "the page's own query asks for the activation");
+    const long = startRun("k3x9q2", true);
+    assert.equal(benchPlan(search(long))!.extended, true);
+    assert.equal(parseRun(search(long))!.extended, true);
+  });
+
+  it("when a quick page is opened by hand with the activation on, then the loop it starts is on that arm from that map and ends after the cycle", () => {
+    const run = runFromPage("?bench=city&epi=1", "k3x9q2")!;
+    assert.deepEqual([stepOf(run).id, run.arm, run.keep, run.extended], ["city:epi", true, false, false]);
+    assert.equal(stepOf(advance(run)!).id, "dam-spine:epi");
+  });
+
+  it("when a quick loop is driven in one page, then the four maps run once each with no pause after the last, and the loop's progress says step n of 4", async () => {
+    const ran: string[] = [];
+    const progress: string[] = [];
+    let pauses = 0;
+    await driveLoop(startRun("k3x9q2", false, false), {
+      show: (run) => new URL(stepHref(base, run)).search,
+      runStep: async (run) => {
+        ran.push(stepOf(run).id);
+        progress.push(loopProgress(run));
+        return true;
+      },
+      pause: async () => void pauses++,
+      reload: async () => false,
+    });
+    assert.equal(ran.join(" "), "strip city dam-spine national-mall");
+    assert.equal(progress.join(" | "), "loop 1, step 1/4 | loop 1, step 2/4 | loop 1, step 3/4 | loop 1, step 4/4");
+    assert.equal(pauses, 3);
   });
 });

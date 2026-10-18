@@ -4,6 +4,9 @@ import type { SkyDetail, SkyMode } from "../present/sky-dome.ts";
 import { labLine, stripLines, type StripResult } from "./engine-bench-plan.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 import type { HitchTable } from "./bench-hitch.ts";
+import { PHASE_NAMES, WORK, WORK_NAMES } from "./sim-phases.ts";
+import { NAME, type FrameStats } from "./bench-frames.ts";
+import { EXTENDED_QUERY } from "./constants.ts";
 import type { SwitchHitch } from "./bench-settle.ts";
 
 const COARSE_LABEL = `1/${QUIET_HZ} s`;
@@ -147,6 +150,8 @@ export interface PageSeconds {
   phases: string;
   /** The sky as drawn each second, a digit of `SKY_DRAWN` (0 none, 1 gradient, 2 half, 3 full, 4 loading): the bench pins the Sky setting, so a window's seconds all read the pinned one. */
   sky: string;
+  /** The epicenter knob each second (0 off, 1 on): the warm-up must end in the state the window runs in, so the last warm second and the first window second read the same digit. */
+  epi: string;
 }
 
 /** The page's state `atS` seconds into `phase` (`BenchResult.pageEvents`). */
@@ -274,8 +279,12 @@ export interface BenchResult {
   pageEvents: PageEvent[];
   /** The page's state each second of the run (`PageSeconds`). */
   pageSeconds: PageSeconds;
+  /** What ran: `extended` (the A/B blocks and the replay followed the window; null A/Bs and no replay when false: the quick bench), and `staged` (the window opened on the staged head-on crash at the start line, `crashAtStart`). */
+  run: { extended: boolean; staged: boolean };
   /** The page as the window opened. */
   pageState: PageState;
+  /** Every frame of the window as the device saw it: percentiles, lows, the `BUCKET_MS` series and the spikes with what the sim was doing in them (`bench-frames.ts`). */
+  frameStats: FrameStats;
   /** Where the window's sim time went, by phase of a step, and the work done (`PhaseCard`). */
   phases: PhaseCard;
   /** Long tasks during the window; null where the browser has no "longtask" entries (not Chrome). */
@@ -288,10 +297,10 @@ export interface BenchResult {
   switches: SwitchHitch[];
   settings: BenchSettings;
   /** The pacer pinned to 1/240 s and to 1/80 s in alternating blocks (same tier), then the FX tier alternated minimal / low / high (and ultra when the page asked: `&ultra=1`). */
-  abPace: { fine: Block; coarse: Block };
-  abFx: { minimal: Block; low: Block; high: Block; ultra?: Block };
+  abPace: { fine: Block; coarse: Block } | null;
+  abFx: { minimal: Block; low: Block; high: Block; ultra?: Block } | null;
   /** The distance detail pinned: no cuts, then the rungs for 75, 50 and 30 m (the governor off, the FX tier held). */
-  abDetail: Record<string, Block>;
+  abDetail: Record<string, Block> | null;
   /** The Sky setting pinned at the top tier the window ran: the full textured strip, then no sky (null: the Lab, which has no sky). */
   abSky: { full: Block; off: Block } | null;
   /** The cosmetic Rapier world (the thrown drivers' and knocked props'): `world.step()` over the sampled window, and the world's size. */
@@ -421,6 +430,20 @@ const phaseLine = (p: PhaseCard, simMsPerSimS: number, spread: number): string =
   return `  sim phases, ms per sim-second: ${phases.map(([name, ms]) => `${name} ${f1(ms)}`).join(", ")}, unattributed ${f1(p.unattributedMsPerSimS)}  (sum ${f1(sum)} of ${f1(simMsPerSimS)}, ${f1(spread)} % spread over its seconds);  work per sim-second: ${work}`;
 };
 
+/** What the window's frame-time spikes coincide with, on one line: how many, and what the sim was doing in them against the other frames. */
+const spikeLine = (f: FrameStats): string => {
+  const { spikes } = f;
+  const head = `frame spikes (over ${spikes.factor}x the window median ${f1(f.medianMs)} ms, at least ${spikes.minMs} ms): ${spikes.count} of ${f.n} frames, p99 ${f1(f.p99Ms)} p99.9 ${f1(f.p999Ms)} max ${f1(f.maxMs)} ms`;
+  if (spikes.count === 0) return `${head}, none`;
+  const a = spikes.activity;
+  const say = (name: string): string => {
+    const k = a.cols.indexOf(name);
+    return `${name} ${f1(a.inSpikes[k]!)} vs ${f1(a.otherwise[k]!)} (r ${a.correlation[k]!.toFixed(2)})`;
+  };
+  const top = PHASE_NAMES.reduce((best, _, p) => (spikes.dominantPhase[p]! > spikes.dominantPhase[best]! ? p : best), 0);
+  return `${head}; in a spike against elsewhere: ${[NAME.crashed, WORK_NAMES[WORK.wreckCarSlices], WORK_NAMES[WORK.pairContacts], WORK_NAMES[WORK.freezes], NAME.ragdoll].map(say).join(", ")}; the ${PHASE_NAMES[top]} phase is the largest in ${spikes.dominantPhase[top]} of them`;
+};
+
 /** The switch hitches on one line, grouped by A/B: `arm longest frame ms / s to settle`, `!` where the arm never settled within the cap. */
 const switchLine = (switches: readonly SwitchHitch[]): string => {
   const stretches = [...new Set(switches.map((s) => s.stretch))];
@@ -448,12 +471,13 @@ const deviceStateText = (longTasks: LongTasks | null, battery: BenchResult["devi
 export function describeBench(r: BenchResult): string[] {
   const d = r.device;
   const s = r.settings;
+  const { abPace, abFx, abDetail } = r;
   const tiers = Object.entries(r.tierPct).sort((a, b) => b[1] - a[1]).map(([t, p]) => `${t} ${Math.round(p)} %`).join(", ");
   return [
-    `CRUSH BENCH  ${r.course}  ${r.cars} cars  epicenter ${s.epicenter ? "ON" : "off"}  ${f1(r.wallS)} s  ${r.frames} frames  (${d.browser})  build ${r.build}`,
+    `CRUSH BENCH  ${r.course}  ${r.cars} cars  epicenter ${s.epicenter ? "ON" : "off"}  ${r.run.extended ? EXTENDED_QUERY : "quick"}${r.run.staged ? ", staged crash" : ""}  ${f1(r.wallS)} s  ${r.frames} frames  (${d.browser})  build ${r.build}`,
     ...(r.strip ? stripLines(r.strip) : []),
     ...(r.labThrown !== null ? [labLine(r.labThrown)] : []),
-    `${f1(r.fps)} FPS   1% low ${f1(r.fpsLow1)}   by thirds ${r.fpsThirds.map(f1).join(" / ")}`,
+    `${f1(r.fps)} FPS   1% low ${f1(r.frameStats.fpsLow1)}   0.1% low ${f1(r.frameStats.fpsLow01)}   by thirds ${r.fpsThirds.map(f1).join(" / ")}`,
     `fps each second: ${r.fpsPerSecond.join(" ")}`,
     `sim ms each second: ${r.simMsPerSecond.join(" ")}`,
     `SIM SPEED ${Math.round(r.simSpeedPct)} %   pacer cut ${r.cutFrames} of ${r.frames} frames, gave up ${f1(r.lostSimS)} sim-s   ${COARSE_LABEL} steps in ${Math.round(r.coarsePct)} % of frames   wrecks: mean ${f1(r.crashed.mean)}, end ${r.crashed.end}`,
@@ -463,6 +487,7 @@ export function describeBench(r: BenchResult): string[] {
     row("  sim", r.simMs) + `   ${f1(r.stepsPerFrame)} steps/frame, ${r.msPerStep.toFixed(2)} ms/step, ${Math.round(r.simMsPerSimS)} ms per sim-second, ${f1(r.fineCutsPerSimS)} fine-slice cuts/sim-s`,
     phaseLine(r.phases, r.simMsPerSimS, r.simSpreadPct),
     `${hitchLine(r.hitches)}   ${switchLine(r.switches)}   warm-up sweep: ${r.sweepHitches.count} hitched of ${r.sweepHitches.frames} frames, ${Math.round(r.sweepHitches.excessMs)} ms over`,
+    spikeLine(r.frameStats),
     row("  draw", r.renderMs),
     r.gpuMs ? row("GPU", r.gpuMs) + (waited(r.gpuMs, r.frameMs) ? "   p95 is one frame long: a wait on the display, p50 is the work" : "") : "GPU       no timer query on this device",
     ragdollLine(r.ragdoll),
@@ -471,15 +496,19 @@ export function describeBench(r: BenchResult): string[] {
     `detail: only the body drawn beyond ${Object.entries(r.detailPct).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} for ${Math.round(v)} %`).join(", ")} of the window`,
     `shadows ${s.shadows.enabled ? `${s.shadows.type} ${s.shadows.map}, ${s.shadows.casters} casters` : "off"}   pixel ratio ${s.pixelRatio} of device ${s.deviceRatio}, canvas ${s.canvas}, ${s.antialias ? "MSAA" : "no MSAA"}   fx density ${f1(s.fxDensity)}, cel ${s.celLook === null ? "auto" : f1(s.celLook)}   night ${s.night ? "on" : "off"}, wet ${s.wet ? "on" : "off"}, realism ${f1(s.realism)}, squash ${f1(s.squash)}, buckle ${f1(s.buckle)}, deform ${s.deformMode}, sky ${s.sky} pinned by the bench (your setting ${s.skyPlayer}, put back after; ${s.skyDetail} on every tier), drawn ${windowSky(r.pageSeconds)}`,
     `depth: ${s.depth.bits} bits (drawing buffer${s.depth.contextDepth ? "" : ", none requested"}), subpixel ${s.depth.subpixelBits} bits, fragment highp ${s.depth.fragmentHighFloat ? `${s.depth.fragmentHighFloat.precision} bits, range 2^${s.depth.fragmentHighFloat.rangeMin}..2^${s.depth.fragmentHighFloat.rangeMax}` : "not supported"}, camera near ${s.depth.near} far ${s.depth.far}, log depth ${s.depth.logarithmicDepthBuffer ? "on" : "off"}, ${describeDepthProbe(s.depth.probe)}`,
-    `A/B pacer pinned: ${arm("1/240 s", r.abPace.fine)}, ${f1(r.abPace.fine.fineCutsPerSimS)} fine-slice cuts/sim-s`,
-    `                  ${arm(COARSE_LABEL, r.abPace.coarse)}, ${f1(r.abPace.coarse.fineCutsPerSimS)} fine-slice cuts/sim-s`,
-    `A/B fx pinned: ${arm("minimal", r.abFx.minimal)}`,
-    `               ${arm("low", r.abFx.low)}`,
-    `               ${arm("high", r.abFx.high)}`,
-    ...(r.abFx.ultra ? [`               ${arm(FX_TIER_ULTRA, r.abFx.ultra)}`] : []),
-    ...DETAIL_ARMS.map((a, i) => `${i ? "                   " : "A/B detail pinned: "}${arm(a.key === "off" ? "no cuts" : `body beyond ${a.key}`, r.abDetail[a.key]!)}`),
-    ...(r.abSky ? [`A/B sky pinned: ${arm("full", r.abSky.full)}`, `                ${arm("off", r.abSky.off)}`] : []),
-    ...replayLines(r.replay, r.replayWhy),
+    ...(abPace && abFx && abDetail
+      ? [
+      `A/B pacer pinned: ${arm("1/240 s", abPace.fine)}, ${f1(abPace.fine.fineCutsPerSimS)} fine-slice cuts/sim-s`,
+      `                  ${arm(COARSE_LABEL, abPace.coarse)}, ${f1(abPace.coarse.fineCutsPerSimS)} fine-slice cuts/sim-s`,
+      `A/B fx pinned: ${arm("minimal", abFx.minimal)}`,
+      `               ${arm("low", abFx.low)}`,
+      `               ${arm("high", abFx.high)}`,
+      ...(abFx.ultra ? [`               ${arm(FX_TIER_ULTRA, abFx.ultra)}`] : []),
+      ...DETAIL_ARMS.map((a, i) => `${i ? "                   " : "A/B detail pinned: "}${arm(a.key === "off" ? "no cuts" : `body beyond ${a.key}`, abDetail[a.key]!)}`),
+      ...(r.abSky ? [`A/B sky pinned: ${arm("full", r.abSky.full)}`, `                ${arm("off", r.abSky.off)}`] : []),
+        ]
+      : [`quick bench: the window alone (no A/B blocks, no replay: the extended bench has them)`]),
+    ...(r.run.extended ? replayLines(r.replay, r.replayWhy) : []),
     `${d.gpu}${d.gpuMasked ? "   [masked by the browser: not the real GPU]" : ""}   load: options ${f1(r.setupMs.options)} ms, start ${f1(r.setupMs.start)} ms`,
     `${d.cores} cores${d.memoryGB ? `, ${d.memoryGB} GB` : ""}  screen ${d.screen} @${d.dpr}  canvas ${d.canvas}  timer step ${f1(d.timerStepMs)} ms   ${deviceStateText(r.longTasks, d.battery)}`,
   ];

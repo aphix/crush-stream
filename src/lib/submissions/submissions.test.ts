@@ -170,8 +170,7 @@ describe("given the submissions endpoint on a freshly migrated database", () => 
     assert.equal(member(oldCard, "payload", "result", "fps"), 58.5, "the older card is read back as it was sent");
     assert.equal(member(oldCard, "payload", "result", "phases"), undefined, "and has no phase table");
     const addedBytes = Buffer.byteLength(JSON.stringify(added));
-    assert.ok(addedBytes < 2048, `the new fields are ${addedBytes} bytes: a 19 kB card stays under half the ${MAX_JSON_BYTES.bench} byte cap`);
-    assert.ok(19 * 1024 + addedBytes < MAX_JSON_BYTES.bench / 2);
+    assert.ok(addedBytes < 2048, `the new fields are ${addedBytes} bytes`);
   });
 
   it("when a capture of 300 samples of non-repeating numbers is posted gzipped, then the owner reads back every sample, and the store holds less than half its bytes", async () => {
@@ -225,7 +224,6 @@ describe("given the submissions endpoint refusing what it must refuse", () => {
     { it: "a flagged clip's text is empty", body: envelope("flag", { payload: { ...(PAYLOADS.flag as object), clip: "" } }), status: 400 },
     { it: "a flagged clip has no title", body: envelope("flag", { payload: { ...(PAYLOADS.flag as object), title: "" } }), status: 400 },
     { it: "a flagged clip says it came from somewhere else", body: envelope("flag", { payload: { ...(PAYLOADS.flag as object), from: "disk" } }), status: 400 },
-    { it: "a bench body is over its size cap", body: envelope("bench", { payload: { filler: "x".repeat(MAX_JSON_BYTES.bench) } }), status: 413 },
     {
       it: "a flagged clip's body is over its size cap",
       body: envelope("flag", { payload: { ...(PAYLOADS.flag as object), clip: "A".repeat(MAX_JSON_BYTES.flag) } }),
@@ -241,6 +239,23 @@ describe("given the submissions endpoint refusing what it must refuse", () => {
       assert.deepEqual((await owner(sql)).body.submissions, []);
     });
   }
+
+  it("when a gzipped bench card inflates past the bench cap (a few kB claiming 8 MB), then it answers 413 and stores nothing", async () => {
+    const sql = await freshDb();
+    const bomb = envelope("bench", { payload: { filler: "x".repeat(MAX_JSON_BYTES.bench + 1024) } });
+    assert.ok(gzipSync(JSON.stringify(bomb)).length < 100 * 1024, "the bomb is small on the wire");
+    const refused = await post(sql, bomb, { gzip: true });
+    assert.equal(refused.status, 413);
+    assert.deepEqual((await owner(sql)).body.submissions, []);
+  });
+
+  it("when a gzipped bench card of over a megabyte of JSON (far bigger than the cards of 2026-10-07) is posted, then it is stored", async () => {
+    const sql = await freshDb();
+    const big = envelope("bench", { payload: { series: Array.from({ length: 400_000 }, (_, i) => i % 97) } });
+    const receipt = await post(sql, big, { gzip: true });
+    assert.equal(receipt.status, 201);
+    assert.ok(JSON.stringify(big).length > 1_000_000, "over a megabyte of JSON");
+  });
 
   it("when a gzipped capture inflates past the capture cap (a few kB claiming 40 MB), then it answers 413 and stores nothing", async () => {
     const sql = await freshDb();

@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { BENCH, type BenchParts } from "./bench-measure.ts";
+import { BENCH, QUICK, type BenchParts } from "./bench-measure.ts";
 import { display, restoreFrame, rig, STEADY_MS } from "./bench-frame.test-util.ts";
 import { CAUSE_NAMES } from "./bench-hitch.ts";
 import { sweep, type SweepEngine } from "./bench-sweep.ts";
@@ -39,12 +39,13 @@ function sweepRig(): { engine: SweepEngine; parts: BenchParts; beat: ReturnType<
 }
 
 const RACE = { lab: null, race: {} } as unknown as BenchPlan;
+const RACE_EPI = { lab: null, race: {}, epicenter: true } as unknown as BenchPlan;
 const LAB = { lab: {}, race: null } as unknown as BenchPlan;
 
 describe("given a sweep over every setting at a page's first step, on a race", () => {
   it("when it runs, then each FX tier, both pacer pins, every detail rung, the sky off then full and the epicenter on and off are put in force once, in that order", async () => {
     const { engine, parts, beat, t, log } = sweepRig();
-    await sweep(engine, parts, RACE, TIERS, true, t, beat, ui);
+    await sweep(engine, parts, RACE, TIERS, "full", t, beat, ui);
     assert.deepEqual(
       log.map((l) => l.what),
       ["fx minimal", "fx low", "fx high", "fx ultra", "pace true", "pace false", "rung off", "rung 2", "rung 4", "sky off", "sky full", "epi.on 1", "epi.on 0"],
@@ -53,7 +54,7 @@ describe("given a sweep over every setting at a page's first step, on a race", (
 
   it("when each setting is put in force, then it runs at least the sweep's seconds and the sweep's minimum frames, and the frames are the hitch log's setting switches", async () => {
     const { engine, parts, beat, t, log, frames } = sweepRig();
-    await sweep(engine, parts, RACE, TIERS, true, t, beat, ui);
+    await sweep(engine, parts, RACE, TIERS, "full", t, beat, ui);
     for (let i = 1; i < log.length; i++) {
       const ran = log[i]!.frame - log[i - 1]!.frame;
       assert.ok(ran >= BENCH.sweepS / (STEADY_MS / 1000) - 1, `${log[i - 1]!.what} ran ${ran} frames`);
@@ -65,7 +66,7 @@ describe("given a sweep over every setting at a page's first step, on a race", (
   it("when a frame hangs inside the sweep, then the hitch log holds it, with the setting-switch cause", async () => {
     const { engine, parts, beat, t } = sweepRig();
     display.use((since) => (since === 700 ? 400 : STEADY_MS));
-    await sweep(engine, parts, RACE, TIERS, true, t, beat, ui);
+    await sweep(engine, parts, RACE, TIERS, "full", t, beat, ui);
     const table = beat.hitches.table();
     assert.equal(table.count, 1, "the one hang in the sweep");
     assert.ok(table.rows[0]!.causes.includes(CAUSE_NAMES[0]), "it is a setting switch");
@@ -76,7 +77,7 @@ describe("given the same sweep on a slow display and at a page's later step", ()
   it("when frames take 100 ms, then each setting runs the minimum frames rather than the seconds", async () => {
     const { engine, parts, beat, t, log } = sweepRig();
     display.use(() => 100);
-    await sweep(engine, parts, RACE, TIERS, true, t, beat, ui);
+    await sweep(engine, parts, RACE, TIERS, "full", t, beat, ui);
     const ran = log[1]!.frame - log[0]!.frame;
     assert.ok(ran >= BENCH.sweepMinFrames && ran <= BENCH.sweepMinFrames + 1, `${ran} frames at 100 ms`);
   });
@@ -84,14 +85,14 @@ describe("given the same sweep on a slow display and at a page's later step", ()
   it("when frames take 600 ms, then a setting runs the cap's seconds, not the minimum frames", async () => {
     const { engine, parts, beat, t, log } = sweepRig();
     display.use(() => 600);
-    await sweep(engine, parts, RACE, TIERS, true, t, beat, ui);
+    await sweep(engine, parts, RACE, TIERS, "full", t, beat, ui);
     const ran = log[1]!.frame - log[0]!.frame;
     assert.ok(Math.abs(ran - Math.ceil(BENCH.sweepCapS / 0.6)) <= 1, `${ran} frames at 600 ms`);
   });
 
   it("when it is a page's later step, then only the FX tiers and the epicenter are visited, for the short seconds", async () => {
     const { engine, parts, beat, t, log } = sweepRig();
-    await sweep(engine, parts, RACE, TIERS, false, t, beat, ui);
+    await sweep(engine, parts, RACE, TIERS, "short", t, beat, ui);
     assert.deepEqual(
       log.map((l) => l.what),
       ["fx minimal", "fx low", "fx high", "fx ultra", "epi.on 1", "epi.on 0"],
@@ -102,10 +103,32 @@ describe("given the same sweep on a slow display and at a page's later step", ()
 
   it("when the bench is the lab, then there is no sky and no epicenter stop", async () => {
     const { engine, parts, beat, t, log } = sweepRig();
-    await sweep(engine, parts, LAB, TIERS.slice(0, 3), true, t, beat, ui);
+    await sweep(engine, parts, LAB, TIERS.slice(0, 3), "full", t, beat, ui);
     assert.deepEqual(
       log.map((l) => l.what),
       ["fx minimal", "fx low", "fx high", "pace true", "pace false", "rung off", "rung 2", "rung 4"],
     );
+  });
+});
+
+describe("given the quick bench's one sweep, on the epicenter arm's page and on the other arm's", () => {
+  it("when the epicenter page is swept, then the activation is turned off, then on, and the sweep ends with it on: the state the window runs in", async () => {
+    const { engine, parts, beat, t, log } = sweepRig();
+    await sweep(engine, parts, RACE_EPI, TIERS, "quick", t, beat, ui);
+    assert.deepEqual(log.map((l) => l.what).slice(-2), ["epi.on 0", "epi.on 1"]);
+  });
+
+  it("when the other arm's page is swept, then the activation is turned on, then off, and the sweep ends with it off", async () => {
+    const { engine, parts, beat, t, log } = sweepRig();
+    await sweep(engine, parts, RACE, TIERS, "quick", t, beat, ui);
+    assert.deepEqual(log.map((l) => l.what).slice(-2), ["epi.on 1", "epi.on 0"]);
+  });
+
+  it("when the quick sweep runs, then it visits the FX tiers and the epicenter only, each held the quick seconds and at least the quick frames", async () => {
+    const { engine, parts, beat, t, log } = sweepRig();
+    await sweep(engine, parts, RACE_EPI, TIERS.slice(0, 3), "quick", t, beat, ui);
+    assert.deepEqual(log.map((l) => l.what), ["fx minimal", "fx low", "fx high", "epi.on 0", "epi.on 1"]);
+    const ran = log[1]!.frame - log[0]!.frame;
+    assert.ok(ran >= QUICK.sweepStopS / (STEADY_MS / 1000) - 1 && ran <= QUICK.sweepStopS / (STEADY_MS / 1000) + 2, `${ran} frames at 6 ms`);
   });
 });

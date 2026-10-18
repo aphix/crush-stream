@@ -8,7 +8,7 @@ import { PREFABS, type PrefabId } from "../world/catalog.ts";
 import { stripCourse, type StripProp, type StripSpec } from "../world/bench-strip.ts";
 import { CAMPAIGN } from "../world/tracks/index.ts";
 import { BENCH_STRIP_ID, TRACK_ID } from "../world/constants.ts";
-import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
+import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, EXTENDED_QUERY, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
 
 /** The city bench's race on course `trackId`: its own field and rules as a program over the player's options, which it never touches. */
 export function benchRace(trackId: string): RaceCommand {
@@ -51,6 +51,8 @@ export interface BenchPlan {
   ultra: boolean;
   /** `&epi=1`: the run has the epicenter activation on (`runBench` turns `epi.on` on once the race is up); the loop runs each map once without and once with. */
   epicenter: boolean;
+  /** `&extended=1`: the long bench (A/B blocks, replay); false: the quick bench, which measures the window alone. */
+  extended: boolean;
 }
 
 /** The strip's defaults: a bare `?bench=strip` is the repeatable baseline. */
@@ -87,12 +89,13 @@ export function benchPlan(search: string): BenchPlan | null {
   const kind = q.get(BENCH_QUERY);
   const ultra = q.get(ULTRA_QUERY) === "1";
   const epicenter = q.get(EPI_QUERY) === "1";
+  const extended = q.get(EXTENDED_QUERY) === "1";
   if (kind === BENCH_KIND.city) {
     const course = q.get(COURSE_QUERY);
     const id = course !== null && CAMPAIGN.includes(course) ? course : TRACK_ID.city;
-    return { id, race: id === TRACK_ID.city ? BENCH_RACE : benchRace(id), course: null, warmS: 20, racers: 16, body: null, strip: null, lab: null, ultra, epicenter };
+    return { id, race: id === TRACK_ID.city ? BENCH_RACE : benchRace(id), course: null, warmS: 20, racers: 16, body: null, strip: null, lab: null, ultra, epicenter, extended };
   }
-  if (kind === BENCH_KIND.lab) return { id: "lab", race: null, course: null, warmS: LAB_BENCH.settleS, racers: 0, body: null, strip: null, lab: LAB_BENCH, ultra, epicenter };
+  if (kind === BENCH_KIND.lab) return { id: "lab", race: null, course: null, warmS: LAB_BENCH.settleS, racers: 0, body: null, strip: null, lab: LAB_BENCH, ultra, epicenter, extended };
   if (kind !== BENCH_KIND.strip) return null;
   const racers = Math.min(16, Math.max(2, Math.round(Number(q.get(STRIP_QUERY.cars) ?? STRIP_DEFAULTS.cars)) || STRIP_DEFAULTS.cars));
   const same = q.get(STRIP_QUERY.same) ?? STRIP_DEFAULTS.same;
@@ -110,6 +113,7 @@ export function benchPlan(search: string): BenchPlan | null {
     lab: null,
     ultra,
     epicenter,
+    extended,
   };
 }
 

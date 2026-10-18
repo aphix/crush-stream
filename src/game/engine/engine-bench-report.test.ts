@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import type { FrameStats } from "./bench-frames.ts";
 import { browserName, describeBench, perSecond, stat, type Block, type BenchResult, type PhaseCard, type RagdollCost, type ReplayResult, type ReplayTier } from "./engine-bench-report.ts";
 import { HITCH } from "./bench-hitch.ts";
 import { roundCard } from "./bench-card.ts";
@@ -19,6 +20,28 @@ const PHASES: PhaseCard = {
   workPerSimS: { steps: 240, slices: 330, liveCarSlices: 3000, wreckCarSlices: 1900, asleepCarSlices: 40, pairTests: 1500, pairContacts: 210, partContacts: 3, prismQueries: 5200, prismsVisited: 21000, prismTouches: 160, skins: 480, skinVerts: 2_400_000, ragdollMessages: 0, ragdollBytes: 0 },
   unitUs: { "integrate us/live slice": 9.5, "wreck us/wreck slice": 42.1 },
   perSecond: { wallS: [1, 1], clockS: [1, 1], msPerSimS: { wreck: [70, 90] }, workPerSimS: { steps: [240, 240] } },
+};
+
+/** The window's frames as the device summarised them: 2700 frames, 12 over 3x the 11.1 ms median, the spikes in the wreck phase with more wrecks and contacts than the rest. */
+const FRAME_STATS: FrameStats = {
+  n: 2700,
+  medianMs: 11.1,
+  p95Ms: 14.2,
+  p99Ms: 31.4,
+  p999Ms: 88.8,
+  maxMs: 120.5,
+  fpsLow1: 28.6,
+  fpsLow01: 11.3,
+  series: { cols: ["atS", "frames", "maxMs"], dp: [1, 0, 2], n: 2, data: [[0, 0.2], [18, 17], [14.1, 31.2]] },
+  spikes: {
+    count: 12,
+    factor: 3,
+    minMs: 25,
+    thresholdMs: 33.3,
+    rows: { cols: ["atS", "intervalMs"], dp: [3, 2], n: 1, data: [[3.2], [88.8]] },
+    activity: { cols: ["crashed", "ragdollMessages", "wreckCarSlices", "asleepCarSlices", "frozenCarSlices", "pairContacts", "partContacts", "freezes", "thaws", "steps"], inSpikes: [6, 4, 31, 2, 8, 44, 12, 1.5, 0.5, 3], otherwise: [3, 0.5, 11, 1, 3, 9, 2, 0.1, 0.1, 2.7], correlation: [0.41, 0.2, 0.55, 0.1, 0.3, 0.72, 0.4, 0.2, 0.1, 0.3] },
+    dominantPhase: [0, 0, 1, 9, 1, 1, 0, 0, 0, 0],
+  },
 };
 
 const RESULT: BenchResult = {
@@ -60,7 +83,9 @@ const RESULT: BenchResult = {
   replay: null,
   replayWhy: "no clip yet",
   pageEvents: [{ phase: "warm", atS: 0, visible: true, focused: true, fullscreen: false }],
-  pageSeconds: { flags: "ffffd5", phases: "001111", sky: "003333" },
+  pageSeconds: { flags: "ffffd5", phases: "001111", sky: "003333", epi: "000000" },
+  run: { extended: true, staged: false },
+  frameStats: FRAME_STATS,
   pageState: { stepOfPage: 2, keep: true, heapUsedMB: 118, heapLimitMB: 4096, ragdollHost: "remote" },
   phases: PHASES,
   longTasks: { count: 4, totalMs: 312.5, maxMs: 120.25 },
@@ -139,7 +164,7 @@ describe("given the bench result of a phone running the city course (describeBen
   test("when the card is written, then it leads with the build, fps, the sim's ms each second and sim speed, lists the settings (the depth buffer with the offset a ground layer needs to show over a coplanar one), both A/Bs and the steps cut short for a coming hit, marks a browser-masked GPU, shows the GPU timing when it can, and fits a 412 px tall phone screen", () => {
     const lines = describeBench(RESULT);
     assert.match(lines[0]!, /^CRUSH BENCH {2}city {2}22 cars.*\(Chrome 150\) {2}build 36b137f$/);
-    assert.match(lines[1]!, /^90\.0 FPS {3}1% low 41\.7 {3}by thirds 90\.0 \/ 90\.0 \/ 89\.0$/);
+    assert.match(lines[1]!, /^90\.0 FPS {3}1% low 28\.6 {3}0\.1% low 11\.3 {3}by thirds 90\.0 \/ 90\.0 \/ 89\.0$/);
     assert.equal(lines[2], "fps each second: 90 91 89 90");
     assert.equal(lines[3], "sim ms each second: 212 230 640 205");
     assert.match(lines[4]!, /^SIM SPEED 98 % /);
@@ -206,7 +231,7 @@ describe("given the bench result of the Lab's throws (?bench=lab)", () => {
 
 describe("given the bench result of a page that asked for the Ultra arm (?ultra=1)", () => {
   test("when the card is written, then the fx A/B has an ultra row after high with its fps, gpu ms and draw calls; a card without the arm has no ultra row", () => {
-    const lines = describeBench({ ...RESULT, abFx: { ...RESULT.abFx, ultra: { ...B(41, 3.2), calls: 655 } } });
+    const lines = describeBench({ ...RESULT, abFx: { ...RESULT.abFx!, ultra: { ...B(41, 3.2), calls: 655 } } });
     const at = lines.findIndex((l) => l.includes("high 48.0 fps"));
     assert.match(lines[at + 1]!, /^ +ultra 41\.0 fps, .*gpu 3\.2, 655 calls$/);
     assert.ok(!describeBench(RESULT).some((l) => l.includes("ultra ")));
@@ -214,7 +239,7 @@ describe("given the bench result of a page that asked for the Ultra arm (?ultra=
 });
 
 describe("given the bench result with the sky as drawn each second", () => {
-  const skyLine = (series: { flags: string; phases: string; sky: string }): string => describeBench({ ...RESULT, pageSeconds: series }).find((l) => l.includes("pinned by the bench"))!;
+  const skyLine = (series: { flags: string; phases: string; sky: string }): string => describeBench({ ...RESULT, pageSeconds: { ...series, epi: "0".repeat(series.flags.length) } }).find((l) => l.includes("pinned by the bench"))!;
 
   test("when every window second drew the strip, then the settings line says the strip was drawn for all of them, counting the window's seconds only", () => {
     // Two warm-up seconds (stretch 0) with the strip still loading, then four window seconds (stretch 1) all drawing it.
@@ -295,6 +320,18 @@ describe("given the bench result of a run that had no clip to replay", () => {
   });
 });
 
+describe("given the bench result whose frames the device summarised", () => {
+  test("when the card is written, then one line counts the frame spikes and says what the sim was doing in them against the other frames, with the correlation and the phase that was largest", () => {
+    const line = describeBench(RESULT).find((l) => l.startsWith("frame spikes"));
+    assert.equal(line, "frame spikes (over 3x the window median 11.1 ms, at least 25 ms): 12 of 2700 frames, p99 31.4 p99.9 88.8 max 120.5 ms; in a spike against elsewhere: crashed 6.0 vs 3.0 (r 0.41), wreckCarSlices 31.0 vs 11.0 (r 0.55), pairContacts 44.0 vs 9.0 (r 0.72), freezes 1.5 vs 0.1 (r 0.20), ragdollMessages 4.0 vs 0.5 (r 0.20); the wreck phase is the largest in 9 of them");
+  });
+
+  test("when no frame was a spike, then the line says none", () => {
+    const quiet = { ...FRAME_STATS, spikes: { ...FRAME_STATS.spikes, count: 0 } };
+    assert.ok(describeBench({ ...RESULT, frameStats: quiet }).some((l) => l.startsWith("frame spikes") && l.endsWith(", none")));
+  });
+});
+
 describe("given the bench result with the sim's phase table, its work counts, long tasks and battery", () => {
   test("when the card is written, then one line names every phase with its ms per sim-second, the unattributed rest (summing to the headline) and the work counts, and the device line carries the long tasks and battery", () => {
     const lines = describeBench(RESULT);
@@ -350,7 +387,7 @@ describe("given a run that hitched as often as the table holds, over every A/B s
       workPerSimS: Object.fromEntries(Object.keys(PHASES.workPerSimS).map((name) => [name, column(2_400_000)])),
     };
     const hex = "fd".repeat(900);
-    const full = { ...RESULT, phases: { ...PHASES, perSecond }, pageSeconds: { flags: hex, phases: hex } };
+    const full = { ...RESULT, phases: { ...PHASES, perSecond }, pageSeconds: { flags: hex, phases: hex, sky: hex, epi: hex } };
     const bytes = JSON.stringify(roundCard(full)).length;
     assert.ok(bytes < MAX_JSON_BYTES.bench - 12 * 1024, `${bytes} bytes against the cap of ${MAX_JSON_BYTES.bench}`);
   });

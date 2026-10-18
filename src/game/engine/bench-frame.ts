@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { epicenterOn } from "../deform/epicenter.ts";
 import { SKY_DRAWN, type SkyMode } from "../present/sky-dome.ts";
 import type { LabPresetId } from "../scenes/lab.ts";
 import { BENCH, emptyAcc, wrecks, type Acc, type BenchParts, type SkyPin, type Tap } from "./bench-measure.ts";
@@ -176,7 +177,7 @@ export async function frame(engine: FrameEngine, renderer: THREE.WebGLRenderer, 
   beat.frame[FRAME.atS] = (f1 - beat.phaseStart) / 1000;
   beat.hitches.frame(beat.frame, beat.phase, readCauses(beat, t));
   beat.arm?.sync();
-  beat.page?.tick(beat.frame, beat.phase, beat.wake?.held === true, beat.parts.sky.drawn);
+  beat.page?.tick(beat.frame, beat.phase, beat.wake?.held === true, beat.parts.sky.drawn, epicenterOn() ? 1 : 0);
 }
 
 /** One setting of an A/B: `set` flips it before its block. */

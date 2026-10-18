@@ -89,7 +89,7 @@ describe("given a submission the server refuses or cannot be reached for", () =>
     const big = { filler: "x".repeat(MAX_JSON_BYTES.bench) };
     const result = await submit("bench", CONTEXT, big, { fetch: answering(201, '{"id":"K7QM-2XWD"}', sent), device: DEVICE, now: NOW, gzip: false });
     assert.deepEqual(sent, []);
-    assert.ok("error" in result && result.error.startsWith("too big to send (49 KB, at most 48 KB)"), JSON.stringify(result));
+    assert.ok("error" in result && result.error.startsWith("too big to send (8.0 MB, at most 8.0 MB)"), JSON.stringify(result));
   });
 
   it("when a body that is not gzipped is over the wire cap, then nothing is sent and the player is told how big it is on the wire", async () => {

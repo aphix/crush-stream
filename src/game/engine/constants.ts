@@ -12,6 +12,8 @@ export const ULTRA_QUERY = "ultra";
 export const EPI_QUERY = "epi";
 /** The step id suffix of a loop step that runs with the activation on (`city:epi`): the card's `loop.step` says which arm it is. */
 export const EPI_STEP_SUFFIX = ":epi";
+/** The page query that asks for the extended bench (`?extended=1`): the FX-tier sweep, the pacer, detail, FX and sky A/Bs and the replay after the window. Absent or 0: the quick bench, the window alone. */
+export const EXTENDED_QUERY = "extended";
 /** The page query that picks the city bench's course (`?course=dam-spine`). */
 export const COURSE_QUERY = "course";
 /** The page queries that shape the strip bench (`benchPlan`): a loop carries them onto every step. */

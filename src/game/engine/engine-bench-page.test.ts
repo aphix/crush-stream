@@ -136,10 +136,10 @@ describe("given the bench page with a stub document and window (watchPage record
   });
 
   /** One frame at `stamp` ms into the series (a frame row as the bench loop writes it) and the state `watch` keeps for that second. */
-  const tick = (watch: ReturnType<typeof watchPage>, stamp: number, phase: number, awake: boolean, sky = 0): void => {
+  const tick = (watch: ReturnType<typeof watchPage>, stamp: number, phase: number, awake: boolean, sky = 0, epi = 0): void => {
     const row = new Float64Array(FRAME.fields);
     row[FRAME.now] = stamp;
-    watch.tick(row, phase, awake, sky);
+    watch.tick(row, phase, awake, sky, epi);
   };
 
   test("when frames tick the series with the page's state, then each second holds one hex digit of shown 1, focused 2, fullscreen 4 and the wake lock held 8, and the stretch's index", () => {
@@ -155,6 +155,18 @@ describe("given the bench page with a stub document and window (watchPage record
     const series = watch.seconds();
     assert.equal(series.flags, "fd5", "flags");
     assert.equal(series.phases, "112", "stretches");
+  });
+
+  test("when the epicenter knob is on through the last warm second and the first window second, then the series holds the same digit across the stretch change", () => {
+    const watch = watchPage();
+    watch.phase(PHASE_WARM);
+    tick(watch, 1000, PHASE_WARM, true, 0, 1);
+    tick(watch, 2000, PHASE_WARM, true, 0, 1);
+    tick(watch, 3100, PHASE_WINDOW, true, 0, 1);
+    tick(watch, 4200, PHASE_WINDOW, true, 0, 1);
+    const { epi, phases } = watch.seconds();
+    assert.equal(epi, "1111");
+    assert.equal(epi[phases.indexOf("0") + phases.split("0").length - 2], epi[phases.indexOf("1")], "the last warm second against the first window second");
   });
 
   test("when the sky as drawn changes during the series, then each second holds the digit of the frame that closed it, the loading digit included", () => {

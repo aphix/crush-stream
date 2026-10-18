@@ -5,6 +5,7 @@ import { KNOB_DEFAULTS, KNOBS } from "../hud/knobs.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { enterBenchScene } from "./bench-scene.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
+import { CRASH_GAP, CRASH_SPEED } from "./engine-bench-replay.ts";
 import { benchPlanEngine, disposeBenchEngine, FRAME_S, runFrames, simCounters, simDigest } from "./engine-bench-headless.test-util.ts";
 import { SKY_DRAWN } from "../present/sky-dome.ts";
 import { newBeat } from "./bench-frame.ts";
@@ -16,6 +17,8 @@ import type { CrashEngine } from "./engine.ts";
 
 /** Sim seconds each step of the sequence runs: the grid, the start, the first crash and the pile-up that follows it (a wreck phase of about 260 ms a second at 7-11 s). */
 const STEP_S = 14;
+/** Sim seconds the staged window is run for in the quick-start rows: the pair meets in the first seconds, so the wrecks and their contacts are in it. */
+const QUICK_CHECK_S = 6;
 
 describe("given one page that runs the bench's steps in turn, as the loop does (a second CrashEngine never resolves ready, so one engine for the file)", () => {
   let engine: CrashEngine;
@@ -73,6 +76,33 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     assert.deepEqual(labels, ["epicenter off", "EPICENTER ON", "epicenter off", "epicenter off"]);
   });
 
+  /** Frames the grid may take to go green on the 1/240 s floor (a 3 s countdown with the course loaded): a guard, not a wait. */
+  const GRID_FRAMES = 4000;
+  /** The quick bench's start as `runBench` makes it: the scene entered, the grid run to green, the head-on pair staged at the start line, then `seconds` of sim. */
+  const quickStart = (query: string, seconds: number): { staged: boolean; digest: string; wrecks: number } => {
+    engine.resetAdaptiveQuality();
+    enterBenchScene(engine, engine.benchParts(), benchPlan(query)!);
+    engine.pace.pin = false;
+    const { race } = engine.benchParts();
+    for (let guard = 0; race.phase !== "racing" && guard < GRID_FRAMES; guard++) runFrames(engine, 1);
+    const since = simCounters(engine);
+    const staged = race.crashAtStart(CRASH_GAP, CRASH_SPEED);
+    runFrames(engine, seconds * FINE_HZ);
+    return { staged, digest: simDigest(engine, since), wrecks: engine.benchParts().live().filter((car) => car.crashed).length };
+  };
+
+  it("when the quick bench's start is made twice on the city, then the head-on pair is staged both times and the window that follows is bit for bit the same: the arms of a map do identical work", () => {
+    const first = quickStart("?bench=city", QUICK_CHECK_S);
+    const second = quickStart("?bench=city", QUICK_CHECK_S);
+    assert.equal(first.staged, true, "the pair is staged at green");
+    assert.ok(first.wrecks >= 2, `${first.wrecks} wrecks after ${QUICK_CHECK_S} s: the staged pair crashed`);
+    assert.equal(second.digest, first.digest);
+  });
+
+  it("when the quick bench starts on the strip, then the pair is staged there too", () => {
+    assert.equal(quickStart("?bench=strip", 1).staged, true);
+  });
+
   it("when a full warm-up sweep (every FX tier, both pacer pins, every detail rung, the sky, the epicenter on and off) runs on the city and the page is reset as a step does, then the city's sim after it is bit for bit the first one's", async () => {
     const parts = engine.benchParts();
     const plan = benchPlan("?bench=city")!;
@@ -90,7 +120,7 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     });
     try {
       // A page without `ultra=1` (its FX tiers are the three; Ultra's look is fetched by the page before the bench, not by the sweep).
-      await sweep(engine, parts, plan, ["minimal", "low", "high"], true, t, beat, { set() {} });
+      await sweep(engine, parts, plan, ["minimal", "low", "high"], "full", t, beat, { set() {} });
       assert.equal(parts.sky.drawn, SKY_DRAWN.full, "the sweep ends on the sky the bench pins: the strip drawn");
       assert.ok(parts.sky.textureBytes > 0, "the strip is held");
       assert.ok(beat.hitches.frames > 3 * 180, `the sweep ran its frames (${beat.hitches.frames})`);

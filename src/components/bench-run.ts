@@ -7,6 +7,7 @@ import type { CrashEngine } from "@/game/engine/engine";
 import type { CrashHudState } from "@/game/hud/hud-store";
 import type { runBench } from "@/game/engine/engine-bench";
 import { driveLoop, loopProgress, loopSettings, newSession, parseRun, runFromPage, startRun, stepHref, stepOf, type BenchRun } from "@/game/engine/bench-loop";
+import { BETWEEN_STEPS_S } from "@/game/engine/bench-plan-time";
 import { WakeHold } from "@/game/engine/bench-wake";
 import { BENCH_QUERY } from "@/game/engine/constants";
 import { fetchDeployedSha, newerBuild, reloadTarget } from "@/lib/deploy/update-check";
@@ -14,11 +15,26 @@ import { KIND } from "@/lib/submissions/kinds";
 import { sendSubmission } from "@/lib/submissions/status";
 
 /** A bench's card and receipt stay on screen this long before the next bench of the loop begins. */
-const PAUSE_MS = 4_000;
+const PAUSE_MS = BETWEEN_STEPS_S * 1000;
 
-/** The Benchmark entry: a new loop from its first step. */
-export function startBenchLoop(): void {
-  location.assign(stepHref(location.href, startRun(newSession())));
+/** Where the quick bench keeps the epicenter arm its next run takes (`1`: on): each run takes it and leaves the other for the next, so a card says which arm it is and consecutive runs are the pair. */
+const NEXT_ARM_KEY = "crush-bench-next-arm";
+
+/** The arm this run takes and the next run does not; off when the browser lets the page keep nothing. */
+function takeArm(): boolean {
+  try {
+    const arm = localStorage.getItem(NEXT_ARM_KEY) === "1";
+    localStorage.setItem(NEXT_ARM_KEY, arm ? "0" : "1");
+    return arm;
+  } catch (err) {
+    console.warn("bench: the next arm cannot be kept in this browser, running epicenter off", err);
+    return false;
+  }
+}
+
+/** The Benchmark entries: a new loop from its first step, the quick bench (one arm of each map, the next run the other) or the extended one. */
+export function startBenchLoop(extended: boolean): void {
+  location.assign(stepHref(location.href, startRun(newSession(), extended, extended ? false : takeArm())));
 }
 
 /**

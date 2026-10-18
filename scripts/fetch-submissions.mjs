@@ -2,17 +2,20 @@
 /**
  * Pull what players sent from the game (benchmark cards, JSON captures, flagged replay clips) down from the server.
  *
- *   SUBMISSIONS_OWNER_TOKEN=<token> node scripts/fetch-submissions.mjs <app url> [--kind bench|capture|flag] [--limit 50] [--id XXXX-XXXX] [--out dir] [--phases] [--series] [--ab]
+ *   SUBMISSIONS_OWNER_TOKEN=<token> node scripts/fetch-submissions.mjs <app url> [--kind bench|capture|flag] [--limit 50] [--id XXXX-XXXX] [--out dir] [--phases] [--series] [--frames] [--ab]
  *
  * `<app url>` is where the game is served, e.g. https://example.org/crush/ . Each submission is saved as `<out>/<receipt id>.json` (default
  * `.bench/submissions`, which git ignores); one already saved is not fetched again. The token is read from the environment only, so it
  * never appears in a process list or a shell history line. `--phases` prints each bench card's sim phase table (ms per sim-second by phase, the work
- * counts, long tasks and battery) under its line, for cards already saved too. `--series` prints the window's per-second phases and work counters, a row a second. `--ab` prints, for each loop cycle and map, the two cards the loop ran (epicenter off, then on) side by side. Exit 0 when every request went; 1 otherwise.
+ * counts, long tasks and battery) under its line, for cards already saved too. `--frames` prints each card's frame stats in full: the percentiles and lows from every frame of its window, every listed spike with what the sim was doing in it, and the window in 200 ms buckets. `--series` prints the window's per-second phases and work counters, a row a second. `--ab` prints, for each loop cycle and map, the two cards the loop ran (epicenter off, then on) side by side. Exit 0 when every request went; 1 otherwise.
  */
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+
+/** The names of the sim's phases in the order the card's frame columns carry them (`PHASE_NAMES`). */
+const PHASE_NAMES = ["drive", "plan", "integrate", "wreck", "pairs", "structure", "course", "bake", "rules", "settle"];
 
 const RECEIPT = /^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/;
 const KINDS = ["bench", "capture", "flag"];
@@ -42,9 +45,54 @@ export function phaseTable(one) {
     `    ${result.course}${armLabel(result)} ${f1(result.simMsPerSimS)} ms/sim-s${result.simSpreadPct === undefined ? "" : ` (spread ${f1(result.simSpreadPct)} %)`} = ${phases}  unattributed ${f1(p.unattributedMsPerSimS)}`,
     `    per sim-s: ${work}`,
     ...(p.unitUs ? [`    per unit (us): ${Object.entries(p.unitUs).map(([name, us]) => `${name} ${f1(us)}`).join("  ")}`] : []),
+    ...(result.frameStats ? frameTable(one) : []),
     ...(result.pageState ? [`    page: step ${result.pageState.stepOfPage} of the page, keep ${result.pageState.keep}, heap ${result.pageState.heapUsedMB ?? "n/a"} of ${result.pageState.heapLimitMB ?? "n/a"} MiB, ragdoll ${result.pageState.ragdollHost}`] : []),
     `    ${tasks}; battery ${battery ? `${level(battery.start)} -> ${level(battery.end)}` : "n/a"}`,
   ];
+}
+
+/** The columns of a card's `{ cols, data }` table as records (one per row). */
+function columnRecords(table) {
+  return Array.from({ length: table?.n ?? 0 }, (_, i) => Object.fromEntries(table.cols.map((name, k) => [name, table.data[k][i]])));
+}
+
+/** The activity columns the card's spike summary names, in the order it prints them. */
+const SPIKE_ACTIVITY = ["crashed", "wreckCarSlices", "pairContacts", "freezes", "ragdollMessages"];
+
+/**
+ * The window's frames as the device summarised them (`frameStats`): the percentiles and lows, what the sim was doing in the spike frames against the others, and (`full`) every listed spike
+ * with its activity and the `BUCKET_MS` series. A card from before the frame stats says so.
+ */
+export function frameTable(one, full = false) {
+  const result = one.submission?.payload?.result;
+  if (one.kind !== "bench" || !result) return [];
+  const f = result.frameStats;
+  if (!f) return ["    frames: none (a card from before the frame stats)"];
+  const sp = f.spikes;
+  const at = (name) => sp.activity.cols.indexOf(name);
+  const lines = [
+    `    ${result.course}${armLabel(result)} frames: ${f.n}, median ${f1(f.medianMs)} ms, p95 ${f1(f.p95Ms)}, p99 ${f1(f.p99Ms)}, p99.9 ${f1(f.p999Ms)}, max ${f1(f.maxMs)}; lows: 1 % ${f1(f.fpsLow1)} fps, 0.1 % ${f1(f.fpsLow01)} fps`,
+  ];
+  if (sp.count === 0) lines.push(`    no frame over ${sp.factor}x the median (${f1(sp.thresholdMs)} ms)`);
+  else {
+    const said = SPIKE_ACTIVITY.filter((name) => at(name) >= 0).map((name) => `${name} ${f1(sp.activity.inSpikes[at(name)])} vs ${f1(sp.activity.otherwise[at(name)])} (r ${sp.activity.correlation[at(name)].toFixed(2)})`);
+    const top = sp.dominantPhase.indexOf(Math.max(...sp.dominantPhase));
+    lines.push(`    ${sp.count} spikes over ${sp.factor}x the median (${f1(sp.thresholdMs)} ms); in a spike against elsewhere: ${said.join(", ")}; phase ${PHASE_NAMES[top] ?? top} largest in ${sp.dominantPhase[top]}`);
+  }
+  if (!full) return lines;
+  const cell = (v, w = 9) => String(v).padStart(w);
+  const spikeRows = columnRecords(sp.rows);
+  if (spikeRows.length) {
+    lines.push(`    ${"at s".padStart(7)}${cell("ms")}${cell("sim ms")}${cell("draw ms")}${cell("steps")}${cell("wrecks")}${cell("wreck sl")}${cell("contacts")}${cell("freeze")}${cell("thaw")}${cell("ragdoll")}  largest phase`);
+    for (const r of spikeRows) {
+      const phases = PHASE_NAMES.map((name) => [name, r[`${name}Ms`] ?? 0]);
+      const top = phases.reduce((best, p) => (p[1] > best[1] ? p : best), phases[0]);
+      lines.push(`    ${f1(r.atS).padStart(7)}${cell(f1(r.intervalMs))}${cell(f1(r.simMs))}${cell(f1(r.drawMs))}${cell(r.steps)}${cell(r.crashed)}${cell(r.wreckCarSlices)}${cell(r.pairContacts)}${cell(r.freezes)}${cell(r.thaws)}${cell(r.ragdollMessages)}  ${top[0]} ${f1(top[1])} ms`);
+    }
+  }
+  lines.push(`    ${"at s".padStart(7)}${cell("frames")}${cell("mean ms")}${cell("max ms")}${cell("sim ms")}${cell("wrecks")}${cell("wreck sl")}${cell("contacts")}${cell("freeze")}${cell("thaw")}${cell("ragdoll")}  (${f.series.n} buckets)`);
+  for (const r of columnRecords(f.series)) lines.push(`    ${f1(r.atS).padStart(7)}${cell(r.frames)}${cell(f1(r.meanMs))}${cell(f1(r.maxMs))}${cell(f1(r.simMs))}${cell(r.crashed)}${cell(r.wreckCarSlices)}${cell(r.pairContacts)}${cell(r.freezes)}${cell(r.thaws)}${cell(r.ragdollMessages)}`);
+  return lines;
 }
 
 /**
@@ -64,6 +112,13 @@ export function seriesTable(one) {
   lines.push(row(["s", "", "", ...names(s.workPerSimS)]));
   for (let i = 0; i < s.wallS.length; i++) lines.push(row([i + 1, "", "", ...names(s.workPerSimS).map((n) => Math.round(s.workPerSimS[n][i]))]));
   return lines;
+}
+
+/** A card's list of records: the wire's `{ keys, rows }` table (each record an array of values in the keys' order) as records, or a list a card from before the tables carries as it is. */
+export function rowsOf(table) {
+  if (Array.isArray(table)) return table;
+  if (!table || !Array.isArray(table.keys) || !Array.isArray(table.rows)) return [];
+  return table.rows.map((row) => Object.fromEntries(table.keys.map((key, k) => [key, key === "causes" && typeof row[k] === "string" ? row[k].split("+").filter(Boolean) : row[k]])));
 }
 
 /** `, epicenter ON` or `, epicenter off` for a card that says which arm it ran; empty for one from before the switch. */
@@ -126,12 +181,15 @@ function windowReading(result) {
       if (pinned !== undefined && series.sky !== undefined && series.sky[i] !== pinned) counts["sky not as pinned"]++;
     }
     const say = (name) => `${name} ${counts[name]} of ${seconds} s`;
+    const lastWarm = series.phases.lastIndexOf("0");
+    const firstWindow = series.phases.indexOf(WINDOW_INDEX);
+    if (series.epi !== undefined && lastWarm >= 0 && firstWindow >= 0 && series.epi[lastWarm] !== series.epi[firstWindow]) faults.push("the epicenter knob changed between the warm-up's last second and the window's first");
     for (const name of ["hidden", "screen not held", "sky not as pinned"]) if (counts[name] > 0) faults.push(say(name));
     if (counts["not fullscreen"] > 0) (touch ? faults : notes).push(say("not fullscreen") + (touch ? "" : " (desktop)"));
     if (counts.unfocused > 0) notes.push(`${say("unfocused")} (visible)`);
   } else {
     const seen = new Set();
-    for (const e of result.pageEvents ?? []) {
+    for (const e of rowsOf(result.pageEvents)) {
       if (e.phase !== PHASE_WINDOW) continue;
       if (!e.visible) seen.add("hidden");
       else if (!e.focused) seen.add("unfocused");
@@ -168,8 +226,9 @@ function focusPerSecond(events, seconds) {
  */
 function focusCost(result) {
   const fps = result.fpsPerSecond;
-  if (!Array.isArray(fps) || fps.length === 0 || !Array.isArray(result.pageEvents)) return {};
-  const states = focusPerSecond(result.pageEvents, fps.length);
+  const events = rowsOf(result.pageEvents);
+  if (!Array.isArray(fps) || fps.length === 0 || events.length === 0) return {};
+  const states = focusPerSecond(events, fps.length);
   const ms = fps.map((v) => (v > 0 ? 1000 / v : null));
   const mean = (values) => values.reduce((sum, v) => sum + v, 0) / values.length;
   const focused = ms.filter((v, i) => v !== null && states[i] === true);
@@ -198,16 +257,29 @@ const topTier = (result) => Object.entries(result.tierPct ?? {}).sort((a, b) => 
  */
 export function abTable(ones) {
   const cards = new Map();
+  const queues = new Map();
   for (const one of ones) {
     const settings = one.submission?.settings;
     const result = one.submission?.payload?.result;
     if (one.kind !== "bench" || !settings?.step || !result?.phases) continue;
     const on = armOf(settings, result);
-    const key = `${settings.session} cycle ${settings.loop} ${settings.step.endsWith(ARM) ? settings.step.slice(0, -ARM.length) : settings.step}`;
+    const map = settings.step.endsWith(ARM) ? settings.step.slice(0, -ARM.length) : settings.step;
+    if (result.run?.extended === false) {
+      // A quick run is one arm of each map: its pair is the run of the other arm, on the same device and build, in the order the runs came.
+      const queue = `quick ${result.build} ${(result.device?.userAgent ?? "").slice(0, 60)} ${map}`;
+      const lists = queues.get(queue) ?? { off: [], on: [] };
+      lists[on ? "on" : "off"].push(result);
+      queues.set(queue, lists);
+      continue;
+    }
+    const key = `${settings.session} cycle ${settings.loop} ${map}`;
     cards.set(key, { ...cards.get(key), [on ? "on" : "off"]: result });
   }
+  const pairs = [...cards].map(([key, pair]) => ({ key, off: pair.off, on: pair.on }));
+  for (const [queue, lists] of queues) for (let i = 0; i < Math.min(lists.off.length, lists.on.length); i++) pairs.push({ key: `${queue}, run ${i + 1}`, off: lists.off[i], on: lists.on[i] });
   const lines = [];
-  for (const [key, pair] of cards) {
+  for (const pair of pairs) {
+    const { key } = pair;
     if (!pair.off || !pair.on) continue;
     const change = (a, b) => (a > 0 ? `${b >= a ? "+" : ""}${f1((100 * (b - a)) / a)} %` : "");
     const row = (name, a, b) => `    ${name.padEnd(22)} ${f1(a).padStart(9)} ${f1(b).padStart(9)} ${change(a, b).padStart(9)}`;
@@ -247,7 +319,7 @@ export function abTable(ones) {
     }
     for (const [arm, result] of [["off", pair.off], ["on", pair.on]]) {
       if (result.simSpreadPct > UNSTEADY_SPREAD_PCT) lines.push(`    FLAG epicenter ${arm}: the window's sim cost swung ${f1(result.simSpreadPct)} % second to second (over ${UNSTEADY_SPREAD_PCT} %): its mean says little, read the per-second series (--series)`);
-      const opened = result.switches?.find((s) => s.stretch === "window");
+      const opened = rowsOf(result.switches).find((s) => s.stretch === "window");
       if (opened && !opened.settled) lines.push(`    FLAG epicenter ${arm}: the page never settled before the window opened (${f1(opened.settleS)} s watched, longest frame ${Math.round(opened.longestMs)} ms)`);
     }
     for (const [arm, result] of [["off", pair.off], ["on", pair.on]]) {
@@ -288,7 +360,7 @@ async function get(url, token, fetchImpl, pause) {
  * already there; rejects on the first request the server refuses.
  */
 export async function fetchSubmissions(options) {
-  const { base, token, out, kind, limit, id, phases = false, series = false, ab = false, fetchImpl = fetch, pause = sleep, log = () => {} } = options;
+  const { base, token, out, kind, limit, id, phases = false, series = false, frames = false, ab = false, fetchImpl = fetch, pause = sleep, log = () => {} } = options;
   if (!token || token.length < 24) throw new Error("SUBMISSIONS_OWNER_TOKEN is not set (24 characters or more)");
   if (kind !== undefined && !KINDS.includes(kind)) throw new Error(`--kind is one of ${KINDS.join(", ")}`);
   if (id !== undefined && !RECEIPT.test(id)) throw new Error("--id is a receipt id like K7QM-2XWD");
@@ -315,6 +387,7 @@ export async function fetchSubmissions(options) {
       seen.push(again);
       if (phases) for (const line of phaseTable(again)) log(line);
       if (series) for (const line of seriesTable(again)) log(line);
+      if (frames) for (const line of frameTable(again, true)) log(line);
       continue;
     }
     const one = await get(`${api}?id=${receipt}`, token, fetchImpl, pause);
@@ -324,6 +397,7 @@ export async function fetchSubmissions(options) {
     seen.push(one);
     if (phases) for (const line of phaseTable(one)) log(line);
     if (series) for (const line of seriesTable(one)) log(line);
+    if (frames) for (const line of frameTable(one, true)) log(line);
   }
   if (ab) for (const line of abTable(seen)) log(line);
   return { saved, skipped };
@@ -341,10 +415,11 @@ function parseArgs(argv) {
     else if (a === "--phases") args.phases = true;
     else if (a === "--ab") args.ab = true;
     else if (a === "--series") args.series = true;
+    else if (a === "--frames") args.frames = true;
     else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else positional.push(a);
   }
-  if (positional.length !== 1) throw new Error("usage: fetch-submissions.mjs <app url> [--kind k] [--limit n] [--id receipt] [--out dir] [--phases] [--series] [--ab]");
+  if (positional.length !== 1) throw new Error("usage: fetch-submissions.mjs <app url> [--kind k] [--limit n] [--id receipt] [--out dir] [--phases] [--series] [--frames] [--ab]");
   return { ...args, base: positional[0] };
 }
 
