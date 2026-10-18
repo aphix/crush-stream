@@ -81,10 +81,14 @@ function sideswipe(speed: number): Sim {
   return sim;
 }
 
-/** `n` cars crashed head-on in pairs in the isolated zone, every knob off, until all have crashed and rolled `AFTER_CRASH_S` on: the wrecks, still in the zone. */
+/**
+ * `n` cars crashed head-on in pairs in the isolated zone, every knob off, until all have crashed and rolled `AFTER_CRASH_S` on: the wrecks, still in the zone. The staging runs with the lone-car cut
+ * off (it builds the same wrecks for every arm and every build of the cut: a different lone rule moved which slice a hit lands on by a hair, and a pushed pile amplifies a millimetre); `lone` is the
+ * row's own setting, applied once the wrecks stand.
+ */
 function stageWrecks(n: number, cls: (i: number) => VehicleClassId, lone: boolean): Sim {
   const list = cars(n, cls);
-  const sim = new Sim(list, lone);
+  const sim = new Sim(list, false);
   for (const [i, c] of list.entries()) {
     const pair = Math.floor(i / 2);
     const dir = i % 2 === 0 ? 1 : -1;
@@ -93,6 +97,7 @@ function stageWrecks(n: number, cls: (i: number) => VehicleClassId, lone: boolea
   }
   sim.runUntil(() => list.every((c) => c.crashed), 8);
   sim.run(AFTER_CRASH_S);
+  sim.world.lone = lone;
   return sim;
 }
 
