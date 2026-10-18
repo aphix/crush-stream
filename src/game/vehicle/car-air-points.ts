@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import type { LooseShape } from "./car-core.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, patchOf, pointContact, pointContactHeld, pointContactNear, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, topsTop, topsTopLive, topsTopNear, wheelContact } from "../world/surfaces.ts";
+import { BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, patchOf, pointContact, pointContactHeld, pointContactNear, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, topsTop, topsTopLive, topsTopNear, wheelContact, type Surface } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { G, GQ } from "../world/ground-clock.ts";
 import { TYRE_R } from "../deform/deform-state.ts";
@@ -63,13 +63,12 @@ const CHK_H = new Float64Array(HIT_SIZE);
 const CHK_V = new THREE.Vector3();
 
 /** `--verify` of `wreckTops`: the old path's answer for a point it skipped (`GQ.wreckTops`): the row it would have made, the `nearing` it would have set, the wreck top it would have been dropped by. */
-function checkSkipped(own: boolean, px: number, py: number, pz: number, r: THREE.Vector3): void {
-  const c = GQ.wreckTops;
+function checkSkipped(c: { skipped: number; wouldRow: number; wouldNear: number; wreckTop: number }, own: boolean, px: number, py: number, pz: number, r: THREE.Vector3): void {
   c.skipped++;
   CHK_Q[PQ_X] = px;
   CHK_Q[PQ_Z] = pz;
   CHK_Q[PQ_Y] = py;
-  CHK_Q[PQ_BODY] = 0;
+  CHK_Q[PQ_BODY] = c === GQ.overhead ? 1 : 0;
   if (own) pointContactNear(CHK_Q, body.skip, CHK_H, NaN, SPECULATIVE_GAP);
   else pointContact(CHK_Q, body.skip, CHK_H, NaN, SPECULATIVE_GAP);
   const gy = CHK_H[C_H]!;
@@ -85,6 +84,15 @@ function checkSkipped(own: boolean, px: number, py: number, pz: number, r: THREE
     return;
   }
   c.wouldRow++;
+}
+
+/** `--verify`: whether the static surface's top over the box was under `low` before the tighter hill bound (`BAKE` off reads every hill's whole height there). */
+function oldHillBound(statics: Surface, xMin: number, xMax: number, zMin: number, zMax: number, low: number): boolean {
+  const on = BAKE.on;
+  BAKE.on = false;
+  const top = staticTop(statics, xMin, xMax, zMin, zMax);
+  BAKE.on = on;
+  return top < low;
 }
 /**
  * Whether a body point (arm `r` from the centre of mass) at crash speed against another car's top `hit` (depth `pen` under it) got there
@@ -153,6 +161,16 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
       held = true;
     }
     let clear = gate && (bound < low || staticTop(statics, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low);
+    // `--verify`: a cage point only the tighter hill bound cleared (the bound before it, every hill's whole height, was not under `low`) is asked the old way too: what that would do is counted (`GQ.overhead`: nothing may be).
+    const byHills = clear && GQ.check && !part && i < bellyFrom && !(bound < low) && !oldHillBound(statics, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel, low);
+    // `--verify`: the static bound over a cage point's box is never under the ground's own height at the point (the least of it over the run, and how many points were probed).
+    if (GQ.check && gate && !part && i < bellyFrom) {
+      const ground = statics.heightAt(px, pz);
+      if (ground > NO_FLOOR) {
+        GQ.overhead.probed++;
+        GQ.overhead.minSlack = Math.min(GQ.overhead.minSlack, staticTop(statics, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) - ground);
+      }
+    }
     if (clear) {
       if (solids !== solids) solids = solidTop(centreOfMass.x - solidReach, centreOfMass.x + solidReach, centreOfMass.z - solidReach, centreOfMass.z + solidReach);
       clear = solids < low || solidTop(px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low;
@@ -161,8 +179,9 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
         const reachable = i < bellyFrom;
         clear = reachable && (wreckTops ? topsTopLive(skip, body.surf.cars, own, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) : (own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel)) < low;
         // `--verify`: a point only `wreckTops` cleared is asked the old way too, and what that would have done is counted (nothing may be: no row, no `nearing`).
-        if (clear && wreckTops && GQ.check && !((own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low)) checkSkipped(own, px, py, pz, r);
-      } else if (clear && checkTops && i < bellyFrom && !((own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low)) checkSkipped(own, px, py, pz, r);
+        if (clear && wreckTops && GQ.check && !((own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low)) checkSkipped(GQ.wreckTops, own, px, py, pz, r);
+      } else if (clear && checkTops && i < bellyFrom && !((own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low)) checkSkipped(GQ.wreckTops, own, px, py, pz, r);
+      if (clear && byHills) checkSkipped(GQ.overhead, own, px, py, pz, r);
     }
     // A point the slice cannot bring to the surface needs no normal: with `nearing` set already none at all, else the square of the distance it moves (`pointContact`'s far answer).
     const travel2 = body.nearing ? -1 : (_vp.x * _vp.x + _vp.y * _vp.y + _vp.z * _vp.z) * dt * dt;

@@ -249,6 +249,8 @@ export class Surface {
   /** Per patch: per-node factors in [0, 1] (a roof's follow of its crush); empty: 1 everywhere. */
   auxs: Float32Array[] = [];
   hills: Float64Array[] = [];
+  /** Per patch with hills: per hill the squared distance (m²) past which the hill's height is under `HILL_FAR` (`hillsTop`). */
+  hillFar: Float64Array[] = [];
   /** Per patch whose heights never change (a grid added without `hmax`): the highest its surface stands in each cell (`cellTopsOf`); empty otherwise. */
   cellTops: Float64Array[] = [];
   /** Per patch whose heights never change: a lower bound on the y of the normal in each cell (`cellNyOf`), in 1/255s; empty otherwise. */
@@ -336,6 +338,7 @@ export class Surface {
     this.surfs[i] = EMPTY8;
     this.auxs[i] = EMPTY32;
     this.hills[i] = EMPTY64;
+    this.hillFar[i] = EMPTY64;
     this.cellTops[i] = EMPTY64;
     this.cellNy[i] = EMPTY8;
     this.sealed = false;
@@ -382,6 +385,8 @@ export class Surface {
     if (g.outside) {
       this.q[qo + Q_SURF2] = g.outside.surface;
       this.hills[i] = g.outside.hills;
+      const hills = g.outside.hills;
+      this.hillFar[i] = Float64Array.from({ length: hills.length / 4 }, (_, k) => (hills[k * 4 + 2]! > HILL_FAR ? hills[k * 4 + 3]! ** 2 * Math.log(hills[k * 4 + 2]! / HILL_FAR) : 0));
     }
     if (g.hmax === undefined) {
       this.cellTops[i] = cellTopsOf(g.nu, g.nv, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!);
@@ -1955,6 +1960,34 @@ function edgeIn(s: Surface, q: Float64Array, skip: number): boolean {
 /** Slack (m) on a height bound: the bilinear reading rounds up to a few ulps past its highest node. */
 const TOP_SLACK = 1e-9;
 
+/** The height (m) under which a hill's tail past its cutoff stays: a hill farther than that from the box adds this much to the bound, not its height. */
+const HILL_FAR = 1e-12;
+/** Relative slack on a hill's bound, over the rounding of `Math.exp` between the box's nearest point and the one that sets the height. */
+const HILL_SLACK = 1e-9;
+
+/**
+ * The highest the base terrain's gaussian hills (`hillsAt`: x, z, height, radius each) add over the plan box: each hill's height at the box's nearest point to its centre (the gaussian falls
+ * with distance), a hill farther than its cutoff (`hillFar`, from `HILL_FAR`) adding only that. Never under what `hillsAt` reads anywhere in the box. With the bake off, every hill's whole
+ * height (the bound before this one, which held every point of a car off the baked grid up at the tallest hill's height: the Mall's 2 m over a car kilometres from it).
+ */
+function hillsTop(hills: Float64Array, far: Float64Array, xMin: number, xMax: number, zMin: number, zMax: number): number {
+  let top = TOP_SLACK;
+  for (let k = 0; k < hills.length; k += 4) {
+    const h = hills[k + 2]!;
+    if (!(h > 0)) continue;
+    const r = hills[k + 3]!;
+    if (!BAKE.on || !(r * r > 0)) {
+      top += h;
+      continue;
+    }
+    const dx = Math.max(0, hills[k]! - xMax, xMin - hills[k]!);
+    const dz = Math.max(0, hills[k + 1]! - zMax, zMin - hills[k + 1]!);
+    const d2 = dx * dx + dz * dz;
+    top += d2 >= far[k >> 2]! ? HILL_FAR : h * Math.exp(-d2 / (r * r)) * (1 + HILL_SLACK);
+  }
+  return top;
+}
+
 /**
  * Per cell of a grid (row-major, `nu - 1` wide) the highest its surface stands in its frame, -Infinity where it has none: its nodes'
  * bilinear (`gridAt`), or the crease where all four corners have a lateral: the centre less the clamped lateral share of the drop,
@@ -2077,11 +2110,7 @@ function patchTop(s: Surface, i: number, xMin: number, xMax: number, zMin: numbe
   const fvMin = (cx * (cx >= 0 ? dxMin : dxMax) + cz * (cz >= 0 ? dzMin : dzMax) - v0) / stepV;
   const fvMax = (cx * (cx >= 0 ? dxMax : dxMin) + cz * (cz >= 0 ? dzMax : dzMin) - v0) / stepV;
   let top = -Infinity;
-  if ((fuMin < 0 || fvMin < 0 || fuMax >= nu - 1 || fvMax >= nv - 1) && s.q[qo + Q_SURF2]! >= 0) {
-    const hills = s.hills[i]!;
-    top = TOP_SLACK;
-    for (let k = 2; k < hills.length; k += 4) top += Math.max(0, hills[k]!);
-  }
+  if ((fuMin < 0 || fvMin < 0 || fuMax >= nu - 1 || fvMax >= nv - 1) && s.q[qo + Q_SURF2]! >= 0) top = hillsTop(s.hills[i]!, s.hillFar[i]!, xMin, xMax, zMin, zMax);
   const i0 = Math.max(0, Math.floor(fuMin));
   const i1 = Math.min(nu - 2, Math.floor(fuMax));
   const j0 = Math.max(0, Math.floor(fvMin));

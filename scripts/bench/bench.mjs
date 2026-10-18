@@ -104,6 +104,7 @@ export function summarize(runs) {
       matrix: list.every((r) => r.matrix) ? matrixOf(list) : null,
       freezeRecord: list[0].freezeRecord ?? null,
       wreckTops: list.every((r) => r.wreckTops) ? Object.fromEntries(["skipped", "wouldRow", "wouldNear", "wreckTop"].map((k) => [k, list.reduce((s, r) => s + r.wreckTops[k], 0)])) : null,
+      overhead: list.every((r) => r.overhead) ? { ...Object.fromEntries(["skipped", "wouldRow", "wouldNear", "wreckTop", "probed"].map((k) => [k, list.reduce((s, r) => s + r.overhead[k], 0)])), minSlack: Math.min(...list.map((r) => r.overhead.minSlack)) } : null,
       allClear: list.every((r) => r.allClear) ? Object.fromEntries(["slices", "wreckSlices", "rowSlices", "rows", "wreckRowSlices"].map((k) => [k, list.reduce((s, r) => s + r.allClear[k], 0)])) : null,
       preClear: list.every((r) => r.preClear) ? { cleared: list.reduce((s, r) => s + r.preClear.cleared, 0), minSlack: Math.min(...list.map((r) => r.preClear.minSlack)), wrong: list.reduce((s, r) => s + r.preClear.wrong, 0) } : null,
       load: { start: Math.min(...list.map((r) => r.loadStart)), startMax: Math.max(...list.map((r) => r.loadStart)), end: Math.max(...list.map((r) => r.loadEnd)) },
@@ -321,6 +322,11 @@ export function table(name, first, arms) {
     const w = a.wreckTops;
     if (!w) continue;
     lines.push(`   wreckTops check, ${a.name} (summed over runs): points skipped ${w.skipped}; of those the old path would have made a contact row ${w.wouldRow} (DISAGREEMENTS: must be 0), answered a wreck's top (dropped) ${w.wreckTop}, set nearing ${w.wouldNear} (only \`hardTouch\`, which nothing of a wreck reads: the slice log says whether anything physical followed)`);
+  }
+  for (const a of arms) {
+    const w = a.overhead;
+    if (!w) continue;
+    lines.push(`   hill bound check, ${a.name} (summed over runs): cage points only the tighter hill bound cleared (the bound before it, every hill's whole height, was not under them) ${w.skipped}; of those the old path would have made a contact row ${w.wouldRow} (DISAGREEMENTS: must be 0), set nearing ${w.wouldNear} (must be 0), answered a wreck's top (dropped, as the old path) ${w.wreckTop}; the static bound over a point's box less the ground's height at the point, least over ${w.probed} probed points: ${w.minSlack.toExponential(2)} m (must be >= 0)`);
   }
   for (const a of arms) {
     const c = a.allClear;

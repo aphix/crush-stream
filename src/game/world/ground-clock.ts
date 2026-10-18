@@ -25,6 +25,8 @@ export const GQ = {
   verify: { compared: new Float64Array(4), mismatches: new Float64Array(4), far: 0, first: "" },
   /** `--verify` with `epi.wreckTops`: the points it skipped (the old test would have asked them), and of those the ones the old path would have turned into a contact row, set `nearing` or answered a wreck's top. */
   wreckTops: { skipped: 0, wouldRow: 0, wouldNear: 0, wreckTop: 0 },
+  /** `--verify` of the hill bound (`surfaces.ts` `hillsTop`, `readPoints`): the cage points only it cleared (the bound before it was not under them), and of those the ones the old path would have turned into a contact row, set `nearing` (neither may be) or answered a wreck's top. */
+  overhead: { skipped: 0, wouldRow: 0, wouldNear: 0, wreckTop: 0, minSlack: Infinity, probed: 0 },
   /** `--verify`: the slices the whole-body gate (`stepFree`'s `allClear`) skipped every point of, and the ones among them where reading the points anyway made contact rows (and how many), for wrecks and all. */
   allClear: { slices: 0, wreckSlices: 0, rowSlices: 0, rows: 0, wreckRowSlices: 0 },
   /** `--verify` with `epi.preClear`: the points it cleared from the body's axes, the least its cheap `low` fell short of the point's own (m, never negative), and the points the point's own test would not have cleared. */

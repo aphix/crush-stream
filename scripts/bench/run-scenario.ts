@@ -347,6 +347,7 @@ console.log(
     census: census ? census.result(simS) : null,
     freezeRecord: recorder ? recorder.result() : null,
     wreckTops: verify ? { ...GQ.wreckTops } : null,
+    overhead: verify ? { ...GQ.overhead } : null,
     allClear: verify ? { ...GQ.allClear } : null,
     preClear: verify ? { ...GQ.preClear } : null,
     thawSites: Object.fromEntries([...sites].sort((a, b) => b[1] - a[1])),
