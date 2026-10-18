@@ -28,7 +28,7 @@ export const ROAD_MARGIN = 2;
  * It runs `RACE_AFTER_S` more seconds past his arrival (the celebration after the line).
  */
 export const RACE_LEAD_S = 2.2;
-export const RACE_AFTER_S = 5;
+const RACE_AFTER_S = 5;
 /** Seconds a race jet throws for once started: the lead, the arrival and `RACE_AFTER_S`. */
 export const RACE_RUN_S = RACE_LEAD_S + RACE_AFTER_S;
 

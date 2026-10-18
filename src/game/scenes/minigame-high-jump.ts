@@ -66,7 +66,7 @@ const BOX_JITTER_SHARE = 0.5;
  */
 export type HighJumpMeasured = { bestHeight: number; landingDistance: number };
 
-export type HeightBoard = { heightAboveLip: number; y: number; major: boolean };
+type HeightBoard = { heightAboveLip: number; y: number; major: boolean };
 
 /** A height sign: the height it names (above the lip) and where its middle stands (m above the pad). */
 export type HeightSign = { heightAboveLip: number; y: number };

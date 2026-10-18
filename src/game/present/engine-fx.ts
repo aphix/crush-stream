@@ -427,7 +427,7 @@ export const JET_SLOTS = 16;
 /** Sparks a power-1 jet throws each second at density 1 (set by eye from shots at ultra: thick enough to read as a fountain at 50 m, not a sprinkler). */
 export const JET_RATE = 120;
 /** Launch speed (m/s, up) of a power-1 spark: apexes from 6.3 to 13.3 m at `GRAVITY`, above the stands and the gantry; a stronger jet scales it by the root of its power (height goes with the power). */
-export const JET_UP_MIN = 11;
+const JET_UP_MIN = 11;
 export const JET_UP_MAX = 16;
 /** A spark's sideways launch speed as a share of its upward speed (a cone of about 19 degrees: a fountain's bell, not a column). */
 const JET_SPREAD = 0.35;
