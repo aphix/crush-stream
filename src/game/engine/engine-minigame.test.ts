@@ -10,7 +10,7 @@ import { MINIGAME_AIM_LEAD } from "../present/ride-cam.ts";
 import { BOX_POSE_FLOATS, type ReleaseScale } from "../present/ragdoll-boxes.ts";
 import { DISC_RADIUS, activeGround, setGround, type Ground } from "../world/ground.ts";
 import { MINIGAME_MODES, REST_HOLD, STATION_ANCHORS, THROW_BOOST, type MinigameMode } from "../scenes/minigame-constants.ts";
-import { BOX_COUNT, HighJumpCapture, type TorsoSample } from "../scenes/minigame-high-jump.ts";
+import { BOX_COUNT, HighJumpPeak, type TorsoSample } from "../scenes/minigame-high-jump.ts";
 import { DRIVER_CARS } from "../match/types.ts";
 import { lipHeight } from "../scenes/minigame-profile.ts";
 import { ringScore } from "../scenes/minigame-ring.ts";
@@ -92,21 +92,17 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     releaseThrottle();
     return samples;
   };
-  /** The mode's score of a throw's torso samples, worked out here from the model's own pieces (the first at-rest sample, the posts' plane crossing). */
+  /** The mode's score of a throw's torso samples, worked out here from the model's own pieces (the first at-rest sample; the high jump's highest point up to it). */
   const expectedScore = (mode: MinigameMode, samples: readonly TorsoSample[]): number => {
+    const restAt = samples.findIndex((sample) => sample.still >= REST_HOLD);
+    assert.ok(restAt >= 0, "the dummy came to rest");
+    const atRest = samples[restAt]!;
     if (mode === "highJump") {
-      const capture = new HighJumpCapture();
-      const { postsX } = engine["minigames"]["highJump"];
-      for (let k = 1; k < samples.length; k++) {
-        const captured = capture.step(samples[k - 1]!, samples[k]!, postsX, lipHeight("highJump"));
-        if (captured !== null) return captured;
-      }
+      const peak = new HighJumpPeak();
+      for (const sample of samples.slice(0, restAt + 1)) peak.step(sample, lipHeight("highJump"));
+      return peak.height;
     }
-    const atRest = samples.find((sample) => sample.still >= REST_HOLD);
-    assert.ok(atRest, "the dummy came to rest");
-    if (mode === "longJump") return Math.max(0, atRest.x);
-    if (mode === "ringFling") return ringScore(atRest.x, atRest.z);
-    return 0;
+    return mode === "longJump" ? Math.max(0, atRest.x) : ringScore(atRest.x, atRest.z);
   };
 
   before(async () => {
@@ -241,7 +237,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
       it("when the best was stored, then a new session on the same storage reads it as this car's and the overall best", () => {
         const fresh = new MinigameSession(minigameStore());
-        fresh.begin(mode, { carType: "sedan", throwsPerSet: scoredHud.throwsPerSet ?? undefined, highJump: { postsX: engine["minigames"]["highJump"].postsX, lipY: lipHeight("highJump") } });
+        fresh.begin(mode, { carType: "sedan", throwsPerSet: scoredHud.throwsPerSet ?? undefined, highJumpLipY: lipHeight("highJump") });
         // A Ring Fling set keeps its total only once the set is complete; the other modes keep each throw.
         const recorded = scoredHud.throwsPerSet === null ? scoredHud.lastScore! : scoredHud.setComplete ? scoredHud.setTotal : 0;
         const score = recorded;

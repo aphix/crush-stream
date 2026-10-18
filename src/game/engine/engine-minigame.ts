@@ -41,9 +41,8 @@ export class Minigames {
   private readonly highJump = highJumpLayout(HIGH_JUMP_MEASURED, this.highJumpLipY);
   private readonly boxPoses = new Float32Array(BOX_COUNT * BOX_POSE_FLOATS);
   private readonly torsoWorld = new THREE.Vector3();
-  /** The session keeps the previous frame's sample to interpolate the posts' plane: two buffers take turns. */
-  private readonly torsoSamples = [blankTorsoSample(), blankTorsoSample()];
-  private nextTorsoSample = 0;
+  /** The torso the session reads each render frame, rewritten in place. */
+  private readonly torsoSample = blankTorsoSample();
   /** The Long jump's bail: this attempt's press and hit, and the barrier's throw held for a late press. */
   private readonly bail = new LongJumpBail();
   private heldThrow: Ejection | null = null;
@@ -125,7 +124,7 @@ export class Minigames {
   }
 
   private beginSession(mode: MinigameMode): void {
-    this.session.begin(mode, { carType: this.carType, throwsPerSet: this.throwsPerSet, highJump: { postsX: this.highJump.postsX, lipY: this.highJumpLipY } });
+    this.session.begin(mode, { carType: this.carType, throwsPerSet: this.throwsPerSet, highJumpLipY: this.highJumpLipY });
   }
 
   /** A new attempt's scene (after `ragdolls.reset`, which drops both): the dummy lives until released, the boxes stand again, no bail yet. */
@@ -189,8 +188,7 @@ export class Minigames {
     let torso: TorsoSample | null = null;
     if (still >= 0) {
       const anchor = STATION_ANCHORS[this.activeMode];
-      torso = this.torsoSamples[this.nextTorsoSample]!;
-      this.nextTorsoSample = 1 - this.nextTorsoSample;
+      torso = this.torsoSample;
       torso.x = this.torsoWorld.x - anchor.x;
       torso.y = this.torsoWorld.y;
       torso.z = this.torsoWorld.z - anchor.z;

@@ -3,7 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { hypot2 } from "../kernel/physics-core.js";
 import { LANDING_HEIGHT, MINIGAME_MODE, STATION_HALF_WIDTH } from "../scenes/minigame-constants.ts";
 import { climbFootX, floorHeightAt, stationFrontX } from "../scenes/minigame-profile.ts";
-import { BOARD_STEP, CAPTURE_HALF_WIDTH, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS, type HeightBoard, type HighJumpLayout } from "../scenes/minigame-high-jump.ts";
+import { FIELD_HALF_WIDTH, POST_HALF_SPAN, POST_THICKNESS, SIGN_HEIGHT, SLAT_THICKNESS, type HeightSign, type HighJumpLayout } from "../scenes/minigame-high-jump.ts";
 import { CANVAS_WHITE, canvasTexture } from "./lab-art.ts";
 import { SIGN_BOARD_PAINT } from "./range-art.ts";
 
@@ -64,23 +64,21 @@ const POST_CAP_OVERHANG = 1.3;
 
 /**
  * Height boards: a slat between the posts at every board's height (`SLAT_THICKNESS` square; the major ones, every 50 m, a bright slat),
- * and above every major slat a big labelled sign standing on it, so the sign is never below the line it names (the lip's sign cannot sink behind the
- * kicker's end) and it reads from about 100 m. The sign fills the room between a major slat and the next slat.
+ * and on every `layout.signs` slat a big labelled sign standing on it (`SIGN_HEIGHT` tall), so the sign is never below the line it names
+ * (the lip's sign cannot sink behind the kicker's end) and it reads from about 100 m. The brass plate bolted to each post at every board:
+ * its depth along the throw, its share of the post's width, and its height (m), the major ones big.
  */
-const SIGN_CLEARANCE = 0.2;
-const SIGN_HEIGHT = BOARD_STEP - SLAT_THICKNESS - SIGN_CLEARANCE;
-/** The brass plate bolted to each post at every board: its depth along the throw, its share of the post's width, and its height (m), the major ones big. */
 const PLATE = { depth: 0.04, widthShare: 0.8, height: { major: 1.2, minor: 0.3 } } as const;
 
 /**
- * The atlas the signs' labels share: `columns` cells across, each `cellWidth` x `cellHeight` px: one labelled cell per major board,
- * then a plain timber cell, then a bright bar cell.
+ * The atlas the signs' labels share: `columns` cells across, each `cellWidth` x `cellHeight` px: one labelled cell per sign (up to 24 at
+ * 10 m on the tallest frame, so a 2048 x 1792 canvas, well inside any GPU's limit), then a plain timber cell, then a bright bar cell.
  */
-const BOARD_ATLAS = { columns: 2, cellWidth: 1024, cellHeight: 512 } as const;
-const BOARD_LABEL_FONT_PX = 340;
-const BOARD_LABEL_MARGIN_PX = 40;
+const BOARD_ATLAS = { columns: 4, cellWidth: 512, cellHeight: 256 } as const;
+const BOARD_LABEL_FONT_PX = 170;
+const BOARD_LABEL_MARGIN_PX = 20;
 const BOARD_PAINT = { ...SIGN_BOARD_PAINT, plain: "#b08a58" } as const;
-const BOARD_EDGE_PX = 16;
+const BOARD_EDGE_PX = 8;
 /** `BoxGeometry` builds six 4-vertex faces: +x, -x, ...: the -x face is the one the approaching car sees. */
 const BOX_VERTICES_PER_FACE = 4;
 const BOX_FRONT_FACE = 1;
@@ -92,7 +90,7 @@ const DASH = { length: 1.5, gap: 1, thickness: 0.25 } as const;
 /** The net: it reaches this far (m) either side beyond the capture band; each end pole stands this far above the net. */
 const NET_SIDE_MARGIN = 3;
 /** Half the net's width (m): the drawn net and the ground's net prism share it. */
-export const NET_HALF_WIDTH = CAPTURE_HALF_WIDTH + NET_SIDE_MARGIN;
+export const NET_HALF_WIDTH = FIELD_HALF_WIDTH + NET_SIDE_MARGIN;
 /** The net's poles and top cable are stout (a 78 m net on 0.3 m sticks reads as a grid hanging in the void) and scale with its height. */
 const NET_POLE_THICKNESS = 0.5;
 const NET_POLE_EXTRA_HEIGHT = 1;
@@ -274,15 +272,15 @@ function paintBoardCell(context: CanvasRenderingContext2D, originX: number, orig
   context.strokeRect(originX + BOARD_EDGE_PX / 2, originY + BOARD_EDGE_PX / 2, BOARD_ATLAS.cellWidth - BOARD_EDGE_PX, BOARD_ATLAS.cellHeight - BOARD_EDGE_PX);
 }
 
-/** One labelled cell per major board (in board order), then the plain timber cell, then the bright bar cell; each label is stretched back to square over the cell-to-sign squeeze. */
-function paintBoardAtlas(context: CanvasRenderingContext2D, majorBoards: readonly HeightBoard[], faceAspect: number): void {
+/** One labelled cell per sign (in sign order), then the plain timber cell, then the bright bar cell; each label is stretched back to square over the cell-to-sign squeeze. */
+function paintBoardAtlas(context: CanvasRenderingContext2D, signs: readonly HeightSign[], faceAspect: number): void {
   const horizontalStretch = BOARD_ATLAS.cellWidth / BOARD_ATLAS.cellHeight / faceAspect;
-  for (let cellIndex = 0; cellIndex < majorBoards.length + 2; cellIndex++) {
+  for (let cellIndex = 0; cellIndex < signs.length + 2; cellIndex++) {
     const originX = (cellIndex % BOARD_ATLAS.columns) * BOARD_ATLAS.cellWidth;
     const originY = Math.floor(cellIndex / BOARD_ATLAS.columns) * BOARD_ATLAS.cellHeight;
-    const board = majorBoards[cellIndex];
-    if (!board) {
-      const isBarCell = cellIndex === majorBoards.length + 1;
+    const sign = signs[cellIndex];
+    if (!sign) {
+      const isBarCell = cellIndex === signs.length + 1;
       paintBoardCell(context, originX, originY, isBarCell ? BOARD_PAINT.fill : BOARD_PAINT.plain, isBarCell ? BOARD_PAINT.edge : null);
       continue;
     }
@@ -294,7 +292,7 @@ function paintBoardAtlas(context: CanvasRenderingContext2D, majorBoards: readonl
     context.font = `bold ${BOARD_LABEL_FONT_PX}px sans-serif`;
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(board.heightAboveLip === 0 ? "LIP = 0" : `${board.heightAboveLip} m`, 0, 0, (BOARD_ATLAS.cellWidth - 2 * BOARD_LABEL_MARGIN_PX) / horizontalStretch);
+    context.fillText(sign.heightAboveLip === 0 ? "LIP = 0" : `${sign.heightAboveLip} m`, 0, 0, (BOARD_ATLAS.cellWidth - 2 * BOARD_LABEL_MARGIN_PX) / horizontalStretch);
     context.restore();
   }
 }
@@ -322,19 +320,16 @@ function boardBox(height: number, y: number, solidCellIndex: number, labelCellIn
   return geometry;
 }
 
-/** One slat per layout board (merged first, in board order), then one sign above every major slat (in board order). */
+/** One slat per layout board (merged first, in board order), then one sign per layout sign (in sign order). */
 function boardsMesh(layout: HighJumpLayout): THREE.Mesh {
-  const majorBoards = layout.boards.filter((board) => board.major);
-  const cellCount = majorBoards.length + 2;
-  const plainCellIndex = majorBoards.length;
-  const barCellIndex = majorBoards.length + 1;
+  const cellCount = layout.signs.length + 2;
+  const plainCellIndex = layout.signs.length;
+  const barCellIndex = layout.signs.length + 1;
   const atlas = canvasTexture(BOARD_ATLAS.columns * BOARD_ATLAS.cellWidth, Math.ceil(cellCount / BOARD_ATLAS.columns) * BOARD_ATLAS.cellHeight, (context) =>
-    paintBoardAtlas(context, majorBoards, SIGN_FACE_ASPECT),
+    paintBoardAtlas(context, layout.signs, SIGN_FACE_ASPECT),
   );
   const slats = layout.boards.map((board) => boardBox(SLAT_THICKNESS, board.y, board.major ? barCellIndex : plainCellIndex, null, cellCount, layout));
-  const signs = majorBoards.map((board, signIndex) =>
-    boardBox(SIGN_HEIGHT, board.y + SLAT_THICKNESS / 2 + SIGN_HEIGHT / 2, plainCellIndex, signIndex, cellCount, layout),
-  );
+  const signs = layout.signs.map((sign, signIndex) => boardBox(SIGN_HEIGHT, sign.y, plainCellIndex, signIndex, cellCount, layout));
   return mergedMesh("boards", [...slats, ...signs], new THREE.MeshStandardMaterial({ map: atlas, roughness: 0.85 }));
 }
 
@@ -446,9 +441,9 @@ function netMesh(layout: HighJumpLayout): THREE.Mesh {
 
 /**
  * The High jump's static art in station-local coordinates (+x the throw, x = 0 the lip, z = 0 the lane's middle, y from the pad): two
- * black 0.25 m posts (the ragdoll's colliders, `MinigameGround`) with a slat and brass plate per `layout.boards` entry (every
- * `BOARD_STEP` m up the frame) and a big labelled sign standing on every major slat, a dashed lip-height line, the net at `layout.netX`
- * and `layout.netHeight` tall, and the run-up's barrels, chevrons and stop block. Seven draws.
+ * black 0.25 m posts with a slat and brass plate per `layout.boards` entry (every `BOARD_STEP` m up the frame) and a labelled sign
+ * standing on every `layout.signs` slat (every `SIGN_EVERY_METRES` m), all of them the ragdoll's colliders (`MinigameGround`), a dashed
+ * lip-height line, the net at `layout.netX` and `layout.netHeight` tall, and the run-up's barrels, chevrons and stop block. Seven draws.
  */
 export function makeHighJumpArt(layout: HighJumpLayout, lipY: number): THREE.Group {
   const group = new THREE.Group();

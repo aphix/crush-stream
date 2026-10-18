@@ -11,10 +11,13 @@ import {
   BOX_PILE_TRAIL,
   BOX_SIZE_MAX,
   BOX_SIZE_MIN,
-  CAPTURE_HALF_WIDTH,
+  FIELD_HALF_WIDTH,
   FRAME_HEADROOM_FACTOR,
-  HighJumpCapture,
+  HighJumpPeak,
   MAJOR_BOARD_EVERY_METRES,
+  SIGN_EVERY_METRES,
+  SIGN_HEIGHT,
+  SLAT_THICKNESS,
   POSTS_DISTANCE,
   POST_HALF_SPAN,
   POST_THICKNESS,
@@ -27,174 +30,102 @@ import {
 const GRAVITY = 9.80665;
 const FRAME_SECONDS = 1 / FRAME_HZ;
 const LIP_Y = 2.5;
-const EDGE_NUDGE = 1e-6;
 const MILLIMETRE = 0.001;
 const BOX_OVERLAP_TOLERANCE = 1e-9;
 
 /** A synthetic best case: the numbers the real measurement would fill in. */
-const SYNTHETIC_MEASURED: HighJumpMeasured = { crossingHeight: 31.3, landingDistance: 28 };
+const SYNTHETIC_MEASURED: HighJumpMeasured = { bestHeight: 31.3, landingDistance: 28 };
 
-function sample(x: number, y: number, z = 0): TorsoSample {
+function torso(x: number, y: number, z = 0): TorsoSample {
   return { x, y, z, still: 0 };
 }
 
 /**
- * A ballistic torso released at the apex (x = 0, y = apexY) with horizontal speed `speed`, sampled once per 60 Hz frame
- * as the ragdoll's `latest()` is: no interpolation between frames.
+ * A ballistic torso whose apex (height `apexY`) falls at frame `apexFrame` (a half-integer lies between two frames, where a
+ * sample is furthest from the apex), sampled once per 60 Hz frame as the ragdoll's `latest()` is: no interpolation between frames.
  */
-function ballisticFrames(apexY: number, speed: number, frameCount: number): TorsoSample[] {
+function arcFrames(apexY: number, apexFrame: number, frameCount: number): TorsoSample[] {
   return Array.from({ length: frameCount }, (_, frame) => {
-    const seconds = frame * FRAME_SECONDS;
-    return sample(speed * seconds, apexY - (GRAVITY * seconds * seconds) / 2);
+    const seconds = (frame - apexFrame) * FRAME_SECONDS;
+    return torso(frame, apexY - (GRAVITY * seconds * seconds) / 2);
   });
 }
 
-/** Feeds the frames in order, as the engine does; returns every frame's answer. */
-function feed(capture: HighJumpCapture, frames: readonly TorsoSample[], postsX: number): (number | null)[] {
-  return frames.map((frame, index) => capture.step(index === 0 ? null : frames[index - 1], frame, postsX, LIP_Y));
-}
-
-function firstNumber(answers: readonly (number | null)[]): number | null {
-  return answers.find((answer) => answer !== null) ?? null;
-}
-
-describe("given a torso falling at 28 m/s past the posts, sampled once per 60 Hz frame", () => {
-  const speed = 15;
+describe("given a torso flying a ballistic arc, sampled once per 60 Hz frame", () => {
   const apexY = 60;
-  /** The plane lies half way between two frames, where an uninterpolated sample is furthest from the plane. */
-  const crossingSeconds = 171.5 * FRAME_SECONDS;
-  const postsX = speed * crossingSeconds;
-  const analyticHeightAboveLip = apexY - (GRAVITY * crossingSeconds * crossingSeconds) / 2 - LIP_Y;
-  const fallSpeedAtCrossing = GRAVITY * crossingSeconds;
+  const apexFrame = 30.5;
+  const frames = arcFrames(apexY, apexFrame, 150);
+  const analyticApexHeight = apexY - LIP_Y;
 
-  it("is a real 28 m/s descent", () => {
-    assert.ok(Math.abs(fallSpeedAtCrossing - 28) < 0.2, `fall speed ${fallSpeedAtCrossing}`);
+  it("when the apex falls half way between two frames, then the highest point is the analytic apex to under a millimetre", () => {
+    const peak = new HighJumpPeak();
+    for (const frame of frames) peak.step(frame, LIP_Y);
+    assert.ok(Math.abs(peak.height - analyticApexHeight) < MILLIMETRE, `peak ${peak.height} vs analytic ${analyticApexHeight}`);
   });
 
-  it("when the torso crosses the plane between two frames, then the height is the analytic one to under a millimetre", () => {
-    const capture = new HighJumpCapture();
-    const answers = feed(capture, ballisticFrames(apexY, speed, 240), postsX);
-    const captured = firstNumber(answers);
-    assert.ok(captured !== null, "a capture came back");
-    assert.ok(
-      Math.abs(captured - analyticHeightAboveLip) < MILLIMETRE,
-      `captured ${captured} vs analytic ${analyticHeightAboveLip}`,
-    );
-    assert.equal(capture.captured, captured, "captured is readable afterwards");
-    assert.equal(answers.filter((answer) => answer !== null).length, 1, "exactly one frame answered");
+  it("when he has fallen back well below the apex, then the score is still the apex, not where he is now", () => {
+    const peak = new HighJumpPeak();
+    for (const frame of frames) peak.step(frame, LIP_Y);
+    assert.ok(frames.at(-1)!.y - LIP_Y < analyticApexHeight - 10, "the last frame is far below the apex");
+    assert.ok(peak.height > analyticApexHeight - MILLIMETRE, `peak ${peak.height}`);
   });
 
-  it("when the plane lies before the torso's fall has reached it, then no frame answers and nothing is captured", () => {
-    const capture = new HighJumpCapture();
-    const frames = ballisticFrames(apexY, speed, 100);
-    assert.ok(frames[frames.length - 1].x < postsX, "the frames stop short of the plane");
-    const answers = feed(capture, frames, postsX);
-    assert.equal(firstNumber(answers), null, "no answer before the plane");
-    assert.equal(capture.captured, null, "nothing captured");
-    const populated = firstNumber(feed(capture, ballisticFrames(apexY, speed, 240), postsX));
-    assert.ok(populated !== null, "the same capture answers once the frames reach the plane");
+  it("when the frames are read in order, then the running value never drops and each answer is the highest so far", () => {
+    const peak = new HighJumpPeak();
+    let previous = 0;
+    for (const [index, frame] of frames.entries()) {
+      const answer = peak.step(frame, LIP_Y);
+      assert.ok(answer >= previous, `frame ${index}: ${answer} after ${previous}`);
+      assert.equal(peak.height, answer, "the getter reads the same");
+      previous = answer;
+    }
   });
 
-  it("when the posts stand where the torso peaks, then the capture is the plane crossing, not the apex", () => {
-    const capture = new HighJumpCapture();
-    const captured = firstNumber(feed(capture, ballisticFrames(apexY, speed, 240), postsX));
-    assert.ok(captured !== null);
-    assert.ok(apexY - LIP_Y - captured > 1, `captured ${captured} is well below the apex height ${apexY - LIP_Y}`);
+  it("when he stops short of the apex (caught on a slat on the way up), then the score is the highest frame he reached", () => {
+    const peak = new HighJumpPeak();
+    const caught = frames.slice(0, 20);
+    for (const frame of caught) peak.step(frame, LIP_Y);
+    assert.equal(peak.height, caught.at(-1)!.y - LIP_Y, "the last frame he was on the way up");
   });
 });
 
-describe("given a pair of samples straddling the plane", () => {
-  const postsX = 40;
-  const crossingTestCases = [
-    { it: "when the crossing is above the lip, then the height above the lip comes back", previous: sample(38, 13), current: sample(42, 9), expected: 8.5 },
-    { it: "when the crossing is below the lip, then the score is 0, not negative and not null", previous: sample(38, 1), current: sample(42, -3), expected: 0 },
-    { it: "when the crossing is exactly at the lip, then the score is 0", previous: sample(38, 4.5), current: sample(42, 0.5), expected: 0 },
-    { it: "when the later sample lies exactly on the plane, then that sample's height counts", previous: sample(36, 20), current: sample(40, 12), expected: 12 - LIP_Y },
-    { it: "when the torso is rising through the plane, then the rising height counts", previous: sample(38, 6), current: sample(42, 14), expected: 10 - LIP_Y },
-  ] as const;
-  for (const testCase of crossingTestCases) {
-    it(testCase.it, () => {
-      const capture = new HighJumpCapture();
-      const captured = capture.step(testCase.previous, testCase.current, postsX, LIP_Y);
-      assert.ok(captured !== null, "the crossing was seen");
-      assert.ok(Math.abs(captured - testCase.expected) < 1e-9, `captured ${captured}, expected ${testCase.expected}`);
-      assert.equal(capture.captured, captured, "captured field");
-    });
-  }
-
-  const nonCrossingTestCases = [
-    { it: "when there is no previous sample, then there is no crossing", previous: null, current: sample(42, 9) },
-    { it: "when both samples are before the plane, then there is no crossing", previous: sample(30, 9), current: sample(35, 9) },
-    { it: "when both samples are past the plane, then there is no crossing", previous: sample(41, 9), current: sample(45, 9) },
-    { it: "when the previous sample lies on the plane, then the pair is not the crossing (the pair before it was)", previous: sample(40, 9), current: sample(44, 9) },
-    { it: "when the torso goes back through the plane, then it is not a +x crossing", previous: sample(42, 9), current: sample(38, 9) },
-  ] as const;
-  for (const testCase of nonCrossingTestCases) {
-    it(testCase.it, () => {
-      const capture = new HighJumpCapture();
-      assert.equal(capture.step(testCase.previous, testCase.current, postsX, LIP_Y), null, "answer");
-      assert.equal(capture.captured, null, "captured");
-      const control = capture.step(sample(38, 9), sample(42, 9), postsX, LIP_Y);
-      assert.ok(control !== null, "a real crossing is still captured afterwards");
-    });
-  }
-
-  it("when a second crossing follows the first, then it answers null; after reset it captures again", () => {
-    const capture = new HighJumpCapture();
-    const first = capture.step(sample(38, 13), sample(42, 9), postsX, LIP_Y);
-    assert.ok(first !== null, "first crossing");
-    assert.equal(capture.step(sample(38, 20), sample(42, 20), postsX, LIP_Y), null, "second crossing");
-    assert.equal(capture.captured, first, "the first capture is kept");
-    capture.reset();
-    assert.equal(capture.captured, null, "reset clears the capture");
-    const again = capture.step(sample(38, 20), sample(42, 20), postsX, LIP_Y);
-    assert.ok(again !== null && Math.abs(again - (20 - LIP_Y)) < 1e-9, "captures again after reset");
-  });
-});
-
-describe("given the capture band beside the posts", () => {
-  const postsX = 40;
-  const bandTestCases = [
-    { it: "when he crosses on the lane centre, then it counts", z: 0, counts: true },
-    { it: "when he crosses beside a post, outside the posts' span, then it counts", z: POST_HALF_SPAN + 1, counts: true },
-    { it: "when he crosses exactly at the band's edge, then it counts", z: CAPTURE_HALF_WIDTH, counts: true },
-    { it: "when he crosses exactly at the other band edge, then it counts", z: -CAPTURE_HALF_WIDTH, counts: true },
-    { it: "when he crosses just past the band's edge, then it does not count", z: CAPTURE_HALF_WIDTH + EDGE_NUDGE, counts: false },
-    { it: "when he crosses just past the other band edge, then it does not count", z: -CAPTURE_HALF_WIDTH - EDGE_NUDGE, counts: false },
-  ] as const;
-  for (const testCase of bandTestCases) {
-    it(testCase.it, () => {
-      const capture = new HighJumpCapture();
-      const captured = capture.step(sample(38, 9, testCase.z), sample(42, 9, testCase.z), postsX, LIP_Y);
-      assert.equal(captured !== null, testCase.counts, "counted");
-      assert.equal(capture.captured !== null, testCase.counts, "captured field");
-    });
-  }
-
-  it("when the samples are both outside the band but the crossing between them is inside, then the interpolated lateral position counts", () => {
-    const capture = new HighJumpCapture();
-    const captured = capture.step(sample(36, 9, -CAPTURE_HALF_WIDTH - 1), sample(44, 9, CAPTURE_HALF_WIDTH + 1), postsX, LIP_Y);
-    assert.ok(captured !== null, "counted");
+describe("given single torso samples", () => {
+  it("when the first sample is read, then it counts: no earlier sample is needed", () => {
+    assert.equal(new HighJumpPeak().step(torso(3, LIP_Y + 8.5), LIP_Y), 8.5);
   });
 
-  it("when his first crossing is outside the band, then a later crossing inside it does not rescue the throw", () => {
-    const capture = new HighJumpCapture();
-    assert.equal(capture.step(sample(38, 9, CAPTURE_HALF_WIDTH + 2), sample(42, 9, CAPTURE_HALF_WIDTH + 2), postsX, LIP_Y), null, "outside");
-    assert.equal(capture.step(sample(38, 9), sample(42, 9), postsX, LIP_Y), null, "later inside crossing");
-    assert.equal(capture.captured, null, "nothing captured");
+  it("when he stays below the lip, then the score is 0, not negative", () => {
+    const peak = new HighJumpPeak();
+    assert.equal(peak.step(torso(5, LIP_Y - 3), LIP_Y), 0, "below the lip");
+    assert.equal(peak.height, 0, "the getter");
+  });
+
+  it("when he flies beside the frame or short of the posts or past them, then the position does not change the height", () => {
+    for (const [x, z] of [[2, 0], [POSTS_DISTANCE - 3, 0], [POSTS_DISTANCE + 20, FIELD_HALF_WIDTH + 40], [-40, -FIELD_HALF_WIDTH - 40]] as const) {
+      assert.equal(new HighJumpPeak().step(torso(x, LIP_Y + 12, z), LIP_Y), 12, `at (${x}, ${z})`);
+    }
+  });
+
+  it("when the peak is reset, then it starts from nothing again", () => {
+    const peak = new HighJumpPeak();
+    peak.step(torso(5, LIP_Y + 20), LIP_Y);
+    peak.reset();
+    assert.equal(peak.height, 0, "cleared");
+    assert.equal(peak.step(torso(5, LIP_Y + 4), LIP_Y), 4, "the next throw's own highest");
   });
 });
 
 const LAYOUT_CASES = [
-  { name: "a record-sized best case", measured: { crossingHeight: 230, landingDistance: 300 }, expectedFrameTop: 300, expectedBoardCount: 60, expectedMajorHeights: [0, 50, 100, 150, 200, 250], expectedNetHeight: 115 },
-  { name: "the sizing measurement's best run (156.4 m over the posts, landing 32.2 m)", measured: { crossingHeight: 156.4, landingDistance: 32.2 }, expectedFrameTop: 205, expectedBoardCount: 41, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 78.2 },
-  { name: "a best case a little over it", measured: { crossingHeight: 157, landingDistance: 240 }, expectedFrameTop: 205, expectedBoardCount: 41, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 78.5 },
-  { name: "a best case whose headroom lands exactly on a board", measured: { crossingHeight: 100, landingDistance: 160 }, expectedFrameTop: 130, expectedBoardCount: 26, expectedMajorHeights: [0, 50, 100], expectedNetHeight: 50 },
-  { name: "a best case whose headroom just passes a big board", measured: { crossingHeight: 38.5, landingDistance: 25 }, expectedFrameTop: 55, expectedBoardCount: 11, expectedMajorHeights: [0, 50], expectedNetHeight: 30 },
-  { name: "a best case whose headroom just reaches a big board", measured: { crossingHeight: 38.4, landingDistance: 25 }, expectedFrameTop: 50, expectedBoardCount: 10, expectedMajorHeights: [0], expectedNetHeight: 30 },
-  { name: "a mid-sized best case", measured: { crossingHeight: 20, landingDistance: 30 }, expectedFrameTop: 30, expectedBoardCount: 6, expectedMajorHeights: [0], expectedNetHeight: 30 },
-  { name: "a tiny best case (the headroom factor alone would give under one board)", measured: { crossingHeight: 3, landingDistance: 15 }, expectedFrameTop: 10, expectedBoardCount: 2, expectedMajorHeights: [0], expectedNetHeight: 30 },
-  { name: "a landing beyond the net", measured: { crossingHeight: 12, landingDistance: 90 }, expectedFrameTop: 20, expectedBoardCount: 4, expectedMajorHeights: [0], expectedNetHeight: 30 },
+  { name: "a record-sized best case", measured: { bestHeight: 230, landingDistance: 300 }, expectedFrameTop: 300, expectedBoardCount: 60, expectedMajorHeights: [0, 50, 100, 150, 200, 250], expectedNetHeight: 115 },
+  { name: "a best case of 156.4 m, landing 32.2 m", measured: { bestHeight: 156.4, landingDistance: 32.2 }, expectedFrameTop: 205, expectedBoardCount: 41, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 78.2 },
+  { name: "the sizing measurement's best run (178.2 m, landing 32.2 m)", measured: { bestHeight: 178.2, landingDistance: 32.2 }, expectedFrameTop: 235, expectedBoardCount: 47, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 89.1 },
+  { name: "a best case a little over it", measured: { bestHeight: 157, landingDistance: 240 }, expectedFrameTop: 205, expectedBoardCount: 41, expectedMajorHeights: [0, 50, 100, 150, 200], expectedNetHeight: 78.5 },
+  { name: "a best case whose headroom lands exactly on a board", measured: { bestHeight: 100, landingDistance: 160 }, expectedFrameTop: 130, expectedBoardCount: 26, expectedMajorHeights: [0, 50, 100], expectedNetHeight: 50 },
+  { name: "a best case whose headroom just passes a big board", measured: { bestHeight: 38.5, landingDistance: 25 }, expectedFrameTop: 55, expectedBoardCount: 11, expectedMajorHeights: [0, 50], expectedNetHeight: 30 },
+  { name: "a best case whose headroom just reaches a big board", measured: { bestHeight: 38.4, landingDistance: 25 }, expectedFrameTop: 50, expectedBoardCount: 10, expectedMajorHeights: [0], expectedNetHeight: 30 },
+  { name: "a mid-sized best case", measured: { bestHeight: 20, landingDistance: 30 }, expectedFrameTop: 30, expectedBoardCount: 6, expectedMajorHeights: [0], expectedNetHeight: 30 },
+  { name: "a tiny best case (the headroom factor alone would give under one board)", measured: { bestHeight: 3, landingDistance: 15 }, expectedFrameTop: 10, expectedBoardCount: 2, expectedMajorHeights: [0], expectedNetHeight: 30 },
+  { name: "a landing beyond the net", measured: { bestHeight: 12, landingDistance: 90 }, expectedFrameTop: 20, expectedBoardCount: 4, expectedMajorHeights: [0], expectedNetHeight: 30 },
 ] as const;
 
 function pileEndX(measured: HighJumpMeasured): number {
@@ -206,7 +137,7 @@ function boundingRadius(box: BoxPlacement): number {
 }
 
 for (const layoutCase of LAYOUT_CASES) {
-  describe(`given ${layoutCase.name} (crossing height ${layoutCase.measured.crossingHeight} m, landing ${layoutCase.measured.landingDistance} m)`, () => {
+  describe(`given ${layoutCase.name} (best height ${layoutCase.measured.bestHeight} m, landing ${layoutCase.measured.landingDistance} m)`, () => {
     const measured = layoutCase.measured;
     const layout = highJumpLayout(measured, LIP_Y);
 
@@ -216,11 +147,11 @@ for (const layoutCase of LAYOUT_CASES) {
       assert.equal(layout.netX, POSTS_DISTANCE + 30, "netX is the posts plus 30 m");
     });
 
-    it("when the layout is made, then the frame top is the best crossing height times the headroom, rounded up to a board", () => {
+    it("when the layout is made, then the frame top is the best height times the headroom, rounded up to a board", () => {
       assert.equal(layout.frameTop, layoutCase.expectedFrameTop, "frame top");
-      assert.ok(layout.frameTop >= measured.crossingHeight * FRAME_HEADROOM_FACTOR, "headroom factor kept");
+      assert.ok(layout.frameTop >= measured.bestHeight * FRAME_HEADROOM_FACTOR, "headroom factor kept");
       assert.equal(layout.frameTop % BOARD_STEP, 0, `frame top ${layout.frameTop} stands on a board height`);
-      assert.ok(layout.frameTop >= measured.crossingHeight + BOARD_STEP, "at least one board above the crossing height");
+      assert.ok(layout.frameTop >= measured.bestHeight + BOARD_STEP, "at least one board above the best height");
     });
 
     it("when the layout is made, then a board stands every BOARD_STEP (5) m from the lip up to under the frame top", () => {
@@ -244,7 +175,20 @@ for (const layoutCase of LAYOUT_CASES) {
       assert.ok(layout.boards.length > bigHeights.length, "small boards exist between them");
     });
 
-    it("when the layout is made, then the net is as tall as the larger of its minimum and half the best crossing height", () => {
+    it("when the layout is made, then a sign stands on the slat at every SIGN_EVERY_METRES from the lip, in the room under the next slat", () => {
+      const expectedHeights = layout.boards.filter((board) => board.heightAboveLip % SIGN_EVERY_METRES === 0).map((board) => board.heightAboveLip);
+      assert.deepEqual(layout.signs.map((sign) => sign.heightAboveLip), expectedHeights, "the signs' heights");
+      assert.equal(layout.signs.length, Math.ceil(layout.frameTop / SIGN_EVERY_METRES), "one per SIGN_EVERY_METRES below the frame top");
+      assert.equal(layout.signs[0]!.heightAboveLip, 0, "the lip line has the first");
+      for (const sign of layout.signs) {
+        const slatTop = LIP_Y + sign.heightAboveLip + SLAT_THICKNESS / 2;
+        const nextSlatBottom = LIP_Y + sign.heightAboveLip + BOARD_STEP - SLAT_THICKNESS / 2;
+        assert.ok(Math.abs(sign.y - SIGN_HEIGHT / 2 - slatTop) < MILLIMETRE / 1000, `the ${sign.heightAboveLip} m sign stands on its slat`);
+        assert.ok(sign.y + SIGN_HEIGHT / 2 < nextSlatBottom, `the ${sign.heightAboveLip} m sign is clear of the slat above`);
+      }
+    });
+
+    it("when the layout is made, then the net is as tall as the larger of its minimum and half the best height", () => {
       assert.equal(layout.netHeight, layoutCase.expectedNetHeight, "net height");
     });
 
@@ -328,7 +272,7 @@ for (const layoutCase of LAYOUT_CASES) {
 
 describe("given a landing so near the posts that the piles cannot hold one cell", () => {
   it("when the layout is made, then it refuses with a RangeError naming the footprint", () => {
-    const measured = { crossingHeight: 12, landingDistance: POSTS_DISTANCE - BOX_PILE_LEAD - BOX_PILE_TRAIL + BOX_CELL_PITCH / 2 };
+    const measured = { bestHeight: 12, landingDistance: POSTS_DISTANCE - BOX_PILE_LEAD - BOX_PILE_TRAIL + BOX_CELL_PITCH / 2 };
     assert.throws(() => highJumpLayout(measured, LIP_Y), RangeError);
   });
 });
@@ -347,7 +291,7 @@ describe("given the layout's boards for a different lip height", () => {
 
 /** The lying dummy's length (present/ragdoll-body.ts PARTS; scenes may not import present). */
 const DUMMY_LYING_LENGTH = 2.0;
-const SIZING_MEASURED: HighJumpMeasured = { crossingHeight: 156.4, landingDistance: 32.2 };
+const SIZING_MEASURED: HighJumpMeasured = { bestHeight: 156.4, landingDistance: 32.2 };
 const LAYERS_AT_SIZING_LANDING = 3;
 
 describe("given the sizing measurement's landing, where the piles are narrow", () => {

@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { REST_HOLD, THROWS_PER_SET, type MinigameMode } from "./minigame-constants.ts";
-import { CAPTURE_HALF_WIDTH } from "./minigame-high-jump.ts";
+import { FIELD_HALF_WIDTH } from "./minigame-high-jump.ts";
 import type { TorsoSample } from "./minigame-high-jump.ts";
 import { RING_CUPS, RING_POCKETS } from "./minigame-ring.ts";
 import { MinigameSession, type MinigameBestPair, type MinigameBests, type MinigameFrame } from "./minigame-session.ts";
@@ -9,7 +9,7 @@ import { MinigameSession, type MinigameBestPair, type MinigameBests, type Miniga
 const CAR_TYPE = "muscle";
 const POSTS_X = 40;
 const LIP_Y = 2.5;
-const HIGH_JUMP_OPTIONS = { carType: CAR_TYPE, highJump: { postsX: POSTS_X, lipY: LIP_Y } };
+const HIGH_JUMP_OPTIONS = { carType: CAR_TYPE, highJumpLipY: LIP_Y };
 const LONG_JUMP_OPTIONS = { carType: CAR_TYPE };
 const STILL_BEFORE_REST = REST_HOLD / 2;
 const FRAMES_AFTER_SCORING = 1000;
@@ -176,58 +176,70 @@ describe("given a long jump session", () => {
 });
 
 describe("given a high jump session", () => {
-  it("when he is begun without his posts and lip, then it fails loudly", () => {
-    const session = new MinigameSession(fakeBests());
-    assert.throws(() => session.begin("highJump", LONG_JUMP_OPTIONS), /posts/, "begin without the high jump's numbers");
-  });
-
-  it("when his torso crosses the posts' plane in flight, then the score is the interpolated height above the lip the moment it does, while he is still flying", () => {
-    const bests = fakeBests();
+  /** A thrown high jump attempt: the pedal pressed and the driver thrown. */
+  function thrownSession(bests: MinigameBests = fakeBests()): MinigameSession {
     const session = new MinigameSession(bests);
     session.begin("highJump", HIGH_JUMP_OPTIONS);
     session.step(PEDAL);
     session.step(THROW);
-    assert.equal(session.step(flying(torsoAt(POSTS_X - 4, LIP_Y + 18, 0, 0))), null, "frame before the plane");
-    assert.equal(session.hud().liveValue, 18, "live height above the lip");
-    const result = session.step(flying(torsoAt(POSTS_X + 4, LIP_Y + 10, 0, 0)));
-    assert.deepEqual(result, { scored: 14 }, "score at the crossing, halfway between the samples");
-    assert.equal(session.hud().phase, "scored", "phase at the crossing");
-    assert.equal(session.hud().lastScore, 14, "last score");
-    assert.deepEqual(bests.recorded, [{ mode: "highJump", throwsPerSet: null, carType: "muscle", score: 14 }], "the throw is recorded");
+    return session;
+  }
+
+  it("when he is begun without his lip height, then it fails loudly", () => {
+    const session = new MinigameSession(fakeBests());
+    assert.throws(() => session.begin("highJump", LONG_JUMP_OPTIONS), /lip/, "begin without the high jump's lip height");
   });
 
-  it("when he comes to rest without ever reaching the plane, then the score is 0 only once the rest hold passes", () => {
-    const session = new MinigameSession(fakeBests());
-    session.begin("highJump", HIGH_JUMP_OPTIONS);
-    session.step(PEDAL);
-    session.step(THROW);
-    assert.equal(session.step(flying(torsoAt(POSTS_X - 15, LIP_Y + 1, 0, STILL_BEFORE_REST))), null, "frame lying short of the plane");
-    assert.deepEqual(session.step(flying(torsoAt(POSTS_X - 15, LIP_Y + 1, 0, REST_HOLD))), { scored: 0 }, "score at rest short of the plane");
+  it("when he rises and falls again, then the card shows the highest point so far, and the score is that highest point once he lies still", () => {
+    const bests = fakeBests();
+    const session = thrownSession(bests);
+    assert.equal(session.step(flying(torsoAt(5, LIP_Y + 18, 0, 0))), null, "rising");
+    assert.equal(session.hud().liveValue, 18, "live: the highest so far");
+    assert.equal(session.step(flying(torsoAt(9, LIP_Y + 30, 0, 0))), null, "at the top");
+    assert.equal(session.step(flying(torsoAt(14, LIP_Y + 6, 0, 0))), null, "falling again");
+    assert.equal(session.hud().liveValue, 30, "live: still the highest, not where he is now");
+    assert.equal(session.step(flying(torsoAt(14, LIP_Y + 0.5, 0, STILL_BEFORE_REST))), null, "lying but not for the rest hold");
+    assert.deepEqual(session.step(flying(torsoAt(14, LIP_Y + 0.5, 0, REST_HOLD))), { scored: 30 }, "scored at rest");
     assert.equal(session.hud().phase, "scored", "phase");
+    assert.equal(session.hud().lastScore, 30, "last score");
+    assert.deepEqual(bests.recorded, [{ mode: "highJump", throwsPerSet: null, carType: "muscle", score: 30 }], "the throw is recorded");
   });
 
-  it("when he crosses the plane wide of the capture band, then the score is 0 at rest", () => {
-    const session = new MinigameSession(fakeBests());
-    session.begin("highJump", HIGH_JUMP_OPTIONS);
-    session.step(PEDAL);
-    session.step(THROW);
-    session.step(flying(torsoAt(POSTS_X - 2, LIP_Y + 8, CAPTURE_HALF_WIDTH + 5, 0)));
-    assert.equal(session.step(flying(torsoAt(POSTS_X + 2, LIP_Y + 8, CAPTURE_HALF_WIDTH + 5, 0))), null, "frame crossing wide of the band");
-    assert.deepEqual(session.step(flying(torsoAt(POSTS_X + 9, LIP_Y, CAPTURE_HALF_WIDTH + 5, REST_HOLD))), { scored: 0 }, "score at rest");
+  it("when he is caught on a slat before the posts' plane and hangs there, then he scores the highest point he reached", () => {
+    const session = thrownSession();
+    session.step(flying(torsoAt(POSTS_X - 3, LIP_Y + 44, 0, 0)));
+    session.step(flying(torsoAt(POSTS_X - 1, LIP_Y + 40, 0, 0)));
+    assert.deepEqual(session.step(flying(torsoAt(POSTS_X - 1, LIP_Y + 40, 0, REST_HOLD))), { scored: 44 }, "scored at rest on the slat, never having crossed the plane");
   });
 
-  it("when retry follows, then the capture is armed again for the next throw", () => {
-    const session = new MinigameSession(fakeBests());
-    session.begin("highJump", HIGH_JUMP_OPTIONS);
-    session.step(PEDAL);
-    session.step(THROW);
-    session.step(flying(torsoAt(POSTS_X - 4, LIP_Y + 6, 0, 0)));
-    session.step(flying(torsoAt(POSTS_X + 4, LIP_Y + 6, 0, 0)));
+  it("when he passes the posts' plane in flight, then nothing is scored until he lies still", () => {
+    const session = thrownSession();
+    session.step(flying(torsoAt(POSTS_X - 4, LIP_Y + 18, 0, 0)));
+    assert.equal(session.step(flying(torsoAt(POSTS_X + 4, LIP_Y + 10, 0, 0))), null, "frame after the plane");
+    assert.equal(session.hud().phase, "thrown", "still thrown");
+  });
+
+  it("when he flies wide of the posts, then the score is the same: any lateral position counts", () => {
+    const session = thrownSession();
+    session.step(flying(torsoAt(POSTS_X, LIP_Y + 12, FIELD_HALF_WIDTH + 5, 0)));
+    assert.deepEqual(session.step(flying(torsoAt(POSTS_X + 9, LIP_Y, FIELD_HALF_WIDTH + 5, REST_HOLD))), { scored: 12 }, "scored wide of the field");
+  });
+
+  it("when he never rises above the lip, then the score is 0, not negative", () => {
+    const session = thrownSession();
+    assert.deepEqual(session.step(flying(torsoAt(6, LIP_Y - 1, 0, REST_HOLD))), { scored: 0 }, "scored at rest below the lip");
+  });
+
+  it("when retry follows, then the highest point starts again from nothing for the next throw", () => {
+    const session = thrownSession();
+    session.step(flying(torsoAt(8, LIP_Y + 20, 0, 0)));
+    session.step(flying(torsoAt(12, LIP_Y + 1, 0, REST_HOLD)));
     session.retry();
     session.step(PEDAL);
     session.step(THROW);
-    session.step(flying(torsoAt(POSTS_X - 4, LIP_Y + 20, 0, 0)));
-    assert.deepEqual(session.step(flying(torsoAt(POSTS_X + 4, LIP_Y + 20, 0, 0))), { scored: 20 }, "score of the second throw");
+    session.step(flying(torsoAt(8, LIP_Y + 6, 0, 0)));
+    assert.equal(session.hud().liveValue, 6, "the live reading forgot the first throw's 20");
+    assert.deepEqual(session.step(flying(torsoAt(12, LIP_Y + 1, 0, REST_HOLD))), { scored: 6 }, "score of the second throw");
   });
 });
 

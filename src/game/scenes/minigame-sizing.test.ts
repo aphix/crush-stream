@@ -18,7 +18,7 @@ import { BAIL_ELEVATION_DEGREES, BAIL_PERFECT_SECONDS, BAIL_WINDOW_SECONDS, bail
 import { JerseyBarrier } from "./engine-props.ts";
 import { RANGE } from "./range.ts";
 import { MinigameGround } from "./minigame-ground.ts";
-import { BOX_NET_CLEARANCE, BOX_PILE_TRAIL, HighJumpCapture, highJumpLayout, POSTS_DISTANCE, type HighJumpMeasured, type TorsoSample } from "./minigame-high-jump.ts";
+import { BOX_NET_CLEARANCE, BOX_PILE_TRAIL, HighJumpPeak, highJumpLayout, type HighJumpMeasured } from "./minigame-high-jump.ts";
 import { lipHeight } from "./minigame-profile.ts";
 import { dressedDriverCar } from "./minigame-profile.test-util.ts";
 import { withoutFrame } from "./minigame-frame.test-util.ts";
@@ -65,17 +65,22 @@ const UPWARD_MUTATION_FACTOR = 1.1;
 const MEASURED_TOLERANCE = 0.02;
 
 /**
- * The high jump's bars. Crossing heights are the torso's metres above the lip at the posts' plane: the best class's best run (the owner's
- * 157 m was acceptable; the frame is set from it), and the least any class's best run crosses at (well over the first boards). Every class
- * must still cross the plane at `CROSSING_SHARE_TARGET` of its full-throttle lip speed (a run slower than that scores 0).
+ * The high jump's bars, on the score: the highest point his torso reaches above the lip (`HighJumpPeak`), measured on the free pad (the
+ * posts, slats and signs are taken out of the ragdoll's world: the launch alone). The best class's best run (the frame is set from it)
+ * scores in `BEST_HEIGHT_BAND`: the owner's accepted 150-160 m was the crossing height at the posts' plane of this same throw (156.4 m),
+ * whose highest point is 178.2 m, so the band is the old one times 178.2 / 156.4 = 1.14 (171-182 m), not a loosening. Every best run
+ * scores at least `BEST_RUN_HEIGHT_MINIMUM` (well up the boards). A run at `SLOW_RUN_SHARE` of the full-throttle lip speed used to have to
+ * cross the posts' plane or score 0; now every run scores its highest point, so the bar is that an 80% run still scores
+ * `SLOW_RUN_HEIGHT_MINIMUM`, the best runs' own floor.
  */
-const BEST_CROSSING_BAND = { minimum: 150, maximum: 160 } as const;
-const BEST_RUN_CROSSING_MINIMUM = 60;
-const CROSSING_SHARE_TARGET = 0.8;
-/** The search for the lowest speed share a class still crosses at: between these shares, this many halvings (a resolution of 0.5%). */
-const CROSSING_SEARCH = { low: 0.3, high: 1, halvings: 7 } as const;
-/** The forward mutation that shrinks the flights: forward times this must stop the sedan crossing at the target share. */
-const FORWARD_CUT_FACTOR = 0.8;
+const BEST_HEIGHT_BAND = { minimum: 171, maximum: 182 } as const;
+const BEST_RUN_HEIGHT_MINIMUM = 60;
+const SLOW_RUN_SHARE = 0.8;
+const SLOW_RUN_HEIGHT_MINIMUM = BEST_RUN_HEIGHT_MINIMUM;
+/** With the posts, slats and signs in the world a catch may cost the best class some height, never below the owner's accepted 150 m. */
+const FRAMED_BEST_HEIGHT_MINIMUM = 150;
+/** The mutation that shrinks the slow runs: upward times this must put an 80% run under the bar. */
+const UPWARD_CUT_FACTOR = 0.8;
 
 /** The five classes whose full-throttle speed at Ring Fling's lip is within 1% of one another (32.2 to 32.5 m/s); the muscle (35.6) and the monster (38.2) are the higher lines. */
 const STANDARD_CLASS_IDS: readonly string[] = ["sedan", "truck", "police", "hatchback", "wagon"];
@@ -217,8 +222,8 @@ function rangeFor(mode: MinigameMode): Promise<RagdollRange> {
 type Flight = {
   apexHeight: number;
   apexDistance: number;
-  /** His torso's height above the lip as it crosses the posts' plane (`HighJumpCapture`, the score's own rule): 0 if he never crosses it. */
-  crossingHeight: number;
+  /** His score: the highest point his torso reached above the lip from the throw until he lay still (`HighJumpPeak`, the score's own rule). */
+  height: number;
   /** Where his torso first came within `TOUCHDOWN_HEIGHT` of the ground after its apex. */
   landingDistance: number;
   /** Where his torso lay when it had been still `REST_HOLD` s, and its height (m above the pad). */
@@ -243,12 +248,11 @@ function fly(range: RagdollRange, mode: MinigameMode, thrown: Capture, scale: Re
   const launched = dummy.bodies[0]!.linvel();
   const torso = new THREE.Vector3();
   const frameSeconds = displayFrames(FRAME_HZ, seed);
-  const crossingCapture = new HighJumpCapture();
-  let previousSample: TorsoSample | null = null;
+  const peak = new HighJumpPeak();
   const flight: Flight = {
     apexHeight: -Infinity,
     apexDistance: 0,
-    crossingHeight: 0,
+    height: 0,
     landingDistance: NaN,
     restDistance: 0,
     restLateral: 0,
@@ -262,9 +266,7 @@ function fly(range: RagdollRange, mode: MinigameMode, thrown: Capture, scale: Re
     system.update(frameDuration, [], true, false, null);
     flight.still = system.latest(torso);
     const distance = torso.x - anchor.x;
-    const sample: TorsoSample = { x: distance, y: torso.y, z: torso.z - anchor.z, still: flight.still };
-    flight.crossingHeight = crossingCapture.step(previousSample, sample, POSTS_DISTANCE, lip) ?? flight.crossingHeight;
-    previousSample = sample;
+    flight.height = peak.step({ x: distance, y: torso.y, z: torso.z - anchor.z, still: flight.still }, lip);
     if (torso.y - lip > flight.apexHeight) {
       flight.apexHeight = torso.y - lip;
       flight.apexDistance = distance;
@@ -305,7 +307,7 @@ async function measure(mode: MinigameMode, scale: ReleaseScale, repeats: number)
 
 const lowest = (measurement: Measurement, pick: (flight: Flight) => number): number => Math.min(...measurement.flights.map(pick));
 const highest = (measurement: Measurement, pick: (flight: Flight) => number): number => Math.max(...measurement.flights.map(pick));
-const crossingOf = (flight: Flight): number => flight.crossingHeight;
+const heightOf = (flight: Flight): number => flight.height;
 const landingOf = (flight: Flight): number => flight.landingDistance;
 const restOf = (flight: Flight): number => flight.restDistance;
 
@@ -314,16 +316,16 @@ const midRunsOf = (rows: readonly Measurement[]): Measurement[] => rows.filter((
 
 /** The class whose best run crosses the posts' plane highest: the one the frame is sized to. */
 function bestClassRun(rows: readonly Measurement[]): Measurement {
-  return bestRunsOf(rows).reduce((best, row) => (lowest(row, crossingOf) > lowest(best, crossingOf) ? row : best));
+  return bestRunsOf(rows).reduce((best, row) => (lowest(row, heightOf) > lowest(best, heightOf) ? row : best));
 }
 
 const scaled = (scale: ReleaseScale, factors: Partial<ReleaseScale>): ReleaseScale => ({ forward: scale.forward * (factors.forward ?? 1), upward: scale.upward * (factors.upward ?? 1), elevation: scale.elevation });
 const metres = (value: number): string => value.toFixed(1);
 
-/** What `highJumpLayout` is given from repeat `repeat`: the best class's best crossing, and the farthest any class's best run lands. */
+/** What `highJumpLayout` is given from repeat `repeat`: the best class's best score (the highest point he reaches), and the farthest any class's best run lands. */
 function measuredBest(rows: readonly Measurement[], repeat: number): HighJumpMeasured {
   return {
-    crossingHeight: bestClassRun(rows).flights[repeat]!.crossingHeight,
+    bestHeight: bestClassRun(rows).flights[repeat]!.height,
     landingDistance: Math.max(...bestRunsOf(rows).map((row) => row.flights[repeat]!.landingDistance)),
   };
 }
@@ -334,36 +336,25 @@ function highJumpViolations(rows: readonly Measurement[]): string[] {
   const bestClass = bestClassRun(rows);
   // The net's distance past the posts does not depend on any measurement; a boost that never lands the dummy (a NaN landing) has no layout to build.
   const { netX } = highJumpLayout(HIGH_JUMP_MEASURED, lipHeight("highJump"));
-  if (lowest(bestClass, crossingOf) < BEST_CROSSING_BAND.minimum) violations.push(`the ${bestClass.type.id}'s best crossing is ${metres(lowest(bestClass, crossingOf))} m, under ${BEST_CROSSING_BAND.minimum}`);
-  if (highest(bestClass, crossingOf) > BEST_CROSSING_BAND.maximum) violations.push(`the ${bestClass.type.id}'s best crossing is ${metres(highest(bestClass, crossingOf))} m, over ${BEST_CROSSING_BAND.maximum}`);
+  if (lowest(bestClass, heightOf) < BEST_HEIGHT_BAND.minimum) violations.push(`the ${bestClass.type.id}'s best score is ${metres(lowest(bestClass, heightOf))} m, under ${BEST_HEIGHT_BAND.minimum}`);
+  if (highest(bestClass, heightOf) > BEST_HEIGHT_BAND.maximum) violations.push(`the ${bestClass.type.id}'s best score is ${metres(highest(bestClass, heightOf))} m, over ${BEST_HEIGHT_BAND.maximum}`);
   for (const row of bestRunsOf(rows)) {
-    if (lowest(row, crossingOf) < BEST_RUN_CROSSING_MINIMUM) violations.push(`the ${row.type.id}'s best run crosses at only ${metres(lowest(row, crossingOf))} m`);
+    if (lowest(row, heightOf) < BEST_RUN_HEIGHT_MINIMUM) violations.push(`the ${row.type.id}'s best run scores only ${metres(lowest(row, heightOf))} m`);
     if (highest(row, landingOf) + BOX_PILE_TRAIL > netX - BOX_NET_CLEARANCE) violations.push(`the ${row.type.id}'s best run lands at ${metres(highest(row, landingOf))} m, past the box piles' end (net at ${metres(netX)})`);
   }
   return violations;
 }
 
-/** Per class: the lowest share of its full-throttle lip speed (the release scaled alike, horizontal and vertical) at which his torso still crosses the posts' plane. */
-async function crossingShares(scale: ReleaseScale): Promise<Map<string, number>> {
+/** Per class: the score of a best run thrown at `SLOW_RUN_SHARE` of its full-throttle lip speed (the release scaled alike, horizontal and vertical). */
+async function slowRunHeights(scale: ReleaseScale): Promise<Map<string, number>> {
   const range = await rangeFor("highJump");
-  const shares = new Map<string, number>();
-  for (const type of DRIVER_CARS) {
-    const thrown = capture(type, "highJump", "best");
-    let low: number = CROSSING_SEARCH.low;
-    let high: number = CROSSING_SEARCH.high;
-    for (let halving = 0; halving < CROSSING_SEARCH.halvings; halving++) {
-      const middle = (low + high) / 2;
-      if (fly(range, "highJump", thrown, scaled(scale, { forward: middle, upward: middle }), 0).crossingHeight > 0) high = middle;
-      else low = middle;
-    }
-    shares.set(type.id, high);
-  }
-  return shares;
+  const slow = scaled(scale, { forward: SLOW_RUN_SHARE, upward: SLOW_RUN_SHARE });
+  return new Map(DRIVER_CARS.map((type) => [type.id, fly(range, "highJump", capture(type, "highJump", "best"), slow, 0).height]));
 }
 
-/** The classes that stop crossing the posts' plane above `CROSSING_SHARE_TARGET` of their full-throttle speed. */
-function crossingShareViolations(shares: ReadonlyMap<string, number>): string[] {
-  return [...shares].filter(([, share]) => share > CROSSING_SHARE_TARGET).map(([id, share]) => `the ${id} stops crossing the posts below ${share.toFixed(2)} of full speed, over ${CROSSING_SHARE_TARGET}`);
+/** The classes whose 80% run scores under `SLOW_RUN_HEIGHT_MINIMUM`. */
+function slowRunViolations(heights: ReadonlyMap<string, number>): string[] {
+  return [...heights].filter(([, height]) => height < SLOW_RUN_HEIGHT_MINIMUM).map(([id, height]) => `the ${id}'s run at ${SLOW_RUN_SHARE * 100}% of full speed scores only ${metres(height)} m, under ${SLOW_RUN_HEIGHT_MINIMUM}`);
 }
 
 /** The mid cups' band along the lane (m past the lip): from the 30 cup's near edge to the 40 cup's far edge. */
@@ -454,20 +445,20 @@ function tableOf(rows: readonly Measurement[], zone: (flight: Flight) => string)
 
 const TABLE_HEADER = "| class | run | lip h/v (m/s) | release h/v (m/s) | apex (m @ m) | lands (m) | rests (m) | zone |";
 
-describe("given the high jump with THROW_BOOST.highJump on the real ground, car and ragdoll", () => {
-  it("when each of the 7 classes' best and mid runs is thrown, then the best class crosses the posts at 150-160 m, every class's best run is well up the boards and lands in the box field, and every class still crosses at 80% of full speed", async (t) => {
+describe("given the high jump with THROW_BOOST.highJump on the free pad (no frame in the ragdoll's world), with the real car, ground and ragdoll", () => {
+  it("when each of the 7 classes' best and mid runs is thrown, then the best class scores 171-182 m, every class's best run is well up the boards and lands in the box field, and every class's 80% run still scores 60 m", async (t) => {
     const rows = await measure("highJump", THROW_BOOST.highJump, REPEATS);
-    const shares = await crossingShares(THROW_BOOST.highJump);
+    const slowRuns = await slowRunHeights(THROW_BOOST.highJump);
     const layout = highJumpLayout(measuredBest(rows, 0), lipHeight("highJump"));
-    const shareLines = [...shares].map(([id, share]) => `${id} ${share.toFixed(2)}`).join(", ");
-    t.diagnostic(`THROW_BOOST.highJump ${JSON.stringify(THROW_BOOST.highJump)}; posts ${layout.postsX} m, net ${layout.netX} m, box piles end ${metres(layout.boxes.reduce((end, box) => Math.max(end, box.x), 0))} m, frame top ${layout.frameTop} m\nlowest speed share that still crosses the posts: ${shareLines}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `crosses at ${metres(flight.crossingHeight)} m`)}`);
+    const slowLines = [...slowRuns].map(([id, height]) => `${id} ${metres(height)} m`).join(", ");
+    t.diagnostic(`THROW_BOOST.highJump ${JSON.stringify(THROW_BOOST.highJump)}; posts ${layout.postsX} m, net ${layout.netX} m, box piles end ${metres(layout.boxes.reduce((end, box) => Math.max(end, box.x), 0))} m, frame top ${layout.frameTop} m\nscore of a run at ${SLOW_RUN_SHARE * 100}% of full lip speed: ${slowLines}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `scores ${metres(flight.height)} m`)}`);
     assert.deepEqual(highJumpViolations(rows), []);
-    assert.deepEqual(crossingShareViolations(shares), []);
+    assert.deepEqual(slowRunViolations(slowRuns), []);
   });
 
-  it("when the boost is the identity (the throw as the sim has it), then the bars break: the best class crosses far under the band and every landing is far past the net", async () => {
+  it("when the boost is the identity (the throw as the sim has it), then the bars break: the best class scores far under the band and every landing is far past the net", async () => {
     const violations = highJumpViolations(await measure("highJump", NO_RELEASE_SCALE, 1));
-    assert.ok(violations.some((violation) => violation.includes("best crossing")), violations.join("; "));
+    assert.ok(violations.some((violation) => violation.includes("best score")), violations.join("; "));
     assert.ok(violations.some((violation) => violation.includes("past the box piles")), violations.join("; "));
   });
 
@@ -476,13 +467,13 @@ describe("given the high jump with THROW_BOOST.highJump on the real ground, car 
     assert.ok(violations.some((violation) => violation.includes("past the box piles")), violations.join("; "));
   });
 
-  it(`when upward is ${UPWARD_MUTATION_FACTOR} times the chosen, then the best class crosses over the band`, async () => {
+  it(`when upward is ${UPWARD_MUTATION_FACTOR} times the chosen, then the best class scores over the band`, async () => {
     const violations = highJumpViolations(await measure("highJump", scaled(THROW_BOOST.highJump, { upward: UPWARD_MUTATION_FACTOR }), 1));
-    assert.ok(violations.some((violation) => violation.includes("best crossing") && violation.includes("over")), violations.join("; "));
+    assert.ok(violations.some((violation) => violation.includes("best score") && violation.includes("over")), violations.join("; "));
   });
 
-  it(`when forward is ${FORWARD_CUT_FACTOR} times the chosen, then a class stops crossing the posts above ${CROSSING_SHARE_TARGET} of full speed`, async () => {
-    const violations = crossingShareViolations(await crossingShares(scaled(THROW_BOOST.highJump, { forward: FORWARD_CUT_FACTOR })));
+  it(`when upward is ${UPWARD_CUT_FACTOR} times the chosen, then the 80% runs no longer score ${SLOW_RUN_HEIGHT_MINIMUM} m`, async () => {
+    const violations = slowRunViolations(await slowRunHeights(scaled(THROW_BOOST.highJump, { upward: UPWARD_CUT_FACTOR })));
     assert.ok(violations.length > 0);
   });
 
@@ -490,17 +481,17 @@ describe("given the high jump with THROW_BOOST.highJump on the real ground, car 
     const rows = await measure("highJump", THROW_BOOST.highJump, REPEATS);
     for (let repeat = 0; repeat < REPEATS; repeat++) {
       const measured = measuredBest(rows, repeat);
-      for (const key of ["crossingHeight", "landingDistance"] as const) {
+      for (const key of ["bestHeight", "landingDistance"] as const) {
         assert.ok(Math.abs(measured[key] - HIGH_JUMP_MEASURED[key]) <= MEASURED_TOLERANCE * HIGH_JUMP_MEASURED[key], `${key}: measured ${metres(measured[key])} against pinned ${HIGH_JUMP_MEASURED[key]}`);
       }
     }
   });
 });
 
-/** The slats catch: at least one class's best run lands this much (m) nearer with the posts and slats in the ragdoll's world than on the free pad. */
-const SLATS_CATCH_BY = 5;
+/** The slats catch: at least one class's best run scores this much (m) less with the posts, slats and signs in the ragdoll's world than on the free pad. */
+const FRAME_COSTS_BY = 5;
 
-/** Every class's best run thrown at the framed ground (the real posts and slats are colliders), once at the ragdoll's steady 60 Hz. */
+/** Every class's best run thrown at the framed ground (the real posts, slats and signs are colliders), once at the ragdoll's steady 60 Hz. */
 async function framedBestRuns(): Promise<Measurement[]> {
   const range = await ragdollOn(new MinigameGround({ highJump: FAR_NET }));
   return DRIVER_CARS.map((type) => {
@@ -509,14 +500,25 @@ async function framedBestRuns(): Promise<Measurement[]> {
   });
 }
 
-describe("given the high jump's posts and slats as ragdoll colliders, with the real car and ragdoll", () => {
-  it("when each class's best run is thrown at them, then the best class still crosses at 150-160 m, every class's best run still crosses well up the boards and lands in the box field, and the slats catch at least one run short of where it lands on the free pad", async (t) => {
+/** What the frame breaks, from every class's best run with it in the world: empty when every bar holds. The landing is not asked: a run caught on the frame falls back short of the posts. */
+function framedViolations(rows: readonly Measurement[]): string[] {
+  const violations: string[] = [];
+  const bestClass = bestClassRun(rows);
+  if (lowest(bestClass, heightOf) < FRAMED_BEST_HEIGHT_MINIMUM) violations.push(`the ${bestClass.type.id}'s best score is ${metres(lowest(bestClass, heightOf))} m, under ${FRAMED_BEST_HEIGHT_MINIMUM} with the frame`);
+  for (const row of bestRunsOf(rows)) {
+    if (lowest(row, heightOf) < BEST_RUN_HEIGHT_MINIMUM) violations.push(`the ${row.type.id}'s best run scores only ${metres(lowest(row, heightOf))} m with the frame`);
+  }
+  return violations;
+}
+
+describe("given the high jump's posts, slats and signs as ragdoll colliders, with the real car and ragdoll", () => {
+  it("when each class's best run is thrown at them, then the best class still scores at least 150 m, every best run still scores well up the boards, and the frame costs at least one run some height against the free pad", async (t) => {
     const framed = await framedBestRuns();
     const free = bestRunsOf(await measure("highJump", THROW_BOOST.highJump, 1));
-    const shortBy = framed.map((row) => free.find((candidate) => candidate.type.id === row.type.id)!.flights[0]!.landingDistance - row.flights[0]!.landingDistance);
-    t.diagnostic(`with the frame (landing on the free pad minus landing with it: ${framed.map((row, index) => `${row.type.id} ${metres(shortBy[index]!)} m`).join(", ")})\n${TABLE_HEADER}\n${tableOf(framed, (flight) => `crosses at ${metres(flight.crossingHeight)} m`)}`);
-    assert.deepEqual(highJumpViolations(framed), []);
-    assert.ok(Math.max(...shortBy) >= SLATS_CATCH_BY, `no best run lands ${SLATS_CATCH_BY} m nearer with the frame: ${shortBy.map((gap) => metres(gap)).join(", ")}`);
+    const cost = framed.map((row) => free.find((candidate) => candidate.type.id === row.type.id)!.flights[0]!.height - row.flights[0]!.height);
+    t.diagnostic(`with the frame (score on the free pad minus score with it: ${framed.map((row, index) => `${row.type.id} ${metres(cost[index]!)} m`).join(", ")}; lands NaN: caught on the frame, he falls back short of his apex's distance)\n${TABLE_HEADER}\n${tableOf(framed, (flight) => `scores ${metres(flight.height)} m`)}`);
+    assert.deepEqual(framedViolations(framed), []);
+    assert.ok(Math.max(...cost) >= FRAME_COSTS_BY, `no best run scores ${FRAME_COSTS_BY} m less with the frame: ${cost.map((gap) => metres(gap)).join(", ")}`);
   });
 });
 

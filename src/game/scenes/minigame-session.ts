@@ -1,6 +1,6 @@
 import { MINIGAME_MODE, THROWS_PER_SET, REST_HOLD, type MinigameMode } from "./minigame-constants.ts";
 import type { BailVerdict } from "./minigame-bail.ts";
-import { HighJumpCapture, type TorsoSample } from "./minigame-high-jump.ts";
+import { HighJumpPeak, type TorsoSample } from "./minigame-high-jump.ts";
 import { ringScore } from "./minigame-ring.ts";
 
 /**
@@ -32,7 +32,7 @@ export type MinigameHudState = {
   attempt: number;
   /** Ring Fling only, else null. */
   throwsPerSet: number | null;
-  /** Metres past the lip (long jump), metres above the lip (high jump), the ring zone under him (Ring Fling); null while he is not flying. */
+  /** Metres past the lip (long jump), the highest point so far in metres above the lip (high jump), the ring zone under him (Ring Fling); null while he is not flying. */
   liveValue: number | null;
   lastScore: number | null;
   /** Ring Fling only: the scores of this set's finished throws; empty in the other modes. */
@@ -52,8 +52,8 @@ type MinigameBeginOptions = {
   carType: string;
   /** Ring Fling only. */
   throwsPerSet?: number;
-  /** High jump only: the posts' plane (m past the lip) and the lip's height above the pad. */
-  highJump?: { postsX: number; lipY: number };
+  /** High jump only: the lip's height above the pad (the score is the highest point above it). */
+  highJumpLipY?: number;
 };
 
 /** One render frame's input to the session. */
@@ -73,15 +73,15 @@ export class MinigameSession {
   private mode: MinigameMode = MINIGAME_MODE.longJump;
   private carType = "";
   private throwsPerSetCount: number = THROWS_PER_SET.default;
-  private highJump: { postsX: number; lipY: number } | null = null;
+  /** High jump only: the lip's height above the pad, the zero of the score. */
+  private highJumpLipY = 0;
   private phase: MinigamePhase = "ready";
   private attempt = 1;
   private liveValue: number | null = null;
   private lastScore: number | null = null;
   private setScores: number[] = [];
   private best: MinigameBestPair = { thisCar: null, overall: null };
-  private previousTorso: TorsoSample | null = null;
-  private readonly capture = new HighJumpCapture();
+  private readonly peak = new HighJumpPeak();
 
   private readonly bests: MinigameBests;
 
@@ -91,11 +91,11 @@ export class MinigameSession {
 
   /** Start the mode's first attempt (a new set in a Ring Fling). */
   begin(mode: MinigameMode, options: MinigameBeginOptions): void {
-    if (mode === MINIGAME_MODE.highJump && options.highJump === undefined) throw new Error("the high jump needs its posts' plane and lip height");
+    if (mode === MINIGAME_MODE.highJump && options.highJumpLipY === undefined) throw new Error("the high jump needs its lip height");
     this.mode = mode;
     this.carType = options.carType;
     this.throwsPerSetCount = clampThrowsPerSet(options.throwsPerSet ?? THROWS_PER_SET.default);
-    this.highJump = options.highJump ?? null;
+    this.highJumpLipY = options.highJumpLipY ?? 0;
     this.attempt = 1;
     this.setScores = [];
     this.lastScore = null;
@@ -110,9 +110,9 @@ export class MinigameSession {
     if (this.phase !== "thrown") return null;
     const { torso } = frame;
     if (torso === null) return null;
+    if (this.mode === MINIGAME_MODE.highJump) this.peak.step(torso, this.highJumpLipY);
     this.liveValue = this.liveValueAt(torso);
     const score = this.scoreAt(torso);
-    this.previousTorso = torso;
     if (score === null) return null;
     this.finishAttempt(score);
     return { scored: score };
@@ -174,8 +174,7 @@ export class MinigameSession {
   private readyAgain(): void {
     this.phase = "ready";
     this.liveValue = null;
-    this.previousTorso = null;
-    this.capture.reset();
+    this.peak.reset();
   }
 
   private refreshBest(): void {
@@ -184,25 +183,14 @@ export class MinigameSession {
 
   private liveValueAt(torso: TorsoSample): number {
     if (this.mode === MINIGAME_MODE.longJump) return Math.max(0, torso.x);
-    if (this.mode === MINIGAME_MODE.highJump) return Math.max(0, torso.y - this.highJumpPlane.lipY);
+    if (this.mode === MINIGAME_MODE.highJump) return this.peak.height;
     return ringScore(torso.x, torso.z);
-  }
-
-  private get highJumpPlane(): { postsX: number; lipY: number } {
-    if (this.highJump === null) throw new Error("the high jump has no posts' plane");
-    return this.highJump;
   }
 
   /** The attempt's score once it is decided, else null. At rest is the torso's own still-time, never the ragdoll's `settled` flag. */
   private scoreAt(torso: TorsoSample): number | null {
-    const atRest = torso.still >= REST_HOLD;
-    if (this.mode === MINIGAME_MODE.highJump) {
-      const { postsX, lipY } = this.highJumpPlane;
-      const captured = this.capture.step(this.previousTorso, torso, postsX, lipY);
-      if (captured !== null) return captured;
-      return atRest ? 0 : null;
-    }
-    if (!atRest) return null;
+    if (torso.still < REST_HOLD) return null;
+    if (this.mode === MINIGAME_MODE.highJump) return this.peak.height;
     return this.mode === MINIGAME_MODE.longJump ? Math.max(0, torso.x) : ringScore(torso.x, torso.z);
   }
 

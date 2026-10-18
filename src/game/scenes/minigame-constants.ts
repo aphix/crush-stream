@@ -106,7 +106,8 @@ export const LIP_CAR_SPEED_KEEP = 0.3;
  * Sized from the real car, ground and ragdoll in `minigame-sizing.test.ts`, which pins every bar below:
  * - High jump: the physical throw is a near-vertical rocket (60 degree kicker: about 45 m/s up and 27 m/s along at the sedan's lip, 59 and 36
  *   for the monster). The posts stand 11 m out, so `forward` 0.108 keeps the monster's best run (the longest) landing in the box field before
- *   the net, and `upward` 1.03 puts that run over the posts at 150-160 m (the owner's 157 m); the sedan's best crosses at about 110 m.
+ *   the net, and `upward` 1.03 puts that run's highest point at 171-182 m (178.2 m; its crossing height at the posts' plane, the owner's
+ *   157 m, was 156.4 m, before the score became the highest point); the sedan's best reaches about 111 m.
  * - Ring Fling: a ballistic landing distance goes with the speed squared. `forward` 0.4 and `upward` 0.7 bring a full-throttle sedan
  *   family run down on the 30 cup, a 75% run on the 10 cup, and the monster's run is stopped by the backstop.
  * - Long jump: the barrier's throw is a flat skim with the same 3.2 m/s climb at any approach speed, so the release is built from the
@@ -122,7 +123,7 @@ export const THROW_BOOST: Readonly<Record<MinigameMode, { forward: number; upwar
 
 /**
  * The best class's (monster) full-throttle run through the high jump with `THROW_BOOST.highJump`, and the farthest any class's best run
- * lands, in station-local metres: the torso's height above the lip as it crosses the posts' plane, and the first touchdown's distance past the
- * lip (where the box piles end). Pinned within 2% by `minigame-sizing.test.ts`, which recomputes them from the real car and ragdoll.
+ * lands, in station-local metres: its score (the highest point the torso reaches above the lip, on the free pad) and the first touchdown's
+ * distance past the lip (where the box piles end). Pinned within 2% by `minigame-sizing.test.ts`, which recomputes them from the real car and ragdoll.
  */
-export const HIGH_JUMP_MEASURED = { crossingHeight: 156.4, landingDistance: 32.2 } as const;
+export const HIGH_JUMP_MEASURED = { bestHeight: 178.2, landingDistance: 32.2 } as const;

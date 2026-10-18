@@ -15,9 +15,9 @@ import { activeGround, FLAT_GROUND, setGround, type Ground } from "../world/grou
 import { PR_ID } from "../world/prism.ts";
 import { GRID, P_OX, P_STRIDE, PRISM, Q_KIND, Q_STRIDE } from "../world/surfaces.ts";
 import { HIGH_JUMP_MEASURED, LANDING_HEIGHT, MINIGAME_MODES, REST_HOLD, STATION_ANCHORS, STATION_HALF_WIDTH, type MinigameMode } from "./minigame-constants.ts";
-import { highJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS } from "./minigame-high-jump.ts";
+import { highJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SIGN_EVERY_METRES, SIGN_HEIGHT, SLAT_THICKNESS } from "./minigame-high-jump.ts";
 import { MinigameGround } from "./minigame-ground.ts";
-import { FRAME_BOX_FLOATS, frameMeshOf, withoutFrame } from "./minigame-frame.test-util.ts";
+import { FRAME_BOX_FLOATS, frameBoxCount, frameMeshOf, withoutFrame } from "./minigame-frame.test-util.ts";
 import { climbFootX, floorHeightAt, lipHeight, stationBackX, stationFrontX, stationStartPose } from "./minigame-profile.ts";
 import { dressedDriverCar } from "./minigame-profile.test-util.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_CUPS, RING_MESH_STEP, ringBoardMesh, ringHeightAt, ringScore } from "./minigame-ring.ts";
@@ -501,19 +501,20 @@ describe("given a dummy thrown at the high jump's net", () => {
   });
 });
 
-/** The bounds of each box of the frame's mesh (the two posts, then one slat per board), in that order. */
+/** The bounds of each box of the frame's mesh (the two posts, then one slat per board, then one sign per layout sign), in that order. */
 function frameBoxes(ground: MinigameGround): THREE.Box3[] {
   const mesh = frameMeshOf(ground, FRAME);
-  return Array.from({ length: 2 + FRAME.boards.length }, (_, box) => new THREE.Box3().setFromArray(Array.from(mesh.vertices.subarray(box * FRAME_BOX_FLOATS, (box + 1) * FRAME_BOX_FLOATS))));
+  return Array.from({ length: frameBoxCount(FRAME) }, (_, box) => new THREE.Box3().setFromArray(Array.from(mesh.vertices.subarray(box * FRAME_BOX_FLOATS, (box + 1) * FRAME_BOX_FLOATS))));
 }
 
-describe("given the high jump's posts and slats", () => {
+describe("given the high jump's posts, slats and signs", () => {
   const anchor = STATION_ANCHORS.highJump;
+  const gapBetweenPosts = { min: anchor.z - POST_HALF_SPAN + POST_THICKNESS / 2, max: anchor.z + POST_HALF_SPAN - POST_THICKNESS / 2 };
 
   it("when the frame's solids are read, then two posts stand 0.25 m square from the pad to the frame's top and a slat thinner than a post stands between them at every board, every 5 m up the frame", () => {
     const boxes = frameBoxes(buildGround());
     const size = new THREE.Vector3();
-    assert.equal(boxes.length, 2 + FRAME.boards.length);
+    assert.equal(boxes.length, frameBoxCount(FRAME));
     for (const [side, post] of [-1, 1].map((sign, index) => [sign, boxes[index]!] as const)) {
       post.getSize(size);
       assert.ok(Math.abs(size.x - POST_THICKNESS) < HEIGHT_TOLERANCE && Math.abs(size.z - POST_THICKNESS) < HEIGHT_TOLERANCE, `post ${side} is ${size.x} x ${size.z}`);
@@ -526,8 +527,22 @@ describe("given the high jump's posts and slats", () => {
       slat.getSize(size);
       assert.ok(size.x < POST_THICKNESS && size.y < POST_THICKNESS, `slat ${index} is ${size.x} x ${size.y}, thinner than a post`);
       assert.ok(Math.abs(slat.getCenter(new THREE.Vector3()).y - board.y) < HEIGHT_TOLERANCE, `slat ${index} at ${slat.getCenter(new THREE.Vector3()).y}, board ${board.y}`);
-      assert.ok(Math.abs(slat.min.z - (anchor.z - POST_HALF_SPAN + POST_THICKNESS / 2)) < HEIGHT_TOLERANCE && Math.abs(slat.max.z - (anchor.z + POST_HALF_SPAN - POST_THICKNESS / 2)) < HEIGHT_TOLERANCE, `slat ${index} spans the gap between the posts`);
+      assert.ok(Math.abs(slat.min.z - gapBetweenPosts.min) < HEIGHT_TOLERANCE && Math.abs(slat.max.z - gapBetweenPosts.max) < HEIGHT_TOLERANCE, `slat ${index} spans the gap between the posts`);
       if (index > 0) assert.ok(Math.abs(board.y - FRAME.boards[index - 1]!.y - 5) < HEIGHT_TOLERANCE, `slat ${index} is 5 m over the one below`);
+    }
+  });
+
+  it("when the frame's solids are read, then a sign panel stands between the posts at every layout sign, every 10 m up the frame, as solid as a slat", () => {
+    const boxes = frameBoxes(buildGround());
+    const size = new THREE.Vector3();
+    assert.ok(FRAME.signs.length > 1, "there are signs");
+    for (const [index, sign] of FRAME.signs.entries()) {
+      const panel = boxes[2 + FRAME.boards.length + index]!;
+      panel.getSize(size);
+      assert.ok(Math.abs(size.x - SLAT_THICKNESS) < HEIGHT_TOLERANCE && Math.abs(size.y - SIGN_HEIGHT) < HEIGHT_TOLERANCE, `sign ${index} is ${size.x} x ${size.y}`);
+      assert.ok(Math.abs(panel.getCenter(new THREE.Vector3()).y - sign.y) < HEIGHT_TOLERANCE, `sign ${index} at ${panel.getCenter(new THREE.Vector3()).y}, expected ${sign.y}`);
+      assert.ok(Math.abs(panel.min.z - gapBetweenPosts.min) < HEIGHT_TOLERANCE && Math.abs(panel.max.z - gapBetweenPosts.max) < HEIGHT_TOLERANCE, `sign ${index} spans the gap between the posts`);
+      if (index > 0) assert.ok(Math.abs(sign.y - FRAME.signs[index - 1]!.y - SIGN_EVERY_METRES) < HEIGHT_TOLERANCE, `sign ${index} is ${SIGN_EVERY_METRES} m over the one below`);
     }
   });
 });
@@ -535,9 +550,10 @@ describe("given the high jump's posts and slats", () => {
 const GRAVITY = 9.80665;
 /**
  * The frame shots: a dummy flung along +x at this speed (m/s) from this far (m) before the posts' plane, at the slat that stands
- * `slatMetresOverLip` m over the lip, and at a post half way between two slats (`gapOffset` m above that slat, so nothing but the post is in his way).
+ * `slatMetresOverLip` m over the lip, at the middle of the sign that stands `signMetresOverLip` m over it, and at a post half way between
+ * two slats (`gapOffset` m above that slat, so nothing but the post is in his way).
  */
-const FRAME_SHOT = { speed: 10, distanceBefore: 4, slatMetresOverLip: 5, gapOffset: 2.5 } as const;
+const FRAME_SHOT = { speed: 10, distanceBefore: 4, slatMetresOverLip: 5, signMetresOverLip: 10, gapOffset: 2.5 } as const;
 /** The control (no frame in the ground) sails on: it must end at least this much (m) further out than the dummy the frame meets. */
 const FRAME_STOPS_BY = 5;
 
@@ -568,6 +584,14 @@ describe("given a dummy flung into the high jump's frame", () => {
     const { caught, control } = await flung(seatAt(POST_HALF_SPAN, slat.y + FRAME_SHOT.gapOffset));
     t.diagnostic(`post: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
     assert.ok(caught.furthestPartX <= anchor.x + FRAME.postsX + POST_THICKNESS / 2 + SOAK, `a part reached x ${caught.furthestPartX - anchor.x} past the post's back face at ${FRAME.postsX + POST_THICKNESS / 2}`);
+    assert.ok(control.torso.x - caught.torso.x >= FRAME_STOPS_BY, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`);
+  });
+
+  it("when he is flung at a height sign, then it stops him at its back face and catches him short of where he lands without the frame", async (t) => {
+    const sign = FRAME.signs.find((candidate) => candidate.heightAboveLip === FRAME_SHOT.signMetresOverLip)!;
+    const { caught, control } = await flung(seatAt(0, sign.y));
+    t.diagnostic(`sign at ${sign.y} m: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
+    assert.ok(caught.furthestPartX <= anchor.x + FRAME.postsX + SLAT_THICKNESS / 2 + SOAK, `a part reached x ${caught.furthestPartX - anchor.x} past the sign's back face at ${FRAME.postsX + SLAT_THICKNESS / 2}`);
     assert.ok(control.torso.x - caught.torso.x >= FRAME_STOPS_BY, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`);
   });
 });

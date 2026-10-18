@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { LANDING_HEIGHT, STATION_HALF_WIDTH } from "../scenes/minigame-constants.ts";
-import { CAPTURE_HALF_WIDTH, highJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS } from "../scenes/minigame-high-jump.ts";
+import { FIELD_HALF_WIDTH, highJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SIGN_EVERY_METRES, SIGN_HEIGHT, SLAT_THICKNESS } from "../scenes/minigame-high-jump.ts";
 import { climbFootX, floorHeightAt, stationFrontX } from "../scenes/minigame-profile.ts";
 import { makeHighJumpArt, NET_HALF_WIDTH } from "./high-jump-art.ts";
 
@@ -11,13 +11,13 @@ import { makeHighJumpArt, NET_HALF_WIDTH } from "./high-jump-art.ts";
 const HIGH_JUMP_DRAW_BUDGET = 12;
 const LIP_Y = 7;
 /**
- * Made-up measurements (m), the layout's own functions turn them into posts, boards, net and boxes: a short frame,
+ * Made-up measurements (m), the layout's own functions turn them into posts, boards, signs, net and boxes: a short frame,
  * the owner's best run (about 155 m) and a frame taller than any run (230 m).
  */
 const CASES = [
-  { name: "a 18 m crossing", measured: { crossingHeight: 18, landingDistance: 22 } },
-  { name: "a 155 m crossing", measured: { crossingHeight: 155, landingDistance: 30 } },
-  { name: "a 230 m crossing", measured: { crossingHeight: 230, landingDistance: 34 } },
+  { name: "an 18 m best height", measured: { bestHeight: 18, landingDistance: 22 } },
+  { name: "a 155 m best height", measured: { bestHeight: 155, landingDistance: 30 } },
+  { name: "a 230 m best height", measured: { bestHeight: 230, landingDistance: 34 } },
 ] as const;
 /** Geometry is built from f32 buffers: a position of up to a few hundred metres is good to about 30 micrometres. */
 const POSITION_TOLERANCE = 1e-4;
@@ -47,18 +47,22 @@ const MAX_BEAM_SAG = 0.03;
 const MAX_FASCIA_THICKNESS = 0.5;
 
 type RecordedFill = { x: number; y: number; width: number; height: number };
-const recordedCanvases: { width: number; height: number; fills: RecordedFill[] }[] = [];
+const recordedCanvases: { width: number; height: number; fills: RecordedFill[]; texts: string[] }[] = [];
 
-/** A document whose canvases remember every `fillRect` (other 2d calls are inert), so the weave's painted line width can be read back. */
+/** A document whose canvases remember every `fillRect` and `fillText` (other 2d calls are inert), so the weave's painted line width and the signs' labels can be read back. */
 function recordCanvases(): void {
   Object.assign(document, {
     createElement: () => {
       const fills: RecordedFill[] = [];
+      const texts: string[] = [];
       const context: object = new Proxy(
-        { fillRect: (x: number, y: number, width: number, height: number) => fills.push({ x, y, width, height }) } as Record<string | symbol, unknown>,
+        {
+          fillRect: (x: number, y: number, width: number, height: number) => fills.push({ x, y, width, height }),
+          fillText: (text: string) => texts.push(text),
+        } as Record<string | symbol, unknown>,
         { get: (target, key) => target[key] ?? (() => context), set: () => true },
       );
-      const canvas = Object.assign(element(), { getContext: () => context, fills });
+      const canvas = Object.assign(element(), { getContext: () => context, fills, texts });
       recordedCanvases.push(canvas);
       return canvas;
     },
@@ -110,7 +114,6 @@ describe("given the High jump's art built from a layout", () => {
 
   for (const { name, measured } of CASES) {
     const layout = highJumpLayout(measured, LIP_Y);
-    const majorBoards = layout.boards.filter((board) => board.major);
 
     it(`when it is built for ${name}, then each post stands at postsX and one side of the lane, from the pad up to the frame's top (lip + frameTop), ${POST_THICKNESS} m square whatever the height`, () => {
       const posts = vertices(meshNamed(makeHighJumpArt(layout, LIP_Y), "posts"));
@@ -134,39 +137,48 @@ describe("given the High jump's art built from a layout", () => {
       assert.equal(material.map, null, "no wood grain on a black post");
     });
 
-    it(`when it is built for ${name}, then each layout board has a slat centred between the posts at its y, and a labelled sign stands above every major slat and never reaches below its line`, () => {
+    it(`when it is built for ${name}, then each layout board has a slat centred between the posts at its y, and a sign stands on every layout sign's slat, between the posts and never reaching below it`, () => {
       const boards = meshNamed(makeHighJumpArt(layout, LIP_Y), "boards");
       const points = vertices(boards);
-      assert.equal(points.length, (layout.boards.length + majorBoards.length) * VERTICES_PER_BOX, "one bar per board, then one sign per major board");
+      assert.equal(points.length, (layout.boards.length + layout.signs.length) * VERTICES_PER_BOX, "one slat per board, then one sign per layout sign");
       const uv = boards.geometry.getAttribute("uv");
       const boxAt = (boxIndex: number) => boundsOf(points.slice(boxIndex * VERTICES_PER_BOX, (boxIndex + 1) * VERTICES_PER_BOX));
       const frontCell = (boxIndex: number) => `${uv.getX(boxIndex * VERTICES_PER_BOX + FRONT_FACE_FIRST_VERTEX).toFixed(4)},${uv.getY(boxIndex * VERTICES_PER_BOX + FRONT_FACE_FIRST_VERTEX).toFixed(4)}`;
-      const majorBarHeights: number[] = [];
-      const minorBarHeights: number[] = [];
       for (let boardIndex = 0; boardIndex < layout.boards.length; boardIndex++) {
         const board = layout.boards[boardIndex]!;
         const bar = boxAt(boardIndex);
-        assert.ok(Math.abs((bar.min.y + bar.max.y) / 2 - board.y) < POSITION_TOLERANCE, `bar ${boardIndex} centre y ${(bar.min.y + bar.max.y) / 2}, expected ${board.y}`);
-        assert.ok(Math.abs((bar.min.x + bar.max.x) / 2 - layout.postsX) < POSITION_TOLERANCE, `bar ${boardIndex} sits at the posts' x`);
-        assert.ok(Math.abs(bar.min.z + bar.max.z) < POSITION_TOLERANCE, `bar ${boardIndex} is centred on the lane`);
+        assert.ok(Math.abs((bar.min.y + bar.max.y) / 2 - board.y) < POSITION_TOLERANCE, `slat ${boardIndex} centre y ${(bar.min.y + bar.max.y) / 2}, expected ${board.y}`);
+        assert.ok(Math.abs((bar.min.x + bar.max.x) / 2 - layout.postsX) < POSITION_TOLERANCE, `slat ${boardIndex} sits at the posts' x`);
+        assert.ok(Math.abs(bar.min.z + bar.max.z) < POSITION_TOLERANCE, `slat ${boardIndex} is centred on the lane`);
         assert.ok(bar.max.z - bar.min.z <= 2 * POST_HALF_SPAN - POST_THICKNESS + POSITION_TOLERANCE, `slat ${boardIndex} fits between the posts`);
         assert.ok(bar.max.x - bar.min.x < POST_THICKNESS && bar.max.y - bar.min.y < POST_THICKNESS, `slat ${boardIndex} is ${bar.max.x - bar.min.x} deep and ${bar.max.y - bar.min.y} tall, thinner than a ${POST_THICKNESS} m post`);
         assert.ok(Math.abs(bar.max.x - bar.min.x - SLAT_THICKNESS) < POSITION_TOLERANCE && Math.abs(bar.max.y - bar.min.y - SLAT_THICKNESS) < POSITION_TOLERANCE, `slat ${boardIndex} is ${SLAT_THICKNESS} m square`);
-        (board.major ? majorBarHeights : minorBarHeights).push(bar.max.y - bar.min.y);
       }
       const signCells = new Set<string>();
-      for (const [signIndex, board] of majorBoards.entries()) {
+      for (const [signIndex, layoutSign] of layout.signs.entries()) {
         const sign = boxAt(layout.boards.length + signIndex);
-        assert.ok(sign.min.y >= board.y - POSITION_TOLERANCE, `the sign of the ${board.heightAboveLip} m board reaches down to ${sign.min.y}, below its line ${board.y}`);
+        const slatTop = LIP_Y + layoutSign.heightAboveLip + SLAT_THICKNESS / 2;
+        assert.ok(sign.min.y >= slatTop - POSITION_TOLERANCE, `the ${layoutSign.heightAboveLip} m sign reaches down to ${sign.min.y}, below its slat's top ${slatTop}`);
+        assert.ok(Math.abs((sign.min.y + sign.max.y) / 2 - layoutSign.y) < POSITION_TOLERANCE && Math.abs(sign.max.y - sign.min.y - SIGN_HEIGHT) < POSITION_TOLERANCE, `the ${layoutSign.heightAboveLip} m sign is ${sign.max.y - sign.min.y} tall at ${(sign.min.y + sign.max.y) / 2}`);
         assert.ok(Math.abs((sign.min.x + sign.max.x) / 2 - layout.postsX) < POSITION_TOLERANCE && Math.abs(sign.min.z + sign.max.z) < POSITION_TOLERANCE, `sign ${signIndex} is between the posts`);
         assert.ok(sign.max.x - sign.min.x <= MAX_BOARD_DEPTH, `sign ${signIndex} is ${sign.max.x - sign.min.x} m deep: a camera inside a deep sign loses the view`);
-        assert.ok(sign.max.y - sign.min.y > 2 * Math.max(...majorBarHeights), `sign ${signIndex} is much bigger than its bar`);
         signCells.add(frontCell(layout.boards.length + signIndex));
       }
-      assert.equal(signCells.size, majorBoards.length, "every sign's front face reads a different atlas cell");
+      assert.equal(signCells.size, layout.signs.length, "every sign's front face reads a different atlas cell");
       const barCells = new Set(layout.boards.map((board, boardIndex) => `${board.major}:${frontCell(boardIndex)}`));
-      assert.equal(barCells.size, 2, "major bars share one cell, minor bars another");
-      assert.ok(![...signCells].some((cell) => barCells.has(`true:${cell}`) || barCells.has(`false:${cell}`)), "a sign's label is not a bar's cell");
+      assert.equal(barCells.size, layout.boards.some((board) => board.major) && layout.boards.some((board) => !board.major) ? 2 : 1, "major slats share one cell, minor slats another");
+      assert.ok(![...signCells].some((cell) => barCells.has(`true:${cell}`) || barCells.has(`false:${cell}`)), "a sign's label is not a slat's cell");
+    });
+
+    it(`when it is built for ${name}, then a sign carries its height: "LIP = 0" at the lip then "10 m", "20 m" ... every ${SIGN_EVERY_METRES} m up the frame`, () => {
+      makeHighJumpArt(layout, LIP_Y);
+      const labelled = recordedCanvases.filter((canvas) => canvas.texts.length > 0).at(-1)!;
+      assert.deepEqual(
+        labelled.texts,
+        layout.signs.map((sign) => (sign.heightAboveLip === 0 ? "LIP = 0" : `${sign.heightAboveLip} m`)),
+        "the atlas's labels, one per sign in sign order",
+      );
+      assert.deepEqual(layout.signs.map((sign) => sign.heightAboveLip % SIGN_EVERY_METRES), layout.signs.map(() => 0), "signs only at multiples of SIGN_EVERY_METRES");
     });
 
     it(`when it is built for ${name}, then a slat's brass plates are bigger at the major boards than the minor ones`, () => {
@@ -195,7 +207,7 @@ describe("given the High jump's art built from a layout", () => {
       const net = meshNamed(art, "net");
       const box = boundsOf(vertices(net));
       assert.ok(Math.abs(box.min.x - layout.netX) < POSITION_TOLERANCE && Math.abs(box.max.x - layout.netX) < POSITION_TOLERANCE, `net x ${box.min.x}..${box.max.x}, expected ${layout.netX}`);
-      assert.ok(box.max.z >= CAPTURE_HALF_WIDTH && box.min.z <= -CAPTURE_HALF_WIDTH, "the net spans the capture band");
+      assert.ok(box.max.z >= FIELD_HALF_WIDTH && box.min.z <= -FIELD_HALF_WIDTH, "the net spans the landing field");
       assert.ok(Math.abs(box.max.z - NET_HALF_WIDTH) < POSITION_TOLERANCE && Math.abs(box.min.z + NET_HALF_WIDTH) < POSITION_TOLERANCE, `net z ${box.min.z}..${box.max.z}, NET_HALF_WIDTH ${NET_HALF_WIDTH}`);
       assert.ok(Math.abs(box.min.y - LANDING_HEIGHT) < POSITION_TOLERANCE, "the net hangs from the pad up");
       assert.ok(Math.abs(box.max.y - (LANDING_HEIGHT + layout.netHeight)) < POSITION_TOLERANCE, `net top ${box.max.y}, netHeight ${layout.netHeight}`);

@@ -2,7 +2,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import type { EjectionWatch } from "../vehicle/ejection.ts";
 import { Ground, STEP_UP } from "../world/ground.ts";
 import { LANDING_HEIGHT, LONG_JUMP_INCLINE, MINIGAME_MODE, MINIGAME_MODES, STATION_ANCHORS, STATION_HALF_WIDTH, type MinigameMode } from "./minigame-constants.ts";
-import { type HighJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS } from "./minigame-high-jump.ts";
+import { type HighJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SIGN_HEIGHT, SLAT_THICKNESS } from "./minigame-high-jump.ts";
 import { LipThrow } from "./minigame-lip.ts";
 import { floorHeightAt, lipHeight, stationBackX, stationFrontX, stationStartPose } from "./minigame-profile.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_MESH_STEP, RING_RAIL_PROFILE, ringBoardMesh, ringHeightAt } from "./minigame-ring.ts";
@@ -18,8 +18,8 @@ const PAD_HALF_EXTENT = 1000;
 /** Half the thickness (m) of the high jump's net wall: more than a part travels in one physics step at a top speed. */
 const NET_HALF_THICKNESS = 0.25;
 
-/** The high jump's posts and slats (`HighJumpLayout`'s own numbers). */
-export type HighJumpFrame = Pick<HighJumpLayout, "postsX" | "frameTop" | "boards">;
+/** The high jump's posts, slats and signs (`HighJumpLayout`'s own numbers). */
+export type HighJumpFrame = Pick<HighJumpLayout, "postsX" | "frameTop" | "boards" | "signs">;
 
 /** Where the high jump's net hangs, station-local: its plane's x, half its width across the lane and its height above the pad; and its frame. */
 type HighJumpStructure = { netX: number; netHalfWidth: number; netHeight: number; frame: HighJumpFrame };
@@ -186,15 +186,18 @@ export class MinigameGround extends Ground {
   }
 
   /**
-   * The posts and the slats between them as one static triangle mesh the dummy meets and the cars' height reads never see (a prism
-   * would be a floor 200 m up to every eye and sight probe): the two posts first, then one slat per board in board order.
+   * The posts, the slats and the height signs between them as one static triangle mesh the dummy meets and the cars' height reads
+   * never see (a prism would be a floor 200 m up to every eye and sight probe): the two posts first, then one slat per board in board
+   * order, then one sign per layout sign in sign order.
    */
   private addHighJumpFrame(frame: HighJumpFrame): void {
     const anchor = STATION_ANCHORS.highJump;
     const x = anchor.x + frame.postsX;
     const frameTopY = lipHeight(MINIGAME_MODE.highJump) + frame.frameTop;
+    const betweenPosts = POST_HALF_SPAN - POST_THICKNESS / 2;
     const boxes: SolidBox[] = [-1, 1].map((side) => ({ x, y: (LANDING_HEIGHT + frameTopY) / 2, z: anchor.z + side * POST_HALF_SPAN, hx: POST_THICKNESS / 2, hy: (frameTopY - LANDING_HEIGHT) / 2, hz: POST_THICKNESS / 2 }));
-    for (const board of frame.boards) boxes.push({ x, y: board.y, z: anchor.z, hx: SLAT_THICKNESS / 2, hy: SLAT_THICKNESS / 2, hz: POST_HALF_SPAN - POST_THICKNESS / 2 });
+    for (const board of frame.boards) boxes.push({ x, y: board.y, z: anchor.z, hx: SLAT_THICKNESS / 2, hy: SLAT_THICKNESS / 2, hz: betweenPosts });
+    for (const sign of frame.signs) boxes.push({ x, y: sign.y, z: anchor.z, hx: SLAT_THICKNESS / 2, hy: SIGN_HEIGHT / 2, hz: betweenPosts });
     this.meshes.push(boxesMesh(boxes));
   }
 
