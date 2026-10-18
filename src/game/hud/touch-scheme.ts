@@ -4,6 +4,7 @@
  * nothing here knows about the DOM.
  */
 
+import { hypot2 } from "../kernel/physics-core.js";
 import { PAD_DEAD } from "../vehicle/gamepad.ts";
 
 export const TOUCH_SCHEMES = ["stick", "pedals", "autogas", "tilt"] as const;
@@ -84,7 +85,7 @@ const DISC_DEAD = 0.04;
  * Only a resting thumb (`DISC_DEAD`) reads zero.
  */
 export function discReading(x: number, y: number): { x: number; y: number } {
-  const offset = Math.hypot(x, y);
+  const offset = hypot2(x, y);
   if (offset < DISC_DEAD) return { x: 0, y: 0 };
   const warped = PAD_DEAD.stick + (1 - PAD_DEAD.stick) * Math.pow(Math.min(1, offset), 1 / PAD_DEAD.curve);
   return { x: (x / offset) * warped, y: (y / offset) * warped };
