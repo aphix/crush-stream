@@ -28,10 +28,12 @@ const PASSER = 2;
 /** The step the passer joins the field: after the first keyframe of the clip is taken, so the clip leaves it out. */
 const JOIN_STEP = 300;
 const IMPACT_X = 60;
+/** Each car's speed (m/s) into the head-on: fast enough that a torn hood comes to rest clear of both wrecks, where only the passer can stir it. */
+const HEAD_ON_SPEED = 20;
 /** How far (m) up the road from the crash the passer is put, its speed (m/s), and how far (m) to the side of the crash line it passes: clear of both wrecks, its roof over the reach of a part that comes to rest beside them. */
 const PASSER_AHEAD = 65;
 const PASSER_SPEED = 20;
-const PASSER_SIDE = 4.6;
+const PASSER_SIDE = -2.4;
 
 /** The clip as a peer decodes it, the cars of the world it was recorded in, the world's trace of every clip car's loose bodies, and where the passer was nearest the crash. */
 interface Recorded {
@@ -64,8 +66,8 @@ function record(passer: boolean): Recorded {
     return car;
   };
   const cars = [A, B].map(make);
-  cars[A]!.spawnFacing(0, 0, Math.PI / 2, 15);
-  cars[B]!.spawnFacing(2 * IMPACT_X, 0, -Math.PI / 2, 15);
+  cars[A]!.spawnFacing(0, 0, Math.PI / 2, HEAD_ON_SPEED);
+  cars[B]!.spawnFacing(2 * IMPACT_X, 0, -Math.PI / 2, HEAD_ON_SPEED);
   const rec = new CrashRecorder({ recall: (_i, out) => out.set([-1]), knocks: () => new Uint8Array(16) });
   rec.begin("flat", HANDLING.realism, false, 4, (i) => `c${i}`, 1);
   const world = newWorld(cars);

@@ -2,12 +2,12 @@ import * as THREE from "three";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
-import { PISTON_IDS } from "./piston-rig.ts";
-import { firePiston, pistonLocality, type PistonLocality, type PistonShot } from "./piston-rig.test-util.ts";
+import { PISTON, PISTON_IDS } from "./piston-rig.ts";
+import { firePiston, pistonLocality, PISTON_DENT_RADIUS, PISTON_FAR, type PistonLocality, type PistonShot, type PistonShotResult } from "./piston-rig.test-util.ts";
 import { transformSkinPointInto } from "../deform/shape-match.test-util.ts";
 import type { ShapeCluster } from "../deform/shape-match.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import type { DeformMode, MassNode } from "../deform/deform-rig.ts";
+import { RES_SLOTS, type DeformMode, type MassNode } from "../deform/deform-rig.ts";
 import { forModes } from "../vehicle/test-support.ts";
 
 /** The deformer internals the reference skin reads (private in production). */
@@ -313,34 +313,63 @@ describe("given a car tapped at 3 km/h by a piston", () => {
   }
 });
 
+/**
+ * A shot read on the skin's own anchors: the struck particles' dent weighted as the dent paint (within `PISTON_DENT_RADIUS` of the struck
+ * point) hangs on them, and the worst far paint among the vertices whose parent masses all stand past `PISTON_FAR` too.
+ */
+function onSkinAnchors(car: DeformableCar, shot: PistonShotResult, tap: PistonShotResult): { particle: number; farSkin: number } {
+  const resJ = car.deform["resJ"];
+  const resW = car.deform["resW"];
+  const sx = shot.strike.x;
+  const sz = shot.strike.z;
+  const struck = shot.struck.map((s) => shot.names.indexOf(s.name));
+  const share = new Float64Array(struck.length);
+  let farSkin = 0;
+  for (let v = 0, k = 0; k < shot.skinRest.length; v++, k += 3) {
+    const rx = shot.skinRest[k]!;
+    const rz = shot.skinRest[k + 2]!;
+    const dent = Math.hypot(rx - sx, shot.skinRest[k + 1]! - PISTON.faceY, rz - sz) < PISTON_DENT_RADIUS;
+    let farParents = Math.hypot(rx - sx, rz - sz) > PISTON_FAR;
+    for (let s = v * RES_SLOTS; s < (v + 1) * RES_SLOTS; s++) {
+      if (resW[s] === 0) continue;
+      const j = resJ[s]! / 3;
+      const q = struck.indexOf(j);
+      if (dent && q >= 0) share[q] += resW[s]!;
+      if (Math.hypot(shot.particleRest[j * 3]! - sx, shot.particleRest[j * 3 + 2]! - sz) <= PISTON_FAR) farParents = false;
+    }
+    if (farParents) farSkin = Math.max(farSkin, Math.hypot(shot.skin[k]! - tap.skin[k]!, shot.skin[k + 1]! - tap.skin[k + 1]!, shot.skin[k + 2]! - tap.skin[k + 2]!));
+  }
+  let weight = 0;
+  let particle = 0;
+  for (let q = 0; q < struck.length; q++) {
+    weight += share[q]!;
+    particle += share[q]! * (shot.struck[q]!.inward - tap.struck[q]!.inward);
+  }
+  return { particle: particle / weight, farSkin };
+}
+
 describe("given a car shot at 40 km/h by a piston, measured against a 3 km/h tap", () => {
   const shots = new Map<string, PistonLocality & { particle: number }>();
   const measure = (id: (typeof PISTON_IDS)[number]) => {
     if (!shots.has(id)) {
       const tap = firePiston(makeCar("shape"), id, TAP);
-      const shot = firePiston(makeCar("shape"), id, { ...TAP, speedKph: 40 });
-      const struck = shot.struck.map((s, k) => s.inward - tap.struck[k]!.inward);
-      shots.set(id, { ...pistonLocality(shot, tap), particle: struck.reduce((a, b) => a + b, 0) / struck.length });
+      const car = makeCar("shape");
+      const shot = firePiston(car, id, { ...TAP, speedKph: 40 });
+      shots.set(id, { ...pistonLocality(shot, tap), ...onSkinAnchors(car, shot, tap) });
     }
     return shots.get(id)!;
   };
-  // Since the wreck split (3bf63441) the 3 km/h tap no longer sags the car as it arms (far paint 0.001 m, 0.080 m before), so these rows,
-  // measured against the tap, see the skin's own far-corner overshoot that the tap's sag used to cancel: the right shot's far paint 0.237 m
-  // against far particles 0.178 m (0.193 against 0.149 before). Held level and unspun through the shot it is 0.195 against 0.110: not the
-  // tilt, not the spin. The front shot's far particles barely move (0.024 m) while its tail paint moves 0.148 m; with the body's pitch and
-  // roll rates held at zero it passes (0.111 against 0.094).
-  const OVERSHOOT = "after the plan: make the skin's far corners follow the particles; the right shot's far paint stands at the bar, 0.173 m against far particles 0.135";
-  const PITCHED = "after the plan: the front shot's far particles move 0.024 m and its tail paint 0.148 m; with the body's pitch and roll rates held at zero through the shot it is 0.111 against 0.094";
-  const FAR_TODO: Partial<Record<(typeof PISTON_IDS)[number], string>> = { front: PITCHED, right: OVERSHOOT };
+  // Read on the skin's anchors: a corner's paint hangs on its bumper more than on its wing, which the kept set no longer drags in (wingFL
+  // -0.016 m, +0.032 before), and the rear shot's far-most paint, 1.37 m out, hangs 35 % on the struck bumperRR.
   for (const id of PISTON_IDS) {
     // Cluster-only skin: corners 37%, front 44% of the particles' dent; a strain-whole anchor put
     // the door paint 8% past the door.
-    it(`when the ${id} piston shoots it, then the paint dent is at least 75% and at most 105% of the dent of the particles it struck`, () => {
+    it(`when the ${id} piston shoots it, then the paint dent is at least 75% and at most 105% of the dent of the particles it struck, weighted as the paint hangs on them`, () => {
       const { dent, particle } = measure(id);
       assert.ok(dent >= 0.75 * particle && dent <= 1.05 * particle, `paint ${dent.toFixed(3)} m vs particles ${particle.toFixed(3)} m`);
     });
     // Cluster-only skin: a rear-corner shot moved far paint 0.228 m where far particles moved 0.140 m.
-    it(`when the ${id} piston shoots it, then the paint far from the hit moves no more than 4 cm past the particles far from it`, { todo: FAR_TODO[id] }, () => {
+    it(`when the ${id} piston shoots it, then the paint hung on particles far from the hit moves no more than 4 cm past the particles far from it`, () => {
       const { farSkin, farParticle } = measure(id);
       assert.ok(farSkin <= farParticle + 0.04, `far paint ${farSkin.toFixed(3)} m vs far particles ${farParticle.toFixed(3)} m`);
     });

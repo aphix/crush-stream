@@ -20,6 +20,8 @@ const TOWARD = -Math.PI / 2;
 const SPEED = 40;
 /** The car's centre this far (m) from the wall's near face at the start (the ground drops 4 m to the wall's foot over the approach: the car comes down onto it). */
 const START_GAP = 40;
+/** A start on the flat at the wall's foot (level from x = -28): from `START_GAP` the car flies off the crest into the wall, and a cm of the lone run's lower flight picks the hit's outcome. */
+const FLAT_GAP = 11;
 /** The steps after the start that are not judged: the car comes down onto the ground and a landing asks for finer slices (`contactHz`, 9 steps measured). */
 const SETTLE_STEPS = 15;
 /** The steps from the first sliced one that must be sliced: the hit's (measured: the crush window closes about 25 steps after it). */
@@ -37,7 +39,7 @@ interface Run {
   alive: boolean;
 }
 
-function drive(lone: boolean): Run {
+function drive(lone: boolean, gap = START_GAP): Run {
   const w = makeWorld();
   w.race.showLobby("havana");
   const car = makeCar("sedan");
@@ -47,7 +49,7 @@ function drive(lone: boolean): Run {
   world.collide = (c, i, h) => w.race.courseHit(c, i, h);
   world.fine = FINE;
   world.lone = lone;
-  car.spawnFacing(NEAR + START_GAP, 12, TOWARD, SPEED);
+  car.spawnFacing(NEAR + gap, 12, TOWARD, SPEED);
   car.velocity.set(-SPEED, 0, 0);
   const input: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
   const rows: Run["rows"] = [];
@@ -78,10 +80,13 @@ describe("given a sedan driven at 40 m/s at Havana's alley wall from 40 m, in co
     assert.ok(run.rows.slice(first, first + HIT_STEPS).every((r) => !r.lone && r.slices === SLICES_PER_STEP), "the hit's steps take all the slices");
     assert.equal(run.past, 0, "no mass past the far face");
   });
+});
 
+describe("given a sedan driven at 40 m/s at Havana's alley wall from 11 m, on the flat at its foot, in coarse steps all cut to fine slices by a pair parked far off", () => {
   it("when lone cars run and when they do not, then the sedan ends the 3 s within 5 cm of the same place with the same drivetrain health", () => {
-    const lone = drive(true);
-    const sliced = drive(false);
+    const lone = drive(true, FLAT_GAP);
+    const sliced = drive(false, FLAT_GAP);
+    assert.ok(lone.rows.slice(0, 10).every((r) => r.lone), "it runs lone before the hit");
     assert.ok(sliced.rows.every((r) => !r.lone));
     assert.ok(Math.abs(lone.x - sliced.x) < 0.05, `${lone.x.toFixed(3)} against ${sliced.x.toFixed(3)} m`);
     assert.equal(lone.alive, sliced.alive);
