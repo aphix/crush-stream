@@ -8,6 +8,7 @@ import { HULL_STRIDE, hullsClear, readHull } from "../contact/hull-gap.ts";
 import type { EjectionWatch } from "../vehicle/ejection.ts";
 import { armCrushRows, takeCrossingsSkipped } from "../vehicle/car-air.ts";
 import { contactHz } from "../vehicle/car-air-points.ts";
+import { REST_SPEED } from "../vehicle/car-air-body.ts";
 import { CarSurfaces, REACH } from "../vehicle/car-surfaces.ts";
 import { armTops } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
@@ -399,7 +400,7 @@ export function stepWorld(w: World, dt: number): void {
       const pair = resolveCarPair(cars[a]!, cars[b]!, h);
       if (pair) {
         work[WORK.pairContacts] = work[WORK.pairContacts]! + 1;
-        wakePair(cars[a]!, cars[b]!);
+        if (pair.closing > REST_SPEED) wakePair(cars[a]!, cars[b]!);
         w.pairHit?.(a, b, pair);
         strongest.offer(pair);
       }
@@ -504,7 +505,8 @@ export function warmCrashPath(): boolean {
 
 /**
  * A contact between two cars wakes both only when one of them moves: wrecks resting in a pile touch every slice, and waking them there
- * restarts their rest timers, so none would ever sleep.
+ * restarts their rest timers, so none would ever sleep. A pair contact wakes them only while it closes faster than rest: a wreck rolling
+ * level beside a still one at a constant 1 cm overlap kept its neighbour awake 0.6 s past its own rest (fleet capture, seed 3).
  */
 function wakePair(a: DeformableCar, b: DeformableCar): void {
   if (!a.moving && !b.moving) return;

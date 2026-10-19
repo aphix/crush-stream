@@ -24,11 +24,13 @@ const _dir = new THREE.Vector3();
 
 type PairHit = {
   impulse: number;
+  /** What the pair met with along the normal this slice (m/s): the larger of its centres' closing and the rigid step's rows'. */
+  closing: number;
   contact: THREE.Vector3;
   normal: THREE.Vector3;
 };
 /** `resolveCarPair`'s result, rewritten by every call: read or copy it (`StrongestContact`) before the next. */
-const _hit: PairHit = { impulse: 0, contact: new THREE.Vector3(), normal: new THREE.Vector3() };
+const _hit: PairHit = { impulse: 0, closing: 0, contact: new THREE.Vector3(), normal: new THREE.Vector3() };
 
 export function impulseCar(car: DeformableCar, nx: number, ny: number, nz: number, j: number): void {
   if (j === 0) return;
@@ -524,6 +526,7 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
 
   if (spent && closing > 0 && dist > 1e-4) holdComGap(carA, carB, leftoverA, leftoverB, dist, dt);
   _hit.impulse = Math.max(met, hit * 6);
+  _hit.closing = met;
   _hit.contact.copy(_p);
   _hit.normal.copy(n);
   return _hit;

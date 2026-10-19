@@ -16,7 +16,7 @@ const SLICE = Math.fround(1 / FINE_HZ);
 /** Slices (1/240 s) of the world after the first touch that the cars are read at: the touch itself is over (it lasts 4 slices), the tyres' grip has had 0.1 s. */
 export const READ_AFTER = 24;
 
-function dressedCar(style: CarStyleId, vehicleClass: VehicleClassId, slot: number): DeformableCar {
+export function dressedCar(style: CarStyleId, vehicleClass: VehicleClassId, slot: number): DeformableCar {
   const car = new DeformableCar({ body: 0xffffff, accent: 0x404040, name: style }, new THREE.Scene(), null, style);
   assignClass(car, vehicleClass);
   car.group.userData.carIndex = slot;

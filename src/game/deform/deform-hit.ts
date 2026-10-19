@@ -9,11 +9,13 @@ import { MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
 /** Most (m/s) a wheel freed by the plant may slide off the body's speed (`seatHubs`). Goes with the plant hand-over: Stage 4 item 6 (wreck split). */
 const HUB_SLIP = 8;
 /**
- * A wreck takes a new hit only after this long (s) without contact: spikes inside one hit never re-arm. Measured with the gate dropped
+ * A wreck takes a new hit only after this long (s) without contact, or a HARDER_HIT one: spikes inside one hit never re-arm. Measured with the gate dropped
  * (Stage 4 item 5 (car-car through the kernel)): hit-slice, symmetry and floor-momentum go red (every slice of one pulse re-arms the hit and its stroke is spent twice).
  * It goes when the hit's pulse is the kernel's one impulse per pair, with the wreck split: Stage 4 item 6 (wreck split).
  */
 const REARM_QUIET = 0.3;
+/** A contact at this multiple of the armed hit's EBS re-arms before REARM_QUIET: a new hit at 2.25× its energy, where its own slices read within a few % of its first. */
+const HARDER_HIT = 1.5;
 /** Smallest EBS (m/s, 10 km/h) that counts as a new hit on a wreck: the IIHS low-speed bumper test's
  *  6 mph full-width impact, where bumper systems start taking damage (research 12). The old 6 m/s
  *  (22 km/h) floor dropped every car-car hit under 43 km/h closing (each car's EBS is about half the
@@ -394,13 +396,13 @@ export abstract class DeformHit extends DeformRig {
   }
 
   /**
-   * A fresh contact on a wreck: after REARM_QUIET without contact, a hit of at least REARM_EBS takes
-   * over the hit frame and adds its EBS² to the struck end, so repeated hard hits keep crushing (and
-   * can reach the engine block) instead of reusing the first hit's stroke. False when the contact
-   * belongs to the current hit or is too soft.
+   * A fresh contact on a wreck: after REARM_QUIET without contact, or at HARDER_HIT times the armed hit's EBS (else a door graze's
+   * hit sizes the nose hit that follows it into a pile), a hit of at least REARM_EBS takes over the hit frame and adds its EBS² to
+   * the struck end, so repeated hard hits keep crushing (and can reach the engine block) instead of reusing the first hit's stroke.
+   * False when the contact belongs to the current hit or is too soft.
    */
   rearmHit(localPoint: THREE.Vector3, localInward: THREE.Vector3, impulse: number, ebs: number): boolean {
-    if (!this.massActive || ebs < REARM_EBS || this.quietTime() < REARM_QUIET) return false;
+    if (!this.massActive || ebs < REARM_EBS || (this.quietTime() < REARM_QUIET && ebs < HARDER_HIT * this.hitSpeed)) return false;
     this.thaw();
     this.impactLocal.copy(localPoint);
     this.impactInward.copy(localInward).normalize();

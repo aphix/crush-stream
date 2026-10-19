@@ -456,13 +456,14 @@ export class DeformableCar extends CarParts {
 
   /**
    * A wreck is the rigid body's (`stepFree`): the masses' motion relative to the body is the crush (`moveRelative`), the body steps, and the masses are carried to where it put them. Its wheels, ride and loose parts step once per slice, here.
-   * A wreck at rest (`asleep`) skips the rigid step until it is moved (`wake`, or a velocity written to it) or something that moves comes within `REACH` of where it lies (`stirNear`); its drawn ride goes on settling.
+   * A wreck at rest (`asleep`) skips the rigid step until it is moved (`wake`, or a velocity at or above rest written to it: the speed it slept under) or something that moves comes
+   * within `REACH` of where it lies (`stirNear`); its drawn ride goes on settling. A contact's nudge under rest speed is dropped, as the rest that put it to sleep dropped its own.
    */
   private integrateWreck(dt: number): void {
     if (this.asleep) {
-      const v = this.velocity;
-      const w = this.angular;
-      if (v.x * v.x + v.y * v.y + v.z * v.z + w.x * w.x + w.y * w.y + w.z * w.z === 0 && !stirNear(this.sleepX, this.sleepZ, REACH, this.slot, this.surfaces?.cars ?? null)) {
+      if (!this.moving && !stirNear(this.sleepX, this.sleepZ, REACH, this.slot, this.surfaces?.cars ?? null)) {
+        this.velocity.set(0, 0, 0);
+        this.angular.set(0, 0, 0);
         this.nudgeWheels(dt);
         this.ride(dt);
         this.stepLooseParts(dt, this.slot);

@@ -457,3 +457,36 @@ Judged by the drawn meshes (`vehicle/tumbled-rest.test.ts`: the world vertices o
 - **A roof-down wreck's doors stand clear.** The 9-19 cm "window frames into the ground" this list carried was the shattered side pane, hidden on its rest seat, read as door by the test; the drawn doors stand 18-29 cm clear on a roof (`tumbled-rest.test.ts` counts drawn meshes only).
 - **Wall push-back along the face:** a light touch's push-out (`wallBounce`) puts a car back along the face the way it came by the share of the slice that took it in (`pen / closing` of the slice), never more than its own move along the face that slice. A car turned into a face at rest (the overlap from its yaw, closing about 0) read `along0 · pen / closing` as metres: a stopped cop slid 0.45 m a frame along a wall into its stakeout partner on Dam Spine (`contact/wall-bounce.test.ts`).
 - **REPLAY 97:** a wreck's torn mirror changes the parts section of its keyframes and the loose bodies stepped after it.
+
+### 12.13 A much harder contact re-arms a wreck's hit before it is quiet (lane PileStiff, on main f694fdb5)
+
+`rearmHit` refused every contact inside `REARM_QUIET` (0.3 s), so a car whose hit a graze had just armed took its next, far harder
+hit on the graze's barrier speed and stroke. In the fleet capture's pile (fleet-c0e67f), a coupe's door graze armed a 2.8 m/s hit. Its
+nose then closed on a pickup at 19.5 m/s and was crushed at 31 kN, so it sank 48-73 cm into the pickup. The owner's survival clip
+C04P-2WMS showed the same thing twice: a cop took 40 m/s contacts on a 5 m/s hit, and the player's car took 30 m/s contacts from a new
+direction on a 7.6 m/s hit. Now a contact reading `HARDER_HIT` (1.5) times the armed hit's EBS re-arms it inside the quiet time too.
+
+- **A hit's own pulse never trips it.** In plain 2-car hits (head-on 30/50/80/115 km/h, 30 against 80, T-bone 30/50/80/115), a hit's
+  own slices read 0.93-0.97 of the EBS it armed at. They never re-arm, and the crush totals are unchanged (`pile-push.test.ts`: the
+  50 km/h head-on and T-bone keep their armed EBS; mutation `HARDER_HIT` 0.9 re-arms both).
+- **Staged pile** (`pile-push.test.ts`: a coupe grazed on its door at 2.8 m/s, then driven nose-first at 19.5 m/s into a parked
+  pickup): it sinks 0.140 m into the pickup's flank and 0.117 m into its rear corner, against 0.384 and 0.806 m before. The bar is
+  0.2 m.
+- **The coupe's cabin peak** (10 ms window) in the staged pile: 7-15 g before, 50-73 g after. An ungrazed coupe in the same hit
+  reads 52-78 g.
+- **Capture replay** (seeds 1-10, 60 Hz, ±40 % frame jitter): the coupe re-arms in 10/10 runs, at 4.9-5.7 m/s. That is its share
+  of a corner hit on the pickup's tail. Its peak overlap falls from 48-73 cm to 27-36 cm. The replay's deepest pair is now
+  sedan-hatch, at 38-64 cm. That overlap grows while the pair's closing is 0 or less, so no hit is armed: a separate mechanism.
+- **Rest beside a settling neighbour** (`engine/fleet-rest.test.ts`). The re-arm changes the capture's crash, and with seed 3 the
+  hatchback came to rest 1.1 cm into the pickup while the pickup was still rolling level onto its popped front-left hub (up to
+  0.42 rad/s, from 1.55 to 1.93 s). Two wake paths kept the hatchback awake until 2.86 s, against the 2.7 s bar:
+  - The pair pass's `wakePair` woke both cars on every slice that either of them moved, though the pair closed at -0.001 to
+    0.008 m/s. It now wakes them only while the contact closes faster than `REST_SPEED`.
+  - Asleep, the hatchback was woken by any velocity written to it: an exchange closing at 0.003 m/s woke it 8 ms after it slept.
+    A sleeper now wakes only at the speed it slept under (`moving`); a nudge under that is dropped.
+  Seed 3 sleeps at 2.495 s, seed 1 at 2.249 s.
+- **Still open: a sleeper stirred by a rocking neighbour.** `stirNear` wakes a sleeper when a moving car's top is within `REACH`,
+  and the wake restarts its whole 1 s rest. Seeds 1-6 run in turn on one engine (the test runs seeds 1 and 3 that way) sleep at:
+  main 2.190 / 2.257 / 2.515 / 2.266 / 2.618 / 2.344 s; the re-arm alone 2.249 / 2.186 / 2.362 / 2.610 / 2.379 / 2.476 s; with both
+  wake rules 2.249 / 2.186 / 2.362 / 3.158 / 2.379 / 2.476 s. In seed 4 the hatchback slept at 2.151 s. A pickup rocking at
+  0.167 rad/s (rest is 0.163) within reach, not touching it, then woke it.

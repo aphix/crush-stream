@@ -945,6 +945,31 @@ forModes("given a wreck that has settled in place with its passenger cell 0.11 m
   });
 });
 
+forModes("given a car whose hit armed at a low barrier speed, touched again before it has been quiet 0.3 s", (spawn) => {
+  // Refused, the harder contact rode the first hit's short stroke: the replay's cop took 40 m/s on a 5 m/s hit, the player's
+  // car 30 m/s on a 7.6 m/s side hit, and the fleet's coupe sank 0.5-0.7 m into a pickup on its door graze's 31 kN.
+  it("when a contact at 40 m/s comes 0.1 s after a 5.3 m/s nose hit, then it re-arms the hit at its own barrier speed", () => {
+    const s = spawn(0, 5.3, new THREE.Vector3(0.24, 0, -0.95).normalize());
+    for (let i = 0; i < 6; i++) stepWreck(s, DT);
+    assert.ok(s.d.quietTime() < 0.3, `quiet ${s.d.quietTime().toFixed(3)} s: the quiet time re-arms it anyway`);
+    assert.equal(s.d.rearmHit(new THREE.Vector3(0.5, 0.36, 2.0), new THREE.Vector3(-0.3, 0, -0.93).normalize(), 40, 40), true);
+    assert.ok(s.d.hitSpeedValue >= 40, `hit speed ${s.d.hitSpeedValue.toFixed(2)} m/s`);
+  });
+
+  it("when a contact at 30.3 m/s from the front-left comes in the same slice as a 7.6 m/s hit on the right door, then it re-arms the hit on the nose at 30.3 m/s", () => {
+    const s = spawn(0, 7.6, new THREE.Vector3(-0.9, 0, 0.02).normalize(), new THREE.Vector3(0.95, 0.36, 0));
+    assert.equal(s.d.rearmHit(new THREE.Vector3(-0.7, 0.36, 2.0), new THREE.Vector3(0.69, 0, -0.67).normalize(), 30.3, 30.3), true);
+    assert.ok(Math.abs(s.d.hitSpeedValue - 30.3) < 1e-9, `hit speed ${s.d.hitSpeedValue.toFixed(2)} m/s`);
+  });
+
+  it("when a contact reads 1.4 times the armed barrier speed, then it stays the armed hit's: a hit's own slices read within a few % of its first", () => {
+    const s = spawn(0, 14);
+    stepWreck(s, DT);
+    assert.equal(s.d.rearmHit(new THREE.Vector3(0, 0.36, 2.06), new THREE.Vector3(0, 0, -1), 14, 14 * 1.4), false);
+    assert.equal(s.d.hitSpeedValue, 14);
+  });
+});
+
 forModes("given a car driving hard into a rigid wall (16 to 20 m/s)", (spawn, mode) => {
   it("when the right-front corner hits the wall 0.62 m off centre for 24 steps, then it crushes over 1.25 times as far as the left-front corner (1.15 times in shape mode) and over 8 cm", () => {
     const s = spawn(0.62, 16);

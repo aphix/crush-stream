@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { FREEWHEEL, launch, makeCar, makeWorld, type CrashWorld } from "./crash-scenarios.test-util.ts";
+import * as THREE from "three";
+import { FREEWHEEL, launch, makeCar, makeWorld, PARKED, type CrashWorld } from "./crash-scenarios.test-util.ts";
+import { dressedCar } from "./off-centre-hit.test-util.ts";
+import { satCars } from "./sat.ts";
 import { stepWorld } from "../engine/world-step.ts";
 import { PUSH_SPEED, PushBudget } from "../deform/push-budget.ts";
 import { satPushCap } from "../deform/physics-util.ts";
@@ -61,6 +64,68 @@ describe("given a settled wreck with two plain cars wedged 1.4 m into its flank"
       assert.ok(moved <= bound, `step ${s}: moved ${moved.toFixed(4)} m, bound ${bound.toFixed(4)} m`);
     }
   });
+});
+
+/** The fleet capture's pile: a coupe's door grazed at this EBS (m/s) armed its hit, then its nose hit a pickup 19.5 m/s faster. */
+const GRAZE_EBS = 2.8;
+/** Deepest overlap (m) of the grazed coupe in the pickup: its nose hit sized from its own barrier speed, as an ungrazed coupe's is. */
+const GRAZED_SINK = 0.2;
+
+/** Peak plan overlap (m) of a coupe grazed on its right door, then driven nose-first at 19.5 m/s into a parked pickup: into its left flank, or (`corner`) its rear corner 0.9 m off its centre line. */
+function grazedNoseHit(corner: boolean): number {
+  const pickup = dressedCar("pickup", "truck", 0);
+  const coupe = dressedCar("coupe", "muscle", 1);
+  launch(pickup, 0, 0, 0, 0, 0);
+  if (corner) launch(coupe, 0.9, -7, 0, 0, 19.5);
+  else launch(coupe, -6.5, 0, Math.PI / 2, 19.5, 0);
+  const w = makeWorld([pickup, coupe], false, false);
+  w.pedals.set(pickup, PARKED);
+  coupe.applyImpact(coupe.group.localToWorld(new THREE.Vector3(0.9, 0.5, 0)), coupe.right.clone().negate(), GRAZE_EBS, GRAZE_EBS);
+  const n = new THREE.Vector3();
+  const p = new THREE.Vector3();
+  let deepest = 0;
+  w.world.afterCar = (car) => {
+    if (car === coupe) deepest = Math.max(deepest, satCars(coupe, pickup, n, p, 0) ?? 0);
+  };
+  for (let s = 0; s < 1.2 / H; s++) stepWorld(w.world, H);
+  return deepest;
+}
+
+describe("given a coupe whose door a graze armed, driven nose-first into a parked pickup at 19.5 m/s before it is quiet", () => {
+  for (const [where, corner] of [["its left flank", false], ["its rear corner", true]] as const) {
+    it(`when the coupe's nose meets ${where}, then it sinks into the pickup no deeper than ${GRAZED_SINK} m`, (t) => {
+      const sink = grazedNoseHit(corner);
+      t.diagnostic(`sink ${sink.toFixed(3)} m`);
+      assert.ok(sink <= GRAZED_SINK, `the coupe sank ${sink.toFixed(3)} m into the pickup`);
+    });
+  }
+});
+
+describe("given two sedans in a plain 50 km/h head-on or T-bone", () => {
+  for (const kind of ["head-on", "t-bone"] as const) {
+    it(`when the ${kind} runs 1.5 s, then each car keeps the barrier speed its hit armed at: a hit's own pulse never re-arms it`, () => {
+      const a = makeCar();
+      const b = makeCar();
+      if (kind === "head-on") {
+        launch(a, -5, 0, Math.PI / 2, 50 / 3.6, 0);
+        launch(b, 5, 0, -Math.PI / 2, -50 / 3.6, 0);
+      } else {
+        launch(a, 0, 0, 0, 0, 0);
+        launch(b, 6, 0, -Math.PI / 2, -50 / 3.6, 0);
+      }
+      const w = makeWorld([a, b], false, false);
+      for (const car of w.cars) w.pedals.set(car, car.spawnSpeed === 0 ? PARKED : FREEWHEEL);
+      const armed = new Map<DeformableCar, number>();
+      w.world.afterCar = (car) => {
+        if (car.crashed && !armed.has(car)) armed.set(car, car.deform.hitSpeedValue);
+      };
+      for (let s = 0; s < 1.5 / H; s++) stepWorld(w.world, H);
+      for (const car of [a, b]) {
+        assert.ok(armed.has(car), `car ${car === a ? "A" : "B"} never crashed`);
+        assert.ok(car.deform.hitSpeedValue === armed.get(car), `car ${car === a ? "A" : "B"} re-armed: ${armed.get(car)!.toFixed(2)} -> ${car.deform.hitSpeedValue.toFixed(2)} m/s`);
+      }
+    });
+  }
 });
 
 describe("given a PushBudget (the cap on the net translation contact pushes may move a car in one slice)", () => {

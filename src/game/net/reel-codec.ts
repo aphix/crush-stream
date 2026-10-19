@@ -233,9 +233,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * inside each other are pushed out to the outlines' 2.5 cm. A clip of 120 or before no longer reads.
  * 122: a thrown driver's arms swing down and his elbows and knees bend in flight; he grips pads, roads and ramps like cloth on asphalt (0.6), so he slides less there, and
  * rests about 5 m farther on the range sand; the driver's exit pane breaks in the step that throws him, live and in a replay alike. A clip of 121 or before no longer reads.
+ * 123: a contact at 1.5 times the EBS a wreck's hit armed at (`HARDER_HIT`) re-arms the hit inside `REARM_QUIET`, so a door graze no longer sizes the nose hit that follows it
+ * into a pile; a pair contact wakes its cars only while it closes faster than rest speed, and a sleeping wreck wakes only at rest speed or when stirred. A clip of 122 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 122;
+const REPLAY_VERSION = 123;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
