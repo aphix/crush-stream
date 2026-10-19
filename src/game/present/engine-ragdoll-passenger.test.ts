@@ -2,9 +2,12 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
+import type { RigidBody } from "@dimforge/rapier3d-simd";
 import type { Ejection } from "../vehicle/ejection.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { armKill, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
+import { setGround } from "../world/ground.ts";
 import type { DriverLook } from "./driver-look.ts";
 import { RagdollSystem, type Throw } from "./engine-ragdoll.ts";
 
@@ -12,6 +15,9 @@ const HEAD_ON_MPS = 20;
 const SETTLE_FRAMES = 60;
 const FIRST_WORKER_ID = 7;
 const PASSENGER: DriverLook = { woman: false, shirt: 0x1f3463, pants: 0x1f3463, hair: 0xe8bf6c, hat: null, mustache: false, portly: true };
+/** Two drivers of one head-on, thrown at each other: 3 m apart at 6 m/s each, they meet 0.12 s in, inside their 0.35 s grace. */
+const MEET_APART = 3;
+const MEET_MPS = 6;
 
 /** A fleet-armed sedan head-on pair, played until a driver is thrown: the cars and the ejections that came out. */
 function headOnEjections() {
@@ -104,5 +110,38 @@ describe("given the dummies' world on this thread (the fallback, and every scene
     const b = out[1]!.bodies[0]!.translation();
     const apart = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
     assert.ok(apart > 0.5 && apart < 1, `the passenger starts ${apart.toFixed(2)} m from the driver`);
+  });
+});
+
+/** The deepest any part of `a` sinks into any part of `b` (m; 0 when apart). */
+function overlap(a: RigidBody[], b: RigidBody[]): number {
+  let deepest = 0;
+  for (const p of a) for (const q of b) deepest = Math.max(deepest, -(p.collider(0).contactCollider(q.collider(0), 0)?.distance ?? 0));
+  return deepest;
+}
+
+describe("given two dummies thrown from two cars straight at each other, both in their first moments out", () => {
+  it("when they meet, then they hit (no part sinks 10 cm into the other) and each comes down on his own side, within 1 m of the middle", async () => {
+    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    await ragdolls.preload();
+    setGround(null);
+    ragdolls.update(1 / FRAME_HZ, [], true, false, null);
+    const lying = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
+    const facing = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI).multiply(lying);
+    for (const [car, side] of [-1, 1].entries()) {
+      const q = side < 0 ? lying : facing;
+      ragdolls.spawn({ car, p: new THREE.Vector3((side * MEET_APART) / 2, 1.2, 0), q, v: new THREE.Vector3(-side * MEET_MPS, 1, 0), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
+    }
+    const [a, b]: { bodies: RigidBody[] }[] = ragdolls["dolls"];
+    let deepest = 0;
+    for (let f = 0; f < 3 * FRAME_HZ; f++) {
+      ragdolls.update(1 / FRAME_HZ, [], true, false, null);
+      deepest = Math.max(deepest, overlap(a!.bodies, b!.bodies));
+    }
+    const xa = a!.bodies[0]!.translation().x;
+    const xb = b!.bodies[0]!.translation().x;
+    ragdolls.dispose();
+    assert.ok(deepest < 0.1, `a part sank ${(deepest * 100).toFixed(0)} cm into the other dummy`);
+    assert.ok(xa > -1 && xa < 0 && xb > 0 && xb < 1, `they came down at x ${xa.toFixed(2)} and ${xb.toFixed(2)} m (thrown from ∓${MEET_APART / 2})`);
   });
 });

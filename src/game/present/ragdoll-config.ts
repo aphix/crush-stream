@@ -16,8 +16,8 @@ export const MAX_ACC = 0.05;
  * Collision groups (membership << 16 | filter), 16 bits: the world; each dummy slot; each car (its lower box, bumper
  * to bonnet line, fitted to its crushed length, and its cabin's slabs), in 10 buckets of car index; the props. Out of
  * the car a dummy hits everything but its own jointed neighbours (`setContactsEnabled(false)`) and the purses. For
- * `GRACE` s after the throw it ignores its own car (it starts inside it) and the other dummies; every other car it hits
- * from the first frame.
+ * `GRACE` s after the throw it ignores its own car (it starts inside it) and the dummies thrown from that car still in
+ * theirs (a passenger starts beside his driver); every other car and dummy it hits from the first frame.
  */
 const G_STATIC = 1;
 const dollBit = (s: number) => 2 << s;
@@ -27,8 +27,8 @@ const carBit = (i: number) => (i < 0 ? 0 : 0x40 << i % 10);
 const G_CARS = 0xffc0;
 const G_PROPS = 0x20;
 export const dollGroups = (s: number) => (dollBit(s) << 16) | G_STATIC | G_DOLLS | G_CARS | G_PROPS;
-/** What a dummy just thrown from car `car` collides with: everything but that car (until `GRACE` s) and himself. */
-export const thrownGroups = (s: number, car: number) => (dollBit(s) << 16) | G_STATIC | dollBit(s) | G_PROPS | (G_CARS & ~carBit(car));
+/** What a dummy just thrown from car `car` collides with: everything but that car (until `GRACE` s) and `mates` (a bit per slot, `1 << slot`: the dummies thrown from that car still in their `GRACE`). */
+export const thrownGroups = (s: number, car: number, mates: number) => (dollBit(s) << 16) | G_STATIC | (G_DOLLS & ~(mates << 1)) | G_PROPS | (G_CARS & ~carBit(car));
 /** A woman's purse and what falls out of it hit the world, the barrier and every car (not their own for `GRACE` s), never a dummy. */
 export const propGroups = (car: number) => (G_PROPS << 16) | G_STATIC | (car < 0 ? G_CARS : G_CARS & ~carBit(car));
 /** A knocked prop (`PropBodies`) hits the world, the dummies, every car (not the one that knocked it for `GRACE` s, nor one squeezing it while its box covers it) and the other knocked props; a purse lets it by. */

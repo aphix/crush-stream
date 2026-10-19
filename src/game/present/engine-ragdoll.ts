@@ -58,7 +58,7 @@ import { GLASS_NAMES } from "../vehicle/car-glass.ts";
 
 /** Seconds a dummy lies about before it goes. */
 const LIFE = 10;
-/** Seconds after the throw the dummy ignores its own car and the other dummies (`thrownGroups`): it starts inside its own cabin, over its own lower box. */
+/** Seconds after the throw the dummy ignores its own car and the dummies thrown from it (`thrownGroups`): it starts inside its own cabin, over its own lower box, beside his passenger. */
 const GRACE = 0.35;
 /** Dummy friction against anything (the lower of the pair counts): low, so it slides a good way (owner, 2026-10-02). */
 const SLIDE = 0.12;
@@ -834,6 +834,9 @@ export class RagdollSystem {
     this.despawn(slot);
     const d = this.dolls[slot]!;
     const t0 = PARTS[0]!.c;
+    let mates = 0;
+    for (let s = 0; s < SLOTS && t.car >= 0; s++) if (this.dolls[s]!.live && this.dolls[s]!.car === t.car && this.dolls[s]!.age < GRACE) mates |= 1 << s;
+    const groups = thrownGroups(slot, t.car, mates);
     for (let k = 0; k < PARTS.length; k++) {
       const b = d.bodies[k]!;
       const c = PARTS[k]!.c;
@@ -857,7 +860,7 @@ export class RagdollSystem {
       _v.y = t.w.y;
       _v.z = t.w.z;
       b.setAngvel(_v, false);
-      b.collider(0).setCollisionGroups(thrownGroups(slot, t.car));
+      b.collider(0).setCollisionGroups(groups);
       b.setEnabled(true);
       b.wakeUp();
     }

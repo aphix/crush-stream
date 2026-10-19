@@ -258,9 +258,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 135: a wreck resting on a face (masses on it, no contact within `CONTACT_HOLD`) keeps the face's push on its struck half out of the free shape step's centroid restore, so it
  * springs off the face instead of walking into it. A clip of 134 or before no longer reads.
  * 136: every thrown driver leaves with a slight roll about his line of flight (`EJECT_ROLL` 0.5 rad/s), live and in a replay alike. A clip of 135 or before no longer reads.
+ * 137: a just-thrown dummy hits other cars' dummies from its first frame (only a dummy thrown from the same car is ignored for its first 0.35 s), so two drivers thrown at
+ * each other in one head-on meet over the cars. A clip of 136 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 136;
+const REPLAY_VERSION = 137;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
