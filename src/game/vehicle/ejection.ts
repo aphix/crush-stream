@@ -67,6 +67,8 @@ const DOOR_SQUARE = 2;
 export const THROW_OUT = 3;
 const THROW_UP = 3.5;
 const TUMBLE = 3;
+/** Roll (rad/s) every thrown driver leaves with about his line of flight (presentation, `RagdollSystem.launch`): about half a turn over the long jump's 3 s in the air (owner: slight, but noticeable). */
+export const EJECT_ROLL = 1.0;
 /** Head centre above the torso's, once he leans out (m): the dummy's `PARTS` head 0.52 m over the torso. */
 const HEAD_UP = 0.52;
 /** Head first out of the pane, superman style: 80 degrees from upright toward the exit, chest down. */

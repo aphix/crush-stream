@@ -32,7 +32,7 @@ function systemWithWorker() {
   const sent: { t: Throw; purse: boolean }[] = [];
   const worker = {
     throwDummy: (t: Throw, purse: boolean) => {
-      sent.push({ t: { ...t, p: t.p.clone(), v: t.v.clone() }, purse });
+      sent.push({ t: { ...t, p: t.p.clone(), v: t.v.clone(), w: t.w.clone() }, purse });
       return FIRST_WORKER_ID + sent.length - 1;
     },
   };
@@ -86,6 +86,18 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a st
     ragdolls.throwFigure(strike, cars);
     assert.equal(ragdolls["next"].rides, before, "the latest driver's record");
     assert.equal(ragdolls["next"].armsDown, undefined, "no hanging arms on it");
+  });
+
+  it("when a figure is run down, then he leaves at the strike's own spin: none of a thrown driver's EJECT_ROLL about his line of flight", () => {
+    const { cars, strike } = struck(0, 15);
+    const { ragdolls, sent } = systemWithWorker();
+    ragdolls.throwFigure(strike, cars);
+    const { t } = sent[0]!;
+    const added = t.w.clone().sub(new THREE.Vector3(strike.wx, strike.wy, strike.wz));
+    assert.ok(t.v.length() > 1, "the control: he flies");
+    const roll = added.dot(t.v) / t.v.length();
+    assert.ok(Math.abs(roll) < 1e-9, `${roll} rad/s about his line of flight`);
+    assert.equal(added.length(), 0, "spin past the strike's (rad/s)");
   });
 });
 

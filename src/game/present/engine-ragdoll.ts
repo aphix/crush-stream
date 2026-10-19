@@ -27,7 +27,7 @@ import { MAX_CARS } from "../scenes/fleet.ts";
 import { BARRIER_HALF } from "../contact/sat.ts";
 import type { Track } from "../world/track.ts";
 import type { Placed } from "../world/placements.ts";
-import { ejectionVelocity, type Ejection } from "../vehicle/ejection.ts";
+import { EJECT_ROLL, ejectionVelocity, type Ejection } from "../vehicle/ejection.ts";
 import { disable, loadRapier, type Rapier } from "../kernel/rapier.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 import { type DriverLook, driverLook, ownLook } from "./driver-look.ts";
@@ -64,8 +64,7 @@ const GRACE = 0.35;
 const SLIDE = 0.12;
 /** Torso speed (m/s) under which a dummy counts as lying still. */
 const REST_SPEED = 0.4;
-/** Roll (rad/s) every thrown driver leaves with about his line of flight: about half a turn over the long jump's 3 s in the air (owner: slight, but noticeable). */
-export const EJECT_ROLL = 1.0;
+
 /**
  * Sim seconds a throw judged before Rapier is in may wait for it; later it is dropped (a dummy out of a car that
  * stopped a second ago reads as a glitch). Rapier lands 0.45 s after `ready` in a production build, a fleet's
@@ -114,6 +113,14 @@ const _v = { x: 0, y: 0, z: 0 };
 const _rot = { x: 0, y: 0, z: 0, w: 1 };
 const Y = new THREE.Vector3(0, 1, 0);
 const _w = new THREE.Vector3();
+const _roll = new THREE.Vector3();
+const _com = new THREE.Vector3();
+/** A thrown driver's centre of mass from his torso, standing, arms raised (`spawn`'s layout; the parts' masses go as their volumes): his roll turns about it. */
+const RAISED_COM = PARTS.reduce((sum, p, k) => {
+  const m = p.h[0] * p.h[1] * p.h[2];
+  const y = ARM(k) ? 2 * SHOULDER_Y - p.c[1] : p.c[1];
+  return sum.add(_r.set(p.c[0] - PARTS[0].c[0], y - PARTS[0].c[1], p.c[2] - PARTS[0].c[2]).multiplyScalar(m));
+}, new THREE.Vector3()).divideScalar(PARTS.reduce((sum, p) => sum + p.h[0] * p.h[1] * p.h[2], 0));
 
 /**
  * A part whose velocity jumps by this much (m/s) in one step has hit something (gravity adds 0.08 per step): the skin
@@ -157,8 +164,6 @@ export class RagdollSystem {
   private solids: readonly Solid[] | null = null;
   /** The flat ground is the range's sand pit (`SAND`), read when a run's first throw builds it (set by the engine). */
   sand = false;
-  /** Roll (rad/s) a thrown driver leaves with about his line of flight (`EJECT_ROLL`); rows that pin the rigid launch or a bail's resting order set it to 0. */
-  ejectRoll = EJECT_ROLL;
   private readonly mesh: DummyMesh;
   /** The HUD's Rig and Particles views of the dummies (`set`). */
   readonly debug: RagdollDebug;
@@ -705,7 +710,11 @@ export class RagdollSystem {
     t.v.set(t.v.x * releaseScale.forward, t.v.y * releaseScale.upward, t.v.z * releaseScale.forward);
     if (releaseScale.elevation !== null) turnToElevation(t.v, releaseScale.elevation);
     const flight = t.v.length();
-    if (flight > 0) t.w.addScaledVector(t.v, this.ejectRoll / flight);
+    if (flight > 0) {
+      t.w.add(_roll.copy(t.v).multiplyScalar(EJECT_ROLL / flight));
+      // About his centre of mass, not the torso point he is placed by: the roll moves none of him along.
+      t.v.sub(_roll.cross(_com.copy(RAISED_COM).applyQuaternion(t.q)));
+    }
     t.car = e.car;
     t.age = 0;
     t.cop = e.cop;

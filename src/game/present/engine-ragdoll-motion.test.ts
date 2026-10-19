@@ -7,11 +7,14 @@ import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/cra
 import { armKill, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
 import { THROW_ONSET } from "../match/phase.ts";
 import { RANGE } from "../scenes/range.ts";
-import { EJECT_ROLL, RagdollSystem } from "./engine-ragdoll.ts";
+import { EJECT_ROLL, ejectionVelocity } from "../vehicle/ejection.ts";
+import { RagdollSystem } from "./engine-ragdoll.ts";
 import { PARTS, shed } from "./ragdoll-body.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 
 const GRAVITY = 9.6;
+/** How near (m/s) the thrown dummy's centre-of-mass velocity is to the throw's own: f32 part velocities at 30 m/s. */
+const COM_TOLERANCE = 1e-4;
 type Doll = { live: boolean; bodies: RigidBody[] };
 
 /** A deterministic stream in [0, 1). */
@@ -57,6 +60,20 @@ function jointGap(world: World): number {
 /** The fastest part's speed (m/s). */
 function fastest(bodies: RigidBody[]): number {
   return Math.max(...bodies.map((b) => Math.hypot(b.linvel().x, b.linvel().y, b.linvel().z)));
+}
+
+/** The mass-weighted mean of `bodies`' velocities (`read` linvel) or positions (`read` translation), into `out`. */
+function massMean(bodies: RigidBody[], read: (b: RigidBody) => { x: number; y: number; z: number }, out: THREE.Vector3): THREE.Vector3 {
+  out.set(0, 0, 0);
+  let mass = 0;
+  for (const b of bodies) {
+    const v = read(b);
+    out.x += b.mass() * v.x;
+    out.y += b.mass() * v.y;
+    out.z += b.mass() * v.z;
+    mass += b.mass();
+  }
+  return out.divideScalar(mass);
 }
 
 type Run = {
@@ -157,7 +174,7 @@ describe("given the ejection range (a sedan at 100 km/h into the jersey barrier,
     assert.ok(Math.max(...xs) - Math.min(...xs) <= 0.1, `landings ${xs.map((x) => x.toFixed(2)).join(", ")} m`);
   });
 
-  it("when the driver leaves, then his torso spins EJECT_ROLL about his line of flight past the ejection's own spin, and no more", async () => {
+  it("when the driver leaves, then his torso spins EJECT_ROLL about his line of flight past the ejection's own spin, and no more, and the roll turns him about his centre of mass: it moves none of him along", async () => {
     const car = makeCar("shape", 0.32, 0.45);
     armKill(car.deform, "sedan", DEFAULT_REALISM, "default");
     launch(car, -RANGE.run, 0, Math.PI / 2, RANGE.kph / 3.6, 0);
@@ -166,21 +183,30 @@ describe("given the ejection range (a sedan at 100 km/h into the jersey barrier,
     const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
     await ragdolls.preload();
     const spin = new THREE.Vector3();
+    const own = new THREE.Vector3();
     let thrown = false;
     w.onEject = (e) => {
       ragdolls.launch(e, [car]);
       spin.copy(e.spin);
+      ejectionVelocity(e, own);
       thrown = true;
     };
     for (let f = 0; f < 30 * FRAME_HZ && !thrown; f++) tickWorld(w, 1 / FRAME_HZ);
     assert.ok(thrown, "the control: the range throws its driver");
     const dolls: Doll[] = ragdolls["dolls"];
-    const torso = dolls.find((d) => d.live)!.bodies[0]!;
+    const doll = dolls.find((d) => d.live)!;
+    const torso = doll.bodies[0]!;
     const added = new THREE.Vector3().copy(torso.angvel()).sub(spin);
     // `limp` shifts every part's velocity a little to keep the dummy's momentum, so his torso flies within a few mrad of the throw's line.
     const off = added.angleTo(new THREE.Vector3().copy(torso.linvel()));
     assert.ok(Math.abs(added.length() - EJECT_ROLL) < 1e-6, `added spin ${added.length().toFixed(5)} rad/s`);
     assert.ok(off < 0.01, `added spin ${off.toFixed(4)} rad off his line of flight`);
+    // His centre of mass moves as the throw with no roll sends it: the ejection's velocity and its own spin about his torso point.
+    const com = massMean(doll.bodies, (b) => b.translation(), new THREE.Vector3());
+    const t = torso.translation();
+    const expected = own.add(spin.cross(com.sub(_a.set(t.x, t.y, t.z))));
+    const drift = massMean(doll.bodies, (b) => b.linvel(), new THREE.Vector3()).distanceTo(expected);
+    assert.ok(drift < COM_TOLERANCE, `his centre of mass leaves ${drift.toFixed(6)} m/s off the throw's own velocity`);
     ragdolls.dispose();
   });
 });
