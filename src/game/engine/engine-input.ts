@@ -490,7 +490,7 @@ export abstract class EngineInput extends EngineRigs {
       case "psky":
         this.setProceduralSky(D.proceduralSky);
         break;
-      case "halftone":
+      case SETTING_KEY.halftone:
         this.setHalftone(D.halftone);
         break;
       case "hatch":

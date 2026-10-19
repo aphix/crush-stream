@@ -488,14 +488,17 @@ export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top:
   scene.traverseVisible((o) => {
     if ((o as THREE.Mesh).isMesh && o.castShadow) casters++;
   });
-  const cel = hud[SETTING_KEY.celLook];
+  const held = (strength: unknown): number | null => (typeof strength === "number" ? strength : null);
   const sky = skyModeOf(hud);
   return {
     fxTier: parts.cine.tier,
     fxAuto: hud["fxAuto"] === true,
     post: describePost(top as FxTier),
     fxDensity: Number(hud["fxDensity"]),
-    celLook: typeof cel === "number" ? cel : null,
+    celLook: held(hud[SETTING_KEY.celLook]),
+    halftone: held(hud[SETTING_KEY.halftone]),
+    hatching: held(hud[SETTING_KEY.hatching]),
+    rimLight: held(hud[SETTING_KEY.rimLight]),
     shadows: { enabled: renderer.shadowMap.enabled, type: ["Basic", "PCF", "PCFSoft", "VSM"][renderer.shadowMap.type] ?? String(renderer.shadowMap.type), map: `${sun.shadow.mapSize.x}x${sun.shadow.mapSize.y}`, casters },
     pixelRatio: renderer.getPixelRatio(),
     deviceRatio: Math.round(devicePixelRatio * 1000) / 1000,

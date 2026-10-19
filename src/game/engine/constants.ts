@@ -24,8 +24,8 @@ export const BENCH_CARD_STYLE =
   "background:rgba(8,10,14,.92);color:#e8f0ff;font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;border-radius:8px;pointer-events:none";
 /** A bench card's button. */
 export const BENCH_BUTTON_STYLE = "margin:6px 6px 0 0;padding:6px 10px;font:inherit;border-radius:6px;border:1px solid #7ee787;background:#14301c;color:#e8f0ff";
-/** The settings the bench reads off the HUD and the HUD's reset command names (`night`, `wet`, `sky`, `realism`, `fx`), the HUD's `celLook`, and the page query `?fx=` that pins the tier: one spelling for all. */
-export const SETTING_KEY = { night: "night", wet: "wet", sky: "sky", realism: "realism", fx: "fx", celLook: "celLook" } as const;
+/** The settings the bench reads off the HUD and the HUD's reset command names (`night`, `wet`, `sky`, `realism`, `fx`), the HUD's `celLook` and look strengths (`halftone`, `hatching`, `rimLight`), and the page query `?fx=` that pins the tier: one spelling for all. */
+export const SETTING_KEY = { night: "night", wet: "wet", sky: "sky", realism: "realism", fx: "fx", celLook: "celLook", halftone: "halftone", hatching: "hatching", rimLight: "rimLight" } as const;
 /** A hit whose impulse is no more than this throws no sparks: a brush, not a crash. */
 export const SPARK_MIN_IMPULSE = 1.2;
 /** The impulse a guard's shot hit throws its spark shower at (the grind's shower for that impulse, `CrashEngine.sparkShower`: 26 sparks; guessed, by eye). */

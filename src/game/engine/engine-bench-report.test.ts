@@ -98,6 +98,9 @@ const RESULT: BenchResult = {
     post: "HDR half-float scene target, bloom (5 mips from 1/2 res, threshold 1.6, 0.45 strength), one composite pass: tone map, grade, vignette, radial blur, grain 0.03",
     fxDensity: 0.7,
     celLook: null,
+    halftone: null,
+    hatching: null,
+    rimLight: null,
     shadows: { enabled: true, type: "PCF", map: "2048x2048", casters: 223 },
     pixelRatio: 1.5,
     deviceRatio: 2.625,
@@ -189,6 +192,15 @@ describe("given the bench result of a phone running the city course (describeBen
     const waiting = describeBench({ ...RESULT, frameMs: S(6.1), gpuMs: { mean: 2.9, p50: 1.5, p95: 5.96, p99: 6.2, max: 10.6 } });
     assert.ok(waiting.some((l) => /^GPU {7}p50 1\.5 {2}p95 6\.0 {2}p99 6\.2 {2}max 10\.6 ms {3}p95 is one frame long: a wait on the display, p50 is the work$/.test(l)));
     assert.ok(lines.length <= 30, `${lines.length} lines: the card scrolls on a 412 px tall phone screen at 11 px type`);
+  });
+});
+
+describe("given the bench result of a run with the print looks and the rim light held on", () => {
+  const settingsLine = (settings: BenchResult["settings"]): string => describeBench({ ...RESULT, settings }).find((l) => l.includes("fx density"))!;
+
+  test("when none is held on, then the settings line says off for dots, hatch and rim, and when they are held, it gives each strength after the cel's", () => {
+    assert.match(settingsLine(RESULT.settings), /cel auto, dots off, hatch off, rim off {3}night/);
+    assert.match(settingsLine({ ...RESULT.settings, celLook: 0.5, halftone: 0.5, hatching: 0.4, rimLight: 0.6 }), /cel 0\.5, dots 0\.5, hatch 0\.4, rim 0\.6 {3}night/);
   });
 });
 

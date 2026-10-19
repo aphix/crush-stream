@@ -62,6 +62,10 @@ export interface BenchSettings {
   post: string;
   fxDensity: number;
   celLook: number | null;
+  /** The print looks and the people's rim light the HUD held on (0-1 strengths); null = off. The procedural sky is not here: the bench's sky pin takes it down for the run. */
+  halftone: number | null;
+  hatching: number | null;
+  rimLight: number | null;
   shadows: { enabled: boolean; type: string; map: string; casters: number };
   pixelRatio: number;
   deviceRatio: number;
@@ -388,6 +392,8 @@ export function perSecond(intervals: ArrayLike<number>, work: ArrayLike<number>,
 }
 
 const f1 = (v: number): string => v.toFixed(1);
+/** A look's strength on the card: `off` when it is not held on. */
+const strengthOf = (v: number | null): string => (v === null ? "off" : f1(v));
 const row = (label: string, s: Stat): string => `${label.padEnd(10)}p50 ${f1(s.p50)}  p95 ${f1(s.p95)}  p99 ${f1(s.p99)}  max ${f1(s.max)} ms`;
 /** The GPU timer spans the draw, so a wait inside it (the display's back buffer, another process) counts: a p95 within 15 % of a frame's length is that wait, and p50 is the work. */
 const waited = (gpu: Stat, frame: Stat): boolean => gpu.p95 >= 0.85 * frame.p50 && gpu.p95 <= 1.15 * frame.p50;
@@ -505,7 +511,7 @@ export function describeBench(r: BenchResult): string[] {
     `draw ${r.calls} calls  ${Math.round(r.triangles / 1000)}k tris   cops: ${r.cops ? `${r.cops.stakeouts} stakeouts, ${r.cops.pursuits} pursuits, pack of ${r.cops.maxPack}` : "none"}`,
     `fx tier: ${tiers}${s.fxAuto ? " (auto)" : ""}   post chain at the top tier: ${s.post}`,
     `detail: only the body drawn beyond ${Object.entries(r.detailPct).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} for ${Math.round(v)} %`).join(", ")} of the window`,
-    `shadows ${s.shadows.enabled ? `${s.shadows.type} ${s.shadows.map}, ${s.shadows.casters} casters` : "off"}   pixel ratio ${s.pixelRatio} of device ${s.deviceRatio}, canvas ${s.canvas}, ${s.antialias ? "MSAA" : "no MSAA"}   fx density ${f1(s.fxDensity)}, cel ${s.celLook === null ? "auto" : f1(s.celLook)}   night ${s.night ? "on" : "off"}, wet ${s.wet ? "on" : "off"}, realism ${f1(s.realism)}, squash ${f1(s.squash)}, buckle ${f1(s.buckle)}, deform ${s.deformMode}, sky ${s.sky} pinned by the bench (your setting ${s.skyPlayer}, put back after; ${s.skyDetail} on every tier), drawn ${windowSky(r.pageSeconds)}`,
+    `shadows ${s.shadows.enabled ? `${s.shadows.type} ${s.shadows.map}, ${s.shadows.casters} casters` : "off"}   pixel ratio ${s.pixelRatio} of device ${s.deviceRatio}, canvas ${s.canvas}, ${s.antialias ? "MSAA" : "no MSAA"}   fx density ${f1(s.fxDensity)}, cel ${s.celLook === null ? "auto" : f1(s.celLook)}, dots ${strengthOf(s.halftone)}, hatch ${strengthOf(s.hatching)}, rim ${strengthOf(s.rimLight)}   night ${s.night ? "on" : "off"}, wet ${s.wet ? "on" : "off"}, realism ${f1(s.realism)}, squash ${f1(s.squash)}, buckle ${f1(s.buckle)}, deform ${s.deformMode}, sky ${s.sky} pinned by the bench (your setting ${s.skyPlayer}, put back after; ${s.skyDetail} on every tier), drawn ${windowSky(r.pageSeconds)}`,
     `depth: ${s.depth.bits} bits (drawing buffer${s.depth.contextDepth ? "" : ", none requested"}), subpixel ${s.depth.subpixelBits} bits, fragment highp ${s.depth.fragmentHighFloat ? `${s.depth.fragmentHighFloat.precision} bits, range 2^${s.depth.fragmentHighFloat.rangeMin}..2^${s.depth.fragmentHighFloat.rangeMax}` : "not supported"}, camera near ${s.depth.near} far ${s.depth.far}, log depth ${s.depth.logarithmicDepthBuffer ? "on" : "off"}, ${describeDepthProbe(s.depth.probe)}`,
     ...(abPace && abFx && abDetail
       ? [

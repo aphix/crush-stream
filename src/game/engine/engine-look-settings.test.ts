@@ -6,6 +6,7 @@ import { isChanged, type SettingId } from "../hud/settings-changes.ts";
 import { decodeShare, encodeShare, type ShareState } from "../hud/share-url.ts";
 import { RIM_LIGHT } from "../present/rim-light.ts";
 import { SKY_DRAWN } from "../present/sky-dome.ts";
+import { settingsOf } from "./bench-measure.ts";
 import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
@@ -102,5 +103,19 @@ describe("given the real engine and the look sliders under Cel in the Playback s
     engine.setSky("auto");
     assert.equal(engine["stage"].sky.drawn, SKY_DRAWN.procedural);
     engine.resetDefaults();
+  });
+
+  it("when the dots, the hatching and the rim light are held on, then the settings a bench card records read them off the HUD, and off they read null", () => {
+    const looks = (): (number | null)[] => {
+      const s = settingsOf(engine.benchParts(), { ...hud.get() }, "high");
+      return [s.halftone, s.hatching, s.rimLight];
+    };
+    assert.deepEqual(looks(), [null, null, null], "off at the start");
+    engine.setHalftone(0.5);
+    engine.setHatching(0.4);
+    engine.setRimLight(0.6);
+    assert.deepEqual(looks(), [0.5, 0.4, 0.6], "held on");
+    engine.resetDefaults();
+    assert.deepEqual(looks(), [null, null, null], "Defaults");
   });
 });
