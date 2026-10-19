@@ -127,13 +127,17 @@ describe("given the real engine in the garage", () => {
     assert.ok(look().distanceTo(new THREE.Vector3(GARAGE.shot.lookX, GARAGE.shot.lookY, GARAGE.shot.lookZ)) < STILL, "the car's pick centres on the car's shot");
   });
 
-  it("when the wheel or a pinch zooms in, then the orbit comes in to the garage's closest, and in the fleet no closer than before", async () => {
+  it("when the wheel or a pinch zooms in, then the orbit comes in to its shot's closest, the car's or the driver's, and in a race or the fleet no closer than before", async () => {
     await enter("fleet");
     wheelIn();
-    assert.equal(radius(), GARAGE.minRadius, "the wheel");
-    engine.frameGarage("car");
+    assert.equal(radius(), GARAGE.shot.minRadius, "the wheel on the car's shot");
+    engine.frameGarage("person");
     pinchOut();
-    assert.equal(radius(), GARAGE.minRadius, "a pinch");
+    assert.equal(radius(), GARAGE.driverShot.minRadius, "a pinch on the driver's shot");
+    engine["setScene"]("race");
+    run(FRAME);
+    wheelIn();
+    assert.equal(radius(), ORBIT_RADIUS.min, "a race's wheel, straight from the driver's shot");
     engine["setScene"]("fleet");
     run(FRAME);
     wheelIn();

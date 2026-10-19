@@ -31,7 +31,7 @@ import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
-import { ChaseCamera, centroid, ORBIT_RADIUS, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
+import { ChaseCamera, centroid, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
 import { blankFreeInput, sceneExtent } from "../present/free-cam.ts";
 import { MINIGAME_AIM_LEAD } from "../present/ride-cam.ts";
 import { MINIGAME_MODE, THROW_BOOST } from "../scenes/minigame-constants.ts";
@@ -55,7 +55,6 @@ import { ReelDirector } from "./engine-highlights.ts";
 import { PodiumDirector } from "./engine-podium.ts";
 import { TrackArt } from "../present/track-art.ts";
 import { EngineGarage } from "./engine-garage.ts";
-import { GARAGE } from "../present/garage-art.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { SHOT_SPARK_IMPULSE, SMOKE_PUFF_HZ, SPARK_MIN_IMPULSE } from "./constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -906,7 +905,6 @@ export class CrashEngine extends EngineGarage {
   private aimRigs(wallDt: number): void {
     // Driving is not spectating: the free view ends where a seat takes the wheel.
     if (this.seat.mode === "drive") this.view.leaveFree();
-    this.view.minRadius = this.showGarage ? GARAGE.minRadius : ORBIT_RADIUS.min;
     if (this.highlights.playing) {
       // The reel frames its own shots: the crash cam over the hit while its window is open, then the subject's thrown driver's ride-along.
       this.reelFov ??= this.camera.fov;

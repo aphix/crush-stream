@@ -43,7 +43,7 @@ export const RIDE_PAUSE = 2.5;
 /** A pointer that travels less (px) than this is a click, not a drag. */
 const CLICK_PX = 8;
 const CURSOR_GRAB = "grab";
-/** The orbit's zoom range (m from `look`): the fleet's whole-car framing; the garage comes closer (`ChaseCamera.minRadius`). */
+/** The orbit's zoom range (m from `look`): the fleet's whole-car framing; the garage's shots come closer (`OrbitShot.minRadius`). */
 export const ORBIT_RADIUS = { min: 4.2, max: 32 } as const;
 
 /** What a canvas press can pick: the car under a screen point (-1: none), and the follow itself. */
@@ -78,8 +78,8 @@ const SHAKE_RAD_S = [2 * Math.PI * 9.1, 2 * Math.PI * 7.3, 2 * Math.PI * 5.7] as
 /** Trauma lost per wall second: a full jolt is gone in a third of a second (drawn as trauma squared, it reads as a short burst). */
 export const SHAKE_DECAY_PER_S = 3.2;
 
-/** An orbit shot (`frameReset`): look point (x and z 0 unless given), distance and pitch. The one-car rigs' is `SOLO_SHOT`. */
-type OrbitShot = { lookY: number; radius: number; pitch: number; lookX?: number; lookZ?: number };
+/** An orbit shot (`frameReset`): look point (x and z 0 unless given), distance and pitch, and how close the zoom may come (the fleet's unless given). The one-car rigs' is `SOLO_SHOT`. */
+type OrbitShot = { lookY: number; radius: number; pitch: number; lookX?: number; lookZ?: number; minRadius?: number };
 const SOLO_SHOT: OrbitShot = { lookY: 0.55, radius: 9.4, pitch: 0.44 };
 
 /**
@@ -96,7 +96,7 @@ export class ChaseCamera {
   trauma = 0;
   /** User dragged or zoomed since the last reset; cinematics stop re-aiming. */
   userFramed = false;
-  /** How close (m) the wheel, a pinch and a reset may bring the orbit's eye to `look` in this scene. */
+  /** How close (m) the wheel, a pinch and a reset may bring the orbit's eye to `look`: the last shot's (`frameReset`). */
   minRadius: number = ORBIT_RADIUS.min;
   /** Rear-view hold, set by the input poll every frame (Backquote, R3, the touch button). */
   rear = false;
@@ -260,6 +260,7 @@ export class ChaseCamera {
     this.flipped = false;
     this.orbitShift.set(0, 0, 0);
     if (this.rig === "fixed") this.rig = "orbit";
+    this.minRadius = shot.minRadius ?? ORBIT_RADIUS.min;
     if (compactor) {
       this.look.set(shot.lookX ?? 0, shot.lookY, shot.lookZ ?? 0);
       this.radius = shot.radius;
