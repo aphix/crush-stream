@@ -55,7 +55,7 @@ const _foot = new Float64Array(FOOT_SIZE);
 const _hit = new Float64Array(FF_SIZE);
 
 /**
- * The car this slice, as every solid meets it (`measure`): its body's lowest and highest points (m) and its vertical speed (`fall`, m/s), whether it was a wreck as the slice began (`wreck`), its footprint (the cage's plan
+ * The car this slice, as every solid meets it (`measure`): its body's lowest and highest points (m) and its vertical speed (`fall`, m/s), whether it was a wreck as the slice began (`wreck`), its footprint (`footprint`'s plan
  * box: the middle's offset (`cx` along right, `cz` along forward) from the origin, half width `hw`, half length `hl`, the far
  * corner's reach from the origin), how far past a solid's reach a hard-driving car is still asked about (`markApproach`), and the
  * plane of the wall piece whose hold face it was last held on (`braked`, the face's unit normal and its offset): the pieces of one
@@ -70,11 +70,42 @@ const SAME_WALL_GAP = 0.25;
 const DOOR_REACH = 0.3;
 /** The mass (kg) of a car a knocked prop's momentum share is taken against: a sedan's. */
 const KNOCK_CAR_MASS = 1400;
-/** The car as every solid meets it this slice: `_span` filled from its drawn body (`bodySpan`) and its cage's plan box. */
+/** The footprint's body-frame plan box (x min, x max, z min, z max), `planBox` grown by a wreck's masses (`footprint`). */
+const _plan = new Float64Array(4);
+
+/**
+ * `car`'s footprint into `_plan`: the drawn body's plan box and, for a wreck, its masses as a face meets them (`faceHits`: half-radius
+ * spheres; a planted hub is the world pin). The drawn body is baked from the masses as they were held a slice before, so a wreck resting
+ * with its masses on a face stood 0-6 cm short of it: slices with no wall, and a nose coasting into it at 14 m/s.
+ */
+function footprint(car: DeformableCar): void {
+  _plan.set(car.cage.fields.planBox);
+  const d = car.deform;
+  if (!d.massActive) return;
+  const pos = car.group.position;
+  const r = car.rightFlat;
+  const f = car.fwdFlat;
+  for (let i = 0; i < d.masses.length; i++) {
+    const m = d.masses[i]!;
+    if (!m.dynamic || (m.hub && !m.popped)) continue;
+    const ox = m.world.x - pos.x;
+    const oz = m.world.z - pos.z;
+    const lx = ox * r.x + oz * r.z;
+    const lz = ox * f.x + oz * f.z;
+    const h = m.radius * 0.5;
+    _plan[0] = Math.min(_plan[0]!, lx - h);
+    _plan[1] = Math.max(_plan[1]!, lx + h);
+    _plan[2] = Math.min(_plan[2]!, lz - h);
+    _plan[3] = Math.max(_plan[3]!, lz + h);
+  }
+}
+
+/** The car as every solid meets it this slice: `_span` filled from its drawn body (`bodySpan`) and its footprint (`footprint`). */
 function measure(car: DeformableCar): void {
   const v = car.velocity;
   bodySpan(car, _span);
-  const plan = car.cage.fields.planBox;
+  footprint(car);
+  const plan = _plan;
   _span.cx = (plan[0]! + plan[1]!) / 2;
   _span.cz = (plan[2]! + plan[3]!) / 2;
   _span.hw = (plan[1]! - plan[0]!) / 2;

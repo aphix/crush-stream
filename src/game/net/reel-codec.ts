@@ -253,9 +253,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 131 or before no longer reads.
  * 133: a crush sets only within `CONTACT_HOLD` of a loading contact, so a wreck's sets no longer ratchet on (set, rest shift, seat) after the face lets go. A clip of 132 or before
  * no longer reads.
+ * 134: a wreck meets a wall or solid prop with its masses' face spheres, not only its drawn body, so a wreck closing slowly into a face is held every slice instead of coasting
+ * its bumpers 0.2 m into it. A clip of 133 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 133;
+const REPLAY_VERSION = 134;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

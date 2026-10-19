@@ -16,6 +16,7 @@ import { newWorld, settleStep, stepWorld } from "./world-step.ts";
 import { STALL_S } from "../vehicle/constants.ts";
 import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
+import { COARSE, FINE, parkedPair } from "./world-step-lone.test-util.ts";
 
 /**
  * A car never ends up through a thin solid prop (Havana's alley wall: 0.44 m thick panels at a car's height, in a row), and never stays hooked
@@ -185,4 +186,52 @@ describe("given the Havana alley wall and a physics step of 1/80 s (69 cm a step
       });
     }
   }
+});
+
+/** The start's gap (m) to the near face: on the flat at the wall's foot (level from x = -28). */
+const FOOT_GAP = 11;
+
+/**
+ * A sedan driven at 40 m/s into the alley wall from `FOOT_GAP`, 3 s in 1/80 s steps (lone cars on or off; a pair parked far off cuts every
+ * step to slices): after each course pass, the deepest its masses' face spheres (`faceHits`: half radius; a planted hub is the world pin)
+ * stand past the near face (m), and the passes that left one there.
+ */
+function wreckOnWall(lone: boolean): { deepest: number; passes: number } {
+  const w = makeWorld();
+  w.race.showLobby("havana");
+  const car = makeCar("sedan");
+  const cars = [car, ...parkedPair()];
+  const world = newWorld(cars);
+  world.fine = FINE;
+  world.lone = lone;
+  const out = { deepest: 0, passes: 0 };
+  world.collide = (c, i, h) => {
+    w.race.courseHit(c, i, h);
+    if (i !== 0 || !car.deform.massActive) return;
+    let pen = 0;
+    for (const m of car.deform.masses) if (m.dynamic && !(m.hub && !m.popped)) pen = Math.max(pen, NEAR - (m.world.x - m.radius * 0.5));
+    if (pen > 0) out.passes++;
+    out.deepest = Math.max(out.deepest, pen);
+  };
+  car.spawnFacing(NEAR + FOOT_GAP, 12, -Math.PI / 2, 40);
+  car.velocity.set(-40, 0, 0);
+  const input: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
+  for (let s = 0; s < 3 * QUIET_HZ; s++) {
+    applyDrive(car, input, COARSE);
+    stepWorld(world, COARSE);
+    settleStep(cars, COARSE, false);
+  }
+  for (const c of cars) c.dispose();
+  return out;
+}
+
+describe("given the Havana alley wall and a sedan driven into it at 40 m/s from the flat at its foot, its wreck left resting on the face", () => {
+  it("when it runs lone and when it runs sliced, then every course pass leaves its masses' face spheres out of the wall: the wall meets the wreck's masses, not only its drawn body", () => {
+    const left: string[] = [];
+    for (const lone of [true, false]) {
+      const r = wreckOnWall(lone);
+      if (r.passes > 0) left.push(`${lone ? "lone" : "sliced"}: ${r.passes} passes, deepest ${r.deepest.toExponential(3)} m`);
+    }
+    assert.deepEqual(left, [], "spheres left in the face");
+  });
 });
