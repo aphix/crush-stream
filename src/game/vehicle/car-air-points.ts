@@ -443,6 +443,12 @@ export function worldWheels(car: DeformableCar, mask: number): number {
   return n;
 }
 
+/** Whether tyre `i` of wreck `car` stands on the top of another wreck (`wheelHit`, `cars` the surfaces' cars): a wreck takes no support from one, so the rigid step takes no row from it and the drawn ride seats no wheel on it. */
+export function onWreckTop(car: DeformableCar, cars: readonly DeformableCar[], i: number): boolean {
+  const own = car.wheelHit[i * HIT_SIZE + C_OWNER]!;
+  return own >= 0 && car.deform.massActive && cars[own]!.deform.massActive;
+}
+
 /**
  * The rate (Hz) at which `stepWorld` splits a step on `car`'s account, 0 for its own slice: a body holding a hard contact or about to
  * (`hardTouch`: a hull point or belly in a surface or reaching one, a tyre at its spring stop or taking a landing), a face yielding under

@@ -141,7 +141,10 @@ monster quickest, truck slowest off the line). Time to top is the law's.
 
 **Drawn suspension** (`car-suspension.ts` `Suspension`): one spring and damper per wheel moves only the drawn body (heave,
 pitch, roll) and seats each drawn wheel on the ground under its tread. Hulls, masses, contacts, wheels, grip, flight and
-landings never read it, so the sim and its digests are the same with or without it. `car-load.ts` `LoadTransfer` adds the
+landings never read it, so the sim and its digests are the same with or without it. It seats a wheel only on what the
+rigid step takes a tyre row from: a wreck's tyre on another wreck's top (`onWreckTop`) is neither held nor drawn there.
+Two packed noses at the same ride height swap which one's tyres read the other's top on micrometres of height, and the
+drawn noses flicked 12-19 cm up and down with them. `car-load.ts` `LoadTransfer` adds the
 squat, dive and roll of the ground pose's acceleration, capped per class. It also kicks the pitch at each gear change of the
 gauge's gear (`carGear`, a change of the speed's bucket while the wheels are down, not on a spawn or a landing, not within 0.25 s of the last):
 a 4 Hz ring, 0.45° of body pitch at the most for an upshift (0.6 of that for a downshift), the nose dipping first, gone in 0.6 s

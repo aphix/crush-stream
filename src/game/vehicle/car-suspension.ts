@@ -225,8 +225,9 @@ export class Suspension {
    * `free` false (a crash) puts the body back on its stock ride, then eases it down onto the corners of the wheels it has lost
    * (`gone`, bit i: `WHEEL_POS` i; `sagOffsets`; snapped at dt 0); the wheels are then the wreck's (`nudgeWheels` puts them on their
    * hubs). A `wreck` (its masses carry it) stands on the ground through its own cage (`stepFree`'s belly rows read the cage's bottom): the drawn body is that cage, so nothing bottoms out.
+   * A wheel in `unheld` (bit i) stands on what the rigid step takes no row from (`onWreckTop`): it is not seated there either.
    */
-  step(group: THREE.Object3D, wheels: readonly THREE.Object3D[], cls: VehicleClassId, lift: number, free: boolean, air: boolean, gone: number, hit: Float64Array, dt: number, wreck = false, slide = 0, spinSpeed = 0): void {
+  step(group: THREE.Object3D, wheels: readonly THREE.Object3D[], cls: VehicleClassId, lift: number, free: boolean, air: boolean, gone: number, unheld: number, hit: Float64Array, dt: number, wreck = false, slide = 0, spinSpeed = 0): void {
     if (this.body === undefined) this.body = group.getObjectByName(CLASS_LIFT) ?? null;
     if (!free) {
       if (this.riding) {
@@ -259,7 +260,7 @@ export class Suspension {
     const off = this.offset;
     const sunk = this.rise > 0 || off[0]! < 0 || off[1]! < 0 || off[2]! < 0 || off[3]! < 0;
     const bottom = wreck || (air && !sunk) ? 0 : this.bottomOut(e, lift);
-    if (this.seatWheels(e, hit, wheels, stop, room, air, gone, dt) || moved || bottom !== this.rise || lift !== this.posedLift) {
+    if (this.seatWheels(e, hit, wheels, stop, room, air, gone, unheld, dt) || moved || bottom !== this.rise || lift !== this.posedLift) {
       this.rise = bottom;
       this.pose(lift);
     }
@@ -288,16 +289,17 @@ export class Suspension {
    * Each drawn wheel onto the surface under its tread (`seat`: its footprint's rise, `wheelContact`); off the ground back onto its hub.
    * A wheel hangs down to its droop (`stop`, half the travel) below its rest ride on the physics frame, as far as the physics tyre
    * reaches; up into its arch it stops `room` (`archStop`) above the body's ride there and lifts
-   * that corner of the body beyond. A wheel in `gone` is a world object of its own (`stepLoose`): not seated. True when it lifted one.
+   * that corner of the body beyond. A wheel in `gone` is a world object of its own (`stepLoose`): not seated. One in `unheld` eases back onto its
+   * hub, as off the ground. True when it lifted one.
    */
-  private seatWheels(e: readonly number[], hit: Float64Array, wheels: readonly THREE.Object3D[], stop: number, room: number, air: boolean, gone: number, dt: number): boolean {
+  private seatWheels(e: readonly number[], hit: Float64Array, wheels: readonly THREE.Object3D[], stop: number, room: number, air: boolean, gone: number, unheld: number, dt: number): boolean {
     const uy = e[5]!;
     let lifted = false;
     for (let i = 0; i < 4; i++) {
       if ((gone >> i) & 1) continue;
       const w = wheels[i]!;
       let s = this.seat[i]! * Math.exp(-UNSEAT * dt);
-      if (!air && uy > UPRIGHT_UP_Y) {
+      if (!air && uy > UPRIGHT_UP_Y && ((unheld >> i) & 1) === 0) {
         // The lift that puts the tread on the surface: the wheel's footprint rise (`wheelContact`, the hub on its rest ride on the
         // physics pose). The hub's height picks the surface's layer.
         const need = hit[i * HIT_SIZE + C_H]!;

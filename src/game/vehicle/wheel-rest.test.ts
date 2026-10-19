@@ -165,7 +165,7 @@ describe("given a wreck's suspension that loses its front-left wheel and then it
     g.updateMatrixWorld(true);
     const hit = new Float64Array(4 * HIT_SIZE);
     for (const gone of [1, 3]) {
-      for (let i = 0; i < 600; i++) s.step(g, [], "sedan", 0, false, false, gone, hit, DT);
+      for (let i = 0; i < 600; i++) s.step(g, [], "sedan", 0, false, false, gone, 0, hit, DT);
       const want = new Float64Array(4);
       sagOffsets(0, droop("sedan"), gone, want);
       assertSameNumbers(s.offset, want, `wheels gone ${gone}`, 1e-4);

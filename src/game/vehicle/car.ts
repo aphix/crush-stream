@@ -9,7 +9,7 @@ import { CarParts } from "./car-parts.ts";
 import { END_WINDOW, type PartNetState, REARM_QUIET_S } from "./car-core.ts";
 import { COM_Y, REST_SPEED } from "./car-air-body.ts";
 import { FLIGHT_BORNE, FLIGHT_CONTACT, FLIGHT_DOWN, FLIGHT_DRIFT, FLIGHT_END_AGO, FLIGHT_END_REACH, FLIGHT_END_SQUEEZE, FLIGHT_EULER, FLIGHT_INV_YAW, FLIGHT_POSITION, FLIGHT_QUATERNION, FLIGHT_RAMPS, FLIGHT_REST, FLIGHT_SLEEP, FLIGHT_SPIN, FLIGHT_STALL, FLIGHT_VELOCITY, FLIGHT_WHEEL_RATE, FLIGHT_WHEEL_SPIN } from "./car-flight.ts";
-import { readContact } from "./car-air-points.ts";
+import { onWreckTop, readContact } from "./car-air-points.ts";
 import { stepFree, wreckCentre, wreckInvI } from "./car-air.ts";
 import { bodyLift, Suspension, UPRIGHT_UP_Y, tyresUnderSkin } from "./car-suspension.ts";
 import { C_GRIP, C_NY, C_OWNER, HIT_SIZE, stirNear } from "../world/surfaces.ts";
@@ -855,8 +855,13 @@ export class DeformableCar extends CarParts {
     const air = this.airborne || upY < UPRIGHT_UP_Y;
     const lift = bodyLift(CLASSES[cls].lift, upY);
     let gone = 0;
-    for (let i = 0; i < 4; i++) if (this.looseWheels[i]!.loose) gone |= 1 << i;
-    this.suspension.step(this.group, this.wheels, cls, lift, !this.crashed || this.deform.massActive, air, gone, this.wheelHit, dt, this.deform.massActive, this.drive.slide, this.drive.spinSpeed);
+    let unheld = 0;
+    const cars = this.surfaces?.cars;
+    for (let i = 0; i < 4; i++) {
+      if (this.looseWheels[i]!.loose) gone |= 1 << i;
+      if (cars !== undefined && onWreckTop(this, cars, i)) unheld |= 1 << i;
+    }
+    this.suspension.step(this.group, this.wheels, cls, lift, !this.crashed || this.deform.massActive, air, gone, unheld, this.wheelHit, dt, this.deform.massActive, this.drive.slide, this.drive.spinSpeed);
   }
 
   /** The class body the ride moves (`null` for a car with no class), found once. */
