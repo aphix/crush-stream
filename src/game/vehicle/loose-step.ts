@@ -94,9 +94,8 @@ function growBox(o: THREE.Object3D, m: THREE.Matrix4): void {
 }
 
 /**
- * `shape` as `object`'s box in its own frame, as drawn: its eight corners and twelve edge middles about the box's middle, and the inverse
- * inertia per unit mass of a solid box that size (a hood is a sheet: its spin about its own length is as easy as its tilt). Measured once
- * per part, when it first flies (`stepLoose`), and again when it has been put back on its car (`count` 0).
+ * `shape` as `object`'s box in its own frame, as drawn (`halfBox`). Measured once per part, when it first flies (`stepLoose`), and again
+ * when it has been put back on its car (`count` 0). Its drawn shape changes after (a crushed arch), so a keyframe carries the box.
  */
 export function boxShape(shape: LooseShape, object: THREE.Object3D): void {
   _box.makeEmpty();
@@ -104,9 +103,14 @@ export function boxShape(shape: LooseShape, object: THREE.Object3D): void {
   if (_box.isEmpty()) _box.set(_size.set(-MIN_HALF, -MIN_HALF, -MIN_HALF), _geoBox.max.set(MIN_HALF, MIN_HALF, MIN_HALF));
   _box.getCenter(shape.centre);
   _box.getSize(_size).multiplyScalar(0.5);
-  const hx = Math.max(MIN_HALF, _size.x);
-  const hy = Math.max(MIN_HALF, _size.y);
-  const hz = Math.max(MIN_HALF, _size.z);
+  halfBox(shape, Math.max(MIN_HALF, _size.x), Math.max(MIN_HALF, _size.y), Math.max(MIN_HALF, _size.z));
+}
+
+/** Index in a box shape's `points` of its last corner, (+hx, +hy, +hz): its half extents. */
+export const BOX_HALVES = 7 * 3;
+
+/** `shape` as a box of half extents `hx`, `hy`, `hz` about its `centre`: its eight corners and twelve edge middles, and the inverse inertia per unit mass of a solid box that size (a hood is a sheet: its spin about its own length is as easy as its tilt). */
+export function halfBox(shape: LooseShape, hx: number, hy: number, hz: number): void {
   // The eight corners, then the middle of each of the twelve edges (a part across a roof's ridge rests on the ridge, not on its corners).
   for (let c = 0; c < 8; c++) {
     shape.points[c * 3] = c & 1 ? hx : -hx;
