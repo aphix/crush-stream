@@ -249,7 +249,7 @@ describe("given the Konami code typed on the National Mall, the VIP riding with 
     };
     sim.restart();
     while (sim.step <= clip.ejections[0]!.step) sim.advanceTo(sim.time + 1e-6);
-    new ReelDirector(host)["launch"]({ id: 1, from: "reel", clip, sim, tl: clipTimeline(clip.firstImpact, sim.length, [], []), shots: [], beat: 0 });
+    new ReelDirector(host)["launch"]({ id: 1, from: "reel", clip, sim, tl: clipTimeline(clip.firstImpact, sim.length, [], []), shots: [] });
     assert.deepEqual(calls, ["eject 0", "eject 1", "passenger 0"]);
   });
 });

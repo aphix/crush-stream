@@ -117,7 +117,7 @@ output needs nothing else; keyframes carry `driverOut` in the snapshot flags.
 
 `ClipSim` fires each ejection after its step ran (`take()` hands them out with `car` the engine slot), sets `driverOut`, and
 the reel launches the dummy from the recorded numbers (`ReelHost.eject`); every driver thrown in the clip's scope (`ClipEjection.own`, above) gets the ride-along
-camera (`ReelDirector.aim`), once the crash cam's window and the clip's last impact beat are over (below) and over the clip's shots from then, until every dummy lies still. The ride frames only those drivers (`launch`'s `rides`): another crash's driver thrown faster elsewhere in the clip (a cop wrecking 120 m off) never pulls it away. Two replays of one clip fly the dummy along exactly
+camera (`ReelDirector.aim`), once the crash cam's window is over (below; every later hit of the clip lies inside it) and over the clip's shots from then, until every dummy lies still. The ride frames only those drivers (`launch`'s `rides`): another crash's driver thrown faster elsewhere in the clip (a cop wrecking 120 m off) never pulls it away. Two replays of one clip fly the dummy along exactly
 the same path (`race-eject-reel.test.ts`); the live dummy and the replay's start from the same point (0 m) but part once
 they bounce off replayed cars (a free flight stayed within 0.9 m of the live one over 4 s, one that hit the oncoming car
 did not): the launch falls on another frame boundary (up to 1/60 s) and the replayed cars are cm to dm off the live ones.
@@ -283,7 +283,7 @@ the shot. A peer at 45 Hz and one at 60 Hz therefore frame the same camera at th
   played its later hits at 0.69× and 0.77× in a 14.8 s clip; they play at 0.032× now, in 30.1 s. A one-hit clip's timeline is
   unchanged to the bit (`clip-timeline.test.ts`), so the bench's scripted head-on (one hit on each bench course, 14.9-15.4 s)
   replays as it did. The reel mirrors it into the engine's
-  clock, the clip's hold too (`PhaseClock.hold`: the first slow-mo's, which the crash cam's window follows), so the letterbox,
+  clock, the clip's hold too (`PhaseClock.hold`: to the last slow-mo's hand-back, which the crash cam's window follows), so the letterbox,
   the HUD and the crash cam behave as in a live crash.
   A race that ends as a driver is thrown (Survival's run-ending throw) would leave his clip no hold, so at "over" the
   recorder runs on (`CrashRecorder.over`) until `THROW_HOLD_SIM` (7.3 × 0.032 = 0.23 s of race) past the last throw,
@@ -317,32 +317,31 @@ Each clip's shots come from `mulberry32(seed ^ clip)`, so the same seed gives th
 2. a run-in about a second before the hit;
 3. the aftermath, once the crash cam hands back (`crashCamEnd` of the clip's hold).
 
-**Camera lookahead.** The clip lists the impacts of its scope (`HighlightClip.hits`: when, where, between which cars). A
-hit that comes after the crash cam has handed back gets a *context shot* cut in `CONTEXT_LEAD` (0.8 s) ahead of it, or in
-the aftermath's place: a fixed eye over the hit and the one before it (`present/highlight-cam.ts` `contextEye`), so the
-viewer keeps the place. The eye is fitted in world space to the narrowest screen the reel plays on (0.44 wide over high:
-what `coverLens` leaves a phone held upright under its bottom sheet), so it shows both points inside 0.6 of the frame on
-every screen at least that wide, which puts them in the part of the view the panels leave free, and every peer picks the
-same eye. Its lens is its own: the widest up to 55° that keeps both points a car's size (2 m at least 1/14 of the frame's
-height) and in frame. The eyes are tried nearest first (the midpoint's 15° turns from a seeded one, 14 to 26 m out low,
-8 to 14 m out at 25 m for a street of buildings; then, for two points further apart than a narrow screen is wide, along
-their own line from behind either one, 30 to 60 m out near the ground, the narrower lens seeing the nearer point big and
-the far one in the same frame; last, 36 to 60 m out level with the points, for a pair on a deck 45 m apart, where from 3 m over
-it the nearer point sits too far below the lens axis to be car-sized in the frame the farther one needs), each with a clear line to both over the course's static solids. Where no eye works, the
-aftermath shot stays. The judge (`reel-view.test.ts`) checks every impact point of every clip at its own time on three
-screens (desktop beside its panels, a phone on its side and upright), and the earlier one still in frame when the camera
-changed between two hits.
+**Every crash on the crash cam** (owner 2026-10-19: "continue through the subsequent crashes with their camera angles, then
+once crash moments are done with, the camera follows the ejected person"). The clip lists the impacts of its scope
+(`HighlightClip.hits`: when, where, between which cars). Each holds a slow-mo `CONTACT_HOLD` past itself and the timeline's
+hold runs to the last slow-mo's hand-back (`clipTimeline`), so every later hit lands at least 5.9 wall s before the crash
+cam's window ends (`crashCamEnd(hold)`) and plays on the crash cam; the ride-along waits for the window. C04P-2WMS (hits 1-3
+at wall 3.75, 13.95, 20.07 s): the crash cam handed back at 9.92 s and hits 2 and 3 played on a context shot; now the crash
+cam holds 3.12-26.12 s. The context shot (a fixed eye over a hit after the hand-back and the one before it) had no hit left
+and is gone. The judge (`reel-view.test.ts`) checks every impact point of every clip at its own time on three screens
+(desktop beside its panels, a phone on its side and upright), and the earlier one still in frame when the camera changed
+between two hits (a later crash's own axis is such a change).
 
 The crash cam begins before its car reaches the hit (the first cut's pick runs over the lead-in), so it is aimed at the recorded
 point's height (`ClipHit.y` of the first hit), not at the first car's height as the sim has it then: a wall hit on a kicker 9 m
 up was aimed at the ground under it (the hit at ndc 5.2, out of the frame).
 
-A hit that comes *inside* the crash cam's window (the cuts from `CUTS[0]` to `crashCamEnd`: the car keeps being hit while
-the held cam stands on it) is looked at by the held cam itself (`ReelDirector.lookahead` → `CrashHold.later`): its aim
-turns to the impact `HIT_LEAD` (0.75 s) before it lands and stays `HIT_KEEP` (0.3 s) after, and `heldCut` picks the cut
-whose eye has room and sees the car and every impact still to come, falling back to the cuts that see the car alone when
-none sees them all. A driver thrown in the clip's scope is one more such beat, aimed at his torso as he leaves the pane
-(owner 10-06: the throw is visible from the camera at the moment it happens; the ride-along no longer takes it).
+A hit inside the crash cam's window (the car keeps being hit while the held cam stands on it) is looked at by the held cam
+itself (`ReelDirector.lookahead` → `CrashHold.later`): its aim turns to the impact `HIT_LEAD` (0.75 s) before it lands and
+stays `HIT_KEEP` (0.3 s) after, and `heldCut` picks the cut whose eye has room and sees the car and every impact still to
+come, falling back to the cuts that see the car alone when none sees them all. A later crash also gets its own axis where
+the place can be kept (`CrashCam.retarget`): as its look begins a `CrashPick` runs on its point at `PICK_RATE`, the turns
+with a cut that keeps the impact before it in frame first, and the cam moves onto it only on such a cut (`heldCut`'s
+`strict`); otherwise it stays on its axis turning to it. C04P's hit 2 is 20.7 m from hit 1 and no cut round it keeps hit 1
+in frame, so it stays on hit 1's crane. A driver thrown in the clip's scope is one more such beat (`LaterHits.thrown`: it
+keeps the axis), aimed at his torso as he leaves the pane (owner 10-06: the throw is visible from the camera at the moment
+it happens; the ride-along no longer takes it).
 The held cam's lens opens past its cut's own to keep every beat of the moment in the frame of the narrowest screen (`fovFor`, never past `WIDEN_MAX` 70°), eased like the aim, except on the first frame of a held cut: a cut change (`heldCut` moved the shot, say crane to long lens as two drivers are thrown) is a new eye with a new own lens, so the opening is taken whole there (`CrashCam.widenCut`), not eased up from the last cut's. Eased, the long lens (21°) stood at 26° on the frame the throw came and one of two drivers thrown 3.2 m apart sat at NDC 0.81 on the phone-portrait layout (margin 0.8); now 36° there, in frame.
 
 A shot is one of: chase (behind the car along its travel), trackside cinematic (`CineCam.pick`, searched in full when
@@ -358,7 +357,7 @@ sandbox (lamp posts, barrier, balls: `sceneSight`), it stands on the ground at t
 hit, reversed, the quarter turns) to the one whose three cut eyes see the hit from furthest out, pulling an eye in toward
 the hit (no closer than 3 m) when a wall is in the way. A cut with no usable eye is left to the chase / reel camera.
 
-**Cars and the crash cam's eye** (owner 10-10: the camera shouldn't spawn inside a car or with a car between it and the impact point; cars above or below are fine). Each car is its tight box, `CAR_HALF`'s footprint turned with its flat heading, from the ground under it to its roof (`withCars` puts them in `Sight.cars`). `carsBlock` (called where `Sight` is consulted, in `SightLines.begin` for every `camUsable` and in `contextEye`, not per cut) rejects an eye inside a box (grown by `CLEAR.pad` all round) or with a box on its straight line to the point it films (up to `CINE.stop` short of it: the hit's own cars touch the point). The line is clipped to the box's footprint and height, so a car over or under the line is no wall. Inputs are the cars' poses when the pick is made and the course: the reel's crash cam (`ReelHost.crash`) and the sandbox's (`beginCinematic`; both through `crashSight` in `engine-core.ts`) are picked against the cars as they stand at the hit; a context shot is picked again as it cuts in (`ReelDirector.frameShot`: its eye was only fitted to the course when the shot list was made, the clip not yet run), and where no eye is clear of the cars the shot it replaced (or the one before it) stays. The held cut's re-asks (`heldCut`) already have every car but the focus as cylinders. Pinned in `present/engine-cine.test.ts`.
+**Cars and the crash cam's eye** (owner 10-10: the camera shouldn't spawn inside a car or with a car between it and the impact point; cars above or below are fine). Each car is its tight box, `CAR_HALF`'s footprint turned with its flat heading, from the ground under it to its roof (`withCars` puts them in `Sight.cars`). `carsBlock` (called where `Sight` is consulted, in `SightLines.begin` for every `camUsable`, not per cut) rejects an eye inside a box (grown by `CLEAR.pad` all round) or with a box on its straight line to the point it films (up to `CINE.stop` short of it: the hit's own cars touch the point). The line is clipped to the box's footprint and height, so a car over or under the line is no wall. Inputs are the cars' poses when the pick is made and the course: the reel's crash cam (`ReelHost.crash`) and the sandbox's (`beginCinematic`; both through `crashSight` in `engine-core.ts`) are picked against the cars as they stand at the hit, a later crash's axis (`CrashCam.retarget`) against them as its look begins. The held cut's re-asks (`heldCut`) already have every car but the focus as cylinders. Pinned in `present/engine-cine.test.ts`.
 
 An eye counts as usable only if it passes `camUsable` at 9 times from its cut's start to its end (`CUT_SAMPLES`): the eye
 pans (long lens), creeps (bumper) and turns (crane) through its cut, and a pick made at the middle alone let eyes drift
@@ -380,7 +379,7 @@ Before that check, a wall hit filmed the back of the wall: 86–178 of each cour
 (`engine-cine.test.ts`) put an eye behind it; after it, every cut has an eye on oval and city, and 14 of 186 (rally) and
 55 of 272 (stunt, tight walls) wall spots have a cut left to the chase.
 
-In a reel the crash cam keeps ONE cut for its whole window (`CUTS[0]` to `crashCamEnd(hold)`: 1.3 s after the hit to as
+In a reel the crash cam keeps ONE cut per crash over its window (`CUTS[0]` to `crashCamEnd(hold)`: 1.3 s after the hit to as
 long before the clip's slow-mo hands back as the sandbox's 6.1 s is before its 6.5 s hold, its cut times stretched evenly
 over it), not the
 sandbox's bumper, crane and long-lens cuts: `heldCut` picks the crane (else the long lens, else the bumper cam) whose eye
@@ -389,13 +388,13 @@ has `CLEAR.radius` m of room and sight of the car (`camUsable`), keeps its eye w
 building or a car in the way), and keeps its cut when none is usable that sees the car (the shot stays on the crash: handing those frames to the chase
 camera cut away from a pile-up's later impacts, owner 2026-10-10); only when no cut has an eye at all does the reel camera keep the shot. Camera changes from the hit
 to 7 s after, in the browser at 60 and 240 Hz: 4 before (bumper, crane, long lens, hand-back), 2 after (take-over,
-hand-back). The sandbox crash cam still cuts three times. A hit inside the window never re-picks (the reel calls
-`impact` once a pass).
+hand-back). The sandbox crash cam still cuts three times; a later crash of a Fleet run while it cuts, once its crash's first
+cut has played, starts the three cuts over on its own axis (`CrashCam.recut`, [`CINEMATIC.md`](CINEMATIC.md)).
 
 **The ride-along waits for the crash shots** (owner 2026-10-10: "stick on the crashes a bit longer before going to a flying
 ragdoll"). `ReelDirector.aim` runs the crash cam first; a thrown driver's ride-along takes the camera only when the crash
-cam's window has closed (`CrashCam.holding`) and the clip's last impact beat has played (`Prepared.beat`: the last impact of
-the scope plus `HIT_KEEP`). It took over at the throw, 0.75 s after the cars met, before the first cut had played, since 10-03
+cam's window has closed (`CrashCam.holding`, or with the crash cam off its timeline end `crashCamEnd(hold)`, which every later
+hit lies inside). It took over at the throw, 0.75 s after the cars met, before the first cut had played, since 10-03
 (`c935d49f`). The live sandbox's `aimRigs` does the same: the crash cam's cuts first, then the ride (the range's own
 dummy cam rides at once). `reel-crash-beats.test.ts` pins both: no ride frame inside the window, every later impact of the
 window on the crash cam, no frame of the window on another camera.

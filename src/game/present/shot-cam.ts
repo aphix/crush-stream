@@ -2,7 +2,6 @@ import { hypot2 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { CINE, CLEAR_COST, CineCam, DUTCH, DutchCam, EyePull, SightLines, sightLine, solid, type Sight } from "./spectate-cam.ts";
-import { SHOT_FOV } from "./constants.ts";
 
 /**
  * The shot director both the results reel (`ReelDirector`, from clip time) and the Auto spectator cam (`AutoCam`, live)
@@ -32,8 +31,8 @@ const SHOT_RANGE = 90;
 const SHOT_AHEAD = 2;
 /** The dutch cam's wheel mounts (four wells, looking forward and back). */
 const DUTCH_MOUNTS = 8;
-/** The chase shot: behind the car along its travel, this far (m) and this high, looking this far (m) ahead of it. */
-const CHASE = { back: 8, up: 2.8, look: 3, fov: SHOT_FOV };
+/** The chase shot: behind the car along its travel, this far (m) and this high, looking this far (m) ahead of it, through the director's standard lens (deg). */
+const CHASE = { back: 8, up: 2.8, look: 3, fov: 55 };
 /** The chase heading (`foldHeading`) is low-passed over this many seconds. */
 const HEADING_TAU = 0.3;
 

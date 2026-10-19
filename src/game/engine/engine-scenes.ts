@@ -705,12 +705,14 @@ export abstract class EngineScenes extends EngineMinigames {
   /** Each car pair's last contact (sim s): a fleet contact is a crash of its own only as the recorder counts one (`countsAsImpact`). */
   private readonly pairAt = new Float64Array(MAX_CARS * MAX_CARS).fill(-Infinity);
 
-  /** A fleet pair's contact closing at `closing` m/s: a crash after the run's first drops the slow-mo again, or holds it on (`laterImpact`). */
-  protected fleetHit(a: number, b: number, closing: number): void {
+  /** A fleet pair's contact: a crash after the run's first drops the slow-mo again, or holds it on (`laterImpact`), and takes its own crash cam cut. */
+  protected fleetHit(a: number, b: number, hit: ContactHit): void {
     const k = a * MAX_CARS + b;
-    const counts = countsAsImpact(this.elapsedSim - this.pairAt[k]!, closing);
+    const counts = countsAsImpact(this.elapsedSim - this.pairAt[k]!, hit.impulse);
     this.pairAt[k] = this.elapsedSim;
-    if (counts && this.autoSlomo && struck(this.clock)) laterImpact(this.clock, SLOMO_HOLD);
+    if (!counts || !this.autoSlomo || !struck(this.clock)) return;
+    laterImpact(this.clock, SLOMO_HOLD);
+    this.cine.recutCrashCam(hit.contact, hit.normal, this.crashSight(), this.clock.hold - this.clock.wallSinceImpact);
   }
 
   /** A derby car's footprint against the arena's prisms: the wall, the containers, the rails, the pads and the tyre berms (`derbyGround.contact`); the rises are the ground itself. */

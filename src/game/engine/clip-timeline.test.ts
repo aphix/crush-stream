@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { CONTACT_HOLD, impactScale, phaseClock, PRE_IMPACT_LEAD } from "../match/phase.ts";
 import { clipTimeline, simAt } from "./engine-highlights.ts";
-import { CUTS } from "../present/engine-cine.ts";
+import { crashCamEnd, CUTS } from "../present/engine-cine.ts";
 import { TIMELINE_HZ } from "./constants.ts";
 
 /** Canary: the time scale just before the cars meet, in multiples of the slow-mo's own scale; the ease is meant to have arrived (the exact rate lands within 1.2×, the timeline's step quantization costs a little more). */
@@ -79,5 +79,16 @@ describe("given the highlight reel timeline of a pile-up whose hits land at 3.31
     const third = stepAt(tl, hits[2]!);
     const back = tl.phase.indexOf("aftermath", third);
     assert.ok(Math.abs((back - third) / TIMELINE_HZ - CONTACT_HOLD) <= 2 / TIMELINE_HZ, `handed back ${((back - third) / TIMELINE_HZ).toFixed(3)} wall s after the third hit`);
+  });
+
+  it("when it plays, then the crash cam's window runs to the last slow-mo's hand-back, so the later hits get its framing before the ride-along", () => {
+    const back = tl.phase.indexOf("aftermath", stepAt(tl, hits[2]!));
+    assert.ok(Math.abs(tl.impact + tl.hold - back / TIMELINE_HZ) < 1e-9, `the window's hold ends at ${(tl.impact + tl.hold).toFixed(3)} wall s, the last hand-back is at ${(back / TIMELINE_HZ).toFixed(3)} s`);
+    const end = tl.impact + crashCamEnd(tl.hold);
+    const walls = hits.slice(1).map((t) => stepAt(tl, t) / TIMELINE_HZ);
+    assert.ok(
+      walls.every((w) => w < end),
+      `later hits at wall ${walls.map((w) => w.toFixed(2)).join(" / ")} s, the crash cam hands back at ${end.toFixed(2)} s`,
+    );
   });
 });

@@ -223,9 +223,10 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
       if (k < 0 || !cur) continue;
       const sim = cur.sim;
       const shot = cur.shots[Math.max(0, reel["shot"])]!;
-      const rig = rode ? "ride" : cut ? "crash" : reel["flying"] ? "flight" : shot.ctx ? "shot:context" : `shot:${shot.kind === "chase" || reel["shotCam"].found ? shot.kind : "chase"}`;
+      const rig = rode ? "ride" : cut ? "crash" : reel["flying"] ? "flight" : `shot:${shot.kind === "chase" || reel["shotCam"].found ? shot.kind : "chase"}`;
       trace?.push({ clip: i, wall: k * FRAME, at: sim.time, rig, hold: clock.hold });
-      const cam = `${rig}|${reel["shot"]}|${crash["held"]}`;
+      // A crash-cam cut is its held eye on its axis: a later crash moves the axis onto itself (`CrashCam.retarget`).
+      const cam = `${rig}|${reel["shot"]}|${crash["held"]}|${crash["camAt"].x.toFixed(1)},${crash["camAt"].z.toFixed(1)}`;
       const view = (kind: MomentKind, at: number, p: THREE.Vector3, car: number): MomentView => ({ scene, title, kind, at, hitAt: clip.firstImpact, rig, x: p.x, y: p.y, z: p.z, ...judge(camera, s, p, screen), cam, back: null, hold: holdAfter(tl, at), wall: (stepOf(tl, at) * wall) / (tl.sim.length - 1), end: wall, fov: camera.fov, note: `${car === clip.focus ? "subject" : "other car"}, hit at ${clip.firstImpact.toFixed(2)} s, eye ${camera.position.toArray().map((v) => v.toFixed(1))}` });
       for (const m of moments) {
         if (m.at > sim.time + 1e-9 || m.at < 0) continue;
@@ -234,7 +235,7 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
         if (m.kind === "impact" || m.kind === "hit") {
           if (m.kind === "hit" && last) {
             const j = judge(camera, s, last.p, screen);
-            // The context shot is fitted to keep both points inside `VIEW.margin`; the held crash cam keeps the place only when a cut sees the car, the earlier point and the later one (`heldCut`), else a lens that sees the car alone, so it is judged at the frame's edge.
+            // The held crash cam keeps the place only when a cut sees the car, the earlier point and the later one (`heldCut`), else a lens that sees the car alone, so it is judged at the frame's edge.
             const edge = rig === "crash" ? 1 : VIEW.margin;
             v.back = { cut: cam !== last.cam, inFrame: j.front && Math.abs(j.ndcX) <= edge && Math.abs(j.ndcY) <= edge && !j.covered, ndcX: j.ndcX, ndcY: j.ndcY };
           }

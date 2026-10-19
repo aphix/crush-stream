@@ -1,7 +1,5 @@
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import type * as THREE from "three";
-import { carsBlock, sightLine, solid, type Sight } from "./spectate-cam.ts";
-import { SHOT_FOV } from "./constants.ts";
 
 /** The reel's far-overhead flight between clips (docs/HIGHLIGHTS.md). */
 const OVERHEAD = {
@@ -40,48 +38,15 @@ export function overheadPose(camera: THREE.PerspectiveCamera, ax: number, az: nu
   }
 }
 
-/**
- * The context shot (docs/HIGHLIGHTS.md "Camera lookahead"): a fixed eye that keeps two impact points of a clip in frame,
- * for the hit that comes after the crash cam has handed back. It is fitted in world space, from the course's solids and
- * the narrowest screen the reel plays on, so every peer picks the same eye whatever its screen.
- */
-const CONTEXT = {
-  /** The widest lens (deg); an eye's own lens is the widest up to this that still shows both points car-sized. */
-  fov: SHOT_FOV,
+/** The frame a point of the reel's moment must sit in (`inFrame`, `fovFor`), on every screen the reel plays on. */
+const FIT = {
   /**
-   * The narrowest screen (width over height) the points are fitted to: what the reel's lens (`coverLens`) frames in the part of
-   * the view the panels leave free, a phone upright under its bottom sheet (0.446 in the judge's layouts). Any wider screen
-   * (a desktop beside its panels, a phone on its side) shows the same eye's points nearer its middle.
+   * The narrowest screen (width over height): what the reel's lens (`coverLens`) frames in the part of the view the panels
+   * leave free, a phone upright under its bottom sheet (0.446 in the judge's layouts). Any wider screen shows the point nearer its middle.
    */
   aspect: 0.44,
   /** Each point lies within this share of the frame's half-extent from its middle (the reel's frame margin is 0.8, a panel takes some). */
   fit: 0.6,
-  /** A 2 m subject spans at least 1/14 of the frame's height (`VIEW.share` asks 1/16): distance (m) times the lens's tan(half fov) stays under this. */
-  reach: 14,
-  /**
-   * Eyes tried, nearest first: the distance (m) flat from the points' midpoint and the height (m) over it. Low ones stand 5 m
-   * and 0.3 of their reach up; the high ones look down a street the low ones cannot see along (a block of buildings in every
-   * direction); the next, far and near the ground, look down the line of two points too far apart for a screen's width, one
-   * behind the other, through a narrower lens; the last, as far and level with the points (a car thrown 45 m onto a wall off a
-   * deck: from 3 m over it the nearer point sits too far below the lens axis to be car-sized in the frame the farther one needs).
-   */
-  eyes: [
-    [14, 9.2],
-    [20, 11],
-    [26, 12.8],
-    [8, 25],
-    [14, 25],
-    [30, 3],
-    [36, 3.5],
-    [46, 4],
-    [60, 5],
-    [36, 0.5],
-    [46, 1],
-    [60, 1.5],
-  ],
-  /** Directions round the midpoint tried from the seeded `turn`, then along the points' own line (rad off it, from behind either point). */
-  turns: 24,
-  line: [0, Math.PI, 0.05, -0.05, Math.PI + 0.05, Math.PI - 0.05, 0.1, -0.1, Math.PI + 0.1, Math.PI - 0.1],
 };
 
 type Vec3 = { x: number; y: number; z: number };
@@ -109,7 +74,7 @@ function look(eye: Vec3, ax: number, ay: number, az: number): boolean {
 }
 
 /**
- * The least tan(half fov) at which `p` lies within `CONTEXT.fit` of the middle of the frame (`CONTEXT.aspect` wide) of the eye
+ * The least tan(half fov) at which `p` lies within `FIT.fit` of the middle of the frame (`FIT.aspect` wide) of the eye
  * `eye` looking along `f` (unit), with `r` its right (flat, unit) and `u` its up; Infinity when `p` is nearer than 4 m or behind it.
  */
 function tanNeeded(p: Vec3, eye: Vec3, f: Vec3, r: Vec3, u: Vec3): number {
@@ -118,8 +83,8 @@ function tanNeeded(p: Vec3, eye: Vec3, f: Vec3, r: Vec3, u: Vec3): number {
   const vz = p.z - eye.z;
   const z = vx * f.x + vy * f.y + vz * f.z;
   if (z < 4) return Infinity;
-  const x = Math.abs(vx * r.x + vz * r.z) / (CONTEXT.fit * CONTEXT.aspect);
-  const y = Math.abs(vx * u.x + vy * u.y + vz * u.z) / CONTEXT.fit;
+  const x = Math.abs(vx * r.x + vz * r.z) / (FIT.fit * FIT.aspect);
+  const y = Math.abs(vx * u.x + vy * u.y + vz * u.z) / FIT.fit;
   return Math.max(x, y) / z;
 }
 
@@ -133,49 +98,4 @@ export function fovFor(eye: Vec3, aim: Vec3, p: Vec3, fov: number): number {
 /** `p` lies in the frame of the eye `eye` looking at `aim` through the lens `fov` (deg) on every screen the reel plays on (`tanNeeded`). */
 export function inFrame(eye: Vec3, aim: Vec3, p: Vec3, fov: number): boolean {
   return look(eye, aim.x, aim.y, aim.z) && tanNeeded(p, eye, _f, _r, _u) <= Math.tan((fov * Math.PI) / 360);
-}
-
-/**
- * An eye from which both `a` and `b` lie in frame and car-sized, looking at their midpoint, standing in no static solid of the course
- * `s`, with a clear line to each over them and (when `s` has the cars' boxes, `carsBlock`) in no car's box with none on either line;
- * into `eye` and `aim`. Where no eye has both lines clear, one with the line to `b` (the hit it is for) clear: `a`, the hit before,
- * then only keeps its place in the frame, behind a wall, a building or a car (a city clip found no eye for hits 30 m apart among the
- * buildings and the pile, and the reel cut away from the earlier one). Returns its lens (deg), 0 when none works (a solid in every way,
- * or the points too far apart for any lens). The eyes are tried nearest first, each from the directions starting at `turn` (rad).
- */
-export function contextEye(s: Sight, a: Vec3, b: Vec3, turn: number, eye: THREE.Vector3, aim: THREE.Vector3): number {
-  const mx = (a.x + b.x) / 2;
-  const my = (a.y + b.y) / 2;
-  const mz = (a.z + b.z) / 2;
-  const tanMax = Math.tan((CONTEXT.fov * Math.PI) / 360);
-  const line = Math.atan2(a.z - mz, a.x - mx);
-  for (let both = 1; both >= 0; both--) {
-    for (const [reach, up] of CONTEXT.eyes) {
-      for (let k = 0; k < CONTEXT.turns + CONTEXT.line.length; k++) {
-        const t = k < CONTEXT.turns ? turn + (k * 2 * Math.PI) / CONTEXT.turns : line + CONTEXT.line[k - CONTEXT.turns]!;
-        const e = { x: mx + Math.cos(t) * reach!, y: my + up!, z: mz + Math.sin(t) * reach! };
-        if (solid(s, e.x, e.y, e.z, 0.5)) continue;
-        if (!look(e, mx, my, mz)) continue;
-        // The widest lens that keeps both points a car's size is the eye's; both must fit inside it.
-        const tanH = Math.min(tanMax, CONTEXT.reach / Math.max(hypot3(a.x - e.x, a.y - e.y, a.z - e.z), hypot3(b.x - e.x, b.y - e.y, b.z - e.z)));
-        if (Math.max(tanNeeded(a, e, _f, _r, _u), tanNeeded(b, e, _f, _r, _u)) > tanH) continue;
-        if (sightLine(s, e.x, e.y, e.z, b.x, b.y, b.z) < 0 || carsBlock(s, e, b)) continue;
-        if (both === 1 && (sightLine(s, e.x, e.y, e.z, a.x, a.y, a.z) < 0 || carsBlock(s, e, a))) continue;
-        eye.set(e.x, e.y, e.z);
-        aim.set(mx, my, mz);
-        return (2 * Math.atan(tanH) * 180) / Math.PI;
-      }
-    }
-  }
-  return 0;
-}
-
-/** The context shot's camera: `eye` looking at `aim` through the lens `fov` (deg) that `contextEye` fitted. */
-export function contextPose(camera: THREE.PerspectiveCamera, eye: THREE.Vector3, aim: THREE.Vector3, fov: number): void {
-  camera.position.copy(eye);
-  camera.lookAt(aim);
-  if (camera.fov !== fov) {
-    camera.fov = fov;
-    camera.updateProjectionMatrix();
-  }
 }

@@ -696,7 +696,7 @@ export class CrashEngine extends EngineGarage {
     if (this.derbyMode) this.derbyHit(a, b, hit);
     else if (this.race.active) this.race.pairHit(a, b, hit);
     else if (this.showLab) this.lab.pairHit(a, b, hit);
-    else if (this.sceneId === "fleet") this.fleetHit(a, b, hit.impulse);
+    else if (this.sceneId === "fleet") this.fleetHit(a, b, hit);
     this.noteHit(a, hit.impulse);
     this.noteHit(b, hit.impulse);
   };

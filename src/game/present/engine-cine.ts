@@ -123,7 +123,8 @@ export function hitAim(out: THREE.Vector3, x: number, y: number, z: number, sigh
  * The eye pans and turns through its cut (a held cut stands at its start, a still one at its middle), so a spot only the middle
  * passes drifts into a wall or behind a corner: measured on the courses, 7 (stunt) to 74 (city) cuts lost their room or sight at
  * one end of a middle-only pick (engine-cine.test.ts). The axis kept is the turn whose cuts see `at` from furthest out (summed
- * reach), the first at full reach on all three. A race hit on a wall or beside one put the side-on eyes behind it: the replay
+ * reach), the first at full reach on all three; with `keep` (a later crash's pick: the impact before it) a turn with a cut that
+ * also has `keep` in frame comes first. A race hit on a wall or beside one put the side-on eyes behind it: the replay
  * showed the wall's back, never the cars. The answer does not depend on how `run` is sliced.
  */
 export class CrashPick {
@@ -142,6 +143,7 @@ export class CrashPick {
   private cut = 0;
   private ri = 0;
   private i = 0;
+  private keep: THREE.Vector3 | null = null;
 
   /** A search is under way (`begin` ran, `run` has not finished it). */
   get pending(): boolean {
@@ -149,7 +151,8 @@ export class CrashPick {
   }
 
   /** Start a search over `turns` of `TURNS`; it leaves the chosen axis in `n` (turned in place) and each cut's reach in `reach` when `run` finishes it. */
-  begin(s: Sight, at: THREE.Vector3, n: THREE.Vector3, reach: Float32Array, turns: number = TURNS.length): void {
+  begin(s: Sight, at: THREE.Vector3, n: THREE.Vector3, reach: Float32Array, turns: number = TURNS.length, keep: THREE.Vector3 | null = null): void {
+    this.keep = keep;
     this.s = s;
     this.at = at;
     this.n = n;
@@ -207,18 +210,30 @@ export class CrashPick {
     this.i = 0;
     this.ri = 0;
     if (++this.cut < 3) return;
-    const score = this.turnReach[0]! + this.turnReach[1]! + this.turnReach[2]!;
+    let score = this.turnReach[0]! + this.turnReach[1]! + this.turnReach[2]!;
+    if (this.keep && this.keeps()) score += 3;
     if (score > this.most) {
       this.most = score;
       this.best.copy(this.axis);
       this.bestReach.set(this.turnReach);
     }
-    if (score === 3 || this.turn + 1 === this.turns) {
+    if (score === (this.keep ? 6 : 3) || this.turn + 1 === this.turns) {
       // A cut with no usable eye keeps `reach` 0: `direct` leaves that cut to the chase / reel camera.
       this.n.copy(this.best);
       this.out.set(this.bestReach);
       this.s = null;
     } else this.nextTurn();
+  }
+
+  /** A cut of this turn with an eye has `keep` in frame as it looks at `at`. */
+  private keeps(): boolean {
+    for (let cut = 0; cut < 3; cut++) {
+      const r = this.turnReach[cut]!;
+      if (r === 0) continue;
+      const fov = crashEye(_eye, CUTS[cut]!, this.at, this.axis, 0, r);
+      if (inFrame(_eye, this.at, this.keep!, fov)) return true;
+    }
+    return false;
   }
 }
 
@@ -231,20 +246,22 @@ export class CrashPick {
  * the crash keeps its shot: `current`, else the first cut with an eye (`crashAxis` checked that eye's room and its sight of
  * `at`), because handing a crash window's frames to the reel's own camera cut away from the crash (a pile-up's later
  * impacts played on the chase shot). -1 only when no cut has an eye at all (the reel camera keeps the shot). `reach`:
- * `crashAxis`'s, 0 = no eye on that cut.
+ * `crashAxis`'s, 0 = no eye on that cut. `first`: the impact before `later`'s first (the crash's own, where the eyes stand
+ * round a later crash's `at`). `strict`: only a cut that sees every impact still to come, else -1.
  */
-export function heldCut(s: Sight, at: THREE.Vector3, n: THREE.Vector3, reach: Float32Array, target: THREE.Vector3, current: number, later: LaterHits = NO_LATER, ahead = 0): number {
+export function heldCut(s: Sight, at: THREE.Vector3, n: THREE.Vector3, reach: Float32Array, target: THREE.Vector3, current: number, later: LaterHits = NO_LATER, ahead = 0, first = at, strict = false): number {
   const usable = (cut: number, every: boolean): boolean => {
     if (reach[cut] === 0) return false;
     const fov = crashEye(_eye, CUTS[cut]!, at, n, 0, reach[cut]!);
     if (!camUsable(s, _eye, target, STILL, 0)) return false;
-    if (every) for (let k = ahead; k < later.n; k++) if (!camUsable(s, _eye, later.at[k]!, STILL, 0) || !inFrame(_eye, later.at[k]!, k === 0 ? at : later.at[k - 1]!, fov)) return false;
+    if (every) for (let k = ahead; k < later.n; k++) if (!camUsable(s, _eye, later.at[k]!, STILL, 0) || !inFrame(_eye, later.at[k]!, k === 0 ? first : later.at[k - 1]!, fov)) return false;
     return true;
   };
   // First the cuts that see every impact still to come, then those that see the car alone.
   for (let pass = 0; pass < 2; pass++) {
     const every = pass === 0;
     if (every && ahead >= later.n) continue;
+    if (strict && !every) return -1;
     if (current >= 0 && usable(current, every)) return current;
     for (const cut of HOLD_ORDER) if (cut !== current && usable(cut, every)) return cut;
   }
@@ -255,13 +272,14 @@ export function heldCut(s: Sight, at: THREE.Vector3, n: THREE.Vector3, reach: Fl
 
 /**
  * The impacts of a clip's scope after its first that fall inside the crash cam's window, in time order (`n` of them): per
- * impact the wall second (into the crash cam) the held cam starts to look at it and the one it stops, and where it lands.
+ * impact the wall second (into the crash cam) the held cam starts to look at it and the one it stops, where it lands, and
+ * whether it is a driver thrown (1: the cam keeps its axis) rather than a crash (0: the axis moves onto it).
  */
-type LaterHits = { n: number; from: Float64Array; until: Float64Array; at: THREE.Vector3[] };
+type LaterHits = { n: number; from: Float64Array; until: Float64Array; at: THREE.Vector3[]; thrown: Uint8Array };
 
 /** Room for `max` later impacts. */
 export function laterHits(max: number): LaterHits {
-  return { n: 0, from: new Float64Array(max), until: new Float64Array(max), at: Array.from({ length: max }, () => new THREE.Vector3()) };
+  return { n: 0, from: new Float64Array(max), until: new Float64Array(max), at: Array.from({ length: max }, () => new THREE.Vector3()), thrown: new Uint8Array(max) };
 }
 
 const NO_LATER = laterHits(0);
@@ -303,7 +321,7 @@ function holdAim(hold: CrashHold, at: THREE.Vector3, t: number): THREE.Vector3 {
 /**
  * The Burnout-style crash cam: the camera half of `Cinematics`, with no GPU in it (the headless reel harness runs this very
  * one). From a hit (`begin`) it letterboxes in, takes the camera for its three replay cuts in slow-mo and hands it back at
- * `crashCamEnd` of the slow-mo's hold, its cuts spread evenly from `CUTS[0]` to then; in a reel (`direct`'s `hold`) it keeps one cut for the whole crash.
+ * `crashCamEnd` of the slow-mo's hold, its cuts spread evenly from `CUTS[0]` to then; in a reel (`direct`'s `hold`) it keeps one cut per crash.
  */
 export class CrashCam {
   /** Wall seconds into the crash cam; < 0 when it is not running. */
@@ -316,9 +334,18 @@ export class CrashCam {
   /** Per crash-cam cut: the share of its eye's offset from the hit that sees it (`crashAxis`). */
   private readonly camReach = new Float32Array([1, 1, 1]);
   private readonly pick = new CrashPick();
+  /** The crash's own hit (`begin`'s): the axis moves on to each later crash's, the first beat stays here. */
+  private readonly firstAt = new THREE.Vector3();
+  /** A later crash's axis while its pick runs (`retarget`): the cam keeps its cut until the pick is done, then stands on it. */
+  private readonly nextAt = new THREE.Vector3();
+  private readonly nextN = new THREE.Vector3();
+  private readonly nextReach = new Float32Array(3);
+  private retargeting = false;
   /** A reel's held crash cam: the cut it stands on (-1 none usable), when it is asked again (`camT`), and where it aims. */
   private heldAt = -1;
   private held = -1;
+  /** Entries of the hold's `later` whose look has begun. */
+  private reached = 0;
   private aimSet = false;
   private readonly aim = new THREE.Vector3();
   /** The lens a held cut opens beyond its own (deg) to keep the moment's points in frame, eased; unset until the cut's first frame, and again when the held cut changes (a new eye has a new own lens: the opening is its first frame's, not eased from the last cut's). */
@@ -339,6 +366,8 @@ export class CrashCam {
   begin(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number): void {
     this.end = crashCamEnd(hold);
     hitAim(this.camAt, contact.x, contact.y, contact.z, sight);
+    this.firstAt.copy(this.camAt);
+    this.retargeting = false;
     this.camN.set(normal.x, 0, normal.z);
     if (this.camN.lengthSq() < 1e-6) this.camN.set(1, 0, 0);
     this.camN.normalize();
@@ -349,10 +378,34 @@ export class CrashCam {
     this.camT = 0;
     this.held = -1;
     this.heldAt = -1;
+    this.reached = 0;
     this.aimSet = false;
     this.widen = 0;
     this.widenSet = false;
     this.widenCut = -1;
+  }
+
+  /**
+   * A later crash while it cuts (a sandbox pile-up): a fresh axis on that hit, its cuts starting over at once and ending as far
+   * past the hit as a first crash's (`hold`: wall s from it to the hand-back). One before its crash's first cut has played is left to it.
+   */
+  recut(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number): void {
+    if (!this.cutting || this.camT < CUTS[1]) return;
+    this.camT = CUTS[0];
+    this.end = CUTS[0] + crashCamEnd(hold);
+    hitAim(this.nextAt, contact.x, contact.y, contact.z, sight);
+    this.nextN.set(normal.x, 0, normal.z);
+    if (this.nextN.lengthSq() < 1e-6) this.nextN.copy(this.camN);
+    this.retarget(this.nextN.normalize(), sight);
+  }
+
+  /** The pick for the axis at `nextAt` along `n` (a turn keeping `keep` in frame first), run over the next frames by `direct`, which moves the cam onto it once it is done. */
+  private retarget(n: THREE.Vector3, sight: Sight | null, keep: THREE.Vector3 | null = null): void {
+    this.nextN.copy(n);
+    this.nextReach.fill(sight ? 0 : 1);
+    if (sight) this.pick.begin(sight, this.nextAt, this.nextN, this.nextReach, TURNS.length, keep);
+    else this.pick.cancel();
+    this.retargeting = true;
   }
 
   /** Off, with no letterbox. */
@@ -377,8 +430,8 @@ export class CrashCam {
 
   /**
    * Takes the camera for the replay cuts. False when the orbit / chase camera should run. With `hold` (the results reel)
-   * it keeps ONE cut for the whole crash, its eye where its cut begins, turning smoothly toward the car, and moves to
-   * another only when its eye has no room or no sight of the car (`heldCut`); no usable eye: the reel camera.
+   * it keeps ONE cut per crash, its eye where its cut begins, turning smoothly toward the car, and moves to another when a
+   * later crash's look begins or its eye has no room or no sight of the car (`heldCut`); no usable eye: the reel camera.
    */
   direct(camera: THREE.PerspectiveCamera, wallDt: number, allowed: boolean, hold: CrashHold | null = null): boolean {
     if (this.camT < 0) return false;
@@ -393,7 +446,25 @@ export class CrashCam {
       this.letterbox = 0;
       return false;
     }
-    if (this.pick.pending) this.pick.run(t >= CUTS[0] - PICK_DEADLINE ? Infinity : wallDt * PICK_RATE);
+    if (this.pick.pending) this.pick.run(this.retargeting || t < CUTS[0] - PICK_DEADLINE ? wallDt * PICK_RATE : Infinity);
+    if (this.retargeting && !this.pick.pending) {
+      this.retargeting = false;
+      // The later crash's axis is taken only with an eye on it; a reel's, only on a cut that keeps the impact before it in frame (the viewer keeps the place).
+      let take = this.nextReach[0]! + this.nextReach[1]! + this.nextReach[2]! > 0 ? 0 : -1;
+      if (take === 0 && hold) {
+        const l = hold.later;
+        let ahead = 0;
+        while (ahead < l.n && l.until[ahead]! <= t) ahead++;
+        take = heldCut(hold.sight(), this.nextAt, this.nextN, this.nextReach, this.nextAt, -1, l, ahead, this.firstAt, true);
+      }
+      if (take >= 0) {
+        this.camAt.copy(this.nextAt);
+        this.camN.copy(this.nextN);
+        this.camReach.set(this.nextReach);
+        this.held = hold ? take : -1;
+        this.heldAt = t + HOLD_CHECK;
+      }
+    }
     if (t < CUTS[0] || t >= end) return false;
     // Where wall `t` falls on the `CUTS` schedule, stretched from `CUTS[0]` to the hand-back.
     const u = CUTS[0] + ((t - CUTS[0]) * (CUTS[3] - CUTS[0])) / (end - CUTS[0]);
@@ -401,11 +472,19 @@ export class CrashCam {
     let eyeT = u;
     let aim = this.camAt;
     if (hold) {
-      if (t >= this.heldAt) {
+      const l = hold.later;
+      if (t >= this.heldAt || (this.reached < l.n && l.from[this.reached]! <= t)) {
         this.heldAt = t + HOLD_CHECK;
         let ahead = 0;
-        while (ahead < hold.later.n && hold.later.until[ahead]! <= t) ahead++;
-        this.held = heldCut(hold.sight(), this.camAt, this.camN, this.camReach, hold.target, this.held, hold.later, ahead);
+        while (ahead < l.n && l.until[ahead]! <= t) ahead++;
+        const s = hold.sight();
+        // Each later crash its own angle: the axis moves to it as its look begins (a thrown driver keeps the cut).
+        for (; this.reached < l.n && l.from[this.reached]! <= t; this.reached++) {
+          if (l.thrown[this.reached] === 1) continue;
+          this.nextAt.copy(l.at[this.reached]!);
+          this.retarget(this.camN, s, this.reached === 0 ? this.firstAt : l.at[this.reached - 1]!);
+        }
+        this.held = heldCut(s, this.camAt, this.camN, this.camReach, hold.target, this.held, l, ahead, this.firstAt);
       }
       cut = this.held;
       if (cut !== this.widenCut) {
@@ -414,7 +493,7 @@ export class CrashCam {
       }
       eyeT = cut < 0 ? u : CUTS[cut]!;
       // The hit itself until it has landed (the reel's moment, framed at the lens's centre), each later impact of the window as it comes, else the car.
-      const want = holdAim(hold, this.camAt, t);
+      const want = holdAim(hold, this.firstAt, t);
       if (this.aimSet) this.aim.lerp(want, 1 - Math.exp(-wallDt * HOLD_AIM));
       else this.aim.copy(want);
       this.aimSet = true;
@@ -566,6 +645,11 @@ export class Cinematics {
   /** The crash cam alone, started apart from the impact (a reel's cut lands before its hit does). */
   beginCrashCam(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number): void {
     if (this.tierNow !== "off") this.crash.begin(contact, normal, sight, hold);
+  }
+
+  /** A later crash of a sandbox run: its own crash cam cut, if the cam is cutting (`CrashCam.recut`). */
+  recutCrashCam(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number): void {
+    this.crash.recut(contact, normal, sight, hold);
   }
 
   /**

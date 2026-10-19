@@ -6,11 +6,12 @@ import { Track } from "../world/track.ts";
 import city from "../world/tracks/city.json" with { type: "json" };
 import stunt from "../world/tracks/stunt.json" with { type: "json" };
 import { clipTitle, type HighlightClip } from "../match/highlights.ts";
-import { crashCamEnd, CUTS } from "../present/engine-cine.ts";
+import { CrashCam, crashCamEnd, CUTS, hitAim, laterHits } from "../present/engine-cine.ts";
 import { raceOn, recordRace, reelViews, type Crash, type RigSample } from "./reel-view.test-util.ts";
+import { clipTimeline } from "./engine-highlights.ts";
+import { TIMELINE_HZ } from "./constants.ts";
 import * as THREE from "three";
 import { blankPoint } from "../world/track.ts";
-import { contextEye } from "../present/highlight-cam.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 /** A replayed frame is one 1/60 s step of the reel's wall clock. */
@@ -105,8 +106,8 @@ describe("given highlight clips of a head-on that throws both drivers, and of a 
 
 /**
  * The stunt course's road climbs and drops. The crash cam begins a second or more before the car reaches its hit (on the way
- * up the kicker), so it is aimed at the recorded point (`ClipHit.y`), not where the car is then; and a context shot for a far
- * hit has an eye level with the two points when the high ones cannot fit both (`CONTEXT.eyes`).
+ * up the kicker), so it is aimed at the recorded point (`ClipHit.y`), not where the car is then; and a later crash below a
+ * drop gets the crash cam's own shot round it, the cam's eyes standing on its ground.
  */
 describe("given a car that hits the wall on the stunt course's kicker 9 m above where its clip starts, replayed through the reel's cameras", () => {
   /** The kicker's deck, where `Track.pointAt` has the road 6.8 m up (arc length, m). */
@@ -133,7 +134,7 @@ describe("given a car that hits the wall on the stunt course's kicker 9 m above 
 describe("given two points 40 m apart on the stunt course, the first on the lip of its drop and the second at the foot of it", () => {
   /** Where the road leaves the deck (arc length, m): its height falls from 7.8 m to 5.0 m within 40 m, then to 2 m. */
   const LIP = 900;
-  it("when a context shot is looked for, then there is an eye that keeps both points in one frame (the high eyes cannot fit them: the nearer sits too far below the lens axis)", () => {
+  it("when the crash cam begun on the lip of a 3-hit pile-up reaches its later crash at the foot, then it holds the camera on a cut at that crash and keeps it until the last slow-mo's hand-back", () => {
     const track = new Track(parseTrack(stunt));
     const w = raceOn("stunt", 3, 1);
     try {
@@ -141,9 +142,35 @@ describe("given two points 40 m apart on the stunt course, the first on the lip 
       const b = blankPoint();
       track.pointAt(LIP, a);
       track.pointAt(LIP + 40, b);
-      const eye = new THREE.Vector3();
-      const fov = contextEye(w.race.courseSight()!, { x: a.x, y: a.y + 0.55, z: a.z }, { x: b.x, y: b.y + 0.55, z: b.z }, 0.3, eye, new THREE.Vector3());
-      assert.ok(fov > 0, "no eye for the pair");
+      const s = w.race.courseSight()!;
+      const foot = hitAim(new THREE.Vector3(), b.x, b.y, b.z, s);
+      const hits = [3.313, 3.946, 4.133];
+      const tl = clipTimeline(hits[0]!, 6, [], hits.slice(1));
+      let k = 0;
+      while (k < tl.sim.length - 1 && tl.sim[k]! < hits[1]!) k++;
+      const at = k / TIMELINE_HZ - tl.impact;
+      const later = laterHits(1);
+      later.n = 1;
+      later.from[0] = at - 0.75;
+      later.until[0] = at + 0.3;
+      later.at[0]!.copy(foot);
+      const cam = new CrashCam(false);
+      cam.begin(new THREE.Vector3(a.x, a.y, a.z), new THREE.Vector3(b.x - a.x, 0, b.z - a.z), s, tl.hold);
+      const hold = { target: foot, sight: () => s, hit: tl.contact - tl.impact + 0.3, later };
+      const camera = new THREE.PerspectiveCamera();
+      let onAtFoot = false;
+      let back = -1;
+      for (let i = 1; back < 0 && i < 60 * FRAME_HZ; i++) {
+        const on = cam.direct(camera, FRAME, true, hold);
+        if (Math.abs(cam.camT - at) < FRAME / 2) onAtFoot = on;
+        if (!cam.holding) back = cam.camT;
+      }
+      assert.equal(onAtFoot, true, `the crash cam not on the camera at the foot's crash (wall ${(tl.impact + at).toFixed(2)} s, handed back at ${(tl.impact + back).toFixed(2)} s)`);
+      let last = k;
+      while (last < tl.sim.length - 1 && tl.sim[last]! < hits[2]!) last++;
+      const lastBack = tl.phase.indexOf("aftermath", last) / TIMELINE_HZ;
+      const early = lastBack - (tl.impact + back);
+      assert.ok(early >= 0 && early <= 0.5, `handed back at ${(tl.impact + back).toFixed(2)} wall s, the last slow-mo at ${lastBack.toFixed(2)} s`);
     } finally {
       w.race.exit();
       setGround(null);

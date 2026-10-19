@@ -9,7 +9,9 @@ import stunt from "../world/tracks/stunt.json" with { type: "json" };
 import { camUsable, carsBlock, occluder, withCars, type Sight } from "./spectate-cam.ts";
 import { CrashCam, crashEye, CUTS, easeWarp, heldCut, hitAim, laterHits } from "./engine-cine.ts";
 import { courseCensus, crashAxis, crashSeen } from "./engine-cine-courses.test-util.ts";
-import { contextEye, fovFor } from "./highlight-cam.ts";
+import { fovFor } from "./highlight-cam.ts";
+import { clipTimeline } from "../engine/engine-highlights.ts";
+import { TIMELINE_HZ } from "../engine/constants.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { SLOMO_HOLD } from "../match/phase.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
@@ -105,6 +107,29 @@ describe("given a reel's crash camera in an open field and a later impact of its
     const box: Sight = { ...open, occ: [occluder(a.x + 3, a.z, 0, 0.5, 4, false, 0, 30), occluder(a.x - 3, a.z, 0, 0.5, 4, false, 0, 30), occluder(a.x, a.z + 3, 0, 4, 0.5, false, 0, 30), occluder(a.x, a.z - 3, 0, 4, 0.5, false, 0, 30)] };
     assert.equal(heldCut(box, at, n, reach, target, 1, beside, 0), 1, "no cut sees the impact: the crane that sees the car holds");
   });
+
+  it("when the held cam reaches a later crash's look, then its eyes stand round that crash from then on, and at a thrown driver's look they stay round the first hit", () => {
+    const camera = new THREE.PerspectiveCamera();
+    /** Metres from the cam's axis point to the later point, before its look (2.5 s in) and after it began (3.5 s). */
+    const axisOff = (thrown: number): [number, number] => {
+      const cam = new CrashCam(false);
+      cam.begin(at, n, null, 20);
+      const later = laterHits(1);
+      later.n = 1;
+      later.from[0] = 3;
+      later.until[0] = 4;
+      later.at[0]!.copy(beside.at[0]!);
+      later.thrown[0] = thrown;
+      const hold = { target, sight: () => open, hit: 0.3, later };
+      const off = (): number => Math.hypot(cam["camAt"].x - later.at[0]!.x, cam["camAt"].z - later.at[0]!.z);
+      for (let i = 0; i < 25; i++) cam.direct(camera, 0.1, true, hold);
+      const before = off();
+      for (let i = 0; i < 10; i++) cam.direct(camera, 0.1, true, hold);
+      return [Math.round(before), Math.round(off())];
+    };
+    assert.deepEqual(axisOff(0), [12, 0], "a later crash: the axis moves onto it");
+    assert.deepEqual(axisOff(1), [12, 12], "a thrown driver: the axis stays on the first hit");
+  });
 });
 
 describe("given a reel's crash camera in an open field and walls boxing the wreck in, so no cut's eye can see it", () => {
@@ -156,6 +181,24 @@ describe("given a crash camera begun at a hit with the sandbox's slow-motion hol
     cam.direct(camera, 0.1, false);
     assert.equal(cam.holding, false);
   });
+
+  it("when a later crash lands while it cuts, then its cuts start over at once on a fresh axis at that hit and hand back as far past it as a first crash's, and one before the first cut has played is left to it", () => {
+    const cam = begin();
+    const later = new THREE.Vector3(10, 0.5, 0);
+    for (let i = 0; i < 20; i++) cam.direct(camera, 0.1, true);
+    cam.recut(later, new THREE.Vector3(0, 0, 1), null, SLOMO_HOLD);
+    cam.direct(camera, 0.1, true);
+    assert.ok(cam["camAt"].x < 1, "2.0 s in, the bumper cut still playing: left to the first crash");
+    for (let i = 0; i < 9; i++) cam.direct(camera, 0.1, true);
+    cam.recut(later, new THREE.Vector3(0, 0, 1), null, SLOMO_HOLD);
+    assert.ok(Math.abs(cam.camT - CUTS[0]) < 1e-9 && cam.cutting, "3.0 s in: its cuts start over, no second lead-in");
+    cam.direct(camera, 0.1, true);
+    assert.ok(cam["camAt"].x > 9, "on the later hit");
+    for (let i = 0; i < 59; i++) cam.direct(camera, 0.1, true);
+    assert.equal(cam.holding, true, "6.0 s past the later hit");
+    for (let i = 0; i < 3; i++) cam.direct(camera, 0.1, true);
+    assert.equal(cam.holding, false, "handed back by 6.3 s past it");
+  });
 });
 
 describe("given a reel's crash camera in an open field holding the crane, and two drivers thrown 3.2 m apart in the same moment", () => {
@@ -171,6 +214,7 @@ describe("given a reel's crash camera in an open field holding the crane, and tw
       later.from[k] = 2.0;
       later.until[k] = 3.0;
       later.at[k]!.set(0, 1, (k - (n - 1) / 2) * gap);
+      later.thrown[k] = 1;
     }
     const hold = { target: new THREE.Vector3(0, 0.55, 0), sight: () => open, hit: 0.3, later };
     for (let i = 0; i < 24; i++) cam.direct(camera, 0.1, true, hold);
@@ -309,29 +353,65 @@ describe("given a crash in an open field and the cars of the pile standing about
     for (let cut = 0; cut < 3; cut++) assert.equal(reach[cut], free[cut], `cut ${cut} reach with cars over and under: ${reach[cut]}, without: ${free[cut]}`);
   });
 
-  it("when a car stands on the context shot's eye, then it takes another eye that is outside every car and has none on its lines to either point", () => {
-    const a = new THREE.Vector3(0, 0.55, 0);
-    const b = new THREE.Vector3(10, 0.55, 0);
+  it("when a later crash 7 m off has a car standing on the crane's eye round it, then the crash cam gives it its own shot: its axis moves onto it, its eye outside every car with none on its line to it, the first hit kept in frame", () => {
+    const b = new THREE.Vector3(5, 0.55, 5);
     const old = new THREE.Vector3();
-    assert.ok(contextEye(open, a, b, 0.3, old, new THREE.Vector3()) > 0, "an open field has an eye");
+    crashEye(old, CUTS[1]!, b, axis, 0, 1);
     const s = withCars(open, [carAt(old.x, old.y - 0.4, old.z, 0.7)]);
-    assert.equal(carsBlock(s, old, a), true, "the old eye is inside the car");
-    const eye = new THREE.Vector3();
-    assert.ok(contextEye(s, a, b, 0.3, eye, new THREE.Vector3()) > 0, "the field still has an eye");
-    assert.equal(carsBlock(s, eye, a) || carsBlock(s, eye, b), false, "the eye the shot takes is in a car or has one on its line");
+    assert.equal(carsBlock(s, old, b), true, "the crane's eye round the later crash is inside the car");
+    const later = laterHits(1);
+    later.n = 1;
+    later.from[0] = 3;
+    later.until[0] = 4;
+    later.at[0]!.copy(b);
+    const cam = new CrashCam(false);
+    cam.begin(at, axis, s, 20);
+    const hold = { target: b, sight: () => s, hit: 0.3, later };
+    const camera = new THREE.PerspectiveCamera();
+    let on = false;
+    for (let i = 0; i < 74; i++) on = cam.direct(camera, 0.05, true, hold);
+    assert.ok(cam["camAt"].distanceTo(b) < 1e-6, "3.7 s in, the axis is on the later crash");
+    assert.equal(on, true, "the crash cam holds the camera at it");
+    assert.equal(carsBlock(s, camera.position, b), false, "its eye is in a car or has one on its line to the later crash");
   });
 
-  it("when a car stands between the context shot's eye and one of its points, then it takes another eye with no car on either line", () => {
-    const a = new THREE.Vector3(0, 0.55, 0);
-    const b = new THREE.Vector3(10, 0.55, 0);
+  it("when a 3-hit pile-up's later crashes come with a car standing between an eye and the second, then the crash cam holds the camera at each of them and to the last slow-mo's hand-back, so a thrown driver's ride-along (it waits on `holding`) starts only after it", () => {
+    const hits = [3.313, 3.946, 4.133];
+    const tl = clipTimeline(hits[0]!, 6, [], hits.slice(1));
+    const stepOf = (t: number): number => {
+      let k = 0;
+      while (k < tl.sim.length - 1 && tl.sim[k]! < t) k++;
+      return k;
+    };
+    const points = [new THREE.Vector3(10, 0.55, 0), new THREE.Vector3(10, 0.55, 6)];
     const old = new THREE.Vector3();
-    contextEye(open, a, b, 0.3, old, new THREE.Vector3());
-    const mid = old.clone().add(a).multiplyScalar(0.5);
+    crashEye(old, CUTS[1]!, points[0]!, axis, 0, 1);
+    const mid = old.clone().add(points[0]!).multiplyScalar(0.5);
     const s = withCars(open, [carAt(mid.x, mid.y - 0.7, mid.z)]);
-    assert.equal(carsBlock(s, old, a), true, "a car stands on the old eye's line to the first point");
-    const eye = new THREE.Vector3();
-    assert.ok(contextEye(s, a, b, 0.3, eye, new THREE.Vector3()) > 0, "the field still has an eye");
-    assert.equal(carsBlock(s, eye, a) || carsBlock(s, eye, b), false, "the eye the shot takes has a car on a line");
+    assert.equal(carsBlock(s, old, points[0]!), true, "a car stands on the crane eye's line to the second crash");
+    const later = laterHits(2);
+    later.n = 2;
+    const walls = hits.slice(1).map((t) => stepOf(t) / TIMELINE_HZ - tl.impact);
+    for (const [k, w] of walls.entries()) {
+      later.from[k] = w - 0.75;
+      later.until[k] = w + 0.3;
+      later.at[k]!.copy(points[k]!);
+    }
+    const cam = new CrashCam(false);
+    cam.begin(at, axis, s, tl.hold);
+    const hold = { target: at, sight: () => s, hit: tl.contact - tl.impact + 0.3, later };
+    const camera = new THREE.PerspectiveCamera();
+    const onAt = walls.map(() => false);
+    let back = -1;
+    for (let i = 1; back < 0 && i < 60 * FRAME_HZ; i++) {
+      const on = cam.direct(camera, 1 / FRAME_HZ, true, hold);
+      for (const [k, w] of walls.entries()) if (Math.abs(cam.camT - w) < 0.5 / FRAME_HZ) onAt[k] = on;
+      if (!cam.holding) back = cam.camT;
+    }
+    assert.deepEqual(onAt, [true, true], `the crash cam on the camera at the later crashes (wall ${walls.map((w) => (tl.impact + w).toFixed(2)).join(" / ")} s, it handed back at ${(tl.impact + back).toFixed(2)} s)`);
+    const lastBack = tl.phase.indexOf("aftermath", stepOf(hits[2]!)) / TIMELINE_HZ;
+    const early = lastBack - (tl.impact + back);
+    assert.ok(early >= 0 && early <= 0.5, `handed back at ${(tl.impact + back).toFixed(2)} wall s, the last slow-mo at ${lastBack.toFixed(2)} s`);
   });
 });
 
@@ -352,6 +432,7 @@ describe("given a reel's crash camera holding the crane with two drivers thrown 
       later.from[k] = 2.0;
       later.until[k] = 3.4;
       later.at[k]!.set(0, 1, k === 0 ? -3 : 3);
+      later.thrown[k] = 1;
     }
     const hold = { target: new THREE.Vector3(0, 0.55, 0), sight: () => (wall ? walled : open), hit: 0.3, later };
     const cam = new CrashCam(false);
