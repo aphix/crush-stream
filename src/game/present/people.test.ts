@@ -57,7 +57,9 @@ describe("given the National Mall's VIP and the player's car parked on the White
     assert.equal(throws.length, 1, "thrown once with the driver");
     assert.equal(throws[0]!.car, 0, "out of the player's car");
     assert.equal(throws[0]!.look.woman, false, "a man");
-    assert.ok(((throws[0]!.look.hair >> 16) & 0xff) > 0xc0 && ((throws[0]!.look.hair >> 8) & 0xff) > 0xa0, "blond");
+    // Blond: a golden hue (30-50 degrees, past ginger and auburn), coloured (not grey) and light (not brown).
+    const hair = new THREE.Color().setHex(throws[0]!.look.hair).getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace);
+    assert.ok(hair.h * 360 > 30 && hair.h * 360 < 50 && hair.s > 0.3 && hair.l > 0.45, `blond: hue ${(hair.h * 360).toFixed(0)}, saturation ${hair.s.toFixed(2)}, lightness ${hair.l.toFixed(2)}`);
     const suit = throws[0]!.look.shirt;
     assert.ok(suit === throws[0]!.look.pants && (suit & 0xff) > ((suit >> 8) & 0xff) && (suit & 0xff) > (suit >> 16) && (suit & 0xff) < 0x90, "a navy-blue suit, jacket and trousers alike");
     assert.equal(throws[0]!.look.portly, true, "portly");

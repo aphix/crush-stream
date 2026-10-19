@@ -7,6 +7,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { blankStrike, fell, runsDown } from "../scenes/figure-strike.ts";
 import { RagdollSystem, type Throw } from "./engine-ragdoll.ts";
 import { PARTS } from "./ragdoll-body.ts";
+import { COP_LOOK, GUARD_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FIRST_WORKER_ID = 7;
@@ -54,9 +55,9 @@ function fly(ragdolls: RagdollSystem, car: DeformableCar, mps: number, seconds: 
 }
 
 const workerCases = [
-  { it: "when a navy-uniformed guard is run down at 15 m/s, then the worker is sent one dummy standing where he stood in his uniform, hands at his sides, flying with the car", guard: 0, expectedCop: true, expectedShirt: 0x16181d, expectedPortly: undefined },
-  { it: "when a black-suited guard is run down, then he is dressed as an agent", guard: 1, expectedCop: false, expectedShirt: 0x16181d, expectedPortly: undefined },
-  { it: "when the VIP is run down, then he is dressed as the portly man in the blue suit", guard: -1, expectedCop: false, expectedShirt: 0x1f3463, expectedPortly: true },
+  { it: "when a navy-uniformed guard is run down at 15 m/s, then the worker is sent one dummy standing where he stood in his uniform, hands at his sides, flying with the car", guard: 0, expectedCop: true, expectedLook: COP_LOOK },
+  { it: "when a black-suited guard is run down, then he is dressed as an agent", guard: 1, expectedCop: false, expectedLook: GUARD_LOOK },
+  { it: "when the VIP is run down, then he is dressed as the portly man in the blue suit", guard: -1, expectedCop: false, expectedLook: VIP_LOOK },
 ] as const;
 
 describe("given the dummies' world in the ragdoll worker (race courses) and a standing figure a car ran down", () => {
@@ -74,9 +75,7 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a st
       assert.equal(purse, false, "no purse");
       assert.ok(Math.abs(t.p.y - TORSO_STANDING) < 1e-6 && Math.abs(t.p.x) < 1e-6 && Math.abs(t.p.z) < 1e-6, "his torso where he stood");
       assert.ok(Math.abs(t.v.x - strike.vx) < 1e-6 && Math.abs(t.v.y - strike.vy) < 1e-6 && Math.abs(t.v.z - strike.vz) < 1e-6, "the strike's velocity");
-      const look = ragdolls["dressing"].get(FIRST_WORKER_ID)!.look;
-      assert.equal(look.shirt, testCase.expectedShirt, "his suit");
-      assert.equal(look.portly, testCase.expectedPortly, "portly or not");
+      assert.equal(ragdolls["dressing"].get(FIRST_WORKER_ID)!.look, testCase.expectedLook, "dressed from his own table: the cop's, the agent's or the VIP's");
     });
   }
 
