@@ -136,6 +136,7 @@ export function recordFlat(spawns: readonly Spawn[], seconds: number, derby: boo
   const world = newWorld(cars);
   world.pairHit = (a, b, hit) => rec.pairHit(a, b, hit);
   world.partTouch = (a, b) => rec.touch(a, b);
+  world.partMet = (own, top) => rec.partMet(own, top);
   const trace: Float64Array[] = [];
   const times = new Map<number, number>();
   const frameEnd: boolean[] = [];

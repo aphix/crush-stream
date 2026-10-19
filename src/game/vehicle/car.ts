@@ -468,7 +468,7 @@ export class DeformableCar extends CarParts {
         this.angular.set(0, 0, 0);
         this.nudgeWheels(dt);
         this.ride(dt);
-        this.stepLooseParts(dt, this.slot);
+        this.stepLooseParts(dt, this.slot, this.surfaces?.partMet);
         return;
       }
       this.wake();
@@ -526,7 +526,7 @@ export class DeformableCar extends CarParts {
     this.refreshBasis();
     this.nudgeWheels(dt);
     this.ride(dt);
-    this.stepLooseParts(dt, this.slot);
+    this.stepLooseParts(dt, this.slot, this.surfaces?.partMet);
   }
 
   /** A wreck at rest for `WRECK_REST_S` on three wheels or more, and not crushing, falls asleep where it lies. */
@@ -571,7 +571,7 @@ export class DeformableCar extends CarParts {
     this.refreshBasis();
     this.nudgeWheels(dt);
     this.ride(dt);
-    this.stepLooseParts(dt, this.slot);
+    this.stepLooseParts(dt, this.slot, this.surfaces?.partMet);
   }
 
   /** One step of the rigid body, its wheels' and its loose parts' flight (`stepLooseParts`, on every path it takes). */
@@ -586,7 +586,7 @@ export class DeformableCar extends CarParts {
     this.flewDt = dt;
     const landed = stepFree(this, dt);
     if (this.falling) {
-      this.stepLooseParts(dt, this.slot);
+      this.stepLooseParts(dt, this.slot, this.surfaces?.partMet);
       return;
     }
     // The drive turns the stored pose each slice (`applyDrive`): it is what the rigid body is now, or the turn undoes its tumble.
@@ -597,7 +597,7 @@ export class DeformableCar extends CarParts {
     this.refreshBasis();
     this.ride(dt);
     if (!this.crashed) this.deform.bindKinematic(this.group, this.velocity, this.angular);
-    this.stepLooseParts(dt, this.slot);
+    this.stepLooseParts(dt, this.slot, this.surfaces?.partMet);
   }
 
   /** One fixed step of what the crash does to the car's parts (`settleStep`): sensors follow the masses, hinges move, parts tear off, lamps break, glass cracks.
@@ -831,7 +831,7 @@ export class DeformableCar extends CarParts {
     this.nudgeWheels(dt, false);
     this.ride(dt);
     this.flutterParts(dt);
-    this.stepLooseParts(dt, this.slot, false);
+    this.stepLooseParts(dt, this.slot, this.surfaces?.partMet, false);
   }
 
   /** The torn parts and popped wheels are not drawn: a car shown with no world for them to fall in (the podium's) is missing them, rather than trailed by them hanging where they came off. `resetVisual` brings them back. */

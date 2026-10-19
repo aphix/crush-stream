@@ -36,6 +36,8 @@ export type World = {
   pairHit: ((a: number, b: number, hit: ContactHit) => void) | null;
   /** A door, mirror or panel of one car met the other (`partContactPair`), a mass of one met a mass of the other (`collideWith`), or one stood on or touched the other's top (`CarSurfaces.met`): they touched without a SAT hit. */
   partTouch: ((a: number, b: number) => void) | null;
+  /** A torn part or popped wheel of car `own` met car `top`'s top (`CarSurfaces.partMet`): `top` moved it, so a clip that keeps `own` keeps `top`. */
+  partMet: ((own: number, top: number) => void) | undefined;
   /** Each car right after its `afterContacts` (the derby bowl). */
   afterCar: ((car: DeformableCar, h: number) => void) | null;
   /** Each car at the end of a slice of `h` s (race walls and props). */
@@ -94,6 +96,7 @@ export function newWorld(cars: readonly DeformableCar[], barrier: JerseyBarrier 
     planLoners: 0,
     pairHit: null,
     partTouch: null,
+    partMet: undefined,
     afterCar: null,
     collide: null,
     ejection,
@@ -317,6 +320,7 @@ export function stepWorld(w: World, dt: number): void {
     work[WORK.slices] = work[WORK.slices]! + 1;
     w.surfaces.cars = cars;
     w.surfaces.met = w.partTouch;
+    w.surfaces.partMet = w.partMet;
     for (let ci = 0; ci < n; ci++) {
       if (i > 0 && lonely.flag[ci]) continue;
       const car = cars[ci]!;

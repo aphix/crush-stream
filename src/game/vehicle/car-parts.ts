@@ -13,7 +13,7 @@ import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox } fro
 import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
 import { fitWheelShape, stepLoose } from "./loose-step.ts";
-import { CAR_CENTRE } from "./car-air-body.ts";
+import { CAR_CENTRE, type TopMet } from "./car-air-body.ts";
 import { wreckCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
 import {
@@ -869,18 +869,19 @@ export abstract class CarParts extends CarGlass {
 
   /**
    * This car's torn parts and popped wheels (`stepLoose`): rigid bodies that land on the ground, the prisms and the other cars' tops, never this car's (`slot`).
-   * `wheels` false: the parts only (a netplay client's wheels ride the host's poses on the wire; its parts are its own, debris is per player).
+   * `met` hears them meet another car's top (`CarSurfaces.partMet`). `wheels` false: the parts only (a netplay client's wheels ride the host's poses on the
+   * wire; its parts are its own, debris is per player).
    */
-  protected stepLooseParts(dt: number, slot: number, wheels = true): void {
+  protected stepLooseParts(dt: number, slot: number, met: TopMet | undefined, wheels = true): void {
     for (let k = 0; k < this.parts.length; k++) {
       const p = this.parts[k]!;
       // A torn shell past `LIVE_SHELLS` is hidden for good (until the reset): nothing to see, nothing to move.
       if (!p.detached || !p.object.visible) continue;
-      if (stepLoose(p, dt, slot, p.dent)) this.noteStirred(k);
+      if (stepLoose(p, dt, slot, p.dent, met)) this.noteStirred(k);
       applyDents(p.dent, p.object);
     }
     if (!wheels) return;
-    for (let k = 0; k < this.looseWheels.length; k++) if (this.looseWheels[k]!.loose && stepLoose(this.looseWheels[k]!, dt, slot)) this.noteStirred(PART_SLOTS + k);
+    for (let k = 0; k < this.looseWheels.length; k++) if (this.looseWheels[k]!.loose && stepLoose(this.looseWheels[k]!, dt, slot, undefined, met)) this.noteStirred(PART_SLOTS + k);
   }
 
   private noteStirred(body: number): void {

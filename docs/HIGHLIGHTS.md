@@ -91,7 +91,8 @@ allocation, a few times a race. Steady state allocates nothing (`engine-record.t
 A clip also takes **bystanders**: every car within `BYSTANDER_R` (80 m) of its hit (the first impact, the cluster's mean
 point or one of its cars, each car from the step it was put on a spot before the impact: where it stood before is not
 the crash) at any keyframe of the clip or at its end, nearest first, each with the cars that touched it
-since the clip's start (a touch is a SAT contact, a door, mirror or panel meeting, or masses overlapping). Left out: a car
+since the clip's start (a touch is a SAT contact, a door, mirror or panel meeting, or masses overlapping), and each car whose top moved one of
+their torn parts or popped wheels (`partMet`, one way: the part's car keeps the top's, as the top feels nothing of the part). Left out: a car
 that did not exist at the clip's first keyframe. A car put on a spot after the first impact is taken like any other (its
 keyframe puts it there again). 80 m covers the replay cameras' sight lines (`DUTCH.range` is 90 m): of
 the 46 cars a camera could see on five seeded races, 80 m holds 44 and 60 m holds 39. A clip grows by bystanders only to

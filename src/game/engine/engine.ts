@@ -714,6 +714,11 @@ export class CrashEngine extends EngineGarage {
     if (this.race.active) this.race.partTouch(a, b);
   };
 
+  /** A loose part met another car's top: the race recorder keeps that car with the part's (`World.partMet`). */
+  private readonly partMet = (own: number, top: number): void => {
+    if (this.race.active) this.race.partMet(own, top);
+  };
+
   /** Each car at a slice's end. The corkscrew's walls hold its car on its floor: the ramps are put away there (`SCENE_PROPS`), like the slab and the balls, so their faces cannot stand in for them (a 6 m/s car slid off the bank onto its roof) or wall in a parked car. */
   private readonly collide = (car: DeformableCar, i: number, h: number): void => {
     if (this.race.active) this.raceCollide(car, i, h);
@@ -773,6 +778,7 @@ export class CrashEngine extends EngineGarage {
     w.beforeSlice = this.beforeSlice;
     w.pairHit = this.pairHit;
     w.partTouch = this.partTouch;
+    w.partMet = this.partMet;
     w.collide = this.collide;
     w.lone = this.race.active;
     if (!this.race.active && !this.showLab) this.syncRigs();

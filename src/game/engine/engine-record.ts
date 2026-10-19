@@ -175,6 +175,8 @@ export class CrashRecorder {
   private readonly pairAt = new Float64Array(MAX_CARS * MAX_CARS);
   /** Last time a door, mirror or panel of one car of the pair met the other (`touch`), per pair like `pairAt`. */
   private readonly touchAt = new Float64Array(MAX_CARS * MAX_CARS);
+  /** Last time a torn part or popped wheel of car `a` met car `b`'s top (`partMet`), at a·MAX_CARS + b: one way, `b` moved `a`'s part. */
+  private readonly metAt = new Float64Array(MAX_CARS * MAX_CARS);
   private readonly wallAt = new Float64Array(MAX_CARS);
   /** Per car: its `placements` at the last step's start. */
   private readonly placed = new Uint32Array(MAX_CARS);
@@ -282,6 +284,7 @@ export class CrashRecorder {
     this.strainCar.fill(null);
     this.pairAt.fill(-Infinity);
     this.touchAt.fill(-Infinity);
+    this.metAt.fill(-Infinity);
     this.wallAt.fill(-Infinity);
     this.carAt.fill(-Infinity);
     this.pre.count = 0;
@@ -490,6 +493,11 @@ export class CrashRecorder {
     if (this.on && a >= 0 && a < this.pre.count && b < this.pre.count && a !== b) this.touchAt[a < b ? a * MAX_CARS + b : b * MAX_CARS + a] = this.time;
   }
 
+  /** `World.partMet`: car `top`'s top moved a torn part or popped wheel of car `own` and felt nothing of it, so a clip that keeps `own` keeps `top`, not the other way. */
+  partMet(own: number, top: number): void {
+    if (this.on && own >= 0 && own < this.pre.count && top < this.pre.count && own !== top) this.metAt[own * MAX_CARS + top] = this.time;
+  }
+
   /** A wall or prop touched car `i`, closing at `closing` m/s at (x, z). */
   wallHit(i: number, closing: number, x: number, z: number): void {
     if (!this.on || i >= this.pre.count) return;
@@ -624,7 +632,7 @@ export class CrashRecorder {
     return w;
   }
 
-  /** `mask` and, over and over, every car that touched one of them since `t0`. */
+  /** `mask` and, over and over, every car that touched one of them since `t0`, and every car whose top met one of their loose parts (`partMet`). */
   private touched(mask: number, n: number, t0: number): number {
     for (let grew = true; grew; ) {
       grew = false;
@@ -632,7 +640,7 @@ export class CrashRecorder {
         if (!((mask >>> a) & 1)) continue;
         for (let b = 0; b < n; b++) {
           const k = a < b ? a * MAX_CARS + b : b * MAX_CARS + a;
-          if ((mask >>> b) & 1 || Math.max(this.pairAt[k]!, this.touchAt[k]!) < t0) continue;
+          if ((mask >>> b) & 1 || Math.max(this.pairAt[k]!, this.touchAt[k]!, this.metAt[a * MAX_CARS + b]!) < t0) continue;
           mask = (mask | (1 << b)) >>> 0;
           grew = true;
         }

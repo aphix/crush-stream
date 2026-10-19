@@ -114,6 +114,8 @@ export class RaceDirector extends RaceHudLayer {
   readonly pairHit = (a: number, b: number, hit: ContactHit): void => this.recorder.pairHit(a, b, hit);
   /** `World.partTouch` while racing: a door or mirror sideswipe keeps both its cars in a highlight clip. */
   readonly partTouch = (a: number, b: number): void => this.recorder.touch(a, b);
+  /** `World.partMet` while racing: a car whose top knocked a clip car's torn part rides in the clip. */
+  readonly partMet = (own: number, top: number): void => this.recorder.partMet(own, top);
 
   /** The engine ignores keys and pad buttons while a menu is open; the HUD owns them. */
   get menuOpen(): boolean {

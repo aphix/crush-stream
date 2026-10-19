@@ -139,6 +139,8 @@ export class CarSurfaces extends Surface {
   cars: readonly DeformableCar[] = [];
   /** Called at each slice's end with the stepping car's slot and each car whose top it pressed or touched (`stepWorld` sets `World.partTouch`). */
   met: ((a: number, b: number) => void) | null = null;
+  /** Called with a car's slot and each car whose top one of its torn parts or popped wheels met (`stepWorld` sets `World.partMet`). */
+  partMet: ((own: number, top: number) => void) | undefined = undefined;
   /** The car being stepped: its own top is never its ground. */
   private self: DeformableCar | null = null;
   /** The cage fields each slot's surface shows (the style's shared ones while the car is pristine, else the car's own). */

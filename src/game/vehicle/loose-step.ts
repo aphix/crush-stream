@@ -5,7 +5,7 @@ import { GRAVITY } from "../kernel/constants.ts";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import { NO_FLOOR } from "../world/ground.ts";
 import { C_DEPTH, C_GRIP, C_H, C_NX, C_NZ, clearOf, HIT_SIZE, holdTops, pointContact, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, stirNear } from "../world/surfaces.ts";
-import { centreOfMass, moveBody, placeBody, standAtCentre, bindBody } from "./car-air-body.ts";
+import { body, centreOfMass, moveBody, placeBody, standAtCentre, bindBody, type TopMet } from "./car-air-body.ts";
 import { loadShape, readPoints } from "./car-air-points.ts";
 import { openRows, solveRows } from "./car-air.ts";
 import { DENT_MIN_DV, recordDent, type DentState } from "./loose-dent.ts";
@@ -161,9 +161,10 @@ export function fitWheelShape(wheel: LooseBody): void {
  * rims) meet what is under and beside them by the one point query, with the point's own velocity (`pointContact`: the ground, every
  * prism, the other cars' tops, car `skip`'s left out), as every body's points do, so a part topples, rolls, slides off an edge and stops
  * at a wall. Here: its sleep, the gate that asks no point when nothing is near, its spin dying in the air, and its dent.
- * True when a sleeper at rest woke because something came near it (`stirNear`): a body woken by speed given it is not a stir.
+ * True when a sleeper at rest woke because something came near it (`stirNear`): a body woken by speed given it is not a stir. `met` hears
+ * each of its points on another car's top.
  */
-export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentState): boolean {
+export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentState, met?: TopMet): boolean {
   const shape = p.shape;
   const object = p.object;
   const v = p.velocity;
@@ -178,6 +179,7 @@ export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentSta
     stirred = still;
   }
   bindBody(object, v, w, shape.centre, shape.invI, skip, true, dt);
+  if (met) body.met = met;
   moveBody();
   // Its spin dies in the air as it always did.
   w.multiplyScalar(Math.pow(SPIN_KEPT_PER_S, dt));

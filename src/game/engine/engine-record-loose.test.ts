@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
+import { crownY } from "../vehicle/car-cage-rig.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { assignClass, HANDLING } from "../vehicle/vehicle-classes.ts";
 import { fleetClass, fleetStyle } from "../scenes/fleet.ts";
@@ -19,7 +20,8 @@ import { FINE_HZ } from "../kernel/constants.ts";
 /**
  * A car whose parts are torn off before its clip begins (owner flag KGXD-SC0N, 2026-10-15: a replay "begins with all those parts being thrown off the
  * car"). A head-on pair makes the clip; a parked car 25 m off its hit rides in it as a bystander with a door, a quarter panel and a wheel off from the
- * first step and its hood torn 30 steps before the clip's keyframe, in the air when the keyframe is taken.
+ * first step and its hood torn 30 steps before the clip's keyframe, in the air when the keyframe is taken. Its trunk lid lies on the roof of a car
+ * too far from the hit to be a bystander, which drives off from under it while the clip runs.
  */
 const H = Math.fround(1 / FINE_HZ);
 const STEPS = 10 * FINE_HZ;
@@ -28,6 +30,15 @@ const B = 1;
 const PARKED = 2;
 const IMPACT_X = 130;
 const PARKED_Z = 25;
+/** A car standing 100 m from the hit with the parked car's trunk lid on its roof. */
+const CARRIER = 3;
+/** Past `BYSTANDER_R` (80 m) of the hit and of the pair's road: only what its roof does to the lid can put it in the clip. */
+const CARRIER_Z = 100;
+/** A second into the clip the carrier drives off at this throttle (about 6 m/s) and the lid slides off its roof's back, 1.7 m in 1.5 s (measured). */
+const DRIVE_AFTER_KEY = FINE_HZ;
+const CARRIER_THROTTLE = 0.1;
+/** The trunk lid is let go this far (m) over the carrier's roof. */
+const LID_DROP = 0.5;
 /** Steps before the clip's keyframe the hood comes off (in the air at the keyframe), and the popped wheel's. */
 const HOOD_BEFORE_KEY = 30;
 const WHEEL_BEFORE_KEY = 20;
@@ -57,7 +68,7 @@ function looseBodies(car: DeformableCar): Float64Array {
   return Float64Array.from(rows);
 }
 
-/** A head-on in a flat field with a parked car beside it. `keyStep`, the step of the clip's keyframe (-1 while it is not known: a first pass finds it), is when the parked car's hood and wheel are torn, that long before it. */
+/** A head-on in a flat field with a parked car beside it and a car standing 100 m off. `keyStep`, the step of the clip's keyframe (-1 while it is not known: a first pass finds it), is when the parked car's hood and wheel are torn, that long before it. */
 function record(keyStep: number): Recorded {
   const { dress } = makeWorld();
   const scene = new THREE.Scene();
@@ -67,15 +78,19 @@ function record(keyStep: number): Recorded {
     dress(car);
     return car;
   };
-  const cars = [A, B, PARKED].map(make);
+  const cars = [A, B, PARKED, CARRIER].map(make);
   cars[A]!.spawnFacing(0, 0, Math.PI / 2, 15);
   cars[B]!.spawnFacing(2 * IMPACT_X, 0, -Math.PI / 2, 15);
   cars[PARKED]!.spawnFacing(IMPACT_X, PARKED_Z, 0, 0);
+  const carrier = cars[CARRIER]!;
+  carrier.spawnFacing(IMPACT_X, CARRIER_Z, Math.PI / 2, 0);
   const rec = new CrashRecorder({ recall: (_i, out) => out.set([-1]), knocks: () => new Uint8Array(16) });
   rec.begin("flat", HANDLING.realism, false, 4, (i) => `c${i}`, 1);
   const world = newWorld(cars);
   world.pairHit = (a, b, hit) => rec.pairHit(a, b, hit);
   world.partTouch = (a, b) => rec.touch(a, b);
+  // As the race wires it (`RaceDirector.partMet`).
+  world.partMet = (own, top) => rec.partMet(own, top);
   const parked = cars[PARKED]!;
   const part = (name: string) => parked["parts"].find((p) => p.name === name)!;
   const trace: Float64Array[] = [];
@@ -84,12 +99,17 @@ function record(keyStep: number): Recorded {
     if (s === 0) {
       parked["detachPart"](part("doorL"), 12);
       parked["detachPart"](part("quarterL"), 12);
+      const lid = part("trunk");
+      parked["detachPart"](lid, 0);
+      lid.object.position.copy(carrier.group.position).y += crownY(carrier) + LID_DROP;
+      lid.velocity.set(0, 0, 0);
+      lid.angular.set(0, 0, 0);
     }
     if (keyStep > 0 && s === keyStep - HOOD_BEFORE_KEY) parked["detachPart"](part("hood"), 20);
     if (keyStep > 0 && s === keyStep - WHEEL_BEFORE_KEY) parked["dropWheel"](0, "hubFL");
     rec.startStep(cars);
     for (const [i, car] of cars.entries()) {
-      input.throttle = i === PARKED ? 0 : 1;
+      input.throttle = i === A || i === B ? 1 : i === CARRIER && keyStep > 0 && s >= keyStep + DRIVE_AFTER_KEY ? CARRIER_THROTTLE : 0;
       applyDrive(car, input, H);
     }
     stepWorld(world, H);
@@ -113,6 +133,11 @@ function gap(a: Float64Array, b: Float64Array): number {
   return worst;
 }
 
+/** `looseBodies`' rows, one per body. */
+function bodyRows(bodies: Float64Array): Float64Array[] {
+  return Array.from({ length: bodies.length / ROW }, (_, k) => bodies.subarray(ROW * k, ROW * k + ROW));
+}
+
 const first = record(-1);
 const keyStep = Math.round(first.clip.t0 / H);
 const run = record(keyStep);
@@ -133,7 +158,7 @@ function replayAgainstLive(): { atStart: number; later: number } {
   return { atStart, later };
 }
 
-describe("given a parked car with a door, a quarter panel and a wheel off before a head-on's clip begins and its hood in the air when the clip's keyframe is taken", () => {
+describe("given a parked car with a door, a quarter panel and a wheel off before a head-on's clip begins, its hood in the air when the clip's keyframe is taken and its trunk lid on the roof of a car 100 m from the hit that drives off from under it", () => {
   it("when the clip is filed, then the parked car rides in it with its parts already off at the keyframe: some lying asleep, one still flying", () => {
     assert.ok(parkedSlot >= 0, "the parked car is a bystander of the clip");
     assert.ok(keyStep > HOOD_BEFORE_KEY, `the clip's keyframe is at step ${keyStep}`);
@@ -141,12 +166,18 @@ describe("given a parked car with a door, a quarter panel and a wheel off before
     const before = trace[keyStep - 2]!;
     assert.ok(atKey.length / ROW >= 4, `${atKey.length / ROW} loose bodies at the keyframe: door, quarter panel, hood and wheel`);
     const hoodSlot = cars[PARKED]!["parts"].findIndex((p) => p.name === "hood");
-    const row = (bodies: Float64Array) => Array.from({ length: bodies.length / ROW }, (_, k) => bodies.subarray(ROW * k, ROW * k + ROW));
-    const hood = row(atKey).find((r) => r[0] === hoodSlot)!;
-    const hoodBefore = row(before).find((r) => r[0] === hoodSlot)!;
+    const hood = bodyRows(atKey).find((r) => r[0] === hoodSlot)!;
+    const hoodBefore = bodyRows(before).find((r) => r[0] === hoodSlot)!;
     assert.ok(gap(hood.subarray(ROW_POSITION, ROW_POSITION + 3), hoodBefore.subarray(ROW_POSITION, ROW_POSITION + 3)) > 1e-6, "the hood is still moving at the keyframe");
-    assert.ok(row(atKey).some((r) => r[ROW_ASLEEP] === 1), "some torn part lies asleep at the keyframe");
-    assert.ok(row(atKey).some((r) => r[ROW_DENTS]! > 0), "a part has been dented in its fall");
+    assert.ok(bodyRows(atKey).some((r) => r[ROW_ASLEEP] === 1), "some torn part lies asleep at the keyframe");
+    assert.ok(bodyRows(atKey).some((r) => r[ROW_DENTS]! > 0), "a part has been dented in its fall");
+  });
+
+  it("when the clip is filed, then the car the trunk lid slid off rides in it, and the lid moved over a metre while the clip ran", () => {
+    const lidSlot = cars[PARKED]!["parts"].findIndex((p) => p.name === "trunk");
+    const [atKey, atEnd] = [trace[keyStep - 1]!, trace[keyStep - 1 + clip.h.length]!].map((bodies) => bodyRows(bodies).find((r) => r[0] === lidSlot)!.subarray(ROW_POSITION, ROW_POSITION + 3));
+    assert.ok(gap(atKey!, atEnd!) > 1, "the lid moved more than a metre over the clip");
+    assert.ok(clip.cars.some((c) => c.slot === CARRIER), `the carrier is in the clip (its cars: ${clip.cars.map((c) => c.slot).join(",")})`);
   });
 
   it("when the clip is replayed, then at its start every torn part and the popped wheel lie or fly where the live sim had them, to the bit, not thrown off the car afresh", () => {

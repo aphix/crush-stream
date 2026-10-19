@@ -217,13 +217,17 @@ export const _crushBack = new THREE.Vector3();
 /** A car's centre of mass in its own frame: `COM_Y` up the origin. */
 export const CAR_CENTRE = new THREE.Vector3(0, COM_Y, 0);
 
+/** A torn part or popped wheel of car `own` met car `top`'s top (`stepLoose`): what moved it is in the world, which a highlight clip with `own` must keep. */
+export type TopMet = (own: number, top: number) => void;
+const NO_MET: TopMet = () => {};
+
 /**
  * The body the rigid step moves, set by `bindBody`. Every body takes the same step (`moveBody`, `placeBody`, `readPoints`, `openRows`,
  * `solveRows`): `stepFree` adds a car's tyres, springs, belly and face budgets between them, `stepLoose` a part's sleep and its gating
  * of the point reads. `q`, `pos`, `v`, `w` are the body's own pose and its velocity and spin (unit mass), `centre` its centre of mass in
  * its own frame, `invI` its inverse inertia per unit mass about its own axes, `skip` its slot asked of the world, `surf` the faces it
  * shares with other cars, `mass` its mass over theirs. `driven`, `parked`, `powered` are a car's drive state (its tyres' friction),
- * `nearing` that a point not yet in a surface reaches it within the slice at its closing speed.
+ * `nearing` that a point not yet in a surface reaches it within the slice at its closing speed, `met` what a part's point on a car's top reports.
  */
 export const body = {
   q: new THREE.Quaternion(),
@@ -242,6 +246,7 @@ export const body = {
   parked: false,
   powered: false,
   nearing: false,
+  met: NO_MET,
 };
 
 /**
@@ -267,6 +272,7 @@ export function bindBody(object: THREE.Object3D, v: THREE.Vector3, w: THREE.Vect
   body.parked = false;
   body.powered = false;
   body.nearing = false;
+  body.met = NO_MET;
   // No car under it bears weight onto it (`takeBorne` sets these for a car).
   if (part) {
     _lv.set(0, 0, 0);

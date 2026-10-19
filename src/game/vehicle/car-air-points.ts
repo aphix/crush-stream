@@ -33,6 +33,7 @@ export function bodyContact(n: number, hit: Float64Array, hull: boolean): void {
   const { q, v, w, surf, mass, part } = body;
   // A part is on the world's faces whatever it stands on: a car's top is no budget of that car's face, and bears nothing of it.
   const own = part ? -1 : hit[C_OWNER]!;
+  if (part && hit[C_OWNER]! >= 0) body.met(body.skip, hit[C_OWNER]!);
   N[n]!.set(hit[C_NX]!, hit[C_NY]!, hit[C_NZ]!);
   TYRE[n] = false;
   HUB[n] = false;

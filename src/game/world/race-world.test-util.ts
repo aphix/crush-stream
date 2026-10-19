@@ -148,6 +148,7 @@ export function makeWorld(survivalCourse?: unknown, tracks?: Map<string, Track>)
     w.onPairContact?.(a, b);
   };
   step.partTouch = race.partTouch;
+  step.partMet = race.partMet;
   step.lone = true;
   return w;
 }
