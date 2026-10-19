@@ -233,8 +233,8 @@ const POSE_S = HUNT.gap + 0.5;
 
 /**
  * Cops dropped in with the chase camera at `poses` places evenly round `path`, the player driving on at `speed` m/s from each. Staged, not waited for: at each pose's turn
- * every cop on the road is wrecked, so the pack is short and the next drop-in is due at once, and the player is put on the pose; the drop-in is judged against the
- * camera of the frame it shows in.
+ * every running cop on the road is wrecked (`disable`: it drags to a stop, as a gunned-down one does, not coasting on at chase speed into the player put there), so the
+ * pack is short and the next drop-in is due at once, and the player is put on the pose; the drop-in is judged against the camera of the frame it shows in.
  */
 export function dropInsAtPoses(w: World, path: Track["path"], poses: number, speed: number): Play {
   const at = Array.from({ length: poses }, (_, i) => {
@@ -246,7 +246,7 @@ export function dropInsAtPoses(w: World, path: Track["path"], poses: number, spe
     const next = ww.race.time < 0 ? -1 : Math.floor(ww.race.time / POSE_S);
     if (next !== turn && next >= 0 && next < poses) {
       turn = next;
-      for (let i = 1; i < ww.live().length; i++) if (ww.cars[i]!.group.visible) ww.cars[i]!.deform.drivetrainAlive = false;
+      for (let i = 1; i < ww.live().length; i++) if (ww.cars[i]!.group.visible && ww.cars[i]!.deform.drivetrainAlive) ww.cars[i]!.disable();
       ww.cars[0]!.spawnFacing(at[turn]!.x, at[turn]!.z, at[turn]!.yaw, speed);
     }
     const p = at[Math.max(turn, 0)]!;
