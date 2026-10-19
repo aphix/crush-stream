@@ -64,8 +64,8 @@ const GRACE = 0.35;
 const SLIDE = 0.12;
 /** Torso speed (m/s) under which a dummy counts as lying still. */
 const REST_SPEED = 0.4;
-/** Roll (rad/s) every thrown driver leaves with about his line of flight: about a quarter turn over the long jump's 3 s in the air (owner: a VERY slight spin at launch). */
-export const EJECT_ROLL = 0.5;
+/** Roll (rad/s) every thrown driver leaves with about his line of flight: about half a turn over the long jump's 3 s in the air (owner: slight, but noticeable). */
+export const EJECT_ROLL = 1.0;
 /**
  * Sim seconds a throw judged before Rapier is in may wait for it; later it is dropped (a dummy out of a car that
  * stopped a second ago reads as a glitch). Rapier lands 0.45 s after `ready` in a production build, a fleet's
