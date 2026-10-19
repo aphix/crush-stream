@@ -235,9 +235,12 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * rests about 5 m farther on the range sand; the driver's exit pane breaks in the step that throws him, live and in a replay alike. A clip of 121 or before no longer reads.
  * 123: a contact at 1.5 times the EBS a wreck's hit armed at (`HARDER_HIT`) re-arms the hit inside `REARM_QUIET`, so a door graze no longer sizes the nose hit that follows it
  * into a pile; a pair contact wakes its cars only while it closes faster than rest speed, and a sleeping wreck wakes only at rest speed or when stirred. A clip of 122 or before no longer reads.
+ * 124: a crushed node springs back min(0.08 m, 0.015 + 10 % of its crush) and in shape mode the set moves the clusters' rest, so dents stay (75-90 % of peak); a head-on pair
+ * stops at 0.9 of its stroke (the crossing slice's exchange is split); a frozen wreck resting on a barrier takes no slab exchange and goes quiet; glass cracks or shatters from its
+ * frame's distortion (windscreen 5 / 30 mm, tempered 30 mm) and a shattered laminated windscreen stays in the contact cage. A clip of 123 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 123;
+const REPLAY_VERSION = 124;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

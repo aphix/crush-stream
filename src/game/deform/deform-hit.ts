@@ -29,6 +29,8 @@ const _centre = new Float64Array(3);
 /** A position-only pass's start (`driftFrom`): the centroid x, z; and its end (`settleDrift`): centroid x, z then mean velocity x, z. */
 const _driftFrom = new Float64Array(2);
 const _driftNow = new Float64Array(4);
+const _rate = new THREE.Vector3();
+const _toCar = new THREE.Quaternion();
 
 /**
  * Reset and mode, the shape-match rest, kinematic binding, crush start and re-arm, and impulses into the masses.
@@ -672,9 +674,40 @@ export abstract class DeformHit extends DeformRig {
     return (rest - 0.36 - this.crumpleTravelCorner()) / Math.max(1e-3, this.hitStroke());
   }
 
+  /**
+   * The struck face's crush (m, `strokeUsed` × `hitStroke`) `t` s ahead: its masses' world positions carried on at their velocities, in
+   * the car's frame (the inverse of `carQuat`). At 0 it holds this slice's feed, which the car frame takes in only at the car's step.
+   */
+  strokeAt(carQuat: THREE.Quaternion, t: number): number {
+    const cell = this.at.cell;
+    const ix = this.impactInward.x;
+    const iz = this.impactInward.z;
+    _toCar.copy(carQuat).invert();
+    if (Math.abs(ix) > Math.abs(iz)) {
+      const door = ix > 0 ? this.at.doorL : this.at.doorR;
+      const d = fromCell(door, cell, t);
+      return (d.x - door.rest.x + cell.rest.x) * ix + (d.z - door.rest.z + cell.rest.z) * iz;
+    }
+    const { bumperFL, bumperFR, bumperRL, bumperRR } = this.at;
+    if (iz > 0) {
+      const lag = 0.36 + 2 * cell.rest.z;
+      const rl = -fromCell(bumperRL, cell, t).z - lag;
+      const rr = -fromCell(bumperRR, cell, t).z - lag;
+      return cell.rest.z - Math.max(bumperRL.rest.z, bumperRR.rest.z) - 0.36 - Math.max(Math.min(rl, rr), 0);
+    }
+    const fl = fromCell(bumperFL, cell, t).z - 0.36;
+    const fr = fromCell(bumperFR, cell, t).z - 0.36;
+    return Math.min(bumperFL.rest.z, bumperFR.rest.z) - cell.rest.z - 0.36 - Math.max(Math.min(fl, fr), 0);
+  }
+
   /** Crush travel (m) the struck face has left: the nose or tail's `crumpleTravelCorner` on an end hit, the door band less its crush on a flank. */
   faceTravel(): number {
     if (Math.abs(this.impactInward.x) > Math.abs(this.impactInward.z)) return Math.max(0, this.at.doorL.bands.max - this.doorCrush());
     return this.crumpleTravelCorner();
   }
+}
+
+/** `_rate` ← where `m` will be `t` s on from where `cell` will be, both at their velocities, in the car's frame (`_toCar`). */
+function fromCell(m: MassNode, cell: MassNode, t: number): THREE.Vector3 {
+  return _rate.set(m.world.x - cell.world.x + (m.vel.x - cell.vel.x) * t, m.world.y - cell.world.y + (m.vel.y - cell.vel.y) * t, m.world.z - cell.world.z + (m.vel.z - cell.vel.z) * t).applyQuaternion(_toCar);
 }

@@ -67,17 +67,12 @@ const MIRROR_POP = 0.5;
 const _seatDoor = new THREE.Matrix4();
 const _seatMirror = new THREE.Matrix4();
 const _unitScale = new THREE.Vector3(1, 1, 1);
-/**
- * Glass against its frame's strain (`cageStrain`, m): the windshield and rear glass read their own cage, side glass its
- * door's. Peaks measured over the standard crashes: an unloaded pane reads ≤ 0.055 (the far door of a 30–50 km/h side hit),
- * a loaded frame 0.088–0.20 (the struck door of a 50 km/h side hit 0.088, the windshield of a 35 km/h wall hit 0.107), a
- * collapsed one 0.266–0.43 (the windshield of a 56 km/h wall hit 0.266). Any load cracks a pane; tempered side and rear
- * glass bursts once its frame has clearly moved, the laminated windshield only once its frame has collapsed. Each bound
- * sits about 0.012 clear of the strains on either side of it.
- */
-const GLASS_CRACK = 0.063;
-const GLASS_TEMPERED = 0.075;
-const GLASS_LAMINATED = 0.25;
+/** Glass against its frame's distortion (`glassDistortion`, m): the laminated windscreen cracks from a few mm of differential aperture movement. */
+const GLASS_CRACK = 0.005;
+/** Tempered side and rear glass bursts once its frame is about 3 cm out of true, in any direction. */
+const GLASS_TEMPERED = 0.03;
+/** The laminated windscreen "shatters" (extensive cracking, the bond line letting go) at about 30 mm of racking. */
+const GLASS_LAMINATED = 0.03;
 
 /** Police light bar: shears off once the roof mass under it sinks this far (m below its rest height; a
  *  56 km/h frontal sinks it ~0.07), or on any hit at or above this EBS (60 km/h, arcade: a big crash throws
@@ -663,9 +658,10 @@ export abstract class CarParts extends CarGlass {
     for (let k = 0; k < this.glassPanes.length; k++) {
       const g = this.glassPanes[k]!;
       if (g.state === "shattered") continue;
-      const strain = this.deform.cageStrain(g.skin ?? (g.parts.includes(DOOR_LEFT) ? DOOR_LEFT : DOOR_RIGHT));
-      if (g.state === "intact" && strain > GLASS_CRACK) this.crackGlass(g);
-      if (strain > (g.skin === "glassFront" ? GLASS_LAMINATED : GLASS_TEMPERED)) this.shatterGlass(g);
+      const distortion = this.deform.glassDistortion(g.skin ?? (g.parts.includes(DOOR_LEFT) ? DOOR_LEFT : DOOR_RIGHT));
+      const laminated = g.skin === "glassFront";
+      if (laminated && g.state === "intact" && distortion > GLASS_CRACK) this.crackGlass(g);
+      if (distortion > (laminated ? GLASS_LAMINATED : GLASS_TEMPERED)) this.shatterGlass(g);
     }
 
     const ebs = this.deform.hitSpeedValue;

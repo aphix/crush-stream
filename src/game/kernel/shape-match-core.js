@@ -662,8 +662,14 @@ function applyPlasticity(c, particles) {
   if (Sp[0] > 1.06) Sp[0] = 1.06;
   if (Sp[4] > 1.06) Sp[4] = 1.06;
   if (Sp[8] > 1.06) Sp[8] = 1.06;
-  // The plastic rest is Sp·q0. q0 itself only moves when the contact window closes and the
-  // owner rebases it onto the deformed shape (resetCluster), so a turned cluster keeps its size.
+  plasticRest(c, particles);
+}
+/**
+ * The plastic rest Sp·q0 and its moments. q0 moves only when the contact window closes and the owner rebases it onto the
+ * deformed shape (resetCluster), or when a member takes a permanent set (shiftRest), so a turned cluster keeps its size.
+ */
+function plasticRest(c, particles) {
+  const Sp = c.Sp;
   const sp0 = Sp[0], sp1 = Sp[1], sp2 = Sp[2], sp3 = Sp[3], sp4 = Sp[4], sp5 = Sp[5], sp6 = Sp[6], sp7 = Sp[7], sp8 = Sp[8];
   const idx = c.idx, q0x = c.q0x, q0y = c.q0y, q0z = c.q0z, qx = c.qx, qy = c.qy, qz = c.qz;
   let a00 = 0, a01 = 0, a02 = 0, a11 = 0, a12 = 0, a22 = 0;
@@ -691,6 +697,28 @@ function applyPlasticity(c, particles) {
   _mom[4] = a12;
   _mom[5] = a22;
   restMomentsInto(c);
+}
+/** `shiftRest`'s inputs, filled by the caller (the doubles of a call V8 does not inline are boxed): the member in [0], the move (m) in [1..3]. */
+const REST_SHIFT = new Float64Array(4);
+/** Member REST_SHIFT[0] of `c` takes a permanent set: its rest point moves by REST_SHIFT[1..3], the rest centroid with it. */
+function shiftRest(c, particles) {
+  const k = REST_SHIFT[0], dx = REST_SHIFT[1], dy = REST_SHIFT[2], dz = REST_SHIFT[3];
+  const idx = c.idx, q0x = c.q0x, q0y = c.q0y, q0z = c.q0z;
+  let msum = 0;
+  for (let i = 0; i < idx.length; i++) msum += particles[idx[i]].mass;
+  const w = particles[idx[k]].mass / Math.max(msum, 1e-8);
+  for (let i = 0; i < idx.length; i++) {
+    q0x[i] -= w * dx;
+    q0y[i] -= w * dy;
+    q0z[i] -= w * dz;
+  }
+  q0x[k] += dx;
+  q0y[k] += dy;
+  q0z[k] += dz;
+  c.cm0x += w * dx;
+  c.cm0y += w * dy;
+  c.cm0z += w * dz;
+  plasticRest(c, particles);
 }
 function resetCluster(c, particles) {
   m3Id(c.Sp);
@@ -796,6 +824,7 @@ function deformBeta(squash) {
 
 export {
   PLASTIC,
+  REST_SHIFT,
   applyPlasticity,
   deformBeta,
   goalAlpha,
@@ -811,5 +840,6 @@ export {
   quatId,
   rebuildAqqWeighted,
   resetCluster,
+  shiftRest,
   stiffnessIters,
 };

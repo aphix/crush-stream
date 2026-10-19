@@ -52,7 +52,9 @@ function panelsOf(car: DeformableCar): Panel[] {
   if (bar !== null) panels.push(lid(bar, car["lightBarRest"]!, car["lightBarOrigin"], "roof"));
   for (const pane of car["glassPanes"]) {
     if (pane.skin === null || pane.restVerts === null) continue;
-    panels.push({ mesh: pane.mesh, rest: pane.restVerts, origin: ZERO, part: pane.skin, on: () => pane.state !== "shattered", hinged: null, seat: pane.restPos });
+    // A shattered laminated windshield holds its fragments on the interlayer: it stays a body. Burst tempered glass is gone.
+    const holds = pane.skin === "glassFront";
+    panels.push({ mesh: pane.mesh, rest: pane.restVerts, origin: ZERO, part: pane.skin, on: () => holds || pane.state !== "shattered", hinged: null, seat: pane.restPos });
   }
   return panels;
 }

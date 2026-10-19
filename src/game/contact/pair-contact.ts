@@ -419,6 +419,72 @@ function crushedSoFar(d: DeformableCar["deform"]): number {
 }
 
 /**
+ * Share (0-1) of this slice's stroke travel that fits in the room a crashed car's struck face has left before `PACKED_STROKE`, both read
+ * off its masses as they stand now, this slice's feed in (`strokeAt`); 1 when all of it fits.
+ */
+function roomShare(car: DeformableCar, dt: number): number {
+  const d = car.deform;
+  if (!car.crashed || !d.massActive) return 1;
+  const q = car.group.quaternion;
+  const now = d.strokeAt(q, 0);
+  const room = PACKED_STROKE * d.hitStroke() - now;
+  if (room <= 0) return 0;
+  const travel = d.strokeAt(q, dt) - now;
+  return travel > room ? room / travel : 1;
+}
+
+/** A split exchange's scratch velocities (`holdVelocities`): at its start, and after its rigid half. Grown once to the largest pair. */
+const split = { start: new Float64Array(0), rigid: new Float64Array(0) };
+
+/** Vector `i` of the pair's velocities: per car its velocity, its spin, then each mass's velocity (4 + both cars' masses in all). */
+function pairVector(carA: DeformableCar, carB: DeformableCar, i: number): THREE.Vector3 {
+  const nA = 2 + carA.deform.masses.length;
+  const car = i < nA ? carA : carB;
+  const k = i < nA ? i : i - nA;
+  return k === 0 ? car.velocity : k === 1 ? car.angular : car.deform.masses[k - 2]!.vel;
+}
+
+function holdVelocities(carA: DeformableCar, carB: DeformableCar, out: Float64Array): void {
+  const count = 4 + carA.deform.masses.length + carB.deform.masses.length;
+  for (let i = 0; i < count; i++) {
+    const v = pairVector(carA, carB, i);
+    out[3 * i] = v.x;
+    out[3 * i + 1] = v.y;
+    out[3 * i + 2] = v.z;
+  }
+}
+
+/** Every pair velocity ← `base` + `share` × (itself − `base`): share 0 puts `base` back, 1 leaves the cars as they are. */
+function blendVelocities(carA: DeformableCar, carB: DeformableCar, base: Float64Array, share: number): void {
+  const count = 4 + carA.deform.masses.length + carB.deform.masses.length;
+  for (let i = 0; i < count; i++) {
+    const v = pairVector(carA, carB, i);
+    v.x = base[3 * i]! + share * (v.x - base[3 * i]!);
+    v.y = base[3 * i + 1]! + share * (v.y - base[3 * i + 1]!);
+    v.z = base[3 * i + 2]! + share * (v.z - base[3 * i + 2]!);
+  }
+}
+
+/**
+ * The exchange of the slice in which the pair packs: the share of the slice's stroke travel that fits in the room left before
+ * `PACKED_STROKE` (`roomShare`, read after the crush-limited exchange) stays crush-limited (`maxJ`), the rest is rigid, so the pair stops
+ * at the packed stroke, not up to one slice's travel past it (the check reads the stroke the last slice left).
+ */
+function splitExchange(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3, p: THREE.Vector3, maxJ: number, dt: number): void {
+  const need = 12 + 3 * (carA.deform.masses.length + carB.deform.masses.length);
+  if (split.start.length < need) {
+    split.start = new Float64Array(need);
+    split.rigid = new Float64Array(need);
+  }
+  holdVelocities(carA, carB, split.start);
+  exchangePair(carA, carB, n, p, Infinity);
+  holdVelocities(carA, carB, split.rigid);
+  blendVelocities(carA, carB, split.start, 0);
+  exchangePair(carA, carB, n, p, maxJ);
+  blendVelocities(carA, carB, split.rigid, Math.max(roomShare(carA, dt), roomShare(carB, dt)));
+}
+
+/**
  * Pair SAT + crumple. Persistent overlap after the zone is spent must not
  * keep dumping cancelClosing (that is the 10s / 120 km/h zip). Every contact
  * offers each car a hit: the first one starts its crash, a fresh hard one on
@@ -509,10 +575,12 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
     // points (the lever of each about its centre in the kernel's effective mass), at the most what the crush force over the slice has
     // left after the feed's kill while a structure still yields (the hit's own barrier speed over its stroke: that of the face that
     // is not stiff, a T-bone's packed bullet nose passes on what the struck door yields), rigid once both are stiff or the crush is
-    // spent or too slow to crush.
+    // spent or too slow to crush. The slice the pair packs in splits its exchange at the packed stroke (`splitExchange`).
     const crushes = closing > CRASH.grazeMps && !spent && !(stiffA && stiffB);
     const force = Math.min(stiffA ? Infinity : crushForce(carA.deform), stiffB ? Infinity : crushForce(carB.deform));
-    exchangePair(carA, carB, n, _p, crushes ? Math.max(0, force * dt - Math.max(0, killed)) : Infinity);
+    const maxJ = crushes ? Math.max(0, force * dt - Math.max(0, killed)) : Infinity;
+    if (crushes && Math.max(roomShare(carA, dt), roomShare(carB, dt)) < 1) splitExchange(carA, carB, n, _p, maxJ, dt);
+    else exchangePair(carA, carB, n, _p, maxJ);
   }
   // The crush layer's kills are the lattice's, not an exchange: the pair's momentum is the one it had, the kernel's impulse the only
   // thing that moved it between the cars.

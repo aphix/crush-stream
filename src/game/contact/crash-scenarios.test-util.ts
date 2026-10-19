@@ -77,6 +77,8 @@ export type CrashResult = {
   /** Largest slice step of any mass past the zip limit 3·v·h + 5 cm (m; negative: the closest margin), and which. */
   massStepExcess: number;
   massStepName: string;
+  /** The most of its hit's stroke (`strokeUsed`) the car's struck face used, read after every slice of the crash. */
+  strokePeak: number;
 };
 
 export type CrashWorld = {
@@ -284,6 +286,7 @@ export class Probe {
     tyreOverlap: -Infinity,
     massStepExcess: -Infinity,
     massStepName: "",
+    strokePeak: 0,
   };
   private prevYaw = 0;
   /** Mass world xz, and the fastest mass speed, after the last slice with live masses (empty until then). */
@@ -318,6 +321,7 @@ export class Probe {
     if (h > 0) this.slices.push({ h, v: this.car.velocity.dot(this.dir) });
     const d = this.car.deform;
     if (!d.massActive || h <= 0) return;
+    if (this.car.crashed) this.r.strokePeak = Math.max(this.r.strokePeak, d.strokeUsed());
     let v = this.car.velocity.length();
     for (const m of d.masses) v = Math.max(v, m.vel.length());
     const limit = 3 * Math.max(v, this.massPrevV) * h + 0.05;

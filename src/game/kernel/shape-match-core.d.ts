@@ -64,6 +64,9 @@ export const PLASTIC: Float64Array;
 /** Plastic flow of one cluster, its slice length, squash and buckle read from `PLASTIC` [0..2] (no argument boxing). */
 export function applyPlasticity(c: ShapeCluster, particles: ShapeParticle[]): void;
 export function resetCluster(c: ShapeCluster, particles: ShapeParticle[]): void;
+export const REST_SHIFT: Float64Array;
+/** Member `REST_SHIFT[0]` of `c` takes a permanent set: its rest point moves by `REST_SHIFT[1..3]` (m), the rest centroid with it. */
+export function shiftRest(c: ShapeCluster, particles: ShapeParticle[]): void;
 export function matchSkinLocal(
   c: ShapeCluster,
   rest: { x: number; y: number; z: number }[],

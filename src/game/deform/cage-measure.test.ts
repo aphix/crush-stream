@@ -79,3 +79,26 @@ describe("given a car that has taken a hard nose hit", () => {
     assert.equal(car.deform.partCompression("nope" as BodyPartName), 0);
   });
 });
+
+describe("given a car's glazed cages (the windscreen's, the rear glass's and the doors')", () => {
+  const TURN = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.3, 0.6, -0.2));
+  const SHIFT = new THREE.Vector3(2, -0.5, 1);
+  /** How far (m) one corner of the windscreen's aperture is pushed. */
+  const PUSH = 0.03;
+
+  test("when every corner of each turns 0.7 rad and shifts 2.3 m as one body, then the glass distortion reads 0 to 1e-9 m; when one windscreen aperture corner is then pushed 3 cm, it reads more than 1 cm and at most 3 cm", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene());
+    for (const name of ["glassFront", "glassRear", "doorLeft", "doorRight"] as const) {
+      const cage = car.deform["cageByPart"].get(name)!;
+      for (let i = 0; i < 8; i++) cage.corners[i]!.copy(cage.restCorners[i]!).applyQuaternion(TURN).add(SHIFT);
+      assert.ok(car.deform.glassDistortion(name) < 1e-9, `${name} moved rigidly reads ${car.deform.glassDistortion(name)} m`);
+    }
+    car.deform["cageByPart"].get("glassFront")!.corners[3]!.x += PUSH;
+    const pushed = car.deform.glassDistortion("glassFront");
+    assert.ok(pushed > PUSH / 3 && pushed <= PUSH, `one corner pushed ${PUSH} m reads ${pushed} m`);
+  });
+
+  test("when a cage holds no pane, then its glass distortion is 0", () => {
+    assert.equal(crashed().deform.glassDistortion("bonnet"), 0);
+  });
+});

@@ -9,7 +9,9 @@ import {
   type ShapeCluster,
   matchCluster,
   PLASTIC,
+  REST_SHIFT,
   applyPlasticity,
+  shiftRest,
   matchSkinLocal,
   deformBeta,
   goalAlpha,
@@ -281,6 +283,40 @@ describe("given a cluster of particles that can yield plastically (keep a perman
     const qz = Math.hypot(c.qx[0]!, c.qy[0]!, c.qz[0]!);
     const q0 = Math.hypot(c.q0x[0]!, c.q0y[0]!, c.q0z[0]!);
     assert.ok(qz < q0 * 0.95 || m3FrobeniusI(c.Sp) > 0.15, "plastic rest did not shorten");
+  });
+
+  it("when one particle is dented 0.2 m in and its rest takes that set, then every goal sits on the dented shape, where without the set the dented particle's goal is over 0.1 m out", () => {
+    const rest: [number, number, number][] = [
+      [1, 0, 1],
+      [-1, 0, 1],
+      [1, 0, -1],
+      [-1, 0, -1],
+      [0, 1, 0],
+      [0, -1, 0],
+    ];
+    const worstPull = (set: boolean): number => {
+      const P = particlesAt(rest);
+      const c = makeCluster(P, P.map((_, i) => i));
+      P[0]!.z -= 0.2;
+      if (set) {
+        REST_SHIFT[0] = 0;
+        REST_SHIFT[1] = 0;
+        REST_SHIFT[2] = 0;
+        REST_SHIFT[3] = -0.2;
+        shiftRest(c, P);
+      }
+      matchCluster(c, P, 0);
+      let worst = 0;
+      for (let i = 0; i < P.length; i++) {
+        const gx = c.M[0]! * c.qx[i]! + c.M[1]! * c.qy[i]! + c.M[2]! * c.qz[i]! + c.cmx;
+        const gy = c.M[3]! * c.qx[i]! + c.M[4]! * c.qy[i]! + c.M[5]! * c.qz[i]! + c.cmy;
+        const gz = c.M[6]! * c.qx[i]! + c.M[7]! * c.qy[i]! + c.M[8]! * c.qz[i]! + c.cmz;
+        worst = Math.max(worst, Math.hypot(gx - P[i]!.x, gy - P[i]!.y, gz - P[i]!.z));
+      }
+      return worst;
+    };
+    assert.ok(worstPull(true) < 1e-9, `a goal ${worstPull(true)} m off the set shape`);
+    assert.ok(worstPull(false) > 0.1, `the dent's goal only ${worstPull(false).toFixed(3)} m out without the set`);
   });
 
   it("when a squash to 0.3 is held for 8 steps, then the permanent deformation keeps the volume (its determinant stays between 0.25 and 2.8)", () => {

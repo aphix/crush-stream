@@ -8,7 +8,8 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { leftoverCrumple, snapshotPoints } from "./physics-util.ts";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { DT, dummyGeom, forModes, mass, paint } from "../vehicle/test-support.ts";
-import { FREEWHEEL, makeCar, makeWorld, PARKED, runPair, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { FREEWHEEL, launch, makeCar, makeWorld, PARKED, runPair, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { classCar } from "../vehicle/ejection.test-util.ts";
 import { sliceSpeed } from "../contact/sat.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { DebrisSystem } from "../present/engine-fx.ts";
@@ -413,21 +414,49 @@ describe("given an engine block made of a left and a right half, 0.60 m apart", 
   });
 });
 
-describe("given a car's glass panes", () => {
-  it("when a car hits a wall at 35 km/h and at 56 km/h, and is hit from the side at 50 km/h, then the windscreen cracks at 35 and shatters at 56 with the rear glass intact, and the side hit shatters the left door glass but not the right", () => {
-    const glassAfter = (kph: number, approach: "front" | "side") => {
-      const car = makeCar();
-      runWall(kph, 1, approach, { car });
-      return car["glassPanes"].map((g) => g.state);
-    };
-    // Pane order (addGlass): 0 windscreen, 1 rear glass, 2/3 door glass L/R.
-    const slow = glassAfter(35, "front");
-    assert.deepEqual([slow[0], slow[1]], ["cracked", "intact"], "35 km/h wall");
-    assert.equal(glassAfter(56, "front")[0], "shattered", "56 km/h wall windscreen");
+describe("given a car's glass panes, which break from their frame's distortion", () => {
+  const glassAfter = (kph: number, approach: "front" | "side", car = makeCar()): string[] => {
+    runWall(kph, 1, approach, { car });
+    return car["glassPanes"].map((g) => g.state);
+  };
+  // Pane order (addGlass): 0 windscreen, 1 rear glass, 2/3 door glass L/R, 4/5 quarter glass L/R.
+  it("when a car taps a wall at 15 km/h, then every pane stays intact: a frame that has not moved breaks no glass", () => {
+    assert.equal(glassAfter(15, "front").join(), "intact,intact,intact,intact,intact,intact");
+  });
+
+  // 50 km/h, not 56: at 56 the drivetrain dies and the driver is thrown through the windscreen, which smashes it (the ejection rows own that).
+  it("when a car hits a wall at 20, 35 and 50 km/h, and is hit on its left at 50 km/h, then 20 and 35 leave every pane intact, the 50 km/h wall cracks the windscreen and shatters both doors' glass with no driver thrown out, and the side hit shatters the windscreen, the rear glass and the left door's glass but not the right's", () => {
+    assert.equal(glassAfter(20, "front").join(), "intact,intact,intact,intact,intact,intact", "20 km/h wall");
+    assert.equal(glassAfter(35, "front").join(), "intact,intact,intact,intact,intact,intact", "35 km/h wall");
+    const car = makeCar();
+    const hard = glassAfter(50, "front", car);
+    assert.equal(car.driverOut, null, "50 km/h wall: the driver stayed in");
+    assert.equal([hard[0], hard[2], hard[3]].join(), "cracked,shattered,shattered", "50 km/h wall: windscreen, door glass L/R");
     const side = glassAfter(50, "side");
-    assert.deepEqual([side[2], side[3]], ["shattered", "intact"], "50 km/h left side hit: door glass L/R");
+    assert.equal(side.slice(0, 4).join(), "shattered,shattered,shattered,intact", "50 km/h left side hit: windscreen, rear, door glass L/R");
+  });
+
+  it("when the same 50 km/h side hit runs with the glass breaking and with it never breaking, then every mass and every cage corner ends bit-identical: the panes hold nothing back", () => {
+    const breaking = makeCar();
+    const unbreakable = makeCar();
+    unbreakable.deform.glassDistortion = () => 0;
+    assert.equal(glassAfter(50, "side", breaking).filter((s) => s === "shattered").length, 4, "the hit broke the glass");
+    assert.equal(glassAfter(50, "side", unbreakable).join(), "intact,intact,intact,intact,intact,intact", "the glass never broke");
+    let worst = 0;
+    const ma = breaking.deform["masses"];
+    const mb = unbreakable.deform["masses"];
+    for (let i = 0; i < ma.length; i++) worst = Math.max(worst, ma[i]!.local.distanceTo(mb[i]!.local), ma[i]!.world.distanceTo(mb[i]!.world));
+    const ca = breaking.deform["cages"];
+    const cb = unbreakable.deform["cages"];
+    for (let i = 0; i < ca.length; i++) for (let k = 0; k < 8; k++) worst = Math.max(worst, ca[i]!.corners[k]!.distanceTo(cb[i]!.corners[k]!));
+    assert.equal(worst, 0);
   });
 });
+
+/** Share of the stroke both noses use before the pair goes rigid (pair-contact's `PACKED_STROKE`). */
+const PACKED = 0.9;
+/** How far (share of the stroke) the stop may land from `PACKED`: the slice's travel is predicted from the masses' speeds, not stepped. */
+const PACKED_TOL = 0.015;
 
 describe("given two cars driving head-on at each other, with the squash setting at 0.32", () => {
   it("when each car drives at 40, 56, 64 or 100 km/h, then their tyres never overlap by more than 1 cm and no part jumps farther than 3·v·h + 5 cm in a physics step (v the speed, h the step); below 100 km/h no wheel pops off, and at 56 km/h the nose crushes 0.25–0.50 m", () => {
@@ -443,12 +472,13 @@ describe("given two cars driving head-on at each other, with the squash setting 
     }
   });
 
-  // The pair goes rigid when both noses have used `PACKED_STROKE` (0.9) of the stroke; before the wreck split 115 km/h crossed it a slice late
-  // and the ladder fell 7 % (0.786 / 0.730 m at 115 / 130 km/h).
-  it("when each car's speed rises through 100, 115, 130, 150, 180 and 200 km/h, then each pair's mean nose crush is never more than 5 % below that of the slower pair before it", () => {
+  // The pair goes rigid when both noses have used `PACKED_STROKE` (0.9) of the stroke; the slice that crosses it splits its exchange there
+  // (`splitExchange`), so the stop does not land up to one slice's travel past it.
+  it("when each car's speed rises through 100, 115, 130, 150, 180 and 200 km/h, then each pair stops with both noses within 0.015 of 0.9 of their stroke used, and each pair's mean nose crush is never more than 5 % below that of the slower pair before it", () => {
     let prev = 0;
     for (const kph of [100, 115, 130, 150, 180, 200]) {
       const [a, b] = runPair(kph, kph, "head-on", { squash: 0.32 });
+      for (const r of [a, b]) assert.ok(Math.abs(r.strokePeak - PACKED) <= PACKED_TOL, `${kph} km/h head-on: the pair stopped at ${r.strokePeak.toFixed(3)} of the stroke`);
       const nose = (a.noseShortL + b.noseShortL) / 2;
       assert.ok(nose >= prev * 0.95, `${kph} km/h head-on: mean nose ${nose.toFixed(3)} m after ${prev.toFixed(3)} m at the slower speed`);
       prev = nose;
@@ -505,6 +535,67 @@ describe("given a 50 km/h T-bone, a car driving into the side of a stationary ca
       assert.ok(door >= 0.12 && door <= 0.28, `squash ${squash}: door ${door.toFixed(3)} m in the impact`);
       assert.ok(gap > 0.9, `squash ${squash}: bullet cell ${gap.toFixed(2)} m from the struck cell`);
     }
+  });
+});
+
+/** Share of a deep crush a part keeps 1 s after its deepest: real structure keeps 75-90 % of its peak, the rest springs back. */
+const KEPT_SHARE = 0.75;
+/** A crush this deep (m) is the structure's, not a skin dent's: the row's premise. */
+const DEEP_CRUSH = 0.1;
+/** How far (m) a part away from the dent may end off its rest: the body does not roll or lean onto the dent. */
+const FAR_SIDE_OFF = 0.03;
+
+/** Mass `name`'s crush (m): how far it sits from its rest place, against the cell. */
+function crushOf(car: DeformableCar, name: string): number {
+  const m = mass(car.deform, name);
+  const c = mass(car.deform, "cell");
+  return Math.hypot(m.local.x - m.rest.x - c.local.x + c.rest.x, m.local.y - m.rest.y - c.local.y + c.rest.y, m.local.z - m.rest.z - c.local.z + c.rest.z);
+}
+
+/**
+ * The ejection matrix's 50 km/h T-bone, a sedan's nose into a parked police car's right door, for 3 s: each watched part's deepest
+ * crush and its crush 1 s later, and how far the struck car's far door and roof end off their rest.
+ */
+function sideHit(): { parts: { name: string; peak: number; later: number }[]; farDoor: number; roof: number } {
+  const striker = classCar("sedan");
+  const struck = classCar("police");
+  launch(struck, 0, 0, 0, 0, 0);
+  launch(striker, 6, 0, -Math.PI / 2, -50 / 3.6, 0);
+  const w = makeWorld([striker, struck], false, false, null);
+  const watch = [
+    { car: struck, name: "doorR", peak: 0, at: 0, later: 0 },
+    { car: striker, name: "bumperFL", peak: 0, at: 0, later: 0 },
+    { car: striker, name: "bumperFR", peak: 0, at: 0, later: 0 },
+  ];
+  let t = 0;
+  while (t < 3) {
+    tickWorld(w);
+    t += w.clock.timeScale / FRAME_HZ;
+    for (const p of watch) {
+      const d = crushOf(p.car, p.name);
+      if (d > p.peak) {
+        p.peak = d;
+        p.at = t;
+      }
+      if (t <= p.at + 1) p.later = d;
+    }
+  }
+  const parts = watch.map((p) => ({ name: `${p.car === struck ? "struck" : "striker"} ${p.name}`, peak: p.peak, later: p.later }));
+  const out = { parts, farDoor: mass(struck.deform, "doorL").local.distanceTo(mass(struck.deform, "doorL").rest), roof: mass(struck.deform, "roof").local.distanceTo(mass(struck.deform, "roof").rest) };
+  striker.dispose();
+  struck.dispose();
+  return out;
+}
+
+describe("given a 50 km/h side hit, a sedan's nose into a parked police car's right door", () => {
+  it("when 1 s has passed since each part's deepest crush, then the struck door and the striker's front corners each keep at least 75 % of it, and the struck car's far door and roof end within 3 cm of their rest", () => {
+    const r = sideHit();
+    for (const p of r.parts) {
+      assert.ok(p.peak > DEEP_CRUSH, `${p.name}: crushed only ${p.peak.toFixed(3)} m`);
+      assert.ok(p.later >= KEPT_SHARE * p.peak, `${p.name}: ${p.peak.toFixed(3)} m at the deepest, ${p.later.toFixed(3)} m 1 s later`);
+    }
+    assert.ok(r.farDoor <= FAR_SIDE_OFF, `far door ${r.farDoor.toFixed(3)} m off rest`);
+    assert.ok(r.roof <= FAR_SIDE_OFF, `roof ${r.roof.toFixed(3)} m off rest`);
   });
 });
 

@@ -5,6 +5,7 @@ import { detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { bodyContact, BODY_HARD, BODY_I, BODY_M, BODY_SIZE, BODY_VX, BODY_VZ, BODY_W, BODY_X, BODY_Z, CT_DEPTH, CT_E, CT_JMAX, CT_MU, CT_NX, CT_NZ, CT_SIZE, CT_X, CT_Z, OUT_EBS_A, OUT_PUSH_A, OUT_SIZE } from "./body-contact.ts";
 import { FACE_ROW } from "../deform/deform-contact.ts";
 import { ARM_CLOSING, SOLID_MU } from "./constants.ts";
+import { CRASH } from "../deform/physics-util.ts";
 import { outlineOf } from "./cage-outline.ts";
 import { _lane, hitDoor, hitMirror, hitPanel, partHit, shutDoorsOnSolid, SIDES } from "./door-contact.ts";
 
@@ -474,7 +475,8 @@ export function strikeCar(car: DeformableCar, box: ContactBox, dt: number, crush
         car.applyImpact(_p, _n, closing, barrierSpeed);
         d.markMotion();
       }
-      if (crush || arm) d.notifyContact();
+      // A face only resting on the slab (a kept dent against the wall) is no contact: the wreck goes quiet and settles, as a pair's does.
+      if ((crush || arm) && closing > CRASH.grazeMps) d.notifyContact();
       // A fixed solid's hulls are fed as crush while they overlap it. A moving striker (piston head, press plate) feeds them only until
       // a particle reaches its face: then the structure's stroke (`exchange`) spends the hit, and feeding both crushes the corner twice
       // (wing 0.188 m against 0.029 m). A fixed solid no particle reaches (a 0.4 m arm tip between the bumper particles) has the hulls
@@ -484,7 +486,8 @@ export function strikeCar(car: DeformableCar, box: ContactBox, dt: number, crush
     shiftVelocities(car, fx * ub, fz * ub);
     d.takeMotion(car.velocity, car.angular);
   }
-  if (crush && held) {
+  // A frozen wreck resting on the face takes no exchange: its tiny impulse would thaw it every slice, before its centre caches.
+  if (crush && held && (rigid || !d.frozen || closing > CRASH.grazeMps)) {
     const ebs = Math.max(0, d.hitSpeedValue);
     // The arming slice starts the stroke at the masses' first touch, not at the slice's end: they (armed at the slice's start, `unstep`)
     // met the face earlier by the depth they are in then (`holdDepth`) and the slice's travel, so the grid cut does not move it. With no mass in, the hull's overlap reads it.

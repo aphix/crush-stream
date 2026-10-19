@@ -8,7 +8,9 @@ import {
 import {
   matchCluster,
   PLASTIC,
+  REST_SHIFT,
   applyPlasticity,
+  shiftRest,
   stiffnessIters,
   goalAlpha,
   deformBeta,
@@ -22,8 +24,12 @@ import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn
 import { detSin, detCos } from "../kernel/physics-core.js";
  import { CONTACT_WINDOW, MIN_INV_MASS, SQUASH_REACH } from "./constants.ts";
 
-/** Elastic part (m) of a crushed node's travel; the rest is permanent set. */
+/** Most of a crushed node's travel (m) that springs back; the rest is permanent set. */
 const SPRINGBACK = 0.08;
+/** A dent this shallow (m) springs back whole: a skin panel's elastic range. */
+const SPRING_YIELD = 0.015;
+/** Share of a crush past the yield that springs back: real structure keeps 75-90 % of its peak crush (17 % back at 56 km/h, SAE 2006-01-0908). */
+const SPRING_SHARE = 0.1;
 /** C4: a wheel separates only on an off-centre hit this hard (m/s EBS, 54 km/h)… */
 const HUB_POP_MPS = 15;
 /** …once the struck corner has crushed to within this of the hub (m): tyre radius 0.32 plus a 0.10 m
@@ -109,7 +115,7 @@ export abstract class DeformSolve extends DeformFreeze {
     _clamp[4] = stroke;
     // The group's world matrix once for the masses below (`localToWorld` re-composed it and its parents for every mass).
     group.updateWorldMatrix(true, false);
-    for (let i = 0; i < this.masses.length; i++) this.clampMass(this.masses[i]!, group, sideHit, pinned, squeeze, deep);
+    for (let i = 0; i < this.masses.length; i++) this.clampMass(i, group, sideHit, pinned, squeeze, deep);
     this.settleHubStand(pinned);
     // A3: each mount caps its own side of the block, but the block is one casting; hold its rest
     // spacing in the frame the masses were just clamped into (T-bone struck car: engine gap error
@@ -138,8 +144,21 @@ export abstract class DeformSolve extends DeformFreeze {
     if (this.at.hubFL.popped && this.at.hubFR.popped && this.at.hubRL.popped && this.at.hubRR.popped) this.drivetrainAlive = false;
   }
 
-  /** `clampLocal` for one mass (its doubles in `_clamp`): the far-side spring, lift, crush and lateral caps, the engine mounts and the hubs. */
-  private clampMass(m: MassNode, group: THREE.Object3D, sideHit: boolean, pinned: boolean, squeeze: boolean, deep: boolean): void {
+  /** Mass `i`'s permanent set grew by `REST_SHIFT[1..3]` (car frame): every shape cluster's rest takes it, so the goals hold the dent instead of pulling the body off it. */
+  private restTakesSet(i: number): void {
+    for (let ci = 0; ci < this.clusters.length; ci++) {
+      const idx = this.clusters[ci]!.idx;
+      for (let k = 0; k < idx.length; k++) {
+        if (idx[k] !== i) continue;
+        REST_SHIFT[0] = k;
+        shiftRest(this.clusters[ci]!, this.shapeParticles);
+      }
+    }
+  }
+
+  /** `clampLocal` for mass `i` (its doubles in `_clamp`): the far-side spring, lift, crush and lateral caps, the engine mounts and the hubs. */
+  private clampMass(i: number, group: THREE.Object3D, sideHit: boolean, pinned: boolean, squeeze: boolean, deep: boolean): void {
+    const m = this.masses[i]!;
     const ix = _clamp[0]!;
     const iz = _clamp[1]!;
     const maxAway = _clamp[2]!;
@@ -188,9 +207,8 @@ export abstract class DeformSolve extends DeformFreeze {
       }
       if (Math.abs(dx) > Math.max(latCap, Math.abs(m.shoveX))) dx = Math.sign(dx) * Math.max(latCap, Math.abs(m.shoveX));
       if (squeeze && !m.hub && m.name !== "cell") {
-        // A squeezed shape keeps its set like a one-ended hit's: only the last SPRINGBACK of a
-        // particle's distance change to the cell (shortened or bowed out) is elastic. Shape matching
-        // and the cabin fold sprang fire("all")'s bumpers 0.10–0.46 m back out once the heads left.
+        // A squeezed shape keeps its set like a one-ended hit's: only the elastic part of a particle's distance change to
+        // the cell (shortened or bowed out) springs back. Shape matching and the cabin fold sprang fire("all")'s bumpers 0.10–0.46 m back out once the heads left.
         const c = this.at.cell;
         const rx = m.rest.x + dx - c.local.x;
         const ry = m.rest.y + dy - c.local.y;
@@ -199,7 +217,8 @@ export abstract class DeformSolve extends DeformFreeze {
         const restLen = m.rest.distanceTo(c.rest);
         const dev = restLen - len;
         const set = m.crushSet;
-        if (Math.abs(dev) - SPRINGBACK > Math.abs(set)) m.crushSet = dev - Math.sign(dev) * SPRINGBACK;
+        const kept = Math.abs(dev) - Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * Math.abs(dev));
+        if (kept > Math.abs(set)) m.crushSet = Math.sign(dev) * kept;
         // A bowed-out set holds only out of contact: a face still pressing may push the panel back in.
         else if (len > 1e-6 && (set > 0 ? dev < set : dev > set && this.quietTime() > 0.025)) {
           const k = (restLen - set) / len;
@@ -242,9 +261,17 @@ export abstract class DeformSolve extends DeformFreeze {
       }
       along = Math.max(-cap, Math.min(cap, rel));
       if (!cabin && this.hitSpeed >= 0) {
-        // Sheet metal keeps its set: only the last SPRINGBACK of crush is elastic.
-        if (along - SPRINGBACK > m.crushSet) m.crushSet = along - SPRINGBACK;
-        else if (along < m.crushSet) along = m.crushSet;
+        // Sheet metal keeps its set: only the elastic part of the crush springs back.
+        const set = along - Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * along);
+        if (set > m.crushSet) {
+          if (this.mode === "shape") {
+            REST_SHIFT[1] = (set - m.crushSet) * ix;
+            REST_SHIFT[2] = 0;
+            REST_SHIFT[3] = (set - m.crushSet) * iz;
+            this.restTakesSet(i);
+          }
+          m.crushSet = set;
+        } else if (along < m.crushSet) along = m.crushSet;
       }
       along += into;
       const perp = hypot2(px, pz);

@@ -611,6 +611,12 @@ export abstract class DeformState extends DeformHit {
     return cage ? this.strain.measure(cage) : 0;
   }
 
+  /** How far (m) the frame holding `name`'s pane has distorted: the largest corner displacement its rigid best fit leaves over (`CageStrain`); 0 for an unglazed cage. */
+  glassDistortion(name: BodyPartName): number {
+    const cage = this.cageByPart.get(name);
+    return cage ? this.strain.aperture(cage) : 0;
+  }
+
   sensorCompression(index: number): number {
     return this.sensors[index]?.compression ?? 0;
   }

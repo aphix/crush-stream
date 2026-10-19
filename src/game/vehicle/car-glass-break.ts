@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { CarCore, type GlassName, type GlassPane } from "./car-core.ts";
 
 /**
- * A car's panes as events and queries: a pane cracks or shatters (the frame strain in `CarParts.evaluateBreakage`, a thrown
+ * A car's panes as events and queries: a pane cracks or shatters (its frame's distortion in `CarParts.evaluateBreakage`, a thrown
  * torso, a net state), and reports its state and world centre.
  */
 export abstract class CarGlass extends CarCore {
@@ -19,7 +19,7 @@ export abstract class CarGlass extends CarCore {
     this.onGlass?.(origin, vel, 56);
   }
 
-  /** Pane `g` cracks: the crack map over a hazier pane. Every crack goes through here (the frame strain, a thrown torso, a net state). */
+  /** Pane `g` cracks: the crack map over a hazier pane. Every crack goes through here (the frame's distortion, a thrown torso, a net state). */
   protected crackGlass(g: GlassPane): void {
     g.state = "cracked";
     this.wearGlass(g, "cracked");
@@ -27,7 +27,7 @@ export abstract class CarGlass extends CarCore {
 
   /**
    * A thrown driver's torso struck pane `name` (`RagdollSystem`): an intact pane cracks and holds, a cracked one (by a
-   * torso or by its frame's strain) shatters. False if it was already gone. Authority only, as `smashGlass`.
+   * torso or by its frame's distortion) shatters. False if it was already gone. Authority only, as `smashGlass`.
    */
   hitGlass(name: GlassName): boolean {
     for (const g of this.glassPanes) {
