@@ -720,13 +720,21 @@ export abstract class EngineScenes extends EngineMinigames {
 
   protected readonly raceCollide = (car: DeformableCar, i: number, h: number): void => this.race.collide(car, i, h);
 
+  /** Reused: `strongest.offer` copies the vectors out. */
+  private readonly wallHit: ContactHit = { impulse: 0, contact: new THREE.Vector3(), normal: new THREE.Vector3() };
+
+  private offerWall(i: number, closing: number, x: number, z: number, nx: number, nz: number): void {
+    this.noteHit(i, closing);
+    this.wallHit.impulse = Math.max(closing, 0.5);
+    this.wallHit.contact.set(x, 0.4, z);
+    this.wallHit.normal.set(nx, 0, nz);
+    this.world.strongest.offer(this.wallHit);
+  }
+
   private readonly rampHits: PropHits = {
     knock: () => {},
     fx: () => {},
-    wall: (_index, i, closing, x, z, nx, nz) => {
-      this.noteHit(i, closing);
-      this.world.strongest.offer({ impulse: Math.max(closing, 0.5), contact: new THREE.Vector3(x, 0.4, z), normal: new THREE.Vector3(nx, 0, nz) });
-    },
+    wall: (_index, i, closing, x, z, nx, nz) => this.offerWall(i, closing, x, z, nx, nz),
   };
 
   protected readonly rampCollide = (car: DeformableCar, _i: number, h: number): void => {
@@ -748,8 +756,7 @@ export abstract class EngineScenes extends EngineMinigames {
       this.sparks.poof(at, n, Math.min(28, 6 + closing * 0.5) * this.fxDensity);
     },
     wall: (index, carIndex, closing, x, z, nx, nz) => {
-      this.noteHit(carIndex, closing);
-      this.world.strongest.offer({ impulse: Math.max(closing, 0.5), contact: new THREE.Vector3(x, 0.4, z), normal: new THREE.Vector3(nx, 0, nz) });
+      this.offerWall(carIndex, closing, x, z, nx, nz);
       if (index < RIG_BALL_FIRST || !shatterBall(this.balls[index - RIG_BALL_FIRST]!, this.world.cars[carIndex]!, closing)) return;
       this.trace.ballHits.push({ t: this.elapsedWall, ball: index - RIG_BALL_FIRST, closing, broken: true });
     },

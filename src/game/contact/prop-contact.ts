@@ -8,9 +8,9 @@ import { TYRE_R } from "../deform/deform-state.ts";
 import { type ContactBox, makeBox, partContact, solidFace } from "./external-contact.ts";
 import { PUSH_SPEED } from "../deform/push-budget.ts";
 import { HIT_AHEAD, impulseCar, markApproach, wallBounce } from "./pair-contact.ts";
-import { COM_Y, WALL_CRUSH } from "../vehicle/car-air-body.ts";
+import { BELLY, BELLY_ABSENT, COM_Y, POINT_X, POINT_Y, POINT_Z, WALL_CRUSH } from "../vehicle/car-air-body.ts";
+import { loadPoints } from "../vehicle/car-air-points.ts";
 import { cageLift } from "../vehicle/car-cage-rig.ts";
-import { UNDERSIDE } from "../vehicle/car-suspension.ts";
 
 /** What a scene does with a car's prop contacts (`propContact`): the race records and draws them, the Lab reads them back. */
 export type PropHits = {
@@ -311,9 +311,8 @@ function askPoint(car: DeformableCar, s: Surface, lx: number, ly: number, lz: nu
 
 /**
  * The car's points against the sides of the sloped prisms of `s` (a wedge's flanks and back), over a slice of `dt` s: each tyre's
- * tread corners, every vertex of the cage (the drawn body, crushed as drawn) and the underside (the belly the rigid step carries: it
- * stands lower than the cage's sill, so a car on its side lies on it against a wedge's flank), as the one query answers them (`pointContact`: a
- * point is in a side when it came in by one, on the top when it came down onto it or is within the step a tyre mounts). The deepest
+ * tread corners and the body points the rigid step meets the world with (`loadPoints`: the drawn body, torn lids off it, and its belly,
+ * a wreck's crushed with it), as the one query answers them (`pointContact`: a point is in a side when it came in by one, on the top when it came down onto it or is within the step a tyre mounts). The deepest
  * pushes the car out and takes the hit as a solid face does (`wallBounce`): a light touch bounces, a hard hit crushes. True when a
  * point was in a side. A plane top gives no height a plan rectangle could be over, so the rectangle (`propContact`) leaves sloped
  * prisms to the points.
@@ -328,11 +327,11 @@ export function sideContact(car: DeformableCar, s: Surface, hits: PropHits, dt: 
       for (let b = 0; b < SIGNS.length; b++) askPoint(car, s, wheel.position.x + SIGNS[a]! * hw, wheel.position.y, wheel.position.z + SIGNS[b]! * r, false);
     }
   }
-  const cage = car.cage;
-  const pos = cage.fields.pos;
-  const lift = cageLift(car);
-  for (let k = 0; k < cage.style.vertexCount; k++) askPoint(car, s, pos[k * 3]!, pos[k * 3 + 1]! + lift, pos[k * 3 + 2]!, true);
-  for (let k = 0; k < UNDERSIDE.length; k++) askPoint(car, s, UNDERSIDE[k]![0], UNDERSIDE[k]![2] + lift, UNDERSIDE[k]![1], true);
+  const bellyFrom = loadPoints(car);
+  for (let k = 0; k < bellyFrom + BELLY.length; k++) {
+    if (k >= bellyFrom && BELLY_ABSENT[k - bellyFrom] === 1) continue;
+    askPoint(car, s, POINT_X[k]!, POINT_Y[k]!, POINT_Z[k]!, true);
+  }
   if (_side.depth <= 0) return false;
   const o = _side.patch * P_STRIDE;
   const nx = _side.nx;

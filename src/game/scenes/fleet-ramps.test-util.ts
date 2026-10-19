@@ -6,7 +6,9 @@ import { FleetRamps, RAMP } from "./fleet-ramps.ts";
 import { collideOn } from "./ramp-collide.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
-import { paint } from "../vehicle/test-support.ts";
+import { DT, paint } from "../vehicle/test-support.ts";
+import { LID } from "../vehicle/constants.ts";
+import { cageLift } from "../vehicle/car-cage-rig.ts";
 import { newWorld, stepWorld, type World } from "../engine/world-step.ts";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
 import { assignClass, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
@@ -176,3 +178,46 @@ export function approachSide(cls: VehicleClassId, off: number, wall: number, { f
   return out;
 }
 
+/** A sedan's nose crushed at rest (a 15 m/s hit fed for 45 slices), its bonnet torn off and left where the cage parks it, settled 3 s. */
+export function tornBonnetWreck(): { ramps: FleetRamps; w: World; car: DeformableCar; wedge: number } {
+  const three = new THREE.Scene();
+  const ramps = new FleetRamps(three);
+  const wedges = ramps["wedges"];
+  for (const k of wedges) ramps.movePrism(k, 100, 100 + k * 10, 0, 0, 0);
+  setGround(ramps);
+  const car = new DeformableCar(paint(), three);
+  car.spawnFacing(0, 0, -Math.PI / 2, 0);
+  car.group.updateMatrixWorld();
+  const hit = car.group.position.clone().addScaledVector(car.fwdFlat, 2.3);
+  hit.y = 0.5;
+  const inward = car.fwdFlat.clone().negate();
+  car.applyImpact(hit, inward, 15, 15);
+  for (let i = 0; i < 45; i++) {
+    car.deform.notifyContact();
+    car.deform.feedOverlap(hit, inward, 0.1, 14, DT);
+    car.deform.stepStructure(DT);
+    car.integrate(DT);
+    car.stepBreakage(DT);
+    car.updateSkin();
+  }
+  const hood = car["parts"].find((p) => p.name === LID.hood)!;
+  if (!hood.detached) car["detachPart"](hood, 0);
+  const w = newWorld([car], null);
+  w.collide = collideOn(ramps);
+  run(w, 3, () => {});
+  return { ramps, w, car, wedge: wedges[0]! };
+}
+
+/** The world x (m) of the frontmost (least x: the car faces −x) cage vertex of `car` on its drawn body (`torn` false) or on its torn-off panels. */
+export function noseX(car: DeformableCar, torn: boolean): number {
+  const { pos, panelOn } = car.cage.fields;
+  const { vertexCount, vertexGroup } = car.cage.style;
+  const v = new THREE.Vector3();
+  let x = Infinity;
+  for (let k = 0; k < vertexCount; k++) {
+    const g = vertexGroup[k]!;
+    if ((g > 0 && panelOn[g - 1] === 0) !== torn) continue;
+    x = Math.min(x, v.set(pos[k * 3]!, pos[k * 3 + 1]! + cageLift(car), pos[k * 3 + 2]!).applyQuaternion(car.group.quaternion).add(car.group.position).x);
+  }
+  return x;
+}

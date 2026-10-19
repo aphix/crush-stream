@@ -5,7 +5,8 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { COM_Y, G, TOUCH } from "../vehicle/car-air-body.ts";
 import { CAR_HALF } from "../vehicle/car-mesh.ts";
 import { RAMP } from "./fleet-ramps.ts";
-import { approachSide, pair, run, scene, watch } from "./fleet-ramps.test-util.ts";
+import { approachSide, noseX, pair, run, scene, tornBonnetWreck, watch } from "./fleet-ramps.test-util.ts";
+import { sideContact } from "../contact/prop-contact.ts";
 import { FRAME } from "../vehicle/ground-probe.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { paint } from "../vehicle/test-support.ts";
@@ -441,5 +442,34 @@ describe("given a car driven at walking pace into a ramp's side", () => {
       assert.ok(r.roll <= 30, `monster 30° off the run, wall ${wall} m: worst roll ${r.roll.toFixed(0)}°, reached z ${r.z.toFixed(1)}`);
     }
     t.diagnostic(rows.join("; "));
+  });
+});
+
+describe("given a settled sedan with its nose crushed and its bonnet torn off, and a ramp's flank brought in between its crushed nose and where the bonnet stood", () => {
+  afterEach(() => setGround(null));
+
+  // The flank cuts through the torn bonnet's parked vertices and the stock underside's front row, never the drawn body.
+  it("when 2 s run, then nothing of the car is in the flank: no side contact, its contact clock runs on and it is not pushed", (t) => {
+    const { ramps, w, car, wedge } = tornBonnetWreck();
+    const body = noseX(car, false);
+    const bonnet = noseX(car, true);
+    const flank = (body + bonnet) / 2;
+    ramps.movePrism(wedge, flank - RAMP.halfW, 1.3, 0, 0, 0);
+    const x0 = car.group.position.x;
+    const quiet0 = car.deform.quietTime();
+    let contacts = 0;
+    const hits = { knock() {}, fx() {}, wall: () => void contacts++ };
+    w.collide = (c, _i, h) => {
+      ramps.sync();
+      sideContact(c, ramps, hits, h);
+    };
+    run(w, 2, () => {});
+    const pushed = car.group.position.x - x0;
+    const quiet = car.deform.quietTime() - quiet0;
+    t.diagnostic(`body nose x ${body.toFixed(3)}, parked bonnet x ${bonnet.toFixed(3)}, flank x ${flank.toFixed(3)}: side contacts ${contacts}, contact clock +${quiet.toFixed(3)} s, pushed ${pushed.toFixed(4)} m`);
+    assert.ok(bonnet < flank - 0.1 && body > flank + 0.1, `the flank at ${flank.toFixed(3)} is not between the parked bonnet ${bonnet.toFixed(3)} and the body ${body.toFixed(3)}`);
+    assert.equal(contacts, 0);
+    assert.ok(quiet > 1.9, `the contact clock ran ${quiet.toFixed(3)} s of 2 s`);
+    assert.ok(Math.abs(pushed) < 1e-3, `pushed ${pushed.toFixed(4)} m`);
   });
 });
