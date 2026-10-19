@@ -3,22 +3,23 @@ import assert from "node:assert/strict";
 import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_LEAD_IDX, GUARD_TURN_IDX } from "./constants.ts";
+import { GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_LEAD_IDX, GUARD_TURN_IDX } from "./constants.ts";
 import { guardContact } from "./contact-guard.ts";
+import { QUIET_HZ } from "../kernel/constants.ts";
 
 /** A car at (`x`, `z`) doing `speed` m/s along +z (`dir` 1) or −z (−1). */
 function car(id: number, x: number, z: number, speed: number, dir: 1 | -1 = 1): AiCar {
   return { ...blankAiCar(id), x, z, yaw: dir === 1 ? 0 : Math.PI, vz: speed * dir };
 }
 
-/** What the guard makes of the plan "full throttle, straight on" for `self` among `others` (class brake 20 m/s², lead brake 11 m/s², lock 1.5 rad/s). */
-function guarded(self: AiCar, others: AiCar[], spare = new Uint8Array(32)): DriveInput {
-  const out: DriveInput = { ...idleDrive(), throttle: 1 };
+/** What the guard makes of the plan "full throttle" for `self` among `others` (class brake 20 m/s², lead brake 11 m/s², lock 1.5 rad/s), the hands at `hands` of lock on the driver's ask of `asked`. */
+function guarded(self: AiCar, others: AiCar[], spare = new Uint8Array(32), hands = 0, asked = hands): DriveInput {
+  const out: DriveInput = { ...idleDrive(), throttle: 1, steer: hands };
   const tune = new Float64Array(GUARD_COUNT);
   tune[GUARD_BRAKE_IDX] = 20;
   tune[GUARD_LEAD_IDX] = 11;
   tune[GUARD_TURN_IDX] = 1.5;
-  guardContact(self, [self, ...others], others.length + 1, spare, tune, out);
+  guardContact(self, [self, ...others], others.length + 1, spare, tune, out, asked);
   return out;
 }
 
@@ -54,5 +55,73 @@ describe("given a driver planning full throttle straight on at 30 m/s, with the 
     const spare = new Uint8Array(32);
     spare[1] = 1;
     assert.deepEqual(pedals(guarded(me, [car(1, 0, 40, 30, -1)], spare)), [1, 0, 0]);
+  });
+});
+
+describe("given a driver at 18 m/s asking 0.4 of lock toward a car 10 m ahead and 6 m to that side that crosses its path at 8 m/s, its hands still at 0.3 (`InputFade` lags the ask)", () => {
+  const me = car(0, 0, 0, 18);
+  const crossing: AiCar = { ...blankAiCar(1), x: 6, z: 10, yaw: -Math.PI / 2, vx: -8 };
+  it("when the guard checks the hands' input, then it brakes for the crossing car as it does with the hands caught up on the ask, where the arc of the hands' 0.3 alone finds nothing to brake for", () => {
+    const caughtUp = guarded(me, [crossing], undefined, 0.4);
+    assert.ok(caughtUp.brake > 0.5, `hands at the ask: brake ${caughtUp.brake.toFixed(2)}`);
+    const lagging = guarded(me, [crossing], undefined, 0.3, 0.4);
+    assert.ok(lagging.brake > 0.5 && lagging.throttle === 0, `hands at 0.3 on an ask of 0.4: brake ${lagging.brake.toFixed(2)}, throttle ${lagging.throttle.toFixed(2)}`);
+    assert.equal(guarded(me, [crossing], undefined, 0.3).brake, 0, "an ask of 0.3 steers clear of it");
+  });
+});
+
+describe("given the contact guard called every step for one car (its held push and braking demand kept in the tune buffer), a stopped car dead ahead that is then taken away", () => {
+  const STEP = 1 / QUIET_HZ;
+  const me = car(0, 0, 0, 30);
+  function tuned(): Float64Array {
+    const tune = new Float64Array(GUARD_COUNT);
+    tune[GUARD_BRAKE_IDX] = 20;
+    tune[GUARD_LEAD_IDX] = 11;
+    tune[GUARD_TURN_IDX] = 1.5;
+    return tune;
+  }
+  /** One call of `dt` s on the plan "full throttle, straight on" with the cars `others`. */
+  function call(tune: Float64Array, others: AiCar[], dt: number): DriveInput {
+    tune[GUARD_DT_IDX] = dt;
+    const out: DriveInput = { ...idleDrive(), throttle: 1 };
+    guardContact(me, [me, ...others], others.length + 1, new Uint8Array(32), tune, out);
+    return out;
+  }
+  /** A call every step for `seconds` with `others`; the last call's output. */
+  function run(tune: Float64Array, others: AiCar[], seconds: number): DriveInput {
+    let out = call(tune, others, STEP);
+    for (let t = STEP; t < seconds; t += STEP) out = call(tune, others, STEP);
+    return out;
+  }
+  /** Close enough that the guard brakes (it cannot steer clear in time), and far enough that it steers clear instead. */
+  const BRAKE_FOR = car(1, 0, 22, 0);
+  const STEER_FROM = car(1, 0, 47, 0);
+  const CLEAR: AiCar[] = [];
+
+  it("when the car it steers away from goes out of reach, then its steer push is still on 0.1 s later and gone within 2 s", () => {
+    const tune = tuned();
+    const on = run(tune, [STEER_FROM], 0.5);
+    assert.ok(Math.abs(on.steer) > 0.03 && on.brake === 0, `contact: steer ${on.steer.toFixed(2)}, brake ${on.brake.toFixed(2)}`);
+    const soon = run(tune, CLEAR, 0.1);
+    assert.ok(Math.abs(soon.steer) > 0.02, `0.1 s after the contact: steer ${soon.steer.toFixed(3)}`);
+    const later = run(tune, CLEAR, 2);
+    assert.ok(later.steer === 0, `2 s after: steer ${later.steer}`);
+  });
+
+  it("when the car it brakes for goes out of reach, then the brake is still on 0.1 s later and off within a second", () => {
+    const tune = tuned();
+    const on = run(tune, [BRAKE_FOR], 0.5);
+    assert.ok(on.brake > 0.5, `contact: brake ${on.brake.toFixed(2)}`);
+    const soon = run(tune, CLEAR, 0.1);
+    assert.ok(soon.brake > 0.2, `0.1 s after: brake ${soon.brake.toFixed(2)}`);
+    const later = run(tune, CLEAR, 1);
+    assert.ok(later.brake === 0 && later.throttle > 0.9, `1 s after: brake ${later.brake}, throttle ${later.throttle}`);
+  });
+
+  it("when a call with no step (dt 0, a one-off) comes after the contact, then it holds nothing: the plan comes back as it was", () => {
+    const tune = tuned();
+    run(tune, [STEER_FROM], 0.5);
+    const once = call(tune, CLEAR, 0);
+    assert.deepEqual(pedals(once), [1, 0, 0]);
   });
 });

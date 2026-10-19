@@ -67,3 +67,33 @@ describe("given a fully aggressive driver doing 20 m/s that has not yet landed a
     assert.ok(out.throttle <= 0 && out.brake > 0.5 && !out.boost, JSON.stringify({ ...out }));
   });
 });
+
+describe("given a fully aggressive driver whose rival ahead closes at about the opening caution's line (7 m/s) in the first seconds of the heat", () => {
+  /** Driver 0 against a standing rival 18 m dead ahead (in range, in the cone), at `speeds[k]` m/s along its heading on step k: the closing speed is its own speed. Returns the brake of each step. */
+  function brakes(speeds: readonly number[]): number[] {
+    const brain = new DerbyBrain();
+    brain.setAggression(0, 1);
+    const self = aiCar(0, { vz: speeds[0]!, rear: 0.9, damage: 0.3, idle: 1000 });
+    const all = [self, aiCar(1, { z: 18, vz: 0 })];
+    brain.think(self, all, 2);
+    return speeds.map((v) => {
+      self.vz = v;
+      return brain.think(self, all, 1 / FRAME_HZ).brake;
+    });
+  }
+  const STEPS_PER_S = FRAME_HZ;
+
+  it("when its closing speed reads 8 m/s for one step and 6 m/s (under the line) after it, then it brakes that step and has the gas back from the next: the caution brakes no car that closes slower than the line", () => {
+    const b = brakes([8, ...Array<number>(2 * STEPS_PER_S).fill(6)]);
+    assert.ok(b[0]! > 0.5, "the step it closed too fast brakes");
+    const on = b.slice(1).filter((x) => x > 0).length;
+    assert.equal(on, 0, `braked ${on} of ${2 * STEPS_PER_S} steps closing at 6 m/s`);
+  });
+
+  it("when its closing speed reads 8 m/s once and then hovers within 0.3 m/s of the line, crossing it every step for a second, then the brake pedal does not swap with the gas more than twice", () => {
+    const b = brakes([8, ...Array.from({ length: STEPS_PER_S }, (_, k) => (k % 2 === 0 ? 7.3 : 6.7))]);
+    let swaps = 0;
+    for (let k = 1; k < b.length; k++) if (Math.abs(b[k]! - b[k - 1]!) > 0.2) swaps++;
+    assert.ok(swaps <= 2, `the brake swapped ${swaps} times in a second: ${b.map((x) => x.toFixed(1)).join(" ")}`);
+  });
+});

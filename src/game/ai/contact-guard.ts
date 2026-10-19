@@ -2,7 +2,7 @@ import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import { DERBY_RULES, type AiCar } from "./derby-ai.ts";
 import { clamp } from "../kernel/scalar.ts";
-import { GUARD_BRAKE_IDX, GUARD_LEAD_IDX, GUARD_TURN_IDX } from "./constants.ts";
+import { GUARD_BRAKE_IDX, GUARD_DT_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_STEER_NEED_IDX, GUARD_TURN_IDX } from "./constants.ts";
 
 /** Seconds ahead the guard looks for a contact, in steps of `STEP`. */
 const HORIZON = 1.5;
@@ -18,6 +18,15 @@ const STEER_ACC = 6;
 const STEER_CAP = 0.35;
 /** A yaw rate (rad/s) under this is a straight line. */
 const STRAIGHT = 1e-3;
+/** Seconds the steer push fades over once the look-ahead stops finding the contact: a grazing path flips contact/none on the 0.1 s grid, and an instant release rocked the wheel at the step rate. */
+const PUSH_RELEASE_S = 0.3;
+/** Share of full lock a second the push moves toward what the look-ahead asks. */
+const PUSH_RATE = 3.5;
+/** The braking demand comes at once and fades over `NEED_RELEASE_S`; the share of it that straightens the steer rises at `NEED_STEER_RATE` a second (instant, it flipped gas and brake 4 to 8 times a second). */
+const NEED_RELEASE_S = 0.3;
+const NEED_STEER_RATE = 4;
+/** A held push or demand under this (of full lock or brake) is gone. */
+const PUSH_FLOOR = 0.002;
 
 /**
  * The look-ahead's sample times: 0 to `HORIZON` in steps of `STEP`, accumulated as the first version of the guard did. The last,
@@ -48,12 +57,14 @@ function sampleTimes(): Float64Array {
  * (by its off-centre share, or in full while there is time to move sideways out of the zone: `STEER_ACC`) and every contact
  * ahead that steering cannot clear is braked for, at the deceleration that takes the closing speed off, down to a `TAP`,
  * in the time left (`brake`, m/s²). A pair already touching and moving apart is left to the physics. No allocation.
- * `brake`, `lead` and `turn` come in the `tune` buffer (`GUARD_*_IDX`).
+ * `brake`, `lead` and `turn` come in the `tune` buffer (`GUARD_*_IDX`). `steer`: the wheel the driver asked for, which the arc is
+ * worked out on; `out.steer` is where its hands have the wheel now (`InputFade` lags the ask), and an arc on it reached a car
+ * the driver was steering into 0.05 s late.
  *
  * Cost: the guarded car's own arc is worked out once, and only when some other car is near enough to reach it: a pair
  * whose centres are further apart than the zone plus what the two cars can close in `HORIZON` s (their speeds added) cannot touch.
  */
-export function guardContact(self: AiCar, cars: readonly AiCar[], count: number, spare: Uint8Array, tune: Float64Array, out: DriveInput): void {
+export function guardContact(self: AiCar, cars: readonly AiCar[], count: number, spare: Uint8Array, tune: Float64Array, out: DriveInput, steer = out.steer): void {
   const brake = tune[GUARD_BRAKE_IDX]!;
   const lead = tune[GUARD_LEAD_IDX]!;
   const turn = tune[GUARD_TURN_IDX]!;
@@ -61,10 +72,15 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
   const sx = self.vx;
   const sz = self.vz;
   const speed = hypot2(sx, sz);
-  // Under a nudge's speed it cannot start a hit, and a crawl is the plan's business (a creeping pair brawled on a wall).
-  if (speed <= DERBY_RULES.hitSpeed) return;
+  // A nudge cannot start a hit, and a crawl is the plan's business.
+  if (speed <= DERBY_RULES.hitSpeed) {
+    tune[GUARD_PUSH_IDX] = 0;
+    tune[GUARD_NEED_IDX] = 0;
+    tune[GUARD_STEER_NEED_IDX] = 0;
+    return;
+  }
   const heading = detAtan2(sx, sz);
-  const omega = out.steer * turn;
+  const omega = steer * turn;
   const straight = Math.abs(omega) < STRAIGHT;
   const last = TIMES[STEPS - 1]!;
   let arc = false;
@@ -166,21 +182,73 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
       steerable = clear;
     }
   }
-  if (soonest >= HORIZON) return;
-  need = clamp(need, 0, 1);
+  if (soonest >= HORIZON) {
+    releasePush(tune, out);
+    return;
+  }
+  need = holdNeed(tune, clamp(need, 0, 1));
+  const steerNeed = riseNeed(tune, need);
   // Braking hard is straight-line work (a steered, locked car sheds speed slowly), so the steer-away gives way to it, and a
   // steer toward the car (its side is the sign of `lateral`) is straightened out as the braking gets harder.
   const u = STEER_CAP * clamp(2 * (1 - soonest / HORIZON), 0, 1) * (steerable ? 1 : offset) * (1 - need);
   const toward = lateral >= 0 ? out.steer > 0 : out.steer < 0;
-  out.steer = clamp((toward ? out.steer * (1 - need) : out.steer) * (1 - u) + (lateral >= 0 ? -u : u), -1, 1);
+  const target = lateral >= 0 ? -u : u;
+  const push = tune[GUARD_DT_IDX]! > 0 ? holdPush(tune, target) : target;
+  tune[GUARD_PUSH_IDX] = push;
+  out.steer = clamp((toward ? out.steer * (1 - steerNeed) : out.steer) * (1 - Math.abs(push)) + push, -1, 1);
+  brakeFor(out, need, soonest <= 0);
+}
+
+/** The steer push held from the calls before, faded by this call's step; a one-off call (step 0) holds nothing, or a wreck would steer on its last contact's push for good. */
+function heldPush(tune: Float64Array): number {
+  const dt = tune[GUARD_DT_IDX]!;
+  return dt > 0 ? tune[GUARD_PUSH_IDX]! * Math.exp(-dt / PUSH_RELEASE_S) : 0;
+}
+
+/** The push this call steers with: it moves toward `target` at `PUSH_RATE`, a smaller one on the same side is only reached as the held push fades, so the wheel never jumps by the look-ahead's grid. */
+function holdPush(tune: Float64Array, target: number): number {
+  const held = heldPush(tune);
+  if (held * target >= 0 && Math.abs(target) <= Math.abs(held)) return held;
+  const step = PUSH_RATE * tune[GUARD_DT_IDX]!;
+  return Math.abs(target - held) <= step ? target : held + Math.sign(target - held) * step;
+}
+
+/** No contact ahead: what is left of the held push still steers, and fades. */
+function releasePush(tune: Float64Array, out: DriveInput): void {
+  const held = heldPush(tune);
+  const push = Math.abs(held) < PUSH_FLOOR ? 0 : held;
+  tune[GUARD_PUSH_IDX] = push;
+  if (push !== 0) out.steer = clamp(out.steer * (1 - Math.abs(push)) + push, -1, 1);
+  const need = holdNeed(tune, 0);
+  tune[GUARD_STEER_NEED_IDX] = 0;
+  brakeFor(out, need, false);
+}
+
+/** Throttle off and brake on for a braking demand `need`; a real stop (over half) or any demand `now` takes the brake and the gas off, a braking car gives up its boost. */
+function brakeFor(out: DriveInput, need: number, now: boolean): void {
+  if (need <= 0) return;
   out.throttle *= 1 - need;
-  // The drive brakes at 0.45 of full at the lightest touch of the pedal, so only a real stop touches it, and a braking car is off the
-  // gas; inside the zone already (`soonest` 0, its time taken as 0.05 s), any closing past a `TAP` is braked for. With the throttle
-  // share left on while braking, and from 0.5 there (a closing of `TAP` + 0.05 s of the braking), a clean city racer held 2.2-3.7 m/s
-  // behind a crashed car crawling at 1.2 m/s, brake and throttle about 0.5 each, until it touched it (race-contact :125, frame 3994).
-  if (need > 0.5 || (soonest <= 0 && need > 0)) {
+  if (need > 0.5 || now) {
     out.brake = Math.max(out.brake, need);
     out.throttle = 0;
   }
   if (need > 0.1) out.boost = false;
+}
+
+/** The demand this call acts on: `need` at once if above the held one, else the held one faded; with no step to fade by, `need` itself. */
+function holdNeed(tune: Float64Array, need: number): number {
+  const dt = tune[GUARD_DT_IDX]!;
+  const held = dt > 0 ? tune[GUARD_NEED_IDX]! * Math.exp(-dt / NEED_RELEASE_S) : 0;
+  const next = Math.max(need, held < PUSH_FLOOR ? 0 : held);
+  tune[GUARD_NEED_IDX] = next;
+  return next;
+}
+
+/** The share of the demand the steer is straightened by: falls at once, rises at `NEED_STEER_RATE` a second. */
+function riseNeed(tune: Float64Array, need: number): number {
+  const dt = tune[GUARD_DT_IDX]!;
+  const held = tune[GUARD_STEER_NEED_IDX]!;
+  const next = dt > 0 && need > held ? Math.min(need, held + NEED_STEER_RATE * dt) : need;
+  tune[GUARD_STEER_NEED_IDX] = next;
+  return next;
 }

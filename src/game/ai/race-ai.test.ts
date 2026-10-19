@@ -48,12 +48,12 @@ function hardMarks(track: Track): string[] {
  * outputs along a real drive, so a change to the drive under the brain re-pins them; these are the marks on the constant-power drive with the
  * traction cap and rolling resistance (the brain was not touched by it beyond planning with the surface's terminal), re-pinned when the plan's braking went from 0.5 to the guard's
  * 0.72 of the class brake (`BRAKE_SHARE`: the plan's decel is what moved, so the brake and throttle outputs hash differently), the guard took a car ahead to shed the
- * whole class brake, and the harness began to give each car its class (`setClass`: the mix of fleet styles plans with its own figures, as the game does).
+ * whole class brake, and the harness began to give each car its class (`setClass`: the mix of fleet styles plans with its own figures, as the game does), and re-pinned when the contact guard's push and braking demand began to be held and released over time instead of coming and going with the contact on its 0.1 s look-ahead grid (`contact-guard.ts` `PUSH_RELEASE_S`: a bug fix, the racer's wheel reversed 32 times a second on a grazing contact).
  */
 const HARD_MARKS: Record<string, string[]> = {
-  oval: ["f9bf989a", "4963715a", "b1414b6b", "92a6645a", "e38da6c2", "303fc21a", "5af7519e", "2aab055b", "affe0fd1", "afaf6d98", "ffe16470", "113a4eca", "fbbc465d", "959639c3", "55a3637a", "708a56a8"],
-  rally: ["795a677f", "94981db4", "be5bb94f", "2a73c2", "652c9ca7", "4585d4b3", "d713a748", "1ebac3aa", "612a0208", "4428af3d", "88cc042a", "7c556b9", "debd970", "5a1a1683", "26a0e0ff", "36421509"],
-  stunt: ["cc295f61", "c7b507ae", "cec50844", "ef2224d", "66f506e6", "a9930ebf", "7b7c7adb", "83f96d5c", "2ccad50d", "8f838f60", "49cf2049", "f12d92b1", "c5e44a68", "9861910b", "dfc14c4c", "13aec185"],
+  oval: ["c146ba08", "e01cb6da", "81fd6a0c", "299e2a50", "96d1197b", "e37d662a", "71c73447", "11f7cdf9", "758bedb6", "bb5ef99b", "72370b79", "1da9bf5d", "97672cc0", "d57c0c05", "71010ff8", "113a3636"],
+  rally: ["898d1c2d", "e432fbe6", "205c80b2", "39a7a52d", "38fe81c3", "664c4431", "90ffbe68", "14b20add", "178ccab6", "4baba2b0", "7cabcb4b", "526abf7", "9e488f71", "8d51214c", "4bd8e434", "239c8ce1"],
+  stunt: ["cc295f61", "c7b507ae", "e287d42d", "7b5add6c", "43a12d7a", "6a5e9bb3", "4e5e3ee", "2a0d81a5", "65d3d77", "92473643", "888ca1c0", "1fd4de7a", "4603d4b5", "c1daeeb6", "d215696f", "14154ced"],
 };
 
 describe("given 8 clean AI cars (aggression 0) on the grid of the oval", () => {
@@ -396,5 +396,37 @@ describe("given a racer on the oval's back straight with a car 12 m ahead at 2.3
   it("when the blocker moves with it at 8 m/s, then the pass is unchanged: the side nearest the planned lane (left, with the nudge)", () => {
     const { want, room } = chosen(8);
     assert.ok(want > 5 && want <= room, `chose ${want.toFixed(2)} m, the left pass is about 5.4 m (room ${room.toFixed(1)} m)`);
+  });
+});
+
+describe("given an every-slice brain whose contact guard runs after its think (`guardLate`, as the engine runs it) with a car 10 m or 14 m ahead of it at 28 m/s on a boost it wants", () => {
+  /** The oval at 100 m round, the brain's car doing 28 m/s along it with a car `gap` m ahead; 20 steps of think and guard. */
+  function steps(gap: number, late: boolean): { out: DriveInput; meter: number } {
+    const brain = new RaceBrain(oval, 2);
+    brain.guardLate = late;
+    brain.setDifficulty(0, AI_EVERY_SLICE);
+    brain.setAggression(0, 1);
+    const p = oval.pointAt(100, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
+    const me = { ...blankAiCar(0), x: p.x, z: p.z, yaw: Math.atan2(p.tx, p.tz), vx: p.tx * 28, vz: p.tz * 28 };
+    const all = [me, { ...blankAiCar(1), x: p.x + p.tx * gap, z: p.z + p.tz * gap, yaw: me.yaw }];
+    const held = idleDrive();
+    let out = held;
+    for (let k = 0; k < 20; k++) {
+      copyDrive(brain.think(me, all, { next: 1, lap: 0 }, DT), held);
+      out = late ? brain.guard(me, all, held, DT) : held;
+    }
+    return { out: { ...out }, meter: brain.meter[0]! };
+  }
+
+  it("when the guard cancels the boost and the throttle, then the boost meter is as full as with the guard inside think: a boost never used is never drained", () => {
+    for (const gap of [10, 14]) {
+      const inside = steps(gap, false);
+      const late = steps(gap, true);
+      assert.ok(inside.out.brake > 0.5 && !inside.out.boost, `${gap} m: the guard brakes and cancels the boost (brake ${inside.out.brake.toFixed(2)})`);
+      assert.ok(inside.meter === 1, `${gap} m: the meter inside think ${inside.meter}`);
+      assert.equal(late.out.brake, inside.out.brake, `${gap} m: the late guard's brake`);
+      assert.equal(late.out.boost, inside.out.boost, `${gap} m: the late guard's boost`);
+      assert.equal(late.meter, inside.meter, `${gap} m: the late guard's meter`);
+    }
   });
 });

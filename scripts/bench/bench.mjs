@@ -3,7 +3,7 @@
  * The scenario bench: named, fixed scenarios (`scenarios.ts`) run as A/B arms, each arm its own process (`run-scenario.ts`), in ABBA order, behind a load gate.
  *
  *   node scripts/bench/bench.mjs list
- *   flock -x <lock> node scripts/bench/bench.mjs run <scenario>... [--arm name:knob=v,knob=v]... [--order abba|baab|both] [--warm s] [--window s]
+ *   flock -x <lock> node scripts/bench/bench.mjs run <scenario>... [--arm name:knob=v,knob=v]... [--order abba|baab|both] [--warm s] [--window s] [--seed n]
  *                                                          [--max-load 2] [--force] [--thaw-sites] [--out dir]
  *
  * With no `--arm` the arms are `off` (every knob at its default) and `on` (`epi.on=1`). Any knob of the epicenter group (`epi.*`, `src/game/deform/epicenter.ts`) can go in
@@ -165,6 +165,7 @@ function verifyOf(list) {
 
 const f1 = (v) => v.toFixed(1);
 const f2 = (v) => v.toFixed(2);
+const f3 = (v) => v.toFixed(3);
 const pct = (a, b) => (a > 0 ? `${b >= a ? "+" : ""}${f1((100 * (b - a)) / a)}%` : "");
 
 /** A body this far off (m) or turned this far (degrees) from where the other arm has it: a difference a player watching the car may see (a judgement, printed beside the numbers, not a measured limit). */
@@ -360,7 +361,13 @@ export function table(name, first, arms) {
     if (!c) continue;
     const pct = (v) => (c.carStepsPerS > 0 ? `${f1((100 * v) / c.carStepsPerS)}%` : "-");
     lines.push(
-      `   lone-car census, ${a.name} (per sim-s; hull gap = separating-axis gap of the car boxes less the pair's relative travel over the step, closing within ${c.closeM} m): steps ${f1(c.stepsPerS)}, of which one slice ${f1(c.singleSliceStepsPerS)}; in the multi-slice steps car-steps ${Math.round(c.carStepsPerS)}: lone ${Math.round(c.loneCarStepsPerS)} (${pct(c.loneCarStepsPerS)}), near-and-not-lone ${Math.round(c.nearCarStepsPerS)} (${pct(c.nearCarStepsPerS)}) = closing ${Math.round(c.closingPerS)} + not closing ${Math.round(c.notClosingPerS)} (${pct(c.notClosingPerS)}); not-closing steps followed by a hull gap under ${c.closeM} m and a contact: ${f1(c.notClosingThenContactPerS)}/s; slices ${f1(c.slicesPerS)}/s, fineCuts ${f1(c.fineCutsPerS)}/s`,
+      `   lone-car census, ${a.name} (per sim-s; hull gap = separating-axis gap of the car boxes less the pair's relative travel over the step, closing within ${c.closeM} m): steps ${f1(c.stepsPerS)}, of which one slice ${f1(c.singleSliceStepsPerS)} (${f1(c.quietCollapsesPerS)} cut steps collapsed to the quiet step: every car lone); in the multi-slice steps car-steps ${Math.round(c.carStepsPerS)}: lone ${Math.round(c.loneCarStepsPerS)} (${pct(c.loneCarStepsPerS)}), near-and-not-lone ${Math.round(c.nearCarStepsPerS)} (${pct(c.nearCarStepsPerS)}) = closing ${Math.round(c.closingPerS)} + not closing ${Math.round(c.notClosingPerS)} (${pct(c.notClosingPerS)}, of which ${Math.round(c.nearNotLoneIneligiblePerS)} are cars the hull test cannot describe: wreck, in the air, door ajar, part off, leaning, asleep); not-closing steps followed by a hull gap under ${c.closeM} m and a contact: ${f1(c.notClosingThenContactPerS)}/s; slices ${f1(c.slicesPerS)}/s, fineCuts ${f1(c.fineCutsPerS)}/s`,
+    );
+    lines.push(
+      `   lone/sliced flips, ${a.name}: ${f2(c.flipsPerCarPerS)} per car per sim-s, of which flickers (a change within 4 steps of the last) ${f2(c.flickersPerCarPerS)}; pair overlap (cage outlines, end of each step), all: ${f1(c.cageOverlapPairStepsPerS)} pair-steps/s, deepest ${f3(c.cageOverlapMaxM)} m, p95 ${f3(c.cageOverlapP95M)} m; with a lone car: ${f1(c.overlapLoneStepsPerS)}/s, deepest ${f3(c.overlapLoneMaxM)} m; between two intact cars: ${f1(c.overlapIntactStepsPerS)}/s, deepest ${f3(c.overlapIntactMaxM)} m, p95 ${f3(c.overlapIntactP95M)} m`,
+    );
+    lines.push(
+      `   first contacts (a pair clear at a step's start, overlapping at its end), ${a.name}: ${f2(c.firstContactsPerS)}/s, depth deepest ${f3(c.firstContactMaxM)} m, p95 ${f3(c.firstContactP95M)} m; with a lone car: ${f2(c.firstContactLonePerS)}/s, deepest ${f3(c.firstContactLoneMaxM)} m; between two intact cars: ${f2(c.firstContactIntactPerS)}/s, deepest ${f3(c.firstContactIntactMaxM)} m, p95 ${f3(c.firstContactIntactP95M)} m`,
     );
     lines.push(`   car-box overlap at the end of a step, ${a.name} (box-vs-box minimum translation, a lower bound for deformed wrecks; per sim-s): pair-steps over 5 cm ${f1(c.overlapPairStepsPerS)}, over 30 cm ${f1(c.deepOverlapPairStepsPerS)}, deepest ${f2(c.maxOverlapM)} m`);
     lines.push(`   overlap over 5 cm by pair class, ${a.name} (pair-steps over 5 cm per sim-s / over 30 cm / deepest m): ${Object.entries(c.overlapBy ?? {}).map(([k, v]) => `${k} ${f1(v.overPerS)} / ${f1(v.deepPerS)} / ${f2(v.maxM)}`).join("; ") || "none"}; over 30 cm by relative speed: ${Object.entries(c.deepBySpeed ?? {}).map(([k, v]) => `${k} ${f1(v)}`).join("; ") || "none"}`);
@@ -378,6 +385,7 @@ function parseArgs(argv) {
     else if (a === "--order") args.order = argv[++i];
     else if (a === "--warm") args.warm = argv[++i];
     else if (a === "--window") args.window = argv[++i];
+    else if (a === "--seed") args.seed = argv[++i];
     else if (a === "--max-load") args.maxLoad = Number(argv[++i]);
     else if (a === "--out") args.out = argv[++i];
     else if (a === "--force") args.force = true;
@@ -452,6 +460,7 @@ export async function main(argv, log = console.log) {
       const env = { BENCH_SCENARIO: name, BENCH_KNOBS: JSON.stringify(arm.knobs) };
       if (args.warm) env.BENCH_WARM = args.warm;
       if (args.window) env.BENCH_WINDOW = args.window;
+      if (args.seed) env.BENCH_SEED = args.seed;
       if (args.thawSites) env.BENCH_THAW_SITES = "1";
       if (args.trace) env.BENCH_TRACE = args.trace;
       if (args.census) env.BENCH_CENSUS = "1";

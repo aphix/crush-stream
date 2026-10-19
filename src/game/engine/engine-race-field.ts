@@ -400,6 +400,7 @@ export abstract class RaceField {
     const ordered = this.grid.map((id) => this.entrants[id]!);
     this.session = new RaceSession(tr, ordered, { laps: this.rules.laps, noReset: sv ? true : this.rules.noReset, survival: sv ? SURVIVAL : undefined });
     this.brain = new RaceBrain(tr, racers);
+    this.brain.guardLate = true;
     this.brain.guarded = this.policeFrom;
     this.police = sv ? new HunterBrain(tr, this.colliders, racers, this.policeFrom, pcount, this.seed) : pcount > 0 ? new PoliceBrain(tr, this.brain, this.policeFrom, pcount, this.seed) : null;
     const n = this.policeFrom + pcount;

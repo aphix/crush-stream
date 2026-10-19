@@ -4,6 +4,7 @@ import { StrongestContact, type ContactHit, type JerseyBarrier } from "../scenes
 import { partContactPair } from "../contact/external-contact.ts";
 import { markApproaches, resolveCarPair } from "../contact/pair-contact.ts";
 import { bandsMeet } from "../contact/cage-outline.ts";
+import { HULL_STRIDE, hullsClear, readHull } from "../contact/hull-gap.ts";
 import type { EjectionWatch } from "../vehicle/ejection.ts";
 import { armCrushRows, takeCrossingsSkipped } from "../vehicle/car-air.ts";
 import { contactHz } from "../vehicle/car-air-points.ts";
@@ -74,6 +75,8 @@ export type World = {
   fine: number;
   /** Steps in contact that `stepWorld` ran in more slices than a step of that length out of contact takes (1, or 2 for a step longer than the quiet step), counted up for ever where `fine` is set (the bench reads differences). */
   fineCuts: number;
+  /** Steps a cut for a pair in the centre-to-centre reach ran as the quiet step because every car was lone (hulls clear), counted up for ever (the bench reads differences). */
+  quietCollapses: number;
   /** Where the live step's time goes and how much work it did (`SimPhases`): the engine's bench switches the clock reads on for its measured window; a world nobody times keeps them off. */
   readonly phases: SimPhases;
 };
@@ -100,6 +103,7 @@ export function newWorld(cars: readonly DeformableCar[], barrier: JerseyBarrier 
     partStirs: [],
     fine: 0,
     fineCuts: 0,
+    quietCollapses: 0,
     phases: new SimPhases(),
   };
 }
@@ -130,8 +134,8 @@ const WAKE_REACH = 2 * Math.SQRT2 * REACH;
  * another one inside the step is never run as lone.
  */
 export const LONE_MARGIN = 1;
-/** Per car, a module scratch: its plan speed (m/s) at the step's start, and whether it runs the step as a lone car (1). */
-const lonely = { speed: new Float64Array(LONE_CARS), flag: new Uint8Array(LONE_CARS) };
+/** Per car, a module scratch: its plan speed (m/s) at the step's start, whether it runs the step as a lone car (1), whether its hull is read, and the hulls. */
+const lonely = { speed: new Float64Array(LONE_CARS), flag: new Uint8Array(LONE_CARS), hulled: new Uint8Array(LONE_CARS), hulls: new Float64Array(LONE_CARS * HULL_STRIDE) };
 
 /** A car the race put away takes no step (`EPICENTER.storedSkip`): the knob and the car's flag. */
 function idle(car: DeformableCar): boolean {
@@ -180,26 +184,30 @@ function growLonely(n: number): void {
   if (lonely.flag.length >= n) return;
   lonely.speed = new Float64Array(n);
   lonely.flag = new Uint8Array(n);
+  lonely.hulled = new Uint8Array(n);
+  lonely.hulls = new Float64Array(n * HULL_STRIDE);
 }
 
 /**
  * The cars of `cars` that nothing can reach this step, as a mask (bit i: `cars[i]`, the first `LONE_CARS`): each runs the step as one slice of its
  * whole length (`stepWorld`), the length a quiet step takes every car at, where the slices of a step in contact are for the cars in it. A car is
  * in the step's contact, so not lone, when a hit is about to land on it (`nearHit`: the course's solids and the pairs, `markApproach`), when its
- * crush runs on (`crushing`), when its body touches something (`contactHz`), and when another car is within `CONTACT_REACH` m of it in plan (what the
- * pair pass and the part contacts read; `WAKE_REACH` where one is a sleeping wreck, which a mover's top wakes) plus the two cars' travel over the step and
- * `LONE_MARGIN`: at any time of the step, whatever slice each car is at, no other car is nearer than that. A lone car meets the course as a car of
+ * crush runs on (`crushing`), when its body touches something (`contactHz`), and when another car can meet it over the step. Two intact cars on the road
+ * (`readHull`) can meet when their hulls are not clear (`hullsClear`: the gap along a separating axis less the closing along it over the step); any other pair
+ * (a wreck, a car in the air, a sleeper) when the centres are within `CONTACT_REACH` m in plan (what the pair pass and the part contacts read; `WAKE_REACH`
+ * where one is a sleeping wreck, which a mover's top wakes) plus the two cars' travel over the step and `LONE_MARGIN`. A lone car meets the course as a car of
  * a quiet step does (the hard approaches are `nearHit`).
  */
 function loneCars(cars: readonly DeformableCar[], dt: number): number {
   const n = cars.length;
   growLonely(n);
-  const { speed, flag } = lonely;
+  const { speed, flag, hulled, hulls } = lonely;
   for (let i = 0; i < n; i++) {
     const car = cars[i]!;
     const v = car.velocity;
     speed[i] = Math.sqrt(v.x * v.x + v.z * v.z);
     flag[i] = car.nearHit || car.deform.crushing || contactHz(car) > 0 ? 0 : 1;
+    hulled[i] = readHull(car, hulls, i * HULL_STRIDE) ? 1 : 0;
   }
   for (let a = 0; a < n; a++) {
     const pa = cars[a]!.group.position;
@@ -209,6 +217,7 @@ function loneCars(cars: readonly DeformableCar[], dt: number): number {
       const dz = pa.z - pb.z;
       const reach = (cars[a]!.asleep || cars[b]!.asleep ? WAKE_REACH : CONTACT_REACH) + LONE_MARGIN + (speed[a]! + speed[b]!) * dt;
       if (dx * dx + dz * dz > reach * reach) continue;
+      if (hulled[a] === 1 && hulled[b] === 1 && hullsClear(hulls, a, b, dt)) continue;
       flag[a] = 0;
       flag[b] = 0;
     }
@@ -216,6 +225,11 @@ function loneCars(cars: readonly DeformableCar[], dt: number): number {
   let mask = 0;
   for (let i = 0; i < Math.min(n, LONE_CARS); i++) if (flag[i]) mask |= 1 << i;
   return mask >>> 0;
+}
+
+/** Whether `mask` names every one of `n` cars. */
+function allLone(mask: number, n: number): boolean {
+  return n > 0 && n <= LONE_CARS && mask === (n === LONE_CARS ? 0xffffffff : (1 << n) - 1);
 }
 
 /**
@@ -262,9 +276,16 @@ export function stepWorld(w: World, dt: number): void {
     const contact = cut !== quiet && (hit || nearWall || carsInReach(cars));
     slices = contact ? cut : quiet;
     if (dt * hz > slices + 1e-6) slices = Math.min(8, Math.ceil(dt * hz - 1e-6));
+    // A lone car's one slice is the step: with every car lone nothing is in contact and the step is the quiet one.
+    if (w.lone && !barrier && slices > 1) {
+      mask = loneCars(cars, dt);
+      if (allLone(mask, n)) {
+        mask = 0;
+        if (slices > quiet) w.quietCollapses++;
+        slices = quiet;
+      }
+    }
     if (contact && w.fine > 0 && slices > quiet) w.fineCuts++;
-    // A lone car's one slice is the step: no cut to ask when every slice is one (`slices` 1).
-    if (w.lone && !barrier && slices > 1) mask = loneCars(cars, dt);
   }
   // Read once: this step's collide passes mark the next.
   for (let i = 0; i < n; i++) cars[i]!.nearHit = false;
@@ -338,7 +359,7 @@ export function stepWorld(w: World, dt: number): void {
       const b = nearList[k + 1]!;
       const ca = cars[a]!;
       const cb = cars[b]!;
-      if (barrier && barrier.blocksPair(ca, cb)) continue;
+      if (lonely.flag[a] || lonely.flag[b] || (barrier && barrier.blocksPair(ca, cb))) continue;
       const dx = ca.group.position.x - cb.group.position.x;
       const dz = ca.group.position.z - cb.group.position.z;
       // Cars at different heights (one flying over the other, on a bridge over it) never touch; nor does a fake falling off the fleet disc.
@@ -372,7 +393,7 @@ export function stepWorld(w: World, dt: number): void {
     for (let k = 0; k < pairs; k += 2) {
       const a = nearList[k]!;
       const b = nearList[k + 1]!;
-      if (barrier && barrier.blocksPair(cars[a]!, cars[b]!)) continue;
+      if (lonely.flag[a] || lonely.flag[b] || (barrier && barrier.blocksPair(cars[a]!, cars[b]!))) continue;
       if (!bandsMeet(cars[a]!, cars[b]!) || cars[a]!.falling || cars[b]!.falling) continue;
       work[WORK.pairTests] = work[WORK.pairTests]! + 1;
       const pair = resolveCarPair(cars[a]!, cars[b]!, h);

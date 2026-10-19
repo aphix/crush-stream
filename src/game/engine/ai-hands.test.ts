@@ -1,0 +1,196 @@
+import { after, before, describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
+import { FADE_S, InputFade } from "../ai/input-fade.ts";
+import type { CrashEngine } from "./engine.ts";
+import { benchPlanEngine, disposeBenchEngine } from "./engine-bench-headless.test-util.ts";
+import { QUIET_HZ } from "../kernel/constants.ts";
+
+/** The coarse step a phone runs (s). */
+const STEP = 1 / QUIET_HZ;
+/** A speed (m/s) at which the wheel fades by its whole time constant. */
+const FAST = 30;
+const GAS: DriveInput = { ...idleDrive(), throttle: 1 };
+
+describe("given an AI driver's hands (`InputFade`)", () => {
+  it("when it asks for full gas, then 0.06 s later (one time constant) the pedal is 63 % of the way, the same at 1/240, 1/120 and 1/60 s steps", () => {
+    for (const steps of [29, 14, 7]) {
+      const dt = FADE_S.throttle / steps;
+      const hands = new InputFade();
+      let throttle = 0;
+      for (let s = 0; s < steps; s++) throttle = hands.fade(0, GAS, dt, FAST).throttle;
+      assert.ok(Math.abs(throttle - (1 - Math.exp(-1))) < 1e-9, `${throttle.toFixed(6)} after ${steps} steps`);
+    }
+  });
+
+  it("when the car is crawling (3 m/s) the wheel follows the driver in a fifth of the time constant it has at 15 m/s and above, and stopped it follows at once", () => {
+    const steps = (speed: number): number => {
+      const hands = new InputFade();
+      let n = 0;
+      while (hands.fade(0, { ...idleDrive(), steer: 1 }, STEP, speed).steer < 0.63 && n < 1000) n++;
+      return n * STEP;
+    };
+    assert.ok(Math.abs(steps(30) - FADE_S.steer) < STEP, `at 30 m/s ${steps(30).toFixed(3)} s`);
+    assert.ok(Math.abs(steps(3) - FADE_S.steer / 5) < STEP, `at 3 m/s ${steps(3).toFixed(3)} s`);
+    assert.equal(steps(0), 0, "stopped");
+  });
+
+  it("when it flips between gas and brake every step, then neither pedal ever moves by more than a few percent a step and the mean is what the flips average to", () => {
+    const hands = new InputFade();
+    let worst = 0;
+    let before = 0;
+    let sum = 0;
+    for (let s = 0; s < 400; s++) {
+      const out = hands.fade(0, s % 2 === 0 ? GAS : { ...idleDrive(), brake: 1 }, STEP, FAST);
+      worst = Math.max(worst, Math.abs(out.throttle - before));
+      before = out.throttle;
+      sum += out.throttle;
+    }
+    assert.ok(worst < 0.2, `a pedal moved ${worst.toFixed(3)} in one step`);
+    assert.ok(Math.abs(sum / 400 - 0.5) < 0.1, `mean gas ${(sum / 400).toFixed(3)}`);
+  });
+
+  it("when the handbrake is asked for one step, then it is not pressed; asked for a tenth of a second it is, and it stays until let go for as long", () => {
+    const hands = new InputFade();
+    assert.equal(hands.fade(0, { ...idleDrive(), ebrake: true }, STEP, FAST).ebrake, false, "one step");
+    assert.equal(hands.fade(0, idleDrive(), STEP, FAST).ebrake, false);
+    let on = false;
+    for (let t = 0; t < 0.2; t += STEP) on = hands.fade(0, { ...idleDrive(), ebrake: true }, STEP, FAST).ebrake;
+    assert.equal(on, true, "asked 0.2 s");
+    assert.equal(hands.fade(0, idleDrive(), STEP, FAST).ebrake, true, "let go for one step");
+  });
+
+  it("when another driver had the car (`follow`), then the hands take over from where it left the pedals", () => {
+    const hands = new InputFade();
+    hands.follow(3, { ...idleDrive(), throttle: 0.8, steer: -0.4 });
+    const out = hands.fade(3, { ...idleDrive(), throttle: 0.8, steer: -0.4 }, STEP, FAST);
+    assert.ok(Math.abs(out.throttle - 0.8) < 1e-9 && Math.abs(out.steer + 0.4) < 1e-9);
+  });
+
+  it("when the car is put on a spot (its placements count moves), then its first step there is what the driver asks, not a fade from the pedals it had where it was; with the count unmoved it fades as ever", () => {
+    const ask = { ...idleDrive(), brake: 0.7, steer: -0.2 };
+    const hands = new InputFade();
+    for (let s = 0; s < 100; s++) hands.fade(0, { ...idleDrive(), throttle: 1 }, STEP, FAST, 1);
+    const placed = hands.fade(0, ask, STEP, FAST, 2);
+    assert.ok(Math.abs(placed.brake - 0.7) < 1e-9 && Math.abs(placed.steer + 0.2) < 1e-9 && placed.throttle === 0, `brake ${placed.brake.toFixed(3)}, steer ${placed.steer.toFixed(3)}, gas ${placed.throttle.toFixed(3)}`);
+    const next = hands.fade(0, { ...idleDrive(), throttle: 1 }, STEP, FAST, 2);
+    assert.ok(next.throttle > 0 && next.throttle < 0.5, "and fades from there on");
+  });
+});
+
+/** The strip's first 30 s of race, the bench card's own (`?bench=strip`, seed 1, the AI drives the player's sedan). */
+const RACE_S = 30;
+/** Steps the engine takes in the window: one per frame at the phone's coarse step. */
+const STEPS = Math.round(RACE_S / STEP);
+
+interface Sample {
+  steer: number;
+  throttle: number;
+  brake: number;
+  roll: number;
+  crashed: boolean;
+}
+
+/** Every step's pedals and drawn body roll (rad) of car 0 for the window, after the race starts. */
+function runWindow(engine: CrashEngine): Sample[] {
+  const out: Sample[] = [];
+  engine.pace.pin = true;
+  for (let i = 0; i < 80 * 20 && engine["race"].phase !== "racing"; i++) engine.advance(STEP, { frameDt: STEP });
+  for (let s = 0; s < STEPS; s++) {
+    engine.advance(STEP, { frameDt: STEP });
+    const car = engine["live"]()[0]!;
+    const body = car.suspension["body"] as { rotation: { z: number } } | null;
+    out.push({ steer: car.drive.steer, throttle: car.drive.throttle, brake: car.drive.brake, roll: body ? body.rotation.z : 0, crashed: car.crashed });
+  }
+  return out;
+}
+
+/** Direction reversals a second of `xs` among its jumps over `jump` between steps. */
+function reversalsPerS(xs: readonly number[], jump: number): number {
+  let reversals = 0;
+  let last = 0;
+  for (let i = 1; i < xs.length; i++) {
+    const d = xs[i]! - xs[i - 1]!;
+    if (Math.abs(d) <= jump) continue;
+    if (last !== 0 && Math.sign(d) !== last) reversals++;
+    last = Math.sign(d);
+  }
+  return reversals / (xs.length * STEP);
+}
+
+/** Swings of `xs` (alternations between extremes at least `amp` apart) a second: the back-and-forth a viewer follows. */
+function swingsPerS(xs: readonly number[], amp: number): number {
+  let swings = 0;
+  let pivot = xs[0]!;
+  let dir = 0;
+  for (const x of xs) {
+    if (dir === 0) {
+      if (x - pivot >= amp) dir = 1;
+      else if (pivot - x >= amp) dir = -1;
+      if (dir !== 0) pivot = x;
+    } else if (dir === 1) {
+      if (x > pivot) pivot = x;
+      else if (pivot - x >= amp) {
+        swings++;
+        dir = -1;
+        pivot = x;
+      }
+    } else if (x < pivot) pivot = x;
+    else if (x - pivot >= amp) {
+      swings++;
+      dir = 1;
+      pivot = x;
+    }
+  }
+  return swings / (xs.length * STEP);
+}
+
+/** Steps a second of `xs` whose jump from the step before is over `jump`. */
+function jumpsPerS(xs: readonly number[], jump: number): number {
+  let n = 0;
+  for (let i = 1; i < xs.length; i++) if (Math.abs(xs[i]! - xs[i - 1]!) > jump) n++;
+  return n / (xs.length * STEP);
+}
+/** The pedals' direction reversals a second, over jumps this big (of full travel): a hand does not reverse a pedal 5 times a second; a racer on main did 4-30. */
+const MOST_REVERSALS = 2;
+/** The wheel's, which the contact guard's avoidance also moves (a swerve and its return are two): main's racer reversed it 32 times a second. */
+const MOST_STEER_REVERSALS = 3;
+const PEDAL_JUMP = 0.05;
+/** The wheel's jump per step: only the contact guard's avoidance onsets exceed it (0.1 a second); main's racer did 5 and more. */
+const STEER_JUMP = 0.2;
+const MOST_BIG_JUMPS = 0.25;
+/** Wheel swings (0.1 of lock apart) a second: main's racer swung it 32 times, the contact guard's swerves swing it 3. */
+const MOST_STEER_SWINGS = 4;
+/** The drawn body's roll swings (1.5 degrees apart) a second: main's racer 16-22, a calm one 1 to 2. */
+const ROLL_SWING_DEG = 1.5;
+const MOST_ROLL_SWINGS = 3;
+/** The first seconds are the grid's launch; the window judged starts after them. */
+const SETTLE_STEPS = 5 * QUIET_HZ;
+
+describe("given the bench strip's first 30 s with the AI driving the player's sedan", () => {
+  let engine: CrashEngine;
+  let samples: Sample[];
+  before(async () => {
+    engine = await benchPlanEngine("?bench=strip");
+    samples = runWindow(engine);
+  });
+  after(() => disposeBenchEngine(engine));
+
+  it("when it drives, then the wheel and the pedals do not reverse at the step rate and a step seldom jumps the wheel by more than a fifth of lock", () => {
+    const judged = samples.slice(SETTLE_STEPS).filter((s) => !s.crashed);
+    assert.ok(judged.length > 15 * QUIET_HZ, `${judged.length} steps judged`);
+    const steer = judged.map((s) => s.steer);
+    const jump = Math.max(...steer.slice(1).map((v, i) => Math.abs(v - steer[i]!)));
+    assert.ok(jumpsPerS(steer, STEER_JUMP) <= MOST_BIG_JUMPS, `big wheel jumps a second ${jumpsPerS(steer, STEER_JUMP).toFixed(2)}, the largest ${jump.toFixed(3)} of lock`);
+    assert.ok(reversalsPerS(steer, PEDAL_JUMP) <= MOST_STEER_REVERSALS, `wheel reversals a second ${reversalsPerS(steer, PEDAL_JUMP).toFixed(2)}`);
+    assert.ok(reversalsPerS(judged.map((s) => s.throttle), PEDAL_JUMP) <= MOST_REVERSALS, "gas reversals a second");
+    assert.ok(reversalsPerS(judged.map((s) => s.brake), PEDAL_JUMP) <= MOST_REVERSALS, "brake reversals a second");
+    assert.ok(swingsPerS(steer, 0.1) <= MOST_STEER_SWINGS, `wheel swings a second ${swingsPerS(steer, 0.1).toFixed(2)}`);
+  });
+
+  it("when it drives, then the drawn body does not rock left and right: its roll swings (1.5 degrees apart) no more than 3 times a second", () => {
+    const judged = samples.slice(SETTLE_STEPS).filter((s) => !s.crashed);
+    const swings = swingsPerS(judged.map((s) => (s.roll * 180) / Math.PI), ROLL_SWING_DEG);
+    assert.ok(swings <= MOST_ROLL_SWINGS, `roll swings a second ${swings.toFixed(2)}`);
+  });
+});

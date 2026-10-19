@@ -5,11 +5,11 @@ import { benchRaceEngine, disposeBenchEngine, FRAME_S, runFrames } from "./engin
 import type { CrashEngine } from "./engine.ts";
 import { PHASE_NAMES, WORK_NAMES } from "./sim-phases.ts";
 
-/** Frames the race runs unmeasured first (10 s of sim: the grid's first crashes are in), then the measured stretch (2 s). */
+/** Frames the race runs unmeasured first (10 s of sim: the grid's first crashes are in), then the measured stretch (4 s: the skin kernel's calls come in bursts when a car deforms, and a 2 s window can read none). */
 const WARM_FRAMES = 2400;
-const WINDOW_FRAMES = 480;
+const WINDOW_FRAMES = 960;
 
-/** The most of the window's sim ms the phases may leave unattributed: the pacer's loop and the pose blend between steps (measured 0.7 %, 10 s warm, 2 s window). */
+/** The most of the window's sim ms the phases may leave unattributed: the pacer's loop and the pose blend between steps (measured 0.7 %). */
 const MAX_UNATTRIBUTED = 0.08;
 
 const emptySeries = (): WorkSeries => ({ seconds: 0, wallS: new Float64Array(0), clockS: new Float64Array(0), phaseMs: new Float64Array(0), counts: new Float64Array(0) });
@@ -79,7 +79,8 @@ describe("given the real engine on the city bench's race, headless", () => {
     pace.run = run;
     const clockS = WINDOW_FRAMES * FRAME_S;
     const card = phaseCard(phaseMs, counts, simMs, clockS, series);
-    assert.ok(series.seconds >= 1 && series.seconds <= 2, `one entry a whole second the window crossed (2 s of frames), got ${series.seconds}`);
+    const windowS = WINDOW_FRAMES * FRAME_S;
+    assert.ok(series.seconds >= windowS - 1 && series.seconds <= windowS, `one entry a whole second the window crossed (${windowS} s of frames), got ${series.seconds}`);
     for (let k = 0; k < PHASE_NAMES.length; k++) {
       let seconds = 0;
       for (let i = 0; i < series.seconds; i++) seconds += series.phaseMs[i * PHASE_NAMES.length + k]!;

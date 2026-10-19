@@ -2,7 +2,7 @@
  * One arm of one scenario in one process (`bench.mjs` starts it): build the scenario with every knob off, apply the arm's knobs, warm up, then run the window with the
  * phase clock on, and print one line, `BENCH_ARM {json}`: ms per sim-second by phase, the work counters per sim-second, the end state's digest and poses, the load.
  *
- *   BENCH_SCENARIO=<name> BENCH_KNOBS='{"epi.on":1}' [BENCH_WARM=<s>] [BENCH_WINDOW=<s>] [BENCH_THAW_SITES=1] node --import scripts/test-setup.mjs scripts/bench/run-scenario.ts
+ *   BENCH_SCENARIO=<name> BENCH_KNOBS='{"epi.on":1}' [BENCH_WARM=<s>] [BENCH_WINDOW=<s>] [BENCH_SEED=<n>] [BENCH_THAW_SITES=1] node --import scripts/test-setup.mjs scripts/bench/run-scenario.ts
  *
  * `BENCH_THAW_SITES=1` counts which call thawed how often (a stack sample per thaw: slower, so a run for counts, never for ms).
  */

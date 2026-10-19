@@ -55,7 +55,7 @@ export function race(track: Track, n: number, aggression: number, laps: number, 
           tap?.(i, out);
           copyDrive(out, held[i]!);
         }
-        input = brain.guard(snaps[i]!, snaps, held[i]!);
+        input = brain.guard(snaps[i]!, snaps, held[i]!, DT);
       }
       applyDrive(c, input, DT);
       c.integrate(DT);

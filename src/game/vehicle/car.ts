@@ -65,6 +65,10 @@ export class DeformableCar extends CarParts {
     const r2 = REST_SPEED * REST_SPEED;
     return v.x * v.x + v.y * v.y + v.z * v.z >= r2 || w.x * w.x + w.y * w.y + w.z * w.z >= r2;
   }
+  /** Both doors shut (`swing.latched`): nothing of the car stands out past its hull and its mirrors; an unlatched door swings out up to its hinge plus its length. */
+  get doorsLatched(): boolean {
+    return this.doorParts[0]!.swing!.latched && this.doorParts[1]!.swing!.latched;
+  }
   private cageRig: CageRig | null = null;
   /** The car's contact shape: its drawn body (`CarCage`), fitted by `refitCage`. */
   get cage(): CarCage {

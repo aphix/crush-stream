@@ -3,52 +3,11 @@ import assert from "node:assert/strict";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { FINE_HZ, QUIET_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
-import { WORK } from "./sim-phases.ts";
+import { QUIET_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
 import { CONTACT_REACH, LONE_MARGIN, newWorld, stepWorld, type World } from "./world-step.ts";
+import { ajar, COARSE, dispose, FINE, parkedPair, run } from "./world-step-lone.test-util.ts";
 
-/** The pacer's coarse step and its 1/240 s floor (s): the step a phone runs, and the slice a step in contact is cut to. */
-const COARSE = 1 / QUIET_HZ;
-const FINE = 1 / FINE_HZ;
 const FRAME_DIGITS = 9;
-
-/** Car-slices the world has stepped so far (live, wreck and sleeping cars alike). */
-function carSlices(w: World): number {
-  const work = w.phases.work;
-  return work[WORK.liveCarSlices]! + work[WORK.wreckCarSlices]! + work[WORK.asleepCarSlices]!;
-}
-
-/** Two cars parked 3 m apart side by side, far off: in each other's reach, so every step of the world is cut to its fine slices whatever else is in it. */
-function parkedPair(): DeformableCar[] {
-  const a = makeCar("shape");
-  const b = makeCar("shape");
-  launch(a, 2000, 0, 0, 0, 0);
-  launch(b, 2003, 0, 0, 0, 0);
-  return [a, b];
-}
-
-function dispose(cars: readonly DeformableCar[]): void {
-  for (const car of cars) car.dispose();
-}
-
-/** One step's account: its slice count, the lone mask and the car-slices it stepped. */
-interface Row {
-  slices: number;
-  loners: number;
-  carSlices: number;
-}
-
-/** `steps` steps of `dt` of `w`, `before` run ahead of each. */
-function run(w: World, steps: number, dt: number, before: (step: number) => void = () => {}): Row[] {
-  const rows: Row[] = [];
-  for (let s = 0; s < steps; s++) {
-    before(s);
-    const n0 = carSlices(w);
-    stepWorld(w, dt);
-    rows.push({ slices: w.shape + 1, loners: w.loners, carSlices: carSlices(w) - n0 });
-  }
-  return rows;
-}
 
 /** A head-on pair (cars 0 and 1) and two cars alone far from everything (2 and 3), driving on at speed. */
 function headOnField(lone: boolean): { cars: DeformableCar[]; w: World } {
@@ -169,6 +128,8 @@ describe("given a car at 60 m/s and a parked one ahead of it on the same line, t
     const parked = makeCar("shape");
     launch(mover, -gap, 0, Math.PI / 2, 60, 0);
     launch(parked, 0, 0, Math.PI / 2, 0, 0);
+    ajar(mover);
+    ajar(parked);
     const far = parkedPair();
     const w = newWorld([mover, parked, ...far]);
     w.fine = FINE;
@@ -189,6 +150,8 @@ describe("given a car at 60 m/s and a parked one ahead of it on the same line, t
     const parked = makeCar("shape");
     launch(mover, -(CONTACT_REACH + LONE_MARGIN + 150 / QUIET_HZ + offset), 0, Math.PI / 2, 150, 0);
     launch(parked, 0, 0, Math.PI / 2, 0, 0);
+    ajar(mover);
+    ajar(parked);
     const far = parkedPair();
     const w = newWorld([mover, parked, ...far]);
     w.fine = FINE;

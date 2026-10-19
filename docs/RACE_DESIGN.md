@@ -18,7 +18,7 @@ HUD with a focus view, controller-driven menus, and a campaign over every course
 | `match/session.ts` | `RaceSession`: the rules |
 | `match/campaign.ts` | `Campaign`: points, standings, grids, pegged rival aggression |
 | `ai/ai-aggression.ts` | `fieldAggression`, `mood`; shared with the derby AI |
-| `ai/race-ai.ts`, `ai/contact-guard.ts` | `RaceBrain` (racing driver), `guardContact` |
+| `ai/race-ai.ts`, `ai/contact-guard.ts`, `ai/input-fade.ts` | `RaceBrain` (racing driver), `guardContact`, `InputFade` (the AI's hands) |
 | `ai/traffic.ts` | `TrafficBrain` (loop lanes + side streets, observer bubble) |
 | `ai/police.ts`, `ai/pack-guard.ts` | `PoliceBrain` (stakeouts, pursuits, packs, attacks), `guardMates` |
 | `present/prefabs.ts`, `present/prefabs-mall.ts`, `present/prefab-pieces.ts`, `present/track-art.ts` | prefab meshes (the National Mall's landmarks in their own file, the shared pieces, boxes and materials in another); `TrackArt`: terrain, ribbons, decks + pillars, tunnels, markings, walls, start gantry, instanced and knocked props |
@@ -277,6 +277,17 @@ tuned at 18 m/s and stretch × `pace = v / 18`.
 - Shortcuts: a seeded coin per car, lap and shortcut (0.3 + 0.4·aggression). A car with another racer within 12 m when the
   coin is tossed stays on the loop.
 - Unstick: throttle without motion → reverse with the nose swinging toward the line.
+- **The AI's hands** (`ai/input-fade.ts` `InputFade`): every input a racing AI driver hands the drive passes through it, per car slot, before `applyDrive` (police, hunter, traffic and the derby AI do not:
+  measured on the city bench none of them chatters, and their stopping and chasing is timed on the plain drive; a lag on the traffic and police brains wrecked the clean-start and pursuit rows). The wheel, gas and brake fade toward
+  what the driver asks over `FADE_S` (0.05, 0.06 and 0.03 s: a first-order lag, the same in seconds at any step), the handbrake and boost change only after the other state has been asked for 0.1 s; every one of those scales with
+  the car's speed (full from 15 m/s, none at a standstill: a car turning round or backing out needs its hands now). A driver that thinks every step and corrects what it just did swung its wheel between two values at the
+  step rate (the bench strip's racer: 32 reversals of the wheel a second, a third of lock apart, the drawn roll rocking to its class cap of 3 degrees 16 to 22 times a second; gas and brake flipping 4 to 8 times a second).
+  The root was the contact guard: its push and its braking demand came and went with the contact on its 0.1 s look-ahead grid (a path grazing the zone is a contact at one step and none at the next). The guard now holds its
+  push and demand and lets them go over 0.3 s, moves its push at 3.5 of lock a second at most and straightens the steer by a demand rising at 4 a second (`contact-guard.ts`), and it runs after the hands (`RaceBrain.guardLate`),
+  and works out the car's arc on the wheel the driver asked for, not on where the hands have it yet (on the hands' wheel a car steering into a crossing car was braked for 0.05 s late, stopped against
+  it and wrecked on it: the city clean-start row, car 5 on traffic car 13; `contact-guard.test.ts`, the crossing car at 10 m),
+  so its avoidance is never lagged. The player's and a peer's inputs do not pass through the hands. A wreck that still drives (`crashed`) has no hands, and its guard does not hold: its inputs are the brain's, as before (the hands changed where wrecks came to rest). A car put on a spot (`DeformableCar.placements` moves: a respawn, a recovery) starts the hands at what the driver asks there, not at the pedals it had where it was. A highlight clip needs none of this state: it records the pedals the sim ran after the hands and the guard, and its replay applies them (`engine-replay-hands.test.ts`: clips that start with a wheel in motion replay to the bit). Rows: `engine/ai-hands.test.ts` (the strip's first 30 s: at most 0.25 wheel jumps over 0.2 of lock, 2 pedal and 3 wheel
+  reversals, 4 wheel and 3 roll swings a second; main: 26, 8, 32, 32 and 22).
 
 ## Traffic (`TrafficBrain`)
 

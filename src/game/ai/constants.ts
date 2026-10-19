@@ -5,7 +5,11 @@
 export const GUARD_BRAKE_IDX = 0; // m/s²: what the car can brake at (the guard's share of it)
 export const GUARD_LEAD_IDX = 1; // m/s²: what a car ahead is taken to brake at
 export const GUARD_TURN_IDX = 2; // rad/s: yaw rate at full lock
-export const GUARD_COUNT = 3;
+export const GUARD_DT_IDX = 3; // s: the step the guard is called for (0: a one-off call, the held push does not fade)
+export const GUARD_PUSH_IDX = 4; // the guard's own state, kept per car: its steer push of the call before (signed share of full lock)
+export const GUARD_NEED_IDX = 5; // its braking demand (share of its brake) of the call before
+export const GUARD_STEER_NEED_IDX = 6; // the share of that demand the steer is straightened by, which rises at a bounded rate
+export const GUARD_COUNT = 7;
 /** The throttle a unit backs out with (a share of reverse): full is more than the drive can use. */
 export const REVERSE_THROTTLE = -0.9;
 /** The throttle a unit crawls forward at while its lock swings the nose round (facing the wrong way, or pinned against the boards). */

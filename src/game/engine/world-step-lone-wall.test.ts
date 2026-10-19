@@ -4,20 +4,18 @@ import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { makeCar } from "../vehicle/ground-probe.test-util.ts";
-import { launch, makeCar as makeShapeCar } from "../contact/crash-scenarios.test-util.ts";
-import type { DeformableCar } from "../vehicle/car.ts";
-import { FINE_HZ, QUIET_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
+import { QUIET_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
 import { newWorld, settleStep, stepWorld } from "./world-step.ts";
+import * as THREE from "three";
+import { satCars } from "../contact/sat.ts";
+import { COARSE, FINE, missedByLone, parkedPair } from "./world-step-lone.test-util.ts";
 
 /**
- * A lone car against the course's walls: Havana's alley wall (five 10 m panels across x = -40.25, approached from +x; `prop-wall.test.ts`), the car driven
- * at it at 40 m/s in steps of the pacer's coarse floor, with a pair parked far off holding every step cut to fine slices, so what the car's own state asks is the
- * only thing between one slice and three.
+ * A lone car against the course's walls: Havana's alley wall (five 10 m panels across x = -40.25, approached from +x; `prop-wall.test.ts`), driven at it in the pacer's coarse steps,
+ * a pair parked far off holding every step cut to fine slices, so only the car's own state decides between one slice and three.
  */
 const NEAR = -40.25 + 0.22;
 const FAR = -40.25 - 0.22;
-const COARSE = 1 / QUIET_HZ;
-const FINE = 1 / FINE_HZ;
 const TOWARD = -Math.PI / 2;
 const SPEED = 40;
 /** The car's centre this far (m) from the wall's near face at the start (the ground drops 4 m to the wall's foot over the approach: the car comes down onto it). */
@@ -43,9 +41,7 @@ function drive(lone: boolean): Run {
   const w = makeWorld();
   w.race.showLobby("havana");
   const car = makeCar("sedan");
-  const parked: DeformableCar[] = [makeShapeCar("shape"), makeShapeCar("shape")];
-  launch(parked[0]!, 2000, 0, 0, 0, 0);
-  launch(parked[1]!, 2003, 0, 0, 0, 0);
+  const parked = parkedPair();
   const cars = [car, ...parked];
   const world = newWorld(cars);
   world.collide = (c, i, h) => w.race.courseHit(c, i, h);
@@ -90,4 +86,80 @@ describe("given a sedan driven at 40 m/s at Havana's alley wall from 40 m, in co
     assert.ok(Math.abs(lone.x - sliced.x) < 0.05, `${lone.x.toFixed(3)} against ${sliced.x.toFixed(3)} m`);
     assert.equal(lone.alive, sliced.alive);
   });
+});
+
+/** Cars `abeam` m apart, the far one on the side away from the wall: just outside the hulls' clearance (2.45 m) so the test calls them clear. */
+const ABEAM = 2.6;
+/** The grazing car's steer toward the wall (of full lock): a firm lean in, pressing the wall below a crash's 5.5 m/s (`WALL_CRUSH`), so no `nearHit` holds it and the wall's push is the course's alone. */
+const WALLWARD_STEER = 0.4;
+/** The grazing car's centre from the wall's face at the start (m): its body half (0.88) and a hand's breadth, so it rubs the wall from the first step. */
+const AGAINST_WALL = 0.95;
+
+interface Graze {
+  /** Per step: whether the pair was clear (both lone) at its start. */
+  clear: boolean[];
+  missed: number;
+  /** The deepest overlap of the pair at the start of any slice (m), and the first step a pair hit resolved. */
+  depth: number;
+  first: number;
+  end: [number, number];
+  /** The nearest the grazing car's centre came to the wall's face (m), and its fastest speed toward it (m/s). */
+  nearest: number;
+  wallward: number;
+}
+
+function graze(speed: number, lone: boolean): Graze {
+  const w = makeWorld();
+  w.race.showLobby("havana");
+  const a = makeCar("sedan");
+  const b = makeCar("sedan");
+  const cars = [a, b, ...parkedPair()];
+  const world = newWorld(cars);
+  world.collide = (c, i, h) => w.race.courseHit(c, i, h);
+  world.fine = FINE;
+  world.lone = lone;
+  // Nose along +z with the wall to the left (-x): steering toward it leans the grazing car in.
+  a.spawnFacing(NEAR + AGAINST_WALL, -8, 0, speed);
+  b.spawnFacing(NEAR + AGAINST_WALL + ABEAM, -8, 0, speed);
+  const n = new THREE.Vector3();
+  const p = new THREE.Vector3();
+  const out: Graze = { clear: [], missed: 0, depth: 0, first: -1, end: [0, 0], nearest: Infinity, wallward: 0 };
+  let step = 0;
+  world.pairHit = (i, j) => {
+    if (i + j === 1 && out.first < 0) out.first = step;
+  };
+  world.beforeSlice = () => {
+    out.depth = Math.max(out.depth, satCars(a, b, n, p, 0) ?? 0);
+    return false;
+  };
+  const input: DriveInput = { throttle: 0.4, steer: 0, brake: 0, ebrake: false, boost: false };
+  for (; step < 2 * QUIET_HZ; step++) {
+    applyDrive(a, { ...input, steer: -WALLWARD_STEER }, COARSE);
+    applyDrive(b, input, COARSE);
+    stepWorld(world, COARSE);
+    settleStep(cars, COARSE, false);
+    out.clear.push((world.loners & 0b11) === 0b11);
+    out.nearest = Math.min(out.nearest, a.group.position.x - NEAR);
+    out.wallward = Math.max(out.wallward, -a.velocity.x);
+    out.missed += missedByLone(world);
+  }
+  out.end = [a.group.position.x, b.group.position.x];
+  for (const c of cars) c.dispose();
+  return out;
+}
+
+describe("given a sedan leaning into Havana's alley wall below a crash's speed, with another 2.6 m abeam on the far side, in coarse steps cut by a pair parked far off", () => {
+  for (const speed of [20, 30]) {
+    it(`when they drive on at ${speed} m/s, then the pair is lone while the wall's push can not reach the other car, no overlap of the pair is missed, and the first contact and the end poses agree with the sliced run's`, () => {
+      const on = graze(speed, true);
+      const off = graze(speed, false);
+      assert.equal(on.missed, 0, "pairs with a lone car that overlap at a step's end");
+      assert.equal(on.first, off.first, "first pair contact");
+      assert.ok(on.depth <= off.depth + 0.02, `deepest overlap ${on.depth.toFixed(3)} m against ${off.depth.toFixed(3)} m`);
+      assert.ok(Math.abs(on.end[1] - off.end[1]) < 0.05, `the neighbour ends ${on.end[1].toFixed(3)} m against ${off.end[1].toFixed(3)} m`);
+      assert.ok(on.clear.some(Boolean), "the pair was clear in some step");
+      assert.ok(on.nearest < 1 && off.nearest < 1, `the car pressed on the wall (its centre ${on.nearest.toFixed(2)} / ${off.nearest.toFixed(2)} m from the face, a body half 0.9 m wide)`);
+      assert.ok(on.wallward > 0.2 && on.wallward < 5.5, `its fastest speed toward the wall (read after the wall's push) was ${on.wallward.toFixed(2)} m/s`);
+    });
+  }
 });

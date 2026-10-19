@@ -1,7 +1,7 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { chargeBoost, idleDrive, topUpBoost, type DriveInput } from "../vehicle/car-drive.ts";
 import { mood } from "./ai-aggression.ts";
-import { AI_EVERY_SLICE, AI_SKILL, GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_LEAD_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_DUE_SLACK, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
+import { AI_EVERY_SLICE, AI_SKILL, GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_LEAD_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_DUE_SLACK, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
 import { guardContact } from "./contact-guard.ts";
 import { DERBY_RULES, STUCK_SPEED, type AiCar } from "./derby-ai.ts";
 import { personality, type Personality } from "./personality.ts";
@@ -157,6 +157,8 @@ export class RaceBrain {
   /** Boost meter per car, 0–1 (the HUD reads it), and whether a burst is running (it runs on to empty). */
   readonly meter = new Float64Array(MAX_CARS);
   private readonly burst = new Uint8Array(MAX_CARS);
+  /** Per car: the meter as it stood before this think's `charge`, to give back a boost the late guard cancelled. */
+  private readonly meterWas = new Float64Array(MAX_CARS);
   private readonly seg = new Int32Array(MAX_CARS);
   private readonly route = new Int16Array(MAX_CARS);
   private readonly routeSeg = new Int32Array(MAX_CARS);
@@ -197,6 +199,8 @@ export class RaceBrain {
   private readonly mainProj = blankProjection();
   private readonly subProj = blankProjection();
   private readonly args = new Float64Array(ARG_COUNT);
+  /** The contact guard runs after the driver's hands, not inside `think`, so the avoidance is never lagged by them. */
+  guardLate = false;
   /** Per car id: the tune `guardContact` reads (`GUARD_*_IDX`), as of its last think. */
   private readonly tunes = Array.from({ length: MAX_CARS }, () => new Float64Array(GUARD_COUNT));
   private readonly pt: TrackPoint = blankPoint();
@@ -304,12 +308,24 @@ export class RaceBrain {
     return s;
   }
 
-  /** The input car `self` drives this slice from its held one: final at `AI_EVERY_SLICE` (`think` guarded it); else the contact guard runs every slice, so a reaction to a car ahead never waits for the next think (scratch output). */
-  guard(self: AiCar, others: readonly AiCar[], held: DriveInput): DriveInput {
+  /** The input car `self` drives this slice from its held one: final at `AI_EVERY_SLICE` (`think` guarded it); else the contact guard runs every slice, so a reaction to a car ahead never waits for the next think (scratch output). `asked`: what the driver asked for when `held` is its hands' lagging take on it (`guardContact`'s `steer`). */
+  guard(self: AiCar, others: readonly AiCar[], held: DriveInput, dt = 0, asked = held): DriveInput {
     const i = self.id;
-    if (this.thinkEvery[i] === 0 || i >= this.racers || !self.alive || this.recover[i]! > 0) return held;
+    // A car that has not thought has no tune (`GUARD_LEAD_IDX` is never 0 once set): the guard would read zeros as a stopped leader.
+    if ((this.thinkEvery[i] === 0 && !this.guardLate) || i >= this.racers || !self.alive || this.recover[i]! > 0 || this.tunes[i]![GUARD_LEAD_IDX] === 0) return held;
     copyDrive(held, this.out);
-    guardContact(self, others, this.guarded, this.hitOf[i]!, this.tunes[i]!, this.out);
+    this.tunes[i]![GUARD_DT_IDX] = dt;
+    guardContact(self, others, this.guarded, this.hitOf[i]!, this.tunes[i]!, this.out, asked.steer);
+    // A brain that thinks every slice had the guard inside `think`: the guarded throttle fed the next stuck test and a cancelled boost was never drained. The late guard keeps both.
+    if (this.thinkEvery[i] === 0) {
+      const out = this.out;
+      this.lastThrottle[i] = out.throttle;
+      if (out.throttle <= 0) out.boost = false;
+      if (held.boost && !out.boost) {
+        this.meter[i] = this.meterWas[i]!;
+        this.charge(i, false);
+      }
+    }
     return this.out;
   }
 
@@ -353,7 +369,6 @@ export class RaceBrain {
       this.charge(i, false);
       return out;
     }
-
     const tr = this.track;
     const fresh = this.seg[i] === -1;
     const main = projectPath(tr.path, self.x, self.z, this.seg[i]!, this.mainProj);
@@ -383,7 +398,6 @@ export class RaceBrain {
     const fx = detSin(self.yaw);
     const fz = detCos(self.yaw);
     const along = self.vx * fx + self.vz * fz;
-
     // A shortcut is narrow, drive its middle: only the following gap (`follow`) applies there.
     this.follow = Number.NaN;
     this.chase = 0;
@@ -421,7 +435,6 @@ export class RaceBrain {
     const reach = early ? Math.max(4, hypot2(tx - self.x, tz - self.z)) : ld;
     const omega = (2 * Math.max(speed, 4) * detSin(alpha)) / reach;
     out.steer = clamp((omega * (clear ? this.steerK[i]! : 1)) / Math.max(0.2, turnMax), -1, 1);
-
     const cls = this.cls[i]!;
     const top = cls.topSpeed;
     a[ARG_SPEED_IDX] = speed;
@@ -457,17 +470,16 @@ export class RaceBrain {
     } else {
       out.brake = clamp(-err / 6, 0.2, 1);
     }
-
     // Last rule, for a racer (police drive this line too and hit on purpose): no car it is closing on is driven into, except the ones it means to hit (`hit`). It counts on `BRAKE_SHARE` of its own brake, and a car ahead is taken to shed the car's whole class brake (what the leader really can: measured 26-28 m/s²): the leader braking harder only raises the closing speed, so the follower is never counting on a gentler stop than the leader can make. A rival that holds its input between thinks is guarded every slice by `guard`, on what it saw now.
     if (i < this.racers) {
       const g = this.tunes[i]!;
       g[GUARD_BRAKE_IDX] = cls.brake * BRAKE_SHARE;
       g[GUARD_LEAD_IDX] = cls.brake;
       g[GUARD_TURN_IDX] = turnMax;
-      if (this.thinkEvery[i] === 0) guardContact(self, others, this.guarded, this.hit, g, out);
+      g[GUARD_DT_IDX] = dt;
+      if (this.thinkEvery[i] === 0 && !this.guardLate) guardContact(self, others, this.guarded, this.hit, g, out);
       else this.hitOf[i]!.set(this.hit);
     }
-
     if (this.lastThrottle[i]! > 0.35 && speed < STUCK_SPEED) this.stuck[i]! += dt;
     else this.stuck[i] = Math.max(0, this.stuck[i]! - dt * 2);
     if (this.stuck[i]! > p.patience + 0.4) {
@@ -480,6 +492,7 @@ export class RaceBrain {
     }
     this.lastThrottle[i] = out.throttle;
     if (out.throttle <= 0) out.boost = false;
+    this.meterWas[i] = this.meter[i]!;
     this.charge(i, out.boost);
     return out;
   }

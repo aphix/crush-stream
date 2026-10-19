@@ -11,13 +11,28 @@
  *
  * The rates are counts per sim-second, so load does not touch them. A step the sim ran as one slice (nothing near anything) has every car single already: those steps are counted apart.
  */
+import * as THREE from "three";
+import { bandsMeet } from "../../src/game/contact/cage-outline.ts";
+import { satCars } from "../../src/game/contact/sat.ts";
 import { CONTACT_REACH, LONE_MARGIN } from "../../src/game/engine/world-step.ts";
+import { HULL_STRIDE, readHull } from "../../src/game/contact/hull-gap.ts";
 import { WORK } from "../../src/game/engine/sim-phases.ts";
 import { CAR_HALF } from "../../src/game/vehicle/car-mesh.ts";
 import type { SimLike } from "./sim.ts";
 
 /** A pair is closing when its hull gap, less the relative travel of one step, is within this (m): the census's own margin for a steer or a push inside the step. */
 const CLOSE_M = 0.5;
+/** A change of a car's single-slice or sliced state within this many steps of its last one is a flicker. */
+const FLICKER_STEPS = 4;
+/** Pairs further apart than this (m, squared) are not tested for overlap: past the hulls' diagonals. */
+const OVERLAP_SCAN_M2 = 6 * 6;
+
+/** The `q` quantile of `values` (nearest rank); 0 for none. */
+function percentile(values: readonly number[], q: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
+}
 
 interface Snap {
   x: number[];
@@ -71,13 +86,34 @@ export class LoneCensus {
   private maxOverlap = 0;
   private readonly overlapBy: Record<string, { over: number; deep: number; max: number }> = {};
   private readonly deepBySpeed: Record<string, number> = {};
+  /** Whether each car's last step ran sliced, the step it last changed, and the changes counted: `flips` all, `flickers` those within `FLICKER_STEPS` of the last. */
+  private readonly wasSliced: boolean[] = [];
+  private readonly lastFlip: number[] = [];
+  private stepNo = 0;
+  private flips = 0;
+  private flickers = 0;
+  /** The depth (m) of every overlapping car pair at the end of a step (`satCars`), one entry per pair-step. */
+  private readonly overlaps: number[] = [];
+  private readonly overlapsLone: number[] = [];
+  private readonly overlapsIntact: number[] = [];
+  /** The depth at the end of the step of each pair that was clear at its start: a first contact's penetration. */
+  private readonly firstContacts: number[] = [];
+  private readonly firstContactsLone: number[] = [];
+  private readonly firstContactsIntact: number[] = [];
+  private readonly normal = new THREE.Vector3();
+  private readonly point = new THREE.Vector3();
   private readonly slices0: number;
   private readonly fineCuts0: number;
+  private readonly collapses0: number;
+  /** Near and not closing car-steps whose hull `readHull` cannot describe: the old circle keeps them in the slices. */
+  private ineligible = 0;
+  private readonly hull = new Float64Array(HULL_STRIDE);
 
   constructor(sim: SimLike) {
     this.sim = sim;
     this.slices0 = sim.world.phases.work[WORK.slices]!;
     this.fineCuts0 = sim.world.fineCuts;
+    this.collapses0 = sim.world.quietCollapses;
   }
 
   private snapshot(): Snap {
@@ -98,10 +134,12 @@ export class LoneCensus {
   step(): void {
     const dt = this.sim.stepS;
     const before = this.snapshot();
+    const started = this.overlapping();
+    const eligible = this.sim.cars.map((c) => readHull(c, this.hull, 0));
     const slices0 = this.sim.world.phases.work[WORK.slices]!;
     this.sim.run(dt);
     const after = this.snapshot();
-    // Car boxes interpenetrating at the end of the step (every step, every pair): the depth is the box-vs-box minimum translation (a lower bound for deformed wrecks); by pair class and by relative speed.
+    // Car boxes interpenetrating at the end of the step: box-vs-box minimum translation (a lower bound for deformed wrecks), by pair class and relative speed.
     for (let i = 0; i < this.sim.cars.length; i++) {
       for (let j = i + 1; j < this.sim.cars.length; j++) {
         if (Math.hypot(after.x[j]! - after.x[i]!, after.z[j]! - after.z[i]!) > 6) continue;
@@ -126,6 +164,17 @@ export class LoneCensus {
     const mask = this.sim.world.loners;
     const n = Math.min(this.sim.cars.length, 32);
     this.steps++;
+    for (let i = 0; i < n; i++) {
+      const slicedNow = sliced > 1 && ((mask >>> i) & 1) === 0;
+      if (this.stepNo > 0 && slicedNow !== this.wasSliced[i]) {
+        this.flips++;
+        if (this.stepNo - this.lastFlip[i]! <= FLICKER_STEPS) this.flickers++;
+        this.lastFlip[i] = this.stepNo;
+      }
+      this.wasSliced[i] = slicedNow;
+    }
+    this.stepNo++;
+    this.measureOverlaps(mask, started);
     if (sliced <= 1) {
       this.singleSliceSteps++;
       return;
@@ -154,8 +203,43 @@ export class LoneCensus {
       if (closing) this.closing++;
       else {
         this.notClosing++;
+        if (!eligible[i]) this.ineligible++;
         if (hullAfter && after.contact[i] !== before.contact[i]) this.falseNegative++;
       }
+    }
+  }
+
+  /** The depth (m) of every pair of cars whose cage outlines overlap now, by pair key (`i * 64 + j`). */
+  private overlapping(): Map<number, number> {
+    const cars = this.sim.cars;
+    const out = new Map<number, number>();
+    for (let i = 0; i < cars.length; i++) {
+      for (let j = i + 1; j < cars.length; j++) {
+        const dx = cars[i]!.group.position.x - cars[j]!.group.position.x;
+        const dz = cars[i]!.group.position.z - cars[j]!.group.position.z;
+        if (dx * dx + dz * dz > OVERLAP_SCAN_M2 || !bandsMeet(cars[i]!, cars[j]!)) continue;
+        const depth = satCars(cars[i]!, cars[j]!, this.normal, this.point, 0) ?? 0;
+        if (depth > 0) out.set(i * 64 + j, depth);
+      }
+    }
+    return out;
+  }
+
+  /** The step's overlaps into `overlaps` (`overlapsLone` with a lone car in `mask`, `overlapsIntact` of two intact cars); pairs clear when it began (`started`) also into the first-contact lists. */
+  private measureOverlaps(mask: number, started: ReadonlyMap<number, number>): void {
+    const cars = this.sim.cars;
+    for (const [key, depth] of this.overlapping()) {
+      const i = key >> 6;
+      const j = key & 63;
+      const lone = i < 32 && j < 32 && (((mask >>> i) & 1) === 1 || ((mask >>> j) & 1) === 1);
+      const intact = !cars[i]!.deform.massActive && !cars[j]!.deform.massActive;
+      this.overlaps.push(depth);
+      if (lone) this.overlapsLone.push(depth);
+      if (intact) this.overlapsIntact.push(depth);
+      if (started.has(key)) continue;
+      this.firstContacts.push(depth);
+      if (lone) this.firstContactsLone.push(depth);
+      if (intact) this.firstContactsIntact.push(depth);
     }
   }
 
@@ -173,6 +257,26 @@ export class LoneCensus {
       notClosingThenContactPerS: per(this.falseNegative),
       slicesPerS: per(this.sim.world.phases.work[WORK.slices]! - this.slices0),
       fineCutsPerS: per(this.sim.world.fineCuts - this.fineCuts0),
+      flipsPerCarPerS: per(this.flips) / Math.max(1, this.sim.cars.length),
+      flickersPerCarPerS: per(this.flickers) / Math.max(1, this.sim.cars.length),
+      cageOverlapPairStepsPerS: per(this.overlaps.length),
+      cageOverlapMaxM: this.overlaps.reduce((a, b) => Math.max(a, b), 0),
+      cageOverlapP95M: percentile(this.overlaps, 0.95),
+      firstContactsPerS: per(this.firstContacts.length),
+      firstContactMaxM: this.firstContacts.reduce((a, b) => Math.max(a, b), 0),
+      firstContactP95M: percentile(this.firstContacts, 0.95),
+      firstContactLonePerS: per(this.firstContactsLone.length),
+      firstContactLoneMaxM: this.firstContactsLone.reduce((a, b) => Math.max(a, b), 0),
+      firstContactIntactPerS: per(this.firstContactsIntact.length),
+      firstContactIntactMaxM: this.firstContactsIntact.reduce((a, b) => Math.max(a, b), 0),
+      firstContactIntactP95M: percentile(this.firstContactsIntact, 0.95),
+      overlapLoneStepsPerS: per(this.overlapsLone.length),
+      overlapLoneMaxM: this.overlapsLone.reduce((a, b) => Math.max(a, b), 0),
+      overlapIntactStepsPerS: per(this.overlapsIntact.length),
+      overlapIntactMaxM: this.overlapsIntact.reduce((a, b) => Math.max(a, b), 0),
+      overlapIntactP95M: percentile(this.overlapsIntact, 0.95),
+      quietCollapsesPerS: per(this.sim.world.quietCollapses - this.collapses0),
+      nearNotLoneIneligiblePerS: per(this.ineligible),
       closeM: CLOSE_M,
       overlapPairStepsPerS: per(this.overlapSteps),
       deepOverlapPairStepsPerS: per(this.deepSteps),

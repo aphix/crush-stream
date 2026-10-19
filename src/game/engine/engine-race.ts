@@ -10,6 +10,7 @@ import { Campaign } from "../match/campaign.ts";
 import { PoliceBrain } from "../ai/police.ts";
 import { HunterBrain } from "../ai/hunter.ts";
 import type { AiCar } from "../ai/derby-ai.ts";
+import { InputFade } from "../ai/input-fade.ts";
 import { copyDrive } from "../ai/race-ai.ts";
 import { AI_DIFFICULTIES } from "../ai/constants.ts";
 import { DRAFT, RaceSession } from "../match/session.ts";
@@ -39,6 +40,8 @@ export class RaceDirector extends RaceHudLayer {
   mirrored = false;
   /** Per car id: the drafting bonuses (`CarRecord.drafts`) already put on a meter. */
   private readonly drafted = new Int32Array(MAX_CARS);
+  /** The AI's hands: every AI driver's input passes through them on its way to the drive. */
+  private readonly hands = new InputFade();
   /** The chasing police units handed to the rules each step (`BUST`; `PoliceBrain.chasers` fills it). */
   private readonly cops: AiCar[] = [];
   private readonly autoCands: Cand[] = [];
@@ -632,6 +635,7 @@ export class RaceDirector extends RaceHudLayer {
       const rec = s.cars[this.rowOf[i]!]!;
       // No driver, no pedals: not the player's seat, a peer's input or the AI (`coast`); the rules reset or retire the car (`judge`).
       let input: DriveInput = this.hold;
+      let ai = false;
       if (car.driverOut !== null) input = this.coast;
       else if (racing && rec.status === "racing") {
         const kind = this.entrants[i]!.kind;
@@ -639,16 +643,23 @@ export class RaceDirector extends RaceHudLayer {
         else if (this.seatDrives(i)) input = this.host.seat.input(car, dt);
         else {
           if (brain.due(i, dt)) copyDrive(brain.think(snaps[i]!, snaps, rec, brain.elapsed(i)), this.held[i]!);
-          input = brain.guard(snaps[i]!, snaps, this.held[i]!);
+          // A wreck that still drives (`crashed`) has no hands to steady.
+          if (car.crashed) {
+            this.hands.follow(i, this.held[i]!);
+            input = brain.guard(snaps[i]!, snaps, this.held[i]!);
+          } else input = brain.guard(snaps[i]!, snaps, this.hands.fade(i, this.held[i]!, dt, car.velocity.length(), car.placements), dt, this.held[i]!);
+          ai = true;
         }
       } else if (rec.status === "finished") {
         // Cool-down lap on the racing line.
-        const ai = brain.think(snaps[i]!, snaps, rec, dt);
-        this.cruise.throttle = Math.min(ai.throttle, 0.55);
-        this.cruise.steer = ai.steer;
-        this.cruise.brake = ai.brake;
-        input = this.cruise;
+        const think = brain.think(snaps[i]!, snaps, rec, dt);
+        this.cruise.throttle = Math.min(think.throttle, 0.55);
+        this.cruise.steer = think.steer;
+        this.cruise.brake = think.brake;
+        input = brain.guard(snaps[i]!, snaps, this.hands.fade(i, this.cruise, dt, car.velocity.length(), car.placements), dt, this.cruise);
+        ai = true;
       }
+      if (!ai) this.hands.follow(i, input);
       const top = rec.draft > 0 ? DRAFT.top : 1;
       applyDrive(car, input, dt, top);
       if (top !== 1) this.recorder.drafting(i);

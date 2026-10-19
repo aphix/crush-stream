@@ -22,11 +22,11 @@ async function benchEngine(): Promise<CrashEngine> {
 }
 
 /** The real engine on the city bench's race (`BENCH_RACE`, the bench's seed; with `course` the same field on another course, off-menu ones too), nothing drawn, the pacer pinned to the 1/240 s floor. One per process (a second `CrashEngine` never resolves `ready`). */
-export async function benchRaceEngine(course?: string): Promise<CrashEngine> {
+export async function benchRaceEngine(course?: string, seed: number = BENCH.seed): Promise<CrashEngine> {
   const engine = await benchEngine();
   engine.toggleRace();
   engine.raceCommand(course === undefined ? BENCH_RACE : benchRace(course));
-  engine["race"].reseed(BENCH.seed);
+  engine["race"].reseed(seed);
   engine.raceCommand({ type: "start" });
   engine["seat"].mode = "follow";
   engine.pace.pin = false;

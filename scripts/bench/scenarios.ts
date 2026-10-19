@@ -142,6 +142,9 @@ const intactLabel = (sim: SimLike): string => `${sim.cars.length} intact, ${sim.
 const cityLabel = (sim: SimLike): string => `${sim.cars.length} cars, ${sim.cars.filter((c) => c.crashed).length} crashed at the start`;
 const derbyLabel = (sim: SimLike): string => `${sim.cars.length} derby AI cars`;
 
+/** The field's dice for the engine rows (`BENCH_SEED`, `bench.mjs --seed`): the race there is chaotic, so one seed is one sample of a build's wrecks; undefined is the bench's own seed. */
+const seed = process.env["BENCH_SEED"] === undefined ? undefined : Number(process.env["BENCH_SEED"]);
+
 export const SCENARIOS: Record<string, Scenario> = {
   "intact-alone": { build: () => intactApart(16, 40, sedan), label: intactLabel },
   "intact-convoy": { build: () => intactConvoy(16, 2, 5, 3.5, sedan), label: intactLabel },
@@ -156,8 +159,8 @@ export const SCENARIOS: Record<string, Scenario> = {
   "intact-alone-race": { build: () => intactApart(16, 40, sedan).useRaceSchedule(), label: intactLabel },
   "intact-convoy-race": { build: () => intactConvoy(16, 2, 5, 3.5, sedan).useRaceSchedule(), label: intactLabel },
   "wreck-driving-apart-race": { build: () => place(stageWrecks(8, sedan, true), "driving", apart(40)).useRaceSchedule(), label: wreckLabel },
-  city: { build: async () => (await import("./engine-sim.ts")).EngineSim.city(false), label: cityLabel },
-  "city-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.city(true), label: cityLabel },
+  city: { build: async () => (await import("./engine-sim.ts")).EngineSim.city(false, seed), label: cityLabel },
+  "city-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.city(true, seed), label: cityLabel },
   strip: { build: async () => (await import("./engine-sim.ts")).EngineSim.plan("?bench=strip"), label: cityLabel },
   "strip-crash": { build: async () => (await import("./engine-sim.ts")).EngineSim.crashStrip(), label: cityLabel },
   mall: { build: async () => (await import("./engine-sim.ts")).EngineSim.plan("?bench=city&course=national-mall"), label: cityLabel },
@@ -166,8 +169,8 @@ export const SCENARIOS: Record<string, Scenario> = {
   "sideswipe-30-race": { build: () => sideswipe(30).useRaceSchedule(), label: intactLabel },
   "derby-8-s3": { build: async () => new (await import("./derby-sim.ts")).DerbySim(8, 3), label: derbyLabel },
   "derby-8-s8": { build: async () => new (await import("./derby-sim.ts")).DerbySim(8, 8), label: derbyLabel },
-  "dam-spine-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("dam-spine"), label: cityLabel },
-  "national-mall-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("national-mall"), label: cityLabel },
-  "havana-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("havana"), label: cityLabel },
+  "dam-spine-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("dam-spine", seed), label: cityLabel },
+  "national-mall-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("national-mall", seed), label: cityLabel },
+  "havana-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("havana", seed), label: cityLabel },
   "fleet-ramps": { build: () => fleetRamps(), label: intactLabel },
 };
