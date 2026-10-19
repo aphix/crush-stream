@@ -147,13 +147,15 @@ describe("given the casual man's tee and jeans hanging off his body", () => {
   }
 });
 
-/** A straight leg or sleeve keeps at least this share of its width at the top down to just above its hem (the reference's straight-leg jeans and roomy long sleeves). */
+/** A straight jeans leg keeps at least this share of its thigh's width down to just above its hem (the reference's straight-leg jeans). */
 const STRAIGHT_SHARE = 0.8;
+/** A long sleeve narrows to this share of its upper arm's width just above the cuff: the reference's long sleeve and uniform sleeve narrow to 0.63 in the picture. */
+const SLEEVE_TAPER = [0.6, 0.8] as const;
 
-describe("given the casual man's jeans and long sleeves falling straight", () => {
+describe("given the casual man's jeans falling straight and his long sleeves narrowing to the cuff", () => {
   const testCases = [
-    { it: "when his right jeans leg is read at the thigh and just above the hem, then it is nearly as wide at the shin as at the thigh", body: "rightLeg", top: 0.68, bottom: 0.2 },
-    { it: "when his right sleeve is read at the upper arm and just above the cuff, then it is nearly as wide at the forearm as at the upper arm", body: "rightArm", top: 1.15, bottom: 0.9 },
+    { it: "when his right jeans leg is read at the thigh and just above the hem, then it is nearly as wide at the shin as at the thigh", body: "rightLeg", top: 0.68, bottom: 0.2, share: [STRAIGHT_SHARE, Infinity] },
+    { it: "when his right sleeve is read at the upper arm and just above the cuff, then it narrows toward the cuff as the reference's do, neither straight nor clinging", body: "rightArm", top: 1.15, bottom: 0.9, share: SLEEVE_TAPER },
   ] as const;
   for (const testCase of testCases) {
     it(testCase.it, () => {
@@ -164,7 +166,8 @@ describe("given the casual man's jeans and long sleeves falling straight", () =>
       };
       const [top, bottom] = [width(testCase.top), width(testCase.bottom)];
       assert.ok(top > 0.05, `the top was read: ${top.toFixed(3)} m`);
-      assert.ok(bottom >= STRAIGHT_SHARE * top, `${bottom.toFixed(3)} m across above the hem against ${top.toFixed(3)} m at the top`);
+      const [least, most] = testCase.share;
+      assert.ok(bottom >= least * top && bottom <= most * top, `${bottom.toFixed(3)} m across above the hem against ${top.toFixed(3)} m at the top`);
     });
   }
 });

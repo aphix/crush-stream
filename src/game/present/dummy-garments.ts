@@ -204,16 +204,16 @@ const TOE_OUT = 0.019;
 /**
  * A stretch the casual clothes hang straight over rather than cling to: from height `from` (m, the man's rest) down to `to`,
  * standing `ease` m (at each end) off the sections of the body it `takes`, eased in from nothing over `fade` m above `from`; at
- * the bottom never narrower than `keep` of the top's width, so a sleeve or a jeans leg falls straight instead of tapering to the
- * wrist or ankle. Each body vertex moves its `share` of the way (a sleeve fades out across the shoulder's blend, no ledge at its
+ * the bottom never narrower than `keep` of the top's width, so a jeans leg falls straight instead of tapering to the ankle and a
+ * sleeve narrows only part way to the wrist. Each body vertex moves its `share` of the way (a sleeve fades out across the shoulder's blend, no ledge at its
  * top), and is never pushed nearer the body's middle than `gap` m (none at `from`, all of it at `to`), so two hung legs falling from pressed thighs part.
  * One that `rests` is never wider at a height than the body's widest from `from` down to there: it falls from a belly instead of standing off the chest above it.
  */
 type Hang = { taken: (fit: Fit, side: number) => Take; share: (fit: Fit, side: number) => (vertex: number) => number; sides: readonly number[]; from: number; to: number; fade: number; ease: readonly [number, number]; keep: number; gap: number; rests: boolean };
-/** The tee falls from under the pecs to its hem (above them the chest is the shoulders' blend), a sleeve from the deltoid to its cuff (a short one is cut at its end), the jeans from the thigh to the hem. */
+/** The tee falls from under the pecs to its hem (above them the chest is the shoulders' blend), a sleeve from the deltoid narrowing to its cuff as the reference's do (a short one is cut at its end), the jeans from the thigh to the hem. */
 const HANGS: readonly Hang[] = [
   { taken: torsoOf, share: (fit) => (vertex) => (torsoOf(fit)(vertex) ? 1 : 0), sides: [0], from: 1.25, to: HEM_TOP, fade: 0.04, ease: [0.004, 0.008], keep: 0, gap: 0, rests: true },
-  { taken: armOf, share: (fit, side) => (vertex) => ((fit.tpose[vertex * 3]! < 0 ? -1 : 1) === side ? fit.shoulderWeight[vertex]! : 0), sides: [-1, 1], from: 1.24, to: SLEEVE_HANG_TO, fade: 0.04, ease: [0.008, 0], keep: 0.85, gap: 0, rests: false },
+  { taken: armOf, share: (fit, side) => (vertex) => ((fit.tpose[vertex * 3]! < 0 ? -1 : 1) === side ? fit.shoulderWeight[vertex]! : 0), sides: [-1, 1], from: 1.24, to: SLEEVE_HANG_TO, fade: 0.04, ease: [0.008, 0], keep: 0.65, gap: 0, rests: false },
   { taken: legOf, share: (fit, side) => (vertex) => (legOf(fit, side)(vertex) ? 1 : 0), sides: [-1, 1], from: 0.7, to: LEG_HANG_TO, fade: 0.1, ease: [0.01, 0.012], keep: 0.85, gap: LEG_GAP, rests: false },
 ];
 /** Sides of the polygons a hang's width is read off, between which it is interpolated by angle. */
@@ -434,6 +434,19 @@ const BACK_YOKE = [[0, 0.875], [0.08, 0.895], [0.16, 0.915]] as const;
 const BACK_POCKET = { x0: 0.035, x1: 0.15, y0: 0.76, y1: 0.89, taper: 0.88, stitch: 0.004 } as const;
 const BOTH_SIDES = [1, -1] as const;
 
+/** Faded denim: each thigh's and knee's front washed lighter to `peak` times the cloth (m: middle, half width, half height), over `FADE_STEPS` nested ellipses so the wash has no edge. */
+const FADE_STEPS = 16;
+/** The reference's thighs read 1.4-1.8 times their shins' luminance, its knees 1.2-1.4; the knee's wash also lifts the shadow under the body's kneecap. */
+const THIGH_FADE = { x: 0.085, y: 0.6, halfX: 0.07, halfY: 0.2, peak: 1.95 } as const;
+const KNEE_FADE = { x: 0.09, y: 0.45, halfX: 0.05, halfY: 0.05, peak: 1.6 } as const;
+
+function fade(wash: { x: number; y: number; halfX: number; halfY: number; peak: number }): Decal[] {
+  return Array.from({ length: FADE_STEPS }, (_, k): Decal => {
+    const share = 1 - k / FADE_STEPS;
+    return { face: "+z", x0: wash.x - wash.halfX * share, x1: wash.x + wash.halfX * share, y0: wash.y - wash.halfY * share, y1: wash.y + wash.halfY * share, round: 1, edge: 0, raise: 0, shade: wash.peak ** (1 / FADE_STEPS), paint: -1, taper: 1 };
+  });
+}
+
 /**
  * A crew neck's cut (the slot's scoop texel: front low, sides high, half width, m): at the man's measured neck base, 1.42 to
  * 1.43 m at the front, rising to the trapezius beside it. Its rib's edge is a seam `CREW_RIB` m under the cut.
@@ -449,8 +462,8 @@ const crewSeam = Array.from({ length: CREW_SEAM_POINTS }, (_, k) => {
 });
 
 /**
- * The casual outfits' seams in the man's rest metres (the shorts wear the same over their own cut): the tee's crew rib, the
- * jeans' fly (centre seam and J stitch), front pockets' curved openings with rivets, outer and inner leg seams, back yoke and pockets.
+ * The casual outfits' seams in the man's rest metres (the shorts wear the same over their own cut): the tee's crew rib, the jeans' fly
+ * (centre seam and J stitch), front pockets' curved openings with rivets, outer and inner leg seams, back yoke and pockets, faded thighs and knees.
  */
 export const JEANS_DECALS: readonly Decal[] = [
   ...seam("+z", crewSeam),
@@ -462,4 +475,5 @@ export const JEANS_DECALS: readonly Decal[] = [
   ...seam("-x", [[-0.01, BELT_BOTTOM], [-0.01, HEM_TUBE_TOP]], WORN_SHADE),
   ...BOTH_SIDES.flatMap((side) => seam("-z", BACK_YOKE.map(([x, y]) => [side * x, y] as const))),
   ...BOTH_SIDES.map((side): Decal => ({ face: "-z", x0: Math.min(side * BACK_POCKET.x0, side * BACK_POCKET.x1), x1: Math.max(side * BACK_POCKET.x0, side * BACK_POCKET.x1), y0: BACK_POCKET.y0, y1: BACK_POCKET.y1, round: 0.2, edge: BACK_POCKET.stitch, raise: SEAM_SINK, shade: WORN_SHADE, paint: -1, taper: BACK_POCKET.taper })),
+  ...BOTH_SIDES.flatMap((side) => [...fade({ ...THIGH_FADE, x: side * THIGH_FADE.x }), ...fade({ ...KNEE_FADE, x: side * KNEE_FADE.x })]),
 ];
