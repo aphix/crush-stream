@@ -70,12 +70,15 @@ function patch(u: number, v: number): Ink {
   return inStar(u, v, 0.5, 0.58, 0.2, 0.08, 5) ? STAR_WHITE : PATCH_FIELD;
 }
 
-/** The cap's emblem: a white six-armed star with a ball on each arm (the reference's cap). */
+/**
+ * The cap's emblem: a white six-armed star with a ball on each arm (the reference's cap), inside 0.35 of the cell's middle: the
+ * crown's front past the star samples the cell's clamped edge, and a far cap's mips carry the outer eighth into it as streaks.
+ */
 function emblem(u: number, v: number): Ink {
-  if (inStar(u, v, 0.5, 0.5, 0.36, 0.16, 6)) return STAR_WHITE;
+  if (inStar(u, v, 0.5, 0.5, 0.274, 0.122, 6)) return STAR_WHITE;
   for (let k = 0; k < 6; k++) {
     const angle = (k * Math.PI) / 3;
-    if ((u - 0.5 - 0.4 * Math.sin(angle)) ** 2 + (v - 0.5 - 0.4 * Math.cos(angle)) ** 2 < 0.06 ** 2) return STAR_WHITE;
+    if ((u - 0.5 - 0.304 * Math.sin(angle)) ** 2 + (v - 0.5 - 0.304 * Math.cos(angle)) ** 2 < 0.046 ** 2) return STAR_WHITE;
   }
   return CLEAR;
 }

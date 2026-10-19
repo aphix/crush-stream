@@ -103,14 +103,17 @@ describe("given the real engine booted on #scene=showcase", () => {
     }
   });
 
-  it("when the set is lit, then its key shines from its own place (the eye's upper left), and a light without one puts the day's sun back where it always was", () => {
-    const sun = engine["stage"].sun;
-    const key = () => sun.position.clone().sub(sun.target.position);
+  it("when the set is lit, then its key and its back light shine from their own places, and a light without them puts the day's sun and fill back where they always were", () => {
+    const stage = engine["stage"];
+    const key = () => stage.sun.position.clone().sub(stage.sun.target.position);
+    const fill = stage["fill"].position;
     assert.ok(key().distanceTo(new THREE.Vector3(...SHOWCASE_LIGHT.sunAt)) < 1e-9, `the key at ${key().toArray()}`);
-    engine["stage"].look(null);
-    const day = key();
-    engine["stage"].look(SHOWCASE_LIGHT);
+    assert.ok(fill.distanceTo(new THREE.Vector3(...SHOWCASE_LIGHT.fillAt)) < 1e-9, `the back light at ${fill.toArray()}`);
+    stage.look(null);
+    const [day, dayFill] = [key(), fill.clone()];
+    stage.look(SHOWCASE_LIGHT);
     assert.ok(day.distanceTo(new THREE.Vector3(-10, 22, 9)) < 1e-9, `the day's sun at ${day.toArray()}`);
+    assert.ok(dayFill.distanceTo(new THREE.Vector3(10, 12, -14)) < 1e-9, `the day's fill at ${dayFill.toArray()}`);
   });
 
   it("when the camera opens on the set, then it is the free eye in front of the first row, and a press on a figure is the scene's, not the camera's", () => {

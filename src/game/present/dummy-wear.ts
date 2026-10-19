@@ -24,9 +24,9 @@ const PEAK_DROP = 0.01;
 const CROWN_DROPS = [0.004, 0.016, 0.035];
 /** Metres a cap's crown stands out of the head. */
 const CROWN_OUT = 0.022;
-/** The cap's star (m): its middle this far above the rim on the crown's front, and its size. */
+/** The cap's star (m): its middle this far above the rim on the crown's front, and its print cell's size (the star fills 0.7 of it). */
 const EMBLEM_RISE = 0.034;
-const EMBLEM_SIZE = [0.046, 0.046] as const;
+const EMBLEM_SIZE = [0.0605, 0.0605] as const;
 /** A print on the crown's front shows only on its front, past this z (m) of the head's middle at the rim. */
 const EMBLEM_FROM = 0.03;
 /**

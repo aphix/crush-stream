@@ -16,8 +16,8 @@ const UNDER_BELT = 0.03;
 const TIE_OFF_CHEST = 0.03;
 /** The furthest (m) a worn piece's vertex may lie from the body under it: the patch's half width on the sleeve, a shoe's toe past the foot's last vertex. */
 const ON_BODY = 0.06;
-/** A colour this dark (each linear channel) reads as black, this bright as white. */
-const BLACK = 0.03;
+/** A colour this dark (each linear channel) reads as black cloth (the reference aide's charcoal black; the cop's navy is 0.067 in blue), this bright as white. */
+const BLACK = 0.05;
 const WHITE = 0.8;
 
 const CIVILIAN: DriverLook = { ...driverLook(1, 0), woman: false };

@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { LAB_LIGHT } from "./lab-art.ts";
+import { STAGE_DIAMETER } from "./engine-world.ts";
+import { GROUND_LEVEL } from "../scenes/constants.ts";
+import { groundMesh } from "../scenes/ground-stack.ts";
 import { ELDER_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { FACE } from "./dummy-faces.ts";
 import { JEANS, OUTFIT, type DriverLook } from "./driver-look.ts";
@@ -53,18 +56,23 @@ const SLOTS = ROWS.length * FIGURES.length;
 export const SHOWCASE_EYE = { x: 0, y: 1.5, z: 8, lookX: 0, lookY: 1, lookZ: 0 };
 export const SHOWCASE_CAR = { x: 60, z: 60 };
 export const SHOWCASE_KNOCK = { up: 2.5, away: 5 };
-/** The reference's studio: a key from the eye's upper left (42° up, 20° round), so each front falls off to its right side as the reference's do, a cool sky light filling, little back light. */
-export const SHOWCASE_LIGHT = { ...LAB_LIGHT, sunIntensity: 1.6, sunAt: [-5, 14, 14] as const, hemi: "#bcc2cc", hemiIntensity: 1.4, fillIntensity: 0.2 };
+/** The reference's studio: a key from the eye's upper left (42° up, 20° round), so each front falls off to its right side as the reference's do, a cool sky light filling with its grey floor's bounce from below, and the fill as a low back light behind the rows so their backs are not left in the dark (low, so it lights no cap or hair top). */
+export const SHOWCASE_LIGHT = { ...LAB_LIGHT, sunIntensity: 1.6, sunAt: [-5, 14, 14] as const, hemi: "#bcc2cc", hemiIntensity: 1.4, ground: "#7a7a7a", fillIntensity: 1.1, fillAt: [0, 3, -14] as const };
+/** The reference's floor: a matte mid-grey (sRGB, tuned to its lightness under the showcase's light) over the sandbox's asphalt, under its grid and rings; matte so the back light does not glint off it at the eye's grazing angle. */
+const STUDIO_FLOOR = 0x3f3c39;
 
 export class ShowcaseArt {
   readonly group = new THREE.Group();
   readonly people = new People(SLOTS);
   readonly slots = SLOTS;
+  private readonly floor = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), new THREE.MeshLambertMaterial({ color: STUDIO_FLOOR }), GROUND_LEVEL.runoff);
 
   constructor() {
     this.group.name = "showcase";
     this.group.visible = false;
-    this.group.add(this.people.group);
+    this.group.add(this.floor, this.people.group);
+    this.floor.rotation.x = -Math.PI / 2;
+    this.floor.receiveShadow = true;
     for (let slot = 0; slot < SLOTS; slot++) this.people.dress(slot, this.figureOf(slot).cop, this.figureOf(slot).look);
     this.stand();
   }
@@ -97,6 +105,8 @@ export class ShowcaseArt {
   }
 
   dispose(): void {
+    this.floor.geometry.dispose();
+    this.floor.material.dispose();
     this.people.dispose();
   }
 }

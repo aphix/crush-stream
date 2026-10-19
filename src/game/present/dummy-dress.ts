@@ -95,8 +95,8 @@ export const DRESS_DECALS: readonly (readonly Decal[])[] = [JEANS_DECALS, SUIT_D
 
 /** The uniformed division: dark-navy shirt and trousers, short dark hair, no cap, no glasses (the reference's cop; sRGB tuned to read as it under the showcase's light). */
 export const COP_LOOK: DriverLook = { woman: false, shirt: 0x2c3749, pants: 0x192333, hair: 0x473727, hat: null, mustache: false, outfit: OUTFIT.UNIFORM, face: FACE.COP };
-/** A plain-clothes agent: the cop's build and kit in black, with dark glasses and an earpiece. */
-export const GUARD_LOOK: DriverLook = { ...COP_LOOK, shirt: 0x16181d, pants: 0x16181d, shades: true };
+/** A plain-clothes agent: the cop's build and kit in black (a charcoal black that reads as cloth under the showcase's light, as the reference aide's suit does), with dark glasses and an earpiece. */
+export const GUARD_LOOK: DriverLook = { ...COP_LOOK, shirt: 0x37383b, pants: 0x202125, shades: true };
 /** The VIP: portly, in a navy-blue suit with a brick-red tie, his golden-blond hair swept back. */
 export const VIP_LOOK: DriverLook = { woman: false, shirt: 0x262a35, pants: 0x20262f, hair: 0xb5855f, hat: null, mustache: false, portly: true, outfit: OUTFIT.SUIT, face: FACE.PRESIDENT };
 /** His older aide: grey-haired, in a near-black charcoal suit and a dark tie. */

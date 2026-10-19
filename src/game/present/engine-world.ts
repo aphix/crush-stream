@@ -9,7 +9,7 @@ import type { FxTier } from "./engine-post.ts";
 import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
 
 /** The sandbox's asphalt disc: its UVs span this many metres (its texture repeats 18 times across). */
-const STAGE_DIAMETER = 96;
+export const STAGE_DIAMETER = 96;
 
 function makeConcrete(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
@@ -182,8 +182,8 @@ const DAY: Day = {
   smoke: 1,
 };
 
-/** A course's own daylight (`environment.light`) or the Lab's: colours (hex), intensities (else the day's), the sun's offset `sunAt` (m, else the time of day's) and sky colour. */
-type Daylight = { sun: string; sunIntensity: number; hemi: string; fill: string; hemiIntensity?: number; fillIntensity?: number; sunAt?: readonly [number, number, number]; sky?: string };
+/** A course's own daylight (`environment.light`) or the Lab's: colours (hex), intensities (else the day's), the sun's offset `sunAt` and the fill's `fillAt` (m, else the time of day's and the default's), the sky light's `ground` bounce (else `GROUND_BOUNCE`) and sky colour. */
+type Daylight = { sun: string; sunIntensity: number; hemi: string; fill: string; hemiIntensity?: number; fillIntensity?: number; sunAt?: readonly [number, number, number]; fillAt?: readonly [number, number, number]; ground?: string; sky?: string };
 const hex = (c: string): number => parseInt(c.slice(1), 16);
 const NIGHT = {
   sky: 0x040509,
@@ -222,6 +222,10 @@ const LOW_SUN = THREE.MathUtils.degToRad(12);
 const MOON_ELEVATION = { min: THREE.MathUtils.degToRad(20), max: THREE.MathUtils.degToRad(60) };
 /** The shadow camera reaches this far (m) past the shadow box's centre, beyond the sun's own distance (60 m over the default 25.8). */
 const SHADOW_REACH = 34;
+/** Where the unshadowed fill shines from (m) when a daylight sets no `fillAt`: across the sky from the default sun. */
+const DEFAULT_FILL_AT = [10, 12, -14] as const;
+/** The sky light's colour from below: what the dark asphalt bounces back up. */
+const GROUND_BOUNCE = 0x1a1816;
 
 /** The sun's elevation (rad) for `time`: the default day's, or where the picture's disc is (sunset not under `LOW_SUN`). */
 export function sunElevation(time: TimeOfDay | null): number {
@@ -307,7 +311,7 @@ export class WorldStage {
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
-    this.hemi = new THREE.HemisphereLight(DAY.hemi[0], 0x1a1816, DAY.hemi[1]);
+    this.hemi = new THREE.HemisphereLight(DAY.hemi[0], GROUND_BOUNCE, DAY.hemi[1]);
     scene.add(this.hemi);
     const dir = new THREE.DirectionalLight(DAY.sun[0], DAY.sun[1]);
     dir.position.copy(DEFAULT_SUN_OFFSET);
@@ -323,7 +327,7 @@ export class WorldStage {
     this.sun = dir;
     scene.add(dir);
     this.fill = new THREE.DirectionalLight(DAY.fill[0], DAY.fill[1]);
-    this.fill.position.set(10, 12, -14);
+    this.fill.position.fromArray(DEFAULT_FILL_AT);
     scene.add(this.fill);
 
     this.groundMat = new THREE.MeshStandardMaterial({
@@ -369,6 +373,8 @@ export class WorldStage {
     this.sun.position.copy(this.sunOffset);
     this.sun.target.position.set(0, 0, 0);
     this.sun.target.updateMatrixWorld();
+    this.fill.position.fromArray(light?.fillAt ?? DEFAULT_FILL_AT);
+    this.hemi.groundColor.setHex(light?.ground ? hex(light.ground) : GROUND_BOUNCE);
     this.apply();
   }
 
