@@ -43,6 +43,14 @@ function headOn(mps: number, police = false): [DeformableCar, DeformableCar] {
   return [a, b];
 }
 
+const _ray = new THREE.Raycaster();
+const _down = new THREE.Vector3(0, -1, 0);
+/** World y of `car`'s highest drawn surface over `p`'s plan point (-Infinity: none). */
+function drawnTop(car: DeformableCar, p: THREE.Vector3): number {
+  car.group.updateMatrixWorld(true);
+  _ray.set(_f.set(p.x, p.y + 4, p.z), _down);
+  return _ray.intersectObject(car.group, true)[0]?.point.y ?? -Infinity;
+}
 const _l = new THREE.Vector3();
 const _f = new THREE.Vector3();
 const _q = new THREE.Quaternion();
@@ -54,7 +62,8 @@ function endZ(car: DeformableCar, name: MassName): number {
 /**
  * Which solid part of `car`'s body holds world point `p` ("" for none): the bonnet or boot block and the door walls
  * below the sill (`SILL_Y`, the top of the dummies' lower box; the crushed ends from the bumper masses), the roof slab over the
- * belt (`BELT_Y`, where the proxy's cabin starts). The cabin and its openings are not solid.
+ * belt (`BELT_Y`, where the proxy's cabin starts) where the drawn body's top over `p` is above it (a crushed roof's box overhangs its open side windows).
+ * The cabin and its openings are not solid.
  */
 function solidAt(car: DeformableCar, p: THREE.Vector3): string {
   const nose = Math.max(endZ(car, "bumperFL"), endZ(car, "bumperFR")) + 0.05;
@@ -66,7 +75,7 @@ function solidAt(car: DeformableCar, p: THREE.Vector3): string {
     if (ax < 0.8 && _l.z < -0.86) return "boot";
     if (ax >= 0.8 && ax < 0.91) return "door";
   }
-  if (ax < 0.85 && _l.y > BELT_Y + 0.25 && _l.y < BELT_Y + 0.33 && _l.z > -0.86 && _l.z < 0.49) return "roof";
+  if (ax < 0.85 && _l.y > BELT_Y + 0.25 && _l.y < BELT_Y + 0.33 && _l.z > -0.86 && _l.z < 0.49 && drawnTop(car, p) > p.y) return "roof";
   return "";
 }
 
