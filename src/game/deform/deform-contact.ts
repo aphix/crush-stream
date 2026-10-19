@@ -242,7 +242,8 @@ export abstract class DeformContact extends DeformState {
    * `Car.integrateWreck`), and its velocity and spin are the body's own: contact impulses land on it (`shiftBody`, `markMotion`/`takeMotion`),
    * never read back off the masses. The masses are re-read into the group's frame (the crush state) and the clamp run. The body seats on
    * its cell no faster than `SEAT_SPEED` (still needed: without it the struck cell's springback leaves the frame off by the cabin's offset,
-   * which reds the wall-bump, police-side and IIHS door rows): what the cell drifts from its seat the body follows, slowly.
+   * which reds the wall-bump, police-side and IIHS door rows): what the cell drifts from its seat the body follows, slowly. The seat is the
+   * cell's rest plus its earlier hits' damage (`baseX/baseZ`): a kept cabin offset never seats, and the step walked a tilted wreck into the ground.
    */
   followGroup(group: THREE.Object3D, velocityOut: THREE.Vector3, angularOut: THREE.Vector3, dt: number): void {
     this.bodyV = velocityOut;
@@ -252,7 +253,7 @@ export abstract class DeformContact extends DeformState {
     group.updateWorldMatrix(false, false);
     _toLocal.copy(group.matrixWorld).invert();
     _a.copy(cell.world).applyMatrix4(_toLocal);
-    _a.set(_a.x - cell.rest.x, 0, _a.z - cell.rest.z);
+    _a.set(_a.x - cell.rest.x - cell.baseX, 0, _a.z - cell.rest.z - cell.baseZ);
     const off = _a.length();
     if (dt > 0 && off > 1e-9) {
       _a.multiplyScalar(Math.min(1, (dt * SEAT_SPEED) / off)).applyQuaternion(group.quaternion);

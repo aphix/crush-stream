@@ -747,9 +747,10 @@ export abstract class RaceField {
 
   /**
    * The bench's scripted crash (`engine-bench.ts`): the first two cars of the grid put head-on on the start line, `gap` m apart (centre to
-   * centre) and each driving at `speed` m/s toward the other, whichever course it is. False when there is no course or fewer than two cars on the grid.
+   * centre) and each driving at `speed` m/s toward the other, the second `offset` m to the first's right, whichever course it is. False when
+   * there is no course or fewer than two cars on the grid.
    */
-  crashAtStart(gap: number, speed: number): boolean {
+  crashAtStart(gap: number, speed: number, offset = 0): boolean {
     const track = this.track;
     const cars = this.host.live();
     if (!track || this.grid.length < 2) return false;
@@ -757,8 +758,10 @@ export abstract class RaceField {
     const b = cars[this.grid[1]!];
     if (!a || !b) return false;
     const s = track.gridSlot(0);
+    const sin = detSin(s.yaw);
+    const cos = detCos(s.yaw);
     this.place(a, s.x, s.z, s.yaw, s.y, speed);
-    this.place(b, s.x + detSin(s.yaw) * gap, s.z + detCos(s.yaw) * gap, s.yaw + Math.PI, s.y, speed);
+    this.place(b, s.x + sin * gap + cos * offset, s.z + cos * gap - sin * offset, s.yaw + Math.PI, s.y, speed);
     return true;
   }
 

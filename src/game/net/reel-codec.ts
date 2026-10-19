@@ -238,9 +238,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 124: a crushed node springs back min(0.08 m, 0.015 + 10 % of its crush) and in shape mode the set moves the clusters' rest, so dents stay (75-90 % of peak); a head-on pair
  * stops at 0.9 of its stroke (the crossing slice's exchange is split); a frozen wreck resting on a barrier takes no slab exchange and goes quiet; glass cracks or shatters from its
  * frame's distortion (windscreen 5 / 30 mm, tempered 30 mm) and a shattered laminated windscreen stays in the contact cage. A clip of 123 or before no longer reads.
+ * 125: a wreck's body seats on its cell's rest plus its earlier hits' damage, so a kept cabin offset no longer walks a tilted wreck into the ground. A clip of 124 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 124;
+const REPLAY_VERSION = 125;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

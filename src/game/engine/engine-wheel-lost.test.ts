@@ -18,6 +18,8 @@ import { element, stubBrowser } from "./engine-headless.test-util.ts";
 const FRAME = 1 / FRAME_HZ;
 const RULES = { trackId: TRACK_ID.city, laps: 1, aiCount: 3, police: false, aggression: 0.5, aiDifficulty: AI_EVERY_SLICE, spectate: false, noReset: false };
 const HUBS = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
+/** The second car's offset (m) to the first's right: an offset head-on pops the struck corners' hubs (C4); a full-width one stops at the packed stroke, short of them. */
+const CRASH_OFFSET = 0.8;
 /** The longest a round takes to go green and the staged head-on to be filed (s). */
 const GREEN_WAIT_S = 20;
 const CLIP_WAIT_S = 20;
@@ -123,7 +125,7 @@ function assertNoneOnSeat(out: Frames, what: string): void {
   );
 }
 
-describe("given the real engine and a head-on at the start line that throws wheels", () => {
+describe("given the real engine and an offset head-on at the start line that throws wheels", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
   let watch: LostWheelWatch | null = null;
@@ -150,13 +152,13 @@ describe("given the real engine and a head-on at the start line that throws whee
     engine["highlights"].stepBudgetMs = Infinity;
   };
 
-  /** The race goes green, its first two cars meet head-on, and every drawn frame is watched until the crash is filed as a clip. */
+  /** The race goes green, its first two cars meet in an offset head-on, and every drawn frame is watched until the crash is filed as a clip. */
   const crashLive = async (): Promise<void> => {
     engine.toggleRace();
     engine.raceCommand({ type: "program", options: RULES });
     engine.raceCommand({ type: "start" });
     assert.ok(await runUntil(() => race().phase === "racing", GREEN_WAIT_S), "the race went green");
-    assert.ok(race().crashAtStart(CRASH_GAP, CRASH_SPEED), "two cars on the grid");
+    assert.ok(race().crashAtStart(CRASH_GAP, CRASH_SPEED, CRASH_OFFSET), "two cars on the grid");
     watch = new LostWheelWatch(engine, () => engine["live"](), () => engine["elapsedSim"]);
     const kept = race().recorder.ledger.kept;
     assert.ok(await runUntil(() => kept.length > 0, CLIP_WAIT_S), "the crash was filed");
