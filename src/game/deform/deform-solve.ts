@@ -66,7 +66,7 @@ const SHAPE_MAX_STEP = 0.14;
 /** Sim seconds a fed contact keeps the solver in contact mode: two 60 Hz frames. With one, the free solver (4 passes at α 0.64
  *  at squash 0.32) closed a 100 km/h head-on's remaining shape gap in the slice after the tyres stopped both cars: bumpers
  *  0.056 m with every mass at rest (limit 0.050). */
-const CONTACT_HOLD = 2 / 60;
+export const CONTACT_HOLD = 2 / 60;
 
 /** `clampMass`'s vertical travel cap (m): roof (more once a deep crush is on, and its load crush `sunk` already taken) and cabin floor, hubs, the rest. */
 function maxLift(m: MassNode, deep: boolean, sunk: number): number {
@@ -261,9 +261,10 @@ export abstract class DeformSolve extends DeformFreeze {
       }
       along = Math.max(-cap, Math.min(cap, rel));
       if (!cabin && this.hitSpeed >= 0) {
-        // Sheet metal keeps its set: only the elastic part of the crush springs back.
+        // Sheet metal keeps its set: only the elastic part of the crush springs back. Only a loading contact's crush sets, within its contact hold:
+        // unloaded, each set's rest shift drew its mass (and the seated frame) on in, which read as more crush: a ratchet.
         const set = along - Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * along);
-        if (set > m.crushSet) {
+        if (set > m.crushSet && this.quietTime() <= CONTACT_HOLD) {
           if (this.mode === "shape") {
             REST_SHIFT[1] = (set - m.crushSet) * ix;
             REST_SHIFT[2] = 0;

@@ -251,9 +251,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 130 or before no longer reads.
  * 132: a gone windscreen no longer opens the roof header in the dummies' world (a lying pane's top-edge nodes stay roof), so a thrown dummy meets the roof the player sees. A clip of
  * 131 or before no longer reads.
+ * 133: a crush sets only within `CONTACT_HOLD` of a loading contact, so a wreck's sets no longer ratchet on (set, rest shift, seat) after the face lets go. A clip of 132 or before
+ * no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 132;
+const REPLAY_VERSION = 133;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

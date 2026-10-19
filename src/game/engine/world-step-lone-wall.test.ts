@@ -9,6 +9,7 @@ import { newWorld, settleStep, stepWorld } from "./world-step.ts";
 import * as THREE from "three";
 import { satCars } from "../contact/sat.ts";
 import { COARSE, FINE, missedByLone, parkedPair } from "./world-step-lone.test-util.ts";
+import { CONTACT_HOLD } from "../deform/deform-solve.ts";
 
 /**
  * A lone car against the course's walls: Havana's alley wall (five 10 m panels across x = -40.25, approached from +x; `prop-wall.test.ts`), driven at it in the pacer's coarse steps,
@@ -32,8 +33,8 @@ const NEAR_STEP_GAP = 2.3 + SPEED * COARSE + 0.5;
 afterEach(() => setGround(null));
 
 interface Run {
-  /** Per step: the car's centre's gap to the near face at the step's start (m), whether it was a lone car, and the slices the step ran. */
-  rows: { gap: number; lone: boolean; slices: number }[];
+  /** Per step: the car's centre's gap to the near face at the step's start (m), whether it was a lone car, the slices the step ran, and at its end the sum of its masses' crush sets (m) and its quiet time (s). */
+  rows: { gap: number; lone: boolean; slices: number; set: number; quiet: number }[];
   past: number;
   x: number;
   alive: boolean;
@@ -59,7 +60,7 @@ function drive(lone: boolean, gap = START_GAP): Run {
     applyDrive(car, input, COARSE);
     stepWorld(world, COARSE);
     settleStep(cars, COARSE, false);
-    rows.push({ gap, lone: (world.loners & 1) === 1, slices: world.shape + 1 });
+    rows.push({ gap, lone: (world.loners & 1) === 1, slices: world.shape + 1, set: car.deform.masses.reduce((sum, m) => sum + m.crushSet, 0), quiet: car.deform.quietTime() });
     for (const m of car.deform.masses) past = Math.max(past, FAR - m.world.x);
   }
   const out = { rows, past, x: car.group.position.x, alive: car.deform.drivetrainAlive };
@@ -167,4 +168,20 @@ describe("given a sedan leaning into Havana's alley wall below a crash's speed, 
       assert.ok(on.wallward > 0.2 && on.wallward < 5.5, `its fastest speed toward the wall (read after the wall's push) was ${on.wallward.toFixed(2)} m/s`);
     });
   }
+});
+
+describe("given a sedan driven at 40 m/s into Havana's alley wall from 40 m, its nose left resting on the wall's face", () => {
+  it("when it runs lone and when it runs sliced, then no crush set grows once the contact hold after its last loading contact is over: the set it keeps is the hit's", () => {
+    const grew: string[] = [];
+    for (const lone of [true, false]) {
+      const { rows } = drive(lone);
+      let last = -1;
+      for (let s = 0; s < rows.length; s++) if (rows[s]!.quiet <= CONTACT_HOLD) last = s;
+      assert.ok(last > 0 && last + 1 < rows.length, `the last step in a loading contact's hold: ${last} of ${rows.length}`);
+      const kept = rows[last + 1]!.set;
+      const grown = rows.at(-1)!.set - kept;
+      if (grown > 0) grew.push(`${lone ? "lone" : "sliced"}: ${grown.toFixed(3)} m over ${kept.toFixed(3)} m after step ${last + 1}`);
+    }
+    assert.deepEqual(grew, [], "the sets grew");
+  });
 });
