@@ -27,12 +27,13 @@ interface Course {
 
 const COURSES: readonly Course[] = [
   { id: TRACK_ID.fourCount, json: fourCount, seeds: [1, 2] },
-  { id: TRACK_ID.oval, json: oval, seeds: [1, 2] },
+  // Four seeds: an oval race ends before STALE_LIFE, so put-aways are luck (3.5 a seed over seeds 1-36) and a pair once drew 1.
+  { id: TRACK_ID.oval, json: oval, seeds: [1, 2, 3, 4] },
   { id: TRACK_ID.city, json: city, seeds: [1, 2] },
 ];
 
 /**
- * Full-sanity sweep, not a per-commit test: whole 150 s police races on three courses and two seeds, every put-on and put-away read against
+ * Full-sanity sweep, not a per-commit test: whole 150 s police races on three courses and two seeds (four on the oval), every put-on and put-away read against
  * where the racers stood. The rules themselves are pinned in the regular suite, each on a staged moment: a spot in or out of a racer's sight
  * (`ai/cop-sight.test.ts`; the spots a pack picks, `ai/police.test.ts`), a cop moving inside the near range never put away and one in sight
  * put away only once STALE_LIFE old, MIN_LIFE, OUT_RANGE and a knocked-out cop (`ai/police.test.ts`), a stalled cop (`race-police-stall.test.ts`).
