@@ -146,8 +146,8 @@ function faceOverlap(car: DeformableCar, box: ContactBox, point: THREE.Vector3):
   return best;
 }
 
-/** What the last `faceDepth` found (reused): the unit normal (plan) the deepest vertex is out along, the face's or an open end's. */
-export const faceExit = { nx: 0, nz: 0 };
+/** What the last `faceDepth` found (reused): the unit normal (plan) the deepest vertex is out along, the face's or an open end's (`atEnd`). */
+export const faceExit = { nx: 0, nz: 0, atEnd: false };
 
 /**
  * How far (m, ≤ 0 clear) the box's leading face has passed the deepest vertex of the car's cage across the face's span (the mesh's
@@ -198,6 +198,7 @@ export function faceDepth(car: DeformableCar, box: ContactBox): number {
   }
   faceExit.nx = bestAtEnd ? endSign * rx : fx;
   faceExit.nz = bestAtEnd ? endSign * rz : fz;
+  faceExit.atEnd = bestAtEnd;
   // A body with a point in the slab is as deep as its farthest point, however far past the back face (the pushed-through corner is
   // what the push-out must bring back); one wholly beyond the back face is on the slab's other side, no contact of this face.
   return inside ? best : -Infinity;
@@ -213,8 +214,8 @@ function shiftVelocities(car: DeformableCar, dx: number, dz: number): void {
   }
 }
 
-/** Result of the last `strikeCar` (reused): whether the face touches the hulls (or is a slice's travel from them) or held a particle, their depth in it (m, negative: the gap), the closing speed (m/s), and the contact point and unit normal into the car (plan). */
-export const bodyHit = { touching: false, depth: 0, closing: 0, x: 0, z: 0, nx: 0, nz: 0 };
+/** Result of the last `strikeCar` (reused): whether the face touches the hulls (or is a slice's travel from them) or held a particle, whether it `held` the wreck, their depth in it (m, negative: the gap), the closing speed (m/s), and the contact point and unit normal into the car (plan). */
+export const bodyHit = { touching: false, held: false, depth: 0, closing: 0, x: 0, z: 0, nx: 0, nz: 0 };
 
 // The kernel's rows (`contact/body-contact.ts`): the struck car, the striker, the contact and the result, reused by every call.
 const rows = new Float64Array(2 * BODY_SIZE);
@@ -488,6 +489,7 @@ export function strikeCar(car: DeformableCar, box: ContactBox, dt: number, crush
     shiftVelocities(car, fx * ub, fz * ub);
     d.takeMotion(car.velocity, car.angular);
   }
+  bodyHit.held = held;
   // A frozen wreck resting on the face takes no exchange: its tiny impulse would thaw it every slice, before its centre caches.
   if (crush && held && (rigid || !d.frozen || !resting)) {
     const ebs = Math.max(0, d.hitSpeedValue);

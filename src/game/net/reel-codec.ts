@@ -264,9 +264,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * the face, so it no longer keeps a phantom speed into a monument's corner that a pair contact reads. A clip of 137 or before no longer reads.
  * 139: 138 withdrawn: its rule also stopped cars hitting a monument head-on with almost no crush (a sedan at 55 m/s kept 1 mm against the slab's 0.50 m), so the sim is 137's
  * again. A clip of 138 or before no longer reads.
+ * 140: 138's rule again, only where the shove leaves round an open end (the one way `strikeCar` cannot hold); a monument's narrow tip slice a head-on car drives through no
+ * longer stops it. A clip of 139 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 139;
+const REPLAY_VERSION = 140;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

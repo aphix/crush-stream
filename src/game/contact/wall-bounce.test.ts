@@ -77,8 +77,7 @@ function wreckAtOpenEnd(): { car: DeformableCar; face: ContactBox } {
 }
 
 describe("given a side-hit sedan wreck driving at 15 m/s into the open end of a 2 m thick solid (a monument's arm), its drawn door 4 cm round the end and no mass on the solid", () => {
-  // Todo: REPLAY 138's fix (a plastic shove for a wreck the face's exchange didn't hold) stopped a sedan at 55 m/s on the monument with 1 mm of crush (slab: 0.50 m, dead), so it was withdrawn (REPLAY 139).
-  it.todo("when the slice shoves it out round the end, then neither its body nor any of its masses keeps speed into the end", () => {
+  it("when the slice shoves it out round the end, then neither its body nor any of its masses keeps speed into the end", () => {
     const { car, face } = wreckAtOpenEnd();
     const endX = face.x + SOLID_HALF_SPAN;
     const massLead = Math.min(...car.deform.masses.filter((m) => m.dynamic).map((m) => m.world.x - m.radius * 0.5));
