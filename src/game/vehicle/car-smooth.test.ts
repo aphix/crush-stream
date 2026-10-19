@@ -403,16 +403,17 @@ describe("given every body style's panels cut from its smoothed loft", () => {
  * `JSON.stringify({ snap: car.deform.snapshot(), raw: masses.map((m) => [m.rest, m.local, m.world, m.vel].map((v) => v.toArray())) })`.
  */
 const SIM_CRASH_KPH = 48;
+// Re-pinned for the kept set (REPLAY 124, dents stay): the first difference is a mass's crushSet at slice 116, the first crushing slice.
 const SIM_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "42909afed5b013778570c85034bc78f81e61c47cc96bcc2675210b57b6699d7a" },
-  { id: "hatchback", digest: "42909afed5b013778570c85034bc78f81e61c47cc96bcc2675210b57b6699d7a" },
-  { id: "wagon", digest: "42909afed5b013778570c85034bc78f81e61c47cc96bcc2675210b57b6699d7a" },
-  { id: "coupe", digest: "4ace2c0f6b1b519e5e837f1cabb74c900203f5433898cd8246f2a0f7b8d47058" },
-  { id: "pickup", digest: "e539bc70cbf2dcf6f7a74f9ff57f0b5649c6f018d51946e534069a20f968f56c" },
+  { id: "sedan", digest: "46fe3df2350d60f0754fe2dbe0a30daacec04c2fd23ebb8a15b4227615ed6d07" },
+  { id: "hatchback", digest: "46fe3df2350d60f0754fe2dbe0a30daacec04c2fd23ebb8a15b4227615ed6d07" },
+  { id: "wagon", digest: "46fe3df2350d60f0754fe2dbe0a30daacec04c2fd23ebb8a15b4227615ed6d07" },
+  { id: "coupe", digest: "67a7271bc1ad91515f3d77f684651e4fcce47879baef4eea191951e821aa8849" },
+  { id: "pickup", digest: "a59bed0eeac6289b1e183324a27619ca98d7a8d659f098974c4cec026ab92f79" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
-  { id: "police", digest: "c144697c21cb4106c16fbff9917561fae0a757d478486b4d88282ea27b07aa1a" },
+  { id: "police", digest: "7523381ab37eee769efae5848ffaa1e7278dd244a609ef26c94894528c7a0144" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style crashed into the wall at 48 km/h by the engine's own step", () => {
