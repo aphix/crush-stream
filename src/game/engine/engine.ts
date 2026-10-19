@@ -957,7 +957,7 @@ export class CrashEngine extends EngineGarage {
       look.set(this.carA.group.position.x, this.showStack ? this.stackLookY(wallDt) : 0.55, this.carA.group.position.z);
     } else if (this.derbyMode && this.derby.winnerId != null) {
       const champ = this.cars[this.derby.winnerId];
-      if (champ) look.set(champ.group.position.x, 0.7, champ.group.position.z);
+      if (champ) this.lookOver(champ.group.position.x, champ.group.position.z);
     } else if (this.derbyMode) {
       const alive = this.aliveBuf;
       const live = this.live();
@@ -965,7 +965,7 @@ export class CrashEngine extends EngineGarage {
       for (let i = 0; i < live.length; i++) if (live[i]!.deform.drivetrainAlive) alive[n++] = live[i]!;
       alive.length = n;
       centroid(_v, n ? alive : live);
-      look.set(_v.x, 0.7, _v.z);
+      this.lookOver(_v.x, _v.z);
     } else if (this.showLab) {
       // A phone turned on its side (or back) gets that shape's shot: its lens and distance are fitted to the screen's width, so a
       // view the player turned on the other shape means nothing on this one.
@@ -973,7 +973,7 @@ export class CrashEngine extends EngineGarage {
       look.copy(this.labLook);
     } else if (!this.showGarage) {
       centroid(_v, this.live());
-      look.set(_v.x, 0.7, _v.z);
+      this.lookOver(_v.x, _v.z);
     }
 
     // The Lab holds still for the aim, and the garage for the paint and the picks: a turning view would turn every flick or stroke.
@@ -982,5 +982,11 @@ export class CrashEngine extends EngineGarage {
       spinRate = this.showPistons ? PISTON_ORBIT_RATE : this.clock.phase === "approach" ? 0.12 : 0.32;
     }
     this.view.orbit(wallDt, spinRate, this.playing, this.rigScene || this.showLab || this.showGarage ? null : this.chaseSight(followed !== null && followed.group.visible));
+  }
+
+  /** Aim the orbit 0.7 m over the surface at (x, z): the cars' mean spot can lie over a derby mound or ramp, and the eye's clear line starts at the aim. */
+  private lookOver(x: number, z: number): void {
+    const g = activeGround().heightAt(x, z);
+    this.view.look.set(x, (g === NO_FLOOR ? 0 : g) + 0.7, z);
   }
 }
