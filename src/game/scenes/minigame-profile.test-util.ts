@@ -332,6 +332,7 @@ export async function driveIntoBarrier(type: DriverCar, ground: Ground | null, s
   barrier.orient(car.group.position, false);
   const world = makeWorld([car], false, true, FREEWHEEL);
   world.world.barrier = barrier;
+  world.world.ejection!.minigame = ground !== null;
   const input: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
   const inner = world.world.beforeSlice!;
   world.world.beforeSlice = (slice) => {
@@ -417,6 +418,7 @@ export function driveToBarrier(type: DriverCar, profile: DriveProfile, startOffs
     barrier.orient(car.group.position, false);
     const world = makeWorld([car], false, true, FREEWHEEL);
     world.world.barrier = barrier;
+    world.world.ejection!.minigame = true;
     const input: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
     const inner = world.world.beforeSlice!;
     world.world.beforeSlice = (slice) => {

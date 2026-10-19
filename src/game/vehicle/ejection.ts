@@ -45,6 +45,15 @@ export function killSpeed(car: DeformableCar): number {
   return KILL_EBS * Math.sqrt(CLASSES[killClass(car)].durability);
 }
 
+/** The share of its `killSpeed` the closing must reach to throw a car whose drivetrain still runs (a packed block, a door slam): drivers went out "a little too easy" when the engine did not die. */
+const ALIVE_CLOSING_SHARE = 1.05;
+
+/** The closing speed (m/s) at which a hit on `car` throws its driver: `EJECT_CLOSING` with a dead drivetrain, else its `killSpeed`, × `ALIVE_CLOSING_SHARE` outside a mini game. */
+export function ejectThreshold(car: DeformableCar, minigame: boolean): number {
+  if (!car.deform.drivetrainAlive) return EJECT_CLOSING;
+  return minigame ? killSpeed(car) : ALIVE_CLOSING_SHARE * killSpeed(car);
+}
+
 /**
  * A hit is square on a door, for the slam throw, when its inward normal's across-the-car part is over this × its
  * along-the-car part: within 27 degrees of straight in from the side (owner, 2026-10-07: the case is a car sliding in
@@ -179,6 +188,8 @@ function launch(car: DeformableCar, i: number, exit: ExitPane, pre: THREE.Vector
 export class EjectionWatch {
   /** Kill context (`armKill`'s): a derby's limits or anywhere else's; the engine sets it per scene. */
   ctx: "derby" | "default" = "default";
+  /** A mini game's run: the long jump is built around its barrier throw, so a running car keeps the bare `killSpeed` bar. */
+  minigame = false;
   private cap = 0;
   private vel = new Float32Array(0);
   private head = new Int32Array(0);
@@ -274,11 +285,7 @@ export class EjectionWatch {
     }
   }
 
-  /**
-   * Car i was just disabled (`killed`), or runs on in a fresh hit on a door: was that hit head-on or from the side, and
-   * hard enough? A kill against the closing speed, a door slam against the lesser of the car's own speed into it and
-   * the closing (`killSpeed`).
-   */
+  /** Car i was just disabled (`killed`), or runs on in a fresh hit on a door: was that hit head-on or from the side, and hard enough (`ejectThreshold`)? */
   private judge(cars: readonly DeformableCar[], i: number, killed: boolean): void {
     const car = cars[i]!;
     // The struck end: inward points from the contact into the car.
@@ -288,6 +295,14 @@ export class EjectionWatch {
     if (Math.abs(ix) > Math.abs(iz)) exit = ix > 0 ? "doorL" : "doorR";
     else if (iz < 0) exit = "windshield";
     else return;
+    if (this.peakClosing(cars, i, killed) < ejectThreshold(car, this.minigame)) return;
+    car.driverOut = exit;
+    this.pending.push(launch(car, i, exit, _pre));
+  }
+
+  /** The closing speed of car i's hit (peak over the `PRE` s before it; a door slam's is the lesser of the car's own speed into it and the closing); the car's velocity at that peak is left in `_pre`. */
+  private peakClosing(cars: readonly DeformableCar[], i: number, killed: boolean): number {
+    const car = cars[i]!;
     _n.copy(car.deform.impactInward).applyQuaternion(car.group.quaternion);
     let other = -1;
     _hit.copy(car.deform.impactLocal).applyQuaternion(car.group.quaternion).add(car.group.position);
@@ -303,9 +318,7 @@ export class EjectionWatch {
     // Peak over the samples since PRE s back: the cars were still closing (or speeding up into it) until contact.
     const back = Math.min(this.count[i]!, other >= 0 ? this.count[other]! : RING, Math.round(PRE / SAMPLE));
     let closing = -Infinity;
-    let sx = car.velocity.x;
-    let sy = car.velocity.y;
-    let sz = car.velocity.z;
+    _pre.copy(car.velocity);
     for (let k = 1; k <= back; k++) {
       const a = (i * RING + ((this.head[i]! - k + RING) % RING)) * VELOCITY_STRIDE;
       let c = -(this.vel[a + VELOCITY_X]! * _n.x + this.vel[a + VELOCITY_Z]! * _n.z);
@@ -316,12 +329,8 @@ export class EjectionWatch {
       }
       if (c <= closing) continue;
       closing = c;
-      sx = this.vel[a + VELOCITY_X]!;
-      sy = this.vel[a + VELOCITY_Y]!;
-      sz = this.vel[a + VELOCITY_Z]!;
+      _pre.set(this.vel[a + VELOCITY_X]!, this.vel[a + VELOCITY_Y]!, this.vel[a + VELOCITY_Z]!);
     }
-    if (closing < (killed ? EJECT_CLOSING : killSpeed(car))) return;
-    car.driverOut = exit;
-    this.pending.push(launch(car, i, exit, _pre.set(sx, sy, sz)));
+    return closing;
   }
 }

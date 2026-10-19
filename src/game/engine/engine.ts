@@ -774,6 +774,7 @@ export class CrashEngine extends EngineGarage {
     w.lone = this.race.active;
     if (!this.race.active && !this.showLab) this.syncRigs();
     this.ejection.ctx = this.derbyMode ? "derby" : "default";
+    this.ejection.minigame = this.minigameMode !== null;
     w.fine = this.pace.fine;
     lap(w.phases, PHASE.drive);
     stepWorld(w, dt);
