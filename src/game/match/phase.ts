@@ -143,20 +143,22 @@ export function holdForThrow(c: PhaseClock): void {
 }
 
 /**
- * The auto slow-mo before a hit, once a frame in approach (`CrashEngine.maybePreSlowmo`): it starts easing in (`easeTimeScale`
+ * The auto slow-mo before a hit, once a frame in approach (`CrashEngine.maybePreSlowmo`), and in a sandbox's aftermath before its
+ * next crash (back to approach, as a reel drops again for its next hit): it starts easing in (`easeTimeScale`
  * reaches the slow scale as the hit lands) when the contact predicted `eta` sim s ahead is within `lead` sim s, or is held for
  * his exit (`THROW_ONSET`) when the hit will throw a driver (`throwing`, asked only then). `simT`: the sim clock; `step`: one
  * sim step. A hit still missing one step past its predicted time (a flick that misses, a pair that passes or turns apart)
- * hands time back to 1×, and the slow-mo waits for a fresh prediction: one that first went out of reach.
+ * hands time back to 1× (the aftermath it came from, after a crash), and the slow-mo waits for a fresh prediction: one that first went out of reach.
  */
 export function preImpact(c: PhaseClock, eta: number, simT: number, lead: number, step: number, throwing: () => boolean): void {
   const scale = impactScale(c);
-  if (c.phase !== "approach" || c.userTimeScale != null) return;
-  if (c.targetScale <= scale || c.slomoAt > 0) {
+  if ((c.phase !== "approach" && c.phase !== "aftermath") || c.userTimeScale != null) return;
+  if (c.phase === "approach" && (c.targetScale <= scale || c.slomoAt > 0)) {
     if (simT > c.preImpactBy) {
       c.targetScale = 1;
       c.slomoAt = 0;
       c.preImpactBy = Infinity;
+      if (struck(c)) c.phase = "aftermath";
     }
     return;
   }
@@ -166,6 +168,7 @@ export function preImpact(c: PhaseClock, eta: number, simT: number, lead: number
   }
   if (c.preImpactBy === Infinity) return;
   c.preImpactBy = simT + eta + step;
+  c.phase = "approach";
   if (throwing()) {
     c.slomoAt = THROW_ONSET;
     return;
@@ -174,14 +177,35 @@ export function preImpact(c: PhaseClock, eta: number, simT: number, lead: number
   c.targetScale = scale;
 }
 
+/** A crash came before in this run: the clock is past approach, or back in it with `wallSinceImpact` held (0 only before the first hit). */
+export function struck(c: PhaseClock): boolean {
+  return c.phase !== "approach" || c.wallSinceImpact > 0;
+}
+
 /**
- * Sim seconds until the first pair of `cars` closing in plan meets (each footprint taken along the line between their
+ * A crash after the first (a sandbox's next car pair to meet, a reel's later hit): one that lands while the slow-mo holds
+ * (`impact`, `slowmo`) holds it `hold` wall s past itself; any other drops the slow-mo again as the first did, held `hold`.
+ */
+export function laterImpact(c: PhaseClock, hold: number): void {
+  if (c.phase === "impact" || c.phase === "slowmo") {
+    c.hold = Math.max(c.hold, c.wallSinceImpact + hold);
+    return;
+  }
+  beginImpact(c, true);
+  c.hold = hold;
+}
+
+/** A pair closing slower than this (m/s) is not on its way to a hit (`pairEta`): a creep. */
+const CLOSING_MIN = 0.35;
+
+/**
+ * Sim seconds until the first pair of `cars` closing in plan faster than `minClosing` m/s meets (each footprint taken along the line between their
  * centres; `refreshBasis` current), Infinity if none: the hit `preImpact` slows for. A pair a car's height apart
  * vertically passes over and never counts: a Lab throw arcing over the house of cards' lower car to its top one held
  * the pre-impact slow-mo (3 %) for 6 s of wall before the real hit. `hit`, when given, gets where that first pair's
  * footprints touch (the near car's footprint edge as it will be then) and their line.
  */
-export function pairEta(cars: readonly DeformableCar[], hit?: PredictedHit): number {
+export function pairEta(cars: readonly DeformableCar[], hit?: PredictedHit, minClosing = CLOSING_MIN): number {
   let eta = Number.POSITIVE_INFINITY;
   for (let i = 0; i < cars.length; i++) {
     for (let j = i + 1; j < cars.length; j++) {
@@ -195,7 +219,7 @@ export function pairEta(cars: readonly DeformableCar[], hit?: PredictedHit): num
       const nx = dx / dist;
       const nz = dz / dist;
       const closing = -((b.velocity.x - a.velocity.x) * nx + (b.velocity.z - a.velocity.z) * nz);
-      if (closing <= 0.35) continue;
+      if (closing <= minClosing) continue;
       const halfA = Math.abs(a.right.x * nx + a.right.z * nz) * CAR_HALF.x + Math.abs(a.forward.x * nx + a.forward.z * nz) * CAR_HALF.z;
       const halfB = Math.abs(b.right.x * nx + b.right.z * nz) * CAR_HALF.x + Math.abs(b.forward.x * nx + b.forward.z * nz) * CAR_HALF.z;
       const t = Math.max(0, dist - halfA - halfB) / closing;

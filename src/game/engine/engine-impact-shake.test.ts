@@ -71,7 +71,8 @@ describe("given the real engine and a hit on the car the camera follows", () => 
       car.spawnSpeed = car.speed;
     }
     let peak = 0;
-    for (let f = 0; f < 90; f++) {
+    // 2.5 s: the hit's own slow-mo eases in before it (`laterImpact`), so the cars meet about 1.5 s in.
+    for (let f = 0; f < 150; f++) {
       engine.advance(FRAME, { frameDt: FRAME });
       peak = Math.max(peak, e.view.trauma);
     }

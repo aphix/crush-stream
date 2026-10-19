@@ -9,7 +9,7 @@ import { PACE_BUDGET_MS, SimPacer } from "./sim-pace.ts";
 import { SETTING_KEY } from "./constants.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
 import { INITIAL_HUD, type HudStore } from "../hud/hud-store.ts";
-import { easeTimeScale, PRE_IMPACT_LEAD, preImpact, stepPhase } from "../match/phase.ts";
+import { easeTimeScale, PRE_IMPACT_LEAD, preImpact, stepPhase, struck } from "../match/phase.ts";
 import { settleStep, stepWorld } from "./world-step.ts";
 import { lap, PHASE, startLaps } from "./sim-phases.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
@@ -681,9 +681,10 @@ export class CrashEngine extends EngineGarage {
   }
 
   private maybePreSlowmo(wallDt: number): void {
-    if (this.derbyMode || this.race.active || !this.autoSlomo || this.rigScene || this.clock.phase !== "approach") return;
-    preImpact(this.clock, this.contactEta(), this.elapsedSim, Math.max(PRE_IMPACT_LEAD, wallDt + FIXED), FIXED, this.throwSoon);
-    if (this.clock.targetScale < 1 && this.clock.userTimeScale == null) this.fudgePredicted();
+    const c = this.clock;
+    if (this.derbyMode || this.race.active || !this.autoSlomo || this.rigScene || !(c.phase === "approach" || (c.phase === "aftermath" && this.sceneId === "fleet"))) return;
+    preImpact(c, this.contactEta(), this.elapsedSim, Math.max(PRE_IMPACT_LEAD, wallDt + FIXED), FIXED, this.throwSoon);
+    if (c.phase === "approach" && c.targetScale < 1 && c.userTimeScale == null) this.fudgePredicted();
   }
 
   /** Whether the coming hit will throw a driver: his exit then plays at 1× (`THROW_ONSET`). */
@@ -696,6 +697,7 @@ export class CrashEngine extends EngineGarage {
     if (this.derbyMode) this.derbyHit(a, b, hit);
     else if (this.race.active) this.race.pairHit(a, b, hit);
     else if (this.showLab) this.lab.pairHit(a, b, hit);
+    else if (this.sceneId === "fleet") this.fleetHit(a, b, hit.impulse);
     this.noteHit(a, hit.impulse);
     this.noteHit(b, hit.impulse);
   };
@@ -803,7 +805,7 @@ export class CrashEngine extends EngineGarage {
     const shot = this.showLab ? this.lab.shot : null;
     if (shot && shot.contactS !== null && this.clock.phase === "approach") {
       this.beginCinematic(shot.contactAt, shot.normal, shot.speedBefore);
-    } else if (!this.derbyMode && !this.race.active && !this.showStack && !this.showLab && this.clock.phase === "approach" && contact && normal && impulse > 0.4) {
+    } else if (!this.derbyMode && !this.race.active && !this.showStack && !this.showLab && !struck(this.clock) && contact && normal && impulse > 0.4) {
       this.beginCinematic(contact, normal, impulse);
     } else if ((this.derbyMode || this.race.active) && contact && normal && impulse > SPARK_MIN_IMPULSE && this.elapsedWall - this.sparkAt > 0.16 && this.witness.sees(contact, FX_REACH.sparks)) {
       this.sparkAt = this.elapsedWall;

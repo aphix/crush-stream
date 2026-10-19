@@ -196,22 +196,30 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
       assert.deepEqual(lost.map((v) => `${v.scene} ${v.at.toFixed(2)}`), []);
     });
 
-    it("when each clip plays, then its slow-mo holds 6.3 s of wall clock past the cars meeting and 7.3 s past each driver thrown while it runs, every hold plays out in full before the clip ends, it hands back to 1× when the last of those is up, and a driver thrown after that plays at 1×", (t) => {
+    it("when each clip plays, then its slow-mo holds 6.3 s of wall clock past the cars meeting and past each later hit, 7.3 s past each driver thrown while it runs, every hold plays out in full before the clip ends, it hands back to 1× when the last of those is up, a later hit after that has a slow-mo of its own, and a driver thrown with none running plays at 1×", (t) => {
       staged();
-      const held = views.filter((v) => v.kind !== "takeoff" && v.kind !== "hit" && v.at >= v.hitAt);
+      const held = views.filter((v) => v.kind !== "takeoff" && v.at >= v.hitAt);
       const key = (v: MomentView): string => `${v.scene}|${v.title}|${v.hitAt}`;
-      // The hand-back each clip owes, from its moments in order (wall s into the clip).
-      const handBack = new Map<string, number>();
+      // Each moment's slow-mo, from the clip's moments in order: a hit or throw inside a running one holds it on, a hit after it starts its own.
+      const running = new Map<string, { end: number }>();
+      const holdOf = new Map<MomentView, { end: number }>();
       for (const v of held) {
-        const h = handBack.get(key(v)) ?? -Infinity;
-        if (v.kind === "impact") handBack.set(key(v), v.wall + HOLD.impact);
-        else if (v.wall < h) handBack.set(key(v), Math.max(h, v.wall + HOLD.throw));
+        const cur = running.get(key(v));
+        const owed = v.wall + (v.kind === "throw" ? HOLD.throw : HOLD.impact);
+        if (cur && v.wall < cur.end) {
+          cur.end = Math.max(cur.end, owed);
+          holdOf.set(v, cur);
+        } else if (v.kind !== "throw") {
+          const own = { end: owed };
+          running.set(key(v), own);
+          holdOf.set(v, own);
+        }
       }
       const bad: string[] = [];
       const sums: Record<MomentKind, [number, number]> = { impact: [0, 0], hit: [0, 0], throw: [0, 0], takeoff: [0, 0] };
       let late = 0;
       for (const v of held) {
-        const h = handBack.get(key(v))!;
+        const h = holdOf.get(v)?.end ?? -Infinity;
         const want = v.wall < h ? h - v.wall : 0;
         if (Math.abs(v.hold - want) > STEP) bad.push(`${v.scene} "${v.title}" ${v.kind} at ${v.at.toFixed(2)} s: held ${v.hold.toFixed(2)} s, owed ${want.toFixed(2)}${h > v.end ? `, clip ends ${(v.end - v.wall).toFixed(2)} s after it` : ""}`);
         if (want === 0) late++;
@@ -220,7 +228,7 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
           sums[v.kind][1]++;
         }
       }
-      t.diagnostic(`mean hold (wall s): impact ${(sums.impact[0]! / sums.impact[1]!).toFixed(2)} over ${sums.impact[1]}, throw ${(sums.throw[0]! / sums.throw[1]!).toFixed(2)} over ${sums.throw[1]}; ${late} throws after the hand-back`);
+      t.diagnostic(`mean hold (wall s): impact ${(sums.impact[0]! / sums.impact[1]!).toFixed(2)} over ${sums.impact[1]}, later hit ${(sums.hit[0]! / sums.hit[1]!).toFixed(2)} over ${sums.hit[1]}, throw ${(sums.throw[0]! / sums.throw[1]!).toFixed(2)} over ${sums.throw[1]}; ${late} throws after the hand-back`);
       assert.ok(sums.impact[1]! >= bars.impact && sums.throw[1]! >= bars.throw, `too few holds to test: ${sums.impact[1]} impacts, ${sums.throw[1]} throws`);
       assert.deepEqual(bad, []);
     });

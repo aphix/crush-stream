@@ -11,7 +11,8 @@ import { PistonBank } from "../present/engine-pistons.ts";
 import { DoorRig, type RamShot } from "../scenes/door-rig.ts";
 import { DoorRam } from "../present/engine-doors.ts";
 import { INITIAL_HUD } from "../hud/hud-store.ts";
-import { beginImpact, FUDGE_GAP, holdForThrow, pairEta, phaseClock } from "../match/phase.ts";
+import { beginImpact, FUDGE_GAP, holdForThrow, pairEta, phaseClock, struck } from "../match/phase.ts";
+import { IMPACT_MIN } from "../match/highlights.ts";
 import { newWorld } from "./world-step.ts";
 import { EjectionWatch } from "../vehicle/ejection.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
@@ -633,10 +634,14 @@ export abstract class EngineCore {
   /** Where the first hit coming lands, as of the last `contactEta`. */
   protected readonly predicted: PredictedHit = { x: 0, y: 0, z: 0, nx: 1, nz: 0 };
   private fudgedAt = -Infinity;
-  /** Sim seconds to the first hit coming between the live cars, or a car and the slab (`pairEta`), Infinity if none; `predicted` says where. */
+  /**
+   * Sim seconds to the first hit coming between the live cars, or a car and the slab (`pairEta`), Infinity if none; `predicted` says where.
+   * After a crash (`struck`) only a pair closing as hard as an impact counts (`IMPACT_MIN`): the wrecks lie touching.
+   */
   protected contactEta(): number {
     const cars = this.live();
     for (let i = 0; i < cars.length; i++) cars[i]!.refreshBasis();
+    if (struck(this.clock)) return pairEta(cars, this.predicted, IMPACT_MIN);
     const eta = pairEta(cars, this.predicted);
     return this.barrierUp ? this.barrier.contactEta(cars, eta, this.predicted) : eta;
   }

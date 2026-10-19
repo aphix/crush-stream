@@ -268,8 +268,17 @@ the shot. A peer at 45 Hz and one at 60 Hz therefore frame the same camera at th
   same constant and ease), the crash clock's `impact` phase starts at the meeting, and the slow-mo is held `CONTACT_HOLD`
   (6.3 wall s) past the cars meeting and
   `THROW_HOLD` (7.3 wall s) past each of the crash's own throws that comes while it runs (owner 2026-10-07: +40 % and 2×
-  of the 4.50 s and 3.65 s timed on main), then back to 1× to the clip's end. The reel mirrors it into the engine's
-  clock, the clip's hold too (`PhaseClock.hold`), so the letterbox, the HUD and the crash cam behave as in a live crash.
+  of the 4.50 s and 3.65 s timed on main), then back to 1× to the clip's end. Each later hit of the clip's scope
+  (`ClipHit`) is a crash of its own (owner 2026-10-19, "each crash its own slow-mo"; `laterImpact`): one that lands while a
+  slow-mo holds holds it `CONTACT_HOLD` past itself; one after the hand-back drops the clock back to approach
+  `PRE_IMPACT_LEAD` before it, eases back down with the first's ease (from wherever the ease back up had got to, so it
+  reaches the slow scale early and the lead plays slower than the first's) and holds `CONTACT_HOLD` past it. A throw holds
+  any running slow-mo, the first's or a later hit's. The owner's flagged pile-up C04P-2WMS (hits 3.313, 3.946, 4.133 clip s)
+  played its later hits at 0.69× and 0.77× in a 14.8 s clip; they play at 0.032× now, in 30.1 s. A one-hit clip's timeline is
+  unchanged to the bit (`clip-timeline.test.ts`), so the bench's scripted head-on (one hit on each bench course, 14.9-15.4 s)
+  replays as it did. The reel mirrors it into the engine's
+  clock, the clip's hold too (`PhaseClock.hold`: the first slow-mo's, which the crash cam's window follows), so the letterbox,
+  the HUD and the crash cam behave as in a live crash.
   A race that ends as a driver is thrown (Survival's run-ending throw) would leave his clip no hold, so at "over" the
   recorder runs on (`CrashRecorder.over`) until `THROW_HOLD_SIM` (7.3 × 0.032 = 0.23 s of race) past the last throw,
   then files: every hold plays whole on recorded motion.

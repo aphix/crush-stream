@@ -4,7 +4,7 @@ import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { ReelPeople } from "../present/grounds-art.ts";
 import type { Ejection } from "../vehicle/ejection.ts";
 import type { CarSurfaces } from "../vehicle/car-surfaces.ts";
-import { beginImpact, CONTACT_HOLD, easeTimeScale, FUDGE_GAP, impactScale, phaseClock, PRE_IMPACT_LEAD, SLOMO_HOLD, stepPhase, THROW_HOLD, type CrashPhase, type PhaseClock } from "../match/phase.ts";
+import { beginImpact, CONTACT_HOLD, easeTimeScale, FUDGE_GAP, impactScale, laterImpact, phaseClock, PRE_IMPACT_LEAD, SLOMO_HOLD, stepPhase, THROW_HOLD, type CrashPhase, type PhaseClock } from "../match/phase.ts";
 import { clipTitle, MAX_HITS, type HighlightClip, type Reel } from "../match/highlights.ts";
 import type { ReelHud, SaveResult, ViewBox } from "../match/types.ts";
 import { mulberry32 } from "../world/placements.ts";
@@ -57,30 +57,35 @@ type Timeline = {
 /**
  * The phase clock run at fixed wall steps over a `length` s clip: 1× to `PRE_IMPACT_LEAD` before the first impact, the
  * ease into the auto slow-mo (the live sandbox's `preImpact`), the slow-mo held over the cars meeting and every throw
- * (clip s, in order) that comes while it runs, then back to 1×.
+ * (clip s, in order) that comes while it runs, then back to 1×. Each `later` hit (clip s, in order, after the first) is a crash
+ * of its own (`laterImpact`): one while the slow-mo holds holds it on, any other drops it again with the same lead and ease.
  */
-export function clipTimeline(firstImpact: number, length: number, throws: readonly number[]): Timeline {
+export function clipTimeline(firstImpact: number, length: number, throws: readonly number[], later: readonly number[]): Timeline {
   const c = phaseClock();
   // The slow-mo holds until the cars meeting sets its hand-back.
   c.hold = Infinity;
-  const lead = firstImpact - PRE_IMPACT_LEAD;
   const sim: number[] = [];
   const scale: number[] = [];
   const phase: CrashPhase[] = [];
   let onset = Infinity;
   let contact = Infinity;
   let next = 0;
+  let hit = 0;
   for (let t = 0; ; ) {
-    if (onset === Infinity && t >= lead) {
+    const due = hit === 0 ? firstImpact : later[hit - 1];
+    if (due !== undefined && t >= due - PRE_IMPACT_LEAD && (c.phase === "approach" || c.phase === "aftermath")) {
+      c.phase = "approach";
       c.targetScale = impactScale(c);
-      onset = sim.length * TL_DT;
+      if (onset === Infinity) onset = sim.length * TL_DT;
     }
     if (contact === Infinity && t >= firstImpact) {
       beginImpact(c, true);
       contact = sim.length * TL_DT;
       c.hold = c.wallSinceImpact + CONTACT_HOLD;
+      hit = 1;
     }
-    // A throw before the cars meet is an earlier crash's; one after the hand-back plays at 1×.
+    for (; contact !== Infinity && hit <= later.length && later[hit - 1]! <= t; hit++) laterImpact(c, CONTACT_HOLD);
+    // A throw before the cars meet is an earlier crash's; one while no slow-mo holds plays at 1×.
     for (; next < throws.length && throws[next]! <= t; next++) {
       if (contact !== Infinity && (c.phase === "impact" || c.phase === "slowmo")) c.hold = Math.max(c.hold, c.wallSinceImpact + THROW_HOLD);
     }
@@ -609,7 +614,8 @@ export class ReelDirector {
       return at;
     });
     const throws = ends.filter((_, i) => clip.ejections[i]!.own);
-    const tl = clipTimeline(clip.firstImpact, sim.length, throws);
+    const later = clip.hits.filter((h) => h.t > clip.firstImpact).map((h) => h.t);
+    const tl = clipTimeline(clip.firstImpact, sim.length, throws, later);
     // The crash shots end with the last impact of the clip's scope (its hit beat, `HIT_KEEP` past it) or the crash cam's window, whichever is later.
     const last = clip.hits[clip.hits.length - 1];
     const beat = Math.max(tl.impact + crashCamEnd(tl.hold), last ? wallAt(tl, shownFrom(clip, last.t)) + HIT_KEEP : 0);

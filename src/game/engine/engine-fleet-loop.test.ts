@@ -61,8 +61,9 @@ describe("given the real engine on Fleet's default settings, every car driving s
 
   it("when two cars meet head-on and crash, then every wreck has rolled to rest within 3 s", () => {
     const cars = engine["live"]();
-    // The loop would reset the scene (respawn every car) before the 3 s are out.
+    // The loop would reset the scene (respawn every car) before the 3 s are out; the rest is timed at 1× (the crash's own slow-mo would stretch it).
     engine["looping"] = false;
+    engine.autoSlomo = false;
     // Two cars 20 m apart on the x axis, 12 m/s at each other, lanes 1 m apart so they glance and keep rolling; the rest stand aside, still.
     const crashed = (): boolean => cars[0]!.crashed && cars[0]!.deform.massActive && cars[1]!.crashed && cars[1]!.deform.massActive;
     for (const [k, car] of cars.entries()) {

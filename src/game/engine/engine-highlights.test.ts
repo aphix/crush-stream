@@ -6,18 +6,16 @@ import { blankPoint, Track } from "../world/track.ts";
 import stunt from "../world/tracks/stunt.json" with { type: "json" };
 import city from "../world/tracks/city.json" with { type: "json" };
 import { frame, makeWorld, type World } from "../world/race-world.test-util.ts";
-import { FUDGE_GAP, impactScale, phaseClock, PRE_IMPACT_LEAD } from "../match/phase.ts";
+import { FUDGE_GAP, phaseClock } from "../match/phase.ts";
 import { carLayout } from "../net/car-pose.ts";
 import { packReel, unpackReel } from "../net/reel-codec.ts";
-import { clipTimeline, FLIGHT_S, ReelDirector, simAt, type ReelHost } from "./engine-highlights.ts";
+import { FLIGHT_S, ReelDirector, simAt, type ReelHost } from "./engine-highlights.ts";
 import { ClipSim } from "./engine-replay.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { Reel } from "../match/highlights.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
-import { CUTS } from "../present/engine-cine.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { TIMELINE_HZ } from "./constants.ts";
 
 /** The city course with the staged head-on's cars (2 and 3) and the player's and car 1: no field around them to crash into. */
 const FIELD = { trackId: "city", laps: 1, aiCount: 3, noReset: false, aggression: 1 };
@@ -37,40 +35,6 @@ function stageHeadOn(w: World, aMps: number, bMps: number): void {
   track.pointAt(158, pt);
   w.cars[3]!.spawnFacing(pt.x, pt.z, Math.atan2(pt.tx, pt.tz) + Math.PI, bMps);
 }
-
-/** Canary: the time scale just before the cars meet, in multiples of the slow-mo's own scale; the ease is meant to have arrived (the exact rate lands within 1.2×, the timeline's step quantization costs a little more). */
-const REACHED_CANARY = 2;
-/** Canary: wall seconds the ease into the slow-mo may take (the 0.2 s of lead at the slow scale alone would crawl for 6 s). */
-const EASE_WALL_CANARY = 2;
-
-describe("given the highlight reel timeline of a 10 s clip whose first impact is at 4 s", () => {
-  const tl = clipTimeline(4, 10, []);
-  const contactStep = Math.round(tl.contact * TIMELINE_HZ);
-
-  it("when the clip plays, then it runs at normal speed up to the lead before the hit and the slow-mo begins easing in there", () => {
-    assert.ok(Math.abs(tl.onset - (4 - PRE_IMPACT_LEAD)) <= 1 / TIMELINE_HZ + 1e-9, `slow-mo began at wall ${tl.onset.toFixed(3)} s, not at ${4 - PRE_IMPACT_LEAD}`);
-    assert.ok(Math.abs(simAt(tl, 2) - 2) < 1e-9, "1× before the hit");
-    assert.ok(Math.abs(tl.impact + CUTS[0] - tl.onset) < 1e-9, `the crash cam began at ${tl.impact.toFixed(3)} s, so its first cut lands at ${(tl.impact + CUTS[0]).toFixed(3)} s, not as the slow-mo starts (${tl.onset.toFixed(3)} s)`);
-  });
-
-  it("when the slow-mo eases in, then the clip moves the lead's worth of game time between its start and the cars meeting, and the ease has reached the slow scale by then", () => {
-    const played = simAt(tl, tl.contact) - simAt(tl, tl.onset);
-    assert.ok(Math.abs(played - PRE_IMPACT_LEAD) <= 1 / TIMELINE_HZ + 1e-9, `${played.toFixed(4)} game s between slow-mo start and the hit, not ${PRE_IMPACT_LEAD}`);
-    const slow = impactScale(phaseClock());
-    assert.ok(tl.scale[contactStep - 1]! <= slow * REACHED_CANARY, `time scale ${tl.scale[contactStep - 1]} a step before the hit, slow scale ${slow}`);
-    assert.ok(tl.contact - tl.onset < EASE_WALL_CANARY, `the ease took ${(tl.contact - tl.onset).toFixed(2)} wall s`);
-    assert.equal(tl.phase[contactStep - 1], "approach");
-    assert.equal(tl.phase[contactStep], "impact");
-  });
-
-  it("when the cars have met, then the clip holds the slow-motion over the hit, then catches up to the clip's last step", () => {
-    // Three wall seconds into the slow-mo the clip has moved about 0.1 s (0.032×).
-    const into = simAt(tl, tl.contact + 3) - simAt(tl, tl.contact);
-    assert.ok(into > 0.05 && into < 0.15, `${into.toFixed(3)} clip s in 3 wall s of slow-mo`);
-    assert.equal(simAt(tl, tl.wall), 10, "the timeline ends on the clip's last step");
-    assert.ok(tl.wall > 16, `the clip played in ${tl.wall.toFixed(1)} wall s: no slow-mo hold`);
-  });
-});
 
 /** A reel host on a harness world: its slot cars, its course, no FX. */
 function hostOf(w: World): ReelHost {

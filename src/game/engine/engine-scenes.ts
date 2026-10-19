@@ -4,7 +4,7 @@ import { BOOST } from "../vehicle/car-drive.ts";
 import { COMPACTOR } from "../scenes/compactor.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 import { PISTON_ORBIT_RATE, pistonBearing } from "../present/engine-pistons.ts";
-import { VAPOR_DEPTH, edgeAction, fleetEmptied, layoutFleet, layoutDerby, respawnSlot } from "../scenes/fleet.ts";
+import { VAPOR_DEPTH, edgeAction, fleetEmptied, layoutFleet, layoutDerby, MAX_CARS, respawnSlot } from "../scenes/fleet.ts";
 import { RANGE } from "../scenes/range.ts";
 import { LAB_PRESET } from "../scenes/constants.ts";
 import { makeRangeArt } from "../present/range-art.ts";
@@ -33,7 +33,8 @@ import { celStrength } from "../present/scene-fade.ts";
 import { EngineMinigames } from "./engine-minigame-commands.ts";
 import type { DerbyCarFlag } from "../match/derby.ts";
 import { LAB_SHOT, planLabShot } from "./lab-shot.ts";
-import { SLOMO_HELD } from "../match/phase.ts";
+import { laterImpact, SLOMO_HELD, SLOMO_HOLD, struck } from "../match/phase.ts";
+import { countsAsImpact } from "../match/highlights.ts";
 import { MINIGAME_MODE } from "../scenes/minigame-constants.ts";
 
 const _v = new THREE.Vector3();
@@ -656,6 +657,7 @@ export abstract class EngineScenes extends EngineMinigames {
       this.clock.targetScale = 1;
     }
     this.clock.wallSinceImpact = 0;
+    this.clock.hold = SLOMO_HOLD;
     this.clock.slomoAt = this.minigameMode === MINIGAME_MODE.longJump ? SLOMO_HELD : 0;
     this.clock.preImpactBy = NaN;
     this.impactKph = null;
@@ -667,6 +669,7 @@ export abstract class EngineScenes extends EngineMinigames {
     this.audio.releaseVoices();
     this.elapsedWall = 0;
     this.elapsedSim = 0;
+    this.pairAt.fill(-Infinity);
     this.impactLightLife = 0;
     this.impactLight.intensity = 0;
 
@@ -691,6 +694,17 @@ export abstract class EngineScenes extends EngineMinigames {
     const n = hit.normal;
     this.derby.noteHit(a, b, -(ca.velocity.x * n.x + ca.velocity.z * n.z), cb.velocity.x * n.x + cb.velocity.z * n.z, hit.impulse);
   };
+
+  /** Each car pair's last contact (sim s): a fleet contact is a crash of its own only as the recorder counts one (`countsAsImpact`). */
+  private readonly pairAt = new Float64Array(MAX_CARS * MAX_CARS).fill(-Infinity);
+
+  /** A fleet pair's contact closing at `closing` m/s: a crash after the run's first drops the slow-mo again, or holds it on (`laterImpact`). */
+  protected fleetHit(a: number, b: number, closing: number): void {
+    const k = a * MAX_CARS + b;
+    const counts = countsAsImpact(this.elapsedSim - this.pairAt[k]!, closing);
+    this.pairAt[k] = this.elapsedSim;
+    if (counts && this.autoSlomo && struck(this.clock)) laterImpact(this.clock, SLOMO_HOLD);
+  }
 
   /** A derby car's footprint against the arena's prisms: the wall, the containers, the rails, the pads and the tyre berms (`derbyGround.contact`); the rises are the ground itself. */
   protected readonly derbyCollide = (car: DeformableCar, i: number, h: number): void => this.derbyGround.contact(car, i, this.derbyHits, h);
