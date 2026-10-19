@@ -64,6 +64,11 @@ type Prop = { x: number; z: number; yaw: number; pieces: Piece[]; face: number }
 
 /** Where a shot is aimed (m up) where the prop's own 60 % of its height up to 1 m would miss it: a billboard's panel, over the opening between its posts. */
 const AIM: Partial<Record<PrefabId, number>> = { billboard: 3 };
+/**
+ * How far short of the face (m) a shot starts where 6 m lets his feet reach the ground first: the tree's 1 m shot, whose feet caught the
+ * grass (`GROUND_GRIP`) and stopped him 0.88 m short of the trunk.
+ */
+const STANDOFF: Partial<Record<PrefabId, number>> = { tree: 4 };
 
 /** Signed distance (m) from a point to the nearest piece of a prop (negative inside one): prop frame local x = (cos, −sin), z = (sin, cos). */
 function depth(s: Prop, p: V3): number {
@@ -82,7 +87,7 @@ function depth(s: Prop, p: V3): number {
 
 /**
  * One `prefab` placed on the square course, a dummy fired head first along its local +x at 15 m/s from 6 m short of its
- * first face, at 60 % of its height up to 1 m (`AIM`). With `solids` false the course's solids are dropped (the control).
+ * first face (`STANDOFF`), at 60 % of its height up to 1 m (`AIM`). With `solids` false the course's solids are dropped (the control).
  */
 async function fireAt(prefab: PrefabId, solids: boolean): Promise<{ solid: Prop; deepest: number; reach: number; along: number }> {
   const spec = PREFABS[prefab];
@@ -103,8 +108,9 @@ async function fireAt(prefab: PrefabId, solids: boolean): Promise<{ solid: Prop;
   const sys = await system(track.ground(), track);
   if (!solids) sys["solids"] = [];
   const dir = new THREE.Vector3(Math.cos(solid.yaw), 0, -Math.sin(solid.yaw));
-  const flight = 6 / 15;
-  const start = new THREE.Vector3(solid.x, y + 0.5 * 9.6 * flight * flight, solid.z).addScaledVector(dir, face - 6);
+  const standoff = STANDOFF[prefab] ?? 6;
+  const flight = standoff / 15;
+  const start = new THREE.Vector3(solid.x, y + 0.5 * 9.6 * flight * flight, solid.z).addScaledVector(dir, face - standoff);
   throwFrom(sys, start, dir.clone().multiplyScalar(15), dir);
   let deepest = Infinity;
   let reach = -Infinity;

@@ -53,6 +53,7 @@ interface ThrowMessage {
   rides: boolean;
   purse: boolean;
   armsDown: boolean;
+  loose: boolean;
   lookSeed: number;
 }
 

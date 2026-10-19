@@ -260,6 +260,8 @@ export class ClipSim {
       const x = list[this.ejectAt]!;
       const slot = this.clip.cars[x.e.car]!.slot;
       this.cars[x.e.car]!.driverOut = x.e.exit;
+      // Live, `EjectionWatch` smashed his way out in this step, and the cars' cages fitted the steps after it without the pane.
+      this.cars[x.e.car]!.smashGlass(x.e.exit);
       const vip = this.vipRide === slot;
       if (vip) this.vipRide = NO_RIDE;
       this.fired.push({ ...x.e, car: slot, own: x.own, vip });

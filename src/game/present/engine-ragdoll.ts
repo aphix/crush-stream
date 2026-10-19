@@ -47,8 +47,8 @@ import { RagdollRemote, type PostTraffic } from "./ragdoll-remote.ts";
 import { RideAlong } from "./ragdoll-ride.ts";
 import type { RideFrame } from "./ride-cam.ts";
 import type { Sight } from "./spectate-cam.ts";
-import { AIR_ANGULAR, AIR_LINEAR, ARM, blendPose, CALM_FOR, type Doll, GROUND_ANGULAR, GROUND_LINEAR, give, isCalm, JOINTS, limit, PARTS, readPose, SETTLE_AFTER, SETTLE_ANGULAR, SETTLE_LINEAR, SHOULDER_Y } from "./ragdoll-body.ts";
-import { joinUp } from "./ragdoll-joints.ts";
+import { AIR_ANGULAR, AIR_LINEAR, ARM, blendPose, CALM_FOR, type Doll, GROUND_ANGULAR, GROUND_LINEAR, give, isCalm, JOINTS, limit, limp, PARTS, readPose, SETTLE_AFTER, SETTLE_ANGULAR, SETTLE_LINEAR, SHOULDER_Y } from "./ragdoll-body.ts";
+import { joinUp, loosen } from "./ragdoll-joints.ts";
 import { groundColliders, PATCH_AHEAD, PATCH_HALF, type Pole } from "./ragdoll-ground.ts";
 import { courseSolids, type Solid } from "./ragdoll-solids.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
@@ -93,8 +93,8 @@ const ITERATIONS = 4;
 /** Rapier's internal solver passes per iteration (default 1): at the first touch of a 29 m/s throw one pass rose energy 75–325 J in a frame at 1/120 and 26–30 J (1 of 5 runs) at 1/480 and 1/960; two at most 0.6 J over 60 runs (60/144/240 Hz). */
 const INTERNAL_PASSES = 2;
 
-/** A throw, placed: car (-1: none, `place`; else the one he ignores for `GRACE` s), torso point and orientation, linear and angular velocity (world), sim seconds waiting, a police driver, whether the ride-along may frame him, whether his purse flies too (unset: when his look is a woman's), arms hanging (a figure thrown standing) instead of raised, and a look of his own (unset: his car's driver's). */
-export type Throw = { car: number; p: THREE.Vector3; q: THREE.Quaternion; v: THREE.Vector3; w: THREE.Vector3; age: number; cop: boolean; rides: boolean; purse?: boolean; armsDown?: boolean; look?: DriverLook };
+/** A throw, placed: car (-1: none, `place`; else the one he ignores for `GRACE` s), torso point and orientation, linear and angular velocity (world), sim seconds waiting, a police driver, whether the ride-along may frame him, whether his purse flies too (unset: when his look is a woman's), arms hanging (a figure thrown standing) instead of raised, a look of his own (unset: his car's driver's), and whether his limbs leave loose (`limp`: a driver thrown out of a car). */
+export type Throw = { car: number; p: THREE.Vector3; q: THREE.Quaternion; v: THREE.Vector3; w: THREE.Vector3; age: number; cop: boolean; rides: boolean; purse?: boolean; armsDown?: boolean; look?: DriverLook; loose?: boolean };
 
 /** What a dummy sent to the worker looks like, applied (`mesh.dress`, `spray`, `Purses.paint`) once the worker says which slot he took. */
 type Dressing = { cop: boolean; look: DriverLook; spray: SprayBitmap | null; purse: boolean; car: number; seed: number };
@@ -296,8 +296,8 @@ export class RagdollSystem {
         );
         return body;
       });
-      joinUp(R, world, bodies);
-      this.dolls.push({ bodies, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3) });
+      const joints = joinUp(R, world, bodies);
+      this.dolls.push({ bodies, joints, loose: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3) });
     }
     // A child of the dummies' mesh, so the scene root keeps its one `ragdolls` child and the props draw only while a dummy is out.
     this.mesh.add((this.purses = this.proxies.purses = new Purses(R, world, SLOTS, propGroups, GRACE)).mesh);
@@ -704,6 +704,7 @@ export class RagdollSystem {
     t.age = 0;
     t.cop = e.cop;
     t.rides = rides;
+    t.loose = true;
     this.driverThrows[e.car] = { ...t, p: t.p.clone(), q: t.q.clone(), v: t.v.clone(), w: t.w.clone() };
     this.onExit(_c, _cq, car.velocity);
     this.pick();
@@ -781,6 +782,7 @@ export class RagdollSystem {
     t.cop = dress?.cop ?? false;
     t.look = dress?.look;
     t.rides = false;
+    t.loose = false;
     return this.spawn(t, slot, life);
   }
 
@@ -853,6 +855,14 @@ export class RagdollSystem {
       b.setEnabled(true);
       b.wakeUp();
     }
+    if (t.loose) {
+      limp(d.bodies, _w.set(1, 0, 0).applyQuaternion(t.q));
+      loosen(this.world!, d.joints);
+    } else if (d.loose) {
+      for (const joint of d.joints) this.world!.removeImpulseJoint(joint, false);
+      d.joints = joinUp(this.R!, this.world!, d.bodies);
+    }
+    d.loose = t.loose === true;
     const speed = hypot2(t.v.x, t.v.z);
     this.buildPatch(d, t.p.x + (speed > 0.5 ? (t.v.x / speed) * PATCH_AHEAD : 0), t.p.z + (speed > 0.5 ? (t.v.z / speed) * PATCH_AHEAD : 0), t.p.y);
     d.live = true;

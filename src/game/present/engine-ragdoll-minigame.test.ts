@@ -8,6 +8,7 @@ import { blankEjection, ejectionVelocity } from "../vehicle/ejection.ts";
 import { setGround } from "../world/ground.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { type BoxPlacement, NO_RELEASE_SCALE, type ReleaseScale } from "./ragdoll-boxes.ts";
+import type { Doll } from "./ragdoll-body.ts";
 
 const FRAME = 1 / FRAME_HZ;
 /** The default life of a thrown dummy (s): `LIFE` in engine-ragdoll.ts. */
@@ -46,6 +47,17 @@ function farEjection() {
 }
 
 const dummyOf = (sys: RagdollSystem) => sys["dolls"][0]!;
+
+/** The dummy's centre-of-mass velocity: a thrown driver's limbs leave loose (`limp`), so no one part moves at his launch velocity. */
+function velocityOf(doll: Doll): THREE.Vector3 {
+  const sum = new THREE.Vector3();
+  let mass = 0;
+  for (const body of doll.bodies) {
+    sum.addScaledVector(body.linvel() as THREE.Vector3, body.mass());
+    mass += body.mass();
+  }
+  return sum.divideScalar(mass);
+}
 
 describe("given a dummy launched through launch() from a car", () => {
   it("when holdThrown() was called and a minute of sim passes, then he is still alive and still, and releaseThrown() removes him", async () => {
@@ -101,14 +113,14 @@ describe("given a dummy launched through launch() from a car", () => {
     assert.equal(life, DEFAULT_LIFE_SECONDS, "LIFE after reset");
   });
 
-  it("when launched with no scale, with the identity scale and with forward 0.5 and upward 1.2, then the first two equal the ejection's own velocity bit for bit and the third has its horizontal halved and its vertical raised by a fifth", async () => {
+  it("when launched with no scale, with the identity scale and with forward 0.5 and upward 1.2, then his centre of mass moves at the ejection's own velocity, the identity scales equal it bit for bit, and the third has its horizontal halved and its vertical raised by a fifth", async () => {
     const car = makeCar();
     const launched = async (scale: ReleaseScale | null) => {
       const sys = await system();
       const ejection = farEjection();
       if (scale === null) sys.launch(ejection, [car]);
       else sys.launch(ejection, [car], true, scale);
-      const velocity = dummyOf(sys).bodies[0]!.linvel();
+      const velocity = velocityOf(dummyOf(sys));
       const position = dummyOf(sys).bodies[0]!.translation();
       const own = ejectionVelocity(ejection, new THREE.Vector3());
       sys.dispose();
@@ -118,9 +130,9 @@ describe("given a dummy launched through launch() from a car", () => {
     const identity = await launched({ forward: 1, upward: 1, elevation: null });
     const named = await launched(NO_RELEASE_SCALE);
     const scaled = await launched({ forward: FORWARD_SCALE, upward: UPWARD_SCALE, elevation: null });
-    assert.equal(unscaled.velocity.x, Math.fround(unscaled.own.x), "default x");
-    assert.equal(unscaled.velocity.y, Math.fround(unscaled.own.y), "default y");
-    assert.equal(unscaled.velocity.z, Math.fround(unscaled.own.z), "default z");
+    assert.ok(Math.abs(unscaled.velocity.x - unscaled.own.x) < SPEED_TOLERANCE, `default x ${unscaled.velocity.x} vs ${unscaled.own.x}`);
+    assert.ok(Math.abs(unscaled.velocity.y - unscaled.own.y) < SPEED_TOLERANCE, `default y ${unscaled.velocity.y} vs ${unscaled.own.y}`);
+    assert.ok(Math.abs(unscaled.velocity.z - unscaled.own.z) < SPEED_TOLERANCE, `default z ${unscaled.velocity.z} vs ${unscaled.own.z}`);
     assert.equal(identity.velocity.x, unscaled.velocity.x, "identity x");
     assert.equal(identity.velocity.y, unscaled.velocity.y, "identity y");
     assert.equal(identity.velocity.z, unscaled.velocity.z, "identity z");
@@ -142,7 +154,7 @@ describe("given a dummy launched through launch() from a car", () => {
     const sys = await system();
     const ejection = farEjection();
     sys.launch(ejection, [makeCar()], true, { forward: ELEVATION_FORWARD, upward: 1, elevation: ELEVATION_RADIANS });
-    const velocity = dummyOf(sys).bodies[0]!.linvel();
+    const velocity = velocityOf(dummyOf(sys));
     const own = ejectionVelocity(ejection, new THREE.Vector3());
     sys.dispose();
     const speed = ELEVATION_FORWARD * Math.hypot(own.x, own.z);

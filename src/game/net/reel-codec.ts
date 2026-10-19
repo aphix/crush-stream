@@ -231,9 +231,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * slice: a wreck resting on a sunk sill no longer hops at 21 Hz, and rests and sleeps earlier. A clip of 119 or before no longer reads.
  * 121: a pair of cars that no longer closes gets no crush stroke to absorb its overlap (`resolveCarPair`'s give applies only while closing): two cars that stopped 10-21 cm
  * inside each other are pushed out to the outlines' 2.5 cm. A clip of 120 or before no longer reads.
+ * 122: a thrown driver's arms swing down and his elbows and knees bend in flight; he grips pads, roads and ramps like cloth on asphalt (0.6), so he slides less there, and
+ * rests about 5 m farther on the range sand; the driver's exit pane breaks in the step that throws him, live and in a replay alike. A clip of 121 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 121;
+const REPLAY_VERSION = 122;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

@@ -34,5 +34,8 @@ export const propGroups = (car: number) => (G_PROPS << 16) | G_STATIC | (car < 0
 /** A knocked prop (`PropBodies`) hits the world, the dummies, every car (not the one that knocked it for `GRACE` s, nor one squeezing it while its box covers it) and the other knocked props; a purse lets it by. */
 export const knockedGroups = (car: number) => (G_PROPS << 16) | G_STATIC | G_DOLLS | G_PROPS | (car < 0 ? G_CARS : G_CARS & ~carBit(car));
 export const FIXED_GROUPS = (G_STATIC << 16) | G_DOLLS | G_PROPS;
+/** The ground's two copies (`groundColliders`): the one only the dummies stand on, with their grip, and the one everything else does, as it always was. */
+export const DOLL_FLOOR_GROUPS = (G_STATIC << 16) | G_DOLLS;
+export const PROP_FLOOR_GROUPS = (G_STATIC << 16) | G_PROPS;
 /** Car i's leaves (`ProxyFitter`) and standing panes; a gone pane's slab collides with nothing (Rapier kept a disabled slab on a moving kinematic body in contact). */
 export const carGroups = (i: number) => (carBit(i) << 16) | G_DOLLS | G_PROPS;

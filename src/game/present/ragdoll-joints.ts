@@ -1,4 +1,4 @@
-import type { RevoluteImpulseJoint, RigidBody, World } from "@dimforge/rapier3d-simd";
+import type { ImpulseJoint, RevoluteImpulseJoint, RigidBody, World } from "@dimforge/rapier3d-simd";
 import type { Rapier } from "../kernel/rapier.ts";
 import { JOINTS, PARTS } from "./ragdoll-body.ts";
 
@@ -36,10 +36,15 @@ const LIMITS: readonly Limit[] = [NECK, null, ELBOW, null, ELBOW, HIP_L, KNEE, H
  * would stiffen to about 10° if they touched, so the hips keep their limits and no contact.
  */
 const TOUCH = [0, 1, 3];
+/**
+ * Damping (per s) a loose dummy's joints put on their parts' relative spin, a velocity motor aimed at none: a loosened limb stops by its own muscle,
+ * not by swinging back on the tumble. Under 2 the range throw rested past its 40 m, at 2–3 some range dummies never lay still, at 5 a 15 m/s throw's knees bent under 30° (lane probe).
+ */
+const JOINT_GIVE = 4;
 
 /** Build the dummy's joints between `bodies` (`JOINTS` order): limits set, contacts between jointed parts on only for `TOUCH`. */
-export function joinUp(R: Rapier, world: World, bodies: readonly RigidBody[]): void {
-  for (const [j, [a, b, x, y, z]] of JOINTS.entries()) {
+export function joinUp(R: Rapier, world: World, bodies: readonly RigidBody[]): ImpulseJoint[] {
+  return JOINTS.map(([a, b, x, y, z], j) => {
     const pa = PARTS[a]!.c;
     const pb = PARTS[b]!.c;
     const at = [{ x: x - pa[0], y: y - pa[1], z: z - pa[2] }, { x: x - pb[0], y: y - pb[1], z: z - pb[2] }] as const;
@@ -47,8 +52,19 @@ export function joinUp(R: Rapier, world: World, bodies: readonly RigidBody[]): v
     const hinge = limit !== null && "hinge" in limit;
     const joint = world.createImpulseJoint(hinge ? R.JointData.revolute(at[0], at[1], { x: 1, y: 0, z: 0 }) : R.JointData.spherical(at[0], at[1]), bodies[a]!, bodies[b]!, true);
     joint.setContactsEnabled(TOUCH.includes(j));
-    if (limit === null) continue;
     if (hinge) (joint as RevoluteImpulseJoint).setLimits(limit.hinge[0], limit.hinge[1]);
-    else for (const [k, [lo, hi]] of limit.euler.entries()) world.impulseJoints.raw.jointSetLimits(joint.handle, ANG[k]!, lo, hi);
+    else if (limit !== null) for (const [k, [lo, hi]] of limit.euler.entries()) world.impulseJoints.raw.jointSetLimits(joint.handle, ANG[k]!, lo, hi);
+    return joint;
+  });
+}
+
+/**
+ * The dummy's `joints` (`joinUp`'s) give (`JOINT_GIVE`). A motor once set stays a row of the solver's even at no damping (a placed dummy's
+ * flick and drops moved), so a slot that was loose has its joints built afresh (`joinUp`) for the next dummy that is not.
+ */
+export function loosen(world: World, joints: readonly ImpulseJoint[]): void {
+  for (const [j, joint] of joints.entries()) {
+    const limit = LIMITS[j]!;
+    for (const axis of limit !== null && "hinge" in limit ? ANG.slice(0, 1) : ANG) world.impulseJoints.raw.jointConfigureMotorVelocity(joint.handle, axis, 0, JOINT_GIVE);
   }
 }

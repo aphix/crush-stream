@@ -270,6 +270,26 @@ const SCENES = {
   particles: { hash: "cars=2&smin=22&smax=24&seed=3", seed: 3, setup: debugView("toggleParticles"), at: 0.1 },
   rig: { hash: "cars=2&smin=22&smax=24&seed=3", seed: 3, setup: debugView("toggleRig"), at: 0.1 },
   hud: { ui: true, hash: "cars=5&smin=22&smax=26&seed=2&night=1", seed: 2, setup: hudOpen, at: 0 },
+  // The ejection range's driver `s` sim seconds into his flight (the slow-mo stretches it; stepped by his own age), framed from the side: his limbs in the air.
+  ...Object.fromEntries(
+    [0.2, 0.6, 1.2].map((s) => [
+      `range-throw-${s}`,
+      {
+        survey: true,
+        hash: "scene=range",
+        setup: async (p) => {
+          await run(p, () => window.__crush.ragdolls.preload());
+          await run(p, (age) => {
+            const e = window.__crush;
+            const doll = () => e.ragdolls["dolls"].find((d) => d.live);
+            for (let i = 0; i < 20000 && (doll()?.age ?? 0) < age; i++) e.advance(1 / 60);
+          }, s);
+          await frame(p, 7, 0.15, 1.6);
+        },
+        at: 0,
+      },
+    ]),
+  ),
   // The hidden survey scene (docs/CONTROLS.md): shot only when named (`survey`), not one of the README's pictures. W flies the free camera in to the front row.
   showcase: { survey: true, hash: "scene=showcase", setup: holdGas, at: 0.2 },
   // The rows from behind: the free eye flown through them and turned round.

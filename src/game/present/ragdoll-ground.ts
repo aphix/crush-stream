@@ -4,6 +4,7 @@ import type { Rapier } from "../kernel/rapier.ts";
 import { activeGround } from "../world/ground.ts";
 import { GRID, P_AX, P_BX, P_CX, P_OX, P_OY, P_OZ, P_RAD2, P_STEP, P_STEPV, P_STRIDE, P_U0, P_V0, PRISM, Q_KIND, Q_NU, Q_NV, Q_SOLID, Q_STRIDE, type Surface } from "../world/surfaces.ts";
 import type { Track } from "../world/track.ts";
+import { DOLL_FLOOR_GROUPS, PROP_FLOOR_GROUPS } from "./ragdoll-config.ts";
 import { prismSolid, type Solid } from "./ragdoll-solids.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 
@@ -29,6 +30,11 @@ const FLAT_HALF = 1000;
  * ragdoll-6's range probe at 30–360 Hz (fixed step, the fleshy losses): 3 lands him 28.2–29.3 m out at 100 km/h.
  */
 const SAND = 3;
+/**
+ * The dummies' grip on the ground he lands on (pad, road, ramps, terrain; Max rule, over his own low `SLIDE`, which still holds on cars,
+ * glass and props): clothing or skin sliding on asphalt, not a toy skating on it (owner, 2026-10-18).
+ */
+const GROUND_GRIP = 0.6;
 
 const _q = new THREE.Quaternion();
 const _r = new THREE.Vector3();
@@ -93,13 +99,19 @@ function cellSolid(R: Rapier, s: Surface, k: number, sand: boolean): ColliderDes
  * The ground under a throw at (`cx`, `cz`), `y` high: the active surface's own solids (`cellSolid` for its one-cell patches,
  * its `meshes`) and, where it has terrain (a multi-cell patch or a road deck), one heightfield patch of it `half` m to a side around the throw (its square, and the reach of the walls and solids built with it);
  * then the solids on it: the sandbox's standing `poles`, and on a `course` the road
- * walls, props, tunnels and decks near it. `sand`: the range's pad. `groups`: the collision groups of every collider built.
+ * walls, props, tunnels and decks near it. `sand`: the range's pad. `groups`: the collision groups of the walls, poles and solids; the ground itself is
+ * built twice (`floor`: `PROP_FLOOR_GROUPS`, `DOLL_FLOOR_GROUPS`) but for the sand, one for all.
  */
 export function groundColliders(R: Rapier, world: World, groups: number, course: Course | null, sand: boolean, poles: readonly Pole[], cx: number, cz: number, y: number, half: number): Collider[] {
   const ground = activeGround();
   const into: Collider[] = [];
   const place = (desc: ColliderDesc) => into.push(world.createCollider(desc.setCollisionGroups(groups)));
   const add = (desc: ColliderDesc, friction = 0.9) => place(desc.setFriction(friction));
+  // A piece of ground twice: as it always was (0.9) for props, purses and boxes, and with `GROUND_GRIP` for the dummies alone (the range's sand: once, its own for all).
+  const floor = (desc: ColliderDesc) => {
+    into.push(world.createCollider(desc.setFriction(0.9).setFrictionCombineRule(R.CoefficientCombineRule.Average).setCollisionGroups(PROP_FLOOR_GROUPS)));
+    into.push(world.createCollider(desc.setFriction(GROUND_GRIP).setFrictionCombineRule(R.CoefficientCombineRule.Max).setCollisionGroups(DOLL_FLOOR_GROUPS)));
+  };
   const n = Math.round((2 * half) / PATCH_CELL);
   const size = n * PATCH_CELL;
   let terrain = false;
@@ -107,7 +119,7 @@ export function groundColliders(R: Rapier, world: World, groups: number, course:
     // A scene's own prisms (the fleet's ramps and slab, the press plates) as the cars meet them, where they stand now.
     if (ground.q[k * Q_STRIDE + Q_KIND] === PRISM) {
       const desc = prismSolid(ground, k)?.make(R);
-      if (desc) add(desc);
+      if (desc) floor(desc);
       continue;
     }
     if (ground.q[k * Q_STRIDE + Q_SOLID] === 0) continue;
@@ -116,9 +128,10 @@ export function groundColliders(R: Rapier, world: World, groups: number, course:
       continue;
     }
     const desc = cellSolid(R, ground, k, sand);
-    if (desc) place(desc);
+    if (desc?.friction === SAND) place(desc);
+    else if (desc) floor(desc);
   }
-  for (const m of ground.meshes) add(R.ColliderDesc.trimesh(m.vertices, m.indices));
+  for (const m of ground.meshes) floor(R.ColliderDesc.trimesh(m.vertices, m.indices));
   // A course's heightfield; a scene's own solids (the Lab's bench and floor, `setSolids`) carry its ground, edges sharp.
   if (terrain && course?.track !== null) {
     // Its vertices lie on the world's `PATCH_CELL` lattice, so every patch (any size, anywhere) has the same triangles where they
@@ -136,7 +149,7 @@ export function groundColliders(R: Rapier, world: World, groups: number, course:
     }
     // Its triangles' inner edges are fixed (`FIX_INTERNAL_EDGES`): a body sliding over the seam between two never catches on
     // it. Without, a crate slid flat at 11 m/s across the flat infield tipped 88° on a seam instead of sliding 7 m upright.
-    add(R.ColliderDesc.heightfield(n, n, heights, { x: size, y: 1, z: size }, R.HeightFieldFlags.FIX_INTERNAL_EDGES).setTranslation(x0 + size / 2, 0, z0 + size / 2));
+    floor(R.ColliderDesc.heightfield(n, n, heights, { x: size, y: 1, z: size }, R.HeightFieldFlags.FIX_INTERNAL_EDGES).setTranslation(x0 + size / 2, 0, z0 + size / 2));
   }
   // Off a course every solid is built; on one, those near it.
   const reach = course ? size / 2 : Infinity;

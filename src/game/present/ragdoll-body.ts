@@ -1,6 +1,6 @@
 import { hypot3 } from "../kernel/physics-core.js";
 import * as THREE from "three";
-import type { Collider, RigidBody } from "@dimforge/rapier3d-simd";
+import type { Collider, ImpulseJoint, RigidBody } from "@dimforge/rapier3d-simd";
 
 /**
  * The thrown dummy's body (`RagdollSystem` builds and steps it): its parts and joints, its damping, and the only
@@ -156,6 +156,52 @@ export function shed(a: RigidBody, b: RigidBody, lin: number, spin: number): voi
   a.applyTorqueImpulse(_w, false);
 }
 
+/**
+ * Spin (rad/s about the torso's lateral axis) a thrown driver's joints leave with, `JOINTS` order: shoulders swing the raised arms down in front,
+ * elbows fold (the hinge's sign is negative), knees bend. His parts otherwise all leave at one velocity and his 3 rad/s tumble holds a limb straight
+ * out like a pendulum, so under about 6 rad/s a kicked limb swings back (lane probe, four ejections).
+ */
+const ARM_DROP = 10;
+const ELBOW_FOLD = 3;
+const KNEE_BEND = 8;
+const LIMP = [0, ARM_DROP, -ELBOW_FOLD, ARM_DROP, -ELBOW_FOLD, 0, KNEE_BEND, 0, KNEE_BEND] as const;
+/** Each joint's child and everything below it: what turns when that joint does. */
+const SUBTREE = JOINTS.map(([, b]) => {
+  const parts: number[] = [b];
+  for (const part of parts) for (const [parent, child] of JOINTS) if (parent === part) parts.push(child);
+  return parts;
+});
+const TOTAL_MASS = MASS.reduce((sum, m) => sum + m, 0);
+const _pivot = new THREE.Vector3();
+const _r = new THREE.Vector3();
+const _dw = new THREE.Vector3();
+const _lost = new THREE.Vector3();
+const _qr = new THREE.Quaternion();
+
+/**
+ * Give each joint of the dummy `bodies` its `LIMP` spin about world axis `axis`, its child and all below it turning about the joint's point (a
+ * joint pulled apart has the solver cancel the spin), then every part the same shift so the whole dummy's linear momentum is what it was.
+ */
+export function limp(bodies: readonly RigidBody[], axis: THREE.Vector3): void {
+  _lost.set(0, 0, 0);
+  for (const [j, rate] of LIMP.entries()) {
+    if (rate === 0) continue;
+    const [a, , x, y, z] = JOINTS[j]!;
+    const q = bodies[a]!.rotation();
+    _pivot.set(x - PARTS[a]!.c[0], y - PARTS[a]!.c[1], z - PARTS[a]!.c[2]).applyQuaternion(_qr.set(q.x, q.y, q.z, q.w)).add(bodies[a]!.translation());
+    _dw.copy(axis).multiplyScalar(rate);
+    for (const k of SUBTREE[j]!) {
+      const body = bodies[k]!;
+      _r.copy(body.translation()).sub(_pivot).cross(_dw);
+      _lost.addScaledVector(_r, MASS[k]!);
+      body.setLinvel(_r.add(body.linvel()), false);
+      body.setAngvel(_r.copy(body.angvel()).add(_dw), false);
+    }
+  }
+  _lost.divideScalar(-TOTAL_MASS);
+  for (const body of bodies) body.setLinvel(_r.copy(body.linvel()).add(_lost), false);
+}
+
 const _qb = new THREE.Quaternion();
 
 /** `body`'s pose into `into` at `o`: position xyz, rotation xyzw (what the dummies, purses and props capture after a step). */
@@ -179,6 +225,10 @@ export function blendPose(a: Float32Array, c: Float32Array, o: number, alpha: nu
 
 export type Doll = {
   bodies: RigidBody[];
+  /** Its joints, `JOINTS` order. */
+  joints: ImpulseJoint[];
+  /** His joints give (`loosen`: a driver thrown out of a car); a stiff dummy in the slot after him gets them built afresh. */
+  loose: boolean;
   live: boolean;
   age: number;
   /** Sim seconds he lies about before he goes: `LIFE` for a thrown driver, as long as the scene wants for a placed one (`place`). */

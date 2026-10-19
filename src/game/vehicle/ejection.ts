@@ -244,6 +244,7 @@ export class EjectionWatch {
     if (car.falling || car.vaporized || car.driverOut !== null) return;
     car.driverOut = "windshield";
     this.pending.push(launch(car, index, "windshield", _pre.copy(car.velocity)));
+    car.smashGlass("windshield");
   }
 
   /** The events since the last call, oldest first (a shared empty array when there are none). */
@@ -298,6 +299,7 @@ export class EjectionWatch {
     if (this.peakClosing(cars, i, killed) < ejectThreshold(car, this.minigame)) return;
     car.driverOut = exit;
     this.pending.push(launch(car, i, exit, _pre));
+    car.smashGlass(exit);
   }
 
   /** The closing speed of car i's hit (peak over the `PRE` s before it; a door slam's is the lesser of the car's own speed into it and the closing); the car's velocity at that peak is left in `_pre`. */
