@@ -252,7 +252,7 @@ export class RagdollSystem {
   constructor(scene: THREE.Scene, onThrow: (car: number) => void, onExit: (at: THREE.Vector3, frame: THREE.Quaternion, inherit: THREE.Vector3) => void) {
     this.onThrow = onThrow;
     this.onExit = onExit;
-    this.mesh = new DummyMesh(SLOTS);
+    this.mesh = new DummyMesh(SLOTS, true);
     this.debug = new RagdollDebug(scene, PARTS, JOINTS, SLOTS);
     this.mesh.name = "ragdolls";
     this.mesh.castShadow = true;

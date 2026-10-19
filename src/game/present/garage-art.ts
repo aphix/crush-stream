@@ -44,7 +44,7 @@ const TURNTABLE_STEEL = 0x3d4147;
  */
 export class GarageArt {
   readonly group = new THREE.Group();
-  readonly dummy = new DummyMesh(1);
+  readonly dummy = new DummyMesh(1, true);
   private readonly own: THREE.Texture[];
 
   constructor() {
