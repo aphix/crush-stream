@@ -63,7 +63,7 @@ describe("given four staged crashes with the epicenter activation off", () => {
   it("when a car hits the held barrier at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
     launch(a, 6.2, 0, -Math.PI / 2, -50 * KPH, 0);
-    assert.equal(staged([a], true, [new Probe(a, a.velocity)], [FREEWHEEL], 5), "9571810d0107ac3e");
+    assert.equal(staged([a], true, [new Probe(a, a.velocity)], [FREEWHEEL], 5), "e72561468d7e1716");
   });
 
   it("when three cars pile up, 6 s, then every mass and pose is the pinned one", () => {

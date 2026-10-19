@@ -33,8 +33,8 @@ const NEAR_STEP_GAP = 2.3 + SPEED * COARSE + 0.5;
 afterEach(() => setGround(null));
 
 interface Run {
-  /** Per step: the car's centre's gap to the near face at the step's start (m), whether it was a lone car, the slices the step ran, and at its end the sum of its masses' crush sets (m) and its quiet time (s). */
-  rows: { gap: number; lone: boolean; slices: number; set: number; quiet: number }[];
+  /** Per step: the car's centre's gap to the near face at the step's start (m), whether it was a lone car, the slices the step ran, and at its end the sum of its masses' crush sets (m), its quiet time (s), whether its mass step is live and its masses resting on the face. */
+  rows: { gap: number; lone: boolean; slices: number; set: number; quiet: number; live: boolean; face: number }[];
   past: number;
   x: number;
   alive: boolean;
@@ -60,7 +60,7 @@ function drive(lone: boolean, gap = START_GAP): Run {
     applyDrive(car, input, COARSE);
     stepWorld(world, COARSE);
     settleStep(cars, COARSE, false);
-    rows.push({ gap, lone: (world.loners & 1) === 1, slices: world.shape + 1, set: car.deform.masses.reduce((sum, m) => sum + m.crushSet, 0), quiet: car.deform.quietTime() });
+    rows.push({ gap, lone: (world.loners & 1) === 1, slices: world.shape + 1, set: car.deform.masses.reduce((sum, m) => sum + m.crushSet, 0), quiet: car.deform.quietTime(), live: car.deform.live(), face: car.deform.faceContacts });
     for (const m of car.deform.masses) past = Math.max(past, FAR - m.world.x);
   }
   const out = { rows, past, x: car.group.position.x, alive: car.deform.drivetrainAlive };
@@ -183,5 +183,26 @@ describe("given a sedan driven at 40 m/s into Havana's alley wall from 40 m, its
       if (grown > 0) grew.push(`${lone ? "lone" : "sliced"}: ${grown.toFixed(3)} m over ${kept.toFixed(3)} m after step ${last + 1}`);
     }
     assert.deepEqual(grew, [], "the sets grew");
+  });
+});
+
+describe("given a sedan driven at 40 m/s into Havana's alley wall from 11 m, its nose left resting on the wall's face", () => {
+  it("when it runs lone and when it runs sliced, then over the steps its shape step runs free (past the contact hold, still live) with masses on the face, the frame does not walk toward the wall", () => {
+    const walks: string[] = [];
+    for (const lone of [true, false]) {
+      const { rows } = drive(lone, FLAT_GAP);
+      let moved = 0;
+      let n = 0;
+      for (let s = 0; s + 1 < rows.length; s++) {
+        const r = rows[s]!;
+        if (!r.live || r.quiet <= CONTACT_HOLD || r.face === 0) continue;
+        moved += rows[s + 1]!.gap - r.gap;
+        n++;
+      }
+      assert.ok(n > 10, `${lone ? "lone" : "sliced"}: ${n} free steps with masses on the face`);
+      const perStep = (moved / n) * 1000;
+      if (perStep < 0) walks.push(`${lone ? "lone" : "sliced"}: ${(-perStep).toFixed(2)} mm a step toward the wall over ${n} steps`);
+    }
+    assert.deepEqual(walks, [], "the frame walked toward the face it rests on");
   });
 });

@@ -452,6 +452,13 @@ export abstract class DeformSolve extends DeformFreeze {
     const upX = this.bodyCos * fu.x - this.bodySin * fu.z;
     const upY = Math.max(fu.y, 0.1);
     const upZ = this.bodySin * fu.x + this.bodyCos * fu.z;
+    // A wreck resting on a face (masses on it, no contact within the hold) is held there by its struck half (between the centroid and the
+    // face): the clip's move there is the face's push, which the centroid restore keeps. Restored, it walked the wreck into the wall (7 mm a step).
+    const faceHeld = !contacting && this.faceContacts > 0 && this.quietTime() > CONTACT_HOLD;
+    const cx0 = comX / comM;
+    const cz0 = comZ / comM;
+    let pushX = 0,
+      pushZ = 0;
     for (let k = 0; k < iters; k++) {
       this.goalX.fill(0);
       this.goalY.fill(0);
@@ -484,6 +491,7 @@ export abstract class DeformSolve extends DeformFreeze {
         let gy = this.goalY[i]! / w;
         let gz = this.goalZ[i]! / w;
         if (!Number.isFinite(gx + gy + gz)) continue;
+        let clip = 0;
         if (this.bidirectional) {
           // Plates already pin the bumpers; don't let shape-match shove them deeper.
           // Cabin / rails must still be allowed to yield once the plates pass the hubs.
@@ -497,6 +505,7 @@ export abstract class DeformSolve extends DeformFreeze {
           if (along < 0) {
             gx -= ix * along;
             gz -= iz * along;
+            if (faceHeld && (p.x - cx0) * ix + (p.z - cz0) * iz < 0) clip = -along;
           }
         }
         if (out) this.bodyToWorld(gx, gy, gz, out, i * 3);
@@ -508,6 +517,9 @@ export abstract class DeformSolve extends DeformFreeze {
         const ax = ax0 * kStep;
         const ay = ay0 * kStep;
         const az = az0 * kStep;
+        const push = clip * alpha * kStep * p.mass;
+        pushX += ix * push;
+        pushZ += iz * push;
         p.x += ax;
         p.y += ay;
         p.z += az;
@@ -530,9 +542,9 @@ export abstract class DeformSolve extends DeformFreeze {
         comY1 += p.y * p.mass;
         comZ1 += p.z * p.mass;
       }
-      const dx = (comX - comX1) / comM;
+      const dx = (comX - comX1 + pushX) / comM;
       const dy = (comY - comY1) / comM;
-      const dz = (comZ - comZ1) / comM;
+      const dz = (comZ - comZ1 + pushZ) / comM;
       if (dx * dx + dy * dy + dz * dz > 1e-16) {
         for (let i = 0; i < this.shapeParticles.length; i++) {
           const hub = this.masses[i]!;

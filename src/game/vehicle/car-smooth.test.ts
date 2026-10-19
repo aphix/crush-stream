@@ -403,17 +403,18 @@ describe("given every body style's panels cut from its smoothed loft", () => {
  * `JSON.stringify({ snap: car.deform.snapshot(), raw: masses.map((m) => [m.rest, m.local, m.world, m.vel].map((v) => v.toArray())) })`.
  */
 const SIM_CRASH_KPH = 48;
-// Re-pinned for the kept set (REPLAY 124, dents stay): the first difference is a mass's crushSet at slice 116, the first crushing slice.
+// Re-pinned for the face's push on a wreck resting on it (the free shape step no longer restores it): the first difference is slice 142, the first past the
+// contact hold, with two masses on the slab (the cell 2.3 mm further from it).
 const SIM_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "46fe3df2350d60f0754fe2dbe0a30daacec04c2fd23ebb8a15b4227615ed6d07" },
-  { id: "hatchback", digest: "46fe3df2350d60f0754fe2dbe0a30daacec04c2fd23ebb8a15b4227615ed6d07" },
-  { id: "wagon", digest: "46fe3df2350d60f0754fe2dbe0a30daacec04c2fd23ebb8a15b4227615ed6d07" },
-  { id: "coupe", digest: "67a7271bc1ad91515f3d77f684651e4fcce47879baef4eea191951e821aa8849" },
-  { id: "pickup", digest: "a59bed0eeac6289b1e183324a27619ca98d7a8d659f098974c4cec026ab92f79" },
+  { id: "sedan", digest: "d64bf2dfc360a6a02643d08fd25866e9dd6c0e44fe3d3c71f234fb9fb1902389" },
+  { id: "hatchback", digest: "d64bf2dfc360a6a02643d08fd25866e9dd6c0e44fe3d3c71f234fb9fb1902389" },
+  { id: "wagon", digest: "d64bf2dfc360a6a02643d08fd25866e9dd6c0e44fe3d3c71f234fb9fb1902389" },
+  { id: "coupe", digest: "5f45301c396bd8209f5652cd5a0fd23a276307c5bb3e8a2713ded9de38ff1663" },
+  { id: "pickup", digest: "d0a051729466291eb4bcb05974e285fffd23e7417fcd01c7594fe9f4bd814879" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
-  { id: "police", digest: "7523381ab37eee769efae5848ffaa1e7278dd244a609ef26c94894528c7a0144" },
+  { id: "police", digest: "9ce2b3e1c9529341f9451014a071e0c117c29e70291a9081e241d9eb273a703c" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style crashed into the wall at 48 km/h by the engine's own step", () => {
