@@ -160,33 +160,33 @@ function faceShares(bitmap: SprayBitmap): number[] {
 const SHARE_TOLERANCE = 0.02;
 
 describe("given the rivals' bitmaps follow the FX tier", () => {
-  it("when the tier is below High, High or Ultra, then the bitmap is the garage's CAR_SPRAY, twice or four times as many texels a side with a mip chain", () => {
+  it("when the tier is below High, High or Ultra, then the bitmap is 128, the garage's CAR_SPRAY (256) or 512 texels a side, the finer two with a mip chain, every face where the garage's is", () => {
     const expected = [
-      { tier: "off", scale: 1 },
-      { tier: "minimal", scale: 1 },
-      { tier: "low", scale: 1 },
-      { tier: "high", scale: 2 },
-      { tier: "ultra", scale: 4 },
+      { tier: "off", side: 128 },
+      { tier: "minimal", side: 128 },
+      { tier: "low", side: 128 },
+      { tier: "high", side: CAR_SPRAY.w },
+      { tier: "ultra", side: 512 },
     ] as const;
-    for (const { tier, scale } of expected) {
+    for (const { tier, side } of expected) {
       const looks = new RivalLooks();
       looks.useTier(tier, "desktop");
       const bitmap = looks.of(3, 1, 0x336699);
-      assert.equal(bitmap.layout.w, CAR_SPRAY.w * scale, `${tier}: width`);
-      assert.equal(bitmap.layout.h, CAR_SPRAY.h * scale, `${tier}: height`);
-      assert.equal(bitmap.texture.generateMipmaps, scale > 1, `${tier}: mip chain`);
-      for (const [at, face] of CAR_SPRAY.faces.entries()) assertSameNumbers(bitmap.layout.faces[at]!, face.map((texels) => texels * scale), `${tier}: face ${at}`);
+      assert.equal(bitmap.layout.w, side, `${tier}: width`);
+      assert.equal(bitmap.layout.h, side, `${tier}: height`);
+      assert.equal(bitmap.texture.generateMipmaps, side > 128, `${tier}: mip chain`);
+      for (const [at, face] of CAR_SPRAY.faces.entries()) assertSameNumbers(bitmap.layout.faces[at]!, face.map((texels) => (texels * side) / CAR_SPRAY.w), `${tier}: face ${at}`);
       assertSameNumbers(bitmap.layout.min, CAR_SPRAY.min, `${tier}: box minimum`);
       assertSameNumbers(bitmap.layout.max, CAR_SPRAY.max, `${tier}: box maximum`);
       looks.dispose();
     }
   });
 
-  it("when the device is mobile and Ultra is picked by hand, then the rivals' bitmap stops at 2x (High's), a desktop's is 4x", () => {
-    for (const [klass, scale] of [["mobile", 2], ["desktop", 4]] as const) {
+  it("when the device is mobile and Ultra is picked by hand, then the rivals' bitmap stops at High's 256 a side, a desktop's is 512", () => {
+    for (const [klass, side] of [["mobile", 256], ["desktop", 512]] as const) {
       const looks = new RivalLooks();
       looks.useTier("ultra", klass);
-      assert.equal(looks.of(3, 1, 0x336699).layout.w, CAR_SPRAY.w * scale, `${klass}: width at Ultra`);
+      assert.equal(looks.of(3, 1, 0x336699).layout.w, side, `${klass}: width at Ultra`);
       looks.dispose();
     }
     const looks = new RivalLooks();
@@ -205,15 +205,15 @@ describe("given the rivals' bitmaps follow the FX tier", () => {
     assert.equal(looks.useTier("high", "desktop"), true, "High changes the size with a bitmap worn");
     const fine = looks.of(3, 1, 0x336699);
     assert.notEqual(fine, standard, "a new bitmap");
-    assert.equal(fine.layout.w, CAR_SPRAY.w * 2, "of the finer size");
+    assert.equal(fine.layout.w, 256, "of the finer size");
     assert.equal(looks.useTier("low", "desktop"), false, "a step down to Low frees and redraws nothing");
     assert.equal(looks.of(3, 1, 0x336699), fine, "the High bitmap is kept at Low");
     assert.equal(looks.useTier("high", "desktop"), false, "and the rise back to High asks for no redraw either");
     assert.equal(looks.of(3, 1, 0x336699), fine, "the same bitmap");
     assert.equal(looks.useTier("ultra", "desktop"), true, "Ultra changes it again");
-    assert.equal(looks.of(3, 1, 0x336699).layout.w, CAR_SPRAY.w * 4, "to the finest size");
+    assert.equal(looks.of(3, 1, 0x336699).layout.w, 512, "to the finest size");
     assert.equal(looks.useTier("minimal", "desktop"), false, "a step down from Ultra keeps it");
-    assert.equal(looks.of(3, 1, 0x336699).layout.w, CAR_SPRAY.w * 4, "at the finest size");
+    assert.equal(looks.of(3, 1, 0x336699).layout.w, 512, "at the finest size");
     looks.dispose();
     assert.equal(looks.useTier("off", "desktop"), false, "with nothing drawn there is nothing to dress again");
   });

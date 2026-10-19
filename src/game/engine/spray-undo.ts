@@ -1,6 +1,6 @@
 import type { SprayBitmap } from "../present/spray.ts";
 
-/** Steps a chain keeps: a step is 4 bytes a texel it changed (index u16, ink before, ink after), so 100 strokes that each repaint all 16 384 texels stay under 6.5 MiB a bitmap. */
+/** Steps a chain keeps: a step is 4 bytes a texel it changed (index u16, which holds a 256 x 256 bitmap's 65 535, ink before, ink after), so 100 strokes that each repaint all 65 536 texels take 25 MiB a bitmap at most. */
 const UNDO_DEPTH = 100;
 
 /** One step: the texels it changed (index, ink before, ink after) and the bitmap's inks either side. */

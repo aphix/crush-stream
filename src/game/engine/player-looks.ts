@@ -1,5 +1,5 @@
 import type { LookData } from "../net/look-codec.ts";
-import { CAR_SPRAY, NO_CAR_PICK, NO_PERSON_PICK, packSpray, PERSON_SPRAY, unpackSpray, type CarPick, type PersonPick } from "../match/look-data.ts";
+import { CAR_SPRAY, NO_CAR_PICK, NO_PERSON_PICK, packSpray, PERSON_SPRAY, unpackSpray, type CarPick, type PersonPick, type SprayPaint } from "../match/look-data.ts";
 import { SprayBitmap } from "../present/spray.ts";
 
 /** A player's look as worn: the picks and both spray bitmaps, drawn. */
@@ -8,6 +8,18 @@ type PlayerLook = { car: CarPick; person: PersonPick; carSpray: SprayBitmap; per
 /** Where this browser keeps its spray between visits (its picks ride the URL). */
 const SPRAY_KEY = { car: "crush.spray.car", person: "crush.spray.person" } as const;
 export type SprayTarget = keyof typeof SPRAY_KEY;
+
+/** A kept spray for a bitmap `side` texels square: as saved, or a save from when the side was half this (128), each texel doubled 2 x 2; null when it is neither. */
+function savedSpray(bytes: Uint8Array, side: number): SprayPaint | null {
+  const paint = unpackSpray(bytes, side * side);
+  if (paint) return paint;
+  const half = side / 2;
+  const old = unpackSpray(bytes, half * half);
+  if (!old) return null;
+  const texels = new Uint8Array(side * side);
+  for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) texels[y * side + x] = old.texels[(y >> 1) * half + (x >> 1)]!;
+  return { texels, palette: old.palette };
+}
 
 /**
  * Every player's look this browser draws: its own (`mine`: picked in the garage, the spray kept in localStorage) and each
@@ -23,7 +35,7 @@ export class PlayerLooks {
       const text = localStorage.getItem(SPRAY_KEY[target]);
       if (text === null) continue;
       const bitmap = this.sprayOf(target);
-      bitmap.load(unpackSpray(Uint8Array.from(atob(text), (c) => c.charCodeAt(0)), bitmap.texels.length));
+      bitmap.load(savedSpray(Uint8Array.from(atob(text), (c) => c.charCodeAt(0)), bitmap.layout.w));
     }
   }
 

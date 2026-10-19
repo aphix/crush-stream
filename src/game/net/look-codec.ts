@@ -7,8 +7,8 @@ export type LookData = { car: CarPick; person: PersonPick; carSpray: SprayPaint;
 /**
  * `MSG.look`: a player's look, sent once on the reliable channel when a guest is seated (to the host) and by the host to every
  * guest (its own and each other player's). Type, the car it is for, the car and driver picks as text (`carPickText`, a length
- * byte first), then each spray bitmap packed (`packSpray`, a u16 length first): a few hundred bytes for a bare car, 8 KiB
- * and 61 bytes of own inks a bitmap at most.
+ * byte first), then each spray bitmap packed (`packSpray`, a u16 length first): a few hundred bytes for a bare car, 32 KiB
+ * and 61 bytes of own inks a bitmap at most, so a whole look (64.2 KiB at most) goes as one message under the data channel's cap.
  */
 export function packLook(car: number, look: LookData): Uint8Array<ArrayBuffer> {
   const enc = new TextEncoder();

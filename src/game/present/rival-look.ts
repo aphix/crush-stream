@@ -1,4 +1,4 @@
-import { SPRAY_PALETTE, CAR_SPRAY, type SprayLayout } from "../match/look-data.ts";
+import { SPRAY_PALETTE, carSprayLayout } from "../match/look-data.ts";
 import { mulberry32 } from "../world/placements.ts";
 import type { FxTier } from "./engine-post.ts";
 import type { DeviceClass } from "./auto-fx.ts";
@@ -77,18 +77,13 @@ export function rivalLook(seed: number, slot: number, bodyColour: number): { rea
 }
 
 /**
- * Texels a metre of the rivals' bitmap has, as a multiple of the garage's `CAR_SPRAY`, per FX tier: the rivals are procedural
- * and never cross the wire or a clip, so the finer the tier the finer the paint (up close the garage's 3.7 cm texel along the car
- * is stair-stepped on a flame's edge): the garage's own bitmap below High, twice the texels a side at High, four times at Ultra.
+ * The rivals' bitmap side (texels) per FX tier: the rivals are procedural and never cross the wire or a clip, so the finer the
+ * tier the finer the paint (up close a 128 bitmap's 3.7 cm texel along the car is stair-stepped on a flame's edge): 128 below
+ * High, the garage's own 256 at High, 512 at Ultra.
  */
-const RIVAL_SPRAY_SCALE: Record<FxTier, number> = { off: 1, minimal: 1, low: 1, high: 2, ultra: 4 };
-/** The finest scale a device class draws (the memory below: a phone's 4x field is 83 MiB beside the page's own): a mobile pick of Ultra draws the rivals at High's 2x. */
-const RIVAL_SPRAY_MAX_SCALE: Record<DeviceClass, number> = { desktop: 4, mobile: 2, software: 4 };
-
-/** `CAR_SPRAY` with every texel `scale` times finer each way: the same box and the same faces, so the paint shader (its face rectangles are fractions of the bitmap) reads it unchanged. */
-function scaledLayout(scale: number): SprayLayout {
-  return { ...CAR_SPRAY, w: CAR_SPRAY.w * scale, h: CAR_SPRAY.h * scale, faces: CAR_SPRAY.faces.map(([x, y, width, height]) => [x * scale, y * scale, width * scale, height * scale] as const) };
-}
+const RIVAL_SPRAY_SIDE: Record<FxTier, number> = { off: 128, minimal: 128, low: 128, high: 256, ultra: 512 };
+/** The finest side a device class draws (the memory below: a phone's 512 field is 83 MiB beside the page's own): a mobile pick of Ultra draws the rivals at High's 256. */
+const RIVAL_SPRAY_MAX_SIDE: Record<DeviceClass, number> = { desktop: 512, mobile: 256, software: 512 };
 
 /** What a slot's bitmap was drawn for. */
 type Drawn = { readonly bitmap: SprayBitmap; seed: number; body: number };
@@ -96,28 +91,28 @@ type Drawn = { readonly bitmap: SprayBitmap; seed: number; body: number };
 /**
  * The rivals' bitmaps, one per slot, drawn on first ask and redrawn in place (the same bitmap, so its texture stays the one the
  * car's paint samples) only when the slot's seed or paint changes. The bitmap's size follows the FX tier upward (`useTier`,
- * `RIVAL_SPRAY_SCALE`) and never back down: a step to a coarser tier keeps the finer bitmaps, so a tier that flaps (the auto tier, a
+ * `RIVAL_SPRAY_SIDE`) and never back down: a step to a coarser tier keeps the finer bitmaps, so a tier that flaps (the auto tier, a
  * bench's A/B, a player trying tiers) pays the redraw and the texture upload once, on its first rise to a size, not on each rise. The finer ones are
  * mip-mapped, so a far car's paint does not shimmer. Memory for the engine's 32 slots (texels + CPU rgba + GPU, the GPU copy a third
- * bigger with its mips): at the garage's size 144 KiB a car, 4.5 MiB a field; High (256 x 256) 661 KiB a car, 20.6 MiB a field; Ultra (512 x 512)
+ * bigger with its mips): 128 x 128 144 KiB a car, 4.5 MiB a field; High (256 x 256) 661 KiB a car, 20.6 MiB a field; Ultra (512 x 512)
  * 2.6 MiB a car, 82.7 MiB a field; held at the finest size the page has asked for until the page closes. Drawing all 31 rivals of a full field takes
  * about 55 ms at High and 170 ms at Ultra (node), once when a race starts and once more when the tier first rises to a size.
  */
 export class RivalLooks {
   private readonly drawn = new Map<number, Drawn>();
-  private scale = RIVAL_SPRAY_SCALE.off;
-  private layout = CAR_SPRAY;
+  private side = RIVAL_SPRAY_SIDE.off;
+  private layout = carSprayLayout(this.side);
 
   /**
-   * Draw for FX tier `tier` on a `klass` device from now on (a mobile device stops at 2x: `RIVAL_SPRAY_MAX_SCALE`), at the finest size asked for so far.
+   * Draw for FX tier `tier` on a `klass` device from now on (a mobile device stops at 256: `RIVAL_SPRAY_MAX_SIDE`), at the finest size asked for so far.
    * Every bitmap drawn so far is freed when that makes the size finer: true then, and the cars wearing one must be dressed again (their paint
    * samples a freed texture until they are). A tier that asks for the size already drawn, or a coarser one, changes nothing.
    */
   useTier(tier: FxTier, klass: DeviceClass): boolean {
-    const scale = Math.min(RIVAL_SPRAY_SCALE[tier], RIVAL_SPRAY_MAX_SCALE[klass]);
-    if (scale <= this.scale) return false;
-    this.scale = scale;
-    this.layout = scaledLayout(scale);
+    const side = Math.min(RIVAL_SPRAY_SIDE[tier], RIVAL_SPRAY_MAX_SIDE[klass]);
+    if (side <= this.side) return false;
+    this.side = side;
+    this.layout = carSprayLayout(side);
     const wasWorn = this.drawn.size > 0;
     this.dispose();
     return wasWorn;
@@ -127,7 +122,7 @@ export class RivalLooks {
   of(seed: number, slot: number, bodyColour: number): SprayBitmap {
     let entry = this.drawn.get(slot);
     if (entry === undefined) {
-      entry = { bitmap: new SprayBitmap(this.layout, this.scale > 1), seed, body: bodyColour };
+      entry = { bitmap: new SprayBitmap(this.layout, this.side > RIVAL_SPRAY_SIDE.off), seed, body: bodyColour };
       this.drawn.set(slot, entry);
     } else if (entry.seed === seed && entry.body === bodyColour) {
       return entry.bitmap;

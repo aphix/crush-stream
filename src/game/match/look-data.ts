@@ -27,38 +27,39 @@ type Face = readonly [number, number, number, number];
 /** A bitmap's size, the rest-frame box it wraps (m) and its five faces (in `SPRAY_FACE` order). */
 export type SprayLayout = { readonly w: number; readonly h: number; readonly min: readonly [number, number, number]; readonly max: readonly [number, number, number]; readonly faces: readonly Face[] };
 
-/** Bitmap side (texels): the wire's budget is 128 x 128 at 4 bits. */
-const SIDE = 128;
+/** The faces are packed on a square grid this many cells a side; a bitmap of any side scales the grid, so every size wraps the box alike. */
+const GRID = 128;
+/** Bitmap side (texels): two a grid cell, 256 x 256. A save from when it was one a cell loads doubled (`PlayerLooks`). */
+const SIDE = 2 * GRID;
 
-/** A car in its own frame (+z forward, y up from the tyre plane): sides 128 x 30, roof 128 x 40, nose and tail 64 x 28. */
-export const CAR_SPRAY: SprayLayout = {
-  w: SIDE,
-  h: SIDE,
-  min: [-0.95, 0, -2.35],
-  max: [0.95, 1.6, 2.35],
-  faces: [
-    [0, 0, 128, 30],
-    [0, 30, 128, 30],
-    [0, 60, 128, 40],
-    [0, 100, 64, 28],
-    [64, 100, 64, 28],
-  ],
-};
+/** A layout `side` texels square round the box `min`..`max`, its `faces` given in grid cells. */
+function gridLayout(side: number, min: SprayLayout["min"], max: SprayLayout["max"], faces: readonly Face[]): SprayLayout {
+  const k = side / GRID;
+  return { w: side, h: side, min, max, faces: faces.map(([x, y, w, h]) => [x * k, y * k, w * k, h * k] as const) };
+}
 
-/** A driver standing (`PARTS` at rest, feet at y 0, facing +z): front and back 40 x 92, sides 24 x 92, the head's top 25 x 36. */
-export const PERSON_SPRAY: SprayLayout = {
-  w: SIDE,
-  h: SIDE,
-  min: [-0.4, 0, -0.25],
-  max: [0.4, 1.85, 0.25],
-  faces: [
-    [80, 0, 24, 92],
-    [104, 0, 24, 92],
-    [0, 92, 25, 36],
-    [0, 0, 40, 92],
-    [40, 0, 40, 92],
-  ],
-};
+/** A car in its own frame (+z forward, y up from the tyre plane), `side` texels square: in grid cells, sides 128 x 30, roof 128 x 40, nose and tail 64 x 28. */
+export function carSprayLayout(side: number): SprayLayout {
+  const half = GRID / 2;
+  return gridLayout(side, [-0.95, 0, -2.35], [0.95, 1.6, 2.35], [
+    [0, 0, GRID, 30],
+    [0, 30, GRID, 30],
+    [0, 60, GRID, 40],
+    [0, 100, half, 28],
+    [half, 100, half, 28],
+  ]);
+}
+
+export const CAR_SPRAY = carSprayLayout(SIDE);
+
+/** A driver standing (`PARTS` at rest, feet at y 0, facing +z): in grid cells, front and back 40 x 92, sides 24 x 92, the head's top 25 x 36. */
+export const PERSON_SPRAY = gridLayout(SIDE, [-0.4, 0, -0.25], [0.4, 1.85, 0.25], [
+  [80, 0, 24, 92],
+  [104, 0, 24, 92],
+  [0, 92, 25, 36],
+  [0, 0, 40, 92],
+  [40, 0, 40, 92],
+]);
 
 /**
  * The face (`SPRAY_FACE`) rest point (px, py, pz) with normal (nx, ny, nz) is painted on, and its place across that face

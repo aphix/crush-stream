@@ -97,7 +97,7 @@ out-of-the-pane direction, orientation) and his velocity relative to the car, th
 `Ejection` the host's sim made (`EjectionWatch`, [RACE_DESIGN.md](RACE_DESIGN.md)), every number f32-exact. A client queues it
 (`EjectQueue`) and launches the dummy when its draw time (the host clock `INTERP_DELAY` behind) reaches the event's, so he
 leaves with the car it is drawn leaving; a reel that plays drops it. 100 bytes, a handful a race.
-`NET_VERSION` (`codec.ts`, now 33; 33 let a `MSG.look` spray carry the player's own ink colours, 27 shaped and thinned `MSG.race`, 26 added the campaign game kind, the lobby gate's course and playlist and the between-rounds clock, 25 the wheelspin byte, 10 moved the reel to `MSG.reelPart` frames, 8 added `look`/`driverOut`/`MSG.eject`) is bumped on any layout change:
+`NET_VERSION` (`codec.ts`, now 34; 34 doubled a `MSG.look` spray bitmap to 256 x 256, 33 let a `MSG.look` spray carry the player's own ink colours, 27 shaped and thinned `MSG.race`, 26 added the campaign game kind, the lobby gate's course and playlist and the between-rounds clock, 25 the wheelspin byte, 10 moved the reel to `MSG.reelPart` frames, 8 added `look`/`driverOut`/`MSG.eject`) is bumped on any layout change:
 a host answers another build's hello with a refusal and a client refuses another build's assign, so
 mixed builds (an auto-deploy mid-session) say "reload" instead of misreading snapshots.
 

@@ -52,7 +52,7 @@ const CLIP_LOOK = 0x5eed1234;
 const rivalsOracle = new RivalLooks();
 
 /**
- * A spray's identity: the digest of its texels (a failed `assert.deepEqual` on two 64 KiB arrays prints a diff that eats the machine).
+ * A spray's identity: the digest of its texels (a failed `assert.deepEqual` on two 256 KiB arrays prints a diff that eats the machine).
  * Premultiplied rgba, hashed as the bitmap holds it.
  */
 const digestOf = (texels: Uint8Array): string => createHash("sha1").update(texels).digest("hex");
@@ -208,28 +208,28 @@ describe("given the real engine headless", () => {
     assert.ok(wornBy(AI_SLOTS).every((spray) => spray === null), "bare in the fleet");
   });
 
-  it("when the FX tier rises to High during a race and falls back, then the opponents' sprays are redrawn twice as fine once, keep that size at the lower tier, each the oracle's, and the player's car keeps its own", () => {
+  it("when the FX tier rises to High during a race and falls back, then the opponents' sprays are redrawn at the garage's size once, keep that size at the lower tier, each the oracle's, and the player's car keeps its own", () => {
     engine.toggleRace();
     startSingle();
     run(1);
     const own = ownDigest();
     const sides = (): string => AI_SLOTS.map((slot) => wornMap(cars()[slot]!)?.image.width).join(",");
     const sidesOf = (width: number): string => AI_SLOTS.map(() => width).join(",");
-    assert.equal(sides(), sidesOf(CAR_SPRAY.w), "the garage's size at Minimal");
+    assert.equal(sides(), sidesOf(128), "128 a side at Minimal");
     // The Sky setting off, so the High tier fetches no sky texture (the headless page has none to give).
     engine.setSky("off");
     try {
       engine["cine"].setTier("high");
       rivalsOracle.useTier("high", "desktop");
       run(0.1);
-      assert.equal(sides(), sidesOf(CAR_SPRAY.w * 2), "twice the texels a side at High");
+      assert.equal(sides(), sidesOf(CAR_SPRAY.w), "the garage's 256 a side at High");
       assertRivals(race().look, "at High");
       assert.equal(sprayOn(cars()[0]!), own, "the player's own spray is as it was");
     } finally {
       engine["cine"].setTier("minimal");
     }
     run(0.1);
-    assert.equal(sides(), sidesOf(CAR_SPRAY.w * 2), "the finer size is kept after the fall: no redraw on a step down");
+    assert.equal(sides(), sidesOf(CAR_SPRAY.w), "the finer size is kept after the fall: no redraw on a step down");
     assertRivals(race().look, "after falling back");
     assert.equal(sprayOn(cars()[0]!), own, "the player's own spray is still as it was");
     engine.toggleRace();
