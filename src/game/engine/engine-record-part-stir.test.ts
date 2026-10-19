@@ -15,6 +15,8 @@ import { CrashRecorder } from "./engine-record.ts";
 import { ClipSim } from "./engine-replay.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
+import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { PART_SLOTS } from "../vehicle/part-state.ts";
 
 /** The engine's step is a float32 (`Math.fround`), which the recorder stores whole: the replay runs the very step the live sim ran. */
 const H = Math.fround(1 / FINE_HZ);
@@ -26,10 +28,10 @@ const PASSER = 2;
 /** The step the passer joins the field: after the first keyframe of the clip is taken, so the clip leaves it out. */
 const JOIN_STEP = 300;
 const IMPACT_X = 60;
-/** How far (m) up the road from the crash the passer is put, its speed (m/s), and how far (m) to the side of the crash line it passes (its roof clear of both wrecks, over no part). */
+/** How far (m) up the road from the crash the passer is put, its speed (m/s), and how far (m) to the side of the crash line it passes: clear of both wrecks, its roof over the reach of a part that comes to rest beside them. */
 const PASSER_AHEAD = 65;
 const PASSER_SPEED = 20;
-const PASSER_SIDE = 5;
+const PASSER_SIDE = 4.6;
 
 /** The clip as a peer decodes it, the cars of the world it was recorded in, the world's trace of every clip car's loose bodies, and where the passer was nearest the crash. */
 interface Recorded {
@@ -39,6 +41,8 @@ interface Recorded {
   trace: Float64Array[][];
   dress: (car: DeformableCar) => void;
   closest: { step: number; gap: number };
+  /** The sleeping torn part or popped wheel the passer came nearest (its car, its `stirredBodies` index, the step and plan gap (m) between the passer's middle and the body's, and the body's reach). */
+  reached: { car: number; body: number; step: number; gap: number; reach: number };
 }
 
 const looseBodyPositions = (car: DeformableCar): Float64Array => {
@@ -70,6 +74,7 @@ function record(passer: boolean): Recorded {
   const trace: Float64Array[][] = [];
   const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
   const closest = { step: -1, gap: Infinity };
+  const reached = { car: -1, body: -1, step: -1, gap: Infinity, reach: 0 };
   for (let s = 0; s < STEPS; s++) {
     if (passer && s === JOIN_STEP) {
       const car = make(PASSER);
@@ -91,6 +96,15 @@ function record(passer: boolean): Recorded {
         closest.gap = gap;
         closest.step = s;
       }
+      for (const c of [A, B]) {
+        const car = cars[c]!;
+        const bodies = [...car["parts"].map((part, k) => ({ shape: part.detached ? part.shape : null, body: k })), ...car["looseWheels"].map((wheel, k) => ({ shape: wheel.loose ? wheel.shape : null, body: PART_SLOTS + k }))];
+        for (const { shape, body } of bodies) {
+          if (!shape?.asleep) continue;
+          const near = Math.hypot(p.x - shape.sleepX, p.z - shape.sleepZ);
+          if (near < reached.gap) Object.assign(reached, { car: c, body, step: s, gap: near, reach: shape.reach });
+        }
+      }
     }
     trace.push([looseBodyPositions(cars[A]!), looseBodyPositions(cars[B]!)]);
   }
@@ -99,7 +113,7 @@ function record(passer: boolean): Recorded {
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
-  return { clip: readClip(new Reader().reset(w.done()), carLayout(cars[0]!)), cars, trace, dress, closest };
+  return { clip: readClip(new Reader().reset(w.done()), carLayout(cars[0]!)), cars, trace, dress, closest, reached };
 }
 
 /**
@@ -134,7 +148,7 @@ describe("given a head-on recorded as a highlight, its torn parts lying asleep o
   const { clip } = run;
   const s0 = Math.round(clip.t0 / H);
 
-  it("when the clip is filed, then it carries the pair but not the passing car, and lists the parts' wakes as runs of slices that begin before the passer is nearest", async (t) => {
+  it("when the clip is filed, then it carries the pair but not the passing car, and lists the wake of a part the passer reaches as a run of slices that begins before the passer is nearest it", async (t) => {
     const bytes = clipBytes(clip) - clipBytes({ ...clip, partStirs: [] });
     const slices = clip.partStirs.reduce((n, x) => n + x.slices, 0);
     // A saved clip is the deflated bytes in base64 (3 bytes to 4 characters).
@@ -144,7 +158,10 @@ describe("given a head-on recorded as a highlight, its torn parts lying asleep o
     assert.ok(!clip.cars.some((c) => c.slot === PASSER), "the car that joined the field after the clip began is left out");
     assert.ok(s0 + clip.h.length > run.closest.step, "the passer comes by inside the clip");
     assert.ok(clip.partStirs.length >= 1, "no torn part was recorded woken");
-    assert.ok(clip.partStirs.some((x) => s0 + x.step <= run.closest.step), "a part wake begins before the passer is nearest");
+    const { reached } = run;
+    assert.ok(reached.gap < CAR_HALF.x + reached.reach, `the passer came within ${reached.gap.toFixed(2)} m of a resting part, not within its reach`);
+    const wakes = clip.partStirs.filter((x) => clip.cars[x.car]!.slot === reached.car && x.body === reached.body && s0 + x.step >= JOIN_STEP);
+    assert.ok(wakes.length > 0 && s0 + wakes[0]!.step <= reached.step, `the part the passer reached was woken at ${wakes.map((x) => s0 + x.step).join(",") || "no step"}, the passer nearest it at ${reached.step}`);
   });
 
   it("when the clip is replayed with its part stirs, then every torn part of its cars is where the live sim had it at every step, to the bit", () => {
