@@ -30,6 +30,19 @@ export function droop(cls: VehicleClassId): number {
   return SPRINGS[cls].travel / 2;
 }
 
+/**
+ * How far (m) each class's tyre can rise into its arch before its top meets the drawn skin over it: the rest clearance of the tightest of
+ * the four wheels (the truck's are the rear ones, under the bed) less a centimetre (`arch-room.test.ts` reads the clearances off the meshes).
+ * Past it the body lifts over the wheel instead of the tyre standing through the hood or the fender. The monster rides its whole travel
+ * (its rear tyres are 47 mm under the bed at rest): its body's pitch and sag rows (`car-load.test.ts`, `wheel-rest.test.ts`) are built on it.
+ */
+const ARCH_ROOM: Readonly<Record<VehicleClassId, number>> = { sedan: 0.074, muscle: 0.048, police: 0.074, truck: 0.053, monster: Infinity };
+
+/** How far (m) a drawn wheel and its body can come together: a class's spring stop, or its arch's room if that is less. */
+function archStop(cls: VehicleClassId): number {
+  return Math.min(droop(cls), ARCH_ROOM[cls]);
+}
+
 /** Half the wheelbase and half the track (m). */
 const AXLE = WHEEL_POS[0]![2];
 const TRACK = Math.abs(WHEEL_POS[0]![0]);
@@ -123,7 +136,7 @@ export function bodyLift(lift: number, upY: number): number {
  * The offsets (`Suspension.offset`) a body resting on the corners of `gone` (bit i: wheel i is off) takes. The standing
  * springs are equal, so the least-offset pose that puts each empty hub's corner down at the underside's height there
  * (the pose is linear: Gauss-Seidel on the Gram system of the empty corners' rows), then the whole body up as far as any
- * underside point (it rests on the first to touch) or the standing wheels' arches (`stop` m of room over each tyre) need.
+ * underside point (it rests on the first to touch) or the standing wheels' arches (`stop` m of room over each tyre, `archStop`) need.
  * All zero on four wheels.
  */
 export function sagOffsets(lift: number, stop: number, gone: number, out: Float64Array): void {
@@ -219,19 +232,20 @@ export class Suspension {
         this.pose(lift);
         this.seat.fill(0);
       }
-      this.sag(lift, SPRINGS[cls].travel / 2, air || group.matrixWorld.elements[5]! < UPRIGHT_UP_Y ? 0 : gone, dt);
+      this.sag(lift, archStop(cls), air || group.matrixWorld.elements[5]! < UPRIGHT_UP_Y ? 0 : gone, dt);
       return;
     }
     if (dt <= 0) return;
     const s = SPRINGS[cls];
     const w = 2 * Math.PI * s.hz;
     const stop = s.travel / 2;
+    const room = archStop(cls);
     const e = group.matrixWorld.elements;
     this.load.step(e, dt, air, cls, w * w, slide, spinSpeed);
     let moved = !this.riding;
     this.riding = true;
     for (let i = 0; i < 4; i++) {
-      const o = Math.max(-stop, Math.min(stop, this.load.target[i]!));
+      const o = Math.max(-room, Math.min(stop, this.load.target[i]!));
       if (o !== this.offset[i]) moved = true;
       this.offset[i] = o;
     }
@@ -240,7 +254,7 @@ export class Suspension {
     const off = this.offset;
     const sunk = this.rise > 0 || off[0]! < 0 || off[1]! < 0 || off[2]! < 0 || off[3]! < 0;
     const bottom = wreck || (air && !sunk) ? 0 : this.bottomOut(e, lift);
-    if (this.seatWheels(e, hit, wheels, stop, air, gone, dt) || moved || bottom !== this.rise || lift !== this.posedLift) {
+    if (this.seatWheels(e, hit, wheels, stop, room, air, gone, dt) || moved || bottom !== this.rise || lift !== this.posedLift) {
       this.rise = bottom;
       this.pose(lift);
     }
@@ -268,10 +282,10 @@ export class Suspension {
   /**
    * Each drawn wheel onto the surface under its tread (`seat`: its footprint's rise, `wheelContact`); off the ground back onto its hub.
    * A wheel hangs down to its droop (`stop`, half the travel) below its rest ride on the physics frame, as far as the physics tyre
-   * reaches; up into its arch it stops `stop` above the body's ride there (a sedan's tyre top is 6 cm under its arch at rest) and lifts
+   * reaches; up into its arch it stops `room` (`archStop`) above the body's ride there and lifts
    * that corner of the body beyond. A wheel in `gone` is a world object of its own (`stepLoose`): not seated. True when it lifted one.
    */
-  private seatWheels(e: readonly number[], hit: Float64Array, wheels: readonly THREE.Object3D[], stop: number, air: boolean, gone: number, dt: number): boolean {
+  private seatWheels(e: readonly number[], hit: Float64Array, wheels: readonly THREE.Object3D[], stop: number, room: number, air: boolean, gone: number, dt: number): boolean {
     const uy = e[5]!;
     let lifted = false;
     for (let i = 0; i < 4; i++) {
@@ -284,8 +298,8 @@ export class Suspension {
         const need = hit[i * HIT_SIZE + C_H]!;
         const o = this.offset[i]!;
         s = Math.max(-stop, need);
-        if (s > o + stop) {
-          this.offset[i] = s - stop;
+        if (s > o + room) {
+          this.offset[i] = s - room;
           lifted = true;
         }
       }
