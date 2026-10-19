@@ -219,10 +219,10 @@ export abstract class RaceHudLayer extends RaceWatch {
   }
 
   /** The podium of what is finished: a finished campaign's standings, else the race's results; null while the race runs. */
-  podium(): { kind: "race" | "campaign"; places: PodiumPlace[] } | null {
-    if (this.campaignFinale) return { kind: "campaign", places: podiumPlaces(this.campaign!.standings()) };
+  podium(): { kind: "race" | "campaign"; title: string; places: PodiumPlace[] } | null {
+    if (this.campaignFinale) return { kind: "campaign", title: "Championship", places: podiumPlaces(this.campaign!.standings()) };
     const s = this.session;
-    return s && s.phase === "finished" ? { kind: "race", places: podiumPlaces(s.results()) } : null;
+    return s && s.phase === "finished" ? { kind: "race", title: this.track?.name ?? "", places: podiumPlaces(s.results()) } : null;
   }
 
   /** Racer `id`'s damage as the race ended (the podium's car shows it); null before one has. */

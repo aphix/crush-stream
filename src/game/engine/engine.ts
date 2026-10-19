@@ -212,9 +212,9 @@ export class CrashEngine extends EngineGarage {
     this.scene.add(...this.wheels.meshes, ...this.lampBatch.meshes);
     // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels and lamps.
     this.scene.onBeforeRender = (renderer) => {
-      const live = this.live();
-      this.wheels.sync(live, renderer);
-      this.lampBatch.sync(live);
+      const drawn = this.drawnCars();
+      this.wheels.sync(drawn, renderer);
+      this.lampBatch.sync(drawn);
     };
 
     this.debris = new DebrisSystem(this.scene);
@@ -357,6 +357,21 @@ export class CrashEngine extends EngineGarage {
       strike: (s) => this.ragdolls.throwFigure(s, this.live()),
       ride: (camera, wallDt, subject) => this.ragdolls.rideAlong && this.ragdolls.frameCamera(camera, wallDt, false, this.cars.indexOf(subject), false, this.view.lens, () => this.sceneSight(subject, true)) !== "none",
     });
+  }
+
+  /** The scratch list `drawnCars` rewrites in place. */
+  private readonly drawnBuf: DeformableCar[] = [];
+
+  /** The cars the wheel and lamp batches draw (instanced, not meshes of the car): the field's, and the podium's own while it stands (it hides the field). */
+  private drawnCars(): readonly DeformableCar[] {
+    const live = this.live();
+    const stand = this.podium.cars();
+    if (stand.length === 0) return live;
+    const out = this.drawnBuf;
+    out.length = 0;
+    for (let i = 0; i < live.length; i++) out.push(live[i]!);
+    for (let i = 0; i < stand.length; i++) out.push(stand[i]!);
+    return out;
   }
 
   private makePodium(): PodiumDirector {

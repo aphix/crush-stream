@@ -653,6 +653,11 @@ export class DeformableCar extends CarParts {
   /** `drop`: a popped hub throws its wheel (host); a netplay client takes loose wheels from snapshots. */
   private nudgeWheels(dt: number, drop = true): void {
     this.spinWheels(dt, true);
+    this.followHubs(drop);
+  }
+
+  /** Each wheel still on the car at its hub's place (a crushed hub carries it off its rest seat), `drop` as `nudgeWheels`. A car posed from a net state and never stepped (the podium's) calls it once. */
+  followHubs(drop = true): void {
     const hubs = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
     for (let i = 0; i < this.wheels.length; i++) {
       const w = this.wheels[i]!;

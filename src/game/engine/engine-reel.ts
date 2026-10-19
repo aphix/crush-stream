@@ -127,7 +127,7 @@ export abstract class EngineReel extends EngineInput {
   private raisePodium(): void {
     const finish = this.race.podium();
     if (!finish || this.podium.open) return;
-    if (this.podium.raise(finish.places, finish.kind)) this.highlights.showPodium(this.podium);
+    if (this.podium.raise(finish.places, finish.kind, finish.title)) this.highlights.showPodium(this.podium);
   }
 
   private lowerPodium(): void {

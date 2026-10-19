@@ -95,8 +95,8 @@ export class PodiumDirector {
     return this.up;
   }
 
-  /** Raise the stage over the course with `places` on it. False (nothing raised) with no course or nobody to show. */
-  raise(places: readonly PodiumPlace[], kind: PodiumHud["kind"]): boolean {
+  /** Raise the stage over the course with `places` on it, `title` small on its banner (the course, or the championship). False (nothing raised) with no course or nobody to show. */
+  raise(places: readonly PodiumPlace[], kind: PodiumHud["kind"], title: string): boolean {
     const spot = this.host.spot();
     if (!spot || places.length === 0) return false;
     if (!this.stage) {
@@ -106,7 +106,7 @@ export class PodiumDirector {
     this.spot.set(spot.x, spot.y, spot.z);
     this.stage.group.position.copy(this.spot);
     this.stage.group.visible = true;
-    this.stage.setNames(places, kind === "campaign" ? "CHAMPIONSHIP" : "PODIUM");
+    this.stage.setNames(places, title);
     this.standing.length = 0;
     for (let k = 0; k < PODIUM_BLOCKS.length; k++) {
       const place = places[k];
@@ -196,6 +196,7 @@ export class PodiumDirector {
     car.group.position.y = s.y + block.top;
     this.host.dress(car);
     this.host.damageOf(id)?.lay(car);
+    car.followHubs(false);
     car.hideLoose();
     car.group.visible = true;
     car.group.updateMatrixWorld(true);

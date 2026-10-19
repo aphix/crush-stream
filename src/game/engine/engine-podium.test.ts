@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
+import { WHEEL_POS } from "../vehicle/car-mesh.ts";
 import { BLOCK_DEPTH, BLOCK_WIDTH, PODIUM_BLOCKS, type PodiumPlace } from "../match/podium.ts";
 import { CarDamage } from "./car-damage.ts";
 import { PodiumDirector, type PodiumHost } from "./engine-podium.ts";
@@ -32,13 +33,14 @@ function skinGap(a: Float32Array, b: Float32Array): number {
   return gap;
 }
 
-/** A host over a bare scene: real cars (one per racer id, fleet bodies), a donor wreck standing in for racer 0's car as the race ended, and the fountain jets . */
-function hostOver(scene: THREE.Scene) {
+/** A host over a bare scene: real cars (fleet bodies), a donor wreck (shoved further by `shove`) standing in for racer 0's car as the race ended, and the fountain jets. */
+function hostOver(scene: THREE.Scene, shove?: (donor: DeformableCar) => void) {
   const make = (id: number): DeformableCar => new DeformableCar({ body: 0x808080, accent: 0, name: `c${id}` }, scene, null, fleetStyle(id));
   const donor = make(0);
   donor.spawnFacing(0, 0, 0, 0);
   donor.applyImpact(new THREE.Vector3(0, 0.5, 2.2), new THREE.Vector3(0, 0, -1), 18, 14);
   for (let i = 0; i < 30; i++) donor.step(1 / FINE_HZ);
+  shove?.(donor);
   donor.updateSkin();
   const damage = new CarDamage();
   damage.read(donor);
@@ -60,7 +62,7 @@ describe("given the podium raised over a course with three racers, the winner's 
   const { host, donor, jets } = hostOver(scene);
   const director = new PodiumDirector(host);
   const wreckSkin = bodyOf(donor);
-  assert.ok(director.raise(PLACES, "race"), "raised");
+  assert.ok(director.raise(PLACES, "race", "Test Oval"), "raised");
   director.frame(0);
   const cars = [...director.cars()];
 
@@ -122,7 +124,7 @@ describe("given the podium raised over a course with three racers, the winner's 
   });
 
   it("when it is raised again with a racer fewer, then the stand holds two", () => {
-    assert.ok(director.raise(PLACES.slice(0, 2), "campaign"));
+    assert.ok(director.raise(PLACES.slice(0, 2), "campaign", "Championship"));
     assert.equal(director.cars().length, 2);
     assert.equal(director.hud(0)?.kind, "campaign");
   });
@@ -132,7 +134,7 @@ describe("given the camera round the podium", () => {
   const scene = new THREE.Scene();
   const { host } = hostOver(scene);
   const director = new PodiumDirector(host);
-  director.raise(PLACES, "race");
+  director.raise(PLACES, "race", "Test Oval");
   const corners = PODIUM_BLOCKS.flatMap((b) => [-1, 1].map((side) => new THREE.Vector3(SPOT.x + b.x + (side * BLOCK_WIDTH) / 2, SPOT.y + b.top, SPOT.z)));
   const shapes = [
     { it: "a landscape desktop", aspect: 16 / 9 },
@@ -178,5 +180,28 @@ describe("given the camera round the podium", () => {
       director.aim(camera);
       assert.ok(camera.position.z > SPOT.z + BLOCK_DEPTH / 2, `at ${f / 60} s the eye is at z ${camera.position.z - SPOT.z} from the stand`);
     }
+  });
+});
+
+/** How far the crash shoved the wreck's rear left hub along the car's x (m). */
+const HUB_SHOVE_M = 0.25;
+/** A wheel sits on its hub's place to this (m). */
+const SEAT_TOLERANCE_M = 0.005;
+
+describe("given a wreck whose rear left hub the crash shoved off its rest seat", () => {
+  const { host } = hostOver(new THREE.Scene(), (donor) => void (donor.deform.massLocal("hubRL").x += HUB_SHOVE_M));
+  const director = new PodiumDirector(host);
+  director.raise(PLACES.slice(0, 1), "race", "Test Oval");
+  const car = director.cars()[0]!;
+
+  it("when the podium car's wheels are read, then the wheel of the shoved hub sits on that hub, off its rest seat, and the wheel of a hub that stayed sits on it", () => {
+    const shoved = car.deform.massLocal("hubRL");
+    const rest = WHEEL_POS[2]!;
+    assert.ok(Math.abs(shoved.x - rest[0]) > HUB_SHOVE_M / 2, `the control: the shove survived the net state (hub at x ${shoved.x}, rest ${rest[0]})`);
+    const wheel = car["wheels"][2]!;
+    assert.ok(Math.abs(wheel.position.x - shoved.x) <= SEAT_TOLERANCE_M, `the wheel is at x ${wheel.position.x}, its hub at ${shoved.x}`);
+    assert.ok(Math.abs(wheel.position.z - shoved.z) <= SEAT_TOLERANCE_M, `the wheel is at z ${wheel.position.z}, its hub at ${shoved.z}`);
+    const kept = car.deform.massLocal("hubFR");
+    assert.ok(Math.abs(car["wheels"][1]!.position.x - kept.x) <= SEAT_TOLERANCE_M, "the front right wheel is on its hub");
   });
 });

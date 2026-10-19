@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { BLOCK_DEPTH, BLOCK_WIDTH, PODIUM_BLOCKS, type PodiumPlace } from "../match/podium.ts";
 import { canvasTexture } from "./lab-art.ts";
+import { BANNER_FRAME_PX, BANNER_PX, bannerLayout, DECAL_PX, decalLayout } from "./podium-layout.ts";
 
 /** The floating platform's top radius (m): the three blocks and the aprons in front of them stand on it with room to spare. */
 const PLATFORM_RADIUS = 11.5;
@@ -22,10 +23,11 @@ const PLATE_WIDTH = 3.6;
 const PLATE_HEIGHT = 0.7;
 const PLATE_AHEAD = 2.7;
 const PLATE_LEAN = 0.8;
-/** Canvas sizes (px): a name plate, the banner, a face decal (a cup either side of the numeral, twice as wide as tall). */
+/** Canvas size (px) of a name plate. */
 const PLATE_PX = { w: 1024, h: 240 };
-const BANNER_PX = { w: 1536, h: 580 };
-const DECAL_PX = { w: 512, h: 256 };
+/** The banner's row of stars: how many, and the gap between them (share of the banner's width). */
+const BANNER_STARS = 5;
+const BANNER_STAR_GAP = 0.085;
 /** A face decal fills this much of its block's height. */
 const DECAL_SHARE = 0.78;
 /** The banner and the plates glow a little of their own colour, so they read at night and in the sun's shadow. */
@@ -72,12 +74,12 @@ function drawCup(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: numbe
 
 /** A block's face decal: a cup either side of the place's numeral, in the place's metal. */
 function drawDecal(ctx: CanvasRenderingContext2D, place: number): void {
-  const paint = DECAL_INK;
+  const { cupSize, cupY, leftX, rightX, numeralPx } = decalLayout();
   ctx.clearRect(0, 0, DECAL_PX.w, DECAL_PX.h);
-  drawCup(ctx, DECAL_PX.w * 0.14, DECAL_PX.h * 0.5, DECAL_PX.h * 0.7, paint);
-  drawCup(ctx, DECAL_PX.w * 0.86, DECAL_PX.h * 0.5, DECAL_PX.h * 0.7, paint);
-  ctx.fillStyle = paint;
-  ctx.font = `bold ${Math.round(DECAL_PX.h * 0.8)}px sans-serif`;
+  drawCup(ctx, leftX, cupY, cupSize, DECAL_INK);
+  drawCup(ctx, rightX, cupY, cupSize, DECAL_INK);
+  ctx.fillStyle = DECAL_INK;
+  ctx.font = `bold ${numeralPx}px sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(String(place), DECAL_PX.w / 2, DECAL_PX.h * 0.54);
@@ -99,8 +101,9 @@ function drawPlate(ctx: CanvasRenderingContext2D, place: number, name: string): 
   ctx.fillText(name, PLATE_PX.w / 2, PLATE_PX.h * 0.54, PLATE_PX.w - 90);
 }
 
-/** The banner: a deep blue field with a gold border and a row of stars, the finish named across it. */
+/** The banner: a deep blue field with a gold border, a trophy at each end, `title` small above a row of stars (never the word podium: a podium just is one). */
 function drawBanner(ctx: CanvasRenderingContext2D, title: string): void {
+  const { cupSize, cupY, leftX, rightX } = bannerLayout();
   const g = ctx.createLinearGradient(0, 0, 0, BANNER_PX.h);
   g.addColorStop(0, "#22336b");
   g.addColorStop(1, "#0f1a3d");
@@ -110,16 +113,16 @@ function drawBanner(ctx: CanvasRenderingContext2D, title: string): void {
   ctx.lineWidth = 14;
   ctx.strokeRect(24, 24, BANNER_PX.w - 48, BANNER_PX.h - 48);
   ctx.lineWidth = 4;
-  ctx.strokeRect(52, 52, BANNER_PX.w - 104, BANNER_PX.h - 104);
-  drawCup(ctx, BANNER_PX.w * 0.11, BANNER_PX.h * 0.5, BANNER_PX.h * 0.42, GOLD);
-  drawCup(ctx, BANNER_PX.w * 0.89, BANNER_PX.h * 0.5, BANNER_PX.h * 0.42, GOLD);
+  ctx.strokeRect(BANNER_FRAME_PX - 4, BANNER_FRAME_PX - 4, BANNER_PX.w - 2 * (BANNER_FRAME_PX - 4), BANNER_PX.h - 2 * (BANNER_FRAME_PX - 4));
+  drawCup(ctx, leftX, cupY, cupSize, GOLD);
+  drawCup(ctx, rightX, cupY, cupSize, GOLD);
   ctx.fillStyle = GOLD;
-  ctx.font = `bold ${Math.round(BANNER_PX.h * 0.34)}px sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(title, BANNER_PX.w / 2, BANNER_PX.h * 0.5, BANNER_PX.w * 0.5);
-  ctx.font = `bold ${Math.round(BANNER_PX.h * 0.12)}px sans-serif`;
-  for (let k = 0; k < 9; k++) ctx.fillText("★", BANNER_PX.w * (0.3 + 0.05 * k), BANNER_PX.h * 0.82);
+  ctx.font = `bold ${Math.round(BANNER_PX.h * 0.11)}px sans-serif`;
+  ctx.fillText(title.toUpperCase(), BANNER_PX.w / 2, BANNER_PX.h * 0.22, BANNER_PX.w * 0.45);
+  ctx.font = `bold ${Math.round(BANNER_PX.h * 0.3)}px sans-serif`;
+  for (let k = 0; k < BANNER_STARS; k++) ctx.fillText("\u2605", BANNER_PX.w * (0.5 + BANNER_STAR_GAP * (k - (BANNER_STARS - 1) / 2)), BANNER_PX.h * 0.52);
 }
 
 /** The bunting: `FLAGS_PER_STRAND` hanging triangles along the sagging line from (`x0`, `y0`) to (`x1`, `y0`), at depth `z`, flags coloured in turn. */

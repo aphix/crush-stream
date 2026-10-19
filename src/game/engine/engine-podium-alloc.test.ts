@@ -34,6 +34,7 @@ describe("given the podium on screen", () => {
         { id: 2, name: "Cy", place: 3 },
       ],
       "race",
+      "Test Oval",
     );
     const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 2000);
     const frame = (f: number): void => {

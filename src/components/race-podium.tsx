@@ -23,7 +23,7 @@ export function PodiumView({ podium, onCommand }: { podium: PodiumHud; onCommand
   return (
     <div ref={ref} className="pointer-events-none absolute inset-0 z-30" role="region" aria-label={campaign ? "Championship podium" : "Race podium"}>
       <p className="hud-ink absolute inset-x-0 hud-top px-4 text-center font-display text-sm font-semibold uppercase tracking-[0.16em] text-white phone-landscape:hidden">
-        {campaign ? "Champion" : "Podium"} · <span className="text-signal-amber">{podium.names[0]}</span>
+        {campaign ? "Champion" : "Winner"} · <span className="text-signal-amber">{podium.names[0]}</span>
       </p>
       <div className="absolute inset-x-0 hud-bottom flex flex-wrap items-center justify-center gap-2 px-4">
         {podium.reel > 0 ? (
