@@ -194,7 +194,8 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
   // steer toward the car (against `away`) is straightened out as the braking gets harder.
   const u = STEER_CAP * clamp(2 * (1 - soonest / HORIZON), 0, 1) * (steerable ? 1 : offset) * (1 - need);
   const held = tune[GUARD_DT_IDX]! > 0 ? tune[GUARD_PUSH_IDX]! : 0;
-  const away = held !== 0 && Math.abs(lateral) < SIDE_BAND ? Math.sign(held) : lateral >= 0 ? -1 : 1;
+  // A braking guard takes the side away from the contact: a held side would steer toward a car crossing the centre line.
+  const away = held !== 0 && need === 0 && Math.abs(lateral) < SIDE_BAND ? Math.sign(held) : lateral >= 0 ? -1 : 1;
   const toward = out.steer * away < 0;
   const target = away * u;
   const push = tune[GUARD_DT_IDX]! > 0 ? holdPush(tune, target) : target;

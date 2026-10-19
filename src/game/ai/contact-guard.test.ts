@@ -138,4 +138,11 @@ describe("given the contact guard called every step for one car (its held push a
     assert.equal(across, 0, "steps the wheel was pushed toward the car it steers from");
     assert.ok(out.steer < -0.03, `after 0.5 s: steer ${out.steer.toFixed(3)}`);
   });
+
+  it("when it has steered clear of a stopped car 0.3 m left of centre and then brakes for a car 0.3 m right of centre 20 m ahead at 15 m/s, then the push turns away from the one it brakes for instead of keeping its side toward it", () => {
+    const tune = tuned();
+    run(tune, [car(1, 0.3, 47, 0)], 0.3);
+    const braked = run(tune, [car(1, -0.3, 20, 15)], 0.3);
+    assert.ok(braked.brake > 0.5 && braked.steer > 0, `braking: brake ${braked.brake.toFixed(2)}, steer ${braked.steer.toFixed(4)}`);
+  });
 });
