@@ -23,6 +23,8 @@ import { sweepSeeds } from "./engine-replay.test-util.ts";
  *   block carries the box): `part-state.test.ts`.
  * - seed 18 (a car outside the clip knocked a clip car's torn arch with its top, which records no touch: the clip keeps a car whose top moved
  *   one of its cars' parts, `partMet`): `engine-record-loose.test.ts` "the car the trunk lid slid off".
+ * - seed 18 (a wheel popped in the replay left at the turn a restore zeroed, not its drawn turn: the flight block carries `wheelSpin`,
+ *   `wheelRate`): `flight-block.test.ts` "pops its front-left wheel".
  * Seeds 1 to 8, each its own race (the field piles up in different places: clips that open on wrecks already in motion,
  * wall hits, pile-ups of 3 to 17 cars). `SEEDS=1,2,... node --experimental-strip-types --test src/game/engine/engine-replay.ai-long-run.ts` runs any others.
  *

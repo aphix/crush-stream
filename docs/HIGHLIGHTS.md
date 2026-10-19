@@ -30,7 +30,7 @@ plays one clip alone with no HUD; **Save** keeps it in this browser.
 into a typed-array ring of `RING` (5120) steps, at least 17 s at a race's
 240–300 steps/s. Every `KEY_EVERY` (1 s) it encodes a keyframe: the netplay snapshot of every car (`writeSnapshot`,
 with each wreck's deform and parts), the course's knocked props (a bit each), then per car its flight block
-(`DeformableCar.flight`: `FLIGHT` (95) doubles, the whole spin, the takeoff spin, pitch, yaw, roll, velocity and position,
+(`DeformableCar.flight`: `FLIGHT` (103) doubles, the whole spin, the takeoff spin, pitch, yaw, roll, velocity and position,
 the squeeze clocks, the drift state, a wreck's rest timer and sleep spot (`restS`: at `WRECK_REST_S` the restored wreck sleeps again, stirred about the spot it fell asleep at, `sleepX`, `sleepZ`), the handbrake and boost ramps (`drive.ebrakeK`, `drive.boostK`), the weight borne on the car by riders stepped after it (`CarSurfaces.borneState`) and what its
 wheels touch (`DeformableCar.contact`); a wreck on its masses touches what its hubs' last slice left, read again, `readContact`), the course's memory of it (`MEMORY` doubles: where
 the wall contact last stood, how far past the line, the road segment the projection hint is on) and, for a wreck, its
@@ -158,13 +158,15 @@ crash it recorded. What it takes, each found by the replay straying from the liv
   had left swinging came back at rest, a panel's hinge value rounded, the door-motion sample re-read. A door slows the next
   striker by what it holds (`partContactPair`), so two wrecks one second after a pile-up hit differently (1e-11 m at the
   first contact of a four-car pile-up, 11 m two seconds later). `CarParts.partState` carries them.
-- **The car's pose, whole** (8). The flight block (`FLIGHT` 95 doubles) holds pitch, yaw, roll, velocity and position exactly
+- **The car's pose, whole** (8). The flight block (`FLIGHT` 103 doubles) holds pitch, yaw, roll, velocity and position exactly
   (the wire rounds them to 1e-4 rad, 1 cm/s and a float32), the squeeze rule's clocks (`endAgo`, `endReach`, `endSqueeze`), the
   drift state, a wreck's rest timer (`restS`; asleep ⇔ `restS >= WRECK_REST_S`, written after every wake in a restore, so a wreck that lay asleep or resting live is asleep or resting on the same second in the replay, not woken to run rigid steps the live car skipped) and where it fell asleep (`sleepX`, `sleepZ`: a steer turns a sleeping wreck about its masses' centre, so its body is not that spot, and `stirNear` asks about the spot: seed 1's sleeper restored at its body woke a step early), the seconds the engine stays cut after a side hit (`stalledS`: a clip that starts on a stalled car replays it stalled), the
   weight borne on it (`CarSurfaces.borneState`: a rider that stepped after it in the last slice left its weight to this step's first
   contacts) and each wheel's contact as the last rigid slice left it (`wheelHit`, `wheelsDown`, `airborne`, `hardTouch`, `yielding`:
   that slice's lift moved them, so a fresh read of the pose (`readContact`) is not them, and the drive grips with them: a car on another's
   roof read one wheel less and drove 0.016 m/s off in its first step, seed 9's fifth clip 62 m by its end). A wreck on its masses reads its hubs' contact again.
+  It holds each drawn wheel's turn and rate (`wheelSpin`, `wheelRate`): a popped wheel leaves at its drawn turn (`dropWheel`), and a restore that zeroed them
+  popped seed 18's car 0's wheel turned otherwise (`flight-block.test.ts` "pops its front-left wheel").
   The wreck's `squash` and `buckle` are stored as doubles in the clip header.
 - **The solver state as doubles** (9). `simState` writes each scalar, and every mass, beam, sensor and cluster number, as a
   double: a restored wreck is bit for bit the live one. It includes the hit vectors (`impactLocal`, `impactInward`), the body

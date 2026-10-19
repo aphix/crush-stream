@@ -5,6 +5,7 @@ import type { DeformableCar } from "./car.ts";
 import { FLIGHT } from "./car-flight.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
+import { assertSameNumbers } from "./test-support.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 
 /**
@@ -133,5 +134,43 @@ describe("given a wreck at rest and a twin rebuilt from its flight block", () =>
     const twin = twinFromFlightBlock(car);
     assert.ok(!twin.asleep, "the twin sleeps early");
     assert.equal(twin.restS, car.restS);
+  });
+});
+
+/** How high (m) the driven car is lifted off the road: it flies all of `FLY_SLICES` and `AIR_SLICES`. */
+const LIFT_M = 3;
+/** Slices it flies before its block is taken: a car on its wheels re-reads their rate off its speed in its next slice, a flying one keeps it (`spinWheels`). */
+const FLY_SLICES = 5;
+/** Slices both fly after, the drawn wheels' rate dying in the air, before a wheel pops. */
+const AIR_SLICES = 30;
+
+describe("given a car whose drawn wheels a drive turned, flying, and a twin rebuilt from its flight block", () => {
+  it("when both fly on and each pops its front-left wheel, then the twin's wheel leaves where and at the turn the car's does, not at a turn the restore zeroed", () => {
+    const car = makeCar("sedan");
+    car.spawnFacing(3, -5, HEADINGS[1]!, SPAWN_SPEED);
+    const live = newWorld([car], null);
+    for (let slice = 0; slice < WARM_SLICES; slice++) {
+      applyDrive(car, PEDALS, SLICE_S);
+      stepWorld(live, SLICE_S);
+    }
+    car.group.position.y += LIFT_M;
+    for (let slice = 0; slice < FLY_SLICES; slice++) {
+      applyDrive(car, IDLE, SLICE_S);
+      stepWorld(live, SLICE_S);
+    }
+    assert.ok(car.airborne, "the car flies when its block is taken");
+    const twin = twinFromFlightBlock(car);
+    const rebuilt = newWorld([twin], null);
+    for (let slice = 0; slice < AIR_SLICES; slice++) {
+      applyDrive(car, IDLE, SLICE_S);
+      stepWorld(live, SLICE_S);
+      applyDrive(twin, IDLE, SLICE_S);
+      stepWorld(rebuilt, SLICE_S);
+    }
+    assert.ok(car.airborne && car["wheelSpin"][0] !== 0, "the car flies with its wheels turned");
+    car["dropWheel"](0, "hubFL");
+    twin["dropWheel"](0, "hubFL");
+    const [carWheel, twinWheel] = [car, twin].map((c) => [...c["looseWheels"][0]!.object.position.toArray(), ...c["looseWheels"][0]!.object.quaternion.toArray()]);
+    assertSameNumbers(twinWheel!, carWheel!, "the popped wheel's position and turn");
   });
 });

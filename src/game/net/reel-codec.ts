@@ -247,9 +247,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * a shape-rest rebase no longer resets the drawn cluster maps. A clip of 128 or before no longer reads.
  * 130: a keyframe's loose block carries each torn part's box (middle and half extents), so a restored part flies as the box it tore as, not its shell drawn on the keyframe's
  * skin. A clip of 129 or before no longer reads.
+ * 131: a keyframe's flight block carries each drawn wheel's turn and rate (`wheelSpin`, `wheelRate`), so a wheel popped in a replay leaves at the turn the live one did. A clip of
+ * 130 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 130;
+const REPLAY_VERSION = 131;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

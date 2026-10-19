@@ -311,8 +311,9 @@ export abstract class CarCore {
   protected world: THREE.Scene;
   protected onGlass: GlassBurst | null;
   protected bodyMat: THREE.MeshPhysicalMaterial;
+  /** Each drawn wheel's turn about its axle (rad): a popped wheel leaves at it (`dropWheel`), so the flight block carries it. */
   protected readonly wheelSpin = new Float64Array(4);
-  /** Each drawn wheel's rate about its axle (rad/s, forward positive): drawn only, the sim never reads it. */
+  /** Each drawn wheel's rate about its axle (rad/s, forward positive): what turns `wheelSpin`. */
   readonly wheelRate = new Float64Array(4);
   /** Throttle (−1..1) of a driven body in the air, which winds its wheels up (`applyDrive` writes it; drive state idles there). */
   airThrottle = -0;
@@ -727,7 +728,7 @@ export abstract class CarCore {
   }
 
   /**
-   * Drawn only: the sim never reads it. Rolling, each tyre turns with its contact point's travel along the heading over the drawn radius
+   * Drawn, and the turn a popped wheel leaves at (`dropWheel`). Rolling, each tyre turns with its contact point's travel along the heading over the drawn radius
    * (`TYRE_R` × wheel scale): body speed less yaw rate × sideways offset, so inner wheels turn slower; a locked wheel (handbrake on the
    * rear pair, hard-brake `lock`) turns less. In the air the wheels keep their rate and lose it to bearing drag, throttle winding a driven body's up.
    */
