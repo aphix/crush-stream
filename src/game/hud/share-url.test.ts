@@ -47,6 +47,10 @@ describe("given a share state with every kind of field set", () => {
       fx: "low",
       fxd: 1.1,
       cel: 0.65,
+      psky: 0.35,
+      dots: 0.5,
+      hatch: 0.4,
+      rim: 0.6,
       squash: KNOB_RANGES.squash.min,
       buckle: 0.9,
       loop: false,
@@ -222,6 +226,28 @@ describe("given the cel (cartoon shading) strength, which is Auto until a manual
     assert.equal(decodeShare("cel=abc").cel, null);
   });
 });
+
+const LOOK_KEYS = [
+  { it: "the procedural sky's cloud cover", key: "psky", range: KNOB_RANGES.psky },
+  { it: "the halftone dots' strength", key: "dots", range: KNOB_RANGES.dots },
+  { it: "the pencil hatching's strength", key: "hatch", range: KNOB_RANGES.hatch },
+  { it: "the people's rim light strength", key: "rim", range: KNOB_RANGES.rim },
+] as const;
+
+for (const c of LOOK_KEYS) {
+  describe(`given ${c.it} (${c.key}), which is off until a strength is set`, () => {
+    it("when it is left off, set, or decoded from an out-of-range or unreadable value, then off is never written, a strength is written after the cel key, 0 is a real value, and out-of-range values clamp", () => {
+      assert.equal(DEFAULTS[c.key], null);
+      assert.equal(encodeShare({ ...DEFAULTS, [c.key]: null }), "");
+      assert.equal(encodeShare({ ...DEFAULTS, [c.key]: 0.5 }), `${c.key}=0.5`);
+      assert.equal(encodeShare({ ...DEFAULTS, cel: 0.53, [c.key]: 0.5 }), `cel=0.53&${c.key}=0.5`);
+      assert.equal(decodeShare(`${c.key}=0`)[c.key], 0);
+      assert.equal(decodeShare(`${c.key}=7`)[c.key], c.range.max);
+      assert.equal(decodeShare(`${c.key}=-1`)[c.key], c.range.min);
+      assert.equal(decodeShare(`${c.key}=abc`)[c.key], null);
+    });
+  });
+}
 
 describe("given a random seed in a share link", () => {
   it("when it is written and read, then it is written in hex, read in either case, holds 32 bits and no more", () => {

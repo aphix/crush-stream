@@ -52,6 +52,10 @@ export abstract class EngineShare extends EngineReel {
       fx: this.autoFx.auto ? null : this.cine.tier,
       fxd: this.fxDensity,
       cel: this.celLook,
+      psky: this.proceduralSky,
+      dots: this.halftone,
+      hatch: this.hatching,
+      rim: this.rimLight,
       squash: this.squash,
       buckle: this.buckle,
       loop: this.looping,
@@ -140,6 +144,10 @@ export abstract class EngineShare extends EngineReel {
       if (differs("rumble")) this.setRumble(t.rumble);
       if (differs("fxd")) this.setFxDensity(t.fxd);
       if (differs("cel")) this.setCelLook(t.cel);
+      if (differs("psky")) this.setProceduralSky(t.psky);
+      if (differs("dots")) this.setHalftone(t.dots);
+      if (differs("hatch")) this.setHatching(t.hatch);
+      if (differs("rim")) this.setRimLight(t.rim);
       if (differs("squash")) this.setSquash(t.squash);
       if (differs("buckle")) this.setBuckle(t.buckle);
       for (const k of KNOBS) if (differs(k.id)) this.setKnob(k.id, t[k.id]);

@@ -14,6 +14,7 @@ export interface SweepEngine extends FrameEngine {
   readonly pace: { readonly steps: number; pin: boolean | null };
   setFxTier(tier: FxTier): void;
   setSky(mode: SkyMode): void;
+  setProceduralSky(cover: number | null): void;
   setKnob(id: KnobId, value: number): void;
 }
 

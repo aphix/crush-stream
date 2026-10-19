@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { HudProps } from "@/components/hud";
 import { ControlsSection } from "@/components/controls-section";
+import { LookRows } from "@/components/hud-look-rows";
 import { Sheet } from "@/components/sheet";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { captureSubmitShown } from "@/game/hud/submit-rules";
@@ -286,7 +287,8 @@ function PlaybackSection({ state, engine }: HudProps) {
           Auto
         </Button>
       </div>
-      {state.fxTier === "off" || state.fxTier === "minimal" ? <p className="hud-label">Cel look needs FX low, high or ultra (a race runs minimal on Auto)</p> : null}
+      {state.fxTier === "off" || state.fxTier === "minimal" ? <p className="hud-label">Cel, dots and hatch need FX low, high or ultra (a race runs minimal on Auto)</p> : null}
+      <LookRows state={state} engine={engine} />
       <label className="flex items-center gap-2">
         <span className="hud-label relative w-12 shrink-0">
           Time

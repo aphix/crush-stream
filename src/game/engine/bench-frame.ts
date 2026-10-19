@@ -292,10 +292,12 @@ export async function waitFor(engine: FrameEngine, parts: BenchParts, t: Tap, be
 }
 
 /**
- * The Sky setting put in force explicitly (`pin`: `full` or `off`, never `auto`: an auto sky follows the FX tier, which the engine's own policy changes mid-run), then frames until the dome draws it (`BENCH.skyWaitS` at
- * most): a strip's decode is the page's first ask, not the arm's cost. True when it is drawn.
+ * The Sky setting put in force explicitly (`pin`: `full` or `off`, never `auto`: an auto sky follows the FX tier, which the engine's own policy changes mid-run) with the player's procedural sky down
+ * (it draws in place of the strip, so a pin of `full` would never be drawn), then frames until the dome draws it (`BENCH.skyWaitS` at most): a strip's decode is the page's first ask, not the arm's cost.
+ * True when it is drawn.
  */
-export async function pinSky(engine: FrameEngine & { setSky(mode: SkyMode): void }, parts: BenchParts, t: Tap, beat: Beat, pin: SkyPin): Promise<boolean> {
+export async function pinSky(engine: FrameEngine & { setSky(mode: SkyMode): void; setProceduralSky(cover: number | null): void }, parts: BenchParts, t: Tap, beat: Beat, pin: SkyPin): Promise<boolean> {
+  engine.setProceduralSky(null);
   engine.setSky(pin);
   return waitFor(engine, parts, t, beat, BENCH.skyWaitS, () => parts.sky.drawn === (pin === "off" ? SKY_DRAWN.off : SKY_DRAWN.full));
 }

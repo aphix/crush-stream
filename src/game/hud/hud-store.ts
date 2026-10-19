@@ -122,6 +122,14 @@ export type CrashHudState = {
    * at the post tiers only (low / high).
    */
   celLook: number | null;
+  /** Procedural sky's cloud cover (0-1); null = the time of day's picture strip. */
+  proceduralSky: number | null;
+  /** Halftone dots over the picture (0-1 strength); null = off. Post tiers only (low / high). */
+  halftone: number | null;
+  /** Pencil cross-hatching over the picture (0-1 strength); null = off. Post tiers only (low / high). */
+  hatching: number | null;
+  /** Rim light on people (0-1 strength); null = off. */
+  rimLight: number | null;
   /** Night lighting (H) and wet asphalt (X). */
   night: boolean;
   wet: boolean;
@@ -218,6 +226,10 @@ export const KNOB_RANGES = {
   speed: { min: 0, max: 48 },
   fxDensity: { min: 0, max: 1.2 },
   cel: { min: 0, max: 1 },
+  psky: { min: 0, max: 1 },
+  dots: { min: 0, max: 1 },
+  hatch: { min: 0, max: 1 },
+  rim: { min: 0, max: 1 },
   timeScale: { min: 0.02, max: 2 },
   musicVolume: { min: 0, max: MUSIC_MAX_GAIN },
   engineVolume: { min: 0, max: 1 },
@@ -255,6 +267,10 @@ export const INITIAL_HUD: CrashHudState = {
   fxAuto: true,
   fxLoading: false,
   celLook: null,
+  proceduralSky: null,
+  halftone: null,
+  hatching: null,
+  rimLight: null,
   night: false,
   wet: false,
   sky: "auto",

@@ -106,6 +106,10 @@ const BASE_FIELDS = {
   fxd: num(R.fxDensity.min, R.fxDensity.max, D.fxDensity),
   // null = Auto (the scene-switch pulse alone); a number holds the cel look on at that strength.
   cel: orNull(num(R.cel.min, R.cel.max, 0)),
+  psky: orNull(num(R.psky.min, R.psky.max, 0)),
+  dots: orNull(num(R.dots.min, R.dots.max, 0)),
+  hatch: orNull(num(R.hatch.min, R.hatch.max, 0)),
+  rim: orNull(num(R.rim.min, R.rim.max, 0)),
   squash: num(R.squash.min, R.squash.max, D.squash),
   buckle: num(R.buckle.min, R.buckle.max, D.buckle),
   loop: flag(D.looping),

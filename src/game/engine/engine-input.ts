@@ -10,6 +10,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { cleanName, DRIVER_CARS, type DriverCar, type SubmitContext } from "../match/types.ts";
 import { driverCarApplies } from "../match/driver-pick.ts";
 import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
+import { RIM_LIGHT } from "../present/rim-light.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
 import { KNOBS, type KnobId } from "../hud/knobs.ts";
 import { loadUltra as fetchUltra } from "../present/ultra/load.ts";
@@ -181,6 +182,34 @@ export abstract class EngineInput extends EngineRigs {
   /** The HUD's cel look: a strength (clamped) holds it on under the scene-switch pulse, null is Auto (the pulse alone). */
   setCelLook(value: number | null): void {
     this.celLook = value === null || !Number.isFinite(value) ? null : THREE.MathUtils.clamp(value, KNOB_RANGES.cel.min, KNOB_RANGES.cel.max);
+    this.emitHud();
+  }
+
+  /** The HUD's procedural sky: a cloud cover (clamped) draws it in place of the picture, null is the picture. */
+  setProceduralSky(value: number | null): void {
+    this.proceduralSky = value === null || !Number.isFinite(value) ? null : THREE.MathUtils.clamp(value, KNOB_RANGES.psky.min, KNOB_RANGES.psky.max);
+    this.stage.setProceduralSky(this.proceduralSky);
+    this.emitHud();
+  }
+
+  /** The HUD's halftone: a strength holds the dots on; 0 and null are off (the URL then carries nothing). */
+  setHalftone(value: number | null): void {
+    this.halftone = value === null || !Number.isFinite(value) || value <= 0 ? null : Math.min(value, KNOB_RANGES.dots.max);
+    this.cine.post.dots = this.halftone ?? 0;
+    this.emitHud();
+  }
+
+  /** The HUD's hatching: a strength holds the pencil lines on; 0 and null are off. */
+  setHatching(value: number | null): void {
+    this.hatching = value === null || !Number.isFinite(value) || value <= 0 ? null : Math.min(value, KNOB_RANGES.hatch.max);
+    this.cine.post.hatch = this.hatching ?? 0;
+    this.emitHud();
+  }
+
+  /** The HUD's rim light on people: a strength holds it on; 0 and null are off. */
+  setRimLight(value: number | null): void {
+    this.rimLight = value === null || !Number.isFinite(value) || value <= 0 ? null : Math.min(value, KNOB_RANGES.rim.max);
+    RIM_LIGHT.value = this.rimLight ?? 0;
     this.emitHud();
   }
 
@@ -457,6 +486,18 @@ export abstract class EngineInput extends EngineRigs {
         break;
       case "cel":
         this.setCelLook(D.celLook);
+        break;
+      case "psky":
+        this.setProceduralSky(D.proceduralSky);
+        break;
+      case "halftone":
+        this.setHalftone(D.halftone);
+        break;
+      case "hatch":
+        this.setHatching(D.hatching);
+        break;
+      case "rim":
+        this.setRimLight(D.rimLight);
         break;
       case "ts":
         this.setTimeScale(D.userTimeScale);

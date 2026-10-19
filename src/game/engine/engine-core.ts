@@ -285,6 +285,11 @@ export abstract class EngineCore {
   protected engineVolume = INITIAL_HUD.engineVolume;
   /** The HUD's cel look (`CrashHudState.celLook`): null = Auto. */
   protected celLook = INITIAL_HUD.celLook;
+  /** The HUD's procedural sky, halftone, hatching and rim light (`CrashHudState`): null = the picture strip / off. */
+  protected proceduralSky = INITIAL_HUD.proceduralSky;
+  protected halftone = INITIAL_HUD.halftone;
+  protected hatching = INITIAL_HUD.hatching;
+  protected rimLight = INITIAL_HUD.rimLight;
   protected speedMin = INITIAL_HUD.speedMin;
   protected speedMax = INITIAL_HUD.speedMax;
   protected balls: RampBall[] = [];

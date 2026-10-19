@@ -1,7 +1,9 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { SKY_DRAWN, type SkyDrawn } from "../present/sky-dome.ts";
-import { skyPinOf } from "./bench-measure.ts";
+import { skyPinOf, tap } from "./bench-measure.ts";
+import { newBeat, pinSky } from "./bench-frame.ts";
+import { restoreFrame } from "./bench-frame.test-util.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
 import { benchPlanEngine, disposeBenchEngine, runFrames } from "./engine-bench-headless.test-util.ts";
 import type { FxTier } from "../present/engine-post.ts";
@@ -69,5 +71,23 @@ describe("given the real engine on the city bench, whose sky is a picture the pa
   it("when the bench pins the Sky setting for the Lab (it has no sky), then no FX tier draws one", async () => {
     engine.setSky(skyPinOf(benchPlan("?bench=lab")!));
     for (const tier of TIERS) assert.equal(await drawnAt(tier), SKY_DRAWN.off, `at ${tier}`);
+  });
+
+  it("when the player has the procedural sky on and the bench pins the Sky setting, then each pin is drawn, the strip then nothing, instead of waiting out `BENCH.skyWaitS` on a sky the pin never asks for", async () => {
+    engine.setProceduralSky(0.4);
+    let stamp = 0;
+    Object.defineProperty(globalThis, "requestAnimationFrame", { value: (callback: (at: number) => void) => void setImmediate(() => callback((stamp += 1000 / 60))), configurable: true });
+    try {
+      const parts = engine.benchParts();
+      const t = tap(engine.pace, parts);
+      const beat = newBeat(parts, 0, null, 0);
+      assert.equal(await pinSky(engine, parts, t, beat, "full"), true, "the strip is pinned");
+      assert.equal(parts.sky.drawn, SKY_DRAWN.full);
+      assert.equal(await pinSky(engine, parts, t, beat, "off"), true, "off is pinned");
+      assert.equal(parts.sky.drawn, SKY_DRAWN.off);
+    } finally {
+      restoreFrame();
+      engine.setProceduralSky(null);
+    }
   });
 });

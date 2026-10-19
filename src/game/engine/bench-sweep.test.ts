@@ -28,6 +28,7 @@ function sweepRig(): { engine: SweepEngine; parts: BenchParts; beat: ReturnType<
       skyMode = mode;
       log.push({ what: `sky ${mode}`, frame: display.shown });
     },
+    setProceduralSky() {},
     setKnob: (id, value) => void log.push({ what: `${id} ${value}`, frame: display.shown }),
   };
   const parts = {

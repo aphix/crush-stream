@@ -340,8 +340,9 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   const batteryStart = await readBattery();
   await engine.ready;
   if (plan.ultra && !(await engine.loadUltra())) throw new Error("CRUSH BENCH: ultra=1, but the Ultra look did not load (see the console)");
-  // The player's Sky setting, put back when the run ends; the run itself pins the sky explicitly (`skyPinOf`).
+  // The player's Sky setting and procedural sky, put back when the run ends; the run itself pins the sky explicitly (`skyPinOf`, `pinSky`).
   const sky0 = skyModeOf(hud() as unknown as Record<string, unknown>);
+  const procedural0 = hud().proceduralSky;
   const pin = skyPinOf(plan);
   const fxTiers: FxTier[] = plan.ultra ? ["minimal", "low", "high", "ultra"] : ["minimal", "low", "high"];
   engine.resetAdaptiveQuality();
@@ -400,6 +401,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   const pageSeconds = page.seconds();
   engine.setFxAuto();
   engine.setSky(sky0);
+  engine.setProceduralSky(procedural0);
   if (plan.lab) engine.setTimeScale(null);
 
   const gpu = await t.finish();
