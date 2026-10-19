@@ -6,7 +6,7 @@ import { hypot2 } from "../kernel/physics-core.js";
 import { wrapPiClosed } from "../kernel/scalar.ts";
 import { LANDING, LandingWatch } from "./landing.ts";
 import { Spring, Spring3, type Axes } from "./spring.ts";
-import { EyeClear } from "./eye-clear.ts";
+import { EyeClear, STEEPEST } from "./eye-clear.ts";
 import type { Occluder, Sight } from "./spectate-cam.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 
@@ -298,7 +298,7 @@ export class DriveCam {
       const c = view === "far" ? CHASE.far : CHASE.third;
       const dist = c.dist + Math.min(Math.abs(along), 30) * CHASE.pullback;
       const r = hypot2(dist, c.height);
-      const elev = THREE.MathUtils.clamp(Math.atan2(c.height, dist) + this.lookPitch.x, 0.02, 1.25);
+      const elev = THREE.MathUtils.clamp(Math.atan2(c.height, dist) + this.lookPitch.x, 0.02, STEEPEST);
       const flat = r * Math.cos(elev);
       _v.set(p.x - sy * flat, p.y + r * Math.sin(elev), p.z - cy * flat);
       const lead = THREE.MathUtils.clamp(along * CHASE.aheadVel, -0.5, CHASE.aheadMax);

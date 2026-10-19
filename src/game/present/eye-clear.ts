@@ -1,7 +1,7 @@
 import type * as THREE from "three";
-import { hypot3 } from "../kernel/physics-core.js";
+import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { CAR_HALF } from "../vehicle/car-mesh.ts";
-import { CINE, gather, inside, solid, type Occluder, type Sight } from "./spectate-cam.ts";
+import { boxEntry, CINE, gather, inside, solid, type Occluder, type Sight } from "./spectate-cam.ts";
 import { Spring } from "./spring.ts";
 
 /** Sight-line samples are `STEP` m apart, each `CINE.pad` (half a step) clear of every solid, so a line never slips between two. */
@@ -24,18 +24,26 @@ const PULL_OUT_SPEED = 4;
 const PULL_LAG_MAX = 3;
 /** A pull-in this short (m) is none. */
 const PULL_NONE = 1e-3;
+/** The steepest (rad above level) a chase line looks down on its car: the drive rig's clamp, and as high as a lift over a car turns it. */
+export const STEEPEST = 1.25;
+/** Lifts tried evenly up to `STEEPEST` before the least clear one is bisected (to 1/2^`LIFT_BISECT` of a try, under 3 mm at the chase's 8 m), so a roof over the steepest (a tunnel's) still leaves a lower lift. */
+const LIFT_TRIES = 8;
+const LIFT_BISECT = 9;
 
 type Vec3 = { x: number; y: number; z: number };
 
 /**
- * Keeps a camera's line of sight to its subject clear of the scene's solids and of the cars' boxes: the eye is pulled in along
- * the line from the subject to just short of the first solid on it (at once as a solid closes on it, eased back out once the
- * way is clear), and when that leaves less than a car's length it swings round the subject, about its vertical axis, to the
- * nearest turn with room, eased so it never pops. The eye never ends inside a solid. The rig's own spring is untouched, and
- * where nothing is in the way the eye is exactly the rig's. No allocation.
+ * Keeps a camera's line of sight to its subject clear of the scene's solids and of the cars' boxes. A car on the line (its box,
+ * not just within `CINE.pad` of the line) lifts the eye over it: the line turns up about the subject to the least lift that
+ * clears (at once as the car closes, eased back down). Past that, and for every other solid, the eye is pulled in along the
+ * line to just short of the first solid on it (at once, eased back out), and when that leaves less than a car's length it
+ * swings round the subject, about its vertical axis, to the nearest turn with room, eased so it never pops. The eye never ends
+ * inside a solid. The rig's own spring is untouched, and where nothing is in the way the eye is exactly the rig's. No allocation.
  */
 export class EyeClear {
   private pull = 0;
+  /** The eased lift (rad) over the cars on the line. */
+  private lift = 0;
   private readonly swing = new Spring();
   private swingTo = 0;
   private cooldown = 0;
@@ -45,6 +53,10 @@ export class EyeClear {
   private sx = 0;
   private sy = 0;
   private sz = 0;
+  /** The rig's line out to the eye, and the line the eye stands on (the rig's, lifted: `aim`). */
+  private rx = 0;
+  private ry = 0;
+  private rz = 0;
   private dx = 0;
   private dy = 0;
   private dz = 0;
@@ -52,6 +64,7 @@ export class EyeClear {
 
   reset(): void {
     this.pull = 0;
+    this.lift = 0;
     this.swing.snap(0);
     this.swingTo = 0;
     this.cooldown = 0;
@@ -69,11 +82,16 @@ export class EyeClear {
     this.sx = subject.x;
     this.sy = subject.y;
     this.sz = subject.z;
-    this.dx = eye.x - subject.x;
-    this.dy = eye.y - subject.y;
-    this.dz = eye.z - subject.z;
+    this.rx = eye.x - subject.x;
+    this.ry = eye.y - subject.y;
+    this.rz = eye.z - subject.z;
     this.len = len;
     this.near = gather(s, this.sx - len, this.sz - len, this.sx + len, this.sz + len, CINE.pad);
+
+    const over = this.liftOver();
+    this.lift = over >= this.lift ? over : over + (this.lift - over) * Math.exp(-PULL_OMEGA * dt);
+    if (this.lift * len < PULL_NONE) this.lift = 0;
+    this.aim(this.lift);
 
     const need = Math.min(SWING_BELOW, len);
     const straight = this.reach(0);
@@ -95,7 +113,7 @@ export class EyeClear {
     this.pull = pulledIn >= this.pull ? pulledIn : Math.max(pulledIn, this.pull - Math.min(this.pull * (1 - Math.exp(-PULL_OMEGA * dt)), PULL_OUT_SPEED * dt));
     this.pull = Math.min(this.pull, pulledIn + PULL_LAG_MAX);
     if (this.pull < PULL_NONE) this.pull = 0;
-    if (this.pull === 0 && turn === 0) return;
+    if (this.pull === 0 && turn === 0 && this.lift === 0) return;
     const c = Math.cos(turn);
     const sn = Math.sin(turn);
     const k = (len - this.pull) / len;
@@ -125,22 +143,80 @@ export class EyeClear {
     this.cooldown = SEARCH_RETRY;
   }
 
-  /** How far (m, at most `len`) the line from the subject, turned `turn` rad about the vertical, runs clear of every solid. */
+  /**
+   * The least lift (rad, up to `STEEPEST`) that takes the rig's line over every car on it and clear of the solids too: 0 when
+   * no car is on it, a solid stops it nearer the subject than the first car (the walls' rule), or no lift clears it.
+   */
+  private liftOver(): number {
+    this.aim(0);
+    const len = this.len;
+    const ux = this.dx / len;
+    const uy = this.dy / len;
+    const uz = this.dz / len;
+    const car = this.carReach(ux, uy, uz);
+    if (car >= len || this.march(ux, uy, uz) < car) return 0;
+    const h = hypot2(this.rx, this.rz);
+    const room = STEEPEST - Math.atan2(this.ry, h);
+    if (h < PULL_NONE || room <= 0) return 0;
+    let lo = 0;
+    let hi = 0;
+    for (let k = 1; k <= LIFT_TRIES; k++) {
+      const at = (room * k) / LIFT_TRIES;
+      this.aim(at);
+      if (this.reach(0) >= len) {
+        hi = at;
+        break;
+      }
+      lo = at;
+    }
+    if (hi === 0) return 0;
+    for (let i = 0; i < LIFT_BISECT; i++) {
+      const mid = (lo + hi) / 2;
+      this.aim(mid);
+      if (this.reach(0) >= len) hi = mid;
+      else lo = mid;
+    }
+    return hi;
+  }
+
+  /** Sets the eye's line (`dx`, `dy`, `dz`) to the rig's turned up `lift` rad about the subject, toward the vertical. */
+  private aim(lift: number): void {
+    if (lift === 0) {
+      this.dx = this.rx;
+      this.dy = this.ry;
+      this.dz = this.rz;
+      return;
+    }
+    const h = hypot2(this.rx, this.rz);
+    const up = Math.atan2(this.ry, h) + lift;
+    const k = (this.len * Math.cos(up)) / h;
+    this.dx = this.rx * k;
+    this.dy = this.len * Math.sin(up);
+    this.dz = this.rz * k;
+  }
+
+  /** How far (m, at most `len`) the line from the subject, turned `turn` rad about the vertical, runs clear of every solid and car. */
   private reach(turn: number): number {
     const c = Math.cos(turn);
     const sn = Math.sin(turn);
     const ux = (this.dx * c + this.dz * sn) / this.len;
     const uy = this.dy / this.len;
     const uz = (this.dz * c - this.dx * sn) / this.len;
+    return Math.min(this.march(ux, uy, uz), this.carReach(ux, uy, uz));
+  }
+
+  /** How far (m, at most `len`) the line from the subject along the unit (`ux`, `uy`, `uz`) runs clear of the scene's solids. */
+  private march(ux: number, uy: number, uz: number): number {
+    const s = this.sight!;
     let lo = 0;
     let d = OWN;
     for (;;) {
       const at = Math.min(d, this.len);
-      if (this.blocked(this.sx + ux * at, this.sy + uy * at, this.sz + uz * at)) {
+      if (solid(s, this.sx + ux * at, this.sy + uy * at, this.sz + uz * at, CINE.pad, this.near)) {
         let hi = at;
         for (let i = 0; i < BISECT; i++) {
           const mid = (lo + hi) / 2;
-          if (this.blocked(this.sx + ux * mid, this.sy + uy * mid, this.sz + uz * mid)) hi = mid;
+          if (solid(s, this.sx + ux * mid, this.sy + uy * mid, this.sz + uz * mid, CINE.pad, this.near)) hi = mid;
           else lo = mid;
         }
         return lo;
@@ -151,10 +227,19 @@ export class EyeClear {
     }
   }
 
-  private blocked(x: number, y: number, z: number): boolean {
-    if (solid(this.sight!, x, y, z, CINE.pad, this.near)) return true;
+  /**
+   * How far (m, at most `len`) the same line runs before a car: one whose box stands on it past the subject's own part, or within
+   * `CINE.pad` of the eye at its end, stops it `CINE.pad` short of the box. A box the line only passes within `CINE.pad` of hides nothing.
+   */
+  private carReach(ux: number, uy: number, uz: number): number {
+    const len = this.len;
+    let reach = len;
     const boxes = this.boxes;
-    for (let i = 0; i < boxes.length; i++) if (inside(boxes[i]!, x, y, z, CINE.pad)) return true;
-    return false;
+    for (let i = 0; i < boxes.length; i++) {
+      const o = boxes[i]!;
+      if (boxEntry(o, this.sx, this.sy, this.sz, ux, uy, uz, OWN, len, 0) === Infinity && !inside(o, this.sx + ux * len, this.sy + uy * len, this.sz + uz * len, CINE.pad)) continue;
+      reach = Math.min(reach, Math.max(0, boxEntry(o, this.sx, this.sy, this.sz, ux, uy, uz, 0, len, CINE.pad)));
+    }
+    return reach;
   }
 }

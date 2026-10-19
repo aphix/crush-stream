@@ -325,24 +325,26 @@ export function carsBlock(s: Sight, eye: Vec3, target: Vec3): boolean {
   const len = hypot3(dx, dy, dz);
   const end = len > CINE.stop ? (len - CINE.stop) / len : 0;
   for (const o of boxes) {
-    const ex = eye.x - o.x;
-    const ez = eye.z - o.z;
-    const lx = ex * o.cos - ez * o.sin;
-    const lz = ex * o.sin + ez * o.cos;
-    if (Math.abs(lx) < o.hx + CLEAR.pad && Math.abs(lz) < o.hz + CLEAR.pad && eye.y > o.y0 - CLEAR.pad && eye.y < o.y1 + CLEAR.pad) return true;
-    if (end === 0) continue;
-    // Slab test of the segment's first `end` share against the box, in the box's own frame: the share inside each axis's slab, narrowed in turn.
-    _slab[0] = 0;
-    _slab[1] = end;
-    slab(lx, dx * o.cos - dz * o.sin, o.hx);
-    slab(lz, dx * o.sin + dz * o.cos, o.hz);
-    slab(eye.y - (o.y0 + o.y1) / 2, dy, (o.y1 - o.y0) / 2);
-    if (_slab[0]! <= _slab[1]!) return true;
+    if (inside(o, eye.x, eye.y, eye.z, CLEAR.pad)) return true;
+    if (end !== 0 && boxEntry(o, eye.x, eye.y, eye.z, dx, dy, dz, 0, end, 0) !== Infinity) return true;
   }
   return false;
 }
 
 const _slab = new Float64Array(2);
+
+/** The first `t` in [`from`, `to`] at which (x, y, z) + t (vx, vy, vz) is within `pad` of box `o` (its circle flag ignored); Infinity when none is, or `o` is parked. */
+export function boxEntry(o: Occluder, x: number, y: number, z: number, vx: number, vy: number, vz: number, from: number, to: number, pad: number): number {
+  if (o.y0 === Infinity) return Infinity;
+  const ex = x - o.x;
+  const ez = z - o.z;
+  _slab[0] = from;
+  _slab[1] = to;
+  slab(ex * o.cos - ez * o.sin, vx * o.cos - vz * o.sin, o.hx + pad);
+  slab(ex * o.sin + ez * o.cos, vx * o.sin + vz * o.cos, o.hz + pad);
+  slab(y - (o.y0 + o.y1) / 2, vy, (o.y1 - o.y0) / 2 + pad);
+  return _slab[0]! <= _slab[1]! ? _slab[0]! : Infinity;
+}
 
 /** Narrows `_slab` (a share of a line, from, to) to where the coordinate `p + t v` lies within ±`half`. */
 function slab(p: number, v: number, half: number): void {
