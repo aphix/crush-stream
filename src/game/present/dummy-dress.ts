@@ -70,7 +70,7 @@ const OUTFITS: readonly Outfit[] = [
   },
   {
     flags: SUITED | DRESS_SHOES,
-    colours: { ...DRESS_SHOE, [ROLE.COLLAR]: 0xf4f4f1, [ROLE.TIE]: 0x772d1b },
+    colours: { ...DRESS_SHOE, [ROLE.COLLAR]: 0xf4f4f1, [ROLE.TIE]: 0x7a2d16 },
     cuts: [JACKET_SLEEVE_END, 0, TROUSERS_FROM, NO_CUT, ...CREW_NECK, kit(FABRIC.WOOL, FABRIC.WOOL, FABRIC.LEATHER, LAYER.SUIT)],
     hang: SUIT_HANG,
   },
@@ -94,11 +94,11 @@ const EARPIECE_DECALS: readonly Decal[] = [
 export const DRESS_DECALS: readonly (readonly Decal[])[] = [JEANS_DECALS, SUIT_DECALS, UNIFORM_DECALS, [...UNIFORM_DECALS, ...EARPIECE_DECALS]];
 
 /** The uniformed division: dark-navy shirt and trousers, short dark hair, no cap, no glasses (the reference's cop; sRGB tuned to read as it under the showcase's light). */
-export const COP_LOOK: DriverLook = { woman: false, shirt: 0x273850, pants: 0x172333, hair: 0x3a2c22, hat: null, mustache: false, outfit: OUTFIT.UNIFORM, face: FACE.COP };
+export const COP_LOOK: DriverLook = { woman: false, shirt: 0x2c3749, pants: 0x192333, hair: 0x473727, hat: null, mustache: false, outfit: OUTFIT.UNIFORM, face: FACE.COP };
 /** A plain-clothes agent: the cop's build and kit in black, with dark glasses and an earpiece. */
 export const GUARD_LOOK: DriverLook = { ...COP_LOOK, shirt: 0x16181d, pants: 0x16181d, shades: true };
 /** The VIP: portly, in a navy-blue suit with a brick-red tie, his golden-blond hair swept back. */
-export const VIP_LOOK: DriverLook = { woman: false, shirt: 0x212b39, pants: 0x1e2732, hair: 0xba8650, hat: null, mustache: false, portly: true, outfit: OUTFIT.SUIT, face: FACE.PRESIDENT };
+export const VIP_LOOK: DriverLook = { woman: false, shirt: 0x262a35, pants: 0x20262f, hair: 0xb5855f, hat: null, mustache: false, portly: true, outfit: OUTFIT.SUIT, face: FACE.PRESIDENT };
 /** His older aide: grey-haired, in a near-black charcoal suit and a dark tie. */
 export const ELDER_LOOK: DriverLook = { woman: false, shirt: 0x26272a, pants: 0x26272a, hair: 0xa9a8a3, hat: null, mustache: false, outfit: OUTFIT.SUIT, face: FACE.ELDER, tie: 0x1d2027 };
 

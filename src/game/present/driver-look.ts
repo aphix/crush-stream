@@ -29,7 +29,7 @@ export type DriverLook = {
 export const OUTFIT = { TEE: 0, LONG_SLEEVE: 1, TOP: 2, SUIT: 3, UNIFORM: 4 } as const;
 
 /** Every man's jeans: the reference's mid-blue denim (sRGB, tuned to read as it under the showcase's light). */
-export const JEANS = 0x333c4a;
+export const JEANS = 0x333840;
 
 /** Chance a civilian driver is a woman (owner: rare, 1 in 10). */
 export const WOMAN_RATE = 0.1;

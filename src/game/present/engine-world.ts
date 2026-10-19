@@ -182,8 +182,8 @@ const DAY: Day = {
   smoke: 1,
 };
 
-/** A course's own daylight (`environment.light`), or the Lab's workshop: sun, hemisphere and fill colours (hex), the sun's intensity (and the hemisphere's and fill's, else the day's), and the sky (and fog) colour when it is not the studio's. */
-type Daylight = { sun: string; sunIntensity: number; hemi: string; fill: string; hemiIntensity?: number; fillIntensity?: number; sky?: string };
+/** A course's own daylight (`environment.light`) or the Lab's: colours (hex), intensities (else the day's), the sun's offset `sunAt` (m, else the time of day's) and sky colour. */
+type Daylight = { sun: string; sunIntensity: number; hemi: string; fill: string; hemiIntensity?: number; fillIntensity?: number; sunAt?: readonly [number, number, number]; sky?: string };
 const hex = (c: string): number => parseInt(c.slice(1), 16);
 const NIGHT = {
   sky: 0x040509,
@@ -363,6 +363,12 @@ export class WorldStage {
    */
   look(light: Daylight | null, sky?: string): void {
     this.day = courseDay(light, sky);
+    if (light?.sunAt) this.sunOffset.fromArray(light.sunAt);
+    else sunOffset(this.time, this.sunOffset);
+    this.aimSun();
+    this.sun.position.copy(this.sunOffset);
+    this.sun.target.position.set(0, 0, 0);
+    this.sun.target.updateMatrixWorld();
     this.apply();
   }
 
@@ -391,9 +397,6 @@ export class WorldStage {
     this.night = time === null ? this.nightOutside : time === TIME_OF_DAY.night;
     sunOffset(time, this.sunOffset);
     this.aimSun();
-    const cam = this.sun.shadow.camera;
-    cam.far = this.sunOffset.length() + SHADOW_REACH;
-    cam.updateProjectionMatrix();
     this.sky.show(time, SUN_BEARING);
     this.apply();
   }
@@ -429,9 +432,13 @@ export class WorldStage {
     }
   }
 
+  /** The shadow camera's axes for `sunOffset`, reaching past it. */
   private aimSun(): void {
     this.sunRight.set(0, 1, 0).cross(this.sunOffset).normalize();
     this.sunUp.copy(this.sunOffset).cross(this.sunRight).normalize();
+    const cam = this.sun.shadow.camera;
+    cam.far = this.sunOffset.length() + SHADOW_REACH;
+    cam.updateProjectionMatrix();
   }
 
   private apply(): void {

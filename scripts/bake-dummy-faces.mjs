@@ -51,15 +51,21 @@ function delight(rgb, skin) {
   }
 }
 
-/** Each face: its crop's pupils (left and right in the picture) and the middle of its mouth, in source pixels, measured by eye. */
+/**
+ * Each face: its crop's pupils (left and right in the picture) and the middle of its mouth, in source pixels, measured by eye,
+ * and its gain (linear r, g, b) solved so it reads as the reference's face under the showcase's light.
+ */
 const FACES = [
-  { name: "MAN", file: "man.png", eyes: [[91.6, 42.6], [114.4, 42.6]], mouth: [102.4, 65.6] },
-  { name: "WOMAN", file: "woman.png", eyes: [[88, 44], [109.4, 44]], mouth: [98.4, 65.6] },
-  { name: "CAP_MAN", file: "cap-man.png", eyes: [[90.5, 49], [113.5, 49]], mouth: [102, 71] },
-  { name: "PRESIDENT", file: "president.png", eyes: [[111, 46], [137, 46]], mouth: [124, 69.6] },
-  { name: "ELDER", file: "elder.png", eyes: [[84.2, 34.7], [102.3, 34.7]], mouth: [93.2, 47.3] },
-  { name: "COP", file: "cop.png", eyes: [[116, 44], [141, 44]], mouth: [127, 69.6] },
+  { name: "MAN", file: "man.png", eyes: [[91.6, 42.6], [114.4, 42.6]], mouth: [102.4, 65.6], gain: [1, 1.145, 1.258] },
+  { name: "WOMAN", file: "woman.png", eyes: [[88, 44], [109.4, 44]], mouth: [98.4, 65.6], gain: [0.913, 0.944, 1.027] },
+  { name: "CAP_MAN", file: "cap-man.png", eyes: [[90.5, 49], [113.5, 49]], mouth: [102, 71], gain: [1.188, 1.296, 1.519] },
+  { name: "PRESIDENT", file: "president.png", eyes: [[111, 46], [137, 46]], mouth: [124, 69.6], gain: [0.666, 0.715, 0.701] },
+  { name: "ELDER", file: "elder.png", eyes: [[84.2, 34.7], [102.3, 34.7]], mouth: [93.2, 47.3], gain: [1, 1, 1] },
+  { name: "COP", file: "cop.png", eyes: [[116, 44], [141, 44]], mouth: [127, 69.6], gain: [0.99, 1, 1.139] },
 ];
+
+const linear = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const srgb = (l) => 255 * (l <= 0.0031308 ? 12.92 * l : 1.055 * l ** (1 / 2.4) - 0.055);
 
 const eyeV = EYES_AT / FACE_SPAN;
 const lipV = LIP_AT / FACE_SPAN;
@@ -72,6 +78,7 @@ function bake(face) {
   const y0 = (ly + ry) / 2 - (1 - eyeV) * height;
   const crop = `crop=${width.toFixed(2)}:${height.toFixed(2)}:${x0.toFixed(2)}:${y0.toFixed(2)},scale=${TEXELS}:${TEXELS}:flags=lanczos`;
   const rgba = execFileSync("ffmpeg", ["-v", "error", "-i", join(SOURCE, face.file), "-vf", crop, "-f", "rawvideo", "-pix_fmt", "rgba", "-"], { maxBuffer: 1 << 24 });
+  for (let p = 0; p < TEXELS * TEXELS; p++) for (let c = 0; c < 3; c++) rgba[p * 4 + c] = Math.min(255, Math.round(srgb(linear(rgba[p * 4 + c]) * face.gain[c])));
   const skin = [0, 0, 0];
   let count = 0;
   for (const [u, v] of CHEEKS) {

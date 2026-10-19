@@ -5,7 +5,7 @@ import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
 import { ROLE, ROW_TEXELS } from "../present/dummy-rig.ts";
-import { SHOWCASE_EYE } from "../present/showcase-art.ts";
+import { SHOWCASE_EYE, SHOWCASE_LIGHT } from "../present/showcase-art.ts";
 import { ELDER_LOOK } from "../present/dummy-dress.ts";
 import { OUTFIT, type DriverLook } from "../present/driver-look.ts";
 import { setGround } from "../world/ground.ts";
@@ -90,16 +90,27 @@ describe("given the real engine booted on #scene=showcase", () => {
     for (let slot = 0; slot < art().slots; slot++) assert.ok(standing(slot), `slot ${slot} stands`);
   });
 
-  it("when the set stands, then every figure faces the eye, as the reference's line-up faces its camera", () => {
+  it("when the set stands, then every figure faces the eye as the reference's line-up faces its camera, but the cop stands square to the line as the reference's does", () => {
     const rows: Float32Array = people()["rows"];
     const forward = new THREE.Vector3();
-    const toEye = new THREE.Vector3();
+    const want = new THREE.Vector3();
     for (let slot = 0; slot < art().slots; slot++) {
       forward.set(0, 0, 1).applyQuaternion(new THREE.Quaternion().fromArray(rows, slot * ROW_TEXELS * 4 + 4));
       const at = art().markOf(slot, new THREE.Vector3());
-      toEye.set(SHOWCASE_EYE.x - at.x, 0, SHOWCASE_EYE.z - at.z).normalize();
-      assert.ok(forward.angleTo(toEye) < 0.02, `slot ${slot} turned ${forward.angleTo(toEye).toFixed(3)} rad off the eye`);
+      if (art().figureOf(slot).name === "uniformed cop") want.set(0, 0, 1);
+      else want.set(SHOWCASE_EYE.x - at.x, 0, SHOWCASE_EYE.z - at.z).normalize();
+      assert.ok(forward.angleTo(want) < 0.02, `slot ${slot} (${art().figureOf(slot).name}) turned ${forward.angleTo(want).toFixed(3)} rad off`);
     }
+  });
+
+  it("when the set is lit, then its key shines from its own place (the eye's upper left), and a light without one puts the day's sun back where it always was", () => {
+    const sun = engine["stage"].sun;
+    const key = () => sun.position.clone().sub(sun.target.position);
+    assert.ok(key().distanceTo(new THREE.Vector3(...SHOWCASE_LIGHT.sunAt)) < 1e-9, `the key at ${key().toArray()}`);
+    engine["stage"].look(null);
+    const day = key();
+    engine["stage"].look(SHOWCASE_LIGHT);
+    assert.ok(day.distanceTo(new THREE.Vector3(-10, 22, 9)) < 1e-9, `the day's sun at ${day.toArray()}`);
   });
 
   it("when the camera opens on the set, then it is the free eye in front of the first row, and a press on a figure is the scene's, not the camera's", () => {
