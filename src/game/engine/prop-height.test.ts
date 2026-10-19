@@ -200,7 +200,7 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
   /**
    * The wreck of a sedan a 9 m/s head-on bullet hit along the prism's long axis, settled, then set along the prism with its middle
    * `along` m from the prism's middle and `inward` m nearer the arena's middle (clear of the ring wall), its lowest point `above` m
-   * over the prism's top, moving at `v`, and (with `pen`) its footprint exactly `pen` m over the prism's face.
+   * over the prism's top, moving at `v`, and (with `pen`) its hull exactly `pen` m inside the prism's face.
    */
   const place = (id: number, along: number, inward: number, above: number, v: [number, number, number], pen?: number) => {
     const prism = DERBY_BOXES[id]!;
@@ -230,13 +230,20 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
     }
     wreck.group.position.set(wreck.group.position.x + dx, wreck.group.position.y + dy, wreck.group.position.z + dz);
     if (pen !== undefined) {
-      // Moved along the unit until its footprint overlaps the prism's face by `pen` m (the footprint's middle is not the centroid, and the bullet turned the wreck a little off the prism's axis).
-      const plan = wreck.cage.fields.planBox;
-      const [cx, cz] = [(plan[0]! + plan[1]!) / 2, (plan[2]! + plan[3]!) / 2];
-      const mx = wreck.group.position.x + wreck.rightFlat.x * cx + wreck.fwdFlat.x * cz;
-      const mz = wreck.group.position.z + wreck.rightFlat.z * cx + wreck.fwdFlat.z * cz;
-      const support = ((plan[1]! - plan[0]!) / 2) * Math.abs(wreck.rightFlat.x * ix + wreck.rightFlat.z * iz) + ((plan[3]! - plan[2]!) / 2) * Math.abs(wreck.fwdFlat.x * ix + wreck.fwdFlat.z * iz);
-      const shift = support + prism.hx - pen - ((mx - prism.x) * ix + (mz - prism.z) * iz);
+      // Moved along the unit until its hull (the cage vertices over the face's span, as the push-out reads them) is `pen` m inside the face.
+      const { pos, panelOn } = wreck.cage.fields;
+      const { vertexCount, vertexGroup } = wreck.cage.style;
+      const p = wreck.group.position;
+      let deepest = Infinity;
+      for (let k = 0; k < vertexCount; k++) {
+        const g = vertexGroup[k]!;
+        if (g > 0 && panelOn[g - 1] === 0) continue;
+        const wx = p.x - prism.x + wreck.rightFlat.x * pos[k * 3]! + wreck.fwdFlat.x * pos[k * 3 + 2]!;
+        const wz = p.z - prism.z + wreck.rightFlat.z * pos[k * 3]! + wreck.fwdFlat.z * pos[k * 3 + 2]!;
+        if (Math.abs(wx * sx + wz * sz) > prism.hz) continue;
+        deepest = Math.min(deepest, wx * ix + wz * iz);
+      }
+      const shift = prism.hx - pen - deepest;
       for (const m of wreck.deform.masses) {
         m.world.x += ix * shift;
         m.world.z += iz * shift;
@@ -326,7 +333,7 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
       out += hit.towardMiddle;
       if (hit.shove < 1e-4 && settled < 0) settled = n;
     }
-    assert.ok(out > 0.05, `it was pushed out only ${(out * 1000).toFixed(0)} mm of its 0.3 m footprint overlap (the hull inside the face is cleared; the rest of the footprint stands clear of the hull)`);
+    assert.ok(out > 0.05, `it was pushed out only ${(out * 1000).toFixed(0)} mm of its 0.3 m hull overlap`);
     assert.ok(settled > 0 && settled <= implied + 3, `it stopped being pushed at slice ${settled}, the push-out speed implies ${implied}`);
   });
 });
