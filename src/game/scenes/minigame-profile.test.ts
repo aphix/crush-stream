@@ -415,7 +415,7 @@ describe("given the long jump's thrown driver, the best car type (the monster tr
 });
 
 describe("given each of the 7 car types released at full throttle from the long jump's hilltop into the jersey barrier, from 5 start phases (the pad's start moved 0 to 0.55 m, so each slice meets the barrier differently)", () => {
-  /** The barrier throws a driver only up to a speed: the lowest arrival speed (m/s) at which any class was not thrown, in a sweep of 20 start phases over speed caps 24 to 34 m/s on the pre-retune long jump (the truck, 31.4; nothing below failed, and the 5-phase sweep of caps 20 to 45 over all 7 classes agrees). A kernel property (`contact/`, `ejection.ts`), not changed here. */
+  /** The lowest arrival speed (m/s) at which any class was not thrown while a running car's barrier hit threw only once it packed the block, in a sweep of 20 start phases over speed caps 24 to 34 m/s on the pre-retune long jump (the truck, 31.4; nothing below failed): the shipped window keeps its margin under it, though the hit now throws by the speed it lost (`ejection.ts`). */
   const LOWEST_FAILING_ARRIVAL = 31.4;
   /** The slowest arrival speed (m/s) every class is thrown at, at every start phase: at 19.6 the monster is not thrown, at 20.57 it is (the sweep's other classes were thrown at 19.6 already). */
   const MINIMUM_EJECTING_ARRIVAL = 20.5;
@@ -457,10 +457,10 @@ describe("given each of the 7 car types released at full throttle from the long 
     }
   });
 
-  it("when the approach is the pre-retune one, then a class is not thrown at some phase and the fastest arrives over the ceiling: the rows can fail", (t) => {
+  it("when the approach is the pre-retune one, then every class is thrown once at every phase, its truck at 31.4 m/s too, but the fastest arrives over the ceiling", (t) => {
     const old = hitsOf(longJumpVariant(PRE_RETUNE), Infinity);
     t.diagnostic(`pre-retune approach:\n${hitTable(old)}`);
-    assert.ok(!allThrownOnce(old), "every class thrown once on the old approach");
+    assert.ok(allThrownOnce(old), "a class not thrown once on the old approach");
     assert.ok(fastest(old) > ARRIVAL_CEILING, `the old fastest arrival ${fastest(old)}`);
   });
 
@@ -472,11 +472,11 @@ describe("given each of the 7 car types released at full throttle from the long 
     assert.ok(slowest(shippedHits) >= ARRIVAL_FLOOR, "the slowest class on the shipped approach is over the floor");
   });
 
-  it("when the truck is held to 32 m/s at start phase 0.55 on the pre-retune approach, then it arrives at the lowest failing speed and is not thrown: the failing speed is a real one", () => {
+  it("when the truck is held to 32 m/s at start phase 0.55 on the pre-retune approach, then it arrives at the old lowest failing speed and is thrown: the barrier hit throws by the speed it lost, its block packed or not", () => {
     const FAILING_CAP = 32;
     const FAILING_PHASE = 0.55;
     const hit = driveToBarrier(truck, longJumpVariant(PRE_RETUNE), FAILING_PHASE, FAILING_CAP);
-    assert.ok(Math.abs(hit.arrivalSpeed - LOWEST_FAILING_ARRIVAL) <= 0.1 && hit.ejections === 0, `arrival ${hit.arrivalSpeed}, ${hit.ejections} throws`);
+    assert.ok(Math.abs(hit.arrivalSpeed - LOWEST_FAILING_ARRIVAL) <= 0.1 && hit.ejections === 1, `arrival ${hit.arrivalSpeed}, ${hit.ejections} throws`);
   });
 
   it("when the builder is given the shipped numbers, then its floor is the shipped floor", () => {

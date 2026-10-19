@@ -9,15 +9,17 @@ import { VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
  * outcomes are the calibration's (docs/CRUSH_CALIBRATION.md): the crush grows with the speed that reaches the
  * struck end (a car's share of the closing is M/(m+M), so a T-bone or rear-end striker feels half the closing a
  * head-on car does), a lethal head-on kills and throws both drivers, and a door or tail hit spares the struck car's
- * engine by design (the block moves along the car, not across it).
+ * engine by design (the block moves along the car, not across it); a lethal T-bone still throws the struck driver out of his door.
  */
 const CLASSES = VEHICLE_CLASS_IDS.filter((id) => id !== "police" && id !== "muscle");
 const PAIRS = CLASSES.flatMap((a) => CLASSES.map((b) => [a, b] as const));
 const HITS: readonly Hit[] = ["head-on", "t-bone", "rear-end"];
 
-/** Closing speed (m/s): a head-on is this per car, a T-bone or rear-end this on the striker alone. */
-const SURVIVABLE: Record<Hit, number> = { "head-on": 12, "t-bone": 20, "rear-end": 20 };
+/** Closing speed (m/s): a head-on is this per car, a T-bone or rear-end this on the striker alone. A survivable head-on keeps a sedan's share against a monster truck (22 × 2900/4300 = 14.8 m/s) under its 16.0 m/s alive bar. */
+const SURVIVABLE: Record<Hit, number> = { "head-on": 11, "t-bone": 20, "rear-end": 20 };
 const LETHAL: Record<Hit, number> = { "head-on": 40, "t-bone": 55, "rear-end": 55 };
+/** The lethal T-bone whose struck driver stays in: he outweighs the striker so far that his share of the closing stays under his alive bar (a sedan into a monster truck: 55 × 1400/4300 = 17.9 m/s against 20.9). */
+const STRUCK_STAYS = "sedan monster";
 
 const label = (hit: Hit, a: VehicleClassId, b: VehicleClassId, mps: number): string => `${hit} ${a} into ${b} at ${mps} m/s`;
 
@@ -38,7 +40,7 @@ describe("given every striker and struck class pair (police and muscle left out)
       }
     });
 
-    it(`when a ${hit} hits at the lethal ${LETHAL[hit]} m/s, then it kills ${hit === "head-on" ? "and throws both drivers" : "and throws the striker's driver, and spares the struck car's engine and driver"}, for every class pair`, () => {
+    it(`when a ${hit} hits at the lethal ${LETHAL[hit]} m/s, then it kills ${hit === "head-on" ? "and throws both drivers" : hit === "t-bone" ? "and throws both drivers (the struck one unless he outweighs the striker past his bar), and spares the struck car's engine" : "and throws the striker's driver, and spares the struck car's engine and driver"}, for every class pair`, () => {
       for (const [a, b] of PAIRS) {
         const [striker, struck] = collide(hit, a, b, LETHAL[hit]);
         const where = label(hit, a, b, LETHAL[hit]);
@@ -48,7 +50,7 @@ describe("given every striker and struck class pair (police and muscle left out)
           assert.equal(struck.thrown, true, `${where}: struck not thrown (health ${struck.health.toFixed(2)}, block ${struck.travel.toFixed(3)} m)`);
           assert.ok(struck.health <= 0.2, `${where}: struck health ${struck.health.toFixed(2)}`);
         } else {
-          assert.equal(struck.thrown, false, `${where}: struck thrown`);
+          assert.equal(struck.thrown, hit === "t-bone" && `${a} ${b}` !== STRUCK_STAYS, `${where}: struck ${struck.thrown ? "thrown" : "not thrown"}`);
           assert.ok(struck.alive && struck.health >= 0.8, `${where}: struck health ${struck.health.toFixed(2)}`);
         }
       }

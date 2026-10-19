@@ -1,6 +1,6 @@
 /**
  * The ejection census: one bench scenario (`scenarios.ts`) in one process, every judgement of `EjectionWatch` counted, and one line printed, `EJECT_CENSUS {json}`: for each judged hit its peak
- * closing speed over the threshold it met, binned by what decided it (a dead drivetrain, a block packed to the realistic kill with the drivetrain alive, a door slam) and whether it threw the driver.
+ * closing speed over the threshold it met, binned by what decided it (a dead drivetrain, a block packed to the realistic kill with the drivetrain alive, a fresh hit on a running car: "slam") and whether it threw the driver.
  *
  *   EJECT_SCENARIO=city-race|dam-spine-race|national-mall-race|strip|derby-8-s3 EJECT_SEED=<n> [EJECT_S=<sim seconds>] node --import ./scripts/test-setup.mjs scripts/bench/eject-census.ts
  *

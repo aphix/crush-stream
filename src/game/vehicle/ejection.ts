@@ -38,15 +38,15 @@ const KILL_EBS = 15.6;
 
 /**
  * The barrier speed (m/s) at which a square hit throws `car`'s driver (`KILL_EBS` × √ its kill class's durability): the
- * sandbox's slow-mo predicts a throw by it (`throwComing`), and a car that slams a door into a hit at least this fast
- * of its own throws its driver out of that door (`EjectionWatch`), as hard a blow to him as the nose-first kill.
+ * sandbox's slow-mo predicts a throw by it (`throwComing`), and a running car takes a fresh hit on its nose or a door at
+ * its share of the closing against it (`EjectionWatch`), as hard a blow to him as the nose-first kill.
  */
 export function killSpeed(car: DeformableCar): number {
   return KILL_EBS * Math.sqrt(CLASSES[killClass(car)].durability);
 }
 
-/** The share of its `killSpeed` the closing must reach to throw a car whose drivetrain still runs (a packed block, a door slam): drivers went out "a little too easy" when the engine did not die. */
-const ALIVE_CLOSING_SHARE = 1.05;
+/** The share of its `killSpeed` the closing must reach to throw a car whose drivetrain still runs (a packed block, a fresh hit on its nose or a door): drivers went out "a little too easy" when the engine did not die at 1, and nobody went out at 1.05 (owner, 2026-10-19: halfway back). */
+const ALIVE_CLOSING_SHARE = 1.025;
 
 /** The closing speed (m/s) at which a hit on `car` throws its driver: `EJECT_CLOSING` with a dead drivetrain, else its `killSpeed`, × `ALIVE_CLOSING_SHARE` outside a mini game. */
 export function ejectThreshold(car: DeformableCar, minigame: boolean): number {
@@ -172,11 +172,11 @@ function launch(car: DeformableCar, i: number, exit: ExitPane, pre: THREE.Vector
  * Watches every car for a hit that throws its driver out. A disabling hit (the drivetrain dying, `drivetrainAlive`:
  * derby engine-kill and wreck, race DNF by damage; or the block packed as far as kills it at the realistic end of the
  * slider, whatever the slider) throws him when it closed fast enough (`EJECT_CLOSING`), head-on or from the side, never
- * from behind. A hit square on a door (`DOOR_SQUARE`) that the car slammed into at its `killSpeed` or faster throws him
- * out of that door's window though the car runs on (owner, 2026-10-07: a handbrake slide sideways into a wall): a side
- * blow never packs the block (the range at 23-25 m/s, 66-83 degrees off: 0.02-0.16 m), so no kill would ever throw
- * him. Slammed: both its own speed into the hit and the closing are that fast, so a car shunted from standstill (a
- * T-bone's struck car) stays in, and so does one trading doors at speed with a car alongside going its way. The
+ * from behind. A running car's fresh hit on its nose, or square on a door (`DOOR_SQUARE`), throws him out of that pane
+ * when its share of the closing by the other's mass (all of it into a wall) reaches the alive bar (`ejectThreshold`):
+ * the closing is the blow to him, the block's travel only the drivetrain's (owner, 2026-10-19: a police car nose-first at
+ * 160 km/h into a parked car, and the car it T-boned, both stayed in). A side blow never packs the block (owner,
+ * 2026-10-07: a handbrake slide sideways into a wall). A car trading doors at speed with a car alongside stays in. The
  * decision is SIM state: `step` runs once per fixed step, at the end of `stepWorld`, on the step's own dt, and reads
  * only the cars' deform state, poses and velocities, so the same steps give the same ejections on every run at every
  * frame rate. A hit that throws sets `car.driverOut` (until the car is put back: `resetVisual`) and queues an
@@ -272,8 +272,10 @@ export class EjectionWatch {
       const was = this.alive[i]!;
       this.alive[i] = now;
       if (car.driverOut !== null || car.deform.sinceHit() > PRE + dt) continue;
+      const ix = Math.abs(car.deform.impactInward.x);
+      const iz = car.deform.impactInward.z;
       if (was === 1 && now === 0) this.judge(cars, i, true);
-      else if (now === 1 && car.deform.massActive && Math.abs(car.deform.impactInward.x) > DOOR_SQUARE * Math.abs(car.deform.impactInward.z)) this.judge(cars, i, false);
+      else if (now === 1 && car.deform.massActive && (ix > DOOR_SQUARE * Math.abs(iz) || -iz >= ix)) this.judge(cars, i, false);
     }
     if (!sample) return;
     for (let i = 0; i < n; i++) {
@@ -286,7 +288,7 @@ export class EjectionWatch {
     }
   }
 
-  /** Car i was just disabled (`killed`), or runs on in a fresh hit on a door: was that hit head-on or from the side, and hard enough (`ejectThreshold`)? */
+  /** Car i was just disabled (`killed`), or runs on in a fresh hit on its nose or square on a door: was that hit head-on or from the side, and hard enough (`ejectThreshold`)? */
   private judge(cars: readonly DeformableCar[], i: number, killed: boolean): void {
     const car = cars[i]!;
     // The struck end: inward points from the contact into the car.
@@ -302,7 +304,7 @@ export class EjectionWatch {
     car.smashGlass(exit);
   }
 
-  /** The closing speed of car i's hit (peak over the `PRE` s before it; a door slam's is the lesser of the car's own speed into it and the closing); the car's velocity at that peak is left in `_pre`. */
+  /** The closing speed of car i's hit, peak over the `PRE` s before it: a kill's is the pair's; a running car's is its own share of it by the other's mass (all of it into a wall), the barrier speed `killSpeed` is. The car's velocity at that peak is left in `_pre`. */
   private peakClosing(cars: readonly DeformableCar[], i: number, killed: boolean): number {
     const car = cars[i]!;
     _n.copy(car.deform.impactInward).applyQuaternion(car.group.quaternion);
@@ -317,6 +319,7 @@ export class EjectionWatch {
         other = j;
       }
     }
+    const share = killed || other < 0 ? 1 : CLASSES[killClass(cars[other]!)].mass / (CLASSES[killClass(car)].mass + CLASSES[killClass(cars[other]!)].mass);
     // Peak over the samples since PRE s back: the cars were still closing (or speeding up into it) until contact.
     const back = Math.min(this.count[i]!, other >= 0 ? this.count[other]! : RING, Math.round(PRE / SAMPLE));
     let closing = -Infinity;
@@ -326,13 +329,14 @@ export class EjectionWatch {
       let c = -(this.vel[a + VELOCITY_X]! * _n.x + this.vel[a + VELOCITY_Z]! * _n.z);
       if (other >= 0) {
         const b = (other * RING + ((this.head[other]! - k + RING) % RING)) * VELOCITY_STRIDE;
-        const close = c + this.vel[b + VELOCITY_X]! * _n.x + this.vel[b + VELOCITY_Z]! * _n.z;
-        c = killed ? close : Math.min(c, close);
+        c = share * (c + this.vel[b + VELOCITY_X]! * _n.x + this.vel[b + VELOCITY_Z]! * _n.z);
       }
       if (c <= closing) continue;
       closing = c;
       _pre.set(this.vel[a + VELOCITY_X]!, this.vel[a + VELOCITY_Y]!, this.vel[a + VELOCITY_Z]!);
     }
+    // A running car with no car at the hit (a wall, a prop it knocks aside, nothing): the blow is only the speed it lost into the hit.
+    if (!killed && other < 0) return Math.min(closing, closing + car.velocity.x * _n.x + car.velocity.z * _n.z);
     return closing;
   }
 }
