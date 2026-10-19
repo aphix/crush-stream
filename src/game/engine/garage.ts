@@ -20,9 +20,9 @@ const _m = new THREE.Matrix4();
 const _nm = new THREE.Matrix3();
 
 /**
- * The garage's runtime: its set (`GarageArt`) and the spray can. With the can on, a press on the car or the driver sprays
- * (the camera's drag never starts) and a drag keeps spraying along the stroke; a press elsewhere still turns the camera.
- * Mouse and touch alike (pointer events, through the camera's `take`).
+ * The garage's runtime: its set (`GarageArt`) and the spray can. With the can on, a press on what the panel edits (`editing`: the
+ * car or the driver) sprays it (the camera's drag never starts) and a drag keeps spraying along the stroke; a press elsewhere,
+ * the other one included, still turns the camera. Mouse and touch alike (pointer events, through the camera's `take`).
  */
 export class Garage {
   readonly art = new GarageArt();
@@ -33,6 +33,8 @@ export class Garage {
   private readonly looks: PlayerLooks;
   private readonly onSprayed: (target: SprayTarget) => void;
   private readonly ray = new THREE.Raycaster();
+  /** What the panel edits (`EngineGarage.frameGarage`): the only thing the can paints. A ray passes through the other one. */
+  editing: SprayTarget = "car";
   /** The stroke's target while the pointer is down, and the last point sprayed (world). */
   private target: SprayTarget | null = null;
   private readonly last = new THREE.Vector3();
@@ -47,14 +49,14 @@ export class Garage {
 
   down(x: number, y: number): boolean {
     if (!this.tool.on) return false;
-    this.target = this.puff(x, y, null);
+    this.target = this.puff(x, y, true) ? this.editing : null;
     return this.target !== null;
   }
 
   move(e: PointerMove): void {
     if (this.target === null) return;
     const samples = e.getCoalescedEvents?.() ?? [];
-    for (const s of samples.length > 0 ? samples : [e]) this.puff(s.clientX, s.clientY, this.target);
+    for (const s of samples.length > 0 ? samples : [e]) this.puff(s.clientX, s.clientY, false);
   }
 
   up(): void {
@@ -65,23 +67,21 @@ export class Garage {
   }
 
   /**
-   * Spray at client (x, y): the nearest of the car's paint and the driver under it (only `only`, once a stroke has its
-   * target), with puffs filled in from the last point so a fast drag leaves a line, not dots. Returns what it sprayed, or null.
+   * Spray `editing` at client (x, y), if it is under the point (the other target never stops the ray), with puffs filled in from
+   * the last point (but on a stroke's `first`) so a fast drag leaves a line, not dots. Whether it sprayed.
    */
-  private puff(x: number, y: number, only: SprayTarget | null): SprayTarget | null {
+  private puff(x: number, y: number, first: boolean): boolean {
     const r = this.rect();
     _ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
     this.ray.setFromCamera(_ndc, this.camera);
     const car = this.car();
     const m = car?.lookMeshes();
-    const meshes: THREE.Object3D[] = only === "person" || !m ? [] : [m.body, m.hood, m.trunk, ...m.doors];
-    if (only !== "car") meshes.push(this.art.dummy);
+    const target = this.editing;
+    const meshes: THREE.Object3D[] = target === "person" ? [this.art.dummy] : m ? [m.body, m.hood, m.trunk, ...m.doors] : [];
     const hit = this.ray.intersectObjects(meshes, false)[0];
-    if (!hit?.face) return null;
-    const target: SprayTarget = hit.object === this.art.dummy ? "person" : "car";
+    if (!hit?.face) return false;
     const bitmap = this.looks.sprayOf(target);
-    // A stroke's first puff lands where it is; the next ones fill in from the last point sprayed.
-    const from = only === null ? hit.point : this.last;
+    const from = first ? hit.point : this.last;
     const steps = Math.max(1, Math.ceil(from.distanceTo(hit.point) / (this.tool.radius * PUFF_STEP)));
     for (let k = 1; k <= steps; k++) {
       _p.lerpVectors(from, hit.point, k / steps);
@@ -89,7 +89,7 @@ export class Garage {
     }
     this.last.copy(hit.point);
     if (target === "person") this.art.dummy.spray(0, bitmap);
-    return target;
+    return true;
   }
 
   /**

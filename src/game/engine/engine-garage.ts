@@ -33,9 +33,13 @@ export abstract class EngineGarage extends EngineShare {
     this.emitHud();
   }
 
-  /** The garage camera frames what is being edited: the driver close up (the orbit circles his chest as he is posed) while his look or spray is picked, the car and the driver beside it otherwise. The orbit keeps that centre (`aimRigs`). */
+  /**
+   * The panel's Edit pick: the can paints only `target` (`Garage.editing`), and the camera frames it: the driver close up (the orbit
+   * circles his chest as he is posed), or the car and the driver beside it. The orbit keeps that centre (`aimRigs`).
+   */
   frameGarage(target: SprayTarget): void {
     if (!this.showGarage || !this.garage) return;
+    this.garage.editing = target;
     if (target === "car") {
       this.view.frameReset(true, this.live(), GARAGE.angle, GARAGE.shot);
       return;

@@ -184,6 +184,8 @@ export abstract class EngineScenes extends EngineMinigames {
     if (next === "garage") {
       this.stage.look(LAB_LIGHT);
       this.view.frameReset(true, this.live(), GARAGE.angle, GARAGE.shot);
+      // The panel opens on the car: the can paints the car until Driver is picked.
+      if (this.garage) this.garage.editing = "car";
     }
     if (next === "showcase") {
       this.stage.look(SHOWCASE_LIGHT);

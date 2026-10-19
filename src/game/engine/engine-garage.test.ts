@@ -9,6 +9,7 @@ import { ORBIT_RADIUS } from "../present/engine-camera.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
 import { setGround } from "../world/ground.ts";
+import type { SprayTarget } from "./player-looks.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 
@@ -70,6 +71,51 @@ describe("given the real engine in the garage", () => {
     pointer("pointerup", 2, 750);
     pointer("pointerup", 1, 50);
   };
+  /** What a screen point shows: the car alone, the driver in front of the car, the driver behind it, or the driver alone. */
+  type Under = "carOnly" | "driverFront" | "driverBehind" | "driverOnly";
+  /** The first canvas point (20 px grid) whose ray from the eye as it stands meets `want`. The stand-in canvas has no size, so the view offset is cleared and the aspect set by hand (`frameField`). */
+  const pointOver = (want: Under): { x: number; y: number } => {
+    const camera = engine["camera"];
+    const { width, height } = canvas.getBoundingClientRect();
+    camera.clearViewOffset();
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    engine["scene"].updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    const m = engine["carA"].lookMeshes();
+    const car = [m.body, m.hood, m.trunk, ...m.doors];
+    const dummy = engine["garage"]!.art.dummy;
+    const ray = new THREE.Raycaster();
+    for (let y = 10; y < height; y += 20) {
+      for (let x = 10; x < width; x += 20) {
+        ray.setFromCamera(new THREE.Vector2((x / width) * 2 - 1, -(y / height) * 2 + 1), camera);
+        const c = ray.intersectObjects(car, false)[0];
+        const d = ray.intersectObjects([dummy], false)[0];
+        const under: Under | null = c && !d ? "carOnly" : d && !c ? "driverOnly" : c && d ? (d.distance < c.distance ? "driverFront" : "driverBehind") : null;
+        if (under === want) return { x, y };
+      }
+    }
+    throw new Error(`no point shows ${want}`);
+  };
+  /**
+   * A stroke of the can with `edit` picked, pressed over the first of `over` and dragged across the rest, the orbit turned to
+   * `bearing` (rad) first when given: whether the press sprayed, and which bitmaps took paint.
+   */
+  const stroke = (edit: SprayTarget, over: readonly Under[], bearing?: number): { sprayed: boolean; car: boolean; person: boolean } => {
+    engine.clearSpray("car");
+    engine.clearSpray("person");
+    engine.frameGarage(edit);
+    if (bearing !== undefined) engine["view"]["angle"] = bearing;
+    run(1);
+    const [first, ...rest] = over.map(pointOver);
+    const garage = engine["garage"]!;
+    const sprayed = garage.down(first!.x, first!.y);
+    for (const at of rest) garage.move({ clientX: at.x, clientY: at.y });
+    garage.up();
+    return { sprayed, car: engine["looks"].sprayOf("car").painted(), person: engine["looks"].sprayOf("person").painted() };
+  };
+  /** The orbit's bearing from the car's far side (-x): the car stands between the eye and the driver. */
+  const FAR_SIDE = -Math.PI / 2;
 
   before(async () => {
     stubBrowser();
@@ -153,5 +199,15 @@ describe("given the real engine in the garage", () => {
     run(FRAME);
     assert.equal(engine["cars"].length, fleet, "cars back in the fleet");
     assert.equal(engine["live"]().length, fleet, "and all of them shown");
+  });
+
+  it("when the can is on, then a stroke paints only what the panel edits: the other one drops out of the ray, so it never blocks or takes paint", async () => {
+    await enter("fleet");
+    engine.setSprayTool({ on: true });
+    assert.deepEqual(stroke("person", ["carOnly", "carOnly"]), { sprayed: false, car: false, person: false }, "Driver picked, a stroke over the car");
+    assert.deepEqual(stroke("person", ["driverBehind", "driverBehind"], FAR_SIDE), { sprayed: true, car: false, person: true }, "Driver picked, a stroke over him behind the car");
+    assert.deepEqual(stroke("car", ["driverFront", "carOnly"]), { sprayed: true, car: true, person: false }, "Car picked, a stroke from him in front of the car across the car");
+    assert.deepEqual(stroke("car", ["driverOnly", "driverOnly"]), { sprayed: false, car: false, person: false }, "Car picked, a stroke over him alone");
+    engine.setSprayTool({ on: false });
   });
 });
