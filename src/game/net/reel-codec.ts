@@ -262,9 +262,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * each other in one head-on meet over the cars. A clip of 136 or before no longer reads.
  * 138: a wreck a solid's face shoves out by position while the face's exchange holds nothing (its drawn body round an open end, no mass on the face) stops driving into
  * the face, so it no longer keeps a phantom speed into a monument's corner that a pair contact reads. A clip of 137 or before no longer reads.
+ * 139: 138 withdrawn: its rule also stopped cars hitting a monument head-on with almost no crush (a sedan at 55 m/s kept 1 mm against the slab's 0.50 m), so the sim is 137's
+ * again. A clip of 138 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 138;
+const REPLAY_VERSION = 139;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
