@@ -17,8 +17,12 @@ export const GARAGE = {
   /** The opening shot (`ChaseCamera.frameReset`): from the front right, the car and the driver beside it in view, and the point the orbit circles. */
   angle: 0.75,
   shot: { lookX: 0.7, lookY: 0.8, lookZ: 0.2, radius: 8.5, pitch: 0.3 },
-  /** The driver's close shot (`EngineGarage.frameGarage`): the orbit circles him, not the car, so a phone can reach his shirt, his hair and his back. */
-  driverShot: { lookX: 1.9, lookY: 0.95, lookZ: 0.6, radius: 3.5, pitch: 0.14 },
+  /** The driver's close shot (`EngineGarage.frameGarage`): the orbit circles his chest (`chest`, on his posed torso), not the car, so a phone can reach his shirt, his hair and his back. */
+  driverShot: { radius: 3.5, pitch: 0.14 },
+  /** His sternum on the standing torso (m, part 0's rest frame: its box spans 0.84 to 1.38 m up). */
+  chest: new THREE.Vector3(0, 1.25, 0),
+  /** The orbit's closest (m from its centre): there a phone's 664 px-tall view draws the can's start dot (12 cm across) on his chest 45 px wide, a fingertip. */
+  minRadius: 2,
   /** The driver the garage shows under the player's picks (a race draws his unpicked clothes from its own seed). */
   driver: driverLook(0, 0),
 } as const;

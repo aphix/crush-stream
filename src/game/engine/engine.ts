@@ -31,7 +31,7 @@ import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
-import { ChaseCamera, centroid, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
+import { ChaseCamera, centroid, ORBIT_RADIUS, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
 import { blankFreeInput, sceneExtent } from "../present/free-cam.ts";
 import { MINIGAME_AIM_LEAD } from "../present/ride-cam.ts";
 import { MINIGAME_MODE, THROW_BOOST } from "../scenes/minigame-constants.ts";
@@ -906,9 +906,7 @@ export class CrashEngine extends EngineGarage {
   private aimRigs(wallDt: number): void {
     // Driving is not spectating: the free view ends where a seat takes the wheel.
     if (this.seat.mode === "drive") this.view.leaveFree();
-    // The Lab is flicked, never followed or driven: a tap by a car would follow it (`watchCar`) and a pedal press then drive it,
-    // each taking the view off the side of the throw and onto the car.
-    if (this.showLab) this.seat.clear();
+    this.view.minRadius = this.showGarage ? GARAGE.minRadius : ORBIT_RADIUS.min;
     if (this.highlights.playing) {
       // The reel frames its own shots: the crash cam over the hit while its window is open, then the subject's thrown driver's ride-along.
       this.reelFov ??= this.camera.fov;
@@ -952,6 +950,7 @@ export class CrashEngine extends EngineGarage {
     if (this.seat.mode === "global" && !this.view.flying) this.view.spec = null;
     const spec = this.view.specView(this.followsInChaseView);
     if (followed && followed.group.visible && this.view.frameSpectate(followed, spec, this.specScene, wallDt, this.playing)) return;
+    // The garage's orbit keeps the centre `frameGarage` gave it (the car's shot or the driver's chest): no case below sets it.
     const look = this.view.look;
     if (followed && followed.group.visible) {
       // Over the car's own height: a race course climbs hills and bridges.
@@ -974,16 +973,14 @@ export class CrashEngine extends EngineGarage {
       // view the player turned on the other shape means nothing on this one.
       if (this.camera.aspect < 1 !== this.labUpright) this.frameLab();
       look.copy(this.labLook);
-    } else if (this.showGarage) {
-      look.set(GARAGE.shot.lookX, GARAGE.shot.lookY, GARAGE.shot.lookZ);
-    } else {
+    } else if (!this.showGarage) {
       centroid(_v, this.live());
       look.set(_v.x, 0.7, _v.z);
     }
 
-    // The Lab holds still for the aim, and the garage while the can is on: a turning view would turn every flick or stroke.
+    // The Lab holds still for the aim, and the garage for the paint and the picks: a turning view would turn every flick or stroke.
     let spinRate = 0;
-    if (this.autoRotate && this.playing && this.seat.mode !== "drive" && !this.showLab && !(this.showGarage && this.garage?.tool.on)) {
+    if (this.autoRotate && this.playing && this.seat.mode !== "drive" && !this.showLab && !this.showGarage) {
       spinRate = this.showPistons ? PISTON_ORBIT_RATE : this.clock.phase === "approach" ? 0.12 : 0.32;
     }
     this.view.orbit(wallDt, spinRate, this.playing, this.rigScene || this.showLab || this.showGarage ? null : this.chaseSight(followed !== null && followed.group.visible));

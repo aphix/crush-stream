@@ -216,7 +216,8 @@ function DesktopHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
         <div className="flex flex-col items-end self-start font-display tabular-nums" style={{ gridArea: "readouts" }}>
           <Gauge view={state.derbyView} corner={false} />
         </div>
-      ) : (
+      ) : state.garage ? null : (
+        // The garage has no run to read: no speeds, no closing, no phase.
         <Readouts state={state} />
       )}
 
@@ -230,7 +231,7 @@ function DesktopHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
 
       <div className="flex min-w-0 flex-col items-start gap-2 self-end" style={{ gridArea: "dock" }}>
         {state.race ? <SpectateBar race={state.race} cycles={showsPrevNext(state)} pad={state.pad !== null} cam={state.cam && CAM_LABEL[state.cam]} freeHelp={state.cam === "free" ? freeHelp(state.pad !== null, false) : null} onCommand={raceCommand} onCam={() => engine.current?.cycleCamera()} /> : null}
-        {!focus && (state.seat !== "global" || state.pad || state.cam) && !state.race?.spectating ? <DriveHint state={state} engine={engine} /> : null}
+        {!focus && !state.garage && (state.seat !== "global" || state.pad || state.cam) && !state.race?.spectating ? <DriveHint state={state} engine={engine} /> : null}
         {focus && state.race ? (
           // Under a race menu these would only peek out beside the card.
           state.race.menu === null ? (

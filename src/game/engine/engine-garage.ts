@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import type { SprayTool } from "../hud/hud-store.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import type { LookData } from "../net/look-codec.ts";
@@ -32,10 +33,15 @@ export abstract class EngineGarage extends EngineShare {
     this.emitHud();
   }
 
-  /** The garage camera frames what is being edited: the driver close up (the orbit circles him) while his look or spray is picked, the car and the driver beside it otherwise. */
+  /** The garage camera frames what is being edited: the driver close up (the orbit circles his chest as he is posed) while his look or spray is picked, the car and the driver beside it otherwise. The orbit keeps that centre (`aimRigs`). */
   frameGarage(target: SprayTarget): void {
-    if (!this.showGarage) return;
-    this.view.frameReset(true, this.live(), GARAGE.angle, target === "person" ? GARAGE.driverShot : GARAGE.shot);
+    if (!this.showGarage || !this.garage) return;
+    if (target === "car") {
+      this.view.frameReset(true, this.live(), GARAGE.angle, GARAGE.shot);
+      return;
+    }
+    const chest = this.garage.art.dummy.partPoint(0, 0, GARAGE.chest, new THREE.Vector3());
+    this.view.frameReset(true, this.live(), GARAGE.angle, { ...GARAGE.driverShot, lookX: chest.x, lookY: chest.y, lookZ: chest.z });
   }
 
   /** `target`'s spray comes off, here and in storage. */

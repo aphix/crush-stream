@@ -389,6 +389,15 @@ export abstract class EngineCore {
     if (this.seat.carIndex >= count) this.seat.clear();
   }
 
+  /** Every car past the first `n` leaves the scene and is freed (`ensureCars` builds the slots again when a field needs them). */
+  protected dropCars(n: number): void {
+    while (this.cars.length > n) {
+      const car = this.cars.pop()!;
+      this.scene.remove(car.group);
+      car.dispose();
+    }
+  }
+
   /** The bench's one body for every non-police car (`?bench=strip&same=`). Not a setting: the HUD, the hash and storage never see it. */
   private oneBody: CarType | null = null;
 

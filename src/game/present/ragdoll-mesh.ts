@@ -128,6 +128,12 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     this.settleBust(s);
   }
 
+  /** Point `rest` of the standing body (m), carried by slot `s`'s part `k` as posed now, in the world, into `out`. */
+  partPoint(s: number, k: number, rest: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+    const at = (s * ROW_TEXELS + 2 * k) * 4;
+    return out.copy(rest).applyQuaternion(_q.fromArray(this.rows, at + 4)).add(_o.fromArray(this.rows, at)).applyMatrix4(this.matrixWorld);
+  }
+
   /** Vertex `i` of slot `s` as posed now (her bust's lag too) into `out`; false when the slot's build does not draw it. */
   posed(s: number, i: number, out: THREE.Vector3): boolean {
     const bones = this.geometry.getAttribute(BONES_ATTRIBUTE);

@@ -43,6 +43,8 @@ export const RIDE_PAUSE = 2.5;
 /** A pointer that travels less (px) than this is a click, not a drag. */
 const CLICK_PX = 8;
 const CURSOR_GRAB = "grab";
+/** The orbit's zoom range (m from `look`): the fleet's whole-car framing; the garage comes closer (`ChaseCamera.minRadius`). */
+export const ORBIT_RADIUS = { min: 4.2, max: 32 } as const;
 
 /** What a canvas press can pick: the car under a screen point (-1: none), and the follow itself. */
 export interface CarPicker {
@@ -94,6 +96,8 @@ export class ChaseCamera {
   trauma = 0;
   /** User dragged or zoomed since the last reset; cinematics stop re-aiming. */
   userFramed = false;
+  /** How close (m) the wheel, a pinch and a reset may bring the orbit's eye to `look` in this scene. */
+  minRadius: number = ORBIT_RADIUS.min;
   /** Rear-view hold, set by the input poll every frame (Backquote, R3, the touch button). */
   rear = false;
   /** Pointer lock (mouse look) held: set by the engine; clicks are off and the orbit follows fast and never auto-spins. */
@@ -251,8 +255,11 @@ export class ChaseCamera {
   frameReset(compactor: boolean, cars: readonly DeformableCar[], soloAngle = 0.85, shot = SOLO_SHOT): void {
     this.userFramed = false;
     this.trauma = 0;
-    // This snap replaces any shot `lookBack` parked.
+    // This snap replaces any shot `lookBack` parked, and is the orbit's own eye (no clearing shift in it): a fixed cam's or the free
+    // view's leaving (radius at least 9) never reworks it.
     this.flipped = false;
+    this.orbitShift.set(0, 0, 0);
+    if (this.rig === "fixed") this.rig = "orbit";
     if (compactor) {
       this.look.set(shot.lookX ?? 0, shot.lookY, shot.lookZ ?? 0);
       this.radius = shot.radius;
@@ -548,7 +555,7 @@ export class ChaseCamera {
     const dy = this.camera.position.y - this.look.y;
     const dz = this.camera.position.z - this.look.z;
     this.angle = Math.atan2(dx, dz);
-    this.radius = THREE.MathUtils.clamp(hypot3(dx, dy, dz), 4.2, 32);
+    this.radius = THREE.MathUtils.clamp(hypot3(dx, dy, dz), this.minRadius, ORBIT_RADIUS.max);
     this.pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(dy / this.radius, -0.99, 0.99)), 0.08, 1.22);
   }
 
@@ -686,7 +693,7 @@ export class ChaseCamera {
       this.free.dollyBy(d - this.pinchDist);
       this.panX = middleX;
       this.panY = middleY;
-    } else if (this.pinchDist > 0 && d > 0) this.radius = THREE.MathUtils.clamp((this.radius * this.pinchDist) / d, 4.2, 32);
+    } else if (this.pinchDist > 0 && d > 0) this.radius = THREE.MathUtils.clamp((this.radius * this.pinchDist) / d, this.minRadius, ORBIT_RADIUS.max);
     this.pinchDist = d;
     this.userFramed = true;
   }
@@ -723,6 +730,6 @@ export class ChaseCamera {
       return;
     }
     const scale = Math.exp(e.deltaY * 0.00115);
-    this.radius = THREE.MathUtils.clamp(this.radius * scale, 4.2, 32);
+    this.radius = THREE.MathUtils.clamp(this.radius * scale, this.minRadius, ORBIT_RADIUS.max);
   };
 }

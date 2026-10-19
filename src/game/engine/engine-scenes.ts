@@ -133,6 +133,9 @@ export abstract class EngineScenes extends EngineMinigames {
     const calm = this.clock.reduceMotion || this.cine.tier === "off" || this.cine.tier === "minimal";
     const next = fade.frame(wallDt, calm, this.warmsInFlight > 0);
     if (next !== null) this.applyScene(next, true);
+    // The Lab is flicked and the garage posed, never followed or driven: a tap by a car (`watchCar`), Q/E or LB/RB would follow it
+    // and a pedal press then drive it, each taking the view off the shot and onto the car. Here, after the input and the switch, before the step and the camera.
+    if (this.showLab || this.showGarage) this.seat.clear();
     this.cine.post.cel = celStrength(this.celLook, fade.cel);
     // Black is a DOM veil over the canvas and the HUD at every tier; written only while it changes.
     if (fade.black !== this.veilBlack) {
@@ -161,6 +164,8 @@ export abstract class EngineScenes extends EngineMinigames {
       this.sandboxCars = this.carCount;
       this.ensureCars(next === "range" || next === "garage" || next === "showcase" ? 1 : next === "lab" ? this.lab.types.length : this.stack.config.cars);
     }
+    // The garage holds the player's car alone: the fleet's others are freed, not parked off the set where a camera could still go.
+    if (next === "garage") this.dropCars(1);
     if (next === "race" || next === "survival") this.setRace(true, next === "survival", false, next === "survival" && menu && this.net.role === "off");
     else this.sceneId = next;
     // The smaller, tighter modes (the Range with its Mini games, the derby) default to the far chase: more of the place in view. A view the player picked stays.

@@ -800,9 +800,11 @@ export abstract class EngineInput extends EngineRigs {
 
   /**
    * View (V / T / Y, the HUD camera button): the driven car's chase view, or the followed car's spectator cam (the rigs' too: the orbit is
-   * their default), the free view last among them. The whole field has no car to cycle round: View flies free from it and back.
+   * their default), the free view last among them. The whole field has no car to cycle round: View flies free from it and back. The
+   * garage has one view, its own orbit round what is being painted.
    */
   cycleCamera(): void {
+    if (this.showGarage) return;
     if (this.seat.mode === "drive") this.seat.cycleView();
     else if (this.seat.mode === "follow") this.view.cycleSpec(this.followsInChaseView);
     else if (!this.view.leaveFree()) this.view.enterFree();
