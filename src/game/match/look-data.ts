@@ -16,7 +16,7 @@ export const SPRAY_PALETTE: readonly number[] = [
   0xd9b98c,
 ];
 
-/** A bitmap's paint: an ink per texel (0 bare) and each ink's colour (sRGB): `SPRAY_PALETTE`, with any colour sprayed that is not a preset on an ink no texel showed, or past them (256 inks at most). */
+/** A bitmap's paint: an ink per texel (0 bare) and each ink's colour (sRGB): `SPRAY_PALETTE`, with any colour sprayed that is not a preset on an ink no texel showed, else the nearest ink (16 inks, 4 bits a texel on the wire). */
 export type SprayPaint = { readonly texels: Uint8Array; readonly palette: readonly number[] };
 
 /** Face order in a layout's `faces` and in the shader's `sprayFaces`. */
