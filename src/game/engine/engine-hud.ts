@@ -11,8 +11,7 @@ import type { RaceHud } from "../match/types.ts";
 import { WALL } from "./engine-lab.ts";
 import { knobValues } from "../hud/knobs.ts";
 import { lookColours } from "../present/car-look.ts";
-import { pickedLook } from "../present/driver-look.ts";
-import { GARAGE } from "../present/garage-art.ts";
+import { ownLook } from "../present/driver-look.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 import type { Garage } from "./garage.ts";
 
@@ -183,7 +182,7 @@ export abstract class EngineHud extends EngineWarm {
   private garageHud(garage: Garage): GarageHud {
     const strokes = garage.strokes(garage.editing);
     const { car, person } = this.looks.mine;
-    return { car: lookColours(this.carA, car), person: pickedLook(GARAGE.driver, person), picked: { ...person }, spray: { ...garage.tool }, undo: strokes.undoable, redo: strokes.redoable };
+    return { car: lookColours(this.carA, car), person: ownLook(person), picked: { ...person }, spray: { ...garage.tool }, undo: strokes.undoable, redo: strokes.redoable };
   }
 
   /** The Lab's last throw as the HUD reads it (`LabHud.shot`). */

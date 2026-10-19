@@ -30,7 +30,7 @@ import type { Placed } from "../world/placements.ts";
 import { ejectionVelocity, type Ejection } from "../vehicle/ejection.ts";
 import { disable, loadRapier, type Rapier } from "../kernel/rapier.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
-import { type DriverLook, driverLook, pickedLook } from "./driver-look.ts";
+import { type DriverLook, driverLook, ownLook } from "./driver-look.ts";
 import { VIP_LOOK } from "./dummy-dress.ts";
 import { guardDress, passengerThrow } from "./people.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
@@ -761,12 +761,12 @@ export class RagdollSystem {
     this.pending.push({ ...t, p: t.p.clone(), q: t.q.clone(), v: t.v.clone(), w: t.w.clone() });
   }
 
-  /** How throw `t` is dressed: `dressed`, else the look of his own (`t.look`), else his car's driver's (the player's own pick, or a drawn one) and the player's spray when he is that driver. */
+  /** How throw `t` is dressed: `dressed`, else the look of his own (`t.look`), else his car's driver's: a player's own look and spray when his car is a player's (`ownLook`, the same in every scene and seed), else the seed's drawn one. */
   private dressingOf(t: Throw, dressed: DriverLook | null): { look: DriverLook; spray: SprayBitmap | null } {
     const given = dressed ?? t.look ?? null;
     if (given) return { look: given, spray: null };
     const own = t.cop ? null : this.lookOf(t.car);
-    if (own) return { look: pickedLook(driverLook(this.lookSeed, t.car), own.person), spray: own.personSpray };
+    if (own) return { look: ownLook(own.person), spray: own.personSpray };
     return { look: driverLook(this.lookSeed, t.car), spray: null };
   }
 

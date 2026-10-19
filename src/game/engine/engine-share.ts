@@ -7,8 +7,7 @@ import { HANDLING } from "../vehicle/vehicle-classes.ts";
 import { EngineReel } from "./engine-reel.ts";
 import { carPickText, NO_CAR_PICK, NO_PERSON_PICK, parseCarPick, parsePersonPick, personPickText, type CarPick, type PersonPick } from "../match/look-data.ts";
 import { KNOBS, knobValues } from "../hud/knobs.ts";
-import { pickedLook } from "../present/driver-look.ts";
-import { GARAGE } from "../present/garage-art.ts";
+import { ownLook } from "../present/driver-look.ts";
 import { shareHashOf } from "./bench-loop.ts";
 
 /** The key `@tanstack/history` keeps a history entry's place in its stack under (`history.state`); a pushed entry carries the next one. */
@@ -213,7 +212,7 @@ export abstract class EngineShare extends EngineReel {
   protected restyle(): void {
     const car = this.cars[this.ownCar()];
     if (car) this.dressCar(car);
-    this.garage?.art.stand(pickedLook(GARAGE.driver, this.looks.mine.person), this.looks.mine.personSpray);
+    this.garage?.art.stand(ownLook(this.looks.mine.person), this.looks.mine.personSpray);
     this.emitHud();
   }
 

@@ -15,7 +15,7 @@ import { GARAGE } from "../present/garage-art.ts";
 import { Showcase } from "./showcase.ts";
 import { SHOWCASE_CAR, SHOWCASE_EYE, SHOWCASE_KNOCK, SHOWCASE_LIGHT } from "../present/showcase-art.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
-import { pickedLook } from "../present/driver-look.ts";
+import { ownLook } from "../present/driver-look.ts";
 import { heldPose, type LabPresetId } from "../scenes/lab.ts";
 import { CORKSCREW } from "../scenes/corkscrew.ts";
 import { stackShot } from "../scenes/stack-rig.ts";
@@ -497,7 +497,7 @@ export abstract class EngineScenes extends EngineMinigames {
     car.group.visible = true;
     car.spawnFacing(0, 0, 0, 0);
     this.dressCar(car);
-    this.garage!.art.stand(pickedLook(GARAGE.driver, this.looks.mine.person), this.looks.mine.personSpray);
+    this.garage!.art.stand(ownLook(this.looks.mine.person), this.looks.mine.personSpray);
     this.parkExtras();
   }
 

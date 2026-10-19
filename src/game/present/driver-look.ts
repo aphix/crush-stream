@@ -9,7 +9,7 @@ import { FACE } from "./dummy-faces.ts";
  * by default the man's or the woman's) and `tie` (sRGB; by default the outfit's) dress the figures the game places itself.
  * Cosmetic only. A drawn driver is a pure function of (the race's look seed, the car's slot), through its own
  * `mulberry32` stream and never the sim's RNG, so sim digests do not move, and every peer, replay and highlight clip that
- * knows the seed draws the same driver; a player's own picks (`look-pick.ts`) then override fields of it.
+ * knows the seed draws the same driver. A player's own driver is never drawn: his picks (`PersonPick`) over one fixed driver (`ownLook`).
  */
 export type DriverLook = {
   woman: boolean;
@@ -77,3 +77,9 @@ export function pickedLook(base: DriverLook, pick: PersonPick): DriverLook {
     face: woman === base.woman ? base.face : undefined,
   };
 }
+
+/** The player's own driver (the garage's, a netplay peer's): his picks over one fixed driver, never a race's seed, so he is the same man in every scene, loop and replay. */
+const OWN_DRIVER = driverLook(0, 0);
+
+/** A player's driver as his picks `pick` dress him: what the garage stands, and what his car throws everywhere. */
+export const ownLook = (pick: PersonPick): DriverLook => pickedLook(OWN_DRIVER, pick);

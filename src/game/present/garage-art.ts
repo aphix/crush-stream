@@ -3,7 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { canvasTexture, cinderBlock, concrete } from "./lab-art.ts";
 import { PARTS } from "./ragdoll-body.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
-import { driverLook, type DriverLook } from "./driver-look.ts";
+import type { DriverLook } from "./driver-look.ts";
 import type { SprayBitmap } from "./spray.ts";
 
 /** The garage (m): the room's half width, its back wall, its height; where the driver stands; and what the camera circles. */
@@ -29,8 +29,6 @@ export const GARAGE = {
   driverShot: { radius: 3.5, pitch: 0.14, minRadius: 0.65 },
   /** His sternum on the standing torso (m, part 0's rest frame: its box spans 0.84 to 1.38 m up). */
   chest: new THREE.Vector3(0, 1.25, 0),
-  /** The driver the garage shows under the player's picks (a race draws his unpicked clothes from its own seed). */
-  driver: driverLook(0, 0),
 } as const;
 
 /** One painted-block tile and one concrete slab (m), as the Lab's garage draws them. */
