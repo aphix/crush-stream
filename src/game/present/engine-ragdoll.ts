@@ -64,6 +64,8 @@ const GRACE = 0.35;
 const SLIDE = 0.12;
 /** Torso speed (m/s) under which a dummy counts as lying still. */
 const REST_SPEED = 0.4;
+/** Roll (rad/s) every thrown driver leaves with about his line of flight: about a quarter turn over the long jump's 3 s in the air (owner: a VERY slight spin at launch). */
+export const EJECT_ROLL = 0.5;
 /**
  * Sim seconds a throw judged before Rapier is in may wait for it; later it is dropped (a dummy out of a car that
  * stopped a second ago reads as a glitch). Rapier lands 0.45 s after `ready` in a production build, a fleet's
@@ -700,6 +702,8 @@ export class RagdollSystem {
     ejectionVelocity(e, t.v);
     t.v.set(t.v.x * releaseScale.forward, t.v.y * releaseScale.upward, t.v.z * releaseScale.forward);
     if (releaseScale.elevation !== null) turnToElevation(t.v, releaseScale.elevation);
+    const flight = t.v.length();
+    if (flight > 0) t.w.addScaledVector(t.v, EJECT_ROLL / flight);
     t.car = e.car;
     t.age = 0;
     t.cop = e.cop;

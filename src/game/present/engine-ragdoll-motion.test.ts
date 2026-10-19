@@ -7,7 +7,7 @@ import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/cra
 import { armKill, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
 import { THROW_ONSET } from "../match/phase.ts";
 import { RANGE } from "../scenes/range.ts";
-import { RagdollSystem } from "./engine-ragdoll.ts";
+import { EJECT_ROLL, RagdollSystem } from "./engine-ragdoll.ts";
 import { PARTS, shed } from "./ragdoll-body.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 
@@ -155,6 +155,33 @@ describe("given the ejection range (a sedan at 100 km/h into the jersey barrier,
       xs.push(await land(() => (0.5 + r()) / 144));
     }
     assert.ok(Math.max(...xs) - Math.min(...xs) <= 0.1, `landings ${xs.map((x) => x.toFixed(2)).join(", ")} m`);
+  });
+
+  it("when the driver leaves, then his torso spins EJECT_ROLL about his line of flight past the ejection's own spin, and no more", async () => {
+    const car = makeCar("shape", 0.32, 0.45);
+    armKill(car.deform, "sedan", DEFAULT_REALISM, "default");
+    launch(car, -RANGE.run, 0, Math.PI / 2, RANGE.kph / 3.6, 0);
+    const w = makeWorld([car], true, false, FREEWHEEL);
+    w.clock.slomoAt = THROW_ONSET;
+    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    await ragdolls.preload();
+    const spin = new THREE.Vector3();
+    let thrown = false;
+    w.onEject = (e) => {
+      ragdolls.launch(e, [car]);
+      spin.copy(e.spin);
+      thrown = true;
+    };
+    for (let f = 0; f < 30 * FRAME_HZ && !thrown; f++) tickWorld(w, 1 / FRAME_HZ);
+    assert.ok(thrown, "the control: the range throws its driver");
+    const dolls: Doll[] = ragdolls["dolls"];
+    const torso = dolls.find((d) => d.live)!.bodies[0]!;
+    const added = new THREE.Vector3().copy(torso.angvel()).sub(spin);
+    // `limp` shifts every part's velocity a little to keep the dummy's momentum, so his torso flies within a few mrad of the throw's line.
+    const off = added.angleTo(new THREE.Vector3().copy(torso.linvel()));
+    assert.ok(Math.abs(added.length() - EJECT_ROLL) < 1e-6, `added spin ${added.length().toFixed(5)} rad/s`);
+    assert.ok(off < 0.01, `added spin ${off.toFixed(4)} rad off his line of flight`);
+    ragdolls.dispose();
   });
 });
 
