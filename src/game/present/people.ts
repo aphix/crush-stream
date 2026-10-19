@@ -39,6 +39,8 @@ const TRACER_RGB = 0xffcf6a;
 const LEG_SWING = 0.5;
 const ARM_SWING = 0.4;
 const KNEE_BEND = 0.6;
+/** Unarmed arms hang this far (rad) out from the sides, the hands clear of the thighs: the reference's relaxed stance. */
+const ARM_OUT = 0.05;
 /** Seated: the thighs level forward, the shins hanging, the forearms forward over the lap (rad). */
 const SIT = { thigh: -Math.PI / 2, knee: Math.PI / 2, arm: -0.35, elbow: -0.9 };
 /** Aiming: the gun arm straight out level, the other hand up under it (rad). */
@@ -73,6 +75,8 @@ const BEHIND = 0.8;
 const NUKE_FLASH = { rise: 1800, hold: 500, fade: 4200 } as const;
 
 const X = new THREE.Vector3(1, 0, 0);
+const Z = new THREE.Vector3(0, 0, 1);
+const _out = new THREE.Quaternion();
 const _qa = new THREE.Quaternion();
 const _qb = new THREE.Quaternion();
 const _q = new THREE.Quaternion();
@@ -190,8 +194,8 @@ export class People {
     this.part(slot, 1, root, turn, _c.fromArray(PARTS[1]!.c), _qa.identity());
     for (let side = 0; side < 2; side++) {
       const sign = side * 2 - 1;
-      this.limb(slot, root, turn, sign, SHOULDER, ELBOW, ARM_UPPER[side], ARM_LOWER[side], stance.arm[side]!, stance.elbow[side]!);
-      this.limb(slot, root, turn, sign, HIP, KNEE, THIGH[side], SHIN[side], stance.thigh[side]!, stance.knee[side]!);
+      this.limb(slot, root, turn, sign, SHOULDER, ELBOW, ARM_UPPER[side], ARM_LOWER[side], stance.arm[side]!, stance.elbow[side]!, armed ? 0 : ARM_OUT);
+      this.limb(slot, root, turn, sign, HIP, KNEE, THIGH[side], SHIN[side], stance.thigh[side]!, stance.knee[side]!, 0);
     }
     if (!armed) return this.holster(slot);
     // The hand at the forearm's far end, the gun along it, its muzzle past the hand.
@@ -278,15 +282,16 @@ export class People {
     this.mesh.pose(slot, k, _p, _q.copy(turn).multiply(local));
   }
 
-  /** A two-part limb from joint `top` through joint `mid`, its upper part swung `a` and its lower `a + b` about his x axis. */
-  private limb(slot: number, root: THREE.Vector3, turn: THREE.Quaternion, side: number, top: readonly number[], mid: readonly number[], upper: number, lower: number, a: number, b: number): void {
+  /** A two-part limb from joint `top` through joint `mid`, its upper part swung `a` and its lower `a + b` about his x axis, both turned `out` (rad) away from his middle. */
+  private limb(slot: number, root: THREE.Vector3, turn: THREE.Quaternion, side: number, top: readonly number[], mid: readonly number[], upper: number, lower: number, a: number, b: number, out: number): void {
     _j.set(side * Math.abs(top[2]!), top[3]!, top[4]!);
-    _qa.setFromAxisAngle(X, a);
+    _out.setFromAxisAngle(Z, side * out);
+    _qa.setFromAxisAngle(X, a).premultiply(_out);
     const cu = PARTS[upper]!.c;
     _r.set(cu[0] - _j.x, cu[1] - _j.y, cu[2] - _j.z).applyQuaternion(_qa).add(_j);
     this.part(slot, upper, root, turn, _r, _qa);
     _k.set(side * Math.abs(mid[2]!), mid[3]!, mid[4]!).sub(_j).applyQuaternion(_qa).add(_j);
-    _qb.setFromAxisAngle(X, a + b);
+    _qb.setFromAxisAngle(X, a + b).premultiply(_out);
     const cl = PARTS[lower]!.c;
     _r.set(cl[0] - side * Math.abs(mid[2]!), cl[1] - mid[3]!, cl[2] - mid[4]!).applyQuaternion(_qb).add(_k);
     this.part(slot, lower, root, turn, _r, _qb);

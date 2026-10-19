@@ -1,5 +1,5 @@
 import { JOINTS, SHOULDER_Y } from "./ragdoll-body.ts";
-import type { Fit } from "./dummy-rig.ts";
+import { smooth, type Fit } from "./dummy-rig.ts";
 
 /** Scales (x, z) at heights (m, rising), linear between rows and held past the ends. */
 type Profile = readonly (readonly [y: number, x: number, z: number])[];
@@ -7,14 +7,27 @@ type Profile = readonly (readonly [y: number, x: number, z: number])[];
 /**
  * A build's physique over its fitted rest pose: the trunk, neck and head scaled about the body's middle, each leg about the
  * rig's hip axis, each arm about the rig's arm axis, moved `armIn` (m) toward the middle and swung `armOut` (rad) about its
- * shoulder. The weights stay, so the ragdoll pins the body as before.
+ * shoulder; the trapezius lowered `slope` (m) beside the neck, so the shoulder line falls from a neck that shows. The weights
+ * stay, so the ragdoll pins the body as before.
  */
-type Physique = { core: Profile; leg: Profile; arm: Profile; armIn: number; armOut: number };
+type Physique = { core: Profile; leg: Profile; arm: Profile; armIn: number; armOut: number; slope: number };
 
 const [ARM_X, ARM_Z] = [JOINTS[3][2], JOINTS[3][4]];
 const [LEG_X, LEG_Z] = [JOINTS[7][2], JOINTS[7][4]];
 /** The inner thighs may meet at the crotch but not cross: each stays this far (m) off the middle. */
 const THIGH_GAP = 0.002;
+/** The trapezius' drop is all of `slope` at the neck's side (|x|, m), none on the neck's column inside it nor at the shoulder's tip. */
+const SLOPE_NECK = [0.05, 0.09] as const;
+const SLOPE_TIP = 0.25;
+/** ...and between these heights (m): the top of the chest, and the jaw. */
+const SLOPE_RISE = [1.36, 1.42] as const;
+const SLOPE_FADE = [1.5, 1.56] as const;
+
+/** How much of a build's `slope` the trunk vertex at (|x|, y) drops. */
+function slopeShare(across: number, y: number): number {
+  const reach = across < SLOPE_NECK[1] ? smooth(SLOPE_NECK[0], SLOPE_NECK[1], across) : 1 - smooth(SLOPE_NECK[1], SLOPE_TIP, across);
+  return reach * smooth(SLOPE_RISE[0], SLOPE_RISE[1], y) * (1 - smooth(SLOPE_FADE[0], SLOPE_FADE[1], y));
+}
 
 function scaleAt(profile: Profile, y: number, axis: 1 | 2): number {
   if (y <= profile[0]![0]) return profile[0]![axis];
@@ -43,7 +56,7 @@ export function shape(fit: Fit, physique: Physique): Fit {
     const legX = side * Math.max(THIGH_GAP, LEG_X + (side * x - LEG_X) * scaleAt(physique.leg, y, 1));
     const legZ = LEG_Z + (z - LEG_Z) * scaleAt(physique.leg, y, 2);
     rest[i * 3] = core * x * scaleAt(physique.core, y, 1) + arm * armX + leg * legX;
-    rest[i * 3 + 1] = (1 - arm) * y + arm * armY;
+    rest[i * 3 + 1] = (1 - arm) * y + arm * armY - core * physique.slope * slopeShare(side * x, y);
     rest[i * 3 + 2] = core * z * scaleAt(physique.core, y, 2) + arm * (ARM_Z + (z - ARM_Z) * scaleAt(physique.arm, y, 2)) + leg * legZ;
     if (arm >= 1) fingertipY = Math.min(fingertipY, rest[i * 3 + 1]!);
   }
@@ -51,13 +64,13 @@ export function shape(fit: Fit, physique: Physique): Fit {
   return fit;
 }
 
-/** The reference's men: fuller hips and waist than the baked body's, thicker forearms, a thicker neck and a broader head. */
+/** The reference's men: fuller hips and waist than the baked body's, a sloped trapezius under a neck that shows, a slimmer deltoid over the biceps, forearms flaring from a slim wrist, a thicker neck and a broader head. */
 export const MAN: Physique = {
   core: [
     [0.7, 1, 1],
     [0.85, 1.12, 1.05],
     [1.1, 1.05, 1.05],
-    [1.25, 1.05, 1.03],
+    [1.25, 1, 1.03],
     [1.35, 1, 1],
     [1.47, 1, 1],
     [1.5, 1.14, 1.05],
@@ -70,12 +83,21 @@ export const MAN: Physique = {
     [0.85, 1.06, 1.06],
   ],
   arm: [
-    [0.95, 1.22, 1.15],
-    [1.07, 1.1, 1.08],
-    [1.12, 0.95, 1],
+    [0.72, 1, 1],
+    [0.8, 1.2, 1.1],
+    [0.86, 1.25, 1.16],
+    [0.92, 1.18, 1.12],
+    [0.97, 1.08, 1.06],
+    [1.02, 1.14, 1.08],
+    [1.07, 1.26, 1.12],
+    [1.12, 1.24, 1.12],
+    [1.2, 1.05, 1.05],
+    [1.28, 0.85, 0.94],
+    [1.36, 0.78, 0.92],
   ],
   armIn: 0,
   armOut: 0.015,
+  slope: 0.025,
 };
 
 /** The reference's woman: narrower shoulders, her arms set in from the man's and hanging out past her hips, a slightly broader head. */
@@ -93,8 +115,9 @@ export const WOMAN: Physique = {
     [1.2, 1, 1],
     [1.35, 0.85, 0.95],
   ],
-  armIn: 0.02,
-  armOut: 0.09,
+  armIn: 0.015,
+  armOut: 0.04,
+  slope: 0,
 };
 
 /** The reference's president: square shoulders, a thick neck and big head, heavy arms set out from his belly, thicker legs. */
@@ -119,4 +142,5 @@ export const PORTLY: Physique = {
   ],
   armIn: 0,
   armOut: 0.03,
+  slope: 0,
 };

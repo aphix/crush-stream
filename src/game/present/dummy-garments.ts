@@ -210,10 +210,10 @@ const TOE_OUT = 0.019;
  * One that `rests` is never wider at a height than the body's widest from `from` down to there: it falls from a belly instead of standing off the chest above it.
  */
 type Hang = { taken: (fit: Fit, side: number) => Take; share: (fit: Fit, side: number) => (vertex: number) => number; sides: readonly number[]; from: number; to: number; fade: number; ease: readonly [number, number]; keep: number; gap: number; rests: boolean };
-/** The tee falls from under the pecs to its hem (above them the chest is the shoulders' blend), a sleeve from the shoulder to its cuff (a short one is cut at its end), the jeans from the thigh to the hem. */
+/** The tee falls from under the pecs to its hem (above them the chest is the shoulders' blend), a sleeve from the deltoid to its cuff (a short one is cut at its end), the jeans from the thigh to the hem. */
 const HANGS: readonly Hang[] = [
   { taken: torsoOf, share: (fit) => (vertex) => (torsoOf(fit)(vertex) ? 1 : 0), sides: [0], from: 1.25, to: HEM_TOP, fade: 0.04, ease: [0.004, 0.008], keep: 0, gap: 0, rests: true },
-  { taken: armOf, share: (fit, side) => (vertex) => ((fit.tpose[vertex * 3]! < 0 ? -1 : 1) === side ? fit.shoulderWeight[vertex]! : 0), sides: [-1, 1], from: 1.24, to: SLEEVE_HANG_TO, fade: 0.1, ease: [0.008, 0], keep: 0.85, gap: 0, rests: false },
+  { taken: armOf, share: (fit, side) => (vertex) => ((fit.tpose[vertex * 3]! < 0 ? -1 : 1) === side ? fit.shoulderWeight[vertex]! : 0), sides: [-1, 1], from: 1.24, to: SLEEVE_HANG_TO, fade: 0.04, ease: [0.008, 0], keep: 0.85, gap: 0, rests: false },
   { taken: legOf, share: (fit, side) => (vertex) => (legOf(fit, side)(vertex) ? 1 : 0), sides: [-1, 1], from: 0.7, to: LEG_HANG_TO, fade: 0.1, ease: [0.01, 0.012], keep: 0.85, gap: LEG_GAP, rests: false },
 ];
 /** Sides of the polygons a hang's width is read off, between which it is interpolated by angle. */
