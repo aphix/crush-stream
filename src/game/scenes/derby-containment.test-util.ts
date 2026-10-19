@@ -61,9 +61,13 @@ function fly(cls: VehicleClassId, x: number, z: number, yaw: number, speed: numb
     frame(world, FLAT_OUT, accumulator, () => {
       const orientation = car.group.quaternion;
       const lift = cageLift(car);
-      const positions = car.cage.fields.pos;
-      for (let k = 0; k < car.cage.style.vertexCount; k++) {
-        vertex.set(positions[k * 3]!, positions[k * 3 + 1]! + lift, positions[k * 3 + 2]!).applyQuaternion(orientation).add(car.group.position);
+      const { pos, panelOn } = car.cage.fields;
+      const { vertexCount, vertexGroup } = car.cage.style;
+      for (let k = 0; k < vertexCount; k++) {
+        // A torn-off lid's points stay parked at its rest on the body; the wall meets the plan box `rasterise` builds without them.
+        const group = vertexGroup[k]!;
+        if (group > 0 && panelOn[group - 1] === 0) continue;
+        vertex.set(pos[k * 3]!, pos[k * 3 + 1]! + lift, pos[k * 3 + 2]!).applyQuaternion(orientation).add(car.group.position);
         const vertexRadius = Math.hypot(vertex.x, vertex.z);
         flight.maxRadius = Math.max(flight.maxRadius, vertexRadius);
         if (vertexRadius >= radius) flight.maxHeightAtWall = Math.max(flight.maxHeightAtWall, vertex.y);
