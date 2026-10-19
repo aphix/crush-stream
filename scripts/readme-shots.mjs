@@ -2,7 +2,7 @@
 // Regenerates the README's pictures from a served build, at the Ultra FX tier: a webp per scene and the animated crash into
 // docs/images/, then the GitHub social card (.github/social-preview.png) from the new hero.
 //
-//   node scripts/readme-shots.mjs <port|url> [name ...] [--out DIR] [--tmp DIR] [--at S,S,...] [--keep]
+//   node scripts/readme-shots.mjs <port|url> [name ...] [--out DIR] [--tmp DIR] [--at S,S,...] [--keep] [--fx TIER] [--hash k=v&k=v]
 //
 // `<port|url>` is a served build (`npm run build:node` then `PORT=8130 HOST=127.0.0.1 npm run start:node`; `npm run build` then
 // `npm run preview:restart` serves one on 8081; any base path works). No names = every scene, then `slowmo` and `card`.
@@ -13,6 +13,7 @@
 //   --at 1.2,1.6   no encoding: one still per time (sim seconds after the scene's setup) into --tmp, to find a scene's best moment.
 //   --tmp DIR      keep the raw frames there (default: a temp folder, removed after unless --keep).
 //   --fx TIER      open every scene at this FX tier instead of ultra (off, minimal, low, high): to see what a lower tier draws.
+//   --hash k=v&k=v   appended to every scene's hash: a setting on for a before/after survey.
 // Needs Playwright's Chromium and ffmpeg with libwebp. On WSL the GPU is reached through ANGLE over d3d12 (a software renderer is
 // too slow for Ultra). The browser is muted. Look at every result: a washed-out or mid-fade frame is re-taken with a different `at`.
 import { spawnSync } from "node:child_process";
@@ -42,11 +43,11 @@ const HIDE_UI = "body *:not(canvas){visibility:hidden !important} canvas{visibil
 
 const { values: flags, positionals } = parseArgs({
   allowPositionals: true,
-  options: { out: { type: "string" }, tmp: { type: "string" }, at: { type: "string" }, keep: { type: "boolean" }, fx: { type: "string" } },
+  options: { out: { type: "string" }, tmp: { type: "string" }, at: { type: "string" }, keep: { type: "boolean" }, fx: { type: "string" }, hash: { type: "string" } },
 });
 const [target, ...wanted] = positionals;
 if (!target) {
-  console.error("usage: node scripts/readme-shots.mjs <port|url> [scene ...] [--out DIR] [--tmp DIR] [--at S,S,...] [--keep]");
+  console.error("usage: node scripts/readme-shots.mjs <port|url> [scene ...] [--out DIR] [--tmp DIR] [--at S,S,...] [--keep] [--fx TIER] [--hash k=v&k=v]");
   process.exit(2);
 }
 const BASE = /^\d+$/.test(target) ? `http://127.0.0.1:${target}/` : target.replace(/\/?$/, "/");
@@ -305,6 +306,8 @@ const SCENES = {
       }),
     at: 0.1,
   },
+  lab: { survey: true, hash: "scene=lab", setup: (p) => frame(p, 9, 0.3, 0.6), at: 1 },
+  stack: { survey: true, hash: "scene=stack&scars=4", setup: (p) => stepSim(p, 2.5), at: 0.5 },
   // Every figure knocked over (the showcase's own press: Rapier loaded first, then knock and take) with the Rig debug view on (G): each body's
   // ten part boxes and joints over its drawn mesh, to see that the skin rides its rig, falling (0.3 s) and lying on the ground (2 s and on).
   // The free eye is set 9 m in and tipped down at the front row (no held key, so it stays put whatever `--at`).
@@ -480,7 +483,7 @@ async function open(browser, { size = [1600, 900], hash, ui }, errors) {
   const [width, height] = size;
   const page = await browser.newPage({ viewport: { width, height } });
   page.on("pageerror", (err) => errors.push(String(err)));
-  await page.goto(`${BASE}?fx=${FX_TIER}#${hash}`, { waitUntil: "load" });
+  await page.goto(`${BASE}?fx=${FX_TIER}#${hash}${flags.hash ? `&${flags.hash}` : ""}`, { waitUntil: "load" });
   await page.waitForFunction((tier) => window.__crush?.cine.tier === tier && !window.__crush.fxLoading, FX_TIER, { timeout: LOAD_MS });
   await page.waitForFunction(() => {
     const fade = window.__crush.sceneFade;
