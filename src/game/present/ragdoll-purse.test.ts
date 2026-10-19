@@ -5,7 +5,7 @@ import "../kernel/rapier-node.test-util.ts";
 import type { RigidBody } from "@dimforge/rapier3d-simd";
 import { driverLook } from "./driver-look.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { ROLES } from "./dummy-skin.ts";
+import { ROLES } from "./dummy-rig.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { Purses, BURST_AT, ITEM_SPEED, ITEMS_MIN, PURSE_SPEED, SPREAD } from "./ragdoll-purse.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";

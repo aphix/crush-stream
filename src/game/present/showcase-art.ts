@@ -1,6 +1,8 @@
 import * as THREE from "three";
-import { driverLook, JEANS, type DriverLook } from "./driver-look.ts";
-import { blankStance, guardDress, People, VIP_LOOK, walkStance, type Stance } from "./people.ts";
+import { ELDER_LOOK, VIP_LOOK } from "./dummy-dress.ts";
+import { FACE } from "./dummy-faces.ts";
+import { OUTFIT, type DriverLook } from "./driver-look.ts";
+import { blankStance, guardDress, People, walkStance, type Stance } from "./people.ts";
 
 /**
  * The showcase's set: every kind of person the game draws, standing in rows (`ROWS`) on the sandbox's disc so the owner can
@@ -11,17 +13,22 @@ import { blankStance, guardDress, People, VIP_LOOK, walkStance, type Stance } fr
 /** One figure: its dress (`cop`: a uniform, else a civilian `look`). */
 type Figure = { name: string; cop: boolean; look: DriverLook };
 
-const CIVILIAN: DriverLook = { woman: false, shirt: 0x3d5a80, pants: JEANS, hair: 0x5a3a22, hat: null, mustache: false };
+/** The reference's jeans (mid-blue denim), her cut-offs (a lighter wash) and the men's dark-brown hair (sRGB). */
+const DENIM = 0x283650;
+const CUT_OFFS = 0x3a4d81;
+const DARK_BROWN = 0x4a3020;
 
-/** The people the game draws: a driver, a woman driver, a driver who picked a cap and a moustache, a plain-clothes guard, the VIP and a uniformed guard (a cop). */
+/** The people the game draws, as the look reference has them: the man in the blue tee, the woman, the man in red with a cap and dark glasses, a plain-clothes guard, the president and a uniformed cop. */
 const FIGURES: readonly Figure[] = [
-  { name: "man", cop: false, look: CIVILIAN },
-  { name: "woman", cop: false, look: { ...driverLook(3, 4), woman: true, shirt: 0x7b4fa6, hair: 0xb5532a } },
-  { name: "cap and moustache", cop: false, look: { ...CIVILIAN, shirt: 0xc0392b, hat: 0x1f3463, mustache: true } },
+  { name: "man", cop: false, look: { woman: false, shirt: 0x2c4f9e, pants: DENIM, hair: DARK_BROWN, hat: null, mustache: false, outfit: OUTFIT.TEE, face: FACE.MAN } },
+  { name: "woman", cop: false, look: { woman: true, shirt: 0x7b4fa6, pants: CUT_OFFS, hair: 0xb5532a, hat: null, mustache: false, outfit: OUTFIT.TOP, face: FACE.WOMAN } },
+  { name: "cap and shades", cop: false, look: { woman: false, shirt: 0xc8462a, pants: DENIM, hair: DARK_BROWN, hat: 0x1c2747, mustache: false, outfit: OUTFIT.LONG_SLEEVE, shades: true, face: FACE.CAP_MAN } },
   { name: "guard", ...guardDress(1) },
   { name: "president", cop: false, look: VIP_LOOK },
   { name: "uniformed cop", ...guardDress(0) },
 ];
+/** The back row: the same kinds, the president's older aide standing behind him as in the reference. */
+const BACK_ROW: readonly Figure[] = FIGURES.map((figure) => (figure.look === VIP_LOOK ? { name: "older aide", cop: false, look: ELDER_LOOK } : figure));
 
 /** The stride a walking row is caught at (rad of a whole stride's 2π): an elbow and a knee bent on each side. */
 const STRIDE_PHASE = 1.1;
@@ -77,7 +84,7 @@ export class ShowcaseArt {
   }
 
   figureOf(slot: number): Figure {
-    return FIGURES[slot % FIGURES.length]!;
+    return (slot < FIGURES.length ? FIGURES : BACK_ROW)[slot % FIGURES.length]!;
   }
 
   dispose(): void {

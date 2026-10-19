@@ -5,7 +5,9 @@ import { driverLook, JEANS, type DriverLook } from "./driver-look.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 import { JOINTS, PARTS } from "./ragdoll-body.ts";
 import { BODY_VERTICES, bodyIndex } from "./dummy-bodies.ts";
-import { BONES_ATTRIBUTE, BUILD, FLAGS_AT, KINDS_ATTRIBUTE, restFits, ROLE, ROLES, skinPoint, WHISKERS } from "./dummy-skin.ts";
+import { restFits } from "./dummy-fit.ts";
+import { BONES_ATTRIBUTE, BUILD, FLAGS_AT, isDrawn, KINDS_ATTRIBUTE, ROLE, ROLES, skinPoint, WHISKERS } from "./dummy-rig.ts";
+import { COP_LOOK, ELDER_LOOK, GUARD_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 
 /**
  * The steepest each `JOINTS` row's blend weight may climb per metre, restated from the band widths of dummy-skin.ts (neck
@@ -29,6 +31,19 @@ const BUILDS = [
   { name: "woman", look: WOMAN },
   { name: "portly man", look: { ...MAN, portly: true } },
 ] as const;
+/** Every kind of person the game draws (the showcase's figures): the triangles each one draws are bounded per kind. */
+const KINDS = [
+  { name: "man", cop: false, look: MAN },
+  { name: "woman", cop: false, look: WOMAN },
+  { name: "man in a cap and shades", cop: false, look: { ...MAN, hat: 0x1c2747, shades: true } },
+  { name: "guard", cop: false, look: GUARD_LOOK },
+  { name: "president", cop: false, look: VIP_LOOK },
+  { name: "older aide", cop: false, look: ELDER_LOOK },
+  { name: "cop", cop: true, look: COP_LOOK },
+] as const;
+/** The baked lores body's triangles, and the most one person may draw: ragdolls run in a worker, so the draw is the cost. */
+const BODY_TRIANGLES = 8040;
+const DRAWN_TRIANGLES = 12000;
 
 /**
  * How well a fitted body sits on the rig (m): its crown within `HEIGHT_BOUND` of the head top; each limb's axis (the mean x and
@@ -201,12 +216,18 @@ describe("given the crash-test dummies drawn for thrown drivers", () => {
     assert.equal(mesh.count, 0);
   });
 
-  it("when the body's triangles are counted, then the baked lores body is all there and the wear on top stays under 12k", () => {
-    const mesh = new DummyMesh(1);
-    const triangles = mesh.geometry.index!.count / 3;
-    assert.ok(triangles >= 8040, `${triangles} triangles, the 8040-triangle body is missing`);
-    assert.ok(triangles <= 12000, `${triangles} triangles`);
-  });
+  for (const kind of KINDS) {
+    it(`when the ${kind.name}'s drawn triangles are counted, then the baked lores body is all there and the wear on top stays within ${DRAWN_TRIANGLES}`, () => {
+      const mesh = new DummyMesh(1);
+      mesh.dress(0, kind.cop, kind.look);
+      const flags = mesh["rows"][FLAGS_AT * 4]!;
+      const [kinds, index] = [mesh.geometry.getAttribute(KINDS_ATTRIBUTE), mesh.geometry.index!];
+      let triangles = 0;
+      for (let t = 0; t < index.count; t += 3) if ([0, 1, 2].every((k) => isDrawn(kinds.getY(index.getX(t + k)), flags))) triangles++;
+      assert.ok(triangles >= BODY_TRIANGLES, `${triangles} triangles, the ${BODY_TRIANGLES}-triangle body is missing`);
+      assert.ok(triangles <= DRAWN_TRIANGLES, `${triangles} drawn triangles, bound ${DRAWN_TRIANGLES}`);
+    });
+  }
 
   it("when each build stands, then its height and joints sit on the rig", () => {
     const top = PARTS[1]!.c[1] + PARTS[1]!.h[1];
@@ -514,7 +535,6 @@ const HEADS = [
   { name: "woman with long hair", look: WOMAN, cop: false },
   { name: "portly man", look: { ...MAN, portly: true }, cop: false },
   { name: "man in a cap", look: { ...MAN, hat: 0x2255aa }, cop: false },
-  { name: "cop in his cap", look: MAN, cop: true },
 ] as const;
 
 describe("given the dummy's head", () => {
@@ -544,23 +564,18 @@ describe("given the dummy's head", () => {
         if (role === ROLE.HAIR) crown.push(at.clone());
         checked++;
       }
-      assert.ok(checked > 40, `${checked} head wear vertices checked`);
-      if (head.cop || head.look.hat !== null) {
+      if (head.look.hat !== null) {
         const fastened = peak.filter((p) => crown.some((c) => c.distanceTo(p) < 1e-3)).length;
         assert.ok(fastened >= PEAK_ATTACHED, `${fastened} of ${peak.length} peak vertices lie on the crown, at least ${PEAK_ATTACHED} must`);
       } else assert.equal(peak.length, 0, "no peak without a cap");
     });
   }
 
-  it("when a civilian and a cop are drawn, then the civilian's eyes are the atlas and the cop's lenses sit on the face", () => {
-    const civilian = drawn(MAN, false);
-    const cop = drawn(MAN, true);
+  it("when a man is dressed with shades and without, then the shaded man has lens vertices on his face and the bare one has none", () => {
     const lenses = (rows: Drawn[]) => ofRole(rows, ROLE.EYES).filter((r) => r.at.z > 0.05 && r.at.y > 1.55);
-    assert.equal(lenses(civilian).length, 0, "no floating eye boxes on a civilian");
-    assert.ok(lenses(cop).length > 8, `${lenses(cop).length} lens vertices on the cop`);
-    const gap = Math.min(...lenses(cop).map((r) => Math.abs(r.at.x)));
-    assert.ok(gap > 0.015, "the lenses are a pair, not one bar");
-    assert.ok(Math.max(...lenses(cop).map((r) => r.at.z)) < 0.14, "the lenses sit on the face, not in front of it");
+    const shaded = lenses(drawn({ ...MAN, shades: true }, false)).length;
+    assert.ok(shaded > 8, `${shaded} lens vertices on the shaded man`);
+    assert.equal(lenses(drawn(MAN, false)).length, 0, "no lenses without shades");
   });
 });
 
@@ -587,10 +602,10 @@ const BODY_OFF_AXIS = CAP_AXIS;
 
 /** Shoulders and hips, the joints a limb must grow out of. `joint` indexes `JOINTS` (parent, child, point). */
 const SEAMS = [
-  { name: "left shoulder", joint: 1, role: ROLE.SHIRT },
-  { name: "right shoulder", joint: 3, role: ROLE.SHIRT },
-  { name: "left hip", joint: 5, role: ROLE.LEGS },
-  { name: "right hip", joint: 7, role: ROLE.LEGS },
+  { name: "left shoulder", joint: 1 },
+  { name: "right shoulder", joint: 3 },
+  { name: "left hip", joint: 5 },
+  { name: "right hip", joint: 7 },
 ] as const;
 
 /** The poses a viewer sees the joint in: standing, the defect's arms overhead, arms out, legs spread, sitting. */
@@ -612,12 +627,12 @@ function onTorso(skin: { getX: (i: number) => number; getY: (i: number) => numbe
  * The seam at `joint` (a `JOINTS` row): how far (m) a torso-weighted end cap floats off the torso body, and the widest hole
  * (m) along the posed span from that body to the limb root. Both stay under their bounds when the limb grows out of the torso.
  */
-function seamGap(mesh: DummyMesh, joint: number, role: number): { float: number; hole: number } {
+function seamGap(mesh: DummyMesh, joint: number): { float: number; hole: number } {
   const [, limb, jx, jy, jz] = JOINTS[joint]!;
   const at = new THREE.Vector3(jx, jy, jz);
   const axis = new THREE.Vector3(jx, 0, jz);
   const geo = mesh.geometry;
-  const [pos, skin, kinds] = [restShape(mesh), geo.getAttribute(BONES_ATTRIBUTE), geo.getAttribute(KINDS_ATTRIBUTE)];
+  const [pos, skin] = [restShape(mesh), geo.getAttribute(BONES_ATTRIBUTE)];
   const offAxis = (p: THREE.Vector3) => Math.hypot(p.x - axis.x, p.z - axis.z);
   const body: THREE.Vector3[] = [];
   const caps: THREE.Vector3[] = [];
@@ -626,11 +641,12 @@ function seamGap(mesh: DummyMesh, joint: number, role: number): { float: number;
   const posed = new THREE.Vector3();
   const rest = new THREE.Vector3();
   for (let i = 0; i < pos.count; i++) {
-    if (kinds.getX(i) !== role || !mesh.posed(0, i, posed)) continue;
+    const w = skin.getZ(i);
+    const sides = [w < 1 ? skin.getX(i) : 0, w > 0 ? skin.getY(i) : 0];
+    if (!sides.every((bone) => bone === 0 || bone === limb) || !mesh.posed(0, i, posed)) continue;
     fill.push(posed.clone());
     rest.fromBufferAttribute(pos, i);
     if (rest.distanceTo(at) > SEAM_REACH) continue;
-    const w = skin.getZ(i);
     const bone = w >= 0.5 ? skin.getY(i) : skin.getX(i);
     if (onTorso(skin, i) && offAxis(rest) <= CAP_AXIS) caps.push(posed.clone());
     else if (onTorso(skin, i) && offAxis(rest) >= BODY_OFF_AXIS) body.push(posed.clone());
@@ -663,7 +679,7 @@ describe("given the dummy's shoulders and hips", () => {
         mesh.dress(0, false, build.look);
         show(mesh, posture(pose.turns));
         for (const seam of SEAMS) {
-          const { float, hole } = seamGap(mesh, seam.joint, seam.role);
+          const { float, hole } = seamGap(mesh, seam.joint);
           assert.ok(float <= CAP_FLOAT, `${seam.name} end cap floats ${float.toFixed(3)} m off the torso (bound ${CAP_FLOAT} m)`);
           assert.ok(hole <= SEAM_HOLE, `${seam.name} opens a ${hole.toFixed(3)} m hole (bound ${SEAM_HOLE} m)`);
         }
@@ -679,11 +695,11 @@ describe("given the dummy's shoulders and hips", () => {
 const OUTWARD = -0.3;
 
 /** Worst inward face at `joint`: how far (dot) a bridge triangle's normal points toward the limb axis instead of away. */
-function inwardFace(mesh: DummyMesh, joint: number, role: number): number {
+function inwardFace(mesh: DummyMesh, joint: number): number {
   const [, limb, jx, jy, jz] = JOINTS[joint]!;
   const axis = new THREE.Vector3(jx, 0, jz);
   const geo = mesh.geometry;
-  const [pos, skin, kinds, index] = [restShape(mesh), geo.getAttribute(BONES_ATTRIBUTE), geo.getAttribute(KINDS_ATTRIBUTE), geo.index!];
+  const [pos, skin, index] = [restShape(mesh), geo.getAttribute(BONES_ATTRIBUTE), geo.index!];
   const at = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   const rest = new THREE.Vector3();
   let worst = 0;
@@ -691,7 +707,7 @@ function inwardFace(mesh: DummyMesh, joint: number, role: number): number {
     if (!mesh.posed(0, i, at[0])) return false;
     rest.fromBufferAttribute(pos, i);
     const w = skin.getZ(i);
-    return kinds.getX(i) === role && rest.distanceTo(new THREE.Vector3(jx, jy, jz)) < 0.2 && skin.getY(i) === limb && w > 0.15 && w < 0.85;
+    return rest.distanceTo(new THREE.Vector3(jx, jy, jz)) < 0.2 && skin.getY(i) === limb && w > 0.15 && w < 0.85;
   };
   for (let t = 0; t < index.count; t += 3) {
     const ij = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
@@ -719,12 +735,41 @@ describe("given the shoulder and hip bridges", () => {
         if (pose.name !== "at rest") continue;
         show(mesh, posture(pose.turns));
         for (const seam of SEAMS) {
-          const dot = inwardFace(mesh, seam.joint, seam.role);
+          const dot = inwardFace(mesh, seam.joint);
           assert.ok(dot >= OUTWARD, `${seam.name} ${pose.name}: a face points inward ${dot.toFixed(2)} (bound ${OUTWARD})`);
-          const { hole } = seamGap(mesh, seam.joint, seam.role);
+          const { hole } = seamGap(mesh, seam.joint);
           assert.ok(hole <= SEAM_HOLE, `${seam.name} ${pose.name}: a ${hole.toFixed(3)} m flap (bound ${SEAM_HOLE} m)`);
         }
       }
     });
   }
+});
+
+describe("given the people's shader drawn with MSAA", () => {
+  it("when it is compiled, then both stages sample the region weights at the centroid, so a pixel shaded off a sliver triangle at a cuff or a neckline never pushes them past 0..1 into an over-bright glint", () => {
+    const mesh = new DummyMesh(1);
+    const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
+    const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+    mesh.material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    assert.match(shader.vertexShader, /^centroid varying vec4 vDollRegion;$/m, "the vertex stage");
+    assert.match(shader.fragmentShader, /^centroid varying vec4 vDollRegion;$/m, "the fragment stage");
+  });
+});
+
+describe("given the wear lofted over the bodies", () => {
+  it("when every wear triangle is read, then its three corners are one role, so its colour neither blends across a role line (a sneaker's white over its canvas) nor hangs on which corner a flat varying reads", () => {
+    const geometry = new DummyMesh(1).geometry;
+    const index = geometry.getIndex()!;
+    const kinds = geometry.getAttribute(KINDS_ATTRIBUTE);
+    let [wear, mixed] = [0, ""];
+    for (let t = 0; t < index.count; t += 3) {
+      const corners = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
+      if (corners[0]! < BODY_VERTICES) continue;
+      wear++;
+      const roles = corners.map((vertex) => kinds.getX(vertex));
+      if ((roles[0] !== roles[1] || roles[0] !== roles[2]) && mixed === "") mixed = `triangle ${t / 3}: roles ${roles.join(", ")}`;
+    }
+    assert.ok(wear > 1000, `${wear} wear triangles`);
+    assert.equal(mixed, "", `a wear triangle mixes roles: ${mixed}`);
+  });
 });

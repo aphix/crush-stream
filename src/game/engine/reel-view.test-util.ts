@@ -8,7 +8,7 @@ import { phaseClock } from "../match/phase.ts";
 import type { ViewBox } from "../match/types.ts";
 import { CrashCam } from "../present/engine-cine.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
-import { VIP_LOOK } from "../present/people.ts";
+import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { addCars, sightLine, withCars, type Sight } from "../present/spectate-cam.ts";
 import { coverLens, FLIGHT_S, ReelDirector, type ReelHost } from "./engine-highlights.ts";
 import { PoseBlend } from "../present/pose-blend.ts";

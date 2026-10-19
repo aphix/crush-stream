@@ -11,7 +11,7 @@ import { throwComing } from "./ragdoll-trigger.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { SHIRTS } from "./driver-look.ts";
 import type { DummyMesh } from "./ragdoll-mesh.ts";
-import { ROLE } from "./dummy-skin.ts";
+import { ROLE } from "./dummy-rig.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
 import { occluder, sightLine, solid, type Occluder, type Sight } from "./spectate-cam.ts";
 import { BELT_Y, SILL_Y, UNDER } from "./ragdoll-proxy.ts";

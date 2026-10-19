@@ -1,14 +1,32 @@
 import { mulberry32 } from "../world/placements.ts";
 import type { PersonPick } from "../match/look-data.ts";
+import { FACE } from "./dummy-faces.ts";
 
 /**
  * A driver's look: tee, trousers, hair, a cap (its colour, null for none), a moustache, and whether she is a woman; `portly` (a
  * figure of the course's own, never a drawn driver): a big man in a suit, white collar and red tie, his hair swept up and back.
+ * `outfit` (one of `OUTFIT`; by default a woman's top or a man's tee, the portly man's suit), `shades`, `face` (one of `FACE`;
+ * by default the man's or the woman's) and `tie` (sRGB; by default the outfit's) dress the figures the game places itself.
  * Cosmetic only. A drawn driver is a pure function of (the race's look seed, the car's slot), through its own
  * `mulberry32` stream and never the sim's RNG, so sim digests do not move, and every peer, replay and highlight clip that
  * knows the seed draws the same driver; a player's own picks (`look-pick.ts`) then override fields of it.
  */
-export type DriverLook = { woman: boolean; shirt: number; pants: number; hair: number; hat: number | null; mustache: boolean; portly?: boolean };
+export type DriverLook = {
+  woman: boolean;
+  shirt: number;
+  pants: number;
+  hair: number;
+  hat: number | null;
+  mustache: boolean;
+  portly?: boolean;
+  outfit?: number;
+  shades?: boolean;
+  face?: number;
+  tie?: number;
+};
+
+/** What a figure wears: a tee and jeans, a long-sleeved shirt and jeans, a woman's top and cut-offs, a suit, a uniform. */
+export const OUTFIT = { TEE: 0, LONG_SLEEVE: 1, TOP: 2, SUIT: 3, UNIFORM: 4 } as const;
 
 /** A drawn driver's trousers: FlatOut's jeans (sRGB). */
 export const JEANS = 0x3a4d6d;
@@ -32,6 +50,9 @@ export const HAIRS: readonly number[] = [
   0xcfcfcf, 0x2d6cdf, 0xff6fa8,
 ];
 
+/** The faces a drawn man may have: the reference's men without glasses. */
+const MAN_FACES = [FACE.MAN, FACE.COP] as const;
+
 /** The look of the driver in car `slot` of the race with look seed `seed`. */
 export function driverLook(seed: number, slot: number): DriverLook {
   const rand = mulberry32(Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(slot + 1, 0xc2b2ae35));
@@ -39,17 +60,20 @@ export function driverLook(seed: number, slot: number): DriverLook {
   const woman = rand() < WOMAN_RATE;
   const shirt = SHIRTS[Math.floor(rand() * SHIRTS.length)]!;
   const hair = HAIRS[Math.floor(rand() * HAIRS.length)]!;
-  return { woman, shirt, pants: JEANS, hair, hat: null, mustache: false };
+  const face = woman ? FACE.WOMAN : MAN_FACES[Math.floor(rand() * MAN_FACES.length)]!;
+  return { woman, shirt, pants: JEANS, hair, hat: null, mustache: false, face };
 }
 
-/** The driver `base` (his drawn look) with the player's picks over it. The cap and the moustache are the player's alone. */
+/** The driver `base` (his drawn look) with the player's picks over it. The cap and the moustache are the player's alone; a pick that changes the build changes the face with it. */
 export function pickedLook(base: DriverLook, pick: PersonPick): DriverLook {
+  const woman = pick.woman ?? base.woman;
   return {
-    woman: pick.woman ?? base.woman,
+    woman,
     shirt: pick.shirt ?? base.shirt,
     pants: pick.pants ?? base.pants,
     hair: pick.hair ?? base.hair,
     hat: pick.hat,
     mustache: pick.mustache,
+    face: woman === base.woman ? base.face : undefined,
   };
 }

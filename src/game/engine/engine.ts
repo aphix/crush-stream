@@ -29,7 +29,7 @@ import { Fountains } from "./engine-fountains.ts";
 import { GameAudio } from "../present/game-audio.ts";
 import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
-import { VIP_LOOK } from "../present/people.ts";
+import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
 import { ChaseCamera, centroid, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
 import { blankFreeInput, sceneExtent } from "../present/free-cam.ts";

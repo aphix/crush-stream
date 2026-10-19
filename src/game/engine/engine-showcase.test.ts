@@ -4,7 +4,9 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
-import { ROLE } from "../present/dummy-skin.ts";
+import { ROLE } from "../present/dummy-rig.ts";
+import { ELDER_LOOK } from "../present/dummy-dress.ts";
+import { OUTFIT, type DriverLook } from "../present/driver-look.ts";
 import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
@@ -17,6 +19,15 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const CHEST_Y = 1.2;
+/** Each kind of person the set must show, by what tells him apart; `back` is a figure of the back row. */
+const KINDS: readonly { name: string; is: (f: { cop: boolean; look: DriverLook; back: boolean }) => boolean }[] = [
+  { name: "woman", is: (f) => f.look.woman },
+  { name: "portly man", is: (f) => f.look.portly === true },
+  { name: "cop", is: (f) => f.cop },
+  { name: "capped man in shades", is: (f) => !f.cop && f.look.hat !== null && f.look.shades === true },
+  { name: "plain-clothes guard", is: (f) => !f.cop && f.look.outfit === OUTFIT.UNIFORM && f.look.shades === true },
+  { name: "older aide in the back row", is: (f) => f.back && f.look === ELDER_LOOK },
+];
 
 describe("given the real engine booted on #scene=showcase", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -56,7 +67,7 @@ describe("given the real engine booted on #scene=showcase", () => {
     setGround(null);
   });
 
-  it("when the page has loaded, then the showcase is the scene and every kind of person stands in one draw: a man, a woman, a cap and moustache, a guard, the president and a cop", () => {
+  it("when the page has loaded, then the showcase is the scene and every kind of person stands in one draw: a woman, a portly man, a cop, a capped man in shades, a plain-clothes guard and the older aide in the back row", () => {
     assert.equal(engine["sceneId"], "showcase");
     assert.equal(art().group.visible, true);
     const meshes: DummyMesh[] = [];
@@ -65,8 +76,8 @@ describe("given the real engine booted on #scene=showcase", () => {
     });
     assert.equal(meshes.length, 1, "one instanced mesh draws them all");
     assert.equal(people().count, art().slots, "every slot is out");
-    const figures = Array.from({ length: art().slots }, (_, slot) => art().figureOf(slot));
-    assert.ok(figures.some((f) => f.look.woman) && figures.some((f) => f.look.portly) && figures.some((f) => f.cop) && figures.some((f) => f.look.mustache && f.look.hat !== null), "the kinds are all there");
+    const figures = Array.from({ length: art().slots }, (_, slot) => ({ ...art().figureOf(slot), back: slot >= art().slots / 2 }));
+    for (const kind of KINDS) assert.ok(figures.some(kind.is), `the ${kind.name} is on the set`);
     const drawn = (slot: number): number => {
       const at = new THREE.Vector3();
       let n = 0;
@@ -74,7 +85,7 @@ describe("given the real engine booted on #scene=showcase", () => {
       return n;
     };
     const kinds = new Set(Array.from({ length: art().slots / 2 }, (_, slot) => `${drawn(slot)}`));
-    assert.ok(kinds.size >= 4, `the first row's six figures draw ${kinds.size} different bodies (man, woman, moustache, portly)`);
+    assert.ok(kinds.size >= 4, `the first row's six figures draw ${kinds.size} different bodies (man, woman, cap and shades, portly)`);
     for (let slot = 0; slot < art().slots; slot++) assert.ok(standing(slot), `slot ${slot} stands`);
   });
 

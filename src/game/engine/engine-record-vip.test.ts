@@ -6,7 +6,8 @@ import { launch, makeCar, makeWorld, PARKED } from "../contact/crash-scenarios.t
 import { CLIP_NO_CAR, type HighlightClip } from "../match/highlights.ts";
 import { GroundsArt } from "../present/grounds-art.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
-import { People, VIP_LOOK, VipEscort } from "../present/people.ts";
+import { VIP_LOOK } from "../present/dummy-dress.ts";
+import { People, VipEscort } from "../present/people.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";

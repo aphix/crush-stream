@@ -8,7 +8,8 @@ import { SAMPLE, sampleAt } from "../vehicle/car-cage.ts";
 import type { Ground } from "../world/ground.ts";
 import { insidePolygon } from "../world/terrain.ts";
 import type { GuardSpec } from "../world/track-schema.ts";
-import { HAIRS, type DriverLook } from "./driver-look.ts";
+import type { DriverLook } from "./driver-look.ts";
+import { COP_LOOK, GUARD_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { JOINTS, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 
@@ -45,20 +46,15 @@ const AIM = { arm: -Math.PI / 2, elbow: 0, support: -1.2, supportElbow: -0.5 };
 
 /** The metres a whole stride covers at the guards' run (`GUARD_RUN`). */
 const GUARD_STRIDE = 1.8;
-/** A plain-clothes agent: a black suit, dark hair (the other half of the squad wears the uniformed division's navy, `cop`). */
-const AGENT: DriverLook = { woman: false, shirt: 0x16181d, pants: 0x16181d, hair: HAIRS[2]!, hat: null, mustache: false };
-
-/** Guard `guard`'s dress: the even ones in the uniformed division's navy (`cop`), the rest in black suits. */
+/** Guard `guard`'s dress: the even ones in the uniformed division's navy (`cop`), the rest plain-clothes agents in black. */
 export function guardDress(guard: number): { cop: boolean; look: DriverLook } {
-  return { cop: guard % 2 === 0, look: AGENT };
+  return guard % 2 === 0 ? { cop: true, look: COP_LOOK } : { cop: false, look: GUARD_LOOK };
 }
 
 /** A shot's aim (m over the car's origin) and how far (m) a miss goes past it. */
 const AIM_Y = 0.7;
 const MISS_WIDE = 2.5;
 
-/** The VIP: portly, in a navy-blue suit with a red tie, his golden-blond hair swept back. */
-export const VIP_LOOK: DriverLook = { woman: false, shirt: 0x1f3463, pants: 0x1f3463, hair: 0xe8bf6c, hat: null, mustache: false, portly: true };
 /** His walk to the car (m/s, a brisk walk) and the metres a whole stride covers. */
 const VIP_WALK = 2.2;
 const VIP_STRIDE = 1.5;
