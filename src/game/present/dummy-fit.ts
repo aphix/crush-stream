@@ -52,6 +52,11 @@ const NECK_FROM = 1.4;
 const NECK_TO = 1.48;
 const NECK_HALF_WIDTH = 0.07;
 const NECK_SLANT = 1.2;
+/** The fingers (m above the fitted fingertip) curl toward the palm, `FINGER_CURL` rad at the tip: the reference's relaxed hands. */
+const FINGERS = 0.09;
+const FINGER_CURL = 0.9;
+/** The knuckles' line is read off the hand's vertices this close (m) to its height. */
+const KNUCKLE_BAND = 0.004;
 
 const vec3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const DOWN = vec3(0, -1, 0);
@@ -246,10 +251,34 @@ function fitBody(raw: Float32Array, width = 1): Fit {
   return { tpose, rest, shoulderWeight, elbowWeight, hipWeight, neckWeight, fingertipY };
 }
 
-const woman = shape(fitBody(bodyPositions("slenderWoman"), WOMAN_NARROW), WOMAN);
+/**
+ * `fit`'s fingers bent in place toward the palms (in, toward the thighs), the hand below the knuckles laid round an arc so every
+ * vertex keeps its distance along it; `fingertipY`, and so the wrist, stays the straight hand's.
+ */
+function curlFingers(fit: Fit): Fit {
+  const [rest, knuckle, radius] = [fit.rest, fit.fingertipY + FINGERS, FINGERS / FINGER_CURL];
+  const [sum, count] = [[0, 0], [0, 0]];
+  for (let i = 0; i < fit.shoulderWeight.length; i++) {
+    if (fit.shoulderWeight[i]! < 1 || Math.abs(rest[i * 3 + 1]! - knuckle) > KNUCKLE_BAND) continue;
+    const hand = rest[i * 3]! < 0 ? 0 : 1;
+    sum[hand] += rest[i * 3]!;
+    count[hand]++;
+  }
+  for (let i = 0; i < fit.shoulderWeight.length; i++) {
+    if (fit.shoulderWeight[i]! < 1 || rest[i * 3 + 1]! >= knuckle) continue;
+    const side = rest[i * 3]! < 0 ? -1 : 1;
+    const pivot = sum[(side + 1) / 2]! / count[(side + 1) / 2]!;
+    const [arc, angle] = [radius + side * (rest[i * 3]! - pivot), (knuckle - rest[i * 3 + 1]!) / radius];
+    rest[i * 3] = pivot + side * (arc * Math.cos(angle) - radius);
+    rest[i * 3 + 1] = knuckle - arc * Math.sin(angle);
+  }
+  return fit;
+}
+
+const woman = curlFingers(shape(fitBody(bodyPositions("slenderWoman"), WOMAN_NARROW), WOMAN));
 archFeet(woman.rest);
 curveHips(woman);
-const fits = { man: shape(fitBody(bodyPositions("slenderMan")), MAN), woman, portly: shape(fitBody(bodyPositions("obeseMan")), PORTLY) };
+const fits = { man: curlFingers(shape(fitBody(bodyPositions("slenderMan")), MAN)), woman, portly: curlFingers(shape(fitBody(bodyPositions("obeseMan")), PORTLY)) };
 /** The three baked bodies fitted to the rig (computed once, on load) and given their physiques, the woman's feet arched onto her heels, her hips curved and her bust sculpted. */
 export function restFits(): { man: Fit; woman: Fit; portly: Fit } {
   return fits;
