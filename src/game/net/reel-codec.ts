@@ -243,9 +243,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 127: ramp side contact asks the points the rigid step carries (`loadPoints`): a torn-off lid's parked vertices are no longer points and a wreck's belly follows its crushed
  * cage, so a wreck beside a ramp flank takes no phantom side hits. A clip of 126 or before no longer reads.
  * 128: a keyframe's flight block carries where a sleeping wreck fell asleep (`sleepX`, `sleepZ`), so a restored sleeper is stirred in the step the live one was. A clip of 127 or before no longer reads.
+ * 129: past the crush window a seat step of 1 mm or more re-bakes the skin and contact cage (fitted exactly), so a side-struck car's body and cage follow its cell back out;
+ * a shape-rest rebase no longer resets the drawn cluster maps. A clip of 128 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 128;
+const REPLAY_VERSION = 129;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

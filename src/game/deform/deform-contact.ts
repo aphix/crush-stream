@@ -23,6 +23,8 @@ const LEVEL = new THREE.Quaternion();
 export const TYRE_HALF_W = 0.11;
 /** Fastest (m/s) a wreck's body follows its cell's drift off its seat (`followGroup`): the nose's springback against a wall in 0.4 s, no faster than the pair pass's pushes. */
 export const SEAT_SPEED = 1;
+/** A seat step (m) under this is the rigid step's jitter once seated (3e-8 to 2e-6 m measured), not a move to re-bake the skin for: an active seat steps 8 mm at 120 Hz. */
+const SEAT_REBAKE = 0.001;
 /** A mass this close (m) to a rigid face still counts as resting on it. */
 const FACE_SKIN = 0.02;
 /** How far (m) under a fixed solid's top a mass's bottom may be and still stand on it: a tyre resting on a rail, a wreck crushed a few cm into one in a slice. */
@@ -269,6 +271,12 @@ export abstract class DeformContact extends DeformState {
       _a.y *= upY > 0 ? 1 - tilt * tilt : 0;
       group.position.add(_a);
       group.updateWorldMatrix(false, false);
+      // The seat moves every mass in the car frame, where the mesh and the cage are baked. Past the crush window (which bakes every step)
+      // they are owed a bake from the masses, fitted exactly as the window's last is (a client fits the host's net bake exactly).
+      if (!this.crushing && Math.min(off, dt * SEAT_SPEED) >= SEAT_REBAKE) {
+        this.loadDirty[0] = 1;
+        this.cageExact = true;
+      }
       _toLocal.copy(group.matrixWorld).invert();
     }
     for (let mi = 0; mi < this.masses.length; mi++) {

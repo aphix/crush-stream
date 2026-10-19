@@ -86,14 +86,15 @@ describe("given a car whose dents are drawn late while it is off-screen (deferre
     assert.ok(maxDiff(meshPositions(lod), meshPositions(ref)) < 1e-6);
   });
 
-  it("when the crush window closes while the drawing is still deferred, then nothing is left owed and the car freezes the same final dents and glass as its twin", () => {
+  it("when the crush window closes while the drawing is still deferred, then once caught up nothing is left owed and the car shows the same final dents and glass as its twin", () => {
     const ref = new DeformableCar(PAINT, new THREE.Scene());
     const lod = new DeformableCar(PAINT, new THREE.Scene());
     crashFront(ref, false, SETTLED);
     crashFront(lod, true, SETTLED);
+    lod.flushDeferredSkin();
     assert.equal(lod.deform.skinOwed, false);
     assert.equal(glassStates(lod), glassStates(ref), "deferred car's glass broke differently");
-    assert.ok(maxDiff(meshPositions(lod), meshPositions(ref)) < 1e-6, "deferred car froze a different dent");
+    assert.ok(maxDiff(meshPositions(lod), meshPositions(ref)) < 1e-6, "caught-up car shows a different dent");
   });
 
   it("when the car is visually reset with drawing still owed, then nothing is left owed and the rebuilt car is not dented again", () => {

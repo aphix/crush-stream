@@ -329,9 +329,9 @@ describe("given a car shot at 40 km/h by a piston, measured against a 3 km/h tap
   // against far particles 0.178 m (0.193 against 0.149 before). Held level and unspun through the shot it is 0.195 against 0.110: not the
   // tilt, not the spin. The front shot's far particles barely move (0.024 m) while its tail paint moves 0.148 m; with the body's pitch and
   // roll rates held at zero it passes (0.111 against 0.094).
-  const OVERSHOOT = "after the plan: make the skin's far corners follow the particles; since the wreck split the tap no longer sags the car, and the far paint outruns the far particles by 6 cm (right 0.238 m against 0.178, left 0.248 against 0.186), with tilt and spin held out still 8 cm";
+  const OVERSHOOT = "after the plan: make the skin's far corners follow the particles; the right shot's far paint stands at the bar, 0.173 m against far particles 0.135";
   const PITCHED = "after the plan: the front shot's far particles move 0.024 m and its tail paint 0.148 m; with the body's pitch and roll rates held at zero through the shot it is 0.111 against 0.094";
-  const FAR_TODO: Partial<Record<(typeof PISTON_IDS)[number], string>> = { front: PITCHED, right: OVERSHOOT, left: OVERSHOOT };
+  const FAR_TODO: Partial<Record<(typeof PISTON_IDS)[number], string>> = { front: PITCHED, right: OVERSHOOT };
   for (const id of PISTON_IDS) {
     // Cluster-only skin: corners 37%, front 44% of the particles' dent; a strain-whole anchor put
     // the door paint 8% past the door.
@@ -345,6 +345,41 @@ describe("given a car shot at 40 km/h by a piston, measured against a 3 km/h tap
       assert.ok(farSkin <= farParticle + 0.04, `far paint ${farSkin.toFixed(3)} m vs far particles ${farParticle.toFixed(3)} m`);
     });
   }
+});
+
+/** How far (m) a mass may stand from where the skin's last bake saw it once a shot car has settled: the bake follows every move of the masses in the car frame. */
+const SEATED_SKIN_SLACK = 0.01;
+
+describe("given a car shot on its right side at 40 km/h by a piston, its cell pushed into the cabin", () => {
+  it("when the body has seated on its cell, then the masses the mesh and the cage were last built from stand within 1 cm of the masses", () => {
+    const car = makeCar("shape");
+    firePiston(car, "right", { ...TAP, speedKph: 40 });
+    const baked = car.deform["massPos"];
+    let worst = 0;
+    let at = "";
+    for (let i = 0; i < car.deform.masses.length; i++) {
+      const m = car.deform.masses[i]!;
+      const e = Math.hypot(baked[i * 3]! - m.local.x, baked[i * 3 + 1]! - m.local.y, baked[i * 3 + 2]! - m.local.z);
+      if (e > worst) {
+        worst = e;
+        at = m.name;
+      }
+    }
+    assert.ok(worst <= SEATED_SKIN_SLACK, `${at} stands ${worst.toFixed(3)} m from where the skin last saw it`);
+  });
+
+  it("when its shape rest is rebased after a bake and before the mesh is written, then the mesh is the bake's", () => {
+    const car = makeCar("shape");
+    firePiston(car, "right", { ...TAP, speedKph: 40 });
+    const geo = car.body.geometry;
+    car.deform.bakeSkin();
+    car.deform.flushSkin(geo, true);
+    const baked = Float32Array.from(geo.getAttribute("position").array);
+    car.deform["rebaseShapeRest"]();
+    car.deform.flushSkin(geo, true);
+    const moved = maxAbs(geo.getAttribute("position").array, baked);
+    assert.ok(moved < 1e-6, `the rebase moved the drawn skin ${moved.toFixed(4)} m`);
+  });
 });
 
 forModes("given a car that has not deformed", (mode) => {

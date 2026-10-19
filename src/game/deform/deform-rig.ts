@@ -142,7 +142,7 @@ export abstract class DeformRig {
   cageDue = true;
   /** Counts every write of the cage corners (`solveCages`, a `simState` restore); 0 again at a respawn (`rebuildRunStructures`): a reader that cached something of the corners re-reads when it changed. */
   cornerSerial = 0;
-  /** The next cage fit takes no `REFIT_EPSILON` slack: the crush window's final bake (and a client's net bake) is fitted exactly. Cleared by the fit. */
+  /** The next cage fit takes no `REFIT_EPSILON` slack: the crush window's final bake, a seat's bake (`followGroup`) and a client's net bake are fitted exactly. Cleared by the fit. */
   cageExact = false;
   /** The sim has baked the masses since the car was set up: until it has, `massPos` and the cluster maps are empty and the body is its rest shape. */
   skinBaked = false;
@@ -358,7 +358,7 @@ export abstract class DeformRig {
   protected skinW = new Float64Array(0);
   /** Skin vertex → mass index of the hub that plants it (wheel arch, below 0.55 m), else −1. */
   protected skinHub = new Int32Array(0);
-  /** Per cluster: skin map M (row-major 9), applied to a skin point's offset from its parent masses (A5). */
+  /** Per cluster: skin map M as of the last bake (row-major 9), applied to a skin point's offset from its parent masses (A5); the mesh, cages and net state read it. */
   protected clusterXf = new Float64Array(0);
   /** Cage corner ← cluster weights (rest-only, so built once): per corner [start, end) into `cornerXf`/`cornerW`, and Σw. */
   protected cornerStart = new Int32Array(0);
@@ -375,8 +375,6 @@ export abstract class DeformRig {
   protected resW = new Float64Array(0);
   protected resC = new Float64Array(0);
   protected massPos = new Float64Array(0);
-  /** Netplay: skin inputs as of the last bake (`bakeLocalSkin`), read by `readNetState`: the post-contact shape-rest rebase resets every cluster's `skinM` under a frozen skin. */
-  protected netSkinXf = new Float64Array(0);
   protected readonly netImpact = Float64Array.of(0, 0, 0, 0, 0, 0, 0, 0, 0, IMPRINT_NONE, 0, 0);
   protected netPopped = 0;
   protected netFlags = 0;
@@ -566,7 +564,7 @@ export abstract class DeformRig {
     this.loadDirty.fill(0);
     for (const b of [this.endEbs2, this.cageCo, this.floorPre, this.floorPost, this.gripPost, this.hubStand, this.pose, this.spinHeld, this.strokeOut, this.massCornerW]) b.fill(0);
     for (const b of [this.goalX, this.goalY, this.goalZ, this.goalW, this.startX, this.startY, this.startZ, this.turnX, this.turnZ, this.impulseW]) b.fill(0);
-    for (const b of [this.massPos, this.clusterXf, this.netSkinXf, this.netImpact]) b.fill(0);
+    for (const b of [this.massPos, this.clusterXf, this.netImpact]) b.fill(0);
     this.netImpact[9] = IMPRINT_NONE;
     this.goalView.fill(NaN);
   }
@@ -598,7 +596,6 @@ export abstract class DeformRig {
     this.resC = new Float64Array(points * 3);
     this.massPos = new Float64Array(this.masses.length * 3);
     this.clusterXf = new Float64Array(this.clusters.length * 9);
-    this.netSkinXf = new Float64Array(this.clusters.length * 9);
     const cms = this.clusters.map((c) => {
       let x = 0,
         y = 0,

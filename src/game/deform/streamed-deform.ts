@@ -211,11 +211,18 @@ export class StreamedDeformation extends DeformSolve {
    * least-squares maps of rest onto the current local particles (SKIN_STRAIN of the strain,
    * plastic Sp composed in) on its short offset from those parents. The paint rides the
    * particles, so a dent is as deep as they went; the clusters add the region's rotation and
-   * strain. The masses' positions are captured here, so a deferred skin flushes this solve's pose
-   * (lattice mode captures only the positions: netplay re-solves its cages from them).
+   * strain. The masses' positions and the cluster maps (`clusterXf`) are captured here, so a deferred skin flushes this solve's pose
+   * and a shape-rest rebase (which resets every `skinM`) leaves the skin as baked (lattice mode captures only the positions: netplay
+   * re-solves its cages from them).
    */
   protected bakeLocalSkin(): void {
-    if (this.mode === "shape") for (let ci = 0; ci < this.clusters.length; ci++) matchSkinLocal(this.clusters[ci]!, this.skinRest, this.skinLocal, this.skinMassN, SKIN_STRAIN);
+    if (this.mode === "shape") {
+      for (let ci = 0; ci < this.clusters.length; ci++) {
+        const c = this.clusters[ci]!;
+        matchSkinLocal(c, this.skinRest, this.skinLocal, this.skinMassN, SKIN_STRAIN);
+        this.clusterXf.set(c.skinM, ci * 9);
+      }
+    }
     const pos = this.massPos;
     for (let j = 0, r = 0; j < this.masses.length; j++, r += 3) {
       const p = this.masses[j]!.local;
@@ -223,7 +230,6 @@ export class StreamedDeformation extends DeformSolve {
       pos[r + 1] = p.y;
       pos[r + 2] = p.z;
     }
-    for (let c = 0; c < this.clusters.length; c++) this.netSkinXf.set(this.clusters[c]!.skinM, c * 9);
     const im = this.netImpact;
     this.impactLocal.toArray(im, 0);
     this.impactInward.toArray(im, 3);
@@ -240,14 +246,7 @@ export class StreamedDeformation extends DeformSolve {
     this.netFlags = (this.deepCrush ? 4 : 0) | (this.bidirectional ? 8 : 0) | (this.mode === "lattice" ? 16 : 0);
   }
 
-  /** `clusterXf` ← each cluster's skin map M (row-major 9). */
-  private refreshClusterXf(): void {
-    const X = this.clusterXf;
-    for (let ci = 0, o = 0; ci < this.clusters.length; ci++, o += 9) X.set(this.clusters[ci]!.skinM, o);
-  }
-
   private solveCagesFromShape(): void {
-    this.refreshClusterXf();
     const X = this.clusterXf;
     const n = this.vertexCount;
     const pos = this.massPos;
@@ -482,7 +481,6 @@ export class StreamedDeformation extends DeformSolve {
     const arr = attr.array as Float32Array;
     const rest = this.restPos;
     const shape = this.mode === "shape";
-    if (shape) this.refreshClusterXf();
     const X = this.clusterXf;
     const co = this.cageCo;
     for (let p = 0; p < this.cages.length; p++) cageCoeffs(this.cages[p]!.corners, co, p * 24);
@@ -718,7 +716,7 @@ export class StreamedDeformation extends DeformSolve {
     }
     out.popped = popped;
     out.skinPos.set(this.massPos);
-    out.skinXf.set(this.netSkinXf);
+    out.skinXf.set(this.clusterXf);
     for (let s = 0; s < this.sensors.length; s++) out.sensor[s] = this.sensors[s]!.compression;
     out.impact.set(this.netImpact);
     out.skinPopped = this.netPopped;
@@ -750,7 +748,7 @@ export class StreamedDeformation extends DeformSolve {
     // The bake inputs as the host baked them: `readNetState` hands them on, and a car read again (a held reset puts a damaged car
     // back through its own net state) skins from them. Left at the last local bake (zeros after a reset) the second read crushes it flat.
     this.netImpact.set(im);
-    this.netSkinXf.set(src.skinXf);
+    this.clusterXf.set(src.skinXf);
     this.netPopped = src.skinPopped;
     this.netFlags = f & 28;
     // Saturates the wrinkle and lattice ramps: the host's value already carries its ramp.
@@ -763,10 +761,6 @@ export class StreamedDeformation extends DeformSolve {
     }
     this.crushAmount = maxC;
     this.massPos.set(src.skinPos);
-    for (let c = 0; c < this.clusters.length; c++) {
-      const m = this.clusters[c]!.skinM;
-      for (let k = 0, o = c * 9; k < 9; k++) m[k] = src.skinXf[o + k]!;
-    }
     for (let i = 0, r = 0; i < this.masses.length; i++, r += 3) {
       const m = this.masses[i]!;
       m.local.set(src.skinPos[r]!, src.skinPos[r + 1]!, src.skinPos[r + 2]!);

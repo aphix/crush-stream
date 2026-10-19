@@ -420,7 +420,7 @@ export abstract class DeformState extends DeformHit {
         this.cageExact = true;
       }
     } else if (this.loadDirty[0] !== 0) {
-      // Load crush baked into the masses (`bakeLoadCrush`) with no crash window open: skin once from them.
+      // Masses moved with no crash window open (load crush `bakeLoadCrush`, the seat in `followGroup`): skin once from them.
       bake = true;
     }
     this.loadDirty[0] = 0;
