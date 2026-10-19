@@ -400,7 +400,7 @@ export function stepWorld(w: World, dt: number): void {
       if (d.massActive) {
         // A relocked wreck (`epicenter` activation) runs its clock and rides its body: no solve, no frame re-measure.
         if (d.frozen) {
-          d.stepFrozen(hc, car.group);
+          d.stepFrozen(hc, car.group, car.asleep);
           work[WORK.frozenCarSlices] = work[WORK.frozenCarSlices]! + 1;
         } else {
           d.stepStructure(hc, car.group.quaternion);

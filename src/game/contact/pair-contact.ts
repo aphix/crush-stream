@@ -516,11 +516,10 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // thing that moved it between the cars.
   restoreMomentum(carA, carB, _momentum);
 
-  // The cage's overlap is the crush's to take (`feedOverlap`): as deep as this slice's own travel explains it (`closing * dt`, how
-  // deep a body that was clear at the last slice can be) or as the stroke this hit has left on either face (`hitStroke`, the speed's
-  // crush length, less what `strokeUsed` has taken). Only what is deeper is a push, by position: the momentum is the exchange's.
-  const give = Math.max(carA.deform.hitStroke() * (1 - carA.deform.strokeUsed()), carB.deform.hitStroke() * (1 - carB.deform.strokeUsed()));
-  const extra = Math.max(0, hit - OUTLINE_REACH - Math.max(give, closing * dt));
+  // While the pair closes, the cage's overlap is the crush's to take (`feedOverlap`): this slice's travel (`closing * dt`) or the stroke either face has left; only what is deeper is a push, by position. A pair that
+  // no longer closes feeds no crush, so it has no stroke to take the overlap (cars rested 10-21 cm into each other).
+  const give = closing > 0 ? Math.max(carA.deform.hitStroke() * (1 - carA.deform.strokeUsed()), carB.deform.hitStroke() * (1 - carB.deform.strokeUsed()), closing * dt) : 0;
+  const extra = Math.max(0, hit - OUTLINE_REACH - give);
   if (extra > 0) pushApart(carA, carB, n.x, n.z, Math.min(extra + 0.006, satPushCap(dt)), dt);
 
   if (spent && closing > 0 && dist > 1e-4) holdComGap(carA, carB, leftoverA, leftoverB, dist, dt);

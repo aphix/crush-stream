@@ -1,5 +1,6 @@
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { setGround } from "../world/ground.ts";
@@ -8,17 +9,20 @@ import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { CAGE_STEP } from "../vehicle/car-cage.ts";
+import { satCars } from "../contact/sat.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 
 /**
  * The owner's fleet capture (sedan, hatchback, wagon, coupe, pickup from its seed) replayed on the real engine with a fixed pacer and 60 Hz frames jittered 40 %. The crash pops the hatchback's front
- * hubs and leaves its sill 44 mm in the road: it must rise out of it without the 21 Hz hop, and sleep.
+ * hubs and leaves its sill 44 mm in the road: it must rise out of it without the 21 Hz hop, sleep, and no two cars may rest inside each other.
  */
 /** Slot of the hatchback in the fleet's style order. */
 const HATCH = 1;
-/** The sim window (s) the hatchback is read in. */
+/** The sim window (s) the hatchback is read in, and the second from which the crash is over. */
 const FROM = 1.4;
 const TO = 3.5;
+const SETTLED = 2;
 /** Frame length varies by this share either way: the crash after the first contact depends on the frame schedule, so two seeds. */
 const JITTER = 0.4;
 const SEEDS = [1, 3];
@@ -28,7 +32,11 @@ const TURN_MM = 0.3;
 const MAX_TURNS = 2;
 /** The hatchback sleeps by this sim second (the hop kept it awake past 2.9 s). */
 const SLEEPS_BY = 2.7;
+/** The most (m) two settled cars overlap: the resolution of the cage outlines. */
+const MAX_OVERLAP = CAGE_STEP;
 
+const _n = new THREE.Vector3();
+const _p = new THREE.Vector3();
 let shared: any;
 
 async function engineOnce(): Promise<any> {
@@ -46,7 +54,7 @@ async function engineOnce(): Promise<any> {
   return shared;
 }
 
-async function replay(seed: number): Promise<{ turns: number; asleepAt: number }> {
+async function replay(seed: number): Promise<{ turns: number; asleepAt: number; overlap: number }> {
   const engine = await engineOnce();
   loadEpicenter(EPICENTER_AT_LOAD);
   engine.setCarCount(5);
@@ -64,12 +72,16 @@ async function replay(seed: number): Promise<{ turns: number; asleepAt: number }
   let lastDy = 0;
   let lastY = NaN;
   let asleepAt = -1;
+  let overlap = 0;
   const original = engine.slice;
   const slice = original.bind(engine);
   engine.slice = (h: number) => {
     slice(h);
     const t = engine.elapsedSim as number;
     if (t < FROM || t > TO) return;
+    if (t >= SETTLED) {
+      for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) overlap = Math.max(overlap, satCars(cars[i]!, cars[j]!, _n, _p, 0) ?? 0);
+    }
     const y = hatch.group.position.y * 1000;
     const dy = y - lastY;
     if (Math.abs(dy) > TURN_MM) {
@@ -90,7 +102,7 @@ async function replay(seed: number): Promise<{ turns: number; asleepAt: number }
   } finally {
     engine.slice = original;
   }
-  return { turns, asleepAt };
+  return { turns, asleepAt, overlap };
 }
 
 describe("given the owner's fleet capture replayed on the engine", () => {
@@ -99,10 +111,11 @@ describe("given the owner's fleet capture replayed on the engine", () => {
     shared?.dispose();
   });
   for (const seed of SEEDS) {
-    it(`when the frames' jitter is seed ${seed}, then the hatchback rises out of the road without a hop, and sleeps by ${SLEEPS_BY} s`, async () => {
-      const { turns, asleepAt } = await replay(seed);
+    it(`when the frames' jitter is seed ${seed}, then the hatchback rises out of the road without a hop, sleeps by ${SLEEPS_BY} s, and no two cars rest more than ${MAX_OVERLAP * 100} cm into each other`, async () => {
+      const { turns, asleepAt, overlap } = await replay(seed);
       assert.ok(turns <= MAX_TURNS, `the hatchback's height turned ${turns} times in ${FROM}-${TO} s`);
       assert.ok(asleepAt >= 0 && asleepAt <= SLEEPS_BY, `the hatchback fell asleep at ${asleepAt.toFixed(2)} s (-1: never)`);
+      assert.ok(overlap <= MAX_OVERLAP, `two cars stood ${(overlap * 100).toFixed(1)} cm into each other after ${SETTLED} s`);
     });
   }
 });

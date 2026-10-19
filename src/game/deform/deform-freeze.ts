@@ -101,8 +101,9 @@ export abstract class DeformFreeze extends DeformContact {
    * A relocked wreck's structure step (`EPICENTER`): the clock goes on (the quiet time and the re-arm rules read it) and the masses ride the body as they do
    * after the contact window; the solver, the suspension, the ground reads and the frame's re-measure (`followGroup`) are skipped: the cage is frozen.
    */
-  stepFrozen(dt: number, group: THREE.Object3D): void {
-    if (EPICENTER.frozenCheck === 1) this.checkFrozen(group);
+  stepFrozen(dt: number, group: THREE.Object3D, asleep = false): void {
+    // A sleeper flagged frozen but not cached was never re-derived (`integrateWreck` returns for it): its masses stand where the whole path left them.
+    if (EPICENTER.frozenCheck === 1 && (this.frozenReady || !asleep)) this.checkFrozen(group);
     this.elapsed += dt;
     this.rideBody(this.drivetrainAlive);
     this.nodesLoose = 0;

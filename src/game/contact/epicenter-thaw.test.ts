@@ -127,6 +127,30 @@ describe("given the guard that checks frozen cars", () => {
     }
   });
 
+  it("when a sleeping wreck is flagged frozen but not cached, then a wheel hub off its frame is no breach, and an awake wreck's is", () => {
+    const saved = epicenterValues();
+    try {
+      loadEpicenter(EPICENTER_AT_LOAD);
+      EPICENTER.on = 1;
+      EPICENTER.frozenCheck = 1;
+      const car = makeCar("shape");
+      launch(car, 6.2, 0, -Math.PI / 2, -50 * KPH, 0);
+      layOnGround(car);
+      const w = makeWorld([car], true, false, FREEWHEEL);
+      run(w, [new Probe(car, car.velocity)], 1.5);
+      const d = car.deform;
+      assert.ok(d.frozen, "the wreck froze");
+      d.frozenReady = false;
+      d.masses.find((m) => m.hub)!.world.x += 0.16;
+      d.stepFrozen(1 / FINE_HZ, car.group, true);
+      assert.equal(d.frozenBreaches, 0, "a sleeper never re-derived was counted");
+      d.stepFrozen(1 / FINE_HZ, car.group, false);
+      assert.equal(d.frozenBreaches, 1, "an awake wreck with a mass off its frame went unnoticed");
+    } finally {
+      loadEpicenter(saved);
+    }
+  });
+
   it("when a car whose frozen centre is cached has its pose re-measured (followGroup: a clamp after the cache), then the check counts a breach: the invariant the freeze rests on (a planted hub's pin must not replace its stand)", () => {
     const saved = epicenterValues();
     try {
