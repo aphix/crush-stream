@@ -6,7 +6,7 @@ import { MU_BODY, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { leftoverCrumple, satPushCap, hypot2, CRASH } from "../deform/physics-util.ts";
 import { satCars } from "./sat.ts";
 import { bandsMeet, OUTLINE_REACH } from "./cage-outline.ts";
-import { strikeCar, faceDepth, faceExit, carRow, takeRow, moveAsOneBody, type ContactBox } from "./external-contact.ts";
+import { strikeCar, faceDepth, faceExit, carRow, takeRow, moveAsOneBody, bodyHit, type ContactBox } from "./external-contact.ts";
 import { bodyContact, BODY_SIZE, BODY_VX, BODY_VZ, BODY_W, BODY_X, BODY_Z, CT_DEPTH, CT_E, CT_JMAX, CT_MU, CT_NX, CT_NZ, CT_SIZE, CT_X, CT_Z, OUT_EBS_A, OUT_EBS_B, OUT_PUSH_A, OUT_PUSH_B, OUT_SIZE } from "./body-contact.ts";
 import { ARM_CLOSING, PAIR_MU, SOLID_E } from "./constants.ts";
 import { CAR_HALF, FOOT_HALF_L } from "../vehicle/car-mesh.ts";
@@ -117,6 +117,20 @@ function shoveWreck(car: DeformableCar, nx: number, nz: number, d: number): void
   car.group.position.z += nz * d;
 }
 
+/** A wreck held out of a face by position alone stops driving into it: every dynamic mass loses its speed into the unit (nx, nz), and the body takes the change. */
+function stopInto(car: DeformableCar, nx: number, nz: number): void {
+  const d = car.deform;
+  d.markMotion();
+  for (const m of d.masses) {
+    if (!m.dynamic) continue;
+    const vn = m.vel.x * nx + m.vel.z * nz;
+    if (vn >= 0) continue;
+    m.vel.x -= nx * vn;
+    m.vel.z -= nz * vn;
+  }
+  d.takeMotion(car.velocity, car.angular);
+}
+
 /**
  * How far (m) a slice may push a wreck out along the unit (nx, nz), out of a face: what the slice could have sunk it by (the fastest
  * footprint corner's speed into the face, the car's turn included, and the slice's other position corrections into it) and the
@@ -193,7 +207,11 @@ export function wallBounce(car: DeformableCar, face: ContactBox, nx: number, nz:
       // A hit armed this slice starts with what the car drove in before the face was met (a truck at 55 m/s: 0.39 m of its drawn body
       // in a 0.79 m deep footprint), pushed out as far as the footprint is in.
       const reach = sinkReach(car, exitX, exitZ, dt);
-      if (sunk > 0) shoveWreck(car, exitX, exitZ, Math.min(sunk + 0.004, car.deform.sinceHit() <= 0 ? Math.min(Math.max(pen, reach), Math.max(reach, arrival)) : reach));
+      if (!(sunk > 0)) return;
+      shoveWreck(car, exitX, exitZ, Math.min(sunk + 0.004, car.deform.sinceHit() <= 0 ? Math.min(Math.max(pen, reach), Math.max(reach, arrival)) : reach));
+      // `strikeCar` reads closing along the face's normal only, so a body out round an open end can drive into the end unheld:
+      // the shove is then the only hold, and plastic, or the masses keep that speed while the shove puts them back every slice.
+      if (!bodyHit.held) stopInto(car, exitX, exitZ);
       return;
     }
     if (pen < WALL_HOLD) return;

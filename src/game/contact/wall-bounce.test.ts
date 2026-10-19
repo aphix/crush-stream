@@ -1,9 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { launch, makeCar } from "./crash-scenarios.test-util.ts";
-import { makeBox, solidFace } from "./external-contact.ts";
+import { launch, makeCar, relaunchDamaged, runWall } from "./crash-scenarios.test-util.ts";
+import { faceDepth, faceExit, makeBox, solidFace, type ContactBox } from "./external-contact.ts";
 import { wallBounce } from "./pair-contact.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
 
 // A light touch of a running car on a fixed face pushes it out and, where the face and the tyres hold it, back along the face the way it
 // came in: never further along the face than the car itself moved along it in the slice.
@@ -37,5 +38,59 @@ describe("given a running sedan touching a wall face lightly, its tyres holding 
     const vz = -10 * Math.cos(Math.PI / 3);
     const moved = bounce(2.3, vx, vz, 20, -vz * H);
     assert.ok(Math.abs(moved - -vx * H) < 1e-9, `moved ${moved.toExponential(4)} m back along the face, the slice moved it ${(vx * H).toExponential(4)}`);
+  });
+});
+
+/** The solid's open end faces +x; the wreck stands beyond it and drives -x into it. */
+const END_NX = 1;
+const INTO_END_MPS = 15;
+/** How far (m) the wreck's drawn door stands past the end plane: deeper than a wreck's skin on a face (`WALL_SKIN`), short of its masses' face spheres. */
+const PAST_END = 0.04;
+/** Turns a side-hit wreck's door 75° off its nose (where its drawn body stands 7.5 cm past its masses' face spheres) onto the end. */
+const DOOR_ON_END = (-11 * Math.PI) / 12;
+const SOLID_HALF_SPAN = 2;
+const SOLID_HALF_THICK = 1;
+
+/** A side-hit sedan wreck at the origin driving into the open end of a solid, its drawn body `PAST_END` round the end at its middle. */
+function wreckAtOpenEnd(): { car: DeformableCar; face: ContactBox } {
+  const car = makeCar();
+  runWall(30, 1, "side", { car });
+  relaunchDamaged(car, 0, 0, DOOR_ON_END, -INTO_END_MPS * END_NX, 0);
+  const { pos, panelOn } = car.cage.fields;
+  const { vertexCount, vertexGroup } = car.cage.style;
+  const r = car.rightFlat;
+  const f = car.fwdFlat;
+  let leadX = Infinity;
+  let leadZ = 0;
+  for (let k = 0; k < vertexCount; k++) {
+    const group = vertexGroup[k]!;
+    if (group > 0 && panelOn[group - 1] === 0) continue;
+    const x = r.x * pos[k * 3]! + f.x * pos[k * 3 + 2]!;
+    if (x >= leadX) continue;
+    leadX = x;
+    leadZ = r.z * pos[k * 3]! + f.z * pos[k * 3 + 2]!;
+  }
+  const endX = leadX + PAST_END;
+  const face = solidFace(makeBox(), 0, 1, endX - SOLID_HALF_SPAN, leadZ + SOLID_HALF_THICK, endX - SOLID_HALF_SPAN, 0, SOLID_HALF_SPAN, SOLID_HALF_THICK);
+  face.openEnds = true;
+  return { car, face };
+}
+
+describe("given a side-hit sedan wreck driving at 15 m/s into the open end of a 2 m thick solid (a monument's arm), its drawn door 4 cm round the end and no mass on the solid", () => {
+  it("when the slice shoves it out round the end, then neither its body nor any of its masses keeps speed into the end", () => {
+    const { car, face } = wreckAtOpenEnd();
+    const endX = face.x + SOLID_HALF_SPAN;
+    const massLead = Math.min(...car.deform.masses.filter((m) => m.dynamic).map((m) => m.world.x - m.radius * 0.5));
+    assert.ok(massLead > endX, `a mass's face sphere reaches ${(endX - massLead).toFixed(3)} m past the end`);
+    const depth = faceDepth(car, face);
+    assert.ok(Math.abs(depth - PAST_END) < 1e-6 && Math.abs(faceExit.nx - END_NX) < 1e-9, `drawn body ${depth.toFixed(3)} m in, out along (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`);
+    const x0 = car.group.position.x;
+    wallBounce(car, face, END_NX, 0, PAST_END, H, false);
+    assert.equal(car.deform.faceContacts, 0, "a mass met the solid: its exchange held the wreck");
+    assert.ok(car.group.position.x > x0, "the slice shoved the wreck out round the end");
+    // `strikeCar` reads no closing on the end (square to the face's normal): the shove alone holds the wreck.
+    const worstMass = Math.min(...car.deform.masses.filter((m) => m.dynamic).map((m) => m.vel.x * END_NX));
+    assert.ok(car.velocity.x * END_NX >= -1e-9, `body ${car.velocity.x.toFixed(2)} m/s into the end`);
+    assert.ok(worstMass >= -1e-9, `a mass ${worstMass.toFixed(2)} m/s into the end`);
   });
 });
