@@ -2,7 +2,7 @@ import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import { benchPlan, leaderAhead, type BenchPlan } from "./engine-bench-plan.ts";
 import { watchPage, type PageWatch } from "./engine-bench-page.ts";
 import { warmUp } from "./engine-bench-warm.ts";
-import { describeBench, DETAIL_ARMS, PACE_ARM, PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_SWEEP, PHASE_WARM, PHASE_WINDOW, SKY_ARM, stat, type BenchResult, type LongTasks } from "./engine-bench-report.ts";
+import { describeBench, DETAIL_ARMS, PACE_ARM, PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_SWEEP, PHASE_WARM, PHASE_WINDOW, SKY_ARM, stat, type BenchResult, type LongTasks, type RunOptions } from "./engine-bench-report.ts";
 import { CLIP_WAIT_S, CRASH_GAP, CRASH_SPEED, ragdollCost, REPLAY_SETTLE_S, REPLAY_TIER_S, START_WAIT_S, type ReplayFrames } from "./engine-bench-replay.ts";
 import { BENCH, QUICK, blocksOf, CAP, deviceOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, skyPinOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type SkyPin, type Samples, type Tap, type Window } from "./bench-measure.ts";
 import type { HighlightClip } from "../match/highlights.ts";
@@ -331,7 +331,7 @@ async function extendedTail(engine: BenchEngine, parts: BenchParts, plan: BenchP
  * detail, FX tier), then the crash replay. Afterwards the settings go back to automatic and the scene plays on under the card.
  * `hud` reads the HUD's state (the card keeps the settings that differ from the defaults, `bench-card.ts`); `opts.submit` posts the card's JSON (Submit button, and the bench loop's `auto` post). Null: no such bench.
  */
-export async function runBench(engine: BenchEngine, hud: () => CrashHudState, search: string, opts: { submit: SubmitBench; auto: boolean; loopProgress: string | null; wake: { readonly held: boolean } | null; stepOfPage: number; keep: boolean | null }): Promise<BenchResult | null> {
+export async function runBench(engine: BenchEngine, hud: () => CrashHudState, search: string, opts: { submit: SubmitBench; auto: boolean; loopProgress: string | null; wake: { readonly held: boolean } | null; stepOfPage: number; options: RunOptions | null }): Promise<BenchResult | null> {
   const plan = benchPlan(search);
   if (!plan) return null;
   const ui = overlay(opts.loopProgress);
@@ -388,7 +388,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
     windowStart = await settleFrames(engine, parts.renderer, t, beat, new SettleWatch());
   } else if (!plan.lab) staged = parts.race.crashAtStart(CRASH_GAP, CRASH_SPEED);
   enterPhase(beat, page, PHASE_WINDOW);
-  const pageState = pageStateOf(parts, opts.stepOfPage, opts.keep);
+  const pageState = pageStateOf(parts, opts.stepOfPage, opts.options?.loop ?? null);
   const { s, w, longTasks, frameStats } = await sample(engine, parts, t, beat, ui, plan.extended ? BENCH.measureS : QUICK.windowS);
   const leaderWindowM = leaderAhead(parts, plan);
   const top = topTier(s, parts.cine.tier);
@@ -413,7 +413,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
     gpuMs: windowGpu.length ? stat(windowGpu) : null,
     replay: tail?.replayRun ? replayResult(tail.replayRun, gpu) : null,
     replayWhy: tail ? tail.replayWhy : "the quick bench has no replay",
-    run: { extended: plan.extended, staged },
+    run: { extended: plan.extended, staged, options: opts.options },
     pageEvents,
     pageSeconds,
     pageState,

@@ -6,7 +6,7 @@
 import type { CrashEngine } from "@/game/engine/engine";
 import type { CrashHudState } from "@/game/hud/hud-store";
 import type { runBench } from "@/game/engine/engine-bench";
-import { driveLoop, entryHref, loopProgress, loopSettings, newSession, parseRun, runFromPage, stepHref, stepOf, withOptions, type BenchRun } from "@/game/engine/bench-loop";
+import { driveLoop, entryHref, loopProgress, loopSettings, newSession, optionsOf, parseRun, runFromPage, stepHref, stepOf, withOptions, type BenchRun } from "@/game/engine/bench-loop";
 import { chooseOptions } from "@/game/engine/bench-chooser";
 import { BETWEEN_STEPS_S } from "@/game/engine/bench-plan-time";
 import { WakeHold } from "@/game/engine/bench-wake";
@@ -47,16 +47,16 @@ export async function runBenchPage(engine: CrashEngine, hud: () => CrashHudState
   await wake.acquire();
   let stepsRun = 0;
   const runStep = async (run: BenchRun | null, query: string): Promise<boolean> => {
+    const loop = run === null ? null : loopSettings(run, stepOf(run));
     const result = await bench.runBench(engine, hud, query, {
       auto: true,
       stepOfPage: stepsRun++,
-      keep: run?.keep ?? null,
+      options: run === null ? null : optionsOf(run),
       loopProgress: run === null ? null : loopProgress(run),
       wake,
       submit: (payload) =>
         sendSubmission(KIND.bench, async () => {
           const { scene, settings } = engine.submitContext();
-          const loop = run === null ? {} : loopSettings(run, stepOf(run));
           return { context: { scene, settings: { ...settings, bench: new URLSearchParams(query).get(BENCH_QUERY), ...loop } }, payload };
         }),
     });

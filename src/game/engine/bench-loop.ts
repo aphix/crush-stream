@@ -2,6 +2,7 @@ import { FX_TIER_ULTRA } from "../present/constants.ts";
 import { FX_TIERS } from "../present/engine-post.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, EPI_STEP_SUFFIX, EXTENDED_QUERY, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
+import type { RunOptions } from "./engine-bench-report.ts";
 
 /**
  * The benchmark loop: one cycle of benches (`?bench=…&loop=<session>&cycle=<n>&step=<i>`), all run in the one page (`driveLoop`: no
@@ -212,9 +213,18 @@ export function autoReloadAsked(search: string): boolean {
   return new URLSearchParams(search).get(LOOP_QUERY.auto) === "1";
 }
 
-/** What every submission of a loop carries, so data across builds lines up: the session, the cycle count and the step. */
-export function loopSettings(run: BenchRun, step: BenchStep): { session: string; loop: number; step: string } {
-  return { session: run.session, loop: run.loop, step: step.id };
+/** The options `run` was started with (the chooser's Loop, Epicenter, Ultra): its card's `run.options`. */
+export function optionsOf(run: BenchRun): RunOptions {
+  return { loop: run.keep, epi: run.epi, ultra: run.ultra };
+}
+
+/**
+ * What every submission of a loop carries, so data across builds lines up: the session, the cycle count, the step and the options the run was started with
+ * (`options.loop`, …: a submission's settings are flat scalars, the server refuses an object).
+ */
+export function loopSettings(run: BenchRun, step: BenchStep) {
+  const options = optionsOf(run);
+  return { session: run.session, loop: run.loop, step: step.id, "options.loop": options.loop, "options.epi": options.epi, "options.ultra": options.ultra };
 }
 
 /** The loop's place on the bench card: its cycle count and the step in the cycle, e.g. `loop 2, step 1/3`. */

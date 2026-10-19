@@ -84,7 +84,7 @@ const RESULT: BenchResult = {
   replayWhy: "no clip yet",
   pageEvents: [{ phase: "warm", atS: 0, visible: true, focused: true, fullscreen: false }],
   pageSeconds: { flags: "ffffd5", phases: "001111", sky: "003333", epi: "000000" },
-  run: { extended: true, staged: false },
+  run: { extended: true, staged: false, options: null },
   frameStats: FRAME_STATS,
   pageState: { stepOfPage: 2, keep: true, heapUsedMB: 118, heapLimitMB: 4096, ragdollHost: "remote" },
   phases: PHASES,
@@ -207,6 +207,14 @@ describe("given a bench window the owner left for another app (the 2278f1c phone
     });
     assert.ok(left.includes("PAGE LEFT during the window: unfocused 18.5 s, hidden 19.0 s, back 45.0 s. Read max and p99 with that in mind: a phone holds a page it is leaving"));
     assert.ok(!describeBench(RESULT).some((l) => l.startsWith("PAGE LEFT")));
+  });
+});
+
+describe("given a card from a bench loop whose options the chooser set (Loop, Epicenter, Ultra)", () => {
+  test("when the card is written, then the line under its header names each option, so an epicenter-on quick run reads apart from an older whole-mode one, and a card from no loop has no such line", () => {
+    const lines = describeBench({ ...RESULT, run: { ...RESULT.run, options: { loop: true, epi: true, ultra: false } } });
+    assert.equal(lines[1], "run options: Loop on, Epicenter on, Ultra off");
+    assert.ok(!describeBench(RESULT).some((l) => l.startsWith("run options")));
   });
 });
 

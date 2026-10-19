@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
-import { advance, autoReloadAsked, BIGGEST_COURSE, cycleOf, driveLoop, entryHref, isBenchPage, loopProgress, loopSettings, newSession, parseRun, runFromPage, shareHashOf, startRun, stepHref, stepOf, ULTRA_AVAILABLE, withOptions, type BenchRun } from "./bench-loop.ts";
+import { advance, autoReloadAsked, BIGGEST_COURSE, cycleOf, driveLoop, entryHref, isBenchPage, loopProgress, loopSettings, newSession, optionsOf, parseRun, runFromPage, shareHashOf, startRun, stepHref, stepOf, ULTRA_AVAILABLE, withOptions, type BenchRun } from "./bench-loop.ts";
 
 const RUN: BenchRun = { session: "k3x9q2", loop: 1, step: 0, ultra: false, keep: false, auto: false, ultraNext: false, extended: true, epi: true };
 
@@ -89,6 +89,14 @@ describe("given a loop that has just finished a step", () => {
     assert.equal(seen.length, 24);
     assert.equal(seen.slice(0, 9).join(" | "), "k3x9q2 1 strip | k3x9q2 1 strip:epi | k3x9q2 1 city | k3x9q2 1 city:epi | k3x9q2 1 dam-spine | k3x9q2 1 dam-spine:epi | k3x9q2 1 national-mall | k3x9q2 1 national-mall:epi | k3x9q2 2 strip:epi");
     assert.equal(new Set(seen.map((s) => s.split(" ")[0])).size, 1);
+  });
+
+  it("when a step of a loop is submitted, then its settings carry the options the run was started with (Loop, Epicenter, Ultra), every value a scalar the server takes", () => {
+    const run: BenchRun = { ...startRun("k3x9q2"), keep: true, epi: false, ultra: false, ultraNext: false };
+    const s = loopSettings(run, stepOf(run));
+    assert.deepEqual([s["options.loop"], s["options.epi"], s["options.ultra"]], [true, false, false]);
+    for (const [name, value] of Object.entries(s)) assert.notEqual(typeof value, "object", name);
+    assert.deepEqual(optionsOf(run), { loop: true, epi: false, ultra: false }, "the card's run.options");
   });
 
   it("when a new extended loop is started, then it keeps benching and reloads onto new builds, with Ultra if this build has it", () => {

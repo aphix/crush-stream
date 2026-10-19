@@ -189,6 +189,13 @@ export interface PhaseSeconds {
   workPerSimS: Record<string, number[]>;
 }
 
+/** The options a bench loop's run was started with (the chooser: Loop, Epicenter, Ultra), carried on every card and submission of the run. */
+export interface RunOptions {
+  loop: boolean;
+  epi: boolean;
+  ultra: boolean;
+}
+
 /**
  * The page as the window opened (docs/PERF_BENCH.md): `stepOfPage` the steps this page ran before (0: the page's first, its coldest), `keep` whether the loop starts the next cycle
  * when this one ends (null: not a loop), the JS heap in use and its limit in MiB (Chrome only, else null), and where the ragdoll dummies are simulated: the page's worker (`remote`), the
@@ -279,8 +286,11 @@ export interface BenchResult {
   pageEvents: PageEvent[];
   /** The page's state each second of the run (`PageSeconds`). */
   pageSeconds: PageSeconds;
-  /** What ran: `extended` (the A/B blocks and the replay followed the window; null A/Bs and no replay when false: the quick bench), and `staged` (the window opened on the staged head-on crash at the start line, `crashAtStart`). */
-  run: { extended: boolean; staged: boolean };
+  /**
+   * What ran: `extended` (the A/B blocks and the replay followed the window; null A/Bs and no replay when false: the quick bench), `staged` (the window opened on the staged head-on crash
+   * at the start line, `crashAtStart`) and `options`, the loop's chooser options (null: no loop; absent on cards from before the chooser).
+   */
+  run: { extended: boolean; staged: boolean; options: RunOptions | null };
   /** The page as the window opened. */
   pageState: PageState;
   /** Every frame of the window as the device saw it: percentiles, lows, the `BUCKET_MS` series and the spikes with what the sim was doing in them (`bench-frames.ts`). */
@@ -475,6 +485,7 @@ export function describeBench(r: BenchResult): string[] {
   const tiers = Object.entries(r.tierPct).sort((a, b) => b[1] - a[1]).map(([t, p]) => `${t} ${Math.round(p)} %`).join(", ");
   return [
     `CRUSH BENCH  ${r.course}  ${r.cars} cars  epicenter ${s.epicenter ? "ON" : "off"}  ${r.run.extended ? EXTENDED_QUERY : "quick"}${r.run.staged ? ", staged crash" : ""}  ${f1(r.wallS)} s  ${r.frames} frames  (${d.browser})  build ${r.build}`,
+    ...(r.run.options ? [`run options: Loop ${r.run.options.loop ? "on" : "off"}, Epicenter ${r.run.options.epi ? "on" : "off"}, Ultra ${r.run.options.ultra ? "on" : "off"}`] : []),
     ...(r.strip ? stripLines(r.strip) : []),
     ...(r.labThrown !== null ? [labLine(r.labThrown)] : []),
     `${f1(r.fps)} FPS   1% low ${f1(r.frameStats.fpsLow1)}   0.1% low ${f1(r.frameStats.fpsLow01)}   by thirds ${r.fpsThirds.map(f1).join(" / ")}`,
