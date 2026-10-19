@@ -126,6 +126,14 @@ describe("given a slice whose contact corrections (pair pushes, structure step, 
     assert.ok(Math.abs(full.settle(1, 0, -1, 0.02, H, TOUCH) - 0.02) < 1e-12, "a drift back along the net was refused");
     assert.ok(Math.abs(full.z - (STEP_CEIL - 0.02)) < 1e-12, "the net was not brought in");
   });
+
+  // Refused past the cap, a push back against the net was granted whole or not at all by the rounding of cap² − net² at a full cap.
+  it("when a push goes against a net translation past the cap then it is allowed, and when it goes along the net then it is refused", () => {
+    const full = new PushBudget();
+    full.debit(1, 0, STEP_CEIL);
+    assert.equal(full.take(1, 0, 1, 0.01, H, TOUCH), 0, "a push along the full net was allowed");
+    assert.ok(Math.abs(full.take(1, 0, -1, 0.01, H, TOUCH) - 0.01) < 1e-12, "a push back against the full net was refused");
+  });
 });
 
 // Seed 275 of 17491eb: one `followGroup` re-fit moved a live car's centroid 49 mm (49/47/37/32 over four steps) right

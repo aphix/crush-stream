@@ -67,27 +67,26 @@ export class PushBudget {
   /**
    * The part of a push `amount` (m) along the unit (nx, nz) this slice still allows: the most that keeps the net
    * translation inside the cap. A push against what was taken already is cheap (the squeezed wreck's two sides cancel),
-   * and nothing is left once the corrections fill the cap. `touchSpeed` is the faster of the touching cars.
+   * and once the corrections fill the cap only a push against the net is left. `touchSpeed` is the faster of the touching cars.
    */
   take(elapsed: number, nx: number, nz: number, amount: number, dt: number, touchSpeed: number): number {
-    this.open(elapsed);
-    const cap = PushBudget.reach(dt, touchSpeed);
-    const dn = this.x * nx + this.z * nz;
-    const left = cap * cap - this.x * this.x - this.z * this.z;
-    const ok = left <= 0 ? 0 : Math.max(0, Math.min(amount, Math.sqrt(dn * dn + left) - dn));
-    this.x += nx * ok;
-    this.z += nz * ok;
-    return ok;
+    return this.grant(elapsed, nx, nz, amount, PushBudget.reach(dt, touchSpeed));
   }
 
   /**
    * The part of a drift `amount` (m) of the centroid along the unit (nx, nz) the slice still allows: a move no solver
-   * chose (the structure step's, a re-fit's: `settleDrift`). Like `take` against the larger of the cap and `STEP_CEIL`, but
-   * a drift against the net translation is never refused, whatever the net: it brings it in.
+   * chose (the structure step's, a re-fit's: `settleDrift`). Like `take` against the larger of the cap and `STEP_CEIL`.
    */
   settle(elapsed: number, nx: number, nz: number, amount: number, dt: number, touchSpeed: number): number {
+    return this.grant(elapsed, nx, nz, amount, Math.max(STEP_CEIL, PushBudget.reach(dt, touchSpeed)));
+  }
+
+  /**
+   * The part of `amount` along (nx, nz) that keeps the net translation within `cap`. A move against the net is never refused, whatever the
+   * net: it brings it in (refused at a full cap, a push against the net was granted whole or not at all by the rounding of `cap² − net²`).
+   */
+  private grant(elapsed: number, nx: number, nz: number, amount: number, cap: number): number {
     this.open(elapsed);
-    const cap = Math.max(STEP_CEIL, PushBudget.reach(dt, touchSpeed));
     const dn = this.x * nx + this.z * nz;
     const left = Math.max(0, cap * cap - this.x * this.x - this.z * this.z);
     const ok = Math.max(0, Math.min(amount, Math.sqrt(dn * dn + left) - dn));
