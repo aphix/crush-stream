@@ -16,6 +16,7 @@ import { MAX_CARS } from "../scenes/fleet.ts";
 import { SCENE_IDS, SOLO_SCENES } from "../scenes/scene-id.ts";
 import { carPickText, NO_CAR_PICK, NO_PERSON_PICK, parseCarPick, parsePersonPick, personPickText } from "../match/look-data.ts";
 import { STACK_DEFAULTS, STACK_RANGES } from "../scenes/stack-rig.ts";
+import { MINIGAME_MODE, MINIGAME_MODES, THROWS_PER_SET } from "../scenes/minigame-constants.ts";
 
 /** One URL value: its default, how to read it back (undefined = malformed) and how to write it. */
 type Field<T> = { def: T; parse(raw: string): T | undefined; fmt(v: T): string };
@@ -131,6 +132,9 @@ const BASE_FIELDS = {
   dkph: num(1, 120, D.doors.kph),
   dkg: num(5, 5000, D.doors.kg),
   dside: pick(["left", "right"] as const, D.doors.side < 0 ? "left" : "right"),
+  // null = the Range's attract loop; a mini game opens straight into its station.
+  mg: orNull(pick(MINIGAME_MODES, MINIGAME_MODE.longJump)),
+  mgset: num(THROWS_PER_SET.min, THROWS_PER_SET.max, THROWS_PER_SET.default, true),
   track: slug(O.trackId),
   camp: slugs(O.campaign),
   mode: pick(RACE_MODES, O.mode),

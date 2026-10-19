@@ -53,6 +53,11 @@ export class Minigames {
     return this.activeMode;
   }
 
+  /** Ring Fling's set length, kept across starts (the panel's stepper): what a link reproduces. */
+  get setLength(): number {
+    return this.throwsPerSet;
+  }
+
   /** The range's sand and distance signs belong to the attract loop and the long jump. */
   get rangeArtShown(): boolean {
     return this.activeMode === null || this.activeMode === MINIGAME_MODE.longJump;

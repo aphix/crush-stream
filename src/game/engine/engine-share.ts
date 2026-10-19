@@ -1,6 +1,7 @@
 import { decodeShare, followShare, isShareableRoom, joinsRoom, type ShareState } from "../hud/share-url.ts";
 import { DEFAULT_RACE_OPTIONS } from "../match/types.ts";
 import { NET_TX } from "../net/net-ports.ts";
+import { MINIGAME_MODE, THROWS_PER_SET } from "../scenes/minigame-constants.ts";
 import { SEEDED_SCENES } from "../scenes/scene-id.ts";
 import { HANDLING } from "../vehicle/vehicle-classes.ts";
 import { EngineReel } from "./engine-reel.ts";
@@ -91,6 +92,8 @@ export abstract class EngineShare extends EngineReel {
       noreset: o.noReset,
       spectate: o.spectate,
       stats: this.statsPanel(),
+      mg: this.minigameMode,
+      mgset: this.minigameMode === MINIGAME_MODE.ringFling ? this.minigames.setLength : THROWS_PER_SET.default,
       seed: SEEDED_SCENES[sc] ? this.sceneSeed : null,
       ...knobValues(),
     };
@@ -157,32 +160,46 @@ export abstract class EngineShare extends EngineReel {
       }
       if (differs("scars", "sdrop", "sgap")) this.setStackConfig({ cars: t.scars, drop: t.sdrop, gap: t.sgap });
       if (differs("dkph", "dkg", "dside")) this.setDoorConfig({ kph: t.dkph, kg: t.dkg, side: t.dside === "left" ? -1 : 1 });
-      // Survival: the `track=` is its course (an id Survival is not played on, as a bare `scene=survival` carries, keeps the picked one). A run or its menu on another course moves to the named one.
-      if (t.scene === "survival") {
-        if (this.race.active) this.raceCommand({ type: "survivalCourse", id: t.track });
-        else this.race.pickSurvivalCourse(t.track);
-      }
-      if (t.scene !== this.sceneId) this.applyScene(t.scene);
-      if (t.scene === "fleet") {
-        c = this.shareState();
-        if (differs("barrier")) this.toggleBarrier();
-        if (differs("balls")) this.toggleBalls();
-        if (differs("ramps")) this.toggleRamps();
-      }
-      if (t.scene === "race") {
-        this.raceCommand({
-          type: "options",
-          options: { trackId: t.track, campaign: t.camp, mode: t.mode, laps: t.laps, aiCount: t.ai, aggression: t.aggr, aiDifficulty: t.diff, police: t.police, timeOfDay: t.tod, noReset: t.noreset, spectate: t.spectate },
-        });
-      }
-      // Survival's menu has a Time of day row too.
-      if (t.scene === "survival") this.raceCommand({ type: "options", options: { timeOfDay: t.tod } });
+      this.enterSharedScene(t);
       if (boot || (t.seed !== null && SEEDED_SCENES[t.scene] && t.seed !== this.sceneSeed)) this.randomizeAndReset();
     } finally {
       this.pinnedSeed = null;
       this.sharing = false;
     }
     this.emitHud();
+  }
+
+  /** The scene `t` names, entered with what is its own: Survival's course and light, the fleet's props, the race's setup, the Range's mini game. */
+  private enterSharedScene(t: ShareState): void {
+    // An id Survival is not played on (a bare `scene=survival` carries the race's) keeps the course picked.
+    if (t.scene === "survival") {
+      if (this.race.active) this.raceCommand({ type: "survivalCourse", id: t.track });
+      else this.race.pickSurvivalCourse(t.track);
+    }
+    if (t.scene !== this.sceneId) this.applyScene(t.scene);
+    if (t.scene === "fleet") {
+      const c = this.shareState();
+      if (t.barrier !== c.barrier) this.toggleBarrier();
+      if (t.balls !== c.balls) this.toggleBalls();
+      if (t.ramps !== c.ramps) this.toggleRamps();
+    }
+    if (t.scene === "race") {
+      this.raceCommand({
+        type: "options",
+        options: { trackId: t.track, campaign: t.camp, mode: t.mode, laps: t.laps, aiCount: t.ai, aggression: t.aggr, aiDifficulty: t.diff, police: t.police, timeOfDay: t.tod, noReset: t.noreset, spectate: t.spectate },
+      });
+    }
+    if (t.scene === "survival") this.raceCommand({ type: "options", options: { timeOfDay: t.tod } });
+    if (t.scene === "range") this.applySharedMinigame(t);
+  }
+
+  /** The Range's mini game a link names (none: the attract loop), then Ring Fling's set length, which only a running Ring Fling takes. */
+  private applySharedMinigame(t: ShareState): void {
+    if (t.mg !== this.minigameMode) {
+      if (t.mg === null) this.exitMinigame();
+      else this.startMinigame(t.mg);
+    }
+    if (t.mg === MINIGAME_MODE.ringFling) this.setMinigameThrowsPerSet(t.mgset);
   }
 
   /** The player's own look takes these picks (the garage's pickers, or a link's `ck` / `pk`): worn on the player's car and driver at once. */
