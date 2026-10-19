@@ -1,7 +1,7 @@
 import { stackLoads } from "../scenes/stack-rig.ts";
 import { compactorStage } from "../scenes/compactor.ts";
 import { LAB_PRESET } from "../scenes/constants.ts";
-import type { HudStore, LabHud } from "../hud/hud-store.ts";
+import type { GarageHud, HudStore, LabHud } from "../hud/hud-store.ts";
 import { carGauge } from "../match/car-view.ts";
 import { HANDLING } from "../vehicle/vehicle-classes.ts";
 import { mayRecoverFlipped, NO_DRIFT } from "../vehicle/car-drive.ts";
@@ -14,6 +14,7 @@ import { lookColours } from "../present/car-look.ts";
 import { pickedLook } from "../present/driver-look.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
+import type { Garage } from "./garage.ts";
 
 /**
  * HUD publish: the engine's state as one `CrashHudState` snapshot.
@@ -84,10 +85,7 @@ export abstract class EngineHud extends EngineWarm {
       showCorkscrew: this.showCorkscrew,
       stack: this.showStack ? { ...this.stack.config, dropped: this.stack.dropped, ...stackLoads(cars, this.stack.dropped) } : null,
       lab: this.showLab ? { preset: this.lab.preset ?? LAB_PRESET.cards, shot: this.labShotHud() } : null,
-      garage:
-        this.showGarage && this.garage
-          ? { car: lookColours(this.carA, this.looks.mine.car), person: pickedLook(GARAGE.driver, this.looks.mine.person), picked: { ...this.looks.mine.person }, spray: { ...this.garage.tool } }
-          : null,
+      garage: this.showGarage && this.garage ? this.garageHud(this.garage) : null,
       pendingScene: this.sceneFade.pending,
       inRoom: this.net.role !== "off",
       doors: {
@@ -180,6 +178,12 @@ export abstract class EngineHud extends EngineWarm {
   /** R / D-pad ↓ may put `car` back on its wheels: always, but in a derby only a flipped car that still runs (`mayRecoverFlipped`, no free heal): the player's and the AI's R alike. */
   protected mayRecover(car: DeformableCar): boolean {
     return !this.derbyMode || mayRecoverFlipped(car);
+  }
+
+  private garageHud(garage: Garage): GarageHud {
+    const strokes = garage.strokes(garage.editing);
+    const { car, person } = this.looks.mine;
+    return { car: lookColours(this.carA, car), person: pickedLook(GARAGE.driver, person), picked: { ...person }, spray: { ...garage.tool }, undo: strokes.undoable, redo: strokes.redoable };
   }
 
   /** The Lab's last throw as the HUD reads it (`LabHud.shot`). */

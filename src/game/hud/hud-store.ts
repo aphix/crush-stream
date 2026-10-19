@@ -62,9 +62,9 @@ export type LabHud = { preset: LabPresetId; shot: { hit: string | null; speed: n
 
 /**
  * The garage's HUD slice (`CrashHudState.garage`): each car part's colour as drawn, the driver as drawn and what the player
- * picked for him, and the spray can (on, radius m, palette colour).
+ * picked for him, the spray can (on, radius m, colour), and the steps there are to undo and redo on what the panel edits.
  */
-export type GarageHud = { car: Record<CarPart, number>; person: DriverLook; picked: PersonPick; spray: SprayTool };
+export type GarageHud = { car: Record<CarPart, number>; person: DriverLook; picked: PersonPick; spray: SprayTool; undo: number; redo: number };
 
 /** The garage's spray can: on or off, its dot's radius (m) and its colour (sRGB). */
 export type SprayTool = { on: boolean; radius: number; colour: number };

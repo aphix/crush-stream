@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Redo2, Undo2 } from "lucide-react";
 import { HexColorInput, HexColorPicker } from "react-colorful";
 import { Button } from "@/components/ui/button";
 import { RangeRow } from "@/components/hud-controls";
@@ -96,6 +96,7 @@ export function GaragePanel({ garage, playerCar, engine }: { garage: GarageHud; 
   const panel = useRef<HTMLDivElement>(null);
   const { spray } = garage;
   useFoldOnViewPress(panel, spray.on, setCollapsed);
+  useUndoKeys(engine);
   const edit = (
     <Segments
       label="Edit"
@@ -122,6 +123,11 @@ export function GaragePanel({ garage, playerCar, engine }: { garage: GarageHud; 
         <div className="min-w-0 flex-1 phone-landscape:hidden">
           <SizeRow radius={spray.radius} engine={engine} />
         </div>
+        {spray.on ? (
+          <Button variant="ghost" className={cn(SEGMENT, "pointer-coarse:w-11")} aria-label="Undo the last stroke" disabled={garage.undo === 0} onClick={() => engine.current?.undoSpray()}>
+            <Undo2 className="size-4" />
+          </Button>
+        ) : null}
         {toggle}
       </div>
     );
@@ -150,10 +156,25 @@ export function GaragePanel({ garage, playerCar, engine }: { garage: GarageHud; 
       </div>
       <div className="border-border pointer-fine:space-y-1 pointer-fine:border-t pointer-fine:pt-1 pointer-coarse:order-0 pointer-coarse:grid pointer-coarse:grid-cols-1 pointer-coarse:gap-1">
         {can}
-        <CanControls spray={spray} target={target} engine={engine} />
+        <CanControls garage={garage} target={target} engine={engine} />
       </div>
     </div>
   );
+}
+
+/** Ctrl/Cmd+Z undoes the last stroke on what the panel edits, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes it; never while typing in a field (its own undo). */
+function useUndoKeys(engine: RefObject<CrashEngine | null>): void {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.target instanceof HTMLInputElement || (key !== "z" && key !== "y")) return;
+      e.preventDefault();
+      if (key === "y" || e.shiftKey) engine.current?.redoSpray();
+      else engine.current?.undoSpray();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [engine]);
 }
 
 /** On a touch screen, while spraying: a press on the view (not on `panel` or another HUD control) is the player painting, so `setCollapsed` folds the panel away to show the whole car. */
@@ -206,12 +227,23 @@ function DriverRows({ garage, engine }: { garage: GarageHud; engine: RefObject<C
   );
 }
 
-/** The can's controls under its Look / Spray switch: size, colour and clearing `target`'s paint (a phone shows them only while spraying). */
-function CanControls({ spray, target, engine }: { spray: SprayTool; target: "car" | "person"; engine: RefObject<CrashEngine | null> }) {
+/** The can's controls under its Look / Spray switch: size, colour, undo and redo, and clearing `target`'s paint (a phone shows them only while spraying). */
+function CanControls({ garage, target, engine }: { garage: GarageHud; target: "car" | "person"; engine: RefObject<CrashEngine | null> }) {
+  const { spray } = garage;
   return (
     <div className={cn("pointer-fine:space-y-1 pointer-coarse:gap-1", spray.on ? "pointer-coarse:grid pointer-coarse:grid-cols-1" : "pointer-coarse:hidden")}>
       <SizeRow radius={spray.radius} engine={engine} />
       <ColourRow label="Spray colour" value={spray.colour} onColour={(c) => engine.current?.setSprayTool({ colour: c, on: true })} />
+      <div className="grid grid-cols-2 gap-0.5 rounded-md bg-surface-2/70 p-0.5" role="group" aria-label="Spray history">
+        <Button variant="ghost" className={SEGMENT} disabled={garage.undo === 0} onClick={() => engine.current?.undoSpray()}>
+          <Undo2 className="size-4" />
+          Undo
+        </Button>
+        <Button variant="ghost" className={SEGMENT} disabled={garage.redo === 0} onClick={() => engine.current?.redoSpray()}>
+          <Redo2 className="size-4" />
+          Redo
+        </Button>
+      </div>
       <Button variant="ghost" className={cn(SEGMENT, "w-full")} onClick={() => engine.current?.clearSpray(target)}>
         Clear the {target === "car" ? "car's" : "driver's"} paint
       </Button>

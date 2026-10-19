@@ -95,6 +95,13 @@ export class SprayBitmap {
     this.texture.needsUpdate = true;
   }
 
+  /** Texels `at` take `inks` (one each) with the bitmap's inks set to `palette`: an undo or redo step (`SprayUndo`). Every other texel's ink keeps its colour across a step. */
+  restore(at: Uint16Array, inks: Uint8Array, palette: readonly number[]): void {
+    for (let ink = 0; ink < this.palette.length; ink++) this.palette[ink] = palette[ink]!;
+    for (let k = 0; k < at.length; k++) this.set(at[k]!, inks[k]!);
+    this.texture.needsUpdate = true;
+  }
+
   dispose(): void {
     this.texture.dispose();
   }

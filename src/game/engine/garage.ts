@@ -4,6 +4,7 @@ import { GarageArt, GARAGE } from "../present/garage-art.ts";
 import { PUFF_STEP, type SprayBitmap } from "../present/spray.ts";
 import { SPRAY_PALETTE } from "../match/look-data.ts";
 import type { PlayerLooks, SprayTarget } from "./player-looks.ts";
+import { SprayUndo } from "./spray-undo.ts";
 import type { SprayTool } from "../hud/hud-store.ts";
 
 /** The screen box the pointer's client coordinates are read in (the canvas's `getBoundingClientRect`). */
@@ -40,6 +41,8 @@ export class Garage {
   private target: SprayTarget | null = null;
   private ink = 0;
   private readonly last = new THREE.Vector3();
+  /** Each bitmap's strokes to undo and redo this visit (`strokes`), dropped when the garage is left (`forget`). */
+  private readonly chains = new Map<SprayBitmap, SprayUndo>();
 
   constructor(camera: THREE.Camera, rect: () => Rect, car: () => DeformableCar | undefined, looks: PlayerLooks, onSprayed: (target: SprayTarget) => void) {
     this.camera = camera;
@@ -63,9 +66,22 @@ export class Garage {
 
   up(): void {
     if (this.target === null) return;
+    this.strokes(this.target).commit();
     this.looks.save(this.target);
     this.onSprayed(this.target);
     this.target = null;
+  }
+
+  /** `target`'s undo and redo chain: a stroke is one step, from the press to the release. */
+  strokes(target: SprayTarget): SprayUndo {
+    const bitmap = this.looks.sprayOf(target);
+    let chain = this.chains.get(bitmap);
+    if (!chain) this.chains.set(bitmap, (chain = new SprayUndo(bitmap)));
+    return chain;
+  }
+
+  forget(): void {
+    this.chains.clear();
   }
 
   /**
@@ -84,7 +100,10 @@ export class Garage {
     if (!hit?.face) return false;
     const bitmap = this.looks.sprayOf(target);
     const from = first ? hit.point : this.last;
-    if (first) this.ink = bitmap.inkOf(this.tool.colour);
+    if (first) {
+      this.strokes(target).begin();
+      this.ink = bitmap.inkOf(this.tool.colour);
+    }
     const steps = Math.max(1, Math.ceil(from.distanceTo(hit.point) / (this.tool.radius * PUFF_STEP)));
     for (let k = 1; k <= steps; k++) {
       _p.lerpVectors(from, hit.point, k / steps);

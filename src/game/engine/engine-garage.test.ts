@@ -4,12 +4,14 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
+import { SPRAY_PALETTE } from "../match/look-data.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { ORBIT_RADIUS } from "../present/engine-camera.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
 import { setGround } from "../world/ground.ts";
-import type { SprayTarget } from "./player-looks.ts";
+import { assertSameNumbers } from "../vehicle/test-support.ts";
+import { PlayerLooks, type SprayTarget } from "./player-looks.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 
@@ -208,6 +210,57 @@ describe("given the real engine in the garage", () => {
     assert.deepEqual(stroke("person", ["driverBehind", "driverBehind"], FAR_SIDE), { sprayed: true, car: false, person: true }, "Driver picked, a stroke over him behind the car");
     assert.deepEqual(stroke("car", ["driverFront", "carOnly"]), { sprayed: true, car: true, person: false }, "Car picked, a stroke from him in front of the car across the car");
     assert.deepEqual(stroke("car", ["driverOnly", "driverOnly"]), { sprayed: false, car: false, person: false }, "Car picked, a stroke over him alone");
+    engine.setSprayTool({ on: false });
+  });
+
+  it("when two strokes are sprayed on the car and one undone, then the bitmap and its save are the first stroke's exactly; redo puts the second back, a new stroke leaves nothing to redo, a clear is one step, and leaving the garage drops them", async () => {
+    const saved = new Map<string, string>();
+    Object.assign(globalThis, { localStorage: { getItem: (k: string) => saved.get(k) ?? null, setItem: (k: string, v: string) => saved.set(k, v), removeItem: (k: string) => saved.delete(k) } });
+    await enter("fleet");
+    engine.setSprayTool({ on: true });
+    engine.frameGarage("car");
+    run(1);
+    const at = pointOver("carOnly");
+    const garage = engine["garage"]!;
+    const bitmap = engine["looks"].sprayOf("car");
+    engine.clearSpray("car");
+    /** A short stroke in `colour` over the car: the bitmap as drawn after it. */
+    const spray = (colour: number): Uint8Array => {
+      engine.setSprayTool({ colour });
+      garage.down(at.x, at.y);
+      garage.move({ clientX: at.x + 10, clientY: at.y });
+      garage.up();
+      return bitmap.rgba.slice();
+    };
+    /** The car's spray as the next visit draws it from storage. */
+    const reloaded = (): Uint8Array => {
+      const looks = new PlayerLooks();
+      const rgba = looks.mine.carSpray.rgba.slice();
+      looks.dispose();
+      return rgba;
+    };
+    const first = spray(SPRAY_PALETTE[4]!);
+    const second = spray(0x123456);
+    assert.notEqual(Buffer.compare(first, second), 0, "the second stroke changed the bitmap");
+    engine.undoSpray();
+    assertSameNumbers(bitmap.rgba, first, "undone: the bitmap after the first stroke");
+    assertSameNumbers(reloaded(), first, "undone: what storage keeps");
+    assert.equal(hud.get().garage?.redo, 1, "one stroke to redo");
+    engine.redoSpray();
+    assertSameNumbers(bitmap.rgba, second, "redone: the bitmap after the second stroke");
+    assertSameNumbers(reloaded(), second, "redone: what storage keeps");
+    engine.undoSpray();
+    const third = spray(SPRAY_PALETTE[10]!);
+    engine.redoSpray();
+    assertSameNumbers(bitmap.rgba, third, "a new stroke dropped the redo chain");
+    engine.clearSpray("car");
+    assert.equal(bitmap.painted(), false, "cleared");
+    engine.undoSpray();
+    assertSameNumbers(bitmap.rgba, third, "the clear undone");
+    await enter("fleet");
+    engine.undoSpray();
+    assertSameNumbers(bitmap.rgba, third, "a new visit has nothing to undo");
+    engine.clearSpray("car");
     engine.setSprayTool({ on: false });
   });
 });

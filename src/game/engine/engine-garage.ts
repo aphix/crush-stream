@@ -6,6 +6,7 @@ import type { CarPart, PersonPick } from "../match/look-data.ts";
 import { EngineShare } from "./engine-share.ts";
 import { SPRAY_RADIUS } from "./garage.ts";
 import type { SprayTarget } from "./player-looks.ts";
+import type { SprayUndo } from "./spray-undo.ts";
 
 /**
  * The garage's controls (its HUD panel) and the player looks netplay carries: the player's own picks and spray, and each
@@ -40,6 +41,7 @@ export abstract class EngineGarage extends EngineShare {
   frameGarage(target: SprayTarget): void {
     if (!this.showGarage || !this.garage) return;
     this.garage.editing = target;
+    this.emitHud();
     if (target === "car") {
       this.view.frameReset(true, this.live(), GARAGE.angle, GARAGE.shot);
       return;
@@ -48,9 +50,30 @@ export abstract class EngineGarage extends EngineShare {
     this.view.frameReset(true, this.live(), GARAGE.angle, { ...GARAGE.driverShot, lookX: chest.x, lookY: chest.y, lookZ: chest.z });
   }
 
-  /** `target`'s spray comes off, here and in storage. */
+  /** `target`'s spray comes off, here and in storage: one step to undo, as a stroke is. */
   clearSpray(target: SprayTarget): void {
+    const strokes = this.garage?.strokes(target);
+    strokes?.begin();
     this.looks.sprayOf(target).load(null);
+    strokes?.commit();
+    this.looks.save(target);
+    this.restyle();
+  }
+
+  /** The last stroke (or clear) on what the panel edits taken back, saved and drawn as a stroke is. */
+  undoSpray(): void {
+    this.stepSpray((strokes) => strokes.undo());
+  }
+
+  /** The last stroke undone on what the panel edits made again. */
+  redoSpray(): void {
+    this.stepSpray((strokes) => strokes.redo());
+  }
+
+  private stepSpray(step: (strokes: SprayUndo) => boolean): void {
+    if (!this.garage) return;
+    const target = this.garage.editing;
+    if (!step(this.garage.strokes(target))) return;
     this.looks.save(target);
     this.restyle();
   }
