@@ -8,7 +8,7 @@ import { activeGround } from "../world/ground.ts";
 import { CarParts } from "./car-parts.ts";
 import { END_WINDOW, type PartNetState, REARM_QUIET_S } from "./car-core.ts";
 import { COM_Y, REST_SPEED } from "./car-air-body.ts";
-import { FLIGHT_BORNE, FLIGHT_CONTACT, FLIGHT_DOWN, FLIGHT_DRIFT, FLIGHT_END_AGO, FLIGHT_END_REACH, FLIGHT_END_SQUEEZE, FLIGHT_EULER, FLIGHT_INV_YAW, FLIGHT_POSITION, FLIGHT_QUATERNION, FLIGHT_RAMPS, FLIGHT_REST, FLIGHT_SPIN, FLIGHT_STALL, FLIGHT_VELOCITY } from "./car-flight.ts";
+import { FLIGHT_BORNE, FLIGHT_CONTACT, FLIGHT_DOWN, FLIGHT_DRIFT, FLIGHT_END_AGO, FLIGHT_END_REACH, FLIGHT_END_SQUEEZE, FLIGHT_EULER, FLIGHT_INV_YAW, FLIGHT_POSITION, FLIGHT_QUATERNION, FLIGHT_RAMPS, FLIGHT_REST, FLIGHT_SLEEP, FLIGHT_SPIN, FLIGHT_STALL, FLIGHT_VELOCITY } from "./car-flight.ts";
 import { readContact } from "./car-air-points.ts";
 import { stepFree, wreckCentre, wreckInvI } from "./car-air.ts";
 import { bodyLift, Suspension, UPRIGHT_UP_Y, tyresUnderSkin } from "./car-suspension.ts";
@@ -316,7 +316,7 @@ export class DeformableCar extends CarParts {
   }
 
   /**
-   * What a netplay pose rounds or leaves out, `FLIGHT` doubles into `buf` at `o`, or with `write` from it: the spins, the Euler angles the drive turns and the quaternion the rigid step turns (each the other's derived copy only up to rounding; the drive reads the heading off the quaternion before it sets it from the Euler), velocity and position whole (the wire rounds them: a first impact 0.5 m/s off), the squeeze clocks, the drift state, the weight a rider that stepped after this car left has borne on it (the step's input as much as the velocity is) and a wreck's rest timer (set last: a wreck that was asleep sleeps again where it lies). What the body touches is read again (`restoreContact`).
+   * What a netplay pose rounds or leaves out, `FLIGHT` doubles into `buf` at `o`, or with `write` from it: the spins, the Euler angles the drive turns and the quaternion the rigid step turns (each the other's derived copy only up to rounding; the drive reads the heading off the quaternion before it sets it from the Euler), velocity and position whole (the wire rounds them: a first impact 0.5 m/s off), the squeeze clocks, the drift state, the weight a rider that stepped after this car left has borne on it (the step's input as much as the velocity is) and a wreck's rest timer and sleep spot (set last: a wreck that was asleep sleeps again, stirred about the spot it fell asleep at, which a steer that turned it where it lay has moved its body off). What the body touches is read again (`restoreContact`).
    */
   flight(buf: Float64Array, o: number, write: boolean): void {
     if (write) {
@@ -345,8 +345,8 @@ export class DeformableCar extends CarParts {
       this.restS = buf[o + FLIGHT_REST]!;
       if (this.restS >= WRECK_REST_S) {
         this.asleep = true;
-        this.sleepX = this.group.position.x;
-        this.sleepZ = this.group.position.z;
+        this.sleepX = buf[o + FLIGHT_SLEEP]!;
+        this.sleepZ = buf[o + FLIGHT_SLEEP + 1]!;
       }
       return;
     }
@@ -370,6 +370,8 @@ export class DeformableCar extends CarParts {
     buf[o + FLIGHT_RAMPS] = this.drive.ebrakeK;
     buf[o + FLIGHT_RAMPS + 1] = this.drive.boostK;
     buf[o + FLIGHT_SPIN] = this.drive.spinSpeed;
+    buf[o + FLIGHT_SLEEP] = this.sleepX;
+    buf[o + FLIGHT_SLEEP + 1] = this.sleepZ;
   }
 
   /**

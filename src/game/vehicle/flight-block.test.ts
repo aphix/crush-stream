@@ -83,6 +83,9 @@ describe("given a car and a twin rebuilt from its flight block, driven on with t
 });
 
 const IDLE = idleDrive();
+const STEER: DriveInput = { ...IDLE, steer: 1 };
+/** Slices of full steer on the sleeping wreck: they turn its body about 4.6 cm off the spot it fell asleep at (measured), and it sleeps on. */
+const STEER_SLICES = 30;
 
 /** A sedan hit on the nose so it is a wreck, stepped on idle pedals until `until(car)` holds (a failure if it never does within 10 s). */
 function wreckUntil(until: (car: DeformableCar) => boolean): DeformableCar {
@@ -108,8 +111,21 @@ describe("given a wreck at rest and a twin rebuilt from its flight block", () =>
     const twin = twinFromFlightBlock(car);
     assert.ok(twin.asleep, "the twin woke");
     assert.equal(twin.restS, car.restS);
-    assert.equal(twin.sleepX, twin.group.position.x);
-    assert.equal(twin.sleepZ, twin.group.position.z);
+    assert.equal(twin.sleepX, car.sleepX);
+    assert.equal(twin.sleepZ, car.sleepZ);
+  });
+
+  it("when the wreck asleep has been turned where it lies by a steer (a race gives its AI wrecks pedals), then the twin sleeps at the spot the wreck fell asleep at, not where the turn left its body", () => {
+    const car = wreckUntil((c) => c.asleep);
+    for (let slice = 0; slice < STEER_SLICES; slice++) {
+      applyDrive(car, STEER, SLICE_S);
+      car.integrate(SLICE_S);
+    }
+    assert.ok(car.asleep, "the steer woke the wreck: nothing moved its body off its sleep spot");
+    assert.ok(car.group.position.x !== car.sleepX || car.group.position.z !== car.sleepZ, "the steer did not move the body off its sleep spot");
+    const twin = twinFromFlightBlock(car);
+    assert.equal(twin.sleepX, car.sleepX);
+    assert.equal(twin.sleepZ, car.sleepZ);
   });
 
   it("when the wreck is resting but not yet asleep, then the twin is awake with the wreck's rest timer, not zero", () => {

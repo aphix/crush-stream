@@ -242,9 +242,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 126: only a fixed solid's slow face counts as a wreck resting on it; a press plate or piston pushes however slowly it closes. A clip of 125 or before no longer reads.
  * 127: ramp side contact asks the points the rigid step carries (`loadPoints`): a torn-off lid's parked vertices are no longer points and a wreck's belly follows its crushed
  * cage, so a wreck beside a ramp flank takes no phantom side hits. A clip of 126 or before no longer reads.
+ * 128: a keyframe's flight block carries where a sleeping wreck fell asleep (`sleepX`, `sleepZ`), so a restored sleeper is stirred in the step the live one was. A clip of 127 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 127;
+const REPLAY_VERSION = 128;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

@@ -17,6 +17,8 @@ import { sweepSeeds } from "./engine-replay.test-util.ts";
  *   "derby bystander touched";
  * - seed 47 (a car with a torn mirror but no wreck came back with a zero hit frame instead of its own: it carries its solver
  *   state like a wreck): `engine-record-bystander.test.ts` "a car with a torn mirror and no crash".
+ * - seed 1 (a sleeping wreck a steer had turned where it lay came back asleep at its body, not at the spot it fell asleep at, so
+ *   what moved near it stirred it a step early: the flight block carries `sleepX`, `sleepZ`): `flight-block.test.ts` "turned where it lies by a steer".
  * Seeds 1 to 8, each its own race (the field piles up in different places: clips that open on wrecks already in motion,
  * wall hits, pile-ups of 3 to 17 cars). `SEEDS=1,2,... node --experimental-strip-types --test src/game/engine/engine-replay.ai-long-run.ts` runs any others.
  *
