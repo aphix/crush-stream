@@ -239,9 +239,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * stops at 0.9 of its stroke (the crossing slice's exchange is split); a frozen wreck resting on a barrier takes no slab exchange and goes quiet; glass cracks or shatters from its
  * frame's distortion (windscreen 5 / 30 mm, tempered 30 mm) and a shattered laminated windscreen stays in the contact cage. A clip of 123 or before no longer reads.
  * 125: a wreck's body seats on its cell's rest plus its earlier hits' damage, so a kept cabin offset no longer walks a tilted wreck into the ground. A clip of 124 or before no longer reads.
+ * 126: only a fixed solid's slow face counts as a wreck resting on it; a press plate or piston pushes however slowly it closes. A clip of 125 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 125;
+const REPLAY_VERSION = 126;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

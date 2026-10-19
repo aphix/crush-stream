@@ -431,6 +431,8 @@ export function strikeCar(car: DeformableCar, box: ContactBox, dt: number, crush
   const fx = detSin(box.yaw);
   const fz = detCos(box.yaw);
   const closing = (box.vx - car.velocity.x) * fx + (box.vz - car.velocity.z) * fz;
+  // A wreck only resting on a fixed solid (a kept dent against the wall) is no contact; a moving striker (press plate, piston) pushes however slowly it closes.
+  const resting = box.fixed && closing <= CRASH.grazeMps;
   const overlap = faceOverlap(car, box, _p);
   const near = overlap > -Math.max(0, closing) * dt;
   _n.set(fx, 0, fz);
@@ -475,8 +477,8 @@ export function strikeCar(car: DeformableCar, box: ContactBox, dt: number, crush
         car.applyImpact(_p, _n, closing, barrierSpeed);
         d.markMotion();
       }
-      // A face only resting on the slab (a kept dent against the wall) is no contact: the wreck goes quiet and settles, as a pair's does.
-      if ((crush || arm) && closing > CRASH.grazeMps) d.notifyContact();
+      // A resting face is no contact: the wreck goes quiet and settles, as a pair's does.
+      if ((crush || arm) && !resting) d.notifyContact();
       // A fixed solid's hulls are fed as crush while they overlap it. A moving striker (piston head, press plate) feeds them only until
       // a particle reaches its face: then the structure's stroke (`exchange`) spends the hit, and feeding both crushes the corner twice
       // (wing 0.188 m against 0.029 m). A fixed solid no particle reaches (a 0.4 m arm tip between the bumper particles) has the hulls
@@ -487,7 +489,7 @@ export function strikeCar(car: DeformableCar, box: ContactBox, dt: number, crush
     d.takeMotion(car.velocity, car.angular);
   }
   // A frozen wreck resting on the face takes no exchange: its tiny impulse would thaw it every slice, before its centre caches.
-  if (crush && held && (rigid || !d.frozen || closing > CRASH.grazeMps)) {
+  if (crush && held && (rigid || !d.frozen || !resting)) {
     const ebs = Math.max(0, d.hitSpeedValue);
     // The arming slice starts the stroke at the masses' first touch, not at the slice's end: they (armed at the slice's start, `unstep`)
     // met the face earlier by the depth they are in then (`holdDepth`) and the slice's travel, so the grid cut does not move it. With no mass in, the hull's overlap reads it.
