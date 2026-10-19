@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { ChevronDown, ChevronUp, Redo2, Undo2 } from "lucide-react";
+import { ChevronDown, ChevronUp, FlipHorizontal2, Redo2, Undo2 } from "lucide-react";
 import { HexColorInput, HexColorPicker } from "react-colorful";
 import { Button } from "@/components/ui/button";
 import { RangeRow } from "@/components/hud-controls";
@@ -8,7 +8,7 @@ import { CarTypeButtons } from "@/components/hud-sections";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import type { CrashEngine } from "@/game/engine/engine";
 import { SPRAY_RADIUS } from "@/game/engine/garage";
-import type { GarageHud, SprayTool } from "@/game/hud/hud-store";
+import type { GarageHud } from "@/game/hud/hud-store";
 import { CAR_PARTS, hexOf, SPRAY_PALETTE, type CarPart } from "@/game/match/look-data";
 import { cn } from "@/lib/utils";
 
@@ -227,13 +227,17 @@ function DriverRows({ garage, engine }: { garage: GarageHud; engine: RefObject<C
   );
 }
 
-/** The can's controls under its Look / Spray switch: size, colour, undo and redo, and clearing `target`'s paint (a phone shows them only while spraying). */
+/** The can's controls under its Look / Spray switch: size, colour, Symmetric, undo and redo, and clearing `target`'s paint (a phone shows them only while spraying). */
 function CanControls({ garage, target, engine }: { garage: GarageHud; target: "car" | "person"; engine: RefObject<CrashEngine | null> }) {
   const { spray } = garage;
   return (
     <div className={cn("pointer-fine:space-y-1 pointer-coarse:gap-1", spray.on ? "pointer-coarse:grid pointer-coarse:grid-cols-1" : "pointer-coarse:hidden")}>
       <SizeRow radius={spray.radius} engine={engine} />
       <ColourRow label="Spray colour" value={spray.colour} onColour={(c) => engine.current?.setSprayTool({ colour: c, on: true })} />
+      <Button variant={spray.mirror ? "default" : "ghost"} aria-pressed={spray.mirror} className={cn(SEGMENT, "w-full")} onClick={() => engine.current?.setSprayTool({ mirror: !spray.mirror })}>
+        <FlipHorizontal2 className="size-4" />
+        Symmetric
+      </Button>
       <div className="grid grid-cols-2 gap-0.5 rounded-md bg-surface-2/70 p-0.5" role="group" aria-label="Spray history">
         <Button variant="ghost" className={SEGMENT} disabled={garage.undo === 0} onClick={() => engine.current?.undoSpray()}>
           <Undo2 className="size-4" />

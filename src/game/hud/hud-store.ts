@@ -66,8 +66,8 @@ export type LabHud = { preset: LabPresetId; shot: { hit: string | null; speed: n
  */
 export type GarageHud = { car: Record<CarPart, number>; person: DriverLook; picked: PersonPick; spray: SprayTool; undo: number; redo: number };
 
-/** The garage's spray can: on or off, its dot's radius (m) and its colour (sRGB). */
-export type SprayTool = { on: boolean; radius: number; colour: number };
+/** The garage's spray can: on or off, its dot's radius (m), its colour (sRGB) and whether each puff is also painted mirrored left-right (Symmetric). */
+export type SprayTool = { on: boolean; radius: number; colour: number; mirror: boolean };
 
 export type CrashHudState = {
   playing: boolean;

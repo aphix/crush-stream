@@ -4,11 +4,12 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
-import { SPRAY_PALETTE } from "../match/look-data.ts";
+import { SPRAY_FACE, SPRAY_PALETTE, type SprayLayout } from "../match/look-data.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { ORBIT_RADIUS } from "../present/engine-camera.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
+import type { SprayBitmap } from "../present/spray.ts";
 import { setGround } from "../world/ground.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { PlayerLooks, type SprayTarget } from "./player-looks.ts";
@@ -20,6 +21,31 @@ const FRAME = 1 / FRAME_HZ;
 const ENTRIES = ["fleet", "driving", "minigame", "race"] as const;
 /** How far (m) an eye may move and still be "put": float noise, nothing a person sees. */
 const STILL = 1e-6;
+
+/**
+ * Texel `i`'s mirror across the body's left-right plane in `layout` (`sprayFace`'s box): the same place on the other flank,
+ * or flipped across the face for the top (its v runs along x) and the ends (their u does); -1 off every face.
+ */
+function mirrorTexel(layout: SprayLayout, i: number): number {
+  const x = i % layout.w;
+  const y = Math.floor(i / layout.w);
+  const face = layout.faces.findIndex(([fx, fy, fw, fh]) => x >= fx && x < fx + fw && y >= fy && y < fy + fh);
+  if (face < 0) return -1;
+  const [fx, fy, fw, fh] = layout.faces[face]!;
+  if (face === SPRAY_FACE.left || face === SPRAY_FACE.right) {
+    const [ox, oy] = layout.faces[face === SPRAY_FACE.left ? SPRAY_FACE.right : SPRAY_FACE.left]!;
+    return (oy + y - fy) * layout.w + ox + x - fx;
+  }
+  if (face === SPRAY_FACE.top) return (2 * fy + fh - 1 - y) * layout.w + x;
+  return y * layout.w + 2 * fx + fw - 1 - x;
+}
+
+/** The painted texels of `bitmap` whose mirror (`mirrorTexel`) holds another ink: 0 for a left-right symmetric bitmap. */
+function asymmetry(bitmap: SprayBitmap): number {
+  let n = 0;
+  for (let i = 0; i < bitmap.texels.length; i++) if (bitmap.texels[i] !== 0 && bitmap.texels[mirrorTexel(bitmap.layout, i)] !== bitmap.texels[i]) n++;
+  return n;
+}
 
 describe("given the real engine in the garage", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -262,5 +288,40 @@ describe("given the real engine in the garage", () => {
     assertSameNumbers(bitmap.rgba, third, "a new visit has nothing to undo");
     engine.clearSpray("car");
     engine.setSprayTool({ on: false });
+  });
+
+  it("when Symmetric is on, then a stroke on the car or the driver is painted mirrored across the body's left-right plane too, texel for texel on the other flank or across the same face and nowhere else, as one step to undo; with it off the same stroke is not", async () => {
+    await enter("fleet");
+    const random = Math.random;
+    // Every texel inside a puff takes paint (`SprayBitmap.spray` speckles a puff's rim off this stream), so the halves compare exactly.
+    Math.random = () => 0;
+    try {
+      for (const [edit, over] of [["car", "carOnly"], ["person", "driverOnly"]] as const) {
+        for (const mirror of [false, true]) {
+          engine.setSprayTool({ on: true, mirror });
+          engine.clearSpray(edit);
+          engine.frameGarage(edit);
+          run(1);
+          const at = pointOver(over);
+          const garage = engine["garage"]!;
+          garage.down(at.x, at.y);
+          garage.move({ clientX: at.x + 15, clientY: at.y + 5 });
+          garage.up();
+          const bitmap = engine["looks"].sprayOf(edit);
+          assert.ok(bitmap.painted(), `${edit}: the stroke painted`);
+          const off = asymmetry(bitmap);
+          if (!mirror) {
+            assert.ok(off > 0, `${edit}: the stroke alone is already symmetric, so the row proves nothing`);
+            continue;
+          }
+          assert.equal(off, 0, `${edit}: ${off} painted texels without their mirror`);
+          engine.undoSpray();
+          assert.equal(bitmap.painted(), false, `${edit}: one undo took both halves`);
+        }
+      }
+    } finally {
+      Math.random = random;
+      engine.setSprayTool({ on: false, mirror: false });
+    }
   });
 });

@@ -28,7 +28,7 @@ const _nm = new THREE.Matrix3();
  */
 export class Garage {
   readonly art = new GarageArt();
-  readonly tool: SprayTool = { on: false, radius: SPRAY_RADIUS.start, colour: SPRAY_PALETTE[4]! };
+  readonly tool: SprayTool = { on: false, radius: SPRAY_RADIUS.start, colour: SPRAY_PALETTE[4]!, mirror: false };
   private readonly camera: THREE.Camera;
   private readonly rect: () => Rect;
   private readonly car: () => DeformableCar | undefined;
@@ -116,7 +116,9 @@ export class Garage {
 
   /**
    * One puff at world point `_p` on what `hit` met (the driver, else `car`), its normal taken from the hit's face, both moved
-   * into the thing's rest frame.
+   * into the thing's rest frame; with the can's `mirror` on, a second at its mirror across the body's left-right plane (x 0
+   * in either rest frame), which `sprayFace` maps to the other flank or across the same face, never another one. Where that
+   * side's mesh differs, the paint lands only where a surface meets those texels.
    */
   private restPoint(hit: THREE.Intersection, car: DeformableCar | undefined, bitmap: SprayBitmap): void {
     _n.copy(hit.face!.normal);
@@ -128,6 +130,10 @@ export class Garage {
       _n.transformDirection(hit.object.matrixWorld).applyQuaternion(car.group.getWorldQuaternion(_q).invert());
       car.group.worldToLocal(_p);
     }
+    bitmap.spray(_p, _n, this.tool.radius, this.ink, Math.random);
+    if (!this.tool.mirror) return;
+    _p.x = -_p.x;
+    _n.x = -_n.x;
     bitmap.spray(_p, _n, this.tool.radius, this.ink, Math.random);
   }
 
