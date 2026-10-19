@@ -5,6 +5,8 @@ import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
+import { SKY_DRAWN } from "../present/sky-dome.ts";
+import { SANDBOX_SKY } from "../present/sky-procedural.ts";
 import type { SceneId } from "../scenes/scene-id.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
@@ -80,4 +82,19 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
       engine["setScene"]("fleet");
     });
   }
+
+  it("when the sandbox's procedural sky is set, then its background and fog are that sky's horizon and the dome draws it; when it is cleared, the sky is as on a fresh load", () => {
+    stage().setProceduralSky(0.3);
+    run(1);
+    const procedural = sandboxSky();
+    const horizon = new THREE.Color(SANDBOX_SKY.day.horizon).getHexString();
+    assert.equal(procedural.background, horizon);
+    assert.equal(procedural.fog, horizon);
+    assert.equal(stage().sky.drawn, SKY_DRAWN.procedural);
+    stage().setProceduralSky(null);
+    run(1);
+    const after = sandboxSky();
+    assert.equal(after.background, "12141a", "the studio's colour");
+    for (const key of Object.keys(fresh)) assert.equal(after[key], fresh[key], key);
+  });
 });

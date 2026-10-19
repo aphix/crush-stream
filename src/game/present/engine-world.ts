@@ -5,6 +5,7 @@ import { groundMaterial, groundMesh } from "../scenes/ground-stack.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { rowElevation, SKY_LOOKS, SkyDome, skyDetailFor, type SkyMode } from "./sky-dome.ts";
+import { SANDBOX_SKY } from "./sky-procedural.ts";
 import type { FxTier } from "./engine-post.ts";
 import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
 
@@ -308,6 +309,8 @@ export class WorldStage {
   /** The player's Sky setting (`setSky`); the FX tier (`setSkyTier`) picks how much sky is drawn under it. */
   skyMode: SkyMode = "auto";
   private skyTier: FxTier = "minimal";
+  /** The procedural sky's cloud cover (`setProceduralSky`), null for the time of day's picture. */
+  private procedural: number | null = null;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -411,6 +414,15 @@ export class WorldStage {
   setSky(mode: SkyMode): void {
     this.skyMode = mode;
     this.syncSky();
+    this.apply();
+  }
+
+  /** The procedural sky with this cloud cover (0-1), drawn in the sandbox too, or null: the time of day's picture. */
+  setProceduralSky(cover: number | null): void {
+    this.procedural = cover;
+    this.sky.setProcedural(cover);
+    this.syncSky();
+    this.apply();
   }
 
   /** The FX tier now in force, every frame: it sets the sky's detail (`skyDetailFor`). */
@@ -420,7 +432,7 @@ export class WorldStage {
   }
 
   private syncSky(): void {
-    this.sky.setDetail(skyDetailFor(this.skyMode, this.skyTier));
+    this.sky.setDetail(skyDetailFor(this.skyMode, this.skyTier, this.procedural !== null));
   }
 
   setWet(on: boolean): void {
@@ -445,6 +457,7 @@ export class WorldStage {
     const cam = this.sun.shadow.camera;
     cam.far = this.sunOffset.length() + SHADOW_REACH;
     cam.updateProjectionMatrix();
+    this.sky.setSun(this.sunOffset);
   }
 
   private apply(): void {
@@ -452,11 +465,13 @@ export class WorldStage {
     if (!(this.scene.background instanceof THREE.Color)) this.scene.background = new THREE.Color();
     const sky = this.scene.background;
     const day = this.lit;
-    // A race's night is its night sky's horizon, not the day's haze darkened.
+    // A race's night is its night sky's horizon, not the day's haze darkened; the sandbox's procedural sky is its own horizon.
     if (this.time === TIME_OF_DAY.night) sky.set(SKY_LOOKS[TIME_OF_DAY.night].horizon);
+    else if (this.time === null && this.procedural !== null && this.skyMode !== "off") sky.set(SANDBOX_SKY[this.night ? "night" : "day"].horizon);
     else mixHex(sky, day.sky, NIGHT.sky, k);
     this.scene.fog?.color.copy(sky);
     this.sky.setHaze(sky);
+    this.sky.setNight(this.night);
     mixHex(this.hemi.color, day.hemi[0], NIGHT.hemi[0], k);
     this.hemi.intensity = THREE.MathUtils.lerp(day.hemi[1], NIGHT.hemi[1], k);
     mixHex(this.sun.color, day.sun[0], NIGHT.sun[0], k);

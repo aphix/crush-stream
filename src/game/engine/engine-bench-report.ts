@@ -148,7 +148,7 @@ export interface ReplayResult {
 export interface PageSeconds {
   flags: string;
   phases: string;
-  /** The sky as drawn each second, a digit of `SKY_DRAWN` (0 none, 1 gradient, 2 half, 3 full, 4 loading): the bench pins the Sky setting, so a window's seconds all read the pinned one. */
+  /** The sky as drawn each second, a digit of `SKY_DRAWN` (0 none, 1 gradient, 2 half, 3 full, 4 loading, 5 procedural): the bench pins the Sky setting, so a window's seconds all read the pinned one. */
   sky: string;
   /** The epicenter knob each second (0 off, 1 on): the warm-up must end in the state the window runs in, so the last warm second and the first window second read the same digit. */
   epi: string;
@@ -417,7 +417,7 @@ const leftPage = (events: readonly PageEvent[]): string[] => {
 };
 
 /** The names of `SKY_DRAWN`'s digits, as the series writes them. */
-const SKY_DRAWN_NAMES = ["none", "gradient", "half", "full", "loading"] as const;
+const SKY_DRAWN_NAMES = ["none", "gradient", "half", "full", "loading", "procedural"] as const;
 
 /** What the sky was drawn as in the window's seconds (`pageSeconds`): each state with its seconds, most first, `6 of 40 s` style: a pinned sky reads one state for every second. */
 const windowSky = (series: PageSeconds): string => {

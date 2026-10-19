@@ -1,9 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { setImmediate } from "node:timers/promises";
 import * as THREE from "three";
 import { TIME_OF_DAY, TIMES_OF_DAY } from "../match/types.ts";
 import { courseDay, sunElevation, sunOffset } from "./engine-world.ts";
-import { rowElevation, SKY_LOOKS, SkyDome, skyDetailFor, uAtNorth, type SkyDetail, type SkyMode } from "./sky-dome.ts";
+import { rowElevation, SKY_DRAWN, SKY_LOOKS, SkyDome, skyDetailFor, uAtNorth, type SkyDetail, type SkyMode } from "./sky-dome.ts";
+import { SANDBOX_SKY } from "./sky-procedural.ts";
 import type { FxTier } from "./engine-post.ts";
 
 /** The sun's place before times of day: every course's daylight was lit from here. */
@@ -72,6 +74,90 @@ describe("given the Sky setting and the FX tier", () => {
       assert.equal(skyDetailFor(mode, tier), detail);
     });
   }
+});
+
+describe("given a procedural sky cover, the Sky setting and the FX tier", () => {
+  const rows: { mode: SkyMode; tier: FxTier; detail: SkyDetail }[] = [
+    { mode: "auto", tier: "off", detail: "procedural" },
+    { mode: "auto", tier: "minimal", detail: "procedural" },
+    { mode: "auto", tier: "low", detail: "procedural" },
+    { mode: "auto", tier: "high", detail: "procedural" },
+    { mode: "auto", tier: "ultra", detail: "procedural" },
+    { mode: "on", tier: "off", detail: "procedural" },
+    { mode: "on", tier: "minimal", detail: "procedural" },
+    { mode: "on", tier: "low", detail: "procedural" },
+    { mode: "on", tier: "high", detail: "procedural" },
+    { mode: "on", tier: "ultra", detail: "procedural" },
+    { mode: "full", tier: "off", detail: "procedural" },
+    { mode: "full", tier: "minimal", detail: "procedural" },
+    { mode: "full", tier: "low", detail: "procedural" },
+    { mode: "full", tier: "high", detail: "procedural" },
+    { mode: "full", tier: "ultra", detail: "procedural" },
+    { mode: "off", tier: "off", detail: "off" },
+    { mode: "off", tier: "minimal", detail: "off" },
+    { mode: "off", tier: "low", detail: "off" },
+    { mode: "off", tier: "high", detail: "off" },
+    { mode: "off", tier: "ultra", detail: "off" },
+  ];
+  for (const row of rows) {
+    it(`when the sky is ${row.mode} on the ${row.tier} tier, then it draws ${row.detail}`, () => {
+      assert.equal(skyDetailFor(row.mode, row.tier, true), row.detail);
+    });
+  }
+});
+
+describe("given a sandbox dome (no time of day) with a procedural cover", () => {
+  it("when the procedural sky is asked for, then it draws with that cover and no texture, and hides once the cover and the detail go", () => {
+    const dome = new SkyDome();
+    dome.show(null, 0);
+    dome.setProcedural(0.4);
+    dome.setDetail("procedural");
+    assert.equal(dome.mesh.visible, true);
+    assert.equal(dome.drawn, SKY_DRAWN.procedural);
+    assert.equal(dome.textureBytes, 0);
+    assert.equal(dome["mat"].uniforms.uCover!.value, 0.4);
+    dome.setProcedural(null);
+    dome.setDetail("off");
+    assert.equal(dome.mesh.visible, false);
+    assert.equal(dome.drawn, SKY_DRAWN.off);
+  });
+
+  it("when the sandbox's night comes on, then the dome draws the night look with stars, and the day look without them when it goes", () => {
+    const dome = new SkyDome();
+    dome.show(null, 0);
+    dome.setProcedural(0.4);
+    dome.setDetail("procedural");
+    const u = dome["mat"].uniforms;
+    const horizon = (): string => `#${(u.horizonColor!.value as THREE.Color).getHexString()}`;
+    dome.setNight(true);
+    assert.equal(horizon(), SANDBOX_SKY.night.horizon);
+    assert.equal(u.uStars!.value, 1);
+    dome.setNight(false);
+    assert.equal(horizon(), SANDBOX_SKY.day.horizon);
+    assert.equal(u.uStars!.value, 0);
+  });
+});
+
+describe("given a race dome holding its strip", () => {
+  it("when the procedural sky is asked for, then the strip is let go and no picture is loaded", async () => {
+    const dome = new SkyDome();
+    const loads: string[] = [];
+    Object.assign(dome, {
+      load: async (file: string) => {
+        loads.push(file);
+        return new THREE.Texture({ width: 64, height: 16, close() {} });
+      },
+    });
+    dome.show(TIME_OF_DAY.day, 0);
+    dome.setDetail("full");
+    await setImmediate();
+    assert.ok(dome.textureBytes > 0, "the control: the strip is held");
+    dome.setDetail("procedural");
+    await setImmediate();
+    assert.equal(dome.textureBytes, 0);
+    assert.equal(dome.drawn, SKY_DRAWN.procedural);
+    assert.equal(loads.join(), TIME_OF_DAY.day, "the one load, the strip's");
+  });
 });
 
 describe("given a race's sky dome", () => {
