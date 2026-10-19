@@ -182,8 +182,8 @@ const DAY: Day = {
   smoke: 1,
 };
 
-/** A course's own daylight (`environment.light`), or the Lab's workshop: sun, hemisphere and fill colours (hex), the sun's intensity, and the sky (and fog) colour when it is not the studio's. */
-type Daylight = { sun: string; sunIntensity: number; hemi: string; fill: string; sky?: string };
+/** A course's own daylight (`environment.light`), or the Lab's workshop: sun, hemisphere and fill colours (hex), the sun's intensity (and the hemisphere's and fill's, else the day's), and the sky (and fog) colour when it is not the studio's. */
+type Daylight = { sun: string; sunIntensity: number; hemi: string; fill: string; hemiIntensity?: number; fillIntensity?: number; sky?: string };
 const hex = (c: string): number => parseInt(c.slice(1), 16);
 const NIGHT = {
   sky: 0x040509,
@@ -240,7 +240,7 @@ export function sunOffset(time: TimeOfDay | null, out: THREE.Vector3): THREE.Vec
 
 /** The palette a course lights with: its own daylight over the default's, and its own sky colour (`sky`, else the daylight's, else the studio's). */
 export function courseDay(light: Daylight | null, sky?: string): Day {
-  const base: Day = light ? { ...DAY, sun: [hex(light.sun), light.sunIntensity], hemi: [hex(light.hemi), DAY.hemi[1]], fill: [hex(light.fill), DAY.fill[1]] } : DAY;
+  const base: Day = light ? { ...DAY, sun: [hex(light.sun), light.sunIntensity], hemi: [hex(light.hemi), light.hemiIntensity ?? DAY.hemi[1]], fill: [hex(light.fill), light.fillIntensity ?? DAY.fill[1]] } : DAY;
   const tint = sky ?? light?.sky;
   return tint ? { ...base, sky: hex(tint) } : base;
 }

@@ -63,8 +63,12 @@ vec3 dollColour() { return dollTexel(${PALETTE_AT} + int(roleKind.x + 0.5)).rgb;
 
 /** What a body region shows where the cuts put it: bare skin, the top, the trousers, the shoes (their roles, in this order). */
 const PICK = { BARE: 0, TOP: 1, PANTS: 2, SHOES: 3 } as const;
-/** The woman's scoop neckline cuts only the front: rest z past this (m). */
+/** A neckline's curve (the slot's scoop texel) is its front, at rest z past this (m). */
 const SCOOP_FRONT_Z = 0;
+/** Behind, a neckline runs no lower than the neck's base (m, the man's rest). */
+const BACK_NECKLINE = 1.46;
+/** The body's skin above this (m, the man's rest: under the neck, over every hand) takes the torso's cut too, so a neckline falling between a shirt row and the neck's skin row is cut sharp instead of blended along the triangle. */
+const NECK_SKIN_FROM = 1.3;
 /** Cut-offs fray (m) over this much above the leg's cut and drop threads this far below it; long trousers (cut under this) do not. */
 const FRAY_ABOVE = 0.012;
 const FRAY_BELOW = 0.01;
@@ -109,7 +113,8 @@ vec3 dollCut(int slot, vec3 p, vec4 region, out int pick) {
   vec4 cuts = dollRow(${CUTS_AT}, slot);
   vec4 scoop = dollRow(${CUTS_AT + 1}, slot);
   float across = abs(p.x) / max(scoop.z, 0.001);
-  bool scooped = p.z > ${glslFloat(SCOOP_FRONT_Z)} && p.y > mix(scoop.x, scoop.y, pow(across, float((int(scoop.w + 0.5) >> 16) & 15)));
+  float neckline = mix(scoop.x, scoop.y, pow(across, float((int(scoop.w + 0.5) >> 16) & 15)));
+  bool scooped = p.y > (p.z > ${glslFloat(SCOOP_FRONT_Z)} ? neckline : max(neckline, ${glslFloat(BACK_NECKLINE)}));
   ivec4 picks = ivec4(p.y < cuts.z ? ${PICK.PANTS} : (scooped ? ${PICK.BARE} : ${PICK.TOP}), p.y < cuts.x ? ${PICK.BARE} : ${PICK.TOP}, p.y < cuts.y ? ${PICK.BARE} : ${PICK.PANTS}, p.y < cuts.w ? ${PICK.SHOES} : ${PICK.BARE});
   int strongest = region.x >= max(region.y, max(region.z, region.w)) ? 0 : (region.y >= max(region.z, region.w) ? 1 : (region.z >= region.w ? 2 : 3));
   pick = picks[strongest];
@@ -249,7 +254,7 @@ vPrint = vec4(${PRINT_ATTRIBUTE}.xy, ${PRINT_ATTRIBUTE}.z < -0.5 ? dollTexel(${F
 int dollRole = int(roleKind.x + 0.5);
 float dollBodyMesh = float(gl_VertexID < ${BODY_VERTICES});
 vDollRole = dollRole + ${ON_BODY_MESH} * int(dollBodyMesh);
-vDollRegion = dollBodyMesh * vec4(float(dollRole == ${ROLE.SHIRT}), float(dollRole == ${ROLE.ARM}), float(dollRole == ${ROLE.LEGS}), float(dollRole == ${ROLE.SHOE}));
+vDollRegion = dollBodyMesh * vec4(float(dollRole == ${ROLE.SHIRT} || (dollRole == ${ROLE.SKIN} && position.y > ${glslFloat(NECK_SKIN_FROM)})), float(dollRole == ${ROLE.ARM}), float(dollRole == ${ROLE.LEGS}), float(dollRole == ${ROLE.SHOE}));
 int dollVertexPick;
 vDollColour = vDollRegion.x + vDollRegion.y + vDollRegion.z + vDollRegion.w > 0.0 ? dollCut(gl_InstanceID, position, vDollRegion, dollVertexPick) : dollColour();
 vDollSlot = gl_InstanceID;

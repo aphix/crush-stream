@@ -13,7 +13,7 @@ import { LabFlick } from "./lab-flick.ts";
 import { Garage } from "./garage.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import { Showcase } from "./showcase.ts";
-import { SHOWCASE_CAR, SHOWCASE_EYE, SHOWCASE_KNOCK } from "../present/showcase-art.ts";
+import { SHOWCASE_CAR, SHOWCASE_EYE, SHOWCASE_KNOCK, SHOWCASE_LIGHT } from "../present/showcase-art.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
 import { pickedLook } from "../present/driver-look.ts";
 import { heldPose, type LabPresetId } from "../scenes/lab.ts";
@@ -181,7 +181,7 @@ export abstract class EngineScenes extends EngineMinigames {
       this.view.frameReset(true, this.live(), GARAGE.angle, GARAGE.shot);
     }
     if (next === "showcase") {
-      this.stage.look(LAB_LIGHT);
+      this.stage.look(SHOWCASE_LIGHT);
       this.frameShowcase();
     }
     this.emitHud();

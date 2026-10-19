@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { LAB_LIGHT } from "./lab-art.ts";
 import { ELDER_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { FACE } from "./dummy-faces.ts";
 import { JEANS, OUTFIT, type DriverLook } from "./driver-look.ts";
@@ -14,13 +15,13 @@ import { blankStance, guardDress, People, walkStance, type Stance } from "./peop
 type Figure = { name: string; cop: boolean; look: DriverLook };
 
 /** The reference's muted blue tee, her purple top and lighter-wash cut-offs, the brick-red long sleeve, the navy cap, the men's dark-brown and her copper hair (sRGB, tuned to read as the reference under the showcase's light). */
-const BLUE_TEE = 0x53637f;
-const PURPLE_TOP = 0x765a93;
-const CUT_OFFS = 0x5b616c;
-const BRICK_RED = 0xa65133;
+const BLUE_TEE = 0x546178;
+const PURPLE_TOP = 0x755889;
+const CUT_OFFS = 0x585c63;
+const BRICK_RED = 0xa85234;
 const NAVY_CAP = 0x141626;
-const DARK_BROWN = 0x382211;
-const COPPER = 0x88421e;
+const DARK_BROWN = 0x462b07;
+const COPPER = 0x8a4f23;
 
 /** The people the game draws, as the look reference has them: the man in the blue tee, the woman, the man in red with a cap and dark glasses, a plain-clothes guard, the president and a uniformed cop. */
 const FIGURES: readonly Figure[] = [
@@ -51,6 +52,8 @@ const SLOTS = ROWS.length * FIGURES.length;
 export const SHOWCASE_EYE = { x: 0, y: 1.5, z: 8, lookX: 0, lookY: 1, lookZ: 0 };
 export const SHOWCASE_CAR = { x: 60, z: 60 };
 export const SHOWCASE_KNOCK = { up: 2.5, away: 5 };
+/** The workshop's light softened to the reference's studio: about half the sun's key, a cooler sky light making up the fill (skin reads the reference's, not orange), less back light, so faces and folds shade softly. */
+export const SHOWCASE_LIGHT = { ...LAB_LIGHT, sunIntensity: 1.2, hemi: "#bcc2cc", hemiIntensity: 2.2, fillIntensity: 0.6 };
 
 export class ShowcaseArt {
   readonly group = new THREE.Group();

@@ -1,4 +1,5 @@
 import { BODY_VERTICES } from "./dummy-bodies.ts";
+import { HAND_LENGTH } from "./dummy-fit.ts";
 import { BODY_INDEX, box, surfaceZ } from "./dummy-loft.ts";
 import { BELTED, BUILD, LEFT_ARM, LEFT_LEG, LONG_SLEEVES, RIGHT_ARM, RIGHT_LEG, ROLE, SHORT_SLEEVES, smooth, SNEAKERS, TORSO, type Decal, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
 import { LACES_SIZE, PRINT_CELL, TOE_CAP_SIZE } from "./dummy-texture.ts";
@@ -14,9 +15,10 @@ export type Take = (vertex: number) => boolean;
 
 /**
  * One ring of a fitted shell: `out` m off the body's section at `y` (negative: tucked under the skin; or one `out` per side, a
- * patch standing out over part of the ring), or at `at` when the ring stands where the body is not (a sole's underside under the footprint).
+ * patch standing out over part of the ring), or at `at` when the ring stands where the body is not (a sole's underside under
+ * the footprint); `holds` widens it to the section at that height too where that is wider (a skirt falling straight from its top).
  */
-type Step = { y: number; out: number | readonly number[]; role: number; at?: number };
+type Step = { y: number; out: number | readonly number[]; role: number; at?: number; holds?: number };
 
 /**
  * A fitted shell's bone, kinds and sides; `axis` (x, z) its centre line (default: the middle of the first ring's section), or
@@ -121,7 +123,9 @@ export function fitted(fit: Fit, taken: Take, steps: readonly Step[], fitting: F
   const rings = steps.map((step): Ring => {
     const at = step.at ?? step.y;
     const [middleX, middleZ] = fitting.centred ? sectionMiddle(fit, triangles, at) : [x, z];
-    const radii = sectionRadii(fit, triangles, at, middleX, middleZ, sides).map((radius, k) => radius + (typeof step.out === "number" ? step.out : step.out[k]!));
+    const own = sectionRadii(fit, triangles, at, middleX, middleZ, sides);
+    const held = step.holds === undefined ? own : sectionRadii(fit, triangles, step.holds, middleX, middleZ, sides);
+    const radii = own.map((radius, k) => Math.max(radius, held[k]!) + (typeof step.out === "number" ? step.out : step.out[k]!));
     return [step.y, 1, 1, middleZ, step.role, 1, radii, middleX - x];
   });
   return { x, sides, kinds: fitting.kinds, bone: fitting.bone, rings, bottom: fitting.bottom };
@@ -155,11 +159,15 @@ export const SHORT_SLEEVE_END = 1.19;
 const SLEEVE_TOP = 1.21;
 const SLEEVE_FLARE = 1.2;
 const SLEEVE_OUT = 0.006;
-/** A long sleeve's cuff (m): a ribbed band over the wrist crease, on the forearm. */
+/** A long sleeve ends here (m, the man's rest: the cut, vertex for vertex the same wrist on every build). */
 export const LONG_SLEEVE_END = 0.79;
-const CUFF_TOP = 0.87;
-const CUFF_RIB = 0.85;
+/** Its cuff (m from the build's own wrist): a ribbed band over the wrist crease, on the forearm; a fixed height would sink into her hand, her wrist 5 cm higher. */
+const CUFF_TOP = 0.068;
+const CUFF_RIB = 0.048;
+const CUFF_END = -0.012;
 const CUFF_OUT = 0.008;
+/** A sleeve's hang ends at the cuff's top (m, the man's rest). */
+const SLEEVE_HANG_TO = 0.87;
 
 /**
  * A hung trouser leg's hem (m): a tube continuing the hung leg's width from where the leg stops hanging (above a sneaker's
@@ -199,25 +207,26 @@ const TOE_OUT = 0.019;
  * the bottom never narrower than `keep` of the top's width, so a sleeve or a jeans leg falls straight instead of tapering to the
  * wrist or ankle. Each body vertex moves its `share` of the way (a sleeve fades out across the shoulder's blend, no ledge at its
  * top), and is never pushed nearer the body's middle than `gap` m (none at `from`, all of it at `to`), so two hung legs falling from pressed thighs part.
+ * One that `rests` is never wider at a height than the body's widest from `from` down to there: it falls from a belly instead of standing off the chest above it.
  */
-type Hang = { taken: (fit: Fit, side: number) => Take; share: (fit: Fit, side: number) => (vertex: number) => number; sides: readonly number[]; from: number; to: number; fade: number; ease: readonly [number, number]; keep: number; gap: number };
+type Hang = { taken: (fit: Fit, side: number) => Take; share: (fit: Fit, side: number) => (vertex: number) => number; sides: readonly number[]; from: number; to: number; fade: number; ease: readonly [number, number]; keep: number; gap: number; rests: boolean };
 /** The tee falls from under the pecs to its hem (above them the chest is the shoulders' blend), a sleeve from the shoulder to its cuff (a short one is cut at its end), the jeans from the thigh to the hem. */
 const HANGS: readonly Hang[] = [
-  { taken: torsoOf, share: (fit) => (vertex) => (torsoOf(fit)(vertex) ? 1 : 0), sides: [0], from: 1.25, to: HEM_TOP, fade: 0.04, ease: [0.004, 0.008], keep: 0, gap: 0 },
-  { taken: armOf, share: (fit, side) => (vertex) => ((fit.tpose[vertex * 3]! < 0 ? -1 : 1) === side ? fit.shoulderWeight[vertex]! : 0), sides: [-1, 1], from: 1.24, to: CUFF_TOP, fade: 0.1, ease: [0.008, 0], keep: 0.85, gap: 0 },
-  { taken: legOf, share: (fit, side) => (vertex) => (legOf(fit, side)(vertex) ? 1 : 0), sides: [-1, 1], from: 0.7, to: LEG_HANG_TO, fade: 0.1, ease: [0.01, 0.012], keep: 0.85, gap: LEG_GAP },
+  { taken: torsoOf, share: (fit) => (vertex) => (torsoOf(fit)(vertex) ? 1 : 0), sides: [0], from: 1.25, to: HEM_TOP, fade: 0.04, ease: [0.004, 0.008], keep: 0, gap: 0, rests: true },
+  { taken: armOf, share: (fit, side) => (vertex) => ((fit.tpose[vertex * 3]! < 0 ? -1 : 1) === side ? fit.shoulderWeight[vertex]! : 0), sides: [-1, 1], from: 1.24, to: SLEEVE_HANG_TO, fade: 0.1, ease: [0.008, 0], keep: 0.85, gap: 0, rests: false },
+  { taken: legOf, share: (fit, side) => (vertex) => (legOf(fit, side)(vertex) ? 1 : 0), sides: [-1, 1], from: 0.7, to: LEG_HANG_TO, fade: 0.1, ease: [0.01, 0.012], keep: 0.85, gap: LEG_GAP, rests: false },
 ];
 /** Sides of the polygons a hang's width is read off, between which it is interpolated by angle. */
 const HANG_SIDES = 32;
 /** A hang's top holds the body's widest (per side) down the upper half of its stretch, read this often (m): a tee falls from the pecs and the lats alike, a sleeve over the biceps. */
 const HANG_TOP_STEP = 0.02;
 
-/** Radii (one per `HANG_SIDES` side about (x, z)) holding every section of `triangles` from `from` down to `to`. */
-function widestRadii(fit: Fit, triangles: readonly number[], from: number, to: number, x: number, z: number): number[] {
-  const widest = sectionRadii(fit, triangles, from, x, z, HANG_SIDES);
-  for (let y = from - HANG_TOP_STEP; y > to; y -= HANG_TOP_STEP) {
-    const radii = sectionRadii(fit, triangles, y, x, z, HANG_SIDES);
-    for (let k = 0; k < HANG_SIDES; k++) widest[k] = Math.max(widest[k]!, radii[k]!);
+/** Radii (one per `HANG_SIDES` side about (x, z)) holding the sections of `triangles` from `from` down to `from - n * HANG_TOP_STEP`, for each n while that stays above `to`. */
+function widestDown(fit: Fit, triangles: readonly number[], from: number, to: number, x: number, z: number): number[][] {
+  const widest = [sectionRadii(fit, triangles, from, x, z, HANG_SIDES)];
+  for (let n = 1; from - n * HANG_TOP_STEP > to; n++) {
+    const above = widest[n - 1]!;
+    widest.push(sectionRadii(fit, triangles, from - n * HANG_TOP_STEP, x, z, HANG_SIDES).map((radius, k) => Math.max(radius, above[k]!)));
   }
   return widest;
 }
@@ -233,7 +242,8 @@ export function hangOffsets(fit: Fit): Float32Array {
       const triangles = takenTriangles(taken);
       const middle = (hang.from + hang.to) / 2;
       const [x, z] = sectionMiddle(fit, triangles, middle);
-      const [top, bottom] = [widestRadii(fit, triangles, hang.from, middle, x, z), sectionRadii(fit, triangles, hang.to, x, z, HANG_SIDES)];
+      const widest = widestDown(fit, triangles, hang.from, hang.to, x, z);
+      const [top, bottom] = [widest[Math.ceil((hang.from - middle) / HANG_TOP_STEP) - 1]!, sectionRadii(fit, triangles, hang.to, x, z, HANG_SIDES)];
       for (let i = 0; i < BODY_VERTICES; i++) {
         const [y, share] = [fit.rest[i * 3 + 1]!, shareOf(i)];
         if (y < hang.to || y > hang.from + hang.fade || share === 0) continue;
@@ -243,7 +253,13 @@ export function hangOffsets(fit: Fit): Float32Array {
         const [next, along] = [(k + 1) % HANG_SIDES, Math.min(1, Math.max(0, (hang.from - y) / (hang.from - hang.to)))];
         const width = (radii: readonly number[], ease: number) => radii[k]! * (1 - f) + radii[next]! * f + ease;
         const fallsFrom = width(top, hang.ease[0]);
-        const falls = (1 - along) * fallsFrom + along * Math.max(width(bottom, hang.ease[1]), hang.keep * fallsFrom);
+        let falls = (1 - along) * fallsFrom + along * Math.max(width(bottom, hang.ease[1]), hang.keep * fallsFrom);
+        if (hang.rests) {
+          const below = Math.max(0, (hang.from - y) / HANG_TOP_STEP);
+          const [upper, lower] = [widest[Math.min(widest.length - 1, Math.floor(below))]!, widest[Math.min(widest.length - 1, Math.floor(below) + 1)]!];
+          const ease = (1 - along) * hang.ease[0] + along * hang.ease[1];
+          falls = Math.min(falls, width(upper, ease) + (below - Math.floor(below)) * (width(lower, ease) - width(upper, ease)));
+        }
         const reach = Math.sqrt(dx * dx + dz * dz);
         const out = share * Math.max(0, falls - reach) * (1 - smooth(hang.from, hang.from + hang.fade, y));
         const across = fit.rest[i * 3]!;
@@ -307,14 +323,15 @@ function beltAndHem(build: number, fit: Fit, hanging: Fit): Shell[] {
 /** Each arm's long-sleeve cuff (on the forearm) and, on the casual man, his tee's short-sleeve hem (on the upper arm). */
 function sleeves(build: number, fit: Fit, hanging: Fit): Shell[] {
   const shells: Shell[] = [];
+  const wrist = fit.fingertipY + HAND_LENGTH;
   for (const [side, upperArm] of [[-1, LEFT_ARM], [1, RIGHT_ARM]] as const) {
     const arm = armOf(fit, side);
     shells.push(
       fitted(fit, arm, [
-        { y: CUFF_TOP, out: TUCK, role: SHIRT },
-        { y: CUFF_RIB, out: CUFF_OUT, role: SHIRT },
-        { y: LONG_SLEEVE_END, out: CUFF_OUT, role: SHIRT },
-        { y: LONG_SLEEVE_END, out: TUCK, role: SHIRT },
+        { y: wrist + CUFF_TOP, out: TUCK, role: SHIRT },
+        { y: wrist + CUFF_RIB, out: CUFF_OUT, role: SHIRT },
+        { y: wrist + CUFF_END, out: CUFF_OUT, role: SHIRT },
+        { y: wrist + CUFF_END, out: TUCK, role: SHIRT },
       ], { bone: upperArm + 1, kinds: build | LONG_SLEEVES, sides: LIMB_SIDES }),
     );
     if ((build & CASUAL_BUILDS) === 0) continue;

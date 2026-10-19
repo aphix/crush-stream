@@ -23,13 +23,12 @@ function blendOf(first: number, second: number, weight: number): [number, number
 
 /** The foot is the shoe below this height (m); the shin above is the trouser's. */
 const FOOT_TOP = 0.1;
-/** At the back of the neck the skin begins where the neck's blend is half done: a shirt's collar rises at the nape. */
-const NAPE_SKIN_WEIGHT = 0.5;
 
 /**
  * The body's bones, roles and prints, from the man's fit: the three builds share one topology, so a vertex is the same
- * anatomy on each. Neck skin begins where the neck's blend does, so the shirt's neckline follows the trapezius up to the
- * neck instead of cutting the mesh's rings in a zigzag. The face is the slot's face print, projected flat from the front.
+ * anatomy on each. Neck skin begins where the neck's blend is done, all round: below it the shirt's neckline is the slot's
+ * cut (front and back), so it follows the trapezius instead of cutting the mesh's rings in a zigzag. The face is the slot's
+ * face print, projected flat from the front.
  */
 function paintBody(fit: Fit): { bones: number[]; roleKind: number[]; print: number[] } {
   const head = measureHead(fit);
@@ -48,7 +47,7 @@ function paintBody(fit: Fit): { bones: number[]; roleKind: number[]; print: numb
     else if (fit.hipWeight[i]! > 0) bones.push(...(fit.hipWeight[i]! < 1 ? blendOf(TORSO, thigh, fit.hipWeight[i]!) : blendOf(thigh, thigh + 1, kneeWeight)));
     else bones.push(...blendOf(TORSO, HEAD, fit.neckWeight[i]!));
     const isHand = fit.shoulderWeight[i]! >= 1 && y < wrist;
-    const isSkin = isHand || fit.neckWeight[i]! >= (z < 0 ? NAPE_SKIN_WEIGHT : 1);
+    const isSkin = isHand || fit.neckWeight[i]! >= 1;
     const role = y < FOOT_TOP ? SHOE : isSkin ? SKIN : fit.shoulderWeight[i]! >= 1 ? ARM : fit.hipWeight[i]! > 0 ? LEGS : SHIRT;
     let kind: number = role;
     let printed: readonly number[] = NO_PRINT;
