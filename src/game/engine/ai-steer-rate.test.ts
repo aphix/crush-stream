@@ -7,6 +7,7 @@ import { THROTTLE_STEPS, type DriveInput } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { standingBite } from "../vehicle/wheel-bite.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
+import { blankPoint } from "../world/track.ts";
 
 const STEP = 1 / QUIET_HZ;
 /** Seconds of each scene judged, from its green light. */
@@ -134,10 +135,35 @@ const PLAYER_S = 6;
 const SWAP_S = 1.5;
 const TAP_S = 0.2;
 
-/** The engine's seat takes car 0 in the race; per step, the wheel it handed the drive (on the byte grid `applyDrive` runs it on) against the wheel the car ran. */
+/** The player starts at rest at the head of the course's straightest stretch this long (m): left where the race had it, car 0 entered the drive at race speed and a wall could throw its driver. */
+const PLAYER_ROOM = 100;
+
+/** Car 0 put at rest at the head of the course's straightest `PLAYER_ROOM` m (the stretch whose sharpest bend is the gentlest), facing along it. */
+function startOnStraight(engine: CrashEngine, car: DeformableCar): void {
+  const race = engine["race"];
+  const track = race["track"];
+  assert.ok(track !== null, "the race has a course");
+  const { curv, count } = track.path;
+  const span = Math.ceil((PLAYER_ROOM / track.length) * count);
+  let best = 0;
+  let gentlest = Infinity;
+  for (let k = 0; k < count; k++) {
+    let sharpest = 0;
+    for (let j = 0; j < span; j++) sharpest = Math.max(sharpest, Math.abs(curv[(k + j) % count]!));
+    if (sharpest < gentlest) {
+      gentlest = sharpest;
+      best = k;
+    }
+  }
+  const pt = track.pointAt((best / count) * track.length, blankPoint());
+  race["place"](car, pt.x, pt.z, Math.atan2(pt.tx, pt.tz), pt.y);
+}
+
+/** The engine's seat takes car 0 in the race, put on the straight (`startOnStraight`); per step, the wheel it handed the drive (on the byte grid `applyDrive` runs it on) against the wheel the car ran. */
 function playerDrives(engine: CrashEngine, out: { asked: number[]; ran: number[]; fastest: number }): void {
   const seat = engine["seat"];
   const car = engine["live"]()[0]!;
+  startOnStraight(engine, car);
   seat.focus(0);
   seat.mode = "drive";
   const input = seat.input.bind(seat);

@@ -38,14 +38,14 @@ describe("given the oval race with 11 AI and police on, where two racers are put
           before: () => {
             const cops = w.cars.length - w.race.racers.length;
             if (cop >= 0 && !armed) {
-              // The frame after the cop was put on its spot: the first two racers not yet crashed head-on on the road beside it, 8 m apart
-              // at 20 m/s each. (Racers wrecked in the race's opening pile-up carry its solver state into the clip and crowd the cop out of
-              // its byte share; the rule is about the clip of the staged crash, not about which slots a seed's pile-up spared.)
+              // The frame after the cop was put on its spot: two racers put head-on on the road beside it, 8 m apart at 20 m/s each, the ones the
+              // race has not crashed first. The spot respawns a car whole (`spawnFacing`), so a seed whose pile-up spared fewer than two (seed 5:
+              // one) stages a wreck respawned; staging only spared ones left seed 5 a lone car beside the cop and no crash to keep.
               armed = true;
               // The ledger keeps the five best clips: the pile-up's (kept and still open) are dropped as the crash is staged, so the staged
               // crash's clip ranks among the race's later ones (seed 5 kept five pile-up clips, impacts at 3.0-3.7 s, over the staged crash at 7.5 s).
               w.race.recorder.ledger.clear();
-              for (let i = 0; i < w.race.racers.length && headOn.length < 2; i++) if (!w.cars[i]!.crashed) headOn.push(i);
+              for (const crashed of [false, true]) for (let i = 0; i < w.race.racers.length && headOn.length < 2; i++) if (w.cars[i]!.crashed === crashed) headOn.push(i);
               const c = w.cars[cop]!.group.position;
               const s = track.project(c.x, c.z, -1, proj).s;
               for (const [k, slot] of headOn.entries()) {
@@ -65,6 +65,7 @@ describe("given the oval race with 11 AI and police on, where two racers are put
           maxFrames: (WAIT_S + 30) * 60,
         });
         assert.ok(cop >= 0, `seed ${seed}: no cop was put on a spot in ${WAIT_S} s of the police race`);
+        assert.equal(headOn.length, 2, `seed ${seed}: two racers to stage head-on beside cop ${cop}`);
         const withCop = recs.filter((r) => r.clip.cars.some((c) => c.slot === cop));
         assert.ok(withCop.length > 0, `seed ${seed}: no kept clip holds cop ${cop} (clips: ${recs.map((r) => r.clip.cars.map((c) => c.slot).join(",")).join(" | ")})`);
         for (const rec of withCop) {
