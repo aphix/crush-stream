@@ -64,6 +64,17 @@ void main() {
   gl_FragColor = vec4(s * (uScatter / 12.0), 1.0);
 }`;
 
+/** The halftone's hex screen pitch in drawing-buffer px: the smallest that still reads as dots at 1280x720 (starting value, tuned from shots). */
+const DOT_PITCH = 6;
+/** The halftone dot's radius at black, in screen cells: past the hex cell's corner (1/√3) by the dot's half-pixel edge, so black prints solid. */
+const DOT_BLACK_RADIUS = 1 / Math.sqrt(3) + 0.5 / DOT_PITCH;
+/** The cross-hatch's line pitch in drawing-buffer px (starting value, tuned from shots). */
+const HATCH_PITCH = 5;
+/** The print looks' paper, display space (starting value, tuned from shots). */
+const PAPER = [0.96, 0.94, 0.9];
+/** The cross-hatch's pencil ink, display space (starting value, tuned from shots). */
+const INK = [0.09, 0.09, 0.11];
+
 /**
  * One full-screen pass: radial blur (boost), chromatic punch (impacts), bloom, flash, the renderer's own
  * tone mapping, a light split-tone grade, vignette, then sRGB and display-space grain.
@@ -85,10 +96,31 @@ uniform float uContrast;
 uniform float uGrade;
 uniform float uLetterbox;
 uniform float uCel;
+uniform float uDots;
+uniform float uHatch;
 varying vec2 vUv;
+const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+const float DOT_PITCH = ${DOT_PITCH.toFixed(1)};
+const float DOT_BLACK_RADIUS = ${DOT_BLACK_RADIUS.toFixed(4)};
+const float HATCH_PITCH = ${HATCH_PITCH.toFixed(1)};
+const vec3 PAPER = vec3(${PAPER.map((v) => v.toFixed(3)).join(", ")});
+const vec3 INK = vec3(${INK.map((v) => v.toFixed(3)).join(", ")});
 float celL(vec2 p) {
   float l = dot(texture2D(tScene, p).rgb, vec3(0.2126, 0.7152, 0.0722));
   return l / (1.0 + l);
+}
+// Hex lattice (pointy-top, unit spacing) and box-filtered stripes after shader-skills (MIT).
+vec4 hexGrid(vec2 p) {
+  const vec2 s = vec2(1.0, 1.7320508);
+  vec2 a = mod(p, s) - 0.5 * s;
+  vec2 b = mod(p - 0.5 * s, s) - 0.5 * s;
+  vec2 l = dot(a, a) < dot(b, b) ? a : b;
+  return vec4(l, p - l);
+}
+float filteredStripes(float x, float w) {
+  w = max(w, 1e-4);
+  float a = x + 0.5 * w, b = x - 0.5 * w;
+  return ((floor(a) * 0.5 + max(fract(a) - 0.5, 0.0)) - (floor(b) * 0.5 + max(fract(b) - 0.5, 0.0))) / w;
 }
 void main() {
   vec2 uv = vUv;
@@ -129,6 +161,21 @@ void main() {
     vec3 cel = clamp(g * (floor(lc * 5.0 + 0.5) / 5.0 / max(lc, 0.02)), 0.0, 1.0);
     cel = mix(vec3(dot(cel, vec3(0.2126, 0.7152, 0.0722))), cel, 1.25) * (1.0 - 0.9 * edge);
     g = mix(g, cel, uCel);
+  }
+  if (uDots > 0.001) {
+    vec4 hex = hexGrid(gl_FragCoord.xy / DOT_PITCH);
+    float lum = dot(g, LUMA);
+    float ink = clamp(0.5 - (length(hex.xy) - (1.0 - lum) * DOT_BLACK_RADIUS) * DOT_PITCH, 0.0, 1.0);
+    g = mix(g, mix(PAPER, g, ink), uDots);
+  }
+  if (uHatch > 0.001) {
+    vec2 p = gl_FragCoord.xy / HATCH_PITCH;
+    float w = 1.0 / HATCH_PITCH;
+    float lum = dot(g, LUMA);
+    float ink = filteredStripes((p.x + p.y) * 0.7071, w) * (1.0 - smoothstep(0.55, 0.78, lum));
+    ink = max(ink, filteredStripes((p.x - p.y) * 0.7071, w) * (1.0 - smoothstep(0.3, 0.5, lum)));
+    ink = max(ink, filteredStripes(p.y, w) * (1.0 - smoothstep(0.08, 0.28, lum)));
+    g = mix(g, mix(PAPER * (0.55 + 0.45 * lum), INK, ink), uHatch);
   }
   vec2 q = uv - 0.5;
   g *= clamp(1.0 - dot(q, q) * (uVignette + uPunch * 0.9), 0.0, 1.0);
@@ -208,6 +255,10 @@ export class PostFX {
   letterbox = 0;
   /** 0–1: scene-switch cel look (posterized bands, Sobel outlines), low / high tiers only (`scene-fade.ts`). */
   cel = 0;
+  /** 0–1: halftone dots, a hex screen whose dot radius follows the pixel's darkness, low / high tiers only. */
+  dots = 0;
+  /** 0–1: cross-hatch, pencil stripes that layer in as the luminance drops, low / high tiers only. */
+  hatch = 0;
   private tierNow: FxTier = "off";
   /** 0–1: the share of the post chain's grade, bloom, vignette and radial blur in the frame; eases up after a switch from a plain tier (`easeFade`). */
   private fade = 0;
@@ -263,6 +314,8 @@ export class PostFX {
           uGrade: { value: 1 },
           uLetterbox: { value: 0 },
           uCel: { value: 0 },
+          uDots: { value: 0 },
+          uHatch: { value: 0 },
         },
         defines: spec.radial ? { BLOOM: "", RADIAL: "" } : { BLOOM: "" },
         depthTest: false,
@@ -403,6 +456,8 @@ export class PostFX {
     u.uRadial!.value = this.radial * k;
     u.uLetterbox!.value = this.letterbox;
     u.uCel!.value = this.cel;
+    u.uDots!.value = this.dots;
+    u.uHatch!.value = this.hatch;
     u.uPhase!.value = (u.uPhase!.value as number + GOLDEN) % 1;
     this.blit(composite, null);
     r.info.autoReset = true;
