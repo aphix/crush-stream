@@ -49,7 +49,7 @@ export interface BenchPlan {
   lab: typeof LAB_BENCH | null;
   /** `&ultra=1`: the card also runs the Ultra look as an FX arm, against the other tiers (`runBench`). */
   ultra: boolean;
-  /** `&epi=1`: the run has the epicenter activation on (`runBench` turns `epi.on` on once the race is up); the loop runs each map once without and once with. */
+  /** `&epi=1`: the run has the epicenter activation on (`runBench` turns `epi.on` on once the race is up); which steps carry it is the loop's Epicenter option (`bench-loop.ts`). */
   epicenter: boolean;
   /** `&extended=1`: the long bench (A/B blocks, replay); false: the quick bench, which measures the window alone. */
   extended: boolean;

@@ -1,12 +1,13 @@
 /**
  * The benchmark loop's browser side (rules: `game/engine/bench-loop.ts`): the bench page itself (`?bench=…`, fetched only when asked
- * for), the whole loop run in it (no navigation between steps: the page keeps its fullscreen, and holds a screen wake lock from the first step to the
+ * for), the options chooser before a new loop, the whole loop run in it (no navigation between steps: the page keeps its fullscreen, and holds a screen wake lock from the first step to the
  * last), and the one move to a newer build. The loop's state lives in the page's address, nothing is stored.
  */
 import type { CrashEngine } from "@/game/engine/engine";
 import type { CrashHudState } from "@/game/hud/hud-store";
 import type { runBench } from "@/game/engine/engine-bench";
-import { driveLoop, loopProgress, loopSettings, newSession, parseRun, runFromPage, startRun, stepHref, stepOf, type BenchRun } from "@/game/engine/bench-loop";
+import { driveLoop, entryHref, loopProgress, loopSettings, newSession, parseRun, runFromPage, stepHref, stepOf, withOptions, type BenchRun } from "@/game/engine/bench-loop";
+import { chooseOptions } from "@/game/engine/bench-chooser";
 import { BETWEEN_STEPS_S } from "@/game/engine/bench-plan-time";
 import { WakeHold } from "@/game/engine/bench-wake";
 import { BENCH_QUERY } from "@/game/engine/constants";
@@ -17,35 +18,28 @@ import { sendSubmission } from "@/lib/submissions/status";
 /** A bench's card and receipt stay on screen this long before the next bench of the loop begins. */
 const PAUSE_MS = BETWEEN_STEPS_S * 1000;
 
-/** Where the quick bench keeps the epicenter arm its next run takes (`1`: on): each run takes it and leaves the other for the next, so a card says which arm it is and consecutive runs are the pair. */
-const NEXT_ARM_KEY = "crush-bench-next-arm";
-
-/** The arm this run takes and the next run does not; off when the browser lets the page keep nothing. */
-function takeArm(): boolean {
-  try {
-    const arm = localStorage.getItem(NEXT_ARM_KEY) === "1";
-    localStorage.setItem(NEXT_ARM_KEY, arm ? "0" : "1");
-    return arm;
-  } catch (err) {
-    console.warn("bench: the next arm cannot be kept in this browser, running epicenter off", err);
-    return false;
-  }
+/** The Benchmark entries: a new loop's first page, quick or extended, which opens on the chooser. */
+export function startBenchLoop(extended: boolean): void {
+  location.assign(entryHref(location.href, extended));
 }
 
-/** The Benchmark entries: a new loop from its first step, the quick bench (one arm of each map, the next run the other) or the extended one. */
-export function startBenchLoop(extended: boolean): void {
-  location.assign(stepHref(location.href, startRun(newSession(), extended, extended ? false : takeArm())));
+/** A page that starts a loop (the Benchmark entry, `/bench`, an address opened by hand) waits for the chooser; null for a bench no step of the cycle runs. */
+async function chosenRun(search: string): Promise<BenchRun | null> {
+  const session = newSession();
+  const offered = runFromPage(search, session);
+  if (offered === null) return null;
+  return runFromPage(withOptions(search, await chooseOptions(offered)), session);
 }
 
 /**
- * A `?bench=` page: run its bench, post the card, and carry the loop on in this page. A page opened by its address alone is a loop from there with
- * every option on (`runFromPage`), exactly as the Benchmark entry starts one, and its address is rewritten to say so; a bench the
+ * A `?bench=` page: run its bench, post the card, and carry the loop on in this page. A page that names no loop yet starts one from there under the
+ * chooser's options (`runFromPage`; all on unless its address turns one off), and its address is rewritten to say so; a bench the
  * cycle doesn't run (the lab, another course) runs once and posts. With `auto` set and a newer build deployed, the next step is a reload onto it (`?v=`,
  * held back by the backoff if earlier reloads did not land): the loop's one navigation, which drops fullscreen and the wake lock with the page.
  */
 export async function runBenchPage(engine: CrashEngine, hud: () => CrashHudState): Promise<void> {
   const search = location.search;
-  const first = parseRun(search) ?? runFromPage(search, newSession());
+  const first = parseRun(search) ?? (await chosenRun(search));
   if (first !== null) history.replaceState(history.state, "", stepHref(location.href, first));
   // Dynamic on purpose: the bench's code is its own chunk, fetched only by a page that asks for a bench (as before the loop).
   const bench: { runBench: typeof runBench } = await import("@/game/engine/engine-bench");

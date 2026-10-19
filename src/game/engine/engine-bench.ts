@@ -7,7 +7,7 @@ import { CLIP_WAIT_S, CRASH_GAP, CRASH_SPEED, ragdollCost, REPLAY_SETTLE_S, REPL
 import { BENCH, QUICK, blocksOf, CAP, deviceOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, skyPinOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type SkyPin, type Samples, type Tap, type Window } from "./bench-measure.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import type { SimPacer } from "./sim-pace.ts";
-import { SETTING_KEY } from "./constants.ts";
+import { BENCH_BUTTON_STYLE, BENCH_CARD_STYLE, SETTING_KEY } from "./constants.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
 import { hudSettings, wireCard } from "./bench-card.ts";
 import { analyzeFrames, FrameRecord, type FrameStats } from "./bench-frames.ts";
@@ -84,9 +84,7 @@ function overlay(loopProgress: string | null): {
   for (const old of document.querySelectorAll(`[${CARD_ATTRIBUTE}]`)) old.remove();
   const root = document.createElement("div");
   root.setAttribute(CARD_ATTRIBUTE, "");
-  root.style.cssText =
-    "position:fixed;left:8px;top:8px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;z-index:99999;padding:8px 10px;" +
-    "background:rgba(8,10,14,.92);color:#e8f0ff;font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;border-radius:8px;pointer-events:none";
+  root.style.cssText = BENCH_CARD_STYLE;
   const pre = document.createElement("pre");
   pre.style.cssText = "margin:0;white-space:pre-wrap";
   const status = document.createElement("div");
@@ -96,7 +94,6 @@ function overlay(loopProgress: string | null): {
   badge.sync();
   root.append(armLine, pre, status);
   document.body.append(root);
-  const buttonStyle = "margin:6px 6px 0 0;padding:6px 10px;font:inherit;border-radius:6px;border:1px solid #7ee787;background:#14301c;color:#e8f0ff";
   const submitButton = document.createElement("button");
   return {
     badge,
@@ -110,18 +107,18 @@ function overlay(loopProgress: string | null): {
       root.style.borderLeft = "4px solid #7ee787";
       const copy = document.createElement("button");
       copy.textContent = "Copy details (JSON)";
-      copy.style.cssText = buttonStyle;
+      copy.style.cssText = BENCH_BUTTON_STYLE;
       copy.onclick = () => {
         void copyText(details()).then((ok) => void (copy.textContent = ok ? "Copied" : "Copy failed: select the card text instead"));
       };
       submitButton.textContent = "Submit \u2191";
-      submitButton.style.cssText = buttonStyle;
+      submitButton.style.cssText = BENCH_BUTTON_STYLE;
       submitButton.onclick = submit;
       // The card covers most of the screen: Hide, at its top so a short screen never has to scroll to it, folds it to its receipt
       // line and buttons; Show brings the text back.
       const hide = document.createElement("button");
       hide.textContent = "Hide";
-      hide.style.cssText = `${buttonStyle};margin:0 0 6px`;
+      hide.style.cssText = `${BENCH_BUTTON_STYLE};margin:0 0 6px`;
       hide.onclick = () => {
         const shown = pre.style.display !== "none";
         pre.style.display = shown ? "none" : "";
@@ -142,7 +139,7 @@ function overlay(loopProgress: string | null): {
         id.style.cssText = "user-select:all;font-size:13px;letter-spacing:.06em;padding:0 4px;background:#1c2530;border-radius:4px";
         const copyId = document.createElement("button");
         copyId.textContent = "Copy";
-        copyId.style.cssText = `${buttonStyle};margin:0 0 0 6px;padding:2px 8px`;
+        copyId.style.cssText = `${BENCH_BUTTON_STYLE};margin:0 0 0 6px;padding:2px 8px`;
         copyId.onclick = () => void copyText(state.id).then((ok) => void (copyId.textContent = ok ? "Copied" : "Select the id"));
         status.append("Receipt ", id, copyId);
       }

@@ -6,9 +6,9 @@ import { ULTRA_AVAILABLE } from "@/game/engine/bench-loop";
 const BUTTON = "idle:hidden h-10 px-1 text-xs font-normal text-muted sm:h-7 sm:px-2.5";
 
 /**
- * The scene list's Benchmark entries. Benchmark is the quick bench: the strip, the city, the biggest course and the National Mall in turn, one epicenter arm of each (the next run is the other arm),
- * the measured window alone, a card posted for each with a receipt; its planned length is on the button. Extended is the long one (the FX-tier sweep, the pacer, detail, FX and sky A/Bs and the
- * replay on every page, both arms of every map), which keeps benching and reloads onto new builds.
+ * The scene list's Benchmark entries, each opening the chooser (Loop, Epicenter, Ultra; all on). Benchmark is the quick bench: the strip, the city, the biggest course and the National
+ * Mall in turn, each under the epicenter arm when it is on, the measured window alone, a card posted for each with a receipt; its planned length is on the button. Extended is the long one (the
+ * FX-tier sweep, the pacer, detail, FX and sky A/Bs and the replay on every page, both arms of every map). With Loop on either keeps benching and reloads onto new builds.
  */
 export function BenchEntry() {
   return (
