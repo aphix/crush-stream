@@ -568,6 +568,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
     /** A long jump at full throttle with the boost key tapped one frame when the sim has run `pressRelative` s since the throttle went down (null: never). */
     const bailRun = (carId: string, pressRelative: number | null): BailRun => {
+      engine["ragdolls"].ejectRoll = 0;
       engine.setPlayerCar(carId);
       engine.startMinigame("longJump");
       const origin = engine["elapsedSim"];

@@ -157,6 +157,8 @@ export class RagdollSystem {
   private solids: readonly Solid[] | null = null;
   /** The flat ground is the range's sand pit (`SAND`), read when a run's first throw builds it (set by the engine). */
   sand = false;
+  /** Roll (rad/s) a thrown driver leaves with about his line of flight (`EJECT_ROLL`); rows that pin the rigid launch or a bail's resting order set it to 0. */
+  ejectRoll = EJECT_ROLL;
   private readonly mesh: DummyMesh;
   /** The HUD's Rig and Particles views of the dummies (`set`). */
   readonly debug: RagdollDebug;
@@ -703,7 +705,7 @@ export class RagdollSystem {
     t.v.set(t.v.x * releaseScale.forward, t.v.y * releaseScale.upward, t.v.z * releaseScale.forward);
     if (releaseScale.elevation !== null) turnToElevation(t.v, releaseScale.elevation);
     const flight = t.v.length();
-    if (flight > 0) t.w.addScaledVector(t.v, EJECT_ROLL / flight);
+    if (flight > 0) t.w.addScaledVector(t.v, this.ejectRoll / flight);
     t.car = e.car;
     t.age = 0;
     t.cop = e.cop;

@@ -54,6 +54,7 @@ function ejection(shot: (typeof SHOTS)[number]): Ejection {
 async function thrown(shot: (typeof SHOTS)[number], scale?: ReleaseScale): Promise<{ sys: RagdollSystem; doll: Doll; e: Ejection }> {
   const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
   sys.sand = true;
+  sys.ejectRoll = 0;
   await sys.preload();
   setGround(null);
   sys.update(FRAME, [], true, false, null);

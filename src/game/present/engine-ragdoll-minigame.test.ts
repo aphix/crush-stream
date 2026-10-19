@@ -30,6 +30,7 @@ const ONE_BOX: readonly BoxPlacement[] = [{ x: 20, y: 0.5, z: 0, yaw: 0, width: 
 async function system(): Promise<RagdollSystem> {
   const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
   sys.sand = true;
+  sys.ejectRoll = 0;
   await sys.preload();
   setGround(null);
   sys.update(FRAME, [], true, false, null);
