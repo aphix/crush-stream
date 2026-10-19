@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { type CrashWorld, launch, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { type CrashWorld, FREEWHEEL, launch, makeWorld, PARKED, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { buildCar, drawnTriangles } from "./drawn-body.test-util.ts";
 import { tyreClearance } from "./tyre-clearance.test-util.ts";
@@ -56,4 +56,30 @@ describe("given a car let down from a metre onto flat ground, its tyres driven u
       assert.ok(seen.clearance >= CLEARANCE_M, `${fmt(seen.clearance)} at frame ${seen.at}`);
     });
   }
+});
+
+describe("given a pickup that hits something with its nose", () => {
+  it("when it meets a second pickup head-on at 50 km/h, then its front tyres keep 5 mm under the drawn hood through the crush and after", () => {
+    const a = crashCar("pickup", "truck");
+    const b = crashCar("pickup", "truck");
+    const w = makeWorld([a, b], false, false);
+    w.pedals.set(a, FREEWHEEL);
+    w.pedals.set(b, FREEWHEEL);
+    launch(a, -5, 0, Math.PI / 2, 50 / 3.6, 0);
+    launch(b, 5, 0, -Math.PI / 2, -50 / 3.6, 0);
+    const seen = leastClearance(w, a, FRONT_WHEELS, 150);
+    assert.ok(seen.clearance >= CLEARANCE_M, `${fmt(seen.clearance)} at frame ${seen.at}`);
+  });
+
+  it("when it drives into a parked sedan's flank at 72 km/h, then its front tyres keep 5 mm under the drawn hood through the crush and after", () => {
+    const a = crashCar("pickup", "truck");
+    const b = crashCar("sedan", "sedan");
+    const w = makeWorld([a, b], false, false);
+    w.pedals.set(a, FREEWHEEL);
+    w.pedals.set(b, PARKED);
+    launch(a, -12, 0, Math.PI / 2, 72 / 3.6, 0);
+    launch(b, 0, 0, 0, 0, 0);
+    const seen = leastClearance(w, a, FRONT_WHEELS, 150);
+    assert.ok(seen.clearance >= CLEARANCE_M, `${fmt(seen.clearance)} at frame ${seen.at}`);
+  });
 });

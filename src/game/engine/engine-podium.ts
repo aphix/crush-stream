@@ -85,6 +85,8 @@ export class PodiumDirector {
   private readonly built: (DeformableCar | null)[] = PODIUM_BLOCKS.map(() => null);
   /** The cars standing now (the winner's first), in place of a place nobody holds. */
   private readonly standing: DeformableCar[] = [];
+  /** The damage each standing car wears, in `standing` order. */
+  private readonly worn: (CarDamage | null)[] = [];
   private names: string[] = [];
   private kind: PodiumHud["kind"] = "race";
   private up = false;
@@ -119,6 +121,7 @@ export class PodiumDirector {
     this.stage.group.visible = true;
     this.stage.setNames(places, title);
     this.standing.length = 0;
+    this.worn.length = 0;
     for (let k = 0; k < PODIUM_BLOCKS.length; k++) {
       const place = places[k];
       const car = place ? this.host.carFor(place.id, this.built[k]!) : null;
@@ -126,6 +129,7 @@ export class PodiumDirector {
       if (!place || !car) continue;
       this.stand(car, place.id, PODIUM_BLOCKS[k]!);
       this.standing.push(car);
+      this.worn.push(this.host.damageOf(place.id));
     }
     this.skinFrames = SKIN_FRAMES;
     this.names = places.map((p) => p.name);
@@ -175,7 +179,10 @@ export class PodiumDirector {
     }
     if (this.skinFrames > 0) {
       this.skinFrames--;
-      for (let k = 0; k < this.standing.length; k++) this.standing[k]!.updateSkin();
+      for (let k = 0; k < this.standing.length; k++) {
+        this.standing[k]!.updateSkin();
+        this.worn[k]?.drawOn(this.standing[k]!);
+      }
     }
   }
 

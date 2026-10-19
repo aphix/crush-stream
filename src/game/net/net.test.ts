@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { idleDrive } from "../vehicle/car-drive.ts";
 import { DerbyMatch } from "../match/derby.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
+import { FREEWHEEL, launch, makeCar, makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { buildCar } from "../vehicle/drawn-body.test-util.ts";
 import { assertSameDigest, assertSameNumbers, forModes } from "../vehicle/test-support.ts";
 import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
@@ -27,10 +28,20 @@ import {
   type Snapshot,
 } from "./codec.ts";
 import { readCarPose } from "./car-pose.ts";
+import { tyreClearance } from "../vehicle/tyre-clearance.test-util.ts";
+import { drawnTriangles } from "../vehicle/drawn-body.test-util.ts";
 import { drawSnapshots } from "./net-view.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const L: NetLayout = { masses: 20, clusters: 16, sensors: 21, parts: 8, wheels: 4 };
+
+/** `car`'s body skin as the sim wrote it, before the drawn tyre hold (`TyreSkin`): what crosses the wire. Each peer holds it over its own drawn wheels, as it draws its own springs. */
+function simSkin(car: DeformableCar): ArrayLike<number> {
+  return car["bodyTyres"]?.["written"] ?? car.body.geometry.getAttribute("position").array;
+}
+
+/** The clearance (m) a drawn tyre top keeps under the drawn skin (`tyre-hood.test.ts`). */
+const TYRE_CLEARANCE_M = 0.005;
 
 function maxDiff(a: ArrayLike<number>, b: ArrayLike<number>): number {
   assert.equal(a.length, b.length);
@@ -270,12 +281,18 @@ describe("given a client car that applies the host car's state from the wire", (
     assert.ok(host.crashed && host.deform.massActive);
     const client = apply(makeCar(mode), wire(host));
 
-    const hv = host.body.geometry.getAttribute("position").array;
-    const cv = client.body.geometry.getAttribute("position").array;
+    const hv = simSkin(host);
+    const cv = simSkin(client);
     const dent = maxDiff(hv, makeCar(mode).body.geometry.getAttribute("position").array);
     assert.ok(dent > 0.05, `the host car is dented (${dent.toFixed(3)} m)`);
     // The client re-skins from the host's baked inputs; only quantization (≤ 0.25 mm per particle) separates them.
     assert.ok(maxDiff(hv, cv) < 0.002, `skin vertices within 2 mm (${maxDiff(hv, cv).toFixed(4)})`);
+    const tris = drawnTriangles(client);
+    for (const wheel of [0, 1]) {
+      if (client["looseWheels"][wheel]!.loose) continue;
+      const clearance = tyreClearance(client, wheel, tris);
+      assert.ok(clearance >= TYRE_CLEARANCE_M, `the client's wheel ${wheel} stands ${(clearance * 1000).toFixed(1)} mm under its drawn hood`);
+    }
 
     host.refitCage();
     client.refitCage();
@@ -306,8 +323,7 @@ describe("given a client car that applies the host car's state from the wire", (
     assert.ok(host.crashed && looseParts(host) === 0);
     apply(client, wire(host));
     assert.equal(looseParts(client), 0);
-    const hv = host.body.geometry.getAttribute("position").array;
-    assert.ok(maxDiff(hv, client.body.geometry.getAttribute("position").array) < 0.002);
+    assert.ok(maxDiff(simSkin(host), simSkin(client)) < 0.002);
   });
 
   // todo -> after the plan: recalibrate the off-centre wall hit's crush against the lever's spin. The 58 km/h rear corner hit tears no quarter
@@ -366,6 +382,42 @@ describe("given a client car that applies the host car's state from the wire", (
   });
 });
 
+/** A pickup at the fleet's crumple settings, as the tyre-hood rows build it. */
+function pickup(): DeformableCar {
+  const car = buildCar("pickup", "truck");
+  car.deform.squash = 0.32;
+  car.deform.buckle = 0.45;
+  return car;
+}
+/** How long (s) the head-on runs before the host's state is sent: its hood is crushed down onto its front tyres by then. */
+const HEAD_ON_S = 1;
+const HEAD_ON_MPS = 50 / 3.6;
+
+describe("given a host pickup that met a second pickup head-on at 50 km/h, and a client that applies its state from the wire", () => {
+  it("when the client draws it, then the sim's skin matches the host's, and the client's drawn hood stands over its own front tyres by the clearance (each peer holds the hood over its own drawn wheels)", () => {
+    const host = pickup();
+    const other = pickup();
+    const w = makeWorld([host, other], false, false);
+    w.pedals.set(host, FREEWHEEL);
+    w.pedals.set(other, FREEWHEEL);
+    launch(host, -5, 0, Math.PI / 2, HEAD_ON_MPS, 0);
+    launch(other, 5, 0, -Math.PI / 2, -HEAD_ON_MPS, 0);
+    for (let f = 0; f < HEAD_ON_S * FRAME_HZ; f++) tickWorld(w, 1 / FRAME_HZ);
+    host.updateSkin();
+    const client = apply(pickup(), wire(host));
+    assert.ok(maxDiff(simSkin(host), simSkin(client)) < 0.002, `skin vertices within 2 mm (${maxDiff(simSkin(host), simSkin(client)).toFixed(4)})`);
+    const tris = drawnTriangles(client);
+    let kept = 0;
+    for (const wheel of [0, 1]) {
+      if (client["looseWheels"][wheel]!.loose) continue;
+      kept++;
+      const clearance = tyreClearance(client, wheel, tris);
+      assert.ok(clearance >= TYRE_CLEARANCE_M, `the client's wheel ${wheel} stands ${(clearance * 1000).toFixed(1)} mm under its drawn hood`);
+    }
+    assert.ok(kept > 0, "no front wheel kept: the row proves nothing");
+  });
+});
+
 describe("given a host wreck the epicenter freeze holds (the activation on) and a client that applies its state from the wire", () => {
   it("when the host hits a wall at 64 km/h and sits 9 s, then the client's skin, cage and engine damage match the host's, as for a wreck that never froze", () => {
     const saved = epicenterValues();
@@ -377,8 +429,8 @@ describe("given a host wreck the epicenter freeze holds (the activation on) and 
       runWall(64, 0.4, "front", { car: host, after: 9 });
       assert.ok(host.crashed && host.deform.massActive && host.deform.frozen, "the host wreck is frozen: the row proves nothing otherwise");
       const client = apply(makeCar(), wire(host));
-      const hv = host.body.geometry.getAttribute("position").array;
-      const cv = client.body.geometry.getAttribute("position").array;
+      const hv = simSkin(host);
+      const cv = simSkin(client);
       assert.ok(maxDiff(hv, cv) < 0.002, `skin vertices within 2 mm (${maxDiff(hv, cv).toFixed(4)})`);
       host.refitCage();
       client.refitCage();

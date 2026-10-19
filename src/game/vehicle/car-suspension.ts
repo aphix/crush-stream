@@ -39,6 +39,11 @@ export function droop(cls: VehicleClassId): number {
 const ARCH_ROOM: Readonly<Record<VehicleClassId, number>> = { sedan: 0.074, muscle: 0.048, police: 0.074, truck: 0.053, monster: Infinity };
 
 /** How far (m) a drawn wheel and its body can come together: a class's spring stop, or its arch's room if that is less. */
+/** Whether a class's tyres stay under its drawn skin: false for one whose tyres ride their whole travel into the body (the monster's bed), which no hold may lift off them. */
+export function tyresUnderSkin(cls: VehicleClassId): boolean {
+  return Number.isFinite(ARCH_ROOM[cls]);
+}
+
 function archStop(cls: VehicleClassId): number {
   return Math.min(droop(cls), ARCH_ROOM[cls]);
 }

@@ -11,9 +11,10 @@ import { COM_Y, REST_SPEED } from "./car-air-body.ts";
 import { FLIGHT_BORNE, FLIGHT_CONTACT, FLIGHT_DOWN, FLIGHT_DRIFT, FLIGHT_END_AGO, FLIGHT_END_REACH, FLIGHT_END_SQUEEZE, FLIGHT_EULER, FLIGHT_INV_YAW, FLIGHT_POSITION, FLIGHT_QUATERNION, FLIGHT_RAMPS, FLIGHT_REST, FLIGHT_SPIN, FLIGHT_STALL, FLIGHT_VELOCITY } from "./car-flight.ts";
 import { readContact } from "./car-air-points.ts";
 import { stepFree, wreckCentre, wreckInvI } from "./car-air.ts";
-import { bodyLift, Suspension, UPRIGHT_UP_Y } from "./car-suspension.ts";
+import { bodyLift, Suspension, UPRIGHT_UP_Y, tyresUnderSkin } from "./car-suspension.ts";
 import { C_GRIP, C_NY, C_OWNER, HIT_SIZE, stirNear } from "../world/surfaces.ts";
 import { carClass, CLASSES } from "./vehicle-classes.ts";
+import { TyreSkin } from "./car-tyre-skin.ts";
 import { clearDents } from "./loose-dent.ts";
 import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
@@ -124,6 +125,8 @@ export class DeformableCar extends CarParts {
   private invYaw = 0;
   /** The drawn body's load transfer over the physics body, and its wheels' seats (drawn only). */
   readonly suspension = new Suspension();
+  private bodyTyres: TyreSkin | null = null;
+  private hoodTyres: TyreSkin | null = null;
   private classBody: THREE.Object3D | null = null;
 
   spawn(x: number, z: number, speed: number): void {
@@ -616,6 +619,7 @@ export class DeformableCar extends CarParts {
     if (this.deform.skinnedThisFrame) this.poseLamps();
     if (this.crashed) {
       if (this.deform.skinnedThisFrame) this.skinPanels();
+      this.holdSkinOffTyres(this.deform.skinnedThisFrame);
       this.followGlass();
     }
     if (this.deform.massActive) this.fitInterior();
@@ -628,7 +632,22 @@ export class DeformableCar extends CarParts {
     this.deform.skinDeferred = false;
     if (!this.deform.flushSkin(this.body.geometry)) return;
     this.poseLamps();
-    if (this.crashed) this.skinPanels();
+    if (this.crashed) {
+      this.skinPanels();
+      this.holdSkinOffTyres(true);
+    }
+  }
+
+  /** A crushed skin drawn over a standing tyre stands on it (`TyreSkin`); a thrown wheel is the world's. */
+  private holdSkinOffTyres(skinWritten: boolean): void {
+    if (!tyresUnderSkin(carClass(this))) return;
+    this.bodyTyres ??= new TyreSkin(this.body, this.deform.restSkin);
+    this.hoodTyres ??= new TyreSkin(this.hood, this.hoodRest);
+    let gone = 0;
+    for (let i = 0; i < this.wheels.length; i++) if (this.looseWheels[i]!.loose) gone |= 1 << i;
+    const lift = CLASSES[carClass(this)].lift;
+    this.bodyTyres.hold(this.group, this.wheels, gone, lift, skinWritten);
+    if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten);
   }
 
   /** Bonnet, boot lid, the police light bar and the skinned glass follow the body skin. */

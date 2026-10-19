@@ -1,7 +1,9 @@
+import type * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { makeCarFrame, type CarFrame } from "../net/codec.ts";
 import { carLayout } from "../net/car-pose.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
+import { computeNormalsFast } from "../deform/fast-normals.ts";
 
 /**
  * One car's damage as it stood when read: the dents and the packed engine block, the parts torn off, the lost wheels, the broken lamps and glass, the engine's travel
@@ -15,6 +17,9 @@ export class CarDamage {
   private squash = 0;
   private buckle = 0;
   private mode: DeformMode = "lattice";
+  /** The drawn body and bonnet as they stood when read (`readDrawn`), the tyre hold included. */
+  private drawnBody: Float32Array | null = null;
+  private drawnHood: Float32Array | null = null;
 
   /** The car's damage now (the first read sizes the record from the car's layout; later reads reuse it). */
   read(car: DeformableCar): void {
@@ -23,6 +28,22 @@ export class CarDamage {
     car.readPartNetState(f.parts);
     this.crashed = car.crashed;
     ({ squash: this.squash, buckle: this.buckle, mode: this.mode } = car.deform);
+  }
+
+  /** The car's drawn body and bonnet now (`drawOn` puts them back): the race's last frame, as the player saw it. */
+  readDrawn(car: DeformableCar): void {
+    // Read before the frame draws the car: its skin is brought up to this step first, as the frame's draw would.
+    car.updateSkin();
+    const { body, hood } = car.lookMeshes();
+    this.drawnBody = copyOf(body.geometry.getAttribute("position").array as Float32Array, this.drawnBody);
+    this.drawnHood = copyOf(hood.geometry.getAttribute("position").array as Float32Array, this.drawnHood);
+  }
+
+  /** The drawn body and bonnet `readDrawn` kept, on `car` (a car of the same body): it is drawn as it finished, not re-held over its own wheels. */
+  drawOn(car: DeformableCar): void {
+    const { body, hood } = car.lookMeshes();
+    drawInto(body, this.drawnBody);
+    drawInto(hood, this.drawnHood);
   }
 
   /**
@@ -42,6 +63,22 @@ export class CarDamage {
   }
 }
 
+/** `from` copied into `into` when it fits, else into a new array. */
+function copyOf(from: Float32Array, into: Float32Array | null): Float32Array {
+  if (into?.length !== from.length) return Float32Array.from(from);
+  into.set(from);
+  return into;
+}
+
+/** `drawn` as the positions of `mesh`, when it fits. */
+function drawInto(mesh: THREE.Mesh, drawn: Float32Array | null): void {
+  const attr = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+  if (!drawn || attr.array.length !== drawn.length) return;
+  (attr.array as Float32Array).set(drawn);
+  attr.needsUpdate = true;
+  computeNormalsFast(mesh.geometry);
+}
+
 /**
  * Every racer's damage as the race ended, read once a race (the first frame that sees it finished): the cars go on moving afterwards and the results reel respawns them, so the podium
  * (docs/PODIUM.md) shows the cars from this, not from what the field's cars look like when it opens.
@@ -54,7 +91,11 @@ export class FinalDamage {
   take(cars: readonly DeformableCar[], racers: number): void {
     if (this.taken) return;
     this.taken = true;
-    for (let i = 0; i < racers && i < cars.length; i++) (this.cars[i] ??= new CarDamage()).read(cars[i]!);
+    for (let i = 0; i < racers && i < cars.length; i++) {
+      const damage = (this.cars[i] ??= new CarDamage());
+      damage.read(cars[i]!);
+      damage.readDrawn(cars[i]!);
+    }
   }
 
   /** Racer `id`'s damage as the race ended; null before one has ended since `clear`. */
