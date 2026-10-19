@@ -104,6 +104,10 @@ function noteClosing(c: number, closing: number): void {
 const _row = new THREE.Vector3();
 /** A floor that is the world's ground is this close (m) to what the ground's own height reads at the row: the same surface, to its rounding. */
 const GROUND_MATCH = 1e-6;
+/** The speed (m/s) a wreck at rest parts from the ground it stands in: under `REST_SPEED`, so it stays at rest and may sleep. */
+const GROUND_LIFT_V = REST_SPEED / 3;
+/** Per row: a wreck-at-rest ground row being lifted out (`standsOnGround`, read once). */
+const LIFTING = new Uint8Array(CONTACTS);
 
 /**
  * Whether row `c` (a body point, not a tyre) is in the world's ground itself, not in a solid, a car's top or a wall: the ground has
@@ -134,6 +138,11 @@ export function solveRows(n: number): void {
   // A body at rest solves over more passes: its friction is rebuilt from 0 every slice and the residual slide integrates (a wreck at rest then sleeps, `integrateWreck`).
   const atRest = !part && v.lengthSq() < REST_SPEED * REST_SPEED && w.lengthSq() < REST_SPEED * REST_SPEED;
   const passes = atRest ? REST_PASSES : PASSES;
+  // A wreck at rest parts from the ground it stands in at `GROUND_LIFT_V` as a speed the solve gives the row: a positional lift hopped the body off its other rows (a 21 Hz hop, never asleep).
+  for (let c = 0; c < n; c++) {
+    LIFTING[c] = body.wreck && atRest && standsOnGround(c) ? 1 : 0;
+    if (LIFTING[c] === 1) GAPV[c] = -Math.min(SINK[c]! / dt, GROUND_LIFT_V);
+  }
   for (let pass = 0; pass < passes; pass++) {
     for (let c = 0; c < n; c++) {
       const nrm = N[c]!;
@@ -279,11 +288,9 @@ export function solveRows(n: number): void {
   for (let c = 0; c < n; c++) {
     const s = SLOT[c]!;
     LEFT[c] = -Infinity;
-    // A wreck at rest rises out of the ground at rest speed at most: a body that moves faster is not at rest, and its depth is what
-    // the move it is making (a door crushing against a piston, a wreck sliding up a bank) carries it through, which the lift must not
-    // pump energy into or pop it out of at once (a sunk wreck jumped 0.22 m in a slice, a piston's crush stopped short).
-    if (body.wreck && atRest && standsOnGround(c)) LEFT[c] = Math.min(SINK[c]! - 0.5 * dt * _dvSolve.dot(N[c]!), REST_SPEED * dt);
-    else if (UNDER[c]) under = Math.max(under, Math.min(SINK[c]!, CLOSING[c]! < BOUNCE_V ? CLOSING[c]! * dt : 0));
+    // A body that moves faster than rest is not lifted out (a door crushing against a piston, a wreck sliding up a bank): the lift must not pump energy into it or pop it out at once.
+    if (LIFTING[c] === 1) continue;
+    if (UNDER[c]) under = Math.max(under, Math.min(SINK[c]!, CLOSING[c]! < BOUNCE_V ? CLOSING[c]! * dt : 0));
     else if (s >= 0 && surf.isYielding(s)) {
       if (!SOFT[c]) surf.note(s, SINK[c]!, FOLLOW[c]!);
     } else if (part || HUB[c] || CLOSING[c]! > 0) {

@@ -227,9 +227,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * a clip recorded with the epicenter on replays its frozen wrecks' hubs differently; with it off nothing changes. A clip of 117 or before no longer reads.
  * 119: a circle collider placed at uneven x and z scales is an ellipse of circles inside the drawn shape (the National Mall's WWII basin, 160 x 48 m, was a 160 m circle): a clip recorded on the
  * Mall that met the old circle north or south of the basin (up to 112 m past its drawn edge) replays without that wall. A clip of 118 or before no longer reads.
+ * 120: a wreck at rest rises out of ground it is sunk into through the contact solve's own speed bias (a third of `REST_SPEED`) instead of a positional lift of 1.2 mm a
+ * slice: a wreck resting on a sunk sill no longer hops at 21 Hz, and rests and sleeps earlier. A clip of 119 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 119;
+const REPLAY_VERSION = 120;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
