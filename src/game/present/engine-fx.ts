@@ -188,7 +188,7 @@ type DotLook = {
   tinted?: boolean;
 };
 
-/** Ring buffer of additive billboard dots that fall, land on the world (`landBit`), and park at y=250 when dead. */
+/** Ring buffer of additive billboard dots that fall and land on the world (`landBit`). The GPU draws only the live ones, packed from slot 0 (`publish`): a dead dot is no pixel, a point sprite never draws smaller than one. */
 class DotPoints {
   protected readonly pos: Float32Array;
   protected readonly vx: Float32Array;
@@ -198,8 +198,11 @@ class DotPoints {
   protected readonly n: number;
   protected readonly points: THREE.Points;
   protected readonly geo: THREE.BufferGeometry;
-  /** Per-dot RGB multiplier (present when the look is `tinted`); a dead dot's entry is stale, it draws parked at y=250. */
+  /** Per-dot RGB multiplier (present when the look is `tinted`), by ring slot. */
   protected readonly tint: Float32Array | null;
+  /** What the GPU reads: the live dots' positions (and tints) packed from the front, `publish` fills them. */
+  private readonly drawPos: Float32Array;
+  private readonly drawTint: Float32Array | null;
   private tmp = new THREE.Vector3();
   private vel = new THREE.Vector3();
   private cursor = 0;
@@ -218,12 +221,13 @@ class DotPoints {
     this.vy = new Float32Array(n);
     this.vz = new Float32Array(n);
     this.life = new Float32Array(n);
-    for (let i = 0; i < n; i++) this.pos[i * 3 + 1] = 250;
     this.geo = new THREE.BufferGeometry();
-    this.geo.setAttribute("position", new THREE.BufferAttribute(this.pos, 3));
+    this.drawPos = new Float32Array(n * 3);
+    this.geo.setAttribute("position", new THREE.BufferAttribute(this.drawPos, 3));
     this.tint = look.tinted ? new Float32Array(n * 3) : null;
-    if (this.tint) this.geo.setAttribute("color", new THREE.BufferAttribute(this.tint, 3));
-    this.geo.setDrawRange(0, n);
+    this.drawTint = this.tint ? new Float32Array(n * 3) : null;
+    if (this.drawTint) this.geo.setAttribute("color", new THREE.BufferAttribute(this.drawTint, 3));
+    this.geo.setDrawRange(0, 0);
     const mat = new THREE.PointsMaterial({
       map: makeDotTexture(look.core, look.glow),
       color: 0xffffff,
@@ -244,9 +248,7 @@ class DotPoints {
     this.life.fill(0);
     this.cursor = 0;
     this.anyAlive = false;
-    for (let i = 0; i < this.n; i++) this.pos[i * 3 + 1] = 250;
-    this.geo.setDrawRange(0, this.n);
-    (this.geo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+    this.publish();
   }
 
   /** Oldest ring slot; the caller fills pos/vel/life for it. */
@@ -259,21 +261,43 @@ class DotPoints {
   /** Publish `spawned` freshly claimed slots to the GPU. */
   protected commit(spawned: number): void {
     if (spawned > 0) this.anyAlive = true;
-    this.geo.setDrawRange(0, this.n);
+    this.publish();
+  }
+
+  /** Pack the live dots (positions, tints) into what the GPU draws and draw exactly them. */
+  protected publish(): void {
+    let live = 0;
+    for (let i = 0; i < this.n; i++) {
+      if (this.life[i]! <= 0) continue;
+      this.drawPos[live * 3] = this.pos[i * 3]!;
+      this.drawPos[live * 3 + 1] = this.pos[i * 3 + 1]!;
+      this.drawPos[live * 3 + 2] = this.pos[i * 3 + 2]!;
+      if (this.tint && this.drawTint) {
+        this.drawTint[live * 3] = this.tint[i * 3]!;
+        this.drawTint[live * 3 + 1] = this.tint[i * 3 + 1]!;
+        this.drawTint[live * 3 + 2] = this.tint[i * 3 + 2]!;
+      }
+      live++;
+    }
+    this.geo.setDrawRange(0, live);
     (this.geo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+    if (this.drawTint) (this.geo.getAttribute("color") as THREE.BufferAttribute).needsUpdate = true;
   }
 
   update(dt: number): void {
     if (!this.anyAlive) return;
+    this.step(dt);
+    this.publish();
+  }
+
+  /** Age every live dot by `dt` and move it; `anyAlive` says whether any was alive going in. */
+  protected step(dt: number): void {
     let any = false;
     for (let i = 0; i < this.n; i++) {
       if (this.life[i]! <= 0) continue;
       any = true;
       this.life[i]! -= dt;
-      if (this.life[i]! <= 0) {
-        this.pos[i * 3 + 1] = 250;
-        continue;
-      }
+      if (this.life[i]! <= 0) continue;
       if (!this.lands) {
         this.pos[i * 3]! += this.vx[i]! * dt;
         this.pos[i * 3 + 1]! += this.vy[i]! * dt;
@@ -294,7 +318,6 @@ class DotPoints {
       this.vz[i] = this.vel.z;
     }
     this.anyAlive = any;
-    if (any) (this.geo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
   }
 
   /** HDR colour multiplier: above 1 the dots feed the bloom pass (cinematic tiers); 1 is the plain look. */
@@ -541,7 +564,7 @@ export class FountainSystem extends DotPoints {
       if (count > 0) this.spray(s, count);
     }
     if (!this.anyAlive) return;
-    super.update(dt);
+    this.step(dt);
     const tint = this.tint!;
     for (let i = 0; i < this.n; i++) {
       const life = this.life[i]!;
@@ -551,7 +574,7 @@ export class FountainSystem extends DotPoints {
       tint[i * 3 + 1] = this.base[i * 3 + 1]! * fade;
       tint[i * 3 + 2] = this.base[i * 3 + 2]! * fade;
     }
-    (this.geo.getAttribute("color") as THREE.BufferAttribute).needsUpdate = true;
+    this.publish();
     this.points.visible = this.anyAlive;
   }
 
