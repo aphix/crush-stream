@@ -1,7 +1,7 @@
 import { BODY_VERTICES } from "./dummy-bodies.ts";
-import { armOf, BELT_BOTTOM, BELT_OUT, BELT_TOP, fitted, FOOTPRINT_AT, legOf, LIMB_SIDES, TORSO_SIDES, torsoOf, TUCK, type Take } from "./dummy-garments.ts";
-import { box, BOX_SIDES, surfaceZ, TUBE_SIDES } from "./dummy-loft.ts";
-import { BUILD, DRESS_SHOES, LEFT_ARM, LEFT_LEG, POLICE, RIGHT_LEG, ROLE, SUITED, TORSO, UNIFORM, type Decal, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
+import { armOf, BELT_BOTTOM, BELT_OUT, BELT_TOP, fitted, FOOTPRINT_AT, hangingFit, legOf, LIMB_SIDES, SUIT_HANG, TORSO_SIDES, torsoOf, trouserHem, TUCK, UNIFORM_HANG, type Take } from "./dummy-garments.ts";
+import { box, BOX_SIDES, surfaceY, surfaceZ, TUBE_SIDES } from "./dummy-loft.ts";
+import { BUILD, DRESS_SHOES, LEFT_ARM, LEFT_LEG, POLICE, RIGHT_ARM, RIGHT_LEG, ROLE, SUITED, TORSO, UNIFORM, type Decal, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
 import { PRINT_CELL } from "./dummy-texture.ts";
 
 /**
@@ -10,7 +10,7 @@ import { PRINT_CELL } from "./dummy-texture.ts";
  * shoes under loose trousers; plus the garment marks (pockets, placket, lapels) the cloth bakes for each outfit.
  */
 
-const { SHIRT, LEGS, SHOE, SOLE, BELT, BADGE, PATCH, TIE, COLLAR } = ROLE;
+const { SHIRT, SHOE, SOLE, BELT, BADGE, PATCH, TIE, COLLAR } = ROLE;
 
 /** Half the height band (m) a section takes its vertices from. */
 const SECTION_BAND = 0.012;
@@ -66,45 +66,63 @@ const TIE_OUTLINE = [
 const TIE_HALF_DEPTH = 0.014;
 const TIE_OUT = 0.006;
 
-/** The dress shoe (m): a low polished upper from the ankle over the foot, on a thin sole. */
+/** The dress shoe (m): a low polished upper from the ankle over the foot, on a thin sole, the trousers' hem standing on its collar. */
 const SHOE_COLLAR = 0.095;
 const SHOE_UPPER = [0.075, 0.05, 0.03] as const;
 const SHOE_OUT = 0.006;
 const SHOE_SOLE_TOP = 0.014;
 const SHOE_SOLE_OUT = 0.009;
 const SHOE_SOLE_BOTTOM = -0.016;
+const DRESS_HEM = 0.105;
 /**
- * Loose trousers (m): per leg a thigh tube from under the hip's blend to past the knee, and a shin tube from inside it down to
- * the hem over the shoe, as (height, out) top to bottom; growing `out` hangs them straight off the leg's taper.
+ * The uniform shirt bloused over the belt (m), on the hung body: out of the hung shirt at the top, fullest just over the belt
+ * (where the body under it no longer hangs), its hem tucked under the belt's top.
  */
-const THIGH_RINGS = [
-  [0.8, TUCK],
-  [0.77, 0.008],
-  [0.62, 0.012],
-  [0.47, 0.02],
-  [0.39, 0.022],
-] as const;
-const SHIN_RINGS = [
-  [0.45, 0.014],
-  [0.3, 0.018],
-  [0.18, 0.026],
-  [0.105, 0.03],
-] as const;
-/** The uniform shirt bloused over the belt (m): out of the skin at the top, fullest (`BLOUSE_FULL` out) just over the belt, its hem tucked under the belt's top. */
-const BLOUSE_FULL = 0.012;
+const BLOUSE_FULL = 0.02;
 const BLOUSE_RINGS = [
-  [1.08, TUCK],
-  [1.02, 0.007],
+  [1.06, TUCK],
+  [1.0, 0.006],
   [0.985, BLOUSE_FULL],
 ] as const;
 const BLOUSE_TUCK = BELT_OUT - 0.002;
-/** A suit jacket's skirt (m): out of the waist, standing off the belly and the hips, flaring to its hem over the trousers' top. */
+/** A suit jacket's skirt (m), on the hung body: out of the hung jacket, falling straight off the hips to its hem over the thighs (the reference's at 0.43 of his height). */
 const JACKET_RINGS = [
   [1.0, TUCK],
-  [0.96, 0.015],
-  [0.88, 0.025],
-  [0.79, 0.04],
+  [0.97, 0.016],
+  [0.88, 0.024],
+  [0.76, 0.032],
 ] as const;
+/**
+ * The jacket's hip pocket flaps (m): a band round the skirt from `FLAP_TOP` down to `FLAP_BOTTOM`, standing `FLAP_PROUD` out of
+ * it over the sides between `FLAP_ANGLES` (rad from +x toward the front, and their mirror) and `FLAP_INSIDE` inside it elsewhere;
+ * `FLAP_SIDES` (7.5 degrees each) keep a flap's ends square.
+ */
+const FLAP_TOP = 0.965;
+const FLAP_BOTTOM = 0.93;
+const FLAP_PROUD = 0.005;
+const FLAP_INSIDE = -0.004;
+const FLAP_ANGLES = [Math.PI / 6, Math.PI / 3] as const;
+const FLAP_SIDES = 48;
+/** A suit's white shirt cuff (m): tucked under the jacket sleeve's end, standing `CUFF_SHOWS` out over the wrist below it. */
+const SHIRT_CUFF_TOP = 0.81;
+const SHIRT_CUFF_EDGE = 0.8;
+const SHIRT_CUFF_END = 0.783;
+const CUFF_SHOWS = 0.004;
+/**
+ * The uniform's epaulettes (m): a strap over each shoulder's ridge from beside the collar (|x| `EPAULETTE_FROM`) out to the
+ * shoulder (`EPAULETTE_TO`), `EPAULETTE_PROUD` over the ridge at `EPAULETTE_STEPS` + 1 rings; each ring `EPAULETTE_ACROSS`
+ * along x (on the shoulder's slope that is its thickness) and `EPAULETTE_WIDE` along z.
+ */
+const EPAULETTE_FROM = 0.1;
+const EPAULETTE_TO = 0.19;
+const EPAULETTE_STEPS = 5;
+const EPAULETTE_PROUD = 0.004;
+const EPAULETTE_ACROSS = 0.02;
+const EPAULETTE_WIDE = 0.045;
+/** The shoulder's ridge is the highest of the body's tops sampled this often (m) across z from its back to its front, over the strap's middle. */
+const RIDGE_FROM = -0.12;
+const RIDGE_TO = 0.06;
+const RIDGE_STEP = 0.01;
 
 /** The extent (m) of the `taken` body vertices within `SECTION_BAND` of height `y`. */
 type Section = { left: number; right: number; back: number; front: number };
@@ -175,14 +193,15 @@ function collar(fit: Fit, kinds: number): Shell {
   return { x: 0, sides: TUBE_SIDES, kinds, bone: TORSO, rings };
 }
 
+/** The tie down the chest, each ring resting on the front-most body across its width (a portly chest rounds out either side of the middle). */
 function tie(fit: Fit, kinds: number): Shell {
   const corner = 1 / Math.cos(Math.PI / BOX_SIDES);
-  const rings = TIE_OUTLINE.map(([y, halfWidth]): Ring => [y, halfWidth * corner, TIE_HALF_DEPTH * corner, surfaceZ(fit, 0, y) + TIE_OUT, TIE]);
+  const rings = TIE_OUTLINE.map(([y, halfWidth]): Ring => [y, halfWidth * corner, TIE_HALF_DEPTH * corner, frontOver(fit, [-halfWidth, 0, halfWidth], [y]) + TIE_OUT, TIE]);
   return { x: 0, sides: BOX_SIDES, kinds, bone: TORSO, rings, bottom: 0 };
 }
 
-/** Each leg's dress shoe under loose trousers: the shin tube and the shoe lofted about the ankle's middle so the hem closes onto the shoe. */
-function dressShoes(fit: Fit, kinds: number): Shell[] {
+/** Each leg's dress shoe lofted about the ankle's middle, under the hem of `trousered`'s hung trouser leg closing onto it. */
+function dressShoes(fit: Fit, trousered: Fit, kinds: number): Shell[] {
   const shells: Shell[] = [];
   for (const [side, thigh] of [
     [-1, LEFT_LEG],
@@ -191,11 +210,9 @@ function dressShoes(fit: Fit, kinds: number): Shell[] {
     const leg = legOf(fit, side);
     const ankle = sectionOf(fit, leg, SHOE_COLLAR);
     const fitting = { bone: thigh + 1, kinds, sides: LIMB_SIDES, axis: [(ankle.left + ankle.right) / 2, (ankle.back + ankle.front) / 2] as const };
-    const hem = SHIN_RINGS[SHIN_RINGS.length - 1]![0];
     const upper = [SHOE_COLLAR, ...SHOE_UPPER].map((y) => ({ y, out: SHOE_OUT, role: SHOE }));
     shells.push(
-      fitted(fit, leg, THIGH_RINGS.map(([y, out]) => ({ y, out, role: LEGS })), { bone: thigh, kinds, sides: LIMB_SIDES }),
-      fitted(fit, leg, [...SHIN_RINGS.map(([y, out]) => ({ y, out, role: LEGS })), { y: hem, out: SHOE_OUT, role: LEGS }], fitting),
+      trouserHem(trousered, side, fitting, DRESS_HEM, SHOE_OUT),
       fitted(fit, leg, [{ y: SHOE_COLLAR, out: TUCK, role: SHOE }, ...upper, { y: SHOE_SOLE_TOP, out: SHOE_SOLE_OUT, role: SOLE }, { y: SHOE_SOLE_BOTTOM, out: SHOE_SOLE_OUT, role: SOLE, at: FOOTPRINT_AT }], { ...fitting, bottom: 0 }),
     );
   }
@@ -206,16 +223,78 @@ function blouse(fit: Fit, kinds: number): Shell {
   return fitted(fit, torsoOf(fit), [...BLOUSE_RINGS.map(([y, out]) => ({ y, out, role: SHIRT })), { y: BELT_TOP, out: BLOUSE_TUCK, role: SHIRT }], { bone: TORSO, kinds, sides: TORSO_SIDES });
 }
 
-/** The jacket's skirt over the body below the arms (the hips and the tops of both thighs in one section). */
-function jacketSkirt(fit: Fit, kinds: number): Shell {
-  return fitted(fit, (i) => fit.shoulderWeight[i] === 0, JACKET_RINGS.map(([y, out]) => ({ y, out, role: SHIRT })), { bone: TORSO, kinds, sides: TORSO_SIDES });
+/** Each shoulder's epaulette: a strap lofted along the shoulder's ridge, each ring at the ridge's top under it (rings run top to bottom, so it steps down outward). */
+function epaulettes(fit: Fit, kinds: number): Shell[] {
+  const middle = (EPAULETTE_FROM + EPAULETTE_TO) / 2;
+  let [ridge, highest] = [0, -Infinity];
+  for (let z = RIDGE_FROM; z <= RIDGE_TO; z += RIDGE_STEP) {
+    const top = surfaceY(fit, middle, z);
+    if (top > highest) [ridge, highest] = [z, top];
+  }
+  const corner = 1 / Math.cos(Math.PI / BOX_SIDES);
+  return [-1, 1].map((side): Shell => {
+    const rings: Ring[] = [];
+    for (let k = 0; k <= EPAULETTE_STEPS; k++) {
+      const along = EPAULETTE_FROM + ((EPAULETTE_TO - EPAULETTE_FROM) * k) / EPAULETTE_STEPS;
+      const y = Math.min(surfaceY(fit, side * along, ridge) + EPAULETTE_PROUD, rings[k - 1]?.[0] ?? Infinity);
+      rings.push([y, (EPAULETTE_ACROSS / 2) * corner, (EPAULETTE_WIDE / 2) * corner, ridge, SHIRT, 1, undefined, side * (along - EPAULETTE_FROM)]);
+    }
+    return { x: side * EPAULETTE_FROM, sides: BOX_SIDES, kinds, bone: TORSO, rings, top: 0, bottom: 0 };
+  });
 }
 
-/** Build `build`'s uniformed wear: the duty kit on the builds a cop may have, the suit and the dress shoes on the builds that wear them. */
+/** The jacket's skirt over the body below the arms (the hips and the tops of both thighs in one section), and its hip pocket flaps on its front. */
+function jacketSkirt(fit: Fit, kinds: number): Shell[] {
+  const below = (i: number) => fit.shoulderWeight[i] === 0;
+  const skirt = fitted(fit, below, JACKET_RINGS.map(([y, out]) => ({ y, out, role: SHIRT })), { bone: TORSO, kinds, sides: TORSO_SIDES });
+  const skirtOut = (y: number) => {
+    const under = JACKET_RINGS.findIndex(([at]) => at <= y);
+    const [[y0, out0], [y1, out1]] = [JACKET_RINGS[under - 1]!, JACKET_RINGS[under]!];
+    return out0 + ((y - y0) / (y1 - y0)) * (out1 - out0);
+  };
+  const onFlap = Array.from({ length: FLAP_SIDES }, (_, k) => {
+    const angle = ((k + 0.5) * 2 * Math.PI) / FLAP_SIDES;
+    const fromSide = Math.min(angle, Math.PI - angle);
+    return fromSide >= FLAP_ANGLES[0] && fromSide <= FLAP_ANGLES[1];
+  });
+  const band = (y: number, proud: boolean) => ({ y, out: onFlap.map((flap) => skirtOut(y) + (proud && flap ? FLAP_PROUD : FLAP_INSIDE)), role: SHIRT });
+  const flaps = fitted(fit, below, [band(FLAP_TOP, false), band(FLAP_TOP, true), band(FLAP_BOTTOM, true), band(FLAP_BOTTOM, false)], { bone: TORSO, kinds, sides: FLAP_SIDES, axis: [skirt.x, skirt.rings[0]![3]] });
+  return [skirt, flaps];
+}
+
+/** A suit's white shirt cuff on each wrist, under the jacket sleeve's end. */
+function shirtCuffs(fit: Fit, kinds: number): Shell[] {
+  const arms = [
+    [-1, LEFT_ARM],
+    [1, RIGHT_ARM],
+  ] as const;
+  return arms.map(([side, upperArm]) =>
+    fitted(fit, armOf(fit, side), [
+      { y: SHIRT_CUFF_TOP, out: TUCK, role: COLLAR },
+      { y: SHIRT_CUFF_EDGE, out: CUFF_SHOWS, role: COLLAR },
+      { y: SHIRT_CUFF_END, out: CUFF_SHOWS, role: COLLAR },
+      { y: SHIRT_CUFF_END, out: TUCK, role: COLLAR },
+    ], { bone: upperArm + 1, kinds, sides: LIMB_SIDES }),
+  );
+}
+
+/**
+ * Build `build`'s uniformed wear, each on its body as its clothes hang (a woman's cling): the duty kit, bloused shirt and
+ * epaulettes on the builds a cop may have, the suit on the builds that wear it, and the dress shoes under either's trousers
+ * (suits and uniforms share their trousers' hang).
+ */
 export function uniformWear(build: number, fit: Fit): Shell[] {
   const shells: Shell[] = [];
-  if (build !== BUILD.PORTLY) shells.push(...dutyKit(fit, build | UNIFORM), badge(fit, build | UNIFORM), shoulderPatch(fit, build | UNIFORM | POLICE), collar(fit, build | UNIFORM), blouse(fit, build | UNIFORM));
-  if (build !== BUILD.WOMAN) shells.push(collar(fit, build | SUITED), tie(fit, build | SUITED), jacketSkirt(fit, build | SUITED), ...dressShoes(fit, build | DRESS_SHOES));
+  if (build !== BUILD.PORTLY) {
+    const hung = build === BUILD.WOMAN ? fit : hangingFit(fit, UNIFORM_HANG);
+    const kinds = build | UNIFORM;
+    shells.push(...dutyKit(hung, kinds), badge(hung, kinds), shoulderPatch(hung, kinds | POLICE), collar(hung, kinds), blouse(hung, kinds), ...epaulettes(hung, kinds));
+  }
+  if (build !== BUILD.WOMAN) {
+    const hung = hangingFit(fit, SUIT_HANG);
+    const kinds = build | SUITED;
+    shells.push(collar(hung, kinds), tie(hung, kinds), ...jacketSkirt(hung, kinds), ...shirtCuffs(hung, kinds), ...dressShoes(fit, hung, build | DRESS_SHOES));
+  }
   return shells;
 }
 
@@ -223,19 +302,26 @@ export function uniformWear(build: number, fit: Fit): Shell[] {
 type Finish = { raise: number; shade: number; round?: number; edge?: number; paint?: number; taper?: number };
 const SEAM: Finish = { edge: 0.003, raise: -0.0006, shade: 0.6 };
 const STITCH: Finish = { raise: -0.0008, shade: 0.6 };
-const FLAP: Finish = { raise: 0.0015, shade: 0.9 };
+const FLAP: Finish = { raise: 0.003, shade: 0.78 };
 const BUTTON: Finish = { round: 1, raise: 0.0015, shade: 0.55 };
 
 /** A mark on the front (m, the man's rest frame: x across, y up). */
 const front = (x0: number, x1: number, y0: number, y1: number, finish: Finish): Decal => ({ face: "+z", x0, x1, y0, y1, round: 0, edge: 0, paint: -1, taper: 1, ...finish });
 
-/** A uniform shirt's breast pocket on side `side` (+1 his left): its seam, a pointed flap and the flap's button. */
-const POCKET_X = 0.085;
-const POCKET_HALF_WIDTH = 0.0425;
+/** A uniform shirt's breast pocket on side `side` (+1 his left): its seam, a box pleat down its middle, a pointed flap and the flap's button, the badge resting just above the left one. */
+const POCKET_X = 0.09;
+const POCKET_HALF_WIDTH = 0.05;
 function pocket(side: number): Decal[] {
   const x = side * POCKET_X;
   const [left, right] = [x - POCKET_HALF_WIDTH, x + POCKET_HALF_WIDTH];
-  return [front(left, right, 1.13, 1.205, SEAM), front(left, right, 1.195, 1.228, FLAP), front(left, right, 1.195, 1.228, SEAM), front(left, right, 1.183, 1.196, { ...FLAP, taper: 0 }), front(x - 0.005, x + 0.005, 1.19, 1.2, BUTTON)];
+  return [
+    front(left, right, 1.1, 1.19, SEAM),
+    front(x - 0.002, x + 0.002, 1.1, 1.165, STITCH),
+    front(left, right, 1.18, 1.215, FLAP),
+    front(left, right, 1.18, 1.215, SEAM),
+    front(left, right, 1.163, 1.181, { ...FLAP, taper: 0 }),
+    front(x - 0.006, x + 0.006, 1.172, 1.184, BUTTON),
+  ];
 }
 
 /** The uniform's shirt buttons down the placket (m), above the blousing. */
@@ -249,13 +335,19 @@ export const UNIFORM_DECALS: readonly Decal[] = [
   ...PLACKET_BUTTONS.map((y) => front(-0.0045, 0.0045, y - 0.0045, y + 0.0045, BUTTON)),
 ];
 
-/** A suit: the white shirt's V between the lapels (their edges raised), the lapels' outer seam, a welt pocket, the jacket's opening above its skirt and its two buttons. */
+/**
+ * A suit: the lapels (a raised, faintly darker V from the shoulders to the button, its outer edge a seam), the white shirt's V
+ * between them (its shade undoing theirs, its raised edges their inner edge), a welt pocket, the jacket's opening under the
+ * button above its skirt, and its two buttons.
+ */
+const LAPEL_SHADE = 0.88;
 export const SUIT_DECALS: readonly Decal[] = [
-  front(-0.05, 0.05, 1.15, 1.45, { raise: -0.001, shade: 1, paint: COLLAR, taper: 0 }),
-  front(-0.05, 0.05, 1.15, 1.45, { edge: 0.006, raise: 0.002, shade: 0.6, taper: 0 }),
-  front(-0.14, 0.14, 1.06, 1.43, { edge: 0.004, raise: -0.0008, shade: 0.5, taper: 0 }),
-  front(0.065, 0.135, 1.27, 1.28, STITCH),
-  front(-0.0015, 0.0015, 1.0, 1.15, STITCH),
-  front(-0.006, 0.006, 1.094, 1.106, BUTTON),
-  front(-0.006, 0.006, 1.024, 1.036, BUTTON),
+  front(-0.16, 0.16, 1.03, 1.44, { raise: 0.0015, shade: LAPEL_SHADE, taper: 0 }),
+  front(-0.16, 0.16, 1.03, 1.44, { edge: 0.004, raise: -0.0008, shade: 0.5, taper: 0 }),
+  front(-0.085, 0.085, 1.1, 1.46, { raise: -0.0025, shade: 1 / LAPEL_SHADE, paint: COLLAR, taper: 0 }),
+  front(-0.085, 0.085, 1.1, 1.46, { edge: 0.006, raise: 0.002, shade: 0.6, taper: 0 }),
+  front(0.075, 0.145, 1.27, 1.28, STITCH),
+  front(-0.0015, 0.0015, 1.0, 1.09, STITCH),
+  front(-0.006, 0.006, 1.079, 1.091, BUTTON),
+  front(-0.006, 0.006, 1.014, 1.026, BUTTON),
 ];

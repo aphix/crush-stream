@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { JOINTS } from "./ragdoll-body.ts";
 import { bodyPositions } from "./dummy-bodies.ts";
 import { archFeet, bustOf, curveHips, sculptBust } from "./dummy-curves.ts";
+import { MAN, PORTLY, shape, WOMAN } from "./dummy-physique.ts";
 import { smooth, type Fit } from "./dummy-rig.ts";
 
 /** The three baked bodies bent into the rig's arms-down rest, with the blend weights the bending and the skinning share. */
@@ -245,11 +246,11 @@ function fitBody(raw: Float32Array, width = 1): Fit {
   return { tpose, rest, shoulderWeight, elbowWeight, hipWeight, neckWeight, fingertipY };
 }
 
-const woman = fitBody(bodyPositions("slenderWoman"), WOMAN_NARROW);
+const woman = shape(fitBody(bodyPositions("slenderWoman"), WOMAN_NARROW), WOMAN);
 archFeet(woman.rest);
 curveHips(woman);
-const fits = { man: fitBody(bodyPositions("slenderMan")), woman, portly: fitBody(bodyPositions("obeseMan")) };
-/** The three baked bodies fitted to the rig (computed once, on load), the woman's feet arched onto her heels, her hips curved and her bust sculpted. */
+const fits = { man: shape(fitBody(bodyPositions("slenderMan")), MAN), woman, portly: shape(fitBody(bodyPositions("obeseMan")), PORTLY) };
+/** The three baked bodies fitted to the rig (computed once, on load) and given their physiques, the woman's feet arched onto her heels, her hips curved and her bust sculpted. */
 export function restFits(): { man: Fit; woman: Fit; portly: Fit } {
   return fits;
 }

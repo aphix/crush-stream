@@ -520,10 +520,11 @@ function skinTriangles(mesh: DummyMesh): THREE.Triangle[] {
 
 /**
  * How far (m) head wear may stand from the skull (the baked head, scalp included). Hair and the cap's crown are shells 0.016 to
- * 0.025 m out of it (the portly man's fuller hair), their face half pulled to half its depth under the skin: 0.06 m with a centimetre to spare.
+ * 0.025 m out of it (the portly man's fuller hair), their face half pulled to half its depth under the skin; her long hair,
+ * full at the cheek as the reference's, stands 0.067 m out at its widest.
  * The peak stands 0.045 m out of a crown 0.02 m out of the skull: 0.12 m still covers the tip.
  */
-const WEAR_BOUND = 0.06;
+const WEAR_BOUND = 0.07;
 const PEAK_BOUND = 0.12;
 /** A woman's long hair hangs below the jaw by design: the check covers the head wear from this height (m, the cheek) up. */
 const HANGS_BELOW = 1.57;

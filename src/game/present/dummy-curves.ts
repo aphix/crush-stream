@@ -1,5 +1,6 @@
 import { bodyIndex } from "./dummy-bodies.ts";
 import { smooth, type Fit } from "./dummy-rig.ts";
+import { JOINTS } from "./ragdoll-body.ts";
 
 /** Her figure on her fitted body: feet arched onto heels, hips curved out, and her bust measured, then sculpted into her chest. */
 
@@ -43,21 +44,52 @@ export function archFeet(rest: Float32Array): void {
   }
 }
 
-/** Her hips widen by up to this share of |x|: the acceptance reference's hourglass (hips about 1.6 times her waist, the baked body's 1.4). */
-const HIP_SWELL = 0.12;
-/** The swell (m): none down to the belt's bottom (a woman cop's duty kit is laid on the belt's section), whole over her hips, gone by mid-thigh, where her hanging fingertips come within 1 cm of it. */
-const SWELL_FROM = 0.93;
-const SWELL_WHOLE_FROM = 0.87;
-const SWELL_WHOLE_TO = 0.84;
-const SWELL_TO = 0.72;
+/**
+ * Her girth down her body, as (her rest height m, scale) top to bottom, linear between: the acceptance reference's hourglass
+ * (front widths over height H: waist 0.141 at 0.65 H, hips 0.234 at 0.52 H, thighs 0.090 at 0.40 H, knees 0.069 at 0.28 H,
+ * ankles as the baked body's). Above the first height she is as baked.
+ */
+const GIRTH = [
+  [1.18, 1],
+  [1.12, 1.17],
+  [1.09, 1.29],
+  [1.05, 1.33],
+  [1.0, 1.36],
+  [0.88, 1.36],
+  [0.84, 1.3],
+  [0.78, 1.25],
+  [0.43, 1.25],
+  [0.34, 1],
+] as const;
+/** The legs hang straight down under the rig's hip joints (x either side, z): a leg's girth grows about that line. */
+const [, , HIP_X, , HIP_Z] = JOINTS[7];
+/** A thigh pressed against the other keeps at least this share of its distance from her middle, so the legs never cross. */
+const PRESS = 0.3;
 
-/** Her hips in `fit` curved out (her arms left where they hang); the bones' weights stay, so the ragdoll pins her as before. */
+/** The girth's scale at her rest height `y`. */
+function girthAt(y: number): number {
+  if (y >= GIRTH[0][0]) return 1;
+  const below = GIRTH.findIndex(([at]) => at <= y);
+  if (below < 0) return GIRTH[GIRTH.length - 1]![1];
+  const [[y0, s0], [y1, s1]] = [GIRTH[below - 1]!, GIRTH[below]!];
+  return s0 + ((y - y0) / (y1 - y0)) * (s1 - s0);
+}
+
+/**
+ * Her waist, hips, thighs and knees in `fit` filled out to `GIRTH` (her arms left where they hang): the torso widens about her
+ * middle, a leg about its own line in x and z, a vertex between the two (the hip's blend) about a line between them by its
+ * hip weight. The bones' weights stay, so the ragdoll pins her as before.
+ */
 export function curveHips(fit: Fit): void {
   const rest = fit.rest;
   for (let i = 0; i < fit.shoulderWeight.length; i++) {
     if (fit.shoulderWeight[i]! > 0) continue;
-    const y = rest[i * 3 + 1]!;
-    rest[i * 3] = rest[i * 3]! * (1 + HIP_SWELL * (y > SWELL_WHOLE_FROM ? smooth(SWELL_FROM, SWELL_WHOLE_FROM, y) : smooth(SWELL_TO, SWELL_WHOLE_TO, y)));
+    const [x, y, z] = [rest[i * 3]!, rest[i * 3 + 1]!, rest[i * 3 + 2]!];
+    const [scale, hip] = [girthAt(y), fit.hipWeight[i]!];
+    const side = fit.tpose[i * 3]! < 0 ? -1 : 1;
+    const pivot = hip * side * HIP_X;
+    rest[i * 3] = side * Math.max(side * (pivot + (x - pivot) * scale), PRESS * side * x);
+    rest[i * 3 + 2] = hip * HIP_Z + (z - hip * HIP_Z) * (1 + (scale - 1) * hip);
   }
 }
 
@@ -114,13 +146,15 @@ const CHEST_RING = 1.35;
 /** Only the chest's own front gives way to that fit: a vertex this far (m) behind it (the torso's side under the arm) keeps its place. */
 const EASE_DEPTH = 0.04;
 /**
- * Under her top's scoop (its bottom at `BRIDGE_TOP` m on her) the fabric spans the cleavage at the domes' own height, as a
- * fitted top does; it rises onto that over `BRIDGE_EASE` m so the neckline's edge is a slope, not a cliff. It lets go of the
- * domes from `BRIDGE_LOW` m under their centres, so the bust's under-curve still rises between them.
+ * Under her top's scoop (its bottom at 1.30 m on her, `BRIDGE_EASE / 2` under `BRIDGE_TOP`) the fabric spans the cleavage at
+ * the domes' own height, as a fitted top does; it rises onto that over `BRIDGE_EASE` m (wide enough that no 1.7 cm edge of the
+ * refined chest stretches past 3x) so the neckline's edge is a slope, not a cliff. It lets go of the domes over `BRIDGE_RELEASE`
+ * m from `BRIDGE_LOW` m under their centres, so the bust's under-curve still rises between them.
  */
-const BRIDGE_TOP = 1.29;
-const BRIDGE_EASE = 0.04;
+const BRIDGE_TOP = 1.33;
+const BRIDGE_EASE = 0.06;
 const BRIDGE_LOW = 0.07;
+const BRIDGE_RELEASE = 0.08;
 
 /** The footprint's normalised distance squared of (x, y) from side `side`'s orb (-1: x < 0), and the share of it that is up or down. */
 function footprint(bust: Bust, side: number, x: number, y: number): [d2: number, upShare: number] {
@@ -213,7 +247,7 @@ function bridgeCleavage(fit: Fit, bust: Bust, front: (i: number) => boolean): vo
   const spans: [number, number][] = [];
   for (let i = 0; i < fit.shoulderWeight.length; i++) {
     const [x, y] = [rest[i * 3]!, rest[i * 3 + 1]!];
-    const share = (1 - smooth(BRIDGE_TOP - BRIDGE_EASE, BRIDGE_TOP, y)) * smooth(bust.y - BRIDGE_LOW, bust.y - BRIDGE_LOW + 2 * BRIDGE_EASE, y);
+    const share = (1 - smooth(BRIDGE_TOP - BRIDGE_EASE, BRIDGE_TOP, y)) * smooth(bust.y - BRIDGE_LOW, bust.y - BRIDGE_LOW + BRIDGE_RELEASE, y);
     if (!front(i) || Math.abs(x) >= bust.x || share === 0) continue;
     const below = line.findIndex(([at]) => at <= y);
     const [[y0, z0], [y1, z1]] = [line[below - 1]!, line[below]!];

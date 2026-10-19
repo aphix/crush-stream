@@ -5,7 +5,7 @@ import { driverLook, type DriverLook } from "./driver-look.ts";
 import { BODY_VERTICES } from "./dummy-bodies.ts";
 import { COP_LOOK, ELDER_LOOK, GUARD_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { restFits } from "./dummy-fit.ts";
-import { BELT_BOTTOM } from "./dummy-garments.ts";
+import { BELT_BOTTOM, hangingFit, SUIT_HANG } from "./dummy-garments.ts";
 import { surfaceZ } from "./dummy-loft.ts";
 import { drawnRows as drawn, posture, turn, type Drawn } from "./dummy-pose.test-util.ts";
 import { LEFT_ARM, LEFT_LEG, RIGHT_LEG, ROLE, type Fit } from "./dummy-rig.ts";
@@ -71,9 +71,9 @@ describe("given the uniformed kinds' wear", () => {
     { name: "president", look: VIP_LOOK, build: "portly" },
     { name: "older man", look: ELDER_LOOK, build: "man" },
   ] as const) {
-    it(`when the ${suit.name} stands in his suit, then a white collar and a tie rest on his own chest, and dress shoes cover his feet`, () => {
+    it(`when the ${suit.name} stands in his suit, then a white collar and a tie rest on his chest as his jacket hangs, and dress shoes cover his feet`, () => {
       const { mesh, rows } = drawn(false, suit.look);
-      const fit: Fit = restFits()[suit.build];
+      const fit: Fit = hangingFit(restFits()[suit.build], SUIT_HANG);
       const tie = ofRole(rows, ROLE.TIE);
       assert.ok(tie.length > 0, "a tie");
       const worst = Math.max(...tie.map((row) => Math.abs(row.at.z - surfaceZ(fit, 0, row.at.y))));

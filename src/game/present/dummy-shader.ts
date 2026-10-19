@@ -109,7 +109,7 @@ vec3 dollCut(int slot, vec3 p, vec4 region, out int pick) {
   vec4 cuts = dollRow(${CUTS_AT}, slot);
   vec4 scoop = dollRow(${CUTS_AT + 1}, slot);
   float across = abs(p.x) / max(scoop.z, 0.001);
-  bool scooped = p.z > ${glslFloat(SCOOP_FRONT_Z)} && p.y > mix(scoop.x, scoop.y, across * across);
+  bool scooped = p.z > ${glslFloat(SCOOP_FRONT_Z)} && p.y > mix(scoop.x, scoop.y, pow(across, float((int(scoop.w + 0.5) >> 16) & 15)));
   ivec4 picks = ivec4(p.y < cuts.z ? ${PICK.PANTS} : (scooped ? ${PICK.BARE} : ${PICK.TOP}), p.y < cuts.x ? ${PICK.BARE} : ${PICK.TOP}, p.y < cuts.y ? ${PICK.BARE} : ${PICK.PANTS}, p.y < cuts.w ? ${PICK.SHOES} : ${PICK.BARE});
   int strongest = region.x >= max(region.y, max(region.z, region.w)) ? 0 : (region.y >= max(region.z, region.w) ? 1 : (region.z >= region.w ? 2 : 3));
   pick = picks[strongest];

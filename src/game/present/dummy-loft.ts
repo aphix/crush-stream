@@ -8,23 +8,35 @@ import { printAt, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
 export const BODY_INDEX = bodyIndex();
 
 /**
- * The front-most z (m) of the fitted body's surface at (x, y): the highest plane of the triangles whose outline in the face
- * plane holds the point. The wear sits on this, not on the nearest vertex (the baked triangles are 5 to 7 cm across on the torso).
+ * The fitted body's surface furthest along axis `along` (1: y, 2: z) at x and `across` (the other of y and z): the highest
+ * plane of the triangles whose outline in the plane of x and that axis holds the point. The wear sits on this, not on the
+ * nearest vertex (the baked triangles are 5 to 7 cm across on the torso).
  */
-export function surfaceZ(fit: Fit, x: number, y: number): number {
+function surfaceAlong(fit: Fit, along: 1 | 2, x: number, across: number): number {
   const index = BODY_INDEX;
   const p = fit.rest;
+  const other = 3 - along;
   let front = -Infinity;
   for (let t = 0; t < index.length; t += 3) {
     const [a, b, c] = [index[t]! * 3, index[t + 1]! * 3, index[t + 2]! * 3];
-    const area = (p[b + 1]! - p[c + 1]!) * (p[a]! - p[c]!) + (p[c]! - p[b]!) * (p[a + 1]! - p[c + 1]!);
+    const area = (p[b + other]! - p[c + other]!) * (p[a]! - p[c]!) + (p[c]! - p[b]!) * (p[a + other]! - p[c + other]!);
     if (Math.abs(area) < 1e-12) continue;
-    const weightA = ((p[b + 1]! - p[c + 1]!) * (x - p[c]!) + (p[c]! - p[b]!) * (y - p[c + 1]!)) / area;
-    const weightB = ((p[c + 1]! - p[a + 1]!) * (x - p[c]!) + (p[a]! - p[c]!) * (y - p[c + 1]!)) / area;
-    if (weightA >= 0 && weightB >= 0 && weightA + weightB <= 1) front = Math.max(front, weightA * p[a + 2]! + weightB * p[b + 2]! + (1 - weightA - weightB) * p[c + 2]!);
+    const weightA = ((p[b + other]! - p[c + other]!) * (x - p[c]!) + (p[c]! - p[b]!) * (across - p[c + other]!)) / area;
+    const weightB = ((p[c + other]! - p[a + other]!) * (x - p[c]!) + (p[a]! - p[c]!) * (across - p[c + other]!)) / area;
+    if (weightA >= 0 && weightB >= 0 && weightA + weightB <= 1) front = Math.max(front, weightA * p[a + along]! + weightB * p[b + along]! + (1 - weightA - weightB) * p[c + along]!);
   }
-  if (front === -Infinity) throw new RangeError(`no body surface at (${x}, ${y})`);
+  if (front === -Infinity) throw new RangeError(`no body surface at (${x}, ${across}) seen along axis ${along}`);
   return front;
+}
+
+/** The front-most z (m) of the fitted body's surface at (x, y). */
+export function surfaceZ(fit: Fit, x: number, y: number): number {
+  return surfaceAlong(fit, 2, x, y);
+}
+
+/** The top-most y (m) of the fitted body's surface at (x, z). */
+export function surfaceY(fit: Fit, x: number, z: number): number {
+  return surfaceAlong(fit, 1, x, z);
 }
 
 /** 12, not 8: an octagon reads as a brick. */

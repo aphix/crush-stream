@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { FABRIC } from "./dummy-cloth.ts";
 import { FACE, FACES } from "./dummy-faces.ts";
-import { CREW_NECK, JEANS_DECALS, LONG_SLEEVE_END, SHORT_SLEEVE_END, TROUSERS_FROM } from "./dummy-garments.ts";
+import { CREW_NECK, JEANS_DECALS, LONG_SLEEVE_END, SHORT_SLEEVE_END, SUIT_HANG, TROUSERS_FROM, UNIFORM_HANG } from "./dummy-garments.ts";
 import { BARE, BELTED, BUILD, CAPPED, CUTS_AT, DRESS_SHOES, FLAGS_AT, HEELS, LONG_SLEEVES, PALETTE_AT, POLICE, ROLE, ROLES, SHADES, SHORT_SLEEVES, SNEAKERS, SUITED, UNIFORM, WHISKERS, type Decal } from "./dummy-rig.ts";
 import { SUIT_DECALS, UNIFORM_DECALS } from "./dummy-uniform.ts";
 import { SHORTS_END, SLEEVE_END } from "./dummy-woman.ts";
@@ -15,10 +15,13 @@ import { OUTFIT, type DriverLook } from "./driver-look.ts";
 
 /** A cut no body vertex reaches (m, man's rest): the garment runs the whole region. */
 const NO_CUT = 9;
-/** Her scoop neckline (m, man's rest): its lowest and highest height at the middle, and its half width at the top (the second reference's top). */
-const SCOOP_LOW = 1.29;
-const SCOOP_HIGH = 1.48;
-const SCOOP_HALF = 0.105;
+/** Her scoop neckline (m, man's rest): its lowest and highest height at the middle, and its half width at the top (the second reference's top: 5 cm above her bust's peak, 11 cm wide each side on her). */
+const SCOOP_LOW = 1.32;
+const SCOOP_HIGH = 1.47;
+const SCOOP_HALF = 0.13;
+/** A neckline's cut rises as |x|^power: a crew's is round (the crew rib's seam follows it); her scoop is the reference's flat-bottomed U. */
+const ROUND_NECK = 2;
+const SCOOP_POWER = 6;
 /** Her heels' straps: skin shows above this height (m) on the foot. */
 const HEEL_SHOE_TOP = 0.05;
 /** A civilian's cap peak against its crown: the reference's cap is one navy, the peak a little darker under its curve. */
@@ -30,9 +33,9 @@ const PATCH_FIELD = 0x8fa2c4;
 /** The decal layers, by index: the jeans' (a woman's cut-offs show their top), the suit's, the uniform's, and the guard's (the uniform's with the earpiece). */
 const LAYER = { JEANS: 0, SUIT: 1, UNIFORM: 2, GUARD: 3 } as const;
 
-/** Fabric kit (cuts texel 2's w): the shirt's, the legs' and the shoes' fabric and the decal layer, four bits each. */
-function kit(shirt: number, legs: number, shoe: number, layer: number): number {
-  return shirt | (legs << 4) | (shoe << 8) | (layer << 12);
+/** Fabric kit (cuts texel 2's w): the shirt's, the legs' and the shoes' fabric, the decal layer and the neckline's power, four bits each. */
+function kit(shirt: number, legs: number, shoe: number, layer: number, neckPower = ROUND_NECK): number {
+  return shirt | (legs << 4) | (shoe << 8) | (layer << 12) | (neckPower << 16);
 }
 
 type Outfit = {
@@ -62,20 +65,20 @@ const OUTFITS: readonly Outfit[] = [
   {
     flags: SHORT_SLEEVES | HEELS,
     colours: { [ROLE.SHOE]: 0x141a33, [ROLE.SOLE]: 0x141a33, [ROLE.EYES]: 0x0b0b0c },
-    cuts: [SLEEVE_END, SHORTS_END, TROUSERS_FROM, HEEL_SHOE_TOP, SCOOP_LOW, SCOOP_HIGH, SCOOP_HALF, kit(FABRIC.JERSEY, FABRIC.DENIM, FABRIC.LEATHER, LAYER.JEANS)],
+    cuts: [SLEEVE_END, SHORTS_END, TROUSERS_FROM, HEEL_SHOE_TOP, SCOOP_LOW, SCOOP_HIGH, SCOOP_HALF, kit(FABRIC.JERSEY, FABRIC.DENIM, FABRIC.LEATHER, LAYER.JEANS, SCOOP_POWER)],
     hang: CLINGS,
   },
   {
     flags: SUITED | DRESS_SHOES,
     colours: { ...DRESS_SHOE, [ROLE.COLLAR]: 0xf4f4f1, [ROLE.TIE]: 0x772d1b },
     cuts: [JACKET_SLEEVE_END, 0, TROUSERS_FROM, NO_CUT, ...CREW_NECK, kit(FABRIC.WOOL, FABRIC.WOOL, FABRIC.LEATHER, LAYER.SUIT)],
-    hang: CLINGS,
+    hang: SUIT_HANG,
   },
   {
     flags: UNIFORM | BELTED | LONG_SLEEVES | DRESS_SHOES,
     colours: { ...DRESS_SHOE, [ROLE.BELT]: 0x111113, [ROLE.BUCKLE]: 0xb9bec6, [ROLE.BADGE]: 0xb9bec6 },
     cuts: [LONG_SLEEVE_END, 0, TROUSERS_FROM, NO_CUT, ...CREW_NECK, kit(FABRIC.TWILL, FABRIC.TWILL, FABRIC.LEATHER, LAYER.UNIFORM)],
-    hang: CLINGS,
+    hang: UNIFORM_HANG,
   },
 ];
 
