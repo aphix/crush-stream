@@ -1,5 +1,6 @@
 import { RANGE } from "../scenes/range.ts";
-import { STATION_HALF_WIDTH, type MinigameMode } from "../scenes/minigame-constants.ts";
+import { MINIGAME_MODE, STATION_HALF_WIDTH, type MinigameMode } from "../scenes/minigame-constants.ts";
+import { stationStartPose } from "../scenes/minigame-profile.ts";
 import type { FxTier } from "./engine-post.ts";
 
 /**
@@ -19,7 +20,8 @@ export const FOUNTAIN_TIER: Readonly<Record<FxTier, { pairs: number; spray: numb
 /** The big pair stands at the finish line or the lip (`LINE_POWER`); each further pair (`ROW_POWER`) stands back from it on the way in. */
 export const LINE_POWER = 1.5;
 export const ROW_POWER = 1;
-export const ROW_GAP = 22;
+/** Metres between a race's rows down the run-in: at 30-45 m/s the car meets one every 0.7-1 s, each its own beat (owner: "more spaced"). */
+export const RACE_ROW_GAP = 30;
 
 /** Metres a race jet stands outside the road's edge (the wall is 1.5 m thick: the nozzle clears it). */
 export const ROAD_MARGIN = 2;
@@ -41,9 +43,31 @@ export function approachDue(toGo: number, speed: number): boolean {
   return toGo >= 0 && toGo / Math.max(speed, MIN_SPEED) <= APPROACH_LEAD_S;
 }
 
-/** The Range's run-up: at most this many rows (2 or 3 is the look; the tier cuts them), the first at the lip (or the barrier), `RUNUP_ROW_GAP` m apart back down the ramp. */
+/** The fewest seconds between one row's light and the next's: a car arriving at speed (the Range's) still sees them light one after another. */
+export const ROW_STAGGER_S = 0.4;
+
+/** The run-up's rows: the lip's pair, then the others spread evenly back toward the car's spawn (the tier cuts them from the back). */
 export const RUNUP_ROWS = 3;
-export const RUNUP_ROW_GAP = 9;
+/** The fewest metres between two run-up rows, the owner's floor: closer, they read as one bank of fire. */
+const RUNUP_MIN_GAP = 10;
+/** Metres past a parked car's standstill reach (`MIN_SPEED` x `APPROACH_LEAD_S`) the back row stands, so it lights as the car pulls away, not while it waits. */
+const PARKED_MARGIN = 0.5;
+const SPAWN_CLEAR = MIN_SPEED * APPROACH_LEAD_S + PARKED_MARGIN;
+
+/** Metres between the rows of a run-up whose car spawns `spawn` m before the lip: the back row just clear of the spawn, never under `RUNUP_MIN_GAP`. */
+function runUpGap(spawn: number): number {
+  return Math.max(RUNUP_MIN_GAP, (spawn - SPAWN_CLEAR) / (RUNUP_ROWS - 1));
+}
+
+/** Each station's row gap, worked out once from its spawn (`stationStartPose`, station-local: the lip at x = 0). */
+export const STATION_ROW_GAP: Readonly<Record<MinigameMode, number>> = {
+  longJump: runUpGap(-stationStartPose(MINIGAME_MODE.longJump).x),
+  highJump: runUpGap(-stationStartPose(MINIGAME_MODE.highJump).x),
+  ringFling: runUpGap(-stationStartPose(MINIGAME_MODE.ringFling).x),
+};
+/** The plain Range's row gap: its car spawns `RANGE.run` m before the barrier. */
+export const RANGE_ROW_GAP = runUpGap(RANGE.run);
+
 /** Metres the plain Range's jets stand outside its field's half-width; a station's stand on its lane's edge (`STATION_HALF_WIDTH`), the ramp's side. */
 const RANGE_MARGIN = 1;
 

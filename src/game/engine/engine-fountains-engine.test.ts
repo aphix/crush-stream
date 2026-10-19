@@ -6,7 +6,7 @@ import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { JET_SLOTS } from "../present/engine-fx.ts";
-import { ROAD_MARGIN, ROW_GAP, RUNUP_ROW_GAP } from "../present/fountain-plan.ts";
+import { RACE_ROW_GAP, ROAD_MARGIN, STATION_ROW_GAP } from "../present/fountain-plan.ts";
 import { MINIGAME_MODES, STATION_ANCHORS, STATION_HALF_WIDTH } from "../scenes/minigame-constants.ts";
 import { RANGE } from "../scenes/range.ts";
 import { blankPoint, pointOn } from "../world/track.ts";
@@ -73,13 +73,11 @@ describe("given the real engine", () => {
     it("when the plain Range's car runs up to the barrier, then the rows stand along both sides of the run-up before the throw, none past the barrier, and the loop's reset clears them", () => {
       engine["setScene"]("range");
       launches.length = 0;
-      for (let frame = 0; frame < LAUNCH_TIMEOUT_S * FRAME_HZ && fountains().jets.jets === 0; frame++) advance(1);
-      assert.ok(fountains().jets.jets > 0, "the jets lit");
+      for (let frame = 0; frame < LAUNCH_TIMEOUT_S * FRAME_HZ && fountains().jets.jets < 6 && launches.length === 0; frame++) advance(1);
       assert.equal(launches.length, 0, "before the throw: the run-up's fountains lead the car in");
-      advance(1);
       const edge = RANGE.halfWidth + 1;
       const placed = jetsAt();
-      assert.equal(placed.length, 6, "three rows of two at the high tier");
+      assert.equal(placed.length, 6, "three rows of two at the high tier, all lit before the throw");
       assert.equal(new Set(placed.map((j) => j.z)).size, 2, "a jet on each side");
       assert.ok(placed.every((j) => Math.abs(Math.abs(j.z) - edge) < 1e-6), "each stands on the field's edge");
       assert.ok(placed.every((j) => j.x <= 0), "none past the barrier");
@@ -105,7 +103,7 @@ describe("given the real engine", () => {
         for (let frame = 0; frame < MINIGAME_DRIVE_TIMEOUT_S * FRAME_HZ && launches.length === 0; frame++) {
           advance(1);
           for (const j of jetsAt()) {
-            const row = Math.round((lip.x - j.x) / RUNUP_ROW_GAP);
+            const row = Math.round((lip.x - j.x) / STATION_ROW_GAP[mode]);
             if (!lit.includes(row)) lit.push(row);
             assert.ok(j.x <= lip.x + 1e-6, `${mode}: a jet stands past the lip`);
             assert.ok(Math.abs(Math.abs(j.z - lip.z) - STATION_HALF_WIDTH) < 1e-6, `${mode}: a jet stands off the ramp's edge`);
@@ -166,17 +164,15 @@ describe("given the real engine", () => {
       assert.ok(Math.abs(apart - 2 * (centre.half + 2)) < 1e-6, `${apart.toFixed(2)} m apart: the road's width and a margin each side`);
     });
 
-    it("when a row is placed back from the line, then it stands before the line along the road, the first on it", () => {
-      const g = session().track.gates[0]!;
-      const cx = (g.ax + g.bx) / 2;
-      const cz = (g.az + g.bz) / 2;
-      const spot = new THREE.Vector3();
+    it("when a row is placed back from the line, then its pair stands either side of the road's centre that far before the line along the course, the first at the line", () => {
+      const track = session().track;
+      const left = new THREE.Vector3();
+      const right = new THREE.Vector3();
       for (const k of [0, 1, 2, 3]) {
-        for (const side of [-1, 1]) {
-          assert.ok(director().roadsideAt(k * ROW_GAP, side, ROAD_MARGIN, spot));
-          const along = (spot.x - cx) * g.nx + (spot.z - cz) * g.nz;
-          assert.ok(Math.abs(along + k * ROW_GAP) < 0.5, `row ${k} stands ${along.toFixed(2)} m along the road from the line, wanted ${-k * ROW_GAP}`);
-        }
+        assert.ok(director().roadsideAt(k * RACE_ROW_GAP, 1, ROAD_MARGIN, left) && director().roadsideAt(k * RACE_ROW_GAP, -1, ROAD_MARGIN, right));
+        const centre = pointOn(track.path, track.length - k * RACE_ROW_GAP, blankPoint());
+        const off = Math.hypot((left.x + right.x) / 2 - centre.x, (left.z + right.z) / 2 - centre.z);
+        assert.ok(off < 1e-6, `row ${k}: its pair is centred on the road ${k * RACE_ROW_GAP} m before the line (${off.toFixed(3)} m off)`);
       }
     });
 
@@ -191,14 +187,14 @@ describe("given the real engine", () => {
       const cz = (g.az + g.bz) / 2;
       /** Metres the jet stands before the line along the way the cars drive (negative: before it). */
       const along = (x: number, z: number): number => (x - cx) * g.nx + (z - cz) * g.nz;
-      let left = 4 * ROW_GAP;
+      let left = 4 * RACE_ROW_GAP;
       director().lastLapLeft = () => left;
       const lit: number[] = [];
       const lastLit: number[] = [];
       for (; left > -10; left -= 1) {
         advance(1);
         for (const j of jetsAt()) {
-          const row = Math.round(Math.abs(along(j.x, j.z)) / ROW_GAP);
+          const row = Math.round(Math.abs(along(j.x, j.z)) / RACE_ROW_GAP);
           assert.ok(along(j.x, j.z) <= 0.05, `a jet stands ${along(j.x, j.z).toFixed(2)} m past the line`);
           if (!lit.includes(row)) {
             lit.push(row);

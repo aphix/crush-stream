@@ -5,11 +5,13 @@ import {
   APPROACH_RUN_S,
   FOUNTAIN_TIER,
   LINE_POWER,
+  RACE_ROW_GAP,
+  RANGE_ROW_GAP,
   ROAD_MARGIN,
-  ROW_GAP,
   ROW_POWER,
+  ROW_STAGGER_S,
   RUNUP_ROWS,
-  RUNUP_ROW_GAP,
+  STATION_ROW_GAP,
   approachDue,
   runUpEdge,
 } from "../present/fountain-plan.ts";
@@ -23,20 +25,23 @@ const SIDES = [-1, 1] as const;
 /** Where the plain Range's run-up ends (its wall is the world origin); a minigame's is its station's anchor (the lip). */
 const RANGE_ORIGIN = { x: 0, z: 0 };
 
+/** The most rows any tier lights: the size of the per-row start times. */
+const MAX_ROWS = Math.max(...Object.values(FOUNTAIN_TIER).map((look) => look.pairs));
+
 const _spot = new THREE.Vector3();
 
 /**
- * The celebration fountains, which lead the watched car up to its big moment: a race's finish line (its last lap) and the Range's lip or
- * barrier (the plain Range and each minigame). Rows stand along both sides of the way in, the big pair at the line or the lip and the
- * others back from it, and each starts so it is in full spray as the car passes it (`approachDue`); none stands past the line or the
- * lip, and none starts once the car is by. Cosmetic: it reads the race and the car and writes only the `FountainSystem`.
- * What a tier throws is `FOUNTAIN_TIER`; the jets, their pool and their fade are `FountainSystem`'s.
+ * The celebration fountains: rows of jets along both sides of the way in to a race's finish line or the Range's lip, lit back to front
+ * as the watched car comes (none past the line or the lip, none once the car is by). Cosmetic: writes only the `FountainSystem`.
  */
 export class Fountains {
   readonly jets: FountainSystem;
   private pairs = 0;
   /** Bit k: row k (0 = the line's or the lip's) has been started this run; one start each, so a slow approach never re-fires them. A run start clears them. */
   private started = 0;
+  /** Seconds of fountain time (`update`'s), and when each row was started on it. */
+  private clock = 0;
+  private readonly startedAt = new Float64Array(MAX_ROWS);
 
   constructor(scene: THREE.Scene) {
     this.jets = new FountainSystem(scene);
@@ -50,41 +55,56 @@ export class Fountains {
   }
 
   /**
-   * Once a frame in a race: start each pair of jets the watched car `car` (at `speed` m/s) is within `APPROACH_LEAD_S` of, on its last lap.
-   * The farther back a pair stands the sooner the car is due at it, so the rows light one after the other down the run-in.
+   * Row k of `rows` starts once the car (`toGo` m short of it, `behind` m short of the row behind) is within its lead and that row behind
+   * has burned `ROW_STAGGER_S`, or was passed unlit: the rows light strictly back to front.
    */
+  private due(k: number, rows: number, toGo: number, behind: number, speed: number): boolean {
+    if (this.started & (1 << k) || !approachDue(toGo, speed)) return false;
+    if (k === rows - 1) return true;
+    if ((this.started & (1 << (k + 1))) === 0) return behind < 0;
+    return this.clock - this.startedAt[k + 1]! >= ROW_STAGGER_S;
+  }
+
+  private markStarted(k: number): void {
+    this.started |= 1 << k;
+    this.startedAt[k] = this.clock;
+  }
+
+  /** Once a frame in a race: on its last lap, start each row the watched car `car` (at `speed` m/s) is due at, `RACE_ROW_GAP` m apart down the run-in. */
   raceFrame(race: RaceField, car: number, speed: number): void {
     if (this.pairs === 0) return;
     const left = race.lastLapLeft(car);
     if (Number.isNaN(left)) return;
-    for (let k = 0; k < this.pairs; k++) {
-      if (this.started & (1 << k) || !approachDue(left - k * ROW_GAP, speed)) continue;
-      this.started |= 1 << k;
+    for (let k = this.pairs - 1; k >= 0; k--) {
+      if (!this.due(k, this.pairs, left - k * RACE_ROW_GAP, left - (k + 1) * RACE_ROW_GAP, speed)) continue;
+      this.markStarted(k);
       for (const side of SIDES) {
-        if (race.roadsideAt(k * ROW_GAP, side, ROAD_MARGIN, _spot)) this.jets.jet(_spot.x, _spot.y, _spot.z, 0, APPROACH_RUN_S, k === 0 ? LINE_POWER : ROW_POWER);
+        if (race.roadsideAt(k * RACE_ROW_GAP, side, ROAD_MARGIN, _spot)) this.jets.jet(_spot.x, _spot.y, _spot.z, 0, APPROACH_RUN_S, k === 0 ? LINE_POWER : ROW_POWER);
       }
     }
   }
 
   /**
-   * Once a frame at the Range (`mode`: the minigame, null for the plain Range): start each pair along the run-up that the car, at world
-   * x `carX` going `speed` m/s along +x, is within `APPROACH_LEAD_S` of. The lip's pair (the barrier's, in the Long jump) stands on the lane's
-   * edge at the lip itself and the rows behind it `RUNUP_ROW_GAP` m apart on the ramp, each on the floor there; they run through the launch.
+   * Once a frame at the Range (`mode`: the minigame, null for the plain Range): start each run-up row the car, at world x `carX` going
+   * `speed` m/s along +x, is due at. The lip's pair (the barrier's, in the Long jump) stands at the lip, the others the course's row gap
+   * apart back toward the spawn (`STATION_ROW_GAP`, `RANGE_ROW_GAP`), each on the lane's edge on the floor there; they burn through the launch.
    */
   runUpFrame(mode: MinigameMode | null, carX: number, speed: number): void {
     const rows = Math.min(this.pairs, RUNUP_ROWS);
     const origin = mode === null ? RANGE_ORIGIN : STATION_ANCHORS[mode];
+    const gap = mode === null ? RANGE_ROW_GAP : STATION_ROW_GAP[mode];
     const edge = runUpEdge(mode);
-    for (let k = 0; k < rows; k++) {
-      const back = -k * RUNUP_ROW_GAP;
-      if (this.started & (1 << k) || !approachDue(origin.x + back - carX, speed)) continue;
-      this.started |= 1 << k;
+    for (let k = rows - 1; k >= 0; k--) {
+      const back = -k * gap;
+      if (!this.due(k, rows, origin.x + back - carX, origin.x + back - gap - carX, speed)) continue;
+      this.markStarted(k);
       const y = mode === null ? LANDING_HEIGHT : floorHeightAt(mode, back, 0);
       for (const side of SIDES) this.jets.jet(origin.x + back, y, origin.z + side * edge, 0, APPROACH_RUN_S, k === 0 ? LINE_POWER : ROW_POWER);
     }
   }
 
   update(dt: number): void {
+    this.clock += dt;
     this.jets.update(dt);
   }
 
