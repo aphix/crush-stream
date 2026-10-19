@@ -87,7 +87,7 @@ export abstract class EngineShare extends EngineReel {
       aggr: o.aggression,
       diff: o.aiDifficulty,
       police: o.police,
-      tod: o.timeOfDay,
+      tod: sc === "survival" ? this.race.options.timeOfDay : o.timeOfDay,
       noreset: o.noReset,
       spectate: o.spectate,
       stats: this.statsPanel(),
@@ -175,6 +175,8 @@ export abstract class EngineShare extends EngineReel {
           options: { trackId: t.track, campaign: t.camp, mode: t.mode, laps: t.laps, aiCount: t.ai, aggression: t.aggr, aiDifficulty: t.diff, police: t.police, timeOfDay: t.tod, noReset: t.noreset, spectate: t.spectate },
         });
       }
+      // Survival's menu has a Time of day row too.
+      if (t.scene === "survival") this.raceCommand({ type: "options", options: { timeOfDay: t.tod } });
       if (boot || (t.seed !== null && SEEDED_SCENES[t.scene] && t.seed !== this.sceneSeed)) this.randomizeAndReset();
     } finally {
       this.pinnedSeed = null;
