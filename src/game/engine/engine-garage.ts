@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { SprayTool } from "../hud/hud-store.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import type { LookData } from "../net/look-codec.ts";
-import { SPRAY_PALETTE, type CarPart, type PersonPick } from "../match/look-data.ts";
+import type { CarPart, PersonPick } from "../match/look-data.ts";
 import { EngineShare } from "./engine-share.ts";
 import { SPRAY_RADIUS } from "./garage.ts";
 import type { SprayTarget } from "./player-looks.ts";
@@ -23,13 +23,13 @@ export abstract class EngineGarage extends EngineShare {
     this.wearPicks(this.looks.mine.car, { ...this.looks.mine.person, ...pick });
   }
 
-  /** The spray can: on or off, its radius (m, clamped to `SPRAY_RADIUS`), its palette colour (never bare). */
+  /** The spray can: on or off, its radius (m, clamped to `SPRAY_RADIUS`), its colour (sRGB). */
   setSprayTool(tool: Partial<SprayTool>): void {
     if (!this.garage) return;
     const t = this.garage.tool;
     if (tool.on !== undefined) t.on = tool.on;
     if (tool.radius !== undefined) t.radius = Math.min(SPRAY_RADIUS.max, Math.max(SPRAY_RADIUS.min, tool.radius));
-    if (tool.colour !== undefined && tool.colour >= 1 && tool.colour < SPRAY_PALETTE.length) t.colour = Math.floor(tool.colour);
+    if (tool.colour !== undefined && Number.isInteger(tool.colour) && tool.colour >= 0 && tool.colour <= 0xffffff) t.colour = tool.colour;
     this.emitHud();
   }
 

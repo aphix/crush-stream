@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { SPRAY_FACE, SPRAY_PALETTE, sprayFace, type SprayLayout } from "../match/look-data.ts";
+import { hypot3 } from "../kernel/physics-core.js";
+import { SPRAY_FACE, SPRAY_PALETTE, sprayFace, type SprayLayout, type SprayPaint } from "../match/look-data.ts";
 
 /**
  * Spray paint drawn: a bitmap's texels as the premultiplied texture the paint shader samples (`SprayBitmap`), the can's
@@ -12,10 +13,11 @@ export const PUFF_STEP = 0.5;
 
 const _uv = new Float64Array(2);
 
-/** One bitmap: a palette index per texel, and the premultiplied RGBA texture the shader samples (linear filtered: soft edges). */
+/** One bitmap: an ink per texel, each ink's colour (`palette`, the presets until a colour of the player's own takes an ink), and the premultiplied RGBA texture the shader samples (linear filtered: soft edges). */
 export class SprayBitmap {
   readonly layout: SprayLayout;
   readonly texels: Uint8Array;
+  readonly palette: number[] = [...SPRAY_PALETTE];
   readonly rgba: Uint8Array;
   readonly texture: THREE.DataTexture;
 
@@ -39,11 +41,30 @@ export class SprayBitmap {
   }
 
   /**
-   * A puff of the can at rest point `p` with normal `n`: texels within `radius` m of it on its face take palette colour
-   * `colour`, each with a chance falling from 1 at the middle to 0 at the edge (`rand`), so the dot is dense in the middle and
-   * speckled at its rim. False when the point's face takes no paint.
+   * The ink that sprays `colour` (sRGB): one that has it already, else the first ink no texel shows takes it; with all 15
+   * shown, the nearest one's. ponytail: 15 inks keep the wire at 4 bits a texel; go to a byte a texel if a 16th colour must stay exact.
    */
-  spray(p: THREE.Vector3, n: THREE.Vector3, radius: number, colour: number, rand: () => number): boolean {
+  inkOf(colour: number): number {
+    const has = this.palette.indexOf(colour, 1);
+    if (has > 0) return has;
+    const shown = new Uint8Array(this.palette.length);
+    for (let i = 0; i < this.texels.length; i++) shown[this.texels[i]!] = 1;
+    const free = shown.indexOf(0, 1);
+    if (free > 0) {
+      this.palette[free] = colour;
+      return free;
+    }
+    let nearest = 1;
+    for (let ink = 2; ink < this.palette.length; ink++) if (colourDistance(this.palette[ink]!, colour) < colourDistance(this.palette[nearest]!, colour)) nearest = ink;
+    return nearest;
+  }
+
+  /**
+   * A puff of the can at rest point `p` with normal `n`: texels within `radius` m of it on its face take ink `ink`, each
+   * with a chance falling from 1 at the middle to 0 at the edge (`rand`), so the dot is dense in the middle and speckled at
+   * its rim. False when the point's face takes no paint.
+   */
+  spray(p: THREE.Vector3, n: THREE.Vector3, radius: number, ink: number, rand: () => number): boolean {
     const face = sprayFace(this.layout, p.x, p.y, p.z, n.x, n.y, n.z, _uv);
     if (face < 0) return false;
     const [fx, fy, fw, fh] = this.layout.faces[face]!;
@@ -60,16 +81,17 @@ export class SprayBitmap {
         const du = (x + 0.5 - cu) / ru;
         const dv = (y + 0.5 - cv) / rv;
         const d = Math.sqrt(du * du + dv * dv);
-        if (d < 1 && rand() < 1 - d) this.set(y * this.layout.w + x, colour);
+        if (d < 1 && rand() < 1 - d) this.set(y * this.layout.w + x, ink);
       }
     }
     this.texture.needsUpdate = true;
     return true;
   }
 
-  /** Every texel from `texels` (a bitmap of this layout), or bare when null. */
-  load(texels: Uint8Array | null): void {
-    for (let i = 0; i < this.texels.length; i++) this.set(i, texels ? texels[i]! : 0);
+  /** Every texel and ink from `paint` (a bitmap of this layout), or bare with the presets when null. */
+  load(paint: SprayPaint | null): void {
+    for (let ink = 0; ink < this.palette.length; ink++) this.palette[ink] = paint ? paint.palette[ink]! : SPRAY_PALETTE[ink]!;
+    for (let i = 0; i < this.texels.length; i++) this.set(i, paint ? paint.texels[i]! : 0);
     this.texture.needsUpdate = true;
   }
 
@@ -77,15 +99,20 @@ export class SprayBitmap {
     this.texture.dispose();
   }
 
-  /** Texel `i` takes palette colour `colour`; bare (0) is all zeros, so its premultiplied RGB stays black. */
-  private set(i: number, colour: number): void {
-    this.texels[i] = colour;
-    const hex = SPRAY_PALETTE[colour]!;
+  /** Texel `i` takes ink `ink`; bare (0) is all zeros, so its premultiplied RGB stays black. */
+  private set(i: number, ink: number): void {
+    this.texels[i] = ink;
+    const hex = this.palette[ink]!;
     this.rgba[i * 4] = hex >> 16;
     this.rgba[i * 4 + 1] = (hex >> 8) & 0xff;
     this.rgba[i * 4 + 2] = hex & 0xff;
-    this.rgba[i * 4 + 3] = colour === 0 ? 0 : 255;
+    this.rgba[i * 4 + 3] = ink === 0 ? 0 : 255;
   }
+}
+
+/** Colours `a` and `b` (sRGB) this far apart. */
+export function colourDistance(a: number, b: number): number {
+  return hypot3((a >> 16) - (b >> 16), ((a >> 8) & 0xff) - ((b >> 8) & 0xff), (a & 0xff) - (b & 0xff));
 }
 
 /** The shader's spray uniforms for a bitmap of `layout` sampled from `map`, `rows` bitmaps stacked up it (one per dummy slot). */

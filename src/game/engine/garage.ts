@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { GarageArt, GARAGE } from "../present/garage-art.ts";
 import { PUFF_STEP, type SprayBitmap } from "../present/spray.ts";
+import { SPRAY_PALETTE } from "../match/look-data.ts";
 import type { PlayerLooks, SprayTarget } from "./player-looks.ts";
 import type { SprayTool } from "../hud/hud-store.ts";
 
@@ -26,7 +27,7 @@ const _nm = new THREE.Matrix3();
  */
 export class Garage {
   readonly art = new GarageArt();
-  readonly tool: SprayTool = { on: false, radius: SPRAY_RADIUS.start, colour: 4 };
+  readonly tool: SprayTool = { on: false, radius: SPRAY_RADIUS.start, colour: SPRAY_PALETTE[4]! };
   private readonly camera: THREE.Camera;
   private readonly rect: () => Rect;
   private readonly car: () => DeformableCar | undefined;
@@ -35,8 +36,9 @@ export class Garage {
   private readonly ray = new THREE.Raycaster();
   /** What the panel edits (`EngineGarage.frameGarage`): the only thing the can paints. A ray passes through the other one. */
   editing: SprayTarget = "car";
-  /** The stroke's target while the pointer is down, and the last point sprayed (world). */
+  /** The stroke's target while the pointer is down, its ink (`SprayBitmap.inkOf` of the can's colour) and the last point sprayed (world). */
   private target: SprayTarget | null = null;
+  private ink = 0;
   private readonly last = new THREE.Vector3();
 
   constructor(camera: THREE.Camera, rect: () => Rect, car: () => DeformableCar | undefined, looks: PlayerLooks, onSprayed: (target: SprayTarget) => void) {
@@ -82,6 +84,7 @@ export class Garage {
     if (!hit?.face) return false;
     const bitmap = this.looks.sprayOf(target);
     const from = first ? hit.point : this.last;
+    if (first) this.ink = bitmap.inkOf(this.tool.colour);
     const steps = Math.max(1, Math.ceil(from.distanceTo(hit.point) / (this.tool.radius * PUFF_STEP)));
     for (let k = 1; k <= steps; k++) {
       _p.lerpVectors(from, hit.point, k / steps);
@@ -106,7 +109,7 @@ export class Garage {
       _n.transformDirection(hit.object.matrixWorld).applyQuaternion(car.group.getWorldQuaternion(_q).invert());
       car.group.worldToLocal(_p);
     }
-    bitmap.spray(_p, _n, this.tool.radius, this.tool.colour, Math.random);
+    bitmap.spray(_p, _n, this.tool.radius, this.ink, Math.random);
   }
 
   dispose(): void {

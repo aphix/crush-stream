@@ -15,7 +15,7 @@ import { reelParts } from "./reel-wire.ts";
 import { makeClip, sameClip } from "./reel-clip.test-util.ts";
 import { HOST_WAIT_MS, SLOT_GRACE_MS } from "./net-constants.ts";
 import type { LookData } from "./look-codec.ts";
-import { CAR_SPRAY, NO_CAR_PICK, NO_PERSON_PICK, PERSON_SPRAY, carPickText, personPickText } from "../match/look-data.ts";
+import { CAR_SPRAY, NO_CAR_PICK, NO_PERSON_PICK, PERSON_SPRAY, SPRAY_PALETTE, carPickText, personPickText } from "../match/look-data.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 
@@ -23,8 +23,8 @@ import { FINE_HZ } from "../kernel/constants.ts";
 const bareLook = (): LookData => ({
   car: { ...NO_CAR_PICK },
   person: { ...NO_PERSON_PICK },
-  carSpray: new Uint8Array(CAR_SPRAY.w * CAR_SPRAY.h),
-  personSpray: new Uint8Array(PERSON_SPRAY.w * PERSON_SPRAY.h),
+  carSpray: { texels: new Uint8Array(CAR_SPRAY.w * CAR_SPRAY.h), palette: SPRAY_PALETTE },
+  personSpray: { texels: new Uint8Array(PERSON_SPRAY.w * PERSON_SPRAY.h), palette: SPRAY_PALETTE },
 });
 
 /** The engine as NetPlay sees it, with real cars and a real seat; records what the session asked of it. */
@@ -369,26 +369,29 @@ describe("given a host and one guest seated in car 1", () => {
 });
 
 describe("given a host and a guest who each picked colours and sprayed paint in the garage", () => {
-  it("when the guest is seated, then the host's car 1 wears the guest's picks and spray texel for texel, the guest's car 0 wears the host's, and the guest's own car 1 wears the guest's own look", () => {
+  it("when the guest is seated, then the host's car 1 wears the guest's picks and spray texel for texel, the guest's car 0 wears the host's (its own colour on an ink included), and the guest's own car 1 wears the guest's own look", () => {
     const hostLook = bareLook();
     hostLook.car.body = 0x11aa33;
     hostLook.person.hat = 0xff0000;
-    hostLook.carSpray.fill(4, 0, 900);
+    hostLook.carSpray.texels.fill(4, 0, 900);
+    hostLook.carSpray.texels.fill(9, 900, 1000);
+    hostLook.carSpray = { ...hostLook.carSpray, palette: SPRAY_PALETTE.map((c, ink) => (ink === 9 ? 0x123456 : c)) };
     const guestLook = bareLook();
     guestLook.car.rims = 0xffd700;
     guestLook.person.woman = true;
-    for (let i = 0; i < guestLook.personSpray.length; i += 7) guestLook.personSpray[i] = (i % 15) + 1;
+    for (let i = 0; i < guestLook.personSpray.texels.length; i += 7) guestLook.personSpray.texels[i] = (i % 15) + 1;
     const s = session({ hostLook, guestLook });
     const onHost = s.hg.worn.filter(([car]) => car === 1).at(-1)?.[1];
     const onGuest = s.cg.worn.filter(([car]) => car === 0).at(-1)?.[1];
     assert.ok(onHost && onGuest, "each side wore the other's look");
     assert.equal(carPickText(onHost.car), carPickText(guestLook.car), "the guest's car picks on the host");
     assert.equal(personPickText(onHost.person), personPickText(guestLook.person), "the guest's driver picks on the host");
-    assertSameNumbers(onHost.personSpray, guestLook.personSpray, "the guest's driver spray on the host");
-    assertSameNumbers(onHost.carSpray, guestLook.carSpray, "the guest's bare car spray on the host");
+    assertSameNumbers(onHost.personSpray.texels, guestLook.personSpray.texels, "the guest's driver spray on the host");
+    assertSameNumbers(onHost.carSpray.texels, guestLook.carSpray.texels, "the guest's bare car spray on the host");
     assert.equal(carPickText(onGuest.car), carPickText(hostLook.car), "the host's car picks on the guest");
     assert.equal(personPickText(onGuest.person), personPickText(hostLook.person), "the host's driver picks on the guest");
-    assertSameNumbers(onGuest.carSpray, hostLook.carSpray, "the host's car spray on the guest");
+    assertSameNumbers(onGuest.carSpray.texels, hostLook.carSpray.texels, "the host's car spray on the guest");
+    assertSameNumbers(onGuest.carSpray.palette, hostLook.carSpray.palette, "the host's car spray inks on the guest, its own colour on ink 9");
     assert.equal(s.cg.worn.some(([car, look]) => car === 1 && look !== null), false, "the guest's own seat never wears a look from the relay");
     assert.ok(s.cg.worn.some(([car, look]) => car === 1 && look === null), "the guest's own seat put on the guest's own look when seated");
   });

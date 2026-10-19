@@ -63,12 +63,12 @@ export class PlayerLooks {
 
   /** This browser's look as `MSG.look` carries it. */
   data(): LookData {
-    return { car: this.mine.car, person: this.mine.person, carSpray: this.mine.carSpray.texels, personSpray: this.mine.personSpray.texels };
+    return { car: this.mine.car, person: this.mine.person, carSpray: this.mine.carSpray, personSpray: this.mine.personSpray };
   }
 
   /** Keep `target`'s spray for the next visit. */
   save(target: SprayTarget): void {
-    const bytes = packSpray(this.sprayOf(target).texels);
+    const bytes = packSpray(this.sprayOf(target));
     let text = "";
     for (let i = 0; i < bytes.length; i++) text += String.fromCharCode(bytes[i]!);
     localStorage.setItem(SPRAY_KEY[target], btoa(text));

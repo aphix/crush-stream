@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { CAR_SPRAY, packSpray, PERSON_SPRAY, sprayFace, unpackSpray, type SprayLayout } from "../match/look-data.ts";
+import { CAR_SPRAY, packSpray, PERSON_SPRAY, SPRAY_PALETTE, sprayFace, unpackSpray, type SprayLayout } from "../match/look-data.ts";
 import { SprayBitmap } from "./spray.ts";
 
 const LAYOUTS: Record<string, SprayLayout> = { car: CAR_SPRAY, person: PERSON_SPRAY };
@@ -14,23 +14,58 @@ describe("given a spray bitmap on the wire", () => {
     const texels = new Uint8Array(CAR_SPRAY.w * CAR_SPRAY.h);
     texels.fill(4, 1000, 1400);
     texels.fill(9, 5000, 5003);
-    const packed = packSpray(texels);
+    const packed = packSpray({ texels, palette: SPRAY_PALETTE });
     assert.ok(packed.length < texels.length / 2 / 10, `${packed.length} bytes against ${texels.length / 2} as nibbles`);
-    assertSameNumbers(unpackSpray(packed, texels.length)!, texels, "texels read back");
+    assertSameNumbers(unpackSpray(packed, texels.length)!.texels, texels, "texels read back");
   });
 
   it("when a speckled bitmap (no two texels alike in a row) is packed and read back, then every texel is the same and it travels as nibbles, 4 bits a texel", () => {
     const texels = new Uint8Array(PERSON_SPRAY.w * PERSON_SPRAY.h);
     for (let i = 0; i < texels.length; i++) texels[i] = (i % 15) + 1;
-    const packed = packSpray(texels);
+    const packed = packSpray({ texels, palette: SPRAY_PALETTE });
     assert.equal(packed.length, 1 + texels.length / 2, "one byte of header, then two texels a byte");
-    assertSameNumbers(unpackSpray(packed, texels.length)!, texels, "texels read back");
+    assertSameNumbers(unpackSpray(packed, texels.length)!.texels, texels, "texels read back");
+  });
+
+  it("when a stroke in a colour of the player's own is packed and read back into another bitmap, then it is drawn in that colour, for 5 bytes over the same stroke in a preset", () => {
+    const mine = new SprayBitmap(CAR_SPRAY);
+    const ink = mine.inkOf(0x123456);
+    mine.spray(new THREE.Vector3(-0.9, 0.8, 0), new THREE.Vector3(-1, 0, 0), 0.15, ink, () => 0);
+    const packed = packSpray(mine);
+    const theirs = new SprayBitmap(CAR_SPRAY);
+    theirs.load(unpackSpray(packed, mine.texels.length));
+    assertSameNumbers(theirs.rgba, mine.rgba, "drawn texel for texel");
+    const at = mine.texels.indexOf(ink);
+    assertSameNumbers(theirs.rgba.subarray(at * 4, at * 4 + 4), [0x12, 0x34, 0x56, 255], "in the player's colour");
+    assert.equal(packed.length, packSpray({ texels: mine.texels, palette: SPRAY_PALETTE }).length + 5, "a count byte, then the ink and its r, g, b");
+    mine.dispose();
+    theirs.dispose();
+  });
+
+  it("when a bitmap of presets alone is packed, then its bytes are the ones a build before own inks wrote, and that build's saved nibbles and runs read back", () => {
+    const texels = [4, 4, 0, 0];
+    assertSameNumbers(packSpray({ texels: new Uint8Array(texels), palette: SPRAY_PALETTE }), [0, 0x44, 0], "packed");
+    for (const saved of [[0, 0x44, 0], [1, 2, 4, 2, 0]]) {
+      const paint = unpackSpray(new Uint8Array(saved), texels.length)!;
+      assertSameNumbers(paint.texels, texels, `texels of ${saved}`);
+      assertSameNumbers(paint.palette, SPRAY_PALETTE, `the presets of ${saved}`);
+    }
+  });
+
+  it("when every ink shows and a 16th colour is sprayed, then it takes the nearest ink and no colour on the bitmap changes", () => {
+    const bitmap = new SprayBitmap(CAR_SPRAY);
+    bitmap.load({ texels: Uint8Array.from({ length: bitmap.texels.length }, (_, i) => (i % 15) + 1), palette: SPRAY_PALETTE });
+    assert.equal(bitmap.inkOf(0xd02020), SPRAY_PALETTE.indexOf(0xd62828), "the preset red");
+    assertSameNumbers(bitmap.palette, SPRAY_PALETTE, "the inks");
+    bitmap.dispose();
   });
 
   const refused = [
     { it: "when its runs come up one texel short, then it is refused", bytes: [1, 255, 0], count: 256 },
     { it: "when a run names a colour past the palette, then it is refused", bytes: [1, 4, 16], count: 4 },
     { it: "when its nibbles are one byte short, then it is refused", bytes: [0, 0x21], count: 4 },
+    { it: "when its own inks name ink 0, then it is refused", bytes: [3, 1, 0, 1, 2, 3, 4, 0], count: 4 },
+    { it: "when its own inks run past its bytes, then it is refused", bytes: [3, 2, 5, 1, 2, 3, 4, 0], count: 4 },
     { it: "when its header is neither nibbles nor runs, then it is refused", bytes: [7, 1, 1], count: 1 },
   ] as const;
   for (const testCase of refused) {

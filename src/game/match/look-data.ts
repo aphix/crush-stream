@@ -5,14 +5,19 @@ import { LID } from "../vehicle/constants.ts";
  * `PersonPick`, as their URL text) and the spray paint, a small paletted bitmap per car and per driver wrapped round the
  * thing as a box. A point on its rest shape (the car's frame before any dent, the driver standing) and its normal pick one
  * of five faces (left, right, top, front, back; the underside takes none) and the point's place across that face picks the
- * texel (`sprayFace`; the shader in `present/spray.ts` runs the same formula). 4 bits a texel on the wire (`packSpray`).
+ * texel (`sprayFace`; the shader in `present/spray.ts` runs the same formula). A texel is an ink, an index into the
+ * bitmap's own palette (`SprayPaint`): the can's presets unless a colour of the player's own took an ink. 4 bits a texel on
+ * the wire while it uses 15 inks or fewer (`packSpray`).
  */
 
-/** The can's colours (sRGB); index 0 is bare (no paint). */
+/** The can's quick colours (sRGB), every bitmap's first palette; index 0 is bare (no paint). */
 export const SPRAY_PALETTE: readonly number[] = [
   0, 0xf4f4f0, 0x141414, 0x808080, 0xd62828, 0xf77f00, 0xf5d300, 0x8ac926, 0x2a9d3f, 0x2ec4d6, 0x1d6fe0, 0x1b2a6b, 0x7b2cbf, 0xff5fa2, 0x7a4a24,
   0xd9b98c,
 ];
+
+/** A bitmap's paint: an ink per texel (0 bare) and each ink's colour (sRGB): `SPRAY_PALETTE`, with any colour sprayed that is not a preset on an ink no texel showed, or past them (256 inks at most). */
+export type SprayPaint = { readonly texels: Uint8Array; readonly palette: readonly number[] };
 
 /** Face order in a layout's `faces` and in the shader's `sprayFaces`. */
 export const SPRAY_FACE = { left: 0, right: 1, top: 2, front: 3, back: 4 } as const;
@@ -86,30 +91,38 @@ function across(v: number, min: number, max: number): number {
   return Math.min(1, Math.max(0, (v - min) / (max - min)));
 }
 
-/** `packSpray`'s first byte: the texels as nibbles, two to a byte, or as runs (length 1-255, then the index). */
+/** `packSpray`'s first byte: the texels as nibbles, two to a byte, or as runs (length 1-255, then the ink); `INKS` set when the bitmap's own inks follow (a count, then ink, r, g, b each). */
 const PACKED = 0;
 const RUNS = 1;
+const INKS = 2;
 const MAX_RUN = 255;
 
-/** A bitmap's texels for the wire and for storage: runs when they come out shorter than the nibbles (a mostly bare bitmap). */
-export function packSpray(texels: Uint8Array): Uint8Array {
+/** A bitmap's paint for the wire and for storage: runs when they come out shorter than the nibbles (a mostly bare bitmap); a bitmap of presets alone packs as before own inks existed. */
+export function packSpray({ texels, palette }: SprayPaint): Uint8Array {
+  const own: number[] = [];
+  for (let ink = 1; ink < SPRAY_PALETTE.length; ink++) if (palette[ink] !== SPRAY_PALETTE[ink]) own.push(ink);
+  const lead = own.length > 0 ? 2 + own.length * 4 : 1;
   let runs = 0;
   for (let i = 0; i < texels.length; runs++) i += runLength(texels, i);
-  if (runs * 2 < texels.length / 2) {
-    const out = new Uint8Array(1 + runs * 2);
-    out[0] = RUNS;
-    let o = 1;
-    for (let i = 0; i < texels.length; ) {
-      const n = runLength(texels, i);
-      out[o++] = n;
-      out[o++] = texels[i]!;
-      i += n;
-    }
+  const asRuns = runs * 2 < texels.length / 2;
+  const out = new Uint8Array(lead + (asRuns ? runs * 2 : Math.ceil(texels.length / 2)));
+  out[0] = (asRuns ? RUNS : PACKED) | (own.length > 0 ? INKS : 0);
+  out[1] = own.length;
+  for (const [k, ink] of own.entries()) {
+    const c = palette[ink]!;
+    out.set([ink, c >> 16, (c >> 8) & 0xff, c & 0xff], 2 + k * 4);
+  }
+  if (!asRuns) {
+    for (let i = 0; i < texels.length; i++) out[lead + (i >> 1)]! |= (texels[i]! & 0xf) << ((i & 1) * 4);
     return out;
   }
-  const out = new Uint8Array(1 + Math.ceil(texels.length / 2));
-  out[0] = PACKED;
-  for (let i = 0; i < texels.length; i++) out[1 + (i >> 1)]! |= (texels[i]! & 0xf) << ((i & 1) * 4);
+  let o = lead;
+  for (let i = 0; i < texels.length; ) {
+    const n = runLength(texels, i);
+    out[o++] = n;
+    out[o++] = texels[i]!;
+    i += n;
+  }
   return out;
 }
 
@@ -119,21 +132,41 @@ function runLength(texels: Uint8Array, at: number): number {
   return n;
 }
 
-/** `packSpray`'s bytes back into `count` texels; null when they are not a packed bitmap of that size (untrusted: a peer's or storage's). */
-export function unpackSpray(bytes: Uint8Array, count: number): Uint8Array | null {
-  const out = new Uint8Array(count);
-  if (bytes[0] === PACKED) {
-    if (bytes.length !== 1 + Math.ceil(count / 2)) return null;
-    for (let i = 0; i < count; i++) out[i] = (bytes[1 + (i >> 1)]! >> ((i & 1) * 4)) & 0xf;
-    return out;
+/** `packSpray`'s bytes back into a paint of `count` texels; null when they are not one (untrusted: a peer's or storage's). */
+export function unpackSpray(bytes: Uint8Array, count: number): SprayPaint | null {
+  const head = bytes[0];
+  if (head === undefined || head > (RUNS | INKS)) return null;
+  const palette = [...SPRAY_PALETTE];
+  let o = 1;
+  if (head & INKS) {
+    const n = bytes[o++] ?? 0;
+    if (n === 0 || o + n * 4 > bytes.length) return null;
+    for (let k = 0; k < n; k++, o += 4) {
+      const ink = bytes[o]!;
+      if (ink === 0 || ink >= palette.length) return null;
+      palette[ink] = (bytes[o + 1]! << 16) | (bytes[o + 2]! << 8) | bytes[o + 3]!;
+    }
   }
-  if (bytes[0] !== RUNS || bytes.length % 2 !== 1) return null;
+  const texels = head & RUNS ? readRuns(bytes.subarray(o), count) : readNibbles(bytes.subarray(o), count);
+  return texels && { texels, palette };
+}
+
+function readNibbles(bytes: Uint8Array, count: number): Uint8Array | null {
+  if (bytes.length !== Math.ceil(count / 2)) return null;
+  const out = new Uint8Array(count);
+  for (let i = 0; i < count; i++) out[i] = (bytes[i >> 1]! >> ((i & 1) * 4)) & 0xf;
+  return out;
+}
+
+function readRuns(bytes: Uint8Array, count: number): Uint8Array | null {
+  if (bytes.length % 2 !== 0) return null;
+  const out = new Uint8Array(count);
   let at = 0;
-  for (let o = 1; o < bytes.length; o += 2) {
+  for (let o = 0; o < bytes.length; o += 2) {
     const n = bytes[o]!;
-    const colour = bytes[o + 1]!;
-    if (n === 0 || colour >= SPRAY_PALETTE.length || at + n > count) return null;
-    out.fill(colour, at, at + n);
+    const ink = bytes[o + 1]!;
+    if (n === 0 || ink >= SPRAY_PALETTE.length || at + n > count) return null;
+    out.fill(ink, at, at + n);
     at += n;
   }
   return at === count ? out : null;

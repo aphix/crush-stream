@@ -1,14 +1,14 @@
-import { CAR_SPRAY, carPickText, packSpray, parseCarPick, parsePersonPick, PERSON_SPRAY, personPickText, unpackSpray, type CarPick, type PersonPick } from "../match/look-data.ts";
+import { CAR_SPRAY, carPickText, packSpray, parseCarPick, parsePersonPick, PERSON_SPRAY, personPickText, unpackSpray, type CarPick, type PersonPick, type SprayPaint } from "../match/look-data.ts";
 import { MSG } from "./codec.ts";
 
-/** A player's look as the wire carries it: the picks and both spray bitmaps' texels (a palette index each). */
-export type LookData = { car: CarPick; person: PersonPick; carSpray: Uint8Array; personSpray: Uint8Array };
+/** A player's look as the wire carries it: the picks and both spray bitmaps' paint (an ink per texel, the inks' colours). */
+export type LookData = { car: CarPick; person: PersonPick; carSpray: SprayPaint; personSpray: SprayPaint };
 
 /**
  * `MSG.look`: a player's look, sent once on the reliable channel when a guest is seated (to the host) and by the host to every
  * guest (its own and each other player's). Type, the car it is for, the car and driver picks as text (`carPickText`, a length
- * byte first), then each spray bitmap packed (`packSpray`, a u16 length first): a few hundred bytes for a bare car, 8 KiB a
- * bitmap at most.
+ * byte first), then each spray bitmap packed (`packSpray`, a u16 length first): a few hundred bytes for a bare car, 8 KiB
+ * and 61 bytes of own inks a bitmap at most.
  */
 export function packLook(car: number, look: LookData): Uint8Array<ArrayBuffer> {
   const enc = new TextEncoder();
@@ -44,15 +44,15 @@ export function readLook(data: Uint8Array): { car: number; look: LookData } | nu
     texts.push(dec.decode(data.subarray(o, o + n)));
     o += n;
   }
-  const bitmaps: Uint8Array[] = [];
+  const bitmaps: SprayPaint[] = [];
   for (const layout of [CAR_SPRAY, PERSON_SPRAY]) {
     if (o + 2 > data.length) return null;
     const n = data[o]! | (data[o + 1]! << 8);
     o += 2;
     if (o + n > data.length) return null;
-    const texels = unpackSpray(data.subarray(o, o + n), layout.w * layout.h);
-    if (!texels) return null;
-    bitmaps.push(texels);
+    const paint = unpackSpray(data.subarray(o, o + n), layout.w * layout.h);
+    if (!paint) return null;
+    bitmaps.push(paint);
     o += n;
   }
   const car = parseCarPick(texts[0]!);

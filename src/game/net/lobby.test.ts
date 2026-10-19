@@ -5,7 +5,7 @@ import { Track } from "../world/track.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
 import { frame, makeWorld, type World } from "../world/race-world.test-util.ts";
-import { NO_CAR_PICK, NO_PERSON_PICK, CAR_SPRAY, PERSON_SPRAY } from "../match/look-data.ts";
+import { NO_CAR_PICK, NO_PERSON_PICK, CAR_SPRAY, PERSON_SPRAY, SPRAY_PALETTE } from "../match/look-data.ts";
 import type { Ejection } from "../vehicle/ejection.ts";
 import { NetPlay } from "./net-play.ts";
 import { PHASES, type NetGame } from "./net-ports.ts";
@@ -62,7 +62,12 @@ function worldGame(w: World, name: string) {
     launchEjection: (_e: Ejection) => {},
     meterOf: () => null,
     courseMenu: () => w.race.courseMenu(),
-    playerLook: () => ({ car: { ...NO_CAR_PICK }, person: { ...NO_PERSON_PICK }, carSpray: new Uint8Array(CAR_SPRAY.w * CAR_SPRAY.h), personSpray: new Uint8Array(PERSON_SPRAY.w * PERSON_SPRAY.h) }),
+    playerLook: () => ({
+      car: { ...NO_CAR_PICK },
+      person: { ...NO_PERSON_PICK },
+      carSpray: { texels: new Uint8Array(CAR_SPRAY.w * CAR_SPRAY.h), palette: SPRAY_PALETTE },
+      personSpray: { texels: new Uint8Array(PERSON_SPRAY.w * PERSON_SPRAY.h), palette: SPRAY_PALETTE },
+    }),
     wearLook: () => {},
     dropLooks: () => {},
     seat: w.seat,

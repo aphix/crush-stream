@@ -66,7 +66,7 @@ export type LabHud = { preset: LabPresetId; shot: { hit: string | null; speed: n
  */
 export type GarageHud = { car: Record<CarPart, number>; person: DriverLook; picked: PersonPick; spray: SprayTool };
 
-/** The garage's spray can: on or off, its dot's radius (m) and its palette colour (`SPRAY_PALETTE` index, never 0). */
+/** The garage's spray can: on or off, its dot's radius (m) and its colour (sRGB). */
 export type SprayTool = { on: boolean; radius: number; colour: number };
 
 export type CrashHudState = {

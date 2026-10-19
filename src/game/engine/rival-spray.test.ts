@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import type * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
-import { CAR_SPRAY, NO_CAR_PICK } from "../match/look-data.ts";
+import { CAR_SPRAY, NO_CAR_PICK, SPRAY_PALETTE } from "../match/look-data.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import { readRace, writeRace } from "../net/codec.ts";
 import { encodeSaved } from "../net/reel-codec.ts";
@@ -110,7 +110,7 @@ describe("given the real engine headless", () => {
   /** The garage bitmap filled with `OWN_INK`: its digest. */
   const ownSpray = (): string => {
     const mine = engine["looks"].mine.carSpray;
-    mine.load(new Uint8Array(mine.texels.length).fill(OWN_INK));
+    mine.load({ texels: new Uint8Array(mine.texels.length).fill(OWN_INK), palette: SPRAY_PALETTE });
     return digestOf(mine.rgba);
   };
   const startSingle = (): void => {

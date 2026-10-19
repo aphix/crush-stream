@@ -180,6 +180,22 @@
   background: var(--tone);
 }
 
+/* The garage's colour picker (react-colorful injects its own unlayered styles; two classes outrank them): as wide as its
+   popover, and finger-sized on a touch screen (a 44 px hue bar, a 36 px handle). */
+.garage-picker .react-colorful {
+  width: 100%;
+  height: 10rem;
+}
+@media (pointer: coarse) {
+  .garage-picker .react-colorful__hue {
+    height: 44px;
+  }
+  .garage-picker .react-colorful__pointer {
+    width: 36px;
+    height: 36px;
+  }
+}
+
 /* Mobile: one column, settings (when shown) stack above the dock. md+: settings own the
    right column under the readouts so the middle of the 3D view stays clear. */
 .hud-grid {

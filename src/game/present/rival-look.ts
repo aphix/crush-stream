@@ -1,4 +1,3 @@
-import { hypot3 } from "../kernel/physics-core.js";
 import { SPRAY_PALETTE, CAR_SPRAY, type SprayLayout } from "../match/look-data.ts";
 import { mulberry32 } from "../world/placements.ts";
 import type { FxTier } from "./engine-post.ts";
@@ -7,7 +6,7 @@ import { BAND_PATTERNS } from "./rival-patterns-bands.ts";
 import { ORGANIC_PATTERNS } from "./rival-patterns-organic.ts";
 import { RivalPen, type RivalPattern } from "./rival-pen.ts";
 import { SHAPE_PATTERNS } from "./rival-patterns-shapes.ts";
-import { SprayBitmap } from "./spray.ts";
+import { colourDistance, SprayBitmap } from "./spray.ts";
 
 /**
  * The rivals' spray: which of the 20 patterns an AI car wears and in which inks (`rivalLook`, a pure function of the race's
@@ -38,11 +37,6 @@ const SEED_MIX = 0x85ebca6b;
 /** A stream for `salt` and `seed`, and for the car in `slot` when one is named. */
 function streamOf(salt: number, seed: number, slot = -1): () => number {
   return mulberry32(Math.imul(seed ^ salt, SEED_MIX) ^ Math.imul(slot + 1, SLOT_MIX));
-}
-
-/** Palette colours `a` and `b` (sRGB) this far apart. */
-function colourDistance(a: number, b: number): number {
-  return hypot3((a >> 16) - (b >> 16), ((a >> 8) & 0xff) - ((b >> 8) & 0xff), (a & 0xff) - (b & 0xff));
 }
 
 /** The pattern order of a field: a Fisher-Yates shuffle of the pattern indices, a function of the seed alone. */

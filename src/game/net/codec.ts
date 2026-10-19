@@ -60,8 +60,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 30: a clip's epicenter byte is the count of knob values that follow, not a flag (REPLAY 114), so peers on 29 would misread a host's clip that ran with the activation on.
 31: a clip's keyframes carry each wreck's epicenter freeze (nine more solver doubles, REPLAY 117), so peers on 30 would misread a host's clip.
 32: a clip's keyframes carry a sleeper's sleep spot (REPLAY 128), each torn part's flight box (REPLAY 130) and each drawn wheel's turn and rate (REPLAY 131), so peers on 31 would misread a host's clip.
+33: a `MSG.look` spray bitmap may carry its own inks (header bit 2, then ink and r, g, b for each colour the player picked off the presets), so peers on 32 would refuse a look sprayed in a colour of the player's own.
 */
-export const NET_VERSION = 32;
+export const NET_VERSION = 33;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 58.3 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
