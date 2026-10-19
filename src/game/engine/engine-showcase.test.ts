@@ -4,7 +4,8 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
-import { ROLE } from "../present/dummy-rig.ts";
+import { ROLE, ROW_TEXELS } from "../present/dummy-rig.ts";
+import { SHOWCASE_EYE } from "../present/showcase-art.ts";
 import { ELDER_LOOK } from "../present/dummy-dress.ts";
 import { OUTFIT, type DriverLook } from "../present/driver-look.ts";
 import { setGround } from "../world/ground.ts";
@@ -87,6 +88,18 @@ describe("given the real engine booted on #scene=showcase", () => {
     const kinds = new Set(Array.from({ length: art().slots / 2 }, (_, slot) => `${drawn(slot)}`));
     assert.ok(kinds.size >= 4, `the first row's six figures draw ${kinds.size} different bodies (man, woman, cap and shades, portly)`);
     for (let slot = 0; slot < art().slots; slot++) assert.ok(standing(slot), `slot ${slot} stands`);
+  });
+
+  it("when the set stands, then every figure faces the eye, as the reference's line-up faces its camera", () => {
+    const rows: Float32Array = people()["rows"];
+    const forward = new THREE.Vector3();
+    const toEye = new THREE.Vector3();
+    for (let slot = 0; slot < art().slots; slot++) {
+      forward.set(0, 0, 1).applyQuaternion(new THREE.Quaternion().fromArray(rows, slot * ROW_TEXELS * 4 + 4));
+      const at = art().markOf(slot, new THREE.Vector3());
+      toEye.set(SHOWCASE_EYE.x - at.x, 0, SHOWCASE_EYE.z - at.z).normalize();
+      assert.ok(forward.angleTo(toEye) < 0.02, `slot ${slot} turned ${forward.angleTo(toEye).toFixed(3)} rad off the eye`);
+    }
   });
 
   it("when the camera opens on the set, then it is the free eye in front of the first row, and a press on a figure is the scene's, not the camera's", () => {

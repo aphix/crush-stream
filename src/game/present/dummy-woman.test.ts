@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { OUTFIT, type DriverLook } from "./driver-look.ts";
 import { BUST, restFits } from "./dummy-fit.ts";
-import { EYES_AT, HAIRLINE_FRONT, headAt, measureHead } from "./dummy-head.ts";
 import { surfaceZ } from "./dummy-loft.ts";
 import { drawnRows, posture, turn, type Drawn } from "./dummy-pose.test-util.ts";
 import { BUILD, LEFT_ARM, LEFT_LEG, RIGHT_LEG, ROLE, SHORT_SLEEVES } from "./dummy-rig.ts";
@@ -15,18 +14,12 @@ const HEEL_LENGTH = 0.03;
 const HEEL_LIFT = 0.04;
 const TOES_DOWN = 0.01;
 const TIP_DOWN = 0.005;
-/** The top's bust stands at least this far (m) in front of her sternum: the reference's fitted top, not the bare mannequin's 3 cm. */
-const BUST_PROJECTION = 0.05;
-/** A dome's side rim lies under the skin or at most this far (m) out of it: it rises out of the chest, no ledge. */
-const RIM_OFF_SKIN = 0.005;
-/** Her face, kept clear of hair: within this half width (m) and `FACE_CLEAR` inside the head's, from this share of the head's height over the chin up to the hairline, no hair stands closer than `FACE_CLEAR` m behind the face's surface. */
-const FACE_OPEN = 0.05;
-const FACE_FROM = 0.1;
-const FACE_CLEAR = 0.01;
-/** Her hair frames her face: at eye height (within `EYE_BAND` m) it reaches past this |x| (m) on each side, and it ends above `HAIR_ENDS` m (her shoulders). */
-const EYE_BAND = 0.012;
-const FRAME_X = 0.1;
-const HAIR_ENDS = 1.4;
+/** Her bust stands at least this far (m) in front of her sternum: the second reference's full fitted top, not the bare mannequin's 3 cm. */
+const BUST_PROJECTION = 0.075;
+/** Under the top's scoop the fabric spans her cleavage: at the domes' centre height her middle stands within this (m) of their front. */
+const BRIDGED = 0.01;
+/** Her raised elbow moves at least this far (m): the raise really happened. */
+const ARM_MOVED = 0.1;
 /** A rigid ride keeps distances within float noise (m). */
 const RIGID = 1e-4;
 /** Her knees bent and her right arm raised this far (degrees) for the rides. */
@@ -86,54 +79,21 @@ describe("given the woman in her top, cut-offs and heels", () => {
     const [from, to] = [byIndex(standing), byIndex(raised)];
     const elbow = lowestRigid(standing, LEFT_ARM, 0);
     const sleeve = ofWear(standing, ROLE.SHIRT, BUILD.WOMAN | SHORT_SLEEVES).filter((row) => row.at.x < 0);
-    assert.ok(sleeve.length > 0 && to.get(elbow.index)!.at.distanceTo(elbow.at) > FRAME_X, "she wears a sleeve and her arm moved");
+    assert.ok(sleeve.length > 0 && to.get(elbow.index)!.at.distanceTo(elbow.at) > ARM_MOVED, "she wears a sleeve and her arm moved");
     assert.ok(drift(sleeve, elbow.index, from, to) < RIGID, `her sleeve drifts ${drift(sleeve, elbow.index, from, to).toFixed(4)} m from her arm`);
   });
 
-  it("when she and a man in the same clothes stand, then her bust stands in front of her chest as the top's, and the man draws none of it", () => {
-    const bust = (rows: readonly Drawn[]) => ofWear(rows, ROLE.SHIRT, BUILD.WOMAN);
-    const front = Math.max(...bust(standing).map((row) => row.at.z));
-    assert.ok(bust(standing).length > 0, "her bust is drawn");
+  it("when she and a man in the same clothes stand, then her bust is her body's own chest standing in front of her sternum, with no shell over it, and the man's chest stays flat", () => {
+    const chest = (rows: readonly Drawn[]) => rows.filter((row) => !row.wear && Math.abs(row.at.y - BUST.y) < BUST.r && Math.abs(row.at.x) < BUST.x + BUST.r);
+    const front = Math.max(...chest(standing).map((row) => row.at.z));
     assert.ok(front - BUST.wall >= BUST_PROJECTION, `her bust stands ${(front - BUST.wall).toFixed(3)} m in front of her sternum`);
-    assert.equal(bust(drawnRows(false, { ...WOMAN, woman: false }).rows).length, 0, "no bust on a man");
+    assert.equal(ofWear(standing, ROLE.SHIRT, BUILD.WOMAN).length, 0, "no dome shell lies over her chest (its rim would show)");
+    const man = Math.max(...chest(drawnRows(false, { ...WOMAN, woman: false }).rows).map((row) => row.at.z));
+    assert.ok(man - BUST.wall < BUST_PROJECTION / 2, `his chest stands ${(man - BUST.wall).toFixed(3)} m in front of her sternum's line`);
   });
 
-  it("when she stands, then each ring of her bust's domes has its side rims at or under the skin of her chest", () => {
-    const bust = ofWear(standing, ROLE.SHIRT, BUILD.WOMAN).sort((a, b) => a.index - b.index);
-    const rings: Drawn[][] = [];
-    for (const row of bust) {
-      const ring = rings.at(-1);
-      if (ring !== undefined && ring[0]!.index + ring.length === row.index && ring[0]!.at.y === row.at.y) ring.push(row);
-      else rings.push([row]);
-    }
-    const lofted = rings.filter((ring) => ring.length > 2);
-    assert.ok(lofted.length > 0, "the domes' rings were found");
-    let [worst, where] = [-Infinity, ""];
-    for (const ring of lofted) {
-      for (const rim of [ring.reduce((a, b) => (b.at.x < a.at.x ? b : a)), ring.reduce((a, b) => (b.at.x > a.at.x ? b : a))]) {
-        const off = rim.at.z - surfaceZ(fit, rim.at.x, rim.at.y);
-        if (off > worst) [worst, where] = [off, `(${rim.at.x.toFixed(3)}, ${rim.at.y.toFixed(3)})`];
-      }
-    }
-    assert.ok(worst <= RIM_OFF_SKIN, `a rim stands ${worst.toFixed(4)} m out of her chest at ${where}`);
-  });
-
-  it("when she stands, then her hair stays off her face, from under her chin's line to her hairline", () => {
-    const head = measureHead(fit);
-    const height = head.top - head.chin;
-    const band = ofWear(standing, ROLE.LOCKS, BUILD.WOMAN).filter((row) => row.at.y > head.chin + FACE_FROM * height && row.at.y < head.chin + HAIRLINE_FRONT * height && Math.abs(row.at.x) < Math.min(FACE_OPEN, headAt(head, row.at.y)[0] - FACE_CLEAR));
-    assert.ok(band.length > 0, "her hair crosses that band (behind her head)");
-    const over = band.filter((row) => row.at.z > surfaceZ(fit, row.at.x, row.at.y) - FACE_CLEAR);
-    assert.equal(over.length, 0, `${over.length} hair vertices over her face`);
-  });
-
-  it("when she stands, then her hair frames her face past her cheeks on both sides at eye height and ends on her shoulders", () => {
-    const head = measureHead(fit);
-    const eyes = head.chin + EYES_AT * (head.top - head.chin);
-    const hair = ofWear(standing, ROLE.LOCKS, BUILD.WOMAN);
-    const atEyes = hair.filter((row) => Math.abs(row.at.y - eyes) < EYE_BAND);
-    assert.ok(Math.max(...atEyes.map((row) => row.at.x)) >= FRAME_X, `it reaches x = ${Math.max(...atEyes.map((row) => row.at.x)).toFixed(3)} m on her left`);
-    assert.ok(Math.min(...atEyes.map((row) => row.at.x)) <= -FRAME_X, `it reaches x = ${Math.min(...atEyes.map((row) => row.at.x)).toFixed(3)} m on her right`);
-    assert.ok(lowest(hair) >= HAIR_ENDS, `it hangs to ${lowest(hair).toFixed(3)} m`);
+  it("when she stands, then under her top's scoop the fabric spans her cleavage at her bust's own height", () => {
+    const [middle, dome] = [surfaceZ(fit, 0, BUST.y), surfaceZ(fit, BUST.x, BUST.y)];
+    assert.ok(dome - middle <= BRIDGED, `her middle lies ${(dome - middle).toFixed(3)} m behind her bust's front`);
   });
 });

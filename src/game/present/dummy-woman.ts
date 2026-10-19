@@ -1,147 +1,7 @@
-import type { Bust } from "./dummy-curves.ts";
-import { BUST } from "./dummy-fit.ts";
 import { fitted, legOf, LIMB_SIDES, TORSO_SIDES, torsoOf, TUCK, type Take } from "./dummy-garments.ts";
-import { HAIRLINE_FRONT, type Head } from "./dummy-head.ts";
-import { overHead, surfaceZ } from "./dummy-loft.ts";
-import { BUILD, HEAD, HEELS, LEFT_ARM, LEFT_LEG, RIGHT_ARM, RIGHT_LEG, ROLE, SHORT_SLEEVES, smooth, TORSO, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
+import { BUILD, HEELS, LEFT_ARM, LEFT_LEG, RIGHT_ARM, RIGHT_LEG, ROLE, SHORT_SLEEVES, TORSO, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
 
-/** The woman's wear on her fitted body: her shoulder-length wavy hair, her bust under the fitted top, its short sleeves, her cut-offs, and stiletto heels under her arched feet. */
-
-/** Her hair stands this far (m) out of her crown: inside a cap's crown (0.02), so a cap covers it. Under her hairline its face half is this share under the skin. */
-const CROWN_HAIR_OUT = 0.018;
-const HAIRLINE_UNDER_SKIN = 0.5;
-/** Under the cap's rim it falls in `FALL_RINGS` rings to `HAIR_END` (m): resting on her shoulders, as the reference's. */
-const HAIR_END = 1.42;
-const FALL_RINGS = 22;
-const HAIR_SIDES = 32;
-/** It lies at least this far (m) off her head and neck wherever it covers them. */
-const HAIR_THICK = 0.012;
-/** It falls about this z (m): inside her head and her neck (the throat's front is near z = 0), so every side's ray leaves her once. */
-const HAIR_AXIS_Z = -0.03;
-/** Its volume (m): half width beside the face, reach in front of and behind the axis; growing from the rim to the chin, then hanging. */
-const VOLUME_AT_RIM = [0.085, 0.1, 0.085] as const;
-const VOLUME_AT_CHIN = [0.128, 0.09, 0.098] as const;
-/** Her face shows through it within this half width (m) in front, her throat within `THROAT_HALF` under the chin. */
-const FACE_HALF = 0.058;
-const THROAT_HALF = 0.05;
-/** Over the face it dives to this share of the head's radius: a section's sides are pushed out past the nose's flanks, so a shallow tuck shows on the cheeks. */
-const OPEN_SINK_SHARE = 0.5;
-/** Its ends lie this far (m) under the skin where they close. */
-const TUCK_UNDER = 0.008;
-/** Its waves: `WAVES` strands round, `WAVE_DEPTH` m deep, twisting a whole turn every `WAVE_TURN` m down. */
-const WAVES = 8;
-const WAVE_DEPTH = 0.006;
-const WAVE_TURN = 0.16;
-/** Its ends curl in onto her shoulders over the last `END_BAND` m; the pole under them sits inside her. */
-const END_BAND = 0.05;
-const END_POLE = 0.01;
-/** Her head and neck under the hair: off the arms, within this |x| (m) of her middle (her trapezius under the ends, not her shoulders). */
-const UNDER_HAIR_X = 0.1;
-/** Beside her head (over the chin) it stands at most this far (m) off her: volume, not a helmet floating clear of her skull. */
-const HAIR_STANDS_OFF = 0.048;
-/** Its volume is whole by this height (m) over the chin, her cheek: it clears her ears with no bump over each. */
-const GROWN_OVER_CHIN = 0.06;
-
-/** Her hair's ring at `y` (m) about the head's middle line: over `body` (her section's radius per side), its volume, opened over her face or throat. */
-function hairRing(y: number, body: readonly number[], head: Head, rim: number): Ring {
-  const grown = smooth(rim, head.chin + GROWN_OVER_CHIN, y);
-  const [halfWidth, front, back] = VOLUME_AT_RIM.map((atRim, i) => atRim + (VOLUME_AT_CHIN[i]! - atRim) * grown);
-  const open = y > head.chin ? FACE_HALF : THROAT_HALF;
-  const closing = smooth(HAIR_END, HAIR_END + END_BAND, y);
-  const radii = body.map((under, k) => {
-    const angle = ((k + 0.5) * 2 * Math.PI) / HAIR_SIDES;
-    const [across, ahead] = [Math.cos(angle), Math.sin(angle)];
-    if (ahead > 0 && Math.abs(under * across) < open) return under * OPEN_SINK_SHARE;
-    const volume = Math.min(1 / Math.sqrt((across / halfWidth!) ** 2 + (ahead / (ahead > 0 ? front! : back!)) ** 2), y > head.chin ? under + HAIR_STANDS_OFF : Infinity);
-    const wave = WAVE_DEPTH * Math.sin(WAVES * angle + (2 * Math.PI * (rim - y)) / WAVE_TURN);
-    return under - TUCK_UNDER + (Math.max(under + HAIR_THICK, volume) + wave - under + TUCK_UNDER) * closing;
-  });
-  return [y, 1, 1, HAIR_AXIS_Z, ROLE.LOCKS, 1, radii];
-}
-
-/** Her hair over `head` (`crownYs`: the cap's crown ring heights, the rim last): her crown under the cap, then the wavy fall framing her face to her shoulders. */
-function hair(fit: Fit, head: Head, crownYs: readonly number[]): Shell {
-  const hairline = head.chin + HAIRLINE_FRONT * (head.top - head.chin);
-  const crown = overHead(head, crownYs, CROWN_HAIR_OUT, ROLE.LOCKS, (y) => (y < hairline ? HAIRLINE_UNDER_SKIN : 1));
-  const rim = crownYs[crownYs.length - 1]!;
-  const ys = Array.from({ length: FALL_RINGS }, (_, k) => rim - ((k + 1) * (rim - HAIR_END)) / FALL_RINGS);
-  const underHair: Take = (vertex) => fit.shoulderWeight[vertex]! < 1 && fit.hipWeight[vertex] === 0 && Math.abs(fit.tpose[vertex * 3]!) < UNDER_HAIR_X;
-  const sections = fitted(fit, underHair, ys.map((y) => ({ y, out: 0, role: ROLE.LOCKS })), { bone: HEAD, kinds: BUILD.WOMAN, sides: HAIR_SIDES, axis: [0, HAIR_AXIS_Z] });
-  const fall = sections.rings.map((ring) => hairRing(ring[0], ring[6]!, head, rim));
-  return { x: 0, sides: HAIR_SIDES, kinds: BUILD.WOMAN, bone: HEAD, rings: [...crown, ...fall], top: head.top + CROWN_HAIR_OUT - crownYs[0]!, bottom: END_POLE };
-}
-
-/**
- * Her bust's footprint on the chest (m): from `BUST_ABOVE` over the tip (where the upper slope leaves the chest) to
- * `BUST_BELOW` under it (where the top drapes onto her ribs), `BUST_INNER` past the cleavage (the two overlap there, so the
- * fitted top bridges them as the second reference's) and `BUST_OUTER` to the chest's side, short of the armpit's gap.
- */
-const BUST_ABOVE = 0.12;
-const BUST_BELOW = 0.085;
-const BUST_INNER = 0.11;
-const BUST_OUTER = 0.045;
-/** The dome's height share is (1 - d²)^p over the footprint's normalised distance d: over 1 it meets the chest tangent, with no ledge; steeper-shouldered upward, rounder underneath. */
-const BUST_POWER_ACROSS = 1.5;
-const BUST_POWER_UP = 2.5;
-const BUST_POWER_DOWN = 1.15;
-const BUST_RINGS = 16;
-const BUST_SIDES = 24;
-/** Points sampled across each ring's footprint: the chest's surface under the dome. */
-const BUST_SAMPLES = 33;
-/** The dome's rim sinks this far (m) under the skin, so it rises out of the chest with no step; its back lies this far under. */
-const BUST_RIM_SINK = 0.004;
-const BUST_BACK_SINK = 0.03;
-/** The poles stand this far (m) past the end rings, inside the chest. */
-const BUST_POLE = 0.004;
-
-/**
- * Radii (m) about (x, z), one per loft side (side k at angle (k + 1/2) 2π/sides), of the closed outline `outline` ((x, z)
- * pairs, star-shaped about the centre): where each side's ray leaves it.
- */
-function polarRadii(outline: readonly number[], x: number, z: number, sides: number): number[] {
-  return Array.from({ length: sides }, (_, k) => {
-    const angle = ((k + 0.5) * 2 * Math.PI) / sides;
-    const [dx, dz] = [Math.cos(angle), Math.sin(angle)];
-    let reach = 0;
-    for (let p = 0; p < outline.length; p += 2) {
-      const q = (p + 2) % outline.length;
-      const [ax, az] = [outline[p]! - x, outline[p + 1]! - z];
-      const [ex, ez] = [outline[q]! - outline[p]!, outline[q + 1]! - outline[p + 1]!];
-      const det = ex * dz - ez * dx;
-      if (Math.abs(det) < 1e-12) continue;
-      const along = (ax * dz - az * dx) / -det;
-      if (along >= 0 && along <= 1) reach = Math.max(reach, (ax + along * ex) * dx + (az + along * ez) * dz);
-    }
-    return reach;
-  });
-}
-
-/** Her bust on side `side` (-1: x < 0): a dome rising out of the chest's own surface to the tip. */
-function bustShell(fit: Fit, bust: Bust, side: number): Shell {
-  const x = side * bust.x;
-  const rise = bust.tip - (surfaceZ(fit, x, bust.y) - BUST_RIM_SINK);
-  const [top, bottom] = [bust.y + BUST_ABOVE, bust.y - BUST_BELOW];
-  const rings: Ring[] = [];
-  for (let k = 1; k < BUST_RINGS; k++) {
-    const y = top - (k / BUST_RINGS) * (top - bottom);
-    const up = (y - bust.y) / (y >= bust.y ? BUST_ABOVE : BUST_BELOW);
-    const across = Math.sqrt(1 - up ** 2);
-    const [front, back]: number[][] = [[], []];
-    for (let j = 0; j < BUST_SAMPLES; j++) {
-      const out = (2 * j) / (BUST_SAMPLES - 1) - 1;
-      const at = x + side * across * out * (out < 0 ? BUST_INNER : BUST_OUTER);
-      const skin = surfaceZ(fit, at, y);
-      const d2 = (out * across) ** 2 + up ** 2;
-      const upShare = d2 > 0 ? up ** 2 / d2 : 0;
-      const power = BUST_POWER_ACROSS + ((up >= 0 ? BUST_POWER_UP : BUST_POWER_DOWN) - BUST_POWER_ACROSS) * upShare;
-      front.push(at, skin - BUST_RIM_SINK + rise * Math.max(0, 1 - d2) ** power);
-      back.unshift(at, skin - BUST_BACK_SINK);
-    }
-    const middle = surfaceZ(fit, x, y) - BUST_BACK_SINK / 2;
-    rings.push([y, 1, 1, middle, ROLE.SHIRT, 1, polarRadii([...front, ...back], x, middle, BUST_SIDES)]);
-  }
-  return { x, sides: BUST_SIDES, kinds: BUILD.WOMAN, bone: TORSO, rings, top: BUST_POLE, bottom: BUST_POLE };
-}
+/** The woman's wear on her fitted body (her bust is her body's own: `sculptBust`): her top's short sleeves, her cut-offs, and stiletto heels under her arched feet. */
 
 /** The heel is the back `HEEL_LENGTH` m of her foot under `HEEL_ABOVE` m; the stiletto rises `HEEL_SINK` m into it. */
 const HEEL_LENGTH = 0.03;
@@ -235,12 +95,9 @@ function cutOffs(fit: Fit): Shell[] {
   return shells;
 }
 
-/** Her wear on her fitted body `fit` with head `head` (`crownYs`: a cap's crown ring heights, the rim last). */
-export function womanWear(fit: Fit, head: Head, crownYs: readonly number[]): Shell[] {
+/** Her wear on her fitted body `fit`. */
+export function womanWear(fit: Fit): Shell[] {
   return [
-    hair(fit, head, crownYs),
-    bustShell(fit, BUST, -1),
-    bustShell(fit, BUST, 1),
     sleeve(fit, -1),
     sleeve(fit, 1),
     stiletto(fit, -1),

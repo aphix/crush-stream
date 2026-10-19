@@ -10,6 +10,7 @@ import { beginImpact, easeTimeScale, holdForThrow, impactScale, phaseClock, step
 import { throwComing } from "./ragdoll-trigger.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { SHIRTS } from "./driver-look.ts";
+import { COP_LOOK } from "./dummy-dress.ts";
 import type { DummyMesh } from "./ragdoll-mesh.ts";
 import { ROLE } from "./dummy-rig.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
@@ -244,9 +245,10 @@ describe("given a head-on crash where one car is a police car", () => {
     ragdolls.dispose();
     // The cop keeps the uniform whatever the look seed; the civilian wears a palette tee that is not the cop navy.
     const tees = SHIRTS.map((h) => `#${new THREE.Color(h).getHexString()}`);
-    assert.equal(shirts[0], "#1b2a4a");
+    const navy = `#${new THREE.Color(COP_LOOK.shirt).getHexString()}`;
+    assert.equal(shirts[0], navy);
     assert.ok(tees.includes(shirts[1]!), `civilian tee ${shirts[1]} is not in the palette`);
-    assert.ok(!tees.includes("#1b2a4a"), "the civilian palette holds the cop navy");
+    assert.ok(!tees.includes(navy), "the civilian palette holds the cop navy");
   });
 });
 

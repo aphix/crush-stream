@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import { BODY_VERTICES, bodyIndex } from "./dummy-bodies.ts";
 import { HAND_LENGTH, KNEE_HALF_BAND, restFits, RIG_KNEE_Y } from "./dummy-fit.ts";
-import { FACE_FRONT_FROM, FACE_FRONT_TO, FACE_HALF_WIDTH, FACE_SPAN, HAIRLINE_BACK, HAIRLINE_BACK_AT, HAIRLINE_FRONT, HAIRLINE_FRONT_AT, headAt, measureHead, RIM_AT } from "./dummy-head.ts";
+import { FACE_FRONT_FROM, FACE_FRONT_TO, FACE_HALF_WIDTH, FACE_SPAN, headAt, measureHead, RIM_AT } from "./dummy-head.ts";
+import { scalpHairline } from "./dummy-hair.ts";
 import { loft, type Lofted } from "./dummy-loft.ts";
 import { BONES_ATTRIBUTE, BUILD, EVERY_BUILD, HANG_ATTRIBUTE, HEAD, KINDS_ATTRIBUTE, LEFT_ARM, LEFT_LEG, NO_PRINT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, PRINT_ATTRIBUTE, RIGHT_ARM, RIGHT_LEG, ROLE, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, smooth, TORSO, type Fit } from "./dummy-rig.ts";
-import { hangOffsets } from "./dummy-garments.ts";
+import { hangAttribute } from "./dummy-garments.ts";
 import { wearFor } from "./dummy-wear.ts";
 
 /**
@@ -54,8 +55,7 @@ function paintBody(fit: Fit): { bones: number[]; roleKind: number[]; print: numb
     if (fit.neckWeight[i] === 1 && role === SKIN) {
       const [, halfDepth, middleZ] = headAt(head, y);
       const frontness = (z - middleZ) / halfDepth;
-      const hairline = head.chin + height * (HAIRLINE_BACK + (HAIRLINE_FRONT - HAIRLINE_BACK) * smooth(HAIRLINE_BACK_AT, HAIRLINE_FRONT_AT, frontness));
-      if (y > hairline) kind = y > head.chin + RIM_AT * height ? HAIR : LOCKS;
+      if (y > head.chin + height * scalpHairline(Math.atan2(Math.abs(x), z))) kind = y > head.chin + RIM_AT * height ? HAIR : LOCKS;
       else printed = [0.5 + x / (2 * FACE_HALF_WIDTH), (y - head.chin) / (FACE_SPAN * height), NO_PRINT[2], smooth(FACE_FRONT_FROM, FACE_FRONT_TO, frontness)];
     }
     roleKind.push(kind, EVERY_BUILD);
@@ -84,7 +84,7 @@ export function dummyGeometry(): THREE.BufferGeometry {
   geometry.setAttribute(PRINT_ATTRIBUTE, new THREE.Float32BufferAttribute(print.concat(wear.print), 4));
   geometry.setAttribute(BONES_ATTRIBUTE, new THREE.Float32BufferAttribute(bones.concat(wear.bones), 3));
   geometry.setAttribute(KINDS_ATTRIBUTE, new THREE.Float32BufferAttribute(roleKind.concat(wear.roleKind), 2));
-  geometry.setAttribute(HANG_ATTRIBUTE, new THREE.Float32BufferAttribute(withWear(hangOffsets(man)).fill(0, BODY_VERTICES * 3), 3));
+  geometry.setAttribute(HANG_ATTRIBUTE, new THREE.Float32BufferAttribute(hangAttribute(man, portly, BODY_VERTICES + wear.position.length / 3), 4));
   for (const vertex of wear.index) index.push(vertex + BODY_VERTICES);
   geometry.setIndex(index);
   geometry.computeVertexNormals();

@@ -25,7 +25,7 @@ const JOINT_SLOPE = [SLOPE_NECK, SLOPE_SHOULDER, SLOPE_ELBOW_OR_KNEE, SLOPE_SHOU
 
 const MAN: DriverLook = { woman: false, shirt: 0xc0392b, pants: JEANS, hair: 0x18120f, hat: null, mustache: false };
 const WOMAN: DriverLook = { woman: true, shirt: 0x2a9d8f, pants: JEANS, hair: 0xd2b062, hat: null, mustache: false };
-const NAVY = new THREE.Color(0x1b2a4a);
+const NAVY = new THREE.Color(COP_LOOK.shirt);
 const BUILDS = [
   { name: "man", look: MAN },
   { name: "woman", look: WOMAN },
@@ -41,8 +41,8 @@ const KINDS = [
   { name: "older aide", cop: false, look: ELDER_LOOK },
   { name: "cop", cop: true, look: COP_LOOK },
 ] as const;
-/** The baked lores body's triangles, and the most one person may draw: ragdolls run in a worker, so the draw is the cost. */
-const BODY_TRIANGLES = 8040;
+/** The lores body's triangles (refined over her bust), and the most one person may draw: ragdolls run in a worker, so the draw is the cost. */
+const BODY_TRIANGLES = bodyIndex().length / 3;
 const DRAWN_TRIANGLES = 12000;
 
 /**
@@ -161,7 +161,7 @@ describe("given the crash-test dummies drawn for thrown drivers", () => {
     assert.notEqual(man.length, woman.length, "a different body");
   });
 
-  it("when a portly man in a suit is dressed against a plain man, then he is broader through the chest and belly, wears a red tie and a white collar, and has fuller hair over his crown", () => {
+  it("when a portly man in a suit is dressed against a plain man, then he is broader through the chest and belly, wears a tie and a white collar, and has fuller hair over his crown", () => {
     const suit = { ...MAN, shirt: 0x1f3463, pants: 0x1f3463, hair: 0xe8bf6c };
     const plain = drawn(suit, false);
     const portly = drawn({ ...suit, portly: true }, false);
@@ -171,7 +171,7 @@ describe("given the crash-test dummies drawn for thrown drivers", () => {
       return (Math.max(...x) - Math.min(...x)) * (Math.max(...z) - Math.min(...z));
     };
     assert.ok(section(portly) > section(plain) * 1.3, `torso section ${section(portly).toFixed(3)} m² against ${section(plain).toFixed(3)} m²`);
-    assert.ok(has(portly, 0xb3202a) && !has(plain, 0xb3202a), "a red tie");
+    assert.ok(ofRole(portly, ROLE.TIE).length > 0 && ofRole(plain, ROLE.TIE).length === 0, "a tie");
     assert.ok(has(portly, 0xf4f4f1) && !has(plain, 0xf4f4f1), "a white collar");
     const hairWidth = (rows: Drawn[]) => Math.max(...ofRole(rows, ROLE.HAIR).map((r) => Math.abs(r.at.x)));
     assert.ok(hairWidth(portly) > hairWidth(plain) + 0.01, `${hairWidth(portly).toFixed(3)} m across the hair against ${hairWidth(plain).toFixed(3)} m`);

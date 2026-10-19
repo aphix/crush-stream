@@ -2,8 +2,8 @@ import type * as THREE from "three";
 import { BODY_VERTICES } from "./dummy-bodies.ts";
 import { DECAL_FACE_AT, DECAL_FLAT, DECAL_H, DECAL_HALF_X, DECAL_HALF_Z, DECAL_NO_PAINT, DECAL_RAISE_STEP, DECAL_W, DECAL_Y, decalMap, FABRIC, FABRIC_CONTRAST, FABRIC_MAP, FABRIC_RELIEF, FABRIC_ROUGHNESS, FABRIC_TILE } from "./dummy-cloth.ts";
 import { DRESS_DECALS } from "./dummy-dress.ts";
-import { CAPPED, CUTS_AT, FLAGS_AT, HANG_ATTRIBUTE, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, OPTIONAL, ORBS_AT, PALETTE_AT, PRINT_ATTRIBUTE, ROLE, ROLES, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, SNEAKERS } from "./dummy-rig.ts";
-import { PRINT_CELLS, PRINT_TEXELS, printMap } from "./dummy-texture.ts";
+import { CAPPED, CUTS_AT, FLAGS_AT, HANG_ATTRIBUTE, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, OPTIONAL, ORBS_AT, PALETTE_AT, PRINT_ATTRIBUTE, ROLE, ROLES, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE } from "./dummy-rig.ts";
+import { FACE_RELIEF, faceReliefMap, PRINT_CELL, PRINT_CELLS, PRINT_TEXELS, printMap } from "./dummy-texture.ts";
 
 /**
  * The dummies' shader patch: GLSL skinning from the slot's pose row; in the fragment the slot's garment cuts over the body
@@ -13,14 +13,15 @@ import { PRINT_CELLS, PRINT_TEXELS, printMap } from "./dummy-texture.ts";
 /**
  * The skinning in GLSL: each vertex rides bones `bones.x` and `bones.y` (weight `bones.z` on the second), moved by the
  * slot's bone transforms (`pose`); `dollShown` and `skinPoint` are the same rules in TS. A vertex the slot's build does not
- * draw collapses to a point. A casual slot's clothes hang off the body (`hang`) where its cuts put cloth.
+ * draw collapses to a point. A man's clothes hang off the body (`hang`: the man's push in xy, the portly man's in zw) where
+ * the slot's cuts put cloth, scaled by its outfit (flags texel z: torso and sleeves, w: trousers).
  */
 const DOLL_COMMON = /* glsl */ `
 attribute vec3 ${SHAPE_WOMAN_ATTRIBUTE};
 attribute vec3 ${SHAPE_PORTLY_ATTRIBUTE};
 attribute vec3 ${NORMAL_WOMAN_ATTRIBUTE};
 attribute vec3 ${NORMAL_PORTLY_ATTRIBUTE};
-attribute vec3 ${HANG_ATTRIBUTE};
+attribute vec4 ${HANG_ATTRIBUTE};
 attribute vec2 bust;
 attribute vec3 bones;
 attribute vec2 roleKind;
@@ -49,8 +50,10 @@ void dollSkin(out vec3 p, out vec3 n) {
   }
   int role = int(roleKind.x + 0.5);
   vec4 cuts = dollTexel(${CUTS_AT});
-  float hangs = float((flags & ${SNEAKERS}) != 0) * (role == ${ROLE.ARM} ? step(cuts.x, position.y) : (role == ${ROLE.LEGS} ? step(cuts.y, position.y) : 1.0));
-  vec3 rest = shaped + hangs * ${HANG_ATTRIBUTE} + bust.x * dollTexel(${ORBS_AT}).xyz + bust.y * dollTexel(${ORBS_AT} + 1).xyz;
+  vec4 flagged = dollTexel(${FLAGS_AT});
+  vec2 hung = (flags & 4) != 0 ? ${HANG_ATTRIBUTE}.zw : ${HANG_ATTRIBUTE}.xy;
+  float hangs = role == ${ROLE.ARM} ? flagged.z * step(cuts.x, position.y) : (role == ${ROLE.LEGS} ? flagged.w * step(cuts.y, position.y) : flagged.z);
+  vec3 rest = shaped + hangs * vec3(hung.x, 0.0, hung.y) + bust.x * dollTexel(${ORBS_AT}).xyz + bust.y * dollTexel(${ORBS_AT} + 1).xyz;
   vec3 pa = dollTexel(2 * a).xyz + dollTurn(qa, rest);
   vec3 pb = dollTexel(2 * b).xyz + dollTurn(qb, rest);
   p = dollShown() ? mix(pa, pb, bones.z) : vec3(0.0);
@@ -118,6 +121,7 @@ vec3 dollCut(int slot, vec3 p, vec4 region, out int pick) {
 const DOLL_FRAGMENT_COMMON = /* glsl */ `
 uniform sampler2D dolls;
 uniform sampler2D prints;
+uniform sampler2D faceRelief;
 uniform highp sampler2DArray fabrics;
 uniform highp sampler2DArray decals;
 varying vec4 vPrint;
@@ -201,13 +205,15 @@ float dollMetalness = DOLL_ROLE_METAL[dollRoleHere];`;
 
 /**
  * The print over a fragment: the atlas cell's texel at the vertex's (u, v), held inside the cell, over the cloth by its
- * alpha and the vertex's weight. Cell -1 is the slot's face (its flags texel's y).
+ * alpha and the vertex's weight; a face's relief raises its brows, lips and chin where its picture shows. Cell -1 is the
+ * slot's face (its flags texel's y).
  */
 const PRINT_FRAGMENT = /* glsl */ `
 if (vPrint.w > 0.0) {
   vec2 printUv = clamp(vPrint.xy, ${(0.5 / PRINT_TEXELS).toFixed(5)}, ${(1 - 0.5 / PRINT_TEXELS).toFixed(5)});
   vec4 ink = texture2D(prints, vec2(printUv.x, (floor(vPrint.z + 0.5) + printUv.y) / ${PRINT_CELLS}.0));
   diffuseColor.rgb = mix(diffuseColor.rgb, ink.rgb, ink.a * vPrint.w);
+  if (vPrint.z < ${glslFloat(PRINT_CELL.BADGE - 0.5)}) dollHeight += ${glslFloat(FACE_RELIEF)} * (texture2D(faceRelief, printUv).r * 2.0 - 1.0) * ink.a * vPrint.w;
 }`;
 
 /** Every outfit's decals, one layer each (`DRESS_DECALS`), baked once for every dummy. */
@@ -229,7 +235,7 @@ export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: 
       shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvec3 dollP;\nvec3 dollN;\ndollSkin(dollP, dollN);\ntransformed = dollP;");
       return;
     }
-    Object.assign(shader.uniforms, { prints: { value: prints }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS } });
+    Object.assign(shader.uniforms, { prints: { value: prints }, faceRelief: { value: faceReliefMap() }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS } });
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",

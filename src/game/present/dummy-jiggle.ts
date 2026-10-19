@@ -16,8 +16,8 @@ const BOUNCE_HZ = 2.5;
 const DAMPING_RATIO = 0.1;
 const STIFF = (2 * Math.PI * BOUNCE_HZ) ** 2;
 const DAMP = 2 * DAMPING_RATIO * 2 * Math.PI * BOUNCE_HZ;
-/** The most an orb trails its anchor (m): a knock saturates it, so this is the bounce the eye sees. */
-const REACH = 0.035;
+/** The most an orb trails its anchor (m), half the bust's 7.8 cm projection: a knock saturates it, so this is the bounce the eye sees. */
+const REACH = 0.039;
 /** Longest integration step (s), half a display frame: semi-implicit Euler stays stable under 2 / ω (0.13 s here) and smooth well below it. */
 const MAX_STEP = 1 / (2 * FRAME_HZ);
 /** Under this lag (m) and relative speed (m/s) an orb snaps to its anchor: a settled slot writes zeros and uploads nothing. */

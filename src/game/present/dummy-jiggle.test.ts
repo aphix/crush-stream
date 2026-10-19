@@ -32,18 +32,17 @@ function stand(mesh: DummyMesh, turn: THREE.Quaternion, drop: number): void {
   }
 }
 
-/** Vertices by their share of the left orb's lag: the bust shell's front (`tip`), her body's own breast (`bodyTip`), and her back (none). */
-function landmarks(mesh: DummyMesh): { tip: number; bodyTip: number; back: number } {
+/** Vertices by their share of the left orb's lag: her breast's front (`tip`, her body's own), and her back (none). */
+function landmarks(mesh: DummyMesh): { tip: number; back: number } {
   const bust = mesh.geometry.getAttribute(BUST_ATTRIBUTE);
   const shape = mesh.geometry.getAttribute("shapeWoman");
-  let [tip, bodyTip, back] = [0, 0, -1];
-  for (let i = 0; i < bust.count; i++) {
+  let [tip, back] = [0, -1];
+  for (let i = 0; i < BODY_VERTICES; i++) {
     if (bust.getX(i) > bust.getX(tip)) tip = i;
-    if (i < BODY_VERTICES && bust.getX(i) > bust.getX(bodyTip)) bodyTip = i;
-    const isBack = i < BODY_VERTICES && bust.getX(i) === 0 && bust.getY(i) === 0 && shape.getY(i) > BACK_FROM && shape.getY(i) < BACK_TO;
+    const isBack = bust.getX(i) === 0 && bust.getY(i) === 0 && shape.getY(i) > BACK_FROM && shape.getY(i) < BACK_TO;
     if (isBack && (back < 0 || shape.getZ(i) < shape.getZ(back))) back = i;
   }
-  return { tip, bodyTip, back };
+  return { tip, back };
 }
 
 /** Slot 0 dressed as `look`, at rest under `turn`, then jolted down `DROP`: vertex `i`'s offset (m, world) from where its bones alone put it, a frame at a time for `seconds`. */
@@ -65,7 +64,7 @@ function jolted(look: DriverLook, turn: THREE.Quaternion, i: number, seconds: nu
 }
 
 describe("given a woman's bust riding her torso as two cosmetic particles", () => {
-  const { tip, bodyTip, back } = landmarks(new DummyMesh(1));
+  const { tip, back } = landmarks(new DummyMesh(1));
   const upright = new THREE.Quaternion();
 
   it("when her torso drops in one frame, then her bust trails it, bounces past its rest and settles back onto it, while her back rides the torso rigidly", () => {
@@ -85,7 +84,7 @@ describe("given a woman's bust riding her torso as two cosmetic particles", () =
   });
 
   it("when a man's torso drops the same way, then the vertex that is her breast rides his torso rigidly: only a woman's bust bounces", () => {
-    const offsets = jolted(MAN, upright, bodyTip, FRAME * 10);
+    const offsets = jolted(MAN, upright, tip, FRAME * 10);
     assert.ok(Math.max(...offsets.map((o) => o.length())) < RIGID, "his chest rides the torso");
   });
 });

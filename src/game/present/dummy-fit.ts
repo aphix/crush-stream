@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { JOINTS } from "./ragdoll-body.ts";
 import { bodyPositions } from "./dummy-bodies.ts";
-import { archFeet, bustOf, curveHips } from "./dummy-curves.ts";
+import { archFeet, bustOf, curveHips, sculptBust } from "./dummy-curves.ts";
 import { smooth, type Fit } from "./dummy-rig.ts";
 
 /** The three baked bodies bent into the rig's arms-down rest, with the blend weights the bending and the skinning share. */
@@ -249,10 +249,11 @@ const woman = fitBody(bodyPositions("slenderWoman"), WOMAN_NARROW);
 archFeet(woman.rest);
 curveHips(woman);
 const fits = { man: fitBody(bodyPositions("slenderMan")), woman, portly: fitBody(bodyPositions("obeseMan")) };
-/** The three baked bodies fitted to the rig (computed once, on load), the woman's feet arched onto her heels and her hips curved. */
+/** The three baked bodies fitted to the rig (computed once, on load), the woman's feet arched onto her heels, her hips curved and her bust sculpted. */
 export function restFits(): { man: Fit; woman: Fit; portly: Fit } {
   return fits;
 }
 
-/** Her bust on her fitted body: where the jiggle's orbs hang and the bust shells sit. */
+/** Her bust on her fitted body, measured before it is sculpted: where the jiggle's orbs hang and the domes rise to. */
 export const BUST = bustOf(woman);
+sculptBust(woman, BUST);

@@ -28,8 +28,8 @@ export type DriverLook = {
 /** What a figure wears: a tee and jeans, a long-sleeved shirt and jeans, a woman's top and cut-offs, a suit, a uniform. */
 export const OUTFIT = { TEE: 0, LONG_SLEEVE: 1, TOP: 2, SUIT: 3, UNIFORM: 4 } as const;
 
-/** A drawn driver's trousers: FlatOut's jeans (sRGB). */
-export const JEANS = 0x3a4d6d;
+/** Every man's jeans: the reference's mid-blue denim (sRGB, tuned to read as it under the showcase's light). */
+export const JEANS = 0x333c4a;
 
 /** Chance a civilian driver is a woman (owner: rare, 1 in 10). */
 export const WOMAN_RATE = 0.1;

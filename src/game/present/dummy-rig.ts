@@ -66,12 +66,12 @@ export const NORMAL_WOMAN_ATTRIBUTE = "normalWoman";
 export const NORMAL_PORTLY_ATTRIBUTE = "normalPortly";
 /** Every vertex's print (u, v, atlas cell, weight); the shader declares it by this name. */
 export const PRINT_ATTRIBUTE = "print";
-/** Every body vertex's rest-space push out to where the casual clothes hang (zero on the wear); the shader declares it by this name. */
+/** Every body vertex's level push (x, z) out to where a man's clothes hang, then the portly man's (zero on the wear); the shader declares it by this name. */
 export const HANG_ATTRIBUTE = "hang";
 
 /**
  * A slot's row in the pose texture: two texels per bone (translation, rotation), a texel per role colour, the flags (x: flags,
- * y: face row), the two bust orbs' lag, and the garment cuts.
+ * y: face row, z and w: the share of `hang` its torso and sleeves, then its trousers, take), the two bust orbs' lag, and the garment cuts.
  */
 const BONES = PARTS.length;
 export const PALETTE_AT = BONES * 2;

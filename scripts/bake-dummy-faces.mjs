@@ -8,18 +8,48 @@
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { EYES_AT, FACE_SPAN, LIP_AT } from "../src/game/present/dummy-head.ts";
+import { EYE_U, EYES_AT, FACE_SPAN, LIP_AT } from "../src/game/present/dummy-head.ts";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const SOURCE = join(ROOT, "assets-src", "faces");
 const OUT = join(ROOT, "src", "game", "present", "dummy-faces.ts");
 /** Texels on a side of one face. */
 const TEXELS = 64;
-/** The eyes' u either side of the middle: 0.035 m of the face print's 0.117 m half width. */
-const EYE_U = 0.15;
 /** Where the cheeks are sampled for the skin (u, v): under the eyes, beside the nose. */
 const CHEEKS = [[0.3, 0.42], [0.7, 0.42]];
 const CHEEK_HALF = 2;
+/**
+ * The reference's light is taken out of each face so the game's light and the face's relief shade it: each texel over its
+ * neighbourhood's brightness (a blur `DELIGHT_SIGMA` texels wide), `DELIGHT` of the way; brows, eyes and lips keep their own.
+ */
+const DELIGHT_SIGMA = 5;
+const DELIGHT = 0.7;
+/** No texel is lifted more than this: a dark patch (the cap man's glasses) stays dark. */
+const DELIGHT_MOST = 1.5;
+
+/** `rgb`'s broad shading flattened toward `skin`'s brightness. */
+function delight(rgb, skin) {
+  const kernel = Array.from({ length: 6 * DELIGHT_SIGMA + 1 }, (_, k) => Math.exp(-(((k - 3 * DELIGHT_SIGMA) / DELIGHT_SIGMA) ** 2) / 2));
+  const blurAlong = (from, step) =>
+    Float64Array.from({ length: TEXELS * TEXELS }, (_, p) => {
+      const [x, y] = [p % TEXELS, Math.floor(p / TEXELS)];
+      let [sum, weight] = [0, 0];
+      for (const [k, w] of kernel.entries()) {
+        const [sx, sy] = step === 1 ? [x + k - 3 * DELIGHT_SIGMA, y] : [x, y + k - 3 * DELIGHT_SIGMA];
+        if (sx < 0 || sy < 0 || sx >= TEXELS || sy >= TEXELS) continue;
+        sum += w * from[sy * TEXELS + sx];
+        weight += w;
+      }
+      return sum / weight;
+    });
+  const brightness = Float64Array.from({ length: TEXELS * TEXELS }, (_, p) => 0.2126 * rgb[p * 3] + 0.7152 * rgb[p * 3 + 1] + 0.0722 * rgb[p * 3 + 2]);
+  const blurred = blurAlong(blurAlong(brightness, 1), TEXELS);
+  const target = 0.2126 * skin[0] + 0.7152 * skin[1] + 0.0722 * skin[2];
+  for (let p = 0; p < TEXELS * TEXELS; p++) {
+    const gain = Math.min(DELIGHT_MOST, (target / blurred[p]) ** DELIGHT);
+    for (let c = 0; c < 3; c++) rgb[p * 3 + c] = Math.min(255, Math.round(rgb[p * 3 + c] * gain));
+  }
+}
 
 /** Each face: its crop's pupils (left and right in the picture) and the middle of its mouth, in source pixels, measured by eye. */
 const FACES = [
@@ -27,7 +57,7 @@ const FACES = [
   { name: "WOMAN", file: "woman.png", eyes: [[88, 44], [109.4, 44]], mouth: [98.4, 65.6] },
   { name: "CAP_MAN", file: "cap-man.png", eyes: [[90.5, 49], [113.5, 49]], mouth: [102, 71] },
   { name: "PRESIDENT", file: "president.png", eyes: [[111, 46], [137, 46]], mouth: [124, 69.6] },
-  { name: "ELDER", file: "elder.png", eyes: [[84.2, 33], [102.3, 33]], mouth: [93.2, 47.3] },
+  { name: "ELDER", file: "elder.png", eyes: [[84.2, 34.7], [102.3, 34.7]], mouth: [93.2, 47.3] },
   { name: "COP", file: "cop.png", eyes: [[116, 44], [141, 44]], mouth: [127, 69.6] },
 ];
 
@@ -61,6 +91,7 @@ function bake(face) {
     const alpha = rgba[p * 4 + 3] / 255;
     for (let c = 0; c < 3; c++) rgb[p * 3 + c] = Math.round(rgba[p * 4 + c] * alpha + mean[c] * (1 - alpha));
   }
+  delight(rgb, mean);
   const hex = `0x${mean.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
   return { name: face.name, skin: hex, rgb: rgb.toString("base64"), crop };
 }

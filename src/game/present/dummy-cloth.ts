@@ -13,11 +13,11 @@ const TILE = 128;
 /** Metres one tile spans on the body: denim's 16 twill lines a tile are then 2.5 mm apart, twice real, so they read at a metre. */
 export const FABRIC_TILE = 0.04;
 /** Each fabric's relief (m, hollow to crest: the bump's depth), by `FABRIC` index. */
-export const FABRIC_RELIEF = [0.00008, 0.0003, 0.0002, 0.00025, 0.0002, 0.00012, 0.0001, 0.0002, 0.0002] as const;
+export const FABRIC_RELIEF = [0.00008, 0.0003, 0.0002, 0.00025, 0.0002, 0.00012, 0.0001, 0.0002, 0.0008] as const;
 /** How much darker each fabric's hollows are than its crests (a share of its colour), by `FABRIC` index. */
-export const FABRIC_CONTRAST = [0.04, 0.22, 0.1, 0.16, 0.08, 0.08, 0.05, 0.12, 0.3] as const;
-/** Each fabric's roughness, by `FABRIC` index, NONE last: hair, leather and polish catch a highlight, canvas and denim do not. */
-export const FABRIC_ROUGHNESS = [0.55, 0.9, 0.88, 0.92, 0.45, 0.85, 0.8, 0.75, 0.45, 0.3] as const;
+export const FABRIC_CONTRAST = [0.04, 0.22, 0.1, 0.16, 0.08, 0.08, 0.05, 0.12, 0.32] as const;
+/** Each fabric's roughness, by `FABRIC` index, NONE last: leather and polish catch a highlight, hair a soft sheen, canvas and denim none. */
+export const FABRIC_ROUGHNESS = [0.55, 0.9, 0.88, 0.92, 0.45, 0.85, 0.8, 0.75, 0.62, 0.3] as const;
 
 /** A hash of lattice point (i, j) under `seed` into [0, 1). */
 function hash(i: number, j: number, seed: number): number {
@@ -79,7 +79,7 @@ const HEIGHTS: readonly ((u: number, v: number) => number)[] = [
   (u, v) => 0.5 * ridge(24 * (u + v)) + 0.5 * noise(u, v, 48, 48, 6),
   (u, v) => 0.4 * (ridge(32 * u) + ridge(32 * v)) + 0.2 * noise(u, v, 16, 16, 7),
   (u, v) => 0.7 * ridge(20 * (u + v)) + 0.3 * noise(u, v, 40, 8, 8),
-  (u, v) => 0.15 + 0.85 * ridge(48 * u + 0.6 * noise(u, v, 4, 4, 9)) * (0.65 + 0.35 * noise(u, v, 32, 4, 10)),
+  (u, v) => 0.15 + 0.6 * ridge(8 * u + 0.8 * noise(u, v, 4, 2, 9)) * (0.7 + 0.3 * noise(u, v, 2, 8, 12)) + 0.25 * ridge(24 * u + 0.5 * noise(u, v, 8, 4, 11)) * noise(u, v, 24, 4, 10),
 ];
 const LAYERS = Math.ceil(HEIGHTS.length / 4);
 

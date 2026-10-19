@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { BODY_VERTICES, bodyIndex } from "./dummy-bodies.ts";
 import { restFits } from "./dummy-fit.ts";
-import { armOf, casualWear, fitted, hangOffsets, legOf, torsoOf, type Take } from "./dummy-garments.ts";
+import { armOf, casualWear, fitted, hangAttribute, hangOffsets, legOf, torsoOf, type Take } from "./dummy-garments.ts";
 import { BONES_ATTRIBUTE, BUILD, ROLE, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
 import { dummyGeometry } from "./dummy-skin.ts";
 import { PRINT_CELL } from "./dummy-texture.ts";
@@ -145,6 +145,45 @@ describe("given the casual man's tee and jeans hanging off his body", () => {
       assert.ok(regrowth <= REGROWTH, `it widens again: ${worst}`);
     });
   }
+});
+
+/** A straight leg or sleeve keeps at least this share of its width at the top down to just above its hem (the reference's straight-leg jeans and roomy long sleeves). */
+const STRAIGHT_SHARE = 0.8;
+
+describe("given the casual man's jeans and long sleeves falling straight", () => {
+  const testCases = [
+    { it: "when his right jeans leg is read at the thigh and just above the hem, then it is nearly as wide at the shin as at the thigh", body: "rightLeg", top: 0.68, bottom: 0.2 },
+    { it: "when his right sleeve is read at the upper arm and just above the cuff, then it is nearly as wide at the forearm as at the upper arm", body: "rightArm", top: 1.15, bottom: 0.9 },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const taken = TAKES[testCase.body]();
+      const width = (y: number) => {
+        const xs = crossings(hung, taken, y).map(([x]) => x);
+        return Math.max(...xs) - Math.min(...xs);
+      };
+      const [top, bottom] = [width(testCase.top), width(testCase.bottom)];
+      assert.ok(top > 0.05, `the top was read: ${top.toFixed(3)} m`);
+      assert.ok(bottom >= STRAIGHT_SHARE * top, `${bottom.toFixed(3)} m across above the hem against ${top.toFixed(3)} m at the top`);
+    });
+  }
+});
+
+describe("given the shader's hang, one attribute for the man's and the portly man's push", () => {
+  it("when each body vertex is read, then its xy is the man's own push and its zw the portly man's own, and the two builds differ", () => {
+    const { portly } = restFits();
+    const packed = hangAttribute(man, portly, BODY_VERTICES + 1);
+    const portlyHang = hangOffsets(portly);
+    let [differs, wrong] = [0, ""];
+    for (let i = 0; i < BODY_VERTICES; i++) {
+      const own = [hang[i * 3]!, hang[i * 3 + 2]!, portlyHang[i * 3]!, portlyHang[i * 3 + 2]!];
+      if (own.some((v, k) => Math.abs(packed[i * 4 + k]! - v) > 1e-7) && wrong === "") wrong = `vertex ${i} packs ${Array.from(packed.subarray(i * 4, i * 4 + 4)).join(", ")}`;
+      if (Math.abs(own[0]! - own[2]!) + Math.abs(own[1]! - own[3]!) > 0.002) differs++;
+    }
+    assert.equal(wrong, "", `a body vertex packs another push: ${wrong}`);
+    assert.ok(differs > 100, `only ${differs} body vertices push differently on the two builds`);
+    assert.ok(packed.subarray(BODY_VERTICES * 4).every((v) => v === 0), "the wear does not hang");
+  });
 });
 
 describe("given the casual man's sneakers", () => {

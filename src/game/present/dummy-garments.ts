@@ -150,22 +150,27 @@ const HEM_TOP = 0.997;
 const HEM_LIP = 0.99;
 const HEM_OUT = 0.009;
 
-/** Where a short sleeve ends on the arm (m): half way down the upper arm, as the reference tee's. The shell's top is below the shoulder's blend. */
+/** Where a short sleeve ends on the arm (m): half way down the upper arm, as the reference tee's. Its hem is a thin lip over the hung sleeve, its top below the shoulder's blend. */
 export const SHORT_SLEEVE_END = 1.19;
-const SLEEVE_TOP = 1.225;
+const SLEEVE_TOP = 1.21;
 const SLEEVE_FLARE = 1.2;
-const SLEEVE_OUT = 0.012;
+const SLEEVE_OUT = 0.006;
 /** A long sleeve's cuff (m): a ribbed band over the wrist crease, on the forearm. */
 export const LONG_SLEEVE_END = 0.79;
 const CUFF_TOP = 0.87;
 const CUFF_RIB = 0.85;
 const CUFF_OUT = 0.008;
 
-/** The jeans' hem (m) breaking over the sneaker's collar: further out than the shoe at every height they share. */
-const JEANS_TOP = 0.24;
+/**
+ * The straight-leg jeans' hem (m): a tube continuing the hung leg's width from where the leg stops hanging (above the sneaker's
+ * collar, so the high-top stays fitted to the foot) down over the collar, flaring a little at the break, then closing in to the shoe.
+ */
+const LEG_HANG_TO = 0.165;
+const JEANS_TOP = 0.26;
 const JEANS_BREAK = 0.18;
-const JEANS_HEM = 0.125;
-const JEANS_OUT = 0.017;
+const JEANS_HEM = 0.12;
+const JEANS_OUT = 0.003;
+const JEANS_FLARE = 0.009;
 
 /** The sneaker (m): a grey canvas high-top over the foot and a white rubber sole; its laces and toe cap are prints. */
 const SNEAKER_COLLAR = 0.15;
@@ -187,39 +192,56 @@ const TOE_OUT = 0.019;
 
 /**
  * A stretch the casual clothes hang straight over rather than cling to: from height `from` (m, the man's rest) down to `to`,
- * standing `ease` m (at each end) off the body's own sections there, eased in from nothing over `fade` m above `from`.
+ * standing `ease` m (at each end) off the sections of the body it `takes`, eased in from nothing over `fade` m above `from`; at
+ * the bottom never narrower than `keep` of the top's width, so a sleeve or a jeans leg falls straight instead of tapering to the
+ * wrist or ankle. Each body vertex moves its `share` of the way (a sleeve fades out across the shoulder's blend, no ledge at its top).
  */
-type Hang = { taken: (fit: Fit, side: number) => Take; sides: readonly number[]; from: number; to: number; fade: number; ease: readonly [number, number] };
-/** The tee falls from under the chest to its hem, a sleeve from the shoulder to its cuff (a short one is cut at its end), the jeans from the thigh to the hem. */
+type Hang = { taken: (fit: Fit, side: number) => Take; share: (fit: Fit, side: number) => (vertex: number) => number; sides: readonly number[]; from: number; to: number; fade: number; ease: readonly [number, number]; keep: number };
+/** The tee falls from under the pecs to its hem (above them the chest is the shoulders' blend), a sleeve from the shoulder to its cuff (a short one is cut at its end), the jeans from the thigh to the hem. */
 const HANGS: readonly Hang[] = [
-  { taken: torsoOf, sides: [0], from: 1.2, to: HEM_TOP, fade: 0.05, ease: [0.004, 0.008] },
-  { taken: armOf, sides: [-1, 1], from: 1.24, to: CUFF_TOP, fade: 0.02, ease: [0.008, 0] },
-  { taken: legOf, sides: [-1, 1], from: 0.7, to: JEANS_TOP, fade: 0.1, ease: [0.008, 0.012] },
+  { taken: torsoOf, share: (fit) => (vertex) => (torsoOf(fit)(vertex) ? 1 : 0), sides: [0], from: 1.25, to: HEM_TOP, fade: 0.04, ease: [0.004, 0.008], keep: 0 },
+  { taken: armOf, share: (fit, side) => (vertex) => ((fit.tpose[vertex * 3]! < 0 ? -1 : 1) === side ? fit.shoulderWeight[vertex]! : 0), sides: [-1, 1], from: 1.24, to: CUFF_TOP, fade: 0.1, ease: [0.008, 0], keep: 0.85 },
+  { taken: legOf, share: (fit, side) => (vertex) => (legOf(fit, side)(vertex) ? 1 : 0), sides: [-1, 1], from: 0.7, to: LEG_HANG_TO, fade: 0.1, ease: [0.01, 0.012], keep: 0.85 },
 ];
 /** Sides of the polygons a hang's width is read off, between which it is interpolated by angle. */
 const HANG_SIDES = 32;
+/** A hang's top holds the body's widest (per side) down the upper half of its stretch, read this often (m): a tee falls from the pecs and the lats alike, a sleeve over the biceps. */
+const HANG_TOP_STEP = 0.02;
 
-/** How far (m, per body vertex: x, y, z) each body vertex of `fit` moves out to where the casual clothes hang (the shader's `hang`, scaled by the slot's cut). */
+/** Radii (one per `HANG_SIDES` side about (x, z)) holding every section of `triangles` from `from` down to `to`. */
+function widestRadii(fit: Fit, triangles: readonly number[], from: number, to: number, x: number, z: number): number[] {
+  const widest = sectionRadii(fit, triangles, from, x, z, HANG_SIDES);
+  for (let y = from - HANG_TOP_STEP; y > to; y -= HANG_TOP_STEP) {
+    const radii = sectionRadii(fit, triangles, y, x, z, HANG_SIDES);
+    for (let k = 0; k < HANG_SIDES; k++) widest[k] = Math.max(widest[k]!, radii[k]!);
+  }
+  return widest;
+}
+
+/** How far (m, per body vertex: x, y, z) each body vertex of `fit` moves out to where a man's clothes hang (the shader's `hang`, cut by the slot's cuts and scaled by its outfit). */
 export function hangOffsets(fit: Fit): Float32Array {
   const offsets = new Float32Array(BODY_VERTICES * 3);
   const step = (2 * Math.PI) / HANG_SIDES;
   for (const hang of HANGS) {
     for (const side of hang.sides) {
       const taken = hang.taken(fit, side);
+      const shareOf = hang.share(fit, side);
       const triangles = takenTriangles(taken);
-      const [x, z] = sectionMiddle(fit, triangles, (hang.from + hang.to) / 2);
-      const [top, bottom] = [sectionRadii(fit, triangles, hang.from, x, z, HANG_SIDES), sectionRadii(fit, triangles, hang.to, x, z, HANG_SIDES)];
+      const middle = (hang.from + hang.to) / 2;
+      const [x, z] = sectionMiddle(fit, triangles, middle);
+      const [top, bottom] = [widestRadii(fit, triangles, hang.from, middle, x, z), sectionRadii(fit, triangles, hang.to, x, z, HANG_SIDES)];
       for (let i = 0; i < BODY_VERTICES; i++) {
-        const y = fit.rest[i * 3 + 1]!;
-        if (y < hang.to || y > hang.from + hang.fade || !taken(i)) continue;
+        const [y, share] = [fit.rest[i * 3 + 1]!, shareOf(i)];
+        if (y < hang.to || y > hang.from + hang.fade || share === 0) continue;
         const [dx, dz] = [fit.rest[i * 3]! - x, fit.rest[i * 3 + 2]! - z];
         const at = (((Math.atan2(dz, dx) / step - 0.5) % HANG_SIDES) + HANG_SIDES) % HANG_SIDES;
         const [k, f] = [Math.floor(at), at - Math.floor(at)];
         const [next, along] = [(k + 1) % HANG_SIDES, Math.min(1, Math.max(0, (hang.from - y) / (hang.from - hang.to)))];
         const width = (radii: readonly number[], ease: number) => radii[k]! * (1 - f) + radii[next]! * f + ease;
-        const falls = (1 - along) * width(top, hang.ease[0]) + along * width(bottom, hang.ease[1]);
+        const fallsFrom = width(top, hang.ease[0]);
+        const falls = (1 - along) * fallsFrom + along * Math.max(width(bottom, hang.ease[1]), hang.keep * fallsFrom);
         const reach = Math.sqrt(dx * dx + dz * dz);
-        const out = Math.max(0, falls - reach) * (1 - smooth(hang.from, hang.from + hang.fade, y));
+        const out = share * Math.max(0, falls - reach) * (1 - smooth(hang.from, hang.from + hang.fade, y));
         offsets[i * 3] += (out * dx) / reach;
         offsets[i * 3 + 2] += (out * dz) / reach;
       }
@@ -228,10 +250,23 @@ export function hangOffsets(fit: Fit): Float32Array {
   return offsets;
 }
 
-/** `fit` with its body hung out by `hangOffsets`: what the casual man's tee hem, sleeve hems and jeans hems are fitted over. */
+/** `fit` with its body hung out by `hangOffsets`: what the clothes over a man's or the portly man's hung body are fitted over. */
 function hangingFit(fit: Fit): Fit {
   const offsets = hangOffsets(fit);
   return { ...fit, rest: fit.rest.map((v, i) => v + (offsets[i] ?? 0)) };
+}
+
+/** The shader's `hang` for `vertices` vertices (the body's first, the wear's zero): each body vertex's level push (x, z) under the man's clothes, then under the portly man's. */
+export function hangAttribute(man: Fit, portly: Fit, vertices: number): Float32Array {
+  const packed = new Float32Array(vertices * 4);
+  for (const [at, fit] of [[0, man], [2, portly]] as const) {
+    const offsets = hangOffsets(fit);
+    for (let i = 0; i < BODY_VERTICES; i++) {
+      packed[i * 4 + at] = offsets[i * 3]!;
+      packed[i * 4 + at + 1] = offsets[i * 3 + 2]!;
+    }
+  }
+  return packed;
 }
 
 /** The belt with its buckle, and a casual shirt's untucked hem over the hung tee (over the belt or, unbelted, over the jeans' top). */
@@ -296,7 +331,7 @@ function feet(build: number, fit: Fit, hanging: Fit): Shell[] {
       fitted(hanging, legOf(hanging, side), [
         { y: JEANS_TOP, out: TUCK, role: LEGS },
         { y: JEANS_BREAK, out: JEANS_OUT, role: LEGS },
-        { y: JEANS_HEM, out: JEANS_OUT, role: LEGS },
+        { y: JEANS_HEM, out: JEANS_FLARE, role: LEGS, at: JEANS_BREAK },
         { y: JEANS_HEM, out: SNEAKER_OUT, role: LEGS },
       ], fitting),
       {

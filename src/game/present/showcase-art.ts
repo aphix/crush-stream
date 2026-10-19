@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { ELDER_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { FACE } from "./dummy-faces.ts";
-import { OUTFIT, type DriverLook } from "./driver-look.ts";
+import { JEANS, OUTFIT, type DriverLook } from "./driver-look.ts";
 import { blankStance, guardDress, People, walkStance, type Stance } from "./people.ts";
 
 /**
@@ -13,16 +13,20 @@ import { blankStance, guardDress, People, walkStance, type Stance } from "./peop
 /** One figure: its dress (`cop`: a uniform, else a civilian `look`). */
 type Figure = { name: string; cop: boolean; look: DriverLook };
 
-/** The reference's jeans (mid-blue denim), her cut-offs (a lighter wash) and the men's dark-brown hair (sRGB). */
-const DENIM = 0x283650;
-const CUT_OFFS = 0x3a4d81;
-const DARK_BROWN = 0x4a3020;
+/** The reference's muted blue tee, her purple top and lighter-wash cut-offs, the brick-red long sleeve, the navy cap, the men's dark-brown and her copper hair (sRGB, tuned to read as the reference under the showcase's light). */
+const BLUE_TEE = 0x53637f;
+const PURPLE_TOP = 0x765a93;
+const CUT_OFFS = 0x5b616c;
+const BRICK_RED = 0xa65133;
+const NAVY_CAP = 0x141626;
+const DARK_BROWN = 0x382211;
+const COPPER = 0x88421e;
 
 /** The people the game draws, as the look reference has them: the man in the blue tee, the woman, the man in red with a cap and dark glasses, a plain-clothes guard, the president and a uniformed cop. */
 const FIGURES: readonly Figure[] = [
-  { name: "man", cop: false, look: { woman: false, shirt: 0x2c4f9e, pants: DENIM, hair: DARK_BROWN, hat: null, mustache: false, outfit: OUTFIT.TEE, face: FACE.MAN } },
-  { name: "woman", cop: false, look: { woman: true, shirt: 0x7b4fa6, pants: CUT_OFFS, hair: 0xb5532a, hat: null, mustache: false, outfit: OUTFIT.TOP, face: FACE.WOMAN } },
-  { name: "cap and shades", cop: false, look: { woman: false, shirt: 0xc8462a, pants: DENIM, hair: DARK_BROWN, hat: 0x1c2747, mustache: false, outfit: OUTFIT.LONG_SLEEVE, shades: true, face: FACE.CAP_MAN } },
+  { name: "man", cop: false, look: { woman: false, shirt: BLUE_TEE, pants: JEANS, hair: DARK_BROWN, hat: null, mustache: false, outfit: OUTFIT.TEE, face: FACE.MAN } },
+  { name: "woman", cop: false, look: { woman: true, shirt: PURPLE_TOP, pants: CUT_OFFS, hair: COPPER, hat: null, mustache: false, outfit: OUTFIT.TOP, face: FACE.WOMAN } },
+  { name: "cap and shades", cop: false, look: { woman: false, shirt: BRICK_RED, pants: JEANS, hair: DARK_BROWN, hat: NAVY_CAP, mustache: false, outfit: OUTFIT.LONG_SLEEVE, shades: true, face: FACE.CAP_MAN } },
   { name: "guard", ...guardDress(1) },
   { name: "president", cop: false, look: VIP_LOOK },
   { name: "uniformed cop", ...guardDress(0) },
@@ -61,13 +65,14 @@ export class ShowcaseArt {
     this.stand();
   }
 
-  /** Every figure back on his mark (a reset). */
+  /** Every figure back on his mark (a reset), turned to face the scene's eye as the reference's line-up faces its camera. */
   stand(): void {
     const at = new THREE.Vector3();
     const stance = blankStance();
     for (let slot = 0; slot < SLOTS; slot++) {
       this.markOf(slot, at);
-      this.people.stand(slot, at.x, at.y, at.z, 0, ROWS[Math.floor(slot / FIGURES.length)]!.pose(stance), false);
+      const yaw = Math.atan2(SHOWCASE_EYE.x - at.x, SHOWCASE_EYE.z - at.z);
+      this.people.stand(slot, at.x, at.y, at.z, yaw, ROWS[Math.floor(slot / FIGURES.length)]!.pose(stance), false);
     }
     this.people.update(0);
   }

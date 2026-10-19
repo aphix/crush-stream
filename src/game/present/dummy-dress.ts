@@ -42,29 +42,40 @@ type Outfit = {
   colours: Partial<Record<number, number>>;
   /** The garment cuts (`CUTS_AT`): sleeve end, leg end, waist, shoe top; scoop low, scoop high, scoop half width, kit. */
   cuts: readonly [number, number, number, number, number, number, number, number];
+  /** How far its torso and sleeves, then its trousers, hang off the body (the flags texel's z and w: a share of `hang`; 0 clings). */
+  hang: readonly [number, number];
 };
 
-const SNEAKER = { [ROLE.SHOE]: 0x3e4045, [ROLE.SOLE]: RUBBER_WHITE, [ROLE.BELT]: 0x17140f, [ROLE.BUCKLE]: 0xb9bdc4, [ROLE.EYES]: 0x0b0b0c };
+/** The reference's sneakers: charcoal canvas, a dark-brown leather belt with a dull silver buckle (sRGB, tuned to read so under the showcase's light). */
+const SNEAKER = { [ROLE.SHOE]: 0x352e2c, [ROLE.SOLE]: RUBBER_WHITE, [ROLE.BELT]: 0x3a3230, [ROLE.BUCKLE]: 0xb9bdc4, [ROLE.EYES]: 0x0b0b0c };
 const DRESS_SHOE = { [ROLE.SHOE]: 0x0e0e10, [ROLE.SOLE]: 0x0e0e10, [ROLE.EYES]: 0x0b0b0c };
+/** A casual outfit hangs as `hang` has it; the rest cling to the body, as a woman always does (`hang` is the men's push). */
+const HUNG = [1, 1] as const;
+const CLINGS = [0, 0] as const;
+/** The suit jacket's sleeve ends here (m, man's rest): its white shirt cuff shows below. */
+const JACKET_SLEEVE_END = 0.8;
 
 /** Each `OUTFIT`'s bits, colours and cuts. */
 const OUTFITS: readonly Outfit[] = [
-  { flags: SHORT_SLEEVES | BELTED | SNEAKERS, colours: SNEAKER, cuts: [SHORT_SLEEVE_END, 0, TROUSERS_FROM, NO_CUT, ...CREW_NECK, kit(FABRIC.JERSEY, FABRIC.DENIM, FABRIC.CANVAS, LAYER.JEANS)] },
-  { flags: LONG_SLEEVES | SNEAKERS, colours: SNEAKER, cuts: [LONG_SLEEVE_END, 0, TROUSERS_FROM, NO_CUT, ...CREW_NECK, kit(FABRIC.JERSEY, FABRIC.DENIM, FABRIC.CANVAS, LAYER.JEANS)] },
+  { flags: SHORT_SLEEVES | BELTED | SNEAKERS, colours: SNEAKER, cuts: [SHORT_SLEEVE_END, 0, TROUSERS_FROM, NO_CUT, ...CREW_NECK, kit(FABRIC.JERSEY, FABRIC.DENIM, FABRIC.CANVAS, LAYER.JEANS)], hang: HUNG },
+  { flags: LONG_SLEEVES | SNEAKERS, colours: SNEAKER, cuts: [LONG_SLEEVE_END, 0, TROUSERS_FROM, NO_CUT, ...CREW_NECK, kit(FABRIC.JERSEY, FABRIC.DENIM, FABRIC.CANVAS, LAYER.JEANS)], hang: HUNG },
   {
     flags: SHORT_SLEEVES | HEELS,
-    colours: { [ROLE.SHOE]: 0x1d2340, [ROLE.SOLE]: 0x1d2340, [ROLE.EYES]: 0x0b0b0c },
+    colours: { [ROLE.SHOE]: 0x141a33, [ROLE.SOLE]: 0x141a33, [ROLE.EYES]: 0x0b0b0c },
     cuts: [SLEEVE_END, SHORTS_END, TROUSERS_FROM, HEEL_SHOE_TOP, SCOOP_LOW, SCOOP_HIGH, SCOOP_HALF, kit(FABRIC.JERSEY, FABRIC.DENIM, FABRIC.LEATHER, LAYER.JEANS)],
+    hang: CLINGS,
   },
   {
-    flags: SUITED | LONG_SLEEVES | DRESS_SHOES,
-    colours: { ...DRESS_SHOE, [ROLE.COLLAR]: 0xf4f4f1, [ROLE.TIE]: 0xb3202a },
-    cuts: [LONG_SLEEVE_END, 0, TROUSERS_FROM, NO_CUT, ...CREW_NECK, kit(FABRIC.WOOL, FABRIC.WOOL, FABRIC.LEATHER, LAYER.SUIT)],
+    flags: SUITED | DRESS_SHOES,
+    colours: { ...DRESS_SHOE, [ROLE.COLLAR]: 0xf4f4f1, [ROLE.TIE]: 0x772d1b },
+    cuts: [JACKET_SLEEVE_END, 0, TROUSERS_FROM, NO_CUT, ...CREW_NECK, kit(FABRIC.WOOL, FABRIC.WOOL, FABRIC.LEATHER, LAYER.SUIT)],
+    hang: CLINGS,
   },
   {
     flags: UNIFORM | BELTED | LONG_SLEEVES | DRESS_SHOES,
     colours: { ...DRESS_SHOE, [ROLE.BELT]: 0x111113, [ROLE.BUCKLE]: 0xb9bec6, [ROLE.BADGE]: 0xb9bec6 },
     cuts: [LONG_SLEEVE_END, 0, TROUSERS_FROM, NO_CUT, ...CREW_NECK, kit(FABRIC.TWILL, FABRIC.TWILL, FABRIC.LEATHER, LAYER.UNIFORM)],
+    hang: CLINGS,
   },
 ];
 
@@ -79,14 +90,14 @@ const EARPIECE_DECALS: readonly Decal[] = [
 /** The decal layers in `LAYER` order. */
 export const DRESS_DECALS: readonly (readonly Decal[])[] = [JEANS_DECALS, SUIT_DECALS, UNIFORM_DECALS, [...UNIFORM_DECALS, ...EARPIECE_DECALS]];
 
-/** The uniformed division: navy shirt and trousers, short dark hair, no cap, no glasses (the reference's cop). */
-export const COP_LOOK: DriverLook = { woman: false, shirt: 0x1b2a4a, pants: 0x1b2a4a, hair: 0x2a2018, hat: null, mustache: false, outfit: OUTFIT.UNIFORM, face: FACE.COP };
+/** The uniformed division: dark-navy shirt and trousers, short dark hair, no cap, no glasses (the reference's cop; sRGB tuned to read as it under the showcase's light). */
+export const COP_LOOK: DriverLook = { woman: false, shirt: 0x273850, pants: 0x172333, hair: 0x3a2c22, hat: null, mustache: false, outfit: OUTFIT.UNIFORM, face: FACE.COP };
 /** A plain-clothes agent: the cop's build and kit in black, with dark glasses and an earpiece. */
 export const GUARD_LOOK: DriverLook = { ...COP_LOOK, shirt: 0x16181d, pants: 0x16181d, shades: true };
-/** The VIP: portly, in a navy-blue suit with a red tie, his golden-blond hair swept back. */
-export const VIP_LOOK: DriverLook = { woman: false, shirt: 0x1f3463, pants: 0x1f3463, hair: 0xc89a4a, hat: null, mustache: false, portly: true, outfit: OUTFIT.SUIT, face: FACE.PRESIDENT };
-/** His older aide: grey-haired, in a charcoal suit and a dark tie. */
-export const ELDER_LOOK: DriverLook = { woman: false, shirt: 0x2a2d33, pants: 0x2a2d33, hair: 0xa9a8a3, hat: null, mustache: false, outfit: OUTFIT.SUIT, face: FACE.ELDER, tie: 0x1d2027 };
+/** The VIP: portly, in a navy-blue suit with a brick-red tie, his golden-blond hair swept back. */
+export const VIP_LOOK: DriverLook = { woman: false, shirt: 0x212b39, pants: 0x1e2732, hair: 0xba8650, hat: null, mustache: false, portly: true, outfit: OUTFIT.SUIT, face: FACE.PRESIDENT };
+/** His older aide: grey-haired, in a near-black charcoal suit and a dark tie. */
+export const ELDER_LOOK: DriverLook = { woman: false, shirt: 0x26272a, pants: 0x26272a, hair: 0xa9a8a3, hat: null, mustache: false, outfit: OUTFIT.SUIT, face: FACE.ELDER, tie: 0x1d2027 };
 
 const _c = new THREE.Color();
 
@@ -119,6 +130,7 @@ export function dressRow(rows: Float32Array, at: number, cop: boolean, look: Dri
   }
   rows[at + FLAGS_AT * 4] = flags;
   rows[at + FLAGS_AT * 4 + 1] = face;
+  rows.set(build === BUILD.WOMAN ? CLINGS : wear.hang, at + FLAGS_AT * 4 + 2);
   rows.set(wear.cuts, at + CUTS_AT * 4);
   if (cop || !look.shades || outfit !== OUTFIT.UNIFORM) return;
   rows[at + (CUTS_AT + 1) * 4 + 3] = kit(FABRIC.TWILL, FABRIC.TWILL, FABRIC.LEATHER, LAYER.GUARD);
