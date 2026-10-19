@@ -4,6 +4,7 @@ import { DECAL_FACE_AT, DECAL_FLAT, DECAL_H, DECAL_HALF_X, DECAL_HALF_Z, DECAL_N
 import { DRESS_DECALS } from "./dummy-dress.ts";
 import { CAPPED, CUTS_AT, FLAGS_AT, HANG_ATTRIBUTE, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, OPTIONAL, ORBS_AT, PALETTE_AT, PRINT_ATTRIBUTE, ROLE, ROLES, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE } from "./dummy-rig.ts";
 import { FACE_RELIEF, faceReliefMap, PRINT_CELL, PRINT_CELLS, PRINT_TEXELS, printMap } from "./dummy-texture.ts";
+import { RIM_FRAGMENT, RIM_LIGHT } from "./rim-light.ts";
 
 /**
  * The dummies' shader patch: GLSL skinning from the slot's pose row; in the fragment the slot's garment cuts over the body
@@ -127,6 +128,7 @@ const DOLL_FRAGMENT_COMMON = /* glsl */ `
 uniform sampler2D dolls;
 uniform sampler2D prints;
 uniform sampler2D faceRelief;
+uniform float uRim;
 uniform highp sampler2DArray fabrics;
 uniform highp sampler2DArray decals;
 varying vec4 vPrint;
@@ -226,7 +228,7 @@ const DECALS = decalMap(DRESS_DECALS);
 
 /**
  * Patch `material` to skin from `dolls`; `lit` also skins the normal and draws the cloth: the slot's cut colours, fabrics,
- * decals and prints in the fragment, the fabric's relief as a bump, and each role's roughness and metal.
+ * decals and prints in the fragment, the fabric's relief as a bump, each role's roughness and metal, and the rim light (`RIM_LIGHT`).
  */
 export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: boolean): void {
   const prev = material.onBeforeCompile;
@@ -240,7 +242,7 @@ export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: 
       shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvec3 dollP;\nvec3 dollN;\ndollSkin(dollP, dollN);\ntransformed = dollP;");
       return;
     }
-    Object.assign(shader.uniforms, { prints: { value: prints }, faceRelief: { value: faceReliefMap() }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS } });
+    Object.assign(shader.uniforms, { prints: { value: prints }, faceRelief: { value: faceReliefMap() }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS }, uRim: RIM_LIGHT });
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
@@ -265,7 +267,8 @@ transformed = dollP;`,
       .replace("#include <map_fragment>", `#include <map_fragment>\n${CLOTH_FRAGMENT}\n${PRINT_FRAGMENT}`)
       .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor = dollRoughness;")
       .replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\nmetalnessFactor = dollMetalness;")
-      .replace("#include <normal_fragment_maps>", "#include <normal_fragment_maps>\nnormal = dollBump(-vViewPosition, normal, vec2(dFdx(dollHeight), dFdy(dollHeight)), faceDirection);");
+      .replace("#include <normal_fragment_maps>", "#include <normal_fragment_maps>\nnormal = dollBump(-vViewPosition, normal, vec2(dFdx(dollHeight), dFdy(dollHeight)), faceDirection);")
+      .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>\n${RIM_FRAGMENT}`);
   };
   material.vertexColors = false;
   material.customProgramCacheKey = () => `${prevKey.call(material)}|dolls-${lit}`;
