@@ -371,9 +371,9 @@ export class ClipSim {
       this.stepAt = this.time;
       this.rideVip(s);
       this.blend.begin(cars);
-      // The cars the record put on a spot in this step (a respawn, a wake, a put-away) go there: the one thing the replay cannot drive.
+      // The cars the record put on a spot in this step (a respawn, a wake, a put-away) go there respawned, as live placement resets even an intact car (a folded mirror): the one thing the replay cannot drive.
       while (this.key < clip.keyStep.length && clip.keyStep[this.key]! <= s) {
-        if (clip.keyStep[this.key] === s) for (let j = 0; j < nc; j++) if ((clip.keyCars[this.key]! >>> j) & 1) this.snap(j, this.key);
+        if (clip.keyStep[this.key] === s) for (let j = 0; j < nc; j++) if ((clip.keyCars[this.key]! >>> j) & 1) this.spawn(j, this.key);
         this.key++;
       }
       // The props a car the clip leaves out knocked off their spot in this step: gone before the clip's cars reach them, as in the record. (A clip car at one in the same step would have knocked it itself.)
@@ -487,14 +487,6 @@ export class ClipSim {
     car.restoreContact();
     car.contact(this.flight[k]!, j * FLIGHT, true);
     if (f.falling) beginFakeFall(car, true);
-  }
-
-  /** Keyframe `k` corrects car `j`'s drift: an intact car that is intact in the record takes the pose, any other is respawned as recorded. */
-  private snap(j: number, k: number): void {
-    const car = this.cars[j]!;
-    const f = this.keys[k]!.cars[j]!;
-    if (!f.crashed && !f.falling && !car.crashed && !car.falling && !car.deform.massActive) this.pose(j, k);
-    else this.spawn(j, k);
   }
 
   /** Pose, motion, drift and flight state from keyframe `k`'s frame of car `j` (the flight block's doubles, not the wire's). */

@@ -153,7 +153,10 @@ crash it recorded. What it takes, each found by the replay straying from the liv
   until a later keyframe put it on the road: the clip's budget dropped the intermediate keyframes, the placement's among them
   (the oval race with police and 11 AI, 5 clips: the top clip's cop 15, `CLIP_BUDGET`). A respawn after the first impact had
   no keyframe at all (the replay corrected drift only up to the hit), so the racer stayed a wreck: 18-100 m off. Every later
-  keyframe is a placement now, kept whole, with the cars it placed alone.
+  keyframe is a placement now, kept whole, with the cars it placed alone, and `ClipSim` respawns each of them from it, as the
+  live placement (`spawnFacing`) resets even an intact car. It once only posed a car intact in the record: city seed 54's
+  traffic car, put away and woken in its clip, kept the mirror a brush had folded, the next brush folded it no further, and
+  the mirror the live car lost stayed on (7.5 m off by the clip's end; `engine-replay-placed.test.ts`).
 - **The parts' state as doubles** (26). The netplay part state is float32 on the wire with no rates: a door that a sideswipe
   had left swinging came back at rest, a panel's hinge value rounded, the door-motion sample re-read. A door slows the next
   striker by what it holds (`partContactPair`), so two wrecks one second after a pile-up hit differently (1e-11 m at the
