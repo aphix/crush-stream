@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { DRIVE, applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
+import { applyAiDrive } from "./input-fade.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { snapshotAiCar } from "../match/derby.ts";
@@ -48,16 +49,14 @@ export function race(track: Track, n: number, aggression: number, laps: number, 
     for (const [i, c] of cars.entries()) snapshotAiCar(snaps[i]!, i, c, true);
     for (const [i, c] of cars.entries()) {
       const rec = session.cars[i]!;
-      let input = hold;
       if (session.phase === "racing" && rec.status === "racing") {
         if (brain.due(i, DT)) {
           const out = brain.think(snaps[i]!, snaps, rec, brain.elapsed(i));
           tap?.(i, out);
           copyDrive(out, held[i]!);
         }
-        input = brain.guard(snaps[i]!, snaps, held[i]!, DT);
-      }
-      applyDrive(c, input, DT);
+        applyAiDrive(c, brain.guard(snaps[i]!, snaps, held[i]!, DT), DT);
+      } else applyDrive(c, hold, DT);
       c.integrate(DT);
     }
     for (const [i, c] of cars.entries()) {

@@ -124,4 +124,18 @@ describe("given the contact guard called every step for one car (its held push a
     const once = call(tune, CLEAR, 0);
     assert.deepEqual(pedals(once), [1, 0, 0]);
   });
+
+  it("when the stopped car ahead reads 0.3 m left of the path's centre on one step and 0.3 m right on the next (the look-ahead's jitter at speed), then the push keeps the side it took: the wheel never swings back across", () => {
+    const tune = tuned();
+    const left = car(1, 0.3, 47, 0);
+    const right = car(1, -0.3, 47, 0);
+    let out = call(tune, [left], STEP);
+    let across = 0;
+    for (let s = 1; s < 0.5 * QUIET_HZ; s++) {
+      out = call(tune, [s % 2 === 0 ? left : right], STEP);
+      if (out.steer > 0) across++;
+    }
+    assert.equal(across, 0, "steps the wheel was pushed toward the car it steers from");
+    assert.ok(out.steer < -0.03, `after 0.5 s: steer ${out.steer.toFixed(3)}`);
+  });
 });

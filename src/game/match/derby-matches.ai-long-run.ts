@@ -5,7 +5,7 @@ import { DerbyMatch, STALEMATE, snapshotAiCar } from "./derby.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
 import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
-import { applyDrive } from "../vehicle/car-drive.ts";
+import { applyAiDrive } from "../ai/input-fade.ts";
 import { fleetStyle, layoutDerby, MAX_CARS } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { CAR_HALF } from "../vehicle/car-mesh.ts";
@@ -157,7 +157,7 @@ function runDerby(cars: DeformableCar[], seconds: number, knobs: Knobs, start?: 
       const h = physicsSlice(1 / FRAME_HZ, vmax);
       const snaps = match.snapshots(n);
       for (const [i, c] of cars.entries()) snapshotAiCar(snaps[i]!, i, c, c.deform.drivetrainAlive);
-      for (const [i, c] of cars.entries()) applyDrive(c, match.think(snaps[i]!, snaps, h), h);
+      for (const [i, c] of cars.entries()) applyAiDrive(c, match.think(snaps[i]!, snaps, h), h);
       w.pairHit = (a, b, pair) => {
         const ca = cars[a]!;
         const cb = cars[b]!;

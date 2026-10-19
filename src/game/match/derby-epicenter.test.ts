@@ -5,7 +5,7 @@ import { DerbyMatch, snapshotAiCar } from "./derby.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
 import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
-import { applyDrive } from "../vehicle/car-drive.ts";
+import { applyAiDrive } from "../ai/input-fade.ts";
 import { layoutDerby } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { WHEEL_POS } from "../vehicle/car-mesh.ts";
@@ -61,7 +61,7 @@ function derbySeed(): { frozenSlices: number; worstHub: number; worstWheel: numb
       const h = physicsSlice(1 / FRAME_HZ, vmax);
       const snaps = match.snapshots(cars.length);
       for (const [i, c] of cars.entries()) snapshotAiCar(snaps[i]!, i, c, c.deform.drivetrainAlive);
-      for (const [i, c] of cars.entries()) applyDrive(c, match.think(snaps[i]!, snaps, h), h);
+      for (const [i, c] of cars.entries()) applyAiDrive(c, match.think(snaps[i]!, snaps, h), h);
       w.pairHit = (a, b, pair) => {
         match.noteHit(a, b, -(cars[a]!.velocity.x * pair.normal.x + cars[a]!.velocity.z * pair.normal.z), cars[b]!.velocity.x * pair.normal.x + cars[b]!.velocity.z * pair.normal.z, pair.impulse);
       };

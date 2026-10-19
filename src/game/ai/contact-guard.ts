@@ -27,6 +27,8 @@ const NEED_RELEASE_S = 0.3;
 const NEED_STEER_RATE = 4;
 /** A held push or demand under this (of full lock or brake) is gone. */
 const PUSH_FLOOR = 0.002;
+/** A contact within this (m) of the path's centre line clears about as well to either side, so the push keeps the side it already steers to: at 55 m/s the look-ahead's lateral at 1.3 s swung ±0.6 m with the push's own yaw and flipped its side every 3 steps. */
+const SIDE_BAND = LAT / 2;
 
 /**
  * The look-ahead's sample times: 0 to `HORIZON` in steps of `STEP`, accumulated as the first version of the guard did. The last,
@@ -189,10 +191,12 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
   need = holdNeed(tune, clamp(need, 0, 1));
   const steerNeed = riseNeed(tune, need);
   // Braking hard is straight-line work (a steered, locked car sheds speed slowly), so the steer-away gives way to it, and a
-  // steer toward the car (its side is the sign of `lateral`) is straightened out as the braking gets harder.
+  // steer toward the car (against `away`) is straightened out as the braking gets harder.
   const u = STEER_CAP * clamp(2 * (1 - soonest / HORIZON), 0, 1) * (steerable ? 1 : offset) * (1 - need);
-  const toward = lateral >= 0 ? out.steer > 0 : out.steer < 0;
-  const target = lateral >= 0 ? -u : u;
+  const held = tune[GUARD_DT_IDX]! > 0 ? tune[GUARD_PUSH_IDX]! : 0;
+  const away = held !== 0 && Math.abs(lateral) < SIDE_BAND ? Math.sign(held) : lateral >= 0 ? -1 : 1;
+  const toward = out.steer * away < 0;
+  const target = away * u;
   const push = tune[GUARD_DT_IDX]! > 0 ? holdPush(tune, target) : target;
   tune[GUARD_PUSH_IDX] = push;
   out.steer = clamp((toward ? out.steer * (1 - steerNeed) : out.steer) * (1 - Math.abs(push)) + push, -1, 1);

@@ -8,6 +8,7 @@ import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
 import { DERBY_BOXES, DERBY_FREE_PROPS, DERBY_PROP } from "../scenes/derby-ground.ts";
 import { idleDrive, applyDrive } from "../vehicle/car-drive.ts";
+import { applyAiDrive } from "../ai/input-fade.ts";
 import { layoutDerby, MAX_CARS } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { physicsSlice } from "../contact/sat.ts";
@@ -336,8 +337,8 @@ describe("given a default two-car derby in shape deform mode", () => {
       const h = physicsSlice(1 / FRAME_HZ, Math.max(a.speed, b.speed, 4));
       const snaps = match.snapshots(2);
       for (const [i, c] of [a, b].entries()) snapshotAiCar(snaps[i]!, i, c, c.deform.drivetrainAlive);
-      applyDrive(a, match.think(snaps[0]!, snaps, h), h);
-      applyDrive(b, match.think(snaps[1]!, snaps, h), h);
+      applyAiDrive(a, match.think(snaps[0]!, snaps, h), h);
+      applyAiDrive(b, match.think(snaps[1]!, snaps, h), h);
       stepWorld(w, h);
       match.step(h, [
         { id: 0, name: "Titanium", alive: a.deform.drivetrainAlive, x: a.group.position.x, z: a.group.position.z },

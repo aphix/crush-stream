@@ -47,6 +47,7 @@ import { TraceRecorder } from "./engine-trace.ts";
 import { snapshotAiCar } from "../match/derby.ts";
 import { FULL_POOL, LampLights, PHONE_POOL } from "../vehicle/lamp-lights.ts";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
+import { applyAiDrive } from "../ai/input-fade.ts";
 import { makeDerbyArena, WinnerSpot } from "../scenes/derby-arena.ts";
 import { NetPlay } from "../net/net-play.ts";
 import { RaceDirector } from "./engine-race.ts";
@@ -750,7 +751,7 @@ export class CrashEngine extends EngineGarage {
       }
       for (let i = 0; i < cars.length; i++) {
         if (i === driven || this.derbySeated.has(i)) continue;
-        applyDrive(cars[i]!, this.derby.think(snaps[i]!, snaps, dt), dt);
+        applyAiDrive(cars[i]!, this.derby.think(snaps[i]!, snaps, dt), dt);
         if (this.derby.recoverDue(i, cars[i]!, dt)) this.recoverCar(cars[i]!);
       }
     }

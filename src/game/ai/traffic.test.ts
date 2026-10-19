@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
+import { applyAiDrive } from "./input-fade.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { snapshotAiCar } from "../match/derby.ts";
@@ -28,7 +29,8 @@ function run(brain: TrafficBrain, fleet: DeformableCar[], seconds: number, sampl
   for (let step = 0; step < seconds / DT; step++) {
     for (const [i, c] of fleet.entries()) snapshotAiCar(snaps[i]!, i, c, true);
     for (const [i, c] of fleet.entries()) {
-      applyDrive(c, i === frozen ? park : brain.think(snaps[i]!, snaps, DT), DT);
+      if (i === frozen) applyDrive(c, park, DT);
+      else applyAiDrive(c, brain.think(snaps[i]!, snaps, DT), DT);
       c.integrate(DT);
     }
     if (step % 6 === 0) for (const [i, c] of fleet.entries()) sample(i, c);

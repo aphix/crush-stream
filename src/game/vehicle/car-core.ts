@@ -284,6 +284,8 @@ export abstract class CarCore {
   spawnSpeed = 0;
   /** Times this car was put on a spot (`placeAt`: a respawn, a wake, a start): the recorder keys a step the count moved in. */
   placements = 0;
+  /** The `placements` count an AI driver last turned the wheel at (`applyAiDrive`): a car put on a spot since starts with its wheel straight. */
+  aiPlacements = 0;
   /** Times its engine was killed from outside the crash sim (`disable`): the recorder keys a step the count moved in, and a clip keeps that keyframe for the car. */
   kills = 0;
   /** Last slice's drive (applyDrive writes it). `spin`: the driven wheels' longitudinal slip ratio 0–1; `lock` / `slide`: 0–1 wheel slip for tyre FX (brake lock-up, sideways slide); `spinSpeed`: m/s the driven wheels' tread runs ahead of the body, 0 gripping (state: a spin builds and fades over the driveline's rotating mass, so it rides in the flight block and on the wire; the gear and revs are read off `along + spinSpeed`); `drift`: the drift assist's state; `hold`: sideways grip (m/s) left this step, spent by a face the car is pressed on (`wallBounce`); `ebrakeK`: the handbrake grip actually applied, 0–1, ramped in and out over `DRIVE.ebrakeIn` / `ebrakeOut`; `boostK`: the boost thrust applied, 0 or 1.

@@ -5,6 +5,7 @@ import { snapshotAiCar } from "../match/derby.ts";
 import { setGround } from "../world/ground.ts";
 import { blankPoint, blankProjection } from "../world/track.ts";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
+import { applyAiDrive } from "./input-fade.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { BEAT, rig, track } from "./police-rig.test-util.ts";
@@ -83,8 +84,8 @@ function runPair(leadShare: number): { pulled: boolean[]; bad: string[]; touched
           const ahead = track.project(fleet[0]!.group.position.x, fleet[0]!.group.position.z, -1, proj).s - spotS[id - 1]!;
           if (ahead < 0) bad.push(`cop ${id} pulled away at ${(f * DT).toFixed(2)} s with the racer ${(-ahead).toFixed(0)} m short of its spot`);
         }
-        const input = driving ? r.police.think(r.cars[id]!, r.cars, DT) : park;
-        applyDrive(car, input, DT);
+        if (driving) applyAiDrive(car, r.police.think(r.cars[id]!, r.cars, DT), DT);
+        else applyDrive(car, park, DT);
         car.integrate(DT);
       }
       closest = Math.min(closest, fleet[1]!.group.position.distanceTo(fleet[2]!.group.position));

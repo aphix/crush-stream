@@ -77,6 +77,7 @@ const HOT = {
   "src/game/ai/traffic.ts": ["think"],
   "src/game/ai/police.ts": ["drive"],
   "src/game/ai/cop-brain.ts": ["think", "attackTarget", "pursuitSteer"],
+  "src/game/ai/input-fade.ts": ["applyAiDrive"],
   "src/game/ai/hunter.ts": ["drive", "update"],
   "src/game/present/pose-blend.ts": ["end", "present", "restore"],
   "src/game/present/motor-sound.ts": ["update", "driveVoice"],

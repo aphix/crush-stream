@@ -2,7 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { physicsSlice } from "../contact/sat.ts";
 import * as THREE from "three";
-import { applyDrive, DRIVE, idleDrive } from "../vehicle/car-drive.ts";
+import { DRIVE, idleDrive } from "../vehicle/car-drive.ts";
+import { applyAiDrive } from "./input-fade.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { snapshotAiCar } from "../match/derby.ts";
@@ -368,7 +369,7 @@ describe("given a hunter at 35 m/s heading at a stopped player car 40 m away, dr
       snapshotAiCar(cop, 1, car, true);
       const dist = Math.hypot(r.cars[0]!.x - cop.x, r.cars[0]!.z - cop.z);
       if (at === null && dist < SETTLE) at = Math.hypot(cop.vx, cop.vz);
-      applyDrive(car, r.brain.think(cop, r.cars, 1 / FRAME_HZ), 1 / FRAME_HZ);
+      applyAiDrive(car, r.brain.think(cop, r.cars, 1 / FRAME_HZ), 1 / FRAME_HZ);
       car.integrate(1 / FRAME_HZ);
     }
     setGround(null);

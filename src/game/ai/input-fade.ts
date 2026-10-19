@@ -1,5 +1,9 @@
-import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
+import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
+import { FEEL } from "../vehicle/drive-input.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
+import { clamp } from "../kernel/scalar.ts";
+import { copyDrive } from "./race-ai.ts";
 
 /**
  * Seconds each pedal of an AI driver takes to fade (first-order lag) toward what the driver asks. A driver that thinks every step and corrects what it just did
@@ -12,7 +16,7 @@ const FADE_SPEED = 15;
 /** Seconds the handbrake or boost button must be asked for (or let go) before it changes: a button held a step or two is a flicker of the loop, not a press. */
 const BUTTON_HOLD_S = 0.1;
 
-/** The racing AI's hands: every input a race brain hands the drive passes through here, per car slot, before `applyDrive`. The player's and a peer's inputs do not. */
+/** The racing AI's hands: every input a race brain hands the drive passes through here, per car slot, before `applyAiDrive`. The player's and a peer's inputs do not. */
 export class InputFade {
   private readonly steer = new Float64Array(MAX_CARS);
   private readonly throttle = new Float64Array(MAX_CARS);
@@ -75,4 +79,20 @@ function press(state: Uint8Array, asked: Float64Array, slot: number, ask: boolea
     asked[slot] = 0;
   }
   return state[slot] === 1;
+}
+
+const _limited: DriveInput = idleDrive();
+
+/**
+ * How every AI driver drives its car (racers, traffic, police, hunters, the derby, after their guards): `applyDrive` with the wheel turned toward the ask no faster than
+ * a pad player's (`FEEL.steerPad` of lock a second), from the wheel the car ran last step (`drive.steer`; straight on a car put on a spot since, as at a race's start).
+ * The player's and a peer's inputs do not pass here.
+ */
+export function applyAiDrive(car: DeformableCar, input: DriveInput, dt: number, topScale = 1): void {
+  copyDrive(input, _limited);
+  const reach = FEEL.steerPad * dt;
+  const was = car.aiPlacements === car.placements ? car.drive.steer : 0;
+  car.aiPlacements = car.placements;
+  _limited.steer = clamp(input.steer, was - reach, was + reach);
+  applyDrive(car, _limited, dt, topScale);
 }

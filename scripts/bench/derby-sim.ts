@@ -14,7 +14,7 @@ import { FRAME_HZ } from "../../src/game/kernel/constants.ts";
 import { physicsSlice } from "../../src/game/contact/sat.ts";
 import { lap, PHASE, startLaps } from "../../src/game/engine/sim-phases.ts";
 import { settleStep, stepWorld, type World } from "../../src/game/engine/world-step.ts";
-import { applyDrive } from "../../src/game/vehicle/car-drive.ts";
+import { applyAiDrive } from "../../src/game/ai/input-fade.ts";
 import { DeformableCar } from "../../src/game/vehicle/car.ts";
 import { armKill, assignClass, carClass, HANDLING } from "../../src/game/vehicle/vehicle-classes.ts";
 import type { SimLike } from "./sim.ts";
@@ -56,7 +56,7 @@ export class DerbySim implements SimLike {
     startLaps(phases);
     const snaps = this.match.snapshots(n);
     for (const [i, c] of this.cars.entries()) snapshotAiCar(snaps[i]!, i, c, c.deform.drivetrainAlive);
-    for (const [i, c] of this.cars.entries()) applyDrive(c, this.match.think(snaps[i]!, snaps, h), h);
+    for (const [i, c] of this.cars.entries()) applyAiDrive(c, this.match.think(snaps[i]!, snaps, h), h);
     lap(phases, PHASE.drive);
     stepWorld(this.world, h);
     lap(phases, PHASE.rules);

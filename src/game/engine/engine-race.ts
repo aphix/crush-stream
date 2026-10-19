@@ -10,7 +10,7 @@ import { Campaign } from "../match/campaign.ts";
 import { PoliceBrain } from "../ai/police.ts";
 import { HunterBrain } from "../ai/hunter.ts";
 import type { AiCar } from "../ai/derby-ai.ts";
-import { InputFade } from "../ai/input-fade.ts";
+import { applyAiDrive, InputFade } from "../ai/input-fade.ts";
 import { copyDrive } from "../ai/race-ai.ts";
 import { AI_DIFFICULTIES } from "../ai/constants.ts";
 import { DRAFT, RaceSession } from "../match/session.ts";
@@ -619,17 +619,9 @@ export class RaceDirector extends RaceHudLayer {
       car.stored = this.dormant[i] === 1;
       if (i >= racers) {
         // A thrown-out driver is nobody's input: the car coasts (`coast`), police and traffic units too.
-        const input =
-          car.driverOut !== null
-            ? this.coast
-            : this.dormant[i]
-              ? this.hold
-              : i >= this.policeFrom
-                ? (police?.think(snaps[i]!, snaps, dt) ?? this.hold)
-                : traffic
-                  ? traffic.think(snaps[i]!, snaps, dt)
-                  : this.hold;
-        applyDrive(car, input, dt);
+        const unit = car.driverOut !== null || this.dormant[i] ? null : i >= this.policeFrom ? police : traffic;
+        if (unit) applyAiDrive(car, unit.think(snaps[i]!, snaps, dt), dt);
+        else applyDrive(car, car.driverOut !== null ? this.coast : this.hold, dt);
         continue;
       }
       const rec = s.cars[this.rowOf[i]!]!;
@@ -661,7 +653,8 @@ export class RaceDirector extends RaceHudLayer {
       }
       if (!ai) this.hands.follow(i, input);
       const top = rec.draft > 0 ? DRAFT.top : 1;
-      applyDrive(car, input, dt, top);
+      if (ai) applyAiDrive(car, input, dt, top);
+      else applyDrive(car, input, dt, top);
       if (top !== 1) this.recorder.drafting(i);
     }
   }

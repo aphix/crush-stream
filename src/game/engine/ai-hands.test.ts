@@ -1,10 +1,13 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
-import { FADE_S, InputFade } from "../ai/input-fade.ts";
+import * as THREE from "three";
+import { idleDrive, THROTTLE_STEPS, type DriveInput } from "../vehicle/car-drive.ts";
+import { applyAiDrive, FADE_S, InputFade } from "../ai/input-fade.ts";
+import { DeformableCar } from "../vehicle/car.ts";
+import { FEEL } from "../vehicle/drive-input.ts";
 import type { CrashEngine } from "./engine.ts";
 import { benchPlanEngine, disposeBenchEngine } from "./engine-bench-headless.test-util.ts";
-import { QUIET_HZ } from "../kernel/constants.ts";
+import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 
 /** The coarse step a phone runs (s). */
 const STEP = 1 / QUIET_HZ;
@@ -75,6 +78,31 @@ describe("given an AI driver's hands (`InputFade`)", () => {
     assert.ok(Math.abs(placed.brake - 0.7) < 1e-9 && Math.abs(placed.steer + 0.2) < 1e-9 && placed.throttle === 0, `brake ${placed.brake.toFixed(3)}, steer ${placed.steer.toFixed(3)}, gas ${placed.throttle.toFixed(3)}`);
     const next = hands.fade(0, { ...idleDrive(), throttle: 1 }, STEP, FAST, 2);
     assert.ok(next.throttle > 0 && next.throttle < 0.5, "and fades from there on");
+  });
+});
+
+describe("given a sedan at 25 m/s driven by an AI driver (`applyAiDrive`, every AI's way to the drive)", () => {
+  it("when the driver flips between full left and full right lock every step, then the wheel the car runs moves no faster than a pad player's (12 of lock a second, on the byte grid), at 1/240, 1/80 and 1/60 s steps; then held at full lock, it gets there moving the pad's whole bytes a step", () => {
+    for (const dt of [1 / FINE_HZ, 1 / QUIET_HZ, 1 / FRAME_HZ]) {
+      const car = new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: "hands" }, new THREE.Scene());
+      car.spawnFacing(0, 0, 0, 25);
+      const reach = FEEL.steerPad * dt + 0.5 / THROTTLE_STEPS + 1e-9;
+      let worst = 0;
+      for (let s = 0; s < 30; s++) {
+        const was = car.drive.steer;
+        applyAiDrive(car, { ...idleDrive(), steer: s % 2 === 0 ? 1 : -1 }, dt);
+        worst = Math.max(worst, Math.abs(car.drive.steer - was));
+      }
+      assert.ok(worst > 0 && worst <= reach, `${(1 / dt).toFixed(0)} Hz: the wheel moved ${worst.toFixed(4)} in a step, a pad's reach ${reach.toFixed(4)}`);
+      const from = car.drive.steer;
+      let steps = 0;
+      while (car.drive.steer < 1 && steps < 100) {
+        applyAiDrive(car, { ...idleDrive(), steer: 1 }, dt);
+        steps++;
+      }
+      const bytes = Math.floor(FEEL.steerPad * dt * THROTTLE_STEPS);
+      assert.ok(steps <= Math.ceil(((1 - from) * THROTTLE_STEPS) / bytes), `${(1 / dt).toFixed(0)} Hz: full lock from ${from.toFixed(3)} in ${steps} steps of ${bytes} bytes`);
+    }
   });
 });
 

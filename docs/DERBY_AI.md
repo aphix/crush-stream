@@ -98,7 +98,7 @@ stopped facing a prop or standing on a ramp is held through the wrong face and t
 −4.5 s (`DerbyOptions.start`, default the race's `GRID_TIME + COUNTDOWN`) to the green light at 0, and the HUD shows
 race mode's start lights (`StartLights`, `startLights(time)`). Before green `DerbyMatch.held` refuses every input
 (AI, the local driver, netplay peers on the host), no count-out clock runs and nothing scores; clients mirror the
-host's clock through `MSG.derby`. The AI then launches through `applyDrive` like any driver: forward 0–50 km/h from
+host's clock through `MSG.derby`. The AI then launches through `applyAiDrive` (`applyDrive` with its wheel turned no faster than a pad player's) like any AI driver: forward 0–50 km/h from
 its first throttle measured 0.964–0.965 s (sedan), 0.786 (muscle), 1.023–1.025 (truck) against full throttle's
 0.974 / 0.789 / 1.031 s. The brain's throttle only sets the speed it aims for (`DERBY_PACE`), never the thrust.
 

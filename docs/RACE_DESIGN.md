@@ -288,6 +288,13 @@ tuned at 18 m/s and stretch × `pace = v / 18`.
   it and wrecked on it: the city clean-start row, car 5 on traffic car 13; `contact-guard.test.ts`, the crossing car at 10 m),
   so its avoidance is never lagged. The player's and a peer's inputs do not pass through the hands. A wreck that still drives (`crashed`) has no hands, and its guard does not hold: its inputs are the brain's, as before (the hands changed where wrecks came to rest). A car put on a spot (`DeformableCar.placements` moves: a respawn, a recovery) starts the hands at what the driver asks there, not at the pedals it had where it was. A highlight clip needs none of this state: it records the pedals the sim ran after the hands and the guard, and its replay applies them (`engine-replay-hands.test.ts`: clips that start with a wheel in motion replay to the bit). Rows: `engine/ai-hands.test.ts` (the strip's first 30 s: at most 0.25 wheel jumps over 0.2 of lock, 2 pedal and 3 wheel
   reversals, 4 wheel and 3 roll swings a second; main: 26, 8, 32, 32 and 22).
+- **Every AI's wheel** (`ai/input-fade.ts` `applyAiDrive`): racers (after their hands and guard), traffic, police, Survival hunters (their pack guard included) and the derby AI all drive through it. It turns the wheel toward
+  what the driver asks no faster than a pad player's (`FEEL.steerPad`, 12 of lock a second), starting from the wheel the car ran last step (`drive.steer`), or straight on a car put on a spot since (a race's start, a respawn).
+  Before it, every kind flipped full lock (−1 to +1) inside one 1/80 s step: recover, turn-round and stuck flips, pursuit steering, derby tactics, the guard's nudges. The player's and a peer's inputs do not pass here
+  (`engine/ai-steer-rate.test.ts`: every AI kind in the real engine no faster than the pad, and the player's wheel bit for bit what the seat shaped, the handbrake's jump included). The steer fade of the racers' hands
+  stays: the limit caps big moves, the fade is what quiets the step-rate dither (without it the strip's racer swung its wheel 5.8 times a second against the row's 3). The contact guard keeps its push's side on a contact within
+  half its zone's width of the path's centre (`SIDE_BAND`): at 55 m/s the look-ahead's lateral at 1.3 s swung ±0.6 m with the push's own yaw and flipped its side every 3 steps (car 0 on the strip, seeds 1-6: 4.2 wheel
+  swings a second on main, 2.9 with it). Clips record the pedals the sim ran, so replays need no REPLAY change.
 
 ## Traffic (`TrafficBrain`)
 

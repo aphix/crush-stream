@@ -3,7 +3,7 @@ import { DerbyMatch, heatLimit, snapshotAiCar, type DerbyDecided } from "../matc
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
 import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
-import { applyDrive } from "../vehicle/car-drive.ts";
+import { applyAiDrive } from "./input-fade.ts";
 import { fleetStyle, layoutDerby } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { CAR_HALF } from "../vehicle/car-mesh.ts";
@@ -160,7 +160,7 @@ function runFieldHeat(n: number, seed: number, playerClass?: VehicleClassId, on?
     const snaps = match.snapshots(n);
     for (const [i, c] of cars.entries()) snapshotAiCar(snaps[i]!, i, c, c.deform.drivetrainAlive);
     for (const [i, c] of cars.entries()) {
-      applyDrive(c, match.think(snaps[i]!, snaps, h), h);
+      applyAiDrive(c, match.think(snaps[i]!, snaps, h), h);
       const now = match.brain.tacticOf(i);
       if (now === "swing" || now === "jturn" || now === "sideswipe") {
         if (t - lastIn[now][i]! > MOVE_GAP) out[now === "swing" ? "swings" : now === "jturn" ? "jturns" : "sideswipes"]++;
