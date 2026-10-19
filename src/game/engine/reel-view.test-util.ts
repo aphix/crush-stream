@@ -41,10 +41,11 @@ export type MomentKind = "impact" | "hit" | "throw" | "takeoff";
 
 /**
  * At a `hit` (an impact of the clip's scope after its first): the previous impact's point in the frame, and whether the
- * camera changed since that impact (a cut: another rig, another shot, another crash-cam cut). `inFrame`: front of the eye,
- * inside `VIEW.margin` (inside the frame's edge when the held crash cam is on it, see the judge below) and clear of the panels.
+ * camera changed since that impact (a cut: another rig, another shot, another crash-cam cut), and whether that change is
+ * the crash cam onto this crash's own axis (`axis`, `CrashCam.retarget`). `inFrame`: front of the eye, inside `VIEW.margin`
+ * (inside the frame's edge when the held crash cam is on it, see the judge below) and clear of the panels.
  */
-export type Back = { cut: boolean; inFrame: boolean; ndcX: number; ndcY: number };
+export type Back = { cut: boolean; axis: boolean; inFrame: boolean; ndcX: number; ndcY: number };
 
 /** One moment of a clip and the reel's camera at it. */
 export type MomentView = {
@@ -212,7 +213,7 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
     const watch = [clip.focus, clip.firstA, clip.firstB];
     const flightAt = [-1, -1, -1];
     const pending: (MomentView | null)[] = [null, null, null];
-    let last: { cam: string; p: THREE.Vector3 } | null = null;
+    let last: { cam: string; axis: string; p: THREE.Vector3 } | null = null;
     for (let k = -1; k * FRAME < wall; k++) {
       const dt = reel.frame(FLIGHT_S + k * FRAME) ?? 0;
       ragdolls.update(dt, w.live(), true, false, null);
@@ -226,7 +227,8 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
       const rig = rode ? "ride" : cut ? "crash" : reel["flying"] ? "flight" : `shot:${shot.kind === "chase" || reel["shotCam"].found ? shot.kind : "chase"}`;
       trace?.push({ clip: i, wall: k * FRAME, at: sim.time, rig, hold: clock.hold });
       // A crash-cam cut is its held eye on its axis: a later crash moves the axis onto itself (`CrashCam.retarget`).
-      const cam = `${rig}|${reel["shot"]}|${crash["held"]}|${crash["camAt"].x.toFixed(1)},${crash["camAt"].z.toFixed(1)}`;
+      const axis = `${crash["camAt"].x.toFixed(1)},${crash["camAt"].z.toFixed(1)}`;
+      const cam = `${rig}|${reel["shot"]}|${crash["held"]}|${axis}`;
       const view = (kind: MomentKind, at: number, p: THREE.Vector3, car: number): MomentView => ({ scene, title, kind, at, hitAt: clip.firstImpact, rig, x: p.x, y: p.y, z: p.z, ...judge(camera, s, p, screen), cam, back: null, hold: holdAfter(tl, at), wall: (stepOf(tl, at) * wall) / (tl.sim.length - 1), end: wall, fov: camera.fov, note: `${car === clip.focus ? "subject" : "other car"}, hit at ${clip.firstImpact.toFixed(2)} s, eye ${camera.position.toArray().map((v) => v.toFixed(1))}` });
       for (const m of moments) {
         if (m.at > sim.time + 1e-9 || m.at < 0) continue;
@@ -237,9 +239,9 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
             const j = judge(camera, s, last.p, screen);
             // The held crash cam keeps the place only when a cut sees the car, the earlier point and the later one (`heldCut`), else a lens that sees the car alone, so it is judged at the frame's edge.
             const edge = rig === "crash" ? 1 : VIEW.margin;
-            v.back = { cut: cam !== last.cam, inFrame: j.front && Math.abs(j.ndcX) <= edge && Math.abs(j.ndcY) <= edge && !j.covered, ndcX: j.ndcX, ndcY: j.ndcY };
+            v.back = { cut: cam !== last.cam, axis: axis !== last.axis, inFrame: j.front && Math.abs(j.ndcX) <= edge && Math.abs(j.ndcY) <= edge && !j.covered, ndcX: j.ndcX, ndcY: j.ndcY };
           }
-          last = { cam, p };
+          last = { cam, axis, p };
         }
         out.push(v);
         m.at = -1;

@@ -353,7 +353,7 @@ describe("given a crash in an open field and the cars of the pile standing about
     for (let cut = 0; cut < 3; cut++) assert.equal(reach[cut], free[cut], `cut ${cut} reach with cars over and under: ${reach[cut]}, without: ${free[cut]}`);
   });
 
-  it("when a later crash 7 m off has a car standing on the crane's eye round it, then the crash cam gives it its own shot: its axis moves onto it, its eye outside every car with none on its line to it, the first hit kept in frame", () => {
+  it("when a later crash 7 m off has a car standing on the crane's eye round it, then the crash cam gives it its own shot: its axis moves onto it, its eye outside every car with none on its line to it", () => {
     const b = new THREE.Vector3(5, 0.55, 5);
     const old = new THREE.Vector3();
     crashEye(old, CUTS[1]!, b, axis, 0, 1);

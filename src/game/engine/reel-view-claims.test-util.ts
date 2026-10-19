@@ -185,13 +185,15 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
       assert.equal(missed.length, 0, `${missed.length} moments not visible beside the panels`);
     });
 
-    it("when a hit of a clip's scope comes after its camera changed, then the earlier impact's point is still in the frame at that hit, so the viewer keeps the place", (t) => {
+    // Owner 2026-10-19 ("new angle per crash"): a later crash's own crash-cam axis may lose the wreck before it; any other cut keeps the place.
+    it("when a hit of a clip's scope comes after its camera changed, then the earlier impact's point is still in the frame at that hit, so the viewer keeps the place, unless the change is the crash cam onto that crash's own axis", (t) => {
       staged();
       const later = views.filter((v) => v.kind === "hit");
       const cuts = later.filter((v) => v.back?.cut);
-      const lost = cuts.filter((v) => !v.back!.inFrame);
-      t.diagnostic(`${later.length} later hits, ${cuts.length} after a camera change, the earlier point lost at ${lost.length}`);
-      for (const v of cuts) t.diagnostic(`${v.scene} "${v.title}" hit at ${v.at.toFixed(2)} s by ${v.cam}: the earlier point at ndc ${v.back!.ndcX.toFixed(2)},${v.back!.ndcY.toFixed(2)}${v.back!.inFrame ? "" : " LOST"} (${v.note})`);
+      const own = cuts.filter((v) => v.back!.axis);
+      const lost = cuts.filter((v) => !v.back!.inFrame && !v.back!.axis);
+      t.diagnostic(`${later.length} later hits, ${cuts.length} after a camera change (${own.length} onto the crash's own axis, ${own.filter((v) => !v.back!.inFrame).length} of them losing the earlier point), the earlier point lost at ${lost.length} other cuts`);
+      for (const v of cuts) t.diagnostic(`${v.scene} "${v.title}" hit at ${v.at.toFixed(2)} s by ${v.cam}${v.back!.axis ? " (own axis)" : ""}: the earlier point at ndc ${v.back!.ndcX.toFixed(2)},${v.back!.ndcY.toFixed(2)}${v.back!.inFrame ? "" : " LOST"} (${v.note})`);
       assert.ok(later.length >= bars.hit && cuts.length >= bars.cut, `too few later hits to test: ${later.length} hits, ${cuts.length} after a camera change`);
       assert.deepEqual(lost.map((v) => `${v.scene} ${v.at.toFixed(2)}`), []);
     });

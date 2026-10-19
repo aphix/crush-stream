@@ -323,10 +323,11 @@ once crash moments are done with, the camera follows the ejected person"). The c
 hold runs to the last slow-mo's hand-back (`clipTimeline`), so every later hit lands at least 5.9 wall s before the crash
 cam's window ends (`crashCamEnd(hold)`) and plays on the crash cam; the ride-along waits for the window. C04P-2WMS (hits 1-3
 at wall 3.75, 13.95, 20.07 s): the crash cam handed back at 9.92 s and hits 2 and 3 played on a context shot; now the crash
-cam holds 3.12-26.12 s. The context shot (a fixed eye over a hit after the hand-back and the one before it) had no hit left
-and is gone. The judge (`reel-view.test.ts`) checks every impact point of every clip at its own time on three screens
-(desktop beside its panels, a phone on its side and upright), and the earlier one still in frame when the camera changed
-between two hits (a later crash's own axis is such a change).
+cam holds 3.12-26.12 s, on hit 1's crane, hit 2's own crane from 13.23 s and hit 3's own long lens from 19.40 s. The context
+shot (a fixed eye over a hit after the hand-back and the one before it) had no hit left and is gone. The judge
+(`reel-view.test.ts`) checks every impact point of every clip at its own time on three screens (desktop beside its panels, a
+phone on its side and upright), and the earlier one still in frame when the camera changed between two hits, unless the
+change is the crash cam onto that crash's own axis (owner 2026-10-19, "new angle per crash": the cut may lose the wreck before).
 
 The crash cam begins before its car reaches the hit (the first cut's pick runs over the lead-in), so it is aimed at the recorded
 point's height (`ClipHit.y` of the first hit), not at the first car's height as the sim has it then: a wall hit on a kicker 9 m
@@ -335,11 +336,10 @@ up was aimed at the ground under it (the hit at ndc 5.2, out of the frame).
 A hit inside the crash cam's window (the car keeps being hit while the held cam stands on it) is looked at by the held cam
 itself (`ReelDirector.lookahead` → `CrashHold.later`): its aim turns to the impact `HIT_LEAD` (0.75 s) before it lands and
 stays `HIT_KEEP` (0.3 s) after, and `heldCut` picks the cut whose eye has room and sees the car and every impact still to
-come, falling back to the cuts that see the car alone when none sees them all. A later crash also gets its own axis where
-the place can be kept (`CrashCam.retarget`): as its look begins a `CrashPick` runs on its point at `PICK_RATE`, the turns
-with a cut that keeps the impact before it in frame first, and the cam moves onto it only on such a cut (`heldCut`'s
-`strict`); otherwise it stays on its axis turning to it. C04P's hit 2 is 20.7 m from hit 1 and no cut round it keeps hit 1
-in frame, so it stays on hit 1's crane. A driver thrown in the clip's scope is one more such beat (`LaterHits.thrown`: it
+come, falling back to the cuts that see the car alone when none sees them all. A later crash also gets its own axis
+(`CrashCam.retarget`): as its look begins a `CrashPick` runs on its point at `PICK_RATE` and the cam moves onto it once the
+pick has an eye there, even where the wreck before leaves the frame (staged reel-view clips: 2 later hits, both on their own
+axis, the earlier point at ndc -2.95,-1.76 and -1.75,0.41). A driver thrown in the clip's scope is one more such beat (`LaterHits.thrown`: it
 keeps the axis), aimed at his torso as he leaves the pane (owner 10-06: the throw is visible from the camera at the moment
 it happens; the ride-along no longer takes it).
 The held cam's lens opens past its cut's own to keep every beat of the moment in the frame of the narrowest screen (`fovFor`, never past `WIDEN_MAX` 70°), eased like the aim, except on the first frame of a held cut: a cut change (`heldCut` moved the shot, say crane to long lens as two drivers are thrown) is a new eye with a new own lens, so the opening is taken whole there (`CrashCam.widenCut`), not eased up from the last cut's. Eased, the long lens (21°) stood at 26° on the frame the throw came and one of two drivers thrown 3.2 m apart sat at NDC 0.81 on the phone-portrait layout (margin 0.8); now 36° there, in frame.
