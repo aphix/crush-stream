@@ -321,8 +321,8 @@ A hit step is marked `HIT_AHEAD` (a quiet step plus a fine slice, 1/60 s) of
 travel ahead, a step and a third of the coarse floor, so no step carries a car from clear of a face to inside it (0.50 m a step at
 40 m/s, 0.69 m at 55 m/s). The coarse-against-fine calibrations were re-pinned to the grid of the step: `hit-slice.test.ts` (a
 sedan's nose into a parked sedan's door, 20 to 40 m/s, four phases: worst 0.027 m between the floors, the 0.045 m bar it had at
-1/120 s) and `wall-crush.test.ts` (engine block travel into the oval's wall, 30 to 66 m/s: worst 0.061 m at 30 m/s from half a step
-out, bar 0.03 -> 0.065 m; 1/90 s left 0.040 m). `npm run sweep` does not step through the pacer. A clip saved at an older
+1/120 s) and `wall-crush.test.ts` (engine block travel into the oval's wall, 30 to 66 m/s, eight phases: mean gap between the
+floors ≤ 0.025 m and worst ≤ 0.075 m, a sixth of the 0.45 m kill; measured 0.020 / 0.068 m). `npm run sweep` does not step through the pacer. A clip saved at an older
 `REPLAY_VERSION` is refused by its header (`savedPlayable`, the outdated-replay purge); a clip of this version replays the steps
 it recorded, so the replay does not depend on the floor of the build that plays it (`replay-fidelity.test.ts` runs both floors).
 

@@ -105,11 +105,13 @@ already moves the skin (see the last section).
 
 Real-world anchors (NCAP full-frontal and IIHS side tests, [`CRUSH_CALIBRATION.md`](CRUSH_CALIBRATION.md)): frontal crush at 56 km/h is
 350–550 mm dynamic / 250–450 mm static and scales with speed, so at 32 km/h EBS 0.14–0.26 m static, ≤ 0.31 m dynamic;
-IIHS side test (1500 kg barrier, 50 km/h) ≈ 0.15–0.25 m B-pillar intrusion; footwell / A-pillar Good < 5 cm. Side shots
+IIHS side test (1500 kg barrier, 50 km/h): good-rated cars keep 0.18–0.43 m of maximum crush, median 0.31 (Brumbelow et al.
+2015, doi 10.1080/15389588.2015.1020112); footwell / A-pillar Good < 5 cm. Side shots
 flatten at the door band (`doorL/R` bands max 0.278 m).
 
 Passing (real assertions): front-middle bumpers 0.14–0.31 m and even L/R; rear-middle ≥ 0.11 m (the rear / front stroke
-ratio); doors ≥ 0.12 m at 40 km/h and 0.15–0.25 m at 50 km/h; corner bumper ≥ 0.12 m with the wing in but less than the
+ratio); doors ≥ 0.12 m at 40 km/h and 0.18–0.43 m at 50 km/h; corner bumper ≥ 0.12 m with the wing behind it (0.44 m back
+along the hit, past the face's travel) neither pushed out nor in deeper than the
 bumper; paint dents ≥ 0.05 m at every ram (≥ 0.04 m at the corners); mirrored rams mirror; crush never shrinks with energy
 (front, rear and corner rams every 10 km/h, 20–80 km/h; the side rams every 5 km/h, below); a 0.5 honeycomb face crushes
 front, left and frontLeft at least 2 cm less than steel; the front-middle kill shot leaves rear, sides and rear corners

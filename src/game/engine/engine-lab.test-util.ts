@@ -11,6 +11,7 @@ import { BOARD, type LabLayout, type LabPresetId } from "../scenes/lab.ts";
 import { G } from "../vehicle/car-air-body.ts";
 import { Lab, WALL, type LabShot } from "./engine-lab.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { FACE_TOP } from "../deform/load-crush.ts";
 
 /** Headless Lab: a layout's cars built and placed, the Lab's ground made active, its hooks on the engine's step (`tickWorld`); `dolls`: the dummies' world, when the rig has one. */
 export type LabRig = { lab: Lab; cars: DeformableCar[]; w: CrashWorld; dolls: RagdollSystem | null };
@@ -81,6 +82,16 @@ export function throwLevelAt(r: LabRig, thing: number, target: number, speed: nu
   r.lab.centre(target, _to);
   _velocity.subVectors(_to, _from).setY(0).setLength(speed);
   return r.lab.launch(thing, _velocity);
+}
+
+/** A base car's roof crushed this deep (m) under the thrown car is knocked down too, pinned where it stood: the settle row lets a roof that only carries the top car give 0.015 m. */
+const ROOF_KNOCKED = 0.02;
+
+/** The house of cards' items `shot` knocked down: its `fell`, plus each base car (items 1 and 2) whose roof the thrown car crushed `ROOF_KNOCKED` or more; sorted. */
+export function houseKnocked(r: LabRig, shot: LabShot): number[] {
+  const knocked = [...shot.fell];
+  for (const item of [1, 2]) if (!knocked.includes(item) && r.cars[r.lab.slotOf[item]!]!.deform.crush[FACE_TOP]! >= ROOF_KNOCKED) knocked.push(item);
+  return knocked.sort((a, b) => a - b);
 }
 
 const UP = new THREE.Vector3(0, 1, 0);

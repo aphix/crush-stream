@@ -66,8 +66,8 @@ Weight in brackets. Bands at other speeds scale linearly with v from the 56 km/h
 | T-bone 50 | struck door 0.12–0.28 m (2), bullet nose 0.08–0.30 m (1, an estimate) |
 
 Real-world anchors: 56 km/h full-frontal crush 0.35–0.55 m dynamic, 0.25–0.45 m permanent, pulse 90–140 ms at 18–25 g
-average; footwell / A-pillar intrusion under 5 cm is IIHS Good; IIHS side (1500 kg barrier at 50 km/h) allows about
-0.15–0.25 m of B-pillar intrusion; the rear stroke is shorter and softer than the front; roofs carry ≥ 3× the car's weight
+average; footwell / A-pillar intrusion under 5 cm is IIHS Good; in the IIHS side test (1500 kg barrier at 50 km/h) good-rated
+cars keep 0.18–0.43 m of maximum crush, median 0.31 (Brumbelow et al. 2015, doi 10.1080/15389588.2015.1020112); the rear stroke is shorter and softer than the front; roofs carry ≥ 3× the car's weight
 (FMVSS 216a). Crush scales with speed (linear spring).
 
 ### Ejection and kill speeds

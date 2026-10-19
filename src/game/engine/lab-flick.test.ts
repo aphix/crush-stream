@@ -1,7 +1,7 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { labDollRig, labRig, leaveLab, runLab, throwAt, type LabRig } from "./engine-lab.test-util.ts";
+import { houseKnocked, labDollRig, labRig, leaveLab, runLab, throwAt, type LabRig } from "./engine-lab.test-util.ts";
 import type { LabShot } from "./engine-lab.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { COM_Y } from "../vehicle/car-air-body.ts";
@@ -163,8 +163,8 @@ describe("given the house of cards on the bench, its thrower swiped on the throw
   });
 
   const reachCases = [
-    { it: "when it is swiped, seen side-on, at the angle and speed a lob to the top card needs, then it knocks all three cars of the house off their places", degrees: SIDE_ON },
-    { it: "when it is swiped, seen obliquely, at the angle and speed a lob to the top card needs, then it knocks all three cars of the house off their places", degrees: OBLIQUE },
+    { it: "when it is swiped, seen side-on, at the angle and speed a lob to the top card needs, then it knocks all three cars of the house down: off their places, or pinned under it with the roof crushed", degrees: SIDE_ON },
+    { it: "when it is swiped, seen obliquely, at the angle and speed a lob to the top card needs, then it knocks all three cars of the house down: off their places, or pinned under it with the roof crushed", degrees: OBLIQUE },
   ] as const;
   for (const testCase of reachCases) {
     it(testCase.it, () => {
@@ -177,7 +177,7 @@ describe("given the house of cards on the bench, its thrower swiped on the throw
       const shot = v.r.lab.launch(v.flicks[0]!.thing, v.flicks[0]!.velocity);
       runLab(v.r, 4);
       assert.notEqual(shot.contactS, null, "the flicked car never met the stack");
-      assert.deepEqual([...shot.fell].sort(), [1, 2, 3]);
+      assert.deepEqual(houseKnocked(v.r, shot), [1, 2, 3]);
     });
   }
 

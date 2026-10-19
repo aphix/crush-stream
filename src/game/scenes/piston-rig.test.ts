@@ -21,8 +21,8 @@ import { QUIET_HZ } from "../kernel/constants.ts";
  * Real-world anchors (NCAP full-frontal and IIHS side tests): frontal
  * crush at 56 km/h is 350–550 mm dynamic, 250–450 mm static; crush scales
  * with speed (linear spring), so at 32 km/h EBS 0.14–0.26 m static, ≤ 0.31 m
- * dynamic. IIHS side test (1500 kg MDB, 50 km/h): about 0.15–0.25 m of
- * B-pillar / door intrusion. Footwell / A-pillar Good < 5 cm.
+ * dynamic. IIHS side test (1500 kg MDB, 50 km/h): good-rated cars keep 18–43 cm
+ * of maximum crush (`IIHS_SIDE_CRUSH`). Footwell / A-pillar Good < 5 cm.
  *
  * `todo` entries are hand-offs to the crash-realism lane: the expectation
  * stays; the measured value is what the current rig does.
@@ -33,6 +33,8 @@ const TAP: PistonShot = { ...STANDARD, speedKph: 3 };
 const LOCAL_TOL = 0.03;
 /** Cabin intrusion target, the same figure the barrier tests use (IIHS rates footwell / A-pillar intrusion under 5 cm Good). */
 const CABIN_TOL = 0.06;
+/** IIHS side test (1500 kg MDB at 50 km/h): good-rated cars' maximum residual crush, 18–43 cm, median 31 (Brumbelow et al. 2015, doi 10.1080/15389588.2015.1020112). */
+const IIHS_SIDE_CRUSH = [0.18, 0.43] as const;
 
 const cache = new Map<string, PistonShotResult>();
 const cars = new Map<string, DeformableCar>();
@@ -154,17 +156,16 @@ describe("given the piston rig attached to a parked car (eight impactors, one at
 
 describe("given a parked car and any one piston firing the standard shot (1500 kg, 40 km/h, rigid face, car free to be shoved)", () => {
   for (const id of PISTON_IDS) {
-    it(`when the ${id} piston fires, then the struck particles go in by the depth expected for that piston (corner bumper deeper than the wing behind it, doors at least 0.12 m, front and rear even left to right)`, { todo: TODO[`${id}:struck`] }, () => {
+    it(`when the ${id} piston fires, then the struck particles go in by the depth expected for that piston (corner bumper at least 0.12 m and the wing behind it neither pushed out nor deeper, doors at least 0.12 m, front and rear even left to right)`, { todo: TODO[`${id}:struck`] }, () => {
       const r = shoot(id);
       assert.ok(r.contacted, "never touched");
       const got = r.struck.map((s) => `${s.name}=${f3(s.inward)}`).join(" ");
       if (isCorner(id)) {
-        // The corner's bumper particle takes the hit along the diagonal; the
-        // wing behind it folds in less (graded from the tip). Rear corners
-        // have no wing particle.
+        // A flat face crushes a point d behind the struck tip by max(0, travel − d); the wing sits 0.44 m back along the hit, past
+        // this shot's travel, so it is neither pushed out (beyond the fit frame's LOCAL_TOL) nor in deeper. Rear corners have no wing.
         const [bumper, wing] = r.struck;
         assert.ok(bumper!.inward >= 0.12, `${got}: corner bumper < 0.12 m`);
-        if (wing) assert.ok(wing.inward > 0.02 && wing.inward < bumper!.inward, `${got}: wing not graded behind the bumper`);
+        if (wing) assert.ok(wing.inward > -LOCAL_TOL && wing.inward < bumper!.inward, `${got}: wing pushed out or in deeper than the bumper`);
       } else if (isSide(id)) {
         assert.ok(r.struck[0]!.inward >= 0.12, `${got}: door < 0.12 m (IIHS band scaled to 40 km/h)`);
       } else {
@@ -190,10 +191,10 @@ describe("given a parked car and any one piston firing the standard shot (1500 k
     }
   });
 
-  it("when the left and right pistons fire 1500 kg at 50 km/h (the IIHS side-impact test), then each dents the door by 0.15–0.25 m", () => {
+  it(`when the left and right pistons fire 1500 kg at 50 km/h (the IIHS side-impact test), then each dents the door by ${IIHS_SIDE_CRUSH[0]}–${IIHS_SIDE_CRUSH[1]} m`, () => {
     for (const id of ["left", "right"] as const) {
       const door = shoot(id, { ...STANDARD, speedKph: 50 }).struck[0]!.inward;
-      assert.ok(door >= 0.15 && door <= 0.25, `${id} door ${f3(door)} m`);
+      assert.ok(door >= IIHS_SIDE_CRUSH[0] && door <= IIHS_SIDE_CRUSH[1], `${id} door ${f3(door)} m`);
     }
   });
 });

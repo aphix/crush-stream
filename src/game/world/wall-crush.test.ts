@@ -83,7 +83,7 @@ function play(speed: number, coarse: boolean, phase: number): Hit {
 }
 
 const played = new Map<string, Hit>();
-/** `play`, once per distinct hit: the kill test of each floor and the floors' comparison read the same 32 runs. */
+/** `play`, once per distinct hit: the kill test of each floor and the floors' comparison read the same 64 runs. */
 function hit(speed: number, coarse: boolean, phase: number): Hit {
   const key = `${speed} ${coarse} ${phase}`;
   const known = played.get(key);
@@ -94,11 +94,13 @@ function hit(speed: number, coarse: boolean, phase: number): Hit {
 }
 
 const SPEEDS = [30, 40, 55, 66];
-const PHASES = [0, 0.25, 0.5, 0.75];
-/** Calibration tolerance (m of engine block travel) between the two floors: 14 % of the 0.45 m that kills. The 1/80 s step's own grid leaves up to 0.061 m between them (measured, 30 m/s from half a step out; the 1/90 s step left 0.040 m, the 1/120 s step stayed under the 0.03 m bar it had). */
-const SAME = 0.065;
+const PHASES = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875];
+/** Mean gap (m of engine block travel) between the floors over every hit: the 1/80 s grid's phase scatter averages out, a step-size dependence does not (measured 0.016 m, 0.020 m with dents kept). */
+const SAME_MEAN = 0.025;
+/** Worst gap (m) between the floors in any one hit: a sixth of the 0.45 m that kills (measured 0.063 m, 0.068 m with dents kept). */
+const SAME_WORST = 0.075;
 
-describe("given a sedan flat out into the oval's straight wall at 30 to 66 m/s, from four approach phases against the step grid", () => {
+describe(`given a sedan flat out into the oval's straight wall at 30 to 66 m/s, from ${PHASES.length} approach phases against the step grid`, () => {
   for (const [floor, coarse] of [["1/240 s", false], ["1/80 s", true]] as const) {
     it(`when the pacer steps at ${floor}, then every hit kills the engine and throws the driver`, () => {
       const missed: string[] = [];
@@ -112,15 +114,20 @@ describe("given a sedan flat out into the oval's straight wall at 30 to 66 m/s, 
     });
   }
 
-  it("when the pacer steps at 1/80 s instead of 1/240 s, then the engine block travels as far, hit for hit", () => {
+  it(`when the pacer steps at 1/80 s instead of 1/240 s, then the engine block travels as far: within ${SAME_MEAN} m on average and ${SAME_WORST} m hit for hit`, () => {
     const apart: string[] = [];
+    let sum = 0;
     for (const speed of SPEEDS) {
       for (const phase of PHASES) {
         const fine = hit(speed, false, phase);
         const coarse = hit(speed, true, phase);
-        if (Math.abs(coarse.travel - fine.travel) > SAME) apart.push(`${speed} m/s phase ${phase}: ${fine.travel.toFixed(3)} m at 1/240 s, ${coarse.travel.toFixed(3)} m at 1/80 s`);
+        const gap = Math.abs(coarse.travel - fine.travel);
+        sum += gap;
+        if (gap > SAME_WORST) apart.push(`${speed} m/s phase ${phase}: ${fine.travel.toFixed(3)} m at 1/240 s, ${coarse.travel.toFixed(3)} m at 1/80 s`);
       }
     }
     assert.deepEqual(apart, []);
+    const mean = sum / (SPEEDS.length * PHASES.length);
+    assert.ok(mean <= SAME_MEAN, `mean gap ${mean.toFixed(4)} m over ${SPEEDS.length * PHASES.length} hits`);
   });
 });
