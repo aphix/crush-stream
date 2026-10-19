@@ -102,7 +102,9 @@ One pass of `deploy/crush-deploy.sh`:
 2. `git fetch` the branch. Same commit as `current/REVISION`, a commit marked failed, or a commit
    whose last build attempt is still inside its retry wait: exit. This is the whole cost of an idle
    poll.
-3. Defer if the 1-minute load average is at or above the core count.
+3. Defer if the 1-minute load average is at or above the core count, unless `state/force` exists: then
+   delete it and build anyway, once (`touch $ROOT/state/force && systemctl start crush-deploy.service`
+   when other work on the box keeps the load up).
 4. As the `crush` user: check out the commit, `corepack pnpm install --frozen-lockfile` (skipped when `package.json`,
    the pnpm lockfile and workspace file and the node version are the ones the last finished install used: `state/deps-key`), `corepack pnpm run build:node`
    with `APP_BASE`, copy `.output` to `releases/<UTC stamp>-<sha>`. The journal logs the seconds each

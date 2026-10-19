@@ -72,10 +72,14 @@ main() {
   fi
 
   # Load average also counts I/O waiters, but as a reason to wait two minutes
-  # it is good enough: the live relays on this box always win.
+  # it is good enough: the live relays on this box always win. `state/force`
+  # (touched by hand) skips the wait once, for when other work keeps the box busy.
   local load
   read -r load _ </proc/loadavg
-  if ((${load%.*} >= $(nproc))); then
+  if [[ -e state/force ]]; then
+    rm -f -- state/force
+    log "state/force: building ${want:0:12} at load $load"
+  elif ((${load%.*} >= $(nproc))); then
     log "load $load >= $(nproc) cores; deferring ${want:0:12}"
     return 0
   fi
