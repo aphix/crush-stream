@@ -1,7 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { DeformableCar } from "./car.ts";
-import type { LooseShape } from "./car-core.ts";
 import { idleDrive, applyDrive } from "./car-drive.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
 import { boxShape, newLooseShape } from "./loose-step.ts";
