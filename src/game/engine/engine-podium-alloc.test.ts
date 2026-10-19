@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
-import { PodiumDirector } from "./engine-podium.ts";
+import { NOW, PodiumDirector } from "./engine-podium.ts";
 import { stubBrowser } from "./engine-headless.test-util.ts";
 
 stubBrowser();
@@ -38,7 +38,8 @@ describe("given the podium on screen", () => {
     );
     const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 2000);
     const frame = (f: number): void => {
-      director.frame(f / 60);
+      director.time[NOW] = f / 60;
+      director.frame();
       director.aim(camera);
     };
     for (let f = 0; f < WARM_FRAMES; f++) frame(f);

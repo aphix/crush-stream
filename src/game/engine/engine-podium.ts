@@ -3,7 +3,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { PODIUM_BLOCKS, type PodiumPlace } from "../match/podium.ts";
 import type { PodiumHud } from "../match/types.ts";
 import { PodiumStage } from "../present/podium-stage.ts";
-import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
+import { sinCosAt } from "../kernel/physics-core.js";
 import type { CarDamage } from "./car-damage.ts";
 
 /** What the podium needs from the engine. */
@@ -26,8 +26,13 @@ export type PodiumHost = {
 
 /** What the reel director asks of a podium while it has the screen (`ReelDirector.showPodium`). */
 export type PodiumShow = {
-  /** Once per rendered frame at `now` (wall s): the wall seconds the effects advance by. */
-  frame(now: number): number;
+  /**
+   * The frame's time, in and out: the caller writes the wall time (s) into `time[NOW]` and `frame` leaves the wall seconds the effects advance by in `time[STEP]`. A typed array, not an
+   * argument and a result: a double passed to or returned from a call that is not inlined is a heap number each frame.
+   */
+  readonly time: Float64Array;
+  /** Once per rendered frame, after `time[NOW]` is written. */
+  frame(): void;
   /** The camera's pose for this frame. */
   aim(camera: THREE.PerspectiveCamera): void;
   /** The car the sun's shadow box follows: the winner's. */
@@ -47,6 +52,8 @@ const EYE_ABOVE = 8.5;
 const AIM_UP = 2.8;
 const STAND_HALF_WIDTH = 9;
 /** Slots of the show's clock (`PodiumDirector.clock`). */
+export const NOW = 0;
+export const STEP = 1;
 const BEGAN = 0;
 const LAST = 1;
 const AGE = 2;
@@ -84,6 +91,10 @@ export class PodiumDirector {
   private readonly spot = new THREE.Vector3();
   /** The show's clock in a typed array (a double stored in a field of the class is a heap number every frame): when it began, the last frame, seconds in, when the next jets fire. */
   private readonly clock = new Float64Array(4).fill(NaN);
+  readonly time = new Float64Array(2);
+  /** Scratch of `aim`: sine and cosine pairs of the sweep, its half and the pitch (`sinCosAt` writes them in place), and the lens's last fov, aspect and the distance it asks. */
+  private readonly trig = new Float64Array(4);
+  private readonly lens = new Float64Array(3).fill(NaN);
   private round = 0;
   private skinFrames = 0;
 
@@ -147,14 +158,15 @@ export class PodiumDirector {
     return this.up ? { kind: this.kind, names: this.names, reel } : null;
   }
 
-  frame(now: number): number {
+  frame(): void {
+    const now = this.time[NOW]!;
     const c = this.clock;
     if (Number.isNaN(c[BEGAN]!)) {
       c[BEGAN] = now;
       c[LAST] = now;
       c[NEXT_JETS] = 0;
     }
-    const dt = Math.min(Math.max(now - c[LAST]!, 0), 0.1);
+    this.time[STEP] = Math.min(Math.max(now - c[LAST]!, 0), 0.1);
     c[LAST] = now;
     c[AGE] = now - c[BEGAN]!;
     if (c[AGE]! >= c[NEXT_JETS]!) {
@@ -165,20 +177,37 @@ export class PodiumDirector {
       this.skinFrames--;
       for (let k = 0; k < this.standing.length; k++) this.standing[k]!.updateSkin();
     }
-    return dt;
   }
 
   aim(camera: THREE.PerspectiveCamera): void {
-    const settle = Math.min(1, this.clock[AGE]! / INTRO_S);
+    const age = this.clock[AGE]!;
+    const settle = Math.min(1, age / INTRO_S);
     const ease = 1 - (1 - settle) * (1 - settle) * (1 - settle);
-    // Far enough that the whole stand fits the view's width, whatever its shape (a phone upright sees a narrow slice).
-    const fits = STAND_HALF_WIDTH / (Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect);
-    const radius = Math.max(RADIUS_START + (RADIUS_SETTLED - RADIUS_START) * ease, fits);
-    const swing = detSin((this.clock[AGE]! * 2 * Math.PI) / SWEEP_PERIOD) * SWEEP_ARC * ease;
+    const lens = this.lens;
+    // Far enough that the whole stand fits the view's width, whatever its shape (a phone upright sees a narrow slice); worked out again only when the lens changes.
+    if (lens[0] !== camera.fov || lens[1] !== camera.aspect) {
+      lens[0] = camera.fov;
+      lens[1] = camera.aspect;
+      lens[2] = STAND_HALF_WIDTH / (Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect);
+    }
+    const radius = Math.max(RADIUS_START + (RADIUS_SETTLED - RADIUS_START) * ease, lens[2]!);
+    // The sweep's sine, then the sine and cosine of half the swing: the swing's own are their double angle, and the camera's yaw quaternion is the half angle itself.
+    const trig = this.trig;
+    trig[0] = (age * 2 * Math.PI) / SWEEP_PERIOD;
+    sinCosAt(trig, 0);
+    trig[2] = (trig[0]! * SWEEP_ARC * ease) / 2;
+    sinCosAt(trig, 2);
+    const sinHalf = trig[2]!;
+    const cosHalf = trig[3]!;
     const s = this.spot;
-    camera.position.set(s.x + detSin(swing) * radius, s.y + EYE_ABOVE, s.z + detCos(swing) * radius);
-    // Turned to the stand by yaw and pitch (no roll): `lookAt` allocates every call.
-    camera.rotation.set(-detAtan2(EYE_ABOVE - AIM_UP, radius), swing, 0, "YXZ");
+    camera.position.set(s.x + 2 * sinHalf * cosHalf * radius, s.y + EYE_ABOVE, s.z + (cosHalf * cosHalf - sinHalf * sinHalf) * radius);
+    // Turned to the stand by yaw (the half angle) and pitch down (the half of an angle whose cosine is the run over the distance, by the half-angle identities): no roll, no trig of the pitch, and
+    // no lookAt or Euler (each allocates every call). The quaternion is the yaw about y then the pitch about x (YXZ).
+    const rise = EYE_ABOVE - AIM_UP;
+    const cosPitch = radius / Math.sqrt(rise * rise + radius * radius);
+    const sinPitchHalf = -Math.sqrt((1 - cosPitch) / 2);
+    const cosPitchHalf = Math.sqrt((1 + cosPitch) / 2);
+    camera.quaternion.set(cosHalf * sinPitchHalf, sinHalf * cosPitchHalf, -sinHalf * sinPitchHalf, cosHalf * cosPitchHalf);
   }
 
   focus(): DeformableCar | null {

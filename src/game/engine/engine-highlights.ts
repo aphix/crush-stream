@@ -14,7 +14,7 @@ import { crashCamEnd, CUTS, hitAim, laterHits, type CrashCam, type CrashHold } f
 import { contextEye, contextPose, overheadPose } from "../present/highlight-cam.ts";
 import { ClipSim, NO_RIDE, type ReplayScene } from "./engine-replay.ts";
 import { SPARK_MIN_IMPULSE, TIMELINE_HZ } from "./constants.ts";
-import type { PodiumShow } from "./engine-podium.ts";
+import { NOW, STEP, type PodiumShow } from "./engine-podium.ts";
 
 /** Wall seconds of the far-overhead flight into each clip. */
 export const FLIGHT_S = 3;
@@ -473,7 +473,9 @@ export class ReelDirector {
   frame(now: number): number | null {
     if (this.podium) {
       this.playing = true;
-      return this.podium.frame(now);
+      this.podium.time[NOW] = now;
+      this.podium.frame();
+      return this.podium.time[STEP]!;
     }
     const solo = this.solo;
     const live = solo !== null || (this.clips.length > 0 && now >= this.startAt);

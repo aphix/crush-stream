@@ -7,7 +7,7 @@ import { fleetStyle } from "../scenes/fleet.ts";
 import { WHEEL_POS } from "../vehicle/car-mesh.ts";
 import { BLOCK_DEPTH, BLOCK_WIDTH, PODIUM_BLOCKS, type PodiumPlace } from "../match/podium.ts";
 import { CarDamage } from "./car-damage.ts";
-import { PodiumDirector, type PodiumHost } from "./engine-podium.ts";
+import { NOW, PodiumDirector, type PodiumHost } from "./engine-podium.ts";
 import { stubBrowser } from "./engine-headless.test-util.ts";
 
 stubBrowser();
@@ -63,7 +63,8 @@ describe("given the podium raised over a course with three racers, the winner's 
   const director = new PodiumDirector(host);
   const wreckSkin = bodyOf(donor);
   assert.ok(director.raise(PLACES, "race", "Test Oval"), "raised");
-  director.frame(0);
+  director.time[NOW] = 0;
+  director.frame();
   const cars = [...director.cars()];
 
   it("when the cars are read, then there is one per place and the winner's is first", () => {
@@ -106,7 +107,10 @@ describe("given the podium raised over a course with three racers, the winner's 
 
   it("when ten seconds are drawn, then the fountains fire a round of four jets every three seconds from the platform", () => {
     jets.length = 0;
-    for (let f = 1; f <= 600; f++) director.frame(f / 60);
+    for (let f = 1; f <= 600; f++) {
+      director.time[NOW] = f / 60;
+      director.frame();
+    }
     assert.equal(jets.length, 4 * 3, "rounds at 3, 6 and 9 s (the one at the start went before)");
     for (const jet of jets) assert.equal(jet.y, SPOT.y, "from the platform's top");
     assert.ok(new Set(jets.map((j) => j.color.getHex())).size > 1, "in more than one colour");
@@ -147,9 +151,11 @@ describe("given the camera round the podium", () => {
   it("when it swings over a minute on each screen shape, then the whole stand stays in view and the camera stays above the platform", () => {
     for (const shape of shapes) {
       const camera = new THREE.PerspectiveCamera(60, shape.aspect, 0.1, 2000);
-      director.frame(0);
+      director.time[NOW] = 0;
+      director.frame();
       for (let f = 0; f <= 3600; f += 20) {
-        director.frame(f / 60);
+        director.time[NOW] = f / 60;
+        director.frame();
         director.aim(camera);
         camera.updateMatrixWorld(true);
         assert.ok(camera.position.y > SPOT.y, `${shape.it} at ${f / 60} s: the eye is over the platform`);
@@ -165,7 +171,8 @@ describe("given the camera round the podium", () => {
     const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 2000);
     const middle = new THREE.Vector3(SPOT.x, SPOT.y + 2.8, SPOT.z);
     for (let f = 0; f <= 3600; f += 60) {
-      director.frame(f / 60);
+      director.time[NOW] = f / 60;
+      director.frame();
       director.aim(camera);
       camera.updateMatrixWorld(true);
       const ndc = middle.clone().project(camera);
@@ -176,7 +183,8 @@ describe("given the camera round the podium", () => {
   it("when it swings, then the eye stays on the viewer's side of the banner (in front of the blocks)", () => {
     const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 2000);
     for (let f = 0; f <= 3600; f += 20) {
-      director.frame(f / 60);
+      director.time[NOW] = f / 60;
+      director.frame();
       director.aim(camera);
       assert.ok(camera.position.z > SPOT.z + BLOCK_DEPTH / 2, `at ${f / 60} s the eye is at z ${camera.position.z - SPOT.z} from the stand`);
     }

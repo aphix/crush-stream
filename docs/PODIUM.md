@@ -42,6 +42,8 @@ kept between raises while a racer's body and class are the same, and let go with
 
 ## The camera, the jets
 
+The camera pose is built without a call that allocates: the swing's sine and cosine come from `sinCosAt` (it writes into a typed array; `detSin`/`detCos`/`detAtan2` box their numbers when not inlined, which showed as 110-180 B a frame in a window that did not happen to be inlined), the camera's quaternion from half-angle identities (no pitch trig, no Euler), the width fit only when the lens changes, and the frame's time goes in and out through `PodiumDirector.time` (a double passed to or returned from a call that is not inlined is a heap number). `engine-podium-alloc.test.ts` holds it at 16 B a frame, 10 of 10 runs alone.
+
 A pendulum swing of 0.8 rad either side of dead ahead over 30 s, dollying in from 34 m to 19 m in 3.5 s, 8.5 m over the platform, looking 2.8 m over it. The distance grows when the screen is narrow enough that the stand would not fit
 its width (a phone upright), so all three blocks stay in view on every screen shape; the pendulum keeps the banner behind the cars. The jets are the course fountains' (`FountainSystem.jet`, `docs/CINEMATIC.md`): four spots on the
 platform, a round every 3 s, in gold, red, blue and white in turn, scaled by the FX tier and nothing at `off`.
