@@ -3,9 +3,9 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { hypot2 } from "../kernel/physics-core.js";
 import { LANDING_HEIGHT, MINIGAME_MODE, STATION_HALF_WIDTH } from "../scenes/minigame-constants.ts";
 import { climbFootX, floorHeightAt, stationFrontX } from "../scenes/minigame-profile.ts";
-import { FIELD_HALF_WIDTH, POST_HALF_SPAN, POST_THICKNESS, SIGN_HEIGHT, SLAT_THICKNESS, type HeightSign, type HighJumpLayout } from "../scenes/minigame-high-jump.ts";
+import { FIELD_HALF_WIDTH, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS, type HighJumpLayout } from "../scenes/minigame-high-jump.ts";
 import { CANVAS_WHITE, canvasTexture } from "./lab-art.ts";
-import { SIGN_BOARD_PAINT } from "./range-art.ts";
+import { signAtlas, signFace } from "./range-art.ts";
 
 const HIGH_JUMP = MINIGAME_MODE.highJump;
 
@@ -62,26 +62,14 @@ const POST_ROUGHNESS = 0.6;
 const POST_CAP_HEIGHT = 0.25;
 const POST_CAP_OVERHANG = 1.3;
 
-/**
- * Height boards: a slat between the posts at every board's height (`SLAT_THICKNESS` square; the major ones, every 50 m, a bright slat),
- * and on every `layout.signs` slat a big labelled sign standing on it (`SIGN_HEIGHT` tall), so the sign is never below the line it names
- * (the lip's sign cannot sink behind the kicker's end) and it reads from about 100 m. The brass plate bolted to each post at every board:
- * its depth along the throw, its share of the post's width, and its height (m), the major ones big.
- */
-const PLATE = { depth: 0.04, widthShare: 0.8, height: { major: 1.2, minor: 0.3 } } as const;
-
-/**
- * The atlas the signs' labels share: `columns` cells across, each `cellWidth` x `cellHeight` px: one labelled cell per sign (up to 24 at
- * 10 m on the tallest frame, so a 2048 x 1792 canvas, well inside any GPU's limit), then a plain timber cell, then a bright bar cell.
- */
-const BOARD_ATLAS = { columns: 4, cellWidth: 512, cellHeight: 256 } as const;
-const BOARD_LABEL_FONT_PX = 170;
-const BOARD_LABEL_MARGIN_PX = 20;
-const BOARD_PAINT = { ...SIGN_BOARD_PAINT, plain: "#b08a58" } as const;
-const BOARD_EDGE_PX = 8;
-/** `BoxGeometry` builds six 4-vertex faces: +x, -x, ...: the -x face is the one the approaching car sees. */
+/** The brass plate on each post at a slat without a height plate: depth along the throw, share of the post's width, height (m). */
+const PLATE = { depth: 0.04, widthShare: 0.8, height: 0.3 } as const;
+/** A height plate (m): half the range's 2.6 x 1.3 m distance sign, so a lip-side chase camera about 20 m off reads its number; lifted off the post's face against z-fighting. */
+const HEIGHT_PLATE = { width: 1.3, height: 0.65, lift: 0.02 } as const;
+/** The slats' paint: the major ones (every 50 m) the signs' yellow, the rest plain timber. */
+const SLAT_COLOR = { major: 0xe3b93f, minor: 0xb08a58 } as const;
+/** `BoxGeometry` builds six 4-vertex faces. */
 const BOX_VERTICES_PER_FACE = 4;
-const BOX_FRONT_FACE = 1;
 const BOX_FACE_COUNT = 6;
 
 /** The lip's dashed height line: dash and gap lengths along the throw, and the line's thickness (m): thick enough to read against the red strip and the dark ground. */
@@ -251,89 +239,26 @@ function timberMaterial(): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ map: canvasTexture(TIMBER_TEXTURE_PX, TIMBER_TEXTURE_PX, paintTimber), roughness: 0.9 });
 }
 
-/** Cell `cellIndex` of the board atlas as a rectangle of the texture (`u0`, `u1` left to right, `v0`, `v1` bottom to top). */
-function atlasCell(cellIndex: number, cellCount: number) {
-  const rows = Math.ceil(cellCount / BOARD_ATLAS.columns);
-  const column = cellIndex % BOARD_ATLAS.columns;
-  const row = Math.floor(cellIndex / BOARD_ATLAS.columns);
-  return { u0: column / BOARD_ATLAS.columns, u1: (column + 1) / BOARD_ATLAS.columns, v0: 1 - (row + 1) / rows, v1: 1 - row / rows };
-}
-
-/** The face of a sign (m): between the posts, so its aspect is what the label is stretched back over. */
-const SIGN_FACE_ASPECT = (2 * POST_HALF_SPAN - POST_THICKNESS) / SIGN_HEIGHT;
-
-/** A cell's fill and edge (the label, if any, is drawn over it by the caller). */
-function paintBoardCell(context: CanvasRenderingContext2D, originX: number, originY: number, fill: string, edge: string | null): void {
-  context.fillStyle = fill;
-  context.fillRect(originX, originY, BOARD_ATLAS.cellWidth, BOARD_ATLAS.cellHeight);
-  if (edge === null) return;
-  context.strokeStyle = edge;
-  context.lineWidth = BOARD_EDGE_PX;
-  context.strokeRect(originX + BOARD_EDGE_PX / 2, originY + BOARD_EDGE_PX / 2, BOARD_ATLAS.cellWidth - BOARD_EDGE_PX, BOARD_ATLAS.cellHeight - BOARD_EDGE_PX);
-}
-
-/** One labelled cell per sign (in sign order), then the plain timber cell, then the bright bar cell; each label is stretched back to square over the cell-to-sign squeeze. */
-function paintBoardAtlas(context: CanvasRenderingContext2D, signs: readonly HeightSign[], faceAspect: number): void {
-  const horizontalStretch = BOARD_ATLAS.cellWidth / BOARD_ATLAS.cellHeight / faceAspect;
-  for (let cellIndex = 0; cellIndex < signs.length + 2; cellIndex++) {
-    const originX = (cellIndex % BOARD_ATLAS.columns) * BOARD_ATLAS.cellWidth;
-    const originY = Math.floor(cellIndex / BOARD_ATLAS.columns) * BOARD_ATLAS.cellHeight;
-    const sign = signs[cellIndex];
-    if (!sign) {
-      const isBarCell = cellIndex === signs.length + 1;
-      paintBoardCell(context, originX, originY, isBarCell ? BOARD_PAINT.fill : BOARD_PAINT.plain, isBarCell ? BOARD_PAINT.edge : null);
-      continue;
-    }
-    paintBoardCell(context, originX, originY, BOARD_PAINT.fill, BOARD_PAINT.edge);
-    context.save();
-    context.translate(originX + BOARD_ATLAS.cellWidth / 2, originY + BOARD_ATLAS.cellHeight / 2);
-    context.scale(horizontalStretch, 1);
-    context.fillStyle = BOARD_PAINT.ink;
-    context.font = `bold ${BOARD_LABEL_FONT_PX}px sans-serif`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText(sign.heightAboveLip === 0 ? "LIP = 0" : `${sign.heightAboveLip} m`, 0, 0, (BOARD_ATLAS.cellWidth - 2 * BOARD_LABEL_MARGIN_PX) / horizontalStretch);
-    context.restore();
-  }
-}
-
-/**
- * A box between the posts centred at height `y`. Every face reads the centre of atlas cell `solidCellIndex`; when `labelCellIndex` is
- * given the -x face (the one the car sees) reads that whole cell instead.
- */
-function boardBox(height: number, y: number, solidCellIndex: number, labelCellIndex: number | null, cellCount: number, layout: HighJumpLayout): THREE.BufferGeometry {
+/** One slat between the posts per layout board, in board order: the major ones bright, the rest timber. */
+function slatGeometry(layout: HighJumpLayout): THREE.BufferGeometry[] {
   const span = 2 * POST_HALF_SPAN - POST_THICKNESS;
-  const geometry = new THREE.BoxGeometry(SLAT_THICKNESS, height, span).translate(layout.postsX, y, 0);
-  const solid = atlasCell(solidCellIndex, cellCount);
-  const label = labelCellIndex === null ? null : atlasCell(labelCellIndex, cellCount);
-  const uv = geometry.getAttribute("uv");
-  for (let face = 0; face < BOX_FACE_COUNT; face++) {
-    for (let corner = 0; corner < BOX_VERTICES_PER_FACE; corner++) {
-      const vertexIndex = face * BOX_VERTICES_PER_FACE + corner;
-      if (face === BOX_FRONT_FACE && label) {
-        uv.setXY(vertexIndex, label.u0 + uv.getX(vertexIndex) * (label.u1 - label.u0), label.v0 + uv.getY(vertexIndex) * (label.v1 - label.v0));
-      } else {
-        uv.setXY(vertexIndex, (solid.u0 + solid.u1) / 2, (solid.v0 + solid.v1) / 2);
-      }
-    }
-  }
-  return geometry;
+  return layout.boards.map((board) => painted(boxAt(SLAT_THICKNESS, SLAT_THICKNESS, span, layout.postsX, board.y, 0), board.major ? SLAT_COLOR.major : SLAT_COLOR.minor));
 }
 
-/** One slat per layout board (merged first, in board order), then one sign per layout sign (in sign order). */
-function boardsMesh(layout: HighJumpLayout): THREE.Mesh {
-  const cellCount = layout.signs.length + 2;
-  const plainCellIndex = layout.signs.length;
-  const barCellIndex = layout.signs.length + 1;
-  const atlas = canvasTexture(BOARD_ATLAS.columns * BOARD_ATLAS.cellWidth, Math.ceil(cellCount / BOARD_ATLAS.columns) * BOARD_ATLAS.cellHeight, (context) =>
-    paintBoardAtlas(context, layout.signs, SIGN_FACE_ASPECT),
+/** A numbered plate on each post at every height mark, the same number on both, facing the run-up: inner edge flush with the post's inner face, so the opening stays clear. */
+function heightPlatesMesh(layout: HighJumpLayout): THREE.Mesh {
+  const labels = layout.signs.map((sign) => String(sign.heightAboveLip));
+  const x = layout.postsX - POST_THICKNESS / 2 - HEIGHT_PLATE.lift;
+  const outboard = POST_HALF_SPAN - POST_THICKNESS / 2 + HEIGHT_PLATE.width / 2;
+  const faces = layout.signs.flatMap((sign, index) =>
+    [-1, 1].map((side) => signFace(HEIGHT_PLATE.width, HEIGHT_PLATE.height, x, sign.y + SLAT_THICKNESS / 2 + HEIGHT_PLATE.height / 2, side * outboard, index, labels.length)),
   );
-  const slats = layout.boards.map((board) => boardBox(SLAT_THICKNESS, board.y, board.major ? barCellIndex : plainCellIndex, null, cellCount, layout));
-  const signs = layout.signs.map((sign, signIndex) => boardBox(SIGN_HEIGHT, sign.y, plainCellIndex, signIndex, cellCount, layout));
-  return mergedMesh("boards", [...slats, ...signs], new THREE.MeshStandardMaterial({ map: atlas, roughness: 0.85 }));
+  const mesh = mergedMesh("height-plates", faces, new THREE.MeshStandardMaterial({ map: signAtlas(labels), roughness: 0.8, side: THREE.DoubleSide }));
+  mesh.castShadow = true;
+  return mesh;
 }
 
-/** The net's top and spaced steel cables, and the brass height plates on the posts. */
+/** The net's top and spaced steel cables, and a brass plate on each post at every slat without a height plate. */
 function frameTrim(layout: HighJumpLayout): THREE.BufferGeometry[] {
   const net = netExtent(layout);
   const cable = NET_CABLE_THICKNESS * net.scale;
@@ -344,9 +269,10 @@ function frameTrim(layout: HighJumpLayout): THREE.BufferGeometry[] {
       boxAt(cable, cable, 2 * net.halfWidth, layout.netX, LANDING_HEIGHT + (cableIndex + 1) * NET_CABLE_SPACING, 0),
     ),
   ].map((part) => painted(part, STEEL_COLOR));
-  const plates = layout.boards.flatMap((board) =>
-    [-1, 1].map((side) => painted(boxAt(PLATE.depth, PLATE.height[board.major ? "major" : "minor"], POST_THICKNESS * PLATE.widthShare, plateX, board.y, side * POST_HALF_SPAN), BRASS_COLOR)),
-  );
+  const marked = new Set(layout.signs.map((sign) => sign.heightAboveLip));
+  const plates = layout.boards
+    .filter((board) => !marked.has(board.heightAboveLip))
+    .flatMap((board) => [-1, 1].map((side) => painted(boxAt(PLATE.depth, PLATE.height, POST_THICKNESS * PLATE.widthShare, plateX, board.y, side * POST_HALF_SPAN), BRASS_COLOR)));
   return [...cables, ...plates];
 }
 
@@ -441,9 +367,8 @@ function netMesh(layout: HighJumpLayout): THREE.Mesh {
 
 /**
  * The High jump's static art in station-local coordinates (+x the throw, x = 0 the lip, z = 0 the lane's middle, y from the pad): two
- * black 0.25 m posts with a slat and brass plate per `layout.boards` entry (every `BOARD_STEP` m up the frame) and a labelled sign
- * standing on every `layout.signs` slat (every `SIGN_EVERY_METRES` m), all of them the ragdoll's colliders (`MinigameGround`), a dashed
- * lip-height line, the net at `layout.netX` and `layout.netHeight` tall, and the run-up's barrels, chevrons and stop block. Seven draws.
+ * black 0.25 m posts with a slat per `layout.boards` entry, a numbered plate on each post at every `layout.signs` mark (the range's
+ * signs), a dashed lip-height line, the net at `layout.netX`, and the run-up's barrels, chevrons and stop block. Eight draws.
  */
 export function makeHighJumpArt(layout: HighJumpLayout, lipY: number): THREE.Group {
   const group = new THREE.Group();
@@ -463,8 +388,8 @@ export function makeHighJumpArt(layout: HighJumpLayout, lipY: number): THREE.Gro
     new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.15 }),
   );
   trim.castShadow = true;
-  const boards = boardsMesh(layout);
+  const boards = mergedMesh("boards", slatGeometry(layout), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
   boards.castShadow = true;
-  group.add(posts, netFrame, kicker, fascia, boards, trim, netMesh(layout));
+  group.add(posts, netFrame, kicker, fascia, boards, heightPlatesMesh(layout), trim, netMesh(layout));
   return group;
 }

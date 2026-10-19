@@ -26,16 +26,10 @@ const NET_HEIGHT_SHARE = 0.5;
 export const POST_HALF_SPAN = 3;
 /** A post's square cross-section side (m): 0.25 m whatever the frame's height. */
 export const POST_THICKNESS = 0.25;
-/** A slat's, and a sign's, square cross-section side (m): thinner than a post, so a dummy catches on it and tumbles through. */
+/** A slat's square cross-section side (m): thinner than a post, so a dummy catches on it and tumbles through. */
 export const SLAT_THICKNESS = 0.1;
-/**
- * A height sign stands on the slat at every multiple of this many metres above the lip (a multiple of `BOARD_STEP`): a panel as wide
- * as the gap between the posts, `SIGN_HEIGHT` tall and `SLAT_THICKNESS` deep, solid to the dummy like a slat.
- */
+/** A height plate stands on each post at every multiple of this many metres above the lip (a multiple of `BOARD_STEP`), the lip's included. */
 export const SIGN_EVERY_METRES = 10;
-/** A sign fills the room between its slat and the next, less this clearance (m) so it never touches the slat above. */
-const SIGN_CLEARANCE = 0.2;
-export const SIGN_HEIGHT = BOARD_STEP - SLAT_THICKNESS - SIGN_CLEARANCE;
 
 /** The landing field (the box piles, the net) reaches this far (m) beside the posts: a dummy does not have to fly between them. */
 const FIELD_MARGIN_BESIDE_POSTS = 3;
@@ -68,8 +62,8 @@ export type HighJumpMeasured = { bestHeight: number; landingDistance: number };
 
 type HeightBoard = { heightAboveLip: number; y: number; major: boolean };
 
-/** A height sign: the height it names (above the lip) and where its middle stands (m above the pad). */
-export type HeightSign = { heightAboveLip: number; y: number };
+/** A height mark: the height it names (above the lip) and where it stands (m above the pad), a plate on each post there. */
+type HeightSign = { heightAboveLip: number; y: number };
 
 /** One cardboard box: `y` is the centre height above the pad, `yaw` turns about the vertical. */
 export type BoxPlacement = { x: number; y: number; z: number; yaw: number; width: number; height: number; depth: number };
@@ -79,7 +73,7 @@ export type HighJumpLayout = {
   /** Height of the frame's top above the lip. */
   frameTop: number;
   boards: readonly HeightBoard[];
-  /** The height signs: solid panels between the posts, each carrying its height. */
+  /** The height marks every `SIGN_EVERY_METRES`: a plate on each post, art only (nothing between the posts but the slats). */
   signs: readonly HeightSign[];
   netX: number;
   /** Height of the catching net above the pad: tall enough for a dummy coming down anywhere in the piles. */
@@ -116,13 +110,6 @@ function heightBoards(frameTop: number, lipY: number): HeightBoard[] {
     boards.push({ heightAboveLip, y: lipY + heightAboveLip, major: heightAboveLip % MAJOR_BOARD_EVERY_METRES === 0 });
   }
   return boards;
-}
-
-/** A sign standing on every `SIGN_EVERY_METRES`-th board (the lip line's included), centred in the room its slat leaves under the next. */
-function heightSigns(boards: readonly HeightBoard[]): HeightSign[] {
-  return boards
-    .filter((board) => board.heightAboveLip % SIGN_EVERY_METRES === 0)
-    .map((board) => ({ heightAboveLip: board.heightAboveLip, y: board.y + SLAT_THICKNESS / 2 + SIGN_HEIGHT / 2 }));
 }
 
 /**
@@ -178,7 +165,7 @@ export function highJumpLayout(measured: HighJumpMeasured, lipY: number): HighJu
     postsX,
     frameTop,
     boards,
-    signs: heightSigns(boards),
+    signs: boards.filter((board) => board.heightAboveLip % SIGN_EVERY_METRES === 0).map(({ heightAboveLip, y }) => ({ heightAboveLip, y })),
     netX,
     netHeight: Math.max(NET_MIN_HEIGHT, measured.bestHeight * NET_HEIGHT_SHARE),
     boxes: boxPiles(postsX - BOX_PILE_LEAD, pileEndX, postsX),

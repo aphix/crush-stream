@@ -66,7 +66,7 @@ const MEASURED_TOLERANCE = 0.02;
 
 /**
  * The high jump's bars, on the score: the highest point his torso reaches above the lip inside the band `SCORE_BAND_HALF_DEPTH` either
- * side of the posts' plane (`HighJumpPeak`), measured on the free pad (the posts, slats and signs are taken out of the ragdoll's world:
+ * side of the posts' plane (`HighJumpPeak`), measured on the free pad (the posts and slats are taken out of the ragdoll's world:
  * the launch alone). The best class's best run (the frame is set from it) scores in `BEST_HEIGHT_BAND`: the owner's accepted 150-160 m was
  * the crossing height at the posts' plane of this same throw (156.4 m); its score under the band rule is 169.1 m (its apex, 178.2 m at
  * 17 m out, lies past the band), so the band is the old one times 169.1 / 156.4 = 1.08 (162-173 m), not a loosening. Every best run scores
@@ -79,7 +79,7 @@ const BEST_HEIGHT_BAND = { minimum: 162, maximum: 173 } as const;
 const BEST_RUN_HEIGHT_MINIMUM = 60;
 const SLOW_RUN_SHARE = 0.8;
 const SLOW_RUN_HEIGHT_MINIMUM = 50;
-/** With the posts, slats and signs in the world a catch may cost the best class some height, never below the owner's accepted 150 m. */
+/** With the posts and slats in the world a catch may cost the best class some height, never below the owner's accepted 150 m. */
 const FRAMED_BEST_HEIGHT_MINIMUM = 150;
 /** The mutation that shrinks the slow runs: upward times this must put an 80% run under the bar. */
 const UPWARD_CUT_FACTOR = 0.8;
@@ -490,10 +490,10 @@ describe("given the high jump with THROW_BOOST.highJump on the free pad (no fram
   });
 });
 
-/** The slats catch: at least one class's best run scores this much (m) less with the posts, slats and signs in the ragdoll's world than on the free pad. */
+/** The slats catch: at least one class's best run scores this much (m) less with the posts and slats in the ragdoll's world than on the free pad. */
 const FRAME_COSTS_BY = 5;
 
-/** Every class's best run thrown at the framed ground (the real posts, slats and signs are colliders), once at the ragdoll's steady 60 Hz. */
+/** Every class's best run thrown at the framed ground (the real posts and slats are colliders), once at the ragdoll's steady 60 Hz. */
 async function framedBestRuns(): Promise<Measurement[]> {
   const range = await ragdollOn(new MinigameGround({ highJump: FAR_NET }));
   return DRIVER_CARS.map((type) => {
@@ -513,7 +513,7 @@ function framedViolations(rows: readonly Measurement[]): string[] {
   return violations;
 }
 
-describe("given the high jump's posts, slats and signs as ragdoll colliders, with the real car and ragdoll", () => {
+describe("given the high jump's posts and slats as ragdoll colliders, with the real car and ragdoll", () => {
   it("when each class's best run is thrown at them, then the best class still scores at least 150 m, every best run still scores well up the boards, and the frame costs at least one run some height against the free pad", async (t) => {
     const framed = await framedBestRuns();
     const free = bestRunsOf(await measure("highJump", THROW_BOOST.highJump, 1));

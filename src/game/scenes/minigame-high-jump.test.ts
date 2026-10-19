@@ -16,9 +16,7 @@ import {
   HighJumpPeak,
   MAJOR_BOARD_EVERY_METRES,
   SIGN_EVERY_METRES,
-  SIGN_HEIGHT,
   SCORE_BAND_HALF_DEPTH,
-  SLAT_THICKNESS,
   POSTS_DISTANCE,
   POST_HALF_SPAN,
   POST_THICKNESS,
@@ -234,17 +232,12 @@ for (const layoutCase of LAYOUT_CASES) {
       assert.ok(layout.boards.length > bigHeights.length, "small boards exist between them");
     });
 
-    it("when the layout is made, then a sign stands on the slat at every SIGN_EVERY_METRES from the lip, in the room under the next slat", () => {
+    it("when the layout is made, then a height mark stands at every SIGN_EVERY_METRES from the lip, at its slat's height", () => {
       const expectedHeights = layout.boards.filter((board) => board.heightAboveLip % SIGN_EVERY_METRES === 0).map((board) => board.heightAboveLip);
-      assert.equal(JSON.stringify(layout.signs.map((sign) => sign.heightAboveLip)), JSON.stringify(expectedHeights), "the signs' heights");
+      assert.equal(JSON.stringify(layout.signs.map((sign) => sign.heightAboveLip)), JSON.stringify(expectedHeights), "the marks' heights");
       assert.equal(layout.signs.length, Math.ceil(layout.frameTop / SIGN_EVERY_METRES), "one per SIGN_EVERY_METRES below the frame top");
       assert.equal(layout.signs[0]!.heightAboveLip, 0, "the lip line has the first");
-      for (const sign of layout.signs) {
-        const slatTop = LIP_Y + sign.heightAboveLip + SLAT_THICKNESS / 2;
-        const nextSlatBottom = LIP_Y + sign.heightAboveLip + BOARD_STEP - SLAT_THICKNESS / 2;
-        assert.ok(Math.abs(sign.y - SIGN_HEIGHT / 2 - slatTop) < MILLIMETRE / 1000, `the ${sign.heightAboveLip} m sign stands on its slat`);
-        assert.ok(sign.y + SIGN_HEIGHT / 2 < nextSlatBottom, `the ${sign.heightAboveLip} m sign is clear of the slat above`);
-      }
+      for (const sign of layout.signs) assert.equal(sign.y, LIP_Y + sign.heightAboveLip, `the ${sign.heightAboveLip} m mark`);
     });
 
     it("when the layout is made, then the net is as tall as the larger of its minimum and half the best height", () => {
