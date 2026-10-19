@@ -249,9 +249,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * skin. A clip of 129 or before no longer reads.
  * 131: a keyframe's flight block carries each drawn wheel's turn and rate (`wheelSpin`, `wheelRate`), so a wheel popped in a replay leaves at the turn the live one did. A clip of
  * 130 or before no longer reads.
+ * 132: a gone windscreen no longer opens the roof header in the dummies' world (a lying pane's top-edge nodes stay roof), so a thrown dummy meets the roof the player sees. A clip of
+ * 131 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 131;
+const REPLAY_VERSION = 132;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

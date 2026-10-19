@@ -371,8 +371,8 @@ export class ProxyFitter {
             const edgeX = glass[b]! - glass[a]!;
             const edgeZ = glass[b + 2]! - glass[a + 2]!;
             const inside = (turn * (edgeX * (z - glass[a + 2]!) - edgeZ * (x - glass[a]!))) / hypot2(edgeX, edgeZ);
-            // Base edge: its nodes stay the hood's or the deck's. Top edge: a standing lying pane's stay the roof's (its step meets the glass); a door's reach a node past it, the roof rail the torso passes through the open window. A gone pane opens its quad `PANE_PAD` past its sides and top edge (the standing slab's own pad): no pillar or header stands in the opening a dummy goes through.
-            const margin = gone ? (e === 0 ? step : -PANE_PAD) : e === 0 ? step : e === 2 ? (lying ? step : -step) : 0;
+            // Base edge: its nodes stay the hood's or the deck's. Top edge: a lying pane's stay the roof's, standing or gone (its step meets the glass; the slab stops short of it); a door's reach a node past it, the roof rail the torso passes through the open window. A gone pane opens its quad `PANE_PAD` past its sides (the standing slab's own pad): no pillar stands in the opening a dummy goes through.
+            const margin = e === 0 || (e === 2 && lying) ? step : gone ? -PANE_PAD : e === 2 ? -step : 0;
             inQuad = inside > margin;
           }
           if (!inQuad) continue;
