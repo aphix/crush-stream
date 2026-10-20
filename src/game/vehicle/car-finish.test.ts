@@ -263,7 +263,7 @@ describe("given a car material being compiled", () => {
       const material = materialOfKind(testCase.kind, testCase.color);
       switchFinish(material, testCase.enabled);
       const { uniforms, vertex, fragment } = compile(material);
-      assert.equal(uniforms.finishMap !== undefined, testCase.expectedBlock, "finish map uniform");
+      assert.equal(uniforms.finishMap?.value instanceof THREE.DataTexture, testCase.expectedBlock, "finish map texture");
       assert.equal(fragment.includes("finishPlaneWeights("), testCase.expectedBlock, "triplanar weights in the fragment shader");
       assert.equal(vertex.includes("vFinishPos = position;"), testCase.expectedBlock, "object-space position handed on by the vertex shader");
       assert.equal(vertex.includes("vFinishNormal = objectNormal;"), testCase.expectedBlock, "object-space normal handed on by the vertex shader");
@@ -361,5 +361,39 @@ describe("given the real engine with its cars on the screen", () => {
     engine["dressCar"](car);
     const { paints, trims } = finishMaterialsUnder(car.group);
     for (const material of [...paints, ...trims]) assert.equal(material.customProgramCacheKey().includes(FINISH_KEY_MARK), false, `key ${material.customProgramCacheKey()}`);
+  });
+});
+
+/** What the renderer binds for `material` now (`WebGLRenderer.properties`): whether its current program draws the finish, and the finish map in the uniforms it uploads to that program (null: none). */
+function boundFinish(renderer: THREE.WebGLRenderer, material: THREE.Material): { finishProgram: boolean; finishMap: THREE.Texture | null } {
+  const built = renderer.properties.get(material);
+  assert.ok(typeof built === "object" && built !== null && "currentProgram" in built && "uniforms" in built, "the renderer has built the material");
+  const { currentProgram: program, uniforms } = built;
+  assert.ok(typeof program === "object" && program !== null && "cacheKey" in program && typeof program.cacheKey === "string", "a current program");
+  assert.ok(typeof uniforms === "object" && uniforms !== null, "uniforms for it");
+  const holder = "finishMap" in uniforms ? uniforms.finishMap : null;
+  const map: unknown = typeof holder === "object" && holder !== null && "value" in holder ? holder.value : null;
+  return { finishProgram: program.cacheKey.includes(FINISH_KEY_MARK), finishMap: map instanceof THREE.Texture ? map : null };
+}
+
+describe("given a police car whose paint and trim the renderer built with the finish on, then off (Auto drops to minimal as a match starts)", () => {
+  it("when the finish comes back on and the renderer returns to the programs it built first, then each is handed its finish map", () => {
+    const renderer = new THREE.WebGLRenderer({ canvas: element() });
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera();
+    const car = new DeformableCar(paint(), scene, null, "police");
+    scene.add(car.group);
+    const { paints, trims } = finishMaterialsUnder(car.group);
+    for (const on of [true, false, true]) {
+      applyCarFinish(car.group, on);
+      renderer.compile(scene, camera);
+    }
+    const bound = [...paints, ...trims].map((material) => boundFinish(renderer, material));
+    assert.ok(paints.length >= 2 && trims.length > 0, `the cop's body and door paints and its trim: ${paints.length} paints, ${trims.length} trims`);
+    assert.ok(bound.every((b) => b.finishProgram), "every finish material is back on its finish program");
+    const unbound = bound.filter((b) => b.finishMap === null).length;
+    assert.equal(unbound, 0, `${unbound} of ${bound.length} finish materials handed no finish map`);
+    car.dispose();
+    renderer.dispose();
   });
 });

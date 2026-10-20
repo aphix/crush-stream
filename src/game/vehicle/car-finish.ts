@@ -308,10 +308,14 @@ export function applyFinish<T extends THREE.MeshStandardMaterial>(material: T, k
   material.userData.carFinish = state;
   const previousHook = material.onBeforeCompile;
   const previousKey = material.customProgramCacheKey;
+  const finishMap: THREE.IUniform<THREE.DataTexture | null> = { value: null };
   material.onBeforeCompile = (shader, renderer) => {
     previousHook.call(material, shader, renderer);
+    // three binds a material's latest compile's uniforms to every program it returns to, so an off compile carries the map too: without it the
+    // finish sampler keeps its last unit (0, the sun's shadow sampler's, if never set) and every draw on that program fails.
+    shader.uniforms.finishMap = finishMap;
     if (!state.on) return;
-    shader.uniforms.finishMap = { value: kind === "paint" ? paintFinishMap() : trimGrainMap() };
+    finishMap.value ??= kind === "paint" ? paintFinishMap() : trimGrainMap();
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vFinishPos;\nvarying vec3 vFinishNormal;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFinishPos = position;\nvFinishNormal = objectNormal;");
