@@ -44,7 +44,7 @@ const FX_TIER_IDS: readonly string[] = FX_TIERS;
 export const ULTRA_AVAILABLE: boolean = FX_TIER_IDS.includes(FX_TIER_ULTRA);
 
 /** The query names that carry a loop through the bench pages' addresses (`?bench=…` is the step's own query, `ultra=1` the Ultra arm's, `epi=1` the epicenter arm's). */
-const LOOP_QUERY = { session: "loop", cycle: "cycle", step: "step", keep: "keep", auto: "auto", ultraNext: "loopultra", ultraCycle: "cycleultra", extended: EXTENDED_QUERY, epi: "loopepi" } as const;
+const LOOP_QUERY = { session: "loop", cycle: "cycle", step: "step", keep: "keep", auto: "auto", ultraNext: "loopultra", ultraCycle: "cycleultra", extended: EXTENDED_QUERY, epi: "loopepi", choose: "choose" } as const;
 
 /**
  * The loop's whole state, read from the address of the bench page it is on: its session (every submission of the loop carries
@@ -103,7 +103,7 @@ export function startRun(session: string, extended = false): BenchRun {
 }
 
 /** The options the Benchmark's chooser offers before a loop starts: they hold for every page of it. */
-export type BenchOptions = Pick<BenchRun, "keep" | "epi" | "ultra">;
+export type BenchOptions = Pick<BenchRun, "keep" | "epi" | "ultra" | "extended">;
 
 /** `search` with `options` written over the loop options it carries, for `runFromPage` to start the loop under them. */
 export function withOptions(search: string, options: BenchOptions): string {
@@ -113,17 +113,28 @@ export function withOptions(search: string, options: BenchOptions): string {
     [LOOP_QUERY.epi, options.epi],
     [LOOP_QUERY.ultraNext, options.ultra],
     [LOOP_QUERY.ultraCycle, options.ultra],
+    [LOOP_QUERY.extended, options.extended],
   ] as const;
   for (const [name, on] of flags) q.set(name, on ? "1" : "0");
   return `?${q.toString()}`;
 }
 
-/** The Benchmark entry's page: the cycle's first map with no loop yet, so it opens on the chooser. */
+/** The Benchmark entry's page: the cycle's first map with no loop yet, marked to open on the chooser. */
 export function entryHref(href: string, extended: boolean): string {
   const url = new URL(href);
-  url.search = `?${MAPS[0]!.query}${extended ? `&${LOOP_QUERY.extended}=1` : ""}`;
+  url.search = `?${MAPS[0]!.query}${extended ? `&${LOOP_QUERY.extended}=1` : ""}&${LOOP_QUERY.choose}=1`;
   url.hash = "";
   return url.toString();
+}
+
+/** Only an entry (a button, or a bare `/bench`) opens the chooser; any other address starts its loop at once under the options it sets. */
+export function asksOptions(search: string): boolean {
+  return new URLSearchParams(search).get(LOOP_QUERY.choose) === "1";
+}
+
+/** Where `/bench` points: with no params, the entry (chooser first); with params, the strip unless they name a bench, running at once. */
+export function benchRouteSearch(params: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  return Object.keys(params).length === 0 ? { [BENCH_QUERY]: BENCH_KIND.strip, [LOOP_QUERY.choose]: 1 } : { [BENCH_QUERY]: BENCH_KIND.strip, ...params };
 }
 
 /**

@@ -9,6 +9,7 @@ const TOGGLE_OFF_STYLE = "border-color:#56606e;background:#1c2530;color:#9aa6b5"
 
 /** Each option's label, in the order the chooser lists them; Ultra only where the build has it. */
 const LABELS: readonly (readonly [keyof BenchOptions, string])[] = [
+  ["extended", "Extended: A/B blocks and the replay on every page; with Epicenter, every map whole, then epicenter"],
   ["keep", "Loop: run again after the last map"],
   ["epi", "Epicenter: every map runs its epicenter arm"],
   ...(ULTRA_AVAILABLE ? [["ultra", "Ultra: Ultra FX on every page"] as const] : []),
@@ -16,11 +17,11 @@ const LABELS: readonly (readonly [keyof BenchOptions, string])[] = [
 
 /** The chooser before a new loop: a toggle for each option (as `run` offers them: all on unless its address says otherwise) and Start; resolves to the choice on Start. */
 export async function chooseOptions(run: BenchRun): Promise<BenchOptions> {
-  const choice: BenchOptions = { keep: run.keep, epi: run.epi, ultra: run.ultra };
+  const choice: BenchOptions = { keep: run.keep, epi: run.epi, ultra: run.ultra, extended: run.extended };
   const root = document.createElement("div");
   root.style.cssText = `${BENCH_CARD_STYLE};pointer-events:auto;width:min(420px,calc(100vw - 16px))`;
   const title = document.createElement("div");
-  title.textContent = `${run.extended ? "Extended benchmark" : "Benchmark"}: these hold for the whole run`;
+  title.textContent = "Benchmark: these hold for the whole run";
   root.append(title);
   for (const [name, label] of LABELS) {
     const toggle = document.createElement("button");

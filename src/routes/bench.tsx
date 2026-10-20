@@ -1,11 +1,9 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { benchRouteSearch } from "@/game/engine/bench-loop";
 
-/**
- * `/bench` (and `/bench/`): the Benchmark loop from its first bench. A `?bench=strip` page with no loop yet opens on the options chooser and starts
- * the loop from there, exactly as the Benchmark entry does (`components/bench-run.ts` `runBenchPage`), so this address only points there.
- */
+/** `/bench` (and `/bench/`): bare, the Benchmark entry (the chooser, then the loop); with params, that bench page, run at once (`benchRouteSearch`). */
 export const Route = createFileRoute("/bench")({
-  beforeLoad: () => {
-    throw redirect({ to: "/", search: { bench: "strip" } as never });
+  beforeLoad: ({ location }) => {
+    throw redirect({ to: "/", search: benchRouteSearch(location.search) as never });
   },
 });

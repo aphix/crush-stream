@@ -6,7 +6,7 @@
 import type { CrashEngine } from "@/game/engine/engine";
 import type { CrashHudState } from "@/game/hud/hud-store";
 import type { runBench } from "@/game/engine/engine-bench";
-import { driveLoop, entryHref, loopProgress, loopSettings, newSession, optionsOf, parseRun, runFromPage, stepHref, stepOf, withOptions, type BenchRun } from "@/game/engine/bench-loop";
+import { asksOptions, driveLoop, entryHref, loopProgress, loopSettings, newSession, optionsOf, parseRun, runFromPage, stepHref, stepOf, withOptions, type BenchRun } from "@/game/engine/bench-loop";
 import { chooseOptions } from "@/game/engine/bench-chooser";
 import { BETWEEN_STEPS_S } from "@/game/engine/bench-plan-time";
 import { WakeHold } from "@/game/engine/bench-wake";
@@ -23,7 +23,7 @@ export function startBenchLoop(extended: boolean): void {
   location.assign(entryHref(location.href, extended));
 }
 
-/** A page that starts a loop (the Benchmark entry, `/bench`, an address opened by hand) waits for the chooser; null for a bench no step of the cycle runs. */
+/** An entry's page (a button, or a bare `/bench`) waits for the chooser; null for a bench no step of the cycle runs. */
 async function chosenRun(search: string): Promise<BenchRun | null> {
   const session = newSession();
   const offered = runFromPage(search, session);
@@ -39,7 +39,7 @@ async function chosenRun(search: string): Promise<BenchRun | null> {
  */
 export async function runBenchPage(engine: CrashEngine, hud: () => CrashHudState): Promise<void> {
   const search = location.search;
-  const first = parseRun(search) ?? (await chosenRun(search));
+  const first = parseRun(search) ?? (asksOptions(search) ? await chosenRun(search) : runFromPage(search, newSession()));
   if (first !== null) history.replaceState(history.state, "", stepHref(location.href, first));
   // Dynamic on purpose: the bench's code is its own chunk, fetched only by a page that asks for a bench (as before the loop).
   const bench: { runBench: typeof runBench } = await import("@/game/engine/engine-bench");

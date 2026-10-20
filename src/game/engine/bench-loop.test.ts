@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
-import { advance, autoReloadAsked, BIGGEST_COURSE, cycleOf, driveLoop, entryHref, isBenchPage, loopProgress, loopSettings, newSession, optionsOf, parseRun, runFromPage, shareHashOf, startRun, stepHref, stepOf, ULTRA_AVAILABLE, withOptions, type BenchRun } from "./bench-loop.ts";
+import { advance, asksOptions, autoReloadAsked, benchRouteSearch, BIGGEST_COURSE, cycleOf, driveLoop, entryHref, isBenchPage, loopProgress, loopSettings, newSession, optionsOf, parseRun, runFromPage, shareHashOf, startRun, stepHref, stepOf, ULTRA_AVAILABLE, withOptions, type BenchRun } from "./bench-loop.ts";
 
 const RUN: BenchRun = { session: "k3x9q2", loop: 1, step: 0, ultra: false, keep: false, auto: false, ultraNext: false, extended: true, epi: true };
 
@@ -394,7 +394,7 @@ describe("given the quick bench, the default: each map once, under the epicenter
   });
 
   it("when the Epicenter option is off, then the four maps run once each with no epicenter arm, and with Loop off it ends after them", () => {
-    const run = runFromPage(withOptions("?bench=strip", { keep: false, epi: false, ultra: false }), "k3x9q2")!;
+    const run = runFromPage(withOptions("?bench=strip", { keep: false, epi: false, ultra: false, extended: false }), "k3x9q2")!;
     assert.equal(idsOf(run), "strip city dam-spine national-mall");
     assert.equal(advance({ ...run, step: 3 }), null, "the loop ends after the fourth map");
   });
@@ -442,11 +442,12 @@ describe("given the quick bench, the default: each map once, under the epicenter
   });
 });
 
-describe("given the chooser before a new loop (Loop, Epicenter, Ultra)", () => {
+describe("given the chooser before a new loop (Extended, Loop, Epicenter, Ultra)", () => {
   it("when the Benchmark entry opens the bench page, then it names no loop yet, so the page asks for the options first, and it starts at the strip", () => {
     for (const extended of [false, true]) {
       const href = entryHref(`${LOOP_BASE}?seed=3#scene=race`, extended);
-      assert.equal(href, `${LOOP_BASE}?bench=strip${extended ? "&extended=1" : ""}`);
+      assert.equal(href, `${LOOP_BASE}?bench=strip${extended ? "&extended=1" : ""}&choose=1`);
+      assert.equal(asksOptions(new URL(href).search), true, "the entry asks for the chooser");
       const search = new URL(href).search;
       assert.equal(parseRun(search), null, "no loop in the address");
       const run = runFromPage(search, "k3x9q2")!;
@@ -457,25 +458,45 @@ describe("given the chooser before a new loop (Loop, Epicenter, Ultra)", () => {
   });
 
   it("when Epicenter is turned off for the extended bench, then each map runs once without it, the extended page all the same", () => {
-    const run = runFromPage(withOptions("?bench=strip&extended=1", { keep: true, epi: false, ultra: false }), "k3x9q2")!;
+    const run = runFromPage(withOptions("?bench=strip&extended=1", { keep: true, epi: false, ultra: false, extended: true }), "k3x9q2")!;
     assert.equal(idsOf(run), "strip city dam-spine national-mall");
     assert.equal(benchPlan(loopSearch(run))!.extended, true);
   });
 
   it("when the options are chosen, then Ultra on runs Ultra this cycle and the next where the build has it, and off runs it in neither", () => {
-    const on = runFromPage(withOptions("?bench=strip", { keep: true, epi: true, ultra: true }), "k3x9q2")!;
-    const off = runFromPage(withOptions("?bench=strip", { keep: true, epi: true, ultra: false }), "k3x9q2")!;
+    const on = runFromPage(withOptions("?bench=strip", { keep: true, epi: true, ultra: true, extended: false }), "k3x9q2")!;
+    const off = runFromPage(withOptions("?bench=strip", { keep: true, epi: true, ultra: false, extended: false }), "k3x9q2")!;
     assert.equal(on.ultra && on.ultraNext, ULTRA_AVAILABLE, "on: this cycle and the next, where the build has it");
     assert.equal(off.ultra || off.ultraNext, false, "off: neither");
   });
 
   it("when an option is turned off, then every later page of the run, read back from its own address, has it off", () => {
-    let at: BenchRun | null = runFromPage(withOptions("?bench=strip", { keep: true, epi: false, ultra: false }), "k3x9q2");
+    let at: BenchRun | null = runFromPage(withOptions("?bench=strip", { keep: true, epi: false, ultra: false, extended: false }), "k3x9q2");
     for (let pages = 0; pages < 8; pages++) {
       assert.ok(at !== null, `page ${pages}`);
       const search = loopSearch(at);
       assert.deepEqual([at.keep, at.epi, at.ultra, at.ultraNext, benchPlan(search)!.epicenter, benchPlan(search)!.ultra], [true, false, false, false, false, false], `page ${pages}`);
       at = advance(parseRun(search)!);
     }
+  });
+
+  it("when Extended is chosen on the quick entry, then the run is the extended cycle: every map whole, then under the epicenter, each page extended", () => {
+    const run = runFromPage(withOptions("?bench=strip&choose=1", { keep: true, epi: true, ultra: false, extended: true }), "k3x9q2")!;
+    assert.equal(idsOf(run), "strip strip:epi city city:epi dam-spine dam-spine:epi national-mall national-mall:epi");
+    assert.equal(benchPlan(loopSearch(run))!.extended, true);
+  });
+
+  it("when a bench address with params but no entry mark is opened, then it asks no options and its loop starts at once under what it sets, the rest on", () => {
+    const search = "?bench=strip&extended=1";
+    assert.equal(asksOptions(search), false);
+    const run = runFromPage(search, "k3x9q2")!;
+    assert.deepEqual([run.extended, run.epi, run.keep, run.auto], [true, true, true, true]);
+    assert.equal(stepOf(run).id, "strip");
+  });
+
+  it("when /bench is opened bare, then it points at the entry (the chooser); with params, at that bench page with them, no chooser", () => {
+    assert.deepEqual(benchRouteSearch({}), { bench: "strip", choose: 1 });
+    assert.deepEqual(benchRouteSearch({ extended: 1 }), { bench: "strip", extended: 1 });
+    assert.deepEqual(benchRouteSearch({ bench: "city", course: "dam-spine", extended: 1, keep: 0 }), { bench: "city", course: "dam-spine", extended: 1, keep: 0 });
   });
 });
