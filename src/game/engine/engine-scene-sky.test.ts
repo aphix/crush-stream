@@ -5,8 +5,8 @@ import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
 import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
 import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
-import { SKY_DRAWN } from "../present/sky-dome.ts";
-import { SANDBOX_SKY } from "../present/sky-procedural.ts";
+import { SKY_DRAWN, SKY_LOOKS } from "../present/sky-dome.ts";
+import { PROCEDURAL_LOOKS, SANDBOX_SKY, type ProceduralLook, type SkyStops } from "../present/sky-procedural.ts";
 import type { SceneId } from "../scenes/scene-id.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
@@ -105,5 +105,38 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     engine.setFxTier("minimal");
     run(1);
     for (const key of Object.keys(fresh)) assert.equal(sandboxSky()[key], fresh[key], key);
+  });
+
+  /** The dome's stops, clouds, disc and stars as drawn, each beside the look it should take. */
+  const assertDomeLook = (look: SkyStops & ProceduralLook, label: string): void => {
+    const dome = stage().sky;
+    const u = dome["mat"].uniforms;
+    assert.equal(dome.drawn, SKY_DRAWN.procedural, `${label}: procedural`);
+    for (const [key, uniform] of [["horizon", "horizonColor"], ["mid", "midColor"], ["zenith", "zenith"]] as const) assert.equal((u[uniform]!.value as THREE.Color).getHexString(), new THREE.Color(look[key]).getHexString(), `${label}: ${key}`);
+    assert.equal(u.zenithEl!.value, look.zenithElevation, `${label}: zenith elevation`);
+    assert.equal(dome["cloudLit"].getHexString(), new THREE.Color(look.cloudLit).getHexString(), `${label}: cloud lit`);
+    assert.equal(dome["cloudShade"].getHexString(), new THREE.Color(look.cloudShade).getHexString(), `${label}: cloud shade`);
+    assert.deepEqual(dome["discTint"].toArray(), [...look.discTint], `${label}: disc tint`);
+    assert.equal(u.uStars!.value, look.stars ? 1 : 0, `${label}: stars`);
+  };
+
+  it("when the default procedural sky runs on high, then each race's dome takes its time of day's look (night: its stops, moon and stars on), and the sandbox's Night toggle the sandbox night look", () => {
+    engine.setFxTier("high");
+    for (const time of [TIME_OF_DAY.night, TIME_OF_DAY.sunset, TIME_OF_DAY.day]) {
+      engine.toggleRace();
+      engine.raceCommand({ type: "program", options: { trackId: TRACK_ID.city, laps: 1, aiCount: 3, police: false, aggression: 0.5, aiDifficulty: AI_EVERY_SLICE, spectate: false, noReset: false, timeOfDay: time } });
+      engine.raceCommand({ type: "start" });
+      run(1);
+      assertDomeLook({ ...SKY_LOOKS[time], ...PROCEDURAL_LOOKS[time] }, time);
+      engine["setScene"]("fleet");
+      run(1);
+    }
+    assertDomeLook(SANDBOX_SKY.day, "sandbox day");
+    engine.setNight(true);
+    run(1);
+    assertDomeLook(SANDBOX_SKY.night, "sandbox night");
+    engine.setNight(false);
+    engine.setFxTier("minimal");
+    run(1);
   });
 });
