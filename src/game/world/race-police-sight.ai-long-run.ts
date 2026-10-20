@@ -7,7 +7,8 @@ import { sightRange } from "../ai/cop-sight.ts";
 import type { HunterWorld } from "../ai/cop-brain.ts";
 import { DEFAULT_RACE_OPTIONS } from "../match/types.ts";
 import { TRACK_ID } from "./constants.ts";
-import { blankProjection, Track } from "./track.ts";
+import { Track } from "./track.ts";
+import { racerSeeing } from "./race-police-sight.test-util.ts";
 import fourCount from "./tracks/four-count.json" with { type: "json" };
 import oval from "./tracks/oval.json" with { type: "json" };
 import city from "./tracks/city.json" with { type: "json" };
@@ -57,7 +58,6 @@ function policeRace(course: Course, seed: number): PopReport {
   w.race.enter();
   const track = new Track(course.json);
   const sight = sightRange(track.length);
-  const proj = blankProjection();
   try {
     w.race.command({ type: "quit" });
     w.race.command({ type: "options", options: { ...DEFAULT_RACE_OPTIONS, trackId: course.id, laps: 3, aiCount: FULL_FIELD - 1, police: true } });
@@ -72,25 +72,11 @@ function policeRace(course: Course, seed: number): PopReport {
     const bornAt = new Map<number, number>();
     let recalling = false;
 
-    /** The racer nearest (x, z): its straight-line distance and the metres of road (x, z) lies ahead of it; whether it sees the spot at all. */
-    const racerSeeing = (x: number, z: number): { sees: boolean; nearest: number; text: string } => {
-      const spotS = track.project(x, z, -1, proj).s;
-      let nearest = Infinity;
-      let text = "";
-      for (let i = 0; i < racers; i++) {
-        const p = w.cars[i]!.group.position;
-        const dist = Math.hypot(p.x - x, p.z - z);
-        nearest = Math.min(nearest, dist);
-        const along = spotS - track.project(p.x, p.z, -1, proj).s;
-        const ahead = along - track.length * Math.round(along / track.length);
-        if (dist < sight.near || (ahead > -sight.behind && ahead < sight.ahead)) text ||= `racer ${i}: ${dist.toFixed(0)} m away, spot ${ahead.toFixed(0)} m ahead of it along the road`;
-      }
-      return { sees: text !== "", nearest, text };
-    };
+    const racerCars = Array.from({ length: racers }, (_, i) => w.cars[i]!.group.position);
 
     const park = world.park.bind(world);
     world.park = (id, x, y, z, yaw) => {
-      const seen = racerSeeing(x, z);
+      const seen = racerSeeing(track, racerCars, x, z);
       report.parks++;
       bornAt.set(id, w.race.time);
       if (seen.sees) report.broken.push(`${w.race.time.toFixed(2)} s: cop ${id} put on the road in sight of ${seen.text}`);
@@ -100,7 +86,7 @@ function policeRace(course: Course, seed: number): PopReport {
     world.store = (id) => {
       const car = w.cars[id]!;
       const p = car.group.position;
-      const seen = racerSeeing(p.x, p.z);
+      const seen = racerSeeing(track, racerCars, p.x, p.z);
       const moving = car.velocity.length() > MOVING;
       const age = w.race.time - (bornAt.get(id) ?? -Infinity);
       report.stores++;
