@@ -590,6 +590,7 @@ export abstract class EngineInput extends EngineRigs {
   /** The scene and the flat settings every submission carries (the trace's own knobs: what a result depends on). */
   submitContext(): SubmitContext {
     const s = this.traceSetup();
+    this.cine.post.glErrors.read(this.renderer.getContext());
     return {
       scene: s.scene,
       settings: {
@@ -598,6 +599,8 @@ export abstract class EngineInput extends EngineRigs {
         wet: s.wet,
         realism: Math.round(s.realism * 1000) / 1000,
         fxTier: s.fxTier,
+        fxAuto: this.autoFx.auto,
+        glErrors: this.cine.post.glErrors.count, glError: this.cine.post.glErrors.last,
         loop: s.loop,
         autoSlomo: s.autoSlomo,
         userTimeScale: s.userTimeScale,

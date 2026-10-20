@@ -82,6 +82,17 @@ describe("given an owner pulling submissions from the server", () => {
   });
 });
 
+describe("given flagged replays as the game sends them now and before the GL error count", () => {
+  const flag = (id, settings) => ({ id, kind: "flag", receivedAt: "2026-10-20T10:00:00Z", sha: "dfab41ef", size: 900, submission: { kind: "flag", settings } });
+
+  it("when they are fetched, then each flag's line ends with its FX tier, whether Auto picked it, and its GL errors with the last code", async () => {
+    const rows = [flag("AAAA-1111", { fxTier: "high", fxAuto: true, glErrors: 3, glError: 1282 }), flag("BBBB-2222", { fxTier: "low", fxAuto: false, glErrors: 0, glError: 0 }), flag("CCCC-3333", { fxTier: "minimal" })];
+    const lines = [];
+    await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server(rows).fetchImpl, pause: noPause, log: (l) => lines.push(l) });
+    assert.deepEqual(lines.map((l) => l.split(".json")[1]), ["  fx minimal, GL errors not recorded", "  fx low (picked), GL errors 0", "  fx high (Auto), GL errors 3 (last 0x502)"]);
+  });
+});
+
 const PHASED = {
   id: "CCCC-3333",
   kind: "bench",

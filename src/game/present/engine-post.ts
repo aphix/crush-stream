@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { BLUE_NOISE } from "./blue-noise.ts";
+import { GlErrors } from "./gl-errors.ts";
 
 /**
  * Cinematic FX quality, cheapest first. `off` and `minimal` render straight to the canvas (no post chain);
@@ -265,6 +266,8 @@ export class PostFX {
   /** The grain amplitude now: eases to the tier's (`TIER`) after a switch. */
   private grain = DITHER;
   private readonly renderer: THREE.WebGLRenderer;
+  /** Read at every tier switch: a switch changes the passes drawn and the programs a car's paint uses. */
+  readonly glErrors = new GlErrors();
   /** The low / high tiers' HDR scene target (the warm-up draws into it once). */
   readonly sceneRT: THREE.WebGLRenderTarget;
   private readonly mips: THREE.WebGLRenderTarget[] = [];
@@ -338,6 +341,7 @@ export class PostFX {
 
   /** A tier with no post chain (`off`, `minimal`) leaves the strengths at nothing, so the next post tier fades in from the plain frame; a switch between post tiers keeps them and eases the grain. */
   setTier(tier: FxTier): void {
+    this.glErrors.read(this.renderer.getContext());
     if (tier === "off" || tier === "minimal") {
       this.fade = 0;
       this.grain = DITHER;

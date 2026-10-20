@@ -7,7 +7,7 @@
  * `<app url>` is where the game is served, e.g. https://example.org/crush/ . Each submission is saved as `<out>/<receipt id>.json` (default
  * `.bench/submissions`, which git ignores); one already saved is not fetched again. The token is read from the environment only, so it
  * never appears in a process list or a shell history line. `--phases` prints each bench card's sim phase table (ms per sim-second by phase, the work
- * counts, long tasks and battery) under its line, for cards already saved too. `--frames` prints each card's frame stats in full: the percentiles and lows from every frame of its window, every listed spike with what the sim was doing in it, and the window in 200 ms buckets. `--series` prints the window's per-second phases and work counters, a row a second. `--ab` prints, for each loop cycle and map, the two cards the loop ran (epicenter off, then on) side by side. Exit 0 when every request went; 1 otherwise.
+ * counts, long tasks and battery) under its line, for cards already saved too. `--frames` prints each card's frame stats in full: the percentiles and lows from every frame of its window, every listed spike with what the sim was doing in it, and the window in 200 ms buckets. `--series` prints the window's per-second phases and work counters, a row a second. `--ab` prints, for each loop cycle and map, the two cards the loop ran (epicenter off, then on) side by side. A flag's line ends with its FX tier, whether Auto picked it, and the WebGL errors read since the page loaded. Exit 0 when every request went; 1 otherwise.
  */
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -26,6 +26,15 @@ const RETRY_429_MAX = 20;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const f1 = (v) => v.toFixed(1);
+
+/** A flag's look when it was sent, for the end of its line: "" for another kind, and a flag from before the GL count says so. */
+function flagLook(one) {
+  const s = one.submission?.settings;
+  if (one.kind !== "flag" || !s) return "";
+  const auto = typeof s.fxAuto === "boolean" ? (s.fxAuto ? " (Auto)" : " (picked)") : "";
+  if (typeof s.glErrors !== "number") return `  fx ${s.fxTier}${auto}, GL errors not recorded`;
+  return `  fx ${s.fxTier}${auto}, GL errors ${s.glErrors}${s.glErrors > 0 ? ` (last 0x${s.glError.toString(16)})` : ""}`;
+}
 
 /**
  * The lines of a bench card's phase table, for a submission as `readOne` answers it; none for another kind. A card from before the phase timing
@@ -393,7 +402,7 @@ export async function fetchSubmissions(options) {
     const one = await get(`${api}?id=${receipt}`, token, fetchImpl, pause);
     await writeFile(file, `${JSON.stringify(one, null, 1)}\n`);
     saved.push(receipt);
-    log(`${receipt}  ${one.kind.padEnd(7)} ${one.receivedAt}  build ${one.sha}  ${file}`);
+    log(`${receipt}  ${one.kind.padEnd(7)} ${one.receivedAt}  build ${one.sha}  ${file}${flagLook(one)}`);
     seen.push(one);
     if (phases) for (const line of phaseTable(one)) log(line);
     if (series) for (const line of seriesTable(one)) log(line);
