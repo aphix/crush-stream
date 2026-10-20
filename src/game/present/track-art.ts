@@ -10,7 +10,7 @@ import { makePrefabMaterials, makeRaceTextures, prefabParts, type RaceTextures }
 import { blankPoint, type Track } from "../world/track.ts";
 import { sections } from "../world/track-sections.ts";
 import {
-  applyMottle, BLACK, DEPTH_INSTANCED, DEPTH_INSTANCED_COLOR, type DrawKind, GANTRY_BEAM, hash01, LIGHT_OFF, LIGHT_ON,
+  applyMottle, BLACK, DEPTH_INSTANCED, DEPTH_INSTANCED_COLOR, type DrawKind, drawCell, GANTRY_BEAM, hash01, LIGHT_OFF, LIGHT_ON,
   LIGHT_RGB, Mesher, RED, RoadIndex, texClass,
 } from "./track-mesh.ts";
 import { buildGroundLayers, TerrainBatch } from "./track-ground.ts";
@@ -24,7 +24,8 @@ import { GroundsArt } from "./grounds-art.ts";
 /**
  * The visible course: terrain (with a far skirt), road / runoff ribbons for the loop, shortcuts and
  * traffic routes, markings and kerbs, walls, bridge decks with pillars, tunnels, the start gantry and
- * every placed prop, in a few dozen draw calls. Heights come from `track.ground()` with the path's
+ * every placed prop; the structures and props one mesh per draw cell (`drawCell`), so only the cells in view and in
+ * the sun's shadow box draw. Heights come from `track.ground()` with the path's
  * own level as the layer hint, so a road under a bridge and the deck above it both sit right.
  */
 
@@ -123,13 +124,13 @@ export class TrackArt {
       }
       if (p.tunnel.includes(1)) addTunnels(tunnels, tunnelLights, p, secs[i]!, ground);
     }
-    if (!walls.empty) this.add(new THREE.Mesh(walls.geometry(false), mats.concrete), { kind: "wall" }, true);
-    if (!decks.empty) this.add(new THREE.Mesh(decks.geometry(false), mats.concrete), { kind: "deck" }, true);
-    if (pillars.length > 0) this.add(new THREE.Mesh(painted(pillars), mats.concrete), { kind: "pillar" }, true);
-    if (!tunnels.empty) this.add(new THREE.Mesh(tunnels.geometry(false), mats.concrete), { kind: "tunnel" }, true);
+    for (const g of walls.cellGeometries()) this.add(new THREE.Mesh(g, mats.concrete), { kind: "wall" }, true);
+    for (const g of decks.cellGeometries()) this.add(new THREE.Mesh(g, mats.concrete), { kind: "deck" }, true);
+    for (const cell of pillarCells(pillars)) this.add(new THREE.Mesh(painted(cell), mats.concrete), { kind: "pillar" }, true);
+    for (const g of tunnels.cellGeometries()) this.add(new THREE.Mesh(g, mats.concrete), { kind: "tunnel" }, true);
     if (!tunnelLights.empty) {
       const glow = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
-      this.add(new THREE.Mesh(tunnelLights.geometry(false), glow), { kind: "tunnel" }, false);
+      for (const g of tunnelLights.cellGeometries()) this.add(new THREE.Mesh(g, glow), { kind: "tunnel" }, false);
     }
 
     // Start gantry, built in the line's frame: x = lateral (+ left), y up from the road, z forward.
@@ -292,4 +293,17 @@ export class TrackArt {
     }
     return false;
   }
+}
+
+function pillarCells(pieces: readonly Piece[]): Piece[][] {
+  const byCell = new Map<number, Piece[]>();
+  for (const piece of pieces) {
+    piece[0].computeBoundingSphere();
+    const { x, z } = piece[0].boundingSphere!.center;
+    const key = drawCell(x, z);
+    let cell = byCell.get(key);
+    if (!cell) byCell.set(key, (cell = []));
+    cell.push(piece);
+  }
+  return [...byCell.values()];
 }

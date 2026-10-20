@@ -25,6 +25,15 @@ export const KERB_FILL = 6;
 export const DEPTH_INSTANCED = new THREE.MeshDepthMaterial();
 export const DEPTH_INSTANCED_COLOR = new THREE.MeshDepthMaterial();
 export type DrawKind = "plain" | "instanced" | "instancedColour";
+/** Props and structures draw per square cell this wide (m), each culled by its own bounds in the view and the sun's shadow box; half as wide drew a few % fewer triangles for twice the added draw calls. */
+const DRAW_CELL = 256;
+/** A draw cell's key packs its x index over this many z indices (a course spans far fewer). */
+const CELL_KEY_SPAN = 65536;
+
+/** The draw cell holding (x, z), as one number. */
+export function drawCell(x: number, z: number): number {
+  return Math.floor(x / DRAW_CELL + 0.5) * CELL_KEY_SPAN + Math.floor(z / DRAW_CELL + 0.5);
+}
 export const KERB_WIDTH = 1.1;
 /** Start / finish chequer depth (m), centred on s = 0; lines stop short of it. */
 export const CHEQUER = 2;
@@ -106,6 +115,44 @@ export class Mesher {
     const g = this.part(0, this.pos.length / 3, 0, this.idx.length);
     if (smooth) g.computeVertexNormals();
     return g;
+  }
+
+  /** The triangles as one geometry per draw cell their middle falls in (`drawCell`; normals as set), each with its bounds. */
+  cellGeometries(): THREE.BufferGeometry[] {
+    const p = this.pos;
+    const idx = this.idx;
+    const byCell = new Map<number, number[]>();
+    for (let t = 0; t < idx.length; t += 3) {
+      const a = idx[t]! * 3;
+      const b = idx[t + 1]! * 3;
+      const c = idx[t + 2]! * 3;
+      const key = drawCell((p[a]! + p[b]! + p[c]!) / 3, (p[a + 2]! + p[b + 2]! + p[c + 2]!) / 3);
+      let tris = byCell.get(key);
+      if (!tris) byCell.set(key, (tris = []));
+      tris.push(t);
+    }
+    const owner = new Int32Array(p.length / 3).fill(-1);
+    const at = new Int32Array(p.length / 3);
+    const out: THREE.BufferGeometry[] = [];
+    for (const tris of byCell.values()) {
+      const m = new Mesher();
+      for (const t of tris) {
+        for (let k = t; k < t + 3; k++) {
+          const v = idx[k]!;
+          if (owner[v] !== out.length) {
+            owner[v] = out.length;
+            at[v] = m.pos.length / 3;
+            m.pos.push(p[v * 3]!, p[v * 3 + 1]!, p[v * 3 + 2]!);
+            m.nrm.push(this.nrm[v * 3]!, this.nrm[v * 3 + 1]!, this.nrm[v * 3 + 2]!);
+            m.col.push(this.col[v * 3]!, this.col[v * 3 + 1]!, this.col[v * 3 + 2]!);
+            m.uv.push(this.uv[v * 2]!, this.uv[v * 2 + 1]!);
+          }
+          m.idx.push(at[v]!);
+        }
+      }
+      out.push(m.geometry(false));
+    }
+    return out;
   }
 
   /**

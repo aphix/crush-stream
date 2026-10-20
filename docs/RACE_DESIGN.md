@@ -21,7 +21,7 @@ HUD with a focus view, controller-driven menus, and a campaign over every course
 | `ai/race-ai.ts`, `ai/contact-guard.ts`, `ai/input-fade.ts` | `RaceBrain` (racing driver), `guardContact`, `InputFade` (the AI's hands) |
 | `ai/traffic.ts` | `TrafficBrain` (loop lanes + side streets, observer bubble) |
 | `ai/police.ts`, `ai/pack-guard.ts` | `PoliceBrain` (stakeouts, pursuits, packs, attacks), `guardMates` |
-| `present/prefabs.ts`, `present/prefabs-mall.ts`, `present/prefab-pieces.ts`, `present/track-art.ts` | prefab meshes (the National Mall's landmarks in their own file, the shared pieces, boxes and materials in another); `TrackArt`: terrain, ribbons, decks + pillars, tunnels, markings, walls, start gantry, instanced and knocked props |
+| `present/prefabs.ts`, `present/prefabs-mall.ts`, `present/prefab-pieces.ts`, `present/track-art.ts` | prefab meshes (the National Mall's landmarks in their own file, the shared pieces, boxes and materials in another); `TrackArt`: terrain, ribbons, decks + pillars, tunnels, markings, walls, start gantry, instanced and knocked props; props and structures are one mesh per 256 m draw cell (`DRAW_CELL`), so the view and the sun's shadow box draw only the cells they reach, and a knocked prop's cell grows to hold it (`PropTumble.place`) |
 | `hud/menu-nav.ts` | spatial focus maths for controller menus |
 | `engine/engine-race.ts`, `engine/engine-race-field.ts` | `RaceDirector` (rules glue, menus, campaign, netplay, HUD model) over `RaceField` (course, grid, spawns, respawns, traffic bubble, wall / prop contacts) |
 | `components/race-*.tsx`, `use-pad-menu.ts` | readouts, standings, overlays, menus; pad / keyboard menu navigation |
@@ -70,7 +70,7 @@ timer, a projection hint, and `draft` / `drafts`. All plain JSON.
   (`Track.onRoad`), a main gate leaves a shortcut only **on** the main road, and where several shortcuts leave one
   checkpoint the car is on the nearest.
 - Ranking distance `progress = lap·L + s'`, `s'` clamped between the last passed gate and `next` the same lap.
-- Chevron signs (`chevron` prefab, scenery: no collider, one instanced mesh for every board of a course). A shortcut end whose turn
+- Chevron signs (`chevron` prefab, scenery: no collider, drawn instanced like every prop, one mesh per draw cell). A shortcut end whose turn
   from the way drivers come in to the way they must go (`junctionsOf`, `world/junctions.ts`, also read by the race AI) is more
   than `CHEVRON_TURN` (30°) gets a run of `CHEVRON_RUN` (4) boards `CHEVRON_GAP` (6 m) apart, from `placeProps` after every other
   placement: at a mouth, on the outside edge of the turn from the loop onto the shortcut, leading up to the mouth; at a rejoin,

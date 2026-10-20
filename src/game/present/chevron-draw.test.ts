@@ -9,6 +9,7 @@ import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { prefabParts } from "./prefabs.ts";
 import { PropTumble } from "./prop-tumble.ts";
+import { drawCell } from "./track-mesh.ts";
 
 const plain = new THREE.MeshBasicMaterial();
 const mats = { plain, concrete: plain, building: plain, billboard: plain, water: plain };
@@ -73,7 +74,7 @@ describe("given the chevron prefab", () => {
 });
 
 describe("given every chevron board of the four-count course", () => {
-  it("when they are drawn, then one instanced mesh holds them all", () => {
+  it("when they are drawn, then one instanced mesh per draw cell they stand in holds them, every board once", () => {
     const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.fourCount));
     const boards = placeProps(track).filter((p) => p.prefab === PREFAB.chevron);
     const chevronMeshes: THREE.InstancedMesh[] = [];
@@ -81,7 +82,7 @@ describe("given every chevron board of the four-count course", () => {
       if (id === PREFAB.chevron) chevronMeshes.push(mesh);
     });
     assert.ok(boards.length > 1, `${boards.length} boards`);
-    assert.equal(chevronMeshes.length, 1, "instanced meshes of the chevron prefab");
-    assert.equal(chevronMeshes[0]!.count, boards.length, "boards in it");
+    assert.equal(chevronMeshes.length, new Set(boards.map((b) => drawCell(b.x, b.z))).size, "instanced meshes of the chevron prefab");
+    assert.equal(chevronMeshes.reduce((sum, mesh) => sum + mesh.count, 0), boards.length, "boards in them");
   });
 });
