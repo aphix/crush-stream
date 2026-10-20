@@ -5,6 +5,9 @@
 // `sin` and `exp` are V8's own `Math.sin` / `Math.exp` (imported), so they cannot drift.
 // Build: `npm run build:kernel`. The committed `skin-kernel.wasm` is what the deploy box serves (it has no cargo).
 
+// deform-rig.ts `ARCH_YIELD`: an arch vertex's plan travel (m) off its plant at which the plant has let go.
+const ARCH_YIELD: f64 = 0.15;
+
 #[inline(always)]
 unsafe fn f(p: *const f64, i: usize) -> f64 {
     *p.add(i)
@@ -141,12 +144,16 @@ pub unsafe extern "C" fn skin_shape(
         }
         let h = *skin_hub.add(i);
         if h >= 0 {
-            // Wheel arch: plant the paint at its rest offset from the hub (the hub's rest while the wheel is on).
+            // Wheel arch: plant the paint at its rest offset from the hub (the hub's rest while the wheel is on),
+            // letting go as a crush drives it off (`archKeep`).
             let hb = h as usize * 5;
             let popped = f(hubs, hb) != 0.0;
-            let keep = if popped { 0.15 } else { 0.82 };
             let hx = if popped { rx + f(hubs, hb + 1) - f(hubs, hb + 2) } else { rx };
             let hz = if popped { rz + f(hubs, hb + 3) - f(hubs, hb + 4) } else { rz };
+            let ax = px - hx;
+            let az = pz - hz;
+            let fade = 1.0 - (ax * ax + az * az).sqrt() / ARCH_YIELD;
+            let keep = (if popped { 0.15 } else { 0.82 }) * if fade > 0.0 { fade } else { 0.0 };
             px = px * (1.0 - keep) + hx * keep;
             pz = pz * (1.0 - keep) + hz * keep;
         }

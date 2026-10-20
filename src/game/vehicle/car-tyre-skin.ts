@@ -50,12 +50,74 @@ const _h = new Float64Array(3);
 const _a = new Float64Array(3);
 
 /**
- * A crushed hood or fender drawn over a standing tyre is held on it: every skin point that rests over the tyre's upper surface stands at least `TYRE_GAP` over it,
- * lifted along the tyre's up. Each hold starts from the skin as last written, so the hold is a function of that skin and the wheels: no history, and it moves smoothly with the tyre.
+ * The share of two skin points' rest height apart that a lift under the lower one leaves between them: a held point lifts the skin resting above it, less
+ * the rest of the way between. Each held point lifted to its own height alone, a crushed nose's side stacked into one band and crossed itself.
+ */
+const ROW_KEEP = 0.1;
+/** How fast (m per m of rest distance) a carried lift falls off along the skin at least: past the rows above a held point it spreads a hand's width, where a near-flat deck would carry it whole. */
+const SPREAD = 0.5;
+
+/** A mesh's edges between distinct rest points (a crease's copies welded into one), each from its lower end to its higher one, and the points lowest first. */
+type RestEdges = { weld: Int32Array; order: Int32Array; start: Int32Array; to: Int32Array; drop: Float32Array };
+
+/** The upward edges of the mesh over `rest` (`index` its triangles); `drop`: how much of a lift the higher end may stand short of it (`ROW_KEEP`, `SPREAD`). */
+function restEdges(rest: Float32Array, index: THREE.BufferAttribute | null): RestEdges {
+  const count = rest.length / 3;
+  const weld = new Int32Array(count);
+  const firstAt = new Map<string, number>();
+  const points: number[] = [];
+  for (let v = 0; v < count; v++) {
+    const key = `${rest[v * 3]},${rest[v * 3 + 1]},${rest[v * 3 + 2]}`;
+    const known = firstAt.get(key);
+    if (known !== undefined) {
+      weld[v] = known;
+      continue;
+    }
+    weld[v] = points.length;
+    firstAt.set(key, points.length);
+    points.push(v);
+  }
+  const up: number[][] = points.map(() => []);
+  const corners = index ? index.count : count;
+  for (let t = 0; t + 2 < corners; t += 3) {
+    for (let k = 0; k < 3; k++) {
+      const a = weld[index ? index.getX(t + k) : t + k]!;
+      const b = weld[index ? index.getX(t + ((k + 1) % 3)) : t + ((k + 1) % 3)]!;
+      const ya = rest[points[a]! * 3 + 1]!;
+      const yb = rest[points[b]! * 3 + 1]!;
+      if (ya < yb) up[a]!.push(b);
+      else if (yb < ya) up[b]!.push(a);
+    }
+  }
+  const start = new Int32Array(points.length + 1);
+  for (let p = 0; p < points.length; p++) start[p + 1] = start[p]! + up[p]!.length;
+  const to = new Int32Array(start[points.length]!);
+  const drop = new Float32Array(to.length);
+  for (let p = 0; p < points.length; p++) {
+    const from = points[p]! * 3;
+    for (let e = 0; e < up[p]!.length; e++) {
+      const q = up[p]![e]!;
+      const at = points[q]! * 3;
+      to[start[p]! + e] = q;
+      const rise = rest[at + 1]! - rest[from + 1]!;
+      drop[start[p]! + e] = Math.max((1 - ROW_KEEP) * rise, SPREAD * hypot3(rest[at]! - rest[from]!, rise, rest[at + 2]! - rest[from + 2]!));
+    }
+  }
+  const order = Int32Array.from(points.keys()).sort((p, q) => rest[points[p]! * 3 + 1]! - rest[points[q]! * 3 + 1]!);
+  return { weld, order, start, to, drop };
+}
+
+/**
+ * A crushed hood or fender drawn over a standing tyre is held on it: every skin point that rests over the tyre's upper surface stands at least `TYRE_GAP` over it
+ * (its rest clearance if less: the uncrushed skin never moves), and lifts the skin resting above it with it (`ROW_KEEP`), so the skin keeps the order it rested in.
+ * Each hold starts from the skin as last written, so the hold is a function of that skin and the wheels: no history, and it moves smoothly with the tyre.
  */
 export class TyreSkin {
   private readonly mesh: THREE.Mesh;
   private readonly rest: Float32Array;
+  private readonly edges: RestEdges;
+  /** Per welded rest point (`RestEdges.weld`), the lift (m, up the mesh) this hold gives it. */
+  private readonly lift: Float32Array;
   /** Per wheel and vertex, how far (m) it rests over the tyre's surface; NaN for one that does not rest over it. */
   private readonly over: Float32Array[] = [];
   /** The class lift, hub shift and wheel scale `over` was found for. */
@@ -70,6 +132,8 @@ export class TyreSkin {
   constructor(mesh: THREE.Mesh, rest: Float32Array) {
     this.mesh = mesh;
     this.rest = rest;
+    this.edges = restEdges(rest, mesh.geometry.index);
+    this.lift = new Float32Array(this.edges.order.length);
     this.written = new Float32Array(rest.length);
   }
 
@@ -117,6 +181,7 @@ export class TyreSkin {
       this.written.set(pos);
       this.hasWritten = true;
     } else pos.set(this.written);
+    this.lift.fill(0);
     for (let w = 0; w < wheels.length; w++) {
       if ((gone >> w) & 1) continue;
       const e = this.heldAt.subarray(w * HELD_ELEMENTS.length, (w + 1) * HELD_ELEMENTS.length);
@@ -125,7 +190,13 @@ export class TyreSkin {
         _a[k] = e[k]! / scale;
         _h[k] = e[3 + k]!;
       }
-      this.liftOver(pos, this.over[w]!, scale);
+      this.needOver(pos, this.over[w]!, scale);
+    }
+    this.carryLift();
+    const { weld } = this.edges;
+    for (let v = 0; v < weld.length; v++) {
+      const up = this.lift[weld[v]!]!;
+      if (up > 0) pos[v * 3 + 1] = pos[v * 3 + 1]! + up;
     }
     attr.needsUpdate = true;
     computeNormalsFast(this.mesh.geometry);
@@ -143,22 +214,32 @@ export class TyreSkin {
     return moved;
   }
 
-  /** Lifts each vertex of `over` standing under the tyre's surface plus its gap (`TYRE_GAP`, or its rest clearance if less: the uncrushed skin never moves) up the tyre's up axis onto it. */
-  private liftOver(pos: Float32Array, over: Float32Array, scale: number): void {
-    const flat = hypot2(_a[0]!, _a[2]!);
-    const fx = -_a[2]! / flat;
-    const fz = _a[0]! / flat;
-    const ux = -fz * _a[1]!;
-    const uy = fz * _a[0]! - fx * _a[2]!;
-    const uz = fx * _a[1]!;
+  /** Each vertex of `over` standing under the tyre's surface plus its gap (`TYRE_GAP`, or its rest clearance if less: the uncrushed skin never moves): the lift up the mesh onto it, into `lift`. */
+  private needOver(pos: Float32Array, over: Float32Array, scale: number): void {
+    const uy = hypot2(_a[0]!, _a[2]!);
+    const { weld } = this.edges;
     for (let v = 0; v < over.length; v++) {
       const rested = over[v]!;
       if (Number.isNaN(rested)) continue;
       const c = clearOver(pos, v * 3, _h, _a, scale, Math.min(TYRE_GAP, rested));
       if (c >= 0) continue;
-      pos[v * 3] = pos[v * 3]! - c * ux;
-      pos[v * 3 + 1] = pos[v * 3 + 1]! - c * uy;
-      pos[v * 3 + 2] = pos[v * 3 + 2]! - c * uz;
+      const p = weld[v]!;
+      this.lift[p] = Math.max(this.lift[p]!, -c / uy);
+    }
+  }
+
+  /** Every lift carried up the mesh's edges, lowest point first: the higher end of an edge stands at most its `drop` short of the lower end's lift. */
+  private carryLift(): void {
+    const { order, start, to, drop } = this.edges;
+    const lift = this.lift;
+    for (let k = 0; k < order.length; k++) {
+      const p = order[k]!;
+      const up = lift[p]!;
+      if (up <= 0) continue;
+      for (let e = start[p]!; e < start[p + 1]!; e++) {
+        const carried = up - drop[e]!;
+        if (carried > lift[to[e]!]!) lift[to[e]!] = carried;
+      }
     }
   }
 }

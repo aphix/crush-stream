@@ -42,6 +42,8 @@ type Internals = {
 
 // ---- Reference: the pre-typed-array skinner (per-influence objects, per-vertex centre subtraction,
 // lerp trilinear, hub scan over every mass), with the arch-pin fix and the particle anchor (A5). Kept only here.
+/** An arch vertex's plan travel (m) off its plant at which the plant has let go (deform-rig `archKeep`). */
+const ARCH_YIELD_M = 0.15;
 
 function hash01(i: number, salt = 1): number {
   const s = Math.sin(i * 127.1 * salt + salt * 311.7) * 43758.5453;
@@ -176,9 +178,9 @@ function referenceSkin(d: Internals): Float32Array {
       for (const m of d.masses) {
         if (!m.hub) continue;
         if (Math.hypot(rx - m.rest.x, rz - m.rest.z) > 0.4) continue;
-        const keep = m.popped ? 0.15 : 0.82;
         const hx = m.popped ? rx + m.local.x - m.rest.x : rx;
         const hz = m.popped ? rz + m.local.z - m.rest.z : rz;
+        const keep = (m.popped ? 0.15 : 0.82) * Math.max(0, 1 - Math.hypot(px - hx, pz - hz) / ARCH_YIELD_M);
         px = px * (1 - keep) + hx * keep;
         pz = pz * (1 - keep) + hz * keep;
         break;

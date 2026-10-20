@@ -282,9 +282,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 146: a pair's crush gives room only from the stroke of the face it presses on, and only while the pair closes faster than `REST_SPEED` (a nose hit's stroke no
  * longer holds off a push on the tail, nor a resting pair's creep its overlap), and a wreck a fixed solid held out in the slice before takes no share of a pair push
  * into that solid (the other car takes it all); a keyframe carries that hold. A clip of 145 or before no longer reads.
+ * 147: a wheel arch's skin lets go of its hub as a crush drives it off its plant (held whole at the plant, not at all past 0.15 m of plan travel), in the drawn skin
+ * and the cage, so a nose crushed back past the front tyres no longer runs through a planted arch lip. A clip of 146 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 146;
+const REPLAY_VERSION = 147;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

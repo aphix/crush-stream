@@ -59,6 +59,13 @@ const RES_SOFT = 0.04;
 export const ARCH_TOP = 0.55;
 /** Plan reach (m) of the arch plant: skin below `ARCH_TOP` this near a hub's rest stands at its rest offset from that hub. */
 export const ARCH_PLANT = 0.4;
+/** Plan travel (m) off its plant at which an arch vertex lets go of its hub: a deeper crush takes the arch with the body (held, a 0.3 m nose crush ran the fender through the arch's lip and folded it). */
+const ARCH_YIELD = 0.15;
+
+/** The share `keep` of an arch vertex's pull onto its plant, as it stands `dx`, `dz` (m) off it: whole at the plant, none from `ARCH_YIELD` on (the skin kernel's `skin_shape` mirrors it). */
+export function archKeep(keep: number, dx: number, dz: number): number {
+  return keep * Math.max(0, 1 - Math.sqrt(dx * dx + dz * dz) / ARCH_YIELD);
+}
 
 export interface Cage {
   spec: CageSpec;

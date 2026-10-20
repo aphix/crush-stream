@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { computeNormalsFast } from "./fast-normals.ts";
 import { matchSkinLocal, type ShapeCluster } from "./shape-match.ts";
 import { DeformSolve } from "./deform-solve.ts";
-import { RES_SLOTS, SIM_SCALAR_NUMBERS, SKIN_K, type Beam, type MassNode, type RigOverrides, type Sensor } from "./deform-rig.ts";
+import { archKeep, RES_SLOTS, SIM_SCALAR_NUMBERS, SKIN_K, type Beam, type MassNode, type RigOverrides, type Sensor } from "./deform-rig.ts";
 import { INF_K } from "./deform-build.ts";
 import { cageAxis, cageCoeffs } from "./deform-state.ts";
 import { skinKernel, skinKey, type SkinDynamic, type SkinKernel, type SkinStatic, type SkinTables } from "./skin-kernel.ts";
@@ -616,11 +616,11 @@ export class StreamedDeformation extends DeformSolve {
       const h = this.skinHub[i]!;
       if (h >= 0) {
         // Wheel arch: plant the paint at its rest offset from the hub (the hub's rest while the wheel
-        // is on). Blending onto the hub centre folded every arch vertex ~0.34 m in, even on a tap.
+        // is on), letting go as a crush drives it off. Blending onto the hub centre folded every arch vertex ~0.34 m in, even on a tap.
         const m = this.masses[h]!;
-        const keep = m.popped ? 0.15 : 0.82;
         const hx = m.popped ? rx + m.local.x - m.rest.x : rx;
         const hz = m.popped ? rz + m.local.z - m.rest.z : rz;
+        const keep = archKeep(m.popped ? 0.15 : 0.82, px - hx, pz - hz);
         px = px * (1 - keep) + hx * keep;
         pz = pz * (1 - keep) + hz * keep;
       }

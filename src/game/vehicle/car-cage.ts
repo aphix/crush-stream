@@ -1,7 +1,7 @@
 import { IMPRINT_NONE } from "../deform/load-crush.ts";
 import { INF_K } from "../deform/deform-build.ts";
 import { cageAxis } from "../deform/deform-state.ts";
-import { RES_SLOTS, SKIN_K } from "../deform/deform-rig.ts";
+import { archKeep, RES_SLOTS, SKIN_K } from "../deform/deform-rig.ts";
 import { interiorPose } from "./part-pose.ts";
 import { decimate, upFacing } from "./cage-mesh.ts";
 import { planFieldOf, rasterise } from "./cage-fields.ts";
@@ -300,9 +300,9 @@ function skinCage(style: CageStyle, live: CageLive, out: CageFields): void {
     if (h >= 0) {
       const o = h * HUB_STRIDE;
       const popped = hubs[o]! !== 0;
-      const keep = popped ? ARCH_OFF : ARCH_ON;
       const hx = popped ? rx + hubs[o + 1]! - hubs[o + 2]! : rx;
       const hz = popped ? rz + hubs[o + 3]! - hubs[o + 4]! : rz;
+      const keep = archKeep(popped ? ARCH_OFF : ARCH_ON, px - hx, pz - hz);
       px = px * (1 - keep) + hx * keep;
       pz = pz * (1 - keep) + hz * keep;
     }

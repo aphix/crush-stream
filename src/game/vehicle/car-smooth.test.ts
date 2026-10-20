@@ -311,23 +311,43 @@ describe("given every body style's greenhouse frame", () => {
 const CRUSHED_OUTWARD_DOT_FLOOR = -0.2;
 const CRUSH_SPEED_KPH = 64;
 
+/** A `id` car crushed by the 64 km/h wall as the engine steps it, its skin written as drawn. */
+function crushedByWall(id: CarStyleId): DeformableCar {
+  const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
+  car.deform.setMode("shape");
+  runWall(CRUSH_SPEED_KPH, 1, "front", { car });
+  car.flushDeferredSkin();
+  car.updateSkin();
+  return car;
+}
+
+/** No normal (`normals`) of `geometry` on the side or ends points into the hull past `CRUSHED_OUTWARD_DOT_FLOOR`. */
+function assertFacesOut(label: string, geometry: THREE.BufferGeometry, normals: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): void {
+  for (const point of outerSidePoints(geometry, normals)) {
+    assert.ok(point.normal.dot(point.outward) > CRUSHED_OUTWARD_DOT_FLOOR, `${label} vertex ${point.vertex}: crushed normal ${point.normal.dot(point.outward)} against outward`);
+  }
+}
+
 describe("given every body style crushed by a 64 km/h full-width wall hit, as the engine steps it", () => {
   for (const id of CAR_STYLE_IDS) {
     it(`when a ${id}'s body normals are read after the skin is written, then every normal is finite and unit length and none on the side or ends points into the hull`, () => {
-      const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
-      car.deform.setMode("shape");
-      runWall(CRUSH_SPEED_KPH, 1, "front", { car });
-      car.flushDeferredSkin();
-      car.updateSkin();
-      const geometry = car.body.geometry;
+      const geometry = crushedByWall(id).body.geometry;
       const normals = geometry.getAttribute("normal");
       for (let vertex = 0; vertex < normals.count; vertex++) {
         const length = Math.hypot(normals.getX(vertex), normals.getY(vertex), normals.getZ(vertex));
         assert.ok(Number.isFinite(length) && Math.abs(length - 1) < 1e-4, `${id} vertex ${vertex}: crushed normal length ${length}`);
       }
-      for (const point of outerSidePoints(geometry, normals)) {
-        assert.ok(point.normal.dot(point.outward) > CRUSHED_OUTWARD_DOT_FLOOR, `${id} vertex ${point.vertex}: crushed normal ${point.normal.dot(point.outward)} against outward`);
-      }
+      assertFacesOut(id, geometry, normals);
+    });
+
+    it(`when a ${id}'s skin is read as the sim writes it, before the drawn tyre hold (the skin the wire carries and the cage is cut from), then none of its normals on the side or ends points into the hull`, () => {
+      const car = crushedByWall(id);
+      const written = car["bodyTyres"]?.["written"];
+      assert.ok(written, `${id}: no tyre hold ran`);
+      const geometry = car.body.geometry.clone();
+      geometry.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(written), 3));
+      geometry.computeVertexNormals();
+      assertFacesOut(`${id} sim skin`, geometry, geometry.getAttribute("normal"));
     });
   }
 });
