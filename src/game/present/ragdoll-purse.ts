@@ -53,8 +53,8 @@ const BODIES = 1 + ITEMS_MAX;
 export const PURSE_BODIES = BODIES;
 const PIECES = 1 + STRAP.length + ITEMS_MAX;
 /**
- * Damping (per s) once a body lies on the ground (in the air it is the dummy's: `AIR_LINEAR`, `AIR_ANGULAR`). A light box landing at 15 m/s on the range's sand
- * (friction 3) spun up to 80 rad/s and skipped 30 m past the dummy (headless range probe), so no body turns faster
+ * Damping (per s) once a body lies on the ground (in the air it is the dummy's: `AIR_LINEAR`, `AIR_ANGULAR`). A light box landing at 15 m/s on the range's sand,
+ * friction 3 at the time, spun up to 80 rad/s and skipped 30 m past the dummy (headless range probe), so no body turns faster
  * than `SPIN_MAX` rad/s (`advance`).
  */
 const GROUND_LINEAR = 4;
@@ -63,7 +63,7 @@ const SPIN_MAX = 15;
 /**
  * A body this near (m) the ground below it (its centre) is on it: more than the purse's longest half extent (0.15), as
  * a purse tumbling on its edge at 18 m/s keeps its centre at 0.18 and never counted as down, so nothing shed its speed
- * before the sand's friction (3) vaulted it 2.5 m up and 10 m past her (range probe, 8 iterations and 2 internal passes).
+ * before the sand (friction 3 at the time) vaulted it 2.5 m up and 10 m past her (range probe, 8 iterations and 2 internal passes).
  */
 const GROUND_REACH = 0.22;
 /** The share of its speed a body keeps at its first touchdown. */
@@ -420,7 +420,7 @@ export class Purses {
 
   /**
    * Body `b` of set `s` (after a step) within `GROUND_REACH` of the ground: it touches down once. A box landing at 15 m/s
-   * on the sand's friction (3) trips and vaults 2 m up and 15 m on (browser range run), so the touchdown sheds half its
+   * on the sand at friction 3 tripped and vaulted 2 m up and 15 m on (browser range run), so the touchdown sheds half its
    * speed along the ground and the fall, as the dummy's skin does (`give`), and from then on it is damped hard.
    */
   private ground(s: number, b: number, body: RigidBody): void {

@@ -167,7 +167,6 @@ export async function rangeThrow(type: DriverCar, control: Control = {}, frameDt
   };
   const sys = new RagdollSystem(new THREE.Scene(), () => holdForThrow(w.clock), () => {});
   await sys.preload();
-  sys.sand = true;
 
   const out: RangeThrow = {
     ejections: 0,

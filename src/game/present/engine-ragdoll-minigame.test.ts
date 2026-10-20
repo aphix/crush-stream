@@ -29,7 +29,6 @@ const ONE_BOX: readonly BoxPlacement[] = [{ x: 20, y: 0.5, z: 0, yaw: 0, width: 
 /** A ragdoll system on the range's flat sand with no cars. */
 async function system(): Promise<RagdollSystem> {
   const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  sys.sand = true;
   await sys.preload();
   setGround(null);
   sys.update(FRAME, [], true, false, null);

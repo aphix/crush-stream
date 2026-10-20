@@ -48,10 +48,9 @@ const PILE_MAX_X = Math.max(...PLACEMENTS.map((box) => box.x)) + BOX_CELL_PITCH 
 const PILE_MIN_Z = Math.min(...PLACEMENTS.map((box) => box.z)) - BOX_CELL_PITCH / 2;
 const PILE_MAX_Z = Math.max(...PLACEMENTS.map((box) => box.z)) + BOX_CELL_PITCH / 2;
 
-/** A ragdoll system on the real High jump ground as the range runs it (sand on), its dummies held lying where they land. */
+/** A ragdoll system on the real High jump ground as the range runs it, its dummies held lying where they land. */
 async function system(boxes: readonly BoxPlacement[]): Promise<RagdollSystem> {
   const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  sys.sand = true;
   await sys.preload();
   setGround(ground);
   sys.update(FRAME, [], true, false, null);

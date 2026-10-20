@@ -360,10 +360,9 @@ function withoutPrism(ground: MinigameGround, prismId: number): MinigameGround {
   return ground;
 }
 
-/** A ragdoll system on `ground` as the range runs it (sand on), dummies held lying where they land. */
+/** A ragdoll system on `ground` as the range runs it, dummies held lying where they land. */
 async function ragdollOn(ground: Ground): Promise<RagdollSystem> {
   const system = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  system.sand = true;
   await system.preload();
   setGround(ground);
   system.update(RAGDOLL_FRAME, [], true, false, null);

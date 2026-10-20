@@ -53,7 +53,6 @@ function ejection(shot: (typeof SHOTS)[number]): Ejection {
 /** A ragdoll system on flat sand with no cars, `shot` thrown out of a car (through `launch`, as the sim does); the doll in slot 0. */
 async function thrown(shot: (typeof SHOTS)[number], scale?: ReleaseScale): Promise<{ sys: RagdollSystem; doll: Doll; e: Ejection }> {
   const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  sys.sand = true;
   await sys.preload();
   setGround(null);
   sys.update(FRAME, [], true, false, null);
@@ -169,7 +168,6 @@ describe("given a dummy placed in the scene rather than thrown from a car", () =
   it("when it is placed in a slot a loose driver flew in, then it flies exactly as one placed in a fresh world: the loose driver's joint give is gone", async () => {
     const flight = async (afterLoose: boolean) => {
       const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-      sys.sand = true;
       await sys.preload();
       setGround(null);
       sys.update(FRAME, [], true, false, null);

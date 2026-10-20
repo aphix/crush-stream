@@ -108,7 +108,6 @@ async function rangeThrow(frame: () => number): Promise<Run> {
   w.clock.slomoAt = THROW_ONSET;
   const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
   await ragdolls.preload();
-  ragdolls.sand = true;
   const barrier = new THREE.Group();
   const dolls: Doll[] = ragdolls["dolls"];
   const torso = new THREE.Vector3();
@@ -149,7 +148,7 @@ async function rangeThrow(frame: () => number): Promise<Run> {
 }
 
 describe("given the ejection range (a sedan at 100 km/h into the jersey barrier, the driver thrown over it onto sand)", () => {
-  it(`when the throw is run at ${FRAME_HZ} and ${FINE_HZ} Hz display rates, then he lands within 1 m of the same spot, ${LANDING_M[0]}–${LANDING_M[1]} m on`, { todo: "59.2 m at 60 Hz, 55.8 m at 240 Hz: cartwheel landing accepted by the owner 2026-10-19 (EJECT_ROLL 16 + airborne brace)" }, async () => {
+  it(`when the throw is run at ${FRAME_HZ} and ${FINE_HZ} Hz display rates, then he lands within 1 m of the same spot, ${LANDING_M[0]}–${LANDING_M[1]} m on`, { todo: "45.5 m at 60 Hz, 46.0 m at 240 Hz: the cartwheel landing accepted by the owner 2026-10-19 (EJECT_ROLL 16 + airborne brace), on sand at the dummies' ground grip (0.6, not 3) since 2026-10-20" }, async () => {
     const slow = await rangeThrow(() => 1 / FRAME_HZ);
     const fast = await rangeThrow(() => 1 / FINE_HZ);
     assert.ok(slow.landing >= LANDING_M[0] && slow.landing <= LANDING_M[1], `${FRAME_HZ} Hz landing ${slow.landing.toFixed(1)} m`);
@@ -166,7 +165,6 @@ describe("given the ejection range (a sedan at 100 km/h into the jersey barrier,
     const land = async (dtOf: () => number): Promise<number> => {
       const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
       await ragdolls.preload();
-      ragdolls.sand = true;
       ragdolls.update(1 / FRAME_HZ, [], true, true, null);
       ragdolls["spawn"]({ car: 0, p: new THREE.Vector3(0, 1.2, 0), q: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2 + 0.3), v: new THREE.Vector3(27, 3.5, 0), w: new THREE.Vector3(0, 0, -3), age: 0, cop: false, rides: true });
       const torso = new THREE.Vector3();

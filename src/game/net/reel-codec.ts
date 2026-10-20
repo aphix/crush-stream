@@ -288,9 +288,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * real spawn (0.5-1 m apart) the pair reads the same as with the exclusion, and a later dummy now meets an earlier one lying in its way. A clip of 147 or before no longer reads.
  * 149: a fixed solid that shoves a wreck's drawn body out also stops the body's turn sweeping that body's deepest vertex into its face (the rigid plastic
  * impulse at that vertex): the centre's closing, which `strikeCar` reads, misses it, and a wreck turning on the spot had its nose shoved 5 cm out of a tyre stack every slice. A clip of 148 or before no longer reads.
+ * 150: the range's sand is ground like any other to a dummy (`GROUND_GRIP`, not a friction of 3 under the Max rule, whose pull at a planted forearm's edge spun the
+ * arm 160 rad/s in a step and sank it 5-11 cm), so a range throw lands, slides and rests shorter. A clip of 149 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 149;
+const REPLAY_VERSION = 150;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

@@ -365,7 +365,6 @@ export abstract class EngineScenes extends EngineMinigames {
     }
     if (this.rangeArt) this.rangeArt.visible = this.showRange && this.minigames.rangeArtShown;
     this.minigames.showArt(this.showRange);
-    this.ragdolls.sand = this.showRange;
     if (this.showLab && !this.labArt) {
       this.labArt = new LabArt();
       this.labFlick = new LabFlick(this.camera, () => this.canvas.getBoundingClientRect(), this.lab, (thing, velocity) => this.flickLab(thing, velocity));

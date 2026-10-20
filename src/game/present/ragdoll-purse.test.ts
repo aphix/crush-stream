@@ -178,7 +178,7 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
     r.dispose();
   });
 
-  it(`when a civilian woman is thrown from a 100 km/h crash into the barrier on sand at the ejection range, then she lands ${LANDING_M[0]}-${LANDING_M[1]} m on, the handbag rests within ${PURSE_NEAR} m of her instead of 30 m on, and no body spins faster than the spin cap`, { todo: "the handbag rests 38.4 m behind her (she lies at 59.1 m): cartwheel landing accepted by the owner 2026-10-19 (EJECT_ROLL 16 + airborne brace)" }, async () => {
+  it(`when a civilian woman is thrown from a 100 km/h crash into the barrier on sand at the ejection range, then she lands ${LANDING_M[0]}-${LANDING_M[1]} m on, the handbag rests within ${PURSE_NEAR} m of her instead of 30 m on, and no body spins faster than the spin cap`, { todo: "the handbag rests 24.9 m behind her (she lies at 46.0 m): the cartwheel landing accepted by the owner 2026-10-19 (EJECT_ROLL 16 + airborne brace), on sand at the dummies' ground grip (0.6, not 3) since 2026-10-20" }, async () => {
     const car = makeCar("shape", 0.32, 0.45);
     armKill(car.deform, "sedan", DEFAULT_REALISM, "default");
     launch(car, -RANGE.run, 0, Math.PI / 2, RANGE.kph / 3.6, 0);
@@ -186,7 +186,6 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
     w.onEject = (e) => r.launch(e, [car]);
     w.clock.slomoAt = THROW_ONSET;
     const r = await system(seedWhere(true));
-    r.sand = true;
     let spin = 0;
     let torso = NaN;
     let still = 0;

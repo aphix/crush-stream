@@ -46,7 +46,6 @@ export async function rangeWall(secs: number): Promise<Pose> {
   const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
   w.onEject = (e) => sys.launch(e, [car]);
   await sys.preload();
-  sys.sand = true;
   const out = noPose();
   let out0 = -1;
   for (let wall = 0; wall < 30 && (out0 < 0 || wall - out0 < secs); wall += FRAME) {

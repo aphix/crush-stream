@@ -195,10 +195,9 @@ after(() => {
   launchCar?.dispose();
 });
 
-/** A ragdoll system on `ground` as the range runs it (sand on), dummies held lying where they land. */
+/** A ragdoll system on `ground` as the range runs it, dummies held lying where they land. */
 async function ragdollOn(ground: Ground): Promise<RagdollRange> {
   const system = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  system.sand = true;
   await system.preload();
   setGround(ground);
   system.update(FRAME, [], true, false, null);

@@ -26,13 +26,9 @@ export const PATCH_AHEAD = 24;
 /** Half-size (m) of the sandbox's flat pad collider: past any spot a car reaches. */
 const FLAT_HALF = 1000;
 /**
- * The range's sand: friction that wins over the dummy's `SLIDE` (Max rule), so he digs in instead of skating. Lane
- * ragdoll-6's range probe at 30–360 Hz (fixed step, the fleshy losses): 3 lands him 28.2–29.3 m out at 100 km/h.
- */
-const SAND = 3;
-/**
- * The dummies' grip on the ground he lands on (pad, road, ramps, terrain; Max rule, over his own low `SLIDE`, which still holds on cars,
- * glass and props): clothing or skin sliding on asphalt, not a toy skating on it (owner, 2026-10-18).
+ * The dummies' grip on the ground he lands on (pad, the range's sand, road, ramps, terrain; Max rule, over his own low `SLIDE`, which still holds
+ * on cars, glass and props): clothing or skin sliding on asphalt, not a toy skating on it (owner, 2026-10-18). A sand of 3 spun a forearm planted
+ * under the whole dummy about its own length at 160 rad/s in one step, its edge 6–11 cm into the ground.
  */
 const GROUND_GRIP = 0.6;
 
@@ -48,10 +44,9 @@ function oneCell(s: Surface, k: number): boolean {
 /**
  * The solid of one-cell patch `k` of `s`: a level one is a slab 0.5 m thick under its top (a cuboid, at most `FLAT_HALF` out
  * from its middle: the pad; a cylinder where the patch is round: the fleet disc), a tilted one the prism from its face down to
- * 0.5 m under its lowest node (a ramp's wedge). `sand`: the range's pad (a slab's floor, whose friction wins over the dummy's
- * slide).
+ * 0.5 m under its lowest node (a ramp's wedge).
  */
-function cellSolid(R: Rapier, s: Surface, k: number, sand: boolean): ColliderDesc | null {
+function cellSolid(R: Rapier, s: Surface, k: number): ColliderDesc | null {
   const P = s.p;
   const o = k * P_STRIDE;
   const hs = s.nodes[k]!;
@@ -75,9 +70,7 @@ function cellSolid(R: Rapier, s: Surface, k: number, sand: boolean): ColliderDes
     _q.setFromAxisAngle(_r.set(0, 1, 0), Math.atan2(-az, ax));
     return R.ColliderDesc.cuboid(Math.min(Math.abs(du) / 2, FLAT_HALF), SLAB, Math.min(Math.abs(dv) / 2, FLAT_HALF))
       .setTranslation(ox + ax * um + cx * vm, top - SLAB, oz + az * um + cz * vm)
-      .setRotation({ x: _q.x, y: _q.y, z: _q.z, w: _q.w })
-      .setFrictionCombineRule(sand ? R.CoefficientCombineRule.Max : R.CoefficientCombineRule.Average)
-      .setFriction(sand ? SAND : 0.9);
+      .setRotation({ x: _q.x, y: _q.y, z: _q.z, w: _q.w });
   }
   const pts: number[] = [];
   let low = Infinity;
@@ -99,15 +92,15 @@ function cellSolid(R: Rapier, s: Surface, k: number, sand: boolean): ColliderDes
  * The ground under a throw at (`cx`, `cz`), `y` high: the active surface's own solids (`cellSolid` for its one-cell patches,
  * its `meshes`) and, where it has terrain (a multi-cell patch or a road deck), one heightfield patch of it `half` m to a side around the throw (its square, and the reach of the walls and solids built with it);
  * then the solids on it: the sandbox's standing `poles`, and on a `course` the road
- * walls, props, tunnels and decks near it. `sand`: the range's pad. `groups`: the collision groups of the walls, poles and solids; the ground itself is
- * built twice (`floor`: `PROP_FLOOR_GROUPS`, `DOLL_FLOOR_GROUPS`) but for the sand, one for all.
+ * walls, props, tunnels and decks near it. `groups`: the collision groups of the walls, poles and solids; the ground itself is
+ * built twice (`floor`: `PROP_FLOOR_GROUPS`, `DOLL_FLOOR_GROUPS`).
  */
-export function groundColliders(R: Rapier, world: World, groups: number, course: Course | null, sand: boolean, poles: readonly Pole[], cx: number, cz: number, y: number, half: number): Collider[] {
+export function groundColliders(R: Rapier, world: World, groups: number, course: Course | null, poles: readonly Pole[], cx: number, cz: number, y: number, half: number): Collider[] {
   const ground = activeGround();
   const into: Collider[] = [];
   const place = (desc: ColliderDesc) => into.push(world.createCollider(desc.setCollisionGroups(groups)));
   const add = (desc: ColliderDesc, friction = 0.9) => place(desc.setFriction(friction));
-  // A piece of ground twice: as it always was (0.9) for props, purses and boxes, and with `GROUND_GRIP` for the dummies alone (the range's sand: once, its own for all).
+  // A piece of ground twice: as it always was (0.9) for props, purses and boxes, and with `GROUND_GRIP` for the dummies alone.
   const floor = (desc: ColliderDesc) => {
     into.push(world.createCollider(desc.setFriction(0.9).setFrictionCombineRule(R.CoefficientCombineRule.Average).setCollisionGroups(PROP_FLOOR_GROUPS)));
     into.push(world.createCollider(desc.setFriction(GROUND_GRIP).setFrictionCombineRule(R.CoefficientCombineRule.Max).setCollisionGroups(DOLL_FLOOR_GROUPS)));
@@ -127,9 +120,8 @@ export function groundColliders(R: Rapier, world: World, groups: number, course:
       terrain = true;
       continue;
     }
-    const desc = cellSolid(R, ground, k, sand);
-    if (desc?.friction === SAND) place(desc);
-    else if (desc) floor(desc);
+    const desc = cellSolid(R, ground, k);
+    if (desc) floor(desc);
   }
   for (const m of ground.meshes) floor(R.ColliderDesc.trimesh(m.vertices, m.indices));
   // A course's heightfield; a scene's own solids (the Lab's bench and floor, `setSolids`) carry its ground, edges sharp.

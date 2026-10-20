@@ -49,7 +49,7 @@ export type DriveProfile = {
   footX: number;
 };
 
-/** A grid of the profile from `backX` to `frontX` (two cells beyond, the profile's own height there too), `cell` m between nodes, then the level landing (one plane, which is what makes the ragdoll's world sand) past it. */
+/** A grid of the profile from `backX` to `frontX` (two cells beyond, the profile's own height there too), `cell` m between nodes, then the level landing (one plane) past it. */
 export class ProfileGround extends Ground {
   constructor(profile: DriveProfile, cell: number) {
     super();
@@ -345,7 +345,6 @@ export async function driveIntoBarrier(type: DriverCar, ground: Ground | null, s
   };
   const system = new RagdollSystem(new THREE.Scene(), () => holdForThrow(world.clock), () => {});
   await system.preload();
-  system.sand = true;
   const out: BarrierThrow = { ejections: 0, carSpeed: 0, distance: null, apex: -Infinity, release: new THREE.Vector3() };
   let thrown = null as (typeof system)["dolls"][number] | null;
   const verticalHistory: { at: number; velocityY: number }[] = [];

@@ -161,8 +161,6 @@ export class RagdollSystem {
   private course: { ground: Ground; track: Track | null; placed: readonly Placed[] } | null = null;
   /** The course's `courseSolids` (built at its first throw), or the scene's own. */
   private solids: readonly Solid[] | null = null;
-  /** The flat ground is the range's sand pit (`SAND`), read when a run's first throw builds it (set by the engine). */
-  sand = false;
   private readonly mesh: DummyMesh;
   /** The HUD's Rig and Particles views of the dummies (`set`). */
   readonly debug: RagdollDebug;
@@ -1144,14 +1142,14 @@ export class RagdollSystem {
   private buildPatch(d: Doll, cx: number, cz: number, y: number): void {
     const c = this.course;
     if (c !== null && activeGround() === c.ground) d.patch.push(...this.patchAt(cx, cz, y, PATCH_HALF));
-    else if (this.statics.length === 0) this.statics.push(...groundColliders(this.R!, this.world!, FIXED_GROUPS, null, this.sand, this.poles, cx, cz, y, PATCH_HALF));
+    else if (this.statics.length === 0) this.statics.push(...groundColliders(this.R!, this.world!, FIXED_GROUPS, null, this.poles, cx, cz, y, PATCH_HALF));
   }
 
   /** The course's or the scene's ground, walls and solids `half` m around (`cx`, `cz`) at height `y` (`groundColliders`): a dummy's patch, or knocked props'. */
   private patchAt(cx: number, cz: number, y: number, half: number): Collider[] {
     const c = this.course!;
     if (c.track) this.solids ??= courseSolids(c.track, c.placed);
-    return groundColliders(this.R!, this.world!, FIXED_GROUPS, { track: c.track, solids: this.solids! }, this.sand, this.poles, cx, cz, y, half);
+    return groundColliders(this.R!, this.world!, FIXED_GROUPS, { track: c.track, solids: this.solids! }, this.poles, cx, cz, y, half);
   }
 
   private despawn(s: number): void {
