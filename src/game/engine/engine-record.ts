@@ -385,7 +385,8 @@ export class CrashRecorder {
       const c = cars[i]!;
       const d = c.drive;
       const o = (s * MAX_CARS + i) * INPUT_BYTES;
-      const tx = d.throttle * 127;
+      // A car in the air idles its drive but its gas still winds its wheels (`airThrottle`): the replay's `applyDrive` re-derives that from this byte.
+      const tx = (c.airThrottle !== 0 ? c.airThrottle : d.throttle) * 127;
       const sx = d.steer * 127;
       const bx = d.brake * 255;
       inp[o] = Math.round(tx) & 255;

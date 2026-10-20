@@ -148,7 +148,10 @@ crash it recorded. What it takes, each found by the replay straying from the liv
   the sim ran the pedals as doubles and a clip kept them as 8 bits for most cars (and as doubles for the involved cars
   alone, for 2 s after the hit, `fine`): a start-of-race pack drifted 7-17 m in the 3 s before the first keyframe
   corrected it, and a car one pile-up away 20-100 m after the hit. The `fine` block, the drift keyframes, the impact
-  keyframe and the smoothing that drew their corrections (`POP_TAU`) are gone with it.
+  keyframe and the smoothing that drew their corrections (`POP_TAU`) are gone with it. A car with no wheel down idles its
+  drive, but its gas still winds its drawn wheels (`airThrottle`), so the throttle byte of a car in the air holds that gas, not
+  the idle 0: a replay that ran 0 wound them otherwise, and a wheel popped later left at another turn
+  (`engine-replay-air-throttle.test.ts`).
 - **A car put on a spot has a keyframe of its own** (26). A cop woken in the clip sat at its stored spot 5.7 km away
   until a later keyframe put it on the road: the clip's budget dropped the intermediate keyframes, the placement's among them
   (the oval race with police and 11 AI, 5 clips: the top clip's cop 15, `CLIP_BUDGET`). A respawn after the first impact had
