@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { REARM_QUIET_S } from "../vehicle/car-core.ts";
 import { armPairWithRows, rowsClosing } from "../vehicle/car-air.ts";
-import { MU_BODY, WALL_CRUSH } from "../vehicle/car-air-body.ts";
+import { MU_BODY, REST_SPEED, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { leftoverCrumple, satPushCap, hypot2, CRASH } from "../deform/physics-util.ts";
 import { satCars } from "./sat.ts";
 import { bandsMeet, OUTLINE_REACH } from "./cage-outline.ts";
@@ -110,9 +110,10 @@ export function markApproaches(cars: readonly DeformableCar[], pairs: Int32Array
   }
 }
 
-/** Move a wreck, every mass and its group, `d` m along the unit (nx, nz). */
+/** A fixed solid moves a wreck, every mass and its group, `d` m out along the unit (nx, nz): it holds the wreck there (`holdBySolid`). */
 function shoveWreck(car: DeformableCar, nx: number, nz: number, d: number): void {
   car.deform.translateMasses(nx * d, nz * d, 0, 0);
+  car.deform.holdBySolid(nx, nz);
   car.group.position.x += nx * d;
   car.group.position.z += nz * d;
 }
@@ -159,6 +160,16 @@ function massesInto(car: DeformableCar, nx: number, nz: number): number {
   return fastest;
 }
 
+/** Cosine within which a contact's normal presses on the face a car's hit struck (`impactInward`, the hit's inward direction in the car's frame). */
+const STRUCK_FACE_COS = 0.5;
+
+/** The crush stroke (m) `car`'s hit has left (`hitStroke` less `strokeUsed`) where a contact presses into it along the unit (nx, nz): on the face the hit struck, else none. */
+function strokeLeftOn(car: DeformableCar, nx: number, nz: number): number {
+  const inward = car.deform.impactInward;
+  const onFace = inward.x * (nx * car.rightFlat.x + nz * car.rightFlat.z) + inward.z * (nx * car.fwdFlat.x + nz * car.fwdFlat.z) > STRUCK_FACE_COS;
+  return onFace ? car.deform.hitStroke() * (1 - car.deform.strokeUsed()) : 0;
+}
+
 /**
  * `car` met a fixed solid (a race wall, a prop, a ramp's flank) whose car-side face is `face` (`solidFace`), its footprint
  * `pen` deep along the unit normal (nx, nz). A hard hit (past `WALL_CRUSH` into the face) or a wreck meets it as the range's
@@ -189,6 +200,7 @@ export function wallBounce(car: DeformableCar, face: ContactBox, nx: number, nz:
     const arrival = wreckAtStart ? sinkReach(car, fx, fz, dt, massesInto(car, fx, fz)) : Infinity;
     strikeCar(car, face, dt, true, true, false, top);
     if (car.deform.massActive) {
+      if (bodyHit.held) car.deform.holdBySolid(fx, fz);
       const over = pen - WALL_REACH;
       if (over > 0) shoveWreck(car, nx, nz, Math.min(over, arrival));
       // The drawn body (the cage's vertices, `faceDepth`) is pushed out as the slab pushes it: while the car drives in as far as the
@@ -260,7 +272,8 @@ export function wallBounce(car: DeformableCar, face: ContactBox, nx: number, nz:
  * budget (`takePush`): the three SAT passes of one slice each pushing a full `satPushCap` moved a wedged wreck 0.11 m in 6 ms
  * (derby group pops), and one cap a slice, shared with the sphere shifts and wall translations, still put 0.04–0.05 m a step on
  * a slow wedged wreck against a zip bound of 3·v·h + 0.05 m: each car's cap is a push-out speed that grows only with its own
- * speed (the pose jump a pop bound of 3·v·h + 2 cm reads is that car's). A shove is a position correction alone: the pair's momentum is the exchange's
+ * speed (the pose jump a pop bound of 3·v·h + 2 cm reads is that car's). A car a fixed solid held out against its share in the slice
+ * before (`solidHolds`) takes none: the solid would put it back, so the other car takes the whole push. A shove is a position correction alone: the pair's momentum is the exchange's
  * (`exchangePair`), never a push's (a pusher kept its drive speed while its shoves moved the car it drove into 3.6–8.4 m/s at a
  * reported speed under 1 m/s: derby 10 cars, 40 s, 791 car-frames over 0.06 m in 1/60 s at under 1 m/s on main ef6611a).
  */
@@ -269,8 +282,12 @@ function pushApart(carA: DeformableCar, carB: DeformableCar, nx: number, nz: num
   loadPair(carA, carB, _dir, carA.group.position, 0, 0, 0);
   pairContact[CT_DEPTH] = depth;
   bodyContact(pairRows, 0, BODY_SIZE, pairContact, pairResult);
-  const aAmt = pairResult[OUT_PUSH_A]!;
-  const bAmt = pairResult[OUT_PUSH_B]!;
+  const pinnedA = carA.deform.solidHolds(nx, nz);
+  const pinnedB = carB.deform.solidHolds(-nx, -nz);
+  const pushA = pairResult[OUT_PUSH_A]!;
+  const pushB = pairResult[OUT_PUSH_B]!;
+  const aAmt = pinnedA === pinnedB ? pushA : pinnedA ? 0 : pushA + pushB;
+  const bAmt = pinnedA === pinnedB ? pushB : pinnedB ? 0 : pushA + pushB;
   const okA = carA.deform.massActive ? carA.deform.takePush(nx, nz, aAmt, dt, hypot2(carA.velocity.x, carA.velocity.z)) : aAmt;
   const okB = carB.deform.massActive ? carB.deform.takePush(-nx, -nz, bAmt, dt, hypot2(carB.velocity.x, carB.velocity.z)) : bAmt;
   pushCar(carA, nx, 0, nz, okA);
@@ -604,9 +621,11 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // thing that moved it between the cars.
   restoreMomentum(carA, carB, _momentum);
 
-  // While the pair closes, the cage's overlap is the crush's to take (`feedOverlap`): this slice's travel (`closing * dt`) or the stroke either face has left; only what is deeper is a push, by position. A pair that
-  // no longer closes feeds no crush, so it has no stroke to take the overlap (cars rested 10-21 cm into each other).
-  const give = closing > 0 ? Math.max(carA.deform.hitStroke() * (1 - carA.deform.strokeUsed()), carB.deform.hitStroke() * (1 - carB.deform.strokeUsed()), closing * dt) : 0;
+  // While the pair closes, the cage's overlap is the crush's to take (`feedOverlap`): this slice's travel (`closing * dt`) or, while it closes faster than `REST_SPEED`
+  // (a crush takes nothing at a creep: a resting pair closing 1 mm/s kept 4 cm of overlap as room), the stroke the face it presses on has left (`strokeLeftOn`); only
+  // what is deeper is a push, by position. A pair that no longer closes feeds no crush, so it has no stroke to take the overlap (cars rested 10-21 cm into each other).
+  const room = closing > REST_SPEED ? Math.max(strokeLeftOn(carA, n.x, n.z), strokeLeftOn(carB, -n.x, -n.z)) : 0;
+  const give = closing > 0 ? Math.max(room, closing * dt) : 0;
   const extra = Math.max(0, hit - OUTLINE_REACH - give);
   if (extra > 0) pushApart(carA, carB, n.x, n.z, Math.min(extra + 0.006, satPushCap(dt)), dt);
 

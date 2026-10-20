@@ -51,6 +51,10 @@ export abstract class DeformHit extends DeformRig {
   beginSlice(dt: number): void {
     this.sliceDt = dt;
     this.sliceTouch = 0;
+    this.solidHold[2] = this.solidHold[0]!;
+    this.solidHold[3] = this.solidHold[1]!;
+    this.solidHold[0] = 0;
+    this.solidHold[1] = 0;
     if (this.massActive) this.sliceAt = this.elapsed;
     else {
       this.sliceAt = -1.5;

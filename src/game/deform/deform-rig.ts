@@ -17,8 +17,8 @@ import { FACES, faceFollow, IMPRINT_NONE } from "./load-crush.ts";
 import { PushBudget } from "./push-budget.ts";
 import { hypot3, hypot2 } from "../kernel/physics-core.js";
 
-/** Numbers a `simState` block spends on the rig’s scalar fields (`simScalarsOut`: 56 fields, one double each: the last nine are the epicenter freeze: `frozen`, `frozenReady`, `sinceThaw`, the cached centre and inertia). */
-export const SIM_SCALAR_NUMBERS = 56;
+/** Numbers a `simState` block spends on the rig’s scalar fields (`simScalarsOut`: 58 fields, one double each: nine are the epicenter freeze: `frozen`, `frozenReady`, `sinceThaw`, the cached centre and inertia; the last two the solids' hold of the slice, `solidHold`). */
+export const SIM_SCALAR_NUMBERS = 58;
 
 export type DeformMode = "shape" | "lattice";
 
@@ -324,6 +324,9 @@ export abstract class DeformRig {
   protected sliceDt = 1 / FRAME_HZ;
   protected sliceTouch = -0;
   protected overlapFrame = false;
+  /** Summed plan normals fixed solids held the wreck out along: [0, 1] this slice (`holdBySolid`), [2, 3] the slice before (`beginSlice`
+   *  moves them), which the pair pushes read (`solidHolds`): the course's solids are met after the pairs. */
+  protected readonly solidHold = new Float64Array(4);
   /** Sim time (elapsed) of the last fed contact: the solver stays in contact mode CONTACT_HOLD past it. */
   protected contactAt = -Infinity;
   /** stepShapeMatch ran during the current / the previous structure step: the falling edge rebases the rests. */
@@ -545,6 +548,7 @@ export abstract class DeformRig {
     this.frameAt = 0;
     this.frameVy = 0;
     this.push.reset();
+    this.solidHold.fill(0);
     this.sliceAt = -1.5;
     this.sliceDt = 1 / FRAME_HZ;
     this.sliceTouch = -0;
@@ -792,6 +796,8 @@ export abstract class DeformRig {
     buf[o + 53] = this.frozenInvI.x;
     buf[o + 54] = this.frozenInvI.y;
     buf[o + 55] = this.frozenInvI.z;
+    buf[o + 56] = this.solidHold[0]!;
+    buf[o + 57] = this.solidHold[1]!;
     return o + SIM_SCALAR_NUMBERS;
   }
 
@@ -848,6 +854,8 @@ export abstract class DeformRig {
     this.sinceThaw = buf[o + 49]!;
     this.frozenCentre.set(buf[o + 50]!, buf[o + 51]!, buf[o + 52]!);
     this.frozenInvI.set(buf[o + 53]!, buf[o + 54]!, buf[o + 55]!);
+    this.solidHold[0] = buf[o + 56]!;
+    this.solidHold[1] = buf[o + 57]!;
     return o + SIM_SCALAR_NUMBERS;
   }
 }

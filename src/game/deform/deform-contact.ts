@@ -646,6 +646,17 @@ export abstract class DeformContact extends DeformState {
     return this.push.along(this.budgetAt(), nx, nz);
   }
 
+  /** A fixed solid held the wreck out along the unit (nx, nz) this slice (`wallBounce`). */
+  holdBySolid(nx: number, nz: number): void {
+    this.solidHold[0] += nx;
+    this.solidHold[1] += nz;
+  }
+
+  /** Whether a fixed solid held the wreck out in the slice before this one against a move along the unit (nx, nz): a pair push that way is the solid's to undo. */
+  solidHolds(nx: number, nz: number): boolean {
+    return this.solidHold[2]! * nx + this.solidHold[3]! * nz < 0;
+  }
+
   /**
    * Push the passenger cell out of overlap. Crumple-zone masses stay on the contact plane so the leftover penetration
    * becomes plastic crush — only as far as the push runs into the struck end (impactInward). Across it, e.g. a derby

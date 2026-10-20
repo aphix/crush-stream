@@ -104,7 +104,7 @@ describe("given the house of cards on the bench (two sedans nose to tail, a thir
       speed: 10,
       todo: "after the plan: a 10 m/s throw is on the edge between the thrown car staying on the top car (it drives the stack apart: all three knocked off) and riding over it (the top car and at most one under it), which a settled stack 1 mm apart decides. Before every roof moved once per slice (92d7a3c1), all three fell at 9.5, 9.75, 10 and 11 m/s and the top car alone at 10.25 and 10.5; after, all three at 9.5 and 9.75 and two at 10, 10.25, 10.5 and 11 (the near car under it 0.17-0.25 m off its place, the bound 0.3 m)",
     },
-    { it: "when a sedan is thrown at its top car at 30 m/s, then the top car and both cars under it are knocked down: off their places, or pinned under the thrown car with the roof crushed", speed: 30, todo: undefined },
+    { it: "when a sedan is thrown at its top car at 25 m/s, then the top car and both cars under it are knocked down: off their places, or pinned under the thrown car with the roof crushed", speed: 25, todo: undefined },
   ] as const;
   for (const testCase of toppleCases) {
     it(testCase.it, { todo: testCase.todo }, () => {
