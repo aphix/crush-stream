@@ -426,9 +426,9 @@ results screen's own (the sheet's component state): the standings sheet, a new m
 
 ### FX tier
 
-The reel has no FX switch of its own. A race starts on `minimal` under the automatic tier and lifts back to the ceiling at green + 3 s if its frame work has room ([`CINEMATIC.md`](CINEMATIC.md) "Auto"); its end,
-where the reel starts, returns the tier to the highest one that held this session, so a capable desktop plays the reel
-on "high" and steps down if its frame work (main thread or GPU) exceeds the 60 fps budget. A manual pick keeps the user's tier through the reel. Switching tiers
+The reel has no FX switch of its own. A race keeps the tier the automatic tier settled on before it and is judged again from green + 3 s ([`CINEMATIC.md`](CINEMATIC.md) "Auto"); its end,
+where the reel starts, keeps that tier, so a capable desktop plays the reel
+on "high" and steps down if its frame work (main thread or GPU) exceeds the 60 fps budget for three windows. A manual pick keeps the user's tier through the reel. Switching tiers
 only switches post passes: on the RTX 4080 laptop run, `renderer.info.programs` stayed at 84 before, through and after
 a switch to "high".
 

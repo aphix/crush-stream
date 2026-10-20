@@ -1,9 +1,8 @@
 // Automatic FX tier (docs/HIGHLIGHTS.md "FX tier"), decided by how full the frame's RENDER is, not by the frame rate or the sim
-// (`present/frame-work.ts`): a quick check after boot lifts a device with a hardware GPU and render time to spare to "high"; two
+// (`present/frame-work.ts`): a quick check after boot lifts a device with a hardware GPU and render time to spare to "high"; three
 // windows too full step it down high → low → minimal; a run of windows with room climbs back one tier (never into "ultra": that
-// one is the user's pick, on every device class); a match starts on minimal and runs the load check again 3 s after green. A
+// one is the user's pick, on every device class); a match keeps the tier and is not judged until 3 s after green. A
 // manual pick turns it off. Whether the device may host a public match is judged on the main thread's total, sim included.
-import { SLOW_WINDOWS } from "./constants.ts";
 import type { FxTier } from "./engine-post.ts";
 import { FRAME_BUDGET_MS, FrameWork, type Judge } from "./frame-work.ts";
 
@@ -37,19 +36,18 @@ export function gpuRenderer(gl: WebGLRenderingContext | WebGL2RenderingContext):
 
 /** A tier holds while its windows can hold this wall rate where no GPU reading exists: the owner's 60 fps less 10. */
 const DROP_FPS = 50;
-/** Windows with room in a row that climb one tier above any that held. */
+/** Windows with room in a row that climb one tier. */
 const UP_STREAK = 8;
-/** Windows with room in a row that lift a match's minimal back to the ceiling (a tier that held before). */
-const RESTORE_STREAK = 2;
+/** Windows too full in a row that step one tier down: the recorded race-start burst runs two windows past green + 3 s. */
+const MISS_WINDOWS = 3;
 /** Windows after a step down before any climb (a reversal inside it is hunting a boundary), and the windows a climb has to survive. */
 const REVERSAL_WINDOWS = 20;
 /** A climb that is dropped again inside `REVERSAL_WINDOWS` doubles the streak the next climb needs, up to this. */
 const MAX_UP_STREAK = 64;
-/** A match's own load check starts this long (s) after its green light (match clock 0). */
-const MATCH_PROBE_AT = 3;
+/** A match is judged from this long (s) after its green light (match clock 0): the seconds before are a burst of first-use load. */
+const MATCH_SETTLE_S = 3;
 const STEP_DOWN: Partial<Record<FxTier, FxTier>> = { high: "low", low: "minimal" };
-/** The tiers auto reaches, lowest first: "ultra" is never among them. */
-const LADDER: readonly FxTier[] = ["minimal", "low", "high"];
+/** "ultra" is never among the tiers auto climbs to. */
 const STEP_UP: Partial<Record<FxTier, FxTier>> = { minimal: "low", low: "high" };
 
 export class AutoFx {
@@ -62,7 +60,7 @@ export class AutoFx {
   /** The last finished window's render ms and the rest of its main-thread ms (the sim), each as a share of the 60 fps frame budget. */
   renderShare = 0;
   simShare = 0;
-  /** The highest tier that held this session, where a match's end returns; null until the load check decides. */
+  /** The tier auto settled on, where a manual pick's resume returns; null until the load check decides. */
   private ceiling: FxTier | null;
   private readonly capable: boolean;
   /** The same policy fed the same frames but judged on the main thread's total (sim included): its ceiling is `canHost`'s. Null in itself. */
@@ -70,8 +68,6 @@ export class AutoFx {
   private tier: FxTier = "minimal";
   /** The last frame's match state; null forces the next frame to apply the target tier. */
   private match: boolean | null = null;
-  /** The current match's post-green load check has run. */
-  private probed = false;
   private readonly win: FrameWork;
   private slow = 0;
   private upRun = 0;
@@ -114,10 +110,12 @@ export class AutoFx {
     const match = matchTime !== null;
     if (match !== this.match) {
       this.match = match;
-      this.probed = false;
-      return this.switch(match ? "minimal" : (this.ceiling ?? "minimal"));
+      return this.switch(this.ceiling ?? "minimal");
     }
-    if (match && !this.probed) return this.probe(ms, workMs, renderMs, gpuMs, matchTime);
+    if (match && matchTime < MATCH_SETTLE_S) {
+      this.win.restart(0);
+      return null;
+    }
     if (!this.capable || !this.win.add(ms, workMs, renderMs, gpuMs)) return null;
     return this.verdict();
   }
@@ -129,45 +127,30 @@ export class AutoFx {
     this.windows++;
     const roomy = w.roomy();
     if (this.ceiling === null) {
+      // A load burst is not the device: minimal is decided only by `MISS_WINDOWS` windows without room in a row.
+      if (!roomy && ++this.slow < MISS_WINDOWS) return null;
       this.ceiling = roomy ? "high" : "minimal";
       return this.switch(this.ceiling);
     }
     if (w.slow(DROP_FPS)) {
       this.upRun = 0;
       const down = STEP_DOWN[this.tier];
-      if (++this.slow < SLOW_WINDOWS || down === undefined) return null;
+      if (++this.slow < MISS_WINDOWS || down === undefined) return null;
       if (this.windows - this.climbedAt <= REVERSAL_WINDOWS) this.upNeed = Math.min(MAX_UP_STREAK, this.upNeed * 2);
       this.downAt = this.windows;
       this.ceiling = down;
       return this.switch(down);
     }
     this.slow = 0;
-    // Under the ceiling (a match start's minimal that the load check did not lift) the way back is short: that tier held before.
-    const restoring = LADDER.indexOf(this.tier) < LADDER.indexOf(this.ceiling);
-    const up = restoring ? this.ceiling : STEP_UP[this.tier];
+    const up = STEP_UP[this.tier];
     if (up === undefined || !roomy) {
       this.upRun = 0;
       return null;
     }
-    if (++this.upRun < (restoring ? RESTORE_STREAK : this.upNeed) || this.windows - this.downAt < REVERSAL_WINDOWS) return null;
+    if (++this.upRun < this.upNeed || this.windows - this.downAt < REVERSAL_WINDOWS) return null;
     this.climbedAt = this.windows;
-    if (LADDER.indexOf(up) > LADDER.indexOf(this.ceiling)) this.ceiling = up;
+    this.ceiling = up;
     return this.switch(up);
-  }
-
-  /** The match's load check: minimal until green + 3 s, then one 1 s window; room to spare lifts to the ceiling. */
-  private probe(ms: number, workMs: number, renderMs: number, gpuMs: number, matchTime: number): FxTier | null {
-    if (matchTime < MATCH_PROBE_AT) {
-      this.win.restart(0);
-      return null;
-    }
-    if (!this.win.add(ms, workMs, renderMs, gpuMs)) return null;
-    this.record();
-    this.probed = true;
-    const roomy = this.win.roomy();
-    // A first check that finds no room leaves the ceiling undecided: the load check after it judges again.
-    if (roomy) this.ceiling ??= "high";
-    return this.switch(roomy ? this.ceiling! : "minimal");
   }
 
   /** Publishes the window that just finished (the console line and the HUD read it). */

@@ -218,11 +218,7 @@ export abstract class EngineInput extends EngineRigs {
   /** The pacer's `lost` at the last frame: what a frame gave up is the difference. */
   private lostSeen = 0;
 
-  /**
-   * Per frame after boot: a match (a race from the grid to the flag, a derby until its winner) starts on minimal, the auto tier
-   * otherwise; and while the tier is automatic, a running match walks the distance detail's rung (`DetailGovernor`) by how full the
-   * frame is (the main thread's ms and the GPU's, `present/frame-work.ts`) and the sim time the pacer gave up (`lostSimS`: the pacer's running total, s).
-   */
+  /** Per frame after boot: the auto FX tier and, while it is automatic, a running match's distance-detail rung, from how full the frame is; `lostSimS` is the pacer's running total of sim time given up (s). */
   protected fxFrame(wallDt: number, lostSimS: number): void {
     this.stage.setSkyTier(this.cine.tier);
     const p = this.race.phase;

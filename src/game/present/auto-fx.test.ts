@@ -48,15 +48,21 @@ describe("given the automatic graphics-effects tier policy (it steps the effects
     assert.deepEqual(run(new AutoFx(true, true), 10, steady(55)), []);
   });
 
-  it("when the frame rate sustains 49 fps from high, then it steps high to low to minimal, 3.5 s each (settle plus two slow windows), never below", () => {
+  it("when the frame rate sustains 49 fps from high, then it steps high to low to minimal, 4.5 s each (settle plus three slow windows), never below", () => {
     const fx = onHigh();
-    assert.deepEqual(run(fx, 60, steady(49)), [[3.5, "low"], [7.0, "minimal"]]);
+    assert.deepEqual(run(fx, 60, steady(49)), [[4.5, "low"], [9.0, "minimal"]]);
   });
 
   it("when frames come in a 45 fps vsync cadence (two on-time frames, one double), then it drops although most frames are 16.7 ms", () => {
     const fx = onHigh();
     const cadence = (i: number): number => (i % 3 === 2 ? 2000 / 60 : 1000 / 60);
-    assert.deepEqual(run(fx, 4, cadence), [[3.5, "low"]]);
+    assert.deepEqual(run(fx, 5, cadence), [[4.6, "low"]]);
+  });
+
+  it("when a 2 s load spike at 30 fps (two slow windows) interrupts 60 fps frames, then it holds; a 3 s spell steps down", () => {
+    const spike = (seconds: number) => (i: number): number => (i >= 90 && i < 90 + 30 * seconds ? 1000 / 30 : jitter60(i));
+    assert.deepEqual(run(onHigh(), 30, spike(2)), []);
+    assert.deepEqual(run(onHigh(), 10, spike(3)), [[4.5, "low"]]);
   });
 
   it("when a single hitch of 100, 400 or 2000 ms interrupts 60 fps frames, then it ends only one slow window and never drops", () => {
@@ -68,36 +74,35 @@ describe("given the automatic graphics-effects tier policy (it steps the effects
 
   it("when the frame rate is 52 fps and then 48 fps, then it is judged against 60 fps, not the screen's refresh rate: 52 fps holds and 48 fps drops", () => {
     assert.deepEqual(run(onHigh(), 30, steady(52)), []);
-    assert.deepEqual(run(onHigh(), 30, steady(48)), [[3.5, "low"], [7.0, "minimal"]]);
+    assert.deepEqual(run(onHigh(), 30, steady(48)), [[4.5, "low"], [9.0, "minimal"]]);
   });
 
-  it("when a race starts, then it starts on minimal and lifts to the tier that held 3 s after green plus the 1 s window, then is monitored again", () => {
+  it("when a race starts after the setup measured high, then it keeps high through grid, countdown and green, and is monitored again from green + 3 s", () => {
     const fx = onHigh();
     const m = race();
-    // Grid and countdown 4.5 s, green + 3 s = 7.5 s, window to 8.5 s.
-    assert.deepEqual(run(fx, 8, jitter60, m), [[0, "minimal"]]);
-    assert.deepEqual(run(fx, 1, jitter60, m), [[0.5, "high"]]);
-    // Monitor again: 1.5 s settle (0.5 s of it spent in the lift's second), then two slow windows.
-    assert.deepEqual(run(fx, 4, steady(40), m), [[3, "low"]]);
+    // Grid and countdown 4.5 s, green + 3 s = 7.5 s.
+    assert.deepEqual(run(fx, 9, jitter60, m), []);
+    // From 9 s: the window under way since 8.5 s is slow, then two more.
+    assert.deepEqual(run(fx, 4, steady(40), m), [[2.5, "low"]]);
   });
 
-  it("when a race runs under 57 fps at green + 3 s, then it stays minimal to the race's end, which returns it to the ceiling", () => {
+  it("when a race runs at 45 fps from its start, then it holds the tier to green + 3 s and steps down on a sustained miss after it, and the race's end keeps the tier it fell to", () => {
     const fx = onHigh();
     const m = race();
-    assert.deepEqual(run(fx, 30, steady(45), m), [[0, "minimal"]]);
-    assert.deepEqual(run(fx, 1, jitter60), [[0, "high"]]);
+    assert.deepEqual(run(fx, 30, steady(45), m), [[10.6, "low"], [15.1, "minimal"]]);
+    assert.deepEqual(run(fx, 1, jitter60), []);
   });
 
-  it("when a race starts on a machine whose ceiling is low, then it lifts to low, not high", () => {
+  it("when a race starts on a machine whose tier is low, then it keeps low", () => {
     const fx = onHigh();
-    assert.deepEqual(run(fx, 4, steady(49)), [[3.5, "low"]]);
-    assert.deepEqual(run(fx, 12, jitter60, race()), [[0, "minimal"], [8.5, "low"]]);
+    assert.deepEqual(run(fx, 5, steady(49)), [[4.5, "low"]]);
+    assert.deepEqual(run(fx, 12, jitter60, race()), []);
   });
 
-  it("when a derby starts with its clock closer to green, then it is probed 3 s after green the same way", () => {
+  it("when a derby starts with its clock closer to green, then it keeps the tier the same way", () => {
     const fx = onHigh();
     const m = { t: -1.5 };
-    assert.deepEqual(run(fx, 10, jitter60, m), [[0, "minimal"], [5.5, "high"]]);
+    assert.deepEqual(run(fx, 10, jitter60, m), []);
   });
 
   it("when a match starts during the load check, then it keeps minimal and the check lifts it 3 s after green", () => {
@@ -125,8 +130,8 @@ describe("given the check for being fit to host a public match", () => {
     assert.equal(new AutoFx(true, true).canHost(), true);
     const fx = onHigh();
     assert.equal(fx.canHost(), true);
-    run(fx, 4, steady(49));
-    assert.equal(fx.canHost(), true, "low is still fit (3.5 s in)");
+    run(fx, 5, steady(49));
+    assert.equal(fx.canHost(), true, "low is still fit (4.5 s in)");
   });
 
   it("when the machine is a phone or software GPU, a desktop under 57 fps at its load check, or one that fell to minimal, then it is not fit", () => {
@@ -229,12 +234,12 @@ describe("given the tier decided by frame work (the main thread's and the GPU's 
 
   it("when a spell of overload falls to minimal and the load then ends, then it climbs one tier at a time after a long calm, never straight to high", () => {
     const moves = runSpells(new AutoFx(true, true), [calm(4), overloaded(12), calm(120)]);
-    assert.deepEqual(moves, [[2.5, "high"], [6, "low"], [9.6, "minimal"], [31.4, "low"], [41, "high"]]);
+    assert.deepEqual(moves, [[2.5, "high"], [7, "low"], [11.6, "minimal"], [33.4, "low"], [43, "high"]]);
   });
 
   it("when the load comes and goes every 10 s for 80 s, then it moves 5 times, not on every spell: a climb that fails is not repeated soon", () => {
     const spells = Array.from({ length: 8 }, (_, i) => (i % 2 === 0 ? calm(10) : overloaded(10)));
-    assert.deepEqual(runSpells(new AutoFx(true, true), spells), [[2.5, "high"], [12.2, "low"], [15.7, "minimal"], [47.5, "low"], [52, "minimal"]]);
+    assert.deepEqual(runSpells(new AutoFx(true, true), spells), [[2.5, "high"], [13.2, "low"], [17.7, "minimal"], [47.5, "low"], [53, "minimal"]]);
   });
 
   it("when frames stay calm for 2 minutes, then it stays on high and never asks for the ultra tier", () => {
@@ -258,7 +263,7 @@ describe("given the tier judged by the render alone (a phone's sim fills its fra
   });
 
   it("when a phone's render takes 14 ms, then it steps down as a desktop's would, high to low to minimal", () => {
-    assert.deepEqual(runSpells(new AutoFx(true, true, false), [phone(4), phone(20, 14)]), [[2.6, "high"], [6.1, "low"], [9.7, "minimal"]]);
+    assert.deepEqual(runSpells(new AutoFx(true, true, false), [phone(4), phone(20, 14)]), [[2.6, "high"], [7.2, "low"], [11.8, "minimal"]]);
   });
 
   it("when the sim alone fills the frame, then the device may not host: not a phone that lifts, and not a desktop either", () => {

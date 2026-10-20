@@ -2,7 +2,7 @@
 
 /** The FX tier id of the Ultra look (`FxTier` in engine-post.ts lists every tier). */
 export const FX_TIER_ULTRA = "ultra";
-/** Slow windows in a row that step the FX tier or the detail rung down: one hitch, however long, ends only one window, so it never steps. */
+/** Slow windows in a row that step the detail rung down: one hitch, however long, ends only one window, so it never steps. */
 export const SLOW_WINDOWS = 2;
 /** The name of a lamp's night light pool decal (`Object3D.name`): `makeLamp` names it, the prefab builder shares it with the scene and `syncPools` hides it with a knocked pole. */
 export const LAMP_POOL = "pool";
