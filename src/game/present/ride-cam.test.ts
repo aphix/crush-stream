@@ -471,7 +471,7 @@ function dollAt(head: THREE.Vector3, velocity: THREE.Vector3): Doll {
   const pose = new Float32Array(14);
   pose.set([head.x, head.y, head.z, 0, 0, 0, 1], 7);
   return {
-    bodies: [], joints: [], loose: false, live: true, age: 0, life: 10, still: 0, patch: [], car: -1, rides: true, prev: pose, cur: pose, ground: false, settled: false, calm: 0, speed: 0,
+    bodies: [], joints: [], loose: false, braced: false, live: true, age: 0, life: 10, still: 0, patch: [], car: -1, rides: true, prev: pose, cur: pose, ground: false, settled: false, calm: 0, speed: 0,
     vel: new Float32Array([velocity.x, velocity.y, velocity.z]),
   };
 }

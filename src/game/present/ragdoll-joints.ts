@@ -68,3 +68,18 @@ export function loosen(world: World, joints: readonly ImpulseJoint[]): void {
     for (const axis of limit !== null && "hinge" in limit ? ANG.slice(0, 1) : ANG) world.impulseJoints.raw.jointConfigureMotorVelocity(joint.handle, axis, 0, JOINT_GIVE);
   }
 }
+
+/** Damping (per s) on a thrown driver's neck, hips and shoulder twist and spread while airborne: near a lock, so his launch roll turns him whole instead of flinging his limbs out. */
+const BRACE = 1000;
+/** `JOINTS` indices of the shoulders, and the axes braced there: twist and spread; their swing (x) stays loose, so the raised arms still come down in front. */
+const SHOULDERS = [1, 3];
+const SHOULDER_BRACED = ANG.slice(1);
+
+/** A loose dummy's spherical joints held (`BRACE`, `airborne`) or given back their `JOINT_GIVE` (once anything first stops a part of him); elbows and knees stay loose. */
+export function brace(world: World, joints: readonly ImpulseJoint[], airborne: boolean): void {
+  for (const [j, joint] of joints.entries()) {
+    const limit = LIMITS[j]!;
+    if (limit !== null && "hinge" in limit) continue;
+    for (const axis of SHOULDERS.includes(j) ? SHOULDER_BRACED : ANG) world.impulseJoints.raw.jointConfigureMotorVelocity(joint.handle, axis, 0, airborne ? BRACE : JOINT_GIVE);
+  }
+}

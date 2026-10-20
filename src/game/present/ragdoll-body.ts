@@ -229,6 +229,8 @@ export type Doll = {
   joints: ImpulseJoint[];
   /** His joints give (`loosen`: a driver thrown out of a car); a stiff dummy in the slot after him gets them built afresh. */
   loose: boolean;
+  /** A loose driver's joints held (`brace`) until anything first stops a part of him (`hits`), so his launch roll turns him whole. */
+  braced: boolean;
   live: boolean;
   age: number;
   /** Sim seconds he lies about before he goes: `LIFE` for a thrown driver, as long as the scene wants for a placed one (`place`). */

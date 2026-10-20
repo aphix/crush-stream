@@ -15,6 +15,10 @@ import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 const GRAVITY = 9.6;
 /** How near (m/s) the thrown dummy's centre-of-mass velocity is to the throw's own: f32 part velocities at 30 m/s. */
 const COM_TOLERANCE = 1e-4;
+/** The owner's barrel roll: at least two thirds of a turn (deg) of the torso before he first touches down. */
+const ROLL_BEFORE_TOUCHDOWN_DEG = 240;
+/** Where (m past the wall) the range's driver lies: rolling, he lands on his limbs and cartwheels on (owner: accepted), past FlatOut's 25–40 m. */
+const LANDING_M = [50, 70] as const;
 type Doll = { live: boolean; bodies: RigidBody[] };
 
 /** A deterministic stream in [0, 1). */
@@ -87,6 +91,8 @@ type Run = {
   speedAt3: number;
   /** Kinetic energy (J) at the end of the first ground contact's frame, and 3 s on. */
   kinetic: [number, number];
+  /** His torso's turn (rad) about his launch line of flight before his first ground contact. */
+  roll: number;
 };
 
 /**
@@ -106,7 +112,8 @@ async function rangeThrow(frame: () => number): Promise<Run> {
   const barrier = new THREE.Group();
   const dolls: Doll[] = ragdolls["dolls"];
   const torso = new THREE.Vector3();
-  const run: Run = { landing: NaN, gap: 0, rise: 0, speedAt3: NaN, kinetic: [NaN, NaN] };
+  const run: Run = { landing: NaN, gap: 0, rise: 0, speedAt3: NaN, kinetic: [NaN, NaN], roll: 0 };
+  const line = new THREE.Vector3();
   let sim = 0;
   let ground = -1;
   let before = 0;
@@ -121,6 +128,9 @@ async function rangeThrow(frame: () => number): Promise<Run> {
     if (landed && Number.isNaN(run.landing)) run.landing = torso.x;
     const d = dolls.find((x) => x.live);
     if (!d) continue;
+    if (line.lengthSq() === 0) massMean(d.bodies, (b) => b.linvel(), line).normalize();
+    const spin = d.bodies[0]!.angvel();
+    if (ground < 0) run.roll += (spin.x * line.x + spin.y * line.y + spin.z * line.z) * simDt;
     run.gap = Math.max(run.gap, jointGap(ragdolls["world"]!));
     const e = energy(d.bodies);
     // His first ground contact: any part's centre within a part's half-length of the sand.
@@ -139,12 +149,17 @@ async function rangeThrow(frame: () => number): Promise<Run> {
 }
 
 describe("given the ejection range (a sedan at 100 km/h into the jersey barrier, the driver thrown over it onto sand)", () => {
-  it(`when the throw is run at ${FRAME_HZ} and ${FINE_HZ} Hz display rates, then he lands within 1 m of the same spot, inside FlatOut's 25–40 m`, async () => {
+  it(`when the throw is run at ${FRAME_HZ} and ${FINE_HZ} Hz display rates, then he lands within 1 m of the same spot, ${LANDING_M[0]}–${LANDING_M[1]} m on`, async () => {
     const slow = await rangeThrow(() => 1 / FRAME_HZ);
     const fast = await rangeThrow(() => 1 / FINE_HZ);
-    assert.ok(slow.landing >= 25 && slow.landing <= 40, `${FRAME_HZ} Hz landing ${slow.landing.toFixed(1)} m`);
-    assert.ok(fast.landing >= 25 && fast.landing <= 40, `${FINE_HZ} Hz landing ${fast.landing.toFixed(1)} m`);
+    assert.ok(slow.landing >= LANDING_M[0] && slow.landing <= LANDING_M[1], `${FRAME_HZ} Hz landing ${slow.landing.toFixed(1)} m`);
+    assert.ok(fast.landing >= LANDING_M[0] && fast.landing <= LANDING_M[1], `${FINE_HZ} Hz landing ${fast.landing.toFixed(1)} m`);
     assert.ok(Math.abs(slow.landing - fast.landing) <= 1, `${FRAME_HZ} Hz ${slow.landing.toFixed(1)} m, ${FINE_HZ} Hz ${fast.landing.toFixed(1)} m`);
+  });
+
+  it(`when the driver is thrown, then his torso turns at least ${ROLL_BEFORE_TOUCHDOWN_DEG}° about his line of flight before his first ground contact (owner: a barrel roll he can see in the slow-mo)`, async () => {
+    const run = await rangeThrow(() => 1 / FRAME_HZ);
+    assert.ok((run.roll * 180) / Math.PI >= ROLL_BEFORE_TOUCHDOWN_DEG, `${((run.roll * 180) / Math.PI).toFixed(0)}° before touchdown`);
   });
 
   it("when one throw is run at 30–360 Hz and with frames that vary 0.5–1.5×, then it lands in the same place", async () => {

@@ -55,6 +55,8 @@ function untilBurst(r: RagdollSystem): number {
  * arms planted in front: owner, 2026-10-18) and rests 11.7 m past it; the spin-cap fault this row guards left it 30 m off.
  */
 const PURSE_NEAR = 13;
+/** Where (m on) the range's thrown woman lies: rolling, she lands on her limbs and cartwheels on (owner: accepted), past the 20–40 m she lay at before the roll. */
+const LANDING_M = [50, 70] as const;
 
 describe("given a thrown crash-test dummy driver who may carry a handbag (a woman civilian) that bursts open into small items", () => {
   it("when a civilian woman is thrown, then 1 handbag leaves at 0.85× her speed on her heading and, at the burst, 4-7 items fly at 0.85× the handbag's speed inside the spread cone", async () => {
@@ -176,7 +178,7 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
     r.dispose();
   });
 
-  it(`when a civilian woman is thrown from a 100 km/h crash into the barrier on sand at the ejection range, then she lands 20-40 m on, the handbag rests within ${PURSE_NEAR} m of her instead of 30 m on, and no body spins faster than the spin cap`, async () => {
+  it(`when a civilian woman is thrown from a 100 km/h crash into the barrier on sand at the ejection range, then she lands ${LANDING_M[0]}-${LANDING_M[1]} m on, the handbag rests within ${PURSE_NEAR} m of her instead of 30 m on, and no body spins faster than the spin cap`, async () => {
     const car = makeCar("shape", 0.32, 0.45);
     armKill(car.deform, "sedan", DEFAULT_REALISM, "default");
     launch(car, -RANGE.run, 0, Math.PI / 2, RANGE.kph / 3.6, 0);
@@ -200,7 +202,7 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
     const purse = bodiesOf(r)[0]!.translation();
     r.dispose();
     // Before the spin cap: the purse spun at 79 rad/s, skipped on and came to rest 30 m past the dummy (58.6 m against 28.4 m).
-    assert.ok(torso > 20 && torso < 40, `she landed at ${torso.toFixed(1)} m`);
+    assert.ok(torso > LANDING_M[0] && torso < LANDING_M[1], `she landed at ${torso.toFixed(1)} m`);
     assert.ok(Math.abs(purse.x - torso) < PURSE_NEAR, `the purse rests ${(purse.x - torso).toFixed(1)} m from her`);
     assert.ok(spin <= 15.5, `fastest spin ${spin.toFixed(1)} rad/s`);
   });

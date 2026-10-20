@@ -48,7 +48,7 @@ import { RideAlong } from "./ragdoll-ride.ts";
 import type { RideFrame } from "./ride-cam.ts";
 import type { Sight } from "./spectate-cam.ts";
 import { AIR_ANGULAR, AIR_LINEAR, ARM, blendPose, CALM_FOR, type Doll, GROUND_ANGULAR, GROUND_LINEAR, give, isCalm, JOINTS, limit, limp, PARTS, readPose, SETTLE_AFTER, SETTLE_ANGULAR, SETTLE_LINEAR, SHOULDER_Y } from "./ragdoll-body.ts";
-import { joinUp, loosen } from "./ragdoll-joints.ts";
+import { brace, joinUp, loosen } from "./ragdoll-joints.ts";
 import { groundColliders, PATCH_AHEAD, PATCH_HALF, type Pole } from "./ragdoll-ground.ts";
 import { courseSolids, type Solid } from "./ragdoll-solids.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
@@ -132,7 +132,6 @@ const RAISED_COM = PARTS.reduce((sum, p, k) => {
 export const HIT_DV = 4;
 /** His torso centre this near (m) the ground: he has touched down (lying, it rests at 0.1–0.3 m; thrown, it is over 0.5 m). */
 export const GROUND_REACH = 0.45;
-
 /** `velocity`'s horizontal speed becomes its whole speed, aimed `elevation` rad above its horizontal heading (a standing-still release stays still). */
 function turnToElevation(velocity: THREE.Vector3, elevation: number): void {
   const speed = hypot2(velocity.x, velocity.z);
@@ -306,7 +305,7 @@ export class RagdollSystem {
         return body;
       });
       const joints = joinUp(R, world, bodies);
-      this.dolls.push({ bodies, joints, loose: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3) });
+      this.dolls.push({ bodies, joints, loose: false, braced: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3) });
     }
     // A child of the dummies' mesh, so the scene root keeps its one `ragdolls` child and the props draw only while a dummy is out.
     this.mesh.add((this.purses = this.proxies.purses = new Purses(R, world, SLOTS, propGroups, GRACE)).mesh);
@@ -589,6 +588,10 @@ export class RagdollSystem {
       this.vel[i + 1] = v.y;
       this.vel[i + 2] = v.z;
       this.vel[i + 3] = jump ? 1 : 0;
+    }
+    if (gave && d.braced) {
+      brace(this.world!, d.joints, false);
+      d.braced = false;
     }
     if (gave) {
       for (let k = 0; k < PARTS.length; k++) {
@@ -876,10 +879,12 @@ export class RagdollSystem {
     if (t.loose) {
       limp(d.bodies, _w.set(1, 0, 0).applyQuaternion(t.q));
       loosen(this.world!, d.joints);
+      brace(this.world!, d.joints, true);
     } else if (d.loose) {
       for (const joint of d.joints) this.world!.removeImpulseJoint(joint, false);
       d.joints = joinUp(this.R!, this.world!, d.bodies);
     }
+    d.braced = t.loose === true;
     d.loose = t.loose === true;
     const speed = hypot2(t.v.x, t.v.z);
     this.buildPatch(d, t.p.x + (speed > 0.5 ? (t.v.x / speed) * PATCH_AHEAD : 0), t.p.z + (speed > 0.5 ? (t.v.z / speed) * PATCH_AHEAD : 0), t.p.y);
