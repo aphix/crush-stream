@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { DRIVER_CARS } from "../match/types.ts";
-import { RangeRun } from "../scenes/range.ts";
+import { RANGE_GROUND, RangeRun } from "../scenes/range.ts";
 import type { ExitPane } from "../vehicle/car-core.ts";
 import { ejectionVelocity } from "../vehicle/ejection.ts";
 import { apexOf, type Carry, type Control, deepest, displayFrames, type DriverCar, inCar, lowest, rangeThrow, type RangeThrow, restOf, speeds, STILL, travel } from "./range-run.test-util.ts";
+import { FLAT_GROUND, type Ground } from "../world/ground.ts";
 
 /**
  * The ejection range (scenes/range.ts) at its defaults (its own spawn, 100 km/h, the HUD's squash, buckle, mode and
@@ -221,6 +222,35 @@ describe(`given the ejection range with a hard handbrake turn ${TURN_AT} m befor
         assert.ok(s.out.dot(s.run.runUp) > 0.7, `${type.id}: the way out faces ${s.out.dot(s.run.runUp).toFixed(2)} along the run-up`);
       });
     }
+  }
+});
+
+/** Degrees the lip must lift the nose at the throw over the flat's: the monster truck's soft springs soak it up to 0.4° (measured, 60 Hz). */
+const NOSE_LIFT_DEG = 0.2;
+/** Metres further his first touch of the sand must be with the lip: measured 0.9 (truck) to 4.1 m (sedan) at 60 Hz. */
+const TOUCHDOWN_GAIN = 0.5;
+const _nose = new THREE.Vector3();
+
+/** A range throw on `ground` at 60 Hz: the car's nose pitch at the throw (deg, up +), and his torso's x at his first touch of the terrain. */
+async function noseAndTouchdown(type: DriverCar, ground: Ground): Promise<{ pitch: number; touchdown: number }> {
+  let pitch = NaN;
+  const run = await rangeThrow(type, {
+    ground,
+    released: (_sys, car) => {
+      pitch = THREE.MathUtils.radToDeg(Math.asin(_nose.set(0, 0, 1).applyQuaternion(car.group.quaternion).y));
+    },
+  });
+  return { pitch, touchdown: run.frames.find((f) => f.ground > 0)?.p[0] ?? NaN };
+}
+
+describe("given the ejection range's lip (a low kicker against the wall's face) against the same range with none, for every car type", () => {
+  for (const type of DRIVER_CARS) {
+    it(`when a ${type.label} crashes at the range, then its nose is up at the throw and its driver first touches the sand further on than with no lip`, async () => {
+      const lip = await noseAndTouchdown(type, RANGE_GROUND);
+      const flat = await noseAndTouchdown(type, FLAT_GROUND);
+      assert.ok(lip.pitch > flat.pitch + NOSE_LIFT_DEG, `${type.id}: nose ${lip.pitch.toFixed(2)}° at the throw, ${flat.pitch.toFixed(2)}° with no lip`);
+      assert.ok(lip.touchdown > flat.touchdown + TOUCHDOWN_GAIN, `${type.id}: first touch at ${lip.touchdown.toFixed(1)} m, ${flat.touchdown.toFixed(1)} m with no lip`);
+    });
   }
 });
 

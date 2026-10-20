@@ -17,6 +17,7 @@ import { throwComing } from "../present/ragdoll-trigger.ts";
 import { displayFrames, rangeCar } from "../present/range-run.test-util.ts";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { JerseyBarrier } from "./engine-props.ts";
+import { RANGE_GROUND } from "./range.ts";
 
 /** Half the width (m) of the test ground's lane: well past a car's side. */
 const LANE_HALF_WIDTH = 3;
@@ -318,12 +319,12 @@ function slowMotionBeforeImpact(clock: PhaseClock, car: DeformableCar, barrier: 
 }
 
 /**
- * One car of `type` parked at local x `startX` of `ground` (null: the range's flat ground), released at full throttle and steered down
+ * One car of `type` parked at local x `startX` of `ground` (null: the range's own, `RANGE_GROUND`), released at full throttle and steered down
  * +x, its pedals lifted past `liftX` (the range's cars coast into the barrier in neutral), into the jersey barrier at the world origin, its
  * driver thrown as the range throws him (`rangeThrow`'s engine frames, ragdoll and slow motion). Runs until his dummy is gone; `distance` is where his torso lay.
  */
 export async function driveIntoBarrier(type: DriverCar, ground: Ground | null, startX: number, run: BarrierRun): Promise<BarrierThrow> {
-  setGround(ground);
+  setGround(ground ?? RANGE_GROUND);
   const car = rangeCar(type);
   car.spawnFacing(startX, 0, THROW_YAW, 0);
   car.group.position.y = ground ? ground.heightAt(startX, 0, 0.5) : 0;

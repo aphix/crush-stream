@@ -53,9 +53,11 @@ Why a triple: the sim keeps a car's horizontal speed on a slope and lets its ver
 
 | Mode | forward | upward | Intent |
 |---|---|---|---|
-| Long jump | 1.15 | 1 | the base of a perfect bail: the whole release speed is 1.15 x the car's horizontal speed at 45 degrees; the bail (section 1) sets the angle and speed of every other press |
-| High jump | 0.108 | 1.03 | forward keeps the best run landing in the box field before the net; upward puts it over the posts |
-| Ring Fling | 0.4 | 0.7 | a ballistic landing that puts a full-throttle sedan on the 30 cup |
+| Long jump | 1.13 | 1 | the base of a perfect bail: the whole release speed is 1.13 x the car's horizontal speed at 45 degrees; the bail (section 1) sets the angle and speed of every other press |
+| High jump | 0.117 | 1.03 | forward keeps the best run landing in the box field before the net; upward puts it over the posts |
+| Ring Fling | 0.4 | 0.65 | a ballistic landing that puts a full-throttle sedan on the 30 cup |
+
+Retuned 2026-10-20 for the seat-velocity launch (the push out follows the pitched nose, so a kicker's throw leaves 1.5 m/s higher and 1.5 m/s less along; was 1.15, 0.108 / 1.03 and 0.4 / 0.7), so each mode lands where it was tuned.
 
 Unboosted a best long jump rests 16-26 m.
 
@@ -63,41 +65,41 @@ Unboosted a best long jump rests 16-26 m.
 
 Worst of 3 repeats, from `minigame-sizing.test.ts`.
 
-**High jump** (boost 0.108 / 1.03; best run: score, the highest point above the lip within `SCORE_BAND_HALF_DEPTH` 2 m of the posts / apex @ distance / lands, all m)
+**High jump** (boost 0.117 / 1.03; best run: score, the highest point above the lip within `SCORE_BAND_HALF_DEPTH` 2 m of the posts / apex @ distance / lands, all m)
 
 | Class | Score / apex @ dist / lands |
 |---|---|
-| sedan, hatchback, wagon | 111.1 / 111.1 @ 10.1 / 19.7 |
-| police | 110.8 / 110.8 @ 10.1 / 19.8 |
-| truck | 107.8 / 107.8 @ 9.7 / 19.2 |
-| muscle | 130.3 / 130.3 @ 12.2 / 23.7 |
-| monster | 169.1 / 178.2 @ 17.0 (past the band) / 32.2 |
+| sedan, hatchback, wagon | 117.9 / 117.9 @ 11.1 / 21.5 |
+| police | 117.6 / 117.6 @ 11.1 / 21.4 |
+| truck | 114.3 / 114.3 @ 10.7 / 20.6 |
+| muscle | 137.2 / 137.3 @ 13.4 / 25.4 |
+| monster | 167.6 / 178.4 @ 17.2 (past the band) / 32.6 |
 
 70% run (mid): scores 0 (sedan family, truck: they land 9.1-9.4 m out, the band starts at 9 m, so the torso is on the ground when it gets there), 3.8 (police), 43.5 (muscle), 86.5 (monster); their apexes (54-66 m at 4-5 m out, 89 m at 7.6 m) fall before the band and do not count. An 80% run (the best throw scaled alike horizontally and vertically): 60 (sedan family, police), 56 (truck), 83 (muscle), 119 (monster); lower, the sedan family reach the band on the ground (65%: 0, 70%: 12, 75%: 40). The old "every class still crosses the posts at 80% of full speed" bar (a run that did not cross scored 0) is replaced by "an 80% run still scores 50 m" (`SLOW_RUN_HEIGHT_MINIMUM`: under the truck's 56 m, over 0); the previous rule (highest point anywhere) gave 71 m at least, the band makes it less because a slow run's apex lies before the band. Under the band rule the best class (monster) scores 169.1 m, not 178.2 m: its apex is 17 m out, 4 m past the band's far edge, and it is read at 13 m; the best-class band 150-160 (the crossing height 156.4 m at the plane) becomes 162-173 (x 1.08). Frame top 220 m (235 under the highest-point rule, 205 under the crossing-height rule), 44 slats, 22 height marks, net height 85 m, posts 11 m, net 41 m, box piles end 35 m.
 
 The table above and its bars are measured on the free pad: the posts and slats are taken out of the ragdoll's world (`rangeFor` in the sizing test), so they size the launch alone. With the frame in (the sizing test's framed row, one throw per class's best run at the steady 60 Hz; score / lands, m): sedan 111.1 / 20.7, hatchback and wagon 111.1 / 22.3, police 110.8 / 15.3, truck 107.8 / 19.2, muscle 129.9 / 17.2, monster 159.8 / 16.3. A slat catches the monster's best run on the way up at 10.9 m out, inside the band, so it costs 9.3 m of score (169.1 to 159.8); every best run still scores well up the boards and the best class stays over the owner's accepted 150 m (the framed bars). With the middle signs gone (they were 4.7 m tall colliders between the posts) the sedan family and police are no longer caught at the plane: they land 15-22 m out instead of resting 8.5-9.8 m out. `HIGH_JUMP_MEASURED` stays the free pad's: it is the most a run can score, which the frame is sized over. Whether a run is caught is a lottery a browser's own frame times change, so a score with the frame in is a range, not a number.
 
-**Ring Fling** (boost 0.4 / 0.7; lip h/v m/s -> rest x, cup)
+**Ring Fling** (boost 0.4 / 0.65; lip h/v m/s -> rest x, cup)
 
 | Class | Full throttle | 70% run |
 |---|---|---|
-| sedan, hatchback, wagon | 32.4/13.5 -> 31.7, cup 30 | sedan 21.6/8.9 -> 18.9, 0 (short of the 10 cup at 20.1 m); hatchback/wagon 23.3-23.6, cup 10 |
-| truck | 32.2/13.7 -> 31.1, cup 30 | 23.3-23.6, cup 10 |
-| police | 32.5/13.6 -> 31.0, cup 30 | 23.3-23.6, cup 10 |
-| muscle | 35.6/14.9 -> 38.7, cup 50 | 21.0, cup 10 |
-| monster | 38.2/18.0 -> 40.8, bounced off the backstop (0) | 25.1, cup 20 |
+| sedan, hatchback, wagon | 32.4/13.5 -> 31.9-32.1, cup 30 | sedan 21.6/8.9 -> 18.6, 0 (short of the 10 cup at 20.1 m); hatchback/wagon 23.3-23.6, cup 10 |
+| truck | 32.2/13.7 -> 32.0, cup 30 | 23.3-23.6, cup 10 |
+| police | 32.5/13.6 -> 32.0, cup 30 | 23.3-23.6, cup 10 |
+| muscle | 35.6/14.9 -> 38.1, cup 50 | 21.0, cup 10 |
+| monster | 38.2/18.0 -> 41.0, bounced off the backstop (0) | 25.1, cup 20 |
 
 Sedan speed-share sweep (share of full-throttle lip speed -> cup): 0.72-0.86 -> 10, 0.88-0.94 -> 20, 0.96-1.00 -> 30; below 0.70 no cup.
 
-**Long jump** (the timed bail; `THROW_BOOST.longJump` forward 1.15; best run of each class: landing / rest in m by press offset from the hit, early and late alike, worst-case seed 0 of `minigame-sizing.test.ts`)
+**Long jump** (the timed bail; `THROW_BOOST.longJump` forward 1.13; best run of each class: landing / rest in m by press offset from the hit, early and late alike, seed 0 of `minigame-sizing.test.ts`)
 
 | Class | Perfect | ±0.05 s | ±0.10 s | ±0.20 s | No press |
 |---|---|---|---|---|---|
-| sedan, hatchback, wagon | 93.9 / 102.5 | 87.9 / 89.3 | 78.5 / 79.2 | 59.0 / 67.5 | 49.0 / 49.8 |
-| muscle | 103.8 / 106.3 | 103.6 / 110.7 | 88.9 / 89.5 | 66.7 / 72.1 | 55.4 / 58.8 |
-| truck | 94.5 / 96.7 | 85.9 / 87.7 | 76.6 / 77.4 | 57.7 / 73.2 | 47.8 / 48.9 |
-| monster | 104.5 / 106.4 | 104.5 / 124.9 | 89.9 / 90.5 | 68.1 / 70.3 | 56.7 / 61.5 |
-| police | 96.6 / 102.5 | 87.4 / 88.8 | 77.9 / 78.8 | 58.5 / 65.8 | 48.6 / 49.6 |
+| sedan, hatchback, wagon | 88.0 / 90.2 | 84.5 / 86.5 | 75.6 / 78.4 | 56.7 / 59.9 | 47.0 / 50.6 |
+| muscle | 99.3 / 101.1 | 95.8 / 97.7 | 85.6 / 88.1 | 64.4 / 68.0 | 53.2 / 57.2 |
+| truck | 86.6 / 88.3 | 83.3 / 85.3 | 74.5 / 76.7 | 56.2 / 59.5 | 46.2 / 49.9 |
+| monster | 104.7 / 106.3 | 100.7 / 103.0 | 90.6 / 92.8 | 68.8 / 72.4 | 57.1 / 60.9 |
+| police | 88.2 / 90.2 | 85.0 / 86.8 | 76.0 / 78.7 | 56.8 / 60.2 | 47.1 / 50.8 |
 
 Mid run (85% of the approach, perfect bail / no press): sedan 68.2 / 36.1, muscle 76.6 / 40.8, truck 66.0 / 35.0, monster 77.4 / 41.9, police 67.7 / 36.0. A slower run lands shorter for every class at every offset. Through the real engine, keys and all, at full throttle with no press: sedan 49.9, muscle 58.2, truck 48.8, monster 63.0, police 49.7, hatchback 49.7, wagon 49.9 m.
 

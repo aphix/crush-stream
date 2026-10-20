@@ -290,9 +290,12 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * impulse at that vertex): the centre's closing, which `strikeCar` reads, misses it, and a wreck turning on the spot had its nose shoved 5 cm out of a tyre stack every slice. A clip of 148 or before no longer reads.
  * 150: the range's sand is ground like any other to a dummy (`GROUND_GRIP`, not a friction of 3 under the Max rule, whose pull at a planted forearm's edge spun the
  * arm 160 rad/s in a step and sank it 5-11 cm), so a range throw lands, slides and rests shorter. A clip of 149 or before no longer reads.
+ * 151: a thrown driver leaves with his seat's velocity as the hit began (the car's centre velocity plus its turn rate, eased pitch and roll included, about his
+ * point; the watch's last sample before the hit, not the peak-closing one up to 0.35 s earlier), and the 3 m/s push out of the pane follows the car's nose in 3D;
+ * the range has a 15 cm lip before the barrier (`RANGE_GROUND`). Every throw anywhere leaves differently. A clip of 150 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 150;
+const REPLAY_VERSION = 151;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

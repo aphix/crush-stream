@@ -105,21 +105,21 @@ export const LIP_CAR_SPEED_KEEP = 0.3;
  * Applied only to a minigame's throw, in the ragdoll's launch (the sim's Ejection event stays physical).
  * Sized from the real car, ground and ragdoll in `minigame-sizing.test.ts`, which pins every bar below:
  * - High jump: the physical throw is a near-vertical rocket (60 degree kicker: about 45 m/s up and 27 m/s along at the sedan's lip, 59 and 36
- *   for the monster). The posts stand 11 m out, so `forward` 0.108 keeps the monster's best run (the longest) landing in the box field before
- *   the net, and `upward` 1.03 puts that run's score (its highest point within 2 m of the posts) at 162-173 m (169.1 m; its apex is
- *   178.2 m, 17 m out, past the band, and its crossing height at the posts' plane, the owner's 157 m, was 156.4 m); the sedan's best
- *   reaches about 111 m.
- * - Ring Fling: a ballistic landing distance goes with the speed squared. `forward` 0.4 and `upward` 0.7 bring a full-throttle sedan
+ *   for the monster; the push out along the pitched nose leaves only half of its 3 m/s along). The posts stand 11 m out, so `forward` 0.117
+ *   keeps the monster's best run (the longest) landing in the box field before the net, and `upward` 1.03 puts that run's score (its highest
+ *   point within 2 m of the posts) at 162-173 m (167.6 m; its crossing height at the posts' plane, the owner's 157 m, was 156.4 m); the
+ *   sedan's best reaches about 118 m.
+ * - Ring Fling: a ballistic landing distance goes with the speed squared. `forward` 0.4 and `upward` 0.65 bring a full-throttle sedan
  *   family run down on the 30 cup, a 75% run on the 10 cup, and the monster's run is stopped by the backstop.
  * - Long jump: the barrier's throw is a flat skim with the same 3.2 m/s climb at any approach speed, so the release is built from the
- *   horizontal speed alone: `forward` is the share of it that is the whole release speed of a perfect bail (1.15 lands the standard classes'
- *   best runs at about 94 m and the muscle and monster at about 104), and the elevation and speed of any other bail are the bail's
+ *   horizontal speed alone: `forward` is the share of it that is the whole release speed of a perfect bail (1.13 lands the standard classes'
+ *   best runs at about 88 m and the muscle and monster at about 99 and 105), and the elevation and speed of any other bail are the bail's
  *   (`minigame-bail.ts` `bailRelease`). The range is speed squared times sin(2 elevation), so a slower run lands shorter for every class.
  */
 export const THROW_BOOST: Readonly<Record<MinigameMode, { forward: number; upward: number; elevation: number | null }>> = {
-  longJump: { forward: 1.15, upward: 1, elevation: null },
-  highJump: { forward: 0.108, upward: 1.03, elevation: null },
-  ringFling: { forward: 0.4, upward: 0.7, elevation: null },
+  longJump: { forward: 1.13, upward: 1, elevation: null },
+  highJump: { forward: 0.117, upward: 1.03, elevation: null },
+  ringFling: { forward: 0.4, upward: 0.65, elevation: null },
 };
 
 /**

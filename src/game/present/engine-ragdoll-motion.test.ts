@@ -6,7 +6,8 @@ import type { RigidBody, World } from "@dimforge/rapier3d-simd";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { armKill, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
 import { THROW_ONSET } from "../match/phase.ts";
-import { RANGE } from "../scenes/range.ts";
+import { RANGE, RANGE_GROUND } from "../scenes/range.ts";
+import { setGround } from "../world/ground.ts";
 import { EJECT_ROLL, ejectionVelocity } from "../vehicle/ejection.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { PARTS, shed } from "./ragdoll-body.ts";
@@ -17,8 +18,8 @@ const GRAVITY = 9.6;
 const COM_TOLERANCE = 1e-4;
 /** The owner's barrel roll: at least two thirds of a turn (deg) of the torso before he first touches down. */
 const ROLL_BEFORE_TOUCHDOWN_DEG = 240;
-/** Where (m past the wall) the range's driver lies: rolling, he lands on his limbs and cartwheels on (owner: accepted), past FlatOut's 25–40 m. */
-const LANDING_M = [50, 70] as const;
+/** Where (m past the wall) the range's driver lies: rolling, he lands on his limbs and cartwheels on (owner: accepted), past FlatOut's 25–40 m; the range's every car type and display rests 42.9–61.2 m on over the lip. */
+const LANDING_M = [42, 62] as const;
 type Doll = { live: boolean; bodies: RigidBody[] };
 
 /** A deterministic stream in [0, 1). */
@@ -96,10 +97,11 @@ type Run = {
 };
 
 /**
- * The ejection range: a sedan at 100 km/h into the jersey barrier, the driver thrown over it onto sand, one frame
+ * The ejection range: a sedan at 100 km/h over the lip into the jersey barrier, the driver thrown over it onto sand, one frame
  * every `frame()` seconds (the engine's order: the car world, then `update` with the slow-mo's sim seconds).
  */
 async function rangeThrow(frame: () => number): Promise<Run> {
+  setGround(RANGE_GROUND);
   const car = makeCar("shape", 0.32, 0.45);
   armKill(car.deform, "sedan", DEFAULT_REALISM, "default");
   launch(car, -RANGE.run, 0, Math.PI / 2, RANGE.kph / 3.6, 0);
@@ -147,8 +149,8 @@ async function rangeThrow(frame: () => number): Promise<Run> {
   return run;
 }
 
-describe("given the ejection range (a sedan at 100 km/h into the jersey barrier, the driver thrown over it onto sand)", () => {
-  it(`when the throw is run at ${FRAME_HZ} and ${FINE_HZ} Hz display rates, then he lands within 1 m of the same spot, ${LANDING_M[0]}–${LANDING_M[1]} m on`, { todo: "45.5 m at 60 Hz, 46.0 m at 240 Hz: the cartwheel landing accepted by the owner 2026-10-19 (EJECT_ROLL 16 + airborne brace), on sand at the dummies' ground grip (0.6, not 3) since 2026-10-20" }, async () => {
+describe("given the ejection range (a sedan at 100 km/h over the lip into the jersey barrier, the driver thrown over it onto sand)", () => {
+  it(`when the throw is run at ${FRAME_HZ} and ${FINE_HZ} Hz display rates, then he lands within 1 m of the same spot, ${LANDING_M[0]}–${LANDING_M[1]} m on`, { todo: "49.9 m at 60 Hz, 53.5 m at 240 Hz: the cartwheel landing accepted by the owner 2026-10-19 (EJECT_ROLL 16 + airborne brace), on sand at the dummies' ground grip (0.6, not 3), over the lip since 2026-10-20" }, async () => {
     const slow = await rangeThrow(() => 1 / FRAME_HZ);
     const fast = await rangeThrow(() => 1 / FINE_HZ);
     assert.ok(slow.landing >= LANDING_M[0] && slow.landing <= LANDING_M[1], `${FRAME_HZ} Hz landing ${slow.landing.toFixed(1)} m`);

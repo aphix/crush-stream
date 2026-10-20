@@ -1,8 +1,11 @@
+import { BARRIER_HALF } from "../contact/sat.ts";
+import { Ground, STEP_UP } from "../world/ground.ts";
+
 /**
  * The ejection range, FlatOut's driver-flinging event: car A runs up `RANGE.run` m at `RANGE.kph` straight into the
- * jersey barrier (hood height) at the origin, its driver flies over it down +x into a sand field with a distance sign
- * every `RANGE.signStep` m, and the camera watches him until he lies still. Distances count from the wall's centre
- * line (x = 0). The dummy is cosmetic (`RagdollSystem`); nothing here feeds the sim.
+ * jersey barrier (hood height) at the origin over a low kicker (`RANGE.lip`), its driver flies over it down +x into a
+ * sand field with a distance sign every `RANGE.signStep` m, and the camera watches him until he lies still. Distances
+ * count from the wall's centre line (x = 0).
  */
 export const RANGE = {
   /** Run-up (m back from the wall) and speed: set by eye, a FlatOut-like hit that throws on every run. */
@@ -13,7 +16,17 @@ export const RANGE = {
   halfWidth: 10,
   signStep: 10,
   signs: 11,
+  /** The kicker against the wall's face (m): it rocks the nose up as it hits, so the driver leaves climbing and lands further (owner, 2026-10-20: tiny, a lip not a ramp); 15 cm landed furthest of the 5, 10 and 15 tried. */
+  lip: { height: 0.15, length: 2, halfWidth: BARRIER_HALF.z },
 } as const;
+
+/** x (m) of the lip's foot: its top edge stands against the wall's face. */
+export const RANGE_LIP_FOOT = -BARRIER_HALF.x - RANGE.lip.length;
+
+/** The range's ground: the flat plane with the lip on it, rising toward the wall. */
+export const RANGE_GROUND = new Ground();
+RANGE_GROUND.addPlane(0, -1e7, 1e7, -1e7, 1e7, Infinity);
+RANGE_GROUND.addFace(RANGE_LIP_FOOT, -RANGE.lip.halfWidth, 0, RANGE.lip.length, 2 * RANGE.lip.halfWidth, 0, RANGE.lip.height, 0, RANGE.lip.height, STEP_UP);
 
 /** Wall seconds the landing stays on screen before a looping range runs again. */
 const SHOW_LANDING = 3;

@@ -5,7 +5,7 @@ import { COMPACTOR } from "../scenes/compactor.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 import { PISTON_ORBIT_RATE, pistonBearing } from "../present/engine-pistons.ts";
 import { VAPOR_DEPTH, edgeAction, fleetEmptied, layoutFleet, layoutDerby, MAX_CARS, respawnSlot } from "../scenes/fleet.ts";
-import { RANGE } from "../scenes/range.ts";
+import { RANGE, RANGE_GROUND } from "../scenes/range.ts";
 import { LAB_PRESET } from "../scenes/constants.ts";
 import { makeRangeArt } from "../present/range-art.ts";
 import { LAB_LIGHT, LabArt } from "../present/lab-art.ts";
@@ -363,7 +363,7 @@ export abstract class EngineScenes extends EngineMinigames {
       this.scene.add(this.rangeArt);
       this.queueWarm();
     }
-    if (this.rangeArt) this.rangeArt.visible = this.showRange && this.minigames.rangeArtShown;
+    if (this.rangeArt) this.minigames.dressRangeArt(this.rangeArt, this.showRange);
     this.minigames.showArt(this.showRange);
     if (this.showLab && !this.labArt) {
       this.labArt = new LabArt();
@@ -391,7 +391,7 @@ export abstract class EngineScenes extends EngineMinigames {
       this.finishResetCommon();
       return;
     }
-    setGround(this.showCorkscrew ? this.corkscrew : this.showLab ? this.lab.ground : this.derbyMode ? this.derbyGround : this.showRange ? this.minigames.groundInPlay : this.rigScene || this.showGarage ? null : this.showRamps ? this.ramps : DISC_GROUND);
+    setGround(this.showCorkscrew ? this.corkscrew : this.showLab ? this.lab.ground : this.derbyMode ? this.derbyGround : this.showRange ? (this.minigames.groundInPlay ?? RANGE_GROUND) : this.rigScene || this.showGarage ? null : this.showRamps ? this.ramps : DISC_GROUND);
     armSolids(this.showLab ? this.lab.prisms : this.rigs);
     this.stage.ground.scale.setScalar(this.showCorkscrew ? 3 : 1);
     for (const o of this.studio) o.visible = !this.showLab && !this.showGarage && !this.derbyMode && this.minigameMode === null;

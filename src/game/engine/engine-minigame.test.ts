@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import type { MinigameHudState } from "../scenes/minigame-session.ts";
+import { RANGE_LIP_ART } from "../present/range-art.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { MINIGAME_AIM_LEAD } from "../present/ride-cam.ts";
@@ -14,7 +14,7 @@ import { BOX_COUNT, HighJumpPeak, type TorsoSample } from "../scenes/minigame-hi
 import { DRIVER_CARS } from "../match/types.ts";
 import { lipHeight } from "../scenes/minigame-profile.ts";
 import { ringScore } from "../scenes/minigame-ring.ts";
-import { MinigameSession } from "../scenes/minigame-session.ts";
+import { MinigameSession, type MinigameHudState } from "../scenes/minigame-session.ts";
 import { BAIL_WINDOW_SECONDS, bailRelease, type BailVerdict } from "../scenes/minigame-bail.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
@@ -132,11 +132,11 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
   describe("given the attract Range before any minigame", () => {
 
-    it("when it runs, then it is the auto-looping jersey-barrier range on the flat ground with its art and studio showing, and no minigame card", () => {
+    it("when it runs, then it is the auto-looping jersey-barrier range on its ground with the lip before the barrier, its art (the lip's too) and studio showing, and no minigame card", () => {
       attractGround = activeGround();
       assert.equal(engine["minigameMode"], null, "no minigame in play");
       assert.ok(engine["barrierUp"], "the jersey barrier stands");
-      assert.ok(engine["rangeArt"]?.visible, "the sand and signs show");
+      assert.ok(engine["rangeArt"]?.visible && engine["rangeArt"].getObjectByName(RANGE_LIP_ART)!.visible && activeGround().heightAt(-1, 0) > 0, "the sand, signs and lip show, and the lip is ground");
       assert.ok(engine["studio"].length > 0 && engine["studio"].every((object) => object.visible), "the studio's disc, grid and rings show");
       assert.ok(engine["looping"], "it loops");
       assert.equal(hud.get().minigame, null, "no minigame card");
@@ -293,7 +293,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
   describe("given a minigame is on and the player picks the modes in turn", () => {
     const picks = [
-      { it: "when Long jump is picked, then the jersey barrier stands, the range's sand shows and only the long jump's station art shows", mode: "longJump", barrier: true, rangeArt: true },
+      { it: "when Long jump is picked, then the jersey barrier stands, the range's sand shows without its lip and only the long jump's station art shows", mode: "longJump", barrier: true, rangeArt: true },
       { it: "when High jump is picked, then the barrier is down, the range's sand is hidden and only the high jump's station art shows", mode: "highJump", barrier: false, rangeArt: false },
       { it: "when Ring Fling is picked, then the barrier is down, the range's sand is hidden and only Ring Fling's station art shows", mode: "ringFling", barrier: false, rangeArt: false },
     ] as const;
@@ -305,7 +305,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         assert.notEqual(activeGround(), attractGround, "not the flat attract ground");
         assert.equal(engine["barrierUp"], testCase.barrier, "barrier up");
         assert.equal(engine["barrier"].group.visible, testCase.barrier, "barrier drawn");
-        assert.equal(engine["rangeArt"]!.visible, testCase.rangeArt, "range art");
+        assert.ok(engine["rangeArt"]!.visible === testCase.rangeArt && !engine["rangeArt"]!.getObjectByName(RANGE_LIP_ART)!.visible, "range art, never the lip");
         assert.ok(engine["studio"].every((object) => !object.visible), "the studio is hidden");
         assert.ok(art.group.visible, "the minigame art shows");
         for (const mode of MINIGAME_MODES) assert.equal(art["stations"][mode].visible, mode === testCase.mode, `${mode}'s station art`);

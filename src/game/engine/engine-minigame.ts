@@ -5,6 +5,7 @@ import { BOX_POSE_FLOATS, type BoxPlacement, type ReleaseScale } from "../presen
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { MinigameArt } from "../present/minigame-art.ts";
 import { NET_HALF_WIDTH } from "../present/high-jump-art.ts";
+import { RANGE_LIP_ART } from "../present/range-art.ts";
 import { HIGH_JUMP_MEASURED, MINIGAME_MODE, STATION_ANCHORS, THROW_BOOST, THROWS_PER_SET, type MinigameMode } from "../scenes/minigame-constants.ts";
 import { bailRelease, LongJumpBail } from "../scenes/minigame-bail.ts";
 import { MinigameGround, type MinigameBounds, type StationStart } from "../scenes/minigame-ground.ts";
@@ -58,9 +59,10 @@ export class Minigames {
     return this.throwsPerSet;
   }
 
-  /** The range's sand and distance signs belong to the attract loop and the long jump. */
-  get rangeArtShown(): boolean {
-    return this.activeMode === null || this.activeMode === MINIGAME_MODE.longJump;
+  /** The range's sand and distance signs belong to the attract loop and the long jump, its lip to the attract loop alone (the long jump's floor has none). */
+  dressRangeArt(art: THREE.Group, inRange: boolean): void {
+    art.visible = inRange && (this.activeMode === null || this.activeMode === MINIGAME_MODE.longJump);
+    art.getObjectByName(RANGE_LIP_ART)!.visible = this.activeMode === null;
   }
 
   /** The physics ground the mode plays on; null in the attract loop (the flat ground). */

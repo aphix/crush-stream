@@ -89,7 +89,7 @@ function crossing(lip: LipThrow, car: DeformableCar, mode: LipMode, localXs: rea
 describe("given a car whose centre crosses the lip plane going forward at speed v", () => {
   for (const mode of LIP_MODES) {
     for (const speed of CROSSING_SPEEDS) {
-      it(`when it crosses the ${mode} lip at ${speed} m/s in one step, then one windshield ejection launches the driver at the car's velocity plus the usual pop and the car keeps LIP_CAR_SPEED_KEEP of its speed`, () => {
+      it(`when it crosses the ${mode} lip at ${speed} m/s in one step, then one windshield ejection launches the driver at the car's velocity plus the usual pop (out along its nose, then up) and the car keeps LIP_CAR_SPEED_KEEP of its speed`, () => {
         const car = carMovingAtLip(mode, speed);
         const { lip, watch } = lipThrowFor(mode, car);
         const step = speed * FRAME;
@@ -106,7 +106,7 @@ describe("given a car whose centre crosses the lip plane going forward at speed 
         const launched = ejectionVelocity(events[0]!, new THREE.Vector3());
         const dir = events[0]!.dir;
         assert.ok(Math.abs(launched.x - (velocityAtLip.x + dir.x * THROW_OUT)) <= F32_TOLERANCE, `launch x ${launched.x}`);
-        assert.ok(Math.abs(launched.y - (velocityAtLip.y + THROW_UP_PINNED)) <= F32_TOLERANCE, `launch y ${launched.y}`);
+        assert.ok(Math.abs(launched.y - (velocityAtLip.y + dir.y * THROW_OUT + THROW_UP_PINNED)) <= F32_TOLERANCE, `launch y ${launched.y}`);
         assert.ok(Math.abs(launched.z - (velocityAtLip.z + dir.z * THROW_OUT)) <= F32_TOLERANCE, `launch z ${launched.z}`);
         assert.ok(Math.abs(car.speed - speed * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `car speed ${car.speed}`);
         assert.ok(Math.abs(car.velocity.length() - speed * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `car velocity ${car.velocity.length()}`);
@@ -245,6 +245,8 @@ type Flight = {
   ejections: number;
   /** The event of the throw: the car's velocity then (`carVel`, f32) and the driver's launch on top of it. */
   event: Ejection | null;
+  /** His seat's velocity over the car's centre's at the throw: the watch's turn rate of the car then, about his point (`ω × r`). */
+  seatTurn: THREE.Vector3;
   /** The car's horizontal speed (m/s) as its driver was thrown, before the cut: what the climb rows of `minigame-profile.test.ts` call the lip speed (`car.speed`). */
   lipSpeed: number;
   /** Station-local x of the car's centre in the slice that threw him. */
@@ -283,9 +285,18 @@ function flyFromLip(type: DriverCar, mode: LipMode, run: FlightRun): Flight {
     const watch = new EjectionWatch();
     const world = newWorld([car], null, watch);
     world.collide = new LipThrow(mode, [car], watch).collide;
+    const seatTurn = new THREE.Vector3();
+    const throwNow = watch.throwDriverNow.bind(watch);
+    watch.throwDriverNow = (cars, index) => {
+      const spin = new THREE.Vector3().fromArray(watch["spin"], index * 3);
+      const centre = cars[index]!.group.position.clone();
+      throwNow(cars, index);
+      const thrown = watch["pending"].at(-1);
+      if (thrown) seatTurn.crossVectors(spin, thrown.pos.clone().sub(centre));
+    };
     const clock = { acc: 0 };
     for (let n = 0; n < SETTLE_SECONDS / FRAME; n++) frame(world, null, clock);
-    const flight: Flight = { ejections: 0, event: null, lipSpeed: NaN, throwLocalX: NaN, landingLocalX: NaN };
+    const flight: Flight = { ejections: 0, event: null, seatTurn, lipSpeed: NaN, throwLocalX: NaN, landingLocalX: NaN };
     const input: DriveInput = { ...idleDrive(), throttle: 1 };
     let secondsInFreeFall = 0;
     let previousVerticalSpeed = 0;
@@ -391,7 +402,7 @@ const keepsClearing = new Map<LipMode, Set<number>>();
 
 describe("given each car type driven up each station's ramp under the real lip throw", () => {
   for (const mode of LIP_MODES) {
-    it(`when each reaches the ${mode} lip at its best and at the slow speed, then one ejection is one windshield throw at the plane, at the car's velocity plus the usual pop, and the slow run is within tolerance of ${SLOW_LIP_SPEED} m/s`, () => {
+    it(`when each reaches the ${mode} lip at its best and at the slow speed, then one ejection is one windshield throw at the plane, at the car's velocity plus his seat's turn and the usual pop (out along its nose, then up), and the slow run is within tolerance of ${SLOW_LIP_SPEED} m/s`, () => {
       for (const type of DRIVER_CARS) {
         for (const speedCap of [Infinity, slowCap(type, mode)]) {
           const flight = flyFromLip(type, mode, { speedCap, keep: LIP_CAR_SPEED_KEEP, until: "throw" });
@@ -400,8 +411,9 @@ describe("given each car type driven up each station's ramp under the real lip t
           assert.equal(flight.ejections, 1, `${type.id}: one ejection`);
           assert.equal(event.exit, "windshield", `${type.id}: windshield`);
           assert.ok(flight.throwLocalX >= 0 && flight.throwLocalX <= flight.lipSpeed * FRAME, `${type.id}: thrown as the centre crossed the plane (x ${flight.throwLocalX})`);
-          const pop = Math.hypot(event.rel.x - event.dir.x * THROW_OUT, event.rel.y - THROW_UP_PINNED, event.rel.z - event.dir.z * THROW_OUT);
-          assert.ok(pop <= F32_TOLERANCE, `${type.id}: the driver's own velocity is off the throw out and up by ${pop}`);
+          const own = event.rel.clone().sub(flight.seatTurn).addScaledVector(event.dir, -THROW_OUT);
+          const pop = Math.hypot(own.x, own.y - THROW_UP_PINNED, own.z);
+          assert.ok(pop <= F32_TOLERANCE, `${type.id}: the driver's own velocity is off his seat's turn, the throw out and up by ${pop}`);
           if (speedCap !== Infinity) assert.ok(Math.abs(flight.lipSpeed - SLOW_LIP_SPEED) <= SLOW_LIP_TOLERANCE, `${type.id}: slow lip speed ${flight.lipSpeed}`);
         }
       }

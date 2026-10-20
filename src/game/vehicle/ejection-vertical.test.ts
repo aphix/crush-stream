@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FREEWHEEL, launch, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { propContact, type PropHits } from "../contact/prop-contact.ts";
-import { RANGE } from "../scenes/range.ts";
+import { RANGE, RANGE_GROUND } from "../scenes/range.ts";
 import { Ground, setGround } from "../world/ground.ts";
 import { solidsOf } from "../world/placements.ts";
 import type { Surface } from "../world/surfaces.ts";
@@ -16,8 +16,10 @@ import { RAD, Wedge } from "./wedge.test-util.ts";
 /** The thrown driver's own upward speed over the car's (m/s): `THROW_UP`, pinned by the flat rows. */
 const FLAT_THROW_UP = 3.5;
 const FLAT_TOLERANCE = 0.05;
-/** How far (m/s) the launch's vertical speed may be from the pre-hit car's plus `FLAT_THROW_UP`: the sample the watch reads is within a frame of the one the rows read. */
+/** How far (m/s) the launch's vertical speed may be from the car's as the hit began plus its push out and `FLAT_THROW_UP`: the sample the watch reads is within a frame of the one the rows read. */
 const CARRY_TOLERANCE = 0.5;
+/** How much faster (m/s) a sedan's driver must leave upward when the range's lip rocks its nose up into the barrier than on the flat: measured 4.50 against 3.53 (60 Hz). */
+const LIP_LIFT = 0.5;
 /** Frames (60 Hz) a run lasts: 2.5 s, past every throw below. */
 const FRAMES = 150;
 /** The watch's look-back (`PRE`, 0.35 s) in frames: a run longer than this has lost its first samples when the throw is judged. */
@@ -79,8 +81,8 @@ function climbing(cls: VehicleClassId, wedge: Wedge, speed: number, startX = 0):
 }
 
 type Throw = {
-  /** The car's velocity at the start of every frame up to and including the throw's. */
-  history: { vx: number; vy: number }[];
+  /** The car's velocity at the start of every frame up to and including the throw's, and whether it had hit anything by then. */
+  history: { vx: number; vy: number; crashed: boolean }[];
   events: readonly Ejection[];
   /** The launch velocity of the first event: the car's, the driver's own throw out and up. */
   launched: THREE.Vector3;
@@ -93,23 +95,27 @@ function runIntoWall(car: DeformableCar, wall: Surface): Throw {
   world.world.collide = (c, _i, h) => propContact(c, 0, wall, knocked, NO_HITS, h);
   const history: Throw["history"] = [];
   for (let f = 0; f < FRAMES && world.ejections.length === 0; f++) {
-    history.push({ vx: car.velocity.x, vy: car.velocity.y });
+    history.push({ vx: car.velocity.x, vy: car.velocity.y, crashed: car.crashed });
     tickWorld(world);
   }
   const launched = world.ejections[0] ? ejectionVelocity(world.ejections[0], new THREE.Vector3()) : new THREE.Vector3(NaN, NaN, NaN);
   return { history, events: world.ejections, launched };
 }
 
-/** The vertical speed (m/s) of the sample the watch reads: the one the car closed on the wall fastest at, the latest of equals (as the watch walks back from the newest sample). */
-function peakClosingVerticalSpeed(history: Throw["history"]): number {
-  let peak = history[history.length - 1]!;
-  for (let k = history.length - 1; k >= 0; k--) if (history[k]!.vx > peak.vx) peak = history[k]!;
-  return peak.vy;
+/** The car's vertical speed (m/s) as its hit began: the last frame before it touched the wall (the throw's own, if that is when it did). */
+function hitVerticalSpeed(history: Throw["history"]): number {
+  const hit = history.findIndex((h) => h.crashed);
+  return history[(hit < 0 ? history.length : hit) - 1]!.vy;
+}
+
+/** The vertical speed (m/s) the driver leaves with off a car moving `vy` m/s up as its hit began: the push out along the nose (`dir`, its pitch too), then `FLAT_THROW_UP`. */
+function expectedLaunchY(vy: number, e: Ejection): number {
+  return vy + e.dir.y * THROW_OUT + FLAT_THROW_UP;
 }
 
 const CLIMBS = [
-  { it: `when a sedan climbs a 20 degree wedge at ${SEDAN_CLIMB_MPS} m/s into a wall, then its driver is thrown with the car's vertical speed at the fastest-closing sample plus 3.5 m/s`, cls: "sedan", mps: SEDAN_CLIMB_MPS },
-  ...VEHICLE_CLASS_IDS.map((cls) => ({ it: `when a ${cls} climbs a 20 degree wedge at ${FLEET_CLIMB_MPS} m/s into a wall, then its driver is thrown with the car's vertical speed at the fastest-closing sample plus 3.5 m/s`, cls, mps: FLEET_CLIMB_MPS })),
+  { it: `when a sedan climbs a 20 degree wedge at ${SEDAN_CLIMB_MPS} m/s into a wall, then its driver is thrown with the car's vertical speed as the hit began, the push out along its pitched nose and 3.5 m/s`, cls: "sedan", mps: SEDAN_CLIMB_MPS },
+  ...VEHICLE_CLASS_IDS.map((cls) => ({ it: `when a ${cls} climbs a 20 degree wedge at ${FLEET_CLIMB_MPS} m/s into a wall, then its driver is thrown with the car's vertical speed as the hit began, the push out along its pitched nose and 3.5 m/s`, cls, mps: FLEET_CLIMB_MPS })),
 ] as const;
 
 describe("given a car climbing a wedge into a wall that kills it (a ramp's flat-up carry)", () => {
@@ -121,28 +127,28 @@ describe("given a car climbing a wedge into a wall that kills it (a ramp's flat-
       const car = climbing(testCase.cls, wedge, testCase.mps, LEAD_START_X);
       const run = runIntoWall(car, wallPrism(WALL_X, top - 3, top + 12));
       assert.ok(run.history.length > WATCH_LOOKBACK_FRAMES, "the throw comes after the look-back has passed the placement sample");
-      const climbSpeed = peakClosingVerticalSpeed(run.history.slice(-WATCH_LOOKBACK_FRAMES));
+      const climbSpeed = hitVerticalSpeed(run.history);
       car.dispose();
       assert.equal(run.events.length, 1, "one throw");
       assert.equal(run.events[0]!.exit, "windshield", "thrown out of the windshield");
       assert.ok(climbSpeed > 2 * FLAT_THROW_UP, `the car was climbing at ${climbSpeed.toFixed(2)} m/s`);
-      assert.ok(Math.abs(run.launched.y - (climbSpeed + FLAT_THROW_UP)) <= CARRY_TOLERANCE, `launched ${run.launched.y.toFixed(2)} m/s up, the climb ${climbSpeed.toFixed(2)} + ${FLAT_THROW_UP}`);
+      assert.ok(Math.abs(run.launched.y - expectedLaunchY(climbSpeed, run.events[0]!)) <= CARRY_TOLERANCE, `launched ${run.launched.y.toFixed(2)} m/s up, the climb ${climbSpeed.toFixed(2)}, out ${(run.events[0]!.dir.y * THROW_OUT).toFixed(2)} + ${FLAT_THROW_UP}`);
     });
   }
 });
 
 describe("given a car driving off a ledge and falling into a wall that kills it", () => {
-  it("when a sedan falls at 7 m/s into the wall, then its driver keeps the fall (the sign carried) and is thrown with the fall plus 3.5 m/s", () => {
+  it("when a sedan falls at 7 m/s into the wall, then its driver keeps the fall (the sign carried) and is thrown with the fall, the push out along its nose and 3.5 m/s", () => {
     setGround(new Ledge(LEDGE_HEIGHT));
     const car = classCar("sedan");
     launch(car, -10, 0, Math.PI / 2, LEDGE_SPEED, 0);
     car.group.position.y = LEDGE_HEIGHT;
     const run = runIntoWall(car, wallPrism(LEDGE_WALL_X, 0, LEDGE_HEIGHT + 3));
-    const fallSpeed = peakClosingVerticalSpeed(run.history.slice(-WATCH_LOOKBACK_FRAMES));
+    const fallSpeed = hitVerticalSpeed(run.history);
     car.dispose();
     assert.equal(run.events.length, 1, "one throw");
     assert.ok(fallSpeed < -FLAT_THROW_UP, `the car was falling at ${fallSpeed.toFixed(2)} m/s`);
-    assert.ok(Math.abs(run.launched.y - (fallSpeed + FLAT_THROW_UP)) <= CARRY_TOLERANCE, `launched ${run.launched.y.toFixed(2)} m/s, the fall ${fallSpeed.toFixed(2)} + ${FLAT_THROW_UP}`);
+    assert.ok(Math.abs(run.launched.y - expectedLaunchY(fallSpeed, run.events[0]!)) <= CARRY_TOLERANCE, `launched ${run.launched.y.toFixed(2)} m/s, the fall ${fallSpeed.toFixed(2)}, out ${(run.events[0]!.dir.y * THROW_OUT).toFixed(2)} + ${FLAT_THROW_UP}`);
     assert.ok(run.launched.y < 0, "he leaves the car still going down");
   });
 });
@@ -162,6 +168,22 @@ describe("given the ejection range: a straight head-on into the barrier on flat 
       assert.ok(Math.abs(launched.y - FLAT_THROW_UP) <= FLAT_TOLERANCE, `launched ${launched.y.toFixed(3)} m/s up`);
     });
   }
+
+  it(`when a sedan drives at ${RANGE.kph} km/h over the range's lip into the barrier, its nose rocking up as it hits, then its driver leaves at least ${LIP_LIFT} m/s faster upward than off the flat`, () => {
+    const up = (ground: Ground | null): number => {
+      setGround(ground);
+      const car = classCar("sedan");
+      launch(car, -RANGE.run, 0, Math.PI / 2, RANGE.kph / 3.6, 0);
+      const world = makeWorld([car], true, false, FREEWHEEL);
+      for (let f = 0; f < FRAMES; f++) tickWorld(world);
+      car.dispose();
+      assert.equal(world.ejections.length, 1, "one throw");
+      return ejectionVelocity(world.ejections[0]!, new THREE.Vector3()).y;
+    };
+    const lip = up(RANGE_GROUND);
+    const flat = up(null);
+    assert.ok(lip > flat + LIP_LIFT, `${lip.toFixed(2)} m/s up over the lip, ${flat.toFixed(2)} off the flat`);
+  });
 });
 
 describe("given a car thrown on the throw's own step with no velocity sample yet but the one it was placed with", () => {
@@ -174,12 +196,12 @@ describe("given a car thrown on the throw's own step with no velocity sample yet
     car.dispose();
     assert.equal(run.events.length, 1, "one throw");
     assert.equal(run.history.length, SEED_FRAMES, "killed on its first frames");
-    assert.ok(Math.abs(run.launched.y - (FLEET_CLIMB_MPS * Math.sin(KILLING_WEDGE_DEG * RAD) + FLAT_THROW_UP)) <= CARRY_TOLERANCE, `launched ${run.launched.y.toFixed(2)} m/s up`);
+    assert.ok(Math.abs(run.launched.y - expectedLaunchY(FLEET_CLIMB_MPS * Math.sin(KILLING_WEDGE_DEG * RAD), run.events[0]!)) <= CARRY_TOLERANCE, `launched ${run.launched.y.toFixed(2)} m/s up`);
   });
 });
 
 describe("given the sim throwing a driver out on demand (a ramp's lip), whatever the car hit", () => {
-  it("when a car climbing a 60 degree wedge at 25 m/s is thrown now, then one windshield event launches him at the car's velocity plus the throw out and up", () => {
+  it("when a car climbing a 60 degree wedge at 25 m/s is thrown now, then one windshield event launches him at the car's velocity plus the throw out along its nose (up the wedge's pitch too) and up", () => {
     const wedge = new Wedge(LIP_WEDGE_DEG);
     setGround(wedge);
     const car = climbing("sedan", wedge, LIP_SPEED);
@@ -192,7 +214,7 @@ describe("given the sim throwing a driver out on demand (a ramp's lip), whatever
     const launched = ejectionVelocity(events[0]!, new THREE.Vector3());
     const dir = events[0]!.dir;
     assert.ok(Math.abs(launched.x - (car.velocity.x + dir.x * THROW_OUT)) <= F32_TOLERANCE, `x ${launched.x}`);
-    assert.ok(Math.abs(launched.y - (car.velocity.y + FLAT_THROW_UP)) <= F32_TOLERANCE, `y ${launched.y} against the car's ${car.velocity.y}`);
+    assert.ok(Math.abs(launched.y - (car.velocity.y + dir.y * THROW_OUT + FLAT_THROW_UP)) <= F32_TOLERANCE, `y ${launched.y} against the car's ${car.velocity.y}`);
     assert.ok(Math.abs(launched.z - (car.velocity.z + dir.z * THROW_OUT)) <= F32_TOLERANCE, `z ${launched.z}`);
     car.dispose();
   });

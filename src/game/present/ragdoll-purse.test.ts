@@ -11,7 +11,8 @@ import { Purses, BURST_AT, ITEM_SPEED, ITEMS_MIN, PURSE_SPEED, SPREAD } from "./
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { armKill, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
 import { THROW_ONSET } from "../match/phase.ts";
-import { RANGE } from "../scenes/range.ts";
+import { RANGE, RANGE_GROUND } from "../scenes/range.ts";
+import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 // The old 120 Hz floor this suite pins its burst timing to, independent of the shipped rates.
@@ -55,8 +56,8 @@ function untilBurst(r: RagdollSystem): number {
  * arms planted in front: owner, 2026-10-18) and rests 11.7 m past it; the spin-cap fault this row guards left it 30 m off.
  */
 const PURSE_NEAR = 13;
-/** Where (m on) the range's thrown woman lies: rolling, she lands on her limbs and cartwheels on (owner: accepted), past the 20–40 m she lay at before the roll. */
-const LANDING_M = [50, 70] as const;
+/** Where (m on) the range's thrown woman lies: rolling, she lands on her limbs and cartwheels on (owner: accepted), past the 20–40 m she lay at before the roll; the range's throws rest 42.9–61.2 m on over the lip. */
+const LANDING_M = [42, 62] as const;
 
 describe("given a thrown crash-test dummy driver who may carry a handbag (a woman civilian) that bursts open into small items", () => {
   it("when a civilian woman is thrown, then 1 handbag leaves at 0.85× her speed on her heading and, at the burst, 4-7 items fly at 0.85× the handbag's speed inside the spread cone", async () => {
@@ -178,7 +179,8 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
     r.dispose();
   });
 
-  it(`when a civilian woman is thrown from a 100 km/h crash into the barrier on sand at the ejection range, then she lands ${LANDING_M[0]}-${LANDING_M[1]} m on, the handbag rests within ${PURSE_NEAR} m of her instead of 30 m on, and no body spins faster than the spin cap`, { todo: "the handbag rests 24.9 m behind her (she lies at 46.0 m): the cartwheel landing accepted by the owner 2026-10-19 (EJECT_ROLL 16 + airborne brace), on sand at the dummies' ground grip (0.6, not 3) since 2026-10-20" }, async () => {
+  it(`when a civilian woman is thrown from a 100 km/h crash into the barrier on sand at the ejection range, then she lands ${LANDING_M[0]}-${LANDING_M[1]} m on, the handbag rests within ${PURSE_NEAR} m of her instead of 30 m on, and no body spins faster than the spin cap`, { todo: "the handbag rests 25.9 m behind her (she lies at 49.9 m): the cartwheel landing accepted by the owner 2026-10-19 (EJECT_ROLL 16 + airborne brace), on sand at the dummies' ground grip (0.6, not 3), over the lip since 2026-10-20" }, async () => {
+    setGround(RANGE_GROUND);
     const car = makeCar("shape", 0.32, 0.45);
     armKill(car.deform, "sedan", DEFAULT_REALISM, "default");
     launch(car, -RANGE.run, 0, Math.PI / 2, RANGE.kph / 3.6, 0);
@@ -202,7 +204,7 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
     r.dispose();
     // Before the spin cap: the purse spun at 79 rad/s, skipped on and came to rest 30 m past the dummy (58.6 m against 28.4 m).
     assert.ok(torso > LANDING_M[0] && torso < LANDING_M[1], `she landed at ${torso.toFixed(1)} m`);
-    assert.ok(Math.abs(purse.x - torso) < PURSE_NEAR, `the purse rests ${(purse.x - torso).toFixed(1)} m from her`);
+    assert.ok(Math.abs(purse.x - torso) < PURSE_NEAR, `the purse rests ${(purse.x - torso).toFixed(1)} m from her (she lies at ${torso.toFixed(1)} m)`);
     assert.ok(spin <= 15.5, `fastest spin ${spin.toFixed(1)} rad/s`);
   });
 });

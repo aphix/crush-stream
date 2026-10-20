@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { RANGE } from "../scenes/range.ts";
+import { RANGE, RANGE_LIP_FOOT } from "../scenes/range.ts";
 import { groundMesh } from "../scenes/ground-stack.ts";
 
 /** The sign boards' paint: scuffed yellow with a brown edge and black ink, shared by every station's height and distance boards. */
@@ -52,10 +52,13 @@ export function signFace(width: number, height: number, x: number, y: number, z:
   return face;
 }
 
+/** The lip's mesh in the range's art: the long jump shows the range's art over its own floor, which has no lip. */
+export const RANGE_LIP_ART = "range-lip";
+
 /**
- * The ejection range's art (`RANGE`): a sand field from the wall at the origin down +x, a low kerb round it, and a
- * numbered sign on two posts every `RANGE.signStep` m along its left edge, facing back up the range. Four draws,
- * shown only in the range scene.
+ * The ejection range's art (`RANGE`): a sand field from the wall at the origin down +x, a low kerb round it, the lip
+ * before the wall, and a numbered sign on two posts every `RANGE.signStep` m along its left edge, facing back up the
+ * range. Five draws, shown only in the range scene.
  */
 export function makeRangeArt(): THREE.Group {
   const g = new THREE.Group();
@@ -74,6 +77,14 @@ export function makeRangeArt(): THREE.Group {
   ];
   const kerb = new THREE.Mesh(mergeGeometries(kerbs)!, new THREE.MeshStandardMaterial({ color: 0xe8e4da, roughness: 0.85 }));
   kerb.receiveShadow = true;
+  const { height, length, halfWidth } = RANGE.lip;
+  const wedge = new THREE.Shape([new THREE.Vector2(RANGE_LIP_FOOT, 0), new THREE.Vector2(RANGE_LIP_FOOT + length, 0), new THREE.Vector2(RANGE_LIP_FOOT + length, height)]);
+  const lip = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(wedge, { depth: 2 * halfWidth, bevelEnabled: false }).translate(0, 0, -halfWidth),
+    new THREE.MeshStandardMaterial({ color: 0xb08850, roughness: 0.85, metalness: 0.02 }),
+  );
+  lip.name = RANGE_LIP_ART;
+  lip.receiveShadow = true;
 
   const z = -W - BOARD_OUT;
   const boards: THREE.BufferGeometry[] = [];
@@ -89,7 +100,7 @@ export function makeRangeArt(): THREE.Group {
   const stakes = new THREE.Mesh(mergeGeometries(posts)!, new THREE.MeshStandardMaterial({ color: 0x5a4a32, roughness: 0.9 }));
   stakes.castShadow = true;
   for (const geo of [...kerbs, ...boards, ...posts]) geo.dispose();
-  g.add(sand, kerb, signs, stakes);
+  g.add(sand, kerb, lip, signs, stakes);
   g.visible = false;
   return g;
 }
