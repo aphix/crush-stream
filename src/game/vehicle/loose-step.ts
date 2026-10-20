@@ -2,14 +2,14 @@ import * as THREE from "three";
 import { applyGroundFriction } from "../deform/physics-util.ts";
 import { TYRE_R } from "../deform/deform-state.ts";
 import { GRAVITY } from "../kernel/constants.ts";
-import { detCos, detSin } from "../kernel/physics-core.js";
+import { detAsin, detCos, detSin } from "../kernel/physics-core.js";
 import { NO_FLOOR } from "../world/ground.ts";
 import { C_DEPTH, C_GRIP, C_H, C_NX, C_NZ, clearOf, HIT_SIZE, holdTops, pointContact, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, stirNear } from "../world/surfaces.ts";
 import { body, centreOfMass, moveBody, placeBody, standAtCentre, bindBody, type TopMet } from "./car-air-body.ts";
 import { loadShape, readPoints } from "./car-air-points.ts";
 import { openRows, solveRows } from "./car-air.ts";
 import { DENT_MIN_DV, recordDent, type DentState } from "./loose-dent.ts";
-import type { LooseBody, LooseShape } from "./car-core.ts";
+import type { DetachPart, LooseBody, LooseShape } from "./car-core.ts";
 
 const _c = new THREE.Vector3();
 const _dv = new THREE.Vector3();
@@ -155,16 +155,99 @@ export function fitWheelShape(wheel: LooseBody): void {
   wheelShape(wheel.shape, TYRE_R * wheel.object.scale.x, TYRE_WIDTH * wheel.object.scale.x);
 }
 
+/** Air at sea level (kg/m³, the ISA standard atmosphere). */
+export const AIR_DENSITY = 1.225;
+/** A flat plate's normal-force coefficient broadside to the wind: Hoerner's square plate (Fluid-Dynamic Drag, 1965, fig. 29). */
+export const PLATE_CN_BROADSIDE = 1.17;
+/** Its rise per unit sin α below stall: a low-aspect-ratio plate's lift slope (πA/2 for A ≈ 1.3), meeting the broadside value at sin α 0.585 (36°), Hoerner's square plate's stall. */
+const PLATE_CN_SLOPE = 2;
+/** The centre of pressure stands this share of the chord ahead of the plate's middle up to `CP_QUARTER_TO` incidence, then moves linearly to the middle at `CP_MIDDLE_FROM` (Holmes, English and Letchford, flat plates as wind-borne debris, after Tachikawa 1983). */
+const CP_QUARTER = 0.25;
+const CP_QUARTER_TO = (20 * Math.PI) / 180;
+const CP_MIDDLE_FROM = (60 * Math.PI) / 180;
+/** A sheet lying on what it slides on takes this uplift coefficient on its plan area from the wind over its top: Wang and Letchford's sheet flight-initiation tests (ICWE 2003) for the Wills, Lee and Wyatt threshold model. */
+const SHEET_LIFTOFF_CF = 0.15;
+
+/** Part masses (kg) from a 2011 Honda Accord's teardown (NHTSA mass-reduction study, DOT HS 811 666): hood 17.9, front door 29.5, trunk lid 12.4, front fender 3.7 (an arch flare is its fender). */
+const HOOD_KG = 17.9;
+const DOOR_KG = 29.5;
+const TRUNK_KG = 12.4;
+const FENDER_KG = 3.7;
+/** A rear quarter's outer skin: the fender's 0.85 mm steel (6.7 kg/m²) over a quarter's 1.3 m². */
+const QUARTER_KG = 8.7;
+/** A mid-size car's plastic bumper cover: fascias run 6-10 kg. */
+const BUMPER_KG = 8;
+/** A door mirror assembly: 1-2 kg with its glass and motor. */
+const MIRROR_KG = 1.3;
+/** A full-width police light bar: about 30 lb. */
+const LIGHT_BAR_KG = 14;
+const PART_KG: Record<DetachPart["hinge"], number> = { cowl: HOOD_KG, tail: TRUNK_KG, door: DOOR_KG, "two-point": BUMPER_KG, bar: LIGHT_BAR_KG, quarter: QUARTER_KG, arch: FENDER_KG };
+
+/** Torn part `p`'s mass (kg): what the wind on its plan area moves (`blow`). */
+export function partMass(p: DetachPart): number {
+  return p.mirror ? MIRROR_KG : PART_KG[p.hinge];
+}
+
+const _qi = new THREE.Quaternion();
+const _vb = new THREE.Vector3();
+const _air = new THREE.Vector3();
+const _arm = new THREE.Vector3();
+
+/**
+ * One slice of the wind on a torn part of `mass` kg flying as a flat plate: its box's two largest extents, the normal its thinnest axis.
+ * The relative wind's normal force (½ρv²A C_N, C_N with the incidence α) pushes along that normal at the centre of pressure ahead of the
+ * middle toward the leading edge, so it lifts, drags, pitches and tumbles the plate; one lying on a surface also takes the wind's uplift
+ * over its top (`SHEET_LIFTOFF_CF`), which raises its leading edge once the wind is fast enough to carry its weight.
+ */
+function blow(p: LooseBody, mass: number, dt: number): void {
+  const v = p.velocity;
+  const speed2 = v.x * v.x + v.y * v.y + v.z * v.z;
+  if (speed2 === 0) return;
+  const s = p.shape;
+  const hx = s.points[BOX_HALVES]!;
+  const hy = s.points[BOX_HALVES + 1]!;
+  const hz = s.points[BOX_HALVES + 2]!;
+  const thin = hx <= hy && hx <= hz ? 0 : hy <= hz ? 1 : 2;
+  const a = thin === 0 ? hy : hx;
+  const b = thin === 2 ? hy : hz;
+  const q = p.object.quaternion;
+  _vb.copy(v).applyQuaternion(_qi.copy(q).invert());
+  const vn = thin === 0 ? _vb.x : thin === 1 ? _vb.y : _vb.z;
+  const va = thin === 0 ? _vb.y : _vb.x;
+  const vc = thin === 2 ? _vb.y : _vb.z;
+  const speed = Math.sqrt(speed2);
+  const sinA = Math.min(1, Math.abs(vn) / speed);
+  // The world's up component of the plate's normal: the share of the plate facing the sky.
+  const up = thin === 0 ? 2 * (q.x * q.y + q.w * q.z) : thin === 1 ? 1 - 2 * (q.x * q.x + q.z * q.z) : 2 * (q.y * q.z - q.w * q.x);
+  const cn = (vn > 0 ? -1 : 1) * Math.min(PLATE_CN_SLOPE * sinA, PLATE_CN_BROADSIDE) + (s.airborne ? 0 : SHEET_LIFTOFF_CF * up);
+  const force = (0.5 * AIR_DENSITY * speed2 * 4 * a * b * cn) / mass;
+  const along = Math.sqrt(va * va + vc * vc);
+  let ahead = 0;
+  if (along > 0) {
+    const alpha = detAsin(sinA);
+    const share = alpha <= CP_QUARTER_TO ? CP_QUARTER : alpha >= CP_MIDDLE_FROM ? 0 : (CP_QUARTER * (CP_MIDDLE_FROM - alpha)) / (CP_MIDDLE_FROM - CP_QUARTER_TO);
+    // The chord through the middle along the wind's run over the plate, from the half extents it crosses first.
+    ahead = (share * 2 * Math.min((a * along) / Math.abs(va), (b * along) / Math.abs(vc))) / along;
+  }
+  _air.set(thin === 0 ? force : 0, thin === 1 ? force : 0, thin === 2 ? force : 0);
+  // The arm to the centre of pressure, in the plate's axes: along the in-plane wind, ahead of the middle.
+  _arm.set(thin === 0 ? 0 : va * ahead, thin === 0 ? va * ahead : thin === 1 ? 0 : vc * ahead, thin === 2 ? 0 : vc * ahead);
+  _arm.cross(_air).multiply(s.invI).multiplyScalar(dt).applyQuaternion(q);
+  p.angular.add(_arm);
+  v.add(_air.multiplyScalar(dt).applyQuaternion(q));
+}
+
 /**
  * One slice of a torn part's or a popped wheel's flight (`p.velocity` its middle's, `p.angular` its spin) by the rigid step every body
  * takes (`car-air.ts`: `moveBody`, `readPoints`, `openRows`, `solveRows`): the body's points (a part's box's eight corners, a wheel's
  * rims) meet what is under and beside them by the one point query, with the point's own velocity (`pointContact`: the ground, every
  * prism, the other cars' tops, car `skip`'s left out), as every body's points do, so a part topples, rolls, slides off an edge and stops
- * at a wall. Here: its sleep, the gate that asks no point when nothing is near, its spin dying in the air, and its dent.
- * True when a sleeper at rest woke because something came near it (`stirNear`): a body woken by speed given it is not a stir. `met` hears
- * each of its points on another car's top.
+ * at a wall. Here: its sleep, the gate that asks no point when nothing is near, its spin dying in the air, and its dent. A torn panel of `mass`
+ * kg flies in the wind (`blow`) and meets surfaces as the body's metal (`body.panel`); 0, a popped wheel: no wind, its rims a locked tyre's
+ * contact. True when a sleeper at rest woke because something came near it (`stirNear`): a body woken by speed given it is not a stir. `met`
+ * hears each of its points on another car's top.
  */
-export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentState, met?: TopMet): boolean {
+export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentState, met?: TopMet, mass = 0): boolean {
   const shape = p.shape;
   const object = p.object;
   const v = p.velocity;
@@ -178,8 +261,10 @@ export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentSta
     shape.asleep = false;
     stirred = still;
   }
+  if (mass > 0) blow(p, mass, dt);
   bindBody(object, v, w, shape.centre, shape.invI, skip, true, dt);
   if (met) body.met = met;
+  body.panel = mass > 0;
   moveBody();
   // Its spin dies in the air as it always did.
   w.multiplyScalar(Math.pow(SPIN_KEPT_PER_S, dt));

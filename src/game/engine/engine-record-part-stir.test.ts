@@ -32,7 +32,7 @@ const IMPACT_X = 60;
  * Each car's speed (m/s) into the head-on, tried in turn: the first whose crash tears off a part (a hood, a wheel) that comes to rest clear of both wrecks within
  * the clip is staged. Where a part lands follows every change to the crush, so the setup searches rather than pins one speed.
  */
-const HEAD_ON_SPEEDS = [20, 21, 19, 22, 18] as const;
+const HEAD_ON_SPEEDS = [20, 21, 19, 22, 18, 23, 17, 24, 16, 25, 15, 26] as const;
 /** How far (m) up the road from the crash the passer is first put, and its speed (m/s). */
 const PASSER_AHEAD = 65;
 const PASSER_SPEED = 20;

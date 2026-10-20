@@ -259,6 +259,14 @@ A clip saved before this rule replays a pile's push-out with the sign of the off
 
 A clip saved before this rule replays its torn parts flying off a turning car with the car's linear velocity only: `REPLAY_VERSION` 75.
 
+### Torn parts bounce, scrape like the body, and fly in the wind
+
+Owner flag JRB7-K38W: a torn arch flare slid flat across the Mall's lawn at 31 → 20.6 m/s for 2.6 s and stopped dead (20.2 → 0.2 m/s in one step) on the pool's 0.5 m stone rim. Three causes, three fixes for torn panels (`loose-step.ts`, `car-air-points.ts`; `stepLoose` with the part's mass sets `body.panel`). A popped wheel (no mass) keeps a tyre's contact as before: a locked tyre's μ times the face's grip and no bounce bias, so it rolls on its tread.
+
+- **The bounce was taken back.** `solveRows` gave `RESTITUTION` on its first pass and the later passes took it back (a parting row returns its dynamic impulse), so every part contact was plastic. A part's row is now solved to part at `RESTITUTION` of its closing on every pass (`bodyContact` sets it as the row's `GAPV` bias); a car's rows are unchanged. Kerb hit at 15-21 m/s, head-on and 30°: 0.00-0.08 of the speed kept → 0.20-0.25.
+- **Tyre friction.** A part rubbed at a locked tyre's μ times the face's tyre grip (0.75 on asphalt, 0.375 on grass). It now scrapes at the body's `MU_BODY` 0.6 on any ground (published body drag factors on pavement: 0.4-0.65 g).
+- **No air.** `blow` treats a torn part as a flat plate (its box's two largest extents, mass from `partMass`): the relative wind's normal force ½ρv²A·C_N(α) (C_N = min(2 sin α, 1.17), Hoerner's square plate) at the centre of pressure a quarter chord ahead of the middle up to 20°, moving to the middle by 60° (Holmes, English and Letchford), plus the uplift of a sheet lying on a surface (C_F 0.15, Wang and Letchford's flight-initiation tests). Popped wheels and the FX shards take no wind. A sheet panel sliding flat at 31 m/s leaves the slide in 0.13-0.25 s and tumbles (rests after 24-40 m, 2.2-3.3 s; before: flat for 67 m, 4.3 s); a door (45 kg/m²) stays flat. Torn at 31 m/s by the tear's own launch: rest at 22-60 m in 2.4-4.8 s (before 65-102 m, 4.2-7.0 s). Staged wall, head-on, T-bone and offset crashes: torn parts land 2.0 m from their tear in a median 1.4 s (before 1.8 m, 1.3 s). Cost: 54 ns a moving part a slice.
+
 ## Fixed solids: race walls, props and ramp flanks meet the car as the jersey slab does
 
 Owner, 2026-10-04: a fixed, very hard object does what the range's jersey slab does, on every map. Race walls

@@ -12,7 +12,7 @@ import { MASS_SPECS, type MassName } from "../kernel/rig-spec.ts";
 import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox } from "./car-panels.ts";
 import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
-import { fitWheelShape, stepLoose } from "./loose-step.ts";
+import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
 import { CAR_CENTRE, type TopMet } from "./car-air-body.ts";
 import { wreckCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
@@ -877,7 +877,7 @@ export abstract class CarParts extends CarGlass {
       const p = this.parts[k]!;
       // A torn shell past `LIVE_SHELLS` is hidden for good (until the reset): nothing to see, nothing to move.
       if (!p.detached || !p.object.visible) continue;
-      if (stepLoose(p, dt, slot, p.dent, met)) this.noteStirred(k);
+      if (stepLoose(p, dt, slot, p.dent, met, partMass(p))) this.noteStirred(k);
       applyDents(p.dent, p.object);
     }
     if (!wheels) return;

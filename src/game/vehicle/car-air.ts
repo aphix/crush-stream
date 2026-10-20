@@ -188,7 +188,7 @@ export function solveRows(n: number): void {
             jn += back;
           }
         } else {
-          const e = pass === 0 && !TYRE[c] && !UNDER[c] && vn < -BOUNCE_V ? RESTITUTION : 0;
+          const e = pass === 0 && !body.panel && !TYRE[c] && !UNDER[c] && vn < -BOUNCE_V ? RESTITUTION : 0;
           const rest = Math.min(-vn, REST[c]!);
           REST[c] = REST[c]! - rest;
           reach(c, dir, nrm, q, true);

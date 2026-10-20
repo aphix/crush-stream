@@ -4,15 +4,15 @@ import * as THREE from "three";
 import { CRASH } from "../deform/physics-util.ts";
 import { GRAVITY, FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 import { newWorld, stepWorld, type World } from "../engine/world-step.ts";
-import { activeGround, Ground, setGround } from "../world/ground.ts";
+import { Ground, setGround } from "../world/ground.ts";
 import { armSolids, Surface } from "../world/surfaces.ts";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart, LooseBody } from "./car-core.ts";
 import { CAR_HALF } from "./car-mesh.ts";
 import { crownY } from "./car-cage-rig.ts";
 import { SKIN } from "./car-surfaces.ts";
-import { COM_Y, RESTITUTION, invInertia } from "./car-air-body.ts";
-import { newLooseShape, stepLoose } from "./loose-step.ts";
+import { COM_Y, MU_BODY, RESTITUTION, invInertia } from "./car-air-body.ts";
+import { AIR_DENSITY, BOX_HALVES, boxShape, newLooseShape, partMass, PLATE_CN_BROADSIDE, stepLoose } from "./loose-step.ts";
 import { corner, LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts";
 import { assertSameDigest, paint } from "./test-support.ts";
 
@@ -106,40 +106,48 @@ const SLIDE_X = B_X - CAR_HALF.x - 0.3;
 /** How far (m) a part sliding straight may drift sideways: a millimetre. */
 const STRAIGHT = 1e-3;
 
-/** The bumper let down on the road at `SLIDE_X` and left to lie, then sliding at `SLIDE_V`, run twice its stopping time; the part after it. */
+/** Where the bumper lies while the parked cars settle on their springs: out of B's reach, which wakes a sleeper and settles it through the speculative gap it slept in. */
+const SETTLE_X = -20;
+
+/** The parked cars settled, then the bumper let down on the road at `SLIDE_X` and left to lie, then sliding at `SLIDE_V`, run twice its stopping time; the part after it. */
 function slide(withB: boolean): DetachPart {
   const l = lot(withB);
+  throwPart(l, SETTLE_X, 0.3, 0, new THREE.Vector3(), 1);
   throwPart(l, SLIDE_X, 0.3, 0, new THREE.Vector3(), 1);
   const o = l.part.object.position;
-  throwPart(l, o.x, o.y, 0, new THREE.Vector3(0, 0, SLIDE_V), (2 * SLIDE_V) / (CRASH.muSlide * GRAVITY));
+  throwPart(l, o.x, o.y, 0, new THREE.Vector3(0, 0, SLIDE_V), (2 * SLIDE_V) / (MU_BODY * GRAVITY));
   return l.part;
 }
 
-/** That it stopped, straight along its line, in the Coulomb distance v²/(2 μ grip g) to within one step's travel (g: the sim's own gravity, the weight its friction presses with). */
-function assertCoulombStop(part: DetachPart): void {
+/**
+ * That it stopped, straight along its line, in the distance its slide friction and the wind on its broad face (square to its slide) give to within
+ * one step's travel: v' = -(μ g + k v²), k = ½ρ C_N A / m (`blow`), so d = ln(1 + k v²/(μ g)) / 2k (g: the sim's own gravity, the weight its friction presses with).
+ */
+function assertSlideStop(part: DetachPart): void {
   const travelled = part.object.position.z;
-  const grip = activeGround().frictionAt(SLIDE_X, travelled);
-  const stop = SLIDE_V ** 2 / (2 * CRASH.muSlide * grip * GRAVITY);
+  const [, mid, big] = Array.from(part.shape.points.subarray(BOX_HALVES, BOX_HALVES + 3)).sort((a, b) => a - b);
+  const k = (0.5 * AIR_DENSITY * PLATE_CN_BROADSIDE * 4 * mid! * big!) / partMass(part);
+  const stop = Math.log(1 + (k * SLIDE_V ** 2) / (MU_BODY * GRAVITY)) / (2 * k);
   assert.equal(planSpeed(part), 0, "plan speed after twice its stopping time");
-  assert.ok(Math.abs(travelled - stop) <= SLIDE_V * H, `slid ${travelled.toFixed(3)} m; Coulomb at μ ${CRASH.muSlide} × grip ${grip}: ${stop.toFixed(3)} m ± one step's ${(SLIDE_V * H).toFixed(3)} m`);
+  assert.ok(Math.abs(travelled - stop) <= SLIDE_V * H, `slid ${travelled.toFixed(3)} m; at μ ${MU_BODY} and the wind's k ${k.toFixed(4)}/m: ${stop.toFixed(3)} m ± one step's ${(SLIDE_V * H).toFixed(3)} m`);
   assert.ok(Math.abs(part.object.position.x - SLIDE_X) < STRAIGHT, `it slides straight along its line (${part.object.position.x - SLIDE_X} m off)`);
 }
 
 describe("given a front bumper torn off a parked car, sliding along the road at 8 m/s", () => {
   it("when it slides on open road, then it stops in the distance its slide friction gives at its speed", () => {
-    assertCoulombStop(slide(false));
+    assertSlideStop(slide(false));
   });
 
   it("when it slides past the flank of a second car parked beside it, then it stops in the distance its slide friction gives at its speed, the same as on open road", () => {
     const beside = slide(true);
-    assertCoulombStop(beside);
+    assertSlideStop(beside);
     assert.equal(beside.object.position.z, slide(false).object.position.z, "distance beside the parked car vs on open road");
   });
 });
 
 /** The part dropped this high (m) over car B's roof crown. */
 const DROP = 0.5;
-/** Pushed across the roof at this speed (m/s): its slide friction stops it after v²/(2 μ g) ≈ 1.7 m, past the roof's edge. */
+/** Pushed across the roof at this speed (m/s): its slide friction stops it after v²/(2 μ g) ≈ 2.2 m, past the roof's edge. */
 const PUSH_V = 5;
 
 /** The bumper dropped onto parked car B's roof, left `rest` s, then pushed off it sideways for `slide` s; its lowest point (m) on the roof and at the end. */
@@ -362,4 +370,112 @@ describe("given a front bumper torn off a car with no linear velocity spinning a
     assert.ok(carried.distanceTo(turn.clone().cross(spun.r)) < 0.5, `carried ${carried.toArray()} vs ω × r ${turn.clone().cross(spun.r).toArray()}`);
     assert.ok(carried.x > 4, `carried ${carried.x.toFixed(2)} m/s sideways`);
   });
+});
+
+/** The speed (m/s) the owner's flagged clip's torn arch slid flat on the Mall's lawn at, for 2.6 s. */
+const TORN_AT = 31;
+/** A part's lowest point this high (m) over the road has left it. */
+const LIFTED = 0.05;
+
+/** Part `name` torn off a parked car and laid flat on the road (its box's thinnest axis up), sliding at `speed` along +z turned `yawDeg` toward +x. */
+function laidFlat(name: string, speed: number, yawDeg = 0): DetachPart {
+  const car = new DeformableCar(paint(), new THREE.Scene());
+  car.spawnFacing(0, 0, 0, 0);
+  const part = car["parts"].find((p) => p.name === name)!;
+  car["detachPart"](part, 0, new THREE.Vector3());
+  boxShape(part.shape, part.object);
+  const h = part.shape.points.subarray(BOX_HALVES, BOX_HALVES + 3);
+  const thin = h[0]! <= h[1]! && h[0]! <= h[2]! ? 0 : h[1]! <= h[2]! ? 1 : 2;
+  part.object.quaternion.setFromUnitVectors(new THREE.Vector3(thin === 0 ? 1 : 0, thin === 1 ? 1 : 0, thin === 2 ? 1 : 0), new THREE.Vector3(0, 1, 0));
+  part.object.position.set(0, 0, 0);
+  part.object.position.y -= lowest(part) - 0.001;
+  const yaw = (yawDeg * Math.PI) / 180;
+  part.velocity.set(speed * Math.sin(yaw), 0, speed * Math.cos(yaw));
+  part.angular.set(0, 0, 0);
+  part.shape.airborne = false;
+  return part;
+}
+
+/** One slice of `part` as its car steps it (`stepLooseParts`): the wind on it at its mass. */
+function stepTorn(part: DetachPart): void {
+  stepLoose(part, H, -1, undefined, undefined, partMass(part));
+}
+
+describe(`given a torn sheet panel lying flat on the road, sliding at ${TORN_AT} m/s`, () => {
+  const testCases = [
+    { it: "when it slides, then the arch flare leaves the flat slide within a second, and at 2.6 s it has lost more than half its speed", part: "archFL" },
+    { it: "when it slides, then the quarter panel leaves the flat slide within a second, and at 2.6 s it has lost more than half its speed", part: "quarterL" },
+    { it: "when it slides, then the hood leaves the flat slide within a second, and at 2.6 s it has lost more than half its speed", part: "hood" },
+    { it: "when it slides, then the trunk lid leaves the flat slide within a second, and at 2.6 s it has lost more than half its speed", part: "trunk" },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const part = laidFlat(testCase.part, TORN_AT);
+      let left = Infinity;
+      for (let t = H; t <= 2.6 + H / 2; t += H) {
+        stepTorn(part);
+        if (left === Infinity && (thinAxisUp(part) < LIES_FLAT || lowest(part) > LIFTED)) left = t;
+      }
+      assert.ok(left <= 1, `it left the flat slide (tilted past ${LIES_FLAT} or rose ${LIFTED} m) at ${left.toFixed(2)} s`);
+      assert.ok(part.velocity.length() < TORN_AT / 2, `speed at 2.6 s: ${part.velocity.length().toFixed(1)} m/s`);
+    });
+  }
+
+  it("when a door (a sheet five times as heavy for its size) slides so, then it stays flat: the wind over it cannot carry its weight at that speed", () => {
+    const door = laidFlat("doorL", TORN_AT);
+    let flattest = 1;
+    for (let t = H; t <= 1 + H / 2; t += H) {
+      stepTorn(door);
+      flattest = Math.min(flattest, thinAxisUp(door));
+    }
+    assert.ok(flattest >= LIES_FLAT, `its thin axis turned to ${flattest.toFixed(3)} of up`);
+    assert.ok(lowest(door) <= RESTS, `its lowest point is ${lowest(door).toFixed(3)} m over the road`);
+  });
+});
+
+/** A 0.5 m stone kerb (the Mall pool's rim) across the road, its face at z `KERB_Z`. */
+const KERB_Z = 3;
+/** The share of its speed a panel keeps 0.05 s after meeting the kerb: `RESTITUTION` of the closing, less the road's friction over that time and, at 30°, the slide along the face the hit stops. */
+const KERB_KEEPS = 0.15;
+
+describe("given a torn panel lying flat on the road, sliding into a 0.5 m kerb", () => {
+  const testCases = [
+    { it: "when the arch flare meets it square at 15 m/s, then it bounces back off it", part: "archFL", speed: 15, yawDeg: 0 },
+    { it: "when the arch flare meets it square at 21 m/s, then it bounces back off it", part: "archFL", speed: 21, yawDeg: 0 },
+    { it: "when the arch flare meets it at 30° and 18 m/s, then it bounces back off it", part: "archFL", speed: 18, yawDeg: 30 },
+    { it: "when the quarter panel meets it square at 15 m/s, then it bounces back off it", part: "quarterL", speed: 15, yawDeg: 0 },
+    { it: "when the quarter panel meets it square at 21 m/s, then it bounces back off it", part: "quarterL", speed: 21, yawDeg: 0 },
+    { it: "when the quarter panel meets it at 30° and 18 m/s, then it bounces back off it", part: "quarterL", speed: 18, yawDeg: 30 },
+  ] as const;
+  for (const testCase of testCases) {
+    it(`${testCase.it}, keeping at least ${KERB_KEEPS} of its speed`, () => {
+      const kerb = new Surface();
+      kerb.addPrism({ x: 0, z: KERB_Z + 0.75, yaw: 0, hx: 20, hz: 0.75, base: 0, top: 0.5, id: 0 });
+      armSolids(kerb);
+      try {
+        const part = laidFlat(testCase.part, testCase.speed, testCase.yawDeg);
+        part.object.position.z = KERB_Z - 0.3 - part.shape.reach;
+        let before = NaN;
+        let after = NaN;
+        let away = NaN;
+        let hitAt = Infinity;
+        for (let t = H; t <= 1 && Number.isNaN(after); t += H) {
+          const speed = part.velocity.length();
+          stepTorn(part);
+          if (hitAt === Infinity && farthest(part, new THREE.Vector3(0, 0, 1)) >= KERB_Z - 0.02) {
+            hitAt = t;
+            before = speed;
+          }
+          if (t >= hitAt + 0.05) {
+            after = part.velocity.length();
+            away = part.velocity.z;
+          }
+        }
+        assert.ok(after >= KERB_KEEPS * before, `${after.toFixed(2)} m/s 0.05 s after meeting it at ${before.toFixed(2)} m/s`);
+        assert.ok(away < 0, `moving ${away.toFixed(2)} m/s along z: away from the kerb`);
+      } finally {
+        armSolids(null);
+      }
+    });
+  }
 });

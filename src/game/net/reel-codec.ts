@@ -293,9 +293,13 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 151: a thrown driver leaves with his seat's velocity as the hit began (the car's centre velocity plus its turn rate, eased pitch and roll included, about his
  * point; the watch's last sample before the hit, not the peak-closing one up to 0.35 s earlier), and the 3 m/s push out of the pane follows the car's nose in 3D;
  * the range has a 15 cm lip before the barrier (`RANGE_GROUND`). Every throw anywhere leaves differently. A clip of 150 or before no longer reads.
+ * 152: a torn panel's contact keeps its bounce (`RESTITUTION` of the closing on every pass of the solve, which took the first pass's back) and scrapes at the
+ * body's `MU_BODY`, not a locked tyre's μ times the tyre grip (a popped wheel keeps the tyre's contact); and it flies in the wind as a flat plate (`blow`: the
+ * relative wind's normal force at its centre of pressure, and the uplift on a sheet lying on a surface), so a panel sliding flat at 31 m/s lifts and tumbles
+ * within 0.25 s and one meeting a kerb at 15-21 m/s bounces back with a fifth of its speed. A clip of 151 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 151;
+const REPLAY_VERSION = 152;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

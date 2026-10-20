@@ -68,7 +68,7 @@ export const RESTITUTION = 0.25;
 export const BOUNCE_V = 1.5;
 /** The closing speed (m/s) from which a contact is a crash, not a touch: into a fixed solid's face (`wallBounce`), or onto another car's top (`CLOSING`). */
 export const WALL_CRUSH = 5.5;
-/** Friction: the body scraping (the rigid step's and a fixed solid's face, `wallBounce`), a tyre across its tread (it rolls freely along it). */
+/** Friction: the body scraping (the rigid step's and a fixed solid's face, `wallBounce`, and a torn part's metal on any ground: published body drag factors on pavement run 0.4-0.65 g), a tyre across its tread (it rolls freely along it). */
 export const MU_BODY = 0.6;
 /** Contact is solved at this rate (Hz) however long the physics step (`stepWorld` splits it): a face's crush depth is the slice's own discretisation otherwise (8 % apart at 60 and 240 Hz). */
 export const CONTACT_HZ = 480;
@@ -201,7 +201,7 @@ export const HIT = new Float64Array(HIT_SIZE);
 /** The query point `pointContact` is asked (world x, z and the asking height y). */
 export const PQ = new Float64Array(PQ_SIZE);
 PQ[PQ_BODY] = 1;
-/** Per contact: its Coulomb coefficient against its face (a car's body `MU_BODY`, a tyre's `MU_TYRE`, a part's `CRASH.muSlide` times the face's grip). */
+/** Per contact: its Coulomb coefficient against its face (a car's body or a torn part `MU_BODY`, a tyre's `MU_TYRE`). */
 export const MU = new Float64Array(CONTACTS);
 /**
  * Per car-owned contact the rows of a solve exchange momentum with a car (`HELD`): whether `noteClosing` has read it this solve, the speed
@@ -227,7 +227,8 @@ const NO_MET: TopMet = () => {};
  * of the point reads. `q`, `pos`, `v`, `w` are the body's own pose and its velocity and spin (unit mass), `centre` its centre of mass in
  * its own frame, `invI` its inverse inertia per unit mass about its own axes, `skip` its slot asked of the world, `surf` the faces it
  * shares with other cars, `mass` its mass over theirs. `driven`, `parked`, `powered` are a car's drive state (its tyres' friction),
- * `nearing` that a point not yet in a surface reaches it within the slice at its closing speed, `met` what a part's point on a car's top reports.
+ * `nearing` that a point not yet in a surface reaches it within the slice at its closing speed, `met` what a part's point on a car's top reports,
+ * `panel` that the part is a torn panel (`stepLoose` with its mass), not a popped wheel.
  */
 export const body = {
   q: new THREE.Quaternion(),
@@ -247,13 +248,14 @@ export const body = {
   powered: false,
   nearing: false,
   met: NO_MET,
+  panel: false,
 };
 
 /**
  * Points the rigid step at the body whose pose is `object`'s, with its velocity `v` and spin `w` (unit mass), its centre of mass `centre`
  * in its own frame and its inverse inertia `invI`, asked of the world as slot `skip`, for a slice of `dt` s. A `part` (a torn panel, a
  * popped wheel) meets a prism's side face through rows of its own, takes a car's top for the world (no face budget, no weight on that
- * car) and rubs at its face's grip (`CRASH.muSlide`); a car's tyres, belly and `sideContact` do all that.
+ * car) and rubs at a locked tyre's μ times its face's grip, a torn panel (`panel`) at the body's `MU_BODY`; a car's tyres, belly and `sideContact` do all that.
  */
 export function bindBody(object: THREE.Object3D, v: THREE.Vector3, w: THREE.Vector3, centre: THREE.Vector3, invI: THREE.Vector3, skip: number, part: boolean, dt: number): void {
   body.q = object.quaternion;
@@ -273,6 +275,7 @@ export function bindBody(object: THREE.Object3D, v: THREE.Vector3, w: THREE.Vect
   body.powered = false;
   body.nearing = false;
   body.met = NO_MET;
+  body.panel = false;
   // No car under it bears weight onto it (`takeBorne` sets these for a car).
   if (part) {
     _lv.set(0, 0, 0);

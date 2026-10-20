@@ -13,7 +13,7 @@ import { carClass } from "./vehicle-classes.ts";
 import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift } from "./car-cage-rig.ts";
-import { COM_Y, BELLY, POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, body, carrier, pointVel } from "./car-air-body.ts";
+import { COM_Y, BELLY, POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
 export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
@@ -37,7 +37,7 @@ export function bodyContact(n: number, hit: Float64Array, hull: boolean): void {
   N[n]!.set(hit[C_NX]!, hit[C_NY]!, hit[C_NZ]!);
   TYRE[n] = false;
   HUB[n] = false;
-  MU[n] = part ? CRASH.muSlide * hit[C_GRIP]! : MU_BODY;
+  MU[n] = part && !body.panel ? CRASH.muSlide * hit[C_GRIP]! : MU_BODY;
   // A body point does not roll: every face pushes it along its normal, so a face does no work along itself. Pushed straight up on the
   // world's ground, a bumper scraping the corkscrew's climb at 27 m/s kept its travel along the road and gained the lift: 180 J/kg in
   // 0.7 s, the car off the lip at 31.4 m/s from 27 m/s at the mouth.
@@ -47,11 +47,12 @@ export function bodyContact(n: number, hit: Float64Array, hull: boolean): void {
   FOLLOW[n] = own >= 0 ? hit[C_AUX]! : 1;
   SLOT[n] = part ? -1 : surf.slot(own, N[n]!, true, q, FOLLOW[n]!);
   SOFT[n] = false;
-  GAPV[n] = 0;
   // A floor's depth is a vertical gap (`pen`), its normal depth that times the normal's y; a side face's `pen` (a part's) is its normal depth already.
   SINK[n] = part && hit[C_H] === NO_FLOOR ? pen : pen * N[n]!.y;
   carrier(surf, n, own, mass);
   CLOSING[n] = Math.max(0, -pointVel(n, v, w, _vp).dot(N[n]!));
+  // A torn panel's row is solved to part at `RESTITUTION` of its closing on every pass: a bounce given on the first pass alone, the later passes took back.
+  GAPV[n] = body.panel && CLOSING[n]! > BOUNCE_V ? -RESTITUTION * CLOSING[n]! : 0;
   if (own >= 0 && CLOSING[n]! < WALL_CRUSH) surf.touch(own);
 }
 
@@ -248,7 +249,7 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
     if (GQ.on) GQ.calls[G.ptRow] = GQ.calls[G.ptRow]! + 1;
     _s[S_PEN] = pen;
     bodyContact(n, HIT, i < bellyFrom);
-    if (pen <= 0) GAPV[n] = (-pen * HIT[C_NY]!) / dt;
+    if (pen <= 0) GAPV[n] = GAPV[n]! + (-pen * HIT[C_NY]!) / dt;
     n++;
   }
   return n;
