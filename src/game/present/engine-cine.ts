@@ -675,7 +675,7 @@ export class Cinematics {
   /** Stamp the mark map, then draw the frame through the post chain (timed on the GPU where the browser has a timer). */
   render(scene: THREE.Scene, camera: THREE.Camera, wallDt: number): void {
     this.gpu?.begin();
-    this.marks.flush(this.renderer, wallDt);
+    this.marks.flush(this.renderer, wallDt, camera.position.x, camera.position.z);
     this.post.render(scene, camera, wallDt);
     this.gpu?.end();
   }

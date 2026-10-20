@@ -12,6 +12,9 @@ import { carClass, CLASSES, drivenAxles } from "../vehicle/vehicle-classes.ts";
  * however many marks exist: no per-mark meshes, the stamps of two frames go in one draw, an empty frame renders
  * nothing, and a slow subtractive fade pass ages old marks out.
  *
+ * The map covers the course, or on a course wider than `MARK_TEXEL` texels allow, a window round the camera: the
+ * map wraps (world xz / window size is its uv), so the window slides a step at a time and wipes only the band it enters.
+ *
  * Channels: R rubber (asphalt, concrete, cobble), G rut / scrape groove (dirt, gravel, sand, a bare hub),
  * B torn turf (grass).
  */
@@ -25,7 +28,7 @@ const SANDBOX = { minX: -48, minZ: -48, maxX: 48, maxZ: 48 } as const;
 const blank = new THREE.DataTexture(new Uint8Array(4), 1, 1);
 blank.needsUpdate = true;
 
-/** Shared by every material `applyMarkMap` patches; `uMarkRect` = (minX, minZ, 1/sizeX, 1/sizeZ). */
+/** Shared by every material `applyMarkMap` patches; `uMarkRect` = the window (minX, minZ, 1/sizeX, 1/sizeZ). */
 const markMapUniforms = {
   uMarkMap: { value: blank as THREE.Texture },
   uMarkRect: {
@@ -49,8 +52,8 @@ export function applyMarkMap(material: THREE.MeshStandardMaterial): void {
       .replace(
         "#include <map_fragment>",
         /* glsl */ `#include <map_fragment>
-vec2 markUv = (vMarkXZ - uMarkRect.xy) * uMarkRect.zw;
-vec4 markS = texture2D(uMarkMap, markUv) * (step(0.0, markUv.x) * step(markUv.x, 1.0) * step(0.0, markUv.y) * step(markUv.y, 1.0));
+vec2 markIn = (vMarkXZ - uMarkRect.xy) * uMarkRect.zw;
+vec4 markS = texture2D(uMarkMap, vMarkXZ * uMarkRect.zw) * (step(0.0, markIn.x) * step(markIn.x, 1.0) * step(0.0, markIn.y) * step(markIn.y, 1.0));
 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.004, 0.004, 0.005), markS.r * 0.95);
 diffuseColor.rgb *= 1.0 - markS.g * 0.55;
 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.075, 0.05, 0.028), markS.b * 0.85);`,
@@ -69,21 +72,27 @@ reflectedLight.indirectDiffuse *= 1.0 - markDark * 0.5;`,
   material.needsUpdate = true;
 }
 
+// The window spans at most two map periods per axis; instance i draws period (i & 1, i >> 1) past the window's first.
 const STAMP_VERT = /* glsl */ `
 attribute vec4 aInk;
 uniform vec4 uRect;
 varying vec4 vInk;
 varying float vEdge;
+varying vec2 vIn;
 void main() {
   vInk = aInk;
   vEdge = position.z;
-  gl_Position = vec4((position.xy - uRect.xy) * uRect.zw * 2.0 - 1.0, 0.0, 1.0);
+  vIn = (position.xy - uRect.xy) * uRect.zw;
+  vec2 period = floor(uRect.xy * uRect.zw) + vec2(gl_InstanceID % 2, gl_InstanceID / 2);
+  gl_Position = vec4((position.xy * uRect.zw - period) * 2.0 - 1.0, 0.0, 1.0);
 }`;
 
 const STAMP_FRAG = /* glsl */ `
 varying vec4 vInk;
 varying float vEdge;
+varying vec2 vIn;
 void main() {
+  if (min(vIn.x, vIn.y) < 0.0 || max(vIn.x, vIn.y) >= 1.0) discard;
   gl_FragColor = vInk * (1.0 - smoothstep(0.45, 1.0, abs(vEdge)));
 }`;
 
@@ -102,6 +111,10 @@ const DRIVE_SLIDE_FULL = 0.8;
 const FADE_EVERY = 0.6;
 /** Frames the stamps wait to go into the map in one draw (a wheel's mark is drawn at most this many frames late). */
 const DRAW_EVERY_FRAMES = 2;
+/** Largest map texel (m): a 24 cm tyre is wider than its diagonal (14 cm), so a stamp covers a texel centre in every row it crosses (no dots). */
+const MARK_TEXEL = 0.1;
+/** The window moves in steps of this fraction of its size (a whole number of texels), wiping the band each step enters. */
+const WINDOW_STEPS = 16;
 
 type WheelFx = {
   /** 0–1 slip this frame per wheel slot (car index × 4 + wheel). */
@@ -134,7 +147,7 @@ export class SkidMarks {
   /** Offscreen stamp + fade draw, exposed so the boot warm-up can link their programs. */
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.Camera();
-  private readonly geo = new THREE.BufferGeometry();
+  private readonly geo = new THREE.InstancedBufferGeometry();
   private readonly pos: Float32Array;
   private readonly ink: Float32Array;
   private readonly stamp: THREE.Mesh;
@@ -143,6 +156,12 @@ export class SkidMarks {
   private readonly cap: number;
   private readonly maxCars: number;
   private readonly hasPrev: Uint8Array;
+  /** Per wheel slot: the end edge of its last stamp (left x, z, right x, z), where the next one starts while `joinedWidth` matches. */
+  private readonly edge: Float32Array;
+  /** Per wheel slot: the width of the stamp it queued last frame, 0 when it queued none (its strip starts afresh). */
+  private readonly joinedWidth: Float32Array;
+  /** The course the marks cover (minX, minZ, sizeX, sizeZ); the window (`uMarkRect`) is all of it or a part round the camera. */
+  private readonly course = new THREE.Vector4(SANDBOX.minX, SANDBOX.minZ, SANDBOX.maxX - SANDBOX.minX, SANDBOX.maxZ - SANDBOX.minZ);
   /** Per car: launch spin held and eased out, so a boost launch lays two tapering stripes, not a 1 m dab. */
   private readonly spinHold: Float32Array;
   private quads = 0;
@@ -166,12 +185,16 @@ export class SkidMarks {
       vz: new Float32Array(slots),
     };
     this.hasPrev = new Uint8Array(slots);
+    this.edge = new Float32Array(slots * 4);
+    this.joinedWidth = new Float32Array(slots);
     this.spinHold = new Float32Array(maxCars);
     this.pos = new Float32Array(this.cap * 4 * 3);
     this.ink = new Float32Array(this.cap * 4 * 4);
     const index = new Uint16Array(this.cap * 6);
     for (let i = 0; i < this.cap; i++) index.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6);
     this.geo.setIndex(new THREE.BufferAttribute(index, 1));
+    // The window's two map periods per axis: one instance draws each (`STAMP_VERT`).
+    this.geo.instanceCount = 4;
     this.geo.setAttribute("position", new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
     this.geo.setAttribute("aInk", new THREE.BufferAttribute(this.ink, 4).setUsage(THREE.DynamicDrawUsage));
     const additive = {
@@ -216,6 +239,8 @@ export class SkidMarks {
           generateMipmaps: true,
           minFilter: THREE.LinearMipmapLinearFilter,
           magFilter: THREE.LinearFilter,
+          wrapS: THREE.RepeatWrapping,
+          wrapT: THREE.RepeatWrapping,
         });
         this.rt.texture.anisotropy = 8;
       }
@@ -231,6 +256,7 @@ export class SkidMarks {
     this.quads = 0;
     this.framesQueued = 0;
     this.hasPrev.fill(0);
+    this.joinedWidth.fill(0);
     this.spinHold.fill(0);
     this.wheels.slip.fill(0);
     this.wheels.scrape.fill(0);
@@ -307,7 +333,8 @@ export class SkidMarks {
         w.scrape[s] = scrape;
         const ch = scrape ? 1 : (CHANNEL[SURFACE_IDS[_hit[C_SURF]!]!] ?? 0);
         w.channel[s] = ch;
-        if (slip > 0.04 && this.rt) this.queue(w.px[s]!, w.pz[s]!, x, z, scrape ? GROOVE_W : TYRE_W, ch, Math.min(1, slip * 0.9));
+        if (slip > 0.04 && this.rt) this.queue(s, w.px[s]!, w.pz[s]!, x, z, scrape ? GROOVE_W : TYRE_W, ch, Math.min(1, slip * 0.9));
+        else this.joinedWidth[s] = 0;
         if (slip > 0.04) any = true;
         w.px[s] = x;
         w.pz[s] = z;
@@ -326,32 +353,39 @@ export class SkidMarks {
 
   /** Re-target the mark map to a world rect (a race track's bounds); the next flush wipes it. */
   setBounds(minX: number, minZ: number, maxX: number, maxZ: number): void {
-    markMapUniforms.uMarkRect.value.set(minX, minZ, 1 / Math.max(1e-3, maxX - minX), 1 / Math.max(1e-3, maxZ - minZ));
+    this.course.set(minX, minZ, Math.max(1e-3, maxX - minX), Math.max(1e-3, maxZ - minZ));
     this.needsClear = true;
   }
 
-  /** Draw the queued stamps and the periodic fade into the map; call once per frame before the main render. Stamps wait up to `DRAW_EVERY_FRAMES` calls and go in one `render()`: a fade or a wipe never waits. */
-  flush(renderer: MarkRenderer, wallDt: number): void {
+  /**
+   * Draw the queued stamps and the periodic fade into the map; call once per frame before the main render, with the camera's
+   * ground position (`focusX`, `focusZ`) the window follows. Stamps wait up to `DRAW_EVERY_FRAMES` calls and go in one
+   * `render()`: a fade, a wipe or a window step never waits.
+   */
+  flush(renderer: MarkRenderer, wallDt: number, focusX: number, focusZ: number): void {
     const rt = this.rt;
     if (!rt || !this.on) return;
     this.fadeAcc += wallDt;
     const fade = this.fadeAcc >= FADE_EVERY;
-    const forced = this.needsClear || fade;
-    if (!forced && this.quads === 0) return;
-    if (!forced && ++this.framesQueued < DRAW_EVERY_FRAMES) return;
+    const rect = markMapUniforms.uMarkRect.value;
+    const fromX = rect.x;
+    const fromZ = rect.y;
+    this.placeWindow(rt.width, focusX, focusZ);
+    const moved = !this.needsClear && (rect.x !== fromX || rect.y !== fromZ);
+    const wiped = this.needsClear || moved;
+    if (!wiped && !fade && this.quads === 0) return;
+    if (!wiped && !fade && ++this.framesQueued < DRAW_EVERY_FRAMES) return;
     this.framesQueued = 0;
     const prevTarget = renderer.getRenderTarget();
     const ac = renderer.autoClear;
     renderer.autoClear = false;
-    renderer.setRenderTarget(rt);
-    if (this.needsClear) {
-      renderer.getClearColor(_clear);
-      const alpha = renderer.getClearAlpha();
-      renderer.setClearColor(0x000000, 0);
-      renderer.clear(true, false, false);
-      renderer.setClearColor(_clear, alpha);
-      this.needsClear = false;
+    if (this.needsClear) this.wipe(renderer, rt, 0, 0, rt.width, rt.width);
+    if (moved) {
+      this.wipeBand(renderer, rt, 0, fromX, rect.x, 1 / rect.z);
+      this.wipeBand(renderer, rt, 1, fromZ, rect.y, 1 / rect.w);
     }
+    this.needsClear = false;
+    renderer.setRenderTarget(rt);
     this.stamp.visible = this.quads > 0;
     this.fade.visible = fade;
     if (fade) this.fadeAcc = 0;
@@ -366,6 +400,40 @@ export class SkidMarks {
     renderer.setRenderTarget(prevTarget);
     renderer.autoClear = ac;
     this.quads = 0;
+  }
+
+  /** The window (`uMarkRect`) for a map `size` texels wide: per axis the whole course, or `size * MARK_TEXEL` m round the focus, on the step grid. */
+  private placeWindow(size: number, focusX: number, focusZ: number): void {
+    const c = this.course;
+    const reach = size * MARK_TEXEL;
+    const wx = Math.min(c.z, reach);
+    const wz = Math.min(c.w, reach);
+    markMapUniforms.uMarkRect.value.set(windowStart(c.x, c.z, wx, focusX), windowStart(c.y, c.w, wz, focusZ), 1 / wx, 1 / wz);
+  }
+
+  /** Wipe the map texels of the world band a window move on `axis` (0 x: columns, 1 z: rows) from start `from` to `to` brought in. */
+  private wipeBand(renderer: MarkRenderer, rt: THREE.WebGLRenderTarget, axis: 0 | 1, from: number, to: number, size: number): void {
+    if (from === to) return;
+    const n = rt.width;
+    const count = Math.min(n, Math.round((Math.abs(to - from) / size) * n));
+    const start = to > from ? from + size : to;
+    const first = ((Math.round((start / size) * n) % n) + n) % n;
+    const head = Math.min(count, n - first);
+    this.wipe(renderer, rt, axis === 0 ? first : 0, axis === 0 ? 0 : first, axis === 0 ? head : n, axis === 0 ? n : head);
+    if (count > head) this.wipe(renderer, rt, 0, 0, axis === 0 ? count - head : n, axis === 0 ? n : count - head);
+  }
+
+  /** Clear the texel rect (x, y, w, h) of the map to no marks. */
+  private wipe(renderer: MarkRenderer, rt: THREE.WebGLRenderTarget, x: number, y: number, w: number, h: number): void {
+    rt.scissor.set(x, y, w, h);
+    rt.scissorTest = true;
+    renderer.setRenderTarget(rt);
+    renderer.getClearColor(_clear);
+    const alpha = renderer.getClearAlpha();
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear(true, false, false);
+    renderer.setClearColor(_clear, alpha);
+    rt.scissorTest = false;
   }
 
   /**
@@ -396,26 +464,54 @@ export class SkidMarks {
     (this.fade.material as THREE.Material).dispose();
   }
 
-  /** One quad from the wheel's last contact to this one, `width` across, ink `a` in channel `ch`. */
-  private queue(x0: number, z0: number, x1: number, z1: number, width: number, ch: number, a: number): void {
+  /**
+   * One quad from wheel slot `s`'s last contact to this one, `width` across, ink `a` in channel `ch`. It starts on the slot's last
+   * stamp's end edge, so a wheel's stamps join in one strip of even width, round a turn too.
+   */
+  private queue(s: number, x0: number, z0: number, x1: number, z1: number, width: number, ch: number, a: number): void {
     const dx = x1 - x0;
     const dz = z1 - z0;
     const len = hypot2(dx, dz);
-    if (len < 1e-4 || this.quads >= this.cap) return;
+    if (len < 1e-4) return;
+    if (this.quads >= this.cap) {
+      this.joinedWidth[s] = 0;
+      return;
+    }
     const nx = (-dz / len) * width * 0.5;
     const nz = (dx / len) * width * 0.5;
+    const e = this.edge;
+    const eo = s * 4;
+    const joined = this.joinedWidth[s] === Math.fround(width) && (e[eo + 2]! - e[eo]!) * nx + (e[eo + 3]! - e[eo + 1]!) * nz > 0;
     const q = this.quads++;
     const p = this.pos;
     let o = q * 12;
-    p[o++] = x0 - nx; p[o++] = z0 - nz; p[o++] = -1;
-    p[o++] = x0 + nx; p[o++] = z0 + nz; p[o++] = 1;
+    p[o++] = joined ? e[eo]! : x0 - nx; p[o++] = joined ? e[eo + 1]! : z0 - nz; p[o++] = -1;
+    p[o++] = joined ? e[eo + 2]! : x0 + nx; p[o++] = joined ? e[eo + 3]! : z0 + nz; p[o++] = 1;
     p[o++] = x1 + nx; p[o++] = z1 + nz; p[o++] = 1;
     p[o++] = x1 - nx; p[o++] = z1 - nz; p[o] = -1;
+    e[eo] = x1 - nx;
+    e[eo + 1] = z1 - nz;
+    e[eo + 2] = x1 + nx;
+    e[eo + 3] = z1 + nz;
+    this.joinedWidth[s] = width;
     const r = ch === 0 ? a : 0;
     const g = ch === 1 ? a : ch === 2 ? a * 0.3 : 0;
     const b = ch === 2 ? a : 0;
-    for (let v = 0; v < 4; v++) this.ink.set([r, g, b, 0], q * 16 + v * 4);
+    const ink = this.ink;
+    for (let i = q * 16; i < q * 16 + 16; i += 4) {
+      ink[i] = r;
+      ink[i + 1] = g;
+      ink[i + 2] = b;
+      ink[i + 3] = 0;
+    }
   }
+}
+
+/** Start of a window `w` m wide on one axis of a course from `min`, `extent` m long: the course's start when it fits, else on the step grid round `focus`. */
+function windowStart(min: number, extent: number, w: number, focus: number): number {
+  if (extent <= w) return min;
+  const step = w / WINDOW_STEPS;
+  return (Math.floor(focus / step) - WINDOW_STEPS / 2) * step;
 }
 
 /** 0 below `a`, 1 above `b`, linear between. */

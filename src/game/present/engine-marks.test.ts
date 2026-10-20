@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
-import { SkidMarks, type MarkRenderer } from "./engine-marks.ts";
+import { applyMarkMap, SkidMarks, type MarkRenderer } from "./engine-marks.ts";
+import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
+import { Track } from "../world/track.ts";
 
 /** Wall seconds a frame adds to the fade's clock: far under the 0.6 s fade period over a test's few frames. */
 const WALL_DT = 0.001;
 const FADE_DUE_DT = 1;
 const MAP_SIZE = 64;
+/** The camera's ground position the map's window follows, in the rows that do not move it. */
+const FOCUS = [0, 0] as const;
+/** A tyre's mark width (m), `TYRE_W` in engine-marks.ts. */
+const TYRE_W = 0.24;
+/** The map sizes the FX tiers use (`MARK_RES` in engine-cine.ts). */
+const TIER_MAP_SIZES = [1024, 2048] as const;
 
 /** A renderer that counts the `render()` calls into the mark map and the stamp quads each one draws. */
 function countingRenderer(marks: SkidMarks) {
@@ -34,12 +42,12 @@ function settledMarks() {
   const marks = new SkidMarks(4);
   marks.setResolution(MAP_SIZE);
   const { renderer, drawn } = countingRenderer(marks);
-  marks.flush(renderer, WALL_DT);
+  marks.flush(renderer, WALL_DT, ...FOCUS);
   return { marks, renderer, drawn };
 }
 
 function layStamp(marks: SkidMarks): void {
-  marks["queue"](0, 0, 1, 0, 0.24, 0, 1);
+  marks["queue"](0, 0, 0, 1, 0, 0.24, 0, 1);
 }
 
 describe("given the mark map with a wheel laying one stamp every frame", () => {
@@ -47,7 +55,7 @@ describe("given the mark map with a wheel laying one stamp every frame", () => {
     const { marks, renderer, drawn } = settledMarks();
     for (let frame = 0; frame < 60; frame++) {
       layStamp(marks);
-      marks.flush(renderer, WALL_DT);
+      marks.flush(renderer, WALL_DT, ...FOCUS);
     }
     assert.equal(drawn.renders, 30, "render() calls into the mark map");
     assert.equal(drawn.quads, 60, "stamp quads drawn: none dropped, none drawn twice");
@@ -56,9 +64,9 @@ describe("given the mark map with a wheel laying one stamp every frame", () => {
   it("when the first stamp is queued, then it is drawn by the next frame's flush", () => {
     const { marks, renderer, drawn } = settledMarks();
     layStamp(marks);
-    marks.flush(renderer, WALL_DT);
+    marks.flush(renderer, WALL_DT, ...FOCUS);
     assert.equal(drawn.renders, 0, "the first frame's stamp waits for the second");
-    marks.flush(renderer, WALL_DT);
+    marks.flush(renderer, WALL_DT, ...FOCUS);
     assert.equal(drawn.quads, 1, "the second flush draws it");
   });
 });
@@ -67,17 +75,125 @@ describe("given a stamp waiting for the next frame's draw", () => {
   it("when the fade comes due that frame, then the stamp goes in with the fade, not a frame later", () => {
     const { marks, renderer, drawn } = settledMarks();
     layStamp(marks);
-    marks.flush(renderer, FADE_DUE_DT);
+    marks.flush(renderer, FADE_DUE_DT, ...FOCUS);
     assert.deepEqual(drawn, { renders: 1, quads: 1 });
   });
 
   it("when the map is cleared, then the waiting stamp is dropped with the old marks", () => {
     const { marks, renderer, drawn } = settledMarks();
     layStamp(marks);
-    marks.flush(renderer, WALL_DT);
+    marks.flush(renderer, WALL_DT, ...FOCUS);
     marks.clear();
-    marks.flush(renderer, WALL_DT);
-    marks.flush(renderer, WALL_DT);
+    marks.flush(renderer, WALL_DT, ...FOCUS);
+    marks.flush(renderer, WALL_DT, ...FOCUS);
     assert.deepEqual(drawn, { renders: 0, quads: 0 });
+  });
+});
+
+/** The window rect and map the ground materials sample (`applyMarkMap`'s uniforms, read off a patched material's compile). */
+function groundSample(): { rect: THREE.Vector4; map: THREE.Texture } {
+  const material = new THREE.MeshStandardMaterial();
+  applyMarkMap(material);
+  const uniforms: Record<string, THREE.IUniform> = {};
+  // The patch reads and writes only these three fields of the compile's parameters, and never the renderer.
+  const shader = { uniforms, vertexShader: "", fragmentShader: "" } as THREE.WebGLProgramParametersWithUniforms;
+  const renderer = {} as THREE.WebGLRenderer;
+  material.onBeforeCompile(shader, renderer);
+  return { rect: uniforms.uMarkRect!.value, map: uniforms.uMarkMap!.value };
+}
+
+describe("given the mark map on every course at each tier's map size", () => {
+  const courses = [...TRACKS, ...OFF_MENU].map((json) => new Track(json));
+  for (const size of TIER_MAP_SIZES) {
+    it(`when the ground samples a ${size}-texel map round the camera, then on every course a tyre is wider than a texel's diagonal (a stamp leaves no gaps)`, () => {
+      const marks = new SkidMarks(4);
+      marks.setResolution(size);
+      const { renderer } = countingRenderer(marks);
+      const coarse: string[] = [];
+      for (const course of courses) {
+        const b = course.bounds;
+        marks.setBounds(b.minX, b.minZ, b.maxX, b.maxZ);
+        marks.flush(renderer, WALL_DT, (b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2);
+        const { rect, map } = groundSample();
+        assert.equal(map, marks["rt"]!.texture, "the ground samples this map");
+        const texels = marks["rt"]!.width;
+        const diagonal = Math.hypot(1 / (rect.z * texels), 1 / (rect.w * texels));
+        if (diagonal >= TYRE_W) coarse.push(`${course.id} ${(diagonal * 100).toFixed(1)} cm`);
+      }
+      assert.deepEqual(coarse, [], "texel diagonals at least a tyre wide");
+    });
+  }
+});
+
+/** A 64-texel map (6.4 m window, 0.4 m steps) on a 200 m course, each `clear` into it logged as its scissor rect "x,y,w,h". */
+function wideCourseMarks() {
+  const marks = new SkidMarks(4);
+  marks.setResolution(MAP_SIZE);
+  marks.setBounds(-100, -100, 100, 100);
+  const { renderer } = countingRenderer(marks);
+  const wiped: string[] = [];
+  renderer.clear = () => {
+    const s = marks["rt"]!.scissor;
+    wiped.push(`${s.x},${s.y},${s.z},${s.w}`);
+  };
+  return { marks, renderer, wiped };
+}
+
+describe("given a course wider than the map's window", () => {
+  it("when the camera moves one step along x, then one band of columns a step wide is wiped, where the window just reached", () => {
+    const { marks, renderer, wiped } = wideCourseMarks();
+    marks.flush(renderer, WALL_DT, 0.2, 0.1);
+    wiped.length = 0;
+    marks.flush(renderer, WALL_DT, 0.6, 0.1);
+    assert.equal(wiped.join(" "), `32,0,4,${MAP_SIZE}`, "window x 3.2..3.6 m: columns 32-35");
+  });
+
+  it("when the camera jumps three steps across the map's edge, then the band is wiped in two parts: the last columns and the first", () => {
+    const { marks, renderer, wiped } = wideCourseMarks();
+    marks.flush(renderer, WALL_DT, 2.6, 0.1);
+    wiped.length = 0;
+    marks.flush(renderer, WALL_DT, 3.8, 0.1);
+    assert.equal(wiped.join(" "), `56,0,8,${MAP_SIZE} 0,0,4,${MAP_SIZE}`, "window x 5.6..6.8 m: columns 56-63 and 0-3");
+  });
+
+  it("when the camera stays inside its step, then nothing is wiped", () => {
+    const { marks, renderer, wiped } = wideCourseMarks();
+    marks.flush(renderer, WALL_DT, 0.2, 0.1);
+    wiped.length = 0;
+    marks.flush(renderer, WALL_DT, 0.35, 0.3);
+    assert.equal(wiped.length, 0);
+  });
+});
+
+/** Corner `v` (0 start left, 1 start right, 2 end right, 3 end left) of stamp quad `q` as (x, z). */
+function corner(marks: SkidMarks, q: number, v: number): [number, number] {
+  const p = marks["pos"];
+  return [p[q * 12 + v * 3]!, p[q * 12 + v * 3 + 1]!];
+}
+
+/** Corner `v` of quad `q` as exact text, so two corners compare as one string. */
+const cornerText = (marks: SkidMarks, q: number, v: number): string => corner(marks, q, v).join(",");
+
+const edgeLength = (a: [number, number], b: [number, number]): number => Math.hypot(b[0] - a[0], b[1] - a[1]);
+
+describe("given a wheel laying a stamp every frame round a 6 m turn", () => {
+  const marks = new SkidMarks(4);
+  marks.setResolution(MAP_SIZE);
+  const STAMPS = 12;
+  const at = (i: number): [number, number] => [6 * Math.sin(i * 0.08), 6 - 6 * Math.cos(i * 0.08)];
+  for (let i = 1; i <= STAMPS; i++) marks["queue"](0, ...at(i - 1), ...at(i), TYRE_W, 0, 1);
+
+  it("when its quads are read, then each starts exactly on the edge the one before ended on (one strip, no wedge gaps)", () => {
+    for (let q = 1; q < STAMPS; q++) {
+      assert.equal(cornerText(marks, q, 0), cornerText(marks, q - 1, 3), `quad ${q} start left`);
+      assert.equal(cornerText(marks, q, 1), cornerText(marks, q - 1, 2), `quad ${q} start right`);
+    }
+  });
+
+  it("when its quads are read, then every edge is a tyre wide", () => {
+    for (let q = 0; q < STAMPS; q++) {
+      assert.ok(Math.abs(edgeLength(corner(marks, q, 0), corner(marks, q, 1)) - TYRE_W) < 1e-6, `quad ${q} start edge`);
+      assert.ok(Math.abs(edgeLength(corner(marks, q, 3), corner(marks, q, 2)) - TYRE_W) < 1e-6, `quad ${q} end edge`);
+    }
   });
 });
