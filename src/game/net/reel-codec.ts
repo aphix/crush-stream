@@ -284,9 +284,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * into that solid (the other car takes it all); a keyframe carries that hold. A clip of 145 or before no longer reads.
  * 147: a wheel arch's skin lets go of its hub as a crush drives it off its plant (held whole at the plant, not at all past 0.15 m of plan travel), in the drawn skin
  * and the cage, so a nose crushed back past the front tyres no longer runs through a planted arch lip. A clip of 146 or before no longer reads.
+ * 148: a dummy thrown from a car collides with the dummies thrown from that car in their `GRACE` (a passenger with his driver), as with any other car's: the
+ * exclusion guarded nothing (a passenger spawned 0-0.8 m from his driver: same joint gaps, no blow-apart, energy and fastest part equal past 0.2 m). A clip of 147 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 147;
+const REPLAY_VERSION = 148;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

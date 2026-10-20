@@ -45,7 +45,7 @@ type Pose = keyof typeof LEAD;
  * a dummy straight at pane `name` of car 1, aimed `up` m up and `along` m across the pane from its middle (across: the car's
  * width on the windshield, its length on a side window), in `pose`, his leading face `START_GAP` m off the glass;
  * `torsoOnly`: his head and limbs touch nothing, so his torso alone meets the car. Each throw is followed `FOLLOW` steps:
- * what his torso did, and the car's glass at the end.
+ * what his torso did, and the car's glass at the end. Each throw takes the one before out of the world, so he meets the glass, not the dummy lying at it.
  */
 async function strikes(name: GlassName, up: number, along: number, pose: Pose, torsoOnly: boolean, speeds: readonly number[]): Promise<{ throws: Strike[]; glass: Record<string, string> }> {
   const own = makeCar();
@@ -68,6 +68,7 @@ async function strikes(name: GlassName, up: number, along: number, pose: Pose, t
   const q = new THREE.Quaternion().setFromRotationMatrix(basis);
   const throws: Strike[] = [];
   for (const speed of speeds) {
+    if (throws.length > 0) ragdolls["despawn"](ragdolls["lastSlot"]);
     ragdolls["spawn"]({ car: 0, p: aim.clone().addScaledVector(out, LEAD[pose] + START_GAP), q, v: inward.clone().multiplyScalar(speed), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
     const bodies = (ragdolls["dolls"] as Dolls)[ragdolls["lastSlot"]]!.bodies;
     if (torsoOnly) for (let k = 1; k < bodies.length; k++) bodies[k]!.collider(0).setCollisionGroups(0);
