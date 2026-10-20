@@ -144,8 +144,12 @@ export abstract class DeformSolve extends DeformFreeze {
     if (this.at.hubFL.popped && this.at.hubFR.popped && this.at.hubRL.popped && this.at.hubRR.popped) this.drivetrainAlive = false;
   }
 
-  /** Mass `i`'s permanent set grew by `REST_SHIFT[1..3]` (car frame): every shape cluster's rest takes it, so the goals hold the dent instead of pulling the body off it. */
+  /** Mass `i`'s permanent set grew by `REST_SHIFT[1..3]` (car frame): every shape cluster's rest takes it, so the goals hold the dent instead of pulling the body off it, and so does the skin's fit rest, so the skin does not read the kept dent as strain on top of the parents that carry it. */
   private restTakesSet(i: number): void {
+    const s = this.skinRest[i]!;
+    s.x += REST_SHIFT[1]!;
+    s.y += REST_SHIFT[2]!;
+    s.z += REST_SHIFT[3]!;
     for (let ci = 0; ci < this.clusters.length; ci++) {
       const idx = this.clusters[ci]!.idx;
       for (let k = 0; k < idx.length; k++) {

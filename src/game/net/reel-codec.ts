@@ -269,9 +269,12 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 141: a pair push back against a car's full net translation for the slice is granted, not refused by the rounding of a full budget; the sill (skin below the arch top
  * between the axles, beyond the arch plant) follows the cell's clusters, not the nose's, so a frontal crush no longer swings the drawn rocker into the front tyre, and the
  * cage's sill and floor change with it. A clip of 140 or before no longer reads.
+ * 142: the skin's fit rest takes each kept set as the clusters' rest does, so a kept dent moves the paint once, through its parent masses: the drawn body and contact cage
+ * over a dent no longer over-read it (a 50 km/h frontal's door frames read 22 mm, not 34, so their glass stays whole), and keyframes carry each mass's skin rest. A clip
+ * of 141 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 141;
+const REPLAY_VERSION = 142;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

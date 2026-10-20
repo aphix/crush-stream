@@ -5,7 +5,7 @@ import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { PISTON, PISTON_IDS } from "./piston-rig.ts";
 import { firePiston, pistonLocality, PISTON_DENT_RADIUS, PISTON_FAR, type PistonLocality, type PistonShot, type PistonShotResult } from "./piston-rig.test-util.ts";
 import { transformSkinPointInto } from "../deform/shape-match.test-util.ts";
-import type { ShapeCluster } from "../deform/shape-match.ts";
+import { REST_SHIFT, type ShapeCluster } from "../deform/shape-match.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { RES_SLOTS, type DeformMode, type MassNode } from "../deform/deform-rig.ts";
 import { forModes } from "../vehicle/test-support.ts";
@@ -191,6 +191,18 @@ function referenceSkin(d: Internals): Float32Array {
   return out;
 }
 
+/** A cluster's masses' mass-weighted rest centroid: the rest-only centre the cage corners' cluster weights are built from (the fit's own rest centre moves with the kept sets). */
+function restCentroid(d: Internals, c: ShapeCluster): THREE.Vector3 {
+  const out = new THREE.Vector3();
+  let mass = 0;
+  for (const i of c.idx) {
+    const m = d.masses[i]!;
+    out.addScaledVector(m.rest, m.mass);
+    mass += m.mass;
+  }
+  return out.multiplyScalar(1 / Math.max(mass, 1e-8));
+}
+
 function referenceCageSolve(d: Internals): void {
   for (const [ci, cage] of d.cages.entries()) {
     for (let i = 0; i < 8; i++) {
@@ -201,7 +213,7 @@ function referenceCageSolve(d: Internals): void {
         pz = 0,
         wsum = 0;
       for (const c of d.clusters) {
-        const dd = Math.hypot(rest.x - c.skinCm0x, rest.y - c.skinCm0y, rest.z - c.skinCm0z);
+        const dd = rest.distanceTo(restCentroid(d, c));
         if (dd > 1.4) continue;
         const w = Math.exp(-dd * 2.35);
         const p = transformSkinPointInto(c, rest.x, rest.y, rest.z);
@@ -408,6 +420,49 @@ describe("given a car shot on its right side at 40 km/h by a piston, its cell pu
     car.deform.flushSkin(geo, true);
     const moved = maxAbs(geo.getAttribute("position").array, baked);
     assert.ok(moved < 1e-6, `the rebase moved the drawn skin ${moved.toFixed(4)} m`);
+  });
+});
+
+/** A kept dent pressed into a resting car's right door (m, inward): a 40 km/h side shot's kept set. */
+const KEPT_DOOR_SET = 0.2;
+/** How far (m) a paint point may stand from where its parents' move alone puts it on a body that stands exactly on its kept sets. */
+const KEPT_PAINT_SLACK = 0.001;
+
+describe("given a car whose right door stands exactly on a kept 0.2 m set, the rest of it at rest", () => {
+  it("when it is skinned, then every paint point moves by its parent masses' move alone: the kept dent is not read again as the region's turn and strain", () => {
+    const car = makeCar("shape");
+    const d = car.deform;
+    const door = d.masses.findIndex((m) => m.name === "doorR");
+    REST_SHIFT[1] = -KEPT_DOOR_SET;
+    REST_SHIFT[2] = 0;
+    REST_SHIFT[3] = 0;
+    d["restTakesSet"](door);
+    d.masses[door]!.local.x -= KEPT_DOOR_SET;
+    const geo = car.body.geometry;
+    d.bakeSkin();
+    d.flushSkin(geo, true);
+    const now = geo.getAttribute("position").array;
+    const rest = d["restPos"];
+    const skinN = d["skinN"];
+    const skinHub = d["skinHub"];
+    const resJ = d["resJ"];
+    const resW = d["resW"];
+    let worst = 0;
+    for (let v = 0; v < d["vertexCount"]; v++) {
+      if (skinN[v] === 0 || skinHub[v]! >= 0) continue;
+      let ex = 0;
+      let ey = 0;
+      let ez = 0;
+      for (let s = v * RES_SLOTS; s < (v + 1) * RES_SLOTS; s++) {
+        const m = d.masses[resJ[s]! / 3]!;
+        ex += resW[s]! * (m.local.x - m.rest.x);
+        ey += resW[s]! * (m.local.y - m.rest.y);
+        ez += resW[s]! * (m.local.z - m.rest.z);
+      }
+      const k = v * 3;
+      worst = Math.max(worst, Math.hypot(now[k]! - rest[k]! - ex, now[k + 1]! - rest[k + 1]! - ey, now[k + 2]! - rest[k + 2]! - ez));
+    }
+    assert.ok(worst <= KEPT_PAINT_SLACK, `a paint point stands ${worst.toFixed(4)} m off its parents' move`);
   });
 });
 

@@ -370,7 +370,8 @@ export abstract class DeformRig {
   protected cornerW = new Float64Array(0);
   protected cornerWsum = new Float64Array(0);
   protected impulseW = new Float64Array(0);
-  protected skinRest: { x: number; y: number; z: number }[] = [];
+  /** The skin's fit rest: each mass's rest plus the sets it has kept (`restTakesSet`), as the clusters' rest takes them. The parents already carry a kept dent into the paint, so the cluster maps read only the strain past it. */
+  protected skinRest: THREE.Vector3[] = [];
   protected skinLocal: { x: number; y: number; z: number }[] = [];
   protected skinMassN: number[] = [];
   /** A5 skin anchors: per skin point (vertices, then cage corners) up to RES_SLOTS parent masses (×3 offsets into `massPos`),
@@ -445,7 +446,7 @@ export abstract class DeformRig {
     for (const m of this.masses) this._totalMass += m.mass;
     this.impulseW = new Float64Array(this.masses.length);
     this.matchedNodes = this.masses.filter((m) => !m.hub).length;
-    this.skinRest = this.masses.map((m) => m.rest);
+    this.skinRest = this.masses.map((m) => m.rest.clone());
     this.skinLocal = this.masses.map((m) => m.local);
     this.skinMassN = this.masses.map((m) => m.mass);
     this.beams = built.beams;
@@ -566,6 +567,7 @@ export abstract class DeformRig {
     this.imprint[1] = 0;
     this.imprint[2] = 0;
     this.loadDirty.fill(0);
+    for (let i = 0; i < this.masses.length; i++) this.skinRest[i]!.copy(this.masses[i]!.rest);
     for (const b of [this.endEbs2, this.cageCo, this.floorPre, this.floorPost, this.gripPost, this.hubStand, this.pose, this.spinHeld, this.strokeOut, this.massCornerW]) b.fill(0);
     for (const b of [this.goalX, this.goalY, this.goalZ, this.goalW, this.startX, this.startY, this.startZ, this.turnX, this.turnZ, this.impulseW]) b.fill(0);
     for (const b of [this.massPos, this.clusterXf, this.netImpact]) b.fill(0);

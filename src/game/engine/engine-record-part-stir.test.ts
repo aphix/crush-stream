@@ -16,7 +16,7 @@ import { ClipSim } from "./engine-replay.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { CAR_HALF } from "../vehicle/car-mesh.ts";
-import { PART_SLOTS } from "../vehicle/part-state.ts";
+import { LOOSE_BODIES, PART_SLOTS } from "../vehicle/part-state.ts";
 
 /** The engine's step is a float32 (`Math.fround`), which the recorder stores whole: the replay runs the very step the live sim ran. */
 const H = Math.fround(1 / FINE_HZ);
@@ -28,12 +28,26 @@ const PASSER = 2;
 /** The step the passer joins the field: after the first keyframe of the clip is taken, so the clip leaves it out. */
 const JOIN_STEP = 300;
 const IMPACT_X = 60;
-/** Each car's speed (m/s) into the head-on: fast enough that a torn hood comes to rest clear of both wrecks, where only the passer can stir it. */
+/** Each car's speed (m/s) into the head-on: fast enough that it tears off parts (a hood, a wheel) that come to rest clear of both wrecks. */
 const HEAD_ON_SPEED = 20;
-/** How far (m) up the road from the crash the passer is put, its speed (m/s), and how far (m) to the side of the crash line it passes: clear of both wrecks, its roof over the reach of a part that comes to rest beside them. */
+/** How far (m) up the road from the crash the passer is first put, and its speed (m/s). */
 const PASSER_AHEAD = 65;
 const PASSER_SPEED = 20;
-const PASSER_SIDE = -2.4;
+/** A lane (m off the crash line) far from anything the crash throws: a passer there stirs nothing, so its run shows where the parts lie and when it passes them. */
+const FAR_LANE = 40;
+/** How far (m) the passer's flank passes outside both wrecks' outlines. */
+const WRECK_CLEAR = 0.5;
+/** Steps a part lies asleep before the passer is nearest it: the passer's roof reaches it about `CAR_HALF.z` + its reach (under 3.5 m, 0.15 s) before. */
+const WAKE_LEAD = FINE_HZ / 4;
+
+/** A clip car's torn part or popped wheel lying asleep with nothing stirring it from step `from` through `to`: where (x, z) and its reach (m). */
+interface Rest {
+  from: number;
+  to: number;
+  x: number;
+  z: number;
+  reach: number;
+}
 
 /** The clip as a peer decodes it, the cars of the world it was recorded in, the world's trace of every clip car's loose bodies, and where the passer was nearest the crash. */
 interface Recorded {
@@ -43,6 +57,9 @@ interface Recorded {
   trace: Float64Array[][];
   dress: (car: DeformableCar) => void;
   closest: { step: number; gap: number };
+  /** Every stretch a clip car's torn part or popped wheel lay still, and the passer's x per step (NaN before it joins). */
+  rests: Rest[];
+  passerX: number[];
   /** The sleeping torn part or popped wheel the passer came nearest (its car, its `stirredBodies` index, the step and plan gap (m) between the passer's middle and the body's, and the body's reach). */
   reached: { car: number; body: number; step: number; gap: number; reach: number };
 }
@@ -55,8 +72,8 @@ const looseBodyPositions = (car: DeformableCar): Float64Array => {
   return positions;
 };
 
-/** A head-on in a flat field recorded as a highlight, its torn parts lying on the road, and (with `passer`) a car the clip leaves out driving by them. */
-function record(passer: boolean): Recorded {
+/** A head-on in a flat field recorded as a highlight, its torn parts lying on the road, and (with `passer`, where it starts) a car the clip leaves out driving by them. */
+function record(passer: { x: number; z: number } | null): Recorded {
   const { dress } = makeWorld();
   const scene = new THREE.Scene();
   const make = (i: number): DeformableCar => {
@@ -77,10 +94,13 @@ function record(passer: boolean): Recorded {
   const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
   const closest = { step: -1, gap: Infinity };
   const reached = { car: -1, body: -1, step: -1, gap: Infinity, reach: 0 };
+  const rests: Rest[] = [];
+  const lying: (Rest | null)[] = new Array(2 * LOOSE_BODIES).fill(null);
+  const passerX: number[] = [];
   for (let s = 0; s < STEPS; s++) {
     if (passer && s === JOIN_STEP) {
       const car = make(PASSER);
-      car.spawnFacing(IMPACT_X + PASSER_AHEAD, PASSER_SIDE, -Math.PI / 2, PASSER_SPEED);
+      car.spawnFacing(passer.x, passer.z, -Math.PI / 2, PASSER_SPEED);
       cars.push(car);
     }
     rec.startStep(cars);
@@ -91,31 +111,72 @@ function record(passer: boolean): Recorded {
     stepWorld(world, H);
     rec.endStep(cars, H, world.shape, world.loners);
     settleStep(cars, H, false);
-    if (cars.length > PASSER) {
-      const p = cars[PASSER]!.group.position;
+    const p = cars.length > PASSER ? cars[PASSER]!.group.position : null;
+    passerX.push(p ? p.x : NaN);
+    if (p) {
       const gap = Math.hypot(p.x - IMPACT_X, p.z);
       if (gap < closest.gap) {
         closest.gap = gap;
         closest.step = s;
       }
-      for (const c of [A, B]) {
-        const car = cars[c]!;
-        const bodies = [...car["parts"].map((part, k) => ({ shape: part.detached ? part.shape : null, body: k })), ...car["looseWheels"].map((wheel, k) => ({ shape: wheel.loose ? wheel.shape : null, body: PART_SLOTS + k }))];
-        for (const { shape, body } of bodies) {
-          if (!shape?.asleep) continue;
-          const near = Math.hypot(p.x - shape.sleepX, p.z - shape.sleepZ);
-          if (near < reached.gap) Object.assign(reached, { car: c, body, step: s, gap: near, reach: shape.reach });
+    }
+    for (const c of [A, B]) {
+      const car = cars[c]!;
+      const bodies = [...car["parts"].map((part, k) => ({ shape: part.detached ? part.shape : null, body: k })), ...car["looseWheels"].map((wheel, k) => ({ shape: wheel.loose ? wheel.shape : null, body: PART_SLOTS + k }))];
+      for (const { shape, body } of bodies) {
+        const k = c * LOOSE_BODIES + body;
+        const open = lying[k];
+        if (shape?.asleep && car.stirredBodies[body] === 0) {
+          if (open) open.to = s;
+          else lying[k] = { from: s, to: s, x: shape.sleepX, z: shape.sleepZ, reach: shape.reach };
+        } else if (open) {
+          rests.push(open);
+          lying[k] = null;
         }
+        if (!p || !shape?.asleep) continue;
+        const near = Math.hypot(p.x - shape.sleepX, p.z - shape.sleepZ);
+        if (near < reached.gap) Object.assign(reached, { car: c, body, step: s, gap: near, reach: shape.reach });
       }
     }
     trace.push([looseBodyPositions(cars[A]!), looseBodyPositions(cars[B]!)]);
   }
   rec.end();
+  for (const open of lying) if (open) rests.push(open);
   assert.ok(rec.ledger.kept.length >= 1, "the head-on crash did not rank as a highlight");
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
-  return { clip: readClip(new Reader().reset(w.done()), carLayout(cars[0]!)), cars, trace, dress, closest, reached };
+  return { clip: readClip(new Reader().reset(w.done()), carLayout(cars[0]!)), cars, trace, dress, closest, rests, passerX, reached };
+}
+
+/**
+ * Where the passer starts (x) and drives (its lane, z) to pass a part the crash leaves asleep clear of both wrecks, read off `dry` (the same run with the passer in `FAR_LANE`):
+ * the part lying still longest within the clip, the passer's flank halfway into its reach on its far side from the crash line, nearest it halfway through that stillness.
+ */
+function passerBy(dry: Recorded): { x: number; z: number } {
+  const end = Math.round(dry.clip.t0 / H) + dry.clip.h.length - 1;
+  const corner = new THREE.Vector3();
+  let wreckSide = 0;
+  for (const c of [A, B]) {
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        corner.set(sx * CAR_HALF.x, 0, sz * CAR_HALF.z).applyQuaternion(dry.cars[c]!.group.quaternion).add(dry.cars[c]!.group.position);
+        wreckSide = Math.max(wreckSide, Math.abs(corner.z));
+      }
+    }
+  }
+  let best: { x: number; z: number } | null = null;
+  let span = 0;
+  for (const r of dry.rests) {
+    const from = r.from + WAKE_LEAD;
+    const to = Math.min(r.to, end);
+    const lane = r.z + (r.z < 0 ? -1 : 1) * (CAR_HALF.x + r.reach / 2);
+    if (Math.abs(lane) - CAR_HALF.x < wreckSide + WRECK_CLEAR || to - from <= span) continue;
+    span = to - from;
+    best = { x: IMPACT_X + PASSER_AHEAD + r.x - dry.passerX[Math.round((from + to) / 2)]!, z: lane };
+  }
+  assert.ok(best, "no torn part or popped wheel lies asleep clear of both wrecks within the clip");
+  return best;
 }
 
 /**
@@ -146,7 +207,7 @@ function replayLooseBodies(run: Recorded, clip: HighlightClip): { firstOff: numb
 }
 
 describe("given a head-on recorded as a highlight, its torn parts lying asleep on the road, and a car the clip leaves out that drives by them", () => {
-  const run = record(true);
+  const run = record(passerBy(record({ x: IMPACT_X + PASSER_AHEAD, z: FAR_LANE })));
   const { clip } = run;
   const s0 = Math.round(clip.t0 / H);
 
@@ -179,7 +240,7 @@ describe("given a head-on recorded as a highlight, its torn parts lying asleep o
 
 describe("given the same head-on recorded with no car outside the clip", () => {
   it("when it is replayed without part stirs, then every torn part is where the live sim had it, to the bit (the passer is what the stirs are for)", (t) => {
-    const run = record(false);
+    const run = record(null);
     t.diagnostic(`its own cars' wrecks alone stir ${run.clip.partStirs.length} part runs over ${run.clip.partStirs.reduce((n, x) => n + x.slices, 0)} slices`);
     assert.deepEqual(replayLooseBodies(run, { ...run.clip, partStirs: [] }), { firstOff: -1, worst: 0 });
   });

@@ -403,18 +403,18 @@ describe("given every body style's panels cut from its smoothed loft", () => {
  * `JSON.stringify({ snap: car.deform.snapshot(), raw: masses.map((m) => [m.rest, m.local, m.world, m.vel].map((v) => v.toArray())) })`.
  */
 const SIM_CRASH_KPH = 48;
-// Re-pinned for the face's push on a wreck resting on it (the free shape step no longer restores it): the first difference is slice 142, the first past the
-// contact hold, with two masses on the slab (the cell 2.3 mm further from it).
+// Re-pinned for the skin reading a kept set once (its fit rest takes the set): the first difference is bumperFL's velocity at 0.0217 s, in the hit,
+// where the cage the contact reads first differs.
 const SIM_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "d64bf2dfc360a6a02643d08fd25866e9dd6c0e44fe3d3c71f234fb9fb1902389" },
-  { id: "hatchback", digest: "d64bf2dfc360a6a02643d08fd25866e9dd6c0e44fe3d3c71f234fb9fb1902389" },
-  { id: "wagon", digest: "d64bf2dfc360a6a02643d08fd25866e9dd6c0e44fe3d3c71f234fb9fb1902389" },
-  { id: "coupe", digest: "5f45301c396bd8209f5652cd5a0fd23a276307c5bb3e8a2713ded9de38ff1663" },
-  { id: "pickup", digest: "d0a051729466291eb4bcb05974e285fffd23e7417fcd01c7594fe9f4bd814879" },
+  { id: "sedan", digest: "482d299bbf62cfe82b9c5037a70fd22463affd183b1eb4e9f64b085bfaf11e30" },
+  { id: "hatchback", digest: "482d299bbf62cfe82b9c5037a70fd22463affd183b1eb4e9f64b085bfaf11e30" },
+  { id: "wagon", digest: "482d299bbf62cfe82b9c5037a70fd22463affd183b1eb4e9f64b085bfaf11e30" },
+  { id: "coupe", digest: "457b9fa4503b2875a323b0b3cce41ea536f3084148ba6bcea0a32b5bf2489bc8" },
+  { id: "pickup", digest: "39d6911ced53f424b1d8a4bcfaf450e76a96b78f19559f39664d5c6a7949bb87" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
-  { id: "police", digest: "9ce2b3e1c9529341f9451014a071e0c117c29e70291a9081e241d9eb273a703c" },
+  { id: "police", digest: "08723ee0b057fd7362b131572b0fae67c75b4b44cba69bb5c9097461202172fe" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style crashed into the wall at 48 km/h by the engine's own step", () => {

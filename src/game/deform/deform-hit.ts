@@ -280,6 +280,7 @@ export abstract class DeformHit extends DeformRig {
     for (let i = 0; i < this.masses.length; i++) {
       const m = this.masses[i]!;
       m.local.copy(m.rest);
+      this.skinRest[i]!.copy(m.rest);
       this.offsetByCrush(i, m.local, this.crushBaked);
       m.world.copy(m.local).applyMatrix4(group.matrixWorld);
       m.vel.copy(worldVel);
