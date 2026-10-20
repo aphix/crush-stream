@@ -121,8 +121,8 @@ const runOf = (type: DriverCar, display: string, frames: () => () => number): Pr
   return runs.get(key)!;
 };
 
-/** Why the rows below are todo: the driver now lands on his limbs and cartwheels on. */
-const CARTWHEEL = "cartwheel landing accepted by the owner 2026-10-19 (EJECT_ROLL 16 + airborne brace)";
+/** Why the rows below are todo: the driver now lands on his limbs and cartwheels on (owner accepted the cartwheel 2026-10-19), and a limb box sinks past the bar as he does: an open defect, not waived. */
+const CARTWHEEL = "open: at the cartwheel landing (EJECT_ROLL 16 + airborne brace) a limb box sinks past SUNK_MAX";
 /** The deepest part (m) under the terrain each car type's driver reached at 60 Hz, measured with the cartwheel. */
 const SUNK_AT_60_HZ: Record<string, number> = { sedan: 0.057, muscle: 0.06, truck: 0.055, monster: 0.084, police: 0.056, hatchback: 0.056, wagon: 0.056 };
 
