@@ -1,11 +1,11 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { SAMPLE, sampleAt, type CageStyle } from "../vehicle/car-cage.ts";
+import { SAMPLE, sampleAt, type CageFields, type CageStyle } from "../vehicle/car-cage.ts";
 import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import { hypot2 } from "../deform/physics-util.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { FINE_HZ } from "../kernel/constants.ts";
-import { OUTLINE_REACH, outlineOf, VERTICAL_CLEAR } from "./cage-outline.ts";
+import { OUTLINE_REACH, outlineOf, VERTICAL_CLEAR, type CageOutline } from "./cage-outline.ts";
 
 export const BARRIER_HALF = { x: 0.38, z: 1.96 };
 /** The slab's top (m): `makeJerseyBarrier`'s profile peak. A car whose every mass clears it flies over (a ramp jump). */
@@ -75,8 +75,8 @@ export function clipCarToBarrier(
 }
 
 /**
- * Per direction of `deepestIn`, sums over the overlap patch in the container's frame, each node weighted by its depth: the weight,
- * the place (x, z), the world height, and the container's outline normal (x, z) there.
+ * Per direction of `deepestIn`, sums over the overlap patch, each node weighted by its depth: the weight, the place in the world (x, z,
+ * then height), and the container's outline normal (x, z) in its frame there.
  */
 const F_W = 0;
 const F_X = 1;
@@ -89,98 +89,218 @@ const _inA = new Float64Array(7);
 const _inB = new Float64Array(7);
 const _grad = new Float64Array(2);
 
+/** `a`'s frame into `b`'s, both full poses (`frameInto`): per axis of `b` (x, y, z), its offset and its x, y, z coefficients on a point of `a`'s. */
+const _ab = new Float64Array(12);
+
+/** `_ab` ← `a`'s frame (world matrix elements `ea`) into `b`'s (`eb`): the groups are rotations and translations, so `b`'s inverse is its transpose. */
+function frameInto(ea: readonly number[], eb: readonly number[]): void {
+  const ox = ea[12]! - eb[12]!;
+  const oy = ea[13]! - eb[13]!;
+  const oz = ea[14]! - eb[14]!;
+  for (let o = 0; o < 12; o += 4) {
+    const ux = eb[o]!;
+    const uy = eb[o + 1]!;
+    const uz = eb[o + 2]!;
+    _ab[o] = ux * ox + uy * oy + uz * oz;
+    _ab[o + 1] = ux * ea[0]! + uy * ea[1]! + uz * ea[2]!;
+    _ab[o + 2] = ux * ea[4]! + uy * ea[5]! + uz * ea[6]!;
+    _ab[o + 3] = ux * ea[8]! + uy * ea[9]! + uz * ea[10]!;
+  }
+}
+
+/**
+ * `deepestIn`'s numbers for `boxMissed`, `meet` and `meetAt` (a double passed across a call V8 does not inline is a heap number): `b`'s
+ * plan box `reach` out (x min, x max, z min, z max), `a`'s height range (class lift on), `reach`, `b`'s class lift, and the node `meet`
+ * places: its frame x and z, the height up `a` it stands at, its band's low and high up `b`, how far short of the box and plan it may
+ * be, the height up `b` of its frame's zero height, and the height up `b` `meetAt` places it at.
+ */
+const _in = new Float64Array(16);
+const I_LOW = 4;
+const I_HIGH = 5;
+const I_REACH = 6;
+const I_LIFT_B = 7;
+const I_X = 8;
+const I_Z = 9;
+const I_Y = 10;
+const I_A_LOW = 11;
+const I_A_HIGH = 12;
+const I_MARGIN = 13;
+const I_YC = 14;
+const I_AT = 15;
+/** What the last `meet` found: the node's depth in `b`'s plan, its place (x, z) in `b`'s frame, the heights the two bodies share there in `b`'s frame (the node's own where `b` has no band), whether `b` has one there (1), and the heights `b` stands at there. */
+const _meet = new Float64Array(8);
+const M_DEPTH = 0;
+const M_X = 1;
+const M_Z = 2;
+const M_LOW = 3;
+const M_HIGH = 4;
+const M_BANDED = 5;
+const M_STAND_LOW = 6;
+const M_STAND_HIGH = 7;
+/** `_meet` of the end of a slanted band `deepestIn` placed first, while it places the other. */
+const _deeper = new Float64Array(8);
+/** How far (m) inside the heights two bands share their ends are sampled: on an end itself, whether the cell it lands in holds it is rounding. */
+const BAND_INSET = VERTICAL_CLEAR / 4;
+
+/**
+ * Whether every node of `outline` at a height in `a`'s range, placed in `b`'s frame by `_ab`, misses `b`'s box. A node's own sum adds
+ * the same terms in the same order as these bounds, each monotone in its coordinate (and so is its rounding), so it never lies beyond.
+ */
+function boxMissed(outline: CageOutline): boolean {
+  const yLo = _in[I_LOW]!;
+  const yHi = _in[I_HIGH]!;
+  for (let o = 0; o <= 8; o += 8) {
+    const kx = _ab[o + 1]!;
+    const ky = _ab[o + 2]!;
+    const kz = _ab[o + 3]!;
+    const least = _ab[o]! + Math.min(kx * outline.xLo, kx * outline.xHi) + Math.min(ky * yLo, ky * yHi) + Math.min(kz * outline.zLo, kz * outline.zHi);
+    const most = _ab[o]! + Math.max(kx * outline.xLo, kx * outline.xHi) + Math.max(ky * yLo, ky * yHi) + Math.max(kz * outline.zLo, kz * outline.zHi);
+    const m = o >> 2;
+    if (most < _in[m]! || least > _in[m + 1]!) return true;
+  }
+  return false;
+}
+
+/**
+ * `_meet` ← the node in `_in` placed in `b`'s frame (`_ab`): its depth in `b`'s plan (-Infinity off the box with the margin more, or the
+ * margin or more short of the plan), the heights the two bodies share there, and the heights `b` stands at there: its own column on a
+ * covered node taller than `VERTICAL_CLEAR`, else its band (an outline node's own column is a sliver of the body's edge).
+ */
+function meet(plan: Float32Array, style: CageStyle, outlineB: CageOutline, fields: CageFields): void {
+  const x = _in[I_X]!;
+  const y = _in[I_Y]!;
+  const z = _in[I_Z]!;
+  const margin = _in[I_MARGIN]!;
+  const bx = _ab[0]! + _ab[1]! * x + _ab[2]! * y + _ab[3]! * z;
+  const bz = _ab[8]! + _ab[9]! * x + _ab[10]! * y + _ab[11]! * z;
+  _meet[M_DEPTH] = -Infinity;
+  _meet[M_X] = bx;
+  _meet[M_Z] = bz;
+  if (bx < _in[0]! - margin || bx > _in[1]! + margin || bz < _in[2]! - margin || bz > _in[3]! + margin) return;
+  SAMPLE[0] = bx;
+  SAMPLE[1] = bz;
+  sampleAt(plan, style);
+  _meet[M_DEPTH] = _in[I_REACH]! - SAMPLE[2]!;
+  if (!(_meet[M_DEPTH]! > -margin)) return;
+  const i = Math.round((bx - style.u0) / style.step) | 0;
+  const j = Math.round((bz - style.v0) / style.step) | 0;
+  outlineB.band(i, j, _band);
+  const banded = _band[0]! <= _band[1]!;
+  const lift = _in[I_LIFT_B]!;
+  _meet[M_BANDED] = banded ? 1 : 0;
+  _meet[M_LOW] = banded ? Math.max(_in[I_A_LOW]!, _band[0]! + lift) : _in[I_A_LOW]!;
+  _meet[M_HIGH] = banded ? Math.min(_in[I_A_HIGH]!, _band[1]! + lift) : _in[I_A_HIGH]!;
+  const k = j * style.nu + i;
+  const column = i >= 0 && j >= 0 && i < style.nu && j < style.nv && fields.covered[k] !== 0 && fields.top[k]! - fields.bottom[k]! > VERTICAL_CLEAR;
+  _meet[M_STAND_LOW] = column ? fields.bottom[k]! + lift : banded ? _band[0]! + lift : _in[I_A_LOW]!;
+  _meet[M_STAND_HIGH] = column ? fields.top[k]! + lift : banded ? _band[1]! + lift : _in[I_A_HIGH]!;
+}
+
+/** `_meet` ← the node in `_in` placed `_in[I_AT]` up `b`; its depth -Infinity unless the two bands share more than `VERTICAL_CLEAR` where it lands and `b` stands at that height there. */
+function meetAt(plan: Float32Array, style: CageStyle, outlineB: CageOutline, fields: CageFields): void {
+  const at = _in[I_AT]!;
+  _in[I_Y] = (at - _in[I_YC]!) / _ab[6]!;
+  meet(plan, style, outlineB, fields);
+  if (_meet[M_BANDED] === 1 && (_meet[M_HIGH]! - _meet[M_LOW]! <= VERTICAL_CLEAR || at < _meet[M_STAND_LOW]! || at > _meet[M_STAND_HIGH]!)) _meet[M_DEPTH] = -Infinity;
+}
+
+/**
+ * `_meet` ← the deeper of the node in `_in` placed at either end (`BAND_INSET` inside) of the heights where its band and `b`'s body
+ * meet where `meet` last placed it: `b`'s standing heights there, or the bands' shared heights where those leave too little.
+ */
+function deeperEnd(plan: Float32Array, style: CageStyle, outlineB: CageOutline, fields: CageFields): void {
+  let low = Math.max(_in[I_A_LOW]!, _meet[M_STAND_LOW]!);
+  let high = Math.min(_in[I_A_HIGH]!, _meet[M_STAND_HIGH]!);
+  if (high - low <= 2 * BAND_INSET) {
+    low = _meet[M_LOW]!;
+    high = _meet[M_HIGH]!;
+  }
+  if (high - low <= 2 * BAND_INSET) return;
+  _in[I_MARGIN] = 0;
+  _in[I_AT] = low + BAND_INSET;
+  meetAt(plan, style, outlineB, fields);
+  _deeper.set(_meet);
+  _in[I_AT] = high - BAND_INSET;
+  meetAt(plan, style, outlineB, fields);
+  if (_deeper[M_DEPTH]! > _meet[M_DEPTH]!) _meet.set(_deeper);
+}
+
 /**
  * How deep (m) the nodes of `a`'s plan outline reach into `b`'s plan (the signed distance field, the outline half a step further out
  * than its node, and `look` further: the travel the pair's closing carries it in the slice, so a contact whose crush keeps its faces
  * apart by that travel stays one), counting only nodes where the two bodies' heights overlap by more than `VERTICAL_CLEAR` there; 0
- * when none does. That depth goes to `found[F_BEST]`; every such node also adds to `found`'s sums with its depth as weight: the overlap
- * patch's centre and outward normal (b's outline) in `b`'s frame, and its height in the world. Both cars' bases are fresh. (Out through
- * `found` and `SAMPLE`: a double returned or passed across a call V8 does not inline is a heap number.)
+ * when none does. A node is placed through both cars' full poses (a car pitched 27° overhangs its level plan by up to 0.45 m at a
+ * raised end). Its band is slanted in `b`'s frame and both cars are rigid in the slice, so its depth is linear in height: placed at its
+ * middle, then at both ends of where it meets `b`'s body there, the deeper counts (`deeperEnd`; at a middle, a pitched cage read up to
+ * 0.14 m shallow, and a raised tail's band met a cab's roof beside the hood it stood over).
+ * That depth goes to `found[F_BEST]`; every such node also adds to `found`'s sums with its depth as weight: the overlap patch's centre
+ * and outward normal (b's outline) in `b`'s frame, and its height in the world (`addToPatch`). Both cars' world matrices are fresh.
  */
 function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look: number): void {
   const outline = outlineOf(a);
   const style = b.cage.style;
-  const outlineB = outlineOf(b);
-  const fb = b.cage.fields;
-  const box = fb.planBox;
+  const box = b.cage.fields.planBox;
   const reach = OUTLINE_REACH + look;
-  const xMin = box[0]! - reach;
-  const xMax = box[1]! + reach;
-  const zMin = box[2]! - reach;
-  const zMax = box[3]! + reach;
-  const ra = a.rightFlat;
-  const fwA = a.fwdFlat;
-  const rb = b.rightFlat;
-  const fwB = b.fwdFlat;
-  const dx = a.group.position.x - b.group.position.x;
-  const dz = a.group.position.z - b.group.position.z;
-  const tx = dx * rb.x + dz * rb.z;
-  const tz = dx * fwB.x + dz * fwB.z;
-  const m00 = ra.x * rb.x + ra.z * rb.z;
-  const m01 = fwA.x * rb.x + fwA.z * rb.z;
-  const m10 = ra.x * fwB.x + ra.z * fwB.z;
-  const m11 = fwA.x * fwB.x + fwA.z * fwB.z;
-  // Every node's (bx, bz) below lies between the values the same sums take at the outline's bounds (each sum is monotone in x and z,
-  // and so is its rounding): when those miss the box, so does every node.
-  const bx00 = tx + m00 * outline.xLo + m01 * outline.zLo;
-  const bx01 = tx + m00 * outline.xLo + m01 * outline.zHi;
-  const bx10 = tx + m00 * outline.xHi + m01 * outline.zLo;
-  const bx11 = tx + m00 * outline.xHi + m01 * outline.zHi;
-  const bz00 = tz + m10 * outline.xLo + m11 * outline.zLo;
-  const bz01 = tz + m10 * outline.xLo + m11 * outline.zHi;
-  const bz10 = tz + m10 * outline.xHi + m11 * outline.zLo;
-  const bz11 = tz + m10 * outline.xHi + m11 * outline.zHi;
-  if (
-    Math.max(bx00, bx01, bx10, bx11) < xMin ||
-    Math.min(bx00, bx01, bx10, bx11) > xMax ||
-    Math.max(bz00, bz01, bz10, bz11) < zMin ||
-    Math.min(bz00, bz01, bz10, bz11) > zMax
-  ) {
-    found.fill(0);
-    return;
-  }
-  const plan = b.cage.planField();
-  const ea = a.group.matrixWorld.elements;
-  const eb = b.group.matrixWorld.elements;
   const liftA = CLASSES[carClass(a)].lift;
-  const liftB = CLASSES[carClass(b)].lift;
-  let best = 0;
+  _in[0] = box[0]! - reach;
+  _in[1] = box[1]! + reach;
+  _in[2] = box[2]! - reach;
+  _in[3] = box[3]! + reach;
+  _in[I_LOW] = outline.low + liftA;
+  _in[I_HIGH] = outline.high + liftA;
+  _in[I_REACH] = reach;
+  _in[I_LIFT_B] = CLASSES[carClass(b)].lift;
+  const eb = b.group.matrixWorld.elements;
+  frameInto(a.group.matrixWorld.elements, eb);
   found.fill(0);
+  if (boxMissed(outline)) return;
+  const outlineB = outlineOf(b);
+  const plan = b.cage.planField();
+  const fields = b.cage.fields;
+  const ty = _ab[4]!, kyx = _ab[5]!, kyy = _ab[6]!, kyz = _ab[7]!;
+  const sweep = Math.abs(_ab[2]!) + Math.abs(_ab[10]!);
+  let best = 0;
   for (let n = 0; n < outline.count; n++) {
-    const x = outline.xs[n]!;
-    const z = outline.zs[n]!;
-    const bx = tx + m00 * x + m01 * z;
-    const bz = tz + m10 * x + m11 * z;
-    if (bx < xMin || bx > xMax || bz < zMin || bz > zMax) continue;
-    SAMPLE[0] = bx;
-    SAMPLE[1] = bz;
-    sampleAt(plan, style);
-    const depth = reach - SAMPLE[2]!;
-    if (!(depth > 0)) continue;
-    const yA = ea[13]! + ea[1]! * x + ea[9]! * z;
-    const aLow = yA + ea[5]! * (outline.lows[n]! + liftA);
-    const aHigh = yA + ea[5]! * (outline.highs[n]! + liftA);
-    let low = Math.min(aLow, aHigh);
-    let high = Math.max(aLow, aHigh);
-    outlineB.band(Math.round((bx - style.u0) / style.step) | 0, Math.round((bz - style.v0) / style.step) | 0, _band);
-    if (_band[0]! <= _band[1]!) {
-      const yB = eb[13]! + eb[1]! * bx + eb[9]! * bz;
-      const bLow = yB + eb[5]! * (_band[0]! + liftB);
-      const bHigh = yB + eb[5]! * (_band[1]! + liftB);
-      low = Math.max(low, Math.min(bLow, bHigh));
-      high = Math.min(high, Math.max(bLow, bHigh));
-      if (high - low <= VERTICAL_CLEAR) continue;
+    const yl = outline.lows[n]! + liftA;
+    const yh = outline.highs[n]! + liftA;
+    const yc = ty + kyx * outline.xs[n]! + kyz * outline.zs[n]!;
+    _in[I_X] = outline.xs[n]!;
+    _in[I_Z] = outline.zs[n]!;
+    _in[I_Y] = (yl + yh) * 0.5;
+    _in[I_A_LOW] = Math.min(yc + kyy * yl, yc + kyy * yh);
+    _in[I_A_HIGH] = Math.max(yc + kyy * yl, yc + kyy * yh);
+    // How far the band's ends stand from its middle in `b`'s plan: no farther does the node move where the heights meet.
+    const slant = 0.5 * (yh - yl) * sweep;
+    _in[I_MARGIN] = slant;
+    meet(plan, style, outlineB, fields);
+    if (!(_meet[M_DEPTH]! > -slant)) continue;
+    if (slant > 0 && Math.abs(kyy) > 1e-6 && _meet[M_BANDED] === 1) {
+      _in[I_YC] = yc;
+      deeperEnd(plan, style, outlineB, fields);
     }
+    const depth = _meet[M_DEPTH]!;
+    if (!(depth > 0) || (_meet[M_BANDED] === 1 && _meet[M_HIGH]! - _meet[M_LOW]! <= VERTICAL_CLEAR)) continue;
     if (depth > best) best = depth;
-    outlineNormal(plan, style);
-    found[F_W] += depth;
-    found[F_X] += depth * bx;
-    found[F_Z] += depth * bz;
-    found[F_Y] += depth * (low + high) * 0.5;
-    found[F_NX] += depth * _grad[0]!;
-    found[F_NZ] += depth * _grad[1]!;
+    addToPatch(found, eb, plan, style);
   }
   found[F_BEST] = best;
+}
+
+/** `found`'s sums take the node `meet` placed, weighted by its depth: its place in the world at the middle of the heights shared there (`eb`: the container's, `b`'s, world matrix), and the outline normal there. */
+function addToPatch(found: Float64Array, eb: readonly number[], plan: Float32Array, style: CageStyle): void {
+  const depth = _meet[M_DEPTH]!;
+  const bx = _meet[M_X]!;
+  const by = (_meet[M_LOW]! + _meet[M_HIGH]!) * 0.5;
+  const bz = _meet[M_Z]!;
+  SAMPLE[0] = bx;
+  SAMPLE[1] = bz;
+  outlineNormal(plan, style);
+  found[F_W] += depth;
+  found[F_X] += depth * (eb[12]! + eb[0]! * bx + eb[4]! * by + eb[8]! * bz);
+  found[F_Z] += depth * (eb[14]! + eb[2]! * bx + eb[6]! * by + eb[10]! * bz);
+  found[F_Y] += depth * (eb[13]! + eb[1]! * bx + eb[5]! * by + eb[9]! * bz);
+  found[F_NX] += depth * _grad[0]!;
+  found[F_NZ] += depth * _grad[1]!;
 }
 
 /** `_grad` ← the unit direction in which `plan` (a cage's plan distance field) grows fastest at frame (x, z): out of the outline; zero where it has none. */
@@ -263,8 +383,8 @@ export function satCars(a: DeformableCar, b: DeformableCar, normalOut: THREE.Vec
   normalOut.x = nx;
   normalOut.y = 0;
   normalOut.z = nz;
-  contactOut.x = (pb.x * wA + rb.x * _inA[F_X]! + fb.x * _inA[F_Z]! + pa.x * wB + ra.x * _inB[F_X]! + fa.x * _inB[F_Z]!) / w;
+  contactOut.x = (_inA[F_X]! + _inB[F_X]!) / w;
   contactOut.y = (_inA[F_Y]! + _inB[F_Y]!) / w;
-  contactOut.z = (pb.z * wA + rb.z * _inA[F_X]! + fb.z * _inA[F_Z]! + pa.z * wB + ra.z * _inB[F_X]! + fa.z * _inB[F_Z]!) / w;
+  contactOut.z = (_inA[F_Z]! + _inB[F_Z]!) / w;
   return Math.max(depthA, depthB) - look;
 }

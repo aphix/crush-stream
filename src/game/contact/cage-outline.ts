@@ -18,7 +18,7 @@ const VERTICAL_WINDOW = 3;
 const _window = new Float64Array(2);
 
 /** One cage's outline as of a fit: the covered nodes that touch an uncovered one (or the lattice's edge), and the cage's height range. */
-class CageOutline {
+export class CageOutline {
   /** Per outline node: its lattice index and its frame x and z (m). */
   nodes: Int32Array = new Int32Array(0);
   xs: Float64Array = new Float64Array(0);

@@ -48,6 +48,9 @@ describe("given the real engine running the owner's five-car fleet crash with th
     engine.setRealism(REALISM);
     engine["pinnedSeed"] = SEED;
     engine.reset();
+    // One crash: the loop resets the fleet 10.4 wall s after the hit, which the slow-mo reaches at about 0.89 sim s, so the window would only
+    // close in a run whose later hit restarted that clock.
+    engine["looping"] = false;
     EPICENTER.on = 0;
     // Headless has no dummy world: a launched dummy calls `onThrow` at once, which lifts the slow-mo for his exit.
     const throwDriver = engine["throwDriver"].bind(engine);

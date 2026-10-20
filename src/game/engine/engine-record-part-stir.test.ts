@@ -36,7 +36,7 @@ const PASSER_SPEED = 20;
 /** A lane (m off the crash line) far from anything the crash throws: a passer there stirs nothing, so its run shows where the parts lie and when it passes them. */
 const FAR_LANE = 40;
 /** How far (m) the passer's flank passes outside both wrecks' outlines. */
-const WRECK_CLEAR = 0.5;
+const WRECK_CLEAR = 0.4;
 /** Steps a part lies asleep before the passer is nearest it: the passer's roof reaches it about `CAR_HALF.z` + its reach (under 3.5 m, 0.15 s) before. */
 const WAKE_LEAD = FINE_HZ / 4;
 

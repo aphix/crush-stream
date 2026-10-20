@@ -276,9 +276,12 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * a straight span drawn 16-20 cm under it. A clip of 142 or before no longer reads.
  * 144: a car put on a spot (respawn, start, held reset) drives from rest: every drive field goes back to as built (steer, throttle, spin, drift, hold...), where before it
  * carried over from the car's last life. A clip of 143 or before no longer reads.
+ * 145: a pair's plan SAT places each car's outline nodes through both cars' full poses (it took a level, yaw-only frame), at both ends of the heights where a node's
+ * slanted band meets the other body, the deeper counting, and the contact point through the container's full pose, so a pitched car's raised end overhanging its
+ * plan is met as deep as it is (a 27° pitched monster's tail read 0.22 m shallow) and a raised tail over a cab is no contact. A clip of 144 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 144;
+const REPLAY_VERSION = 145;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
