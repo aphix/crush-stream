@@ -205,6 +205,8 @@ export abstract class EngineCore {
   }
   protected disposed = false;
   protected last = 0;
+  /** Set by `advance` for its frames: the frame's wall seconds as given. Its stamps ride the wall clock, whose size rounds `now - last` (the slow-mo's hold and the pacer's sim time then moved with the time of day). */
+  protected advanceDt: number | null = null;
   /** Set by `advance` on its silent frames: the frame steps everything but the post-chain draw. */
   protected skipDraw = false;
   protected readonly clock = phaseClock();

@@ -9,8 +9,10 @@ import { enterBenchScene } from "./bench-scene.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 
-/** One step a frame: the pacer takes the fine slice, never more than one step a frame, so no frame meets its wall deadline and the steps do not depend on how fast the machine runs. */
+/** One frame at the fine slice: a frame steps once, or more at a speed the 1/240 s slice travels past 7 cm in. */
 export const FRAME_S = 1 / FINE_HZ;
+/** Ms the pacer's clock moves at each read: a step costs next to nothing, so no frame is cut at the wall deadline (a loaded box's clock cut them) and the clock is never blind. */
+const PACER_TICK_MS = 0.001;
 
 async function benchEngine(): Promise<CrashEngine> {
   stubBrowser();
@@ -18,6 +20,8 @@ async function benchEngine(): Promise<CrashEngine> {
   Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
   await engine.ready;
   engine.fadeScenes = false;
+  let tick = 0;
+  Object.assign(engine.pace, { now: () => (tick += PACER_TICK_MS) });
   return engine;
 }
 

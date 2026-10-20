@@ -274,9 +274,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * of 141 or before no longer reads.
  * 143: a wreck's hull carries sill-underside samples between the axles where the lattice can bend the sill (24-25 a style), so a wreck rests on its bent sill instead of
  * a straight span drawn 16-20 cm under it. A clip of 142 or before no longer reads.
+ * 144: a car put on a spot (respawn, start, held reset) drives from rest: every drive field goes back to as built (steer, throttle, spin, drift, hold...), where before it
+ * carried over from the car's last life. A clip of 143 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 143;
+const REPLAY_VERSION = 144;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

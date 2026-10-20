@@ -59,6 +59,8 @@ const SIREN_GAIN = { red: 1.3, blue: 1.5 } as const;
 const AIR_SPIN_TAU = 1.5;
 /** A driven wheel in the air winds up under full throttle at this rate (rad/s²): unloaded, a little. */
 const AIR_SPIN_UP = 8;
+/** The drive a built car has (`CarCore.drive`). `-0`: doubles from construction; each field's first fractional write mid-race deoptimised applyDrive for seconds. */
+const DRIVE_AT_REST = { throttle: -0, steer: -0, brake: -0, ebrake: false, boost: false, neutral: false, spin: -0, spinSpeed: -0, lock: -0, slide: -0, drift: -0, hold: -0, ebrakeK: -0, boostK: -0 };
 
 export interface CarPaint {
   body: number;
@@ -288,9 +290,8 @@ export abstract class CarCore {
   aiPlacements = 0;
   /** Times its engine was killed from outside the crash sim (`disable`): the recorder keys a step the count moved in, and a clip keeps that keyframe for the car. */
   kills = 0;
-  /** Last slice's drive (applyDrive writes it). `spin`: the driven wheels' longitudinal slip ratio 0–1; `lock` / `slide`: 0–1 wheel slip for tyre FX (brake lock-up, sideways slide); `spinSpeed`: m/s the driven wheels' tread runs ahead of the body, 0 gripping (state: a spin builds and fades over the driveline's rotating mass, so it rides in the flight block and on the wire; the gear and revs are read off `along + spinSpeed`); `drift`: the drift assist's state; `hold`: sideways grip (m/s) left this step, spent by a face the car is pressed on (`wallBounce`); `ebrakeK`: the handbrake grip actually applied, 0–1, ramped in and out over `DRIVE.ebrakeIn` / `ebrakeOut`; `boostK`: the boost thrust applied, 0 or 1.
-   *  `-0`: doubles from construction; each field's first fractional write mid-race deoptimised applyDrive for seconds. */
-  readonly drive = { throttle: -0, steer: -0, brake: -0, ebrake: false, boost: false, neutral: false, spin: -0, spinSpeed: -0, lock: -0, slide: -0, drift: -0, hold: -0, ebrakeK: -0, boostK: -0 };
+  /** Last slice's drive (applyDrive writes it). `spin`: the driven wheels' longitudinal slip ratio 0–1; `lock` / `slide`: 0–1 wheel slip for tyre FX (brake lock-up, sideways slide); `spinSpeed`: m/s the driven wheels' tread runs ahead of the body, 0 gripping (state: a spin builds and fades over the driveline's rotating mass, so it rides in the flight block and on the wire; the gear and revs are read off `along + spinSpeed`); `drift`: the drift assist's state; `hold`: sideways grip (m/s) left this step, spent by a face the car is pressed on (`wallBounce`); `ebrakeK`: the handbrake grip actually applied, 0–1, ramped in and out over `DRIVE.ebrakeIn` / `ebrakeOut`; `boostK`: the boost thrust applied, 0 or 1. A car put on a spot gets it back as built (`stopDrive`). */
+  readonly drive = { ...DRIVE_AT_REST };
   /** A wreck at rest: `integrateWreck` skips its rigid step until something moves it (`wake`). */
   asleep = false;
   /** Seconds the wreck has rested (`integrateWreck`); it sleeps at `WRECK_REST_S`. */
@@ -725,6 +726,11 @@ export abstract class CarCore {
     if (fl > 1e-6) this.fwdFlat.set(this.forward.x / fl, 0, this.forward.z / fl);
     else this.fwdFlat.set(0, 0, 1);
     this.rightFlat.set(this.fwdFlat.z, 0, -this.fwdFlat.x);
+  }
+
+  /** The drive back as built: a car put on a spot carries no wheel, pedals, wheelspin, drift, grip or ramps over from where it was. */
+  protected stopDrive(): void {
+    Object.assign(this.drive, DRIVE_AT_REST);
   }
 
   /**

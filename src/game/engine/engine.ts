@@ -485,7 +485,7 @@ export class CrashEngine extends EngineGarage {
     if (this.disposed) return;
     const t0 = performance.now();
     // The first rAF stamp can predate `start()`'s performance.now(): a negative dt froze the sim for seconds.
-    const wallDt = Math.min(Math.max(0, (now - this.last) / 1000), 0.1);
+    const wallDt = Math.min(this.advanceDt ?? Math.max(0, (now - this.last) / 1000), 0.1);
     this.last = now;
     if (wallDt > 1e-4) {
       const inst = 1 / wallDt;

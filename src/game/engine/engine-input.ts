@@ -56,6 +56,7 @@ export abstract class EngineInput extends EngineRigs {
     const frames = Math.max(1, Math.round((seconds * 1000) / dt));
     const real = this.last;
     let t = real;
+    this.advanceDt = opts.frameDt ?? 1 / FRAME_HZ;
     try {
       for (let i = 0; i < frames; i++) {
         t += dt;
@@ -64,6 +65,7 @@ export abstract class EngineInput extends EngineRigs {
       }
     } finally {
       this.skipDraw = false;
+      this.advanceDt = null;
       this.last = performance.now();
     }
   }

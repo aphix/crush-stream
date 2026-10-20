@@ -48,7 +48,7 @@ function aiKind(engine: CrashEngine, i: number): Kind | null {
 
 /**
  * Every step the engine takes from now: per AI kind, the steps judged and the most the wheel the sim ran (`drive.steer`) moved in one over a pad player's reach (≤ 0: never faster).
- * A car put on a spot since the step before (a respawn, a start) is not judged on its first step there: it starts with its wheel straight, a jump from the wheel it had where it was.
+ * A car put on a spot since the step before or during the step (a respawn, a start) is not judged on that step or its first step there: it starts with its wheel straight, a jump from the wheel it had where it was.
  */
 function watchSteer(engine: CrashEngine): Map<Kind, Tally> {
   const tally = new Map<Kind, Tally>();
@@ -67,7 +67,7 @@ function watchSteer(engine: CrashEngine): Map<Kind, Tally> {
     fixedStep(dt);
     for (let i = 0; i < cars.length; i++) {
       const kind = kinds[i];
-      if (!kind) continue;
+      if (!kind || cars[i]!.placements !== placed[i]) continue;
       const now = cars[i]!.drive.steer;
       const over = Math.abs(now - was[i]!) - reach(dt);
       const t = tally.get(kind) ?? { steps: 0, worst: -Infinity, at: "" };

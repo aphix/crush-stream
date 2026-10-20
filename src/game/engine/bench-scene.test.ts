@@ -134,4 +134,25 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
       if (real.createImageBitmap === undefined) Reflect.deleteProperty(globalThis, "createImageBitmap");
     }
   });
+
+  /** A wall-clock reading (ms) 11.6 days into a page's life, where frame stamps on the wall clock round `now - last` off by up to 1.2e-7 ms. */
+  const LATE_MS = 1e9;
+  it("when the probe frames start at a page's first millisecond and 11 days into it, then every frame runs its own wall time to the bit: the sim never reads the time of day", () => {
+    const poll = engine["pollInput"];
+    const seen: number[] = [];
+    engine["pollInput"] = (wallDt: number): void => {
+      seen.push(wallDt);
+      poll.call(engine, wallDt);
+    };
+    try {
+      for (const at of [0, LATE_MS]) {
+        engine["last"] = at;
+        runFrames(engine, 1);
+      }
+    } finally {
+      engine["pollInput"] = poll;
+    }
+    assert.equal(seen.length, 2, "two frames ran");
+    for (const [k, wallDt] of seen.entries()) assert.equal(wallDt, FRAME_S, `frame ${k}`);
+  });
 });

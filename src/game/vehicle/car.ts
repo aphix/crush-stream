@@ -176,6 +176,7 @@ export class DeformableCar extends CarParts {
     this.spawnSpeed = speed;
     this.parked = false;
     this.stalledS = 0;
+    this.stopDrive();
     this.crashed = false;
     this.resetContact();
     this.suspension.reset();

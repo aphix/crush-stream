@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
+import { applyDrive, idleDrive } from "./car-drive.ts";
 import { DeformableCar } from "./car.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { assertSameDigest, DT, paint } from "./test-support.ts";
@@ -39,5 +40,24 @@ describe("given two cars that have crashed head-on at 20 m/s each for 90 frames,
     a.resetVisual();
     built.resetVisual();
     assertSameDigest(fields(a.deform), fields(built.deform), "deform after reset");
+  });
+});
+
+/** Seconds of gas, full lock and handbrake at `HARD_SPEED_MS`: long enough to build a slide, a wheelspin and the handbrake's ramp. */
+const HARD_S = 0.6;
+const HARD_SPEED_MS = 20;
+
+describe("given a car that has driven hard (gas, full lock and the handbrake at 20 m/s)", () => {
+  it("when it is put on a spot again, then every field of its drive is a built car's: no wheel, pedals, wheelspin, slide, grip or ramp carried over", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene());
+    car.spawnFacing(0, 0, 0, HARD_SPEED_MS);
+    const input = { ...idleDrive(), throttle: 1, steer: 1, ebrake: true };
+    for (let t = 0; t < HARD_S - 1e-9; t += DT) {
+      car.velocity.set(car.fwdFlat.x * HARD_SPEED_MS, 0, car.fwdFlat.z * HARD_SPEED_MS);
+      applyDrive(car, input, DT);
+    }
+    for (const key of ["steer", "throttle", "drift", "ebrakeK"] as const) assert.ok(car.drive[key] !== 0, `the control: ${key} is ${car.drive[key]} before the respawn`);
+    car.spawnFacing(10, 10, 1, 0);
+    for (const [key, value] of Object.entries(car.drive)) assert.equal(value, typeof value === "boolean" ? false : -0, key);
   });
 });
