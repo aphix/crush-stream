@@ -116,7 +116,7 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     assert.equal(u.zenithEl!.value, look.zenithElevation, `${label}: zenith elevation`);
     assert.equal(dome["cloudLit"].getHexString(), new THREE.Color(look.cloudLit).getHexString(), `${label}: cloud lit`);
     assert.equal(dome["cloudShade"].getHexString(), new THREE.Color(look.cloudShade).getHexString(), `${label}: cloud shade`);
-    assert.deepEqual(dome["discTint"].toArray(), [...look.discTint], `${label}: disc tint`);
+    assert.equal(dome["discTint"].toArray().join(), look.discTint.join(), `${label}: disc tint`);
     assert.equal(u.uStars!.value, look.stars ? 1 : 0, `${label}: stars`);
   };
 
