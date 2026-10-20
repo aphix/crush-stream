@@ -33,7 +33,7 @@ function skinGap(a: Float32Array, b: Float32Array): number {
   return gap;
 }
 
-/** A host over a bare scene: real cars (fleet bodies), a donor wreck (shoved further by `shove`) standing in for racer 0's car as the race ended, and the fountain jets. */
+/** A host over a bare scene: real cars (fleet bodies), a donor wreck (shoved further by `shove`) standing in for racer 0's car as the race ended, its damage read as the race's end reads it (`FinalDamage.take`: the net state and the drawn body), and the fountain jets. */
 function hostOver(scene: THREE.Scene, shove?: (donor: DeformableCar) => void) {
   const make = (id: number): DeformableCar => new DeformableCar({ body: 0x808080, accent: 0, name: `c${id}` }, scene, null, fleetStyle(id));
   const donor = make(0);
@@ -44,6 +44,7 @@ function hostOver(scene: THREE.Scene, shove?: (donor: DeformableCar) => void) {
   donor.updateSkin();
   const damage = new CarDamage();
   damage.read(donor);
+  damage.readDrawn(donor);
   const jets: { x: number; y: number; z: number; color: THREE.Color }[] = [];
   const host: PodiumHost = {
     spot: () => SPOT,

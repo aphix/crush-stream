@@ -1,97 +1,73 @@
-import { after, before, describe, it } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
-import { setGround } from "../world/ground.ts";
-import { loadEpicenter } from "../deform/epicenter.ts";
-import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
+import * as THREE from "three";
+import { DeformableCar } from "../vehicle/car.ts";
+import { paint } from "../vehicle/test-support.ts";
+import { assignClass, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
+import type { CarStyleId } from "../vehicle/car-variants.ts";
+import { makeWorld, PARKED, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { C_OWNER, HIT_SIZE } from "../world/surfaces.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import type { DeformableCar } from "../vehicle/car.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
 
+/**
+ * The owner's head-on flicker (17 m/s, muscle car and sedan): when the noses packed, a wreck's front tyres read the other wreck's crushed top,
+ * the rigid step took no row from them, but the drawn ride seated on it, so each nose jumped up 12-19 cm and back. Staged here directly: a
+ * muscle car's wreck set down with its front tyres on a parked sedan wreck's bonnet and its rear tyres on the road.
+ */
 const FRAME = 1 / FRAME_HZ;
-/** The owner's head-on: both cars at 17 m/s. */
-const SPEED = 17;
-/** Sim s read: the noses pack at 0.42 s and a front tyre reads the other wreck's top from 0.45 s; the driver is thrown at 0.47 s. */
-const UNTIL = 0.47;
-/** A drawn front wheel seated more than this (m) over its hub stands on something: the fleet disc is flat. */
+/** Frames read: while the front tyres still stand on the bonnet; the pair's push slides the car off onto the road by 0.3 s, where its nose lands (a seat on the ground, no flicker). */
+const ON_TOP_FRAMES = 15;
+/** A drawn front wheel seated more than this (m) over its hub stands on something: the parked wreck's bonnet is the only thing under it. */
 const RAISED = 0.05;
 const FRONT_WHEELS = 2;
+/** Plan z (m) of the muscle car's front axle over the sedan's bonnet, and the bonnet's height there (m), which its front tyres are set on. */
+const AXLE_OVER_Z = 1.6;
+const BONNET_Y = 0.7;
+/** Half the wheelbase (m) and the hub's height (m) the car is pitched about. */
+const HALF_BASE = 1.34;
+const HUB_Y = 0.32;
 
-type Run = { onTop: number; raised: number; flips: number; maxSeat: number };
-
-/** Whether a front tyre of wreck `car` answers another wreck's top (the slot `wheelHit` names). */
-function frontOnWreckTop(car: DeformableCar, cars: readonly DeformableCar[]): boolean {
-  if (!car.deform.massActive) return false;
-  for (let i = 0; i < FRONT_WHEELS; i++) {
-    const own = car.wheelHit[i * HIT_SIZE + C_OWNER]!;
-    if (own >= 0 && cars[own]!.deform.massActive) return true;
-  }
-  return false;
+/** A `style` car of class `cls` as a wreck at rest at (x, y, z), heading `yaw`, pitched nose-up by `pitch` (rad). */
+function wreckAt(style: CarStyleId, cls: VehicleClassId, x: number, y: number, z: number, yaw: number, pitch: number): DeformableCar {
+  const car = new DeformableCar(paint(), new THREE.Scene(), null, style);
+  assignClass(car, cls);
+  car.spawnFacing(x, z, yaw, 0);
+  car.group.position.y = y;
+  car.group.rotation.set(-pitch, yaw, 0, "YXZ");
+  car.group.updateMatrixWorld(true);
+  car.deform.bindKinematic(car.group, car.velocity, car.angular);
+  car.deform.armMasses(car.group, car.velocity, car.angular);
+  car.crashed = true;
+  return car;
 }
 
-/** One slice's reading of every car into `run`; `was` holds each car's raised state from the slice before. */
-function read(cars: readonly DeformableCar[], run: Run, was: boolean[]): void {
-  for (let k = 0; k < cars.length; k++) {
-    const car = cars[k]!;
-    if (frontOnWreckTop(car, cars)) run.onTop++;
-    const seat = Math.max(car.suspension.seat[0]!, car.suspension.seat[1]!);
-    run.maxSeat = Math.max(run.maxSeat, seat);
-    const raised = seat > RAISED;
-    if (raised) run.raised++;
-    if (raised !== was[k]) run.flips++;
-    was[k] = raised;
-  }
-}
-
-function headOn(engine: CrashEngine): Run {
-  loadEpicenter(EPICENTER_AT_LOAD);
-  engine["looping"] = false;
-  engine.setCarCount(2);
-  engine.setSpeedRange(SPEED, SPEED);
-  engine.setPlayerCar("muscle");
-  engine.matchCar(1, "sedan", "sedan");
-  engine["pinnedSeed"] = 4242;
-  engine.reset();
-  // A pacer clock that never moves cuts no frame at the wall deadline, and the floor held at 1/240 s: the same slices on any machine.
-  Object.assign(engine.pace, { now: () => 0, pin: false });
-  const cars = engine["live"]();
-  const run: Run = { onTop: 0, raised: 0, flips: 0, maxSeat: 0 };
-  const was = cars.map(() => false);
-  const paced = engine.pace.run.bind(engine.pace);
-  engine.pace.run = (simDt, scale, vmax, fine, deadline, step) =>
-    paced(simDt, scale, vmax, fine, deadline, (h) => {
-      step(h);
-      read(cars, run, was);
-    });
-  try {
-    while (engine["elapsedSim"] < UNTIL) engine.advance(FRAME, { frameDt: FRAME });
-  } finally {
-    engine.pace.run = paced;
-  }
-  return run;
-}
-
-describe("given the fleet sandbox's muscle car and sedan driven head-on at 17 m/s each into a packed nose-to-nose crush", () => {
-  let engine: CrashEngine;
-  before(async () => {
-    stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
-  });
-  after(() => {
-    engine.dispose();
-    setGround(null);
-  });
-
-  it("when a wreck's front tyres read the other wreck's top, which the rigid step takes no row from, then neither car's drawn nose is seated on it: no raise and no raise/flat flips", () => {
-    const run = headOn(engine);
-    assert.ok(run.onTop > 0, "no front tyre read the other wreck's top: the crush never packed the noses");
-    assert.equal(run.flips, 0, `drawn front raise/flat flips (${run.raised} car-slices raised, seat up to ${(run.maxSeat * 1000).toFixed(0)} mm)`);
-    assert.equal(run.raised, 0, `drawn front raised in ${run.raised} car-slices (seat up to ${(run.maxSeat * 1000).toFixed(0)} mm)`);
+describe("given a muscle car's wreck set with its front tyres on a parked sedan wreck's bonnet and its rear tyres on the road", () => {
+  it("when its front tyres read the other wreck's top, which the rigid step takes no row from, then its drawn nose is not seated on it: no raise and no raise/flat flips", () => {
+    const parked = wreckAt("sedan", "sedan", 0, 0, 0, 0, 0);
+    const pitch = Math.asin(BONNET_Y / (2 * HALF_BASE));
+    const over = wreckAt("coupe", "muscle", 0, HUB_Y + HALF_BASE * Math.sin(pitch) - HUB_Y * Math.cos(pitch), AXLE_OVER_Z + HALF_BASE * Math.cos(pitch), Math.PI, pitch);
+    const cars = [parked, over];
+    const w = makeWorld(cars, false, false, PARKED);
+    let onTop = 0;
+    let raised = 0;
+    let flips = 0;
+    let most = 0;
+    let was = false;
+    for (let frame = 0; frame < ON_TOP_FRAMES; frame++) {
+      tickWorld(w, FRAME);
+      for (let i = 0; i < FRONT_WHEELS; i++) {
+        const own = over.wheelHit[i * HIT_SIZE + C_OWNER]!;
+        if (own >= 0 && cars[own]!.deform.massActive) onTop++;
+      }
+      const seat = Math.max(over.suspension.seat[0]!, over.suspension.seat[1]!);
+      most = Math.max(most, seat);
+      const up = seat > RAISED;
+      if (up) raised++;
+      if (up !== was) flips++;
+      was = up;
+    }
+    assert.ok(onTop > 0, "no front tyre read the other wreck's top: the staging proves nothing");
+    assert.equal(flips, 0, `drawn front raise/flat flips (${raised} frames raised, seat up to ${(most * 1000).toFixed(0)} mm)`);
+    assert.equal(raised, 0, `drawn front raised in ${raised} frames (seat up to ${(most * 1000).toFixed(0)} mm)`);
   });
 });

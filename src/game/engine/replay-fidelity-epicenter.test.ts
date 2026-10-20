@@ -2,7 +2,7 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
-import { agreement, atClipStart, recordFlat, type Spawn } from "./replay-fidelity.test-util.ts";
+import { agreement, atClipStart, recordFlat, type Recording, type Spawn } from "./replay-fidelity.test-util.ts";
 
 /**
  * A clip recorded with the epicenter activation on replays to the bit: the replay runs under the knobs the clip carries (`HighlightClip.epicenter`), so it freezes
@@ -10,6 +10,20 @@ import { agreement, atClipStart, recordFlat, type Spawn } from "./replay-fidelit
  * long enough (8 s) for the wrecks to sit frozen for most of the clip.
  */
 const HEAD = Math.PI / 2;
+/** The swiped wreck's recording (s): it meets car 2 at about 7 s and the clip of that crash runs on past it. */
+const SWIPE_S = 12;
+/** Car 2 stands on car 0's line where it crosses this x (m): how the sideswipe bends that line follows the contact shape, so a dry run reads it. */
+const PARKED_X = 250;
+/** Car 2's z (m) in the dry run: out of every car's path. */
+const CLEAR_Z = 500;
+
+/** Car 0's z (m) where it first reaches plan x `x` in `rec`. */
+function lineAt(rec: Recording, x: number): number {
+  const row = rec.trace.find((state) => state[0]! >= x);
+  assert.ok(row, `the dry run's car 0 never reached x ${x}`);
+  return row[2]!;
+}
+
 const saved = epicenterValues();
 afterEach(() => loadEpicenter(saved));
 
@@ -74,19 +88,13 @@ describe("given a clip whose first keyframe finds a wreck frozen (the activation
     loadEpicenter(EPICENTER_AT_LOAD);
     EPICENTER.on = 1;
     // Cars 0 and 1 sideswipe at about 1.5 s and drive on frozen; car 0 meets the parked car 2 at about 7 s, and that clip (the one that starts latest) opens on car 0 frozen at speed.
-    const rec = recordFlat(
-      [
-        { x: 0, z: 0, yaw: HEAD, speed: 14, throttle: 1 },
-        { x: 60, z: 1.6, yaw: -HEAD, speed: 10, throttle: 1 },
-        { x: 250, z: -36.8, yaw: 0, speed: 0, throttle: 0 },
-      ],
-      12,
-      false,
-      [],
-      undefined,
-      null,
-      true,
-    );
+    const swipers: Spawn[] = [
+      { x: 0, z: 0, yaw: HEAD, speed: 14, throttle: 1 },
+      { x: 60, z: 1.6, yaw: -HEAD, speed: 10, throttle: 1 },
+    ];
+    const parked = (z: number): Spawn => ({ x: PARKED_X, z, yaw: 0, speed: 0, throttle: 0 });
+    const line = lineAt(recordFlat([...swipers, parked(CLEAR_Z)], SWIPE_S, false, [], undefined, null, true), PARKED_X);
+    const rec = recordFlat([...swipers, parked(line)], SWIPE_S, false, [], undefined, null, true);
     loadEpicenter(EPICENTER_AT_LOAD);
     const start = atClipStart(rec, 0);
     assert.ok(
