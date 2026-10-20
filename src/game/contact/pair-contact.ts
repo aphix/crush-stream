@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { REARM_QUIET_S } from "../vehicle/car-core.ts";
-import { armPairWithRows, rowsClosing } from "../vehicle/car-air.ts";
+import { armPairWithRows, rowsClosing, wreckCentre, wreckInvI } from "../vehicle/car-air.ts";
 import { MU_BODY, REST_SPEED, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { leftoverCrumple, satPushCap, hypot2, CRASH } from "../deform/physics-util.ts";
 import { satCars } from "./sat.ts";
@@ -21,6 +21,7 @@ const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _tn = new THREE.Vector3();
 const _dir = new THREE.Vector3();
+const _turnCentre = new THREE.Vector3();
 
 type PairHit = {
   impulse: number;
@@ -133,6 +134,22 @@ function stopInto(car: DeformableCar, nx: number, nz: number): void {
 }
 
 /**
+ * The drawn body rides the rigid body, so a shove also answers what the body's turn swept in, which `strikeCar` (the centre's closing) never
+ * reads: the face takes it at the deepest vertex (`faceExit`), the rigid plastic impulse that leaves that point closing at the centre's speed.
+ */
+function stopTurnInto(car: DeformableCar, nx: number, nz: number): void {
+  const centre = _turnCentre.copy(wreckCentre(car)).applyQuaternion(car.group.quaternion);
+  const rx = faceExit.offX - centre.x;
+  const rz = faceExit.offZ - centre.z;
+  const lever = rz * nx - rx * nz;
+  const sweep = car.angular.y * lever;
+  if (sweep >= 0) return;
+  const dvn = -sweep / (1 + lever * lever * wreckInvI.y);
+  const pos = car.group.position;
+  car.deform.shiftBody(car.velocity, car.angular, nx * dvn, nz * dvn, dvn * lever * wreckInvI.y, pos.x + centre.x, pos.z + centre.z, nx, nz, 0);
+}
+
+/**
  * How far (m) a slice may push a wreck out along the unit (nx, nz), out of a face: what the slice could have sunk it by (the fastest
  * footprint corner's speed into the face, the car's turn included, and the slice's other position corrections into it) and the
  * solver's push-out speed (`PUSH_SPEED`).
@@ -221,6 +238,7 @@ export function wallBounce(car: DeformableCar, face: ContactBox, nx: number, nz:
       const reach = sinkReach(car, exitX, exitZ, dt);
       if (!(sunk > 0)) return;
       shoveWreck(car, exitX, exitZ, Math.min(sunk + 0.004, car.deform.sinceHit() <= 0 ? Math.min(Math.max(pen, reach), Math.max(reach, arrival)) : reach));
+      stopTurnInto(car, exitX, exitZ);
       // `strikeCar` reads closing along the face's normal only: round an open end the shove is the only hold, so it is plastic. Through
       // the face the crush takes the speed, though this prism holds no mass (a monument's tip slice, while the slice behind it holds the car).
       if (!bodyHit.held && faceExit.atEnd) stopInto(car, exitX, exitZ);
