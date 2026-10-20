@@ -279,7 +279,7 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
         towardMiddle: (after.x - before.x) * ix + (after.z - before.z) * iz,
       };
     };
-    return { slice, prism };
+    return { slice, prism, wreck };
   };
   afterEach(leaveArena);
 
@@ -312,10 +312,35 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
     });
   }
 
+  /** The plan clearance (m) the side hit's footprint keeps from ring walls 26 and 27 behind the stack's ends: ten slices of its 8 m/s, so the stack alone meets it. */
+  const RING_CLEAR = 0.2;
+  /** How far (m) the corners of `wreck`'s plan box (the footprint a prism meets, `prop-contact.ts` `footprint`) stand outside derby box `id` in plan; negative inside. */
+  const footprintClear = (wreck: DeformableCar, id: number): number => {
+    const box = DERBY_BOXES[id]!;
+    const [sin, cos] = [Math.sin(box.yaw), Math.cos(box.yaw)];
+    const plan = wreck.cage.fields.planBox;
+    const p = wreck.group.position;
+    let clear = Infinity;
+    for (const x of [plan[0]!, plan[1]!]) {
+      for (const z of [plan[2]!, plan[3]!]) {
+        const dx = p.x + wreck.rightFlat.x * x + wreck.fwdFlat.x * z - box.x;
+        const dz = p.z + wreck.rightFlat.z * x + wreck.fwdFlat.z * z - box.z;
+        const across = Math.abs(dx * cos - dz * sin) - box.hx;
+        const along = Math.abs(dx * sin + dz * cos) - box.hz;
+        clear = Math.min(clear, across > 0 && along > 0 ? Math.hypot(across, along) : Math.max(across, along));
+      }
+    }
+    return clear;
+  };
+
+  // Staged 1.7 m in from the stack's middle line: at 1.5 m the settled wreck's footprint stood 3.7 cm off ring wall 26 (main met it by millimetres).
   it("when it drives outward at 8 m/s into the side of the tyre stack 54 with its body a metre under the top, then the stack pushes it back toward the arena's middle as ever, within its zip bound", () => {
     const prism = DERBY_BOXES[54]!;
     const reach = Math.hypot(prism.x, prism.z);
-    const hit = place(54, 0, 1.5, -1, [(8 * prism.x) / reach, 0, (8 * prism.z) / reach]).slice(0.0026);
+    const { slice, wreck } = place(54, 0, 1.7, -1, [(8 * prism.x) / reach, 0, (8 * prism.z) / reach]);
+    const ring = Math.min(footprintClear(wreck, 26), footprintClear(wreck, 27));
+    assert.ok(ring >= RING_CLEAR, `staging: the footprint stands ${ring.toFixed(3)} m off ring walls 26 and 27`);
+    const hit = slice(0.0026);
     assert.ok(hit.walls.length > 0 && hit.walls.every((i) => i === 54), `met the stack alone: ${hit.walls}`);
     assert.ok(hit.towardMiddle > 0.001, `pushed ${(hit.towardMiddle * 1000).toFixed(1)} mm back toward the middle`);
     assert.ok(hit.shove <= hit.bound, `shoved ${(hit.shove * 1000).toFixed(0)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(0)} mm`);
