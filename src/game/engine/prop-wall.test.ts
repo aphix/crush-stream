@@ -28,6 +28,12 @@ import { COARSE, FINE, parkedPair } from "./world-step-lone.test-util.ts";
 const FRAME = 1 / FRAME_HZ;
 /** Seconds the driver keeps backing out once the engine runs after a hit. */
 const RECOVER = 3;
+/**
+ * How far (m) off the near face a car must stand when its recovery ends to be out of the wall: seven times the 7 cm a slice carries a
+ * car at most, so nothing of the wall reaches it. Read off the wall rather than the road driven: a car can end its recovery cornered
+ * by the alley's cross wall at z = -12, free of this one.
+ */
+const OFF_WALL = 0.5;
 const D = Math.PI / 180;
 /** The alley wall: five 10 m panels in a row across x = −40.25 (0.22 m either side at a car's height: the 0.44 m footing; the 0.6 m cap is 3 m up) from z = −13 to 37, joined at z = −3, 7, 17 and 27; the approach is from +x. */
 const PANEL = { x: -40.25, z: 12, hx: 0.22 };
@@ -46,16 +52,18 @@ function alley() {
   return w;
 }
 
-/** How far the body reaches past the wall's far face (m), and how deep inside the slab (m), along the wall. */
-function reach(car: DeformableCar): { past: number; inside: number } {
+/** How far the body reaches past the wall's far face (m), how deep inside the slab (m), and how far off the near face its nearest point stands (m; negative in or past it), along the wall. */
+function reach(car: DeformableCar): { past: number; inside: number; off: number } {
   let past = 0;
   let inside = 0;
+  let off = Infinity;
   for (const [x, z] of bodyPoints(car)) {
     if (z < WALL_Z[0] || z > WALL_Z[1]) continue;
     past = Math.max(past, FAR - x);
+    off = Math.min(off, x - NEAR);
     if (x < NEAR && x > FAR) inside = Math.max(inside, Math.min(NEAR - x, x - FAR));
   }
-  return { past, inside };
+  return { past, inside, off };
 }
 
 describe("given a panel of the Havana alley wall (0.44 m thick) and a car with one corner 0.2 m past the panel's middle plane", () => {
@@ -110,10 +118,8 @@ function hit(w: World, cls: VehicleClassId, o: { dw: number; alpha: number; vdir
   const SECS = 2;
   const hitEndFrame = Math.round(SECS / FRAME);
   const recoverFrames = Math.round(RECOVER / FRAME);
-  // A side hit past the crash sensor cuts the fuel (`stalledS`): the car cannot back out before the engine restarts, so how far it gets from where it stood then is read over RECOVER seconds from there.
+  // A side hit past the crash sensor cuts the fuel (`stalledS`): the car cannot back out before the engine restarts, so its recovery is the RECOVER seconds from there.
   let restart = -1;
-  let driveFrom: [number, number] = [0, 0];
-  let drove = 0;
   for (let f = 0; f < (SECS + STALL_S + RECOVER) / FRAME && (restart < 0 || f < restart + recoverFrames); f++) {
     const t = f * FRAME;
     acc = Math.min(0.05, acc + FRAME);
@@ -130,13 +136,10 @@ function hit(w: World, cls: VehicleClassId, o: { dw: number; alpha: number; vdir
     car.updateSkin();
     cop?.updateSkin();
     past = Math.max(past, reach(car).past);
-    if (restart < 0 && f >= hitEndFrame && car.stalledS <= 0) {
-      restart = f;
-      driveFrom = [car.group.position.x, car.group.position.z];
-    }
-    if (restart >= 0) drove = Math.max(drove, Math.hypot(car.group.position.x - driveFrom[0], car.group.position.z - driveFrom[1]));
+    if (restart < 0 && f >= hitEndFrame && car.stalledS <= 0) restart = f;
   }
-  return { car, past, inside: reach(car).inside, alive: car.deform.drivetrainAlive, drove };
+  const end = reach(car);
+  return { car, past, inside: end.inside, off: end.off, alive: car.deform.drivetrainAlive };
 }
 
 describe("given the Havana alley wall and a car swung into it with the handbrake and boost on, in each of nine ways (at a seam between panels, and at a panel's middle)", () => {
@@ -161,7 +164,7 @@ describe("given the Havana alley wall and a car swung into it with the handbrake
           assert.ok(r.past < 0.02, `${JSON.stringify(c)}: ${r.past.toFixed(2)} m past the far face`);
           assert.ok(r.inside < 0.05, `${JSON.stringify(c)}: left ${r.inside.toFixed(2)} m inside the slab`);
           // Alone, a car that lived through the hit drives out of the wall. (A pinned car can lose its wheel hubs to the cop; that is the pair contact's, not the wall's.)
-          if (!pinned && r.alive) assert.ok(r.drove > 3, `${JSON.stringify(c)}: stuck, drove ${r.drove.toFixed(1)} m in ${RECOVER} s after the engine ran`);
+          if (!pinned && r.alive) assert.ok(r.off >= OFF_WALL, `${JSON.stringify(c)}: stuck, ${r.off.toFixed(2)} m off the wall's face ${RECOVER} s after the engine ran`);
         }
       });
     }
