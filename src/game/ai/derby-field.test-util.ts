@@ -160,9 +160,10 @@ function runFieldHeat(n: number, seed: number, playerClass?: VehicleClassId, on?
     const snaps = match.snapshots(n);
     for (const [i, c] of cars.entries()) snapshotAiCar(snaps[i]!, i, c, c.deform.drivetrainAlive);
     for (const [i, c] of cars.entries()) {
-      applyAiDrive(c, match.think(snaps[i]!, snaps, h), h);
+      const input = match.think(snaps[i]!, snaps, h);
+      applyAiDrive(c, input, h);
       const now = match.brain.tacticOf(i);
-      if (now === "swing" || now === "jturn" || now === "sideswipe") {
+      if ((now === "swing" && input.ebrake) || now === "jturn" || now === "sideswipe") {
         if (t - lastIn[now][i]! > MOVE_GAP) out[now === "swing" ? "swings" : now === "jturn" ? "jturns" : "sideswipes"]++;
         lastIn[now][i] = t;
       }
