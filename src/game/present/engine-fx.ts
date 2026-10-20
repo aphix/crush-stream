@@ -21,6 +21,24 @@ function landBit(pos: THREE.Vector3, vel: THREE.Vector3, r: number, dt: number):
 
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 
+/** Floats per instance matrix (a 4x4). */
+const MATRIX_FLOATS = 16;
+
+/** Each attribute's one reused update range: `addUpdateRange` builds a new one per call, so a running pool would allocate every frame. */
+const FRONT_RANGES = new WeakMap<THREE.BufferAttribute, { start: number; count: number }>();
+
+/** Upload only the first `floats` floats of `attr` this frame: a pool packs what it draws at the front. */
+function uploadFront(attr: THREE.BufferAttribute, floats: number): void {
+  let range = FRONT_RANGES.get(attr);
+  if (!range) FRONT_RANGES.set(attr, (range = { start: 0, count: 0 }));
+  range.count = floats;
+  if (attr.updateRanges[0] !== range) {
+    attr.clearUpdateRanges();
+    attr.updateRanges[0] = range;
+  }
+  attr.needsUpdate = true;
+}
+
 /** Instanced metal bits. Slots come from a ring; each piece owns its position, spin and size; a spent slot draws at scale 0. */
 export class DebrisSystem {
   private mesh: THREE.InstancedMesh;
@@ -106,7 +124,7 @@ export class DebrisSystem {
       this.size[i] = 0.45 + Math.random() * 0.7;
       this.place(i);
     }
-    this.mesh.instanceMatrix.needsUpdate = true;
+    uploadFront(this.mesh.instanceMatrix, this.mesh.count * MATRIX_FLOATS);
   }
 
   private place(i: number): void {
@@ -145,7 +163,7 @@ export class DebrisSystem {
       this.rot[i * 3 + 1]! += dt * 3.2;
       this.place(i);
     }
-    this.mesh.instanceMatrix.needsUpdate = true;
+    uploadFront(this.mesh.instanceMatrix, this.mesh.count * MATRIX_FLOATS);
     if (!any) this.reset();
   }
 
@@ -223,10 +241,10 @@ class DotPoints {
     this.life = new Float32Array(n);
     this.geo = new THREE.BufferGeometry();
     this.drawPos = new Float32Array(n * 3);
-    this.geo.setAttribute("position", new THREE.BufferAttribute(this.drawPos, 3));
+    this.geo.setAttribute("position", new THREE.BufferAttribute(this.drawPos, 3).setUsage(THREE.DynamicDrawUsage));
     this.tint = look.tinted ? new Float32Array(n * 3) : null;
     this.drawTint = this.tint ? new Float32Array(n * 3) : null;
-    if (this.drawTint) this.geo.setAttribute("color", new THREE.BufferAttribute(this.drawTint, 3));
+    if (this.drawTint) this.geo.setAttribute("color", new THREE.BufferAttribute(this.drawTint, 3).setUsage(THREE.DynamicDrawUsage));
     this.geo.setDrawRange(0, 0);
     const mat = new THREE.PointsMaterial({
       map: makeDotTexture(look.core, look.glow),
@@ -280,8 +298,9 @@ class DotPoints {
       live++;
     }
     this.geo.setDrawRange(0, live);
-    (this.geo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
-    if (this.drawTint) (this.geo.getAttribute("color") as THREE.BufferAttribute).needsUpdate = true;
+    if (live === 0) return;
+    uploadFront(this.geo.getAttribute("position") as THREE.BufferAttribute, live * 3);
+    if (this.drawTint) uploadFront(this.geo.getAttribute("color") as THREE.BufferAttribute, live * 3);
   }
 
   update(dt: number): void {
@@ -399,14 +418,8 @@ export class SparkSystem extends DotPoints {
     }
     this.streakGeo.setDrawRange(0, live * 2);
     if (live === 0) return;
-    const pa = this.streakGeo.attributes.position as THREE.BufferAttribute;
-    const ca = this.streakGeo.attributes.color as THREE.BufferAttribute;
-    pa.clearUpdateRanges();
-    ca.clearUpdateRanges();
-    pa.addUpdateRange(0, live * 6);
-    ca.addUpdateRange(0, live * 6);
-    pa.needsUpdate = true;
-    ca.needsUpdate = true;
+    uploadFront(this.streakGeo.attributes.position as THREE.BufferAttribute, live * 6);
+    uploadFront(this.streakGeo.attributes.color as THREE.BufferAttribute, live * 6);
   }
 
   override reset(): void {
@@ -714,27 +727,17 @@ export class TireSmokeSystem {
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, n);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
+    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
-    this.mesh.count = n;
     scene.add(this.mesh);
-    this.hideAll();
-  }
-
-  private hideAll(): void {
-    this.mesh.visible = false;
-    this.dummy.scale.setScalar(0.001);
-    this.dummy.position.set(0, 250, 0);
-    this.dummy.updateMatrix();
-    for (let i = 0; i < this.n; i++) this.mesh.setMatrixAt(i, this.dummy.matrix);
-    this.mesh.instanceMatrix.needsUpdate = true;
+    this.reset();
   }
 
   reset(): void {
     this.life.fill(0);
     this.cursor = 0;
-    this.anyAlive = false;
-    this.hideAll();
+    this.anyAlive = this.mesh.visible = false;
+    this.mesh.count = 0;
   }
 
   /** Tyre smoke: thin, low-rising, short-lived wisps; `tint` colours it (dust on dirt, turf on grass), white when omitted. */
@@ -806,22 +809,15 @@ export class TireSmokeSystem {
   update(dt: number, camera: THREE.Camera): void {
     if (!this.anyAlive) return;
     const damp = Math.exp(-0.7 * dt);
-    let any = false;
-    let wrote = false;
+    let live = 0;
     for (let i = 0; i < this.n; i++) {
       if (this.life[i]! <= 0) continue;
       this.life[i]! -= dt;
       const fade = Math.max(0, this.life[i]! / Math.max(this.maxLife[i]!, 1e-4));
       if (fade <= 0) {
         this.life[i] = 0;
-        this.dummy.position.set(0, 250, 0);
-        this.dummy.scale.setScalar(0.001);
-        this.dummy.updateMatrix();
-        this.mesh.setMatrixAt(i, this.dummy.matrix);
-        wrote = true;
         continue;
       }
-      any = true;
       this.px[i]! += this.vx[i]! * dt;
       this.py[i]! += this.vy[i]! * dt;
       this.pz[i]! += this.vz[i]! * dt;
@@ -832,16 +828,17 @@ export class TireSmokeSystem {
       this.dummy.scale.setScalar(this.size[i]! * (0.7 + (1 - fade) * this.grow));
       this.dummy.quaternion.copy(camera.quaternion);
       this.dummy.updateMatrix();
-      this.mesh.setMatrixAt(i, this.dummy.matrix);
+      // Packed in slot order, the order the ring drew them in: the alpha-blended puffs composite as before.
+      this.mesh.setMatrixAt(live, this.dummy.matrix);
       const g = (0.55 + fade * 0.4) * this.shade;
-      this.mesh.setColorAt(i, _smokeColor.setRGB(g * this.tint[i * 3]!, g * this.tint[i * 3 + 1]!, g * 0.96 * this.tint[i * 3 + 2]!));
-      wrote = true;
+      this.mesh.setColorAt(live, _smokeColor.setRGB(g * this.tint[i * 3]!, g * this.tint[i * 3 + 1]!, g * 0.96 * this.tint[i * 3 + 2]!));
+      live++;
     }
-    this.anyAlive = this.mesh.visible = any;
-    if (wrote) {
-      this.mesh.instanceMatrix.needsUpdate = true;
-      if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
-    }
+    this.mesh.count = live;
+    this.anyAlive = this.mesh.visible = live > 0;
+    if (live === 0) return;
+    uploadFront(this.mesh.instanceMatrix, live * MATRIX_FLOATS);
+    uploadFront(this.mesh.instanceColor!, live * 3);
   }
 
   dispose(): void {
