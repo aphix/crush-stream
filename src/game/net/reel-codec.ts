@@ -272,9 +272,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 142: the skin's fit rest takes each kept set as the clusters' rest does, so a kept dent moves the paint once, through its parent masses: the drawn body and contact cage
  * over a dent no longer over-read it (a 50 km/h frontal's door frames read 22 mm, not 34, so their glass stays whole), and keyframes carry each mass's skin rest. A clip
  * of 141 or before no longer reads.
+ * 143: a wreck's hull carries sill-underside samples between the axles where the lattice can bend the sill (24-25 a style), so a wreck rests on its bent sill instead of
+ * a straight span drawn 16-20 cm under it. A clip of 142 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 142;
+const REPLAY_VERSION = 143;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

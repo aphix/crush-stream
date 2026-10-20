@@ -208,7 +208,8 @@ const SHOULDER = [0.074, 0.104] as const;
 const SHOULDER_TOP = Math.PI / 3;
 /** Tuck-under from the feature line to the rocker (m, parabolic in height). */
 const TUCK = 0.03;
-const ROCKER_Y = 0.2;
+/** The rocker's height (m): the side's lowest line; under it the sill turns in to the floor. */
+export const ROCKER_Y = 0.2;
 
 /**
  * Body-side half-width at height `y` for a station of half-width `hw` and belt `yb`: the shoulder rolls in

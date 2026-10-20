@@ -437,6 +437,12 @@ forModes("given a parked car in the compactor press, and how far it crushes comp
   });
 });
 
+/**
+ * What a particle's distance to the cell may move within a frame past the squeeze's springback clamp (`SPRINGBACK`, 0.08 m, set at the
+ * clamp; the slice's rigid rows run after it): 0.17 mm since a squeezed wreck rests on its sill samples, 0.005 mm under the bar before.
+ */
+const HOLD_SLACK = 0.0005;
+
 describe("given a shape-deform-mode car at squash setting 0.32 and at 0.4, pressed to the maximum", () => {
   // The squeeze pinned the group at the world origin and clamped each particle's local offset from
   // rest, which then also carried the cell's own deep-crush travel: a 2 s hold at max face sprang
@@ -465,7 +471,7 @@ describe("given a shape-deform-mode car at squash setting 0.32 and at 0.4, press
           }
         }
       }
-      assert.ok(drop <= 0.08, `squash ${squash}: ${worst} during the hold`);
+      assert.ok(drop <= 0.08 + HOLD_SLACK, `squash ${squash}: ${worst} during the hold`);
     }
   });
 });

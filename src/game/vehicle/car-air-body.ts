@@ -4,7 +4,7 @@ import { HIT_SIZE, PQ_BODY, PQ_SIZE } from "../world/surfaces.ts";
 import { CAR_HALF, WHEEL_POS } from "./car-mesh.ts";
 import { PAN, UNDERSIDE } from "./car-suspension.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
-import { CAGE_VERTICES } from "./car-cage.ts";
+import { CAGE_VERTICES, SILL_CAPACITY } from "./car-cage.ts";
 
 export const G = 9.6;
 /** Centre of mass above the group's origin (car-local y, m); the origin is on the ground under the body's middle. */
@@ -27,8 +27,8 @@ export const BELLY: readonly (readonly [number, number, number])[] = [
   }),
   ...PAN,
 ];
-/** Room for a style's cage vertices at most (`CAGE_VERTICES`) and the belly: `loadPoints` fills it per body each slice. */
-export const POINT_CAPACITY = CAGE_VERTICES + BELLY.length;
+/** Room for a style's cage vertices at most (`CAGE_VERTICES`), a wreck's sill samples (`SILL_CAPACITY`) and the belly: `loadPoints` fills it per body each slice. */
+export const POINT_CAPACITY = CAGE_VERTICES + SILL_CAPACITY + BELLY.length;
 /** The loaded points as flat car-local x, y (class lift on), z rows: `hullPoint` reads them per slice without unpacking a tuple. */
 export const POINT_X = new Float64Array(POINT_CAPACITY);
 export const POINT_Y = new Float64Array(POINT_CAPACITY);

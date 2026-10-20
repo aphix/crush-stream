@@ -31,6 +31,8 @@ const HALF_Z = 2.4;
 export const CAGE_STEP = 0.05;
 /** The decimation's vertex target: the body and its panels (lids, glass), which keeps the cage near 300 triangles. */
 export const CAGE_VERTICES = 220;
+/** Room for a style's sill samples past the hull (`CageSource.sill`, less those the decimation kept): 24 or 25 per style today. */
+export const SILL_CAPACITY = 32;
 /** The interior's vertex target: what shows through a gone pane (the dash, the headliner, the seats), a few boxes. */
 const INTERIOR_VERTICES = 32;
 
@@ -84,6 +86,11 @@ export interface CageSource {
   readonly interiorIndex: ArrayLike<number>;
   /** Offsets into `massPos` (3 each) of the masses `fitInterior` places it by: `INTERIOR_MASSES`, in that order. */
   readonly interiorMass: Int32Array;
+  /**
+   * Body vertices (indices into `rest`) the cage carries as sill samples: the underside rows under the rocker between the axles, at
+   * each row's ends and wherever the lattice can bend the row between two samples (`sillSamples`). A wreck's hull points, on no triangle.
+   */
+  readonly sill: Int32Array;
 }
 
 /** What a fit reads of the car now: a `SkinDynamic`, less its lattice coefficients (the cage is the shape-mode skin). */
@@ -108,7 +115,7 @@ export interface CageLive {
 
 /** One fit's results: what a pristine style shares among its cars and a crushed car owns. */
 export interface CageFields {
-  /** The vertices in the body frame, x, y, z each: the rigid step's hull points. */
+  /** The vertices in the body frame, x, y, z each: the hull's (`vertexCount`, the rigid step's hull points), the sill samples (`sillCount`), then the interior's. */
   readonly pos: Float64Array;
   /** Per vertex: its height before the roof imprint's cut (the cut is laid over the nodes by `rasterise`; `pos` carries it for the hull points). */
   readonly rawY: Float64Array;
@@ -137,8 +144,14 @@ export interface CageStyle {
   readonly u0: number;
   readonly v0: number;
   readonly vertexCount: number;
+  /**
+   * The sill samples (`CageSource.sill`) follow the hull's vertices in the per-vertex tables and in `pos`: skinned as they are, on no
+   * triangle, so no field reads them. A wreck's rigid step rests on them too (`loadPoints`): a crushed sill bends between the hull's
+   * vertices at the arches, under the straight span the hull draws there.
+   */
+  readonly sillCount: number;
   readonly triCount: number;
-  /** The drawn mesh's vertex each cage vertex is. */
+  /** The drawn mesh's vertex each cage vertex is: the hull's, then the sill samples. */
   readonly source: Int32Array;
   /** Triangles, three vertex indices each. */
   readonly tris: Uint16Array;
@@ -170,7 +183,7 @@ export interface CageStyle {
   readonly panelsOn: Uint8Array;
   /** Per panel: 1 for a glass pane, 0 for a lid (`CageSource.panelGlass`). */
   readonly panelGlass: Uint8Array;
-  /** The interior's vertices follow the body's in `pos` (`vertexCount` is the body's alone: the rigid step's hull points are those), and its triangles the body's, in group `panelCount + 1`: never a lid, never cut by the roof imprint. */
+  /** The interior's vertices follow the sill samples in `pos` (`vertexCount` is the body's alone: the rigid step's hull points are those), and its triangles the body's, in group `panelCount + 1`: never a lid, never cut by the roof imprint. */
   readonly interiorCount: number;
   /** The interior's rest positions as `fitInterior` places them with the masses at rest, x, y, z each. */
   readonly interiorRest: Float32Array;
@@ -200,7 +213,7 @@ function skinCage(style: CageStyle, live: CageLive, out: CageFields): void {
   const cutZ = live.params[P_CUT_Z]!;
   const follow = live.panelsFollow !== 0;
   const panelOrigin = style.panelOrigin;
-  for (let i = 0, r = 0; i < style.vertexCount; i++, r += 3) {
+  for (let i = 0, r = 0, end = style.vertexCount + style.sillCount; i < end; i++, r += 3) {
     const rx = rest[r]!;
     const ry = rest[r + 1]!;
     const rz = rest[r + 2]!;
@@ -305,7 +318,8 @@ const _pose = new Float64Array(4);
 
 /** The interior's vertices placed into `out` by the masses `massPos` (`interiorPose`: where the drawn interior stands). Not cut by the roof imprint, never a lid. */
 function placeInterior(style: CageStyle, massPos: ArrayLike<number>, out: CageFields): void {
-  const { interiorMass, interiorRest, interiorCount, vertexCount } = style;
+  const { interiorMass, interiorRest, interiorCount } = style;
+  const vertexCount = style.vertexCount + style.sillCount;
   interiorPose(massPos[interiorMass[0]!]!, massPos[interiorMass[1]!]!, massPos[interiorMass[2]! + 1]!, massPos[interiorMass[2]! + 2]!, _pose);
   for (let i = 0, r = vertexCount * 3; i < interiorCount; i++, r += 3) {
     out.pos[r] = interiorRest[i * 3]! * _pose[0]! + _pose[1]!;
@@ -478,7 +492,7 @@ export class CarCage {
     } else {
       const live = (this.read ??= allocateLive(style));
       unpackInputs(inputs, live);
-      const own = (this.own ??= allocateFields(style.vertexCount + style.interiorCount, style.nu, style.nv, style.panelCount));
+      const own = (this.own ??= allocateFields(style.vertexCount + style.sillCount + style.interiorCount, style.nu, style.nv, style.panelCount));
       skinCage(style, live, own);
       own.panelOn.set(live.panelOn);
       rasterise(style, own, live.panelOn, live.params[P_CUT_Y]!, live.params[P_CUT_X]!, live.params[P_CUT_Z]!);
@@ -542,54 +556,51 @@ function cageFor(key: object, source: () => CageSource, step: number): CarCage {
   return new CarCage(style);
 }
 
-function buildStyle(src: CageSource, step: number): CageStyle {
-  const body = decimate(src.rest, src.index, src.group, CAGE_VERTICES);
-  const top = upFacing(src.interiorRest, src.interiorIndex);
-  const inner = decimate(top.rest, top.index, new Uint8Array(top.rest.length / 3), INTERIOR_VERTICES);
-  const { source } = body;
+/** The skin tables `CageStyle` holds per vertex, taken from `src` for the cage vertices `source` (indices into its vertices), in that order. */
+type VertexTables = Pick<CageStyle, "rest" | "skinN" | "skinXf" | "skinW" | "resJ" | "resW" | "resC" | "skinHub" | "infN" | "infCo" | "infUvw">;
+
+function vertexTables(src: CageSource, source: Int32Array): VertexTables {
   const n = source.length;
-  const ni = inner.source.length;
-  const bodyTris = body.tris.length / 3;
-  const tris = new Uint16Array(body.tris.length + inner.tris.length);
-  tris.set(body.tris);
-  for (let k = 0; k < inner.tris.length; k++) tris[body.tris.length + k] = inner.tris[k]! + n;
-  const interiorRest = new Float32Array(ni * 3);
-  for (let i = 0; i < ni; i++) for (let k = 0; k < 3; k++) interiorRest[i * 3 + k] = top.rest[inner.source[i]! * 3 + k]!;
-  const rest = new Float64Array(n * 3);
-  const skinN = new Uint8Array(n);
-  const skinXf = new Int32Array(n * SKIN_K);
-  const skinW = new Float64Array(n * SKIN_K);
-  const resJ = new Int32Array(n * RES_SLOTS);
-  const resW = new Float64Array(n * RES_SLOTS);
-  const resC = new Float64Array(n * 3);
-  const skinHub = new Int32Array(n);
-  const infN = new Uint8Array(n);
-  const infCo = new Int32Array(n * INF_K);
-  const infUvw = new Float64Array(n * INF_K * 4);
+  const t = {
+    rest: new Float64Array(n * 3),
+    skinN: new Uint8Array(n),
+    skinXf: new Int32Array(n * SKIN_K),
+    skinW: new Float64Array(n * SKIN_K),
+    resJ: new Int32Array(n * RES_SLOTS),
+    resW: new Float64Array(n * RES_SLOTS),
+    resC: new Float64Array(n * 3),
+    skinHub: new Int32Array(n),
+    infN: new Uint8Array(n),
+    infCo: new Int32Array(n * INF_K),
+    infUvw: new Float64Array(n * INF_K * 4),
+  };
   for (let i = 0; i < n; i++) {
     const v = source[i]!;
     for (let k = 0; k < 3; k++) {
-      rest[i * 3 + k] = src.rest[v * 3 + k]!;
-      resC[i * 3 + k] = src.resC[v * 3 + k]!;
+      t.rest[i * 3 + k] = src.rest[v * 3 + k]!;
+      t.resC[i * 3 + k] = src.resC[v * 3 + k]!;
     }
-    skinN[i] = src.skinN[v]!;
-    skinHub[i] = src.skinHub[v]!;
+    t.skinN[i] = src.skinN[v]!;
+    t.skinHub[i] = src.skinHub[v]!;
     for (let k = 0; k < SKIN_K; k++) {
-      skinXf[i * SKIN_K + k] = src.skinXf[v * SKIN_K + k]!;
-      skinW[i * SKIN_K + k] = src.skinW[v * SKIN_K + k]!;
+      t.skinXf[i * SKIN_K + k] = src.skinXf[v * SKIN_K + k]!;
+      t.skinW[i * SKIN_K + k] = src.skinW[v * SKIN_K + k]!;
     }
     for (let k = 0; k < RES_SLOTS; k++) {
-      resJ[i * RES_SLOTS + k] = src.resJ[v * RES_SLOTS + k]!;
-      resW[i * RES_SLOTS + k] = src.resW[v * RES_SLOTS + k]!;
+      t.resJ[i * RES_SLOTS + k] = src.resJ[v * RES_SLOTS + k]!;
+      t.resW[i * RES_SLOTS + k] = src.resW[v * RES_SLOTS + k]!;
     }
-    infN[i] = src.infN[v]!;
+    t.infN[i] = src.infN[v]!;
     for (let k = 0; k < INF_K; k++) {
-      infCo[i * INF_K + k] = src.infCo[v * INF_K + k]!;
-      for (let c = 0; c < 4; c++) infUvw[(i * INF_K + k) * 4 + c] = src.infUvw[(v * INF_K + k) * 4 + c]!;
+      t.infCo[i * INF_K + k] = src.infCo[v * INF_K + k]!;
+      for (let c = 0; c < 4; c++) t.infUvw[(i * INF_K + k) * 4 + c] = src.infUvw[(v * INF_K + k) * 4 + c]!;
     }
   }
-  const nu = 2 * Math.round(HALF_X / step) + 1;
-  const nv = 2 * Math.round(HALF_Z / step) + 1;
+  return t;
+}
+
+/** The inputs of a pristine car of `src`, laid out as `Fit.last`: the masses at rest, identity cluster maps, the hubs at rest, the cages at rest, every panel on at its origin, no roof imprint. */
+function restInputsOf(src: CageSource): Float64Array {
   const massCount = src.massRest.length / 3;
   const restInputs = new Float64Array(massCount * 3 + src.clusterCount * 9 + massCount * HUB_STRIDE + src.restCo.length + src.panelCount * 8 + 1 + 5);
   let o = 0;
@@ -619,6 +630,35 @@ function buildStyle(src: CageSource, step: number): CageStyle {
   }
   o += 1;
   restInputs[o + 2] = IMPRINT_NONE;
+  return restInputs;
+}
+
+/** `src.sill` less the samples the decimation kept: a hull vertex at the same rest position already carries that point. */
+function sillOffHull(src: CageSource, hull: Int32Array): Int32Array {
+  const at = (v: number): string => `${Math.round(src.rest[v * 3]! * 1e4)},${Math.round(src.rest[v * 3 + 1]! * 1e4)},${Math.round(src.rest[v * 3 + 2]! * 1e4)}`;
+  const kept = new Set(Array.from(hull, at));
+  const sill = src.sill.filter((v) => !kept.has(at(v)));
+  if (sill.length > SILL_CAPACITY) throw new Error(`${sill.length} sill samples, room for ${SILL_CAPACITY}`);
+  return sill;
+}
+
+function buildStyle(src: CageSource, step: number): CageStyle {
+  const body = decimate(src.rest, src.index, src.group, CAGE_VERTICES);
+  const top = upFacing(src.interiorRest, src.interiorIndex);
+  const inner = decimate(top.rest, top.index, new Uint8Array(top.rest.length / 3), INTERIOR_VERTICES);
+  const n = body.source.length;
+  const source = Int32Array.from([...body.source, ...sillOffHull(src, body.source)]);
+  const points = source.length;
+  const ni = inner.source.length;
+  const bodyTris = body.tris.length / 3;
+  const tris = new Uint16Array(body.tris.length + inner.tris.length);
+  tris.set(body.tris);
+  for (let k = 0; k < inner.tris.length; k++) tris[body.tris.length + k] = inner.tris[k]! + points;
+  const interiorRest = new Float32Array(ni * 3);
+  for (let i = 0; i < ni; i++) for (let k = 0; k < 3; k++) interiorRest[i * 3 + k] = top.rest[inner.source[i]! * 3 + k]!;
+  const tables = vertexTables(src, source);
+  const nu = 2 * Math.round(HALF_X / step) + 1;
+  const nv = 2 * Math.round(HALF_Z / step) + 1;
   const style: CageStyle = {
     step,
     nu,
@@ -626,24 +666,15 @@ function buildStyle(src: CageSource, step: number): CageStyle {
     u0: -HALF_X,
     v0: -HALF_Z,
     vertexCount: n,
+    sillCount: points - n,
     triCount: tris.length / 3,
     source,
     tris,
-    rest,
-    skinN,
-    skinXf,
-    skinW,
-    resJ,
-    resW,
-    resC,
-    skinHub,
-    infN,
-    infCo,
-    infUvw,
-    restInputs,
-    massCount,
+    ...tables,
+    restInputs: restInputsOf(src),
+    massCount: src.massRest.length / 3,
     clusterCount: src.clusterCount,
-    pristine: allocateFields(n + ni, nu, nv, src.panelCount),
+    pristine: allocateFields(points + ni, nu, nv, src.panelCount),
     triGroup: Uint8Array.from({ length: tris.length / 3 }, (_, t) => (t < bodyTris ? body.triGroup[t]! : src.panelCount + 1)),
     vertexGroup: Uint8Array.from(source, (v) => src.group[v]!),
     panelCount: src.panelCount,
@@ -654,9 +685,9 @@ function buildStyle(src: CageSource, step: number): CageStyle {
     panelGlass: src.panelGlass,
     panelOrigin: src.panelOrigin,
   };
-  style.pristine.pos.set(rest);
+  style.pristine.pos.set(tables.rest);
   style.pristine.panelOn.fill(1);
-  for (let i = 0; i < n; i++) style.pristine.rawY[i] = rest[i * 3 + 1]!;
+  for (let i = 0; i < points; i++) style.pristine.rawY[i] = tables.rest[i * 3 + 1]!;
   placeInterior(style, src.massRest, style.pristine);
   rasterise(style, style.pristine, style.panelsOn, IMPRINT_NONE, 0, 0);
   return style;

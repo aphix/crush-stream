@@ -434,14 +434,14 @@ describe("given every body style crashed into the wall at 48 km/h by the engine'
 /**
  * Every rest-only table `cageSourceOf` hands the cage (the cage mesh is decimated from them, so they fix the contact shape of every
  * hit, not only the scripted one), hashed as raw bytes in field order. Re-pinned for the sill following the cell's clusters: only the
- * sill vertices' cluster tables (skinN, skinXf, skinW) changed.
+ * sill vertices' cluster tables (skinN, skinXf, skinW) changed. Re-pinned for the sill samples a wreck rests on (`sill`, the last table).
  */
 function cageSourceDigest(car: DeformableCar): string {
   const source = cageSourceOf(car);
   const fields = [
     source.rest, Uint32Array.from(source.index), source.group, source.skinN, source.skinXf, source.skinW, source.resJ, source.resW, source.resC,
     source.skinHub, source.infN, source.infCo, source.infUvw, source.massRest, source.restCo, source.panelOrigin, source.panelGlass,
-    source.interiorRest, Uint32Array.from(source.interiorIndex), source.interiorMass, Uint32Array.of(source.panelCount, source.clusterCount),
+    source.interiorRest, Uint32Array.from(source.interiorIndex), source.interiorMass, Uint32Array.of(source.panelCount, source.clusterCount), source.sill,
   ];
   const hash = createHash("sha256");
   for (const field of fields) hash.update(new Uint8Array(field.buffer, field.byteOffset, field.byteLength));
@@ -449,12 +449,12 @@ function cageSourceDigest(car: DeformableCar): string {
 }
 
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "ed544cdbf1e9f90c2ccba40dd3155fd17784110e164a7e65c7931a4956134a0a" },
-  { id: "hatchback", digest: "72d4cefea79ab2d9c4995b8dfd61f4691028e2a08eb216ae2ba6bbc97ff68460" },
-  { id: "wagon", digest: "6386288e948e4a8541a00f8ce7ded5065573517d77d57c98af0aea216158da08" },
-  { id: "coupe", digest: "634d9c631f03b441211c18f5e4923b8ab75d4bb4cc8b42ff3a28dc1e652a90e2" },
-  { id: "pickup", digest: "141b4b0366c5f94716f10369cfdb41cd664c4eb1a54044c9cefaf4eebdf84aaa" },
-  { id: "police", digest: "3a63752ea94dc4a21b133f1ccd257ef7819dea4c442109bdb522f9dc3fd8feef" },
+  { id: "sedan", digest: "505b4c4fe9c4f34f8f3350c3530634eff8ae353dcfa168b128b9525112f4d52a" },
+  { id: "hatchback", digest: "05d9ac32b6a4a27601edd27c36fd30ff7e74808b1e6a2f68f290f8040a1a7222" },
+  { id: "wagon", digest: "2ec7bcc51ccd1d45f51587fe633611d7bb0a30cc19df2b940eacb5c3ad1ec5f7" },
+  { id: "coupe", digest: "b322568b9713bf4d89e349caee9e5d1cfc77af2640bd6420abbc6ffdcf4384eb" },
+  { id: "pickup", digest: "74c010377f9c5958cc9a88b234097fb8cf12393139f45c2657abed873e5d3c37" },
+  { id: "police", digest: "44c94fa5daa8c1c3dd5672c2bdb1a80ef92666e5c027c7698814ddf6b7de1796" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {

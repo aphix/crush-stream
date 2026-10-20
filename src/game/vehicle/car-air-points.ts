@@ -272,7 +272,7 @@ const LOADED = new WeakMap<DeformableCar, LoadedPoints>();
 
 /**
  * Loads `car`'s body points into the point table: the four hubs (their tyres meet the ground through `wheelContact`), then the cage's
- * vertices (the drawn body as it is crushed and lifted by its class: the points a hit crushes), then the belly. A torn-off or shattered
+ * vertices (the drawn body as it is crushed and lifted by its class: the points a hit crushes; a wreck's sill samples too), then the belly. A torn-off or shattered
  * panel is no part of the drawn body: its vertices (left at rest in `pos`) are no points. Returns the index of the first belly point; the
  * cage's fit is current (`refitCage`). The tables come from the car's last load (copied back) while nothing they are a function of has changed:
  * the point loop and the belly samples run only for a car whose cage was fitted, lifted or wrecked since.
@@ -291,10 +291,10 @@ export function loadPoints(car: DeformableCar): number {
     return memo.bellyFrom;
   }
   const { pos, panelOn } = car.cage.fields;
-  const { vertexCount, vertexGroup } = car.cage.style;
+  const { vertexCount, vertexGroup, sillCount } = car.cage.style;
   let reach2 = 0;
   let n = 0;
-  for (let k = 0; k < vertexCount; k++) {
+  for (let k = 0, end = vertexCount + (wreck ? sillCount : 0); k < end; k++) {
     const g = vertexGroup[k]!;
     if (g > 0 && panelOn[g - 1] === 0) continue;
     const x = pos[k * 3]!;
