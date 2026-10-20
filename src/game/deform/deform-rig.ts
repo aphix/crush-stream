@@ -55,6 +55,10 @@ const RES_K = 4;
 export const RES_SLOTS = 5;
 /** IDW softening (m²) of the parent weights, 1/(d² + RES_SOFT). */
 const RES_SOFT = 0.04;
+/** Height (m) of the wheel arch's top: skin below it is the arch's (planted on its hub) or the sill's. */
+export const ARCH_TOP = 0.55;
+/** Plan reach (m) of the arch plant: skin below `ARCH_TOP` this near a hub's rest stands at its rest offset from that hub. */
+export const ARCH_PLANT = 0.4;
 
 export interface Cage {
   spec: CageSpec;
@@ -618,6 +622,10 @@ export abstract class DeformRig {
     const cellMass = this.masses.indexOf(this.at.cell);
     const holdsCell = this.clusters.map((c) => c.idx.includes(cellMass));
     const inCell = (x: number, y: number, z: number): boolean => z >= span.min.z && z <= span.max.z && y >= span.min.y;
+    // The sill (skin below the arch top between the axles, outside the arches) is the cell's rocker and follows the cell's clusters too:
+    // on the nose's clusters, which a frontal crush turns, it swung into the standing front tyre.
+    const axleF = Math.max(...this.masses.filter((m) => m.hub).map((m) => m.rest.z));
+    const axleR = Math.min(...this.masses.filter((m) => m.hub).map((m) => m.rest.z));
     // A5 parents: the RES_K nearest non-hub masses by 1/(d² + RES_SOFT), less the (RES_K+1)th's weight so a
     // parent fades out before it is swapped (no seam where the nearest set changes). A cabin point takes
     // cabin masses only (D1), plus the cell-face share of the nearest other mass.
@@ -661,6 +669,8 @@ export abstract class DeformRig {
       const rz = this.restPos[i * 3 + 2]!;
       parents(rx, ry, rz, i);
       const cabin = inCell(rx, ry, rz);
+      if (ry < ARCH_TOP) this.skinHub[i] = this.masses.findIndex((m) => m.hub && hypot2(rx - m.rest.x, rz - m.rest.z) <= ARCH_PLANT);
+      const cellOnly = cabin || (ry < ARCH_TOP && rz < axleF && rz > axleR && this.skinHub[i]! < 0);
       const scored: { ci: number; w: number }[] = [];
       let other = -1,
         otherW = 0;
@@ -670,7 +680,7 @@ export abstract class DeformRig {
         if (d > 1.45) continue;
         if (ry > 1.02 && cm.y < 0.78) continue;
         const w = Math.exp(-d * 2.35);
-        if (cabin && !holdsCell[ci]) {
+        if (cellOnly && !holdsCell[ci]) {
           if (w > otherW) {
             other = ci;
             otherW = w;
@@ -694,9 +704,6 @@ export abstract class DeformRig {
       for (let k = 0; k < scored.length; k++) {
         this.skinXf[i * SKIN_K + k] = scored[k]!.ci * 9;
         this.skinW[i * SKIN_K + k] = scored[k]!.w;
-      }
-      if (ry < 0.55) {
-        this.skinHub[i] = this.masses.findIndex((m) => m.hub && hypot2(rx - m.rest.x, rz - m.rest.z) <= 0.4);
       }
     }
     // Cage corners follow the clusters within 1.4 m of their rest position (`solveCagesFromShape`).

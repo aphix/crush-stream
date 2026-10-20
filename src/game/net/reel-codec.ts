@@ -266,9 +266,12 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * again. A clip of 138 or before no longer reads.
  * 140: 138's rule again, only where the shove leaves round an open end (the one way `strikeCar` cannot hold); a monument's narrow tip slice a head-on car drives through no
  * longer stops it. A clip of 139 or before no longer reads.
+ * 141: a pair push back against a car's full net translation for the slice is granted, not refused by the rounding of a full budget; the sill (skin below the arch top
+ * between the axles, beyond the arch plant) follows the cell's clusters, not the nose's, so a frontal crush no longer swings the drawn rocker into the front tyre, and the
+ * cage's sill and floor change with it. A clip of 140 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 140;
+const REPLAY_VERSION = 141;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

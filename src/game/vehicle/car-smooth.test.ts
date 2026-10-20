@@ -433,7 +433,8 @@ describe("given every body style crashed into the wall at 48 km/h by the engine'
 
 /**
  * Every rest-only table `cageSourceOf` hands the cage (the cage mesh is decimated from them, so they fix the contact shape of every
- * hit, not only the scripted one), hashed as raw bytes in field order. The expected values were produced on f3bd2074 by this function.
+ * hit, not only the scripted one), hashed as raw bytes in field order. Re-pinned for the sill following the cell's clusters: only the
+ * sill vertices' cluster tables (skinN, skinXf, skinW) changed.
  */
 function cageSourceDigest(car: DeformableCar): string {
   const source = cageSourceOf(car);
@@ -448,12 +449,12 @@ function cageSourceDigest(car: DeformableCar): string {
 }
 
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "4ae75bdb39abd7c349d113090f4f008fb24761338c9b1f7aa924e6afc412c877" },
-  { id: "hatchback", digest: "bcc7956e75badcdbc98e67102be5c1745fe1f5012e85fd528fec73b66a71d1d1" },
-  { id: "wagon", digest: "f08c06be9bce985f9bda361f106402edbdb47280dd51d0a712ad2f80bb29e0bb" },
-  { id: "coupe", digest: "f00cbbb9f895cd3cc5e1b958b3465c3ab7e4f7f75fc531dc06495cb8bc1e740b" },
-  { id: "pickup", digest: "47e39536242da3c28e635cecb77f91bb814d1d2432b7ec395180e87d60890b73" },
-  { id: "police", digest: "2fd08944adac0b0686a35a6a4c8c19848d3415e2932a41e1dcbbdc7e3d925057" },
+  { id: "sedan", digest: "ed544cdbf1e9f90c2ccba40dd3155fd17784110e164a7e65c7931a4956134a0a" },
+  { id: "hatchback", digest: "72d4cefea79ab2d9c4995b8dfd61f4691028e2a08eb216ae2ba6bbc97ff68460" },
+  { id: "wagon", digest: "6386288e948e4a8541a00f8ce7ded5065573517d77d57c98af0aea216158da08" },
+  { id: "coupe", digest: "634d9c631f03b441211c18f5e4923b8ab75d4bb4cc8b42ff3a28dc1e652a90e2" },
+  { id: "pickup", digest: "141b4b0366c5f94716f10369cfdb41cd664c4eb1a54044c9cefaf4eebdf84aaa" },
+  { id: "police", digest: "3a63752ea94dc4a21b133f1ccd257ef7819dea4c442109bdb522f9dc3fd8feef" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {

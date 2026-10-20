@@ -5,14 +5,15 @@ import { EPICENTER } from "../deform/epicenter.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { drawnTriangles } from "../vehicle/drawn-body.test-util.ts";
-import { tyreClearance } from "../vehicle/tyre-clearance.test-util.ts";
+import { sillInTyre, tyreClearance } from "../vehicle/tyre-clearance.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
- * The owner's five-car fleet crash (the pickup is the fifth car): its drawn front tyres stay under its drawn hood while the cars hit and
- * settle. A pickup's hood is crushed down onto its tyres by the car that hits it, whose wheels the sim leaves where they stand.
+ * The owner's five-car fleet crash (the pickup is the fifth car): its drawn front tyres stay under its drawn hood, and its drawn sill out of
+ * them, while the cars hit and settle. A pickup's hood is crushed down onto its tyres by the car that hits it, whose wheels the sim leaves
+ * where they stand.
  */
 const FRAME = 1 / FRAME_HZ;
 const FLEET = 5;
@@ -31,6 +32,9 @@ const REALISM = 0.25;
 
 describe("given the real engine running the owner's five-car fleet crash with the epicentre off", () => {
   let engine: CrashEngine;
+  /** Over the window, every frame: the least clearance of a front tyre under the drawn hood, and the deepest the drawn sill stands in one. */
+  let least = { clearance: Infinity, sim: 0 };
+  let sill = { depth: 0, sim: 0 };
 
   before(async () => {
     stubBrowser();
@@ -52,14 +56,6 @@ describe("given the real engine running the owner's five-car fleet crash with th
       engine["onThrow"](args[0].car);
     };
     Object.assign(engine.pace, { now: () => 0, pin: false });
-  });
-  after(() => {
-    engine.dispose();
-    setGround(null);
-  });
-
-  it(`when the cars hit and settle for ${TO_S} s, then the pickup's front tyres keep 5 mm under its drawn hood in every frame`, () => {
-    let least = { clearance: Infinity, sim: 0 };
     while (engine["elapsedSim"] < TO_S) {
       engine.advance(FRAME, { frameDt: FRAME });
       if (engine["elapsedSim"] < FROM_S) continue;
@@ -69,8 +65,21 @@ describe("given the real engine running the owner's five-car fleet crash with th
         if (car["looseWheels"][wheel]!.loose) continue;
         const clearance = tyreClearance(car, wheel, tris);
         if (clearance < least.clearance) least = { clearance, sim: engine["elapsedSim"] };
+        const depth = sillInTyre(car, wheel);
+        if (depth > sill.depth) sill = { depth, sim: engine["elapsedSim"] };
       }
     }
+  });
+  after(() => {
+    engine.dispose();
+    setGround(null);
+  });
+
+  it(`when the cars hit and settle for ${TO_S} s, then the pickup's front tyres keep 5 mm under its drawn hood in every frame`, () => {
     assert.ok(least.clearance >= CLEARANCE_M, `${(least.clearance * 1000).toFixed(1)} mm at sim ${least.sim.toFixed(2)} s`);
+  });
+
+  it(`when the cars hit and settle for ${TO_S} s, then the pickup's drawn sill (the rocker and the arch's rear lip) never stands inside a front tyre`, () => {
+    assert.equal(sill.depth, 0, `the sill stood ${(sill.depth * 1000).toFixed(1)} mm inside a front tyre at sim ${sill.sim.toFixed(2)} s`);
   });
 });

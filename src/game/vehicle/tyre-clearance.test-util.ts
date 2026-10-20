@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { makeWheelGeometry } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
+import { ARCH_PLANT, ARCH_TOP } from "../deform/deform-rig.ts";
 
 /**
  * How far a drawn tyre stands under the drawn skin over it (docs/UNIFIED_CONTACT.md's drawn body, not the cage): for the upper half of
@@ -61,4 +62,39 @@ export function tyreClearance(car: DeformableCar, wheel: number, tris: Float32Ar
     least = Math.min(least, top - _v.y);
   }
   return least;
+}
+
+/** The tyre's half width across its axle and its radius, in the wheel mesh's own frame. */
+const TYRE_HALF_WIDTH = Math.max(...Array.from({ length: TYRE_POINTS.count }, (_, i) => Math.abs(TYRE_POINTS.getX(i))));
+const TYRE_RADIUS = Math.max(...Array.from({ length: TYRE_POINTS.count }, (_, i) => Math.hypot(TYRE_POINTS.getY(i), TYRE_POINTS.getZ(i))));
+const _s = new THREE.Vector3();
+
+/**
+ * How deep (m) the drawn sill of `car` stands inside the tyre of wheel `wheel`: the body skin below `ARCH_TOP`, between the axles and beyond
+ * the arch plant (`ARCH_PLANT` of a hub), the rocker and the arch's rear lip. 0 when none of it is inside.
+ */
+export function sillInTyre(car: DeformableCar, wheel: number): number {
+  const d = car.deform;
+  const rest = d["restPos"];
+  const hubs = d.masses.filter((m) => m.hub);
+  const front = Math.max(...hubs.map((m) => m.rest.z));
+  const back = Math.min(...hubs.map((m) => m.rest.z));
+  const w = car.wheels[wheel]!;
+  w.updateMatrixWorld(true);
+  car.body.updateMatrixWorld(true);
+  _m.copy(w.matrixWorld).invert().multiply(car.body.matrixWorld);
+  const scale = w.getWorldScale(_s).x;
+  const pos = car.body.geometry.getAttribute("position");
+  let deepest = 0;
+  for (let i = 0; i < pos.count; i++) {
+    const rx = rest[i * 3]!;
+    const rz = rest[i * 3 + 2]!;
+    if (rest[i * 3 + 1]! >= ARCH_TOP || rz >= front || rz <= back || hubs.some((m) => Math.hypot(rx - m.rest.x, rz - m.rest.z) <= ARCH_PLANT)) continue;
+    _v.fromBufferAttribute(pos, i).applyMatrix4(_m);
+    const across = Math.abs(_v.x);
+    const out = Math.hypot(_v.y, _v.z);
+    if (across >= TYRE_HALF_WIDTH || out >= TYRE_RADIUS) continue;
+    deepest = Math.max(deepest, Math.min(TYRE_RADIUS - out, TYRE_HALF_WIDTH - across) * scale);
+  }
+  return deepest;
 }
