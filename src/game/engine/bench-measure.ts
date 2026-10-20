@@ -11,7 +11,7 @@ import { describePost, FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import type { DriverSeat } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { BenchPlan } from "./engine-bench-plan.ts";
-import { browserName, perSecond, stat, type Battery, type BenchResult, type BenchSettings, type Block, type LongTasks, type PhaseCard, type PageState, type PhaseSeconds, type RagdollCost, type ReplayResult } from "./engine-bench-report.ts";
+import { browserName, perSecond, SKY_ARM, stat, type Battery, type BenchResult, type BenchSettings, type Block, type LongTasks, type PhaseCard, type PageState, type PhaseSeconds, type RagdollCost, type ReplayResult, type SkyPin } from "./engine-bench-report.ts";
 import { REPLAY_TIER_S, replayTier, type ReplayFrames } from "./engine-bench-replay.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
@@ -466,14 +466,8 @@ function depthOf(renderer: THREE.WebGLRenderer, camera: THREE.PerspectiveCamera)
   };
 }
 
-/**
- * The Sky setting a bench runs under, put in force explicitly: `full` on a race (the strip the sweep loaded stays in, the same on every FX tier), `off` on the Lab (it has no sky). Never `auto`: an auto sky
- * follows the FX tier, which the engine's own policy (`AutoFx`) and the A/Bs change, so the sky's cost would move with the arm under test. The player's own setting is put back when the run ends.
- */
-export type SkyPin = Extract<SkyMode, "full" | "off">;
-
-/** The sky pin of `plan`'s bench. */
-export const skyPinOf = (plan: BenchPlan): SkyPin => (plan.lab ? "off" : "full");
+/** The sky pin of `plan`'s bench (`SkyPin`); the player's own setting is put back when the run ends. */
+export const skyPinOf = (plan: BenchPlan): SkyPin => (plan.lab ? SKY_ARM.off : SKY_ARM.procedural);
 
 /** The Sky setting the HUD holds (`auto` when it holds none the game knows). */
 export function skyModeOf(hud: Record<string, unknown>): SkyMode {
@@ -481,7 +475,7 @@ export function skyModeOf(hud: Record<string, unknown>): SkyMode {
 }
 
 /** What was switched on, read off the renderer, the sun and the HUD's own state. */
-export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top: string): Omit<BenchSettings, "skyPlayer"> {
+export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top: string): Omit<BenchSettings, "skyPlayer" | "skyPin"> {
   const { renderer, scene, sun, camera } = parts;
   const size = renderer.domElement;
   let casters = 0;
@@ -508,7 +502,7 @@ export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top:
     night: hud[SETTING_KEY.night] === true,
     wet: hud[SETTING_KEY.wet] === true,
     sky,
-    skyDetail: skyDetailFor(sky, top as FxTier),
+    skyDetail: skyDetailFor(sky, top as FxTier, typeof hud["proceduralSky"] === "number"),
     realism: Number(hud[SETTING_KEY.realism]),
     squash: Number(hud["squash"]),
     buckle: Number(hud["buckle"]),

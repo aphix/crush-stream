@@ -2,9 +2,9 @@ import type { FxTier } from "../present/engine-post.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
 import type { KnobId } from "../hud/knobs.ts";
 import { BENCH, QUICK, type BenchParts, type Tap } from "./bench-measure.ts";
-import { frame, pinSky, type Beat, type FrameEngine } from "./bench-frame.ts";
+import { applySkyPin, frame, pinSky, type Beat, type FrameEngine } from "./bench-frame.ts";
 import { FRAME } from "./bench-hitch.ts";
-import { DETAIL_ARMS } from "./engine-bench-report.ts";
+import { DETAIL_ARMS, type SkyPin } from "./engine-bench-report.ts";
 import type { BenchPlan } from "./engine-bench-plan.ts";
 
 /** What the sweep puts in force: every setting the bench's window and A/Bs will later switch. */
@@ -43,7 +43,7 @@ const HOLD: Record<SweepHow, { seconds: number; minFrames: number; capS: number 
 /**
  * The settings a page visits before it measures, so the code each of them runs is compiled and optimised, and each one's first draw on this page's scene
  * (its programs linked, its targets allocated) is behind it, when the window and the A/Bs reach them. Every FX tier (Ultra when the page loaded it), then,
- * with `full` (a page's first step: the JIT stays warm across the steps of one page), the pacer's pins, every detail rung, and the Sky setting `off` then `full` (the strip is loaded and stays in, as the bench pins it);
+ * with `full` (a page's first step: the JIT stays warm across the steps of one page), the pacer's pins, every detail rung, and the sky `off`, the painted strip, then the procedural sky (the strip is loaded and stays in; the race's pin is drawn last);
  * on a race, `epi.on` on and off (the freeze and thaw paths run, on both arms' pages alike: neither starts colder). The caller puts the page back as a
  * fresh step (`enterBenchScene`, `resetAdaptiveQuality`) afterwards, so a wreck frozen here is not in the arm it warmed.
  */
@@ -52,7 +52,7 @@ function sweepStops(engine: SweepEngine, parts: BenchParts, plan: BenchPlan, tie
   if (how === "full") {
     stops.push({ name: "pacer 1/80 s", set: () => void (engine.pace.pin = true) }, { name: "pacer 1/240 s", set: () => void (engine.pace.pin = false) });
     for (const a of DETAIL_ARMS) stops.push({ name: `detail ${a.key}`, set: () => setDetailArm(parts, a.level) });
-    if (!plan.lab) stops.push({ name: "sky off", set: () => pinSky(engine, parts, t, beat, "off") }, { name: "sky full", set: () => pinSky(engine, parts, t, beat, "full") });
+    if (!plan.lab) stops.push({ name: "sky off", set: () => pinSky(engine, parts, t, beat, "off") }, { name: "sky full", set: () => pinSky(engine, parts, t, beat, "full") }, { name: "sky procedural", set: () => pinSky(engine, parts, t, beat, "procedural") });
   }
   if (plan.race) {
     const on = { name: "epicenter on", set: () => engine.setKnob("epi.on", 1) };
@@ -85,9 +85,9 @@ export async function sweep(engine: SweepEngine, parts: BenchParts, plan: BenchP
   beat.switching = false;
 }
 
-/** The page after the sweep, as the step starts from it: the pacer unpinned, the bench's Sky pin in force (`skyPinOf`; the player's own setting comes back when the run ends), the adaptive quality as the page booted (the caller then enters the scene afresh). */
-export function endSweep(engine: SweepEngine, sky: SkyMode): void {
+/** The page after the sweep, as the step starts from it: the pacer unpinned, the bench's sky pin in force (`skyPinOf`; the player's own setting comes back when the run ends), the adaptive quality as the page booted (the caller then enters the scene afresh). */
+export function endSweep(engine: SweepEngine, sky: SkyPin): void {
   engine.pace.pin = null;
-  engine.setSky(sky);
+  applySkyPin(engine, sky);
   engine.resetAdaptiveQuality();
 }

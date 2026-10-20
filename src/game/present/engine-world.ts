@@ -4,7 +4,7 @@ import { applyMarkMap } from "./engine-marks.ts";
 import { groundMaterial, groundMesh } from "../scenes/ground-stack.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
 import { LAMP_POOL } from "./constants.ts";
-import { rowElevation, SKY_LOOKS, SkyDome, skyDetailFor, type SkyMode } from "./sky-dome.ts";
+import { rowElevation, SKY_LOOKS, SkyDome, skyDetailFor, type SkyDetail, type SkyMode } from "./sky-dome.ts";
 import { SANDBOX_SKY } from "./sky-procedural.ts";
 import type { FxTier } from "./engine-post.ts";
 import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
@@ -311,6 +311,8 @@ export class WorldStage {
   private skyTier: FxTier = "minimal";
   /** The procedural sky's cloud cover (`setProceduralSky`), null for the time of day's picture. */
   private procedural: number | null = null;
+  /** What `skyDetailFor` gave last: the sandbox's background follows whether its procedural sky is drawn. */
+  private skyDetail: SkyDetail = "off";
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -432,7 +434,11 @@ export class WorldStage {
   }
 
   private syncSky(): void {
-    this.sky.setDetail(skyDetailFor(this.skyMode, this.skyTier, this.procedural !== null));
+    const detail = skyDetailFor(this.skyMode, this.skyTier, this.procedural !== null);
+    if (detail === this.skyDetail) return;
+    this.skyDetail = detail;
+    this.sky.setDetail(detail);
+    this.apply();
   }
 
   setWet(on: boolean): void {
@@ -467,7 +473,7 @@ export class WorldStage {
     const day = this.lit;
     // A race's night is its night sky's horizon, not the day's haze darkened; the sandbox's procedural sky is its own horizon.
     if (this.time === TIME_OF_DAY.night) sky.set(SKY_LOOKS[TIME_OF_DAY.night].horizon);
-    else if (this.time === null && this.procedural !== null && this.skyMode !== "off") sky.set(SANDBOX_SKY[this.night ? "night" : "day"].horizon);
+    else if (this.time === null && this.skyDetail === "procedural") sky.set(SANDBOX_SKY[this.night ? "night" : "day"].horizon);
     else mixHex(sky, day.sky, NIGHT.sky, k);
     this.scene.fog?.color.copy(sky);
     this.sky.setHaze(sky);

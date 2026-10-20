@@ -145,8 +145,8 @@ const BIT_SHOWN = 1;
 const BIT_FOCUSED = 2;
 const BIT_FULLSCREEN = 4;
 const BIT_AWAKE = 8;
-/** The digit of the card's sky series (`SKY_DRAWN`) that each Sky setting the bench pins draws: the full strip, or nothing. */
-const SKY_PIN_DIGIT = { full: "3", off: "0" };
+/** The digit of the card's sky series (`SKY_DRAWN`) that each sky the bench pins draws: the procedural sky, the full strip, or nothing. A card from before `settings.skyPin` pinned its `settings.sky`. */
+const SKY_PIN_DIGIT = { procedural: "5", full: "3", off: "0" };
 
 /** A window second at or under this many frames was throttled (a browser holds a page it does not draw to about one frame a second): a phone's or a software GL's steady 10 fps is not. */
 const THROTTLED_FPS = 2;
@@ -168,7 +168,7 @@ function windowReading(result) {
   const notes = [];
   if (series) {
     const counts = { hidden: 0, unfocused: 0, "not fullscreen": 0, "screen not held": 0, "sky not as pinned": 0 };
-    const pinned = SKY_PIN_DIGIT[result.settings?.sky];
+    const pinned = SKY_PIN_DIGIT[result.settings?.skyPin ?? result.settings?.sky];
     let seconds = 0;
     for (let i = 0; i < series.flags.length; i++) {
       if (series.phases[i] !== WINDOW_INDEX) continue;

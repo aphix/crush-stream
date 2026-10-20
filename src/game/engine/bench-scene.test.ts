@@ -10,7 +10,7 @@ import { benchPlanEngine, disposeBenchEngine, FRAME_S, runFrames, simCounters, s
 import { SKY_DRAWN } from "../present/sky-dome.ts";
 import { newBeat } from "./bench-frame.ts";
 import { ArmBadge } from "./bench-badge.ts";
-import { tap, watchWork } from "./bench-measure.ts";
+import { skyPinOf, tap, watchWork } from "./bench-measure.ts";
 import { PHASE_SWEEP } from "./engine-bench-report.ts";
 import { endSweep, sweep } from "./bench-sweep.ts";
 import type { CrashEngine } from "./engine.ts";
@@ -121,10 +121,10 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     try {
       // A page without `ultra=1` (its FX tiers are the three; Ultra's look is fetched by the page before the bench, not by the sweep).
       await sweep(engine, parts, plan, ["minimal", "low", "high"], "full", t, beat, { set() {} });
-      assert.equal(parts.sky.drawn, SKY_DRAWN.full, "the sweep ends on the sky the bench pins: the strip drawn");
-      assert.ok(parts.sky.textureBytes > 0, "the strip is held");
+      assert.equal(parts.sky.drawn, SKY_DRAWN.procedural, "the sweep ends on the sky a race pins: the procedural sky drawn");
+      assert.equal(parts.sky.textureBytes, 0, "the strip it loaded is let go");
       assert.ok(beat.hitches.frames > 3 * 180, `the sweep ran its frames (${beat.hitches.frames})`);
-      endSweep(engine, "full");
+      endSweep(engine, skyPinOf(plan));
       step("city after the sweep", "?bench=city", true);
       assert.equal(digests["city after the sweep"], digests["city first"]);
       // A load the step began is still in flight (its decode is a promise chain): let it land on the stand-in.

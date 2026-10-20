@@ -17,8 +17,14 @@ export const DETAIL_ARMS: readonly { key: string; level: number | null }[] = [{ 
 /** The pacer A/B's arms, the keys of `BenchResult.abPace`: the 1/240 s slice pinned, the 1/80 s slice pinned. */
 export const PACE_ARM = { fine: "fine", coarse: "coarse" } as const;
 
-/** The sky A/B's arms, the keys of `BenchResult.abSky`: the Sky setting `full` (the textured strip at the tier held), and `off`. */
-export const SKY_ARM = { full: "full", off: "off" } as const;
+/** The sky A/B's arms, the keys of `BenchResult.abSky`: the procedural sky (the default), the painted strip (`full`) and no sky, each a `SkyPin`. */
+export const SKY_ARM = { procedural: "procedural", full: "full", off: "off" } as const;
+
+/**
+ * The sky a bench runs under, put in force explicitly: on a race the default procedural sky at the default cover, on the Lab `off` (it has no sky); `full` is the painted strip, for the sky A/B.
+ * Each holds the Sky setting `full` or `off`, never `auto`: an auto sky follows the FX tier, which `AutoFx` and the A/Bs change, so the sky's cost would move with the arm under test.
+ */
+export type SkyPin = (typeof SKY_ARM)[keyof typeof SKY_ARM];
 
 export interface Stat {
   mean: number;
@@ -83,8 +89,10 @@ export interface BenchSettings {
   deformMode: string;
   /** The epicenter activation was on (`epi.on` = 1) for the run: the loop runs every map twice, off then on. */
   epicenter: boolean;
-  /** The player's own Sky setting, put back when the run ended: during it `sky` is the bench's pin (`skyPinOf`), never `auto`. */
+  /** The player's own Sky setting, put back when the run ended: during it `sky` is the one the bench's pin holds, never `auto`. */
   skyPlayer: SkyMode;
+  /** The sky the bench pinned (`skyPinOf`): the procedural sky on a race, none on the Lab. Absent on a card from before the procedural default: it pinned `sky`. */
+  skyPin?: SkyPin;
   depth: { bits: number; subpixelBits: number; contextDepth: boolean; fragmentHighFloat: { precision: number; rangeMin: number; rangeMax: number } | null; near: number; far: number; logarithmicDepthBuffer: boolean; probe: DepthProbe };
 }
 
@@ -315,8 +323,8 @@ export interface BenchResult {
   abFx: { minimal: Block; low: Block; high: Block; ultra?: Block } | null;
   /** The distance detail pinned: no cuts, then the rungs for 75, 50 and 30 m (the governor off, the FX tier held). */
   abDetail: Record<string, Block> | null;
-  /** The Sky setting pinned at the top tier the window ran: the full textured strip, then no sky (null: the Lab, which has no sky). */
-  abSky: { full: Block; off: Block } | null;
+  /** The sky pinned at the top tier the window ran: the procedural sky (absent on a card from before it was the default), the painted strip, then no sky (null: the Lab, which has no sky). */
+  abSky: { procedural?: Block; full: Block; off: Block } | null;
   /** The cosmetic Rapier world (the thrown drivers' and knocked props'): `world.step()` over the sampled window, and the world's size. */
   ragdoll: RagdollCost;
   /** The run's own crash replayed as a highlight at each FX tier (null: no clip, `replayWhy` says why). */
@@ -399,6 +407,15 @@ const row = (label: string, s: Stat): string => `${label.padEnd(10)}p50 ${f1(s.p
 const waited = (gpu: Stat, frame: Stat): boolean => gpu.p95 >= 0.85 * frame.p50 && gpu.p95 <= 1.15 * frame.p50;
 const gpuOf = (b: Block): string => (b.gpuMs === null ? "gpu n/a" : `gpu ${f1(b.gpuMs)}`);
 const arm = (label: string, b: Block): string => `${label} ${f1(b.fps)} fps, sim ${Math.round(b.simSpeedPct)} %, ${Math.round(b.simMsPerSimS)} ms/sim-s ±${Math.round(b.simSpreadPct)} %${b.unsettled ? ` (${b.unsettled} switches never settled!)` : ""}, cpu ${f1(b.cpuMs)}, draw ${f1(b.drawMs)}, ${gpuOf(b)}, ${Math.round(b.calls)} calls`;
+/** Each sky arm on the card, the first under the title; a card from before the procedural default has no procedural arm. */
+function skyArmLines(ab: NonNullable<BenchResult["abSky"]>): string[] {
+  const lines: string[] = [];
+  for (const key of Object.values(SKY_ARM)) {
+    const block = ab[key];
+    if (block) lines.push(`${lines.length ? "                " : "A/B sky pinned: "}${arm(key, block)}`);
+  }
+  return lines;
+}
 const pair = (p: Pair): string => `${f1(p.mean)}/${f1(p.p95)}`;
 const ragdollLine = (g: RagdollCost): string => `ragdoll world: ${g.steps} steps, step ${g.stepMs.mean.toFixed(2)} ms mean / ${g.stepMs.p95.toFixed(2)} p95, ${g.colliders} colliders, ${g.bodies} bodies`;
 /** The replay's lines: the clip and a row per FX tier (mean/p95 ms), or why there is none. */
@@ -511,7 +528,7 @@ export function describeBench(r: BenchResult): string[] {
     `draw ${r.calls} calls  ${Math.round(r.triangles / 1000)}k tris   cops: ${r.cops ? `${r.cops.stakeouts} stakeouts, ${r.cops.pursuits} pursuits, pack of ${r.cops.maxPack}` : "none"}`,
     `fx tier: ${tiers}${s.fxAuto ? " (auto)" : ""}   post chain at the top tier: ${s.post}`,
     `detail: only the body drawn beyond ${Object.entries(r.detailPct).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} for ${Math.round(v)} %`).join(", ")} of the window`,
-    `shadows ${s.shadows.enabled ? `${s.shadows.type} ${s.shadows.map}, ${s.shadows.casters} casters` : "off"}   pixel ratio ${s.pixelRatio} of device ${s.deviceRatio}, canvas ${s.canvas}, ${s.antialias ? "MSAA" : "no MSAA"}   fx density ${f1(s.fxDensity)}, cel ${s.celLook === null ? "auto" : f1(s.celLook)}, dots ${strengthOf(s.halftone)}, hatch ${strengthOf(s.hatching)}, rim ${strengthOf(s.rimLight)}   night ${s.night ? "on" : "off"}, wet ${s.wet ? "on" : "off"}, realism ${f1(s.realism)}, squash ${f1(s.squash)}, buckle ${f1(s.buckle)}, deform ${s.deformMode}, sky ${s.sky} pinned by the bench (your setting ${s.skyPlayer}, put back after; ${s.skyDetail} on every tier), drawn ${windowSky(r.pageSeconds)}`,
+    `shadows ${s.shadows.enabled ? `${s.shadows.type} ${s.shadows.map}, ${s.shadows.casters} casters` : "off"}   pixel ratio ${s.pixelRatio} of device ${s.deviceRatio}, canvas ${s.canvas}, ${s.antialias ? "MSAA" : "no MSAA"}   fx density ${f1(s.fxDensity)}, cel ${s.celLook === null ? "auto" : f1(s.celLook)}, dots ${strengthOf(s.halftone)}, hatch ${strengthOf(s.hatching)}, rim ${strengthOf(s.rimLight)}   night ${s.night ? "on" : "off"}, wet ${s.wet ? "on" : "off"}, realism ${f1(s.realism)}, squash ${f1(s.squash)}, buckle ${f1(s.buckle)}, deform ${s.deformMode}, sky ${s.skyPin ?? s.sky} pinned by the bench (your setting ${s.skyPlayer}, put back after; ${s.skyDetail} on every tier), drawn ${windowSky(r.pageSeconds)}`,
     `depth: ${s.depth.bits} bits (drawing buffer${s.depth.contextDepth ? "" : ", none requested"}), subpixel ${s.depth.subpixelBits} bits, fragment highp ${s.depth.fragmentHighFloat ? `${s.depth.fragmentHighFloat.precision} bits, range 2^${s.depth.fragmentHighFloat.rangeMin}..2^${s.depth.fragmentHighFloat.rangeMax}` : "not supported"}, camera near ${s.depth.near} far ${s.depth.far}, log depth ${s.depth.logarithmicDepthBuffer ? "on" : "off"}, ${describeDepthProbe(s.depth.probe)}`,
     ...(abPace && abFx && abDetail
       ? [
@@ -522,7 +539,7 @@ export function describeBench(r: BenchResult): string[] {
       `               ${arm("high", abFx.high)}`,
       ...(abFx.ultra ? [`               ${arm(FX_TIER_ULTRA, abFx.ultra)}`] : []),
       ...DETAIL_ARMS.map((a, i) => `${i ? "                   " : "A/B detail pinned: "}${arm(a.key === "off" ? "no cuts" : `body beyond ${a.key}`, abDetail[a.key]!)}`),
-      ...(r.abSky ? [`A/B sky pinned: ${arm("full", r.abSky.full)}`, `                ${arm("off", r.abSky.off)}`] : []),
+      ...(r.abSky ? skyArmLines(r.abSky) : []),
         ]
       : [`quick bench: the window alone (no A/B blocks, no replay: the extended bench has them)`]),
     ...(r.run.extended ? replayLines(r.replay, r.replayWhy) : []),

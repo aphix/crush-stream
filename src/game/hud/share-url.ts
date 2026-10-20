@@ -56,6 +56,9 @@ const lookText = <T>(def: T, parse: (raw: string) => T | null, text: (pick: T) =
 });
 /** `null` (the default) is "not set": the setting is not pinned by the URL. */
 const orNull = <T>(f: Field<T>): Field<T | null> => ({ def: null, parse: (raw) => f.parse(raw), fmt: (v) => f.fmt(v as T) });
+const PICTURE = "picture";
+/** The procedural sky's cover, defaulting to `f`'s; null, the time of day's picture, is written `picture`. */
+const coverOrPicture = (f: Field<number>): Field<number | null> => ({ def: f.def, parse: (raw) => (raw === PICTURE ? null : f.parse(raw)), fmt: (v) => (v === null ? PICTURE : f.fmt(v)) });
 /**
  * A private room code as the Room field takes it (`[A-Z0-9]`, ≤ 12, uppercased here as the field does); "" is no room. A
  * public room (`pub-…`) is never accepted, so a crafted link cannot send a visitor into one, or into polling a dead code (docs/MULTIPLAYER.md).
@@ -106,7 +109,7 @@ const BASE_FIELDS = {
   fxd: num(R.fxDensity.min, R.fxDensity.max, D.fxDensity),
   // null = Auto (the scene-switch pulse alone); a number holds the cel look on at that strength.
   cel: orNull(num(R.cel.min, R.cel.max, 0)),
-  psky: orNull(num(R.psky.min, R.psky.max, 0)),
+  psky: coverOrPicture(num(R.psky.min, R.psky.max, D.proceduralSky ?? 0)),
   dots: orNull(num(R.dots.min, R.dots.max, 0)),
   hatch: orNull(num(R.hatch.min, R.hatch.max, 0)),
   rim: orNull(num(R.rim.min, R.rim.max, 0)),
@@ -170,7 +173,7 @@ export function encodeShare(s: ShareState): string {
   for (const k of KEYS) {
     const f = FIELDS[k] as Field<unknown>;
     const v = s[k];
-    if (v === null || (f.def !== null && f.fmt(v) === f.fmt(f.def))) continue;
+    if (v === f.def || (v !== null && f.def !== null && f.fmt(v) === f.fmt(f.def))) continue;
     out.push(`${k}=${f.fmt(v)}`);
   }
   return out.join("&");
@@ -182,7 +185,8 @@ export function decodeShare(fragment: string): ShareState {
   const out: Record<string, unknown> = {};
   for (const k of KEYS) {
     const raw = p.get(k);
-    out[k] = (raw === null ? undefined : FIELDS[k].parse(raw)) ?? FIELDS[k].def;
+    const parsed = raw === null ? undefined : FIELDS[k].parse(raw);
+    out[k] = parsed === undefined ? FIELDS[k].def : parsed;
   }
   const s = out as ShareState;
   // A link that names a room joins the host's scene: a single-player scene beside it is dropped.

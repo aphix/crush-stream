@@ -30,10 +30,10 @@ export function quickPlanS(ultra: boolean): number {
 export function extendedPlanS(ultra: boolean): number {
   const tiers = tiersOf(ultra);
   const arms = (count: number, rounds: number): number => count * rounds * (BENCH.blockS + SETTLE_TYPICAL_S);
-  const abs = arms(2, BENCH.paceCycles) + arms(3, BENCH.detailCycles) + arms(tiers, BENCH.fxCycles) + arms(2, BENCH.skyCycles);
+  const abs = arms(2, BENCH.paceCycles) + arms(3, BENCH.detailCycles) + arms(tiers, BENCH.fxCycles) + arms(3, BENCH.skyCycles);
   const replay = REPLAY_FILING_S + tiers * (REPLAY_SETTLE_S + REPLAY_TIER_S);
   const page = QUICK.loadS + QUICK.countdownS + EXTENDED_WARM_S + SETTLE_TYPICAL_S + BENCH.measureS + abs + replay;
-  const fullSweep = (tiers + 2 + 3 + 2 + 2) * BENCH.sweepS;
+  const fullSweep = (tiers + 2 + 3 + 3 + 2) * BENCH.sweepS;
   const shortSweeps = 7 * (tiers + 2) * BENCH.sweepShortS;
   const pages = 2 * MAP_COUNT;
   return pages * page + fullSweep + shortSweeps + (pages - 1) * BETWEEN_STEPS_S;

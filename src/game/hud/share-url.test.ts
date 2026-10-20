@@ -227,8 +227,28 @@ describe("given the cel (cartoon shading) strength, which is Auto until a manual
   });
 });
 
+describe("given the procedural sky's cloud cover (psky), drawn by default at the HUD's cover, with the picture as the opt-out", () => {
+  it("when the default is encoded, a cover is set or the picture is picked, then the default writes nothing, a cover is written after the cel key, the picture is written `picture` and reads back, 0 is a real cover, out-of-range values clamp and an unreadable one is the default", () => {
+    assert.equal(DEFAULTS.psky, INITIAL_HUD.proceduralSky);
+    assert.notEqual(DEFAULTS.psky, null, "the procedural sky is the default");
+    assert.equal(encodeShare(DEFAULTS), "");
+    assert.equal(encodeShare({ ...DEFAULTS, psky: 0.5 }), "psky=0.5");
+    assert.equal(encodeShare({ ...DEFAULTS, cel: 0.53, psky: 0.5 }), "cel=0.53&psky=0.5");
+    assert.equal(encodeShare({ ...DEFAULTS, psky: null }), "psky=picture");
+    assert.equal(decodeShare("psky=picture").psky, null);
+    assert.equal(decodeShare("psky=0").psky, 0);
+    assert.equal(decodeShare("psky=7").psky, KNOB_RANGES.psky.max);
+    assert.equal(decodeShare("psky=-1").psky, KNOB_RANGES.psky.min);
+    assert.equal(decodeShare("psky=abc").psky, INITIAL_HUD.proceduralSky);
+  });
+
+  it("when a link written before the default is opened, then its cover still reads, and one without the key gets the default", () => {
+    assert.equal(decodeShare("#night=1&psky=0.35").psky, 0.35);
+    assert.equal(decodeShare("#night=1").psky, INITIAL_HUD.proceduralSky);
+  });
+});
+
 const LOOK_KEYS = [
-  { it: "the procedural sky's cloud cover", key: "psky", range: KNOB_RANGES.psky },
   { it: "the halftone dots' strength", key: "dots", range: KNOB_RANGES.dots },
   { it: "the pencil hatching's strength", key: "hatch", range: KNOB_RANGES.hatch },
   { it: "the people's rim light strength", key: "rim", range: KNOB_RANGES.rim },

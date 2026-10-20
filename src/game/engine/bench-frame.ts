@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import { epicenterOn } from "../deform/epicenter.ts";
-import { SKY_DRAWN, type SkyMode } from "../present/sky-dome.ts";
+import { SKY_DRAWN, type SkyDrawn, type SkyMode } from "../present/sky-dome.ts";
+import { INITIAL_HUD } from "../hud/hud-store.ts";
 import type { LabPresetId } from "../scenes/lab.ts";
-import { BENCH, emptyAcc, wrecks, type Acc, type BenchParts, type SkyPin, type Tap } from "./bench-measure.ts";
+import { BENCH, emptyAcc, wrecks, type Acc, type BenchParts, type Tap } from "./bench-measure.ts";
+import type { SkyPin } from "./engine-bench-report.ts";
 import { CAUSE, FRAME, HitchLog } from "./bench-hitch.ts";
 import { SettleWatch, type SettleResult, type SwitchHitch } from "./bench-settle.ts";
 import type { BenchPlan } from "./engine-bench-plan.ts";
@@ -291,13 +293,23 @@ export async function waitFor(engine: FrameEngine, parts: BenchParts, t: Tap, be
   return true;
 }
 
-/**
- * The Sky setting put in force explicitly (`pin`: `full` or `off`, never `auto`: an auto sky follows the FX tier, which the engine's own policy changes mid-run) with the player's procedural sky down
- * (it draws in place of the strip, so a pin of `full` would never be drawn), then frames until the dome draws it (`BENCH.skyWaitS` at most): a strip's decode is the page's first ask, not the arm's cost.
- * True when it is drawn.
- */
-export async function pinSky(engine: FrameEngine & { setSky(mode: SkyMode): void; setProceduralSky(cover: number | null): void }, parts: BenchParts, t: Tap, beat: Beat, pin: SkyPin): Promise<boolean> {
-  engine.setProceduralSky(null);
-  engine.setSky(pin);
-  return waitFor(engine, parts, t, beat, BENCH.skyWaitS, () => parts.sky.drawn === (pin === "off" ? SKY_DRAWN.off : SKY_DRAWN.full));
+/** Each pin's Sky setting, cloud cover and what the dome draws under it, the same on every FX tier. */
+const SKY_PINS: Record<SkyPin, { mode: SkyMode; cover: number | null; drawn: SkyDrawn }> = {
+  procedural: { mode: "full", cover: INITIAL_HUD.proceduralSky, drawn: SKY_DRAWN.procedural },
+  full: { mode: "full", cover: null, drawn: SKY_DRAWN.full },
+  off: { mode: "off", cover: null, drawn: SKY_DRAWN.off },
+};
+
+type SkyEngine = { setSky(mode: SkyMode): void; setProceduralSky(cover: number | null): void };
+
+/** The pin's Sky setting and cloud cover put in force, not waited for. */
+export function applySkyPin(engine: SkyEngine, pin: SkyPin): void {
+  engine.setProceduralSky(SKY_PINS[pin].cover);
+  engine.setSky(SKY_PINS[pin].mode);
+}
+
+/** `pin` put in force, then frames until the dome draws it (`BENCH.skyWaitS` at most): a strip's decode is the page's first ask, not the arm's cost. True when it is drawn. */
+export async function pinSky(engine: FrameEngine & SkyEngine, parts: BenchParts, t: Tap, beat: Beat, pin: SkyPin): Promise<boolean> {
+  applySkyPin(engine, pin);
+  return waitFor(engine, parts, t, beat, BENCH.skyWaitS, () => parts.sky.drawn === SKY_PINS[pin].drawn);
 }

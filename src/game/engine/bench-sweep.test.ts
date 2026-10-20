@@ -16,8 +16,9 @@ const ui = { set() {} };
 function sweepRig(): { engine: SweepEngine; parts: BenchParts; beat: ReturnType<typeof rig>["beat"]; t: ReturnType<typeof rig>["t"]; log: { what: string; frame: number }[]; frames: () => number } {
   const base = rig();
   const log: { what: string; frame: number }[] = [];
-  /** The Sky setting in force: the stand-in dome draws the strip (3) unless it is off (0), as soon as it is asked. */
+  /** The Sky setting and cover in force: the stand-in dome draws them (0 off, 3 the strip, 5 procedural) as soon as they are asked. */
   let skyMode = "auto";
+  let cover: number | null = null;
   const pace = { steps: 1, set pin(value: boolean | null) { log.push({ what: `pace ${value}`, frame: display.shown }); }, get pin(): boolean | null { return null; } };
   const engine: SweepEngine = {
     ...base.engine,
@@ -26,15 +27,15 @@ function sweepRig(): { engine: SweepEngine; parts: BenchParts; beat: ReturnType<
     setFxTier: (tier) => void log.push({ what: `fx ${tier}`, frame: display.shown }),
     setSky: (mode) => {
       skyMode = mode;
-      log.push({ what: `sky ${mode}`, frame: display.shown });
+      log.push({ what: `sky ${mode !== "off" && cover !== null ? "procedural" : mode}`, frame: display.shown });
     },
-    setProceduralSky() {},
+    setProceduralSky: (value) => void (cover = value),
     setKnob: (id, value) => void log.push({ what: `${id} ${value}`, frame: display.shown }),
   };
   const parts = {
     ...base.parts,
     detail: { setLevel: (level: number) => void log.push({ what: `rung ${level}`, frame: display.shown }), setDistances: () => void log.push({ what: "rung off", frame: display.shown }) },
-    sky: { textureBytes: 1, get drawn() { return skyMode === "off" ? 0 : 3; } },
+    sky: { textureBytes: 1, get drawn() { return skyMode === "off" ? 0 : cover === null ? 3 : 5; } },
   } as unknown as BenchParts;
   return { engine, parts, beat: base.beat, t: base.t, log, frames: () => display.shown };
 }
@@ -44,12 +45,12 @@ const RACE_EPI = { lab: null, race: {}, epicenter: true } as unknown as BenchPla
 const LAB = { lab: {}, race: null } as unknown as BenchPlan;
 
 describe("given a sweep over every setting at a page's first step, on a race", () => {
-  it("when it runs, then each FX tier, both pacer pins, every detail rung, the sky off then full and the epicenter on and off are put in force once, in that order", async () => {
+  it("when it runs, then each FX tier, both pacer pins, every detail rung, the sky off, the strip, then the procedural sky, and the epicenter on and off are put in force once, in that order", async () => {
     const { engine, parts, beat, t, log } = sweepRig();
     await sweep(engine, parts, RACE, TIERS, "full", t, beat, ui);
     assert.deepEqual(
       log.map((l) => l.what),
-      ["fx minimal", "fx low", "fx high", "fx ultra", "pace true", "pace false", "rung off", "rung 2", "rung 4", "sky off", "sky full", "epi.on 1", "epi.on 0"],
+      ["fx minimal", "fx low", "fx high", "fx ultra", "pace true", "pace false", "rung off", "rung 2", "rung 4", "sky off", "sky full", "sky procedural", "epi.on 1", "epi.on 0"],
     );
   });
 

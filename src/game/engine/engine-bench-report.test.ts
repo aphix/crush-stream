@@ -276,13 +276,23 @@ describe("given the bench result with the sky as drawn each second", () => {
 });
 
 describe("given the bench result of a race that ran the sky A/B", () => {
-  test("when the card is written, then it names the Sky setting and what it drew at the top tier, and the sky arms give their fps and draw calls with the full strip first; the Lab's card has no sky arms", () => {
+  test("when a card from before the procedural default is written, then it names the Sky setting and what it drew at the top tier, and the sky arms give their fps and draw calls with the full strip first; the Lab's card has no sky arms", () => {
     const lines = describeBench({ ...RESULT, abSky: { full: { ...B(52, null), calls: 160 }, off: { ...B(57, null), calls: 159 } } });
     assert.ok(lines.some((l) => l.includes("deform shape, sky full pinned by the bench (your setting auto, put back after; full on every tier), drawn ")), "the setting in effect");
     const at = lines.findIndex((l) => l.startsWith("A/B sky pinned: full 52.0 fps"));
     assert.ok(at >= 0 && lines[at]!.endsWith("160 calls"), "the full arm");
     assert.match(lines[at + 1]!, /^ +off 57\.0 fps, .*159 calls$/);
     assert.ok(!describeBench({ ...RESULT, abSky: null }).some((l) => l.startsWith("A/B sky")), "no arms without a sky");
+  });
+
+  test("when a card that pinned the procedural sky is written, then its settings line names that pin, and the sky arms run procedural, the strip, then none", () => {
+    const settings = { ...RESULT.settings, skyPin: "procedural", skyDetail: "procedural" } as const;
+    const lines = describeBench({ ...RESULT, settings, abSky: { procedural: { ...B(55, null), calls: 160 }, full: { ...B(52, null), calls: 160 }, off: { ...B(57, null), calls: 159 } } });
+    assert.ok(lines.some((l) => l.includes("sky procedural pinned by the bench (your setting auto, put back after; procedural on every tier), drawn ")), "the pin in effect");
+    const at = lines.findIndex((l) => l.startsWith("A/B sky pinned: procedural 55.0 fps"));
+    assert.ok(at >= 0, "the procedural arm first");
+    assert.match(lines[at + 1]!, /^ +full 52\.0 fps, .*160 calls$/);
+    assert.match(lines[at + 2]!, /^ +off 57\.0 fps, .*159 calls$/);
   });
 });
 

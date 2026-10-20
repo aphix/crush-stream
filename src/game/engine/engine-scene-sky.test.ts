@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
-import { HudStore } from "../hud/hud-store.ts";
+import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
 import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
 import { SKY_DRAWN } from "../present/sky-dome.ts";
 import { SANDBOX_SKY } from "../present/sky-procedural.ts";
@@ -51,6 +51,7 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     };
   };
   let fresh: Record<string, string | number | boolean>;
+  let freshDrawn: number;
 
   before(async () => {
     stubBrowser();
@@ -60,6 +61,7 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     engine.fadeScenes = false;
     run(1);
     fresh = sandboxSky();
+    freshDrawn = stage().sky.drawn;
   });
   after(() => {
     engine.dispose();
@@ -83,18 +85,25 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     });
   }
 
-  it("when the sandbox's procedural sky is set, then its background and fog are that sky's horizon and the dome draws it; when it is cleared, the sky is as on a fresh load", () => {
-    stage().setProceduralSky(0.3);
+  it("when a fresh engine runs under the Sky setting auto, then on the minimal tier it draws no sky (the studio's colour), and on high the default procedural sky, its background and fog that sky's horizon", () => {
+    assert.equal(engine["cine"].tier, "minimal", "the control: a fresh page's tier");
+    assert.equal(freshDrawn, SKY_DRAWN.off, "no sky on minimal");
+    assert.equal(fresh.background, "12141a", "the studio's colour");
+    engine.setFxTier("high");
     run(1);
     const procedural = sandboxSky();
     const horizon = new THREE.Color(SANDBOX_SKY.day.horizon).getHexString();
+    assert.equal(stage().sky.drawn, SKY_DRAWN.procedural);
+    assert.equal(stage().sky["mat"].uniforms.uCover!.value, INITIAL_HUD.proceduralSky);
     assert.equal(procedural.background, horizon);
     assert.equal(procedural.fog, horizon);
-    assert.equal(stage().sky.drawn, SKY_DRAWN.procedural);
     stage().setProceduralSky(null);
     run(1);
-    const after = sandboxSky();
-    assert.equal(after.background, "12141a", "the studio's colour");
-    for (const key of Object.keys(fresh)) assert.equal(after[key], fresh[key], key);
+    assert.equal(stage().sky.drawn, SKY_DRAWN.off, "the picture: the sandbox has none");
+    assert.equal(sandboxSky().background, "12141a", "the picture: the studio's colour");
+    stage().setProceduralSky(INITIAL_HUD.proceduralSky);
+    engine.setFxTier("minimal");
+    run(1);
+    for (const key of Object.keys(fresh)) assert.equal(sandboxSky()[key], fresh[key], key);
   });
 });

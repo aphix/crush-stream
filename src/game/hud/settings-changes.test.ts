@@ -114,6 +114,13 @@ describe("given the settings menu, where each setting is a group of HUD fields w
     assert.equal(isChanged({ ...INITIAL_HUD, carCount: 1 }, "cars"), true);
   });
 
+  it("when the Clouds row's Picture is picked, then it reads as changed (the procedural sky is the default), and its reset brings the default cover back", () => {
+    assert.equal(isChanged(INITIAL_HUD, "psky"), false);
+    const picture = { ...INITIAL_HUD, proceduralSky: null };
+    assert.deepEqual(changedSettings(picture), ["psky"]);
+    assert.equal(reset(picture, "psky").proceduralSky, INITIAL_HUD.proceduralSky);
+  });
+
   it("when a camera slider is moved off its default or only a hair off, then it is a changed Debug setting only when moved, and resetting it clears it", () => {
     assert.equal(isChanged({ ...INITIAL_HUD, "cam.pos.lon": INITIAL_HUD["cam.pos.lon"] + 1e-6 }, "cam.pos.lon"), false);
     const moved = { ...INITIAL_HUD, "cam.pos.lon": INITIAL_HUD["cam.pos.lon"] + 1 };

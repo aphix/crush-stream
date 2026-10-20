@@ -122,7 +122,7 @@ export type CrashHudState = {
    * at the post tiers only (low / high).
    */
   celLook: number | null;
-  /** Procedural sky's cloud cover (0-1); null = the time of day's picture strip. */
+  /** Procedural sky's cloud cover (0-1), the default (it needs nothing past WebGL2 and holds no texture); null = the time of day's picture strip. */
   proceduralSky: number | null;
   /** Halftone dots over the picture (0-1 strength); null = off. Post tiers only (low / high). */
   halftone: number | null;
@@ -267,7 +267,7 @@ export const INITIAL_HUD: CrashHudState = {
   fxAuto: true,
   fxLoading: false,
   celLook: null,
-  proceduralSky: null,
+  proceduralSky: 0.4,
   halftone: null,
   hatching: null,
   rimLight: null,

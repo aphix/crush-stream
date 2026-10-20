@@ -78,8 +78,8 @@ describe("given the Sky setting and the FX tier", () => {
 
 describe("given a procedural sky cover, the Sky setting and the FX tier", () => {
   const rows: { mode: SkyMode; tier: FxTier; detail: SkyDetail }[] = [
-    { mode: "auto", tier: "off", detail: "procedural" },
-    { mode: "auto", tier: "minimal", detail: "procedural" },
+    { mode: "auto", tier: "off", detail: "off" },
+    { mode: "auto", tier: "minimal", detail: "off" },
     { mode: "auto", tier: "low", detail: "procedural" },
     { mode: "auto", tier: "high", detail: "procedural" },
     { mode: "auto", tier: "ultra", detail: "procedural" },

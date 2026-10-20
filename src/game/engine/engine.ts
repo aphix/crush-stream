@@ -232,6 +232,7 @@ export class CrashEngine extends EngineGarage {
     // `?sky=0|1|auto|on|off` pins the Sky setting for the session (bench A/B).
     const skyParam = new URLSearchParams(window.location.search).get(SETTING_KEY.sky);
     this.stage.setSky(skyParam === "0" ? "off" : skyParam === "1" ? "on" : (SKY_MODES.find((m) => m === skyParam) ?? INITIAL_HUD.sky));
+    this.stage.setProceduralSky(INITIAL_HUD.proceduralSky);
     const gl = this.renderer.getContext();
     const kind = deviceClass(gpuRenderer(gl), window.matchMedia("(pointer: fine)").matches, (navigator as Navigator & { userAgentData?: { mobile: boolean } }).userAgentData?.mobile === true);
     this.deviceClass = kind;

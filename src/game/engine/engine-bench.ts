@@ -2,9 +2,9 @@ import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import { benchPlan, leaderAhead, type BenchPlan } from "./engine-bench-plan.ts";
 import { watchPage, type PageWatch } from "./engine-bench-page.ts";
 import { warmUp } from "./engine-bench-warm.ts";
-import { describeBench, DETAIL_ARMS, PACE_ARM, PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_SWEEP, PHASE_WARM, PHASE_WINDOW, SKY_ARM, stat, type BenchResult, type LongTasks, type RunOptions } from "./engine-bench-report.ts";
+import { describeBench, DETAIL_ARMS, PACE_ARM, PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_SWEEP, PHASE_WARM, PHASE_WINDOW, SKY_ARM, stat, type BenchResult, type LongTasks, type RunOptions, type SkyPin } from "./engine-bench-report.ts";
 import { CLIP_WAIT_S, CRASH_GAP, CRASH_SPEED, ragdollCost, REPLAY_SETTLE_S, REPLAY_TIER_S, START_WAIT_S, type ReplayFrames } from "./engine-bench-replay.ts";
-import { BENCH, QUICK, blocksOf, CAP, deviceOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, skyPinOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type SkyPin, type Samples, type Tap, type Window } from "./bench-measure.ts";
+import { BENCH, QUICK, blocksOf, CAP, deviceOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, skyPinOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type Samples, type Tap, type Window } from "./bench-measure.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import type { SimPacer } from "./sim-pace.ts";
 import { BENCH_BUTTON_STYLE, BENCH_CARD_STYLE, SETTING_KEY } from "./constants.ts";
@@ -300,10 +300,10 @@ async function extendedTail(engine: BenchEngine, parts: BenchParts, plan: BenchP
   parts.detail.setLevel(parts.governor.level);
   enterPhase(beat, page, PHASE_AB_FX);
   const fx = await alternate(engine, parts, t, beat, ui, SETTING_KEY.fx, fxTiers.map((tier) => ({ key: tier, set: () => engine.setFxTier(tier) })), BENCH.fxCycles);
-  // The sky arms hold the window's tier too, with the Sky setting put in force explicitly both ways, `full` (the whole strip, waited for) against `off`; the bench's pin goes back after, drawn, and the player's own setting when the run ends.
+  // The sky arms hold the window's tier too, each pin put in force explicitly and waited for: the procedural sky, the painted strip, none. The bench's pin goes back after, drawn, and the player's own setting when the run ends.
   enterPhase(beat, page, PHASE_AB_SKY);
   engine.setFxTier(top);
-  const sky = plan.lab ? null : await alternate(engine, parts, t, beat, ui, SETTING_KEY.sky, [{ key: SKY_ARM.full, set: () => pinSky(engine, parts, t, beat, "full") }, { key: SKY_ARM.off, set: () => pinSky(engine, parts, t, beat, "off") }], BENCH.skyCycles);
+  const sky = plan.lab ? null : await alternate(engine, parts, t, beat, ui, SETTING_KEY.sky, Object.values(SKY_ARM).map((key) => ({ key, set: () => pinSky(engine, parts, t, beat, key) })), BENCH.skyCycles);
   await pinSky(engine, parts, t, beat, pin);
   // What the run was like at its end is read now: the replay starts the race over.
   const leaderEndM = leaderAhead(parts, plan);
@@ -393,7 +393,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   const { s, w, longTasks, frameStats } = await sample(engine, parts, t, beat, ui, plan.extended ? BENCH.measureS : QUICK.windowS);
   const leaderWindowM = leaderAhead(parts, plan);
   const top = topTier(s, parts.cine.tier);
-  const settings = { ...settingsOf(parts, hud() as unknown as Record<string, unknown>, top), skyPlayer: sky0 };
+  const settings = { ...settingsOf(parts, hud() as unknown as Record<string, unknown>, top), skyPlayer: sky0, skyPin: pin };
   const summary = summarize(parts, plan, s, w, setupMs);
   const tail = plan.extended ? await extendedTail(engine, parts, plan, t, beat, page, ui, fxTiers, top, pin) : null;
   const leaderEndM = tail ? tail.leaderEndM : leaderWindowM;
@@ -430,7 +430,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
     abPace: abPace && { fine: abPace[PACE_ARM.fine]!, coarse: abPace[PACE_ARM.coarse]! },
     abFx: abFx && { minimal: abFx["minimal"]!, low: abFx["low"]!, high: abFx["high"]!, ...(plan.ultra ? { ultra: abFx["ultra"]! } : {}) },
     abDetail: tail && blocksOf(tail.detail, gpu),
-    abSky: abSky && { full: abSky[SKY_ARM.full]!, off: abSky[SKY_ARM.off]! },
+    abSky: abSky && { procedural: abSky[SKY_ARM.procedural]!, full: abSky[SKY_ARM.full]!, off: abSky[SKY_ARM.off]! },
     device,
   };
   const payload = (): object => ({ at: new Date().toISOString(), url: location.href, userAgent: navigator.userAgent, hud: hudSettings(hud(), INITIAL_HUD), result: wireCard(result as unknown as Record<string, unknown>) });

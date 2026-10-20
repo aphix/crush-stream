@@ -316,6 +316,13 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
     assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran sky not as pinned 1 of 4 s"]);
   });
 
+  it("when a card pinned the procedural sky (Sky setting full) and drew it all through, then nothing is said of the sky, and a second that drew the strip instead is flagged", async () => {
+    const drift = { settings: { epicenter: true, sky: "full", skyPin: "procedural" }, pageSeconds: { flags: "ffff", phases: "1111", sky: "5535" } };
+    const steady = { settings: { epicenter: false, sky: "full", skyPin: "procedural" }, pageSeconds: { flags: "ffff", phases: "1111", sky: "5555" } };
+    const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, steady), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, drift)]);
+    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran sky not as pinned 1 of 4 s"]);
+  });
+
   it("when a window's cost swung over 25 % a second and the page had not settled when it opened, then the block gives the window spread of both arms and flags each", async () => {
     const swung = { simSpreadPct: 40, switches: [{ stretch: "window", arm: "start", round: 1, settled: false, settleS: 6, longestMs: 812 }] };
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, { simSpreadPct: 5 }), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, swung)]);
