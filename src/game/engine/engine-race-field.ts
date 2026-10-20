@@ -402,7 +402,7 @@ export abstract class RaceField {
     this.brain = new RaceBrain(tr, racers);
     this.brain.guardLate = true;
     this.brain.guarded = this.policeFrom;
-    this.police = sv ? new HunterBrain(tr, this.colliders, racers, this.policeFrom, pcount, this.seed) : pcount > 0 ? new PoliceBrain(tr, this.brain, this.policeFrom, pcount, this.seed) : null;
+    this.police = sv ? new HunterBrain(tr, this.colliders, racers, this.policeFrom, pcount, this.seed) : pcount > 0 ? new PoliceBrain(tr, this.brain, this.policeFrom, pcount, this.seed, Uint8Array.from(this.entrants, (e) => (e.kind === "remote" ? 1 : 0))) : null;
     const n = this.policeFrom + pcount;
     while (this.snaps.length < n) this.snaps.push(blankAiCar(this.snaps.length));
     while (this.poses.length < racers) this.poses.push({ x: 0, z: 0, yaw: 0, vx: 0, vz: 0, alive: true });

@@ -2,9 +2,9 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { guardMates } from "./pack-guard.ts";
-import { MIN_LIFE, OUT_RANGE, PoliceBrain, STALE_LIFE } from "./police.ts";
+import { MIN_LIFE, OUT_RANGE, PoliceBrain } from "./police.ts";
 import { sightRange } from "./cop-sight.ts";
-import type { PoliceWorld } from "./cop-brain.ts";
+import type { HunterWorld } from "./cop-brain.ts";
 import { RaceBrain } from "./race-ai.ts";
 import { idleDrive } from "../vehicle/car-drive.ts";
 import { blankProjection } from "../world/track.ts";
@@ -29,14 +29,16 @@ describe("given a racer with a stakeout of two cops parked ahead of it, the firs
     assert.ok(r.stored.includes(2), "unit 2 is put away past MIN_LIFE");
   });
 
-  it("when the racer stops racing beside the parked cop, then it is not put away while the racer is there, and is put away once the racer has driven out of sight", () => {
+  it("when the racer stops racing beside the parked cop in the camera's view, then it is not put away while the camera sees it, and is put away once the racer has driven off and the camera no longer sees it", () => {
     const r = rig();
     r.hunt[0] = 0;
+    r.camera.sees = true;
     r.run(MIN_LIFE + 30);
-    assert.ok(!r.stored.includes(2), "nothing vanishes beside the racer");
+    assert.ok(!r.stored.includes(2), "nothing vanishes in the camera's view");
     r.sit(PAST_SIGHT);
+    r.camera.sees = false;
     r.beat();
-    assert.ok(r.stored.includes(2), "gone once the racer is out of sight");
+    assert.ok(r.stored.includes(2), "gone once out of the camera's view");
   });
 });
 
@@ -189,11 +191,12 @@ describe("given two packs of cops, each with a parked stakeout, and a racer pass
       // The engine's `park` moves the car; the snapshot `cars` holds is only refreshed after the beat.
       const placed: { id: number; x: number; z: number }[] = [];
       const everPlaced = new Map<number, { x: number; z: number }>();
-      const world: PoliceWorld = {
+      const world: HunterWorld = {
         park: (id, x, _y, z) => placed.push({ id, x, z }),
         store: () => {},
         down: () => false,
         sirens: () => {},
+        hidden: () => false,
       };
       const police = new PoliceBrain(track, new RaceBrain(track, 1), 1, 6, seed);
       const lead = track.length * 0.4;
@@ -278,57 +281,88 @@ describe("given a pack that has stood down (its racer stopped racing) with a cop
     Object.assign(cars[1]!, { x: p.x, z: p.z, vx: 0, vz: 10 });
   };
 
-  it("when the cop keeps driving 60 m from the racer for a minute, then it is never put away, and when it falls 150 m behind the racer, then it is", () => {
+  it("when the cop keeps driving 60 m from the racer in the camera's view for a minute, then it is never put away, and when it falls 150 m behind the racer out of the camera's view, then it is", () => {
     const r = rig();
     r.hunt[0] = 0;
+    r.camera.sees = true;
     for (let n = 0; n < 60 / BEAT; n++) {
       drive(r.cars, 60);
       r.beat();
       assert.ok(!r.stored.includes(1), `a cop moving 60 m from the racer was put away at ${r.clock().toFixed(2)} s`);
     }
+    r.camera.sees = false;
     drive(r.cars, -150);
     r.beat();
     assert.ok(r.stored.includes(1), "a cop 150 m behind the racer is put away");
   });
 });
 
-describe("given a stood-down pack's cop that keeps driving in a racer's sight along the road for a long time", () => {
-  /** Seconds after the stakeout the cop (kept `ahead` m along from the racer, moving) is put away, or Infinity within `limit` s. */
-  const goneAfter = (ahead: number, limit: number): number => {
+describe("given a stood-down pack's cop that keeps driving in a racer's sight along the road, with no other racer to take up", () => {
+  /** Seconds after the stakeout the cop (kept `ahead` m along from the racer, moving) is put away, or Infinity within `limit` s; the camera looks away from `lookAway` s on. */
+  const goneAfter = (ahead: number, limit: number, lookAway = Infinity): number => {
     const r = rig();
     r.hunt[0] = 0;
     const s = track.project(r.cars[0]!.x, r.cars[0]!.z, -1, blankProjection()).s;
     for (let n = 0; n < limit / BEAT; n++) {
       const p = track.pointAt(s + ahead, pt);
       Object.assign(r.cars[1]!, { x: p.x, z: p.z, vx: 0, vz: 10 });
+      r.camera.sees = r.clock() < lookAway;
       r.beat();
       if (r.stored.includes(1)) return r.clock();
     }
     return Infinity;
   };
 
-  it("when it is clear of the racers' near range, then it is put away once it has been on the road STALE_LIFE s, and when it is inside that range, then it never is", () => {
-    const clear = goneAfter(SIGHT.near + 20 + 6, STALE_LIFE + 20);
-    assert.ok(clear >= STALE_LIFE && clear < STALE_LIFE + 5, `a cop in sight but clear of the near range went at ${clear} s, not at STALE_LIFE`);
-    assert.equal(goneAfter(SIGHT.near, STALE_LIFE + 60), Infinity, "a cop inside the near range was put away");
+  it("when the camera sees it, then it is never put away, and once the camera looks away, then it is put away within a beat if it is clear of the racers' near range, and never inside it", () => {
+    const clear = SIGHT.near + 20 + 6;
+    assert.equal(goneAfter(clear, 120), Infinity, "a cop the camera sees was put away");
+    const gone = goneAfter(clear, 120, 60);
+    assert.ok(gone > 60 && gone < 60 + 2 * BEAT, `a cop out of the camera's view went at ${gone} s, not as the camera looked away at 60 s`);
+    assert.equal(goneAfter(SIGHT.near, 120, 0), Infinity, "a cop inside the near range was put away");
   });
 
-  it("when it is doing 25 m/s, then it keeps driving before STALE_LIFE s and brakes to a stop once it is that old, so the racers go round it and the stall rule can put it away", () => {
+  it("when it is doing 25 m/s, then it eases along the line however long it has been out, never stopping in the racers' path", () => {
     const r = rig();
     r.hunt[0] = 0;
+    r.camera.sees = true;
     r.beat();
     Object.assign(r.cars[1]!, { vx: 0, vz: 25 });
     const young = r.police.think(r.cars[1]!, r.cars, 0);
     assert.ok(young.brake < 0.5 && young.throttle > 0, `a young given-up cop braked: throttle ${young.throttle}, brake ${young.brake}`);
-    r.run(STALE_LIFE);
+    r.run(120);
     const old = r.police.think(r.cars[1]!, r.cars, 0);
-    assert.ok(old.brake >= 0.5 && old.throttle === 0, `a stale given-up cop did not brake: throttle ${old.throttle}, brake ${old.brake}`);
+    assert.ok(old.brake < 0.5 && old.throttle > 0, `a given-up cop out 120 s braked: throttle ${old.throttle}, brake ${old.brake}`);
+  });
+});
+
+describe("given a stood-down pack's cop on the oval with a second racer on the course", () => {
+  it("when the racer its pack gave up on drives behind it, then it does not take it up again, and when the other racer comes within ENGAGE m, then it takes that one up", () => {
+    const r = rig(2, 1, 0.4, 2);
+    r.camera.sees = true;
+    const s = track.project(r.cars[2]!.x, r.cars[2]!.z, -1, blankProjection()).s;
+    const behind = (racer: AiCar, ds: number) => {
+      const p = track.pointAt(s - ds, pt);
+      Object.assign(racer, { x: p.x, z: p.z });
+    };
+    r.hunt[0] = 0;
+    r.beat();
+    assert.equal(r.police.copsOn(0), 0, "the pack did not stand down");
+    r.hunt[0] = 1;
+    behind(r.cars[0]!, 20);
+    r.run(5);
+    assert.deepEqual(r.police.chasers(r.cars, []), [], "a cop took up the racer its pack gave up on");
+    r.hunt[1] = 1;
+    behind(r.cars[1]!, 25);
+    r.beat();
+    assert.deepEqual(r.police.chasers(r.cars, []).map((c) => c.id), [2], "the given-up cop did not take up the other racer");
+    assert.equal(r.police.copsOn(1), 1);
   });
 });
 
 describe("given a woken cop the race's stall rule has asked to put away", () => {
-  it("when it is driving 36 km/h 56 m from the racer, then it is not put away, and once it is stopped there, or driving out of every racer's sight, then it is", () => {
+  it("when it is driving 36 km/h 56 m from the racer in the camera's view, then it is not put away, and once it is stopped there, or driving out of every racer's sight, then it is", () => {
     const r = rig();
+    r.camera.sees = true;
     const s = track.project(r.cars[0]!.x, r.cars[0]!.z, -1, blankProjection()).s;
     const place = (ahead: number, speed: number) => {
       const p = track.pointAt(s + ahead, pt);
@@ -336,11 +370,24 @@ describe("given a woken cop the race's stall rule has asked to put away", () => 
     };
     place(56, 10);
     r.beat();
-    r.police.recall(1, { ...r.world, hidden: () => true });
+    r.police.recall(1, r.world);
     assert.equal(r.stored.length, 0, "a cop driving 36 km/h 56 m from the racer was recalled");
     place(56, 0);
     r.police.recall(1, { ...r.world, hidden: () => true });
     assert.deepEqual(r.stored, [1], "a stopped cop is recalled where it stands");
+  });
+
+  it("when it is stopped 5 m from the racer in the camera's view, then it is not put away, and once the camera no longer sees it, then it is, where it stands", () => {
+    const r = rig();
+    r.camera.sees = true;
+    r.cars[1]!.vx = 0;
+    r.cars[1]!.vz = 0;
+    r.beat();
+    r.police.recall(1, r.world);
+    assert.equal(r.stored.length, 0, "a stuck cop the camera sees was recalled");
+    r.camera.sees = false;
+    r.police.recall(1, r.world);
+    assert.deepEqual(r.stored, [1], "a stuck cop out of the camera's view is recalled");
   });
 
   it("when it is driving 36 km/h 400 m ahead of the racer, then it is put away", () => {

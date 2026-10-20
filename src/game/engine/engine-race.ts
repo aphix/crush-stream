@@ -685,7 +685,8 @@ export class RaceDirector extends RaceHudLayer {
     if (!s) return;
     const cars = this.host.live();
     if (s.phase === "finished") {
-      // Over: the recorder runs on for the last thrown driver's hold (`CrashRecorder.over`), and the reel goes out when it ends.
+      // Over: a race's patrol goes on (a cop no racer is left to chase goes once unseen), and the recorder for the last thrown driver's hold (`CrashRecorder.over`): the reel goes out when it ends.
+      if (!this.survival) this.patrol(dt);
       if (!this.recorder.on) return;
       this.recorder.endStep(cars, dt, shape, lone);
       this.reelIfRecorded();

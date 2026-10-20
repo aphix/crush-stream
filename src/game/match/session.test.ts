@@ -10,7 +10,7 @@ import { assertSameDigest } from "../vehicle/test-support.ts";
 import { CAR_HALF } from "../vehicle/car-mesh.ts";
 import oval from "../world/tracks/oval.json" with { type: "json" };
 import { PoliceBrain } from "../ai/police.ts";
-import type { PoliceWorld } from "../ai/cop-brain.ts";
+import type { HunterWorld } from "../ai/cop-brain.ts";
 import { RaceBrain } from "../ai/race-ai.ts";
 import { blankAiCar, type AiCar } from "../ai/derby-ai.ts";
 
@@ -487,7 +487,7 @@ describe("given a three-lap race with one car on the oval and a PARKED stakeout 
     const police = new PoliceBrain(ovalTrack, brain, 1, 2, 1);
     const cars = [0, 1, 2].map(blankAiCar);
     const spots: Pt[] = [];
-    const world: PoliceWorld = {
+    const world: HunterWorld = {
       park: (id, x, _y, z) => {
         spots[id] = { x, z };
         Object.assign(cars[id]!, { x, z, vx: 0, vz: 0 });
@@ -495,6 +495,7 @@ describe("given a three-lap race with one car on the oval and a PARKED stakeout 
       store: () => {},
       down: () => false,
       sirens: () => {},
+      hidden: () => false,
     };
     const hunt = new Uint8Array([1, 0, 0]);
     // The leader a third of a lap in: the first stakeout parks two units ahead of car 0.

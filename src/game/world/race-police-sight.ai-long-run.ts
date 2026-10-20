@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld } from "./race-world.test-util.ts";
-import { MIN_LIFE, OUT_RANGE, PoliceBrain, STALE_LIFE } from "../ai/police.ts";
+import { MIN_LIFE, OUT_RANGE, PoliceBrain } from "../ai/police.ts";
 import { sightRange } from "../ai/cop-sight.ts";
 import type { HunterWorld } from "../ai/cop-brain.ts";
 import { DEFAULT_RACE_OPTIONS } from "../match/types.ts";
@@ -28,7 +28,7 @@ interface Course {
 
 const COURSES: readonly Course[] = [
   { id: TRACK_ID.fourCount, json: fourCount, seeds: [1, 2] },
-  // Four seeds: an oval race ends before STALE_LIFE, so put-aways are luck (3.5 a seed over seeds 1-36) and a pair once drew 1.
+  // Four seeds: an oval race's racers see nearly all of it, so put-aways are luck (3.5 a seed over seeds 1-36) and a pair once drew 1.
   { id: TRACK_ID.oval, json: oval, seeds: [1, 2, 3, 4] },
   { id: TRACK_ID.city, json: city, seeds: [1, 2] },
 ];
@@ -37,7 +37,7 @@ const COURSES: readonly Course[] = [
  * Full-sanity sweep, not a per-commit test: whole 150 s police races on three courses and two seeds (four on the oval), every put-on and put-away read against
  * where the racers stood. The rules themselves are pinned in the regular suite, each on a staged moment: a spot in or out of a racer's sight
  * (`ai/cop-sight.test.ts`; the spots a pack picks, `ai/police.test.ts`), a cop moving inside the near range never put away and one in sight
- * put away only once STALE_LIFE old, MIN_LIFE, OUT_RANGE and a knocked-out cop (`ai/police.test.ts`), a stalled cop (`race-police-stall.test.ts`).
+ * put away only out of the camera's view, MIN_LIFE, OUT_RANGE and a knocked-out cop (`ai/police.test.ts`), a stalled cop (`race-police-stall.test.ts`).
  */
 
 /**
@@ -92,7 +92,7 @@ function policeRace(course: Course, seed: number): PopReport {
       report.stores++;
       if (moving) report.movingStores++;
       if (moving && seen.nearest < sight.near) report.broken.push(`${w.race.time.toFixed(2)} s: cop ${id} put away moving ${(car.velocity.length() * 3.6).toFixed(0)} km/h, ${seen.nearest.toFixed(0)} m from a racer`);
-      const exemptFromSight = (recalling && !moving) || age >= STALE_LIFE;
+      const exemptFromSight = world.hidden(p.x, p.z) && (!moving || seen.nearest >= sight.near);
       if (seen.sees && !exemptFromSight) report.broken.push(`${w.race.time.toFixed(2)} s: cop ${id} put away in sight of ${seen.text}`);
       const excused = world.down(id) || recalling || seen.nearest > OUT_RANGE;
       if (age < MIN_LIFE && !excused) report.broken.push(`${w.race.time.toFixed(2)} s: cop ${id} put away ${age.toFixed(2)} s after it was put on the road`);

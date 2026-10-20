@@ -7,7 +7,7 @@ import { wrapPi } from "../kernel/scalar.ts";
 import type { RaceBrain } from "./race-ai.ts";
 import { blankPoint, blankProjection, projectPath, type Track } from "../world/track.ts";
 import { ATTACK, attackTarget, BEHIND, CATCH_UP, CopBrain, HEAD_ON, PULL_OUT, pursuitSteer, RAM_TIME, WAIT_BEHIND, type HunterWorld, type PoliceWorld } from "./cop-brain.ts";
-import { CORRIDOR, RacerSight, SIGHT_MARGIN } from "./cop-sight.ts";
+import { CORRIDOR, PARK_SPACING, RacerSight, SIGHT_MARGIN } from "./cop-sight.ts";
 
 /**
  * Most police cars in one race (all packs together; fewer when the field and traffic leave fewer car
@@ -32,18 +32,6 @@ const RETRY = 1;
 const PAST_SIGHT = 10;
 const PAST_NEAR = 20;
 const AHEAD_SPAN = 60;
-/** Units of one stakeout park this far apart (m) along the road. */
-const PARK_SPACING = 12;
-/** Half width and half length (m) of a car's footprint, for the parking spot. */
-const HALF_W = 0.95;
-const HALF_L = 2.3;
-/** Room (m) a parked car keeps from the run-off's outer edge (the wall). */
-const PARK_MARGIN = 0.15;
-/** A parked car noses this far (rad) toward the road where the run-off is at least `ANGLED_RUN` m wide. */
-const PARK_ANGLE = 0.25;
-const ANGLED_RUN = 3;
-/** A parking spot keeps this far (m) from every car. */
-const PARK_CLEAR = 10;
 /**
  * A parked unit wakes once a racer's road progress is past its spot by up to `PASSED` m (a patrol beat at top
  * speed covers ~14 m); so does a knock that leaves it moving faster than `KNOCK` m/s.
@@ -67,15 +55,14 @@ const PURSUIT_MAX = 40;
 /** Seconds a respawned racer is left alone. */
 const IMMUNE = 4;
 /**
- * A parked unit nobody came near is put away after `PARK_MAX` s and a knocked-out one after `DOWN_STORE` s, a given-up one once it is out of every racer's
- * sight (`RacerSight`), none of them while a racer can see it. A unit put on the road is not put away for `MIN_LIFE` s unless it is knocked
- * out or `OUT_RANGE` m from every racer; one on the road `STALE_LIFE` s goes wherever no racer is near. The director's stall recall (`CopBrain.recall`, a unit that gained no
- * ground for 8 s) puts a stopped unit away at once and a moving one by the same rules.
+ * A parked unit nobody came near is put away after `PARK_MAX` s and a knocked-out one after `DOWN_STORE` s, a given-up one with no other racer to take
+ * up at once, none of them while a player can see it (`mayStore`). A unit put on the road is not put away for
+ * `MIN_LIFE` s unless it is knocked out or `OUT_RANGE` m from every racer. The director's stall recall (`CopBrain.recall`, a unit that gained no
+ * ground for 8 s) puts a unit away by the same rules, as a knocked-out one.
  */
 const PARK_MAX = 45;
 const DOWN_STORE = 6;
 export const MIN_LIFE = 12;
-export const STALE_LIFE = 75;
 export const OUT_RANGE = 300;
 
 type UnitState = "stored" | "parked" | "pursuit" | "down";
@@ -93,8 +80,9 @@ const LINE_STATE = { next: -1, lap: 0 };
  * place in the pack — PIT from the rear quarter, getting ahead to block and brake-check, door slams
  * from either side; ahead of the racer it pulls out into its path, and one facing it rams it head-on.
  * A sustained pursuit calls a reinforcement every `REINFORCE_EVERY` s up to `PACK_MAX`. A pack whose
- * target finishes, dies or escapes picks another racer near it or gives up, as it does after
- * `PURSUIT_MAX` s; units knocked out (or given up) are stored again once no racer sees them. Sirens run while a unit chases.
+ * target finishes, dies or escapes picks another racer near it or gives up, as it does after `PURSUIT_MAX` s; a given-up
+ * unit takes up another racer that comes within `ENGAGE` m of it (or, still parked, passes it), never the one its pack gave up
+ * on; units knocked out (or given up with none to take up) are stored again once no player sees them. Sirens run while a unit chases.
  * Police are never entrants: the rules and standings never see them.
  * Deterministic (seeded dice, no clock); no allocation per call.
  */
@@ -106,8 +94,9 @@ export class PoliceBrain extends CopBrain {
   /** Driving, so a slow one may be pulling out (not parked at a stakeout, knocked out or stored: those are stopped obstacles). */
   protected readonly pullsOut = (u: number): boolean => this.state[u] === "pursuit";
   private readonly state: UnitState[] = [];
-  /** Per unit: its pack (−1 none: stored, or giving up). */
+  /** Per unit: its pack (−1 none: stored, or giving up), and the racer its pack gave up on (−1 none), which it does not take up again. */
   private readonly pack: Int16Array;
+  private readonly dropped: Int16Array;
   /** Per unit: seconds of lead-in left, and its parking spot's road arc (m). */
   private readonly leadIn: Float64Array;
   private readonly parkS: Float64Array;
@@ -130,17 +119,19 @@ export class PoliceBrain extends CopBrain {
   private readonly comeUpBehind: number;
   /** Per unit: race time it was put on the road. Scratch: the last patrol's race time and cars (`recall` has only an id). */
   private readonly bornAt: Float64Array;
+  /** Per racer id: 1 for a netplay peer's car, whose screen is not this camera's: what it sees is its racer sight. */
+  private readonly peers: Uint8Array;
   private now = 0;
   private fieldCars: readonly AiCar[] = [];
-  /** Scratch: the last `nearest` call's distance and the last `spot` found. */
+  /** Scratch: the last `nearest` call's distance. */
   private nearD = Infinity;
-  private readonly spotAt = { x: 0, y: 0, z: 0, yaw: 0, s: 0 };
 
-  constructor(track: Track, line: RaceBrain, first: number, count: number, seed: number) {
+  constructor(track: Track, line: RaceBrain, first: number, count: number, seed: number, peers = new Uint8Array(0)) {
     super(first, count, seed);
     this.track = track;
     this.line = line;
     this.pack = new Int16Array(count).fill(-1);
+    this.dropped = new Int16Array(count).fill(-1);
     this.leadIn = new Float64Array(count);
     this.parkS = new Float64Array(count);
     this.packLive = new Uint8Array(count);
@@ -149,6 +140,7 @@ export class PoliceBrain extends CopBrain {
     this.lost = new Float64Array(count);
     this.age = new Float64Array(count);
     this.bornAt = new Float64Array(count);
+    this.peers = peers;
     this.sight = new RacerSight(track, line.racers);
     this.parkAhead = this.sight.range.ahead + SIGHT_MARGIN + PAST_SIGHT;
     this.comeUpBehind = this.sight.range.near + SIGHT_MARGIN + PAST_NEAR;
@@ -167,13 +159,9 @@ export class PoliceBrain extends CopBrain {
     this.immune[id] = time + IMMUNE;
   }
 
-  /**
-   * A stuck unit that is stopped (slower than `KNOCK`) is put away as before; one still moving (shoving a car or a wall) only once no racer sees
-   * it, as any put-away: the director asks again after another stall window.
-   */
+  /** A stuck unit is put away as a knocked-out one is (`mayStore`), stopped or moving: never while a player sees it; the director asks again after another stall window. */
   override recall(id: number, world: HunterWorld): void {
-    const car = this.fieldCars[id]!;
-    if (hypot2(car.vx, car.vz) <= KNOCK || this.mayStore(id - this.first, true)) super.recall(id, world);
+    if (this.mayStore(id - this.first, true, world)) super.recall(id, world);
   }
 
   copsOn(id: number): number {
@@ -211,11 +199,6 @@ export class PoliceBrain extends CopBrain {
       out.throttle = Math.min(line.throttle, 0.5);
       out.steer = line.steer;
       out.brake = line.brake;
-      // A given-up unit that has been out `STALE_LIFE` s comes to a stop: the racers go round it and the stall rule puts it away, where at their pace it never got clear of them.
-      if (p < 0 && this.now - this.bornAt[u]! >= STALE_LIFE) {
-        out.throttle = 0;
-        out.brake = 1;
-      }
       return out;
     }
     const tg = cars[t]!;
@@ -280,7 +263,7 @@ export class PoliceBrain extends CopBrain {
    * reinforced, stakeouts, units stored. `hunt[id]` is 1 for a racer still racing; `lead` is the
    * leader's progress (m).
    */
-  update(time: number, dt: number, cars: readonly AiCar[], hunt: Uint8Array, lead: number, world: PoliceWorld): void {
+  update(time: number, dt: number, cars: readonly AiCar[], hunt: Uint8Array, lead: number, world: HunterWorld): void {
     this.now = time;
     this.fieldCars = cars;
     this.sight.watch(cars);
@@ -297,7 +280,7 @@ export class PoliceBrain extends CopBrain {
   }
 
   /** Knock-outs, wake-ups and put-aways, unit by unit. */
-  private patrolUnits(dt: number, cars: readonly AiCar[], hunt: Uint8Array, time: number, world: PoliceWorld): void {
+  private patrolUnits(dt: number, cars: readonly AiCar[], hunt: Uint8Array, time: number, world: HunterWorld): void {
     for (let u = 0; u < this.count; u++) {
       const st = this.state[u]!;
       if (st === "stored") continue;
@@ -305,7 +288,7 @@ export class PoliceBrain extends CopBrain {
       const car = cars[id]!;
       this.since[u]! += dt;
       if (st === "down") {
-        if (this.since[u]! > DOWN_STORE && this.mayStore(u, true)) this.store(u, world);
+        if (this.since[u]! > DOWN_STORE && this.mayStore(u, true, world)) this.store(u, world);
         continue;
       }
       if (world.down(id)) {
@@ -316,22 +299,27 @@ export class PoliceBrain extends CopBrain {
         continue;
       }
       if (st === "parked") {
-        // Stood down with its pack: nothing wakes it, and it goes once out of sight.
+        // Stood down with its pack: a racer other than the one its pack gave up on passing its spot wakes it, and it goes once out of sight.
         if (this.pack[u]! < 0) {
-          if (this.mayStore(u, false)) this.store(u, world);
+          const r = this.passer(u, cars, hunt, time, this.dropped[u]!);
+          if (r >= 0) this.takeUp(u, r);
+          else if (this.mayStore(u, false, world)) this.store(u, world);
           continue;
         }
         // Held back until a racer passes its spot (or a knock moves it).
         let r = this.passer(u, cars, hunt, time);
         if (r < 0 && hypot2(car.vx, car.vz) > KNOCK) r = this.nearest(car, cars, hunt, time);
         if (r >= 0) this.wake(u, r);
-        else if (this.since[u]! > PARK_MAX && this.mayStore(u, false)) this.store(u, world);
+        else if (this.since[u]! > PARK_MAX && this.mayStore(u, false, world)) this.store(u, world);
         continue;
       }
       if (this.pack[u]! < 0) {
-        // Giving up: sirens off, gone once no racer sees it go.
+        const r = this.nearest(car, cars, hunt, time, this.dropped[u]!);
+        if (r >= 0 && this.nearD < ENGAGE) this.takeUp(u, r);
+      }
+      if (this.pack[u]! < 0) {
         world.sirens(id, false);
-        if (this.mayStore(u, false)) this.store(u, world);
+        if (this.mayStore(u, false, world)) this.store(u, world);
       } else world.sirens(id, true);
     }
   }
@@ -378,8 +366,8 @@ export class PoliceBrain extends CopBrain {
         const side = this.roll() < 0.5 ? 1 : -1;
         if (u < 0) continue;
         // Parked ahead where no racer sees it; else it comes up from behind, already chasing, its sirens on from the first frame it shows.
-        if (this.spot(tg, this.parkAhead, side, 1, cars)) this.place(u, p, size, cars, world);
-        else if (this.spot(tg, -this.comeUpBehind, side, 1, cars)) {
+        if (this.sight.parkSpot(tg, this.parkAhead, side, 1, cars, this.seg)) this.place(u, p, size, cars, world);
+        else if (this.sight.parkSpot(tg, -this.comeUpBehind, side, 1, cars, this.seg)) {
           this.place(u, p, size, cars, world);
           this.setState(u, "pursuit");
           world.sirens(this.first + u, true);
@@ -389,14 +377,15 @@ export class PoliceBrain extends CopBrain {
   }
 
   /**
-   * Unit `u` may be put away: no racer sees it (`RacerSight`: never one moving or standing within its near range of a racer), and it has
-   * been on the road for `MIN_LIFE` s, unless it is `knockedOut` (or stuck) or out of range of every racer. A unit on the road for `STALE_LIFE`
-   * s that is still seen (a short course the racers cover, a given-up cop driving among them) goes once no racer is within its near range.
+   * Unit `u` may be put away: no player sees it (this camera, `world.hidden`, nor a netplay peer by its racer sight; not every racer's: on a short
+   * course the racers cover, one always sees it), it has been on the road `MIN_LIFE` s unless it is `knockedOut` (or stuck) or out of range of every
+   * racer, and it is stopped (as the stall rule puts one away where it stands) or clear of every racer's near range.
    */
-  private mayStore(u: number, knockedOut: boolean): boolean {
-    const age = this.now - this.bornAt[u]!;
-    if (this.sight.hiddenCar(this.fieldCars[this.first + u]!)) return knockedOut || age >= MIN_LIFE || this.sight.gap > OUT_RANGE;
-    return age >= STALE_LIFE && this.sight.gap >= this.sight.range.near + SIGHT_MARGIN;
+  private mayStore(u: number, knockedOut: boolean, world: HunterWorld): boolean {
+    const car = this.fieldCars[this.first + u]!;
+    if (!world.hidden(car.x, car.z) || !this.sight.hiddenCar(car, this.peers)) return false;
+    const old = knockedOut || this.now - this.bornAt[u]! >= MIN_LIFE || this.sight.gap > OUT_RANGE;
+    return old && (this.sight.gap >= this.sight.range.near + SIGHT_MARGIN || hypot2(car.vx, car.vz) <= KNOCK);
   }
 
   /** Park a fresh pack of `PACK_START` ahead of a random racer still racing. False when no spot out of sight was found for it: the cars are still free. */
@@ -417,7 +406,7 @@ export class PoliceBrain extends CopBrain {
     for (let k = 0; k < PACK_START; k++) {
       const u = this.free();
       // The second car of a stakeout parks facing the oncoming racers: a head-on rammer.
-      if (u < 0 || !this.spot(cars[r]!, ahead + k * PARK_SPACING, this.roll() < 0.5 ? 1 : -1, k === 1 ? -1 : 1, cars)) break;
+      if (u < 0 || !this.sight.parkSpot(cars[r]!, ahead + k * PARK_SPACING, this.roll() < 0.5 ? 1 : -1, k === 1 ? -1 : 1, cars, this.seg)) break;
       this.place(u, p, k, cars, world);
     }
     if (!this.packLive[p]) return false;
@@ -428,7 +417,7 @@ export class PoliceBrain extends CopBrain {
   /** Park unit `u` at the last `spot` as member `role` of pack `p`; `cars` takes its new place at once, so the next `spot` of this beat keeps clear of it. */
   private place(u: number, p: number, role: number, cars: readonly AiCar[], world: PoliceWorld): void {
     const id = this.first + u;
-    const s = this.spotAt;
+    const s = this.sight.spot;
     world.park(id, s.x, s.y, s.z, s.yaw);
     cars[id]!.x = s.x;
     cars[id]!.z = s.z;
@@ -448,43 +437,6 @@ export class PoliceBrain extends CopBrain {
     }
   }
 
-  /**
-   * A parking spot `ahead` m along the road from car `c` (behind it when negative), on the run-off on `side` (+1 left of travel),
-   * facing with the travel (`facing` 1) or against it (−1), clear of every car and out of every racer's sight; it scans
-   * on along the road, the way it was asked for, past bridge decks. Fills `spotAt`.
-   */
-  private spot(c: AiCar, ahead: number, side: 1 | -1, facing: 1 | -1, cars: readonly AiCar[]): boolean {
-    const path = this.track.path;
-    const L = this.track.length;
-    let s = projectPath(path, c.x, c.z, this.seg[c.id]!, this.proj).s + ahead;
-    this.seg[c.id] = this.proj.k;
-    for (let tries = 0; tries < 6; tries++, s += Math.sign(ahead) * PARK_SPACING * 1.5) {
-      const ws = ((s % L) + L) % L;
-      const k = Math.min(path.count - 1, Math.floor((ws / L) * path.count));
-      if (path.deck[k]) continue;
-      const run = side > 0 ? path.runL[k]! : path.runR[k]!;
-      const angle = run >= ANGLED_RUN ? PARK_ANGLE : 0;
-      const lat = side * (path.half[k]! + run - HALF_W - PARK_MARGIN - HALF_L * detSin(angle));
-      const pt = this.track.pointAt(ws, this.pt);
-      const x = pt.x + pt.tz * lat;
-      const z = pt.z - pt.tx * lat;
-      if (!this.sight.hiddenAt(x, z, ws, true)) continue;
-      let clear = true;
-      for (const o of cars) if (hypot2(o.x - x, o.z - z) < PARK_CLEAR) clear = false;
-      if (!clear) continue;
-      // Nose toward the road: forward turned by `angle` toward the centreline.
-      const fx = facing * pt.tx * detCos(angle) - side * pt.tz * detSin(angle);
-      const fz = facing * pt.tz * detCos(angle) + side * pt.tx * detSin(angle);
-      this.spotAt.x = x;
-      this.spotAt.y = pt.y;
-      this.spotAt.z = z;
-      this.spotAt.yaw = detAtan2(fx, fz);
-      this.spotAt.s = ws;
-      return true;
-    }
-    return false;
-  }
-
   /** Wake unit `u` (a racer passed it): it joins its pack's pursuit, or starts one after `racer`. Its pack-mates further on wait for their own pass. */
   private wake(u: number, racer: number): void {
     const p = this.pack[u]!;
@@ -498,17 +450,35 @@ export class PoliceBrain extends CopBrain {
   }
 
   /**
-   * Pack `p` gives up: its chasers drive off and are put away once out of sight. A unit still parked (no racer passed its spot, so it
-   * never woke) has nothing to give up: it stays where it stands, off the road, until it too is put away unseen.
+   * Pack `p` gives up: its units drive off (or, still parked, stay where they stand, off the road) until another racer than the one it gave up
+   * on comes their way (`takeUp`), and are put away once unseen.
    */
   private disband(p: number): void {
+    const gaveUpOn = this.target[p]!;
     this.packLive[p] = 0;
     this.target[p] = -1;
     for (let u = 0; u < this.count; u++) {
       if (this.pack[u] !== p) continue;
       this.pack[u] = -1;
+      this.dropped[u] = gaveUpOn;
       if (this.state[u] !== "parked") this.since[u] = 0;
     }
+  }
+
+  /** Given-up unit `u` takes up racer `r`: with the pack already after it, else as a pack of its own, pursuing (a parked unit leads in). */
+  private takeUp(u: number, r: number): void {
+    let p = 0;
+    while (p < this.count && !(this.packLive[p] && this.target[p] === r)) p++;
+    if (p === this.count) {
+      p = 0;
+      while (p < this.count && this.packLive[p]) p++;
+      if (p === this.count) return;
+      this.packLive[p] = 1;
+      this.target[p] = -1;
+    }
+    this.role[u] = this.sizeOf(p);
+    this.pack[u] = p;
+    this.wake(u, r);
   }
 
   protected override store(u: number, world: PoliceWorld): void {
@@ -534,12 +504,12 @@ export class PoliceBrain extends CopBrain {
     return hunt[id] === 1 && time >= this.immune[id]!;
   }
 
-  /** The nearest racer still racing and not just respawned (−1 none); its distance in `nearD`. */
-  private nearest(c: AiCar, cars: readonly AiCar[], hunt: Uint8Array, time: number): number {
+  /** The nearest racer still racing and not just respawned, other than `except` (−1 none); its distance in `nearD`. */
+  private nearest(c: AiCar, cars: readonly AiCar[], hunt: Uint8Array, time: number, except = -1): number {
     let best = -1;
     this.nearD = Infinity;
     for (let i = 0; i < this.line.racers; i++) {
-      if (!this.huntable(i, hunt, time)) continue;
+      if (i === except || !this.huntable(i, hunt, time)) continue;
       const d = hypot2(cars[i]!.x - c.x, cars[i]!.z - c.z);
       if (d < this.nearD) {
         this.nearD = d;
@@ -550,16 +520,16 @@ export class PoliceBrain extends CopBrain {
   }
 
   /**
-   * The racer most recently past unit `u`'s spot along the road, by under `PASSED` m (−1 none). A racer outside the road's corridor (across
-   * the field on a shortcut) is not passing anything: its nearest road point slides along the road as it drives, past a spot it never came near.
+   * The racer most recently past unit `u`'s spot along the road, by under `PASSED` m, other than `except` (−1 none). A racer outside the road's
+   * corridor (across the field on a shortcut) is not passing anything: its nearest road point slides along the road as it drives, past a spot it never came near.
    */
-  private passer(u: number, cars: readonly AiCar[], hunt: Uint8Array, time: number): number {
+  private passer(u: number, cars: readonly AiCar[], hunt: Uint8Array, time: number, except = -1): number {
     const path = this.track.path;
     const L = this.track.length;
     let best = -1;
     let bestD = PASSED;
     for (let i = 0; i < this.line.racers; i++) {
-      if (!this.huntable(i, hunt, time)) continue;
+      if (i === except || !this.huntable(i, hunt, time)) continue;
       const on = projectPath(path, cars[i]!.x, cars[i]!.z, this.seg[i]!, this.proj);
       this.seg[i] = on.k;
       const reach = path.half[on.k]! + Math.max(path.runL[on.k]!, path.runR[on.k]!) + CORRIDOR;
