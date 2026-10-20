@@ -105,6 +105,11 @@ export class DeformableCar extends CarParts {
     if (write) {
       rig.cage.readState(own);
       this.cageChanged = true;
+      // What hands these over is `followGroup`, which a frozen wreck never runs: `rideBody` carries its masses on them and clears the driven body's spin on them.
+      if (this.deform.massActive) {
+        this.deform.bodyV = this.velocity;
+        this.deform.bodyW = this.angular;
+      }
     } else rig.cage.writeState(own);
   }
   /** The world's other-car tops this body can stand on (`stepWorld` sets it; null: the world's ground alone). */

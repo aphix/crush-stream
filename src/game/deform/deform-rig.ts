@@ -299,9 +299,9 @@ export abstract class DeformRig {
   }
 
   protected prevYaw = 0;
-  /** The rigid body's velocity and spin (`followGroup`'s arguments, kept: the car's own vectors) the masses ride when the structure is rigid and the wheels are freed against. */
-  protected bodyV = new THREE.Vector3();
-  protected bodyW = new THREE.Vector3();
+  /** The rigid body's velocity and spin (`followGroup`'s arguments, kept: the car's own vectors; a restored wreck's from `DeformableCar.solverState`) the masses ride when the structure is rigid and the wheels are freed against. */
+  bodyV = new THREE.Vector3();
+  bodyW = new THREE.Vector3();
   /** Share (0–1) of the read pitch/roll the frame takes, and the sim time it was last eased at (followGroup). */
   protected lean = 1;
   protected leanAt = -Infinity;

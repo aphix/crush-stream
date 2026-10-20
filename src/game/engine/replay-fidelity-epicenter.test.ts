@@ -69,4 +69,33 @@ describe("given a clip whose first keyframe finds a wreck frozen (the activation
     assert.equal(a.wreckMismatch, 0, "a car is a wreck in one run and not in the other");
     assert.deepEqual({ pose: a.pose.max, vel: a.vel.max, crush: a.crush.max }, { pose: 0, vel: 0, crush: 0 }, "a car strays from the live sim (m, m/s, m)");
   });
+
+  it("when that wreck drives on frozen at 36 m/s (sideswiped 1.5 s in, its drivetrain alive) into a parked car, then the replay from that keyframe matches the live sim at every step, to the bit", () => {
+    loadEpicenter(EPICENTER_AT_LOAD);
+    EPICENTER.on = 1;
+    // Cars 0 and 1 sideswipe at about 1.5 s and drive on frozen; car 0 meets the parked car 2 at about 7 s, and that clip (the one that starts latest) opens on car 0 frozen at speed.
+    const rec = recordFlat(
+      [
+        { x: 0, z: 0, yaw: HEAD, speed: 14, throttle: 1 },
+        { x: 60, z: 1.6, yaw: -HEAD, speed: 10, throttle: 1 },
+        { x: 250, z: -36.8, yaw: 0, speed: 0, throttle: 0 },
+      ],
+      12,
+      false,
+      [],
+      undefined,
+      null,
+      true,
+    );
+    loadEpicenter(EPICENTER_AT_LOAD);
+    const start = atClipStart(rec, 0);
+    assert.ok(
+      rec.clip.cars.some((c) => c.slot === 0) && start.wreck && start.frozen && start.speed > 20 && rec.cars[0]!.deform.drivetrainAlive,
+      `the clip must open on car 0 frozen and driving (clip cars ${rec.clip.cars.map((c) => c.slot).join()}, at its start ${JSON.stringify(start)}): the row proves nothing`,
+    );
+    const a = agreement(rec);
+    assert.ok(a.steps >= 100, `${a.steps} steps compared`);
+    assert.equal(a.wreckMismatch, 0, "a car is a wreck in one run and not in the other");
+    assert.deepEqual({ pose: a.pose.max, vel: a.vel.max, crush: a.crush.max }, { pose: 0, vel: 0, crush: 0 }, "a car strays from the live sim (m, m/s, m)");
+  });
 });

@@ -179,6 +179,10 @@ crash it recorded. What it takes, each found by the replay straying from the liv
   bake ever ran for it, the skin inputs zeroed too: `StreamedDeformation.writeNetState` leaves such a car its rest mesh, where skinning from zeros collapsed
   its body, hood, boot and glass on the origin (owner flag ZD1Z-TQXR: a player's car with a torn mirror replayed as a bare frame until the first contact baked a skin;
   `engine-record-bystander.test.ts`). A netplay client's gun-killed car and a held reset's undented car read the same way.
+- **A frozen wreck's body vectors**. A wreck's masses ride its rigid body's own velocity and spin vectors (`DeformRig.bodyV`, `bodyW`: `followGroup` hands them
+  over, and `rideBody` clears a driven wreck's spin on them). A wreck the epicenter activation froze runs no `followGroup`, so one a keyframe restored frozen rode
+  the reset's detached zeros: its masses at rest and its body's spin never cleared. A frozen sedan driven up an embankment replayed rolled onto its side, 16 m from
+  the monument it had turned into live (owner flag HWZM-ADDP). `DeformableCar.solverState` hands a restored wreck its own vectors (`replay-fidelity-epicenter.test.ts`).
 - **The cage is the sim's alone** (52). A car's contact shape, its cage (`CarCage`), is fitted from the skin the *sim* bakes (`DeformState.stepCrush`:
   every step of a crush window and a load crush's step) and from its parts' state
   (`hingePose`), never from what was drawn: drawing writes the mesh from the last bake and solves nothing (`engine/cage-draw-independence.test.ts`:
