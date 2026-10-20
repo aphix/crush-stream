@@ -207,6 +207,7 @@ export class SkidMarks {
       depthTest: false,
       depthWrite: false,
       transparent: true,
+      forceSinglePass: true, // additive blend is order-independent, so skip three's back-then-front double draw
     } as const;
     this.stamp = new THREE.Mesh(
       this.geo,

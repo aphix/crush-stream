@@ -168,7 +168,6 @@ export function makePaintMaterial(color: number): THREE.MeshPhysicalMaterial {
             roughness: 0.42,
             clearcoat: 0.72,
             clearcoatRoughness: 0.24,
-            envMapIntensity: 0.9,
             side: THREE.FrontSide,
           }),
         ),
@@ -188,7 +187,7 @@ const trimByColor = new Map<number, THREE.MeshStandardMaterial>();
 export function trimMaterial(color: number): THREE.MeshStandardMaterial {
   let m = trimByColor.get(color);
   if (m === undefined) {
-    m = classed(applyFinish(capHighlights(new THREE.MeshStandardMaterial({ color, metalness: 0.55, roughness: 0.38, envMapIntensity: 0.65 })), "trim"), DRAW_CLASS.trim);
+    m = classed(applyFinish(capHighlights(new THREE.MeshStandardMaterial({ color, metalness: 0.55, roughness: 0.38 })), "trim"), DRAW_CLASS.trim);
     m.userData.shared = true;
     trimByColor.set(color, m);
   }
@@ -270,7 +269,6 @@ export function makeGlassMaterial(): THREE.MeshStandardMaterial {
     roughness: 0.08,
     transparent: true,
     opacity: 0.72,
-    envMapIntensity: 1.15,
     side: THREE.DoubleSide,
     // Panes are near-planar: each pixel sees one face, so three's back-then-front two-pass draw
     // only doubled the draws and re-resolved the program twice per pane per frame.

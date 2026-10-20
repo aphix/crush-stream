@@ -36,7 +36,10 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
 - Hidden direct children of the scene (a rig, the arena, a pooled car) are parked out of its graph while no warm-up runs
   (`ParkingScene.sync`, once a frame before the draw): the matrix pass and traversals skip them. Every warm-up starts by
   putting them all back (`unparkAll`), so a hidden mode's programs link with the rest.
-- Post render targets and the mark map are allocated once and resized with the canvas, so a tier switch allocates nothing.
+- Post render targets and the mark map are allocated once and resized in place, so a tier switch allocates nothing, with two
+  exceptions: a switch between a 1024 mark-map tier (minimal, low) and a 2048 one (high, ultra) reallocates the mark map and
+  wipes it, and a canvas resize while a plain tier (off, minimal) is up frees the post targets, so the next switch to a post
+  tier reallocates them on its first post frame.
 - One material per draw kind: track art gives each draw kind its own copy of a material (`TrackArt.forDraw`) and
   instanced casters their own depth material, so three never re-selects a program between plain and instanced draws.
 - `npm run check:programs` plays the sandbox (fleet crash with cracked glass, drive, night / wet, every FX tier but Ultra, every

@@ -233,7 +233,7 @@ export function makePrefabMaterials(tex: RaceTextures): PrefabMaterials {
     concrete: new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }),
     building: new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.windows, roughness: 0.8, metalness: 0.05 }),
     billboard: new THREE.MeshStandardMaterial({ map: tex.billboard, emissiveMap: tex.billboard, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.6 }),
-    water: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.2, envMapIntensity: 1.4 }),
+    water: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.2 }),
   };
 }
 

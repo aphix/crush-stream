@@ -329,7 +329,8 @@ export class PostFX {
     this.composites = { low: composite(TIER.low), high, ultra: high };
     // Match the canvas: the renderer asked for MSAA only at a device pixel ratio of 1.
     const samples = renderer.getContextAttributes()?.antialias ? 4 : 0;
-    this.sceneRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples, depthBuffer: true, stencilBuffer: false });
+    // Nothing reads the scene's depth after the draw: skip the per-frame MSAA depth resolve.
+    this.sceneRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples, depthBuffer: true, stencilBuffer: false, resolveDepthBuffer: false });
     for (let i = 0; i < CHAIN; i++) {
       this.mips.push(new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false }));
     }
