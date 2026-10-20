@@ -5,7 +5,7 @@ import { applyGroundFriction, leftoverCrumple } from "../deform/physics-util.ts"
 import { C_PY, HIT_SIZE } from "../world/surfaces.ts";
 import { BARRIER_HALF, BARRIER_MASS, BARRIER_TOP, clipCarToBarrier } from "../contact/sat.ts";
 import { strikeCar, bodyHit, makeBox, type ContactBox } from "../contact/external-contact.ts";
-import { detSin, detCos, detAtan2, hypot2, hypot3 } from "../kernel/physics-core.js";
+import { CRASH, detSin, detCos, detAtan2, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { LAMP_POSTS, LAMP_RING_R } from "./fleet.ts";
 
 /** Fraction of a ramp ball's diameter left above the asphalt. */
@@ -261,7 +261,8 @@ export class JerseyBarrier {
 
   /**
    * The car meets the slab: `arm` starts or re-arms its crash at the face's closing speed, `feed` spends the hit's stroke (the slab's
-   * reaction slides it). Returns the hit for the cinematic and the FX while the car's hulls are in the slab.
+   * reaction slides it). Returns the hit for the cinematic and the FX while the car's hulls are in the slab, or while the face holds it
+   * closing faster than a graze: the contact starts before the overlap, so a hull that meets the face cleanly is never in it.
    */
   resolve(car: DeformableCar, arm: boolean, feed: boolean, dt: number): ContactHit | null {
     if (this.over(car)) return null;
@@ -272,7 +273,7 @@ export class JerseyBarrier {
     _cn.set(bodyHit.nx, 0, bodyHit.nz);
     if (feed && bodyHit.depth > 0) this.indent(_cp, _cn, Math.min(0.012, bodyHit.depth * 0.12));
     this.clip(car);
-    return bodyHit.depth > 0.001 ? { impulse: Math.max(bodyHit.closing, 0.5), contact: _cp, normal: _cn } : null;
+    return bodyHit.depth > 0.001 || (bodyHit.held && bodyHit.closing > CRASH.grazeMps) ? { impulse: Math.max(bodyHit.closing, 0.5), contact: _cp, normal: _cn } : null;
   }
 
   /** True when the slab sits between this pair so they must not SAT through it. */
