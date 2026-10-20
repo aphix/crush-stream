@@ -403,6 +403,11 @@ export class CrashCam {
     return this.camT >= CUTS[0] && this.camT < this.end;
   }
 
+  /** The hit the cuts stand on (a later crash's once its pick is done). */
+  get hit(): THREE.Vector3 {
+    return this.camAt;
+  }
+
   /**
    * The crash cam's window is open, from its hit (`begin`) to its hand-back at `crashCamEnd`: the lead-in before its first cut
    * and every cut. A thrown driver's ride-along waits for it (owner, 2026-10-10): the crash shots play first, then the camera
@@ -672,10 +677,13 @@ export class Cinematics {
     return on;
   }
 
-  /** Stamp the mark map, then draw the frame through the post chain (timed on the GPU where the browser has a timer). */
-  render(scene: THREE.Scene, camera: THREE.Camera, wallDt: number): void {
+  /**
+   * Stamp the mark map, its window round `markFocus` (what the shot watches: a camera far off still records the marks it films),
+   * then draw the frame through the post chain (timed on the GPU where the browser has a timer).
+   */
+  render(scene: THREE.Scene, camera: THREE.Camera, wallDt: number, markFocus: THREE.Vector3): void {
     this.gpu?.begin();
-    this.marks.flush(this.renderer, wallDt, camera.position.x, camera.position.z);
+    this.marks.flush(this.renderer, wallDt, markFocus.x, markFocus.z);
     this.post.render(scene, camera, wallDt);
     this.gpu?.end();
   }

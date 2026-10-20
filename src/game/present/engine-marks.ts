@@ -12,7 +12,7 @@ import { carClass, CLASSES, drivenAxles } from "../vehicle/vehicle-classes.ts";
  * however many marks exist: no per-mark meshes, the stamps of two frames go in one draw, an empty frame renders
  * nothing, and a slow subtractive fade pass ages old marks out.
  *
- * The map covers the course, or on a course wider than `MARK_TEXEL` texels allow, a window round the camera: the
+ * The map covers the course, or on a course wider than `MARK_TEXEL` texels allow, a window round what the shot watches: the
  * map wraps (world xz / window size is its uv), so the window slides a step at a time and wipes only the band it enters.
  *
  * Channels: R rubber (asphalt, concrete, cobble), G rut / scrape groove (dirt, gravel, sand, a bare hub),
@@ -160,7 +160,7 @@ export class SkidMarks {
   private readonly edge: Float32Array;
   /** Per wheel slot: the width of the stamp it queued last frame, 0 when it queued none (its strip starts afresh). */
   private readonly joinedWidth: Float32Array;
-  /** The course the marks cover (minX, minZ, sizeX, sizeZ); the window (`uMarkRect`) is all of it or a part round the camera. */
+  /** The course the marks cover (minX, minZ, sizeX, sizeZ); the window (`uMarkRect`) is all of it or a part round the shot's focus. */
   private readonly course = new THREE.Vector4(SANDBOX.minX, SANDBOX.minZ, SANDBOX.maxX - SANDBOX.minX, SANDBOX.maxZ - SANDBOX.minZ);
   /** Per car: launch spin held and eased out, so a boost launch lays two tapering stripes, not a 1 m dab. */
   private readonly spinHold: Float32Array;
@@ -358,8 +358,8 @@ export class SkidMarks {
   }
 
   /**
-   * Draw the queued stamps and the periodic fade into the map; call once per frame before the main render, with the camera's
-   * ground position (`focusX`, `focusZ`) the window follows. Stamps wait up to `DRAW_EVERY_FRAMES` calls and go in one
+   * Draw the queued stamps and the periodic fade into the map; call once per frame before the main render, with the ground
+   * position the shot watches (`focusX`, `focusZ`), which the window follows. Stamps wait up to `DRAW_EVERY_FRAMES` calls and go in one
    * `render()`: a fade, a wipe or a window step never waits.
    */
   flush(renderer: MarkRenderer, wallDt: number, focusX: number, focusZ: number): void {

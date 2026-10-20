@@ -125,11 +125,11 @@ describe("given the mark map on every course at each tier's map size", () => {
   }
 });
 
-/** A 64-texel map (6.4 m window, 0.4 m steps) on a 200 m course, each `clear` into it logged as its scissor rect "x,y,w,h". */
-function wideCourseMarks() {
+/** A `size`-texel map (`size` × 10 cm window, 1/16 steps) on a course of `bounds`, each `clear` into it logged as its scissor rect "x,y,w,h". */
+function wideCourseMarks(size = MAP_SIZE, bounds: readonly [number, number, number, number] = [-100, -100, 100, 100]) {
   const marks = new SkidMarks(4);
-  marks.setResolution(MAP_SIZE);
-  marks.setBounds(-100, -100, 100, 100);
+  marks.setResolution(size);
+  marks.setBounds(...bounds);
   const { renderer } = countingRenderer(marks);
   const wiped: string[] = [];
   renderer.clear = () => {
@@ -140,7 +140,7 @@ function wideCourseMarks() {
 }
 
 describe("given a course wider than the map's window", () => {
-  it("when the camera moves one step along x, then one band of columns a step wide is wiped, where the window just reached", () => {
+  it("when the shot's focus moves one step along x, then one band of columns a step wide is wiped, where the window just reached", () => {
     const { marks, renderer, wiped } = wideCourseMarks();
     marks.flush(renderer, WALL_DT, 0.2, 0.1);
     wiped.length = 0;
@@ -148,7 +148,7 @@ describe("given a course wider than the map's window", () => {
     assert.equal(wiped.join(" "), `32,0,4,${MAP_SIZE}`, "window x 3.2..3.6 m: columns 32-35");
   });
 
-  it("when the camera jumps three steps across the map's edge, then the band is wiped in two parts: the last columns and the first", () => {
+  it("when the shot's focus jumps three steps across the map's edge, then the band is wiped in two parts: the last columns and the first", () => {
     const { marks, renderer, wiped } = wideCourseMarks();
     marks.flush(renderer, WALL_DT, 2.6, 0.1);
     wiped.length = 0;
@@ -156,13 +156,44 @@ describe("given a course wider than the map's window", () => {
     assert.equal(wiped.join(" "), `56,0,8,${MAP_SIZE} 0,0,4,${MAP_SIZE}`, "window x 5.6..6.8 m: columns 56-63 and 0-3");
   });
 
-  it("when the camera stays inside its step, then nothing is wiped", () => {
+  it("when the shot's focus stays inside its step, then nothing is wiped", () => {
     const { marks, renderer, wiped } = wideCourseMarks();
     marks.flush(renderer, WALL_DT, 0.2, 0.1);
     wiped.length = 0;
     marks.flush(renderer, WALL_DT, 0.35, 0.3);
     assert.equal(wiped.length, 0);
   });
+});
+
+/** The National Mall's mark rect (m), rounded out. */
+const MALL_BOUNDS = [-2080, -1230, 730, 120] as const;
+/** A first crash's spot on it, mid-texel. */
+const FIRST_CRASH = [100.05, -300.05] as const;
+
+describe("given a reel on the National Mall with its 2048² map, the first crash's marks laid with the window on that crash", () => {
+  const directions = Array.from({ length: 8 }, (_, k) => (k * Math.PI) / 4);
+  for (const away of [20, 30, 40]) {
+    it(`when it cuts to a later crash ${away} m off in any of 8 directions, then no wipe touches the first crash's texel and the window still holds it`, () => {
+      const hit: string[] = [];
+      for (const a of directions) {
+        const { marks, renderer, wiped } = wideCourseMarks(2048, MALL_BOUNDS);
+        const [x, z] = FIRST_CRASH;
+        marks.flush(renderer, WALL_DT, x, z);
+        wiped.length = 0;
+        marks.flush(renderer, WALL_DT, x + away * Math.cos(a), z + away * Math.sin(a));
+        const { rect } = groundSample();
+        const col = Math.floor((((x * rect.z) % 1) + 1) % 1 * 2048);
+        const row = Math.floor((((z * rect.w) % 1) + 1) % 1 * 2048);
+        const inside = (x - rect.x) * rect.z < 1 && x >= rect.x && (z - rect.y) * rect.w < 1 && z >= rect.y;
+        const covered = wiped.some((r) => {
+          const [rx, ry, rw, rh] = r.split(",").map(Number) as [number, number, number, number];
+          return col >= rx && col < rx + rw && row >= ry && row < ry + rh;
+        });
+        if (!inside || covered) hit.push(`${((a * 180) / Math.PI).toFixed(0)}°: ${inside ? "wiped" : "outside the window"}`);
+      }
+      assert.equal(hit.join("; "), "", "directions that lose the first crash's marks");
+    });
+  }
 });
 
 /** Corner `v` (0 start left, 1 start right, 2 end right, 3 end left) of stamp quad `q` as (x, z). */

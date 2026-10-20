@@ -163,12 +163,12 @@ export function tap(pace: SimPacer, parts: BenchParts): Tap {
     t.simMs += performance.now() - t0;
     t.simS += simDt - (pace.lost - lost0);
   };
-  cine.render = (scene, camera, wallDt): void => {
+  cine.render = (scene, camera, wallDt, markFocus): void => {
     const t0 = performance.now();
     const timed = timer !== null && t.timing && inFlight < QUERY_POOL;
     const slot = (oldest + inFlight) % QUERY_POOL;
     if (timed) gl.beginQuery(elapsedTarget, pool[slot]!);
-    render.call(cine, scene, camera, wallDt);
+    render.call(cine, scene, camera, wallDt, markFocus);
     if (timed) {
       gl.endQuery(elapsedTarget);
       poolBlock[slot] = t.block;

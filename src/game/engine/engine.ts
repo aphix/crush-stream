@@ -620,7 +620,7 @@ export class CrashEngine extends EngineGarage {
     const drawAt = performance.now();
     if (!this.skipDraw) {
       this.scene.sync(this.warmsInFlight === 0);
-      this.cine.render(this.scene, this.camera, wallDt);
+      this.cine.render(this.scene, this.camera, wallDt, this.markFocus());
     }
     this.renderMs = performance.now() - drawAt;
     this.blend.restore();
@@ -882,6 +882,13 @@ export class CrashEngine extends EngineGarage {
       return this.followedCar() ?? car;
     },
   };
+
+  /** What the shot watches, for the tyre-mark window: the crash cam's hit while it cuts, else the reel's or the seat's car, else the eye. */
+  private markFocus(): THREE.Vector3 {
+    if (this.cine.cutting) return this.cine.crash.hit;
+    const car = this.highlights.playing ? this.highlights.focus() : this.followedCar();
+    return car ? car.group.position : this.camera.position;
+  }
 
   /** The rigs' shot, then the rear-view hold over it (undone before the next frame's rigs, so they never see it). */
   private updateCamera(wallDt: number): void {
