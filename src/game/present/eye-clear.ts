@@ -75,18 +75,23 @@ export class EyeClear {
    * no easing, so the eye depends on where it stands alone.
    */
   apply(s: Sight, boxes: readonly Occluder[], subject: Vec3, eye: THREE.Vector3, dt: number): void {
-    const len = hypot3(eye.x - subject.x, eye.y - subject.y, eye.z - subject.z);
-    if (len < PULL_NONE) return;
+    const reachOut = hypot3(eye.x - subject.x, eye.y - subject.y, eye.z - subject.z);
+    if (reachOut < PULL_NONE) return;
     this.sight = s;
     this.boxes = boxes;
     this.sx = subject.x;
-    this.sy = subject.y;
     this.sz = subject.z;
+    this.near = gather(s, this.sx - reachOut, this.sz - reachOut, this.sx + reachOut, this.sz + reachOut, CINE.pad);
+    const sy = this.clearAbove(subject.y, reachOut);
+    if (sy !== sy) return;
+    this.sy = sy;
     this.rx = eye.x - subject.x;
-    this.ry = eye.y - subject.y;
+    this.ry = eye.y - sy;
     this.rz = eye.z - subject.z;
+    const len = hypot3(this.rx, this.ry, this.rz);
+    if (len < PULL_NONE) return;
     this.len = len;
-    this.near = gather(s, this.sx - len, this.sz - len, this.sx + len, this.sz + len, CINE.pad);
+    if (len > reachOut) this.near = gather(s, this.sx - len, this.sz - len, this.sx + len, this.sz + len, CINE.pad);
 
     const over = this.liftOver();
     this.lift = over >= this.lift ? over : over + (this.lift - over) * Math.exp(-PULL_OMEGA * dt);
@@ -118,6 +123,17 @@ export class EyeClear {
     const sn = Math.sin(turn);
     const k = (len - this.pull) / len;
     eye.set(this.sx + (this.dx * c + this.dz * sn) * k, this.sy + this.dy * k, this.sz + (this.dz * c - this.dx * sn) * k);
+  }
+
+  /**
+   * The line's pivot: `y` over the subject, or for a subject inside a solid (a car in a ramp or a deck's slab, a look under a slope) the
+   * first height above it that stands clear, so the pull never closes on the subject itself. NaN: none within `reach` m up (the rig's eye stays).
+   */
+  private clearAbove(y: number, reach: number): number {
+    const s = this.sight!;
+    if (!solid(s, this.sx, y, this.sz, 0, this.near)) return y;
+    for (let up = CINE.pad; up <= reach; up += CINE.pad) if (!solid(s, this.sx, y + up, this.sz, CINE.pad, this.near)) return y + up;
+    return NaN;
   }
 
   /** The turn (rad) nearest the rig's, on the side it already turned if equal, with at least `need` m of clear line; else the one with most. */

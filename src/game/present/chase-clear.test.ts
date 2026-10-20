@@ -6,7 +6,7 @@ import { DriverSeat } from "../vehicle/car-drive.ts";
 import type { PadState } from "../vehicle/gamepad.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { DERBY_BOXES, DERBY_PROP, DERBY_TABLE_TOP, DerbyGround, type DerbyBox } from "../scenes/derby-ground.ts";
-import { NO_FLOOR, setGround } from "../world/ground.ts";
+import { activeGround, NO_FLOOR, setGround } from "../world/ground.ts";
 import { placeProps } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
@@ -102,13 +102,15 @@ const TABLE_TOP = DERBY_TABLE_TOP.height;
 /** The car stands still this long (s) before a drive sets off, so the chase eye settles first. */
 const HOLD = 1.5;
 
-/** Every frame of a car driven straight along `drive` (kinematically, at 60 Hz), followed by one chase camera that keeps clear (`keep`) or none. */
+/** Every frame of a car driven straight along `drive` (kinematically, at 60 Hz) on the bowl's floor, followed by one chase camera that keeps clear (`keep`) or none. */
 function follow(drive: Drive, keep: boolean) {
+  const floor = activeGround();
   const rivals = drive.rivals.map((r) => newCar(r.x, r.z, r.yaw));
+  for (const r of rivals) r.group.position.y = floor.heightAt(r.group.position.x, r.group.position.z);
   const car = newCar(drive.x, drive.z, drive.yaw);
   const sight = bowlSight(rivals, car);
   const exact = exactSolids(sight);
-  const { camera, view } = chaseRig(drive.x, drive.z, drive.yaw);
+  const { camera, view } = chaseRig(drive.x, drive.z, drive.yaw, floor.heightAt(drive.x, drive.z));
   view.drive.nudge(0, -drive.lookDown);
   const sx = Math.sin(drive.yaw);
   const cz = Math.cos(drive.yaw);
@@ -118,7 +120,9 @@ function follow(drive: Drive, keep: boolean) {
   for (let f = 0; f < (HOLD + drive.seconds) / DT; f++) {
     const moving = f * DT >= HOLD;
     const t = moving ? f * DT - HOLD : 0;
-    car.group.position.set(drive.x + sx * drive.speed * t, 0, drive.z + cz * drive.speed * t);
+    const x = drive.x + sx * drive.speed * t;
+    const z = drive.z + cz * drive.speed * t;
+    car.group.position.set(x, floor.heightAt(x, z), z);
     car.velocity.set(moving ? sx * drive.speed : 0, 0, moving ? cz * drive.speed : 0);
     view.frameDrive(car, keep ? sight : null, DT, false);
     subject.set(car.group.position.x, car.group.position.y + CHASE.third.aimUp, car.group.position.z);

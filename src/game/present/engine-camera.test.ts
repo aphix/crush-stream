@@ -7,13 +7,13 @@ import type { PadState } from "../vehicle/gamepad.ts";
 import { assignClass } from "../vehicle/vehicle-classes.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
-import { FLAT_GROUND, Ground, setGround } from "../world/ground.ts";
+import { FLAT_GROUND, Ground, setGround, STEP_UP } from "../world/ground.ts";
 import { Spring, Spring3 } from "./spring.ts";
 import { CHASE, DriveCam } from "./drive-cam.ts";
 import { LANDING } from "./landing.ts";
 import { type CarPicker, ChaseCamera, RIDE_PAUSE, type SpecScene } from "./engine-camera.ts";
 import { blankFreeInput, DRAG_PITCH_PER_PX, DRAG_YAW_PER_PX } from "./free-cam.ts";
-import { occluder, solid, type Sight } from "./spectate-cam.ts";
+import { CINE, occluder, solid, type Sight } from "./spectate-cam.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 
 const DT = 1 / FRAME_HZ;
@@ -188,6 +188,58 @@ describe("given the derby's orbit round a car 4 m from the bowl's 38 m wall", ()
     assert.ok(plain > 38, `the plain orbit reaches ${plain.toFixed(2)} m from the middle (the test needs it past the wall)`);
     const kept = turn(38);
     assert.ok(kept <= 36 + 1e-9, `eye ${kept.toFixed(2)} m from the middle`);
+  });
+});
+
+describe("given the orbit kept clear of the scene's solids round a look that is itself inside one", () => {
+  /** The followed car's look, 0.7 m over a sedan standing on flat ground at the origin (the engine's `followed.group.position.y + 0.7`). */
+  const carLook = (): THREE.Vector3 => {
+    const car = new DeformableCar(paint(), new THREE.Scene());
+    assignClass(car, "sedan");
+    car.spawnFacing(0, 0, 0, 0);
+    return new THREE.Vector3(0, car.group.position.y + 0.7, 0);
+  };
+  /** The road under an overpass whose deck top stands 1 m over the look: the look is in the deck's slab (a surface within `STEP_UP` over a point is over it). */
+  const overpass = (look: THREE.Vector3): Sight => {
+    const g = new Ground();
+    g.addPlane(0, -300, 300, -300, 300, Infinity);
+    g.addPlane(look.y + 1, -300, 300, -5, 5, STEP_UP);
+    return { ground: g, path: null, wallTop: 0, rim: Infinity, occ: [] };
+  };
+  /** A slope rising 1 in 2 toward +z from z = 0, and a look 0.7 m over the flat 2 m up it: 0.3 m under the slope. */
+  const slope = (): Sight => {
+    const g = new Ground();
+    g.addPlane(0, -300, 300, -300, 300, Infinity);
+    g.addFace(-300, 0, 0, 600, 300, 0, 0, 150, 150, Infinity);
+    return { ground: g, path: null, wallTop: 0, rim: Infinity, occ: [] };
+  };
+  /** A ramp's 1.6 m block (a prop's box) the followed car has run into: the look is inside it. */
+  const ramp: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ: [occluder(0, 0, 0, 2, 3, false, 0, 1.6)] };
+
+  it("when the orbit goes a whole turn round a car under an overpass, at the foot of a rising slope and inside a ramp, then the eye stands outside every solid and never within CINE.stop of the look", () => {
+    const look = carLook();
+    const cases: [string, Sight, THREE.Vector3][] = [
+      ["overpass", overpass(look), look],
+      ["slope", slope(), new THREE.Vector3(0, 0.7, 2)],
+      ["ramp", ramp, look],
+    ];
+    const spin = 0.32;
+    for (const [name, sight, at] of cases) {
+      assert.ok(solid(sight, at.x, at.y, at.z, 0), `${name}: the look is not inside a solid (the test needs it inside)`);
+      const { camera, view } = rig("global");
+      view.look.copy(at);
+      camera.position.set(at.x, at.y + 5, at.z + 13);
+      let near = Infinity;
+      let buried = 0;
+      for (let f = 0; f < 120 + Math.round((2 * Math.PI) / spin / DT); f++) {
+        view.orbit(DT, spin, false, sight);
+        const p = camera.position;
+        near = Math.min(near, p.distanceTo(at));
+        if (solid(sight, p.x, p.y, p.z, 0)) buried++;
+      }
+      assert.equal(buried, 0, `${name}: the eye stood inside a solid on ${buried} frames`);
+      assert.ok(near >= CINE.stop, `${name}: the eye came ${near.toFixed(2)} m from the look`);
+    }
   });
 });
 
