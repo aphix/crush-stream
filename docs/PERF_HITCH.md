@@ -33,6 +33,10 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
   `start()` but only simulates and draws after `ready`.
 - New scene content warms where it appears: a race course's art (`buildArt`) and new cars (`buildCar`) queue the same
   warm-up, so it runs in the setup menu or the countdown.
+- Both car finish states warm whatever the tier (`EngineWarm.eachFinish`): plain paint for both outputs, the finish (it
+  draws only at `high` and `ultra`) for the HDR target alone, so it has no canvas twin. A tier switch that changes the
+  finish queues the same warm-up, which finds every program linked and drawn and skips its draws. When a switch only
+  compiled them, its first frame drew 6 new programs and took 162–194 ms (`check:programs`, headless ANGLE/GL).
 - Hidden direct children of the scene (a rig, the arena, a pooled car) are parked out of its graph while no warm-up runs
   (`ParkingScene.sync`, once a frame before the draw): the matrix pass and traversals skip them. Every warm-up starts by
   putting them all back (`unparkAll`), so a hidden mode's programs link with the rest.
@@ -43,8 +47,10 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
 - One material per draw kind: track art gives each draw kind its own copy of a material (`TrackArt.forDraw`) and
   instanced casters their own depth material, so three never re-selects a program between plain and instanced draws.
 - `npm run check:programs` plays the sandbox (fleet crash with cracked glass, drive, night / wet, every FX tier but Ultra, every
-  scene, debug views) and a race on every course, and fails if any program links after the boot warm-up or between a
-  race's green light and its end. Ultra links its programs on its first pick, by design ([`CINEMATIC.md`](CINEMATIC.md)).
+  scene, debug views), a race on every course, and, booted at High, a sprayed race whose tier drops to Low and comes back. It
+  fails if any program links after the boot warm-up or between a race's green light and its end, if a tier switch links a
+  program or draws one for the first time inside a frame (it prints the switch's first three frames' draw ms), or if a finish
+  program exists for the canvas. Ultra links its programs on its first pick, by design ([`CINEMATIC.md`](CINEMATIC.md)).
 
 **The `minimal` tier** (the default, `INITIAL_HUD.fxTier`; `?fx=` sets it) renders straight to the canvas: no HDR target,
 bloom, grade, vignette, grain or blur. It keeps every effect that needs no post (tyre marks, tyre smoke, slip sparks, shake,

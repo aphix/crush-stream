@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { getCrackMap, makeGlassMaterial } from "../vehicle/car-materials.ts";
+import { applyCarFinish, finishedMaterials } from "../vehicle/car-finish.ts";
 import { warmCrashPath } from "./world-step.ts";
 import { loadSkinKernel, skinKernel } from "../deform/skin-kernel.ts";
 import { EngineCore } from "./engine-core.ts";
@@ -67,12 +68,18 @@ export abstract class EngineWarm extends EngineCore {
    * canvas and the HDR target) and the mark map, through a zero-area scissor so nothing lands. Compiling alone
    * left each program's first draw mid-race to check its link and fetch its uniform locations: synchronous GPU
    * round trips, 110–340 ms frames. The draws also link what compile() skips (shadow-depth variants of hidden
-   * or far meshes) and upload every texture.
+   * or far meshes) and upload every texture. Both car finish states are warmed whatever the tier (`eachFinish`).
    */
   private async warmScene(): Promise<void> {
     const programs = this.renderer.info.programs?.length ?? 0;
     this.scene.unparkAll();
-    await this.cine.post.warm(this.scene, this.camera, [[this.cine.marks.scene, this.cine.marks.camera]]);
+    const post = this.cine.post;
+    const jobs: Promise<unknown>[] = [];
+    this.eachFinish(
+      () => jobs.push(post.warm(this.scene, this.camera, [[this.cine.marks.scene, this.cine.marks.camera]])),
+      () => jobs.push(post.warmHdr(this.scene, this.camera)),
+    );
+    await Promise.all(jobs);
     if (this.disposed) return;
     // After boot every known program has drawn; the draws below cost the GPU process ~0.5–1 s for a whole
     // course, so content that brought no new program (the city's traffic cars) skips them.
@@ -102,10 +109,18 @@ export abstract class EngineWarm extends EngineCore {
     r.setScissorTest(true);
     hdr.scissor.set(0, 0, 0, 0);
     hdr.scissorTest = true;
-    for (const target of [null, hdr]) {
-      r.setRenderTarget(target);
-      r.render(this.scene, this.camera);
-    }
+    this.eachFinish(
+      () => {
+        for (const target of [null, hdr]) {
+          r.setRenderTarget(target);
+          r.render(this.scene, this.camera);
+        }
+      },
+      () => {
+        r.setRenderTarget(hdr);
+        r.render(this.scene, this.camera);
+      },
+    );
     this.cine.post.prime();
     hdr.scissorTest = false;
     r.setScissorTest(false);
@@ -114,6 +129,19 @@ export abstract class EngineWarm extends EngineCore {
     for (const o of shown) o.visible = false;
     for (const o of culled) o.frustumCulled = true;
     for (const m of hiddenMats) m.visible = false;
+  }
+
+  /**
+   * Run `off` with every car finish in the scene off, then `on` with it on, then put each material's own state back: an FX tier
+   * switch (Auto steps down mid-race) then links nothing. The finish draws only at the post tiers, so `on` is for the HDR target alone.
+   */
+  private eachFinish(off: () => void, on: () => void): void {
+    const finished = finishedMaterials(this.scene);
+    applyCarFinish(this.scene, false);
+    off();
+    applyCarFinish(this.scene, true);
+    on();
+    applyCarFinish(this.scene, finished);
   }
 
   /**

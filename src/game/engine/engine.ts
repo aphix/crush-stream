@@ -231,7 +231,7 @@ export class CrashEngine extends EngineGarage {
     this.ragdolls.poles = this.poles;
     this.ragdolls.lookOf = (car) => this.looks.of(car, this.ownCar());
     this.lab.dolls = this.ragdolls;
-    this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion);
+    this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
     const fxParam = FX_TIERS.find((t) => t === new URLSearchParams(window.location.search).get(SETTING_KEY.fx));
     this.cine.marks.phone = !desktop;
