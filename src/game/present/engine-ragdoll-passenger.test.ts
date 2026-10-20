@@ -145,3 +145,27 @@ describe("given two dummies thrown from two cars straight at each other, both in
     assert.ok(xa > -1 && xa < 0 && xb > 0 && xb < 1, `they came down at x ${xa.toFixed(2)} and ${xb.toFixed(2)} m (thrown from ∓${MEET_APART / 2})`);
   });
 });
+
+describe("given two dummies thrown from one car (a driver and his passenger), both in their first moments out, the second straight at the first", () => {
+  it("when the second reaches the first, then he hits him (no part sinks 10 cm into him) and his torso stops short of the first's instead of passing through", async (t) => {
+    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    await ragdolls.preload();
+    setGround(null);
+    ragdolls.update(1 / FRAME_HZ, [], true, false, null);
+    const lying = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
+    ragdolls.spawn({ car: 0, p: new THREE.Vector3(0, 1.2, 0), q: lying, v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
+    ragdolls.spawn({ car: 0, p: new THREE.Vector3(-MEET_APART / 2, 1.2, 0), q: lying, v: new THREE.Vector3(MEET_MPS, 0, 0), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
+    const [a, b]: { bodies: RigidBody[] }[] = ragdolls["dolls"];
+    let deepest = 0;
+    let ahead = -Infinity;
+    for (let f = 0; f < FRAME_HZ / 2; f++) {
+      ragdolls.update(1 / FRAME_HZ, [], true, false, null);
+      deepest = Math.max(deepest, overlap(a!.bodies, b!.bodies));
+      ahead = Math.max(ahead, b!.bodies[0]!.translation().x - a!.bodies[0]!.translation().x);
+    }
+    ragdolls.dispose();
+    t.diagnostic(`deepest ${(deepest * 100).toFixed(1)} cm; the second torso got to ${ahead.toFixed(2)} m of the first's`);
+    assert.ok(deepest < 0.1, `a part sank ${(deepest * 100).toFixed(0)} cm into the other dummy`);
+    assert.ok(ahead < 0, `the second torso got ${ahead.toFixed(2)} m past the first's`);
+  });
+});
