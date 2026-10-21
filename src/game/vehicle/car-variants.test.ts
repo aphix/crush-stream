@@ -10,7 +10,7 @@ import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { MIRROR_ROOT } from "./part-geometry.ts";
 import { makeGreenhouseFrame } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { glassCorners, makeRearGlass, makeWindshield } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, glassCorners, makeRearGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { LIGHT_BAR_FOOT, makeLightBar } from "./car-materials.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
@@ -464,5 +464,78 @@ describe("given a body style's H2 hardpoints", () => {
         assert.ok(top <= roof + 1e-6, `${id} ${name} header bar tops out at y ${top}, roof skin over its end (x ${width / 2}, z ${z}) at ${roof}`);
       }
     }
+  });
+
+  it("when its door hinge moves, then the door glass stays in the same window: it rides on its door's own hinge", () => {
+    const moved: BodyStyle = { ...sedan, door: { ...sedan.door, hingeX: 0.8, hingeY: 0.79, hingeZ: 0.7 } };
+    const inCar = (style: BodyStyle) => {
+      const box = partBox(makeSideGlass(1, style));
+      const { hingeX, hingeY, hingeZ } = style.door;
+      return [box.max.x + hingeX + DOOR_GLASS_SEAT.x, box.max.y + hingeY + DOOR_GLASS_SEAT.y, box.max.z + hingeZ + DOOR_GLASS_SEAT.z];
+    };
+    assertSameNumbers(inCar(moved), inCar(sedan), "right door pane's top corner in the car (x, y, z)", 1e-6);
+  });
+});
+
+const DETAIL_TOLERANCE = 0.02;
+
+function detailFaults(style: BodyStyle): string[] {
+  const { dims, details } = style;
+  const faults: string[] = [];
+  if (!details) return faults;
+  const zMin = -(dims.wheelbase / 2 + dims.overhang.rear);
+  const zMax = dims.wheelbase / 2 + dims.overhang.front;
+  const halfWidth = dims.width / 2;
+  const boxes = {
+    side: [[zMin, zMax], [0, dims.height]],
+    top: [[zMin, zMax], [0, halfWidth]],
+    front: [[0, halfWidth], [0, dims.height]],
+    rear: [[0, halfWidth], [0, dims.height]],
+  } as const;
+  const check = (kind: string, index: number, item: (typeof details.lines)[number] | (typeof details.patches)[number]) => {
+    const [a, b] = boxes[item.view];
+    for (const [p, q] of item.points) {
+      if (p < a[0] - DETAIL_TOLERANCE || p > a[1] + DETAIL_TOLERANCE || q < b[0] - DETAIL_TOLERANCE || q > b[1] + DETAIL_TOLERANCE) {
+        faults.push(`${style.id} ${kind} ${index} (${item.view}) point [${p}, ${q}] is outside the car box a [${a[0]}, ${a[1]}], b [${b[0]}, ${b[1]}]`);
+      }
+    }
+    if (Math.abs(item.depth) > 0.006) faults.push(`${style.id} ${kind} ${index} depth ${item.depth} exceeds 0.006`);
+    if (item.cavity < 0 || item.cavity > 1) faults.push(`${style.id} ${kind} ${index} cavity ${item.cavity} is outside [0, 1]`);
+  };
+  for (let i = 0; i < details.lines.length; i++) {
+    const line = details.lines[i]!;
+    check("line", i, line);
+    if (line.points.length < 2) faults.push(`${style.id} line ${i} has ${line.points.length} points, needs 2`);
+    if (line.width < 0.006) faults.push(`${style.id} line ${i} width ${line.width} is under 0.006`);
+  }
+  for (let i = 0; i < details.patches.length; i++) {
+    const patch = details.patches[i]!;
+    check("patch", i, patch);
+    if (patch.points.length < 3) faults.push(`${style.id} patch ${i} has ${patch.points.length} points, needs 3`);
+    if (patch.rim < 0) faults.push(`${style.id} patch ${i} rim ${patch.rim} is negative`);
+  }
+  return faults;
+}
+
+describe("given a body style's detail table", () => {
+  it("when any style's details are read, then every stroke and patch lies on the car within its view", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const faults = detailFaults(CAR_STYLES[id]);
+      assert.ok(faults.length === 0, `${id} has ${faults.length} detail faults: ${faults.join("; ")}`);
+    }
+  });
+
+  it("when a stroke runs past the nose, then the check names it", () => {
+    const sedan = CAR_STYLES.sedan;
+    const noseZ = sedan.dims.wheelbase / 2 + sedan.dims.overhang.front;
+    const style: BodyStyle = {
+      ...sedan,
+      details: {
+        lines: [{ view: "side", points: [[0, 0.5], [noseZ + 0.1, 0.5]], width: 0.008, depth: -0.004, profile: "v", cavity: 0.85 }],
+        patches: [],
+      },
+    };
+    const faults = detailFaults(style);
+    assert.ok(faults.length === 1, `expected 1 fault for a stroke 0.1 m past the nose at z ${noseZ + 0.1}, got ${faults.length}: ${faults.join("; ")}`);
   });
 });

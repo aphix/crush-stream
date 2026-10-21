@@ -11,8 +11,8 @@ import { beltY } from "./car-lines.ts";
 export const GLASS_NAMES: readonly GlassName[] = ["windshield", "rear", "doorL", "doorR", "quarterL", "quarterR"];
 
 const SEDAN = CAR_STYLES.sedan;
-/** Door glass pane origin in car space (door hinge + pane offset set in car.ts). */
-const DOOR_GLASS_ORIGIN = { x: 0.84, y: 1.06, z: 0.27 } as const;
+/** The door glass pane's origin in door space (right door; the left mirrors x): the pane is parented to its door there. */
+export const DOOR_GLASS_SEAT = { x: -0.02, y: 0.52, z: -0.28 } as const;
 
 const _pt = new THREE.Vector3();
 
@@ -120,10 +120,11 @@ function makeSideGlassPane(sign: number, style: BodyStyle, span: SideSpan, origi
   return geo;
 }
 
-/** Door glass in pane-local space: car.ts parents it to the door at (∓0.02, 0.52, -0.28). */
+/** Door glass in pane-local space: car.ts parents it to the door at `DOOR_GLASS_SEAT` (x mirrored on the left). */
 export function makeSideGlass(sign: number, style: BodyStyle = SEDAN): THREE.BufferGeometry {
-  const o = DOOR_GLASS_ORIGIN;
-  return makeSideGlassPane(sign, style, doorSpan(style), [sign * o.x, o.y, o.z]);
+  const d = style.door;
+  const o = DOOR_GLASS_SEAT;
+  return makeSideGlassPane(sign, style, doorSpan(style), [sign * (d.hingeX + o.x), d.hingeY + o.y, d.hingeZ + o.z]);
 }
 
 /** Quarter glass from the B-pillar back to the C-pillar, on the body (car local). */
