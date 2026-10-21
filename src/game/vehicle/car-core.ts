@@ -316,7 +316,8 @@ export abstract class CarCore {
   readonly wheelRate = new Float64Array(4);
   /** Throttle (−1..1) of a driven body in the air, which winds its wheels up (`applyDrive` writes it; drive state idles there). */
   airThrottle = -0;
-  protected glassPanes: GlassPane[] = [];
+  /** Every pane (`addGlass`); a car the distance detail has cut draws the shown ones through `CoverBatch`. */
+  readonly glassPanes: GlassPane[] = [];
   protected parts: DetachPart[] = [];
   /** [left, right] door and mirror parts, also listed in `parts`. */
   protected doorParts: DetachPart[] = [];
@@ -331,6 +332,8 @@ export abstract class CarCore {
   readonly lamps: Lamp[] = [];
   /** Hood, boot lid, doors, bumpers: they lie on the shell until a crash or hinge moves them, so an undamaged car's sun shadow is the body's alone (`CarParts.settleCasters`); far-car detail cuts treat them as casters anyway. */
   readonly flushCasters: THREE.Mesh[] = [];
+  /** The doors: the door cut drops the body's side to the sill, so a car with them off the camera is open there; a far-cut car draws them through `CoverBatch`. */
+  readonly apertureParts: THREE.Mesh[] = [];
   protected hullHelper: THREE.LineSegments | null = null;
   abstract readonly cage: CarCage;
   private bumperF: THREE.Group;
@@ -426,6 +429,7 @@ export abstract class CarCore {
     this.hoodOrigin = this.hood.position.clone();
     this.trunkOrigin = this.trunk.position.clone();
     this.flushCasters.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
+    this.apertureParts.push(this.doorMeshL, this.doorMeshR);
 
     this.bumperF = this.makeBumper(true, livery?.accent ?? paint.accent);
     this.bumperR = this.makeBumper(false, livery?.accent ?? paint.accent);

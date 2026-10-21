@@ -7,11 +7,13 @@
  * program that failed to link. Exit 1 on a link failure or a GL error. Not a frame-time judge: the browser bench is.
  *
  *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png]
- *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--at 8]
+ *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--at 8] [--detail 2]
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
  * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
- * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--at` is the sim seconds before the drawn frames.
+ * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--at` is the sim seconds before the drawn frames;
+ * `--detail` puts a distance-detail rung in force (`DETAIL_LEVELS`: 0 the desktop's, 2 the phone's; `off`: no cuts, the bench's detail A/B arms),
+ * and the JSON counts the cars cut to their body (`farCars`).
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -52,6 +54,7 @@ const { values } = parseArgs({
     hash: { type: "string" },
     camera: { type: "string" },
     at: { type: "string", default: String(START_S) },
+    detail: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -64,6 +67,8 @@ if (!Number.isInteger(frames) || frames < 1) throw new Error(`--frames ${values.
 if (size === null) throw new Error(`--size ${values.size}: width x height, e.g. 1280x800`);
 if (!(atS >= 0)) throw new Error(`--at ${values.at}: sim seconds, 0 or more`);
 if (camera !== undefined && (camera.length !== 3 || !camera.every(Number.isFinite))) throw new Error(`--camera ${values.camera}: radius,pitch,angle, e.g. 2.4,0.12,2.1`);
+const detail = values.detail === undefined || values.detail === "off" ? values.detail : Number(values.detail);
+if (typeof detail === "number" && !Number.isInteger(detail)) throw new Error(`--detail ${values.detail}: a rung of DETAIL_LEVELS (e.g. 2) or off`);
 const W = Number(size[1]);
 const H = Number(size[2]);
 const out = resolve(values.out ?? `screenshots/headless-frame-${tier}.png`);
@@ -181,6 +186,9 @@ await engine.ready;
 const readyMs = Math.round(performance.now() - bootAt);
 if (tier === "ultra" && !(await engine.loadUltra())) throw new Error("headless-frame: the Ultra look did not load (see the console)");
 engine.setFxTier(tier);
+// The tier set by hand turns Auto off, so the detail governor leaves the rung put from here.
+if (detail === "off") engine["detail"].setDistances(Infinity, Infinity);
+else if (detail !== undefined) engine["detail"].setLevel(detail);
 
 const FRAME = 1 / FRAME_HZ;
 engine.fadeScenes = false;
@@ -214,6 +222,7 @@ for (let f = 0; f < frames; f++) {
 const glError = gl.getError();
 const { render, memory, programs } = three.info;
 const counts = { calls: render.calls, triangles: render.triangles, programs: programs.length, textures: memory.textures, geometries: memory.geometries };
+const farCars = engine["cars"].filter((car) => engine["detail"].isFar(car)).length;
 
 const w = canvas.width;
 const h = canvas.height;
@@ -228,7 +237,7 @@ mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, await shot.encode("png"));
 
 engine.dispose();
-const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
+const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, detail: engine["detail"].level, farCars, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
 process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 
