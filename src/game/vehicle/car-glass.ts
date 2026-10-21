@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassQuad } from "./car-variants.ts";
-import { beltY, glassTopY, glassX, lerp } from "./car-mesh.ts";
+import { glassTopY, glassX, lerp } from "./car-mesh.ts";
+import { beltY } from "./car-lines.ts";
 
 // Glass panes on the shared platform: windshield, rear glass, door and quarter glass, filling the greenhouse `car-greenhouse-mesh.ts` builds.
 
