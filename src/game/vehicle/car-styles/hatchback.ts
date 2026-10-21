@@ -25,7 +25,7 @@ export const HATCHBACK: BodyStyle = {
       wrap: { from: 0.46, back: 0.1 },
     },
   },
-  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.86, halfHeight: 0.3, mirrorY: 0.32, mirrorZ: 0.185, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.21, 0.62] },
+  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.86, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.21, 0.62] },
   aPillarFoot: 0.73,
   aPillarTop: 0.3,
   glassTop: 0.045,
