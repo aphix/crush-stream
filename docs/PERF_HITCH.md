@@ -41,6 +41,10 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
 - Hidden direct children of the scene (a rig, the arena, a pooled car) are parked out of its graph while no warm-up runs
   (`ParkingScene.sync`, once a frame before the draw): the matrix pass and traversals skip them. Every warm-up starts by
   putting them all back (`unparkAll`), so a hidden mode's programs link with the rest.
+- A lost WebGL context that the browser gives back (`webglcontextrestored`) has lost every program and GPU object. three
+  rebuilds its own state. The engine (`onContextRestored`) re-runs the warm-up, which links and draws the whole scene again.
+  It also makes a new `GpuTimer` (the old queries died) and re-bakes the studio environment and Ultra's sky, whose PMREM
+  targets lost their contents. Auto's and the detail governor's windows start over: the frames while lost drew nothing.
 - Post render targets and the mark map are allocated once and resized in place, so a tier switch allocates nothing, with two
   exceptions: on a desktop a switch between a 1024 mark-map tier (minimal, low) and a 2048 one (high, ultra) reallocates the mark map and
   wipes it, and a canvas resize while a plain tier (off, minimal) is up frees the post targets, so the next switch to a post

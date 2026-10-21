@@ -536,7 +536,7 @@ export class Cinematics {
   private punch = 0;
   /** The crash cam (the camera half of the crash): `impact` starts it, `direct` runs it. */
   readonly crash: CrashCam;
-  private readonly gpu: GpuTimer | null;
+  private gpu: GpuTimer | null;
   /** The engine's draw warm-up (`EngineWarm.queueWarm`): links and draws what the scene draws next, outside a frame. */
   private readonly queueWarm: () => void;
 
@@ -691,6 +691,11 @@ export class Cinematics {
   /** GPU ms of the newest finished draw since the last call; -1 when none finished or the browser has no timer. */
   gpuMs(): number {
     return this.gpu ? this.gpu.take() : -1;
+  }
+
+  /** The context came back (`webglcontextrestored`): the timer's queries died with the old one. */
+  contextRestored(): void {
+    this.gpu = GpuTimer.create(this.renderer.getContext() as WebGL2RenderingContext);
   }
 
   dispose(): void {

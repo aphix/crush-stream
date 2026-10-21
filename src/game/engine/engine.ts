@@ -272,6 +272,8 @@ export class CrashEngine extends EngineGarage {
     window.addEventListener("keydown", this.onKey);
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("blur", this.onBlur);
+    // three calls preventDefault on webglcontextlost (so the browser may restore) and rebuilds its own state on restore; the rest is ours.
+    canvas.addEventListener("webglcontextrestored", this.onContextRestored);
     this.pad.attach(() => this.emitHud());
     this.view.attach();
     try {
@@ -451,6 +453,7 @@ export class CrashEngine extends EngineGarage {
     const g = window as unknown as { __crush?: CrashEngine };
     if (g.__crush === this) delete g.__crush;
     const gl = this.renderer.getContext();
+    this.renderer.domElement.removeEventListener("webglcontextrestored", this.onContextRestored);
     this.renderer.dispose();
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
@@ -469,6 +472,26 @@ export class CrashEngine extends EngineGarage {
     this.detail.setLevel(this.detailGov.level);
     this.pace.reset();
   }
+
+  /**
+   * The browser gave the context back: the timer's queries, the PMREM environments (the studio's; Ultra's sky with its handle) and every
+   * program's link went with the old one, and the load windows counted frames that drew nothing.
+   */
+  private readonly onContextRestored = (): void => {
+    this.cine.contextRestored();
+    this.autoFx.restart();
+    this.detailGov.restart();
+    const ultra = this.cine.tier === "ultra";
+    if (this.cine.ultra) {
+      if (ultra) this.cine.setTier("high");
+      this.cine.ultra.dispose();
+      this.cine.ultra = null;
+    }
+    void this.attachStudioEnv().then(() => {
+      if (ultra) this.setFxTier("ultra");
+    });
+    this.queueWarm();
+  };
 
   private tick = (now: number): void => {
     if (this.disposed) return;

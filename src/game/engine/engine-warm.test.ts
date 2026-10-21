@@ -15,14 +15,28 @@ const FINISH_PASSES = "canvas plain,hdr finish,hdr plain";
 /** The purse pool's program key (`Purses`): one program per output, the canvas and the HDR target. */
 const PURSE_KEY = "purse-shapes";
 const OUTPUTS = 2;
+/** One frame longer than any load window's settle: the window under way is past it. */
+const PAST_SETTLE_MS = 60_000;
 
 const isDrawn = (object: THREE.Object3D): boolean => {
   for (let node: THREE.Object3D | null = object; node; node = node.parent) if (!node.visible) return false;
   return true;
 };
 
+/** A stand-in canvas that keeps its listeners (three's and the engine's), so a row can play the browser's context events to them. */
+function listeningCanvas(): { canvas: HTMLCanvasElement & HTMLElement; fire: (type: string) => void } {
+  const canvas = element();
+  const heard: { type: string; listener: (event: Event) => void }[] = [];
+  Object.assign(canvas, { addEventListener: (type: string, listener: (event: Event) => void) => heard.push({ type, listener }) });
+  const fire = (type: string): void => {
+    for (const h of heard) if (h.type === type) h.listener(new Event(type, { cancelable: true }));
+  };
+  return { canvas, fire };
+}
+
 describe("given the engine warming its programs before the loop starts", () => {
   let engine: CrashEngine;
+  let fire: (type: string) => void;
   const drawnDebugViews = new Set<string>();
   const compiledPasses = new Set<string>();
   const drawnPasses = new Set<string>();
@@ -44,7 +58,9 @@ describe("given the engine warming its programs before the loop starts", () => {
   };
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
+    const listening = listeningCanvas();
+    fire = listening.fire;
+    engine = new CrashEngine(listening.canvas, new HudStore(), element());
     // Links for real (three's compile); its async poll is skipped, as the stand-in context has no KHR_parallel_shader_compile and three warns.
     const compile = engine["renderer"].compile.bind(engine["renderer"]);
     const compileAsync = async (scene: THREE.Object3D, camera: THREE.Camera, target?: THREE.Scene | null): Promise<THREE.Object3D> => {
@@ -99,5 +115,17 @@ describe("given the engine warming its programs before the loop starts", () => {
     await yieldToLoop();
     assert.equal([...compiledPasses].sort().join(), FINISH_PASSES);
     assert.ok(paintKey().includes(FINISH_KEY_MARK), `key ${paintKey()}`);
+  });
+
+  it("when the context is lost and restored, then the warm-up links and draws the whole scene again and both load windows start over", async () => {
+    const windows = [engine["autoFx"]["win"], engine["detailGov"]["win"]];
+    for (const win of windows) win.add(PAST_SETTLE_MS, 0, 0, -1);
+    await warmsDone();
+    drawnMaterials.clear();
+    fire("webglcontextlost");
+    fire("webglcontextrestored");
+    await warmsDone();
+    assert.equal(drawnMaterials.has(engine["live"]()[0]!.lookMeshes().bodyPaint), true, "car paint was not drawn again");
+    assert.equal(windows.map((win) => win.settling).join(), "true,true");
   });
 });
