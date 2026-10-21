@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { describe, it } from "node:test";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { CAR_STYLES, CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
+import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import { CREASE_DEGREES, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
@@ -378,12 +379,26 @@ const BASELINE_BY_STYLE = [
 ] as const satisfies readonly { id: CarStyleId; drawCalls: number; triangles: number; bodyVertices: number }[];
 /** The stated budget: a car's triangles at most 1.6 x the baseline. */
 const TRIANGLE_BUDGET = 1.6;
-/** The skin writes every body vertex each frame (its cost follows the count): the body at most 1.2 x the baseline's vertices, which measured 1.2 x the baseline's skin time at most. */
+/** The skin writes every body vertex each frame (its cost follows the count): the body's loft at most 1.2 x the baseline's vertices, which measured 1.2 x the baseline's skin time at most. */
 const BODY_VERTEX_BUDGET = 1.2;
+/** Each roof fitting kind's vertices as built (`makeRoofFittings`), merged into the body on top of its loft: red if a fitting grows. */
+const ROOF_FITTING_VERTICES = { rails: 220, glassPanel: 154, spoiler: 26 } as const;
+type RoofKind = keyof typeof ROOF_FITTING_VERTICES;
+
+/** `style`'s roof fittings' vertices, all together and per kind (each built alone). */
+function roofFittingVertices(style: BodyStyle): { all: number; byKind: [RoofKind, number][] } {
+  const count = (s: BodyStyle) => makeRoofFittings(s)?.geometry.getAttribute("position").count ?? 0;
+  const kinds = Object.keys(style.roof ?? {}) as RoofKind[];
+  return { all: count(style), byKind: kinds.map((kind) => [kind, count({ ...style, roof: { [kind]: style.roof![kind] } })]) };
+}
+
+function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
+  for (const [kind, n] of byKind) assert.ok(n <= ROOF_FITTING_VERTICES[kind], `${id} ${kind}: ${n} vertices against ${ROOF_FITTING_VERTICES[kind]}`);
+}
 
 describe("given every body style's car built whole", () => {
   for (const testCase of BASELINE_BY_STYLE) {
-    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices`, () => {
+    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting within its own count`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, testCase.id);
       let drawCalls = 0;
       let triangles = 0;
@@ -395,10 +410,21 @@ describe("given every body style's car built whole", () => {
       });
       assert.equal(drawCalls, testCase.drawCalls);
       assert.ok(triangles <= testCase.triangles * TRIANGLE_BUDGET, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`);
-      const bodyVertices = car.body.geometry.getAttribute("position").count;
-      assert.ok(bodyVertices <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${bodyVertices} body vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
+      const fittings = roofFittingVertices(car.style);
+      const loft = car.body.geometry.getAttribute("position").count - fittings.all;
+      assert.ok(loft <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
+      assertRoofFittingCaps(testCase.id, fittings.byKind);
     });
   }
+
+  it("when a body carries every roof fitting, then each adds at most its own count of vertices to the body", () => {
+    const wagon = CAR_STYLES.wagon;
+    const roof = { rails: { x: [0.5, 0.56], z: [-1.6, 0.12], rise: 0.045 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 }, spoiler: { z: [-1.85, -1.7], y: [1.52, 1.6], halfWidth: 0.6 } } as const;
+    const fittings = roofFittingVertices({ ...wagon, roof });
+    assert.equal(fittings.byKind.length, 3, "the control: every kind is built");
+    assertRoofFittingCaps("wagon", fittings.byKind);
+    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.all, makeChassisGeometry(wagon).getAttribute("position").count, "the fittings are all the body gains");
+  });
 });
 
 // ---- (e) the panels still cut ----------------------------------------------------------------------------------------------
