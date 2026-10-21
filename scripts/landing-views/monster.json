@@ -1,0 +1,30 @@
+{
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/green-monster-truck/green-monster-truck-1.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/green-monster-truck/green-monster-truck-2.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      765,
+      170,
+      615,
+      545
+    ],
+    "wheels": {},
+    "camera": null
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      606,
+      154,
+      436,
+      404
+    ],
+    "wheels": {},
+    "camera": null
+  }
+}
