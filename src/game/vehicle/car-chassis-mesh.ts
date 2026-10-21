@@ -116,7 +116,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const rings = zs.map((z) => (source === "cage" ? sectionAt(z) : insetRing(sectionAt(z), endRollInset(z, style.profile))));
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
-  const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style)];
+  const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style, source)];
   for (const [wx, wy, wz] of carFrame(style).wheels) {
     const hw = sampleSlice(wz, style.profile).hw;
     // A tyre standing outboard of the body (the monster's) keeps its liner inside the body side.

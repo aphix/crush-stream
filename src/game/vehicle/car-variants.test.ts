@@ -600,7 +600,8 @@ describe("given a body style's H2 hardpoints", () => {
 
   it("when the door and the A-pillar foot move, then the door glass spans from the door's trailing edge to the pillar's foot", () => {
     const sedan = CAR_STYLES.sedan;
-    const moved: BodyStyle = { ...sedan, aPillarFoot: 0.88, door: { ...sedan.door, hingeZ: 0.74, length: 1.0 } };
+    // Without the style's own B band, which ends the pane at the band instead.
+    const moved: BodyStyle = { ...sedan, pillars: undefined, aPillarFoot: 0.88, door: { ...sedan.door, hingeZ: 0.74, length: 1.0 } };
     const box = partBox(makeSideGlass(1, moved));
     const { hingeZ } = moved.door;
     const [rear, front] = [box.min.z + hingeZ + DOOR_GLASS_SEAT.z, box.max.z + hingeZ + DOOR_GLASS_SEAT.z];
@@ -626,7 +627,7 @@ describe("given a body style's H2 hardpoints", () => {
     for (const id of CAR_STYLE_IDS) {
       const stock = CAR_STYLES[id];
       for (const style of [stock, { ...stock, aPillarTop: stock.windshieldTop[1] - 0.02 }]) {
-        const [post, ...sail] = aPillarParts(style);
+        const [post] = aPillarParts(style);
         const side = behindWindshieldEdge(post!, style);
         const proud = -Math.min(...side);
         // The post's front stands 4 mm off the glass; the old slab stood 1-2 cm over it.
@@ -638,15 +639,16 @@ describe("given a body style's H2 hardpoints", () => {
           const width = Math.max(...behind) - Math.min(...behind);
           assert.ok(width > 0.058, `${id} aPillarTop ${aPillarTopZ(style)}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}`);
         }
-        // Every drawn pillar (A-post, sail, B, rear, divider) runs into the roof: under its skin, and in under its lip (the cant line 8 cm out).
-        for (const part of makeGreenhouseFrame(style, "drawn").filter((g) => g.name !== "")) {
+        // Every drawn greenhouse part (A-post, sail, B, rear, divider, rail, fills) stays in the roof: under its skin, and in under its side over the cant line.
+        for (const part of makeGreenhouseFrame(style, "drawn")) {
           const pos = part.getAttribute("position") as THREE.BufferAttribute;
           for (let i = 0; i < pos.count; i++) {
             const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
             if (z < style.roofZ[0] || z > style.roofZ[1]) continue;
             // 1e-6: float32 vertices, a ulp at 1.3 m is 1.2e-7.
             assert.ok(y <= roofTopY(x, z, style) + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands over the roof skin there (${roofTopY(x, z, style)})`);
-            const lipX = roofAt(z, style).x + 0.08;
+            // The drawn roof's side runs 1 cm past the cant line, out to the pillars' faces.
+            const lipX = roofAt(z, style).x + 0.09;
             assert.ok(y <= cantY(z, style) + 1e-6 || Math.abs(x) <= lipX + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands out past the roof's lip (x ${lipX}) over the cant line`);
           }
         }
@@ -741,7 +743,7 @@ describe("given a body style's H2 hardpoints", () => {
     assertSameNumbers([corners[5 * 12 + 6 + 1]!, corners[3 * 12 + 9 + 1]!], [yRear, yFront], "quarter glass rear top y, door glass front top y", 1e-5);
     const [drawn, stock] = [makeGreenhouseFrame(moved, "drawn"), makeGreenhouseFrame(hatch, "drawn")];
     assert.equal(drawn.length - stock.length, 2, "one fill a side");
-    const fill = partBox(drawn[drawn.length - 3]!);
+    const fill = partBox(drawn[drawn.length - 1]!);
     const low = Math.min(yRear, yFront);
     assert.ok(Math.abs(fill.min.y - low) < 1e-4 && fill.max.y > glassTopY(zFront, hatch) - 1e-4, `right fill spans y ${fill.min.y}..${fill.max.y}: from the glass top's low end ${low} up to the cant line`);
     const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join("|");
@@ -790,25 +792,6 @@ describe("given a body style's H2 hardpoints", () => {
     const [movedGap, sedanGap] = [gap(moved), gap(sedan)];
     assert.ok(movedGap - sedanGap >= 0.02, `moved bumper's corner at |x| 0.35-0.45 stands ${movedGap} m behind its middle, the platform wrap's ${sedanGap}: at least 0.02 more`);
     assert.ok(Math.abs(sedanGap) < 0.01, `platform-wrap bumper's corner at |x| 0.35-0.45 stands ${sedanGap} m behind its middle, under 0.01`);
-  });
-
-  it("when any style's header bars are built, then they stay inside its roof: ends at the roof's edge, faces in its z span, top under its skin; also on a wide windshield ending at the roof's front", () => {
-    const sedan = CAR_STYLES.sedan;
-    const wide: BodyStyle = { ...sedan, windshield: { ...sedan.windshield, wTop: 1.4 }, roofZ: [sedan.roofZ[0], sedan.windshieldTop[1]] };
-    for (const style of [...CAR_STYLE_IDS.map((id) => CAR_STYLES[id]), wide]) {
-      const bars = makeGreenhouseFrame(style, "drawn").slice(-2);
-      for (const [k, name] of ["windshield", "rear"].entries()) {
-        const box = partBox(bars[k]!);
-        const at = `${style.id}${style === wide ? " (wide)" : ""} ${name} header bar`;
-        // 1e-6: the bar's vertices are float32, a ulp at 1.3 m is 1.2e-7.
-        assert.ok(box.min.z >= style.roofZ[0] - 1e-6 && box.max.z <= style.roofZ[1] + 1e-6, `${at} spans z ${box.min.z}..${box.max.z}, the roof ${style.roofZ.join("..")}`);
-        for (const z of [box.min.z, box.max.z]) {
-          const edge = roofAt(z, style).x;
-          assert.ok(box.max.x <= edge + 1e-6, `${at} ends at x ${box.max.x}, the roof's edge at z ${z} is at ${edge}`);
-          assert.ok(box.max.y <= roofTopY(box.max.x, z, style) + 1e-6, `${at} tops out at y ${box.max.y}, the roof skin over its end at z ${z} at ${roofTopY(box.max.x, z, style)}`);
-        }
-      }
-    }
   });
 
   it("when its door hinge moves with the door's trailing edge kept, then the door glass stays in the same window: it rides on its door's own hinge", () => {
