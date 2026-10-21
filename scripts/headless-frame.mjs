@@ -11,8 +11,8 @@
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
  * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
- * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--view hood|chase|far` puts the driven car's
- * camera in that view instead (boot a race on it: `--hash 'scene=race&car=<id>'`); `--at` is the sim seconds before the drawn frames.
+ * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--view hood|chase|far` follows the hash's car
+ * (`car=<id>`) in that drive view instead, e.g. `--hash 'scene=race&car=coupe'`; `--at` is the sim seconds before the drawn frames.
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -205,8 +205,13 @@ if (camera !== undefined) {
   await settle();
 }
 if (seatView !== undefined) {
-  if (engine.seat.mode !== "drive") throw new Error(`--view ${values.view}: no driven car (seat ${engine.seat.mode}); boot a race on one: --hash 'scene=race&car=<id>'`);
-  Object.assign(engine.seat, { view: seatView, viewPicked: true });
+  // The hash's car, followed in that drive view (a spectator's spec view: any scene, driven or not).
+  const want = new URLSearchParams(values.hash ?? "").get("car");
+  const cars = engine.live();
+  const index = want === null ? engine.seat.carIndex : cars.findIndex((car) => car.style.id === want);
+  if (index < 0) throw new Error(`--view ${values.view}: no ${want} car in the scene (field: ${cars.map((car) => car.style.id)})`);
+  Object.assign(engine.seat, { mode: "follow", carIndex: index });
+  engine.view.spec = seatView;
   engine.advance(VIEW_S, { frameDt: FRAME });
   await settle();
 }
