@@ -3,7 +3,7 @@ import type { DeformableCar } from "./car.ts";
 import { Surface } from "../world/surfaces.ts";
 import type { CageFields, CageStyle } from "./car-cage.ts";
 import { cageLift } from "./car-cage-rig.ts";
-import { FACES, FACE_AXIS, FACE_TOP, faceFollow, faceMax, faceStrength, IMPRINT_NONE, SKIN_STRAIN } from "../deform/load-crush.ts";
+import { FACES, FACE_AXIS, FACE_TOP, faceFollow, faceMax, faceStrength, IMPRINT_NONE, SKIN_STRAIN, type FaceBands } from "../deform/load-crush.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 
@@ -35,15 +35,15 @@ const NEAR_SLACK = 2;
 const YIELDS = 0.3;
 const ROOFS = new WeakMap<CageStyle, { crown: number; follow: Float32Array }>();
 
-/** A style's pristine roof: its crown (the highest node, m over the car's origin at the stock ride) and per node how far the drawn top follows the roof's crush (`faceFollow` at the node's height, times the share of a mass's travel the skin takes: `SKIN_STRAIN`; NaN where there is no top). */
-function roofOf(style: CageStyle): { crown: number; follow: Float32Array } {
+/** A style's pristine roof: its crown (the highest node, m over the car's origin at the stock ride) and per node how far the drawn top follows the roof's crush (`faceFollow` over the style's `bands` at the node's height, times the share of a mass's travel the skin takes: `SKIN_STRAIN`; NaN where there is no top). */
+function roofOf(style: CageStyle, bands: FaceBands): { crown: number; follow: Float32Array } {
   let roof = ROOFS.get(style);
   if (roof === undefined) {
     const top = style.pristine.top;
     const follow = new Float32Array(top.length);
     let crown = 0;
     for (let k = 0; k < top.length; k++) {
-      follow[k] = faceFollow(FACE_TOP, 0, top[k]!, 0) * SKIN_STRAIN;
+      follow[k] = faceFollow(bands, FACE_TOP, 0, top[k]!, 0) * SKIN_STRAIN;
       if (top[k]! > crown) crown = top[k]!;
     }
     ROOFS.set(style, (roof = { crown, follow }));
@@ -106,11 +106,11 @@ function imprint(presser: DeformableCar, pressed: DeformableCar): void {
   const d = pressed.deform;
   const im = d.imprint;
   const drop = d.crush[FACE_TOP]!;
-  if (!(c <= roofOf(pressed.cage.style).crown - drop + IMPRINT_REACH)) return;
+  if (!(c <= roofOf(pressed.cage.style, pressed.frame.rig.faceBands).crown - drop + IMPRINT_REACH)) return;
   const old = im[0] !== IMPRINT_NONE;
   const style = pressed.cage.style;
   const top = style.pristine.top;
-  const follow = roofOf(style).follow;
+  const follow = roofOf(style, pressed.frame.rig.faceBands).follow;
   let relief = 0;
   let overRoof = false;
   for (let k = 0; k < pan.length; k++) {
@@ -391,7 +391,7 @@ export class CarSurfaces extends Surface {
     car.refitCage();
     if (this.shown[i] !== cage.fields || this.shownSerial[i] !== cage.serial) {
       const { nu, nv, step, u0, v0 } = cage.style;
-      this.setGridData(i, nu, nv, step, step, u0, v0, cage.fields.top, roofOf(cage.style).follow, cage.fields.heightMax);
+      this.setGridData(i, nu, nv, step, step, u0, v0, cage.fields.top, roofOf(cage.style, car.frame.rig.faceBands).follow, cage.fields.heightMax);
       this.shown[i] = cage.fields;
       this.shownSerial[i] = cage.serial;
     }

@@ -14,8 +14,12 @@ const SILL_TOL = 0.015;
 const MIN_STATION_GAP = 0.06;
 /** The loft's end stations stand this far (m) inside the silhouette's ends: the bumper fascia covers the rest. */
 const END_INSET = 0.06;
-/** Plan half-widths are a running median over this half-window (m): a mirror head narrower than it drops out. */
+/** Plan half-widths are a running median over this half-window (m), after protrusions are cut. */
 const PLAN_MEDIAN_HALF = 0.15;
+/** The hull line a plan column is held to: the running median over this half-window (m), wider than any mirror. */
+const HULL_HALF = 0.4;
+/** A plan column standing this far (m) past the hull line is a mirror or a handle, not body. */
+const PROTRUSION = 0.015;
 /** Share of the opening's height its top and bottom rows take for the pillar ends. */
 const EDGE_BAND = 0.2;
 /** A glass run along the top view's centreline at least this long (m) is a pane; its widths are read this share in from its ends. */
@@ -27,6 +31,15 @@ const CABIN_EPS = 0.02;
 export const CABIN_MIN = 0.25;
 /** The underside is read clear of each tyre by this many radii. */
 const TYRE_CLEAR = 1.1;
+/** The door skin stands this far (m) proud of the body side; the hinge sits on the plan less that. */
+const DOOR_PROUD = 0.003;
+/** The stock belt rail stands this far (m) inside the shoulder (sill x 0.85 under hw 0.89): it hides there, never outside the loft. */
+const BELT_INSET = 0.04;
+/** The builders' bumper corner: its section shrinks by this share of its lip at the end of its span (car-mesh's wrap). */
+const WRAP_SHRINK = 0.228;
+/** The wrap's straight run is searched in steps of this (m); end rows set back more than WRAP_MAX_SETBACK (m) are fender, not bumper. */
+const WRAP_STEP = 0.01;
+const WRAP_MAX_SETBACK = 0.35;
 
 /** `table` (rows [h, ...], ascending h) at h in column `k`: linear between rows, held past the ends. */
 export function at(table, h, k = 1) {
@@ -47,10 +60,17 @@ export function outlineOf(frame, mask) {
   return out.sort((a, b) => a[0] - b[0]);
 }
 
-/** Per column of a top view's `mask`, ascending z: [z, half-width] (m), a running median over PLAN_MEDIAN_HALF either side. */
+/**
+ * Per column of a top view's `mask`, ascending z: the body's plan [z, half-width] (m). Columns standing PROTRUSION past the hull
+ * line (a running median over HULL_HALF either side) are mirrors and handles: they take the line between their neighbours. The
+ * result is then a running median over PLAN_MEDIAN_HALF.
+ */
 export function planOf(frame, mask) {
+  const raw = rawHalfOf(frame, mask);
+  const hull = runningMedian(raw, HULL_HALF);
+  const body = raw.filter(([, hw], i) => hw <= hull[i][1] + PROTRUSION);
   return runningMedian(
-    outlineOf(frame, mask).map(([z, a, b]) => [z, Math.abs(b - a) / 2]),
+    raw.map(([z]) => [z, at(body, z)]),
     PLAN_MEDIAN_HALF,
   );
 }
@@ -95,13 +115,70 @@ function lineDistance([x, y], [x0, y0], [x1, y1]) {
   return len === 0 ? Math.hypot(x - x0, y - y0) : Math.abs((y1 - y0) * (x - x0) - (x1 - x0) * (y - y0)) / len;
 }
 
-/** The top view: nose and tail z, the plan half-widths, and the windshield and rear glass on the centreline (null if absent). */
+/** The top view: nose and tail z, the plan half-widths, each row's front and rear z, and the windshield and rear glass. */
 export function extractTop(frame, sil, glass) {
   const half = planOf(frame, sil);
   const panes = centrePanes(frame, glass).sort((a, b) => a.zMid - b.zMid);
   const windshield = panes.length > 1 || panes[0]?.zMid > 0 ? panes.at(-1) : null;
   const rear = panes.length > 1 || panes[0]?.zMid <= 0 ? panes[0] : null;
-  return { nose: half.at(-1)[0], tail: half[0][0], half, windshield, rear };
+  return { nose: half.at(-1)[0], tail: half[0][0], half, ends: endsOf(frame, sil), windshield, rear };
+}
+
+/** Per column of a top view's `mask`, ascending z: [z, half-width] (m), unfiltered (mirrors kept). */
+function rawHalfOf(frame, mask) {
+  return outlineOf(frame, mask).map(([z, a, b]) => [z, Math.abs(b - a) / 2]);
+}
+
+/** Per row of a top view's `mask`: [|x|, front z, rear z] (m). */
+function endsOf(frame, mask) {
+  const { left, right } = rowEdges(mask, frame.W, frame.H);
+  const out = [];
+  for (let v = 0; v < frame.H; v++) if (left[v] >= 0) out.push([Math.abs(frame.g(v + 0.5)), frame.h(left[v]), frame.h(right[v] + 1)]);
+  return out;
+}
+
+/** The bumper's lip: how far (m) past its seat its fascia reaches, its outermost point at the centre. */
+function lip(bumper) {
+  return Math.max(...bumper.fascia.map((p) => p[1]));
+}
+
+/**
+ * `bumper` seated so its lip meets the reference's end `tip` (m from the middle), its plan corner (`wrap`) fitted to the end's
+ * setback per lateral x: straight out to `from`, then back linearly to `span` (the builders' sweep, the section shrinking
+ * WRAP_SHRINK of its lip). `setbacks`: [|x|, m behind the tip].
+ */
+function fitBumper(bumper, tip, setbacks) {
+  const out = lip(bumper);
+  const near = setbacks.filter(([x, s]) => x <= bumper.span && s <= WRAP_MAX_SETBACK);
+  let best = { sse: Infinity, from: bumper.wrap.from, k: 0 };
+  for (let from = 0; from < bumper.span; from += WRAP_STEP) {
+    let sd = 0;
+    let dd = 0;
+    for (const [x, s] of near) {
+      const d = Math.max(0, x - from);
+      sd += s * d;
+      dd += d * d;
+    }
+    const k = dd > 0 ? sd / dd : 0;
+    let sse = 0;
+    for (const [x, s] of near) sse += (s - k * Math.max(0, x - from)) ** 2;
+    if (sse < best.sse) best = { sse, from, k };
+  }
+  const back = near.length === 0 ? bumper.wrap.back : Math.max(0, best.k * (bumper.span - best.from) - WRAP_SHRINK * out);
+  return { ...bumper, seat: { ...bumper.seat, z: tip - out }, wrap: { from: near.length === 0 ? bumper.wrap.from : best.from, back } };
+}
+
+/** The front and rear bumpers fitted to the top view's ends, and the door's hinge on the plan at its z. */
+function hardpoints(top, style) {
+  const zFront = Math.max(...top.ends.map((e) => e[1]));
+  const zRear = Math.min(...top.ends.map((e) => e[2]));
+  return {
+    door: { ...style.door, hingeX: at(top.half, style.door.hingeZ) - DOOR_PROUD },
+    bumpers: {
+      front: fitBumper(style.bumpers.front, zFront, top.ends.map(([x, f]) => [x, zFront - f])),
+      rear: fitBumper(style.bumpers.rear, -zRear, top.ends.map(([x, , r]) => [x, r - zRear])),
+    },
+  };
 }
 
 /** The glass runs along the top view's centreline (MIN_PANE long or more): front and rear z, and the widths just inside them. */
@@ -160,22 +237,22 @@ export function extractSide(frame, sil, glass, hubs, lift, zone) {
   };
 }
 
-/** The side daylight opening: its sill line and its pillars' ends. */
+/** The side daylight opening: its sill line and the A-pillar's top end. */
 function opening(frame, glass, dlo) {
-  const { left, right } = rowEdges(glass, frame.W, frame.H);
+  const { left } = rowEdges(glass, frame.W, frame.H);
   const box = maskBox(glass, frame.W, frame.H);
   const band = Math.max(1, Math.round(EDGE_BAND * (box.v1 - box.v0)));
-  const meanZ = (v0, v1, edge, shift) => {
-    const zs = [];
-    for (let v = v0; v <= v1; v++) if (edge[v] >= 0) zs.push(frame.h(edge[v] + shift));
-    return zs.reduce((a, b) => a + b, 0) / zs.length;
-  };
+  const zs = [];
+  for (let v = box.v0; v <= box.v0 + band; v++) if (left[v] >= 0) zs.push(frame.h(left[v]));
   return {
     sill: simplify(runningMedian(dlo.map(([z, , b]) => [z, b]), SILL_MEDIAN_HALF), SILL_TOL),
-    frontTopZ: meanZ(box.v0, box.v0 + band, left, 0),
-    rearTopZ: meanZ(box.v0, box.v0 + band, right, 1),
-    rearBotZ: dlo[0][0],
+    frontTopZ: zs.reduce((a, b) => a + b, 0) / zs.length,
   };
+}
+
+/** `t` with its belt rail (and side glass foot) held BELT_INSET inside the shoulder at every station, as the stock tables stand. */
+export function beltUnderShoulder(t) {
+  return { ...t, belt: { ...t.belt, x: t.profile.map((s) => [s.z, s.hw - BELT_INSET]) } };
 }
 
 /**
@@ -205,9 +282,9 @@ export function tableFrom(side, top, style, wheelScale) {
     windshield: ws ? { base: [y(ws.front), ws.front], wBase: ws.wFront, wTop: Math.min(ws.wRear, ws.wFront) } : style.windshield,
     windshieldTop,
     rearGlass: rg ? { base: [y(rg.rear), rg.rear], top: [y(rg.front), rg.front], wBase: rg.wRear, wTop: Math.min(rg.wFront, rg.wRear) } : style.rearGlass,
-    quarter: dlo ? { zRearBot: dlo.rearBotZ, zRearTop: dlo.rearTopZ } : style.quarter,
     belt: { x: style.belt.x, y: sill },
     underside: side.underside,
+    ...hardpoints(top, style),
   };
 }
 
@@ -252,8 +329,13 @@ export function formatTable(t) {
     `  windshield: { base: ${pair(t.windshield.base)}, wBase: ${n(t.windshield.wBase)}, wTop: ${n(t.windshield.wTop)} },`,
     `  windshieldTop: ${pair(t.windshieldTop)},`,
     `  rearGlass: { base: ${pair(t.rearGlass.base)}, top: ${pair(t.rearGlass.top)}, wBase: ${n(t.rearGlass.wBase)}, wTop: ${n(t.rearGlass.wTop)} },`,
-    `  quarter: { zRearBot: ${n(t.quarter.zRearBot)}, zRearTop: ${n(t.quarter.zRearTop)} },`,
-    `  belt: { x: ${n(t.belt.x)}, y: ${pairs(t.belt.y)} },`,
+    `  belt: { x: ${typeof t.belt.x === "number" ? n(t.belt.x) : pairs(t.belt.x)}, y: ${pairs(t.belt.y)} },`,
     `  underside: ${pairs(t.underside)},`,
+    `  door: { ${Object.entries(t.door).map(([k, v]) => `${k}: ${Array.isArray(v) ? pair(v) : n(v)}`).join(", ")} },`,
+    `  bumpers: { front: ${bumper(t.bumpers.front)}, rear: ${bumper(t.bumpers.rear)} },`,
   ].join("\n");
+
+  function bumper(b) {
+    return `{ seat: { y: ${n(b.seat.y)}, z: ${n(b.seat.z)} }, fascia: ${pairs(b.fascia)}, span: ${n(b.span)}, wrap: { from: ${n(b.wrap.from)}, back: ${n(b.wrap.back)} } }`;
+  }
 }

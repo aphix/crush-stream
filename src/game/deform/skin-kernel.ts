@@ -28,7 +28,7 @@ export interface SkinStatic {
   idx: Uint32Array;
 }
 
-/** What a skin rewrites before each run (copied in). `hubs`: 5 per mass, `params`: 9 (see `kernels/skin/src/lib.rs`). */
+/** What a skin rewrites before each run (copied in). `hubs`: 5 per mass, `params`: 13 (see `kernels/skin/src/lib.rs`). */
 export interface SkinDynamic {
   X: Float64Array;
   co: Float64Array;

@@ -12,6 +12,7 @@ import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { DOOR_GLASS_SEAT, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
+import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
   LIGHT_BAR_FOOT,
   LIGHT_BAR_LENS,
@@ -433,6 +434,8 @@ export abstract class CarCore {
     this.hoodOrigin = this.hood.position.clone();
     this.trunkOrigin = this.trunk.position.clone();
     this.flushCasters.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
+    if (this.style.details) for (const mesh of [this.body, this.hood, this.trunk, this.doorMeshL, this.doorMeshR]) ensureRestFrame(mesh, this.group);
+    for (const material of new Set([this.bodyMat, doorMat])) applyDetailMap(material, this.style);
 
     const accent = livery?.accent ?? paint.accent;
     this.bumperF = this.makeBumper(true, accent, livery?.body ?? paint.body);
@@ -442,11 +445,11 @@ export abstract class CarCore {
 
     const seatX = mirrorSeatX(this.style);
     this.mirrorL = this.partSeats[PART_KIND.mirrorL]!;
-    this.mirrorL.position.set(-seatX, door.mirrorY, 0);
+    this.mirrorL.position.set(-seatX, door.mirrorY, -(door.mirrorZ ?? 0));
     this.mirrorL.scale.x = door.mirrorReach / MIRROR_REACH;
     this.doorL.add(this.mirrorL);
     this.mirrorR = this.partSeats[PART_KIND.mirrorR]!;
-    this.mirrorR.position.set(seatX, door.mirrorY, 0);
+    this.mirrorR.position.set(seatX, door.mirrorY, -(door.mirrorZ ?? 0));
     this.mirrorR.scale.x = door.mirrorReach / MIRROR_REACH;
     this.doorR.add(this.mirrorR);
 
