@@ -41,8 +41,19 @@ export const SEGS: Int16Array = (() => {
   }
   return pairs.slice(0, m);
 })();
-/** Contacts a body can hold in one slice: its tyres and points, and a belly segment's edge each. */
-export const CONTACTS = POINT_CAPACITY + SEGS.length / 2;
+/**
+ * A tyre's points that meet side faces (`readTyreSides`), as (across, along) shares of its half-width and radius: its four corners in plan
+ * at hub height. A face that stands no higher over the hub than the tyre mounts is its floor (`wheelContact` asks from the hub too); points
+ * under the hub met a kerb the tread climbs as a wall.
+ */
+export const TYRE_POINTS = [
+  [-1, -1],
+  [-1, 1],
+  [1, -1],
+  [1, 1],
+] as const;
+/** Contacts a body can hold in one slice: its four tyres' spring rows and every tyre point's side row, its points, and a belly segment's edge each. */
+export const CONTACTS = 4 * (1 + TYRE_POINTS.length) + POINT_CAPACITY + SEGS.length / 2;
 /** A wheel this close (m) to the ground counts as down. */
 export const TOUCH = 0.03;
 /** Restitution of a body point closing faster than `BOUNCE_V` (m/s); slower contacts and tyres (their springs,
@@ -141,6 +152,8 @@ export const PASSES = 12;
 /** Passes for a body at rest (what a slice's gravity leaves it, under `REST_SPEED`, as `loose-step.ts` counts rest): 12 left the car-on-car friction unconverged (rebuilt from 0 every slice), and the house of cards' top car crept 0.13 mm in 10 s on the residual. 24 passes crept, 48 stood still. ponytail: more passes at rest, not a warm start; a friction+normal warm start across slices if the rest cost shows in the cost rows. */
 export const REST_PASSES = 48;
 export const REST_SPEED = (2 * G) / 120;
+/** The speed (m/s) a body at rest parts from what it stands in (a wreck from the ground, a tyre from the face it pressed): under `REST_SPEED`, so it stays at rest and may sleep. */
+export const GROUND_LIFT_V = REST_SPEED / 3;
 /** The most (in G·dt) the solve's change of velocity moves the body within its own slice (half of it, the trapezoid rule). */
 export const SOLVE_MOVE_G = 1.5;
 /** Per contact: the depth (m) along its normal the lift has still to take out (-Infinity: a row that does not lift). */

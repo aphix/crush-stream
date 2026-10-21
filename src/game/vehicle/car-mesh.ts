@@ -6,7 +6,7 @@ import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
 import { INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
-import { bootPivot } from "./hinge-spec.ts";
+import { bootPivot, roofHinged } from "./hinge-spec.ts";
 import { bayTub } from "./interior-geometry.ts";
 
 export const SEDAN = CAR_STYLES.sedan;
@@ -189,6 +189,66 @@ function tubAt(z: number, style: BodyStyle, tubs: readonly (readonly [number, nu
   return { t, floor };
 }
 
+/**
+ * The boot's opening in the drawn body (the cage's deck stays closed): an open floor `floor` high from `front` back to `rear`, and the
+ * rear face's cut a tailgate, or a lid wrapping the tail, takes with it: `wall` its half-width and `sill` its bottom, over the face
+ * from the tail to `face.front`. A deck lid's hollow is its own boot (`lined`, an unpainted inner panel); a tailgate or roof-hinged
+ * lid opens the cabin's or bed's floor on through the tail.
+ */
+interface BootCut {
+  rear: number;
+  front: number;
+  floor: number;
+  lined: boolean;
+  face: { front: number; wall: number; sill: number } | null;
+}
+
+/** A deck lid's hollow stops this far (m) inside the lid's ends, so its ramps stay under the shut lid. */
+const BOOT_GAP = 0.005;
+/** A face's opening stays this far (m) inside the panel that shuts it: the panel's edge closes over body, never over the hole. */
+const BOOT_LAP = 0.01;
+/** The face's cut runs at least this far (m) in from the tail: the opening's sill is the tail panel's top. */
+const FACE_DEPTH = 0.06;
+/** A hollow's floor stands at least this far (m) over the floor pan and over a wheel well's arch: inside the cage's hull, whose sill corner stands 2 cm over the pan. */
+const BOOT_FLOOR_CLEAR = 0.03;
+/** Past the tail: a hollow open "through" it never ramps back up. */
+const THROUGH = 1;
+
+export function bootCut(style: BodyStyle): BootCut {
+  const b = style.boot;
+  const tail = style.profile[0]!.z;
+  const faceFront = (z: number) => Math.max(z, tail + FACE_DEPTH);
+  let back: readonly [number, number, number] | null = null;
+  for (const tub of style.tubs) if (!back || tub[0] < back[0]) back = tub;
+  if (back && (b.kind === "tailgate" || roofHinged(b))) {
+    const floor = back[2];
+    const face =
+      b.kind === "tailgate"
+        ? { front: faceFront(Math.max(b.origin[1], b.z0 ?? b.origin[1])), wall: sampleSlice(b.origin[1], style.profile).hw - TAILGATE_INSET - BOOT_LAP, sill: Math.max(b.y0 + BOOT_LAP, floor) }
+        : b.drop
+          ? { front: faceFront(b.z1 + LID_FOLD_R), wall: b.drop.w - BOOT_LAP, sill: Math.max(b.drop.y + BOOT_LAP, floor) }
+          : null;
+    return { rear: tail - THROUGH, front: back[0] + 2 * TUB_EDGE, floor, lined: false, face };
+  }
+  if (b.kind !== "lid") throw new Error(`${style.id}: a tailgate needs a tub to open into`);
+  const bumperTop = style.bumpers.rear.seat.y;
+  const face = b.drop ? { front: faceFront(b.z1 + LID_FOLD_R), wall: b.drop.w - BOOT_LAP, sill: b.drop.y + BOOT_LAP } : null;
+  return {
+    rear: face ? tail - THROUGH : b.z1 + TUB_EDGE + BOOT_GAP,
+    front: b.z0 - TUB_EDGE - BOOT_GAP,
+    floor: Math.min(bumperTop, face?.sill ?? bumperTop),
+    lined: true,
+    face,
+  };
+}
+
+/** How far (0..1) the drawn body's loft at `z` is open into the boot (`cut`), and into its face's cut. */
+export function bootCutAt(z: number, cut: BootCut): { open: number; face: number } {
+  const open = THREE.MathUtils.smoothstep(z, cut.rear - TUB_EDGE, cut.rear + TUB_EDGE) * (1 - THREE.MathUtils.smoothstep(z, cut.front - TUB_EDGE, cut.front + TUB_EDGE));
+  const face = cut.face ? 1 - THREE.MathUtils.smoothstep(z, cut.face.front - TUB_EDGE, cut.face.front + TUB_EDGE) : 0;
+  return { open, face };
+}
+
 /** Half-width (m) of the rear-door shut-line groove; seamInset sets its 9 mm depth (8e2dc49). */
 export const SEAM_HALF = 0.012;
 
@@ -258,17 +318,30 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [num
   const side = (y: number): [number, number] => [sideX(y, hw, yb, rockerY) - inset, y];
   const tuckRows = TUCK_ROWS[source];
   const rocker = FLARE_FIRST + tuckRows + 1;
+  // A tub's floor stays flat over wheels whose tyres it clears (the pickup's bed), or that stand outboard of the body (the monster's).
+  const floorClear = tub.t > 0 && wheels.every(([wx, wy]) => Math.abs(wx) > hw || wy + style.dims.wheel.radius < tub.floor);
+  const edge = wellEdge(z, hw, tub.t, floorClear, well, style, source);
   // The ring's half: deck crown and edge, the shoulder, the feature line, the tuck-under, the rocker, then the sill and the floor.
   const half: [number, number][] = [
-    [lerp(hw - 0.22, hw - 0.06, tub.t), lerp(yb + 0.012, tub.floor, tub.t)],
+    [lerp(hw - 0.22, edge ?? hw - 0.06, tub.t), lerp(yb + 0.012, tub.floor, tub.t)],
     [lerp(hw - 0.07, hw - 0.06, tub.t), lerp(yb + 0.004, yb - 0.006, tub.t)],
     ...SHOULDER_RING.map((a) => side(yF + SHOULDER[1] * detSin(a))),
     side(yF),
     ...Array.from({ length: tuckRows }, (_, row) => side(lerp(yF, rockerY, (row + 1) / (tuckRows + 1)))),
     side(rockerY),
     [hw - 0.05, floor + SILL_CORNER_RISE],
-    [hw * 0.8, floor + 0.004],
+    [edge === null ? hw * 0.8 : lerp(hw * 0.8, Math.min(hw * 0.8, edge), tub.t), floor + 0.004],
   ];
+  const boot = bootCut(style);
+  const cut = source === "drawn" ? bootCutAt(z, boot) : { open: 0, face: 0 };
+  if (cut.open > 0) {
+    // The hollow's floor stays inside the cage's hull: over its floor pan, and over a wheel's well.
+    const hollow = Math.max(boot.floor, floor + BOOT_FLOOR_CLEAR, well >= 0.03 ? archY + BOOT_FLOOR_CLEAR : -Infinity);
+    const wall = lerp(hw - 0.06, Math.min(boot.face?.wall ?? hw, hw - 0.06), cut.face);
+    const bottom = lerp(hollow, Math.max(boot.face?.sill ?? 0, hollow), cut.face);
+    half[0] = [lerp(half[0]![0], wall, cut.open), lerp(half[0]![1], bottom, cut.open)];
+    half[1] = [lerp(half[1]![0], wall, cut.open), lerp(half[1]![1], yb - 0.006, cut.open)];
+  }
   // The door cut: every point above the rocker drops onto the sill's top, the last tuck row onto its far edge.
   const sill: [number, number][] = [
     [hw - 0.1, rockerY + SILL_ROWS[0]!],
@@ -288,15 +361,30 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [num
     p[1] = lerp(p[1], sill[i]![1], hole);
   }
   for (let i = FLARE_FIRST; i <= rocker; i++) half[i]![0] += 0.022 * archFlare(z, half[i]![1], wheels, style.arch.radius);
-  // A tub's floor over wheels standing outboard of the body (the monster's bed) stays flat: no tyre comes up through it.
-  const floorClear = tub.t > 0 && wheels.every(([wx]) => Math.abs(wx) > hw);
+  // The arch lifts every point under it to its edge, but a flat tub floor and, at a well's edge, the floor pan under it.
+  const held = (i: number) => (i === 0 && (floorClear || edge !== null)) || (i === half.length - 1 && edge !== null);
   for (let i = 0; i < half.length; i++) {
     const p = half[i]!;
-    if (well < 0.03 || p[0] < hw * 0.58 || p[1] > archY + 0.02 || (i === 0 && floorClear)) continue;
+    if (well < 0.03 || p[0] < hw * 0.58 || p[1] > archY + 0.02 || held(i)) continue;
     const t = THREE.MathUtils.smoothstep((p[0] - hw * 0.58) / (hw * 0.42), 0, 1);
     p[1] = Math.max(p[1], lerp(p[1], archY, t));
   }
   return half;
+}
+
+/** The wheel-well liner's width across the car (m): it stands over the tyre, or inside the side of a body the tyre stands outboard of. */
+export const WELL_LINER_WIDTH = 0.24;
+
+/**
+ * Where a tub's floor at `z` meets the well of a wheel under the body (both builds; not the drawn bay's trough, nor a floor clearing the
+ * tyres): the liner's inner edge (m, |x|). The floor runs flat out to it, the floor pan holds under it, and the liner, in the cage as in the
+ * drawn body, stands up through the floor there as the well's hump, only where the wheel is. Null elsewhere.
+ */
+function wellEdge(z: number, hw: number, tubT: number, floorClear: boolean, well: number, style: BodyStyle, source: BodySource): number | null {
+  if (tubT === 0 || floorClear || well < 0.03 || (source === "drawn" && bayAt(z, style) >= tubT)) return null;
+  // A tub only grazing an arch (the coupe's cabin floor ramping out over its rear arch's front edge) keeps the arch's lift.
+  const wheel = carFrame(style).wheels.find(([wx, , wz]) => Math.abs(z - wz) < style.arch.radius && Math.abs(wx) <= hw && style.tubs.some(([a, b]) => wz > a && wz < b));
+  return wheel ? Math.min(hw - 0.06, Math.abs(wheel[0]) - WELL_LINER_WIDTH / 2) : null;
 }
 
 /** The cage's own build has one tuck row, so the cage hull's side below the feature line ends at this half-ring index. */
@@ -373,8 +461,22 @@ export function loftFromRings(rings: Pt[][], zs: number[], u0: number, u1: numbe
       positions.push(p.x, p.y, z);
       uvs.push(inward ? 0 : 1, 0.5);
     }
+    cx /= n;
+    cy /= n;
+    const turn = (a: Pt, b: Pt, c: Pt) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    let area = 0;
+    for (let i = 0; i < n; i++) area += turn({ x: cx, y: cy }, ring[i]!, ring[(i + 1) % n]!);
+    // A notched end (a boot's face cut) folds the centre's fan over the notch: ear-clip it instead, wound as the fan would be.
+    if (ring.some((p, i) => turn({ x: cx, y: cy }, p, ring[(i + 1) % n]!) * area < 0)) {
+      const want = inward ? -area : area;
+      for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(ring.map((p) => new THREE.Vector2(p.x, p.y)), [])) {
+        if (turn(ring[a!]!, ring[b!]!, ring[c!]!) * want >= 0) indices.push(base + a!, base + b!, base + c!);
+        else indices.push(base + a!, base + c!, base + b!);
+      }
+      return;
+    }
     const center = positions.length / 3;
-    positions.push(cx / n, cy / n, z);
+    positions.push(cx, cy, z);
     uvs.push(inward ? 0 : 1, 0.5);
     for (let i = 0; i < n; i++) {
       const i1 = (i + 1) % n;

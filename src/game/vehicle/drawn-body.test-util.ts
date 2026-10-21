@@ -392,7 +392,7 @@ export const BODIES = [
   { body: "sedan", style: "sedan", cls: "sedan" },
   { body: "wagon", style: "wagon", cls: "sedan" },
   { body: "pickup truck", style: "pickup", cls: "truck" },
-  { body: "monster pickup", style: "pickup", cls: "monster" },
+  { body: "monster pickup", style: "monster", cls: "monster" },
 ] as const satisfies readonly { body: string; style: CarStyleId; cls: VehicleClassId }[];
 
 /** The states a body is held in: pristine, roof crushed by a load, after a head-on crash, after landing on its roof, in flight. */
