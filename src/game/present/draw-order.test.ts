@@ -5,6 +5,7 @@ import type { RenderItem } from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { drawClassOf } from "../vehicle/car-materials.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
+import { PartBatch } from "../vehicle/part-batch.ts";
 import { sortByDrawClass } from "./draw-order.ts";
 
 /** The sort's keys, most significant first. */
@@ -53,7 +54,7 @@ describe("given two opaque draws in one frame", () => {
 
 const fleetStyles: CarStyleId[] = ["sedan", "pickup", "hatchback", "wagon", "coupe", "police"];
 
-/** Every opaque, plain mesh of `cars` as the render list would hold it, in scene order. */
+/** Every opaque, plain mesh of `cars` as the render list would hold it, in scene order, then the part batch's seven instanced draws (the seats' parts are no meshes). */
 function opaqueDraws(cars: DeformableCar[]): RenderItem[] {
   const out: RenderItem[] = [];
   for (const car of cars) {
@@ -63,6 +64,12 @@ function opaqueDraws(cars: DeformableCar[]): RenderItem[] {
       out.push({ id: mesh.id, object: mesh, geometry: null, material: mesh.material, materialVariant: 0, groupOrder: 0, renderOrder: mesh.renderOrder, z: 0, group: null });
     });
   }
+  const batch = new PartBatch(cars.length);
+  for (const mesh of batch.meshes) {
+    if (Array.isArray(mesh.material)) continue;
+    out.push({ id: mesh.id, object: mesh, geometry: null, material: mesh.material, materialVariant: 0, groupOrder: 0, renderOrder: mesh.renderOrder, z: 0, group: null });
+  }
+  batch.dispose();
   return out;
 }
 

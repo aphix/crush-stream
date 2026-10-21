@@ -52,7 +52,7 @@ export const DERBY_RULES = {
 /** The derby field's aggression slider: a maximum, each driver rolls its own under it (ai-aggression.ts). */
 export const DEFAULT_DERBY_AGGRESSION = 1;
 
-/** The steering wheel sits at local x −0.22 (car-mesh `makeInterior`): the driver's door is the −x side. */
+/** The steering wheel sits at local x −0.22 (part-geometry `interior`): the driver's door is the −x side. */
 const DRIVER_SIDE = -1;
 
 function wrapPi(a: number): number {

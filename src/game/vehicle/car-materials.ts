@@ -1,54 +1,10 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { once } from "../kernel/scalar.ts";
-import { detSin, detCos, PART_FAMILY } from "../kernel/physics-core.js";
-import { INTERIOR_MESH } from "./constants.ts";
+import { detSin, detCos } from "../kernel/physics-core.js";
 import { applyFinish } from "./car-finish.ts";
 
-/** The shared car textures and materials (paint, tone grid, glass, crack map, lamp mask) and the small multi-tone parts built on them. */
-
-export function makeMirror(sign: number): THREE.Mesh {
-  const arm = toned(new THREE.BoxGeometry(0.12, 0.04, 0.05), 0x2a2c32, 0.5, 0.4);
-  arm.translate(sign * 0.08, 0, 0);
-  const cap = toned(new THREE.BoxGeometry(0.1, 0.08, 0.16), 0x1c1e22, 0.35, 0.55);
-  cap.translate(sign * 0.16, 0.01, 0);
-  const glass = toned(new THREE.PlaneGeometry(0.08, 0.06), 0x9aa8b4, 0.08, 0.7);
-  glass.rotateY(sign * Math.PI * 0.5);
-  glass.translate(sign * 0.212, 0.01, 0);
-  return new THREE.Mesh(mergeToned([arm, cap, glass], PART_FAMILY.mirror), partsMaterial());
-}
-
-/** Cabin tub, dash, headliner, bulkhead, seats, side walls and steering wheel: one draw. */
-export function makeInterior(): THREE.Mesh {
-  const dark = [0x14161c, 0.94, 0.04] as const;
-  const vinyl = [0x1a1e24, 0.9, 0.05] as const;
-  const seat = [0x1c2228, 0.88, 0.06] as const;
-  const box = (w: number, h: number, d: number, tone: readonly [number, number, number], x: number, y: number, z: number) =>
-    toned(new THREE.BoxGeometry(w, h, d), ...tone).translate(x, y, z);
-  const parts = [
-    box(0.84, 0.04, 1.28, dark, 0, 0.34, 0.02),
-    box(0.82, 0.2, 0.24, dark, 0, 0.6, 0.48),
-    box(0.78, 0.02, 1.05, vinyl, 0, 1.08, 0.02),
-    box(0.8, 0.55, 0.04, vinyl, 0, 0.62, -0.62),
-    toned(new THREE.TorusGeometry(0.11, 0.016, 8, 16), 0x2a2c32, 0.55, 0.2).rotateX(0.55).translate(-0.22, 0.68, 0.36),
-  ];
-  for (const x of [-0.2, 0.2]) {
-    parts.push(box(0.3, 0.08, 0.36, seat, x, 0.4, 0.06));
-    parts.push(toned(new THREE.BoxGeometry(0.3, 0.32, 0.07), ...seat).rotateX(-0.12).translate(x, 0.58, 0.06 - 0.16));
-  }
-  for (const sign of [-1, 1]) parts.push(box(0.03, 0.5, 1.1, vinyl, sign * 0.4, 0.62, 0.02));
-  const mesh = new THREE.Mesh(mergeToned(parts, INTERIOR_MESH), partsMaterial());
-  // The engine's distance detail keeps it on far cars: it shows through the glass.
-  mesh.name = INTERIOR_MESH;
-  return mesh;
-}
-
-/** Inner door skin, in door-group space (hinge at the A-pillar). */
-export function makeDoorLining(sign: number): THREE.Mesh {
-  const geo = toned(new THREE.BoxGeometry(0.018, 0.5, 0.52), 0x1a1e24, 0.9, 0.04);
-  geo.translate(-sign * 0.024, 0, -0.28);
-  return new THREE.Mesh(geo, partsMaterial());
-}
+/** The shared car textures and materials (paint, tone grid, glass, crack map, lamp mask) and the multi-tone part helpers; the small parts built on them are in `part-geometry.ts`. */
 
 /**
  * What the paint's colour (sRGB 0xf2f2f0, linear here) and roughness multiply in where its two 1 x 1 maps were sampled, those maps'
@@ -202,7 +158,10 @@ const toneGrid = once((): THREE.DataTexture => {
 /** Shared by every car's multi-tone static parts (interior, mirrors, trim; the wheels have their own copy): colour
  * comes from vertex colours and roughness/metalness from `toneGrid` via UV, so dozens of tiny meshes
  * collapse into a few draws that all reuse one program and one uniform upload. Never disposed. */
-const partsMaterial = once(makePartsMaterial);
+export const partsMaterial = once(makePartsMaterial);
+
+/** A torn part's mesh wears its own copy: three re-selects the program on every instanced<->plain switch of one material. Never disposed. */
+export const loosePartsMaterial = once(makePartsMaterial);
 
 function makePartsMaterial(): THREE.MeshStandardMaterial {
   const grid = toneGrid();
@@ -216,7 +175,7 @@ function makePartsMaterial(): THREE.MeshStandardMaterial {
 
 /** Paint `geo` one flat tone: vertex colour (linear, as `material.color` would be) and a UV at the
  * tone-grid texel for this roughness/metalness. */
-function toned(geo: THREE.BufferGeometry, color: number, roughness: number, metalness: number): THREE.BufferGeometry {
+export function toned(geo: THREE.BufferGeometry, color: number, roughness: number, metalness: number): THREE.BufferGeometry {
   const n = geo.getAttribute("position").count;
   const c = new THREE.Color(color);
   const u = (Math.round(roughness * TONE_STEPS) + 0.5) / (TONE_STEPS + 1);
@@ -235,7 +194,7 @@ function toned(geo: THREE.BufferGeometry, color: number, roughness: number, meta
   return geo;
 }
 
-function mergeToned(parts: THREE.BufferGeometry[], what: string): THREE.BufferGeometry {
+export function mergeToned(parts: THREE.BufferGeometry[], what: string): THREE.BufferGeometry {
   const geo = mergeGeometries(parts, false);
   for (const g of parts) g.dispose();
   if (!geo) throw new Error(`Failed to merge ${what}`);
@@ -331,24 +290,6 @@ export const getCrackMap = once((): THREE.Texture => {
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 });
-
-/** Grille slats in front-bumper space; the headlamps sit on the body (`makeLampUnit`). */
-export function makeGrille(): THREE.Mesh {
-  return new THREE.Mesh(toned(new THREE.BoxGeometry(0.72, 0.16, 0.06, 4, 2, 1), 0x1a1c20, 0.55, 0.45), partsMaterial());
-}
-
-/**
- * Lower diffuser strip and the number plate, in rear-bumper space; the tail lamps sit on the body. The bumper's seat is 0.05 m inside the
- * body's tail station (2.06 against the profiles' 2.11), so the strip's rear face at -0.02 - 0.03 lay on the tail face and z-fought it;
- * centred at -0.04 its rear face stands 2 cm proud.
- */
-export function makeTailTrim(): THREE.Mesh {
-  const parts = [
-    toned(new THREE.BoxGeometry(1.1, 0.05, 0.06), 0x15171a, 0.6, 0.3).translate(0, -0.12, -0.04),
-    toned(new THREE.BoxGeometry(0.36, 0.11, 0.02), 0xd8d4cc, 0.6, 0.1).translate(0, 0.03, -0.08),
-  ];
-  return new THREE.Mesh(mergeToned(parts, "tail trim"), partsMaterial());
-}
 
 export type LampKind = "head" | "tail";
 

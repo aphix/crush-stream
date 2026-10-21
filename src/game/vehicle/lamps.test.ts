@@ -6,8 +6,16 @@ import { FULL_POOL, LampBatch, LampLights, type LampPool, lampPoolFor, PHONE_POO
 import { LAMP_HOUSING } from "./car-materials.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { assignClass, STYLE_CLASS, type VehicleClassId } from "./vehicle-classes.ts";
-import { CLASS_LIFT } from "./constants.ts";
+import { CLASS_LIFT, INTERIOR_MESH } from "./constants.ts";
+import { PartSeat } from "./part-geometry.ts";
 import { DT, forModes, paint } from "./test-support.ts";
+
+/** A seat has no `raycast`; a mesh of its shared geometry at its world pose stands in for it. */
+function seatProbe(seat: PartSeat): THREE.Mesh {
+  const probe = new THREE.Mesh(seat.geometry);
+  probe.matrixWorld.copy(seat.matrixWorld);
+  return probe;
+}
 
 type LampRow = { kind: string; side: number; intact: boolean };
 /** Lamp order inside the car: head L, head R, tail L, tail R. */
@@ -131,9 +139,9 @@ describe("given every body style fitted with its own lamps", () => {
       car.group.updateMatrixWorld(true);
       const exterior: THREE.Object3D[] = [];
       car.group.traverse((o) => {
-        if (!(o instanceof THREE.Mesh) || o.name === "interior") return;
+        if (!(o instanceof THREE.Mesh || o instanceof PartSeat) || o.name === INTERIOR_MESH) return;
         for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p.name === "deform-rig" || !p.visible) return;
-        exterior.push(o);
+        exterior.push(o instanceof PartSeat ? seatProbe(o) : o);
       });
       const ray = new THREE.Raycaster();
       const x = new THREE.Vector3();

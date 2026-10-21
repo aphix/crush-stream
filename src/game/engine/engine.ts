@@ -213,12 +213,13 @@ export class CrashEngine extends EngineGarage {
 
     this.glassDots = new GlassDotSystem(this.scene);
     this.ensureCars(INITIAL_HUD.carCount);
-    this.scene.add(...this.wheels.meshes, ...this.lampBatch.meshes);
-    // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels and lamps.
+    this.scene.add(...this.wheels.meshes, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm);
+    // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels, lamps and parts.
     this.scene.onBeforeRender = (renderer) => {
       const drawn = this.drawnCars();
       this.wheels.sync(drawn, renderer);
       this.lampBatch.sync(drawn);
+      this.partBatch.sync(drawn);
     };
 
     this.debris = new DebrisSystem(this.scene);
@@ -362,7 +363,7 @@ export class CrashEngine extends EngineGarage {
   /** The scratch list `drawnCars` rewrites in place. */
   private readonly drawnBuf: DeformableCar[] = [];
 
-  /** The cars the wheel and lamp batches draw (instanced, not meshes of the car): the field's, and the podium's own while it stands (it hides the field). */
+  /** The cars the wheel, lamp and part batches draw (instanced, not meshes of the car): the field's, and the podium's own while it stands (it hides the field). */
   private drawnCars(): readonly DeformableCar[] {
     const live = this.live();
     const stand = this.podium.cars();
@@ -426,8 +427,7 @@ export class CrashEngine extends EngineGarage {
     this.garage?.dispose();
     this.looks.dispose();
     this.rivals.dispose();
-    this.wheels.dispose();
-    this.lampBatch.dispose();
+    for (const batch of [this.wheels, this.lampBatch, this.partBatch]) batch.dispose();
     this.sparks.dispose();
     this.fountains.dispose();
     this.debris.dispose();

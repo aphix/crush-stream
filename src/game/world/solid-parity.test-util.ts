@@ -8,6 +8,7 @@ import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
 import { physicsSlice, sliceSpeed, BARRIER_HALF } from "../contact/sat.ts";
 import { FOOT_HALF_L } from "../vehicle/car-mesh.ts";
 import { cageLift } from "../vehicle/car-cage-rig.ts";
+import { PartSeat } from "../vehicle/part-geometry.ts";
 import { launch, makeWorld as barrierWorld, relaunchDamaged, strikeReach, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { makeWorld as raceWorld } from "./race-world.test-util.ts";
 import { activeGround, setGround } from "./ground.ts";
@@ -263,7 +264,7 @@ function sinkPast(car: DeformableCar, f: Face): Sink {
   for (const w of car.wheels) w.traverse((o) => wheels.add(o));
   let mesh = -Infinity;
   car.group.traverse((o) => {
-    if (!(o instanceof THREE.Mesh) || wheels.has(o) || !o.visible) return;
+    if (!(o instanceof THREE.Mesh || o instanceof PartSeat) || wheels.has(o) || !o.visible) return;
     const at = o.geometry.attributes.position;
     if (!at || at.count > 30000) return;
     for (let i = 0; i < at.count; i++) {

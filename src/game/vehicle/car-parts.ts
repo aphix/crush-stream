@@ -45,6 +45,7 @@ import {
   windWear,
 } from "./car-wear.ts";
 import { LOOSE_BODIES, looseState, partState, PART_SLOTS } from "./part-state.ts";
+import { PART_KIND, looseOnCamera, partGeometry } from "./part-geometry.ts";
 
 const _interior = new Float64Array(4);
 const DOOR_LEFT: GlassPart = "doorLeft";
@@ -125,11 +126,6 @@ const _poseSig = new Float64Array(7 * 20 + 20);
 /** An input moved less than this (m, rad or the unit of the value) from what the parts were last posed at is no change: a resting wreck's masses are re-derived through the frame's inverse each slice and differ by 1e-13. A nanometre moves no pixel; a slow creep is seen once it adds up, as the comparison is against the last pose, not the last slice. */
 const POSE_EPSILON = 1e-9;
 const _hinge = new Float64Array(7);
-
-/** Back on the camera's layer 0 (`traverse` callback, one function for every tear). */
-function showOnCamera(o: THREE.Object3D): void {
-  o.layers.enable(0);
-}
 
 /**
  * Detachable parts: attached-part posing, door hinges and mirrors, glass following, breakage and detaching,
@@ -743,7 +739,7 @@ export abstract class CarParts extends CarGlass {
     if (cached) return cached;
     const door = this.doorParts[i]!;
     const mirror = this.mirrorParts[i]!;
-    const geometry = (mirror.object as THREE.Mesh).geometry;
+    const geometry = partGeometry(i === 0 ? PART_KIND.mirrorL : PART_KIND.mirrorR);
     geometry.computeBoundingBox();
     _seatDoor.compose(door.restPos, door.restQuat, _unitScale);
     _seatMirror.compose(mirror.restPos, mirror.restQuat, _unitScale);
@@ -798,7 +794,7 @@ export abstract class CarParts extends CarGlass {
     this.group.remove(p.object);
     this.world.add(p.object);
     // Loose, the part is the world's, not the car's: the distance detail's cuts (`CarDetail`) took its meshes off the camera while it was on the car.
-    p.object.traverse(showOnCamera);
+    looseOnCamera(p.object);
     if (p.region) this.trackShell(p);
     // Where the part sits about the body's centre of mass (a wreck's masses' centroid, else the box's): the car's spin carries it at ω × r, whatever else it is thrown with.
     _com.copy(this.deform.massActive ? wreckCentre(this) : CAR_CENTRE).applyQuaternion(this.group.quaternion).add(this.group.position);
@@ -986,5 +982,4 @@ export abstract class CarParts extends CarGlass {
   looseState(buf: Float64Array, write: boolean): number {
     return looseState(this.parts, this.looseWheels, buf, write);
   }
-
 }

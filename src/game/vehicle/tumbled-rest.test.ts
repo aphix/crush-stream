@@ -7,6 +7,7 @@ import { buildCar, TOP_PARTS } from "./drawn-body.test-util.ts";
 import { makeLampUnit } from "./car-materials.ts";
 import type { CarStyleId } from "./car-variants.ts";
 import type { DeformableCar } from "./car.ts";
+import { PartSeat } from "./part-geometry.ts";
 import type { VehicleClassId } from "./vehicle-classes.ts";
 
 /**
@@ -73,7 +74,8 @@ function lowestDrawn(car: DeformableCar, crown: ReadonlySet<number>): Lowest {
   car.group.updateMatrixWorld(true);
   car.body.updateWorldMatrix(true, false);
   const parts = car["parts"];
-  const mirrors = parts.filter((p) => p.mirror).map((p) => p.object as THREE.Mesh);
+  const mirrors: PartSeat[] = parts.filter((p) => p.mirror).flatMap((p) => (p.object instanceof PartSeat ? [p.object] : []));
+  const isMirror = (o: THREE.Object3D): boolean => mirrors.some((m) => m === o || m === o.parent);
   let low: Lowest = { body: lowestY(car.body.geometry, car.body.matrixWorld), crown: lowestY(car.body.geometry, car.body.matrixWorld, (k) => crown.has(k)), mirrors: Infinity, doors: Infinity, lamps: Infinity };
   for (const mirror of mirrors) {
     mirror.updateWorldMatrix(true, false);
@@ -82,7 +84,7 @@ function lowestDrawn(car: DeformableCar, crown: ReadonlySet<number>): Lowest {
   for (const door of parts.filter((p) => p.hinge === "door")) {
     door.object.updateWorldMatrix(true, false);
     door.object.traverse((o) => {
-      if (!(o instanceof THREE.Mesh) || mirrors.includes(o)) return;
+      if (!(o instanceof THREE.Mesh || o instanceof PartSeat) || isMirror(o)) return;
       // Only what is drawn: a shattered side pane is hidden on its rest seat and is no part of the door the eye sees.
       let shown = o.visible;
       o.traverseAncestors((a) => (shown &&= a.visible));

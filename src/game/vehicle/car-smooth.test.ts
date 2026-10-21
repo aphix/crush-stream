@@ -355,16 +355,17 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
 // ---- (d) draw calls and cost -----------------------------------------------------------------------------------------------
 
 /**
- * Measured on f3bd2074 (before the smoothing) by building every style's car: the visible meshes a car draws, the triangles they hold, and
- * the body mesh's vertices (what the skin writes each frame, so what its cost follows).
+ * Measured by building every style's car: the visible meshes a car draws, the triangles they hold, and the body mesh's vertices (what the
+ * skin writes each frame, so what its cost follows). `drawCalls` counts the car's own meshes: its seven static parts are seats `PartBatch`
+ * draws, one instanced draw per kind for every car.
  */
 const BASELINE_BY_STYLE = [
-  { id: "sedan", drawCalls: 20, triangles: 5266, bodyVertices: 1587 },
-  { id: "hatchback", drawCalls: 20, triangles: 5064, bodyVertices: 1587 },
-  { id: "wagon", drawCalls: 20, triangles: 5088, bodyVertices: 1635 },
-  { id: "coupe", drawCalls: 20, triangles: 5152, bodyVertices: 1530 },
-  { id: "pickup", drawCalls: 20, triangles: 5026, bodyVertices: 1568 },
-  { id: "police", drawCalls: 21, triangles: 5338, bodyVertices: 1587 },
+  { id: "sedan", drawCalls: 13, triangles: 5266, bodyVertices: 1587 },
+  { id: "hatchback", drawCalls: 13, triangles: 5064, bodyVertices: 1587 },
+  { id: "wagon", drawCalls: 13, triangles: 5088, bodyVertices: 1635 },
+  { id: "coupe", drawCalls: 13, triangles: 5152, bodyVertices: 1530 },
+  { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
+  { id: "police", drawCalls: 14, triangles: 5338, bodyVertices: 1587 },
 ] as const satisfies readonly { id: CarStyleId; drawCalls: number; triangles: number; bodyVertices: number }[];
 /** The stated budget: a car's triangles at most 1.6 x the baseline. */
 const TRIANGLE_BUDGET = 1.6;

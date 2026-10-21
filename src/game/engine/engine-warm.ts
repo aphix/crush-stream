@@ -20,9 +20,10 @@ export abstract class EngineWarm extends EngineCore {
 
   /**
    * Link every program play can reach before the loop starts: a first-use link stalls its frame 50–800 ms.
-   * Waits for the studio env (part of every lit program's key), then warms the scene (`warmScene`) with two
+   * Waits for the studio env (part of every lit program's key), then warms the scene (`warmScene`) with three
    * stand-ins added: cracked glass (a pane gains the crack map mid-crash, `car.ts`), linked on a hidden mesh
-   * that keeps the program alive, and the debug views (their helpers, and the thrown dummies' rig and particle
+   * that keeps the program alive; the torn-part material (`PartBatch.looseWarm`, a hidden mesh engine.ts adds
+   * to the scene); and the debug views (their helpers, and the thrown dummies' rig and particle
    * views, join the scene only while shown).
    * Night, wet and the lamp pool's lights only change uniforms: the light count is fixed.
    */

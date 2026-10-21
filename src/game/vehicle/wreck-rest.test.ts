@@ -7,6 +7,7 @@ import { FLAT_GROUND, Ground, setGround } from "../world/ground.ts";
 import { layOnGround } from "./car-air-points.ts";
 import type { DeformableCar } from "./car.ts";
 import { buildCar } from "./drawn-body.test-util.ts";
+import { PartSeat } from "./part-geometry.ts";
 import type { VehicleClassId } from "./vehicle-classes.ts";
 
 /**
@@ -52,7 +53,7 @@ function lowestDrawn(car: DeformableCar, ground: Ground): { clearance: number; m
   const inverse = car.group.matrixWorld.clone().invert();
   const lowest = { clearance: Infinity, mesh: "" };
   car.group.traverse((o) => {
-    if (!(o instanceof THREE.Mesh)) return;
+    if (!(o instanceof THREE.Mesh || o instanceof PartSeat)) return;
     for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p.name === "deform-rig" || !p.visible) return;
     const position = o.geometry.getAttribute("position");
     if (!position) return;

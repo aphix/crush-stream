@@ -3,6 +3,8 @@ import { describe, test } from "node:test";
 import * as THREE from "three";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { DeformableCar } from "../vehicle/car.ts";
+import { INTERIOR_MESH, SMALL_PART_SEAT } from "../vehicle/constants.ts";
+import { PART_KIND, type PartSeat } from "../vehicle/part-geometry.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { CarDetail, DETAIL_LEVELS, PHONE_LEVEL } from "./car-detail.ts";
 
@@ -182,6 +184,36 @@ describe("given a car that crosses the far distance", () => {
     const arrived = drawn(fromFar, camera).length;
     assert.equal(arrived, drawn(fromNear, camera).length);
     assert.ok(arrived > 1, "more than the body");
+  });
+});
+
+describe("given a car's batched part seats", () => {
+  const seatsOf = (car: DeformableCar): PartSeat[] => car.partSeats.filter((s) => s.kind !== PART_KIND.interior);
+  const enabled = (seats: readonly PartSeat[]): boolean[] => seats.map((s) => s.layers.isEnabled(0));
+
+  test("when a car goes past the mid distance, then the six small seats leave layer 0 and the interior seat stays; past the far distance the interior goes too; back at 10 m, all seven are on again", () => {
+    const { camera, detail, car } = stage();
+    const probe = car(10);
+    const small = seatsOf(probe);
+    const interior = probe.partSeats[PART_KIND.interior]!;
+    assert.equal(probe.partSeats.length - small.length, 1, "one interior seat");
+    assert.ok(small.every((s) => s.name === SMALL_PART_SEAT), "the six are the small-part seats the mid cut takes by name");
+    assert.equal(interior.name, INTERIOR_MESH);
+    const move = (at: number): void => {
+      probe.group.position.z = at;
+      probe.group.updateMatrixWorld(true);
+      detail.update([probe], camera, null, null);
+    };
+    move(10);
+    assert.ok(enabled(small).every(Boolean) && interior.layers.isEnabled(0), "whole at 10 m");
+    move(50);
+    assert.ok(enabled(small).every((on) => !on), "the six small seats are cut at 50 m");
+    assert.equal(interior.layers.isEnabled(0), true, "the interior stays until the far cut");
+    move(80);
+    assert.equal(interior.layers.isEnabled(0), false, "the far cut takes the interior seat");
+    assert.ok(enabled(small).every((on) => !on));
+    move(10);
+    assert.ok(enabled(small).every(Boolean) && interior.layers.isEnabled(0), "give puts all seven back");
   });
 });
 

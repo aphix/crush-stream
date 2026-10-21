@@ -14,20 +14,16 @@ import { makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from 
 import {
   LIGHT_BAR_FOOT,
   LIGHT_BAR_LENS,
-  makeDoorLining,
   GLASS_COLOR,
   glassMaterial,
   type GlassLook,
-  makeGrille,
-  makeInterior,
   makeLightBar,
-  makeMirror,
   makePaintMaterial,
   makeSirenMaterial,
-  makeTailTrim,
   trimMaterial,
   type LampKind,
 } from "./car-materials.ts";
+import { PART_KIND, PART_KINDS, PartSeat } from "./part-geometry.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { anchorOnSkin, poseOnSkin, type GlowKind, type SkinAnchor } from "./lamp-lights.ts";
@@ -349,9 +345,11 @@ export abstract class CarCore {
   protected doorRRest: Float32Array;
   protected hoodOrigin: THREE.Vector3;
   protected trunkOrigin: THREE.Vector3;
-  readonly interior: THREE.Mesh;
-  private mirrorL: THREE.Mesh;
-  private mirrorR: THREE.Mesh;
+  readonly interior: PartSeat;
+  private mirrorL: PartSeat;
+  private mirrorR: PartSeat;
+  /** The seven static parts, drawn by PartBatch; indexed by PartKind. */
+  readonly partSeats: readonly PartSeat[] = PART_KINDS.map((kind) => new PartSeat(kind));
   /** Police roof light bar (skinned with the roof cage), its part, rest shape and seat; null on other styles. */
   protected lightBar: THREE.Mesh | null = null;
   protected lightBarPart: DetachPart | null = null;
@@ -380,7 +378,7 @@ export abstract class CarCore {
     this.group.add(this.body);
     this.deform = new StreamedDeformation(bodyGeo, this.style.rig);
 
-    this.interior = makeInterior();
+    this.interior = this.partSeats[PART_KIND.interior]!;
     this.group.add(this.interior);
 
     this.hood = new THREE.Mesh(makeHoodGeometry(this.style), this.bodyMat);
@@ -415,8 +413,8 @@ export abstract class CarCore {
     this.doorMeshR.castShadow = true;
     this.doorL.add(this.doorMeshL);
     this.doorR.add(this.doorMeshR);
-    this.doorL.add(makeDoorLining(-1));
-    this.doorR.add(makeDoorLining(1));
+    this.doorL.add(this.partSeats[PART_KIND.liningL]!);
+    this.doorR.add(this.partSeats[PART_KIND.liningR]!);
     this.group.add(this.doorL, this.doorR);
 
     this.hoodRest = this.copyRest(this.hood.geometry);
@@ -432,10 +430,10 @@ export abstract class CarCore {
     this.group.add(this.bumperF, this.bumperR);
     this.addLamps();
 
-    this.mirrorL = makeMirror(-1);
+    this.mirrorL = this.partSeats[PART_KIND.mirrorL]!;
     this.mirrorL.position.set(-DOOR.mirrorX, DOOR.mirrorY, 0);
     this.doorL.add(this.mirrorL);
-    this.mirrorR = makeMirror(1);
+    this.mirrorR = this.partSeats[PART_KIND.mirrorR]!;
     this.mirrorR.position.set(DOOR.mirrorX, DOOR.mirrorY, 0);
     this.doorR.add(this.mirrorR);
 
@@ -472,10 +470,10 @@ export abstract class CarCore {
     mesh.castShadow = true;
     this.flushCasters.push(mesh);
     g.add(mesh);
-    if (!front) g.add(makeTailTrim());
+    if (!front) g.add(this.partSeats[PART_KIND.tailTrim]!);
     g.position.set(0, BUMPER_SEAT.y, front ? BUMPER_SEAT.z : -BUMPER_SEAT.z);
     if (front) {
-      const grille = makeGrille();
+      const grille = this.partSeats[PART_KIND.grille]!;
       grille.position.set(0, 0.1, 0.06);
       g.add(grille);
     }

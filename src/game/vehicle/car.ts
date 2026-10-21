@@ -19,6 +19,7 @@ import { clearDents } from "./loose-dent.ts";
 import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CageRig } from "./car-cage-rig.ts";
+import { PartSeat } from "./part-geometry.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
 
 export { CAR_HALF, DOOR, WHEEL_POS };
@@ -727,7 +728,8 @@ export class DeformableCar extends CarParts {
     const free = (obj: THREE.Object3D) => {
       // Meshes, lines and points alike: the hull overlay is a LineSegments, and freeing meshes alone left its buffer for good.
       const drawn = obj as THREE.Mesh | THREE.Line | THREE.Points;
-      drawn.geometry?.dispose();
+      if (obj instanceof PartSeat) obj.dispose();
+      else drawn.geometry?.dispose();
       for (const m of [drawn.material].flat()) if (m && !m.userData.shared) m.dispose();
       if (obj instanceof THREE.Light) obj.dispose();
     };

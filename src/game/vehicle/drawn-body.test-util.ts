@@ -6,6 +6,7 @@ import { cageLift } from "./car-cage-rig.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
 import { DeformableCar } from "./car.ts";
 import type { CarStyleId } from "./car-variants.ts";
+import { PartSeat } from "./part-geometry.ts";
 import { paint } from "./test-support.ts";
 import { armKill, assignClass, killClass, type VehicleClassId } from "./vehicle-classes.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -51,7 +52,7 @@ export function drawnTriangles(car: DeformableCar): Float32Array {
   const v = new THREE.Vector3();
   const m = new THREE.Matrix4();
   car.group.traverse((o) => {
-    if (!(o instanceof THREE.Mesh)) return;
+    if (!(o instanceof THREE.Mesh || o instanceof PartSeat)) return;
     for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p.name === "deform-rig" || !p.visible) return;
     const pos = o.geometry.getAttribute("position");
     if (!pos || pos.count === 0) return;

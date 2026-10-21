@@ -5,6 +5,7 @@ import { StreamedDeformation } from "./streamed-deform.ts";
 import { TYRE_R } from "./deform-state.ts";
 import type { DeformMode } from "./deform-rig.ts";
 import { DeformableCar } from "../vehicle/car.ts";
+import { PART_KIND, PartSeat } from "../vehicle/part-geometry.ts";
 import { leftoverCrumple, snapshotPoints } from "./physics-util.ts";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { DT, dummyGeom, forModes, mass, paint } from "../vehicle/test-support.ts";
@@ -266,6 +267,24 @@ forModes("given a car with one part detached", () => {
   });
 });
 
+forModes("given a car whose right mirror is torn off", () => {
+  it("when the car is disposed of, then the loose mirror's own geometry copy is freed and the shared mirror geometry is not", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene());
+    car.spawn(0, 0, 0);
+    const seat = car.partSeats[PART_KIND.mirrorR]!;
+    car.breakMirror(1, new THREE.Vector3());
+    const own = seat.children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh);
+    assert.ok(own, "the torn mirror's seat has no loose mesh");
+    let ownFreed = false;
+    let sharedFreed = false;
+    own.geometry.addEventListener("dispose", () => void (ownFreed = true));
+    seat.geometry.addEventListener("dispose", () => void (sharedFreed = true));
+    car.dispose();
+    assert.equal(ownFreed, true, "the loose copy leaked");
+    assert.equal(sharedFreed, false, "the shared geometry was disposed with one car");
+  });
+});
+
 forModes("given a freshly built car", () => {
   it("when it is disposed of, then every geometry and own material in its group, the hull overlay's lines included, is freed", () => {
     const scene = new THREE.Scene();
@@ -276,6 +295,8 @@ forModes("given a freshly built car", () => {
       const d = o as THREE.Mesh | THREE.Line | THREE.Points;
       if (!d.geometry) return;
       drawn++;
+      // A seat's geometry is the kind's shared one, drawn by every car and never disposed.
+      if (o instanceof PartSeat) return;
       live.add(d.geometry);
       for (const m of [d.material].flat() as THREE.Material[]) if (!m.userData.shared) live.add(m);
     });

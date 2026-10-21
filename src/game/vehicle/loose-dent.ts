@@ -1,6 +1,7 @@
 import { hypot3 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
+import { PartSeat } from "./part-geometry.ts";
 
 /**
  * Cosmetic dents on a torn part: every bounce that changes its velocity this much pushes the skin around
@@ -83,7 +84,11 @@ export function clearDents(d: DentState): void {
   d.meshes = d.rest = null;
 }
 
-/** A child mesh sits at its own offset in the part's frame; the part's own mesh is the frame (`off` below). */
+/** `m`'s offset in the part's frame: its own position, or its seat's when it is a torn part's clone; zero when that frame is the part itself. */
+function frameOffset(m: THREE.Mesh, object: THREE.Object3D): THREE.Vector3 {
+  const frame = m.parent instanceof PartSeat ? m.parent : m;
+  return frame === object ? _zero : frame.position;
+}
 
 function carve(d: DentState, object: THREE.Object3D, o: number): void {
   const nx = d.hits[o]!;
@@ -99,7 +104,7 @@ function carve(d: DentState, object: THREE.Object3D, o: number): void {
   for (let mi = 0; mi < meshes.length; mi++) {
     const m = meshes[mi]!;
     const a = (m.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
-    const off = m === object ? _zero : m.position;
+    const off = frameOffset(m, object);
     for (let i = 0; i < a.length; i += 3) {
       const x = a[i]! + off.x;
       const y = a[i + 1]! + off.y;
@@ -118,7 +123,7 @@ function carve(d: DentState, object: THREE.Object3D, o: number): void {
     const attr = m.geometry.getAttribute("position") as THREE.BufferAttribute;
     const a = attr.array as Float32Array;
     const rest = d.rest![k]!;
-    const off = m === object ? _zero : m.position;
+    const off = frameOffset(m, object);
     for (let i = 0; i < a.length; i += 3) {
       const r = hypot3(a[i]! + off.x - cx, a[i + 1]! + off.y - cy, a[i + 2]! + off.z - cz);
       if (r >= DENT_REACH) continue;
