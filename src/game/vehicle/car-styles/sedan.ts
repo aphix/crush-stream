@@ -18,9 +18,10 @@ export const SEDAN: BodyStyle = {
   rocker: { y: 0.21 },
   arch: { radius: 0.405 },
   hood: { z0: 0.88, z1: 1.97, origin: [0.81, 0.86] },
+  /** Body-colour fascias, as the reference's: its black is the lower intake, grille and diffuser (`details`, grille, tail trim), not the bumper. */
   bumpers: {
-    front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.34, z: 1.965 }, span: 0.74, wrap: { from: 0.33, back: 0.242 } },
-    rear: { ...PLATFORM_HARDPOINTS.bumpers.rear, seat: { y: 0.52, z: 2.088 }, span: 0.76, wrap: { from: 0.3, back: 0.25 } },
+    front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.34, z: 1.965 }, span: 0.74, wrap: { from: 0.33, back: 0.242 }, trim: "body" },
+    rear: { ...PLATFORM_HARDPOINTS.bumpers.rear, seat: { y: 0.52, z: 2.088 }, span: 0.76, wrap: { from: 0.3, back: 0.25 }, trim: "body" },
   },
   door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
   aPillarFoot: 0.66,

@@ -8,8 +8,8 @@ import { SprayBitmap } from "./spray.ts";
 
 /**
  * A cop's black-and-white livery as spray paint: white roof, pillars and doors over the black body and POLICE across both
- * doors, drawn from the style's own tables into its spray layout. It rides the paint's spray patch, so it links no program a
- * sprayed car does not.
+ * doors, drawn from the style's own tables into its spray layout. The skin under the rear glass stays bare, so the glass reads
+ * the black body's tint, as the reference's. It rides the paint's spray patch, so it links no program a sprayed car does not.
  */
 
 const WHITE = 1;
@@ -65,8 +65,8 @@ export function copSpray(style: BodyStyle, klass: DeviceClass): SprayBitmap | nu
 
 function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
   const texels = new Uint8Array(layout.w * layout.h);
-  const [, yMin, zMin] = layout.min;
-  const [, yMax, zMax] = layout.max;
+  const [xMin, yMin, zMin] = layout.min;
+  const [xMax, yMax, zMax] = layout.max;
   const sill = style.rocker.y + SILL;
   const [doorCut, doorFront] = style.door.aperture;
   const doorRear = style.rearDoorSeam ?? doorCut;
@@ -84,7 +84,7 @@ function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
         const y = yMin + ((ty + 0.5) / fh) * (yMax - yMin);
         const greenhouse = z > glassRear && z < (face === SPRAY_FACE.top ? roofFront : pillarFront);
         let ink = 0;
-        if (face === SPRAY_FACE.top) ink = greenhouse ? WHITE : 0;
+        if (face === SPRAY_FACE.top) ink = greenhouse && !underRearGlass(xMin + ((ty + 0.5) / fh) * (xMax - xMin), z, style) ? WHITE : 0;
         else {
           if (y > beltY(z, style) ? greenhouse : y > sill && z > doorRear && z < doorFront) ink = WHITE;
           // The word reads left to right to someone facing each flank: front to rear on the +x face, rear to front on the −x face.
@@ -96,6 +96,13 @@ function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
     }
   }
   return { texels, palette: PALETTE };
+}
+
+/** Whether plan point (`x`, `z`) lies under `style`'s rear glass (its quad's widths are full widths). */
+function underRearGlass(x: number, z: number, style: BodyStyle): boolean {
+  const { base, top, wBase, wTop } = style.rearGlass;
+  const t = (z - base[1]) / (top[1] - base[1]);
+  return t >= 0 && t <= 1 && Math.abs(x) < (wBase + (wTop - wBase) * t) / 2;
 }
 
 /** Whether the point `along` m into the word and `up` m above its baseline lies on a letter's stroke. */

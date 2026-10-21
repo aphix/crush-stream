@@ -15,4 +15,6 @@ export const POLICE: BodyStyle = {
   details: POLICE_DETAILS,
   /** The cruiser's mirrors are black plastic: a body-colour cap would take the white door paint. */
   door: { ...SEDAN.door, mirror: { ...SEDAN_MIRROR, finish: "black" } },
+  /** The cruiser's bumpers are black plastic, front and rear (both references). */
+  bumpers: { front: { ...SEDAN.bumpers.front, trim: "black" }, rear: { ...SEDAN.bumpers.rear, trim: "black" } },
 };
