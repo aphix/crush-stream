@@ -40,7 +40,7 @@ function inkCount(paint: SprayPaint, layout: SprayLayout, face: number, ink: num
 const rgbaHex = (rgba: Uint8Array, i: number): number => (rgba[i * 4]! << 16) | (rgba[i * 4 + 1]! << 8) | rgba[i * 4 + 2]!;
 
 describe("given the police style's livery drawn into a spray bitmap", () => {
-  const spray = copSpray(CAR_STYLES.police)!;
+  const spray = copSpray(CAR_STYLES.police, "desktop")!;
 
   it("when it is read, then the roof is white, POLICE stands black on both flanks, and the nose, tail and rear quarters stay bare (the black body)", () => {
     const { layout } = spray;
@@ -54,8 +54,15 @@ describe("given the police style's livery drawn into a spray bitmap", () => {
   });
 
   it("when a car with no light bar asks for it, then there is none", () => {
-    assert.ok(copSpray(CAR_STYLES.sedan) === null, "a sedan has no livery bitmap");
+    assert.ok(copSpray(CAR_STYLES.sedan, "desktop") === null, "a sedan has no livery bitmap");
     assert.ok(copPaint(CAR_STYLES.sedan, CAR_SPRAY) === null, "a sedan has no livery paint");
+  });
+
+  it("when cops ask for it on a desktop and on a phone, then every cop of the style shares one bitmap per device, 512 a side on the desktop and the rivals' 256 on the phone", () => {
+    assert.ok(copSpray(CAR_STYLES.police, "desktop") === spray, "a second desktop cop drew its own bitmap");
+    const phone = copSpray(CAR_STYLES.police, "mobile")!;
+    assert.equal(`${spray.layout.w} ${phone.layout.w}`, "512 256");
+    assert.ok(copSpray(CAR_STYLES.police, "mobile") === phone, "a second phone cop drew its own bitmap");
   });
 });
 
@@ -93,7 +100,7 @@ describe("given the real engine with every car built as police", () => {
     const cop = engine["cars"][1]!;
     assert.equal(cop.style.id, "police");
     // Identity, not assert.equal: a failing equal inspects both textures in full (megabytes of texels).
-    assert.ok(compiledUniforms(cop.lookMeshes().bodyPaint).sprayMap?.value === copSpray(CAR_STYLES.police)!.texture, "the cop's paint samples its livery bitmap");
+    assert.ok(compiledUniforms(cop.lookMeshes().bodyPaint).sprayMap?.value === copSpray(CAR_STYLES.police, engine["deviceClass"])!.texture, "the cop's paint samples its livery bitmap");
   });
 
   it("when the player's own cop has a red dot sprayed on the roof, then its bare texels show the livery, the dot keeps its red, and the bitmap packs as it did without the livery", () => {

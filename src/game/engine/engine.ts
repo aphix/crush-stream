@@ -172,7 +172,7 @@ export class CrashEngine extends EngineGarage {
   };
 
   /** What this device is (`deviceClass`), decided once from the GL context, the pointer and the user agent. */
-  private readonly deviceClass: DeviceClass;
+  protected readonly deviceClass: DeviceClass;
 
   constructor(canvas: HTMLCanvasElement, hudStore: HudStore, veil: HTMLElement) {
     super();
