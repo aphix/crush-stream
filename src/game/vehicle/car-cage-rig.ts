@@ -13,6 +13,7 @@ import type { DetachPart } from "./car-core.ts";
 import { bodyLift } from "./car-suspension.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
 import { LID, LIGHT_BAR } from "./constants.ts";
+import { cageInterior } from "./interior-geometry.ts";
 import { rockerAt } from "./car-lines.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
@@ -238,7 +239,7 @@ export function cageSourceOf(car: DeformableCar): CageSource {
   const restCo = new Float64Array(rig[CAGES].length * 24);
   for (let p = 0; p < rig[CAGES].length; p++) cageCoeffs(rig[CAGES][p]!.restCorners, restCo, p * 24);
   const panelGlass = Uint8Array.from(panels, (p) => (p.hinged === null ? 1 : 0));
-  const interior = car.interior.geometry;
+  const interior = cageInterior();
   const interiorIndex = interior.index;
   if (interiorIndex === null) throw new Error("the interior mesh has no index");
   const interiorMass = Int32Array.from(INTERIOR_MASSES, (name) => rig.masses.findIndex((m) => m.name === name) * 3);

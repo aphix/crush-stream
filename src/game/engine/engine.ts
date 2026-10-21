@@ -213,13 +213,16 @@ export class CrashEngine extends EngineGarage {
 
     this.glassDots = new GlassDotSystem(this.scene);
     this.ensureCars(INITIAL_HUD.carCount);
-    this.scene.add(...this.wheels.meshes, ...this.lampBatch.meshes, ...this.partBatch.meshes, ...this.partBatch.casters, this.partBatch.looseWarm);
-    // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels, lamps and parts.
+    this.scene.add(...this.wheels.meshes, ...this.lampBatch.meshes, ...this.partBatch.meshes, ...this.partBatch.casters, this.partBatch.looseWarm, this.seated.mesh);
+    const driverLook = (car: number, cop: boolean) => this.ragdolls.carDriverLook(car, cop);
+    // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels, lamps, parts and seated drivers.
     this.scene.onBeforeRender = (renderer) => {
       const drawn = this.drawnCars();
       this.wheels.sync(drawn, renderer);
       this.lampBatch.sync(drawn);
       this.partBatch.sync(drawn);
+      // In the garage the standing dummy beside the car is the driver: no one sits in the car there.
+      this.seated.sync(this.showGarage ? [] : drawn, driverLook);
     };
 
     this.debris = new DebrisSystem(this.scene);
@@ -427,7 +430,7 @@ export class CrashEngine extends EngineGarage {
     this.garage?.dispose();
     this.looks.dispose();
     this.rivals.dispose();
-    for (const batch of [this.wheels, this.lampBatch, this.partBatch]) batch.dispose();
+    for (const batch of [this.wheels, this.lampBatch, this.partBatch, this.seated]) batch.dispose();
     this.sparks.dispose();
     this.fountains.dispose();
     this.debris.dispose();

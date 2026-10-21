@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { st } from "./platform.ts";
+import { PLATFORM_HARDPOINTS, st } from "./platform.ts";
 
 /** Compact five-door: boxy face, near-vertical hatch under a roof spoiler. */
 export const HATCHBACK: BodyStyle = {
@@ -71,6 +71,7 @@ export const HATCHBACK: BodyStyle = {
   rearDoorSeam: -0.88,
   boot: { kind: "tailgate", y0: 0.57, origin: [0.93, -1.625], z0: -1.76 },
   lamps: { head: [0.34, 0.54], tail: [0.59, 0.72] },
+  seats: PLATFORM_HARDPOINTS.seats,
   details: {
     lines: [
       { view: "top", points: [[1.68, 0], [1.69, 0.36], [1.64, 0.62], [1.55, 0.68]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },

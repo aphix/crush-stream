@@ -6,7 +6,7 @@ import { DeformableCar } from "./car.ts";
 import { BUMPER_F } from "./constants.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
-import { PART_KIND, PART_KINDS, partGeometry } from "./part-geometry.ts";
+import { PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
 
 /** The instance matrix is float32: a seat's position of a few hundred metres is stored within 1e-4 m. */
@@ -21,6 +21,8 @@ const GRILLE_NORMAL = new THREE.Vector3(0.05, -1, -0.02).normalize();
 const HARD_BOUNCE = 3 * DENT_MIN_DV;
 /** loose-dent's reach (m), which it keeps private: skin within this of the contact moves. */
 const DENT_REACH = 0.26;
+/** Seats of a kind one car at rest draws: its `PART_PER_CAR`, and none of the bay or the crash bars (hood and bumpers on). */
+const atRest = (kind: number): number => (kind === PART_KIND.engineBay || kind === PART_KIND.crashBar ? 0 : PART_PER_CAR[kind]!);
 
 /** A 50 degree lens at the origin looking down +z; cars stand on the axis at the given distance. */
 function stage(capacity = 16) {
@@ -49,13 +51,13 @@ const looseMeshes = (seat: THREE.Object3D): THREE.Mesh[] => seat.children.filter
 const positions = (g: THREE.BufferGeometry): ArrayLike<number> => g.getAttribute("position").array;
 
 describe("given the part batch and a few cars near the camera", () => {
-  test("when the cars are synced, then every kind has one instance per car and the parts cost seven draws whatever the car count", () => {
+  test("when the cars are synced, then every kind shown at rest has its seats per car, the bay and crash bars none, and the parts cost one draw per shown kind whatever the car count", () => {
     for (const n of [1, CARS]) {
       const { batch, car, draw } = stage();
       draw(Array.from({ length: n }, () => car(10)));
       assert.equal(batch.meshes.length, PART_KINDS.length);
-      for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.count, n, `kind ${kind} with ${n} cars`);
-      assert.equal(batch.meshes.filter((m) => m.count > 0).length, PART_KINDS.length, `${n} cars draw seven meshes`);
+      for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.count, n * atRest(kind), `kind ${kind} with ${n} cars`);
+      assert.equal(batch.meshes.filter((m) => m.count > 0).length, PART_KINDS.filter((k) => atRest(k) > 0).length, `${n} cars draw ten meshes`);
     }
   });
 
@@ -203,10 +205,10 @@ describe("given the part batch and a car the distance detail cuts", () => {
     const { batch, car, draw } = stage();
     const cars = [car(10), car(10), car(FAR_BEYOND + 20)];
     draw(cars);
-    for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.count, CARS - 1, `kind ${kind} while cut`);
+    for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.count, (CARS - 1) * atRest(kind), `kind ${kind} while cut`);
     cars[2]!.group.position.z = 12;
     draw(cars);
-    for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.count, CARS, `kind ${kind} restored`);
+    for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.count, CARS * atRest(kind), `kind ${kind} restored`);
   });
 
   test("when a car is hidden, then its seats draw nothing; when shown again, they do", () => {
@@ -214,10 +216,10 @@ describe("given the part batch and a car the distance detail cuts", () => {
     const cars = [car(10), car(10)];
     cars[1]!.group.visible = false;
     draw(cars);
-    for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.count, 1, `kind ${kind} while hidden`);
+    for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.count, atRest(kind), `kind ${kind} while hidden`);
     cars[1]!.group.visible = true;
     draw(cars);
-    for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.count, 2, `kind ${kind} shown`);
+    for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.count, 2 * atRest(kind), `kind ${kind} shown`);
   });
 });
 
@@ -228,8 +230,8 @@ describe("given a part batch smaller than the cars it is asked to draw", () => {
     draw(Array.from({ length: CARS }, () => car(10)));
     for (const kind of PART_KINDS) {
       const mesh = batch.meshes[kind]!;
-      assert.equal(mesh.count, capacity, `kind ${kind}`);
-      assert.equal(mesh.instanceMatrix.count, capacity, "the matrix buffer is the capacity's size, nothing grew");
+      assert.equal(mesh.count, capacity * atRest(kind), `kind ${kind}`);
+      assert.equal(mesh.instanceMatrix.count, capacity * PART_PER_CAR[kind]!, "the matrix buffer is the capacity's size, nothing grew");
     }
   });
 });

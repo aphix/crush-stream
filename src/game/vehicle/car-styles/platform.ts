@@ -65,4 +65,5 @@ export const PLATFORM_HARDPOINTS = {
   bumpers: { front: PLATFORM_BUMPER, rear: PLATFORM_BUMPER },
   door: { hingeX: 0.86, hingeY: 0.54, hingeZ: 0.55, length: 0.57, halfHeight: 0.31, mirrorY: 0.32, mirrorReach: 0.21, mirrorHalfDepth: 0.08, aperture: [0, 0.54] },
   aPillarFoot: 0.76,
-} as const satisfies Pick<BodyStyle, "windshield" | "bPillar" | "belt" | "rocker" | "arch" | "hood" | "bumpers" | "door" | "aPillarFoot">;
+  seats: { front: [-0.36, 0.44, -0.15], rear: [0.46, -0.42] },
+} as const satisfies Pick<BodyStyle, "windshield" | "bPillar" | "belt" | "rocker" | "arch" | "hood" | "bumpers" | "door" | "aPillarFoot" | "seats">;

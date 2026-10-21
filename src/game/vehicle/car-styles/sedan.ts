@@ -75,6 +75,7 @@ export const SEDAN: BodyStyle = {
   rearDoorSeam: -1.06,
   boot: { kind: "lid", z0: -1.65, z1: -2.06, origin: [0.97, -1.62] },
   lamps: { head: [0.28, 0.515], tail: [0.34, 0.8] },
+  seats: PLATFORM_HARDPOINTS.seats,
   details: SEDAN_DETAILS,
   camera: { ...PLATFORM_CAMERA, hood: [1.08, 1.2] },
 };

@@ -210,6 +210,11 @@ export interface BodyStyle {
    * the bumpers, grille and boot (`lamps.test.ts`).
    */
   lamps: { head: readonly [number, number]; tail: readonly [number, number] };
+  /**
+   * Seats (m, car space): the driver's H-point [x, y, z] (he sits on -x; the passenger mirrors him), and the rear bench's [y, z] on the
+   * centre line, or null with no rear row (a regular cab). The drawn seats, the seated driver and the sim's seat all read it.
+   */
+  seats: { front: readonly [number, number, number]; rear: readonly [number, number] | null };
   /** Fixed paint, or none (the fleet paint). */
   livery?: Livery;
   /** Roof light bar with red / blue sirens (`DeformableCar.setSirens`). */

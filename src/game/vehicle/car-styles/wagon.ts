@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { st } from "./platform.ts";
+import { PLATFORM_HARDPOINTS, st } from "./platform.ts";
 
 /** Luxury SUV (the `wagon` id): tall clamshell nose, flat floating roof, raked tailgate glass under a roof spoiler. */
 export const WAGON: BodyStyle = {
@@ -80,6 +80,7 @@ export const WAGON: BodyStyle = {
   rearDoorSeam: -1.2,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.09, -2.115], z0: -2.125 },
   lamps: { head: [0.3, 0.8], tail: [0.62, 0.955] },
+  seats: PLATFORM_HARDPOINTS.seats,
   details: {
     lines: [
       { view: "top", points: [[1.97, 0], [1.95, 0.35], [1.9, 0.52], [1.82, 0.62]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },

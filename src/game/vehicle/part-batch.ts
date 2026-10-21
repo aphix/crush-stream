@@ -2,14 +2,14 @@ import * as THREE from "three";
 import { loosePartsMaterial, partsMaterial, shadowOnlyMaterial } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS } from "./car-variants.ts";
-import { PART_KINDS, partGeometry } from "./part-geometry.ts";
+import { PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
 
 /** A caster's stand-in until its style's first car syncs: the program links at the warm, before any car of the style draws. */
 const NO_CASTER = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([], 3));
 
 /**
- * Every car's seven static parts (interior, door linings, mirrors, grille, tail trim) as seven instanced draws, one per kind.
- * A loose part draws as its own mesh; a cut seat (layer 0 off, `CarDetail`) or a hidden car draws nothing.
+ * Every car's static parts (cabin, door cards, mirrors, grille, tail trim, seats, wheel, engine bay, crash bars) as one instanced draw per
+ * kind. A loose part draws as its own mesh; a cut seat (layer 0 off, `CarDetail`), a hidden car or a seat whose `showIf` fails draws nothing.
  */
 export class PartBatch {
   readonly meshes: readonly THREE.InstancedMesh[];
@@ -19,13 +19,14 @@ export class PartBatch {
   /** A hidden mesh in the torn-part material: the boot warm draws it, so a first tear links no program. */
   readonly looseWarm = new THREE.Mesh(new THREE.PlaneGeometry(0, 0), loosePartsMaterial());
   private readonly counts = new Int32Array(PART_KINDS.length);
-  private readonly capacity: number;
+  /** Instances each kind holds: `cars` cars' worth (`PART_PER_CAR`). */
+  private readonly capacity: Int32Array;
 
-  constructor(capacity: number) {
-    this.capacity = capacity;
+  constructor(cars: number) {
+    this.capacity = Int32Array.from(PART_KINDS, (kind) => cars * PART_PER_CAR[kind]!);
     const meshes: THREE.InstancedMesh[] = [];
     for (const kind of PART_KINDS) {
-      const mesh = new THREE.InstancedMesh(partGeometry(kind), partsMaterial(), capacity);
+      const mesh = new THREE.InstancedMesh(partGeometry(kind), partsMaterial(), this.capacity[kind]!);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       // Instances span the pad and move every frame; a stale bound would cull live parts.
       mesh.frustumCulled = false;
@@ -36,7 +37,7 @@ export class PartBatch {
     }
     this.meshes = meshes;
     this.casters = CAR_STYLE_IDS.map((id) => {
-      const mesh = new THREE.InstancedMesh(NO_CASTER, shadowOnlyMaterial(), capacity);
+      const mesh = new THREE.InstancedMesh(NO_CASTER, shadowOnlyMaterial(), cars);
       mesh.name = `shadow-caster-${id}`;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.frustumCulled = false;
@@ -67,7 +68,7 @@ export class PartBatch {
         if (seat.loose) seat.fasten();
         const kind = seat.kind;
         const n = counts[kind]!;
-        if (!shown || !seat.layers.isEnabled(0) || n >= this.capacity) continue;
+        if (!shown || !seat.layers.isEnabled(0) || n >= this.capacity[kind]! || (seat.showIf !== null && !seat.showIf())) continue;
         this.meshes[kind]!.setMatrixAt(n, seat.matrixWorld);
         counts[kind] = n + 1;
       }
@@ -76,8 +77,8 @@ export class PartBatch {
       for (let p = caster.parent; casts && p; p = p.parent) casts = p.visible;
       const style = CAR_STYLE_IDS.indexOf(car.style.id);
       const n = casterCounts[style]!;
-      if (!casts || n >= this.capacity) continue;
       const mesh = this.casters[style]!;
+      if (!casts || n >= mesh.instanceMatrix.count) continue;
       mesh.geometry = caster.geometry;
       mesh.setMatrixAt(n, caster.matrixWorld);
       casterCounts[style] = n + 1;
