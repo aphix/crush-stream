@@ -213,6 +213,14 @@ export interface BodyStyle {
   quarter: { zRearBot: number; zRearTop: number };
   /** Extra pillar splitting the quarter glass (wagon C-pillar), or null. */
   midPillarZ: number | null;
+  /**
+   * Drawn only: side-view widths along z (m). `b`: the B-pillar, centred on its band, even from belt to top, the side panes
+   * tucked under it. `divider`: the post at `midPillarZ`, its widths and its z at the belt and at the top (a leaning post).
+   * Absent: the `bPillar` band (its top 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`.
+   */
+  pillars?: { b?: number; divider?: { width: readonly [number, number]; z?: readonly [number, number] } };
+  /** Drawn only: greenhouse parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar. */
+  blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean };
   rearBulkhead: { z: number; yTop: number };
   /** Open floors visible through the glass: [zRear, zFront, floorY]. */
   tubs: readonly (readonly [number, number, number])[];

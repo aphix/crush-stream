@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle } from "./car-variants.ts";
-import { aPillarTopZ, beltX, beltY, cantDrop } from "./car-lines.ts";
+import { aPillarTopZ, bPillarBand, beltX, beltY, cantDrop } from "./car-lines.ts";
 import {
   ROOF_CROWN,
   ROOF_SHOULDER,
@@ -64,19 +64,19 @@ const FILLET_CORNERS = [
   { x: 0, y: 0, startAngle: Math.PI },
 ] as const;
 
-/** The fraction of a section side (m) that its fillet takes off each end. */
-function filletShare(side: number): number {
-  return Math.min(PILLAR_FILLET, PILLAR_FILLET_SHARE * side) / side;
+/** The fraction of a section side (m) that a fillet of `radius` takes off each end; none on a side of no length. */
+function filletShare(side: number, radius = PILLAR_FILLET): number {
+  return side > 0 ? Math.min(radius, PILLAR_FILLET_SHARE * side) / side : 0;
 }
 
-/** A rectangle's outline in the unit square with elliptical-arc corners of radii `radiusU` x `radiusW` (unit fractions along each axis). */
-function filletedUnitSection(radiusU: number, radiusW: number): Pt[] {
+/** A rectangle's outline in the unit square with elliptical-arc corners of radii `radiusU` x `radiusW` (unit fractions along each axis), `steps` chords each. */
+function filletedUnitSection(radiusU: number, radiusW: number, steps = PILLAR_FILLET_STEPS): Pt[] {
   const section: Pt[] = [];
   for (const corner of FILLET_CORNERS) {
     const centreU = corner.x === 1 ? 1 - radiusU : radiusU;
     const centreW = corner.y === 1 ? 1 - radiusW : radiusW;
-    for (let step = 0; step <= PILLAR_FILLET_STEPS; step++) {
-      const angle = corner.startAngle + (step / PILLAR_FILLET_STEPS) * (Math.PI / 2);
+    for (let step = 0; step <= steps; step++) {
+      const angle = corner.startAngle + (step / steps) * (Math.PI / 2);
       section.push({ x: centreU + radiusU * detCos(angle), y: centreW + radiusW * detSin(angle) });
     }
   }
@@ -107,6 +107,31 @@ function boxFromCorners(
   return geo;
 }
 
+/** A pillar section's outer-face rear and front points at one station along it (+x side). */
+type Rail = { rear: V3; front: V3 };
+
+/**
+ * Rounded pillar lofted through `rails` (belt to top), thickness inward, its corners rounded at `radius` (m) in `steps` chords;
+ * sign -1 mirrors to the left without flipping the winding. `ownCaps`: its end caps get their own rings (`loftFromRings`).
+ */
+function roundedPillarAlong(sign: number, rails: readonly Rail[], thick: number, radius = PILLAR_FILLET, steps = PILLAR_FILLET_STEPS, ownCaps = true): THREE.BufferGeometry {
+  const last = rails.length - 1;
+  const stations = rails.map((_, k) => k / last);
+  const sections = rails.map((r) => filletedUnitSection(filletShare(thick, radius), filletShare(Math.abs(r.front[2] - r.rear[2]), radius), steps));
+  const geo = loftFromRings(sections, stations, 0, 1, ownCaps);
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const u = pos.getX(i);
+    const w = pos.getY(i);
+    const { rear, front } = rails[Math.round(pos.getZ(i) * last)]!;
+    const outer = lerp(rear[0], front[0], w);
+    const x = sign > 0 ? outer - (1 - u) * thick : -(outer - u * thick);
+    pos.setXYZ(i, x, lerp(rear[1], front[1], w), lerp(rear[2], front[2], w));
+  }
+  ensureOutwardNormals(geo);
+  return geo;
+}
+
 /**
  * Chamfered pillar mapped onto four outer-face corners (+x side), thickness inward;
  * sign -1 mirrors to the left without flipping the winding.
@@ -117,20 +142,75 @@ function roundedPillarFromCorners(
   thick: number,
   hs = 1,
 ): THREE.BufferGeometry {
-  const stations = Array.from({ length: hs + 1 }, (_, k) => k / hs);
-  const at = (k: number, v: number, w: number) => lerp(lerp(c.rb[k]!, c.fb[k]!, w), lerp(c.rt[k]!, c.ft[k]!, w), v);
-  const sections = stations.map((v) => filletedUnitSection(filletShare(thick), filletShare(Math.abs(at(2, v, 1) - at(2, v, 0)))));
-  const geo = loftFromRings(sections, stations, 0, 1);
+  const rails = Array.from({ length: hs + 1 }, (_, k): Rail => {
+    const v = k / hs;
+    return {
+      rear: [lerp(c.rb[0], c.rt[0], v), lerp(c.rb[1], c.rt[1], v), lerp(c.rb[2], c.rt[2], v)],
+      front: [lerp(c.fb[0], c.ft[0], v), lerp(c.fb[1], c.ft[1], v), lerp(c.fb[2], c.ft[2], v)],
+    };
+  });
+  return roundedPillarAlong(sign, rails, thick);
+}
+
+/** The drawn A-pillar is a post at least this wide (m) in side view across the windshield's edge, so it never thins to a sliver. */
+const A_POST_WIDTH = 0.06;
+/** The drawn A-post's depth inward (m): a slim post, not a slab. */
+const A_POST_THICK = 0.03;
+/** Stations along the drawn A-post, base to top: enough for the roof skin to bend its top (each costs the skin a ring a frame). */
+const A_POST_STATIONS = 4;
+/** The drawn A-post stands this far (m) off the windshield's edge and the side glass, outward, so neither glass shows through it. */
+const A_POST_LIFT = 0.004;
+/** The drawn A-post's rear top runs this far (m) up past the cant line, into the roof's side lip. */
+const A_POST_TOP_RISE = 0.03;
+/** The drawn A-post's corners round at this radius (m) in this many chords, so it reads as a rounded post. */
+const A_POST_ROUND = 0.012;
+const A_POST_ROUND_STEPS = 2;
+/** The sail (the panel between the A-post and the door glass) is this thick (m), on the side glass plane. */
+const SAIL_THICK = 0.02;
+/** A sail narrower than this (m) at every station is not drawn. */
+const SAIL_MIN = 0.005;
+/** Where the door glass runs under the post the sail thins to this (m), never to nothing, so its faces keep their normals. */
+const SAIL_EDGE = 0.001;
+
+/**
+ * The drawn A-post's rails and its sail's, base to top. The post runs along the windshield's edge, `A_POST_WIDTH` wide in side
+ * view; the door glass's front edge (`aPillarFoot` to `aPillarTopZ`) under it is covered, and where that edge lies further back
+ * the sail fills the gap at the same height, so no style's glass layout leaves a hole or a sliver.
+ */
+function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
+  const { base, wBase, wTop } = style.windshield;
+  const [topY, topZ] = style.windshieldTop;
+  const run = hypot2(topZ - base[1], topY - base[0]);
+  const [uz, uy] = [(topZ - base[1]) / run, (topY - base[0]) / run];
+  const [footZ, aTopZ] = [style.aPillarFoot, aPillarTopZ(style)];
+  const [footY, aTopY] = [beltY(footZ, style), cantY(aTopZ, style) + A_POST_TOP_RISE];
+  const post: Rail[] = [];
+  const sail: Rail[] = [];
+  let sailWidth = 0;
+  for (let k = 0; k < A_POST_STATIONS; k++) {
+    const t = k / (A_POST_STATIONS - 1);
+    const y = lerp(footY, aTopY, t);
+    // Side view: the point at height y that lies A_POST_WIDTH behind the windshield's edge line.
+    const postZ = base[1] + (uz * (y - base[0]) - A_POST_WIDTH) / uy;
+    const glassZ = lerp(footZ, aTopZ, t);
+    const sailZ = Math.min(glassZ, postZ - SAIL_EDGE);
+    const rear: V3 = [glassX(postZ, y, style) + A_POST_LIFT, y, postZ];
+    post.push({ rear, front: [lerp(wBase, wTop, t) / 2 + A_POST_LIFT, lerp(base[0], topY, t) - A_POST_LIFT * uz, lerp(base[1], topZ, t) + A_POST_LIFT * uy] });
+    sail.push({ rear: [glassX(sailZ, y, style), y, sailZ], front: [glassX(postZ, y, style), y, postZ] });
+    sailWidth = Math.max(sailWidth, postZ - glassZ);
+  }
+  return { post, sail: sailWidth > SAIL_MIN ? sail : null };
+}
+
+/** Holds every vertex of `geo` over the roof panel's z span at or under the roof skin, so a pillar's top blends into the roof; names it `name`. */
+function underRoofSkin(geo: THREE.BufferGeometry, style: BodyStyle, name: string): THREE.BufferGeometry {
+  const [z0, z1] = style.roofZ;
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
-    const u = pos.getX(i);
-    const w = pos.getY(i);
-    const v = pos.getZ(i);
-    const outer = at(0, v, w);
-    const x = sign > 0 ? outer - (1 - u) * thick : -(outer - u * thick);
-    pos.setXYZ(i, x, at(1, v, w), at(2, v, w));
+    const z = pos.getZ(i);
+    if (z >= z0 && z <= z1) pos.setY(i, Math.min(pos.getY(i), roofTopY(pos.getX(i), z, style)));
   }
-  ensureOutwardNormals(geo);
+  geo.name = name;
   return geo;
 }
 
@@ -195,64 +275,89 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   const rg = style.rearGlass;
   const q = style.quarter;
   const aTopZ = aPillarTopZ(style);
+  const aPost = source === "drawn" ? aPostRails(style) : null;
+  const bBand = source === "drawn" ? bPillarBand(style) : null;
+  const [bRear, bFront] = bBand ?? [bp.rear, bp.front];
+  // The drawn B-pillar with the style's own width is even from belt to top; else its top is 3 cm narrower than its band.
+  const bTopInset = bBand ? 0 : 0.015;
+  const m = style.midPillarZ;
+  const divider = source === "drawn" ? style.pillars?.divider : undefined;
+  const [dividerBelt, dividerTop] = divider?.width ?? [0.08, 0.07];
+  const black = (source === "drawn" ? style.blackout : undefined) ?? {};
+  const tone = (geo: THREE.BufferGeometry, dark: boolean | undefined) => {
+    geo.userData.blackout = dark === true;
+    return geo;
+  };
   for (const sign of [-1, 1]) {
     parts.push(
-      pillarFromCorners(
-        sign,
-        {
-          fb: [ws.wBase / 2 + 0.02, ws.base[0] + 0.01, ws.base[1] - 0.03],
-          rb: [beltXAt(style.aPillarFoot), belt(style.aPillarFoot), style.aPillarFoot],
-          rt: [cantX(aTopZ, style), cantY(aTopZ, style) + 0.03, aTopZ],
-          ft: [ws.wTop / 2 + 0.02, wsY + 0.02, wsZ],
-        },
-        0.05,
-        2,
-      ),
+      aPost
+        ? tone(underRoofSkin(roundedPillarAlong(sign, aPost.post, A_POST_THICK, A_POST_ROUND, A_POST_ROUND_STEPS, false), style, "aPost"), black.a)
+        : boxFromCorners(
+            sign,
+            {
+              fb: [ws.wBase / 2 + 0.02, ws.base[0] + 0.01, ws.base[1] - 0.03],
+              rb: [beltXAt(style.aPillarFoot), belt(style.aPillarFoot), style.aPillarFoot],
+              rt: [cantX(aTopZ, style), cantY(aTopZ, style) + 0.03, aTopZ],
+              ft: [ws.wTop / 2 + 0.02, wsY + 0.02, wsZ],
+            },
+            0.05,
+            2,
+          ),
     );
-    const bz = (bp.rear + bp.front) * 0.5;
+    const bz = (bRear + bFront) * 0.5;
     const bTop = cantY(bz, style) + 0.05;
     const bX = cantX(bz, style) + 0.01;
     parts.push(
-      pillarFromCorners(
-        sign,
-        {
-          fb: [beltXAt(bp.front) + 0.01, belt(bp.front) - 0.02, bp.front],
-          rb: [beltXAt(bp.rear) + 0.01, belt(bp.rear) - 0.02, bp.rear],
-          rt: [bX, bTop, bp.rear + 0.015],
-          ft: [bX, bTop, bp.front - 0.015],
-        },
-        0.05,
-      ),
-    );
-    parts.push(
-      pillarFromCorners(
-        sign,
-        {
-          fb: [beltXAt(q.zRearBot), belt(q.zRearBot) - 0.02, q.zRearBot],
-          rb: [rg.wBase / 2 + 0.02, rg.base[0], rg.base[1] - 0.01],
-          rt: [rg.wTop / 2 + 0.02, rg.top[0] + 0.01, rg.top[1] - 0.01],
-          ft: [cantX(q.zRearTop, style), cantY(q.zRearTop, style) + 0.03, q.zRearTop],
-        },
-        0.05,
-      ),
-    );
-    const m = style.midPillarZ;
-    if (m !== null) {
-      const mTop = cantY(m, style) + 0.03;
-      const mX = cantX(m, style) + 0.012;
-      parts.push(
+      tone(
         pillarFromCorners(
           sign,
           {
-            fb: [beltXAt(m + 0.04) + 0.012, belt(m + 0.04) - 0.02, m + 0.04],
-            rb: [beltXAt(m - 0.04) + 0.012, belt(m - 0.04) - 0.02, m - 0.04],
-            rt: [mX, mTop, m - 0.035],
-            ft: [mX, mTop, m + 0.035],
+            fb: [beltXAt(bFront) + 0.01, belt(bFront) - 0.02, bFront],
+            rb: [beltXAt(bRear) + 0.01, belt(bRear) - 0.02, bRear],
+            rt: [bX, bTop, bRear + bTopInset],
+            ft: [bX, bTop, bFront - bTopInset],
           },
-          0.04,
+          0.05,
+        ),
+        black.b,
+      ),
+    );
+    parts.push(
+      tone(
+        pillarFromCorners(
+          sign,
+          {
+            fb: [beltXAt(q.zRearBot), belt(q.zRearBot) - 0.02, q.zRearBot],
+            rb: [rg.wBase / 2 + 0.02, rg.base[0], rg.base[1] - 0.01],
+            rt: [rg.wTop / 2 + 0.02, rg.top[0] + 0.01, rg.top[1] - 0.01],
+            ft: [cantX(q.zRearTop, style), cantY(q.zRearTop, style) + 0.03, q.zRearTop],
+          },
+          0.05,
+        ),
+        black.rear,
+      ),
+    );
+    if (m !== null) {
+      const [beltZ, topZ] = divider?.z ?? [m, m];
+      const mTop = cantY(topZ, style) + 0.03;
+      const mX = cantX(topZ, style) + 0.012;
+      parts.push(
+        tone(
+          pillarFromCorners(
+            sign,
+            {
+              fb: [beltXAt(beltZ + dividerBelt / 2) + 0.012, belt(beltZ + dividerBelt / 2) - 0.02, beltZ + dividerBelt / 2],
+              rb: [beltXAt(beltZ - dividerBelt / 2) + 0.012, belt(beltZ - dividerBelt / 2) - 0.02, beltZ - dividerBelt / 2],
+              rt: [mX, mTop, topZ - dividerTop / 2],
+              ft: [mX, mTop, topZ + dividerTop / 2],
+            },
+            0.04,
+          ),
+          black.divider,
         ),
       );
     }
+    if (aPost?.sail) parts.push(tone(underRoofSkin(roundedPillarAlong(sign, aPost.sail, SAIL_THICK, PILLAR_FILLET, PILLAR_FILLET_STEPS, false), style, "sail"), black.sail));
     // The belt rail runs from the C-pillar to the B-pillar along the sill, pitched with it and turned in plan where the sill narrows.
     const [railRear, railFront] = [belt(q.zRearBot), belt(bp.front)];
     const [railRearX, railFrontX] = [beltXAt(q.zRearBot), beltXAt(bp.front)];
