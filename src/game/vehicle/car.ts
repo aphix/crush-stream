@@ -19,6 +19,7 @@ import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CageRig } from "./car-cage-rig.ts";
 import { PartSeat } from "./part-geometry.ts";
+import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
 
 export { DOOR };
@@ -226,6 +227,8 @@ export class DeformableCar extends CarParts {
     this.group.rotation.set(0, 0, 0);
     this.interior.scale.set(1, 1, 1);
     this.interior.position.set(0, 0, 0);
+    this.cabin.fit(null);
+    this.cabin.sinkHeadliner(null);
 
     this.endAgo.fill(9);
     this.endReach = Infinity;
@@ -240,6 +243,7 @@ export class DeformableCar extends CarParts {
         else if (!p.region) this.group.add(p.object);
       }
       if (p.region) this.closePanel(p);
+      if (p.bare) setBare(p.bare, this.body.geometry, false);
       p.detached = false;
       p.folding = false;
       p.hingeT = 0;
@@ -640,7 +644,8 @@ export class DeformableCar extends CarParts {
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
       this.followGlass();
     }
-    if (this.deform.massActive) this.fitInterior();
+    // A load crushes the roof's skin with the masses at rest: the headliner follows it too.
+    if (this.deform.massActive || this.deform.skinnedThisFrame) this.fitInterior();
     if (this.hullHelper?.visible) this.updateHullHelper();
     this.settleCasters();
   }
@@ -654,6 +659,7 @@ export class DeformableCar extends CarParts {
       this.skinPanels();
       this.holdSkinOffTyres(true);
     }
+    this.fitInterior();
   }
 
   /** A crushed skin drawn over a standing tyre stands on it (`TyreSkin`); a thrown wheel is the world's. */
@@ -728,7 +734,7 @@ export class DeformableCar extends CarParts {
       // Meshes, lines and points alike: the hull overlay is a LineSegments, and freeing meshes alone left its buffer for good.
       const drawn = obj as THREE.Mesh | THREE.Line | THREE.Points;
       if (obj instanceof PartSeat) obj.dispose();
-      else drawn.geometry?.dispose();
+      else if (!drawn.geometry?.userData.shared) drawn.geometry?.dispose();
       for (const m of [drawn.material].flat()) if (m && !m.userData.shared) m.dispose();
       if (obj instanceof THREE.Light) obj.dispose();
     };
@@ -740,9 +746,9 @@ export class DeformableCar extends CarParts {
     this.group.traverse(free);
   }
 
-  /** The meshes a player's look recolours (`car-look.ts`): the body (on the body paint), the lids, the door skins and the glass panes. */
-  lookMeshes(): { body: THREE.Mesh; bodyPaint: THREE.MeshPhysicalMaterial; hood: THREE.Mesh; trunk: THREE.Mesh; doors: readonly THREE.Mesh[]; glass: readonly THREE.Mesh[] } {
-    return { body: this.body, bodyPaint: this.bodyMat, hood: this.hood, trunk: this.trunk, doors: [this.doorMeshL, this.doorMeshR], glass: this.glassPanes.map((g) => g.mesh) };
+  /** The meshes a player's look recolours (`car-look.ts`): the body (on the body paint), the lids, the door skins, the glass panes and the front and rear bumpers. */
+  lookMeshes(): { body: THREE.Mesh; bodyPaint: THREE.MeshPhysicalMaterial; hood: THREE.Mesh; trunk: THREE.Mesh; doors: readonly THREE.Mesh[]; glass: readonly THREE.Mesh[]; bumpers: readonly THREE.Mesh[] } {
+    return { body: this.body, bodyPaint: this.bodyMat, hood: this.hood, trunk: this.trunk, doors: [this.doorMeshL, this.doorMeshR], glass: this.glassPanes.map((g) => g.mesh), bumpers: this.bumperMeshes };
   }
 
   /** The meshes the crush skin writes (`updateSkin`): the body, the lids, the light bar and the skinned panes. */
@@ -776,6 +782,7 @@ export class DeformableCar extends CarParts {
           else if (p.name === "mirrorL") this.doorL.add(p.object);
           else if (p.name === "mirrorR") this.doorR.add(p.object);
           else this.group.add(p.object);
+          if (p.bare) setBare(p.bare, this.body.geometry, false);
           p.detached = false;
         }
       }

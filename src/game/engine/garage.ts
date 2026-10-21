@@ -6,6 +6,7 @@ import { SPRAY_PALETTE } from "../match/look-data.ts";
 import type { PlayerLooks, SprayTarget } from "./player-looks.ts";
 import { SprayUndo } from "./spray-undo.ts";
 import type { SprayTool } from "../hud/hud-store.ts";
+import { CLASS_LIFT } from "../vehicle/constants.ts";
 
 /** The screen box the pointer's client coordinates are read in (the canvas's `getBoundingClientRect`). */
 type Rect = { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
@@ -116,9 +117,9 @@ export class Garage {
 
   /**
    * One puff at world point `_p` on what `hit` met (the driver, else `car`), its normal taken from the hit's face, both moved
-   * into the thing's rest frame; with the can's `mirror` on, a second at its mirror across the body's left-right plane (x 0
-   * in either rest frame), which `sprayFace` maps to the other flank or across the same face, never another one. Where that
-   * side's mesh differs, the paint lands only where a surface meets those texels.
+   * into the thing's rest frame (a car's without its class lift and ride, `ensureRestFrame`); with the can's `mirror` on, a second
+   * at its mirror across the body's left-right plane (x 0 in either rest frame), which `sprayFace` maps to the other flank or across
+   * the same face, never another one. Where that side's mesh differs, the paint lands only where a surface meets those texels.
    */
   private restPoint(hit: THREE.Intersection, car: DeformableCar | undefined, bitmap: SprayBitmap): void {
     _n.copy(hit.face!.normal);
@@ -127,8 +128,9 @@ export class Garage {
       _n.applyMatrix3(_nm.getNormalMatrix(_m));
       _p.sub(GARAGE.person);
     } else if (car) {
-      _n.transformDirection(hit.object.matrixWorld).applyQuaternion(car.group.getWorldQuaternion(_q).invert());
-      car.group.worldToLocal(_p);
+      const body = car.group.getObjectByName(CLASS_LIFT) ?? car.group;
+      _n.transformDirection(hit.object.matrixWorld).applyQuaternion(body.getWorldQuaternion(_q).invert());
+      body.worldToLocal(_p);
     }
     bitmap.spray(_p, _n, this.tool.radius, this.ink, Math.random);
     if (!this.tool.mirror) return;

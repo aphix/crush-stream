@@ -9,6 +9,7 @@ import type { StirCar } from "../world/surfaces.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import type { MassName } from "../kernel/rig-spec.ts";
 import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox } from "./car-panels.ts";
+import { setBare } from "./interior.ts";
 import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
 import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
@@ -92,8 +93,8 @@ const TOUCH_NOW = 0.03;
 const FLUSH_HINGE = 0.02;
 /** How fast (hinge value per s) a hinged part swings toward its target. */
 const HINGE_RATE = 3.2;
-/** A lid's crash hinge value runs on the tail's crush (the rear bumper cage's compression, m): the latch racks from `LID_CRUSH_ON` (a ~20 km/h rear wall), full `LID_CRUSH_RANGE` past it. */
-const LID_CRUSH_ON = 0.1;
+/** A lid's crash hinge value runs on the tail's crush (the rear bumper cage's compression, m) from `LID_CRUSH_ON`, full `LID_CRUSH_RANGE` past it: its latch (ajar 0.2) springs at 0.2 m, past every lid car's 15 km/h rear wall and short of its 30 km/h one. */
+const LID_CRUSH_ON = 0.14;
 const LID_CRUSH_RANGE = 0.3;
 
 /** The hinge value above which a part counts as folding (hung open, crushed, flapping), by hinge kind. */
@@ -140,9 +141,9 @@ export abstract class CarParts extends CarGlass {
   /** Pendulum drive, car frame: acceleration right, acceleration forward (m/s²), yaw rate (rad/s), yaw acceleration (rad/s²). */
   readonly swingDrive = new Float64Array(4);
   /**
-   * Once a frame, with the skin: the hood, boot lid, doors and bumpers cast into the sun's shadow map (one draw each) only
-   * when the car has been hit or a part has hinged, swung or come off. Until then they lie on the body's shell and the
-   * body's shadow is theirs to within a texel row at the bumpers (`flush-casters.test.ts` measures it).
+   * Once a frame, with the skin: an undamaged car casts its sun shadow from `shadowCaster` alone (body and every flush part
+   * merged at rest, one draw), so overhanging parts are not missing from it. Once the car has been hit or a part has hinged,
+   * swung or come off, the merged mesh stops and the body, hood, boot lid, doors and bumpers cast, one draw each.
    */
   protected settleCasters(): void {
     let flush = !this.crashed;
@@ -150,6 +151,8 @@ export abstract class CarParts extends CarGlass {
       const p = this.parts[i]!;
       flush = !p.detached && p.hingeT <= FLUSH_HINGE && (p.swing === null || p.swing.theta <= FLUSH_HINGE);
     }
+    this.body.castShadow = !flush;
+    this.shadowCaster.castShadow = flush;
     for (let i = 0; i < this.flushCasters.length; i++) this.flushCasters[i]!.castShadow = !flush;
   }
 
@@ -676,6 +679,8 @@ export abstract class CarParts extends CarGlass {
     if (!this.deform.massActive) {
       this.interior.scale.set(1, 1, 1);
       this.interior.position.set(0, 0, 0);
+      this.cabin.fit(null);
+      this.cabin.sinkHeadliner(this.deform.massLocal("roof").y);
       return;
     }
     const l = this.deform.massLocal(INTERIOR_MASSES[0]);
@@ -684,6 +689,8 @@ export abstract class CarParts extends CarGlass {
     interiorPose(l.x, r.x, cell.y, cell.z, _interior);
     this.interior.scale.x = _interior[0]!;
     this.interior.position.set(_interior[1]!, _interior[2]!, _interior[3]!);
+    this.cabin.fit(this.deform);
+    this.cabin.sinkHeadliner(this.deform.massLocal("roof").y);
   }
 
   /** Once a frame on a crashed car (`updateSkin`, after the skin): the parts' poses a step left pending are written first, door glass rides its door. */
@@ -853,6 +860,7 @@ export abstract class CarParts extends CarGlass {
     const wpos = new THREE.Vector3();
     const wquat = new THREE.Quaternion();
     if (p.region) this.openPanel(p);
+    if (p.bare) setBare(p.bare, this.body.geometry, true);
     p.object.getWorldPosition(wpos);
     p.object.getWorldQuaternion(wquat);
     if (p.region) {

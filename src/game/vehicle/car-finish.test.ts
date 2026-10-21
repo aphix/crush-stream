@@ -15,9 +15,9 @@ import type * as CarFinish from "./car-finish.ts";
 import { makePaintMaterial, trimMaterial } from "./car-materials.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
 
-/** What a car material's program key was before the finish existed: the strings these tests prove an OFF material still has. */
+/** What a car material's program key is with the finish off: the strings these tests prove an OFF material still has (the trim's names its fittings hook). */
 const PAINT_KEY_TODAY = "car-paint-primer";
-const TRIM_KEY_TODAY = "car-highlight-cap";
+const TRIM_KEY_TODAY = "car-trim-fittings";
 const SPRAY_SUFFIX = "|spray-car";
 
 type FinishModule = typeof CarFinish;
@@ -163,7 +163,7 @@ describe("given the FX tiers", () => {
 });
 
 const keyCases = [
-  { it: "when the finish is on, then the paint program key names the paint finish and the trim key the trim finish", enabled: true, paintKey: `${PAINT_KEY_TODAY}|finish-paint`, trimKey: `${TRIM_KEY_TODAY}|finish-trim` },
+  { it: "when the finish is on, then the paint program key names the paint finish (and the sedan's detail map) and the trim key the trim finish", enabled: true, paintKey: `${PAINT_KEY_TODAY}|finish-paint|detail`, trimKey: `${TRIM_KEY_TODAY}|finish-trim` },
   { it: "when the finish is switched off again, then every key is the one a car had before the finish existed", enabled: false, paintKey: PAINT_KEY_TODAY, trimKey: TRIM_KEY_TODAY },
 ] as const;
 

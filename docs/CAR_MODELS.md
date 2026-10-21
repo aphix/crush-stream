@@ -49,18 +49,83 @@ The hardpoints place the openings and the lower body, each per car:
 |---|---|
 | `windshield` | Base `[y, z]` of the glass centre line and its widths at the base and at `windshieldTop` |
 | `bPillar` | The B-pillar's z band |
-| `belt` | Side-glass sill: half-width `x`, and height `y` as `[z, y]` stations (linear between, held past the ends), so a beltline can rise toward the tail |
+| `aPillarFoot` | Where the A-pillar's foot meets the belt (z): the door glass's front edge starts there |
+| `aPillarTop` | Optional: where the A-pillar's rear edge meets the cant line (z), the door glass's top-front corner. Absent, 5 cm behind the windshield's top; set it on a raked windshield so the window's front edge isn't a straight line from the foot |
+| `glassTop` | Optional side glass top (the DLO's top edge). A number: its drop under the roof (absent 0.075), the roof's side lip and the pillar tops following it. `[z, y]` stations (linear between, held past the ends, never above the cant line): the glass top follows them under a 0.075 lip and a painted fill (drawn only) closes the gap up to the cant line from the C-pillar to the A-pillar |
+| `camera` | Optional cameras, car frame as drawn (a class lift included): `hood` `[y, z]`, the hood view's eye, just over the bonnet and ahead of the windshield base (`car-variants.test.ts` holds it there); `third` and `far` `{ dist, height, aimUp }`, the chase and far chase eyes behind and over the car's origin and their aim point's height. Absent: `PLATFORM_CAMERA` (the 4.2 m sedan's). Shoot them with `scripts/headless-frame.mjs --hash 'scene=race&car=<id>' --view hood\|chase\|far` |
+| `belt` | Side-glass sill: half-width `x` (one value, or `[z, x]` stations where the sill narrows toward the tail), and height `y` as `[z, y]` stations (linear between, held past the ends), so a beltline can rise toward the tail |
 | `rocker` | The body side's lowest line; under it the sill turns in to the floor pan. It rides up with `underside` |
 | `underside` | Optional floor pan height as `[z, y]` stations (linear between, held past the ends): the underside's rise to the nose and tail. Absent, the floor is flat at `dims.rideHeight` |
-| `door` | Front doors: hinge axis `hingeX`, `hingeY`, `hingeZ` at the A-pillar, `length` hinge to trailing edge, skin ±`halfHeight` about the hinge, and `aperture` `[z0, z1]`, the body's door cut (the skin covers it, 2 cm past each end). The mirror seats itself on the door skin at `mirrorY` over the hinge and is drawn to reach `mirrorReach` out, ±`mirrorHalfDepth` deep |
+| `door` | Front doors: hinge axis `hingeX`, `hingeY`, `hingeZ` at the A-pillar, `length` hinge to trailing edge, skin ±`halfHeight` about the hinge, and `aperture` `[z0, z1]`, the body's door cut (the skin covers it, 2 cm past each end). The door glass rides the door: its rear edge stands 3 cm (belt) / 5 cm (top) inside the trailing edge, so put the B-pillar's front there. The mirror seats itself on the door skin at `mirrorY` over the hinge and `mirrorZ` behind it (default 0), drawn to reach `mirrorReach` out, ±`mirrorHalfDepth` deep |
 | `arch` | Wheel-arch opening radius about each hub |
 | `hood` | Bonnet span `z0` (cowl) to `z1` (nose) and its hinge `origin` `[y, z]` |
 | `bumpers.front`, `bumpers.rear` | Group `seat` (height, distance from the middle), `fascia` section `[y, out]` top to bottom, `span` (half-width), and `wrap`: the `|x|` where the fascia's corner starts sweeping back (`from`) and how far its end sweeps (`back`) |
+| `seats` | The driver's H-point `front` `[x, y, z]` (he sits on −x, the passenger mirrors him) and the rear bench's `rear` `[y, z]` on the centre line, or `null` with no rear row (the regular-cab truck). The drawn seats, the seated driver and the sim's seat read it |
 
 `car-styles/platform.ts` exports the values the first bodies shared as `PLATFORM_HARDPOINTS`; a table spreads it and overrides
 what its car changes. Every hardpoint but the bumper fascia reaches the collision cage or a sim reader (the greenhouse pillars,
 the sill, the arches, the hood's pose, a torn bumper's box), so moving one moves the sim: re-pin and bump `REPLAY_VERSION`.
 The greenhouse header bars follow the roof: a drawn header bar's top never stands above the roof skin over its ends.
+
+The drawn parts (optional, drawn only: no cage build reads them, so adding one never moves the sim) dress a body without a
+new mesh: each is merged into the mesh it stands on and moves with it.
+
+| Field | Meaning |
+|---|---|
+| `hood.bulge` | Raised centre bulge on the drawn hood from `z0` to `z1`, `width` across, its top `rise` over the lid, easing into it at both ends. `scoop` (`inlets` 1 or 2, mouth at `z`, `width`, `height` over the bulge) rises toward a mouth facing forward, drawn dark. Merged into the hood (`withHoodBulge`): the bonnet's skin crushes it |
+| `hood.kind` | `"lid"` (default) or `"clamshell"`: the drawn lid wraps over the body's shoulders to a side shut line on the fender top |
+| `boot.lip` | Ducktail kick: the deck lid's top rises `rise` at its rear edge, or the tailgate's top edge kicks `rise` out, easing in over `depth` |
+| `roof.rails` | Two dark rails at \|x\| `x[0]`..`x[1]` over `z` [rear, front], their tops `rise` over the roof at their inner edge |
+| `roof.spoiler` | Body-colour wedge off the roof's rear end over `z` [tip, front edge]: underside at `y[0]`, top `y[1]` at the front edge, ±`halfWidth` |
+| `roof.glassPanel` | Dark panel a few mm proud of the roof over `z` [rear, front], `width` across |
+| `bumpers.front.trim`, `bumpers.rear.trim` | `"body"` (its body colour, painted finish), `"chrome"` or `"black"`; unset, the car's accent trim. A player's bumper colour still recolours it |
+| `bumpers.rear.hitch` | Black tow-hitch receiver under the rear bumper's middle |
+| `exhaust` | `tips` 1 (at `x`) or 2 (at ±`x`) at height `y`, `size` [w, h], `shape` `"round"` (oval) or `"rect"`: chrome with a dark throat, past the rear bumper's face |
+
+The roof parts are merged into the drawn body after its other parts (the body's skin crushes them with the roof); rails and
+panel are drawn dark by the paint's `primer` attribute. Exhaust tips and the hitch are merged into the rear bumper
+(`withRearFittings`), so they tear off with it; their chrome and black come from the trim material's `fitting` attribute, so
+no part adds a draw call.
+
+## Interior, engine bay and bare metal
+
+The cabin is shared props, placed per car by its spec (`vehicle/interior.ts` `CarCabin`, geometry in `interior-geometry.ts`):
+
+| Prop (`PART_KIND`) | Seats per car | Placed by |
+|---|---|---|
+| `interior`: the cabin shell (floor, tunnel and console, dash with binnacle and screen, headliner, side trim) | 1 | Mapped from `REF_CABIN` onto the car's cabin box: `belt.x` (sides), the cabin tub's floor, the roof line at the B-pillar (headliner), `rearBulkhead.z` to `windshield.base` |
+| `seatFront` | 2 | `seats.front`, the passenger mirrored |
+| `seatRear` | 0 or 1 | `seats.rear`, stretched to the cabin's width |
+| `wheel` | 1 | Ahead of the driver's H-point (`WHEEL_AT`), leaned `WHEEL_TILT` |
+| `liningL`, `liningR`: door cards | 1 each | Door space; each keeps the first lining's box exactly (a torn door's loose box is sim) |
+| `engineBay` | 1 | Mapped from `REF_BAY` onto the trough under the hood; shown while the hood is off or open |
+| `crashBar` | 2 | Each bumper's seat; shown while that bumper is off or hanging |
+
+Every prop kind is one `InstancedMesh` for the whole field (`PartBatch`, `PART_PER_CAR`): adding a car adds instances, never
+draws. At rest the interior costs six draws for the whole field (cabin, both door-card sides, front seats, rear bench, wheel) and the
+seated drivers one more; the bay and the crash bars draw only while exposed. `CarDetail` takes the cabin, seats, wheel and bay at its
+far distance (by `INTERIOR_MESH`), the door cards and crash bars with the small parts at mid distance.
+
+- **Seat lean:** seats and the seated driver lean `SEAT_RECLINE` back; under a low roof the seat leans further (to
+  `SEAT_RECLINE` + 0.35 rad) until the driver's head clears the roof line by 5 cm.
+- **The driver:** `present/seated-drivers.ts` draws every car's driver seated (one `DummyMesh` for the field, slot = the car's
+  index), posed by `seatedPose(style)`: hips on the H-point, back on the seat, hands on the rim's grips, soles on the floor. He
+  wears the car's driver look (`RagdollSystem.carDriverLook`, as he is thrown) and hides once `driverOut` is set or the far
+  cut takes his seat. In the garage no one sits in the car: the standing dummy beside it is the driver. The National Mall's
+  VIP rides with his hips on the passenger H-point (`seats.front` mirrored).
+- **Crush:** the headliner sinks with the roof mass (a load's crush too, `CarCabin.sinkHeadliner`), so the cabin never stands
+  through a crushed roof. The bay rides the engine masses with its front no further out than the front bumper's masses (the
+  nose); each crash bar rides its bumper's, its face on the bumper's seat.
+- **The engine bay:** the drawn body (never the cage) opens a trough under the hood (`bayTub`: from the hood's cowl edge or the
+  windshield's foot to inside the nose, floor at 0.28 m), one more `tubs` entry for the drawn loft only. The bay set fills it
+  wall to wall up to the hood's underside: a dark block and black cover with bare-aluminium heads, intake, plenum and strut
+  caps, steel rails and manifolds, black radiator, airbox and battery.
+- **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor, the wheel liners and
+  the hood's underside are set so at build, on the drawn body only. No texture, no draw.
+- **Bare metal:** the paint's `primer` attribute draws procedural riveted steel (`bare-metal.ts`: object-space seams, rivet
+  rows, a tint per sheet), so a torn panel's or bumper's under-panel bends with the body and costs no texture or draw. A torn
+  bumper bares the painted body it covered (`bumperBare`), a reset paints it again.
+- **The cage** reads `cageInterior()`, the first interior box byte-for-byte: the drawn kit moves no sim reading.
 
 ## References and scale
 
@@ -89,12 +154,18 @@ The references live in `/home/aphix/github/crash-deformer-test/.tmp/ModernCarDes
 reboot). Run both through the box gate: `CAP=2G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node ...`.
 
 **`fit-car.mjs`: a speed-up.** It reads the side and top pictures into the style's own fields, builds the car from them, and
-nudges the profile stations toward the reference's roof line and plan for a few rounds, all in one process of about 5 s. It
+nudges the profile stations toward the reference's roof line and plan for a few rounds, all in one process of about 6 s. It
 gets a car close fast but misses finer details. Each car agent then aligns the rest by hand on trace-car's overlays (windows,
 doors, wheel centres, any silhouette edge) and spot-checks against the bar: side and top IoU ≥ 0.95, per-edge mean ≤ 2 cm,
 max ≤ 5 cm, corners and glass included. Output: `.tmp/fit/<style>/fit.ts` (paste over the style file's fields after review),
 before/after overlays beside it, and one JSON line with both views' IoU, edge and glass offsets before and after, the
-per-corner checklist, and `notFit` (the fields left to the hand). It never writes a style file.
+per-corner checklist, `guard` and `notFit` (the fields left to the hand). It never writes a style file.
+
+The fit is guarded: it lays the read fields onto the style as it stands one group at a time (the body with its greenhouse frame,
+then the plan, track, glass sill, door, bumpers, underside). It keeps a group only where neither view's IoU nor either side of
+the plan gets worse (mean and largest |offset| over the sides, ends trimmed) and something gains. Each group's result is one
+`guard` line, so the output is never worse than the style it started from. `dims` overhangs, width and height are then
+measured off the built car, as the dims rows hold them.
 
 ```sh
 R=/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
@@ -102,13 +173,13 @@ node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
   --side $R/silver-sedan/silver-sedan-1.png --side-span 3,299=4.221 --top $R/silver-sedan/silver-sedan-2.png --top-span 3,292
 ```
 
-- Read: `dims` (wheelbase and wheel radius from the side picture's tyres, which also set z = 0; overhangs, height, width),
-  `profile` (stations where the roof line, plan or glass zone bends), `roofZ`, `windshield`, `windshieldTop`, `rearGlass`,
-  `quarter`, `belt.y` (the glass sill), `underside`, `door.hingeX` (the plan at the hinge), `door.mirrorReach` (one build, so the
-  mirror tip meets the reference's), `bumpers.*.seat.z` (lip on the end) and `bumpers.*.wrap` (the plan's end corners).
-  Fitted: `profile`.
-- Not read: hood, arch, rocker, boot, `track`, `rideHeight`, `cabinHw`, `bPillar`, the bumper fascia and span, and the door's
-  hinge y and z, length and aperture.
+- Read: `dims` (wheelbase and wheel radius from the side picture's tyres, which also set z = 0; `track` so each tyre's outer face
+  sits 1 cm inside the plan), `profile` (stations where the roof line, plan or glass zone bends; mirrors and handles cut from
+  the plan), `roofZ`, `windshield`, `windshieldTop`, `rearGlass`, `belt.y` (the glass sill), `belt.x` (the rail 4 cm under the
+  shoulder), `underside`, `door.hingeX` (the plan at the hinge), `bumpers.*.seat.z` (lip on the end) and `bumpers.*.wrap`
+  (the plan's end corners). Fitted: `profile`.
+- Not read: hood, arch, rocker, boot, `rideHeight`, `cabinHw`, `bPillar`, `quarter`, mirrors, the bumper fascia and span, and the
+  door's hinge y and z, length and aperture.
 
 **`trace-car.mjs`: one view, measured.** Writes an overlay PNG and prints one JSON line: the silhouette IoU and signed edge
 offsets (cm, positive where the car sticks out), the glass's (side: roof rail, sill, A- and C-pillar with their rake), the

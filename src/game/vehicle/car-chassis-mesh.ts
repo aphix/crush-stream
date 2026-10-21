@@ -1,11 +1,14 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detSin } from "../kernel/physics-core.js";
-import { PRIMER_ATTRIBUTE } from "./constants.ts";
+import { INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
+import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import {
+  bayAt,
+  bodyTubs,
   DOOR_EDGE,
   SEAM_HALF,
   SEDAN,
@@ -71,7 +74,7 @@ function sliceZs(style: BodyStyle, source: BodySource): number[] {
   const z1 = p[p.length - 1]!.z;
   const [a0, a1] = style.door.aperture;
   const knots = [a0, a0 + DOOR_EDGE, a1 - DOOR_EDGE, a1];
-  for (const [a, b] of style.tubs) knots.push(a - TUB_EDGE, a + TUB_EDGE, b - TUB_EDGE, b + TUB_EDGE);
+  for (const [a, b] of bodyTubs(style, source)) knots.push(a - TUB_EDGE, a + TUB_EDGE, b - TUB_EDGE, b + TUB_EDGE);
   const seam = style.rearDoorSeam;
   if (seam !== null) knots.push(seam - SEAM_HALF, seam, seam + SEAM_HALF);
   const zs = knots.filter((k) => k > z0 && k < z1);
@@ -94,8 +97,11 @@ function sliceZs(style: BodyStyle, source: BodySource): number[] {
   return stations.sort((a, b) => a - b);
 }
 
+/** The wheel-well liner's width across the car (m). */
+const WELL_LINER_WIDTH = 0.24;
+
 function makeWellLiner(wx: number, wy: number, wz: number, archR: number): THREE.BufferGeometry {
-  const geo = new THREE.CylinderGeometry(archR, archR, 0.24, 14, 1, true, 0, Math.PI);
+  const geo = new THREE.CylinderGeometry(archR, archR, WELL_LINER_WIDTH, 14, 1, true, 0, Math.PI);
   geo.rotateZ(Math.PI / 2);
   geo.rotateY(wx > 0 ? 0 : Math.PI);
   geo.translate(wx, wy, wz);
@@ -111,11 +117,23 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
   const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style)];
-  for (const [wx, wy, wz] of carFrame(style).wheels) parts.push(makeWellLiner(wx, wy, wz, style.arch.radius));
+  for (const [wx, wy, wz] of carFrame(style).wheels) {
+    const hw = sampleSlice(wz, style.profile).hw;
+    // A tyre standing outboard of the body (the monster's) keeps its liner inside the body side.
+    const x = Math.abs(wx) > hw ? Math.sign(wx) * (hw - WELL_LINER_WIDTH / 2) : wx;
+    parts.push(makeWellLiner(x, wy, wz, style.arch.radius));
+  }
   parts.push(...makeGreenhouseFrame(style, source));
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
   const rb = style.rearBulkhead;
   parts.push(makeBox(1.16, rb.yTop - 0.34, 0.045, 0, (rb.yTop + 0.34) * 0.5, rb.z));
+  // The wheel liners, merged after the loft and roof: unpainted like the bay they rise into.
+  const linerFrom = body.getAttribute("position").count + parts[1]!.getAttribute("position").count;
+  const linerTo = linerFrom + parts.slice(2, 2 + carFrame(style).wheels.length).reduce((n, g) => n + g.getAttribute("position").count, 0);
+  // Last, so every other part keeps its vertex ids; the drawn body only (the cage never carries them).
+  const fittings = source === "drawn" ? makeRoofFittings(style) : null;
+  const fittingCount = fittings?.geometry.getAttribute("position").count ?? 0;
+  if (fittings) parts.push(fittings.geometry);
   const merged = mergeGeometries(parts, false);
   for (const g of parts) g.dispose();
   if (!merged) throw new Error("Failed to merge chassis");
@@ -124,7 +142,19 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   merged.computeBoundingSphere();
   // The loft is merged first: its vertex `s * ring + i` and its first (slices - 1) * ring * 2 triangles (`panelRegions` cuts panels out of them).
   merged.userData.loft = { ring: rings[0]!.length, slices: zs.length };
-  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): a torn panel's vertices are set dark.
-  merged.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(merged.getAttribute("position").count), 1));
+  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): a torn panel's vertices are set dark, and so are the roof's rails and glass
+  // panel; `INNER_PANEL` an unpainted inner panel.
+  const primer = new Float32Array(merged.getAttribute("position").count);
+  if (fittings) primer.fill(1, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
+  if (source === "drawn") {
+    // The bay trough's floor corner and wall top on each side: ring points 0, 1 and their mirrors.
+    const n = rings[0]!.length;
+    for (let s = 0; s < zs.length; s++) {
+      const w = INNER_PANEL * bayAt(zs[s]!, style);
+      for (const i of [0, 1, n - 2, n - 1]) primer[s * n + i] = w;
+    }
+    primer.fill(INNER_PANEL, linerFrom, linerTo);
+  }
+  merged.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(primer, 1));
   return markSkinDynamic(merged);
 }

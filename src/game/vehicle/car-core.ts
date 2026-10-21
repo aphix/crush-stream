@@ -1,29 +1,34 @@
 // First: every quaternion built from here on, constants at load included, takes the engine-identical trig (kernel/three-trig.ts).
 import "../kernel/three-trig.ts";
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
+import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { DOOR_GLASS_SEAT, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
+import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
   LIGHT_BAR_FOOT,
   LIGHT_BAR_LENS,
   GLASS_COLOR,
+  bumperMaterial,
   glassMaterial,
   type GlassLook,
   makeLightBar,
   makePaintMaterial,
   makeSirenMaterial,
-  trimMaterial,
   type LampKind,
+  shadowOnlyMaterial,
 } from "./car-materials.ts";
-import { MIRROR_REACH, PART_KIND, PART_KINDS, PartSeat } from "./part-geometry.ts";
+import { carPartSeats, MIRROR_REACH, PART_KIND, PartSeat } from "./part-geometry.ts";
+import { bumperBare, CarCabin } from "./interior.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { anchorOnSkin, poseOnSkin, type GlowKind, type SkinAnchor } from "./lamp-lights.ts";
@@ -36,6 +41,8 @@ const _p = new THREE.Vector3();
 const _inv = new THREE.Quaternion();
 const _lampQ = new THREE.Quaternion();
 const _lampE = new THREE.Euler();
+/** Each style's rest caster (body + flush parts), shared by its cars and drawn by `PartBatch.casters`; never disposed. */
+const casterByStyle = new WeakMap<BodyStyle, THREE.BufferGeometry>();
 
 const PANEL_SEATS: Record<PanelName, readonly [DetachPart["cage"], number, number]> = {
   quarterL: ["wingRL", 10, 8],
@@ -115,12 +122,12 @@ const DOOR_JAM = 1.45;
 /** C1: a side hit that raises a door's hinge value past this at `DOOR_TEAR_MPS` tears it off. */
 const DOOR_TEAR_T = 0.58;
 
-/** The doors' hinge on this car's door geometry: the constants above. */
+/** The doors' hinge at this car's door hinge line; the swinging slab is the platform `DOOR`, as in the rest of the door sim. */
 function doorSpec(door: BodyStyle["door"]): HingeSpec {
   return {
-    length: door.length,
+    length: DOOR.length,
     kg: DOOR_MASS,
-    inertia: (DOOR_MASS * door.length * door.length) / 3,
+    inertia: (DOOR_MASS * DOOR.length * DOOR.length) / 3,
     stop: DOOR_OPEN_MAX,
     jam: DOOR_JAM,
     ajar: DOOR_AJAR,
@@ -250,6 +257,8 @@ export interface DetachPart {
   swing: DoorHinge | null;
   /** Quarter panels and arch flares: the patch of body skin they are (null on every other part); once hinged, whether the shell is in the scene (the body under it is primer). */
   region: PanelRegion | null;
+  /** Bumpers: the body's vertices they cover, bare metal once they are gone (`setBare`); null on every other part. */
+  bare: Int32Array | null;
   open: boolean;
   /** The hinge value the open shell was last posed at (`shellPose`): an attached panel is re-posed only when it changes (a changed skin re-poses all, `skinPanels`). */
   posed: number;
@@ -366,12 +375,16 @@ export abstract class CarCore {
   protected endReach = Infinity;
   protected endSqueeze = false;
   readonly lamps: Lamp[] = [];
-  /** Hood, boot lid, doors, bumpers: they lie on the shell until a crash or hinge moves them, so an undamaged car's sun shadow is the body's alone (`CarParts.settleCasters`); far-car detail cuts treat them as casters anyway. */
+  /** Hood, boot lid, doors, bumpers: they lie on the shell until a crash or hinge moves them, so an undamaged car's sun shadow is `shadowCaster` alone (`CarParts.settleCasters`); far-car detail cuts treat them as casters anyway. */
   readonly flushCasters: THREE.Mesh[] = [];
+  /** The undamaged car's sun-shadow seat: body and every flush part at rest as one geometry, never drawn itself; `PartBatch.casters` draws it instanced per style while `castShadow` (`CarParts.settleCasters`) says the car is flush. */
+  readonly shadowCaster: THREE.Mesh;
   protected hullHelper: THREE.LineSegments | null = null;
   abstract readonly cage: CarCage;
   private bumperF: THREE.Group;
   private bumperR: THREE.Group;
+  /** The front and rear bumper meshes, in that order: a player's bumper colour recolours them (`car-look.ts`). */
+  protected readonly bumperMeshes: THREE.Mesh[] = [];
   protected hood: THREE.Mesh;
   protected trunk: THREE.Mesh;
   protected doorL: THREE.Group;
@@ -384,11 +397,14 @@ export abstract class CarCore {
   protected doorRRest: Float32Array;
   protected hoodOrigin: THREE.Vector3;
   protected trunkOrigin: THREE.Vector3;
-  readonly interior: PartSeat;
+  /** The cabin's pose, holding its shell, seats and wheel (`CarCabin`): `fitInterior` moves it with the crushed cell. */
+  readonly interior: THREE.Group;
+  /** The interior kit, the engine bay and the crash bars, placed by the style. */
+  protected readonly cabin: CarCabin;
   private mirrorL: PartSeat;
   private mirrorR: PartSeat;
-  /** The seven static parts, drawn by PartBatch; indexed by PartKind. */
-  readonly partSeats: readonly PartSeat[] = PART_KINDS.map((kind) => new PartSeat(kind));
+  /** The static parts, drawn by PartBatch: one of each kind indexed by PartKind, then the further ones (`carPartSeats`). */
+  readonly partSeats: readonly PartSeat[] = carPartSeats();
   /** Police roof light bar (skinned with the roof cage), its part, rest shape and seat; null on other styles. */
   protected lightBar: THREE.Mesh | null = null;
   protected lightBarPart: DetachPart | null = null;
@@ -418,10 +434,10 @@ export abstract class CarCore {
     this.group.add(this.body);
     this.deform = new StreamedDeformation(bodyGeo, this.frame.rig);
 
-    this.interior = this.partSeats[PART_KIND.interior]!;
-    this.group.add(this.interior);
+    this.cabin = new CarCabin(this.style, this.partSeats, this.group);
+    this.interior = this.cabin.pose;
 
-    this.hood = new THREE.Mesh(makeHoodGeometry(this.style), this.bodyMat);
+    this.hood = new THREE.Mesh(withHoodBulge(makeHoodGeometry(this.style), this.style), this.bodyMat);
     this.hood.castShadow = true;
     this.hood.position.set(0, this.style.hood.origin[0], this.style.hood.origin[1]);
     this.group.add(this.hood);
@@ -466,24 +482,30 @@ export abstract class CarCore {
     this.hoodOrigin = this.hood.position.clone();
     this.trunkOrigin = this.trunk.position.clone();
     this.flushCasters.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
+    if (this.style.details) for (const mesh of [this.body, this.hood, this.trunk, this.doorMeshL, this.doorMeshR]) ensureRestFrame(mesh, this.group);
+    for (const material of new Set([this.bodyMat, doorMat])) applyDetailMap(material, this.style);
 
-    this.bumperF = this.makeBumper(true, livery?.accent ?? paint.accent);
-    this.bumperR = this.makeBumper(false, livery?.accent ?? paint.accent);
+    const accent = livery?.accent ?? paint.accent;
+    this.bumperF = this.makeBumper(true, accent, livery?.body ?? paint.body);
+    this.bumperR = this.makeBumper(false, accent, livery?.body ?? paint.body);
     this.group.add(this.bumperF, this.bumperR);
+    this.shadowCaster = this.makeShadowCaster();
+    this.group.add(this.shadowCaster);
     this.addLamps();
 
     const seatX = mirrorSeatX(this.style);
     this.mirrorL = this.partSeats[PART_KIND.mirrorL]!;
-    this.mirrorL.position.set(-seatX, door.mirrorY, 0);
+    this.mirrorL.position.set(-seatX, door.mirrorY, -(door.mirrorZ ?? 0));
     this.mirrorL.scale.x = door.mirrorReach / MIRROR_REACH;
     this.doorL.add(this.mirrorL);
     this.mirrorR = this.partSeats[PART_KIND.mirrorR]!;
-    this.mirrorR.position.set(seatX, door.mirrorY, 0);
+    this.mirrorR.position.set(seatX, door.mirrorY, -(door.mirrorZ ?? 0));
     this.mirrorR.scale.x = door.mirrorReach / MIRROR_REACH;
     this.doorR.add(this.mirrorR);
 
     this.addGlass();
     this.registerParts();
+    this.cabin.watch(this.parts);
     this.buildHullHelper();
 
     // Transforms only: the engine's WheelBatch draws every car's wheels in one instanced call.
@@ -509,15 +531,40 @@ export abstract class CarCore {
     computeNormalsFast(geo);
   }
 
-  private makeBumper(front: boolean, accent: number): THREE.Group {
+  /** The style's rest caster (body + hood, boot lid, doors, bumpers in the car frame, positions only) on a hidden mesh that marks where the batch draws it. */
+  private makeShadowCaster(): THREE.Mesh {
+    let geo = casterByStyle.get(this.style);
+    if (!geo) {
+      this.group.updateMatrixWorld(true); // group is at the origin here, so matrixWorld is the car frame
+      const parts = [this.body, ...this.flushCasters].map((m) => {
+        const src = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+        return new THREE.BufferGeometry().setAttribute("position", src.getAttribute("position")).applyMatrix4(m.matrixWorld);
+      });
+      const merged = mergeGeometries(parts, false);
+      for (const g of parts) g.dispose();
+      if (!merged) throw new Error(`Failed to merge the ${this.style.id} shadow caster`);
+      merged.userData.shared = true;
+      casterByStyle.set(this.style, merged);
+      geo = merged;
+    }
+    const mesh = new THREE.Mesh(geo, shadowOnlyMaterial());
+    mesh.visible = false;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    return mesh;
+  }
+
+  private makeBumper(front: boolean, accent: number, body: number): THREE.Group {
     const g = new THREE.Group();
-    const mesh = new THREE.Mesh(makeBumperGeometry(front, this.style), trimMaterial(accent));
+    const spec = front ? this.style.bumpers.front : this.style.bumpers.rear;
+    const fascia = makeBumperGeometry(front, this.style);
+    const mesh = new THREE.Mesh(front ? fascia : withRearFittings(fascia, this.style), bumperMaterial(spec.trim, accent, body));
+    this.bumperMeshes.push(mesh);
     mesh.castShadow = true;
     this.flushCasters.push(mesh);
     g.add(mesh);
     if (!front) g.add(this.partSeats[PART_KIND.tailTrim]!);
-    const { seat } = front ? this.style.bumpers.front : this.style.bumpers.rear;
-    g.position.set(0, seat.y, front ? seat.z : -seat.z);
+    g.position.set(0, spec.seat.y, front ? spec.seat.z : -spec.seat.z);
     if (front) {
       const grille = this.partSeats[PART_KIND.grille]!;
       grille.position.set(0, 0.1, 0.06);
@@ -625,6 +672,7 @@ export abstract class CarCore {
         radius,
         swing,
         region: null,
+        bare: null,
         open: false,
         posed: -1,
         dent: newDentState(),
@@ -633,8 +681,8 @@ export abstract class CarCore {
       this.parts.push(p);
       return p;
     };
-    add(BUMPER_F, this.bumperF, "bumperFront", 1, 2, "two-point", 0.42);
-    add("bumperR", this.bumperR, "bumperRear", 16, 17, "two-point", 0.4);
+    add(BUMPER_F, this.bumperF, "bumperFront", 1, 2, "two-point", 0.42).bare = bumperBare(this.style, this.body.geometry, true);
+    add("bumperR", this.bumperR, "bumperRear", 16, 17, "two-point", 0.4).bare = bumperBare(this.style, this.body.geometry, false);
     add(LID.hood, this.hood, "bonnet", 3, 3, "cowl", 0.5);
     this.lidPart = add(LID.trunk, this.trunk, "boot", 18, 18, "tail", 0.48, newSwing(lidSpec(this.style.boot)));
     const doors = doorSpec(this.style.door);

@@ -5,6 +5,10 @@ import { archKeep, RES_SLOTS, SKIN_K } from "../deform/deform-rig.ts";
 import { interiorPose } from "./part-pose.ts";
 import { decimate, upFacing } from "./cage-mesh.ts";
 import { planFieldOf, rasterise } from "./cage-fields.ts";
+import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { carFrame } from "./car-rig.ts";
+import { rockerAt } from "./car-lines.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 
 /**
  * The car's contact shape is its drawn body (docs/UNIFIED_CONTACT.md stage 3): the cage.
@@ -28,8 +32,28 @@ import { planFieldOf, rasterise } from "./cage-fields.ts";
 export const CAGE_STEP = 0.05;
 /** The decimation's vertex target: the body and its panels (lids, glass), which keeps the cage near 300 triangles. */
 export const CAGE_VERTICES = 220;
-/** Room for a style's sill samples past the hull (`CageSource.sill`, less those the decimation kept): 24 or 25 per style today. */
-export const SILL_CAPACITY = 32;
+/** The cage build's vertices a style's sill can be sampled from (`cageSourceOf`): welded, under its rocker line, between its axles. */
+function sillCandidates(style: BodyStyle): number {
+  const geo = makeChassisGeometry(style, "cage");
+  const pos = geo.getAttribute("position").array;
+  let axleR = Infinity;
+  let axleF = -Infinity;
+  for (const [, , z] of carFrame(style).wheels) {
+    axleR = Math.min(axleR, z);
+    axleF = Math.max(axleF, z);
+  }
+  const welded = new Set<string>();
+  for (let i = 0; i < pos.length; i += 3) {
+    const z = pos[i + 2]!;
+    const y = Math.round(pos[i + 1]! * 1e4);
+    if (y >= rockerAt(z, style) * 1e4 || z <= axleR || z >= axleF) continue;
+    welded.add(`${Math.round(pos[i]! * 1e4)},${y},${Math.round(z * 1e4)}`);
+  }
+  geo.dispose();
+  return welded.size;
+}
+/** Room for a style's sill samples past the hull (`CageSource.sill`): every sample is one of its style's sill candidates, so the most any style has. */
+export const SILL_CAPACITY = Math.max(...CAR_STYLE_IDS.map((id) => sillCandidates(CAR_STYLES[id])));
 /** The interior's vertex target: what shows through a gone pane (the dash, the headliner, the seats), a few boxes. */
 const INTERIOR_VERTICES = 32;
 

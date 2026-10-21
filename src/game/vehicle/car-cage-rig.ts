@@ -13,6 +13,9 @@ import type { DetachPart } from "./car-core.ts";
 import { bodyLift } from "./car-suspension.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
 import { LID, LIGHT_BAR } from "./constants.ts";
+import { cageInterior } from "./interior-geometry.ts";
+import { rockerAt } from "./car-lines.ts";
+import type { BodyStyle } from "./car-variants.ts";
 
 /**
  * The bridge from a car's rig to its cage (`StreamedDeformation`'s skin tables and the inputs `skin` hands the skin kernel, read through the
@@ -79,19 +82,23 @@ function cagePanelsOf(car: DeformableCar): Panel[] {
  */
 const SILL_SHARE = 0.1;
 
-/** The body mesh's underside rows under the rocker (`rockerY`) between the axles (`axleR`, `axleF`), off the arch plants: welded vertex ids by row (height and side), each by z. */
-function sillRows(rest: Float32Array, skinHub: Int32Array, count: number, axleR: number, axleF: number, rockerY: number): number[][] {
+/**
+ * The body mesh's underside rows under the style's rocker line between the axles (`axleR`, `axleF`), off the arch plants: welded vertex ids
+ * by row, each by z. A loft vertex's row is its place on the ring (`ring` points a ring), so a sill that rises along the body stays one row;
+ * the other parts' vertices row by height.
+ */
+function sillRows(rest: Float32Array, skinHub: Int32Array, count: number, axleR: number, axleF: number, style: BodyStyle, ring: number, loft: number): number[][] {
   const rows = new Map<string, number[]>();
   const welded = new Set<string>();
   for (let i = 0; i < count; i++) {
     const x = Math.round(rest[i * 3]! * 1e4);
     const y = Math.round(rest[i * 3 + 1]! * 1e4);
     const z = rest[i * 3 + 2]!;
-    if (y >= rockerY * 1e4 || z <= axleR || z >= axleF || skinHub[i]! >= 0) continue;
+    if (y >= rockerAt(z, style) * 1e4 || z <= axleR || z >= axleF || skinHub[i]! >= 0) continue;
     const at = `${x},${y},${Math.round(z * 1e4)}`;
     if (welded.has(at)) continue;
     welded.add(at);
-    const key = `${y}:${Math.sign(x)}`;
+    const key = i < loft ? `r${i % ring}:${Math.sign(x)}` : `${y}:${Math.sign(x)}`;
     const row = rows.get(key) ?? [];
     if (row.length === 0) rows.set(key, row);
     row.push(i);
@@ -133,11 +140,11 @@ function strays(rest: Float32Array, row: readonly number[], w: readonly Float64A
  * no longer holds the weights between them within `SILL_SHARE`. The parents that move a sill (a door mass, the tank) change along it:
  * the hull draws it as one span from arch to arch, so a crush that moves those parents apart bends the drawn sill under the hull.
  */
-function sillSamples(tables: StreamedDeformation, count: number, masses: readonly { readonly hub: boolean; readonly rest: THREE.Vector3 }[], rockerY: number): Int32Array {
+function sillSamples(tables: StreamedDeformation, count: number, masses: readonly { readonly hub: boolean; readonly rest: THREE.Vector3 }[], style: BodyStyle, loft: { ring: number; slices: number }): Int32Array {
   const rest = tables[REST_POS];
   const hubZ = masses.flatMap((m) => (m.hub ? [m.rest.z] : []));
   const out: number[] = [];
-  for (const row of sillRows(rest, tables["skinHub"], count, Math.min(...hubZ), Math.max(...hubZ), rockerY)) {
+  for (const row of sillRows(rest, tables["skinHub"], count, Math.min(...hubZ), Math.max(...hubZ), style, loft.ring, loft.ring * loft.slices)) {
     const w = row.map((i) => parentWeights(tables["resJ"], tables["resW"], i, masses.length));
     out.push(row[0]!);
     let from = 0;
@@ -234,11 +241,12 @@ export function cageSourceOf(car: DeformableCar): CageSource {
   const restCo = new Float64Array(rig[CAGES].length * 24);
   for (let p = 0; p < rig[CAGES].length; p++) cageCoeffs(rig[CAGES][p]!.restCorners, restCo, p * 24);
   const panelGlass = Uint8Array.from(panels, (p) => (p.hinged === null ? 1 : 0));
-  const interior = car.interior.geometry;
+  const interior = cageInterior();
   const interiorIndex = interior.index;
   if (interiorIndex === null) throw new Error("the interior mesh has no index");
   const interiorMass = Int32Array.from(INTERIOR_MASSES, (name) => rig.masses.findIndex((m) => m.name === name) * 3);
-  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, panelCount: panels.length, panelOrigin, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill: sillSamples(bodyTables, bodyCount, rig.masses, car.style.rocker.y), lattice: car.frame.lattice, roofClampY: car.frame.rig.roofClampY };
+  const sill = sillSamples(bodyTables, bodyCount, rig.masses, car.style, cageBody.userData.loft as { ring: number; slices: number });
+  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, panelCount: panels.length, panelOrigin, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill, lattice: car.frame.lattice, roofClampY: car.frame.rig.roofClampY };
 }
 
 /** A car's cage on the lattice (or `step`), its style's build shared by every car of the style. */

@@ -5,8 +5,13 @@ export const LIGHT_BAR = "lightBar";
 export const CLASS_LIFT = "classLift";
 export const CLASS_HUBS = "classHubs";
 export const INTERIOR_MESH = "interior";
-/** The body geometry's per-vertex paint attribute: 0 paint, 1 primer (a torn panel's vertices). */
+/** The body geometry's per-vertex paint attribute: 0 paint, 1 primer (a torn panel's vertices), `INNER_PANEL` an unpainted inner panel. */
 export const PRIMER_ATTRIBUTE = "primer";
+/** `PRIMER_ATTRIBUTE` of the bay trough's walls and floor: dark bare steel (`bare-metal.ts` darkens past 1). */
+export const INNER_PANEL = 2;
+/** A bumper's per-vertex trim attribute: 0 the bumper's own trim, `FITTING_TONE` black or chrome (its exhaust tips and tow hitch, drawn in its one mesh). */
+export const FITTING_ATTRIBUTE = "fitting";
+export const FITTING_TONE = { black: 1, chrome: 2 } as const;
 export const BUMPER_F = "bumperF";
 /** The name of a car's head or tail lamp seat (`Object3D.name`): `addLamps` names it, the distance cut finds it. */
 export const LAMP_SEAT = "lampSeat";
