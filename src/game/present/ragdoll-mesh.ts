@@ -5,7 +5,7 @@ import { applySpray, BARE_SPRAY, sprayUniforms, type SprayBitmap } from "./spray
 import { PERSON_SPRAY } from "../match/look-data.ts";
 import { BONES_ATTRIBUTE, BUILD, FLAGS_AT, isDrawn, KINDS_ATTRIBUTE, ORBS_AT, PALETTE_AT, ROW_TEXELS, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, skinPoint } from "./dummy-rig.ts";
 import { dressRow } from "./dummy-dress.ts";
-import { BUST_ATTRIBUTE, BustSprings } from "./dummy-jiggle.ts";
+import { BustSprings } from "./dummy-jiggle.ts";
 import { applyDolls } from "./dummy-shader.ts";
 import { dummyGeometry } from "./dummy-skin.ts";
 
@@ -136,13 +136,13 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
   /** Vertex `i` of slot `s` as posed now (her bust's lag too) into `out`; false when the slot's build does not draw it. */
   posed(s: number, i: number, out: THREE.Vector3): boolean {
     const bones = this.geometry.getAttribute(BONES_ATTRIBUTE);
-    if (!isDrawn(this.geometry.getAttribute(KINDS_ATTRIBUTE).getY(i), this.flagsOf(s))) return false;
+    const kinds = this.geometry.getAttribute(KINDS_ATTRIBUTE);
+    if (!isDrawn(kinds.getY(i), this.flagsOf(s))) return false;
     const flags = this.flagsOf(s);
     const shape = (flags & BUILD.WOMAN) !== 0 ? SHAPE_WOMAN_ATTRIBUTE : (flags & BUILD.PORTLY) !== 0 ? SHAPE_PORTLY_ATTRIBUTE : "position";
-    const bust = this.geometry.getAttribute(BUST_ATTRIBUTE);
     const lag = (s * ROW_TEXELS + ORBS_AT) * 4;
     _o.fromBufferAttribute(this.geometry.getAttribute(shape), i);
-    _o.addScaledVector(_lag.fromArray(this.rows, lag), bust.getX(i)).addScaledVector(_lag.fromArray(this.rows, lag + 4), bust.getY(i));
+    _o.addScaledVector(_lag.fromArray(this.rows, lag), kinds.getZ(i)).addScaledVector(_lag.fromArray(this.rows, lag + 4), kinds.getW(i));
     skinPoint(this.rows, s, bones.getX(i), bones.getY(i), bones.getZ(i), _o, out);
     return true;
   }
