@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { DRIVE, type SeatView } from "../vehicle/car-drive.ts";
 import { LOAD_FEEL } from "../vehicle/car-load.ts";
+import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import { wrapPiClosed } from "../kernel/scalar.ts";
 import { LANDING, LandingWatch } from "./landing.ts";
@@ -18,10 +19,6 @@ const _subject = new THREE.Vector3();
 const NO_BOXES: readonly Occluder[] = [];
 
 export const CHASE = {
-  third: { dist: 6.2, height: 2.0, aimUp: 1.0 },
-  far: { dist: 10, height: 3.3, aimUp: 1.15 },
-  /** Hood-cam eye in car space: over the bonnet, ahead of the windshield (the tinted glass reads opaque from inside). */
-  eye: { x: 0, y: 1.02, z: 1.15 },
   /**
    * Convergence (1/s): how hard the eye is pulled to its target, per axis of the car's frame (`Spring3.stepBasis`). The talk's
    * most important parameter (masterclass 29:30); it splits the spring per axis for "lots of sideways motion when turning, but
@@ -245,6 +242,8 @@ export class DriveCam {
     const along = vel.x * fwd.x + vel.z * fwd.z;
     // The view looks into a slide as the car gets going, not at a speed: `followBlend` is 0 below `followFrom`, 1 from `followTo`.
     const follow = followBlend(along);
+    const cams = car.style.camera ?? PLATFORM_CAMERA;
+    const chase = view === "far" ? cams.far : cams.third;
     let yawT = Math.atan2(fwd.x, fwd.z);
     if (follow > 0 && view !== "first") {
       yawT += THREE.MathUtils.clamp(wrapPiClosed(Math.atan2(vel.x, vel.z) - yawT), -0.5, 0.5) * 0.4 * follow;
@@ -288,17 +287,16 @@ export class DriveCam {
     const sy = Math.sin(yaw);
     const cy = Math.cos(yaw);
     if (view === "first") {
-      const eye = car.group.localToWorld(_v.set(CHASE.eye.x, CHASE.eye.y, CHASE.eye.z));
+      const eye = car.group.localToWorld(_v.set(0, cams.hood[0], cams.hood[1]));
       const pt = this.lookPitch.x + 0.05;
       const cp = Math.cos(pt);
       _w.set(eye.x + sy * cp * 10, eye.y - Math.sin(pt) * 10, eye.z + cy * cp * 10);
       this.pos.snap(eye);
       this.aim.snap(_w);
     } else {
-      const c = view === "far" ? CHASE.far : CHASE.third;
-      const dist = c.dist + Math.min(Math.abs(along), 30) * CHASE.pullback;
-      const r = hypot2(dist, c.height);
-      const elev = THREE.MathUtils.clamp(Math.atan2(c.height, dist) + this.lookPitch.x, 0.02, STEEPEST);
+      const dist = chase.dist + Math.min(Math.abs(along), 30) * CHASE.pullback;
+      const r = hypot2(dist, chase.height);
+      const elev = THREE.MathUtils.clamp(Math.atan2(chase.height, dist) + this.lookPitch.x, 0.02, STEEPEST);
       const flat = r * Math.cos(elev);
       _v.set(p.x - sy * flat, p.y + r * Math.sin(elev), p.z - cy * flat);
       const lead = THREE.MathUtils.clamp(along * CHASE.aheadVel, -0.5, CHASE.aheadMax);
@@ -315,7 +313,7 @@ export class DriveCam {
         lx += (vx - lx) * follow;
         lz += (vz - lz) * follow;
       }
-      _w.set(p.x + lx, p.y + c.aimUp, p.z + lz);
+      _w.set(p.x + lx, p.y + chase.aimUp, p.z + lz);
       if (enter && camera.position.distanceToSquared(p) <= CHASE.blendRange * CHASE.blendRange) {
         // Blend in from the current shot (orbit, another car, or the hood cam); a shot that far off (a scene change) is a cut.
         this.pos.snap(camera.position);
@@ -344,7 +342,7 @@ export class DriveCam {
     }
     camera.position.copy(this.pos.x);
     if (view === "first" || !solids) this.clear.reset();
-    else this.clear.apply(solids, solids.cars ?? NO_BOXES, _subject.set(p.x, p.y + (view === "far" ? CHASE.far : CHASE.third).aimUp, p.z), camera.position, dt);
+    else this.clear.apply(solids, solids.cars ?? NO_BOXES, _subject.set(p.x, p.y + chase.aimUp, p.z), camera.position, dt);
     camera.lookAt(this.aim.x);
 
     this.rideStep(camera, car, view, dt);

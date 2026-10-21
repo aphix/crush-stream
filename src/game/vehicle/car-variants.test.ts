@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
-import { PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
+import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
 import { ROCKER, doorAperture, glassTopY, glassX, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { aPillarTopZ, beltY, floorY, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
@@ -524,6 +524,16 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(Math.abs(fill.min.y - yRear) < 1e-4 && fill.max.y > glassTopY(zFront, hatch) - 1e-4, `right fill spans y ${fill.min.y}..${fill.max.y}: from the glass top ${yRear} up to the cant line`);
     const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join("|");
     assert.ok(cage(moved) === cage(hatch), "the cage greenhouse is unchanged");
+  });
+
+  it("when a style seats its cameras, then its hood eye stands over its drawn bonnet and ahead of its windshield base", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      if (style.camera === undefined && id !== "sedan") continue;
+      const [y, z] = (style.camera ?? PLATFORM_CAMERA).hood;
+      const bonnet = topAt(id, z);
+      assert.ok(y > bonnet + 0.05 && z > style.windshield.base[1], `${id}: hood eye y ${y} z ${z}: the drawn top there is ${bonnet.toFixed(3)} (5 cm under the eye at most), the windshield base at z ${style.windshield.base[1]}`);
+    }
   });
 
   it("when the sill narrows toward the tail, then the side glass and the C-pillar's foot follow its stations", () => {

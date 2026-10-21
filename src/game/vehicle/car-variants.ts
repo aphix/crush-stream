@@ -115,6 +115,13 @@ interface DetailPatch {
   cavity: number;
 }
 
+/** A chase eye: `dist` behind and `height` over the car's origin, aimed `aimUp` over it (m). */
+interface ChaseEye {
+  dist: number;
+  height: number;
+  aimUp: number;
+}
+
 export interface BodyStyle {
   id: CarStyleId;
   /** What the reference was measured to; the tables below are built to it (`car-variants.test.ts`). */
@@ -172,6 +179,8 @@ export interface BodyStyle {
   pushBar?: boolean;
   /** Fine contours drawn as detail maps, not geometry: strokes and patches on the side, top, front and rear views, car-frame metres, x >= 0 mirrored. */
   details?: { lines: readonly DetailLine[]; patches: readonly DetailPatch[] };
+  /** Cameras (m, car frame as drawn, a class lift included): the hood eye [y, z] over the bonnet ahead of the windshield base, and the chase and far chase eyes `dist` behind and `height` over the car's origin, aimed `aimUp` over it; absent = `PLATFORM_CAMERA`. */
+  camera?: { hood: YZ; third: ChaseEye; far: ChaseEye };
 }
 
 export const CAR_STYLES: Readonly<Record<CarStyleId, BodyStyle>> = {
