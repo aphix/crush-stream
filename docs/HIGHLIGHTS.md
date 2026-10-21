@@ -298,9 +298,15 @@ the shot. A peer at 45 Hz and one at 60 Hz therefore frame the same camera at th
   recorder runs on (`CrashRecorder.over`) until `THROW_HOLD_SIM` (7.3 × 0.032 = 0.23 s of race) past the last throw,
   then files: every hold plays whole on recorded motion.
 - **Fudge.** The crash starts `PRE_IMPACT_LEAD` before the cars meet, where the replay's contact is still being worked
-  out. From the slow-mo's start until the meeting the reel calls `ReelHost.fudge` every `FUDGE_GAP` (0.08 wall s) with the
-  clip's recorded first-impact point: `SparkSystem.poof` and `DebrisSystem.burst`, nothing else. The live sandbox does the
-  same on the point `pairEta` (or the slab's `contactEta`) predicts. Race and derby have no live slow-mo, so no fudge.
+  out (owner 2026-10-10: cover the impact point with sparks "where it's probably still cooking"). From the slow-mo's start
+  until the meeting the reel calls `ReelHost.fudge`, at most every `FUDGE_GAP` (0.08 wall s), with the clip's recorded
+  first-impact point and a strength: `SparkSystem.poof` and `DebrisSystem.burst` scaled by it, nothing else. The strength
+  (`fudgeStrength`) goes by the farther drawn body of the first impact's cars (both cars of a pair; the lone car of a wall
+  hit), its plan distance to the point (`bodyGap`: the car's `planBox` where it is drawn): 1 within `FUDGE_FULL` (0.3 m),
+  nothing thrown from `FUDGE_NONE` (1 m) on, linear between. So no burst hangs in empty air ahead of cars still metres away,
+  and none sprays off a parked car's bumper while the car that will hit it is still coming (owner 2026-10-21: up to 12 m and
+  50 steps early before this gate). The live sandbox gates its fudge the same way, on the point and the cars `pairEta` (or
+  the slab's `contactEta`) predicts. Race and derby have no live slow-mo, so no fudge.
 - **Hit sparks.** `ReelHost.hit` throws the sparks of the replay's strongest contact (`World.strongest`, the last step's
   hardest), at most every `SPARK_GAP`, and only when a step has run since the last look: the slow-mo between steps and a
   solo view's hold on the last frame never throw one step's contact again (owner 2026-10-18: sparks "continuing post reset

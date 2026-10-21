@@ -349,7 +349,7 @@ export class CrashEngine extends EngineGarage {
       crash: (contact, normal) => this.cine.beginCrashCam(contact, normal, this.crashSight(), this.clock.hold),
       impact: (contact, normal, closing) => this.beginCinematic(contact, normal, closing, false),
       hit: this.hitFx,
-      fudge: (at, normal) => this.fudgeContact(at, normal),
+      fudge: (at, normal, strength) => this.fudgeContact(at, normal, strength),
       eject: (e, ride) => {
         this.ragdolls.launch(e, this.live(), ride);
         if (ride) this.ragdolls.follow();
