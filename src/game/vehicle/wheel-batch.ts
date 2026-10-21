@@ -2,12 +2,15 @@ import * as THREE from "three";
 import { makeWheelGeometry, makeWheelGeometryFar, makeWheelMaterial, treadNormalMap } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
 import { spokeSmear } from "./wheel-blur.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 
 /** What the batch needs of a renderer: its shadow pass, which it wraps to show the shadow prisms to that pass alone. */
 type ShadowPass = { readonly shadowMap: { render: THREE.WebGLShadowMap["render"] } };
 
 /** An untinted wheel: the instance colour that leaves the tyre and the alloy as toned. */
 const UNTINTED = new THREE.Color(1, 1, 1);
+const _tyre = new THREE.Vector3();
+const _drawn = new THREE.Matrix4();
 
 /** One instanced draw of one wheel geometry: the wheels at one distance rung. */
 class WheelLane {
@@ -145,6 +148,10 @@ export class WheelBatch {
     let shadows = 0;
     for (const car of cars) {
       const lane = this.isFar(car) ? this.far : this.near;
+      // The one wheel mesh is the platform tyre's size: a car's own tyre (its dims) scales it across (width) and in the wheel's plane (radius).
+      const { r, halfW } = car.frame.rig.tyre;
+      const sized = r !== PLATFORM_TYRE.r || halfW !== PLATFORM_TYRE.halfW;
+      _tyre.set(halfW / PLATFORM_TYRE.halfW, r / PLATFORM_TYRE.r, r / PLATFORM_TYRE.r);
       for (const w of car.wheels) {
         let shown = lane.open;
         for (let p: THREE.Object3D | null = w; p && shown; p = p.parent) shown = p.visible;
@@ -155,8 +162,9 @@ export class WheelBatch {
           t.angle = w.rotation.x;
         }
         if (!shown) continue;
-        lane.add(w.matrixWorld, spokeSmear(t.step), (w.userData.rim as THREE.Color | undefined) ?? UNTINTED);
-        this.shadow.setMatrixAt(shadows++, w.matrixWorld);
+        const world = sized ? _drawn.copy(w.matrixWorld).scale(_tyre) : w.matrixWorld;
+        lane.add(world, spokeSmear(t.step), (w.userData.rim as THREE.Color | undefined) ?? UNTINTED);
+        this.shadow.setMatrixAt(shadows++, world);
       }
     }
     this.near.end();
