@@ -19,16 +19,40 @@ import {
   type V3,
 } from "./car-mesh.ts";
 
-export function makeRoofGeometry(style: BodyStyle): THREE.BufferGeometry {
+/** The drawn headliner stands this far (m) inside the roof skin: a few mm, the skin's inner face, never past it. */
+const HEADLINER_INSET = 0.004;
+/** The roof section points the headliner is inset from, right cant, crown, left cant: the dome between them bows 4 mm past the chords. */
+const HEADLINER_POINTS = [6, 4, 2] as const;
+/** The roof's z segments: the cage's, and the drawn one's, fewer so its headliner keeps the body within its vertex budget (the chords sag 0.5 mm). */
+const ROOF_SEGS = { cage: 16, drawn: 12 } as const;
+
+/** `skin` (an open section, left lip over the crown to the right lip) and its `HEADLINER_POINTS` `inset` inside it. */
+function shellRing(skin: Pt[], inset: number): Pt[] {
+  const inner: Pt[] = [];
+  for (const k of HEADLINER_POINTS) {
+    const tx = skin[k + 1]!.x - skin[k - 1]!.x;
+    const ty = skin[k + 1]!.y - skin[k - 1]!.y;
+    const len = hypot2(tx, ty);
+    // Left to right over the crown, (-ty, tx) is the skin's outward normal.
+    inner.push({ x: skin[k]!.x + (ty / len) * inset, y: skin[k]!.y - (tx / len) * inset });
+  }
+  return [...skin, ...inner];
+}
+
+/**
+ * The roof panel. The cage's is a closed wedge down to a keel under the crown. The drawn one is a thin shell whose inner face, inset
+ * `HEADLINER_INSET` from the skin's cants and crown, is the headliner (`userData.shellTwins`: each inner vertex, then the skin vertex it is inset from).
+ */
+export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry {
   const [z0, z1] = style.roofZ;
   const lip = cantDrop(style);
-  const segs = 16;
+  const segs = ROOF_SEGS[source];
   const rings: Pt[][] = [];
   const zs: number[] = [];
   for (let s = 0; s <= segs; s++) {
     const z = lerp(z0, z1, s / segs);
     const { y, x } = roofAt(z, style);
-    rings.push([
+    const skin = [
       { x: -(x + 0.08), y: y - lip },
       { x: -(x + 0.07), y: y - 0.03 },
       { x: -x, y },
@@ -38,12 +62,22 @@ export function makeRoofGeometry(style: BodyStyle): THREE.BufferGeometry {
       { x, y },
       { x: x + 0.07, y: y - 0.03 },
       { x: x + 0.08, y: y - lip },
-      { x: 0, y: y - 0.085 },
-    ]);
+    ];
+    rings.push(source === "drawn" ? shellRing(skin, HEADLINER_INSET) : [...skin, { x: 0, y: y - 0.085 }]);
     zs.push(z);
   }
   const geo = loftFromRings(rings, zs, 0.28, 0.72);
   ensureOutwardNormals(geo);
+  if (source === "drawn") {
+    // The loft's rings, then each end cap's own copy of its ring (`loftFromRings`).
+    const n = rings[0]!.length;
+    const skinPoints = n - HEADLINER_POINTS.length;
+    const twins: number[] = [];
+    for (const base of [...zs.map((_, s) => s * n), zs.length * n, zs.length * n + n + 1]) {
+      for (let j = 0; j < HEADLINER_POINTS.length; j++) twins.push(base + skinPoints + j, base + HEADLINER_POINTS[j]!);
+    }
+    geo.userData.shellTwins = Int32Array.from(twins);
+  }
   return geo;
 }
 

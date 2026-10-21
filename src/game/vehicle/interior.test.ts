@@ -12,6 +12,8 @@ import { CarCabin } from "./interior.ts";
 import { PartBatch } from "./part-batch.ts";
 import { carPartSeats, PART_KIND, PART_KINDS, type PartSeat } from "./part-geometry.ts";
 import { paint } from "./test-support.ts";
+import { carInState } from "./drawn-body.test-util.ts";
+import { STYLE_CLASS } from "./vehicle-classes.ts";
 
 const mm = (v: THREE.Vector3): string => v.toArray().map((x) => x.toFixed(3)).join();
 
@@ -136,6 +138,53 @@ describe("given every style's drawn body and hood", () => {
       assert.equal(makeChassisGeometry(style, "cage").getAttribute(PRIMER_ATTRIBUTE).array.every((p) => p === 0), true, `${id}: the cage build is all paint`);
     }
   });
+});
+
+describe("given every style's drawn headliner, the roof skin's inner face", () => {
+  /** A vertex within this (m) of the skin's tangent plane is on the skin (a crushed roof clips both faces to one plane). */
+  const ON_SKIN = 0.001;
+  /**
+   * The headliner vertex furthest outside the roof skin: its distance (m) past the skin vertex it is inset from, along the normal
+   * of the skin's own triangles there at rest (a crush folds the drip lip over, turning the skin's own facing inside out); and
+   * that normal's rise at the skin's crown, so a skin wound inward (the headliner standing over it) cannot pass.
+   */
+  const furthestOut = (car: DeformableCar): { out: number; at: number; count: number; crownUp: number } => {
+    car.flushDeferredSkin();
+    car.updateSkin();
+    const geo = car.body.geometry;
+    const twins: unknown = geo.userData.shellTwins;
+    assert.ok(twins instanceof Int32Array, "the drawn body names its headliner's vertices");
+    const pos = geo.getAttribute("position");
+    const headliner = new Set(Array.from({ length: twins.length / 2 }, (_, k) => twins[2 * k]!));
+    const all = geo.getIndex()!.array;
+    const skinTris: number[] = [];
+    for (let t = 0; t < all.length; t += 3) if (!headliner.has(all[t]!) && !headliner.has(all[t + 1]!) && !headliner.has(all[t + 2]!)) skinTris.push(all[t]!, all[t + 1]!, all[t + 2]!);
+    const restSkin = new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(car.deform.restSkin, 3)).setIndex(skinTris);
+    restSkin.computeVertexNormals();
+    const normal = restSkin.getAttribute("normal");
+    const step = new THREE.Vector3();
+    const n = new THREE.Vector3();
+    let worst = { out: -Infinity, at: -1 };
+    let crown = twins[1]!;
+    for (let k = 0; k < twins.length; k += 2) {
+      step.fromBufferAttribute(pos, twins[k]!).sub(n.fromBufferAttribute(pos, twins[k + 1]!));
+      const out = step.dot(n.fromBufferAttribute(normal, twins[k + 1]!));
+      if (out > worst.out) worst = { out, at: twins[k]! };
+      if (car.deform.restSkin[twins[k + 1]! * 3 + 1]! > car.deform.restSkin[crown * 3 + 1]!) crown = twins[k + 1]!;
+    }
+    return { ...worst, count: twins.length / 2, crownUp: normal.getY(crown) };
+  };
+
+  for (const state of ["untouched", "loaded", "rolled"] as const) {
+    test(`when ${state}, then no headliner vertex stands outside the roof skin`, () => {
+      for (const id of CAR_STYLE_IDS) {
+        const { out, at, count, crownUp } = furthestOut(carInState(state, id, STYLE_CLASS[id]));
+        assert.ok(count >= 3 * 13, `${id}: ${count} headliner vertices`);
+        assert.ok(crownUp > 0.9, `${id}: the roof skin faces ${crownUp.toFixed(2)} up at its crown`);
+        assert.ok(out <= ON_SKIN, `${id} ${state}: headliner vertex ${at} stands ${(out * 1000).toFixed(1)} mm outside the roof skin`);
+      }
+    });
+  }
 });
 
 describe("given the door cards", () => {

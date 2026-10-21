@@ -116,7 +116,8 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const rings = zs.map((z) => (source === "cage" ? sectionAt(z) : insetRing(sectionAt(z), endRollInset(z, style.profile))));
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
-  const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style)];
+  const roof = makeRoofGeometry(style, source);
+  const parts: THREE.BufferGeometry[] = [body, roof];
   for (const [wx, wy, wz] of carFrame(style).wheels) {
     const hw = sampleSlice(wz, style.profile).hw;
     // A tyre standing outboard of the body (the monster's) keeps its liner inside the body side.
@@ -151,6 +152,12 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   merged.computeBoundingSphere();
   // The loft is merged first: its vertex `s * ring + i` and its first (slices - 1) * ring * 2 triangles (`panelRegions` cuts panels out of them).
   merged.userData.loft = { ring: rings[0]!.length, slices: zs.length };
+  const roofFrom = body.getAttribute("position").count;
+  const roofTwins: unknown = roof.userData.shellTwins;
+  const twins = roofTwins instanceof Int32Array ? roofTwins.map((v) => v + roofFrom) : new Int32Array(0);
+  // The headliner (the roof's inner face) is dark primer, as the dark cabin shell's headliner was.
+  for (let k = 0; k < twins.length; k += 2) primer[twins[k]!] = 1;
+  merged.userData.shellTwins = twins;
 
   if (fittings) primer.fill(1, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
   if (source === "drawn") {

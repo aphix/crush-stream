@@ -14,7 +14,6 @@ const TRIM: Tone = [0x16191d, 0.85, 0.05];
 const SOFT: Tone = [0x1d2026, 0.7, 0];
 const ACCENT: Tone = [0x6c7178, 0.35, 0.85];
 const GLOSS: Tone = [0x07090c, 0.12, 0.3];
-const HEADLINER: Tone = [0x4c4f55, 0.95, 0];
 const LEATHER: Tone = [0x1b1f25, 0.62, 0];
 const INSERT: Tone = [0x262a31, 0.8, 0];
 const RIM: Tone = [0x1a1c20, 0.55, 0];
@@ -90,7 +89,7 @@ export const cageInterior = once((): THREE.BufferGeometry => {
   return mergeToned(parts, INTERIOR_MESH);
 });
 
-/** Floor, tunnel and console, dash with its binnacle and screen, headliner and the side trim behind and ahead of the doors, in `REF_CABIN`. */
+/** Floor, tunnel and console, dash with its binnacle and screen, and the side trim behind and ahead of the doors, in `REF_CABIN` (the headliner is the drawn roof's inner face). */
 export function cabinGeometry(): THREE.BufferGeometry {
   const parts = [
     box(1.56, 0.03, 1.42, CARPET, 0, 0.315, -0.01),
@@ -104,7 +103,6 @@ export function cabinGeometry(): THREE.BufferGeometry {
     box(0.36, 0.08, 0.16, SOFT, -0.36, 0.89, 0.5),
     box(0.3, 0.06, 0.01, GLOSS, -0.36, 0.875, 0.42, -0.2),
     box(0.26, 0.15, 0.015, GLOSS, 0, 0.93, 0.47, -0.25),
-    box(1.44, 0.025, 1.22, HEADLINER, 0, 1.287, -0.1),
   ];
   for (const sign of [-1, 1]) {
     parts.push(box(0.03, 0.5, 0.7, TRIM, sign * 0.785, 0.58, -0.37));
