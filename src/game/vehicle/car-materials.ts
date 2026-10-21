@@ -51,27 +51,11 @@ export function makeDoorLining(sign: number): THREE.Mesh {
 }
 
 /**
- * The tones the paint's colour and roughness maps multiply in, kept from the canvas maps' base fills so every car's colour and
- * roughness (the material's 0.42 x 0.54) stay what they were. The maps once also carried speckle, seam strokes and a dark lower band:
- * the body, lids, doors and bumpers each have their own uv, so those landed in a different place on every part (plaid lines on
- * the fenders, hood and doors). The surface detail is the finish now (`car-finish.ts`), in object space.
+ * What the paint's colour (sRGB 0xf2f2f0, linear here) and roughness multiply in where its two 1 x 1 maps were sampled, those maps'
+ * texels: every car's paint stays what it was, and no paint pixel fetches a texture for a constant.
  */
-const PAINT_COLOR_TONE_SRGB = [0xf2, 0xf2, 0xf0] as const;
-const PAINT_ROUGHNESS_TONE = 0x8a;
-const OPAQUE = 0xff;
-
-/** A 1 x 1 flat texture of `texel`: built in code, so it exists with no document (tests, workers). */
-function flatTexture(texel: readonly [number, number, number], colorSpace: THREE.ColorSpace): THREE.DataTexture {
-  const texture = new THREE.DataTexture(new Uint8Array([...texel, OPAQUE]), 1, 1);
-  texture.colorSpace = colorSpace;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-const makePaintMaps = once((): { map: THREE.DataTexture; roughness: THREE.DataTexture } => ({
-  map: flatTexture(PAINT_COLOR_TONE_SRGB, THREE.SRGBColorSpace),
-  roughness: flatTexture([PAINT_ROUGHNESS_TONE, PAINT_ROUGHNESS_TONE, PAINT_ROUGHNESS_TONE], THREE.NoColorSpace),
-}));
+const PAINT_COLOR_TONE = new THREE.Color(0xf2f2f0);
+const PAINT_ROUGHNESS_TONE = 0x8a / 0xff;
 
 /**
  * Soft shoulder on a car material's final linear radiance: untouched up to 0.7, rolling off to at most 1.1.
@@ -96,7 +80,7 @@ function capHighlights<T extends THREE.MeshStandardMaterial>(m: T): T {
  * Per-vertex primer on the paint: a `primer` attribute (0 on any mesh without one) darkens the paint toward bare primer, with the
  * vertex blend sharpened to a thin edge (a thin torn arch spans only a row or two of the coarse body loft; a linear blend smears it
  * to a faint gradient). A torn body panel's under-panel is the body's own triangles turned dark this way, so it costs no draw.
- * Wraps `capHighlights`' compile hook.
+ * Multiplies in the paint tones (`PAINT_COLOR_TONE`) and wraps `capHighlights`' compile hook.
  */
 function withPrimer<T extends THREE.MeshStandardMaterial>(m: T): T {
   const cap = m.onBeforeCompile;
@@ -107,6 +91,8 @@ function withPrimer<T extends THREE.MeshStandardMaterial>(m: T): T {
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvPrimer = primer;");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying float vPrimer;")
+      .replace("#include <map_fragment>", `#include <map_fragment>\ndiffuseColor.rgb *= vec3(${PAINT_COLOR_TONE.r}, ${PAINT_COLOR_TONE.g}, ${PAINT_COLOR_TONE.b});`)
+      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\nroughnessFactor *= ${PAINT_ROUGHNESS_TONE};`)
       .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - 0.93 * smoothstep(0.3, 0.6, vPrimer);");
   };
   m.customProgramCacheKey = () => "car-paint-primer";
@@ -155,15 +141,12 @@ export function drawClassOf(m: THREE.Material): number {
 }
 
 export function makePaintMaterial(color: number): THREE.MeshPhysicalMaterial {
-  const maps = makePaintMaps();
   return classed(
     applyFinish(
       withPrimer(
         capHighlights(
           new THREE.MeshPhysicalMaterial({
             color,
-            map: maps.map,
-            roughnessMap: maps.roughness,
             metalness: 0.2,
             roughness: 0.42,
             clearcoat: 0.72,

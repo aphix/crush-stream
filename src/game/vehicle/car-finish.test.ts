@@ -284,14 +284,27 @@ describe("given a car material being compiled", () => {
   });
 });
 
-describe("given the paint maps every paint material wears", () => {
-  it("when a paint material is made where there is no document, then it still carries a flat light colour map and a flat roughness map", () => {
+/** The paint's tones: what its old 1 x 1 colour map (sRGB 0xf2f2f0) and roughness map (0x8a) multiplied in. */
+const PAINT_TONE = new THREE.Color(0xf2f2f0);
+const PAINT_TONE_LINE = `diffuseColor.rgb *= vec3(${PAINT_TONE.r}, ${PAINT_TONE.g}, ${PAINT_TONE.b});`;
+const ROUGHNESS_TONE_LINE = `roughnessFactor *= ${0x8a / 0xff};`;
+
+describe("given the tones every paint material multiplies in", () => {
+  it("when a paint material is made where there is no document, then it samples no texture for them: no colour map, no roughness map", () => {
     const material = makePaintMaterial(0x445566);
-    const colorTexel = (material.map as THREE.DataTexture).image.data!;
-    const roughnessTexel = (material.roughnessMap as THREE.DataTexture).image.data!;
     assert.equal(typeof document, "undefined");
-    assertSameNumbers(colorTexel, [0xf2, 0xf2, 0xf0, 0xff], "colour map texel");
-    assertSameNumbers(roughnessTexel, [0x8a, 0x8a, 0x8a, 0xff], "roughness map texel");
+    assert.equal(material.map, null, "colour map");
+    assert.equal(material.roughnessMap, null, "roughness map");
+  });
+
+  it("when a sprayed paint compiles, then the colour tone lands where the map was, before the spray, and the roughness tone after the roughness chunk", () => {
+    const material = makePaintMaterial(0x445566);
+    applySpray(material, sprayUniforms(CAR_SPRAY, BARE_SPRAY, 1), "attribute vec3 sprayPos;\nattribute vec3 sprayNrm;", "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car");
+    const { fragment } = compile(material);
+    const tone = fragment.indexOf(PAINT_TONE_LINE);
+    assert.ok(tone > fragment.indexOf("diffuseColor *= sampledDiffuseColor"), "the colour tone follows the map chunk");
+    assert.ok(tone < fragment.indexOf("vec4 sprayS = sprayTexel();"), "the colour tone comes before the spray (the spray is not toned)");
+    assert.ok(fragment.indexOf(ROUGHNESS_TONE_LINE) > fragment.indexOf("float roughnessFactor = roughness;"), "the roughness tone follows roughnessFactor");
   });
 });
 
