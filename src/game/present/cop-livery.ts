@@ -114,5 +114,7 @@ function nearSegment(px: number, py: number, ax: number, ay: number, bx: number,
   const dx = bx - ax;
   const dy = by - ay;
   const t = Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
-  return Math.hypot(px - ax - t * dx, py - ay - t * dy) <= r;
+  const ex = px - ax - t * dx;
+  const ey = py - ay - t * dy;
+  return ex * ex + ey * ey <= r * r;
 }
