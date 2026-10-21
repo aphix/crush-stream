@@ -88,8 +88,15 @@ export const SEDAN: BodyStyle = {
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,
-  boot: { kind: "lid", z0: -1.65, z1: -2.06, origin: [0.97, -1.62] },
+  /** The reference's ducktail: the deck dips into a shallow groove at z -2.03 and kicks up into the lip at its rear edge (gridded side: crest y 0.955 over z -2.0..-2.09, ~1.2 cm proud of the deck line). */
+  boot: { kind: "lid", z0: -1.65, z1: -2.06, origin: [0.97, -1.62], lip: { rise: 0.012, depth: 0.06 } },
   lamps: { head: [0.26, 0.575], tail: [0.34, 0.8] },
+  /**
+   * The reference's twin wide oval tips in the diffuser (gridded rear iso and side: |x| 0.47-0.64, y 0.27-0.33, ~3 cm proud). Ours sit
+   * inboard at |x| 0.36: the body's tail floor only reaches |x| 0.48 (0.8 hw) and the bumper face sweeps back from 0.33, so wider tips
+   * hung in the air past both.
+   */
+  exhaust: { tips: 2, x: 0.36, y: 0.31, size: [0.14, 0.055], shape: "round" },
   details: SEDAN_DETAILS,
   camera: { ...PLATFORM_CAMERA, hood: [1.08, 1.2] },
 };
