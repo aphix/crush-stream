@@ -1,0 +1,30 @@
+{
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/red-suv/red-suv-1.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/red-suv/red-suv-2.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      945,
+      862,
+      638,
+      561
+    ],
+    "wheels": {},
+    "camera": null
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      754,
+      684,
+      447,
+      406
+    ],
+    "wheels": {},
+    "camera": null
+  }
+}

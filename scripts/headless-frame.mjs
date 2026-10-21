@@ -8,13 +8,18 @@
  *
  *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png]
  *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--view hood] [--at 8]
+ *     [--view side|top|iso|rear-iso --view-camera <json>] [--backdrop '#ffffff'] [--detail 2]
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
  * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
  * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--view hood|chase|far` follows the hash's car
  * (`car=<id>`) in that drive view instead, e.g. `--hash 'scene=race&car=coupe'`; `--at` is the sim seconds before the drawn frames.
+ * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,
+ * `trace-camera.mjs`: car space, orthographic for side and top), at the spec's size, so the shot lines up with trace-car's overlay;
+ * `scripts/landing-shots.mjs` runs the pair. `--backdrop <colour>` draws the car alone over that colour (no garage room, no fog).
+ * `--detail <rung>` pins the distance-detail ladder's rung (0 desktop, 2 the phone's start) with its governor off.
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -31,6 +36,8 @@ const FRAMING_S = 0.3;
 const VIEW_S = 2;
 /** `--view`'s names for the seat's views. */
 const SEAT_VIEWS = { hood: "first", chase: "third", far: "far" };
+/** `--view`'s landing views: the car through a trace-car camera spec. */
+const LANDING_VIEWS = ["side", "top", "iso", "rear-iso"];
 /** What the sim's pacer reads as its clock advances by on every read, so its time budget never depends on the host's speed. */
 const PACE_STEP_S = 0.001;
 /** The yardstick shader's timed frames. */
@@ -57,6 +64,9 @@ const { values } = parseArgs({
     hash: { type: "string" },
     camera: { type: "string" },
     view: { type: "string" },
+    "view-camera": { type: "string" },
+    backdrop: { type: "string" },
+    detail: { type: "string" },
     at: { type: "string", default: String(START_S) },
   },
 });
@@ -71,10 +81,14 @@ if (size === null) throw new Error(`--size ${values.size}: width x height, e.g. 
 if (!(atS >= 0)) throw new Error(`--at ${values.at}: sim seconds, 0 or more`);
 if (camera !== undefined && (camera.length !== 3 || !camera.every(Number.isFinite))) throw new Error(`--camera ${values.camera}: radius,pitch,angle, e.g. 2.4,0.12,2.1`);
 const seatView = values.view === undefined ? undefined : SEAT_VIEWS[values.view];
-if (values.view !== undefined && seatView === undefined) throw new Error(`--view ${values.view}: hood, chase or far`);
-const W = Number(size[1]);
-const H = Number(size[2]);
+const landingView = LANDING_VIEWS.includes(values.view) ? JSON.parse(readFileSync(resolve(values["view-camera"] ?? ""), "utf8")) : null;
+if (values.view !== undefined && seatView === undefined && landingView === null) throw new Error(`--view ${values.view}: hood, chase, far, ${LANDING_VIEWS.join(", ")}`);
+if (landingView !== null && landingView.view !== values.view) throw new Error(`--view-camera ${values["view-camera"]}: a ${landingView.view} camera, not ${values.view}`);
+const W = landingView?.W ?? Number(size[1]);
+const H = landingView?.H ?? Number(size[2]);
 const out = resolve(values.out ?? `screenshots/headless-frame-${tier}.png`);
+const detail = values.detail === undefined ? null : Number(values.detail);
+if (detail !== null && !(Number.isInteger(detail) && detail >= 0)) throw new Error(`--detail ${values.detail}: a rung of the distance-detail ladder, 0 or more`);
 
 // WSL: Mesa's d3d12 driver reaches the host GPU through /dev/dxg; without it Mesa draws on the CPU. Elsewhere Mesa has no d3d12 driver.
 if (existsSync("/dev/dxg")) process.env.GALLIUM_DRIVER ??= "d3d12";
@@ -97,6 +111,12 @@ const { CrashEngine } = await game("engine/engine.ts");
 const { HudStore } = await game("hud/hud-store.ts");
 const { FX_TIERS } = await game("present/engine-post.ts");
 const { FRAME_HZ } = await game("kernel/constants.ts");
+const { DRIVER_CARS } = await game("match/types.ts");
+/** The body style the hash's `car=` boots: it names a car-menu id (a class, e.g. `muscle` for the coupe body, or a style), or null. */
+const hashStyle = (() => {
+  const id = new URLSearchParams(values.hash ?? "").get("car");
+  return id === null ? null : (DRIVER_CARS.find((d) => d.id === id)?.style ?? id);
+})();
 if (!FX_TIERS.includes(tier)) throw new Error(`--tier ${tier}: one of ${FX_TIERS.join(", ")}`);
 
 // Referenced for the process's life: @kmamal/gl aborts the process when the garbage collector frees a context.
@@ -189,6 +209,10 @@ await engine.ready;
 const readyMs = Math.round(performance.now() - bootAt);
 if (tier === "ultra" && !(await engine.loadUltra())) throw new Error("headless-frame: the Ultra look did not load (see the console)");
 engine.setFxTier(tier);
+if (detail !== null) {
+  engine.detail.setLevel(detail);
+  engine.detailGov.frame = () => null;
+}
 
 const FRAME = 1 / FRAME_HZ;
 engine.fadeScenes = false;
@@ -206,7 +230,7 @@ if (camera !== undefined) {
 }
 if (seatView !== undefined) {
   // The hash's car, followed in that drive view (a spectator's spec view: any scene, driven or not).
-  const want = new URLSearchParams(values.hash ?? "").get("car");
+  const want = hashStyle;
   const cars = engine.live();
   const index = want === null ? engine.seat.carIndex : cars.findIndex((car) => car.style.id === want);
   if (index < 0) throw new Error(`--view ${values.view}: no ${want} car in the scene (field: ${cars.map((car) => car.style.id)})`);
@@ -215,6 +239,7 @@ if (seatView !== undefined) {
   engine.advance(VIEW_S, { frameDt: FRAME });
   await settle();
 }
+if (landingView !== null || values.backdrop !== undefined) await shootAs(landingView, values.backdrop);
 const notDrawn = new Set();
 // three draws on with a program that failed to link, a GL error per draw: the quirk's meshes leave the camera's layer for the drawn
 // frames, and the errors their draws left so far are dropped, so `glError` speaks for the drawn frames.
@@ -247,9 +272,48 @@ mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, await shot.encode("png"));
 
 engine.dispose();
-const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
+const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
 process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
+
+/**
+ * Every drawn frame from here goes through `spec`'s camera (trace-camera, car space, placed on the hash's car) and/or over a flat
+ * `backdrop` colour with the garage room and fog gone. The engine's own camera keeps running unchanged: the detail, skin and lamp
+ * pickers read it before the draw, so the car keeps the detail the garage's orbit eye gives it.
+ */
+async function shootAs(spec, backdrop) {
+  const THREE = await import(pathToFileURL(join(root, "node_modules/three/build/three.module.js")).href);
+  const { makeCamera } = await import(pathToFileURL(join(import.meta.dirname, "trace-camera.mjs")).href);
+  const want = hashStyle;
+  const car = engine.live().find((c) => want === null || c.style.id === want);
+  if (car === undefined) throw new Error(`--view/--backdrop: no ${want} car in the scene; boot one: --hash 'scene=garage&car=<id>'`);
+  car.group.updateMatrixWorld(true);
+  const shotCamera = spec === null ? null : makeCamera(THREE, spec, car.group.matrixWorld);
+  const flat = backdrop === undefined ? null : new THREE.Color(backdrop);
+  // The car alone: its group, the batches that draw its wheels, lamps and parts, and the lights. The rest (room, sky dome, props) hides.
+  const kept = new Set([car.group, ...engine.wheels.meshes, ...engine.lampBatch.meshes, ...engine.partBatch.meshes]);
+  const cine = engine.cine;
+  const draw = cine.render.bind(cine);
+  cine.render = (scene, viewCamera, ...rest) => {
+    const saved = { background: scene.background, fog: scene.fog?.density, hidden: [] };
+    if (flat !== null) {
+      scene.background = flat;
+      if (scene.fog) scene.fog.density = 0;
+      for (const o of scene.children) {
+        if (kept.has(o) || o.isLight || !o.visible) continue;
+        o.visible = false;
+        saved.hidden.push(o);
+      }
+    }
+    try {
+      return draw(scene, shotCamera ?? viewCamera, ...rest);
+    } finally {
+      scene.background = saved.background;
+      if (scene.fog) scene.fog.density = saved.fog;
+      for (const o of saved.hidden) o.visible = true;
+    }
+  };
+}
 
 /** Waits out the page's file loads and the engine's program warms, so every run draws its frames over the same state. */
 async function settle() {

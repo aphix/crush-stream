@@ -1,0 +1,106 @@
+{
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/silver-sedan/silver-sedan-1.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/silver-sedan/silver-sedan-2.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      64,
+      120,
+      552,
+      362
+    ],
+    "wheels": {
+      "fl": {
+        "hub": [
+          240,
+          281
+        ],
+        "contact": [
+          235,
+          329
+        ]
+      },
+      "rl": {
+        "hub": [
+          491,
+          135
+        ],
+        "contact": [
+          487,
+          180
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        4.2466,
+        3.2621,
+        5.0457
+      ],
+      "target": [
+        3.6621,
+        2.8382,
+        4.3539
+      ],
+      "up": [
+        -0.2831,
+        0.9056,
+        -0.3157
+      ],
+      "fov": 26
+    }
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      52,
+      101,
+      426,
+      313
+    ],
+    "wheels": {
+      "rr": {
+        "hub": [
+          212,
+          235
+        ],
+        "contact": [
+          205,
+          272
+        ]
+      },
+      "fr": {
+        "hub": [
+          389,
+          109
+        ],
+        "contact": [
+          385,
+          144
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        -7.9815,
+        7.3724,
+        -12.0264
+      ],
+      "target": [
+        -7.4862,
+        6.9261,
+        -11.2811
+      ],
+      "up": [
+        0.2603,
+        0.8948,
+        0.3628
+      ],
+      "fov": 12
+    }
+  }
+}
