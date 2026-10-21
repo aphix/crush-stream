@@ -10,6 +10,7 @@ import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-me
 import {
   bayAt,
   bootCut,
+  bootInfill,
   bootCutAt,
   bodyTubs,
   DOOR_EDGE,
@@ -132,6 +133,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   if (lips) parts.push(lips);
   const humps = wellHumpGeometry(style, source);
   if (humps) parts.push(humps);
+  if (source === "drawn") parts.push(...bootInfill(style));
   // The wheel liners, merged after the loft and roof: unpainted like the bay they rise into.
   const linerFrom = body.getAttribute("position").count + parts[1]!.getAttribute("position").count;
   const linerTo = linerFrom + parts.slice(2, 2 + carFrame(style).wheels.length).reduce((n, g) => n + g.getAttribute("position").count, 0);

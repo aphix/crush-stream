@@ -6,7 +6,7 @@ import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, st } from "./car-styles/platform.ts";
-import { ROCKER, cantY, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { ROCKER, cantY, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, tailgateHalf } from "./car-mesh.ts";
 import { aPillarTopZ, aPostRearZ, beltY, floorY, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, styleMirrorDrawn } from "./part-geometry.ts";
@@ -1288,13 +1288,13 @@ function bodyHit(body: THREE.Mesh, from: THREE.Vector3Tuple, dir: THREE.Vector3T
   return new THREE.Raycaster(new THREE.Vector3(...from), new THREE.Vector3(...dir), 0, far).intersectObject(body, false)[0]?.point ?? null;
 }
 
-/** The rear face's opening of a tailgate, or of a lid wrapping the tail: its half-width, its sill and its top (m). */
-function faceOpening(style: BodyStyle): { half: number; sill: number; top: number } | null {
+/** The rear face's opening of a tailgate, or of a lid wrapping the tail: its half-width at a height, its sill and its top (m). */
+function faceOpening(style: BodyStyle): { half: (y: number) => number; sill: number; top: number } | null {
   const b = style.boot;
   const tail = style.profile[0]!.z;
-  if (b.kind === "lid") return b.drop ? { half: b.drop.w, sill: b.drop.y, top: sampleSlice(tail, style.profile).yBelt } : null;
+  if (b.kind === "lid") return b.drop ? { half: () => b.drop!.w, sill: b.drop.y, top: sampleSlice(tail, style.profile).yBelt } : null;
   const bed = style.tubs.find(([z0]) => z0 < tail + 0.1);
-  return { half: makeTrunkGeometry(style).boundingBox!.max.x, sill: Math.max(b.y0, bed?.[2] ?? 0), top: b.origin[0] };
+  return { half: (y) => tailgateHalf(style, y), sill: Math.max(b.y0, bed?.[2] ?? 0), top: b.origin[0] };
 }
 
 /** Where the drawn body stands in `style`'s boot opening: under its deck lid between the lid's edges, and in its rear face's cut. */
@@ -1313,7 +1313,7 @@ function openingCrossings(style: BodyStyle): string[] {
   const face = faceOpening(style);
   if (!face) return hits;
   for (let y = face.sill + OPEN_EDGE; y <= face.top - OPEN_EDGE; y += OPEN_GRID) {
-    for (let x = -face.half + OPEN_EDGE; x <= face.half - OPEN_EDGE; x += OPEN_GRID) at(bodyHit(body, [x, y, tail - 0.05], [0, 0, 1], OPEN_DEPTH));
+    for (let x = -face.half(y) + OPEN_EDGE; x <= face.half(y) - OPEN_EDGE; x += OPEN_GRID) at(bodyHit(body, [x, y, tail - 0.05], [0, 0, 1], OPEN_DEPTH));
   }
   return hits;
 }
@@ -1347,6 +1347,41 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       assert.ok(hits.length === 0, `${id}: ${hits.length} rays meet body in the opening, first ${hits.slice(0, 4).join(" ")}`);
     });
   }
+
+  it("when the hatch's tailgate is built on its seam's outline, then its edge stands on the outline at each of the outline's corners, in the drawn and the cage build", () => {
+    const b = CAR_STYLES.hatchback.boot;
+    assert.ok(b.kind === "tailgate" && b.outline, "the hatch's gate carries an outline");
+    const [py] = bootPivot(b);
+    const off: string[] = [];
+    for (const source of ["drawn", "cage"] as const) {
+      const pos = makeTrunkGeometry(CAR_STYLES.hatchback, source).getAttribute("position");
+      for (const [ox, oy] of b.outline) {
+        if (oy <= b.y0 || oy >= b.origin[0]) continue;
+        let edge = 0;
+        for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) + py - oy) < 1e-4) edge = Math.max(edge, pos.getX(i));
+        if (Math.abs(edge - ox) > 1e-3) off.push(`${source} at y ${oy}: ${edge.toFixed(3)} (${ox})`);
+      }
+    }
+    assert.ok(off.length === 0, `the gate's edge: ${off.join("; ")}`);
+  });
+
+  it("when the hatch's tailgate steps in between its tail lamps, then the body's tail beside the step is shut flush with the gate's face", () => {
+    const style = CAR_STYLES.hatchback;
+    const b = style.boot;
+    assert.ok(b.kind === "tailgate" && b.z0 !== undefined, "the hatch's gate leans");
+    const [y1, oz] = b.origin;
+    const lean = (b.z0 - oz) / (b.y0 - y1);
+    const body = new THREE.Mesh(makeChassisGeometry(style), SIDED);
+    const off: string[] = [];
+    for (let y = b.y0 + 0.05; y <= 0.78; y += OPEN_GRID) {
+      for (const x of [0.46, 0.52, 0.58]) {
+        const gate = oz + (y - y1) * lean;
+        const z = bodyHit(body, [x, y, gate - 0.1], [0, 0, 1], 0.2)?.z ?? NaN;
+        if (!(Math.abs(z - gate) < 0.005)) off.push(`(${x}, ${y.toFixed(2)}): ${z.toFixed(3)} vs ${gate.toFixed(3)}`);
+      }
+    }
+    assert.ok(off.length === 0, `the tail beside the step: ${off.join("; ")}`);
+  });
 
   for (const id of ["pickup", "monster", "hatchback", "wagon"] as const) {
     it(`when a ${id}'s bed or cargo floor is looked down onto behind its rear bulkhead, then it is flat between the wheel humps`, () => {
