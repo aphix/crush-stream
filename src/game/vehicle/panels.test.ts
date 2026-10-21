@@ -15,6 +15,8 @@ import { LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts"
 const BAR_SEAT_M = 0.03;
 /** A roof skin vertex counts as under a bar vertex within this plan distance (m): the skin's vertex spacing on the roof. */
 const UNDER_M = 0.15;
+/** Body positions are float32: a quarter vertex cut exactly at the door's rear edge reads within this (m) of the float64 edge. */
+const FLOAT32_EDGE = 1e-6;
 
 /** How deep (m) the light bar's deepest vertex sits under the roof skin directly beneath it (negative: clear of it). */
 function barDepth(car: Probe): number {
@@ -89,7 +91,10 @@ describe("given every car body style, whose panels are cut from each body's own 
       return Math.max(...[...r.verts].map((v) => pos.getZ(v)));
     };
     assert.ok(front("sedan") < -0.5, `sedan quarter reaches z=${front("sedan")}, past its rear door`);
-    assert.ok(front("coupe") > -0.15 && front("pickup") > -0.15, `two-door quarters start at z=${front("coupe")} / ${front("pickup")}, behind the door`);
+    for (const id of ["coupe", "pickup"] as const) {
+      const doorRear = CAR_STYLES[id].door.hingeZ - CAR_STYLES[id].door.length;
+      assert.ok(front(id) >= doorRear - FLOAT32_EDGE, `${id} quarter starts at z=${front(id)}, not reaching its door's rear edge ${doorRear}`);
+    }
   });
 
   it("when the sedan's quarter panel is shelled flat and then bent, then the flat shell lies on the skin (4 mm proud, its sheet 2 cm behind) and the bent panel peels at its leading edge and holds at the tail", () => {

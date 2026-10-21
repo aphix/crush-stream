@@ -59,6 +59,20 @@ describe("given the part batch and a few cars near the camera", () => {
     }
   });
 
+  test("when undamaged cars are synced, then their shadows are one instanced caster per style, holding each car's rest caster where the car stands, and a car beyond the far cut still casts", () => {
+    const { batch, car, draw } = stage();
+    const cars = [car(10), car(20), car(FAR_BEYOND + 20)];
+    draw(cars);
+    const sedan = batch.casters.find((m) => m.name === "shadow-caster-sedan")!;
+    assert.equal(sedan.count, cars.length, "one instance per undamaged sedan");
+    assert.ok(sedan.geometry === cars[0]!.shadowCaster.geometry, "the batch draws the sedan's rest caster");
+    assert.ok(sedan.castShadow && !cars[0]!.shadowCaster.visible, "the batch casts, the car's own caster never draws");
+    assert.equal(batch.casters.filter((m) => m.count > 0).length, 1, "one caster draw for a field of one style");
+    const m = new THREE.Matrix4();
+    sedan.getMatrixAt(1, m);
+    assertSameNumbers(m.elements, cars[1]!.shadowCaster.matrixWorld.elements, "the second sedan's caster instance", FLOAT32_SLACK);
+  });
+
   test("when a car is synced, then its mirror's instance stands where the seat does", () => {
     const { batch, car, draw } = stage();
     const only = car(10);

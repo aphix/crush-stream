@@ -153,9 +153,9 @@ export abstract class CarParts extends CarGlass {
   /** Pendulum drive, car frame: acceleration right, acceleration forward (m/s²), yaw rate (rad/s), yaw acceleration (rad/s²). */
   readonly swingDrive = new Float64Array(4);
   /**
-   * Once a frame, with the skin: the hood, boot lid, doors and bumpers cast into the sun's shadow map (one draw each) only
-   * when the car has been hit or a part has hinged, swung or come off. Until then they lie on the body's shell and the
-   * body's shadow is theirs to within a texel row at the bumpers (`flush-casters.test.ts` measures it).
+   * Once a frame, with the skin: an undamaged car casts its sun shadow from `shadowCaster` alone (body and every flush part
+   * merged at rest, one draw), so overhanging parts are not missing from it. Once the car has been hit or a part has hinged,
+   * swung or come off, the merged mesh stops and the body, hood, boot lid, doors and bumpers cast, one draw each.
    */
   protected settleCasters(): void {
     let flush = !this.crashed;
@@ -163,6 +163,8 @@ export abstract class CarParts extends CarGlass {
       const p = this.parts[i]!;
       flush = !p.detached && p.hingeT <= FLUSH_HINGE && (p.swing === null || p.swing.theta <= FLUSH_HINGE);
     }
+    this.body.castShadow = !flush;
+    this.shadowCaster.castShadow = flush;
     for (let i = 0; i < this.flushCasters.length; i++) this.flushCasters[i]!.castShadow = !flush;
   }
 
