@@ -8,6 +8,7 @@ import {
   hypot2,
 } from "./physics-util.ts";
 import { DeformState, ENGINE_PACK_GAP, PLANT_QUIET, TYRE_R } from "./deform-state.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { BodyFit } from "./body-fit.ts";
 import { detSin, detCos, detAtan2, sinCosAt } from "../kernel/physics-core.js";
 import { CONTACT_REF_SLICE, MIN_IMPACT_ZONE, MIN_INERTIA, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
@@ -20,7 +21,7 @@ import { EPICENTER } from "./epicenter.ts";
 export const ENGINE_SLACK = 0.04;
 /** `stepStructure`'s frame when its caller gives none: level. */
 const LEVEL = new THREE.Quaternion();
-export const TYRE_HALF_W = 0.11;
+export const TYRE_HALF_W = PLATFORM_TYRE.halfW;
 /** Fastest (m/s) a wreck's body follows its cell's drift off its seat (`followGroup`): the nose's springback against a wall in 0.4 s, no faster than the pair pass's pushes. */
 export const SEAT_SPEED = 1;
 /** A seat step (m) under this is the rigid step's jitter once seated (3e-8 to 2e-6 m measured), not a move to re-bake the skin for: an active seat steps 8 mm at 120 Hz. */

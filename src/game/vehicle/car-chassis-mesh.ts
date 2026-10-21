@@ -13,7 +13,6 @@ import {
   SEAM_HALF,
   SEDAN,
   TUB_EDGE,
-  WHEEL_POS,
   ensureOutwardNormals,
   loftFromRings,
   sampleSlice,
@@ -21,6 +20,7 @@ import {
   type BodySource,
   type Pt,
 } from "./car-mesh.ts";
+import { carFrame } from "./car-rig.ts";
 
 /** Base loft stations: with SLICE_WARP ≈7 cm apart at nose/tail, 13 cm mid-cabin (8e2dc49 commit notes). */
 const BASE_SLICES = 40;
@@ -113,7 +113,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
   const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style)];
-  for (const [wx, wy, wz] of WHEEL_POS) parts.push(makeWellLiner(wx, wy, wz));
+  for (const [wx, wy, wz] of carFrame(style).wheels) parts.push(makeWellLiner(wx, wy, wz));
   parts.push(...makeGreenhouseFrame(style, source));
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
   const rb = style.rearBulkhead;

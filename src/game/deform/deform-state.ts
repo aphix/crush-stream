@@ -7,7 +7,7 @@ import {
   forceTransfer,
   hypot2,
 } from "./physics-util.ts";
-import type { BodyPartName, MassName } from "../kernel/rig-spec.ts";
+import { PLATFORM_TYRE, type BodyPartName, type MassName } from "../kernel/rig-spec.ts";
 import { DeformParticleHelper, DeformRigHelper } from "./deform-helper.ts";
 import { DeformHit } from "./deform-hit.ts";
 import type { Beam, MassNode } from "./deform-rig.ts";
@@ -22,8 +22,8 @@ export const ENGINE_PACK_GAP = 0.54;
 /** How far (m) a single nose hit's dynamic crush peaks short of its stroke: single 48–54 km/h hits at
  *  squash 0.32 and 0.4 all peak the block at the stroke's reach (stroke − 0.30) minus 0.06 ± 0.01 m. */
 const STROKE_SHORTFALL = 0.06;
-/** Tyre (m): radius along the car (TYRE_REACH's 0.32) and half-width across it, for the faces' hub contact. */
-export const TYRE_R = 0.32;
+/** The platform tyre's radius along the car (m), for the faces' hub contact. */
+export const TYRE_R = PLATFORM_TYRE.r;
 /** A face that shoves a planted hub this far (m, one wheel diameter) off its rest tears the wheel off. */
 export const WHEEL_DIAMETER = 2 * TYRE_R;
 /** Throttle input this recent (s) still counts as "under power" for the settle rule. */

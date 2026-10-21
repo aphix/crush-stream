@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, detSin, detCos, detAtan2, detAsin, PART_FAMILY } from "../kernel/physics-core.js";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
-import { ARCH_R, ROCKER, WHEEL_POS } from "./car-mesh.ts";
+import { ARCH_R, ROCKER, type V3 } from "./car-mesh.ts";
+import { carFrame } from "./car-rig.ts";
 import { DOOR } from "./car-door-mesh.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
@@ -77,7 +78,8 @@ function cut(style: BodyStyle, body: THREE.BufferGeometry): PanelRegion[] {
   // The quarter runs from behind the rear door's shut line (on a two-door, behind the door) to the tail corner.
   const zFront = style.rearDoorSeam ?? DOOR.hingeZ - DOOR.length;
   const zTail = style.profile[0]!.z + 0.15;
-  const hubY = WHEEL_POS[0]![1];
+  const { wheels } = carFrame(style);
+  const hubY = wheels[0]![1];
   const tris = Object.fromEntries(PANEL_NAMES.map((k) => [k, [] as number[]])) as Record<PanelName, number[]>;
   for (let s = 0; s < slices - 1; s++) {
     for (let i = 1; i < n; i++) {
@@ -94,7 +96,7 @@ function cut(style: BodyStyle, body: THREE.BufferGeometry): PanelRegion[] {
       const y = (pos[a * 3 + 1]! + pos[b * 3 + 1]! + pos[c * 3 + 1]! + pos[d * 3 + 1]!) / 4;
       let name: PanelName | null = null;
       for (let k = 0; k < 4; k++) {
-        const [wx, , wz] = WHEEL_POS[k]!;
+        const [wx, , wz] = wheels[k]!;
         if (Math.sign(wx) !== side) continue;
         const dy = y - hubY;
         const r = dy > 0 ? hypot2(z - wz, dy) : Math.abs(z - wz);
@@ -104,10 +106,10 @@ function cut(style: BodyStyle, body: THREE.BufferGeometry): PanelRegion[] {
       if (name) tris[name].push(a, b, c, b, d, c);
     }
   }
-  return PANEL_NAMES.map((name) => region(name, tris[name], pos));
+  return PANEL_NAMES.map((name) => region(name, tris[name], pos, wheels));
 }
 
-function region(name: PanelName, ids: number[], pos: Float32Array): PanelRegion {
+function region(name: PanelName, ids: number[], pos: Float32Array, wheels: readonly V3[]): PanelRegion {
   const local = new Map<number, number>();
   const verts: number[] = [];
   const tris: number[] = [];
@@ -143,7 +145,7 @@ function region(name: PanelName, ids: number[], pos: Float32Array): PanelRegion 
     yMin = Math.min(yMin, pos[g * 3 + 1]!);
     yMax = Math.max(yMax, pos[g * 3 + 1]!);
   }
-  const hub = WHEEL_POS[PANEL_NAMES.indexOf(name) - 2];
+  const hub = wheels[PANEL_NAMES.indexOf(name) - 2];
   const w = new Float32Array(nv);
   // The hinge line's mean: a quarter's trailing edge (x), an arch's top (x, y).
   let px = 0;

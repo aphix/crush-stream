@@ -3,6 +3,7 @@ import { hypot2, detSin } from "../kernel/physics-core.js";
 import { CAR_STYLES, type BodyStyle, type ProfileStation, type YZ } from "./car-variants.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
+import { carFrame } from "./car-rig.ts";
 
 export const WHEEL_POS: [number, number, number][] = [
   [-0.74, 0.32, 1.34],
@@ -21,7 +22,6 @@ export const FOOT_HALF_L = 2.3;
 
 /** Shared-platform hardpoints (8e2dc49, five styles on one platform): arch opening radius about the hub (m), floor pan height (m). */
 export const ARCH_R = 0.38;
-const WHEEL_Y = WHEEL_POS[0]![1];
 const Y_FLOOR = 0.145;
 export const SEDAN = CAR_STYLES.sedan;
 
@@ -138,9 +138,9 @@ export function glassX(z: number, y: number, style: BodyStyle): number {
   return lerp(GLASS_BELT_X, cantX(z, style), THREE.MathUtils.clamp((y - GLASS_BELT_Y) / (top - GLASS_BELT_Y), 0, 1));
 }
 
-function wheelWell(z: number): number {
+function wheelWell(z: number, wheels: readonly V3[]): number {
   let w = 0;
-  for (const [, , wz] of WHEEL_POS) {
+  for (const [, , wz] of wheels) {
     const dz = z - wz;
     if (Math.abs(dz) < ARCH_R) w = Math.max(w, Math.sqrt(ARCH_R * ARCH_R - dz * dz));
   }
@@ -148,11 +148,11 @@ function wheelWell(z: number): number {
 }
 
 /** Fender flare band just outside the arch opening. */
-function archFlare(z: number, y: number): number {
+function archFlare(z: number, y: number, wheels: readonly V3[]): number {
   let f = 0;
-  for (const [, , wz] of WHEEL_POS) {
+  for (const [, wy, wz] of wheels) {
     const dz = z - wz;
-    const r = y >= WHEEL_Y ? hypot2(dz, y - WHEEL_Y) : Math.abs(dz);
+    const r = y >= wy ? hypot2(dz, y - wy) : Math.abs(dz);
     const band =
       THREE.MathUtils.smoothstep(r, ARCH_R - 0.04, ARCH_R + 0.02) *
       (1 - THREE.MathUtils.smoothstep(r, ARCH_R + 0.06, ARCH_R + 0.17));
@@ -247,8 +247,9 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [num
   const { hw, yBelt: yb, z } = s;
   const hole = doorAperture(z);
   const tub = tubAt(z, style);
-  const well = wheelWell(z);
-  const archY = WHEEL_Y + well;
+  const { wheels } = carFrame(style);
+  const well = wheelWell(z, wheels);
+  const archY = wheels[0]![1] + well;
   const inset = seamInset(z, style);
   const yF = yb - FEATURE_DROP;
   const side = (y: number): [number, number] => [sideX(y, hw, yb) - inset, y];
@@ -281,7 +282,7 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [num
     p[0] = lerp(p[0], sill[i]![0], hole);
     p[1] = lerp(p[1], sill[i]![1], hole);
   }
-  for (let i = FLARE_FIRST; i <= rocker; i++) half[i]![0] += 0.022 * archFlare(z, half[i]![1]);
+  for (let i = FLARE_FIRST; i <= rocker; i++) half[i]![0] += 0.022 * archFlare(z, half[i]![1], wheels);
   for (const p of half) {
     if (well < 0.03 || p[0] < hw * 0.58 || p[1] > archY + 0.02) continue;
     const t = THREE.MathUtils.smoothstep((p[0] - hw * 0.58) / (hw * 0.42), 0, 1);

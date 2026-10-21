@@ -1,5 +1,4 @@
-import { TYRE_HALF_W } from "../../deform/deform-contact.ts";
-import { TYRE_R } from "../../deform/deform-state.ts";
+import { PLATFORM_TYRE } from "../../kernel/rig-spec.ts";
 import type { ProfileStation } from "../car-variants.ts";
 
 export function st(z: number, hw: number, yBelt: number, yRoof = yBelt, cabinHw = 0.5, cabin = 0): ProfileStation {
@@ -24,5 +23,5 @@ export const CABIN_TUB = [-0.7, 0.7, 0.3] as const;
 /** Boot sensor (SENSORS[18]) follows the tail panel on hatch / tailgate bodies. */
 export const BOOT_SENSOR = 18;
 
-/** The one tyre the sim's hub contact is sized to today (`TYRE_R`, `TYRE_HALF_W`). */
-export const PLATFORM_WHEEL = { radius: TYRE_R, width: 2 * TYRE_HALF_W } as const;
+/** The one tyre the sim's hub contact is sized to today (`PLATFORM_TYRE`). */
+export const PLATFORM_WHEEL = { radius: PLATFORM_TYRE.r, width: 2 * PLATFORM_TYRE.halfW } as const;
