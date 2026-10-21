@@ -13,7 +13,6 @@ const LAMP_INNER = { width: 0.008, depth: 0.002, profile: "u", cavity: 0 } as co
 const TRIM = { width: 0.01, depth: -0.003, profile: "u", cavity: 0.4 } as const;
 const VENT = { depth: -0.005, rim: 0.006, pattern: { kind: "hslats", pitch: 0.012, bar: 0.004, depth: 0.003 }, cavity: 0.7 } as const;
 const BADGE = { depth: 0.002, rim: 0.003, cavity: 0 } as const;
-const EXHAUST = { depth: -0.006, rim: 0.006, cavity: 0.9 } as const;
 
 const SHARED_LINES: readonly Line[] = [
   { view: "top", points: [[0.8, 0.66], [0.9, 0.65], [1, 0.645], [1.1, 0.64], [1.19, 0.63], [1.3, 0.615], [1.37, 0.6], [1.47, 0.58], [1.55, 0.56], [1.66, 0.53], [1.77, 0.5], [1.88, 0.46], [1.96, 0.42]], ...GAP },
@@ -115,7 +114,6 @@ const SEDAN_PATCHES: readonly Patch[] = [
   { view: "front", points: [[0.5, 0.345], [0.7, 0.345], [0.7, 0.245], [0.5, 0.245]], ...VENT },
   { view: "side", points: [[1.79, 0.5], [1.745, 0.5], [1.73, 0.31], [1.775, 0.31]], ...VENT },
   { view: "rear", points: [[0, 0.88], [0.035, 0.88], [0.035, 0.93], [0, 0.93]], ...BADGE },
-  { view: "rear", points: [[0.47, 0.327], [0.5, 0.33], [0.6, 0.33], [0.63, 0.327], [0.64, 0.315], [0.64, 0.285], [0.63, 0.273], [0.6, 0.27], [0.5, 0.27], [0.47, 0.273], [0.46, 0.285], [0.46, 0.315]], ...EXHAUST },
 ];
 
 const POLICE_PATCHES: readonly Patch[] = [
@@ -124,7 +122,6 @@ const POLICE_PATCHES: readonly Patch[] = [
   { view: "front", points: [[0, 0.27], [0.38, 0.27], [0.38, 0.21], [0, 0.21]], ...VENT },
   { view: "front", points: [[0.52, 0.27], [0.66, 0.27], [0.66, 0.225], [0.52, 0.225]], ...VENT },
   { view: "rear", points: [[0, 0.82], [0.025, 0.795], [0, 0.77]], ...BADGE },
-  { view: "rear", points: [[0.478, 0.245], [0.485, 0.265], [0.506, 0.273], [0.527, 0.265], [0.534, 0.245], [0.527, 0.225], [0.506, 0.217], [0.485, 0.225]], ...EXHAUST },
 ];
 
 /** Every sedan flank, top, nose and tail detail the two measurement scouts reported. */
@@ -133,7 +130,7 @@ export const SEDAN_DETAILS: Details = {
   patches: [...SHARED_PATCHES, ...SEDAN_PATCHES],
 };
 
-/** The sedan body with the cop's own front fascia and tail lamps/tips swapped in for the sedan's. */
+/** The sedan body with the cop's own front fascia and tail lamps swapped in for the sedan's (exhaust tips are geometry: `exhaust`). */
 export const POLICE_DETAILS: Details = {
   lines: [...SHARED_LINES, ...POLICE_LINES],
   patches: [...SHARED_PATCHES, ...POLICE_PATCHES],
