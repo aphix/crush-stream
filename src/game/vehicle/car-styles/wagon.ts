@@ -25,7 +25,7 @@ export const WAGON: BodyStyle = {
       wrap: { from: 0.35, back: 0.25 },
     },
   },
-  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.69, length: 0.97, halfHeight: 0.38, mirrorY: 0.29, mirrorZ: 0.21, mirrorReach: 0.09, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.68] },
+  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.69, length: 0.97, halfHeight: 0.38, mirrorY: 0.4, mirrorZ: 0.21, mirrorReach: 0.09, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.68] },
   aPillarFoot: 0.5,
   underside: [[-2.143, 0.463], [-2.111, 0.421], [-2.058, 0.378], [-2.015, 0.349], [-1.86, 0.295], [-1.744, 0.296], [-1.651, 0.271], [-1.55, 0.24], [-0.45, 0.25], [-0.018, 0.239], [0.167, 0.228], [1.846, 0.225], [1.868, 0.242], [1.989, 0.264], [2.042, 0.307], [2.067, 0.524]],
   profile: [
