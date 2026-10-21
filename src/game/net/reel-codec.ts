@@ -304,9 +304,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 154: a car that leaves a solid's face (a course wall, a prop) no longer keeps the face's last count of its masses on it: each world slice drops the count
  * before its course pass, so the free shape step stops holding the struck half against a face that is gone (a wreck rolling back off a wall rested 7 cm
  * further off, pushed 7 mm a step). Every car that leaves a wall moves differently. A clip of 153 or before no longer reads.
+ * 155: a torn part or popped wheel resting on two points (a bumper across two wreck tops) sleeps once it has rested a second under rest speed; on three or
+ * more it sleeps at once as before. A keyframe's loose block carries each body's rest time (one number more). A clip of 154 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 154;
+const REPLAY_VERSION = 155;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

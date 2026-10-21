@@ -323,6 +323,47 @@ describe("given a torn part at rest on the road", () => {
   });
 });
 
+/** The posts under a bumper-sized slab (`slab`): one under the middle of each end (x = ±0.85 m), so each meets one of its points. */
+const POST_X = 0.85;
+const POST_TOP = 0.5;
+/** A post's half side (m): thin enough that no other point of the slab's ends stands over it. */
+const POST_HALF = 0.03;
+/** A roll (rad/s) about the line between the posts, under rest speed: from it the slab tips off them. */
+const ROCK = 0.01;
+
+/** The slab laid level across the posts, rolling at `rock` about the line between them, stepped `seconds`: when it first slept (s, -1: never) and its lowest point (m). */
+function onPosts(rock: number, seconds: number): { sleptAt: number; low: number } {
+  const solids = new Surface();
+  for (const sx of [-1, 1]) solids.addPrism({ x: sx * POST_X, z: 0, yaw: 0, hx: POST_HALF, hz: POST_HALF, base: 0, top: POST_TOP, id: sx < 0 ? 0 : 1 });
+  armSolids(solids);
+  try {
+    const part = slab(POST_TOP + 0.15, new THREE.Vector3());
+    part.angular.set(rock, 0, 0);
+    let sleptAt = -1;
+    for (let t = 0; t < seconds; t += H) {
+      stepLoose(part, H, -1);
+      if (part.shape.asleep && sleptAt < 0) sleptAt = t + H;
+    }
+    return { sleptAt, low: lowest(part) };
+  } finally {
+    armSolids(null);
+  }
+}
+
+describe("given a torn bumper laid level across two posts, one under the middle of each end (two points, its weight over the line between them)", () => {
+  it("when it is left still, then it sleeps where it lies within two seconds", () => {
+    const { sleptAt, low } = onPosts(0, 2);
+    assert.ok(sleptAt > 0, "it fell asleep on the posts");
+    assert.ok(Math.abs(low - POST_TOP) < RESTS, `lowest point ${low.toFixed(3)} m, the posts' top ${POST_TOP} m`);
+  });
+
+  it("when it rolls at 0.01 rad/s about the line between the posts, then it does not sleep on them: it tips off and comes to rest on the road", () => {
+    const { sleptAt, low } = onPosts(ROCK, 3);
+    assert.ok(sleptAt > 0, "it fell asleep");
+    assert.ok(Math.abs(low) < RESTS, `lowest point ${low.toFixed(3)} m over the road (the posts' top ${POST_TOP} m)`);
+  });
+});
+
 describe("given a body with unequal inertias turned to any orientation", () => {
   it("when a vector goes through its world-frame inverse inertia, then it is what the body-frame inertia gives it turned to the world and back (within 1e-9)", () => {
     const shape = newLooseShape();

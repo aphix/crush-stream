@@ -64,8 +64,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 34: a `MSG.look` spray bitmap is 256 x 256 texels (it was 128 x 128), so peers on 33 would refuse every look.
 35: a clip's keyframes carry each mass's skin fit rest (REPLAY 142), so peers on 34 would misread a host's clip.
 36: a clip's keyframes carry each wreck's solid hold of its last slice (two more solver doubles, REPLAY 146), so peers on 35 would misread a host's clip.
+37: a clip's keyframes carry each loose body's rest time (one more number per torn part or popped wheel, REPLAY 155), so peers on 36 would misread a host's clip.
 */
-export const NET_VERSION = 36;
+export const NET_VERSION = 37;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 58.3 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;

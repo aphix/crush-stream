@@ -75,9 +75,9 @@ export function partState(car: CarParts, parts: readonly DetachPart[], buf: Floa
 /** A popped wheel: a loose body with the flag the car keeps of it. */
 type LooseWheel = LooseBody & { loose: boolean };
 
-/** Numbers a loose body takes in a keyframe's loose block: pose (position, quaternion), velocity, spin, the flags, the sleep place (x, z), the dents' count and their hits, then a part's box: its middle and half extents (0: not measured yet). */
+/** Numbers a loose body takes in a keyframe's loose block: pose (position, quaternion), velocity, spin, the flags, the sleep place (x, z), the dents' count and their hits, a part's box (its middle and half extents, 0: not measured yet), then how long it has rested (`restFor`). */
 const LOOSE_BOX = 17 + DENT_MAX * 4;
-const LOOSE_EACH = LOOSE_BOX + 6;
+const LOOSE_EACH = LOOSE_BOX + 7;
 const LOOSE_ASLEEP = 1;
 const LOOSE_AIRBORNE = 2;
 const LOOSE_SHOWN = 4;
@@ -96,7 +96,7 @@ export function looseStateLength(mask: number): number {
  * Highlight keyframes: where every torn part and popped wheel of the car lies and what it is doing. The netplay state says which are off (and
  * a wheel's pose) but not where a part lies, so a keyframe's replay threw each one off the car afresh at the clip's first step. `buf`
  * (`LOOSE_STATE_MAX` numbers) holds the mask of the loose bodies (bit i: the part in slot i, then the wheels from `PART_SLOTS`), then per
- * loose body its pose, velocity and spin, whether it sleeps, flies free and is drawn, where it sleeps, its dents' record and a part's box. With `write`
+ * loose body its pose, velocity and spin, whether it sleeps, flies free and is drawn, where it sleeps, its dents' record, a part's box and how long it has rested. With `write`
  * the bodies the car has off already (its net state's) are put back as recorded. Returns the numbers used.
  */
 export function looseState(parts: readonly DetachPart[], wheels: readonly LooseWheel[], buf: Float64Array, write: boolean): number {
@@ -135,6 +135,7 @@ function readLooseBody(body: LooseBody, dent: DentState | undefined, buf: Float6
   for (let k = 0; k < DENT_MAX * 4; k++) buf[at + 17 + k] = dent?.hits[k] ?? 0;
   s.centre.toArray(buf, at + LOOSE_BOX);
   for (let k = 0; k < 3; k++) buf[at + LOOSE_BOX + 3 + k] = s.count === 0 ? 0 : s.points[BOX_HALVES + k]!;
+  buf[at + LOOSE_BOX + 6] = s.restFor;
 }
 
 function putLooseBody(body: LooseBody, isWheel: boolean, dent: DentState | undefined, buf: Float64Array, at: number): void {
@@ -156,6 +157,7 @@ function putLooseBody(body: LooseBody, isWheel: boolean, dent: DentState | undef
   s.airborne = (flags & LOOSE_AIRBORNE) !== 0;
   s.sleepX = buf[at + 14]!;
   s.sleepZ = buf[at + 15]!;
+  s.restFor = buf[at + LOOSE_BOX + 6]!;
   o.visible = (flags & LOOSE_SHOWN) !== 0;
   if (!dent) return;
   dent.count = buf[at + 16]!;

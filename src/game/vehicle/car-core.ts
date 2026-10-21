@@ -240,6 +240,8 @@ export interface LooseShape {
   sleepZ: number;
   /** The last step found no contact at any point: a box then tests its eight corners first (its twelve edge middles only once a corner touches). */
   airborne: boolean;
+  /** Seconds it has rested on two points or more at no more than rest speed (`stepLoose`): on two it sleeps once this reaches `TWO_POINT_REST_S`. Kept while it sleeps, so a stir that finds it still resting puts it back to sleep at once. */
+  restFor: number;
 }
 
 export interface LooseBody {

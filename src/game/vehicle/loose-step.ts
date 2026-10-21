@@ -25,8 +25,10 @@ const LAND_BOUNCE = 0.28;
 const SPIN_KEPT_PER_S = 0.72;
 /** A box's corners, the first of its points: a box flying free asks them alone until one touches. */
 const BOX_CORNERS = 8;
-/** The speed (m/s, rad/s) under which a part on three points or more is at rest: twice the pull of gravity over 1/120 s, the number it was tuned at, which is still 1.5 times what the pacer's coarsest slice (1/90 s) lets gravity add (`GRAVITY / 90`). A slice's own `dt` here put a slide's stop at 0.16 m/s in a 1/120 s slice and 0.053 in a 1/360 s one, so the distance a part slid depended on how the world cut the step. */
+/** The speed (m/s, rad/s) under which a part on two points or more is at rest: twice the pull of gravity over 1/120 s, the number it was tuned at, which is still 1.5 times what the pacer's coarsest slice (1/90 s) lets gravity add (`GRAVITY / 90`). A slice's own `dt` here put a slide's stop at 0.16 m/s in a 1/120 s slice and 0.053 in a 1/360 s one, so the distance a part slid depended on how the world cut the step. */
 const REST_SPEED = (2 * GRAVITY) / 120;
+/** How long (s) a part rests on two points before it sleeps (on three it sleeps at once): a bumper across two wreck tops holds there, where one rocking through still moves on (a slab tipping off two posts from 0.01 rad/s passes rest speed 0.8 s in). */
+const TWO_POINT_REST_S = 1;
 
 /**
  * A free point (an FX bit: a spark, a glass dot, a metal chip) meets what is under it and beside it by the one point query
@@ -74,7 +76,7 @@ const SHAPE_POINTS = 20;
 
 /** A shape for a body of at most `SHAPE_POINTS` points, empty until `boxShape` or `wheelShape` fills it. */
 export function newLooseShape(): LooseShape {
-  return { points: new Float64Array(3 * SHAPE_POINTS), count: 0, centre: new THREE.Vector3(), invI: new THREE.Vector3(), reach: 0, asleep: false, sleepX: 0, sleepZ: 0, airborne: false };
+  return { points: new Float64Array(3 * SHAPE_POINTS), count: 0, centre: new THREE.Vector3(), invI: new THREE.Vector3(), reach: 0, asleep: false, sleepX: 0, sleepZ: 0, airborne: false, restFor: 0 };
 }
 
 /** The thinnest a box's half extent is taken (m): a sheet of no thickness would have no spin about its own length. */
@@ -129,6 +131,7 @@ export function halfBox(shape: LooseShape, hx: number, hy: number, hz: number): 
   shape.reach = Math.sqrt(hx * hx + hy * hy + hz * hz);
   shape.asleep = false;
   shape.airborne = false;
+  shape.restFor = 0;
 }
 
 /** `shape` as a wheel of `radius` and `width` (m), axle along its x: eight points round each rim; the inertia of a solid disk. */
@@ -145,6 +148,7 @@ function wheelShape(shape: LooseShape, radius: number, width: number): void {
   shape.reach = Math.sqrt(radius * radius + (width * width) / 4);
   shape.asleep = false;
   shape.airborne = false;
+  shape.restFor = 0;
 }
 
 /** A tyre's width (m) at wheel scale 1: a popped wheel flies as a disk this wide. */
@@ -287,8 +291,10 @@ export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentSta
   openRows(n);
   solveRows(n);
   standAtCentre();
-  // Resting on three points or more at no more than `REST_SPEED`: at rest.
-  if (n >= 3 && v.x * v.x + v.y * v.y + v.z * v.z < REST_SPEED * REST_SPEED && w.x * w.x + w.y * w.y + w.z * w.z < REST_SPEED * REST_SPEED) {
+  const slow = v.x * v.x + v.y * v.y + v.z * v.z < REST_SPEED * REST_SPEED && w.x * w.x + w.y * w.y + w.z * w.z < REST_SPEED * REST_SPEED;
+  shape.restFor = slow && n >= 2 ? shape.restFor + dt : 0;
+  // Resting on three points or more at no more than `REST_SPEED`, or on two for `TWO_POINT_REST_S`: at rest.
+  if (slow && (n >= 3 || shape.restFor >= TWO_POINT_REST_S)) {
     v.set(0, 0, 0);
     w.set(0, 0, 0);
     shape.asleep = true;
