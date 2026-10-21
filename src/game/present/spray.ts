@@ -172,8 +172,8 @@ vec4 sprayTexel() {
 
 /**
  * Patch `material` to lay its spray over the paint. `vertex` sets `vSprayP` / `vSprayN` (the rest point and normal) and
- * `vSprayRow` (which stacked bitmap) from attributes it declares in `attributes`. Chains any earlier compile hook, like
- * `applyMarkMap`.
+ * `vSprayRow` (which stacked bitmap) from attributes it declares in `attributes`, unless an earlier hook (the detail map) declared
+ * them. Chains any earlier compile hook, like `applyMarkMap`.
  */
 export function applySpray(material: THREE.Material, uniforms: Record<string, THREE.IUniform>, attributes: string, vertex: string, key: string): void {
   const prev = material.onBeforeCompile;
@@ -182,7 +182,7 @@ export function applySpray(material: THREE.Material, uniforms: Record<string, TH
     prev.call(material, shader, renderer);
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", `#include <common>\n${attributes}\nvarying vec3 vSprayP;\nvarying vec3 vSprayN;\nvarying float vSprayRow;`)
+      .replace("#include <common>", `#include <common>\n${shader.vertexShader.includes(attributes) ? "" : attributes}\nvarying vec3 vSprayP;\nvarying vec3 vSprayN;\nvarying float vSprayRow;`)
       .replace("#include <begin_vertex>", `#include <begin_vertex>\n${vertex}`);
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>\n${SPRAY_FRAGMENT}`)

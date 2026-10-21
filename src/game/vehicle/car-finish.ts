@@ -218,7 +218,7 @@ const FINISH_MESH_REACH_M = 4;
 const PLANE_BLEND_SHARPNESS = 4;
 
 /** A number as a GLSL float literal. */
-function glslFloat(value: number): string {
+export function glslFloat(value: number): string {
   return Number.isInteger(value) ? `${value}.0` : `${value}`;
 }
 
@@ -309,6 +309,12 @@ type CarFinishState = { on: boolean };
 
 function isCarFinishState(value: unknown): value is CarFinishState {
   return typeof value === "object" && value !== null && "on" in value && typeof value.on === "boolean";
+}
+
+/** Whether `material`'s finish is switched on: a hook chained after `applyFinish` may call the finish's shader functions only then. */
+export function finishOn(material: THREE.Material): boolean {
+  const state: unknown = material.userData.carFinish;
+  return isCarFinishState(state) && state.on;
 }
 
 /**

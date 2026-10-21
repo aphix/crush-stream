@@ -5,6 +5,7 @@ import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
+import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import {
   DOOR_EDGE,
   SEAM_HALF,
@@ -124,6 +125,10 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
   const rb = style.rearBulkhead;
   parts.push(makeBox(1.16, rb.yTop - 0.34, 0.045, 0, (rb.yTop + 0.34) * 0.5, rb.z));
+  // Last, so every other part keeps its vertex ids; the drawn body only (the cage never carries them).
+  const fittings = source === "drawn" ? makeRoofFittings(style) : null;
+  const fittingCount = fittings?.geometry.getAttribute("position").count ?? 0;
+  if (fittings) parts.push(fittings.geometry);
   const merged = mergeGeometries(parts, false);
   for (const g of parts) g.dispose();
   if (!merged) throw new Error("Failed to merge chassis");
@@ -132,7 +137,9 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   merged.computeBoundingSphere();
   // The loft is merged first: its vertex `s * ring + i` and its first (slices - 1) * ring * 2 triangles (`panelRegions` cuts panels out of them).
   merged.userData.loft = { ring: rings[0]!.length, slices: zs.length };
-  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): a torn panel's vertices are set dark.
-  merged.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(merged.getAttribute("position").count), 1));
+  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): a torn panel's vertices are set dark, and so are the roof's rails and glass panel.
+  const primer = new Float32Array(merged.getAttribute("position").count);
+  if (fittings) primer.fill(1, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
+  merged.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(primer, 1));
   return markSkinDynamic(merged);
 }
