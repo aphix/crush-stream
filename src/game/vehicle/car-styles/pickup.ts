@@ -29,7 +29,7 @@ export const PICKUP: BodyStyle = {
   aPillarFoot: 0.7,
   aPillarTop: 0.41,
   bPillar: { rear: -0.3, front: -0.23 },
-  arch: { radius: 0.46 },
+  arch: { radius: 0.46, lip: { flare: 0.024, width: 0.065, square: true } },
   hood: { z0: 0.92, z1: 1.9, origin: [1.2, 0.9] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.76, wrap: { from: 0.3, back: 0.1 }, fascia: TRUCK_FRONT_FASCIA },
