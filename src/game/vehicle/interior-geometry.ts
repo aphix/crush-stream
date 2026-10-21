@@ -95,16 +95,16 @@ export function cabinGeometry(): THREE.BufferGeometry {
   const parts = [
     box(1.56, 0.03, 1.42, CARPET, 0, 0.315, -0.01),
     box(1.4, 0.03, 0.24, CARPET, 0, 0.4, 0.62, -0.6),
-    rounded(0.22, 0.2, 1.0, 0.03, TRIM).translate(0, 0.42, 0.05),
-    rounded(0.2, 0.05, 0.36, 0.02, SOFT).translate(0, 0.545, -0.25),
-    rounded(0.24, 0.3, 0.12, 0.03, TRIM).rotateX(-0.35).translate(0, 0.66, 0.48),
+    box(0.22, 0.2, 1.0, TRIM, 0, 0.42, 0.05),
+    box(0.2, 0.05, 0.36, SOFT, 0, 0.545, -0.25),
+    box(0.24, 0.3, 0.12, TRIM, 0, 0.66, 0.48, -0.35),
     rounded(1.56, 0.18, 0.42, 0.04, TRIM).translate(0, 0.73, 0.62),
-    rounded(1.56, 0.05, 0.5, 0.02, SOFT).rotateX(0.08).translate(0, 0.835, 0.65),
+    box(1.56, 0.05, 0.5, SOFT, 0, 0.835, 0.65, 0.08),
     box(1.3, 0.012, 0.01, ACCENT, 0, 0.79, 0.41),
-    rounded(0.36, 0.08, 0.16, 0.03, SOFT).translate(-0.36, 0.89, 0.5),
+    box(0.36, 0.08, 0.16, SOFT, -0.36, 0.89, 0.5),
     box(0.3, 0.06, 0.01, GLOSS, -0.36, 0.875, 0.42, -0.2),
     box(0.26, 0.15, 0.015, GLOSS, 0, 0.93, 0.47, -0.25),
-    rounded(1.44, 0.025, 1.22, 0.01, HEADLINER).translate(0, 1.287, -0.1),
+    box(1.44, 0.025, 1.22, HEADLINER, 0, 1.287, -0.1),
   ];
   for (const sign of [-1, 1]) {
     parts.push(box(0.03, 0.5, 0.7, TRIM, sign * 0.785, 0.58, -0.37));
@@ -113,19 +113,19 @@ export function cabinGeometry(): THREE.BufferGeometry {
   return mergeToned(parts, "cabin");
 }
 
-/** One front seat about its H-point (+z ahead): bolstered cushion and back, inserts, headrest, base on the rails. */
+/** One front seat about its H-point (+z ahead): bolstered cushion and back, inserts, headrest, base on the rails. The back and headrest, which show through the glass, are rounded; the rest are boxes. */
 export function frontSeatGeometry(): THREE.BufferGeometry {
   const parts = [
-    rounded(0.5, 0.1, 0.5, 0.04, LEATHER, 2).rotateX(-0.1).translate(0, -0.12, 0.1),
-    rounded(0.3, 0.012, 0.4, 0.005, INSERT).rotateX(-0.1).translate(0, -0.068, 0.1),
-    onBack(rounded(0.5, 0.66, 0.11, 0.04, LEATHER, 2), 0, 0.36, 0.165),
-    onBack(rounded(0.3, 0.5, 0.012, 0.005, INSERT), 0, 0.36, 0.108),
-    onBack(rounded(0.26, 0.17, 0.09, 0.04, LEATHER, 2), 0, 0.82, 0.165),
+    box(0.5, 0.1, 0.5, LEATHER, 0, -0.12, 0.1, -0.1),
+    box(0.3, 0.012, 0.4, INSERT, 0, -0.068, 0.1, -0.1),
+    onBack(rounded(0.5, 0.66, 0.11, 0.04, LEATHER), 0, 0.36, 0.165),
+    onBack(box(0.3, 0.5, 0.012, INSERT, 0, 0, 0), 0, 0.36, 0.108),
+    onBack(rounded(0.26, 0.17, 0.09, 0.04, LEATHER), 0, 0.82, 0.165),
     box(0.4, 0.08, 0.4, PLASTIC, 0, -0.21, 0.08),
   ];
   for (const sign of [-1, 1]) {
-    parts.push(rounded(0.07, 0.07, 0.46, 0.03, LEATHER).rotateX(-0.1).translate(sign * 0.215, -0.06, 0.1));
-    parts.push(onBack(rounded(0.07, 0.56, 0.08, 0.03, LEATHER), sign * 0.215, 0.34, 0.13));
+    parts.push(box(0.07, 0.07, 0.46, LEATHER, sign * 0.215, -0.06, 0.1, -0.1));
+    parts.push(onBack(box(0.07, 0.56, 0.08, LEATHER, 0, 0, 0), sign * 0.215, 0.34, 0.13));
   }
   return mergeToned(parts, "front seat");
 }
@@ -133,13 +133,13 @@ export function frontSeatGeometry(): THREE.BufferGeometry {
 /** The rear bench about its middle H-point (+z ahead), `REF_CABIN` wide: cushion, back and two outboard headrests. */
 export function rearSeatGeometry(): THREE.BufferGeometry {
   const parts = [
-    rounded(1.3, 0.1, 0.42, 0.04, LEATHER, 2).rotateX(-0.08).translate(0, -0.12, 0.08),
-    onBack(rounded(1.3, 0.58, 0.1, 0.04, LEATHER, 2), 0, 0.31, 0.16),
+    rounded(1.3, 0.1, 0.42, 0.04, LEATHER).rotateX(-0.08).translate(0, -0.12, 0.08),
+    onBack(rounded(1.3, 0.58, 0.1, 0.04, LEATHER), 0, 0.31, 0.16),
     box(1.2, 0.1, 0.35, PLASTIC, 0, -0.22, 0.05),
   ];
   for (const sign of [-1, 1]) {
-    parts.push(onBack(rounded(0.24, 0.13, 0.08, 0.035, LEATHER), sign * 0.36, 0.7, 0.17));
-    parts.push(onBack(rounded(0.38, 0.44, 0.01, 0.004, INSERT), sign * 0.33, 0.3, 0.108));
+    parts.push(onBack(box(0.24, 0.13, 0.08, LEATHER, 0, 0, 0), sign * 0.36, 0.7, 0.17));
+    parts.push(onBack(box(0.38, 0.44, 0.01, INSERT, 0, 0, 0), sign * 0.33, 0.3, 0.108));
   }
   return mergeToned(parts, "rear seat");
 }
@@ -147,12 +147,12 @@ export function rearSeatGeometry(): THREE.BufferGeometry {
 /** Rim, hub, three spokes and the column (+z, into the dash), facing the driver down -z. */
 export function wheelGeometry(): THREE.BufferGeometry {
   const parts = [
-    toned(new THREE.TorusGeometry(0.18, 0.02, 8, 28), ...RIM),
-    toned(new THREE.CylinderGeometry(0.06, 0.065, 0.05, 16), ...HUB).rotateX(Math.PI / 2).translate(0, 0, 0.01),
+    toned(new THREE.TorusGeometry(0.18, 0.02, 6, 16), ...RIM),
+    toned(new THREE.CylinderGeometry(0.06, 0.065, 0.05, 12), ...HUB).rotateX(Math.PI / 2).translate(0, 0, 0.01),
     box(0.26, 0.03, 0.015, HUB, 0, -0.01, 0.005),
     box(0.03, 0.12, 0.015, HUB, 0, -0.1, 0.005),
-    toned(new THREE.CylinderGeometry(0.035, 0.045, 0.3, 10), ...PLASTIC).rotateX(Math.PI / 2).translate(0, 0, 0.18),
-    rounded(0.1, 0.09, 0.16, 0.02, PLASTIC).translate(0, -0.02, 0.14),
+    toned(new THREE.CylinderGeometry(0.035, 0.045, 0.3, 8), ...PLASTIC).rotateX(Math.PI / 2).translate(0, 0, 0.18),
+    box(0.1, 0.09, 0.16, PLASTIC, 0, -0.02, 0.14),
   ];
   return mergeToned(parts, "steering wheel");
 }
