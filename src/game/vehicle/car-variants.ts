@@ -43,8 +43,8 @@ export interface GlassQuad {
 type BootSpec =
   /** Deck lid lofted on the profile from z0 to z1, hinged at origin. */
   | { kind: "lid"; z0: number; z1: number; origin: YZ }
-  /** Vertical tail panel (hatch / tailgate) from y0 up to origin, hinged at its top edge. */
-  | { kind: "tailgate"; y0: number; origin: YZ };
+  /** Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, hinged at its top edge; z0 defaults to origin's z (upright). */
+  | { kind: "tailgate"; y0: number; origin: YZ; z0?: number };
 
 /** Paint a style fixes whatever the fleet paint (police black-and-white). */
 interface Livery {
@@ -78,6 +78,8 @@ interface BumperSpec {
   fascia: readonly (readonly [number, number])[];
   /** Half-width (m) of the fascia across the car. */
   span: number;
+  /** Fascia corner sweep: `from` the |x| (m) where it starts sweeping back, `back` how far (m) its end sweeps back from the face. */
+  wrap: { from: number; back: number };
 }
 
 export interface BodyStyle {
@@ -97,6 +99,10 @@ export interface BodyStyle {
   belt: { x: number; y: readonly (readonly [number, number])[] };
   /** The body side's lowest line (m); under it the sill turns in to the floor pan at `dims.rideHeight`. */
   rocker: { y: number };
+  /** Floor pan height as [z, y] stations in ascending z (linear between, held past the ends); absent = flat at `dims.rideHeight`. The rocker rides up with it. */
+  underside?: readonly (readonly [number, number])[];
+  /** Front door: hinge axis at the A-pillar (±hingeX, hingeY, hingeZ), `length` hinge to trailing edge, skin ±halfHeight about the hinge, `aperture` [z0, z1] the body's front-door cut (the skin overlaps it 0.02 each end), mirror seated `mirrorY` over the hinge reaching `mirrorReach` out, ±mirrorHalfDepth deep. */
+  door: { hingeX: number; hingeY: number; hingeZ: number; length: number; halfHeight: number; mirrorY: number; mirrorReach: number; mirrorHalfDepth: number; aperture: readonly [number, number] };
   /** Wheel-arch opening radius (m) about each hub. */
   arch: { radius: number };
   /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. */

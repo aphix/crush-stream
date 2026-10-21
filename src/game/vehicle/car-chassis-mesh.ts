@@ -7,8 +7,6 @@ import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import {
   DOOR_EDGE,
-  DOOR_Z0,
-  DOOR_Z1,
   SEAM_HALF,
   SEDAN,
   TUB_EDGE,
@@ -71,7 +69,8 @@ function sliceZs(style: BodyStyle, source: BodySource): number[] {
   const p = style.profile;
   const z0 = p[0]!.z;
   const z1 = p[p.length - 1]!.z;
-  const knots = [DOOR_Z0, DOOR_Z0 + DOOR_EDGE, DOOR_Z1 - DOOR_EDGE, DOOR_Z1];
+  const [a0, a1] = style.door.aperture;
+  const knots = [a0, a0 + DOOR_EDGE, a1 - DOOR_EDGE, a1];
   for (const [a, b] of style.tubs) knots.push(a - TUB_EDGE, a + TUB_EDGE, b - TUB_EDGE, b + TUB_EDGE);
   const seam = style.rearDoorSeam;
   if (seam !== null) knots.push(seam - SEAM_HALF, seam, seam + SEAM_HALF);

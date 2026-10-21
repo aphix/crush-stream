@@ -4,7 +4,11 @@ import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
-import { ROCKER, beltY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { ROCKER, doorAperture, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { beltY, floorY, rockerAt } from "./car-lines.ts";
+import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
+import { MIRROR_ROOT } from "./part-geometry.ts";
+import { makeGreenhouseFrame } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { glassCorners, makeRearGlass, makeWindshield } from "./car-glass.ts";
 import { LIGHT_BAR_FOOT, makeLightBar } from "./car-materials.ts";
@@ -333,5 +337,132 @@ describe("given a body style's own hardpoints (windshield, belt, hood, bumpers, 
     const outer = Math.max(...arch.map((p) => p.x));
     const lowestOuter = Math.min(...arch.filter((p) => p.x > outer - 0.01).map((p) => p.y));
     assert.ok(lowestOuter > hubY + 0.42 - 0.01, `the side over the front hub comes down to ${lowestOuter.toFixed(3)} m, inside the ${0.42} m arch`);
+  });
+});
+
+/** Lowest y of the section ring `style` draws at `z` as `source`. */
+function ringLowest(style: BodyStyle, z: number, source: "drawn" | "cage"): number {
+  return sectionPoints(sampleSlice(z, style.profile), style, source).reduce((m, p) => Math.min(m, p.y), Infinity);
+}
+
+/** Largest x of the chassis' vertices on the door-mirror's band over the hinge; throws, naming the style, if it has none. */
+function bodySideAtMirror(style: BodyStyle): number {
+  const d = style.door;
+  const pos = makeChassisGeometry(style, "drawn").getAttribute("position") as THREE.BufferAttribute;
+  const mirrorY = d.hingeY + d.mirrorY;
+  let side = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const inBand = Math.abs(pos.getZ(i) - d.hingeZ) < 0.08 && pos.getY(i) >= mirrorY - 0.08 && pos.getY(i) <= mirrorY && pos.getX(i) > 0;
+    if (inBand) side = Math.max(side, pos.getX(i));
+  }
+  assert.ok(side > -Infinity, `${style.id}: no chassis vertex within 0.08 m of the hinge z ${d.hingeZ} and 0.08 m under the mirror height ${mirrorY}`);
+  return side;
+}
+
+/** Mean z of the vertices at `geo`'s highest (`top`) or lowest y. */
+function edgeMeanZ(geo: THREE.BufferGeometry, top: boolean): number {
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  let edge = top ? -Infinity : Infinity;
+  for (let i = 0; i < pos.count; i++) edge = top ? Math.max(edge, pos.getY(i)) : Math.min(edge, pos.getY(i));
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i < pos.count; i++) {
+    if (Math.abs(pos.getY(i) - edge) > 1e-4) continue;
+    sum += pos.getZ(i);
+    n++;
+  }
+  return sum / n;
+}
+
+/** Largest z among the bumper's vertices with |x| in [lo, hi). */
+function bumperReachAt(geo: THREE.BufferGeometry, lo: number, hi: number): number {
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  let reach = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const x = Math.abs(pos.getX(i));
+    if (x >= lo && x < hi) reach = Math.max(reach, pos.getZ(i));
+  }
+  return reach;
+}
+
+describe("given a body style's H2 hardpoints", () => {
+  const sedan = CAR_STYLES.sedan;
+
+  it("when its underside is raised at the tail, then the section's lowest point and the rocker follow the floor there and nowhere else", () => {
+    const moved: BodyStyle = { ...sedan, underside: [[-2.2, 0.3], [-1.6, 0.145], [1.6, 0.145]] };
+    for (const source of ["drawn", "cage"] as const) {
+      const tail = ringLowest(moved, -2.0, source);
+      assert.ok(Math.abs(tail - floorY(-2.0, moved)) < 1e-9 && tail > 0.2, `${source}: lowest y at z -2.0 is ${tail}, floor ${floorY(-2.0, moved)}, must be > 0.2`);
+      const mid = ringLowest(moved, 0, source);
+      assert.ok(Math.abs(mid - 0.145) < 1e-9, `${source}: lowest y at z 0 is ${mid}, ride height 0.145`);
+    }
+    const lift = rockerAt(-2.0, moved) - rockerAt(0, moved);
+    assert.ok(Math.abs(lift - (floorY(-2.0, moved) - 0.145)) < 1e-9, `rocker lifts ${lift} m between z 0 and -2.0, the floor lifts ${floorY(-2.0, moved) - 0.145}`);
+  });
+
+  it("when its ride height and rocker are raised, then no section point, on the body side or in the door cut, dips below the floor", () => {
+    const moved: BodyStyle = { ...sedan, dims: { ...sedan.dims, rideHeight: 0.245 }, rocker: { y: 0.3 } };
+    for (const source of ["drawn", "cage"] as const) {
+      for (const z of [-0.5, 0.27, 0.5]) {
+        const low = ringLowest(moved, z, source);
+        assert.ok(low >= 0.245 - 1e-9, `${source} section at z ${z} reaches down to y ${low}, floor 0.245`);
+      }
+    }
+  });
+
+  it("when its door aperture is moved, then the body's cut and the door skin's length and place follow it", () => {
+    const moved: BodyStyle = { ...sedan, door: { ...sedan.door, aperture: [-0.2, 0.7] } };
+    assert.ok(doorAperture(0.6, moved) === 1 && doorAperture(-0.1, moved) === 1, `moved cut at z 0.6 is ${doorAperture(0.6, moved)}, at z -0.1 ${doorAperture(-0.1, moved)}, both 1`);
+    assert.ok(doorAperture(0.6, sedan) === 0, `sedan cut at z 0.6 is ${doorAperture(0.6, sedan)}, 0`);
+    const box = partBox(makeDoorGeometry(1, moved));
+    const length = box.max.z - box.min.z;
+    assert.ok(Math.abs(length - 0.94) < 1e-3, `skin is ${length} m long, 0.9 + 0.04`);
+    const centre = (box.max.z + box.min.z) / 2 + doorSkinZ(moved) + moved.door.hingeZ;
+    assert.ok(Math.abs(centre - 0.25) < 1e-3, `skin is centred at car z ${centre}, the cut's middle 0.25`);
+  });
+
+  it("when any style's mirror is seated, then its arm starts on the body side", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const side = bodySideAtMirror(style);
+      const root = style.door.hingeX + mirrorSeatX(style) + MIRROR_ROOT;
+      assert.ok(Math.abs(root - side) < 0.01, `${id}: mirror arm starts at x ${root}, body side at x ${side}`);
+    }
+  });
+
+  it("when the tailgate's bottom edge leans out, then its foot moves with it and its hinge edge stays put", () => {
+    const hatchback = CAR_STYLES.hatchback;
+    const moved: BodyStyle = { ...hatchback, boot: { ...hatchback.boot, z0: hatchback.boot.origin[1] - 0.2 } };
+    const [was, now] = [makeTrunkGeometry(hatchback), makeTrunkGeometry(moved)];
+    const foot = edgeMeanZ(now, false) - edgeMeanZ(was, false);
+    const hinge = edgeMeanZ(now, true) - edgeMeanZ(was, true);
+    assert.ok(Math.abs(foot + 0.2) < 0.01, `lowest vertices moved ${foot} m in z, -0.2 asked`);
+    assert.ok(Math.abs(hinge) < 0.005, `highest vertices moved ${hinge} m in z, 0 asked`);
+  });
+
+  it("when a bumper's wrap starts nearer the middle, then its corners sweep back from its face", () => {
+    const moved: BodyStyle = { ...sedan, bumpers: { ...sedan.bumpers, front: { ...sedan.bumpers.front, wrap: { from: 0.25, back: 0.12 } } } };
+    const movedGap = bumperReachAt(makeBumperGeometry(true, moved), 0, 0.05) - bumperReachAt(makeBumperGeometry(true, moved), 0.5, 0.6);
+    const sedanGap = bumperReachAt(makeBumperGeometry(true, sedan), 0, 0.05) - bumperReachAt(makeBumperGeometry(true, sedan), 0.5, 0.6);
+    assert.ok(movedGap >= 0.03, `moved bumper's corner at |x| 0.5-0.6 stands ${movedGap} m behind its middle, at least 0.03`);
+    assert.ok(Math.abs(sedanGap) < 0.01, `sedan bumper's corner at |x| 0.5-0.6 stands ${sedanGap} m behind its middle, under 0.01 (wrap starts at 0.58)`);
+  });
+
+  it("when any style's header bars are built, then they stay under its roof skin over their ends", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const bars = makeGreenhouseFrame(style, "drawn").slice(-2);
+      const specs = [
+        { name: "windshield", width: style.windshield.wTop + 0.1, z: style.windshieldTop[1] - 0.02 },
+        { name: "rear", width: style.rearGlass.wTop + 0.12, z: style.rearGlass.top[1] - 0.02 },
+      ];
+      for (let k = 0; k < specs.length; k++) {
+        const { name, width, z } = specs[k]!;
+        const top = partBox(bars[k]!).max.y;
+        const roof = roofTopY(width / 2, z, style);
+        // 1e-6: the bar's vertices are float32, a ulp at 1.3 m is 1.2e-7.
+        assert.ok(top <= roof + 1e-6, `${id} ${name} header bar tops out at y ${top}, roof skin over its end (x ${width / 2}, z ${z}) at ${roof}`);
+      }
+    }
   });
 });

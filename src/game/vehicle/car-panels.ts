@@ -4,7 +4,6 @@ import { hypot2, detSin, detCos, detAtan2, detAsin, PART_FAMILY } from "../kerne
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { ROCKER, type V3 } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
-import { DOOR } from "./car-door-mesh.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
 /**
@@ -76,7 +75,7 @@ function cut(style: BodyStyle, body: THREE.BufferGeometry): PanelRegion[] {
   const { ring: n, slices } = body.userData.loft as { ring: number; slices: number };
   const pos = (body.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
   // The quarter runs from behind the rear door's shut line (on a two-door, behind the door) to the tail corner.
-  const zFront = style.rearDoorSeam ?? DOOR.hingeZ - DOOR.length;
+  const zFront = style.rearDoorSeam ?? style.door.hingeZ - style.door.length;
   const zTail = style.profile[0]!.z + 0.15;
   const { wheels } = carFrame(style);
   const hubY = wheels[0]![1];

@@ -1,16 +1,17 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle } from "./car-variants.ts";
+import { beltY } from "./car-lines.ts";
 import {
   ROOF_CROWN,
   ROOF_SHOULDER,
-  beltY,
   cantX,
   ensureOutwardNormals,
   glassTopY,
   lerp,
   loftFromRings,
   roofAt,
+  roofTopY,
   type BodySource,
   type Pt,
   type V3,
@@ -152,6 +153,9 @@ function makeBar(source: BodySource, width: number, height: number, depth: numbe
   return (alongX ? bar.rotateY(Math.PI / 2) : bar).translate(x, y, z);
 }
 
+/** Header bars are this tall (m); the drawn bar's top never stands above the roof skin over its ends. */
+const HEADER_HALF_HEIGHT = 0.03;
+
 export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry[] {
   const pillarFromCorners = source === "cage" ? boxFromCorners : roundedPillarFromCorners;
   const parts: THREE.BufferGeometry[] = [];
@@ -227,7 +231,9 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     const rail = makeBar(source, 0.03, 0.03, hypot2(railRun, railFront - railRear), 0, 0, 0).rotateX(-detAtan2(railFront - railRear, railRun));
     parts.push(rail.translate(sign * (beltX + 0.015), (railRear + railFront) / 2 + 0.005, q.zRearBot + railRun * 0.5));
   }
-  parts.push(makeBar(source, ws.wTop + 0.1, 0.06, 0.08, 0, wsY + 0.03, wsZ - 0.02));
-  parts.push(makeBar(source, rg.wTop + 0.12, 0.06, 0.08, 0, rg.top[0] + 0.04, rg.top[1] - 0.02));
+  // The cage keeps its box until the rig derives the cabin cage.
+  const headerY = (centre: number, z: number, width: number) => (source === "cage" ? centre : Math.min(centre, roofTopY(width / 2, z, style) - HEADER_HALF_HEIGHT));
+  parts.push(makeBar(source, ws.wTop + 0.1, 2 * HEADER_HALF_HEIGHT, 0.08, 0, headerY(wsY + 0.03, wsZ - 0.02, ws.wTop + 0.1), wsZ - 0.02));
+  parts.push(makeBar(source, rg.wTop + 0.12, 2 * HEADER_HALF_HEIGHT, 0.08, 0, headerY(rg.top[0] + 0.04, rg.top[1] - 0.02, rg.wTop + 0.12), rg.top[1] - 0.02));
   return parts;
 }
