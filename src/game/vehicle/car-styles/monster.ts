@@ -17,13 +17,14 @@ const MONSTER_BUMPER_FASCIA = [
 /** The truck family as a crew cab, squatter and longer than the pickup; the monster class lifts it onto its big wheels. */
 export const MONSTER: BodyStyle = {
   id: "monster",
-  dims: { wheelbase: 2.77, overhang: { front: 0.77, rear: 1.055 }, track: 2.39, width: 1.68, height: 1.504, rideHeight: 0.34, wheel: { radius: 0.355, width: 0.364 } },
+  dims: { wheelbase: 2.77, overhang: { front: 0.755, rear: 1.065 }, track: 2.39, width: 1.68, height: 1.511, rideHeight: 0.34, wheel: { radius: 0.355, width: 0.364 } },
   ...PLATFORM_HARDPOINTS,
   windshield: { base: [1.0, 1.0], wBase: 1.46, wTop: 1.3 },
   belt: { x: 0.8, y: [[0, 1.0]] },
   rocker: { y: 0.4 },
   underside: [[-2.4, 0.38], [-2.1, 0.34], [2.1, 0.34]],
-  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, mirrorY: 0.32, mirrorReach: 0.23, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75] },
+  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, mirrorY: 0.29, mirrorZ: 0.2, mirrorReach: 0.1, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75] },
+  aPillarFoot: 0.6,
   bPillar: { rear: -0.19, front: -0.12 },
   arch: { radius: 0.47 },
   hood: { z0: 0.96, z1: 2.08, origin: [0.96, 0.94] },
