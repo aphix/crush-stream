@@ -1,12 +1,12 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { BOOT_SENSOR, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+import { BOOT_SENSOR, HEAD_LAMP, PLATFORM_HARDPOINTS, st } from "./platform.ts";
 
 const { bumpers } = PLATFORM_HARDPOINTS;
 
 /** The truck family as a crew cab, squatter and longer than the pickup; the monster class lifts it onto its big wheels. */
 export const MONSTER: BodyStyle = {
   id: "monster",
-  dims: { wheelbase: 2.77, overhang: { front: 0.81, rear: 0.81 }, track: 2.39, width: 1.801, height: 1.365, rideHeight: 0.34, wheel: PLATFORM_WHEEL },
+  dims: { wheelbase: 2.77, overhang: { front: 0.81, rear: 0.81 }, track: 2.39, width: 1.801, height: 1.365, rideHeight: 0.34, wheel: { radius: 0.355, width: 0.364 } },
   ...PLATFORM_HARDPOINTS,
   windshield: { base: [1.1, 0.99], wBase: 1.46, wTop: 1.3 },
   belt: { x: 0.8, y: [[0, 1.0]] },

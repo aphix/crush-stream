@@ -1,12 +1,12 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+import { HEAD_LAMP, PLATFORM_HARDPOINTS, st } from "./platform.ts";
 
 const { bumpers } = PLATFORM_HARDPOINTS;
 
 /** Late-70s notchback muscle coupe (Celica Supra A40 proportions): long flat hood, flat roof, sloped rear glass, short ducktail deck. */
 export const COUPE: BodyStyle = {
   id: "coupe",
-  dims: { wheelbase: 2.38, overhang: { front: 0.81, rear: 0.81 }, track: 1.32, width: 1.852, height: 1.276, rideHeight: 0.18, wheel: PLATFORM_WHEEL },
+  dims: { wheelbase: 2.38, overhang: { front: 0.81, rear: 0.81 }, track: 1.32, width: 1.852, height: 1.276, rideHeight: 0.18, wheel: { radius: 0.3, width: 0.2 } },
   ...PLATFORM_HARDPOINTS,
   windshield: { base: [0.93, 0.7], wBase: 1.32, wTop: 1.08 },
   belt: { x: 0.73, y: [[0, 0.89]] },
