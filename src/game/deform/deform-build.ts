@@ -92,7 +92,7 @@ function makeMasses(rig: RigTables, nameIndex: Map<MassName, number>): MassNode[
       local: rest.clone(),
       world: rest.clone(),
       vel: new THREE.Vector3(),
-      mass: spec.mass,
+      mass: spec.mass * rig.massScale,
       radius: spec.radius,
       dynamic: false,
       clipping: false,
@@ -114,7 +114,7 @@ function makeMasses(rig: RigTables, nameIndex: Map<MassName, number>): MassNode[
 }
 
 /** The structure's beams at their rest lengths. */
-function makeBeams(masses: readonly MassNode[], nameIndex: Map<MassName, number>): Beam[] {
+function makeBeams(masses: readonly MassNode[], nameIndex: Map<MassName, number>, scale: number): Beam[] {
   return BEAM_SPECS.map(([na, nb, kTen, yieldK, maxShorten]) => {
     const a = nameIndex.get(na)!;
     const b = nameIndex.get(nb)!;
@@ -127,9 +127,10 @@ function makeBeams(masses: readonly MassNode[], nameIndex: Map<MassName, number>
       rest,
       plastic: rest,
       minLen: Math.max(0.1, rest * (1 - maxShorten)),
-      kTen,
-      yieldK,
-      damp: Math.sqrt(yieldK * 8),
+      kTen: kTen * scale,
+      yieldK: yieldK * scale,
+      // Scaling the damping with the mass and stiffness keeps each beam's damping ratio.
+      damp: Math.sqrt(yieldK * 8) * scale,
       alive: true,
       restDir,
     };
@@ -227,7 +228,7 @@ export function buildRunStructures(rig: RigTables, nameIndex = new Map<MassName,
     cages,
     sensors: makeSensors(rig, partIndex),
     masses,
-    beams: makeBeams(masses, nameIndex),
+    beams: makeBeams(masses, nameIndex, rig.massScale),
     shapeParticles,
     clusters: SHAPE_CLUSTERS.map((spec) => makeCluster(shapeParticles, spec.masses.map((n) => nameIndex.get(n)!))),
   };

@@ -2,7 +2,8 @@ import { CRASH, TRANSFER } from "../kernel/physics-core.js";
 import { BEAM_SPECS, CAGES, MASS_SPECS, SENSORS, SHAPE_CLUSTERS } from "../kernel/rig-spec.ts";
 import { DRIVE } from "../vehicle/car-drive.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
-import type { CarStyleId } from "../vehicle/car-variants.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "../vehicle/car-variants.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
 import type { Ejection } from "../vehicle/ejection.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { SquadEvent } from "../scenes/lawn-guard.ts";
@@ -676,7 +677,7 @@ export type Reel = { seed: number; clips: HighlightClip[] };
 
 /** Tuning a replay depends on: a clip recorded under other numbers replays as another crash, so storage refuses it. */
 export function simFingerprint(): number {
-  const json = JSON.stringify([CLASSES, DRIVE, CRASH, TRANSFER, MASS_SPECS, BEAM_SPECS, CAGES, SENSORS, SHAPE_CLUSTERS]);
+  const json = JSON.stringify([CLASSES, DRIVE, CRASH, TRANSFER, MASS_SPECS, BEAM_SPECS, CAGES, SENSORS, SHAPE_CLUSTERS, CAR_STYLE_IDS.map((id) => carFrame(CAR_STYLES[id]).rig)]);
   // FNV-1a, 32-bit.
   let h = 0x811c9dc5;
   for (let i = 0; i < json.length; i++) h = Math.imul(h ^ json.charCodeAt(i), 0x01000193);

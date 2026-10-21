@@ -10,7 +10,8 @@ import { fleetStyle, layoutDerby, MAX_CARS } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { stepWorld } from "../engine/world-step.ts";
-import { CAGES } from "../kernel/rig-spec.ts";
+import { CAR_STYLE_IDS, CAR_STYLES } from "../vehicle/car-variants.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
 import { armKill, carClass, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -56,15 +57,15 @@ const ARCADE: Knobs = { squash: 0.4, rear: 0.45, realism: null };
 /** CrushCalibration's realistic defaults (lane/calib-defaults) at Handling's default realism. */
 const REALISTIC: Knobs = { squash: 0.32, rear: 0.38, realism: DEFAULT_REALISM };
 
-/** Builds and runs cars with chassisRear's maxCrush at `knobs.rear` (cages copy their spec at construction). */
+/** Builds and runs cars with every style frame's chassisRear maxCrush at `knobs.rear` (cages copy their spec at construction). */
 function atKnobs(knobs: Knobs, build: () => DeformableCar[], seconds: number, start?: number): DerbyRun {
-  const rear = CAGES.find((c) => c.name === "chassisRear")!;
-  const rest = rear.maxCrush;
-  rear.maxCrush = knobs.rear;
+  const rears = CAR_STYLE_IDS.map((id) => carFrame(CAR_STYLES[id]).rig.cages.find((c) => c.name === "chassisRear")!);
+  const rests = rears.map((c) => c.maxCrush);
+  for (const c of rears) c.maxCrush = knobs.rear;
   try {
     return runDerby(build(), seconds, knobs, start);
   } finally {
-    rear.maxCrush = rest;
+    for (const [k, c] of rears.entries()) c.maxCrush = rests[k]!;
     leaveArena();
   }
 }

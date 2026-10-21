@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { BOOT_SENSOR, FRONT_CLIP, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+import { FRONT_CLIP, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
 
 export const WAGON: BodyStyle = {
   id: "wagon",
@@ -25,12 +25,4 @@ export const WAGON: BodyStyle = {
   rearDoorSeam: -0.62,
   boot: { kind: "tailgate", y0: 0.46, origin: [0.87, -2.115] },
   lamps: { head: HEAD_LAMP, tail: [0.7, 0.68] },
-  rig: {
-    cages: {
-      roof: { min: [-0.6, 1.02, -1.72], max: [0.6, 1.36, 0.56] },
-      glassRear: { min: [-0.68, 0.84, -2.08], max: [0.68, 1.32, -1.62] },
-      boot: { min: [-0.78, 0.42, -2.18], max: [0.78, 0.94, -1.76] },
-    },
-    sensors: { [BOOT_SENSOR]: [0, 0.68, -1.98] },
-  },
 };

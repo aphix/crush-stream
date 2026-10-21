@@ -7,7 +7,7 @@ import { hingePose, INTERIOR_MASSES, interiorPose } from "./part-pose.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import type { StirCar } from "../world/surfaces.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
-import { MASS_SPECS, type MassName } from "../kernel/rig-spec.ts";
+import type { MassName } from "../kernel/rig-spec.ts";
 import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox } from "./car-panels.ts";
 import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
@@ -79,7 +79,6 @@ const GLASS_LAMINATED = 0.03;
  *  it). Guessed, tuned by eye. (The roof sensor's compression is no measure: a 20 km/h frontal reads 0.36.) */
 const BAR_TEAR_SINK = 0.12;
 const BAR_TEAR_MPS = 60 / 3.6;
-export const ROOF_REST_Y = MASS_SPECS.find((m) => m.name === "roof")!.rest[1];
 /**
  * Quarter panels and arch flares hinge by the crush under them, `(crush - on) / range`, and tear off once the hinge value
  * passes `PANEL_TEAR` on a hit this fast (EBS). Tuned on the walls: the rear wing sensor peaks
@@ -678,7 +677,7 @@ export abstract class CarParts extends CarGlass {
         }
       }
       if (p.hinge === "bar") {
-        const sink = ROOF_REST_Y - this.deform.massLocal("roof").y;
+        const sink = this.roofRestY - this.deform.massLocal("roof").y;
         if (sink > BAR_TEAR_SINK || (ebs >= BAR_TEAR_MPS && this.deform.crushElapsed > 0.05)) this.detachPart(p, impulse);
         continue;
       }
@@ -826,9 +825,14 @@ export abstract class CarParts extends CarGlass {
     else if (p.hinge === "tail") p.angular.x += 3.4;
   }
 
+  /** The roof mass's rest height (m) on this car's frame: the baseline a sinking roof is measured from. */
+  get roofRestY(): number {
+    return this.frame.rig.masses.find((m) => m.name === "roof")!.rest[1];
+  }
+
   /** 0 to 1 and over: how near the roof's sinking, or a hit this fast, is to shearing the light bar's mounts (`evaluateBreakage` tears it at 1). */
   private barLoad(): number {
-    return Math.max((ROOF_REST_Y - this.deform.massLocal("roof").y) / BAR_TEAR_SINK, this.deform.hitSpeedValue / BAR_TEAR_MPS);
+    return Math.max((this.roofRestY - this.deform.massLocal("roof").y) / BAR_TEAR_SINK, this.deform.hitSpeedValue / BAR_TEAR_MPS);
   }
 
   /** A panel's shell, built if need be and bent to its hinge value on the current skin. */

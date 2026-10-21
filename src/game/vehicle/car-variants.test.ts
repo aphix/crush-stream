@@ -11,6 +11,7 @@ import { LIGHT_BAR_FOOT, makeLightBar } from "./car-materials.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
+import { PLATFORM_RIG } from "../deform/deform-rig.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { LIGHT_BAR } from "./constants.ts";
@@ -79,21 +80,39 @@ function roofSkinDrift(style: BodyStyle): number {
   return drift;
 }
 
-describe("given every body style, compared with the sedan that the shared platform is built on", () => {
+describe("given every body style, compared with the sedan and the platform its rig is carried from", () => {
   const sedan = chassisBox(CAR_STYLES.sedan);
+  const dimsLength = (id: CarStyleId): number => {
+    const d = CAR_STYLES[id].dims;
+    return d.overhang.front + d.wheelbase + d.overhang.rear;
+  };
 
   for (const id of CAR_STYLE_IDS) {
-    it(`when a ${id} is built, then it keeps the sedan's wheel positions, and its length to within 0.12 m and its width to within 3 cm`, () => {
-      for (const [i, w] of cars[id].wheels.entries()) assertSameNumbers(w.position.toArray(), carFrame(CAR_STYLES.sedan).wheels[i]!, `${id} wheel ${i}`);
+    it(`when a ${id} is built, then its wheels stand where its own frame puts them, and its chassis is as much longer and wider than the sedan's as its dims say, to within 0.12 m and 3 cm`, () => {
+      for (const [i, w] of cars[id].wheels.entries()) assertSameNumbers(w.position.toArray(), carFrame(CAR_STYLES[id]).wheels[i]!, `${id} wheel ${i}`);
       const b = chassisBox(CAR_STYLES[id]);
       const len = b.max.z - b.min.z;
-      assert.ok(Math.abs(len - (sedan.max.z - sedan.min.z)) <= 0.12, `${id} length ${len}`);
-      assert.ok(Math.abs(b.max.x - sedan.max.x) < 0.03 && Math.abs(b.min.x - sedan.min.x) < 0.03, `${id} width ${b.min.x}..${b.max.x}`);
+      const longer = len - (sedan.max.z - sedan.min.z);
+      assert.ok(Math.abs(longer - (dimsLength(id) - dimsLength("sedan"))) <= 0.12, `${id} length ${len}`);
+      const wider = b.max.x - b.min.x - (sedan.max.x - sedan.min.x);
+      assert.ok(Math.abs(wider - (CAR_STYLES[id].dims.width - CAR_STYLES.sedan.dims.width)) < 0.03, `${id} width ${b.min.x}..${b.max.x}`);
     });
 
-    it(`when a ${id} is built, then it keeps the sedan's mass rig (the masses and where each sits at rest)`, () => {
-      const rig = (c: DeformableCar) => c.deform.masses.map((m) => [m.name, m.mass, ...m.rest.toArray()]);
-      assertSameDigest(rig(cars[id]), rig(cars.sedan), `${id} mass rig`);
+    it(`when a ${id} is built, then its mass rig is the platform's carried onto its body: the platform's masses in its order, each the platform's mass times the car's mass scale, the hubs on its wheels and every other mass inside its dims' box`, () => {
+      const c = cars[id];
+      const d = CAR_STYLES[id].dims;
+      assert.equal(c.deform.masses.map((m) => m.name).join(), PLATFORM_RIG.masses.map((m) => m.name).join());
+      for (const [k, m] of c.deform.masses.entries()) {
+        assert.ok(Math.abs(m.mass - PLATFORM_RIG.masses[k]!.mass * c.frame.rig.massScale) < 1e-9, `${id} ${m.name} mass ${m.mass}`);
+        const hub = ["hubFL", "hubFR", "hubRL", "hubRR"].indexOf(m.name);
+        if (hub >= 0) {
+          assertSameNumbers(m.rest.toArray(), c.frame.wheels[hub]!, `${id} ${m.name} rest`);
+          continue;
+        }
+        const [x, y, z] = m.rest.toArray();
+        const inLength = z! <= d.wheelbase / 2 + d.overhang.front && z! >= -(d.wheelbase / 2 + d.overhang.rear);
+        assert.ok(Math.abs(x!) <= d.width / 2 && y! >= 0 && y! <= d.height && inLength, `${id} ${m.name} rest ${x},${y},${z} outside its dims' box`);
+      }
     });
   }
 

@@ -36,10 +36,7 @@ const BUMPERS = [-1, 1].flatMap((sx) => [-1, 1].map((sz): [number, number, numbe
 /** Height hints are the asking point plus this (m): the layer rule (`STEP_UP`, a ramp's kerb) reads them. */
 const HINT_ABOVE = 1;
 
-/** The rocker lines' x (m): the underside's keel runs along x 0, its rockers along x ±`ROCKER`. */
-const ROCKER = 0.8;
-/** The lines the belly is read along (car-local): along z at each `LINE_X`, across x at each `LINE_Z` (the frame's `belly` rows). */
-const LINE_X = [-ROCKER, -0.5, 0, 0.5, ROCKER] as const;
+/** The lines the belly is read along (car-local): along z at each of the car's `lineX` (its rockers at ±the underside's widest x), across x at each `LINE_Z` (the frame's `belly` rows). */
 const LINE_Z = [2, 1, 0, -0.5, -1, -2] as const;
 /** A belly line is halved down to this (m) where the ground under it is not one plane: a face's edge under the belly is found within 1 cm. */
 const LINE_STEP = 0.01;
@@ -247,10 +244,14 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   // above reads as resting. A sample deeper than `BELLY_IN` is in the ground, not resting on it (its depth is not `pen`'s reading).
   // The underside's keel and rocker lines, [z, height] from the nose back.
   const keelLine = car.frame.underside.filter((p) => p[0] === 0).map(([, z, h]) => [z, h] as const);
-  const rockerLine = car.frame.underside.filter((p) => p[0] === ROCKER).map(([, z, h]) => [z, h] as const);
+  // The rockers stand at the underside's widest x: the frame scales it with the car's width.
+  let rockerX = 0;
+  for (const p of car.frame.underside) rockerX = Math.max(rockerX, p[0]);
+  const lineX = [-rockerX, -0.5, 0, 0.5, rockerX];
+  const rockerLine = car.frame.underside.filter((p) => p[0] === rockerX).map(([, z, h]) => [z, h] as const);
   const clearance = (x: number, z: number): number => {
     const keel = along(keelLine, z);
-    _p.set(x, keel + ((along(rockerLine, z) - keel) * Math.abs(x)) / ROCKER, z).applyMatrix4(body.matrixWorld);
+    _p.set(x, keel + ((along(rockerLine, z) - keel) * Math.abs(x)) / rockerX, z).applyMatrix4(body.matrixWorld);
     const c = _p.y - ground.heightAt(_p.x, _p.z, _p.y);
     if (c >= -BELLY_IN) hull = Math.min(hull, c);
     return c;
@@ -289,8 +290,8 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
     }
   };
   if (!hullOnly) {
-    for (const x of LINE_X) for (let i = 1; i < LINE_Z.length; i++) line(x, LINE_Z[i - 1]!, x, LINE_Z[i]!);
-    for (const z of LINE_Z) for (let i = 1; i < LINE_X.length; i++) line(LINE_X[i - 1]!, z, LINE_X[i]!, z);
+    for (const x of lineX) for (let i = 1; i < LINE_Z.length; i++) line(x, LINE_Z[i - 1]!, x, LINE_Z[i]!);
+    for (const z of LINE_Z) for (let i = 1; i < lineX.length; i++) line(lineX[i - 1]!, z, lineX[i]!, z);
   }
   const ge = car.group.matrixWorld.elements;
   return {

@@ -30,11 +30,8 @@ const SPRINGBACK = 0.08;
 const SPRING_YIELD = 0.015;
 /** Share of a crush past the yield that springs back: real structure keeps 75-90 % of its peak crush (17 % back at 56 km/h, SAE 2006-01-0908). */
 const SPRING_SHARE = 0.1;
-/** C4: a wheel separates only on an off-centre hit this hard (m/s EBS, 54 km/h)… */
+/** C4: a wheel separates only on an off-centre hit this hard (m/s EBS, 54 km/h), once the struck corner has crushed to within the rig's `tyreReach` of the hub. */
 const HUB_POP_MPS = 15;
-/** …once the struck corner has crushed to within this of the hub (m): tyre radius 0.32 plus a 0.10 m
- *  packed bumper beam. With the 0.72 m overhang the wheel is reached after 0.30 m of corner crush. */
-const TYRE_REACH = 0.42;
 /** The hit speed (m/s EBS) from which a corner crushed to `HUB_OVERRUN` of its hub takes the wheel. */
 const HUB_OVERRUN_MPS = 3;
 
@@ -291,7 +288,7 @@ export abstract class DeformSolve extends DeformFreeze {
         const reach = Math.abs(corner.rest.z - m.rest.z);
         // C4: a hard off-centre hit whose struck corner has crushed onto the tyre pops it (a full-width hit loads the rails), as does any hit that overruns the hub.
         const crushed = (corner.local.x - corner.rest.x) * ix + (corner.local.z - corner.rest.z) * iz;
-        const c4 = !sideHit && front === iz < 0 && this.hitSpeed >= HUB_POP_MPS && Math.abs(this.impactLocal.x) >= 0.2 && cw > 0.6 && crushed >= reach - TYRE_REACH;
+        const c4 = !sideHit && front === iz < 0 && this.hitSpeed >= HUB_POP_MPS && Math.abs(this.impactLocal.x) >= 0.2 && cw > 0.6 && crushed >= reach - this.rig.tyreReach;
         if (c4 || (front ? corner.rest.z - corner.local.z : corner.local.z - corner.rest.z) >= reach - HUB_OVERRUN) this.popHub(m);
       }
       if (!m.popped && hypot2(m.shoveX, m.shoveZ) > 2 * this.rig.tyre.r) this.popHub(m);

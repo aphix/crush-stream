@@ -20,11 +20,27 @@ export const HEAD_LAMP = [0.485, 0.485] as const;
 /** The cabin's open floor [zRear, zFront, floorY] behind the glass. */
 export const CABIN_TUB = [-0.7, 0.7, 0.3] as const;
 
-/** Boot sensor (SENSORS[18]) follows the tail panel on hatch / tailgate bodies. */
-export const BOOT_SENSOR = 18;
-
 /** The one tyre the sim's hub contact is sized to today (`PLATFORM_TYRE`). */
 export const PLATFORM_WHEEL = { radius: PLATFORM_TYRE.r, width: 2 * PLATFORM_TYRE.halfW } as const;
+
+/** The body every rig table was tuned on (the first sedan's dims): the rig carries its tables onto a car by that car's dims' offsets from these (`carFrame`). */
+export const PLATFORM_DIMS = {
+  wheelbase: 2.68,
+  overhang: { front: 0.81, rear: 0.81 },
+  track: 1.48,
+  width: 1.813,
+  height: 1.366,
+  rideHeight: 0.145,
+  wheel: PLATFORM_WHEEL,
+} as const satisfies BodyStyle["dims"];
+
+/** The cabin the rig's roof, glass and boot cages were fitted to (the first sedan's): a car's cages move by its own cabin's offsets from these. */
+export const PLATFORM_CABIN = {
+  roofZ: [-0.82, 0.58],
+  windshieldTop: [1.26, 0.49],
+  rearGlass: { base: [0.81, -1.16], top: [1.23, -0.76] },
+  boot: { z0: -0.66, z1: -1.98, origin: [0.74, -0.72] },
+} as const;
 
 /** Bumper fascia section about its seat, top to bottom, [y, out] (m): rounded top, intake recess, splitter lip. */
 const PLATFORM_FASCIA = [
