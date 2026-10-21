@@ -10,7 +10,7 @@ import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { MIRROR_ROOT } from "./part-geometry.ts";
 import { makeGreenhouseFrame } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { glassCorners, makeRearGlass, makeWindshield } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, glassCorners, makeRearGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { LIGHT_BAR_FOOT, makeLightBar } from "./car-materials.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
@@ -464,5 +464,15 @@ describe("given a body style's H2 hardpoints", () => {
         assert.ok(top <= roof + 1e-6, `${id} ${name} header bar tops out at y ${top}, roof skin over its end (x ${width / 2}, z ${z}) at ${roof}`);
       }
     }
+  });
+
+  it("when its door hinge moves, then the door glass stays in the same window: it rides on its door's own hinge", () => {
+    const moved: BodyStyle = { ...sedan, door: { ...sedan.door, hingeX: 0.8, hingeY: 0.79, hingeZ: 0.7 } };
+    const inCar = (style: BodyStyle) => {
+      const box = partBox(makeSideGlass(1, style));
+      const { hingeX, hingeY, hingeZ } = style.door;
+      return [box.max.x + hingeX + DOOR_GLASS_SEAT.x, box.max.y + hingeY + DOOR_GLASS_SEAT.y, box.max.z + hingeZ + DOOR_GLASS_SEAT.z];
+    };
+    assertSameNumbers(inCar(moved), inCar(sedan), "right door pane's top corner in the car (x, y, z)", 1e-6);
   });
 });
