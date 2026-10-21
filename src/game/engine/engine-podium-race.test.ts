@@ -181,7 +181,7 @@ describe("given the real engine and a race ended with every car dented", () => {
     // The renderer's pre-draw hook, run by hand: the stubbed renderer draws nothing.
     const scene = engine["scene"];
     scene.onBeforeRender(engine["renderer"], scene, engine["camera"], new THREE.BufferGeometry(), new THREE.MeshBasicMaterial(), new THREE.Group());
-    const drawn = engine["wheels"]["near"].mesh.count + engine["wheels"]["far"].mesh.count;
+    const drawn = engine["wheels"].meshes.slice(0, -1).reduce((n, mesh) => n + mesh.count, 0);
     assert.equal(drawn, lost.reduce((total, n) => total + 4 - n, 0), "wheels drawn: four a car less the ones it lost");
     assert.ok(drawn > 0, "the control: some wheels are drawn");
   });

@@ -182,7 +182,7 @@ per-corner checklist, `guard` and `notFit` (the fields left to the hand). It nev
 
 The fit is guarded: it lays the read fields onto the style as it stands one group at a time (the body with its greenhouse frame,
 then the plan, track, glass sill, door, bumpers, underside). It keeps a group only where neither view's IoU nor either side of
-the plan gets worse (mean and largest |offset| over the sides, ends trimmed) and something gains. Each group's result is one
+the plan gets worse (mean and largest |offset| over the sides, ends and wheel arches trimmed) and something gains. Each group's result is one
 `guard` line, so the output is never worse than the style it started from. `dims` overhangs, width and height are then
 measured off the built car, as the dims rows hold them.
 
@@ -194,9 +194,13 @@ node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
 
 - Read: `dims` (wheelbase and wheel radius from the side picture's tyres, which also set z = 0; `track` so each tyre's outer face
   sits 1 cm inside the plan), `profile` (stations where the roof line, plan or glass zone bends; mirrors and handles cut from
-  the plan), `roofZ`, `windshield`, `windshieldTop`, `rearGlass`, `belt.y` (the glass sill), `belt.x` (the rail 4 cm under the
-  shoulder), `underside`, `door.hingeX` (the plan at the hinge), `bumpers.*.seat.z` (lip on the end) and `bumpers.*.wrap`
-  (the plan's end corners). Fitted: `profile`.
+  the plan, and the wheel arches too: 1.3 tyre radii either side of each hub, where the flare bulges past the body side, take the
+  line between their neighbours, and no station there is ever wider than that line, so the shoulder gets no hump over a wheel;
+  the flare is the arch lip's), `roofZ`, `windshield`, `windshieldTop`, `rearGlass`, `belt.y` (the glass sill), `belt.x` (the rail
+  4 cm under the shoulder), `underside`, `door.hingeX` (the plan at the hinge), `bumpers.*.seat.z` (lip on the end) and
+  `bumpers.*.wrap` (the plan's end corners). Fitted: `profile`. `arch-bulge.test.ts` holds every style to it, fitted or hand-set:
+  over each arch's stretch, the drawn half-width at the belt and the shoulder's top stand no more than 1 cm over the lowest body
+  either side of them.
 - Not read: hood, arch, rocker, boot, `rideHeight`, `cabinHw`, `bPillar`, `quarter`, mirrors, the bumper fascia and span, and the
   door's hinge y and z, length and aperture.
 
@@ -206,12 +210,14 @@ both through one camera spec (`trace-camera.mjs`), so each pair lines up pixel f
 
 ```sh
 CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
-  scripts/landing-shots.mjs --root <tree> --car <style>     # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay}.png
+  scripts/landing-shots.mjs --root <tree> --car <style> [--paint]   # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay}.png
 ```
 
 - Each car's `scripts/landing-views/<style>.json` holds its references, its iso crops (cut from the lineups; widen one that
   clips its car) and its iso cameras. Side and top are orthographic, spanned on the reference's bumper tips at the spec length,
-  with z = 0 between the reference's tyres.
+  with z = 0 between the reference's tyres. Its `paint` is the reference's body colour (the median of the top picture's brighter
+  half), which `--paint` gives both shots (`headless-frame --paint <colour>` or `<style>=<colour>,...`; a livery stays) so the
+  overlays compare like for like.
 - The isos are AI renders with their own lens, so each is aligned once on its wheels. Pick the visible wheels' hub (outer face)
   and contact points on the crop: `trace-car --style <id> --view iso --landing --grid <png>` draws the crop with a pixel grid.
   Wheels are named `fl`/`fr`/`rl`/`rr`; the front iso shows the car's left (+x) side, the rear iso its right. Store them as

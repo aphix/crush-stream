@@ -64,9 +64,25 @@ function withPrimer<T extends THREE.MeshStandardMaterial>(m: T): T {
 const SMEAR_TONE = new THREE.Color(0x6b6f76);
 
 /**
+ * The loaded tyre's foot in the hub frame: within the patch's half-angle `ap` (where an unloaded tyre `1 + tyreLoad.z` crowns
+ * across would cut the ground) the crown lies on the flat ground at its own radius, then eases back to round by `2 ap`.
+ */
+const LOADED_FOOT = `if (tyre > 0.0 && tyreLoad.z > 0.0) {
+  float rho = max(length(transformed.yz), 1e-6);
+  float c = dot(transformed.yz, tyreLoad.xy) / rho;
+  float a = acos(clamp(c, -1.0, 1.0));
+  float ap = acos(1.0 / (1.0 + tyreLoad.z));
+  float k = a < ap ? 1.0 / c : 1.0 + tyreLoad.z * (1.0 - smoothstep(ap, 2.0 * ap, a));
+  transformed.yz *= 1.0 + (k - 1.0) * tyre;
+  transformed.x += sign(transformed.x) * tyreLoad.w * 4.0 * tyre * (1.0 - tyre) * (1.0 - smoothstep(0.0, 3.0 * ap, a));
+}`;
+
+/**
  * The parts material for the wheel batch: the `blur` of each instance (0 sharp .. 1 smeared, `spokeSmear`) fades the
  * vertices with `smear` weight toward one flat, half-metal tone, so a rim turning too fast to read as spokes reads as a
- * soft disc instead of strobing slow or backwards. Wraps `capHighlights`' compile hook.
+ * soft disc instead of strobing slow or backwards. Each instance's `tyreLoad` (`WheelBatch`) loads its tyre: the rubber
+ * (`tyre` weight) is pushed out onto a flat foot round the hub-frame down `tyreLoad.xy`, `tyreLoad.z` the flatten over the
+ * crown radius, and the sidewall bulges `tyreLoad.w` across near the foot. Wraps `capHighlights`' compile hook.
  */
 export function makeWheelMaterial(): THREE.MeshStandardMaterial {
   const m = makePartsMaterial();
@@ -74,8 +90,8 @@ export function makeWheelMaterial(): THREE.MeshStandardMaterial {
   m.onBeforeCompile = (shader, renderer) => {
     cap.call(m, shader, renderer);
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float smear;\nattribute float blur;\nvarying float vSmear;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvSmear = smear * blur;");
+      .replace("#include <common>", "#include <common>\nattribute float smear;\nattribute float blur;\nattribute float tyre;\nattribute vec4 tyreLoad;\nvarying float vSmear;")
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\nvSmear = smear * blur;\n${LOADED_FOOT}`);
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying float vSmear;")
       .replace("#include <color_fragment>", `#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SMEAR_TONE.r}, ${SMEAR_TONE.g}, ${SMEAR_TONE.b}), vSmear);`)
@@ -660,26 +676,103 @@ function flatPart(g: THREE.BufferGeometry, tone: readonly [number, number, numbe
 /** The tyre's tone: its vertices are the wheel's only ones this colour. */
 export const RUBBER = [0x121214, 0.92, 0.05] as const;
 const ALLOY = [0xc9cdd4, 0.28, 0.92] as const;
+const DARK_DISC = [0x1c1d20, 0.7, 0.3] as const;
+const HUB = [0x8a909a, 0.35, 0.8] as const;
+/** A black-painted centre (pickup steel wheel, monster hub). */
+const DARK_HUB = [0x232428, 0.55, 0.45] as const;
+/** The muscle car's polished rim lip. */
+const CHROME = [0xeef0f3, 0.12, 1] as const;
 
-/** Give every vertex of `g` a `smear` weight: 1 on the spokes and the disc behind them, which `makeWheelMaterial` fades toward a blur. */
-function smeared(g: THREE.BufferGeometry, weight: number): THREE.BufferGeometry {
-  g.setAttribute("smear", new THREE.BufferAttribute(new Float32Array(g.getAttribute("position").count).fill(weight), 1));
+/** Bead and crown radius (m) of `TYRE_PROFILE`: the `tyre` weight runs 0 at the bead to 1 at the crown. */
+const ROAD_TYRE: readonly [number, number] = [0.205, 0.32];
+
+/**
+ * Give every vertex of `g` a `smear` weight (1 on the spokes and the disc behind them, which `makeWheelMaterial` fades toward a blur)
+ * and a `tyre` weight: 0 off the rubber, else 0 at `tyre`'s bead radius to 1 at its crown, how far it follows the loaded foot.
+ */
+function smeared(g: THREE.BufferGeometry, weight: number, tyre: readonly [number, number] | null = null): THREE.BufferGeometry {
+  const p = g.getAttribute("position");
+  const w = new Float32Array(p.count);
+  if (tyre) for (let i = 0; i < p.count; i++) w[i] = THREE.MathUtils.clamp((Math.sqrt(p.getY(i) ** 2 + p.getZ(i) ** 2) - tyre[0]) / (tyre[1] - tyre[0]), 0, 1);
+  g.setAttribute("smear", new THREE.BufferAttribute(new Float32Array(p.count).fill(weight), 1));
+  g.setAttribute("tyre", new THREE.BufferAttribute(w, 1));
   return g;
 }
 
-/**
- * One wheel about the x axle, symmetric in x so the same instance serves both sides: a lathed tyre
- * (tread detail from `treadNormalMap`), a rim barrel, five spokes through the full rim width over a
- * dark centre disc, and the hub. ~680 triangles. The spokes and disc carry `smear` 1 (`spokeSmear`).
- */
-export function makeWheelGeometry(): THREE.BufferGeometry {
-  const parts = [latheX(TYRE_PROFILE, 24, TYRE_TREAD_V, TREAD_REPEATS, RUBBER), latheX(RIM_PROFILE, 16, null, 1, ALLOY)].map((g) => smeared(g, 0));
-  for (const side of [1, -1]) parts.push(smeared(flatPart(new THREE.CircleGeometry(0.19, 16).rotateY((side * Math.PI) / 2), [0x1c1d20, 0.7, 0.3]), 1));
-  for (let k = 0; k < 5; k++) {
-    parts.push(smeared(flatPart(new THREE.BoxGeometry(0.17, 0.15, 0.042).translate(0, 0.115, 0).rotateX((k * 2 * Math.PI) / 5), ALLOY), 1));
+/** `n` spokes `size` = [across, radial, round] (m) from the hub out to the rim, `split` rad apart in pairs when given. */
+function spokes(n: number, size: readonly [number, number, number], tone: readonly [number, number, number], split = 0): THREE.BufferGeometry[] {
+  const out: THREE.BufferGeometry[] = [];
+  for (let k = 0; k < n; k++) {
+    for (const s of split ? [-1, 1] : [0]) {
+      const box = new THREE.BoxGeometry(...size).translate(0, 0.19 - size[1] / 2, 0);
+      out.push(smeared(flatPart(box.rotateX((k * 2 * Math.PI) / n + (s * split) / 2), tone), 1));
+    }
   }
-  parts.push(smeared(flatPart(new THREE.CylinderGeometry(0.062, 0.062, 0.19, 10).rotateZ(Math.PI / 2), [0x8a909a, 0.35, 0.8]), 0));
-  return mergeToned(parts, "wheel");
+  return out;
+}
+
+/** A flat ring each face at `x` (m off centre), between radii `inner` and `outer`. */
+function faceRings(inner: number, outer: number, x: number, tone: readonly [number, number, number]): THREE.BufferGeometry[] {
+  return [1, -1].map((side) => smeared(flatPart(new THREE.RingGeometry(inner, outer, 16).rotateY((side * Math.PI) / 2).translate(side * x, 0, 0), tone), 0));
+}
+
+/** The rim designs the references show; each is one instanced draw in the wheel batch. */
+export type WheelDesign = "five" | "split10" | "mag5" | "six" | "beadlock";
+export const WHEEL_DESIGNS: readonly WheelDesign[] = ["five", "split10", "mag5", "six", "beadlock"];
+
+/** Mud-terrain lugs round the monster tyre: pitches, and each block's [across, radial, round] size (m) and chevron yaw (rad). */
+const MONSTER_LUGS = 22;
+const LUG_SIZE = [0.1, 0.05, 0.06] as const;
+const LUG_CHEVRON = 0.45;
+/** How far (m) a lug stands above the crown under it; the rest of the block is sunk in, showing only where the shoulder rolls off. */
+const LUG_RISE = 0.024;
+/** Monster tyre: bead radius (m) for a tall sidewall on the small rim, and its crown under the lugs, whose tops are the rig's crown. */
+const MONSTER_TYRE: readonly [number, number] = [0.165, ROAD_TYRE[1] - LUG_RISE];
+/** The monster's rim and face shrunk about the axle: the reference rim is half the tyre's height. */
+const MONSTER_RIM = 0.8;
+
+function monsterTyre(): THREE.BufferGeometry[] {
+  const [bead, base] = MONSTER_TYRE;
+  const k = (base - bead) / (ROAD_TYRE[1] - ROAD_TYRE[0]);
+  const profile = TYRE_PROFILE.map(([r, x]) => [bead + (r - ROAD_TYRE[0]) * k, x] as const);
+  const parts = [smeared(latheX(profile, 24, TYRE_TREAD_V, TREAD_REPEATS, RUBBER), 0, [bead, ROAD_TYRE[1]])];
+  for (let k2 = 0; k2 < MONSTER_LUGS; k2++) {
+    for (const s of [1, -1]) {
+      const lug = new THREE.BoxGeometry(...LUG_SIZE).rotateY(s * LUG_CHEVRON).translate((s * LUG_SIZE[0]) / 2, ROAD_TYRE[1] - LUG_SIZE[1] / 2, 0);
+      parts.push(smeared(flatPart(lug.rotateX(((k2 + (s > 0 ? 0 : 0.5)) * 2 * Math.PI) / MONSTER_LUGS), RUBBER), 0, [bead, ROAD_TYRE[1]]));
+    }
+  }
+  return parts;
+}
+
+/** The face of each design: what sits inside the rim barrel. */
+function rimFace(design: WheelDesign): THREE.BufferGeometry[] {
+  const disc = [1, -1].map((side) => smeared(flatPart(new THREE.CircleGeometry(0.19, 16).rotateY((side * Math.PI) / 2), DARK_DISC), 1));
+  const hub = (r: number, tone: readonly [number, number, number]) => smeared(flatPart(new THREE.CylinderGeometry(r, r, 0.19, 10).rotateZ(Math.PI / 2), tone), 0);
+  switch (design) {
+    case "five":
+      return [...disc, ...spokes(5, [0.17, 0.15, 0.042], ALLOY), hub(0.062, HUB)];
+    case "split10":
+      return [...disc, ...spokes(5, [0.16, 0.15, 0.018], ALLOY, 0.2), hub(0.055, HUB)];
+    case "mag5":
+      return [...disc, ...spokes(5, [0.11, 0.15, 0.065], ALLOY), ...faceRings(0.188, 0.222, 0.1, CHROME), hub(0.05, CHROME)];
+    case "six":
+      return [...disc, ...spokes(6, [0.15, 0.15, 0.075], ALLOY), hub(0.08, DARK_HUB)];
+    case "beadlock":
+      return [...disc, ...spokes(6, [0.1, 0.15, 0.05], ALLOY), ...faceRings(0.17, 0.222, 0.104, ALLOY), hub(0.085, DARK_HUB)];
+  }
+}
+
+/**
+ * One wheel about the x axle, symmetric in x so the same instance serves both sides: a lathed tyre (tread detail from
+ * `treadNormalMap`; the monster's carries lug blocks), a rim barrel and `design`'s face. The face's spokes and disc carry
+ * `smear` 1 (`spokeSmear`); the rubber carries its `tyre` weight (`makeWheelMaterial`'s loaded foot).
+ */
+export function makeWheelGeometry(design: WheelDesign = "five"): THREE.BufferGeometry {
+  const rim = [smeared(latheX(RIM_PROFILE, 16, null, 1, ALLOY), 0), ...rimFace(design)];
+  if (design !== "beadlock") return mergeToned([smeared(latheX(TYRE_PROFILE, 24, TYRE_TREAD_V, TREAD_REPEATS, RUBBER), 0, ROAD_TYRE), ...rim], "wheel");
+  for (const g of rim) g.scale(1, MONSTER_RIM, MONSTER_RIM);
+  return mergeToned([...monsterTyre(), ...rim], "wheel");
 }
 
 /** Which of `TYRE_PROFILE`'s nine points the far wheel keeps: bead, shoulder, crown, shoulder, bead. */
@@ -695,7 +788,7 @@ const FAR_DISC = [0x4a4d53, 0.5, 0.6] as const;
 export function makeWheelGeometryFar(): THREE.BufferGeometry {
   const profile = FAR_TYRE_POINTS.map((i) => TYRE_PROFILE[i]!);
   const treadV = FAR_TYRE_POINTS.map((i) => TYRE_TREAD_V[i]!);
-  const parts = [smeared(latheX(profile, 12, treadV, TREAD_REPEATS, RUBBER), 0)];
+  const parts = [smeared(latheX(profile, 12, treadV, TREAD_REPEATS, RUBBER), 0, ROAD_TYRE)];
   for (const side of [1, -1]) parts.push(smeared(flatPart(new THREE.CircleGeometry(0.2, 12).rotateY((side * Math.PI) / 2), FAR_DISC), 1));
   return mergeToned(parts, "far wheel");
 }
