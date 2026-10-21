@@ -201,9 +201,9 @@ the tier) and written as a PNG, with one JSON line on stdout. `--hash <share lin
   which downloads the native binary from GitHub releases: the Lux deploy installs dev dependencies too, and stays
   registry-only. Fetch the binary once per `node_modules` with `node node_modules/@kmamal/gl/scripts/install.mjs`; the
   script exits 2 with that line while it is missing. `@napi-rs/canvas` ships its binaries as npm packages.
-- **Dummies are not drawn:** the bundled ANGLE (2.1.24078) counts `gl_VertexID` and `gl_InstanceID` against
-  `MAX_VERTEX_ATTRIBS` (16), so the dummy's lit program (16 declared attribute slots plus both built-ins) fails to link
-  here ("Too many attributes (print)"), while Chrome 149's ANGLE links it on the same GPU. A failed program that links
-  once those built-ins read as 0 is listed under `builtinQuirk`, its meshes under `notDrawn`; every other failure is in
-  `linkFailures`.
+- **Built-in ids count as attributes:** the bundled ANGLE (2.1.24078) counts `gl_VertexID` and `gl_InstanceID` against
+  `MAX_VERTEX_ATTRIBS` (16), as some GLES drivers do; Chrome 149's ANGLE does not. The dummy's lit program once declared
+  16 slots and read both, and failed to link here ("Too many attributes (print)"); its attributes are now packed to 14
+  slots with `gl_InstanceID` (`ragdoll-mesh.test.ts` pins it), so dummies draw. A failed program that links once those
+  built-ins read as 0 is listed under `builtinQuirk`, its meshes under `notDrawn`; every other failure is in `linkFailures`.
 - **Cost:** about 11 s wall, 6.6 s of it to `ready`; runs inside a 2 GB memory cap.

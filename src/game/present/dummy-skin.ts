@@ -4,10 +4,10 @@ import { HAND_LENGTH, KNEE_HALF_BAND, restFits, RIG_KNEE_Y } from "./dummy-fit.t
 import { FACE_FRONT_FROM, FACE_FRONT_TO, FACE_HALF_WIDTH, FACE_SPAN, headAt, measureHead, RIM_AT } from "./dummy-head.ts";
 import { scalpHairline } from "./dummy-hair.ts";
 import { loft, type Lofted } from "./dummy-loft.ts";
-import { BONES_ATTRIBUTE, BUILD, EVERY_BUILD, HANG_ATTRIBUTE, HEAD, KINDS_ATTRIBUTE, LEFT_ARM, LEFT_LEG, NO_PRINT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, PRINT_ATTRIBUTE, RIGHT_ARM, RIGHT_LEG, ROLE, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, smooth, TORSO, type Fit } from "./dummy-rig.ts";
+import { BONES_ATTRIBUTE, BUILD, EVERY_BUILD, HEAD, KINDS_ATTRIBUTE, LEFT_ARM, LEFT_LEG, NO_PRINT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, PRINT_ATTRIBUTE, RIGHT_ARM, RIGHT_LEG, ROLE, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, smooth, TORSO, type Fit } from "./dummy-rig.ts";
 import { hangAttribute } from "./dummy-garments.ts";
 import { wearFor } from "./dummy-wear.ts";
-import { BUST_ATTRIBUTE, bustWeights } from "./dummy-jiggle.ts";
+import { bustWeights } from "./dummy-jiggle.ts";
 import { once } from "../kernel/scalar.ts";
 
 /**
@@ -65,6 +65,17 @@ function paintBody(fit: Fit): { bones: number[]; roleKind: number[]; print: numb
   return { bones, roleKind, print };
 }
 
+/** `a` (`aSize` floats a vertex) and `b` (`bSize`) interleaved vertex by vertex: two attributes packed in one. */
+function interleave(a: ArrayLike<number>, aSize: number, b: ArrayLike<number>, bSize: number): Float32Array {
+  const size = aSize + bSize;
+  const out = new Float32Array((a.length / aSize) * size);
+  for (let i = 0; i < a.length / aSize; i++) {
+    for (let k = 0; k < aSize; k++) out[i * size + k] = a[i * aSize + k]!;
+    for (let k = 0; k < bSize; k++) out[i * size + aSize + k] = b[i * bSize + k]!;
+  }
+  return out;
+}
+
 /** The baked bodies, plus each build's wear lofted on after. One vertex order; three position attributes. */
 function buildDummyGeometry(): THREE.BufferGeometry {
   const { man, woman, portly } = restFits();
@@ -72,33 +83,38 @@ function buildDummyGeometry(): THREE.BufferGeometry {
   const { bones, roleKind, print } = paintBody(man);
   const wear: Lofted = { position: [], bones: [], roleKind: [], print: [], index: [] };
   for (const [build, fit] of [[BUILD.MAN, man], [BUILD.WOMAN, woman], [BUILD.PORTLY, portly]] as const) for (const shell of wearFor(build, fit)) loft(shell, wear);
-  const geometry = new THREE.BufferGeometry();
+  const count = BODY_VERTICES + wear.position.length / 3;
+  const hang = hangAttribute(man, portly, count);
+  const push = (part: number) => hang.filter((_, k) => k % 4 === part);
   const withWear = (body: Float32Array) => {
     const all = new Float32Array(body.length + wear.position.length);
     all.set(body);
     all.set(wear.position, body.length);
     return all;
   };
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(withWear(man.rest), 3));
-  geometry.setAttribute(SHAPE_WOMAN_ATTRIBUTE, new THREE.Float32BufferAttribute(withWear(woman.rest), 3));
-  geometry.setAttribute(SHAPE_PORTLY_ATTRIBUTE, new THREE.Float32BufferAttribute(withWear(portly.rest), 3));
-  geometry.setAttribute(PRINT_ATTRIBUTE, new THREE.Float32BufferAttribute(print.concat(wear.print), 4));
-  geometry.setAttribute(BONES_ATTRIBUTE, new THREE.Float32BufferAttribute(bones.concat(wear.bones), 3));
-  geometry.setAttribute(KINDS_ATTRIBUTE, new THREE.Float32BufferAttribute(roleKind.concat(wear.roleKind), 2));
-  geometry.setAttribute(HANG_ATTRIBUTE, new THREE.Float32BufferAttribute(hangAttribute(man, portly, BODY_VERTICES + wear.position.length / 3), 4));
   for (const vertex of wear.index) index.push(vertex + BODY_VERTICES);
-  geometry.setIndex(index);
-  geometry.computeVertexNormals();
   const normalsOf = (positions: Float32Array) => {
     const shape = new THREE.BufferGeometry();
     shape.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     shape.setIndex(index);
     shape.computeVertexNormals();
-    return shape.getAttribute("normal");
+    return shape.getAttribute("normal").array;
   };
-  geometry.setAttribute(NORMAL_WOMAN_ATTRIBUTE, normalsOf(withWear(woman.rest)));
-  geometry.setAttribute(NORMAL_PORTLY_ATTRIBUTE, normalsOf(withWear(portly.rest)));
-  geometry.setAttribute(BUST_ATTRIBUTE, new THREE.Float32BufferAttribute(bustWeights(geometry.getAttribute(SHAPE_WOMAN_ATTRIBUTE), geometry.getAttribute(KINDS_ATTRIBUTE)), 2));
+  const [womanRest, portlyRest] = [withWear(woman.rest), withWear(portly.rest)];
+  const kinds = roleKind.concat(wear.roleKind);
+  const bust = bustWeights(new THREE.Float32BufferAttribute(womanRest, 3), new THREE.Float32BufferAttribute(kinds, 2));
+  const onBody = Float32Array.from({ length: count }, (_, i) => Number(i < BODY_VERTICES));
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(withWear(man.rest), 3));
+  geometry.setAttribute(SHAPE_WOMAN_ATTRIBUTE, new THREE.Float32BufferAttribute(interleave(womanRest, 3, push(0), 1), 4));
+  geometry.setAttribute(SHAPE_PORTLY_ATTRIBUTE, new THREE.Float32BufferAttribute(interleave(portlyRest, 3, push(2), 1), 4));
+  geometry.setAttribute(NORMAL_WOMAN_ATTRIBUTE, new THREE.Float32BufferAttribute(interleave(normalsOf(womanRest), 3, push(1), 1), 4));
+  geometry.setAttribute(NORMAL_PORTLY_ATTRIBUTE, new THREE.Float32BufferAttribute(interleave(normalsOf(portlyRest), 3, push(3), 1), 4));
+  geometry.setAttribute(PRINT_ATTRIBUTE, new THREE.Float32BufferAttribute(print.concat(wear.print), 4));
+  geometry.setAttribute(BONES_ATTRIBUTE, new THREE.Float32BufferAttribute(interleave(bones.concat(wear.bones), 3, onBody, 1), 4));
+  geometry.setAttribute(KINDS_ATTRIBUTE, new THREE.Float32BufferAttribute(interleave(kinds, 2, bust, 2), 4));
+  geometry.setIndex(index);
+  geometry.computeVertexNormals();
   return geometry;
 }
 

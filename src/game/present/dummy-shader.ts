@@ -1,8 +1,7 @@
 import type * as THREE from "three";
-import { BODY_VERTICES } from "./dummy-bodies.ts";
 import { DECAL_FACE_AT, DECAL_FLAT, DECAL_H, DECAL_HALF_X, DECAL_HALF_Z, DECAL_NO_PAINT, DECAL_RAISE_STEP, DECAL_W, DECAL_Y, decalMap, FABRIC, FABRIC_CONTRAST, FABRIC_MAP, FABRIC_RELIEF, FABRIC_ROUGHNESS, FABRIC_TILE } from "./dummy-cloth.ts";
 import { DRESS_DECALS } from "./dummy-dress.ts";
-import { CAPPED, CUTS_AT, FLAGS_AT, HANG_ATTRIBUTE, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, OPTIONAL, ORBS_AT, PALETTE_AT, PRINT_ATTRIBUTE, ROLE, ROLES, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE } from "./dummy-rig.ts";
+import { CAPPED, CUTS_AT, FLAGS_AT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, OPTIONAL, ORBS_AT, PALETTE_AT, PRINT_ATTRIBUTE, ROLE, ROLES, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE } from "./dummy-rig.ts";
 import { FACE_RELIEF, faceReliefMap, PRINT_CELL, PRINT_CELLS, PRINT_TEXELS, printMap } from "./dummy-texture.ts";
 import { RIM_FRAGMENT, RIM_LIGHT } from "./rim-light.ts";
 
@@ -14,18 +13,16 @@ import { RIM_FRAGMENT, RIM_LIGHT } from "./rim-light.ts";
 /**
  * The skinning in GLSL: each vertex rides bones `bones.x` and `bones.y` (weight `bones.z` on the second), moved by the
  * slot's bone transforms (`pose`); `dollShown` and `skinPoint` are the same rules in TS. A vertex the slot's build does not
- * draw collapses to a point. A man's clothes hang off the body (`hang`: the man's push in xy, the portly man's in zw) where
- * the slot's cuts put cloth, scaled by its outfit (flags texel z: torso and sleeves, w: trousers).
+ * draw collapses to a point. A man's clothes hang off the body (the push in the shapes' and normals' w: the woman's for the man
+ * and her, the portly man's for him) where the slot's cuts put cloth, scaled by its outfit (flags texel z: torso and sleeves, w: trousers).
  */
 const DOLL_COMMON = /* glsl */ `
-attribute vec3 ${SHAPE_WOMAN_ATTRIBUTE};
-attribute vec3 ${SHAPE_PORTLY_ATTRIBUTE};
-attribute vec3 ${NORMAL_WOMAN_ATTRIBUTE};
-attribute vec3 ${NORMAL_PORTLY_ATTRIBUTE};
-attribute vec4 ${HANG_ATTRIBUTE};
-attribute vec2 bust;
-attribute vec3 bones;
-attribute vec2 roleKind;
+attribute vec4 ${SHAPE_WOMAN_ATTRIBUTE};
+attribute vec4 ${SHAPE_PORTLY_ATTRIBUTE};
+attribute vec4 ${NORMAL_WOMAN_ATTRIBUTE};
+attribute vec4 ${NORMAL_PORTLY_ATTRIBUTE};
+attribute vec4 bones;
+attribute vec4 roleKind;
 uniform sampler2D dolls;
 vec4 dollTexel(int x) { return texelFetch(dolls, ivec2(x, gl_InstanceID), 0); }
 vec3 dollTurn(vec4 q, vec3 v) { return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); }
@@ -43,18 +40,18 @@ void dollSkin(out vec3 p, out vec3 n) {
   vec3 shaped = position;
   vec3 shapedNormal = normal;
   if ((flags & 2) != 0) {
-    shaped = ${SHAPE_WOMAN_ATTRIBUTE};
-    shapedNormal = ${NORMAL_WOMAN_ATTRIBUTE};
+    shaped = ${SHAPE_WOMAN_ATTRIBUTE}.xyz;
+    shapedNormal = ${NORMAL_WOMAN_ATTRIBUTE}.xyz;
   } else if ((flags & 4) != 0) {
-    shaped = ${SHAPE_PORTLY_ATTRIBUTE};
-    shapedNormal = ${NORMAL_PORTLY_ATTRIBUTE};
+    shaped = ${SHAPE_PORTLY_ATTRIBUTE}.xyz;
+    shapedNormal = ${NORMAL_PORTLY_ATTRIBUTE}.xyz;
   }
   int role = int(roleKind.x + 0.5);
   vec4 cuts = dollTexel(${CUTS_AT});
   vec4 flagged = dollTexel(${FLAGS_AT});
-  vec2 hung = (flags & 4) != 0 ? ${HANG_ATTRIBUTE}.zw : ${HANG_ATTRIBUTE}.xy;
+  vec2 hung = (flags & 4) != 0 ? vec2(${SHAPE_PORTLY_ATTRIBUTE}.w, ${NORMAL_PORTLY_ATTRIBUTE}.w) : vec2(${SHAPE_WOMAN_ATTRIBUTE}.w, ${NORMAL_WOMAN_ATTRIBUTE}.w);
   float hangs = role == ${ROLE.ARM} ? flagged.z * step(cuts.x, position.y) : (role == ${ROLE.LEGS} ? flagged.w * step(cuts.y, position.y) : flagged.z);
-  vec3 rest = shaped + hangs * vec3(hung.x, 0.0, hung.y) + bust.x * dollTexel(${ORBS_AT}).xyz + bust.y * dollTexel(${ORBS_AT} + 1).xyz;
+  vec3 rest = shaped + hangs * vec3(hung.x, 0.0, hung.y) + roleKind.z * dollTexel(${ORBS_AT}).xyz + roleKind.w * dollTexel(${ORBS_AT} + 1).xyz;
   vec3 pa = dollTexel(2 * a).xyz + dollTurn(qa, rest);
   vec3 pb = dollTexel(2 * b).xyz + dollTurn(qb, rest);
   p = dollShown() ? mix(pa, pb, bones.z) : vec3(0.0);
@@ -254,7 +251,7 @@ export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: 
         `#include <begin_vertex>
 vPrint = vec4(${PRINT_ATTRIBUTE}.xy, ${PRINT_ATTRIBUTE}.z < -0.5 ? dollTexel(${FLAGS_AT}).y : ${PRINT_ATTRIBUTE}.z, ${PRINT_ATTRIBUTE}.w);
 int dollRole = int(roleKind.x + 0.5);
-float dollBodyMesh = float(gl_VertexID < ${BODY_VERTICES});
+float dollBodyMesh = bones.w;
 vDollRole = dollRole + ${ON_BODY_MESH} * int(dollBodyMesh);
 vDollRegion = dollBodyMesh * vec4(float(dollRole == ${ROLE.SHIRT} || (dollRole == ${ROLE.SKIN} && position.y > ${glslFloat(NECK_SKIN_FROM)})), float(dollRole == ${ROLE.ARM}), float(dollRole == ${ROLE.LEGS}), float(dollRole == ${ROLE.SHOE}));
 int dollVertexPick;

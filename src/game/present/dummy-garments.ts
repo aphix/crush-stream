@@ -231,7 +231,7 @@ function widestDown(fit: Fit, triangles: readonly number[], from: number, to: nu
   return widest;
 }
 
-/** How far (m, per body vertex: x, y, z) each body vertex of `fit` moves out to where a man's clothes hang (the shader's `hang`, cut by the slot's cuts and scaled by its outfit). */
+/** How far (m, per body vertex: x, y, z) each body vertex of `fit` moves out to where a man's clothes hang (the shader's hang push, cut by the slot's cuts and scaled by its outfit). */
 export function hangOffsets(fit: Fit): Float32Array {
   const offsets = new Float32Array(BODY_VERTICES * 3);
   const step = (2 * Math.PI) / HANG_SIDES;
@@ -285,7 +285,7 @@ export function hangingFit(fit: Fit, share: readonly [number, number] = [1, 1]):
   return { ...fit, rest: fit.rest.map((v, i) => v + (offsets[i] ?? 0) * (fit.hipWeight[Math.floor(i / 3)]! > 0 ? share[1] : share[0])) };
 }
 
-/** The shader's `hang` for `vertices` vertices (the body's first, the wear's zero): each body vertex's level push (x, z) under the man's clothes, then under the portly man's. */
+/** The hang push for `vertices` vertices (the body's first, the wear's zero): each body vertex's level push (x, z) under the man's clothes, then under the portly man's; the shape and normal attributes carry it in w. */
 export function hangAttribute(man: Fit, portly: Fit, vertices: number): Float32Array {
   const packed = new Float32Array(vertices * 4);
   for (const [at, fit] of [[0, man], [2, portly]] as const) {

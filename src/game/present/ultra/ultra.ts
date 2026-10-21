@@ -27,7 +27,7 @@ const MAX_ANISOTROPY = 8;
 /** Edge (px) the diffuse is shrunk to for its mean colour. */
 const MEAN_EDGE = 256;
 
-/** One role's photographs and `1 / mean linear colour` of its diffuse (the gain `prefabs.ts` keeps for the procedural ones). */
+/** One role's photographs, on the GPU only (`uploadOnce`), and `1 / mean linear colour` of its diffuse (the gain `prefabs.ts` keeps for the procedural ones). */
 type PbrSet = { diff: THREE.Texture; nor: THREE.Texture; arm: THREE.Texture; gain: THREE.Color };
 /** A set tiled for one place: the same images, a repeat that makes a tile cover its real size where one UV unit spans `uvMetres`. */
 type Tiling = { diff: THREE.Texture; nor: THREE.Texture; arm: THREE.Texture };
@@ -44,7 +44,7 @@ type Saved = {
 };
 const SAVED = "ultraSaved";
 
-async function loadImage(dir: string, role: SurfaceRole, kind: "diff" | "nor" | "arm", anisotropy: number): Promise<THREE.Texture> {
+async function loadImage(dir: string, role: SurfaceRole, kind: "diff" | "nor" | "arm", anisotropy: number): Promise<THREE.Texture<ImageBitmap>> {
   const bitmap = await loadUprightBitmap(`${dir}${role}-${kind}.webp`);
   const tex = new THREE.Texture(bitmap);
   tex.colorSpace = kind === "diff" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
@@ -56,12 +56,24 @@ async function loadImage(dir: string, role: SurfaceRole, kind: "diff" | "nor" | 
   return tex;
 }
 
-async function loadSet(dir: string, role: SurfaceRole, anisotropy: number): Promise<PbrSet> {
+async function loadSet(renderer: THREE.WebGLRenderer, dir: string, role: SurfaceRole, anisotropy: number): Promise<PbrSet> {
   const [diff, nor, arm] = await Promise.all([loadImage(dir, role, "diff", anisotropy), loadImage(dir, role, "nor", anisotropy), loadImage(dir, role, "arm", anisotropy)]);
   const c = document.createElement("canvas");
   c.width = c.height = MEAN_EDGE;
-  c.getContext("2d")!.drawImage(diff.image as ImageBitmap, 0, 0, MEAN_EDGE, MEAN_EDGE);
-  return { diff, nor, arm, gain: gainOf(c) };
+  c.getContext("2d")!.drawImage(diff.image, 0, 0, MEAN_EDGE, MEAN_EDGE);
+  const gain = gainOf(c);
+  for (const tex of [diff, nor, arm]) uploadOnce(renderer, tex);
+  return { diff, nor, arm, gain };
+}
+
+/**
+ * Upload `tex` and free its decoded picture, so the GPU holds the only copy. A tiling's clone bumps the shared source's version:
+ * `dataReady` false keeps that from re-reading the closed picture.
+ */
+function uploadOnce(renderer: THREE.WebGLRenderer, tex: THREE.Texture<ImageBitmap>): void {
+  renderer.initTexture(tex);
+  tex.image.close();
+  tex.source.dataReady = false;
 }
 
 /**
@@ -92,7 +104,7 @@ export class Ultra {
     const envLoad = loadHdrEnv(host.renderer, SKY_URL, host.alive);
     let loaded: PbrSet[];
     try {
-      loaded = await Promise.all(ROLES.map((role) => loadSet(host.phone ? PHONE_DIR : FULL_DIR, role, anisotropy)));
+      loaded = await Promise.all(ROLES.map((role) => loadSet(host.renderer, host.phone ? PHONE_DIR : FULL_DIR, role, anisotropy)));
     } catch (err) {
       void envLoad.then((e) => e?.dispose());
       throw err;
@@ -162,10 +174,7 @@ export class Ultra {
     this.tilings.clear();
     for (const role of ROLES) {
       const s = this.sets[role];
-      for (const t of [s.diff, s.nor, s.arm]) {
-        t.dispose();
-        (t.image as ImageBitmap).close();
-      }
+      for (const t of [s.diff, s.nor, s.arm]) t.dispose();
     }
   }
 
