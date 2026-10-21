@@ -139,6 +139,7 @@ const BASE_FIELDS = {
   dkph: num(1, 120, D.doors.kph),
   dkg: num(5, 5000, D.doors.kg),
   dside: pick(["left", "right"] as const, D.doors.side < 0 ? "left" : "right"),
+  dlid: num(0, 2, 0, true),
   // null = the Range's attract loop; a mini game opens straight into its station.
   mg: orNull(pick(MINIGAME_MODES, MINIGAME_MODE.longJump)),
   mgset: num(THROWS_PER_SET.min, THROWS_PER_SET.max, THROWS_PER_SET.default, true),

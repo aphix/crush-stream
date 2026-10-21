@@ -68,6 +68,7 @@ describe("given a share state with every kind of field set", () => {
       dkph: 30,
       dkg: 800,
       dside: "left",
+      dlid: 2,
       track: "figure8",
       camp: ["rally", "oval", "city"],
       mode: "campaign",
@@ -148,14 +149,14 @@ describe("given the Ultra effects tier pinned in a link", () => {
 
 describe("given a link with malformed values and unknown keys", () => {
   it("when it is decoded, then every field falls back to its default and nothing throws", () => {
-    const d = decodeShare("#scene=nope&cars=abc&night=yes&seed=zz&fx=turbo&car=tank&dside=up&track=../x&foo=1&smin=&ts=1e3&%=%%&");
+    const d = decodeShare("#scene=nope&cars=abc&night=yes&seed=zz&fx=turbo&car=tank&dside=up&dlid=x&track=../x&foo=1&smin=&ts=1e3&%=%%&");
     assert.equal(json(d), json(DEFAULTS));
   });
 });
 
 describe("given a link with out-of-range numbers", () => {
   it("when it is decoded, then each number clamps to the HUD's own range for that setting", () => {
-    const d = decodeShare("cars=999&smin=-5&smax=500&real=2&fxd=9&buckle=-1&ts=0&ai=0&laps=77&aggr=3&squash=9");
+    const d = decodeShare("cars=999&smin=-5&smax=500&real=2&fxd=9&buckle=-1&ts=0&ai=0&laps=77&aggr=3&squash=9&dlid=9");
     assert.equal(d.cars, 32);
     assert.equal(d.smin, KNOB_RANGES.speed.min);
     assert.equal(d.smax, KNOB_RANGES.speed.max);
@@ -167,6 +168,7 @@ describe("given a link with out-of-range numbers", () => {
     assert.equal(d.laps, 9);
     assert.equal(d.aggr, 1);
     assert.equal(d.squash, KNOB_RANGES.squash.max);
+    assert.equal(d.dlid, 2);
   });
 });
 

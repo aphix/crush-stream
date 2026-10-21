@@ -129,7 +129,7 @@ function strike(part: "door" | "panel", dir: 1 | -1, kph: number, kg: number, ca
     box.z += box.vz * h;
     const hit = partContact(car, box, h);
     if (hit.du > 0) box.vz -= hit.nz * hit.du;
-    car.swingDoors(h);
+    car.swingHinges(h);
   }
   return {
     off: (["doorR", "quarterR"] as const).filter((n) => car.partOff(n)),

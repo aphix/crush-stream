@@ -1,3 +1,4 @@
+import type { LidSwing } from "./hinge-spec.ts";
 import { COUPE } from "./car-styles/coupe.ts";
 import { HATCHBACK } from "./car-styles/hatchback.ts";
 import { MONSTER } from "./car-styles/monster.ts";
@@ -39,18 +40,26 @@ export interface GlassQuad {
   wTop: number;
 }
 
+/** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
+export interface LidDrop {
+  y: number;
+  w: number;
+  z?: number;
+}
+
 /** Ducktail kick on a boot's free edge (a deck lid's rear edge, a tailgate's top edge): it rises `rise` (m) outward at the edge, easing to the panel over `depth` (m). */
 export interface BootLip {
   rise: number;
   depth: number;
 }
 
-type BootSpec = (
-  /** Deck lid lofted on the profile from z0 to z1, hinged at origin. */
-  | { kind: "lid"; z0: number; z1: number; origin: YZ }
-  /** Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, hinged at its top edge; z0 defaults to origin's z (upright). */
+/** The panel's shape; `pivot` is where it turns (default `origin`): a hatch's or liftgate's roof hinge, a drop gate's bottom edge. `swing`: its latch, struts and limits (default by kind, `hinge-spec.ts`). */
+export type BootSpec = (
+  /** Deck lid lofted on the profile from z0 to z1, hinged at origin; with `drop` it wraps the tail, its face standing at z1. */
+  | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop }
+  /** Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). */
   | { kind: "tailgate"; y0: number; origin: YZ; z0?: number }
-) & { lip?: BootLip };
+) & { lip?: BootLip; pivot?: YZ; swing?: LidSwing };
 
 /** Raised centre bulge on the drawn hood from z `z0` (cowl end) to `z1`, `width` (m) across, its top `rise` (m) over the lid's; it ramps into the lid at both ends. */
 interface HoodBulge {
@@ -179,8 +188,23 @@ export interface BodyStyle {
   rocker: { y: number };
   /** Floor pan height as [z, y] stations in ascending z (linear between, held past the ends); absent = flat at `dims.rideHeight`. The rocker rides up with it. */
   underside?: readonly (readonly [number, number])[];
-  /** Front door: hinge axis at the A-pillar (±hingeX, hingeY, hingeZ), `length` hinge to trailing edge, skin ±halfHeight about the hinge, `aperture` [z0, z1] the body's front-door cut (the skin overlaps it 0.02 each end), mirror seated `mirrorY` over the hinge and `mirrorZ` (default 0) behind it, reaching `mirrorReach` out, ±mirrorHalfDepth deep. */
-  door: { hingeX: number; hingeY: number; hingeZ: number; length: number; halfHeight: number; mirrorY: number; mirrorZ?: number; mirrorReach: number; mirrorHalfDepth: number; aperture: readonly [number, number] };
+  /**
+   * Front door: hinge axis at the A-pillar (±hingeX, hingeY, hingeZ), `length` hinge to trailing edge, skin ±halfHeight about the hinge, `aperture` [z0, z1] the body's front-door cut (the skin overlaps it 0.02 each end), mirror seated `mirrorY` over the hinge and `mirrorZ` (default 0) behind it, reaching `mirrorReach` out, ±mirrorHalfDepth deep.
+   * `mirror` (drawn only): its own mirror, `cap` rounded or box of `size` [w out, h, d along z] (default `MIRROR_CAP_SIZE`) in `finish` (body: the door's paint), its outer face at `mirrorReach`, its foot on the skin; absent = the platform mirror x-scaled to the reach.
+   */
+  door: {
+    hingeX: number;
+    hingeY: number;
+    hingeZ: number;
+    length: number;
+    halfHeight: number;
+    mirrorY: number;
+    mirrorZ?: number;
+    mirrorReach: number;
+    mirrorHalfDepth: number;
+    aperture: readonly [number, number];
+    mirror?: { cap: "rounded" | "box"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number] };
+  };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
   aPillarFoot: number;
   /** Where the A-pillar's rear edge meets the cant line (z, m): the door glass's top-front corner; absent = 5 cm behind the windshield's top. */
@@ -198,6 +222,14 @@ export interface BodyStyle {
   quarter: { zRearBot: number; zRearTop: number };
   /** Extra pillar splitting the quarter glass (wagon C-pillar), or null. */
   midPillarZ: number | null;
+  /**
+   * Drawn only: side-view widths along z (m). `b`: the B-pillar, centred on its band, even from belt to top, the side panes
+   * tucked under it. `divider`: the post at `midPillarZ`, its widths and its z at the belt and at the top (a leaning post).
+   * Absent: the `bPillar` band (its top 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`.
+   */
+  pillars?: { b?: number; divider?: { width: readonly [number, number]; z?: readonly [number, number] } };
+  /** Drawn only: greenhouse parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar. */
+  blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean };
   rearBulkhead: { z: number; yTop: number };
   /** Open floors visible through the glass: [zRear, zFront, floorY]. */
   tubs: readonly (readonly [number, number, number])[];
@@ -210,6 +242,11 @@ export interface BodyStyle {
    * the bumpers, grille and boot (`lamps.test.ts`).
    */
   lamps: { head: readonly [number, number]; tail: readonly [number, number] };
+  /**
+   * Seats (m, car space): the driver's H-point [x, y, z] (he sits on -x; the passenger mirrors him), and the rear bench's [y, z] on the
+   * centre line, or null with no rear row (a regular cab). The drawn seats, the seated driver and the sim's seat all read it.
+   */
+  seats: { front: readonly [number, number, number]; rear: readonly [number, number] | null };
   /** Fixed paint, or none (the fleet paint). */
   livery?: Livery;
   /** Roof light bar with red / blue sirens (`DeformableCar.setSirens`). */

@@ -697,12 +697,12 @@ export abstract class EngineInput extends EngineRigs {
       this.toggleBalls();
     } else if (e.code === "Period") {
       this.toggleRamps();
-    } else if (this.showDoors && /^Digit[1-7]$/.test(e.code)) {
+    } else if (this.showDoors && /^Digit[1-9]$/.test(e.code)) {
       const n = Number(e.code.slice(5));
       if (n <= 3) this.fireDoorRam(n === 1 ? "mirror" : n === 2 ? "overOpen" : "shut");
       else if (n === 4) this.toggleDoorOpen();
       else if (n === 5) this.setDoorConfig({ side: this.doorRig.side < 0 ? 1 : -1 });
-      else this.fireDoorRam(n === 6 ? "panelPush" : "panelPull");
+      else this.fireDoorRam(n === 6 ? "panelPush" : n === 7 ? "panelPull" : n === 8 ? "lidPop" : "lidTear");
     } else if (this.showPistons && /^Digit[0-8]$/.test(e.code)) {
       const n = Number(e.code.slice(5));
       this.firePiston(n === 0 ? PISTON_IDS.length : n - 1);

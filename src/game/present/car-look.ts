@@ -42,6 +42,7 @@ export function wearCarLook(car: DeformableCar, pick: CarPick, spray: SprayBitma
   w.hood.color.setHex(c.hood);
   w.trunk.color.setHex(c.trunk);
   w.doors.color.setHex(c.doors);
+  car.setMirrorPaint(c.doors);
   const ends = [car.style.bumpers.front, car.style.bumpers.rear];
   for (let i = 0; i < w.bumpers.length; i++) w.bumpers[i]!.material = pick.bumpers === null ? bumperMaterial(ends[i]!.trim, c.bumpers, c.body) : trimMaterial(c.bumpers);
   car.setGlassTint(c.glass);

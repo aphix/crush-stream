@@ -3,7 +3,7 @@ import { PART_FAMILY } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassQuad } from "./car-variants.ts";
 import { glassTopY, glassX, lerp } from "./car-mesh.ts";
-import { aPillarTopZ, beltY } from "./car-lines.ts";
+import { aPillarTopZ, bPillarBand, beltY } from "./car-lines.ts";
 
 // Glass panes on the shared platform: windshield, rear glass, door and quarter glass, filling the greenhouse `car-greenhouse-mesh.ts` builds.
 
@@ -69,17 +69,22 @@ type SideSpan = { bot: readonly [number, number]; top: readonly [number, number]
 
 /** The door glass rides its door, so its rear edge stays this far (m) inside the door's trailing edge at the belt and at the top. */
 const DOOR_GLASS_INSET = { bot: 0.03, top: 0.05 } as const;
+/** Under a B-pillar whose width the style sets, the side panes run this far (m) in under its edges. */
+const PANE_TUCK = 0.01;
 
-/** Door glass: from inside the door's trailing edge at the belt up to the A-pillar, from its foot on the belt to its top on the cant line. */
+/** Door glass: from inside the door's trailing edge (or under the drawn B-pillar) at the belt up to the A-pillar, from its foot on the belt to its top on the cant line. */
 function doorSpan(style: BodyStyle): SideSpan {
+  const band = bPillarBand(style);
   const trailing = style.door.hingeZ - style.door.length;
-  return { bot: [trailing + DOOR_GLASS_INSET.bot, style.aPillarFoot], top: [trailing + DOOR_GLASS_INSET.top, aPillarTopZ(style)] };
+  const [bot, top] = band ? [band[1] - PANE_TUCK, band[1] - PANE_TUCK] : [trailing + DOOR_GLASS_INSET.bot, trailing + DOOR_GLASS_INSET.top];
+  return { bot: [bot, style.aPillarFoot], top: [top, aPillarTopZ(style)] };
 }
 
-/** Quarter glass: from the C-pillar forward to the B-pillar. */
+/** Quarter glass: from the C-pillar forward to the B-pillar (under the drawn one when the style sets its width). */
 function quarterSpan(style: BodyStyle): SideSpan {
-  const { rear } = style.bPillar;
-  return { bot: [style.quarter.zRearBot, rear], top: [style.quarter.zRearTop, rear] };
+  const band = bPillarBand(style);
+  const front = band ? band[0] + PANE_TUCK : style.bPillar.rear;
+  return { bot: [style.quarter.zRearBot, front], top: [style.quarter.zRearTop, front] };
 }
 
 /** Point of a side pane in car space: `s` 0…1 rear to front, `t` 0…1 belt to top, leaning in with the tumblehome. */

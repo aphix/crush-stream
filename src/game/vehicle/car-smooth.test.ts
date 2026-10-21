@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { describe, it } from "node:test";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { CAR_STYLES, CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
+import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import { CREASE_DEGREES, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
@@ -74,20 +75,24 @@ type EdgeCensus = { sharpEdges: number; sharpEdgesStillShared: number; smoothEdg
 /**
  * Every edge shared by exactly two faces of `geometry` (edges matched by the vertices' places, so a split edge still counts), against
  * `creaseDegrees`: the sharp ones (the faces' normals at least that far apart) must not share their vertices, the smooth ones must.
+ * A loft's end caps (`loftFromRings` writes them after its quads) are the panel's cut ends, hard by construction: their seams are not read.
  */
-function censusOfEdges(geometry: THREE.BufferGeometry, creaseDegrees: number): EdgeCensus {
+function censusOfEdges(geometry: THREE.BufferGeometry, creaseDegrees: number, capsAreCuts: boolean): EdgeCensus {
   const position = geometry.getAttribute("position");
   const index = geometry.getIndex()!;
   const placeOf = (vertex: number) => `${position.getX(vertex)},${position.getY(vertex)},${position.getZ(vertex)}`;
-  const faces = new Map<string, { normal: THREE.Vector3; vertices: string }[]>();
+  const faces = new Map<string, { normal: THREE.Vector3; vertices: string; cut: boolean }[]>();
+  const loft = geometry.userData.loft as { ring: number; slices: number } | undefined;
+  const firstCapTriangle = capsAreCuts && loft ? 2 * loft.ring * (loft.slices - 1) : Infinity;
   for (let t = 0; t < index.count; t += 3) {
+    const cut = t / 3 >= firstCapTriangle;
     const corners = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
     const normal = triangleNormal(...(corners.map((vertex) => positionAt(geometry, vertex)) as [THREE.Vector3, THREE.Vector3, THREE.Vector3]));
     if (!normal) continue;
     for (let k = 0; k < 3; k++) {
       const [a, b] = [corners[k]!, corners[(k + 1) % 3]!];
       const key = [placeOf(a), placeOf(b)].sort().join("|");
-      const record = { normal, vertices: [a, b].sort((x, y) => x - y).join(",") };
+      const record = { normal, vertices: [a, b].sort((x, y) => x - y).join(","), cut };
       const list = faces.get(key);
       if (list) list.push(record);
       else faces.set(key, [record]);
@@ -95,7 +100,7 @@ function censusOfEdges(geometry: THREE.BufferGeometry, creaseDegrees: number): E
   }
   const census: EdgeCensus = { sharpEdges: 0, sharpEdgesStillShared: 0, smoothEdgesSplit: 0, firstOffence: "none" };
   for (const [key, [first, second, ...rest]] of faces) {
-    if (!first || !second || rest.length > 0) continue;
+    if (!first || !second || rest.length > 0 || first.cut !== second.cut) continue;
     const shared = first.vertices === second.vertices;
     const degrees = angleBetweenDegrees(first.normal, second.normal);
     if (degrees >= creaseDegrees) {
@@ -217,14 +222,14 @@ describe("given the lids as built", () => {
   }
 });
 
-type PartCase = { readonly name: string; readonly make: (id: CarStyleId) => THREE.BufferGeometry; readonly creaseDegrees: number };
+type PartCase = { readonly name: string; readonly make: (id: CarStyleId) => THREE.BufferGeometry; readonly creaseDegrees: number; readonly capsAreCuts: boolean };
 const partCases: readonly PartCase[] = [
-  { name: "bonnet", make: (id) => makeHoodGeometry(CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.deckLid },
-  { name: "boot", make: (id) => makeTrunkGeometry(CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.deckLid },
-  { name: "left door", make: (id) => makeDoorGeometry(-1, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.door },
-  { name: "right door", make: (id) => makeDoorGeometry(1, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.door },
-  { name: "front bumper", make: (id) => makeBumperGeometry(true, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.bumper },
-  { name: "rear bumper", make: (id) => makeBumperGeometry(false, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.bumper },
+  { name: "bonnet", make: (id) => makeHoodGeometry(CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.deckLid, capsAreCuts: true },
+  { name: "boot", make: (id) => makeTrunkGeometry(CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.deckLid, capsAreCuts: true },
+  { name: "left door", make: (id) => makeDoorGeometry(-1, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.door, capsAreCuts: false },
+  { name: "right door", make: (id) => makeDoorGeometry(1, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.door, capsAreCuts: false },
+  { name: "front bumper", make: (id) => makeBumperGeometry(true, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.bumper, capsAreCuts: true },
+  { name: "rear bumper", make: (id) => makeBumperGeometry(false, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.bumper, capsAreCuts: true },
 ];
 
 describe("given every part whose hard edges are declared, as built for every body style", () => {
@@ -232,7 +237,7 @@ describe("given every part whose hard edges are declared, as built for every bod
     for (const testCase of partCases) {
       it(`when a ${id} ${testCase.name}'s edges are read against its ${testCase.creaseDegrees}° crease, then every sharper edge has vertices of its own and every softer one shares them`, () => {
         const geometry = testCase.make(id);
-        const census = censusOfEdges(geometry, testCase.creaseDegrees);
+        const census = censusOfEdges(geometry, testCase.creaseDegrees, testCase.capsAreCuts);
         assert.ok(census.sharpEdges > 0, `${id} ${testCase.name} has no sharp edge at all`);
         assert.equal(census.sharpEdgesStillShared, 0, `${id} ${testCase.name}: sharp edges still share vertices (${JSON.stringify(census)})`);
         assert.equal(census.smoothEdgesSplit, 0, `${id} ${testCase.name}: smooth edges were split (${JSON.stringify(census)})`);
@@ -374,12 +379,26 @@ const BASELINE_BY_STYLE = [
 ] as const satisfies readonly { id: CarStyleId; drawCalls: number; triangles: number; bodyVertices: number }[];
 /** The stated budget: a car's triangles at most 1.6 x the baseline. */
 const TRIANGLE_BUDGET = 1.6;
-/** The skin writes every body vertex each frame (its cost follows the count): the body at most 1.2 x the baseline's vertices, which measured 1.2 x the baseline's skin time at most. */
+/** The skin writes every body vertex each frame (its cost follows the count): the body's loft at most 1.2 x the baseline's vertices, which measured 1.2 x the baseline's skin time at most. */
 const BODY_VERTEX_BUDGET = 1.2;
+/** Each roof fitting kind's vertices as built (`makeRoofFittings`), merged into the body on top of its loft: red if a fitting grows. */
+const ROOF_FITTING_VERTICES = { rails: 220, glassPanel: 154, spoiler: 26 } as const;
+type RoofKind = keyof typeof ROOF_FITTING_VERTICES;
+
+/** `style`'s roof fittings' vertices, all together and per kind (each built alone). */
+function roofFittingVertices(style: BodyStyle): { all: number; byKind: [RoofKind, number][] } {
+  const count = (s: BodyStyle) => makeRoofFittings(s)?.geometry.getAttribute("position").count ?? 0;
+  const kinds = Object.keys(style.roof ?? {}) as RoofKind[];
+  return { all: count(style), byKind: kinds.map((kind) => [kind, count({ ...style, roof: { [kind]: style.roof![kind] } })]) };
+}
+
+function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
+  for (const [kind, n] of byKind) assert.ok(n <= ROOF_FITTING_VERTICES[kind], `${id} ${kind}: ${n} vertices against ${ROOF_FITTING_VERTICES[kind]}`);
+}
 
 describe("given every body style's car built whole", () => {
   for (const testCase of BASELINE_BY_STYLE) {
-    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices`, () => {
+    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting within its own count`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, testCase.id);
       let drawCalls = 0;
       let triangles = 0;
@@ -391,10 +410,21 @@ describe("given every body style's car built whole", () => {
       });
       assert.equal(drawCalls, testCase.drawCalls);
       assert.ok(triangles <= testCase.triangles * TRIANGLE_BUDGET, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`);
-      const bodyVertices = car.body.geometry.getAttribute("position").count;
-      assert.ok(bodyVertices <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${bodyVertices} body vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
+      const fittings = roofFittingVertices(car.style);
+      const loft = car.body.geometry.getAttribute("position").count - fittings.all;
+      assert.ok(loft <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
+      assertRoofFittingCaps(testCase.id, fittings.byKind);
     });
   }
+
+  it("when a body carries every roof fitting, then each adds at most its own count of vertices to the body", () => {
+    const wagon = CAR_STYLES.wagon;
+    const roof = { rails: { x: [0.5, 0.56], z: [-1.6, 0.12], rise: 0.045 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 }, spoiler: { z: [-1.85, -1.7], y: [1.52, 1.6], halfWidth: 0.6 } } as const;
+    const fittings = roofFittingVertices({ ...wagon, roof });
+    assert.equal(fittings.byKind.length, 3, "the control: every kind is built");
+    assertRoofFittingCaps("wagon", fittings.byKind);
+    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.all, makeChassisGeometry(wagon).getAttribute("position").count, "the fittings are all the body gains");
+  });
 });
 
 // ---- (e) the panels still cut ----------------------------------------------------------------------------------------------
@@ -480,12 +510,13 @@ function cageSourceDigest(car: DeformableCar): string {
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
   { id: "sedan", digest: "505b4c4fe9c4f34f8f3350c3530634eff8ae353dcfa168b128b9525112f4d52a" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
-  { id: "hatchback", digest: "2ebc4b0141b5c6c0d89162f27eca758e2ea6d5707a3f20b3497c08134cb52e59" },
-  { id: "wagon", digest: "b7deba530880e57530f77753db99a14888cc4412bafe0227dd79381f24985dec" },
+  // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
+  { id: "hatchback", digest: "ba4c934973909383e4f766d12db1f27bcd4798c25b2755e5eec2079791a13d9f" },
+  { id: "wagon", digest: "61041e1b4bf248102eeecd2037608e51ff6217088b070e2811527c43611378d2" },
   { id: "coupe", digest: "986eb8a7cb728f9b75067a62ea6c793b9f330c5d773dd0e9eac12d1dc09074b2" },
-  { id: "pickup", digest: "ef70266b44997559494201993b461f959c68591e1e81ee5795a01e20dba9aacf" },
+  { id: "pickup", digest: "494e523b2fff1803aaa9b226da64bbe63602ee4d68973be7888f9e2ca473eca8" },
   { id: "police", digest: "44c94fa5daa8c1c3dd5672c2bdb1a80ef92666e5c027c7698814ddf6b7de1796" },
-  { id: "monster", digest: "ef70266b44997559494201993b461f959c68591e1e81ee5795a01e20dba9aacf" },
+  { id: "monster", digest: "494e523b2fff1803aaa9b226da64bbe63602ee4d68973be7888f9e2ca473eca8" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {
