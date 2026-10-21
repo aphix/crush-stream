@@ -60,6 +60,7 @@ export const PICKUP: BodyStyle = {
   rearDoorSeam: null,
   boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15] },
   lamps: { head: [0.4, 0.82], tail: [0.58, 0.86] },
+  camera: { hood: [1.42, 1.25], third: { dist: 6.4, height: 2.3, aimUp: 1.2 }, far: { dist: 10.3, height: 3.6, aimUp: 1.35 } },
   details: {
     lines: [
       { view: "side", points: [[0.706, 1.148], [0.699, 0.421]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },

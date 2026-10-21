@@ -84,6 +84,7 @@ export const COUPE: BodyStyle = {
   rearDoorSeam: null,
   boot: { kind: "lid", z0: -1.42, z1: -2.0, origin: [0.97, -1.42] },
   lamps: { head: [0.485, 0.51], tail: [0.4, 0.66] },
+  camera: { hood: [1.12, 1.0], third: { dist: 6.1, height: 1.95, aimUp: 0.95 }, far: { dist: 9.9, height: 3.25, aimUp: 1.1 } },
   details: {
     lines: [
       { view: "side", points: [[0.592, 0.848], [0.592, 0.606], [0.606, 0.321]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
