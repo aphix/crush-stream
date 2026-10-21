@@ -5,7 +5,7 @@ import { LIFTGATE } from "../hinge-spec.ts";
 /** Luxury SUV (the `wagon` id): tall clamshell nose, flat floating roof, raked tailgate glass under a roof spoiler. */
 export const WAGON: BodyStyle = {
   id: "wagon",
-  dims: { wheelbase: 2.45, overhang: { front: 0.8415, rear: 0.9185 }, track: 1.4, width: 1.693, height: 1.586, rideHeight: 0.23, wheel: { radius: 0.37, width: 0.23 } },
+  dims: { wheelbase: 2.45, overhang: { front: 0.8415, rear: 0.9185 }, track: 1.4, width: 1.693, height: 1.595, rideHeight: 0.23, wheel: { radius: 0.37, width: 0.23 } },
   windshield: { base: [1.1, 0.89], wBase: 1.42, wTop: 0.98 },
   bPillar: { rear: -0.325, front: -0.245 },
   belt: { x: [[-1.97, 0.64], [-1.8, 0.7], [-1.6, 0.74], [-1.4, 0.77], [-1.2, 0.785]], y: [[-2.033, 1.095], [0.024, 1.07], [0.887, 1.062]] },
