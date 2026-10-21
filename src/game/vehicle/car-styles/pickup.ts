@@ -1,9 +1,10 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { BOOT_SENSOR, CABIN_TUB, FRONT_CLIP, HEAD_LAMP, REAR_GLASS_W, st } from "./platform.ts";
+import { BOOT_SENSOR, CABIN_TUB, FRONT_CLIP, HEAD_LAMP, PLATFORM_WHEEL, st } from "./platform.ts";
 
 /** Single cab + open bed; the trunk part is the tailgate. */
 export const PICKUP: BodyStyle = {
   id: "pickup",
+  dims: { wheelbase: 2.68, overhang: { front: 0.81, rear: 0.81 }, track: 1.48, width: 1.801, height: 1.365, rideHeight: 0.145, wheel: PLATFORM_WHEEL },
   profile: [
     st(-2.11, 0.86, 0.92),
     st(-1.58, 0.885, 0.92),
@@ -15,7 +16,7 @@ export const PICKUP: BodyStyle = {
   ],
   roofZ: [-0.7, 0.58],
   windshieldTop: [1.26, 0.49],
-  rearGlass: { base: [0.91, -0.71], top: [1.24, -0.67], wBase: REAR_GLASS_W.narrow, wTop: 1.1 },
+  rearGlass: { base: [0.91, -0.71], top: [1.24, -0.67], wBase: 1.3, wTop: 1.1 },
   quarter: { zRearBot: -0.56, zRearTop: -0.54 },
   midPillarZ: null,
   rearBulkhead: { z: -0.735, yTop: 0.91 },

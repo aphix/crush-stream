@@ -1,8 +1,9 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { CABIN_TUB, FRONT_CLIP, HEAD_LAMP, REAR_DOOR_SEAM, REAR_GLASS_W, st } from "./platform.ts";
+import { CABIN_TUB, FRONT_CLIP, HEAD_LAMP, PLATFORM_WHEEL, st } from "./platform.ts";
 
 export const SEDAN: BodyStyle = {
   id: "sedan",
+  dims: { wheelbase: 2.68, overhang: { front: 0.81, rear: 0.81 }, track: 1.48, width: 1.813, height: 1.366, rideHeight: 0.145, wheel: PLATFORM_WHEEL },
   profile: [
     st(-2.11, 0.64, 0.66),
     st(-1.92, 0.79, 0.76),
@@ -15,12 +16,12 @@ export const SEDAN: BodyStyle = {
   ],
   roofZ: [-0.82, 0.58],
   windshieldTop: [1.26, 0.49],
-  rearGlass: { base: [0.81, -1.16], top: [1.23, -0.76], wBase: REAR_GLASS_W.wide, wTop: 0.98 },
+  rearGlass: { base: [0.81, -1.16], top: [1.23, -0.76], wBase: 1.36, wTop: 0.98 },
   quarter: { zRearBot: -0.86, zRearTop: -0.7 },
   midPillarZ: null,
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
-  rearDoorSeam: REAR_DOOR_SEAM,
+  rearDoorSeam: -0.62,
   boot: { kind: "lid", z0: -0.66, z1: -1.98, origin: [0.74, -0.72] },
   lamps: { head: HEAD_LAMP, tail: [0.47, 0.56] },
   rig: {},

@@ -52,8 +52,27 @@ interface Livery {
   accent: number;
 }
 
+/** A car's spec dimensions (m) in car space: origin on the ground midway between the axles, +z forward. Length = overhangs + wheelbase. */
+interface CarDims {
+  wheelbase: number;
+  /** Axle to bumper face. */
+  overhang: { front: number; rear: number };
+  /** Wheel centre to wheel centre. */
+  track: number;
+  /** Widest body, mirrors off. */
+  width: number;
+  /** Ground to roof crown at rest, light bar off. */
+  height: number;
+  /** Ground to floor pan, class lift off. */
+  rideHeight: number;
+  /** Tyre, before the class's wheelScale. */
+  wheel: { radius: number; width: number };
+}
+
 export interface BodyStyle {
   id: CarStyleId;
+  /** What the reference was measured to; the tables below are built to it (`car-variants.test.ts`). */
+  dims: CarDims;
   /** Stations rear → front; z ≥ 0.82 is the shared front clip. */
   profile: readonly ProfileStation[];
   /** Roof panel [rear, front] z. */

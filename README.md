@@ -36,6 +36,7 @@ Each row links the document that covers the system; [`docs/ARCHITECTURE.md`](doc
 | System | What it does | Docs |
 |---|---|---|
 | Classes and handling | Five classes (sedan, muscle, truck, monster, police), gears and one Realism slider from arcade to realistic. Damage changes how a car drives. | [`HANDLING`](docs/HANDLING.md) |
+| Car models | Each car is one spec table (its dimensions and shapes) that the shared builders turn into the drawn body, its parts, the collision cage and the soft-body rig. | [`CAR_MODELS`](docs/CAR_MODELS.md) |
 | Controls | Keyboard, controller and touch work together; phones get a thumb pad and captioned buttons. | [`CONTROLS`](docs/CONTROLS.md) |
 | Cameras | Chase, far chase and hood views, spectator cams including Auto, a crash cam in slow motion, impact shake, mouse look. | [`CONTROLS`](docs/CONTROLS.md), [`CINEMATIC`](docs/CINEMATIC.md) |
 | Garage | Pick the car and spray-paint it, and choose the driver's look: every colour, the spray's too, from the quick colours or any colour on one picker. The picks travel in the share URL. | [`CONTROLS`](docs/CONTROLS.md#shareable-url) |

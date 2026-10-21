@@ -12,6 +12,8 @@ import { fleetStyle } from "../scenes/fleet.ts";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { TYRE_HALF_W } from "../deform/deform-contact.ts";
+import { LIGHT_BAR } from "./constants.ts";
 
 const PAINT = { body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" };
 const scene = new THREE.Scene();
@@ -100,6 +102,42 @@ describe("given every body style, compared with the sedan that the shared platfo
     assertSameDigest([...new Set(field)].sort(), [...FLEET_STYLE_IDS].sort(), "styles in a 10-car field");
   });
 });
+/** Tolerance (m) between a style's spec dimensions and its built car: well under a pixel of the references at their scale. */
+const DIMS_TOL = 0.005;
+
+/** Box in the car's frame of every mesh it draws but the light bar (the spec leaves it off). */
+function shellBox(car: DeformableCar): THREE.Box3 {
+  car.group.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  car.group.traverse((o) => {
+    if (o instanceof THREE.Mesh && o.name !== LIGHT_BAR) box.expandByObject(o);
+  });
+  return box;
+}
+
+describe("given every body style's spec dimensions (`BodyStyle.dims`)", () => {
+  for (const id of CAR_STYLE_IDS) {
+    const d = CAR_STYLES[id].dims;
+
+    it(`when a ${id} is built, then its drawn shell's nose, tail, width, roof and floor stand where its dims put them, within ${DIMS_TOL * 1000} mm`, () => {
+      const b = shellBox(cars[id]);
+      const half = d.wheelbase / 2;
+      assertSameNumbers(
+        [b.max.z, b.min.z, b.max.x - b.min.x, b.max.y, b.min.y],
+        [half + d.overhang.front, -half - d.overhang.rear, d.width, d.height, d.rideHeight],
+        `${id} nose, tail, width, roof, floor`,
+        DIMS_TOL,
+      );
+    });
+
+    it(`when a ${id} is built, then its wheels sit on its wheelbase and track, each hub one tyre radius up, on tyres its dims' width`, () => {
+      const hubs = cars[id].wheels.flatMap((w) => [Math.abs(w.position.x), w.position.y, Math.abs(w.position.z)]);
+      assertSameNumbers(hubs, cars[id].wheels.flatMap(() => [d.track / 2, d.wheel.radius, d.wheelbase / 2]), `${id} hubs`, DIMS_TOL);
+      assert.ok(Math.abs(2 * TYRE_HALF_W - d.wheel.width) < DIMS_TOL, `${id} tyre width ${2 * TYRE_HALF_W} vs dims ${d.wheel.width}`);
+    });
+  }
+});
+
 
 describe("given each body style's silhouette, measured as the highest visible surface along the car's length", () => {
   it("when the sedan is measured, then it is three-box: the roof stands over the cabin and the trunk deck sits below 0.9 m behind the glass", () => {

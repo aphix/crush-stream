@@ -1,3 +1,5 @@
+import { TYRE_HALF_W } from "../../deform/deform-contact.ts";
+import { TYRE_R } from "../../deform/deform-state.ts";
 import type { ProfileStation } from "../car-variants.ts";
 
 export function st(z: number, hw: number, yBelt: number, yRoof = yBelt, cabinHw = 0.5, cabin = 0): ProfileStation {
@@ -22,11 +24,5 @@ export const CABIN_TUB = [-0.7, 0.7, 0.3] as const;
 /** Boot sensor (SENSORS[18]) follows the tail panel on hatch / tailgate bodies. */
 export const BOOT_SENSOR = 18;
 
-/** Rear door shut line (z, m) of the four-door bodies: their doors share one aperture. */
-export const REAR_DOOR_SEAM = -0.62;
-
-/** Seat-back bulkhead of the tailgate bodies that carry their roof past the rear seats (hatchback, wagon). */
-export const TAILGATE_BULKHEAD = { z: -0.72, yTop: 0.8 } as const;
-
-/** Rear glass base widths (m): the coupe's and pickup's back lights (narrow), the sedan's and wagon's (wide). */
-export const REAR_GLASS_W = { narrow: 1.3, wide: 1.36 } as const;
+/** The one tyre the sim's hub contact is sized to today (`TYRE_R`, `TYRE_HALF_W`). */
+export const PLATFORM_WHEEL = { radius: TYRE_R, width: 2 * TYRE_HALF_W } as const;

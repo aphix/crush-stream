@@ -1,8 +1,9 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { BOOT_SENSOR, FRONT_CLIP, HEAD_LAMP, REAR_DOOR_SEAM, REAR_GLASS_W, st, TAILGATE_BULKHEAD } from "./platform.ts";
+import { BOOT_SENSOR, FRONT_CLIP, HEAD_LAMP, PLATFORM_WHEEL, st } from "./platform.ts";
 
 export const WAGON: BodyStyle = {
   id: "wagon",
+  dims: { wheelbase: 2.68, overhang: { front: 0.81, rear: 0.81 }, track: 1.48, width: 1.82, height: 1.375, rideHeight: 0.145, wheel: PLATFORM_WHEEL },
   profile: [
     st(-2.11, 0.76, 0.88),
     st(-1.96, 0.84, 0.89, 1.22, 0.55, 0.6),
@@ -15,12 +16,12 @@ export const WAGON: BodyStyle = {
   ],
   roofZ: [-1.68, 0.58],
   windshieldTop: [1.27, 0.49],
-  rearGlass: { base: [0.9, -1.99], top: [1.28, -1.7], wBase: REAR_GLASS_W.wide, wTop: 1.12 },
+  rearGlass: { base: [0.9, -1.99], top: [1.28, -1.7], wBase: 1.36, wTop: 1.12 },
   quarter: { zRearBot: -1.62, zRearTop: -1.52 },
   midPillarZ: -0.66,
-  rearBulkhead: TAILGATE_BULKHEAD,
+  rearBulkhead: { z: -0.72, yTop: 0.8 },
   tubs: [[-1.96, 0.7, 0.3]],
-  rearDoorSeam: REAR_DOOR_SEAM,
+  rearDoorSeam: -0.62,
   boot: { kind: "tailgate", y0: 0.46, origin: [0.87, -2.115] },
   lamps: { head: HEAD_LAMP, tail: [0.7, 0.68] },
   rig: {
