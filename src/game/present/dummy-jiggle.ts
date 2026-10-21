@@ -5,11 +5,8 @@ import { ORBS_AT, ROLE, ROW_TEXELS, smooth } from "./dummy-rig.ts";
 
 /**
  * Her bust as two cosmetic particles a slot (Dead or Alive's bounce), each on an underdamped spring from where the torso's
- * pose carries its orb; every vertex moves by its `bustWeights` share of its orb's lag (shader and `DummyMesh.posed`).
+ * pose carries its orb; every vertex moves by its `bustWeights` share of its orb's lag (`roleKind`'s zw: shader and `DummyMesh.posed`).
  */
-
-/** Each vertex's (left, right) share of its orb's lag; the shader declares it by this name. */
-export const BUST_ATTRIBUTE = "bust";
 
 /** The bounce (Hz) and its damping ratio: a knock leaves a few big bounces, gone within a couple of seconds. */
 const BOUNCE_HZ = 2.5;

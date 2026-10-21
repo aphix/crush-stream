@@ -55,19 +55,22 @@ export function isDrawn(kinds: number, flags: number): boolean {
   return (kinds & flags & EVERY_BUILD) !== 0 && (kinds & OPTIONAL & ~flags) === 0;
 }
 
-/** The geometry's attributes beside `position` and `normal`; the shader declares them by these names. */
+// The geometry's attributes beside `position` and `normal`, four floats a slot: some GLES drivers count gl_InstanceID against
+// the 16 vertex attributes, so the lit program keeps to 14 with it and instancing's 4.
+/** (bone a, bone b, b's weight, 1 on the body mesh and 0 on the wear). */
 export const BONES_ATTRIBUTE = "bones";
+/** (colour role, kinds, the left and right bust orbs' shares of their lag). */
 export const KINDS_ATTRIBUTE = "roleKind";
-/** The woman's and the portly man's rest positions, beside the man's `position`; the shader declares them by these names. */
+/**
+ * The woman's and the portly man's rest positions (xyz, beside the man's `position`) and normals (the man's are `normal`), each w
+ * a level push out to where clothes hang (x on the shape, z on the normal): the woman's carry the man's push, which she shares.
+ */
 export const SHAPE_WOMAN_ATTRIBUTE = "shapeWoman";
 export const SHAPE_PORTLY_ATTRIBUTE = "shapePortly";
-/** Their normals, each from its own shape (the man's are `normal`). */
 export const NORMAL_WOMAN_ATTRIBUTE = "normalWoman";
 export const NORMAL_PORTLY_ATTRIBUTE = "normalPortly";
 /** Every vertex's print (u, v, atlas cell, weight); the shader declares it by this name. */
 export const PRINT_ATTRIBUTE = "print";
-/** Every body vertex's level push (x, z) out to where a man's clothes hang, then the portly man's (zero on the wear); the shader declares it by this name. */
-export const HANG_ATTRIBUTE = "hang";
 
 /**
  * A slot's row in the pose texture: two texels per bone (translation, rotation), a texel per role colour, the flags (x: flags,

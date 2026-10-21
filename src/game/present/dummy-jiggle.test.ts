@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { JEANS, type DriverLook } from "./driver-look.ts";
 import { BODY_VERTICES } from "./dummy-bodies.ts";
-import { BUST_ATTRIBUTE } from "./dummy-jiggle.ts";
+import { KINDS_ATTRIBUTE } from "./dummy-rig.ts";
 import { PARTS } from "./ragdoll-body.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 
@@ -34,12 +34,12 @@ function stand(mesh: DummyMesh, turn: THREE.Quaternion, drop: number): void {
 
 /** Vertices by their share of the left orb's lag: her breast's front (`tip`, her body's own), and her back (none). */
 function landmarks(mesh: DummyMesh): { tip: number; back: number } {
-  const bust = mesh.geometry.getAttribute(BUST_ATTRIBUTE);
+  const kinds = mesh.geometry.getAttribute(KINDS_ATTRIBUTE);
   const shape = mesh.geometry.getAttribute("shapeWoman");
   let [tip, back] = [0, -1];
   for (let i = 0; i < BODY_VERTICES; i++) {
-    if (bust.getX(i) > bust.getX(tip)) tip = i;
-    const isBack = bust.getX(i) === 0 && bust.getY(i) === 0 && shape.getY(i) > BACK_FROM && shape.getY(i) < BACK_TO;
+    if (kinds.getZ(i) > kinds.getZ(tip)) tip = i;
+    const isBack = kinds.getZ(i) === 0 && kinds.getW(i) === 0 && shape.getY(i) > BACK_FROM && shape.getY(i) < BACK_TO;
     if (isBack && (back < 0 || shape.getZ(i) < shape.getZ(back))) back = i;
   }
   return { tip, back };
