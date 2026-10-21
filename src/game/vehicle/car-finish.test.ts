@@ -282,6 +282,32 @@ describe("given a car material being compiled", () => {
     assert.ok(fragment.includes("normal = finishPerturbedNormal(normal, baseSlope"), "base layer: waviness, peel and flake");
     assert.ok(fragment.includes("clearcoatNormal = finishPerturbedNormal(clearcoatNormal, coatSlope"), "clear coat: waviness and peel only");
   });
+
+  const gateCases = [
+    {
+      it: "when a paint material compiles with the finish on, then its broad fetch stops past 90 m, its grain fetch past 18 m and the whole block past 90 m from the mesh, reach 4 m",
+      kind: "paint",
+      gates: ["if (meshNear < 90.0) heights.x = (finishTriplanar(p, w, 2.4)", "if (meshNear < 18.0) heights.yz = (finishTriplanar(p, w, 0.12)"],
+      fetchLines: 2,
+    },
+    { it: "when a trim material compiles with the finish on, then its grain fetch and the whole block stop past 16 m from the mesh, reach 4 m", kind: "trim", gates: ["if (finishMeshNear() >= 16.0) return vec3(0.0);"], fetchLines: 1 },
+  ] as const;
+  for (const testCase of gateCases) {
+    it(testCase.it, () => {
+      const material = materialOfKind(testCase.kind, 0x203044);
+      switchFinish(material, true);
+      const { fragment } = compile(material);
+      const lines = fragment.split("\n").map((line) => line.trim());
+      assert.equal(lines.filter((line) => line === "uniform mat4 modelViewMatrix;").length, 1, "the mesh's view transform declared once");
+      assert.ok(lines.includes("return length(modelViewMatrix[3].xyz) - 4.0;"), "the nearest pixel of the draw: its origin's distance less the reach");
+      assert.ok(lines.includes("if (finishMeshNear() < max(finishFadeEnd.x, max(finishFadeEnd.y, finishFadeEnd.z))) {"), "the normal block skipped once every layer has faded");
+      const fetchLines = lines.filter((line) => line.includes("finishTriplanar(p, w,") || (line.includes("texture2D(finishMap") && !line.startsWith("return")));
+      assert.equal(fetchLines.length, testCase.fetchLines, `fetch lines: ${fetchLines.join(" / ")}`);
+      const gateAt = testCase.gates.map((gate) => lines.findIndex((line) => line.startsWith(gate)));
+      assert.ok(gateAt.every((at) => at >= 0), `gates found at lines ${gateAt.join(", ")}`);
+      if (testCase.kind === "trim") assert.ok(gateAt[0]! < lines.findIndex((line) => line.includes("texture2D(finishMap")), "the trim gate comes before its fetch");
+    });
+  }
 });
 
 /** The paint's tones: what its old 1 x 1 colour map (sRGB 0xf2f2f0) and roughness map (0x8a) multiplied in. */
