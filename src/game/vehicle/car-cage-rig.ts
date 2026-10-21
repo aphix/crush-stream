@@ -58,7 +58,9 @@ function panelsOf(car: DeformableCar): Panel[] {
     if (pane.skin === null || pane.restVerts === null) continue;
     // A shattered laminated windshield holds its fragments on the interlayer: it stays a body. Burst tempered glass is gone.
     const holds = pane.skin === "glassFront";
-    panels.push({ mesh: pane.mesh, rest: pane.restVerts, origin: ZERO, part: pane.skin, on: () => holds || pane.state !== "shattered", hinged: null, seat: pane.restPos });
+    // A hatch's pane leaves with its gate.
+    const carrier = parts.find((p) => p.object === pane.mesh.parent);
+    panels.push({ mesh: pane.mesh, rest: pane.restVerts, origin: ZERO, part: pane.skin, on: () => (holds || pane.state !== "shattered") && !carrier?.detached, hinged: null, seat: ZERO });
   }
   return panels;
 }

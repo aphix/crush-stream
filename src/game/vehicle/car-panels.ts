@@ -105,6 +105,15 @@ function cut(style: BodyStyle, body: THREE.BufferGeometry): PanelRegion[] {
       if (name) tris[name].push(a, b, c, b, d, c);
     }
   }
+  // An arch's drawn lip (`archLipGeometry`) is skin of its arch: it peels and tears with it.
+  const lips = body.userData.archLips as { from: number; perWheel: readonly number[] } | undefined;
+  if (lips) {
+    const index = body.getIndex()!.array;
+    let at = lips.from;
+    for (let k = 0; k < lips.perWheel.length; k++) {
+      for (const end = at + lips.perWheel[k]!; at < end; at++) tris[PANEL_NAMES[2 + k]!].push(index[at]!);
+    }
+  }
   return PANEL_NAMES.map((name) => region(name, tris[name], pos, wheels));
 }
 

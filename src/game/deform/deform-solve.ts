@@ -31,7 +31,7 @@ const SPRING_YIELD = 0.015;
 /** Share of a crush past the yield that springs back: real structure keeps 75-90 % of its peak crush (17 % back at 56 km/h, SAE 2006-01-0908). */
 const SPRING_SHARE = 0.1;
 /** C4: a wheel separates only on an off-centre hit this hard (m/s EBS, 54 km/h), once the struck corner has crushed to within the rig's `tyreReach` of the hub. */
-const HUB_POP_MPS = 15;
+export const HUB_POP_MPS = 15;
 /** The hit speed (m/s EBS) from which a corner crushed to `HUB_OVERRUN` of its hub takes the wheel. */
 const HUB_OVERRUN_MPS = 3;
 

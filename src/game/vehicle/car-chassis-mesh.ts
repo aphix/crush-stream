@@ -6,8 +6,11 @@ import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
+import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import {
   bayAt,
+  bootCut,
+  bootCutAt,
   bodyTubs,
   DOOR_EDGE,
   SEAM_HALF,
@@ -67,8 +70,14 @@ function insetRing(ring: Pt[], inset: number): Pt[] {
   return ring.map((p) => ({ x: cx + (p.x - cx) * (1 - inset / reachX), y: cy + (p.y - cy) * (1 - inset / reachY) }));
 }
 
-/** Loft stations: warped base spacing (≈7 cm at nose/tail, 13 cm mid) plus feature edges, and the roll's own rings at each end. */
-function sliceZs(style: BodyStyle, source: BodySource): number[] {
+/** A cut's ring this close (m) to another knot's is that knot's. */
+const KNOT_MERGE = 0.005;
+
+/**
+ * Loft stations: warped base spacing (≈7 cm at nose/tail, 13 cm mid) plus feature edges, and the roll's own rings at each end. `bootOpen`
+ * (the drawn body's) adds the boot cut's ramps.
+ */
+export function sliceZs(style: BodyStyle, source: BodySource, bootOpen = source === "drawn"): number[] {
   const p = style.profile;
   const z0 = p[0]!.z;
   const z1 = p[p.length - 1]!.z;
@@ -77,6 +86,12 @@ function sliceZs(style: BodyStyle, source: BodySource): number[] {
   for (const [a, b] of bodyTubs(style, source)) knots.push(a - TUB_EDGE, a + TUB_EDGE, b - TUB_EDGE, b + TUB_EDGE);
   const seam = style.rearDoorSeam;
   if (seam !== null) knots.push(seam - SEAM_HALF, seam, seam + SEAM_HALF);
+  // The boot's cut keeps its ramps' rings even inside the tail roll's clearance, so its opening ends where the lid's does. A cut
+  // carrying an open floor on through the tail ramps in on that floor's own rings.
+  const cut = bootOpen ? bootCut(style) : null;
+  const ends = cut ? [...(cut.lined ? [cut.front, ...(cut.rear > z0 ? [cut.rear] : [])] : []), ...(cut.face ? [cut.face.front] : [])] : [];
+  const cutKnots = ends.flatMap((k) => [k - TUB_EDGE, k + TUB_EDGE]).filter((k) => knots.every((other) => Math.abs(other - k) > KNOT_MERGE));
+  knots.push(...cutKnots);
   const zs = knots.filter((k) => k > z0 && k < z1);
   const mid = (z0 + z1) * 0.5;
   const half = (z1 - z0) * 0.5;
@@ -90,24 +105,12 @@ function sliceZs(style: BodyStyle, source: BodySource): number[] {
   const rollRear = z0 + END_ROLL_LENGTH;
   const rollFront = z1 - END_ROLL_LENGTH;
   const stations = zs.filter((z) => z > rollRear + ROLL_CLEARANCE && z < rollFront - ROLL_CLEARANCE);
+  stations.push(...cutKnots.filter((k) => k > rollRear && k <= rollRear + ROLL_CLEARANCE));
   for (let step = 0; step <= END_ROLL_STEPS; step++) {
     const progress = detSin((step / END_ROLL_STEPS) * (Math.PI / 2));
     stations.push(z0 + END_ROLL_LENGTH * (1 - progress), z1 - END_ROLL_LENGTH * (1 - progress));
   }
   return stations.sort((a, b) => a - b);
-}
-
-/** The wheel-well liner's width across the car (m). */
-const WELL_LINER_WIDTH = 0.24;
-
-function makeWellLiner(wx: number, wy: number, wz: number, archR: number): THREE.BufferGeometry {
-  const geo = new THREE.CylinderGeometry(archR, archR, WELL_LINER_WIDTH, 14, 1, true, 0, Math.PI);
-  geo.rotateZ(Math.PI / 2);
-  geo.rotateY(wx > 0 ? 0 : Math.PI);
-  geo.translate(wx, wy, wz);
-  const uv = geo.getAttribute("uv") as THREE.BufferAttribute;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.12, i / uv.count);
-  return geo;
 }
 
 export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
@@ -116,17 +119,18 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const rings = zs.map((z) => (source === "cage" ? sectionAt(z) : insetRing(sectionAt(z), endRollInset(z, style.profile))));
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
-  const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style)];
-  for (const [wx, wy, wz] of carFrame(style).wheels) {
-    const hw = sampleSlice(wz, style.profile).hw;
-    // A tyre standing outboard of the body (the monster's) keeps its liner inside the body side.
-    const x = Math.abs(wx) > hw ? Math.sign(wx) * (hw - WELL_LINER_WIDTH / 2) : wx;
-    parts.push(makeWellLiner(x, wy, wz, style.arch.radius));
-  }
+  const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style, source)];
+  parts.push(...makeWellLiners(style));
   parts.push(...makeGreenhouseFrame(style, source));
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
   const rb = style.rearBulkhead;
   parts.push(makeBox(1.16, rb.yTop - 0.34, 0.045, 0, (rb.yTop + 0.34) * 0.5, rb.z));
+  // The drawn wells' lips and humps (the cage carries neither), before the fittings; each lip's triangles are kept for its arch's panel.
+  const lips = source === "drawn" ? archLipGeometry(style, body) : null;
+  const lipIndex = parts.reduce((n, g) => n + g.getIndex()!.count, 0);
+  if (lips) parts.push(lips);
+  const humps = source === "drawn" ? wellHumpGeometry(style) : null;
+  if (humps) parts.push(humps);
   // The wheel liners, merged after the loft and roof: unpainted like the bay they rise into.
   const linerFrom = body.getAttribute("position").count + parts[1]!.getAttribute("position").count;
   const linerTo = linerFrom + parts.slice(2, 2 + carFrame(style).wheels.length).reduce((n, g) => n + g.getAttribute("position").count, 0);
@@ -135,22 +139,30 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const fittingCount = fittings?.geometry.getAttribute("position").count ?? 0;
   if (fittings) parts.push(fittings.geometry);
   const merged = mergeGeometries(parts, false);
-  for (const g of parts) g.dispose();
   if (!merged) throw new Error("Failed to merge chassis");
+  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): torn panels, roof rails/glass panel and blacked-out pillars;
+  // `INNER_PANEL` an unpainted inner panel.
+  const primer = new Float32Array(merged.getAttribute("position").count);
+  let start = 0;
+  for (const g of parts) {
+    const count = g.getAttribute("position").count;
+    if (g.userData.blackout === true) primer.fill(1, start, start + count);
+    start += count;
+  }
+  for (const g of parts) g.dispose();
   merged.computeVertexNormals();
   merged.computeBoundingBox();
   merged.computeBoundingSphere();
   // The loft is merged first: its vertex `s * ring + i` and its first (slices - 1) * ring * 2 triangles (`panelRegions` cuts panels out of them).
   merged.userData.loft = { ring: rings[0]!.length, slices: zs.length };
-  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): a torn panel's vertices are set dark, and so are the roof's rails and glass
-  // panel; `INNER_PANEL` an unpainted inner panel.
-  const primer = new Float32Array(merged.getAttribute("position").count);
+  if (lips) merged.userData.archLips = { from: lipIndex, perWheel: lips.userData.perWheel as number[] };
   if (fittings) primer.fill(1, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
   if (source === "drawn") {
-    // The bay trough's floor corner and wall top on each side: ring points 0, 1 and their mirrors.
+    // The bay trough's and a lid's lined boot's floor corner and wall top on each side: ring points 0, 1 and their mirrors.
     const n = rings[0]!.length;
+    const cut = bootCut(style);
     for (let s = 0; s < zs.length; s++) {
-      const w = INNER_PANEL * bayAt(zs[s]!, style);
+      const w = INNER_PANEL * Math.max(bayAt(zs[s]!, style), cut.lined ? bootCutAt(zs[s]!, cut).open : 0);
       for (const i of [0, 1, n - 2, n - 1]) primer[s * n + i] = w;
     }
     primer.fill(INNER_PANEL, linerFrom, linerTo);

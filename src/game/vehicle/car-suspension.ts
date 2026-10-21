@@ -23,6 +23,8 @@ export const SPRINGS: Readonly<Record<VehicleClassId, { hz: number; zeta: number
   truck: { hz: 1.1, zeta: 0.25, travel: 0.22 },
   // ζ 0.2 (the starting value) still swung 1 cm 2.4 s after a 14 m/s ramp landing (0.3: 2.3 s); 0.35 settles by 2 s.
   monster: { hz: 0.8, zeta: 0.35, travel: 0.45 },
+  hatch: { hz: 1.45, zeta: 0.35, travel: 0.12 },
+  suv: { hz: 1.15, zeta: 0.35, travel: 0.19 },
 };
 
 /** How far (m) a class's wheels reach below its body's rest ride (half its travel): further off its ground no wheel holds it, it flies. */
@@ -36,7 +38,7 @@ export function droop(cls: VehicleClassId): number {
  * Past it the body lifts over the wheel instead of the tyre standing through the hood or the fender. The monster rides its whole travel
  * (its rear tyres are 47 mm under the bed at rest): its body's pitch and sag rows (`car-load.test.ts`, `wheel-rest.test.ts`) are built on it.
  */
-const ARCH_ROOM: Readonly<Record<VehicleClassId, number>> = { sedan: 0.074, muscle: 0.048, police: 0.074, truck: 0.053, monster: Infinity };
+const ARCH_ROOM: Readonly<Record<VehicleClassId, number>> = { sedan: 0.074, muscle: 0.048, police: 0.074, truck: 0.053, monster: Infinity, hatch: 0.074, suv: 0.074 };
 
 /** How far (m) a drawn wheel and its body can come together: a class's spring stop, or its arch's room if that is less. */
 /** Whether a class's tyres stay under its drawn skin: false for one whose tyres ride their whole travel into the body (the monster's bed), which no hold may lift off them. */

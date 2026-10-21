@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { INSTANCE_PART_VARIANT_ATTRIBUTE, loosePartsMaterial, partsMaterial, shadowOnlyMaterial, variantPartsMaterial } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS } from "./car-variants.ts";
-import { PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
+import { drawnDoorCard } from "./car-door-mesh.ts";
+import { PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
 import { partBatchGeometry } from "./part-variants.ts";
 
 /** A caster's stand-in until its style's first car syncs: the program links at the warm, before any car of the style draws. */
@@ -35,7 +36,8 @@ export class PartBatch {
     for (const kind of PART_KINDS) {
       const capacity = this.capacity[kind]!;
       const styled = partBatchGeometry(kind, capacity);
-      const mesh = new THREE.InstancedMesh(styled ?? partGeometry(kind), styled ? variantPartsMaterial() : partsMaterial(), capacity);
+      const card = kind === PART_KIND.liningL ? -1 : kind === PART_KIND.liningR ? 1 : 0;
+      const mesh = new THREE.InstancedMesh(styled ?? (card !== 0 ? drawnDoorCard(card) : partGeometry(kind)), styled ? variantPartsMaterial() : partsMaterial(), capacity);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       const variants = styled ? (styled.getAttribute(INSTANCE_PART_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute) : null;
       if (variants) mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.DynamicDrawUsage);

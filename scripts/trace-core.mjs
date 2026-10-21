@@ -73,14 +73,17 @@ export async function openGame(root = join(import.meta.dirname, "..")) {
 
 /** One car at a time in a lit scene, with the engine's wheel, lamp and part batches drawing it. */
 export class CarStage {
-  constructor(game) {
+  /** `body`: the paint colour (default the trace orange, which stands apart from every reference). */
+  constructor(game, body = PAINT.body) {
     this.game = game;
+    this.paint = { ...PAINT, body };
     this.scene = new THREE.Scene();
     this.wheels = new game.WheelBatch(4, () => false);
     this.lamps = new game.LampBatch(LAMP_CAPACITY);
     this.parts = new game.PartBatch(1);
-    // The wheel batch's third mesh is its shadow prisms, hidden from every pass but the shadow map's.
-    this.batch = { wheels: this.wheels.meshes.slice(0, 2), lamps: this.lamps.meshes, parts: this.parts.meshes };
+    // The wheel batch's last mesh is its shadow prisms, hidden from every pass but the shadow map's; before it, one per rim design
+    // and the far wheel.
+    this.batch = { wheels: this.wheels.meshes.slice(0, -1), lamps: this.lamps.meshes, parts: this.parts.meshes };
     const sun = new THREE.DirectionalLight(0xffffff, 1.6);
     sun.position.set(3, 6, 4);
     this.scene.add(...this.wheels.meshes, ...this.lamps.meshes, ...this.parts.meshes, new THREE.HemisphereLight(0xffffff, 0x404040, 2.2), sun);
@@ -94,7 +97,7 @@ export class CarStage {
     const saved = CAR_STYLES[id];
     if (table !== null) CAR_STYLES[id] = table;
     try {
-      this.car = new DeformableCar(PAINT, this.scene, null, id);
+      this.car = new DeformableCar(this.paint, this.scene, null, id);
       assignClass(this.car, cls);
       this.scene.add(this.car.group);
       this.show([]);
@@ -162,7 +165,8 @@ function measureCar({ scene, car, batch }) {
   const zs = hubs.map((p) => p.z);
   const xs = hubs.map((p) => p.x);
   const [front, rear] = [Math.max(...zs), Math.min(...zs)];
-  const ground = wheelBox.isEmpty() ? 0 : wheelBox.min.y;
+  if (wheelBox.isEmpty()) throw new Error("the wheel batch drew no wheel for the car: CarStage's wheel meshes miss its rim design");
+  const ground = wheelBox.min.y;
   const r = (x) => Number(x.toFixed(3));
   return {
     box,

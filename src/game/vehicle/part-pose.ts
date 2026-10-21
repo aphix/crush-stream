@@ -15,7 +15,7 @@ export const BAR_FOLD = 0.45;
 
 /**
  * Where a hinged lid (`cowl` hood, `tail` boot) or the light bar stands at hinge value `t = p.hingeT` (from rest, which turns nothing): position x, y, z
- * then quaternion x, y, z, w into `out` at `o`. The lids turn about x through their rest origin. The bar (`bar`) turns about x too, but about the line
+ * then quaternion x, y, z, w into `out` at `o`. The lids turn about x through their rest origin, the boot by its free swing too. The bar (`bar`) turns about x too, but about the line
  * along its base's edge on the side the car's inertia sends it (`deform.impactInward.z`: a hit on the nose, inward −z, tips it forward, a hit on the tail back):
  * the edge of both feet's soles stays where it is and the other edge rises, as a door's hinge side stays and its free edge swings. The bar is skinned
  * with the roof (`skinPanel`), which carries that edge down and back with the crushed roof (0.15 m back in a frontal crush: turning about its rest place
@@ -37,7 +37,9 @@ export function hingePose(p: DetachPart, deform: StreamedDeformation, out: Float
   } else if (p.hinge === "tail") {
     z += t * 0.08;
     y += t * 0.22;
-    turn = t * 0.5;
+    // The crash's jam or the free swing, whichever holds it further open, the way its hinge opens.
+    const s = p.swing!;
+    turn = s.spec.dir * Math.max(t * s.spec.jam, s.theta);
   } else {
     const side = deform.impactInward.z > 0 ? -1 : 1;
     turn = side * t * BAR_FOLD;

@@ -53,7 +53,7 @@ export const PICKUP: BodyStyle = {
   aPillarFoot: 0.7,
   aPillarTop: 0.41,
   bPillar: { rear: -0.3, front: -0.23 },
-  arch: { radius: 0.46 },
+  arch: { radius: 0.46, lip: { flare: 0.024, width: 0.065, square: true } },
   hood: { z0: 0.92, z1: 1.9, origin: [1.2, 0.9] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.76, wrap: { from: 0.3, back: 0.1 }, fascia: TRUCK_FRONT_FASCIA },
@@ -83,7 +83,7 @@ export const PICKUP: BodyStyle = {
   rearBulkhead: { z: -0.56, yTop: 1.2 },
   tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
   rearDoorSeam: null,
-  boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15] },
+  boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15], pivot: [0.6, -2.15] },
   lamps: { head: [0.5, 0.85], tail: [0.61, 0.93], shapes: PICKUP_LAMP_SHAPES, brake: { at: [0, 1.66], size: [0.3, 0.06] } },
   grille: { y: 0.85, size: [0.62, 0.225], kind: "bars", count: 3, finish: "black" },
   camera: { hood: [1.42, 1.25], third: { dist: 6.4, height: 2.3, aimUp: 1.2 }, far: { dist: 10.3, height: 3.62, aimUp: 1.35 } },

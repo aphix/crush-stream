@@ -1,10 +1,12 @@
 import * as THREE from "three";
 import { hypot2, detSin } from "../kernel/physics-core.js";
-import type { BodyStyle } from "./car-variants.ts";
+import { once } from "../kernel/scalar.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { splitCreases } from "./car-crease.ts";
 import { CREASE_DEGREES, SEDAN, sampleSlice, sideX } from "./car-mesh.ts";
 import { rockerAt } from "./car-lines.ts";
 import { MIRROR_REACH, MIRROR_ROOT } from "./part-geometry.ts";
+import { doorCardGeometry } from "./interior-geometry.ts";
 import { PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
 
 /** The platform door as the sim readers still take it (door contact, hull gap, wear, car-parts) until they read `style.door`; `mirrorX` is its mirror base out from the hinge. */
@@ -123,6 +125,32 @@ function faceXAtHeight(style: BodyStyle, grid: DoorGrid, z: number, y: number): 
     below = above;
   }
   return NaN;
+}
+
+/** The drawn door card stands at least this far (m) inboard of every style's door skin. */
+const CARD_CLEAR = 0.003;
+
+/** The door card as drawn on side `sign` (every style shares it): each vertex held `CARD_CLEAR` inboard of every style's door skin outer face, so no card shows where a skin tucks in low on the door. The sim keeps the card's own box (`doorCardGeometry`). */
+function cardInsideSkins(sign: number): THREE.BufferGeometry {
+  const card = doorCardGeometry(sign);
+  const pos = card.getAttribute("position") as THREE.BufferAttribute;
+  for (const id of CAR_STYLE_IDS) {
+    const style = CAR_STYLES[id];
+    const grid = doorGrid(style);
+    for (let i = 0; i < pos.count; i++) {
+      const limit = faceXAtHeight(style, grid, pos.getZ(i) - doorSkinZ(style), pos.getY(i)) - CARD_CLEAR;
+      if (sign * pos.getX(i) > limit) pos.setX(i, sign * limit);
+    }
+  }
+  card.computeVertexNormals();
+  return card;
+}
+
+const DRAWN_CARDS = [once(() => cardInsideSkins(-1)), once(() => cardInsideSkins(1))] as const;
+
+/** The door card the part batch draws on side `sign`, inside every style's door skin (`cardInsideSkins`). */
+export function drawnDoorCard(sign: number): THREE.BufferGeometry {
+  return DRAWN_CARDS[sign < 0 ? 0 : 1]();
 }
 
 /**
