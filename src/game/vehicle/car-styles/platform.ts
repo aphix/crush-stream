@@ -57,7 +57,7 @@ const PLATFORM_FASCIA = [
 ] as const;
 
 /** The bumper both ends wear: seated 0.05 inside the end stations' 2.11. */
-const PLATFORM_BUMPER = { seat: { y: 0.33, z: 2.06 }, fascia: PLATFORM_FASCIA, span: 0.77 } as const;
+const PLATFORM_BUMPER = { seat: { y: 0.33, z: 2.06 }, fascia: PLATFORM_FASCIA, span: 0.77, wrap: { from: 0.58, back: 0.1235 } } as const;
 
 /** The hardpoints the first bodies shared on one platform: a table spreads these and overrides what its car changes. */
 export const PLATFORM_HARDPOINTS = {
@@ -68,4 +68,5 @@ export const PLATFORM_HARDPOINTS = {
   arch: { radius: 0.38 },
   hood: { z0: 0.76, z1: 1.98, origin: [0.7, 0.74] },
   bumpers: { front: PLATFORM_BUMPER, rear: PLATFORM_BUMPER },
-} as const satisfies Pick<BodyStyle, "windshield" | "bPillar" | "belt" | "rocker" | "arch" | "hood" | "bumpers">;
+  door: { hingeX: 0.86, hingeY: 0.54, hingeZ: 0.55, length: 0.57, halfHeight: 0.31, mirrorY: 0.32, mirrorReach: 0.21, mirrorHalfDepth: 0.08, aperture: [0, 0.54] },
+} as const satisfies Pick<BodyStyle, "windshield" | "bPillar" | "belt" | "rocker" | "arch" | "hood" | "bumpers" | "door">;

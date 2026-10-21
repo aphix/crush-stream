@@ -33,8 +33,10 @@ Mass, centre of gravity, lift and `wheelScale` stay per class in `vehicle-classe
 
 The shape tables describe the surfaces inside those bounds: `profile` (side-profile stations rear to front: shoulder
 half-width, beltline, roof height and width, how much greenhouse), `roofZ`, `windshieldTop`, `rearGlass`, `quarter`,
-`midPillarZ`, `rearBulkhead`, `tubs` (open floors), `rearDoorSeam`, `boot` (deck lid, or a hatch / tailgate), `lamps`, and the
+`midPillarZ`, `rearBulkhead`, `tubs` (open floors), `rearDoorSeam`, `boot` (deck lid, or a hatch / tailgate; a tailgate's
+optional `z0` leans its panel from its bottom edge `[y0, z0]` up to its hinge), `lamps`, and the
 optional `livery` and `lightBar`. `rig` overrides the soft-body cages a body's panels need.
+Optional `details` holds the car's fine contours (panel gaps, shut lines, creases, vents, grille bars, lamp internals) as strokes and patches drawn on its side, top, front and rear views; the detail-map system bakes them into height and cavity maps read at the skin's rest position, so they ride a crushed panel.
 
 The hardpoints place the openings and the lower body, each per car:
 
@@ -43,14 +45,17 @@ The hardpoints place the openings and the lower body, each per car:
 | `windshield` | Base `[y, z]` of the glass centre line and its widths at the base and at `windshieldTop` |
 | `bPillar` | The B-pillar's z band |
 | `belt` | Side-glass sill: half-width `x`, and height `y` as `[z, y]` stations (linear between, held past the ends), so a beltline can rise toward the tail |
-| `rocker` | The body side's lowest line; under it the sill turns in to the floor pan at `dims.rideHeight` |
+| `rocker` | The body side's lowest line; under it the sill turns in to the floor pan. It rides up with `underside` |
+| `underside` | Optional floor pan height as `[z, y]` stations (linear between, held past the ends): the underside's rise to the nose and tail. Absent, the floor is flat at `dims.rideHeight` |
+| `door` | Front doors: hinge axis `hingeX`, `hingeY`, `hingeZ` at the A-pillar, `length` hinge to trailing edge, skin ±`halfHeight` about the hinge, and `aperture` `[z0, z1]`, the body's door cut (the skin covers it, 2 cm past each end). The mirror seats itself on the door skin at `mirrorY` over the hinge and is drawn to reach `mirrorReach` out, ±`mirrorHalfDepth` deep |
 | `arch` | Wheel-arch opening radius about each hub |
 | `hood` | Bonnet span `z0` (cowl) to `z1` (nose) and its hinge `origin` `[y, z]` |
-| `bumpers.front`, `bumpers.rear` | Group `seat` (height, distance from the middle), `fascia` section `[y, out]` top to bottom, and `span` (half-width) |
+| `bumpers.front`, `bumpers.rear` | Group `seat` (height, distance from the middle), `fascia` section `[y, out]` top to bottom, `span` (half-width), and `wrap`: the `|x|` where the fascia's corner starts sweeping back (`from`) and how far its end sweeps (`back`) |
 
 `car-styles/platform.ts` exports the values the first bodies shared as `PLATFORM_HARDPOINTS`; a table spreads it and overrides
 what its car changes. Every hardpoint but the bumper fascia reaches the collision cage or a sim reader (the greenhouse pillars,
 the sill, the arches, the hood's pose, a torn bumper's box), so moving one moves the sim: re-pin and bump `REPLAY_VERSION`.
+The greenhouse header bars follow the roof: a drawn header bar's top never stands above the roof skin over its ends.
 
 ## References and scale
 
@@ -73,15 +78,41 @@ views, then the lineup. Archetype research (real cars of the type) sets ratios a
 
 ## Tracing harness
 
-`scripts/trace-car.mjs` draws one style's car (its class's lift and wheel scale applied, no engine boot, under a second) over a
-reference picture calibrated to metres, writes an overlay PNG and prints one JSON line: the silhouette IoU, signed edge offsets
-in cm at stations along the top, bottom, front and rear edges (positive where the car sticks out past the reference), and the
-drawn car's length, width, height, wheelbase, track, overhangs, wheel diameter and ground clearance.
+Two tools share one core (`scripts/trace-core.mjs`, `trace-ref.mjs`, `trace-metrics.mjs`): a style's drawn car (its class's lift
+and wheel scale applied, no engine boot) in a bare scene through headless GL, over a reference picture calibrated to metres.
+The references live in `/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/` (git-ignored; `/tmp` does not survive a
+reboot). Run both through the box gate: `CAP=2G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node ...`.
+
+**`fit-car.mjs`: a speed-up.** It reads the side and top pictures into the style's own fields, builds the car from them, and
+nudges the profile stations toward the reference's roof line and plan for a few rounds, all in one process of about 5 s. It
+gets a car close fast but misses finer details. Each car agent then aligns the rest by hand on trace-car's overlays (windows,
+doors, wheel centres, any silhouette edge) and spot-checks against the bar: side and top IoU ≥ 0.95, per-edge mean ≤ 2 cm,
+max ≤ 5 cm, corners and glass included. Output: `.tmp/fit/<style>/fit.ts` (paste over the style file's fields after review),
+before/after overlays beside it, and one JSON line with both views' IoU, edge and glass offsets before and after, the
+per-corner checklist, and `notFit` (the fields left to the hand). It never writes a style file.
 
 ```sh
-S=/tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
+R=/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
+node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
+  --side $R/silver-sedan/silver-sedan-1.png --side-span 3,299=4.221 --top $R/silver-sedan/silver-sedan-2.png --top-span 3,292
+```
+
+- Read: `dims` (wheelbase and wheel radius from the side picture's tyres, which also set z = 0; overhangs, height, width),
+  `profile` (stations where the roof line, plan or glass zone bends), `roofZ`, `windshield`, `windshieldTop`, `rearGlass`,
+  `quarter`, `belt.y` (the glass sill), `underside`, `door.hingeX` (the plan at the hinge), `door.mirrorReach` (one build, so the
+  mirror tip meets the reference's), `bumpers.*.seat.z` (lip on the end) and `bumpers.*.wrap` (the plan's end corners).
+  Fitted: `profile`.
+- Not read: hood, arch, rocker, boot, `track`, `rideHeight`, `cabinHw`, `bPillar`, the bumper fascia and span, and the door's
+  hinge y and z, length and aperture.
+
+**`trace-car.mjs`: one view, measured.** Writes an overlay PNG and prints one JSON line: the silhouette IoU and signed edge
+offsets (cm, positive where the car sticks out), the glass's (side: roof rail, sill, A- and C-pillar with their rake), the
+side view's named corners (nose, tail, bumper tops and bottoms, sill, arch lips, roof corners), the largest uncovered and
+overhanging regions (cm² with their extent), a `checklist` of FAIL/ok lines over all of them, and the drawn car's dimensions.
+
+```sh
 node --disable-warning=ExperimentalWarning scripts/trace-car.mjs --style sedan --view side \
-  --ref $S/silver-sedan/silver-sedan-1.png --ref-span 3,299=4.221 [--points '[[2.0,0.65],[1.2,0.9]]']
+  --ref $R/silver-sedan/silver-sedan-1.png --ref-span 3,299=4.221 [--omit doors,bumpers] [--points '[[2.0,0.65],[1.2,0.9]]']
 ```
 
 - `--view side|top|front|rear` are orthographic and axis-aligned; `iso` / `iso-rear` use the game's lens at `--camera r,pitch,angle`
@@ -89,6 +120,8 @@ node --disable-warning=ExperimentalWarning scripts/trace-car.mjs --style sedan -
 - `--ref-span x0,x1=m`: the reference's bumper-tip columns (or wheel centres with `--anchor wheels`) and their distance; without
   `=m`, the style's `dims` length (wheelbase). Side spans are the foreground columns × 0.01426 m; a top view takes its side's length.
   The hatchback's pictures are swapped (`-2` is its side, `-1` its top).
-- `--points` overlays a traced edge in the view's axes (side `[z, y]`, top `[z, x]`): read the reference's edge off the PNG's
-  0.5 m grid or the JSON's `edges` (`[station, car, reference, offset cm]`), and copy it into the style's tables.
-- The PNG: the car orange and outlined magenta, the reference outlined cyan. Full usage is in the script's header.
+- `--omit` hides parts (doors, glass, bumpers, mirrors, hood, trunk, lightbar, wheels, lamps, parts) from the drawing and the fit.
+- `--points` overlays a traced edge in the view's axes (side `[z, y]`, top `[z, x]`).
+- The PNG: the car orange, outlined magenta; the reference outlined cyan; the car's glass lime, the reference's blue. The
+  reference's glass is its dark, grey pixels (an Otsu cut, printed as `refThreshold`); a grey ground shadow on an opaque backdrop
+  is left out of its silhouette (`shadowPx`). Full usage is in each script's header.

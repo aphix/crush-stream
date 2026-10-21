@@ -9,8 +9,8 @@ import { PART_FAMILY } from "../kernel/physics-core.js";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { DOOR, makeDoorGeometry } from "./car-door-mesh.ts";
-import { makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
+import { DOOR, doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
+import { DOOR_GLASS_SEAT, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import {
   LIGHT_BAR_FOOT,
   LIGHT_BAR_LENS,
@@ -23,7 +23,7 @@ import {
   trimMaterial,
   type LampKind,
 } from "./car-materials.ts";
-import { PART_KIND, PART_KINDS, PartSeat } from "./part-geometry.ts";
+import { MIRROR_REACH, PART_KIND, PART_KINDS, PartSeat } from "./part-geometry.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { anchorOnSkin, poseOnSkin, type GlowKind, type SkinAnchor } from "./lamp-lights.ts";
@@ -406,15 +406,16 @@ export abstract class CarCore {
       this.lightBarRest = this.copyRest(this.lightBar.geometry);
     }
 
+    const door = this.style.door;
     this.doorL = new THREE.Group();
     this.doorR = new THREE.Group();
-    this.doorL.position.set(-DOOR.hingeX, DOOR.hingeY, DOOR.hingeZ);
-    this.doorR.position.set(DOOR.hingeX, DOOR.hingeY, DOOR.hingeZ);
+    this.doorL.position.set(-door.hingeX, door.hingeY, door.hingeZ);
+    this.doorR.position.set(door.hingeX, door.hingeY, door.hingeZ);
     this.doorMeshL = new THREE.Mesh(makeDoorGeometry(-1, this.style), doorMat);
-    this.doorMeshL.position.set(0, 0, DOOR.skinZ);
+    this.doorMeshL.position.set(0, 0, doorSkinZ(this.style));
     this.doorMeshL.castShadow = true;
     this.doorMeshR = new THREE.Mesh(makeDoorGeometry(1, this.style), doorMat);
-    this.doorMeshR.position.set(0, 0, DOOR.skinZ);
+    this.doorMeshR.position.set(0, 0, doorSkinZ(this.style));
     this.doorMeshR.castShadow = true;
     this.doorL.add(this.doorMeshL);
     this.doorR.add(this.doorMeshR);
@@ -435,11 +436,14 @@ export abstract class CarCore {
     this.group.add(this.bumperF, this.bumperR);
     this.addLamps();
 
+    const seatX = mirrorSeatX(this.style);
     this.mirrorL = this.partSeats[PART_KIND.mirrorL]!;
-    this.mirrorL.position.set(-DOOR.mirrorX, DOOR.mirrorY, 0);
+    this.mirrorL.position.set(-seatX, door.mirrorY, 0);
+    this.mirrorL.scale.x = door.mirrorReach / MIRROR_REACH;
     this.doorL.add(this.mirrorL);
     this.mirrorR = this.partSeats[PART_KIND.mirrorR]!;
-    this.mirrorR.position.set(DOOR.mirrorX, DOOR.mirrorY, 0);
+    this.mirrorR.position.set(seatX, door.mirrorY, 0);
+    this.mirrorR.scale.x = door.mirrorReach / MIRROR_REACH;
     this.doorR.add(this.mirrorR);
 
     this.addGlass();
@@ -539,10 +543,10 @@ export abstract class CarCore {
     addPane("windshield", new THREE.Mesh(makeWindshield(style), glassMat), this.group, ["roof", "bonnet"], "glassFront");
     addPane("rear", new THREE.Mesh(makeRearGlass(style), glassMat), this.group, ["roof", "boot"], "glassRear");
     const sideL = new THREE.Mesh(makeSideGlass(-1, style), glassMat);
-    sideL.position.set(0.02, 0.52, -0.28);
+    sideL.position.set(-DOOR_GLASS_SEAT.x, DOOR_GLASS_SEAT.y, DOOR_GLASS_SEAT.z);
     addPane("doorL", sideL, this.doorL, ["doorLeft", "roof"]);
     const sideR = new THREE.Mesh(makeSideGlass(1, style), glassMat);
-    sideR.position.set(-0.02, 0.52, -0.28);
+    sideR.position.set(DOOR_GLASS_SEAT.x, DOOR_GLASS_SEAT.y, DOOR_GLASS_SEAT.z);
     addPane("doorR", sideR, this.doorR, ["doorRight", "roof"]);
     addPane("quarterL", new THREE.Mesh(makeRearSideGlass(-1, style), glassMat), this.group, ["roof", "doorLeft"]);
     addPane("quarterR", new THREE.Mesh(makeRearSideGlass(1, style), glassMat), this.group, ["roof", "doorRight"]);

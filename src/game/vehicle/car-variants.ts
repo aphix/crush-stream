@@ -42,8 +42,8 @@ export interface GlassQuad {
 type BootSpec =
   /** Deck lid lofted on the profile from z0 to z1, hinged at origin. */
   | { kind: "lid"; z0: number; z1: number; origin: YZ }
-  /** Vertical tail panel (hatch / tailgate) from y0 up to origin, hinged at its top edge. */
-  | { kind: "tailgate"; y0: number; origin: YZ };
+  /** Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, hinged at its top edge; z0 defaults to origin's z (upright). */
+  | { kind: "tailgate"; y0: number; origin: YZ; z0?: number };
 
 /** Paint a style fixes whatever the fleet paint (police black-and-white). */
 interface Livery {
@@ -77,6 +77,42 @@ interface BumperSpec {
   fascia: readonly (readonly [number, number])[];
   /** Half-width (m) of the fascia across the car. */
   span: number;
+  /** Fascia corner sweep: `from` the |x| (m) where it starts sweeping back, `back` how far (m) its end sweeps back from the face. */
+  wrap: { from: number; back: number };
+}
+
+type DetailView = "side" | "top" | "front" | "rear";
+
+/** A stroke drawn on one view of the car, cut into (depth < 0) or raised from (depth > 0) the surface. */
+interface DetailLine {
+  /** "side": points [z, y], both sides of the car. "top": [z, x]. "front" / "rear": [x, y]. x >= 0 only: mirrored to -x. */
+  view: DetailView;
+  /** Polyline (m, car frame, ground y = 0 before class lift, origin mid-axles, +z forward), at least 2 points. */
+  points: readonly (readonly [number, number])[];
+  /** Loop back to the first point (lamp outline, fuel flap, vent rim). Default false. */
+  closed?: boolean;
+  /** Full width across the stroke (m); >= 0.006 (thinner aliases away). */
+  width: number;
+  /** Peak height (m), |depth| <= 0.006: negative = groove (shut line ~ -0.004), positive = raised (bead, seal ~ 0.002). */
+  depth: number;
+  /** Section: "v" sharp groove, "u" rounded (crease, bead), "step" character line: the LEFT side walking along the points stands `depth` proud of the right, ramped over `width`. */
+  profile: "v" | "u" | "step";
+  /** 0..1 darkening at the centre: panel gap ~0.85, deep vent slot ~0.7, crease 0. */
+  cavity: number;
+}
+
+/** A filled patch: vent, grille infill, lamp internals, badge plate. */
+interface DetailPatch {
+  view: DetailView;
+  /** Closed polygon (m, the view's axes as above), x >= 0 only, mirrored. */
+  points: readonly (readonly [number, number])[];
+  /** The patch floor's height (m) against the surface around it (negative = recessed), ramped over `rim` (m) at its edge. */
+  depth: number;
+  rim: number;
+  /** Repeated relief inside: hslats = horizontal bars, vslats = vertical bars, hex mesh, dots; bar width and depth (m). */
+  pattern?: { kind: "hslats" | "vslats" | "hex" | "dots"; pitch: number; bar: number; depth: number };
+  /** 0..1 darkening of the patch floor (open grille ~0.8, blind vent ~0.4). */
+  cavity: number;
 }
 
 export interface BodyStyle {
@@ -96,6 +132,10 @@ export interface BodyStyle {
   belt: { x: number; y: readonly (readonly [number, number])[] };
   /** The body side's lowest line (m); under it the sill turns in to the floor pan at `dims.rideHeight`. */
   rocker: { y: number };
+  /** Floor pan height as [z, y] stations in ascending z (linear between, held past the ends); absent = flat at `dims.rideHeight`. The rocker rides up with it. */
+  underside?: readonly (readonly [number, number])[];
+  /** Front door: hinge axis at the A-pillar (±hingeX, hingeY, hingeZ), `length` hinge to trailing edge, skin ±halfHeight about the hinge, `aperture` [z0, z1] the body's front-door cut (the skin overlaps it 0.02 each end), mirror seated `mirrorY` over the hinge reaching `mirrorReach` out, ±mirrorHalfDepth deep. */
+  door: { hingeX: number; hingeY: number; hingeZ: number; length: number; halfHeight: number; mirrorY: number; mirrorReach: number; mirrorHalfDepth: number; aperture: readonly [number, number] };
   /** Wheel-arch opening radius (m) about each hub. */
   arch: { radius: number };
   /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. */
@@ -124,6 +164,8 @@ export interface BodyStyle {
   lightBar?: boolean;
   /** Push bar in front of the front bumper, drawn in its trim (`withPushBar`). */
   pushBar?: boolean;
+  /** Fine contours drawn as detail maps, not geometry: strokes and patches on the side, top, front and rear views, car-frame metres, x >= 0 mirrored. */
+  details?: { lines: readonly DetailLine[]; patches: readonly DetailPatch[] };
 }
 
 export const CAR_STYLES: Readonly<Record<CarStyleId, BodyStyle>> = {

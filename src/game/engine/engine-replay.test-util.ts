@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
 import { clipBytes } from "../net/reel-codec.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
 import { agreement, recordField } from "./replay-fidelity.test-util.ts";
 
 /**
@@ -18,13 +19,35 @@ const RACE_S = 75;
 const CLIPS = 5;
 
 /**
- * A race with no clip by this race second gets a hit of its own: the player's car drives flat out straight ahead (the way
- * `replay-fidelity.test.ts` scripts its attacker) into the first wall it meets. A seed whose AI field races a clean lap
- * (every hit under `MIN_SCORE`) would leave nothing to replay: seed 14 of 1-64, and seed 7 once a trajectory changed.
+ * A race with no clip by this race second gets a hit of its own: the player rams the field (`ram`). A seed whose AI field races
+ * a clean lap leaves nothing to replay otherwise (seed 14 of 1-64; seed 6 once the cage's arch moved).
  */
 const SCRIPTED_AT = 12;
-/** The speed (m/s) the scripted car is set going: queued behind a spun car it would have no run-up to hit a wall hard enough to make a clip. */
-const SCRIPTED_SPEED = 20;
+/** Plan gap (m) the rammer starts behind its target, centre to centre: at `RAM_SPEED` it closes in over `REHIT_S`, so a car it just touched still counts as a fresh impact. */
+const RAM_GAP = 15;
+/** The rammer's closing speed (m/s) on its target: well over `IMPACT_MIN`, so the hit is an impact whatever the target's pedals do in the run-up. */
+const RAM_SPEED = 25;
+/** Least plan speed (m/s) of a car to ram: its velocity points along the road it came down, which is where the rammer is put. */
+const RAM_MOVING = 5;
+
+/**
+ * Puts `cars[0]` `RAM_GAP` behind the nearest other car driving at least `RAM_MOVING`, on its line and `RAM_SPEED` faster: a
+ * player sent straight ahead can meet a wall at a glance, under the impact bar, and grind along it for the rest of the race.
+ */
+function ram(cars: readonly DeformableCar[]): void {
+  const player = cars[0]!;
+  const { x, z } = player.group.position;
+  let target: DeformableCar | null = null;
+  for (const c of cars) {
+    if (c === player || Math.hypot(c.velocity.x, c.velocity.z) < RAM_MOVING) continue;
+    if (!target || Math.hypot(c.group.position.x - x, c.group.position.z - z) < Math.hypot(target.group.position.x - x, target.group.position.z - z)) target = c;
+  }
+  assert.ok(target, `no car drives at ${RAM_MOVING} m/s or more at ${SCRIPTED_AT} s for the player to ram`);
+  const v = Math.hypot(target.velocity.x, target.velocity.z);
+  const dx = target.velocity.x / v;
+  const dz = target.velocity.z / v;
+  player.spawnFacing(target.group.position.x - dx * RAM_GAP, target.group.position.z - dz * RAM_GAP, Math.atan2(dx, dz), v + RAM_SPEED);
+}
 
 /**
  * One test per seed: its race's crashes recorded, then each clip replayed and held to the live sim: every car of it, every
@@ -45,8 +68,7 @@ export function sweepSeeds(list: readonly number[]): void {
           seed,
           before: () => {
             if (w.race.recorder.now >= SCRIPTED_AT && w.race.recorder.ledger.kept.length === 0 && w.seat.mode !== "drive") {
-              const player = w.cars[0]!;
-              player.spawnFacing(player.group.position.x, player.group.position.z, player.yaw, SCRIPTED_SPEED);
+              ram(w.cars);
               w.seat.mode = "drive";
               w.seat.carIndex = 0;
               w.seat.intent.gas = 1;

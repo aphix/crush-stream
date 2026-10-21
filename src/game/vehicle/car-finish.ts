@@ -212,7 +212,8 @@ const FLAKE_FADE_START_M = 1.5;
 const FLAKE_FADE_END_M = 5;
 const TRIM_FADE_START_M = 4;
 const TRIM_FADE_END_M = 16;
-
+/** Furthest any pixel of a finish mesh lies from its origin (m): a car is ~2.6 m corner to middle, the rest is crush and loose-panel slack. */
+const FINISH_MESH_REACH_M = 4;
 /** The weight of each plane is |object normal| to this power, normalised: 4 keeps a plane's blend to the corners where two planes meet. */
 const PLANE_BLEND_SHARPNESS = 4;
 
@@ -221,16 +222,21 @@ function glslFloat(value: number): string {
   return Number.isInteger(value) ? `${value}.0` : `${value}`;
 }
 
-/** The heights of the three layers (m; x waviness, y peel, z flake) at object-space point `p`, planes weighted by `w`, for the paint map. */
+/**
+ * The heights of the three layers (m; x waviness, y peel, z flake) at object-space point `p`, planes weighted by `w`, for the paint map.
+ * A layer whose fade has ended on every pixel of the mesh is never fetched: its height stays 0, as its faded step already was.
+ */
 const PAINT_HEIGHTS = /* glsl */ `
 vec3 finishTriplanar(vec3 p, vec3 w, float tileMetres) {
   vec3 q = p / tileMetres;
   return w.x * texture2D(finishMap, q.zy).rgb + w.y * texture2D(finishMap, q.xz).rgb + w.z * texture2D(finishMap, q.xy).rgb;
 }
 vec3 finishHeights(vec3 p, vec3 w) {
-  vec3 broad = finishTriplanar(p, w, ${glslFloat(WAVE_TILE_M)});
-  vec3 grain = finishTriplanar(p, w, ${glslFloat(GRAIN_TILE_M)});
-  return (vec3(broad.r, grain.g, grain.b) - 0.5) * vec3(${glslFloat(WAVE_HEIGHT_M)}, ${glslFloat(PEEL_HEIGHT_M)}, ${glslFloat(FLAKE_HEIGHT_M)});
+  float meshNear = finishMeshNear();
+  vec3 heights = vec3(0.0);
+  if (meshNear < ${glslFloat(WAVE_FADE_END_M)}) heights.x = (finishTriplanar(p, w, ${glslFloat(WAVE_TILE_M)}).r - 0.5) * ${glslFloat(WAVE_HEIGHT_M)};
+  if (meshNear < ${glslFloat(PEEL_FADE_END_M)}) heights.yz = (finishTriplanar(p, w, ${glslFloat(GRAIN_TILE_M)}).gb - 0.5) * vec2(${glslFloat(PEEL_HEIGHT_M)}, ${glslFloat(FLAKE_HEIGHT_M)});
+  return heights;
 }
 const vec3 finishFadeStart = vec3(${glslFloat(WAVE_FADE_START_M)}, ${glslFloat(PEEL_FADE_START_M)}, ${glslFloat(FLAKE_FADE_START_M)});
 const vec3 finishFadeEnd = vec3(${glslFloat(WAVE_FADE_END_M)}, ${glslFloat(PEEL_FADE_END_M)}, ${glslFloat(FLAKE_FADE_END_M)});`;
@@ -238,6 +244,7 @@ const vec3 finishFadeEnd = vec3(${glslFloat(WAVE_FADE_END_M)}, ${glslFloat(PEEL_
 /** The same three outputs for the trim: only the peel slot carries the grain. */
 const TRIM_HEIGHTS = /* glsl */ `
 vec3 finishHeights(vec3 p, vec3 w) {
+  if (finishMeshNear() >= ${glslFloat(TRIM_FADE_END_M)}) return vec3(0.0);
   vec3 q = p / ${glslFloat(TRIM_TILE_M)};
   float grain = w.x * texture2D(finishMap, q.zy).r + w.y * texture2D(finishMap, q.xz).r + w.z * texture2D(finishMap, q.xy).r;
   return vec3(0.0, (grain - 0.5) * ${glslFloat(TRIM_GRAIN_HEIGHT_M)}, 0.0);
@@ -249,11 +256,16 @@ const vec3 finishFadeEnd = vec3(${glslFloat(TRIM_FADE_END_M)});`;
  * Mikkelsen's screen-space bump (three's `perturbNormalArb`, bump_pars_fragment) on `surfaceNormal` (view space): the height
  * slopes `heightSlope` are the height's steps over one pixel right and down. Unlike three's it does not normalise the surface
  * steps, so heights in metres give true slopes and the strength does not depend on the screen size.
+ * `finishMeshNear` is the nearest any pixel of this draw can be: one value a draw, so branching on it keeps `dFdx` and the map's mip pick defined.
  */
 const FINISH_FUNCTIONS = /* glsl */ `
 uniform sampler2D finishMap;
+uniform mat4 modelViewMatrix;
 varying vec3 vFinishPos;
 varying vec3 vFinishNormal;
+float finishMeshNear() {
+  return length(modelViewMatrix[3].xyz) - ${glslFloat(FINISH_MESH_REACH_M)};
+}
 vec3 finishPlaneWeights(vec3 objectSpaceNormal) {
   vec3 w = pow(abs(objectSpaceNormal), vec3(${glslFloat(PLANE_BLEND_SHARPNESS)}));
   return w / max(w.x + w.y + w.z, 0.0001);
@@ -269,12 +281,13 @@ vec3 finishPerturbedNormal(vec3 surfaceNormal, vec2 heightSlope, float faceDirec
 }`;
 
 /**
- * After the clear coat's normal is declared: each layer's height step one pixel right and down (`dFdx` / `dFdy` of the triplanar
- * heights: one sample set a pixel, not three), faded by view distance, then the base layer's normal takes waviness, peel and
- * flake, and the clear coat's takes waviness and peel only (the peel lives in the clear coat; the flake sits under it).
+ * After the clear coat's normal is declared, unless every layer has faded on every pixel of the draw: each layer's height step one
+ * pixel right and down (`dFdx` / `dFdy` of the triplanar heights: one sample set a pixel, not three), faded by view distance, then
+ * the base layer's normal takes waviness, peel and flake, and the clear coat's takes waviness and peel only (the peel lives in the
+ * clear coat; the flake sits under it).
  */
 const FINISH_NORMALS = /* glsl */ `
-{
+if (finishMeshNear() < max(finishFadeEnd.x, max(finishFadeEnd.y, finishFadeEnd.z))) {
   vec3 finishPoint = vFinishPos;
   vec3 finishWeights = finishPlaneWeights(normalize(vFinishNormal));
   vec3 finishHere = finishHeights(finishPoint, finishWeights);
