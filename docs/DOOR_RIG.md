@@ -16,9 +16,11 @@ front at the top:
   light pull opens it, a hard one tears it off. The panel is the door's mirror image (hinged at its
   tail), so the directions swap. Open doors also swing with the car's own acceleration; see
   [`PANEL_FLAP.md`](PANEL_FLAP.md).
+- **F** (key 8): the trunk lid is shut; a ram square into the tail crushes it and springs the lid past its latch.
+- **G** (key 9): the lid is on its stop; a hard enough hit tears it off. See Lids, below.
 
 Code: `vehicle/car-core.ts` (hinge constants) and `vehicle/car-parts.ts` (hinge state and rules:
-`swingDoors`, `syncAttachedParts`, `evaluateBreakage`, `loadDoorStop`), `scenes/door-rig.ts`
+`swingHinges`, `syncAttachedParts`, `evaluateBreakage`, `loadDoorStop`), `scenes/door-rig.ts`
 (`DoorRig`, DOM-free), `contact/door-contact.ts` (door and mirror colliders `hitDoor`/`hitMirror`),
 `present/engine-doors.ts` (ram visuals), the doors scene in `engine/engine-rigs.ts` (`fireDoorRam`,
 `stepDoors`), and `DoorPanel` in `components/hud-panels.tsx`. Tests: `door-rig.test.ts`, with the
@@ -31,7 +33,7 @@ taken at the stop, and its mirror's fold. The door is a thin slab about its fron
 I = m·L²/3, with m = 25 kg and L = 0.57 m (the model's hinge-to-trailing-edge length), so
 I = 2.71 kg·m².
 
-`swingDoors(dt)` runs the free swing:
+`swingHinges(dt)` runs the free swing of every unlatched door and lid:
 
 - Hinge friction: ω decays at 0.8 /s.
 - **Check-strap stop** at θ = 68°. The door's swing energy ½Iω² at the stop goes into `load`. The
@@ -79,6 +81,44 @@ So a light push folds the mirror and a real hit breaks it off.
 | `MIRROR_BREAK_J` | 30 J | **guessed**: the research file has no mirror source (§2). ECE R46 is the place to check |
 | hinge friction | 0.8 /s | guessed |
 
+## Lids (`hinge-spec.ts`, `car-parts.ts`)
+
+The trunk lid, hatch, SUV liftgate and pickup/monster drop gate (part slot 3, `LID.trunk`, hinge `tail`) swing on the same
+`DoorHinge` as the doors. Its `spec` (`HingeSpec`, static, never netted) comes from the style's `boot` (`lidSpec`):
+
+- **Hinge line:** `boot.pivot` (car `[y, z]`; default the panel's `origin`). The trunk mesh is built local to it, so the lid
+  turns about car x through it. The free edge is the panel edge farthest from the pivot; a chord rising more than 45° from the
+  pivot is a drop gate (`dir` −1, opens rearward-down), anything else opens up (`dir` +1). A pivot more than 0.2 m above the
+  panel's top edge (`origin`) is a roof hinge (`roofHinged`): a hatch or liftgate.
+- **Shape (`makeTrunkGeometry`):** a deck lid lofts on the deck line from `z0` to `z1`; its optional `drop` `{ y, w, z? }` folds it
+  over the tail edge (8 cm radius) and down the rear face to `y`, narrowing to the half-width `w`; the face's top stands at `z1`
+  and its bottom edge at `z` (default `z1`, upright; another `z` leans it like a tailgate's `z0`). A tailgate is an upright (or
+  leaning) panel. The owner's reference
+  (`.tmp/ModernCarDesign/owner-trunks-popped.png`): the sedan and police lid is hinged at the rear window's base and wraps the
+  tail down to the plate recess, the tail lamps' inner halves inside its face (`drop`); the muscle's is a flat deck to the tail;
+  the hatch and SUV gate is roof-hinged, carries the rear window and wraps down to just above the bumper (`drop`); the pickup and
+  monster drop gate falls level. Only the hatch and SUV gates have glass.
+- **Swing data:** `boot.swing` (`LidSwing`), or the preset for its kind: `TRUNK_LID` (deck lid, 12.4 kg), `HATCH_LID` (18 kg,
+  any other gate opening up, a roof-hinged deck lid included), `LIFTGATE` (26 kg, the SUV sets it), `DROP_GATE` (22 kg). `rise`
+  is the chord's angle above level on the stop; a drop gate's 0 stops it level (90°) on its cables. A new car only adds data.
+- **Drive law (`lidAccel`):** a uniform slab about one edge, I = m·L²/3, pushed by its weight, its struts or torsion bars
+  (`lift`: 0 none, 1 balanced, 1.5 lifts it to the stop) and the car's fore-aft acceleration. A hard launch swings an open deck lid
+  down off its stop; coasting lets it rise back.
+- **Pop:** rear crush drives the lid's crash hinge value, `hingeT = (c − 0.1) / 0.3` of the rear bumper cage's compression c
+  (sensor 18 alone stays under 0.08 even at 55 km/h). Past `ajar` 0.2 the latch springs at the jam angle `min(hingeT·0.5, stop)`.
+- **Re-latch:** shut (`shutLid`, or its own swing) under `slamJ` it latches; a harder slam wrenches it off.
+- **Tear:** stop energy past `tearJ`; crush past `hingeT` 0.78; or an open lid hit past `tearT` 0.5 at EBS ≥ 12.5 m/s. A torn lid
+  flies as a loose part at its own mass and tumbles the way it opens. A door or lid already resting on its stop takes no strap
+  load from the push holding it there (else a drop gate on its cables would tear off on its own).
+- **Rear glass:** a roof-hinged hatch or liftgate carries its rear pane: the pane is the trunk mesh's child at −pivot, so it
+  swings, tears off and resets with the gate. The contact cage keeps the pane at rest while it is on (it does not swing).
+- **Cage:** a wrapping lid's boot cage reaches 2 cm below and behind its face, so the face skins without clamping.
+- `hingesLatched` counts the lid with the doors. API: `setLidOpen`, `lidAngle`, `shutLid`, `lidHinge`, `lidOff`, `ripLid`.
+
+Rows: `hinge-spec.test.ts`, `lid-swing.test.ts` (pop at 30 km/h but not 14 km/h on the rear wall, drop gate at exactly 90°, gates
+on their stop, surge, re-latch and slam, stop tear, a hit on an open lid, the rear pane), `engine-replay-lid.test.ts` (a sprung
+and a torn lid replay bit-exact on a peer's cars), and the Doors-scene F/G rows in `door-rig.test.ts`.
+
 ## Rig (`door-rig.ts`)
 
 The car is parked at the origin facing +Z. The ram is a box: a face width × height × 0.5 m. It is
@@ -97,6 +137,14 @@ across the travel. Then the slab is pushed out of the face.
 | A `mirror` | rear→front | 0.95 (4 cm off the shut skin, 3 cm off the mirror base) | 0.4 | 0.50–1.10 | shut, latched |
 | B `overOpen` | rear→front | 0.95 | 0.6 | 0.30–0.75 (below the mirror) | 55° |
 | C `shut` | front→rear | 1.10 (outside the open door's mirror) | 0.6 | 0.30–0.75 | 55° |
+| F `lidPop` | rear→front, into the tail | centred (x −0.6…0.6) | 1.2 | 0.30–0.90 | lid shut, latched |
+| G `lidTear` | rear→front, into the tail | centred | 1.2 | 0.30–0.90 | lid on its stop |
+
+F and G reach the skin: the ram dents the tail through the body contact, and the rear crush drives the lid (Lids, above). The ram
+meets the tail, not the lid, so the two differ only in the lid's starting angle. With a 1500 kg ram, F leaves the lid latched at
+15 km/h and springs it at 30 km/h on the sedan, hatchback, SUV and pickup; G at 15 km/h leaves the open lid on its stop. A 5000 kg
+ram at 56 km/h (EBS 13.3 m/s, crush past `tearT`) tears the sedan's and pickup's lid off; with 1500 kg the crush rule (0.78) tears
+the pickup's at 68 km/h and the sedan's at 70 km/h, with the right bumper.
 
 `fireRam(car, scenario, { kph, kg, side })` runs one shot at 60 Hz the way the engine does
 (`integrate`, `step`, `stepBreakage`, `updateSkin`). It returns:
@@ -130,11 +178,14 @@ Thresholds from a 1 km/h sweep:
 
 To open the scene, pick **Doors** in the scene picker or press **N**. The panel has:
 
-- **A** / **B** / **C** / **D** / **E** buttons (keys 1–3, 6, 7). Firing sets the door shut or open for that scene
-  (D and E: the door shut, the panel at hinge 0.45) and re-parks the car if that side already lost the part it needs.
+- **A** / **B** / **C** / **D** / **E** / **F** / **G** buttons (keys 1–3, 6, 7, 8, 9). Firing sets the door shut or open for that scene
+  (D and E: the door shut, the panel at hinge 0.45; F and G: the lid shut or on its stop) and re-parks the car if it already
+  lost the part it needs.
 - **Left/Right door** (key 5) and **Door open/shut** (key 4).
 - Speed and mass sliders.
 - The last shot's outcome, including the body Δ.
+- The share link's `dlid` parks the car with its lid shut (0, default), on its stop (1) or torn off (2): `DoorRig.attach` sets it
+  after every reset (`resetVisual` re-hangs the lid before the park), and a new value re-parks the car.
 
 The ram (head, post and floor rail) is one instanced draw.
 

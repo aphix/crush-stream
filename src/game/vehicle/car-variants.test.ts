@@ -25,6 +25,7 @@ import { PLATFORM_RIG } from "../deform/deform-rig.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, LIGHT_BAR, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { bootPivot, lidSpec, roofHinged } from "./hinge-spec.ts";
 
 const PAINT = { body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" };
 const scene = new THREE.Scene();
@@ -257,7 +258,7 @@ describe("given every body style's rig cage (the soft-body frame that wraps the 
 
     it(`when a ${id} is at rest, then its boot, glass and any light bar sit inside their cages with no clamping`, () => {
       const d = new StreamedDeformation(makeChassisGeometry(style), carFrame(style).rig);
-      const [oy, oz] = style.boot.origin;
+      const [oy, oz] = bootPivot(style.boot);
       assert.ok(panelClamp(d, makeTrunkGeometry(style), "boot", new THREE.Vector3(0, oy, oz)) < 1e-4, `${id} boot`);
       assert.ok(panelClamp(d, makeWindshield(style), "glassFront", new THREE.Vector3()) < 1e-4, `${id} windshield`);
       assert.ok(panelClamp(d, makeRearGlass(style), "glassRear", new THREE.Vector3()) < 1e-4, `${id} rear glass`);
@@ -299,6 +300,45 @@ describe("given every body style's rig cage (the soft-body frame that wraps the 
       assert.ok(r < 4.2, `${id} skin exploded, vertex radius ${r}`);
     });
   }
+});
+
+/** The owner's lids (docs/DOOR_RIG.md, Lids): a sedan's lid hinged at the rear window's base wraps the tail down to its lamps; a hatch is a roof-hinged lid wrapping down a leaning tail face to just above the bumper. */
+const WRAPPED: readonly [string, BodyStyle][] = [
+  ["sedan", { ...CAR_STYLES.sedan, boot: { kind: "lid", z0: -1.65, z1: -2.06, origin: [0.97, -1.62], pivot: [1.02, -1.65], drop: { y: 0.5, w: 0.47 } } }],
+  ["hatchback", { ...CAR_STYLES.hatchback, boot: { kind: "lid", z0: -1.61, z1: -1.716, origin: [0.94, -1.61], pivot: [1.28, -1.15], drop: { y: 0.57, w: 0.43, z: -1.775 } } }],
+];
+
+describe("given a deck lid that wraps the tail (boot.drop)", () => {
+  for (const [id, style] of WRAPPED) {
+    it(`when a ${id}'s wrapping lid is built, then it folds down the rear face to drop.y, its bottom edge at drop.z (else z1), drop.w wide, inside its cage with no clamping`, () => {
+      const boot = style.boot;
+      assert.ok(boot.kind === "lid" && boot.drop !== undefined);
+      const [py, pz] = bootPivot(boot);
+      const geo = makeTrunkGeometry(style);
+      const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+      let low = Infinity;
+      let back = Infinity;
+      let faceW = 0;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i) + py;
+        low = Math.min(low, y);
+        if (y > boot.drop.y + 1e-6) continue;
+        back = Math.min(back, pos.getZ(i) + pz);
+        faceW = Math.max(faceW, Math.abs(pos.getX(i)));
+      }
+      const bottomZ = boot.drop.z ?? boot.z1;
+      assert.ok(Math.abs(low - boot.drop.y) < 1e-6 && Math.abs(faceW - boot.drop.w) < 1e-6, `${id} face bottom ${low} m, half-width ${faceW} m`);
+      assert.ok(back < bottomZ && back > bottomZ - 0.02, `${id} face bottom edge at z ${back}`);
+      const d = new StreamedDeformation(makeChassisGeometry(style), carFrame(style).rig);
+      assert.ok(panelClamp(d, geo, "boot", new THREE.Vector3(0, py, pz)) < 1e-4, `${id} boot clamped`);
+    });
+  }
+
+  it("when their hinges are read, then the sedan's lid is a torsion-bar deck lid and the roof-hinged hatch a strutted hatch carrying its glass", () => {
+    const [sedan, hatch] = WRAPPED.map(([, s]) => s.boot);
+    assert.ok(!roofHinged(sedan!) && lidSpec(sedan!).kg === 12.4 && lidSpec(sedan!).dir === 1, `sedan ${JSON.stringify(lidSpec(sedan!))}`);
+    assert.ok(roofHinged(hatch!) && lidSpec(hatch!).kg === 18 && lidSpec(hatch!).dir === 1, `hatch ${JSON.stringify(lidSpec(hatch!))}`);
+  });
 });
 
 /** A police car through a square `kph` wall hit (shape mode), and its bar. */
@@ -1022,11 +1062,12 @@ describe("given a body style's P1 parts", () => {
     const [plainDeck, lipDeck, plainGate, lipGate] = [coupe, deckStyle, hatchback, gateStyle].map((s) => makeTrunkGeometry(s));
     const edge = deck.z1 - deck.origin[1];
     const deckIn = lerp(deck.z0, deck.z1, 0.8) - deck.origin[1];
-    const gateDown = lerp(gate.y0, gate.origin[0], 0.6) - gate.origin[0];
+    const gateTop = gate.origin[0] - bootPivot(gate)[0];
+    const gateDown = gateTop + lerp(gate.y0, gate.origin[0], 0.6) - gate.origin[0];
     const top = (g: THREE.BufferGeometry, at: number) => extremeAt(g, 2, at, 1, 1);
     const face = (g: THREE.BufferGeometry, at: number) => extremeAt(g, 1, at, 2, -1);
     assertSameNumbers([top(lipDeck!, edge) - top(plainDeck!, edge), top(lipDeck!, deckIn) - top(plainDeck!, deckIn)], [lip.rise, 0], "the deck lid's top over the plain one's at its rear edge and 0.13 m in", 1e-5);
-    assertSameNumbers([face(plainGate!, 0) - face(lipGate!, 0), face(plainGate!, gateDown) - face(lipGate!, gateDown)], [lip.rise, 0], "the tailgate's face behind the plain one's at its top edge and 0.15 m down", 1e-5);
+    assertSameNumbers([face(plainGate!, gateTop) - face(lipGate!, gateTop), face(plainGate!, gateDown) - face(lipGate!, gateDown)], [lip.rise, 0], "the tailgate's face behind the plain one's at its top edge and 0.15 m down", 1e-5);
     assert.ok(cageHash(deckStyle) === cageHash(coupe) && cageHash(gateStyle) === cageHash(hatchback), "the cage builds are unchanged");
   });
 

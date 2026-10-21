@@ -35,7 +35,7 @@ const HULL_SLACK = 0.02;
 /** `car`'s hull into `out` from index `o`; false (`out` unwritten) where the plan box does not describe the car: a wreck, airborne, falling, on a roof, leaning, a door ajar or a part off, asleep. */
 export function readHull(car: DeformableCar, out: Float64Array, o: number): boolean {
   if (car.deform.massActive || car.crashed || car.vaporized || car.falling || car.airborne || car.asleep || car.restsOn !== null) return false;
-  if (!car.doorsLatched || car.hasLoosePart()) return false;
+  if (!car.hingesLatched || car.hasLoosePart()) return false;
   if (Math.abs(car.forward.y) > LEVEL || Math.abs(car.right.y) > LEVEL) return false;
   const plan = car.cage.fields.planBox;
   const midX = (plan[0]! + plan[1]!) / 2;

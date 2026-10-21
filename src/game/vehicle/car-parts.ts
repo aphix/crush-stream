@@ -2,7 +2,7 @@ import { hypot2, detSin, detCos, PART_FAMILY } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { BUMPER_F } from "./constants.ts";
-import { DOOR } from "./car-door-mesh.ts";
+import { lidAccel } from "./hinge-spec.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose } from "./part-pose.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import type { StirCar } from "../world/surfaces.ts";
@@ -16,21 +16,7 @@ import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
 import type { TopMet } from "./car-air-body.ts";
 import { wreckCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
-import {
-  BUMPER_TEAR_MPS,
-  type DetachPart,
-  DOOR_AJAR,
-  DOOR_DAMP,
-  DOOR_INERTIA,
-  DOOR_OPEN_MAX,
-  DOOR_TEAR_MPS,
-  type DoorHinge,
-  type GlassPart,
-  HINGE_TEAR_J,
-  type Lamp,
-  type PartNetState,
-  SLAM_TEAR_J,
-} from "./car-core.ts";
+import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, type Lamp, type PartNetState } from "./car-core.ts";
 import {
   DOOR_ACC_MAX,
   DOOR_DRY,
@@ -51,8 +37,6 @@ const _interior = new Float64Array(4);
 const DOOR_LEFT: GlassPart = "doorLeft";
 const DOOR_RIGHT: GlassPart = "doorRight";
 
-/** A door's drawn angle (rad) per unit of crash hinge value (`hingeT`): the jam that holds a door ajar. */
-const DOOR_JAM = 1.45;
 const _push = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _n = new THREE.Vector3();
@@ -109,6 +93,9 @@ const TOUCH_NOW = 0.03;
 const FLUSH_HINGE = 0.02;
 /** How fast (hinge value per s) a hinged part swings toward its target. */
 const HINGE_RATE = 3.2;
+/** A lid's crash hinge value runs on the tail's crush (the rear bumper cage's compression, m) from `LID_CRUSH_ON`, full `LID_CRUSH_RANGE` past it: its latch (ajar 0.2) springs at 0.2 m, past every lid car's 15 km/h rear wall and short of its 30 km/h one. */
+const LID_CRUSH_ON = 0.14;
+const LID_CRUSH_RANGE = 0.3;
 
 /** The hinge value above which a part counts as folding (hung open, crushed, flapping), by hinge kind. */
 function foldAt(p: DetachPart): number {
@@ -197,13 +184,13 @@ export abstract class CarParts extends CarGlass {
       } else if (onHit) {
         if (p.hinge === "two-point") target = THREE.MathUtils.clamp((crush - 0.04) / 0.55, 0, 1);
         else if (p.hinge === "cowl") target = THREE.MathUtils.clamp((crush - 0.1) / 0.6, 0, 1);
-        else if (p.hinge === "tail") target = THREE.MathUtils.clamp((crush - 0.1) / 0.6, 0, 1);
+        else if (p.hinge === "tail") target = THREE.MathUtils.clamp((this.deform.partCompression("bumperRear") - LID_CRUSH_ON) / LID_CRUSH_RANGE, 0, 1);
         else if (p.region) target = THREE.MathUtils.clamp((crush - PANEL_HINGE[p.region.kind].on) / PANEL_HINGE[p.region.kind].range, 0, 1);
       }
       p.hingeT = Math.min(p.hingeMax, Math.max(p.hingeT, Math.min(target, p.hingeT + Math.max(dt * HINGE_RATE, 0.012))));
       // `folding` is read by the net state and the recorder's keyframes at every step, so it is set here, not in the frame's pose.
       p.folding = p.hingeT > foldAt(p);
-      if (p.hinge === "door" && onHit) this.springDoor(p);
+      if ((p.hinge === "door" || p.hinge === "tail") && onHit) this.springSwing(p);
     }
     this.partsDirty = true;
   }
@@ -316,7 +303,7 @@ export abstract class CarParts extends CarGlass {
       p.object.quaternion.set(_hinge[3]!, _hinge[4]!, _hinge[5]!, _hinge[6]!);
     } else if (p.hinge === "door") {
       const sign = p.name === "doorL" ? -1 : 1;
-      p.object.rotation.y = -sign * Math.max(t * DOOR_JAM, p.swing!.theta);
+      p.object.rotation.y = -sign * Math.max(t * p.swing!.spec.jam, p.swing!.theta);
       p.object.position.x += sign * t * 0.06;
       p.object.updateWorldMatrix(true, false);
       // Keep the door's bottom off the ground under it (not where there is none: off the fleet disc's rim), by a lift along the car's up: only on its wheels, where that is up (on its side or roof it points into the ground).
@@ -380,6 +367,16 @@ export abstract class CarParts extends CarGlass {
     return this.doorParts[side < 0 ? 0 : 1]!.swing!;
   }
 
+  /** The trunk lid's (hatch's, tailgate's) hinge state. */
+  lidHinge(): DoorHinge {
+    return this.lidPart.swing!;
+  }
+
+  /** Whether the trunk lid has left the car. */
+  lidOff(): boolean {
+    return this.lidPart.detached;
+  }
+
   /** Whether a door, mirror or quarter panel has left the car; a mirror rides off on its torn door. */
   partOff(name: "doorL" | "doorR" | "mirrorL" | "mirrorR" | "quarterL" | "quarterR"): boolean {
     const i = name.endsWith("L") ? 0 : 1;
@@ -390,10 +387,18 @@ export abstract class CarParts extends CarGlass {
 
   /** Unlatch a door and leave it at rest `theta` open (rad, up to the stop); 0 shuts and latches it. */
   setDoorOpen(side: number, theta: number): void {
-    const p = this.doorParts[side < 0 ? 0 : 1]!;
+    this.setSwingOpen(this.doorParts[side < 0 ? 0 : 1]!, theta);
+  }
+
+  /** Unlatch the trunk lid and leave it at rest `theta` open (rad, up to its stop); 0 shuts and latches it. */
+  setLidOpen(theta: number): void {
+    this.setSwingOpen(this.lidPart, theta);
+  }
+
+  private setSwingOpen(p: DetachPart, theta: number): void {
     if (p.detached) return;
     const h = p.swing!;
-    h.theta = THREE.MathUtils.clamp(theta, 0, DOOR_OPEN_MAX);
+    h.theta = THREE.MathUtils.clamp(theta, 0, h.spec.stop);
     h.omega = 0;
     h.latched = h.theta === 0;
     this.sampleMotion();
@@ -402,37 +407,56 @@ export abstract class CarParts extends CarGlass {
 
   /** The angle (rad) door `side` is drawn open at: the free swing, or the crash's jam when that holds it further out; 0 once it is off. */
   doorAngle(side: number): number {
-    const p = this.doorParts[side < 0 ? 0 : 1]!;
-    return p.detached ? 0 : Math.max(p.hingeT * DOOR_JAM, p.swing!.theta);
+    return this.swingAngle(this.doorParts[side < 0 ? 0 : 1]!);
+  }
+
+  /** The trunk lid's drawn open angle (rad), as `doorAngle`. */
+  lidAngle(): number {
+    return this.swingAngle(this.lidPart);
+  }
+
+  private swingAngle(p: DetachPart): number {
+    return p.detached ? 0 : Math.max(p.hingeT * p.swing!.spec.jam, p.swing!.theta);
   }
 
   /**
    * A fixed solid shuts door `side` to `angle` (rad) at closing rate `rate` (rad/s): the door swings in to it, latching at 0, and
-   * a slam past `SLAM_TEAR_J` wrenches it off (`closeDoor`). A door the crash jammed open past `angle` cannot shut: the solid
+   * a slam past its `slamJ` wrenches it off (`closeSwing`). A door the crash jammed open past `angle` cannot shut: the solid
    * tears it off. True if it tore off.
    */
   shutDoor(side: number, angle: number, rate: number): boolean {
-    const p = this.doorParts[side < 0 ? 0 : 1]!;
+    return this.shutSwing(this.doorParts[side < 0 ? 0 : 1]!, angle, rate);
+  }
+
+  /** A solid shuts the trunk lid to `angle` at `rate`, as `shutDoor`. */
+  shutLid(angle: number, rate: number): boolean {
+    return this.shutSwing(this.lidPart, angle, rate);
+  }
+
+  private shutSwing(p: DetachPart, angle: number, rate: number): boolean {
     if (p.detached) return false;
-    if (p.hingeT * DOOR_JAM > angle) {
-      this.detachPart(p, 0, _push.set(side * 1.2, 0.6, 0));
+    if (p.hingeT * p.swing!.spec.jam > angle) {
+      this.detachPart(p, 0, this.wrenchPush(p, 0));
       return true;
     }
     p.swing!.omega = -rate;
-    const tore = this.closeDoor(p, side, angle);
+    const tore = this.closeSwing(p, angle);
     if (!tore) this.posePart(p);
     return tore;
   }
 
   /**
-   * The check strap takes `energy` (J) past the stop. Once the total passes `HINGE_TEAR_J` the
+   * The check strap takes `energy` (J) past the stop. Once the total passes the hinge's `tearJ` the
    * door tears off with `push` (car-space m/s on top of the car's velocity). Returns whether it did.
    */
   loadDoorStop(side: number, energy: number, push: THREE.Vector3): boolean {
-    const p = this.doorParts[side < 0 ? 0 : 1]!;
+    return this.loadStop(this.doorParts[side < 0 ? 0 : 1]!, energy, push);
+  }
+
+  private loadStop(p: DetachPart, energy: number, push: THREE.Vector3): boolean {
     if (p.detached) return false;
     p.swing!.load += energy;
-    if (p.swing!.load < HINGE_TEAR_J) return false;
+    if (p.swing!.load < p.swing!.spec.tearJ) return false;
     this.detachPart(p, 0, push);
     return true;
   }
@@ -451,54 +475,91 @@ export abstract class CarParts extends CarGlass {
   }
 
   /**
-   * Free door swing: the car's acceleration drives the pendulum (`swingAccel`), hinge friction damps it, and it ends on the
-   * check-strap stop, on the crash jam (`hingeT`) or in the latch (`closeDoor`: the ram's shut scene and the car's own swing alike).
+   * Free swing of the doors and the trunk lid: the car's acceleration drives a door's pendulum (`swingAccel`), weight, struts and
+   * the car's surge a lid's (`lidAccel`); hinge friction damps either, and it ends on its stop, on the crash jam (`hingeT`) or in
+   * the latch (`closeSwing`: the ram's shut scene and the car's own swing alike).
    */
-  swingDoors(dt: number): void {
+  swingHinges(dt: number): void {
     this.sampleDrive(dt);
-    const d = this.swingDrive;
-    for (let i = 0; i < 2; i++) {
+    const doors = !this.doorParts[0]!.swing!.latched || !this.doorParts[1]!.swing!.latched;
+    for (let i = 0; i < 2 && doors; i++) {
       const p = this.doorParts[i]!;
-      if (p.detached) continue;
-      const h = p.swing!;
-      const sign = i === 0 ? -1 : 1;
-      if (!h.latched) {
-        // A door the crash jammed open never shuts past its jam.
-        const jam = Math.min(p.hingeT * DOOR_JAM, DOOR_OPEN_MAX);
-        h.omega += swingAccel(sign, h.theta, d[0]!, d[1]!, d[2]!, d[3]!) * dt;
-        const dry = DOOR_DRY * dt;
-        h.omega = Math.abs(h.omega) <= dry ? 0 : h.omega - Math.sign(h.omega) * dry;
-        h.theta += h.omega * dt;
-        h.omega *= Math.exp(-DOOR_DAMP * dt);
-        if (h.theta >= DOOR_OPEN_MAX && h.omega > 0) {
-          h.theta = DOOR_OPEN_MAX;
-          // The trailing edge's velocity is what the strap stops.
-          _push.set(sign * detCos(h.theta), 0, detSin(h.theta)).multiplyScalar(h.omega * DOOR.length);
-          const e = 0.5 * DOOR_INERTIA * h.omega * h.omega;
-          // The strap's detent holds it on the stop.
-          h.omega = 0;
-          if (this.loadDoorStop(sign, e, _push)) continue;
-        } else if (h.theta <= jam && h.omega < 0) {
-          if (this.closeDoor(p, sign, jam)) continue;
-        } else if (h.theta < jam) h.theta = jam;
-      }
+      if (p.detached || (!p.swing!.latched && this.swingStep(p, dt))) continue;
       this.posePart(p);
       const m = this.mirrorParts[i]!;
       if (!m.detached) this.posePart(m);
     }
+    const lid = this.lidPart;
+    if (!lid.detached && !lid.swing!.latched && !this.swingStep(lid, dt)) this.posePart(lid);
+  }
+
+  /** Whether a door or the trunk lid hangs off its latch (`swingHinges` has work). */
+  protected swingFree(): boolean {
+    return !this.doorParts[0]!.swing!.latched || !this.doorParts[1]!.swing!.latched || (!this.lidPart.detached && !this.lidPart.swing!.latched);
+  }
+
+  /** One step of an unlatched part's swing. True if it tore off. */
+  private swingStep(p: DetachPart, dt: number): boolean {
+    const h = p.swing!;
+    const s = h.spec;
+    // A part the crash jammed open never shuts past its jam.
+    const jam = Math.min(p.hingeT * s.jam, s.stop);
+    const resting = h.theta >= s.stop;
+    h.omega += this.hingeAccel(p) * dt;
+    const dry = DOOR_DRY * dt;
+    h.omega = Math.abs(h.omega) <= dry ? 0 : h.omega - Math.sign(h.omega) * dry;
+    h.theta += h.omega * dt;
+    h.omega *= Math.exp(-DOOR_DAMP * dt);
+    if (h.theta >= s.stop && h.omega > 0) {
+      h.theta = s.stop;
+      // The stop takes the free edge's blow when it arrives; the detent then holds it, and the push that keeps it there loads nothing.
+      const e = resting ? 0 : 0.5 * s.inertia * h.omega * h.omega;
+      this.edgeVelocity(p, _push);
+      h.omega = 0;
+      return e > 0 && this.loadStop(p, e, _push);
+    }
+    if (h.theta <= jam && h.omega < 0) return this.closeSwing(p, jam);
+    if (h.theta < jam) h.theta = jam;
+    return false;
+  }
+
+  /** Opening acceleration (rad/s²) of swinging part `p` now. */
+  private hingeAccel(p: DetachPart): number {
+    const h = p.swing!;
+    const d = this.swingDrive;
+    if (p.hinge === "door") return swingAccel(h.spec, p.name === "doorL" ? -1 : 1, h.theta, d[0]!, d[1]!, d[2]!, d[3]!);
+    // The world's up in the car's frame (its y and z): the column of the car's rotation that turns car y.
+    const q = this.group.quaternion;
+    return lidAccel(h.spec, h.theta, 1 - 2 * (q.x * q.x + q.z * q.z), 2 * (q.y * q.z - q.w * q.x), d[1]!);
+  }
+
+  /** The free edge's velocity (car-frame m/s) as part `p` swings: what its stop takes, and what it leaves with if that tears it off. */
+  private edgeVelocity(p: DetachPart, out: THREE.Vector3): THREE.Vector3 {
+    const h = p.swing!;
+    const s = h.spec;
+    if (p.hinge === "door") return out.set((p.name === "doorL" ? -1 : 1) * detCos(h.theta), 0, detSin(h.theta)).multiplyScalar(h.omega * s.length);
+    const turn = s.dir * h.theta;
+    const c = detCos(turn);
+    const sn = detSin(turn);
+    // The chord's rate of turn: the chord turned a quarter toward opening.
+    return out.set(0, -(s.uy * sn + s.uz * c), s.uy * c - s.uz * sn).multiplyScalar(s.dir * h.omega * s.length);
+  }
+
+  /** A part torn out of its hinges against its frame leaves outward (a door, rearward at its centre's swing rate `omega`) or up and back (a lid). */
+  private wrenchPush(p: DetachPart, omega: number): THREE.Vector3 {
+    if (p.hinge !== "door") return _push.set(0, 0.6, -1.2);
+    return _push.set(p.name === "doorL" ? -1.2 : 1.2, 0.6, 0.5 * p.swing!.spec.length * omega);
   }
 
   /**
-   * A door swung into its frame at closing rate ω < 0: the latch takes it at `jam` 0 (a crash jam above stops it there), or past
-   * `SLAM_TEAR_J` it is wrenched off. True if it tore off.
+   * A part swung into its frame at closing rate ω < 0: the latch takes it at `jam` 0 (a crash jam above stops it there), or past
+   * its `slamJ` it is wrenched off. True if it tore off.
    */
-  private closeDoor(p: DetachPart, sign: number, jam: number): boolean {
+  private closeSwing(p: DetachPart, jam: number): boolean {
     const h = p.swing!;
     h.theta = jam;
-    if (0.5 * DOOR_INERTIA * h.omega * h.omega >= SLAM_TEAR_J) {
-      // Wrenched out of its hinges against the frame: it leaves outward and rearward at its centre's swing speed.
-      _push.set(sign * 1.2, 0.6, 0.5 * DOOR.length * h.omega);
-      this.detachPart(p, 0, _push);
+    if (0.5 * h.spec.inertia * h.omega * h.omega >= h.spec.slamJ) {
+      this.detachPart(p, 0, this.wrenchPush(p, h.omega));
       return true;
     }
     h.omega = 0;
@@ -506,16 +567,16 @@ export abstract class CarParts extends CarGlass {
     return false;
   }
 
-  /** A door a side hit has opened past `DOOR_AJAR` is off its latch: it hangs at least as far open as the crash jam (`hingeT`) and swings with the car. */
-  private springDoor(p: DetachPart): void {
+  /** A door or lid a hit has crushed past its `ajar` is off its latch: it hangs at least as far open as the crash jam (`hingeT`) and swings with the car. */
+  private springSwing(p: DetachPart): void {
     const h = p.swing!;
     if (h.latched) {
-      if (p.hingeT <= DOOR_AJAR) return;
+      if (p.hingeT <= h.spec.ajar) return;
       h.latched = false;
       h.omega = 0;
       this.sampleMotion();
     }
-    h.theta = Math.max(h.theta, Math.min(p.hingeT * DOOR_JAM, DOOR_OPEN_MAX));
+    h.theta = Math.max(h.theta, Math.min(p.hingeT * h.spec.jam, h.spec.stop));
   }
 
   /** Remember the car's velocity and yaw rate: the next `sampleDrive` reads their change as acceleration. Call after setting either by hand. */
@@ -609,6 +670,11 @@ export abstract class CarParts extends CarGlass {
     this.detachPart(this.quarterPanel(side), 0, push);
   }
 
+  /** Tear the trunk lid off with `push` (car-space m/s on top of the car's velocity). */
+  ripLid(push: THREE.Vector3): void {
+    this.detachPart(this.lidPart, 0, push);
+  }
+
   protected fitInterior(): void {
     if (!this.deform.massActive) {
       this.interior.scale.set(1, 1, 1);
@@ -697,9 +763,12 @@ export abstract class CarParts extends CarGlass {
       let should = false;
       if (p.mirror) should = p.hingeT > 0.5;
       else if (p.bumper) should = p.hingeT > 0.7 && ebs >= BUMPER_TEAR_MPS;
-      else if (p.hinge === "cowl" || p.hinge === "tail") should = p.hingeT > 0.78;
-      else if (p.hinge === "door") should = p.hingeT > 0.58 && (this.deform.bidirectional || ebs >= DOOR_TEAR_MPS);
-      else if (p.region) should = p.hingeT > PANEL_TEAR && ebs >= PANEL_TEAR_MPS;
+      else if (p.hinge === "cowl") should = p.hingeT > 0.78;
+      else if (p.hinge === "door" || p.hinge === "tail") {
+        // A lid crushed this far is off whatever the speed; an open door or lid hit hard enough past its `tearT` is torn off (C1).
+        const s = p.swing!.spec;
+        should = (p.hinge === "tail" && p.hingeT > 0.78) || (p.hingeT > s.tearT && (this.deform.bidirectional || ebs >= s.tearMps));
+      } else if (p.region) should = p.hingeT > PANEL_TEAR && ebs >= PANEL_TEAR_MPS;
       if (should) this.detachPart(p, impulse);
     }
 
@@ -783,7 +852,7 @@ export abstract class CarParts extends CarGlass {
   protected detachPart(p: DetachPart, impulse: number, push?: THREE.Vector3): void {
     if (p.detached) return;
     // The part leaves in the pose its state gives now, not the last frame's (poses are written once a frame, `poseParts`; a door
-    // torn off by `swingDoors` finds none pending).
+    // torn off by `swingHinges` finds none pending).
     this.posePart(p);
     p.detached = true;
     p.shape.count = 0;
@@ -830,7 +899,7 @@ export abstract class CarParts extends CarGlass {
     p.angular.set(hash(1) * 6, hash(2) * 5, hash(3) * 6).add(this.angular);
     if (p.hinge === "door") p.angular.y += (p.name === "doorL" ? -1 : 1) * (3.2 + p.hingeT * 2.4);
     else if (p.hinge === "cowl") p.angular.x -= 3.4;
-    else if (p.hinge === "tail") p.angular.x += 3.4;
+    else if (p.hinge === "tail") p.angular.x += 3.4 * p.swing!.spec.dir;
   }
 
   /** The roof mass's rest height (m) on this car's frame: the baseline a sinking roof is measured from. */

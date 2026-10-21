@@ -1,5 +1,6 @@
 import type { BodyStyle } from "../car-variants.ts";
 import { PLATFORM_HARDPOINTS, st } from "./platform.ts";
+import { LIFTGATE } from "../hinge-spec.ts";
 
 /** Luxury SUV (the `wagon` id): tall clamshell nose, flat floating roof, raked tailgate glass under a roof spoiler. */
 export const WAGON: BodyStyle = {
@@ -78,7 +79,7 @@ export const WAGON: BodyStyle = {
   rearBulkhead: { z: -1.3, yTop: 1.0 },
   tubs: [[-1.96, 0.7, 0.38]],
   rearDoorSeam: -1.2,
-  boot: { kind: "tailgate", y0: 0.66, origin: [1.09, -2.115], z0: -2.125 },
+  boot: { kind: "tailgate", y0: 0.66, origin: [1.09, -2.115], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE },
   lamps: { head: [0.3, 0.8], tail: [0.62, 0.955] },
   seats: PLATFORM_HARDPOINTS.seats,
   roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.82, -1.74], y: [1.46, 1.51], halfWidth: 0.5 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 } },

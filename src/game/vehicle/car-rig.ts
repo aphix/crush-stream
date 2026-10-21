@@ -147,10 +147,16 @@ function moved(base: CageSpec, xScale: number, dy: Shift, dz: Shift, topRoom = 0
   };
 }
 
+/** A wrapping lid's cage reaches this far (m) below and behind its face, so the face skins inside it. */
+const LID_DROP_ROOM = 0.02;
+
 function bootCage(boot: BodyStyle["boot"], base: CageSpec, xScale: number): CageSpec {
   if (boot.kind === "lid") {
     const P = PLATFORM_CABIN.boot;
-    return moved(base, xScale, lifted(boot.origin[0] - P.origin[0]), spanned(P.z1, P.z0, boot.z1, boot.z0));
+    const cage = moved(base, xScale, lifted(boot.origin[0] - P.origin[0]), spanned(P.z1, P.z0, boot.z1, boot.z0));
+    if (!boot.drop) return cage;
+    const back = Math.min(boot.z1, boot.drop.z ?? boot.z1);
+    return { ...cage, min: [cage.min[0], Math.min(cage.min[1], boot.drop.y - LID_DROP_ROOM), Math.min(cage.min[2], back - LID_DROP_ROOM)] };
   }
   const [y, z] = boot.origin;
   const x = base.max[0] + base.max[0] * (xScale - 1);

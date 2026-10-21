@@ -69,7 +69,7 @@ export const HATCHBACK: BodyStyle = {
   rearBulkhead: { z: -0.95, yTop: 0.8 },
   tubs: [[-1.56, 0.7, 0.27]],
   rearDoorSeam: -0.88,
-  boot: { kind: "tailgate", y0: 0.57, origin: [0.93, -1.625], z0: -1.76 },
+  boot: { kind: "tailgate", y0: 0.57, origin: [0.93, -1.625], z0: -1.76, pivot: [1.277, -1.15] },
   lamps: { head: [0.34, 0.54], tail: [0.59, 0.72] },
   seats: PLATFORM_HARDPOINTS.seats,
   roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.5 } },

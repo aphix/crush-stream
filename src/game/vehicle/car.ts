@@ -66,9 +66,9 @@ export class DeformableCar extends CarParts {
     const r2 = REST_SPEED * REST_SPEED;
     return v.x * v.x + v.y * v.y + v.z * v.z >= r2 || w.x * w.x + w.y * w.y + w.z * w.z >= r2;
   }
-  /** Both doors shut (`swing.latched`): nothing of the car stands out past its hull and its mirrors; an unlatched door swings out up to its hinge plus its length. */
-  get doorsLatched(): boolean {
-    return this.doorParts[0]!.swing!.latched && this.doorParts[1]!.swing!.latched;
+  /** Both doors and the trunk lid shut (`swing.latched`; a torn lid is no lid): nothing of the car stands out past its hull and its mirrors; an unlatched door swings out up to its hinge plus its length, a lid past the tail or roof. */
+  get hingesLatched(): boolean {
+    return !this.swingFree();
   }
   private cageRig: CageRig | null = null;
   /** The car's contact shape: its drawn body (`CarCage`), fitted by `refitCage`. */
@@ -449,7 +449,7 @@ export class DeformableCar extends CarParts {
       d.deepCrush = false;
     }
     if (this.endReach < Infinity && d.quietTime() > REARM_QUIET_S && Math.min(this.endAgo[0]!, this.endAgo[1]!) > END_WINDOW) this.endReach = Infinity;
-    if (!this.doorParts[0]!.swing!.latched || !this.doorParts[1]!.swing!.latched) this.swingDoors(dt);
+    if (this.swingFree()) this.swingHinges(dt);
     else this.sampleMotion();
   }
 
