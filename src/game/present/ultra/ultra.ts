@@ -15,10 +15,13 @@ import type { UltraHost } from "./load.ts";
  *  - concrete-*: "Concrete Floor Worn 001" by Dimitrios Savva and Rico Cilliers, https://polyhaven.com/a/concrete_floor_worn_001
  *  - ground-*: "Gravelly Sand" by Dario Barresi, https://polyhaven.com/a/gravelly_sand
  * `-diff` is the diffuse colour, `-nor` the OpenGL normal map, `-arm` ambient occlusion (R), roughness (G), metalness (B); the 1k JPEGs
- * re-encoded as WebP (quality 80, normals 88).
+ * re-encoded as WebP (quality 80, normals 88). `public/ultra/512/` is the phone set: the 1024² files by ffmpeg `scale=512:512:flags=area`, WebP quality 80 (normals 88).
  */
 const BASE = import.meta.env?.BASE_URL ?? "/";
 const SKY_URL = `${BASE}ultra/sky.hdr`;
+const FULL_DIR = `${BASE}ultra/`;
+/** A phone's nine images at 512²: 12 MiB of RGBA8 plus mips instead of 48; tiling is by metres, so only the texel density halves. */
+const PHONE_DIR = `${BASE}ultra/512/`;
 const ROLES: readonly SurfaceRole[] = ["asphalt", "concrete", "ground"];
 const MAX_ANISOTROPY = 8;
 /** Edge (px) the diffuse is shrunk to for its mean colour. */
@@ -41,8 +44,8 @@ type Saved = {
 };
 const SAVED = "ultraSaved";
 
-async function loadImage(role: SurfaceRole, kind: "diff" | "nor" | "arm", anisotropy: number): Promise<THREE.Texture> {
-  const bitmap = await loadUprightBitmap(`${BASE}ultra/${role}-${kind}.webp`);
+async function loadImage(dir: string, role: SurfaceRole, kind: "diff" | "nor" | "arm", anisotropy: number): Promise<THREE.Texture> {
+  const bitmap = await loadUprightBitmap(`${dir}${role}-${kind}.webp`);
   const tex = new THREE.Texture(bitmap);
   tex.colorSpace = kind === "diff" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -53,8 +56,8 @@ async function loadImage(role: SurfaceRole, kind: "diff" | "nor" | "arm", anisot
   return tex;
 }
 
-async function loadSet(role: SurfaceRole, anisotropy: number): Promise<PbrSet> {
-  const [diff, nor, arm] = await Promise.all([loadImage(role, "diff", anisotropy), loadImage(role, "nor", anisotropy), loadImage(role, "arm", anisotropy)]);
+async function loadSet(dir: string, role: SurfaceRole, anisotropy: number): Promise<PbrSet> {
+  const [diff, nor, arm] = await Promise.all([loadImage(dir, role, "diff", anisotropy), loadImage(dir, role, "nor", anisotropy), loadImage(dir, role, "arm", anisotropy)]);
   const c = document.createElement("canvas");
   c.width = c.height = MEAN_EDGE;
   c.getContext("2d")!.drawImage(diff.image as ImageBitmap, 0, 0, MEAN_EDGE, MEAN_EDGE);
@@ -89,7 +92,7 @@ export class Ultra {
     const envLoad = loadHdrEnv(host.renderer, SKY_URL, host.alive);
     let loaded: PbrSet[];
     try {
-      loaded = await Promise.all(ROLES.map((role) => loadSet(role, anisotropy)));
+      loaded = await Promise.all(ROLES.map((role) => loadSet(host.phone ? PHONE_DIR : FULL_DIR, role, anisotropy)));
     } catch (err) {
       void envLoad.then((e) => e?.dispose());
       throw err;

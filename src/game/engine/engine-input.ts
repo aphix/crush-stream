@@ -154,7 +154,7 @@ export abstract class EngineInput extends EngineRigs {
   /** True once the Ultra look is loaded (the bench awaits it before its Ultra arm). Fetches it on the first call; false, logged, when that fails. */
   loadUltra(): Promise<boolean> {
     if (this.cine.ultra !== null) return Promise.resolve(true);
-    this.ultraLoad ??= fetchUltra({ renderer: this.renderer, scene: this.scene, stage: this.stage, queueWarm: () => this.queueWarm(), alive: () => !this.disposed })
+    this.ultraLoad ??= fetchUltra({ renderer: this.renderer, scene: this.scene, stage: this.stage, phone: this.cine.marks.phone, queueWarm: () => this.queueWarm(), alive: () => !this.disposed })
       .then((handle) => {
         if (handle === null) return false;
         if (this.disposed) {
