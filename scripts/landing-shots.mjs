@@ -7,14 +7,16 @@
  * (`trace-landing.mjs`).
  *
  *   CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
- *     scripts/landing-shots.mjs --root <tree> --car <style> [--out-dir <tree>/.tmp/shots/landing] [--views side,top,iso,rear-iso]
+ *     scripts/landing-shots.mjs --root <tree> --car <style> [--paint] [--out-dir <tree>/.tmp/shots/landing] [--views side,top,iso,rear-iso]
  *
+ * `--paint` paints the car its reference's colour (the landing file's `paint`; a livery stays) in both shots, so they compare like
+ * for like; without it "ours" wears the garage paint and the overlay the trace orange.
  * Writes `<out-dir>/<car>-<view>-{ours,overlay}.png` (and each view's camera spec in `<out-dir>/camera/`) and prints one JSON line:
  * per view the overlay's IoU, the isos' wheel error (crop pixels) and how they are aligned, both PNGs and any GL error. The runs go
  * one after another inside this one process's memory cap.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -33,6 +35,7 @@ const { values } = parseArgs({
     car: { type: "string" },
     "out-dir": { type: "string" },
     views: { type: "string", default: VIEWS.join(",") },
+    paint: { type: "boolean", default: false },
   },
 });
 if (values.root === undefined || values.car === undefined) throw new Error("--root <tree> and --car <style> are required (usage in the file header)");
@@ -46,14 +49,16 @@ mkdirSync(join(outDir, "camera"), { recursive: true });
 const { DRIVER_CARS } = await import(pathToFileURL(join(root, "src/game/match/types.ts")).href);
 const menuId = DRIVER_CARS.find((d) => d.style === car)?.id;
 if (menuId === undefined) throw new Error(`--car ${car}: no car-menu entry draws that style (styles: ${DRIVER_CARS.map((d) => d.style).join(", ")})`);
+const paint = values.paint ? (JSON.parse(readFileSync(join(import.meta.dirname, "landing-views", `${car}.json`), "utf8")).paint ?? null) : null;
 
 const shots = {};
 for (const view of views) {
   const camera = join(outDir, "camera", `${car}-${view}.json`);
   const overlay = join(outDir, `${car}-${view}-overlay.png`);
   const ours = join(outDir, `${car}-${view}-ours.png`);
-  const trace = run("trace-car.mjs", ["--root", root, "--style", car, "--view", view, "--landing", "--camera-out", camera, "--out", overlay]);
-  const frame = run("headless-frame.mjs", ["--root", root, "--hash", `scene=garage&car=${menuId}`, "--view", view, "--view-camera", camera, "--backdrop", BACKDROP, "--at", SETTLE_S, "--frames", FRAMES, "--out", ours]);
+  const painted = paint === null ? [] : ["--paint", paint];
+  const trace = run("trace-car.mjs", ["--root", root, "--style", car, "--view", view, "--landing", "--camera-out", camera, "--out", overlay, ...painted]);
+  const frame = run("headless-frame.mjs", ["--root", root, "--hash", `scene=garage&car=${menuId}`, "--view", view, "--view-camera", camera, "--backdrop", BACKDROP, "--at", SETTLE_S, "--frames", FRAMES, "--out", ours, ...painted]);
   const error = (set) => (set ? { rmsPx: set.rmsPx, maxPx: set.maxPx } : null);
   shots[view] = { iou: trace.iou, wheels: error(trace.wheels), landmarks: error(trace.landmarks), aligned: trace.aligned ?? "orthographic", overlay, ours, glError: Math.max(trace.glError, frame.glError), linkFailures: frame.linkFailures.length };
 }
