@@ -7,6 +7,7 @@ import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
+import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
@@ -15,12 +16,12 @@ import {
   LIGHT_BAR_FOOT,
   LIGHT_BAR_LENS,
   GLASS_COLOR,
+  bumperMaterial,
   glassMaterial,
   type GlassLook,
   makeLightBar,
   makePaintMaterial,
   makeSirenMaterial,
-  trimMaterial,
   type LampKind,
 } from "./car-materials.ts";
 import { MIRROR_REACH, PART_KIND, PART_KINDS, PartSeat } from "./part-geometry.ts";
@@ -337,6 +338,8 @@ export abstract class CarCore {
   abstract readonly cage: CarCage;
   private bumperF: THREE.Group;
   private bumperR: THREE.Group;
+  /** The front and rear bumper meshes, in that order: a player's bumper colour recolours them (`car-look.ts`). */
+  protected readonly bumperMeshes: THREE.Mesh[] = [];
   protected hood: THREE.Mesh;
   protected trunk: THREE.Mesh;
   protected doorL: THREE.Group;
@@ -386,7 +389,7 @@ export abstract class CarCore {
     this.interior = this.partSeats[PART_KIND.interior]!;
     this.group.add(this.interior);
 
-    this.hood = new THREE.Mesh(makeHoodGeometry(this.style), this.bodyMat);
+    this.hood = new THREE.Mesh(withHoodBulge(makeHoodGeometry(this.style), this.style), this.bodyMat);
     this.hood.castShadow = true;
     this.hood.position.set(0, this.style.hood.origin[0], this.style.hood.origin[1]);
     this.group.add(this.hood);
@@ -431,8 +434,9 @@ export abstract class CarCore {
     this.trunkOrigin = this.trunk.position.clone();
     this.flushCasters.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
 
-    this.bumperF = this.makeBumper(true, livery?.accent ?? paint.accent);
-    this.bumperR = this.makeBumper(false, livery?.accent ?? paint.accent);
+    const accent = livery?.accent ?? paint.accent;
+    this.bumperF = this.makeBumper(true, accent, livery?.body ?? paint.body);
+    this.bumperR = this.makeBumper(false, accent, livery?.body ?? paint.body);
     this.group.add(this.bumperF, this.bumperR);
     this.addLamps();
 
@@ -473,15 +477,17 @@ export abstract class CarCore {
     computeNormalsFast(geo);
   }
 
-  private makeBumper(front: boolean, accent: number): THREE.Group {
+  private makeBumper(front: boolean, accent: number, body: number): THREE.Group {
     const g = new THREE.Group();
-    const mesh = new THREE.Mesh(makeBumperGeometry(front, this.style), trimMaterial(accent));
+    const spec = front ? this.style.bumpers.front : this.style.bumpers.rear;
+    const fascia = makeBumperGeometry(front, this.style);
+    const mesh = new THREE.Mesh(front ? fascia : withRearFittings(fascia, this.style), bumperMaterial(spec.trim, accent, body));
+    this.bumperMeshes.push(mesh);
     mesh.castShadow = true;
     this.flushCasters.push(mesh);
     g.add(mesh);
     if (!front) g.add(this.partSeats[PART_KIND.tailTrim]!);
-    const { seat } = front ? this.style.bumpers.front : this.style.bumpers.rear;
-    g.position.set(0, seat.y, front ? seat.z : -seat.z);
+    g.position.set(0, spec.seat.y, front ? spec.seat.z : -spec.seat.z);
     if (front) {
       const grille = this.partSeats[PART_KIND.grille]!;
       grille.position.set(0, 0.1, 0.06);

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { makePaintMaterial, trimMaterial } from "../vehicle/car-materials.ts";
+import { bumperMaterial, makePaintMaterial, trimMaterial } from "../vehicle/car-materials.ts";
 import { CAR_SPRAY, carPickText, NO_CAR_PICK, type CarPart, type CarPick } from "../match/look-data.ts";
 import { applySpray, BARE_SPRAY, sprayUniforms, type SprayBitmap } from "./spray.ts";
 
@@ -44,8 +44,8 @@ export function wearCarLook(car: DeformableCar, pick: CarPick, spray: SprayBitma
   w.hood.color.setHex(c.hood);
   w.trunk.color.setHex(c.trunk);
   w.doors.color.setHex(c.doors);
-  const trim = trimMaterial(c.bumpers);
-  for (const bumper of w.bumpers) bumper.material = trim;
+  const ends = [car.style.bumpers.front, car.style.bumpers.rear];
+  for (let i = 0; i < w.bumpers.length; i++) w.bumpers[i]!.material = pick.bumpers === null ? bumperMaterial(ends[i]!.trim, c.bumpers, c.body) : trimMaterial(c.bumpers);
   car.setGlassTint(c.glass);
   for (const wheel of car.wheels) {
     if (c.rims === RIMS_AS_BUILT) delete wheel.userData.rim;
@@ -82,16 +82,12 @@ function baseOf(car: DeformableCar): CarBase {
 function firstWear(car: DeformableCar): Worn {
   const m = car.lookMeshes();
   const base = baseOf(car);
-  const bumpers: THREE.Mesh[] = [];
-  car.group.traverse((o) => {
-    if (o instanceof THREE.Mesh && o.material === trimMaterial(base.bumpers)) bumpers.push(o);
-  });
   const w: Worn = {
     uniforms: sprayUniforms(CAR_SPRAY, BARE_SPRAY, 1),
     hood: makePaintMaterial(base.body),
     trunk: makePaintMaterial(base.body),
     doors: makePaintMaterial(base.doors),
-    bumpers,
+    bumpers: m.bumpers,
     base,
   };
   m.hood.material = w.hood;
