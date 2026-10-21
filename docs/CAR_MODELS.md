@@ -61,6 +61,26 @@ what its car changes. Every hardpoint but the bumper fascia reaches the collisio
 the sill, the arches, the hood's pose, a torn bumper's box), so moving one moves the sim: re-pin and bump `REPLAY_VERSION`.
 The greenhouse header bars follow the roof: a drawn header bar's top never stands above the roof skin over its ends.
 
+The drawn parts (optional, drawn only: no cage build reads them, so adding one never moves the sim) dress a body without a
+new mesh: each is merged into the mesh it stands on and moves with it.
+
+| Field | Meaning |
+|---|---|
+| `hood.bulge` | Raised centre bulge on the drawn hood from `z0` to `z1`, `width` across, its top `rise` over the lid, easing into it at both ends. `scoop` (`inlets` 1 or 2, mouth at `z`, `width`, `height` over the bulge) rises toward a mouth facing forward, drawn dark. Merged into the hood (`withHoodBulge`): the bonnet's skin crushes it |
+| `hood.kind` | `"lid"` (default) or `"clamshell"`: the drawn lid wraps over the body's shoulders to a side shut line on the fender top |
+| `boot.lip` | Ducktail kick: the deck lid's top rises `rise` at its rear edge, or the tailgate's top edge kicks `rise` out, easing in over `depth` |
+| `roof.rails` | Two dark rails at \|x\| `x[0]`..`x[1]` over `z` [rear, front], their tops `rise` over the roof at their inner edge |
+| `roof.spoiler` | Body-colour wedge off the roof's rear end over `z` [tip, front edge]: underside at `y[0]`, top `y[1]` at the front edge, ±`halfWidth` |
+| `roof.glassPanel` | Dark panel a few mm proud of the roof over `z` [rear, front], `width` across |
+| `bumpers.front.trim`, `bumpers.rear.trim` | `"body"` (its body colour, painted finish), `"chrome"` or `"black"`; unset, the car's accent trim. A player's bumper colour still recolours it |
+| `bumpers.rear.hitch` | Black tow-hitch receiver under the rear bumper's middle |
+| `exhaust` | `tips` 1 (at `x`) or 2 (at ±`x`) at height `y`, `size` [w, h], `shape` `"round"` (oval) or `"rect"`: chrome with a dark throat, past the rear bumper's face |
+
+The roof parts are merged into the drawn body after its other parts (the body's skin crushes them with the roof); rails and
+panel are drawn dark by the paint's `primer` attribute. Exhaust tips and the hitch are merged into the rear bumper
+(`withRearFittings`), so they tear off with it; their chrome and black come from the trim material's `fitting` attribute, so
+no part adds a draw call.
+
 ## References and scale
 
 The reference images are measured at one scale for every car: 0.01426 m per pixel of the lineup side view, anchored at the

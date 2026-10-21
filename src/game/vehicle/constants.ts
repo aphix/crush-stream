@@ -7,6 +7,9 @@ export const CLASS_HUBS = "classHubs";
 export const INTERIOR_MESH = "interior";
 /** The body geometry's per-vertex paint attribute: 0 paint, 1 primer (a torn panel's vertices). */
 export const PRIMER_ATTRIBUTE = "primer";
+/** A bumper's per-vertex trim attribute: 0 the bumper's own trim, `FITTING_TONE` black or chrome (its exhaust tips and tow hitch, drawn in its one mesh). */
+export const FITTING_ATTRIBUTE = "fitting";
+export const FITTING_TONE = { black: 1, chrome: 2 } as const;
 export const BUMPER_F = "bumperF";
 /** The name of a car's head or tail lamp seat (`Object3D.name`): `addLamps` names it, the distance cut finds it. */
 export const LAMP_SEAT = "lampSeat";
