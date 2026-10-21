@@ -138,6 +138,10 @@ export interface BodyStyle {
   door: { hingeX: number; hingeY: number; hingeZ: number; length: number; halfHeight: number; mirrorY: number; mirrorZ?: number; mirrorReach: number; mirrorHalfDepth: number; aperture: readonly [number, number] };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
   aPillarFoot: number;
+  /** Where the A-pillar's rear edge meets the cant line (z, m): the door glass's top-front corner; absent = 5 cm behind the windshield's top. */
+  aPillarTop?: number;
+  /** Side glass top: its drop under the roof (m, absent 0.075), the roof's side lip ending there too; or [z, y] stations (ascending, linear, held past the ends) under a 0.075 lip, painted fill between them and the lip. */
+  glassTop?: number | readonly (readonly [number, number])[];
   /** Wheel-arch opening radius (m) about each hub. */
   arch: { radius: number };
   /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. */

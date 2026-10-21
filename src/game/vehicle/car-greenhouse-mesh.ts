@@ -1,13 +1,15 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle } from "./car-variants.ts";
-import { beltX, beltY } from "./car-lines.ts";
+import { aPillarTopZ, beltX, beltY, cantDrop } from "./car-lines.ts";
 import {
   ROOF_CROWN,
   ROOF_SHOULDER,
   cantX,
+  cantY,
   ensureOutwardNormals,
   glassTopY,
+  glassX,
   lerp,
   loftFromRings,
   roofAt,
@@ -19,6 +21,7 @@ import {
 
 export function makeRoofGeometry(style: BodyStyle): THREE.BufferGeometry {
   const [z0, z1] = style.roofZ;
+  const lip = cantDrop(style);
   const segs = 16;
   const rings: Pt[][] = [];
   const zs: number[] = [];
@@ -26,7 +29,7 @@ export function makeRoofGeometry(style: BodyStyle): THREE.BufferGeometry {
     const z = lerp(z0, z1, s / segs);
     const { y, x } = roofAt(z, style);
     rings.push([
-      { x: -(x + 0.08), y: y - 0.075 },
+      { x: -(x + 0.08), y: y - lip },
       { x: -(x + 0.07), y: y - 0.03 },
       { x: -x, y },
       { x: -x * ROOF_SHOULDER[0], y: y + ROOF_SHOULDER[1] },
@@ -34,7 +37,7 @@ export function makeRoofGeometry(style: BodyStyle): THREE.BufferGeometry {
       { x: x * ROOF_SHOULDER[0], y: y + ROOF_SHOULDER[1] },
       { x, y },
       { x: x + 0.07, y: y - 0.03 },
-      { x: x + 0.08, y: y - 0.075 },
+      { x: x + 0.08, y: y - lip },
       { x: 0, y: y - 0.085 },
     ]);
     zs.push(z);
@@ -156,6 +159,31 @@ function makeBar(source: BodySource, width: number, height: number, depth: numbe
 /** Header bars are this tall (m); the drawn bar's top never stands above the roof skin over its ends. */
 const HEADER_HALF_HEIGHT = 0.03;
 
+/** The painted fill between a side glass top dropped under the cant line and the cant line is this thick (m), like a pillar. */
+const GLASS_FILL_THICK = 0.05;
+
+/** Painted fill from the side glass top up to the cant line, C-pillar to A-pillar, on the glass plane (drawn only): a style's DLO that drops under its roof. */
+function glassTopFill(sign: number, style: BodyStyle, aTopZ: number): THREE.BufferGeometry[] {
+  const stations = style.glassTop;
+  if (stations === undefined || typeof stations === "number") return [];
+  const zRear = style.quarter.zRearTop;
+  const zs = [zRear, ...stations.map(([z]) => z).filter((z) => z > zRear && z < aTopZ), aTopZ];
+  const rings = zs.map((z): Pt[] => {
+    const low = glassTopY(z, style);
+    const lowX = glassX(z, low, style);
+    const [high, highX] = [cantY(z, style), cantX(z, style)];
+    return [
+      { x: sign * lowX, y: low },
+      { x: sign * highX, y: high },
+      { x: sign * (highX - GLASS_FILL_THICK), y: high },
+      { x: sign * (lowX - GLASS_FILL_THICK), y: low },
+    ];
+  });
+  const fill = loftFromRings(rings, zs, 0, 1);
+  ensureOutwardNormals(fill);
+  return [fill];
+}
+
 export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry[] {
   const pillarFromCorners = source === "cage" ? boxFromCorners : roundedPillarFromCorners;
   const parts: THREE.BufferGeometry[] = [];
@@ -166,7 +194,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   const bp = style.bPillar;
   const rg = style.rearGlass;
   const q = style.quarter;
-  const aTopZ = wsZ - 0.05;
+  const aTopZ = aPillarTopZ(style);
   for (const sign of [-1, 1]) {
     parts.push(
       pillarFromCorners(
@@ -174,7 +202,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
         {
           fb: [ws.wBase / 2 + 0.02, ws.base[0] + 0.01, ws.base[1] - 0.03],
           rb: [beltXAt(style.aPillarFoot), belt(style.aPillarFoot), style.aPillarFoot],
-          rt: [cantX(aTopZ, style), glassTopY(aTopZ, style) + 0.03, aTopZ],
+          rt: [cantX(aTopZ, style), cantY(aTopZ, style) + 0.03, aTopZ],
           ft: [ws.wTop / 2 + 0.02, wsY + 0.02, wsZ],
         },
         0.05,
@@ -182,7 +210,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       ),
     );
     const bz = (bp.rear + bp.front) * 0.5;
-    const bTop = glassTopY(bz, style) + 0.05;
+    const bTop = cantY(bz, style) + 0.05;
     const bX = cantX(bz, style) + 0.01;
     parts.push(
       pillarFromCorners(
@@ -203,14 +231,14 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
           fb: [beltXAt(q.zRearBot), belt(q.zRearBot) - 0.02, q.zRearBot],
           rb: [rg.wBase / 2 + 0.02, rg.base[0], rg.base[1] - 0.01],
           rt: [rg.wTop / 2 + 0.02, rg.top[0] + 0.01, rg.top[1] - 0.01],
-          ft: [cantX(q.zRearTop, style), glassTopY(q.zRearTop, style) + 0.03, q.zRearTop],
+          ft: [cantX(q.zRearTop, style), cantY(q.zRearTop, style) + 0.03, q.zRearTop],
         },
         0.05,
       ),
     );
     const m = style.midPillarZ;
     if (m !== null) {
-      const mTop = glassTopY(m, style) + 0.03;
+      const mTop = cantY(m, style) + 0.03;
       const mX = cantX(m, style) + 0.012;
       parts.push(
         pillarFromCorners(
@@ -233,6 +261,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     const rail = makeBar(source, 0.03, 0.03, hypot2(railPlan, railFront - railRear), 0, 0, 0).rotateX(-detAtan2(railFront - railRear, railPlan));
     if (railFrontX !== railRearX) rail.rotateY(sign * detAtan2(railFrontX - railRearX, railRun));
     parts.push(rail.translate(sign * ((railRearX + railFrontX) / 2 + 0.015), (railRear + railFront) / 2 + 0.005, q.zRearBot + railRun * 0.5));
+    if (source === "drawn") parts.push(...glassTopFill(sign, style, aTopZ));
   }
   // The cage keeps its box until the rig derives the cabin cage.
   const headerY = (centre: number, z: number, width: number) => (source === "cage" ? centre : Math.min(centre, roofTopY(width / 2, z, style) - HEADER_HALF_HEIGHT));
