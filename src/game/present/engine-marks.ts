@@ -109,6 +109,8 @@ const DRIVE_SLIDE_START = 0.25;
 const DRIVE_SLIDE_FULL = 0.8;
 /** Subtract one 8-bit step from the whole map this often (s): a full-black mark is gone in ~2.5 min. */
 const FADE_EVERY = 0.6;
+/** Fades that take a full-ink texel to 0 (one 8-bit step each): a map with no stamps for this many is empty, and its fade is skipped. */
+const FADES_TO_EMPTY = 255;
 /** Frames the stamps wait to go into the map in one draw (a wheel's mark is drawn at most this many frames late). */
 const DRAW_EVERY_FRAMES = 2;
 /** Largest map texel (m): a 24 cm tyre is wider than its diagonal (14 cm), so a stamp covers a texel centre in every row it crosses (no dots). */
@@ -170,6 +172,8 @@ export class SkidMarks {
   /** `flush` calls since the last draw that found stamps waiting. */
   private framesQueued = 0;
   private fadeAcc = 0;
+  /** Fades the map still needs before it holds no ink: 0 after a full wipe, `FADES_TO_EMPTY` after each stamp draw. */
+  private fadesOwed = 0;
   private needsClear = true;
   private any = false;
   /** A phone's map stops at `PHONE_MAP_SIZE`: set once, before the first `setResolution`. */
@@ -372,7 +376,9 @@ export class SkidMarks {
     const rt = this.rt;
     if (!rt || !this.on) return;
     this.fadeAcc += wallDt;
-    const fade = this.fadeAcc >= FADE_EVERY;
+    const due = this.fadeAcc >= FADE_EVERY;
+    if (due) this.fadeAcc = 0;
+    const fade = due && this.fadesOwed > 0;
     const rect = markMapUniforms.uMarkRect.value;
     const fromX = rect.x;
     const fromZ = rect.y;
@@ -385,7 +391,10 @@ export class SkidMarks {
     const prevTarget = renderer.getRenderTarget();
     const ac = renderer.autoClear;
     renderer.autoClear = false;
-    if (this.needsClear) this.wipe(renderer, rt, 0, 0, rt.width, rt.width);
+    if (this.needsClear) {
+      this.wipe(renderer, rt, 0, 0, rt.width, rt.width);
+      this.fadesOwed = 0;
+    }
     if (moved) {
       this.wipeBand(renderer, rt, 0, fromX, rect.x, 1 / rect.z);
       this.wipeBand(renderer, rt, 1, fromZ, rect.y, 1 / rect.w);
@@ -394,8 +403,9 @@ export class SkidMarks {
     renderer.setRenderTarget(rt);
     this.stamp.visible = this.quads > 0;
     this.fade.visible = fade;
-    if (fade) this.fadeAcc = 0;
+    if (fade) this.fadesOwed--;
     if (this.quads > 0) {
+      this.fadesOwed = FADES_TO_EMPTY;
       this.geo.setDrawRange(0, this.quads * 6);
       (this.geo.attributes.position as THREE.BufferAttribute).addUpdateRange(0, this.quads * 12);
       (this.geo.attributes.aInk as THREE.BufferAttribute).addUpdateRange(0, this.quads * 16);

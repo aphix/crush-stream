@@ -71,9 +71,19 @@ describe("given the mark map with a wheel laying one stamp every frame", () => {
   });
 });
 
+/** A settled map holding ink (one stamp drawn into it, so a due fade has marks to take off), its counts back at zero. */
+function inkedMarks() {
+  const settled = settledMarks();
+  layStamp(settled.marks);
+  settled.marks.flush(settled.renderer, WALL_DT, ...FOCUS);
+  settled.marks.flush(settled.renderer, WALL_DT, ...FOCUS);
+  Object.assign(settled.drawn, { renders: 0, quads: 0 });
+  return settled;
+}
+
 describe("given a stamp waiting for the next frame's draw", () => {
   it("when the fade comes due that frame, then the stamp goes in with the fade, not a frame later", () => {
-    const { marks, renderer, drawn } = settledMarks();
+    const { marks, renderer, drawn } = inkedMarks();
     layStamp(marks);
     marks.flush(renderer, FADE_DUE_DT, ...FOCUS);
     assert.deepEqual(drawn, { renders: 1, quads: 1 });
@@ -87,6 +97,41 @@ describe("given a stamp waiting for the next frame's draw", () => {
     marks.flush(renderer, WALL_DT, ...FOCUS);
     marks.flush(renderer, WALL_DT, ...FOCUS);
     assert.deepEqual(drawn, { renders: 0, quads: 0 });
+  });
+});
+
+/** Flush `n` frames, each with a fade due and no stamp. */
+function fadeFrames(marks: SkidMarks, renderer: MarkRenderer, n: number): void {
+  for (let i = 0; i < n; i++) marks.flush(renderer, FADE_DUE_DT, ...FOCUS);
+}
+
+describe("given the mark map's periodic fade", () => {
+  it("when a wiped map that was never stamped sees 10 fade periods, then nothing is drawn into it", () => {
+    const { marks, renderer, drawn } = settledMarks();
+    fadeFrames(marks, renderer, 10);
+    assert.equal(drawn.renders, 0);
+  });
+
+  it("when one stamp was drawn and 300 fade periods pass, then the map is faded 255 times, a full-ink texel's 8-bit steps, and then left alone", () => {
+    const { marks, renderer, drawn } = inkedMarks();
+    fadeFrames(marks, renderer, 300);
+    assert.equal(drawn.renders, 255);
+  });
+
+  it("when a new stamp goes in with the 101st fade, then 255 more fades follow it", () => {
+    const { marks, renderer, drawn } = inkedMarks();
+    fadeFrames(marks, renderer, 100);
+    layStamp(marks);
+    fadeFrames(marks, renderer, 1 + 300);
+    assert.equal(drawn.renders, 100 + 1 + 255);
+  });
+
+  it("when the map is cleared after a stamp, then no fade runs", () => {
+    const { marks, renderer, drawn } = inkedMarks();
+    marks.clear();
+    marks.flush(renderer, WALL_DT, ...FOCUS);
+    fadeFrames(marks, renderer, 10);
+    assert.equal(drawn.renders, 0);
   });
 });
 
