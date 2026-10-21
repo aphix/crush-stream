@@ -4,6 +4,9 @@
  *
  *   node scripts/bench-browser.mjs [--url http://127.0.0.1:8080/] [--cars 2,10,16,24,32]
  *     [--modes fleet,derby,race-oval,race-rally,race-city] [--seconds 8] [--warmup 2] [--out bench.json] [--headed] [--vsync]
+ *     [--draw auto|far|max] [--scale auto|0.75|1|1.5|2] [--shadow auto|high|max]
+ *
+ * --draw/--scale/--shadow pin the quality knobs (`?draw=`, `?scale=`, `?shadow=`); the page's deviceScaleFactor stays 1, so Auto renders at 1.
  *
  * Drives the page through `window.__crush` (the CrashEngine), forces 1× time scale so
  * auto-slomo cannot hide sim cost, and wraps the hot entry points on the live instance:
@@ -39,6 +42,9 @@ function parseArgs(argv) {
     rig: false,
     particles: false,
     profile: null,
+    draw: null,
+    scale: null,
+    shadow: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -54,6 +60,9 @@ function parseArgs(argv) {
     else if (a === "--rig") out.rig = true;
     else if (a === "--particles") out.particles = true;
     else if (a === "--profile") out.profile = next();
+    else if (a === "--draw") out.draw = next();
+    else if (a === "--scale") out.scale = next();
+    else if (a === "--shadow") out.shadow = next();
     else throw new Error(`unknown argument: ${a}`);
   }
   return out;
@@ -198,7 +207,9 @@ async function main() {
   page.on("console", (msg) => {
     if (msg.type() === "error") errors.push(msg.text());
   });
-  await page.goto(opts.url, { waitUntil: "load", timeout: 90_000 });
+  const u = new URL(opts.url);
+  for (const k of ["draw", "scale", "shadow"]) if (opts[k] !== null) u.searchParams.set(k, opts[k]);
+  await page.goto(u.href, { waitUntil: "load", timeout: 90_000 });
   await page.waitForFunction(() => Boolean(window.__crush), null, { timeout: 90_000 });
   await page.evaluate(() => (window.__crush.fadeScenes = false));
   const gpu = await page.evaluate(() => {
@@ -206,7 +217,7 @@ async function main() {
     const ext = gl.getExtension("WEBGL_debug_renderer_info");
     return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
   });
-  console.log(`url ${opts.url}\ngpu ${gpu}\nchromium ${executablePath ?? "playwright default"}\n`);
+  console.log(`url ${u.href}\ngpu ${gpu}\nchromium ${executablePath ?? "playwright default"}\n`);
   let cdp = null;
   if (opts.profile) {
     mkdirSync(opts.profile, { recursive: true });
@@ -268,7 +279,7 @@ async function main() {
     }
   }
   if (errors.length) console.log(`\nconsole errors (${errors.length}):\n  ${errors.slice(0, 8).join("\n  ")}`);
-  if (opts.out) writeFileSync(opts.out, JSON.stringify({ url: opts.url, gpu, opts, rows, errors }, null, 2));
+  if (opts.out) writeFileSync(opts.out, JSON.stringify({ url: u.href, gpu, opts, rows, errors }, null, 2));
   await browser.close();
   if (errors.length) process.exitCode = 1;
 }

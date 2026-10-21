@@ -245,6 +245,17 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
     assert.deepEqual(squash(lines.filter((l) => l.includes("note epicenter"))), ["note epicenter on: not fullscreen (desktop); unfocused (visible)"]);
   });
 
+  it("when the two cards ran different quality knobs, then the pair is flagged", async () => {
+    /** A card's own settings with the draw distance pinned by the URL (`epicenter` rides in them too, so the arm stays an arm). */
+    const held = (on) => ({ settings: { epicenter: on, quality: { draw: "max", scale: "auto", shadow: "auto", pinned: "draw" } } });
+    const different = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, held(false)), arm("BBBB-2222", "city:epi", true, 540, 270, 3500)]);
+    assert.deepEqual(squash(different.filter((l) => l.includes("FLAG"))), ["FLAG the arms ran different quality knobs: off draw max, on auto"]);
+    // The equal pair is the control: the same knobs on both arms say nothing.
+    const equal = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, held(false)), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, held(true))]);
+    assert.deepEqual(squash(equal.filter((l) => l.includes("FLAG"))), []);
+    assert.ok(equal.some((l) => l.includes("k3x9q2 cycle 1 city")), "the equal pair is still paired");
+  });
+
   const PHONE = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/149.0.0.0 Mobile Safari/537.36";
 
   it("when the same window is a phone's, then the loss of fullscreen is a FLAG, and a window that stayed fullscreen has none", async () => {

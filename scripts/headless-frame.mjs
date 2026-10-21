@@ -8,12 +8,14 @@
  *
  *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png]
  *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--at 8] [--detail 2]
+ *     [--draw auto|far|max] [--scale auto|0.75|1|1.5|2] [--shadow auto|high|max]
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
  * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
  * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--at` is the sim seconds before the drawn frames;
  * `--detail` puts a distance-detail rung in force (`DETAIL_LEVELS`: 0 the desktop's, 2 the phone's; `off`: no cuts, the bench's detail A/B arms),
  * and the JSON counts the cars cut to their body (`farCars`).
+ * `--draw`, `--scale` and `--shadow` pin the quality knobs (`?draw=`, `?scale=`, `?shadow=`). A numeric `--scale` keeps the shot's size and shrinks the CSS box (`--size` over the scale), so the drawing buffer stays `--size`.
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -55,6 +57,9 @@ const { values } = parseArgs({
     camera: { type: "string" },
     at: { type: "string", default: String(START_S) },
     detail: { type: "string" },
+    draw: { type: "string" },
+    scale: { type: "string" },
+    shadow: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -71,6 +76,10 @@ const detail = values.detail === undefined || values.detail === "off" ? values.d
 if (typeof detail === "number" && !Number.isInteger(detail)) throw new Error(`--detail ${values.detail}: a rung of DETAIL_LEVELS (e.g. 2) or off`);
 const W = Number(size[1]);
 const H = Number(size[2]);
+// The headless context cannot grow: a render scale draws the same buffer from a smaller CSS box.
+const renderScale = Number(values.scale);
+const CSS_W = renderScale > 0 ? Math.round(W / renderScale) : W;
+const CSS_H = renderScale > 0 ? Math.round(H / renderScale) : H;
 const out = resolve(values.out ?? `screenshots/headless-frame-${tier}.png`);
 
 // WSL: Mesa's d3d12 driver reaches the host GPU through /dev/dxg; without it Mesa draws on the CPU. Elsewhere Mesa has no d3d12 driver.
@@ -104,13 +113,15 @@ const renderer = nativeRenderer(gl);
 
 stubBrowser();
 const page = new URL(location.href);
-location.search = `?fx=${tier}`;
+const q = new URLSearchParams({ fx: tier });
+for (const k of ["draw", "scale", "shadow"]) if (values[k] !== undefined) q.set(k, values[k]);
+location.search = `?${q}`;
 if (values.hash !== undefined) location.hash = `#${values.hash.replace(/^#/, "")}`;
 const stubElement = document.createElement;
 document.createElement = (tag) => (tag === "canvas" ? Object.assign(createCanvas(1, 1), { style: {}, addEventListener() {}, removeEventListener() {}, setAttribute() {} }) : stubElement(tag));
 Object.assign(globalThis, {
-  innerWidth: W,
-  innerHeight: H,
+  innerWidth: CSS_W,
+  innerHeight: CSS_H,
   // A desktop browser's pointer, so the engine takes the device class a desktop does.
   matchMedia: (query) => ({ matches: query === "(pointer: fine)", addEventListener() {} }),
   // three's file loader builds a `Request` from the page-relative URL, and reports its download with `ProgressEvent`s.
@@ -130,8 +141,8 @@ Object.assign(globalThis, {
 });
 const canvas = element();
 // The engine fits its lens to the canvas's box (`coverLens` reads all four edges).
-const box = { left: 0, top: 0, right: W, bottom: H, width: W, height: H };
-Object.assign(canvas, { clientWidth: W, clientHeight: H, getBoundingClientRect: () => box, getContext: () => gl });
+const box = { left: 0, top: 0, right: CSS_W, bottom: CSS_H, width: CSS_W, height: CSS_H };
+Object.assign(canvas, { clientWidth: CSS_W, clientHeight: CSS_H, getBoundingClientRect: () => box, getContext: () => gl });
 
 /** The page's file loads in flight (fetches, decodes), waited out by `settle`. */
 const loads = new Set();
@@ -237,7 +248,7 @@ mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, await shot.encode("png"));
 
 engine.dispose();
-const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, detail: engine["detail"].level, farCars, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
+const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, detail: engine["detail"].level, farCars, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
 process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 

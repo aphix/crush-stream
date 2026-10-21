@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { setSunBias } from "../engine-world.ts";
 import { loadHdrEnv } from "../look-env.ts";
 import { loadUprightBitmap } from "../bitmap-loader.ts";
 import { gainOf } from "../prefabs.ts";
@@ -77,9 +76,10 @@ function uploadOnce(renderer: THREE.WebGLRenderer, tex: THREE.Texture<ImageBitma
 }
 
 /**
- * The Ultra look (FX tier "ultra"): an HDRI daylight environment turned to the sun's side, the sun's shadow on a larger map with a normal
- * bias and a wider soft edge, and photographic PBR textures (colour, normals, occlusion, roughness) over the asphalt, concrete and
- * natural-ground surfaces. A manual pick (`AutoFx` never lifts to it). The whole folder is one lazy chunk, fetched when Ultra is picked.
+ * The Ultra look (FX tier "ultra"): an HDRI daylight environment turned to the sun's side, the sun's map raised to 2048²
+ * (`WorldStage.setUltraShadow`: the player's Shadows level is kept) with a wider soft edge, and photographic PBR textures (colour,
+ * normals, occlusion, roughness) over the asphalt, concrete and natural-ground surfaces. A manual pick (`AutoFx` never lifts to
+ * it). The whole folder is one lazy chunk, fetched when Ultra is picked.
  */
 export class Ultra {
   private on = false;
@@ -90,7 +90,7 @@ export class Ultra {
   private readonly env: THREE.Texture;
   private readonly sets: Record<SurfaceRole, PbrSet>;
   /** What the engine had before `enable`; null while off. */
-  private before: { env: THREE.Texture | null; exposure: number; mapSize: number; radius: number } | null = null;
+  private before: { env: THREE.Texture | null; exposure: number; radius: number } | null = null;
 
   private constructor(host: UltraHost, env: THREE.Texture, sets: Record<SurfaceRole, PbrSet>) {
     this.host = host;
@@ -120,16 +120,15 @@ export class Ultra {
     if (this.on) return;
     const { renderer, scene, stage } = this.host;
     const shadow = stage.sun.shadow;
-    this.before = { env: scene.environment, exposure: renderer.toneMappingExposure, mapSize: shadow.mapSize.x, radius: shadow.radius };
+    this.before = { env: scene.environment, exposure: renderer.toneMappingExposure, radius: shadow.radius };
     this.on = true;
     scene.environment = this.env;
     scene.environmentRotation.y = envYaw(this.sunDir.copy(stage.sun.position).sub(stage.sun.target.position));
     stage.envGain = LOOK.envGain;
     scene.environmentIntensity = stage.envIntensity;
     renderer.toneMappingExposure = LOOK.exposure;
-    shadow.mapSize.set(LOOK.shadow.mapSize, LOOK.shadow.mapSize);
+    stage.setUltraShadow(LOOK.shadow.mapSize);
     shadow.radius = LOOK.shadow.radius;
-    setSunBias(shadow);
     // The surfaces are dressed in the warm's first step (`dress`), so their programs compile with everything else in it.
     this.host.queueWarm();
   }
@@ -146,9 +145,8 @@ export class Ultra {
     stage.envGain = 1;
     scene.environmentIntensity = stage.envIntensity;
     renderer.toneMappingExposure = before.exposure;
-    shadow.mapSize.set(before.mapSize, before.mapSize);
+    stage.setUltraShadow(0);
     shadow.radius = before.radius;
-    setSunBias(shadow);
     scene.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) for (const m of [(o as THREE.Mesh).material].flat()) this.undress(m);
     });

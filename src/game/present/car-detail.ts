@@ -92,6 +92,11 @@ export class CarDetail {
   private midBack2 = 0;
   private far2 = 0;
   private farBack2 = 0;
+  /** The cut distances before the player's Draw distance (m). */
+  private midM = 0;
+  private farM = 0;
+  /** The player's Draw distance: both cuts start this many times further (1: the ladder's own). */
+  private reach = 1;
   private readonly cuts = new WeakMap<DeformableCar, Cut>();
 
   constructor(level = 0) {
@@ -108,11 +113,25 @@ export class CarDetail {
 
   /** The two distances by hand (m; Infinity: that cut never starts), for the bench's A/B. */
   setDistances(mid: number, far: number): void {
+    this.midM = mid;
+    this.farM = far;
+    this.cutAt();
+    this.level = -1;
+  }
+
+  /** The player's Draw distance: the cuts in force times `reach`, the rung kept. */
+  setReach(reach: number): void {
+    this.reach = reach;
+    this.cutAt();
+  }
+
+  private cutAt(): void {
+    const mid = this.midM * this.reach;
+    const far = this.farM * this.reach;
     this.mid2 = mid * mid;
     this.midBack2 = this.mid2 * BACK * BACK;
     this.far2 = far * far;
     this.farBack2 = this.far2 * BACK * BACK;
-    this.level = -1;
   }
 
   /** Whether `car` is cut to its body alone right now: the wheel batch draws it its far wheels (`WheelBatch.sync`). */

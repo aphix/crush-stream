@@ -4,6 +4,10 @@ import { cn } from "@/lib/utils";
 /** Number boxes and the time-scale field: 44 px tall on touch, 32 px with a fine pointer. */
 export const FIELD =
   "h-11 w-14 shrink-0 rounded-md bg-surface-2 px-1.5 text-right font-display text-xs tabular-nums text-fg shadow-[var(--shadow-border)] pointer-fine:h-8";
+/** Option buttons inside a segmented track: 44 px on touch. Five-option tracks wrap at three per row: one row of five overflows the panel. */
+export const SEGMENT = "h-11 px-1 text-xs pointer-fine:h-7";
+/** The grid a segmented track's option buttons sit in; the row sets its columns. */
+export const TRACK = "grid min-w-0 flex-1 gap-0.5 rounded-md bg-surface-2 p-0.5";
 /** A dot in the margin left of a label (or at the end of a chip): this setting differs from its default. Hidden from the page, the section's reset row names it. */
 export function ChangedDot({ on, className }: { on: boolean; className?: string }) {
   return on ? <span aria-hidden className={className ?? "absolute -left-1.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-accent"} data-changed /> : null;
