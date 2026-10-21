@@ -111,6 +111,12 @@ const { CrashEngine } = await game("engine/engine.ts");
 const { HudStore } = await game("hud/hud-store.ts");
 const { FX_TIERS } = await game("present/engine-post.ts");
 const { FRAME_HZ } = await game("kernel/constants.ts");
+const { DRIVER_CARS } = await game("match/types.ts");
+/** The body style the hash's `car=` boots: it names a car-menu id (a class, e.g. `muscle` for the coupe body, or a style), or null. */
+const hashStyle = (() => {
+  const id = new URLSearchParams(values.hash ?? "").get("car");
+  return id === null ? null : (DRIVER_CARS.find((d) => d.id === id)?.style ?? id);
+})();
 if (!FX_TIERS.includes(tier)) throw new Error(`--tier ${tier}: one of ${FX_TIERS.join(", ")}`);
 
 // Referenced for the process's life: @kmamal/gl aborts the process when the garbage collector frees a context.
@@ -224,7 +230,7 @@ if (camera !== undefined) {
 }
 if (seatView !== undefined) {
   // The hash's car, followed in that drive view (a spectator's spec view: any scene, driven or not).
-  const want = new URLSearchParams(values.hash ?? "").get("car");
+  const want = hashStyle;
   const cars = engine.live();
   const index = want === null ? engine.seat.carIndex : cars.findIndex((car) => car.style.id === want);
   if (index < 0) throw new Error(`--view ${values.view}: no ${want} car in the scene (field: ${cars.map((car) => car.style.id)})`);
@@ -278,7 +284,7 @@ process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 async function shootAs(spec, backdrop) {
   const THREE = await import(pathToFileURL(join(root, "node_modules/three/build/three.module.js")).href);
   const { makeCamera } = await import(pathToFileURL(join(import.meta.dirname, "trace-camera.mjs")).href);
-  const want = new URLSearchParams(values.hash ?? "").get("car");
+  const want = hashStyle;
   const car = engine.live().find((c) => want === null || c.style.id === want);
   if (car === undefined) throw new Error(`--view/--backdrop: no ${want} car in the scene; boot one: --hash 'scene=garage&car=<id>'`);
   car.group.updateMatrixWorld(true);

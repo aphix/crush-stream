@@ -4,7 +4,7 @@ import type { BodyStyle } from "./car-variants.ts";
 import { splitCreases } from "./car-crease.ts";
 import { CREASE_DEGREES, SEDAN, sampleSlice, sideX } from "./car-mesh.ts";
 import { rockerAt } from "./car-lines.ts";
-import { MIRROR_ROOT } from "./part-geometry.ts";
+import { MIRROR_REACH, MIRROR_ROOT } from "./part-geometry.ts";
 import { PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
 
 /** The platform door as the sim readers still take it (door contact, hull gap, wear, car-parts) until they read `style.door`; `mirrorX` is its mirror base out from the hinge. */
@@ -23,12 +23,23 @@ export function doorSkinZ(style: BodyStyle): number {
   return (z0 + z1) / 2 - style.door.hingeZ;
 }
 
-/** The mirror's seat in door space: x on the door skin's outer face at the mirror's height and z, less the arm's root offset, so the arm starts on the skin. */
+/** The mirror's seat in door space: x on the drawn door skin (the vertex grid's flat triangles) where the mirror is inside the door cut and the face's height, else on the body side, less the arm root's offset at the mirror's x-scale, so the arm starts on the skin. */
 export function mirrorSeatX(style: BodyStyle): number {
   const d = style.door;
+  const grid = doorGrid(style);
+  const zl = -(d.mirrorZ ?? 0) - doorSkinZ(style);
+  const armRoot = MIRROR_ROOT * (d.mirrorReach / MIRROR_REACH);
+  const { columns } = grid;
+  const cutHalf = grid.halfLength - DOOR_SKIN_OVERLAP;
+  let upper = 1;
+  while (upper < columns.length - 1 && columns[upper]! < zl) upper++;
+  const z0 = columns[upper - 1]!;
+  const z1 = columns[upper]!;
+  const onDoor = Math.abs(zl) < cutHalf ? THREE.MathUtils.lerp(faceXAtHeight(style, grid, z0, d.mirrorY), faceXAtHeight(style, grid, z1, d.mirrorY), (zl - z0) / (z1 - z0)) : NaN;
+  if (!Number.isNaN(onDoor)) return onDoor - armRoot;
   const z = d.hingeZ - (d.mirrorZ ?? 0);
   const sl = sampleSlice(z, style.profile);
-  return sideX(d.hingeY + d.mirrorY, sl.hw, sl.yBelt, rockerAt(z, style)) + DOOR_PROUD - d.hingeX - MIRROR_ROOT;
+  return sideX(d.hingeY + d.mirrorY, sl.hw, sl.yBelt, rockerAt(z, style)) + DOOR_PROUD - d.hingeX - armRoot;
 }
 /** Outer-face rows (bunched toward the top by `DOOR_ROW_WARP`, so the shoulder roll reads round) and columns before the edge rolls are added. */
 const DOOR_ROWS = 8;
@@ -67,13 +78,16 @@ function gridPerimeter(columns: number, rows: number): number[] {
   return loop;
 }
 
-/**
- * Door skin in hinge-local space (parent at the A-pillar hinge, the skin centred on the door cut). The outer face
- * follows the body side (`sideX`) at each height and station and rolls over its perimeter in a rounded edge into a
- * slab `DOOR_THICKNESS` thick inboard, closed by a flat inner face; its rows bunch toward the top so the shoulder
- * roll reads round.
- */
-export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.BufferGeometry {
+interface DoorGrid {
+  h: number;
+  halfLength: number;
+  skinLength: number;
+  rows: number[];
+  columns: number[];
+}
+
+/** The door skin's row and column stations (door space) and the extents they span. */
+function doorGrid(style: BodyStyle): DoorGrid {
   const d = style.door;
   const h = d.halfHeight;
   const [z0, z1] = d.aperture;
@@ -81,8 +95,45 @@ export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.
   const halfLength = skinLength / 2;
   const rowInterior = Array.from({ length: DOOR_ROWS - 1 }, (_, k) => h * (1 - 2 * (1 - (k + 1) / DOOR_ROWS) ** DOOR_ROW_WARP));
   const columnInterior = Array.from({ length: DOOR_COLUMNS - 1 }, (_, k) => -halfLength + (skinLength * (k + 1)) / DOOR_COLUMNS);
-  const rows = doorStations(h, rowInterior);
-  const columns = doorStations(halfLength, columnInterior);
+  return { h, halfLength, skinLength, rows: doorStations(h, rowInterior), columns: doorStations(halfLength, columnInterior) };
+}
+
+/** The drawn outer-face vertex at a grid `rowStation` and column `z` (door space): `x` after the edge roll, `y` after the end slopes, `outer` before the roll. */
+function doorFaceVertex(style: BodyStyle, grid: DoorGrid, rowStation: number, z: number) {
+  const d = style.door;
+  const { h, halfLength } = grid;
+  let y = rowStation;
+  if (z > halfLength - DOOR_FRONT_SLOPE.fromEdge) y += (z - (halfLength - DOOR_FRONT_SLOPE.fromEdge)) * DOOR_FRONT_SLOPE.rise;
+  if (z < -(halfLength - DOOR_REAR_SLOPE.fromEdge)) y += (-(halfLength - DOOR_REAR_SLOPE.fromEdge) - z) * DOOR_REAR_SLOPE.rise;
+  const zCar = d.hingeZ + doorSkinZ(style) + z;
+  const sl = sampleSlice(zCar, style.profile);
+  const outer = sideX(d.hingeY + y, sl.hw, sl.yBelt, rockerAt(zCar, style)) + DOOR_PROUD - d.hingeX;
+  const drop = doorEdgeDrop(Math.min(rowStation + h, h - rowStation), Math.min(z + halfLength, halfLength - z));
+  return { x: outer - drop, y, outer };
+}
+
+/** The drawn outer face's x at height `y` on grid column `z`: the lerp between the two rows whose vertices bracket `y`; NaN off the face. */
+function faceXAtHeight(style: BodyStyle, grid: DoorGrid, z: number, y: number): number {
+  const { rows } = grid;
+  let below = doorFaceVertex(style, grid, rows[0]!, z);
+  if (y < below.y) return NaN;
+  for (let r = 1; r < rows.length; r++) {
+    const above = doorFaceVertex(style, grid, rows[r]!, z);
+    if (y <= above.y) return below.x + ((above.x - below.x) * (y - below.y)) / (above.y - below.y);
+    below = above;
+  }
+  return NaN;
+}
+
+/**
+ * Door skin in hinge-local space (parent at the A-pillar hinge, the skin centred on the door cut). The outer face
+ * follows the body side (`sideX`) at each height and station and rolls over its perimeter in a rounded edge into a
+ * slab `DOOR_THICKNESS` thick inboard, closed by a flat inner face; its rows bunch toward the top so the shoulder
+ * roll reads round.
+ */
+export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.BufferGeometry {
+  const grid = doorGrid(style);
+  const { h, halfLength, skinLength, rows, columns } = grid;
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
@@ -90,15 +141,9 @@ export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.
   const tri = (a: number, b: number, c: number, outward: boolean) => (outward ? indices.push(a, b, c) : indices.push(a, c, b));
   for (const rowStation of rows) {
     for (const z of columns) {
-      let y = rowStation;
-      if (z > halfLength - DOOR_FRONT_SLOPE.fromEdge) y += (z - (halfLength - DOOR_FRONT_SLOPE.fromEdge)) * DOOR_FRONT_SLOPE.rise;
-      if (z < -(halfLength - DOOR_REAR_SLOPE.fromEdge)) y += (-(halfLength - DOOR_REAR_SLOPE.fromEdge) - z) * DOOR_REAR_SLOPE.rise;
-      const zCar = d.hingeZ + doorSkinZ(style) + z;
-      const sl = sampleSlice(zCar, style.profile);
-      const outer = sideX(d.hingeY + y, sl.hw, sl.yBelt, rockerAt(zCar, style)) + DOOR_PROUD - d.hingeX;
-      const drop = doorEdgeDrop(Math.min(rowStation + h, h - rowStation), Math.min(z + halfLength, halfLength - z));
-      positions.push(sign * (outer - drop), y, z);
-      outerX.push(outer);
+      const v = doorFaceVertex(style, grid, rowStation, z);
+      positions.push(sign * v.x, v.y, z);
+      outerX.push(v.outer);
       uvs.push((z + halfLength) / skinLength, (rowStation + h) / (2 * h));
     }
   }

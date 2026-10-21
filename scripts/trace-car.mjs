@@ -100,7 +100,7 @@ const ref = refFile === undefined ? null : await loadRef(game, refFile, crop);
 if (values.grid !== undefined) await writeGrid(game, ref, resolve(values.grid));
 const stage = new CarStage(game);
 const dims = stage.build(values.style, carClass, omit);
-const fit = iso ? await isoTrace(game, stage, dims, ref, view, { style: values.style, entry, solve: values.solve, out }) : await orthoView();
+const fit = iso ? await isoTrace(game, stage, dims, ref, view, { style: values.style, entry, solve: values.solve, lift: game.CLASSES[carClass].lift, out }) : await orthoView();
 if (values["camera-out"] !== undefined) {
   mkdirSync(dirname(resolve(values["camera-out"])), { recursive: true });
   writeFileSync(resolve(values["camera-out"]), `${JSON.stringify(fit.camera)}\n`);

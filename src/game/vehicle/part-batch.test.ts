@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+import { after, describe, test } from "node:test";
 import * as THREE from "three";
 import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
 import { DeformableCar } from "./car.ts";
 import { BUMPER_F } from "./constants.ts";
+import { INSTANCE_MIRROR_VARIANT_ATTRIBUTE, MIRROR_VARIANT_ATTRIBUTE } from "./car-materials.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
 import { PART_KIND, PART_KINDS, partGeometry } from "./part-geometry.ts";
@@ -68,9 +70,48 @@ describe("given the part batch and a few cars near the camera", () => {
     assertSameNumbers(matrix.elements, only.partSeats[PART_KIND.mirrorR]!.matrixWorld.elements, "the mirror instance is the seat's world matrix", FLOAT32_SLACK);
   });
 
-  test("when every kind's mesh is read, then it draws the kind's one shared geometry", () => {
+  test("when every kind's mesh is read, then it draws the kind's one shared geometry; a mirror's draws its own, every style's mirror with the platform's first", () => {
     const { batch } = stage();
-    for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.geometry, partGeometry(kind), `kind ${kind} (same object, not equal copies)`);
+    for (const kind of PART_KINDS) {
+      const mesh = batch.meshes[kind]!;
+      if (kind !== PART_KIND.mirrorL && kind !== PART_KIND.mirrorR) {
+        assert.equal(mesh.geometry, partGeometry(kind), `kind ${kind} (same object, not equal copies)`);
+        continue;
+      }
+      const platform = positions(partGeometry(kind));
+      assertSameNumbers(Array.from(positions(mesh.geometry)).slice(0, platform.length), platform, `kind ${kind}: the platform mirror leads its geometry`);
+      assert.equal(mesh.geometry.getAttribute(MIRROR_VARIANT_ATTRIBUTE).getX(0), 0, `kind ${kind}: as variant 0`);
+    }
+  });
+});
+
+describe("given the part batch and a car whose style has its own mirror", () => {
+  // Set before the first batch or car reads the fleet's mirror variants; nothing else in this file builds a wagon.
+  const wagon = CAR_STYLES.wagon;
+  const door = wagon.door;
+  wagon.door = { ...door, mirror: { cap: "rounded", finish: "body" } };
+  after(() => {
+    wagon.door = door;
+  });
+
+  test("when it is synced beside a platform-mirror car, then its instance carries its variant and door paint, and the batch's geometry holds its mirror under that variant", () => {
+    const { batch, car, draw } = stage();
+    const own = new DeformableCar({ ...paint(), body: 0x336699 }, new THREE.Scene(), null, "wagon");
+    own.spawn(0, 10, 0);
+    draw([car(10), own]);
+    const mesh = batch.meshes[PART_KIND.mirrorR]!;
+    const seat = own.partSeats[PART_KIND.mirrorR]!;
+    const variants = mesh.geometry.getAttribute(INSTANCE_MIRROR_VARIANT_ATTRIBUTE);
+    assert.ok(mesh.count === 2 && variants.getX(0) === 0 && seat.variant > 0 && variants.getX(1) === seat.variant, `variants ${variants.getX(0)}, ${variants.getX(1)} of ${seat.variant}`);
+    const tint = new THREE.Color();
+    mesh.getColorAt(1, tint);
+    assert.equal(tint.getHex(), 0x336699, "the instance colour is its door's paint");
+    const tagged = mesh.geometry.getAttribute(MIRROR_VARIANT_ATTRIBUTE);
+    const at = positions(mesh.geometry);
+    const batched = Array.from({ length: tagged.count }, (_, i) => i)
+      .filter((i) => tagged.getX(i) === seat.variant)
+      .flatMap((i) => [at[i * 3]!, at[i * 3 + 1]!, at[i * 3 + 2]!]);
+    assertSameNumbers(batched, Array.from(positions(seat.drawn)), "its variant's vertices are its drawn mirror's");
   });
 });
 
