@@ -494,8 +494,9 @@ describe("given a body style's H2 hardpoints", () => {
 
   it("when the tailgate's bottom edge leans out, then its foot moves with it and its hinge edge stays put", () => {
     const hatchback = CAR_STYLES.hatchback;
+    const upright: BodyStyle = { ...hatchback, boot: { ...hatchback.boot, z0: hatchback.boot.origin[1] } };
     const moved: BodyStyle = { ...hatchback, boot: { ...hatchback.boot, z0: hatchback.boot.origin[1] - 0.2 } };
-    const [was, now] = [makeTrunkGeometry(hatchback), makeTrunkGeometry(moved)];
+    const [was, now] = [makeTrunkGeometry(upright), makeTrunkGeometry(moved)];
     const foot = edgeMeanZ(now, false) - edgeMeanZ(was, false);
     const hinge = edgeMeanZ(now, true) - edgeMeanZ(was, true);
     assert.ok(Math.abs(foot + 0.2) < 0.01, `lowest vertices moved ${foot} m in z, -0.2 asked`);
