@@ -36,6 +36,22 @@ half-width, beltline, roof height and width, how much greenhouse), `roofZ`, `win
 `midPillarZ`, `rearBulkhead`, `tubs` (open floors), `rearDoorSeam`, `boot` (deck lid, or a hatch / tailgate), `lamps`, and the
 optional `livery` and `lightBar`. `rig` overrides the soft-body cages a body's panels need.
 
+The hardpoints place the openings and the lower body, each per car:
+
+| Field | Meaning |
+|---|---|
+| `windshield` | Base `[y, z]` of the glass centre line and its widths at the base and at `windshieldTop` |
+| `bPillar` | The B-pillar's z band |
+| `belt` | Side-glass sill: half-width `x`, and height `y` as `[z, y]` stations (linear between, held past the ends), so a beltline can rise toward the tail |
+| `rocker` | The body side's lowest line; under it the sill turns in to the floor pan at `dims.rideHeight` |
+| `arch` | Wheel-arch opening radius about each hub |
+| `hood` | Bonnet span `z0` (cowl) to `z1` (nose) and its hinge `origin` `[y, z]` |
+| `bumpers.front`, `bumpers.rear` | Group `seat` (height, distance from the middle), `fascia` section `[y, out]` top to bottom, and `span` (half-width) |
+
+`car-styles/platform.ts` exports the values the first bodies shared as `PLATFORM_HARDPOINTS`; a table spreads it and overrides
+what its car changes. Every hardpoint but the bumper fascia reaches the collision cage or a sim reader (the greenhouse pillars,
+the sill, the arches, the hood's pose, a torn bumper's box), so moving one moves the sim: re-pin and bump `REPLAY_VERSION`.
+
 ## References and scale
 
 The reference images are measured at one scale for every car: 0.01426 m per pixel of the lineup side view, anchored at the

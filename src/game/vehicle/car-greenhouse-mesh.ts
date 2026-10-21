@@ -1,14 +1,10 @@
 import * as THREE from "three";
-import { detSin, detCos } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle } from "./car-variants.ts";
 import {
-  B_PILLAR_Z,
-  GLASS_BELT_X,
-  GLASS_BELT_Y,
   ROOF_CROWN,
   ROOF_SHOULDER,
-  WINDSHIELD_BASE,
-  WINDSHIELD_W,
+  beltY,
   cantX,
   ensureOutwardNormals,
   glassTopY,
@@ -160,6 +156,10 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   const pillarFromCorners = source === "cage" ? boxFromCorners : roundedPillarFromCorners;
   const parts: THREE.BufferGeometry[] = [];
   const [wsY, wsZ] = style.windshieldTop;
+  const ws = style.windshield;
+  const beltX = style.belt.x;
+  const belt = (z: number) => beltY(z, style);
+  const bp = style.bPillar;
   const rg = style.rearGlass;
   const q = style.quarter;
   const aTopZ = wsZ - 0.05;
@@ -168,26 +168,26 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       pillarFromCorners(
         sign,
         {
-          fb: [WINDSHIELD_W.base / 2 + 0.02, WINDSHIELD_BASE[0] + 0.01, WINDSHIELD_BASE[1] - 0.03],
-          rb: [GLASS_BELT_X, GLASS_BELT_Y, 0.76],
+          fb: [ws.wBase / 2 + 0.02, ws.base[0] + 0.01, ws.base[1] - 0.03],
+          rb: [beltX, belt(0.76), 0.76],
           rt: [cantX(aTopZ, style), glassTopY(aTopZ, style) + 0.03, aTopZ],
-          ft: [WINDSHIELD_W.top / 2 + 0.02, wsY + 0.02, wsZ],
+          ft: [ws.wTop / 2 + 0.02, wsY + 0.02, wsZ],
         },
         0.05,
         2,
       ),
     );
-    const bz = (B_PILLAR_Z.rear + B_PILLAR_Z.front) * 0.5;
+    const bz = (bp.rear + bp.front) * 0.5;
     const bTop = glassTopY(bz, style) + 0.05;
     const bX = cantX(bz, style) + 0.01;
     parts.push(
       pillarFromCorners(
         sign,
         {
-          fb: [GLASS_BELT_X + 0.01, GLASS_BELT_Y - 0.02, B_PILLAR_Z.front],
-          rb: [GLASS_BELT_X + 0.01, GLASS_BELT_Y - 0.02, B_PILLAR_Z.rear],
-          rt: [bX, bTop, B_PILLAR_Z.rear + 0.015],
-          ft: [bX, bTop, B_PILLAR_Z.front - 0.015],
+          fb: [beltX + 0.01, belt(bp.front) - 0.02, bp.front],
+          rb: [beltX + 0.01, belt(bp.rear) - 0.02, bp.rear],
+          rt: [bX, bTop, bp.rear + 0.015],
+          ft: [bX, bTop, bp.front - 0.015],
         },
         0.05,
       ),
@@ -196,7 +196,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       pillarFromCorners(
         sign,
         {
-          fb: [GLASS_BELT_X, GLASS_BELT_Y - 0.02, q.zRearBot],
+          fb: [beltX, belt(q.zRearBot) - 0.02, q.zRearBot],
           rb: [rg.wBase / 2 + 0.02, rg.base[0], rg.base[1] - 0.01],
           rt: [rg.wTop / 2 + 0.02, rg.top[0] + 0.01, rg.top[1] - 0.01],
           ft: [cantX(q.zRearTop, style), glassTopY(q.zRearTop, style) + 0.03, q.zRearTop],
@@ -212,8 +212,8 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
         pillarFromCorners(
           sign,
           {
-            fb: [GLASS_BELT_X + 0.012, GLASS_BELT_Y - 0.02, m + 0.04],
-            rb: [GLASS_BELT_X + 0.012, GLASS_BELT_Y - 0.02, m - 0.04],
+            fb: [beltX + 0.012, belt(m + 0.04) - 0.02, m + 0.04],
+            rb: [beltX + 0.012, belt(m - 0.04) - 0.02, m - 0.04],
             rt: [mX, mTop, m - 0.035],
             ft: [mX, mTop, m + 0.035],
           },
@@ -221,10 +221,13 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
         ),
       );
     }
-    const railLen = B_PILLAR_Z.front - q.zRearBot;
-    parts.push(makeBar(source, 0.03, 0.03, railLen, sign * (GLASS_BELT_X + 0.015), GLASS_BELT_Y + 0.005, q.zRearBot + railLen * 0.5));
+    // The belt rail runs from the C-pillar to the B-pillar along the sill, pitched with it.
+    const [railRear, railFront] = [belt(q.zRearBot), belt(bp.front)];
+    const railRun = bp.front - q.zRearBot;
+    const rail = makeBar(source, 0.03, 0.03, hypot2(railRun, railFront - railRear), 0, 0, 0).rotateX(-detAtan2(railFront - railRear, railRun));
+    parts.push(rail.translate(sign * (beltX + 0.015), (railRear + railFront) / 2 + 0.005, q.zRearBot + railRun * 0.5));
   }
-  parts.push(makeBar(source, WINDSHIELD_W.top + 0.1, 0.06, 0.08, 0, wsY + 0.03, wsZ - 0.02));
+  parts.push(makeBar(source, ws.wTop + 0.1, 0.06, 0.08, 0, wsY + 0.03, wsZ - 0.02));
   parts.push(makeBar(source, rg.wTop + 0.12, 0.06, 0.08, 0, rg.top[0] + 0.04, rg.top[1] - 0.02));
   return parts;
 }

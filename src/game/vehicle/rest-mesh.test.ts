@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
+import { makeHoodGeometry, makeTrunkGeometry, SEDAN } from "./car-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
 import { restSideProfile } from "./rest-mesh.test-util.ts";
@@ -123,7 +123,7 @@ function assembleRestCar(): THREE.Group {
   const g = new THREE.Group();
   g.add(new THREE.Mesh(makeChassisGeometry()));
   const hood = new THREE.Mesh(makeHoodGeometry());
-  hood.position.set(0, 0.7, 0.74);
+  hood.position.set(0, SEDAN.hood.origin[0], SEDAN.hood.origin[1]);
   g.add(hood);
   const trunk = new THREE.Mesh(makeTrunkGeometry());
   trunk.position.set(0, 0.74, -0.72);

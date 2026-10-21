@@ -1,10 +1,11 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { CABIN_TUB, FRONT_CLIP, HEAD_LAMP, PLATFORM_WHEEL, st } from "./platform.ts";
+import { CABIN_TUB, FRONT_CLIP, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
 
 /** Fastback two-door: lower roof, long sail, short deck. Fits the sedan rig as is. */
 export const COUPE: BodyStyle = {
   id: "coupe",
   dims: { wheelbase: 2.68, overhang: { front: 0.81, rear: 0.81 }, track: 1.48, width: 1.852, height: 1.276, rideHeight: 0.145, wheel: PLATFORM_WHEEL },
+  ...PLATFORM_HARDPOINTS,
   profile: [
     st(-2.11, 0.66, 0.7),
     st(-1.92, 0.81, 0.78),
