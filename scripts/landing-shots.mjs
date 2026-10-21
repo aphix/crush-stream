@@ -16,6 +16,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 const VIEWS = ["side", "top", "iso", "rear-iso"];
@@ -41,6 +42,10 @@ const views = values.views.split(",");
 if (!views.every((v) => VIEWS.includes(v))) throw new Error(`--views ${values.views}: some of ${VIEWS.join(", ")}`);
 const outDir = resolve(values["out-dir"] ?? join(root, ".tmp/shots/landing"));
 mkdirSync(join(outDir, "camera"), { recursive: true });
+// The garage boots a car-menu id: a class (`muscle` for the coupe body, `truck` for the pickup), or a style the classes don't name.
+const { DRIVER_CARS } = await import(pathToFileURL(join(root, "src/game/match/types.ts")).href);
+const menuId = DRIVER_CARS.find((d) => d.style === car)?.id;
+if (menuId === undefined) throw new Error(`--car ${car}: no car-menu entry draws that style (styles: ${DRIVER_CARS.map((d) => d.style).join(", ")})`);
 
 const shots = {};
 for (const view of views) {
@@ -48,8 +53,9 @@ for (const view of views) {
   const overlay = join(outDir, `${car}-${view}-overlay.png`);
   const ours = join(outDir, `${car}-${view}-ours.png`);
   const trace = run("trace-car.mjs", ["--root", root, "--style", car, "--view", view, "--landing", "--camera-out", camera, "--out", overlay]);
-  const frame = run("headless-frame.mjs", ["--root", root, "--hash", `scene=garage&car=${car}`, "--view", view, "--view-camera", camera, "--backdrop", BACKDROP, "--at", SETTLE_S, "--frames", FRAMES, "--out", ours]);
-  shots[view] = { iou: trace.iou, wheels: trace.wheels ? { rmsPx: trace.wheels.rmsPx, maxPx: trace.wheels.maxPx } : null, aligned: trace.aligned ?? "orthographic", overlay, ours, glError: Math.max(trace.glError, frame.glError), linkFailures: frame.linkFailures.length };
+  const frame = run("headless-frame.mjs", ["--root", root, "--hash", `scene=garage&car=${menuId}`, "--view", view, "--view-camera", camera, "--backdrop", BACKDROP, "--at", SETTLE_S, "--frames", FRAMES, "--out", ours]);
+  const error = (set) => (set ? { rmsPx: set.rmsPx, maxPx: set.maxPx } : null);
+  shots[view] = { iou: trace.iou, wheels: error(trace.wheels), landmarks: error(trace.landmarks), aligned: trace.aligned ?? "orthographic", overlay, ours, glError: Math.max(trace.glError, frame.glError), linkFailures: frame.linkFailures.length };
 }
 process.stdout.write(`${JSON.stringify({ car, root, shots, ms: Math.round(performance.now() - t0) })}\n`);
 process.exitCode = Object.values(shots).every((s) => s.glError === 0 && s.linkFailures === 0) ? 0 : 1;
