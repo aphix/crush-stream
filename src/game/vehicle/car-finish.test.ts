@@ -163,7 +163,7 @@ describe("given the FX tiers", () => {
 });
 
 const keyCases = [
-  { it: "when the finish is on, then the paint program key names the paint finish and the trim key the trim finish", enabled: true, paintKey: `${PAINT_KEY_TODAY}|finish-paint`, trimKey: `${TRIM_KEY_TODAY}|finish-trim` },
+  { it: "when the finish is on, then the paint program key names the paint finish (and the sedan's detail map) and the trim key the trim finish", enabled: true, paintKey: `${PAINT_KEY_TODAY}|finish-paint|detail`, trimKey: `${TRIM_KEY_TODAY}|finish-trim` },
   { it: "when the finish is switched off again, then every key is the one a car had before the finish existed", enabled: false, paintKey: PAINT_KEY_TODAY, trimKey: TRIM_KEY_TODAY },
 ] as const;
 

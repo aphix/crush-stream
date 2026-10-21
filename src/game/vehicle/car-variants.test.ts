@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
-import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
+import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, st } from "./car-styles/platform.ts";
 import { ROCKER, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { aPillarTopZ, beltY, floorY, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
@@ -346,9 +346,12 @@ function partBox(geometry: THREE.BufferGeometry): THREE.Box3 {
   return geometry.boundingBox!;
 }
 
+/** The platform's cowl-to-nose stations (every style's front clip before each drew its own): a nose wide enough that a bumper's corners never clamp. */
+const PLATFORM_NOSE = [st(0.82, 0.87, 0.8, 1.05, 0.52, 0.4), st(1.18, 0.86, 0.775), st(1.58, 0.83, 0.72), st(1.9, 0.75, 0.64), st(2.11, 0.62, 0.54)];
+
 describe("given a body style's own hardpoints (windshield, belt, hood, bumpers, rocker, floor, arches)", () => {
-  // The sedan's body on the platform's hardpoints and flat floor: the rows move one hardpoint from known values.
-  const sedan: BodyStyle = { ...CAR_STYLES.sedan, ...PLATFORM_HARDPOINTS, underside: undefined };
+  // The sedan's body on the platform's hardpoints, nose and flat floor: the rows move one hardpoint from known values (the sedan's own narrow nose would clamp the bumper's corners).
+  const sedan: BodyStyle = { ...CAR_STYLES.sedan, ...PLATFORM_HARDPOINTS, profile: [...CAR_STYLES.sedan.profile.filter((s) => s.z < PLATFORM_NOSE[0]!.z), ...PLATFORM_NOSE], underside: undefined };
   const moved: BodyStyle = {
     ...sedan,
     windshield: { base: [0.82, 1.0], wBase: 1.24, wTop: 0.9 },
@@ -534,7 +537,7 @@ describe("given a body style's H2 hardpoints", () => {
   });
 
   it("when the A-pillar's top moves back, then the door glass's top-front corner and the pillar's rear top corner follow it", () => {
-    const sedan = CAR_STYLES.sedan;
+    const sedan: BodyStyle = { ...CAR_STYLES.sedan, aPillarTop: undefined };
     const moved: BodyStyle = { ...sedan, aPillarTop: 0.3 };
     // glassCorners: 12 floats per pane, doorR is pane 3, its (front, top) corner the fourth.
     const doorTopFrontZ = (style: BodyStyle) => glassCorners(style)[3 * 12 + 9 + 2]!;
@@ -545,7 +548,7 @@ describe("given a body style's H2 hardpoints", () => {
   });
 
   it("when the side glass drops less under the roof, then the glass top, the roof's side lip and the pillar tops rise with it", () => {
-    const sedan = CAR_STYLES.sedan;
+    const sedan: BodyStyle = { ...CAR_STYLES.sedan, glassTop: undefined };
     const moved: BodyStyle = { ...sedan, glassTop: 0.05 };
     // glassCorners: doorR is pane 3, its (rear, top) corner the third; the roof loft's vertex 0 is its first ring's lip; frame part 1 is the left B-pillar.
     const rise = (read: (style: BodyStyle) => number) => read(moved) - read(sedan);
