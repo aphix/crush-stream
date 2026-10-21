@@ -20,6 +20,13 @@ const PLAN_MEDIAN_HALF = 0.15;
 const HULL_HALF = 0.4;
 /** A plan column standing this far (m) past the hull line is a mirror or a handle, not body. */
 const PROTRUSION = 0.015;
+/**
+ * The wheel arches' plan zone: this many tyre radii either side of each hub. The arch's flare bulges past the body-side line
+ * there; read as body width, the loft lifted it to the shoulder as a hump over each wheel. The flare is the arch lip's to draw.
+ */
+const ARCH_ZONE_RADII = 1.3;
+/** Without a measured tyre (m). */
+const ARCH_FALLBACK_R = 0.35;
 /** Share of the opening's height its top and bottom rows take for the pillar ends. */
 const EDGE_BAND = 0.2;
 /** A glass run along the top view's centreline at least this long (m) is a pane; its widths are read this share in from its ends. */
@@ -62,17 +69,39 @@ export function outlineOf(frame, mask) {
 
 /**
  * Per column of a top view's `mask`, ascending z: the body's plan [z, half-width] (m). Columns standing PROTRUSION past the hull
- * line (a running median over HULL_HALF either side) are mirrors and handles: they take the line between their neighbours. The
- * result is then a running median over PLAN_MEDIAN_HALF.
+ * line (a running median over HULL_HALF either side) are mirrors and handles, and columns in the wheel-arch `zones` ([z0, z1]) are
+ * flares: both take the line between their neighbours. The result is then a running median over PLAN_MEDIAN_HALF.
  */
-export function planOf(frame, mask) {
+export function planOf(frame, mask, zones = []) {
   const raw = rawHalfOf(frame, mask);
   const hull = runningMedian(raw, HULL_HALF);
-  const body = raw.filter(([, hw], i) => hw <= hull[i][1] + PROTRUSION);
+  const body = raw.filter(([z, hw], i) => hw <= hull[i][1] + PROTRUSION && !inZones(z, zones));
   return runningMedian(
     raw.map(([z]) => [z, at(body, z)]),
     PLAN_MEDIAN_HALF,
   );
+}
+
+/** The wheel arches' plan zones [z0, z1] round the side picture's hubs (`sideHubs`). */
+export function archZones(hubs) {
+  return [hubs.rear, hubs.front].map(({ z, radius }) => {
+    const reach = ARCH_ZONE_RADII * (radius ?? ARCH_FALLBACK_R);
+    return [z - reach, z + reach];
+  });
+}
+
+export function inZones(z, zones) {
+  return zones.some(([z0, z1]) => z >= z0 && z <= z1);
+}
+
+/**
+ * `profile` with no station in a wheel-arch zone wider at the shoulder than the line between the nearest stations outside the
+ * zones (the one there is, past an end): a plan read never lifts the shoulder over a wheel.
+ */
+export function holdArches(profile, zones) {
+  const outside = profile.filter((s) => !inZones(s.z, zones)).map((s) => [s.z, s.hw]);
+  if (outside.length === 0) return profile;
+  return profile.map((s) => (inZones(s.z, zones) ? { ...s, hw: Math.min(s.hw, at(outside, s.z)) } : s));
 }
 
 /** [h, g] rows with g the median of the rows within `half` (m) either side. */
@@ -115,9 +144,9 @@ function lineDistance([x, y], [x0, y0], [x1, y1]) {
   return len === 0 ? Math.hypot(x - x0, y - y0) : Math.abs((y1 - y0) * (x - x0) - (x1 - x0) * (y - y0)) / len;
 }
 
-/** The top view: nose and tail z, the plan half-widths, each row's front and rear z, and the windshield and rear glass. */
-export function extractTop(frame, sil, glass) {
-  const half = planOf(frame, sil);
+/** The top view: nose and tail z, the plan half-widths (flat over the wheel-arch `zones`), each row's front and rear z, and the glass. */
+export function extractTop(frame, sil, glass, zones) {
+  const half = planOf(frame, sil, zones);
   const panes = centrePanes(frame, glass).sort((a, b) => a.zMid - b.zMid);
   const windshield = panes.length > 1 || panes[0]?.zMid > 0 ? panes.at(-1) : null;
   const rear = panes.length > 1 || panes[0]?.zMid <= 0 ? panes[0] : null;

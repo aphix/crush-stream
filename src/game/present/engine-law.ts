@@ -34,6 +34,8 @@ const NATURAL_DB: Readonly<Record<VehicleClassId, readonly number[]>> = {
   muscle: [-23.8, -22.7, -19.7, -22.6, -26.7, -27.8, -25.6, -24.5, -24.5],
   truck: [-23.1, -22.7, -20.6, -22.1, -26.5, -28.7, -26.4, -24.3, -24.0],
   monster: [-25.3, -26.2, -25.2, -28.9, -29.1, -27.7, -27.0, -25.2, -27.1],
+  hatch: [-24.8, -24.1, -22.6, -21.2, -23.0, -25.1, -25.8, -27.6, -29.2],
+  suv: [-26.2, -26.5, -25.3, -26.7, -28.7, -29.7, -30.5, -29.9, -28.6],
 };
 
 /** The target level (dB, <= 0) at the dial's `rpmFrac` (`REV_IDLE`..1, as `motorRev`) and `load` (0..1), under a redline at full load. */

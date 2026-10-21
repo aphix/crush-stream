@@ -88,6 +88,17 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | `bumpers.rear.hitch` | Black tow-hitch receiver under the rear bumper's middle |
 | `exhaust` | `tips` 1 (at `x`) or 2 (at ±`x`) at height `y`, `size` [w, h], `shape` `"round"` (oval) or `"rect"`: chrome with a dark throat, ending 4 mm inside the rear bumper's rearmost face (nothing stands past the tail) |
 | `door.mirror` | The style's own mirror: `cap` `"rounded"` or `"box"`, `size` [w out from the door, h, d along the car] (default 0.16 × 0.10 × 0.08), `finish` `"body"` (the door's paint, a look's door colour too), `"black"` or `"chrome"`. Its foot sits on the door/A-pillar skin at the seat, a stalk runs out to the cap where the cap leaves room, and the cap's outer face is at `mirrorReach`, drawn at its real size. Unset: the platform mirror, x-scaled to the reach. The sim's mirror (reach, seat, rest box, torn box) is the platform's either way |
+| `arch.lip` | Each wheel arch's lip: a strip round the opening's edge, its crown `flare` (m) proud of the body side, faired into the skin `width` out and rolled under the edge into the well, down the opening's sides to the rocker. `square` squares its outline (a superellipse round the round opening) and its face: a box flare. Merged into the body, seated on its drawn loft (`archLipGeometry`); it peels and tears with its arch's panel |
+
+Every drawn body also opens its boot and closes its wells, from the tables it already has (`bootCut`, `wellHumpGeometry`):
+- **Boot opening.** Under a deck lid hinged at its front, a hollow (an unpainted inner panel) from the lid's front edge to its rear
+  edge, its floor at the rear bumper's seat height. A tailgate, or a roof-hinged lid (hatch, liftgate), opens the rearmost open floor
+  (cabin or bed) on through the tail instead. A tailgate, or a lid with `boot.drop`, also takes its share of the rear face: the tail
+  panel is cut to the panel's width (1 cm inside its edge) down to its bottom edge, or the floor where that stands higher (a bed).
+  Nothing of the body stands in the opening between its edges (`car-variants.test.ts`); the cage's deck stays closed.
+- **Open floors and wheel humps.** A drawn open floor (a bed, a cargo floor, a boot; not the engine bay) stays flat over the wheels.
+  Where a wheel's liner stands up through one, a hump closes it: from the floor's side wall in to past the liner's inner edge, its top a
+  half ellipse 1.5 cm over the liner's arc. The liner is the cage's own wheel housing, so the hump stands where the sim already does.
 
 The roof parts are merged into the drawn body after its other parts (the body's skin crushes them with the roof); rails and
 panel, and blacked-out pillars, are drawn dark by the paint's `primer` attribute. Exhaust tips and the hitch are merged into the rear bumper
@@ -171,7 +182,7 @@ per-corner checklist, `guard` and `notFit` (the fields left to the hand). It nev
 
 The fit is guarded: it lays the read fields onto the style as it stands one group at a time (the body with its greenhouse frame,
 then the plan, track, glass sill, door, bumpers, underside). It keeps a group only where neither view's IoU nor either side of
-the plan gets worse (mean and largest |offset| over the sides, ends trimmed) and something gains. Each group's result is one
+the plan gets worse (mean and largest |offset| over the sides, ends and wheel arches trimmed) and something gains. Each group's result is one
 `guard` line, so the output is never worse than the style it started from. `dims` overhangs, width and height are then
 measured off the built car, as the dims rows hold them.
 
@@ -183,9 +194,13 @@ node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
 
 - Read: `dims` (wheelbase and wheel radius from the side picture's tyres, which also set z = 0; `track` so each tyre's outer face
   sits 1 cm inside the plan), `profile` (stations where the roof line, plan or glass zone bends; mirrors and handles cut from
-  the plan), `roofZ`, `windshield`, `windshieldTop`, `rearGlass`, `belt.y` (the glass sill), `belt.x` (the rail 4 cm under the
-  shoulder), `underside`, `door.hingeX` (the plan at the hinge), `bumpers.*.seat.z` (lip on the end) and `bumpers.*.wrap`
-  (the plan's end corners). Fitted: `profile`.
+  the plan, and the wheel arches too: 1.3 tyre radii either side of each hub, where the flare bulges past the body side, take the
+  line between their neighbours, and no station there is ever wider than that line, so the shoulder gets no hump over a wheel;
+  the flare is the arch lip's), `roofZ`, `windshield`, `windshieldTop`, `rearGlass`, `belt.y` (the glass sill), `belt.x` (the rail
+  4 cm under the shoulder), `underside`, `door.hingeX` (the plan at the hinge), `bumpers.*.seat.z` (lip on the end) and
+  `bumpers.*.wrap` (the plan's end corners). Fitted: `profile`. `arch-bulge.test.ts` holds every style to it, fitted or hand-set:
+  over each arch's stretch, the drawn half-width at the belt and the shoulder's top stand no more than 1 cm over the lowest body
+  either side of them.
 - Not read: hood, arch, rocker, boot, `rideHeight`, `cabinHw`, `bPillar`, `quarter`, mirrors, the bumper fascia and span, and the
   door's hinge y and z, length and aperture.
 
@@ -195,12 +210,14 @@ both through one camera spec (`trace-camera.mjs`), so each pair lines up pixel f
 
 ```sh
 CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
-  scripts/landing-shots.mjs --root <tree> --car <style>     # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay}.png
+  scripts/landing-shots.mjs --root <tree> --car <style> [--paint]   # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay}.png
 ```
 
 - Each car's `scripts/landing-views/<style>.json` holds its references, its iso crops (cut from the lineups; widen one that
   clips its car) and its iso cameras. Side and top are orthographic, spanned on the reference's bumper tips at the spec length,
-  with z = 0 between the reference's tyres.
+  with z = 0 between the reference's tyres. Its `paint` is the reference's body colour (the median of the top picture's brighter
+  half), which `--paint` gives both shots (`headless-frame --paint <colour>` or `<style>=<colour>,...`; a livery stays) so the
+  overlays compare like for like.
 - The isos are AI renders with their own lens, so each is aligned once on its wheels. Pick the visible wheels' hub (outer face)
   and contact points on the crop: `trace-car --style <id> --view iso --landing --grid <png>` draws the crop with a pixel grid.
   Wheels are named `fl`/`fr`/`rl`/`rr`; the front iso shows the car's left (+x) side, the rear iso its right. Store them as

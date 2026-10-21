@@ -295,9 +295,6 @@ export function propContact(car: DeformableCar, i: number, solids: Surface, knoc
 /** Fastest a side pushes a body point out (m/s): a point that came down deep in a wedge slides out, never teleports (a step's push stays under 1 cm); it ends this far (m) outside, so the push leaves nothing on its plane. */
 const SIDE_PUSH_SPEED = 1;
 const SIDE_PUSH_SKIN = 0.002;
-/** Half the tread's flat (m) at wheel scale 1: the plan rectangle a tyre meets a side with; its rounded shoulders (the other 5 cm of the 10.4 cm half tread) give. */
-const TREAD_HALF = 0.054;
-const SIGNS = [-1, 1] as const;
 const _pq = new Float64Array(PQ_SIZE);
 const _pout = new Float64Array(HIT_SIZE);
 const _pw = new THREE.Vector3();
@@ -312,8 +309,8 @@ function sloped(s: Surface, k: number): boolean {
   return s.p[k * P_STRIDE + PR_GU] !== 0 || s.p[k * P_STRIDE + PR_GW] !== 0;
 }
 
-/** Car-local point (`lx`, `ly`, `lz`) of `car`, as the body is posed, asked of the one query with its own velocity; a side of a ramp it is in is kept if it is the deepest. */
-function askPoint(car: DeformableCar, s: Surface, lx: number, ly: number, lz: number, body: boolean): void {
+/** Car-local body point (`lx`, `ly`, `lz`) of `car`, as the body is posed, asked of the one query with its own velocity; a side of a ramp it is in is kept if it is the deepest. */
+function askPoint(car: DeformableCar, s: Surface, lx: number, ly: number, lz: number): void {
   const q = car.group.quaternion;
   const pos = car.group.position;
   _pw.set(lx, ly, lz).applyQuaternion(q).add(pos);
@@ -325,7 +322,7 @@ function askPoint(car: DeformableCar, s: Surface, lx: number, ly: number, lz: nu
   _pq[PQ_VX] = _pv.x;
   _pq[PQ_VY] = _pv.y;
   _pq[PQ_VZ] = _pv.z;
-  _pq[PQ_BODY] = body ? 1 : 0;
+  _pq[PQ_BODY] = 1;
   pointContact(_pq, car.slot, _pout);
   const depth = _pout[C_DEPTH]!;
   if (_pout[C_NY] !== 0 || !(depth > _side.depth)) return;
@@ -340,28 +337,20 @@ function askPoint(car: DeformableCar, s: Surface, lx: number, ly: number, lz: nu
 }
 
 /**
- * The car's points against the sides of the sloped prisms of `s` (a wedge's flanks and back), over a slice of `dt` s: each tyre's
- * tread corners and the body points the rigid step meets the world with (`loadPoints`: the drawn body, torn lids off it, and its belly,
- * a wreck's crushed with it), as the one query answers them (`pointContact`: a point is in a side when it came in by one, on the top when it came down onto it or is within the step a tyre mounts). The deepest
- * pushes the car out and takes the hit as a solid face does (`wallBounce`): a light touch bounces, a hard hit crushes. True when a
- * point was in a side. A plane top gives no height a plan rectangle could be over, so the rectangle (`propContact`) leaves sloped
- * prisms to the points.
+ * The car's body points against the sides of the sloped prisms of `s` (a wedge's flanks and back), over a slice of `dt` s: the points the
+ * rigid step meets the world with (`loadPoints`: the drawn body, torn lids off it, and its belly, a wreck's crushed with it), as the one
+ * query answers them (`pointContact`: a point is in a side when it came in by one, on the top when it came down onto it). The tyres meet
+ * every side in the rigid step (`readTyreSides`). The deepest pushes the car out and takes the hit as a solid face does (`wallBounce`):
+ * a light touch bounces, a hard hit crushes. True when a point was in a side. A plane top gives no height a plan rectangle could be
+ * over, so the rectangle (`propContact`) leaves sloped prisms to the points.
  */
 export function sideContact(car: DeformableCar, s: Surface, hits: PropHits, dt: number): boolean {
   _side.depth = 0;
-  for (let w = 0; w < car.wheels.length; w++) {
-    const wheel = car.wheels[w]!;
-    const hw = TREAD_HALF * wheel.scale.x;
-    const r = car.frame.rig.tyre.r * wheel.scale.x;
-    for (let a = 0; a < SIGNS.length; a++) {
-      for (let b = 0; b < SIGNS.length; b++) askPoint(car, s, wheel.position.x + SIGNS[a]! * hw, wheel.position.y, wheel.position.z + SIGNS[b]! * r, false);
-    }
-  }
   const bellyFrom = loadPoints(car);
   const pointEnd = bellyFrom + car.frame.belly.length;
   for (let k = 0; k < pointEnd; k++) {
     if (k >= bellyFrom && BELLY_ABSENT[k - bellyFrom] === 1) continue;
-    askPoint(car, s, POINT_X[k]!, POINT_Y[k]!, POINT_Z[k]!, true);
+    askPoint(car, s, POINT_X[k]!, POINT_Y[k]!, POINT_Z[k]!);
   }
   if (_side.depth <= 0) return false;
   const o = _side.patch * P_STRIDE;

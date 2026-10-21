@@ -299,7 +299,8 @@ export abstract class DeformRig {
   /** `yawMomentum`'s held angular momentum: [0] clampLocal's, [1] separateAlong's, [2] stepShapeMatch's, [3] the slide drag's (`stepMassSlice`, `dragGround`). */
   protected readonly spinHeld = new Float64Array(4);
   protected readonly strokeOut = new Float64Array(1);
-  protected rearmed = false;
+  /** The current hit's block travel is its EBS energy's outright (`updateDrivetrain`): a re-armed hit's, or a tyre's side hit's (it lands on the running gear, under the nose's crush). */
+  protected energyTravel = false;
   /** `elapsed` of the last throttle input (`notifyPower`). */
   protected lastPower = -0;
   /** `elapsed` when the current hit began (beginCrush, rearmHit): the sliding-drag clock (`sinceHit`). */
@@ -573,7 +574,7 @@ export abstract class DeformRig {
     this.crushing = false;
     this.impulse = -0;
     this.hitSpeed = -1;
-    this.rearmed = false;
+    this.energyTravel = false;
     this.lastPower = -10;
     this.hitAt = -0;
     this.wrinkleAmp = -0;
@@ -805,7 +806,7 @@ export abstract class DeformRig {
     buf[o + 18] = this.impulse;
     buf[o + 19] = this.hitSpeed;
     buf[o + 20] = this.floorsFresh ? 1 : 0;
-    buf[o + 21] = this.rearmed ? 1 : 0;
+    buf[o + 21] = this.energyTravel ? 1 : 0;
     buf[o + 22] = this.lastPower;
     buf[o + 23] = this.hitAt;
     buf[o + 24] = this.wrinkleAmp;
@@ -867,7 +868,7 @@ export abstract class DeformRig {
     this.impulse = buf[o + 18]!;
     this.hitSpeed = buf[o + 19]!;
     this.floorsFresh = buf[o + 20]! !== 0;
-    this.rearmed = buf[o + 21]! !== 0;
+    this.energyTravel = buf[o + 21]! !== 0;
     this.lastPower = buf[o + 22]!;
     this.hitAt = buf[o + 23]!;
     this.wrinkleAmp = buf[o + 24]!;

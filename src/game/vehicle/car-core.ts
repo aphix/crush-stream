@@ -53,8 +53,6 @@ const PANEL_SEATS: Record<PanelName, readonly [DetachPart["cage"], number, numbe
   archRR: ["wingRR", 11, 11],
 };
 
-/** Light bar seat on the roof (car z, m): over the front seats, behind the windshield header. */
-const LIGHT_BAR_Z = -0.02;
 /** Siren flash: red, then blue, each half of this period (s). */
 const SIREN_PERIOD = 0.5;
 /** Lit lens emissive gain past the bloom threshold; each stays under the ACES knee where it washes out (red to orange, blue to lavender at 2.4). */
@@ -451,8 +449,10 @@ export abstract class CarCore {
       this.lightBar = new THREE.Mesh(makeLightBar(), this.sirenMat);
       this.lightBar.name = LIGHT_BAR;
       this.lightBar.castShadow = true;
-      // Feet soles on the roof's dome where they stand, not the crown between them (that sank them 0.5–2.3 cm).
-      this.lightBar.position.set(0, roofTopY(LIGHT_BAR_FOOT.x, LIGHT_BAR_Z, this.style) - LIGHT_BAR_FOOT.sole, LIGHT_BAR_Z);
+      // Feet soles on the roof's dome where they stand, not the crown between them (that sank them 0.5–2.3 cm). Over the B-pillars, on
+      // the roof's flat crown: at -0.02 m its 0.18 m feet stood on the fastback's falling roof, a sole 1.7 cm in the air.
+      const z = (this.style.bPillar.rear + this.style.bPillar.front) / 2;
+      this.lightBar.position.set(0, roofTopY(LIGHT_BAR_FOOT.x, z, this.style) - LIGHT_BAR_FOOT.sole, z);
       this.lightBarOrigin.copy(this.lightBar.position);
       this.group.add(this.lightBar);
       this.lightBarRest = this.copyRest(this.lightBar.geometry);

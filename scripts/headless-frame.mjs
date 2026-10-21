@@ -8,7 +8,7 @@
  *
  *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png]
  *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--view hood] [--at 8] [--tear hood,bumperF]
- *     [--view side|top|iso|rear-iso --view-camera <json>] [--backdrop '#ffffff'] [--detail 2]
+ *     [--view side|top|iso|rear-iso --view-camera <json>] [--backdrop '#ffffff'] [--detail 2] [--paint '#8b8a8d' | --paint coupe=#2a313e,...]
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
  * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
@@ -20,6 +20,8 @@
  * `trace-camera.mjs`: car space, orthographic for side and top), at the spec's size, so the shot lines up with trace-car's overlay;
  * `scripts/landing-shots.mjs` runs the pair. `--backdrop <colour>` draws the car alone over that colour (no garage room, no fog).
  * `--detail <rung>` pins the distance-detail ladder's rung (0 desktop, 2 the phone's start) with its governor off.
+ * `--paint <colour>` paints the hash's car that colour, `--paint <style>=<colour>,...` every car of those styles (a livery, the
+ * police's, stays): the landing shots and lineup sheets in each reference's colour.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -69,6 +71,7 @@ const { values } = parseArgs({
     "view-camera": { type: "string" },
     backdrop: { type: "string" },
     detail: { type: "string" },
+    paint: { type: "string" },
     at: { type: "string", default: String(START_S) },
     tear: { type: "string" },
   },
@@ -250,6 +253,7 @@ if (seatView !== undefined) {
   engine.advance(VIEW_S, { frameDt: FRAME });
   await settle();
 }
+if (values.paint !== undefined) paintCars(values.paint);
 if (landingView !== null || values.backdrop !== undefined) await shootAs(landingView, values.backdrop);
 const notDrawn = new Set();
 // three draws on with a program that failed to link, a GL error per draw: the quirk's meshes leave the camera's layer for the drawn
@@ -283,9 +287,27 @@ mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, await shot.encode("png"));
 
 engine.dispose();
-const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
+const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
 process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
+
+/**
+ * `--paint`: one colour for the hash's car, or `<style>=<colour>` pairs; a car whose style fixes its paint (a livery) keeps it. The
+ * hinged panels wear their own copies of the body paint, so every material still in the body's colour takes the new one.
+ */
+function paintCars(spec) {
+  const pairs = spec.includes("=") ? spec.split(",").map((p) => p.split("=")) : [[hashStyle, spec]];
+  const colours = new Map(pairs);
+  if (colours.has(null)) throw new Error("--paint <colour> paints the hash's car: name one (--hash 'scene=garage&car=<id>'), or give <style>=<colour> pairs");
+  for (const car of engine.live()) {
+    const colour = colours.get(car.style.id);
+    if (colour === undefined || car.style.livery) continue;
+    const was = car.lookMeshes().bodyPaint.color.getHex();
+    car.group.traverse((o) => {
+      for (const m of [o.material ?? []].flat()) if (m.color?.getHex() === was) m.color.set(colour);
+    });
+  }
+}
 
 /**
  * Every drawn frame from here goes through `spec`'s camera (trace-camera, car space, placed on the hash's car) and/or over a flat
