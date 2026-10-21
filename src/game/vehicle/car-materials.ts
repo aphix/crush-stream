@@ -242,9 +242,9 @@ export const partsMaterial = once(makePartsMaterial);
 /** A torn part's mesh wears its own copy: three re-selects the program on every instanced<->plain switch of one material. Never disposed. */
 export const loosePartsMaterial = once(makePartsMaterial);
 
-/** The sun-shadow casters' material (`PartBatch.casters`): no colour or depth in the camera's pass; DoubleSide so the sheet parts cast whichever way they wind. Never disposed. */
+/** The sun-shadow casters' material (`PartBatch.casters`): no colour or depth in the camera's pass; front side, as the body casts. Never disposed. */
 export const shadowOnlyMaterial = once((): THREE.MeshBasicMaterial => {
-  const m = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, side: THREE.DoubleSide });
+  const m = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
   m.userData.shared = true;
   return m;
 });
