@@ -15,9 +15,9 @@ import type * as CarFinish from "./car-finish.ts";
 import { makePaintMaterial, trimMaterial } from "./car-materials.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
 
-/** What a car material's program key was before the finish existed: the strings these tests prove an OFF material still has. */
+/** What a car material's program key is with the finish off: the strings these tests prove an OFF material still has (the trim's names its fittings hook). */
 const PAINT_KEY_TODAY = "car-paint-primer";
-const TRIM_KEY_TODAY = "car-highlight-cap";
+const TRIM_KEY_TODAY = "car-trim-fittings";
 const SPRAY_SUFFIX = "|spray-car";
 
 type FinishModule = typeof CarFinish;

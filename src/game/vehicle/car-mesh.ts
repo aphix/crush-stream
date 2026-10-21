@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { hypot2, detSin } from "../kernel/physics-core.js";
-import { CAR_STYLES, type BodyStyle, type ProfileStation, type YZ } from "./car-variants.ts";
+import { CAR_STYLES, type BodyStyle, type BootLip, type ProfileStation, type YZ } from "./car-variants.ts";
 import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
@@ -18,10 +18,11 @@ export const SEDAN = CAR_STYLES.sedan;
  * - door: the slab's edge wall meets the inner face at 90°; the edge roll turns 45° at most a chord and the shoulder under 30°.
  * - bumper: the fascia's splitter lip and back turn 73° and 90° (the lip's lower chord 67°); its rounded top and intake recess turn
  *   49° at most a chord. A quad the corner wrap warps folds 63° along its diagonal, which no fan of vertices can keep hard, so the angle sits above that.
+ * - fitting: a style's drawn add-ons (hood bulge, scoop, roof rails, spoiler, glass panel) are boxes and wedges: their edges turn 70-90°, their tops under 10° a chord.
  * The body loft is never split (`panelRegions` primes and peels it by vertex id: a copy would stay painted while its original tears
  * to primer), and the greenhouse pillars, roof, liners and bulkheads are parts with their own vertices, hard against each other.
  */
-export const CREASE_DEGREES = { deckLid: 45, tailgate: 45, door: 60, bumper: 70 } as const;
+export const CREASE_DEGREES = { deckLid: 45, tailgate: 45, door: 60, bumper: 70, fitting: 50 } as const;
 
 /**
  * Which build of a body part a builder draws. `drawn`: the smoothed mesh the player sees. `cage`: the plain build the collision
@@ -421,26 +422,58 @@ export const ROOF_CROWN = 0.026;
 /** The dome's shoulder: [share of the roof half-width, rise above the cant line (m)]. */
 export const ROOF_SHOULDER = [0.45, 0.018] as const;
 
-/** Lid lofted on the deck line (hood / trunk), local to its hinge origin. */
-function makeDeckPanel(style: BodyStyle, z0: number, z1: number, origin: YZ, source: BodySource): THREE.BufferGeometry {
+/** A deck lid's top stands `DECK_RISE` (m) over its station's belt, `DECK_INSET` (m) inside its half-width, domed `DECK_DOME` (m) at the centre line and 0.7 of that at `DECK_SHOULDER` of its half-width. */
+const DECK_RISE = 0.016;
+const DECK_INSET = 0.075;
+const DECK_DOME = 0.012;
+const DECK_SHOULDER = 0.45;
+/** Where a boot lip's extra rings stand, as shares of its depth from the edge: the kick's curve needs them on a 6 cm ring spacing. */
+const LIP_RINGS = [0.5, 1] as const;
+/** A clamshell lid stands this far (m) clear of the body shoulder it wraps. */
+const CLAMSHELL_GAP = 0.006;
+
+/** Height (car frame, m) of a deck lid's top at (`x`, `z`), as `makeDeckPanel` lofts it. */
+export function deckTopY(x: number, z: number, style: BodyStyle): number {
+  const sl = sampleSlice(z, style.profile);
+  const u = Math.min(Math.abs(x) / (sl.hw - DECK_INSET), 1);
+  const dome = u < DECK_SHOULDER ? lerp(1, 0.7, u / DECK_SHOULDER) : lerp(0.7, 0, (u - DECK_SHOULDER) / (1 - DECK_SHOULDER));
+  return sl.yBelt + DECK_RISE + DECK_DOME * dome;
+}
+
+/** How far (m) a boot lip lifts the panel `d` (m) in from its free edge: a quadratic kick from 0 at `depth` to `rise` at the edge. */
+function lipKick(d: number, lip: BootLip | undefined): number {
+  if (!lip || d >= lip.depth) return 0;
+  const t = 1 - d / lip.depth;
+  return lip.rise * t * t;
+}
+
+/** `count + 1` loft stations from 0 to 1, plus a lip's rings near the free end at 1 (`span` m long). */
+function panelStations(count: number, lip: BootLip | undefined, span: number): number[] {
+  const ts = Array.from({ length: count + 1 }, (_, s) => s / count);
+  if (lip) for (const share of LIP_RINGS) ts.push(1 - (share * lip.depth) / span);
+  return ts.sort((a, b) => a - b);
+}
+
+/** Lid lofted on the deck line (hood / trunk), local to its hinge origin. A `clamshell` lid wraps the body's shoulder to its side shut line; a `lip` kicks its top up at z1. */
+function makeDeckPanel(style: BodyStyle, z0: number, z1: number, origin: YZ, source: BodySource, clamshell = false, lip?: BootLip): THREE.BufferGeometry {
   const segs = 10;
   const tk = 0.04;
   const drop = 0.06;
-  const dome = 0.012;
   const [oy, oz] = origin;
   const rings: Pt[][] = [];
   const zs: number[] = [];
-  for (let s = 0; s <= segs; s++) {
-    const z = lerp(z0, z1, s / segs);
+  for (const t of panelStations(segs, lip, Math.abs(z1 - z0))) {
+    const z = lerp(z0, z1, t);
     const sl = sampleSlice(z, style.profile);
-    const w = sl.hw - 0.075;
-    const y = sl.yBelt + 0.016 - oy;
-    rings.push([
-      { x: -w, y },
-      { x: -w * 0.45, y: y + dome * 0.7 },
-      { x: 0, y: y + dome },
-      { x: w * 0.45, y: y + dome * 0.7 },
-      { x: w, y },
+    const w = sl.hw - DECK_INSET;
+    const y = sl.yBelt + DECK_RISE - oy;
+    const top = y + lipKick(Math.abs(z1 - z), lip);
+    const ring = [
+      { x: -w, y: top },
+      { x: -w * DECK_SHOULDER, y: top + DECK_DOME * 0.7 },
+      { x: 0, y: top + DECK_DOME },
+      { x: w * DECK_SHOULDER, y: top + DECK_DOME * 0.7 },
+      { x: w, y: top },
       { x: w, y: y - drop * 0.55 },
       { x: w, y: y - drop },
       { x: w - tk, y: y - drop },
@@ -449,7 +482,9 @@ function makeDeckPanel(style: BodyStyle, z0: number, z1: number, origin: YZ, sou
       { x: -w + tk, y: y - drop },
       { x: -w, y: y - drop },
       { x: -w, y: y - drop * 0.55 },
-    ]);
+    ];
+    if (clamshell) wrapShoulder(ring, sectionPoints(sl, style, "drawn"), oy, tk);
+    rings.push(ring);
     zs.push(z - oz);
   }
   const geo = loftFromRings(rings, zs, 0, 1);
@@ -459,11 +494,23 @@ function makeDeckPanel(style: BodyStyle, z0: number, z1: number, origin: YZ, sou
   return geo;
 }
 
+/** A clamshell: the lid ring's skirt moved out over the body ring's shoulder (`body`: its right half ends shoulder 30°, shoulder 60°, deck edge, crown), `CLAMSHELL_GAP` clear, down to the 30° point, the side shut line. */
+function wrapShoulder(ring: Pt[], body: readonly Pt[], oy: number, tk: number): void {
+  const upper = body[body.length - 3]!;
+  const shut = body[body.length - 4]!;
+  for (const sign of [1, -1]) {
+    const [over, edge, inner] = sign > 0 ? ([5, 6, 7] as const) : ([12, 11, 10] as const);
+    ring[over] = { x: sign * (upper.x + CLAMSHELL_GAP), y: upper.y + CLAMSHELL_GAP - oy };
+    ring[edge] = { x: sign * (shut.x + CLAMSHELL_GAP), y: shut.y - oy };
+    ring[inner] = { x: sign * (shut.x + CLAMSHELL_GAP - tk), y: shut.y - oy };
+  }
+}
+
 /** The tailgate stops this far (m) inside the tail panel's half-width: the tail lamps stand upright in the corners. */
 const TAILGATE_INSET = 0.135;
 
-/** Hatch / tailgate: a slightly bowed panel leaning from its bottom edge [y0, z0] up to its hinge at its top edge. */
-function makeTailgate(style: BodyStyle, y0: number, z0: number, origin: YZ, source: BodySource): THREE.BufferGeometry {
+/** Hatch / tailgate: a slightly bowed panel leaning from its bottom edge [y0, z0] up to its hinge at its top edge; a `lip` kicks its top edge out. */
+function makeTailgate(style: BodyStyle, y0: number, z0: number, origin: YZ, source: BodySource, lip?: BootLip): THREE.BufferGeometry {
   const [y1, oz] = origin;
   const w = sampleSlice(oz, style.profile).hw - TAILGATE_INSET;
   const tk = 0.03;
@@ -471,17 +518,19 @@ function makeTailgate(style: BodyStyle, y0: number, z0: number, origin: YZ, sour
   const segs = 5;
   const rings: Pt[][] = [];
   const hs: number[] = [];
-  for (let s = 0; s <= segs; s++) {
+  for (const t of panelStations(segs, lip, Math.abs(y1 - y0))) {
+    const h = lerp(y0, y1, t) - y1;
+    const out = lipKick(-h, lip);
     rings.push([
-      { x: -w, y: 0 },
-      { x: -w * 0.5, y: bow * 0.75 },
-      { x: 0, y: bow },
-      { x: w * 0.5, y: bow * 0.75 },
-      { x: w, y: 0 },
+      { x: -w, y: out },
+      { x: -w * 0.5, y: bow * 0.75 + out },
+      { x: 0, y: bow + out },
+      { x: w * 0.5, y: bow * 0.75 + out },
+      { x: w, y: out },
       { x: w, y: -tk },
       { x: -w, y: -tk },
     ]);
-    hs.push(lerp(y0, y1, s / segs) - y1);
+    hs.push(h);
   }
   const geo = loftFromRings(rings, hs, 0, 1);
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
@@ -493,15 +542,17 @@ function makeTailgate(style: BodyStyle, y0: number, z0: number, origin: YZ, sour
   return geo;
 }
 
+/** Bonnet lid per style; the drawn build wraps a `clamshell` lid over the fenders (the hood bulge is `withHoodBulge`'s). Local to `style.hood.origin`. */
 export function makeHoodGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
-  const { z0, z1, origin } = style.hood;
-  return markSkinDynamic(makeDeckPanel(style, z0, z1, origin, source));
+  const { z0, z1, origin, kind } = style.hood;
+  return markSkinDynamic(makeDeckPanel(style, z0, z1, origin, source, source === "drawn" && kind === "clamshell"));
 }
 
-/** Trunk lid, hatch or tailgate per style; local to `style.boot.origin` ([y, z]). */
+/** Trunk lid, hatch or tailgate per style, the drawn build with its `lip`; local to `style.boot.origin` ([y, z]). */
 export function makeTrunkGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const b = style.boot;
-  return markSkinDynamic(b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source) : makeTailgate(style, b.y0, b.z0 ?? b.origin[1], b.origin, source));
+  const lip = source === "drawn" ? b.lip : undefined;
+  return markSkinDynamic(b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, false, lip) : makeTailgate(style, b.y0, b.z0 ?? b.origin[1], b.origin, source, lip));
 }
 
 /** How far inside the body side (m) a bumper's wrapped corner is held: a tail or nose narrower than the fascia would show the corner through the skin. */

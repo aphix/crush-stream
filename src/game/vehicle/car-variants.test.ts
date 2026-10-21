@@ -1,25 +1,27 @@
 import * as THREE from "three";
+import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
-import { ROCKER, doorAperture, glassTopY, glassX, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { ROCKER, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { aPillarTopZ, beltY, floorY, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { MIRROR_ROOT } from "./part-geometry.ts";
 import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, glassCorners, makeRearGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
-import { LIGHT_BAR_FOOT, makeLightBar } from "./car-materials.ts";
+import { LIGHT_BAR_FOOT, bumperMaterial, makeLightBar, trimMaterial } from "./car-materials.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { PLATFORM_RIG } from "../deform/deform-rig.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { LIGHT_BAR } from "./constants.ts";
+import { FITTING_ATTRIBUTE, FITTING_TONE, LIGHT_BAR, PRIMER_ATTRIBUTE } from "./constants.ts";
 
 const PAINT = { body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" };
 const scene = new THREE.Scene();
@@ -675,4 +677,267 @@ describe("given a body style's detail table", () => {
     const faults = detailFaults(style);
     assert.ok(faults.length === 1, `expected 1 fault for a stroke 0.1 m past the nose at z ${noseZ + 0.1}, got ${faults.length}: ${faults.join("; ")}`);
   });
+});
+
+// ---- P1 parts: drawn-only add-ons ----------------------------------------------------------------------------------------------
+
+/** A hood vertex standing more than this (m) over the lid counts as raised. */
+const RAISED_M = 0.005;
+/** Float32 positions hold a part's numbers to about this (m). */
+const POSITION_TOL = 1e-5;
+
+/** Short sha-256 of geometries' positions and indices: two builds hash alike only when they are the same to the bit. */
+function geometryHash(geometries: readonly THREE.BufferGeometry[]): string {
+  const hash = createHash("sha256");
+  for (const g of geometries) {
+    const pos = g.getAttribute("position").array as Float32Array;
+    hash.update(new Uint8Array(pos.buffer, pos.byteOffset, pos.byteLength));
+    const index = g.getIndex()?.array;
+    if (index) hash.update(new Uint8Array(index.buffer, index.byteOffset, index.byteLength));
+  }
+  return hash.digest("hex").slice(0, 16);
+}
+
+/** Every cage build the sim reads off a style (body, bonnet, boot), hashed. */
+function cageHash(style: BodyStyle): string {
+  return geometryHash([makeChassisGeometry(style, "cage"), makeHoodGeometry(style, "cage"), makeTrunkGeometry(style, "cage")]);
+}
+
+/** Box of `geometry`'s vertices from `from` on whose `attribute` reads `tone` (every vertex when `attribute` is null), and how many. */
+function toneBox(geometry: THREE.BufferGeometry, attribute: string | null, tone: number, from = 0): { box: THREE.Box3; count: number } {
+  const pos = geometry.getAttribute("position");
+  const tones = attribute === null ? null : geometry.getAttribute(attribute);
+  const box = new THREE.Box3();
+  const p = new THREE.Vector3();
+  let count = 0;
+  for (let i = from; i < pos.count; i++) {
+    if (tones !== null && tones.getX(i) !== tone) continue;
+    box.expandByPoint(p.fromBufferAttribute(pos, i));
+    count++;
+  }
+  return { box, count };
+}
+
+/** A hood (`withHoodBulge`) read in the car frame: the box of the vertices standing over the lid, the highest point over the lid's centre line, and its primer-dark mouths' box and least forward normal. */
+function readBulge(hood: THREE.BufferGeometry, style: BodyStyle): { raised: THREE.Box3; peak: number; mouth: THREE.Box3; forward: number } {
+  const [oy, oz] = style.hood.origin;
+  const pos = hood.getAttribute("position");
+  const nrm = hood.getAttribute("normal");
+  const primer = hood.hasAttribute(PRIMER_ATTRIBUTE) ? hood.getAttribute(PRIMER_ATTRIBUTE) : null;
+  const raised = new THREE.Box3();
+  const mouth = new THREE.Box3();
+  const p = new THREE.Vector3();
+  let peak = 0;
+  let forward = 1;
+  for (let i = 0; i < pos.count; i++) {
+    p.set(pos.getX(i), pos.getY(i) + oy, pos.getZ(i) + oz);
+    if (primer !== null && primer.getX(i) === 1) {
+      mouth.expandByPoint(p);
+      forward = Math.min(forward, nrm.getZ(i));
+    } else if (p.y - deckTopY(p.x, p.z, style) > RAISED_M) raised.expandByPoint(p);
+    peak = Math.max(peak, p.y - deckTopY(0, p.z, style));
+  }
+  return { raised, peak, mouth, forward };
+}
+
+/** The outermost (+x) vertex of a hood's loft station at `z` (car frame). */
+function outerEdgeAt(hood: THREE.BufferGeometry, style: BodyStyle, z: number): { x: number; y: number } {
+  const [oy, oz] = style.hood.origin;
+  const pos = hood.getAttribute("position");
+  const edge = { x: -Infinity, y: 0 };
+  for (let i = 0; i < pos.count; i++) {
+    if (Math.abs(pos.getZ(i) + oz - z) > POSITION_TOL || pos.getX(i) <= edge.x) continue;
+    edge.x = pos.getX(i);
+    edge.y = pos.getY(i) + oy;
+  }
+  return edge;
+}
+
+/** Among `geometry`'s vertices whose coordinate `axis` (1 y, 2 z) is `at`, the largest coordinate `read` (`sign` -1: the smallest). */
+function extremeAt(geometry: THREE.BufferGeometry, axis: 1 | 2, at: number, read: 1 | 2, sign: 1 | -1): number {
+  const a = geometry.getAttribute("position").array;
+  let best = -Infinity;
+  for (let i = 0; i < a.length; i += 3) if (Math.abs(a[i + axis]! - at) < POSITION_TOL) best = Math.max(best, sign * a[i + read]!);
+  return sign * best;
+}
+
+/** The sedan's drawn body with `roof`: the vertices past the plain body's (the roof parts), their box, and the box of the primer-dark ones. */
+function roofParts(roof: NonNullable<BodyStyle["roof"]>): { style: BodyStyle; body: THREE.BufferGeometry; from: number; all: { box: THREE.Box3; count: number }; dark: { box: THREE.Box3; count: number } } {
+  const style: BodyStyle = { ...CAR_STYLES.sedan, roof };
+  const body = makeChassisGeometry(style);
+  const from = makeChassisGeometry(CAR_STYLES.sedan).getAttribute("position").count;
+  return { style, body, from, all: toneBox(body, null, 0, from), dark: toneBox(body, PRIMER_ATTRIBUTE, 1, from) };
+}
+
+/** Over the body's vertices from `from` on: the least |x|, and the most any stands over the roof skin at `x` (at its own x when null). */
+function overRoof(body: THREE.BufferGeometry, from: number, style: BodyStyle, x: number | null): { inner: number; peak: number } {
+  const pos = body.getAttribute("position");
+  let inner = Infinity;
+  let peak = -Infinity;
+  for (let i = from; i < pos.count; i++) {
+    inner = Math.min(inner, Math.abs(pos.getX(i)));
+    peak = Math.max(peak, pos.getY(i) - roofTopY(x ?? pos.getX(i), pos.getZ(i), style));
+  }
+  return { inner, peak };
+}
+
+const EXHAUST_CASES = [
+  {
+    it: "when a rear bumper carries twin round tips, then a chrome oval with a dark rear-facing throat stands at each of ±x at its y, its size across, past the bumper's face, and the cage builds are unchanged",
+    exhaust: { tips: 2, x: 0.55, y: 0.22, size: [0.09, 0.06], shape: "round" },
+    expectedXs: [-0.55, 0.55],
+  },
+  {
+    it: "when a rear bumper carries one rectangular tip, then one chrome box with a dark rear-facing throat stands at its x and y, its size across, past the bumper's face, and the cage builds are unchanged",
+    exhaust: { tips: 1, x: 0.4, y: 0.25, size: [0.12, 0.06], shape: "rect" },
+    expectedXs: [0.4],
+  },
+] as const;
+/** A round tip's 14-sided tube spans this share of its width (its widest chord). */
+const ROUND_TIP_SPAN = 0.97;
+
+describe("given a body style's P1 parts", () => {
+  const sedan = CAR_STYLES.sedan;
+
+  it("when a hood carries a bulge with a twin scoop, then the bulge stands over the lid only inside its width and z span, the scoop tops out its height over the bulge with its dark mouths facing forward at its z, and the cage builds are unchanged", () => {
+    const bulge = { z0: 0.9, z1: 1.8, width: 0.6, rise: 0.04, scoop: { inlets: 2, z: 1.55, width: 0.44, height: 0.05 } } as const;
+    const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge } };
+    const plainHood = makeHoodGeometry(sedan);
+    assert.ok(withHoodBulge(plainHood, sedan) === plainHood, "a hood without a bulge comes back as built");
+    const plain = readBulge(plainHood, sedan);
+    assert.ok(plain.raised.isEmpty() && plain.peak < POSITION_TOL, `the plain lid has nothing standing over it (peak ${plain.peak})`);
+    const { raised, peak, mouth, forward } = readBulge(withHoodBulge(makeHoodGeometry(style), style), style);
+    const half = bulge.width / 2;
+    assert.ok(raised.max.x - raised.min.x > bulge.width * 0.8, `the bulge spans ${(raised.max.x - raised.min.x).toFixed(3)} m of its ${bulge.width}`);
+    const inside = raised.min.x >= -half - POSITION_TOL && raised.max.x <= half + POSITION_TOL && raised.min.z >= bulge.z0 - POSITION_TOL && raised.max.z <= bulge.z1 + POSITION_TOL;
+    assert.ok(inside, `raised x ${raised.min.x.toFixed(3)}..${raised.max.x.toFixed(3)}, z ${raised.min.z.toFixed(3)}..${raised.max.z.toFixed(3)}`);
+    assertSameNumbers([peak], [bulge.rise + bulge.scoop.height], "the scoop's top over the lid's centre line", 1e-4);
+    assertSameNumbers([mouth.min.z, mouth.max.z], [bulge.scoop.z, bulge.scoop.z], "the mouths' z", POSITION_TOL);
+    const scoopHalf = bulge.scoop.width / 2;
+    assert.ok(!mouth.isEmpty() && mouth.min.x >= -scoopHalf - POSITION_TOL && mouth.max.x <= scoopHalf + POSITION_TOL, `mouths x ${mouth.min.x}..${mouth.max.x}`);
+    assert.ok(forward > 0.99, `every mouth vertex faces forward (least normal z ${forward.toFixed(3)})`);
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a hood is a clamshell, then its sides wrap over the body's shoulder to a shut line on the fender top, clear of the body there, and the cage builds are unchanged", () => {
+    const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, kind: "clamshell" } };
+    const z = lerp(sedan.hood.z0, sedan.hood.z1, 0.5);
+    const ring = sectionPoints(sampleSlice(z, sedan.profile), sedan, "drawn");
+    const fenderTop = ring[ring.length - 4]!;
+    const lid = outerEdgeAt(makeHoodGeometry(sedan), sedan, z);
+    const clam = outerEdgeAt(makeHoodGeometry(style), style, z);
+    assert.ok(clam.x > fenderTop.x && clam.x - fenderTop.x < 0.01, `the clamshell's edge at x ${clam.x.toFixed(4)} stands clear of the fender top at ${fenderTop.x.toFixed(4)}, within 1 cm`);
+    assertSameNumbers([clam.y], [fenderTop.y], "the shut line's height on the fender top", 1e-4);
+    assert.ok(fenderTop.x - lid.x > 0.05, `the plain lid stops on the deck at x ${lid.x.toFixed(3)}, inboard of the fender top`);
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a boot carries a lip, then a deck lid's top rises its rise at the rear edge, a tailgate's top edge kicks its rise out, nothing moves past its depth from the edge, and the cage builds are unchanged", () => {
+    const lip = { rise: 0.025, depth: 0.08 };
+    const { coupe, hatchback } = CAR_STYLES;
+    const deck = coupe.boot;
+    const gate = hatchback.boot;
+    assert.ok(deck.kind === "lid" && gate.kind === "tailgate", "the coupe has a deck lid, the hatchback a tailgate");
+    const deckStyle: BodyStyle = { ...coupe, boot: { ...deck, lip } };
+    const gateStyle: BodyStyle = { ...hatchback, boot: { ...gate, lip } };
+    const [plainDeck, lipDeck, plainGate, lipGate] = [coupe, deckStyle, hatchback, gateStyle].map((s) => makeTrunkGeometry(s));
+    const edge = deck.z1 - deck.origin[1];
+    const deckIn = lerp(deck.z0, deck.z1, 0.8) - deck.origin[1];
+    const gateDown = lerp(gate.y0, gate.origin[0], 0.6) - gate.origin[0];
+    const top = (g: THREE.BufferGeometry, at: number) => extremeAt(g, 2, at, 1, 1);
+    const face = (g: THREE.BufferGeometry, at: number) => extremeAt(g, 1, at, 2, -1);
+    assertSameNumbers([top(lipDeck!, edge) - top(plainDeck!, edge), top(lipDeck!, deckIn) - top(plainDeck!, deckIn)], [lip.rise, 0], "the deck lid's top over the plain one's at its rear edge and 0.13 m in", 1e-5);
+    assertSameNumbers([face(plainGate!, 0) - face(lipGate!, 0), face(plainGate!, gateDown) - face(lipGate!, gateDown)], [lip.rise, 0], "the tailgate's face behind the plain one's at its top edge and 0.15 m down", 1e-5);
+    assert.ok(cageHash(deckStyle) === cageHash(coupe) && cageHash(gateStyle) === cageHash(hatchback), "the cage builds are unchanged");
+  });
+
+  it("when a roof carries rails, then two dark rails stand on it between their |x| and z ends, their tops their rise over the roof at their inner edge, and the cage builds are unchanged", () => {
+    const rails = { x: [0.45, 0.5], z: [-0.6, 0.4], rise: 0.04 } as const;
+    const { style, body, from, all, dark } = roofParts({ rails });
+    assert.ok(all.count > 0 && dark.count === all.count, `${all.count} roof-part vertices, ${dark.count} of them dark`);
+    assertSameNumbers([all.box.min.x, all.box.max.x, all.box.min.z, all.box.max.z], [-0.5, 0.5, -0.6, 0.4], "the rails' x and z ends", POSITION_TOL);
+    const { inner, peak } = overRoof(body, from, style, rails.x[0]);
+    assertSameNumbers([inner, peak], [rails.x[0], rails.rise], "the rails' inner edge and their top over the roof there", 1e-4);
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a roof carries a glass panel, then a dark panel lies on the roof a few mm proud across its width and z span, and the cage builds are unchanged", () => {
+    const glassPanel = { z: [-0.6, 0.2], width: 0.8 } as const;
+    const { style, body, from, all, dark } = roofParts({ glassPanel });
+    assert.ok(all.count > 0 && dark.count === all.count, `${all.count} roof-part vertices, ${dark.count} of them dark`);
+    assertSameNumbers([all.box.min.x, all.box.max.x, all.box.min.z, all.box.max.z], [-0.4, 0.4, -0.6, 0.2], "the panel's x and z ends", POSITION_TOL);
+    const { peak } = overRoof(body, from, style, null);
+    assert.ok(peak > 0 && peak < 0.01, `the panel stands ${(peak * 1000).toFixed(1)} mm over the roof skin`);
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a roof carries a spoiler, then a body-colour wedge fills its z, y and half-width numbers, and the cage builds are unchanged", () => {
+    const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5 } as const;
+    const { style, all, dark } = roofParts({ spoiler });
+    assert.ok(all.count > 0 && dark.count === 0, `${all.count} roof-part vertices, ${dark.count} of them dark`);
+    assertSameNumbers([...all.box.min.toArray(), ...all.box.max.toArray()], [-0.5, 1.15, -0.95, 0.5, 1.22, -0.8], "the spoiler's box", POSITION_TOL);
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a bumper's trim is chrome, black or body, then it wears chrome, black plastic or the body's colour (unset: the car's accent trim), and no bumper or cage build changes", () => {
+    const accent = 0x9aa0a8;
+    const body = 0x7a1020;
+    assert.ok(bumperMaterial(undefined, accent, body) === trimMaterial(accent), "unset: the accent trim every such car shares");
+    const chrome = bumperMaterial("chrome", accent, body);
+    const black = bumperMaterial("black", accent, body);
+    const painted = bumperMaterial("body", accent, body);
+    assert.ok(chrome.metalness > 0.9 && chrome.color.r > 0.5, `chrome: metalness ${chrome.metalness}, red ${chrome.color.r.toFixed(3)}`);
+    assert.ok(black.color.r < 0.02 && black.color.g < 0.02 && black.color.b < 0.02, `black: ${black.color.getHexString()}`);
+    assert.ok(painted.color.getHex() === body && painted.metalness < trimMaterial(accent).metalness, `body: ${painted.color.getHexString()}, metalness ${painted.metalness}`);
+    const style: BodyStyle = { ...sedan, bumpers: { front: { ...sedan.bumpers.front, trim: "chrome" }, rear: { ...sedan.bumpers.rear, trim: "black" } } };
+    const bumpers = (s: BodyStyle) => geometryHash([makeBumperGeometry(true, s), makeBumperGeometry(false, s)]);
+    assert.ok(bumpers(style) === bumpers(sedan) && cageHash(style) === cageHash(sedan), "the bumpers and cage builds are unchanged");
+  });
+
+  it("when a rear bumper carries a hitch, then one black receiver stands under its middle, its top inside the bumper and its end past the bumper's face, and the cage builds are unchanged", () => {
+    const pickup = CAR_STYLES.pickup;
+    const style: BodyStyle = { ...pickup, bumpers: { ...pickup.bumpers, rear: { ...pickup.bumpers.rear, hitch: true } } };
+    const fascia = makeBumperGeometry(false, pickup);
+    assert.ok(withRearFittings(fascia, pickup) === fascia, "a bumper with no fittings comes back as built");
+    const face = partBox(makeBumperGeometry(false, style)).clone();
+    const fitted = withRearFittings(makeBumperGeometry(false, style), style);
+    const { box, count } = toneBox(fitted, FITTING_ATTRIBUTE, FITTING_TONE.black);
+    assert.ok(count > 0 && toneBox(fitted, FITTING_ATTRIBUTE, FITTING_TONE.chrome).count === 0, `${count} black vertices, no chrome`);
+    assertSameNumbers([box.min.x + box.max.x], [0], "the receiver's middle x", POSITION_TOL);
+    assert.ok(box.min.y < face.min.y && box.max.y > face.min.y && box.max.y < face.min.y + 0.03, `receiver y ${box.min.y.toFixed(3)}..${box.max.y.toFixed(3)}, the bumper's bottom ${face.min.y.toFixed(3)}`);
+    assert.ok(box.min.z < face.min.z && box.max.z > face.min.z, `receiver z ${box.min.z.toFixed(3)}..${box.max.z.toFixed(3)}, the bumper's face ${face.min.z.toFixed(3)}`);
+    assert.ok(cageHash(style) === cageHash(pickup), "the cage builds are unchanged");
+  });
+
+  for (const testCase of EXHAUST_CASES) {
+    it(testCase.it, () => {
+      const { exhaust } = testCase;
+      const style: BodyStyle = { ...sedan, exhaust };
+      const face = partBox(makeBumperGeometry(false, sedan)).clone();
+      const fitted = withRearFittings(makeBumperGeometry(false, style), style);
+      const pos = fitted.getAttribute("position");
+      const tone = fitted.getAttribute(FITTING_ATTRIBUTE);
+      const nrm = fitted.getAttribute("normal");
+      const [w, h] = exhaust.size;
+      for (const x of testCase.expectedXs) {
+        const tip = new THREE.Box3();
+        let throatBack = -Infinity;
+        let throats = 0;
+        for (let i = 0; i < pos.count; i++) {
+          if (tone.getX(i) === 0 || Math.abs(pos.getX(i) - x) > w) continue;
+          if (tone.getX(i) === FITTING_TONE.chrome) tip.expandByPoint(new THREE.Vector3().fromBufferAttribute(pos, i));
+          else {
+            throatBack = Math.max(throatBack, nrm.getZ(i));
+            throats++;
+          }
+        }
+        const size = tip.getSize(new THREE.Vector3());
+        const centre = tip.getCenter(new THREE.Vector3());
+        assertSameNumbers([centre.x, centre.y, size.y], [x, exhaust.y - sedan.bumpers.rear.seat.y, h], `the tip at x ${x}: middle x, y and height`, 1e-4);
+        assert.ok(size.x > w * (exhaust.shape === "round" ? ROUND_TIP_SPAN : 1) - 1e-4 && size.x < w + 1e-4, `the tip at x ${x} is ${size.x.toFixed(4)} m wide of ${w}`);
+        assert.ok(tip.min.z < face.min.z && throats > 0 && throatBack < -0.99, `the tip ends at z ${tip.min.z.toFixed(3)} past the face ${face.min.z.toFixed(3)}; ${throats} throat vertices, normal z up to ${throatBack.toFixed(3)}`);
+      }
+      assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    });
+  }
 });
