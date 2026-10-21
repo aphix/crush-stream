@@ -14,10 +14,10 @@ import { LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts"
 
 /** The body's paint attribute, joined: 0 paint, 1 primer, `INNER_PANEL` the unpainted bay trough. */
 const primerOf = (car: DeformableCar): string => Array.from(car.body.geometry.getAttribute("primer").array).join();
-/** The rest build's: paint, and the trough's inner panel only. */
+/** The rest build's: paint, the roof fittings' dark primer and the trough's inner panel only. */
 const restPrimer = (car: DeformableCar): string => {
   const rest = Array.from(makeChassisGeometry(car.style).getAttribute("primer").array);
-  assert.ok(rest.every((v) => v === 0 || v === INNER_PANEL), "a rest body holds only paint and inner panel");
+  assert.ok(rest.every((v) => v === 0 || v === 1 || v === INNER_PANEL), "a rest body holds only paint, primer and inner panel");
   return rest.join();
 };
 
