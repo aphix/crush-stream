@@ -43,7 +43,7 @@ export const COUPE: BodyStyle = {
     st(-1.761, 0.718, 0.9),
     st(-1.662, 0.734, 0.911),
     st(-1.587, 0.736, 0.95),
-    st(-1.49, 0.752, 0.911, 1.065, 0.5, 0.25),
+    st(-1.49, 0.752, 0.945, 1.0, 0.5, 0.25),
     st(-1.43, 0.78, 0.964, 1.011, 0.5, 0.25),
     st(-1.359, 0.792, 1.018, 1.038, 0.514, 0.25),
     st(-1.277, 0.791, 1.059, 1.079, 0.533, 0.25),
@@ -83,7 +83,7 @@ export const COUPE: BodyStyle = {
   rearBulkhead: { z: -0.9, yTop: 0.89 },
   tubs: [[-0.9, 0.7, 0.3]],
   rearDoorSeam: null,
-  boot: { kind: "lid", z0: -1.42, z1: -2.0, origin: [0.97, -1.42] },
+  boot: { kind: "lid", z0: -1.5, z1: -2.04, origin: [0.975, -1.5] },
   lamps: { head: [0.485, 0.51], tail: [0.4, 0.66] },
   camera: { hood: [1.12, 1.0], third: { dist: 6.1, height: 1.95, aimUp: 0.95 }, far: { dist: 9.9, height: 3.25, aimUp: 1.1 } },
   details: {
