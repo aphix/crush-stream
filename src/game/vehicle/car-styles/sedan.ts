@@ -77,6 +77,13 @@ export const SEDAN: BodyStyle = {
   rearGlass: { base: [1.02, -1.68], top: [1.235, -1.159], wBase: 1.05, wTop: 1.0 },
   quarter: { zRearBot: -0.88, zRearTop: -0.88 },
   midPillarZ: null,
+  /**
+   * The reference's B-pillar is gloss black: 0.10 wide at the roof (z -0.27..-0.37) and 0.17 at the belt, where the front door frame's
+   * leaning rear edge (z -0.21 at the belt, -0.27 at the top) joins it. An even width can't lean: 0.12 splits it (2 cm wide at the top,
+   * 5 cm narrow at the belt). The sail by the mirror is black too; the A-post and the rear pillar are body colour.
+   */
+  pillars: { b: 0.12 },
+  blackout: { sail: true, b: true },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,
