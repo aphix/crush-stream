@@ -78,15 +78,36 @@ views, then the lineup. Archetype research (real cars of the type) sets ratios a
 
 ## Tracing harness
 
-`scripts/trace-car.mjs` draws one style's car (its class's lift and wheel scale applied, no engine boot, under a second) over a
-reference picture calibrated to metres, writes an overlay PNG and prints one JSON line: the silhouette IoU, signed edge offsets
-in cm at stations along the top, bottom, front and rear edges (positive where the car sticks out past the reference), and the
-drawn car's length, width, height, wheelbase, track, overhangs, wheel diameter and ground clearance.
+Two tools share one core (`scripts/trace-core.mjs`, `trace-ref.mjs`, `trace-metrics.mjs`): a style's drawn car (its class's lift
+and wheel scale applied, no engine boot) in a bare scene through headless GL, over a reference picture calibrated to metres.
+The references live in `/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/` (git-ignored; `/tmp` does not survive a
+reboot). Run both through the box gate: `CAP=2G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node ...`.
+
+**`fit-car.mjs`: the rough fit.** Reads the side and top pictures into the style's own fields, builds the car from them, and
+nudges the profile stations toward the reference's roof line and plan for a few rounds, in one process of about 4 s. Its output
+is `.tmp/fit/<style>/fit.ts` (paste over the style file's fields), before/after overlays beside it, and one JSON line: both
+views' IoU, edge and glass offsets before and after, the per-corner checklist, and `notFit` (the fields it leaves to the hand).
+It never writes a style file. Finish by hand on trace-car's overlays.
 
 ```sh
-S=/tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
+R=/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
+node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
+  --side $R/silver-sedan/silver-sedan-1.png --side-span 3,299=4.221 --top $R/silver-sedan/silver-sedan-2.png --top-span 3,292
+```
+
+- Read: `dims` (wheelbase and wheel radius from the side picture's tyres, which also set z = 0; overhangs, height, width),
+  `profile` (stations where the roof line, plan or glass zone bends), `roofZ`, `windshield`, `windshieldTop`, `rearGlass`,
+  `quarter`, `belt.y` (the glass sill) and `underside`. Fitted: `profile` only.
+- Not read: bumpers, hood, arch, rocker, door, boot, `bPillar`, `track`, `rideHeight`, `cabinHw`.
+
+**`trace-car.mjs`: one view, measured.** Writes an overlay PNG and prints one JSON line: the silhouette IoU and signed edge
+offsets (cm, positive where the car sticks out), the glass's (side: roof rail, sill, A- and C-pillar with their rake), the
+side view's named corners (nose, tail, bumper tops and bottoms, sill, arch lips, roof corners), the largest uncovered and
+overhanging regions (cm² with their extent), a `checklist` of FAIL/ok lines over all of them, and the drawn car's dimensions.
+
+```sh
 node --disable-warning=ExperimentalWarning scripts/trace-car.mjs --style sedan --view side \
-  --ref $S/silver-sedan/silver-sedan-1.png --ref-span 3,299=4.221 [--points '[[2.0,0.65],[1.2,0.9]]']
+  --ref $R/silver-sedan/silver-sedan-1.png --ref-span 3,299=4.221 [--omit doors,bumpers] [--points '[[2.0,0.65],[1.2,0.9]]']
 ```
 
 - `--view side|top|front|rear` are orthographic and axis-aligned; `iso` / `iso-rear` use the game's lens at `--camera r,pitch,angle`
@@ -94,6 +115,8 @@ node --disable-warning=ExperimentalWarning scripts/trace-car.mjs --style sedan -
 - `--ref-span x0,x1=m`: the reference's bumper-tip columns (or wheel centres with `--anchor wheels`) and their distance; without
   `=m`, the style's `dims` length (wheelbase). Side spans are the foreground columns × 0.01426 m; a top view takes its side's length.
   The hatchback's pictures are swapped (`-2` is its side, `-1` its top).
-- `--points` overlays a traced edge in the view's axes (side `[z, y]`, top `[z, x]`): read the reference's edge off the PNG's
-  0.5 m grid or the JSON's `edges` (`[station, car, reference, offset cm]`), and copy it into the style's tables.
-- The PNG: the car orange and outlined magenta, the reference outlined cyan. Full usage is in the script's header.
+- `--omit` hides parts (doors, glass, bumpers, mirrors, hood, trunk, lightbar, wheels, lamps, parts) from the drawing and the fit.
+- `--points` overlays a traced edge in the view's axes (side `[z, y]`, top `[z, x]`).
+- The PNG: the car orange, outlined magenta; the reference outlined cyan; the car's glass lime, the reference's blue. The
+  reference's glass is its dark, grey pixels (an Otsu cut, printed as `refThreshold`); a grey ground shadow on an opaque backdrop
+  is left out of its silhouette (`shadowPx`). Full usage is in each script's header.
