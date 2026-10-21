@@ -17,7 +17,7 @@ type V3 = readonly [number, number, number];
 type Dims = BodyStyle["dims"];
 
 /** The platform's body box (half extents, m) every table below was tuned on. */
-const PLATFORM_HALF = { x: 0.88, y: 0.68, z: 2.22 } as const;
+export const PLATFORM_HALF = { x: 0.88, y: 0.68, z: 2.22 } as const;
 /**
  * The plan length (half length; m) a car meets a solid with: the drawn body with its mirrors and a margin, longer than `half`
  * (the body's own box). The look-ahead of a hard-driving car reads it too (`markApproaches`).
