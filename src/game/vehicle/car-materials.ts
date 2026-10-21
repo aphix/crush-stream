@@ -3,6 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { once } from "../kernel/scalar.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { applyFinish } from "./car-finish.ts";
+import { BARE_METAL_FRAGMENT, BARE_METAL_VERTEX } from "./bare-metal.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
@@ -35,23 +36,25 @@ function capHighlights<T extends THREE.MeshStandardMaterial>(m: T): T {
 }
 
 /**
- * Per-vertex primer on the paint: a `primer` attribute (0 on any mesh without one) darkens the paint toward bare primer, with the
- * vertex blend sharpened to a thin edge (a thin torn arch spans only a row or two of the coarse body loft; a linear blend smears it
- * to a faint gradient). A torn body panel's under-panel is the body's own triangles turned dark this way, so it costs no draw.
- * Multiplies in the paint tones (`PAINT_COLOR_TONE`) and wraps `capHighlights`' compile hook.
+ * Per-vertex primer on the paint: a `primer` attribute (0 on any mesh without one) turns the paint to bare riveted steel
+ * (`bare-metal.ts`), the vertex blend sharpened to a thin edge (a thin torn arch spans only a row or two of the coarse body loft; a
+ * linear blend smears it to a faint gradient). A torn panel's or bumper's under-panel is the body's own triangles turned this way, so
+ * it costs no draw. Multiplies in the paint tones (`PAINT_COLOR_TONE`) and wraps `capHighlights`' compile hook.
  */
 function withPrimer<T extends THREE.MeshStandardMaterial>(m: T): T {
   const cap = m.onBeforeCompile;
   m.onBeforeCompile = (shader, renderer) => {
     cap.call(m, shader, renderer);
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float primer;\nvarying float vPrimer;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvPrimer = primer;");
+      .replace("#include <common>", `#include <common>\nattribute float primer;\nvarying float vPrimer;\n${BARE_METAL_VERTEX.pars}`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\nvPrimer = primer;\n${BARE_METAL_VERTEX.main}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying float vPrimer;")
+      .replace("#include <common>", `#include <common>\nvarying float vPrimer;\n${BARE_METAL_FRAGMENT.pars}`)
       .replace("#include <map_fragment>", `#include <map_fragment>\ndiffuseColor.rgb *= vec3(${PAINT_COLOR_TONE.r}, ${PAINT_COLOR_TONE.g}, ${PAINT_COLOR_TONE.b});`)
-      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\nroughnessFactor *= ${PAINT_ROUGHNESS_TONE};`)
-      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - 0.93 * smoothstep(0.3, 0.6, vPrimer);");
+      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\nroughnessFactor *= ${PAINT_ROUGHNESS_TONE};\n${BARE_METAL_FRAGMENT.roughness}`)
+      .replace("#include <metalnessmap_fragment>", `#include <metalnessmap_fragment>\n${BARE_METAL_FRAGMENT.metalness}`)
+      .replace("#include <color_fragment>", `#include <color_fragment>\n${BARE_METAL_FRAGMENT.color}`)
+      .replace("#include <lights_physical_fragment>", `#include <lights_physical_fragment>\n${BARE_METAL_FRAGMENT.clearcoat}`);
   };
   m.customProgramCacheKey = () => "car-paint-primer";
   return m;
@@ -242,6 +245,13 @@ export const partsMaterial = once(makePartsMaterial);
 /** A torn part's mesh wears its own copy: three re-selects the program on every instanced<->plain switch of one material. Never disposed. */
 export const loosePartsMaterial = once(makePartsMaterial);
 
+/** The sun-shadow casters' material (`PartBatch.casters`): no colour or depth in the camera's pass; DoubleSide so the sheet parts cast whichever way they wind. Never disposed. */
+export const shadowOnlyMaterial = once((): THREE.MeshBasicMaterial => {
+  const m = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, side: THREE.DoubleSide });
+  m.userData.shared = true;
+  return m;
+});
+
 function makePartsMaterial(): THREE.MeshStandardMaterial {
   const grid = toneGrid();
   const m = classed(
@@ -400,8 +410,9 @@ const SIREN_U = [1 / 6, 3 / 6, 5 / 6] as const;
 /** The light bar's two feet in bar space: at ±`x`, their soles `sole` below the origin, `2z` deep (front to back). They rest on the roof. */
 export const LIGHT_BAR_FOOT = { x: 0.4, sole: -0.03, z: 0.09 } as const;
 
-/** Roof light bar in bar space (+z forward): housing on two feet (`LIGHT_BAR_FOOT`), a red lens on the left (−x)
- *  and a blue one on the right, one draw. `LIGHT_BAR_LENS` lists each lens's vertices. */
+/** Roof light bar in bar space (+z forward, so +x is the car's left): housing on two feet (`LIGHT_BAR_FOOT`), a red lens on
+ *  the car's left (+x) and a blue one on its right (−x), as the reference cruiser's, with a clear takedown module between,
+ *  one draw. `LIGHT_BAR_LENS` lists each lens's vertices. */
 export function makeLightBar(): THREE.BufferGeometry {
   const box = (w: number, h: number, d: number, x: number, y: number, tone: number, texel: 0 | 1 | 2) => {
     const g = toned(new THREE.BoxGeometry(w, h, d), tone, 0, 0).translate(x, y, 0);
@@ -414,12 +425,12 @@ export function makeLightBar(): THREE.BufferGeometry {
   };
   return mergeToned(
     [
-      box(1.06, 0.05, 0.25, 0, 0.04, 0x16181c, 0),
-      box(0.06, 0.07, 0.2, 0, 0.1, 0x8a909a, 0),
+      box(1.04, 0.045, 0.26, 0, 0.04, 0x16181c, 0),
+      box(0.16, 0.07, 0.22, 0, 0.1, 0xd8dce2, 0),
       box(0.08, -2 * LIGHT_BAR_FOOT.sole, 2 * LIGHT_BAR_FOOT.z, -LIGHT_BAR_FOOT.x, 0, 0x16181c, 0),
       box(0.08, -2 * LIGHT_BAR_FOOT.sole, 2 * LIGHT_BAR_FOOT.z, LIGHT_BAR_FOOT.x, 0, 0x16181c, 0),
-      box(0.47, 0.075, 0.22, -0.27, 0.1, 0x8c1218, 1),
-      box(0.47, 0.075, 0.22, 0.27, 0.1, 0x1a36a8, 2),
+      box(0.42, 0.075, 0.23, 0.3, 0.1, 0x8c1218, 1),
+      box(0.42, 0.075, 0.23, -0.3, 0.1, 0x1a36a8, 2),
     ],
     "light bar",
   );

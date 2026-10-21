@@ -262,6 +262,11 @@ export interface BodyStyle {
   };
   /** The front grille (drawn only; it tears off with the front bumper): centre height `y` and face `z` (m, car frame; z absent: the platform grille's face), `size` [w, h], `kind` horizontal bars, vertical slats or a mesh of both, in `finish` (body: the body's paint). Absent: the platform grille. */
   grille?: { y: number; z?: number; size: readonly [number, number]; kind: "bars" | "mesh" | "slats"; finish: "black" | "chrome" | "body" };
+  /**
+   * Seats (m, car space): the driver's H-point [x, y, z] (he sits on -x; the passenger mirrors him), and the rear bench's [y, z] on the
+   * centre line, or null with no rear row (a regular cab). The drawn seats, the seated driver and the sim's seat all read it.
+   */
+  seats: { front: readonly [number, number, number]; rear: readonly [number, number] | null };
   /** Fixed paint, or none (the fleet paint). */
   livery?: Livery;
   /** Roof light bar with red / blue sirens (`DeformableCar.setSirens`). */

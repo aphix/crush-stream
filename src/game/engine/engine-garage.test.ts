@@ -229,6 +229,25 @@ describe("given the real engine in the garage", () => {
     assert.equal(engine["live"]().length, fleet, "and all of them shown");
   });
 
+  it("when it is entered, then no driver sits in the car (the standing dummy is the driver), and back in the fleet the drivers sit in their cars again", async () => {
+    const scene = engine["scene"];
+    /** The seated drivers drawn after the render pass's sync (the stand-in renderer never fires it). */
+    const seated = (): number => {
+      scene.updateMatrixWorld(true);
+      scene.onBeforeRender(engine["renderer"], scene, engine["camera"], new THREE.BufferGeometry(), new THREE.MeshBasicMaterial(), new THREE.Group());
+      return engine["seated"].mesh.count;
+    };
+    engine["setScene"]("fleet");
+    run(FRAME);
+    assert.ok(seated() > 0, "control: the fleet's drivers sit in their cars");
+    await enter("fleet");
+    assert.equal(seated(), 0, "a driver sits in the garage's car");
+    assert.ok(engine["garage"]!.art.dummy.visible, "the standing dummy is shown");
+    engine["setScene"]("fleet");
+    run(FRAME);
+    assert.ok(seated() > 0, "the drivers sit again in the fleet");
+  });
+
   it("when the can is on, then a stroke paints only what the panel edits: the other one drops out of the ray, so it never blocks or takes paint", async () => {
     await enter("fleet");
     engine.setSprayTool({ on: true });

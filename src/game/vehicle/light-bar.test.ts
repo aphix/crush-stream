@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
-import { LIGHT_BAR_FOOT, makeLightBar, withPushBar } from "./car-materials.ts";
+import { LIGHT_BAR_FOOT, LIGHT_BAR_LENS, makeLightBar, withPushBar } from "./car-materials.ts";
 import { makeBumperGeometry } from "./car-mesh.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { BAR_FOLD, hingePose } from "./part-pose.ts";
@@ -172,7 +172,22 @@ describe("given the police light bar on its base hinge", () => {
   });
 });
 
-describe("given the push bar a cruiser wears on its front bumper", () => {
+/** The mean x (m, bar space) of `count` vertices of `geo` from `first`. */
+function meanX(geo: THREE.BufferGeometry, first: number, count: number): number {
+  const pos = geo.getAttribute("position");
+  let x = 0;
+  for (let v = first; v < first + count; v++) x += pos.getX(v);
+  return x / count;
+}
+
+describe("given the light bar and the push bar as the reference cruiser wears them", () => {
+  it("when the light bar is built, then its red lens stands on the car's left (+x) and its blue on its right, a clear module between", () => {
+    const bar = makeLightBar();
+    const [[redFirst, redCount], [blueFirst, blueCount]] = LIGHT_BAR_LENS;
+    assert.ok(meanX(bar, redFirst, redCount) > 0.2, `red lens at x ${meanX(bar, redFirst, redCount)}`);
+    assert.ok(meanX(bar, blueFirst, blueCount) < -0.2, `blue lens at x ${meanX(bar, blueFirst, blueCount)}`);
+  });
+
   it("when a front bumper takes a push bar, then one geometry stands its uprights ahead of the bumper's face and above its top, the bumper's own vertices first and unmoved", () => {
     const bumper = makeBumperGeometry(true, CAR_STYLES.police);
     bumper.computeBoundingBox();

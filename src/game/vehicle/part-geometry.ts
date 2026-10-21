@@ -3,11 +3,29 @@ import { once } from "../kernel/scalar.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import { INTERIOR_MESH, SMALL_PART_SEAT } from "./constants.ts";
 import { loosePartsMaterial, mergeToned, PAINTED_ATTRIBUTE, toned } from "./car-materials.ts";
+import { cabinGeometry, crashBarGeometry, doorCardGeometry, engineBayGeometry, frontSeatGeometry, rearSeatGeometry, wheelGeometry } from "./interior-geometry.ts";
 
-/** The seven static parts of a car, in `PartBatch.meshes` order. */
-export const PART_KIND = { interior: 0, liningL: 1, liningR: 2, mirrorL: 3, mirrorR: 4, grille: 5, tailTrim: 6 } as const;
+/** A car's static parts, in `PartBatch.meshes` order: the cabin shell, door cards, mirrors, grille, tail trim, then the interior kit and the bay set (`CarCabin`). */
+export const PART_KIND = {
+  interior: 0,
+  liningL: 1,
+  liningR: 2,
+  mirrorL: 3,
+  mirrorR: 4,
+  grille: 5,
+  tailTrim: 6,
+  seatFront: 7,
+  seatRear: 8,
+  wheel: 9,
+  engineBay: 10,
+  crashBar: 11,
+} as const;
 export type PartKind = (typeof PART_KIND)[keyof typeof PART_KIND];
 export const PART_KINDS: readonly PartKind[] = Object.values(PART_KIND);
+/** Seats of each kind on one car (`PartBatch` sizes each kind's draw by it): two front seats, a crash bar at each end. */
+export const PART_PER_CAR: readonly number[] = PART_KINDS.map((k) => (k === PART_KIND.seatFront || k === PART_KIND.crashBar ? 2 : 1));
+/** The kinds the far distance cut takes with the cabin (`CarDetail`, by `INTERIOR_MESH`); the rest are small parts, cut at mid distance. */
+const INTERIOR_KINDS: ReadonlySet<number> = new Set([PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.engineBay]);
 
 /** The mirror arm's inner end, out from its seat (m). */
 export const MIRROR_ROOT = 0.02;
@@ -25,35 +43,6 @@ function mirror(sign: number): THREE.BufferGeometry {
   glass.rotateY(sign * Math.PI * 0.5);
   glass.translate(sign * 0.212, 0.01, 0);
   return mergeToned([arm, cap, glass], PART_FAMILY.mirror);
-}
-
-/** Cabin tub, dash, headliner, bulkhead, seats, side walls and steering wheel: one draw. */
-function interior(): THREE.BufferGeometry {
-  const dark = [0x14161c, 0.94, 0.04] as const;
-  const vinyl = [0x1a1e24, 0.9, 0.05] as const;
-  const seat = [0x1c2228, 0.88, 0.06] as const;
-  const box = (w: number, h: number, d: number, tone: readonly [number, number, number], x: number, y: number, z: number) =>
-    toned(new THREE.BoxGeometry(w, h, d), ...tone).translate(x, y, z);
-  const parts = [
-    box(0.84, 0.04, 1.28, dark, 0, 0.34, 0.02),
-    box(0.82, 0.2, 0.24, dark, 0, 0.6, 0.48),
-    box(0.78, 0.02, 1.05, vinyl, 0, 1.08, 0.02),
-    box(0.8, 0.55, 0.04, vinyl, 0, 0.62, -0.62),
-    toned(new THREE.TorusGeometry(0.11, 0.016, 8, 16), 0x2a2c32, 0.55, 0.2).rotateX(0.55).translate(-0.22, 0.68, 0.36),
-  ];
-  for (const x of [-0.2, 0.2]) {
-    parts.push(box(0.3, 0.08, 0.36, seat, x, 0.4, 0.06));
-    parts.push(toned(new THREE.BoxGeometry(0.3, 0.32, 0.07), ...seat).rotateX(-0.12).translate(x, 0.58, 0.06 - 0.16));
-  }
-  for (const sign of [-1, 1]) parts.push(box(0.03, 0.5, 1.1, vinyl, sign * 0.4, 0.62, 0.02));
-  return mergeToned(parts, INTERIOR_MESH);
-}
-
-/** Inner door skin, in door-group space (hinge at the A-pillar). */
-function lining(sign: number): THREE.BufferGeometry {
-  const geo = toned(new THREE.BoxGeometry(0.018, 0.5, 0.52), 0x1a1e24, 0.9, 0.04);
-  geo.translate(-sign * 0.024, 0, -0.28);
-  return geo;
 }
 
 /** The platform grille in front-bumper space; the headlamps sit on the body (`makeLampUnit`). A style's own grille: `part-variants.ts`. */
@@ -75,7 +64,20 @@ function tailTrim(): THREE.BufferGeometry {
 }
 
 /** Built once, shared by every car; a car's dispose skips it (engine teardown frees only its GPU copy). */
-const GEOMETRY = [once(interior), once(() => lining(-1)), once(() => lining(1)), once(() => mirror(-1)), once(() => mirror(1)), once(grille), once(tailTrim)] as const;
+const GEOMETRY = [
+  once(cabinGeometry),
+  once(() => doorCardGeometry(-1)),
+  once(() => doorCardGeometry(1)),
+  once(() => mirror(-1)),
+  once(() => mirror(1)),
+  once(grille),
+  once(tailTrim),
+  once(frontSeatGeometry),
+  once(rearSeatGeometry),
+  once(wheelGeometry),
+  once(engineBayGeometry),
+  once(crashBarGeometry),
+] as const;
 
 export const partGeometry = (kind: PartKind): THREE.BufferGeometry => GEOMETRY[kind]();
 
@@ -92,6 +94,8 @@ export class PartSeat extends THREE.Object3D {
   /** The paint (linear) its `painted` vertices take: its panel's (a mirror's door, the grille's body). */
   readonly tint = new THREE.Color(1, 1, 1);
   readonly kind: PartKind;
+  /** Drawn only while this holds too (`PartBatch`): the bay under a gone hood, a crash bar under a gone bumper. */
+  showIf: (() => boolean) | null = null;
   private looseMesh: THREE.Mesh | null = null;
 
   constructor(kind: PartKind) {
@@ -99,7 +103,7 @@ export class PartSeat extends THREE.Object3D {
     this.kind = kind;
     this.geometry = partGeometry(kind);
     this.drawn = this.geometry;
-    this.name = kind === PART_KIND.interior ? INTERIOR_MESH : SMALL_PART_SEAT;
+    this.name = INTERIOR_KINDS.has(kind) ? INTERIOR_MESH : SMALL_PART_SEAT;
   }
 
   get loose(): boolean {
@@ -151,4 +155,11 @@ export function looseOnCamera(object: THREE.Object3D): void {
     o.layers.enable(0);
     if (o instanceof PartSeat) o.loosen();
   });
+}
+
+/** A car's part seats: one of each kind indexed by kind, then each kind's further seats (`PART_PER_CAR`). */
+export function carPartSeats(): PartSeat[] {
+  const seats = PART_KINDS.map((kind) => new PartSeat(kind));
+  for (const kind of PART_KINDS) for (let i = 1; i < PART_PER_CAR[kind]!; i++) seats.push(new PartSeat(kind));
+  return seats;
 }

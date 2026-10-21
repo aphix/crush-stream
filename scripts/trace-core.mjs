@@ -5,8 +5,9 @@
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import * as THREE from "three";
+import { makeCamera, orthoSpec } from "./trace-camera.mjs";
 import { checklist, compare, fillHoles, gapRegions, glassCompare, maskBox, outline, sideCorners, sideHubs } from "./trace-metrics.mjs";
 
 /** Pixels per metre, and the margin (m) around the car, without a reference. */
@@ -34,13 +35,13 @@ export const VIEWS = {
 /** The parts `--omit` hides. */
 export const OMIT_PARTS = ["doors", "glass", "bumpers", "mirrors", "hood", "trunk", "lightbar", "wheels", "lamps", "parts"];
 
-/** The game's car modules, headless GL and Skia, with the WASM skin kernel loaded. */
-export async function openGame() {
+/** The game's car modules from the checkout at `root` (default this one), headless GL and Skia, with the WASM skin kernel loaded. */
+export async function openGame(root = join(import.meta.dirname, "..")) {
   // WSL: Mesa's d3d12 driver reaches the host GPU through /dev/dxg; without it Mesa draws on the CPU.
   if (existsSync("/dev/dxg")) process.env.GALLIUM_DRIVER ??= "d3d12";
   const glDir = dirname(fileURLToPath(import.meta.resolve("@kmamal/gl")));
   if (!existsSync(join(glDir, "dist/webgl.node"))) throw new Error(`@kmamal/gl has no native binary. Fetch it once: node ${join(glDir, "scripts/install.mjs")}`);
-  const game = (path) => import(new URL(`../src/game/${path}`, import.meta.url).href);
+  const game = (path) => import(pathToFileURL(join(root, "src/game", path)).href);
   await (await game("deform/skin-kernel.test-util.ts")).loadSkinKernelForTest();
   const [gl, canvas, car, variants, classes, wheels, lamps, parts] = await Promise.all([
     import("@kmamal/gl"),
@@ -166,6 +167,7 @@ function measureCar({ scene, car, batch }) {
   return {
     box,
     hubs,
+    wheels: { ground, outerX: [wheelBox.min.x, wheelBox.max.x] },
     car: {
       length: r(box.max.z - box.min.z),
       width: r(body.max.x - body.min.x),
@@ -263,18 +265,9 @@ export function centreOnHubs(frame, sil) {
   return { frame: moved, hubs: sideHubs(moved, sil) };
 }
 
+/** The frame's orthographic camera (`trace-camera.orthoSpec`: the one headless-frame's landing shots build too). */
 export function frameCamera(frame) {
-  const { R, U } = VIEWS[frame.view];
-  const r = new THREE.Vector3(...R);
-  const up = new THREE.Vector3(...U);
-  const centre = r.clone().multiplyScalar(frame.sxc).addScaledVector(up, frame.syc);
-  const { W, H, ppm } = frame;
-  const camera = new THREE.OrthographicCamera(-W / 2 / ppm, W / 2 / ppm, H / 2 / ppm, -H / 2 / ppm, 0.1, 40);
-  camera.up.copy(up);
-  camera.position.copy(centre).addScaledVector(r.clone().cross(up), 20);
-  camera.lookAt(centre);
-  camera.updateMatrixWorld();
-  return camera;
+  return makeCamera(THREE, orthoSpec(frame, VIEWS[frame.view]));
 }
 
 /** The frame round the car's box, without a reference. */

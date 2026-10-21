@@ -8,8 +8,8 @@ import { INTERIOR_MESH, LIGHT_BAR, SMALL_PART_SEAT } from "../vehicle/constants.
  *
  * - beyond `mid` it drops its small parts that cast no shadow (the trims, grille, mirrors and door linings are batched seats, glass:
  *   12 of its 20 draws) and its 4 lamps from the lamp batch. They are a few pixels there; body, interior, panels and wheels stay, and so do the hood,
- *   boot lid, doors and bumpers (`flushCasters`), whether or not they cast right now.
- * - beyond `far` it draws its body alone: the interior, the panels, the wheels and every flush part (bumpers, hood, trunk, doors)
+ *   boot lid, doors and bumpers (`flushCasters`), whether or not they cast right now, and the shadow caster (`shadowCaster`).
+ * - beyond `far` it draws its body and shadow caster alone: the interior, the panels, the wheels and every flush part (bumpers, hood, trunk, doors)
  *   leave the camera too, a wreck's as well as a whole car's (at 50 m a car is ~20 px on the phone and the body carries the paint
  *   and the dents). Only the police light bar stays: it is how a cop reads from afar. Loose bodies (a torn door, a dropped wheel)
  *   are not the car's meshes and keep drawing.
@@ -60,7 +60,7 @@ function takeMid(car: DeformableCar): THREE.Object3D[] {
       parts.push(o);
       return;
     }
-    if (!(o instanceof THREE.Mesh) || o instanceof THREE.InstancedMesh || o.castShadow || car.flushCasters.includes(o) || o.name === INTERIOR_MESH || o.name === "panel") return;
+    if (!(o instanceof THREE.Mesh) || o instanceof THREE.InstancedMesh || o.castShadow || o === car.body || o === car.shadowCaster || car.flushCasters.includes(o) || o.name === INTERIOR_MESH || o.name === "panel") return;
     o.layers.disable(0);
     parts.push(o);
   });
@@ -72,7 +72,7 @@ function takeFar(car: DeformableCar): THREE.Object3D[] {
   const parts: THREE.Object3D[] = [];
   car.group.traverse((o) => {
     const interior = o.name === INTERIOR_MESH;
-    if ((!interior && !(o instanceof THREE.Mesh)) || o instanceof THREE.InstancedMesh || o === car.body || o.name === LIGHT_BAR || !o.layers.isEnabled(0)) return;
+    if ((!interior && !(o instanceof THREE.Mesh)) || o instanceof THREE.InstancedMesh || o === car.body || o === car.shadowCaster || o.name === LIGHT_BAR || !o.layers.isEnabled(0)) return;
     o.layers.disable(0);
     parts.push(o);
   });

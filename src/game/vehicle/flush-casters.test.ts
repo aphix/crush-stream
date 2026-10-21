@@ -63,11 +63,11 @@ const styleCases = [
 
 describe("given a car that has not been in a crash", () => {
   for (const testCase of styleCases) {
-    it(`when it is a ${testCase.it}, then only its body${testCase.bar ? " and its light bar cast" : " casts"} a shadow and the shadow covers the ground the whole car's would, to within 1.2 %`, () => {
+    it(`when it is a ${testCase.it}, then only its shadow caster${testCase.bar ? " and its light bar cast" : " casts"} a shadow and the shadow covers the ground the whole car's would, to within 1.2 %`, () => {
       const car = standingCar(testCase.style);
       const casting = castingMeshes(car);
       assert.equal(casting.length, testCase.bar ? 2 : 1, `${casting.length} meshes cast`);
-      assert.ok(casting.includes(car.body), "the body casts");
+      assert.ok(casting.includes(car.shadowCaster), "the shadow caster casts");
       const whole = [...casting, ...car.flushCasters];
       const gap = uncovered(sunCoverage(whole, car.group.position), sunCoverage(casting, car.group.position));
       assert.ok(gap.of > 2000, `the whole car fills ${gap.of} texels`);
@@ -98,13 +98,13 @@ describe("given a car", () => {
     for (const part of car.flushCasters) assert.ok(part.castShadow, "a flush part does not cast with a door open");
   });
 
-  it("when it is hit and then put back on the grid, then only its body casts a shadow again", () => {
+  it("when it is hit and then put back on the grid, then only its shadow caster casts a shadow again", () => {
     const car = standingCar("sedan");
     hitAndSettle(car, "nose", 40, 50);
     car.spawn(8, 12, 12);
     car.group.updateMatrixWorld(true);
     car.updateSkin();
     const casting = castingMeshes(car);
-    assert.ok(casting.length === 1 && casting[0] === car.body, `${casting.length} meshes cast`);
+    assert.ok(casting.length === 1 && casting[0] === car.shadowCaster, `${casting.length} meshes cast`);
   });
 });

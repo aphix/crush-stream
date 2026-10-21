@@ -5,6 +5,8 @@ import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt } from "./car
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
+import { INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { bayTub } from "./interior-geometry.ts";
 
 export const SEDAN = CAR_STYLES.sedan;
 
@@ -12,9 +14,9 @@ export const SEDAN = CAR_STYLES.sedan;
  * The hard edges the drawn parts declare: the angle (degrees) between two faces past which `splitCreases` gives the edge its
  * own vertices, so the live per-skin normals stay hard across a crush and smooth everywhere else. Faces turning less than the
  * angle shade as one surface.
- * - deckLid: a bonnet or boot lid's top meets its skirt at 90° (the shut line); its dome and skirt chords turn under 2°. Its flat end
- *   caps (own vertices, set by the loft) meet a side wall that leans in plan by up to 30°, i.e. at 60° or more, so the angle stays under that.
- * - tailgate: the hatch's bowed panel meets its edge at 90°; its bow turns under 2° a chord; the same cap rule.
+ * A loft's flat end caps are the panel's cut ends: own vertices (set by the loft), hard at whatever angle the panel meets them.
+ * - deckLid: a bonnet or boot lid's top meets its skirt at 90° (the shut line); its dome and skirt chords turn under 2°.
+ * - tailgate: the hatch's bowed panel meets its edge at 90°; its bow turns under 2° a chord.
  * - door: the slab's edge wall meets the inner face at 90°; the edge roll turns 45° at most a chord and the shoulder under 30°.
  * - bumper: the fascia's splitter lip and back turn 73° and 90° (the lip's lower chord 67°); its rounded top and intake recess turn
  *   49° at most a chord. A quad the corner wrap warps folds 63° along its diagonal, which no fan of vertices can keep hard, so the angle sits above that.
@@ -161,10 +163,20 @@ export function doorAperture(z: number, style: BodyStyle): number {
 /** Half-width (m) of the blend into and out of a style's tub floor along z (8e2dc49). */
 export const TUB_EDGE = 0.025;
 
-function tubAt(z: number, style: BodyStyle): { t: number; floor: number } {
+/** The open floors a body build lofts: the style's tubs, and on the drawn body the engine bay under the hood (`bayTub`). */
+export function bodyTubs(style: BodyStyle, source: BodySource): readonly (readonly [number, number, number])[] {
+  return source === "drawn" ? [...style.tubs, bayTub(style)] : style.tubs;
+}
+
+/** How far (0..1) the drawn body's loft at `z` has dropped into the engine bay's trough (`bayTub`). */
+export function bayAt(z: number, style: BodyStyle): number {
+  return tubAt(z, style, [bayTub(style)]).t;
+}
+
+function tubAt(z: number, style: BodyStyle, tubs: readonly (readonly [number, number, number])[]): { t: number; floor: number } {
   let t = 0;
   let floor = floorY(z, style);
-  for (const [z0, z1, f] of style.tubs) {
+  for (const [z0, z1, f] of tubs) {
     const w =
       THREE.MathUtils.smoothstep(z, z0 - TUB_EDGE, z0 + TUB_EDGE) *
       (1 - THREE.MathUtils.smoothstep(z, z1 - TUB_EDGE, z1 + TUB_EDGE));
@@ -236,7 +248,7 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [num
   const hole = doorAperture(z, style);
   const rockerY = rockerAt(z, style);
   const floor = floorY(z, style);
-  const tub = tubAt(z, style);
+  const tub = tubAt(z, style, bodyTubs(style, source));
   const { wheels } = carFrame(style);
   const well = wheelWell(z, wheels, style.arch.radius);
   const archY = wheels[0]![1] + well;
@@ -275,8 +287,11 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [num
     p[1] = lerp(p[1], sill[i]![1], hole);
   }
   for (let i = FLARE_FIRST; i <= rocker; i++) half[i]![0] += 0.022 * archFlare(z, half[i]![1], wheels, style.arch.radius);
-  for (const p of half) {
-    if (well < 0.03 || p[0] < hw * 0.58 || p[1] > archY + 0.02) continue;
+  // A tub's floor over wheels standing outboard of the body (the monster's bed) stays flat: no tyre comes up through it.
+  const floorClear = tub.t > 0 && wheels.every(([wx]) => Math.abs(wx) > hw);
+  for (let i = 0; i < half.length; i++) {
+    const p = half[i]!;
+    if (well < 0.03 || p[0] < hw * 0.58 || p[1] > archY + 0.02 || (i === 0 && floorClear)) continue;
     const t = THREE.MathUtils.smoothstep((p[0] - hw * 0.58) / (hw * 0.42), 0, 1);
     p[1] = Math.max(p[1], lerp(p[1], archY, t));
   }
@@ -545,7 +560,15 @@ function makeTailgate(style: BodyStyle, y0: number, z0: number, origin: YZ, sour
 /** Bonnet lid per style; the drawn build wraps a `clamshell` lid over the fenders (the hood bulge is `withHoodBulge`'s). Local to `style.hood.origin`. */
 export function makeHoodGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const { z0, z1, origin, kind } = style.hood;
-  return markSkinDynamic(makeDeckPanel(style, z0, z1, origin, source, source === "drawn" && kind === "clamshell"));
+  const geo = makeDeckPanel(style, z0, z1, origin, source, source === "drawn" && kind === "clamshell");
+  if (source === "drawn") {
+    // Its underside, the lid over the bay, is an unpainted inner panel.
+    const normal = geo.getAttribute("normal");
+    const primer = new Float32Array(normal.count);
+    for (let v = 0; v < normal.count; v++) if (normal.getY(v) < -0.5) primer[v] = INNER_PANEL;
+    geo.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(primer, 1));
+  }
+  return markSkinDynamic(geo);
 }
 
 /** Trunk lid, hatch or tailgate per style, the drawn build with its `lip`; local to `style.boot.origin` ([y, z]). */

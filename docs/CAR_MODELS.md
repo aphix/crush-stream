@@ -55,6 +55,7 @@ The hardpoints place the openings and the lower body, each per car:
 | `arch` | Wheel-arch opening radius about each hub |
 | `hood` | Bonnet span `z0` (cowl) to `z1` (nose) and its hinge `origin` `[y, z]` |
 | `bumpers.front`, `bumpers.rear` | Group `seat` (height, distance from the middle), `fascia` section `[y, out]` top to bottom, `span` (half-width), and `wrap`: the `|x|` where the fascia's corner starts sweeping back (`from`) and how far its end sweeps (`back`) |
+| `seats` | The driver's H-point `front` `[x, y, z]` (he sits on −x, the passenger mirrors him) and the rear bench's `rear` `[y, z]` on the centre line, or `null` with no rear row (the regular-cab truck). The drawn seats, the seated driver and the sim's seat read it |
 
 `car-styles/platform.ts` exports the values the first bodies shared as `PLATFORM_HARDPOINTS`; a table spreads it and overrides
 what its car changes. Every hardpoint but the bumper fascia reaches the collision cage or a sim reader (the greenhouse pillars,
@@ -82,6 +83,46 @@ panel are drawn dark by the paint's `primer` attribute. Exhaust tips and the hit
 (`withRearFittings`), so they tear off with it; their chrome and black come from the trim material's `fitting` attribute, so
 no part adds a draw call. Every style's mirror is one variant in the part batch's two mirror draws: an instance draws its own
 variant and paints a body-colour cap from its instance colour (`mirrorPartsMaterial`), so mirrors stay at two draws for any fleet.
+
+## Interior, engine bay and bare metal
+
+The cabin is shared props, placed per car by its spec (`vehicle/interior.ts` `CarCabin`, geometry in `interior-geometry.ts`):
+
+| Prop (`PART_KIND`) | Seats per car | Placed by |
+|---|---|---|
+| `interior`: the cabin shell (floor, tunnel and console, dash with binnacle and screen, headliner, side trim) | 1 | Mapped from `REF_CABIN` onto the car's cabin box: `belt.x` (sides), the cabin tub's floor, the roof line at the B-pillar (headliner), `rearBulkhead.z` to `windshield.base` |
+| `seatFront` | 2 | `seats.front`, the passenger mirrored |
+| `seatRear` | 0 or 1 | `seats.rear`, stretched to the cabin's width |
+| `wheel` | 1 | Ahead of the driver's H-point (`WHEEL_AT`), leaned `WHEEL_TILT` |
+| `liningL`, `liningR`: door cards | 1 each | Door space; each keeps the first lining's box exactly (a torn door's loose box is sim) |
+| `engineBay` | 1 | Mapped from `REF_BAY` onto the trough under the hood; shown while the hood is off or open |
+| `crashBar` | 2 | Each bumper's seat; shown while that bumper is off or hanging |
+
+Every prop kind is one `InstancedMesh` for the whole field (`PartBatch`, `PART_PER_CAR`): adding a car adds instances, never
+draws. At rest the interior costs six draws for the whole field (cabin, both door-card sides, front seats, rear bench, wheel) and the
+seated drivers one more; the bay and the crash bars draw only while exposed. `CarDetail` takes the cabin, seats, wheel and bay at its
+far distance (by `INTERIOR_MESH`), the door cards and crash bars with the small parts at mid distance.
+
+- **Seat lean:** seats and the seated driver lean `SEAT_RECLINE` back; under a low roof the seat leans further (to
+  `SEAT_RECLINE` + 0.35 rad) until the driver's head clears the roof line by 5 cm.
+- **The driver:** `present/seated-drivers.ts` draws every car's driver seated (one `DummyMesh` for the field, slot = the car's
+  index), posed by `seatedPose(style)`: hips on the H-point, back on the seat, hands on the rim's grips, soles on the floor. He
+  wears the car's driver look (`RagdollSystem.carDriverLook`, as he is thrown) and hides once `driverOut` is set or the far
+  cut takes his seat. In the garage no one sits in the car: the standing dummy beside it is the driver. The National Mall's
+  VIP rides with his hips on the passenger H-point (`seats.front` mirrored).
+- **Crush:** the headliner sinks with the roof mass (a load's crush too, `CarCabin.sinkHeadliner`), so the cabin never stands
+  through a crushed roof. The bay rides the engine masses with its front no further out than the front bumper's masses (the
+  nose); each crash bar rides its bumper's, its face on the bumper's seat.
+- **The engine bay:** the drawn body (never the cage) opens a trough under the hood (`bayTub`: from the hood's cowl edge or the
+  windshield's foot to inside the nose, floor at 0.28 m), one more `tubs` entry for the drawn loft only. The bay set fills it
+  wall to wall up to the hood's underside: a dark block and black cover with bare-aluminium heads, intake, plenum and strut
+  caps, steel rails and manifolds, black radiator, airbox and battery.
+- **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor, the wheel liners and
+  the hood's underside are set so at build, on the drawn body only. No texture, no draw.
+- **Bare metal:** the paint's `primer` attribute draws procedural riveted steel (`bare-metal.ts`: object-space seams, rivet
+  rows, a tint per sheet), so a torn panel's or bumper's under-panel bends with the body and costs no texture or draw. A torn
+  bumper bares the painted body it covered (`bumperBare`), a reset paints it again.
+- **The cage** reads `cageInterior()`, the first interior box byte-for-byte: the drawn kit moves no sim reading.
 
 ## References and scale
 
@@ -136,6 +177,35 @@ node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
   (the plan's end corners). Fitted: `profile`.
 - Not read: hood, arch, rocker, boot, `rideHeight`, `cabinHw`, `bPillar`, `quarter`, mirrors, the bumper fascia and span, and the
   door's hinge y and z, length and aperture.
+
+**`landing-shots.mjs`: the landing gate's eight shots.** For side, top, iso and rear-iso, the car alone (`ours`: the real engine in
+the garage at the high tier over a white backdrop, through headless-frame) and the car over its reference (`overlay`: trace-car),
+both through one camera spec (`trace-camera.mjs`), so each pair lines up pixel for pixel and every car is framed the same way:
+
+```sh
+CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
+  scripts/landing-shots.mjs --root <tree> --car <style>     # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay}.png
+```
+
+- Each car's `scripts/landing-views/<style>.json` holds its references, its iso crops (cut from the lineups; widen one that
+  clips its car) and its iso cameras. Side and top are orthographic, spanned on the reference's bumper tips at the spec length,
+  with z = 0 between the reference's tyres.
+- The isos are AI renders with their own lens, so each is aligned once on its wheels. Pick the visible wheels' hub (outer face)
+  and contact points on the crop: `trace-car --style <id> --view iso --landing --grid <png>` draws the crop with a pixel grid.
+  Wheels are named `fl`/`fr`/`rl`/`rr`; the front iso shows the car's left (+x) side, the rear iso its right. Store them as
+  `wheels`. One side's wheels lie near one plane and leave the view's tilt about the wheel line loose, so also pick one or two
+  `landmarks` off that plane, e.g. `{ "name": "front badge", "at": [0, 0.62, 2.08], "pixel": [u, v] }`. `at` is the point's place
+  as the style file writes it (metres, before the class lift): a badge on the centre line, a far-side lamp or mirror. Then run
+  `--solve`.
+- `--solve` fits the camera's pose to the picks, held upright, for fields of view from 12° to 50°. It keeps the one whose
+  silhouette fits best, or the entry's `fov` where one is pinned by hand, and stores it. Narrower lenses fit the renders a little
+  better but stand the camera past the detail map's fade, so the engine shot would lose its panel lines. Every later shot reuses
+  the stored camera, so a wheel the car moves shows as wheel error. Re-solve only when the wheels change.
+- The overlay marks the picks yellow and the car's points magenta. The JSON prints `wheels` and `landmarks` (each point's error in
+  crop pixels, RMS and largest). The sedan's wheel picks are in: about 2.5 px RMS on both isos.
+- `headless-frame.mjs --view side|top|iso|rear-iso --view-camera <spec>` draws that camera on the garage car, and
+  `--backdrop <colour>` draws the car alone. Both also work on their own, as does `--detail <rung>` (the distance-detail rung,
+  governor off).
 
 **`trace-car.mjs`: one view, measured.** Writes an overlay PNG and prints one JSON line: the silhouette IoU and signed edge
 offsets (cm, positive where the car sticks out), the glass's (side: roof rail, sill, A- and C-pillar with their rake), the
