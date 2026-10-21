@@ -17,7 +17,7 @@ import { TyreSkin } from "./car-tyre-skin.ts";
 import { clearDents } from "./loose-dent.ts";
 import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
-import { CageRig } from "./car-cage-rig.ts";
+import { CageRig, centreY } from "./car-cage-rig.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
 
@@ -270,7 +270,7 @@ export class DeformableCar extends CarParts {
     if (rigid) {
       // A rigid body (`stepFree`) takes the hit on its masses: its centre's velocity carried to the group's origin, as `land` does, and a wreck's masses keep their dents. Its masses fly it on (`syncPose`)
       // and hand it back to `stepFree` once their contact window closes; left rigid, nothing ever landed it and its drive stayed idled (8 s, stopped, on the stunt course).
-      this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, this.frame.comY, 0).applyQuaternion(this.group.quaternion)));
+      this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, centreY(this), 0).applyQuaternion(this.group.quaternion)));
       if (this.crashed) {
         this.deform.armMasses(this.group, this.velocity, this.angular);
         this.deform.unstep(this.flewDt);
@@ -410,7 +410,7 @@ export class DeformableCar extends CarParts {
 
   /** A wreck flying as a rigid body (`stepFree`) with three wheels on the world goes back to its masses (`armed`), taking its centre's velocity less the spin's carry (a body crushed only by a load has no masses and stands on its wheels). */
   private landWreck(): void {
-    this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, this.frame.comY, 0).applyQuaternion(this.group.quaternion)));
+    this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, centreY(this), 0).applyQuaternion(this.group.quaternion)));
     this.angular.set(0, this.angular.y, 0);
     this.speed = hypot2(this.velocity.x, this.velocity.z);
     this.deform.armMasses(this.group, this.velocity, this.angular);
@@ -891,7 +891,7 @@ export class DeformableCar extends CarParts {
 
 /**
  * Start the fake fall: the soft body stops (`massActive` off; its state is left as it is) and the car flies on as the rigid step
- * flies every body, off the world's ground, with the `angular` it has and the `velocity` it has at its own centre (`frame.comY`; a wreck's body
+ * flies every body, off the world's ground, with the `angular` it has and the `velocity` it has at its own centre (`centreY`; a wreck's body
  * turned about its masses' centroid, so the spin carries the difference). `keepMotion`: a replay or netplay client has set the pose,
  * `velocity` and `angular` already.
  */
@@ -899,7 +899,7 @@ export function beginFakeFall(car: DeformableCar, keepMotion = false): void {
   if (car.deform.massActive && !keepMotion) {
     car.group.updateMatrixWorld(false);
     _p.copy(wreckCentre(car)).applyMatrix4(car.group.matrixWorld);
-    _c.set(0, car.frame.comY, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
+    _c.set(0, centreY(car), 0).applyQuaternion(car.group.quaternion).add(car.group.position);
     car.velocity.add(_v.crossVectors(car.angular, _c.sub(_p)));
   }
   car.deform.massActive = false;

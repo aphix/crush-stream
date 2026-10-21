@@ -5,6 +5,7 @@ import { carFrame, type CarFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
 import { CAGE_VERTICES, SILL_CAPACITY } from "./car-cage.ts";
+import { centreY } from "./car-cage-rig.ts";
 
 export const G = 9.6;
 /** Sizes the per-slice tables and the unbound body: every frame's belly and wheels share the sedan's layout. */
@@ -311,7 +312,7 @@ export function carrier(surf: CarSurfaces, n: number, own: number, mass: number)
   }
   HELD[n] = o;
   RATIO[n] = mass / o.deform.totalMass;
-  ARM[n]!.copy(centreOfMass).add(R[n]!).sub(o.group.position).sub(_r.set(0, o.frame.comY, 0).applyQuaternion(o.group.quaternion));
+  ARM[n]!.copy(centreOfMass).add(R[n]!).sub(o.group.position).sub(_r.set(0, centreY(o), 0).applyQuaternion(o.group.quaternion));
 }
 
 /** World inverse inertia (body orientation `q`, its inverse `qi`; `inertia` its inverse inertia per unit mass about its own axes) applied to `x` in place. */

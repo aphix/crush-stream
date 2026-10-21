@@ -310,9 +310,18 @@ export class CageRig {
 }
 
 /** How far (m) up `car`'s drawn body stands over its frame: its class's lift while upright, none once on its side (`bodyLift`), read off the pose, never off the drawn body (drawn only: heave and pitch). */
-export function cageLift(car: DeformableCar): number {
+export function cageLift(car: Pick<DeformableCar, "group" | "style">): number {
   const q = car.group.quaternion;
   return bodyLift(CLASSES[carClass(car)].lift, 1 - 2 * (q.x * q.x + q.z * q.z));
+}
+
+/**
+ * The height (m, car frame) of `car`'s rigid centre: its frame's stock centre (`comY`) carried up with the body by the class's lift
+ * (`cageLift`, fading as it lies over). At the stock 0.72 m a monster's centre stood 0.07 m over its hubs, under a body lifted 0.87 m,
+ * and a side hit on its tyres yawed it off with 2° of roll where it should trip.
+ */
+export function centreY(car: Pick<DeformableCar, "group" | "style" | "frame">): number {
+  return car.frame.comY + cageLift(car);
 }
 
 /** The highest (`high`) or lowest node of a cage field (m), the nodes with no height skipped. */
