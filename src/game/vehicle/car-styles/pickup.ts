@@ -11,6 +11,9 @@ export const PICKUP: BodyStyle = {
   windshield: { base: [1.19, 0.91], wBase: 1.36, wTop: 1.18 },
   belt: { x: 0.73, y: [[0, 1.18]] },
   rocker: { y: 0.4 },
+  underside: [[-2.18, 0.44], [-1.75, 0.36], [-1.5, 0.34], [1.6, 0.34], [1.76, 0.35], [1.93, 0.38]],
+  door: { hingeX: 0.76, hingeY: 0.79, hingeZ: 0.7, length: 0.93, halfHeight: 0.39, mirrorY: 0.42, mirrorReach: 0.23, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69] },
+  bPillar: { rear: -0.29, front: -0.23 },
   arch: { radius: 0.43 },
   hood: { z0: 0.85, z1: 1.92, origin: [1.07, 0.83] },
   bumpers: {

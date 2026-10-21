@@ -6,11 +6,14 @@ const { bumpers } = PLATFORM_HARDPOINTS;
 /** Late-70s notchback muscle coupe (Celica Supra A40 proportions): long flat hood, flat roof, sloped rear glass, short ducktail deck. */
 export const COUPE: BodyStyle = {
   id: "coupe",
-  dims: { wheelbase: 2.38, overhang: { front: 0.81, rear: 0.81 }, track: 1.32, width: 1.852, height: 1.276, rideHeight: 0.18, wheel: { radius: 0.3, width: 0.2 } },
+  dims: { wheelbase: 2.38, overhang: { front: 0.81, rear: 0.81 }, track: 1.32, width: 1.852, height: 1.276, rideHeight: 0.2, wheel: { radius: 0.3, width: 0.2 } },
   ...PLATFORM_HARDPOINTS,
   windshield: { base: [0.93, 0.7], wBase: 1.32, wTop: 1.08 },
   belt: { x: 0.73, y: [[0, 0.89]] },
   rocker: { y: 0.22 },
+  underside: [[-2.05, 0.3], [-1.75, 0.26], [-1.5, 0.2], [1.56, 0.2], [1.83, 0.24], [1.99, 0.27]],
+  door: { hingeX: 0.77, hingeY: 0.555, hingeZ: 0.61, length: 1.1, halfHeight: 0.335, mirrorY: 0.365, mirrorReach: 0.21, mirrorHalfDepth: 0.08, aperture: [-0.49, 0.6] },
+  bPillar: { rear: -0.56, front: -0.48 },
   arch: { radius: 0.36 },
   hood: { z0: 0.64, z1: 1.97, origin: [0.8, 0.62] },
   bumpers: {

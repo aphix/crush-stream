@@ -11,6 +11,9 @@ export const MONSTER: BodyStyle = {
   windshield: { base: [1.1, 0.99], wBase: 1.46, wTop: 1.3 },
   belt: { x: 0.8, y: [[0, 1.0]] },
   rocker: { y: 0.4 },
+  underside: [[-2.4, 0.38], [-2.1, 0.34], [2.1, 0.34]],
+  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, mirrorY: 0.32, mirrorReach: 0.23, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75] },
+  bPillar: { rear: -0.19, front: -0.12 },
   arch: { radius: 0.47 },
   hood: { z0: 0.93, z1: 2.08, origin: [0.96, 0.91] },
   bumpers: {
