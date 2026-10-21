@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
-import { makeTrunkGeometry } from "./car-mesh.ts";
+import { ROCKER, beltY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { makeRearGlass, makeWindshield } from "./car-glass.ts";
+import { glassCorners, makeRearGlass, makeWindshield } from "./car-glass.ts";
 import { LIGHT_BAR_FOOT, makeLightBar } from "./car-materials.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
@@ -24,6 +24,7 @@ const cars: Record<CarStyleId, DeformableCar> = {
   coupe: new DeformableCar(PAINT, scene, null, "coupe"),
   pickup: new DeformableCar(PAINT, scene, null, "pickup"),
   police: new DeformableCar(PAINT, scene, null, "police"),
+  monster: new DeformableCar(PAINT, scene, null, "monster"),
 };
 
 /** Highest visible surface at (x=0, z): roof, glass, deck or bed floor — never the debug rig. */
@@ -96,12 +97,13 @@ describe("given every body style, compared with the sedan that the shared platfo
     });
   }
 
-  it("when a 10-car field is generated, then every fleet style appears, slot 0 is the sedan and police never spawn on their own", () => {
+  it("when a 10-car field is generated, then every fleet style and the monster appear, slot 0 is the sedan and police never spawn on their own", () => {
     const field = Array.from({ length: 10 }, (_, i) => fleetStyle(i));
     assert.equal(field[0], "sedan");
-    assertSameDigest([...new Set(field)].sort(), [...FLEET_STYLE_IDS].sort(), "styles in a 10-car field");
+    assertSameDigest([...new Set(field)].sort(), [...FLEET_STYLE_IDS, "monster"].sort(), "styles in a 10-car field");
   });
 });
+
 /** Tolerance (m) between a style's spec dimensions and its built car: well under a pixel of the references at their scale. */
 const DIMS_TOL = 0.005;
 
@@ -160,11 +162,12 @@ describe("given each body style's silhouette, measured as the highest visible su
     assert.ok(topAt("coupe", -0.2) < topAt("sedan", -0.2) - 0.06, `coupe ${topAt("coupe", -0.2)} sedan ${topAt("sedan", -0.2)}`);
   });
 
-  it("when the pickup is measured, then it has a cab roof and an open bed floor below 0.6 m, lower than every other style's deck", () => {
-    assert.ok(topAt("pickup", -0.2) > 1.25);
+  it("when the pickup and the monster are measured, then each has a cab roof and an open bed floor below 0.6 m, lower than every other style's deck", () => {
+    const beds: readonly CarStyleId[] = ["pickup", "monster"];
+    for (const id of beds) assert.ok(topAt(id, -0.2) > 1.25, `${id} cab roof ${topAt(id, -0.2)}`);
     for (const z of [-1.1, -1.7]) {
-      assert.ok(topAt("pickup", z) < 0.6, `pickup bed floor at z=${z} is ${topAt("pickup", z)}`);
-      for (const id of CAR_STYLE_IDS) if (id !== "pickup") assert.ok(topAt(id, z) > 0.78, `${id} deck at z=${z}`);
+      for (const id of beds) assert.ok(topAt(id, z) < 0.6, `${id} bed floor at z=${z} is ${topAt(id, z)}`);
+      for (const id of CAR_STYLE_IDS) if (!beds.includes(id)) assert.ok(topAt(id, z) > 0.78, `${id} deck at z=${z}`);
     }
   });
 });
@@ -286,5 +289,49 @@ describe("given the police cruiser", () => {
       car.flashSirens(now);
       for (let i = 4; i < car.lampCount; i++) assert.equal(car.lampWorld(i, p, new THREE.Vector3()), null, `siren ${i} lit at t=${now} off a torn bar`);
     }
+  });
+});
+
+/** Box of a built part, in its own frame. */
+function partBox(geometry: THREE.BufferGeometry): THREE.Box3 {
+  geometry.computeBoundingBox();
+  return geometry.boundingBox!;
+}
+
+describe("given a body style's own hardpoints (windshield, belt, hood, bumpers, rocker, floor, arches)", () => {
+  const sedan = CAR_STYLES.sedan;
+  const moved: BodyStyle = {
+    ...sedan,
+    windshield: { base: [0.82, 1.0], wBase: 1.24, wTop: 0.9 },
+    belt: { x: 0.84, y: [[-0.9, 0.95], [0.76, 0.87]] },
+    hood: { z0: 0.8, z1: 1.9, origin: [0.7, 0.8] },
+    bumpers: { ...sedan.bumpers, front: { ...sedan.bumpers.front, span: 0.7 } },
+    rocker: { y: 0.25 },
+    dims: { ...sedan.dims, rideHeight: 0.17 },
+    arch: { radius: 0.42 },
+  };
+
+  it("when they are moved, then the windshield's base, the side glass's sill, the hood's span and the front bumper's width follow them", () => {
+    const ws = partBox(makeWindshield(moved));
+    const hood = partBox(makeHoodGeometry(moved));
+    const bumper = partBox(makeBumperGeometry(true, moved));
+    assertSameNumbers([ws.min.y, ws.max.x - ws.min.x, hood.min.z + 0.8, hood.max.z + 0.8, bumper.max.x - bumper.min.x], [0.82, 1.24, 0.8, 1.9, 1.4], "windshield base y and width, hood z0 and z1, bumper width", 1e-3);
+    const corners = glassCorners(moved);
+    for (const pane of [2, 4]) {
+      for (const k of [0, 1]) {
+        const at = pane * 12 + k * 3;
+        assert.ok(Math.abs(corners[at + 1]! - beltY(corners[at + 2]!, moved)) < 1e-6, `pane ${pane} base corner ${k} at y ${corners[at + 1]} off the belt ${beltY(corners[at + 2]!, moved)}`);
+      }
+    }
+  });
+
+  it("when they are moved, then the body side ends at the style's rocker, the keel at its floor, and the arch opening clears its radius above the hub", () => {
+    const ring = sectionPoints(sampleSlice(-0.4, moved.profile), moved, "drawn");
+    assertSameNumbers([ring[ROCKER]!.y, ring[(ring.length - 1) / 2]!.y], [0.25, 0.17], "rocker, keel", 1e-9);
+    const [, hubY, hubZ] = carFrame(moved).wheels[0]!;
+    const arch = sectionPoints(sampleSlice(hubZ, moved.profile), moved, "drawn");
+    const outer = Math.max(...arch.map((p) => p.x));
+    const lowestOuter = Math.min(...arch.filter((p) => p.x > outer - 0.01).map((p) => p.y));
+    assert.ok(lowestOuter > hubY + 0.42 - 0.01, `the side over the front hub comes down to ${lowestOuter.toFixed(3)} m, inside the ${0.42} m arch`);
   });
 });

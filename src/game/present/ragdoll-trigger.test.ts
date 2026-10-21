@@ -8,7 +8,7 @@ import { assertSameDigest } from "../vehicle/test-support.ts";
 import { headOn } from "../vehicle/ejection.test-util.ts";
 import type { GlassName } from "../vehicle/car-core.ts";
 import { glassOf } from "../vehicle/car-glass.test-util.ts";
-import { B_PILLAR_Z } from "../vehicle/car-mesh.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -138,8 +138,9 @@ function entryFace(from: THREE.Vector3, to: THREE.Vector3): GlassName | "roof" |
   if (axis === 1) return from.y > CABIN.max.y ? "roof" : "lower body";
   if (axis === 2) return from.z > CABIN.max.z ? "windshield" : "rear";
   const z = from.z + (to.z - from.z) * last;
-  if (z >= B_PILLAR_Z.front) return from.x < 0 ? "doorL" : "doorR";
-  if (z <= B_PILLAR_Z.rear) return from.x < 0 ? "quarterL" : "quarterR";
+  const pillar = CAR_STYLES.sedan.bPillar;
+  if (z >= pillar.front) return from.x < 0 ? "doorL" : "doorR";
+  if (z <= pillar.rear) return from.x < 0 ? "quarterL" : "quarterR";
   return "B pillar";
 }
 

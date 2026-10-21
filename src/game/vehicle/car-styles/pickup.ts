@@ -1,10 +1,11 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { BOOT_SENSOR, CABIN_TUB, HEAD_LAMP, PLATFORM_WHEEL, st } from "./platform.ts";
+import { BOOT_SENSOR, CABIN_TUB, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
 
 /** 80s regular/extended-cab long-bed pickup (Toyota Pickup proportions): boxy cab, flat hood, open bed; the trunk part is the tailgate. */
 export const PICKUP: BodyStyle = {
   id: "pickup",
   dims: { wheelbase: 2.68, overhang: { front: 0.81, rear: 0.81 }, track: 1.48, width: 1.801, height: 1.365, rideHeight: 0.145, wheel: PLATFORM_WHEEL },
+  ...PLATFORM_HARDPOINTS,
   profile: [
     st(-2.18, 0.76, 1.19),
     st(-1.6, 0.775, 1.2),
