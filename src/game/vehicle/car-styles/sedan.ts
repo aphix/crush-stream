@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { CABIN_TUB, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+import { CABIN_TUB, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
 
 export const SEDAN: BodyStyle = {
   id: "sedan",
@@ -11,9 +11,24 @@ export const SEDAN: BodyStyle = {
   arch: { radius: 0.405 },
   hood: { z0: 0.88, z1: 1.97, origin: [0.81, 0.86] },
   bumpers: {
-    front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.4, z: 1.96 }, span: 0.74 },
-    rear: { ...PLATFORM_HARDPOINTS.bumpers.rear, seat: { y: 0.45, z: 2.08 }, span: 0.76 },
+    front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.4, z: 1.96 }, span: 0.74, wrap: { from: 0.25, back: 0.12 } },
+    rear: { ...PLATFORM_HARDPOINTS.bumpers.rear, seat: { y: 0.45, z: 2.08 }, span: 0.76, wrap: { from: 0.32, back: 0.1 } },
   },
+  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.36, mirrorReach: 0.09, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74] },
+  underside: [
+    [-2.14, 0.35],
+    [-2.04, 0.275],
+    [-1.94, 0.253],
+    [-1.84, 0.235],
+    [-1.74, 0.221],
+    [-1.62, 0.19],
+    [-1.5, 0.165],
+    [1.55, 0.165],
+    [1.71, 0.17],
+    [1.81, 0.182],
+    [1.91, 0.185],
+    [2.0, 0.22],
+  ],
   profile: [
     st(-2.11, 0.45, 0.93),
     st(-2.03, 0.6, 0.975),
@@ -39,8 +54,8 @@ export const SEDAN: BodyStyle = {
   midPillarZ: null,
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
-  rearDoorSeam: -0.62,
+  rearDoorSeam: -1.06,
   boot: { kind: "lid", z0: -1.65, z1: -2.06, origin: [0.97, -1.62] },
-  lamps: { head: HEAD_LAMP, tail: [0.47, 0.56] },
+  lamps: { head: [0.34, 0.6], tail: [0.34, 0.8] },
   rig: {},
 };
