@@ -87,7 +87,7 @@ const SCENE_KEYS: [string, string][] = [
   ...SCENE_KEY_BINDINGS.map((binding): [string, string] => [binding.label, sceneLabel(binding.scene)]),
   ["H", "In a race: race view · full menu"],
   ["1–8 · 0", "Fire ram · all"],
-  ["1–3 · 4 · 5 · 6 · 7", "Door ram A–C · open · side · panel D · E"],
+  ["1–3 · 4 · 5 · 6 · 7 · 8 · 9", "Door ram A–C · open · side · panel D · E · lid F · G"],
   ["B", "Wall"],
   ["K", "Balls"],
   [".", "Ramps"],

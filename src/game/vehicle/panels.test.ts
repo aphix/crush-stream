@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { INNER_PANEL } from "./constants.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { makeShell, PANEL_NAMES, panelRegions, poseShell } from "./car-panels.ts";
 import { DENT_MAX, newDentState, recordDent } from "./loose-dent.ts";
@@ -11,10 +12,21 @@ import { runWall, type CrashResult } from "../contact/crash-scenarios.test-util.
 import { assertSameNumbers, DT, paint } from "./test-support.ts";
 import { LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts";
 
+/** The body's paint attribute, joined: 0 paint, 1 primer, `INNER_PANEL` the unpainted bay trough. */
+const primerOf = (car: DeformableCar): string => Array.from(car.body.geometry.getAttribute("primer").array).join();
+/** The rest build's: paint, the roof fittings' dark primer and the trough's inner panel only. */
+const restPrimer = (car: DeformableCar): string => {
+  const rest = Array.from(makeChassisGeometry(car.style).getAttribute("primer").array);
+  assert.ok(rest.every((v) => v === 0 || v === 1 || v === INNER_PANEL), "a rest body holds only paint, primer and inner panel");
+  return rest.join();
+};
+
 /** How far (m) the light bar may sink into the roof skin under it past where it sits at rest: its feet's seat (measured 0.022 at worst, struck and tilted). */
 const BAR_SEAT_M = 0.03;
 /** A roof skin vertex counts as under a bar vertex within this plan distance (m): the skin's vertex spacing on the roof. */
 const UNDER_M = 0.15;
+/** Body positions are float32: a quarter vertex cut exactly at the door's rear edge reads within this (m) of the float64 edge. */
+const FLOAT32_EDGE = 1e-6;
 
 /** How deep (m) the light bar's deepest vertex sits under the roof skin directly beneath it (negative: clear of it). */
 function barDepth(car: Probe): number {
@@ -61,11 +73,6 @@ function probe(style: CarStyleId = "sedan"): Probe {
 const positions = (m: THREE.Object3D) => ((m as THREE.Mesh).geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
 const worst = (r: CrashResult, kind: "quarter" | "arch") => Math.max(...PANEL_NAMES.filter((n) => n.startsWith(kind)).map((n) => r.hinge[n]!));
 const torn = (r: CrashResult, kind: "quarter" | "arch") => r.detached.filter((n) => n.startsWith(kind));
-/** Whether any body vertex under a panel is primer: its under-panel turns dark only once the panel hinges (blacked-out trim is dark from the build, never under a panel). */
-const underPanelPrimer = (car: Probe) => {
-  const primer = car.body.geometry.getAttribute("primer");
-  return car.allParts.some((p) => p.region !== null && Array.from(p.region.verts).some((v) => primer.getX(v) !== 0));
-};
 
 describe("given every car body style, whose panels are cut from each body's own skin", () => {
   const bodies = CAR_STYLE_IDS.map((id) => ({ id, body: makeChassisGeometry(CAR_STYLES[id]) }));
@@ -94,7 +101,10 @@ describe("given every car body style, whose panels are cut from each body's own 
       return Math.max(...[...r.verts].map((v) => pos.getZ(v)));
     };
     assert.ok(front("sedan") < -0.5, `sedan quarter reaches z=${front("sedan")}, past its rear door`);
-    assert.ok(front("coupe") > -0.15 && front("pickup") > -0.15, `two-door quarters start at z=${front("coupe")} / ${front("pickup")}, behind the door`);
+    for (const id of ["coupe", "pickup"] as const) {
+      const doorRear = CAR_STYLES[id].door.hingeZ - CAR_STYLES[id].door.length;
+      assert.ok(front(id) >= doorRear - FLOAT32_EDGE, `${id} quarter starts at z=${front(id)}, not reaching its door's rear edge ${doorRear}`);
+    }
   });
 
   it("when the sedan's quarter panel is shelled flat and then bent, then the flat shell lies on the skin (4 mm proud, its sheet 2 cm behind) and the bent panel peels at its leading edge and holds at the tail", () => {
@@ -126,7 +136,7 @@ describe("given every car body style, whose panels are cut from each body's own 
   it("when a police car nobody has crashed is checked, then it carries no panel mesh: attached panels are body, with no draw of their own", () => {
     const car = probe("police");
     for (const p of car.allParts.filter((q) => q.region)) assert.ok(!p.open && p.object.parent === null, `${p.name} is in the scene`);
-    assert.ok(!underPanelPrimer(car), "the body is primer before any panel hinged");
+    assert.ok(primerOf(car) === restPrimer(car), "the body is paint (and the bay trough unpainted) before any panel hinged");
   });
 });
 
@@ -195,7 +205,7 @@ describe("given a car whose quarter panels and arch flares are torn off", () => 
     assert.equal(car.allParts.filter((p) => p.region && p.detached && p.object.visible).length, 2, "drawn torn shells");
     car.resetVisual();
     assert.ok(car.allParts.every((p) => !p.region || p.object.visible), "a reset brings every shell back");
-    assert.ok(!underPanelPrimer(car), "and the body is paint again");
+    assert.ok(primerOf(car) === restPrimer(car), "and the body is paint again (the bay trough still unpainted)");
   });
 
   it("when a panel is torn and posed again, then it is culled by a sphere that follows each pose", () => {

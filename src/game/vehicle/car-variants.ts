@@ -1,3 +1,4 @@
+import type { LidSwing } from "./hinge-spec.ts";
 import { COUPE } from "./car-styles/coupe.ts";
 import { HATCHBACK } from "./car-styles/hatchback.ts";
 import { MONSTER } from "./car-styles/monster.ts";
@@ -39,18 +40,26 @@ export interface GlassQuad {
   wTop: number;
 }
 
+/** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
+export interface LidDrop {
+  y: number;
+  w: number;
+  z?: number;
+}
+
 /** Ducktail kick on a boot's free edge (a deck lid's rear edge, a tailgate's top edge): it rises `rise` (m) outward at the edge, easing to the panel over `depth` (m). */
 export interface BootLip {
   rise: number;
   depth: number;
 }
 
-type BootSpec = (
-  /** Deck lid lofted on the profile from z0 to z1, hinged at origin. */
-  | { kind: "lid"; z0: number; z1: number; origin: YZ }
-  /** Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, hinged at its top edge; z0 defaults to origin's z (upright). */
+/** The panel's shape; `pivot` is where it turns (default `origin`): a hatch's or liftgate's roof hinge, a drop gate's bottom edge. `swing`: its latch, struts and limits (default by kind, `hinge-spec.ts`). */
+export type BootSpec = (
+  /** Deck lid lofted on the profile from z0 to z1, hinged at origin; with `drop` it wraps the tail, its face standing at z1. */
+  | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop }
+  /** Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). */
   | { kind: "tailgate"; y0: number; origin: YZ; z0?: number }
-) & { lip?: BootLip };
+) & { lip?: BootLip; pivot?: YZ; swing?: LidSwing };
 
 /** Raised centre bulge on the drawn hood from z `z0` (cowl end) to `z1`, `width` (m) across, its top `rise` (m) over the lid's; it ramps into the lid at both ends. */
 interface HoodBulge {
@@ -233,6 +242,11 @@ export interface BodyStyle {
    * the bumpers, grille and boot (`lamps.test.ts`).
    */
   lamps: { head: readonly [number, number]; tail: readonly [number, number] };
+  /**
+   * Seats (m, car space): the driver's H-point [x, y, z] (he sits on -x; the passenger mirrors him), and the rear bench's [y, z] on the
+   * centre line, or null with no rear row (a regular cab). The drawn seats, the seated driver and the sim's seat all read it.
+   */
+  seats: { front: readonly [number, number, number]; rear: readonly [number, number] | null };
   /** Fixed paint, or none (the fleet paint). */
   livery?: Livery;
   /** Roof light bar with red / blue sirens (`DeformableCar.setSirens`). */

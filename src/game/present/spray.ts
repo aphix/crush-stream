@@ -20,6 +20,8 @@ export class SprayBitmap {
   readonly palette: number[] = [...SPRAY_PALETTE];
   readonly rgba: Uint8Array;
   readonly texture: THREE.DataTexture;
+  /** Paint a bare texel shows (a cop's livery under its player's spray): drawn only, never in `texels` or `palette`, so never on the wire or in storage. */
+  private under: SprayPaint | null = null;
 
   /** `mipmapped`: the texture keeps a mip chain (the rivals' finer bitmaps, which a far car would otherwise alias); the garage's stays unmipped. */
   constructor(layout: SprayLayout, mipmapped = false) {
@@ -92,11 +94,7 @@ export class SprayBitmap {
   load(paint: SprayPaint | null): void {
     for (let ink = 0; ink < this.palette.length; ink++) this.palette[ink] = paint ? paint.palette[ink]! : SPRAY_PALETTE[ink]!;
     if (paint) for (let i = 0; i < this.texels.length; i++) this.set(i, paint.texels[i]!);
-    else {
-      // Bare is ink 0, palette[0] is 0: set(i, 0) would write all zeros.
-      this.texels.fill(0);
-      this.rgba.fill(0);
-    }
+    else for (let i = 0; i < this.texels.length; i++) this.set(i, 0);
     this.texture.needsUpdate = true;
   }
 
@@ -107,18 +105,28 @@ export class SprayBitmap {
     this.texture.needsUpdate = true;
   }
 
+  /** Bare texels show `paint` (a bitmap of this layout), or nothing when null; the painted ones keep their ink. */
+  underlay(paint: SprayPaint | null): void {
+    if (paint === this.under) return;
+    this.under = paint;
+    for (let i = 0; i < this.texels.length; i++) if (this.texels[i] === 0) this.set(i, 0);
+    this.texture.needsUpdate = true;
+  }
+
   dispose(): void {
     this.texture.dispose();
   }
 
-  /** Texel `i` takes ink `ink`; bare (0) is all zeros, so its premultiplied RGB stays black. */
+  /** Texel `i` takes ink `ink`; bare (0) shows the underlay's texel, else all zeros, so its premultiplied RGB stays black. */
   private set(i: number, ink: number): void {
     this.texels[i] = ink;
-    const hex = this.palette[ink]!;
+    const from: SprayPaint = ink === 0 && this.under ? this.under : this;
+    const shown = from.texels[i]!;
+    const hex = from.palette[shown]!;
     this.rgba[i * 4] = hex >> 16;
     this.rgba[i * 4 + 1] = (hex >> 8) & 0xff;
     this.rgba[i * 4 + 2] = hex & 0xff;
-    this.rgba[i * 4 + 3] = ink === 0 ? 0 : 255;
+    this.rgba[i * 4 + 3] = shown === 0 ? 0 : 255;
   }
 }
 

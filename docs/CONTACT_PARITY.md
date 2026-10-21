@@ -116,8 +116,8 @@ the struck car takes). The scene props only move their box; the car meets it thr
 - **`partContact(car, box, dt)`**: the door slab and mirror colliders (formerly `DoorRig.hitMirror`
   / `hitDoor`), for any striker running along the car (within 15°, `PARALLEL`) with its near edge
   outside the body's width (the cage's plan box, `car.cage.fields.planBox`). Folds, breaks and tears go through the hinge model in
-  `car.ts` (`setMirrorFold`, `breakMirror`, `loadDoorStop`); the free swing (`swingDoors`) now
-  runs in `afterContacts` for every car with an unlatched door. Callers: the Doors ram
+  `car.ts` (`setMirrorFold`, `breakMirror`, `loadDoorStop`); the free swing (`swingHinges`) now
+  runs in `afterContacts` for every car with an unlatched door or lid. Callers: the Doors ram
   (`DoorRig.hit`), piston heads, and car-car (`partContactPair`, once per slice per close pair
   in `engine.ts fixedStep`, `pair-contact.ts stepCarPair` and the
   test copies of `fixedStep`). A car striker is the box `carBox(car)`; what the parts take comes

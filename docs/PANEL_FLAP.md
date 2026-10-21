@@ -61,6 +61,9 @@ A door a **side hit** opens past `DOOR_AJAR` is sprung (`springDoor`): unlatched
 jam (`hingeT × 1.45`, which it can never shut past), swinging with the car. Frontal and rear hits still only jam it ajar,
 latched (C1).
 
+The trunk lid, hatch, liftgate and drop gate swing on the same hinge once a rear hit springs them, turning about car x with their
+own law (`lidAccel`: weight, struts, fore-aft acceleration; [`DOOR_RIG.md`](DOOR_RIG.md), Lids).
+
 ## The Doors scene: panels (D, E) and frame parity
 
 - **D `panelPush`** (key 6): a quarter panel stands out at hinge 0.45; the ram runs rear→front and pushes it back onto the
@@ -93,3 +96,8 @@ Netted already: `hingeT` (also a smushed panel's), door `theta` and latch, part 
 three hinge slots free; they now carry `fatigue` and `1 − hingeMax` (0 = uncapped, so old data reads as before), so a keyframe
 restores the wear and the dent cap. Not carried: the flap clock (cosmetic), the contact timing and door motion sample (re-read from the
 restored deform and velocity, `restoreWear`). No layout change: NET_VERSION 8 and REPLAY_VERSION 6 stay.
+
+Lids: the trunk slot (3) now has a swing, so its two free hinge slots carry the lid's `theta` and 0 (were `fatigue` and
+`1 − hingeMax`, always 0 for it) and part flag bit 4 its latch. Same layout, new meaning: a NET_VERSION bump (it rides the car
+rig's combined bump) and a REPLAY entry (lids swing, spring, re-latch and tear; a part resting on its stop takes no strap load; the
+lid's crash hinge runs on rear crush).

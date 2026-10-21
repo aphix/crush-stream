@@ -16,6 +16,8 @@ import { GuardSquad, People, VipEscort, nukeFlash } from "./people.ts";
 import { drawnTriangles } from "../vehicle/drawn-body.test-util.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { driverSeat } from "../vehicle/interior.ts";
+import { JOINTS } from "./ragdoll-body.ts";
 
 /** Once the Konami code is in, a man in a suit walks out of the White House to the car, rides with the player and is thrown out with the driver when it crashes. */
 const json = TRACKS.find((j) => parseTrack(j).id === TRACK_ID.nationalMall)!;
@@ -63,6 +65,24 @@ describe("given the National Mall's VIP and the player's car parked on the White
     assert.equal(throws[0]!.look.pants, VIP_LOOK.pants, "his navy trousers");
     assert.equal(throws[0]!.look.portly, true, "portly");
     assert.equal(vip.ridingIn, -1, "no longer riding");
+  });
+
+  it("when he rides, then his hips are on the passenger seat from the style's seats (the driver's H-point mirrored across the car), and they ride a crushed cabin", () => {
+    const { vip, car, cars, throwPassenger, throwFigure, boardedAt } = escort(true, 40);
+    assert.ok(boardedAt > 0, "control: he boarded");
+    const mesh: DummyMesh = vip["people"]["mesh"];
+    const joint = (j: number) => new THREE.Vector3(JOINTS[j]![2], JOINTS[j]![3], JOINTS[j]![4]);
+    const hips = () => mesh.partPoint(0, 6, joint(5), new THREE.Vector3()).add(mesh.partPoint(0, 8, joint(7), new THREE.Vector3())).multiplyScalar(0.5);
+    const seat = () => {
+      const h = driverSeat(car.style).hip;
+      car.interior.updateWorldMatrix(true, false);
+      return new THREE.Vector3(-h.x, h.y, h.z).applyMatrix4(car.interior.matrixWorld);
+    };
+    assert.ok(hips().distanceTo(seat()) < 1e-3, `hips ${hips().distanceTo(seat()).toFixed(3)} m off the passenger H-point`);
+    car.interior.scale.x = 0.8;
+    car.interior.position.set(0.05, -0.03, 0.02);
+    vip.frame(FRAME, true, 0, cars, throwPassenger, throwFigure);
+    assert.ok(hips().distanceTo(seat()) < 1e-3, `crushed cabin: hips ${hips().distanceTo(seat()).toFixed(3)} m off the passenger H-point`);
   });
 
   it("when the secret is still in, then he never comes out, though the same car would draw him once it is", () => {
