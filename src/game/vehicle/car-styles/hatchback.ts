@@ -4,7 +4,7 @@ import { BOOT_SENSOR, st } from "./platform.ts";
 /** Compact five-door: boxy face, near-vertical hatch under a roof spoiler. */
 export const HATCHBACK: BodyStyle = {
   id: "hatchback",
-  dims: { wheelbase: 2.225, overhang: { front: 0.7, rear: 0.64 }, track: 1.37, width: 1.62, height: 1.306, rideHeight: 0.15, wheel: { radius: 0.25, width: 0.17 } },
+  dims: { wheelbase: 2.225, overhang: { front: 0.7, rear: 0.64 }, track: 1.37, width: 1.61, height: 1.306, rideHeight: 0.15, wheel: { radius: 0.25, width: 0.17 } },
   windshield: { base: [0.9, 0.8], wBase: 1.1, wTop: 0.92 },
   bPillar: { rear: -0.29, front: -0.21 },
   belt: { x: 0.75, y: [[0, 0.88]] },

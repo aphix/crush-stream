@@ -4,7 +4,7 @@ import { BOOT_SENSOR, st } from "./platform.ts";
 /** Luxury SUV (the `wagon` id): tall clamshell nose, flat floating roof, raked tailgate glass under a roof spoiler. */
 export const WAGON: BodyStyle = {
   id: "wagon",
-  dims: { wheelbase: 2.45, overhang: { front: 0.835, rear: 0.915 }, track: 1.4, width: 1.68, height: 1.588, rideHeight: 0.23, wheel: { radius: 0.32, width: 0.23 } },
+  dims: { wheelbase: 2.45, overhang: { front: 0.835, rear: 0.915 }, track: 1.4, width: 1.66, height: 1.588, rideHeight: 0.23, wheel: { radius: 0.32, width: 0.23 } },
   windshield: { base: [1.1, 0.86], wBase: 1.3, wTop: 1.12 },
   bPillar: { rear: -0.34, front: -0.26 },
   belt: { x: 0.785, y: [[-1.8, 1.11], [0.7, 1.08]] },
