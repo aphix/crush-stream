@@ -41,8 +41,13 @@ export const SEGS: Int16Array = (() => {
   }
   return pairs.slice(0, m);
 })();
-/** Contacts a body can hold in one slice: its tyres and points, and a belly segment's edge each. */
-export const CONTACTS = POINT_CAPACITY + SEGS.length / 2;
+/** A tyre's points that meet side faces (`readTyreSides`), as (across, along, down) shares of its half-width, radius and radius: its four corners in plan at hub height, and its tread front and back 45° below the hub, both sides. */
+export const TYRE_POINTS = [
+  [-1, -1, 0], [-1, 1, 0], [1, -1, 0], [1, 1, 0],
+  [-1, -Math.SQRT1_2, Math.SQRT1_2], [-1, Math.SQRT1_2, Math.SQRT1_2], [1, -Math.SQRT1_2, Math.SQRT1_2], [1, Math.SQRT1_2, Math.SQRT1_2],
+] as const;
+/** Contacts a body can hold in one slice: its four tyres' spring rows and every tyre point's side row, its points, and a belly segment's edge each. */
+export const CONTACTS = 4 * (1 + TYRE_POINTS.length) + POINT_CAPACITY + SEGS.length / 2;
 /** A wheel this close (m) to the ground counts as down. */
 export const TOUCH = 0.03;
 /** Restitution of a body point closing faster than `BOUNCE_V` (m/s); slower contacts and tyres (their springs,

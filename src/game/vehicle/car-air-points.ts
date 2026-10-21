@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import type { LooseShape } from "./car-core.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, patchOf, pointContact, pointContactHeld, pointContactNear, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, topsTop, topsTopLive, topsTopNear, wheelContact, type Surface } from "../world/surfaces.ts";
+import { BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, MU_TYRE, patchOf, pointContact, pointContactHeld, pointContactNear, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, STEP_MAX, staticTop, topsTop, topsTopLive, topsTopNear, wheelContact, type Surface } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { G, GQ } from "../world/ground-clock.ts";
 import { CRASH, hypot2 } from "../deform/physics-util.ts";
@@ -12,7 +12,7 @@ import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift } from "./car-cage-rig.ts";
-import { POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, body, carrier, pointVel } from "./car-air-body.ts";
+import { POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_POINTS, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
 export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
@@ -46,8 +46,8 @@ export function bodyContact(n: number, hit: Float64Array, hull: boolean): void {
   FOLLOW[n] = own >= 0 ? hit[C_AUX]! : 1;
   SLOT[n] = part ? -1 : surf.slot(own, N[n]!, true, q, FOLLOW[n]!);
   SOFT[n] = false;
-  // A floor's depth is a vertical gap (`pen`), its normal depth that times the normal's y; a side face's `pen` (a part's) is its normal depth already.
-  SINK[n] = part && hit[C_H] === NO_FLOOR ? pen : pen * N[n]!.y;
+  // A floor's depth is a vertical gap (`pen`), its normal depth that times the normal's y; a side face's `pen` (a part's, a tyre's) is its normal depth already.
+  SINK[n] = hit[C_H] === NO_FLOOR ? pen : pen * N[n]!.y;
   carrier(surf, n, own, mass);
   CLOSING[n] = Math.max(0, -pointVel(n, v, w, _vp).dot(N[n]!));
   // A torn panel's row is solved to part at `RESTITUTION` of its closing on every pass: a bounce given on the first pass alone, the later passes took back.
@@ -376,6 +376,11 @@ export function beginContacts(car: DeformableCar): CarSurfaces {
 export const _e = new Float64Array(9);
 const _hub = new Float64Array(3);
 const _hit = new Float64Array(HIT_SIZE);
+/** Each wheel's hub (world x, y, z) and tyre (radius, half-width; radius 0: no tyre, its hub popped) as `wheelsAt` last stood them. */
+const TYRE_HUB = new Float64Array(12);
+const TYRE_DIM = new Float64Array(8);
+/** A tyre point's query: the tyre's law (a face within its mount of the point is floor, so it climbs it; a taller one is side). */
+const TYRE_PQ = new Float64Array(PQ_SIZE);
 
 /** The body's x, y and z axes in world (9 numbers) from `q` into `_e`. */
 function basisOf(q: THREE.Quaternion): void {
@@ -417,6 +422,7 @@ export function wheelsAt(car: DeformableCar, within: number): number {
     const o = i * HIT_SIZE;
     if (wreck && car.deform.hubPopped(HUBS[i]!)) {
       hit[o + C_H] = NO_FLOOR;
+      TYRE_DIM[2 * i] = 0;
       continue;
     }
     const sc = car.wheels[i]!.scale.x;
@@ -430,10 +436,60 @@ export function wheelsAt(car: DeformableCar, within: number): number {
     _hub[2] = p.z + _e[2]! * hx + _e[5]! * r + _e[8]! * hz;
     // The footprint's tread rings are the platform tyre's: scaled to this car's radius, so its tread reaches the ground its hub stands over.
     wheelContact(_hub, _e, sc * (car.frame.rig.tyre.r / PLATFORM_TYRE.r), car.slot, _hit);
+    TYRE_HUB.set(_hub, i * 3);
+    TYRE_DIM[2 * i] = r;
+    TYRE_DIM[2 * i + 1] = car.frame.rig.tyre.halfW * sc;
     for (let k = 0; k < HIT_SIZE; k++) hit[o + k] = _hit[k]!;
     if (-_hit[C_TOUCH]! <= within && _hit[C_H]! > NO_FLOOR) mask |= 1 << i;
   }
   return mask;
+}
+
+/**
+ * Rows for the bound body's tyres against side faces (a wall, a slab, a prism's flank) as `wheelsAt` last stood them (its hubs, on its axes `_e`), from row `n` on;
+ * returns the row past the last. A tyre point standing inside a face it cannot mount is pushed out along the face, as a body point is: a
+ * lifted car's tyres meet a slab its body clears, and a tyre never runs through a solid. Only where something taller than the tyre's
+ * mount stands within its plan reach (the floor rows already hold it on everything lower).
+ */
+export function readTyreSides(n: number): number {
+  const { v, w, dt, skip } = body;
+  const statics = activeGround();
+  const travel = v.length() * dt;
+  for (let i = 0; i < 4; i++) {
+    const r = TYRE_DIM[2 * i]!;
+    if (r === 0) continue;
+    const half = TYRE_DIM[2 * i + 1]!;
+    const hx = TYRE_HUB[3 * i]!;
+    const hy = TYRE_HUB[3 * i + 1]!;
+    const hz = TYRE_HUB[3 * i + 2]!;
+    const reach = r + half + travel;
+    const top = Math.max(solidTop(hx - reach, hx + reach, hz - reach, hz + reach), staticTop(statics, hx - reach, hx + reach, hz - reach, hz + reach));
+    if (top <= hy - r + STEP_MAX) continue;
+    for (const [across, along, down] of TYRE_POINTS) {
+      const a = across * half;
+      const f = along * r;
+      const d = -down * r;
+      TYRE_PQ[PQ_X] = hx + _e[0]! * a + _e[3]! * d + _e[6]! * f;
+      TYRE_PQ[PQ_Y] = hy + _e[1]! * a + _e[4]! * d + _e[7]! * f;
+      TYRE_PQ[PQ_Z] = hz + _e[2]! * a + _e[5]! * d + _e[8]! * f;
+      const rx = TYRE_PQ[PQ_X]! - centreOfMass.x;
+      const ry = TYRE_PQ[PQ_Y]! - centreOfMass.y;
+      const rz = TYRE_PQ[PQ_Z]! - centreOfMass.z;
+      // The point's own velocity: the face it came in through is the one it meets.
+      TYRE_PQ[PQ_VX] = v.x + w.y * rz - w.z * ry;
+      TYRE_PQ[PQ_VY] = v.y + w.z * rx - w.x * rz;
+      TYRE_PQ[PQ_VZ] = v.z + w.x * ry - w.y * rx;
+      pointContact(TYRE_PQ, skip, HIT, NaN, SPECULATIVE_GAP);
+      if (HIT[C_H] !== NO_FLOOR || !(HIT[C_DEPTH]! > 0)) continue;
+      R[n]!.set(rx, ry, rz);
+      _s[S_PEN] = HIT[C_DEPTH]!;
+      bodyContact(n, HIT, true);
+      TYRE[n] = true;
+      MU[n] = MU_TYRE;
+      n++;
+    }
+  }
+  return n;
 }
 
 /** How many of the wheels in `mask` stand on the world rather than on another car's top. */

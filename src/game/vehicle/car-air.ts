@@ -9,7 +9,7 @@ import { droop, SPRINGS } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
-import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop } from "./car-air-points.ts";
+import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop, readTyreSides } from "./car-air-points.ts";
 
 /** Crossings `wreckTop` let a wreck skip since `takeCrossingsSkipped` last read (a field of a const: the bench's work counter reads and zeroes it once a slice). */
 const prune = { skipped: 0 };
@@ -684,6 +684,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     n++;
   }
   const tyres = n;
+  n = readTyreSides(n);
   // A point that stays higher than the static surface anywhere within its slice's plan travel, by its descent over the slice and a
   // speculative gap, neither meets nor nears it: no reading. Near a car top each body point is held to the solids and that top too.
   const statics = activeGround();
