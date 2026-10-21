@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { strike, strikeSink } from "./solid-parity.test-util.ts";
 import { BARRIER_HALF, BARRIER_TOP } from "../contact/sat.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
+import { HUBS } from "../vehicle/car-air-body.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { SPRINGS } from "../vehicle/car-suspension.ts";
 import { STEP_MAX } from "./surfaces.ts";
@@ -27,11 +28,13 @@ const _hub = new THREE.Vector3();
 /**
  * How deep (m) the deepest of `car`'s tyres stands inside the held slab (x in ±`BARRIER_HALF.x`, up to `BARRIER_TOP`, the car coming from
  * +x): each tyre's disc in the x-y plane against the slab's section, by the least of its depth past the struck face, past the far face
- * and below the top (its chord across the top where the hub is over it). Negative: no tyre is in it.
+ * and below the top (its chord across the top where the hub is over it). A wheel torn off is a loose part, no tyre of the car's. Negative:
+ * no tyre is in it.
  */
 function tyreIn(car: DeformableCar): number {
   let deepest = -Infinity;
-  for (const wheel of car.wheels) {
+  for (const [i, wheel] of car.wheels.entries()) {
+    if (car.deform.hubPopped(HUBS[i]!)) continue;
     wheel.getWorldPosition(_hub);
     const r = car.frame.rig.tyre.r * wheel.scale.x;
     const over = _hub.y - BARRIER_TOP;

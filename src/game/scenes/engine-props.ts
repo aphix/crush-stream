@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { cageLift, keelY } from "../vehicle/car-cage-rig.ts";
+import { keelY } from "../vehicle/car-cage-rig.ts";
 import { applyGroundFriction, leftoverCrumple } from "../deform/physics-util.ts";
 import { C_PY, HIT_SIZE } from "../world/surfaces.ts";
 import { BARRIER_HALF, BARRIER_MASS, BARRIER_TOP, clipCarToBarrier } from "../contact/sat.ts";
@@ -181,9 +181,8 @@ export class JerseyBarrier {
    * The slab meets a car until the car is over it: a driven car clears while a wheel that is down stands higher than the slab's top
    * (up a fleet ramp beside the slab's end, on its top: that wheel's contact point, `wheelHit`) or while the slab's top, where it is
    * under the car's plan, is under the car's underside (a car straddling a ramp's edge crosses the slab's end with its high side, its
-   * low wheels still on the floor beside it); a body with no wheel contact to read clears by its origin's height, less its class's lift
-   * (a monster's body rides 0.87 m over its origin: a monster wreck at rest on its tyres was met by the slab its keel stood 0.4 m over,
-   * and stopped from 55 m/s in one slice). A car on the ground never clears.
+   * low wheels still on the floor beside it); a body with no wheel contact to read clears by its origin's height. A car on the ground
+   * never clears.
    */
   private over(car: DeformableCar): boolean {
     if (car.airborne || car.deform.massActive) return car.group.position.y > FLIGHT_CLEAR;
