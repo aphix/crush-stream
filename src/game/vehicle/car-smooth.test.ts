@@ -413,7 +413,7 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; bo
   const body = makeChassisGeometry(style);
   return {
     lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,
-    humps: wellHumpGeometry(style)?.getAttribute("position").count ?? 0,
+    humps: wellHumpGeometry(style, "drawn")?.getAttribute("position").count ?? 0,
     bootRings: (sliceZs(style, "drawn").length - sliceZs(style, "drawn", false).length) * loftOf(body).ring,
   };
 }

@@ -26,6 +26,8 @@ import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, LIGHT_BAR, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { bootPivot, lidSpec, roofHinged } from "./hinge-spec.ts";
+import { SPRINGS } from "./car-suspension.ts";
+import { CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
 
 const PAINT = { body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" };
 const scene = new THREE.Scene();
@@ -1206,6 +1208,18 @@ function linerInnerEdge(style: BodyStyle, wx: number, wz: number): number {
 /** A style without its arch lip. */
 const lipless = (style: BodyStyle): BodyStyle => ({ ...style, arch: { radius: style.arch.radius } });
 
+/** A bed's side wall stands this far (m) in from the body side (`halfRing`'s floor edge). */
+const BED_WALL_INSET = 0.06;
+
+/** The wheels of `style` whose liner stands up through one of its tubs' floors, each with that floor's height. */
+function wheelsInFloors(style: BodyStyle): [number, number, number, number][] {
+  const r = style.arch.radius;
+  return carFrame(style).wheels.flatMap(([wx, wy, wz]): [number, number, number, number][] => {
+    const tub = style.tubs.find(([z0, z1, f]) => wy + r > Math.max(f, floorY(wz, style)) && wz > z0 && wz < z1);
+    return tub ? [[wx, wy, wz, Math.max(tub[2], floorY(wz, style))]] : [];
+  });
+}
+
 describe("given a body style's boot opening, its open floors and its arch lips (drawn only)", () => {
   const cases: readonly [string, BodyStyle][] = [...CAR_STYLE_IDS.map((id): [string, BodyStyle] => [id, CAR_STYLES[id]]), ...WRAPPED.map(([id, s]): [string, BodyStyle] => [`${id} (wrapped lid)`, s])];
   for (const [id, style] of cases) {
@@ -1232,15 +1246,66 @@ describe("given a body style's boot opening, its open floors and its arch lips (
   for (const id of CAR_STYLE_IDS) {
     const style = CAR_STYLES[id];
     const r = style.arch.radius;
-    const raised = carFrame(style).wheels.filter(([, wy, wz]) => style.tubs.some(([z0, z1, f]) => wy + r > Math.max(f, floorY(wz, style)) && wz > z0 && wz < z1));
+    const raised = wheelsInFloors(style);
     if (raised.length === 0) continue;
     it(`when a ${id}'s open floor is looked down onto over its wheels, then a hump closes each liner there: its top over the liner's inner edge stands at the liner's top or above`, () => {
       const body = new THREE.Mesh(makeChassisGeometry(style), SIDED);
       for (const [wx, wy, wz] of raised) {
         const x = Math.sign(wx) * (linerInnerEdge(style, wx, wz) - 0.01);
-        const top = bodyHit(body, [x, wy + r + 0.1, wz], [0, -1, 0], r + 0.5)?.y ?? -Infinity;
+        const from = wy + r + 0.1 + (style.wheelTub?.rise ?? 0);
+        const top = bodyHit(body, [x, from, wz], [0, -1, 0], from - wy)?.y ?? -Infinity;
         assert.ok(top >= wy + r, `${id} wheel at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: the top over the liner's edge at ${top.toFixed(3)} m, the liner's top at ${(wy + r).toFixed(3)} m`);
       }
+    });
+  }
+
+  for (const id of CAR_STYLE_IDS) {
+    const style = CAR_STYLES[id];
+    const tub = style.wheelTub;
+    if (!tub) continue;
+    it(`when a ${id}'s bed is looked down onto over its wheels, then a tub stands at each side, ${tub.rise} m over the floor, ${tub.length} m long and ${tub.width} m in from the wall, in the drawn and the cage build`, () => {
+      const off: string[] = [];
+      for (const source of ["drawn", "cage"] as const) {
+        const body = new THREE.Mesh(makeChassisGeometry(style, source), SIDED);
+        const down = (x: number, z: number): number => bodyHit(body, [x, 3, z], [0, -1, 0], 3)?.y ?? -Infinity;
+        for (const [wx, , wz, floor] of wheelsInFloors(style)) {
+          const s = Math.sign(wx);
+          const mid = s * (sampleSlice(wz, style.profile).hw - BED_WALL_INSET - tub.width / 2);
+          const end = tub.length / 2 + 0.02;
+          const readings: [string, number, number][] = [
+            ["top", down(mid, wz), floor + tub.rise],
+            ["inboard", down(mid - s * (tub.width / 2 + 0.02), wz), floor],
+            ["ahead", down(mid, wz + end), floor],
+            ["behind", down(mid, wz - end), floor],
+          ];
+          for (const [what, y, want] of readings) if (Math.abs(y - want) > 0.005) off.push(`${source} x ${wx.toFixed(2)} ${what} ${y.toFixed(3)} (${want.toFixed(3)})`);
+        }
+      }
+      assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
+    });
+
+    it(`when a ${id}'s tyres are risen to their spring's stop, then none stands through the bed floor between the bed's walls`, () => {
+      const body = new THREE.Mesh(makeChassisGeometry(style), SIDED);
+      const cls = STYLE_CLASS[id];
+      const { lift, wheelScale } = CLASSES[cls];
+      const radius = style.dims.wheel.radius * wheelScale;
+      const halfWidth = (style.dims.wheel.width * wheelScale) / 2;
+      const bump = SPRINGS[cls].travel / 2;
+      let worst = Infinity;
+      let at = "none under the bed";
+      for (const [wx, wy, wz] of wheelsInFloors(style)) {
+        const hubY = wy + style.dims.wheel.radius * (wheelScale - 1) - lift + bump;
+        const wall = sampleSlice(wz, style.profile).hw - BED_WALL_INSET;
+        for (let x = Math.abs(wx) - halfWidth; x <= Math.min(Math.abs(wx) + halfWidth, wall); x += 0.02) {
+          for (let dz = -radius; dz <= radius; dz += 0.02) {
+            const skin = bodyHit(body, [Math.sign(wx) * x, 3, wz + dz], [0, -1, 0], 3)?.y;
+            if (skin === undefined) continue;
+            const gap = skin - (hubY + Math.sqrt(radius * radius - dz * dz));
+            if (gap < worst) [worst, at] = [gap, `x ${x.toFixed(2)} z ${(wz + dz).toFixed(2)}`];
+          }
+        }
+      }
+      assert.ok(worst >= 0, `${id}: a tyre stands ${(-worst).toFixed(3)} m through the bed at ${at}`);
     });
   }
 

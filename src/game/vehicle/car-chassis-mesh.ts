@@ -125,11 +125,12 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
   const rb = style.rearBulkhead;
   parts.push(makeBox(1.16, rb.yTop - 0.34, 0.045, 0, (rb.yTop + 0.34) * 0.5, rb.z));
-  // The drawn wells' lips and humps (the cage carries neither), before the fittings; each lip's triangles are kept for its arch's panel.
+  // The wells' lips (drawn only) and humps (the cage's: a bed's wheel tubs), after every other cage part so each keeps its vertex ids;
+  // each lip's triangles are kept for its arch's panel.
   const lips = source === "drawn" ? archLipGeometry(style, body) : null;
   const lipIndex = parts.reduce((n, g) => n + g.getIndex()!.count, 0);
   if (lips) parts.push(lips);
-  const humps = source === "drawn" ? wellHumpGeometry(style) : null;
+  const humps = wellHumpGeometry(style, source);
   if (humps) parts.push(humps);
   // The wheel liners, merged after the loft and roof: unpainted like the bay they rise into.
   const linerFrom = body.getAttribute("position").count + parts[1]!.getAttribute("position").count;
