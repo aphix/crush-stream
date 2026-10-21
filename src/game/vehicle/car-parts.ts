@@ -7,6 +7,7 @@ import { BUMPER_SEAT } from "./car-mesh.ts";
 import { DOOR } from "./car-door-mesh.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose } from "./part-pose.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
+import type { StirCar } from "../world/surfaces.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { MASS_SPECS, type MassName } from "../kernel/rig-spec.ts";
 import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox } from "./car-panels.ts";
@@ -865,19 +866,21 @@ export abstract class CarParts extends CarGlass {
 
   /**
    * This car's torn parts and popped wheels (`stepLoose`): rigid bodies that land on the ground, the prisms and the other cars' tops, never this car's (`slot`).
-   * `met` hears them meet another car's top (`CarSurfaces.partMet`). `wheels` false: the parts only (a netplay client's wheels ride the host's poses on the
-   * wire; its parts are its own, debris is per player).
+   * `roofs` (the world's `CarSurfaces`): its `partMet` hears them meet another car's top, and a sleeper wakes only for a top whose car moves (`cars`).
+   * `wheels` false: the parts only (a netplay client's wheels ride the host's poses on the wire; its parts are its own, debris is per player).
    */
-  protected stepLooseParts(dt: number, slot: number, met: TopMet | undefined, wheels = true): void {
+  protected stepLooseParts(dt: number, slot: number, roofs: { readonly partMet: TopMet | undefined; readonly cars: readonly StirCar[] } | null, wheels = true): void {
+    const met = roofs?.partMet;
+    const cars = roofs?.cars ?? null;
     for (let k = 0; k < this.parts.length; k++) {
       const p = this.parts[k]!;
       // A torn shell past `LIVE_SHELLS` is hidden for good (until the reset): nothing to see, nothing to move.
       if (!p.detached || !p.object.visible) continue;
-      if (stepLoose(p, dt, slot, p.dent, met, partMass(p))) this.noteStirred(k);
+      if (stepLoose(p, dt, slot, p.dent, met, partMass(p), cars)) this.noteStirred(k);
       applyDents(p.dent, p.object);
     }
     if (!wheels) return;
-    for (let k = 0; k < this.looseWheels.length; k++) if (this.looseWheels[k]!.loose && stepLoose(this.looseWheels[k]!, dt, slot, undefined, met)) this.noteStirred(PART_SLOTS + k);
+    for (let k = 0; k < this.looseWheels.length; k++) if (this.looseWheels[k]!.loose && stepLoose(this.looseWheels[k]!, dt, slot, undefined, met, 0, cars)) this.noteStirred(PART_SLOTS + k);
   }
 
   private noteStirred(body: number): void {

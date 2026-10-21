@@ -174,6 +174,53 @@ describe("given a front bumper torn off a parked car and dropped 0.5 m onto the 
   });
 });
 
+/** Car B pushed into the bumper lying beside it at this speed (m/s), toward A. */
+const PUSH_INTO = 2;
+/** Shoved by B at `PUSH_INTO` for a second, the bumper moves at least this far (m): B's flank carries it (0.53 m). */
+const SHOVED = 0.3;
+
+/** The parked cars settled with the bumper away (`SETTLE_X`), then the bumper woken, let down beside B's flank at `SLIDE_X` and left 2 s: it falls asleep within B's roof's reach. */
+function besideB(): Lot {
+  const l = lot(true);
+  throwPart(l, SETTLE_X, 0.3, 0, new THREE.Vector3(), 1);
+  l.part.shape.asleep = false;
+  throwPart(l, SLIDE_X, 0.3, 0, new THREE.Vector3(), 2);
+  return l;
+}
+
+/** Of `steps` world steps (`H`), how many had a slice step the bumper because something stirred it (`stirredBodies`). */
+function stirredSteps(l: Lot, steps: number): number {
+  const k = l.cars[0]!["parts"].indexOf(l.part);
+  let n = 0;
+  for (let s = 0; s < steps; s++) {
+    stepWorld(l.w, H);
+    if (l.cars[0]!.stirredBodies[k] !== 0) n++;
+  }
+  return n;
+}
+
+describe("given a front bumper torn off a parked car, asleep on the road a hand's width off the flank of a second car parked beside it (within its roof's reach)", () => {
+  it("when the second car stays parked, then for 2 s no slice steps the bumper (a still roof is no stir) and its pose stays as it was", () => {
+    const l = besideB();
+    assert.ok(l.part.shape.asleep, "it fell asleep beside B");
+    const at = l.part.object.position.clone();
+    const turn = l.part.object.quaternion.clone();
+    const n = stirredSteps(l, 2 * QUIET_HZ);
+    assert.ok(n === 0, `stirred in ${n} of ${2 * QUIET_HZ} steps`);
+    assert.ok(l.part.object.position.equals(at) && l.part.object.quaternion.equals(turn), `pose moved ${l.part.object.position.distanceTo(at)} m`);
+  });
+
+  it(`when the second car is pushed into it at ${PUSH_INTO} m/s, then the bumper wakes in the push's first step and is shoved at least ${SHOVED} m in a second`, () => {
+    const l = besideB();
+    const at = l.part.object.position.clone();
+    l.cars[1]!.velocity.set(-PUSH_INTO, 0, 0);
+    assert.equal(stirredSteps(l, 1), 1, "stirred in the push's first step");
+    stirredSteps(l, QUIET_HZ - 1);
+    const moved = l.part.object.position.distanceTo(at);
+    assert.ok(moved >= SHOVED, `shoved ${moved.toFixed(3)} m`);
+  });
+});
+
 /** A hood (the torn panel's own box: wide, long and thin) let go this high (m) over the road, tumbling. */
 const HOOD_DROP = 1;
 /** Within this long (s) it has settled. */

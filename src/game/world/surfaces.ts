@@ -1702,7 +1702,7 @@ function checkPoint(kind: number, q: Float64Array, out: Float64Array, far: boole
 }
 
 /** What `stirNear` asks of a car: whether it moves (speed or spin at or above rest). */
-type StirCar = { readonly moving: boolean };
+export type StirCar = { readonly moving: boolean };
 
 /**
  * Whether anything that moves or changes has its box over the square of half side `r` about plan (`x`, `z`): a static's or a solid's patch rewritten

@@ -206,11 +206,11 @@ crash it recorded. What it takes, each found by the replay straying from the liv
   and car, a clip lists those of its steps and cars (`HighlightClip.stirs`: step u32, car u8, slice u8, after the knocks) and the replay
   wakes the wreck at that slice (`World.stirs`). `engine-record-stir.test.ts` replays a clip whose wreck a car the clip leaves out drove past: exact with the stirs, 2.5e-5 m off without.
 - **Torn parts and popped wheels stirred by cars the clip leaves out** (84). The same wake for loose bodies: a torn part or a popped wheel at rest sleeps (`stepLoose`) and steps again
-  while any car's roof but its own car's is within its reach (`stirNear`), settling a little each slice and sleeping again. The replay has no roof for a car the clip leaves out, so the body
+  while the roof of a car that moves (any but its own car's) is within its reach (`stirNear`, as a sleeping wreck wakes), settling a little each slice and sleeping again. The replay has no roof for a car the clip leaves out, so the body
   lay still where the live one settled (3.9e-8 m the first slice in `engine-record-part-stir.test.ts`). `stepLoose` says it woke by a stir, `CarParts.stirredBodies` keeps the slices of the step each loose body
   was woken in (`stepWorld` sets the slice's bit), `CrashRecorder.endStep` joins consecutive slices into runs (a car parked by a part is one run, not a slice each) and a clip lists those of its cars
   (`HighlightClip.partStirs`: step u32, car u8, body u8 (the car's parts by slot, then its wheels), slice u8, slices u16 = 9 bytes a run, after the stirs); the replay wakes the body at each slice of the run
-  (`World.partStirs`). A stir by one of the clip's own cars is listed too (the replay makes it anyway): in that test the pair's own wrecks make 21 runs (189 bytes raw) and the passer 2 more (18 bytes, 130 slices).
+  (`World.partStirs`). A stir by one of the clip's own cars is listed too (the replay makes it anyway): in that test the pair's own wrecks, once at rest, make none and the passer 1 (9 bytes, 50 slices).
   Exact with the runs, off from the passer's approach without them.
 - **Figures run down by the clip's cars** (87). A guard a car runs down on the National Mall's lawn is a thrown ragdoll (`FigureStrike`, `scenes/figure-strike.ts`: the guard's index, -1 for the VIP, the striking car, where he stood and faced, and his launch velocity and spin, all float32-exact).
   `CrashRecorder.strike` keeps each with its step (a copy, the last `MAX_STRUCK` (64)); it is no moment, so a strike never makes a clip or scores one. A clip lists those of its steps by cars it carries, in step order, the car as the clip's own index

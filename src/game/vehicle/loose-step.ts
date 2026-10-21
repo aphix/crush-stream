@@ -4,7 +4,7 @@ import { TYRE_R } from "../deform/deform-state.ts";
 import { GRAVITY } from "../kernel/constants.ts";
 import { detAsin, detCos, detSin } from "../kernel/physics-core.js";
 import { NO_FLOOR } from "../world/ground.ts";
-import { C_DEPTH, C_GRIP, C_H, C_NX, C_NZ, clearOf, HIT_SIZE, holdTops, pointContact, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, stirNear } from "../world/surfaces.ts";
+import { C_DEPTH, C_GRIP, C_H, C_NX, C_NZ, clearOf, HIT_SIZE, holdTops, pointContact, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, stirNear, type StirCar } from "../world/surfaces.ts";
 import { body, centreOfMass, moveBody, placeBody, standAtCentre, bindBody, type TopMet } from "./car-air-body.ts";
 import { loadShape, readPoints } from "./car-air-points.ts";
 import { openRows, solveRows } from "./car-air.ts";
@@ -248,10 +248,10 @@ function blow(p: LooseBody, mass: number, dt: number): void {
  * prism, the other cars' tops, car `skip`'s left out), as every body's points do, so a part topples, rolls, slides off an edge and stops
  * at a wall. Here: its sleep, the gate that asks no point when nothing is near, its spin dying in the air, and its dent. A torn panel of `mass`
  * kg flies in the wind (`blow`) and meets surfaces as the body's metal (`body.panel`); 0, a popped wheel: no wind, its rims a locked tyre's
- * contact. True when a sleeper at rest woke because something came near it (`stirNear`): a body woken by speed given it is not a stir. `met`
+ * contact. True when a sleeper at rest woke because something came near it (`stirNear`; with `cars`, the world's, only a top whose car moves): a body woken by speed given it is not a stir. `met`
  * hears each of its points on another car's top.
  */
-export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentState, met?: TopMet, mass = 0): boolean {
+export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentState, met?: TopMet, mass = 0, cars: readonly StirCar[] | null = null): boolean {
   const shape = p.shape;
   const object = p.object;
   const v = p.velocity;
@@ -261,7 +261,7 @@ export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentSta
   if (shape.asleep) {
     // At rest and nothing near that moves or changes: the step would hand it back where it is. A hit gave it speed or something came within its reach: it steps.
     const still = v.x * v.x + v.y * v.y + v.z * v.z + w.x * w.x + w.y * w.y + w.z * w.z === 0;
-    if (still && !stirNear(shape.sleepX, shape.sleepZ, shape.reach, skip)) return false;
+    if (still && !stirNear(shape.sleepX, shape.sleepZ, shape.reach, skip, cars)) return false;
     shape.asleep = false;
     stirred = still;
   }
