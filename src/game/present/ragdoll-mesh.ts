@@ -5,7 +5,7 @@ import { applySpray, BARE_SPRAY, sprayUniforms, type SprayBitmap } from "./spray
 import { PERSON_SPRAY } from "../match/look-data.ts";
 import { BONES_ATTRIBUTE, BUILD, FLAGS_AT, isDrawn, KINDS_ATTRIBUTE, ORBS_AT, PALETTE_AT, ROW_TEXELS, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, skinPoint } from "./dummy-rig.ts";
 import { dressRow } from "./dummy-dress.ts";
-import { BUST_ATTRIBUTE, BustSprings, bustWeights } from "./dummy-jiggle.ts";
+import { BUST_ATTRIBUTE, BustSprings } from "./dummy-jiggle.ts";
 import { applyDolls } from "./dummy-shader.ts";
 import { dummyGeometry } from "./dummy-skin.ts";
 
@@ -40,7 +40,6 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     super(dummyGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0 }), slots);
     this.rows = new Float32Array(slots * ROW_TEXELS * 4);
     this.bust = new BustSprings(slots);
-    this.geometry.setAttribute(BUST_ATTRIBUTE, new THREE.Float32BufferAttribute(bustWeights(this.geometry.getAttribute(SHAPE_WOMAN_ATTRIBUTE), this.geometry.getAttribute(KINDS_ATTRIBUTE)), 2));
     this.dolls = new THREE.DataTexture(this.rows, ROW_TEXELS, slots, THREE.RGBAFormat, THREE.FloatType);
     this.sprayRgba = sprayed ? new Uint8Array(PERSON_SPRAY.w * PERSON_SPRAY.h * 4 * slots) : null;
     this.sprayAtlas = this.sprayRgba ? sprayAtlas(this.sprayRgba, slots) : BARE_SPRAY;

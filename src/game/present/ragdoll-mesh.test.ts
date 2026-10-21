@@ -7,6 +7,7 @@ import { JOINTS, PARTS } from "./ragdoll-body.ts";
 import { BODY_VERTICES, bodyIndex } from "./dummy-bodies.ts";
 import { restFits } from "./dummy-fit.ts";
 import { BONES_ATTRIBUTE, BUILD, FLAGS_AT, isDrawn, KINDS_ATTRIBUTE, ROLE, ROLES, skinPoint, WHISKERS } from "./dummy-rig.ts";
+import { BUST_ATTRIBUTE } from "./dummy-jiggle.ts";
 import { COP_LOOK, ELDER_LOOK, GUARD_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 
 /**
@@ -772,5 +773,14 @@ describe("given the wear lofted over the bodies", () => {
     }
     assert.ok(wear > 1000, `${wear} wear triangles`);
     assert.equal(mixed, "", `a wear triangle mixes roles: ${mixed}`);
+  });
+});
+
+describe("given two dummy meshes", () => {
+  it("when both are built, then they draw one geometry and it carries the bust weights", () => {
+    const first = new DummyMesh(1);
+    const second = new DummyMesh(2);
+    assert.equal(first.geometry, second.geometry, "one shared geometry");
+    assert.ok(first.geometry.getAttribute(BUST_ATTRIBUTE), "bust weights");
   });
 });

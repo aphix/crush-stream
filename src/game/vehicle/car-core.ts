@@ -379,7 +379,6 @@ export abstract class CarCore {
     this.body.receiveShadow = true;
     this.group.add(this.body);
     this.deform = new StreamedDeformation(bodyGeo, this.style.rig);
-    this.deform.createHelper(this.group);
 
     this.interior = makeInterior();
     this.group.add(this.interior);

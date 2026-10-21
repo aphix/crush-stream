@@ -7,6 +7,8 @@ import { loft, type Lofted } from "./dummy-loft.ts";
 import { BONES_ATTRIBUTE, BUILD, EVERY_BUILD, HANG_ATTRIBUTE, HEAD, KINDS_ATTRIBUTE, LEFT_ARM, LEFT_LEG, NO_PRINT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, PRINT_ATTRIBUTE, RIGHT_ARM, RIGHT_LEG, ROLE, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, smooth, TORSO, type Fit } from "./dummy-rig.ts";
 import { hangAttribute } from "./dummy-garments.ts";
 import { wearFor } from "./dummy-wear.ts";
+import { BUST_ATTRIBUTE, bustWeights } from "./dummy-jiggle.ts";
+import { once } from "../kernel/scalar.ts";
 
 /**
  * The dummy's one continuous body: `dummyGeometry` takes the three fitted bodies (one topology, three rest position sets), gives
@@ -64,7 +66,7 @@ function paintBody(fit: Fit): { bones: number[]; roleKind: number[]; print: numb
 }
 
 /** The baked bodies, plus each build's wear lofted on after. One vertex order; three position attributes. */
-export function dummyGeometry(): THREE.BufferGeometry {
+function buildDummyGeometry(): THREE.BufferGeometry {
   const { man, woman, portly } = restFits();
   const index = Array.from(bodyIndex());
   const { bones, roleKind, print } = paintBody(man);
@@ -96,6 +98,10 @@ export function dummyGeometry(): THREE.BufferGeometry {
   };
   geometry.setAttribute(NORMAL_WOMAN_ATTRIBUTE, normalsOf(withWear(woman.rest)));
   geometry.setAttribute(NORMAL_PORTLY_ATTRIBUTE, normalsOf(withWear(portly.rest)));
+  geometry.setAttribute(BUST_ATTRIBUTE, new THREE.Float32BufferAttribute(bustWeights(geometry.getAttribute(SHAPE_WOMAN_ATTRIBUTE), geometry.getAttribute(KINDS_ATTRIBUTE)), 2));
   return geometry;
 }
+
+/** The one body every DummyMesh draws, built on first use and shared: only engine teardown disposes it. */
+export const dummyGeometry = once(buildDummyGeometry);
 

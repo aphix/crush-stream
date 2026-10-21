@@ -29,6 +29,10 @@ const CHANNELS = 4;
 const OPAQUE = 255;
 const ALPHA_INDEX = 3;
 const FULL_TURN = 2 * Math.PI;
+const FNV_OFFSET = 0x811c9dc5;
+const FNV_PRIME = 0x01000193;
+/** FNV-1a of the dirt's 4 MiB as the per-texel closure painted it: a rewrite that keeps random()'s order keeps every byte. */
+const DIRT_BYTES_HASH = 0x49e9ba3d;
 
 function luminanceAtTexel(column: number, row: number): number {
   return dirtPixels[(row * dirt.image.width + column) * CHANNELS];
@@ -92,6 +96,12 @@ describe("given the dirt texture", () => {
       if (dirtPixels[index] !== rebuiltPixels[index]) firstMismatch = index;
     }
     assert.equal(firstMismatch, -1, "first mismatching byte index");
+  });
+
+  it("keeps every byte of the dirt the per-texel closure painted", () => {
+    let hash = FNV_OFFSET;
+    for (let index = 0; index < dirtPixels.length; index++) hash = Math.imul(hash ^ dirtPixels[index]!, FNV_PRIME) >>> 0;
+    assert.equal(hash, DIRT_BYTES_HASH, "FNV-1a of every byte");
   });
 
   it("when its mean luminance is taken, then it is pale and warm: 0.80 to 0.90 of white", () => {

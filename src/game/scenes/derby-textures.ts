@@ -13,7 +13,7 @@ export const TEXTURE_WRAP = {
 } as const;
 
 /** Largest 8-bit channel value: a texel without a fourth number is this opaque. */
-const OPAQUE = 255;
+export const OPAQUE = 255;
 /** Rubber and tyres are a touch blue (blue channel multiplier). */
 const COOL_TINT = 1.06;
 
@@ -178,7 +178,7 @@ export function makeSeededRandom(seed: number): () => number {
 }
 
 /** A `DataTexture` painted texel by texel; a texel carries red, green, blue and optionally alpha (0-255). */
-export function makeTexture(width: number, height: number, texelAt: (column: number, row: number) => Texel, wrap: Wrap): THREE.DataTexture {
+function makeTexture(width: number, height: number, texelAt: (column: number, row: number) => Texel, wrap: Wrap): THREE.DataTexture {
   const data = new Uint8ClampedArray(width * height * 4);
   for (let row = 0; row < height; row++) {
     for (let column = 0; column < width; column++) {
@@ -190,6 +190,11 @@ export function makeTexture(width: number, height: number, texelAt: (column: num
       data[offset + 3] = alpha;
     }
   }
+  return dataTextureOf(data, width, height, wrap);
+}
+
+/** A `DataTexture` over RGBA bytes (`width x height x 4`): sRGB, linear magnification, mipmapped. */
+export function dataTextureOf(data: Uint8ClampedArray, width: number, height: number, wrap: Wrap): THREE.DataTexture {
   const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
   texture.wrapS = wrap.horizontal;
   texture.wrapT = wrap.vertical;

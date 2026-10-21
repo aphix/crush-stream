@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { once } from "../kernel/scalar.ts";
 import { makeAsphalt, makeJerseyBarrier, makeLamp } from "./engine-world.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
 import { CHEVRON, FENCE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, type PrefabId } from "../world/catalog.ts";
@@ -53,11 +54,11 @@ const WINDOW_FRAME = "#5c5a55";
 const BILLBOARD_PAPER = "#f2efe6";
 
 /**
- * The race's shared textures, built once per track art. `*Gain` is the reciprocal of the texture's
+ * The race's shared textures, built once per page (`raceTextures`): every track art and the lab dress from the same set, and none disposes it. `*Gain` is the reciprocal of the texture's
  * mean linear colour: a material with `color = gain` and `map = texture` shows its vertex colour on
  * average, so `SURFACES` colours stay the colours you see.
  */
-export type RaceTextures = {
+type RaceTextures = {
   asphalt: THREE.CanvasTexture;
   asphaltGain: THREE.Color;
   concrete: THREE.CanvasTexture;
@@ -210,7 +211,7 @@ function makeBillboard(): HTMLCanvasElement {
   return c;
 }
 
-export function makeRaceTextures(): RaceTextures {
+export const raceTextures = once((): RaceTextures => {
   const asphalt = tagSurface(makeAsphalt(), "asphalt", TILE.asphalt);
   asphalt.repeat.set(1, 1);
   const concrete = makeConcrete();
@@ -225,7 +226,7 @@ export function makeRaceTextures(): RaceTextures {
     windows: texture(makeWindows(), true),
     billboard: texture(makeBillboard(), false),
   };
-}
+});
 
 export function makePrefabMaterials(tex: RaceTextures): PrefabMaterials {
   return {

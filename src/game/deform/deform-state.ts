@@ -550,8 +550,8 @@ export abstract class DeformState extends DeformHit {
     return out.set(cageAxis(co, 0, u, v, w), cageAxis(co, 8, u, v, w), cageAxis(co, 16, u, v, w));
   }
 
-  createHelper(parent: THREE.Object3D): void {
-    this.helper ??= new DeformRigHelper(parent, {
+  private createHelper(parent: THREE.Object3D): void {
+    this.helper = new DeformRigHelper(parent, {
       cages: this.cages,
       sensors: this.sensors,
       masses: this.masses,
@@ -559,17 +559,17 @@ export abstract class DeformState extends DeformHit {
       clusters: this.clusters,
       mode: () => this.mode,
     });
-    if (!this.particleHelper) {
-      this.goalView = new Float64Array(this.masses.length * 3).fill(NaN);
-      this.particleHelper = new DeformParticleHelper(parent, { particles: this.masses, goals: this.goalView });
-    }
+    this.goalView = new Float64Array(this.masses.length * 3).fill(NaN);
+    this.particleHelper = new DeformParticleHelper(parent, { particles: this.masses, goals: this.goalView });
   }
 
-  setHelperVisible(v: boolean): void {
+  setHelperVisible(v: boolean, parent: THREE.Object3D): void {
+    if (v && !this.helper) this.createHelper(parent);
     this.helper?.setVisible(v);
   }
 
-  setParticlesVisible(v: boolean): void {
+  setParticlesVisible(v: boolean, parent: THREE.Object3D): void {
+    if (v && !this.helper) this.createHelper(parent);
     this.goalOut = v && this.particleHelper ? this.goalView : null;
     if (!v) this.goalView.fill(NaN);
     this.particleHelper?.setVisible(v);

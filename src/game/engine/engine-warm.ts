@@ -44,7 +44,7 @@ export abstract class EngineWarm extends EngineCore {
     this.ragdolls.debug.set(true, true);
     for (const car of this.live()) {
       car.setRigVisible(true);
-      car.deform.setParticlesVisible(true);
+      car.deform.setParticlesVisible(true, car.group);
     }
     const scene = this.warmScene();
     // While the GPU process compiles: the crush path's first run, unoptimised, cost 26–48 ms frames mid-race.
@@ -56,7 +56,7 @@ export abstract class EngineWarm extends EngineCore {
     this.ragdolls.debug.set(this.showRig, this.showParticles);
     for (const car of this.live()) {
       car.setRigVisible(this.showRig);
-      car.deform.setParticlesVisible(this.showParticles);
+      car.deform.setParticlesVisible(this.showParticles, car.group);
     }
   }
 

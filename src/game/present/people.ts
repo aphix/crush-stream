@@ -259,7 +259,6 @@ export class People {
 
   dispose(): void {
     this.group.removeFromParent();
-    this.mesh.geometry.dispose();
     this.mesh.material.dispose();
     this.mesh.dispose();
     for (const m of [this.guns, this.flashes]) {

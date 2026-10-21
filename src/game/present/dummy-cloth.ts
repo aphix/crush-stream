@@ -151,7 +151,12 @@ function coverOf(decal: Decal, across: number, y: number): [number, number] {
 /** `decals` painted into layer `layer` of `texels` (`DECAL_W` x `DECAL_H` RGBA a layer). */
 function paintLayer(texels: Uint8Array, layer: number, decals: readonly Decal[]): void {
   const base = layer * DECAL_W * DECAL_H * 4;
-  for (let t = 0; t < DECAL_W * DECAL_H; t++) texels.set([DECAL_FLAT, DECAL_FLAT, DECAL_NO_PAINT, 0], base + t * 4);
+  for (let at = base, end = base + DECAL_W * DECAL_H * 4; at < end; at += 4) {
+    texels[at] = DECAL_FLAT;
+    texels[at + 1] = DECAL_FLAT;
+    texels[at + 2] = DECAL_NO_PAINT;
+    texels[at + 3] = 0;
+  }
   for (const decal of decals) {
     const side = decal.face === "+x" || decal.face === "-x";
     const [half, columns] = side ? [DECAL_HALF_Z, SIDE_TEXELS] : [DECAL_HALF_X, FRONT_TEXELS];

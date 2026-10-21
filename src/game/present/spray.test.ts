@@ -60,6 +60,21 @@ describe("given a spray bitmap on the wire", () => {
     bitmap.dispose();
   });
 
+  it("when a painted bitmap is cleared with load(null), then every texel and rgba byte is zero and the inks are the presets, as loading an all-bare paint writes them", () => {
+    const cleared = new SprayBitmap(CAR_SPRAY);
+    cleared.spray(new THREE.Vector3(-0.9, 0.8, 0), new THREE.Vector3(-1, 0, 0), 0.15, cleared.inkOf(0x123456), () => 0);
+    assert.ok(cleared.painted(), "something to clear");
+    cleared.load(null);
+    const perTexel = new SprayBitmap(CAR_SPRAY);
+    perTexel.load({ texels: new Uint8Array(cleared.texels.length), palette: SPRAY_PALETTE });
+    assertSameNumbers(cleared.texels, perTexel.texels, "texels");
+    assertSameNumbers(cleared.rgba, perTexel.rgba, "rgba");
+    assertSameNumbers(cleared.palette, SPRAY_PALETTE, "inks");
+    assert.equal(cleared.painted(), false, "bare");
+    cleared.dispose();
+    perTexel.dispose();
+  });
+
   const refused = [
     { it: "when its runs come up one texel short, then it is refused", bytes: [1, 255, 0], count: 256 },
     { it: "when a run names a colour past the palette, then it is refused", bytes: [1, 4, 16], count: 4 },

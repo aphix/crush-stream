@@ -509,7 +509,7 @@ export abstract class EngineCore {
     car.deform.buckle = this.buckle;
     car.deform.setMode(this.deformMode);
     car.setRigVisible(this.showRig);
-    car.deform.setParticlesVisible(this.showParticles);
+    car.deform.setParticlesVisible(this.showParticles, car.group);
     // Re-dress after a respawn re-attached its parts, and arm the slider's kill travel (a derby's is shorter).
     const cls = carClass(car);
     assignClass(car, cls);

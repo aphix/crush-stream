@@ -1,7 +1,7 @@
 import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { CAR_HALF } from "../vehicle/car-mesh.ts";
 import { DERBY_ARENA } from "./constants.ts";
-import { TEXTURE_WRAP, makeSeededRandom, makeTexture, makeValueNoise, ramp } from "./derby-textures.ts";
+import { OPAQUE, TEXTURE_WRAP, dataTextureOf, makeSeededRandom, makeValueNoise, ramp } from "./derby-textures.ts";
 
 /** Compacted dirt of the derby floor: a grey texture over the square `2 x (radius + 1)` m (the floor reaches one metre past the radius); column = +x, row = +z. */
 const DIRT_SIZE = 1024;
@@ -398,17 +398,20 @@ export function makeDirtTexture() {
   const tracks = paintTracks(DIRT_TRACK_PATHS);
   const fine = makeFineGrids(random, tracks);
   const pebbles = scatterPebbles();
-  return makeTexture(
-    DIRT_SIZE,
-    DIRT_SIZE,
-    (column, row) => {
+  const data = new Uint8ClampedArray(DIRT_SIZE * DIRT_SIZE * 4);
+  for (let row = 0; row < DIRT_SIZE; row++) {
+    const v = (row + 0.5) / DIRT_SIZE;
+    for (let column = 0; column < DIRT_SIZE; column++) {
       const u = (column + 0.5) / DIRT_SIZE;
-      const v = (row + 0.5) / DIRT_SIZE;
       const index = row * DIRT_SIZE + column;
       const grit = (random() - 0.5) * DIRT_GRIT_SPREAD;
       const level = squeezeDarkness((sampleField(fine.add, RUT_GRID, u, v) + grit) * sampleField(fine.scale, RUT_GRID, u, v) * (1 - tracks.tread[index] * TRACK_TREAD_DARKEN) + pebbles[index]);
-      return [level, level, level];
-    },
-    TEXTURE_WRAP.clamp,
-  );
+      const offset = index * 4;
+      data[offset] = level;
+      data[offset + 1] = level;
+      data[offset + 2] = level;
+      data[offset + 3] = OPAQUE;
+    }
+  }
+  return dataTextureOf(data, DIRT_SIZE, DIRT_SIZE, TEXTURE_WRAP.clamp);
 }

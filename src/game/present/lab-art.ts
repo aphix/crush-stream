@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { BENCH, BOARD, BOARD_T, BRACKET_T, FLOOR, LAB_BACK, LAB_LAYOUTS, LAB_SCALE, labPlaced, labSurfaces, PEG, ROOM_H, ROOM_HALF_W, type LabPresetId } from "../scenes/lab.ts";
-import { makePrefabMaterials, makeRaceTextures, type RaceTextures } from "./prefabs.ts";
+import { makePrefabMaterials, raceTextures } from "./prefabs.ts";
 import { PropTumble } from "./prop-tumble.ts";
 import { DEPTH_INSTANCED, DEPTH_INSTANCED_COLOR } from "./track-mesh.ts";
 
@@ -327,7 +327,6 @@ export class LabArt {
   readonly group = new THREE.Group();
   private readonly sets: Record<LabPresetId, LabSet>;
   private active: LabSet;
-  private readonly textures: RaceTextures;
   private readonly own: THREE.Texture[];
 
   constructor() {
@@ -418,8 +417,7 @@ export class LabArt {
       tubes,
     );
 
-    this.textures = makeRaceTextures();
-    const mats = makePrefabMaterials(this.textures);
+    const mats = makePrefabMaterials(raceTextures());
     const steel = new THREE.MeshStandardMaterial({ color: 0x9aa2ab, roughness: 0.45, metalness: 0.6 });
     const set = (id: LabPresetId): LabSet => {
       const layout = LAB_LAYOUTS[id];
@@ -471,8 +469,7 @@ export class LabArt {
     });
     for (const g of geos) g.dispose();
     for (const m of mats) m.dispose();
-    const t = this.textures;
-    for (const x of [t.asphalt, t.concrete, t.detail, t.windows, t.billboard, ...this.own]) x.dispose();
+    for (const x of this.own) x.dispose();
     this.group.removeFromParent();
     this.group.clear();
   }

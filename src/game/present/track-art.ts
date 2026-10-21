@@ -6,7 +6,7 @@ import { SURFACE_IDS, type PrefabId, type SurfaceId } from "../world/catalog.ts"
 import type { Placed } from "../world/placements.ts";
 import { PREFAB } from "../world/constants.ts";
 import { box, painted, type Piece } from "./prefab-pieces.ts";
-import { makePrefabMaterials, makeRaceTextures, prefabParts, type RaceTextures } from "./prefabs.ts";
+import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import { blankPoint, type Track } from "../world/track.ts";
 import { sections } from "../world/track-sections.ts";
 import {
@@ -37,7 +37,6 @@ type RaceMeshTag = { kind: RaceMeshKind; surface?: SurfaceId; prefab?: PrefabId 
 
 export class TrackArt {
   readonly group = new THREE.Group();
-  private readonly textures: RaceTextures;
   private readonly lamps: THREE.InstancedMesh;
   private readonly lampColour: number[] = [];
   private lights = -1;
@@ -67,8 +66,7 @@ export class TrackArt {
     if (this.backdropSpec && !this.backdropSpec.secret) this.standBackdrop(this.backdropSpec);
     const ground = track.ground();
     this.grounds = track.json.guards ? new GroundsArt(track.json.guards, ground, this.group) : null;
-    const tex = makeRaceTextures();
-    this.textures = tex;
+    const tex = raceTextures();
     const mats = makePrefabMaterials(tex);
     const paths = track.paths();
     const index = new RoadIndex(paths);
@@ -237,8 +235,6 @@ export class TrackArt {
     });
     for (const g of geos) g.dispose();
     for (const m of mats) if (!this.shared.includes(m)) m.dispose();
-    const t = this.textures;
-    for (const x of [t.asphalt, t.concrete, t.detail, t.windows, t.billboard]) x.dispose();
     this.group.removeFromParent();
     this.group.clear();
   }

@@ -717,7 +717,7 @@ export class DeformableCar extends CarParts {
   }
 
   setRigVisible(v: boolean): void {
-    this.deform.setHelperVisible(v);
+    this.deform.setHelperVisible(v, this.group);
     if (this.hullHelper) this.hullHelper.visible = v;
     if (v) this.updateHullHelper();
   }

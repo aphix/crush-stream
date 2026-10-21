@@ -102,7 +102,7 @@ export abstract class EngineInput extends EngineRigs {
 
   toggleParticles(): void {
     this.showParticles = !this.showParticles;
-    for (const car of this.live()) car.deform.setParticlesVisible(this.showParticles);
+    for (const car of this.live()) car.deform.setParticlesVisible(this.showParticles, car.group);
     this.ragdolls.debug.set(this.showRig, this.showParticles);
     this.emitHud();
   }

@@ -91,7 +91,12 @@ export class SprayBitmap {
   /** Every texel and ink from `paint` (a bitmap of this layout), or bare with the presets when null. */
   load(paint: SprayPaint | null): void {
     for (let ink = 0; ink < this.palette.length; ink++) this.palette[ink] = paint ? paint.palette[ink]! : SPRAY_PALETTE[ink]!;
-    for (let i = 0; i < this.texels.length; i++) this.set(i, paint ? paint.texels[i]! : 0);
+    if (paint) for (let i = 0; i < this.texels.length; i++) this.set(i, paint.texels[i]!);
+    else {
+      // Bare is ink 0, palette[0] is 0: set(i, 0) would write all zeros.
+      this.texels.fill(0);
+      this.rgba.fill(0);
+    }
     this.texture.needsUpdate = true;
   }
 

@@ -90,7 +90,7 @@ export class GarageArt {
   dispose(): void {
     this.group.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
-      o.geometry.dispose();
+      if (o !== this.dummy) o.geometry.dispose();
       (o.material as THREE.Material).dispose();
     });
     for (const t of this.own) t.dispose();
