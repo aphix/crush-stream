@@ -20,6 +20,8 @@ import { run } from "node:test";
 import { spec } from "node:test/reporters";
 
 const COST = new URL("./test-cost.json", import.meta.url);
+/** V8 heap cap per test process (MB): about twice the heaviest file's peak heap, so a runaway aborts there, not at the box's memory. */
+const HEAP_MB = 1536;
 const args = process.argv.slice(2);
 const learn = args.includes("--learn");
 const concurrency = Number(args.find((a) => a.startsWith("--concurrency="))?.slice(14) ?? 4);
@@ -51,7 +53,7 @@ const stderrByFile = new Map();
 const stream = run({
   files,
   concurrency,
-  execArgv: ["--disable-warning=ExperimentalWarning", `--import=${new URL("./test-setup.mjs", import.meta.url).href}`],
+  execArgv: ["--disable-warning=ExperimentalWarning", `--max-old-space-size=${HEAP_MB}`, `--import=${new URL("./test-setup.mjs", import.meta.url).href}`],
 });
 stream.on("test:summary", (s) => {
   if (s.file === undefined && !s.success) process.exitCode = 1;
