@@ -67,4 +67,11 @@ describe("given the player's spray kept in this browser's storage", () => {
     looks.dispose();
     next.dispose();
   });
+
+  it("when a peer's look is worn, then its car spray is mipped, so a far car's paint does not alias", () => {
+    const looks = new PlayerLooks();
+    looks.wear(1, looks.data());
+    assert.equal(looks.of(1, 0)?.carSpray.texture.generateMipmaps, true);
+    looks.dispose();
+  });
 });

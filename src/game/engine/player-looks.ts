@@ -52,7 +52,7 @@ export class PlayerLooks {
   wear(car: number, look: LookData | null): void {
     this.drop(car);
     if (!look) return;
-    const worn: PlayerLook = { car: look.car, person: look.person, carSpray: new SprayBitmap(CAR_SPRAY), personSpray: new SprayBitmap(PERSON_SPRAY) };
+    const worn: PlayerLook = { car: look.car, person: look.person, carSpray: new SprayBitmap(CAR_SPRAY, true), personSpray: new SprayBitmap(PERSON_SPRAY) };
     worn.carSpray.load(look.carSpray);
     worn.personSpray.load(look.personSpray);
     this.theirs.set(car, worn);
