@@ -4,18 +4,18 @@ import { lampEmissiveMap, makeLampUnit, type LampKind } from "./car-materials.ts
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 
 /**
- * Lamp light pools, created once and only ever re-aimed or dimmed: adding, removing or hiding a light
- * changes three's lights hash and recompiles every lit material (32c53c1 dropped a 19-light shader
- * for a boot hang). Broken, off and unassigned lights sit at intensity 0. The pool size is chosen once at boot, before the
- * programs link (`CrashEngine`), never per FX tier or mid-race.
+ * Lamp light pools, created once and only ever re-aimed or dimmed: adding, removing or hiding a light changes three's lights hash
+ * and recompiles every lit material (32c53c1 dropped a 19-light shader for a boot hang). Broken, off and unassigned lights sit at
+ * intensity 0. The pool size is chosen once at boot, before the programs link (`CrashEngine`), never per FX tier or mid-race.
  */
 export interface LampPool {
   readonly spots: number;
   readonly points: number;
 }
 export const FULL_POOL: LampPool = { spots: 4, points: 4 };
-/** The lean pool a phone can opt into (`?lamps=lean`): every lit fragment loops over every light, and these are 4 of the 8 pooled ones. */
 export const PHONE_POOL: LampPool = { spots: 2, points: 2 };
+/** The pool a device links its programs with: the full one on a desktop or with `?lamps=full` (the A/B arm), else the phone's (every lit fragment loops over every light). */
+export const lampPoolFor = (desktop: boolean, lampsParam: string | null): LampPool => (desktop || lampsParam === "full" ? FULL_POOL : PHONE_POOL);
 
 /** Headlamp spot (exported for the fade tests: a lamp at weight 1 shows `intensity`). */
 export const HEAD = { color: 0xfff1d8, intensity: 40, distance: 22, angle: 0.5, penumbra: 0.55, decay: 2 };

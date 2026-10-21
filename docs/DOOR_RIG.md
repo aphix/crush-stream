@@ -157,7 +157,8 @@ class lift (truck +8 cm, monster +48 cm) raises them with the drawn lamp.
 
 Real lights come from a fixed pool created once in the `CrashEngine` constructor:
 `SPOT_POOL` = 4 white SpotLights for headlamps and `POINT_POOL` = 4 short red PointLights for tail
-lamps, with no shadows. Lights are never added, removed or visibility-toggled at runtime. Doing that
+lamps, with no shadows; a phone gets 2 + 2 (`PHONE_POOL`, `lampPoolFor`; `?lamps=full` gives it the
+full pool for an A/B). Lights are never added, removed or visibility-toggled at runtime. Doing that
 changes three's lights hash and recompiles every lit material (see 32c53c1). Off, broken and
 unassigned lights sit at intensity 0, like `impactLight` and `winnerLight`.
 

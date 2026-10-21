@@ -45,7 +45,7 @@ import { FleetRamps } from "../scenes/fleet-ramps.ts";
 import { Corkscrew } from "../scenes/corkscrew.ts";
 import { TraceRecorder } from "./engine-trace.ts";
 import { snapshotAiCar } from "../match/derby.ts";
-import { FULL_POOL, LampLights, PHONE_POOL } from "../vehicle/lamp-lights.ts";
+import { LampLights, lampPoolFor } from "../vehicle/lamp-lights.ts";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
 import { makeDerbyArena, WinnerSpot } from "../scenes/derby-arena.ts";
@@ -252,11 +252,9 @@ export class CrashEngine extends EngineGarage {
     });
     this.impactLight = new THREE.PointLight(0xffc27a, 0, 22, 2);
     this.scene.add(this.impactLight);
-    // Four body lamps per car plus at most one lit siren (police flash red, then blue). `?lamps=lean` trims a phone's pool to 2 spots
-    // + 2 points (about 0.5 ms a frame at 4x CPU; the cars without a real light show fake ground pools instead). Fixed here, before the programs
+    // Four body lamps per car plus at most one lit siren; a phone links the lean pool (`lampPoolFor`). Fixed here, before the programs
     // link: a light-count change relinks every lit shader.
-    const leanLamps = !desktop && new URLSearchParams(window.location.search).get("lamps") === "lean";
-    this.lampLights = new LampLights(this.scene, MAX_CARS * 5, leanLamps ? PHONE_POOL : FULL_POOL);
+    this.lampLights = new LampLights(this.scene, MAX_CARS * 5, lampPoolFor(desktop, new URLSearchParams(window.location.search).get("lamps")));
     this.lampLights.middleTile = desktop;
     groundMaterial(this.lampLights.pools.material as THREE.Material, GROUND_LEVEL.decal);
     this.lampLights.pools.renderOrder = levelOrder(GROUND_LEVEL.decal);

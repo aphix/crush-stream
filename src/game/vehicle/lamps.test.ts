@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
-import { FULL_POOL, LampBatch, LampLights, type LampPool, PHONE_POOL } from "./lamp-lights.ts";
+import { FULL_POOL, LampBatch, LampLights, type LampPool, lampPoolFor, PHONE_POOL } from "./lamp-lights.ts";
 import { LAMP_HOUSING } from "./car-materials.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { assignClass, STYLE_CLASS, type VehicleClassId } from "./vehicle-classes.ts";
@@ -321,4 +321,20 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     for (const car of [near, aside]) for (const i of [HEAD_L, HEAD_R]) assert.ok(pooled(car, i), `headlamp ${i} of a car without a spot has no fake pool`);
     for (const car of [far, behind]) for (const i of [HEAD_L, HEAD_R]) assert.ok(!pooled(car, i), `headlamp ${i} of a car with real spots also shows a fake pool`);
   });
+});
+
+describe("given a device class and the page's ?lamps setting", () => {
+  const testCases = [
+    { it: "when the device is a desktop, then it links the full pool", desktop: true, lamps: null, spots: 4, points: 4 },
+    { it: "when a desktop's page asks ?lamps=lean, then it still links the full pool", desktop: true, lamps: "lean", spots: 4, points: 4 },
+    { it: "when the device is a phone, then it links the lean pool", desktop: false, lamps: null, spots: 2, points: 2 },
+    { it: "when a phone's page asks ?lamps=full (the A/B arm), then it links the full pool", desktop: false, lamps: "full", spots: 4, points: 4 },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const pool = lampPoolFor(testCase.desktop, testCase.lamps);
+      assert.equal(pool.spots, testCase.spots, "spots");
+      assert.equal(pool.points, testCase.points, "points");
+    });
+  }
 });
