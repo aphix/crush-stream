@@ -7,7 +7,6 @@ import { JOINTS, PARTS } from "./ragdoll-body.ts";
 import { BODY_VERTICES, bodyIndex } from "./dummy-bodies.ts";
 import { restFits } from "./dummy-fit.ts";
 import { BONES_ATTRIBUTE, BUILD, FLAGS_AT, isDrawn, KINDS_ATTRIBUTE, ROLE, ROLES, skinPoint, WHISKERS } from "./dummy-rig.ts";
-import { BUST_ATTRIBUTE } from "./dummy-jiggle.ts";
 import { COP_LOOK, ELDER_LOOK, GUARD_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 
 /**
@@ -758,6 +757,24 @@ describe("given the people's shader drawn with MSAA", () => {
   });
 });
 
+/** Vertex attribute slots the people's lit program may need: two spare under the 16 a GLES driver grants, which some count gl_InstanceID against. */
+const DUMMY_SLOTS = 14;
+/** Slots three declares itself in an instanced lit program: instanceMatrix (a mat4, four), position and normal; its uv stays inactive with no map. */
+const THREE_SLOTS = 6;
+
+describe("given the people's lit program on a GLES driver that counts built-in ids as attributes", () => {
+  it("when its vertex stage is compiled, then three's attributes, the dummy's and the built-in ids it reads need at most 14 slots, so it links with two to spare", () => {
+    const mesh = new DummyMesh(1);
+    const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
+    const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+    mesh.material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    const declared = shader.vertexShader.match(/^attribute (?:float|vec[234]) \w+;$/gm) ?? [];
+    const builtins = new Set(shader.vertexShader.match(/\bgl_(?:VertexID|InstanceID)\b/g));
+    const slots = THREE_SLOTS + declared.length + builtins.size;
+    assert.ok(slots <= DUMMY_SLOTS, `${slots} slots (bound ${DUMMY_SLOTS}): three's ${THREE_SLOTS}, ${[...declared, ...builtins].join(" ")}`);
+  });
+});
+
 describe("given the wear lofted over the bodies", () => {
   it("when every wear triangle is read, then its three corners are one role, so its colour neither blends across a role line (a sneaker's white over its canvas) nor hangs on which corner a flat varying reads", () => {
     const geometry = new DummyMesh(1).geometry;
@@ -781,6 +798,7 @@ describe("given two dummy meshes", () => {
     const first = new DummyMesh(1);
     const second = new DummyMesh(2);
     assert.equal(first.geometry, second.geometry, "one shared geometry");
-    assert.ok(first.geometry.getAttribute(BUST_ATTRIBUTE), "bust weights");
+    const kinds = first.geometry.getAttribute(KINDS_ATTRIBUTE);
+    assert.ok(Array.from({ length: kinds.count }, (_, i) => kinds.getZ(i)).some((share) => share > 0), "bust weights in roleKind's z");
   });
 });
