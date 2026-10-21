@@ -177,3 +177,30 @@ and interleaved where the effect is small; "n" is the number of pairs.
 ### Open
 
 - A test-result cache keyed by the import closure would skip unchanged files outright; tests would have to be proven hermetic first.
+
+## Headless frame (`scripts/headless-frame.mjs`, 2026-10-21)
+
+The real `CrashEngine` drawing in node, for shots, counts and link checks without a browser. `engine-headless.test-util.ts`
+boots it; the script swaps in a real WebGL2 context (`@kmamal/gl` 10.0.0-2, a BSD-2 fork of headless-gl: ANGLE over the
+host's GL), Skia canvases (`@napi-rs/canvas` 1.0.12) for the game's procedural textures, and the page's files from
+`public/`. A pinned-seed derby 8 s past its start is drawn through the engine's own frame (`tickInner`, then `PostFX` at
+the tier) and written as a PNG, with one JSON line on stdout.
+
+- **For:** shots and before/after diffs (`--root <other checkout>`: same seed, same clock; two runs of one tree give
+  byte-identical PNGs, and so do two checkouts of one commit), the frame's counts per tier (`renderer.info`: calls,
+  triangles, programs, textures, geometries), and link checks: exit 1 on a program that fails to link or a GL error.
+- **Not for:** frame-time verdicts; the browser is the perf judge ([`PERF_BENCH.md`](PERF_BENCH.md)). `yardstickMs`, a
+  fixed full-screen shader synced by a 1 px read on a context of its own, only tells a GPU (0.35-0.49 ms at 1280x800 on
+  the RTX 4080 Laptop through Mesa d3d12) from a CPU rasterizer (55 ms on llvmpipe); `renderer` names which.
+- **GPU:** on WSL the script sets `GALLIUM_DRIVER=d3d12` when `/dev/dxg` exists, so Mesa reaches the GPU; elsewhere Mesa
+  picks its own driver. No timer queries and no `KHR_parallel_shader_compile` (three warns once).
+- **Install:** pnpm never runs `@kmamal/gl`'s install script (`allowBuilds: "@kmamal/gl": false` in `pnpm-workspace.yaml`),
+  which downloads the native binary from GitHub releases: the Lux deploy installs dev dependencies too, and stays
+  registry-only. Fetch the binary once per `node_modules` with `node node_modules/@kmamal/gl/scripts/install.mjs`; the
+  script exits 2 with that line while it is missing. `@napi-rs/canvas` ships its binaries as npm packages.
+- **Dummies are not drawn:** the bundled ANGLE (2.1.24078) counts `gl_VertexID` and `gl_InstanceID` against
+  `MAX_VERTEX_ATTRIBS` (16), so the dummy's lit program (16 declared attribute slots plus both built-ins) fails to link
+  here ("Too many attributes (print)"), while Chrome 149's ANGLE links it on the same GPU. A failed program that links
+  once those built-ins read as 0 is listed under `builtinQuirk`, its meshes under `notDrawn`; every other failure is in
+  `linkFailures`.
+- **Cost:** about 11 s wall, 6.6 s of it to `ready`; runs inside a 2 GB memory cap.

@@ -21,6 +21,10 @@ are in `docs/ARCHITECTURE.md` and enforced by `npm run check:boundaries`.
 - Playwright drives the repo's own browser scripts (`scripts/bench-browser.mjs`, `scripts/bake-env.mjs`,
   `scripts/check-programs.mjs`, `scripts/readme-shots.mjs`, which remakes the README's pictures at the Ultra tier from a
   served build). QA screenshots go under `screenshots/` (git-ignored).
+- `scripts/headless-frame.mjs` draws the real engine in node, no browser: WebGL2 from `@kmamal/gl` (ANGLE; on WSL the
+  script sets `GALLIUM_DRIVER=d3d12` itself so Mesa reaches the GPU) and the game's canvases from `@napi-rs/canvas`. pnpm
+  never runs `@kmamal/gl`'s download of its native binary from GitHub (`allowBuilds` in `pnpm-workspace.yaml`: the deploy
+  installs dev dependencies too), so fetch it once per `node_modules`: `node node_modules/@kmamal/gl/scripts/install.mjs`.
 
 ## Checks
 
@@ -35,6 +39,7 @@ are in `docs/ARCHITECTURE.md` and enforced by `npm run check:boundaries`.
 | `npm run lint` | `oxlint` (`docs/TOOLCHAIN.md`) |
 | `npm run build:node` | the self-hosted server build into `.output/` |
 | `node scripts/check-links.mjs` | every relative link in `README.md` and `docs/*.md` resolves; run it after moving or renaming a doc |
+| `node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out <png>] [--root <checkout>]` | a derby frame drawn by the real engine in node: a PNG plus one JSON line (GPU, draw calls, triangles, programs, textures, geometries, every program that failed to link, GL error); exit 1 on a link failure or a GL error. For shots, before/after diffs (`--root` another checkout) and counts; not for frame times, which the browser judges (`docs/TOOLCHAIN.md`) |
 
 ## Layout
 

@@ -138,6 +138,7 @@ run it through `scripts/with-app-env.mjs`. `npm run build` then `npm run preview
 | `node scripts/check-links.mjs` | every relative link in this file and `docs/*.md` resolves |
 | `npm run bench`, `npm run sweep` | JS kernel timings; the squash × buckle crash sweep ([`docs/CRUSH_CALIBRATION.md`](docs/CRUSH_CALIBRATION.md)) |
 | `node scripts/bench-browser.mjs` | real-browser frame bench ([`docs/PERF_BENCH.md`](docs/PERF_BENCH.md)) |
+| `node scripts/headless-frame.mjs` | a derby frame drawn by the real engine in node, no browser: a PNG plus its draw counts and link failures, for shots and before/after diffs; not a frame-time bench ([`docs/TOOLCHAIN.md`](docs/TOOLCHAIN.md)) |
 | `npm run build:kernel`, `npm run build:motor`, `npm run bake:env` | rebuild the WASM skin kernel, the engine-sound worklet and the baked environment map |
 
 [`AGENTS.md`](AGENTS.md) has the contributor rules these checks serve.
