@@ -30,7 +30,7 @@ export const COUPE: BodyStyle = {
   aPillarFoot: 0.5,
   aPillarTop: 0.02,
   bPillar: { rear: -0.54, front: -0.48 },
-  arch: { radius: 0.38, lip: { flare: 0.014, width: 0.05 } },
+  arch: { radius: 0.38, lip: { flare: 0.0225, width: 0.06 } },
   hood: { z0: 0.64, z1: 1.93, origin: [0.8, 0.62] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.366, z: 1.925 }, span: 0.6, wrap: { from: 0.3, back: 0.1 }, fascia: MUSCLE_FRONT_FASCIA },

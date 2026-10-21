@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import type { BodyStyle } from "./car-variants.ts";
 import { floorY, rockerAt } from "./car-lines.ts";
 import { bootCut, ensureOutwardNormals, lerp, loftFromRings, sampleSlice, TUB_EDGE, WELL_LINER_WIDTH, type Pt } from "./car-mesh.ts";
@@ -61,9 +62,9 @@ export function wellHumpGeometry(style: BodyStyle): THREE.BufferGeometry | null 
     const zs: number[] = [];
     for (let k = 0; k <= HUMP_STEPS; k++) {
       const a = (k / HUMP_STEPS - 0.5) * Math.PI;
-      const z = wz + half * Math.sin(a);
+      const z = wz + half * detSin(a);
       const wall = sampleSlice(z, style.profile).hw - 0.06 + HUMP_SINK;
-      const top = floor + Math.max(rise * Math.cos(a), 2 * HUMP_SINK);
+      const top = floor + Math.max(rise * detCos(a), 2 * HUMP_SINK);
       const round = Math.min(HUMP_ROUND, (top - floor) / 2);
       const bottom = floor - HUMP_SINK;
       rings.push(
@@ -91,24 +92,27 @@ const LIP_ARC_STEPS = 12;
 const LIP_SINK = 0.004;
 /** A squared lip's outline: the superellipse exponent its corners follow (2 = the round opening). */
 const LIP_SQUARE = 4;
+/** Round the opening's edge the lip rolls this far (m) under it, then tucks this far into the well past the skin; a box flare's face steps out over its outer `STEP` (m). */
+const LIP_EDGE = { roll: 0.006, tuck: 0.01 } as const;
+const LIP_STEP = 0.016;
 
 /** The lip's section (m) as [out from the opening's edge, off the skin]: its toe faired into the skin, its crown, rolled round the edge and tucked into the well. */
 function lipSection(flare: number, width: number, square: boolean): (readonly [number, number])[] {
   return square
     ? [
         [width, -LIP_SINK],
-        [width - 0.008, flare * 0.85],
-        [width - 0.016, flare],
-        [0.004, flare],
-        [-0.008, -0.01],
+        [width - LIP_STEP / 2, flare * 0.85],
+        [width - LIP_STEP, flare],
+        [LIP_SINK, flare],
+        [-LIP_EDGE.roll, -LIP_EDGE.tuck],
       ]
     : [
         [width, -LIP_SINK],
         [width * 0.65, flare * 0.35],
         [width * 0.35, flare * 0.8],
         [width * 0.1, flare],
-        [-0.006, flare * 0.55],
-        [-0.01, -0.01],
+        [-LIP_EDGE.roll, flare * 0.55],
+        [-LIP_EDGE.tuck, -LIP_EDGE.tuck],
       ];
 }
 
@@ -145,14 +149,18 @@ function skinX(loft: THREE.BufferGeometry, side: number, y: number, z: number): 
 function lipPath(style: BodyStyle, wy: number, wz: number, square: boolean): [number, number, number, number][] {
   const r = style.arch.radius;
   const foot = (sign: number) => rockerAt(wz + sign * r, style);
+  // The arc's end angle from the top: down to hub height, or up to where the rocker meets the opening over it.
+  const reachDown = (sign: number) => {
+    const c = Math.min(1, (foot(sign) - wy) / r);
+    return foot(sign) < wy ? Math.PI / 2 : detAtan2(Math.sqrt(1 - c * c), c);
+  };
   const path: [number, number, number, number][] = [];
-  const start = foot(-1) < wy ? -Math.PI / 2 : -Math.acos(Math.min(1, (foot(-1) - wy) / r));
-  const end = foot(1) < wy ? Math.PI / 2 : Math.acos(Math.min(1, (foot(1) - wy) / r));
+  const [start, end] = [-reachDown(-1), reachDown(1)];
   if (foot(-1) < wy) path.push([wz - r, foot(-1), -1, 0]);
   for (let k = 0; k <= LIP_ARC_STEPS; k++) {
     const a = lerp(start, end, k / LIP_ARC_STEPS);
-    const s = Math.sin(a);
-    const c = Math.cos(a);
+    const s = detSin(a);
+    const c = detCos(a);
     const reach = square ? r * (Math.abs(s) ** LIP_SQUARE + Math.abs(c) ** LIP_SQUARE) ** (-1 / LIP_SQUARE) : r;
     path.push([wz + reach * s, wy + reach * c, s, c]);
   }

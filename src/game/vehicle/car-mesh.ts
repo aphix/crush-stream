@@ -195,7 +195,7 @@ function tubAt(z: number, style: BodyStyle, tubs: readonly (readonly [number, nu
  * from the tail to `face.front`. A deck lid's hollow is its own boot (`lined`, an unpainted inner panel); a tailgate or roof-hinged
  * lid opens the cabin's or bed's floor on through the tail.
  */
-export interface BootCut {
+interface BootCut {
   rear: number;
   front: number;
   floor: number;
@@ -382,7 +382,8 @@ export const WELL_LINER_WIDTH = 0.24;
  */
 function wellEdge(z: number, hw: number, tubT: number, floorClear: boolean, well: number, style: BodyStyle, source: BodySource): number | null {
   if (tubT === 0 || floorClear || well < 0.03 || (source === "drawn" && bayAt(z, style) >= tubT)) return null;
-  const wheel = carFrame(style).wheels.find(([wx, , wz]) => Math.abs(z - wz) < style.arch.radius && Math.abs(wx) <= hw);
+  // A tub only grazing an arch (the coupe's cabin floor ramping out over its rear arch's front edge) keeps the arch's lift.
+  const wheel = carFrame(style).wheels.find(([wx, , wz]) => Math.abs(z - wz) < style.arch.radius && Math.abs(wx) <= hw && style.tubs.some(([a, b]) => wz > a && wz < b));
   return wheel ? Math.min(hw - 0.06, Math.abs(wheel[0]) - WELL_LINER_WIDTH / 2) : null;
 }
 
