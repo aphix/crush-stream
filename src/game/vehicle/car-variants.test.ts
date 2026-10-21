@@ -175,18 +175,22 @@ describe("given every body style's spec dimensions (`BodyStyle.dims`)", () => {
 
 
 describe("given each body style's silhouette, measured as the highest visible surface along the car's length", () => {
-  it("when the sedan is measured, then it is three-box: the roof stands over the cabin and the trunk deck sits below 0.9 m behind the glass", () => {
+  it("when the sedan is measured, then it is a fastback: the roof stands over the cabin and the rear glass falls from it in one slope to a short deck", () => {
     assert.ok(topAt("sedan", -0.2) > 1.25);
-    assert.ok(topAt("sedan", -1.5) < 0.9, `sedan trunk ${topAt("sedan", -1.5)}`);
+    const glassTop = topAt("sedan", -1.2);
+    const glassMid = topAt("sedan", -1.45);
+    const deck = topAt("sedan", -1.9);
+    assert.ok(glassTop > 1.15 && glassTop < 1.26, `sedan rear glass top at z=-1.2 is ${glassTop}`);
+    assert.ok(glassMid > 1.05 && glassMid < glassTop - 0.07, `sedan rear glass at z=-1.45 is ${glassMid}`);
+    assert.ok(deck > 0.9 && deck < 1.02, `sedan deck at z=-1.9 is ${deck}`);
   });
 
   it("when the wagon's roof is measured 1.2 m and 1.5 m behind the centre, then it runs on past the sedan's toward the tail, above 1.2 m at both", () => {
     for (const z of [-1.2, -1.5]) assert.ok(topAt("wagon", z) > 1.2, `wagon roof at z=${z} is ${topAt("wagon", z)}`);
   });
 
-  it("when the hatchback is measured, then its roof outruns the sedan's but its tail drops at least 0.2 m below the wagon's", () => {
+  it("when the hatchback is measured, then its roof runs on toward the tail but its tail drops at least 0.2 m below the wagon's", () => {
     assert.ok(topAt("hatchback", -1.2) > 1.2, `hatch roof ${topAt("hatchback", -1.2)}`);
-    assert.ok(topAt("sedan", -1.2) < 1.05, `sedan glass at z=-1.2 is ${topAt("sedan", -1.2)}`);
     assert.ok(topAt("hatchback", -1.75) < topAt("wagon", -1.75) - 0.2, "hatch tail is as tall as the wagon's");
   });
 
