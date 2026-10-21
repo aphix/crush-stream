@@ -185,8 +185,11 @@ if (quirkPrograms.size > 0) {
   hideQuirkMeshes();
   while (gl.getError() !== gl.NO_ERROR);
 }
+// The counts are the last frame whole (the mark map and every post pass): the reader brackets renderer.info, as the bench does.
+three.info.autoReset = false;
 for (let f = 0; f < frames; f++) {
   hideQuirkMeshes();
+  three.info.reset();
   engine.advance(FRAME, { frameDt: FRAME });
   await settle();
 }
