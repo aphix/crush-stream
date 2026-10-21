@@ -36,6 +36,7 @@ half-width, beltline, roof height and width, how much greenhouse), `roofZ`, `win
 `midPillarZ`, `rearBulkhead`, `tubs` (open floors), `rearDoorSeam`, `boot` (deck lid, or a hatch / tailgate; a tailgate's
 optional `z0` leans its panel from its bottom edge `[y0, z0]` up to its hinge), `lamps`, and the
 optional `livery` and `lightBar`. `rig` overrides the soft-body cages a body's panels need.
+Optional `details` holds the car's fine contours (panel gaps, shut lines, creases, vents, grille bars, lamp internals) as strokes and patches drawn on its side, top, front and rear views; the detail-map system bakes them into height and cavity maps read at the skin's rest position, so they ride a crushed panel.
 
 The hardpoints place the openings and the lower body, each per car:
 
