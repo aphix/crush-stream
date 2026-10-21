@@ -1,12 +1,14 @@
 import * as THREE from "three";
-import { INSTANCE_MIRROR_VARIANT_ATTRIBUTE, loosePartsMaterial, mirrorPartsMaterial, partsMaterial } from "./car-materials.ts";
+import { INSTANCE_PART_VARIANT_ATTRIBUTE, loosePartsMaterial, partsMaterial, variantPartsMaterial } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
-import { mirrorBatchGeometry, PART_KIND, PART_KINDS, partGeometry } from "./part-geometry.ts";
+import { PART_KINDS, partGeometry } from "./part-geometry.ts";
+import { partBatchGeometry } from "./part-variants.ts";
 
 /**
  * Every car's seven static parts (interior, door linings, mirrors, grille, tail trim) as seven instanced draws, one per kind.
  * A loose part draws as its own mesh; a cut seat (layer 0 off, `CarDetail`) or a hidden car draws nothing.
- * Each mirror draw holds every style's mirror: an instance carries its car's variant and door paint (`mirrorPartsMaterial`).
+ * A kind a style may draw its own way (mirrors, grille) holds every style's variant in its one draw: an instance carries its car's variant
+ * and panel paint (`withPartVariants`).
  */
 export class PartBatch {
   readonly meshes: readonly THREE.InstancedMesh[];
@@ -14,7 +16,7 @@ export class PartBatch {
   readonly looseWarm = new THREE.Mesh(new THREE.PlaneGeometry(0, 0), loosePartsMaterial());
   private readonly counts = new Int32Array(PART_KINDS.length);
   private readonly capacity: number;
-  /** Per kind, its instances' mirror variants; null for a kind that is not a mirror. */
+  /** Per kind, its instances' variants; null for a kind with one shape. */
   private readonly variants: (THREE.InstancedBufferAttribute | null)[] = [];
   /** Per kind, the per-instance attributes a sync uploads. */
   private readonly uploads: THREE.InstancedBufferAttribute[][] = [];
@@ -23,11 +25,10 @@ export class PartBatch {
     this.capacity = capacity;
     const meshes: THREE.InstancedMesh[] = [];
     for (const kind of PART_KINDS) {
-      const side = kind === PART_KIND.mirrorL ? -1 : kind === PART_KIND.mirrorR ? 1 : 0;
-      const geometry = side === 0 ? partGeometry(kind) : mirrorBatchGeometry(side, capacity);
-      const mesh = new THREE.InstancedMesh(geometry, side === 0 ? partsMaterial() : mirrorPartsMaterial(), capacity);
+      const styled = partBatchGeometry(kind, capacity);
+      const mesh = new THREE.InstancedMesh(styled ?? partGeometry(kind), styled ? variantPartsMaterial() : partsMaterial(), capacity);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      const variants = side === 0 ? null : (geometry.getAttribute(INSTANCE_MIRROR_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute);
+      const variants = styled ? (styled.getAttribute(INSTANCE_PART_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute) : null;
       if (variants) mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.DynamicDrawUsage);
       this.variants.push(variants);
       this.uploads.push(variants ? [mesh.instanceMatrix, mesh.instanceColor!, variants] : [mesh.instanceMatrix]);

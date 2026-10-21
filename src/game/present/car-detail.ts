@@ -50,7 +50,7 @@ const _eye = new THREE.Vector3();
 /** The small parts a mid cut takes: the lamp seats and the plain meshes that cast no shadow. A hinged panel's shell stays (the body under it is primer). */
 function takeMid(car: DeformableCar): THREE.Object3D[] {
   const parts: THREE.Object3D[] = [];
-  for (const lamp of car.lamps) {
+  for (const lamp of [...car.lamps, ...car.lampFittings]) {
     lamp.seat.layers.disable(0);
     parts.push(lamp.seat);
   }

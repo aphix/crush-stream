@@ -497,8 +497,9 @@ export function tractionLimit(frame: CarFrame, k: ClassStats, muF: number, muR: 
 type Dressable = {
   readonly group: THREE.Group;
   readonly wheels: readonly THREE.Object3D[];
-  /** Lamp seats ride the lift like the body they sit on (bare objects, not children of the group). */
+  /** Lamp seats and the drawn-only lamp fittings ride the lift like the body they sit on (bare objects, not children of the group). */
   readonly lamps: readonly { readonly seat: THREE.Object3D }[];
+  readonly lampFittings: readonly { readonly seat: THREE.Object3D }[];
   readonly style: { id: CarStyleId };
   readonly frame: CarFrame;
 };
@@ -533,5 +534,5 @@ export function assignClass(car: Dressable, id: VehicleClassId): void {
     else body.add(c);
   }
   for (const w of car.wheels) w.scale.setScalar(s.wheelScale);
-  for (const lamp of car.lamps) lamp.seat.parent = body;
+  for (const lamp of [...car.lamps, ...car.lampFittings]) lamp.seat.parent = body;
 }

@@ -9,7 +9,8 @@ import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
 import { ROCKER, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { aPillarTopZ, beltY, floorY, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
-import { MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, styleMirrorDrawn } from "./part-geometry.ts";
+import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
+import { drawnLamp, drawnPart, lampEndZ, lampRest } from "./part-variants.ts";
 import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
@@ -984,7 +985,7 @@ function mirrorStyle(mirror: MirrorSpec): BodyStyle {
 function readMirror(style: BodyStyle): { inner: number; outer: number; cap: THREE.Box3; tip: THREE.Color } {
   const scaleX = style.door.mirrorReach / MIRROR_REACH;
   const seat = style.door.hingeX + mirrorSeatX(style);
-  const geo = styleMirrorDrawn(style, 1).geometry;
+  const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
   const [pos, painted, colour] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE), geo.getAttribute("color")];
   const cap = new THREE.Box3();
   let [inner, outer, tip] = [Infinity, -Infinity, 0];
@@ -1041,11 +1042,13 @@ describe("given a body style's P2 parts", () => {
     assert.ok(!cap.isEmpty() && tip.getHex() === PAINT_COLOR_TONE.getHex(), `body: the cap is painted, its outer face 0x${tip.getHexString()}`);
   });
 
-  it("when a style has no mirror of its own, then its seats draw the platform mirror", () => {
+  it("when a style has no mirror or grille of its own, then its seats draw the platform parts", () => {
     for (const id of CAR_STYLE_IDS) {
-      for (const [kind, sign] of [[PART_KIND.mirrorL, -1], [PART_KIND.mirrorR, 1]] as const) {
+      const style = CAR_STYLES[id];
+      const own = [style.door.mirror, style.door.mirror, style.grille];
+      for (const [k, kind] of [PART_KIND.mirrorL, PART_KIND.mirrorR, PART_KIND.grille].entries()) {
         const seat = cars[id].partSeats[kind]!;
-        assert.ok(CAR_STYLES[id].door.mirror !== undefined || (seat.drawn === partGeometry(kind) && seat.variant === 0 && styleMirrorDrawn(CAR_STYLES[id], sign).geometry === partGeometry(kind)), `${id} side ${sign}`);
+        assert.ok(own[k] !== undefined || (seat.drawn === partGeometry(kind) && seat.variant === 0 && drawnPart(kind, style).geometry === partGeometry(kind)), `${id} kind ${kind}`);
       }
     }
   });
@@ -1065,5 +1068,41 @@ describe("given a body style's P2 parts", () => {
     const k = Array.from({ length: painted.count }, (_, i) => i).find((i) => painted.getX(i) === 1)!;
     const want = PAINT_COLOR_TONE.clone().multiply(new THREE.Color(0x336699));
     assertSameNumbers([colour.getX(k), colour.getY(k), colour.getZ(k)], [want.r, want.g, want.b], "the torn cap keeps its paint", 1e-6);
+  });
+
+  it("when a front bumper carries its own grille, then its surround fills its size at its height with its face at its z, in its finish, and the grille seat and the cage builds are unchanged", () => {
+    const sedan = CAR_STYLES.sedan;
+    const seat = sedan.bumpers.front.seat;
+    const grille = { y: 0.48, z: seat.z + 0.07, size: [0.6, 0.12], kind: "bars", finish: "chrome" } as const;
+    const style: BodyStyle = { ...sedan, grille };
+    const geo = drawnPart(PART_KIND.grille, style).geometry;
+    const box = toneBox(geo, null, 0).box.translate(new THREE.Vector3(0, seat.y + GRILLE_SEAT.y, seat.z + GRILLE_SEAT.z));
+    const [size, centre] = [box.getSize(new THREE.Vector3()), box.getCenter(new THREE.Vector3())];
+    assertSameNumbers([size.x, size.y, centre.y, box.max.z], [...grille.size, grille.y, grille.z], "the grille's w, h, centre height and face", POSITION_TOL);
+    const colour = geo.getAttribute("color");
+    const chrome = new THREE.Color(TRIM_CHROME);
+    assert.ok(Array.from({ length: colour.count }, (_, i) => i).some((i) => Math.abs(colour.getX(i) - chrome.r) < 1e-6), "its surround and bars are chrome");
+    assert.ok(drawnPart(PART_KIND.grille, sedan).geometry === partGeometry(PART_KIND.grille), "without the field, the platform grille");
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a style draws its own head lamp to an outline, then its lit lens fills the outline 1-6 mm proud of the skin, the left lamp mirrors the right, and the cage builds are unchanged", () => {
+    const sedan = CAR_STYLES.sedan;
+    const [x, y] = sedan.lamps.head;
+    const loop = { points: [[x - 0.08, y - 0.03], [x + 0.08, y - 0.03], [x + 0.08, y + 0.03], [x - 0.08, y + 0.03]] } as const;
+    const style: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: { head: { loops: [loop], lens: "lit", bezel: "chrome" } } } };
+    const zEnd = lampEndZ("head", style);
+    const lens = [-1, 1].map((side) => {
+      const rest = new THREE.Matrix4().compose(new THREE.Vector3(side * x, y, zEnd), lampRest("head", style, new THREE.Quaternion()), new THREE.Vector3(1, 1, 1));
+      const geo = drawnLamp(style, "head", side).geometry.clone().applyMatrix4(rest);
+      return toneBox(geo, "uv", 0.75);
+    });
+    assert.ok(lens[1]!.count > 0, "the control: the lit lens is drawn");
+    assertSameNumbers([lens[1]!.box.min.x, lens[1]!.box.max.x, lens[1]!.box.min.y, lens[1]!.box.max.y], [x - 0.08, x + 0.08, y - 0.03, y + 0.03], "the lens fills its outline", 0.003);
+    assertSameNumbers([lens[0]!.box.min.x, lens[0]!.box.max.x], [-lens[1]!.box.max.x, -lens[1]!.box.min.x], "the left lamp mirrors the right", POSITION_TOL);
+    const skin = new THREE.Raycaster(new THREE.Vector3(x, y, zEnd + 1), new THREE.Vector3(0, 0, -1)).intersectObject(new THREE.Mesh(makeChassisGeometry(style)), false)[0]!;
+    const proud = lens[1]!.box.max.z - skin.point.z;
+    assert.ok(proud > 0.001 && proud < 0.006, `the lens stands ${(proud * 1000).toFixed(1)} mm off the skin at its centre`);
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 });

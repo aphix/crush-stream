@@ -83,32 +83,35 @@ export function makeWheelMaterial(): THREE.MeshStandardMaterial {
   return m;
 }
 
-/** Per vertex: the mirror variant it belongs to (`mirrorVariant`); per instance: the variant its car draws. */
-export const MIRROR_VARIANT_ATTRIBUTE = "mirrorVariant";
-export const INSTANCE_MIRROR_VARIANT_ATTRIBUTE = "instanceMirrorVariant";
-/** Per vertex 1 where a mirror cap takes its door's paint (the instance colour), else 0. */
+/** Per vertex: the style variant it belongs to (`part-variants.ts`); per instance: the variant its car draws. */
+export const PART_VARIANT_ATTRIBUTE = "partVariant";
+export const INSTANCE_PART_VARIANT_ATTRIBUTE = "instancePartVariant";
+/** Per vertex 1 where a part takes its panel's paint (the instance colour), else 0. */
 export const PAINTED_ATTRIBUTE = "painted";
 
 /**
- * The part batch's mirror material: one geometry per side holds every style's mirror, so an instance draws only its own variant (the
- * others collapse to a point) and its `painted` cap in the instance colour, its door's paint. Wraps `capHighlights`' compile hook.
+ * `m` drawing a batch whose one geometry holds every style's variant of a part: an instance draws only its own variant (the others
+ * collapse to a point) and, with an instance colour, paints its `painted` vertices that colour. Chains `m`'s compile hook and key.
  */
-export const mirrorPartsMaterial = once((): THREE.MeshStandardMaterial => {
-  const m = makePartsMaterial();
-  const cap = m.onBeforeCompile;
+export function withPartVariants<T extends THREE.MeshStandardMaterial>(m: T): T {
+  const hook = m.onBeforeCompile;
+  const key = m.customProgramCacheKey;
   m.onBeforeCompile = (shader, renderer) => {
-    cap.call(m, shader, renderer);
+    hook.call(m, shader, renderer);
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", `#include <common>\nattribute float ${MIRROR_VARIANT_ATTRIBUTE};\nattribute float ${INSTANCE_MIRROR_VARIANT_ATTRIBUTE};\nattribute float ${PAINTED_ATTRIBUTE};`)
+      .replace("#include <common>", `#include <common>\nattribute float ${PART_VARIANT_ATTRIBUTE};\nattribute float ${INSTANCE_PART_VARIANT_ATTRIBUTE};\nattribute float ${PAINTED_ATTRIBUTE};`)
       .replace(
         "#include <color_vertex>",
         `vColor = vec4(color, 1.0);\n#ifdef USE_INSTANCING_COLOR\nvColor.rgb *= mix(vec3(1.0), instanceColor.rgb, ${PAINTED_ATTRIBUTE});\n#endif`,
       )
-      .replace("#include <begin_vertex>", `#include <begin_vertex>\nif (abs(${MIRROR_VARIANT_ATTRIBUTE} - ${INSTANCE_MIRROR_VARIANT_ATTRIBUTE}) > 0.5) transformed = vec3(0.0);`);
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\nif (abs(${PART_VARIANT_ATTRIBUTE} - ${INSTANCE_PART_VARIANT_ATTRIBUTE}) > 0.5) transformed = vec3(0.0);`);
   };
-  m.customProgramCacheKey = () => "car-mirror-variants";
+  m.customProgramCacheKey = () => `${key.call(m)}|part-variants`;
   return m;
-});
+}
+
+/** The part batch's material for a kind drawn in style variants (mirrors, grille, tail trim). */
+export const variantPartsMaterial = once((): THREE.MeshStandardMaterial => withPartVariants(makePartsMaterial()));
 
 /**
  * A car material's draw class: opaque draws of one class need one shader program, so `sortByDrawClass` (present/draw-order.ts)
@@ -370,7 +373,7 @@ export const getCrackMap = once((): THREE.Texture => {
 export type LampKind = "head" | "tail";
 
 /** Lamp housing [width, height] (m). The head lamp fits the nose between the grille and the header panel. */
-export const LAMP_HOUSING: Readonly<Record<LampKind, readonly [number, number]>> = { head: [0.22, 0.09], tail: [0.31, 0.11] };
+const LAMP_HOUSING: Readonly<Record<LampKind, readonly [number, number]>> = { head: [0.22, 0.09], tail: [0.31, 0.11] };
 
 /** Lamp unit in lamp space (lens toward +z, origin on the body skin): dark housing plus lens, one draw.
  *  uv picks the `lampEmissiveMap` texel — housing 0, lens 1 — so a per-lamp emissive lights the lens alone. */

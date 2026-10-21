@@ -3,16 +3,16 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { FULL_POOL, LampBatch, LampLights, type LampPool, lampPoolFor, PHONE_POOL } from "./lamp-lights.ts";
-import { LAMP_HOUSING } from "./car-materials.ts";
+import { drawnLamp } from "./part-variants.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { assignClass, STYLE_CLASS, type VehicleClassId } from "./vehicle-classes.ts";
 import { CLASS_LIFT, INTERIOR_MESH } from "./constants.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { DT, forModes, paint } from "./test-support.ts";
 
-/** A seat has no `raycast`; a mesh of its shared geometry at its world pose stands in for it. */
+/** A seat has no `raycast`; a mesh of what it draws (`drawn`: a style's own grille or mirror) at its world pose stands in for it. */
 function seatProbe(seat: PartSeat): THREE.Mesh {
-  const probe = new THREE.Mesh(seat.geometry);
+  const probe = new THREE.Mesh(seat.drawn);
   probe.matrixWorld.copy(seat.matrixWorld);
   return probe;
 }
@@ -84,7 +84,7 @@ forModes("given a car whose lamps live on the body and break per corner", (mode)
     assert.deepEqual(out, ["headL"], `lamps out: ${out.join(",") || "none"}`);
     const batch = new LampBatch(2);
     batch.sync([car]);
-    assert.deepEqual(batch.meshes.map((m) => m.count), [1, 1, 2, 0], "drawn as head lit / head broken / tail lit / tail broken");
+    assert.deepEqual(batch.meshes.map((m) => m.count), [1, 1, 2, 0, 0, 0], "drawn as head lit / head broken / tail lit / tail broken, no brake lamp or marker");
   });
 
   it("when the front-left corner is crushed, then the crushed corner carries its lamp with the skin and the lamp stays seated on it", () => {
@@ -158,12 +158,14 @@ describe("given every body style fitted with its own lamps", () => {
         y.setFromMatrixColumn(m, 1).normalize();
         axis.setFromMatrixColumn(m, 2).normalize();
         assert.ok(axis.z * (l.kind === "head" ? 1 : -1) > 0.99, `${name} faces ${axis.toArray().map((v) => v.toFixed(2))}`);
-        // 5×5 probes over the housing's back face, each cast in from outside along the lamp axis: the first surface met
-        // must be the body skin within 1.5 cm of the seat plane (not air, not a bumper, grille or boot over the lamp).
-        const [w, h] = LAMP_HOUSING[l.kind];
+        // 5×5 probes over the housing's back face (its drawn unit's box: the style's own, else `LAMP_HOUSING`), each cast in from outside along
+        // the lamp axis: the first surface met must be the body skin within 1.5 cm of the seat plane (not air, not a bumper, grille or boot over the lamp).
+        const unit = drawnLamp(car.style, l.kind, l.side).geometry;
+        unit.computeBoundingBox();
+        const { min, max } = unit.boundingBox!;
         for (let a = 0; a <= 4; a++) {
           for (let b = 0; b <= 4; b++) {
-            q.setFromMatrixPosition(m).addScaledVector(x, (a / 4 - 0.5) * w).addScaledVector(y, (b / 4 - 0.5) * h);
+            q.setFromMatrixPosition(m).addScaledVector(x, THREE.MathUtils.lerp(min.x, max.x, a / 4)).addScaledVector(y, THREE.MathUtils.lerp(min.y, max.y, b / 4));
             ray.set(q.clone().addScaledVector(axis, 0.6), axis.clone().negate());
             const hit = ray.intersectObjects(exterior, false)[0];
             assert.ok(hit?.object === car.body, `${name} probe ${a},${b} meets ${hit ? hit.object.name || hit.object.parent?.name || "a part" : "nothing"}`);
