@@ -1,11 +1,22 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { BOOT_SENSOR, CABIN_TUB, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+import { BOOT_SENSOR, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+
+const { bumpers } = PLATFORM_HARDPOINTS;
 
 /** 80s regular/extended-cab long-bed pickup (Toyota Pickup proportions): boxy cab, flat hood, open bed; the trunk part is the tailgate. */
 export const PICKUP: BodyStyle = {
   id: "pickup",
-  dims: { wheelbase: 2.68, overhang: { front: 0.81, rear: 0.81 }, track: 1.48, width: 1.801, height: 1.365, rideHeight: 0.145, wheel: PLATFORM_WHEEL },
+  dims: { wheelbase: 2.51, overhang: { front: 0.81, rear: 0.81 }, track: 1.3, width: 1.801, height: 1.365, rideHeight: 0.34, wheel: PLATFORM_WHEEL },
   ...PLATFORM_HARDPOINTS,
+  windshield: { base: [1.19, 0.91], wBase: 1.36, wTop: 1.18 },
+  belt: { x: 0.73, y: [[0, 1.18]] },
+  rocker: { y: 0.4 },
+  arch: { radius: 0.43 },
+  hood: { z0: 0.85, z1: 1.92, origin: [1.07, 0.83] },
+  bumpers: {
+    front: { ...bumpers.front, seat: { y: 0.42, z: 1.88 }, span: 0.76 },
+    rear: { ...bumpers.rear, seat: { y: 0.5, z: 2.13 }, span: 0.76 },
+  },
   profile: [
     st(-2.18, 0.76, 1.19),
     st(-1.6, 0.775, 1.2),
@@ -26,7 +37,7 @@ export const PICKUP: BodyStyle = {
   quarter: { zRearBot: -0.47, zRearTop: -0.47 },
   midPillarZ: null,
   rearBulkhead: { z: -0.58, yTop: 1.2 },
-  tubs: [CABIN_TUB, [-2.12, -0.62, 0.8]],
+  tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
   rearDoorSeam: null,
   boot: { kind: "tailgate", y0: 0.58, origin: [1.19, -2.18] },
   lamps: { head: HEAD_LAMP, tail: [0.7, 0.86] },

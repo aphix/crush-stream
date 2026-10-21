@@ -1,11 +1,22 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { CABIN_TUB, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+import { HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+
+const { bumpers } = PLATFORM_HARDPOINTS;
 
 /** Late-70s notchback muscle coupe (Celica Supra A40 proportions): long flat hood, flat roof, sloped rear glass, short ducktail deck. */
 export const COUPE: BodyStyle = {
   id: "coupe",
-  dims: { wheelbase: 2.38, overhang: { front: 0.81, rear: 0.81 }, track: 1.32, width: 1.852, height: 1.276, rideHeight: 0.145, wheel: PLATFORM_WHEEL },
+  dims: { wheelbase: 2.38, overhang: { front: 0.81, rear: 0.81 }, track: 1.32, width: 1.852, height: 1.276, rideHeight: 0.18, wheel: PLATFORM_WHEEL },
   ...PLATFORM_HARDPOINTS,
+  windshield: { base: [0.93, 0.7], wBase: 1.32, wTop: 1.08 },
+  belt: { x: 0.73, y: [[0, 0.89]] },
+  rocker: { y: 0.22 },
+  arch: { radius: 0.36 },
+  hood: { z0: 0.64, z1: 1.97, origin: [0.8, 0.62] },
+  bumpers: {
+    front: { ...bumpers.front, seat: { y: 0.35, z: 1.94 }, span: 0.74 },
+    rear: { ...bumpers.rear, seat: { y: 0.36, z: 2.0 }, span: 0.72 },
+  },
   profile: [
     st(-2.05, 0.63, 0.86),
     st(-1.9, 0.69, 0.9),
@@ -26,7 +37,7 @@ export const COUPE: BodyStyle = {
   quarter: { zRearBot: -1.02, zRearTop: -0.9 },
   midPillarZ: null,
   rearBulkhead: { z: -0.9, yTop: 0.89 },
-  tubs: [CABIN_TUB],
+  tubs: [[-0.9, 0.7, 0.3]],
   rearDoorSeam: null,
   boot: { kind: "lid", z0: -1.42, z1: -2.0, origin: [0.97, -1.42] },
   lamps: { head: HEAD_LAMP, tail: [0.5, 0.66] },
