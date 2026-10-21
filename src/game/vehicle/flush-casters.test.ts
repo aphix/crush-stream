@@ -2,18 +2,21 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
-import type { CarStyleId } from "./car-variants.ts";
+import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { sunCoverage, uncovered } from "./shadow-cover.test-util.ts";
+import { shadowOnlyMaterial } from "./car-materials.ts";
 import { DT, paint } from "./test-support.ts";
 
 /**
  * A car's hood, boot lid, doors and bumpers lie on the body's own shell until a crash moves them, so the sun's shadow of an
- * undamaged car is the body's. They draw into the shadow map only once the car has been hit, a door is open, or a part is
- * off: 7 shadow draws a car become 1 on the phone, with the shadow unchanged to a fraction of a texel row.
+ * undamaged car is one decimated shell of all of them per style (`restCaster`, drawn by `PartBatch.casters`). They and the body
+ * draw into the shadow map themselves only once the car has been hit, a door is open, or a part is off.
  */
 
-/** The share of the whole car's shadow the body alone may leave lit (the bumpers stand a texel proud of the body). */
+/** The share of the whole car's shadow the caster may leave lit, or shade beyond it (the bumpers stand a texel proud of the body). */
 const UNDAMAGED_MISSING_MAX = 0.012;
+/** A style's caster triangles: a third of its body alone, so the shadow pass costs less than the body casting did. */
+const CASTER_TRIANGLES_MAX = 1000;
 
 const standingCar = (style: CarStyleId): DeformableCar => {
   const car = new DeformableCar(paint(), new THREE.Scene(), null, style);
@@ -63,15 +66,28 @@ const styleCases = [
 
 describe("given a car that has not been in a crash", () => {
   for (const testCase of styleCases) {
-    it(`when it is a ${testCase.it}, then only its shadow caster${testCase.bar ? " and its light bar cast" : " casts"} a shadow and the shadow covers the ground the whole car's would, to within 1.2 %`, () => {
+    it(`when it is a ${testCase.it}, then only its rest caster${testCase.bar ? " and its light bar cast" : " casts"} a shadow and the shadow covers the ground the whole car's would, to within 1.2 % either way`, () => {
       const car = standingCar(testCase.style);
       const casting = castingMeshes(car);
-      assert.equal(casting.length, testCase.bar ? 2 : 1, `${casting.length} meshes cast`);
-      assert.ok(casting.includes(car.shadowCaster), "the shadow caster casts");
-      const whole = [...casting, ...car.flushCasters];
-      const gap = uncovered(sunCoverage(whole, car.group.position), sunCoverage(casting, car.group.position));
+      assert.equal(casting.length, testCase.bar ? 1 : 0, `${casting.length} meshes of its own cast`);
+      assert.ok(car.restCasts, "the rest caster casts");
+      const rest = new THREE.Mesh(car.restCaster, shadowOnlyMaterial());
+      car.group.add(rest);
+      const whole = sunCoverage([car.body, ...car.flushCasters], car.group.position);
+      const caster = sunCoverage([rest], car.group.position);
+      const gap = uncovered(whole, caster);
+      const spill = uncovered(caster, whole);
       assert.ok(gap.of > 2000, `the whole car fills ${gap.of} texels`);
       assert.ok(gap.missing / gap.of <= UNDAMAGED_MISSING_MAX, `${gap.missing} of ${gap.of} texels left lit`);
+      assert.ok(spill.missing / gap.of <= UNDAMAGED_MISSING_MAX, `${spill.missing} texels shaded beyond the car's ${gap.of}`);
+    });
+  }
+
+  for (const style of CAR_STYLE_IDS) {
+    it(`when it is a ${style}, then its shadow caster holds at most ${CASTER_TRIANGLES_MAX} triangles`, () => {
+      const index = standingCar(style).restCaster.index;
+      const triangles = index ? index.count / 3 : 0;
+      assert.ok(triangles > 0 && triangles <= CASTER_TRIANGLES_MAX, `${triangles} triangles`);
     });
   }
 });
@@ -98,13 +114,13 @@ describe("given a car", () => {
     for (const part of car.flushCasters) assert.ok(part.castShadow, "a flush part does not cast with a door open");
   });
 
-  it("when it is hit and then put back on the grid, then only its shadow caster casts a shadow again", () => {
+  it("when it is hit and then put back on the grid, then only its rest caster casts a shadow again", () => {
     const car = standingCar("sedan");
     hitAndSettle(car, "nose", 40, 50);
     car.spawn(8, 12, 12);
     car.group.updateMatrixWorld(true);
     car.updateSkin();
     const casting = castingMeshes(car);
-    assert.ok(casting.length === 1 && casting[0] === car.shadowCaster, `${casting.length} meshes cast`);
+    assert.ok(casting.length === 0 && car.restCasts, `${casting.length} meshes of its own cast`);
   });
 });
