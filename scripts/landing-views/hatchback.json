@@ -1,0 +1,30 @@
+{
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/purple-hatchback/purple-hatchback-2.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/purple-hatchback/purple-hatchback-1.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      551,
+      759,
+      528,
+      448
+    ],
+    "wheels": {},
+    "camera": null
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      434,
+      609,
+      400,
+      340
+    ],
+    "wheels": {},
+    "camera": null
+  }
+}
