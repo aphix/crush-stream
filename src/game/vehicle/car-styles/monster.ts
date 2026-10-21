@@ -30,8 +30,8 @@ export const MONSTER: BodyStyle = {
   arch: { radius: 0.47 },
   hood: { z0: 0.94, z1: 2.08, origin: [0.96, 0.92] },
   bumpers: {
-    front: { ...bumpers.front, seat: { y: 0.39, z: 2.05 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA },
-    rear: { ...bumpers.rear, seat: { y: 0.44, z: 2.36 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA },
+    front: { ...bumpers.front, seat: { y: 0.39, z: 2.05 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black" },
+    rear: { ...bumpers.rear, seat: { y: 0.44, z: 2.36 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black" },
   },
   profile: [
     st(-2.3, 0.8, 1.02),
@@ -49,7 +49,7 @@ export const MONSTER: BodyStyle = {
   ],
   roofZ: [-0.7, 0.5],
   windshieldTop: [1.47, 0.5],
-  rearGlass: { base: [1.02, -0.78], top: [1.45, -0.71], wBase: 1.36, wTop: 1.18 },
+  rearGlass: { base: [1.02, -0.78], top: [1.45, -0.7], wBase: 1.36, wTop: 1.18 },
   quarter: { zRearBot: -0.64, zRearTop: -0.64 },
   midPillarZ: null,
   rearBulkhead: { z: -0.79, yTop: 1.03 },
