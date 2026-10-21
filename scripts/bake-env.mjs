@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Bakes three's RoomEnvironment to public/env-studio.hdr: a 1024x512 equirect in linear radiance (Radiance RGBE, run-length coded),
+// Bakes three's RoomEnvironment to public/env-studio.hdr: a 512x256 equirect in linear radiance (Radiance RGBE, run-length coded),
 // so the softboxes keep their real brightness (peaks near 46 after the exposure match below) instead of the 8-bit jpeg's clip at 1.
 import { createReadStream, existsSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -7,9 +7,12 @@ import { extname, join, resolve } from "node:path";
 import { chromium } from "playwright";
 
 const ROOT = resolve(import.meta.dirname, "..");
-/** `--width N` (1024, 512, 256): the equirect's width, box-filtered down from the 1024 bake; three's PMREM cube is a quarter of it. `--out FILE`. */
+/**
+ * `--width N` (1024, 512, 256; 512 by default: the paint's highlights shot the same as at 1024 for a quarter of the VRAM): the equirect's
+ * width, box-filtered down from the 1024 bake; three's PMREM cube is a quarter of it. `--out FILE`.
+ */
 const arg = (name, fallback) => (process.argv.includes(`--${name}`) ? process.argv[process.argv.indexOf(`--${name}`) + 1] : fallback);
-const WIDTH = Number(arg("width", 1024));
+const WIDTH = Number(arg("width", 512));
 const OUT = resolve(arg("out", join(ROOT, "public", "env-studio.hdr")));
 const MIME = {
   ".html": "text/html; charset=utf-8",
