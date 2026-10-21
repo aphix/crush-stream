@@ -84,8 +84,8 @@ class LostWheelWatch {
     scene.updateMatrixWorld();
     scene.onBeforeRender(engine["renderer"], scene, engine["camera"], NO_GEOMETRY, NO_MATERIAL, NO_GROUP);
     drawn.length = 0;
-    for (const lane of [engine["wheels"]["near"], engine["wheels"]["far"]]) {
-      for (let i = 0; i < lane.mesh.count; i++) drawn.push(new THREE.Vector3().setFromMatrixPosition(lane.mesh.getMatrixAt(i, m)));
+    for (const mesh of engine["wheels"].meshes.slice(0, -1)) {
+      for (let i = 0; i < mesh.count; i++) drawn.push(new THREE.Vector3().setFromMatrixPosition(mesh.getMatrixAt(i, m)));
     }
     wheels.length = 0;
     for (const car of new Set(engine["drawnCars"]())) for (const w of car.wheels) if (chainVisible(w)) wheels.push(new THREE.Vector3().setFromMatrixPosition(w.matrixWorld));
