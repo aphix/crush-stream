@@ -119,7 +119,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const rings = zs.map((z) => (source === "cage" ? sectionAt(z) : insetRing(sectionAt(z), endRollInset(z, style.profile))));
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
-  const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style)];
+  const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style, source)];
   parts.push(...makeWellLiners(style));
   parts.push(...makeGreenhouseFrame(style, source));
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
