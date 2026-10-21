@@ -31,7 +31,8 @@ const EPS_ROT = 1e-6;
 const MOVING = 0.005;
 const BAR = 0.95;
 
-type Class = "group" | "classLift" | "wheel" | "part" | "hinged";
+/** `skin`: a geometry the crush skin writes (`DeformableCar.skinGeometries`), its points' x and z only (the tyre hold lifts them in y on every frame its drawn wheel moved). */
+type Class = "group" | "classLift" | "wheel" | "part" | "hinged" | "skin";
 /** `on`: for a hinged sample, the part is still on the car (its local pose is what is drawn). */
 type Pose = { p: THREE.Vector3; q: THREE.Quaternion; on: boolean };
 
@@ -68,6 +69,14 @@ function moved(a: Pose, b: Pose): boolean {
   return a.p.distanceTo(b.p) > EPS_POS || a.q.angleTo(b.q) > EPS_ROT;
 }
 
+/** The largest x or z move (m) of any point of `now` from `last`, which then takes `now`. */
+function planarStep(now: Float32Array, last: Float32Array): number {
+  let most = 0;
+  for (let i = 0; i < now.length; i += 3) most = Math.max(most, Math.abs(now[i]! - last[i]!), Math.abs(now[i + 2]! - last[i + 2]!));
+  last.set(now);
+  return most;
+}
+
 /** Per class: the frames on which an entity moves, and the ones among them on which its drawn pose changed since the frame before. */
 /** `skip`: `EPICENTER.presentSkip`, which poses the parts only when what the pose reads changed (so not on the frames between two steps); `calls` counts the poses written. */
 function shares(dt: number, skip: 0 | 1): { rows: Record<Class, { moving: number; changed: number }>; calls: number } {
@@ -86,6 +95,9 @@ function shares(dt: number, skip: 0 | 1): { rows: Record<Class, { moving: number
   };
   const ents = entities(cars);
   const series: Pose[][] = ents.map(() => []);
+  const skins = cars.flatMap((c) => c.skinGeometries().map((g) => g.getAttribute("position") as THREE.BufferAttribute));
+  const skinLast = skins.map((a) => Float32Array.from(a.array as Float32Array));
+  const skinSteps: number[][] = skins.map(() => []);
   let t = 0;
   try {
     while (t < sim.length - dt) {
@@ -96,13 +108,14 @@ function shares(dt: number, skip: 0 | 1): { rows: Record<Class, { moving: number
       for (const c of cars) c.updateSkin();
       blend.refresh();
       for (let i = 0; i < ents.length; i++) series[i]!.push(sample(ents[i]!));
+      for (let i = 0; i < skins.length; i++) skinSteps[i]!.push(planarStep(skins[i]!.array as Float32Array, skinLast[i]!));
       blend.restore();
     }
   } finally {
     proto.posePart = real;
   }
   const none = (): { moving: number; changed: number } => ({ moving: 0, changed: 0 });
-  const out: Record<Class, { moving: number; changed: number }> = { group: none(), classLift: none(), wheel: none(), part: none(), hinged: none() };
+  const out: Record<Class, { moving: number; changed: number }> = { group: none(), classLift: none(), wheel: none(), part: none(), hinged: none(), skin: none() };
   for (let i = 0; i < ents.length; i++) {
     const s = series[i]!;
     const hinged = ents[i]!.cls === "hinged";
@@ -116,6 +129,17 @@ function shares(dt: number, skip: 0 | 1): { rows: Record<Class, { moving: number
       } else if (s[f - 3]!.p.distanceTo(s[f + 3]!.p) <= MOVING) continue;
       out[ents[i]!.cls].moving++;
       if (moved(s[f]!, s[f - 1]!)) out[ents[i]!.cls].changed++;
+    }
+  }
+  // A skin moves on a frame when its points moved in the 3 frames up to it and in the 3 after, by more than `MOVING` in all (each frame's farthest point
+  // summed): a crush starts and stops, and its still frames either side are not frames it moves on.
+  for (const steps of skinSteps) {
+    for (let f = 3; f < steps.length - 3; f++) {
+      const before = steps[f - 2]! + steps[f - 1]! + steps[f]!;
+      const after = steps[f + 1]! + steps[f + 2]! + steps[f + 3]!;
+      if (before <= EPS_POS || after <= EPS_POS || before + after <= MOVING) continue;
+      out.skin.moving++;
+      if (steps[f]! > EPS_POS) out.skin.changed++;
     }
   }
   return { rows: out, calls };
@@ -135,7 +159,7 @@ describe("given a crash replayed in slow motion from its clip", () => {
         const rows = (Object.keys(s) as Class[]).map((c) => `${c} ${s[c].changed}/${s[c].moving}`).join(", ");
         assert.ok(s.part.moving > 100, `${name}: the clip sheds parts that move (${rows})`);
         assert.ok(s.hinged.moving > 20, `${name}: the clip moves parts that are still on the car (${rows})`);
-        assert.ok(s.wheel.moving > 100 && s.classLift.moving > 100 && s.group.moving > 100, `${name}: ${rows}`);
+        assert.ok(s.wheel.moving > 100 && s.classLift.moving > 100 && s.group.moving > 100 && s.skin.moving > 100, `${name}: ${rows}`);
         for (const c of Object.keys(s) as Class[]) assert.ok(s[c].changed >= BAR * s[c].moving, `${name}, ${c}: ${(s[c].changed / s[c].moving).toFixed(3)} of its moving frames change (${rows})`);
       }
     });

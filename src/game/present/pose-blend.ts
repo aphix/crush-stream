@@ -76,14 +76,21 @@ class SkinTrack {
     this.version = attr.version;
   }
 
-  /** A write since the last frame becomes `cur`, the skin as of step `steps`; the one it replaces, `prev`, held from the last write until then. */
+  /**
+   * A write since the last frame becomes `cur`, the skin as of step `steps`; the one it replaces, `prev`, held from the last write until then.
+   * A write within the step of the last one (the tyre hold over the drawn wheels, a deferred skin) is that step's skin again: the segment keeps its start.
+   */
   take(steps: number): void {
     if (this.attr.version === this.version) return;
+    this.version = this.attr.version;
+    if (steps === this.to) {
+      this.cur.set(this.attr.array as Float32Array);
+      return;
+    }
     const last = this.prev;
     this.prev = this.cur;
     this.cur = last;
     last.set(this.attr.array as Float32Array);
-    this.version = this.attr.version;
     this.from = this.to;
     this.to = steps;
   }
