@@ -91,7 +91,7 @@ export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.
       if (z > DOOR_FRONT_SLOPE.fromZ) y += (z - DOOR_FRONT_SLOPE.fromZ) * DOOR_FRONT_SLOPE.rise;
       if (z < DOOR_REAR_SLOPE.fromZ) y += (DOOR_REAR_SLOPE.fromZ - z) * DOOR_REAR_SLOPE.rise;
       const sl = sampleSlice(DOOR.hingeZ + DOOR.skinZ + z, style.profile);
-      const outer = sideX(DOOR.hingeY + y, sl.hw, sl.yBelt) + DOOR_PROUD - DOOR.hingeX;
+      const outer = sideX(DOOR.hingeY + y, sl.hw, sl.yBelt, style.rocker.y) + DOOR_PROUD - DOOR.hingeX;
       const drop = doorEdgeDrop(Math.min(rowStation + h, h - rowStation), Math.min(z + halfLength, halfLength - z));
       positions.push(sign * (outer - drop), y, z);
       outerX.push(outer);

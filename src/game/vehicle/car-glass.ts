@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassQuad } from "./car-variants.ts";
-import { B_PILLAR_Z, GLASS_BELT_Y, WINDSHIELD_BASE, WINDSHIELD_W, glassTopY, glassX, lerp } from "./car-mesh.ts";
+import { beltY, glassTopY, glassX, lerp } from "./car-mesh.ts";
 
 // Glass panes on the shared platform: windshield, rear glass, door and quarter glass, filling the greenhouse `car-greenhouse-mesh.ts` builds.
 
@@ -49,9 +49,10 @@ function makeGlassQuad(q: GlassQuad, segX: number, segY: number, bow: number): T
   return geo;
 }
 
-/** The windshield's quad on `style`: the shared base and widths, the style's top edge. */
+/** The windshield's quad on `style`: its base and widths, its top edge. */
 function windshieldQuad(style: BodyStyle): GlassQuad {
-  return { base: WINDSHIELD_BASE, top: style.windshieldTop, wBase: WINDSHIELD_W.base, wTop: WINDSHIELD_W.top };
+  const { base, wBase, wTop } = style.windshield;
+  return { base, top: style.windshieldTop, wBase, wTop };
 }
 
 export function makeWindshield(style: BodyStyle = SEDAN): THREE.BufferGeometry {
@@ -72,14 +73,16 @@ function doorSpan(style: BodyStyle): SideSpan {
 
 /** Quarter glass: from the C-pillar forward to the B-pillar. */
 function quarterSpan(style: BodyStyle): SideSpan {
-  return { bot: [style.quarter.zRearBot, B_PILLAR_Z.rear], top: [style.quarter.zRearTop, B_PILLAR_Z.rear] };
+  const { rear } = style.bPillar;
+  return { bot: [style.quarter.zRearBot, rear], top: [style.quarter.zRearTop, rear] };
 }
 
 /** Point of a side pane in car space: `s` 0…1 rear to front, `t` 0…1 belt to top, leaning in with the tumblehome. */
 function sidePoint(sign: number, style: BodyStyle, span: SideSpan, s: number, t: number): THREE.Vector3 {
   const zt = lerp(span.top[0], span.top[1], s);
-  const z = lerp(lerp(span.bot[0], span.bot[1], s), zt, t);
-  const y = lerp(GLASS_BELT_Y, glassTopY(zt, style), t);
+  const zb = lerp(span.bot[0], span.bot[1], s);
+  const z = lerp(zb, zt, t);
+  const y = lerp(beltY(zb, style), glassTopY(zt, style), t);
   return _pt.set(sign * glassX(z, y, style), y, z);
 }
 

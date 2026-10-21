@@ -144,7 +144,7 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
   monster: {
     id: "monster",
     label: "Monster",
-    style: "pickup",
+    style: "monster",
     mass: 2900,
     topSpeed: 190 / 3.6,
     revSpeed: 10,
@@ -173,7 +173,7 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
   police: { ...SEDAN, id: "police", label: "Police", style: "police", drive: "rwd", redlineRpm: 7000, durability: 1.3 },
 };
 
-/** The class each body style drives as unless assigned another (the monster truck rides the pickup body). */
+/** The class each body style drives as unless assigned another. */
 export const STYLE_CLASS: Readonly<Record<CarStyleId, VehicleClassId>> = {
   sedan: "sedan",
   hatchback: "sedan",
@@ -181,6 +181,7 @@ export const STYLE_CLASS: Readonly<Record<CarStyleId, VehicleClassId>> = {
   coupe: "muscle",
   pickup: "truck",
   police: "police",
+  monster: "monster",
 };
 
 export function classStats(id: VehicleClassId): ClassStats {

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, detSin, detCos, detAtan2, detAsin, PART_FAMILY } from "../kernel/physics-core.js";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
-import { ARCH_R, ROCKER, type V3 } from "./car-mesh.ts";
+import { ROCKER, type V3 } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import { DOOR } from "./car-door-mesh.ts";
 import type { BodyStyle } from "./car-variants.ts";
@@ -100,7 +100,7 @@ function cut(style: BodyStyle, body: THREE.BufferGeometry): PanelRegion[] {
         if (Math.sign(wx) !== side) continue;
         const dy = y - hubY;
         const r = dy > 0 ? hypot2(z - wz, dy) : Math.abs(z - wz);
-        if (archOk && r >= ARCH_R - ARCH_IN && r <= ARCH_R + ARCH_OUT) name = PANEL_NAMES[2 + k]!;
+        if (archOk && r >= style.arch.radius - ARCH_IN && r <= style.arch.radius + ARCH_OUT) name = PANEL_NAMES[2 + k]!;
       }
       if (!name && m <= QUARTER_LAST && z <= zFront && z >= zTail) name = side < 0 ? "quarterL" : "quarterR";
       if (name) tris[name].push(a, b, c, b, d, c);
