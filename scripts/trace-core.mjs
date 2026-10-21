@@ -73,8 +73,10 @@ export async function openGame(root = join(import.meta.dirname, "..")) {
 
 /** One car at a time in a lit scene, with the engine's wheel, lamp and part batches drawing it. */
 export class CarStage {
-  constructor(game) {
+  /** `body`: the paint colour (default the trace orange, which stands apart from every reference). */
+  constructor(game, body = PAINT.body) {
     this.game = game;
+    this.paint = { ...PAINT, body };
     this.scene = new THREE.Scene();
     this.wheels = new game.WheelBatch(4, () => false);
     this.lamps = new game.LampBatch(LAMP_CAPACITY);
@@ -94,7 +96,7 @@ export class CarStage {
     const saved = CAR_STYLES[id];
     if (table !== null) CAR_STYLES[id] = table;
     try {
-      this.car = new DeformableCar(PAINT, this.scene, null, id);
+      this.car = new DeformableCar(this.paint, this.scene, null, id);
       assignClass(this.car, cls);
       this.scene.add(this.car.group);
       this.show([]);
