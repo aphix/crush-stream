@@ -36,6 +36,7 @@ import { LAB_SHOT, planLabShot } from "./lab-shot.ts";
 import { laterImpact, SLOMO_HELD, SLOMO_HOLD, struck } from "../match/phase.ts";
 import { countsAsImpact } from "../match/highlights.ts";
 import { MINIGAME_MODE } from "../scenes/minigame-constants.ts";
+import type { SimPacer } from "./sim-pace.ts";
 
 const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
@@ -46,6 +47,8 @@ const _q = new THREE.Quaternion();
 const CLIENT_RACE_COMMANDS: ReadonlySet<RaceCommand["type"]> = new Set(["fullUi", "cycle", "watch", "spectate"]);
 
 export abstract class EngineScenes extends EngineMinigames {
+  /** The frame's pacer (`CrashEngine.pace`): every attempt starts from a fresh one (`restartCrash`). */
+  abstract readonly pace: SimPacer;
   /** The corkscrew's car this run: not yet flown, in the air, or down again (`EngineRigs.watchCorkscrew`). */
   protected corkFlight: "ground" | "air" | "down" = "ground";
 
@@ -668,6 +671,9 @@ export abstract class EngineScenes extends EngineMinigames {
     this.clock.preImpactBy = NaN;
     this.impactKph = null;
     this.fxPoofed = false;
+    // An attempt's slices are its own: a long jump run after a thrown one took half a frame's step first (the slice time owed and the
+    // floor learned in the throw's slow-mo), and the same run's crash came on other slices than when run first.
+    this.pace.reset();
   }
 
   private finishResetCommon(): void {

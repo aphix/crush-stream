@@ -719,6 +719,32 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       });
     }
 
+    /** Frames of an attempt's start compared: a second of full throttle off the hilltop. */
+    const START_FRAMES = FRAME_HZ;
+    /** The car's x (m) over each of an attempt's first `START_FRAMES` frames at full throttle from the long jump's start. */
+    const startOf = (): number[] => {
+      engine.setPlayerCar("sedan");
+      engine.startMinigame("longJump");
+      engine["keys"].add(THROTTLE_KEY);
+      const xs: number[] = [];
+      for (let frame = 0; frame < START_FRAMES; frame++) {
+        engine.advance(FRAME, { frameDt: FRAME });
+        xs.push(engine["carA"].group.position.x);
+      }
+      releaseThrottle();
+      return xs;
+    };
+
+    // The coasting run above took 22 frames from the hit to the release after a held run and 15 on its own: the pacer's slice time owed and
+    // floor learned in the held run's slow-mo carried into the next attempt, whose first frame stepped half as far (0.18 m/s against 0.37).
+    it("when a long jump is attempted right after a thrown one and again after a short drive, then both attempts step alike from their first frame", () => {
+      clockRun(null, null);
+      const afterThrow = startOf();
+      const afterDrive = startOf();
+      const first = afterThrow.findIndex((x, frame) => x !== afterDrive[frame]);
+      assert.equal(first, -1, `frame ${first}: x ${afterThrow[first]} after the throw against ${afterDrive[first]} after the drive`);
+    });
+
     const presses = [
       { it: "0.1 s", framesAfterHit: Math.round(0.1 * FRAME_HZ), expectedKind: "late", expectedOffsetS: 0.1 },
       { it: "0.5 s", framesAfterHit: Math.round(0.5 * FRAME_HZ), expectedKind: "tooLate", expectedOffsetS: 0.5 },
