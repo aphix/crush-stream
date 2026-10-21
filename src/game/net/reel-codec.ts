@@ -301,9 +301,12 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * gave up on. With none, it is put away only once no player can see it (outside the local camera's view or behind a solid, out of every netplay peer's racer
  * sight; stopped, or clear of every racer's near range plus the margin), where before it stayed until every racer's sight let it go or it was 75 s old and braked
  * to a stop. Every put-away is judged this way, the stall recall's included, and the race's patrol runs on after the finish. A clip of 152 or before no longer reads.
+ * 154: a car that leaves a solid's face (a course wall, a prop) no longer keeps the face's last count of its masses on it: each world slice drops the count
+ * before its course pass, so the free shape step stops holding the struck half against a face that is gone (a wreck rolling back off a wall rested 7 cm
+ * further off, pushed 7 mm a step). Every car that leaves a wall moves differently. A clip of 153 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 153;
+const REPLAY_VERSION = 154;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

@@ -27,6 +27,10 @@ const FLAT_GAP = 11;
 const RESTING_GAPS = [11, 11.5, 10.5, 12, 10, 9.5, 9] as const;
 /** The free steps with masses on the face a resting run needs: enough that the frame's walk is a mean over the rest, not one step's. */
 const MIN_FREE_STEPS = 10;
+/** A hit the sedan backs away from under reverse: slow enough that its drivetrain lives (m/s). */
+const BACK_OFF_SPEED = 20;
+/** How far (m) the nearest mass has moved off where the masses first rested on the face before the wreck is clear of it: well past the 2 cm skin within which the face counts a mass (`FACE_SKIN`). */
+const OFF_FACE = 0.05;
 /** The steps after the start that are not judged: the car comes down onto the ground and a landing asks for finer slices (`contactHz`, 9 steps measured). */
 const SETTLE_STEPS = 15;
 /** The steps from the first sliced one that must be sliced: the hit's (measured: the crush window closes about 25 steps after it). */
@@ -37,14 +41,14 @@ const NEAR_STEP_GAP = 2.3 + SPEED * COARSE + 0.5;
 afterEach(() => setGround(null));
 
 interface Run {
-  /** Per step: the car's centre's gap to the near face at the step's start (m), whether it was a lone car, the slices the step ran, and at its end the sum of its masses' crush sets (m), its quiet time (s), whether its mass step is live and its masses resting on the face. */
-  rows: { gap: number; lone: boolean; slices: number; set: number; quiet: number; live: boolean; face: number }[];
+  /** Per step: the car's centre's gap to the near face at the step's start (m), whether it was a lone car, the slices the step ran, and at its end the sum of its masses' crush sets (m), its quiet time (s), whether its mass step is live, its masses resting on the face and its nearest mass's gap to the near face (m). */
+  rows: { gap: number; lone: boolean; slices: number; set: number; quiet: number; live: boolean; face: number; near: number }[];
   past: number;
   x: number;
   alive: boolean;
 }
 
-function drive(lone: boolean, gap = START_GAP): Run {
+function drive(lone: boolean, gap = START_GAP, speed = SPEED, throttle = 1): Run {
   const w = makeWorld();
   w.race.showLobby("havana");
   const car = makeCar("sedan");
@@ -54,9 +58,9 @@ function drive(lone: boolean, gap = START_GAP): Run {
   world.collide = (c, i, h) => w.race.courseHit(c, i, h);
   world.fine = FINE;
   world.lone = lone;
-  car.spawnFacing(NEAR + gap, 12, TOWARD, SPEED);
-  car.velocity.set(-SPEED, 0, 0);
-  const input: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
+  car.spawnFacing(NEAR + gap, 12, TOWARD, speed);
+  car.velocity.set(-speed, 0, 0);
+  const input: DriveInput = { throttle, steer: 0, brake: 0, ebrake: false, boost: false };
   const rows: Run["rows"] = [];
   let past = 0;
   for (let s = 0; s < 3 * QUIET_HZ; s++) {
@@ -64,8 +68,12 @@ function drive(lone: boolean, gap = START_GAP): Run {
     applyDrive(car, input, COARSE);
     stepWorld(world, COARSE);
     settleStep(cars, COARSE, false);
-    rows.push({ gap, lone: (world.loners & 1) === 1, slices: world.shape + 1, set: car.deform.masses.reduce((sum, m) => sum + m.crushSet, 0), quiet: car.deform.quietTime(), live: car.deform.live(), face: car.deform.faceContacts });
-    for (const m of car.deform.masses) past = Math.max(past, FAR - m.world.x);
+    let near = Infinity;
+    for (const m of car.deform.masses) {
+      past = Math.max(past, FAR - m.world.x);
+      near = Math.min(near, m.world.x - NEAR);
+    }
+    rows.push({ gap, lone: (world.loners & 1) === 1, slices: world.shape + 1, set: car.deform.masses.reduce((sum, m) => sum + m.crushSet, 0), quiet: car.deform.quietTime(), live: car.deform.live(), face: car.deform.faceContacts, near });
   }
   const out = { rows, past, x: car.group.position.x, alive: car.deform.drivetrainAlive };
   for (const c of cars) c.dispose();
@@ -221,5 +229,24 @@ describe("given a sedan driven at 40 m/s into Havana's alley wall from the flat 
       if (perStep < 0) walks.push(`${lone ? "lone" : "sliced"}: ${(-perStep).toFixed(2)} mm a step toward the wall over ${moves.length} steps from ${gap} m`);
     }
     assert.deepEqual(walks, [], "the frame walked toward the face it rests on");
+  });
+});
+
+describe("given a sedan driven at 20 m/s into Havana's alley wall from 11 m with reverse held, so it backs off the wall's face after the hit", () => {
+  it("when it runs lone and when it runs sliced, then its masses rest on the face after the hit, and no later step that ends with them clear of where they rested counts any on the face", (t) => {
+    const counted: string[] = [];
+    for (const lone of [true, false]) {
+      const { rows } = drive(lone, FLAT_GAP, BACK_OFF_SPEED, -1);
+      const first = rows.findIndex((r) => r.face > 0);
+      assert.ok(first >= 0, `${lone ? "lone" : "sliced"}: no step with masses on the face`);
+      const rest = rows[first]!.near;
+      const on = rows.filter((r) => r.face > 0).length;
+      const off = rows.slice(first).filter((r) => r.near > rest + OFF_FACE);
+      const stale = off.filter((r) => r.face > 0).length;
+      t.diagnostic(`${lone ? "lone" : "sliced"}: ${on} steps with masses on the face, ${off.length} clear of it, ${stale} of those counting masses on it`);
+      assert.ok(on > 0 && off.length > 0, `${lone ? "lone" : "sliced"}: ${on} steps on the face, ${off.length} clear of it`);
+      if (stale > 0) counted.push(`${lone ? "lone" : "sliced"}: ${stale} of ${off.length} steps clear of the face`);
+    }
+    assert.deepEqual(counted, [], "steps clear of the face that count masses on it");
   });
 });

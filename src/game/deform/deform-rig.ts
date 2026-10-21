@@ -198,7 +198,7 @@ export abstract class DeformRig {
   /** Sticky until reset: this car was squeezed / deep-crushed, so `clampLocal` keeps those shape limits. */
   protected squeezeShape = false;
   protected deepShape = false;
-  /** Masses resting on the face after the last `faceHits` call. */
+  /** Masses resting on the face after the last `faceHits` call (a world slice drops it before its course pass). */
   faceContacts = 0;
   /** Walls past both wheel midpoints: the cage and rails may yield. Reads false while `frameCrush` is off. */
   get deepCrush(): boolean {

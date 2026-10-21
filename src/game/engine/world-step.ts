@@ -448,7 +448,14 @@ export function stepWorld(w: World, dt: number): void {
       d.crushDropped = 0;
     }
     lap(ph, PHASE.structure);
-    if (w.collide) for (let ci = 0; ci < n; ci++) if (i === 0 || !lonely.flag[ci]) w.collide(cars[ci]!, ci, lonely.flag[ci] ? dt : h);
+    if (w.collide) {
+      for (let ci = 0; ci < n; ci++) {
+        if (i > 0 && lonely.flag[ci]) continue;
+        // The next slice's structure step reads the face this pass counts: a car that left the face is counted by no pass.
+        cars[ci]!.deform.faceContacts = 0;
+        w.collide(cars[ci]!, ci, lonely.flag[ci] ? dt : h);
+      }
+    }
     lap(ph, PHASE.course);
     for (let ci = 0; ci < n; ci++) if ((i === 0 || !lonely.flag[ci]) && !idle(cars[ci]!)) cars[ci]!.deform.endSlice();
     // A step's last slice is baked by its caller (`stepBreakage`); the slices before it take their own, so the next slice reads the body
