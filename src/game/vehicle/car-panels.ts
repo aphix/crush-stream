@@ -187,7 +187,7 @@ function region(name: PanelName, ids: number[], pos: Float32Array): PanelRegion 
 /** A panel's shell, posed on `body`'s current skin, unbent. */
 export function makeShell(r: PanelRegion, body: THREE.BufferGeometry): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(r.verts.length * 6), 3));
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(r.verts.length * 6), 3).setUsage(THREE.DynamicDrawUsage));
   g.setIndex(r.shell);
   poseShell(r, g, body, 0, 0);
   return g;
@@ -241,6 +241,7 @@ export function poseShell(r: PanelRegion, shell: THREE.BufferGeometry, body: THR
   computeNormalsFast(shell);
   // The shell moved: a scrape test against its box (`setFromObject`) must not read the last pose's.
   shell.boundingBox = null;
+  shell.boundingSphere = null; // three rebuilds it when it next culls, so a torn panel is culled like any mesh
 }
 
 const _v = new THREE.Vector3();
@@ -276,6 +277,7 @@ export function recentre(shell: THREE.BufferGeometry, out: THREE.Vector3): void 
     o[i + 2] -= out.z;
   }
   attr.needsUpdate = true;
+  shell.boundingSphere = null;
 }
 
 const _ay = new THREE.Vector3(0, 1, 0);

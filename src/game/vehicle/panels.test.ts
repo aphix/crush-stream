@@ -192,6 +192,25 @@ describe("given a car whose quarter panels and arch flares are torn off", () => 
     assert.ok(car.allParts.every((p) => !p.region || p.object.visible), "a reset brings every shell back");
     assert.ok(!car.body.geometry.getAttribute("primer").array.some((v) => v !== 0), "and the body is paint again");
   });
+
+  it("when a panel is torn and posed again, then it is culled by a sphere that follows each pose", () => {
+    const car = probe();
+    car.tear("quarterR", 20);
+    const part = car.part("quarterR");
+    const mesh = part.object as THREE.Mesh;
+    assert.equal(mesh.frustumCulled, true, "a torn panel is frustum-culled");
+    assert.equal(mesh.geometry.boundingSphere, null, "recentre leaves no stale sphere");
+    mesh.geometry.computeBoundingSphere();
+    poseShell(part.region!, mesh.geometry, car.body.geometry, 1, 0);
+    assert.equal(mesh.geometry.boundingSphere, null, "poseShell leaves no stale sphere");
+    mesh.geometry.computeBoundingSphere();
+    const sphere = mesh.geometry.boundingSphere!;
+    const p = positions(mesh);
+    for (let i = 0; i < p.length; i += 3) {
+      const d = Math.hypot(p[i]! - sphere.center.x, p[i + 1]! - sphere.center.y, p[i + 2]! - sphere.center.z);
+      assert.ok(d <= sphere.radius + 1e-6, `vertex ${i / 3} is ${d} from the centre, radius ${sphere.radius}`);
+    }
+  });
 });
 
 describe("given a parked car that tears its hood and right quarter panel off and drops them on the road (dents on torn parts)", () => {

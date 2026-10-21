@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detSin } from "../kernel/physics-core.js";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
+import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import {
@@ -127,5 +128,5 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   merged.userData.loft = { ring: rings[0]!.length, slices: zs.length };
   // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): a torn panel's vertices are set dark.
   merged.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(merged.getAttribute("position").count), 1));
-  return merged;
+  return markSkinDynamic(merged);
 }

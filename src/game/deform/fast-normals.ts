@@ -11,7 +11,7 @@ export function computeNormalsFast(geometry: THREE.BufferGeometry): void {
   const pos = posAttr.array as Float32Array;
   let normalAttr = geometry.getAttribute("normal") as THREE.BufferAttribute | undefined;
   if (!normalAttr || normalAttr.count !== posAttr.count || !(normalAttr.array instanceof Float32Array)) {
-    normalAttr = new THREE.BufferAttribute(new Float32Array(posAttr.count * 3), 3);
+    normalAttr = new THREE.BufferAttribute(new Float32Array(posAttr.count * 3), 3).setUsage(THREE.DynamicDrawUsage);
     geometry.setAttribute("normal", normalAttr);
   }
   const nor = normalAttr.array as Float32Array;
@@ -55,4 +55,12 @@ export function computeNormalsFast(geometry: THREE.BufferGeometry): void {
     nor[i + 2] = z * inv;
   }
   normalAttr.needsUpdate = true;
+}
+
+/** A crash rewrites this geometry whole every skin pass (every vertex moves, so no update range helps): dynamic-draw hint on its position and normal, set before the first upload. */
+export function markSkinDynamic(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  for (const attr of [geometry.getAttribute("position"), geometry.getAttribute("normal")]) {
+    if (attr instanceof THREE.BufferAttribute) attr.setUsage(THREE.DynamicDrawUsage);
+  }
+  return geometry;
 }

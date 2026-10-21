@@ -76,6 +76,7 @@ export function clearDents(d: DentState): void {
       (attr.array as Float32Array).set(d.rest![k]!);
       attr.needsUpdate = true;
       computeNormalsFast(m.geometry);
+      m.geometry.boundingSphere = null;
     }
   }
   d.count = d.applied = 0;
@@ -138,5 +139,6 @@ function carve(d: DentState, object: THREE.Object3D, o: number): void {
     }
     attr.needsUpdate = true;
     computeNormalsFast(m.geometry);
+    m.geometry.boundingSphere = null;
   }
 }

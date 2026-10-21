@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { hypot2, detSin } from "../kernel/physics-core.js";
 import { CAR_STYLES, type BodyStyle, type ProfileStation, type YZ } from "./car-variants.ts";
 import { splitCreases } from "./car-crease.ts";
+import { markSkinDynamic } from "../deform/fast-normals.ts";
 
 export const WHEEL_POS: [number, number, number][] = [
   [-0.74, 0.32, 1.34],
@@ -500,13 +501,13 @@ function makeTailgate(style: BodyStyle, y0: number, origin: YZ, source: BodySour
 }
 
 export function makeHoodGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
-  return makeDeckPanel(style, 0.76, 1.98, [0.7, 0.74], source);
+  return markSkinDynamic(makeDeckPanel(style, 0.76, 1.98, [0.7, 0.74], source));
 }
 
 /** Trunk lid, hatch or tailgate per style; local to `style.boot.origin` ([y, z]). */
 export function makeTrunkGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const b = style.boot;
-  return b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source) : makeTailgate(style, b.y0, b.origin, source);
+  return markSkinDynamic(b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source) : makeTailgate(style, b.y0, b.origin, source));
 }
 
 const FASCIA: readonly (readonly [number, number])[] = [

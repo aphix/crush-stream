@@ -600,7 +600,6 @@ export abstract class CarCore {
       // No shadow draw: a torn sheet's shadow is not worth a second draw per panel (32 cars with 192 panels torn: +590 draws with it).
       mesh.castShadow = false;
       mesh.name = "panel";
-      mesh.frustumCulled = false;
       mesh.position.copy(r.origin);
       const part = add(r.name, mesh, cage, attachL, attachR, r.kind, r.kind === "quarter" ? 0.3 : 0.22);
       part.region = r;
