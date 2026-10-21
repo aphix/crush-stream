@@ -93,7 +93,7 @@ describe("given a car's right door swung from half a radian open at a chosen ope
     const car = makeCar();
     car.setDoorOpen(1, theta);
     car.doorHinge(1).omega = omega;
-    for (let i = 0; i < SWING_HZ; i++) car.swingDoors(1 / SWING_HZ);
+    for (let i = 0; i < SWING_HZ; i++) car.swingHinges(1 / SWING_HZ);
     return car;
   };
 

@@ -54,11 +54,13 @@ const LID_JAM = 0.5;
 const LID_LATCH = { ajar: 0.2, tearT: 0.5, tearMps: 12.5 } as const;
 
 /** Deck lid: 12.4 kg (2011 Accord teardown, NHTSA DOT HS 811 666); torsion bars lift a released lid to ~63°. Hinge energies guessed under a door's. */
-const TRUNK_LID: LidSwing = { kg: 12.4, rise: 1.1, lift: 1.2, ...LID_LATCH, tearJ: 150, slamJ: 250 };
-/** Hatch with its glass (guessed 18 kg); gas struts hold it ~17° above level. */
-const HATCH_LID: LidSwing = { kg: 18, rise: 0.3, lift: 1.2, ...LID_LATCH, tearJ: 200, slamJ: 300 };
+const TRUNK_LID: LidSwing = { kg: 12.4, rise: 1.1, lift: 1.5, ...LID_LATCH, tearJ: 150, slamJ: 250 };
+/** Gas struts hold a hatch or liftgate's chord this far above level (rad, ~17°): head room under its edge. */
+const STRUT_RISE = 0.3;
+/** Hatch with its glass (guessed 18 kg), on gas struts. */
+const HATCH_LID: LidSwing = { kg: 18, rise: STRUT_RISE, lift: 1.5, ...LID_LATCH, tearJ: 200, slamJ: 300 };
 /** SUV liftgate, glass and all (guessed 26 kg), on gas struts. */
-export const LIFTGATE: LidSwing = { kg: 26, rise: 0.3, lift: 1.15, ...LID_LATCH, tearJ: 300, slamJ: 400 };
+export const LIFTGATE: LidSwing = { kg: 26, rise: STRUT_RISE, lift: 1.5, ...LID_LATCH, tearJ: 300, slamJ: 400 };
 /** Pickup drop gate: 22 kg steel (20–30 kg typical), let down level on two cables, rated far above its own ~60 J drop. */
 const DROP_GATE: LidSwing = { kg: 22, rise: 0, lift: 0, ...LID_LATCH, tearJ: 450, slamJ: 400 };
 

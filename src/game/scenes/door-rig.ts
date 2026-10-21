@@ -179,7 +179,7 @@ export class DoorRig {
         this.settled += h;
         if (this.settled > RAM.settle) this.phase = "idle";
       }
-      car.swingDoors(h);
+      car.swingHinges(h);
     }
     // A dented body runs the same structure step as every other crash.
     if (car.deform.massActive) {
