@@ -9,7 +9,7 @@ import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
 import { ROCKER, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { aPillarTopZ, beltY, floorY, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
-import { MIRROR_ROOT } from "./part-geometry.ts";
+import { MIRROR_REACH, MIRROR_ROOT } from "./part-geometry.ts";
 import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
@@ -386,30 +386,51 @@ function ringLowest(style: BodyStyle, z: number, source: "drawn" | "cage"): numb
   return sectionPoints(sampleSlice(z, style.profile), style, source).reduce((m, p) => Math.min(m, p.y), Infinity);
 }
 
+/** The door skin's outer x (car frame) at the mirror's seat: the widest drawn triangle covering its height and z, which beats the slab's inner face. Throws, naming the style, with no triangle there. */
+function doorSkinAtMirror(style: BodyStyle): number {
+  const d = style.door;
+  const geo = makeDoorGeometry(1, style);
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  const index = geo.index!;
+  const [zT, yT] = [-(d.mirrorZ ?? 0) - doorSkinZ(style), d.mirrorY];
+  let widest = -Infinity;
+  for (let k = 0; k < index.count; k += 3) {
+    const [a, b, c] = [index.getX(k), index.getX(k + 1), index.getX(k + 2)];
+    const [za, ya, zb, yb, zc, yc] = [pos.getZ(a), pos.getY(a), pos.getZ(b), pos.getY(b), pos.getZ(c), pos.getY(c)];
+    const det = (yb - yc) * (za - zc) + (zc - zb) * (ya - yc);
+    if (Math.abs(det) < 1e-12) continue;
+    const wa = ((yb - yc) * (zT - zc) + (zc - zb) * (yT - yc)) / det;
+    const wb = ((yc - ya) * (zT - zc) + (za - zc) * (yT - yc)) / det;
+    const wc = 1 - wa - wb;
+    if (wa < -1e-6 || wb < -1e-6 || wc < -1e-6) continue;
+    widest = Math.max(widest, wa * pos.getX(a) + wb * pos.getX(b) + wc * pos.getX(c));
+  }
+  assert.ok(widest > -Infinity, `${style.id}: no door skin triangle at the mirror's z ${zT} and height ${yT}`);
+  return d.hingeX + widest;
+}
+
 /**
- * The outer x of the body at the mirror's seat (its z, just under its height): the door skin's where the seat is in the door cut
- * (under its 2 cm edge roll), else the chassis' outside the cut (its rings are sparse in height, so over 8 cm under the seat);
- * linear between the two nearest vertex columns in z, the widest vertex of each. Throws, naming the style, with no column either side.
+ * The outer x of the body at the mirror's seat (its z, just under its height): the door skin's, exactly at the seat, where it is in the door cut,
+ * else the chassis' outside the cut (its rings are sparse in height, so over 8 cm under the seat); linear between the two nearest vertex
+ * columns in z, the widest vertex of each. Throws, naming the style, with no column either side.
  */
 function bodySideAtMirror(style: BodyStyle): number {
   const d = style.door;
   const mirrorY = d.hingeY + d.mirrorY;
   const mirrorZ = d.hingeZ - (d.mirrorZ ?? 0);
-  const onDoor = doorAperture(mirrorZ, style) > 0;
-  const geo = onDoor ? makeDoorGeometry(1, style) : makeChassisGeometry(style, "drawn");
-  const [dx, dy, dz] = onDoor ? [d.hingeX, d.hingeY, d.hingeZ + doorSkinZ(style)] : [0, 0, 0];
-  const [yLow, yHigh] = onDoor ? [mirrorY - 0.05, mirrorY - 0.02] : [mirrorY - 0.08, mirrorY];
+  if (doorAperture(mirrorZ, style) > 0) return doorSkinAtMirror(style);
+  const geo = makeChassisGeometry(style, "drawn");
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   const columns = new Map<number, number>();
   for (let i = 0; i < pos.count; i++) {
-    const [x, y, z] = [dx + pos.getX(i), dy + pos.getY(i), dz + pos.getZ(i)];
-    if (x <= 0 || y < yLow || y > yHigh || (!onDoor && doorAperture(z, style) > 0)) continue;
+    const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+    if (x <= 0 || y < mirrorY - 0.08 || y > mirrorY || doorAperture(z, style) > 0) continue;
     const key = Math.round(z * 1e4) / 1e4;
     columns.set(key, Math.max(columns.get(key) ?? -Infinity, x));
   }
   const zs = [...columns.keys()].sort((a, b) => a - b);
   const after = zs.findIndex((z) => z >= mirrorZ);
-  assert.ok(after > 0, `${style.id}: no ${onDoor ? "door skin" : "chassis"} vertex column either side of the mirror's z ${mirrorZ} under its height ${mirrorY}`);
+  assert.ok(after > 0, `${style.id}: no chassis vertex column either side of the mirror's z ${mirrorZ} under its height ${mirrorY}`);
   const [z0, z1] = [zs[after - 1]!, zs[after]!];
   const [x0, x1] = [columns.get(z0)!, columns.get(z1)!];
   return x0 + ((x1 - x0) * (mirrorZ - z0)) / (z1 - z0);
@@ -483,8 +504,8 @@ describe("given a body style's H2 hardpoints", () => {
     for (const id of CAR_STYLE_IDS) {
       const style = CAR_STYLES[id];
       const side = bodySideAtMirror(style);
-      const root = style.door.hingeX + mirrorSeatX(style) + MIRROR_ROOT;
-      assert.ok(Math.abs(root - side) < 0.01, `${id}: mirror arm starts at x ${root}, body side at x ${side}`);
+      const root = style.door.hingeX + mirrorSeatX(style) + MIRROR_ROOT * (style.door.mirrorReach / MIRROR_REACH);
+      assert.ok(Math.abs(root - side) < 0.005, `${id}: mirror arm starts at x ${root}, body side at x ${side}`);
     }
   });
 
@@ -494,8 +515,8 @@ describe("given a body style's H2 hardpoints", () => {
     const profile = coupe.profile.map((s) => ({ ...s, hw: s.hw - 0.2 * Math.max(0, coupe.door.hingeZ - s.z) }));
     const moved: BodyStyle = { ...coupe, profile, door: { ...coupe.door, mirrorZ: 0.3 } };
     const skin = bodySideAtMirror(moved);
-    const root = moved.door.hingeX + mirrorSeatX(moved) + MIRROR_ROOT;
-    assert.ok(Math.abs(root - skin) < 0.01, `mirror 0.3 m back: arm starts at x ${root}, door skin at x ${skin}`);
+    const root = moved.door.hingeX + mirrorSeatX(moved) + MIRROR_ROOT * (moved.door.mirrorReach / MIRROR_REACH);
+    assert.ok(Math.abs(root - skin) < 0.005, `mirror 0.3 m back: arm starts at x ${root}, door skin at x ${skin}`);
   });
 
   it("when the door and the A-pillar foot move, then the door glass spans from the door's trailing edge to the pillar's foot", () => {
@@ -531,7 +552,7 @@ describe("given a body style's H2 hardpoints", () => {
   });
 
   it("when the side glass top follows its own stations under the roof, then its corners meet them and a painted fill closes the gap to the cant line, drawn only", () => {
-    const hatch = CAR_STYLES.hatchback;
+    const hatch: BodyStyle = { ...CAR_STYLES.hatchback, glassTop: undefined };
     const [zRear, zFront] = [hatch.quarter.zRearTop, aPillarTopZ(hatch)];
     const [yRear, yFront] = [glassTopY(zRear, hatch) - 0.12, glassTopY(zFront, hatch) - 0.04];
     const moved: BodyStyle = { ...hatch, glassTop: [[zRear, yRear], [zFront, yFront]] };
