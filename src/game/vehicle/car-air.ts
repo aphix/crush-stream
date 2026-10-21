@@ -8,7 +8,7 @@ import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-ut
 import { droop, SPRINGS } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
+import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
 import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop, readTyreSides } from "./car-air-points.ts";
 
 /** Crossings `wreckTop` let a wreck skip since `takeCrossingsSkipped` last read (a field of a const: the bench's work counter reads and zeroes it once a slice). */
@@ -104,8 +104,6 @@ function noteClosing(c: number, closing: number): void {
 const _row = new THREE.Vector3();
 /** A floor that is the world's ground is this close (m) to what the ground's own height reads at the row: the same surface, to its rounding. */
 const GROUND_MATCH = 1e-6;
-/** The speed (m/s) a wreck at rest parts from the ground it stands in: under `REST_SPEED`, so it stays at rest and may sleep. */
-const GROUND_LIFT_V = REST_SPEED / 3;
 /** Per row: a wreck-at-rest ground row being lifted out (`standsOnGround`, read once). */
 const LIFTING = new Uint8Array(CONTACTS);
 
@@ -193,7 +191,9 @@ export function solveRows(n: number): void {
           REST[c] = REST[c]! - rest;
           reach(c, dir, nrm, q, true);
           const jd = (1 + e) * (-vn - rest) * _s[S_REACH]!;
-          if (OWN[c]! >= 0 && !part) noteClosing(c, -vn - rest);
+          // A tyre on a solid's side (its normal level) is a hit on the car, as a body point on another car is: at the point's whole closing,
+          // the closing its stroke still allows (`GAPV`) included.
+          if ((OWN[c]! >= 0 || (TYRE[c] && nrm.y === 0)) && !part) noteClosing(c, -vn - rest + (OWN[c]! >= 0 ? 0 : GAPV[c]!));
           reach(c, dir, nrm, q, false);
           const jr = rest * _s[S_REACH]!;
           jn = jr + jd;
@@ -342,7 +342,12 @@ const P_PLASTIC = 9;
 /** The two cars' velocity and spin (3 + 3 numbers each) as they stood before the rows' exchange: the crush is armed with its masses at that speed. */
 const P_PRE_A = 10;
 const P_PRE_B = 16;
-const PENDING_STRIDE = 22;
+/** 1 where the hardest row is a tyre's on a solid's side (`applyImpact`'s `tyreSide`). */
+const P_TYRE = 22;
+/** The tyre side rows' points summed by their closing (x, y, z) and that closing's sum: where a tyre hit lands. */
+const P_TX = 23;
+const P_TW = 26;
+const PENDING_STRIDE = 27;
 const PENDING = new Float64Array(PENDING_CAPACITY * PENDING_STRIDE);
 const PENDING_A: (DeformableCar | null)[] = new Array(PENDING_CAPACITY).fill(null);
 const PENDING_B: (DeformableCar | null)[] = new Array(PENDING_CAPACITY).fill(null);
@@ -397,6 +402,13 @@ function collectCrush(car: DeformableCar, n: number): void {
     const f = slot * PENDING_STRIDE;
     PENDING[f + P_EBS_A2] = Math.max(PENDING[f + P_EBS_A2]!, ebsA * ebsA);
     PENDING[f + P_EBS_B2] = Math.max(PENDING[f + P_EBS_B2]!, ebsB * ebsB);
+    if (TYRE[c] && N[c]!.y === 0) {
+      // A tyre hit lands across the tyres that meet the face, as a body hit lands across its face: square on both front tyres it is
+      // full-width (the rails take it: `clampMass` pops no hub), one tyre alone off-centre. At the hardest row alone a square hit popped
+      // whichever front tyre was listed first, and the other, holding, turned the car 1.8° on a flat wall.
+      for (let k = 0; k < 3; k++) PENDING[f + P_TX + k] = PENDING[f + P_TX + k]! + closing * CRUSH_POINT[c * 3 + k]!;
+      PENDING[f + P_TW] = PENDING[f + P_TW]! + closing;
+    }
     if (plastic <= PENDING[f + P_PLASTIC]!) continue;
     const plan = hypot2(N[c]!.x, N[c]!.z);
     PENDING[f + P_PLASTIC] = plastic;
@@ -407,6 +419,7 @@ function collectCrush(car: DeformableCar, n: number): void {
     PENDING[f + P_NZ] = N[c]!.z / plan;
     PENDING[f + P_CLOSING] = closing;
     PENDING[f + P_DEPTH] = Math.max(0, SINK[c]!);
+    PENDING[f + P_TYRE] = TYRE[c] && N[c]!.y === 0 ? 1 : 0;
   }
 }
 
@@ -414,18 +427,19 @@ function collectCrush(car: DeformableCar, n: number): void {
  * Arms `car`'s crush at `point` along `inward` as the contact stood before the rows' exchange: its masses start at the speed the car
  * had then (`PENDING` at `pre`), and the exchange's change of the car's speed and spin since (planar, about its centre of mass) is handed
  * to them as the kernel's increment (`shiftBody`, the face moving at `common` along `inward`). Armed after it, the masses had no closing
- * to crush with. A car whose masses already run (armed earlier this slice) takes the hit as it stands.
+ * to crush with. A car whose masses already run (armed earlier this slice) takes the hit as it stands. `tyreSide`: the hit is a tyre's on
+ * a solid's side (`applyImpact`).
  */
-function armAtExchange(car: DeformableCar, pre: number, point: THREE.Vector3, inward: THREE.Vector3, closing: number, ebs: number, common: number): void {
+function armAtExchange(car: DeformableCar, pre: number, point: THREE.Vector3, inward: THREE.Vector3, closing: number, ebs: number, common: number, tyreSide: boolean): void {
   if (!car.rigid) {
-    car.applyImpact(point, inward, closing, ebs);
+    car.applyImpact(point, inward, closing, ebs, tyreSide);
     return;
   }
   _postV.copy(car.velocity);
   _postW.copy(car.angular);
   car.velocity.fromArray(PENDING, pre);
   car.angular.fromArray(PENDING, pre + 3);
-  car.applyImpact(point, inward, closing, ebs);
+  car.applyImpact(point, inward, closing, ebs, tyreSide);
   _centre.set(0, car.frame.comY, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
   car.deform.shiftBody(car.velocity, car.angular, _postV.x - PENDING[pre]!, _postV.z - PENDING[pre + 2]!, _postW.y - PENDING[pre + 4]!, _centre.x, _centre.z, inward.x, inward.z, common);
 }
@@ -458,8 +472,8 @@ export function armPairWithRows(a: DeformableCar, b: DeformableCar, point: THREE
   const swapped = PENDING_A[first] !== a;
   const common = commonSpeed(a, b, normal);
   _crushBack.copy(normal).negate();
-  armAtExchange(a, first * PENDING_STRIDE + (swapped ? P_PRE_B : P_PRE_A), point, normal, closing, Math.sqrt(ebsA2), common);
-  armAtExchange(b, first * PENDING_STRIDE + (swapped ? P_PRE_A : P_PRE_B), point, _crushBack, closing, Math.sqrt(ebsB2), -common);
+  armAtExchange(a, first * PENDING_STRIDE + (swapped ? P_PRE_B : P_PRE_A), point, normal, closing, Math.sqrt(ebsA2), common, false);
+  armAtExchange(b, first * PENDING_STRIDE + (swapped ? P_PRE_A : P_PRE_B), point, _crushBack, closing, Math.sqrt(ebsB2), -common, false);
   for (let i = queue.size - 1; i >= 0; i--) {
     if (!((PENDING_A[i] === a && PENDING_B[i] === b) || (PENDING_A[i] === b && PENDING_B[i] === a))) continue;
     queue.size--;
@@ -489,14 +503,17 @@ export function armCrushRows(dt: number): void {
     const a = PENDING_A[i]!;
     const b = PENDING_B[i];
     const f = i * PENDING_STRIDE;
-    _crushPoint.set(PENDING[f + P_X]!, PENDING[f + P_Y]!, PENDING[f + P_Z]!);
+    const tyre = PENDING[f + P_TYRE] === 1;
+    const w = PENDING[f + P_TW]!;
+    if (tyre) _crushPoint.set(PENDING[f + P_TX]! / w, PENDING[f + P_TX + 1]! / w, PENDING[f + P_TX + 2]! / w);
+    else _crushPoint.set(PENDING[f + P_X]!, PENDING[f + P_Y]!, PENDING[f + P_Z]!);
     _crushNormal.set(PENDING[f + P_NX]!, 0, PENDING[f + P_NZ]!);
     _crushBack.copy(_crushNormal).negate();
     const closing = PENDING[f + P_CLOSING]!;
     const fed = Math.max(PENDING[f + P_DEPTH]!, closing * dt);
     const common = b === null ? 0 : commonSpeed(a, b, _crushNormal);
-    armAtExchange(a, f + P_PRE_A, _crushPoint, _crushNormal, closing, Math.sqrt(PENDING[f + P_EBS_A2]!), common);
-    if (b !== null) armAtExchange(b, f + P_PRE_B, _crushPoint, _crushBack, closing, Math.sqrt(PENDING[f + P_EBS_B2]!), -common);
+    armAtExchange(a, f + P_PRE_A, _crushPoint, _crushNormal, closing, Math.sqrt(PENDING[f + P_EBS_A2]!), common, tyre);
+    if (b !== null) armAtExchange(b, f + P_PRE_B, _crushPoint, _crushBack, closing, Math.sqrt(PENDING[f + P_EBS_B2]!), -common, false);
     a.deform.markMotion();
     a.deform.feedOverlap(_crushPoint, _crushNormal, fed, closing, dt, common);
     a.deform.takeMotion(a.velocity, a.angular);
@@ -684,7 +701,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     n++;
   }
   const tyres = n;
-  n = readTyreSides(n);
+  n = readTyreSides(n, sp.travel);
   // A point that stays higher than the static surface anywhere within its slice's plan travel, by its descent over the slice and a
   // speculative gap, neither meets nor nears it: no reading. Near a car top each body point is held to the solids and that top too.
   const statics = activeGround();

@@ -12,7 +12,8 @@ import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift } from "./car-cage-rig.ts";
-import { POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_POINTS, body, carrier, pointVel } from "./car-air-body.ts";
+import { HUB_POP_MPS } from "../deform/deform-solve.ts";
+import { POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_POINTS, GROUND_LIFT_V, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
 export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
@@ -436,7 +437,13 @@ export function wheelsAt(car: DeformableCar, within: number): number {
     _hub[2] = p.z + _e[2]! * hx + _e[5]! * r + _e[8]! * hz;
     // The footprint's tread rings are the platform tyre's: scaled to this car's radius, so its tread reaches the ground its hub stands over.
     wheelContact(_hub, _e, sc * (car.frame.rig.tyre.r / PLATFORM_TYRE.r), car.slot, _hit);
-    TYRE_HUB.set(_hub, i * 3);
+    // A tyre meets a side on the body's own hub (`readTyreSides`): a wreck's hub mass held at a face it stands against (shoved, `shoveHub`)
+    // let the body it hangs on drive on through the slab, 1.4 m past its tyre.
+    const fx = car.frame.wx[i]!;
+    const fz = car.frame.wz[i]!;
+    TYRE_HUB[i * 3] = p.x + _e[0]! * fx + _e[3]! * r + _e[6]! * fz;
+    TYRE_HUB[i * 3 + 1] = p.y + _e[1]! * fx + _e[4]! * r + _e[7]! * fz;
+    TYRE_HUB[i * 3 + 2] = p.z + _e[2]! * fx + _e[5]! * r + _e[8]! * fz;
     TYRE_DIM[2 * i] = r;
     TYRE_DIM[2 * i + 1] = car.frame.rig.tyre.halfW * sc;
     for (let k = 0; k < HIT_SIZE; k++) hit[o + k] = _hit[k]!;
@@ -447,14 +454,20 @@ export function wheelsAt(car: DeformableCar, within: number): number {
 
 /**
  * Rows for the bound body's tyres against side faces (a wall, a slab, a prism's flank) as `wheelsAt` last stood them (its hubs, on its axes `_e`), from row `n` on;
- * returns the row past the last. A tyre point standing inside a face it cannot mount is pushed out along the face, as a body point is: a
- * lifted car's tyres meet a slab its body clears, and a tyre never runs through a solid. Only where something taller than the tyre's
- * mount stands within its plan reach (the floor rows already hold it on everything lower).
+ * returns the row past the last. A tyre point standing inside a face it cannot mount meets it as a body point does: a lifted car's tyres
+ * meet a slab its body clears, and a tyre never runs through a solid. Only where something taller than the tyre's mount stands within its
+ * plan reach (the floor rows already hold it on everything lower).
+ * The tyre and its suspension give over the class's `stroke` (m, its spring travel) before the face holds the point rigid: a spring that
+ * takes a hit at the speed that pops a hub (`HUB_POP_MPS`) in exactly that stroke, so a slower one stops inside it and a harder one
+ * bottoms it out. Its push slows the point's closing slice by slice; once it has stopped, the tyre comes back out at no more than a body
+ * at rest parts from what it stands in (`GROUND_LIFT_V`): the hit's energy is spent, not thrown back (the spring's own push sent a truck
+ * back off an 8 m/s wall hit at 1.2 m/s). A rigid tyre stopped a monster's 29 m/s in one 4 ms slice.
  */
-export function readTyreSides(n: number): number {
+export function readTyreSides(n: number, stroke: number): number {
   const { v, w, dt, skip } = body;
   const statics = activeGround();
   const travel = v.length() * dt;
+  const spring = (HUB_POP_MPS / stroke) ** 2;
   for (let i = 0; i < 4; i++) {
     const r = TYRE_DIM[2 * i]!;
     if (r === 0) continue;
@@ -465,19 +478,20 @@ export function readTyreSides(n: number): number {
     const reach = r + half + travel;
     const top = Math.max(solidTop(hx - reach, hx + reach, hz - reach, hz + reach), staticTop(statics, hx - reach, hx + reach, hz - reach, hz + reach));
     if (top <= hy - r + STEP_MAX) continue;
-    for (const [across, along, down] of TYRE_POINTS) {
+    for (const [across, along] of TYRE_POINTS) {
       const a = across * half;
       const f = along * r;
-      const d = -down * r;
-      TYRE_PQ[PQ_X] = hx + _e[0]! * a + _e[3]! * d + _e[6]! * f;
-      TYRE_PQ[PQ_Y] = hy + _e[1]! * a + _e[4]! * d + _e[7]! * f;
-      TYRE_PQ[PQ_Z] = hz + _e[2]! * a + _e[5]! * d + _e[8]! * f;
+      TYRE_PQ[PQ_X] = hx + _e[0]! * a + _e[6]! * f;
+      TYRE_PQ[PQ_Y] = hy + _e[1]! * a + _e[7]! * f;
+      TYRE_PQ[PQ_Z] = hz + _e[2]! * a + _e[8]! * f;
       const rx = TYRE_PQ[PQ_X]! - centreOfMass.x;
       const ry = TYRE_PQ[PQ_Y]! - centreOfMass.y;
       const rz = TYRE_PQ[PQ_Z]! - centreOfMass.z;
-      // The point's own velocity: the face it came in through is the one it meets.
+      // The point's plan velocity: the face it came in through is the side it meets. A tyre standing in a face taller than its mount (a
+      // point under the top by less is the floor it climbs) came in by a side whatever its vertical motion: read falling, a monster's front
+      // tyres pitching down 0.36 m into the slab read its top as come in through, and the stopped body drove on through at 3 m/s.
       TYRE_PQ[PQ_VX] = v.x + w.y * rz - w.z * ry;
-      TYRE_PQ[PQ_VY] = v.y + w.z * rx - w.x * rz;
+      TYRE_PQ[PQ_VY] = 0;
       TYRE_PQ[PQ_VZ] = v.z + w.x * ry - w.y * rx;
       pointContact(TYRE_PQ, skip, HIT, NaN, SPECULATIVE_GAP);
       if (HIT[C_H] !== NO_FLOOR || !(HIT[C_DEPTH]! > 0)) continue;
@@ -486,6 +500,11 @@ export function readTyreSides(n: number): number {
       bodyContact(n, HIT, true);
       TYRE[n] = true;
       MU[n] = MU_TYRE;
+      // The tyre is no face of the body: the face it presses takes no load crush (a yielding face let the tyre sink 28 cm into the slab).
+      SLOT[n] = body.surf.slot(OWN[n]!, N[n]!, false, body.q, FOLLOW[n]!);
+      const depth = HIT[C_DEPTH]!;
+      SINK[n] = depth - stroke;
+      GAPV[n] = depth < stroke ? Math.max(CLOSING[n]! - spring * depth * dt, -GROUND_LIFT_V) : 0;
       n++;
     }
   }
