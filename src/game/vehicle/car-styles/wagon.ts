@@ -1,13 +1,13 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { BOOT_SENSOR, st } from "./platform.ts";
+import { st } from "./platform.ts";
 
 /** Luxury SUV (the `wagon` id): tall clamshell nose, flat floating roof, raked tailgate glass under a roof spoiler. */
 export const WAGON: BodyStyle = {
   id: "wagon",
   dims: { wheelbase: 2.45, overhang: { front: 0.8415, rear: 0.9185 }, track: 1.4, width: 1.693, height: 1.597, rideHeight: 0.23, wheel: { radius: 0.37, width: 0.23 } },
   windshield: { base: [1.1, 0.89], wBase: 1.34, wTop: 1.1 },
-  bPillar: { rear: -0.34, front: -0.26 },
-  belt: { x: 0.785, y: [[-2.033, 1.095], [0.024, 1.07], [0.887, 1.062]] },
+  bPillar: { rear: -0.325, front: -0.245 },
+  belt: { x: [[-1.97, 0.64], [-1.8, 0.7], [-1.6, 0.74], [-1.4, 0.77], [-1.2, 0.785]], y: [[-2.033, 1.095], [0.024, 1.07], [0.887, 1.062]] },
   rocker: { y: 0.28 },
   arch: { radius: 0.455 },
   hood: { z0: 0.86, z1: 1.97, origin: [0.96, 0.84] },
@@ -25,7 +25,8 @@ export const WAGON: BodyStyle = {
       wrap: { from: 0.35, back: 0.25 },
     },
   },
-  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.69, length: 0.97, halfHeight: 0.38, mirrorY: 0.29, mirrorReach: 0.09, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.68] },
+  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.69, length: 0.97, halfHeight: 0.38, mirrorY: 0.29, mirrorZ: 0.21, mirrorReach: 0.09, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.68] },
+  aPillarFoot: 0.5,
   underside: [[-2.143, 0.463], [-2.111, 0.421], [-2.058, 0.378], [-2.015, 0.349], [-1.86, 0.295], [-1.744, 0.296], [-1.651, 0.271], [-1.55, 0.24], [-0.45, 0.25], [-0.018, 0.239], [0.167, 0.228], [1.846, 0.225], [1.868, 0.242], [1.989, 0.264], [2.042, 0.307], [2.067, 0.524]],
   profile: [
     st(-2.083, 0.52, 1.095, 1.137, 0.495, 0.25),
@@ -76,14 +77,6 @@ export const WAGON: BodyStyle = {
   rearDoorSeam: -1.2,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.09, -2.088], z0: -2.11 },
   lamps: { head: [0.3, 0.8], tail: [0.62, 0.955] },
-  rig: {
-    cages: {
-      roof: { min: [-0.62, 1.2, -1.91], max: [0.62, 1.64, 0.36] },
-      glassRear: { min: [-0.7, 1.04, -2.14], max: [0.7, 1.52, -1.74] },
-      boot: { min: [-0.8, 0.6, -2.18], max: [0.8, 1.14, -1.98] },
-    },
-    sensors: { [BOOT_SENSOR]: [0, 0.88, -2.08] },
-  },
   details: {
     lines: [
       { view: "top", points: [[1.97, 0], [1.95, 0.35], [1.9, 0.52], [1.82, 0.62]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },

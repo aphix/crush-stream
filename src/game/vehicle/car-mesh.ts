@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { hypot2, detSin } from "../kernel/physics-core.js";
 import { CAR_STYLES, type BodyStyle, type ProfileStation, type YZ } from "./car-variants.ts";
-import { beltY, floorY, rockerAt } from "./car-lines.ts";
+import { beltX, beltY, floorY, rockerAt } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
@@ -112,7 +112,7 @@ export function cantX(z: number, style: BodyStyle): number {
 export function glassX(z: number, y: number, style: BodyStyle): number {
   const top = glassTopY(z, style);
   const belt = beltY(z, style);
-  return lerp(style.belt.x, cantX(z, style), THREE.MathUtils.clamp((y - belt) / (top - belt), 0, 1));
+  return lerp(beltX(z, style), cantX(z, style), THREE.MathUtils.clamp((y - belt) / (top - belt), 0, 1));
 }
 
 function wheelWell(z: number, wheels: readonly V3[], archR: number): number {

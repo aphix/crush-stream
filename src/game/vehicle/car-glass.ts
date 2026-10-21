@@ -67,9 +67,13 @@ export function makeRearGlass(style: BodyStyle = SEDAN): THREE.BufferGeometry {
 /** A side pane's edge z at the belt (`bot`) and at the top, rear → front. */
 type SideSpan = { bot: readonly [number, number]; top: readonly [number, number] };
 
-/** Door glass: from just behind the door's front edge at the belt up to the A-pillar under the windshield's top. */
+/** The door glass rides its door, so its rear edge stays this far (m) inside the door's trailing edge at the belt and at the top. */
+const DOOR_GLASS_INSET = { bot: 0.03, top: 0.05 } as const;
+
+/** Door glass: from inside the door's trailing edge at the belt up to the A-pillar, from its foot on the belt to under the windshield's top. */
 function doorSpan(style: BodyStyle): SideSpan {
-  return { bot: [0.01, 0.76], top: [0.03, style.windshieldTop[1] - 0.05] };
+  const trailing = style.door.hingeZ - style.door.length;
+  return { bot: [trailing + DOOR_GLASS_INSET.bot, style.aPillarFoot], top: [trailing + DOOR_GLASS_INSET.top, style.windshieldTop[1] - 0.05] };
 }
 
 /** Quarter glass: from the C-pillar forward to the B-pillar. */

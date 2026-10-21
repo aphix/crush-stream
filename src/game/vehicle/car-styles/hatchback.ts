@@ -1,12 +1,12 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { BOOT_SENSOR, st } from "./platform.ts";
+import { st } from "./platform.ts";
 
 /** Compact five-door: boxy face, near-vertical hatch under a roof spoiler. */
 export const HATCHBACK: BodyStyle = {
   id: "hatchback",
   dims: { wheelbase: 2.225, overhang: { front: 0.6975, rear: 0.6775 }, track: 1.37, width: 1.621, height: 1.309, rideHeight: 0.15, wheel: { radius: 0.29, width: 0.17 } },
   windshield: { base: [0.891, 0.883], wBase: 1.16, wTop: 0.98 },
-  bPillar: { rear: -0.29, front: -0.21 },
+  bPillar: { rear: -0.27, front: -0.19 },
   belt: { x: 0.75, y: [[-1.174, 0.881], [-0.939, 0.877], [-0.935, 0.856], [0.128, 0.838], [0.381, 0.809], [0.58, 0.824], [0.584, 0.852], [0.88, 0.852]] },
   rocker: { y: 0.2 },
   arch: { radius: 0.35 },
@@ -25,7 +25,8 @@ export const HATCHBACK: BodyStyle = {
       wrap: { from: 0.46, back: 0.1 },
     },
   },
-  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.68, length: 0.91, halfHeight: 0.3, mirrorY: 0.365, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.21, 0.67] },
+  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.68, length: 0.91, halfHeight: 0.3, mirrorY: 0.365, mirrorZ: 0.235, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.21, 0.67] },
+  aPillarFoot: 0.6,
   underside: [[-1.791, 0.456], [-1.759, 0.278], [-1.705, 0.225], [-1.652, 0.207], [-1.57, 0.214], [-1.559, 0.203], [-0.625, 0.168], [-0.611, 0.153], [0.577, 0.153], [0.591, 0.168], [0.687, 0.168], [1.618, 0.15], [1.682, 0.164], [1.729, 0.21], [1.782, 0.3], [1.8, 0.367]],
   profile: [
     st(-1.7, 0.66, 0.62),
@@ -67,14 +68,6 @@ export const HATCHBACK: BodyStyle = {
   rearDoorSeam: -0.88,
   boot: { kind: "tailgate", y0: 0.57, origin: [0.93, -1.625], z0: -1.76 },
   lamps: { head: [0.34, 0.54], tail: [0.59, 0.72] },
-  rig: {
-    cages: {
-      roof: { min: [-0.56, 1.0, -1.2], max: [0.56, 1.32, 0.46] },
-      glassRear: { min: [-0.62, 0.84, -1.7], max: [0.62, 1.29, -1.1] },
-      boot: { min: [-0.66, 0.52, -1.78], max: [0.66, 0.92, -1.6] },
-    },
-    sensors: { [BOOT_SENSOR]: [0, 0.72, -1.69] },
-  },
   details: {
     lines: [
       { view: "top", points: [[1.68, 0], [1.69, 0.36], [1.64, 0.62], [1.55, 0.68]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },

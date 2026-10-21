@@ -17,7 +17,7 @@ import { DEFAULT_BUCKLE, DEFAULT_SQUASH } from "./constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { DeformParticleHelper, DeformRigHelper } from "./deform-helper.ts";
 import { bindLattice, buildRunStructures, INF_K, restoreInto, runTemplate, wrinkleSeeds } from "./deform-build.ts";
-import { FACES, faceFollow, IMPRINT_NONE } from "./load-crush.ts";
+import { FACES, faceFollow, IMPRINT_NONE, type FaceBands } from "./load-crush.ts";
 import { PushBudget } from "./push-budget.ts";
 import { hypot3, hypot2 } from "../kernel/physics-core.js";
 
@@ -40,21 +40,45 @@ export const HUB_OVERRUN = 0.12;
 /** Sim time (s) a driven wreck's steer turn stays in its reported spin after `applyDrive` set it (`keptSpin`). */
 const DRIVE_TURN_HOLD = 1 / 30;
 
-/** Per-body-style rig: cage boxes / sensor rests (by SENSORS index) that differ
- *  from the platform tables so the cages wrap that style's roof, glass and boot. */
-export interface RigOverrides {
-  cages?: Partial<Record<BodyPartName, Pick<CageSpec, "min" | "max">>>;
-  sensors?: Partial<Record<number, SensorSpec["rest"]>>;
-}
-/** A car's rig at rest: rig-spec's cages, crush sensors and masses placed on its body, and its tyre (m: radius along the car, half-width across). */
+/** A car's rig at rest: rig-spec's cages, crush sensors and masses placed on its body, its tyre (m: radius along the car, half-width across) and the scalars its readers take from the body. */
 export interface RigTables {
   readonly cages: readonly CageSpec[];
   readonly sensors: readonly SensorSpec[];
   readonly masses: readonly MassSpec[];
   readonly tyre: { readonly r: number; readonly halfW: number };
+  /** Factor on every mass and on every beam's stiffness, yield and damping: a heavier body keeps the platform's frequencies and damping ratios. */
+  readonly massScale: number;
+  /** Height (m) of the wheel arch's top: skin below it is the arch's (planted on its hub) or the sill's. */
+  readonly archTop: number;
+  /** Plan reach (m) of the arch plant: skin below `archTop` this near a hub's rest stands at its rest offset from that hub. */
+  readonly archPlant: number;
+  /** A rest vertex over this height (m) is roof: the skin's roof clamp holds it. */
+  readonly roofClampY: number;
+  /** Where each face's crush reaches into this body (`faceFollow`): the bands follow its bonnet, roof and ends. */
+  readonly faceBands: FaceBands;
+  /** Plan reach (m) from its hub at which a crushed corner has hit the tyre: tyre radius plus the packed bumper beam. */
+  readonly tyreReach: number;
 }
+/** Platform bonnet top (m): where the top band starts following the roof's crush. */
+const PLATFORM_BONNET_TOP = CAGES.find((cage) => cage.name === "bonnet")!.max[1];
 /** The tables as they stand: the platform every body shared. */
-export const PLATFORM_RIG: RigTables = { cages: CAGES, sensors: SENSORS, masses: MASS_SPECS, tyre: PLATFORM_TYRE };
+export const PLATFORM_RIG: RigTables = {
+  cages: CAGES,
+  sensors: SENSORS,
+  masses: MASS_SPECS,
+  tyre: PLATFORM_TYRE,
+  massScale: 1,
+  archTop: 0.55,
+  archPlant: 0.4,
+  roofClampY: 1.05,
+  faceBands: {
+    top: [PLATFORM_BONNET_TOP, MASS_SPECS.find((spec) => spec.name === "roof")!.rest[1] - PLATFORM_BONNET_TOP],
+    nose: [0.7, 1.36],
+    tail: [0.7, 1.36],
+    side: [0.4, 0.4],
+  },
+  tyreReach: 0.42,
+};
 /** Depth (m) inside the chassisCell span's front/rear face over which non-cell skin weight blends back in. */
 const CELL_FACE_BLEND = 0.3;
 /** Largest non-cell skin weight at the span face (D1): the A-pillar foot still creases. */
@@ -68,10 +92,6 @@ const RES_K = 4;
 export const RES_SLOTS = 5;
 /** IDW softening (m²) of the parent weights, 1/(d² + RES_SOFT). */
 const RES_SOFT = 0.04;
-/** Height (m) of the wheel arch's top: skin below it is the arch's (planted on its hub) or the sill's. */
-export const ARCH_TOP = 0.55;
-/** Plan reach (m) of the arch plant: skin below `ARCH_TOP` this near a hub's rest stands at its rest offset from that hub. */
-export const ARCH_PLANT = 0.4;
 /** Plan travel (m) off its plant at which an arch vertex lets go of its hub: a deeper crush takes the arch with the body (held, a 0.3 m nose crush ran the fender through the arch's lip and folded it). */
 const ARCH_YIELD = 0.15;
 
@@ -497,7 +517,7 @@ export abstract class DeformRig {
     this.loadW = new Float64Array(this.masses.length * FACES);
     for (const [i, m] of this.masses.entries()) {
       if (m.hub) continue;
-      for (let f = 0; f < FACES; f++) this.loadW[i * FACES + f] = faceFollow(f, m.rest.x, m.rest.y, m.rest.z);
+      for (let f = 0; f < FACES; f++) this.loadW[i * FACES + f] = faceFollow(this.rig.faceBands, f, m.rest.x, m.rest.y, m.rest.z);
     }
     this.buildSkinWeights();
     this.initRunState();
@@ -689,14 +709,18 @@ export abstract class DeformRig {
         this.resC[i * 3 + 2] += r.z * w;
       }
     };
+    const { archTop, archPlant } = this.rig;
+    // The roof skin takes no cluster from below the bonnet's top.
+    const roofFloor = this.cages.find((c) => c.spec.name === "roof")!.spec.min[1];
+    const bonnetTop = this.cages.find((c) => c.spec.name === "bonnet")!.spec.max[1];
     for (let i = 0; i < n; i++) {
       const rx = this.restPos[i * 3]!;
       const ry = this.restPos[i * 3 + 1]!;
       const rz = this.restPos[i * 3 + 2]!;
       parents(rx, ry, rz, i);
       const cabin = inCell(rx, ry, rz);
-      if (ry < ARCH_TOP) this.skinHub[i] = this.masses.findIndex((m) => m.hub && hypot2(rx - m.rest.x, rz - m.rest.z) <= ARCH_PLANT);
-      const cellOnly = cabin || (ry < ARCH_TOP && rz < axleF && rz > axleR && this.skinHub[i]! < 0);
+      if (ry < archTop) this.skinHub[i] = this.masses.findIndex((m) => m.hub && hypot2(rx - m.rest.x, rz - m.rest.z) <= archPlant);
+      const cellOnly = cabin || (ry < archTop && rz < axleF && rz > axleR && this.skinHub[i]! < 0);
       const scored: { ci: number; w: number }[] = [];
       let other = -1,
         otherW = 0;
@@ -704,7 +728,7 @@ export abstract class DeformRig {
         const cm = cms[ci]!;
         const d = hypot3(rx - cm.x, ry - cm.y, rz - cm.z);
         if (d > 1.45) continue;
-        if (ry > 1.02 && cm.y < 0.78) continue;
+        if (ry > roofFloor && cm.y < bonnetTop) continue;
         const w = Math.exp(-d * 2.35);
         if (cellOnly && !holdsCell[ci]) {
           if (w > otherW) {
