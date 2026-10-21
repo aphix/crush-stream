@@ -61,6 +61,11 @@ function probe(style: CarStyleId = "sedan"): Probe {
 const positions = (m: THREE.Object3D) => ((m as THREE.Mesh).geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
 const worst = (r: CrashResult, kind: "quarter" | "arch") => Math.max(...PANEL_NAMES.filter((n) => n.startsWith(kind)).map((n) => r.hinge[n]!));
 const torn = (r: CrashResult, kind: "quarter" | "arch") => r.detached.filter((n) => n.startsWith(kind));
+/** Whether any body vertex under a panel is primer: its under-panel turns dark only once the panel hinges (blacked-out trim is dark from the build, never under a panel). */
+const underPanelPrimer = (car: Probe) => {
+  const primer = car.body.geometry.getAttribute("primer");
+  return car.allParts.some((p) => p.region !== null && Array.from(p.region.verts).some((v) => primer.getX(v) !== 0));
+};
 
 describe("given every car body style, whose panels are cut from each body's own skin", () => {
   const bodies = CAR_STYLE_IDS.map((id) => ({ id, body: makeChassisGeometry(CAR_STYLES[id]) }));
@@ -121,7 +126,7 @@ describe("given every car body style, whose panels are cut from each body's own 
   it("when a police car nobody has crashed is checked, then it carries no panel mesh: attached panels are body, with no draw of their own", () => {
     const car = probe("police");
     for (const p of car.allParts.filter((q) => q.region)) assert.ok(!p.open && p.object.parent === null, `${p.name} is in the scene`);
-    assert.ok(!car.body.geometry.getAttribute("primer").array.some((v) => v !== 0), "the body is primer before any panel hinged");
+    assert.ok(!underPanelPrimer(car), "the body is primer before any panel hinged");
   });
 });
 
@@ -190,7 +195,7 @@ describe("given a car whose quarter panels and arch flares are torn off", () => 
     assert.equal(car.allParts.filter((p) => p.region && p.detached && p.object.visible).length, 2, "drawn torn shells");
     car.resetVisual();
     assert.ok(car.allParts.every((p) => !p.region || p.object.visible), "a reset brings every shell back");
-    assert.ok(!car.body.geometry.getAttribute("primer").array.some((v) => v !== 0), "and the body is paint again");
+    assert.ok(!underPanelPrimer(car), "and the body is paint again");
   });
 
   it("when a panel is torn and posed again, then it is culled by a sphere that follows each pose", () => {

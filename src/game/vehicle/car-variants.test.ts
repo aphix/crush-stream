@@ -61,6 +61,23 @@ function chassisBox(style: BodyStyle): THREE.Box3 {
   return b;
 }
 
+/** The left drawn A-post and, when the door glass starts behind it, the sail between them. */
+function aPillarParts(style: BodyStyle): THREE.BufferGeometry[] {
+  const parts = makeGreenhouseFrame(style, "drawn");
+  const sail = parts.find((g) => g.name === "sail");
+  return [parts.find((g) => g.name === "aPost")!, ...(sail ? [sail] : [])];
+}
+
+/** Side view of `geo` against the windshield's edge line: each vertex's distance behind it (m; negative in front of it). */
+function behindWindshieldEdge(geo: THREE.BufferGeometry, style: BodyStyle): number[] {
+  const [baseY, baseZ] = style.windshield.base;
+  const [topY, topZ] = style.windshieldTop;
+  const run = Math.sqrt((topZ - baseZ) ** 2 + (topY - baseY) ** 2);
+  const [uz, uy] = [(topZ - baseZ) / run, (topY - baseY) / run];
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  return Array.from({ length: pos.count }, (_, i) => (pos.getY(i) - baseY) * uz - (pos.getZ(i) - baseZ) * uy);
+}
+
 /** Max |skinned − rest| of a panel skinned against an undeformed rig: >0 only where the cage clamps it. */
 function panelClamp(deform: StreamedDeformation, geo: THREE.BufferGeometry, part: Parameters<StreamedDeformation["skinPanel"]>[2], origin: THREE.Vector3): number {
   const attr = geo.getAttribute("position") as THREE.BufferAttribute;
@@ -515,15 +532,113 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(front > 0.86 && front < 0.95, `door glass front edge at z ${front}, around the A-pillar foot 0.88`);
   });
 
-  it("when the A-pillar's top moves back, then the door glass's top-front corner and the pillar's rear top corner follow it", () => {
+  it("when the A-pillar's top moves back, then the door glass's top-front corner and the pillar's rear top corner (its post's, or the sail's behind it) follow it", () => {
     const sedan = CAR_STYLES.sedan;
-    const moved: BodyStyle = { ...sedan, aPillarTop: 0.3 };
+    // 30 cm behind the windshield's top: behind the A-post's own rear top, so the sail reaches back to it.
+    const top = sedan.windshieldTop[1] - 0.3;
+    const moved: BodyStyle = { ...sedan, aPillarTop: top };
     // glassCorners: 12 floats per pane, doorR is pane 3, its (front, top) corner the fourth.
     const doorTopFrontZ = (style: BodyStyle) => glassCorners(style)[3 * 12 + 9 + 2]!;
-    const pillarRearZ = (style: BodyStyle) => partBox(makeGreenhouseFrame(style, "drawn")[0]!).min.z;
-    assertSameNumbers([doorTopFrontZ(moved), pillarRearZ(moved)], [0.3, 0.3], "door glass top-front z, A-pillar rear top z", 1e-5);
+    const pillarRearZ = (style: BodyStyle) => Math.min(...aPillarParts(style).map((g) => partBox(g).min.z));
+    assertSameNumbers([doorTopFrontZ(moved), pillarRearZ(moved)], [top, top], "door glass top-front z, A-pillar rear top z", 1e-5);
+    const unset: BodyStyle = { ...sedan, aPillarTop: undefined };
     const stock = sedan.windshieldTop[1] - 0.05;
-    assertSameNumbers([doorTopFrontZ(sedan), aPillarTopZ(sedan)], [stock, stock], "unset: 5 cm behind the windshield's top", 1e-5);
+    assertSameNumbers([doorTopFrontZ(unset), aPillarTopZ(unset)], [stock, stock], "unset: 5 cm behind the windshield's top", 1e-5);
+  });
+
+  it("when any style's drawn A-pillar is read, then it is a post along the windshield's edge: never proud of the glass, 6 cm wide in side view, its top under the roof skin; also with its top at the windshield's", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const stock = CAR_STYLES[id];
+      for (const style of [stock, { ...stock, aPillarTop: stock.windshieldTop[1] - 0.02 }]) {
+        const [post, ...sail] = aPillarParts(style);
+        const side = behindWindshieldEdge(post!, style);
+        const proud = -Math.min(...side);
+        // The post's front stands 4 mm off the glass; the old slab stood 1-2 cm over it.
+        assert.ok(proud < 0.006, `${id} aPillarTop ${aPillarTopZ(style)}: the post stands ${proud} m proud of the windshield's edge line`);
+        // Side-view width across the windshield's edge, ring by ring along the post (its stations, belt to top).
+        const { ring, slices } = post!.userData.loft as { ring: number; slices: number };
+        for (let slice = 0; slice < slices; slice++) {
+          const behind = side.slice(slice * ring, (slice + 1) * ring);
+          const width = Math.max(...behind) - Math.min(...behind);
+          assert.ok(width > 0.058, `${id} aPillarTop ${aPillarTopZ(style)}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}`);
+        }
+        for (const part of [post!, ...sail]) {
+          const pos = part.getAttribute("position") as THREE.BufferAttribute;
+          for (let i = 0; i < pos.count; i++) {
+            const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+            if (z < style.roofZ[0] || z > style.roofZ[1]) continue;
+            // 1e-6: float32 vertices, a ulp at 1.3 m is 1.2e-7.
+            assert.ok(y <= roofTopY(x, z, style) + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands over the roof skin there (${roofTopY(x, z, style)})`);
+          }
+        }
+      }
+    }
+  });
+
+  it("when a style's door glass starts further back than the A-post's width, then a sail fills the gap from the post to the glass at the belt", () => {
+    const sedan = CAR_STYLES.sedan;
+    const moved: BodyStyle = { ...sedan, aPillarFoot: sedan.windshield.base[1] - 0.4 };
+    const [post, sail] = aPillarParts(moved);
+    assert.ok(sail !== undefined, "the sail is drawn");
+    const belt = beltY(moved.aPillarFoot, moved);
+    const lowZ = (g: THREE.BufferGeometry) => {
+      const pos = g.getAttribute("position") as THREE.BufferAttribute;
+      const zs: number[] = [];
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) - belt) < 1e-4) zs.push(pos.getZ(i));
+      return [Math.min(...zs), Math.max(...zs)];
+    };
+    const [[sailRear, sailFront], [postRear]] = [lowZ(sail), lowZ(post!)];
+    assertSameNumbers([sailRear, sailFront], [moved.aPillarFoot, postRear!], "the sail at the belt runs from the door glass's front edge to the post's rear (z)", 1e-5);
+  });
+
+  it("when a style blacks out greenhouse parts, then exactly their drawn vertices turn primer-dark, and the drawn shape and the cage are unchanged", () => {
+    const wagon = CAR_STYLES.wagon;
+    const dark: BodyStyle = { ...wagon, blackout: { b: true, divider: true } };
+    const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
+    const [was, now] = [makeChassisGeometry(wagon), makeChassisGeometry(dark)];
+    const bz = (wagon.bPillar.rear + wagon.bPillar.front) / 2;
+    let turned = 0;
+    for (let i = 0; i < primer(now).count; i++) {
+      if (primer(now).getX(i) === primer(was).getX(i)) continue;
+      turned++;
+      const z = now.getAttribute("position").getZ(i);
+      assert.ok(Math.abs(z - bz) < 0.06 || Math.abs(z - wagon.midPillarZ!) < 0.05, `vertex ${i} at z ${z} turned dark: off the B-pillar (z ${bz}) and the divider (z ${wagon.midPillarZ})`);
+    }
+    const pillars = makeGreenhouseFrame(dark, "drawn").filter((g) => g.userData.blackout === true);
+    assert.equal(pillars.length, 4, "two B-pillars and two dividers");
+    assert.equal(turned, pillars.reduce((n, g) => n + g.getAttribute("position").count, 0), "every vertex of them, no other");
+    const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
+    assert.ok(bits(now) === bits(was), "the drawn body's shape is unchanged");
+    assert.ok(bits(makeChassisGeometry(dark, "cage")) === bits(makeChassisGeometry(wagon, "cage")), "the cage is unchanged");
+    const sailed: BodyStyle = { ...wagon, aPillarFoot: wagon.windshield.base[1] - 0.4, blackout: { a: true, sail: true, rear: true } };
+    const names = makeGreenhouseFrame(sailed, "drawn").filter((g) => g.userData.blackout === true).map((g) => g.name || "rear");
+    assert.ok(names.join(",") === "aPost,rear,sail,aPost,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
+  });
+
+  it("when a style sets its B-pillar's width and seats a leaning divider, then the drawn pillars take them at the belt and the top, the side panes tuck under the B-pillar, and the cage keeps its bands", () => {
+    const wagon = CAR_STYLES.wagon;
+    const m = wagon.midPillarZ!;
+    const moved: BodyStyle = { ...wagon, pillars: { b: 0.07, divider: { width: [0.05, 0.04], z: [m - 0.06, m + 0.04] } } };
+    const bz = (wagon.bPillar.rear + wagon.bPillar.front) / 2;
+    // Frame parts per side: A-pillar, B-pillar, C-pillar, divider.
+    const parts = makeGreenhouseFrame(moved, "drawn");
+    const spans = (g: THREE.BufferGeometry) => {
+      const pos = g.getAttribute("position") as THREE.BufferAttribute;
+      const box = partBox(g);
+      const [low, top]: number[][] = [[], []];
+      for (let i = 0; i < pos.count; i++) {
+        if (pos.getY(i) < box.min.y + 0.005) low.push(pos.getZ(i));
+        if (pos.getY(i) > box.max.y - 0.005) top.push(pos.getZ(i));
+      }
+      return [Math.min(...low), Math.max(...low), Math.min(...top), Math.max(...top)];
+    };
+    assertSameNumbers(spans(parts[1]!), [bz - 0.035, bz + 0.035, bz - 0.035, bz + 0.035], "B-pillar z span at the belt and at its top", 1e-5);
+    assertSameNumbers(spans(parts[3]!), [m - 0.085, m - 0.035, m + 0.02, m + 0.06], "divider z span at the belt and at its top", 1e-5);
+    // glassCorners: doorR is pane 3, its rear corners (across 0) at the base and the top; quarterR is pane 5, its front corners (across 1).
+    const c = glassCorners(moved);
+    assertSameNumbers([c[3 * 12 + 2]!, c[3 * 12 + 6 + 2]!, c[5 * 12 + 3 + 2]!, c[5 * 12 + 9 + 2]!], [bz + 0.025, bz + 0.025, bz - 0.025, bz - 0.025], "door glass rear and quarter glass front edges, 1 cm under the B-pillar (z)", 1e-5);
+    const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join("|");
+    assert.ok(cage(moved) === cage(wagon), "the cage greenhouse is unchanged");
   });
 
   it("when the side glass drops less under the roof, then the glass top, the roof's side lip and the pillar tops rise with it", () => {
