@@ -150,13 +150,16 @@ CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-
 - The isos are AI renders with their own lens, so each is aligned once on its wheels. Pick the visible wheels' hub (outer face)
   and contact points on the crop: `trace-car --style <id> --view iso --landing --grid <png>` draws the crop with a pixel grid.
   Wheels are named `fl`/`fr`/`rl`/`rr`; the front iso shows the car's left (+x) side, the rear iso its right. Store them as
-  `wheels`, then run `--solve`.
+  `wheels`. One side's wheels lie near one plane and leave the view's tilt about the wheel line loose, so also pick one or two
+  `landmarks` off that plane, e.g. `{ "name": "front badge", "at": [0, 0.62, 2.08], "pixel": [u, v] }`. `at` is the point's place
+  as the style file writes it (metres, before the class lift): a badge on the centre line, a far-side lamp or mirror. Then run
+  `--solve`.
 - `--solve` fits the camera's pose to the picks, held upright, for fields of view from 12° to 50°. It keeps the one whose
   silhouette fits best, or the entry's `fov` where one is pinned by hand, and stores it. Narrower lenses fit the renders a little
   better but stand the camera past the detail map's fade, so the engine shot would lose its panel lines. Every later shot reuses
   the stored camera, so a wheel the car moves shows as wheel error. Re-solve only when the wheels change.
-- The overlay marks the picks yellow and the car's wheel points magenta; the JSON prints `wheels` (each point's error in crop
-  pixels, RMS and largest). The sedan's picks are in: about 2.5 px RMS on both isos.
+- The overlay marks the picks yellow and the car's points magenta. The JSON prints `wheels` and `landmarks` (each point's error in
+  crop pixels, RMS and largest). The sedan's wheel picks are in: about 2.5 px RMS on both isos.
 - `headless-frame.mjs --view side|top|iso|rear-iso --view-camera <spec>` draws that camera on the garage car, and
   `--backdrop <colour>` draws the car alone. Both also work on their own, as does `--detail <rung>` (the distance-detail rung,
   governor off).
