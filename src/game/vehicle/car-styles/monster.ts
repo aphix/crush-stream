@@ -27,7 +27,7 @@ export const MONSTER: BodyStyle = {
   aPillarFoot: 0.74,
   aPillarTop: 0.41,
   bPillar: { rear: -0.19, front: -0.12 },
-  arch: { radius: 0.47 },
+  arch: { radius: 0.47, lip: { flare: 0.035, width: 0.085 } },
   hood: { z0: 0.94, z1: 2.08, origin: [0.96, 0.92] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.39, z: 2.05 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black" },

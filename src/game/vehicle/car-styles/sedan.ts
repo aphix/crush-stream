@@ -9,7 +9,7 @@ export const SEDAN: BodyStyle = {
   bPillar: { rear: -0.31, front: -0.21 },
   belt: { x: 0.74, y: [[-1.23, 1.0], [-1.15, 0.98], [-0.9, 0.948], [-0.5, 0.913], [0.4, 0.9], [0.92, 0.9]] },
   rocker: { y: 0.21 },
-  arch: { radius: 0.405 },
+  arch: { radius: 0.405, lip: { flare: 0.008, width: 0.035 } },
   hood: { z0: 0.88, z1: 1.97, origin: [0.81, 0.86] },
   bumpers: {
     front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.34, z: 1.965 }, span: 0.74, wrap: { from: 0.33, back: 0.242 } },
@@ -75,6 +75,7 @@ export const SEDAN: BodyStyle = {
   rearDoorSeam: -1.06,
   boot: { kind: "lid", z0: -1.65, z1: -2.06, origin: [0.97, -1.62] },
   lamps: { head: [0.28, 0.515], tail: [0.34, 0.8] },
+  seats: PLATFORM_HARDPOINTS.seats,
   details: SEDAN_DETAILS,
   camera: { ...PLATFORM_CAMERA, hood: [1.08, 1.2] },
 };

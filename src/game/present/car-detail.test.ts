@@ -71,7 +71,8 @@ describe("given a car and the farthest rung (small parts beyond 35 m, only the b
     const probe = car(60);
     detail.update([probe], camera, null, null);
     const meshes = drawn(probe, camera);
-    assert.equal(casters(meshes), 1, "only the body casts");
+    assert.equal(casters(meshes), 0, "nothing of its own drawn casts: its flush shadow is the style's batched caster");
+    assert.ok(probe.shadowCaster.castShadow && probe.shadowCaster.layers.isEnabled(0), "its shadow caster stays in the batch");
     for (const part of probe.flushCasters) assert.ok(meshes.includes(part), "a flush part left the camera");
   });
 });
@@ -188,32 +189,31 @@ describe("given a car that crosses the far distance", () => {
 });
 
 describe("given a car's batched part seats", () => {
-  const seatsOf = (car: DeformableCar): PartSeat[] => car.partSeats.filter((s) => s.kind !== PART_KIND.interior);
   const enabled = (seats: readonly PartSeat[]): boolean[] => seats.map((s) => s.layers.isEnabled(0));
 
-  test("when a car goes past the mid distance, then the six small seats leave layer 0 and the interior seat stays; past the far distance the interior goes too; back at 10 m, all seven are on again", () => {
+  test("when a car goes past the mid distance, then the small seats leave layer 0 and the interior kit's stay; past the far distance the interior kit goes too; back at 10 m, all are on again", () => {
     const { camera, detail, car } = stage();
     const probe = car(10);
-    const small = seatsOf(probe);
-    const interior = probe.partSeats[PART_KIND.interior]!;
-    assert.equal(probe.partSeats.length - small.length, 1, "one interior seat");
-    assert.ok(small.every((s) => s.name === SMALL_PART_SEAT), "the six are the small-part seats the mid cut takes by name");
-    assert.equal(interior.name, INTERIOR_MESH);
+    const interior = probe.partSeats.filter((s) => s.name === INTERIOR_MESH);
+    const small = probe.partSeats.filter((s) => s.name === SMALL_PART_SEAT);
+    assert.equal(interior.map((s) => s.kind).join(), [PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.engineBay, PART_KIND.seatFront].join(), "the cabin, both front seats, the rear bench, the wheel and the bay go with the far cut");
+    assert.equal(small.length + interior.length, probe.partSeats.length, "every seat is one or the other");
+    assert.equal(small.length, 8, "door cards, mirrors, grille, tail trim and the two crash bars are the small-part seats the mid cut takes by name");
     const move = (at: number): void => {
       probe.group.position.z = at;
       probe.group.updateMatrixWorld(true);
       detail.update([probe], camera, null, null);
     };
     move(10);
-    assert.ok(enabled(small).every(Boolean) && interior.layers.isEnabled(0), "whole at 10 m");
+    assert.ok(enabled(small).every(Boolean) && enabled(interior).every(Boolean), "whole at 10 m");
     move(50);
-    assert.ok(enabled(small).every((on) => !on), "the six small seats are cut at 50 m");
-    assert.equal(interior.layers.isEnabled(0), true, "the interior stays until the far cut");
+    assert.ok(enabled(small).every((on) => !on), "the small seats are cut at 50 m");
+    assert.ok(enabled(interior).every(Boolean), "the interior kit stays until the far cut");
     move(80);
-    assert.equal(interior.layers.isEnabled(0), false, "the far cut takes the interior seat");
+    assert.ok(enabled(interior).every((on) => !on), "the far cut takes the interior kit");
     assert.ok(enabled(small).every((on) => !on));
     move(10);
-    assert.ok(enabled(small).every(Boolean) && interior.layers.isEnabled(0), "give puts all seven back");
+    assert.ok(enabled(small).every(Boolean) && enabled(interior).every(Boolean), "give puts them all back");
   });
 });
 

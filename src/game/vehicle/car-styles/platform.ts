@@ -5,18 +5,6 @@ export function st(z: number, hw: number, yBelt: number, yRoof = yBelt, cabinHw 
   return { z, hw, yBelt, yRoof, cabinHw, cabin };
 }
 
-/** Cowl to nose: identical on every style (hood, fenders, lamps, windshield base). */
-export const FRONT_CLIP: readonly ProfileStation[] = [
-  st(0.82, 0.87, 0.8, 1.05, 0.52, 0.4),
-  st(1.18, 0.86, 0.775),
-  st(1.58, 0.83, 0.72),
-  st(1.9, 0.75, 0.64),
-  st(2.11, 0.62, 0.54),
-];
-
-/** The front clip's head lamp seat: outboard of the grille, under the header panel, above the bumper. */
-export const HEAD_LAMP = [0.485, 0.485] as const;
-
 /** The cabin's open floor [zRear, zFront, floorY] behind the glass. */
 export const CABIN_TUB = [-0.7, 0.7, 0.3] as const;
 
@@ -77,4 +65,5 @@ export const PLATFORM_HARDPOINTS = {
   bumpers: { front: PLATFORM_BUMPER, rear: PLATFORM_BUMPER },
   door: { hingeX: 0.86, hingeY: 0.54, hingeZ: 0.55, length: 0.57, halfHeight: 0.31, mirrorY: 0.32, mirrorReach: 0.21, mirrorHalfDepth: 0.08, aperture: [0, 0.54] },
   aPillarFoot: 0.76,
-} as const satisfies Pick<BodyStyle, "windshield" | "bPillar" | "belt" | "rocker" | "arch" | "hood" | "bumpers" | "door" | "aPillarFoot">;
+  seats: { front: [-0.36, 0.44, -0.15], rear: [0.46, -0.42] },
+} as const satisfies Pick<BodyStyle, "windshield" | "bPillar" | "belt" | "rocker" | "arch" | "hood" | "bumpers" | "door" | "aPillarFoot" | "seats">;

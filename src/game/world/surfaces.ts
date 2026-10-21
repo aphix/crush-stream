@@ -1505,6 +1505,15 @@ export function pointContact(q: Float64Array, skip: number, out: Float64Array, t
   return finish(q, out, travel2, gap);
 }
 
+/**
+ * `pointContact` over the static surface and the solids alone, no car top: what a tyre's side meets (`readTyreSides`). A top answers no
+ * side, and asking the tops would list the near ones (`CarSurfaces.near`) again for every tyre point.
+ */
+export function pointContactSolids(q: Float64Array, skip: number, out: Float64Array): void {
+  seek(q, skip, null, NO_TOPS, 0);
+  answer(q, out);
+}
+
 /** `pointContact` over the car tops `holdTops` readied last, not those near the point: a body asks the tops once for all its points. */
 export function pointContactHeld(q: Float64Array, skip: number, out: Float64Array, travel2 = NaN, gap = 0): boolean {
   if (GQ.on) return pointOn(POINT_HELD, q, skip, out, travel2, gap);

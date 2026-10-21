@@ -1,6 +1,7 @@
 // First: every quaternion built from here on, constants at load included, takes the engine-identical trig (kernel/three-trig.ts).
 import "../kernel/three-trig.ts";
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
@@ -24,8 +25,10 @@ import {
   makePaintMaterial,
   makeSirenMaterial,
   type LampKind,
+  shadowOnlyMaterial,
 } from "./car-materials.ts";
-import { MIRROR_REACH, PART_KIND, PART_KINDS, PartSeat, styleMirrorDrawn } from "./part-geometry.ts";
+import { carPartSeats, MIRROR_REACH, PART_KIND, PartSeat, styleMirrorDrawn } from "./part-geometry.ts";
+import { bumperBare, CarCabin } from "./interior.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { anchorOnSkin, poseOnSkin, type GlowKind, type SkinAnchor } from "./lamp-lights.ts";
@@ -33,10 +36,13 @@ import { panelRegions, type PanelName, type PanelRegion } from "./car-panels.ts"
 import { newDentState, type DentState } from "./loose-dent.ts";
 import { newLooseShape } from "./loose-step.ts";
 import { carClass, CLASSES, drivenAxles } from "./vehicle-classes.ts";
+import { bootPivot, lidSpec, roofHinged, type HingeSpec } from "./hinge-spec.ts";
 const _p = new THREE.Vector3();
 const _inv = new THREE.Quaternion();
 const _lampQ = new THREE.Quaternion();
 const _lampE = new THREE.Euler();
+/** Each style's rest caster (body + flush parts), shared by its cars and drawn by `PartBatch.casters`; never disposed. */
+const casterByStyle = new WeakMap<BodyStyle, THREE.BufferGeometry>();
 
 const PANEL_SEATS: Record<PanelName, readonly [DetachPart["cage"], number, number]> = {
   quarterL: ["wingRL", 10, 8],
@@ -47,8 +53,6 @@ const PANEL_SEATS: Record<PanelName, readonly [DetachPart["cage"], number, numbe
   archRR: ["wingRR", 11, 11],
 };
 
-/** Light bar seat on the roof (car z, m): over the front seats, behind the windshield header. */
-const LIGHT_BAR_Z = -0.02;
 /** Siren flash: red, then blue, each half of this period (s). */
 const SIREN_PERIOD = 0.5;
 /** Lit lens emissive gain past the bloom threshold; each stays under the ACES knee where it washes out (red to orange, blue to lavender at 2.4). */
@@ -85,7 +89,7 @@ function writePlanBox(arr: Float32Array, box: Float64Array): void {
 }
 
 /** C1: only a side hit this hard (m/s EBS, 45 km/h) tears a door off; slower side hits spring it. */
-export const DOOR_TEAR_MPS = 12.5;
+const DOOR_TEAR_MPS = 12.5;
 /** C1: frontal and rear crush can jam a door ajar (hingeT), never swing it open. */
 export const DOOR_AJAR = 0.2;
 /** C2: below 30 km/h EBS a folded bumper stays on (IIHS low-speed bumper protocols). */
@@ -111,28 +115,60 @@ export const DOOR_DAMP = 0.8;
 export const MIRROR_FOLD_MAX = (75 * Math.PI) / 180;
 /** Energy the mirror's fold stop takes before the mirror snaps off (J), guessed. */
 export const MIRROR_BREAK_J = 30;
+/** A door's drawn angle (rad) per unit of crash hinge value (`hingeT`): the jam that holds a door ajar. */
+const DOOR_JAM = 1.45;
+/** C1: a side hit that raises a door's hinge value past this at `DOOR_TEAR_MPS` tears it off. */
+const DOOR_TEAR_T = 0.58;
+
+/** The doors' hinge at this car's door hinge line; the swinging slab is the platform `DOOR`, as in the rest of the door sim. */
+function doorSpec(door: BodyStyle["door"]): HingeSpec {
+  return {
+    length: DOOR.length,
+    kg: DOOR_MASS,
+    inertia: (DOOR_MASS * DOOR.length * DOOR.length) / 3,
+    stop: DOOR_OPEN_MAX,
+    jam: DOOR_JAM,
+    ajar: DOOR_AJAR,
+    tearJ: HINGE_TEAR_J,
+    slamJ: SLAM_TEAR_J,
+    tearT: DOOR_TEAR_T,
+    tearMps: DOOR_TEAR_MPS,
+    hx: door.hingeX,
+    hz: door.hingeZ,
+    dir: 0,
+    uy: 0,
+    uz: 0,
+    lift: 0,
+  };
+}
+
+/** A shut, latched swing on hinge `spec`. */
+function newSwing(spec: HingeSpec): DoorHinge {
+  return { theta: 0, omega: 0, latched: true, load: 0, mirrorFold: 0, spec };
+}
 
 /** Both ends struck within this (s) is a squeeze (`noteContactEnd`). */
 export const END_WINDOW = 0.25;
 /** A squeeze ends once contact has been quiet this long (s), the deform's re-arm quiet time. */
 export const REARM_QUIET_S = 0.3;
 
-/** A door's free swing; the crash rule's `hingeT` jams it open on top of this (C1). */
+/** A door's or lid's free swing within its hinge's `spec`; the crash rule's `hingeT` jams it open on top of this (C1). */
 export interface DoorHinge {
   /** Open angle (rad, 0 = shut). */
   theta: number;
   /** Opening rate (rad/s, + opens). */
   omega: number;
   latched: boolean;
-  /** Energy the hinges have taken at the stop (J); tears at `HINGE_TEAR_J`. */
+  /** Energy the hinges have taken at the stop (J); tears at `spec.tearJ`. */
   load: number;
   /** The door mirror's fold about its base: its `rotation.y` (rad). */
   mirrorFold: number;
+  readonly spec: HingeSpec;
 }
 
 /** Netplay state of a car's detachable parts, lamps and glass, preallocated from `partNetSizes()`. */
 export interface PartNetState {
-  /** Per part: 1 detached, 2 folding, 4 its door swing is latched. */
+  /** Per part: 1 detached, 2 folding, 4 its swing (a door's, the lid's) is latched. */
   readonly flags: Uint8Array;
   /** Per part × 3: hingeT, swing theta (rad), swing mirrorFold (rad); 0 without a swing. */
   readonly hinge: Float32Array;
@@ -215,10 +251,12 @@ export interface DetachPart {
   velocity: THREE.Vector3;
   angular: THREE.Vector3;
   radius: number;
-  /** Doors own their hinge; a mirror shares its door's. */
+  /** Doors and the trunk lid own their hinge; a mirror shares its door's. */
   swing: DoorHinge | null;
   /** Quarter panels and arch flares: the patch of body skin they are (null on every other part); once hinged, whether the shell is in the scene (the body under it is primer). */
   region: PanelRegion | null;
+  /** Bumpers: the body's vertices they cover, bare metal once they are gone (`setBare`); null on every other part. */
+  bare: Int32Array | null;
   open: boolean;
   /** The hinge value the open shell was last posed at (`shellPose`): an attached panel is re-posed only when it changes (a changed skin re-poses all, `skinPanels`). */
   posed: number;
@@ -327,14 +365,18 @@ export abstract class CarCore {
   protected mirrorParts: DetachPart[] = [];
   /** [left, right] quarter panels, also listed in `parts`. */
   protected quarterParts: DetachPart[] = [];
+  /** The trunk lid, hatch or tailgate, also listed in `parts`. */
+  protected lidPart!: DetachPart;
   /** Seconds since the [front, rear] end was last struck (`noteContactEnd`). */
   protected readonly endAgo = new Float64Array([9, 9]);
   /** Smallest striker reach (m from centre along the length) since the squeeze began. */
   protected endReach = Infinity;
   protected endSqueeze = false;
   readonly lamps: Lamp[] = [];
-  /** Hood, boot lid, doors, bumpers: they lie on the shell until a crash or hinge moves them, so an undamaged car's sun shadow is the body's alone (`CarParts.settleCasters`); far-car detail cuts treat them as casters anyway. */
+  /** Hood, boot lid, doors, bumpers: they lie on the shell until a crash or hinge moves them, so an undamaged car's sun shadow is `shadowCaster` alone (`CarParts.settleCasters`); far-car detail cuts treat them as casters anyway. */
   readonly flushCasters: THREE.Mesh[] = [];
+  /** The undamaged car's sun-shadow seat: body and every flush part at rest as one geometry, never drawn itself; `PartBatch.casters` draws it instanced per style while `castShadow` (`CarParts.settleCasters`) says the car is flush. */
+  readonly shadowCaster: THREE.Mesh;
   protected hullHelper: THREE.LineSegments | null = null;
   abstract readonly cage: CarCage;
   private bumperF: THREE.Group;
@@ -353,11 +395,14 @@ export abstract class CarCore {
   protected doorRRest: Float32Array;
   protected hoodOrigin: THREE.Vector3;
   protected trunkOrigin: THREE.Vector3;
-  readonly interior: PartSeat;
+  /** The cabin's pose, holding its shell, seats and wheel (`CarCabin`): `fitInterior` moves it with the crushed cell. */
+  readonly interior: THREE.Group;
+  /** The interior kit, the engine bay and the crash bars, placed by the style. */
+  protected readonly cabin: CarCabin;
   private mirrorL: PartSeat;
   private mirrorR: PartSeat;
-  /** The seven static parts, drawn by PartBatch; indexed by PartKind. */
-  readonly partSeats: readonly PartSeat[] = PART_KINDS.map((kind) => new PartSeat(kind));
+  /** The static parts, drawn by PartBatch: one of each kind indexed by PartKind, then the further ones (`carPartSeats`). */
+  readonly partSeats: readonly PartSeat[] = carPartSeats();
   /** Police roof light bar (skinned with the roof cage), its part, rest shape and seat; null on other styles. */
   protected lightBar: THREE.Mesh | null = null;
   protected lightBarPart: DetachPart | null = null;
@@ -387,8 +432,8 @@ export abstract class CarCore {
     this.group.add(this.body);
     this.deform = new StreamedDeformation(bodyGeo, this.frame.rig);
 
-    this.interior = this.partSeats[PART_KIND.interior]!;
-    this.group.add(this.interior);
+    this.cabin = new CarCabin(this.style, this.partSeats, this.group);
+    this.interior = this.cabin.pose;
 
     this.hood = new THREE.Mesh(withHoodBulge(makeHoodGeometry(this.style), this.style), this.bodyMat);
     this.hood.castShadow = true;
@@ -396,15 +441,18 @@ export abstract class CarCore {
     this.group.add(this.hood);
     this.trunk = new THREE.Mesh(makeTrunkGeometry(this.style), this.bodyMat);
     this.trunk.castShadow = true;
-    this.trunk.position.set(0, this.style.boot.origin[0], this.style.boot.origin[1]);
+    const [pivotY, pivotZ] = bootPivot(this.style.boot);
+    this.trunk.position.set(0, pivotY, pivotZ);
     this.group.add(this.trunk);
     if (this.style.lightBar) {
       this.sirenMat = makeSirenMaterial();
       this.lightBar = new THREE.Mesh(makeLightBar(), this.sirenMat);
       this.lightBar.name = LIGHT_BAR;
       this.lightBar.castShadow = true;
-      // Feet soles on the roof's dome where they stand, not the crown between them (that sank them 0.5–2.3 cm).
-      this.lightBar.position.set(0, roofTopY(LIGHT_BAR_FOOT.x, LIGHT_BAR_Z, this.style) - LIGHT_BAR_FOOT.sole, LIGHT_BAR_Z);
+      // Feet soles on the roof's dome where they stand, not the crown between them (that sank them 0.5–2.3 cm). Over the B-pillars, on
+      // the roof's flat crown: at -0.02 m its 0.18 m feet stood on the fastback's falling roof, a sole 1.7 cm in the air.
+      const z = (this.style.bPillar.rear + this.style.bPillar.front) / 2;
+      this.lightBar.position.set(0, roofTopY(LIGHT_BAR_FOOT.x, z, this.style) - LIGHT_BAR_FOOT.sole, z);
       this.lightBarOrigin.copy(this.lightBar.position);
       this.group.add(this.lightBar);
       this.lightBarRest = this.copyRest(this.lightBar.geometry);
@@ -441,6 +489,8 @@ export abstract class CarCore {
     this.bumperF = this.makeBumper(true, accent, livery?.body ?? paint.body);
     this.bumperR = this.makeBumper(false, accent, livery?.body ?? paint.body);
     this.group.add(this.bumperF, this.bumperR);
+    this.shadowCaster = this.makeShadowCaster();
+    this.group.add(this.shadowCaster);
     this.addLamps();
 
     const seatX = mirrorSeatX(this.style);
@@ -456,6 +506,7 @@ export abstract class CarCore {
 
     this.addGlass();
     this.registerParts();
+    this.cabin.watch(this.parts);
     this.buildHullHelper();
 
     // Transforms only: the engine's WheelBatch draws every car's wheels in one instanced call.
@@ -479,6 +530,29 @@ export abstract class CarCore {
     (pos.array as Float32Array).set(rest);
     pos.needsUpdate = true;
     computeNormalsFast(geo);
+  }
+
+  /** The style's rest caster (body + hood, boot lid, doors, bumpers in the car frame, positions only) on a hidden mesh that marks where the batch draws it. */
+  private makeShadowCaster(): THREE.Mesh {
+    let geo = casterByStyle.get(this.style);
+    if (!geo) {
+      this.group.updateMatrixWorld(true); // group is at the origin here, so matrixWorld is the car frame
+      const parts = [this.body, ...this.flushCasters].map((m) => {
+        const src = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+        return new THREE.BufferGeometry().setAttribute("position", src.getAttribute("position")).applyMatrix4(m.matrixWorld);
+      });
+      const merged = mergeGeometries(parts, false);
+      for (const g of parts) g.dispose();
+      if (!merged) throw new Error(`Failed to merge the ${this.style.id} shadow caster`);
+      merged.userData.shared = true;
+      casterByStyle.set(this.style, merged);
+      geo = merged;
+    }
+    const mesh = new THREE.Mesh(geo, shadowOnlyMaterial());
+    mesh.visible = false;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    return mesh;
   }
 
   private makeBumper(front: boolean, accent: number, body: number): THREE.Group {
@@ -551,7 +625,14 @@ export abstract class CarCore {
     const glassMat = glassMaterial("fresh");
     const style = this.style;
     addPane("windshield", new THREE.Mesh(makeWindshield(style), glassMat), this.group, ["roof", "bonnet"], "glassFront");
-    addPane("rear", new THREE.Mesh(makeRearGlass(style), glassMat), this.group, ["roof", "boot"], "glassRear");
+    // A roof-hinged hatch or liftgate carries its glass: the pane rides the lid (origin on its hinge line) at −pivot, so it swings, tears off and resets with it.
+    const rear = new THREE.Mesh(makeRearGlass(style), glassMat);
+    const inGate = roofHinged(style.boot);
+    if (inGate) {
+      const [pivotY, pivotZ] = bootPivot(style.boot);
+      rear.position.set(0, -pivotY, -pivotZ);
+    }
+    addPane("rear", rear, inGate ? this.trunk : this.group, ["roof", "boot"], "glassRear");
     const sideL = new THREE.Mesh(makeSideGlass(-1, style), glassMat);
     sideL.position.set(-DOOR_GLASS_SEAT.x, DOOR_GLASS_SEAT.y, DOOR_GLASS_SEAT.z);
     addPane("doorL", sideL, this.doorL, ["doorLeft", "roof"]);
@@ -592,6 +673,7 @@ export abstract class CarCore {
         radius,
         swing,
         region: null,
+        bare: null,
         open: false,
         posed: -1,
         dent: newDentState(),
@@ -600,12 +682,13 @@ export abstract class CarCore {
       this.parts.push(p);
       return p;
     };
-    add(BUMPER_F, this.bumperF, "bumperFront", 1, 2, "two-point", 0.42);
-    add("bumperR", this.bumperR, "bumperRear", 16, 17, "two-point", 0.4);
+    add(BUMPER_F, this.bumperF, "bumperFront", 1, 2, "two-point", 0.42).bare = bumperBare(this.style, this.body.geometry, true);
+    add("bumperR", this.bumperR, "bumperRear", 16, 17, "two-point", 0.4).bare = bumperBare(this.style, this.body.geometry, false);
     add(LID.hood, this.hood, "bonnet", 3, 3, "cowl", 0.5);
-    add(LID.trunk, this.trunk, "boot", 18, 18, "tail", 0.48);
-    const doorL = add("doorL", this.doorL, "doorLeft", 6, 6, "door", 0.4, { theta: 0, omega: 0, latched: true, load: 0, mirrorFold: 0 });
-    const doorR = add("doorR", this.doorR, "doorRight", 7, 7, "door", 0.4, { theta: 0, omega: 0, latched: true, load: 0, mirrorFold: 0 });
+    this.lidPart = add(LID.trunk, this.trunk, "boot", 18, 18, "tail", 0.48, newSwing(lidSpec(this.style.boot)));
+    const doors = doorSpec(this.style.door);
+    const doorL = add("doorL", this.doorL, "doorLeft", 6, 6, "door", 0.4, newSwing(doors));
+    const doorR = add("doorR", this.doorR, "doorRight", 7, 7, "door", 0.4, newSwing(doors));
     this.doorParts = [doorL, doorR];
     this.mirrorParts = [
       add("mirrorL", this.mirrorL, "doorLeft", 6, 4, "two-point", 0.1, doorL.swing),

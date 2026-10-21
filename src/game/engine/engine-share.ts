@@ -82,6 +82,7 @@ export abstract class EngineShare extends EngineReel {
       dkph: this.doorRig.kph,
       dkg: this.doorRig.kg,
       dside: this.doorRig.side < 0 ? "left" : "right",
+      dlid: this.doorRig.lid,
       // The race's course while it is the scene, the Survival course while Survival is (one `track=`); another scene's is not a setting.
       track: sc === "survival" ? this.race.survivalId : o.trackId,
       camp: o.campaign,
@@ -166,7 +167,7 @@ export abstract class EngineShare extends EngineReel {
         this.setPistonConfig({ speedKph: t.pkph, massKg: t.pkg, hardness: t.phard, holdCar: t.phold, hopSeconds: t.phop });
       }
       if (differs("scars", "sdrop", "sgap")) this.setStackConfig({ cars: t.scars, drop: t.sdrop, gap: t.sgap });
-      if (differs("dkph", "dkg", "dside")) this.setDoorConfig({ kph: t.dkph, kg: t.dkg, side: t.dside === "left" ? -1 : 1 });
+      if (differs("dkph", "dkg", "dside", "dlid")) this.setDoorConfig({ kph: t.dkph, kg: t.dkg, side: t.dside === "left" ? -1 : 1, lid: t.dlid });
       this.enterSharedScene(t);
       if (boot || (t.seed !== null && SEEDED_SCENES[t.scene] && t.seed !== this.sceneSeed)) this.randomizeAndReset();
     } finally {

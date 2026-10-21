@@ -19,6 +19,7 @@ import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CageRig } from "./car-cage-rig.ts";
 import { PartSeat } from "./part-geometry.ts";
+import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
 
 export { DOOR };
@@ -65,9 +66,9 @@ export class DeformableCar extends CarParts {
     const r2 = REST_SPEED * REST_SPEED;
     return v.x * v.x + v.y * v.y + v.z * v.z >= r2 || w.x * w.x + w.y * w.y + w.z * w.z >= r2;
   }
-  /** Both doors shut (`swing.latched`): nothing of the car stands out past its hull and its mirrors; an unlatched door swings out up to its hinge plus its length. */
-  get doorsLatched(): boolean {
-    return this.doorParts[0]!.swing!.latched && this.doorParts[1]!.swing!.latched;
+  /** Both doors and the trunk lid shut (`swing.latched`; a torn lid is no lid): nothing of the car stands out past its hull and its mirrors; an unlatched door swings out up to its hinge plus its length, a lid past the tail or roof. */
+  get hingesLatched(): boolean {
+    return !this.swingFree();
   }
   private cageRig: CageRig | null = null;
   /** The car's contact shape: its drawn body (`CarCage`), fitted by `refitCage`. */
@@ -226,6 +227,8 @@ export class DeformableCar extends CarParts {
     this.group.rotation.set(0, 0, 0);
     this.interior.scale.set(1, 1, 1);
     this.interior.position.set(0, 0, 0);
+    this.cabin.fit(null);
+    this.cabin.sinkHeadliner(null);
 
     this.endAgo.fill(9);
     this.endReach = Infinity;
@@ -240,6 +243,7 @@ export class DeformableCar extends CarParts {
         else if (!p.region) this.group.add(p.object);
       }
       if (p.region) this.closePanel(p);
+      if (p.bare) setBare(p.bare, this.body.geometry, false);
       p.detached = false;
       p.folding = false;
       p.hingeT = 0;
@@ -264,8 +268,8 @@ export class DeformableCar extends CarParts {
     for (const g of this.glassPanes) this.resetGlass(g);
     this.resetLamps();
   }
-  /** `impulse` is the closing speed (FX, glass); `ebs` the equivalent barrier speed that sizes the crush. The first hit starts the crash; on a wreck a fresh, hard enough contact re-arms a new hit (`rearmHit`). Returns whether the hit armed. */
-  applyImpact(worldPoint: THREE.Vector3, worldInward: THREE.Vector3, impulse: number, ebs: number): boolean {
+  /** `impulse` is the closing speed (FX, glass); `ebs` the equivalent barrier speed that sizes the crush; `tyreSide`, a tyre met a solid's side (`beginCrush`). The first hit starts the crash; on a wreck a fresh, hard enough contact re-arms a new hit (`rearmHit`). Returns whether the hit armed. */
+  applyImpact(worldPoint: THREE.Vector3, worldInward: THREE.Vector3, impulse: number, ebs: number, tyreSide = false): boolean {
     const rigid = this.rigid;
     if (rigid) {
       // A rigid body (`stepFree`) takes the hit on its masses: its centre's velocity carried to the group's origin, as `land` does, and a wreck's masses keep their dents. Its masses fly it on (`syncPose`)
@@ -293,7 +297,7 @@ export class DeformableCar extends CarParts {
     } else {
       this.crashed = true;
       this.ride(0);
-      this.deform.beginCrush(localP, localN, impulse, ebs, this.group, this.velocity, this.angular);
+      this.deform.beginCrush(localP, localN, impulse, ebs, this.group, this.velocity, this.angular, tyreSide);
       if (rigid) {
         this.deform.unstep(this.flewDt);
       }
@@ -445,7 +449,7 @@ export class DeformableCar extends CarParts {
       d.deepCrush = false;
     }
     if (this.endReach < Infinity && d.quietTime() > REARM_QUIET_S && Math.min(this.endAgo[0]!, this.endAgo[1]!) > END_WINDOW) this.endReach = Infinity;
-    if (!this.doorParts[0]!.swing!.latched || !this.doorParts[1]!.swing!.latched) this.swingDoors(dt);
+    if (this.swingFree()) this.swingHinges(dt);
     else this.sampleMotion();
   }
 
@@ -640,7 +644,8 @@ export class DeformableCar extends CarParts {
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
       this.followGlass();
     }
-    if (this.deform.massActive) this.fitInterior();
+    // A load crushes the roof's skin with the masses at rest: the headliner follows it too.
+    if (this.deform.massActive || this.deform.skinnedThisFrame) this.fitInterior();
     if (this.hullHelper?.visible) this.updateHullHelper();
     this.settleCasters();
   }
@@ -654,6 +659,7 @@ export class DeformableCar extends CarParts {
       this.skinPanels();
       this.holdSkinOffTyres(true);
     }
+    this.fitInterior();
   }
 
   /** A crushed skin drawn over a standing tyre stands on it (`TyreSkin`); a thrown wheel is the world's. */
@@ -728,7 +734,7 @@ export class DeformableCar extends CarParts {
       // Meshes, lines and points alike: the hull overlay is a LineSegments, and freeing meshes alone left its buffer for good.
       const drawn = obj as THREE.Mesh | THREE.Line | THREE.Points;
       if (obj instanceof PartSeat) obj.dispose();
-      else drawn.geometry?.dispose();
+      else if (!drawn.geometry?.userData.shared) drawn.geometry?.dispose();
       for (const m of [drawn.material].flat()) if (m && !m.userData.shared) m.dispose();
       if (obj instanceof THREE.Light) obj.dispose();
     };
@@ -776,6 +782,7 @@ export class DeformableCar extends CarParts {
           else if (p.name === "mirrorL") this.doorL.add(p.object);
           else if (p.name === "mirrorR") this.doorR.add(p.object);
           else this.group.add(p.object);
+          if (p.bare) setBare(p.bare, this.body.geometry, false);
           p.detached = false;
         }
       }
