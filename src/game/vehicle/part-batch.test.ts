@@ -5,7 +5,7 @@ import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
 import { DeformableCar } from "./car.ts";
 import { BUMPER_F } from "./constants.ts";
 import { INSTANCE_MIRROR_VARIANT_ATTRIBUTE, MIRROR_VARIANT_ATTRIBUTE } from "./car-materials.ts";
-import { CAR_STYLES } from "./car-variants.ts";
+import { CAR_STYLE_IDS, CAR_STYLES } from "./car-variants.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
 import { PART_KIND, PART_KINDS, partGeometry } from "./part-geometry.ts";
@@ -95,10 +95,15 @@ describe("given the part batch and a car whose style has its own mirror", () => 
   });
 
   test("when it is synced beside a platform-mirror car, then its instance carries its variant and door paint, and the batch's geometry holds its mirror under that variant", () => {
-    const { batch, car, draw } = stage();
+    const { batch, draw } = stage();
+    // The neighbour is the first style that draws the platform mirror: which styles carry their own caps is the fleet table's business.
+    const plainId = CAR_STYLE_IDS.find((id) => CAR_STYLES[id].door.mirror === undefined);
+    assert.ok(plainId !== undefined, "some style draws the platform mirror");
+    const plain = new DeformableCar(paint(), new THREE.Scene(), null, plainId);
+    plain.spawn(0, 10, 0);
     const own = new DeformableCar({ ...paint(), body: 0x336699 }, new THREE.Scene(), null, "wagon");
     own.spawn(0, 10, 0);
-    draw([car(10), own]);
+    draw([plain, own]);
     const mesh = batch.meshes[PART_KIND.mirrorR]!;
     const seat = own.partSeats[PART_KIND.mirrorR]!;
     const variants = mesh.geometry.getAttribute(INSTANCE_MIRROR_VARIANT_ATTRIBUTE);

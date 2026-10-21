@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { SEDAN } from "./sedan.ts";
+import { SEDAN, SEDAN_MIRROR } from "./sedan.ts";
 import { POLICE_DETAILS } from "./sedan-details.ts";
 
 /** Black body and trim, white doors: the cop's two-tone; `present/cop-livery.ts` paints the white roof, pillars and door lettering in it. */
@@ -13,4 +13,6 @@ export const POLICE: BodyStyle = {
   lightBar: true,
   pushBar: true,
   details: POLICE_DETAILS,
+  /** The cruiser's mirrors are black plastic: a body-colour cap would take the white door paint. */
+  door: { ...SEDAN.door, mirror: { ...SEDAN_MIRROR, finish: "black" } },
 };
