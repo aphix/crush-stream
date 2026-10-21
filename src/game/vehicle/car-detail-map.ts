@@ -321,7 +321,7 @@ type DetailUniforms = {
   detailBounds: THREE.IUniform<THREE.Vector4[]>;
 };
 
-/** One set of uniforms per style, shared by every material of its cars; the atlas is baked into it at the first compile that draws it, never disposed. */
+/** One set of uniforms per style, shared by every material of its cars; its atlas is baked when the style's first car is built (race setup, before the warm-up), so no draw or tier flip bakes; never disposed. */
 const uniformsByStyle = new WeakMap<BodyStyle, DetailUniforms>();
 
 function detailUniforms(style: BodyStyle): DetailUniforms {
@@ -335,13 +335,14 @@ function detailUniforms(style: BodyStyle): DetailUniforms {
 
 /**
  * Patch paint `material` (one with `applyFinish`) to draw `style`'s details while its finish is on: its program key gains `|detail`
- * and its shader samples the style's atlas at the rest frame. A style with no details leaves the material as it was. Chains the
- * earlier compile hook, like `applyFinish`.
+ * and its shader samples the style's atlas at the rest frame, baked here whatever the tier so a flip to High finds it ready. A style
+ * with no details leaves the material as it was. Chains the earlier compile hook, like `applyFinish`.
  */
 export function applyDetailMap(material: THREE.MeshPhysicalMaterial, style: BodyStyle): void {
   const details = style.details;
   if (!details) return;
   const uniforms = detailUniforms(style);
+  uniforms.detailMap.value ??= bakeDetailAtlas(details, style.dims, uniforms.detailTiles.value, uniforms.detailBounds.value);
   const previousHook = material.onBeforeCompile;
   const previousKey = material.customProgramCacheKey;
   material.onBeforeCompile = (shader, renderer) => {
@@ -349,7 +350,6 @@ export function applyDetailMap(material: THREE.MeshPhysicalMaterial, style: Body
     // Every compile carries the uniforms, as the finish's map does: three binds a material's latest uniforms to each program it returns to.
     Object.assign(shader.uniforms, uniforms);
     if (!finishOn(material)) return;
-    uniforms.detailMap.value ??= bakeDetailAtlas(details, style.dims, uniforms.detailTiles.value, uniforms.detailBounds.value);
     const attributes = shader.vertexShader.includes(REST_FRAME_ATTRIBUTES) ? "" : REST_FRAME_ATTRIBUTES;
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", `#include <common>\n${attributes}\nvarying vec3 vDetailPos;\nvarying vec3 vDetailNormal;`)

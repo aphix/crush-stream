@@ -1,0 +1,30 @@
+{
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/police-car/police-car-1.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/police-car/police-car-2.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      124,
+      639,
+      553,
+      412
+    ],
+    "wheels": {},
+    "camera": null
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      85,
+      525,
+      439,
+      340
+    ],
+    "wheels": {},
+    "camera": null
+  }
+}

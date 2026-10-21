@@ -185,12 +185,17 @@ describe("given the detail compile hook on a paint material", () => {
     assert.ok(compileHooks(detailed).uniforms.detailMap?.value instanceof THREE.DataTexture, "a detail map with details");
   });
 
-  it("when the finish is off (a low tier), then a detailed material keeps today's program key and bakes nothing, until the finish is on", () => {
+  it("when the finish is off (a low tier), then a detailed material keeps today's program key, its atlas is already baked, and a Low→High→Low→High round trip draws that same atlas", () => {
     const material = makePaintMaterial(0x336699);
     applyDetailMap(material, sedanWith(SEDAN_DETAILS));
     assert.equal(material.customProgramCacheKey(), "car-paint-primer", "program key with the finish off");
-    assert.ok(compileHooks(material).uniforms.detailMap?.value === null, "no atlas baked with the finish off");
+    const baked = compileHooks(material).uniforms.detailMap?.value;
+    assert.ok(baked instanceof THREE.DataTexture, "the atlas is baked when the material is patched, before any compile with the finish on");
     switchFinish(material, true);
-    assert.ok(compileHooks(material).uniforms.detailMap?.value instanceof THREE.DataTexture, "an atlas once the finish is on");
+    assert.ok(compileHooks(material).uniforms.detailMap?.value === baked, "the first compile with the finish on bakes nothing new");
+    switchFinish(material, false);
+    compileHooks(material);
+    switchFinish(material, true);
+    assert.ok(compileHooks(material).uniforms.detailMap?.value === baked, "a tier round trip keeps the atlas");
   });
 });
