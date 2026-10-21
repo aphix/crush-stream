@@ -3,7 +3,7 @@ import { PART_FAMILY } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassQuad } from "./car-variants.ts";
 import { glassTopY, glassX, lerp } from "./car-mesh.ts";
-import { beltY } from "./car-lines.ts";
+import { aPillarTopZ, beltY } from "./car-lines.ts";
 
 // Glass panes on the shared platform: windshield, rear glass, door and quarter glass, filling the greenhouse `car-greenhouse-mesh.ts` builds.
 
@@ -70,10 +70,10 @@ type SideSpan = { bot: readonly [number, number]; top: readonly [number, number]
 /** The door glass rides its door, so its rear edge stays this far (m) inside the door's trailing edge at the belt and at the top. */
 const DOOR_GLASS_INSET = { bot: 0.03, top: 0.05 } as const;
 
-/** Door glass: from inside the door's trailing edge at the belt up to the A-pillar, from its foot on the belt to under the windshield's top. */
+/** Door glass: from inside the door's trailing edge at the belt up to the A-pillar, from its foot on the belt to its top on the cant line. */
 function doorSpan(style: BodyStyle): SideSpan {
   const trailing = style.door.hingeZ - style.door.length;
-  return { bot: [trailing + DOOR_GLASS_INSET.bot, style.aPillarFoot], top: [trailing + DOOR_GLASS_INSET.top, style.windshieldTop[1] - 0.05] };
+  return { bot: [trailing + DOOR_GLASS_INSET.bot, style.aPillarFoot], top: [trailing + DOOR_GLASS_INSET.top, aPillarTopZ(style)] };
 }
 
 /** Quarter glass: from the C-pillar forward to the B-pillar. */
