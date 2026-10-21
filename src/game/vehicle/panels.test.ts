@@ -4,12 +4,22 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { INNER_PANEL } from "./constants.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { makeShell, PANEL_NAMES, panelRegions, poseShell } from "./car-panels.ts";
 import { DENT_MAX, newDentState, recordDent } from "./loose-dent.ts";
 import { runWall, type CrashResult } from "../contact/crash-scenarios.test-util.ts";
 import { assertSameNumbers, DT, paint } from "./test-support.ts";
 import { LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts";
+
+/** The body's paint attribute, joined: 0 paint, 1 primer, `INNER_PANEL` the unpainted bay trough. */
+const primerOf = (car: DeformableCar): string => Array.from(car.body.geometry.getAttribute("primer").array).join();
+/** The rest build's: paint, and the trough's inner panel only. */
+const restPrimer = (car: DeformableCar): string => {
+  const rest = Array.from(makeChassisGeometry(car.style).getAttribute("primer").array);
+  assert.ok(rest.every((v) => v === 0 || v === INNER_PANEL), "a rest body holds only paint and inner panel");
+  return rest.join();
+};
 
 /** How far (m) the light bar may sink into the roof skin under it past where it sits at rest: its feet's seat (measured 0.022 at worst, struck and tilted). */
 const BAR_SEAT_M = 0.03;
@@ -121,7 +131,7 @@ describe("given every car body style, whose panels are cut from each body's own 
   it("when a police car nobody has crashed is checked, then it carries no panel mesh: attached panels are body, with no draw of their own", () => {
     const car = probe("police");
     for (const p of car.allParts.filter((q) => q.region)) assert.ok(!p.open && p.object.parent === null, `${p.name} is in the scene`);
-    assert.ok(!car.body.geometry.getAttribute("primer").array.some((v) => v !== 0), "the body is primer before any panel hinged");
+    assert.ok(primerOf(car) === restPrimer(car), "the body is paint (and the bay trough unpainted) before any panel hinged");
   });
 });
 
@@ -190,7 +200,7 @@ describe("given a car whose quarter panels and arch flares are torn off", () => 
     assert.equal(car.allParts.filter((p) => p.region && p.detached && p.object.visible).length, 2, "drawn torn shells");
     car.resetVisual();
     assert.ok(car.allParts.every((p) => !p.region || p.object.visible), "a reset brings every shell back");
-    assert.ok(!car.body.geometry.getAttribute("primer").array.some((v) => v !== 0), "and the body is paint again");
+    assert.ok(primerOf(car) === restPrimer(car), "and the body is paint again (the bay trough still unpainted)");
   });
 
   it("when a panel is torn and posed again, then it is culled by a sphere that follows each pose", () => {

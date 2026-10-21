@@ -19,11 +19,11 @@ const LEATHER: Tone = [0x1b1f25, 0.62, 0];
 const INSERT: Tone = [0x262a31, 0.8, 0];
 const RIM: Tone = [0x1a1c20, 0.55, 0];
 const HUB: Tone = [0x22252a, 0.4, 0.3];
-const CAST: Tone = [0x3a3d42, 0.6, 0.6];
-const SATIN: Tone = [0x202227, 0.35, 0.2];
 const BLACK: Tone = [0x111214, 0.7, 0.4];
 const STEEL: Tone = [0x5d6064, 0.5, 0.8];
 const PLASTIC: Tone = [0x18191c, 0.6, 0.05];
+const ENGINE: Tone = [0x24262a, 0.55, 0.6];
+const ALU: Tone = [0x9ea2a8, 0.32, 0.9];
 
 /** Seat backs and the seated driver lean back this far from upright (rad): a 1.74 m dummy's crown clears a 1.28 m roof. */
 export const SEAT_RECLINE = 0.44;
@@ -38,10 +38,12 @@ export const REF_CABIN = { halfX: 0.8, floor: 0.3, roof: 1.3, rear: -0.72, front
 export const REF_BAY = { halfX: 0.75, floor: 0.36, top: 0.709, rear: 1.07, front: 1.9 } as const;
 /** The bay opens this far (m) ahead of the hood's cowl edge or the windshield's foot, whichever is further forward, and stops this far inside the hood's nose edge. */
 const BAY_CLEAR = { rear: 0.04, front: 0.08 } as const;
+/** The trough's floor (m, car y): deep enough that the bay set stands tall in it, clear of the body's floor pan at 0.145. */
+const BAY_FLOOR = 0.28;
 
 /** The drawn body's engine bay trough under the hood, as a tub [zRear, zFront, floorY] (`BodyStyle.tubs`): drawn only, the cage's deck stays closed. */
 export function bayTub(style: BodyStyle): readonly [number, number, number] {
-  return [Math.max(style.hood.z0, style.windshield.base[1]) + BAY_CLEAR.rear, style.hood.z1 - BAY_CLEAR.front, REF_BAY.floor];
+  return [Math.max(style.hood.z0, style.windshield.base[1]) + BAY_CLEAR.rear, style.hood.z1 - BAY_CLEAR.front, BAY_FLOOR];
 }
 
 /** A flat-toned box at (x, y, z), tipped `rx` (rad) about x first. */
@@ -170,31 +172,43 @@ export function doorCardGeometry(sign: number): THREE.BufferGeometry {
   return mergeToned(parts, "door card");
 }
 
-/** The shared engine bay in `REF_BAY`: undertray, firewall, aprons and strut caps, rails, block, heads, cover, intake, radiator, fan, lamp backs, battery, tank, hose. */
+/**
+ * The shared engine bay in `REF_BAY`, a dark mass wall to wall up to the hood's underside: undertray, firewall, aprons and strut
+ * towers, rails, a dark block with bare-aluminium heads, intake and plenum, a black cover, exhaust manifolds, radiator and fan,
+ * airbox, battery, booster, fuse box, tank, hoses and lamp backs.
+ */
 export function engineBayGeometry(): THREE.BufferGeometry {
+  const along = (geo: THREE.BufferGeometry): THREE.BufferGeometry => geo.rotateX(Math.PI / 2);
   const parts = [
-    box(1.5, 0.02, 0.85, BLACK, 0, 0.37, 1.485),
-    box(1.44, 0.36, 0.02, TRIM, 0, 0.55, 1.08),
-    rounded(0.44, 0.22, 0.4, 0.03, CAST).translate(0, 0.5, 1.32),
-    rounded(0.34, 0.05, 0.34, 0.02, SATIN, 2).translate(0, 0.672, 1.3),
-    box(0.3, 0.008, 0.02, ACCENT, 0, 0.699, 1.22),
-    box(0.3, 0.008, 0.02, ACCENT, 0, 0.699, 1.38),
-    toned(new THREE.CylinderGeometry(0.055, 0.055, 0.24, 12), ...SATIN).rotateX(Math.PI / 2).translate(0.22, 0.615, 1.52),
-    rounded(0.2, 0.13, 0.22, 0.03, PLASTIC).translate(0.42, 0.59, 1.66),
-    box(1.1, 0.2, 0.04, BLACK, 0, 0.48, 1.84),
-    box(1.3, 0.04, 0.06, STEEL, 0, 0.6, 1.84),
-    toned(new THREE.CylinderGeometry(0.16, 0.16, 0.04, 16), ...PLASTIC).rotateX(Math.PI / 2).translate(0, 0.48, 1.8),
-    rounded(0.16, 0.14, 0.2, 0.02, PLASTIC).translate(-0.44, 0.51, 1.64),
-    box(0.03, 0.02, 0.03, [0xa8231c, 0.5, 0.2], -0.48, 0.59, 1.6),
-    toned(new THREE.CylinderGeometry(0.05, 0.05, 0.1, 10), 0xb8b8b0, 0.5, 0).translate(0.46, 0.57, 1.2),
-    toned(new THREE.CylinderGeometry(0.022, 0.022, 0.3, 8), ...PLASTIC).rotateX(Math.PI / 2).translate(0.12, 0.56, 1.66),
+    box(1.5, 0.02, 0.83, BLACK, 0, 0.37, 1.485),
+    box(1.5, 0.34, 0.03, TRIM, 0, 0.54, 1.085),
+    box(1.3, 0.05, 0.06, TRIM, 0, 0.68, 1.12),
+    rounded(0.52, 0.24, 0.46, 0.03, ENGINE).translate(0, 0.5, 1.34),
+    rounded(0.3, 0.05, 0.38, 0.02, PLASTIC, 2).translate(0, 0.685, 1.32),
+    box(0.2, 0.006, 0.02, ALU, 0, 0.711, 1.24),
+    box(0.2, 0.006, 0.02, ALU, 0, 0.711, 1.4),
+    along(toned(new THREE.CylinderGeometry(0.06, 0.06, 0.34, 14), ...ALU)).translate(0, 0.64, 1.6),
+    along(toned(new THREE.CylinderGeometry(0.045, 0.045, 0.3, 12), ...ALU)).rotateY(0.9).translate(0.22, 0.62, 1.66),
+    rounded(0.24, 0.15, 0.26, 0.03, PLASTIC).translate(0.43, 0.6, 1.66),
+    box(1.2, 0.26, 0.05, BLACK, 0, 0.5, 1.85),
+    box(1.36, 0.04, 0.07, ALU, 0, 0.66, 1.85),
+    along(toned(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 18), ...PLASTIC)).translate(0, 0.5, 1.8),
+    rounded(0.18, 0.16, 0.22, 0.02, PLASTIC).translate(-0.44, 0.53, 1.66),
+    box(0.03, 0.02, 0.03, [0xa8231c, 0.5, 0.2], -0.49, 0.62, 1.6),
+    box(0.03, 0.02, 0.03, ALU, -0.39, 0.62, 1.6),
+    along(toned(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 16), ...ENGINE)).translate(-0.48, 0.6, 1.16),
+    rounded(0.16, 0.08, 0.14, 0.02, PLASTIC).translate(0.48, 0.62, 1.2),
+    toned(new THREE.CylinderGeometry(0.05, 0.05, 0.1, 10), 0x5a5a56, 0.5, 0).translate(0.3, 0.62, 1.15),
+    along(toned(new THREE.CylinderGeometry(0.022, 0.022, 0.36, 8), ...PLASTIC)).rotateY(-0.5).translate(-0.18, 0.6, 1.62),
   ];
   for (const sign of [-1, 1]) {
-    parts.push(rounded(0.18, 0.3, 0.56, 0.03, TRIM).translate(sign * 0.66, 0.53, 1.34));
-    parts.push(toned(new THREE.CylinderGeometry(0.07, 0.08, 0.05, 12), ...CAST).translate(sign * 0.62, 0.7, 1.2));
-    parts.push(box(0.08, 0.1, 0.9, STEEL, sign * 0.5, 0.43, 1.47));
-    parts.push(rounded(0.16, 0.08, 0.38, 0.025, SATIN).rotateZ(sign * 0.35).translate(sign * 0.13, 0.63, 1.32));
-    parts.push(rounded(0.24, 0.1, 0.1, 0.03, PLASTIC).translate(sign * 0.5, 0.5, 1.86));
+    parts.push(rounded(0.2, 0.3, 0.78, 0.03, TRIM).translate(sign * 0.65, 0.52, 1.47));
+    parts.push(toned(new THREE.CylinderGeometry(0.07, 0.08, 0.06, 12), ...ALU).translate(sign * 0.6, 0.69, 1.2));
+    parts.push(box(0.08, 0.1, 0.8, STEEL, sign * 0.5, 0.43, 1.47));
+    parts.push(rounded(0.13, 0.08, 0.42, 0.025, ALU).rotateZ(sign * 0.35).translate(sign * 0.2, 0.64, 1.34));
+    parts.push(along(toned(new THREE.CylinderGeometry(0.025, 0.025, 0.4, 8), ...STEEL)).translate(sign * 0.31, 0.47, 1.34));
+    for (const z of [1.2, 1.3, 1.4, 1.5]) parts.push(toned(new THREE.CylinderGeometry(0.018, 0.018, 0.08, 6), ...ALU).rotateZ(sign * 1.1).translate(sign * 0.12, 0.69, z));
+    parts.push(rounded(0.24, 0.1, 0.1, 0.03, PLASTIC).translate(sign * 0.5, 0.52, 1.86));
   }
   return mergeToned(parts, "engine bay");
 }

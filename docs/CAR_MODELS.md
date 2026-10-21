@@ -83,13 +83,20 @@ far distance (by `INTERIOR_MESH`), the door cards and crash bars with the small 
 - **The driver:** `present/seated-drivers.ts` draws every car's driver seated (one `DummyMesh` for the field, slot = the car's
   index), posed by `seatedPose(style)`: hips on the H-point, back on the seat, hands on the rim's grips, soles on the floor. He
   wears the car's driver look (`RagdollSystem.carDriverLook`, as he is thrown) and hides once `driverOut` is set or the far
-  cut takes his seat.
+  cut takes his seat. In the garage no one sits in the car: the standing dummy beside it is the driver. The National Mall's
+  VIP rides with his hips on the passenger H-point (`seats.front` mirrored).
+- **Crush:** the headliner sinks with the roof mass (a load's crush too, `CarCabin.sinkHeadliner`), so the cabin never stands
+  through a crushed roof. The bay rides the engine masses with its front no further out than the front bumper's masses (the
+  nose); each crash bar rides its bumper's, its face on the bumper's seat.
 - **The engine bay:** the drawn body (never the cage) opens a trough under the hood (`bayTub`: from the hood's cowl edge or the
-  windshield's foot to inside the nose, floor at 0.36 m), one more `tubs` entry for the drawn loft only. The bay and the crash
-  bars ride their masses (engine, bumper corners) through a crush.
+  windshield's foot to inside the nose, floor at 0.28 m), one more `tubs` entry for the drawn loft only. The bay set fills it
+  wall to wall up to the hood's underside: a dark block and black cover with bare-aluminium heads, intake, plenum and strut
+  caps, steel rails and manifolds, black radiator, airbox and battery.
+- **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor, the wheel liners and
+  the hood's underside are set so at build, on the drawn body only. No texture, no draw.
 - **Bare metal:** the paint's `primer` attribute draws procedural riveted steel (`bare-metal.ts`: object-space seams, rivet
   rows, a tint per sheet), so a torn panel's or bumper's under-panel bends with the body and costs no texture or draw. A torn
-  bumper bares the body it covered (`bumperBare`), a reset paints it again.
+  bumper bares the painted body it covered (`bumperBare`), a reset paints it again.
 - **The cage** reads `cageInterior()`, the first interior box byte-for-byte: the drawn kit moves no sim reading.
 
 ## References and scale

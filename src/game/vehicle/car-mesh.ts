@@ -5,6 +5,7 @@ import { beltX, beltY, floorY, rockerAt } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
+import { INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { bayTub } from "./interior-geometry.ts";
 
 export const SEDAN = CAR_STYLES.sedan;
@@ -157,6 +158,11 @@ export const TUB_EDGE = 0.025;
 /** The open floors a body build lofts: the style's tubs, and on the drawn body the engine bay under the hood (`bayTub`). */
 export function bodyTubs(style: BodyStyle, source: BodySource): readonly (readonly [number, number, number])[] {
   return source === "drawn" ? [...style.tubs, bayTub(style)] : style.tubs;
+}
+
+/** How far (0..1) the drawn body's loft at `z` has dropped into the engine bay's trough (`bayTub`). */
+export function bayAt(z: number, style: BodyStyle): number {
+  return tubAt(z, style, [bayTub(style)]).t;
 }
 
 function tubAt(z: number, style: BodyStyle, tubs: readonly (readonly [number, number, number])[]): { t: number; floor: number } {
@@ -494,7 +500,15 @@ function makeTailgate(style: BodyStyle, y0: number, z0: number, origin: YZ, sour
 
 export function makeHoodGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const { z0, z1, origin } = style.hood;
-  return markSkinDynamic(makeDeckPanel(style, z0, z1, origin, source));
+  const geo = makeDeckPanel(style, z0, z1, origin, source);
+  if (source === "drawn") {
+    // Its underside, the lid over the bay, is an unpainted inner panel.
+    const normal = geo.getAttribute("normal");
+    const primer = new Float32Array(normal.count);
+    for (let v = 0; v < normal.count; v++) if (normal.getY(v) < -0.5) primer[v] = INNER_PANEL;
+    geo.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(primer, 1));
+  }
+  return markSkinDynamic(geo);
 }
 
 /** Trunk lid, hatch or tailgate per style; local to `style.boot.origin` ([y, z]). */

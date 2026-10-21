@@ -201,15 +201,16 @@ export class CarCabin {
   }
 }
 
-/** The body's vertices a gone bumper bares (`front` or rear): from `BARE_REACH.inward` inside its seat out to the end, up to `BARE_REACH.up` over it. */
+/** The painted body's vertices a gone bumper bares (`front` or rear): from `BARE_REACH.inward` inside its seat out to the end, up to `BARE_REACH.up` over it; never an inner panel's. */
 export function bumperBare(style: BodyStyle, body: THREE.BufferGeometry, front: boolean): Int32Array {
   const { seat } = front ? style.bumpers.front : style.bumpers.rear;
   const pos = body.getAttribute("position");
+  const paint = body.getAttribute(PRIMER_ATTRIBUTE);
   const from = seat.z - BARE_REACH.inward;
   const out: number[] = [];
   for (let i = 0; i < pos.count; i++) {
     const z = front ? pos.getZ(i) : -pos.getZ(i);
-    if (z >= from && pos.getY(i) <= seat.y + BARE_REACH.up) out.push(i);
+    if (z >= from && pos.getY(i) <= seat.y + BARE_REACH.up && paint.getX(i) === 0) out.push(i);
   }
   return Int32Array.from(out);
 }

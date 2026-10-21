@@ -1,11 +1,12 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detSin } from "../kernel/physics-core.js";
-import { PRIMER_ATTRIBUTE } from "./constants.ts";
+import { INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import {
+  bayAt,
   bodyTubs,
   DOOR_EDGE,
   SEAM_HALF,
@@ -125,6 +126,9 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
   const rb = style.rearBulkhead;
   parts.push(makeBox(1.16, rb.yTop - 0.34, 0.045, 0, (rb.yTop + 0.34) * 0.5, rb.z));
+  // The wheel liners, merged after the loft and roof: unpainted like the bay they rise into.
+  const linerFrom = body.getAttribute("position").count + parts[1]!.getAttribute("position").count;
+  const linerTo = linerFrom + parts.slice(2, 2 + carFrame(style).wheels.length).reduce((n, g) => n + g.getAttribute("position").count, 0);
   const merged = mergeGeometries(parts, false);
   for (const g of parts) g.dispose();
   if (!merged) throw new Error("Failed to merge chassis");
@@ -133,7 +137,17 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   merged.computeBoundingSphere();
   // The loft is merged first: its vertex `s * ring + i` and its first (slices - 1) * ring * 2 triangles (`panelRegions` cuts panels out of them).
   merged.userData.loft = { ring: rings[0]!.length, slices: zs.length };
-  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): a torn panel's vertices are set dark.
-  merged.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(merged.getAttribute("position").count), 1));
+  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): a torn panel's vertices are set dark; 2 = an unpainted inner panel.
+  const primer = new THREE.BufferAttribute(new Float32Array(merged.getAttribute("position").count), 1);
+  merged.setAttribute(PRIMER_ATTRIBUTE, primer);
+  if (source === "drawn") {
+    // The bay trough's floor corner and wall top on each side: ring points 0, 1 and their mirrors.
+    const n = rings[0]!.length;
+    for (let s = 0; s < zs.length; s++) {
+      const w = INNER_PANEL * bayAt(zs[s]!, style);
+      for (const i of [0, 1, n - 2, n - 1]) primer.setX(s * n + i, w);
+    }
+    for (let v = linerFrom; v < linerTo; v++) primer.setX(v, INNER_PANEL);
+  }
   return markSkinDynamic(merged);
 }

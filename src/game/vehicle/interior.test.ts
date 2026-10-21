@@ -3,8 +3,11 @@ import { describe, test } from "node:test";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
-import { BUMPER_F, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
-import { doorCardGeometry } from "./interior-geometry.ts";
+import { BUMPER_F, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { makeHoodGeometry, TUB_EDGE } from "./car-mesh.ts";
+import { carFrame } from "./car-rig.ts";
+import { bayTub, doorCardGeometry } from "./interior-geometry.ts";
 import { CarCabin } from "./interior.ts";
 import { PartBatch } from "./part-batch.ts";
 import { carPartSeats, PART_KIND, PART_KINDS, type PartSeat } from "./part-geometry.ts";
@@ -104,6 +107,34 @@ describe("given a car whose front bumper is torn off", () => {
     assert.equal(primer(car, bare), bare.length);
     car.resetVisual();
     assert.equal(primer(car, bare), 0);
+  });
+});
+
+describe("given every style's drawn body and hood", () => {
+  test("when their paint is read, then the bay trough's walls and floor, the wheel liners and the hood's underside are unpainted inner panel, and nothing else on the deck is", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const body = makeChassisGeometry(style);
+      const paintOf = body.getAttribute(PRIMER_ATTRIBUTE);
+      const pos = body.getAttribute("position");
+      const [zRear, zFront, floor] = bayTub(style);
+      const linerTop = carFrame(style).wheels[0]![1] + style.arch.radius;
+      let trough = 0;
+      let deckOutside = 0;
+      for (let v = 0; v < pos.count; v++) {
+        if (paintOf.getX(v) !== INNER_PANEL) continue;
+        const z = pos.getZ(v);
+        if (z > zRear && z < zFront && pos.getY(v) <= floor + 1e-6) trough++;
+        if (pos.getY(v) > linerTop + 0.1 && (z < zRear - TUB_EDGE || z > zFront + TUB_EDGE)) deckOutside++;
+      }
+      assert.ok(trough >= 4, `${id}: ${trough} trough floor vertices unpainted`);
+      assert.equal(deckOutside, 0, `${id}: unpainted vertices on the deck outside the bay`);
+      const hood = makeHoodGeometry(style).getAttribute(PRIMER_ATTRIBUTE);
+      let under = 0;
+      for (let v = 0; v < hood.count; v++) if (hood.getX(v) === INNER_PANEL) under++;
+      assert.ok(under > 0 && under < hood.count / 2, `${id}: ${under} of ${hood.count} hood vertices unpainted`);
+      assert.equal(makeChassisGeometry(style, "cage").getAttribute(PRIMER_ATTRIBUTE).array.every((p) => p === 0), true, `${id}: the cage build is all paint`);
+    }
   });
 });
 

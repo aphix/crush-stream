@@ -13,6 +13,8 @@ const RIVET_R = 0.0055;
 const STEEL = [0.2, 0.205, 0.215] as const;
 const STEEL_ROUGHNESS = 0.55;
 const STEEL_METALNESS = 0.75;
+/** The share of that steel's colour an unpainted inner panel keeps (`primer` 2, the bay trough): dark grey under the engine. */
+const INNER_SHADE = 0.25;
 
 const f = (x: number): string => (Number.isInteger(x) ? `${x}.0` : `${x}`);
 
@@ -47,7 +49,7 @@ vec3 bareMetal(vec3 p, vec3 n) {
 /** Fragment replacements, each appended after its include: the colour, roughness, metalness and clearcoat give way to the steel by `bareW`. */
 export const BARE_METAL_FRAGMENT = {
   pars: FUNCTIONS,
-  color: "float bareW = smoothstep(0.3, 0.6, vPrimer);\ndiffuseColor.rgb = mix(diffuseColor.rgb, bareMetal(vBarePos, vBareN), bareW);",
+  color: `float bareW = smoothstep(0.3, 0.6, vPrimer);\ndiffuseColor.rgb = mix(diffuseColor.rgb, bareMetal(vBarePos, vBareN), bareW);\ndiffuseColor.rgb *= mix(1.0, ${f(INNER_SHADE)}, smoothstep(1.2, 1.8, vPrimer));`,
   roughness: `roughnessFactor = mix(roughnessFactor, ${f(STEEL_ROUGHNESS)}, bareW);`,
   metalness: `metalnessFactor = mix(metalnessFactor, ${f(STEEL_METALNESS)}, bareW);`,
   clearcoat: "#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= 1.0 - bareW;\n#endif",
