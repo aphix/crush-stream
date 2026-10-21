@@ -29,7 +29,7 @@ const ELBOW_POLE = [0.6, -1, 0] as const;
 const KNEE_POLE = new THREE.Vector3(0, 1, 0.3).normalize();
 
 /** A seated driver's ten parts (`PARTS` order) in car space: each part's centre and turn from standing. */
-export interface SeatedPose {
+interface SeatedPose {
   readonly p: readonly THREE.Vector3[];
   readonly q: readonly THREE.Quaternion[];
 }
@@ -54,7 +54,7 @@ const poses = new WeakMap<BodyStyle, SeatedPose>();
  * `style`'s driver sat on his drawn seat (`driverSeat`): hips on the H-point, back on the seat's lean, hands on the wheel's grips,
  * soles on the floor ahead. Built once per style. The pose a thrown driver can start from, so the seated one hands over without a jump.
  */
-export function seatedPose(style: BodyStyle): SeatedPose {
+function seatedPose(style: BodyStyle): SeatedPose {
   const known = poses.get(style);
   if (known) return known;
   const seat = driverSeat(style);

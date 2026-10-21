@@ -34,7 +34,7 @@ const BAR_OPEN = 0.5;
 const BARE_REACH = { inward: 0.25, up: 0.14 } as const;
 
 /** Where the driver sits (car space, m): his H-point, his back's lean from upright (rad), the wheel's centre, his grips on it and his soles, [his right (-x), his left]. */
-export interface DriverPlace {
+interface DriverPlace {
   hip: THREE.Vector3;
   recline: number;
   wheel: THREE.Vector3;
