@@ -123,7 +123,8 @@ Deploy (`deploy/`, `scripts/` build helpers, `kernels/`, `migrations/`) sits out
 
 Runner: `node --test` semantics (Node runs the TypeScript as is; no test framework), through `scripts/run-tests.mjs`, which
 starts the slowest files first (`scripts/test-cost.json`; `--learn` refreshes it) and otherwise behaves like the CLI, except that every test process imports
-`scripts/test-setup.mjs` first: the WASM skin kernel is loaded, so headless engines and cars skin as the browser does. The JS skin it replaces is checked
+`scripts/test-setup.mjs` first: the WASM skin kernel is loaded, so headless engines and cars skin as the browser does, and a failing assert on big values
+gets a bounded message (`scripts/assert-guard.mjs`; `docs/TOOLCHAIN.md`, test memory guards). The JS skin it replaces is checked
 against it alone, first, by `npm run test:parity` (`deform/skin-kernel.parity.ts`), and the suites stop if that fails. `npm run test:app` runs the game and
 multiplayer suites, `npm run test:game` only `src/game`. Each test stages the moment it claims (cars placed at the poses, speeds and states it needs; no full race,
 derby or Survival run, no seed sweep hoping the event happens). Long AI-driven runs that watch a whole field for anything going wrong (stuck cars, false ejections)
