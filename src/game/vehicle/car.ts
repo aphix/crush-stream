@@ -268,8 +268,8 @@ export class DeformableCar extends CarParts {
     for (const g of this.glassPanes) this.resetGlass(g);
     this.resetLamps();
   }
-  /** `impulse` is the closing speed (FX, glass); `ebs` the equivalent barrier speed that sizes the crush. The first hit starts the crash; on a wreck a fresh, hard enough contact re-arms a new hit (`rearmHit`). Returns whether the hit armed. */
-  applyImpact(worldPoint: THREE.Vector3, worldInward: THREE.Vector3, impulse: number, ebs: number): boolean {
+  /** `impulse` is the closing speed (FX, glass); `ebs` the equivalent barrier speed that sizes the crush; `tyreSide`, a tyre met a solid's side (`beginCrush`). The first hit starts the crash; on a wreck a fresh, hard enough contact re-arms a new hit (`rearmHit`). Returns whether the hit armed. */
+  applyImpact(worldPoint: THREE.Vector3, worldInward: THREE.Vector3, impulse: number, ebs: number, tyreSide = false): boolean {
     const rigid = this.rigid;
     if (rigid) {
       // A rigid body (`stepFree`) takes the hit on its masses: its centre's velocity carried to the group's origin, as `land` does, and a wreck's masses keep their dents. Its masses fly it on (`syncPose`)
@@ -297,7 +297,7 @@ export class DeformableCar extends CarParts {
     } else {
       this.crashed = true;
       this.ride(0);
-      this.deform.beginCrush(localP, localN, impulse, ebs, this.group, this.velocity, this.angular);
+      this.deform.beginCrush(localP, localN, impulse, ebs, this.group, this.velocity, this.angular, tyreSide);
       if (rigid) {
         this.deform.unstep(this.flewDt);
       }

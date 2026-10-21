@@ -47,7 +47,7 @@ const proxyCases = BODIES.flatMap((b) =>
     state: s.id,
     stateText: s.text,
     /** The parts of this row held to the bars as a todo (`todoCause`), the others as plain tests. */
-    todoParts: s.id === "rolled" && b.style === "pickup" ? ["cabin"] : s.id === "headon" && b.cls !== "monster" ? ["hood"] : [],
+    todoParts: s.id === "rolled" && (b.style === "pickup" || b.style === "monster") ? ["cabin"] : s.id === "headon" && b.cls !== "monster" ? ["hood"] : [],
   })),
 );
 

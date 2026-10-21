@@ -225,11 +225,13 @@ export abstract class DeformState extends DeformHit {
     // geometric peak up to that, which kept single-hit kills monotone (0.4: 49.5 km/h peaked 0.155 m and
     // died, 50 km/h 0.139 m lived). A re-armed hit counts it outright: its own peak rides the packed nose's
     // springback and the clip, so three 35 km/h hits killed on the 4th at squash 0.32 (0.128 m at 60 km/h
-    // equivalent) and on the 2nd at 0.4 (0.154 m at 49 km/h).
+    // equivalent) and on the 2nd at 0.4 (0.154 m at 49 km/h). So does a tyre's side hit: it meets the running gear
+    // under the nose, whose crush reached the block 0.225 m at a monster's 55 m/s slab hit (alive at 0.58) where
+    // its body's own hit on a wall packed it 0.54 m and killed it.
     if (noseHit) {
       const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(el.rest.z, er.rest.z) - ENGINE_PACK_GAP;
       const energy = this.hitStroke() - crumple - STROKE_SHORTFALL;
-      travel = this.rearmed ? energy : Math.min(travel, energy);
+      travel = this.energyTravel ? energy : Math.min(travel, energy);
     }
     if (travel > this.engineTravel) this.engineTravel = travel;
     if (travel / this.killTravel + this.wreckShare() > 1) this.drivetrainAlive = false;

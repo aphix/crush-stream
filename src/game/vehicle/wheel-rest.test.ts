@@ -12,6 +12,7 @@ import { assertSameNumbers, DT, paint } from "./test-support.ts";
 import { HIT_SIZE } from "../world/surfaces.ts";
 import { REST_SPEED } from "./car-air-body.ts";
 import { applyDrive, idleDrive } from "./car-drive.ts";
+import { PLATFORM_DIMS } from "./car-styles/platform.ts";
 
 const IDLE = idleDrive();
 const SEDAN = carFrame(CAR_STYLES.sedan);
@@ -100,7 +101,9 @@ describe("given a parked car of each vehicle class, hit once so it is a wreck, w
         // A lifted body is held up on its standing tyres' arches before its underside reaches the ground, most of all on
         // the two diagonal tyres of a monster truck (a 0.45 m spring stroke over the ground).
         const diagonal = lost.length === 2 && lost[0]! + lost[1]! === 3;
-        const touch = diagonal && CLASSES[cls].lift > 0.3 ? 0.35 : 0.03 + 0.12 * CLASSES[cls].lift;
+        // How much higher this body rides than the platform's: the class's lift plus its style's own ride height over the platform's.
+        const rise = CLASSES[cls].lift + (CAR_STYLES[CLASSES[cls].style].dims.rideHeight - PLATFORM_DIMS.rideHeight);
+        const touch = diagonal && CLASSES[cls].lift > 0.3 ? 0.35 : 0.03 + 0.12 * rise;
         const tag = `${cls} minus ${lost.map((i) => NAMES[i]).join("+")}`;
         assert.ok(r.speed < 0.05, `${tag}: still moving at ${r.speed.toFixed(3)} m/s`);
         // The drawn body leans on its resting rigid body's slice-to-slice jitter, with a gain of cg / (track · ω²) (`car-load.ts`): up to
@@ -116,8 +119,8 @@ describe("given a parked car of each vehicle class, hit once so it is a wreck, w
         const hover = Math.max(...r.corners);
         const low = Math.min(...r.corners);
         const tipped = 2 * Math.max(...lost.map((i) => r.fresh[i]!)) - low + 0.01;
-        const bound = diagonal && CLASSES[cls].lift > 0.3 ? tipped : 0.1 + 0.2 * CLASSES[cls].lift + (diagonal ? 0.2 : 0);
-        const down = 0.03 + 0.12 * CLASSES[cls].lift;
+        const bound = diagonal && CLASSES[cls].lift > 0.3 ? tipped : 0.1 + 0.2 * rise + (diagonal ? 0.2 : 0);
+        const down = 0.03 + 0.12 * rise;
         if (diagonal) assert.ok(low < down, `${tag}: no empty corner down, the lower at ${(low * 100).toFixed(1)} cm`);
         assert.ok(hover < bound, `${tag}: an empty corner hovers ${(hover * 100).toFixed(1)} cm (bound ${(bound * 100).toFixed(1)} cm)`);
       }
