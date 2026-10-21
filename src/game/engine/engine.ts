@@ -213,7 +213,7 @@ export class CrashEngine extends EngineGarage {
 
     this.glassDots = new GlassDotSystem(this.scene);
     this.ensureCars(INITIAL_HUD.carCount);
-    this.scene.add(...this.wheels.meshes, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.seated.mesh);
+    this.scene.add(...this.wheels.meshes, ...this.lampBatch.meshes, ...this.partBatch.meshes, ...this.partBatch.casters, this.partBatch.looseWarm, this.seated.mesh);
     const driverLook = (car: number, cop: boolean) => this.ragdolls.carDriverLook(car, cop);
     // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels, lamps, parts and seated drivers.
     this.scene.onBeforeRender = (renderer) => {

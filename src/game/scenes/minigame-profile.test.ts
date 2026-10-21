@@ -60,8 +60,8 @@ const MINIMUM_SPEED: Readonly<Record<MinigameMode, Readonly<Record<string, { foo
     truck: { foot: 17.5, lip: 24.5 },
     monster: { foot: 19, lip: 26.5 },
     police: { foot: 17.5, lip: 24.5 },
-    hatchback: { foot: 17.5, lip: 25 },
-    wagon: { foot: 17.5, lip: 25 },
+    hatch: { foot: 17.5, lip: 25 },
+    suv: { foot: 17.5, lip: 25 },
   },
   highJump: {
     sedan: { foot: 31, lip: 26.5 },
@@ -69,8 +69,8 @@ const MINIMUM_SPEED: Readonly<Record<MinigameMode, Readonly<Record<string, { foo
     truck: { foot: 31, lip: 26 },
     monster: { foot: 34.5, lip: 35 },
     police: { foot: 31, lip: 26.5 },
-    hatchback: { foot: 31, lip: 26.5 },
-    wagon: { foot: 31, lip: 26.5 },
+    hatch: { foot: 31, lip: 26.5 },
+    suv: { foot: 31, lip: 26.5 },
   },
   ringFling: {
     sedan: { foot: 29.5, lip: 32 },
@@ -78,8 +78,8 @@ const MINIMUM_SPEED: Readonly<Record<MinigameMode, Readonly<Record<string, { foo
     truck: { foot: 29, lip: 32 },
     monster: { foot: 32.5, lip: 37.5 },
     police: { foot: 29.5, lip: 32 },
-    hatchback: { foot: 29.5, lip: 32 },
-    wagon: { foot: 29.5, lip: 32 },
+    hatch: { foot: 29.5, lip: 32 },
+    suv: { foot: 29.5, lip: 32 },
   },
 };
 

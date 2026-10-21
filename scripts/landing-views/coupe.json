@@ -1,0 +1,30 @@
+{
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/blue-coupe/blue-coupe-1.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/blue-coupe/blue-coupe-2.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      380,
+      205,
+      520,
+      370
+    ],
+    "wheels": {},
+    "camera": null
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      296,
+      186,
+      396,
+      288
+    ],
+    "wheels": {},
+    "camera": null
+  }
+}

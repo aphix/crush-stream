@@ -71,7 +71,8 @@ describe("given a car and the farthest rung (small parts beyond 35 m, only the b
     const probe = car(60);
     detail.update([probe], camera, null, null);
     const meshes = drawn(probe, camera);
-    assert.equal(casters(meshes), 1, "only the body casts");
+    assert.equal(casters(meshes), 0, "nothing of its own drawn casts: its flush shadow is the style's batched caster");
+    assert.ok(probe.shadowCaster.castShadow && probe.shadowCaster.layers.isEnabled(0), "its shadow caster stays in the batch");
     for (const part of probe.flushCasters) assert.ok(meshes.includes(part), "a flush part left the camera");
   });
 });

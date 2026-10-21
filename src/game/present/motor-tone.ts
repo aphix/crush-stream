@@ -78,13 +78,15 @@ interface ClassFactors {
   gains: readonly [number, number, number];
 }
 
-/** The class table: sedan a bit lighter, police near the demo, muscle a bit beefier, truck and monster deeper (longer pipes, slower ignition). */
+/** The class table: sedan a bit lighter, hatch lighter and buzzier still, police near the demo, muscle a bit beefier, the SUV smooth and muffled on more cylinders, truck and monster deeper (longer pipes, slower ignition). */
 const CLASS_FACTORS: Readonly<Record<VehicleClassId, ClassFactors>> = {
   sedan: { idleRpm: 850, cylinders: 1, intake: 0.9, exhaust: 0.9, extractor: 0.9, ignition: 0.9, straightPipe: 0.85, mufflers: 0.9, action: 0.9, outlet: 0.8, gains: [1.1, 0.8, 0.9] },
   police: { idleRpm: 800, cylinders: 1, intake: 0.95, exhaust: 1, extractor: 1.05, ignition: 0.95, straightPipe: 1.05, mufflers: 1, action: 1, outlet: 1, gains: [1.05, 1, 1] },
   muscle: { idleRpm: 700, cylinders: 1, intake: 1.05, exhaust: 1.1, extractor: 1.1, ignition: 1.1, straightPipe: 1.2, mufflers: 1.1, action: 1.1, outlet: 1.2, gains: [0.9, 1.1, 1.1] },
   truck: { idleRpm: 650, cylinders: 1, intake: 1.2, exhaust: 1.25, extractor: 1.2, ignition: 1.25, straightPipe: 1.5, mufflers: 1.3, action: 0.85, outlet: 1.6, gains: [0.8, 1.2, 1] },
   monster: { idleRpm: 600, cylinders: 1.5, intake: 1.3, exhaust: 1.4, extractor: 1.3, ignition: 1.4, straightPipe: 1.8, mufflers: 1.5, action: 1.2, outlet: 2, gains: [0.8, 1.3, 1.1] },
+  hatch: { idleRpm: 900, cylinders: 1, intake: 0.85, exhaust: 0.85, extractor: 0.85, ignition: 0.85, straightPipe: 0.75, mufflers: 0.9, action: 0.9, outlet: 0.7, gains: [1.15, 0.75, 0.85] },
+  suv: { idleRpm: 700, cylinders: 1.5, intake: 1.05, exhaust: 1.05, extractor: 1, ignition: 1.05, straightPipe: 1.1, mufflers: 1.15, action: 0.95, outlet: 1.1, gains: [0.95, 1.05, 1] },
 };
 
 /** A class's generator parameters: the baseline times its factors. Cylinders round to a whole engine. */
@@ -113,6 +115,8 @@ const CLASS_TONE: Readonly<Record<VehicleClassId, ClassTone>> = {
   muscle: tone("muscle"),
   truck: tone("truck"),
   monster: tone("monster"),
+  hatch: tone("hatch"),
+  suv: tone("suv"),
 };
 
 /**

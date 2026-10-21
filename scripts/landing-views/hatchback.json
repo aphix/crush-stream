@@ -1,0 +1,158 @@
+{
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/purple-hatchback/purple-hatchback-2.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/purple-hatchback/purple-hatchback-1.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      551,
+      759,
+      528,
+      448
+    ],
+    "wheels": {
+      "fl": {
+        "hub": [
+          250,
+          368
+        ],
+        "contact": [
+          247,
+          415
+        ]
+      },
+      "rl": {
+        "hub": [
+          482,
+          202
+        ],
+        "contact": [
+          480,
+          247
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        9.6136,
+        11.0337,
+        10.334
+      ],
+      "target": [
+        9.0654,
+        10.4316,
+        9.7536
+      ],
+      "up": [
+        -0.4073,
+        0.7984,
+        -0.4436
+      ],
+      "fov": 12
+    },
+    "landmarks": [
+      {
+        "name": "front badge",
+        "at": [
+          0,
+          0.53,
+          1.76
+        ],
+        "pixel": [
+          81,
+          326
+        ]
+      },
+      {
+        "name": "far head lamp",
+        "at": [
+          -0.55,
+          0.55,
+          1.72
+        ],
+        "pixel": [
+          30,
+          295
+        ]
+      }
+    ]
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      434,
+      609,
+      400,
+      340
+    ],
+    "wheels": {
+      "rr": {
+        "hub": [
+          212,
+          277
+        ],
+        "contact": [
+          210,
+          312
+        ]
+      },
+      "fr": {
+        "hub": [
+          365,
+          127
+        ],
+        "contact": [
+          362,
+          162
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        -7.9402,
+        11.6646,
+        -10.7199
+      ],
+      "target": [
+        -7.4818,
+        11.0141,
+        -10.1144
+      ],
+      "up": [
+        0.3952,
+        0.7594,
+        0.5168
+      ],
+      "fov": 12
+    },
+    "landmarks": [
+      {
+        "name": "rear badge",
+        "at": [
+          0,
+          0.76,
+          -1.715
+        ],
+        "pixel": [
+          77,
+          224
+        ]
+      },
+      {
+        "name": "far tail lamp",
+        "at": [
+          0.7,
+          0.72,
+          -1.68
+        ],
+        "pixel": [
+          30,
+          200
+        ]
+      }
+    ]
+  }
+}
