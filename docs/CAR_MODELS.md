@@ -44,10 +44,14 @@ The hardpoints place the openings and the lower body, each per car:
 |---|---|
 | `windshield` | Base `[y, z]` of the glass centre line and its widths at the base and at `windshieldTop` |
 | `bPillar` | The B-pillar's z band |
-| `belt` | Side-glass sill: half-width `x`, and height `y` as `[z, y]` stations (linear between, held past the ends), so a beltline can rise toward the tail |
+| `aPillarFoot` | Where the A-pillar's foot meets the belt (z): the door glass's front edge starts there |
+| `aPillarTop` | Optional: where the A-pillar's rear edge meets the cant line (z), the door glass's top-front corner. Absent, 5 cm behind the windshield's top; set it on a raked windshield so the window's front edge isn't a straight line from the foot |
+| `glassTop` | Optional side glass top (the DLO's top edge). A number: its drop under the roof (absent 0.075), the roof's side lip and the pillar tops following it. `[z, y]` stations (linear between, held past the ends, never above the cant line): the glass top follows them under a 0.075 lip and a painted fill (drawn only) closes the gap up to the cant line from the C-pillar to the A-pillar |
+| `camera` | Optional cameras, car frame as drawn (a class lift included): `hood` `[y, z]`, the hood view's eye, just over the bonnet and ahead of the windshield base (`car-variants.test.ts` holds it there); `third` and `far` `{ dist, height, aimUp }`, the chase and far chase eyes behind and over the car's origin and their aim point's height. Absent: `PLATFORM_CAMERA` (the 4.2 m sedan's). Shoot them with `scripts/headless-frame.mjs --hash 'scene=race&car=<id>' --view hood\|chase\|far` |
+| `belt` | Side-glass sill: half-width `x` (one value, or `[z, x]` stations where the sill narrows toward the tail), and height `y` as `[z, y]` stations (linear between, held past the ends), so a beltline can rise toward the tail |
 | `rocker` | The body side's lowest line; under it the sill turns in to the floor pan. It rides up with `underside` |
 | `underside` | Optional floor pan height as `[z, y]` stations (linear between, held past the ends): the underside's rise to the nose and tail. Absent, the floor is flat at `dims.rideHeight` |
-| `door` | Front doors: hinge axis `hingeX`, `hingeY`, `hingeZ` at the A-pillar, `length` hinge to trailing edge, skin ±`halfHeight` about the hinge, and `aperture` `[z0, z1]`, the body's door cut (the skin covers it, 2 cm past each end). The mirror seats itself on the door skin at `mirrorY` over the hinge and is drawn to reach `mirrorReach` out, ±`mirrorHalfDepth` deep |
+| `door` | Front doors: hinge axis `hingeX`, `hingeY`, `hingeZ` at the A-pillar, `length` hinge to trailing edge, skin ±`halfHeight` about the hinge, and `aperture` `[z0, z1]`, the body's door cut (the skin covers it, 2 cm past each end). The door glass rides the door: its rear edge stands 3 cm (belt) / 5 cm (top) inside the trailing edge, so put the B-pillar's front there. The mirror seats itself on the door skin at `mirrorY` over the hinge and `mirrorZ` behind it (default 0), drawn to reach `mirrorReach` out, ±`mirrorHalfDepth` deep |
 | `arch` | Wheel-arch opening radius about each hub |
 | `hood` | Bonnet span `z0` (cowl) to `z1` (nose) and its hinge `origin` `[y, z]` |
 | `bumpers.front`, `bumpers.rear` | Group `seat` (height, distance from the middle), `fascia` section `[y, out]` top to bottom, `span` (half-width), and `wrap`: the `|x|` where the fascia's corner starts sweeping back (`from`) and how far its end sweeps (`back`) |
@@ -83,11 +87,19 @@ and wheel scale applied, no engine boot) in a bare scene through headless GL, ov
 The references live in `/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/` (git-ignored; `/tmp` does not survive a
 reboot). Run both through the box gate: `CAP=2G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node ...`.
 
-**`fit-car.mjs`: the rough fit.** Reads the side and top pictures into the style's own fields, builds the car from them, and
-nudges the profile stations toward the reference's roof line and plan for a few rounds, in one process of about 4 s. Its output
-is `.tmp/fit/<style>/fit.ts` (paste over the style file's fields), before/after overlays beside it, and one JSON line: both
-views' IoU, edge and glass offsets before and after, the per-corner checklist, and `notFit` (the fields it leaves to the hand).
-It never writes a style file. Finish by hand on trace-car's overlays.
+**`fit-car.mjs`: a speed-up.** It reads the side and top pictures into the style's own fields, builds the car from them, and
+nudges the profile stations toward the reference's roof line and plan for a few rounds, all in one process of about 6 s. It
+gets a car close fast but misses finer details. Each car agent then aligns the rest by hand on trace-car's overlays (windows,
+doors, wheel centres, any silhouette edge) and spot-checks against the bar: side and top IoU ≥ 0.95, per-edge mean ≤ 2 cm,
+max ≤ 5 cm, corners and glass included. Output: `.tmp/fit/<style>/fit.ts` (paste over the style file's fields after review),
+before/after overlays beside it, and one JSON line with both views' IoU, edge and glass offsets before and after, the
+per-corner checklist, `guard` and `notFit` (the fields left to the hand). It never writes a style file.
+
+The fit is guarded: it lays the read fields onto the style as it stands one group at a time (the body with its greenhouse frame,
+then the plan, track, glass sill, door, bumpers, underside). It keeps a group only where neither view's IoU nor either side of
+the plan gets worse (mean and largest |offset| over the sides, ends trimmed) and something gains. Each group's result is one
+`guard` line, so the output is never worse than the style it started from. `dims` overhangs, width and height are then
+measured off the built car, as the dims rows hold them.
 
 ```sh
 R=/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
@@ -95,10 +107,13 @@ node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
   --side $R/silver-sedan/silver-sedan-1.png --side-span 3,299=4.221 --top $R/silver-sedan/silver-sedan-2.png --top-span 3,292
 ```
 
-- Read: `dims` (wheelbase and wheel radius from the side picture's tyres, which also set z = 0; overhangs, height, width),
-  `profile` (stations where the roof line, plan or glass zone bends), `roofZ`, `windshield`, `windshieldTop`, `rearGlass`,
-  `quarter`, `belt.y` (the glass sill) and `underside`. Fitted: `profile` only.
-- Not read: bumpers, hood, arch, rocker, door, boot, `bPillar`, `track`, `rideHeight`, `cabinHw`.
+- Read: `dims` (wheelbase and wheel radius from the side picture's tyres, which also set z = 0; `track` so each tyre's outer face
+  sits 1 cm inside the plan), `profile` (stations where the roof line, plan or glass zone bends; mirrors and handles cut from
+  the plan), `roofZ`, `windshield`, `windshieldTop`, `rearGlass`, `belt.y` (the glass sill), `belt.x` (the rail 4 cm under the
+  shoulder), `underside`, `door.hingeX` (the plan at the hinge), `bumpers.*.seat.z` (lip on the end) and `bumpers.*.wrap`
+  (the plan's end corners). Fitted: `profile`.
+- Not read: hood, arch, rocker, boot, `rideHeight`, `cabinHw`, `bPillar`, `quarter`, mirrors, the bumper fascia and span, and the
+  door's hinge y and z, length and aperture.
 
 **`trace-car.mjs`: one view, measured.** Writes an overlay PNG and prints one JSON line: the silhouette IoU and signed edge
 offsets (cm, positive where the car sticks out), the glass's (side: roof rail, sill, A- and C-pillar with their rake), the

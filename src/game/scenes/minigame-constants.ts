@@ -128,4 +128,4 @@ export const THROW_BOOST: Readonly<Record<MinigameMode, { forward: number; upwar
  * the free pad) and the first touchdown's distance past the lip (where the box piles end). Pinned within 2% by `minigame-sizing.test.ts`,
  * which recomputes them from the real car and ragdoll.
  */
-export const HIGH_JUMP_MEASURED = { bestHeight: 169.1, landingDistance: 32.2 } as const;
+export const HIGH_JUMP_MEASURED = { bestHeight: 169.1, landingDistance: 32.9 } as const;

@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { BOOT_SENSOR, CABIN_TUB, FRONT_CLIP, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+import { CABIN_TUB, FRONT_CLIP, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
 
 /** Single cab + open bed; the trunk part is the tailgate. */
 export const PICKUP: BodyStyle = {
@@ -25,12 +25,4 @@ export const PICKUP: BodyStyle = {
   rearDoorSeam: null,
   boot: { kind: "tailgate", y0: 0.44, origin: [0.915, -2.12] },
   lamps: { head: HEAD_LAMP, tail: [0.79, 0.72] },
-  rig: {
-    cages: {
-      roof: { min: [-0.58, 1.02, -0.72], max: [0.58, 1.36, 0.56] },
-      glassRear: { min: [-0.66, 0.84, -0.8], max: [0.66, 1.3, -0.6] },
-      boot: { min: [-0.78, 0.38, -2.18], max: [0.78, 0.96, -1.8] },
-    },
-    sensors: { [BOOT_SENSOR]: [0, 0.7, -1.98] },
-  },
 };

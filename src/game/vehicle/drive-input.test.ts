@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { applyDrive, BOOST, DriverSeat, driftPay, idleDrive, type SeatView } from "./car-drive.ts";
 import { blankIntent, FEEL, gameKey, readIntent, shapeDrive } from "./drive-input.ts";
 import { CHASE, DriveCam } from "../present/drive-cam.ts";
+import { PLATFORM_CAMERA } from "./car-styles/platform.ts";
 import { DeformableCar } from "./car.ts";
 import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 
@@ -333,7 +334,7 @@ describe("given a driving camera, whose A and D keys must look like left and rig
       ["KeyD", -1],
     ] as const) {
       const r = rigAt("first", 10);
-      const ahead = r.car.group.localToWorld(new THREE.Vector3(CHASE.eye.x, CHASE.eye.y, 60));
+      const ahead = r.car.group.localToWorld(new THREE.Vector3(0, PLATFORM_CAMERA.hood[0], 60));
       const before = ahead.clone().project(r.cam).x;
       assert.ok(Math.abs(before) < 0.02, `hood cam not looking ahead: ${before}`);
       hold(r, ["KeyW", key], 0.6);

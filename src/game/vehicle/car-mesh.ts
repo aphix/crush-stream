@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { hypot2, detSin } from "../kernel/physics-core.js";
 import { CAR_STYLES, type BodyStyle, type ProfileStation, type YZ } from "./car-variants.ts";
-import { beltY, floorY, rockerAt } from "./car-lines.ts";
+import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
@@ -99,9 +99,16 @@ export function roofTopY(x: number, z: number, style: BodyStyle): number {
   return r.y + (u < us ? lerp(ROOF_CROWN, ys, u / us) : lerp(ys, 0, (u - us) / (1 - us)));
 }
 
-/** Side glass top edge: tucked under the roof cant rail. */
+/** The roof's cant line: its side lip's bottom, where the pillars end and the side glass plane leans to. */
+export function cantY(z: number, style: BodyStyle): number {
+  return roofAt(z, style).y - cantDrop(style);
+}
+
+/** Side glass top edge: the cant line, or the style's own stations under it. */
 export function glassTopY(z: number, style: BodyStyle): number {
-  return roofAt(z, style).y - 0.075;
+  const cant = cantY(z, style);
+  const own = glassTopStation(z, style);
+  return own === null ? cant : Math.min(own, cant);
 }
 
 export function cantX(z: number, style: BodyStyle): number {
@@ -110,9 +117,9 @@ export function cantX(z: number, style: BodyStyle): number {
 
 /** Tumblehome: side glass leans in from the belt to the roof cant. */
 export function glassX(z: number, y: number, style: BodyStyle): number {
-  const top = glassTopY(z, style);
+  const top = cantY(z, style);
   const belt = beltY(z, style);
-  return lerp(style.belt.x, cantX(z, style), THREE.MathUtils.clamp((y - belt) / (top - belt), 0, 1));
+  return lerp(beltX(z, style), cantX(z, style), THREE.MathUtils.clamp((y - belt) / (top - belt), 0, 1));
 }
 
 function wheelWell(z: number, wheels: readonly V3[], archR: number): number {
@@ -162,7 +169,7 @@ function tubAt(z: number, style: BodyStyle): { t: number; floor: number } {
       (1 - THREE.MathUtils.smoothstep(z, z1 - TUB_EDGE, z1 + TUB_EDGE));
     if (w > t) {
       t = w;
-      floor = f;
+      floor = Math.max(f, floorY(z, style));
     }
   }
   return { t, floor };

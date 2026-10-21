@@ -23,11 +23,12 @@ export function doorSkinZ(style: BodyStyle): number {
   return (z0 + z1) / 2 - style.door.hingeZ;
 }
 
-/** The mirror's seat in door space: x on the door skin's outer face at the mirror's height over the hinge, less the arm's root offset, so the arm starts on the skin. */
+/** The mirror's seat in door space: x on the door skin's outer face at the mirror's height and z, less the arm's root offset, so the arm starts on the skin. */
 export function mirrorSeatX(style: BodyStyle): number {
   const d = style.door;
-  const sl = sampleSlice(d.hingeZ, style.profile);
-  return sideX(d.hingeY + d.mirrorY, sl.hw, sl.yBelt, rockerAt(d.hingeZ, style)) + DOOR_PROUD - d.hingeX - MIRROR_ROOT;
+  const z = d.hingeZ - (d.mirrorZ ?? 0);
+  const sl = sampleSlice(z, style.profile);
+  return sideX(d.hingeY + d.mirrorY, sl.hw, sl.yBelt, rockerAt(z, style)) + DOOR_PROUD - d.hingeX - MIRROR_ROOT;
 }
 /** Outer-face rows (bunched toward the top by `DOOR_ROW_WARP`, so the shoulder roll reads round) and columns before the edge rolls are added. */
 const DOOR_ROWS = 8;
