@@ -7,11 +7,12 @@
  * program that failed to link. Exit 1 on a link failure or a GL error. Not a frame-time judge: the browser bench is.
  *
  *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png]
- *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--at 8] [--tear hood,bumperF]
+ *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--view hood] [--at 8] [--tear hood,bumperF]
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
  * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
- * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--at` is the sim seconds before the drawn frames.
+ * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--view hood|chase|far` follows the hash's car
+ * (`car=<id>`) in that drive view instead, e.g. `--hash 'scene=race&car=coupe'`; `--at` is the sim seconds before the drawn frames.
  * `--tear` tears the named parts (`DetachPart.name`: hood, bumperF, archFL, ...) off every car before the framing and hides them, to
  * show what is under them (the engine bay, the crash bars, the bare metal).
  */
@@ -28,6 +29,10 @@ const SEED = 12641919;
 const START_S = 8;
 /** Sim seconds a hand `--camera` framing gets to settle before the drawn frames (readme-shots' `at: 0.3`). */
 const FRAMING_S = 0.3;
+/** Sim seconds a `--view` gets to settle before the drawn frames: the chase springs' convergence. */
+const VIEW_S = 2;
+/** `--view`'s names for the seat's views. */
+const SEAT_VIEWS = { hood: "first", chase: "third", far: "far" };
 /** What the sim's pacer reads as its clock advances by on every read, so its time budget never depends on the host's speed. */
 const PACE_STEP_S = 0.001;
 /** The yardstick shader's timed frames. */
@@ -53,6 +58,7 @@ const { values } = parseArgs({
     root: { type: "string", default: join(import.meta.dirname, "..") },
     hash: { type: "string" },
     camera: { type: "string" },
+    view: { type: "string" },
     at: { type: "string", default: String(START_S) },
     tear: { type: "string" },
   },
@@ -67,6 +73,8 @@ if (!Number.isInteger(frames) || frames < 1) throw new Error(`--frames ${values.
 if (size === null) throw new Error(`--size ${values.size}: width x height, e.g. 1280x800`);
 if (!(atS >= 0)) throw new Error(`--at ${values.at}: sim seconds, 0 or more`);
 if (camera !== undefined && (camera.length !== 3 || !camera.every(Number.isFinite))) throw new Error(`--camera ${values.camera}: radius,pitch,angle, e.g. 2.4,0.12,2.1`);
+const seatView = values.view === undefined ? undefined : SEAT_VIEWS[values.view];
+if (values.view !== undefined && seatView === undefined) throw new Error(`--view ${values.view}: hood, chase or far`);
 const W = Number(size[1]);
 const H = Number(size[2]);
 const out = resolve(values.out ?? `screenshots/headless-frame-${tier}.png`);
@@ -207,6 +215,17 @@ if (camera !== undefined) {
   engine.advance(FRAMING_S, { frameDt: FRAME });
   await settle();
 }
+if (seatView !== undefined) {
+  // The hash's car, followed in that drive view (a spectator's spec view: any scene, driven or not).
+  const want = new URLSearchParams(values.hash ?? "").get("car");
+  const cars = engine.live();
+  const index = want === null ? engine.seat.carIndex : cars.findIndex((car) => car.style.id === want);
+  if (index < 0) throw new Error(`--view ${values.view}: no ${want} car in the scene (field: ${cars.map((car) => car.style.id)})`);
+  Object.assign(engine.seat, { mode: "follow", carIndex: index });
+  engine.view.spec = seatView;
+  engine.advance(VIEW_S, { frameDt: FRAME });
+  await settle();
+}
 const notDrawn = new Set();
 // three draws on with a program that failed to link, a GL error per draw: the quirk's meshes leave the camera's layer for the drawn
 // frames, and the errors their draws left so far are dropped, so `glError` speaks for the drawn frames.
@@ -239,7 +258,7 @@ mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, await shot.encode("png"));
 
 engine.dispose();
-const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
+const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
 process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 

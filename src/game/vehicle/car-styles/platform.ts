@@ -23,6 +23,13 @@ export const CABIN_TUB = [-0.7, 0.7, 0.3] as const;
 /** The one tyre the sim's hub contact is sized to today (`PLATFORM_TYRE`). */
 export const PLATFORM_WHEEL = { radius: PLATFORM_TYRE.r, width: 2 * PLATFORM_TYRE.halfW } as const;
 
+/** The cameras every style had before it seated its own (playtest): the hood eye over the platform bonnet, the chase framing a 4.2 m sedan. */
+export const PLATFORM_CAMERA = {
+  hood: [1.02, 1.15],
+  third: { dist: 6.2, height: 2.0, aimUp: 1.0 },
+  far: { dist: 10, height: 3.3, aimUp: 1.15 },
+} as const satisfies NonNullable<BodyStyle["camera"]>;
+
 /** The body every rig table was tuned on (the first sedan's dims): the rig carries its tables onto a car by that car's dims' offsets from these (`carFrame`). */
 export const PLATFORM_DIMS = {
   wheelbase: 2.68,
