@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { COMPACTOR, CompactorRig as Rig, compactorStage } from "./compactor.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { leftoverCrumple } from "../deform/physics-util.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
 import type { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { forModes } from "../vehicle/test-support.ts";
@@ -159,10 +158,11 @@ forModes("given a parked car in the compactor press (plates squeezing its nose a
     const r = pressRig(mode);
     const face = COMPACTOR.midFace + 0.1;
     r.runTo(face);
+    const tyreR = r.car!.frame.rig.tyre.r;
     for (const name of ["hubFL", "hubFR", "hubRL", "hubRR"] as const) {
       const h = r.d.masses.find((m) => m.name === name)!;
       assert.equal(h.popped, false, `${name} popped before a wheel diameter`);
-      assert.ok(Math.abs(h.world.z) + TYRE_R <= face + 0.01, `${name} tyre reaches ${(Math.abs(h.world.z) + TYRE_R).toFixed(3)} past the plate at ${face.toFixed(3)}`);
+      assert.ok(Math.abs(h.world.z) + tyreR <= face + 0.01, `${name} tyre reaches ${(Math.abs(h.world.z) + tyreR).toFixed(3)} past the plate at ${face.toFixed(3)}`);
     }
   });
 });

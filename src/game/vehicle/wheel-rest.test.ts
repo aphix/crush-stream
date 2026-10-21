@@ -4,6 +4,8 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { assignClass, armKill, killClass, CLASSES, HANDLING, VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
 import { droop, sagOffsets, Suspension } from "./car-suspension.ts";
+import { carFrame } from "./car-rig.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 import { newWorld, stepWorld, type World } from "../engine/world-step.ts";
 import { INITIAL_HUD } from "../hud/hud-store.ts";
 import { assertSameNumbers, DT, paint } from "./test-support.ts";
@@ -12,6 +14,7 @@ import { REST_SPEED } from "./car-air-body.ts";
 import { applyDrive, idleDrive } from "./car-drive.ts";
 
 const IDLE = idleDrive();
+const SEDAN = carFrame(CAR_STYLES.sedan);
 
 /**
  * A wreck missing wheels rests on the body corners where they were (and on the wheels it still has), as the drawn
@@ -141,7 +144,7 @@ describe("given a sedan with all four wheels on", () => {
 describe("given all four wheels on, for the suspension's sag offsets (how far each body corner drops or lifts for the wheels that are missing)", () => {
   it("when the sag offsets are computed, then every corner's offset is zero, so nothing sags where nothing is missing", () => {
     const o = new Float64Array(4).fill(7);
-    sagOffsets(0, 0.065, 0, o);
+    sagOffsets(SEDAN, 0, 0.065, 0, o);
     assert.deepEqual([...o], [0, 0, 0, 0]);
   });
 });
@@ -150,7 +153,7 @@ describe("given a missing front-left wheel at each class lift (0, 0.08 and 0.48 
   it("when the sag offsets are computed, then the front-left corner of the body drops by over 3 cm and the diagonal corner sits above it", () => {
     for (const lift of [0, 0.08, 0.48]) {
       const o = new Float64Array(4);
-      sagOffsets(lift, 0.065 + lift, 1, o);
+      sagOffsets(SEDAN, lift, 0.065 + lift, 1, o);
       const drop = (0.75 * o[0]! + 0.25 * o[1]! + 0.25 * o[2]! - 0.25 * o[3]!);
       assert.ok(drop < -0.03, `lift ${lift}: front-left corner ${drop.toFixed(3)} m`);
       assert.ok(o[3]! > o[0]!, `lift ${lift}: diagonal corner ${o[3]!.toFixed(3)} not above ${o[0]!.toFixed(3)}`);
@@ -160,14 +163,14 @@ describe("given a missing front-left wheel at each class lift (0, 0.08 and 0.48 
 
 describe("given a wreck's suspension that loses its front-left wheel and then its front-right wheel as well", () => {
   it("when it settles for 600 steps after each loss, then its corner offsets match the sag of the new set of missing wheels (within 1e-4 m), not the first set's", () => {
-    const s = new Suspension();
+    const s = new Suspension(SEDAN);
     const g = new THREE.Group();
     g.updateMatrixWorld(true);
     const hit = new Float64Array(4 * HIT_SIZE);
     for (const gone of [1, 3]) {
       for (let i = 0; i < 600; i++) s.step(g, [], "sedan", 0, false, false, gone, 0, hit, DT);
       const want = new Float64Array(4);
-      sagOffsets(0, droop("sedan"), gone, want);
+      sagOffsets(SEDAN, 0, droop("sedan"), gone, want);
       assertSameNumbers(s.offset, want, `wheels gone ${gone}`, 1e-4);
     }
   });

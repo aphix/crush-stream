@@ -7,7 +7,6 @@ import { AI_EVERY_SLICE } from "../ai/constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import type { HighlightClip } from "../match/highlights.ts";
-import { WHEEL_POS } from "../vehicle/car-mesh.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
@@ -37,7 +36,7 @@ type Frames = { frames: number; lost: Set<string>; farthest: Map<string, number>
 
 /** Where the car seats wheel `k` (`followHubs`): its hub along the car (its rest seat while the car is rigid), at the rest ride's height, in world. */
 function seatOf(car: DeformableCar, k: number, out: THREE.Vector3): THREE.Vector3 {
-  const rest = WHEEL_POS[k]!;
+  const rest = car.frame.wheels[k]!;
   if (car.deform.massActive) {
     const hub = car.deform.massLocal(HUBS[k]!);
     out.set(hub.x, rest[1], hub.z);

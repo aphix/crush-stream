@@ -7,8 +7,7 @@ import {
   crushStroke,
   hypot2,
 } from "./physics-util.ts";
-import { DeformState, ENGINE_PACK_GAP, PLANT_QUIET, TYRE_R } from "./deform-state.ts";
-import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
+import { DeformState, ENGINE_PACK_GAP, PLANT_QUIET } from "./deform-state.ts";
 import { BodyFit } from "./body-fit.ts";
 import { detSin, detCos, detAtan2, sinCosAt } from "../kernel/physics-core.js";
 import { CONTACT_REF_SLICE, MIN_IMPACT_ZONE, MIN_INERTIA, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
@@ -21,7 +20,6 @@ import { EPICENTER } from "./epicenter.ts";
 export const ENGINE_SLACK = 0.04;
 /** `stepStructure`'s frame when its caller gives none: level. */
 const LEVEL = new THREE.Quaternion();
-export const TYRE_HALF_W = PLATFORM_TYRE.halfW;
 /** Fastest (m/s) a wreck's body follows its cell's drift off its seat (`followGroup`): the nose's springback against a wall in 0.4 s, no faster than the pair pass's pushes. */
 export const SEAT_SPEED = 1;
 /** A seat step (m) under this is the rigid step's jitter once seated (3e-8 to 2e-6 m measured), not a move to re-bake the skin for: an active seat steps 8 mm at 120 Hz. */
@@ -549,6 +547,7 @@ export abstract class DeformContact extends DeformState {
     // which the slab clip reads) in step with the projected world positions.
     const gc = detCos(this.prevYaw);
     const gs = detSin(this.prevYaw);
+    const tyre = this.rig.tyre;
     let n = 0;
     this.faceContacts = 0;
     for (let mi = 0; mi < this.masses.length; mi++) {
@@ -558,15 +557,15 @@ export abstract class DeformContact extends DeformState {
       // centres (`deepCrush`) meets the tyres.
       if (!m.dynamic || (planted && !this.bidirectional && !this.deepCrush)) continue;
       // A mass whose bottom stands within `STAND_SKIN` of the solid's top (or over it) is on the top, whatever its plan overlap with the box.
-      if (m.world.y - (planted ? TYRE_R : m.radius * 0.5) >= topY - STAND_SKIN) continue;
+      if (m.world.y - (planted ? tyre.r : m.radius * 0.5) >= topY - STAND_SKIN) continue;
       const ox = m.world.x - cx;
       const oz = m.world.z - cz;
       let r = m.radius * 0.5;
       let rEnd = r;
       if (planted) {
-        // The face meets the tyre: its tread (TYRE_R) along the car, its sidewall across it.
-        r = hypot2(TYRE_HALF_W * (rx * gc - rz * gs), TYRE_R * (rx * gs + rz * gc));
-        rEnd = hypot2(TYRE_HALF_W * (fx * gc - fz * gs), TYRE_R * (fx * gs + fz * gc));
+        // The face meets the tyre: its tread (radius) along the car, its sidewall across it.
+        r = hypot2(tyre.halfW * (rx * gc - rz * gs), tyre.r * (rx * gs + rz * gc));
+        rEnd = hypot2(tyre.halfW * (fx * gc - fz * gs), tyre.r * (fx * gs + fz * gc));
       }
       const lz = ox * fx + oz * fz;
       const penX = hx + r - (ox * rx + oz * rz) * side;

@@ -4,7 +4,6 @@ import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
-import { WHEEL_POS } from "../vehicle/car-mesh.ts";
 import { BLOCK_DEPTH, BLOCK_WIDTH, PODIUM_BLOCKS, type PodiumPlace } from "../match/podium.ts";
 import { CarDamage } from "./car-damage.ts";
 import { NOW, PodiumDirector, type PodiumHost } from "./engine-podium.ts";
@@ -205,7 +204,7 @@ describe("given a wreck whose rear left hub the crash shoved off its rest seat",
 
   it("when the podium car's wheels are read, then the wheel of the shoved hub sits on that hub, off its rest seat, and the wheel of a hub that stayed sits on it", () => {
     const shoved = car.deform.massLocal("hubRL");
-    const rest = WHEEL_POS[2]!;
+    const rest = car.frame.wheels[2]!;
     assert.ok(Math.abs(shoved.x - rest[0]) > HUB_SHOVE_M / 2, `the control: the shove survived the net state (hub at x ${shoved.x}, rest ${rest[0]})`);
     const wheel = car["wheels"][2]!;
     assert.ok(Math.abs(wheel.position.x - shoved.x) <= SEAT_TOLERANCE_M, `the wheel is at x ${wheel.position.x}, its hub at ${shoved.x}`);

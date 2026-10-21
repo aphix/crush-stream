@@ -2,8 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
-import { TYRE_R } from "./deform-state.ts";
-import { ENGINE_KILL_TRAVEL, type DeformMode } from "./deform-rig.ts";
+import { ENGINE_KILL_TRAVEL, PLATFORM_RIG, type DeformMode } from "./deform-rig.ts";
 import { CRASH, crushStroke, leftoverCrumple } from "./physics-util.ts";
 import { DT, MODES, assertSameDigest, dummyGeom, mass } from "../vehicle/test-support.ts";
 import { runPair } from "../contact/crash-scenarios.test-util.ts";
@@ -850,8 +849,8 @@ forModes("given a car whose wheels stay on until a hard enough hit knocks them o
     const s = spawn(0, 0);
     s.d.bidirectional = true;
     const h = mass(s.d, "hubFL");
-    // A slab square to the car (normal −z) whose near face is 0.1 m inside the tyre (hub z + TYRE_R).
-    const face = h.world.z + TYRE_R - 0.1;
+    // A slab square to the car (normal −z) whose near face is 0.1 m inside the tyre (hub z + radius).
+    const face = h.world.z + PLATFORM_RIG.tyre.r - 0.1;
     holdOnFace(s.d, h.world.x, face + 0.5, 0.5, 0.06, Math.PI / 2, true);
     stepWreck(s, DT);
     assert.ok(h.local.z - h.rest.z < -0.09, `hub held at ${(h.local.z - h.rest.z).toFixed(3)} m: the face is inside the tyre`);
@@ -862,7 +861,7 @@ forModes("given a car whose wheels stay on until a hard enough hit knocks them o
 
   it("when a wall face shoves a standing car's front-right wheel back more than one wheel diameter, then the wheel tears off, whereas with wheel detaching switched off it stays on and moves at most one wheel diameter", () => {
     const on = spawn(0, 0);
-    on.d.shoveHub(mass(on.d, "hubFR"), 0, -(2 * TYRE_R + 0.01));
+    on.d.shoveHub(mass(on.d, "hubFR"), 0, -(2 * PLATFORM_RIG.tyre.r + 0.01));
     stepWreck(on, DT);
     assert.equal(mass(on.d, "hubFR").popped, true, "a wheel diameter of shove left the wheel on");
     const held = spawn(0, 0);
@@ -871,7 +870,7 @@ forModes("given a car whose wheels stay on until a hard enough hit knocks them o
     stepWreck(held, DT);
     const hub = mass(held.d, "hubFR");
     assert.equal(hub.popped, false, "wheelsDetach off still popped the wheel");
-    assert.ok(Math.abs(hub.local.z - hub.rest.z) <= 2 * TYRE_R + 1e-6, `shoved ${(hub.local.z - hub.rest.z).toFixed(3)} m past a diameter`);
+    assert.ok(Math.abs(hub.local.z - hub.rest.z) <= 2 * PLATFORM_RIG.tyre.r + 1e-6, `shoved ${(hub.local.z - hub.rest.z).toFixed(3)} m past a diameter`);
   });
 
   it("when three wheels have popped off and then the fourth does too, then the drivetrain is still alive with three gone and dead once all four are gone, like a dead engine", () => {

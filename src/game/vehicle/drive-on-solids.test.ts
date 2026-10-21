@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DriveInput } from "./car-drive.ts";
 import { assignClass } from "./vehicle-classes.ts";
-import { COM_Y, CONTACT_HZ, G } from "./car-air-body.ts";
+import { CONTACT_HZ, G } from "./car-air-body.ts";
 import { paint } from "./test-support.ts";
 import { makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { BARRIER_TOP } from "../contact/sat.ts";
@@ -19,7 +19,7 @@ import { FRAME_HZ } from "../kernel/constants.ts";
  * height and grip does (within 5 % at each time), and driven off the edge of one it flies as a body that has dropped the height of the
  * edge does: its airtime is the free fall sqrt(2 h / g) of that drop, to within one slice.
  *
- * A sedan's tyres stand 1.48 m apart and 2.68 m front to rear (`WHEEL_POS`): the box prop and the jersey slab here are as wide and
+ * A sedan's tyres stand 1.48 m apart and 2.68 m front to rear (`frame.wheels`): the box prop and the jersey slab here are as wide and
  * long as it needs (a slab 0.76 m wide, `BARRIER_HALF`, carries no sedan on its top), at the jersey slab's own height. A ramp's deck
  * rises, so its reference is a height-field ramp of the same slope and height, and the car is on it for the first part of its run.
  */
@@ -186,7 +186,7 @@ describe("given a car standing on another car's roof, at full throttle", () => {
 const _up = new THREE.Vector3();
 /** The height (m) of the sedan's centre of mass, the point gravity moves (the origin swings about it as the body pitches). */
 function centreY(c: DeformableCar): number {
-  return c.group.position.y + _up.set(0, COM_Y, 0).applyQuaternion(c.group.quaternion).y;
+  return c.group.position.y + _up.set(0, c.frame.comY, 0).applyQuaternion(c.group.quaternion).y;
 }
 
 /**

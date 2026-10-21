@@ -2,8 +2,7 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
-import { COM_Y, G, TOUCH } from "../vehicle/car-air-body.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { G, TOUCH } from "../vehicle/car-air-body.ts";
 import { RAMP } from "./fleet-ramps.ts";
 import { approachSide, noseX, pair, run, scene, tornBonnetWreck, watch } from "./fleet-ramps.test-util.ts";
 import { sideContact } from "../contact/prop-contact.ts";
@@ -80,8 +79,8 @@ function jump(v: number): Jump {
     peak = Math.max(peak, p.y);
     const nose = Math.asin(f.set(0, 0, 1).applyQuaternion(q).y) * DEG;
     const flying = Math.min(...gaps) > SPRING_REACH && fit(car, ramps).hull > 0.02;
-    const pastSlab = Math.abs(p.z) > RAMP.start + CAR_HALF.z;
-    _com.set(0, COM_Y, 0).applyQuaternion(q).add(p);
+    const pastSlab = Math.abs(p.z) > RAMP.start + car.frame.half.z;
+    _com.set(0, car.frame.comY, 0).applyQuaternion(q).add(p);
     if (flying) {
       air += FRAME;
       since = 0;
@@ -203,7 +202,7 @@ describe("given the ramps with no slab between them", () => {
     run(w, SETTLE_S, () => {
       peak = Math.max(peak, p.y);
     });
-    const tail = car.group.localToWorld(new THREE.Vector3(0, 0, -CAR_HALF.z));
+    const tail = car.group.localToWorld(new THREE.Vector3(0, 0, -car.frame.half.z));
     const speed = Math.hypot(car.velocity.x, car.velocity.z);
     t.diagnostic(`peak ${peak.toFixed(2)} m, end z ${p.z.toFixed(1)} y ${p.y.toFixed(3)} tail y ${tail.y.toFixed(3)} speed ${speed.toFixed(3)} m/s`);
     assert.ok(peak < RAMP.top + 0.4, `peak ${peak.toFixed(2)} m`);

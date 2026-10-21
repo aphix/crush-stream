@@ -1,4 +1,4 @@
-import { WHEEL_POS } from "./car-mesh.ts";
+import type { CarFrame } from "./car-rig.ts";
 import { CLASSES, gearAt, type VehicleClassId } from "./vehicle-classes.ts";
 import { detSin } from "../kernel/physics-core.js";
 
@@ -9,10 +9,6 @@ function tanh(x: number): number {
   const e = Math.exp(2 * x);
   return (e - 1) / (e + 1);
 }
-
-/** Half the wheelbase and half the track (m). */
-const AXLE = WHEEL_POS[0]![2];
-const TRACK = Math.abs(WHEEL_POS[0]![0]);
 
 /**
  * Drawn-pose feel knobs (mutable: the debug panel sets them live). `driftLean`: extra drawn roll in a slide, a share of the class cap at full slide; the body leans into the drift.
@@ -65,7 +61,7 @@ function alongRoad(load: number, slope: number, cap: number): number {
  * Drawn only: the acceleration is read off `group.matrixWorld` across slices, as `Suspension` reads vertical speed.
  */
 export class LoadTransfer {
-  /** Each wheel's body offset (m, `Suspension.offset` sign) the load holds the body at, `WHEEL_POS` order. */
+  /** Each wheel's body offset (m, `Suspension.offset` sign) the load holds the body at, `frame.wheels` order. */
   readonly target = new Float64Array(4);
   private px = 0;
   private pz = 0;
@@ -80,6 +76,12 @@ export class LoadTransfer {
   private gear = 0;
   private age = Infinity;
   private dir = 0;
+
+  private readonly frame: CarFrame;
+
+  constructor(frame: CarFrame) {
+    this.frame = frame;
+  }
 
   reset(): void {
     this.seen = 0;
@@ -131,10 +133,11 @@ export class LoadTransfer {
     const cg = CLASSES[cls].cgHeight;
     // Per wheel a spring k m/4 carries ΔF = m a h / (2 L) (axle) or m a h / (2 T) (side): Δ = 2 a h / (L k) with
     // L the wheelbase and T the track; the springs' own scale is saturated at the class's limit.
-    const capP = AXLE * Math.tan(c.pitch * RAD);
-    const capR = TRACK * Math.tan(c.roll * RAD * (1 + LOAD_FEEL.driftLean * slide));
-    const p = alongRoad(capP * tanh((along * cg) / (AXLE * k * capP)), e[9]!, c.pitch * RAD) + this.kick(dt);
-    const r = alongRoad(capR * tanh((side * cg) / (TRACK * k * capR)), e[1]!, c.roll * RAD);
+    const { halfBase, halfTrack } = this.frame;
+    const capP = halfBase * Math.tan(c.pitch * RAD);
+    const capR = halfTrack * Math.tan(c.roll * RAD * (1 + LOAD_FEEL.driftLean * slide));
+    const p = alongRoad(capP * tanh((along * cg) / (halfBase * k * capP)), e[9]!, c.pitch * RAD) + this.kick(dt);
+    const r = alongRoad(capR * tanh((side * cg) / (halfTrack * k * capR)), e[1]!, c.roll * RAD);
     // Front and the +x side rise under +along and +side; the rear and the −x side sink.
     this.target[0] = p - r;
     this.target[1] = p + r;
@@ -157,6 +160,6 @@ export class LoadTransfer {
   private kick(dt: number): number {
     this.age += dt;
     if (this.age > SHIFT_END) return 0;
-    return -this.dir * LOAD_FEEL.shiftKick * AXLE * Math.tan(SHIFT_DEG * RAD) * detSin(2 * Math.PI * SHIFT_HZ * this.age) * Math.exp(-this.age / SHIFT_TAU);
+    return -this.dir * LOAD_FEEL.shiftKick * this.frame.halfBase * Math.tan(SHIFT_DEG * RAD) * detSin(2 * Math.PI * SHIFT_HZ * this.age) * Math.exp(-this.age / SHIFT_TAU);
   }
 }

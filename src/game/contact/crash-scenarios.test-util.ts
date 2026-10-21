@@ -1,8 +1,6 @@
 import * as THREE from "three";
 import { bleedAfterSlide, DeformableCar } from "../vehicle/car.ts";
 import { JerseyBarrier, type ContactHit } from "../scenes/engine-props.ts";
-import { TYRE_HALF_W } from "../deform/deform-contact.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
 import { bodyHit } from "./external-contact.ts";
 import { beginImpact, easeTimeScale, phaseClock, stepPhase, type PhaseClock } from "../match/phase.ts";
 import { CAGES } from "../kernel/rig-spec.ts";
@@ -603,19 +601,21 @@ export function runPair(kphA: number, kphB: number, kind: "head-on" | "t-bone" =
 /** A pair's four tyre-rectangle axes (unit x, z) and both tyres' summed half-extent along each. */
 const tyreAxesOf = new Float64Array(12);
 
-/** A tyre seen from above is a 2·TYRE_R × 2·TYRE_HALF_W rectangle on its hub, along its car. */
+/** A tyre seen from above is a 2·r × 2·halfW rectangle on its hub, along its car. */
+// ponytail: both cars' tyres read off carA's frame (one factor, bit-identical); split per car once styles differ in tyre size.
 function tyreAxes(carA: DeformableCar, carB: DeformableCar): void {
   const fA = carA.fwdFlat,
     rA = carA.rightFlat,
     fB = carB.fwdFlat,
     rB = carB.rightFlat;
+  const { r, halfW } = carA.frame.rig.tyre;
   for (let k = 0; k < 4; k++) {
     const u = k === 0 ? fA : k === 1 ? rA : k === 2 ? fB : rB;
     tyreAxesOf[k * 3] = u.x;
     tyreAxesOf[k * 3 + 1] = u.z;
     tyreAxesOf[k * 3 + 2] =
-      TYRE_R * (Math.abs(fA.x * u.x + fA.z * u.z) + Math.abs(fB.x * u.x + fB.z * u.z)) +
-      TYRE_HALF_W * (Math.abs(rA.x * u.x + rA.z * u.z) + Math.abs(rB.x * u.x + rB.z * u.z));
+      r * (Math.abs(fA.x * u.x + fA.z * u.z) + Math.abs(fB.x * u.x + fB.z * u.z)) +
+      halfW * (Math.abs(rA.x * u.x + rA.z * u.z) + Math.abs(rB.x * u.x + rB.z * u.z));
   }
 }
 
