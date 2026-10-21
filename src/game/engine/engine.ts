@@ -221,7 +221,8 @@ export class CrashEngine extends EngineGarage {
       this.wheels.sync(drawn, renderer);
       this.lampBatch.sync(drawn);
       this.partBatch.sync(drawn);
-      this.seated.sync(drawn, driverLook);
+      // In the garage the standing dummy beside the car is the driver: no one sits in the car there.
+      this.seated.sync(this.showGarage ? [] : drawn, driverLook);
     };
 
     this.debris = new DebrisSystem(this.scene);

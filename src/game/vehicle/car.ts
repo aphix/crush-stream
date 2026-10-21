@@ -228,6 +228,7 @@ export class DeformableCar extends CarParts {
     this.interior.scale.set(1, 1, 1);
     this.interior.position.set(0, 0, 0);
     this.cabin.fit(null);
+    this.cabin.sinkHeadliner(null);
 
     this.endAgo.fill(9);
     this.endReach = Infinity;
@@ -643,7 +644,8 @@ export class DeformableCar extends CarParts {
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
       this.followGlass();
     }
-    if (this.deform.massActive) this.fitInterior();
+    // A load crushes the roof's skin with the masses at rest: the headliner follows it too.
+    if (this.deform.massActive || this.deform.skinnedThisFrame) this.fitInterior();
     if (this.hullHelper?.visible) this.updateHullHelper();
     this.settleCasters();
   }
@@ -657,6 +659,7 @@ export class DeformableCar extends CarParts {
       this.skinPanels();
       this.holdSkinOffTyres(true);
     }
+    this.fitInterior();
   }
 
   /** A crushed skin drawn over a standing tyre stands on it (`TyreSkin`); a thrown wheel is the world's. */

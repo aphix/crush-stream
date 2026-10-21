@@ -102,6 +102,13 @@ export class CarCabin {
   private readonly rests: readonly THREE.Vector3[];
   /** Rest positions of the masses the bay and bars ride: engine, front bumper, rear bumper, each pair [left, right]. */
   private readonly massRest: readonly (readonly [MassName, THREE.Vector3])[];
+  /** The cabin shell, its floor and headliner (car space, m) at rest, and the roof mass's rest height: the headliner sinks with the roof. */
+  private readonly shell: PartSeat;
+  private readonly shellY: readonly [floor: number, top: number];
+  private readonly roofRest: number;
+  /** The bay's rear and front at rest (m, car z), and each of `under`'s z drift this frame. */
+  private readonly bayZ: readonly [rear: number, front: number];
+  private readonly driftZ = new Float64Array(3);
 
   constructor(style: BodyStyle, seats: readonly PartSeat[], group: THREE.Object3D) {
     const of = (kind: number) => seats.filter((s) => s.kind === kind);
@@ -118,6 +125,8 @@ export class CarCabin {
     const halfX = beltX(bMid, style) - CABIN_INSET;
     const floor = style.tubs[0]![2];
     fitBox(cabin!, { halfX: REF_CABIN.halfX, y0: REF_CABIN.floor, y1: REF_CABIN.roof, z0: REF_CABIN.rear, z1: REF_CABIN.front }, halfX, floor, roof, style.rearBulkhead.z, style.windshield.base[1]);
+    this.shell = cabin!;
+    this.shellY = [floor, roof];
     place(driver!, seat.hip.x, seat.hip.y, seat.hip.z, lean);
     place(passenger!, -seat.hip.x, seat.hip.y, seat.hip.z, lean);
     wheel!.position.copy(seat.wheel);
@@ -134,6 +143,7 @@ export class CarCabin {
     for (let z = zRear; z <= zFront; z += 0.1) bayHalf = Math.min(bayHalf, sampleSlice(z, style.profile).hw - BAY_INSET);
     const bayTop = sampleSlice((zRear + zFront) * 0.5, style.profile).yBelt - HOOD_UNDER;
     fitBox(bay!, { halfX: REF_BAY.halfX, y0: REF_BAY.floor, y1: REF_BAY.top, z0: REF_BAY.rear, z1: REF_BAY.front }, bayHalf, bayFloor, bayTop, zRear, zFront);
+    this.bayZ = [zRear, zFront];
     const { front, rear: tail } = style.bumpers;
     bars[0]!.position.set(0, front.seat.y, front.seat.z);
     bars[1]!.position.set(0, tail.seat.y, -tail.seat.z);
@@ -145,6 +155,7 @@ export class CarCabin {
     const rig = carFrame(style).rig.masses;
     const restOf = (name: MassName): readonly [MassName, THREE.Vector3] => [name, new THREE.Vector3(...rig.find((m) => m.name === name)!.rest)];
     this.massRest = (["engineL", "engineR", "bumperFL", "bumperFR", "bumperRL", "bumperRR"] as const).map(restOf);
+    this.roofRest = restOf("roof")[1].y;
   }
 
   /** The bay shows while the hood is off or open, each crash bar while its bumper is off or hanging: `parts` are the car's own. */
@@ -157,18 +168,36 @@ export class CarCabin {
     this.under[2]!.showIf = () => rear.detached || rear.hingeT > BAR_OPEN;
   }
 
-  /** The bay rides the engine masses through a crush and each bar its bumper's: once a frame on a crashed car, at rest without (`deform` null). */
+  /** The bay rides the engine masses through a crush, its front no further out than the nose (the front bumper's masses), and each bar its bumper's: once a frame on a crashed car, at rest without (`deform` null). */
   fit(deform: StreamedDeformation | null): void {
     for (let k = 0; k < this.under.length; k++) {
       const seat = this.under[k]!;
       seat.position.copy(this.rests[k]!);
+      this.driftZ[k] = 0;
       if (deform === null) continue;
       const [l, lRest] = this.massRest[2 * k]!;
       const [r, rRest] = this.massRest[2 * k + 1]!;
       _bay.copy(deform.massLocal(l)).sub(lRest);
       _mass.copy(deform.massLocal(r)).sub(rRest);
       seat.position.add(_bay.add(_mass).multiplyScalar(0.5));
+      this.driftZ[k] = _bay.z;
     }
+    const [zRear, zFront] = this.bayZ;
+    const [engine, nose] = this.driftZ;
+    const bay = this.under[0]!;
+    const sz = (zFront + Math.min(engine!, nose!) - zRear - engine!) / (REF_BAY.front - REF_BAY.rear);
+    bay.scale.z = sz;
+    bay.position.z = zRear + engine! - REF_BAY.rear * sz;
+  }
+
+  /** The headliner sinks by the roof mass's drop to `roofY` (car space; null: at rest), a load's crush too, so it never stands through the crushed roof. */
+  sinkHeadliner(roofY: number | null): void {
+    const [floor, top] = this.shellY;
+    // The pose already moved the shell by the cell's y; only the roof's further drop squeezes it.
+    const sink = roofY === null ? 0 : Math.min(0, roofY - this.roofRest - this.pose.position.y);
+    const sy = (top + sink - floor) / (REF_CABIN.roof - REF_CABIN.floor);
+    this.shell.scale.y = sy;
+    this.shell.position.y = floor - REF_CABIN.floor * sy;
   }
 }
 

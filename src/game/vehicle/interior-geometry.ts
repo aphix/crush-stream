@@ -199,9 +199,9 @@ export function engineBayGeometry(): THREE.BufferGeometry {
   return mergeToned(parts, "engine bay");
 }
 
-/** A bare bumper beam about the bumper's seat, standing proud of the nose (+z out): shown once the bumper is gone. */
+/** A bare bumper beam on the bumper's seat, its face where the bumper's was (+z out), so a crushed nose never pushes it past the body: shown once the bumper is gone. */
 export function crashBarGeometry(): THREE.BufferGeometry {
-  const parts = [rounded(1.3, 0.1, 0.06, 0.025, STEEL).translate(0, 0, 0.07)];
-  for (const sign of [-1, 1]) parts.push(box(0.08, 0.08, 0.1, STEEL, sign * 0.5, 0, -0.01));
+  const parts = [rounded(1.3, 0.1, 0.06, 0.025, STEEL).translate(0, 0, -0.03)];
+  for (const sign of [-1, 1]) parts.push(box(0.08, 0.08, 0.1, STEEL, sign * 0.5, 0, -0.11));
   return mergeToned(parts, "crash bar");
 }
