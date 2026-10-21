@@ -1,4 +1,5 @@
 import type { RigOverrides } from "../deform/deform-rig.ts";
+import type { LidSwing } from "./hinge-spec.ts";
 import { COUPE } from "./car-styles/coupe.ts";
 import { HATCHBACK } from "./car-styles/hatchback.ts";
 import { MONSTER } from "./car-styles/monster.ts";
@@ -40,11 +41,13 @@ export interface GlassQuad {
   wTop: number;
 }
 
-type BootSpec =
+/** The panel's shape; `pivot` is where it turns (default `origin`): a hatch's or liftgate's roof hinge, a drop gate's bottom edge. `swing`: its latch, struts and limits (default by kind, `hinge-spec.ts`). */
+export type BootSpec = (
   /** Deck lid lofted on the profile from z0 to z1, hinged at origin. */
   | { kind: "lid"; z0: number; z1: number; origin: YZ }
-  /** Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, hinged at its top edge; z0 defaults to origin's z (upright). */
-  | { kind: "tailgate"; y0: number; origin: YZ; z0?: number };
+  /** Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). */
+  | { kind: "tailgate"; y0: number; origin: YZ; z0?: number }
+) & { pivot?: YZ; swing?: LidSwing };
 
 /** Paint a style fixes whatever the fleet paint (police black-and-white). */
 interface Livery {

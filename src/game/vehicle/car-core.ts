@@ -31,6 +31,7 @@ import { panelRegions, type PanelName, type PanelRegion } from "./car-panels.ts"
 import { newDentState, type DentState } from "./loose-dent.ts";
 import { newLooseShape } from "./loose-step.ts";
 import { carClass, CLASSES, drivenAxles } from "./vehicle-classes.ts";
+import { bootPivot } from "./hinge-spec.ts";
 const _p = new THREE.Vector3();
 const _inv = new THREE.Quaternion();
 const _lampQ = new THREE.Quaternion();
@@ -392,7 +393,8 @@ export abstract class CarCore {
     this.group.add(this.hood);
     this.trunk = new THREE.Mesh(makeTrunkGeometry(this.style), this.bodyMat);
     this.trunk.castShadow = true;
-    this.trunk.position.set(0, this.style.boot.origin[0], this.style.boot.origin[1]);
+    const [pivotY, pivotZ] = bootPivot(this.style.boot);
+    this.trunk.position.set(0, pivotY, pivotZ);
     this.group.add(this.trunk);
     if (this.style.lightBar) {
       this.sirenMat = makeSirenMaterial();

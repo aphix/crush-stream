@@ -23,7 +23,7 @@ export const HATCHBACK: BodyStyle = {
   rearBulkhead: { z: -0.72, yTop: 0.8 },
   tubs: [[-1.82, 0.7, 0.3]],
   rearDoorSeam: -0.62,
-  boot: { kind: "tailgate", y0: 0.46, origin: [0.83, -2.115] },
+  boot: { kind: "tailgate", y0: 0.46, origin: [0.83, -2.115], pivot: [1.27, -1.33] },
   lamps: { head: HEAD_LAMP, tail: [0.675, 0.645] },
   rig: {
     cages: {

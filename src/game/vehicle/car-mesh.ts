@@ -5,6 +5,7 @@ import { beltY, floorY, rockerAt } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
+import { bootPivot } from "./hinge-spec.ts";
 
 export const SEDAN = CAR_STYLES.sedan;
 
@@ -491,10 +492,13 @@ export function makeHoodGeometry(style: BodyStyle = SEDAN, source: BodySource = 
   return markSkinDynamic(makeDeckPanel(style, z0, z1, origin, source));
 }
 
-/** Trunk lid, hatch or tailgate per style; local to `style.boot.origin` ([y, z]). */
+/** Trunk lid, hatch or tailgate per style; local to the boot's pivot (`bootPivot`, [y, z]). */
 export function makeTrunkGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const b = style.boot;
-  return markSkinDynamic(b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source) : makeTailgate(style, b.y0, b.z0 ?? b.origin[1], b.origin, source));
+  const g = b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source) : makeTailgate(style, b.y0, b.z0 ?? b.origin[1], b.origin, source);
+  const [py, pz] = bootPivot(b);
+  if (py !== b.origin[0] || pz !== b.origin[1]) g.translate(0, b.origin[0] - py, b.origin[1] - pz);
+  return markSkinDynamic(g);
 }
 
 /** How far inside the body side (m) a bumper's wrapped corner is held: a tail or nose narrower than the fascia would show the corner through the skin. */

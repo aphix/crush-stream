@@ -18,6 +18,7 @@ import { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { LIGHT_BAR } from "./constants.ts";
+import { bootPivot } from "./hinge-spec.ts";
 
 const PAINT = { body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" };
 const scene = new THREE.Scene();
@@ -182,7 +183,7 @@ describe("given every body style's rig cage (the soft-body frame that wraps the 
 
     it(`when a ${id} is at rest, then its boot, glass and any light bar sit inside their cages with no clamping`, () => {
       const d = new StreamedDeformation(makeChassisGeometry(style), carFrame(style).rig);
-      const [oy, oz] = style.boot.origin;
+      const [oy, oz] = bootPivot(style.boot);
       assert.ok(panelClamp(d, makeTrunkGeometry(style), "boot", new THREE.Vector3(0, oy, oz)) < 1e-4, `${id} boot`);
       assert.ok(panelClamp(d, makeWindshield(style), "glassFront", new THREE.Vector3()) < 1e-4, `${id} windshield`);
       assert.ok(panelClamp(d, makeRearGlass(style), "glassRear", new THREE.Vector3()) < 1e-4, `${id} rear glass`);

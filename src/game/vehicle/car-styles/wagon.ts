@@ -1,5 +1,6 @@
 import type { BodyStyle } from "../car-variants.ts";
 import { BOOT_SENSOR, FRONT_CLIP, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+import { LIFTGATE } from "../hinge-spec.ts";
 
 export const WAGON: BodyStyle = {
   id: "wagon",
@@ -23,7 +24,7 @@ export const WAGON: BodyStyle = {
   rearBulkhead: { z: -0.72, yTop: 0.8 },
   tubs: [[-1.96, 0.7, 0.3]],
   rearDoorSeam: -0.62,
-  boot: { kind: "tailgate", y0: 0.46, origin: [0.87, -2.115] },
+  boot: { kind: "tailgate", y0: 0.46, origin: [0.87, -2.115], pivot: [1.28, -1.7], swing: LIFTGATE },
   lamps: { head: HEAD_LAMP, tail: [0.7, 0.68] },
   rig: {
     cages: {

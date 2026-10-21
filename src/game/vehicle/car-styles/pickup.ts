@@ -23,7 +23,7 @@ export const PICKUP: BodyStyle = {
   rearBulkhead: { z: -0.735, yTop: 0.91 },
   tubs: [CABIN_TUB, [-2.05, -0.8, 0.52]],
   rearDoorSeam: null,
-  boot: { kind: "tailgate", y0: 0.44, origin: [0.915, -2.12] },
+  boot: { kind: "tailgate", y0: 0.44, origin: [0.915, -2.12], pivot: [0.44, -2.12] },
   lamps: { head: HEAD_LAMP, tail: [0.79, 0.72] },
   rig: {
     cages: {
