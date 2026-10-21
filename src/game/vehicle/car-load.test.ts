@@ -17,8 +17,8 @@ const FRAME = 1 / FRAME_HZ;
 const DEG = 180 / Math.PI;
 const IDLE: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
 
-/** Most the drawn body may pitch (deg) in a launch or a stop, per class: a few degrees, the monster more. */
-const PITCH_MAX: Record<VehicleClassId, number> = { sedan: 3, muscle: 3, police: 3, truck: 4.5, monster: 6 };
+/** Most the drawn body may pitch (deg) in a launch or a stop, per class: a few degrees, the tall SUV and the truck more, the monster most. */
+const PITCH_MAX: Record<VehicleClassId, number> = { sedan: 3, muscle: 3, police: 3, truck: 4.5, monster: 6, hatch: 3, suv: 4 };
 const ROLL_MAX = 6.5;
 
 type Sample = { pitch: number; roll: number; speed: number };

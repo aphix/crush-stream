@@ -119,7 +119,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const rings = zs.map((z) => (source === "cage" ? sectionAt(z) : insetRing(sectionAt(z), endRollInset(z, style.profile))));
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
-  const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style)];
+  const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style, source)];
   parts.push(...makeWellLiners(style));
   parts.push(...makeGreenhouseFrame(style, source));
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
@@ -140,17 +140,23 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const fittingCount = fittings?.geometry.getAttribute("position").count ?? 0;
   if (fittings) parts.push(fittings.geometry);
   const merged = mergeGeometries(parts, false);
-  for (const g of parts) g.dispose();
   if (!merged) throw new Error("Failed to merge chassis");
+  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): torn panels, roof rails/glass panel and blacked-out pillars;
+  // `INNER_PANEL` an unpainted inner panel.
+  const primer = new Float32Array(merged.getAttribute("position").count);
+  let start = 0;
+  for (const g of parts) {
+    const count = g.getAttribute("position").count;
+    if (g.userData.blackout === true) primer.fill(1, start, start + count);
+    start += count;
+  }
+  for (const g of parts) g.dispose();
   merged.computeVertexNormals();
   merged.computeBoundingBox();
   merged.computeBoundingSphere();
   // The loft is merged first: its vertex `s * ring + i` and its first (slices - 1) * ring * 2 triangles (`panelRegions` cuts panels out of them).
   merged.userData.loft = { ring: rings[0]!.length, slices: zs.length };
   if (lips) merged.userData.archLips = { from: lipIndex, perWheel: lips.userData.perWheel as number[] };
-  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): a torn panel's vertices are set dark, and so are the roof's rails and glass
-  // panel; `INNER_PANEL` an unpainted inner panel.
-  const primer = new Float32Array(merged.getAttribute("position").count);
   if (fittings) primer.fill(1, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
   if (source === "drawn") {
     // The bay trough's and a lid's lined boot's floor corner and wall top on each side: ring points 0, 1 and their mirrors.

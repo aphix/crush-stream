@@ -46,7 +46,7 @@ function along(car: DeformableCar): number {
 
 /**
  * Launch targets (docs/HANDLING.md § Acceleration): 0–100 km/h (s) at each end of the realism slider. Realistic: the sourced
- * 0–60 mph (sedan 6.1, muscle 4.3, truck 7.9, monster about 4). Arcade: about 0.4× of those, real order kept (muscle and monster
+ * 0–60 mph (sedan 6.1, muscle 4.3, truck 7.9, monster about 4, hatchback 7.3, SUV 7.4). Arcade: about 0.4× of those, real order kept (muscle and monster
  * quickest, truck slowest off the line). Time to top follows from the law (`timeToTop`), not from a second figure: the pull is the
  * launch pull to the knee, then constant power, so t_top = knee/launch + (v_top² − knee²)/(2·power).
  */
@@ -56,6 +56,8 @@ const LAUNCH: Record<VehicleClassId, { topKmh: number; gears: number; arcade: nu
   truck: { topKmh: 195, gears: 4, arcade: 2.5, real: 7.9 },
   monster: { topKmh: 190, gears: 4, arcade: 2, real: 4 },
   police: { topKmh: 200, gears: 5, arcade: 2.45, real: 6.1 },
+  hatch: { topKmh: 192, gears: 5, arcade: 2.47, real: 7.3 },
+  suv: { topKmh: 198, gears: 5, arcade: 2.49, real: 7.4 },
 };
 
 /** The seconds the law takes from rest to `v` m/s at `realism`: flat at the launch pull to the knee, then constant power. */
@@ -324,7 +326,7 @@ for (const H of RATES) {
         monster.group.updateMatrixWorld(true);
         for (const w of monster.wheels) {
           const centre = w.getWorldPosition(new THREE.Vector3());
-          const radius = 0.32 * w.getWorldScale(new THREE.Vector3()).y;
+          const radius = monster.frame.rig.tyre.r * w.getWorldScale(new THREE.Vector3()).y;
           assert.ok(Math.abs(centre.y - radius) < 0.01, `wheel floats/sinks: centre ${centre.y.toFixed(3)} r ${radius.toFixed(3)}`);
         }
         assert.ok(monster.body.getWorldPosition(new THREE.Vector3()).y > 0.4, "body not lifted");

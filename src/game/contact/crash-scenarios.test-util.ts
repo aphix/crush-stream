@@ -13,6 +13,8 @@ import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts"
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import type { SimPacer } from "../engine/sim-pace.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
+import { RigSolids } from "../scenes/rig-solids.ts";
+import { armedSolids, armSolids } from "../world/surfaces.ts";
 
 /**
  * Headless crash scenarios through the engine's own step (`stepWorld`) and phase clock, at
@@ -193,16 +195,26 @@ class HeldBarrier extends JerseyBarrier {
   }
 }
 
+/** The range's slab as the engine arms it (`RigSolids`, synced before each step): the solid a tyre or a part meets of it. */
+let slabSolids: RigSolids | null = null;
+
 /**
  * One rendered frame of `CrashEngine.tickInner`: the physics part and the phase clock (sandbox impact rule). With `pace` the
  * frame is stepped as the engine does (`SimPacer`: whole slices of its floor); without it the frame's time is cut into
- * `physicsSlice`s that end exactly on it.
+ * `physicsSlice`s that end exactly on it. A world with a slab arms it as the engine's range does, and puts back what was armed.
  */
 export function tickWorld(w: CrashWorld, wallDt = FRAME, pace?: SimPacer): void {
   easeTimeScale(w.clock, wallDt);
   const simDt = wallDt * w.clock.timeScale;
   const vmax = sliceSpeed(w.cars);
+  const armed = armedSolids();
   const step = (h: number): void => {
+    const slab = w.world.barrier;
+    if (slab) {
+      slabSolids ??= new RigSolids();
+      slabSolids.syncSlab(slab);
+      armSolids(slabSolids);
+    }
     if (pace) w.world.fine = pace.fine;
     stepWorld(w.world, h);
     for (const e of w.world.ejection?.take() ?? []) {
@@ -229,6 +241,7 @@ export function tickWorld(w: CrashWorld, wallDt = FRAME, pace?: SimPacer): void 
     }
   }
   for (const car of w.cars) car.updateSkin();
+  armSolids(armed);
   stepPhase(w.clock, wallDt);
 }
 

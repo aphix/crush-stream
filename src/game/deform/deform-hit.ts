@@ -338,7 +338,7 @@ export abstract class DeformHit extends DeformRig {
     this.loadDirty[0] = 1;
   }
 
-  /** `impulse` drives FX and glass; `ebs` (equivalent barrier speed, m/s) sizes the crush. */
+  /** `impulse` drives FX and glass; `ebs` (equivalent barrier speed, m/s) sizes the crush; `tyreSide`: a tyre met a solid's side (its block travel is its EBS energy's, `energyTravel`). */
   beginCrush(
     localPoint: THREE.Vector3,
     localInward: THREE.Vector3,
@@ -347,6 +347,7 @@ export abstract class DeformHit extends DeformRig {
     group: THREE.Object3D,
     worldVel: THREE.Vector3,
     worldOmega: THREE.Vector3,
+    tyreSide = false,
   ): void {
     this.thaw();
     this.impactLocal.copy(localPoint);
@@ -358,6 +359,7 @@ export abstract class DeformHit extends DeformRig {
       this.wear = Math.min(this.hitSpeed * this.hitSpeed, WEAR_HIT);
     }
     this.impulse = clamped;
+    if (tyreSide) this.energyTravel = true;
     this.crushing = true;
     this.massActive = true;
     this.elapsed = 0;
@@ -419,7 +421,7 @@ export abstract class DeformHit extends DeformRig {
     this.endEbs2[end] = this.endEbs2[end]! + e * e;
     this.wear += Math.min(e * e, WEAR_HIT);
     this.hitSpeed = Math.min(70, Math.sqrt(this.endEbs2[end]!));
-    this.rearmed = true;
+    this.energyTravel = true;
     this.impulse = THREE.MathUtils.clamp(impulse, 4, 70);
     this.crushing = true;
     this.dirty = true;

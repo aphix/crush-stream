@@ -36,6 +36,8 @@ const LOAD: Readonly<Record<VehicleClassId, { pitch: number; roll: number }>> = 
   police: { pitch: 1.5, roll: 3 },
   truck: { pitch: 2.2, roll: 3.4 },
   monster: { pitch: 3.5, roll: 4 },
+  hatch: { pitch: 1.5, roll: 3 },
+  suv: { pitch: 1.5, roll: 3 },
 };
 
 /** Time constant (s) the ground pose's acceleration is smoothed over: a few slices, so one contact spike doesn't kick the body. */

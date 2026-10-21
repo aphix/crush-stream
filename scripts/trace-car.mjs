@@ -71,6 +71,7 @@ const { values } = parseArgs({
     zoom: { type: "string" },
     stations: { type: "string", default: "16" },
     "camera-out": { type: "string" },
+    paint: { type: "string" },
     out: { type: "string" },
   },
 });
@@ -98,7 +99,7 @@ const crop = entry?.crop ?? values["ref-crop"]?.split(",").map(Number);
 if (crop !== undefined && (crop.length !== 4 || !crop.every((n) => n >= 0))) throw new Error(`--ref-crop ${crop}: x,y,width,height in reference pixels`);
 const ref = refFile === undefined ? null : await loadRef(game, refFile, crop);
 if (values.grid !== undefined) await writeGrid(game, ref, resolve(values.grid));
-const stage = new CarStage(game);
+const stage = new CarStage(game, values.paint === undefined ? undefined : Number.parseInt(values.paint.replace(/^#/, ""), 16));
 const dims = stage.build(values.style, carClass, omit);
 const fit = iso ? await isoTrace(game, stage, dims, ref, view, { style: values.style, entry, solve: values.solve, lift: game.CLASSES[carClass].lift, out }) : await orthoView();
 if (values["camera-out"] !== undefined) {

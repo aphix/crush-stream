@@ -19,7 +19,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { CABIN_MIN, at, beltUnderShoulder, extractSide, extractTop, formatTable, glassZone, outlineOf, planOf, tableFrom } from "./fit-extract.mjs";
+import { CABIN_MIN, archZones, at, beltUnderShoulder, extractSide, extractTop, formatTable, glassZone, holdArches, inZones, outlineOf, planOf, tableFrom } from "./fit-extract.mjs";
 import { CarStage, ViewPort, alphaMask, beltOf, centreOnHubs, frameCamera, glassMask, openGame, refFrame, traceView } from "./trace-core.mjs";
 import { columnEdges, compare, iou } from "./trace-metrics.mjs";
 import { loadRef, refLayers } from "./trace-ref.mjs";
@@ -85,6 +85,7 @@ if (!game.VEHICLE_CLASS_IDS.includes(cls)) throw new Error(`--class ${cls}: one 
 const base = game.CAR_STYLES[id];
 const stage = new CarStage(game);
 const side = await sideView();
+const arches = archZones(side.hubs);
 const top = await topView();
 side.read = extractSide(side.frame, side.layers.sil, side.layers.glass, side.hubs, game.CLASSES[cls].lift, glassZone(top.read, base));
 const start = { ...base, ...tableFrom(side.read, top.read, base, game.CLASSES[cls].wheelScale) };
@@ -145,7 +146,7 @@ async function topView() {
   const [nose, tail] = [outline.at(-1)[0], outline[0][0]];
   const frame = refFrame("top", ref, ZOOM, pad, span.cols, span.metres ?? nose - tail, (nose + tail) / 2, (ref.box.v0 + ref.box.v1 + 1) / 2);
   const layers = refLayers(game, ref, frame, ZOOM, pad);
-  return { frame, layers, port: new ViewPort(game, frame.W, frame.H), read: extractTop(frame, layers.sil, layers.glass) };
+  return { frame, layers, port: new ViewPort(game, frame.W, frame.H), read: extractTop(frame, layers.sil, layers.glass, arches) };
 }
 
 /** Both views of `table` (null: the style as it stands) whole, with their overlays tagged `tag`. */
@@ -167,7 +168,7 @@ function meetsBar(v) {
 /** Rounds of build, measure, step until MIN_GAIN stalls or `maxRounds`; the best round's table. */
 function fit(first) {
   const rounds = [];
-  let table = beltUnderShoulder(first);
+  let table = beltUnderShoulder({ ...first, profile: holdArches(first.profile, arches) });
   let best = { score: -Infinity, table };
   for (let r = 0; r < maxRounds; r++) {
     const m = measureRound(table);
@@ -175,7 +176,7 @@ function fit(first) {
     rounds.push({ side: m.side.iou, top: m.top.iou, roofCm: m.side.offsetCm.top, planCm: [m.top.offsetCm.top, m.top.offsetCm.bottom] });
     if (score > best.score) best = { score, table };
     if (rounds.length >= 3 && score - (rounds.at(-3).side + rounds.at(-3).top) < MIN_GAIN) break;
-    table = beltUnderShoulder({ ...table, profile: step(table.profile, first.profile, m.roof, m.plan) });
+    table = beltUnderShoulder({ ...table, profile: holdArches(step(table.profile, first.profile, m.roof, m.plan), arches) });
   }
   return { table: best.table, rounds };
 }
@@ -208,7 +209,7 @@ function guardReads(fitted) {
  */
 function groups(f) {
   const hwOf = (profile) => profile.map((s) => [s.z, s.hw]);
-  const plan = (t, hw) => beltUnderShoulder({ ...t, profile: t.profile.map((s) => ({ ...s, hw: at(hw, s.z) })) });
+  const plan = (t, hw) => beltUnderShoulder({ ...t, profile: holdArches(t.profile.map((s) => ({ ...s, hw: at(hw, s.z) })), arches) });
   const take = (keys) => (t) => ({ ...t, ...Object.fromEntries(keys.map((k) => [k, f[k]])) });
   const frame = take(["windshield", "windshieldTop", "roofZ", "rearGlass"]);
   return {
@@ -232,7 +233,8 @@ function tuckTyres(t) {
 
 /**
  * `t` built whole: both views' IoU, the side view's glass IoU, and the top view's two sides (mean and largest |offset|, cm) over the
- * reference's length less SIDE_TRIM at each end (the ends' curves belong to the front and rear edges).
+ * reference's length less SIDE_TRIM at each end and the wheel-arch zones (the ends' curves are the front and rear edges', the flares
+ * the arch lips').
  */
 function judge(t) {
   stage.build(id, cls, [], t);
@@ -244,7 +246,8 @@ function judge(t) {
   const s = shot(side);
   const p = shot(top);
   const sideOf = (edge) => {
-    const d = edge.filter((e) => e[3] !== null && e[0] > top.read.tail + SIDE_TRIM && e[0] < top.read.nose - SIDE_TRIM).map((e) => Math.abs(e[3]));
+    const onSide = (e) => e[3] !== null && e[0] > top.read.tail + SIDE_TRIM && e[0] < top.read.nose - SIDE_TRIM && !inZones(e[0], arches);
+    const d = edge.filter(onSide).map((e) => Math.abs(e[3]));
     return { abs: d.reduce((a, b) => a + b, 0) / d.length, max: Math.max(...d) };
   };
   return { side: s.fit.iou, top: p.fit.iou, sides: [sideOf(p.fit.edges.top), sideOf(p.fit.edges.bottom)], glass: iou(s.glass, side.layers.glass) };
@@ -288,8 +291,8 @@ function measureRound(table) {
     if (Math.abs(d) < SAMPLE_CAP) roof.push([side.frame.h(u + 0.5), d]);
   }
   const half = top.read.half;
-  const plan = planOf(top.frame, topSil)
-    .filter(([z]) => z > half[0][0] && z < half.at(-1)[0])
+  const plan = planOf(top.frame, topSil, arches)
+    .filter(([z]) => z > half[0][0] && z < half.at(-1)[0] && !inZones(z, arches))
     .map(([z, hw]) => [z, hw - at(half, z)])
     .filter(([, d]) => Math.abs(d) < SAMPLE_CAP);
   return { side: compare(side.frame, sideSil, side.layers.sil, STATIONS, ROWS), top: compare(top.frame, topSil, top.layers.sil, STATIONS, ROWS), roof, plan };

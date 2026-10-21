@@ -6,9 +6,9 @@ import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, st } from "./car-styles/platform.ts";
-import { ROCKER, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
-import { aPillarTopZ, beltY, floorY, rockerAt } from "./car-lines.ts";
-import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
+import { ROCKER, cantY, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { aPillarTopZ, aPostRearZ, beltY, floorY, rockerAt } from "./car-lines.ts";
+import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, styleMirrorDrawn } from "./part-geometry.ts";
 import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
@@ -62,6 +62,23 @@ function chassisBox(style: BodyStyle): THREE.Box3 {
   const b = geo.boundingBox!.clone();
   geo.dispose();
   return b;
+}
+
+/** The left drawn A-post and, when the door glass starts behind it, the sail between them. */
+function aPillarParts(style: BodyStyle): THREE.BufferGeometry[] {
+  const parts = makeGreenhouseFrame(style, "drawn");
+  const sail = parts.find((g) => g.name === "sail");
+  return [parts.find((g) => g.name === "a")!, ...(sail ? [sail] : [])];
+}
+
+/** Side view of `geo` against the windshield's edge line: each vertex's distance behind it (m; negative in front of it). */
+function behindWindshieldEdge(geo: THREE.BufferGeometry, style: BodyStyle): number[] {
+  const [baseY, baseZ] = style.windshield.base;
+  const [topY, topZ] = style.windshieldTop;
+  const run = Math.sqrt((topZ - baseZ) ** 2 + (topY - baseY) ** 2);
+  const [uz, uy] = [(topZ - baseZ) / run, (topY - baseY) / run];
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  return Array.from({ length: pos.count }, (_, i) => (pos.getY(i) - baseY) * uz - (pos.getZ(i) - baseZ) * uy);
 }
 
 /** Max |skinned − rest| of a panel skinned against an undeformed rig: >0 only where the cage clamps it. */
@@ -585,7 +602,8 @@ describe("given a body style's H2 hardpoints", () => {
 
   it("when the door and the A-pillar foot move, then the door glass spans from the door's trailing edge to the pillar's foot", () => {
     const sedan = CAR_STYLES.sedan;
-    const moved: BodyStyle = { ...sedan, aPillarFoot: 0.88, door: { ...sedan.door, hingeZ: 0.74, length: 1.0 } };
+    // Without the style's own B band, which ends the pane at the band instead.
+    const moved: BodyStyle = { ...sedan, pillars: undefined, aPillarFoot: 0.88, door: { ...sedan.door, hingeZ: 0.74, length: 1.0 } };
     const box = partBox(makeSideGlass(1, moved));
     const { hingeZ } = moved.door;
     const [rear, front] = [box.min.z + hingeZ + DOOR_GLASS_SEAT.z, box.max.z + hingeZ + DOOR_GLASS_SEAT.z];
@@ -593,15 +611,134 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(front > 0.86 && front < 0.95, `door glass front edge at z ${front}, around the A-pillar foot 0.88`);
   });
 
-  it("when the A-pillar's top moves back, then the door glass's top-front corner and the pillar's rear top corner follow it", () => {
-    const sedan: BodyStyle = { ...CAR_STYLES.sedan, aPillarTop: undefined };
-    const moved: BodyStyle = { ...sedan, aPillarTop: 0.3 };
+  it("when the A-pillar's top moves back, then the door glass's top-front corner and the pillar's rear top corner (its post's, or the sail's behind it) follow it", () => {
+    const sedan = CAR_STYLES.sedan;
+    // 30 cm behind the windshield's top: behind the A-post's own rear top, so the sail reaches back to it.
+    const top = sedan.windshieldTop[1] - 0.3;
+    const moved: BodyStyle = { ...sedan, aPillarTop: top };
     // glassCorners: 12 floats per pane, doorR is pane 3, its (front, top) corner the fourth.
     const doorTopFrontZ = (style: BodyStyle) => glassCorners(style)[3 * 12 + 9 + 2]!;
-    const pillarRearZ = (style: BodyStyle) => partBox(makeGreenhouseFrame(style, "drawn")[0]!).min.z;
-    assertSameNumbers([doorTopFrontZ(moved), pillarRearZ(moved)], [0.3, 0.3], "door glass top-front z, A-pillar rear top z", 1e-5);
+    const pillarRearZ = (style: BodyStyle) => Math.min(...aPillarParts(style).map((g) => partBox(g).min.z));
+    assertSameNumbers([doorTopFrontZ(moved), pillarRearZ(moved)], [top, top], "door glass top-front z, A-pillar rear top z", 1e-5);
+    const unset: BodyStyle = { ...sedan, aPillarTop: undefined };
     const stock = sedan.windshieldTop[1] - 0.05;
-    assertSameNumbers([doorTopFrontZ(sedan), aPillarTopZ(sedan)], [stock, stock], "unset: 5 cm behind the windshield's top", 1e-5);
+    assertSameNumbers([doorTopFrontZ(unset), aPillarTopZ(unset)], [stock, stock], "unset: 5 cm behind the windshield's top", 1e-5);
+  });
+
+  it("when any style's drawn A-pillar is read, then it is a post along the windshield's edge: never proud of the glass, 6 cm wide in side view, its top under the roof skin; also with its top at the windshield's", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const stock = CAR_STYLES[id];
+      for (const style of [stock, { ...stock, aPillarTop: stock.windshieldTop[1] - 0.02 }]) {
+        const [post] = aPillarParts(style);
+        const side = behindWindshieldEdge(post!, style);
+        const proud = -Math.min(...side);
+        // The post's front stands 4 mm off the glass; the old slab stood 1-2 cm over it.
+        assert.ok(proud < 0.006, `${id} aPillarTop ${aPillarTopZ(style)}: the post stands ${proud} m proud of the windshield's edge line`);
+        // Side-view width across the windshield's edge, ring by ring along the post (its stations, belt to top).
+        const { ring, slices } = post!.userData.loft as { ring: number; slices: number };
+        for (let slice = 0; slice < slices; slice++) {
+          const behind = side.slice(slice * ring, (slice + 1) * ring);
+          const width = Math.max(...behind) - Math.min(...behind);
+          assert.ok(width > 0.058, `${id} aPillarTop ${aPillarTopZ(style)}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}`);
+        }
+        // Every drawn greenhouse part (A-post, sail, B, rear, divider, rail, fills) stays in the roof: under its skin, and in under its side over the cant line.
+        for (const part of makeGreenhouseFrame(style, "drawn")) {
+          const pos = part.getAttribute("position") as THREE.BufferAttribute;
+          for (let i = 0; i < pos.count; i++) {
+            const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+            if (z < style.roofZ[0] || z > style.roofZ[1]) continue;
+            // 1e-6: float32 vertices, a ulp at 1.3 m is 1.2e-7.
+            assert.ok(y <= roofTopY(x, z, style) + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands over the roof skin there (${roofTopY(x, z, style)})`);
+            // The drawn roof's side runs 1 cm past the cant line, out to the pillars' faces.
+            const lipX = roofAt(z, style).x + 0.09;
+            assert.ok(y <= cantY(z, style) + 1e-6 || Math.abs(x) <= lipX + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands out past the roof's lip (x ${lipX}) over the cant line`);
+          }
+        }
+      }
+    }
+  });
+
+  it("when a style's door glass starts further back than the A-post's width, then a sail fills the gap from the post to the glass at the belt", () => {
+    const sedan = CAR_STYLES.sedan;
+    const moved: BodyStyle = { ...sedan, aPillarFoot: sedan.windshield.base[1] - 0.4 };
+    const [post, sail] = aPillarParts(moved);
+    assert.ok(sail !== undefined, "the sail is drawn");
+    const belt = beltY(moved.aPillarFoot, moved);
+    const lowZ = (g: THREE.BufferGeometry) => {
+      const pos = g.getAttribute("position") as THREE.BufferAttribute;
+      const zs: number[] = [];
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) - belt) < 1e-4) zs.push(pos.getZ(i));
+      return [Math.min(...zs), Math.max(...zs)];
+    };
+    const [[sailRear, sailFront], [postRear]] = [lowZ(sail), lowZ(post!)];
+    assertSameNumbers([sailRear, sailFront], [moved.aPillarFoot, postRear!], "the sail at the belt runs from the door glass's front edge to the post's rear (z)", 1e-5);
+  });
+
+  it("when a style knees its door glass onto the A-post (aPillarKnee), then the glass's front edge meets the post's rear edge there and the sail ends there: a small triangle at the foot, glass over it", () => {
+    const sedan = CAR_STYLES.sedan;
+    const gap: BodyStyle = { ...sedan, pillars: undefined, aPillarFoot: sedan.windshield.base[1] - 0.4 };
+    const knee = beltY(gap.aPillarFoot, gap) + 0.1;
+    const kneed: BodyStyle = { ...gap, aPillarKnee: knee };
+    const top = (g: THREE.BufferGeometry) => partBox(g).max.y;
+    assert.ok(top(aPillarParts(gap)[1]!) > knee + 0.1, "the control: without a knee the sail runs up the post");
+    assert.ok(Math.abs(top(aPillarParts(kneed)[1]!) - knee) < 1e-5, `the sail tops out at the knee ${knee}: ${top(aPillarParts(kneed)[1]!)}`);
+    const pane = makeSideGlass(1, kneed);
+    const pos = pane.getAttribute("position") as THREE.BufferAttribute;
+    const { hingeY, hingeZ } = kneed.door;
+    let front = -Infinity;
+    for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) + hingeY + DOOR_GLASS_SEAT.y - knee) < 1e-5) front = Math.max(front, pos.getZ(i) + hingeZ + DOOR_GLASS_SEAT.z);
+    assert.ok(Math.abs(front - (aPostRearZ(knee, kneed) + 0.01)) < 1e-5, `the door glass's front edge at the knee stands at z ${front}, 1 cm under the post's rear edge ${aPostRearZ(knee, kneed)}`);
+  });
+
+  it("when a style blacks out greenhouse parts, then exactly their drawn vertices turn primer-dark, and the drawn shape and the cage are unchanged", () => {
+    // The style may black out parts of its own: the row's control is the wagon with none.
+    const wagon: BodyStyle = { ...CAR_STYLES.wagon, blackout: undefined };
+    const dark: BodyStyle = { ...wagon, blackout: { b: true, divider: true } };
+    const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
+    const [was, now] = [makeChassisGeometry(wagon), makeChassisGeometry(dark)];
+    const bz = (wagon.bPillar.rear + wagon.bPillar.front) / 2;
+    let turned = 0;
+    for (let i = 0; i < primer(now).count; i++) {
+      if (primer(now).getX(i) === primer(was).getX(i)) continue;
+      turned++;
+      const z = now.getAttribute("position").getZ(i);
+      assert.ok(Math.abs(z - bz) < 0.06 || Math.abs(z - wagon.midPillarZ!) < 0.05, `vertex ${i} at z ${z} turned dark: off the B-pillar (z ${bz}) and the divider (z ${wagon.midPillarZ})`);
+    }
+    const pillars = makeGreenhouseFrame(dark, "drawn").filter((g) => g.userData.blackout === true);
+    assert.equal(pillars.length, 4, "two B-pillars and two dividers");
+    assert.equal(turned, pillars.reduce((n, g) => n + g.getAttribute("position").count, 0), "every vertex of them, no other");
+    const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
+    assert.ok(bits(now) === bits(was), "the drawn body's shape is unchanged");
+    assert.ok(bits(makeChassisGeometry(dark, "cage")) === bits(makeChassisGeometry(wagon, "cage")), "the cage is unchanged");
+    const sailed: BodyStyle = { ...wagon, aPillarFoot: wagon.windshield.base[1] - 0.4, blackout: { a: true, sail: true, rear: true } };
+    const names = makeGreenhouseFrame(sailed, "drawn").filter((g) => g.userData.blackout === true).map((g) => g.name || "rear");
+    assert.ok(names.join(",") === "a,rear,sail,a,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
+  });
+
+  it("when a style sets its B-pillar's width and seats a leaning divider, then the drawn pillars take them at the belt and the top, the side panes tuck under the B-pillar, and the cage keeps its bands", () => {
+    const wagon = CAR_STYLES.wagon;
+    const m = wagon.midPillarZ!;
+    const moved: BodyStyle = { ...wagon, pillars: { b: 0.07, divider: { width: [0.05, 0.04], z: [m - 0.06, m + 0.04] } } };
+    const bz = (wagon.bPillar.rear + wagon.bPillar.front) / 2;
+    // Frame parts per side: A-pillar, B-pillar, C-pillar, divider.
+    const parts = makeGreenhouseFrame(moved, "drawn");
+    const spans = (g: THREE.BufferGeometry) => {
+      const pos = g.getAttribute("position") as THREE.BufferAttribute;
+      const box = partBox(g);
+      const [low, top]: number[][] = [[], []];
+      for (let i = 0; i < pos.count; i++) {
+        if (pos.getY(i) < box.min.y + 0.005) low.push(pos.getZ(i));
+        if (pos.getY(i) > box.max.y - 0.005) top.push(pos.getZ(i));
+      }
+      return [Math.min(...low), Math.max(...low), Math.min(...top), Math.max(...top)];
+    };
+    assertSameNumbers(spans(parts[1]!), [bz - 0.035, bz + 0.035, bz - 0.035, bz + 0.035], "B-pillar z span at the belt and at its top", 1e-5);
+    assertSameNumbers(spans(parts[3]!), [m - 0.085, m - 0.035, m + 0.02, m + 0.06], "divider z span at the belt and at its top", 1e-5);
+    // glassCorners: doorR is pane 3, its rear corners (across 0) at the base and the top; quarterR is pane 5, its front corners (across 1).
+    const c = glassCorners(moved);
+    assertSameNumbers([c[3 * 12 + 2]!, c[3 * 12 + 6 + 2]!, c[5 * 12 + 3 + 2]!, c[5 * 12 + 9 + 2]!], [bz + 0.025, bz + 0.025, bz - 0.025, bz - 0.025], "door glass rear and quarter glass front edges, 1 cm under the B-pillar (z)", 1e-5);
+    const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join("|");
+    assert.ok(cage(moved) === cage(wagon), "the cage greenhouse is unchanged");
   });
 
   it("when the side glass drops less under the roof, then the glass top, the roof's side lip and the pillar tops rise with it", () => {
@@ -625,7 +762,7 @@ describe("given a body style's H2 hardpoints", () => {
     assertSameNumbers([corners[5 * 12 + 6 + 1]!, corners[3 * 12 + 9 + 1]!], [yRear, yFront], "quarter glass rear top y, door glass front top y", 1e-5);
     const [drawn, stock] = [makeGreenhouseFrame(moved, "drawn"), makeGreenhouseFrame(hatch, "drawn")];
     assert.equal(drawn.length - stock.length, 2, "one fill a side");
-    const fill = partBox(drawn[drawn.length - 3]!);
+    const fill = partBox(drawn[drawn.length - 1]!);
     const low = Math.min(yRear, yFront);
     assert.ok(Math.abs(fill.min.y - low) < 1e-4 && fill.max.y > glassTopY(zFront, hatch) - 1e-4, `right fill spans y ${fill.min.y}..${fill.max.y}: from the glass top's low end ${low} up to the cant line`);
     const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join("|");
@@ -674,24 +811,6 @@ describe("given a body style's H2 hardpoints", () => {
     const [movedGap, sedanGap] = [gap(moved), gap(sedan)];
     assert.ok(movedGap - sedanGap >= 0.02, `moved bumper's corner at |x| 0.35-0.45 stands ${movedGap} m behind its middle, the platform wrap's ${sedanGap}: at least 0.02 more`);
     assert.ok(Math.abs(sedanGap) < 0.01, `platform-wrap bumper's corner at |x| 0.35-0.45 stands ${sedanGap} m behind its middle, under 0.01`);
-  });
-
-  it("when any style's header bars are built, then they stay under its roof skin over their ends", () => {
-    for (const id of CAR_STYLE_IDS) {
-      const style = CAR_STYLES[id];
-      const bars = makeGreenhouseFrame(style, "drawn").slice(-2);
-      const specs = [
-        { name: "windshield", width: style.windshield.wTop + 0.1, z: style.windshieldTop[1] - 0.02 },
-        { name: "rear", width: style.rearGlass.wTop + 0.12, z: style.rearGlass.top[1] - 0.02 },
-      ];
-      for (let k = 0; k < specs.length; k++) {
-        const { name, width, z } = specs[k]!;
-        const top = partBox(bars[k]!).max.y;
-        const roof = roofTopY(width / 2, z, style);
-        // 1e-6: the bar's vertices are float32, a ulp at 1.3 m is 1.2e-7.
-        assert.ok(top <= roof + 1e-6, `${id} ${name} header bar tops out at y ${top}, roof skin over its end (x ${width / 2}, z ${z}) at ${roof}`);
-      }
-    }
   });
 
   it("when its door hinge moves with the door's trailing edge kept, then the door glass stays in the same window: it rides on its door's own hinge", () => {
@@ -1329,4 +1448,45 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       assert.ok(cageHash(style) === cageHash(lipless(style)), "the cage build is unchanged");
     });
   }
+});
+
+describe("given every style's doors and the shared door card", () => {
+  it("when a ray from outside meets each style's door skin at every drawn card vertex, then the card stands under the skin's outer face (no dark wedge where the skin tucks in); the sim still measures the card's own box", () => {
+    for (const sign of [-1, 1]) {
+      const card = drawnDoorCard(sign);
+      assert.ok(card !== partGeometry(sign < 0 ? PART_KIND.liningL : PART_KIND.liningR), "the seat's measured geometry is the card's own");
+      const pos = card.getAttribute("position") as THREE.BufferAttribute;
+      const ray = new THREE.Raycaster();
+      for (const id of CAR_STYLE_IDS) {
+        const skin = new THREE.Mesh(makeDoorGeometry(sign, CAR_STYLES[id]));
+        skin.position.z = doorSkinZ(CAR_STYLES[id]);
+        skin.updateMatrixWorld();
+        for (let i = 0; i < pos.count; i++) {
+          ray.set(new THREE.Vector3(sign * 2, pos.getY(i), pos.getZ(i)), new THREE.Vector3(-sign, 0, 0));
+          const hit = ray.intersectObject(skin, false)[0];
+          if (hit) assert.ok(sign * pos.getX(i) < sign * hit.point.x, `${id} side ${sign}: card vertex (${pos.getX(i)}, ${pos.getY(i)}, ${pos.getZ(i)}) stands out of the door skin at x ${hit.point.x}`);
+        }
+        skin.geometry.dispose();
+      }
+    }
+  });
+});
+
+describe("given a style with privacy glass", () => {
+  it("when its car is built, and again after a player recolours its glass, then its rear and quarter panes wear the colour well under half as light, its windshield and door panes the colour itself", () => {
+    const hatch = CAR_STYLES.hatchback;
+    const was = hatch.privacyGlass;
+    hatch.privacyGlass = { rear: true, quarter: true };
+    try {
+      const car = new DeformableCar(PAINT, new THREE.Scene(), null, "hatchback");
+      const light = (name: string) => (car["glassPanes"].find((g) => g.name === name)!.mesh.material as THREE.MeshStandardMaterial).color.getHSL({ h: 0, s: 0, l: 0 }).l;
+      for (const pass of ["built", "recoloured"]) {
+        if (pass === "recoloured") car.setGlassTint(0x6688aa);
+        for (const dark of ["rear", "quarterL", "quarterR"]) assert.ok(light(dark) < 0.5 * light("windshield"), `${pass}: ${dark} ${light(dark)} against the windshield's ${light("windshield")}`);
+        assert.ok(light("doorR") === light("windshield"), `${pass}: the door pane wears the colour itself`);
+      }
+    } finally {
+      hatch.privacyGlass = was;
+    }
+  });
 });
