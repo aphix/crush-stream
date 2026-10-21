@@ -25,7 +25,7 @@ export const HATCHBACK: BodyStyle = {
       wrap: { from: 0.46, back: 0.1 },
     },
   },
-  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.86, halfHeight: 0.3, mirrorY: 0.32, mirrorZ: 0.185, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.21, 0.62] },
+  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.86, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.21, 0.62] },
   aPillarFoot: 0.73,
   aPillarTop: 0.3,
   glassTop: 0.045,
@@ -72,6 +72,8 @@ export const HATCHBACK: BodyStyle = {
   boot: { kind: "tailgate", y0: 0.57, origin: [0.93, -1.625], z0: -1.76 },
   lamps: { head: [0.34, 0.54], tail: [0.59, 0.72] },
   seats: PLATFORM_HARDPOINTS.seats,
+  roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.5 } },
+  exhaust: { tips: 2, x: 0.55, y: 0.32, size: [0.075, 0.045], shape: "round" },
   details: {
     lines: [
       { view: "top", points: [[1.68, 0], [1.69, 0.36], [1.64, 0.62], [1.55, 0.68]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
