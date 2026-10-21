@@ -182,9 +182,12 @@ and interleaved where the effect is small; "n" is the number of pairs.
 
 The real `CrashEngine` drawing in node, for shots, counts and link checks without a browser. `engine-headless.test-util.ts`
 boots it; the script swaps in a real WebGL2 context (`@kmamal/gl` 10.0.0-2, a BSD-2 fork of headless-gl: ANGLE over the
-host's GL), Skia canvases (`@napi-rs/canvas` 1.0.12) for the game's procedural textures, and the page's files from
+host's GL), Skia canvases (`@napi-rs/canvas` 1.0.11) for the game's procedural textures, and the page's files from
 `public/`. A pinned-seed derby 8 s past its start is drawn through the engine's own frame (`tickInner`, then `PostFX` at
-the tier) and written as a PNG, with one JSON line on stdout.
+the tier) and written as a PNG, with one JSON line on stdout. `--hash <share link #>` boots another scene instead (e.g.
+`scene=garage&car=sedan`), `--camera radius,pitch,angle` frames the orbit camera by hand (readme-shots' `frame()`), and
+`--at <s>` sets the sim seconds before the drawn frames. The counts are the last frame whole: the script holds
+`renderer.info.autoReset` off and resets it before each drawn frame, as the bench does.
 
 - **For:** shots and before/after diffs (`--root <other checkout>`: same seed, same clock; two runs of one tree give
   byte-identical PNGs, and so do two checkouts of one commit), the frame's counts per tier (`renderer.info`: calls,

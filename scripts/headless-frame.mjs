@@ -2,14 +2,16 @@
 /**
  * The game's real `CrashEngine` drawing in node, for shots, counts and link checks: WebGL2 through headless GL (`@kmamal/gl`,
  * ANGLE on the host's GL), the game's own canvases through Skia (`@napi-rs/canvas`), the page's files read from `public/`. A derby
- * field past its green light, drawn by the engine's own frame at one FX tier, is written as a PNG, with one JSON line on stdout:
- * the GPU, a yardstick shader's ms (a CPU rasterizer shows here), the frame's counts, and every program that failed to link. Exit 1
- * on a link failure or a GL error. Not a frame-time judge: the browser bench is.
+ * field past its green light (or the scene a share `--hash` names), drawn by the engine's own frame at one FX tier, is written as a
+ * PNG, with one JSON line on stdout: the GPU, a yardstick shader's ms (a CPU rasterizer shows here), the frame's counts, and every
+ * program that failed to link. Exit 1 on a link failure or a GL error. Not a frame-time judge: the browser bench is.
  *
  *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png]
- *     [--frames 60] [--size 1280x800] [--root <checkout>]
+ *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--at 8]
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
+ * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
+ * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--at` is the sim seconds before the drawn frames.
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -20,8 +22,10 @@ import { parseArgs } from "node:util";
 
 /** Any fixed seed: the same derby field in both trees of a diff. */
 const SEED = 12641919;
-/** Sim seconds after the derby starts before the drawn frames: the derby tests' wait, past the green light with the field engaged. */
+/** Sim seconds before the drawn frames, by default: the derby tests' wait, past the green light with the field engaged. */
 const START_S = 8;
+/** Sim seconds a hand `--camera` framing gets to settle before the drawn frames (readme-shots' `at: 0.3`). */
+const FRAMING_S = 0.3;
 /** What the sim's pacer reads as its clock advances by on every read, so its time budget never depends on the host's speed. */
 const PACE_STEP_S = 0.001;
 /** The yardstick shader's timed frames. */
@@ -45,14 +49,21 @@ const { values } = parseArgs({
     frames: { type: "string", default: "60" },
     size: { type: "string", default: "1280x800" },
     root: { type: "string", default: join(import.meta.dirname, "..") },
+    hash: { type: "string" },
+    camera: { type: "string" },
+    at: { type: "string", default: String(START_S) },
   },
 });
 const root = resolve(values.root);
 const tier = values.tier;
 const frames = Number(values.frames);
 const size = /^(\d+)x(\d+)$/.exec(values.size);
+const atS = Number(values.at);
+const camera = values.camera?.split(",").map(Number);
 if (!Number.isInteger(frames) || frames < 1) throw new Error(`--frames ${values.frames}: a whole number of frames, at least 1`);
 if (size === null) throw new Error(`--size ${values.size}: width x height, e.g. 1280x800`);
+if (!(atS >= 0)) throw new Error(`--at ${values.at}: sim seconds, 0 or more`);
+if (camera !== undefined && (camera.length !== 3 || !camera.every(Number.isFinite))) throw new Error(`--camera ${values.camera}: radius,pitch,angle, e.g. 2.4,0.12,2.1`);
 const W = Number(size[1]);
 const H = Number(size[2]);
 const out = resolve(values.out ?? `screenshots/headless-frame-${tier}.png`);
@@ -89,6 +100,7 @@ const renderer = nativeRenderer(gl);
 stubBrowser();
 const page = new URL(location.href);
 location.search = `?fx=${tier}`;
+if (values.hash !== undefined) location.hash = `#${values.hash.replace(/^#/, "")}`;
 const stubElement = document.createElement;
 document.createElement = (tag) => (tag === "canvas" ? Object.assign(createCanvas(1, 1), { style: {}, addEventListener() {}, removeEventListener() {}, setAttribute() {} }) : stubElement(tag));
 Object.assign(globalThis, {
@@ -175,9 +187,15 @@ engine.fadeScenes = false;
 engine.pinnedSeed = SEED;
 let paceClock = 0;
 engine.pace.now = () => (paceClock += PACE_STEP_S);
-engine.toggleDerby();
-engine.advance(START_S, { frameDt: FRAME });
+if (values.hash === undefined) engine.toggleDerby();
+engine.advance(atS, { frameDt: FRAME });
 await settle();
+if (camera !== undefined) {
+  const [radius, pitch, angle] = camera;
+  Object.assign(engine.view, { userFramed: true, radius, pitch, angle });
+  engine.advance(FRAMING_S, { frameDt: FRAME });
+  await settle();
+}
 const notDrawn = new Set();
 // three draws on with a program that failed to link, a GL error per draw: the quirk's meshes leave the camera's layer for the drawn
 // frames, and the errors their draws left so far are dropped, so `glError` speaks for the drawn frames.
@@ -210,7 +228,7 @@ mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, await shot.encode("png"));
 
 engine.dispose();
-const result = { root, tier, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
+const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
 process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 
