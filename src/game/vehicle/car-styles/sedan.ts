@@ -1,5 +1,6 @@
 import type { BodyStyle } from "../car-variants.ts";
 import { CABIN_TUB, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+import { SEDAN_DETAILS } from "./sedan-details.ts";
 
 export const SEDAN: BodyStyle = {
   id: "sedan",
@@ -14,7 +15,7 @@ export const SEDAN: BodyStyle = {
     front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.34, z: 1.965 }, span: 0.74, wrap: { from: 0.33, back: 0.242 } },
     rear: { ...PLATFORM_HARDPOINTS.bumpers.rear, seat: { y: 0.52, z: 2.088 }, span: 0.76, wrap: { from: 0.3, back: 0.25 } },
   },
-  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.36, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74] },
+  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.3, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74] },
   underside: [
     [-2.14, 0.35],
     [-2.04, 0.275],
@@ -71,5 +72,6 @@ export const SEDAN: BodyStyle = {
   rearDoorSeam: -1.06,
   boot: { kind: "lid", z0: -1.65, z1: -2.06, origin: [0.97, -1.62] },
   lamps: { head: [0.34, 0.57], tail: [0.34, 0.8] },
+  details: SEDAN_DETAILS,
   rig: {},
 };

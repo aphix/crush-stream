@@ -1,5 +1,6 @@
 import type { BodyStyle } from "../car-variants.ts";
 import { SEDAN } from "./sedan.ts";
+import { POLICE_DETAILS } from "./sedan-details.ts";
 
 /** Black body and trim, white doors: the cop's two-tone; `present/cop-livery.ts` paints the white roof, pillars and door lettering in it. */
 export const COP_LIVERY = { body: 0x0c0d0f, doors: 0xeef0f2, accent: 0x16171a } as const;
@@ -14,5 +15,6 @@ export const POLICE: BodyStyle = {
   livery: COP_LIVERY,
   lightBar: true,
   pushBar: true,
+  details: POLICE_DETAILS,
   rig: { cages: { roof: { min: [-0.58, 1.02, -0.7], max: [0.58, 1.52, 0.56] } } },
 };
