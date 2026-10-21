@@ -27,7 +27,7 @@ import {
   type LampKind,
   shadowOnlyMaterial,
 } from "./car-materials.ts";
-import { carPartSeats, MIRROR_REACH, PART_KIND, PartSeat } from "./part-geometry.ts";
+import { carPartSeats, MIRROR_REACH, PART_KIND, PartSeat, styleMirrorDrawn } from "./part-geometry.ts";
 import { bumperBare, CarCabin } from "./interior.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
@@ -459,13 +459,14 @@ export abstract class CarCore {
 
     const seatX = mirrorSeatX(this.style);
     this.mirrorL = this.partSeats[PART_KIND.mirrorL]!;
-    this.mirrorL.position.set(-seatX, door.mirrorY, -(door.mirrorZ ?? 0));
-    this.mirrorL.scale.x = door.mirrorReach / MIRROR_REACH;
-    this.doorL.add(this.mirrorL);
     this.mirrorR = this.partSeats[PART_KIND.mirrorR]!;
-    this.mirrorR.position.set(seatX, door.mirrorY, -(door.mirrorZ ?? 0));
-    this.mirrorR.scale.x = door.mirrorReach / MIRROR_REACH;
-    this.doorR.add(this.mirrorR);
+    for (const [seat, sign, doorGroup] of [[this.mirrorL, -1, this.doorL], [this.mirrorR, 1, this.doorR]] as const) {
+      seat.position.set(sign * seatX, door.mirrorY, -(door.mirrorZ ?? 0));
+      seat.scale.x = door.mirrorReach / MIRROR_REACH;
+      ({ variant: seat.variant, geometry: seat.drawn } = styleMirrorDrawn(this.style, sign));
+      doorGroup.add(seat);
+    }
+    this.setMirrorPaint(livery?.doors ?? paint.body);
 
     this.addGlass();
     this.registerParts();
@@ -698,6 +699,12 @@ export abstract class CarCore {
   protected wearGlass(g: GlassPane, look: GlassLook): void {
     g.look = look;
     g.mesh.material = glassMaterial(look, g.tint);
+  }
+
+  /** The door paint (sRGB) a body-colour mirror cap (`door.mirror.finish` "body") takes; other caps keep their finish. */
+  setMirrorPaint(color: number): void {
+    this.mirrorL.tint.setHex(color);
+    this.mirrorR.tint.setHex(color);
   }
 
   /** The player's glass colour (`car-look.ts`): every pane keeps its look, in `color`. */
