@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { HEAD_LAMP, PLATFORM_HARDPOINTS, st } from "./platform.ts";
+import { PLATFORM_HARDPOINTS, st } from "./platform.ts";
 
 const { bumpers } = PLATFORM_HARDPOINTS;
 /** Black steel bar bumper, 28 cm tall with a flat face 9 cm proud ([y, out] m, top to bottom). */
@@ -55,7 +55,7 @@ export const MONSTER: BodyStyle = {
   tubs: [[-0.76, 0.96, 0.5], [-2.26, -0.82, 0.62]],
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
-  lamps: { head: HEAD_LAMP, tail: [0.7, 0.8] },
+  lamps: { head: [0.5, 0.62], tail: [0.73, 0.8] },
   details: {
     lines: [
       { view: "side", points: [[0.72, 0.948], [0.713, 0.406]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
