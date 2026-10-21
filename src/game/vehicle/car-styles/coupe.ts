@@ -17,6 +17,18 @@ const MUSCLE_FRONT_FASCIA = [
   [-0.135, -0.07],
 ] as const;
 
+/** Chrome rear bar under the tail-lamp band: 12 cm tall, 6 cm proud, rounded top and bottom, no splitter ([y, out] m, top to bottom). */
+const MUSCLE_REAR_FASCIA = [
+  [0.06, -0.06],
+  [0.06, 0.02],
+  [0.05, 0.05],
+  [0.02, 0.06],
+  [-0.02, 0.06],
+  [-0.05, 0.05],
+  [-0.06, 0.02],
+  [-0.06, -0.06],
+] as const;
+
 /** Late-70s notchback muscle coupe (Celica Supra A40 proportions): long flat hood, flat roof, sloped rear glass, short ducktail deck. */
 export const COUPE: BodyStyle = {
   id: "coupe",
@@ -34,7 +46,7 @@ export const COUPE: BodyStyle = {
   hood: { z0: 0.64, z1: 1.93, origin: [0.8, 0.62] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.366, z: 1.925 }, span: 0.6, wrap: { from: 0.3, back: 0.1 }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
-    rear: { ...bumpers.rear, seat: { y: 0.41, z: 2.02 }, span: 0.6, wrap: { from: 0.1, back: 0.25 }, trim: "chrome" },
+    rear: { ...bumpers.rear, seat: { y: 0.44, z: 2.0475 }, span: 0.72, wrap: { from: 0.55, back: 0.1 }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome" },
   },
   profile: [
     st(-2.054, 0.57, 0.87),
