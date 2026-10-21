@@ -1,8 +1,8 @@
 import * as THREE from "three";
-import { loosePartsMaterial, partsMaterial, shadowOnlyMaterial } from "./car-materials.ts";
+import { INSTANCE_MIRROR_VARIANT_ATTRIBUTE, loosePartsMaterial, mirrorPartsMaterial, partsMaterial, shadowOnlyMaterial } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS } from "./car-variants.ts";
-import { PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
+import { mirrorBatchGeometry, PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
 
 /** A caster's stand-in until its style's first car syncs: the program links at the warm, before any car of the style draws. */
 const NO_CASTER = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([], 3));
@@ -10,6 +10,7 @@ const NO_CASTER = new THREE.BufferGeometry().setAttribute("position", new THREE.
 /**
  * Every car's static parts (cabin, door cards, mirrors, grille, tail trim, seats, wheel, engine bay, crash bars) as one instanced draw per
  * kind. A loose part draws as its own mesh; a cut seat (layer 0 off, `CarDetail`), a hidden car or a seat whose `showIf` fails draws nothing.
+ * Each mirror draw holds every style's mirror: an instance carries its car's variant and door paint (`mirrorPartsMaterial`).
  */
 export class PartBatch {
   readonly meshes: readonly THREE.InstancedMesh[];
@@ -21,13 +22,24 @@ export class PartBatch {
   private readonly counts = new Int32Array(PART_KINDS.length);
   /** Instances each kind holds: `cars` cars' worth (`PART_PER_CAR`). */
   private readonly capacity: Int32Array;
+  /** Per kind, its instances' mirror variants; null for a kind that is not a mirror. */
+  private readonly variants: (THREE.InstancedBufferAttribute | null)[] = [];
+  /** Per kind, then per style's caster, the per-instance attributes a sync uploads. */
+  private readonly uploads: THREE.InstancedBufferAttribute[][] = [];
 
   constructor(cars: number) {
     this.capacity = Int32Array.from(PART_KINDS, (kind) => cars * PART_PER_CAR[kind]!);
     const meshes: THREE.InstancedMesh[] = [];
     for (const kind of PART_KINDS) {
-      const mesh = new THREE.InstancedMesh(partGeometry(kind), partsMaterial(), this.capacity[kind]!);
+      const side = kind === PART_KIND.mirrorL ? -1 : kind === PART_KIND.mirrorR ? 1 : 0;
+      const capacity = this.capacity[kind]!;
+      const geometry = side === 0 ? partGeometry(kind) : mirrorBatchGeometry(side, capacity);
+      const mesh = new THREE.InstancedMesh(geometry, side === 0 ? partsMaterial() : mirrorPartsMaterial(), capacity);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      const variants = side === 0 ? null : (geometry.getAttribute(INSTANCE_MIRROR_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute);
+      if (variants) mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.DynamicDrawUsage);
+      this.variants.push(variants);
+      this.uploads.push(variants ? [mesh.instanceMatrix, mesh.instanceColor!, variants] : [mesh.instanceMatrix]);
       // Instances span the pad and move every frame; a stale bound would cull live parts.
       mesh.frustumCulled = false;
       mesh.count = 0;
@@ -44,6 +56,7 @@ export class PartBatch {
       mesh.count = 0;
       mesh.castShadow = true;
       mesh.receiveShadow = false;
+      this.uploads.push([mesh.instanceMatrix]);
       return mesh;
     });
     this.looseWarm.name = "warm-loose-part";
@@ -69,7 +82,13 @@ export class PartBatch {
         const kind = seat.kind;
         const n = counts[kind]!;
         if (!shown || !seat.layers.isEnabled(0) || n >= this.capacity[kind]! || (seat.showIf !== null && !seat.showIf())) continue;
-        this.meshes[kind]!.setMatrixAt(n, seat.matrixWorld);
+        const mesh = this.meshes[kind]!;
+        mesh.setMatrixAt(n, seat.matrixWorld);
+        const variants = this.variants[kind];
+        if (variants) {
+          variants.setX(n, seat.variant);
+          mesh.setColorAt(n, seat.tint);
+        }
         counts[kind] = n + 1;
       }
       const caster = car.shadowCaster;
@@ -83,21 +102,27 @@ export class PartBatch {
       mesh.setMatrixAt(n, caster.matrixWorld);
       casterCounts[style] = n + 1;
     }
-    for (let s = 0; s < this.casters.length; s++) this.publish(this.casters[s]!, casterCounts[s]!);
-    for (let k = 0; k < this.meshes.length; k++) this.publish(this.meshes[k]!, counts[k]!);
+    const kinds = this.meshes.length;
+    for (let s = 0; s < this.casters.length; s++) this.publish(this.casters[s]!, casterCounts[s]!, this.uploads[kinds + s]!);
+    for (let k = 0; k < kinds; k++) this.publish(this.meshes[k]!, counts[k]!, this.uploads[k]!);
   }
 
-  private publish(mesh: THREE.InstancedMesh, n: number): void {
+  private publish(mesh: THREE.InstancedMesh, n: number, uploads: readonly THREE.InstancedBufferAttribute[]): void {
     mesh.count = n;
-    const attr = mesh.instanceMatrix;
-    attr.clearUpdateRanges();
-    attr.addUpdateRange(0, n * 16);
-    attr.needsUpdate = true;
+    for (const attr of uploads) {
+      attr.clearUpdateRanges();
+      attr.addUpdateRange(0, n * attr.itemSize);
+      attr.needsUpdate = true;
+    }
   }
 
-  /** The batch's geometries and material are shared (never disposed here). */
+  /** The batch's material and its non-mirror geometries are shared (never disposed here); its mirror geometries are its own. */
   dispose(): void {
-    for (const mesh of [...this.meshes, ...this.casters]) mesh.dispose();
+    for (const [k, mesh] of this.meshes.entries()) {
+      mesh.dispose();
+      if (this.variants[k]) mesh.geometry.dispose();
+    }
+    for (const mesh of this.casters) mesh.dispose();
     this.looseWarm.geometry.dispose();
   }
 }

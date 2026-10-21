@@ -33,8 +33,8 @@ const PANEL_STATIONS = 8;
 const PANEL_PROUD = 0.004;
 /** The spoiler's top at its tip stands this share of its height over its underside. */
 const SPOILER_TIP = 0.35;
-/** Exhaust tip: tube `length` (m), its end `pastFace` (m) past the bumper face, a dark throat `throat` of its size standing `throatProud` (m) off its end. */
-const TIP = { length: 0.14, pastFace: 0.025, throat: 0.72, throatProud: 0.002, segments: 14 } as const;
+/** Exhaust tip: tube `length` (m), its end `recess` (m) inside the bumper's rearmost face (tips sit in the lower band; nothing stands past the tail), a dark throat `throat` of its size standing `throatProud` (m) off its end. */
+const TIP = { length: 0.14, recess: 0.004, throat: 0.72, throatProud: 0.002, segments: 14 } as const;
 /** Tow-hitch receiver: `size` (m) square, `length` long, reaching `reach` (m) past the bumper face, its top `tuck` (m) up into the bumper. */
 const HITCH = { size: 0.06, length: 0.3, reach: 0.09, tuck: 0.01 } as const;
 
@@ -136,7 +136,7 @@ export function withRearFittings(bumper: THREE.BufferGeometry, style: BodyStyle)
   if (exhaust) {
     const [w, h] = exhaust.size;
     const round = exhaust.shape === "round";
-    const end = min.z - TIP.pastFace;
+    const end = min.z + TIP.recess;
     for (const x of exhaust.tips === 2 ? [-exhaust.x, exhaust.x] : [exhaust.x]) {
       const y = exhaust.y - seat.y;
       const tube = round ? new THREE.CylinderGeometry(0.5, 0.5, TIP.length, TIP.segments).rotateX(Math.PI / 2).scale(w, h, 1) : new THREE.BoxGeometry(w, h, TIP.length);
