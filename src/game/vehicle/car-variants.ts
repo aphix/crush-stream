@@ -124,6 +124,8 @@ export interface BodyStyle {
   livery?: Livery;
   /** Roof light bar with red / blue sirens (`DeformableCar.setSirens`). */
   lightBar?: boolean;
+  /** Push bar in front of the front bumper, drawn in its trim (`withPushBar`). */
+  pushBar?: boolean;
 }
 
 export const CAR_STYLES: Readonly<Record<CarStyleId, BodyStyle>> = {
