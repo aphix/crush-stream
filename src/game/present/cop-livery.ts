@@ -82,7 +82,7 @@ function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
         if (face === SPRAY_FACE.top) ink = greenhouse ? WHITE : 0;
         else {
           if (y > GLASS_BELT_Y ? greenhouse : y > sill && z > doorRear && z < doorFront) ink = WHITE;
-          // The word reads from the viewer's left on each flank: front to rear on the right (+x), rear to front on the left.
+          // The word reads left to right to someone facing each flank: front to rear on the +x face, rear to front on the −x face.
           const along = face === SPRAY_FACE.right ? wordMid + WORD_LENGTH / 2 - z : z - (wordMid - WORD_LENGTH / 2);
           if (onWord(along, y - baseline)) ink = BLACK;
         }

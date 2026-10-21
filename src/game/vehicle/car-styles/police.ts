@@ -13,5 +13,6 @@ export const POLICE: BodyStyle = {
   id: "police",
   livery: COP_LIVERY,
   lightBar: true,
+  pushBar: true,
   rig: { cages: { roof: { min: [-0.58, 1.02, -0.7], max: [0.58, 1.52, 0.56] } } },
 };

@@ -54,8 +54,8 @@ describe("given the police style's livery drawn into a spray bitmap", () => {
   });
 
   it("when a car with no light bar asks for it, then there is none", () => {
-    assert.equal(copSpray(CAR_STYLES.sedan), null);
-    assert.equal(copPaint(CAR_STYLES.sedan, CAR_SPRAY), null);
+    assert.ok(copSpray(CAR_STYLES.sedan) === null, "a sedan has no livery bitmap");
+    assert.ok(copPaint(CAR_STYLES.sedan, CAR_SPRAY) === null, "a sedan has no livery paint");
   });
 });
 
@@ -92,7 +92,8 @@ describe("given the real engine with every car built as police", () => {
     engine.useOneBody("police");
     const cop = engine["cars"][1]!;
     assert.equal(cop.style.id, "police");
-    assert.equal(compiledUniforms(cop.lookMeshes().bodyPaint).sprayMap?.value, copSpray(CAR_STYLES.police)!.texture);
+    // Identity, not assert.equal: a failing equal inspects both textures in full (megabytes of texels).
+    assert.ok(compiledUniforms(cop.lookMeshes().bodyPaint).sprayMap?.value === copSpray(CAR_STYLES.police)!.texture, "the cop's paint samples its livery bitmap");
   });
 
   it("when the player's own cop has a red dot sprayed on the roof, then its bare texels show the livery, the dot keeps its red, and the bitmap packs as it did without the livery", () => {
