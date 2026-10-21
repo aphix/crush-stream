@@ -1,0 +1,34 @@
+import type { BodyStyle } from "../car-variants.ts";
+import { BOOT_SENSOR, FRONT_CLIP, HEAD_LAMP, REAR_DOOR_SEAM, st, TAILGATE_BULKHEAD } from "./platform.ts";
+
+export const HATCHBACK: BodyStyle = {
+  id: "hatchback",
+  profile: [
+    st(-2.11, 0.74, 0.84),
+    st(-1.92, 0.83, 0.855),
+    st(-1.62, 0.875, 0.845, 1.0, 0.52, 0.3),
+    st(-1.36, 0.88, 0.835, 1.29, 0.58, 1),
+    st(-0.78, 0.89, 0.82, 1.34, 0.6, 1),
+    st(-0.18, 0.89, 0.82, 1.36, 0.62, 1),
+    st(0.42, 0.88, 0.81, 1.31, 0.6, 1),
+    ...FRONT_CLIP,
+  ],
+  roofZ: [-1.32, 0.58],
+  windshieldTop: [1.27, 0.49],
+  rearGlass: { base: [0.87, -1.84], top: [1.27, -1.33], wBase: 1.34, wTop: 1.04 },
+  quarter: { zRearBot: -1.36, zRearTop: -1.12 },
+  midPillarZ: null,
+  rearBulkhead: TAILGATE_BULKHEAD,
+  tubs: [[-1.82, 0.7, 0.3]],
+  rearDoorSeam: REAR_DOOR_SEAM,
+  boot: { kind: "tailgate", y0: 0.46, origin: [0.83, -2.115] },
+  lamps: { head: HEAD_LAMP, tail: [0.675, 0.645] },
+  rig: {
+    cages: {
+      roof: { min: [-0.58, 1.02, -1.36], max: [0.58, 1.36, 0.56] },
+      glassRear: { min: [-0.66, 0.8, -1.92], max: [0.66, 1.32, -1.26] },
+      boot: { min: [-0.76, 0.42, -2.18], max: [0.76, 0.9, -1.72] },
+    },
+    sensors: { [BOOT_SENSOR]: [0, 0.66, -1.98] },
+  },
+};
