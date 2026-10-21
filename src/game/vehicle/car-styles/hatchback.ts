@@ -26,7 +26,7 @@ export const HATCHBACK: BodyStyle = {
     },
   },
   door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.68, length: 0.91, halfHeight: 0.3, mirrorY: 0.365, mirrorZ: 0.235, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.21, 0.67] },
-  aPillarFoot: 0.6,
+  aPillarFoot: 0.66,
   underside: [[-1.791, 0.456], [-1.759, 0.278], [-1.705, 0.225], [-1.652, 0.207], [-1.57, 0.214], [-1.559, 0.203], [-0.625, 0.168], [-0.611, 0.153], [0.577, 0.153], [0.591, 0.168], [0.687, 0.168], [1.618, 0.15], [1.682, 0.164], [1.729, 0.21], [1.782, 0.3], [1.8, 0.367]],
   profile: [
     st(-1.7, 0.66, 0.62),
