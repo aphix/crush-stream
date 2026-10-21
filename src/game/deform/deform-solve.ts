@@ -19,7 +19,7 @@ import { ENGINE_SLACK } from "./deform-contact.ts";
 import { DeformFreeze } from "./deform-freeze.ts";
 import { HUB_OVERRUN, type MassNode } from "./deform-rig.ts";
 import { FACE_TOP } from "./load-crush.ts";
-import { ENGINE_PACK_GAP, PLANT_QUIET, TYRE_R, WHEEL_DIAMETER } from "./deform-state.ts";
+import { ENGINE_PACK_GAP, PLANT_QUIET } from "./deform-state.ts";
 import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn-hold.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
  import { CONTACT_WINDOW, MIN_INV_MASS, SQUASH_REACH } from "./constants.ts";
@@ -47,11 +47,6 @@ const _pq = new Float64Array(PQ_SIZE);
 const _read = new Float64Array(2);
 const READ_H = 0;
 const READ_GRIP = 1;
-/** How far (m, plan) fore and aft of a wreck's hub `sampleGround` also reads what its tyre can rest on, and how far (m) the
- *  tyre's arc stands there over its bottom: R − √(R² − d²), its whole radius at d = R. */
-const TREAD_FORE = TYRE_R;
-const TREAD_DROP = TYRE_R - Math.sqrt(TYRE_R * TYRE_R - TREAD_FORE * TREAD_FORE);
-
 /** The ground under the query point `_pq` into `_read`: its height (`READ_H`) and, with `grip`, the grip there (`READ_GRIP`). */
 function readGround(ground: Ground, grip: boolean): void {
   const h = heightIn(ground, _pq, grip);
@@ -299,7 +294,7 @@ export abstract class DeformSolve extends DeformFreeze {
         const c4 = !sideHit && front === iz < 0 && this.hitSpeed >= HUB_POP_MPS && Math.abs(this.impactLocal.x) >= 0.2 && cw > 0.6 && crushed >= reach - TYRE_REACH;
         if (c4 || (front ? corner.rest.z - corner.local.z : corner.local.z - corner.rest.z) >= reach - HUB_OVERRUN) this.popHub(m);
       }
-      if (!m.popped && hypot2(m.shoveX, m.shoveZ) > WHEEL_DIAMETER) this.popHub(m);
+      if (!m.popped && hypot2(m.shoveX, m.shoveZ) > 2 * this.rig.tyre.r) this.popHub(m);
       if (!m.popped) {
         dx = m.shoveX;
         dz = m.shoveZ;
@@ -713,16 +708,20 @@ export abstract class DeformSolve extends DeformFreeze {
 
   /** A course's ground (hills, bridge decks; 0 and grip 1 on the flat pad) under every dynamic mass on its own layer, and the
    *  grip where there is ground. An attached hub's is what its tyre rests on, the highest ground within its radius: the read
-   *  under it and one `TREAD_FORE` fore and aft along its heading, each lowered by the tyre's arc there. The centre alone
+   *  under it and one `treadFore` fore and aft along its heading, each lowered by the tyre's arc there. The centre alone
    *  read a wedge's gap floor 1.2 m down under a hub 2 cm short of its high end, holding the frame 0.25 m under its cell
    *  until the anchor's read stepping onto the wedge snapped it up in one slice (19.7 m/s). The side points are read only
-   *  where `staticTop` within `TREAD_FORE` of the hub, lowered by `TREAD_DROP`, is above the centre's read. The grip is read
+   *  where `staticTop` within `treadFore` of the hub, lowered by `treadDrop`, is above the centre's read. The grip is read
    *  once, at the read that wins. */
   protected sampleGround(floor: Float64Array, grip: Float64Array | null): void {
     const ground = activeGround();
     const withGrip = grip !== null;
-    const fx = detSin(this.prevYaw) * TREAD_FORE;
-    const fz = detCos(this.prevYaw) * TREAD_FORE;
+    const r = this.rig.tyre.r;
+    // How far (m, plan) fore and aft of a hub the tyre's rest is also read, and its arc's rise there: R − √(R² − d²).
+    const treadFore = r;
+    const treadDrop = r - Math.sqrt(r * r - treadFore * treadFore);
+    const fx = detSin(this.prevYaw) * treadFore;
+    const fz = detCos(this.prevYaw) * treadFore;
     for (let i = 0; i < this.masses.length; i++) {
       const m = this.masses[i]!;
       if (!m.dynamic) continue;
@@ -734,13 +733,13 @@ export abstract class DeformSolve extends DeformFreeze {
       let h = _read[READ_H]!;
       // The highest of the three; on a tie the centre's, then the aft one's.
       let side = 0;
-      if (m.hub && !m.popped && staticTop(ground, w.x - TREAD_FORE, w.x + TREAD_FORE, w.z - TREAD_FORE, w.z + TREAD_FORE) - TREAD_DROP > h) {
+      if (m.hub && !m.popped && staticTop(ground, w.x - treadFore, w.x + treadFore, w.z - treadFore, w.z + treadFore) - treadDrop > h) {
         _pq[PQ_X] = w.x - fx;
         _pq[PQ_Z] = w.z - fz;
-        const aft = heightIn(ground, _pq) - TREAD_DROP;
+        const aft = heightIn(ground, _pq) - treadDrop;
         _pq[PQ_X] = w.x + fx;
         _pq[PQ_Z] = w.z + fz;
-        const fore = heightIn(ground, _pq) - TREAD_DROP;
+        const fore = heightIn(ground, _pq) - treadDrop;
         if (aft > h) {
           h = aft;
           side = -1;

@@ -1,9 +1,7 @@
 import * as THREE from "three";
-import { TYRE_HALF_W } from "../deform/deform-contact.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
-import { WHEEL_POS } from "./car-mesh.ts";
+import type { CarFrame } from "./car-rig.ts";
 
 /** How far (m) a held skin point stands over the tyre: the triangles between held points sag under their chords (edges up to 25 cm over a tyre). */
 const TYRE_GAP = 0.05;
@@ -30,8 +28,8 @@ function matrixIn(root: THREE.Object3D, obj: THREE.Object3D, out: THREE.Matrix4)
   return out;
 }
 
-/** How far (m) point `i` of `pos` stands over the upper surface of the tyre of hub h, unit axle a and scale `scale`, less `gap`; the surface carried on past its edges at `FALL`. */
-function clearOver(pos: ArrayLike<number>, i: number, h: ArrayLike<number>, a: ArrayLike<number>, scale: number, gap: number): number {
+/** How far (m) point `i` of `pos` stands over the upper surface of tyre `tyre` of hub h, unit axle a and scale `scale`, less `gap`; the surface carried on past its edges at `FALL`. */
+function clearOver(tyre: CarFrame["rig"]["tyre"], pos: ArrayLike<number>, i: number, h: ArrayLike<number>, a: ArrayLike<number>, scale: number, gap: number): number {
   const dx = pos[i]! - h[0]!;
   const dy = pos[i + 1]! - h[1]!;
   const dz = pos[i + 2]! - h[2]!;
@@ -41,8 +39,8 @@ function clearOver(pos: ArrayLike<number>, i: number, h: ArrayLike<number>, a: A
   const up = -fz * a[1]! * dx + (fz * a[0]! - fx * a[2]!) * dy + fx * a[1]! * dz;
   const ahead = dx * fx + dz * fz;
   const along = dx * a[0]! + dy * a[1]! + dz * a[2]!;
-  const r = TYRE_R * scale;
-  const top = Math.sqrt(Math.max(0, r * r - ahead * ahead)) - FALL * (Math.max(0, Math.abs(ahead) - r) + Math.max(0, Math.abs(along) - TYRE_HALF_W * scale));
+  const r = tyre.r * scale;
+  const top = Math.sqrt(Math.max(0, r * r - ahead * ahead)) - FALL * (Math.max(0, Math.abs(ahead) - r) + Math.max(0, Math.abs(along) - tyre.halfW * scale));
   return up - top - gap;
 }
 
@@ -113,6 +111,7 @@ function restEdges(rest: Float32Array, index: THREE.BufferAttribute | null): Res
  * Each hold starts from the skin as last written, so the hold is a function of that skin and the wheels: no history, and it moves smoothly with the tyre.
  */
 export class TyreSkin {
+  private readonly frame: CarFrame;
   private readonly mesh: THREE.Mesh;
   private readonly rest: Float32Array;
   private readonly edges: RestEdges;
@@ -129,7 +128,8 @@ export class TyreSkin {
   private hasWritten = false;
 
   /** `rest`: the mesh's rest positions in its own frame. */
-  constructor(mesh: THREE.Mesh, rest: Float32Array) {
+  constructor(frame: CarFrame, mesh: THREE.Mesh, rest: Float32Array) {
+    this.frame = frame;
     this.mesh = mesh;
     this.rest = rest;
     this.edges = restEdges(rest, mesh.geometry.index);
@@ -153,13 +153,14 @@ export class TyreSkin {
     _a[1] = 0;
     _a[2] = 0;
     for (let w = 0; w < wheels.length; w++) {
-      _hub.set(WHEEL_POS[w]![0], WHEEL_POS[w]![1] + hubShift, WHEEL_POS[w]![2]).applyMatrix4(_mesh);
+      const hub = this.frame.wheels[w]!;
+      _hub.set(hub[0], hub[1] + hubShift, hub[2]).applyMatrix4(_mesh);
       _h[0] = _hub.x;
       _h[1] = _hub.y;
       _h[2] = _hub.z;
       const over = (this.over[w] ??= new Float32Array(this.rest.length / 3));
       for (let i = 0; i < this.rest.length; i += 3) {
-        const c = clearOver(this.rest, i, _h, _a, scale, 0);
+        const c = clearOver(this.frame.rig.tyre, this.rest, i, _h, _a, scale, 0);
         over[i / 3] = c >= -REST_SLACK && c < REACH ? c : NaN;
       }
     }
@@ -221,7 +222,7 @@ export class TyreSkin {
     for (let v = 0; v < over.length; v++) {
       const rested = over[v]!;
       if (Number.isNaN(rested)) continue;
-      const c = clearOver(pos, v * 3, _h, _a, scale, Math.min(TYRE_GAP, rested));
+      const c = clearOver(this.frame.rig.tyre, pos, v * 3, _h, _a, scale, Math.min(TYRE_GAP, rested));
       if (c >= 0) continue;
       const p = weld[v]!;
       this.lift[p] = Math.max(this.lift[p]!, -c / uy);

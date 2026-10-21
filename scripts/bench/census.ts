@@ -3,7 +3,7 @@
  * run it once), and of the ones that did not, how many were near another car but not closing on it. Read per step from the state before and after it, with no change to the sim:
  *
  *  - near: another car within `CONTACT_REACH + LONE_MARGIN` plus both cars' travel over the step (the lone test's own reach: `loneCars`, `engine/world-step.ts`), by the centres at the step's start;
- *  - hull gap: the larger of the four separating-axis gaps of the two car boxes (`CAR_HALF`, the plan oriented by `fwdFlat`/`rightFlat`): a lower bound of the distance between the hulls;
+ *  - hull gap: the larger of the four separating-axis gaps of the two car boxes (`FLEET_HALF`, the largest style's box, the plan oriented by `fwdFlat`/`rightFlat`): a lower bound of the distance between the hulls;
  *  - closing: the hull gap, less the pair's relative speed over the step (in any direction, a bound on the closing speed whatever the steer), is within `CLOSE_M`;
  *  - not closing: near and not closing, the car-steps a hull-gap lone test could run once;
  *  - false negative: a not-closing car-step after which the car's contact clock moved (a contact of any kind, `lastContact`) while another car's hull gap was under `CLOSE_M`: the contacts a
@@ -17,7 +17,7 @@ import { satCars } from "../../src/game/contact/sat.ts";
 import { CONTACT_REACH, LONE_MARGIN } from "../../src/game/engine/world-step.ts";
 import { HULL_STRIDE, readHull } from "../../src/game/contact/hull-gap.ts";
 import { WORK } from "../../src/game/engine/sim-phases.ts";
-import { CAR_HALF } from "../../src/game/vehicle/car-mesh.ts";
+import { FLEET_HALF } from "../../src/game/vehicle/car-rig.ts";
 import type { SimLike } from "./sim.ts";
 
 /** A pair is closing when its hull gap, less the relative travel of one step, is within this (m): the census's own margin for a steer or a push inside the step. */
@@ -55,12 +55,12 @@ function hullGap(s: Snap, i: number, j: number): number {
       // The axis: the box k's forward (along) or right (across), in plan.
       const ax = along ? s.fx[k]! : s.fz[k]!;
       const az = along ? s.fz[k]! : -s.fx[k]!;
-      const own = along ? CAR_HALF.z : CAR_HALF.x;
+      const own = along ? FLEET_HALF.z : FLEET_HALF.x;
       const o = k === i ? j : i;
       // The other box's extent on that axis.
       const ofx = s.fx[o]!;
       const ofz = s.fz[o]!;
-      const other = CAR_HALF.z * Math.abs(ax * ofx + az * ofz) + CAR_HALF.x * Math.abs(ax * ofz - az * ofx);
+      const other = FLEET_HALF.z * Math.abs(ax * ofx + az * ofz) + FLEET_HALF.x * Math.abs(ax * ofz - az * ofx);
       gap = Math.max(gap, Math.abs(dx * ax + dz * az) - own - other);
     }
   }

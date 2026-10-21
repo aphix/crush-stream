@@ -70,7 +70,7 @@ class WheelLane {
 
 /** The shadow proxy's prism is twelve-sided, of equal area to the tyre's circle so the shadow keeps its size. */
 const SHADOW_SIDES = 12;
-/** Its circumradius (m): the tyre's crown radius (`TYRE_R`, 0.32) times √(π / 3), since a twelve-sided polygon's area is 3 R². */
+/** Its circumradius (m): the platform tyre's crown radius (0.32) times √(π / 3), since a twelve-sided polygon's area is 3 R². */
 const SHADOW_RADIUS = 0.32 * Math.sqrt(Math.PI / 3);
 /** The tyre's width (m) between its shoulders (±0.112 on `TYRE_PROFILE`). */
 const SHADOW_WIDTH = 0.224;

@@ -6,7 +6,7 @@
 import * as THREE from "three";
 import type { CarStyleId } from "./car-variants.ts";
 import { CLASS_HUBS, CLASS_LIFT } from "./constants.ts";
-import { WHEEL_POS } from "./car-mesh.ts";
+import type { CarFrame } from "./car-rig.ts";
 import { MU_TYRE } from "../world/surfaces.ts";
 import { SURFACES } from "../world/catalog.ts";
 import { FRICTION_G } from "../deform/physics-util.ts";
@@ -182,9 +182,6 @@ export const STYLE_CLASS: Readonly<Record<CarStyleId, VehicleClassId>> = {
   pickup: "truck",
   police: "police",
 };
-
-/** Wheel radius of the shared mesh (m); a scaled wheel is lifted to keep its tyre on the ground (`assignClass`) and its tread speed is the hub's × its scale (`rotatingShare`). */
-const WHEEL_RADIUS = 0.32;
 
 export function classStats(id: VehicleClassId): ClassStats {
   return CLASSES[id];
@@ -464,19 +461,19 @@ const ROTATING_PER_RATIO2 = 0.0025;
  * overall ratio that puts the engine at its redline at `ws`, held at 1st's top below it. Gillespie's per-gear value at every gear's top,
  * continuous between: a per-gear step fed the gear back into the spin and hunted at a bucket edge.
  */
-export function rotatingShare(k: ClassStats, ws: number): number {
-  const ratio = (((k.redlineRpm * 2 * Math.PI) / 60) * WHEEL_RADIUS * k.wheelScale) / Math.max(ws, gearHi(k, 0));
+export function rotatingShare(frame: CarFrame, k: ClassStats, ws: number): number {
+  const ratio = (((k.redlineRpm * 2 * Math.PI) / 60) * frame.rig.tyre.r * k.wheelScale) / Math.max(ws, gearHi(k, 0));
   return ROTATING_FIXED + ROTATING_PER_RATIO2 * ratio * ratio;
 }
 
 /**
  * Gillespie ch. 2 traction-limited acceleration, in g, for the class's driveline on front and rear tyre μ `f`, `r`: the static 50/50 split
- * (`WHEEL_POS` ±AXLE) and the longitudinal transfer a·h/L (h the class CG height, L the wheelbase) give front load share ½ − h·a/(gL), rear
+ * (`frame.halfBase` fore and aft) and the longitudinal transfer a·h/L (h the class CG height, L the wheelbase) give front load share ½ − h·a/(gL), rear
  * ½ + h·a/(gL); fwd a = μF g (½ − h a/(gL)) → ½ μF / (1 + μF h/L); rwd ½ μR / (1 − μR h/L); awd (open centre, equal torque) 2 × the weaker
  * axle's limit; 4wd (locked) the axles' limits add with the transfer moving load from front to rear: ½ (μF + μR) / (1 + (h/L)(μF − μR)).
  */
-function tractionG(k: ClassStats, f: number, r: number): number {
-  const h = k.cgHeight / (2 * WHEEL_POS[0]![2]);
+function tractionG(frame: CarFrame, k: ClassStats, f: number, r: number): number {
+  const h = k.cgHeight / (2 * frame.halfBase);
   return k.drive === "fwd" ? (0.5 * f) / (1 + f * h) : k.drive === "rwd" ? (0.5 * r) / (1 - r * h) : k.drive === "awd" ? Math.min(f / (1 + 2 * f * h), r / (1 - 2 * r * h)) : (0.5 * (f + r)) / (1 + h * (f - r));
 }
 
@@ -488,9 +485,9 @@ function tractionG(k: ClassStats, f: number, r: number): number {
  * `MU_TYRE`) gives the layout there against dry asphalt, so a front-driven car loses more of its launch on a loose surface than a rear-driven
  * one and a locked 4wd the least.
  */
-export function tractionLimit(k: ClassStats, muF: number, muR: number, realism: number): number {
+export function tractionLimit(frame: CarFrame, k: ClassStats, muF: number, muR: number, realism: number): number {
   const arcade = k.launch[0] * (k.drive === "fwd" ? muF : k.drive === "rwd" ? muR : k.drive === "awd" ? Math.min(muF, muR) : 0.5 * (muF + muR));
-  const real = (k.launch[1] * tractionG(k, muF * MU_TYRE, muR * MU_TYRE)) / tractionG(k, MU_TYRE, MU_TYRE);
+  const real = (k.launch[1] * tractionG(frame, k, muF * MU_TYRE, muR * MU_TYRE)) / tractionG(frame, k, MU_TYRE, MU_TYRE);
   return arcade + (real - arcade) * realism;
 }
 
@@ -502,6 +499,7 @@ type Dressable = {
   /** Lamp seats ride the lift like the body they sit on (bare objects, not children of the group). */
   readonly lamps: readonly { readonly seat: THREE.Object3D }[];
   readonly style: { id: CarStyleId };
+  readonly frame: CarFrame;
 };
 
 
@@ -524,7 +522,7 @@ export function assignClass(car: Dressable, id: VehicleClassId): void {
     hubs.name = CLASS_HUBS;
     g.add(body, hubs);
   }
-  const wheelLift = WHEEL_RADIUS * (s.wheelScale - 1);
+  const wheelLift = car.frame.rig.tyre.r * (s.wheelScale - 1);
   body.position.y = s.lift;
   hubs!.position.y = wheelLift;
   for (let i = g.children.length - 1; i >= 0; i--) {

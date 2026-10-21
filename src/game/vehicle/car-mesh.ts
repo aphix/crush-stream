@@ -5,21 +5,6 @@ import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
 
-export const WHEEL_POS: [number, number, number][] = [
-  [-0.74, 0.32, 1.34],
-  [0.74, 0.32, 1.34],
-  [-0.74, 0.32, -1.34],
-  [0.74, 0.32, -1.34],
-];
-
-export const CAR_HALF = { x: 0.88, y: 0.68, z: 2.22 };
-
-/**
- * The plan length (half length; m) a car meets a solid with: the drawn body with its mirrors and a margin, longer than `CAR_HALF`
- * (the body's own box). The look-ahead of a hard-driving car reads it too (`markApproaches`).
- */
-export const FOOT_HALF_L = 2.3;
-
 /** Shared-platform hardpoints (8e2dc49, five styles on one platform): arch opening radius about the hub (m), floor pan height (m). */
 export const ARCH_R = 0.38;
 const Y_FLOOR = 0.145;

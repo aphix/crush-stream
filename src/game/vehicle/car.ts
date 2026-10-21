@@ -2,12 +2,11 @@ import * as THREE from "three";
 import { detAtan2 } from "../kernel/physics-core.js";
 import type { DeformNetState } from "../deform/streamed-deform.ts";
 import { applyGroundFriction, CRASH, FRICTION_G, hypot2 } from "../deform/physics-util.ts";
-import { CAR_HALF, WHEEL_POS } from "./car-mesh.ts";
 import { DOOR } from "./car-door-mesh.ts";
 import { activeGround } from "../world/ground.ts";
 import { CarParts } from "./car-parts.ts";
 import { END_WINDOW, type PartNetState, REARM_QUIET_S } from "./car-core.ts";
-import { COM_Y, REST_SPEED } from "./car-air-body.ts";
+import { REST_SPEED } from "./car-air-body.ts";
 import { FLIGHT_BORNE, FLIGHT_CONTACT, FLIGHT_DOWN, FLIGHT_DRIFT, FLIGHT_END_AGO, FLIGHT_END_REACH, FLIGHT_END_SQUEEZE, FLIGHT_EULER, FLIGHT_INV_YAW, FLIGHT_POSITION, FLIGHT_QUATERNION, FLIGHT_RAMPS, FLIGHT_REST, FLIGHT_SLEEP, FLIGHT_SPIN, FLIGHT_STALL, FLIGHT_VELOCITY, FLIGHT_WHEEL_RATE, FLIGHT_WHEEL_SPIN } from "./car-flight.ts";
 import { onWreckTop, readContact } from "./car-air-points.ts";
 import { stepFree, wreckCentre, wreckInvI } from "./car-air.ts";
@@ -22,7 +21,7 @@ import { CageRig } from "./car-cage-rig.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
 
-export { CAR_HALF, DOOR, WHEEL_POS };
+export { DOOR };
 
 const _p = new THREE.Vector3();
 const _m = new THREE.Matrix4();
@@ -125,16 +124,16 @@ export class DeformableCar extends CarParts {
   hardTouch = false;
   /** A hard hit is about to land: this car is closing on a fixed solid (the course's collide pass) or on another car (`markApproaches`), within a step or two of travel of it, or driving into it. Not state: derived again every step, read by `stepWorld` to cut the step. */
   nearHit = false;
-  /** Each wheel's last contact (`wheelContact`, `HIT_SIZE` doubles per wheel, `WHEEL_POS` order): the lift it needs, normal, grip, surface and owner. */
+  /** Each wheel's last contact (`wheelContact`, `HIT_SIZE` doubles per wheel, `frame.wheels` order): the lift it needs, normal, grip, surface and owner. */
   readonly wheelHit = STANDING.slice();
-  /** The wheels within their springs' reach of a surface, bit i: wheel i (`WHEEL_POS` order). Drive and traction follow them. */
+  /** The wheels within their springs' reach of a surface, bit i: wheel i (`frame.wheels` order). Drive and traction follow them. */
   wheelsDown = 15;
   /** The slice (s) `stepFree` moved this body in the slice under way; 0 once that slice's masses have stepped (`afterContacts`). */
   private flewDt = 0;
   /** The yaw inverse inertia per unit mass (`wreckInvI`) the last wreck step had; 0 off the masses. */
   private invYaw = 0;
   /** The drawn body's load transfer over the physics body, and its wheels' seats (drawn only). */
-  readonly suspension = new Suspension();
+  readonly suspension = new Suspension(this.frame);
   private bodyTyres: TyreSkin | null = null;
   private hoodTyres: TyreSkin | null = null;
   private classBody: THREE.Object3D | null = null;
@@ -218,7 +217,7 @@ export class DeformableCar extends CarParts {
         loose.velocity.set(0, 0, 0);
         loose.angular.set(0, 0, 0);
       }
-      const rest = WHEEL_POS[i]!;
+      const rest = this.frame.wheels[i]!;
       w.position.set(rest[0], rest[1], rest[2]);
       w.rotation.set(0, 0, 0);
       w.visible = true;
@@ -271,7 +270,7 @@ export class DeformableCar extends CarParts {
     if (rigid) {
       // A rigid body (`stepFree`) takes the hit on its masses: its centre's velocity carried to the group's origin, as `land` does, and a wreck's masses keep their dents. Its masses fly it on (`syncPose`)
       // and hand it back to `stepFree` once their contact window closes; left rigid, nothing ever landed it and its drive stayed idled (8 s, stopped, on the stunt course).
-      this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, COM_Y, 0).applyQuaternion(this.group.quaternion)));
+      this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, this.frame.comY, 0).applyQuaternion(this.group.quaternion)));
       if (this.crashed) {
         this.deform.armMasses(this.group, this.velocity, this.angular);
         this.deform.unstep(this.flewDt);
@@ -411,7 +410,7 @@ export class DeformableCar extends CarParts {
 
   /** A wreck flying as a rigid body (`stepFree`) with three wheels on the world goes back to its masses (`armed`), taking its centre's velocity less the spin's carry (a body crushed only by a load has no masses and stands on its wheels). */
   private landWreck(): void {
-    this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, COM_Y, 0).applyQuaternion(this.group.quaternion)));
+    this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, this.frame.comY, 0).applyQuaternion(this.group.quaternion)));
     this.angular.set(0, this.angular.y, 0);
     this.speed = hypot2(this.velocity.x, this.velocity.z);
     this.deform.armMasses(this.group, this.velocity, this.angular);
@@ -459,7 +458,7 @@ export class DeformableCar extends CarParts {
       this.endSqueeze = true;
       this.deform.bidirectional = true;
     }
-    if (this.endSqueeze && this.endReach < WHEEL_POS[0]![2]) this.deform.deepCrush = true;
+    if (this.endSqueeze && this.endReach < this.frame.halfBase) this.deform.deepCrush = true;
   }
 
   step(dt: number): void {
@@ -660,8 +659,8 @@ export class DeformableCar extends CarParts {
   /** A crushed skin drawn over a standing tyre stands on it (`TyreSkin`); a thrown wheel is the world's. */
   private holdSkinOffTyres(skinWritten: boolean): void {
     if (!tyresUnderSkin(carClass(this))) return;
-    this.bodyTyres ??= new TyreSkin(this.body, this.deform.restSkin);
-    this.hoodTyres ??= new TyreSkin(this.hood, this.hoodRest);
+    this.bodyTyres ??= new TyreSkin(this.frame, this.body, this.deform.restSkin);
+    this.hoodTyres ??= new TyreSkin(this.frame, this.hood, this.hoodRest);
     let gone = 0;
     for (let i = 0; i < this.wheels.length; i++) if (this.looseWheels[i]!.loose) gone |= 1 << i;
     const lift = CLASSES[carClass(this)].lift;
@@ -700,7 +699,7 @@ export class DeformableCar extends CarParts {
     for (let i = 0; i < this.wheels.length; i++) {
       const w = this.wheels[i]!;
       if (this.looseWheels[i]!.loose) continue;
-      const rest = WHEEL_POS[i]!;
+      const rest = this.frame.wheels[i]!;
       if (!this.deform.massActive) {
         w.position.set(rest[0], rest[1], rest[2]);
         continue;
@@ -892,7 +891,7 @@ export class DeformableCar extends CarParts {
 
 /**
  * Start the fake fall: the soft body stops (`massActive` off; its state is left as it is) and the car flies on as the rigid step
- * flies every body, off the world's ground, with the `angular` it has and the `velocity` it has at its own centre (`COM_Y`; a wreck's body
+ * flies every body, off the world's ground, with the `angular` it has and the `velocity` it has at its own centre (`frame.comY`; a wreck's body
  * turned about its masses' centroid, so the spin carries the difference). `keepMotion`: a replay or netplay client has set the pose,
  * `velocity` and `angular` already.
  */
@@ -900,7 +899,7 @@ export function beginFakeFall(car: DeformableCar, keepMotion = false): void {
   if (car.deform.massActive && !keepMotion) {
     car.group.updateMatrixWorld(false);
     _p.copy(wreckCentre(car)).applyMatrix4(car.group.matrixWorld);
-    _c.set(0, COM_Y, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
+    _c.set(0, car.frame.comY, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
     car.velocity.add(_v.crossVectors(car.angular, _c.sub(_p)));
   }
   car.deform.massActive = false;

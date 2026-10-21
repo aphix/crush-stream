@@ -1,5 +1,5 @@
 import { detAtan2, hypot2 } from "../kernel/physics-core.js";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { clamp } from "../kernel/scalar.ts";
 import { OPEN_REACH, blankPoint, blankProjection, crossGate, inCorridor, pointOn, projectPath, type Projection, type Track, type TrackPath } from "../world/track.ts";
 import type {
@@ -46,7 +46,7 @@ const TELEPORT = 25;
 export const GATE_MARGIN = 3;
 const RESPAWN_TRIES = 12;
 /**
- * Drafting: a racing car in another's wake, a cone opening behind its rear bumper. In the leader's velocity frame, `x` m behind the bumper (the stock hull, `CAR_HALF`), the follower is in when 0 <= x <= `range` car lengths and its offset from the leader's line is within the leader's half width + x·`fan`.
+ * Drafting: a racing car in another's wake, a cone opening behind its rear bumper. In the leader's velocity frame, `x` m behind the bumper (the largest hull, `FLEET_HALF`), the follower is in when 0 <= x <= `range` car lengths and its offset from the leader's line is within the leader's half width + x·`fan`.
  * Both must be over `speed` m/s, and the follower's velocity within `align` (cosine) of the leader's, so a car crossing behind does not draft.
  * Every `every` s unbroken earns `bonus` of a boost meter; while it lasts top speed is × `top` (`applyDrive`'s `topScale`).
  * `range` 3 car lengths: the owner's sketch, research 2.5-3. `fan` tan 18°: a 36° wake, inside the owner's 35-45° and the research's 12-18° half angle. `align` cos 45°: the research's heading check. Research: `.extraResearch/perplexity/2026-10-13-arcade-draft-zone-values.md`, `2026-10-13-slipstream-zone-around-corners.md`.
@@ -265,9 +265,9 @@ export class RaceSession {
         const fz = q.vz / v;
         const back = (q.x - p.x) * fx + (q.z - p.z) * fz;
         const off = Math.abs((p.x - q.x) * fz - (p.z - q.z) * fx);
-        const x = back - CAR_HALF.z; // m behind the leader's rear bumper
+        const x = back - FLEET_HALF.z; // m behind the leader's rear bumper
         const pf = p.vx * fx + p.vz * fz;
-        trail = x >= 0 && x <= DRAFT.range * 2 * CAR_HALF.z && off <= CAR_HALF.x + x * DRAFT.fan && pf >= DRAFT.speed && pf >= DRAFT.align * hypot2(p.vx, p.vz);
+        trail = x >= 0 && x <= DRAFT.range * 2 * FLEET_HALF.z && off <= FLEET_HALF.x + x * DRAFT.fan && pf >= DRAFT.speed && pf >= DRAFT.align * hypot2(p.vx, p.vz);
       }
       if (!trail) {
         c.draft = 0;
@@ -746,7 +746,7 @@ export class RaceSession {
       const dz = spot.z - q.z;
       const ahead = (dx * q.vx + dz * q.vz) / v;
       const off = Math.abs(dx * q.vz - dz * q.vx) / v;
-      if (ahead > -CAR_HALF.z && ahead < CLEARANCE + (v * v) / (2 * RESPAWN_BRAKE) && off < RESPAWN_LANE) return false;
+      if (ahead > -FLEET_HALF.z && ahead < CLEARANCE + (v * v) / (2 * RESPAWN_BRAKE) && off < RESPAWN_LANE) return false;
     }
     return true;
   }

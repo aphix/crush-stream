@@ -4,10 +4,11 @@ import { setGround } from "../world/ground.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { parseTrack } from "../world/track-schema.ts";
-import { VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
+import { CLASSES, VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
 import { DEG, drive, FRAME, type Sample } from "./ground-probe.test-util.ts";
 import { CONTACT_HZ, G } from "./car-air-body.ts";
-import { WHEEL_POS } from "./car-mesh.ts";
+import { carFrame } from "./car-rig.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 import { SPRINGS } from "./car-suspension.ts";
 import { useStiffSprings } from "./stiff-springs.test-util.ts";
 import { BOUNDS } from "./ground-judge.test-util.ts";
@@ -21,7 +22,7 @@ const track = new Track(TRACKS.find((t) => parseTrack(t).id === "stunt"));
 
 /** Most the body's pitch may stray (deg) from the road's slope on its springs: the front axle at one end of its travel, the rear at the other. */
 function springPitch(cls: VehicleClassId): number {
-  return Math.atan(SPRINGS[cls].travel / (2 * WHEEL_POS[0]![2])) * DEG;
+  return Math.atan(SPRINGS[cls].travel / (2 * carFrame(CAR_STYLES[CLASSES[cls].style]).halfBase)) * DEG;
 }
 /** The drop matrix's bounds (ground-fit): a tyre sunk past `gap`, an underside past `pen`, a body off its ground's slope past `pose`. */
 const PLAIN = BOUNDS.plain;

@@ -9,7 +9,6 @@ import { bandsMeet, OUTLINE_REACH } from "./cage-outline.ts";
 import { strikeCar, faceDepth, faceExit, carRow, takeRow, moveAsOneBody, bodyHit, type ContactBox } from "./external-contact.ts";
 import { bodyContact, BODY_SIZE, BODY_VX, BODY_VZ, BODY_W, BODY_X, BODY_Z, CT_DEPTH, CT_E, CT_JMAX, CT_MU, CT_NX, CT_NZ, CT_SIZE, CT_X, CT_Z, OUT_EBS_A, OUT_EBS_B, OUT_PUSH_A, OUT_PUSH_B, OUT_SIZE } from "./body-contact.ts";
 import { ARM_CLOSING, PAIR_MU, SOLID_E } from "./constants.ts";
-import { CAR_HALF, FOOT_HALF_L } from "../vehicle/car-mesh.ts";
 import { SOLID_AT_REST } from "../world/constants.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { FINE_HZ, QUIET_HZ } from "../kernel/constants.ts";
@@ -106,8 +105,9 @@ export function markApproaches(cars: readonly DeformableCar[], pairs: Int32Array
     if (d2 === 0 || !bandsMeet(ca, cb) || ca.falling || cb.falling) continue;
     const d = Math.sqrt(d2);
     const closing = ((ca.velocity.x - cb.velocity.x) * dx + (ca.velocity.z - cb.velocity.z) * dz) / d;
-    markApproach(ca, d - 2 * FOOT_HALF_L, closing);
-    markApproach(cb, d - 2 * FOOT_HALF_L, closing);
+    const gap = d - (ca.frame.footHalfL + cb.frame.footHalfL);
+    markApproach(ca, gap, closing);
+    markApproach(cb, gap, closing);
   }
 }
 
@@ -160,9 +160,11 @@ function sinkReach(car: DeformableCar, nx: number, nz: number, dt: number, inbou
   const f = car.fwdFlat;
   const r = car.rightFlat;
   let corner = inboundFloor;
+  const { footHalfL } = car.frame;
+  const halfW = car.frame.half.x;
   for (let k = 0; k < 4; k++) {
-    const sl = k & 1 ? FOOT_HALF_L : -FOOT_HALF_L;
-    const sw = k & 2 ? CAR_HALF.x : -CAR_HALF.x;
+    const sl = k & 1 ? footHalfL : -footHalfL;
+    const sw = k & 2 ? halfW : -halfW;
     const rx = f.x * sl + r.x * sw;
     const rz = f.z * sl + r.z * sw;
     corner = Math.max(corner, -((v.x + w * rz) * nx + (v.z - w * rx) * nz));

@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { applyGroundFriction } from "../deform/physics-util.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
 import { GRAVITY } from "../kernel/constants.ts";
 import { detAsin, detCos, detSin } from "../kernel/physics-core.js";
 import { NO_FLOOR } from "../world/ground.ts";
@@ -156,7 +155,7 @@ const TYRE_WIDTH = 0.24;
 
 /** `wheel`'s shape as the disk it flies as (`wheelShape`) at its own scale: a popped wheel's, whether it left its hub in a step or a keyframe put it loose. */
 export function fitWheelShape(wheel: LooseBody): void {
-  wheelShape(wheel.shape, TYRE_R * wheel.object.scale.x, TYRE_WIDTH * wheel.object.scale.x);
+  wheelShape(wheel.shape, wheel.radius * wheel.object.scale.x, TYRE_WIDTH * wheel.object.scale.x);
 }
 
 /** Air at sea level (kg/m³, the ISA standard atmosphere). */

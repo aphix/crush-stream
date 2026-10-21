@@ -16,7 +16,6 @@ import { ROLE } from "./dummy-rig.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
 import { occluder, sightLine, solid, type Occluder, type Sight } from "./spectate-cam.ts";
 import { BELT_Y, SILL_Y, UNDER } from "./ragdoll-proxy.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -177,7 +176,7 @@ describe("given a thrown dummy and the crushed bodies of the other cars", () => 
       const t = dolls[0]!.bodies[0]!.translation();
       _l.set(t.x, t.y, t.z);
       const local = _l.clone().sub(b.group.position).applyQuaternion(_q.copy(b.group.quaternion).invert());
-      if (Math.abs(local.x) < CAR_HALF.x && local.y > -UNDER && local.y < SILL_Y && Math.abs(local.z) < CAR_HALF.z) inside.push(`frame ${f} at ${local.toArray().map((v) => v.toFixed(2))}`);
+      if (Math.abs(local.x) < b.frame.half.x && local.y > -UNDER && local.y < SILL_Y && Math.abs(local.z) < b.frame.half.z) inside.push(`frame ${f} at ${local.toArray().map((v) => v.toFixed(2))}`);
       // The grace window ends 0.35 s in (frame 20–21): anything still inside a box would be shoved out here.
       if (f >= 18 && f <= 24) jump = Math.max(jump, _l.distanceTo(prev));
       maxZ = Math.max(maxZ, t.z);
@@ -268,7 +267,7 @@ function carSight(cars: readonly DeformableCar[]): () => Sight {
     path: null,
     wallTop: 0,
     rim: Infinity,
-    occ: cars.map((c) => occluder(c.group.position.x, c.group.position.z, 0, CAR_HALF.z, CAR_HALF.z, true, c.group.position.y - 0.3, c.group.position.y + 1.6)),
+    occ: cars.map((c) => occluder(c.group.position.x, c.group.position.z, 0, c.frame.half.z, c.frame.half.z, true, c.group.position.y - 0.3, c.group.position.y + 1.6)),
   });
 }
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { beginFakeFall, type DeformableCar } from "./car.ts";
-import { COM_Y, G } from "./car-air-body.ts";
+import { G } from "./car-air-body.ts";
 import { readContact } from "./car-air-points.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
@@ -31,9 +31,9 @@ function launch(spin: THREE.Vector3) {
   return car;
 }
 
-/** The car's centre of mass: the group's origin `COM_Y` up its own axis. */
+/** The car's centre of mass: the group's origin `frame.comY` up its own axis. */
 function centre(car: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
-  return out.set(0, COM_Y, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
+  return out.set(0, car.frame.comY, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
 }
 
 /** Step `car` for `FLIGHT_S` at `hz` with the drive run every slice; the worst distance (m) of its centre from the parabola, and of its body axes from the turn. */

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CAR_HALF, type DeformableCar } from "../vehicle/car.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
 import type { MassName } from "../kernel/rig-spec.ts";
 import { COMPACTOR, CompactorRig } from "./compactor.ts";
 import { strikeCar, bodyHit, type ContactBox } from "../contact/external-contact.ts";
@@ -21,8 +21,6 @@ import { FRAME_HZ } from "../kernel/constants.ts";
  */
 
 const FRAME = 1 / FRAME_HZ;
-/** Clear air (m) between the parked car's bumper and a striker car's: the striker starts this far off. */
-const STRIKE_GAP = 2 * CAR_HALF.z + 0.25;
 const D2R = Math.PI / 180;
 
 export type CarState = {
@@ -177,7 +175,7 @@ function runUntilReadoutHeld(cars: DeformableCar[], cap: number): void {
 // ── Doors: a car sideswipes the parked car on the Doors ram lane ─────────────────────────────
 
 let cageHalfMemo: { x: number; z: number } | null = null;
-/** The stock car's cage plan half extents (m): the contact shape of a striker car, so the lane a car-shaped head sweeps and the place a striker car stands are the cage's, not the drawn nominal `CAR_HALF`. */
+/** The stock car's cage plan half extents (m): the contact shape of a striker car, so the lane a car-shaped head sweeps and the place a striker car stands are the cage's, not the drawn nominal `frame.half`. */
 function cageHalf(): { x: number; z: number } {
   if (!cageHalfMemo) {
     const plan = makeCar().cage.fields.planBox;
@@ -225,7 +223,7 @@ export function carDoorPass(scenario: DoorScenario, kph: number, tyres = false, 
 /** The Doors ram; `carShaped`: a head with a car body's length, height and width on the same lane. */
 export function ramDoorPass(scenario: DoorScenario, kph: number, kg: number, carShaped = false): CarState {
   const a = parkCar();
-  const shape = carShaped ? { bottom: 0, top: 2 * CAR_HALF.y, width: 2 * cageHalf().x } : undefined;
+  const shape = carShaped ? { bottom: 0, top: 2 * a.frame.half.y, width: 2 * cageHalf().x } : undefined;
   fireRam(a, scenario, { kph, kg, side: 1, length: carShaped ? 2 * cageHalf().z : RAM.length, shape, stillWhen: stillWatch(() => readoutKey(a)) });
   return carState(a);
 }
@@ -264,7 +262,7 @@ export function doorHit(form: DoorForm, scenario: DoorScenario, kph: number, kg:
     if (form === "reversingCar") return reversingDoorPass(scenario, kph, grip, side);
     const a = parkCar();
     const carShaped = Math.abs(kg - a.deform.totalMass) < 1;
-    const shape = carShaped ? { bottom: 0, top: 2 * CAR_HALF.y, width: 2 * cageHalf().x } : undefined;
+    const shape = carShaped ? { bottom: 0, top: 2 * a.frame.half.y, width: 2 * cageHalf().x } : undefined;
     fireRam(a, scenario, { kph, kg, side, length: carShaped ? 2 * cageHalf().z : RAM.length, shape, carMoves: form === "carMoves", tyres: grip, stillWhen: stillWatch(() => readoutKey(a, side)) });
     return carState(a, side);
   });
@@ -451,8 +449,8 @@ export function carSandwich(kph: number): Sandwich {
   const b = pooledCar(1);
   const c = pooledCar(2);
   const force: SandwichForce = { nose: { t: [], lost: [] }, tail: { t: [], lost: [] }, kg: b.deform.totalMass };
-  launch(b, 0, STRIKE_GAP, Math.PI, kph);
-  launch(c, 0, -STRIKE_GAP, 0, kph);
+  launch(b, 0, a.frame.half.z + b.frame.half.z + 0.25, Math.PI, kph);
+  launch(c, 0, -(a.frame.half.z + c.frame.half.z + 0.25), 0, kph);
   const ke0 = 0.5 * (b.deform.totalMass + c.deform.totalMass) * (kph / 3.6) ** 2;
   const seconds = runOut([a, b, c], 10, 1.5, (w) => {
     trackDelivered(w, b, -1, force.nose);
@@ -487,7 +485,9 @@ export function carStrike(at: Strike, kph: number, squash?: number, carMoves = f
   const a = parkCar(squash);
   a.parked = !carMoves;
   const b = pooledCar(1, "shape", squash);
-  const [x, z, yaw] = at === "front" ? [0, STRIKE_GAP, Math.PI] : at === "rear" ? [0, -STRIKE_GAP, 0] : [CAR_HALF.x + CAR_HALF.z + 0.25, 0.08, -Math.PI / 2];
+  // Clear air between the parked car's bumper and the striker's: 0.25 m.
+  const gap = a.frame.half.z + b.frame.half.z + 0.25;
+  const [x, z, yaw] = at === "front" ? [0, gap, Math.PI] : at === "rear" ? [0, -gap, 0] : [a.frame.half.x + b.frame.half.z + 0.25, 0.08, -Math.PI / 2];
   if (carMoves) {
     const u = kph / 3.6;
     b.spawnFacing(x, z, yaw, 0);
@@ -583,7 +583,7 @@ let policeCar: DeformableCar | null = null;
 export function copIntoSide(mps: number, coarse: boolean): SideHit {
   const struck = parkCar();
   const cop = (policeCar ??= makeClassCar("police"));
-  launch(cop, CAR_HALF.x + CAR_HALF.z + 0.25, 0.08, -Math.PI / 2, mps * 3.6);
+  launch(cop, struck.frame.half.x + cop.frame.half.z + 0.25, 0.08, -Math.PI / 2, mps * 3.6);
   const w = newWorld([struck, cop], null);
   const pacer = new SimPacer();
   pacer.pin = coarse;

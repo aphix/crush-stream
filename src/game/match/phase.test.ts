@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import * as THREE from "three";
 import { beginImpact, easeTimeScale, holdForThrow, impactScale, pairEta, phaseClock, PRE_IMPACT_LEAD, preImpact, SLOMO_HELD, stepPhase, THROW_ONSET, type PhaseClock } from "./phase.ts";
-import { CAR_HALF, type DeformableCar } from "../vehicle/car.ts";
+import { DeformableCar } from "../vehicle/car.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
@@ -94,18 +95,22 @@ describe("given a pair on course to meet 1 s of sim from now, with the automatic
   });
 });
 
-/** A car for `pairEta`: where it is (flat), how fast it goes along x, and its heading along x (right is across, z). */
+/** A car for `pairEta`: flat at (`x`, 0), heading along x at `vx` m/s (right is across, z). */
 function carAt(x: number, vx: number): DeformableCar {
-  return { group: { position: { x, y: 0, z: 0 } }, velocity: { x: vx, z: 0 }, right: { x: 0, z: 1 }, forward: { x: 1, z: 0 } } as unknown as DeformableCar;
+  const car = new DeformableCar({ body: 0x808080, accent: 0, name: "c" }, new THREE.Scene(), null);
+  car.spawnFacing(x, 0, Math.PI / 2, vx);
+  return car;
 }
 
 describe("given two cars on the same line closing on each other", () => {
   it("when one drives at a parked one, then the predicted hit lies on the parked car's near face, on the line between them", () => {
     const hit = { x: NaN, y: NaN, z: NaN, nx: NaN, nz: NaN };
-    const eta = pairEta([carAt(-10, 20), carAt(10, 0)], hit);
-    assert.ok(Math.abs(hit.x - (10 - CAR_HALF.z)) < 1e-9, `hit at x ${hit.x}, the parked car's near face is ${10 - CAR_HALF.z}`);
+    const parked = carAt(10, 0);
+    const eta = pairEta([carAt(-10, 20), parked], hit);
+    const near = 10 - parked.frame.half.z;
+    assert.ok(Math.abs(hit.x - near) < 1e-9, `hit at x ${hit.x}, the parked car's near face is ${near}`);
     assert.ok(Math.abs(hit.z) < 1e-9 && hit.nx === 1 && hit.nz === 0, `hit at z ${hit.z}, line ${hit.nx},${hit.nz}`);
-    assert.ok(Math.abs(eta - (20 - 2 * CAR_HALF.z) / 20) < 1e-9, `eta ${eta}`);
+    assert.ok(Math.abs(eta - (20 - 2 * parked.frame.half.z) / 20) < 1e-9, `eta ${eta}`);
   });
 
   it("when both drive at 10 m/s from either side of x = 0, then the predicted hit lies where they meet, x = 0", () => {

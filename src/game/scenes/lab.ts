@@ -3,7 +3,8 @@ import { cageOf } from "../vehicle/car-cage-rig.ts";
 import type { CarCage } from "../vehicle/car-cage.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { STOCK_PAINT } from "../vehicle/constants.ts";
-import { UNDERSIDE, underY } from "../vehicle/car-suspension.ts";
+import { carFrame, underY } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { sampleField } from "../contact/cage-outline.ts";
 import { hypot2, detSin, detCos, detAsin } from "../kernel/physics-core.js";
 import { PREFABS, type PrefabId } from "../world/catalog.ts";
@@ -169,7 +170,7 @@ export function labColliders(placed: readonly Placed[]): PropCollider[] {
  */
 const CARDS_X = 10;
 const CARDS_GAP = 0.2;
-/** The nose and tail lever (car-local z, m) of the top car's pitch: `UNDERSIDE`'s end rows, where the belly the rigid step rests with ends. */
+/** The nose and tail lever (car-local z, m) of the top car's pitch: `frame.underside`'s end rows, where the belly the rigid step rests with ends. */
 const KEEL_Z = 2;
 /** A base car under the top car's weight rides bottomed on its suspension's stops, pitched nose-up by the rear tyres: its origin's height (m) and pitch (rad), measured on the lab's cards. */
 const BASE_RIDE = -0.0518;
@@ -194,13 +195,14 @@ export function planHalf(style: CarType["style"]): { hx: number; hz: number } {
 
 /**
  * The stock sedan's body points the rigid step rests with (car-local x, y, z): the cage's vertices (the drawn body) and the belly rows
- * of the drawn underside (`UNDERSIDE`, and the keel-to-rocker rows half a metre out, `underY`). The cage's own bottom stands up to 0.26 m
+ * of the drawn underside (`frame.underside`, and the keel-to-rocker rows half a metre out, `underY`). The cage's own bottom stands up to 0.26 m
  * over that underside at the nose and its tail vertices down to 0.1 m under it, so neither alone says where the top car touches.
  */
 function bodyPoints(): readonly (readonly [number, number, number])[] {
   const { style, fields } = stockCage(SEDAN.style);
-  const points: [number, number, number][] = UNDERSIDE.map(([x, z, h]): [number, number, number] => [x, h, z]);
-  for (const z of [2, 1, 0, -2]) for (const x of [-0.5, 0.5]) points.push([x, underY(x, z), z]);
+  const { underside } = carFrame(CAR_STYLES[SEDAN.style]);
+  const points: [number, number, number][] = underside.map(([x, z, h]): [number, number, number] => [x, h, z]);
+  for (const z of [2, 1, 0, -2]) for (const x of [-0.5, 0.5]) points.push([x, underY(underside, x, z), z]);
   for (let k = 0; k < style.vertexCount; k++) points.push([fields.pos[k * 3]!, fields.pos[k * 3 + 1]!, fields.pos[k * 3 + 2]!]);
   return points;
 }

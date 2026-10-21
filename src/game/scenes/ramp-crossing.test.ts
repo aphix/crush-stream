@@ -1,9 +1,10 @@
 import { after, afterEach, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { CAR_HALF, DeformableCar } from "../vehicle/car.ts";
-import { COM_Y, MU_BODY } from "../vehicle/car-air-body.ts";
-import { UNDERSIDE } from "../vehicle/car-suspension.ts";
+import { DeformableCar } from "../vehicle/car.ts";
+import { MU_BODY } from "../vehicle/car-air-body.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { JerseyBarrier } from "./engine-props.ts";
 import { FleetRamps, RAMP } from "./fleet-ramps.ts";
@@ -40,9 +41,10 @@ const ES = [-0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6] as const;
 const SPEEDS = [8, 12, 20] as const;
 /** The bars (docs/UNIFIED_CONTACT.md E1). */
 const BAR = { yaw: 1.0, heading: 1.0, shove: 0.01, dv: 0.3, tilt: 1.5 } as const;
-/** The face's slope angle (rad), and the sedan's chin: the front of its keel (`UNDERSIDE`), 3 cm up and 0.66 m ahead of its front tyres. */
+/** The face's slope angle (rad), and the sedan's chin: the front of its keel (`underside`), 3 cm up and 0.66 m ahead of its front tyres. */
 const FACE = Math.atan2(RAMP.top, RAMP.len);
-const [, CHIN_Z, CHIN_H] = UNDERSIDE.find((p) => p[0] === 0 && p[1] === Math.max(...UNDERSIDE.map((u) => u[1])))!;
+const SEDAN = carFrame(CAR_STYLES.sedan);
+const [, CHIN_Z, CHIN_H] = SEDAN.underside.find((p) => p[0] === 0 && p[1] === Math.max(...SEDAN.underside.map((u) => u[1])))!;
 /**
  * The most (m/s) a crossing at `v` m/s changes the car's speed in a slice beyond `BAR.dv`: its chin, too low to clear the face, runs onto it
  * closing at v sin θ. A belly point only resists the ground (no bounce): its push along the face's normal n stops that closing speed over
@@ -51,9 +53,9 @@ const [, CHIN_Z, CHIN_H] = UNDERSIDE.find((p) => p[0] === 0 && p[1] === Math.max
  * push along the face: of both, the plan part.
  */
 function chinScrape(v: number): number {
-  const armY = CHIN_H + CLASSES.sedan.lift - COM_Y;
+  const armY = CHIN_H + CLASSES.sedan.lift - SEDAN.comY;
   const lever = armY * Math.sin(FACE) + CHIN_Z * Math.cos(FACE);
-  const gyration = (CAR_HALF.y ** 2 + CAR_HALF.z ** 2) / 3;
+  const gyration = (SEDAN.half.y ** 2 + SEDAN.half.z ** 2) / 3;
   const normalDv = (v * Math.sin(FACE)) / (1 + (lever * lever) / gyration);
   return normalDv * (Math.sin(FACE) + MU_BODY * Math.cos(FACE));
 }
@@ -162,7 +164,7 @@ function cross(v: number, thDeg: number, e: number, mirrored = false): Result {
   const head0 = wrap(yaw);
   let lastVx = car.velocity.x;
   let lastVz = car.velocity.z;
-  _c.set(0, COM_Y, 0).applyQuaternion(car.group.quaternion);
+  _c.set(0, car.frame.comY, 0).applyQuaternion(car.group.quaternion);
   let lastCx = p.x + _c.x;
   let lastCz = p.z + _c.z;
   const dirF = new Float64Array(2);
@@ -208,7 +210,7 @@ function cross(v: number, thDeg: number, e: number, mirrored = false): Result {
       const crossing = tyresShortOfToe > 0;
       if (fi.airborne && tyresNearGround > 0) out.airWhileTouching++;
       // `velocity` is the centre of mass's: a body turning about its centre swings its origin, and that is no shove.
-      _c.set(0, COM_Y, 0).applyQuaternion(car.group.quaternion);
+      _c.set(0, car.frame.comY, 0).applyQuaternion(car.group.quaternion);
       const mx = p.x + _c.x - lastCx;
       const mz = p.z + _c.z - lastCz;
       if (crossing) {

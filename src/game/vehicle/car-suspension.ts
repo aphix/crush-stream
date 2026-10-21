@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { VehicleClassId } from "./vehicle-classes.ts";
 import { CLASS_LIFT } from "./constants.ts";
-import { CAR_HALF, WHEEL_POS } from "./car-mesh.ts";
+import type { CarFrame } from "./car-rig.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { C_H, HIT_SIZE, staticTop } from "../world/surfaces.ts";
 import { LoadTransfer } from "./car-load.ts";
@@ -48,84 +48,20 @@ function archStop(cls: VehicleClassId): number {
   return Math.min(droop(cls), ARCH_ROOM[cls]);
 }
 
-/** Half the wheelbase and half the track (m). */
-const AXLE = WHEEL_POS[0]![2];
-const TRACK = Math.abs(WHEEL_POS[0]![0]);
 /** Off the ground a seated wheel eases back onto its hub at this rate (1/s). */
 const UNSEAT = 15;
 /** A wreck's body eases onto its empty corners at this rate (1/s): 99 % in 1.2 s. */
 const SETTLE = 4;
-
-/**
- * The body's underside (x, z, height m over the ground at the stock ride with no class lift), read off the skinned
- * wreck mesh of every style (sedan, wagon, coupe, hatchback and pickup alike): the keel along the middle, rising to
- * the tail, and the rocker and bumper corners 0.8 m out. The wheel arches are cut out and left out.
- */
-export const UNDERSIDE: readonly (readonly [number, number, number])[] = [
-  [0, 2, 0.032], [0, 1, 0.072], [0, 0, 0.131], [0, -1, 0.136], [0, -2, 0.161],
-  ...([-0.8, 0.8] as const).flatMap((x) => [[x, 2, 0.051], [x, 1, 0.101], [x, 0, 0.134], [x, -0.5, 0.147], [x, -2, 0.169]] as const),
-];
-/** The drawn underside's height (m) at car-local (`x`, `z`) within the rockers: `UNDERSIDE`'s keel and its rocker line along z, between them across. */
-export function underY(x: number, z: number): number {
-  let keel = 0;
-  let rocker = 0;
-  for (const [line, side] of [[0, 0], [0.8, 1]] as const) {
-    let lo: readonly [number, number, number] | undefined;
-    let hi: readonly [number, number, number] | undefined;
-    for (const p of UNDERSIDE) {
-      if (p[0] !== line) continue;
-      if (p[1] <= z && (!lo || p[1] > lo[1])) lo = p;
-      if (p[1] >= z && (!hi || p[1] < hi[1])) hi = p;
-    }
-    const h = !lo || !hi || lo === hi ? (lo ?? hi)![2] : lo[2] + ((hi[2] - lo[2]) * (z - lo[1])) / (hi[1] - lo[1]);
-    if (side === 0) keel = h;
-    else rocker = h;
-  }
-  return keel + ((rocker - keel) * Math.abs(x)) / 0.8;
-}
-/** The pan's half width and half length (m). */
-const PAN_HALF = 0.35;
-/**
- * The plane the belly's centre patch lies on, along the car: height at z = 0 and rise per metre of z (least squares through the drawn
- * underside under the pan's rows, 22 mm higher at the rear row than at the front; the pan is symmetric across).
- */
-const PAN_PLANE: readonly [number, number] = (() => {
-  let sum = 0;
-  let sz = 0;
-  let n = 0;
-  for (const z of [-PAN_HALF, PAN_HALF]) {
-    for (const x of [-PAN_HALF, 0, PAN_HALF]) {
-      const h = underY(x, z);
-      sum += h;
-      sz += h * z;
-      n++;
-    }
-  }
-  return [sum / n, sz / (n * PAN_HALF * PAN_HALF)];
-})();
-/**
- * The belly's centre patch, the pan under the cabin (car-local x, height, z): six points on `PAN_PLANE`, within 3 mm of the drawn
- * underside. Flat across: on the drawn underside's V (keel 5 mm under its rocker side) it stood on the keel line alone, rolling 1° each
- * way on a flat roof. A flat pan at 0.132 stood 15-22 mm over the drawn underside at its front row.
- */
-export const PAN: readonly (readonly [number, number, number])[] = [-PAN_HALF, PAN_HALF].flatMap((z) => [-PAN_HALF, 0, PAN_HALF].map((x): [number, number, number] => [x, PAN_PLANE[0] + PAN_PLANE[1] * z, z]));
-/** `HULL_UNDER`'s row: car-local x, z and height above the tyre plane. */
+/** `frame.hullUnder`'s row: car-local x, z and height above the tyre plane. */
 const HU_X = 0;
 const HU_Z = 1;
 const HU_H = 2;
 const HU_SIZE = 3;
-/** The underside samples and the bumpers' bottom corners (rows of `HU_SIZE`): what the body bottoms out on. */
-const HULL_UNDER = Float64Array.from([
-  ...UNDERSIDE.flat(),
-  ...[-1, 1].flatMap((sx) => [-1, 1].flatMap((sz) => [sx * CAR_HALF.x, sz * CAR_HALF.z, 0.35])),
-]);
-/** The underside's height (m) at each hub's plan position (a front hub's is the bumper corner's, a rear hub's the tail's). */
-const SILL = [0.084, 0.084, 0.157, 0.157] as const;
 
 /** Body drop at corner `j` per metre of offset at corner `i`: the pose below is the mean heave plus pitch plus roll. */
-function reach(j: number, i: number): number {
-  const [xj, , zj] = WHEEL_POS[j]!;
-  const [xi, , zi] = WHEEL_POS[i]!;
+function reach(frame: CarFrame, j: number, i: number): number {
+  const [xj, , zj] = frame.wheels[j]!;
+  const [xi, , zi] = frame.wheels[i]!;
   return (1 + Math.sign(xj * xi) + Math.sign(zj * zi)) / 4;
 }
 
@@ -144,42 +80,42 @@ export function bodyLift(lift: number, upY: number): number {
  * underside point (it rests on the first to touch) or the standing wheels' arches (`stop` m of room over each tyre, `archStop`) need.
  * All zero on four wheels.
  */
-export function sagOffsets(lift: number, stop: number, gone: number, out: Float64Array): void {
+export function sagOffsets(frame: CarFrame, lift: number, stop: number, gone: number, out: Float64Array): void {
   out.fill(0);
   if (gone === 0) return;
   const mu = [0, 0, 0, 0];
   for (let pass = 0; pass < 12; pass++) {
     for (let a = 0; a < 4; a++) {
       if (!((gone >> a) & 1)) continue;
-      let r = -(lift + SILL[a]!);
+      let r = -(lift + frame.sill[a]!);
       let g = 0;
       for (let b = 0; b < 4; b++) {
         if (!((gone >> b) & 1)) continue;
         let dot = 0;
-        for (let i = 0; i < 4; i++) dot += reach(a, i) * reach(b, i);
+        for (let i = 0; i < 4; i++) dot += reach(frame, a, i) * reach(frame, b, i);
         r -= dot * mu[b]!;
         if (a === b) g = dot;
       }
       mu[a]! += r / g;
     }
   }
-  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((gone >> j) & 1) out[i]! += reach(j, i) * mu[j]!;
-  const pitch = (out[0]! + out[1]! - out[2]! - out[3]!) / (4 * AXLE);
-  const roll = (out[1]! + out[3]! - out[0]! - out[2]!) / (4 * TRACK);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((gone >> j) & 1) out[i]! += reach(frame, j, i) * mu[j]!;
+  const pitch = (out[0]! + out[1]! - out[2]! - out[3]!) / (4 * frame.halfBase);
+  const roll = (out[1]! + out[3]! - out[0]! - out[2]!) / (4 * frame.halfTrack);
   const heave = (out[0]! + out[1]! + out[2]! + out[3]!) / 4;
   let raise = 0;
-  for (const [x, z, h] of UNDERSIDE) raise = Math.max(raise, -(lift + h) - (heave + z * pitch + x * roll));
+  for (const [x, z, h] of frame.underside) raise = Math.max(raise, -(lift + h) - (heave + z * pitch + x * roll));
   for (let j = 0; j < 4; j++) {
     if ((gone >> j) & 1) continue;
     let d = 0;
-    for (let i = 0; i < 4; i++) d += reach(j, i) * out[i]!;
+    for (let i = 0; i < 4; i++) d += reach(frame, j, i) * out[i]!;
     raise = Math.max(raise, -stop - d);
   }
   for (let i = 0; i < 4; i++) out[i]! += raise;
 }
 
 export class Suspension {
-  /** Each wheel's body offset from its rest ride (m): − bump (compressed), + droop. `WHEEL_POS` order. */
+  /** Each wheel's body offset from its rest ride (m): − bump (compressed), + droop. `frame.wheels` order. */
   readonly offset = new Float64Array(4);
   /**
    * Each drawn wheel's lift off its rest hub (m, + up): on the ground it follows the ground under its tread (a bank's
@@ -187,7 +123,7 @@ export class Suspension {
    */
   readonly seat = new Float64Array(4);
   /** The ground pose's load transfer (squat, dive, roll): the springs' resting offsets while it lasts. */
-  private readonly load = new LoadTransfer();
+  private readonly load: LoadTransfer;
   private readonly target = new Float64Array(4);
   /** The `lift`, `stop` and `gone` that `target` was solved for (a wreck's wheel set is fixed until the next spawn). */
   private sagLift = NaN;
@@ -201,6 +137,12 @@ export class Suspension {
   private rise = 0;
   /** The class `lift` the body was last posed at (`NaN` before the first pose): the lift fades as the body rolls onto its side, however still its springs are. */
   private posedLift = NaN;
+  private readonly frame: CarFrame;
+
+  constructor(frame: CarFrame) {
+    this.frame = frame;
+    this.load = new LoadTransfer(frame);
+  }
 
   /** At rest on a new spawn: the body back on its stock ride. */
   reset(): void {
@@ -223,7 +165,7 @@ export class Suspension {
    * is on the ground. The group is the physics body, already sprung on its tyres (`stepFree`): the drawn body rides it with the
    * load transfer alone (squat, dive, roll: drawn only), each drawn wheel seated by what the physics tyre reads (`seatWheels`).
    * `free` false (a crash) puts the body back on its stock ride, then eases it down onto the corners of the wheels it has lost
-   * (`gone`, bit i: `WHEEL_POS` i; `sagOffsets`; snapped at dt 0); the wheels are then the wreck's (`nudgeWheels` puts them on their
+   * (`gone`, bit i: `frame.wheels` i; `sagOffsets`; snapped at dt 0); the wheels are then the wreck's (`nudgeWheels` puts them on their
    * hubs). A `wreck` (its masses carry it) stands on the ground through its own cage (`stepFree`'s belly rows read the cage's bottom): the drawn body is that cage, so nothing bottoms out.
    * A wheel in `unheld` (bit i) stands on what the rigid step takes no row from (`onWreckTop`): it is not seated there either.
    */
@@ -269,7 +211,7 @@ export class Suspension {
   /** A wreck's offsets one slice nearer the corners it rests on (`sagOffsets`); `dt` 0 takes them at once. */
   private sag(lift: number, stop: number, gone: number, dt: number): void {
     if (lift !== this.sagLift || stop !== this.sagStop || gone !== this.sagGone) {
-      sagOffsets(lift, stop, gone, this.target);
+      sagOffsets(this.frame, lift, stop, gone, this.target);
       this.sagLift = lift;
       this.sagStop = stop;
       this.sagGone = gone;
@@ -311,7 +253,8 @@ export class Suspension {
         }
       }
       // Along the world's vertical (the body's up leans a rolled wheel's hub sideways: over a ramp's edge it stood on the wrong side of it).
-      w.position.set(WHEEL_POS[i]![0] + s * e[1]!, WHEEL_POS[i]![1] + s * uy, WHEEL_POS[i]![2] + s * e[9]!);
+      const hub = this.frame.wheels[i]!;
+      w.position.set(hub[0] + s * e[1]!, hub[1] + s * uy, hub[2] + s * e[9]!);
       this.seat[i] = s;
     }
     return lifted;
@@ -326,7 +269,7 @@ export class Suspension {
   /** The body's pitch (rad, + nose up: front over rear). */
   get pitch(): number {
     const o = this.offset;
-    return detAtan((o[0]! + o[1]! - o[2]! - o[3]!) / (4 * AXLE));
+    return detAtan((o[0]! + o[1]! - o[2]! - o[3]!) / (4 * this.frame.halfBase));
   }
 
   /** The body's ride from the four offsets: heave, pitch (front over rear) and roll (+x side over −x), and `rise`. */
@@ -337,7 +280,7 @@ export class Suspension {
     this.posedLift = lift;
     body.position.y = lift + this.heave + this.rise;
     body.rotation.x = -this.pitch;
-    body.rotation.z = detAtan((o[1]! + o[3]! - o[0]! - o[2]!) / (4 * TRACK));
+    body.rotation.z = detAtan((o[1]! + o[3]! - o[0]! - o[2]!) / (4 * this.frame.halfTrack));
   }
 
   /**
@@ -352,17 +295,18 @@ export class Suspension {
     if (uy < UPRIGHT_UP_Y) return 0;
     // The body group's turn (x then z, `pose`) and its place over the ground pose.
     const rx = -this.pitch;
-    const rz = detAtan((o[1]! + o[3]! - o[0]! - o[2]!) / (4 * TRACK));
+    const rz = detAtan((o[1]! + o[3]! - o[0]! - o[2]!) / (4 * this.frame.halfTrack));
     const sx = detSin(rx);
     const cx = detCos(rx);
     const sz = detSin(rz);
     const cz = detCos(rz);
     const dy = lift + this.heave;
     let pen = 0;
-    for (let i = 0; i < HULL_UNDER.length; i += HU_SIZE) {
-      const x = HULL_UNDER[i + HU_X]!;
-      const z = HULL_UNDER[i + HU_Z]!;
-      const h = HULL_UNDER[i + HU_H]!;
+    const hull = this.frame.hullUnder;
+    for (let i = 0; i < hull.length; i += HU_SIZE) {
+      const x = hull[i + HU_X]!;
+      const z = hull[i + HU_Z]!;
+      const h = hull[i + HU_H]!;
       const x1 = x * cz - h * sz;
       const y1 = x * sz + h * cz;
       const y = y1 * cx - z * sx + dy;

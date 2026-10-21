@@ -4,7 +4,8 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { assignClass, CLASSES, HANDLING, type VehicleClassId } from "./vehicle-classes.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
+import { carFrame } from "./car-rig.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 import { DT, paint } from "./test-support.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 
@@ -31,7 +32,7 @@ function roll(car: DeformableCar, vx: number, vz: number, secs: number): { angle
   return { angle: car.wheels[0]!.rotation.x, along: car.group.position.z - z0 };
 }
 
-const radius = (cls: VehicleClassId) => TYRE_R * CLASSES[cls].wheelScale;
+const radius = (cls: VehicleClassId) => carFrame(CAR_STYLES[CLASSES[cls].style]).rig.tyre.r * CLASSES[cls].wheelScale;
 
 for (const cls of ["sedan", "monster"] as const) {
   describe(`given a ${cls} whose drawn wheels turn with the ground (the distance the car moves along its nose over the tyre's drawn radius)`, () => {
@@ -68,7 +69,8 @@ describe("given a sedan under the real drive with the throttle held in reverse",
     const along = car.group.position.z - z0;
     assert.ok(car.velocity.dot(car.forward) < -2, `not reversing: ${car.velocity.dot(car.forward).toFixed(2)} m/s`);
     assert.ok(car.wheels[0]!.rotation.x < 0, `wheels turned forward ${car.wheels[0]!.rotation.x.toFixed(2)} rad reversing`);
-    assert.ok(Math.abs(car.wheels[0]!.rotation.x * TYRE_R - along) < 0.05 * Math.abs(along), `rolled ${(car.wheels[0]!.rotation.x * TYRE_R).toFixed(2)} m, moved ${along.toFixed(2)} m`);
+    const tyreR = car.frame.rig.tyre.r;
+    assert.ok(Math.abs(car.wheels[0]!.rotation.x * tyreR - along) < 0.05 * Math.abs(along), `rolled ${(car.wheels[0]!.rotation.x * tyreR).toFixed(2)} m, moved ${along.toFixed(2)} m`);
   });
 });
 

@@ -1,7 +1,6 @@
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { CAR_HALF, WHEEL_POS } from "../vehicle/car-mesh.ts";
 import { NO_FLOOR, type Ground } from "../world/ground.ts";
 import { PREFABS } from "../world/catalog.ts";
 import { propColliders, type Placed } from "../world/placements.ts";
@@ -30,17 +29,18 @@ export function addCars(occ: Occluder[], cars: readonly DeformableCar[], except:
   for (const c of cars) {
     if (c === except || c.vaporized || !c.group.visible) continue;
     const p = c.group.position;
-    occ.push(occluder(p.x, p.z, 0, CAR_HALF.z, CAR_HALF.z, true, p.y - 0.3, p.y + 1.6));
+    occ.push(occluder(p.x, p.z, 0, c.frame.half.z, c.frame.half.z, true, p.y - 0.3, p.y + 1.6));
   }
 }
 
-/** `s` with every visible car (not vaporized) as its tight box (`CAR_HALF`'s footprint turned with its flat heading, ground to roof): what a crash cam's eye is picked against (`carsBlock`), at the poses of the pick. */
+/** `s` with every visible car (not vaporized) as its tight box (its `frame.half` footprint turned with its flat heading, ground to roof): what a crash cam's eye is picked against (`carsBlock`), at the poses of the pick. */
 export function withCars(s: Sight, cars: readonly DeformableCar[]): Sight {
   const boxes: Occluder[] = [];
   for (const c of cars) {
     if (c.vaporized || !c.group.visible) continue;
     const p = c.group.position;
-    boxes.push({ x: p.x, z: p.z, cos: c.fwdFlat.z, sin: c.fwdFlat.x, hx: CAR_HALF.x, hz: CAR_HALF.z, circle: false, y0: p.y, y1: p.y + 2 * CAR_HALF.y });
+    const h = c.frame.half;
+    boxes.push({ x: p.x, z: p.z, cos: c.fwdFlat.z, sin: c.fwdFlat.x, hx: h.x, hz: h.z, circle: false, y0: p.y, y1: p.y + 2 * h.y });
   }
   return { ...s, cars: boxes };
 }
@@ -697,12 +697,8 @@ export const DUTCH = {
   range: 90,
 };
 
-type Mount = { x: number; y: number; z: number; dz: number; roll: number };
-
-/** Each wheel well, hanging outboard of the body above the tyre, looking forward (dz 1) or back (−1). */
-const MOUNTS: readonly Mount[] = WHEEL_POS.flatMap(([x, y, z]) =>
-  [1, -1].map((dz) => ({ x: Math.sign(x) * (CAR_HALF.x + DUTCH.out), y: y + 0.34, z, dz, roll: Math.sign(x) * dz * DUTCH.roll })),
-);
+/** The mounts: each wheel well (`frame.wheels` order), hanging outboard of the body above the tyre, looking forward (even) or back (odd). */
+const MOUNTS = 8;
 const _a = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 
@@ -722,16 +718,19 @@ export class DutchCam {
 
   /** Re-choose on the next `update`, starting the search after `mount` (replays: same seed, same cuts). */
   reset(mount = this.mount): void {
-    this.mount = mount % MOUNTS.length;
+    this.mount = mount % MOUNTS;
     this.car = null;
   }
 
   /** `camera` on mount `j` of `car`: aimed along the body, splayed outward and a touch down, then rolled. */
   place(camera: THREE.PerspectiveCamera, car: DeformableCar, j: number): void {
-    const m = MOUNTS[j]!;
-    car.group.localToWorld(camera.position.set(m.x, m.y, m.z));
-    camera.lookAt(car.group.localToWorld(_a.set(m.x + Math.sign(m.x) * 10 * DUTCH.splay, m.y - 0.5, m.z + m.dz * 10)));
-    camera.rotateZ(m.roll);
+    const [wx, wy, wz] = car.frame.wheels[j >> 1]!;
+    const dz = j & 1 ? -1 : 1;
+    const x = Math.sign(wx) * (car.frame.half.x + DUTCH.out);
+    const y = wy + 0.34;
+    car.group.localToWorld(camera.position.set(x, y, wz));
+    camera.lookAt(car.group.localToWorld(_a.set(x + Math.sign(x) * 10 * DUTCH.splay, y - 0.5, wz + dz * 10)));
+    camera.rotateZ(Math.sign(wx) * dz * DUTCH.roll);
   }
 
   /** Rivals (not `car`, not vaporized) in mount `j`'s view within `DUTCH.range`; `lens` gives the aspect. */
@@ -781,8 +780,8 @@ export class DutchCam {
   choose(car: DeformableCar, rivals: readonly DeformableCar[], lens: THREE.PerspectiveCamera, need = 0): void {
     let best = -1;
     let pick = this.mount;
-    for (let d = 1; d < MOUNTS.length; d++) {
-      const j = (this.mount + d) % MOUNTS.length;
+    for (let d = 1; d < MOUNTS; d++) {
+      const j = (this.mount + d) % MOUNTS;
       const n = this.seen(car, rivals, j, lens);
       if (n > best) {
         best = n;

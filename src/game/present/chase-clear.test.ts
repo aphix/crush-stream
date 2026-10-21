@@ -16,7 +16,6 @@ import { CHASE } from "./drive-cam.ts";
 import { ChaseSolids } from "./chase-solids.ts";
 import { EyeClear } from "./eye-clear.ts";
 import { carsBlock, CINE, inside, occluder, raceSight, solid, type Sight } from "./spectate-cam.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const DT = 1 / FRAME_HZ;
@@ -331,7 +330,8 @@ function overtake(tailGap: number) {
   const solids = new ChaseSolids(() => {});
   const kept = chaseRig(0, 0, 0);
   const bare = chaseRig(0, 0, 0);
-  const own = occluder(0, 0, 0, CAR_HALF.x, CAR_HALF.z, false, 0, 2 * CAR_HALF.y);
+  const { half } = car.frame;
+  const own = occluder(0, 0, 0, half.x, half.z, false, 0, 2 * half.y);
   const subject = new THREE.Vector3();
   const offset = new THREE.Vector3();
   const last = new THREE.Vector3();
@@ -342,7 +342,7 @@ function overtake(tailGap: number) {
     car.group.position.set(0, 0, z);
     car.velocity.set(0, 0, RACE_SPEED);
     const { gap, side } = rivalAt(t, tailGap);
-    rival.group.position.set(side, 0, z - 2 * CAR_HALF.z - gap);
+    rival.group.position.set(side, 0, z - 2 * rival.frame.half.z - gap);
     const sight = solids.frame(null, false, [rival], car);
     kept.view.frameDrive(car, sight, DT, false);
     bare.view.frameDrive(car, null, DT, false);

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { armSolids, C_DEPTH, C_H, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, MOUNT, pointContact, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VZ, PQ_X, PQ_Y, PQ_Z, STEP_MAX, Surface, WALL } from "./surfaces.ts";
 import "./ground.ts";
 import { CLASSES } from "../vehicle/vehicle-classes.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { ENTRY_WINDOW, SOLID_AT_REST } from "./constants.ts";
 import { FF_NX, FF_NZ, FF_PEN, FF_SIZE, FOOT_FX, FOOT_FZ, FOOT_HL, FOOT_HW, FOOT_RX, FOOT_RZ, FOOT_SIZE, FOOT_X, FOOT_Z, footFace } from "./prism.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
@@ -167,7 +168,8 @@ describe("given a circle prism and a ramp prism", () => {
 describe("given the step a tyre mounts", () => {
   it("when it is derived from the classes then it is the biggest tyre's share of its radius", () => {
     const biggest = Math.max(...Object.values(CLASSES).map((c) => c.wheelScale));
-    assert.ok(Math.abs(STEP_MAX - MOUNT * TYRE_R * biggest) < 1e-9, `${STEP_MAX} against ${MOUNT * TYRE_R * biggest}`);
+    const tyreR = carFrame(CAR_STYLES.sedan).rig.tyre.r;
+    assert.ok(Math.abs(STEP_MAX - MOUNT * tyreR * biggest) < 1e-9, `${STEP_MAX} against ${MOUNT * tyreR * biggest}`);
   });
 
   it("when prisms are listed near a point then each one is listed once, and the ones far away are not", () => {
