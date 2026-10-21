@@ -2,7 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { setImmediate as yieldToLoop } from "node:timers/promises";
 import { createHash } from "node:crypto";
-import type * as THREE from "three";
+import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { CAR_SPRAY, NO_CAR_PICK, SPRAY_PALETTE } from "../match/look-data.ts";
@@ -298,5 +298,29 @@ describe("given the real engine headless", () => {
     assert.equal(sprayOn(car(0)), ownDigest(), "this browser's own car keeps its own spray");
     engine.raceCommand({ type: "reelBack" });
     assert.equal(sprayOn(car(racer)), null, "the racer is bare once the clip is over");
+  });
+
+  it("when a saved clip is played alone on the high tier, then its racer's new paints carry the finish, as a live dress gives them", async () => {
+    store.set("crush.highlight.rival", savedText);
+    engine.setSky("off");
+    engine["cine"].setTier("high");
+    // The clip's dress rebuilds a car of another body: its first spray splits fresh paints, the ones the clip's dress must finish.
+    const clipCar = recorded.cars.find((c) => c.slot === 1)!;
+    engine.matchCar(1, clipCar.style === "pickup" ? "sedan" : "pickup", clipCar.cls);
+    try {
+      engine.raceCommand({ type: "savedPlay", key: "rival" });
+      for (let turns = 0; turns < MAX_TURNS && engine["highlights"]["solo"] === null; turns++) await yieldToLoop();
+      assert.notEqual(engine["highlights"]["solo"], null, "the saved clip is up alone");
+      const paintKeys: string[] = [];
+      engine["cars"][1]!.group.traverse((object) => {
+        if (object instanceof THREE.Mesh) for (const material of [object.material].flat()) if (material.userData.carFinish !== undefined) paintKeys.push(material.customProgramCacheKey());
+      });
+      assert.ok(paintKeys.length > 0, "the racer carries finish-capable materials");
+      for (const key of paintKeys) assert.ok(key.includes("|finish-"), `key ${key}`);
+    } finally {
+      engine.raceCommand({ type: "reelBack" });
+      engine.matchCar(1, clipCar.style, clipCar.cls);
+      engine["cine"].setTier("minimal");
+    }
   });
 });

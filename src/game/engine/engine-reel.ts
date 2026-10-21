@@ -1,4 +1,5 @@
 import { carClass } from "../vehicle/vehicle-classes.ts";
+import { applyCarFinish, finishForTier } from "../vehicle/car-finish.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { carLayout } from "../net/car-pose.ts";
 import { decodeSaved, encodeSaved, packReel, unpackReel } from "../net/reel-codec.ts";
@@ -218,6 +219,7 @@ export abstract class EngineReel extends EngineInput {
     for (const c of rivals) {
       const car = this.cars[c.slot]!;
       wearCarLook(car, NO_CAR_PICK, this.rivals.of(clip.look, c.slot, lookColours(car, NO_CAR_PICK).body));
+      applyCarFinish(car.group, finishForTier(this.cine.tier));
     }
     return () => {
       for (const l of looks) this.matchCar(l.slot, l.style, l.cls);
