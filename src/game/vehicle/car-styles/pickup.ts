@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { BOOT_SENSOR, HEAD_LAMP, PLATFORM_HARDPOINTS, st } from "./platform.ts";
+import { HEAD_LAMP, PLATFORM_HARDPOINTS, st } from "./platform.ts";
 
 const { bumpers } = PLATFORM_HARDPOINTS;
 /** Flat chrome bar over a black valance: the bar 13 cm tall and 9 cm proud, the valance 7 cm under it ([y, out] m, top to bottom). */
@@ -113,13 +113,5 @@ export const PICKUP: BodyStyle = {
       { view: "rear", points: [[0, 0.97], [0.1, 0.97], [0.1, 1.07], [0, 1.07]], depth: -0.006, rim: 0.004, cavity: 0.6 },
       { view: "rear", points: [[0, 0.5], [0.38, 0.5], [0.38, 0.64], [0, 0.64]], depth: -0.002, rim: 0.004, cavity: 0.6 },
     ],
-  },
-  rig: {
-    cages: {
-      roof: { min: [-0.6, 1.3, -0.56], max: [0.6, 1.72, 0.42] },
-      glassRear: { min: [-0.66, 1.15, -0.62], max: [0.66, 1.66, -0.48] },
-      boot: { min: [-0.78, 0.55, -2.24], max: [0.78, 1.22, -1.86] },
-    },
-    sensors: { [BOOT_SENSOR]: [0, 0.85, -2.05] },
   },
 };

@@ -433,16 +433,17 @@ const SIM_CRASH_KPH = 48;
 // where the cage the contact reads first differs.
 const SIM_DIGEST_BY_STYLE = [
   { id: "sedan", digest: "482d299bbf62cfe82b9c5037a70fd22463affd183b1eb4e9f64b085bfaf11e30" },
-  { id: "hatchback", digest: "482d299bbf62cfe82b9c5037a70fd22463affd183b1eb4e9f64b085bfaf11e30" },
-  { id: "wagon", digest: "482d299bbf62cfe82b9c5037a70fd22463affd183b1eb4e9f64b085bfaf11e30" },
-  { id: "coupe", digest: "457b9fa4503b2875a323b0b3cce41ea536f3084148ba6bcea0a32b5bf2489bc8" },
-  { id: "pickup", digest: "39d6911ced53f424b1d8a4bcfaf450e76a96b78f19559f39664d5c6a7949bb87" },
+  // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
+  { id: "hatchback", digest: "56765eb4cf171c369b1c5dd0dc9a9b95dddc35fef363c304a0a13e7ab9716fad" },
+  { id: "wagon", digest: "ee9063937f7634ff346b016cd7f58f41d4d62c2bef1ae57e9cceb8e43495f298" },
+  { id: "coupe", digest: "40338da7598383475ddc25e15b9e759e2f8bbbadf3856d43f2fcf84d61960b77" },
+  { id: "pickup", digest: "075726ca358aeba30f6036888aa7d8f9340e5b972178bdd6aef3a2ebbc1480f3" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
   { id: "police", digest: "08723ee0b057fd7362b131572b0fae67c75b4b44cba69bb5c9097461202172fe" },
   // The monster's body is the pickup's: given the monster class, the pickup body and the monster body hash the same (7c249b89...).
-  { id: "monster", digest: "8b368488473b0b7de3d40fc1cf8e12fa71ebe8a9e6fc484e06d12b653e91653f" },
+  { id: "monster", digest: "1ff87dbcbd27c05353eff1ccdb9d5dff37ab793c99f3a382c5f053e1ce878386" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style crashed into the wall at 48 km/h by the engine's own step", () => {
@@ -478,12 +479,13 @@ function cageSourceDigest(car: DeformableCar): string {
 
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
   { id: "sedan", digest: "505b4c4fe9c4f34f8f3350c3530634eff8ae353dcfa168b128b9525112f4d52a" },
-  { id: "hatchback", digest: "05d9ac32b6a4a27601edd27c36fd30ff7e74808b1e6a2f68f290f8040a1a7222" },
-  { id: "wagon", digest: "2ec7bcc51ccd1d45f51587fe633611d7bb0a30cc19df2b940eacb5c3ad1ec5f7" },
-  { id: "coupe", digest: "b322568b9713bf4d89e349caee9e5d1cfc77af2640bd6420abbc6ffdcf4384eb" },
-  { id: "pickup", digest: "74c010377f9c5958cc9a88b234097fb8cf12393139f45c2657abed873e5d3c37" },
+  // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
+  { id: "hatchback", digest: "2ebc4b0141b5c6c0d89162f27eca758e2ea6d5707a3f20b3497c08134cb52e59" },
+  { id: "wagon", digest: "b7deba530880e57530f77753db99a14888cc4412bafe0227dd79381f24985dec" },
+  { id: "coupe", digest: "986eb8a7cb728f9b75067a62ea6c793b9f330c5d773dd0e9eac12d1dc09074b2" },
+  { id: "pickup", digest: "ef70266b44997559494201993b461f959c68591e1e81ee5795a01e20dba9aacf" },
   { id: "police", digest: "44c94fa5daa8c1c3dd5672c2bdb1a80ef92666e5c027c7698814ddf6b7de1796" },
-  { id: "monster", digest: "74c010377f9c5958cc9a88b234097fb8cf12393139f45c2657abed873e5d3c37" },
+  { id: "monster", digest: "ef70266b44997559494201993b461f959c68591e1e81ee5795a01e20dba9aacf" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {

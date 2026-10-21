@@ -12,13 +12,14 @@
  *
  * `--side-span x0,x1[=m]` scales the side picture (bumper tips, or wheel centres with the metres between them; default the spec
  * length), and its two tyres set z = 0. `--top-span x0,x1[=m]` marks the top picture's nose and tail columns, which land on the
- * side picture's nose and tail. Read once: dims, the glass hardpoints, belt and underside. Fitted: `profile` (yBelt or yRoof from
+ * side picture's nose and tail. Read once: dims, the glass hardpoints, belt, underside, the door's hinge x and the bumpers' seat z
+ * and plan wrap; the mirror's reach is set from one build so its tip meets the reference's. Fitted: `profile` (yBelt or yRoof from
  * the side's top edge, hw from the plan; the end stations take widths only). The style file is never written.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { CABIN_MIN, at, extractSide, extractTop, formatTable, glassZone, outlineOf, planOf, tableFrom } from "./fit-extract.mjs";
+import { CABIN_MIN, at, extractSide, extractTop, formatTable, glassZone, mirrorTip, outlineOf, planOf, rawHalfOf, refMirrorTip, tableFrom } from "./fit-extract.mjs";
 import { CarStage, ViewPort, alphaMask, beltOf, centreOnHubs, frameCamera, openGame, refFrame, traceView } from "./trace-core.mjs";
 import { columnEdges, compare } from "./trace-metrics.mjs";
 import { loadRef, refLayers } from "./trace-ref.mjs";
@@ -47,7 +48,7 @@ const BAR = { iou: 0.95, meanCm: 2, maxCm: 5 };
 /** The fit's renders: the side without the parts that stick out of the roof line; the plan as the loft alone. */
 const SIDE_OMIT = ["mirrors", "lightbar"];
 const PLAN_OMIT = ["doors", "glass", "bumpers", "mirrors", "lightbar", "wheels", "lamps", "parts"];
-const NOT_FIT = "bumpers (seat, fascia, wrap), hood, arch, rocker, door, boot, track, rideHeight, cabinHw: finish them on trace-car's overlays";
+const NOT_FIT = "hood, arch, rocker, boot, track, rideHeight, cabinHw, bPillar, bumper fascia and span, door hinge y/z, length and aperture";
 
 const t0 = performance.now();
 const { values } = parseArgs({
@@ -80,7 +81,9 @@ const top = await topView();
 side.read = extractSide(side.frame, side.layers.sil, side.layers.glass, side.hubs, game.CLASSES[cls].lift, glassZone(top.read, base));
 const start = { ...base, ...tableFrom(side.read, top.read, base, game.CLASSES[cls].wheelScale) };
 const before = await evaluate(null, "before");
-const { table, rounds } = fit(start);
+const fitted = fit(start);
+const table = reachMirror(fitted.table);
+const rounds = fitted.rounds;
 const after = await evaluate(table, "after");
 stage.dispose();
 mkdirSync(outDir, { recursive: true });
@@ -165,6 +168,16 @@ function fit(first) {
     table = { ...table, profile: step(table.profile, m.roof, m.plan) };
   }
   return { table: best.table, rounds };
+}
+
+/** `t` with its mirror reach moved so the drawn mirror's tip meets the reference's (the tip moves with the reach): one build. */
+function reachMirror(t) {
+  const z = t.door.hingeZ;
+  const want = refMirrorTip(top.read, z);
+  if (want === null) return t;
+  stage.build(id, cls, [], t);
+  const drawn = rawHalfOf(top.frame, alphaMask(top.port.draw(stage.scene, frameCamera(top.frame)), top.frame.W, top.frame.H));
+  return { ...t, door: { ...t.door, mirrorReach: t.door.mirrorReach + want - mirrorTip(drawn, z) } };
 }
 
 /** One round's fit renders and residuals: the side's top edge (m, car minus reference, per column) and the plan half-width. */

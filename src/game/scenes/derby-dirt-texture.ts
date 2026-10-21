@@ -1,5 +1,6 @@
 import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
-import { FLEET_HALF } from "../vehicle/car-rig.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { DERBY_ARENA } from "./constants.ts";
 import { OPAQUE, TEXTURE_WRAP, dataTextureOf, makeSeededRandom, makeValueNoise, ramp } from "./derby-textures.ts";
 
@@ -37,9 +38,9 @@ const PEBBLE_RADIUS = { least: 0.05, most: 0.15 };
 const PEBBLE_LEVELS = { least: 22, most: 55 };
 const PEBBLE_SEED = 777;
 
-/** Wheel ruts 0.55 m wide, a pair `2 x FLEET_HALF.x` apart, in a trodden lane 2.4 m wide whose pushed-up ridge (0.45 m) lies outside it. */
+/** Wheel ruts 0.55 m wide, a pair the slot-0 sedan's body width apart, in a trodden lane 2.4 m wide whose pushed-up ridge (0.45 m) lies outside it. */
 const TRACK_RUT_WIDTH = 0.55;
-export const TRACK_GAUGE = 2 * FLEET_HALF.x;
+export const TRACK_GAUGE = 2 * carFrame(CAR_STYLES.sedan).half.x;
 export const TRACK_LANE_WIDTH = 2.4;
 const TRACK_RIDGE_WIDTH = 0.45;
 const TRACK_RUT_HALF = TRACK_RUT_WIDTH / 2;

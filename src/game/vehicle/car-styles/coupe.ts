@@ -137,5 +137,4 @@ export const COUPE: BodyStyle = {
       { view: "front", points: [[0, 0.32], [0.7, 0.32], [0.7, 0.38], [0, 0.38]], depth: 0.003, rim: 0.003, cavity: 0.2 },
     ],
   },
-  rig: {},
 };
