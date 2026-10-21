@@ -3,6 +3,8 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { once } from "../kernel/scalar.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { applyFinish } from "./car-finish.ts";
+import { FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
+import type { BodyStyle } from "./car-variants.ts";
 
 /** The shared car textures and materials (paint, tone grid, glass, crack map, lamp mask) and the multi-tone part helpers; the small parts built on them are in `part-geometry.ts`. */
 
@@ -117,20 +119,67 @@ export function makePaintMaterial(color: number): THREE.MeshPhysicalMaterial {
   );
 }
 
-const trimByColor = new Map<number, THREE.MeshStandardMaterial>();
+const trimByKey = new Map<string, THREE.MeshStandardMaterial>();
+
+/** Trim finishes: the accent trim's satin, chrome, black plastic, and a painted bumper's (the paint's metalness and roughness, no clear coat). */
+const TRIM_FINISH = {
+  satin: { metalness: 0.55, roughness: 0.38 },
+  chrome: { metalness: 0.95, roughness: 0.16 },
+  plastic: { metalness: 0.3, roughness: 0.6 },
+  paint: { metalness: 0.2, roughness: 0.42 },
+} as const;
+
+/** Black plastic and chrome (sRGB): a black or chrome bumper, and the fittings drawn in any bumper (`FITTING_TONE`). */
+const TRIM_BLACK = 0x121316;
+const TRIM_CHROME = 0xd2d6db;
+
+/** A `vec3` literal of sRGB `hex` in the shader's linear space. */
+function glslTone(hex: number): string {
+  const c = new THREE.Color(hex);
+  return `vec3(${c.r}, ${c.g}, ${c.b})`;
+}
+
+/** Fittings drawn in the trim's one mesh: a `FITTING_ATTRIBUTE` vertex (0 on a mesh without one) of a `FITTING_TONE` takes that tone's colour and finish. Wraps `capHighlights`' compile hook. */
+function withFittings<T extends THREE.MeshStandardMaterial>(m: T): T {
+  const cap = m.onBeforeCompile;
+  const fitted = `vFitting > ${FITTING_TONE.black - 0.5}`;
+  const chrome = `vFitting > ${FITTING_TONE.chrome - 0.5}`;
+  const { chrome: shine, plastic } = TRIM_FINISH;
+  m.onBeforeCompile = (shader, renderer) => {
+    cap.call(m, shader, renderer);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", `#include <common>\nattribute float ${FITTING_ATTRIBUTE};\nvarying float vFitting;`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\nvFitting = ${FITTING_ATTRIBUTE};`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying float vFitting;")
+      .replace("#include <color_fragment>", `#include <color_fragment>\nif (${fitted}) diffuseColor.rgb = ${chrome} ? ${glslTone(TRIM_CHROME)} : ${glslTone(TRIM_BLACK)};`)
+      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\nif (${fitted}) roughnessFactor = ${chrome} ? ${shine.roughness} : ${plastic.roughness};`)
+      .replace("#include <metalnessmap_fragment>", `#include <metalnessmap_fragment>\nif (${fitted}) metalnessFactor = ${chrome} ? ${shine.metalness} : ${plastic.metalness};`);
+  };
+  m.customProgramCacheKey = () => "car-trim-fittings";
+  return m;
+}
 
 /**
- * The bumper trim of `color`, one material for every car that wears it (the palette has a dozen): a material switch costs a
+ * The bumper trim of `color` in `finish`, one material for every car that wears it (the palette has a dozen): a material switch costs a
  * frame about 0.015 ms at 4x CPU, and 32 cars drew 64 trim materials. Never disposed, like `partsMaterial`.
  */
-export function trimMaterial(color: number): THREE.MeshStandardMaterial {
-  let m = trimByColor.get(color);
+export function trimMaterial(color: number, finish: keyof typeof TRIM_FINISH = "satin"): THREE.MeshStandardMaterial {
+  const key = `${finish}:${color}`;
+  let m = trimByKey.get(key);
   if (m === undefined) {
-    m = classed(applyFinish(capHighlights(new THREE.MeshStandardMaterial({ color, metalness: 0.55, roughness: 0.38 })), "trim"), DRAW_CLASS.trim);
+    m = classed(applyFinish(withFittings(capHighlights(new THREE.MeshStandardMaterial({ color, ...TRIM_FINISH[finish] }))), "trim"), DRAW_CLASS.trim);
     m.userData.shared = true;
-    trimByColor.set(color, m);
+    trimByKey.set(key, m);
   }
   return m;
+}
+
+/** A bumper's material for its style's `trim` (`BumperSpec.trim`): the car's `accent` trim when unset, else black, chrome, or its body colour `body` in a painted finish. */
+export function bumperMaterial(trim: BodyStyle["bumpers"]["front"]["trim"], accent: number, body: number): THREE.MeshStandardMaterial {
+  if (trim === "chrome") return trimMaterial(TRIM_CHROME, "chrome");
+  if (trim === "black") return trimMaterial(TRIM_BLACK, "plastic");
+  return trim === "body" ? trimMaterial(body, "paint") : trimMaterial(accent);
 }
 
 /** Roughness/metalness lookup in 0.01 steps: texel (i, j) = roughness i/100 (G), metalness j/100 (B). */
@@ -321,8 +370,9 @@ const SIREN_U = [1 / 6, 3 / 6, 5 / 6] as const;
 /** The light bar's two feet in bar space: at ±`x`, their soles `sole` below the origin, `2z` deep (front to back). They rest on the roof. */
 export const LIGHT_BAR_FOOT = { x: 0.4, sole: -0.03, z: 0.09 } as const;
 
-/** Roof light bar in bar space (+z forward): housing on two feet (`LIGHT_BAR_FOOT`), a red lens on the left (−x)
- *  and a blue one on the right, one draw. `LIGHT_BAR_LENS` lists each lens's vertices. */
+/** Roof light bar in bar space (+z forward, so +x is the car's left): housing on two feet (`LIGHT_BAR_FOOT`), a red lens on
+ *  the car's left (+x) and a blue one on its right (−x), as the reference cruiser's, with a clear takedown module between,
+ *  one draw. `LIGHT_BAR_LENS` lists each lens's vertices. */
 export function makeLightBar(): THREE.BufferGeometry {
   const box = (w: number, h: number, d: number, x: number, y: number, tone: number, texel: 0 | 1 | 2) => {
     const g = toned(new THREE.BoxGeometry(w, h, d), tone, 0, 0).translate(x, y, 0);
@@ -335,12 +385,12 @@ export function makeLightBar(): THREE.BufferGeometry {
   };
   return mergeToned(
     [
-      box(1.06, 0.05, 0.25, 0, 0.04, 0x16181c, 0),
-      box(0.06, 0.07, 0.2, 0, 0.1, 0x8a909a, 0),
+      box(1.04, 0.045, 0.26, 0, 0.04, 0x16181c, 0),
+      box(0.16, 0.07, 0.22, 0, 0.1, 0xd8dce2, 0),
       box(0.08, -2 * LIGHT_BAR_FOOT.sole, 2 * LIGHT_BAR_FOOT.z, -LIGHT_BAR_FOOT.x, 0, 0x16181c, 0),
       box(0.08, -2 * LIGHT_BAR_FOOT.sole, 2 * LIGHT_BAR_FOOT.z, LIGHT_BAR_FOOT.x, 0, 0x16181c, 0),
-      box(0.47, 0.075, 0.22, -0.27, 0.1, 0x8c1218, 1),
-      box(0.47, 0.075, 0.22, 0.27, 0.1, 0x1a36a8, 2),
+      box(0.42, 0.075, 0.23, 0.3, 0.1, 0x8c1218, 1),
+      box(0.42, 0.075, 0.23, -0.3, 0.1, 0x1a36a8, 2),
     ],
     "light bar",
   );

@@ -740,9 +740,9 @@ export class DeformableCar extends CarParts {
     this.group.traverse(free);
   }
 
-  /** The meshes a player's look recolours (`car-look.ts`): the body (on the body paint), the lids, the door skins and the glass panes. */
-  lookMeshes(): { body: THREE.Mesh; bodyPaint: THREE.MeshPhysicalMaterial; hood: THREE.Mesh; trunk: THREE.Mesh; doors: readonly THREE.Mesh[]; glass: readonly THREE.Mesh[] } {
-    return { body: this.body, bodyPaint: this.bodyMat, hood: this.hood, trunk: this.trunk, doors: [this.doorMeshL, this.doorMeshR], glass: this.glassPanes.map((g) => g.mesh) };
+  /** The meshes a player's look recolours (`car-look.ts`): the body (on the body paint), the lids, the door skins, the glass panes and the front and rear bumpers. */
+  lookMeshes(): { body: THREE.Mesh; bodyPaint: THREE.MeshPhysicalMaterial; hood: THREE.Mesh; trunk: THREE.Mesh; doors: readonly THREE.Mesh[]; glass: readonly THREE.Mesh[]; bumpers: readonly THREE.Mesh[] } {
+    return { body: this.body, bodyPaint: this.bodyMat, hood: this.hood, trunk: this.trunk, doors: [this.doorMeshL, this.doorMeshR], glass: this.glassPanes.map((g) => g.mesh), bumpers: this.bumperMeshes };
   }
 
   /** The meshes the crush skin writes (`updateSkin`): the body, the lids, the light bar and the skinned panes. */

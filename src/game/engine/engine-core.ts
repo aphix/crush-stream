@@ -66,6 +66,7 @@ import type { Garage } from "./garage.ts";
 import type { Showcase } from "./showcase.ts";
 import { PlayerLooks } from "./player-looks.ts";
 import { lookColours, wearCarLook } from "../present/car-look.ts";
+import { copPaint, copSpray } from "../present/cop-livery.ts";
 import { RivalLooks } from "../present/rival-look.ts";
 import { rivalSeedOf } from "./rival-seed.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
@@ -518,9 +519,11 @@ export abstract class EngineCore {
     armKill(car.deform, killClass(car), HANDLING.realism, this.derbyMode ? "derby" : "default");
     const slot = car.group.userData.carIndex as number;
     const look = this.looks.of(slot, this.ownCar());
+    // A cop wears its livery: under its player's spray (bare texels show it), else as its own.
+    if (look) look.carSpray.underlay(copPaint(car.style, look.carSpray.layout));
     // A car with no player's look wears its rival spray when the race or derby has one for it (the first dress runs before `race` is assigned).
     const seed = look || !this.race ? null : rivalSeedOf(slot, this.race, this.derbyMode ? { round: this.derbyRound, seated: this.derbySeated } : null);
-    if (seed === null) wearCarLook(car, look?.car ?? NO_CAR_PICK, look?.carSpray ?? null);
+    if (seed === null) wearCarLook(car, look?.car ?? NO_CAR_PICK, look?.carSpray ?? copSpray(car.style));
     else wearCarLook(car, NO_CAR_PICK, this.rivals.of(seed, slot, lookColours(car, NO_CAR_PICK).body));
     applyCarFinish(car.group, finishForTier(this.cine.tier));
   }

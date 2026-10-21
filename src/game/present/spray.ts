@@ -20,6 +20,8 @@ export class SprayBitmap {
   readonly palette: number[] = [...SPRAY_PALETTE];
   readonly rgba: Uint8Array;
   readonly texture: THREE.DataTexture;
+  /** Paint a bare texel shows (a cop's livery under its player's spray): drawn only, never in `texels` or `palette`, so never on the wire or in storage. */
+  private under: SprayPaint | null = null;
 
   /** `mipmapped`: the texture keeps a mip chain (the rivals' finer bitmaps, which a far car would otherwise alias); the garage's stays unmipped. */
   constructor(layout: SprayLayout, mipmapped = false) {
@@ -92,11 +94,7 @@ export class SprayBitmap {
   load(paint: SprayPaint | null): void {
     for (let ink = 0; ink < this.palette.length; ink++) this.palette[ink] = paint ? paint.palette[ink]! : SPRAY_PALETTE[ink]!;
     if (paint) for (let i = 0; i < this.texels.length; i++) this.set(i, paint.texels[i]!);
-    else {
-      // Bare is ink 0, palette[0] is 0: set(i, 0) would write all zeros.
-      this.texels.fill(0);
-      this.rgba.fill(0);
-    }
+    else for (let i = 0; i < this.texels.length; i++) this.set(i, 0);
     this.texture.needsUpdate = true;
   }
 
@@ -107,18 +105,28 @@ export class SprayBitmap {
     this.texture.needsUpdate = true;
   }
 
+  /** Bare texels show `paint` (a bitmap of this layout), or nothing when null; the painted ones keep their ink. */
+  underlay(paint: SprayPaint | null): void {
+    if (paint === this.under) return;
+    this.under = paint;
+    for (let i = 0; i < this.texels.length; i++) if (this.texels[i] === 0) this.set(i, 0);
+    this.texture.needsUpdate = true;
+  }
+
   dispose(): void {
     this.texture.dispose();
   }
 
-  /** Texel `i` takes ink `ink`; bare (0) is all zeros, so its premultiplied RGB stays black. */
+  /** Texel `i` takes ink `ink`; bare (0) shows the underlay's texel, else all zeros, so its premultiplied RGB stays black. */
   private set(i: number, ink: number): void {
     this.texels[i] = ink;
-    const hex = this.palette[ink]!;
+    const from: SprayPaint = ink === 0 && this.under ? this.under : this;
+    const shown = from.texels[i]!;
+    const hex = from.palette[shown]!;
     this.rgba[i * 4] = hex >> 16;
     this.rgba[i * 4 + 1] = (hex >> 8) & 0xff;
     this.rgba[i * 4 + 2] = hex & 0xff;
-    this.rgba[i * 4 + 3] = ink === 0 ? 0 : 255;
+    this.rgba[i * 4 + 3] = shown === 0 ? 0 : 255;
   }
 }
 
@@ -164,8 +172,8 @@ vec4 sprayTexel() {
 
 /**
  * Patch `material` to lay its spray over the paint. `vertex` sets `vSprayP` / `vSprayN` (the rest point and normal) and
- * `vSprayRow` (which stacked bitmap) from attributes it declares in `attributes`. Chains any earlier compile hook, like
- * `applyMarkMap`.
+ * `vSprayRow` (which stacked bitmap) from attributes it declares in `attributes`, unless an earlier hook (the detail map) declared
+ * them. Chains any earlier compile hook, like `applyMarkMap`.
  */
 export function applySpray(material: THREE.Material, uniforms: Record<string, THREE.IUniform>, attributes: string, vertex: string, key: string): void {
   const prev = material.onBeforeCompile;
@@ -174,7 +182,7 @@ export function applySpray(material: THREE.Material, uniforms: Record<string, TH
     prev.call(material, shader, renderer);
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", `#include <common>\n${attributes}\nvarying vec3 vSprayP;\nvarying vec3 vSprayN;\nvarying float vSprayRow;`)
+      .replace("#include <common>", `#include <common>\n${shader.vertexShader.includes(attributes) ? "" : attributes}\nvarying vec3 vSprayP;\nvarying vec3 vSprayN;\nvarying float vSprayRow;`)
       .replace("#include <begin_vertex>", `#include <begin_vertex>\n${vertex}`);
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>\n${SPRAY_FRAGMENT}`)
