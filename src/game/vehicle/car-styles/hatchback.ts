@@ -1,6 +1,44 @@
 import type { BodyStyle } from "../car-variants.ts";
 import { PLATFORM_HARDPOINTS, st } from "./platform.ts";
 
+/** Hatchback's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const HATCHBACK_LAMP_SHAPES = {
+  head: {
+    loops: [{ points: [[0.4, 0.49], [0.68, 0.49], [0.7, 0.6], [0.4, 0.62]] }],
+    lens: "lit",
+    bezel: "black",
+    recess: 0.01,
+    cells: [
+      { loop: { points: [[0.61, 0.49], [0.7, 0.49], [0.7, 0.61], [0.61, 0.61]] }, tone: "amber" },
+      { loop: { side: true, points: [[1.72, 0.49], [1.62, 0.49], [1.62, 0.59], [1.72, 0.61]] }, tone: "amber" },
+    ],
+  },
+  tail: {
+    loops: [
+      { points: [[0.6, 0.62], [0.78, 0.6], [0.78, 0.8], [0.6, 0.82]] },
+      { points: [[0.43, 0.64], [0.6, 0.62], [0.6, 0.82], [0.43, 0.82]] },
+      { side: true, points: [[-1.68, 0.6], [-1.6, 0.62], [-1.58, 0.8], [-1.68, 0.82]] },
+    ],
+    lens: "lit",
+    bezel: "black",
+    recess: 0.01,
+    strips: [{ line: { points: [[0.43, 0.81], [0.78, 0.79]] }, width: 0.02, tone: "lit" }],
+    cells: [
+      { loop: { points: [[0.43, 0.64], [0.5, 0.64], [0.5, 0.8], [0.43, 0.8]] }, tone: "clear" },
+      { loop: { points: [[0.6, 0.6], [0.78, 0.6], [0.78, 0.7], [0.6, 0.7]] }, tone: "smoked" },
+      { loop: { points: [[0.5, 0.62], [0.6, 0.62], [0.6, 0.7], [0.5, 0.7]] }, tone: "smoked" },
+    ],
+  },
+  front: {
+    loops: [{ points: [[0.56, 0.3], [0.68, 0.3], [0.68, 0.34], [0.56, 0.34]] }],
+    lens: "amber",
+  },
+  rear: {
+    loops: [{ points: [[0.48, 0.3], [0.64, 0.3], [0.64, 0.33], [0.48, 0.33]] }],
+    lens: "red",
+  },
+} as const;
+
 /** Compact five-door: boxy face, near-vertical hatch under a roof spoiler. */
 export const HATCHBACK: BodyStyle = {
   id: "hatchback",
@@ -70,7 +108,8 @@ export const HATCHBACK: BodyStyle = {
   tubs: [[-1.56, 0.7, 0.27]],
   rearDoorSeam: -0.88,
   boot: { kind: "tailgate", y0: 0.57, origin: [0.93, -1.625], z0: -1.76 },
-  lamps: { head: [0.34, 0.54], tail: [0.59, 0.72] },
+  lamps: { head: [0.545, 0.55], tail: [0.603, 0.718], shapes: HATCHBACK_LAMP_SHAPES },
+  grille: { y: 0.53, size: [0.66, 0.1], kind: "bars", count: 4, badge: 0.025, finish: "black" },
   seats: PLATFORM_HARDPOINTS.seats,
   roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.5 } },
   exhaust: { tips: 2, x: 0.55, y: 0.32, size: [0.075, 0.045], shape: "round" },

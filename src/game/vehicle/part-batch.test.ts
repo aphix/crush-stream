@@ -86,11 +86,12 @@ describe("given the part batch and a few cars near the camera", () => {
     assertSameNumbers(matrix.elements, only.partSeats[PART_KIND.mirrorR]!.matrixWorld.elements, "the mirror instance is the seat's world matrix", FLOAT32_SLACK);
   });
 
-  test("when every kind's mesh is read, then it draws the kind's one shared geometry, or, for a kind a style draws its own way (here the mirrors), every variant with the platform part first", () => {
+  test("when every kind's mesh is read, then it draws the kind's one shared geometry, or, for a kind a style draws its own way (mirrors, grille, tail trim), every variant with the platform part first", () => {
     const { batch } = stage();
+    const styled: readonly number[] = [PART_KIND.mirrorL, PART_KIND.mirrorR, PART_KIND.grille, PART_KIND.tailTrim];
     for (const kind of PART_KINDS) {
       const mesh = batch.meshes[kind]!;
-      if (kind !== PART_KIND.mirrorL && kind !== PART_KIND.mirrorR) {
+      if (!styled.includes(kind)) {
         assert.equal(mesh.geometry, partGeometry(kind), `kind ${kind} (same object, not equal copies)`);
         continue;
       }
@@ -216,7 +217,7 @@ describe("given the part batch and a car that loses a door or its front bumper",
     const bumper = only["parts"].find((p) => p.name === BUMPER_F)!;
     only["detachPart"](bumper, 0, SHOVE);
     const seat = only.partSeats[PART_KIND.grille]!;
-    const shared = positions(partGeometry(PART_KIND.grille));
+    const shared = positions(seat.drawn);
     const sharedBefore = Float32Array.from(shared);
     // The dent's normal is read in the part's frame; an upright part makes it the one above.
     bumper.object.quaternion.identity();

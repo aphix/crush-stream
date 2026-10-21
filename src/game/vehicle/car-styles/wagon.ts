@@ -1,6 +1,48 @@
 import type { BodyStyle } from "../car-variants.ts";
 import { PLATFORM_HARDPOINTS, st } from "./platform.ts";
 
+/** Wagon's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const WAGON_LAMP_SHAPES = {
+  head: {
+    loops: [
+      { points: [[0.41, 0.79], [0.7, 0.81], [0.76, 0.85], [0.41, 0.86]] },
+      { side: true, points: [[1.92, 0.8], [1.7, 0.84], [1.68, 0.87], [1.92, 0.87]] },
+    ],
+    lens: "dark",
+    bezel: "black",
+    recess: 0.01,
+    strips: [{ line: { points: [[0.41, 0.86], [0.41, 0.8], [0.7, 0.815], [0.76, 0.85]] }, width: 0.008, tone: "lit" }],
+    rounds: [
+      { at: [0.47, 0.835], r: 0.012, tone: "lit" },
+      { at: [0.54, 0.835], r: 0.012, tone: "lit" },
+    ],
+  },
+  tail: {
+    loops: [
+      { points: [[0.62, 0.99], [0.74, 1.0], [0.74, 1.05], [0.62, 1.06]] },
+      { points: [[0.5, 0.99], [0.62, 0.99], [0.62, 1.06], [0.5, 1.06]] },
+      { side: true, points: [[-2.12, 0.99], [-1.97, 1.02], [-1.97, 1.05], [-2.12, 1.06]] },
+    ],
+    lens: "lit",
+    bezel: "black",
+    strips: [{ line: { points: [[0.5, 1.055], [0.74, 1.045]] }, width: 0.006, tone: "lit" }],
+    cells: [
+      { loop: { points: [[0, 1.0], [0.5, 1.0], [0.5, 1.05], [0, 1.05]] }, tone: "dark" },
+      { loop: { points: [[0.5, 0.99], [0.74, 0.99], [0.74, 1.02], [0.5, 1.02]] }, tone: "smoked" },
+      { loop: { points: [[0.5, 1.02], [0.55, 1.02], [0.55, 1.06], [0.5, 1.06]] }, tone: "clear" },
+    ],
+  },
+  front: {
+    loops: [{ points: [[0.52, 0.36], [0.72, 0.36], [0.72, 0.48], [0.52, 0.48]] }],
+    lens: "dark",
+    strips: [{ line: { points: [[0.52, 0.38], [0.72, 0.38]] }, width: 0.01, tone: "chrome" }],
+  },
+  rear: {
+    loops: [{ points: [[0.48, 0.45], [0.64, 0.45], [0.64, 0.47], [0.48, 0.47]] }],
+    lens: "red",
+  },
+} as const;
+
 /** Luxury SUV (the `wagon` id): tall clamshell nose, flat floating roof, raked tailgate glass under a roof spoiler. */
 export const WAGON: BodyStyle = {
   id: "wagon",
@@ -79,7 +121,8 @@ export const WAGON: BodyStyle = {
   tubs: [[-1.96, 0.7, 0.38]],
   rearDoorSeam: -1.2,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.09, -2.115], z0: -2.125 },
-  lamps: { head: [0.3, 0.8], tail: [0.62, 0.955] },
+  lamps: { head: [0.57, 0.828], tail: [0.635, 1.025], shapes: WAGON_LAMP_SHAPES },
+  grille: { y: 0.72, size: [0.8, 0.28], bottom: 0.62, round: 0.03, kind: "hex", finish: "chrome" },
   seats: PLATFORM_HARDPOINTS.seats,
   roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.82, -1.74], y: [1.46, 1.51], halfWidth: 0.5 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 } },
   exhaust: { tips: 2, x: 0.62, y: 0.44, size: [0.12, 0.05], shape: "rect" },

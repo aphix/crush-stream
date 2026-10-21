@@ -16,6 +16,30 @@ const TRUCK_FRONT_FASCIA = [
   [-0.14, -0.07],
 ] as const;
 
+/** Pickup's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const PICKUP_LAMP_SHAPES = {
+  head: {
+    loops: [
+      { points: [[0.415, 0.8625], [0.585, 0.8625], [0.585, 0.9625], [0.415, 0.9625]] },
+      { points: [[0.415, 0.7375], [0.585, 0.7375], [0.585, 0.8375], [0.415, 0.8375]] },
+    ],
+    lens: "lit",
+    bezel: "chrome",
+    recess: 0.012,
+    cells: [{ loop: { points: [[0.62, 0.75], [0.68, 0.75], [0.68, 0.95], [0.62, 0.95]] }, tone: "amber" }],
+  },
+  tail: {
+    loops: [{ points: [[0.56, 0.73], [0.66, 0.73], [0.66, 1.13], [0.56, 1.13]] }],
+    lens: "lit",
+    bezel: "black",
+    cells: [{ loop: { points: [[0.56, 0.87], [0.66, 0.87], [0.66, 0.95], [0.56, 0.95]] }, tone: "clear" }],
+  },
+  front: {
+    loops: [{ points: [[0.585, 0.55], [0.655, 0.55], [0.655, 0.61], [0.585, 0.61]] }],
+    lens: "dark",
+  },
+} as const;
+
 /** 80s regular-cab long-bed pickup (Toyota Pickup proportions): boxy cab, flat hood, open bed; the trunk part is the tailgate. */
 export const PICKUP: BodyStyle = {
   id: "pickup",
@@ -60,7 +84,8 @@ export const PICKUP: BodyStyle = {
   tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
   rearDoorSeam: null,
   boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15] },
-  lamps: { head: [0.4, 0.82], tail: [0.58, 0.86] },
+  lamps: { head: [0.5, 0.85], tail: [0.61, 0.93], shapes: PICKUP_LAMP_SHAPES, brake: { at: [0, 1.66], size: [0.3, 0.06] } },
+  grille: { y: 0.85, size: [0.62, 0.225], kind: "bars", count: 3, finish: "black" },
   camera: { hood: [1.42, 1.25], third: { dist: 6.4, height: 2.3, aimUp: 1.2 }, far: { dist: 10.3, height: 3.62, aimUp: 1.35 } },
   details: {
     lines: [

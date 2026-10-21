@@ -10,7 +10,7 @@ import { ROCKER, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeom
 import { aPillarTopZ, beltY, floorY, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
-import { drawnLamp, drawnPart, lampEndZ, lampRest } from "./part-variants.ts";
+import { drawnLamp, drawnPart, lampRest, lampSeatAt } from "./part-variants.ts";
 import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
@@ -24,6 +24,7 @@ import { fleetStyle } from "../scenes/fleet.ts";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { PLATFORM_RIG } from "../deform/deform-rig.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
+import { LampBatch } from "./lamp-lights.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, LIGHT_BAR, PRIMER_ATTRIBUTE } from "./constants.ts";
 
@@ -150,12 +151,17 @@ function hasDeckAt(style: BodyStyle, z: number): boolean {
   return z >= b.origin[1];
 }
 
-/** Box in the car's frame of every mesh it draws but the light bar (the spec leaves it off). */
+/** Box in the car's frame of every mesh it draws but the light bar and a bumper's fittings (exhaust tips, hitch): the spec leaves them off. */
 function shellBox(car: DeformableCar): THREE.Box3 {
   car.group.updateMatrixWorld(true);
   const box = new THREE.Box3();
+  const v = new THREE.Vector3();
   car.group.traverse((o) => {
-    if (o instanceof THREE.Mesh && o.name !== LIGHT_BAR) box.expandByObject(o);
+    if (!(o instanceof THREE.Mesh) || o.name === LIGHT_BAR) return;
+    const fitting = o.geometry.getAttribute(FITTING_ATTRIBUTE);
+    if (!fitting) return void box.expandByObject(o);
+    const pos = o.geometry.getAttribute("position");
+    for (let i = 0; i < pos.count; i++) if (fitting.getX(i) === 0) box.expandByPoint(v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld));
   });
   return box;
 }
@@ -960,7 +966,7 @@ describe("given a body style's P1 parts", () => {
   });
 
   it("when a rear bumper carries a hitch, then one black receiver stands under its middle, its top inside the bumper and its end past the bumper's face, and the cage builds are unchanged", () => {
-    const pickup = CAR_STYLES.pickup;
+    const pickup = { ...CAR_STYLES.pickup, bumpers: { ...CAR_STYLES.pickup.bumpers, rear: { ...CAR_STYLES.pickup.bumpers.rear, hitch: false } }, exhaust: undefined };
     const style: BodyStyle = { ...pickup, bumpers: { ...pickup.bumpers, rear: { ...pickup.bumpers.rear, hitch: true } } };
     const fascia = makeBumperGeometry(false, pickup);
     assert.ok(withRearFittings(fascia, pickup) === fascia, "a bumper with no fittings comes back as built");
@@ -1111,7 +1117,7 @@ describe("given a body style's P2 parts", () => {
     const sedan = CAR_STYLES.sedan;
     const seat = sedan.bumpers.front.seat;
     const grille = { y: 0.48, z: seat.z + 0.07, size: [0.6, 0.12], kind: "bars", finish: "chrome" } as const;
-    const style: BodyStyle = { ...sedan, grille };
+    const style: BodyStyle = { ...sedan, grille, lamps: { ...sedan.lamps, shapes: undefined } };
     const geo = drawnPart(PART_KIND.grille, style).geometry;
     const box = toneBox(geo, null, 0).box.translate(new THREE.Vector3(0, seat.y + GRILLE_SEAT.y, seat.z + GRILLE_SEAT.z));
     const [size, centre] = [box.getSize(new THREE.Vector3()), box.getCenter(new THREE.Vector3())];
@@ -1119,27 +1125,113 @@ describe("given a body style's P2 parts", () => {
     const colour = geo.getAttribute("color");
     const chrome = new THREE.Color(TRIM_CHROME);
     assert.ok(Array.from({ length: colour.count }, (_, i) => i).some((i) => Math.abs(colour.getX(i) - chrome.r) < 1e-6), "its surround and bars are chrome");
-    assert.ok(drawnPart(PART_KIND.grille, sedan).geometry === partGeometry(PART_KIND.grille), "without the field, the platform grille");
+    const plain: BodyStyle = { ...style, grille: undefined };
+    assert.ok(drawnPart(PART_KIND.grille, plain).geometry === partGeometry(PART_KIND.grille), "without the field, the platform grille");
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 
   it("when a style draws its own head lamp to an outline, then its lit lens fills the outline 1-6 mm proud of the skin, the left lamp mirrors the right, and the cage builds are unchanged", () => {
     const sedan = CAR_STYLES.sedan;
-    const [x, y] = sedan.lamps.head;
+    const [x, y] = [0.53, 0.51];
     const loop = { points: [[x - 0.08, y - 0.03], [x + 0.08, y - 0.03], [x + 0.08, y + 0.03], [x - 0.08, y + 0.03]] } as const;
-    const style: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: { head: { loops: [loop], lens: "lit", bezel: "chrome" } } } };
-    const zEnd = lampEndZ("head", style);
+    const style: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, head: [x, y], shapes: { head: { loops: [loop], lens: "lit", bezel: "chrome" } } } };
+    const skin = new THREE.Mesh(makeChassisGeometry(style));
+    const ray = new THREE.Raycaster();
     const lens = [-1, 1].map((side) => {
-      const rest = new THREE.Matrix4().compose(new THREE.Vector3(side * x, y, zEnd), lampRest("head", style, new THREE.Quaternion()), new THREE.Vector3(1, 1, 1));
+      const rest = new THREE.Matrix4().compose(lampSeatAt(style, "head", side), lampRest("head", style, new THREE.Quaternion()), new THREE.Vector3(1, 1, 1));
       const geo = drawnLamp(style, "head", side).geometry.clone().applyMatrix4(rest);
-      return toneBox(geo, "uv", 0.75);
+      const [pos, nrm, uv] = [geo.getAttribute("position"), geo.getAttribute("normal"), geo.getAttribute("uv")];
+      // Each lit vertex back onto the skin along its normal: the lens's footprint, and how far proud of it the lens stands.
+      const [footprint, drawn] = [new THREE.Box3(), new THREE.Box3()];
+      let [low, high] = [Infinity, -Infinity];
+      for (let i = 0; i < pos.count; i++) {
+        if (uv.getX(i) !== 0.75) continue;
+        const [v, n] = [new THREE.Vector3().fromBufferAttribute(pos, i), new THREE.Vector3().fromBufferAttribute(nrm, i)];
+        drawn.expandByPoint(v);
+        ray.set(v.clone().addScaledVector(n, 0.05), n.clone().negate());
+        const hit = ray.intersectObject(skin, false)[0]!;
+        footprint.expandByPoint(hit.point);
+        [low, high] = [Math.min(low, hit.distance - 0.05), Math.max(high, hit.distance - 0.05)];
+      }
+      return { footprint, drawn, low, high };
     });
-    assert.ok(lens[1]!.count > 0, "the control: the lit lens is drawn");
-    assertSameNumbers([lens[1]!.box.min.x, lens[1]!.box.max.x, lens[1]!.box.min.y, lens[1]!.box.max.y], [x - 0.08, x + 0.08, y - 0.03, y + 0.03], "the lens fills its outline", 0.003);
-    assertSameNumbers([lens[0]!.box.min.x, lens[0]!.box.max.x], [-lens[1]!.box.max.x, -lens[1]!.box.min.x], "the left lamp mirrors the right", POSITION_TOL);
-    const skin = new THREE.Raycaster(new THREE.Vector3(x, y, zEnd + 1), new THREE.Vector3(0, 0, -1)).intersectObject(new THREE.Mesh(makeChassisGeometry(style)), false)[0]!;
-    const proud = lens[1]!.box.max.z - skin.point.z;
-    assert.ok(proud > 0.001 && proud < 0.006, `the lens stands ${(proud * 1000).toFixed(1)} mm off the skin at its centre`);
+    const [l, r] = [lens[0]!, lens[1]!];
+    assert.ok(!r.footprint.isEmpty(), "the control: the lit lens is drawn");
+    assertSameNumbers([r.footprint.min.x, r.footprint.max.x, r.footprint.min.y, r.footprint.max.y], [x - 0.08, x + 0.08, y - 0.03, y + 0.03], "the lens fills its outline", 0.003);
+    assertSameNumbers([l.drawn.min.x, l.drawn.max.x], [-r.drawn.max.x, -r.drawn.min.x], "the left lamp mirrors the right", POSITION_TOL);
+    assert.ok(r.low > 0.001 && r.high < 0.006, `the lens stands ${(r.low * 1000).toFixed(1)}-${(r.high * 1000).toFixed(1)} mm off the skin`);
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a grille is a trapezoid hex mesh with a badge, then its surround is its width at the top and `bottom` at the bottom, and a chrome badge sits at its centre", () => {
+    const sedan = CAR_STYLES.sedan;
+    const seat = sedan.bumpers.front.seat;
+    const grille = { y: 0.45, size: [0.7, 0.24], bottom: 0.5, kind: "hex", badge: 0.03, finish: "black" } as const;
+    const geo = drawnPart(PART_KIND.grille, { ...sedan, grille, lamps: { ...sedan.lamps, shapes: undefined } }).geometry;
+    const [pos, colour] = [geo.getAttribute("position"), geo.getAttribute("color")];
+    const cy = grille.y - seat.y - GRILLE_SEAT.y;
+    const widthAt = (y: number): number => 2 * Math.max(...Array.from({ length: pos.count }, (_, i) => (Math.abs(pos.getY(i) - y) < 1e-4 ? Math.abs(pos.getX(i)) : 0)));
+    assertSameNumbers([widthAt(cy + 0.12), widthAt(cy - 0.12)], [0.7, 0.5], "the surround's width at its top and bottom", 1e-4);
+    const chrome = new THREE.Color(TRIM_CHROME);
+    const badge = Array.from({ length: pos.count }, (_, i) => i).filter((i) => Math.hypot(pos.getX(i), pos.getY(i) - cy) < grille.badge + 1e-4 && Math.abs(colour.getX(i) - chrome.r) < 1e-6);
+    assert.ok(badge.length > 0, "a chrome badge at the centre of a black grille");
+  });
+
+  it("when a style puts lamps on its bumpers, then the grille seat draws the front ones on the fascia and the tail trim the rear ones, with no shared dark strip across the tail", () => {
+    const sedan = CAR_STYLES.sedan;
+    const meet = (front: boolean, x: number, y: number): number => {
+      const { seat } = sedan.bumpers[front ? "front" : "rear"];
+      const fascia = new THREE.Mesh(makeBumperGeometry(front, sedan).translate(0, seat.y, front ? seat.z : -seat.z));
+      return new THREE.Raycaster(new THREE.Vector3(x, y, front ? 5 : -5), new THREE.Vector3(0, 0, front ? -1 : 1)).intersectObject(fascia, false)[0]!.point.z;
+    };
+    const near = (geo: THREE.BufferGeometry, offset: THREE.Vector3, at: THREE.Vector3): boolean => {
+      const pos = geo.getAttribute("position");
+      return Array.from({ length: pos.count }, (_, i) => i).some((i) => new THREE.Vector3().fromBufferAttribute(pos, i).add(offset).distanceTo(at) < 0.015);
+    };
+    const { front, rear } = sedan.bumpers;
+    const grille = drawnPart(PART_KIND.grille, sedan).geometry;
+    const grilleAt = new THREE.Vector3(0, front.seat.y + GRILLE_SEAT.y, front.seat.z + GRILLE_SEAT.z);
+    for (const x of [-0.6, 0.6]) assert.ok(near(grille, grilleAt, new THREE.Vector3(x, 0.305, meet(true, Math.abs(x), 0.305))), `the fog lens at x ${x} on the fascia`);
+    const trim = drawnPart(PART_KIND.tailTrim, sedan).geometry;
+    const trimAt = new THREE.Vector3(0, rear.seat.y, -rear.seat.z);
+    for (const x of [-0.62, 0.62]) assert.ok(near(trim, trimAt, new THREE.Vector3(x, 0.495, meet(false, Math.abs(x), 0.495))), `the reflector at x ${x} on the fascia`);
+    const plate = partGeometry(PART_KIND.tailTrim);
+    plate.computeBoundingBox();
+    assert.ok(plate.boundingBox!.max.x - plate.boundingBox!.min.x < 0.4, `the platform tail trim is the plate alone, ${(plate.boundingBox!.max.x - plate.boundingBox!.min.x).toFixed(2)} m wide`);
+  });
+
+  it("when a tail lamp's outline runs onto the boot lid, then the lid carries that share and opens with it, and the body keeps the rest", () => {
+    const car = new DeformableCar(PAINT, new THREE.Scene(), null, "hatchback");
+    const lid = car.lampFittings.find((f) => f.kind === "boot");
+    assert.ok(lid, "the hatch carries a share of the tails");
+    const trunk = lid.seat.parent as THREE.Mesh;
+    assert.ok(trunk.parent && trunk.position.z === car.style.boot.origin[1], "riding the lid itself");
+    car.group.updateMatrixWorld(true);
+    // Nearest distance (m) from a car-frame point to a mesh's surface.
+    const gap = (mesh: THREE.Mesh, p: THREE.Vector3): number => {
+      const [pos, index] = [mesh.geometry.getAttribute("position"), mesh.geometry.getIndex()!];
+      const [tri, q] = [new THREE.Triangle(), new THREE.Vector3()];
+      let best = Infinity;
+      for (let t = 0; t < index.count; t += 3) {
+        tri.set(...([0, 1, 2].map((k) => new THREE.Vector3().fromBufferAttribute(pos, index.getX(t + k)).applyMatrix4(mesh.matrixWorld)) as [THREE.Vector3, THREE.Vector3, THREE.Vector3]));
+        best = Math.min(best, tri.closestPointToPoint(p, q).distanceTo(p));
+      }
+      return best;
+    };
+    // Every lid-share triangle has a corner on the lid (lens and bezel stand at most 1.6 cm off it); the body's share is probed in lamps.test.
+    const lidShare = drawnLamp(car.style, "boot", 0).geometry;
+    const [pos, index] = [lidShare.getAttribute("position"), lidShare.getIndex()!];
+    const off = Array.from({ length: pos.count }, (_, i) => gap(trunk, new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(trunk.matrixWorld)));
+    let loose = 0;
+    for (let t = 0; t < index.count; t += 3) if (Math.min(off[index.getX(t)]!, off[index.getX(t + 1)]!, off[index.getX(t + 2)]!) > 0.016) loose++;
+    assert.equal(loose, 0, "lid-share triangles off the lid");
+    assert.ok(drawnLamp(car.style, "tail", 1).geometry.getIndex()!.count > 0, "the body keeps a share");
+    trunk.rotation.x = 0.6;
+    car.group.updateMatrixWorld(true);
+    const batch = new LampBatch(2);
+    batch.sync([car]);
+    const got = new THREE.Matrix4();
+    batch.meshes[7]!.getMatrixAt(0, got);
+    for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!) < 1e-6, `the opened lid's pose, element ${k}`);
   });
 });

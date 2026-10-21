@@ -83,10 +83,10 @@ interface LampLoop {
 type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "chrome";
 
 /**
- * A lamp drawn to its outline (drawn only), conforming to the skin a few mm proud of it: its lens filling `loops` (a wrap round the corner
- * is another loop) in `lens`; a `bezel` ring round each loop standing `recess` (m) proud of the lens, so the lens reads set back in its
- * pocket and no face lies on the skin's; `cells` (sections, an amber corner, a reverse or smoked cell, a slat) over the lens in their
- * own tones; `strips` (a DRL or LED line, ribs) along open lines `width` wide; `rounds` (projector cells) of radius `r`.
+ * A lamp drawn to its outline (drawn only), met on the skin: its lens filling `loops` (a wrap round the corner is another loop) a few mm
+ * proud of it, in `lens`; a `bezel` lip round each loop cresting `recess` (m) over the lens, so the lens sits in its own pocket and no face
+ * lies on the skin's; `cells` (sections, a reverse or smoked cell, a band) over the lens in their own tones; `strips` (a DRL or LED line,
+ * ribs) along open lines `width` wide; `rounds` (projector cells, fog lenses) of radius `r`.
  */
 interface LampShape {
   loops: readonly LampLoop[];
@@ -247,21 +247,36 @@ export interface BodyStyle {
   boot: BootSpec;
   /**
    * Lamp seats [x, y] (m, right side; the left mirrors it) on the end panels: the head lamps on the nose, the tail lamps
-   * on the tail panel, standing upright in its corners beside a tailgate. Each housing sits whole on the skin, clear of
-   * the bumpers, grille and boot (`lamps.test.ts`). `shapes` (drawn only): each kind's own lamp, drawn to its outline and riding
-   * its seat; absent, the platform housing (`LAMP_HOUSING`, standing 4.5 cm proud). `brake`: a high-mount brake lamp `size` [w, h]
-   * met on the skin from behind at [x, y] (a pickup's cab); `sideMarkers`: amber markers on each side met from outboard at [y, z].
-   * Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
+   * on the tail panel, standing upright in its corners beside a tailgate. `shapes` (drawn only): `head` / `tail` each kind's own lamp
+   * riding its seat (a tail's share that lands on the boot lid rides the lid, lit with the tails); `front` / `rear` lamps, reflectors and
+   * pods on that bumper's fascia (unlit, torn off with it). Absent, the platform housing (`LAMP_HOUSING`, standing 4.5 cm proud).
+   * `brake`: a high-mount brake lamp `size` [w, h] met on the skin from behind at [x, y] (a pickup's cab); `sideMarkers`: amber markers
+   * on each side met from outboard at [y, z]. Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
    */
   lamps: {
     head: readonly [number, number];
     tail: readonly [number, number];
-    shapes?: { head?: LampShape; tail?: LampShape };
+    shapes?: { head?: LampShape; tail?: LampShape; front?: LampShape; rear?: LampShape };
     brake?: { at: readonly [number, number]; size: readonly [number, number] };
     sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number] }[];
   };
-  /** The front grille (drawn only; it tears off with the front bumper): centre height `y` and face `z` (m, car frame; z absent: the platform grille's face), `size` [w, h], `kind` horizontal bars, vertical slats or a mesh of both, in `finish` (body: the body's paint). Absent: the platform grille. */
-  grille?: { y: number; z?: number; size: readonly [number, number]; kind: "bars" | "mesh" | "slats"; finish: "black" | "chrome" | "body" };
+  /**
+   * The front grille (drawn only; it tears off with the front bumper): centre height `y` and face `z` (m, car frame; z absent: the platform
+   * grille's face); `size` [w at the top, h], `bottom` its width at the bottom (a trapezoid; absent, w), corners rounded `round` (m); `kind`
+   * horizontal bars, vertical slats, a mesh of both or a diagonal (hex) mesh, `count` bars or slats (absent, at the default pitch); a round
+   * `badge` of that radius at its centre; in `finish` (body: the body's paint). Absent: the platform grille.
+   */
+  grille?: {
+    y: number;
+    z?: number;
+    size: readonly [number, number];
+    bottom?: number;
+    round?: number;
+    kind: "bars" | "mesh" | "slats" | "hex";
+    count?: number;
+    badge?: number;
+    finish: "black" | "chrome" | "body";
+  };
   /**
    * Seats (m, car space): the driver's H-point [x, y, z] (he sits on -x; the passenger mirrors him), and the rear bench's [y, z] on the
    * centre line, or null with no rear row (a regular cab). The drawn seats, the seated driver and the sim's seat all read it.

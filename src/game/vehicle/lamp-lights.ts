@@ -648,8 +648,11 @@ const LAMP_LOOK = {
 /** A car as the lamp batch reads it: its lamps (seat, state, kind, unit variant) and its drawn-only lamp fittings. */
 interface LampCar {
   readonly lamps: readonly { readonly seat: THREE.Object3D; readonly intact: boolean; readonly kind: LampKind; readonly variant: number }[];
-  readonly lampFittings: readonly { readonly seat: THREE.Object3D; readonly kind: "brake" | "marker" }[];
+  readonly lampFittings: readonly { readonly seat: THREE.Object3D; readonly kind: keyof typeof FITTING_MESH; readonly variant: number }[];
 }
+
+/** Each lamp fitting's mesh in `LampBatch.meshes`. */
+const FITTING_MESH = { brake: 4, marker: 5, hood: 6, boot: 7 } as const;
 
 /** Whether `seat` shows: on the camera's layer (distance detail) and visible up its parent chain. */
 function seatShown(seat: THREE.Object3D): boolean {
@@ -662,13 +665,13 @@ function seatShown(seat: THREE.Object3D): boolean {
  * Every car's lamp units as four instanced draws (head / tail × lit / broken) instead of four meshes per car. A car
  * keeps a bare Object3D per lamp that it seats on the skin, parented to the class lift but out of the scene graph; `sync`
  * brings each shown seat's world matrix current from the lift's and copies it into the batch for the lamp's kind and state.
- * Styles that draw their own units (`lamps.units`) are variants in the same four draws (`withPartVariants`); brake lamps and side
- * markers (`lamps.brake`, `lamps.sideMarker`) take two more, drawn only while a car on screen has them.
+ * Styles that draw their own lamps (`lamps.shapes`) are variants in the same draws (`withPartVariants`); brake lamps, side markers
+ * and the lamps' shares on the hood and boot lid take four more, drawn only while a car on screen has them.
  */
 export class LampBatch {
-  /** Head lit, head broken, tail lit, tail broken, brake, marker. */
+  /** Head lit, head broken, tail lit, tail broken, brake, marker, the heads on the hood, the tails on the boot lid. */
   readonly meshes: readonly THREE.InstancedMesh[];
-  private readonly n = [0, 0, 0, 0, 0, 0];
+  private readonly n = [0, 0, 0, 0, 0, 0, 0, 0];
   /** Per mesh, its instances' unit variants; null where every unit is the platform's (and for the fittings). */
   private readonly variants: (THREE.InstancedBufferAttribute | null)[] = [];
   /** Per mesh, the per-instance attributes a sync uploads. */
@@ -704,6 +707,12 @@ export class LampBatch {
     }
     add(brakeLampUnit(), plain.tail, capacity, null);
     add(sideMarkerUnit(), plain.head, capacity * 2, null);
+    for (const [slot, look] of [["hood", plain.head], ["boot", plain.tail]] as const) {
+      const styled = lampBatchGeometry(slot, capacity);
+      const geo = styled ?? new THREE.BufferGeometry();
+      add(geo, styled ? withPartVariants(look.clone()) : look, capacity, styled ? (styled.getAttribute(INSTANCE_PART_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute) : null);
+      this.own.push(geo);
+    }
     this.meshes = meshes;
   }
 
@@ -716,7 +725,7 @@ export class LampBatch {
         if (!seatShown(l.seat)) continue;
         this.put((l.kind === "head" ? 0 : 2) + (l.intact ? 0 : 1), l.seat, l.variant);
       }
-      for (const f of car.lampFittings) if (seatShown(f.seat)) this.put(f.kind === "brake" ? 4 : 5, f.seat, 0);
+      for (const f of car.lampFittings) if (seatShown(f.seat)) this.put(FITTING_MESH[f.kind], f.seat, f.variant);
     }
     for (let b = 0; b < this.meshes.length; b++) {
       this.meshes[b]!.count = n[b]!;

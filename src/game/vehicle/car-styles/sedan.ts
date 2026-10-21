@@ -2,6 +2,104 @@ import type { BodyStyle } from "../car-variants.ts";
 import { CABIN_TUB, PLATFORM_CAMERA, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
 import { SEDAN_DETAILS } from "./sedan-details.ts";
 
+/** Sedan's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const SEDAN_LAMP_SHAPES = {
+  head: {
+    loops: [
+      {
+        points: [
+          [0.42, 0.575, 1.97],
+          [0.52, 0.572, 1.92],
+          [0.62, 0.576, 1.84],
+          [0.7, 0.585, 1.7],
+          [0.75, 0.605, 1.6],
+          [0.78, 0.65, 1.54],
+          [0.785, 0.7, 1.515],
+          [0.76, 0.69, 1.6],
+          [0.73, 0.682, 1.66],
+          [0.7, 0.675, 1.72],
+          [0.65, 0.665, 1.8],
+          [0.58, 0.645, 1.88],
+          [0.5, 0.62, 1.93],
+          [0.42, 0.6, 1.97],
+        ],
+      },
+    ],
+    lens: "clear",
+    bezel: "black",
+    recess: 0.012,
+    strips: [
+      {
+        line: {
+          points: [
+            [0.43, 0.583, 1.965],
+            [0.62, 0.584, 1.835],
+            [0.7, 0.593, 1.7],
+            [0.75, 0.612, 1.6],
+            [0.78, 0.655, 1.54],
+            [0.785, 0.695, 1.52],
+          ],
+        },
+        width: 0.01,
+        tone: "lit",
+      },
+      { line: { points: [[0.66, 0.668, 1.81], [0.715, 0.668, 1.67]] }, width: 0.004, tone: "dark" },
+      { line: { points: [[0.66, 0.652, 1.81], [0.715, 0.652, 1.67]] }, width: 0.004, tone: "dark" },
+      { line: { points: [[0.66, 0.636, 1.81], [0.715, 0.636, 1.67]] }, width: 0.004, tone: "dark" },
+    ],
+    rounds: [{ at: [0.56, 0.597, 1.89], r: 0.02, tone: "lit" }],
+  },
+  tail: {
+    loops: [
+      {
+        points: [
+          [0.745, 0.855, -1.72],
+          [0.725, 0.864, -1.81],
+          [0.69, 0.87, -1.88],
+          [0.63, 0.87, -1.96],
+          [0.55, 0.866, -2.05],
+          [0.45, 0.855, -2.1],
+          [0.4, 0.842, -2.12],
+          [0.4, 0.776, -2.12],
+          [0.45, 0.772, -2.1],
+          [0.55, 0.765, -2.05],
+          [0.63, 0.757, -1.96],
+          [0.69, 0.756, -1.88],
+          [0.725, 0.768, -1.81],
+          [0.745, 0.8, -1.74],
+        ],
+      },
+    ],
+    lens: "lit",
+    bezel: "chrome",
+    strips: [
+      {
+        line: {
+          points: [
+            [0.74, 0.842, -1.73],
+            [0.69, 0.855, -1.88],
+            [0.55, 0.851, -2.05],
+            [0.41, 0.828, -2.115],
+          ],
+        },
+        width: 0.012,
+        tone: "lit",
+      },
+      { line: { points: [[0, 0.809], [0.4, 0.809]] }, width: 0.006, tone: "chrome" },
+    ],
+  },
+  front: {
+    loops: [{ points: [[0.5, 0.26], [0.7, 0.26], [0.7, 0.35], [0.5, 0.35]] }],
+    lens: "dark",
+    bezel: "black",
+    rounds: [{ at: [0.6, 0.305], r: 0.028, tone: "clear" }],
+  },
+  rear: {
+    loops: [{ points: [[0.54, 0.455], [0.7, 0.455], [0.7, 0.535], [0.54, 0.535]] }],
+    lens: "red",
+  },
+} as const;
+
 export const SEDAN: BodyStyle = {
   id: "sedan",
   dims: { wheelbase: 2.5, overhang: { front: 0.804, rear: 0.925 }, track: 1.36, width: 1.64, height: 1.337, rideHeight: 0.165, wheel: { radius: 0.342, width: PLATFORM_WHEEL.width } },
@@ -74,7 +172,9 @@ export const SEDAN: BodyStyle = {
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,
   boot: { kind: "lid", z0: -1.65, z1: -2.06, origin: [0.97, -1.62] },
-  lamps: { head: [0.28, 0.515], tail: [0.34, 0.8] },
+  lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES },
+  grille: { y: 0.43, size: [0.74, 0.26], round: 0.05, kind: "slats", count: 13, finish: "chrome" },
+  exhaust: { tips: 2, x: 0.45, y: 0.425, size: [0.1, 0.045], shape: "round" },
   seats: PLATFORM_HARDPOINTS.seats,
   details: SEDAN_DETAILS,
   camera: { ...PLATFORM_CAMERA, hood: [1.08, 1.2] },

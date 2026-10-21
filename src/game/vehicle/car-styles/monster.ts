@@ -14,6 +14,32 @@ const MONSTER_BUMPER_FASCIA = [
   [-0.14, -0.07],
 ] as const;
 
+/** Monster's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const MONSTER_LAMP_SHAPES = {
+  head: {
+    loops: [{ points: [[0.445, 0.605], [0.655, 0.605], [0.655, 0.795], [0.445, 0.795]] }],
+    lens: "lit",
+    bezel: "black",
+    recess: 0.012,
+    cells: [{ loop: { points: [[0.665, 0.615], [0.735, 0.615], [0.735, 0.785], [0.665, 0.785]] }, tone: "amber" }],
+  },
+  tail: {
+    loops: [{ points: [[0.68, 0.62], [0.78, 0.62], [0.78, 0.98], [0.68, 0.98]] }],
+    lens: "lit",
+    bezel: "black",
+    cells: [{ loop: { points: [[0.68, 0.71], [0.78, 0.71], [0.78, 0.836], [0.68, 0.836]] }, tone: "amber" }],
+  },
+  front: {
+    loops: [{ points: [[0.51, 0.365], [0.59, 0.365], [0.59, 0.435], [0.51, 0.435]] }],
+    lens: "clear",
+    bezel: "black",
+  },
+  rear: {
+    loops: [{ points: [[0.615, 0.37], [0.685, 0.37], [0.685, 0.43], [0.615, 0.43]] }],
+    lens: "amber",
+  },
+} as const;
+
 /** The truck family as a crew cab, squatter and longer than the pickup; the monster class lifts it onto its big wheels. */
 export const MONSTER: BodyStyle = {
   id: "monster",
@@ -56,7 +82,8 @@ export const MONSTER: BodyStyle = {
   tubs: [[-0.76, 0.96, 0.5], [-2.26, -0.82, 0.62]],
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
-  lamps: { head: [0.5, 0.62], tail: [0.73, 0.8] },
+  lamps: { head: [0.55, 0.7], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, sideMarkers: [{ at: [0.88, -2.1], size: [0.06, 0.03] }] },
+  grille: { y: 0.7, size: [0.8, 0.19], kind: "bars", count: 4, finish: "black" },
   camera: { hood: [2.08, 1.27], third: { dist: 7.4, height: 3.0, aimUp: 1.7 }, far: { dist: 11.5, height: 4.3, aimUp: 1.9 } },
   details: {
     lines: [
