@@ -17,10 +17,10 @@ const CELLED = new Set(["prop", "wall", "deck", "pillar", "tunnel"]);
 const EYE = { back: 6, up: 2.5, ahead: 10, lookUp: 1 };
 /** The race camera's lens: vertical degrees and a 16:9 screen. */
 const LENS = { fov: 50, aspect: 16 / 9, near: 0.1 };
-/** The most of the Mall's prop and structure triangles the start's view may draw (18 % with cells; main drew 67 %: a part with one placement in view drew the course's every one). */
-const MAIN_SHARE = 0.25;
-/** The most the sun's 48 m shadow box at the start may draw (6.4 % with cells; main drew 65 %). */
-const SHADOW_SHARE = 0.1;
+/** The most of the Mall's prop and structure triangles the start's view may draw (28.4 % with 512 m cells, 18 % with 256 m; main drew 67 %: a part with one placement in view drew the course's every one). */
+const MAIN_SHARE = 0.35;
+/** The most the sun's 48 m shadow box at the start may draw (10.0 % with 512 m cells, 6.4 % with 256 m; main drew 65 %). */
+const SHADOW_SHARE = 0.15;
 
 const triangles = (mesh: THREE.Mesh): number => {
   const g = mesh.geometry;

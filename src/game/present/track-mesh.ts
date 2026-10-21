@@ -25,8 +25,11 @@ export const KERB_FILL = 6;
 export const DEPTH_INSTANCED = new THREE.MeshDepthMaterial();
 export const DEPTH_INSTANCED_COLOR = new THREE.MeshDepthMaterial();
 export type DrawKind = "plain" | "instanced" | "instancedColour";
-/** Props and structures draw per square cell this wide (m), each culled by its own bounds in the view and the sun's shadow box; half as wide drew a few % fewer triangles for twice the added draw calls. */
-const DRAW_CELL = 256;
+/**
+ * Props and structures draw per square cell this wide (m), each culled by its own bounds in the view and the sun's shadow box. 512 against
+ * 256 on the Mall at 4x CPU: a fifth fewer draw calls, 0.5 ms less render CPU, 5 % more triangles, the same GPU ms.
+ */
+const DRAW_CELL = 512;
 /** A draw cell's key packs its x index over this many z indices (a course spans far fewer). */
 const CELL_KEY_SPAN = 65536;
 
