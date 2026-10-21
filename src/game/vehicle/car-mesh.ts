@@ -12,9 +12,9 @@ export const SEDAN = CAR_STYLES.sedan;
  * The hard edges the drawn parts declare: the angle (degrees) between two faces past which `splitCreases` gives the edge its
  * own vertices, so the live per-skin normals stay hard across a crush and smooth everywhere else. Faces turning less than the
  * angle shade as one surface.
- * - deckLid: a bonnet or boot lid's top meets its skirt at 90° (the shut line); its dome and skirt chords turn under 2°. Its flat end
- *   caps (own vertices, set by the loft) meet a side wall that leans in plan by up to 30°, i.e. at 60° or more, so the angle stays under that.
- * - tailgate: the hatch's bowed panel meets its edge at 90°; its bow turns under 2° a chord; the same cap rule.
+ * A loft's flat end caps are the panel's cut ends: own vertices (set by the loft), hard at whatever angle the panel meets them.
+ * - deckLid: a bonnet or boot lid's top meets its skirt at 90° (the shut line); its dome and skirt chords turn under 2°.
+ * - tailgate: the hatch's bowed panel meets its edge at 90°; its bow turns under 2° a chord.
  * - door: the slab's edge wall meets the inner face at 90°; the edge roll turns 45° at most a chord and the shoulder under 30°.
  * - bumper: the fascia's splitter lip and back turn 73° and 90° (the lip's lower chord 67°); its rounded top and intake recess turn
  *   49° at most a chord. A quad the corner wrap warps folds 63° along its diagonal, which no fan of vertices can keep hard, so the angle sits above that.
@@ -274,8 +274,11 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [num
     p[1] = lerp(p[1], sill[i]![1], hole);
   }
   for (let i = FLARE_FIRST; i <= rocker; i++) half[i]![0] += 0.022 * archFlare(z, half[i]![1], wheels, style.arch.radius);
-  for (const p of half) {
-    if (well < 0.03 || p[0] < hw * 0.58 || p[1] > archY + 0.02) continue;
+  // A tub's floor over wheels standing outboard of the body (the monster's bed) stays flat: no tyre comes up through it.
+  const floorClear = tub.t > 0 && wheels.every(([wx]) => Math.abs(wx) > hw);
+  for (let i = 0; i < half.length; i++) {
+    const p = half[i]!;
+    if (well < 0.03 || p[0] < hw * 0.58 || p[1] > archY + 0.02 || (i === 0 && floorClear)) continue;
     const t = THREE.MathUtils.smoothstep((p[0] - hw * 0.58) / (hw * 0.42), 0, 1);
     p[1] = Math.max(p[1], lerp(p[1], archY, t));
   }

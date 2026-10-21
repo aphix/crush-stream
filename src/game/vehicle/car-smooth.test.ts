@@ -74,20 +74,24 @@ type EdgeCensus = { sharpEdges: number; sharpEdgesStillShared: number; smoothEdg
 /**
  * Every edge shared by exactly two faces of `geometry` (edges matched by the vertices' places, so a split edge still counts), against
  * `creaseDegrees`: the sharp ones (the faces' normals at least that far apart) must not share their vertices, the smooth ones must.
+ * A loft's end caps (`loftFromRings` writes them after its quads) are the panel's cut ends, hard by construction: their seams are not read.
  */
-function censusOfEdges(geometry: THREE.BufferGeometry, creaseDegrees: number): EdgeCensus {
+function censusOfEdges(geometry: THREE.BufferGeometry, creaseDegrees: number, capsAreCuts: boolean): EdgeCensus {
   const position = geometry.getAttribute("position");
   const index = geometry.getIndex()!;
   const placeOf = (vertex: number) => `${position.getX(vertex)},${position.getY(vertex)},${position.getZ(vertex)}`;
-  const faces = new Map<string, { normal: THREE.Vector3; vertices: string }[]>();
+  const faces = new Map<string, { normal: THREE.Vector3; vertices: string; cut: boolean }[]>();
+  const loft = geometry.userData.loft as { ring: number; slices: number } | undefined;
+  const firstCapTriangle = capsAreCuts && loft ? 2 * loft.ring * (loft.slices - 1) : Infinity;
   for (let t = 0; t < index.count; t += 3) {
+    const cut = t / 3 >= firstCapTriangle;
     const corners = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
     const normal = triangleNormal(...(corners.map((vertex) => positionAt(geometry, vertex)) as [THREE.Vector3, THREE.Vector3, THREE.Vector3]));
     if (!normal) continue;
     for (let k = 0; k < 3; k++) {
       const [a, b] = [corners[k]!, corners[(k + 1) % 3]!];
       const key = [placeOf(a), placeOf(b)].sort().join("|");
-      const record = { normal, vertices: [a, b].sort((x, y) => x - y).join(",") };
+      const record = { normal, vertices: [a, b].sort((x, y) => x - y).join(","), cut };
       const list = faces.get(key);
       if (list) list.push(record);
       else faces.set(key, [record]);
@@ -95,7 +99,7 @@ function censusOfEdges(geometry: THREE.BufferGeometry, creaseDegrees: number): E
   }
   const census: EdgeCensus = { sharpEdges: 0, sharpEdgesStillShared: 0, smoothEdgesSplit: 0, firstOffence: "none" };
   for (const [key, [first, second, ...rest]] of faces) {
-    if (!first || !second || rest.length > 0) continue;
+    if (!first || !second || rest.length > 0 || first.cut !== second.cut) continue;
     const shared = first.vertices === second.vertices;
     const degrees = angleBetweenDegrees(first.normal, second.normal);
     if (degrees >= creaseDegrees) {
@@ -217,14 +221,14 @@ describe("given the lids as built", () => {
   }
 });
 
-type PartCase = { readonly name: string; readonly make: (id: CarStyleId) => THREE.BufferGeometry; readonly creaseDegrees: number };
+type PartCase = { readonly name: string; readonly make: (id: CarStyleId) => THREE.BufferGeometry; readonly creaseDegrees: number; readonly capsAreCuts: boolean };
 const partCases: readonly PartCase[] = [
-  { name: "bonnet", make: (id) => makeHoodGeometry(CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.deckLid },
-  { name: "boot", make: (id) => makeTrunkGeometry(CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.deckLid },
-  { name: "left door", make: (id) => makeDoorGeometry(-1, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.door },
-  { name: "right door", make: (id) => makeDoorGeometry(1, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.door },
-  { name: "front bumper", make: (id) => makeBumperGeometry(true, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.bumper },
-  { name: "rear bumper", make: (id) => makeBumperGeometry(false, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.bumper },
+  { name: "bonnet", make: (id) => makeHoodGeometry(CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.deckLid, capsAreCuts: true },
+  { name: "boot", make: (id) => makeTrunkGeometry(CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.deckLid, capsAreCuts: true },
+  { name: "left door", make: (id) => makeDoorGeometry(-1, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.door, capsAreCuts: false },
+  { name: "right door", make: (id) => makeDoorGeometry(1, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.door, capsAreCuts: false },
+  { name: "front bumper", make: (id) => makeBumperGeometry(true, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.bumper, capsAreCuts: true },
+  { name: "rear bumper", make: (id) => makeBumperGeometry(false, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.bumper, capsAreCuts: true },
 ];
 
 describe("given every part whose hard edges are declared, as built for every body style", () => {
@@ -232,7 +236,7 @@ describe("given every part whose hard edges are declared, as built for every bod
     for (const testCase of partCases) {
       it(`when a ${id} ${testCase.name}'s edges are read against its ${testCase.creaseDegrees}° crease, then every sharper edge has vertices of its own and every softer one shares them`, () => {
         const geometry = testCase.make(id);
-        const census = censusOfEdges(geometry, testCase.creaseDegrees);
+        const census = censusOfEdges(geometry, testCase.creaseDegrees, testCase.capsAreCuts);
         assert.ok(census.sharpEdges > 0, `${id} ${testCase.name} has no sharp edge at all`);
         assert.equal(census.sharpEdgesStillShared, 0, `${id} ${testCase.name}: sharp edges still share vertices (${JSON.stringify(census)})`);
         assert.equal(census.smoothEdgesSplit, 0, `${id} ${testCase.name}: smooth edges were split (${JSON.stringify(census)})`);
