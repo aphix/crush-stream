@@ -70,7 +70,8 @@ export function refPlate(game, ref, W, H, dx, dy, k) {
 
 /**
  * The reference's plate, silhouette (holes filled; a ground shadow on an opaque backdrop left out, `shadowPx` pixels) and glass
- * (`refGlass`), drawn on `frame`'s canvas at `zoom` with `pad`.
+ * (`refGlass`), drawn on `frame`'s canvas at `zoom` with `pad`. A top view's glass keeps only what its mirror across the centreline
+ * also holds: the car is symmetric, the picture's lighting is not (one fender's shading read as glass).
  */
 export function refLayers(game, ref, frame, zoom, pad, plate = refPlate(game, ref, frame.W, frame.H, pad * zoom, pad * zoom, zoom)) {
   const { W, H } = frame;
@@ -79,7 +80,19 @@ export function refLayers(game, ref, frame, zoom, pad, plate = refPlate(game, re
   const shadowPx = ref.bg[3] === 255 ? dropShadow(plate, sil, W, H) : 0;
   fillHoles(sil, W, H);
   const glass = refGlass(plate, sil, W, H, frame.view !== "top", Math.max(1, Math.round(GLASS_OPEN_REF_PX * zoom)));
+  if (frame.view === "top") mirrorAnd(glass.mask, W, H, 2 * frame.v(0));
   return { plate, sil, glass: glass.mask, glassThreshold: glass.threshold, shadowPx };
+}
+
+/** Clears every pixel of `mask` whose mirror across the row `twice / 2` is clear (or off the frame). */
+function mirrorAnd(mask, W, H, twice) {
+  const keep = new Uint8Array(mask.length);
+  for (let v = 0; v < H; v++) {
+    const m = Math.round(twice - v - 1);
+    if (m < 0 || m >= H) continue;
+    for (let u = 0; u < W; u++) keep[v * W + u] = mask[v * W + u] & mask[m * W + u];
+  }
+  mask.set(keep);
 }
 
 /** Clears the grey ground shadow: grey pixels lighter than SHADOW_LUMA under the line through each half's lowest dark pixel. */
