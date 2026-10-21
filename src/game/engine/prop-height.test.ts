@@ -75,6 +75,9 @@ function carOn(c: PropCollider, low: number, pitch = 0): DeformableCar {
 }
 
 const _v = new THREE.Vector3();
+const _turned = new THREE.Vector3();
+const _turnQ = new THREE.Quaternion();
+const UP_AXIS = new THREE.Vector3(0, 1, 0);
 
 afterEach(() => setGround(null));
 
@@ -200,7 +203,9 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
   /**
    * The wreck of a sedan a 9 m/s head-on bullet hit along the prism's long axis, settled, then set along the prism with its middle
    * `along` m from the prism's middle and `inward` m nearer the arena's middle (clear of the ring wall), its lowest point `above` m
-   * over the prism's top, moving at `v`, and (with `pen`) its hull exactly `pen` m inside the prism's face.
+   * over the prism's top, moving at `v`, and (with `pen`) its hull exactly `pen` m inside the prism's face. Set along it, it is turned
+   * square to it about its masses' middle: the settle rolls it 35 m across the arena into the ring's boxes, and the heading that slide
+   * left it (4° off, its tyres on a box's flank) stood its footprint's corner 6 cm off the ring wall behind the stack's end.
    */
   const place = (id: number, along: number, inward: number, above: number, v: [number, number, number], pen?: number) => {
     const prism = DERBY_BOXES[id]!;
@@ -218,6 +223,20 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
     /** The unit from the prism toward the arena's middle. */
     const [ix, iz] = [-prism.x / reach, -prism.z / reach];
     const from = centroid(wreck);
+    // Square to the prism's long axis, whichever way along it the slide left it facing.
+    const off = Math.atan2(Math.sin(prism.yaw - wreck.yaw), Math.cos(prism.yaw - wreck.yaw));
+    const turn = Math.abs(off) > Math.PI / 2 ? off - Math.sign(off) * Math.PI : off;
+    for (const m of wreck.deform.masses) {
+      _turned.set(m.world.x - from.x, 0, m.world.z - from.z).applyAxisAngle(UP_AXIS, turn);
+      m.world.x = from.x + _turned.x;
+      m.world.z = from.z + _turned.z;
+    }
+    _turned.set(wreck.group.position.x - from.x, 0, wreck.group.position.z - from.z).applyAxisAngle(UP_AXIS, turn);
+    wreck.group.position.x = from.x + _turned.x;
+    wreck.group.position.z = from.z + _turned.z;
+    wreck.group.quaternion.premultiply(_turnQ.setFromAxisAngle(UP_AXIS, turn));
+    wreck.yaw += turn;
+    wreck["refreshBasis"]();
     const dx = prism.x + sx * along + ix * inward - from.x;
     const dz = prism.z + sz * along + iz * inward - from.z;
     const dy = prism.height + above - lowestY(wreck);
@@ -314,6 +333,11 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
 
   /** The plan clearance (m) the side hit's footprint keeps from ring walls 26 and 27 behind the stack's ends: ten slices of its 8 m/s, so the stack alone meets it. */
   const RING_CLEAR = 0.2;
+  /** Along stack 54 from its middle (m), away from box 55: the wreck's near end (its half-length 2.09 m over the stack's 1.9) back inside the stack's own end, with 6 cm to spare. */
+  const OFF_55 = -0.25;
+  /** The side hit's contact is read slice by slice (s): the one slice it was read over, and the most of it read (a tenth of its 8 m/s's travel, 0.4 m). */
+  const EPISODE_SLICE = 0.0026;
+  const EPISODE_S = 0.05;
   /** How far (m) the corners of `wreck`'s plan box (the footprint a prism meets, `prop-contact.ts` `footprint`) stand outside derby box `id` in plan; negative inside. */
   const footprintClear = (wreck: DeformableCar, id: number): number => {
     const box = DERBY_BOXES[id]!;
@@ -334,16 +358,31 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
   };
 
   // Staged 1.7 m in from the stack's middle line: at 1.5 m the settled wreck's footprint stood 3.7 cm off ring wall 26 (main met it by millimetres).
+  // And `OFF_55` along it from its middle, away from box 55: the 4.2 m wreck, set square to the 3.8 m stack (`place`), overhangs both its ends,
+  // and box 55 stands 9 cm past the stack's end on that side (nothing stands past the other). The wreck moves on at its own speed between
+  // the slices (its masses and body carried by their velocities), so it keeps pressing, and the push is the stack's over the contact, from
+  // the first touch until the wreck parts or `EPISODE_S` passes: one 2.6 ms slice of a wreck held still read a corner the settle had left 4°
+  // off the stack (over 1 mm); square to it, that slice pushed 0.6 mm and a held wreck took no more (0.5 mm net).
   it("when it drives outward at 8 m/s into the side of the tyre stack 54 with its body a metre under the top, then the stack pushes it back toward the arena's middle as ever, within its zip bound", () => {
     const prism = DERBY_BOXES[54]!;
     const reach = Math.hypot(prism.x, prism.z);
-    const { slice, wreck } = place(54, 0, 1.7, -1, [(8 * prism.x) / reach, 0, (8 * prism.z) / reach]);
+    const { slice, wreck } = place(54, OFF_55, 1.7, -1, [(8 * prism.x) / reach, 0, (8 * prism.z) / reach]);
     const ring = Math.min(footprintClear(wreck, 26), footprintClear(wreck, 27));
     assert.ok(ring >= RING_CLEAR, `staging: the footprint stands ${ring.toFixed(3)} m off ring walls 26 and 27`);
-    const hit = slice(0.0026);
-    assert.ok(hit.walls.length > 0 && hit.walls.every((i) => i === 54), `met the stack alone: ${hit.walls}`);
-    assert.ok(hit.towardMiddle > 0.001, `pushed ${(hit.towardMiddle * 1000).toFixed(1)} mm back toward the middle`);
-    assert.ok(hit.shove <= hit.bound, `shoved ${(hit.shove * 1000).toFixed(0)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(0)} mm`);
+    const met = new Set<number>();
+    let towardMiddle = 0;
+    for (let t = 0; t < EPISODE_S; t += EPISODE_SLICE) {
+      for (const m of wreck.deform.masses) m.world.addScaledVector(m.vel, EPISODE_SLICE);
+      wreck.group.position.addScaledVector(wreck.velocity, EPISODE_SLICE);
+      const hit = slice(EPISODE_SLICE);
+      assert.ok(hit.shove <= hit.bound, `${(t * 1000).toFixed(1)} ms in: shoved ${(hit.shove * 1000).toFixed(0)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(0)} mm`);
+      for (const id of hit.walls) met.add(id);
+      towardMiddle += hit.towardMiddle;
+      // Parted: the stack neither met it nor moved it this slice.
+      if (met.size > 0 && hit.walls.length === 0 && hit.towardMiddle <= 0) break;
+    }
+    assert.ok(met.size > 0 && [...met].every((i) => i === 54), `met the stack alone: ${[...met]}`);
+    assert.ok(towardMiddle > 0.001, `pushed ${(towardMiddle * 1000).toFixed(1)} mm back toward the middle over the contact`);
   });
 
   it("when it is held 0.3 m inside the tyre stack 54's side at rest, a metre under the top, then it is pushed out of the stack within the slices the push-out speed implies, every slice within its zip bound", () => {
