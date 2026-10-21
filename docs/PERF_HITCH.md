@@ -31,8 +31,9 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
   stand-in and the debug views (the cars' helpers and the thrown dummies' rig lines and particle spheres) added; the scene is drawn with every mesh shown and unculled through a zero-area scissor, so
   shadow-depth variants link, every uniform location is fetched and every texture uploads. The loop reads input from
   `start()` but only simulates and draws after `ready`.
-- New scene content warms where it appears: a race course's art (`buildArt`) and new cars (`buildCar`) queue the same
-  warm-up, so it runs in the setup menu or the countdown.
+- New scene content warms where it appears: a race course's art (`buildArt`), new cars (`buildCar`) and the thrown dummies'
+  purse pool (it joins the scene once Rapier is in, after boot) queue the same warm-up, so it runs in the setup menu, the
+  countdown or the sandbox's first seconds. After boot a warm-up draws only the meshes whose material gained a program.
 - Both car finish states warm whatever the tier (`EngineWarm.eachFinish`): plain paint for both outputs, the finish (it
   draws only at `high` and `ultra`) for the HDR target alone, so it has no canvas twin. A tier switch that changes the
   finish queues the same warm-up, which finds every program linked and drawn and skips its draws. When a switch only

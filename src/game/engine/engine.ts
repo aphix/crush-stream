@@ -290,9 +290,9 @@ export class CrashEngine extends EngineGarage {
       .then(() => {
         this.warming = false;
         if (fxParam === "ultra") this.setFxTier("ultra");
-        // Only a throw needs Rapier, so boot never waits for it: it loads in the background from here, and a car
-        // disabled before it is in simply throws nobody (`EjectionWatch` only judges edges it saw).
-        this.ragdolls.preload().catch((err: unknown) => console.error("Crush Stream ragdoll load failed", err));
+        // Only a throw needs Rapier, so boot never waits for it: it loads in the background from here, and a car disabled before
+        // it is in simply throws nobody (`EjectionWatch` only judges edges it saw). Its purse pool joins the scene then: warm it.
+        this.ragdolls.preload().then(() => this.queueWarm(), (err: unknown) => console.error("Crush Stream ragdoll load failed", err));
       });
   }
 
