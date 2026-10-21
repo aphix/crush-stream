@@ -6,6 +6,8 @@ import { treadNormalMap } from "./car-materials.ts";
 import { DeformableCar } from "./car.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
 import { WheelBatch } from "./wheel-batch.ts";
+import { CAR_STYLE_IDS, CAR_STYLES } from "./car-variants.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 
 /** The instance matrix is float32: a wheel's position of a few hundred metres is stored within 1e-4 m. */
 const FLOAT32_SLACK = 1e-4;
@@ -114,4 +116,21 @@ describe("given the wheel batch synced for a renderer's shadow pass", () => {
     passRuns(renderer);
     assert.equal(seen[0], false);
   });
+});
+
+describe("given every body style's tyre (its dims' wheel), drawn by the one platform-sized wheel mesh", () => {
+  for (const id of CAR_STYLE_IDS) {
+    test(`when a ${id} is drawn, then its wheels are drawn at its tyre's width and radius`, () => {
+      const batch = new WheelBatch(4, () => false);
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
+      car.group.updateMatrixWorld(true);
+      batch.sync([car], { shadowMap: { render: () => {} } });
+      const m = new THREE.Matrix4();
+      (batch.meshes[0] as THREE.InstancedMesh).getMatrixAt(0, m);
+      const across = new THREE.Vector3().setFromMatrixColumn(m, 0).length();
+      const round = new THREE.Vector3().setFromMatrixColumn(m, 1).length();
+      const { wheel } = CAR_STYLES[id].dims;
+      assertSameNumbers([across, round], [wheel.width / (2 * PLATFORM_TYRE.halfW), wheel.radius / PLATFORM_TYRE.r], `${id} drawn tyre scale (width, radius)`, FLOAT32_SLACK);
+    });
+  }
 });
