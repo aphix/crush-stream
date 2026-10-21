@@ -8,6 +8,7 @@ import { INSTANCE_MIRROR_VARIANT_ATTRIBUTE, MIRROR_VARIANT_ATTRIBUTE } from "./c
 import { CAR_STYLES } from "./car-variants.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
+import { drawnDoorCard } from "./car-door-mesh.ts";
 import { PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
 
@@ -86,12 +87,14 @@ describe("given the part batch and a few cars near the camera", () => {
     assertSameNumbers(matrix.elements, only.partSeats[PART_KIND.mirrorR]!.matrixWorld.elements, "the mirror instance is the seat's world matrix", FLOAT32_SLACK);
   });
 
-  test("when every kind's mesh is read, then it draws the kind's one shared geometry; a mirror's draws its own, every style's mirror with the platform's first", () => {
+  test("when every kind's mesh is read, then it draws the kind's one shared geometry (a door card's: the one inside every door skin); a mirror's draws its own, every style's mirror with the platform's first", () => {
     const { batch } = stage();
     for (const kind of PART_KINDS) {
       const mesh = batch.meshes[kind]!;
       if (kind !== PART_KIND.mirrorL && kind !== PART_KIND.mirrorR) {
-        assert.equal(mesh.geometry, partGeometry(kind), `kind ${kind} (same object, not equal copies)`);
+        const card = kind === PART_KIND.liningL ? -1 : kind === PART_KIND.liningR ? 1 : 0;
+        // Identity, never a deep compare: a geometry holds big typed arrays.
+        assert.ok(mesh.geometry === (card !== 0 ? drawnDoorCard(card) : partGeometry(kind)), `kind ${kind} (same object, not equal copies)`);
         continue;
       }
       const platform = positions(partGeometry(kind));

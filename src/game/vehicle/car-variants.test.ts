@@ -7,8 +7,8 @@ import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, st } from "./car-styles/platform.ts";
 import { ROCKER, cantY, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
-import { aPillarTopZ, beltY, floorY, rockerAt } from "./car-lines.ts";
-import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
+import { aPillarTopZ, aPostRearZ, beltY, floorY, rockerAt } from "./car-lines.ts";
+import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, styleMirrorDrawn } from "./part-geometry.ts";
 import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
@@ -672,8 +672,25 @@ describe("given a body style's H2 hardpoints", () => {
     assertSameNumbers([sailRear, sailFront], [moved.aPillarFoot, postRear!], "the sail at the belt runs from the door glass's front edge to the post's rear (z)", 1e-5);
   });
 
+  it("when a style knees its door glass onto the A-post (aPillarKnee), then the glass's front edge meets the post's rear edge there and the sail ends there: a small triangle at the foot, glass over it", () => {
+    const sedan = CAR_STYLES.sedan;
+    const gap: BodyStyle = { ...sedan, pillars: undefined, aPillarFoot: sedan.windshield.base[1] - 0.4 };
+    const knee = beltY(gap.aPillarFoot, gap) + 0.1;
+    const kneed: BodyStyle = { ...gap, aPillarKnee: knee };
+    const top = (g: THREE.BufferGeometry) => partBox(g).max.y;
+    assert.ok(top(aPillarParts(gap)[1]!) > knee + 0.1, "the control: without a knee the sail runs up the post");
+    assert.ok(Math.abs(top(aPillarParts(kneed)[1]!) - knee) < 1e-5, `the sail tops out at the knee ${knee}: ${top(aPillarParts(kneed)[1]!)}`);
+    const pane = makeSideGlass(1, kneed);
+    const pos = pane.getAttribute("position") as THREE.BufferAttribute;
+    const { hingeY, hingeZ } = kneed.door;
+    let front = -Infinity;
+    for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) + hingeY + DOOR_GLASS_SEAT.y - knee) < 1e-5) front = Math.max(front, pos.getZ(i) + hingeZ + DOOR_GLASS_SEAT.z);
+    assert.ok(Math.abs(front - (aPostRearZ(knee, kneed) + 0.01)) < 1e-5, `the door glass's front edge at the knee stands at z ${front}, 1 cm under the post's rear edge ${aPostRearZ(knee, kneed)}`);
+  });
+
   it("when a style blacks out greenhouse parts, then exactly their drawn vertices turn primer-dark, and the drawn shape and the cage are unchanged", () => {
-    const wagon = CAR_STYLES.wagon;
+    // The style may black out parts of its own: the row's control is the wagon with none.
+    const wagon: BodyStyle = { ...CAR_STYLES.wagon, blackout: undefined };
     const dark: BodyStyle = { ...wagon, blackout: { b: true, divider: true } };
     const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
     const [was, now] = [makeChassisGeometry(wagon), makeChassisGeometry(dark)];
@@ -1245,5 +1262,46 @@ describe("given a body style's P2 parts", () => {
     const k = Array.from({ length: painted.count }, (_, i) => i).find((i) => painted.getX(i) === 1)!;
     const want = PAINT_COLOR_TONE.clone().multiply(new THREE.Color(0x336699));
     assertSameNumbers([colour.getX(k), colour.getY(k), colour.getZ(k)], [want.r, want.g, want.b], "the torn cap keeps its paint", 1e-6);
+  });
+});
+
+describe("given every style's doors and the shared door card", () => {
+  it("when a ray from outside meets each style's door skin at every drawn card vertex, then the card stands under the skin's outer face (no dark wedge where the skin tucks in); the sim still measures the card's own box", () => {
+    for (const sign of [-1, 1]) {
+      const card = drawnDoorCard(sign);
+      assert.ok(card !== partGeometry(sign < 0 ? PART_KIND.liningL : PART_KIND.liningR), "the seat's measured geometry is the card's own");
+      const pos = card.getAttribute("position") as THREE.BufferAttribute;
+      const ray = new THREE.Raycaster();
+      for (const id of CAR_STYLE_IDS) {
+        const skin = new THREE.Mesh(makeDoorGeometry(sign, CAR_STYLES[id]));
+        skin.position.z = doorSkinZ(CAR_STYLES[id]);
+        skin.updateMatrixWorld();
+        for (let i = 0; i < pos.count; i++) {
+          ray.set(new THREE.Vector3(sign * 2, pos.getY(i), pos.getZ(i)), new THREE.Vector3(-sign, 0, 0));
+          const hit = ray.intersectObject(skin, false)[0];
+          if (hit) assert.ok(sign * pos.getX(i) < sign * hit.point.x, `${id} side ${sign}: card vertex (${pos.getX(i)}, ${pos.getY(i)}, ${pos.getZ(i)}) stands out of the door skin at x ${hit.point.x}`);
+        }
+        skin.geometry.dispose();
+      }
+    }
+  });
+});
+
+describe("given a style with privacy glass", () => {
+  it("when its car is built, and again after a player recolours its glass, then its rear and quarter panes wear the colour well under half as light, its windshield and door panes the colour itself", () => {
+    const hatch = CAR_STYLES.hatchback;
+    const was = hatch.privacyGlass;
+    hatch.privacyGlass = { rear: true, quarter: true };
+    try {
+      const car = new DeformableCar(PAINT, new THREE.Scene(), null, "hatchback");
+      const light = (name: string) => (car["glassPanes"].find((g) => g.name === name)!.mesh.material as THREE.MeshStandardMaterial).color.getHSL({ h: 0, s: 0, l: 0 }).l;
+      for (const pass of ["built", "recoloured"]) {
+        if (pass === "recoloured") car.setGlassTint(0x6688aa);
+        for (const dark of ["rear", "quarterL", "quarterR"]) assert.ok(light(dark) < 0.5 * light("windshield"), `${pass}: ${dark} ${light(dark)} against the windshield's ${light("windshield")}`);
+        assert.ok(light("doorR") === light("windshield"), `${pass}: the door pane wears the colour itself`);
+      }
+    } finally {
+      hatch.privacyGlass = was;
+    }
   });
 });

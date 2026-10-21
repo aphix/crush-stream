@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle } from "./car-variants.ts";
-import { aPillarTopZ, bPillarBand, beltX, beltY, cantDrop } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
   ROOF_CROWN,
@@ -184,8 +184,6 @@ function roundedPillarFromCorners(
   return roundedPillarAlong(sign, rails, thick, { ownCaps: false, crown: PILLAR_CROWN });
 }
 
-/** The drawn A-pillar is a post at least this wide (m) in side view across the windshield's edge, so it never thins to a sliver. */
-const A_POST_WIDTH = 0.06;
 /** The drawn A-post's depth inward (m): a slim post, not a slab. */
 const A_POST_THICK = 0.03;
 /** Stations along the drawn A-post, base to top: enough for the roof to bend its top (each costs the skin a ring a frame). */
@@ -204,9 +202,9 @@ const SAIL_MIN = 0.005;
 const SAIL_EDGE = 0.001;
 
 /**
- * The drawn A-post's rails and its sail's, base to top. The post runs along the windshield's edge, `A_POST_WIDTH` wide in side
- * view; the door glass's front edge (`aPillarFoot` to `aPillarTopZ`) under it is covered, and where that edge lies further back
- * the sail fills the gap at the same height, so no style's glass layout leaves a hole or a sliver.
+ * The drawn A-post's rails and its sail's, base to top. The post runs along the windshield's edge, `aPostRearZ` behind it in side
+ * view; the door glass's front edge (`doorGlassFrontZ`) under it is covered, and where that edge lies further back the sail fills the
+ * gap at the same height up to the glass's knee (or the post's top), so no style's glass layout leaves a hole or a sliver.
  */
 function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const { base, wBase, wTop } = style.windshield;
@@ -216,19 +214,22 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const [footZ, aTopZ] = [style.aPillarFoot, aPillarTopZ(style)];
   const [footY, aTopY] = [beltY(footZ, style), cantY(aTopZ, style) + PILLAR_TOP_RISE];
   const post: Rail[] = [];
-  const sail: Rail[] = [];
-  let sailWidth = 0;
   for (let k = 0; k < A_POST_STATIONS; k++) {
     const t = k / (A_POST_STATIONS - 1);
     const y = lerp(footY, aTopY, t);
-    // Side view: the point at height y that lies A_POST_WIDTH behind the windshield's edge line.
-    const postZ = base[1] + (uz * (y - base[0]) - A_POST_WIDTH) / uy;
-    const glassZ = lerp(footZ, aTopZ, t);
-    const sailZ = Math.min(glassZ, postZ - SAIL_EDGE);
+    const postZ = aPostRearZ(y, style);
     const rear: V3 = [underRoofSide(glassX(postZ, y, style) + A_POST_LIFT, y, postZ, style), y, postZ];
     const [frontY, frontZ] = [lerp(base[0], topY, t) - A_POST_LIFT * uz, lerp(base[1], topZ, t) + A_POST_LIFT * uy];
     const front: V3 = [underRoofSide(lerp(wBase, wTop, t) / 2 + A_POST_LIFT, frontY, frontZ, style), frontY, frontZ];
     post.push({ rear, front });
+  }
+  const glassTop = glassTopY(aTopZ, style);
+  const sail: Rail[] = [];
+  let sailWidth = 0;
+  for (let k = 0; k < A_POST_STATIONS; k++) {
+    const y = lerp(footY, style.aPillarKnee ?? aTopY, k / (A_POST_STATIONS - 1));
+    const [postZ, glassZ] = [aPostRearZ(y, style), doorGlassFrontZ(y, footY, glassTop, style)];
+    const sailZ = Math.min(glassZ, postZ - SAIL_EDGE);
     sail.push({ rear: [glassX(sailZ, y, style), y, sailZ], front: [glassX(postZ, y, style), y, postZ] });
     sailWidth = Math.max(sailWidth, postZ - glassZ);
   }
@@ -435,7 +436,6 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     const rail = makeBar(source, 0.03, 0.03, hypot2(railPlan, railFront - railRear), 0, 0, 0).rotateX(-detAtan2(railFront - railRear, railPlan));
     if (railFrontX !== railRearX) rail.rotateY(sign * detAtan2(railFrontX - railRearX, railRun));
     parts.push(rail.translate(sign * ((railRearX + railFrontX) / 2 + 0.015), (railRear + railFront) / 2 + 0.005, q.zRearBot + railRun * 0.5));
-    rail.name = "rail";
     if (source === "drawn") parts.push(...glassTopFill(sign, style, aTopZ));
   }
   // The cage keeps its header boxes until the rig derives the cabin cage; the drawn roof covers both glass tops, so it draws none.

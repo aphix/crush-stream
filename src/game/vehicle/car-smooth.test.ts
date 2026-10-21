@@ -292,7 +292,16 @@ describe("given every body style's chassis, whose nose and tail roll into the en
 /** Of each side's greenhouse parts the B pillar and the rail are the near-rectangular ones (the A and C pillars lean in plan, so their section is a sheared parallelogram). */
 const roundedPartCases = [
   { name: "B pillar", pick: (parts: THREE.BufferGeometry[]) => parts[1]! },
-  { name: "side rail", pick: (parts: THREE.BufferGeometry[]) => parts.find((g) => g.name === "rail")! },
+  // The first part long along z and only a few cm tall: the left belt rail (the glass-top fills come after it).
+  {
+    name: "side rail",
+    pick: (parts: THREE.BufferGeometry[]) =>
+      parts.find((g) => {
+        g.computeBoundingBox();
+        const box = g.boundingBox!;
+        return box.max.z - box.min.z > 0.3 && box.max.y - box.min.y < 0.1;
+      })!,
+  },
 ] as const;
 
 /** At the cant line the drawn roof's side keeps normals of its own, pointing out at least this much (x share), not down with its underside's. */

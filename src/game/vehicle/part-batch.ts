@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { INSTANCE_MIRROR_VARIANT_ATTRIBUTE, loosePartsMaterial, mirrorPartsMaterial, partsMaterial, shadowOnlyMaterial } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS } from "./car-variants.ts";
+import { drawnDoorCard } from "./car-door-mesh.ts";
 import { mirrorBatchGeometry, PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
 
 /** A caster's stand-in until its style's first car syncs: the program links at the warm, before any car of the style draws. */
@@ -33,7 +34,8 @@ export class PartBatch {
     for (const kind of PART_KINDS) {
       const side = kind === PART_KIND.mirrorL ? -1 : kind === PART_KIND.mirrorR ? 1 : 0;
       const capacity = this.capacity[kind]!;
-      const geometry = side === 0 ? partGeometry(kind) : mirrorBatchGeometry(side, capacity);
+      const card = kind === PART_KIND.liningL ? -1 : kind === PART_KIND.liningR ? 1 : 0;
+      const geometry = side !== 0 ? mirrorBatchGeometry(side, capacity) : card !== 0 ? drawnDoorCard(card) : partGeometry(kind);
       const mesh = new THREE.InstancedMesh(geometry, side === 0 ? partsMaterial() : mirrorPartsMaterial(), capacity);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       const variants = side === 0 ? null : (geometry.getAttribute(INSTANCE_MIRROR_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute);
