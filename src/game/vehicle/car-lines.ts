@@ -54,3 +54,11 @@ export function glassTopStation(z: number, style: BodyStyle): number | null {
 export function aPillarTopZ(style: BodyStyle): number {
   return style.aPillarTop ?? style.windshieldTop[1] - A_PILLAR_TOP_BACK;
 }
+
+/** The drawn B-pillar's z band [rear, front] when the style sets its width (centred on `bPillar`), else null: the `bPillar` band. */
+export function bPillarBand(style: BodyStyle): readonly [number, number] | null {
+  const width = style.pillars?.b;
+  if (width === undefined) return null;
+  const mid = (style.bPillar.rear + style.bPillar.front) / 2;
+  return [mid - width / 2, mid + width / 2];
+}
