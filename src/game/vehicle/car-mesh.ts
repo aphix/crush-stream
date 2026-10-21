@@ -162,7 +162,7 @@ function tubAt(z: number, style: BodyStyle): { t: number; floor: number } {
       (1 - THREE.MathUtils.smoothstep(z, z1 - TUB_EDGE, z1 + TUB_EDGE));
     if (w > t) {
       t = w;
-      floor = f;
+      floor = Math.max(f, floorY(z, style));
     }
   }
   return { t, floor };
