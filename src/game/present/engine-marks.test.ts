@@ -228,3 +228,25 @@ describe("given a wheel laying a stamp every frame round a 6 m turn", () => {
     }
   });
 });
+
+describe("given the mark map at each tier's size on a phone and on a desktop", () => {
+  const [low, high] = TIER_MAP_SIZES;
+  it("when a phone's FX tier flips low, high, low, high, then its map stays 1024 texels in the same target, never resized", () => {
+    const marks = new SkidMarks(4);
+    marks.phone = true;
+    marks.setResolution(low);
+    const rt = marks["rt"]!;
+    let resized = 0;
+    rt.addEventListener("dispose", () => resized++);
+    for (const size of [high, low, high]) marks.setResolution(size);
+    assert.equal(marks["rt"], rt, "the phone's map target");
+    assert.equal(rt.width, low, "the phone's map edge");
+    assert.equal(resized, 0, "resizes of the phone's map (setSize frees the old storage)");
+  });
+
+  it("when a desktop's FX tier goes to high, then its map is 2048 texels", () => {
+    const marks = new SkidMarks(4);
+    marks.setResolution(high);
+    assert.equal(marks["rt"]!.width, high);
+  });
+});

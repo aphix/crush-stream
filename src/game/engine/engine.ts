@@ -184,6 +184,10 @@ export class CrashEngine extends EngineGarage {
     this.lab.fx = this.hitFx;
 
     this.renderer = makeRenderer(canvas);
+    const gl = this.renderer.getContext();
+    const kind = deviceClass(gpuRenderer(gl), window.matchMedia("(pointer: fine)").matches, (navigator as Navigator & { userAgentData?: { mobile: boolean } }).userAgentData?.mobile === true);
+    this.deviceClass = kind;
+    const desktop = kind === "desktop";
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 180);
     this.view = new ChaseCamera(this.camera, canvas, this.seat, this.pad.state, this.clock.reduceMotion, {
@@ -228,15 +232,12 @@ export class CrashEngine extends EngineGarage {
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion);
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
     const fxParam = FX_TIERS.find((t) => t === new URLSearchParams(window.location.search).get(SETTING_KEY.fx));
+    this.cine.marks.phone = !desktop;
     this.cine.setTier(fxParam === "ultra" ? "high" : (fxParam ?? INITIAL_HUD.fxTier));
     // `?sky=0|1|auto|on|off` pins the Sky setting for the session (bench A/B).
     const skyParam = new URLSearchParams(window.location.search).get(SETTING_KEY.sky);
     this.stage.setSky(skyParam === "0" ? "off" : skyParam === "1" ? "on" : (SKY_MODES.find((m) => m === skyParam) ?? INITIAL_HUD.sky));
     this.stage.setProceduralSky(INITIAL_HUD.proceduralSky);
-    const gl = this.renderer.getContext();
-    const kind = deviceClass(gpuRenderer(gl), window.matchMedia("(pointer: fine)").matches, (navigator as Navigator & { userAgentData?: { mobile: boolean } }).userAgentData?.mobile === true);
-    this.deviceClass = kind;
-    const desktop = kind === "desktop";
     this.autoFx = new AutoFx(kind !== "software", fxParam === undefined, desktop);
     // A phone starts on the nearer rung (a ~20 px car loses nothing the eye can use); the governor walks either way from the first match.
     this.detailGov = new DetailGovernor(desktop ? 0 : PHONE_LEVEL);

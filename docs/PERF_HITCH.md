@@ -37,7 +37,7 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
   (`ParkingScene.sync`, once a frame before the draw): the matrix pass and traversals skip them. Every warm-up starts by
   putting them all back (`unparkAll`), so a hidden mode's programs link with the rest.
 - Post render targets and the mark map are allocated once and resized in place, so a tier switch allocates nothing, with two
-  exceptions: a switch between a 1024 mark-map tier (minimal, low) and a 2048 one (high, ultra) reallocates the mark map and
+  exceptions: on a desktop a switch between a 1024 mark-map tier (minimal, low) and a 2048 one (high, ultra) reallocates the mark map and
   wipes it, and a canvas resize while a plain tier (off, minimal) is up frees the post targets, so the next switch to a post
   tier reallocates them on its first post frame.
 - One material per draw kind: track art gives each draw kind its own copy of a material (`TrackArt.forDraw`) and

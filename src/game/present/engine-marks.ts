@@ -115,6 +115,8 @@ const DRAW_EVERY_FRAMES = 2;
 const MARK_TEXEL = 0.1;
 /** The window moves in steps of this fraction of its size (a whole number of texels), wiping the band each step enters. */
 const WINDOW_STEPS = 16;
+/** A phone's map stops at this edge (texels): 4 MiB, not 16 plus mips, blurrier marks, and an Auto tier flip never resizes it. */
+const PHONE_MAP_SIZE = 1024;
 
 type WheelFx = {
   /** 0–1 slip this frame per wheel slot (car index × 4 + wheel). */
@@ -170,6 +172,8 @@ export class SkidMarks {
   private fadeAcc = 0;
   private needsClear = true;
   private any = false;
+  /** A phone's map stops at `PHONE_MAP_SIZE`: set once, before the first `setResolution`. */
+  phone = false;
 
   constructor(maxCars: number) {
     const slots = maxCars * 4;
@@ -229,8 +233,9 @@ export class SkidMarks {
     this.scene.add(this.stamp, this.fade);
   }
 
-  /** Map edge in texels (0 = no map: the off tier). The target is created once and resized in place; the map is wiped. */
-  setResolution(size: number): void {
+  /** Map edge in texels (0 = no map: the off tier), capped on a phone. The target is created once and resized in place; the map is wiped. */
+  setResolution(tierSize: number): void {
+    const size = this.phone ? Math.min(tierSize, PHONE_MAP_SIZE) : tierSize;
     this.on = size > 0;
     if (this.on) {
       if (!this.rt) {
