@@ -771,13 +771,17 @@ export class RagdollSystem {
     this.pending.push({ ...t, p: t.p.clone(), q: t.q.clone(), v: t.v.clone(), w: t.w.clone() });
   }
 
-  /** How throw `t` is dressed: `dressed`, else the look of his own (`t.look`), else his car's driver's: a player's own look and spray when his car is a player's (`ownLook`, the same in every scene and seed), else the seed's drawn one. */
+  /** How throw `t` is dressed: `dressed`, else the look of his own (`t.look`), else his car's driver's (`carDriverLook`) with a player's own spray. */
   private dressingOf(t: Throw, dressed: DriverLook | null): { look: DriverLook; spray: SprayBitmap | null } {
     const given = dressed ?? t.look ?? null;
     if (given) return { look: given, spray: null };
-    const own = t.cop ? null : this.lookOf(t.car);
-    if (own) return { look: ownLook(own.person), spray: own.personSpray };
-    return { look: driverLook(this.lookSeed, t.car), spray: null };
+    return { look: this.carDriverLook(t.car, t.cop), spray: (t.cop ? null : this.lookOf(t.car))?.personSpray ?? null };
+  }
+
+  /** Car `car`'s driver as he sits in it and is thrown from it: a player's own look when his car is a player's (`ownLook`, the same in every scene and seed), else the seed's drawn one; a cop wears the uniform over the drawn one. */
+  carDriverLook(car: number, cop: boolean): DriverLook {
+    const own = cop ? null : this.lookOf(car);
+    return own ? ownLook(own.person) : driverLook(this.lookSeed, car);
   }
 
   /**

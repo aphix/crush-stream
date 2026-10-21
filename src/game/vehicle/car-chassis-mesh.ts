@@ -6,6 +6,7 @@ import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import {
+  bodyTubs,
   DOOR_EDGE,
   SEAM_HALF,
   SEDAN,
@@ -71,7 +72,7 @@ function sliceZs(style: BodyStyle, source: BodySource): number[] {
   const z1 = p[p.length - 1]!.z;
   const [a0, a1] = style.door.aperture;
   const knots = [a0, a0 + DOOR_EDGE, a1 - DOOR_EDGE, a1];
-  for (const [a, b] of style.tubs) knots.push(a - TUB_EDGE, a + TUB_EDGE, b - TUB_EDGE, b + TUB_EDGE);
+  for (const [a, b] of bodyTubs(style, source)) knots.push(a - TUB_EDGE, a + TUB_EDGE, b - TUB_EDGE, b + TUB_EDGE);
   const seam = style.rearDoorSeam;
   if (seam !== null) knots.push(seam - SEAM_HALF, seam, seam + SEAM_HALF);
   const zs = knots.filter((k) => k > z0 && k < z1);

@@ -1,24 +1,25 @@
 import * as THREE from "three";
 import { loosePartsMaterial, partsMaterial } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
-import { PART_KINDS, partGeometry } from "./part-geometry.ts";
+import { PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
 
 /**
- * Every car's seven static parts (interior, door linings, mirrors, grille, tail trim) as seven instanced draws, one per kind.
- * A loose part draws as its own mesh; a cut seat (layer 0 off, `CarDetail`) or a hidden car draws nothing.
+ * Every car's static parts (cabin, door cards, mirrors, grille, tail trim, seats, wheel, engine bay, crash bars) as one instanced draw per
+ * kind. A loose part draws as its own mesh; a cut seat (layer 0 off, `CarDetail`), a hidden car or a seat whose `showIf` fails draws nothing.
  */
 export class PartBatch {
   readonly meshes: readonly THREE.InstancedMesh[];
   /** A hidden mesh in the torn-part material: the boot warm draws it, so a first tear links no program. */
   readonly looseWarm = new THREE.Mesh(new THREE.PlaneGeometry(0, 0), loosePartsMaterial());
   private readonly counts = new Int32Array(PART_KINDS.length);
-  private readonly capacity: number;
+  /** Instances each kind holds: `cars` cars' worth (`PART_PER_CAR`). */
+  private readonly capacity: Int32Array;
 
-  constructor(capacity: number) {
-    this.capacity = capacity;
+  constructor(cars: number) {
+    this.capacity = Int32Array.from(PART_KINDS, (kind) => cars * PART_PER_CAR[kind]!);
     const meshes: THREE.InstancedMesh[] = [];
     for (const kind of PART_KINDS) {
-      const mesh = new THREE.InstancedMesh(partGeometry(kind), partsMaterial(), capacity);
+      const mesh = new THREE.InstancedMesh(partGeometry(kind), partsMaterial(), this.capacity[kind]!);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       // Instances span the pad and move every frame; a stale bound would cull live parts.
       mesh.frustumCulled = false;
@@ -48,7 +49,7 @@ export class PartBatch {
         if (seat.loose) seat.fasten();
         const kind = seat.kind;
         const n = counts[kind]!;
-        if (!shown || !seat.layers.isEnabled(0) || n >= this.capacity) continue;
+        if (!shown || !seat.layers.isEnabled(0) || n >= this.capacity[kind]! || (seat.showIf !== null && !seat.showIf())) continue;
         this.meshes[kind]!.setMatrixAt(n, seat.matrixWorld);
         counts[kind] = n + 1;
       }

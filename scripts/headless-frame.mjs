@@ -7,11 +7,13 @@
  * program that failed to link. Exit 1 on a link failure or a GL error. Not a frame-time judge: the browser bench is.
  *
  *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png]
- *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--at 8]
+ *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--at 8] [--tear hood,bumperF]
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
  * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
  * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--at` is the sim seconds before the drawn frames.
+ * `--tear` tears the named parts (`DetachPart.name`: hood, bumperF, archFL, ...) off every car before the framing and hides them, to
+ * show what is under them (the engine bay, the crash bars, the bare metal).
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -52,6 +54,7 @@ const { values } = parseArgs({
     hash: { type: "string" },
     camera: { type: "string" },
     at: { type: "string", default: String(START_S) },
+    tear: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -190,6 +193,14 @@ engine.pace.now = () => (paceClock += PACE_STEP_S);
 if (values.hash === undefined) engine.toggleDerby();
 engine.advance(atS, { frameDt: FRAME });
 await settle();
+for (const name of values.tear?.split(",") ?? []) {
+  for (const car of engine["live"]()) {
+    const part = car["parts"].find((p) => p.name === name);
+    if (!part) throw new Error(`--tear ${name}: no such part on the ${car.style.id}`);
+    car["detachPart"](part, 0);
+    part.object.visible = false;
+  }
+}
 if (camera !== undefined) {
   const [radius, pitch, angle] = camera;
   Object.assign(engine.view, { userFramed: true, radius, pitch, angle });

@@ -19,6 +19,7 @@ import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CageRig } from "./car-cage-rig.ts";
 import { PartSeat } from "./part-geometry.ts";
+import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
 
 export { DOOR };
@@ -226,6 +227,7 @@ export class DeformableCar extends CarParts {
     this.group.rotation.set(0, 0, 0);
     this.interior.scale.set(1, 1, 1);
     this.interior.position.set(0, 0, 0);
+    this.cabin.fit(null);
 
     this.endAgo.fill(9);
     this.endReach = Infinity;
@@ -240,6 +242,7 @@ export class DeformableCar extends CarParts {
         else if (!p.region) this.group.add(p.object);
       }
       if (p.region) this.closePanel(p);
+      if (p.bare) setBare(p.bare, this.body.geometry, false);
       p.detached = false;
       p.folding = false;
       p.hingeT = 0;
@@ -776,6 +779,7 @@ export class DeformableCar extends CarParts {
           else if (p.name === "mirrorL") this.doorL.add(p.object);
           else if (p.name === "mirrorR") this.doorR.add(p.object);
           else this.group.add(p.object);
+          if (p.bare) setBare(p.bare, this.body.geometry, false);
           p.detached = false;
         }
       }

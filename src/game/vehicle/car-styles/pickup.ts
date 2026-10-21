@@ -25,6 +25,7 @@ export const PICKUP: BodyStyle = {
   rearDoorSeam: null,
   boot: { kind: "tailgate", y0: 0.44, origin: [0.915, -2.12] },
   lamps: { head: HEAD_LAMP, tail: [0.79, 0.72] },
+  seats: { front: PLATFORM_HARDPOINTS.seats.front, rear: null },
   rig: {
     cages: {
       roof: { min: [-0.58, 1.02, -0.72], max: [0.58, 1.36, 0.56] },

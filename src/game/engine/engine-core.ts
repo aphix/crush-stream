@@ -48,6 +48,7 @@ import { TraceRecorder, type TraceClock, type TraceSetup } from "./engine-trace.
 import { DerbyMatch } from "../match/derby.ts";
 import { LampBatch, LampLights } from "../vehicle/lamp-lights.ts";
 import { PartBatch } from "../vehicle/part-batch.ts";
+import { SeatedDrivers } from "../present/seated-drivers.ts";
 import { DriverSeat } from "../vehicle/car-drive.ts";
 import { GamepadInput, type Rumble } from "../vehicle/gamepad.ts";
 import { impactRumble, landingRumble, SLIDE_EVERY, slideRumble } from "../present/rumble.ts";
@@ -234,6 +235,7 @@ export abstract class EngineCore {
   protected readonly wheels = new WheelBatch(MAX_CARS * 4, (car) => this.detail.isFar(car));
   protected readonly lampBatch = new LampBatch(MAX_CARS * 2);
   protected readonly partBatch = new PartBatch(MAX_CARS);
+  protected readonly seated = new SeatedDrivers();
   protected lampLights!: LampLights;
   protected sparks!: SparkSystem;
   protected fountains!: Fountains;

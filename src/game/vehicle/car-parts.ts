@@ -9,6 +9,7 @@ import type { StirCar } from "../world/surfaces.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { MASS_SPECS, type MassName } from "../kernel/rig-spec.ts";
 import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox } from "./car-panels.ts";
+import { setBare } from "./interior.ts";
 import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
 import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
@@ -611,6 +612,7 @@ export abstract class CarParts extends CarGlass {
     if (!this.deform.massActive) {
       this.interior.scale.set(1, 1, 1);
       this.interior.position.set(0, 0, 0);
+      this.cabin.fit(null);
       return;
     }
     const l = this.deform.massLocal(INTERIOR_MASSES[0]);
@@ -619,6 +621,7 @@ export abstract class CarParts extends CarGlass {
     interiorPose(l.x, r.x, cell.y, cell.z, _interior);
     this.interior.scale.x = _interior[0]!;
     this.interior.position.set(_interior[1]!, _interior[2]!, _interior[3]!);
+    this.cabin.fit(this.deform);
   }
 
   /** Once a frame on a crashed car (`updateSkin`, after the skin): the parts' poses a step left pending are written first, door glass rides its door. */
@@ -785,6 +788,7 @@ export abstract class CarParts extends CarGlass {
     const wpos = new THREE.Vector3();
     const wquat = new THREE.Quaternion();
     if (p.region) this.openPanel(p);
+    if (p.bare) setBare(p.bare, this.body.geometry, true);
     p.object.getWorldPosition(wpos);
     p.object.getWorldQuaternion(wquat);
     if (p.region) {

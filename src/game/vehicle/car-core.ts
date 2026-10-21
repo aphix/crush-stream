@@ -23,7 +23,8 @@ import {
   trimMaterial,
   type LampKind,
 } from "./car-materials.ts";
-import { MIRROR_REACH, PART_KIND, PART_KINDS, PartSeat } from "./part-geometry.ts";
+import { carPartSeats, MIRROR_REACH, PART_KIND, PartSeat } from "./part-geometry.ts";
+import { bumperBare, CarCabin } from "./interior.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { anchorOnSkin, poseOnSkin, type GlowKind, type SkinAnchor } from "./lamp-lights.ts";
@@ -217,6 +218,8 @@ export interface DetachPart {
   swing: DoorHinge | null;
   /** Quarter panels and arch flares: the patch of body skin they are (null on every other part); once hinged, whether the shell is in the scene (the body under it is primer). */
   region: PanelRegion | null;
+  /** Bumpers: the body's vertices they cover, bare metal once they are gone (`setBare`); null on every other part. */
+  bare: Int32Array | null;
   open: boolean;
   /** The hinge value the open shell was last posed at (`shellPose`): an attached panel is re-posed only when it changes (a changed skin re-poses all, `skinPanels`). */
   posed: number;
@@ -349,11 +352,14 @@ export abstract class CarCore {
   protected doorRRest: Float32Array;
   protected hoodOrigin: THREE.Vector3;
   protected trunkOrigin: THREE.Vector3;
-  readonly interior: PartSeat;
+  /** The cabin's pose, holding its shell, seats and wheel (`CarCabin`): `fitInterior` moves it with the crushed cell. */
+  readonly interior: THREE.Group;
+  /** The interior kit, the engine bay and the crash bars, placed by the style. */
+  protected readonly cabin: CarCabin;
   private mirrorL: PartSeat;
   private mirrorR: PartSeat;
-  /** The seven static parts, drawn by PartBatch; indexed by PartKind. */
-  readonly partSeats: readonly PartSeat[] = PART_KINDS.map((kind) => new PartSeat(kind));
+  /** The static parts, drawn by PartBatch: one of each kind indexed by PartKind, then the further ones (`carPartSeats`). */
+  readonly partSeats: readonly PartSeat[] = carPartSeats();
   /** Police roof light bar (skinned with the roof cage), its part, rest shape and seat; null on other styles. */
   protected lightBar: THREE.Mesh | null = null;
   protected lightBarPart: DetachPart | null = null;
@@ -383,8 +389,8 @@ export abstract class CarCore {
     this.group.add(this.body);
     this.deform = new StreamedDeformation(bodyGeo, this.frame.rig);
 
-    this.interior = this.partSeats[PART_KIND.interior]!;
-    this.group.add(this.interior);
+    this.cabin = new CarCabin(this.style, this.partSeats, this.group);
+    this.interior = this.cabin.pose;
 
     this.hood = new THREE.Mesh(makeHoodGeometry(this.style), this.bodyMat);
     this.hood.castShadow = true;
@@ -448,6 +454,7 @@ export abstract class CarCore {
 
     this.addGlass();
     this.registerParts();
+    this.cabin.watch(this.parts);
     this.buildHullHelper();
 
     // Transforms only: the engine's WheelBatch draws every car's wheels in one instanced call.
@@ -582,6 +589,7 @@ export abstract class CarCore {
         radius,
         swing,
         region: null,
+        bare: null,
         open: false,
         posed: -1,
         dent: newDentState(),
@@ -590,8 +598,8 @@ export abstract class CarCore {
       this.parts.push(p);
       return p;
     };
-    add(BUMPER_F, this.bumperF, "bumperFront", 1, 2, "two-point", 0.42);
-    add("bumperR", this.bumperR, "bumperRear", 16, 17, "two-point", 0.4);
+    add(BUMPER_F, this.bumperF, "bumperFront", 1, 2, "two-point", 0.42).bare = bumperBare(this.style, this.body.geometry, true);
+    add("bumperR", this.bumperR, "bumperRear", 16, 17, "two-point", 0.4).bare = bumperBare(this.style, this.body.geometry, false);
     add(LID.hood, this.hood, "bonnet", 3, 3, "cowl", 0.5);
     add(LID.trunk, this.trunk, "boot", 18, 18, "tail", 0.48);
     const doorL = add("doorL", this.doorL, "doorLeft", 6, 6, "door", 0.4, { theta: 0, omega: 0, latched: true, load: 0, mirrorFold: 0 });
