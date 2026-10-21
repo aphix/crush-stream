@@ -1,5 +1,5 @@
 import { carSprayLayout, SPRAY_FACE, SPRAY_PALETTE, type SprayLayout, type SprayPaint } from "../match/look-data.ts";
-import { B_PILLAR_Z, DOOR_Z0, DOOR_Z1, GLASS_BELT_Y, ROCKER_Y, WINDSHIELD_BASE } from "../vehicle/car-mesh.ts";
+import { beltY, DOOR_Z0, DOOR_Z1 } from "../vehicle/car-mesh.ts";
 import { COP_LIVERY } from "../vehicle/car-styles/police.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
 import { SprayBitmap } from "./spray.ts";
@@ -64,13 +64,13 @@ function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
   const texels = new Uint8Array(layout.w * layout.h);
   const [, yMin, zMin] = layout.min;
   const [, yMax, zMax] = layout.max;
-  const sill = ROCKER_Y + SILL;
+  const sill = style.rocker.y + SILL;
   const doorFront = DOOR_Z1;
   const doorRear = style.rearDoorSeam ?? DOOR_Z0;
-  const glassFront = WINDSHIELD_BASE[1];
+  const glassFront = style.windshield.base[1];
   const glassRear = style.rearGlass.base[1];
-  const wordMid = (B_PILLAR_Z.rear + B_PILLAR_Z.front) / 2;
-  const baseline = (GLASS_BELT_Y + sill - CAP) / 2;
+  const wordMid = (style.bPillar.rear + style.bPillar.front) / 2;
+  const baseline = (beltY(wordMid, style) + sill - CAP) / 2;
   for (const face of [SPRAY_FACE.left, SPRAY_FACE.right, SPRAY_FACE.top]) {
     const [fx, fy, fw, fh] = layout.faces[face]!;
     for (let ty = 0; ty < fh; ty++) {
@@ -81,7 +81,7 @@ function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
         let ink = 0;
         if (face === SPRAY_FACE.top) ink = greenhouse ? WHITE : 0;
         else {
-          if (y > GLASS_BELT_Y ? greenhouse : y > sill && z > doorRear && z < doorFront) ink = WHITE;
+          if (y > beltY(z, style) ? greenhouse : y > sill && z > doorRear && z < doorFront) ink = WHITE;
           // The word reads left to right to someone facing each flank: front to rear on the +x face, rear to front on the −x face.
           const along = face === SPRAY_FACE.right ? wordMid + WORD_LENGTH / 2 - z : z - (wordMid - WORD_LENGTH / 2);
           if (onWord(along, y - baseline)) ink = BLACK;
