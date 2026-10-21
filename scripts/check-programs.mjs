@@ -5,11 +5,12 @@
  * course, new cars) in the menu that loads it. This boots the game in headless Chromium, waits for that
  * warm-up, then plays through everything that can need a new program: a fast fleet crash (sparks, debris,
  * smoke, cracked glass, tyre marks), a boost launch and handbrake drift, night and wet, every FX tier, every
- * scene (derby, pistons fired, door ram, compactor, barrier, balls), the debug views, a mid-race FX tier drop and
- * rise in a sprayed field, and a race on every course (8 cars, the city's traffic). It fails if the renderer holds
- * more programs after the sandbox play than right after warm-up, if any program links between a race's green light
- * and its end of play, if a tier switch links a program or draws one for the first time inside a frame, or if a
- * finish program exists for the canvas. Counts, not timings, so it is deterministic; the switches' frame times are printed.
+ * scene (derby, pistons fired, door ram, compactor, barrier, balls), the debug views, a race on every course (8 cars,
+ * the city's traffic), and Auto's mid-race tier steps in a sprayed field (`SPRAYED_STEPS`). A program is its id with
+ * its key, so one freed and linked again counts. It fails if a program links after the warm-up in the sandbox play, or
+ * between a race's green light and its end of play, if a tier switch links a program or draws one for the first time
+ * inside a frame, or if a finish program exists for the canvas. Counts, not timings, so it is deterministic; it prints
+ * the programs held per tier, the finish programs by key, and the switches' frame times.
  *
  *   node scripts/check-programs.mjs [--url http://127.0.0.1:8080/]
  *
@@ -46,9 +47,13 @@ page.on("console", (m) => {
 
 const run = (body) => page.evaluate((b) => new Function("e", b)(window.__crush), body);
 const wait = (s) => page.waitForTimeout(s * 1000);
-/** Every program the renderer holds, keyed by its cache key, with the material type that built it. */
+/** Every program the renderer holds, with the material type that built it. */
 const programs = () =>
   page.evaluate(() => (window.__crush.renderer.info.programs ?? []).map((p) => ({ id: p.id, type: p.type, key: String(p.cacheKey) })));
+/** A program as one linked object, its id with its key: one freed and linked again under the same key is a new link. */
+const programId = (p) => `${p.id} ${p.key}`;
+/** The newest program count at each FX tier, taken after each switch to it. */
+const perTier = new Map();
 /** A program key's output colour space: "srgb" draws to the canvas, "srgb-linear" into a render target (three keys it after the precision). */
 const outputOf = (key) => /,(?:high|medium|low)p,(srgb(?:-linear)?),/.exec(key)?.[1] ?? "unknown";
 /** What the car finish adds to a program key (`applyFinish`). */
@@ -95,7 +100,7 @@ const watchDraws = () =>
  * `SWITCH_FRAMES` frames. The warm-up the switch queues must have linked and drawn everything already: a failure goes into `late`.
  */
 async function tierSwitch(label, tier, late) {
-  const before = new Set((await programs()).map((p) => p.id));
+  const before = new Set((await programs()).map(programId));
   await page.evaluate(
     ([t, frames]) => {
       Object.assign(window.__drawProbe, { firstDraws: 0, watch: frames, since: performance.now(), frameMs: [], startMs: [] });
@@ -104,10 +109,12 @@ async function tierSwitch(label, tier, late) {
     [tier, SWITCH_FRAMES],
   );
   await wait(SWITCH_WATCH_S);
-  const linked = (await programs()).filter((p) => !before.has(p.id));
+  const now = await programs();
+  const linked = now.filter((p) => !before.has(programId(p)));
+  perTier.set(tier, now.length);
   const { firstDraws, frameMs, startMs } = await page.evaluate(() => window.__drawProbe);
   const ms = (list) => list.map((t) => t.toFixed(1)).join(" / ");
-  console.log(`- ${label}: ${linked.length} programs linked, ${firstDraws} uniform fetches of first draws inside frames`);
+  console.log(`- ${label}: ${linked.length} programs linked (${now.length} held), ${firstDraws} uniform fetches of first draws inside frames`);
   console.log(`  first ${SWITCH_FRAMES} frames: draw ${ms(frameMs)} ms, started ${ms(startMs)} ms after the switch`);
   for (const p of linked) console.log(`  linked after the switch: ${p.type} …${p.key.slice(-80).replace(/\s+/g, " ")}`);
   late.push(...linked);
@@ -119,9 +126,41 @@ async function boot(href) {
   await page.goto(href, { waitUntil: "load", timeout: 120_000 });
   await page.waitForFunction(() => Boolean(window.__crush), null, { timeout: 120_000 });
   await page.evaluate(() => window.__crush.ready);
+  // Rapier loads after boot and its purse pool warms in the background: that warm is part of the boot's, not a mid-play link.
+  await page.evaluate(() => window.__crush.ragdolls.preload());
+  await page.waitForFunction(() => window.__crush.warmsInFlight === 0, null, { timeout: 60_000 });
   await page.evaluate(() => (window.__crush.fadeScenes = false));
   await watchDraws();
 }
+
+/**
+ * Auto's mid-race steps, one tier at a time, in a sprayed field (the city race's rivals) dressed at the boot tier: booted at High it steps
+ * down to Minimal and back up, booted at Low it climbs to High and drops back. The finish and the rivals' bitmap size change on the way.
+ */
+const SPRAYED_STEPS = [
+  ["high", ["low", "minimal", "low", "high"]],
+  ["low", ["high", "low"]],
+];
+
+async function sprayedSwitches(late) {
+  for (const [from, steps] of SPRAYED_STEPS) {
+    const at = new URL(url);
+    at.searchParams.set("fx", from);
+    await boot(at.href);
+    await run("e.toggleRace()");
+    await run(`e.raceCommand({ type: "options", options: { trackId: "city", aiCount: 7, laps: 9 } }); e.raceCommand({ type: "start" })`);
+    await page.waitForFunction(() => window.__crush.race.hud().phase === "racing", null, { timeout: 60_000 });
+    await wait(3);
+    let tier = from;
+    for (const to of steps) {
+      await tierSwitch(`booted at ${from}, race city, ${tier} → ${to}`, to, late);
+      tier = to;
+    }
+  }
+}
+
+/** A program key's last field: the material's own key (`customProgramCacheKey`), e.g. "car-paint-primer|finish-paint|spray-car". */
+const customKey = (key) => key.slice(key.lastIndexOf(",") + 1);
 
 try {
   await boot(url);
@@ -172,10 +211,9 @@ try {
     await run(body);
     await wait(s);
   }
-
   const after = await programs();
-  const known = new Set(warm.map((p) => p.key));
-  const played = after.filter((p) => !known.has(p.key));
+  const known = new Set(warm.map(programId));
+  const played = after.filter((p) => !known.has(programId(p)));
   console.log(`programs after warm-up: ${warm.length}, after play: ${after.length}`);
   for (const p of played) console.log(`  linked mid-play: ${p.type} …${p.key.slice(-80).replace(/\s+/g, " ")}`);
   late.push(...played);
@@ -190,13 +228,13 @@ try {
   for (const id of await run("return e.race.courses.map((c) => c.id)")) {
     await run(`e.raceCommand({ type: "options", options: { trackId: "${id}", aiCount: 7, laps: 9 } }); e.raceCommand({ type: "start" })`);
     await page.waitForFunction(() => window.__crush.race.hud().phase === "racing", null, { timeout: 60_000 });
-    const green = new Set((await programs()).map((p) => p.key));
+    const green = new Set((await programs()).map(programId));
     // The player car rides the AI's racing line (out of drive mode the brain steers it) for 12 s.
     for (let t = 0; t < 12; t++) {
       await run("if (e.seat.mode === 'drive') e.seat.mode = 'follow'");
       await wait(1);
     }
-    const raced = (await programs()).filter((p) => !green.has(p.key));
+    const raced = (await programs()).filter((p) => !green.has(programId(p)));
     console.log(`- race ${id}: ${green.size} programs at the green light, ${raced.length} linked while racing`);
     for (const p of raced) console.log(`  linked mid-race: ${p.type} …${p.key.slice(-80).replace(/\s+/g, " ")}`);
     late.push(...raced);
@@ -204,17 +242,11 @@ try {
   }
   await run("e.toggleRace()");
 
-  // Auto steps down mid-race after slow windows. A session already at High when its race's cars were dressed (here: booted at
-  // High) drops to Low and back: a sprayed field on the city.
-  const atHigh = new URL(url);
-  atHigh.searchParams.set("fx", "high");
-  await boot(atHigh.href);
-  await run("e.toggleRace()");
-  await run(`e.raceCommand({ type: "options", options: { trackId: "city", aiCount: 7, laps: 9 } }); e.raceCommand({ type: "start" })`);
-  await page.waitForFunction(() => window.__crush.race.hud().phase === "racing", null, { timeout: 60_000 });
-  await wait(3);
-  await tierSwitch("booted at high, race city, high → low", "low", late);
-  await tierSwitch("booted at high, race city, low → high", "high", late);
+  await sprayedSwitches(late);
+  console.log(`programs per tier: ${[...perTier].map(([t, n]) => `${t} ${n}`).join(", ")}`);
+  const finishKinds = new Map();
+  for (const p of await programs()) if (p.key.includes(FINISH_KEY_MARK)) finishKinds.set(customKey(p.key), (finishKinds.get(customKey(p.key)) ?? 0) + 1);
+  console.log(`finish programs by key: ${[...finishKinds].map(([k, n]) => `${k} ×${n}`).join(", ")}`);
 
   if (errors.length) console.log(`console errors:\n  ${errors.slice(0, 8).join("\n  ")}`);
   process.exitCode = late.length || errors.length ? 1 : 0;

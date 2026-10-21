@@ -48,10 +48,13 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
 - One material per draw kind: track art gives each draw kind its own copy of a material (`TrackArt.forDraw`) and
   instanced casters their own depth material, so three never re-selects a program between plain and instanced draws.
 - `npm run check:programs` plays the sandbox (fleet crash with cracked glass, drive, night / wet, every FX tier but Ultra, every
-  scene, debug views), a race on every course, and, booted at High, a sprayed race whose tier drops to Low and comes back. It
-  fails if any program links after the boot warm-up or between a race's green light and its end, if a tier switch links a
-  program or draws one for the first time inside a frame (it prints the switch's first three frames' draw ms), or if a finish
-  program exists for the canvas. Ultra links its programs on its first pick, by design ([`CINEMATIC.md`](CINEMATIC.md)).
+  scene, debug views), a race on every course, and Auto's one-tier steps mid-race in a sprayed city field. Booted at High,
+  that field steps down to Minimal and back up; booted at Low, it climbs to High and drops back. A program is its id with its
+  key, so one freed and linked again counts. The check fails if any program links after the boot warm-up (with the purse
+  pool's background warm once Rapier is in) or between a race's green light and its end, if a tier switch links a program
+  or draws one for the first time inside a frame, or if a finish program exists for the canvas. It prints each switch's
+  first three frames' draw ms, the programs held per tier and the finish programs by key. Ultra links its programs on its
+  first pick, by design ([`CINEMATIC.md`](CINEMATIC.md)).
 
 **The `minimal` tier** (the default, `INITIAL_HUD.fxTier`; `?fx=` sets it) renders straight to the canvas: no HDR target,
 bloom, grade, vignette, grain or blur. It keeps every effect that needs no post (tyre marks, tyre smoke, slip sparks, shake,
