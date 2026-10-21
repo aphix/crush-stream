@@ -165,9 +165,11 @@ const DOOR_SHOTS: { id: DoorScenario; label: string; title: string }[] = [
   { id: "shut", label: "C", title: "C · open door, ram from the front toward shut (3)" },
   { id: "panelPush", label: "D", title: "D · stretched quarter panel, ram from behind pushes it back onto the body (6)" },
   { id: "panelPull", label: "E", title: "E · stretched quarter panel, ram from the front pulls it out (7)" },
+  { id: "lidPop", label: "F", title: "F · shut trunk lid, ram from behind springs it (8)" },
+  { id: "lidTear", label: "G", title: "G · open trunk lid, ram from behind tears it off (9)" },
 ];
 
-/** Doors scene controls: A–E fire pad (door and mirror, quarter panel), side and door toggles, the ram config and the last shot. */
+/** Doors scene controls: A–G fire pad (door and mirror, quarter panel, trunk lid), side and door toggles, the ram config and the last shot. */
 export function DoorPanel({ doors, engine }: { doors: DoorHud; engine: RefObject<CrashEngine | null> }) {
   const shot = doors.shot;
   const unit = useSpeedUnit();

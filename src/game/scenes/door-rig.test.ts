@@ -1,10 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import * as THREE from "three";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { DOOR_INERTIA, DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX, SLAM_TEAR_J } from "../vehicle/car-core.ts";
-import type { DoorScenario, RamShot } from "./door-rig.ts";
+import { DeformableCar } from "../vehicle/car.ts";
+import type { CarStyleId } from "../vehicle/car-variants.ts";
+import { DoorRig, type DoorScenario, type RamShot } from "./door-rig.ts";
 import { fireRam } from "./door-rig.test-util.ts";
-import { assertSameDigest } from "../vehicle/test-support.ts";
+import { assertSameDigest, paint } from "../vehicle/test-support.ts";
 
 /** The door swing integrates at its own 120 Hz, a finer step than the quiet one: the test pins one second of it, not the shipped step. */
 const SWING_HZ = 120;
@@ -123,5 +126,57 @@ describe("given a car driven at 64 km/h head-on into a wall", () => {
       const h = car.doorHinge(side);
       assert.ok(h.latched && h.theta === 0 && h.load === 0, `side ${side} hinge ${JSON.stringify(h)}`);
     }
+  });
+});
+
+/** A parked car of style `id` facing +Z. */
+function parkedStyle(id: CarStyleId): DeformableCar {
+  const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
+  car.spawnFacing(0, 0, 0, 0);
+  return car;
+}
+
+/** The heavy ram the lid lanes are pinned with (kg): a car's mass, so the tail crushes as a rear-ender's does. */
+const LID_RAM_KG = 1500;
+
+describe("given a rear ram square into the tail of a parked car (F lidPop: lid shut; G lidTear: lid on its stop; docs/DOOR_RIG.md, Lids)", () => {
+  for (const id of ["sedan", "hatchback", "wagon", "pickup"] as const) {
+    it(`when F hits the ${id} at 15 and then 30 km/h, then the first leaves the lid latched and the second springs it, still on the car`, (t) => {
+      const soft = parkedStyle(id);
+      fireRam(soft, "lidPop", { kph: 15, kg: LID_RAM_KG });
+      const hard = parkedStyle(id);
+      fireRam(hard, "lidPop", { kph: 30, kg: LID_RAM_KG });
+      t.diagnostic(`${id}: 15 km/h latched ${soft.lidHinge().latched}, 30 km/h latched ${hard.lidHinge().latched} at ${hard.lidAngle().toFixed(3)} rad`);
+      assert.ok(soft.lidHinge().latched && !soft.lidOff(), `${id} lid sprang at 15 km/h`);
+      assert.ok(!hard.lidHinge().latched && !hard.lidOff(), `${id} lid at 30 km/h: latched ${hard.lidHinge().latched}, off ${hard.lidOff()}`);
+    });
+  }
+
+  // The ram meets the tail, not the lid: the lid tears once the crush passes its `tearT` in a hit of `tearMps` EBS or more.
+  for (const id of ["sedan", "pickup"] as const) {
+    it(`when G hits the ${id}'s open lid at 15 km/h and then a 5000 kg ram at 56 km/h, then the first leaves it on its stop and the second tears it off`, () => {
+      const open = parkedStyle(id);
+      fireRam(open, "lidTear", { kph: 15, kg: LID_RAM_KG });
+      const h = open.lidHinge();
+      const hard = parkedStyle(id);
+      const torn = fireRam(hard, "lidTear", { kph: 56, kg: 5000 });
+      assert.ok(!h.latched && h.theta === h.spec.stop && !open.lidOff(), `${id} 15 km/h: latched ${h.latched} at ${h.theta} rad, off ${open.lidOff()}`);
+      assert.ok(torn.detached.includes("trunk") && hard.hasLoosePart(), `${id} 56 km/h lid stayed on: [${torn.detached}]`);
+    });
+  }
+});
+
+describe("given the Doors scene's lid state for the park (share key dlid)", () => {
+  it("when the rig attaches a freshly reset car with lid 1 and then 2, then the first lid hangs unlatched on its stop and the second is off the car", () => {
+    const rig = new DoorRig();
+    const open = parkedStyle("sedan");
+    rig.lid = 1;
+    rig.attach(open);
+    const h = open.lidHinge();
+    assert.ok(!h.latched && h.theta === h.spec.stop && !open.lidOff(), `lid 1: latched ${h.latched} at ${h.theta} rad`);
+    const torn = parkedStyle("sedan");
+    rig.lid = 2;
+    rig.attach(torn);
+    assert.ok(torn.lidOff(), "lid 2 left the lid on");
   });
 });

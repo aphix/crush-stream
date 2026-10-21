@@ -667,6 +667,11 @@ export abstract class CarParts extends CarGlass {
     this.detachPart(this.quarterPanel(side), 0, push);
   }
 
+  /** Tear the trunk lid off with `push` (car-space m/s on top of the car's velocity). */
+  ripLid(push: THREE.Vector3): void {
+    this.detachPart(this.lidPart, 0, push);
+  }
+
   protected fitInterior(): void {
     if (!this.deform.massActive) {
       this.interior.scale.set(1, 1, 1);

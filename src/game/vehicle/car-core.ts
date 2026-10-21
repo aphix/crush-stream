@@ -577,7 +577,14 @@ export abstract class CarCore {
     const glassMat = glassMaterial("fresh");
     const style = this.style;
     addPane("windshield", new THREE.Mesh(makeWindshield(style), glassMat), this.group, ["roof", "bonnet"], "glassFront");
-    addPane("rear", new THREE.Mesh(makeRearGlass(style), glassMat), this.group, ["roof", "boot"], "glassRear");
+    // A hatch or liftgate carries its glass: the pane rides the lid (origin on its hinge line) at −pivot, so it swings, tears off and resets with it.
+    const rear = new THREE.Mesh(makeRearGlass(style), glassMat);
+    const inGate = style.boot.kind === "tailgate" && lidSpec(style.boot).dir > 0;
+    if (inGate) {
+      const [pivotY, pivotZ] = bootPivot(style.boot);
+      rear.position.set(0, -pivotY, -pivotZ);
+    }
+    addPane("rear", rear, inGate ? this.trunk : this.group, ["roof", "boot"], "glassRear");
     const sideL = new THREE.Mesh(makeSideGlass(-1, style), glassMat);
     sideL.position.set(-DOOR_GLASS_SEAT.x, DOOR_GLASS_SEAT.y, DOOR_GLASS_SEAT.z);
     addPane("doorL", sideL, this.doorL, ["doorLeft", "roof"]);

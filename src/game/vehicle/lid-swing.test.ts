@@ -127,3 +127,26 @@ describe("given a rear hit on a car whose lid is already open", () => {
     assert.ok(car.lidOff() && r.detached.includes(LID.trunk) && car.hasLoosePart());
   });
 });
+
+/** The rear pane's first vertex in the world (m). */
+function rearPaneAt(car: DeformableCar): THREE.Vector3 {
+  const mesh = car["glassPanes"].find((g) => g.name === "rear")!.mesh;
+  car.group.updateMatrixWorld(true);
+  return new THREE.Vector3().fromBufferAttribute(mesh.geometry.getAttribute("position") as THREE.BufferAttribute, 0).applyMatrix4(mesh.matrixWorld);
+}
+
+describe("given a car's rear window and its lid (docs/DOOR_RIG.md, Lids)", () => {
+  for (const [id, gate] of [["hatchback", true], ["wagon", true], ["sedan", false], ["pickup", false]] as const) {
+    it(`when the ${id}'s lid opens to its stop and then tears off, then its rear pane ${gate ? "swings and leaves with it" : "stays on the body"}`, () => {
+      const car = parked(id);
+      const shut = rearPaneAt(car);
+      car.setLidOpen(car.lidHinge().spec.stop);
+      const moved = rearPaneAt(car).distanceTo(shut);
+      car.ripLid(new THREE.Vector3());
+      let up: THREE.Object3D | null = car["glassPanes"].find((g) => g.name === "rear")!.mesh;
+      while (up !== null && up !== car.group) up = up.parent;
+      if (gate) assert.ok(moved > 0.1 && up === null, `${id} pane moved ${moved.toFixed(3)} m, still on the body ${up !== null}`);
+      else assert.ok(moved === 0 && up === car.group, `${id} pane moved ${moved} m, on the body ${up !== null}`);
+    });
+  }
+});
