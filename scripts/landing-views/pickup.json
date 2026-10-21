@@ -1,0 +1,30 @@
+{
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/tan-pickup-truck/tan-pickup-truck-1.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/tan-pickup-truck/tan-pickup-truck-2.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      1165,
+      400,
+      535,
+      430
+    ],
+    "wheels": {},
+    "camera": null
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      912,
+      303,
+      380,
+      358
+    ],
+    "wheels": {},
+    "camera": null
+  }
+}
