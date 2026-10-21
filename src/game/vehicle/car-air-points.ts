@@ -5,15 +5,13 @@ import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, patchOf, pointContact, pointContactHeld, pointContactNear, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, topsTop, topsTopLive, topsTopNear, wheelContact, type Surface } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { G, GQ } from "../world/ground-clock.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
 import { CRASH, hypot2 } from "../deform/physics-util.ts";
-import { WHEEL_POS } from "./car-mesh.ts";
 import { droop } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift } from "./car-cage-rig.ts";
-import { COM_Y, BELLY, POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, body, carrier, pointVel } from "./car-air-body.ts";
+import { POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
 export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
@@ -293,6 +291,7 @@ export function loadPoints(car: DeformableCar): number {
   }
   const { pos, panelOn } = car.cage.fields;
   const { vertexCount, vertexGroup, sillCount } = car.cage.style;
+  const { belly, comY } = car.frame;
   let reach2 = 0;
   let n = 0;
   for (let k = 0, end = vertexCount + (wreck ? sillCount : 0); k < end; k++) {
@@ -305,12 +304,12 @@ export function loadPoints(car: DeformableCar): number {
     POINT_Y[n] = y;
     POINT_Z[n] = z;
     n++;
-    reach2 = Math.max(reach2, x * x + (y - COM_Y) * (y - COM_Y) + z * z);
+    reach2 = Math.max(reach2, x * x + (y - comY) * (y - comY) + z * z);
   }
   const bellyFrom = n;
   const { bottom } = car.cage.fields;
-  for (let k = 0; k < BELLY.length; k++) {
-    const [x, y, z] = BELLY[k]!;
+  for (let k = 0; k < belly.length; k++) {
+    const [x, y, z] = belly[k]!;
     SAMPLE[0] = x;
     SAMPLE[1] = z;
     sampleAt(bottom, car.cage.style);
@@ -320,7 +319,7 @@ export function loadPoints(car: DeformableCar): number {
     POINT_X[bellyFrom + k] = x;
     POINT_Y[bellyFrom + k] = h;
     POINT_Z[bellyFrom + k] = z;
-    reach2 = Math.max(reach2, x * x + (h - COM_Y) * (h - COM_Y) + z * z);
+    reach2 = Math.max(reach2, x * x + (h - comY) * (h - comY) + z * z);
   }
   _s[S_POINT_REACH] = Math.sqrt(reach2);
   memo ??= {
@@ -333,7 +332,7 @@ export function loadPoints(car: DeformableCar): number {
     x: new Float64Array(POINT_CAPACITY),
     y: new Float64Array(POINT_CAPACITY),
     z: new Float64Array(POINT_CAPACITY),
-    absent: new Uint8Array(BELLY.length),
+    absent: new Uint8Array(belly.length),
   };
   memo.serial = car.cage.serial;
   memo.fields = car.cage.fields;
@@ -376,8 +375,6 @@ export function beginContacts(car: DeformableCar): CarSurfaces {
 export const _e = new Float64Array(9);
 const _hub = new Float64Array(3);
 const _hit = new Float64Array(HIT_SIZE);
-export const WX = Float64Array.from(WHEEL_POS, (p) => p[0]);
-export const WZ = Float64Array.from(WHEEL_POS, (p) => p[2]);
 
 /** The body's x, y and z axes in world (9 numbers) from `q` into `_e`. */
 function basisOf(q: THREE.Quaternion): void {
@@ -422,10 +419,10 @@ export function wheelsAt(car: DeformableCar, within: number): number {
       continue;
     }
     const sc = car.wheels[i]!.scale.x;
-    const r = TYRE_R * sc;
+    const r = car.frame.rig.tyre.r * sc;
     const at = wreck ? car.deform.massLocal(HUBS[i]!) : null;
-    const hx = at === null ? WX[i]! : at.x;
-    const hz = at === null ? WZ[i]! : at.z;
+    const hx = at === null ? car.frame.wx[i]! : at.x;
+    const hz = at === null ? car.frame.wz[i]! : at.z;
     // The hub on its rest ride: the tyre's bottom is the body's y = 0 for every class.
     _hub[0] = p.x + _e[0]! * hx + _e[3]! * r + _e[6]! * hz;
     _hub[1] = p.y + _e[1]! * hx + _e[4]! * r + _e[7]! * hz;

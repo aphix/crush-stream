@@ -2,12 +2,12 @@
 import "../kernel/three-trig.ts";
 import * as THREE from "three";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
 import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
-import { BUMPER_SEAT, WHEEL_POS, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
+import { BUMPER_SEAT, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
+import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, makeDoorGeometry } from "./car-door-mesh.ts";
 import { makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
@@ -259,6 +259,8 @@ export abstract class CarCore {
   readonly deform: StreamedDeformation;
   readonly paint: CarPaint;
   readonly style: BodyStyle;
+  /** The style's sim frame: its rig, wheels, body box, centre of mass and underside. */
+  readonly frame: CarFrame;
   readonly wheels: THREE.Group[] = [];
   /** Per wheel: off its popped hub and loose in the world (`dropWheel`), with its own motion. */
   protected readonly looseWheels: (LooseBody & { loose: boolean })[] = [];
@@ -365,6 +367,7 @@ export abstract class CarCore {
   constructor(paint: CarPaint, world: THREE.Scene, onGlass: GlassBurst | null = null, style: CarStyleId = "sedan") {
     this.paint = paint;
     this.style = CAR_STYLES[style];
+    this.frame = carFrame(this.style);
     this.world = world;
     this.onGlass = onGlass;
     this.group.name = paint.name;
@@ -378,7 +381,7 @@ export abstract class CarCore {
     this.body.castShadow = true;
     this.body.receiveShadow = true;
     this.group.add(this.body);
-    this.deform = new StreamedDeformation(bodyGeo, this.style.rig);
+    this.deform = new StreamedDeformation(bodyGeo, this.frame.rig);
 
     this.interior = this.partSeats[PART_KIND.interior]!;
     this.group.add(this.interior);
@@ -444,12 +447,12 @@ export abstract class CarCore {
     this.buildHullHelper();
 
     // Transforms only: the engine's WheelBatch draws every car's wheels in one instanced call.
-    for (const [x, y, z] of WHEEL_POS) {
+    for (const [x, y, z] of this.frame.wheels) {
       const w = new THREE.Group();
       w.position.set(x, y, z);
       this.group.add(w);
       this.wheels.push(w);
-      this.looseWheels.push({ object: w, velocity: new THREE.Vector3(), angular: new THREE.Vector3(), radius: TYRE_R, shape: newLooseShape(), loose: false });
+      this.looseWheels.push({ object: w, velocity: new THREE.Vector3(), angular: new THREE.Vector3(), radius: this.frame.rig.tyre.r, shape: newLooseShape(), loose: false });
     }
     this.group.castShadow = true;
   }
@@ -733,12 +736,12 @@ export abstract class CarCore {
 
   /**
    * Drawn, and the turn a popped wheel leaves at (`dropWheel`). Rolling, each tyre turns with its contact point's travel along the heading over the drawn radius
-   * (`TYRE_R` × wheel scale): body speed less yaw rate × sideways offset, so inner wheels turn slower; a locked wheel (handbrake on the
+   * (tyre radius × wheel scale): body speed less yaw rate × sideways offset, so inner wheels turn slower; a locked wheel (handbrake on the
    * rear pair, hard-brake `lock`) turns less. In the air the wheels keep their rate and lose it to bearing drag, throttle winding a driven body's up.
    */
   protected spinWheels(dt: number, rolling: boolean): void {
     const d = this.drive;
-    const inv = 1 / (TYRE_R * this.wheels[0]!.scale.x);
+    const inv = 1 / (this.frame.rig.tyre.r * this.wheels[0]!.scale.x);
     const along = this.velocity.dot(this.forward);
     const decay = Math.exp(-dt / AIR_SPIN_TAU);
     const wind = this.airThrottle * AIR_SPIN_UP * dt;
@@ -746,7 +749,7 @@ export abstract class CarCore {
     const driven = drivenAxles(CLASSES[carClass(this)]);
     for (let i = 0; i < this.wheels.length; i++) {
       const tread = along + ((driven & (i < 2 ? 1 : 2)) !== 0 ? Math.sign(along) * d.spinSpeed : 0);
-      if (rolling) this.wheelRate[i] = (tread - this.angular.y * WHEEL_POS[i]![0]) * inv * (1 - (i >= 2 ? Math.max(d.ebrakeK, d.lock) : d.lock));
+      if (rolling) this.wheelRate[i] = (tread - this.angular.y * this.frame.wx[i]!) * inv * (1 - (i >= 2 ? Math.max(d.ebrakeK, d.lock) : d.lock));
       else this.wheelRate[i] = this.wheelRate[i]! * decay + wind;
       this.wheelSpin[i]! += this.wheelRate[i]! * dt;
       if (!this.looseWheels[i]!.loose) this.wheels[i]!.rotation.x = this.wheelSpin[i]!;

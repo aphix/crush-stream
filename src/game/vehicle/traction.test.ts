@@ -4,6 +4,8 @@ import { applyDrive, DRIVE, idleDrive, THROTTLE_STEPS, type DriveInput } from ".
 import type { DeformableCar } from "./car.ts";
 import { FLIGHT } from "./car-flight.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
+import { carFrame } from "./car-rig.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 import { carGear, carRpm, CLASSES, gearHi, gearLo, HANDLING, rollingOver, rotatingShare, terminalSpeed, tractionLimit, VEHICLE_CLASS_IDS, type ClassStats, type Driveline, type VehicleClassId } from "./vehicle-classes.ts";
 import { Ground, setGround } from "../world/ground.ts";
 import { SURFACE } from "../world/constants.ts";
@@ -57,7 +59,7 @@ function drive(cls: VehicleClassId, ground: Ground, seconds: number, h: number, 
 }
 
 describe("given the traction law of each driveline layout (a pure function of the axle grips)", () => {
-  const on = (drive: Driveline, muF: number, muR: number, realism: number) => tractionLimit({ ...CLASSES.sedan, drive } as ClassStats, muF, muR, realism);
+  const on = (drive: Driveline, muF: number, muR: number, realism: number) => tractionLimit(carFrame(CAR_STYLES.sedan), { ...CLASSES.sedan, drive } as ClassStats, muF, muR, realism);
 
   it("when both axles stand on dry asphalt, then every layout passes the class's launch pull at both ends of the slider (the sourced launch was driven on real tyres: a cap under it would count the tyre twice)", () => {
     for (const layout of LAYOUTS) {
@@ -264,7 +266,7 @@ for (const H of RATES) {
         let bodyWas = along(car);
         drive("sedan", flat(SURFACE.grass), FADE_S, H, idleDrive(), (c, t) => {
           // The most the tyres take off the spin in a slice: the road's traction on the wheel's rotating mass (`rotatingShare` at the wheel speed the slice began at), plus what the body itself lost.
-          const most = tractionLimit(k, SURFACES.grass.grip, SURFACES.grass.grip, HANDLING.realism) * (1 + 1 / rotatingShare(k, bodyWas + was)) * H + Math.max(0, bodyWas - along(c));
+          const most = tractionLimit(car.frame, k, SURFACES.grass.grip, SURFACES.grass.grip, HANDLING.realism) * (1 + 1 / rotatingShare(car.frame, k, bodyWas + was)) * H + Math.max(0, bodyWas - along(c));
           if (was - c.drive.spinSpeed > most * 1.01 + 1e-9) steps++;
           if (c.drive.spinSpeed === 0 && gone === Infinity) gone = t;
           was = c.drive.spinSpeed;

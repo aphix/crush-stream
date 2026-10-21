@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { computeNormalsFast } from "./fast-normals.ts";
 import { matchSkinLocal, type ShapeCluster } from "./shape-match.ts";
 import { DeformSolve } from "./deform-solve.ts";
-import { archKeep, RES_SLOTS, SIM_SCALAR_NUMBERS, SKIN_K, type Beam, type MassNode, type RigOverrides, type Sensor } from "./deform-rig.ts";
+import { archKeep, RES_SLOTS, SIM_SCALAR_NUMBERS, SKIN_K, type Beam, type MassNode, type RigTables, type Sensor } from "./deform-rig.ts";
 import { INF_K } from "./deform-build.ts";
 import { cageAxis, cageCoeffs } from "./deform-state.ts";
 import { skinKernel, skinKey, type SkinDynamic, type SkinKernel, type SkinStatic, type SkinTables } from "./skin-kernel.ts";
@@ -23,7 +23,7 @@ const SUNK_ROOF = 0.075;
 const CAGE_CRUSH_SHARE = 0.9;
 
 /** `skinKey` per style: the rig object every car of a style shares, the rest skin and triangle count it was hashed for, and the key. */
-const styleKeys = new WeakMap<RigOverrides, { rest: Float32Array; indexLen: number; key: string }>();
+const styleKeys = new WeakMap<RigTables, { rest: Float32Array; indexLen: number; key: string }>();
 
 function sameRest(a: Float32Array, b: Float32Array): boolean {
   if (a.length !== b.length) return false;

@@ -2,7 +2,6 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { G } from "./car-air-body.ts";
-import { WHEEL_POS } from "./car-mesh.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
 import { STIFF_HZ, useStiffSprings } from "./stiff-springs.test-util.ts";
 
@@ -17,8 +16,6 @@ const MEASURED_S = 1;
 const CRUISE: DriveInput = { throttle: 0.5, steer: 0, brake: 0, ebrake: false, boost: false };
 /** A tilt step smaller than this (rad) is rounding noise, not a direction. */
 const ROUNDING_RAD = 1e-9;
-const HALF_TRACK = Math.abs(WHEEL_POS[0]![0]);
-const HALF_WHEELBASE = Math.abs(WHEEL_POS[0]![2]);
 /** One spring's static sag (m) at the stiff ride: a quarter of the weight over a quarter of the body's stiffness, G / (2π f)². */
 const STATIC_SAG = G / (2 * Math.PI * STIFF_HZ) ** 2;
 
@@ -61,8 +58,9 @@ describe("given a driven car on flat ground with stiff, short springs, knocked i
         pitch.push(car.pitch);
         roll.push(car.roll);
       }
-      assert.ok(largest(pitch) <= STATIC_SAG / HALF_WHEELBASE, `pitch ${(largest(pitch) * 1000).toFixed(3)} mrad over the sag's ${((STATIC_SAG / HALF_WHEELBASE) * 1000).toFixed(3)}`);
-      assert.ok(largest(roll) <= STATIC_SAG / HALF_TRACK, `roll ${(largest(roll) * 1000).toFixed(3)} mrad over the sag's ${((STATIC_SAG / HALF_TRACK) * 1000).toFixed(3)}`);
+      const { halfBase, halfTrack } = car.frame;
+      assert.ok(largest(pitch) <= STATIC_SAG / halfBase, `pitch ${(largest(pitch) * 1000).toFixed(3)} mrad over the sag's ${((STATIC_SAG / halfBase) * 1000).toFixed(3)}`);
+      assert.ok(largest(roll) <= STATIC_SAG / halfTrack, `roll ${(largest(roll) * 1000).toFixed(3)} mrad over the sag's ${((STATIC_SAG / halfTrack) * 1000).toFixed(3)}`);
       assert.equal(reversals(pitch), 0, "pitch reversals");
       assert.equal(reversals(roll), 0, "roll reversals");
     });

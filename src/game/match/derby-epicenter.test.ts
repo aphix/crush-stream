@@ -8,7 +8,6 @@ import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
 import { layoutDerby } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
-import { WHEEL_POS } from "../vehicle/car-mesh.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { stepWorld } from "../engine/world-step.ts";
 import { CAGES } from "../kernel/rig-spec.ts";
@@ -74,7 +73,7 @@ function derbySeed(): { frozenSlices: number; worstHub: number; worstWheel: numb
         for (const [k, name] of (["hubFL", "hubFR", "hubRL", "hubRR"] as const).entries()) {
           if (c.deform.hubPopped(name)) continue;
           const hub = c.deform.massLocal(name);
-          const rp = WHEEL_POS[k]!;
+          const rp = c.frame.wheels[k]!;
           worstHub = Math.max(worstHub, Math.hypot(hub.x - rp[0], hub.z - rp[2]));
           const wp = c.wheels[k]!.position;
           worstWheel = Math.max(worstWheel, Math.hypot(wp.x - rp[0], wp.z - rp[2]));

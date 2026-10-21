@@ -1,53 +1,36 @@
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import { HIT_SIZE, PQ_BODY, PQ_SIZE } from "../world/surfaces.ts";
-import { CAR_HALF, WHEEL_POS } from "./car-mesh.ts";
-import { PAN, UNDERSIDE } from "./car-suspension.ts";
+import { carFrame, type CarFrame } from "./car-rig.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
 import { CAGE_VERTICES, SILL_CAPACITY } from "./car-cage.ts";
 
 export const G = 9.6;
-/** Centre of mass above the group's origin (car-local y, m); the origin is on the ground under the body's middle. */
-export const COM_Y = 0.55;
-/** Inverse inertia per unit mass (1/m²) of the body's box about its centre of mass: car-local x, y, z. */
-export const INV_I = new THREE.Vector3(3 / (CAR_HALF.y ** 2 + CAR_HALF.z ** 2), 3 / (CAR_HALF.x ** 2 + CAR_HALF.z ** 2), 3 / (CAR_HALF.x ** 2 + CAR_HALF.y ** 2));
-/**
- * The underside (car-local x, height, z): `UNDERSIDE`'s keel and rockers, and the belly between them 0.5 m either side of
- * the keel (its height interpolated), so a car on another's flat roof rests on its width, not balanced on the keel line, and `PAN`
- * (the belly's centre patch, car-suspension.ts): the only part of the belly that meets a car top's ridge between its points
- * (`ridgeCross`), since the hull lines past it slope down to the nose and stood under the pan at a roof's front edge (every car in a
- * stack rested 1° nose-up on the one under it).
- */
-export const BELLY: readonly (readonly [number, number, number])[] = [
-  ...UNDERSIDE.map(([x, z, h]): [number, number, number] => [x, h, z]),
-  ...[2, 1, 0, -2].flatMap((z) => {
-    const keel = UNDERSIDE.find((p) => p[0] === 0 && p[1] === z)![2];
-    const rocker = UNDERSIDE.find((p) => p[0] === 0.8 && p[1] === z)![2];
-    return [-0.5, 0.5].map((x): [number, number, number] => [x, keel + (rocker - keel) * 0.625, z]);
-  }),
-  ...PAN,
-];
+/** Sizes the per-slice tables and the unbound body: every frame's belly and wheels share the sedan's layout. */
+const PLATFORM = carFrame(CAR_STYLES.sedan);
 /** Room for a style's cage vertices at most (`CAGE_VERTICES`), a wreck's sill samples (`SILL_CAPACITY`) and the belly: `loadPoints` fills it per body each slice. */
-export const POINT_CAPACITY = CAGE_VERTICES + SILL_CAPACITY + BELLY.length;
+export const POINT_CAPACITY = CAGE_VERTICES + SILL_CAPACITY + PLATFORM.belly.length;
 /** The loaded points as flat car-local x, y (class lift on), z rows: `hullPoint` reads them per slice without unpacking a tuple. */
 export const POINT_X = new Float64Array(POINT_CAPACITY);
 export const POINT_Y = new Float64Array(POINT_CAPACITY);
 export const POINT_Z = new Float64Array(POINT_CAPACITY);
 /** Per belly point this slice: 1 while a wreck has no drawn body over it (the cage's bottom has no node there: a bumper's rounded corner), so it is no point. */
-export const BELLY_ABSENT = new Uint8Array(BELLY.length);
+export const BELLY_ABSENT = new Uint8Array(PLATFORM.belly.length);
 export const HUBS = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
-/** Neighbouring belly points as `BELLY` index pairs (along x at one z, along z at one x): where the two stand on different patches,
+/** Neighbouring belly points as belly index pairs (along x at one z, along z at one x): where the two stand on different patches,
  *  the belly between them meets that patch's edge (`edgeCross`), as a ramp's crest does between rows half a metre apart. */
 export const SEGS: Int16Array = (() => {
-  const pairs = new Int16Array(BELLY.length * BELLY.length);
+  const belly = PLATFORM.belly;
+  const pairs = new Int16Array(belly.length * belly.length);
   let m = 0;
-  for (let i = 0; i < BELLY.length; i++) {
-    for (let j = i + 1; j < BELLY.length; j++) {
-      const [xi, , zi] = BELLY[i]!;
-      const [xj, , zj] = BELLY[j]!;
+  for (let i = 0; i < belly.length; i++) {
+    for (let j = i + 1; j < belly.length; j++) {
+      const [xi, , zi] = belly[i]!;
+      const [xj, , zj] = belly[j]!;
       if (xi !== xj && zi !== zj) continue;
       let between = false;
-      for (const [xk, , zk] of BELLY) {
+      for (const [xk, , zk] of belly) {
         if (zi === zj && zk === zi && (xk - xi) * (xk - xj) < 0) between = true;
         if (xi === xj && xk === xi && (zk - zi) * (zk - zj) < 0) between = true;
       }
@@ -214,8 +197,6 @@ export const CRUSH_POINT = new Float64Array(CONTACTS * 3);
 export const _crushPoint = new THREE.Vector3();
 export const _crushNormal = new THREE.Vector3();
 export const _crushBack = new THREE.Vector3();
-/** A car's centre of mass in its own frame: `COM_Y` up the origin. */
-export const CAR_CENTRE = new THREE.Vector3(0, COM_Y, 0);
 
 /** A torn part or popped wheel of car `own` met car `top`'s top (`stepLoose`): what moved it is in the world, which a highlight clip with `own` must keep. */
 export type TopMet = (own: number, top: number) => void;
@@ -235,8 +216,8 @@ export const body = {
   pos: new THREE.Vector3(),
   v: new THREE.Vector3(),
   w: new THREE.Vector3(),
-  centre: CAR_CENTRE,
-  invI: INV_I,
+  centre: PLATFORM.centre,
+  invI: PLATFORM.invI,
   skip: -1,
   part: false,
   dt: 0,
@@ -317,7 +298,7 @@ export function carrier(surf: CarSurfaces, n: number, own: number, mass: number)
   }
   HELD[n] = o;
   RATIO[n] = mass / o.deform.totalMass;
-  ARM[n]!.copy(centreOfMass).add(R[n]!).sub(o.group.position).sub(_r.set(0, COM_Y, 0).applyQuaternion(o.group.quaternion));
+  ARM[n]!.copy(centreOfMass).add(R[n]!).sub(o.group.position).sub(_r.set(0, o.frame.comY, 0).applyQuaternion(o.group.quaternion));
 }
 
 /** World inverse inertia (body orientation `q`, its inverse `qi`; `inertia` its inverse inertia per unit mass about its own axes) applied to `x` in place. */
@@ -356,7 +337,7 @@ export function give(c: number, v: THREE.Vector3, w: THREE.Vector3, q: THREE.Qua
   const o = HELD[c];
   if (o === null) return;
   const oq = o.group.quaternion;
-  invInertia(_rn.crossVectors(ARM[c]!, dir), oq, _qo.copy(oq).invert(), INV_I);
+  invInertia(_rn.crossVectors(ARM[c]!, dir), oq, _qo.copy(oq).invert(), o.frame.invI);
   o.velocity.addScaledVector(dir, -jd * RATIO[c]!);
   o.angular.addScaledVector(_rn, -jd * RATIO[c]!);
   if (j !== jd) surf.bear(OWN[c]!, dir, _rn, (jd - j) * RATIO[c]!);
@@ -373,7 +354,7 @@ export function reach(c: number, dir: THREE.Vector3, along: THREE.Vector3, q: TH
   const o = HELD[c];
   if (both && o !== null) {
     const oq = o.group.quaternion;
-    other = RATIO[c]! * (along.dot(dir) + _k.crossVectors(invInertia(_rn.crossVectors(ARM[c]!, dir), oq, _qo.copy(oq).invert(), INV_I), ARM[c]!).dot(along));
+    other = RATIO[c]! * (along.dot(dir) + _k.crossVectors(invInertia(_rn.crossVectors(ARM[c]!, dir), oq, _qo.copy(oq).invert(), o.frame.invI), ARM[c]!).dot(along));
   }
   _s[S_REACH] = 1 / (own + other);
 }
@@ -383,7 +364,7 @@ export function weightClosing(c: number): void {
   _s[S_WEIGHT] = Math.max(0, -_vp.crossVectors(_lw, R[c]!).add(_lv).addScaledVector(UP, -G * body.dt).dot(N[c]!));
 }
 
-const WHEELS = WHEEL_POS.length;
+const WHEELS = PLATFORM.wheels.length;
 const AUGMENTED_STRIDE = WHEELS + 1;
 /** The tyre springs' system for the slice: matrix, right side, the tyres still pushing, their rows, the augmented rows and the solution. */
 const SPRING_LHS = new Float64Array(WHEELS * WHEELS);
@@ -425,11 +406,11 @@ function solveSpringSystem(tyres: number): void {
  * spring cannot swing the body from one side to the other every slice (the push of the slice's start state did: the roll mode of a
  * 24 Hz spring at 120 Hz, a limit cycle of 0.09°). A tyre the system would pull is left out and the rest solved again.
  */
-export function springPushes(tyres: number, stiff: number, damp: number, dt: number, q: THREE.Quaternion, v: THREE.Vector3, w: THREE.Vector3): void {
+export function springPushes(frame: CarFrame, tyres: number, stiff: number, damp: number, dt: number, q: THREE.Quaternion, v: THREE.Vector3, w: THREE.Vector3): void {
   const endForce = 0.5 * dt * stiff;
   for (let d = 0; d < tyres; d++) {
     SPRING_PUSHING[d] = SOFT[d]!;
-    if (SOFT[d]) invInertia(SPIN_PER_PUSH[d]!.crossVectors(R[d]!, UP), q, _qi, INV_I);
+    if (SOFT[d]) invInertia(SPIN_PER_PUSH[d]!.crossVectors(R[d]!, UP), q, _qi, frame.invI);
   }
   for (let c = 0; c < tyres; c++) {
     if (!SOFT[c]) continue;

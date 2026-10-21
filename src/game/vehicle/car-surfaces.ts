@@ -4,7 +4,8 @@ import { Surface } from "../world/surfaces.ts";
 import type { CageFields, CageStyle } from "./car-cage.ts";
 import { cageLift } from "./car-cage-rig.ts";
 import { FACES, FACE_AXIS, FACE_TOP, faceFollow, faceMax, faceStrength, IMPRINT_NONE, SKIN_STRAIN } from "../deform/load-crush.ts";
-import { PAN } from "./car-suspension.ts";
+import { carFrame } from "./car-rig.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 
 /**
  * What a body in flight (`stepAir`) rests on besides the world's ground: the other cars' tops, as the dynamic part of the
@@ -58,16 +59,12 @@ const _qi = new THREE.Quaternion();
 const IMPRINT_REACH = 0.05;
 const _mi = new THREE.Matrix4();
 const _pt = new THREE.Vector3();
-/** The pan's six points in the pressed roof's frame (x, y, z each), scratch of `imprint`. */
-const _pl = new Float64Array(3 * PAN.length);
+/** The pan's points in the pressed roof's frame (x, y, z each), scratch of `imprint`: every frame's pan has the sedan's count. */
+const _pl = new Float64Array(3 * carFrame(CAR_STYLES.sedan).pan.length);
 
-/** The pan's rise per metre along its own z axis (the drawn underside's slant: the front 23 mm under the rear) and its length (m). */
-const PAN_SLOPE = (PAN[3]![1] - PAN[0]![1]) / (PAN[3]![2] - PAN[0]![2]);
-const PAN_LENGTH = PAN[3]![2] - PAN[0]![2];
-
-/** `presser`'s `PAN` point `k` (class lift on) in the roof frame `_mi` of a car whose class lift is `lift`, into `_pl` at `3k`. */
+/** `presser`'s pan point `k` (class lift on) in the roof frame `_mi` of a car whose class lift is `lift`, into `_pl` at `3k`. */
 function inRoofFrame(presser: DeformableCar, k: number, lift: number): void {
-  const p = PAN[k]!;
+  const p = presser.frame.pan[k]!;
   _pt.set(p[0], p[1] + cageLift(presser), p[2]).applyQuaternion(presser.group.quaternion).add(presser.group.position).applyMatrix4(_mi);
   _pl[3 * k] = _pt.x;
   _pl[3 * k + 1] = _pt.y - lift;
@@ -98,11 +95,14 @@ function gridAt(style: CageStyle, g: Float32Array, x: number, z: number): number
 function imprint(presser: DeformableCar, pressed: DeformableCar): void {
   _mi.copy(pressed.group.matrixWorld).invert();
   const lift = cageLift(pressed);
-  for (let k = 0; k < PAN.length; k++) inRoofFrame(presser, k, lift);
-  const a = (PAN_SLOPE * (_pl[9]! - _pl[0]!)) / PAN_LENGTH;
-  const b = (PAN_SLOPE * (_pl[11]! - _pl[2]!)) / PAN_LENGTH;
+  const pan = presser.frame.pan;
+  for (let k = 0; k < pan.length; k++) inRoofFrame(presser, k, lift);
+  const slope = (pan[3]![1] - pan[0]![1]) / (pan[3]![2] - pan[0]![2]);
+  const length = pan[3]![2] - pan[0]![2];
+  const a = (slope * (_pl[9]! - _pl[0]!)) / length;
+  const b = (slope * (_pl[11]! - _pl[2]!)) / length;
   let c = Infinity;
-  for (let k = 0; k < PAN.length; k++) c = Math.min(c, _pl[3 * k + 1]! - a * _pl[3 * k]! - b * _pl[3 * k + 2]!);
+  for (let k = 0; k < pan.length; k++) c = Math.min(c, _pl[3 * k + 1]! - a * _pl[3 * k]! - b * _pl[3 * k + 2]!);
   const d = pressed.deform;
   const im = d.imprint;
   const drop = d.crush[FACE_TOP]!;
@@ -113,7 +113,7 @@ function imprint(presser: DeformableCar, pressed: DeformableCar): void {
   const follow = roofOf(style).follow;
   let relief = 0;
   let overRoof = false;
-  for (let k = 0; k < PAN.length; k++) {
+  for (let k = 0; k < pan.length; k++) {
     const x = _pl[3 * k]!;
     const z = _pl[3 * k + 2]!;
     let surface = gridAt(style, top, x, z) - drop * gridAt(style, follow, x, z);

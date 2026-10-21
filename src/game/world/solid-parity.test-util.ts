@@ -6,7 +6,8 @@ import { INITIAL_HUD } from "../hud/hud-store.ts";
 import { EjectionWatch } from "../vehicle/ejection.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
 import { physicsSlice, sliceSpeed, BARRIER_HALF } from "../contact/sat.ts";
-import { FOOT_HALF_L } from "../vehicle/car-mesh.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { cageLift } from "../vehicle/car-cage-rig.ts";
 import { PartSeat } from "../vehicle/part-geometry.ts";
 import { launch, makeWorld as barrierWorld, relaunchDamaged, strikeReach, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -32,7 +33,7 @@ const SETTLE = 2.5;
 /** Nose-to-face gap (m) a car is sent from. */
 const RUN_IN = 3;
 /** How far out (m) from the face the ground under the car's run is read: the run-in and a car's length. */
-const APPROACH = RUN_IN + 2 * FOOT_HALF_L;
+const APPROACH = RUN_IN + 2 * carFrame(CAR_STYLES.sedan).footHalfL;
 
 /** What one hit left of the car. */
 export type Outcome = {

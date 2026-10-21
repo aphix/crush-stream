@@ -37,7 +37,7 @@ function skinTop(tris: Float32Array, x: number, z: number): number {
   return best;
 }
 
-/** The least clearance (m) over wheel `wheel` (`WHEEL_POS` order) of `car`, whose car-local drawn triangles are `tris` (`drawnTriangles`). Infinity when no point has a hood over it. */
+/** The least clearance (m) over wheel `wheel` (`frame.wheels` order) of `car`, whose car-local drawn triangles are `tris` (`drawnTriangles`). Infinity when no point has a hood over it. */
 export function tyreClearance(car: DeformableCar, wheel: number, tris: Float32Array): number {
   const w = car.wheels[wheel]!;
   w.updateMatrixWorld(true);

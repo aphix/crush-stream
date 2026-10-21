@@ -7,7 +7,7 @@ import {
   forceTransfer,
   hypot2,
 } from "./physics-util.ts";
-import { PLATFORM_TYRE, type BodyPartName, type MassName } from "../kernel/rig-spec.ts";
+import type { BodyPartName, MassName } from "../kernel/rig-spec.ts";
 import { DeformParticleHelper, DeformRigHelper } from "./deform-helper.ts";
 import { DeformHit } from "./deform-hit.ts";
 import type { Beam, MassNode } from "./deform-rig.ts";
@@ -22,10 +22,6 @@ export const ENGINE_PACK_GAP = 0.54;
 /** How far (m) a single nose hit's dynamic crush peaks short of its stroke: single 48–54 km/h hits at
  *  squash 0.32 and 0.4 all peak the block at the stroke's reach (stroke − 0.30) minus 0.06 ± 0.01 m. */
 const STROKE_SHORTFALL = 0.06;
-/** The platform tyre's radius along the car (m), for the faces' hub contact. */
-export const TYRE_R = PLATFORM_TYRE.r;
-/** A face that shoves a planted hub this far (m, one wheel diameter) off its rest tears the wheel off. */
-export const WHEEL_DIAMETER = 2 * TYRE_R;
 /** Throttle input this recent (s) still counts as "under power" for the settle rule. */
 const POWER_HOLD = 0.1;
 /**
@@ -149,9 +145,10 @@ export abstract class DeformState extends DeformHit {
     m.shoveX += dx * gc - dz * gs;
     m.shoveZ += dx * gs + dz * gc;
     const len = hypot2(m.shoveX, m.shoveZ);
-    if (!this.wheelsDetach && len > WHEEL_DIAMETER) {
-      m.shoveX *= WHEEL_DIAMETER / len;
-      m.shoveZ *= WHEEL_DIAMETER / len;
+    const diameter = 2 * this.rig.tyre.r;
+    if (!this.wheelsDetach && len > diameter) {
+      m.shoveX *= diameter / len;
+      m.shoveZ *= diameter / len;
     }
   }
 

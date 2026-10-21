@@ -2,7 +2,6 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
-import { TYRE_R } from "./deform-state.ts";
 import type { DeformMode } from "./deform-rig.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { PART_KIND, PartSeat } from "../vehicle/part-geometry.ts";
@@ -323,7 +322,8 @@ forModes("given a car whose wheel hubs all pop off after a 2 m/s nose knock", (m
     for (const m of car.deform.masses) if (m.hub) car.deform.popHub(m);
     const before = car.wheels.map((w) => w.position.clone());
     const bodies = car["looseWheels"];
-    const toContact = new THREE.Vector3(0, -TYRE_R, 0);
+    const tyreR = car.frame.rig.tyre.r;
+    const toContact = new THREE.Vector3(0, -tyreR, 0);
     const slide = new THREE.Vector3();
     for (let i = 0; i < 600; i++) {
       if (i === 599) for (const [k, w] of car.wheels.entries()) before[k]!.copy(w.position);
@@ -339,7 +339,7 @@ forModes("given a car whose wheel hubs all pop off after a 2 m/s nose knock", (m
         const slip = slide.crossVectors(body.angular, toContact).add(body.velocity).setY(0).length();
         const speed = body.velocity.length();
         assert.equal(w.parent, scene, `wheel ${k} still rides the car`);
-        assert.ok(Math.abs(w.position.y - TYRE_R) <= TYRE_R * FACET_SLIP + 0.02, `wheel ${k} rolls at y ${w.position.y.toFixed(3)}, not on its tyre`);
+        assert.ok(Math.abs(w.position.y - tyreR) <= tyreR * FACET_SLIP + 0.02, `wheel ${k} rolls at y ${w.position.y.toFixed(3)}, not on its tyre`);
         assert.ok(slip <= speed * FACET_SLIP + GRAVITY * DT, `wheel ${k} slides at 5 s: ${slip.toFixed(3)} m/s at the road at ${speed.toFixed(2)} m/s`);
       }
     }

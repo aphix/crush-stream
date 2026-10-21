@@ -8,10 +8,11 @@ import { Ground, setGround } from "../world/ground.ts";
 import { armSolids, Surface } from "../world/surfaces.ts";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart, LooseBody } from "./car-core.ts";
-import { CAR_HALF } from "./car-mesh.ts";
+import { carFrame } from "./car-rig.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 import { crownY } from "./car-cage-rig.ts";
 import { SKIN } from "./car-surfaces.ts";
-import { COM_Y, MU_BODY, RESTITUTION, invInertia } from "./car-air-body.ts";
+import { MU_BODY, RESTITUTION, invInertia } from "./car-air-body.ts";
 import { AIR_DENSITY, BOX_HALVES, boxShape, newLooseShape, partMass, PLATE_CN_BROADSIDE, stepLoose } from "./loose-step.ts";
 import { corner, LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts";
 import { assertSameDigest, paint } from "./test-support.ts";
@@ -60,8 +61,8 @@ describe("given a torn part sliding along a road", () => {
   });
 });
 
-/** Car B's plan x: parked beside car A (at the origin), a body width and a metre between their flanks. */
-const B_X = 2 * CAR_HALF.x + 1;
+/** Car B's plan x: parked beside car A (at the origin), a body width and a metre between their flanks (both sedans). */
+const B_X = 2 * carFrame(CAR_STYLES.sedan).half.x + 1;
 
 type Lot = { w: World; cars: DeformableCar[]; part: DetachPart };
 
@@ -101,7 +102,7 @@ const planSpeed = (p: DetachPart): number => Math.hypot(p.velocity.x, p.velocity
 const SLIDE_V = 8;
 
 /** Where the bumper slides: beside B's flank (and clear of A's), along +z from z = 0. */
-const SLIDE_X = B_X - CAR_HALF.x - 0.3;
+const SLIDE_X = B_X - carFrame(CAR_STYLES.sedan).half.x - 0.3;
 
 /** How far (m) a part sliding straight may drift sideways: a millimetre. */
 const STRAIGHT = 1e-3;
@@ -168,7 +169,8 @@ describe("given a front bumper torn off a parked car and dropped 0.5 m onto the 
     const { onRoof, restSpeed, end, endLow, roofY } = roofDrop(l, B_X, 1, 2);
     assert.ok(onRoof <= roofY + RESTS && onRoof >= roofY - SKIN, `lowest point ${onRoof.toFixed(3)} m up, roof crown ${roofY.toFixed(3)} m (a point ${SKIN} m under a top stands on it)`);
     assert.ok(restSpeed <= 2 * GRAVITY * H, `its speed resting on the roof: ${restSpeed.toFixed(4)} m/s, at most the jitter a step's gravity gives (${(2 * GRAVITY * H).toFixed(4)} m/s)`);
-    assert.ok(end.x > B_X + CAR_HALF.x, `ended at x ${end.x.toFixed(2)}, B's flank at ${(B_X + CAR_HALF.x).toFixed(2)}`);
+    const flank = B_X + l.cars[1]!.frame.half.x;
+    assert.ok(end.x > flank, `ended at x ${end.x.toFixed(2)}, B's flank at ${flank.toFixed(2)}`);
     assert.ok(endLow >= -RESTS && endLow <= RESTS, `ended with its lowest point ${endLow.toFixed(3)} m over the road`);
     assert.equal(planSpeed(l.part), 0, "plan speed on the road");
   });
@@ -438,7 +440,7 @@ describe("given a front bumper torn off a car with no linear velocity spinning a
     car.angular.set(0, spin, 0);
     const part = car["parts"].find((p) => p.name === "bumperF")!;
     car["detachPart"](part, impulse, push);
-    const com = new THREE.Vector3(0, COM_Y, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
+    const com = new THREE.Vector3(0, car.frame.comY, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
     return { part, r: part.object.position.clone().sub(com) };
   }
 

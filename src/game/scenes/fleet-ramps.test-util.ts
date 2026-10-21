@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
-import { COM_Y, G, TOUCH } from "../vehicle/car-air-body.ts";
+import { G, TOUCH } from "../vehicle/car-air-body.ts";
 import { JerseyBarrier } from "./engine-props.ts";
 import { FleetRamps, RAMP } from "./fleet-ramps.ts";
 import { collideOn } from "./ramp-collide.test-util.ts";
@@ -97,7 +97,7 @@ export function pair(vA: number, vB: number, dx = 0.4): { w: World; cars: [Defor
 export function watch(cars: readonly DeformableCar[]): { list: string[]; frame: () => void; slice: (h: number) => void } {
   const heights = (c: DeformableCar): [number, number] => {
     const q = c.group.quaternion;
-    return [c.group.position.y, c.group.position.y + COM_Y * (1 - 2 * (q.x * q.x + q.z * q.z))];
+    return [c.group.position.y, c.group.position.y + c.frame.comY * (1 - 2 * (q.x * q.x + q.z * q.z))];
   };
   const last = cars.map((c) => [...heights(c), c.velocity.y, c.airborne] as const);
   const vmin = cars.map((c) => c.velocity.y);
