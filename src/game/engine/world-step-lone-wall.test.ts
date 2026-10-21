@@ -23,6 +23,10 @@ const SPEED = 40;
 const START_GAP = 40;
 /** A start on the flat at the wall's foot (level from x = -28): from `START_GAP` the car flies off the crest into the wall, and a cm of the lone run's lower flight picks the hit's outcome. */
 const FLAT_GAP = 11;
+/** Start gaps (m) on the flat at the wall's foot, tried in turn for a nose left resting on the face: how long the masses stay on it before the wreck sleeps follows every change to the contact, so the setup searches rather than pins one gap. */
+const RESTING_GAPS = [11, 11.5, 10.5, 12, 10, 9.5, 9] as const;
+/** The free steps with masses on the face a resting run needs: enough that the frame's walk is a mean over the rest, not one step's. */
+const MIN_FREE_STEPS = 10;
 /** The steps after the start that are not judged: the car comes down onto the ground and a landing asks for finer slices (`contactHz`, 9 steps measured). */
 const SETTLE_STEPS = 15;
 /** The steps from the first sliced one that must be sliced: the hit's (measured: the crush window closes about 25 steps after it). */
@@ -186,22 +190,35 @@ describe("given a sedan driven at 40 m/s into Havana's alley wall from 40 m, its
   });
 });
 
-describe("given a sedan driven at 40 m/s into Havana's alley wall from 11 m, its nose left resting on the wall's face", () => {
-  it("when it runs lone and when it runs sliced, then over the steps its shape step runs free (past the contact hold, still live) with masses on the face, the frame does not walk toward the wall", () => {
+/** The frame's move (m, + away from the wall) over each step whose shape step runs free (past the contact hold, still live) with masses on the face. */
+function freeMoves(rows: Run["rows"]): number[] {
+  const moves: number[] = [];
+  for (let s = 0; s + 1 < rows.length; s++) {
+    const r = rows[s]!;
+    if (r.live && r.quiet > CONTACT_HOLD && r.face > 0) moves.push(rows[s + 1]!.gap - r.gap);
+  }
+  return moves;
+}
+
+/** The first of `RESTING_GAPS` from which both the lone and the sliced run rest on the face for more than `MIN_FREE_STEPS` free steps, and those runs' free moves. */
+function restingOnFace(): { gap: number; runs: { lone: boolean; moves: number[] }[] } {
+  for (const gap of RESTING_GAPS) {
+    const runs = [true, false].map((lone) => ({ lone, moves: freeMoves(drive(lone, gap).rows) }));
+    if (runs.every((r) => r.moves.length > MIN_FREE_STEPS)) return { gap, runs };
+  }
+  assert.fail(`no start gap of ${RESTING_GAPS.join(", ")} m leaves the nose resting on the face for more than ${MIN_FREE_STEPS} free steps, lone and sliced`);
+}
+
+describe("given a sedan driven at 40 m/s into Havana's alley wall from the flat at its foot, its nose left resting on the wall's face", () => {
+  it("when it runs lone and when it runs sliced, then over the steps its shape step runs free (past the contact hold, still live) with masses on the face, the frame does not walk toward the wall", (t) => {
+    const { gap, runs } = restingOnFace();
     const walks: string[] = [];
-    for (const lone of [true, false]) {
-      const { rows } = drive(lone, FLAT_GAP);
+    for (const { lone, moves } of runs) {
       let moved = 0;
-      let n = 0;
-      for (let s = 0; s + 1 < rows.length; s++) {
-        const r = rows[s]!;
-        if (!r.live || r.quiet <= CONTACT_HOLD || r.face === 0) continue;
-        moved += rows[s + 1]!.gap - r.gap;
-        n++;
-      }
-      assert.ok(n > 10, `${lone ? "lone" : "sliced"}: ${n} free steps with masses on the face`);
-      const perStep = (moved / n) * 1000;
-      if (perStep < 0) walks.push(`${lone ? "lone" : "sliced"}: ${(-perStep).toFixed(2)} mm a step toward the wall over ${n} steps`);
+      for (const m of moves) moved += m;
+      const perStep = (moved / moves.length) * 1000;
+      t.diagnostic(`from ${gap} m, ${lone ? "lone" : "sliced"}: ${perStep.toFixed(2)} mm a step away from the wall over ${moves.length} free steps`);
+      if (perStep < 0) walks.push(`${lone ? "lone" : "sliced"}: ${(-perStep).toFixed(2)} mm a step toward the wall over ${moves.length} steps from ${gap} m`);
     }
     assert.deepEqual(walks, [], "the frame walked toward the face it rests on");
   });
