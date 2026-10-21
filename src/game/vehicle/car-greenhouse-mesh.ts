@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle } from "./car-variants.ts";
-import { beltY } from "./car-lines.ts";
+import { beltX, beltY } from "./car-lines.ts";
 import {
   ROOF_CROWN,
   ROOF_SHOULDER,
@@ -161,7 +161,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   const parts: THREE.BufferGeometry[] = [];
   const [wsY, wsZ] = style.windshieldTop;
   const ws = style.windshield;
-  const beltX = style.belt.x;
+  const beltXAt = (z: number) => beltX(z, style);
   const belt = (z: number) => beltY(z, style);
   const bp = style.bPillar;
   const rg = style.rearGlass;
@@ -173,7 +173,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
         sign,
         {
           fb: [ws.wBase / 2 + 0.02, ws.base[0] + 0.01, ws.base[1] - 0.03],
-          rb: [beltX, belt(0.76), 0.76],
+          rb: [beltXAt(style.aPillarFoot), belt(style.aPillarFoot), style.aPillarFoot],
           rt: [cantX(aTopZ, style), glassTopY(aTopZ, style) + 0.03, aTopZ],
           ft: [ws.wTop / 2 + 0.02, wsY + 0.02, wsZ],
         },
@@ -188,8 +188,8 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       pillarFromCorners(
         sign,
         {
-          fb: [beltX + 0.01, belt(bp.front) - 0.02, bp.front],
-          rb: [beltX + 0.01, belt(bp.rear) - 0.02, bp.rear],
+          fb: [beltXAt(bp.front) + 0.01, belt(bp.front) - 0.02, bp.front],
+          rb: [beltXAt(bp.rear) + 0.01, belt(bp.rear) - 0.02, bp.rear],
           rt: [bX, bTop, bp.rear + 0.015],
           ft: [bX, bTop, bp.front - 0.015],
         },
@@ -200,7 +200,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       pillarFromCorners(
         sign,
         {
-          fb: [beltX, belt(q.zRearBot) - 0.02, q.zRearBot],
+          fb: [beltXAt(q.zRearBot), belt(q.zRearBot) - 0.02, q.zRearBot],
           rb: [rg.wBase / 2 + 0.02, rg.base[0], rg.base[1] - 0.01],
           rt: [rg.wTop / 2 + 0.02, rg.top[0] + 0.01, rg.top[1] - 0.01],
           ft: [cantX(q.zRearTop, style), glassTopY(q.zRearTop, style) + 0.03, q.zRearTop],
@@ -216,8 +216,8 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
         pillarFromCorners(
           sign,
           {
-            fb: [beltX + 0.012, belt(m + 0.04) - 0.02, m + 0.04],
-            rb: [beltX + 0.012, belt(m - 0.04) - 0.02, m - 0.04],
+            fb: [beltXAt(m + 0.04) + 0.012, belt(m + 0.04) - 0.02, m + 0.04],
+            rb: [beltXAt(m - 0.04) + 0.012, belt(m - 0.04) - 0.02, m - 0.04],
             rt: [mX, mTop, m - 0.035],
             ft: [mX, mTop, m + 0.035],
           },
@@ -225,11 +225,14 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
         ),
       );
     }
-    // The belt rail runs from the C-pillar to the B-pillar along the sill, pitched with it.
+    // The belt rail runs from the C-pillar to the B-pillar along the sill, pitched with it and turned in plan where the sill narrows.
     const [railRear, railFront] = [belt(q.zRearBot), belt(bp.front)];
+    const [railRearX, railFrontX] = [beltXAt(q.zRearBot), beltXAt(bp.front)];
     const railRun = bp.front - q.zRearBot;
-    const rail = makeBar(source, 0.03, 0.03, hypot2(railRun, railFront - railRear), 0, 0, 0).rotateX(-detAtan2(railFront - railRear, railRun));
-    parts.push(rail.translate(sign * (beltX + 0.015), (railRear + railFront) / 2 + 0.005, q.zRearBot + railRun * 0.5));
+    const railPlan = railFrontX === railRearX ? railRun : hypot2(railRun, railFrontX - railRearX);
+    const rail = makeBar(source, 0.03, 0.03, hypot2(railPlan, railFront - railRear), 0, 0, 0).rotateX(-detAtan2(railFront - railRear, railPlan));
+    if (railFrontX !== railRearX) rail.rotateY(sign * detAtan2(railFrontX - railRearX, railRun));
+    parts.push(rail.translate(sign * ((railRearX + railFrontX) / 2 + 0.015), (railRear + railFront) / 2 + 0.005, q.zRearBot + railRun * 0.5));
   }
   // The cage keeps its box until the rig derives the cabin cage.
   const headerY = (centre: number, z: number, width: number) => (source === "cage" ? centre : Math.min(centre, roofTopY(width / 2, z, style) - HEADER_HALF_HEIGHT));

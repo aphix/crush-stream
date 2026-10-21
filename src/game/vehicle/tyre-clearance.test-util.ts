@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { makeWheelGeometry } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
-import { ARCH_PLANT, ARCH_TOP } from "../deform/deform-rig.ts";
 
 /**
  * How far a drawn tyre stands under the drawn skin over it (docs/UNIFIED_CONTACT.md's drawn body, not the cage): for the upper half of
@@ -70,12 +69,13 @@ const TYRE_RADIUS = Math.max(...Array.from({ length: TYRE_POINTS.count }, (_, i)
 const _s = new THREE.Vector3();
 
 /**
- * How deep (m) the drawn sill of `car` stands inside the tyre of wheel `wheel`: the body skin below `ARCH_TOP`, between the axles and beyond
- * the arch plant (`ARCH_PLANT` of a hub), the rocker and the arch's rear lip. 0 when none of it is inside.
+ * How deep (m) the drawn sill of `car` stands inside the tyre of wheel `wheel`: the body skin below the rig's `archTop`, between the axles and beyond
+ * the arch plant (`archPlant` of a hub), the rocker and the arch's rear lip. 0 when none of it is inside.
  */
 export function sillInTyre(car: DeformableCar, wheel: number): number {
   const d = car.deform;
   const rest = d["restPos"];
+  const { archTop, archPlant } = car.frame.rig;
   const hubs = d.masses.filter((m) => m.hub);
   const front = Math.max(...hubs.map((m) => m.rest.z));
   const back = Math.min(...hubs.map((m) => m.rest.z));
@@ -89,7 +89,7 @@ export function sillInTyre(car: DeformableCar, wheel: number): number {
   for (let i = 0; i < pos.count; i++) {
     const rx = rest[i * 3]!;
     const rz = rest[i * 3 + 2]!;
-    if (rest[i * 3 + 1]! >= ARCH_TOP || rz >= front || rz <= back || hubs.some((m) => Math.hypot(rx - m.rest.x, rz - m.rest.z) <= ARCH_PLANT)) continue;
+    if (rest[i * 3 + 1]! >= archTop || rz >= front || rz <= back || hubs.some((m) => Math.hypot(rx - m.rest.x, rz - m.rest.z) <= archPlant)) continue;
     _v.fromBufferAttribute(pos, i).applyMatrix4(_m);
     const across = Math.abs(_v.x);
     const out = Math.hypot(_v.y, _v.z);

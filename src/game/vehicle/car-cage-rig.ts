@@ -236,7 +236,7 @@ export function cageSourceOf(car: DeformableCar): CageSource {
   const interiorIndex = interior.index;
   if (interiorIndex === null) throw new Error("the interior mesh has no index");
   const interiorMass = Int32Array.from(INTERIOR_MASSES, (name) => rig.masses.findIndex((m) => m.name === name) * 3);
-  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, panelCount: panels.length, panelOrigin, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill: sillSamples(bodyTables, bodyCount, rig.masses, car.style.rocker.y) };
+  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, panelCount: panels.length, panelOrigin, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill: sillSamples(bodyTables, bodyCount, rig.masses, car.style.rocker.y), lattice: car.frame.lattice, roofClampY: car.frame.rig.roofClampY };
 }
 
 /** A car's cage on the lattice (or `step`), its style's build shared by every car of the style. */
