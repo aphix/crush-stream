@@ -88,10 +88,18 @@ The trunk lid, hatch, SUV liftgate and pickup/monster drop gate (part slot 3, `L
 
 - **Hinge line:** `boot.pivot` (car `[y, z]`; default the panel's `origin`). The trunk mesh is built local to it, so the lid
   turns about car x through it. The free edge is the panel edge farthest from the pivot; a chord rising more than 45° from the
-  pivot is a drop gate (`dir` −1, opens rearward-down), anything else opens up (`dir` +1).
-- **Swing data:** `boot.swing` (`LidSwing`), or the preset for its kind: `TRUNK_LID` (deck lid, 12.4 kg), `HATCH_LID` (18 kg),
-  `LIFTGATE` (26 kg, the SUV sets it), `DROP_GATE` (22 kg). `rise` is the chord's angle above level on the stop; a drop gate's
-  0 stops it level (90°) on its cables. A new car only adds data.
+  pivot is a drop gate (`dir` −1, opens rearward-down), anything else opens up (`dir` +1). A pivot more than 0.2 m above the
+  panel's top edge (`origin`) is a roof hinge (`roofHinged`): a hatch or liftgate.
+- **Shape (`makeTrunkGeometry`):** a deck lid lofts on the deck line from `z0` to `z1`; its optional `drop` `{ y, w }` folds it
+  over the tail edge (8 cm radius) and down the rear face to `y`, narrowing to the half-width `w`, the face 1.6 cm proud of the
+  tail at `z1`. A tailgate is an upright (or leaning) panel. The owner's reference
+  (`.tmp/ModernCarDesign/owner-trunks-popped.png`): the sedan and police lid is hinged at the rear window's base and wraps the
+  tail down to the plate recess, the tail lamps' inner halves inside its face (`drop`); the muscle's is a flat deck to the tail;
+  the hatch and SUV gate is roof-hinged, carries the rear window and wraps down to just above the bumper (`drop`); the pickup and
+  monster drop gate falls level. Only the hatch and SUV gates have glass.
+- **Swing data:** `boot.swing` (`LidSwing`), or the preset for its kind: `TRUNK_LID` (deck lid, 12.4 kg), `HATCH_LID` (18 kg,
+  any other gate opening up, a roof-hinged deck lid included), `LIFTGATE` (26 kg, the SUV sets it), `DROP_GATE` (22 kg). `rise`
+  is the chord's angle above level on the stop; a drop gate's 0 stops it level (90°) on its cables. A new car only adds data.
 - **Drive law (`lidAccel`):** a uniform slab about one edge, I = m·L²/3, pushed by its weight, its struts or torsion bars
   (`lift`: 0 none, 1 balanced, 1.5 lifts it to the stop) and the car's fore-aft acceleration. A hard launch swings an open deck lid
   down off its stop; coasting lets it rise back.
@@ -101,8 +109,9 @@ The trunk lid, hatch, SUV liftgate and pickup/monster drop gate (part slot 3, `L
 - **Tear:** stop energy past `tearJ`; crush past `hingeT` 0.78; or an open lid hit past `tearT` 0.5 at EBS ≥ 12.5 m/s. A torn lid
   flies as a loose part at its own mass and tumbles the way it opens. A door or lid already resting on its stop takes no strap
   load from the push holding it there (else a drop gate on its cables would tear off on its own).
-- **Rear glass:** a hatch or liftgate (a tailgate opening up) carries its rear pane: the pane is the trunk mesh's child at −pivot,
-  so it swings, tears off and resets with the gate. The contact cage keeps the pane at rest while it is on (it does not swing).
+- **Rear glass:** a roof-hinged hatch or liftgate carries its rear pane: the pane is the trunk mesh's child at −pivot, so it
+  swings, tears off and resets with the gate. The contact cage keeps the pane at rest while it is on (it does not swing).
+- **Cage:** a wrapping lid's boot cage reaches 2 cm below and behind its face, so the face skins without clamping.
 - `hingesLatched` counts the lid with the doors. API: `setLidOpen`, `lidAngle`, `shutLid`, `lidHinge`, `lidOff`, `ripLid`.
 
 Rows: `hinge-spec.test.ts`, `lid-swing.test.ts` (pop at 30 km/h but not 14 km/h on the rear wall, drop gate at exactly 90°, gates

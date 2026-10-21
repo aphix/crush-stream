@@ -19,7 +19,7 @@ import { PLATFORM_RIG } from "../deform/deform-rig.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { LIGHT_BAR } from "./constants.ts";
-import { bootPivot } from "./hinge-spec.ts";
+import { bootPivot, lidSpec, roofHinged } from "./hinge-spec.ts";
 
 const PAINT = { body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" };
 const scene = new THREE.Scene();
@@ -244,6 +244,43 @@ describe("given every body style's rig cage (the soft-body frame that wraps the 
       assert.ok(r < 4.2, `${id} skin exploded, vertex radius ${r}`);
     });
   }
+});
+
+/** The owner's lids (docs/DOOR_RIG.md, Lids): a sedan's lid hinged at the rear window's base wraps the tail down to its lamps; a hatch is a roof-hinged lid wrapping down to just above the bumper. */
+const WRAPPED: readonly [string, BodyStyle][] = [
+  ["sedan", { ...CAR_STYLES.sedan, boot: { kind: "lid", z0: -1.16, z1: -2.126, origin: [0.74, -0.72], pivot: [0.81, -1.16], drop: { y: 0.5, w: 0.47 } } }],
+  ["hatchback", { ...CAR_STYLES.hatchback, boot: { kind: "lid", z0: -1.84, z1: -2.126, origin: [0.87, -1.84], pivot: [1.27, -1.33], drop: { y: 0.46, w: 0.6 } } }],
+];
+
+describe("given a deck lid that wraps the tail (boot.drop)", () => {
+  for (const [id, style] of WRAPPED) {
+    it(`when a ${id}'s wrapping lid is built, then it folds down the rear face to drop.y at z1, drop.w wide, inside its cage with no clamping`, () => {
+      const boot = style.boot;
+      assert.ok(boot.kind === "lid" && boot.drop !== undefined);
+      const [py, pz] = bootPivot(boot);
+      const geo = makeTrunkGeometry(style);
+      const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+      let low = Infinity;
+      let back = Infinity;
+      let faceW = 0;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i) + py;
+        low = Math.min(low, y);
+        back = Math.min(back, pos.getZ(i) + pz);
+        if (y < boot.drop.y + 0.01) faceW = Math.max(faceW, Math.abs(pos.getX(i)));
+      }
+      assert.ok(Math.abs(low - boot.drop.y) < 1e-6 && Math.abs(faceW - boot.drop.w) < 1e-6, `${id} face bottom ${low} m, half-width ${faceW} m`);
+      assert.ok(back < boot.z1 && back > boot.z1 - 0.02, `${id} face at z ${back}`);
+      const d = new StreamedDeformation(makeChassisGeometry(style), carFrame(style).rig);
+      assert.ok(panelClamp(d, geo, "boot", new THREE.Vector3(0, py, pz)) < 1e-4, `${id} boot clamped`);
+    });
+  }
+
+  it("when their hinges are read, then the sedan's lid is a torsion-bar deck lid and the roof-hinged hatch a strutted hatch carrying its glass", () => {
+    const [sedan, hatch] = WRAPPED.map(([, s]) => s.boot);
+    assert.ok(!roofHinged(sedan!) && lidSpec(sedan!).kg === 12.4 && lidSpec(sedan!).dir === 1, `sedan ${JSON.stringify(lidSpec(sedan!))}`);
+    assert.ok(roofHinged(hatch!) && lidSpec(hatch!).kg === 18 && lidSpec(hatch!).dir === 1, `hatch ${JSON.stringify(lidSpec(hatch!))}`);
+  });
 });
 
 /** A police car through a square `kph` wall hit (shape mode), and its bar. */

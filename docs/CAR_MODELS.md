@@ -34,10 +34,12 @@ Mass, centre of gravity, lift and `wheelScale` stay per class in `vehicle-classe
 The shape tables describe the surfaces inside those bounds: `profile` (side-profile stations rear to front: shoulder
 half-width, beltline, roof height and width, how much greenhouse), `roofZ`, `windshieldTop`, `rearGlass`, `quarter`,
 `midPillarZ`, `rearBulkhead`, `tubs` (open floors), `rearDoorSeam`, `boot` (deck lid, or a hatch / tailgate; a tailgate's
-optional `z0` leans its panel from its bottom edge `[y0, z0]` up to its hinge; optional `pivot` `[y, z]` is the hinge line the
-lid turns about, default its `origin`, and decides the swing: a chord rising over 45° from it is a drop gate; optional `swing` is
-its `LidSwing` (mass, struts, stop rise, latch and tear bars), default the preset for its kind; [`DOOR_RIG.md`](DOOR_RIG.md),
-Lids; a hatch or liftgate carries the rear glass), `lamps`, and the
+optional `z0` leans its panel from its bottom edge `[y0, z0]` up to its hinge; a deck lid's optional `drop` `{ y, w }` wraps it
+over the tail edge (8 cm fold) and down the rear face to `y`, `w` its half-width there, the face standing at `z1`; optional
+`pivot` `[y, z]` is the hinge line the lid turns about, default its `origin`, and decides the swing: a chord rising over 45° from
+it is a drop gate, a pivot over 0.2 m above the panel's top edge is a roof-hinged hatch or liftgate that carries the rear glass;
+optional `swing` is its `LidSwing` (mass, struts, stop rise, latch and tear bars), default the preset for its kind;
+[`DOOR_RIG.md`](DOOR_RIG.md), Lids), `lamps`, and the
 optional `livery` and `lightBar`. `rig` overrides the soft-body cages a body's panels need.
 Optional `details` holds the car's fine contours (panel gaps, shut lines, creases, vents, grille bars, lamp internals) as strokes and patches drawn on its side, top, front and rear views; the detail-map system bakes them into height and cavity maps read at the skin's rest position, so they ride a crushed panel.
 

@@ -72,13 +72,21 @@ export function bootPivot(boot: BootSpec): YZ {
 /** A chord rising more steeply than this from its hinge stands above it: a drop gate, opening rearward-down. */
 const UPRIGHT_CHORD = Math.SQRT1_2;
 
+/** A hinge this far (m) above the panel's own top edge is on the roof: a hatch or liftgate, carrying the rear glass. */
+const ROOF_HINGE_RISE = 0.2;
+
+/** Whether the boot is a roof-hinged hatch or liftgate (it carries the rear window). */
+export function roofHinged(boot: BootSpec): boolean {
+  return bootPivot(boot)[0] - boot.origin[0] > ROOF_HINGE_RISE;
+}
+
 /** The lid's hinge from its style: the free edge is the panel's edge farthest from the pivot. */
 export function lidSpec(boot: BootSpec): HingeSpec {
   const [py, pz] = bootPivot(boot);
   let fy: number;
   let fz: number;
   if (boot.kind === "lid") {
-    fy = boot.origin[0];
+    fy = boot.drop?.y ?? boot.origin[0];
     fz = boot.z1;
   } else {
     const by = boot.y0;
@@ -92,7 +100,7 @@ export function lidSpec(boot: BootSpec): HingeSpec {
   const uy = (fy - py) / length;
   const uz = (fz - pz) / length;
   const dir = uy > UPRIGHT_CHORD ? -1 : 1;
-  const s = boot.swing ?? (boot.kind === "lid" ? TRUNK_LID : dir < 0 ? DROP_GATE : HATCH_LID);
+  const s = boot.swing ?? (dir < 0 ? DROP_GATE : boot.kind === "lid" && !roofHinged(boot) ? TRUNK_LID : HATCH_LID);
   return {
     length,
     kg: s.kg,

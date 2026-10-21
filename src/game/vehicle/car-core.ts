@@ -31,7 +31,7 @@ import { panelRegions, type PanelName, type PanelRegion } from "./car-panels.ts"
 import { newDentState, type DentState } from "./loose-dent.ts";
 import { newLooseShape } from "./loose-step.ts";
 import { carClass, CLASSES, drivenAxles } from "./vehicle-classes.ts";
-import { bootPivot, lidSpec, type HingeSpec } from "./hinge-spec.ts";
+import { bootPivot, lidSpec, roofHinged, type HingeSpec } from "./hinge-spec.ts";
 const _p = new THREE.Vector3();
 const _inv = new THREE.Quaternion();
 const _lampQ = new THREE.Quaternion();
@@ -577,9 +577,9 @@ export abstract class CarCore {
     const glassMat = glassMaterial("fresh");
     const style = this.style;
     addPane("windshield", new THREE.Mesh(makeWindshield(style), glassMat), this.group, ["roof", "bonnet"], "glassFront");
-    // A hatch or liftgate carries its glass: the pane rides the lid (origin on its hinge line) at −pivot, so it swings, tears off and resets with it.
+    // A roof-hinged hatch or liftgate carries its glass: the pane rides the lid (origin on its hinge line) at −pivot, so it swings, tears off and resets with it.
     const rear = new THREE.Mesh(makeRearGlass(style), glassMat);
-    const inGate = style.boot.kind === "tailgate" && lidSpec(style.boot).dir > 0;
+    const inGate = roofHinged(style.boot);
     if (inGate) {
       const [pivotY, pivotZ] = bootPivot(style.boot);
       rear.position.set(0, -pivotY, -pivotZ);

@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { hypot2, detSin } from "../kernel/physics-core.js";
-import { CAR_STYLES, type BodyStyle, type ProfileStation, type YZ } from "./car-variants.ts";
+import { hypot2, detCos, detSin } from "../kernel/physics-core.js";
+import { CAR_STYLES, type BodyStyle, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
 import { beltY, floorY, rockerAt } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
@@ -415,42 +415,80 @@ export const ROOF_CROWN = 0.026;
 /** The dome's shoulder: [share of the roof half-width, rise above the cant line (m)]. */
 export const ROOF_SHOULDER = [0.45, 0.018] as const;
 
-/** Lid lofted on the deck line (hood / trunk), local to its hinge origin. */
-function makeDeckPanel(style: BodyStyle, z0: number, z1: number, origin: YZ, source: BodySource): THREE.BufferGeometry {
+/** A wrapping lid's fold over the tail edge: its radius (m), its quarter turn's rings, and the face's rings below it. */
+const LID_FOLD_R = 0.08;
+const LID_FOLD_STEPS = 3;
+const LID_FACE_STEPS = 2;
+
+/**
+ * Lid lofted on the deck line (hood / trunk), local to its hinge origin. With a `drop` the lid also folds over the tail edge
+ * and runs down the rear face to `drop.y`, narrowing to the face half-width `drop.w`; the face stands at `z1`.
+ */
+function makeDeckPanel(style: BodyStyle, z0: number, z1: number, origin: YZ, source: BodySource, drop?: LidDrop): THREE.BufferGeometry {
   const segs = 10;
   const tk = 0.04;
-  const drop = 0.06;
+  const skirt = 0.06;
   const dome = 0.012;
   const [oy, oz] = origin;
+  const ring = (w: number, y: number): Pt[] => [
+    { x: -w, y },
+    { x: -w * 0.45, y: y + dome * 0.7 },
+    { x: 0, y: y + dome },
+    { x: w * 0.45, y: y + dome * 0.7 },
+    { x: w, y },
+    { x: w, y: y - skirt * 0.55 },
+    { x: w, y: y - skirt },
+    { x: w - tk, y: y - skirt },
+    { x: w - tk, y: y - tk },
+    { x: -w + tk, y: y - tk },
+    { x: -w + tk, y: y - skirt },
+    { x: -w, y: y - skirt },
+    { x: -w, y: y - skirt * 0.55 },
+  ];
+  const fold = drop ? LID_FOLD_R : 0;
+  const zEnd = z1 + fold;
   const rings: Pt[][] = [];
   const zs: number[] = [];
   for (let s = 0; s <= segs; s++) {
-    const z = lerp(z0, z1, s / segs);
+    const z = lerp(z0, zEnd, s / segs);
     const sl = sampleSlice(z, style.profile);
-    const w = sl.hw - 0.075;
-    const y = sl.yBelt + 0.016 - oy;
-    rings.push([
-      { x: -w, y },
-      { x: -w * 0.45, y: y + dome * 0.7 },
-      { x: 0, y: y + dome },
-      { x: w * 0.45, y: y + dome * 0.7 },
-      { x: w, y },
-      { x: w, y: y - drop * 0.55 },
-      { x: w, y: y - drop },
-      { x: w - tk, y: y - drop },
-      { x: w - tk, y: y - tk },
-      { x: -w + tk, y: y - tk },
-      { x: -w + tk, y: y - drop },
-      { x: -w, y: y - drop },
-      { x: -w, y: y - drop * 0.55 },
-    ]);
+    rings.push(ring(sl.hw - 0.075, sl.yBelt + 0.016 - oy));
     zs.push(z - oz);
   }
+  // The fold and the face are lofted straight on past the deck's end (z = path length), then bent onto the tail below.
+  const end = sampleSlice(zEnd, style.profile);
+  const wEnd = end.hw - 0.075;
+  const yc = end.yBelt + 0.016 - oy - fold;
+  const zA = zEnd - oz;
+  const arc = (fold * Math.PI) / 2;
+  if (drop) {
+    const run = arc + yc - (drop.y - oy);
+    for (let k = 1; k <= LID_FOLD_STEPS + LID_FACE_STEPS; k++) {
+      rings.push(ring(wEnd, 0));
+      zs.push(zA - (k <= LID_FOLD_STEPS ? (k / LID_FOLD_STEPS) * arc : arc + ((k - LID_FOLD_STEPS) / LID_FACE_STEPS) * (run - arc)));
+    }
+  }
   const geo = loftFromRings(rings, zs, 0, 1);
+  if (drop) bendOverTail(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, drop.w / wEnd);
   ensureOutwardNormals(geo);
   if (source === "drawn") splitCreases(geo, CREASE_DEGREES.deckLid);
   geo.computeBoundingBox();
   return geo;
+}
+
+/**
+ * Bends the straight run lofted past `zA` (its z the path length, its y the offset off the panel) a quarter turn down over the
+ * tail edge, about the fold's centre (`yc`, `zA`), then straight down the face, scaling x to `wFace` × on the way round.
+ */
+function bendOverTail(pos: THREE.BufferAttribute, zA: number, yc: number, wFace: number): void {
+  const arc = (LID_FOLD_R * Math.PI) / 2;
+  for (let i = 0; i < pos.count; i++) {
+    const s = zA - pos.getZ(i);
+    if (s < 1e-9) continue;
+    const turn = Math.min(s / LID_FOLD_R, Math.PI / 2);
+    const r = LID_FOLD_R + pos.getY(i);
+    pos.setXYZ(i, pos.getX(i) * lerp(1, wFace, turn / (Math.PI / 2)), yc + r * detCos(turn) - Math.max(0, s - arc), zA - r * detSin(turn));
+  }
 }
 
 /** The tailgate stops this far (m) inside the tail panel's half-width: the tail lamps stand upright in the corners. */
@@ -495,7 +533,7 @@ export function makeHoodGeometry(style: BodyStyle = SEDAN, source: BodySource = 
 /** Trunk lid, hatch or tailgate per style; local to the boot's pivot (`bootPivot`, [y, z]). */
 export function makeTrunkGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const b = style.boot;
-  const g = b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source) : makeTailgate(style, b.y0, b.z0 ?? b.origin[1], b.origin, source);
+  const g = b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, b.drop) : makeTailgate(style, b.y0, b.z0 ?? b.origin[1], b.origin, source);
   const [py, pz] = bootPivot(b);
   if (py !== b.origin[0] || pz !== b.origin[1]) g.translate(0, b.origin[0] - py, b.origin[1] - pz);
   return markSkinDynamic(g);
