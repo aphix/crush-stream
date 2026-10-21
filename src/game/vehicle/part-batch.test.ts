@@ -72,6 +72,24 @@ describe("given the part batch and a few cars near the camera", () => {
     const { batch } = stage();
     for (const kind of PART_KINDS) assert.equal(batch.meshes[kind]!.geometry, partGeometry(kind), `kind ${kind} (same object, not equal copies)`);
   });
+
+  test("when the interior is built, then its steering wheel is on the car's left (+x), the driver's side", () => {
+    const attr = partGeometry(PART_KIND.interior).getAttribute("position");
+    let count = 0;
+    let sumX = 0;
+    // Only the wheel torus lies here: the dash is at |x| 0.41, the seats and their backs are lower or further back.
+    for (let i = 0; i < attr.count; i++) {
+      const x = attr.getX(i);
+      const y = attr.getY(i);
+      const z = attr.getZ(i);
+      if (Math.abs(x) < 0.38 && y > 0.55 && y < 0.8 && z > 0.2 && z < 0.5) {
+        count++;
+        sumX += x;
+      }
+    }
+    assert.ok(count > 0, "the wheel's vertices were found");
+    assert.ok(sumX / count > 0.15, `the wheel's mean car-local x is ${(sumX / count).toFixed(2)}`);
+  });
 });
 
 describe("given the part batch and a car whose right mirror snaps off", () => {

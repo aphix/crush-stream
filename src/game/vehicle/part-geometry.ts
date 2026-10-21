@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { once } from "../kernel/scalar.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
-import { INTERIOR_MESH, SMALL_PART_SEAT } from "./constants.ts";
+import { DRIVER_SIDE, INTERIOR_MESH, SMALL_PART_SEAT } from "./constants.ts";
 import { loosePartsMaterial, mergeToned, toned } from "./car-materials.ts";
 
 /** The seven static parts of a car, in `PartBatch.meshes` order. */
@@ -32,7 +32,7 @@ function interior(): THREE.BufferGeometry {
     box(0.82, 0.2, 0.24, dark, 0, 0.6, 0.48),
     box(0.78, 0.02, 1.05, vinyl, 0, 1.08, 0.02),
     box(0.8, 0.55, 0.04, vinyl, 0, 0.62, -0.62),
-    toned(new THREE.TorusGeometry(0.11, 0.016, 8, 16), 0x2a2c32, 0.55, 0.2).rotateX(0.55).translate(-0.22, 0.68, 0.36),
+    toned(new THREE.TorusGeometry(0.11, 0.016, 8, 16), 0x2a2c32, 0.55, 0.2).rotateX(0.55).translate(DRIVER_SIDE * 0.22, 0.68, 0.36),
   ];
   for (const x of [-0.2, 0.2]) {
     parts.push(box(0.3, 0.08, 0.36, seat, x, 0.4, 0.06));

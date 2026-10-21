@@ -5,6 +5,7 @@ import { GUARD_AT_POST, GUARD_DOWN, GUARD_IN, GUARD_RUNNING_IN, GUARD_RUNNING_OU
 import type { DeformableCar } from "../vehicle/car.ts";
 import { cageLift, crownY, keelY } from "../vehicle/car-cage-rig.ts";
 import { SAMPLE, sampleAt } from "../vehicle/car-cage.ts";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import type { Ground } from "../world/ground.ts";
 import { insidePolygon } from "../world/terrain.ts";
 import type { GuardSpec } from "../world/track-schema.ts";
@@ -68,7 +69,9 @@ const DOOR_OUT = 1.1;
 const GIVE_UP = 45;
 /** In his seat: hips this far (m) in from the passenger window's middle, down from it, and back of it. */
 const SEAT = { in: 0.42, down: 0.92, back: 0.15 };
-/** How far (m) from the driver's torso a thrown passenger leaves: beside him (car +x) out of the windshield, behind him out of a door. */
+/** His window: the passenger's, across from the driver's (`DRIVER_SIDE`). */
+const PASSENGER_PANE = DRIVER_SIDE > 0 ? "doorL" : "doorR";
+/** How far (m) from the driver's torso a thrown passenger leaves: beside him (toward the passenger side) out of the windshield, behind him out of a door. */
 const BESIDE = 0.75;
 const BEHIND = 0.8;
 /** The secret's flash (ms; the owner: "a slow bright flash"): its swell, hold at full glare, and fade. */
@@ -554,8 +557,8 @@ export class VipEscort {
     const car = cars[this.car];
     if (!car) return this.reset();
     if (this.runOver(cars, throwFigure)) return;
-    _door.set(DOOR_OUT, 0, 0).applyQuaternion(car.group.quaternion);
-    car.glassWorld("doorR", _pane).add(_door);
+    _door.set(-DRIVER_SIDE * DOOR_OUT, 0, 0).applyQuaternion(car.group.quaternion);
+    car.glassWorld(PASSENGER_PANE, _pane).add(_door);
     const dx = _pane.x - this.x;
     const dz = _pane.z - this.z;
     const left = hypot2(dx, dz);
@@ -589,18 +592,18 @@ export class VipEscort {
     return false;
   }
 
-  /** In the passenger seat: hips in from the right-hand window, facing the car's way (`HIP[3]`: the hips' height standing). */
+  /** In the passenger seat: hips in from the passenger window, facing the car's way (`HIP[3]`: the hips' height standing). */
   private sit(car: DeformableCar): void {
     const g = car.group;
-    car.glassWorld("doorR", _pane).sub(g.position).applyQuaternion(_inv.copy(g.quaternion).invert());
-    _root.set(_pane.x - SEAT.in, _pane.y - SEAT.down - HIP[3]!, _pane.z - SEAT.back).applyQuaternion(g.quaternion).add(g.position);
+    car.glassWorld(PASSENGER_PANE, _pane).sub(g.position).applyQuaternion(_inv.copy(g.quaternion).invert());
+    _root.set(_pane.x + DRIVER_SIDE * SEAT.in, _pane.y - SEAT.down - HIP[3]!, _pane.z - SEAT.back).applyQuaternion(g.quaternion).add(g.position);
     this.people.pose(this.slot, _root, g.quaternion, seatedStance(this.stance), false);
   }
 }
 
 /** `at` (the driver's torso place, just out of `car`) moved to where his passenger is thrown from: off it by `BESIDE` or `BEHIND`, toward the passenger side. */
 export function passengerThrow(car: DeformableCar, at: THREE.Vector3): void {
-  if (car.driverOut === "windshield" || car.driverOut === null) _off.set(BESIDE, 0, 0);
+  if (car.driverOut === "windshield" || car.driverOut === null) _off.set(-DRIVER_SIDE * BESIDE, 0, 0);
   else _off.set(car.driverOut === "doorL" ? BEHIND : -BEHIND, 0, 0);
   at.add(_off.applyQuaternion(car.group.quaternion));
 }

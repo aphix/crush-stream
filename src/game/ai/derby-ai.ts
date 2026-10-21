@@ -1,5 +1,6 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { chargeBoost, clearDrive, DRIVE, idleDrive, topUpBoost, type DriveInput } from "../vehicle/car-drive.ts";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { mood } from "./ai-aggression.ts";
@@ -51,9 +52,6 @@ export const DERBY_RULES = {
 
 /** The derby field's aggression slider: a maximum, each driver rolls its own under it (ai-aggression.ts). */
 export const DEFAULT_DERBY_AGGRESSION = 1;
-
-/** The steering wheel sits at local x −0.22 (part-geometry `interior`): the driver's door is the −x side. */
-const DRIVER_SIDE = -1;
 
 function wrapPi(a: number): number {
   let x = a;

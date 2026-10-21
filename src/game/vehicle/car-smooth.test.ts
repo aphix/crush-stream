@@ -456,6 +456,7 @@ describe("given every body style crashed into the wall at 48 km/h by the engine'
  * Every rest-only table `cageSourceOf` hands the cage (the cage mesh is decimated from them, so they fix the contact shape of every
  * hit, not only the scripted one), hashed as raw bytes in field order. Re-pinned for the sill following the cell's clusters: only the
  * sill vertices' cluster tables (skinN, skinXf, skinW) changed. Re-pinned for the sill samples a wreck rests on (`sill`, the last table).
+ * Re-pinned for the driver's side (`DRIVER_SIDE`, the steering wheel moved to +x): only `interiorRest` changed.
  */
 function cageSourceDigest(car: DeformableCar): string {
   const source = cageSourceOf(car);
@@ -470,12 +471,12 @@ function cageSourceDigest(car: DeformableCar): string {
 }
 
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "505b4c4fe9c4f34f8f3350c3530634eff8ae353dcfa168b128b9525112f4d52a" },
-  { id: "hatchback", digest: "05d9ac32b6a4a27601edd27c36fd30ff7e74808b1e6a2f68f290f8040a1a7222" },
-  { id: "wagon", digest: "2ec7bcc51ccd1d45f51587fe633611d7bb0a30cc19df2b940eacb5c3ad1ec5f7" },
-  { id: "coupe", digest: "b322568b9713bf4d89e349caee9e5d1cfc77af2640bd6420abbc6ffdcf4384eb" },
-  { id: "pickup", digest: "74c010377f9c5958cc9a88b234097fb8cf12393139f45c2657abed873e5d3c37" },
-  { id: "police", digest: "44c94fa5daa8c1c3dd5672c2bdb1a80ef92666e5c027c7698814ddf6b7de1796" },
+  { id: "sedan", digest: "8d0ca6fec24787b820976ef5beb3b9bc33abd7d28ee2e89cdd0159374addc6cd" },
+  { id: "hatchback", digest: "a82049f5c91bd2c7e2306ff4b9ac60a28e4817c5dc55670489e9e76d6a5ac18f" },
+  { id: "wagon", digest: "4cd165fb12715df32cabe684a5885b7ec9d8d22485a5a2153d4d2db8ddc227bc" },
+  { id: "coupe", digest: "013ad7471e1b627d4c1f88410698ebd920b93bb216fc170c996d5755245ba330" },
+  { id: "pickup", digest: "3dc69dbf7f5dacb9e5227d9b30452555510ad842693de5b061ac7b8c6194455f" },
+  { id: "police", digest: "0fe302dbb51d2b348fcb6ea47db61a3a25aa10e3737093cc78b7bbd0ad816cc9" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {
