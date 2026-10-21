@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
-import type { BodyStyle } from "./car-variants.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ } from "./car-lines.ts";
+import type { BodyStyle, PillarSpan } from "./car-variants.ts";
+import { aPillarTopZ, aPostRearZ, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
   ROOF_CROWN,
@@ -310,6 +310,9 @@ const HEADER_DEPTH = 0.08;
 /** The painted fill between a side glass top dropped under the cant line and the cant line is this thick (m), like a pillar. */
 const GLASS_FILL_THICK = 0.05;
 
+/** A divider the style doesn't size: 8 cm wide at the belt, 7 at the top, upright at `midPillarZ`. */
+const DIVIDER: PillarSpan = { width: [0.08, 0.07] };
+
 /** Painted fill from the side glass top up to the cant line, C-pillar to A-pillar, on the glass plane (drawn only): a style's DLO that drops under its roof. */
 function glassTopFill(sign: number, style: BodyStyle, aTopZ: number): THREE.BufferGeometry[] {
   const stations = style.glassTop;
@@ -344,13 +347,11 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   const q = style.quarter;
   const aTopZ = aPillarTopZ(style);
   const aPost = source === "drawn" ? aPostRails(style) : null;
-  const bBand = source === "drawn" ? bPillarBand(style) : null;
-  const [bRear, bFront] = bBand ?? [bp.rear, bp.front];
-  // The drawn B-pillar with the style's own width is even from belt to top; else its top is 3 cm narrower than its band.
-  const bTopInset = bBand ? 0 : 0.015;
+  // The drawn B-pillar takes the style's bands; else the `bPillar` band, its top 3 cm narrower.
+  const bSpan = source === "drawn" ? style.pillars?.b : undefined;
+  const bBands = bSpan ? pillarBands(bSpan, (bp.rear + bp.front) / 2) : { belt: [bp.rear, bp.front] as const, top: [bp.rear + 0.015, bp.front - 0.015] as const };
   const m = style.midPillarZ;
-  const divider = source === "drawn" ? style.pillars?.divider : undefined;
-  const [dividerBelt, dividerTop] = divider?.width ?? [0.08, 0.07];
+  const divider = (source === "drawn" ? style.pillars?.divider : undefined) ?? DIVIDER;
   const black = (source === "drawn" ? style.blackout : undefined) ?? {};
   // A drawn pillar runs into the roof (never through it), named and toned by its `blackout` key; the cage keeps its boxes.
   const pillar = (geo: THREE.BufferGeometry, name: keyof NonNullable<BodyStyle["blackout"]>) => {
@@ -376,7 +377,9 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
             2,
           ),
     );
-    const bz = (bRear + bFront) * 0.5;
+    const [bRear, bFront] = bBands.belt;
+    const [bTopRear, bTopFront] = bBands.top;
+    const bz = bSpan?.z?.[1] ?? (bp.rear + bp.front) * 0.5;
     const bTop = cantY(bz, style) + (source === "cage" ? 0.05 : PILLAR_TOP_RISE);
     parts.push(
       pillar(
@@ -385,8 +388,8 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
           {
             fb: [beltXAt(bFront) + 0.01, belt(bFront) - 0.02, bFront],
             rb: [beltXAt(bRear) + 0.01, belt(bRear) - 0.02, bRear],
-            rt: [topX(bRear + bTopInset, bTop, ROOF_DRIP, cantX(bz, style) + 0.01), bTop, bRear + bTopInset],
-            ft: [topX(bFront - bTopInset, bTop, ROOF_DRIP, cantX(bz, style) + 0.01), bTop, bFront - bTopInset],
+            rt: [topX(bTopRear, bTop, ROOF_DRIP, cantX(bz, style) + 0.01), bTop, bTopRear],
+            ft: [topX(bTopFront, bTop, ROOF_DRIP, cantX(bz, style) + 0.01), bTop, bTopFront],
           },
           0.05,
         ),
@@ -409,17 +412,18 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       ),
     );
     if (m !== null) {
-      const [beltZ, topZ] = divider?.z ?? [m, m];
+      const topZ = divider.z?.[1] ?? m;
+      const { belt: [dRear, dFront], top: [dTopRear, dTopFront] } = pillarBands(divider, m);
       const mTop = cantY(topZ, style) + PILLAR_TOP_RISE;
       parts.push(
         pillar(
           pillarFromCorners(
             sign,
             {
-              fb: [beltXAt(beltZ + dividerBelt / 2) + 0.012, belt(beltZ + dividerBelt / 2) - 0.02, beltZ + dividerBelt / 2],
-              rb: [beltXAt(beltZ - dividerBelt / 2) + 0.012, belt(beltZ - dividerBelt / 2) - 0.02, beltZ - dividerBelt / 2],
-              rt: [topX(topZ - dividerTop / 2, mTop, 0.012, cantX(topZ, style) + 0.012), mTop, topZ - dividerTop / 2],
-              ft: [topX(topZ + dividerTop / 2, mTop, 0.012, cantX(topZ, style) + 0.012), mTop, topZ + dividerTop / 2],
+              fb: [beltXAt(dFront) + 0.012, belt(dFront) - 0.02, dFront],
+              rb: [beltXAt(dRear) + 0.012, belt(dRear) - 0.02, dRear],
+              rt: [topX(dTopRear, mTop, 0.012, cantX(topZ, style) + 0.012), mTop, dTopRear],
+              ft: [topX(dTopFront, mTop, 0.012, cantX(topZ, style) + 0.012), mTop, dTopFront],
             },
             0.04,
           ),

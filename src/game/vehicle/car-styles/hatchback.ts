@@ -71,7 +71,7 @@ export const HATCHBACK: BodyStyle = {
   boot: { kind: "tailgate", y0: 0.57, origin: [0.94, -1.615], z0: -1.76, pivot: [1.277, -1.15] },
   lamps: { head: [0.34, 0.54], tail: [0.59, 0.72] },
   seats: { front: [-0.35, 0.4, -0.1], rear: [0.41, -0.85] },
-  pillars: { b: 0.08, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] } },
+  pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] } },
   blackout: { b: true, divider: true },
   roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.5 } },
   exhaust: { tips: 2, x: 0.45, y: 0.3, size: [0.075, 0.045], shape: "round" },

@@ -7,7 +7,7 @@ import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, st } from "./car-styles/platform.ts";
 import { ROCKER, cantY, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
-import { aPillarTopZ, aPostRearZ, beltY, floorY, rockerAt } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltY, floorY, pillarBands, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, styleMirrorDrawn } from "./part-geometry.ts";
 import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
@@ -694,13 +694,15 @@ describe("given a body style's H2 hardpoints", () => {
     const dark: BodyStyle = { ...wagon, blackout: { b: true, divider: true } };
     const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
     const [was, now] = [makeChassisGeometry(wagon), makeChassisGeometry(dark)];
-    const bz = (wagon.bPillar.rear + wagon.bPillar.front) / 2;
+    // A turned vertex lies on the B-pillar's or the divider's band (the wagon's divider is 10.5 cm wide), 1 cm at most past its edges.
+    const bands = [bPillarBand(wagon)!, pillarBands(wagon.pillars!.divider!, wagon.midPillarZ!)];
+    const onBand = (z: number) => bands.some(({ belt, top }) => z > Math.min(belt[0], top[0]) - 0.01 && z < Math.max(belt[1], top[1]) + 0.01);
     let turned = 0;
     for (let i = 0; i < primer(now).count; i++) {
       if (primer(now).getX(i) === primer(was).getX(i)) continue;
       turned++;
       const z = now.getAttribute("position").getZ(i);
-      assert.ok(Math.abs(z - bz) < 0.06 || Math.abs(z - wagon.midPillarZ!) < 0.05, `vertex ${i} at z ${z} turned dark: off the B-pillar (z ${bz}) and the divider (z ${wagon.midPillarZ})`);
+      assert.ok(onBand(z), `vertex ${i} at z ${z} turned dark: off the B-pillar and divider bands ${JSON.stringify(bands)}`);
     }
     const pillars = makeGreenhouseFrame(dark, "drawn").filter((g) => g.userData.blackout === true);
     assert.equal(pillars.length, 4, "two B-pillars and two dividers");
@@ -713,11 +715,12 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(names.join(",") === "a,rear,sail,a,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
   });
 
-  it("when a style sets its B-pillar's width and seats a leaning divider, then the drawn pillars take them at the belt and the top, the side panes tuck under the B-pillar, and the cage keeps its bands", () => {
+  it("when a style leans its B-pillar and its divider, then the drawn pillars take their bands at the belt and the top, the side panes tuck under the B-pillar's edges, and the cage keeps its bands", () => {
     const wagon = CAR_STYLES.wagon;
     const m = wagon.midPillarZ!;
-    const moved: BodyStyle = { ...wagon, pillars: { b: 0.07, divider: { width: [0.05, 0.04], z: [m - 0.06, m + 0.04] } } };
     const bz = (wagon.bPillar.rear + wagon.bPillar.front) / 2;
+    // 17 cm at the belt, 10 at the top, its rear edge upright: the front door frame's rear edge leans into it (the sedan's reference).
+    const moved: BodyStyle = { ...wagon, pillars: { b: { width: [0.17, 0.1], z: [bz + 0.035, bz] }, divider: { width: [0.05, 0.04], z: [m - 0.06, m + 0.04] } } };
     // Frame parts per side: A-pillar, B-pillar, C-pillar, divider.
     const parts = makeGreenhouseFrame(moved, "drawn");
     const spans = (g: THREE.BufferGeometry) => {
@@ -730,11 +733,11 @@ describe("given a body style's H2 hardpoints", () => {
       }
       return [Math.min(...low), Math.max(...low), Math.min(...top), Math.max(...top)];
     };
-    assertSameNumbers(spans(parts[1]!), [bz - 0.035, bz + 0.035, bz - 0.035, bz + 0.035], "B-pillar z span at the belt and at its top", 1e-5);
+    assertSameNumbers(spans(parts[1]!), [bz - 0.05, bz + 0.12, bz - 0.05, bz + 0.05], "B-pillar z span at the belt and at its top", 1e-5);
     assertSameNumbers(spans(parts[3]!), [m - 0.085, m - 0.035, m + 0.02, m + 0.06], "divider z span at the belt and at its top", 1e-5);
     // glassCorners: doorR is pane 3, its rear corners (across 0) at the base and the top; quarterR is pane 5, its front corners (across 1).
     const c = glassCorners(moved);
-    assertSameNumbers([c[3 * 12 + 2]!, c[3 * 12 + 6 + 2]!, c[5 * 12 + 3 + 2]!, c[5 * 12 + 9 + 2]!], [bz + 0.025, bz + 0.025, bz - 0.025, bz - 0.025], "door glass rear and quarter glass front edges, 1 cm under the B-pillar (z)", 1e-5);
+    assertSameNumbers([c[3 * 12 + 2]!, c[3 * 12 + 6 + 2]!, c[5 * 12 + 3 + 2]!, c[5 * 12 + 9 + 2]!], [bz + 0.11, bz + 0.04, bz - 0.04, bz - 0.04], "door glass rear and quarter glass front edges, 1 cm under the B-pillar's edges at the belt and the top (z)", 1e-5);
     const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join("|");
     assert.ok(cage(moved) === cage(wagon), "the cage greenhouse is unchanged");
   });

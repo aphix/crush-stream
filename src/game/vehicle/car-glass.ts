@@ -76,7 +76,7 @@ const PANE_TUCK = 0.01;
 function doorSpan(style: BodyStyle): SideSpan {
   const band = bPillarBand(style);
   const trailing = style.door.hingeZ - style.door.length;
-  const [bot, top] = band ? [band[1] - PANE_TUCK, band[1] - PANE_TUCK] : [trailing + DOOR_GLASS_INSET.bot, trailing + DOOR_GLASS_INSET.top];
+  const [bot, top] = band ? [band.belt[1] - PANE_TUCK, band.top[1] - PANE_TUCK] : [trailing + DOOR_GLASS_INSET.bot, trailing + DOOR_GLASS_INSET.top];
   const span: SideSpan = { bot: [bot, style.aPillarFoot], top: [top, aPillarTopZ(style)] };
   const knee = style.aPillarKnee;
   if (knee === undefined) return span;
@@ -87,8 +87,8 @@ function doorSpan(style: BodyStyle): SideSpan {
 /** Quarter glass: from the C-pillar forward to the B-pillar (under the drawn one when the style sets its width). */
 function quarterSpan(style: BodyStyle): SideSpan {
   const band = bPillarBand(style);
-  const front = band ? band[0] + PANE_TUCK : style.bPillar.rear;
-  return { bot: [style.quarter.zRearBot, front], top: [style.quarter.zRearTop, front] };
+  if (!band) return { bot: [style.quarter.zRearBot, style.bPillar.rear], top: [style.quarter.zRearTop, style.bPillar.rear] };
+  return { bot: [style.quarter.zRearBot, band.belt[0] + PANE_TUCK], top: [style.quarter.zRearTop, band.top[0] + PANE_TUCK] };
 }
 
 /** Point of a side pane in car space: `s` 0…1 rear to front, `t` 0…1 belt to top, leaning in with the tumblehome. */
