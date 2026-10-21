@@ -193,13 +193,14 @@ function edgeOffsets(lines, station, carEdge, refEdge, toWorld, out, ppm) {
   });
 }
 
-/** Mean and largest signed offset (cm) per edge list. */
+/** Per edge list: the mean signed offset, the mean |offset| (`abs`: a wavy edge shows here, not in `mean`) and the largest (cm). */
 function summarize(edges) {
   const out = {};
   for (const [name, list] of Object.entries(edges)) {
     const d = list.filter((s) => s[3] !== null).map((s) => s[3]);
     const largest = d.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), 0);
-    out[name] = { mean: d.length === 0 ? null : round(d.reduce((a, b) => a + b, 0) / d.length, 1), max: round(largest, 1) };
+    const mean = (xs) => (xs.length === 0 ? null : round(xs.reduce((a, b) => a + b, 0) / xs.length, 1));
+    out[name] = { mean: mean(d), abs: mean(d.map(Math.abs)), max: round(largest, 1) };
   }
   return out;
 }
