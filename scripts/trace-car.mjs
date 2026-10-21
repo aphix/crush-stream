@@ -12,7 +12,8 @@
  * 6,0.55,0.8 from the front-left; `iso-rear` turns it half way round), zoomed to fill the frame, with the reference's foreground
  * scaled to the car's (same box area) and centred on it: its IoU is a rough guide only, and it takes no `--points`.
  * `--ref-span x0,x1=m`: two pixel columns of the reference (front then rear: bumper tips with `--anchor ends`, the default, or wheel
- * centres with `--anchor wheels`) are `m` metres apart, and their midpoint sits on the car's matching midpoint. `--ref-ground y`:
+ * centres with `--anchor wheels`) are `m` metres apart (default: the style's spec `dims` length, or wheelbase; width or track in the
+ * front and rear views), and their midpoint sits on the car's matching midpoint. `--ref-ground y`:
  * the reference row of the ground (side/front/rear) or of the centreline (top); default the foreground's bottom row (its middle row
  * for `top`). `--ref-crop` cuts one car out of a lineup first. Foreground: any pixel that differs from the reference's top-left
  * pixel by more than REF_FG_DIFF, holes filled (both silhouettes).
@@ -110,7 +111,7 @@ const { createCanvas, ImageData, loadImage } = await import("@napi-rs/canvas");
 const game = (path) => import(new URL(`../src/game/${path}`, import.meta.url).href);
 await (await game("deform/skin-kernel.test-util.ts")).loadSkinKernelForTest();
 const { DeformableCar } = await game("vehicle/car.ts");
-const { CAR_STYLE_IDS } = await game("vehicle/car-variants.ts");
+const { CAR_STYLES, CAR_STYLE_IDS } = await game("vehicle/car-variants.ts");
 const { STYLE_CLASS, VEHICLE_CLASS_IDS, assignClass } = await game("vehicle/vehicle-classes.ts");
 const { WheelBatch } = await game("vehicle/wheel-batch.ts");
 const { LampBatch } = await game("vehicle/lamp-lights.ts");
@@ -151,9 +152,10 @@ if (ref !== null) {
   H = Math.round((ref.height + 2 * pad) * zoom);
 }
 if (!iso && ref !== null) {
-  const span = /^(-?[\d.]+),(-?[\d.]+)=([\d.]+)$/.exec(values["ref-span"] ?? "");
-  if (span === null) throw new Error(`--ref-span x0,x1=metres is required with --ref: the reference's foreground spans columns ${refBox.u0}..${refBox.u1}, rows ${refBox.v0}..${refBox.v1}`);
-  const [u0, u1, metres] = [Number(span[1]), Number(span[2]), Number(span[3])];
+  const span = /^(-?[\d.]+),(-?[\d.]+)(?:=([\d.]+))?$/.exec(values["ref-span"] ?? "");
+  if (span === null) throw new Error(`--ref-span x0,x1[=metres] is required with --ref: the reference's foreground spans columns ${refBox.u0}..${refBox.u1 + 1}, rows ${refBox.v0}..${refBox.v1 + 1}`);
+  const [u0, u1] = [Number(span[1]), Number(span[2])];
+  const metres = span[3] === undefined ? specSpan(CAR_STYLES[values.style].dims) : Number(span[3]);
   ppm = (zoom * Math.abs(u1 - u0)) / metres;
   const vGround = values["ref-ground"] === undefined ? (view === "top" ? (refBox.v0 + refBox.v1 + 1) / 2 : refBox.v1 + 1) : Number(values["ref-ground"]);
   sxc = mid(featureAlong(VIEWS[view].R)) + (W / 2 - zoom * ((u0 + u1) / 2 + pad)) / ppm;
@@ -308,6 +310,13 @@ function featureAlong(axis) {
   if (values.anchor === "ends") return along(dims.box, axis);
   const at = dims.hubs.map((p) => p.x * axis[0] + p.y * axis[1] + p.z * axis[2]);
   return [Math.min(...at), Math.max(...at)];
+}
+
+/** The spec length the reference span marks when it names none (`BodyStyle.dims`). */
+function specSpan({ wheelbase, overhang, track, width }) {
+  const lengthwise = view === "side" || view === "top";
+  if (values.anchor === "wheels") return lengthwise ? wheelbase : track;
+  return lengthwise ? overhang.front + wheelbase + overhang.rear : width;
 }
 
 /** The car's screen-up coordinate the reference's ground row sits on: the tyres' bottom, or the centreline from above. */

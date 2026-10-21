@@ -54,3 +54,25 @@ views, then the lineup. Archetype research (real cars of the type) sets ratios a
    (`src/game/net/reel-codec.ts`).
 5. Update the docs the car touches: [`UNIFIED_CONTACT`](UNIFIED_CONTACT.md) (cage), [`DOOR_RIG`](DOOR_RIG.md) (doors, lamps),
    [`PANEL_FLAP`](PANEL_FLAP.md) (panels), [`HANDLING`](HANDLING.md) (class), [`CINEMATIC`](CINEMATIC.md) (look).
+
+## Tracing harness
+
+`scripts/trace-car.mjs` draws one style's car (its class's lift and wheel scale applied, no engine boot, under a second) over a
+reference picture calibrated to metres, writes an overlay PNG and prints one JSON line: the silhouette IoU, signed edge offsets
+in cm at stations along the top, bottom, front and rear edges (positive where the car sticks out past the reference), and the
+drawn car's length, width, height, wheelbase, track, overhangs, wheel diameter and ground clearance.
+
+```sh
+S=/tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
+node --disable-warning=ExperimentalWarning scripts/trace-car.mjs --style sedan --view side \
+  --ref $S/silver-sedan/silver-sedan-1.png --ref-span 3,299=4.221 [--points '[[2.0,0.65],[1.2,0.9]]']
+```
+
+- `--view side|top|front|rear` are orthographic and axis-aligned; `iso` / `iso-rear` use the game's lens at `--camera r,pitch,angle`
+  and fit the reference to the car (IoU a rough guide). `--ref-crop x,y,w,h` cuts one car out of a lineup.
+- `--ref-span x0,x1=m`: the reference's bumper-tip columns (or wheel centres with `--anchor wheels`) and their distance; without
+  `=m`, the style's `dims` length (wheelbase). Side spans are the foreground columns × 0.01426 m; a top view takes its side's length.
+  The hatchback's pictures are swapped (`-2` is its side, `-1` its top).
+- `--points` overlays a traced edge in the view's axes (side `[z, y]`, top `[z, x]`): read the reference's edge off the PNG's
+  0.5 m grid or the JSON's `edges` (`[station, car, reference, offset cm]`), and copy it into the style's tables.
+- The PNG: the car orange and outlined magenta, the reference outlined cyan. Full usage is in the script's header.
