@@ -12,6 +12,8 @@ import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
 import { cageSourceOf } from "./car-cage-rig.ts";
 import { assertSameDigest, paint } from "./test-support.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
+import { tyresUnderSkin } from "./car-suspension.ts";
+import { STYLE_CLASS } from "./vehicle-classes.ts";
 
 const DEGREES_PER_RADIAN = 180 / Math.PI;
 
@@ -339,7 +341,9 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
       }
       assertFacesOut(id, geometry, normals);
     });
-
+  }
+  // A class whose tyres ride free of the body (the monster's) runs no tyre hold: its drawn skin, read above, is the sim's.
+  for (const id of CAR_STYLE_IDS.filter((style) => tyresUnderSkin(STYLE_CLASS[style]))) {
     it(`when a ${id}'s skin is read as the sim writes it, before the drawn tyre hold (the skin the wire carries and the cage is cut from), then none of its normals on the side or ends points into the hull`, () => {
       const car = crushedByWall(id);
       const written = car["bodyTyres"]?.["written"];
@@ -366,6 +370,7 @@ const BASELINE_BY_STYLE = [
   { id: "coupe", drawCalls: 13, triangles: 5152, bodyVertices: 1530 },
   { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
   { id: "police", drawCalls: 14, triangles: 5338, bodyVertices: 1587 },
+  { id: "monster", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
 ] as const satisfies readonly { id: CarStyleId; drawCalls: number; triangles: number; bodyVertices: number }[];
 /** The stated budget: a car's triangles at most 1.6 x the baseline. */
 const TRIANGLE_BUDGET = 1.6;
@@ -436,6 +441,8 @@ const SIM_DIGEST_BY_STYLE = [
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
   { id: "police", digest: "08723ee0b057fd7362b131572b0fae67c75b4b44cba69bb5c9097461202172fe" },
+  // The monster's body is the pickup's: given the monster class, the pickup body and the monster body hash the same (7c249b89...).
+  { id: "monster", digest: "8b368488473b0b7de3d40fc1cf8e12fa71ebe8a9e6fc484e06d12b653e91653f" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style crashed into the wall at 48 km/h by the engine's own step", () => {
@@ -476,6 +483,7 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   { id: "coupe", digest: "b322568b9713bf4d89e349caee9e5d1cfc77af2640bd6420abbc6ffdcf4384eb" },
   { id: "pickup", digest: "74c010377f9c5958cc9a88b234097fb8cf12393139f45c2657abed873e5d3c37" },
   { id: "police", digest: "44c94fa5daa8c1c3dd5672c2bdb1a80ef92666e5c027c7698814ddf6b7de1796" },
+  { id: "monster", digest: "74c010377f9c5958cc9a88b234097fb8cf12393139f45c2657abed873e5d3c37" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {

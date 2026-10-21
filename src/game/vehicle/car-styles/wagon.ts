@@ -1,9 +1,10 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { BOOT_SENSOR, FRONT_CLIP, HEAD_LAMP, PLATFORM_WHEEL, st } from "./platform.ts";
+import { BOOT_SENSOR, FRONT_CLIP, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
 
 export const WAGON: BodyStyle = {
   id: "wagon",
   dims: { wheelbase: 2.68, overhang: { front: 0.81, rear: 0.81 }, track: 1.48, width: 1.82, height: 1.375, rideHeight: 0.145, wheel: PLATFORM_WHEEL },
+  ...PLATFORM_HARDPOINTS,
   profile: [
     st(-2.11, 0.76, 0.88),
     st(-1.96, 0.84, 0.89, 1.22, 0.55, 0.6),

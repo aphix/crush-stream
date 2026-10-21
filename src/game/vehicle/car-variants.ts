@@ -1,18 +1,19 @@
 import type { RigOverrides } from "../deform/deform-rig.ts";
 import { COUPE } from "./car-styles/coupe.ts";
 import { HATCHBACK } from "./car-styles/hatchback.ts";
+import { MONSTER } from "./car-styles/monster.ts";
 import { PICKUP } from "./car-styles/pickup.ts";
 import { POLICE } from "./car-styles/police.ts";
 import { SEDAN } from "./car-styles/sedan.ts";
 import { WAGON } from "./car-styles/wagon.ts";
 
-export type CarStyleId = "sedan" | "hatchback" | "wagon" | "coupe" | "pickup" | "police";
+export type CarStyleId = "sedan" | "hatchback" | "wagon" | "coupe" | "pickup" | "police" | "monster";
 
 /** Spawn order: a 5+ car field shows every fleet style. Police spawn only on request (pursuit, HUD class). */
 export const FLEET_STYLE_IDS: readonly CarStyleId[] = ["sedan", "hatchback", "wagon", "coupe", "pickup"];
 
 /** Every body in netplay wire order (a snapshot sends the index): append only. */
-export const CAR_STYLE_IDS: readonly CarStyleId[] = [...FLEET_STYLE_IDS, "police"];
+export const CAR_STYLE_IDS: readonly CarStyleId[] = [...FLEET_STYLE_IDS, "police", "monster"];
 
 /** One side-profile station (car space, +z forward). */
 export interface ProfileStation {
@@ -69,6 +70,16 @@ interface CarDims {
   wheel: { radius: number; width: number };
 }
 
+/** A bumper: where its group sits and the section its fascia is lofted from. */
+interface BumperSpec {
+  /** Group seat (m): its height, and its distance from the car's middle. */
+  seat: { y: number; z: number };
+  /** Fascia section about the seat, top to bottom: [y, out] (m). */
+  fascia: readonly (readonly [number, number])[];
+  /** Half-width (m) of the fascia across the car. */
+  span: number;
+}
+
 export interface BodyStyle {
   id: CarStyleId;
   /** What the reference was measured to; the tables below are built to it (`car-variants.test.ts`). */
@@ -77,7 +88,20 @@ export interface BodyStyle {
   profile: readonly ProfileStation[];
   /** Roof panel [rear, front] z. */
   roofZ: readonly [number, number];
+  /** Windshield: base [y, z] of its centre line and its widths at the base and the top (`windshieldTop`). */
+  windshield: { base: YZ; wBase: number; wTop: number };
   windshieldTop: YZ;
+  /** B-pillar z band. */
+  bPillar: { rear: number; front: number };
+  /** Side glass sill: its half-width, and its height as [z, y] stations in ascending z (linear between them, held past the ends). */
+  belt: { x: number; y: readonly (readonly [number, number])[] };
+  /** The body side's lowest line (m); under it the sill turns in to the floor pan at `dims.rideHeight`. */
+  rocker: { y: number };
+  /** Wheel-arch opening radius (m) about each hub. */
+  arch: { radius: number };
+  /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. */
+  hood: { z0: number; z1: number; origin: YZ };
+  bumpers: { front: BumperSpec; rear: BumperSpec };
   rearGlass: GlassQuad;
   /** Side glass behind the B-pillar: rear edge z at the belt and at the top. */
   quarter: { zRearBot: number; zRearTop: number };
@@ -111,4 +135,5 @@ export const CAR_STYLES: Readonly<Record<CarStyleId, BodyStyle>> = {
   coupe: COUPE,
   pickup: PICKUP,
   police: POLICE,
+  monster: MONSTER,
 };

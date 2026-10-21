@@ -1,9 +1,19 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { CABIN_TUB, HEAD_LAMP, PLATFORM_WHEEL, st } from "./platform.ts";
+import { CABIN_TUB, HEAD_LAMP, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
 
 export const SEDAN: BodyStyle = {
   id: "sedan",
-  dims: { wheelbase: 2.5, overhang: { front: 0.796, rear: 0.921 }, track: 1.4, width: 1.64, height: 1.337, rideHeight: 0.165, wheel: PLATFORM_WHEEL },
+  dims: { wheelbase: 2.5, overhang: { front: 0.796, rear: 0.921 }, track: 1.4, width: 1.64, height: 1.337, rideHeight: 0.165, wheel: { radius: 0.338, width: PLATFORM_WHEEL.width } },
+  windshield: { base: [0.93, 0.9], wBase: 1.3, wTop: 1.1 },
+  bPillar: { rear: -0.35, front: -0.26 },
+  belt: { x: 0.74, y: [[-1.12, 0.99], [-0.9, 0.95], [0.76, 0.89]] },
+  rocker: { y: 0.21 },
+  arch: { radius: 0.405 },
+  hood: { z0: 0.88, z1: 1.97, origin: [0.81, 0.86] },
+  bumpers: {
+    front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.4, z: 1.96 }, span: 0.74 },
+    rear: { ...PLATFORM_HARDPOINTS.bumpers.rear, seat: { y: 0.45, z: 2.08 }, span: 0.76 },
+  },
   profile: [
     st(-2.11, 0.64, 0.93),
     st(-2.03, 0.71, 0.975),
