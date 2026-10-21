@@ -1,5 +1,5 @@
 import { carSprayLayout, SPRAY_FACE, SPRAY_PALETTE, type SprayLayout, type SprayPaint } from "../match/look-data.ts";
-import { beltY, DOOR_Z0, DOOR_Z1 } from "../vehicle/car-mesh.ts";
+import { beltY } from "../vehicle/car-lines.ts";
 import { COP_LIVERY } from "../vehicle/car-styles/police.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
 import { SprayBitmap } from "./spray.ts";
@@ -65,8 +65,8 @@ function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
   const [, yMin, zMin] = layout.min;
   const [, yMax, zMax] = layout.max;
   const sill = style.rocker.y + SILL;
-  const doorFront = DOOR_Z1;
-  const doorRear = style.rearDoorSeam ?? DOOR_Z0;
+  const [doorCut, doorFront] = style.door.aperture;
+  const doorRear = style.rearDoorSeam ?? doorCut;
   const glassFront = style.windshield.base[1];
   const glassRear = style.rearGlass.base[1];
   const wordMid = (style.bPillar.rear + style.bPillar.front) / 2;
