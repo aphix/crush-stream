@@ -16,6 +16,7 @@ import { C_GRIP, C_NY, C_OWNER, HIT_SIZE, stirNear } from "../world/surfaces.ts"
 import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { TyreSkin } from "./car-tyre-skin.ts";
 import { clearDents } from "./loose-dent.ts";
+import { clearShape } from "./loose-step.ts";
 import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CageRig } from "./car-cage-rig.ts";
@@ -218,6 +219,7 @@ export class DeformableCar extends CarParts {
         loose.velocity.set(0, 0, 0);
         loose.angular.set(0, 0, 0);
       }
+      clearShape(loose.shape);
       const rest = WHEEL_POS[i]!;
       w.position.set(rest[0], rest[1], rest[2]);
       w.rotation.set(0, 0, 0);
@@ -260,6 +262,7 @@ export class DeformableCar extends CarParts {
       p.object.visible = true;
       p.velocity.set(0, 0, 0);
       p.angular.set(0, 0, 0);
+      clearShape(p.shape);
     }
     this.resetWear();
     for (const g of this.glassPanes) this.resetGlass(g);

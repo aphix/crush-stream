@@ -79,6 +79,20 @@ export function newLooseShape(): LooseShape {
   return { points: new Float64Array(3 * SHAPE_POINTS), count: 0, centre: new THREE.Vector3(), invI: new THREE.Vector3(), reach: 0, asleep: false, sleepX: 0, sleepZ: 0, airborne: false, restFor: 0 };
 }
 
+/** `shape` as `newLooseShape` made it: not measured, awake, no sleep place. A body back on its car (`resetVisual`) flies afresh when next torn, as a new car's would. */
+export function clearShape(shape: LooseShape): void {
+  shape.points.fill(0);
+  shape.count = 0;
+  shape.centre.set(0, 0, 0);
+  shape.invI.set(0, 0, 0);
+  shape.reach = 0;
+  shape.asleep = false;
+  shape.sleepX = 0;
+  shape.sleepZ = 0;
+  shape.airborne = false;
+  shape.restFor = 0;
+}
+
 /** The thinnest a box's half extent is taken (m): a sheet of no thickness would have no spin about its own length. */
 const MIN_HALF = 0.01;
 const _box = new THREE.Box3();
