@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { HEAD_LAMP, PLATFORM_HARDPOINTS, st } from "./platform.ts";
+import { PLATFORM_HARDPOINTS, st } from "./platform.ts";
 
 const { bumpers } = PLATFORM_HARDPOINTS;
 /** Flat chrome bar over a black valance: the bar 13 cm tall and 9 cm proud, the valance 7 cm under it ([y, out] m, top to bottom). */
@@ -25,11 +25,11 @@ export const PICKUP: BodyStyle = {
   belt: { x: 0.73, y: [[0, 1.15]] },
   rocker: { y: 0.42 },
   underside: [[-2.17, 0.52], [-1.96, 0.42], [-1.75, 0.38], [-1.5, 0.34], [1.6, 0.34], [1.76, 0.35], [1.93, 0.38]],
-  door: { hingeX: 0.74, hingeY: 0.79, hingeZ: 0.7, length: 0.93, halfHeight: 0.39, mirrorY: 0.37, mirrorZ: 0.08, mirrorReach: 0.08, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69] },
+  door: { hingeX: 0.74, hingeY: 0.79, hingeZ: 0.7, length: 0.93, halfHeight: 0.39, mirrorY: 0.34, mirrorZ: 0.08, mirrorReach: 0.08, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69] },
   aPillarFoot: 0.62,
   bPillar: { rear: -0.46, front: -0.27 },
   arch: { radius: 0.46 },
-  hood: { z0: 0.92, z1: 1.94, origin: [1.2, 0.9] },
+  hood: { z0: 0.92, z1: 1.9, origin: [1.2, 0.9] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.76, wrap: { from: 0.3, back: 0.1 }, fascia: TRUCK_FRONT_FASCIA },
     rear: { ...bumpers.rear, seat: { y: 0.57, z: 2.13 }, span: 0.74, wrap: { from: 0.65, back: 0.05 } },
@@ -59,7 +59,8 @@ export const PICKUP: BodyStyle = {
   tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
   rearDoorSeam: null,
   boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15] },
-  lamps: { head: HEAD_LAMP, tail: [0.7, 0.86] },
+  lamps: { head: [0.4, 0.82], tail: [0.58, 0.86] },
+  camera: { hood: [1.42, 1.25], third: { dist: 6.4, height: 2.3, aimUp: 1.2 }, far: { dist: 10.3, height: 3.6, aimUp: 1.35 } },
   details: {
     lines: [
       { view: "side", points: [[0.706, 1.148], [0.699, 0.421]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },

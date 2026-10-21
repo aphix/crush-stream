@@ -149,11 +149,13 @@ describe("given every body style's spec dimensions (`BodyStyle.dims`)", () => {
   for (const id of CAR_STYLE_IDS) {
     const d = CAR_STYLES[id].dims;
 
-    it(`when a ${id} is built, then its drawn shell's nose, tail, width, roof and floor stand where its dims put them, within ${DIMS_TOL * 1000} mm`, () => {
+    it(`when a ${id} is built, then its drawn shell's nose, tail, width and roof, and its body's floor pan, stand where its dims put them, within ${DIMS_TOL * 1000} mm`, () => {
       const b = shellBox(cars[id]);
+      // The floor is the body's (a bumper may hang under it: the monster's).
+      const floor = new THREE.Box3().setFromObject(cars[id].body).min.y;
       const half = d.wheelbase / 2;
       assertSameNumbers(
-        [b.max.z, b.min.z, b.max.x - b.min.x, b.max.y, b.min.y],
+        [b.max.z, b.min.z, b.max.x - b.min.x, b.max.y, floor],
         [half + d.overhang.front, -half - d.overhang.rear, d.width, d.height, d.rideHeight],
         `${id} nose, tail, width, roof, floor`,
         DIMS_TOL,
@@ -537,7 +539,8 @@ describe("given a body style's H2 hardpoints", () => {
     const [drawn, stock] = [makeGreenhouseFrame(moved, "drawn"), makeGreenhouseFrame(hatch, "drawn")];
     assert.equal(drawn.length - stock.length, 2, "one fill a side");
     const fill = partBox(drawn[drawn.length - 3]!);
-    assert.ok(Math.abs(fill.min.y - yRear) < 1e-4 && fill.max.y > glassTopY(zFront, hatch) - 1e-4, `right fill spans y ${fill.min.y}..${fill.max.y}: from the glass top ${yRear} up to the cant line`);
+    const low = Math.min(yRear, yFront);
+    assert.ok(Math.abs(fill.min.y - low) < 1e-4 && fill.max.y > glassTopY(zFront, hatch) - 1e-4, `right fill spans y ${fill.min.y}..${fill.max.y}: from the glass top's low end ${low} up to the cant line`);
     const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join("|");
     assert.ok(cage(moved) === cage(hatch), "the cage greenhouse is unchanged");
   });
