@@ -96,6 +96,8 @@ function installProbe() {
   if (window.__bench) return true;
   const acc = { tick: 0, physics: 0, deform: 0, render: 0, frames: 0, intervals: [] };
   let last = 0;
+  // renderer.info counts a whole frame (the mark map and every post pass): three's per-render() reset is held off and the probe resets per tick.
+  e.renderer.info.autoReset = false;
   const wrap = (obj, key, bucket) => {
     const orig = obj[key];
     obj[key] = function (...args) {
@@ -109,6 +111,7 @@ function installProbe() {
   };
   const origTick = e.tickInner;
   e.tickInner = function (now) {
+    e.renderer.info.reset();
     const t0 = performance.now();
     try {
       return origTick.call(this, now);

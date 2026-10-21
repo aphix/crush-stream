@@ -35,7 +35,8 @@ const POST_TIERS = ["low", "high"] as const;
 const STRENGTH = 0.65;
 
 describe("given the post chain on a headless renderer and a print look's strength", () => {
-  const post = new PostFX(new THREE.WebGLRenderer({ canvas: element() }));
+  const renderer = new THREE.WebGLRenderer({ canvas: element() });
+  const post = new PostFX(renderer);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera();
   for (const look of PRINT_LOOKS) {
@@ -54,4 +55,14 @@ describe("given the post chain on a headless renderer and a print look's strengt
       });
     }
   }
+  it("leaves renderer.info's reset to whoever counts the frame", () => {
+    for (const tier of POST_TIERS) {
+      post.setTier(tier);
+      for (const hold of [false, true]) {
+        renderer.info.autoReset = hold;
+        post.render(scene, camera, 1 / FRAME_HZ);
+        assert.equal(renderer.info.autoReset, hold, `${tier} tier changed autoReset from ${hold}`);
+      }
+    }
+  });
 });

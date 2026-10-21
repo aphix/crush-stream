@@ -413,9 +413,6 @@ export class PostFX {
       return;
     }
     const spec = TIER[this.tierNow];
-    // Several render() calls make up one frame: keep renderer.info a whole-frame count.
-    r.info.autoReset = false;
-    r.info.reset();
     r.setRenderTarget(this.sceneRT);
     r.render(scene, camera);
 
@@ -465,7 +462,6 @@ export class PostFX {
     u.uHatch!.value = this.hatch;
     u.uPhase!.value = (u.uPhase!.value as number + GOLDEN) % 1;
     this.blit(composite, null);
-    r.info.autoReset = true;
   }
 
   dispose(): void {
