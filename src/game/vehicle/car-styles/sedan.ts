@@ -15,7 +15,7 @@ export const SEDAN: BodyStyle = {
     front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.34, z: 1.965 }, span: 0.74, wrap: { from: 0.33, back: 0.242 } },
     rear: { ...PLATFORM_HARDPOINTS.bumpers.rear, seat: { y: 0.52, z: 2.088 }, span: 0.76, wrap: { from: 0.3, back: 0.25 } },
   },
-  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.4, mirrorZ: 0.2, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74] },
+  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74] },
   aPillarFoot: 0.93,
   aPillarTop: 0.08,
   glassTop: 0.05,
