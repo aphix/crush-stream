@@ -89,7 +89,10 @@ describe("given every car body style, whose panels are cut from each body's own 
       return Math.max(...[...r.verts].map((v) => pos.getZ(v)));
     };
     assert.ok(front("sedan") < -0.5, `sedan quarter reaches z=${front("sedan")}, past its rear door`);
-    assert.ok(front("coupe") > -0.15 && front("pickup") > -0.15, `two-door quarters start at z=${front("coupe")} / ${front("pickup")}, behind the door`);
+    for (const id of ["coupe", "pickup"] as const) {
+      const seam = CAR_STYLES[id].door.aperture[0] - 0.02;
+      assert.ok(front(id) > seam, `${id} two-door quarter starts at z=${front(id)}, not behind its door (${seam})`);
+    }
   });
 
   it("when the sedan's quarter panel is shelled flat and then bent, then the flat shell lies on the skin (4 mm proud, its sheet 2 cm behind) and the bent panel peels at its leading edge and holds at the tail", () => {

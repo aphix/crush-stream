@@ -8,6 +8,7 @@ import { G, GQ } from "../world/ground-clock.ts";
 import { CRASH, hypot2 } from "../deform/physics-util.ts";
 import { droop } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift } from "./car-cage-rig.ts";
@@ -427,7 +428,8 @@ export function wheelsAt(car: DeformableCar, within: number): number {
     _hub[0] = p.x + _e[0]! * hx + _e[3]! * r + _e[6]! * hz;
     _hub[1] = p.y + _e[1]! * hx + _e[4]! * r + _e[7]! * hz;
     _hub[2] = p.z + _e[2]! * hx + _e[5]! * r + _e[8]! * hz;
-    wheelContact(_hub, _e, sc, car.slot, _hit);
+    // The footprint's tread rings are the platform tyre's: scaled to this car's radius, so its tread reaches the ground its hub stands over.
+    wheelContact(_hub, _e, sc * (car.frame.rig.tyre.r / PLATFORM_TYRE.r), car.slot, _hit);
     for (let k = 0; k < HIT_SIZE; k++) hit[o + k] = _hit[k]!;
     if (-_hit[C_TOUCH]! <= within && _hit[C_H]! > NO_FLOOR) mask |= 1 << i;
   }

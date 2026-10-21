@@ -10,6 +10,8 @@ import { PLATFORM_RIG, type RigTables } from "../deform/deform-rig.ts";
 import type { FaceBands } from "../deform/load-crush.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { PLATFORM_CABIN, PLATFORM_DIMS, PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
+import { CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
+import { floorY } from "./car-lines.ts";
 
 type V3 = readonly [number, number, number];
 type Dims = BodyStyle["dims"];
@@ -152,9 +154,11 @@ function bootCage(boot: BodyStyle["boot"], base: CageSpec, xScale: number): Cage
     const P = PLATFORM_CABIN.boot;
     return moved(base, xScale, lifted(boot.origin[0] - P.origin[0]), spanned(P.z1, P.z0, boot.z1, boot.z0));
   }
+  // A leaning tailgate's foot (`z0`) stands behind or ahead of its top edge: the cage spans both.
   const [y, z] = boot.origin;
+  const foot = boot.z0 ?? z;
   const x = base.max[0] + base.max[0] * (xScale - 1);
-  return { ...base, min: [-x, boot.y0 - TAILGATE_CAGE.below, z - TAILGATE_CAGE.back], max: [x, y + TAILGATE_CAGE.above, z + TAILGATE_CAGE.ahead] };
+  return { ...base, min: [-x, boot.y0 - TAILGATE_CAGE.below, Math.min(z, foot) - TAILGATE_CAGE.back], max: [x, y + TAILGATE_CAGE.above, Math.max(z, foot) + TAILGATE_CAGE.ahead] };
 }
 
 /** The cages wrapping the cabin's panels, the hood and the boot: carried by the car's own panel offsets from the platform's, not by the body's warp. */
@@ -222,7 +226,7 @@ function rigOf(style: BodyStyle, w: Warp, wheels: readonly V3[]): RigTables {
     sensors,
     masses,
     tyre: { r, halfW: style.dims.wheel.width / 2 },
-    massScale: P.massScale,
+    massScale: CLASSES[STYLE_CLASS[style.id]].crashMass,
     archTop: P.archTop + (r - PLATFORM_TYRE.r) + arch,
     archPlant: P.archPlant + arch,
     roofClampY: P.roofClampY + (named(cages, "roof").min[1] - named(P.cages, "roof").min[1]),
@@ -302,7 +306,12 @@ function buildFrame(style: BodyStyle): CarFrame {
   const grow = (lengthOf(d) - lengthOf(P)) / 2;
   const half = { x: PLATFORM_HALF.x + (d.width - P.width) / 2, y: PLATFORM_HALF.y + (d.height - P.height) / 2, z: PLATFORM_HALF.z + grow };
   const comY = PLATFORM_COM_Y + (rise + (d.height - P.height)) / 2;
-  const underside = PLATFORM_UNDERSIDE.map(([x, z, h]): V3 => [x + dxOf(w, x), z + dzOf(w, z), h + rise]);
+  // The underside rides the style's own floor line (`floorY`: its rideHeight, or its stations where the floor rises to a nose or a tail).
+  const lifted = (z: number): number => floorY(z, style) - P.rideHeight;
+  const underside = PLATFORM_UNDERSIDE.map(([x, z, h]): V3 => {
+    const at = z + dzOf(w, z);
+    return [x + dxOf(w, x), at, h + lifted(at)];
+  });
   const pan = panOf(underside);
   return {
     rig: rigOf(style, w, wheels),
@@ -317,10 +326,10 @@ function buildFrame(style: BodyStyle): CarFrame {
     centre: new THREE.Vector3(0, comY, 0),
     invI: new THREE.Vector3(3 / (half.y ** 2 + half.z ** 2), 3 / (half.x ** 2 + half.z ** 2), 3 / (half.x ** 2 + half.y ** 2)),
     underside,
-    sill: PLATFORM_SILL.map((h) => h + rise),
+    sill: PLATFORM_SILL.map((h, i) => h + lifted(wheels[i]![2])),
     pan,
     belly: bellyOf(w, underside, pan),
-    hullUnder: Float64Array.from([...underside.flat(), ...[-1, 1].flatMap((sx) => [-1, 1].flatMap((sz) => [sx * half.x, sz * half.z, BUMPER_UNDER + rise]))]),
+    hullUnder: Float64Array.from([...underside.flat(), ...[-1, 1].flatMap((sx) => [-1, 1].flatMap((sz) => [sx * half.x, sz * half.z, BUMPER_UNDER + lifted(sz * half.z)]))]),
     lattice: { x: PLATFORM_LATTICE.x + Math.max(0, half.x - PLATFORM_HALF.x), z: PLATFORM_LATTICE.z + Math.max(0, half.z - PLATFORM_HALF.z) },
   };
 }
