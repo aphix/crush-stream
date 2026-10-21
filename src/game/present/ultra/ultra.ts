@@ -83,6 +83,9 @@ function uploadOnce(renderer: THREE.WebGLRenderer, tex: THREE.Texture<ImageBitma
  */
 export class Ultra {
   private on = false;
+  private worn = false;
+  /** The scene's environment while Ultra's is worn (`wear`). */
+  private envUnder: THREE.Texture | null = null;
   private readonly tilings = new Map<string, Tiling>();
   private readonly procGain = new WeakMap<THREE.Texture, THREE.Color>();
   private readonly sunDir = new THREE.Vector3();
@@ -90,7 +93,7 @@ export class Ultra {
   private readonly env: THREE.Texture;
   private readonly sets: Record<SurfaceRole, PbrSet>;
   /** What the engine had before `enable`; null while off. */
-  private before: { env: THREE.Texture | null; exposure: number; radius: number } | null = null;
+  private before: { exposure: number; radius: number } | null = null;
 
   private constructor(host: UltraHost, env: THREE.Texture, sets: Record<SurfaceRole, PbrSet>) {
     this.host = host;
@@ -120,17 +123,16 @@ export class Ultra {
     if (this.on) return;
     const { renderer, scene, stage } = this.host;
     const shadow = stage.sun.shadow;
-    this.before = { env: scene.environment, exposure: renderer.toneMappingExposure, radius: shadow.radius };
+    this.before = { exposure: renderer.toneMappingExposure, radius: shadow.radius };
     this.on = true;
-    scene.environment = this.env;
+    this.wear(true);
     scene.environmentRotation.y = envYaw(this.sunDir.copy(stage.sun.position).sub(stage.sun.target.position));
     stage.envGain = LOOK.envGain;
     scene.environmentIntensity = stage.envIntensity;
     renderer.toneMappingExposure = LOOK.exposure;
     stage.setUltraShadow(LOOK.shadow.mapSize);
     shadow.radius = LOOK.shadow.radius;
-    // The surfaces are dressed in the warm's first step (`dress`), so their programs compile with everything else in it.
-    this.host.queueWarm();
+
   }
 
   disable(): void {
@@ -140,22 +142,42 @@ export class Ultra {
     this.before = null;
     const { renderer, scene, stage } = this.host;
     const shadow = stage.sun.shadow;
-    scene.environment = before.env;
+    this.wear(false);
     scene.environmentRotation.set(0, 0, 0);
     stage.envGain = 1;
     scene.environmentIntensity = stage.envIntensity;
     renderer.toneMappingExposure = before.exposure;
     stage.setUltraShadow(0);
     shadow.radius = before.radius;
-    scene.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh) for (const m of [(o as THREE.Mesh).material].flat()) this.undress(m);
-    });
+
     this.host.queueWarm();
   }
 
-  /** Swap the photographic set into every surface material in the scene that does not wear it yet (a course loaded while Ultra is on). */
+  /**
+   * Put on (or take off) what keys Ultra's programs: the sky as the environment and the photographic surfaces. The pick's warm-up wears it
+   * to link and draw them while the frames still draw the current look (`EngineWarm.warmUltra`); while enabled it stays on, so a second
+   * pick's warm-up ending after the first pick's switch leaves the look on.
+   */
+  wear(on: boolean): void {
+    if (on === this.worn || (!on && this.on)) return;
+    this.worn = on;
+    const scene = this.host.scene;
+    if (on) {
+      this.envUnder = scene.environment;
+      scene.environment = this.env;
+      this.dress();
+      return;
+    }
+    scene.environment = this.envUnder;
+    this.envUnder = null;
+    scene.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) for (const m of [(o as THREE.Mesh).material].flat()) this.undress(m);
+    });
+  }
+
+  /** Swap the photographic set into every surface material in the scene that does not wear it yet (a course loaded while Ultra is worn). */
   dress(): void {
-    if (!this.on) return;
+    if (!this.worn) return;
     this.host.scene.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) for (const m of [(o as THREE.Mesh).material].flat()) this.dressMaterial(m);
     });

@@ -4,6 +4,15 @@ import { applyCarFinish, finishedMaterials } from "../vehicle/car-finish.ts";
 import { warmCrashPath } from "./world-step.ts";
 import { loadSkinKernel, skinKernel } from "../deform/skin-kernel.ts";
 import { EngineCore } from "./engine-core.ts";
+import type { Ultra } from "../present/ultra/ultra.ts";
+
+/** Ms between polls of a parallel link, three's `compileAsync` interval. */
+const LINK_POLL_MS = 10;
+// Executor form: the tsconfig lib predates `Promise.withResolvers`.
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/** three's `WebGLProgram.isReady` (KHR_parallel_shader_compile's completion status), missing from its types. */
+const isLinked = (program: unknown): boolean =>
+  typeof program !== "object" || program === null || !("isReady" in program) || typeof program.isReady !== "function" || program.isReady() === true;
 
 /**
  * Shader warm-up: links every program before the loop runs, then warms new scene content as it appears.
@@ -69,23 +78,41 @@ export abstract class EngineWarm extends EngineCore {
    * left each program's first draw mid-race to check its link and fetch its uniform locations: synchronous GPU
    * round trips, 110–340 ms frames. The draws also link what compile() skips (shadow-depth variants of hidden
    * or far meshes) and upload every texture. Both car finish states are warmed whatever the tier (`eachFinish`).
+   * With `wear`, the scene is compiled and drawn wearing that look (`wear(true)`) and between those steps wears its own, so the frames
+   * in between draw the current look while the worn one links.
    */
-  private async warmScene(): Promise<void> {
+  private async warmScene(wear: ((on: boolean) => void) | null = null): Promise<void> {
     const before = new Set(this.renderer.info.programs ?? []);
     this.scene.unparkAll();
     const post = this.cine.post;
     const jobs: Promise<unknown>[] = [];
+    wear?.(true);
     this.eachFinish(
       () => jobs.push(post.warm(this.scene, this.camera, [[this.cine.marks.scene, this.cine.marks.camera]])),
       () => jobs.push(post.warmHdr(this.scene, this.camera)),
     );
+    if (wear) {
+      wear(false);
+      jobs.push(this.linkedSince(before));
+    }
     await Promise.all(jobs);
     if (this.disposed) return;
     // After boot every known program has drawn; a whole scene's draw costs the GPU process 0.2–1 s, so only the meshes
     // whose material gained a program draw (the purse pool, a course's art), and content that brought none skips it.
     const gained = this.warming ? null : this.materialsWithNewPrograms(before);
     if (gained?.size === 0) return;
+    wear?.(true);
     this.drawWarm(gained);
+    wear?.(false);
+  }
+
+  /**
+   * Resolves once every program made since `before` has linked. three's `compileAsync` polls each material's current program, which a
+   * frame drawing another look sets back to that look's, so it resolves before a worn look's programs are in.
+   */
+  private async linkedSince(before: ReadonlySet<unknown>): Promise<void> {
+    const gl = this.renderer.getContext();
+    while (!this.disposed && !gl.isContextLost() && (this.renderer.info.programs ?? []).some((p) => !before.has(p) && !isLinked(p))) await sleep(LINK_POLL_MS);
   }
 
   /** Every material in the scene holding a program that `before` did not (three keeps a material's programs by key). */
@@ -185,5 +212,18 @@ export abstract class EngineWarm extends EngineCore {
         .catch((err: unknown) => console.error("Crush Stream program warm-up failed", err))
         .finally(() => this.warmsInFlight--);
     });
+  }
+
+  /**
+   * Link and draw `ultra`'s programs (its sky as the environment, its dressed surfaces) while the frames still draw the current look, so
+   * the switch after it links nothing. A context restore disposes it meanwhile (the restore's pick loads another): then it is not worn again.
+   */
+  protected async warmUltra(ultra: Ultra): Promise<void> {
+    this.warmsInFlight++;
+    await this.warmScene((on) => {
+      if (this.cine.ultra === ultra) ultra.wear(on);
+    })
+      .catch((err: unknown) => console.error("Crush Stream Ultra warm-up failed", err))
+      .finally(() => this.warmsInFlight--);
   }
 }

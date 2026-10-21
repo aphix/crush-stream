@@ -132,11 +132,11 @@ export abstract class EngineInput extends EngineRigs {
 
   /**
    * Cinematic FX quality (`FX_TIERS`): off and minimal draw straight to the canvas; minimal adds tyre marks and the crash cam, low / high / ultra the
-   * post chain. The user's pick turns the auto tier off. Ultra is fetched on its first pick (`loadUltra`) and the tier changes when it is in.
+   * post chain. The user's pick turns the auto tier off. A pick of Ultra switches once it is loaded and warmed (`pickUltra`), a few frames later.
    */
   setFxTier(tier: FxTier): void {
     this.ultraWanted = tier === "ultra";
-    if (tier === "ultra" && this.cine.ultra === null) {
+    if (tier === "ultra" && this.cine.tier !== "ultra") {
       void this.pickUltra();
       return;
     }
@@ -193,13 +193,18 @@ export abstract class EngineInput extends EngineRigs {
     return this.ultraLoad;
   }
 
-  /** A pick of Ultra: load it, then switch if it is still the player's last pick. */
+  /**
+   * A pick of Ultra: load it (its first pick), link and draw its programs while the frames draw the current look (`warmUltra`: the scene
+   * may hold content Ultra never wore since its last pick), then switch if it is still the player's last pick and still the loaded look.
+   */
   private async pickUltra(): Promise<void> {
     this.fxLoading = true;
     this.emitHud();
-    const loaded = await this.loadUltra();
+    await this.loadUltra();
+    const ultra = this.cine.ultra;
+    if (this.ultraWanted && ultra !== null) await this.warmUltra(ultra);
     this.fxLoading = false;
-    if (loaded && this.ultraWanted) {
+    if (this.ultraWanted && ultra !== null && this.cine.ultra === ultra && this.cine.tier !== "ultra") {
       this.autoFx.auto = false;
       this.cine.setTier("ultra");
     }

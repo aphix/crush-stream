@@ -206,6 +206,8 @@ await engine.ready;
 const readyMs = Math.round(performance.now() - bootAt);
 if (tier === "ultra" && !(await engine.loadUltra())) throw new Error("headless-frame: the Ultra look did not load (see the console)");
 engine.setFxTier(tier);
+// A pick of Ultra switches once its warm-up has linked the look (`pickUltra`).
+while (engine.cine.tier !== tier) await sleep(SETTLE_POLL_MS);
 // The tier set by hand turns Auto off, so the detail governor leaves the rung put from here.
 if (detail === "off") engine["detail"].setDistances(Infinity, Infinity);
 else if (detail !== undefined) engine["detail"].setLevel(detail);
