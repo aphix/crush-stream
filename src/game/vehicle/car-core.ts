@@ -10,7 +10,7 @@ import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } fro
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
-import { makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import {
   LIGHT_BAR_FOOT,
   LIGHT_BAR_LENS,
@@ -543,10 +543,10 @@ export abstract class CarCore {
     addPane("windshield", new THREE.Mesh(makeWindshield(style), glassMat), this.group, ["roof", "bonnet"], "glassFront");
     addPane("rear", new THREE.Mesh(makeRearGlass(style), glassMat), this.group, ["roof", "boot"], "glassRear");
     const sideL = new THREE.Mesh(makeSideGlass(-1, style), glassMat);
-    sideL.position.set(0.02, 0.52, -0.28);
+    sideL.position.set(-DOOR_GLASS_SEAT.x, DOOR_GLASS_SEAT.y, DOOR_GLASS_SEAT.z);
     addPane("doorL", sideL, this.doorL, ["doorLeft", "roof"]);
     const sideR = new THREE.Mesh(makeSideGlass(1, style), glassMat);
-    sideR.position.set(-0.02, 0.52, -0.28);
+    sideR.position.set(DOOR_GLASS_SEAT.x, DOOR_GLASS_SEAT.y, DOOR_GLASS_SEAT.z);
     addPane("doorR", sideR, this.doorR, ["doorRight", "roof"]);
     addPane("quarterL", new THREE.Mesh(makeRearSideGlass(-1, style), glassMat), this.group, ["roof", "doorLeft"]);
     addPane("quarterR", new THREE.Mesh(makeRearSideGlass(1, style), glassMat), this.group, ["roof", "doorRight"]);
