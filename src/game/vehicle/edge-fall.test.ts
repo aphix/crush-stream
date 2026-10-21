@@ -2,7 +2,6 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { beginFakeFall, type DeformableCar } from "./car.ts";
-import { COM_Y } from "./car-air-body.ts";
 import { FREEWHEEL, makeCar, makeWorld, runPair, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { edgeAction, FAKE_DEPTH, FLEET_MIN_SEP, fleetEmptied, layoutFleet, respawnSlot, RESPAWN_S, VAPOR_DEPTH } from "../scenes/fleet.ts";
 import { DISC_GROUND, DISC_RADIUS, FLAT_GROUND, setGround, type Ground } from "../world/ground.ts";
@@ -128,8 +127,8 @@ describe("given the fleet course's disc-shaped ground (a round pad with a rim pa
     for (const m of dynamic) c.addScaledVector(m.world, m.mass / mass);
     car.velocity.set(3, -2, 5);
     car.angular.copy(spin);
-    const com = new THREE.Vector3(0, COM_Y, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
-    // The wreck's body turns about its masses' centroid; the intact body about `COM_Y`: the velocity there is v + spin × (centre − centroid).
+    const com = new THREE.Vector3(0, car.frame.comY, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
+    // The wreck's body turns about its masses' centroid; the intact body about `frame.comY`: the velocity there is v + spin × (centre − centroid).
     const want = car.velocity.clone().add(spin.clone().cross(com.clone().sub(c)));
     beginFakeFall(car);
     assert.ok(car.falling && !car.deform.massActive);

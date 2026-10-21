@@ -15,7 +15,6 @@ import { CrashRecorder } from "./engine-record.ts";
 import { ClipSim } from "./engine-replay.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
 import { LOOSE_BODIES, PART_SLOTS } from "../vehicle/part-state.ts";
 
 /** The engine's step is a float32 (`Math.fround`), which the recorder stores whole: the replay runs the very step the live sim ran. */
@@ -40,7 +39,7 @@ const PASSER_SPEED = 20;
 const FAR_LANE = 40;
 /** How far (m) the passer's flank passes outside both wrecks' outlines. */
 const WRECK_CLEAR = 0.4;
-/** Steps a part lies asleep before the passer is nearest it: the passer's roof reaches it about `CAR_HALF.z` + its reach (under 3.5 m, 0.15 s) before. */
+/** Steps a part lies asleep before the passer is nearest it: the passer's roof reaches it about its half length + the part's reach (under 3.5 m, 0.15 s) before. */
 const WAKE_LEAD = FINE_HZ / 4;
 
 /** A clip car's torn part or popped wheel lying asleep with nothing stirring it from step `from` through `to`: where (x, z) and its reach (m). */
@@ -164,18 +163,20 @@ function passerBy(dry: Recorded): { x: number; z: number } | null {
   for (const c of [A, B]) {
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
-        corner.set(sx * CAR_HALF.x, 0, sz * CAR_HALF.z).applyQuaternion(dry.cars[c]!.group.quaternion).add(dry.cars[c]!.group.position);
+        const { half } = dry.cars[c]!.frame;
+        corner.set(sx * half.x, 0, sz * half.z).applyQuaternion(dry.cars[c]!.group.quaternion).add(dry.cars[c]!.group.position);
         wreckSide = Math.max(wreckSide, Math.abs(corner.z));
       }
     }
   }
+  const passerHalfW = dry.cars[PASSER]!.frame.half.x;
   let best: { x: number; z: number } | null = null;
   let span = 0;
   for (const r of dry.rests) {
     const from = r.from + WAKE_LEAD;
     const to = Math.min(r.to, end);
-    const lane = r.z + (r.z < 0 ? -1 : 1) * (CAR_HALF.x + r.reach / 2);
-    if (Math.abs(lane) - CAR_HALF.x < wreckSide + WRECK_CLEAR || to - from <= span) continue;
+    const lane = r.z + (r.z < 0 ? -1 : 1) * (passerHalfW + r.reach / 2);
+    if (Math.abs(lane) - passerHalfW < wreckSide + WRECK_CLEAR || to - from <= span) continue;
     const shift = r.x - dry.passerX[Math.round((from + to) / 2)]!;
     if (nearerOnTheWay(dry, shift, lane, Math.abs(lane - r.z))) continue;
     span = to - from;
@@ -249,7 +250,7 @@ describe("given a head-on recorded as a highlight, its torn parts lying asleep o
     assert.ok(s0 + clip.h.length > run.closest.step, "the passer comes by inside the clip");
     assert.ok(clip.partStirs.length >= 1, "no torn part was recorded woken");
     const { reached } = run;
-    assert.ok(reached.gap < CAR_HALF.x + reached.reach, `the passer came within ${reached.gap.toFixed(2)} m of a resting part, not within its reach`);
+    assert.ok(reached.gap < run.cars[PASSER]!.frame.half.x + reached.reach, `the passer came within ${reached.gap.toFixed(2)} m of a resting part, not within its reach`);
     const wakes = clip.partStirs.filter((x) => clip.cars[x.car]!.slot === reached.car && x.body === reached.body && s0 + x.step >= JOIN_STEP);
     assert.ok(wakes.length > 0 && s0 + wakes[0]!.step <= reached.step, `the part the passer reached was woken at ${wakes.map((x) => s0 + x.step).join(",") || "no step"}, the passer nearest it at ${reached.step}`);
   });

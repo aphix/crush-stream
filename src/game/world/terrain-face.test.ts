@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { launch } from "../contact/crash-scenarios.test-util.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { MU_BODY } from "../vehicle/car-air-body.ts";
 import { EjectionWatch } from "../vehicle/ejection.ts";
 import { activeGround, Ground, NO_FLOOR, setGround } from "./ground.ts";
@@ -45,7 +46,7 @@ const HEIGHT = 2.7;
 const POINT_STOPS_BELOW = MU_BODY / Math.sqrt(1 + MU_BODY * MU_BODY);
 /** The sedan's nose lever from its centre of mass (m, forward and up: the belly's front row) and its inverse inertia about the pitch axis. */
 const LEVER = { x: 2.0, y: -0.52 };
-const INV_I_PITCH = 3 / (CAR_HALF.y ** 2 + CAR_HALF.z ** 2);
+const INV_I_PITCH = carFrame(CAR_STYLES.sedan).invI.x;
 /** The normal's up component below which the nose's friction stops the sedan dead: ny / nh = MU_BODY kt / kn, solved by bisection. */
 function stopsBelow(): number {
   let lo = 0;

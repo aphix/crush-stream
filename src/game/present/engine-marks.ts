@@ -96,9 +96,8 @@ void main() {
   gl_FragColor = vInk * (1.0 - smoothstep(0.45, 1.0, abs(vEdge)));
 }`;
 
-/** Wheel order matches `car.wheels` / `WHEEL_POS`: FL, FR, RL, RR. */
+/** Wheel order matches `car.wheels` / `frame.wheels`: FL, FR, RL, RR. */
 const HUBS = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
-const WHEEL_R = 0.32;
 const TYRE_W = 0.24;
 const GROOVE_W = 0.07;
 /** Rear-wheel sideways speed (m/s) where a slide starts to mark, at grip 1; a full-lock arcade turn stays under it. */
@@ -299,6 +298,7 @@ export class SkidMarks {
       const bodySlide = ramp(car.drive.slide, DRIVE_SLIDE_START, DRIVE_SLIDE_FULL);
       // The driven axles lay the launch stripes: a FWD car's fronts, a RWD car's rears, a 4WD car's all four.
       const driven = drivenAxles(CLASSES[carClass(car)]);
+      const tyreR = car.frame.rig.tyre.r;
       for (let k = 0; k < 4; k++) {
         const s = c * 4 + k;
         if (!car.group.visible) {
@@ -319,9 +319,9 @@ export class SkidMarks {
         // another car's roof is not on the mark map's floor), whatever moves the car: its drive, a wreck's masses, a netplay pose.
         _pq[PQ_X] = x;
         _pq[PQ_Z] = z;
-        _pq[PQ_Y] = _q.y - WHEEL_R;
+        _pq[PQ_Y] = _q.y - tyreR;
         pointContact(_pq, car.slot, _hit);
-        const gap = _q.y - WHEEL_R - _hit[C_H]!;
+        const gap = _q.y - tyreR - _hit[C_H]!;
         const grounded = gap < 0.14 && _hit[C_OWNER]! < 0;
         const grip = _hit[C_GRIP]!;
         const rear = k >= 2;
@@ -335,7 +335,7 @@ export class SkidMarks {
             rear ? bodySlide : bodySlide * 0.5,
           );
           slip = Math.max(slide, lock, (driven & (rear ? 2 : 1)) !== 0 ? spin : 0);
-        } else if (hadPrev && !jump && popped && gap < -WHEEL_R * 0.25 && vx * vx + vz * vz > 2) {
+        } else if (hadPrev && !jump && popped && gap < -tyreR * 0.25 && vx * vx + vz * vz > 2) {
           scrape = 1;
           slip = 0.9;
         }

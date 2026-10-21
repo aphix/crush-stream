@@ -2,11 +2,15 @@ import * as THREE from "three";
 import type { CrushBands } from "./physics-util.ts";
 import type { ShapeCluster, ShapeParticle } from "./shape-match.ts";
 import {
+  CAGES,
   MASS_SPECS,
+  PLATFORM_TYRE,
+  SENSORS,
   SHAPE_CLUSTERS,
   type BodyPartName,
   type CageSpec,
   type MassName,
+  type MassSpec,
   type SensorSpec,
 } from "../kernel/rig-spec.ts";
 import { DEFAULT_BUCKLE, DEFAULT_SQUASH } from "./constants.ts";
@@ -42,6 +46,15 @@ export interface RigOverrides {
   cages?: Partial<Record<BodyPartName, Pick<CageSpec, "min" | "max">>>;
   sensors?: Partial<Record<number, SensorSpec["rest"]>>;
 }
+/** A car's rig at rest: rig-spec's cages, crush sensors and masses placed on its body, and its tyre (m: radius along the car, half-width across). */
+export interface RigTables {
+  readonly cages: readonly CageSpec[];
+  readonly sensors: readonly SensorSpec[];
+  readonly masses: readonly MassSpec[];
+  readonly tyre: { readonly r: number; readonly halfW: number };
+}
+/** The tables as they stand: the platform every body shared. */
+export const PLATFORM_RIG: RigTables = { cages: CAGES, sensors: SENSORS, masses: MASS_SPECS, tyre: PLATFORM_TYRE };
 /** Depth (m) inside the chassisCell span's front/rear face over which non-cell skin weight blends back in. */
 const CELL_FACE_BLEND = 0.3;
 /** Largest non-cell skin weight at the span face (D1): the A-pillar foot still creases. */
@@ -101,7 +114,7 @@ export interface MassNode {
   clipping: boolean;
   popped: boolean;
   /** Car-frame push (m) a squeezing face (press plates, `pushMass` when bidirectional) has given a planted
-   *  hub: clampLocal pins it at rest + shove and pops it past WHEEL_DIAMETER. Pinned at rest, plates passed through the tyres. */
+   *  hub: clampLocal pins it at rest + shove and pops it past a wheel diameter. Pinned at rest, plates passed through the tyres. */
   shoveX: number;
   shoveZ: number;
   /** Permanent set (m) along the hit, from `baseX/baseZ`: crush this node can no longer spring back from. */
@@ -403,9 +416,9 @@ export abstract class DeformRig {
   readonly imprint = Float64Array.of(IMPRINT_NONE, 0, 0);
   protected readonly loadW: Float64Array;
   protected readonly loadDirty = new Uint8Array(1);
-  protected readonly rig: RigOverrides;
+  protected readonly rig: RigTables;
 
-  constructor(geometry: THREE.BufferGeometry, rig: RigOverrides = {}) {
+  constructor(geometry: THREE.BufferGeometry, rig: RigTables = PLATFORM_RIG) {
     this.rig = rig;
     const pos = geometry.getAttribute("position") as THREE.BufferAttribute;
     this.vertexCount = pos.count;

@@ -1,14 +1,15 @@
 import * as THREE from "three";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { makeHoodGeometry, makeTrunkGeometry, CAR_HALF } from "./car-mesh.ts";
+import { makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
 import { restSideProfile } from "./rest-mesh.test-util.ts";
 import { makeSideGlass, makeRearSideGlass, makeWindshield, makeRearGlass } from "./car-glass.ts";
 import { makeWheelGeometry, RUBBER, treadNormalMap } from "./car-materials.ts";
 import { FLAT_DEVIATION, mapBytes, SIDEWALL_RELIEF_MIN, strongestDeviationSampledAt } from "./tyre-map.test-util.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
+import { carFrame } from "./car-rig.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 
 function bbox(geo: THREE.BufferGeometry) {
   geo.computeBoundingBox();
@@ -82,8 +83,9 @@ describe("given the sedan's rest-pose body panels (chassis shell, hood, trunk an
   });
 
   it("when the car's collision half-size is read, then it matches the visual shell: 2.0 to 2.4 m half-length and 0.8 to 1.0 m half-width", () => {
-    assert.ok(CAR_HALF.z > 2.0 && CAR_HALF.z < 2.4);
-    assert.ok(CAR_HALF.x > 0.8 && CAR_HALF.x < 1.0);
+    const half = carFrame(CAR_STYLES.sedan).half;
+    assert.ok(half.z > 2.0 && half.z < 2.4);
+    assert.ok(half.x > 0.8 && half.x < 1.0);
   });
 
   it("when the hood and trunk panels are measured, then each is a shallow shell under 0.5 m tall, not a cabin", () => {
@@ -185,11 +187,12 @@ describe("given the sedan's wheel mesh (tyre, rim and hub)", () => {
   const nrm = geo.getAttribute("normal");
   const uv1 = geo.getAttribute("uv1");
   const radius = (i: number) => Math.hypot(pos.getY(i), pos.getZ(i));
+  const tyreR = carFrame(CAR_STYLES.sedan).rig.tyre.r;
 
   it("when the largest radius is measured, then the tread crown equals the rig's tyre radius within 1e-6 m, so the wheel neither floats nor sinks", () => {
     let r = 0;
     for (let i = 0; i < pos.count; i++) r = Math.max(r, radius(i));
-    assert.ok(Math.abs(r - TYRE_R) < 1e-6, `crown ${r} vs TYRE_R ${TYRE_R}`);
+    assert.ok(Math.abs(r - tyreR) < 1e-6, `crown ${r} vs tyre radius ${tyreR}`);
   });
 
   it("when the wheel's extent along the axle is measured, then it is mirror-symmetric across the axle plane within 1e-6 m and under 0.24 m wide, so one mesh serves the left and right wheels", () => {
@@ -199,7 +202,7 @@ describe("given the sedan's wheel mesh (tyre, rim and hub)", () => {
 
   it("when the normals of the tread vertices are read, then each points outward (more than 0.8 of the way), so the tyre does not render inside out", () => {
     for (let i = 0; i < pos.count; i++) {
-      if (radius(i) < TYRE_R - 0.002) continue;
+      if (radius(i) < tyreR - 0.002) continue;
       const out = (nrm.getY(i) * pos.getY(i) + nrm.getZ(i) * pos.getZ(i)) / radius(i);
       assert.ok(out > 0.8, `tread vertex ${i} normal points ${out.toFixed(2)} outward`);
     }

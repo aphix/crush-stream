@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { DeformableCar, WHEEL_POS } from "./car.ts";
+import { DeformableCar } from "./car.ts";
+import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { makeTrunkGeometry } from "./car-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
@@ -12,7 +13,6 @@ import { fleetStyle } from "../scenes/fleet.ts";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { TYRE_HALF_W } from "../deform/deform-contact.ts";
 import { LIGHT_BAR } from "./constants.ts";
 
 const PAINT = { body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" };
@@ -63,7 +63,7 @@ function panelClamp(deform: StreamedDeformation, geo: THREE.BufferGeometry, part
  *  cage solve's own breathing (≈5 cm on the base sedan), never off the body. */
 function roofSkinDrift(style: BodyStyle): number {
   const geo = makeChassisGeometry(style);
-  const d = new StreamedDeformation(geo, style.rig);
+  const d = new StreamedDeformation(geo, carFrame(style).rig);
   const attr = geo.getAttribute("position") as THREE.BufferAttribute;
   const rest = new Float32Array(attr.array as Float32Array);
   d.applyImpact(new THREE.Vector3(0, 0.4, 2), new THREE.Vector3(0, 0, -1), 4);
@@ -83,7 +83,7 @@ describe("given every body style, compared with the sedan that the shared platfo
 
   for (const id of CAR_STYLE_IDS) {
     it(`when a ${id} is built, then it keeps the sedan's wheel positions, and its length to within 0.12 m and its width to within 3 cm`, () => {
-      for (const [i, w] of cars[id].wheels.entries()) assertSameNumbers(w.position.toArray(), WHEEL_POS[i]!, `${id} wheel ${i}`);
+      for (const [i, w] of cars[id].wheels.entries()) assertSameNumbers(w.position.toArray(), carFrame(CAR_STYLES.sedan).wheels[i]!, `${id} wheel ${i}`);
       const b = chassisBox(CAR_STYLES[id]);
       const len = b.max.z - b.min.z;
       assert.ok(Math.abs(len - (sedan.max.z - sedan.min.z)) <= 0.12, `${id} length ${len}`);
@@ -133,7 +133,8 @@ describe("given every body style's spec dimensions (`BodyStyle.dims`)", () => {
     it(`when a ${id} is built, then its wheels sit on its wheelbase and track, each hub one tyre radius up, on tyres its dims' width`, () => {
       const hubs = cars[id].wheels.flatMap((w) => [Math.abs(w.position.x), w.position.y, Math.abs(w.position.z)]);
       assertSameNumbers(hubs, cars[id].wheels.flatMap(() => [d.track / 2, d.wheel.radius, d.wheelbase / 2]), `${id} hubs`, DIMS_TOL);
-      assert.ok(Math.abs(2 * TYRE_HALF_W - d.wheel.width) < DIMS_TOL, `${id} tyre width ${2 * TYRE_HALF_W} vs dims ${d.wheel.width}`);
+      const halfW = cars[id].frame.rig.tyre.halfW;
+      assert.ok(Math.abs(2 * halfW - d.wheel.width) < DIMS_TOL, `${id} tyre width ${2 * halfW} vs dims ${d.wheel.width}`);
     });
   }
 });
@@ -173,7 +174,7 @@ describe("given every body style's rig cage (the soft-body frame that wraps the 
     const style = CAR_STYLES[id];
 
     it(`when a ${id} is at rest, then its boot, glass and any light bar sit inside their cages with no clamping`, () => {
-      const d = new StreamedDeformation(makeChassisGeometry(style), style.rig);
+      const d = new StreamedDeformation(makeChassisGeometry(style), carFrame(style).rig);
       const [oy, oz] = style.boot.origin;
       assert.ok(panelClamp(d, makeTrunkGeometry(style), "boot", new THREE.Vector3(0, oy, oz)) < 1e-4, `${id} boot`);
       assert.ok(panelClamp(d, makeWindshield(style), "glassFront", new THREE.Vector3()) < 1e-4, `${id} windshield`);

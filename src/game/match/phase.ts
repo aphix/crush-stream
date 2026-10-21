@@ -1,5 +1,5 @@
 import { hypot2 } from "../kernel/physics-core.js";
-import { CAR_HALF, type DeformableCar } from "../vehicle/car.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
 import type { PredictedHit } from "../scenes/engine-props.ts";
 
 /** The sandbox crash's phases: driving in, the hit, the slow-mo look, the wreck settling at 1×. */
@@ -211,7 +211,7 @@ export function pairEta(cars: readonly DeformableCar[], hit?: PredictedHit, minC
     for (let j = i + 1; j < cars.length; j++) {
       const a = cars[i]!;
       const b = cars[j]!;
-      if (Math.abs(a.group.position.y - b.group.position.y) >= 2 * CAR_HALF.y) continue;
+      if (Math.abs(a.group.position.y - b.group.position.y) >= a.frame.half.y + b.frame.half.y) continue;
       const dx = b.group.position.x - a.group.position.x;
       const dz = b.group.position.z - a.group.position.z;
       const dist = hypot2(dx, dz);
@@ -220,8 +220,10 @@ export function pairEta(cars: readonly DeformableCar[], hit?: PredictedHit, minC
       const nz = dz / dist;
       const closing = -((b.velocity.x - a.velocity.x) * nx + (b.velocity.z - a.velocity.z) * nz);
       if (closing <= minClosing) continue;
-      const halfA = Math.abs(a.right.x * nx + a.right.z * nz) * CAR_HALF.x + Math.abs(a.forward.x * nx + a.forward.z * nz) * CAR_HALF.z;
-      const halfB = Math.abs(b.right.x * nx + b.right.z * nz) * CAR_HALF.x + Math.abs(b.forward.x * nx + b.forward.z * nz) * CAR_HALF.z;
+      const ha = a.frame.half;
+      const hb = b.frame.half;
+      const halfA = Math.abs(a.right.x * nx + a.right.z * nz) * ha.x + Math.abs(a.forward.x * nx + a.forward.z * nz) * ha.z;
+      const halfB = Math.abs(b.right.x * nx + b.right.z * nz) * hb.x + Math.abs(b.forward.x * nx + b.forward.z * nz) * hb.z;
       const t = Math.max(0, dist - halfA - halfB) / closing;
       if (t < eta && hit) {
         hit.x = a.group.position.x + a.velocity.x * t + nx * halfA;

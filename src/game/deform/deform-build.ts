@@ -2,16 +2,8 @@ import * as THREE from "three";
 import { hypot3, detSin, PART_FAMILY } from "../kernel/physics-core.js";
 import { regionSoftness, regionCrushBands } from "./physics-util.ts";
 import { makeCluster, type ShapeCluster, type ShapeParticle } from "./shape-match.ts";
-import {
-  BEAM_SPECS,
-  CAGES,
-  MASS_SPECS,
-  SENSORS,
-  SHAPE_CLUSTERS,
-  type BodyPartName,
-  type MassName,
-} from "../kernel/rig-spec.ts";
-import type { Beam, Cage, MassNode, RigOverrides, Sensor } from "./deform-rig.ts";
+import { BEAM_SPECS, SHAPE_CLUSTERS, type BodyPartName, type MassName } from "../kernel/rig-spec.ts";
+import type { Beam, Cage, MassNode, RigTables, Sensor } from "./deform-rig.ts";
 
 // The rig as built: wrinkle seeds, cages, sensors, masses and beams at rest, and the lattice skin's cage influences.
 
@@ -44,11 +36,9 @@ export function wrinkleSeeds(restPos: Float32Array, vertexCount: number): Float6
   return wrinkleSeed;
 }
 
-/** The rig's cages at rest (`rig.cages` boxes over the spec's). */
-function makeCages(rig: RigOverrides): Cage[] {
-  return CAGES.map((base) => {
-    const box = rig.cages?.[base.name];
-    const spec = box ? { ...base, ...box } : base;
+/** The rig's cages at rest. */
+function makeCages(rig: RigTables): Cage[] {
+  return rig.cages.map((spec) => {
     const min = new THREE.Vector3(...spec.min);
     const max = new THREE.Vector3(...spec.max);
     const restCorners: THREE.Vector3[] = [];
@@ -75,11 +65,9 @@ function makeCages(rig: RigOverrides): Cage[] {
   });
 }
 
-/** The rig's crush sensors at rest (`rig.sensors` rests over the spec's), each on its cage's index. */
-function makeSensors(rig: RigOverrides, partIndex: Map<BodyPartName, number>): Sensor[] {
-  return SENSORS.map((base, i) => {
-    const rest = rig.sensors?.[i];
-    const spec = rest ? { ...base, rest } : base;
+/** The rig's crush sensors at rest, each on its cage's index. */
+function makeSensors(rig: RigTables, partIndex: Map<BodyPartName, number>): Sensor[] {
+  return rig.sensors.map((spec) => {
     return {
       spec,
       rest: new THREE.Vector3(...spec.rest),
@@ -93,9 +81,9 @@ function makeSensors(rig: RigOverrides, partIndex: Map<BodyPartName, number>): S
   });
 }
 
-/** The mass nodes at rest, in `MASS_SPECS` order; fills `nameIndex` (name → index). */
-function makeMasses(nameIndex: Map<MassName, number>): MassNode[] {
-  return MASS_SPECS.map((spec, i) => {
+/** The mass nodes at rest, in the rig's order; fills `nameIndex` (name → index). */
+function makeMasses(rig: RigTables, nameIndex: Map<MassName, number>): MassNode[] {
+  return rig.masses.map((spec, i) => {
     nameIndex.set(spec.name, i);
     const rest = new THREE.Vector3(...spec.rest);
     return {
@@ -229,11 +217,11 @@ type RunStructures = {
 };
 
 /** The per-run structures as built for `rig` (the constructor's). Fills `nameIndex` (mass name → index). */
-export function buildRunStructures(rig: RigOverrides, nameIndex = new Map<MassName, number>()): RunStructures {
+export function buildRunStructures(rig: RigTables, nameIndex = new Map<MassName, number>()): RunStructures {
   const cages = makeCages(rig);
   const partIndex = new Map<BodyPartName, number>();
   for (const [i, c] of cages.entries()) partIndex.set(c.spec.name, i);
-  const masses = makeMasses(nameIndex);
+  const masses = makeMasses(rig, nameIndex);
   const shapeParticles = masses.map((m) => ({ x: m.rest.x, y: m.rest.y, z: m.rest.z, vx: 0, vy: 0, vz: 0, mass: m.mass }));
   return {
     cages,
@@ -246,14 +234,13 @@ export function buildRunStructures(rig: RigOverrides, nameIndex = new Map<MassNa
 }
 
 /**
- * `reset`'s read-only template per distinct rig (by value; a handful of body styles): built once, shared by every car
- * of that rig. A copy kept per car cost 160 KB each; building one per reset cost 0.1 ms per car.
+ * `reset`'s read-only template per rig (one per body style): built once, shared by every car of that rig. A copy kept per car
+ * cost 160 KB each; building one per reset cost 0.1 ms per car.
  */
-const templates = new Map<string, RunStructures>();
-export function runTemplate(rig: RigOverrides): RunStructures {
-  const key = JSON.stringify(rig);
-  let t = templates.get(key);
-  if (!t) templates.set(key, (t = buildRunStructures(rig)));
+const templates = new WeakMap<RigTables, RunStructures>();
+export function runTemplate(rig: RigTables): RunStructures {
+  let t = templates.get(rig);
+  if (!t) templates.set(rig, (t = buildRunStructures(rig)));
   return t;
 }
 

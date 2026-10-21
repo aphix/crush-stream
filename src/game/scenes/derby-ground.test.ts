@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { arenaWorld, leaveArena } from "./derby-arena.test-util.ts";
@@ -27,7 +27,7 @@ const LEVEL = 0.01;
 const SUNK_DEPTH = FAKE_DEPTH;
 const DRIVE_MPS = 8;
 const SLICE_SECONDS = 1 / FINE_HZ;
-/** How far (m) behind the solid's face the car's origin starts: its nose (`CAR_HALF.z`) is then inside the face. */
+/** How far (m) behind the solid's face the car's origin starts: its nose (`frame.half.z`) is then inside the face. */
 const NOSE_BEHIND_FACE = 1.5;
 /** A stretch of the ring wall with no prop or ramp at it: its bearing (degrees round from +z) and a point on it at the wall's face. */
 const BARE_WALL_DEGREES = 128;
@@ -83,7 +83,7 @@ function isWithin(box: DerbyBox, x: number, z: number, margin: number): boolean 
 function hullCorners(x: number, z: number, yaw: number): [number, number][] {
   const right = { x: Math.cos(yaw), z: -Math.sin(yaw) };
   const forward = { x: Math.sin(yaw), z: Math.cos(yaw) };
-  return [-1, 1].flatMap((sideways) => [-1, 1].map((ahead): [number, number] => [x + right.x * sideways * CAR_HALF.x + forward.x * ahead * CAR_HALF.z, z + right.z * sideways * CAR_HALF.x + forward.z * ahead * CAR_HALF.z]));
+  return [-1, 1].flatMap((sideways) => [-1, 1].map((ahead): [number, number] => [x + right.x * sideways * FLEET_HALF.x + forward.x * ahead * FLEET_HALF.z, z + right.z * sideways * FLEET_HALF.x + forward.z * ahead * FLEET_HALF.z]));
 }
 
 function rampNamed(name: string) {
@@ -124,7 +124,7 @@ describe("given the arena's ground and the full field's spawn ring", () => {
             for (const [propIndex, prop] of DERBY_FREE_PROPS.entries()) {
               const local = localOf(prop, x, z);
               const gap = Math.hypot(Math.max(0, Math.abs(local.across) - prop.hx), Math.max(0, Math.abs(local.along) - prop.hz));
-              assert.ok(gap >= CAR_HALF.z, `${count} cars at spin ${spin.toFixed(2)}: slot ${slotIndex} heads at free prop ${propIndex} (${gap.toFixed(2)} m)`);
+              assert.ok(gap >= FLEET_HALF.z, `${count} cars at spin ${spin.toFixed(2)}: slot ${slotIndex} heads at free prop ${propIndex} (${gap.toFixed(2)} m)`);
             }
           }
         }
@@ -151,7 +151,7 @@ describe("given the arena's ground and the full field's spawn ring", () => {
 
   it("when the rises are read on the grid, then none but the ramps reaches the ring where cars spawn, a grid cell's reach included", () => {
     // The ground reads its nodes bilinearly: a rise node raises the floor up to a cell (√2 m) beyond it.
-    const innerEdgeOfSpawns = radius - spawnInset - CAR_HALF.z - Math.SQRT2;
+    const innerEdgeOfSpawns = radius - spawnInset - FLEET_HALF.z - Math.SQRT2;
     const nodes = 2 * gridHalf + 1;
     for (let j = 0; j < nodes; j++) {
       for (let i = 0; i < nodes; i++) {

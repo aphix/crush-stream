@@ -4,7 +4,6 @@ import * as THREE from "three";
 import { houseKnocked, labDollRig, labRig, leaveLab, runLab, throwAt, type LabRig } from "./engine-lab.test-util.ts";
 import type { LabShot } from "./engine-lab.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { COM_Y } from "../vehicle/car-air-body.ts";
 import { FLICK, LabFlick } from "./lab-flick.ts";
 import { LAB_SHOT, planLabShot } from "./lab-shot.ts";
 import { heldPose } from "../scenes/lab.ts";
@@ -33,7 +32,7 @@ type Px = [number, number];
 const LINE_DRIFT = 0.01;
 
 function centreOfMass(car: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
-  return out.set(0, COM_Y, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
+  return out.set(0, car.frame.comY, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
 }
 
 /** A 60° camera `degrees` off the bench's long axis (90: side-on, 0: straight down it from behind the thrower), at `CAMERA_RADIUS` from `LOOK`. */

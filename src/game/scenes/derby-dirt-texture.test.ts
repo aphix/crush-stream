@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { DERBY_ARENA } from "./constants.ts";
 import {
   DIRT_BASE_GREY,
@@ -211,8 +211,8 @@ describe("given the generated tyre track paths", () => {
     assert.ok(shortest >= 2 * FEATHER_LEAST - 2, "the shortest skid (m) still tapers to a point over its half length");
   });
 
-  it("when the gauge is read, then it is the car's wheel pair: twice CAR_HALF.x", () => {
-    assert.equal(TRACK_GAUGE, 2 * CAR_HALF.x, "gauge");
+  it("when the gauge is read, then it is the car's wheel pair: twice FLEET_HALF.x", () => {
+    assert.equal(TRACK_GAUGE, 2 * FLEET_HALF.x, "gauge");
   });
 });
 

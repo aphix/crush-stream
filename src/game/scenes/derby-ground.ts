@@ -1,5 +1,5 @@
 import type { DeformableCar } from "../vehicle/car.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { propContact, type PropHits } from "../contact/prop-contact.ts";
 import { detAtan2, detCos, detSin, hypot2, PART_FAMILY } from "../kernel/physics-core.js";
 import { SURFACE_IDS } from "../world/catalog.ts";
@@ -96,13 +96,13 @@ export const DERBY_PLATEAUS: readonly Plateau[] = [
 /** How far outside a prop's box (m) a spawned hull's corner must stay. */
 export const SPAWN_CLEARANCE = 1;
 /** Radial half-width (m) of the band round the spawn ring in which a spawned hull stands: its half-length and the clearance. */
-const SPAWN_BAND = CAR_HALF.z + SPAWN_CLEARANCE;
+const SPAWN_BAND = FLEET_HALF.z + SPAWN_CLEARANCE;
 const SPAWN_RING = radius - spawnInset;
 /**
  * A prop whose nearest point to the middle is this far (m) out stands behind every spawned hull (its rear corners) and its clearance:
  * no car starts facing it, so `layoutDerby` need not skip its bearings. The rows of props against the wall are set this far out, plus a margin.
  */
-const BEHIND_HULLS = hypot2(SPAWN_RING + CAR_HALF.z, CAR_HALF.x) + SPAWN_CLEARANCE;
+const BEHIND_HULLS = hypot2(SPAWN_RING + FLEET_HALF.z, FLEET_HALF.x) + SPAWN_CLEARANCE;
 const BEHIND_MARGIN = 0.05;
 const BEHIND_RING = BEHIND_HULLS + BEHIND_MARGIN;
 
@@ -203,9 +203,9 @@ function nearestReach(b: SpawnBox): number {
 }
 
 /**
- * A slot faces the middle, so its hull's inner end stands `CAR_HALF.z` nearer the middle than the slot and over a ramp where the slot
+ * A slot faces the middle, so its hull's inner end stands `FLEET_HALF.z` nearer the middle than the slot and over a ramp where the slot
  * itself is not: a ramp spoils the slots whose lateral offset on the ring is its own times about this (measured with the ramps' laterals:
- * 1.12 keeps every spoiled bearing inside the arc its box blocks; the plain ring/(ring - CAR_HALF.z) = 1.07 leaves the west ramp's low end out).
+ * 1.12 keeps every spoiled bearing inside the arc its box blocks; the plain ring/(ring - FLEET_HALF.z) = 1.07 leaves the west ramp's low end out).
  */
 const RING_LATERAL_SCALE = 1.12;
 /** Half-width (m) of a ramp's box across its axis: the least that blocks every bearing a hull of any slot touches the rise on, its tail included (measured: 5.75 m leaves some). */
@@ -247,7 +247,7 @@ const FLOOR = SURFACE_IDS.indexOf(SURFACE.asphalt);
  * a body is wholly under the base of). A car stays in the soft-body sim down to `FAKE_DEPTH` at its origin, its body reaching a
  * body height lower still.
  */
-const DERBY_PRISM_BASE = -(FAKE_DEPTH + 2 * CAR_HALF.y);
+const DERBY_PRISM_BASE = -(FAKE_DEPTH + 2 * FLEET_HALF.y);
 
 export class DerbyGround extends Ground {
   /** The baked grid, row-major along x: node (i, j) is at world (i - gridHalf, j - gridHalf). The floor mesh reads the same nodes. */

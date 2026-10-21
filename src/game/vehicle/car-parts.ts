@@ -1,6 +1,5 @@
 import { hypot2, detSin, detCos, PART_FAMILY } from "../kernel/physics-core.js";
 import * as THREE from "three";
-import { TYRE_R } from "../deform/deform-state.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { BUMPER_F } from "./constants.ts";
 import { BUMPER_SEAT } from "./car-mesh.ts";
@@ -14,7 +13,7 @@ import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox } fro
 import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
 import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
-import { CAR_CENTRE, type TopMet } from "./car-air-body.ts";
+import type { TopMet } from "./car-air-body.ts";
 import { wreckCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
 import {
@@ -798,7 +797,7 @@ export abstract class CarParts extends CarGlass {
     looseOnCamera(p.object);
     if (p.region) this.trackShell(p);
     // Where the part sits about the body's centre of mass (a wreck's masses' centroid, else the box's): the car's spin carries it at ω × r, whatever else it is thrown with.
-    _com.copy(this.deform.massActive ? wreckCentre(this) : CAR_CENTRE).applyQuaternion(this.group.quaternion).add(this.group.position);
+    _com.copy(this.deform.massActive ? wreckCentre(this) : this.frame.centre).applyQuaternion(this.group.quaternion).add(this.group.position);
     _n.crossVectors(this.angular, _n.copy(wpos).sub(_com));
     p.object.position.copy(wpos);
     p.object.quaternion.copy(wquat);
@@ -934,7 +933,7 @@ export abstract class CarParts extends CarGlass {
     w.velocity.y = Math.max(w.velocity.y, 0) + 1;
     // Rolls on about its axle (the car's x) at the hub's ground speed.
     _n.set(1, 0, 0).applyQuaternion(this.group.quaternion);
-    w.angular.copy(_n).multiplyScalar(hypot2(w.velocity.x, w.velocity.z) / TYRE_R);
+    w.angular.copy(_n).multiplyScalar(hypot2(w.velocity.x, w.velocity.z) / this.frame.rig.tyre.r);
     fitWheelShape(w);
   }
 

@@ -158,7 +158,7 @@ function sillSamples(tables: StreamedDeformation, count: number, masses: readonl
 export function cageSourceOf(car: DeformableCar): CageSource {
   const rig = car.deform;
   const cageBody = makeChassisGeometry(car.style, "cage");
-  const bodyTables = new StreamedDeformation(cageBody, car.style.rig);
+  const bodyTables = new StreamedDeformation(cageBody, car.frame.rig);
   const bodyIndex = cageBody.index;
   if (bodyIndex === null) throw new Error("the body mesh has no index");
   const panels = cagePanelsOf(car);

@@ -4,11 +4,10 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { cameThroughTop, FF_CLOSING, FF_CX, FF_CZ, FF_FD, FF_FNX, FF_FNZ, FF_FW, FF_FX, FF_FZ, FF_GAP, FF_NX, FF_NZ, FF_PEN, FF_SIZE, FOOT_FX, FOOT_FZ, FOOT_HL, FOOT_HW, FOOT_RX, FOOT_RZ, FOOT_SIZE, FOOT_X, FOOT_Z, footFace, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, sideFace } from "../world/prism.ts";
 import { ENTRY_WINDOW, SOLID_AT_REST } from "../world/constants.ts";
 import { C_ARG, C_DEPTH, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, P_STRIDE, pointContact, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, RIG, WALL, type Surface } from "../world/surfaces.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
 import { type ContactBox, makeBox, partContact, solidFace } from "./external-contact.ts";
 import { PUSH_SPEED } from "../deform/push-budget.ts";
 import { HIT_AHEAD, impulseCar, markApproach, wallBounce } from "./pair-contact.ts";
-import { BELLY, BELLY_ABSENT, COM_Y, POINT_X, POINT_Y, POINT_Z, WALL_CRUSH } from "../vehicle/car-air-body.ts";
+import { BELLY_ABSENT, POINT_X, POINT_Y, POINT_Z, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { loadPoints } from "../vehicle/car-air-points.ts";
 import { cageLift } from "../vehicle/car-cage-rig.ts";
 
@@ -318,7 +317,7 @@ function askPoint(car: DeformableCar, s: Surface, lx: number, ly: number, lz: nu
   const q = car.group.quaternion;
   const pos = car.group.position;
   _pw.set(lx, ly, lz).applyQuaternion(q).add(pos);
-  _pr.subVectors(_pw, pos).sub(_pcom.set(0, COM_Y, 0).applyQuaternion(q));
+  _pr.subVectors(_pw, pos).sub(_pcom.set(0, car.frame.comY, 0).applyQuaternion(q));
   _pv.crossVectors(car.angular, _pr).add(car.velocity);
   _pq[PQ_X] = _pw.x;
   _pq[PQ_Y] = _pw.y;
@@ -353,13 +352,14 @@ export function sideContact(car: DeformableCar, s: Surface, hits: PropHits, dt: 
   for (let w = 0; w < car.wheels.length; w++) {
     const wheel = car.wheels[w]!;
     const hw = TREAD_HALF * wheel.scale.x;
-    const r = TYRE_R * wheel.scale.x;
+    const r = car.frame.rig.tyre.r * wheel.scale.x;
     for (let a = 0; a < SIGNS.length; a++) {
       for (let b = 0; b < SIGNS.length; b++) askPoint(car, s, wheel.position.x + SIGNS[a]! * hw, wheel.position.y, wheel.position.z + SIGNS[b]! * r, false);
     }
   }
   const bellyFrom = loadPoints(car);
-  for (let k = 0; k < bellyFrom + BELLY.length; k++) {
+  const pointEnd = bellyFrom + car.frame.belly.length;
+  for (let k = 0; k < pointEnd; k++) {
     if (k >= bellyFrom && BELLY_ABSENT[k - bellyFrom] === 1) continue;
     askPoint(car, s, POINT_X[k]!, POINT_Y[k]!, POINT_Z[k]!, true);
   }

@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { DeformableCar } from "./car.ts";
-import { UNDERSIDE } from "./car-suspension.ts";
 import { sampleField } from "../contact/cage-outline.ts";
 import { layOnGround } from "./car-air-points.ts";
 import { assignClass, CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
@@ -37,11 +36,9 @@ const BUMPERS = [-1, 1].flatMap((sx) => [-1, 1].map((sz): [number, number, numbe
 /** Height hints are the asking point plus this (m): the layer rule (`STEP_UP`, a ramp's kerb) reads them. */
 const HINT_ABOVE = 1;
 
-/** `UNDERSIDE`'s keel (x 0) and rocker (x ±`ROCKER`) lines, [z, height] from the nose back. */
+/** The rocker lines' x (m): the underside's keel runs along x 0, its rockers along x ±`ROCKER`. */
 const ROCKER = 0.8;
-const KEEL = UNDERSIDE.filter((p) => p[0] === 0).map(([, z, h]) => [z, h] as const);
-const ROCKERS = UNDERSIDE.filter((p) => p[0] === ROCKER).map(([, z, h]) => [z, h] as const);
-/** The lines the belly is read along (car-local): along z at each `LINE_X`, across x at each `LINE_Z` (car-air.ts `BELLY`'s rows). */
+/** The lines the belly is read along (car-local): along z at each `LINE_X`, across x at each `LINE_Z` (the frame's `belly` rows). */
 const LINE_X = [-ROCKER, -0.5, 0, 0.5, ROCKER] as const;
 const LINE_Z = [2, 1, 0, -0.5, -1, -2] as const;
 /** A belly line is halved down to this (m) where the ground under it is not one plane: a face's edge under the belly is found within 1 cm. */
@@ -66,7 +63,7 @@ function along(line: readonly (readonly [number, number])[], z: number): number 
 
 export type Fit = {
   airborne: boolean;
-  /** Per tyre (`WHEEL_POS` order): its lowest tread point's height above the ground under it (m; < 0 sunk in). */
+  /** Per tyre (`frame.wheels` order): its lowest tread point's height above the ground under it (m; < 0 sunk in). */
   gaps: number[];
   /** Per tyre: the tread point with the smallest gap, as (x, ground height under it, z): where the tyre rests on the ground (`NaN`s with no ground under it). */
   contacts: Float64Array;
@@ -231,7 +228,7 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   // keel, and no drawn body is at a point the cage bottom has no node over), the height the rigid step rests its belly rows at.
   car.refitCage();
   const wreck = car.deform.massActive;
-  for (const [x, z, h] of UNDERSIDE) {
+  for (const [x, z, h] of car.frame.underside) {
     const drawn = wreck ? sampleField(car.cage.fields.bottom, car.cage.style, x, z) : h;
     if (!Number.isNaN(drawn)) probe(`under(${x},${z})`, x, drawn, z);
   }
@@ -248,9 +245,12 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   // The belly between the keel and the rockers, along its lines: where the ground under a line is not one plane between two samples (a
   // face's edge or a crest under the belly) the line is halved down to `LINE_STEP`, so a belly resting on an edge between the stations
   // above reads as resting. A sample deeper than `BELLY_IN` is in the ground, not resting on it (its depth is not `pen`'s reading).
+  // The underside's keel and rocker lines, [z, height] from the nose back.
+  const keelLine = car.frame.underside.filter((p) => p[0] === 0).map(([, z, h]) => [z, h] as const);
+  const rockerLine = car.frame.underside.filter((p) => p[0] === ROCKER).map(([, z, h]) => [z, h] as const);
   const clearance = (x: number, z: number): number => {
-    const keel = along(KEEL, z);
-    _p.set(x, keel + ((along(ROCKERS, z) - keel) * Math.abs(x)) / ROCKER, z).applyMatrix4(body.matrixWorld);
+    const keel = along(keelLine, z);
+    _p.set(x, keel + ((along(rockerLine, z) - keel) * Math.abs(x)) / ROCKER, z).applyMatrix4(body.matrixWorld);
     const c = _p.y - ground.heightAt(_p.x, _p.z, _p.y);
     if (c >= -BELLY_IN) hull = Math.min(hull, c);
     return c;

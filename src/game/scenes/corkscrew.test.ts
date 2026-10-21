@@ -2,7 +2,6 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
-import { WHEEL_POS } from "../vehicle/car-mesh.ts";
 import { Corkscrew, CORKSCREW } from "./corkscrew.ts";
 import { setGround } from "../world/ground.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
@@ -55,9 +54,10 @@ function launch(v: number): Run {
     car.refitCage();
     const body = car.cage.fields.pos;
     // The tyre contacts, then the cage's vertices (the drawn body, crushed as drawn): what can meet the ground.
-    for (let i = 0; i < WHEEL_POS.length + car.cage.style.vertexCount; i++) {
-      if (i < WHEEL_POS.length) p.set(WHEEL_POS[i]![0], 0, WHEEL_POS[i]![2]);
-      else p.set(body[(i - WHEEL_POS.length) * 3]!, body[(i - WHEEL_POS.length) * 3 + 1]!, body[(i - WHEEL_POS.length) * 3 + 2]!);
+    const wheels = car.frame.wheels;
+    for (let i = 0; i < wheels.length + car.cage.style.vertexCount; i++) {
+      if (i < wheels.length) p.set(wheels[i]![0], 0, wheels[i]![2]);
+      else p.set(body[(i - wheels.length) * 3]!, body[(i - wheels.length) * 3 + 1]!, body[(i - wheels.length) * 3 + 2]!);
       p.applyQuaternion(q).add(car.group.position);
       low = Math.min(low, p.y - cork.heightAt(p.x, p.z, p.y));
     }

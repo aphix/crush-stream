@@ -10,11 +10,12 @@ import { TRACKS } from "../world/tracks/index.ts";
 import { FRAME, frame, makeWorld } from "../world/race-world.test-util.ts";
 import { aheadPoints, camUsable, CINE, CineCam, CLEAR, clearSpot, DutchCam, occluder, raceSight, SightLines, type Sight } from "./spectate-cam.ts";
 import { AutoCam, type AutoScene } from "./auto-cam.ts";
-import { WHEEL_POS } from "../vehicle/car-mesh.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { eyeProblems } from "./spectate-cam.test-util.ts";
 
 /** The dutch cam's mounts: each wheel well, looking forward and back. */
-const MOUNT_COUNT = WHEEL_POS.length * 2;
+const MOUNT_COUNT = carFrame(CAR_STYLES.sedan).wheels.length * 2;
 
 const COURSES = TRACKS.map((j) => new Track(parseTrack(j)));
 /** The per-commit cases run the oval's lap; `spectate-cam.ai-long-run.ts` runs every course's. */

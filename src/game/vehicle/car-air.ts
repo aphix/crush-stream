@@ -5,11 +5,11 @@ import { C_AUX, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_PX, C_PY, C_PZ, EDGE_HIT, edge
 import { GQ } from "../world/ground-clock.ts";
 import { MIN_SLIDE } from "../deform/constants.ts";
 import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-util.ts";
-import { droop, PAN, SPRINGS } from "./car-suspension.ts";
+import { droop, SPRINGS } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { G, COM_Y, INV_I, BELLY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, CAR_CENTRE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
-import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, WX, WZ, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop } from "./car-air-points.ts";
+import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
+import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop } from "./car-air-points.ts";
 
 /** Crossings `wreckTop` let a wreck skip since `takeCrossingsSkipped` last read (a field of a const: the bench's work counter reads and zeroes it once a slice). */
 const prune = { skipped: 0 };
@@ -426,7 +426,7 @@ function armAtExchange(car: DeformableCar, pre: number, point: THREE.Vector3, in
   car.velocity.fromArray(PENDING, pre);
   car.angular.fromArray(PENDING, pre + 3);
   car.applyImpact(point, inward, closing, ebs);
-  _centre.set(0, COM_Y, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
+  _centre.set(0, car.frame.comY, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
   car.deform.shiftBody(car.velocity, car.angular, _postV.x - PENDING[pre]!, _postV.z - PENDING[pre + 2]!, _postW.y - PENDING[pre + 4]!, _centre.x, _centre.z, inward.x, inward.z, common);
 }
 
@@ -518,7 +518,7 @@ export const wreckInvI = new THREE.Vector3();
  * masses' mean, so the body must turn about it) and its inverse yaw inertia per unit mass their spread about it (`_wreckInvI`, the
  * rest the car box's). Returns the centre.
  */
-export function wreckCentre(car: Pick<DeformableCar, "deform">): THREE.Vector3 {
+export function wreckCentre(car: Pick<DeformableCar, "deform" | "frame">): THREE.Vector3 {
   // A frozen wreck's masses stand still in its frame: the centre and inertia it had when its rigid step last read them.
   if (car.deform.frozenReady) {
     wreckInvI.copy(car.deform.frozenInvI);
@@ -537,14 +537,15 @@ export function wreckCentre(car: Pick<DeformableCar, "deform">): THREE.Vector3 {
     cz += n.local.z * n.mass;
   }
   if (m < 1e-8) {
-    wreckInvI.copy(INV_I);
-    return _wreckCentre.copy(CAR_CENTRE);
+    wreckInvI.copy(car.frame.invI);
+    return _wreckCentre.copy(car.frame.centre);
   }
   cx /= m;
   cz /= m;
   let inertia = 0;
   for (const n of ms) if (n.dynamic) inertia += n.mass * ((n.local.x - cx) ** 2 + (n.local.z - cz) ** 2);
-  wreckInvI.set(INV_I.x, inertia > 1e-9 ? m / inertia : INV_I.y, INV_I.z);
+  const invI = car.frame.invI;
+  wreckInvI.set(invI.x, inertia > 1e-9 ? m / inertia : invI.y, invI.z);
   return _wreckCentre.set(cx, cy / m, cz);
 }
 
@@ -601,7 +602,8 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   const v = car.velocity;
   const w = car.angular;
   const wreck = car.deform.massActive;
-  bindBody(car.group, v, w, wreck ? wreckCentre(car) : CAR_CENTRE, wreck ? wreckInvI : INV_I, car.slot, false, dt);
+  const frame = car.frame;
+  bindBody(car.group, v, w, wreck ? wreckCentre(car) : frame.centre, wreck ? wreckInvI : frame.invI, car.slot, false, dt);
   body.wreck = car.deform.massActive;
   moveBody();
   if (!car.crashed && !car.falling && car.wheelsDown !== 0) {
@@ -675,7 +677,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     GAPV[n] = 0;
     SINK[n] = sink;
     PRESS[n] = pen;
-    SHARE[n] = 0.25 * (1 + body.centre.x / WX[i]!) * (1 + body.centre.z / WZ[i]!);
+    SHARE[n] = 0.25 * (1 + body.centre.x / frame.wx[i]!) * (1 + body.centre.z / frame.wz[i]!);
     carrier(surf, n, own, mass);
     CLOSING[n] = Math.max(0, -pointVel(n, v, w, _vp).dot(N[n]!));
     if (own >= 0 && CLOSING[n]! < WALL_CRUSH) surf.touch(own);
@@ -688,7 +690,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   const speed = v.length();
   const turnRate = w.length();
   const bellyFrom = loadPoints(car);
-  const pointEnd = bellyFrom + BELLY.length;
+  const pointEnd = bellyFrom + frame.belly.length;
   const pointReach = _s[S_POINT_REACH]!;
   const bodyReach = pointReach + (speed + turnRate * pointReach) * dt;
   // `EPICENTER.wreckTops`: a wreck takes no row from another wreck's top (`readPoints`, the belly's edges below drop that answer), so only the tops of cars that are not wrecks make it read every point.
@@ -699,7 +701,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // Every point's slice travel lies within this of the centre of mass: its reach about the body's own centre is at most the stock reach
   // plus that centre's offset from the car's (`readPoints` reads the solids over that square once, if a point needs them).
   const c = body.centre;
-  const shiftedReach = pointReach + Math.abs(c.x - CAR_CENTRE.x) + Math.abs(c.y - CAR_CENTRE.y) + Math.abs(c.z - CAR_CENTRE.z);
+  const shiftedReach = pointReach + Math.abs(c.x - frame.centre.x) + Math.abs(c.y - frame.centre.y) + Math.abs(c.z - frame.centre.z);
   const solidReach = shiftedReach + (speed + turnRate * shiftedReach) * dt + CLEAR_ROUND;
   // The whole body at once first: each point's box below and each belly segment's lies within the points' boxes together, so a raster
   // under all of them lower than the lowest point's clearance clears every point and segment in one read (measured: 84 % of the slices
@@ -719,7 +721,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     let low = Infinity;
     for (let i = 0; i < pointEnd; i++) {
       const x = POINT_X[i]!;
-      const y = POINT_Y[i]! - COM_Y;
+      const y = POINT_Y[i]! - frame.comY;
       const z = POINT_Z[i]!;
       const rx = _e[0]! * x + _e[3]! * y + _e[6]! * z;
       const rz = _e[2]! * x + _e[5]! * y + _e[8]! * z;
@@ -736,7 +738,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     const z1 = centreOfMass.z + zMax + pad;
     const top = Math.max(staticTop(statics, x0, x1, z0, z1, true), solidTop(x0, x1, z0, z1));
     allClear = !flipped && top < centreOfMass.y + low - descent;
-    bodyTop = allClear || body.centre === CAR_CENTRE ? top : centredTop(statics, turnRate, dt, pointEnd);
+    bodyTop = allClear || body.centre === frame.centre ? top : centredTop(statics, turnRate, dt, pointEnd);
   }
   // `--verify`: with `wreckTops` a point it cleared that the old test would have asked is asked the old way too (`GQ.wreckTops`), every point is visited for it (no whole-body skip).
   const checkOld = GQ.check && flipped;
@@ -761,7 +763,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // (`ridgeCross`), pressed along the belly's own normal, not the windscreen's: a sedan on another's roof, its middle row on the roof and
   // its front row past the roof's front edge, tipped 10° nose-down onto the windscreen with its centre still 25 cm behind that edge.
   _up.set(0, 1, 0).applyQuaternion(q);
-  const panFrom = bellyFrom + BELLY.length - PAN.length;
+  const panFrom = bellyFrom + frame.belly.length - frame.pan.length;
   for (let s = allClear ? SEGS.length : 0; s < SEGS.length; s += 2) {
     if (BELLY_ABSENT[SEGS[s]!] === 1 || BELLY_ABSENT[SEGS[s + 1]!] === 1) continue;
     let a = bellyFrom + SEGS[s]!;
@@ -805,7 +807,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // The tyres in their springs push together, from the slice's state, and share each face's budget (`take`) in proportion to what each
   // asks: in list order the first spent it, and a coupe's two rear tyres landing on a wagon's roof took 6.2 and 2.3 of 6.2 each and rolled
   // it off the column.
-  springPushes(tyres, stiff, damp, dt, q, v, w);
+  springPushes(frame, tyres, stiff, damp, dt, q, v, w);
   for (let c = 0; c < tyres; c++) {
     if (!SOFT[c]) continue;
     // A tyre within a speculative gap of its stop whose spring pushes less than the weight the slice brings onto it rests on the stop,
