@@ -53,4 +53,5 @@ export const PLATFORM_HARDPOINTS = {
   hood: { z0: 0.76, z1: 1.98, origin: [0.7, 0.74] },
   bumpers: { front: PLATFORM_BUMPER, rear: PLATFORM_BUMPER },
   door: { hingeX: 0.86, hingeY: 0.54, hingeZ: 0.55, length: 0.57, halfHeight: 0.31, mirrorY: 0.32, mirrorReach: 0.21, mirrorHalfDepth: 0.08, aperture: [0, 0.54] },
-} as const satisfies Pick<BodyStyle, "windshield" | "bPillar" | "belt" | "rocker" | "arch" | "hood" | "bumpers" | "door">;
+  aPillarFoot: 0.76,
+} as const satisfies Pick<BodyStyle, "windshield" | "bPillar" | "belt" | "rocker" | "arch" | "hood" | "bumpers" | "door" | "aPillarFoot">;

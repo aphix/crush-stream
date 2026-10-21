@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
-import { ROCKER, doorAperture, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { ROCKER, doorAperture, glassX, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { beltY, floorY, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { MIRROR_ROOT } from "./part-geometry.ts";
@@ -345,17 +345,18 @@ function ringLowest(style: BodyStyle, z: number, source: "drawn" | "cage"): numb
   return sectionPoints(sampleSlice(z, style.profile), style, source).reduce((m, p) => Math.min(m, p.y), Infinity);
 }
 
-/** Largest x of the chassis' vertices on the door-mirror's band over the hinge; throws, naming the style, if it has none. */
+/** Largest x of the chassis' vertices on the door-mirror's band (at its seat's z, under its height); throws, naming the style, if it has none. */
 function bodySideAtMirror(style: BodyStyle): number {
   const d = style.door;
   const pos = makeChassisGeometry(style, "drawn").getAttribute("position") as THREE.BufferAttribute;
   const mirrorY = d.hingeY + d.mirrorY;
+  const mirrorZ = d.hingeZ - (d.mirrorZ ?? 0);
   let side = -Infinity;
   for (let i = 0; i < pos.count; i++) {
-    const inBand = Math.abs(pos.getZ(i) - d.hingeZ) < 0.08 && pos.getY(i) >= mirrorY - 0.08 && pos.getY(i) <= mirrorY && pos.getX(i) > 0;
+    const inBand = Math.abs(pos.getZ(i) - mirrorZ) < 0.08 && pos.getY(i) >= mirrorY - 0.08 && pos.getY(i) <= mirrorY && pos.getX(i) > 0;
     if (inBand) side = Math.max(side, pos.getX(i));
   }
-  assert.ok(side > -Infinity, `${style.id}: no chassis vertex within 0.08 m of the hinge z ${d.hingeZ} and 0.08 m under the mirror height ${mirrorY}`);
+  assert.ok(side > -Infinity, `${style.id}: no chassis vertex within 0.08 m of the mirror's z ${mirrorZ} and 0.08 m under its height ${mirrorY}`);
   return side;
 }
 
@@ -430,6 +431,48 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
+  it("when a mirror sits back along a door whose side narrows rearward, then its arm still starts on the door skin there", () => {
+    const coupe = CAR_STYLES.coupe;
+    // The side tapers 6 cm over the mirror's 0.3 m, so a seat taken at the hinge stands off the skin.
+    const profile = coupe.profile.map((s) => ({ ...s, hw: s.hw - 0.2 * Math.max(0, coupe.door.hingeZ - s.z) }));
+    const moved: BodyStyle = { ...coupe, profile, door: { ...coupe.door, mirrorZ: 0.3 } };
+    const d = moved.door;
+    const pos = makeDoorGeometry(1, moved).getAttribute("position") as THREE.BufferAttribute;
+    const [mirrorY, mirrorZ] = [d.hingeY + d.mirrorY, d.hingeZ - 0.3];
+    let skin = -Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      const [y, z] = [d.hingeY + pos.getY(i), d.hingeZ + doorSkinZ(moved) + pos.getZ(i)];
+      // Under the skin's 2 cm edge roll, where its face is the body side's.
+      if (Math.abs(z - mirrorZ) < 0.04 && y >= mirrorY - 0.05 && y <= mirrorY - 0.02) skin = Math.max(skin, d.hingeX + pos.getX(i));
+    }
+    const root = d.hingeX + mirrorSeatX(moved) + MIRROR_ROOT;
+    assert.ok(Math.abs(root - skin) < 0.01, `mirror 0.3 m back: arm starts at x ${root}, door skin at x ${skin}`);
+  });
+
+  it("when the door and the A-pillar foot move, then the door glass spans from the door's trailing edge to the pillar's foot", () => {
+    const sedan = CAR_STYLES.sedan;
+    const moved: BodyStyle = { ...sedan, aPillarFoot: 0.88, door: { ...sedan.door, hingeZ: 0.74, length: 1.0 } };
+    const box = partBox(makeSideGlass(1, moved));
+    const { hingeZ } = moved.door;
+    const [rear, front] = [box.min.z + hingeZ + DOOR_GLASS_SEAT.z, box.max.z + hingeZ + DOOR_GLASS_SEAT.z];
+    assert.ok(Math.abs(rear - (0.74 - 1.0 + 0.03)) < 0.005, `door glass rear edge at z ${rear}, door trailing edge -0.26 + 0.03`);
+    assert.ok(front > 0.86 && front < 0.95, `door glass front edge at z ${front}, around the A-pillar foot 0.88`);
+  });
+
+  it("when the sill narrows toward the tail, then the side glass and the C-pillar's foot follow its stations", () => {
+    const wagon = CAR_STYLES.wagon;
+    const moved: BodyStyle = { ...wagon, belt: { ...wagon.belt, x: [[-1.6, 0.66], [-0.6, 0.85]] } };
+    const at = (z: number) => glassX(z, beltY(z, moved), moved);
+    assertSameNumbers([at(-1.8), at(-1.1), at(0)], [0.66, 0.755, 0.85], "side glass half-width on the sill at z -1.8, -1.1, 0", 1e-9);
+    let footX = -Infinity;
+    for (const part of makeGreenhouseFrame(moved, "drawn")) {
+      const pos = part.getAttribute("position") as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) - moved.quarter.zRearBot) < 0.01 && pos.getX(i) > 0) footX = Math.max(footX, pos.getX(i));
+    }
+    // The belt rail's rear end stands 1.5 cm outboard of the sill and is 3 cm thick.
+    assert.ok(footX > 0.65 && footX < 0.66 + 0.031, `C-pillar foot and belt rail at the quarter's rear z ${moved.quarter.zRearBot} stand out to x ${footX}, sill there 0.66`);
+  });
+
   it("when the tailgate's bottom edge leans out, then its foot moves with it and its hinge edge stays put", () => {
     const hatchback = CAR_STYLES.hatchback;
     const moved: BodyStyle = { ...hatchback, boot: { ...hatchback.boot, z0: hatchback.boot.origin[1] - 0.2 } };
@@ -466,8 +509,8 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
-  it("when its door hinge moves, then the door glass stays in the same window: it rides on its door's own hinge", () => {
-    const moved: BodyStyle = { ...sedan, door: { ...sedan.door, hingeX: 0.8, hingeY: 0.79, hingeZ: 0.7 } };
+  it("when its door hinge moves with the door's trailing edge kept, then the door glass stays in the same window: it rides on its door's own hinge", () => {
+    const moved: BodyStyle = { ...sedan, door: { ...sedan.door, hingeX: 0.8, hingeY: 0.79, hingeZ: 0.7, length: sedan.door.length + 0.15 } };
     const inCar = (style: BodyStyle) => {
       const box = partBox(makeSideGlass(1, style));
       const { hingeX, hingeY, hingeZ } = style.door;

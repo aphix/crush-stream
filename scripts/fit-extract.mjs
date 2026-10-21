@@ -333,7 +333,7 @@ export function formatTable(t) {
     `  windshieldTop: ${pair(t.windshieldTop)},`,
     `  rearGlass: { base: ${pair(t.rearGlass.base)}, top: ${pair(t.rearGlass.top)}, wBase: ${n(t.rearGlass.wBase)}, wTop: ${n(t.rearGlass.wTop)} },`,
     `  quarter: { zRearBot: ${n(t.quarter.zRearBot)}, zRearTop: ${n(t.quarter.zRearTop)} },`,
-    `  belt: { x: ${n(t.belt.x)}, y: ${pairs(t.belt.y)} },`,
+    `  belt: { x: ${typeof t.belt.x === "number" ? n(t.belt.x) : pairs(t.belt.x)}, y: ${pairs(t.belt.y)} },`,
     `  underside: ${pairs(t.underside)},`,
     `  door: { ${["hingeX", "hingeY", "hingeZ", "length", "halfHeight", "mirrorY", "mirrorReach", "mirrorHalfDepth"].map((k) => `${k}: ${n(t.door[k])}`).join(", ")}, aperture: ${pair(t.door.aperture)} },`,
     `  bumpers: { front: ${bumper(t.bumpers.front)}, rear: ${bumper(t.bumpers.rear)} },`,
