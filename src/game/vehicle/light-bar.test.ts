@@ -6,7 +6,6 @@ import type { DetachPart } from "./car-core.ts";
 import { LIGHT_BAR_FOOT, makeLightBar, withPushBar } from "./car-materials.ts";
 import { makeBumperGeometry } from "./car-mesh.ts";
 import { CAR_STYLES } from "./car-variants.ts";
-import { ROOF_REST_Y } from "./car-parts.ts";
 import { BAR_FOLD, hingePose } from "./part-pose.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { DT, paint } from "./test-support.ts";
@@ -76,7 +75,7 @@ class Probe extends DeformableCar {
   }
   /** The roof mass pushed down to `sink` m under its rest height, then the step's breakage rules run on it. */
   sinkRoof(sink: number): void {
-    this.deform.massLocal("roof").y = ROOF_REST_Y - sink;
+    this.deform.massLocal("roof").y = this.roofRestY - sink;
     this.evaluateBreakage(0, DT);
   }
 }
