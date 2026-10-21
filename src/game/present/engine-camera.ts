@@ -6,6 +6,7 @@ import { DISC_RADIUS } from "../world/ground.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { AutoCam, type AutoScene } from "./auto-cam.ts";
 import { CHASE, DriveCam, easeFov } from "./drive-cam.ts";
+import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
 import { CineCam, DutchCam, type Occluder, type Sight } from "./spectate-cam.ts";
 import { EyeClear } from "./eye-clear.ts";
 import { DRAG_PITCH_PER_PX, DRAG_YAW_PER_PX, FreeCam, type FreeInput, PAD_PITCH_RATE, PAD_YAW_RATE } from "./free-cam.ts";
@@ -502,7 +503,8 @@ export class ChaseCamera {
     this.flipped = true;
     const p = car.group.position;
     const f = car.fwdFlat;
-    const c = this.seat.view === "far" ? CHASE.far : CHASE.third;
+    const cams = car.style.camera ?? PLATFORM_CAMERA;
+    const c = this.seat.view === "far" ? cams.far : cams.third;
     this.camera.position.set(p.x + f.x * c.dist, p.y + c.height, p.z + f.z * c.dist);
     if (solids) this.rearClear.apply(solids, solids.cars ?? NO_BOXES, _w.set(p.x, p.y + c.aimUp, p.z), this.camera.position, wallDt);
     this.camera.lookAt(p.x - f.x * c.dist, p.y + c.aimUp, p.z - f.z * c.dist);

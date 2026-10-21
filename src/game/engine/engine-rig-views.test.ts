@@ -2,7 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
-import { CHASE } from "../present/drive-cam.ts";
+import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
 import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
@@ -85,7 +85,7 @@ describe("given the real engine in a rig scene, watching its car", () => {
     const along = dx * car.fwdFlat.x + dz * car.fwdFlat.z;
     assert.ok(car.velocity.length() > 5, `the car is under way at ${car.velocity.length().toFixed(1)} m/s`);
     assert.ok(along < 0, `the camera is ahead of the car (${along.toFixed(2)} m along its heading)`);
-    assert.ok(dist <= CHASE.third.dist + 1.5, `the camera is ${dist.toFixed(2)} m off, the chase distance is ${CHASE.third.dist}`);
+    assert.ok(dist <= PLATFORM_CAMERA.third.dist + 1.5, `the camera is ${dist.toFixed(2)} m off, the chase distance is ${PLATFORM_CAMERA.third.dist}`);
     engine.reset();
     assert.equal(engine["view"].specView(false), "third", "the reset keeps the view");
     run(1);
