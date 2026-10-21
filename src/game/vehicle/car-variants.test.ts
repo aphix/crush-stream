@@ -130,6 +130,10 @@ describe("given every body style, compared with the sedan and the platform its r
 
 /** Tolerance (m) between a style's spec dimensions and its built car: well under a pixel of the references at their scale. */
 const DIMS_TOL = 0.005;
+/** A bed floor stands within two of the references' pixels of where its spec's bed tub puts it. */
+const BED_FLOOR_TOL = 0.03;
+/** The references' beds are open about 0.40 m under the rail; under 0.35 m a bed reads as a flatbed. */
+const BED_DEPTH = 0.35;
 
 /** Box in the car's frame of every mesh it draws but the light bar (the spec leaves it off). */
 function shellBox(car: DeformableCar): THREE.Box3 {
@@ -186,12 +190,24 @@ describe("given each body style's silhouette, measured as the highest visible su
     assert.ok(topAt("coupe", -0.2) < topAt("sedan", -0.2) - 0.06, `coupe ${topAt("coupe", -0.2)} sedan ${topAt("sedan", -0.2)}`);
   });
 
-  it("when the pickup and the monster are measured, then each has a cab roof and an open bed floor below 0.6 m, lower than every other style's deck", () => {
+  it("when the pickup and the monster are measured, then each has a cab roof and an open bed: its floor where its spec's bed tub puts it, deep under its rail, and lower than every other style's deck", () => {
     const beds: readonly CarStyleId[] = ["pickup", "monster"];
-    for (const id of beds) assert.ok(topAt(id, -0.2) > 1.25, `${id} cab roof ${topAt(id, -0.2)}`);
+    for (const id of beds) {
+      assert.ok(topAt(id, -0.2) > 1.25, `${id} cab roof ${topAt(id, -0.2)}`);
+      const style = CAR_STYLES[id];
+      const [zRear, zFront, floorY] = style.tubs.at(-1)!;
+      const mid = (zRear + zFront) / 2;
+      const floor = topAt(id, mid);
+      assert.ok(Math.abs(floor - floorY) <= BED_FLOOR_TOL, `${id} bed floor ${floor} at z=${mid} vs its tub's ${floorY}`);
+      const rail = sampleSlice(mid, style.profile).yBelt;
+      assert.ok(rail - floor >= BED_DEPTH, `${id} bed ${rail - floor} m deep under its rail at ${rail}`);
+    }
     for (const z of [-1.1, -1.7]) {
-      for (const id of beds) assert.ok(topAt(id, z) < 0.6, `${id} bed floor at z=${z} is ${topAt(id, z)}`);
-      for (const id of CAR_STYLE_IDS) if (!beds.includes(id)) assert.ok(topAt(id, z) > 0.78, `${id} deck at z=${z}`);
+      for (const id of CAR_STYLE_IDS) {
+        if (beds.includes(id)) continue;
+        assert.ok(topAt(id, z) > 0.78, `${id} deck at z=${z}`);
+        for (const bed of beds) assert.ok(topAt(bed, z) < topAt(id, z), `${bed} bed floor ${topAt(bed, z)} at z=${z} against the ${id} deck ${topAt(id, z)}`);
+      }
     }
   });
 });
