@@ -436,6 +436,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     const rail = makeBar(source, 0.03, 0.03, hypot2(railPlan, railFront - railRear), 0, 0, 0).rotateX(-detAtan2(railFront - railRear, railPlan));
     if (railFrontX !== railRearX) rail.rotateY(sign * detAtan2(railFrontX - railRearX, railRun));
     parts.push(rail.translate(sign * ((railRearX + railFrontX) / 2 + 0.015), (railRear + railFront) / 2 + 0.005, q.zRearBot + railRun * 0.5));
+    rail.name = "beltRail";
     if (source === "drawn") parts.push(...glassTopFill(sign, style, aTopZ));
   }
   // The cage keeps its header boxes until the rig derives the cabin cage; the drawn roof covers both glass tops, so it draws none.
