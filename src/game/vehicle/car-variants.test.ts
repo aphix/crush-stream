@@ -246,15 +246,15 @@ describe("given every body style's rig cage (the soft-body frame that wraps the 
   }
 });
 
-/** The owner's lids (docs/DOOR_RIG.md, Lids): a sedan's lid hinged at the rear window's base wraps the tail down to its lamps; a hatch is a roof-hinged lid wrapping down to just above the bumper. */
+/** The owner's lids (docs/DOOR_RIG.md, Lids): a sedan's lid hinged at the rear window's base wraps the tail down to its lamps; a hatch is a roof-hinged lid wrapping down a leaning tail face to just above the bumper. */
 const WRAPPED: readonly [string, BodyStyle][] = [
   ["sedan", { ...CAR_STYLES.sedan, boot: { kind: "lid", z0: -1.16, z1: -2.126, origin: [0.74, -0.72], pivot: [0.81, -1.16], drop: { y: 0.5, w: 0.47 } } }],
-  ["hatchback", { ...CAR_STYLES.hatchback, boot: { kind: "lid", z0: -1.84, z1: -2.126, origin: [0.87, -1.84], pivot: [1.27, -1.33], drop: { y: 0.46, w: 0.6 } } }],
+  ["hatchback", { ...CAR_STYLES.hatchback, boot: { kind: "lid", z0: -1.84, z1: -2.1, origin: [0.87, -1.84], pivot: [1.27, -1.33], drop: { y: 0.46, w: 0.6, z: -2.14 } } }],
 ];
 
 describe("given a deck lid that wraps the tail (boot.drop)", () => {
   for (const [id, style] of WRAPPED) {
-    it(`when a ${id}'s wrapping lid is built, then it folds down the rear face to drop.y at z1, drop.w wide, inside its cage with no clamping`, () => {
+    it(`when a ${id}'s wrapping lid is built, then it folds down the rear face to drop.y, its bottom edge at drop.z (else z1), drop.w wide, inside its cage with no clamping`, () => {
       const boot = style.boot;
       assert.ok(boot.kind === "lid" && boot.drop !== undefined);
       const [py, pz] = bootPivot(boot);
@@ -266,11 +266,13 @@ describe("given a deck lid that wraps the tail (boot.drop)", () => {
       for (let i = 0; i < pos.count; i++) {
         const y = pos.getY(i) + py;
         low = Math.min(low, y);
+        if (y > boot.drop.y + 1e-6) continue;
         back = Math.min(back, pos.getZ(i) + pz);
-        if (y < boot.drop.y + 0.01) faceW = Math.max(faceW, Math.abs(pos.getX(i)));
+        faceW = Math.max(faceW, Math.abs(pos.getX(i)));
       }
+      const bottomZ = boot.drop.z ?? boot.z1;
       assert.ok(Math.abs(low - boot.drop.y) < 1e-6 && Math.abs(faceW - boot.drop.w) < 1e-6, `${id} face bottom ${low} m, half-width ${faceW} m`);
-      assert.ok(back < boot.z1 && back > boot.z1 - 0.02, `${id} face at z ${back}`);
+      assert.ok(back < bottomZ && back > bottomZ - 0.02, `${id} face bottom edge at z ${back}`);
       const d = new StreamedDeformation(makeChassisGeometry(style), carFrame(style).rig);
       assert.ok(panelClamp(d, geo, "boot", new THREE.Vector3(0, py, pz)) < 1e-4, `${id} boot clamped`);
     });

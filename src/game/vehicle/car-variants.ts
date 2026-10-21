@@ -40,10 +40,11 @@ export interface GlassQuad {
   wTop: number;
 }
 
-/** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m). */
+/** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
 export interface LidDrop {
   y: number;
   w: number;
+  z?: number;
 }
 
 /** The panel's shape; `pivot` is where it turns (default `origin`): a hatch's or liftgate's roof hinge, a drop gate's bottom edge. `swing`: its latch, struts and limits (default by kind, `hinge-spec.ts`). */

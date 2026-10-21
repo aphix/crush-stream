@@ -469,7 +469,10 @@ function makeDeckPanel(style: BodyStyle, z0: number, z1: number, origin: YZ, sou
     }
   }
   const geo = loftFromRings(rings, zs, 0, 1);
-  if (drop) bendOverTail(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, drop.w / wEnd);
+  if (drop) {
+    const lean = ((drop.z ?? z1) - z1) / (yc - (drop.y - oy));
+    bendOverTail(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, drop.w / wEnd, lean);
+  }
   ensureOutwardNormals(geo);
   if (source === "drawn") splitCreases(geo, CREASE_DEGREES.deckLid);
   geo.computeBoundingBox();
@@ -478,16 +481,17 @@ function makeDeckPanel(style: BodyStyle, z0: number, z1: number, origin: YZ, sou
 
 /**
  * Bends the straight run lofted past `zA` (its z the path length, its y the offset off the panel) a quarter turn down over the
- * tail edge, about the fold's centre (`yc`, `zA`), then straight down the face, scaling x to `wFace` × on the way round.
+ * tail edge, about the fold's centre (`yc`, `zA`), then down the face, `lean` m of z per m down; x scales to `wFace` × on the way round.
  */
-function bendOverTail(pos: THREE.BufferAttribute, zA: number, yc: number, wFace: number): void {
+function bendOverTail(pos: THREE.BufferAttribute, zA: number, yc: number, wFace: number, lean: number): void {
   const arc = (LID_FOLD_R * Math.PI) / 2;
   for (let i = 0; i < pos.count; i++) {
     const s = zA - pos.getZ(i);
     if (s < 1e-9) continue;
     const turn = Math.min(s / LID_FOLD_R, Math.PI / 2);
     const r = LID_FOLD_R + pos.getY(i);
-    pos.setXYZ(i, pos.getX(i) * lerp(1, wFace, turn / (Math.PI / 2)), yc + r * detCos(turn) - Math.max(0, s - arc), zA - r * detSin(turn));
+    const down = Math.max(0, s - arc);
+    pos.setXYZ(i, pos.getX(i) * lerp(1, wFace, turn / (Math.PI / 2)), yc + r * detCos(turn) - down, zA - r * detSin(turn) + lean * down);
   }
 }
 

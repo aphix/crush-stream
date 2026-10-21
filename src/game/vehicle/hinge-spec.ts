@@ -87,7 +87,7 @@ export function lidSpec(boot: BootSpec): HingeSpec {
   let fz: number;
   if (boot.kind === "lid") {
     fy = boot.drop?.y ?? boot.origin[0];
-    fz = boot.z1;
+    fz = boot.drop?.z ?? boot.z1;
   } else {
     const by = boot.y0;
     const bz = boot.z0 ?? boot.origin[1];

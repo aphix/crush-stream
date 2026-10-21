@@ -90,9 +90,10 @@ The trunk lid, hatch, SUV liftgate and pickup/monster drop gate (part slot 3, `L
   turns about car x through it. The free edge is the panel edge farthest from the pivot; a chord rising more than 45° from the
   pivot is a drop gate (`dir` −1, opens rearward-down), anything else opens up (`dir` +1). A pivot more than 0.2 m above the
   panel's top edge (`origin`) is a roof hinge (`roofHinged`): a hatch or liftgate.
-- **Shape (`makeTrunkGeometry`):** a deck lid lofts on the deck line from `z0` to `z1`; its optional `drop` `{ y, w }` folds it
-  over the tail edge (8 cm radius) and down the rear face to `y`, narrowing to the half-width `w`, the face 1.6 cm proud of the
-  tail at `z1`. A tailgate is an upright (or leaning) panel. The owner's reference
+- **Shape (`makeTrunkGeometry`):** a deck lid lofts on the deck line from `z0` to `z1`; its optional `drop` `{ y, w, z? }` folds it
+  over the tail edge (8 cm radius) and down the rear face to `y`, narrowing to the half-width `w`; the face's top stands at `z1`
+  and its bottom edge at `z` (default `z1`, upright; another `z` leans it like a tailgate's `z0`). A tailgate is an upright (or
+  leaning) panel. The owner's reference
   (`.tmp/ModernCarDesign/owner-trunks-popped.png`): the sedan and police lid is hinged at the rear window's base and wraps the
   tail down to the plate recess, the tail lamps' inner halves inside its face (`drop`); the muscle's is a flat deck to the tail;
   the hatch and SUV gate is roof-hinged, carries the rear window and wraps down to just above the bumper (`drop`); the pickup and

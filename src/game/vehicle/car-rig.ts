@@ -154,7 +154,9 @@ function bootCage(boot: BodyStyle["boot"], base: CageSpec, xScale: number): Cage
   if (boot.kind === "lid") {
     const P = PLATFORM_CABIN.boot;
     const cage = moved(base, xScale, lifted(boot.origin[0] - P.origin[0]), spanned(P.z1, P.z0, boot.z1, boot.z0));
-    return boot.drop ? { ...cage, min: [cage.min[0], Math.min(cage.min[1], boot.drop.y - LID_DROP_ROOM), Math.min(cage.min[2], boot.z1 - LID_DROP_ROOM)] } : cage;
+    if (!boot.drop) return cage;
+    const back = Math.min(boot.z1, boot.drop.z ?? boot.z1);
+    return { ...cage, min: [cage.min[0], Math.min(cage.min[1], boot.drop.y - LID_DROP_ROOM), Math.min(cage.min[2], back - LID_DROP_ROOM)] };
   }
   const [y, z] = boot.origin;
   const x = base.max[0] + base.max[0] * (xScale - 1);
