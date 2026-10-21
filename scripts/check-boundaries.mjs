@@ -414,7 +414,7 @@ const PLATFORM_WORDS = new Set([
   "pointerlockchange", "pointerlockerror", "mousemove", "fullscreenchange", "webkitfullscreenchange", "languagechange",
   "visibilitychange", "resize", "blur", "focus", "click", "error", "load", "change", "input", "contextmenu", "wheel", "copy",
   "cut", "paste", "connected", "connecting", "standard", "stylesheet", "preconnect", "rel", "navigate", "same-origin", "include",
-  "gamepadconnected", "gamepaddisconnected", "webglcontextrestored", "http:", "https:",
+  "gamepadconnected", "gamepaddisconnected", "webglcontextrestored", "http:", "https:", "module",
   // canvas / three.js
   "position", "uv", "uv1", "color", "normal", "index", "2d", "canvas", "YXZ", "WEBGL_debug_renderer_info", "EXT_disjoint_timer_query_webgl2", "div", "textarea", "button",
   // HTTP / encodings

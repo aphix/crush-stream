@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import * as THREE from "three";
 import { element, stubBrowser } from "../../engine/engine-headless.test-util.ts";
+import { PageWorker } from "../../engine/page-worker.test-util.ts";
 import { tagSurface } from "./surface-tag.ts";
 import { Ultra } from "./ultra.ts";
 
-const PAGE = "http://x/";
+/** The page's files: every URL the loads ask for is root-relative (`BASE_URL` is "/" in node). */
 const PUBLIC = new URL("../../../../public/", import.meta.url);
 /** The desktop set's edge (px). */
 const PHOTO_EDGE = 1024;
@@ -24,18 +25,8 @@ let mipmapRuns = 0;
 
 stubBrowser();
 Object.assign(globalThis, {
-  Request: class extends Request {
-    constructor(input: RequestInfo | URL, init?: RequestInit) {
-      super(typeof input === "string" ? new URL(input, PAGE) : input, init);
-    }
-  },
-  ProgressEvent: class extends Event {
-    constructor(type: string, init?: object) {
-      super(type);
-      Object.assign(this, init);
-    }
-  },
-  fetch: async (input: RequestInfo | URL) => new Response(await readFile(new URL(new URL(input instanceof Request ? input.url : String(input), PAGE).pathname.slice(1), PUBLIC))),
+  Worker: PageWorker,
+  fetch: async (url: string) => new Response(await readFile(new URL(url.slice(1), PUBLIC))),
   createImageBitmap: async () => {
     const bitmap: FakeBitmap = {
       width: PHOTO_EDGE,
