@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { CABIN_TUB, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
+import { CABIN_TUB, PLATFORM_CAMERA, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
 import { SEDAN_DETAILS } from "./sedan-details.ts";
 
 export const SEDAN: BodyStyle = {
@@ -76,4 +76,5 @@ export const SEDAN: BodyStyle = {
   boot: { kind: "lid", z0: -1.65, z1: -2.06, origin: [0.97, -1.62] },
   lamps: { head: [0.28, 0.515], tail: [0.34, 0.8] },
   details: SEDAN_DETAILS,
+  camera: { ...PLATFORM_CAMERA, hood: [1.08, 1.2] },
 };
