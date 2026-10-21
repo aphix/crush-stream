@@ -156,6 +156,7 @@ scenarios at the engine's slices), `scenes/contact-parity.test-util.ts` (striker
 - **W4. Visual cheats.** Effects, camera and lighting may ignore physics ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md) 1). The cheat lives in
   `present`, never in a sim context.
 - **W5. Table rows look alike.** Repeated rows in data tables are not duplication.
+  `src/game/vehicle/car-styles/` is one such table, a car per file: C13 skips a value only those files repeat.
 
 ## 8. Size
 

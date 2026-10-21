@@ -553,7 +553,12 @@ const c12 = [];
 for (const [v, at] of strGroups) if (at.length > 1) for (const w of at) c12.push(`${w} "${v}" ×${at.length}`);
 check("C12", "id-like string literals repeated in production code (one constant, imported)", c12);
 const c13 = [...rateLiterals];
-for (const [key, g] of numGroups) if (new Set(g.map((o) => o.f)).size > 1) for (const o of g) c13.push(`${o.at} ${key} ×${g.length}`);
+// W5: the per-car style tables are one data table split a car per file; a value only they repeat is two rows alike.
+const STYLE_TABLES = "src/game/vehicle/car-styles/";
+for (const [key, g] of numGroups) {
+  if (new Set(g.map((o) => o.f)).size < 2 || g.every((o) => o.f.startsWith(STYLE_TABLES))) continue;
+  for (const o of g) c13.push(`${o.at} ${key} ×${g.length}`);
+}
 check("C13", "named numeric knobs repeated across files, and step/frame rate literals anywhere (one constant, imported)", c13);
 
 // Size caps (C8) are listed but never fail the ratchet: the owner treats splitting files as clean-up paperwork after
