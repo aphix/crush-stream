@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import { loadHdrEnv } from "../look-env.ts";
-import { loadUprightBitmap } from "../bitmap-loader.ts";
+import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import { gainOf } from "../prefabs.ts";
 import { surfaceOf, type SurfaceRole, type SurfaceTag } from "./surface-tag.ts";
-import { envYaw, LOOK, SURFACE_METRES } from "./ultra-look.ts";
+import { DIFF_GAIN, envYaw, LOOK, SURFACE_METRES } from "./ultra-look.ts";
 import type { UltraHost } from "./load.ts";
 
 /**
@@ -13,21 +13,23 @@ import type { UltraHost } from "./load.ts";
  *  - asphalt-*: "Asphalt 01" by Dario Barresi and Charlotte Baglioni, https://polyhaven.com/a/asphalt_01
  *  - concrete-*: "Concrete Floor Worn 001" by Dimitrios Savva and Rico Cilliers, https://polyhaven.com/a/concrete_floor_worn_001
  *  - ground-*: "Gravelly Sand" by Dario Barresi, https://polyhaven.com/a/gravelly_sand
- * `-diff` is the diffuse colour, `-nor` the OpenGL normal map, `-arm` ambient occlusion (R), roughness (G), metalness (B); the 1k JPEGs
- * re-encoded as WebP (quality 80, normals 88). `public/ultra/512/` is the phone set: the 1024² files by ffmpeg `scale=512:512:flags=area`, WebP quality 80 (normals 88).
+ * `-diff` is the diffuse colour, `-nor` the OpenGL normal map, `-arm` ambient occlusion (R), roughness (G), metalness (B); each a KTX2
+ * (UASTC, Zstd, a full mip chain; colour with the sRGB transfer, normals and ARM linear, normals with the normal-map preset) encoded by
+ * ktx2-encoder 0.6.0 from the 1k JPEGs re-encoded as WebP (quality 80, normals 88). `public/ultra/512/` is the phone set, encoded the same
+ * from those WebPs scaled by ffmpeg `scale=512:512:flags=area`.
  */
 const BASE = import.meta.env?.BASE_URL ?? "/";
 const SKY_URL = `${BASE}ultra/sky.hdr`;
 const FULL_DIR = `${BASE}ultra/`;
-/** A phone's nine images at 512²: 12 MiB of RGBA8 plus mips instead of 48; tiling is by metres, so only the texel density halves. */
+/** A phone's nine images at 512²: a quarter of the desktop set's texels; tiling is by metres, so only the texel density halves. */
 const PHONE_DIR = `${BASE}ultra/512/`;
 const ROLES: readonly SurfaceRole[] = ["asphalt", "concrete", "ground"];
 const MAX_ANISOTROPY = 8;
-/** Edge (px) the diffuse is shrunk to for its mean colour. */
-const MEAN_EDGE = 256;
+/** three's Basis transcoder, copied from its `examples/jsm/libs/basis/`: KTX2Loader fetches `basis_transcoder.js` and `.wasm` by name from one folder. */
+const TRANSCODER_DIR = `${BASE}basis/`;
 
-/** One role's photographs, on the GPU only (`uploadOnce`), and `1 / mean linear colour` of its diffuse (the gain `prefabs.ts` keeps for the procedural ones). */
-type PbrSet = { diff: THREE.Texture; nor: THREE.Texture; arm: THREE.Texture; gain: THREE.Color };
+/** One role's photographs, on the GPU only (`uploadOnce`), and `1 / mean linear colour` of its diffuse (`DIFF_GAIN`, the gain `prefabs.ts` keeps for the procedural ones). */
+type PbrSet = { diff: THREE.CompressedTexture; nor: THREE.CompressedTexture; arm: THREE.CompressedTexture; gain: THREE.Color };
 /** A set tiled for one place: the same images, a repeat that makes a tile cover its real size where one UV unit spans `uvMetres`. */
 type Tiling = { diff: THREE.Texture; nor: THREE.Texture; arm: THREE.Texture };
 /** A surface material as the procedural look left it; kept on the material (`userData`), so a disposed course takes it along. */
@@ -43,35 +45,27 @@ type Saved = {
 };
 const SAVED = "ultraSaved";
 
-async function loadImage(dir: string, role: SurfaceRole, kind: "diff" | "nor" | "arm", anisotropy: number): Promise<THREE.Texture<ImageBitmap>> {
-  const bitmap = await loadUprightBitmap(`${dir}${role}-${kind}.webp`);
-  const tex = new THREE.Texture(bitmap);
-  tex.colorSpace = kind === "diff" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+async function loadPhoto(loader: KTX2Loader, dir: string, role: SurfaceRole, kind: "diff" | "nor" | "arm", anisotropy: number): Promise<THREE.CompressedTexture> {
+  // The file's own colour space: sRGB for the colour, linear for the normals and ARM.
+  const tex = await loader.loadAsync(`${dir}${role}-${kind}.ktx2`);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.anisotropy = anisotropy;
-  // An ImageBitmap carries its orientation already (`imageOrientation` above).
-  tex.flipY = false;
-  tex.needsUpdate = true;
   return tex;
 }
 
-async function loadSet(renderer: THREE.WebGLRenderer, dir: string, role: SurfaceRole, anisotropy: number): Promise<PbrSet> {
-  const [diff, nor, arm] = await Promise.all([loadImage(dir, role, "diff", anisotropy), loadImage(dir, role, "nor", anisotropy), loadImage(dir, role, "arm", anisotropy)]);
-  const c = document.createElement("canvas");
-  c.width = c.height = MEAN_EDGE;
-  c.getContext("2d")!.drawImage(diff.image, 0, 0, MEAN_EDGE, MEAN_EDGE);
-  const gain = gainOf(c);
+async function loadSet(renderer: THREE.WebGLRenderer, loader: KTX2Loader, dir: string, role: SurfaceRole, anisotropy: number): Promise<PbrSet> {
+  const [diff, nor, arm] = await Promise.all([loadPhoto(loader, dir, role, "diff", anisotropy), loadPhoto(loader, dir, role, "nor", anisotropy), loadPhoto(loader, dir, role, "arm", anisotropy)]);
   for (const tex of [diff, nor, arm]) uploadOnce(renderer, tex);
-  return { diff, nor, arm, gain };
+  return { diff, nor, arm, gain: new THREE.Color(...DIFF_GAIN[role]) };
 }
 
 /**
- * Upload `tex` and free its decoded picture, so the GPU holds the only copy. A tiling's clone bumps the shared source's version:
- * `dataReady` false keeps that from re-reading the closed picture.
+ * Upload `tex` and drop its transcoded mips, so the GPU holds the only copy. A tiling's clone bumps the shared source's version:
+ * `dataReady` false keeps that from uploading again.
  */
-function uploadOnce(renderer: THREE.WebGLRenderer, tex: THREE.Texture<ImageBitmap>): void {
+function uploadOnce(renderer: THREE.WebGLRenderer, tex: THREE.CompressedTexture): void {
   renderer.initTexture(tex);
-  tex.image.close();
+  tex.mipmaps = [];
   tex.source.dataReady = false;
 }
 
@@ -105,12 +99,15 @@ export class Ultra {
   static async create(host: UltraHost): Promise<Ultra> {
     const anisotropy = Math.min(MAX_ANISOTROPY, host.renderer.capabilities.getMaxAnisotropy());
     const envLoad = loadHdrEnv(host.renderer, SKY_URL, host.alive);
+    const loader = new KTX2Loader().setTranscoderPath(TRANSCODER_DIR).detectSupport(host.renderer);
     let loaded: PbrSet[];
     try {
-      loaded = await Promise.all(ROLES.map((role) => loadSet(host.renderer, host.phone ? PHONE_DIR : FULL_DIR, role, anisotropy)));
+      loaded = await Promise.all(ROLES.map((role) => loadSet(host.renderer, loader, host.phone ? PHONE_DIR : FULL_DIR, role, anisotropy)));
     } catch (err) {
       void envLoad.then((e) => e?.dispose());
       throw err;
+    } finally {
+      loader.dispose();
     }
     const env = await envLoad;
     if (env === null) throw new Error(`Ultra sky ${SKY_URL} did not load (or the engine was disposed meanwhile)`);

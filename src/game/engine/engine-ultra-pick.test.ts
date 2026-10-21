@@ -1,6 +1,5 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -11,9 +10,8 @@ import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { PageWorker } from "./page-worker.test-util.ts";
+import { servePublic } from "./page-files.test-util.ts";
 
-/** The page's files: every URL the loads ask for is root-relative (`BASE_URL` is "/" in node). */
-const PUBLIC = new URL("../../../public/", import.meta.url);
 /** The extension that links programs off the main thread, and its query (three's `WebGLProgram.isReady`). */
 const PARALLEL_LINK = "KHR_parallel_shader_compile";
 const COMPLETION_STATUS_KHR = 0x91b1;
@@ -66,11 +64,8 @@ function surface(key: string): THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandar
 }
 
 stubBrowser();
-Object.assign(globalThis, {
-  Worker: PageWorker,
-  fetch: async (url: string) => new Response(await readFile(new URL(url.slice(1), PUBLIC))),
-  createImageBitmap: async () => ({ width: 1, height: 1, close() {} }),
-});
+servePublic();
+Object.assign(globalThis, { Worker: PageWorker });
 
 describe("given a page with Ultra loaded (a second pick, or the bench's Ultra arm, finds it so) on a GPU that links programs in parallel", () => {
   let engine: CrashEngine;
