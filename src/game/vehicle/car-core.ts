@@ -6,7 +6,7 @@ import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
-import { BUMPER_SEAT, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
+import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, makeDoorGeometry } from "./car-door-mesh.ts";
@@ -388,7 +388,7 @@ export abstract class CarCore {
 
     this.hood = new THREE.Mesh(makeHoodGeometry(this.style), this.bodyMat);
     this.hood.castShadow = true;
-    this.hood.position.set(0, 0.7, 0.74);
+    this.hood.position.set(0, this.style.hood.origin[0], this.style.hood.origin[1]);
     this.group.add(this.hood);
     this.trunk = new THREE.Mesh(makeTrunkGeometry(this.style), this.bodyMat);
     this.trunk.castShadow = true;
@@ -476,7 +476,8 @@ export abstract class CarCore {
     this.flushCasters.push(mesh);
     g.add(mesh);
     if (!front) g.add(this.partSeats[PART_KIND.tailTrim]!);
-    g.position.set(0, BUMPER_SEAT.y, front ? BUMPER_SEAT.z : -BUMPER_SEAT.z);
+    const { seat } = front ? this.style.bumpers.front : this.style.bumpers.rear;
+    g.position.set(0, seat.y, front ? seat.z : -seat.z);
     if (front) {
       const grille = this.partSeats[PART_KIND.grille]!;
       grille.position.set(0, 0.1, 0.06);

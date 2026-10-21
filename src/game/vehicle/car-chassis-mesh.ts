@@ -6,7 +6,6 @@ import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import {
-  ARCH_R,
   DOOR_EDGE,
   DOOR_Z0,
   DOOR_Z1,
@@ -96,8 +95,8 @@ function sliceZs(style: BodyStyle, source: BodySource): number[] {
   return stations.sort((a, b) => a - b);
 }
 
-function makeWellLiner(wx: number, wy: number, wz: number): THREE.BufferGeometry {
-  const geo = new THREE.CylinderGeometry(ARCH_R, ARCH_R, 0.24, 14, 1, true, 0, Math.PI);
+function makeWellLiner(wx: number, wy: number, wz: number, archR: number): THREE.BufferGeometry {
+  const geo = new THREE.CylinderGeometry(archR, archR, 0.24, 14, 1, true, 0, Math.PI);
   geo.rotateZ(Math.PI / 2);
   geo.rotateY(wx > 0 ? 0 : Math.PI);
   geo.translate(wx, wy, wz);
@@ -113,7 +112,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
   const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style)];
-  for (const [wx, wy, wz] of carFrame(style).wheels) parts.push(makeWellLiner(wx, wy, wz));
+  for (const [wx, wy, wz] of carFrame(style).wheels) parts.push(makeWellLiner(wx, wy, wz, style.arch.radius));
   parts.push(...makeGreenhouseFrame(style, source));
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
   const rb = style.rearBulkhead;

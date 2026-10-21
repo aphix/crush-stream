@@ -5,6 +5,24 @@ import { BOOT_SENSOR, st } from "./platform.ts";
 export const HATCHBACK: BodyStyle = {
   id: "hatchback",
   dims: { wheelbase: 2.225, overhang: { front: 0.7, rear: 0.64 }, track: 1.37, width: 1.62, height: 1.306, rideHeight: 0.15, wheel: { radius: 0.25, width: 0.17 } },
+  windshield: { base: [0.9, 0.8], wBase: 1.1, wTop: 0.92 },
+  bPillar: { rear: -0.29, front: -0.21 },
+  belt: { x: 0.75, y: [[0, 0.88]] },
+  rocker: { y: 0.2 },
+  arch: { radius: 0.3 },
+  hood: { z0: 0.8, z1: 1.66, origin: [0.79, 0.78] },
+  bumpers: {
+    front: {
+      seat: { y: 0.38, z: 1.7245 },
+      fascia: [[0.09, -0.07], [0.09, 0.02], [0.079, 0.062], [0.045, 0.08], [0.016, 0.074], [-0.011, 0.062], [-0.045, 0.064], [-0.063, 0.088], [-0.09, 0.075], [-0.09, -0.07]],
+      span: 0.7,
+    },
+    rear: {
+      seat: { y: 0.41, z: 1.6645 },
+      fascia: [[0.15, -0.07], [0.15, 0.02], [0.132, 0.062], [0.075, 0.08], [0.027, 0.074], [-0.018, 0.062], [-0.075, 0.064], [-0.105, 0.088], [-0.15, 0.075], [-0.15, -0.07]],
+      span: 0.66,
+    },
+  },
   profile: [
     st(-1.7125, 0.64, 0.875),
     st(-1.6, 0.72, 0.885, 0.96, 0.5, 0.25),
