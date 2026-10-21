@@ -346,6 +346,31 @@ export function makeLightBar(): THREE.BufferGeometry {
   );
 }
 
+/** A push bar stands this far (m) ahead of its bumper's face, `tube` thick; its uprights `x` either side of the middle reach
+ *  `rise` above the bumper's top, and its lower bar spans `span` either side: a cruiser's grille guard. */
+const PUSH_BAR = { gap: 0.04, tube: 0.05, x: 0.2, rise: 0.3, span: 0.42 } as const;
+
+/** Front bumper `bumper` (bumper space, +z forward, indexed) with a push bar in front of its face: one geometry, so the bar
+ *  draws in the bumper's trim and tears off with it. */
+export function withPushBar(bumper: THREE.BufferGeometry): THREE.BufferGeometry {
+  bumper.computeBoundingBox();
+  const { min, max } = bumper.boundingBox!;
+  const { gap, tube, x, rise, span } = PUSH_BAR;
+  const z = max.z + gap + tube / 2;
+  const top = max.y + rise;
+  const box = (w: number, h: number, d: number, bx: number, by: number, bz: number) => new THREE.BoxGeometry(w, h, d).translate(bx, by, bz);
+  const parts = [bumper, box(2 * x + tube, tube, tube, 0, top - tube / 2, z), box(2 * span, tube, tube, 0, max.y - tube, z)];
+  for (const side of [-1, 1]) {
+    parts.push(box(tube, top - min.y, tube, side * x, (top + min.y) / 2, z));
+    parts.push(box(0.07, 0.22, 0.025, side * x, max.y + rise / 2, z + tube / 2 + 0.0125));
+    parts.push(box(tube, tube, gap + tube, side * x, max.y - tube, max.z + (gap + tube) / 2));
+  }
+  const geo = mergeGeometries(parts, false);
+  for (const g of parts) g.dispose();
+  if (!geo) throw new Error("Failed to merge the push bar into its bumper");
+  return geo;
+}
+
 /** [first vertex, count] of the red and blue lens in `makeLightBar` (a box is 24 vertices). */
 export const LIGHT_BAR_LENS = [
   [96, 24],

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
-import { LIGHT_BAR_FOOT, makeLightBar } from "./car-materials.ts";
+import { LIGHT_BAR_FOOT, makeLightBar, withPushBar } from "./car-materials.ts";
+import { makeBumperGeometry } from "./car-mesh.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 import { ROOF_REST_Y } from "./car-parts.ts";
 import { BAR_FOLD, hingePose } from "./part-pose.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
@@ -168,5 +170,24 @@ describe("given the police light bar on its base hinge", () => {
     assert.equal(digest(56), digest(56), "an attached bar differs between two runs of one crash");
     assert.equal(digest(64), digest(64), "a torn bar differs between two runs of one crash");
     assert.notEqual(digest(56), digest(64), "the two crashes read alike");
+  });
+});
+
+describe("given the push bar a cruiser wears on its front bumper", () => {
+  it("when a front bumper takes a push bar, then one geometry stands its uprights ahead of the bumper's face and above its top, the bumper's own vertices first and unmoved", () => {
+    const bumper = makeBumperGeometry(true, CAR_STYLES.police);
+    bumper.computeBoundingBox();
+    const before = bumper.boundingBox!.clone();
+    const rest = (bumper.getAttribute("position").array as Float32Array).slice();
+    const guarded = withPushBar(bumper);
+    guarded.computeBoundingBox();
+    const after = guarded.boundingBox!;
+    assert.ok(after.max.z > before.max.z + 0.08 && after.max.z < before.max.z + 0.15, `face ${before.max.z} -> ${after.max.z}`);
+    assert.ok(after.max.y > before.max.y + 0.25, `top ${before.max.y} -> ${after.max.y}`);
+    assert.ok(after.min.y >= before.min.y - 1e-6, "the bar reaches below the bumper");
+    const now = guarded.getAttribute("position").array;
+    let moved = 0;
+    for (let i = 0; i < rest.length; i++) moved = Math.max(moved, Math.abs(now[i]! - rest[i]!));
+    assert.equal(moved, 0, "the bumper's own vertices moved");
   });
 });

@@ -33,7 +33,8 @@ Mass, centre of gravity, lift and `wheelScale` stay per class in `vehicle-classe
 
 The shape tables describe the surfaces inside those bounds: `profile` (side-profile stations rear to front: shoulder
 half-width, beltline, roof height and width, how much greenhouse), `roofZ`, `windshieldTop`, `rearGlass`, `quarter`,
-`midPillarZ`, `rearBulkhead`, `tubs` (open floors), `rearDoorSeam`, `boot` (deck lid, or a hatch / tailgate), `lamps`, and the
+`midPillarZ`, `rearBulkhead`, `tubs` (open floors), `rearDoorSeam`, `boot` (deck lid, or a hatch / tailgate; a tailgate's
+optional `z0` leans its panel from its bottom edge `[y0, z0]` up to its hinge), `lamps`, and the
 optional `livery` and `lightBar`. `rig` overrides the soft-body cages a body's panels need.
 
 The hardpoints place the openings and the lower body, each per car:
@@ -43,14 +44,17 @@ The hardpoints place the openings and the lower body, each per car:
 | `windshield` | Base `[y, z]` of the glass centre line and its widths at the base and at `windshieldTop` |
 | `bPillar` | The B-pillar's z band |
 | `belt` | Side-glass sill: half-width `x`, and height `y` as `[z, y]` stations (linear between, held past the ends), so a beltline can rise toward the tail |
-| `rocker` | The body side's lowest line; under it the sill turns in to the floor pan at `dims.rideHeight` |
+| `rocker` | The body side's lowest line; under it the sill turns in to the floor pan. It rides up with `underside` |
+| `underside` | Optional floor pan height as `[z, y]` stations (linear between, held past the ends): the underside's rise to the nose and tail. Absent, the floor is flat at `dims.rideHeight` |
+| `door` | Front doors: hinge axis `hingeX`, `hingeY`, `hingeZ` at the A-pillar, `length` hinge to trailing edge, skin ±`halfHeight` about the hinge, and `aperture` `[z0, z1]`, the body's door cut (the skin covers it, 2 cm past each end). The mirror seats itself on the door skin at `mirrorY` over the hinge and is drawn to reach `mirrorReach` out, ±`mirrorHalfDepth` deep |
 | `arch` | Wheel-arch opening radius about each hub |
 | `hood` | Bonnet span `z0` (cowl) to `z1` (nose) and its hinge `origin` `[y, z]` |
-| `bumpers.front`, `bumpers.rear` | Group `seat` (height, distance from the middle), `fascia` section `[y, out]` top to bottom, and `span` (half-width) |
+| `bumpers.front`, `bumpers.rear` | Group `seat` (height, distance from the middle), `fascia` section `[y, out]` top to bottom, `span` (half-width), and `wrap`: the `|x|` where the fascia's corner starts sweeping back (`from`) and how far its end sweeps (`back`) |
 
 `car-styles/platform.ts` exports the values the first bodies shared as `PLATFORM_HARDPOINTS`; a table spreads it and overrides
 what its car changes. Every hardpoint but the bumper fascia reaches the collision cage or a sim reader (the greenhouse pillars,
 the sill, the arches, the hood's pose, a torn bumper's box), so moving one moves the sim: re-pin and bump `REPLAY_VERSION`.
+The greenhouse header bars follow the roof: a drawn header bar's top never stands above the roof skin over its ends.
 
 ## References and scale
 

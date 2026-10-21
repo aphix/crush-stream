@@ -9,9 +9,14 @@ export const PART_KIND = { interior: 0, liningL: 1, liningR: 2, mirrorL: 3, mirr
 type PartKind = (typeof PART_KIND)[keyof typeof PART_KIND];
 export const PART_KINDS: readonly PartKind[] = Object.values(PART_KIND);
 
+/** The mirror arm's inner end, out from its seat (m). */
+export const MIRROR_ROOT = 0.02;
+/** The mirror glass's reach from its seat (m): a car's `door.mirrorReach` scales the drawn mirror to it. */
+export const MIRROR_REACH = 0.21;
+
 function mirror(sign: number): THREE.BufferGeometry {
   const arm = toned(new THREE.BoxGeometry(0.12, 0.04, 0.05), 0x2a2c32, 0.5, 0.4);
-  arm.translate(sign * 0.08, 0, 0);
+  arm.translate(sign * (MIRROR_ROOT + 0.06), 0, 0);
   const cap = toned(new THREE.BoxGeometry(0.1, 0.08, 0.16), 0x1c1e22, 0.35, 0.55);
   cap.translate(sign * 0.16, 0.01, 0);
   const glass = toned(new THREE.PlaneGeometry(0.08, 0.06), 0x9aa8b4, 0.08, 0.7);
