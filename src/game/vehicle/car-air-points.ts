@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import type { LooseShape } from "./car-core.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, MU_TYRE, patchOf, pointContact, pointContactHeld, pointContactNear, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, STEP_MAX, staticTop, topsTop, topsTopLive, topsTopNear, wheelContact, type Surface } from "../world/surfaces.ts";
+import { BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, MU_TYRE, patchOf, pointContact, pointContactHeld, pointContactNear, pointContactSolids, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, STEP_MAX, staticTop, topsTop, topsTopLive, topsTopNear, wheelContact, type Surface } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { G, GQ } from "../world/ground-clock.ts";
 import { CRASH, hypot2 } from "../deform/physics-util.ts";
@@ -382,6 +382,8 @@ const TYRE_HUB = new Float64Array(12);
 const TYRE_DIM = new Float64Array(8);
 /** A tyre point's query: the tyre's law (a face within its mount of the point is floor, so it climbs it; a taller one is side). */
 const TYRE_PQ = new Float64Array(PQ_SIZE);
+/** Its answer: its own, so the body points' `HIT` keeps what their reads left in it (a far answer fills only part of it). */
+const TYRE_HIT = new Float64Array(HIT_SIZE);
 
 /** The body's x, y and z axes in world (9 numbers) from `q` into `_e`. */
 function basisOf(q: THREE.Quaternion): void {
@@ -437,13 +439,7 @@ export function wheelsAt(car: DeformableCar, within: number): number {
     _hub[2] = p.z + _e[2]! * hx + _e[5]! * r + _e[8]! * hz;
     // The footprint's tread rings are the platform tyre's: scaled to this car's radius, so its tread reaches the ground its hub stands over.
     wheelContact(_hub, _e, sc * (car.frame.rig.tyre.r / PLATFORM_TYRE.r), car.slot, _hit);
-    // A tyre meets a side on the body's own hub (`readTyreSides`): a wreck's hub mass held at a face it stands against (shoved, `shoveHub`)
-    // let the body it hangs on drive on through the slab, 1.4 m past its tyre.
-    const fx = car.frame.wx[i]!;
-    const fz = car.frame.wz[i]!;
-    TYRE_HUB[i * 3] = p.x + _e[0]! * fx + _e[3]! * r + _e[6]! * fz;
-    TYRE_HUB[i * 3 + 1] = p.y + _e[1]! * fx + _e[4]! * r + _e[7]! * fz;
-    TYRE_HUB[i * 3 + 2] = p.z + _e[2]! * fx + _e[5]! * r + _e[8]! * fz;
+    TYRE_HUB.set(_hub, i * 3);
     TYRE_DIM[2 * i] = r;
     TYRE_DIM[2 * i + 1] = car.frame.rig.tyre.halfW * sc;
     for (let k = 0; k < HIT_SIZE; k++) hit[o + k] = _hit[k]!;
@@ -493,16 +489,16 @@ export function readTyreSides(n: number, stroke: number): number {
       TYRE_PQ[PQ_VX] = v.x + w.y * rz - w.z * ry;
       TYRE_PQ[PQ_VY] = 0;
       TYRE_PQ[PQ_VZ] = v.z + w.x * ry - w.y * rx;
-      pointContact(TYRE_PQ, skip, HIT, NaN, SPECULATIVE_GAP);
-      if (HIT[C_H] !== NO_FLOOR || !(HIT[C_DEPTH]! > 0)) continue;
+      pointContactSolids(TYRE_PQ, skip, TYRE_HIT);
+      if (TYRE_HIT[C_H] !== NO_FLOOR || !(TYRE_HIT[C_DEPTH]! > 0)) continue;
       R[n]!.set(rx, ry, rz);
-      _s[S_PEN] = HIT[C_DEPTH]!;
-      bodyContact(n, HIT, true);
+      _s[S_PEN] = TYRE_HIT[C_DEPTH]!;
+      bodyContact(n, TYRE_HIT, true);
       TYRE[n] = true;
       MU[n] = MU_TYRE;
       // The tyre is no face of the body: the face it presses takes no load crush (a yielding face let the tyre sink 28 cm into the slab).
       SLOT[n] = body.surf.slot(OWN[n]!, N[n]!, false, body.q, FOLLOW[n]!);
-      const depth = HIT[C_DEPTH]!;
+      const depth = TYRE_HIT[C_DEPTH]!;
       SINK[n] = depth - stroke;
       GAPV[n] = depth < stroke ? Math.max(CLOSING[n]! - spring * depth * dt, -GROUND_LIFT_V) : 0;
       n++;
