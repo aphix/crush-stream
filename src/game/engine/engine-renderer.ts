@@ -15,12 +15,10 @@ if (!lightsChunk.includes(SKIP_DARK)) THREE.ShaderChunk.lights_fragment_begin = 
 
 /** The page's renderer: sRGB out, ACES at the game's exposure, PCF shadows, MSAA only at device pixel ratio 1. */
 export function makeRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: (window.devicePixelRatio || 1) <= 1,
-    alpha: false,
-    powerPreference: "high-performance",
-  });
+  // three r186 makes its own context with `alpha: true` whatever its `alpha` option says, compositing a transparent canvas.
+  const context = canvas.getContext("webgl2", { alpha: false, antialias: (window.devicePixelRatio || 1) <= 1, powerPreference: "high-performance" });
+  if (!context) throw new Error("WebGL2 is not available");
+  const renderer = new THREE.WebGLRenderer({ canvas, context });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setClearColor(0x12141a, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
