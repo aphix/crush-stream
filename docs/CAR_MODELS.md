@@ -74,12 +74,14 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | `roof.glassPanel` | Dark panel a few mm proud of the roof over `z` [rear, front], `width` across |
 | `bumpers.front.trim`, `bumpers.rear.trim` | `"body"` (its body colour, painted finish), `"chrome"` or `"black"`; unset, the car's accent trim. A player's bumper colour still recolours it |
 | `bumpers.rear.hitch` | Black tow-hitch receiver under the rear bumper's middle |
-| `exhaust` | `tips` 1 (at `x`) or 2 (at ±`x`) at height `y`, `size` [w, h], `shape` `"round"` (oval) or `"rect"`: chrome with a dark throat, past the rear bumper's face |
+| `exhaust` | `tips` 1 (at `x`) or 2 (at ±`x`) at height `y`, `size` [w, h], `shape` `"round"` (oval) or `"rect"`: chrome with a dark throat, ending 4 mm inside the rear bumper's rearmost face (nothing stands past the tail) |
+| `door.mirror` | The style's own mirror: `cap` `"rounded"` or `"box"`, `size` [w out from the door, h, d along the car] (default 0.16 × 0.10 × 0.08), `finish` `"body"` (the door's paint, a look's door colour too), `"black"` or `"chrome"`. Its foot sits on the door/A-pillar skin at the seat, a stalk runs out to the cap where the cap leaves room, and the cap's outer face is at `mirrorReach`, drawn at its real size. Unset: the platform mirror, x-scaled to the reach. The sim's mirror (reach, seat, rest box, torn box) is the platform's either way |
 
 The roof parts are merged into the drawn body after its other parts (the body's skin crushes them with the roof); rails and
 panel are drawn dark by the paint's `primer` attribute. Exhaust tips and the hitch are merged into the rear bumper
 (`withRearFittings`), so they tear off with it; their chrome and black come from the trim material's `fitting` attribute, so
-no part adds a draw call.
+no part adds a draw call. Every style's mirror is one variant in the part batch's two mirror draws: an instance draws its own
+variant and paints a body-colour cap from its instance colour (`mirrorPartsMaterial`), so mirrors stay at two draws for any fleet.
 
 ## References and scale
 

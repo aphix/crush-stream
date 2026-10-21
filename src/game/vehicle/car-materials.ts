@@ -12,7 +12,7 @@ import type { BodyStyle } from "./car-variants.ts";
  * What the paint's colour (sRGB 0xf2f2f0, linear here) and roughness multiply in where its two 1 x 1 maps were sampled, those maps'
  * texels: every car's paint stays what it was, and no paint pixel fetches a texture for a constant.
  */
-const PAINT_COLOR_TONE = new THREE.Color(0xf2f2f0);
+export const PAINT_COLOR_TONE = new THREE.Color(0xf2f2f0);
 const PAINT_ROUGHNESS_TONE = 0x8a / 0xff;
 
 /**
@@ -83,6 +83,33 @@ export function makeWheelMaterial(): THREE.MeshStandardMaterial {
   return m;
 }
 
+/** Per vertex: the mirror variant it belongs to (`mirrorVariant`); per instance: the variant its car draws. */
+export const MIRROR_VARIANT_ATTRIBUTE = "mirrorVariant";
+export const INSTANCE_MIRROR_VARIANT_ATTRIBUTE = "instanceMirrorVariant";
+/** Per vertex 1 where a mirror cap takes its door's paint (the instance colour), else 0. */
+export const PAINTED_ATTRIBUTE = "painted";
+
+/**
+ * The part batch's mirror material: one geometry per side holds every style's mirror, so an instance draws only its own variant (the
+ * others collapse to a point) and its `painted` cap in the instance colour, its door's paint. Wraps `capHighlights`' compile hook.
+ */
+export const mirrorPartsMaterial = once((): THREE.MeshStandardMaterial => {
+  const m = makePartsMaterial();
+  const cap = m.onBeforeCompile;
+  m.onBeforeCompile = (shader, renderer) => {
+    cap.call(m, shader, renderer);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", `#include <common>\nattribute float ${MIRROR_VARIANT_ATTRIBUTE};\nattribute float ${INSTANCE_MIRROR_VARIANT_ATTRIBUTE};\nattribute float ${PAINTED_ATTRIBUTE};`)
+      .replace(
+        "#include <color_vertex>",
+        `vColor = vec4(color, 1.0);\n#ifdef USE_INSTANCING_COLOR\nvColor.rgb *= mix(vec3(1.0), instanceColor.rgb, ${PAINTED_ATTRIBUTE});\n#endif`,
+      )
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\nif (abs(${MIRROR_VARIANT_ATTRIBUTE} - ${INSTANCE_MIRROR_VARIANT_ATTRIBUTE}) > 0.5) transformed = vec3(0.0);`);
+  };
+  m.customProgramCacheKey = () => "car-mirror-variants";
+  return m;
+});
+
 /**
  * A car material's draw class: opaque draws of one class need one shader program, so `sortByDrawClass` (present/draw-order.ts)
  * draws a class together instead of switching programs once per car. 0 (unset) sorts first.
@@ -122,16 +149,16 @@ export function makePaintMaterial(color: number): THREE.MeshPhysicalMaterial {
 const trimByKey = new Map<string, THREE.MeshStandardMaterial>();
 
 /** Trim finishes: the accent trim's satin, chrome, black plastic, and a painted bumper's (the paint's metalness and roughness, no clear coat). */
-const TRIM_FINISH = {
+export const TRIM_FINISH = {
   satin: { metalness: 0.55, roughness: 0.38 },
   chrome: { metalness: 0.95, roughness: 0.16 },
   plastic: { metalness: 0.3, roughness: 0.6 },
   paint: { metalness: 0.2, roughness: 0.42 },
 } as const;
 
-/** Black plastic and chrome (sRGB): a black or chrome bumper, and the fittings drawn in any bumper (`FITTING_TONE`). */
-const TRIM_BLACK = 0x121316;
-const TRIM_CHROME = 0xd2d6db;
+/** Black plastic and chrome (sRGB): a black or chrome bumper or mirror, and the fittings drawn in any bumper (`FITTING_TONE`). */
+export const TRIM_BLACK = 0x121316;
+export const TRIM_CHROME = 0xd2d6db;
 
 /** A `vec3` literal of sRGB `hex` in the shader's linear space. */
 function glslTone(hex: number): string {
