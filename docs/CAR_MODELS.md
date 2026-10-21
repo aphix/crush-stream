@@ -83,11 +83,13 @@ and wheel scale applied, no engine boot) in a bare scene through headless GL, ov
 The references live in `/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/` (git-ignored; `/tmp` does not survive a
 reboot). Run both through the box gate: `CAP=2G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node ...`.
 
-**`fit-car.mjs`: the rough fit.** Reads the side and top pictures into the style's own fields, builds the car from them, and
-nudges the profile stations toward the reference's roof line and plan for a few rounds, in one process of about 4 s. Its output
-is `.tmp/fit/<style>/fit.ts` (paste over the style file's fields), before/after overlays beside it, and one JSON line: both
-views' IoU, edge and glass offsets before and after, the per-corner checklist, and `notFit` (the fields it leaves to the hand).
-It never writes a style file. Finish by hand on trace-car's overlays.
+**`fit-car.mjs`: a speed-up.** It reads the side and top pictures into the style's own fields, builds the car from them, and
+nudges the profile stations toward the reference's roof line and plan for a few rounds, all in one process of about 5 s. It
+gets a car close fast but misses finer details. Each car agent then aligns the rest by hand on trace-car's overlays (windows,
+doors, wheel centres, any silhouette edge) and spot-checks against the bar: side and top IoU ≥ 0.95, per-edge mean ≤ 2 cm,
+max ≤ 5 cm, corners and glass included. Output: `.tmp/fit/<style>/fit.ts` (paste over the style file's fields after review),
+before/after overlays beside it, and one JSON line with both views' IoU, edge and glass offsets before and after, the
+per-corner checklist, and `notFit` (the fields left to the hand). It never writes a style file.
 
 ```sh
 R=/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
@@ -97,8 +99,11 @@ node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
 
 - Read: `dims` (wheelbase and wheel radius from the side picture's tyres, which also set z = 0; overhangs, height, width),
   `profile` (stations where the roof line, plan or glass zone bends), `roofZ`, `windshield`, `windshieldTop`, `rearGlass`,
-  `quarter`, `belt.y` (the glass sill) and `underside`. Fitted: `profile` only.
-- Not read: bumpers, hood, arch, rocker, door, boot, `bPillar`, `track`, `rideHeight`, `cabinHw`.
+  `quarter`, `belt.y` (the glass sill), `underside`, `door.hingeX` (the plan at the hinge), `door.mirrorReach` (one build, so the
+  mirror tip meets the reference's), `bumpers.*.seat.z` (lip on the end) and `bumpers.*.wrap` (the plan's end corners).
+  Fitted: `profile`.
+- Not read: hood, arch, rocker, boot, `track`, `rideHeight`, `cabinHw`, `bPillar`, the bumper fascia and span, and the door's
+  hinge y and z, length and aperture.
 
 **`trace-car.mjs`: one view, measured.** Writes an overlay PNG and prints one JSON line: the silhouette IoU and signed edge
 offsets (cm, positive where the car sticks out), the glass's (side: roof rail, sill, A- and C-pillar with their rake), the

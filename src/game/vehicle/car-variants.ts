@@ -1,4 +1,3 @@
-import type { RigOverrides } from "../deform/deform-rig.ts";
 import type { LidSwing } from "./hinge-spec.ts";
 import { COUPE } from "./car-styles/coupe.ts";
 import { HATCHBACK } from "./car-styles/hatchback.ts";
@@ -162,7 +161,6 @@ export interface BodyStyle {
    * the bumpers, grille and boot (`lamps.test.ts`).
    */
   lamps: { head: readonly [number, number]; tail: readonly [number, number] };
-  rig: RigOverrides;
   /** Fixed paint, or none (the fleet paint). */
   livery?: Livery;
   /** Roof light bar with red / blue sirens (`DeformableCar.setSirens`). */

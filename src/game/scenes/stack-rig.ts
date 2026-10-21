@@ -1,6 +1,5 @@
 import type { DeformableCar } from "../vehicle/car.ts";
 import { readContact } from "../vehicle/car-air-points.ts";
-import { ROOF_REST_Y } from "../vehicle/car-parts.ts";
 import { crownY, keelY } from "../vehicle/car-cage-rig.ts";
 import { SKIN } from "../vehicle/car-surfaces.ts";
 import { hypot2 } from "../kernel/physics-core.js";
@@ -105,7 +104,7 @@ export function stackLoads(cars: readonly DeformableCar[], n: number): { loadKn:
       loadKn[i] = (above * G) / 1000;
       above += c.deform.totalMass;
     } else loadKn[i] = null;
-    crushMm[i] = (ROOF_REST_Y - c.deform.massLocal("roof").y) * 1000;
+    crushMm[i] = (c.roofRestY - c.deform.massLocal("roof").y) * 1000;
   }
   return { loadKn, crushMm };
 }

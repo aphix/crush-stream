@@ -26,5 +26,4 @@ export const COUPE: BodyStyle = {
   rearDoorSeam: null,
   boot: { kind: "lid", z0: -1.34, z1: -1.98, origin: [0.8, -1.34] },
   lamps: { head: HEAD_LAMP, tail: [0.5, 0.58] },
-  rig: {},
 };

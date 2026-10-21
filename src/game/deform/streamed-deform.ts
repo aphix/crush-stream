@@ -504,6 +504,7 @@ export class StreamedDeformation extends DeformSolve {
     const extraCap = 0.03 + b * 0.08;
     const cap = shape ? 1.35 : 2.2;
     const roofClamp = !this.deepCrush && this.roofHolds();
+    const roofY = this.rig.roofClampY;
     // The roof's imprint (`DeformRig.imprint`) as drawn: no skin point stands over it, as no point of the top other cars stand on does.
     const cutY = this.netImpact[9]!;
     const cutX = this.netImpact[10]!;
@@ -512,7 +513,7 @@ export class StreamedDeformation extends DeformSolve {
     const nor = geometry.getAttribute("normal") as THREE.BufferAttribute | undefined;
     if (kernel && geometry.index && nor && nor.count === attr.count && nor.array instanceof Float32Array) {
       // The kernel's loop is this one below, with `computeNormalsFast`: same bits out (skin-kernel.parity.ts).
-      const d = (this.kernelIn ??= { X, co, pos, hubs: new Float64Array(this.masses.length * 5), params: new Float64Array(12) });
+      const d = (this.kernelIn ??= { X, co, pos, hubs: new Float64Array(this.masses.length * 5), params: new Float64Array(13) });
       const p = d.params;
       p[0] = wrinkles ? 1 : 0;
       p[1] = ampK;
@@ -526,6 +527,7 @@ export class StreamedDeformation extends DeformSolve {
       p[9] = cutY;
       p[10] = cutX;
       p[11] = cutZ;
+      p[12] = roofY;
       this.fillKernelHubs(d.hubs);
       kernel.run((this.kernelSet ??= this.placeKernelTables(kernel, geometry.index.array, d)), d, arr, nor.array);
       attr.needsUpdate = true;
@@ -610,7 +612,7 @@ export class StreamedDeformation extends DeformSolve {
         py = ry + ty * t;
         pz = rz + tz * t;
       }
-      if (roofClamp && ry > 1.05) py = THREE.MathUtils.clamp(py, ry - 0.1, ry + 0.08);
+      if (roofClamp && ry > roofY) py = THREE.MathUtils.clamp(py, ry - 0.1, ry + 0.08);
       const cut = cutY + cutX * px + cutZ * pz;
       if (py > cut) py = cut;
       const h = this.skinHub[i]!;
