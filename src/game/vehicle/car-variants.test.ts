@@ -6,7 +6,7 @@ import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
-import { ROCKER, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { ROCKER, cantY, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { aPillarTopZ, beltY, floorY, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { MIRROR_ROOT } from "./part-geometry.ts";
@@ -62,7 +62,7 @@ function chassisBox(style: BodyStyle): THREE.Box3 {
 function aPillarParts(style: BodyStyle): THREE.BufferGeometry[] {
   const parts = makeGreenhouseFrame(style, "drawn");
   const sail = parts.find((g) => g.name === "sail");
-  return [parts.find((g) => g.name === "aPost")!, ...(sail ? [sail] : [])];
+  return [parts.find((g) => g.name === "a")!, ...(sail ? [sail] : [])];
 }
 
 /** Side view of `geo` against the windshield's edge line: each vertex's distance behind it (m; negative in front of it). */
@@ -537,13 +537,16 @@ describe("given a body style's H2 hardpoints", () => {
           const width = Math.max(...behind) - Math.min(...behind);
           assert.ok(width > 0.058, `${id} aPillarTop ${aPillarTopZ(style)}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}`);
         }
-        for (const part of [post!, ...sail]) {
+        // Every drawn pillar (A-post, sail, B, rear, divider) runs into the roof: under its skin, and in under its lip (the cant line 8 cm out).
+        for (const part of makeGreenhouseFrame(style, "drawn").filter((g) => g.name !== "")) {
           const pos = part.getAttribute("position") as THREE.BufferAttribute;
           for (let i = 0; i < pos.count; i++) {
             const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
             if (z < style.roofZ[0] || z > style.roofZ[1]) continue;
             // 1e-6: float32 vertices, a ulp at 1.3 m is 1.2e-7.
             assert.ok(y <= roofTopY(x, z, style) + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands over the roof skin there (${roofTopY(x, z, style)})`);
+            const lipX = roofAt(z, style).x + 0.08;
+            assert.ok(y <= cantY(z, style) + 1e-6 || Math.abs(x) <= lipX + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands out past the roof's lip (x ${lipX}) over the cant line`);
           }
         }
       }
@@ -587,7 +590,7 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(bits(makeChassisGeometry(dark, "cage")) === bits(makeChassisGeometry(wagon, "cage")), "the cage is unchanged");
     const sailed: BodyStyle = { ...wagon, aPillarFoot: wagon.windshield.base[1] - 0.4, blackout: { a: true, sail: true, rear: true } };
     const names = makeGreenhouseFrame(sailed, "drawn").filter((g) => g.userData.blackout === true).map((g) => g.name || "rear");
-    assert.ok(names.join(",") === "aPost,rear,sail,aPost,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
+    assert.ok(names.join(",") === "a,rear,sail,a,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
   });
 
   it("when a style sets its B-pillar's width and seats a leaning divider, then the drawn pillars take them at the belt and the top, the side panes tuck under the B-pillar, and the cage keeps its bands", () => {
@@ -687,20 +690,21 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(Math.abs(sedanGap) < 0.01, `platform-wrap bumper's corner at |x| 0.35-0.45 stands ${sedanGap} m behind its middle, under 0.01`);
   });
 
-  it("when any style's header bars are built, then they stay under its roof skin over their ends", () => {
-    for (const id of CAR_STYLE_IDS) {
-      const style = CAR_STYLES[id];
+  it("when any style's header bars are built, then they stay inside its roof: ends at the roof's edge, faces in its z span, top under its skin; also on a wide windshield ending at the roof's front", () => {
+    const sedan = CAR_STYLES.sedan;
+    const wide: BodyStyle = { ...sedan, windshield: { ...sedan.windshield, wTop: 1.4 }, roofZ: [sedan.roofZ[0], sedan.windshieldTop[1]] };
+    for (const style of [...CAR_STYLE_IDS.map((id) => CAR_STYLES[id]), wide]) {
       const bars = makeGreenhouseFrame(style, "drawn").slice(-2);
-      const specs = [
-        { name: "windshield", width: style.windshield.wTop + 0.1, z: style.windshieldTop[1] - 0.02 },
-        { name: "rear", width: style.rearGlass.wTop + 0.12, z: style.rearGlass.top[1] - 0.02 },
-      ];
-      for (let k = 0; k < specs.length; k++) {
-        const { name, width, z } = specs[k]!;
-        const top = partBox(bars[k]!).max.y;
-        const roof = roofTopY(width / 2, z, style);
+      for (const [k, name] of ["windshield", "rear"].entries()) {
+        const box = partBox(bars[k]!);
+        const at = `${style.id}${style === wide ? " (wide)" : ""} ${name} header bar`;
         // 1e-6: the bar's vertices are float32, a ulp at 1.3 m is 1.2e-7.
-        assert.ok(top <= roof + 1e-6, `${id} ${name} header bar tops out at y ${top}, roof skin over its end (x ${width / 2}, z ${z}) at ${roof}`);
+        assert.ok(box.min.z >= style.roofZ[0] - 1e-6 && box.max.z <= style.roofZ[1] + 1e-6, `${at} spans z ${box.min.z}..${box.max.z}, the roof ${style.roofZ.join("..")}`);
+        for (const z of [box.min.z, box.max.z]) {
+          const edge = roofAt(z, style).x;
+          assert.ok(box.max.x <= edge + 1e-6, `${at} ends at x ${box.max.x}, the roof's edge at z ${z} is at ${edge}`);
+          assert.ok(box.max.y <= roofTopY(box.max.x, z, style) + 1e-6, `${at} tops out at y ${box.max.y}, the roof skin over its end at z ${z} at ${roofTopY(box.max.x, z, style)}`);
+        }
       }
     }
   });
