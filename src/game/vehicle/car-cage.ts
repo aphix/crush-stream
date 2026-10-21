@@ -5,6 +5,10 @@ import { archKeep, RES_SLOTS, SKIN_K } from "../deform/deform-rig.ts";
 import { interiorPose } from "./part-pose.ts";
 import { decimate, upFacing } from "./cage-mesh.ts";
 import { planFieldOf, rasterise } from "./cage-fields.ts";
+import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { carFrame } from "./car-rig.ts";
+import { rockerAt } from "./car-lines.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 
 /**
  * The car's contact shape is its drawn body (docs/UNIFIED_CONTACT.md stage 3): the cage.
@@ -24,15 +28,32 @@ import { planFieldOf, rasterise } from "./cage-fields.ts";
  * @internal Imported by nothing until the Stage 3 lane wires it in (`armTops`, `HULL`, `satCars`, the ragdoll proxies).
  */
 
-/** The lattice's half width (m) along x and along z: the body (x ±0.91, z ±2.11) and the skin's 1.35 m travel cap, trimmed. */
-const HALF_X = 1.2;
-const HALF_Z = 2.4;
 /** Node spacing (m) of the fields. */
 export const CAGE_STEP = 0.05;
 /** The decimation's vertex target: the body and its panels (lids, glass), which keeps the cage near 300 triangles. */
 export const CAGE_VERTICES = 220;
-/** Room for a style's sill samples past the hull (`CageSource.sill`, less those the decimation kept): 24 or 25 per style today. */
-export const SILL_CAPACITY = 32;
+/** The cage build's vertices a style's sill can be sampled from (`cageSourceOf`): welded, under its rocker line, between its axles. */
+function sillCandidates(style: BodyStyle): number {
+  const geo = makeChassisGeometry(style, "cage");
+  const pos = geo.getAttribute("position").array;
+  let axleR = Infinity;
+  let axleF = -Infinity;
+  for (const [, , z] of carFrame(style).wheels) {
+    axleR = Math.min(axleR, z);
+    axleF = Math.max(axleF, z);
+  }
+  const welded = new Set<string>();
+  for (let i = 0; i < pos.length; i += 3) {
+    const z = pos[i + 2]!;
+    const y = Math.round(pos[i + 1]! * 1e4);
+    if (y >= rockerAt(z, style) * 1e4 || z <= axleR || z >= axleF) continue;
+    welded.add(`${Math.round(pos[i]! * 1e4)},${y},${Math.round(z * 1e4)}`);
+  }
+  geo.dispose();
+  return welded.size;
+}
+/** Room for a style's sill samples past the hull (`CageSource.sill`): every sample is one of its style's sill candidates, so the most any style has. */
+export const SILL_CAPACITY = Math.max(...CAR_STYLE_IDS.map((id) => sillCandidates(CAR_STYLES[id])));
 /** The interior's vertex target: what shows through a gone pane (the dash, the headliner, the seats), a few boxes. */
 const INTERIOR_VERTICES = 32;
 
@@ -42,8 +63,7 @@ export const P_ROOF_CLAMP = 4;
 export const P_CUT_Y = 9;
 export const P_CUT_X = 10;
 export const P_CUT_Z = 11;
-/** The skin's roof clamp: a vertex of the rest roof (over this height) rises at most `ROOF_UP` and sinks at most `ROOF_DOWN` (streamed-deform.ts `skin`). */
-const ROOF_CLAMP_Y = 1.05;
+/** How far a vertex of the rest roof, over the clamp height, may rise and sink (streamed-deform.ts `skin`). */
 const ROOF_DOWN = 0.1;
 const ROOF_UP = 0.08;
 /** The wheel arch's share of the hub's own offset it plants the paint at, with the wheel on and off (streamed-deform.ts `skin`). */
@@ -79,6 +99,8 @@ export interface CageSource {
   readonly panelCount: number;
   /** Per panel, the origin its mesh is skinned about (`skinPanel`'s), x, y, z. */
   readonly panelOrigin: Float64Array;
+  /** A rest vertex over this height (m) is roof: the skin's roof clamp holds it (the rig's `roofClampY`). */
+  readonly roofClampY: number;
   /** Per panel: 1 for a glass pane, 0 for a lid or the light bar. */
   readonly panelGlass: Uint8Array;
   /** The interior mesh's rest positions (x, y, z per vertex) and triangle indices: seen through a gone pane, so part of the body drawn. */
@@ -91,6 +113,8 @@ export interface CageSource {
    * each row's ends and wherever the lattice can bend the row between two samples (`sillSamples`). A wreck's hull points, on no triangle.
    */
   readonly sill: Int32Array;
+  /** The lattice's half extents (m), the body's frame's. */
+  readonly lattice: { readonly x: number; readonly z: number };
 }
 
 /** What a fit reads of the car now: a `SkinDynamic`, less its lattice coefficients (the cage is the shape-mode skin). */
@@ -185,6 +209,8 @@ export interface CageStyle {
   readonly panelGlass: Uint8Array;
   /** The interior's vertices follow the sill samples in `pos` (`vertexCount` is the body's alone: the rigid step's hull points are those), and its triangles the body's, in group `panelCount + 1`: never a lid, never cut by the roof imprint. */
   readonly interiorCount: number;
+  /** A rest vertex over this height (m) is roof: the skin's roof clamp holds it (the rig's `roofClampY`). */
+  readonly roofClampY: number;
   /** The interior's rest positions as `fitInterior` places them with the masses at rest, x, y, z each. */
   readonly interiorRest: Float32Array;
   readonly interiorMass: Int32Array;
@@ -208,6 +234,7 @@ function skinCage(style: CageStyle, live: CageLive, out: CageFields): void {
   const hubs = live.hubs;
   const cap = live.params[P_CAP]!;
   const roofClamp = live.params[P_ROOF_CLAMP]! !== 0;
+  const roofY = style.roofClampY;
   const cutY = live.params[P_CUT_Y]!;
   const cutX = live.params[P_CUT_X]!;
   const cutZ = live.params[P_CUT_Z]!;
@@ -292,7 +319,7 @@ function skinCage(style: CageStyle, live: CageLive, out: CageFields): void {
       py = ry + ty * t;
       pz = rz + tz * t;
     }
-    if (roofClamp && ry > ROOF_CLAMP_Y) py = Math.min(Math.max(py, ry - ROOF_DOWN), ry + ROOF_UP);
+    if (roofClamp && ry > roofY) py = Math.min(Math.max(py, ry - ROOF_DOWN), ry + ROOF_UP);
     const rawHeight = py;
     const cut = cutY + cutX * px + cutZ * pz;
     if (py > cut) py = cut;
@@ -657,14 +684,14 @@ function buildStyle(src: CageSource, step: number): CageStyle {
   const interiorRest = new Float32Array(ni * 3);
   for (let i = 0; i < ni; i++) for (let k = 0; k < 3; k++) interiorRest[i * 3 + k] = top.rest[inner.source[i]! * 3 + k]!;
   const tables = vertexTables(src, source);
-  const nu = 2 * Math.round(HALF_X / step) + 1;
-  const nv = 2 * Math.round(HALF_Z / step) + 1;
+  const nu = 2 * Math.round(src.lattice.x / step) + 1;
+  const nv = 2 * Math.round(src.lattice.z / step) + 1;
   const style: CageStyle = {
     step,
     nu,
     nv,
-    u0: -HALF_X,
-    v0: -HALF_Z,
+    u0: -src.lattice.x,
+    v0: -src.lattice.z,
     vertexCount: n,
     sillCount: points - n,
     triCount: tris.length / 3,
@@ -684,6 +711,7 @@ function buildStyle(src: CageSource, step: number): CageStyle {
     panelsOn: new Uint8Array(src.panelCount).fill(1),
     panelGlass: src.panelGlass,
     panelOrigin: src.panelOrigin,
+    roofClampY: src.roofClampY,
   };
   style.pristine.pos.set(tables.rest);
   style.pristine.panelOn.fill(1);

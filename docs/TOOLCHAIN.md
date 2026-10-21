@@ -178,6 +178,25 @@ and interleaved where the effect is small; "n" is the number of pairs.
 
 - A test-result cache keyed by the import closure would skip unchanged files outright; tests would have to be proven hermetic first.
 
+## Test memory guards (2026-10-21)
+
+A failing `node:assert` comparison of two big values (a texture, a geometry) took the whole WSL VM from 9 GB free to 0 in
+18 s. Node builds the failure message by printing both sides whole (`maxArrayLength: Infinity`, one line per element) and,
+for `strictEqual` / `deepStrictEqual`, diffing those lines with a trace that is a typed array per diff step: off the V8 heap,
+so `--max-old-space-size` does not stop it (measured: heap held at 1315 MB of a 1536 MB cap while RSS climbed to 4 GB).
+
+- **`scripts/assert-guard.mjs`**, imported first by every test process (`test-setup.mjs`, and `--import` in `test` /
+  `test:parity`): when a comparison fails and its sides would print past `MAX_DIFF_LINES` lines (array elements, keys and
+  long strings counted), the error carries a bounded print (`util.inspect`, 20 elements, depth 4) as its message, `actual`
+  and `expected`. Covers `assert` and `assert/strict` (default and named imports), `t.assert`, and `throws` / `rejects`
+  with a validation object. Passing comparisons and failures on small values are Node's own: same message, fields and
+  stack (checked on 25 small cases, identical with and without the guard). `scripts/assert-guard.test.mjs` pins it.
+- **`--max-old-space-size=1536`** on every test process (`run-tests.mjs` `HEAP_MB`, `test`, `test:parity`): a runaway
+  held on the heap aborts there. The heaviest of the 400+ suite files peaks at 711 MB of heap (`present/ground-overlap`).
+- Failing compare of two objects holding a 4096² `Float32Array`, under a 2-3 GB memory cap: before, OOM-killed at the cap
+  after 8-10 s on each of `assert.equal`, `deepStrictEqual`, `t.assert.deepStrictEqual` and `assert.throws` with a
+  validation object; after, each fails in 40 ms at 184 MB RSS with a 2.7 KB report.
+
 ## Headless frame (`scripts/headless-frame.mjs`, 2026-10-21)
 
 The real `CrashEngine` drawing in node, for shots, counts and link checks without a browser. `engine-headless.test-util.ts`
@@ -201,9 +220,9 @@ the tier) and written as a PNG, with one JSON line on stdout. `--hash <share lin
   which downloads the native binary from GitHub releases: the Lux deploy installs dev dependencies too, and stays
   registry-only. Fetch the binary once per `node_modules` with `node node_modules/@kmamal/gl/scripts/install.mjs`; the
   script exits 2 with that line while it is missing. `@napi-rs/canvas` ships its binaries as npm packages.
-- **Dummies are not drawn:** the bundled ANGLE (2.1.24078) counts `gl_VertexID` and `gl_InstanceID` against
-  `MAX_VERTEX_ATTRIBS` (16), so the dummy's lit program (16 declared attribute slots plus both built-ins) fails to link
-  here ("Too many attributes (print)"), while Chrome 149's ANGLE links it on the same GPU. A failed program that links
-  once those built-ins read as 0 is listed under `builtinQuirk`, its meshes under `notDrawn`; every other failure is in
-  `linkFailures`.
+- **Built-in ids count as attributes:** the bundled ANGLE (2.1.24078) counts `gl_VertexID` and `gl_InstanceID` against
+  `MAX_VERTEX_ATTRIBS` (16), as some GLES drivers do; Chrome 149's ANGLE does not. The dummy's lit program once declared
+  16 slots and read both, and failed to link here ("Too many attributes (print)"); its attributes are now packed to 14
+  slots with `gl_InstanceID` (`ragdoll-mesh.test.ts` pins it), so dummies draw. A failed program that links once those
+  built-ins read as 0 is listed under `builtinQuirk`, its meshes under `notDrawn`; every other failure is in `linkFailures`.
 - **Cost:** about 11 s wall, 6.6 s of it to `ready`; runs inside a 2 GB memory cap.

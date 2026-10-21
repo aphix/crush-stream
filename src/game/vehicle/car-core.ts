@@ -444,11 +444,11 @@ export abstract class CarCore {
 
     const seatX = mirrorSeatX(this.style);
     this.mirrorL = this.partSeats[PART_KIND.mirrorL]!;
-    this.mirrorL.position.set(-seatX, door.mirrorY, 0);
+    this.mirrorL.position.set(-seatX, door.mirrorY, -(door.mirrorZ ?? 0));
     this.mirrorL.scale.x = door.mirrorReach / MIRROR_REACH;
     this.doorL.add(this.mirrorL);
     this.mirrorR = this.partSeats[PART_KIND.mirrorR]!;
-    this.mirrorR.position.set(seatX, door.mirrorY, 0);
+    this.mirrorR.position.set(seatX, door.mirrorY, -(door.mirrorZ ?? 0));
     this.mirrorR.scale.x = door.mirrorReach / MIRROR_REACH;
     this.doorR.add(this.mirrorR);
 

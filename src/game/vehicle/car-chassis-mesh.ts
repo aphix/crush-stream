@@ -95,8 +95,11 @@ function sliceZs(style: BodyStyle, source: BodySource): number[] {
   return stations.sort((a, b) => a - b);
 }
 
+/** The wheel-well liner's width across the car (m). */
+const WELL_LINER_WIDTH = 0.24;
+
 function makeWellLiner(wx: number, wy: number, wz: number, archR: number): THREE.BufferGeometry {
-  const geo = new THREE.CylinderGeometry(archR, archR, 0.24, 14, 1, true, 0, Math.PI);
+  const geo = new THREE.CylinderGeometry(archR, archR, WELL_LINER_WIDTH, 14, 1, true, 0, Math.PI);
   geo.rotateZ(Math.PI / 2);
   geo.rotateY(wx > 0 ? 0 : Math.PI);
   geo.translate(wx, wy, wz);
@@ -112,7 +115,12 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
   const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style)];
-  for (const [wx, wy, wz] of carFrame(style).wheels) parts.push(makeWellLiner(wx, wy, wz, style.arch.radius));
+  for (const [wx, wy, wz] of carFrame(style).wheels) {
+    const hw = sampleSlice(wz, style.profile).hw;
+    // A tyre standing outboard of the body (the monster's) keeps its liner inside the body side.
+    const x = Math.abs(wx) > hw ? Math.sign(wx) * (hw - WELL_LINER_WIDTH / 2) : wx;
+    parts.push(makeWellLiner(x, wy, wz, style.arch.radius));
+  }
   parts.push(...makeGreenhouseFrame(style, source));
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
   const rb = style.rearBulkhead;

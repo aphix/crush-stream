@@ -25,5 +25,4 @@ export const SEDAN: BodyStyle = {
   rearDoorSeam: -0.62,
   boot: { kind: "lid", z0: -0.66, z1: -1.98, origin: [0.74, -0.72] },
   lamps: { head: HEAD_LAMP, tail: [0.47, 0.56] },
-  rig: {},
 };
