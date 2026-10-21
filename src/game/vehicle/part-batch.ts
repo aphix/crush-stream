@@ -1,11 +1,12 @@
 import * as THREE from "three";
-import { loosePartsMaterial, partsMaterial } from "./car-materials.ts";
+import { INSTANCE_MIRROR_VARIANT_ATTRIBUTE, loosePartsMaterial, mirrorPartsMaterial, partsMaterial } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
-import { PART_KINDS, partGeometry } from "./part-geometry.ts";
+import { mirrorBatchGeometry, PART_KIND, PART_KINDS, partGeometry } from "./part-geometry.ts";
 
 /**
  * Every car's seven static parts (interior, door linings, mirrors, grille, tail trim) as seven instanced draws, one per kind.
  * A loose part draws as its own mesh; a cut seat (layer 0 off, `CarDetail`) or a hidden car draws nothing.
+ * Each mirror draw holds every style's mirror: an instance carries its car's variant and door paint (`mirrorPartsMaterial`).
  */
 export class PartBatch {
   readonly meshes: readonly THREE.InstancedMesh[];
@@ -13,13 +14,23 @@ export class PartBatch {
   readonly looseWarm = new THREE.Mesh(new THREE.PlaneGeometry(0, 0), loosePartsMaterial());
   private readonly counts = new Int32Array(PART_KINDS.length);
   private readonly capacity: number;
+  /** Per kind, its instances' mirror variants; null for a kind that is not a mirror. */
+  private readonly variants: (THREE.InstancedBufferAttribute | null)[] = [];
+  /** Per kind, the per-instance attributes a sync uploads. */
+  private readonly uploads: THREE.InstancedBufferAttribute[][] = [];
 
   constructor(capacity: number) {
     this.capacity = capacity;
     const meshes: THREE.InstancedMesh[] = [];
     for (const kind of PART_KINDS) {
-      const mesh = new THREE.InstancedMesh(partGeometry(kind), partsMaterial(), capacity);
+      const side = kind === PART_KIND.mirrorL ? -1 : kind === PART_KIND.mirrorR ? 1 : 0;
+      const geometry = side === 0 ? partGeometry(kind) : mirrorBatchGeometry(side, capacity);
+      const mesh = new THREE.InstancedMesh(geometry, side === 0 ? partsMaterial() : mirrorPartsMaterial(), capacity);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      const variants = side === 0 ? null : (geometry.getAttribute(INSTANCE_MIRROR_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute);
+      if (variants) mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.DynamicDrawUsage);
+      this.variants.push(variants);
+      this.uploads.push(variants ? [mesh.instanceMatrix, mesh.instanceColor!, variants] : [mesh.instanceMatrix]);
       // Instances span the pad and move every frame; a stale bound would cull live parts.
       mesh.frustumCulled = false;
       mesh.count = 0;
@@ -49,7 +60,13 @@ export class PartBatch {
         const kind = seat.kind;
         const n = counts[kind]!;
         if (!shown || !seat.layers.isEnabled(0) || n >= this.capacity) continue;
-        this.meshes[kind]!.setMatrixAt(n, seat.matrixWorld);
+        const mesh = this.meshes[kind]!;
+        mesh.setMatrixAt(n, seat.matrixWorld);
+        const variants = this.variants[kind];
+        if (variants) {
+          variants.setX(n, seat.variant);
+          mesh.setColorAt(n, seat.tint);
+        }
         counts[kind] = n + 1;
       }
     }
@@ -57,16 +74,20 @@ export class PartBatch {
       const mesh = this.meshes[k]!;
       const n = counts[k]!;
       mesh.count = n;
-      const attr = mesh.instanceMatrix;
-      attr.clearUpdateRanges();
-      attr.addUpdateRange(0, n * 16);
-      attr.needsUpdate = true;
+      for (const attr of this.uploads[k]!) {
+        attr.clearUpdateRanges();
+        attr.addUpdateRange(0, n * attr.itemSize);
+        attr.needsUpdate = true;
+      }
     }
   }
 
-  /** The batch's geometries and material are shared (never disposed here). */
+  /** The batch's material and its non-mirror geometries are shared (never disposed here); its mirror geometries are its own. */
   dispose(): void {
-    for (const mesh of this.meshes) mesh.dispose();
+    for (const [k, mesh] of this.meshes.entries()) {
+      mesh.dispose();
+      if (this.variants[k]) mesh.geometry.dispose();
+    }
     this.looseWarm.geometry.dispose();
   }
 }

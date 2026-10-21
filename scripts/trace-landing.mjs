@@ -3,14 +3,18 @@
  * `scripts/landing-views/<style>.json` (one file per car, owned by its lane):
  *
  *   { "side": { "ref": "<file under the references>" }, "top": { "ref": ... },
- *     "iso": { "ref": ..., "crop": [x, y, w, h], "wheels": { "fl": { "hub": [u, v], "contact": [u, v] }, ... }, "fov": 15?, "camera": {...} | null },
+ *     "iso": { "ref": ..., "crop": [x, y, w, h], "wheels": { "fl": { "hub": [u, v], "contact": [u, v] }, ... },
+ *              "landmarks": [{ "name": "front badge", "at": [x, y, z], "pixel": [u, v] }], "fov": 15?, "camera": {...} | null },
  *     "rear-iso": { ... } }
  *
  * Wheels are picked once on the crop (pixels, x right y down; `trace-car --grid` draws the crop with a pixel grid to read them off):
  * `f`/`r` front/rear, `l`/`r` the car's left/right (the left is +x, the side the front iso shows), `hub` the wheel's centre on its
- * outer face, `contact` the tyre's lowest point. `trace-car --solve` fits the camera to them and stores it: it tries a range of
- * fields of view and keeps the one whose silhouette fits best, or only `fov` (degrees) where the entry pins one by hand. Every shot
- * after uses the stored camera, so a wheel the car moves later shows as wheel error instead of being hidden by a new camera.
+ * outer face, `contact` the tyre's lowest point. One side's wheels lie near one plane and leave the view's tilt about the wheel line
+ * loose: `landmarks` add points off that plane (a badge on the centre line, a far-side lamp or mirror), each at a car-space place
+ * `at` as the style file writes it (metres, before the class lift; the solve adds the lift) and its `pixel` on the crop.
+ * `trace-car --solve` fits the camera to all the picks and stores it: it tries a range of fields of view and keeps the one whose
+ * silhouette fits best, or only `fov` (degrees) where the entry pins one by hand. Every shot after uses the stored camera, so a
+ * wheel the car moves later shows as wheel error instead of being hidden by a new camera.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -100,11 +104,11 @@ function largestOnly(layers, W, H) {
  * and the wheels' error is measured; without one, the brief's framing and the reference scaled to the car (a rough guide).
  * `solve`: fit the camera to the picked wheels first and store it. Writes the overlay to `out`; returns the fit and the camera spec.
  */
-export async function isoTrace(game, stage, dims, ref, view, { style, entry, solve, out }) {
+export async function isoTrace(game, stage, dims, ref, view, { style, entry, solve, lift, out }) {
   const canvas = ref === null ? { W: ISO_SIZE[0], H: ISO_SIZE[1], pad: 0, at: (p) => p } : isoCanvas(ref);
   const { W, H } = canvas;
   const port = new ViewPort(game, W, H);
-  const picks = ref === null ? [] : wheelPoints(dims, entry?.wheels);
+  const picks = ref === null ? [] : [...wheelPoints(dims, entry?.wheels), ...landmarkPoints(entry?.landmarks, lift)];
   if (solve) saveCamera(style, view, solveFor(game, stage, port, ref, canvas, picks, view, entry.fov));
   const stored = solve ? loadLanding(style)[view].camera : entry?.camera;
   const spec = stored ? perspectiveSpec(view, W, H, stored) : defaultSpec(view, W, H, dims.box);
@@ -112,13 +116,14 @@ export async function isoTrace(game, stage, dims, ref, view, { style, entry, sol
   const glError = port.gl.getError();
   const carSil = alphaMask(carRgba, W, H);
   const layers = ref === null ? null : stored ? nativeLayers(game, ref, canvas) : scaledLayers(game, ref, carSil, W, H);
-  const wheels = stored ? wheelError(spec, picks, canvas) : null;
+  const wheels = stored ? pickError(spec, picks.filter((p) => !p.landmark), canvas) : null;
+  const landmarks = stored ? pickError(spec, picks.filter((p) => p.landmark), canvas) : null;
   const shot = composeShot(game, W, H, layers?.plate ?? null, carRgba, { ref: layers?.sil ?? null, car: carSil });
-  if (wheels) drawWheels(shot.ctx, wheels.points);
+  for (const set of [wheels, landmarks]) if (set) drawPicks(shot.ctx, set.points);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, await shot.canvas.encode("png"));
   const aligned = stored ? "stored camera" : ref === null ? "no reference" : "rough: no stored camera (pick wheels, then --solve)";
-  return { png: out, size: `${W}x${H}`, aligned, iou: layers && iou(carSil, layers.sil), wheels, shadowPx: layers?.shadowPx ?? 0, camera: spec, glError };
+  return { png: out, size: `${W}x${H}`, aligned, iou: layers && iou(carSil, layers.sil), wheels, landmarks, shadowPx: layers?.shadowPx ?? 0, camera: spec, glError };
 }
 
 function nativeLayers(game, ref, canvas) {
@@ -137,8 +142,13 @@ function scaledLayers(game, ref, carSil, W, H) {
   return largestOnly(refLayers(game, ref, { W, H, view: "iso" }, 1, 0, refPlate(game, ref, W, H, dx, dy, k)), W, H);
 }
 
+/** The landmarks' car-space places on the drawn car (the body rides `lift` above the style file's frame). */
+function landmarkPoints(landmarks, lift) {
+  return (landmarks ?? []).map(({ name, at, pixel }) => ({ name, point: [at[0], at[1] + lift, at[2]], pixel, landmark: true }));
+}
+
 /** Each picked point against where the stored camera draws it (crop pixels), with the RMS and the largest. */
-function wheelError(spec, picks, canvas) {
+function pickError(spec, picks, canvas) {
   if (picks.length === 0) return null;
   const points = picks.map(({ name, point, pixel }) => {
     const drawn = project(spec, point);
@@ -151,7 +161,7 @@ function wheelError(spec, picks, canvas) {
 }
 
 /** Picked points as yellow crosses, the car's as magenta rings, joined. */
-function drawWheels(ctx, points) {
+function drawPicks(ctx, points) {
   ctx.lineWidth = 2;
   for (const { at: [[pu, pv], [du, dv]] } of points) {
     ctx.strokeStyle = `rgb(${PICK_RGB})`;
@@ -173,7 +183,7 @@ function drawWheels(ctx, points) {
 
 /** The solved camera: the fields of view whose fits tie on the wheels, settled by the silhouette. */
 function solveFor(game, stage, port, ref, canvas, picks, view, fov) {
-  if (picks.length < 4) throw new Error(`--solve: pick at least 4 wheel points (2 wheels' hub and contact) in the ${view} entry first`);
+  if (picks.length < 4) throw new Error(`--solve: pick at least 4 points (2 wheels' hub and contact, or landmarks) in the ${view} entry first`);
   const layers = nativeLayers(game, ref, canvas);
   const tied = solveCamera(view, canvas.W, canvas.H, picks.map((p) => p.point), picks.map((p) => canvas.at(p.pixel)), view === "rear-iso", fov === undefined ? undefined : [fov]);
   const scored = tied.map((c) => ({ ...c, iou: iou(alphaMask(port.draw(stage.scene, makeCamera(THREE, c.spec)), canvas.W, canvas.H), layers.sil) }));
