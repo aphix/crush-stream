@@ -119,6 +119,11 @@ export class CarDetail {
     return this.cuts.get(car)?.far != null;
   }
 
+  /** Whether `car`'s small parts are cut right now (past mid, far too): its glass and the driver behind it are off the camera. */
+  isMid(car: DeformableCar): boolean {
+    return this.cuts.get(car)?.mid != null;
+  }
+
   /** Once a frame, after the camera and the sim have settled and before the draw. `keepA` and `keepB` are never cut. */
   update(cars: readonly DeformableCar[], camera: THREE.PerspectiveCamera, keepA: DeformableCar | null, keepB: DeformableCar | null): void {
     _eye.setFromMatrixPosition(camera.matrixWorld);

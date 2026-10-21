@@ -27,7 +27,7 @@ function seated(style: Style) {
     const car = new DeformableCar(paint(), new THREE.Scene(), null, style.id);
     car.spawn(0, 0, 0);
     car.group.updateMatrixWorld(true);
-    const drivers = new SeatedDrivers();
+    const drivers = new SeatedDrivers(() => false);
     drivers.sync([car], (c) => driverLook(1, c));
     s = { car, drivers, toCabin: car.interior.matrixWorld.clone().invert() };
     seatedCars.set(style.id, s);
@@ -79,14 +79,19 @@ describe("given every style's seated driver", () => {
 });
 
 describe("given the seated drivers' batch and one car", () => {
-  test("when its driver is in, then one slot is drawn; thrown, or past the far cut, then none", () => {
+  test("when its driver is in, then one slot is drawn; thrown, past the mid cut (his glass cut) or past the far cut, then none", () => {
     const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
     car.spawn(0, 0, 0);
     car.group.updateMatrixWorld(true);
-    const drivers = new SeatedDrivers();
+    let glassCut = false;
+    const drivers = new SeatedDrivers(() => glassCut);
     const look = (car: number) => driverLook(1, car);
     drivers.sync([car], look);
     assert.equal(drivers.mesh.count, 1);
+    glassCut = true;
+    drivers.sync([car], look);
+    assert.equal(drivers.mesh.count, 0, "cut with the glass at mid distance");
+    glassCut = false;
     car.driverOut = "windshield";
     drivers.sync([car], look);
     assert.equal(drivers.mesh.count, 0, "the thrown driver is the ragdoll now");

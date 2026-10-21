@@ -120,18 +120,22 @@ export class SeatedDrivers {
   private readonly dressed: (DriverLook | null)[] = Array.from({ length: MAX_CARS }, () => null);
   private readonly cops = new Uint8Array(MAX_CARS);
 
-  constructor() {
+  /** The car's glass is off the camera (`CarDetail.isMid`), so no one sees him there. */
+  private readonly cut: (car: DeformableCar) => boolean;
+
+  constructor(cut: (car: DeformableCar) => boolean) {
+    this.cut = cut;
     this.mesh.name = "seatedDrivers";
     this.mesh.castShadow = false;
     this.mesh.receiveShadow = true;
   }
 
-  /** Pose the drivers of `cars` (world matrices current), dressed as `lookOf` has them; empty slots and thrown drivers hide. */
+  /** Pose the drivers of `cars` (world matrices current), dressed as `lookOf` has them; empty slots, thrown drivers and cut cars hide. */
   sync(cars: readonly DeformableCar[], lookOf: (car: number, cop: boolean) => DriverLook): void {
     for (let s = 0; s < MAX_CARS; s++) {
       const car = cars[s];
       const seat = car?.partSeats[PART_KIND.seatFront];
-      if (!car || !seat || !seatedShown(car, seat)) {
+      if (!car || !seat || this.cut(car) || !seatedShown(car, seat)) {
         if ((this.shown >> s) & 1) this.mesh.hide(s);
         this.shown &= ~(1 << s);
         continue;
