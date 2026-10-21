@@ -44,14 +44,14 @@ The hardpoints place the openings and the lower body, each per car:
 |---|---|
 | `windshield` | Base `[y, z]` of the glass centre line and its widths at the base and at `windshieldTop` |
 | `bPillar` | The B-pillar's z band |
-| `aPillarFoot` | Where the A-pillar's foot meets the belt (z): the door glass's front edge starts there |
-| `aPillarTop` | Optional: where the A-pillar's rear edge meets the cant line (z), the door glass's top-front corner. Absent, 5 cm behind the windshield's top; set it on a raked windshield so the window's front edge isn't a straight line from the foot |
+| `aPillarFoot` | Where the door glass's front edge meets the belt (z) |
+| `aPillarTop` | Optional: where the door glass's front edge meets the cant line (z), its top-front corner. Absent, 5 cm behind the windshield's top; set it on a raked windshield so the window's front edge isn't a straight line from the foot |
 | `glassTop` | Optional side glass top (the DLO's top edge). A number: its drop under the roof (absent 0.075), the roof's side lip and the pillar tops following it. `[z, y]` stations (linear between, held past the ends, never above the cant line): the glass top follows them under a 0.075 lip and a painted fill (drawn only) closes the gap up to the cant line from the C-pillar to the A-pillar |
 | `camera` | Optional cameras, car frame as drawn (a class lift included): `hood` `[y, z]`, the hood view's eye, just over the bonnet and ahead of the windshield base (`car-variants.test.ts` holds it there); `third` and `far` `{ dist, height, aimUp }`, the chase and far chase eyes behind and over the car's origin and their aim point's height. Absent: `PLATFORM_CAMERA` (the 4.2 m sedan's). Shoot them with `scripts/headless-frame.mjs --hash 'scene=race&car=<id>' --view hood\|chase\|far` |
 | `belt` | Side-glass sill: half-width `x` (one value, or `[z, x]` stations where the sill narrows toward the tail), and height `y` as `[z, y]` stations (linear between, held past the ends), so a beltline can rise toward the tail |
 | `rocker` | The body side's lowest line; under it the sill turns in to the floor pan. It rides up with `underside` |
 | `underside` | Optional floor pan height as `[z, y]` stations (linear between, held past the ends): the underside's rise to the nose and tail. Absent, the floor is flat at `dims.rideHeight` |
-| `door` | Front doors: hinge axis `hingeX`, `hingeY`, `hingeZ` at the A-pillar, `length` hinge to trailing edge, skin ±`halfHeight` about the hinge, and `aperture` `[z0, z1]`, the body's door cut (the skin covers it, 2 cm past each end). The door glass rides the door: its rear edge stands 3 cm (belt) / 5 cm (top) inside the trailing edge, so put the B-pillar's front there. The mirror seats itself on the door skin at `mirrorY` over the hinge and `mirrorZ` behind it (default 0), drawn to reach `mirrorReach` out, ±`mirrorHalfDepth` deep |
+| `door` | Front doors: hinge axis `hingeX`, `hingeY`, `hingeZ` at the A-pillar, `length` hinge to trailing edge, skin ±`halfHeight` about the hinge, and `aperture` `[z0, z1]`, the body's door cut (the skin covers it, 2 cm past each end). The door glass rides the door: its rear edge stands 3 cm (belt) / 5 cm (top) inside the trailing edge (or 1 cm under the drawn B-pillar when `pillars.b` is set), so put the B-pillar's front there. The mirror seats itself on the door skin at `mirrorY` over the hinge and `mirrorZ` behind it (default 0), drawn to reach `mirrorReach` out, ±`mirrorHalfDepth` deep |
 | `arch` | Wheel-arch opening radius about each hub |
 | `hood` | Bonnet span `z0` (cowl) to `z1` (nose) and its hinge `origin` `[y, z]` |
 | `bumpers.front`, `bumpers.rear` | Group `seat` (height, distance from the middle), `fascia` section `[y, out]` top to bottom, `span` (half-width), and `wrap`: the `|x|` where the fascia's corner starts sweeping back (`from`) and how far its end sweeps (`back`) |
@@ -60,7 +60,10 @@ The hardpoints place the openings and the lower body, each per car:
 `car-styles/platform.ts` exports the values the first bodies shared as `PLATFORM_HARDPOINTS`; a table spreads it and overrides
 what its car changes. Every hardpoint but the bumper fascia reaches the collision cage or a sim reader (the greenhouse pillars,
 the sill, the arches, the hood's pose, a torn bumper's box), so moving one moves the sim: re-pin and bump `REPLAY_VERSION`.
-The greenhouse header bars follow the roof: a drawn header bar's top never stands above the roof skin over its ends.
+The greenhouse header bars follow the roof: a drawn header bar's top never stands above the roof skin over its ends. The drawn
+A-pillar is a rounded post along the windshield's edge, 6 cm wide in side view whatever `aPillarFoot` / `aPillarTop` say, its top
+held under the roof skin; where the door glass's front edge lies further back, a sail panel fills the gap at the same height (the
+cage keeps its box between the windshield and the door glass).
 
 The drawn parts (optional, drawn only: no cage build reads them, so adding one never moves the sim) dress a body without a
 new mesh: each is merged into the mesh it stands on and moves with it.
@@ -73,13 +76,16 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | `roof.rails` | Two dark rails at \|x\| `x[0]`..`x[1]` over `z` [rear, front], their tops `rise` over the roof at their inner edge |
 | `roof.spoiler` | Body-colour wedge off the roof's rear end over `z` [tip, front edge]: underside at `y[0]`, top `y[1]` at the front edge, ±`halfWidth` |
 | `roof.glassPanel` | Dark panel a few mm proud of the roof over `z` [rear, front], `width` across |
+| `pillars.b` | The drawn B-pillar's side-view width (z), centred on `bPillar` and even from belt to top; the door and quarter glass tuck 1 cm under its edges. Absent: the `bPillar` band, its top 3 cm narrower |
+| `pillars.divider` | The drawn post at `midPillarZ`: `width` [belt, top] (z) and optional `z` [belt, top] (a leaning post). Absent: 0.08 / 0.07 wide, upright at `midPillarZ` |
+| `blackout` | Greenhouse parts drawn gloss black by the paint's `primer` attribute: `a` (A-post), `sail`, `b`, `divider`, `rear` (the pillar to the rear glass) |
 | `bumpers.front.trim`, `bumpers.rear.trim` | `"body"` (its body colour, painted finish), `"chrome"` or `"black"`; unset, the car's accent trim. A player's bumper colour still recolours it |
 | `bumpers.rear.hitch` | Black tow-hitch receiver under the rear bumper's middle |
 | `exhaust` | `tips` 1 (at `x`) or 2 (at ±`x`) at height `y`, `size` [w, h], `shape` `"round"` (oval) or `"rect"`: chrome with a dark throat, ending 4 mm inside the rear bumper's rearmost face (nothing stands past the tail) |
 | `door.mirror` | The style's own mirror: `cap` `"rounded"` or `"box"`, `size` [w out from the door, h, d along the car] (default 0.16 × 0.10 × 0.08), `finish` `"body"` (the door's paint, a look's door colour too), `"black"` or `"chrome"`. Its foot sits on the door/A-pillar skin at the seat, a stalk runs out to the cap where the cap leaves room, and the cap's outer face is at `mirrorReach`, drawn at its real size. Unset: the platform mirror, x-scaled to the reach. The sim's mirror (reach, seat, rest box, torn box) is the platform's either way |
 
 The roof parts are merged into the drawn body after its other parts (the body's skin crushes them with the roof); rails and
-panel are drawn dark by the paint's `primer` attribute. Exhaust tips and the hitch are merged into the rear bumper
+panel, and blacked-out pillars, are drawn dark by the paint's `primer` attribute. Exhaust tips and the hitch are merged into the rear bumper
 (`withRearFittings`), so they tear off with it; their chrome and black come from the trim material's `fitting` attribute, so
 no part adds a draw call. Every style's mirror is one variant in the part batch's two mirror draws: an instance draws its own
 variant and paints a body-colour cap from its instance colour (`mirrorPartsMaterial`), so mirrors stay at two draws for any fleet.
