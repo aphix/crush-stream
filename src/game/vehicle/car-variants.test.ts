@@ -136,6 +136,15 @@ const DIMS_TOL = 0.005;
 const BED_FLOOR_TOL = 0.03;
 /** The references' beds are open about 0.40 m under the rail; under 0.35 m a bed reads as a flatbed. */
 const BED_DEPTH = 0.35;
+/** Two styles' roofs stand as far apart as their spec heights say, within this (m): under a pixel pair of the references. */
+const ROOF_GAP_TOL = 0.01;
+
+/** Whether a style has a deck at `z`: inside its boot lid's span, or ahead of a hatch / tailgate's top edge (its roof over the cargo); behind that a tail panel leans away and no deck stands there. */
+function hasDeckAt(style: BodyStyle, z: number): boolean {
+  const b = style.boot;
+  if (b.kind === "lid") return z >= Math.min(b.z0, b.z1) && z <= Math.max(b.z0, b.z1);
+  return z >= b.origin[1];
+}
 
 /** Box in the car's frame of every mesh it draws but the light bar (the spec leaves it off). */
 function shellBox(car: DeformableCar): THREE.Box3 {
@@ -194,8 +203,10 @@ describe("given each body style's silhouette, measured as the highest visible su
     assert.ok(topAt("hatchback", -1.75) < topAt("wagon", -1.75) - 0.2, "hatch tail is as tall as the wagon's");
   });
 
-  it("when the coupe is measured, then its roof sits at least 6 cm lower than the sedan's", () => {
-    assert.ok(topAt("coupe", -0.2) < topAt("sedan", -0.2) - 0.06, `coupe ${topAt("coupe", -0.2)} sedan ${topAt("sedan", -0.2)}`);
+  it("when the muscle (coupe) is measured, then its roof sits lower than the sedan's by the gap between their spec heights", () => {
+    const gap = CAR_STYLES.sedan.dims.height - CAR_STYLES.coupe.dims.height;
+    const measured = topAt("sedan", -0.2) - topAt("coupe", -0.2);
+    assert.ok(measured > 0 && Math.abs(measured - gap) <= ROOF_GAP_TOL, `coupe ${topAt("coupe", -0.2)} sedan ${topAt("sedan", -0.2)}: ${measured} m apart against the specs' ${gap}`);
   });
 
   it("when the pickup and the monster are measured, then each has a cab roof and an open bed: its floor where its spec's bed tub puts it, deep under its rail, and lower than every other style's deck", () => {
@@ -212,7 +223,7 @@ describe("given each body style's silhouette, measured as the highest visible su
     }
     for (const z of [-1.1, -1.7]) {
       for (const id of CAR_STYLE_IDS) {
-        if (beds.includes(id)) continue;
+        if (beds.includes(id) || !hasDeckAt(CAR_STYLES[id], z)) continue;
         assert.ok(topAt(id, z) > 0.78, `${id} deck at z=${z}`);
         for (const bed of beds) assert.ok(topAt(bed, z) < topAt(id, z), `${bed} bed floor ${topAt(bed, z)} at z=${z} against the ${id} deck ${topAt(id, z)}`);
       }
