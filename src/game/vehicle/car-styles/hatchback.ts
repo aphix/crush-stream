@@ -49,8 +49,8 @@ const HATCHBACK_LAMP_SHAPES = {
     ],
   },
   front: {
-    // The reference's orange reflector on the lip under the black band's outer end, inboard of the bumper's corner roll.
-    loops: [{ points: [[0.47, 0.305], [0.56, 0.305], [0.56, 0.33], [0.47, 0.33]] }],
+    // The reference's amber corner lamp at the black intake band's outer end, at the band's height.
+    loops: [{ points: [[0.52, 0.338], [0.64, 0.338], [0.64, 0.392], [0.52, 0.392]] }],
     lens: "amber",
     onBody: true,
   },
@@ -84,6 +84,7 @@ export const HATCHBACK: BodyStyle = {
       // face (between the dip and the lip's crest) is the black intake band.
       wrap: { from: 0.45, back: 0.3, end: { corner: 0.15, stand: 0.008 } },
       band: [0.33, 0.4],
+      bandHalfWidth: 0.52,
       trim: "body",
       top: [[0, 0.462], [0.4, 0.462], [0.62, 0.462]],
       edge: [[1.72, 0.462], [1.45, 0.462], [1.485, 0.38], [1.5, 0.3]],
@@ -166,16 +167,16 @@ export const HATCHBACK: BodyStyle = {
     brake: { at: [0, 1.231], size: [0.34, 0.012] },
     sideMarkers: [{ at: [0.62, 0.8], size: [0.045, 0.022] }],
   },
-  // A flush band on the nose's flat front (skin z 1.74), as the reference's: no box side showing.
-  grille: { y: 0.575, z: 1.748, size: [0.72, 0.11], kind: "bars", count: 4, badge: 0.025, finish: "black" },
+  // A flush band on the nose's flat front (skin z 1.74), as the reference's: no box side showing; four slim slats with open gaps between them.
+  grille: { y: 0.575, z: 1.748, size: [0.72, 0.11], kind: "bars", count: 4, bar: 0.007, badge: 0.025, finish: "black" },
   seats: { front: [0.35, 0.41, -0.1], rear: [0.47, -0.7] },
   // The D-pillar's foot on the shoulder's top beside the gate's corner (x .680, y .895 at z -1.61): at the glass's corner it left the
   // cabin's opening open between its bottom edge and the shoulder, a dark wedge up to 4 cm wide at z -1.5.
   pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] }, rearFoot: [0.68, 0.895] },
   blackout: { b: true, divider: true },
   privacyGlass: { rear: true, quarter: true },
-  // The spoiler spans the roof's rear end out to its side lip, its side ends sloping down over the lip's tuck onto the D-pillars' tops.
-  roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.6, ends: [0.08, 0.04] } },
+  // The spoiler spans the roof's rear end out to its side lip, carrying the roof's crown, its side ends sloping down over the lip's tuck onto the D-pillars' tops.
+  roof: { spoiler: { z: [-1.24, -1.1], y: [1.22, 1.28], halfWidth: 0.6, ends: [0.06, 0.04], crown: 0.026 } },
   exhaust: { tips: 2, x: 0.5, y: 0.24, size: [0.1, 0.045], shape: "round" },
   details: {
     lines: [

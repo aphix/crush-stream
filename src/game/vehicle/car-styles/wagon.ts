@@ -40,12 +40,15 @@ const WAGON_LAMP_SHAPES = {
     ],
   },
   front: {
-    loops: [{ points: [[0.52, 0.36], [0.72, 0.36], [0.72, 0.48], [0.52, 0.48]] }],
+    // The reference's corner intake: a tall recess, its inboard edge leaning out toward its foot, its bright blade across its upper third
+    // from inboard of it, turning up at its outer end.
+    loops: [{ points: [[0.525, 0.555], [0.7, 0.555], [0.725, 0.535], [0.73, 0.37], [0.71, 0.345], [0.6, 0.345], [0.575, 0.36], [0.53, 0.53]] }],
     lens: "dark",
     onBody: true,
-    // The corner intake's bright blade, 2/3 of its width, and the silver splitter along the fascia's bottom lip (diffuse silver: chrome reads dark there).
+    fill: 0.03,
+    // The silver splitter along the fascia's bottom lip (diffuse silver: chrome reads dark there).
     strips: [
-      { line: { points: [[0.553, 0.43], [0.687, 0.43]] }, width: 0.018, tone: "clear" },
+      { line: { points: [[0.45, 0.505], [0.6, 0.505], [0.68, 0.507], [0.71, 0.52]] }, width: 0.014, tone: "clear" },
       { line: { points: [[0.006, 0.345], [0.2, 0.345], [0.35, 0.345], [0.5, 0.345], [0.64, 0.345]] }, width: 0.014, tone: "clear" },
     ],
   },
@@ -163,8 +166,8 @@ export const WAGON: BodyStyle = {
   blackout: { a: true, sail: true, b: true, divider: true, rear: true },
   privacyGlass: { rear: true, quarter: "matte" },
   // The glass panel as the reference's isos: from 19 cm behind the windshield's top, 0.57 m long, 0.72 m across. The spoiler covers the roof's
-  // end out to its lip, its trailing corners cut 10 cm in plan as the reference's rounded roof corners.
-  roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.86, -1.74], y: [1.46, 1.51], halfWidth: 0.6, ends: [0.06, 0.1] }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
+  // end out to its lip carrying the roof's crown, its trailing corners rounded 10 cm in plan as the reference's roof corners.
+  roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.86, -1.74], y: [1.46, 1.51], halfWidth: 0.6, ends: [0.06, 0.1], round: true, crown: 0.026 }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
   exhaust: { tips: 2, x: 0.5, y: 0.42, size: [0.15, 0.05], shape: "round" },
   details: {
     lines: [
@@ -218,9 +221,9 @@ export const WAGON: BodyStyle = {
     patches: [
       { view: "top", points: [[1.18, 0.47], [1.18, 0.55], [1, 0.55], [1, 0.47]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.02, bar: 0.006, depth: 0.004 }, cavity: 0.7 },
       { view: "front", points: [[0, 0.58], [0.025, 0.585], [0.035, 0.6], [0.025, 0.615], [0, 0.62]], depth: 0.003, rim: 0.004, cavity: 0 },
-      // The lower intake and the corner intake's recess end where the corner intake's dark lens does (x .52, y .36-.48): no stepped edge.
-      { view: "front", points: [[0, 0.48], [0.52, 0.48], [0.52, 0.31], [0, 0.31]], depth: -0.006, rim: 0.004, cavity: 0.95 },
-      { view: "front", points: [[0.52, 0.48], [0.72, 0.48], [0.72, 0.36], [0.52, 0.36]], depth: -0.006, rim: 0.004, cavity: 0.95 },
+      // The lower intake and the corner intake's recess end where the corner intake's dark lens does: no stepped edge.
+      { view: "front", points: [[0, 0.48], [0.543, 0.48], [0.575, 0.36], [0.575, 0.31], [0, 0.31]], depth: -0.006, rim: 0.004, cavity: 0.95 },
+      { view: "front", points: [[0.525, 0.555], [0.7, 0.555], [0.725, 0.535], [0.73, 0.37], [0.71, 0.345], [0.6, 0.345], [0.575, 0.36], [0.53, 0.53]], depth: -0.006, rim: 0.004, cavity: 0.95 },
       { view: "front", points: [[0.485, 0.758], [0.555, 0.758], [0.555, 0.803], [0.485, 0.803]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "side", points: [[0.92, 0.89], [0.92, 0.925], [0.47, 0.925], [0.47, 0.89]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0.5, 0.91], [0.8, 0.91], [0.8, 0.99], [0.5, 0.99]], depth: -0.004, rim: 0.004, cavity: 0 },
