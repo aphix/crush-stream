@@ -190,7 +190,7 @@ type Rail = { rear: V3; front: V3; inward?: readonly [number, number] };
 /**
  * Pillar lofted through `rails` (belt to top), thickness inward, its unit `section` at each rail's width (default: corners rounded at
  * `radius` (m) in `steps` chords, the outer face bulged `crown` (m)); sign -1 mirrors to the left without flipping the winding.
- * `ownCaps`: its end caps get their own rings (`loftFromRings`); a pillar whose ends are buried in the body and the roof shares them.
+ * Its end caps share the end rings; `open`: both ends are buried (in the body, the roof's side), so it draws no caps.
  */
 function roundedPillarAlong(
   sign: number,
@@ -199,15 +199,24 @@ function roundedPillarAlong(
   {
     radius = PILLAR_FILLET,
     steps = PILLAR_FILLET_STEPS,
-    ownCaps = true,
+    open = false,
     crown = 0,
     section = (width: number) => filletedUnitSection(filletShare(thick, radius), filletShare(width, radius), steps, crown / thick),
-  }: { radius?: number; steps?: number; ownCaps?: boolean; crown?: number; section?: (width: number) => Pt[] } = {},
+  }: { radius?: number; steps?: number; open?: boolean; crown?: number; section?: (width: number) => Pt[] } = {},
 ): THREE.BufferGeometry {
   const last = rails.length - 1;
   const stations = rails.map((_, k) => k / last);
   const sections = rails.map(({ rear, front }) => section(hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2])));
-  const geo = loftFromRings(sections, stations, 0, 1, ownCaps);
+  const geo = loftFromRings(sections, stations, 0, 1, false);
+  if (open) {
+    // The loft's rings and side triangles come first, its caps' centres and fans after.
+    const ring = sections[0]!.length;
+    geo.setIndex(Array.from(geo.index!.array.subarray(0, last * ring * 6)));
+    for (const name of ["position", "uv"]) {
+      const attribute = geo.getAttribute(name);
+      geo.setAttribute(name, new THREE.Float32BufferAttribute(attribute.array.slice(0, rails.length * ring * attribute.itemSize), attribute.itemSize));
+    }
+  }
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
     const u = pos.getX(i);
@@ -237,13 +246,17 @@ function roundedPillarFromCorners(sign: number, c: { fb: V3; rb: V3; rt: V3; ft:
     const [dx, dz] = [front[0] - rear[0], front[2] - rear[2]];
     return square ? { rear, front, inward: [dz / hypot2(dx, dz), dx / hypot2(dx, dz)] } : { rear, front };
   });
-  return roundedPillarAlong(sign, rails, thick, { ownCaps: false, section: (width) => postSection(thick, width) });
+  return roundedPillarAlong(sign, rails, thick, { open: true, section: (width) => postSection(thick, width) });
 }
 
 /** The drawn A-post's depth inward (m): a slim post, not a slab. */
 const A_POST_THICK = 0.03;
-/** Stations along the drawn A-post, base to top: the side glass's lean and the roof's tuck bend its rails smoothly between them, never at one kink. */
-const A_POST_STATIONS = 7;
+/** Stations along the drawn A-post: its rails run straight up to the cant line, so all but the last spread evenly up to it and the last runs up into the roof. */
+const A_POST_STATIONS = 6;
+/** The A-post's last station under the roof stands this far (m) under the cant line, so none of its points reaches into the roof. */
+const A_POST_CANT_CLEAR = 0.005;
+/** Halvings that find where the A-post's rails reach the cant line: 20 put it within a micron. */
+const A_POST_CANT_STEPS = 20;
 /** The drawn A-post stands this far (m) off the windshield's edge and the side glass, outward, so neither glass shows through it. */
 const A_POST_LIFT = 0.004;
 /** A drawn pillar's top runs this far (m) up past the cant line, buried in the roof's side. */
@@ -288,7 +301,24 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
     const [dx, dz] = [front[0] - rear[0], front[2] - rear[2]];
     return { rear, front, inward: [dz / hypot2(dx, dz), dx / hypot2(dx, dz)] };
   };
-  const post = Array.from({ length: A_POST_STATIONS }, (_, k) => railAt(k / (A_POST_STATIONS - 1)));
+  // Every point of the station's section stays under the cant line wherever the roof spans, on either side (`roundedPillarAlong`'s left
+  // mapping takes its depth from u, the right's from 1 - u).
+  const underCant = (t: number) => {
+    const { rear, front, inward = [1, 0] } = railAt(t);
+    return postSection(A_POST_THICK, hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2])).every(({ x: u, y: w }) =>
+      [u, 1 - u].every((depth) => {
+        const [y, z] = [lerp(rear[1], front[1], w), lerp(rear[2], front[2], w) + depth * A_POST_THICK * inward[1]];
+        return z < style.roofZ[0] || z > style.roofZ[1] || y < cantY(z, style) - A_POST_CANT_CLEAR;
+      }),
+    );
+  };
+  let [shownTop, heldFrom] = [0, 1];
+  for (let k = 0; k < A_POST_CANT_STEPS; k++) {
+    const mid = (shownTop + heldFrom) / 2;
+    if (underCant(mid)) shownTop = mid;
+    else heldFrom = mid;
+  }
+  const post = [...Array.from({ length: A_POST_STATIONS - 1 }, (_, k) => railAt((k / (A_POST_STATIONS - 2)) * shownTop)), railAt(1)];
   const sail: Rail[] = [];
   let sailWidth = 0;
   for (let k = 0; k < SAIL_STATIONS; k++) {
@@ -427,16 +457,15 @@ function drawnBeltRail(sign: number, style: BodyStyle): THREE.BufferGeometry {
     const run = hypot2(dx, dz);
     return { rear: [outer, y - RAIL_FOOT, z], front: [outer, y + RAIL_LIP, z], inward: [dz / run, dx / run] };
   });
-  const rail = roundedPillarAlong(sign, rails, 2 * RAIL_PROUD, { ownCaps: false });
+  const rail = roundedPillarAlong(sign, rails, 2 * RAIL_PROUD);
   rail.name = BELT_RAIL;
   return rail;
 }
 
 /** The sail is as deep (m) as the post it replaces; its two edges roll round at half that. */
 const SAIL_DEPTH = 0.05;
-/** Behind the side window's line the sail's foot sweeps out from the glass onto the haunch's shoulder over this run (m), in `SAIL_SWEEP_CHORDS`. */
+/** Behind the side window's line the sail's foot sweeps out from the glass onto the haunch's shoulder over this run (m), in one chord. */
 export const SAIL_SWEEP = 0.15;
-const SAIL_SWEEP_CHORDS = 2;
 /** The sail's stations along the haunch stand at most this far apart (m): the shoulder turns under 1 cm along it, so its foot keeps to it between them. */
 const SAIL_STEP = 0.35;
 /** The sail's foot sits this far (m) under the shoulder it leaves, so where the two touch they never fight over a pixel. */
@@ -469,7 +498,8 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   const haunch = Math.max(1, Math.ceil((sweepZ - rear) / SAIL_STEP));
   const zs = [
     ...Array.from({ length: haunch }, (_, k) => lerp(rear, sweepZ, k / haunch)),
-    ...Array.from({ length: SAIL_SWEEP_CHORDS + 1 }, (_, k) => lerp(sweepZ, tipZ, k / SAIL_SWEEP_CHORDS)),
+    sweepZ,
+    tipZ,
     rt[2],
     topZ,
   ]
@@ -523,7 +553,8 @@ function cPillarTip(sign: number, style: BodyStyle, [tipY, tipZ]: YZ): THREE.Buf
   const q = style.quarter;
   const [topY, topZ] = [glassTopY(q.zRearTop, style), q.zRearTop];
   const front = Math.max(q.zRearBot, q.zRearTop) + TIP_LAP;
-  const zs = [tipZ, ...style.belt.y.map(([z]) => z).filter((z) => z > tipZ && z < front), front];
+  // Its buried bottom edge runs straight between its ends: the belt bends under 1 cm over its run.
+  const zs = [tipZ, front];
   const rings = zs.map((z): Pt[] => {
     const [low, high] = [beltY(z, style) - RAIL_FOOT, lerp(tipY, topY, Math.min((z - tipZ) / (topZ - tipZ), 1)) + TIP_LAP];
     const [lowX, highX] = [onGlassPlane(z, low, style, TIP_PROUD), onGlassPlane(z, high, style, TIP_PROUD)];
@@ -567,7 +598,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   for (const sign of [-1, 1]) {
     parts.push(
       aPost
-        ? pillar(roundedPillarAlong(sign, aPost.post, A_POST_THICK, { ownCaps: false, section: (width) => postSection(A_POST_THICK, width) }), "a")
+        ? pillar(roundedPillarAlong(sign, aPost.post, A_POST_THICK, { open: true, section: (width) => postSection(A_POST_THICK, width) }), "a")
         : boxFromCorners(
             sign,
             {
@@ -628,7 +659,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
         ),
       );
     }
-    if (aPost?.sail) parts.push(pillar(roundedPillarAlong(sign, aPost.sail, SAIL_THICK, { ownCaps: false }), "sail"));
+    if (aPost?.sail) parts.push(pillar(roundedPillarAlong(sign, aPost.sail, SAIL_THICK), "sail"));
     // The belt rail runs from the C-pillar to the B-pillar along the sill: the cage's box pitched straight between its ends, the drawn seal along the quarter glass's sill.
     if (source === "drawn") {
       parts.push(drawnBeltRail(sign, style), ...glassTopFill(sign, style, aTopZ));

@@ -706,14 +706,13 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
  * into the body on top of its loft: red if one grows.
  */
 const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number }> = {
-  // The sedan's, police's and coupe's C-pillar is a sail (`cPillar`): 6 or 7 sections of 19 points a side, not a post's 2 of 11.
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 416 },
-  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 296 },
-  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 296 },
-  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 454 },
-  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 264 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 416 },
-  monster: { lips: 312, humps: 94, liners: 214, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 264 },
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 378 },
+  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 258 },
+  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 258 },
+  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 416 },
+  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 226 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 378 },
+  monster: { lips: 312, humps: 94, liners: 214, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 226 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and their stations then (the A-post's, every other post's). */
 const CHAMFERED_POST_RING = 11;
@@ -882,8 +881,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   { id: "hatchback", digest: "ce63b76a30c823bfbb334938b043b0f30e1fbc3d33255ddeb254d45733b1737b" },
   { id: "wagon", digest: "eb9db693294fddf0470fba46a10bf8c4181d12a8d392ef892fc4beb6c843f908" },
   { id: "coupe", digest: "fae75944c9d7c46dfa25624af496ca874cff628595859acd29f6d585ae2456b7" },
-  // Pickup and monster re-pinned for their thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
-  { id: "pickup", digest: "5e914ede89c07ac21bec7b8997641fe25db9f1eb75035ee912c4a0dd48b928cf" },
+  // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
+  { id: "pickup", digest: "365bfae1e11bf43392fd4c981a39922a5b1f686fdc8860a0d1737e6a743cd583" },
   { id: "police", digest: "23142cfaa9b3170558c726feb09a56cb9782d946cbb1ab7ecdefd3610cebc58b" },
   { id: "monster", digest: "ea8b2e2587a915177f279a2edfac3611fdd253740d9418000e6d99144f32c7fe" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];

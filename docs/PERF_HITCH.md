@@ -57,8 +57,8 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
   key, so one freed and linked again counts. The check fails if any program links after the boot warm-up (with the purse
   pool's background warm once Rapier is in) or between a race's green light and its end, if a tier switch links a program
   or draws one for the first time inside a frame, or if a finish program exists for the canvas. It prints each switch's
-  first three frames' draw ms, the programs held per tier and the finish programs by key. Ultra links its programs on its
-  first pick, by design ([`CINEMATIC.md`](CINEMATIC.md)).
+  first three frames' draw ms, the programs held per tier and the finish programs by key. Ultra is not stepped: its pick
+  links and draws its programs before it switches, a few a step with frames between ([`CINEMATIC.md`](CINEMATIC.md)).
 
 **The `minimal` tier** (the default, `INITIAL_HUD.fxTier`; `?fx=` sets it) renders straight to the canvas: no HDR target,
 bloom, grade, vignette, grain or blur. It keeps every effect that needs no post (tyre marks, tyre smoke, slip sparks, shake,

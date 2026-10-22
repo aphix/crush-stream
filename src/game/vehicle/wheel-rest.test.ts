@@ -29,8 +29,13 @@ const SETS: readonly (readonly number[])[] = [[0], [3], [0, 1], [2, 3], [0, 2], 
 const _v = new THREE.Vector3();
 /** How far (m) in plan from a hub its body corner is read over a body whose side stands over its tyres: about the corner's own extent. */
 const CORNER_REACH = 0.6;
+/**
+ * A body that loses one wheel and stays up on its other three (a front-heavy coupe minus a rear wheel: its centre of mass stands inside
+ * the three tyres' triangle) rests if its empty corner sags to within this (m) of the ground: no body point need touch it.
+ */
+const THREE_TYRE_CORNER = 0.1;
 
-type Rest = { low: number; corners: number[]; fresh: number[]; all: number[]; speed: number; drift: number };
+type Rest = { low: number; corners: number[]; fresh: number[]; all: number[]; speed: number; drift: number; down: number };
 
 /** A parked `cls` car at (`x`, `z`), hit once on its nose so it is a wreck. */
 function struck(cls: VehicleClassId, x = 0, nose = 2.05, z = 0): DeformableCar {
@@ -95,12 +100,13 @@ function rest(cls: VehicleClassId, lost: readonly number[], secs = 5): Rest {
     all: low,
     speed: car.velocity.length(),
     drift: Math.max(...low.map((y, i) => Math.abs(y - before[i]!))),
+    down: car.wheelsDown,
   };
 }
 
 describe("given a parked car of each vehicle class, hit once so it is a wreck, with some of its wheels popped off", () => {
   for (const cls of VEHICLE_CLASS_IDS) {
-    it(`when a ${cls} loses one corner, a front, rear or side pair, or a diagonal pair of wheels and settles for 5 s, then it is still, its body lies on the ground without sinking into it or hovering over it, and no empty corner hovers`, (t) => {
+    it(`when a ${cls} loses one corner, a front, rear or side pair, or a diagonal pair of wheels and settles for 5 s, then it is still, its body lies on the ground (or, one wheel lost, stands on its other three with the empty corner sagged within ${THREE_TYRE_CORNER * 100} cm of it) without sinking into it or hovering over it, and no empty corner hovers`, (t) => {
       for (const lost of SETS) {
         const r = rest(cls, lost);
         // A lifted body is held up on its standing tyres' arches before its underside reaches the ground, most of all on
@@ -110,23 +116,26 @@ describe("given a parked car of each vehicle class, hit once so it is a wreck, w
         const rise = CLASSES[cls].lift + (CAR_STYLES[CLASSES[cls].style].dims.rideHeight - PLATFORM_DIMS.rideHeight);
         const touch = diagonal && CLASSES[cls].lift > 0.3 ? 0.35 : 0.03 + 0.12 * rise;
         const tag = `${cls} minus ${lost.map((i) => NAMES[i]).join("+")}`;
+        // A diagonal pair lost leaves the body on the other diagonal's tyres: it tips about the line through them until one empty corner is
+        // down. The two empty corners, mirrored across that line, go down and up by the same amount, and the line stands no higher than the
+        // fresh body did, so the risen one is at most twice its fresh height less the low one's: on a body riding higher than the platform by
+        // more than the platform's own ride (the pickup's 0.34 m, the monster lifted 0.87 m on it) that is over the flat bar.
+        const hover = Math.max(...r.corners);
+        const low = Math.min(...r.corners);
+        const tipped = 2 * Math.max(...lost.map((i) => r.fresh[i]!)) - low + 0.01;
+        const bound = diagonal && rise > PLATFORM_DIMS.rideHeight ? tipped : 0.1 + 0.2 * rise + (diagonal ? 0.2 : 0);
+        const down = 0.03 + 0.12 * rise;
+        t.diagnostic(`${tag}: body low ${(r.low * 100).toFixed(1)} cm, empty corners ${r.corners.map((c) => (c * 100).toFixed(1)).join("/")} cm (bound ${(bound * 100).toFixed(1)}), wheels down ${r.down.toString(2)}, speed ${r.speed.toFixed(3)} m/s`);
         assert.ok(r.speed < 0.05, `${tag}: still moving at ${r.speed.toFixed(3)} m/s`);
         // The drawn body leans on its resting rigid body's slice-to-slice jitter, with a gain of cg / (track · ω²) (`car-load.ts`): up to
         // 1 cm on a lifted body (the monster), a fraction of a millimetre on the others.
         const still = CLASSES[cls].lift > 0.3 ? 0.01 : 0.003;
         assert.ok(r.drift < still, `${tag}: body still settling after 4 s, moved ${(r.drift * 1000).toFixed(1)} mm in the last second`);
         assert.ok(r.low > -0.02, `${tag}: body ${(-r.low * 100).toFixed(1)} cm into the ground`);
-        assert.ok(r.low < touch, `${tag}: body hovers ${(r.low * 100).toFixed(1)} cm over the ground`);
-        // A diagonal pair lost leaves the body on the other diagonal's tyres: it tips about the line through them until one empty corner is
-        // down. The two empty corners, mirrored across that line, go down and up by the same amount, and the line stands no higher than the
-        // fresh body did, so the risen one is at most twice its fresh height less the low one's: on a lifted body (the monster's 0.48 m) that
-        // is over the flat bar.
-        const hover = Math.max(...r.corners);
-        const low = Math.min(...r.corners);
-        const tipped = 2 * Math.max(...lost.map((i) => r.fresh[i]!)) - low + 0.01;
-        const bound = diagonal && CLASSES[cls].lift > 0.3 ? tipped : 0.1 + 0.2 * rise + (diagonal ? 0.2 : 0);
-        const down = 0.03 + 0.12 * rise;
-        t.diagnostic(`${tag}: body low ${(r.low * 100).toFixed(1)} cm, empty corners ${r.corners.map((c) => (c * 100).toFixed(1)).join("/")} cm (bound ${(bound * 100).toFixed(1)}), speed ${r.speed.toFixed(3)} m/s`);
+        // One wheel lost, the body may stand on the other three: each of them down and the empty corner sagged near the ground.
+        const standing = 15 & ~lost.reduce((m, i) => m | (1 << i), 0);
+        const onThree = lost.length === 1 && (r.down & standing) === standing && r.corners[0]! < THREE_TYRE_CORNER;
+        assert.ok(r.low < touch || onThree, `${tag}: body hovers ${(r.low * 100).toFixed(1)} cm over the ground (wheels down ${r.down.toString(2)}, empty corner ${(r.corners[0]! * 100).toFixed(1)} cm)`);
         if (diagonal) assert.ok(low < down, `${tag}: no empty corner down, the lower at ${(low * 100).toFixed(1)} cm`);
         assert.ok(hover < bound, `${tag}: an empty corner hovers ${(hover * 100).toFixed(1)} cm (bound ${(bound * 100).toFixed(1)} cm)`);
       }
