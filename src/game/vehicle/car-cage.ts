@@ -6,6 +6,7 @@ import { interiorPose } from "./part-pose.ts";
 import { decimate, upFacing } from "./cage-mesh.ts";
 import { planFieldOf, rasterise } from "./cage-fields.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { wellHumpGeometry } from "./car-well-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import { rockerAt } from "./car-lines.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
@@ -54,6 +55,8 @@ function sillCandidates(style: BodyStyle): number {
 }
 /** Room for a style's sill samples past the hull (`CageSource.sill`): every sample is one of its style's sill candidates, so the most any style has. */
 export const SILL_CAPACITY = Math.max(...CAR_STYLE_IDS.map((id) => sillCandidates(CAR_STYLES[id])));
+/** Room for a style's bed wheel tubs past its decimated hull (`CageSource.tubs`, kept whole): the most any style's cage build carries. */
+export const CAGE_TUB_VERTICES = Math.max(...CAR_STYLE_IDS.map((id) => wellHumpGeometry(CAR_STYLES[id], "cage")?.getAttribute("position").count ?? 0));
 /** The interior's vertex target: what shows through a gone pane (the dash, the headliner, the seats), a few boxes. */
 const INTERIOR_VERTICES = 32;
 
@@ -115,6 +118,8 @@ export interface CageSource {
   readonly sill: Int32Array;
   /** The lattice's half extents (m), the body's frame's. */
   readonly lattice: { readonly x: number; readonly z: number };
+  /** The body's bed wheel tubs (`BodyStyle.wheelTub`): `count` vertices of `rest` from `from`, kept out of the decimation and whole past the hull. */
+  readonly tubs: { readonly from: number; readonly count: number };
 }
 
 /** What a fit reads of the car now: a `SkinDynamic`, less its lattice coefficients (the cage is the shape-mode skin). */
@@ -669,8 +674,55 @@ function sillOffHull(src: CageSource, hull: Int32Array): Int32Array {
   return sill;
 }
 
+/**
+ * The hull: `src`'s body and panels decimated to `CAGE_VERTICES` exactly as the same body without its wheel tubs, then the tubs'
+ * vertices (welded) and triangles after it, so the tubs cost the hull none of its budget.
+ */
+function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array } {
+  const { from, count } = src.tubs;
+  if (count === 0) return decimate(src.rest, src.index, src.group, CAGE_VERTICES);
+  const to = from + count;
+  const rest = new Float32Array(src.rest.length - count * 3);
+  rest.set(src.rest.subarray(0, from * 3));
+  rest.set(src.rest.subarray(to * 3), from * 3);
+  const group = new Uint8Array(src.group.length - count);
+  group.set(src.group.subarray(0, from));
+  group.set(src.group.subarray(to), from);
+  const index: number[] = [];
+  const tubTris: number[] = [];
+  for (let t = 0; t + 2 < src.index.length; t += 3) {
+    const tri = [src.index[t]!, src.index[t + 1]!, src.index[t + 2]!];
+    if (tri.every((v) => v >= from && v < to)) tubTris.push(...tri);
+    else index.push(...tri.map((v) => (v < from ? v : v - count)));
+  }
+  const hull = decimate(rest, index, group, CAGE_VERTICES);
+  const source = Array.from(hull.source, (v) => (v < from ? v : v + count));
+  const slots = new Map<string, number>();
+  const slotOf = new Int32Array(count);
+  for (let v = from; v < to; v++) {
+    const key = `${Math.round(src.rest[v * 3]! * 1e4)},${Math.round(src.rest[v * 3 + 1]! * 1e4)},${Math.round(src.rest[v * 3 + 2]! * 1e4)}`;
+    let slot = slots.get(key);
+    if (slot === undefined) {
+      slot = source.length;
+      slots.set(key, slot);
+      source.push(v);
+    }
+    slotOf[v - from] = slot;
+  }
+  const tris = Array.from(hull.tris);
+  const triGroup = Array.from(hull.triGroup);
+  for (let k = 0; k < tubTris.length; k += 3) {
+    const [a, b, c] = [slotOf[tubTris[k]! - from]!, slotOf[tubTris[k + 1]! - from]!, slotOf[tubTris[k + 2]! - from]!];
+    if (a === b || b === c || a === c) continue;
+    tris.push(a, b, c);
+    triGroup.push(src.group[tubTris[k]!]!);
+  }
+  if (source.length > CAGE_VERTICES + CAGE_TUB_VERTICES) throw new Error(`${source.length} hull vertices, room for ${CAGE_VERTICES + CAGE_TUB_VERTICES}`);
+  return { source: Int32Array.from(source), tris: Uint16Array.from(tris), triGroup: Uint8Array.from(triGroup) };
+}
+
 function buildStyle(src: CageSource, step: number): CageStyle {
-  const body = decimate(src.rest, src.index, src.group, CAGE_VERTICES);
+  const body = hullOf(src);
   const top = upFacing(src.interiorRest, src.interiorIndex);
   const inner = decimate(top.rest, top.index, new Uint8Array(top.rest.length / 3), INTERIOR_VERTICES);
   const n = body.source.length;

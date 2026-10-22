@@ -58,6 +58,7 @@ export const PICKUP: BodyStyle = {
   midPillarZ: null,
   rearBulkhead: { z: -0.56, yTop: 1.2 },
   tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
+  wheelTub: { rise: 0.19, length: 0.55, width: 0.22 },
   rearDoorSeam: null,
   boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15], pivot: [0.6, -2.15] },
   lamps: { head: [0.5, 0.85], tail: [0.58, 0.86] },
