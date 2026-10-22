@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, it } from "node:test";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLES, CAR_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId, type DrawnTwin } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantX, cantY, glassTopY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
 import { beltX, beltY } from "./car-lines.ts";
@@ -710,8 +710,9 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
     });
 
     it(`when a ${id}'s A-posts are laid along its windshield, then each laps the windshield's side edge within ${A_POST_EDGE_FOLLOW * 100} cm at every station under the roof and in side view its centre's offset from that edge varies under ${A_POST_EDGE_FOLLOW * 100} cm`, () => {
-      const glass = makeWindshield(CAR_STYLES[id]).getAttribute("position");
-      for (const post of makeGreenhouseFrame(CAR_STYLES[id], "drawn").filter((g) => g.name === "a")) {
+      const style = drawnStyle(CAR_STYLES[id]);
+      const glass = makeWindshield(style).getAttribute("position");
+      for (const post of makeGreenhouseFrame(style, "drawn").filter((g) => g.name === "a")) {
         const { ring, slices } = loftOf(post);
         const side = Math.sign(positionAt(post, 0).x);
         // The pane's side edge as drawn, base to top (its 10 × 8 grid): it falls with the roof's dome toward its top.
@@ -1472,6 +1473,35 @@ describe("given every body style's cage source, the tables its collision cage is
       assertSameDigest(cageSourceDigest(car), testCase.digest, `${testCase.id} cage source`);
     });
   }
+});
+
+/** The sedan with its windshield's base drawn 5 cm further back and its door glass starting 4 cm further back, its cage and sim on its own fields. */
+const SEDAN_TWIN: DrawnTwin = {
+  windshield: { ...CAR_STYLES.sedan.windshield, base: [CAR_STYLES.sedan.windshield.base[0], CAR_STYLES.sedan.windshield.base[1] - 0.05] },
+  aPillarFoot: CAR_STYLES.sedan.aPillarFoot - 0.04,
+};
+
+describe("given a style whose windshield is drawn apart from its cage (`drawn`)", () => {
+  it("when a car of it is built, then its windshield pane and its body's A-post and sail are the twin's, while its cage source, its sim masses at rest and the windshield's exit point stay the style's own", () => {
+    const joined = (geo: THREE.BufferGeometry) => Array.from(geo.getAttribute("position").array).join(",");
+    const paneOf = (car: DeformableCar) => car["glassPanes"].find((g) => g.name === "windshield")!.mesh.geometry;
+    const massesOf = (car: DeformableCar) => car.deform.masses.map(({ rest }) => `${rest.x},${rest.y},${rest.z}`).join(";");
+    const plain = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
+    CAR_STYLES.sedan.drawn = SEDAN_TWIN;
+    try {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
+      const off: string[] = [];
+      if (joined(paneOf(car)) !== joined(makeWindshield(drawnStyle(CAR_STYLES.sedan)))) off.push("the windshield pane is not the twin's");
+      if (joined(paneOf(car)) === joined(paneOf(plain))) off.push("the windshield pane did not move");
+      if (joined(car.body.geometry) === joined(plain.body.geometry)) off.push("the body's A-post and sail did not move");
+      if (String(paneOf(car).userData.centre) !== String(paneOf(plain).userData.centre)) off.push(`the exit point moved: ${paneOf(car).userData.centre} vs ${paneOf(plain).userData.centre}`);
+      if (massesOf(car) !== massesOf(plain)) off.push("the sim's masses at rest moved");
+      if (cageSourceDigest(car) !== cageSourceDigest(plain)) off.push("the cage source moved");
+      assert.ok(off.length === 0, off.join("; "));
+    } finally {
+      delete CAR_STYLES.sedan.drawn;
+    }
+  });
 });
 
 /** A drawn ring point may stand this far (m) outside the cage source's ring at the same station: rounding in the chord interpolation. The cage carries the ground, so a car resting on its flank sinks into it by whatever the drawn side stands proud. */

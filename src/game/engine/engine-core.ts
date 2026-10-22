@@ -21,7 +21,7 @@ import { fleetProp, type SceneId } from "../scenes/scene-id.ts";
 import { MINIGAME_MODE, type MinigameMode } from "../scenes/minigame-constants.ts";
 import { SceneFade } from "../present/scene-fade.ts";
 import { ParkingScene } from "../present/parking-scene.ts";
-import type { CarStyleId } from "../vehicle/car-variants.ts";
+import { drawnStyle, type CarStyleId } from "../vehicle/car-variants.ts";
 import { armKill, assignClass, carClass, HANDLING, killClass, STYLE_CLASS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { DRIVER_CARS, type DriverCar } from "../match/types.ts";
 import { WorldStage, makeLamp } from "../present/engine-world.ts";
@@ -529,10 +529,10 @@ export abstract class EngineCore {
     const slot = car.group.userData.carIndex as number;
     const look = this.looks.of(slot, this.ownCar());
     // A cop wears its livery: under its player's spray (bare texels show it), else as its own.
-    if (look) look.carSpray.underlay(copPaint(car.style, look.carSpray.layout));
+    if (look) look.carSpray.underlay(copPaint(drawnStyle(car.style), look.carSpray.layout));
     // A car with no player's look wears its rival spray when the race or derby has one for it (the first dress runs before `race` is assigned).
     const seed = look || !this.race ? null : rivalSeedOf(slot, this.race, this.derbyMode ? { round: this.derbyRound, seated: this.derbySeated } : null);
-    if (seed === null) wearCarLook(car, look?.car ?? NO_CAR_PICK, look?.carSpray ?? copSpray(car.style, this.deviceClass));
+    if (seed === null) wearCarLook(car, look?.car ?? NO_CAR_PICK, look?.carSpray ?? copSpray(drawnStyle(car.style), this.deviceClass));
     else wearCarLook(car, NO_CAR_PICK, this.rivals.of(seed, slot, lookColours(car, NO_CAR_PICK).body));
     applyCarFinish(car.group, finishForTier(this.cine.tier));
   }
