@@ -66,7 +66,7 @@ Mechanism: a grounded car only ever reads `activeGround()` (car.ts:388-471); ano
 | 40 | 196/165/30/5 | 208/106/102/4 | 3.61 | 8 |
 | 60 | 267/255/12/1 | 281/137/144/7 | 12.0 roof | 10 |
 
-Matched on energy instead, the press cannot reach it from 20 km/h: it stops at `COMPACTOR.maxFace` 0.62 with 9.2 kJ of plate work against shares of 10.1-79 kJ; at matched travel the plates do 313-839 J, 1-12 % of the share. A force-matched press needs a plate mode that does not exist (plates are kinematic, 0.55 m/s, kg Infinity, no force target).
+Matched on energy instead, the press cannot reach it from 20 km/h: it stops at the car's `PressFaces.maxFace` (0.62 on the platform car) with 9.2 kJ of plate work against shares of 10.1-79 kJ; at matched travel the plates do 313-839 J, 1-12 % of the share. A force-matched press needs a plate mode that does not exist (plates are kinematic, 0.55 m/s, kg Infinity, no force target).
 
 | piston vs car (hardness 0.5) | 10 | 20 | 30 | 40 | 60 km/h |
 |---|---|---|---|---|---|

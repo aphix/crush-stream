@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { compactorStage } from "../scenes/compactor.ts";
+import type { CompactorStage } from "../scenes/compactor.ts";
 import { BALL_EXPOSE, type JerseyBarrier, type RampBall } from "../scenes/engine-props.ts";
 import type { CrashPhase } from "../match/phase.ts";
 import { leftoverCrumple, round4, vec3 } from "../deform/physics-util.ts";
@@ -66,6 +66,7 @@ export type TraceSetup = {
   ramps: boolean;
   compactor: boolean;
   compactFace: number;
+  compactStage: CompactorStage;
   carCount: number;
   speedMin: number;
   speedMax: number;
@@ -210,7 +211,7 @@ export class TraceRecorder {
       buckle: setup.buckle,
       fxDensity: setup.fxDensity,
       compactFace: round4(setup.compactFace),
-      compactStage: compactorStage(setup.compactFace),
+      compactStage: setup.compactStage,
       closing: Math.round(clock.closing * 3.6 * 10) / 10,
       collision: {
         leftover: cars.map((c) => round4(leftoverCrumple(c.deform.crumpleTravelCorner()))),
