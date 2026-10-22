@@ -510,8 +510,11 @@ export function tractionLimit(frame: Axles, k: ClassStats, muF: number, muR: num
 type Dressable = {
   readonly group: THREE.Group;
   readonly wheels: readonly THREE.Object3D[];
-  /** Lamp seats ride the lift like the body they sit on (bare objects, not children of the group). */
+  /** Lamp seats and the drawn-only lamp fittings ride the lift like the body they sit on (bare objects, not children of the group); a lid's lamps ride the lid. */
   readonly lamps: readonly { readonly seat: THREE.Object3D }[];
+  readonly lampFittings: readonly { readonly seat: THREE.Object3D; readonly kind: string }[];
+  /** A lifted truck's axles ride the hubs with the wheels. */
+  readonly underbody: { readonly axles: readonly THREE.Object3D[] } | null;
   readonly style: { id: CarStyleId };
   readonly frame: Axles;
 };
@@ -520,8 +523,9 @@ type Dressable = {
 /**
  * Give `car` a class: stats for `applyDrive`, plus the monster / truck stance.
  * Body parts ride a lift group and the wheels a hub group inside the car's
- * group, so the physics frame (masses, hulls, contacts) stays stock. Run it
- * again after every respawn: a re-attached part lands back on the plain group.
+ * group, so the physics frame (masses, hulls, contacts) stays stock. A respawn
+ * or a host's state puts torn parts and wheels back under these groups
+ * (`DeformableCar.resetVisual`, `writeNetState`).
  */
 export function assignClass(car: Dressable, id: VehicleClassId): void {
   assigned.set(car, id);
@@ -542,9 +546,10 @@ export function assignClass(car: Dressable, id: VehicleClassId): void {
   for (let i = g.children.length - 1; i >= 0; i--) {
     const c = g.children[i]!;
     if (c === body || c === hubs) continue;
-    if (car.wheels.includes(c)) hubs!.add(c);
+    if (car.wheels.includes(c) || car.underbody?.axles.includes(c)) hubs!.add(c);
     else body.add(c);
   }
   for (const w of car.wheels) w.scale.setScalar(s.wheelScale);
   for (const lamp of car.lamps) lamp.seat.parent = body;
+  for (const f of car.lampFittings) if (f.kind !== "hood" && f.kind !== "boot") f.seat.parent = body;
 }

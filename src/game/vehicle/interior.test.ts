@@ -1,21 +1,22 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
-import { floorY } from "./car-lines.ts";
+import { beltY, floorY } from "./car-lines.ts";
 import { roofAt } from "./car-mesh.ts";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
-import { BUMPER_F, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { BUMPER_F, CABIN_TRIM, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { makeDoorGeometry } from "./car-door-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { bayAt, bayTub, makeHoodGeometry, sampleSlice, TUB_EDGE } from "./car-mesh.ts";
+import { bayAt, bayTub, glassX, makeHoodGeometry, sampleSlice, TUB_EDGE } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import { cabinGeometry, cageInterior, doorCardGeometry } from "./interior-geometry.ts";
 import { CarCabin, driverSeat } from "./interior.ts";
 import { PartBatch } from "./part-batch.ts";
-import { carPartSeats, PART_KIND, PART_KINDS, type PartSeat } from "./part-geometry.ts";
+import { carPartSeats, PART_KIND, PART_KINDS, partGeometry, type PartSeat } from "./part-geometry.ts";
 import { paint } from "./test-support.ts";
 import { carInState } from "./drawn-body.test-util.ts";
-import { STYLE_CLASS } from "./vehicle-classes.ts";
+import { assignClass, CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
 
 const mm = (v: THREE.Vector3): string => v.toArray().map((x) => x.toFixed(3)).join();
 
@@ -151,6 +152,7 @@ describe("given a field of one car of every style", () => {
     return Object.fromEntries(PART_KINDS.map((k) => [k, batch.meshes[k]!.count]));
   };
   const rows = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].seats.rear !== null).length;
+  const lifted = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].underbody).length;
 
   test("when the batch syncs, then each prop kind is one instanced draw holding the whole field's seats, and nothing under the hood or bumpers shows", () => {
     const counts = draw();
@@ -162,6 +164,9 @@ describe("given a field of one car of every style", () => {
     assert.equal(counts[PART_KIND.wheel], cars.length);
     assert.equal(counts[PART_KIND.engineBay], 0);
     assert.equal(counts[PART_KIND.crashBar], 0);
+    assert.equal(counts[PART_KIND.ladderFrame], lifted, "a frame only under a style with an undercarriage");
+    assert.equal(counts[PART_KIND.axle], 2 * lifted);
+    assert.ok(lifted > 0 && lifted < cars.length, "the control: the monster has one, the rest none");
   });
 
   test("when one car's hood and another's front bumper come off, then the bay and one crash bar show, in their kinds' one draw each", () => {
@@ -174,6 +179,70 @@ describe("given a field of one car of every style", () => {
     const reset = draw();
     assert.equal(reset[PART_KIND.engineBay], 0, "a reset closes the bay");
     assert.equal(reset[PART_KIND.crashBar], 0);
+  });
+});
+
+describe("given a monster truck of its class at rest on flat ground", () => {
+  const scene = new THREE.Scene();
+  const build = (style: "monster" | "pickup"): DeformableCar => {
+    const car = new DeformableCar(paint(), scene, null, style);
+    assignClass(car, "monster");
+    car.spawn(0, 0, 0);
+    car.group.updateMatrixWorld(true);
+    return car;
+  };
+  const monster = build("monster");
+  const batch = new PartBatch(1);
+  batch.sync([monster]);
+  const m = new THREE.Matrix4();
+  const v = new THREE.Vector3();
+
+  test("when the batch syncs, then its frame and both axles draw, and a pickup body on the same lift draws none of them", () => {
+    assert.equal(batch.meshes[PART_KIND.ladderFrame]!.count, 1);
+    assert.equal(batch.meshes[PART_KIND.axle]!.count, 2);
+    const plain = new PartBatch(1);
+    plain.sync([build("pickup")]);
+    assert.equal(plain.meshes[PART_KIND.ladderFrame]!.count + plain.meshes[PART_KIND.axle]!.count, 0);
+  });
+
+  test("when its axles are read, then each sits on its wheels' hubs, at the class's hub height (the drawn tyre's radius)", () => {
+    const hub = carFrame(monster.style).rig.tyre.r * CLASSES.monster.wheelScale;
+    const w = monster.wheels.map((wheel) => wheel.getWorldPosition(new THREE.Vector3()));
+    for (const [k, [a, b]] of [[0, 1], [2, 3]].entries()) {
+      batch.meshes[PART_KIND.axle]!.getMatrixAt(k, m);
+      v.setFromMatrixPosition(m);
+      const mid = w[a!]!.clone().add(w[b!]!).multiplyScalar(0.5);
+      assert.ok(v.distanceTo(mid) < 1e-4 && Math.abs(v.y - hub) < 1e-4, `axle ${k} at ${mm(v)}, hubs' midpoint ${mm(mid)}, hub height ${hub.toFixed(3)}`);
+    }
+  });
+
+  test("when every undercarriage vertex is read through its instance, then none is below the ground", () => {
+    let low = Infinity;
+    for (const kind of [PART_KIND.ladderFrame, PART_KIND.axle]) {
+      const mesh = batch.meshes[kind]!;
+      const pos = partGeometry(kind).getAttribute("position");
+      for (let k = 0; k < mesh.count; k++) {
+        mesh.getMatrixAt(k, m);
+        for (let i = 0; i < pos.count; i++) low = Math.min(low, v.fromBufferAttribute(pos, i).applyMatrix4(m).y);
+      }
+    }
+    assert.ok(low >= 0, `lowest undercarriage vertex at ${low.toFixed(3)} m`);
+  });
+
+  test("when its front-left wheel pops off, then the front axle still draws, its stub on the gone wheel's rest hub where it stood", () => {
+    const popped = build("monster");
+    const own = new PartBatch(1);
+    own.sync([popped]);
+    const before = new THREE.Matrix4();
+    own.meshes[PART_KIND.axle]!.getMatrixAt(0, before);
+    popped["dropWheel"](0, "hubFL");
+    popped.group.updateMatrixWorld(true);
+    own.sync([popped]);
+    assert.ok(popped.wheels[0]!.parent === scene, "the control: the wheel left the car");
+    assert.equal(own.meshes[PART_KIND.axle]!.count, 2, "both axles draw");
+    own.meshes[PART_KIND.axle]!.getMatrixAt(0, m);
+    const moved = Math.max(...m.elements.map((e, i) => Math.abs(e - before.elements[i]!)));
+    assert.ok(moved < 1e-4, `the front axle moved ${moved.toFixed(5)} off its rest place`);
   });
 });
 
@@ -358,4 +427,77 @@ describe("given the door cards", () => {
       assert.equal(box(card.boundingBox!), box(lining.boundingBox!), `side ${sign}`);
     }
   });
+});
+
+describe("given every style's cabin as its glass shows it", () => {
+  test("when the drawn body and doors are read, then the headliner, the cabin tub's floor corners away from its blends, and each door's flat inner face are dark cabin trim, not body paint or bare steel", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const body = makeChassisGeometry(style);
+      const primer = body.getAttribute(PRIMER_ATTRIBUTE);
+      const pos = body.getAttribute("position");
+      const twins = body.userData.shellTwins as Int32Array;
+      for (let k = 0; k < twins.length; k += 2) assert.equal(primer.getX(twins[k]!), CABIN_TRIM, `${id}: headliner vertex ${twins[k]}`);
+      const { ring, slices } = body.userData.loft as { ring: number; slices: number };
+      const [zRear, zFront] = style.tubs[0]!;
+      let floor = 0;
+      for (let s = 0; s < slices; s++) {
+        const z = pos.getZ(s * ring);
+        if (z < zRear + 2 * TUB_EDGE || z > zFront - 2 * TUB_EDGE || bayAt(z, style) > 0) continue;
+        for (const i of [0, ring - 1]) assert.equal(primer.getX(s * ring + i), CABIN_TRIM, `${id}: cabin floor corner at z ${z.toFixed(3)}, ring point ${i}`);
+        floor++;
+      }
+      assert.ok(floor >= 4, `${id}: ${floor} cabin floor slices read`);
+      for (const sign of [-1, 1]) {
+        const door = makeDoorGeometry(sign, style);
+        const [doorPrimer, normal] = [door.getAttribute(PRIMER_ATTRIBUTE), door.getAttribute("normal")];
+        let inner = 0;
+        for (let v = 0; v < normal.count; v++) {
+          if (sign * normal.getX(v) > -0.99) continue;
+          inner++;
+          assert.equal(doorPrimer?.getX(v), CABIN_TRIM, `${id} door ${sign}: inner-face vertex ${v}`);
+        }
+        assert.ok(inner > 0, `${id} door ${sign}: an inner face`);
+      }
+    }
+  });
+
+  /** A drawn interior point may stand this far (m) past a pane or the roof line before it shows through: the glass's own thickness. */
+  const THROUGH_M = 0.005;
+  /** Styles whose seat data still puts a seat through a pane, with their owner and the reading: the owning lane's ticket turns them live. */
+  const OPEN_FIT: Partial<Record<CarStyleId, string>> = {
+    pickup: "CarTrucks2: the front seat back stands 7.4 cm through the cab's rear window at (0.27, 1.36, -0.59)",
+    monster: "CarTrucks2: the rear bench stands 3.5 cm through the rear window at (-0.23, 1.26, -0.77)",
+  };
+  /** The z of the pane line from `base` to `top` ([y, z] each) at height `y`. */
+  const paneZ = (y: number, [y0, z0]: readonly [number, number], [y1, z1]: readonly [number, number]): number => z0 + ((y - y0) / (y1 - y0)) * (z1 - z0);
+  for (const id of CAR_STYLE_IDS) {
+    const name = `when a ${id}'s cabin is built, then no point of its shell, seats, bench or wheel stands over the roof line or through the side glass, the windshield or the rear glass`;
+    if (OPEN_FIT[id] !== undefined) {
+      test.todo(`${name} (${OPEN_FIT[id]})`);
+      continue;
+    }
+    test(name, () => {
+      const style = CAR_STYLES[id];
+      const seats = carPartSeats();
+      new CarCabin(style, seats, new THREE.Group());
+      const kinds = new Set<number>([PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel]);
+      const through: string[] = [];
+      const [ws, wsTop, rg] = [style.windshield.base, style.windshieldTop, style.rearGlass];
+      for (const seat of seats) {
+        if (!kinds.has(seat.kind) || seat.parent === null) continue;
+        seat.updateMatrix();
+        const pos = seat.geometry.getAttribute("position");
+        for (let i = 0; i < pos.count; i++) {
+          const p = new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(seat.matrix);
+          const at = `kind ${seat.kind} at (${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
+          if (p.z >= style.roofZ[0] && p.z <= style.roofZ[1] && p.y > roofAt(p.z, style).y + THROUGH_M) through.push(`over the roof line: ${at}`);
+          if (p.y > beltY(p.z, style) && Math.abs(p.x) > glassX(p.z, p.y, style) + THROUGH_M) through.push(`through the side glass: ${at}`);
+          if (p.y > ws[0] && p.y < wsTop[0] && p.z > paneZ(p.y, ws, wsTop) + THROUGH_M) through.push(`through the windshield: ${at}`);
+          if (p.y > rg.base[0] && p.y < rg.top[0] && p.z < paneZ(p.y, rg.base, rg.top) - THROUGH_M) through.push(`through the rear glass: ${at}`);
+        }
+      }
+      assert.equal(through.length, 0, `${id}: ${through.length} interior points outside the greenhouse, e.g. ${through.slice(0, 3).join("; ")}`);
+    });
+  }
 });

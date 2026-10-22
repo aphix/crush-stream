@@ -1,5 +1,6 @@
 import type { BodyStyle } from "../car-variants.ts";
 import { PLATFORM_HARDPOINTS, st } from "./platform.ts";
+import { TOW_MIRROR } from "./pickup.ts";
 
 const { bumpers } = PLATFORM_HARDPOINTS;
 /** Black steel bar bumper, 28 cm tall with a flat face 9 cm proud ([y, out] m, top to bottom). */
@@ -14,6 +15,39 @@ const MONSTER_BUMPER_FASCIA = [
   [-0.14, -0.07],
 ] as const;
 
+/** Monster's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const MONSTER_LAMP_SHAPES = {
+  head: {
+    loops: [{ points: [[0.445, 0.605], [0.655, 0.605], [0.655, 0.795], [0.445, 0.795]] }],
+    lens: "lit",
+    bezel: "black",
+    recess: 0.02,
+    cells: [
+      { loop: { points: [[0.665, 0.615], [0.735, 0.615], [0.735, 0.785], [0.665, 0.785]] }, tone: "amber" },
+      { loop: { side: true, points: [[2.08, 0.615], [2.01, 0.615], [2.01, 0.785], [2.08, 0.785]] }, tone: "amber" },
+    ],
+  },
+  tail: {
+    loops: [
+      { points: [[0.68, 0.62], [0.78, 0.62], [0.78, 0.98], [0.68, 0.98]] },
+      { side: true, points: [[-2.295, 0.62], [-2.255, 0.62], [-2.255, 0.98], [-2.295, 0.98]] },
+    ],
+    lens: "lit",
+    bezel: "black",
+    recess: 0.01,
+    cells: [{ loop: { points: [[0.68, 0.71], [0.78, 0.71], [0.78, 0.836], [0.68, 0.836]] }, tone: "amber" }],
+  },
+  front: {
+    loops: [{ points: [[0.51, 0.365], [0.59, 0.365], [0.59, 0.435], [0.51, 0.435]] }],
+    lens: "clear",
+    bezel: "black",
+  },
+  rear: {
+    loops: [{ points: [[0.615, 0.37], [0.685, 0.37], [0.685, 0.43], [0.615, 0.43]] }],
+    lens: "amber",
+  },
+} as const;
+
 /** The truck family as a crew cab, squatter and longer than the pickup; the monster class lifts it onto its big wheels. */
 export const MONSTER: BodyStyle = {
   id: "monster",
@@ -23,7 +57,7 @@ export const MONSTER: BodyStyle = {
   belt: { x: 0.8, y: [[0, 1.0]] },
   rocker: { y: 0.4 },
   underside: [[-2.4, 0.38], [-2.1, 0.34], [2.1, 0.34]],
-  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, mirrorY: 0.29, mirrorZ: 0.2, mirrorReach: 0.1, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75] },
+  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, mirrorY: 0.29, mirrorZ: 0.2, mirrorReach: 0.16, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75], mirror: TOW_MIRROR },
   aPillarFoot: 0.74,
   aPillarTop: 0.41,
   bPillar: { rear: -0.19, front: -0.12 },
@@ -57,7 +91,9 @@ export const MONSTER: BodyStyle = {
   wheelTub: { rise: 0.24, length: 0.82, width: 0.25 },
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
-  lamps: { head: [0.5, 0.62], tail: [0.73, 0.8] },
+  lamps: { head: [0.55, 0.7], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, sideMarkers: [{ at: [0.88, -2.1], size: [0.06, 0.03] }] },
+  grille: { y: 0.7, size: [0.8, 0.19], kind: "bars", count: 4, finish: "black" },
+  underbody: true,
   camera: { hood: [2.08, 1.27], third: { dist: 7.4, height: 3.0, aimUp: 1.7 }, far: { dist: 11.5, height: 4.3, aimUp: 1.9 } },
   details: {
     lines: [
@@ -98,7 +134,6 @@ export const MONSTER: BodyStyle = {
       { view: "top", points: [[-0.915, 0], [-2.242, 0]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
       { view: "front", points: [[0, 0.9], [0.7, 0.9]], width: 0.008, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "front", points: [[0, 0.52], [0.82, 0.52]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.1 },
-      { view: "rear", points: [[0, 0.45], [0.67, 0.45], [0.67, 1.02], [0, 1.02]], width: 0.008, depth: -0.004, profile: "v", cavity: 0.85 },
     ],
     patches: [
       { view: "side", points: [[0.064, 0.877], [-0.107, 0.877], [-0.107, 0.798], [0.064, 0.798]], depth: -0.004, rim: 0.004, cavity: 0.5 },

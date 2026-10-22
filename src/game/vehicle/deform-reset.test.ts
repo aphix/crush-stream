@@ -6,6 +6,8 @@ import { DeformableCar } from "./car.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { assertSameDigest, DT, paint } from "./test-support.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
+import { assignClass, CLASSES } from "./vehicle-classes.ts";
+import { BUMPER_F, CLASS_HUBS, CLASS_LIFT } from "./constants.ts";
 
 /**
  * Every field of a deform as plain data, nested and typed arrays included; −0, NaN and ±Infinity kept apart. The G / P
@@ -59,5 +61,26 @@ describe("given a car that has driven hard (gas, full lock and the handbrake at 
     for (const key of ["steer", "throttle", "drift", "ebrakeK"] as const) assert.ok(car.drive[key] !== 0, `the control: ${key} is ${car.drive[key]} before the respawn`);
     car.spawnFacing(10, 10, 1, 0);
     for (const [key, value] of Object.entries(car.drive)) assert.equal(value, typeof value === "boolean" ? false : -0, key);
+  });
+});
+
+/** A car's torn-part hooks, protected on the car: the hit and the step that would tear them are beside the point. */
+type Tearable = { dropWheel(i: number, hub: string): void; detachPart(p: unknown, impulse: number): void; parts: { name: string; object: THREE.Object3D }[] };
+
+describe("given a monster truck whose rear-right wheel and front bumper have come off", () => {
+  it("when it is put on a spot again, then the wheel is back on its class's hub group and the bumper on its lifted body, so neither is drawn under where it belongs", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, CLASSES.monster.style);
+    assignClass(car, "monster");
+    car.spawnFacing(0, 0, 0, 0);
+    const torn = car as unknown as Tearable;
+    const wheel = car.wheels[3]!;
+    const part = torn.parts.find((p) => p.name === BUMPER_F)!;
+    torn.dropWheel(3, "hubRR");
+    torn.detachPart(part, 0);
+    assert.ok(wheel.parent?.name !== CLASS_HUBS && part.object.parent?.name !== CLASS_LIFT, "the wheel or the bumper never came off");
+    // Put on the plain group, the wheel was drawn 26 cm under its hub (the monster's tyre lift) and the bumper 0.87 m under its body.
+    car.spawnFacing(10, 10, 1, 0);
+    assert.equal(wheel.parent?.name, CLASS_HUBS, "the wheel's parent");
+    assert.equal(part.object.parent?.name, CLASS_LIFT, "the bumper's parent");
   });
 });

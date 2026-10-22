@@ -39,8 +39,8 @@ const DETAIL_BUMP_END_M = 25;
 const DETAIL_CAVITY_FADE_START_M = 60;
 const DETAIL_CAVITY_END_M = 80;
 
-/** The views in their uniform slots: the shader reads side 0, top 1, front 2, rear 3. */
-const VIEWS: readonly DetailView[] = ["side", "top", "front", "rear"];
+/** The views in their uniform slots: the shader reads side 0, top 1, front 2, rear 3, bottom 4. */
+const VIEWS: readonly DetailView[] = ["side", "top", "front", "rear", "bottom"];
 
 /** One view's tile: its view axes' origin (m), its size and its corner in the atlas (texels). */
 type Tile = { a0: number; b0: number; width: number; height: number; x: number; y: number };
@@ -85,7 +85,7 @@ export function ensureRestFrame(mesh: THREE.Mesh, group: THREE.Object3D): void {
 
 // --- the bake ----------------------------------------------------------------------------------------------------------
 
-/** The four tiles of a car of `dims` and the atlas they pack into: side and top along the length, front and rear side by side under them. */
+/** The five tiles of a car of `dims` and the atlas they pack into: side and top along the length, front and rear side by side under them, the bottom along the length under those. */
 function tileLayout(dims: BodyStyle["dims"]): { tiles: Tile[]; width: number; height: number } {
   const texels = (metres: number) => Math.ceil(metres / DETAIL_TEXEL_M);
   const zMin = -(dims.wheelbase / 2 + dims.overhang.rear);
@@ -98,8 +98,33 @@ function tileLayout(dims: BodyStyle["dims"]): { tiles: Tile[]; width: number; he
     { a0: zMin, b0: 0, width: along, height: across, x: g, y: up + 3 * g },
     { a0: 0, b0: 0, width: across, height: up, x: g, y: up + across + 5 * g },
     { a0: 0, b0: 0, width: across, height: up, x: across + 3 * g, y: up + across + 5 * g },
+    { a0: zMin, b0: 0, width: along, height: across, x: g, y: 2 * up + across + 7 * g },
   ];
-  return { tiles, width: Math.max(along, 2 * across + 2 * g) + 2 * g, height: 2 * up + across + 6 * g };
+  return { tiles, width: Math.max(along, 2 * across + 2 * g) + 2 * g, height: 2 * up + 2 * across + 8 * g };
+}
+
+/**
+ * The floor pan every car shows on its roof, as bottom-view strokes from its dims: the tunnel, the floor rails and cross ribs, a
+ * subframe at each axle, the tank ahead of the rear one, and the exhaust run (on its tip's line) with its silencer behind it.
+ */
+function panDetails(style: BodyStyle): Details {
+  const axle = style.dims.wheelbase / 2;
+  const tail = -(axle + style.dims.overhang.rear);
+  const pipe = style.exhaust?.x ?? 0.4;
+  const rail = 0.75 * (style.dims.width / 2);
+  const ribs = Array.from({ length: Math.floor((2 * axle - 1.2) / 0.35) }, (_, k) => axle - 0.6 - 0.35 * k);
+  const line = (points: [number, number][], width: number, depth: number, cavity: number): DetailLine => ({ view: "bottom", points, width, depth, profile: "u", cavity });
+  const box = (z0: number, z1: number, x0: number, x1: number, depth: number, cavity: number): DetailPatch => ({ view: "bottom", points: [[z0, x0], [z1, x0], [z1, x1], [z0, x1]], depth, rim: 0.03, cavity });
+  return {
+    lines: [
+      line([[axle - 0.1, rail], [-axle + 0.1, rail]], 0.07, 0.005, 0.3),
+      ...ribs.map((z) => line([[z, 0.18], [z, rail - 0.06]], 0.03, -0.003, 0.35)),
+      line([[axle, 0], [axle, rail + 0.1]], 0.09, 0.006, 0.45),
+      line([[-axle, 0], [-axle, rail + 0.1]], 0.09, 0.006, 0.45),
+      line([[axle - 0.35, 0.1], [0, pipe], [tail + 0.12, pipe]], 0.06, 0.006, 0.5),
+    ],
+    patches: [box(axle - 0.3, -axle + 0.6, 0, 0.13, 0.005, 0.15), box(-axle + 0.2, -axle + 0.8, 0.15, Math.max(0.3, pipe - 0.1), 0.005, 0.25), box(tail + 0.35, -axle - 0.15, pipe - 0.13, pipe + 0.13, 0.006, 0.3)],
+  };
 }
 
 /** The bake's float heights (m) and cavities (0..1), one per atlas texel, and the atlas width. */
@@ -208,14 +233,18 @@ function patternCover(pattern: Pattern, u: number, v: number): number {
   return clamp(DETAIL_TEXEL_M / 2 + pattern.bar / 2 - d, 0, Math.min(DETAIL_TEXEL_M, pattern.bar)) / DETAIL_TEXEL_M;
 }
 
-/** Distance (m) from (a, b) to the outline of `points`, signed + inside (even-odd). */
-function signedPolygonDistance(points: DetailPatch["points"], a: number, b: number): number {
+/** Each view's mirrored axis in its points ([a, b] index): an outline edge lying on x = 0 is the car's middle, not the patch's edge. */
+const MIRROR_AXIS: Readonly<Record<DetailView, 0 | 1 | null>> = { side: null, top: 1, bottom: 1, front: 0, rear: 0 };
+
+/** Distance (m) from (a, b) to the outline of `points`, signed + inside (even-odd); edges on the `mirror` axis's zero are skipped. */
+function signedPolygonDistance(points: DetailPatch["points"], a: number, b: number, mirror: 0 | 1 | null): number {
   let inside = false;
   let nearest = Infinity;
   for (let k = 0, m = points.length - 1; k < points.length; m = k++) {
     const [pa, pb] = points[k]!;
     const [qa, qb] = points[m]!;
     if (pb > b !== qb > b && a < ((qa - pa) * (b - pb)) / (qb - pb) + pa) inside = !inside;
+    if (mirror !== null && points[k]![mirror] === 0 && points[m]![mirror] === 0) continue;
     const da = qa - pa;
     const db = qb - pb;
     const length2 = da * da + db * db;
@@ -238,8 +267,9 @@ function drawPatch(canvas: Canvas, tile: Tile, patch: DetailPatch): void {
     bMax = Math.max(bMax, b);
   }
   const pattern = patch.pattern;
+  const mirror = MIRROR_AXIS[patch.view];
   forTexels(tile, aMin - DETAIL_TEXEL_M, aMax + DETAIL_TEXEL_M, bMin - DETAIL_TEXEL_M, bMax + DETAIL_TEXEL_M, canvas.width, (a, b, at) => {
-    const floor = clamp01((signedPolygonDistance(patch.points, a, b) + DETAIL_TEXEL_M / 2) / (patch.rim + DETAIL_TEXEL_M));
+    const floor = clamp01((signedPolygonDistance(patch.points, a, b, mirror) + DETAIL_TEXEL_M / 2) / (patch.rim + DETAIL_TEXEL_M));
     if (floor === 0) return;
     const bars = pattern ? patternCover(pattern, a - aMin, b - bMin) : 0;
     combine(canvas, at, floor * (patch.depth + (pattern ? pattern.depth * bars : 0)), floor * patch.cavity * (1 - bars));
@@ -247,16 +277,17 @@ function drawPatch(canvas: Canvas, tile: Tile, patch: DetailPatch): void {
 }
 
 /**
- * `details` baked for a car of `dims`: an RGBA8 atlas (R height about the middle byte, G cavity, B and A the height's slope along the
- * tile's a and b axes from central differences of the float heights, square-root coded about the middle byte so a broad, shallow
- * stroke's slope steps finely), its tiles' lookups written into `tiles` / `bounds`.
+ * `style`'s details and its floor pan baked for its dims: an RGBA8 atlas (R height about the middle byte, G cavity, B and A the height's
+ * slope along the tile's a and b axes from central differences of the float heights, square-root coded about the middle byte so a
+ * broad, shallow stroke's slope steps finely), its tiles' lookups written into `tiles` / `bounds`.
  */
-function bakeDetailAtlas(details: Details, dims: BodyStyle["dims"], tiles: readonly THREE.Vector4[], bounds: readonly THREE.Vector4[]): THREE.DataTexture {
-  const layout = tileLayout(dims);
+function bakeDetailAtlas(style: BodyStyle, details: Details, tiles: readonly THREE.Vector4[], bounds: readonly THREE.Vector4[]): THREE.DataTexture {
+  const layout = tileLayout(style.dims);
   const { width, height } = layout;
   const canvas: Canvas = { heights: new Float32Array(width * height), cavities: new Float32Array(width * height), width };
-  for (const line of details.lines) drawLine(canvas, layout.tiles[VIEWS.indexOf(line.view)]!, line);
-  for (const patch of details.patches) drawPatch(canvas, layout.tiles[VIEWS.indexOf(patch.view)]!, patch);
+  const pan = panDetails(style);
+  for (const line of [...details.lines, ...pan.lines]) drawLine(canvas, layout.tiles[VIEWS.indexOf(line.view)]!, line);
+  for (const patch of [...details.patches, ...pan.patches]) drawPatch(canvas, layout.tiles[VIEWS.indexOf(patch.view)]!, patch);
   const texels = new Uint8Array(width * height * DETAIL_CHANNELS);
   const h = canvas.heights;
   const slopeByte = (rise: number) => {
@@ -291,8 +322,9 @@ function bakeDetailAtlas(details: Details, dims: BodyStyle["dims"], tiles: reado
 
 const DETAIL_PARS = /* glsl */ `
 uniform sampler2D detailMap;
-uniform vec4 detailTiles[4];
-uniform vec4 detailBounds[4];
+uniform vec4 detailTiles[5];
+uniform vec4 detailBounds[5];
+uniform vec2 detailEnds;
 varying vec3 vDetailPos;
 varying vec3 vDetailNormal;
 // A tile's height and cavity at q (xy) and its height's slope one pixel right and down (zw), from the slope baked off the float heights:
@@ -306,22 +338,24 @@ vec4 detailPlane(vec4 tile, vec4 bounds, vec2 q, vec2 qx, vec2 qy) {
 
 /**
  * After the clear coat's normal, inside FinishLod's draw gate (`finishMeshNear`, so only with the finish on): the three view tiles
- * the rest normal faces blended as the finish's planes (the underside reads none), the cavity darkening the paint, and near enough
- * the height's slope (`detailPlane`'s baked slope) bending the base and coat normals.
+ * the rest normal faces blended as the finish's planes (a down-facing one reads the bottom tile for the top's; the front tile only
+ * ahead of the front axle, the rear only behind the rear axle), the cavity darkening the paint, and near enough the height's slope
+ * (`detailPlane`'s baked slope) bending the base and coat normals.
  */
 const DETAIL_SURFACE = /* glsl */ `
 float detailCavity = 0.0;
 float detailNear = finishMeshNear();
 if (detailNear < ${glslFloat(DETAIL_CAVITY_END_M)}) {
   vec3 detailWeights = finishPlaneWeights(vDetailNormal);
-  if (vDetailNormal.y < 0.0) detailWeights.y = 0.0;
+  bool detailUnder = vDetailNormal.y < 0.0;
   float detailX = abs(vDetailPos.x);
   bool detailFront = vDetailNormal.z >= 0.0;
+  if (detailFront ? vDetailPos.z < detailEnds.x : vDetailPos.z > detailEnds.y) detailWeights.z = 0.0;
   vec2 detailSide = vDetailPos.zy;
   vec2 detailTop = vec2(vDetailPos.z, detailX);
   vec2 detailEnd = vec2(detailX, vDetailPos.y);
   vec4 detailTexel = detailWeights.x * detailPlane(detailTiles[0], detailBounds[0], detailSide, dFdx(detailSide), dFdy(detailSide))
-    + detailWeights.y * detailPlane(detailTiles[1], detailBounds[1], detailTop, dFdx(detailTop), dFdy(detailTop))
+    + detailWeights.y * detailPlane(detailUnder ? detailTiles[4] : detailTiles[1], detailUnder ? detailBounds[4] : detailBounds[1], detailTop, dFdx(detailTop), dFdy(detailTop))
     + detailWeights.z * detailPlane(detailFront ? detailTiles[2] : detailTiles[3], detailFront ? detailBounds[2] : detailBounds[3], detailEnd, dFdx(detailEnd), dFdy(detailEnd));
   float detailDistance = length(vViewPosition);
   detailCavity = detailTexel.g * (1.0 - smoothstep(${glslFloat(DETAIL_CAVITY_FADE_START_M)}, ${glslFloat(DETAIL_CAVITY_END_M)}, detailDistance));
@@ -345,6 +379,8 @@ type DetailUniforms = {
   detailMap: THREE.IUniform<THREE.DataTexture | null>;
   detailTiles: THREE.IUniform<THREE.Vector4[]>;
   detailBounds: THREE.IUniform<THREE.Vector4[]>;
+  /** The front and rear axles' z (m): the end tiles print only past them. */
+  detailEnds: THREE.IUniform<THREE.Vector2>;
 };
 
 /** One set of uniforms per style, shared by every material of its cars; its atlas is baked when the style's first car is built (race setup, before the warm-up), so no draw or tier flip bakes; never disposed. */
@@ -353,7 +389,13 @@ const uniformsByStyle = new WeakMap<BodyStyle, DetailUniforms>();
 function detailUniforms(style: BodyStyle): DetailUniforms {
   let uniforms = uniformsByStyle.get(style);
   if (uniforms === undefined) {
-    uniforms = { detailMap: { value: null }, detailTiles: { value: VIEWS.map(() => new THREE.Vector4()) }, detailBounds: { value: VIEWS.map(() => new THREE.Vector4()) } };
+    const axle = style.dims.wheelbase / 2;
+    uniforms = {
+      detailMap: { value: null },
+      detailTiles: { value: VIEWS.map(() => new THREE.Vector4()) },
+      detailBounds: { value: VIEWS.map(() => new THREE.Vector4()) },
+      detailEnds: { value: new THREE.Vector2(axle, -axle) },
+    };
     uniformsByStyle.set(style, uniforms);
   }
   return uniforms;
@@ -368,7 +410,7 @@ export function applyDetailMap(material: THREE.MeshPhysicalMaterial, style: Body
   const details = style.details;
   if (!details) return;
   const uniforms = detailUniforms(style);
-  uniforms.detailMap.value ??= bakeDetailAtlas(details, style.dims, uniforms.detailTiles.value, uniforms.detailBounds.value);
+  uniforms.detailMap.value ??= bakeDetailAtlas(style, details, uniforms.detailTiles.value, uniforms.detailBounds.value);
   const previousHook = material.onBeforeCompile;
   const previousKey = material.customProgramCacheKey;
   material.onBeforeCompile = (shader, renderer) => {

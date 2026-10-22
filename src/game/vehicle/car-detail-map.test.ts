@@ -51,6 +51,27 @@ describe("given a style's detail table baked to its atlas", () => {
     assert.equal(left.cavity, right.cavity, "cavity at x -0.3");
   });
 
+  it("when any style's bottom tile is read on its exhaust run, then the pipe stands proud and dark on both sides, and a car with no strokes of its own has it in no other tile", () => {
+    for (const style of Object.values(CAR_STYLES)) {
+      if (!style.details) continue;
+      const read = detailReader(style);
+      const pipe = style.exhaust?.x ?? 0.4;
+      for (const x of [pipe, -pipe]) {
+        const under = read("bottom", -0.5, x);
+        assert.ok(under.height >= 0.005 && under.cavity >= 0.4, `${style.id} at x ${x}: height ${under.height}, cavity ${under.cavity}`);
+      }
+    }
+    const bare = sedanWith({ lines: [], patches: [] });
+    const read = detailReader(bare);
+    const pipe = bare.exhaust?.x ?? 0.4;
+    assert.ok(read("bottom", -0.5, pipe).height >= 0.005 && read("top", -0.5, pipe).height === 0, "the pan's pipe lands in the bottom tile only");
+  });
+
+  it("when the shader is built, then a down-facing pixel reads the bottom tile in the top's place", () => {
+    const { fragmentShader } = compileHooks(detailPaint(SEDAN));
+    assert.ok(fragmentShader.includes("bool detailUnder = vDetailNormal.y < 0.0;") && fragmentShader.includes("detailUnder ? detailTiles[4] : detailTiles[1]"), "the bottom tile replaces the top's under the car");
+  });
+
   it("when a step runs forward along the side, then its left (above) stands its depth proud and its right (below) reads nothing", () => {
     const read = detailReader(sedanWith({ lines: [{ view: "side", points: [[-1, 0.7], [1, 0.7]], width: 0.012, depth: 0.003, profile: "step", cavity: 0 }], patches: [] }));
     within(read("side", 0, 0.7 + 0.012).height, 0.003, 0.1, "height a width left of the line");
@@ -88,6 +109,21 @@ describe("given a style's detail table baked to its atlas", () => {
     assert.equal(bar.cavity, 0, "cavity on a bar");
     within(between.height, -0.004, 0.02, "height between bars");
     within(between.cavity, 0.8, 0.02, "cavity between bars");
+  });
+
+  it("when a patch meets the mirror line (x 0), then its floor runs on across it with no rim there, and its outer edges keep theirs", () => {
+    const read = detailReader(
+      sedanWith({
+        lines: [],
+        patches: [
+          { view: "front", points: [[0, 0.3], [0.2, 0.3], [0.2, 0.5], [0, 0.5]], depth: -0.005, rim: 0.02, cavity: 0.6 },
+          { view: "top", points: [[-0.2, 0], [0.2, 0], [0.2, 0.1], [-0.2, 0.1]], depth: -0.005, rim: 0.02, cavity: 0.6 },
+        ],
+      }),
+    );
+    within(read("front", TEXEL / 2, 0.4).height, -0.005, 0.02, "front height beside x 0");
+    within(read("top", 0, TEXEL / 2).height, -0.005, 0.02, "top height beside x 0");
+    within(read("front", 0.19, 0.4).height, -0.0025, 0.2, "front height half way up the outer rim");
   });
 
   it("when a stroke runs past the nose, then it ends at the side tile's edge and nothing wraps to the tail", () => {
@@ -190,6 +226,14 @@ describe("given the detail compile hook on a paint material", () => {
       assert.equal(vertexShader.split("attribute vec3 sprayNrm;").length - 1, 1, "sprayNrm declarations");
     });
   }
+
+  it("when the finish is on, then the front tile prints only ahead of the front axle and the rear tile only behind the rear axle, so a cab's back wall or a gate's inner face takes neither", () => {
+    const { uniforms, fragmentShader } = compileHooks(detailPaint(style));
+    const ends = uniforms.detailEnds?.value as THREE.Vector2 | undefined;
+    assert.ok(ends !== undefined, "the axles' z reach the shader");
+    assert.equal(`${ends.x} ${ends.y}`, `${style.dims.wheelbase / 2} ${-style.dims.wheelbase / 2}`, "front and rear axle z");
+    assert.ok(fragmentShader.includes("if (detailFront ? vDetailPos.z < detailEnds.x : vDetailPos.z > detailEnds.y) detailWeights.z = 0.0;"), "the end tile's weight is cut between the axles");
+  });
 
   it("when the style has no details, then the material keeps its hook, its program key and samples no texture, unlike one with details", () => {
     const bare = makePaintMaterial(0x336699);

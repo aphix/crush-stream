@@ -14,7 +14,7 @@ const HEIGHT_MAX_M = 0.006;
 const SLOPE_MAX = 1.5;
 const BYTE_MAX = 255;
 /** The shader's tile slots. */
-const VIEW_SLOT = { side: 0, top: 1, front: 2, rear: 3 } as const;
+const VIEW_SLOT = { side: 0, top: 1, front: 2, rear: 3, bottom: 4 } as const;
 
 type DetailView = keyof typeof VIEW_SLOT;
 
@@ -39,7 +39,7 @@ export function detailPaint(style: BodyStyle): THREE.MeshPhysicalMaterial {
 }
 
 /**
- * `style`'s baked atlas read as the shader reads it: the `view` tile at its own axes (a, b) in metres (side [z, y], top [z, x],
+ * `style`'s baked atlas read as the shader reads it: the `view` tile at its own axes (a, b) in metres (side [z, y], top and bottom [z, x],
  * front / rear [x, y]), x folded to |x|, through the tile and bounds uniforms; the nearest texel's height (m), cavity and the height's
  * slope (m/m) along a and b.
  */
@@ -57,7 +57,7 @@ export function detailReader(style: BodyStyle): (view: DetailView, a: number, b:
     const tile = tiles[VIEW_SLOT[view]]!;
     const box = bounds[VIEW_SLOT[view]]!;
     const u = view === "front" || view === "rear" ? Math.abs(a) : a;
-    const v = view === "top" ? Math.abs(b) : b;
+    const v = view === "top" || view === "bottom" ? Math.abs(b) : b;
     const s = clamp(tile.x + u * tile.z, box.x, box.z);
     const t = clamp(tile.y + v * tile.w, box.y, box.w);
     const at = CHANNELS * (Math.floor(t * height) * width + Math.floor(s * width));

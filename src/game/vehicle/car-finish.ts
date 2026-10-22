@@ -360,20 +360,35 @@ export function applyFinish<T extends THREE.MeshStandardMaterial>(material: T, k
 }
 
 /**
- * Switch the finish on or off on every finish-capable material under `root`, marking a material for a rebuild only where its
- * state changes. True when any changed. The tier's choice (`finishForTier`) is stored on the materials themselves, never in a module.
+ * Switch the finish on or off on every finish-capable material under `root` (`enabled`: one state for all, or on for exactly the
+ * materials in the set), marking a material for a rebuild only where its state changes. True when any changed. The tier's choice
+ * (`finishForTier`) is stored on the materials themselves, never in a module.
  */
-export function applyCarFinish(root: THREE.Object3D, enabled: boolean): boolean {
+export function applyCarFinish(root: THREE.Object3D, enabled: boolean | ReadonlySet<THREE.Material>): boolean {
   let changed = false;
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return;
     for (const material of [object.material].flat()) {
       const state: unknown = material.userData.carFinish;
-      if (!isCarFinishState(state) || state.on === enabled) continue;
-      state.on = enabled;
+      const on = typeof enabled === "boolean" ? enabled : enabled.has(material);
+      if (!isCarFinishState(state) || state.on === on) continue;
+      state.on = on;
       material.needsUpdate = true;
       changed = true;
     }
   });
   return changed;
+}
+
+/** Every material under `root` drawing the finish now: `applyCarFinish(root, set)` puts these states back. */
+export function finishedMaterials(root: THREE.Object3D): Set<THREE.Material> {
+  const on = new Set<THREE.Material>();
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    for (const material of [object.material].flat()) {
+      const state: unknown = material.userData.carFinish;
+      if (isCarFinishState(state) && state.on) on.add(material);
+    }
+  });
+  return on;
 }

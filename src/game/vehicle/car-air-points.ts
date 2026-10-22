@@ -11,7 +11,7 @@ import { carClass } from "./vehicle-classes.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
-import { cageLift } from "./car-cage-rig.ts";
+import { cageLift, centreLift } from "./car-cage-rig.ts";
 import { HUB_POP_MPS } from "../deform/deform-solve.ts";
 import { POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_POINTS, GROUND_LIFT_V, body, carrier, pointVel } from "./car-air-body.ts";
 
@@ -294,8 +294,8 @@ export function loadPoints(car: DeformableCar): number {
   const { pos, panelOn } = car.cage.fields;
   const { vertexCount, vertexGroup, sillCount } = car.cage.style;
   const { belly } = car.frame;
-  // The reach about the body's centre, lifted with it as its points are (`centreY`).
-  const comY = car.frame.comY + lift;
+  // The reach about the body's centre (`centreY`), its points lifted with the drawn body (`lift`).
+  const comY = car.frame.comY + centreLift(car);
   let reach2 = 0;
   let n = 0;
   for (let k = 0, end = vertexCount + (wreck ? sillCount : 0); k < end; k++) {
@@ -439,8 +439,10 @@ export function wheelsAt(car: DeformableCar, within: number): number {
     _hub[0] = p.x + _e[0]! * hx + _e[3]! * r + _e[6]! * hz;
     _hub[1] = p.y + _e[1]! * hx + _e[4]! * r + _e[7]! * hz;
     _hub[2] = p.z + _e[2]! * hx + _e[5]! * r + _e[8]! * hz;
-    // The footprint's tread rings are the platform tyre's: scaled to this car's radius, so its tread reaches the ground its hub stands over.
-    wheelContact(_hub, _e, sc * (car.frame.rig.tyre.r / PLATFORM_TYRE.r), car.slot, _hit);
+    // The footprint's tread rings are the platform tyre's: scaled to this car's radius and its width, so its tread reaches the ground its
+    // hub stands over across the whole drawn tread.
+    const { r: tyreR, halfW } = car.frame.rig.tyre;
+    wheelContact(_hub, _e, sc * (tyreR / PLATFORM_TYRE.r), sc * (halfW / PLATFORM_TYRE.halfW), car.slot, _hit);
     TYRE_HUB.set(_hub, i * 3);
     TYRE_DIM[2 * i] = r;
     TYRE_DIM[2 * i + 1] = car.frame.rig.tyre.halfW * sc;

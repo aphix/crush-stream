@@ -124,11 +124,15 @@ The cabin is shared props, placed per car by its spec (`vehicle/interior.ts` `Ca
 | `liningL`, `liningR`: door cards | 1 each | Door space; each keeps the first lining's box exactly (a torn door's loose box is sim) |
 | `engineBay` | 1 | Mapped from `REF_BAY` onto the trough under the hood; shown while the hood is off or open |
 | `crashBar` | 2 | Each bumper's seat; shown while that bumper is off or hanging |
+| `ladderFrame`: rails, crossmembers, transfer case, steering box, shock bodies | 0 or 1 | `underbody: true` (the monster): in the class-lift body's space, under the floor (`CarUnderbody`) |
+| `axle`: tube, diff, knuckles, shock shafts, trailing links, driveshaft, tie rod | 0 or 2 | `underbody: true`: each pair of drawn wheels' hub midpoint, tilted and spanned to them every sync; hung in the class hub group (`assignClass`); none while either wheel is off the car |
 
 Every prop kind is one `InstancedMesh` for the whole field (`PartBatch`, `PART_PER_CAR`): adding a car adds instances, never
 draws. At rest the interior costs six draws for the whole field (cabin, both door-card sides, front seats, rear bench, wheel) and the
-seated drivers one more; the bay and the crash bars draw only while exposed. `CarDetail` takes the cabin, seats, wheel and bay at its
-far distance (by `INTERIOR_MESH`), the door cards and crash bars with the small parts at mid distance.
+seated drivers one more; the bay and the crash bars draw only while exposed, the undercarriage (two draws) only while a monster is in
+the field. `CarDetail` takes the cabin, seats, wheel and bay at its far distance (by `INTERIOR_MESH`), the door cards, crash bars
+and undercarriage with the small parts at mid distance. The undercarriage is drawn only: the cage, hull and contact shapes never
+see it; each axle's shock shafts slide into the frame's shock bodies, so the pair telescopes through the suspension's travel.
 
 - **Seat lean:** seats and the seated driver lean `SEAT_RECLINE` back; under a low roof the seat leans further (to
   `SEAT_RECLINE` + 0.35 rad) until the driver's head clears the roof line by 5 cm.
@@ -220,14 +224,20 @@ node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
 - Not read: hood, arch, rocker, boot, `rideHeight`, `cabinHw`, `bPillar`, `quarter`, mirrors, the bumper fascia and span, and the
   door's hinge y and z, length and aperture.
 
-**`landing-shots.mjs`: the landing gate's eight shots.** For side, top, iso and rear-iso, the car alone (`ours`: the real engine in
-the garage at the high tier over a white backdrop, through headless-frame) and the car over its reference (`overlay`: trace-car),
-both through one camera spec (`trace-camera.mjs`), so each pair lines up pixel for pixel and every car is framed the same way:
+**`landing-shots.mjs`: the landing gate's shots.** For side, top, iso and rear-iso, the car alone (`ours`: the real engine in
+the garage at the high tier over a white backdrop, through headless-frame), the car over its reference (`overlay`: trace-car) and
+the two side by side (`pair`: the reference alone left, ours right), all through one camera spec (`trace-camera.mjs`) on one
+canvas, so they line up pixel for pixel and every car is framed the same way:
 
 ```sh
 CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
-  scripts/landing-shots.mjs --root <tree> --car <style> [--paint]   # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay}.png
+  scripts/landing-shots.mjs --root <tree> --car <style> [--paint]   # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay,pair}.png
 ```
+
+- Build side-by-sides only this way: a pair cropped or scaled per half (each to its own bounding box) misregisters. Each pair
+  marks the reference's wheels (yellow crosses: the iso picks, the side picture's tyre contacts) and where the engine drew ours
+  (magenta rings) on both halves. A wheel more than 5 reference pixels off, or a pair with nothing to register by (an iso with no
+  picks, a side picture whose tyres were not found), turns the label red and the exit nonzero. The top view is not registered.
 
 - Each car's `scripts/landing-views/<style>.json` holds its references, its iso crops (cut from the lineups; widen one that
   clips its car) and its iso cameras. Side and top are orthographic, spanned on the reference's bumper tips at the spec length,
