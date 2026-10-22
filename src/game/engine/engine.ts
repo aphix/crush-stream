@@ -222,6 +222,7 @@ export class CrashEngine extends EngineGarage {
     this.scene.onBeforeRender = (renderer) => {
       const drawn = this.drawnCars();
       this.wheels.sync(drawn, renderer);
+      this.lampBatch.night = this.stage.night;
       this.lampBatch.sync(drawn);
       this.partBatch.sync(drawn);
       // In the garage the standing dummy beside the car is the driver: no one sits in the car there.
