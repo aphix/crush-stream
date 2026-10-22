@@ -1,4 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
+import { pullHandle } from "./platform.ts";
 
 type Details = NonNullable<BodyStyle["details"]>;
 type Line = Details["lines"][number];
@@ -7,7 +8,6 @@ type Patch = Details["patches"][number];
 const GAP = { width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 } as const;
 const CREASE = { width: 0.02, depth: 0.003, profile: "u", cavity: 0 } as const;
 const SEAL = { width: 0.012, depth: 0.002, profile: "u", cavity: 0.3 } as const;
-const HANDLE = { width: 0.008, depth: -0.004, profile: "v", cavity: 0.7 } as const;
 const TRIM = { width: 0.01, depth: -0.003, profile: "u", cavity: 0.4 } as const;
 const VENT = { depth: -0.005, rim: 0.006, pattern: { kind: "hslats", pitch: 0.012, bar: 0.004, depth: 0.003 }, cavity: 0.7 } as const;
 const BADGE = { depth: 0.002, rim: 0.003, cavity: 0 } as const;
@@ -27,9 +27,6 @@ const SHARED_LINES: readonly Line[] = [
   { view: "side", points: [[1.61, 0.16], [1.605, 0.335], [1.593, 0.427], [1.557, 0.513], [1.501, 0.586], [1.428, 0.642], [1.342, 0.678], [1.25, 0.69], [1.158, 0.678], [1.073, 0.642], [0.999, 0.586], [0.943, 0.513], [0.907, 0.427], [0.895, 0.335], [0.89, 0.16]], ...CREASE },
   { view: "side", points: [[-0.89, 0.16], [-0.895, 0.335], [-0.907, 0.427], [-0.943, 0.513], [-0.999, 0.586], [-1.073, 0.642], [-1.158, 0.678], [-1.25, 0.69], [-1.342, 0.678], [-1.428, 0.642], [-1.501, 0.586], [-1.557, 0.513], [-1.593, 0.427], [-1.605, 0.335], [-1.61, 0.16]], ...CREASE },
   { view: "top", points: [[0.28, 0.52], [0.1, 0.505], [-0.2, 0.5], [-0.5, 0.495], [-0.8, 0.495], [-1, 0.495], [-1.1, 0.49]], ...CREASE, depth: -0.003 },
-  // Door pull handles, slim pills (gridded side, 430 px/m): front z +0.08..-0.11, y 0.74-0.78; rear z -0.74..-0.93, y 0.76-0.79.
-  { view: "side", points: [[0.08, 0.758], [0.068, 0.773], [0.04, 0.781], [-0.08, 0.782], [-0.104, 0.773], [-0.11, 0.758], [-0.09, 0.745], [0.05, 0.743]], closed: true, ...HANDLE },
-  { view: "side", points: [[-0.742, 0.776], [-0.754, 0.789], [-0.78, 0.794], [-0.9, 0.795], [-0.925, 0.787], [-0.932, 0.774], [-0.912, 0.762], [-0.77, 0.76]], closed: true, ...HANDLE },
   { view: "side", points: [[0.66, 0.885], [0.6, 0.93], [0.52, 0.985], [0.43, 1.04], [0.32, 1.1], [0.21, 1.16], [0.1, 1.2], [0, 1.225], [-0.12, 1.235], [-0.285, 1.24], [-0.4, 1.24], [-0.67, 1.235], [-0.885, 1.2], [-1, 1.18], [-1.12, 1.13], [-1.205, 1.085], [-1.26, 1.045]], ...SEAL },
   { view: "side", points: [[0.66, 0.885], [0.4, 0.895], [0, 0.905], [-0.22, 0.915], [-0.5, 0.93], [-0.9, 0.945], [-1.02, 0.965], [-1.12, 0.99], [-1.2, 1.02], [-1.26, 1.045]], ...SEAL },
   { view: "side", points: [[-0.265, 0.89], [-0.31, 1.235], [-0.385, 1.235], [-0.35, 0.92]], closed: true, ...SEAL },
@@ -83,14 +80,17 @@ const POLICE_PATCHES: readonly Patch[] = [
   { view: "top", points: [[-0.978, 0], [-0.984, 0.0156], [-1.0, 0.022], [-1.016, 0.0156], [-1.022, 0]], depth: 0.006, rim: 0.012, cavity: 0.9 },
 ];
 
+/** The door pull handles at the reference's places (gridded side, 430 px/m): front z +0.08..-0.11 at y 0.762, rear -0.742..-0.932 at 0.777. */
+const HANDLES = [pullHandle(0.08, -0.11, 0.762, 0.04), pullHandle(-0.742, -0.932, 0.777, 0.035)];
+
 /** Every sedan flank, top, nose and tail detail the two measurement scouts reported. */
 export const SEDAN_DETAILS: Details = {
-  lines: [...SHARED_LINES, ...SEDAN_LINES],
-  patches: [...SHARED_PATCHES, ...SEDAN_PATCHES],
+  lines: [...SHARED_LINES, ...SEDAN_LINES, ...HANDLES.flatMap((h) => h.lines)],
+  patches: [...SHARED_PATCHES, ...SEDAN_PATCHES, ...HANDLES.flatMap((h) => h.patches)],
 };
 
 /** The sedan body with the cop's own front fascia and tail lamps swapped in for the sedan's (exhaust tips are geometry: `exhaust`). */
 export const POLICE_DETAILS: Details = {
-  lines: [...SHARED_LINES, ...POLICE_LINES],
-  patches: [...SHARED_PATCHES, ...POLICE_PATCHES],
+  lines: [...SHARED_LINES, ...POLICE_LINES, ...HANDLES.flatMap((h) => h.lines)],
+  patches: [...SHARED_PATCHES, ...POLICE_PATCHES, ...HANDLES.flatMap((h) => h.patches)],
 };
