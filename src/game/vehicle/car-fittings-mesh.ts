@@ -180,7 +180,7 @@ function railGeometry(rail: NonNullable<RoofParts["rails"]>, side: number, style
   return hardEdged(loftFromRings(rings, zs, 0, 1));
 }
 
-/** A thin panel following the roof's dome, `panel.width` across. */
+/** A thin panel following the roof's dome, `panel.width` across; its underside, sunk in the crowned roof, one chord edge to edge. */
 function glassPanelGeometry(panel: NonNullable<RoofParts["glassPanel"]>, style: BodyStyle): THREE.BufferGeometry {
   const half = panel.width / 2;
   const xs = [-half, -half / 2, 0, half / 2, half];
@@ -189,7 +189,7 @@ function glassPanelGeometry(panel: NonNullable<RoofParts["glassPanel"]>, style: 
   for (let s = 0; s <= PANEL_STATIONS; s++) {
     const z = lerp(panel.z[0], panel.z[1], s / PANEL_STATIONS);
     const top = xs.map((x) => ({ x, y: roofTopY(x, z, style) + PANEL_PROUD }));
-    const under = [...xs].reverse().map((x) => ({ x, y: roofTopY(x, z, style) - SINK }));
+    const under = [half, -half].map((x) => ({ x, y: roofTopY(x, z, style) - SINK }));
     rings.push([...top, ...under]);
     zs.push(z);
   }

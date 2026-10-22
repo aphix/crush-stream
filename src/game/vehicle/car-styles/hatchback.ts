@@ -9,7 +9,7 @@ const HATCHBACK_LAMP_SHAPES = {
     bezel: "black",
     recess: 0.01,
     cells: [
-      { loop: { points: [[0.61, 0.48], [0.7, 0.48], [0.7, 0.6], [0.61, 0.602]] }, tone: "amber" },
+      { loop: { points: [[0.665, 0.48], [0.7, 0.48], [0.7, 0.6], [0.665, 0.601]] }, tone: "amber" },
       { loop: { side: true, points: [[1.72, 0.48], [1.62, 0.48], [1.62, 0.59], [1.72, 0.6]] }, tone: "amber" },
     ],
   },

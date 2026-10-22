@@ -129,7 +129,7 @@ export const WAGON: BodyStyle = {
   rearDoorSeam: -1.23,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE },
   lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES },
-  grille: { y: 0.723, z: 2.014, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 16, finish: "black", rim: "chrome", lean: 0.387 },
+  grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 16, finish: "black", rim: "chrome", lean: 0.387 },
   seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },
   pillars: { b: { width: [0.088, 0.088] }, divider: { width: [0.105, 0.105] } },
   blackout: { a: true, sail: true, b: true, divider: true, rear: true },
