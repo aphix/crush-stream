@@ -71,7 +71,7 @@ export const COUPE: BodyStyle = {
   aPillarFoot: 0.5,
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
-  arch: { radius: 0.38, lip: { flare: 0.0225, width: 0.06 } },
+  arch: { radius: 0.38, lip: { flare: 0.012, width: 0.05, band: true } },
   hood: { z0: 0.7, z1: 1.93, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.74, width: 0.62, rise: 0.03, scoop: { inlets: 2, z: 1.6, width: 0.52, height: 0.025 } } },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.39, z: 1.925 }, span: 0.66, wrap: { from: 0.52, back: 0.12 }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
