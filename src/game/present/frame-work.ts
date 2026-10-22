@@ -3,9 +3,11 @@
  * Under vsync the frame rate is pinned at the display's refresh whatever the headroom (a 60 Hz screen shows 60 fps at 3 ms of work
  * and at 16 ms), so a window counts, per frame, the main thread's own time (sim + draw submit, `Engine.workMs`), the part of it
  * that is the draw submit (`Engine.renderMs`) and, where the browser has a GPU timer, the draw's GPU time. A window is JUDGED on
- * one of two bases: `work`, the main thread's total (sim included) and the GPU against the whole 60 fps frame; or `render`, the
+ * one of three bases: `work`, the main thread's total (sim included) and the GPU against the whole 60 fps frame; `render`, the
  * draw submit's ms and the GPU's against `RENDER_BUDGET_MS`, the part of the frame the render may take (a tier changes the
- * render, never the sim: a phone whose sim alone fills the frame can still show a costlier tier when its render has room).
+ * render, never the sim: a phone whose sim alone fills the frame can still show a costlier tier when its render has room); or
+ * `gpu`, the GPU's ms against the whole frame, and without a GPU reading the wall less the main thread's own time (what the
+ * frame waited on): what the render scale changes.
  * Without a GPU reading (Firefox, some phones) a window's wall rate still counts as evidence of a slow frame, and a median wall
  * interval on the 60 Hz vsync as evidence of a free one; the GPU-bound frames only the timer would show stay unseen.
  */
@@ -19,8 +21,8 @@ export const FRAME_BUDGET_MS = 1000 / 60;
  */
 const RENDER_BUDGET_MS = 0.8 * FRAME_BUDGET_MS;
 
-/** What a window is judged on: the main thread's total (`work`) or the render alone (`render`). */
-export type Judge = "work" | "render";
+/** What a window is judged on: the main thread's total (`work`), the render alone (`render`) or the GPU alone (`gpu`). */
+export type Judge = "work" | "render" | "gpu";
 
 /** Frames ignored after boot, a match start or a switch (ms): shader links and the first allocations land here. */
 const SETTLE_MS = 1500;
@@ -58,9 +60,9 @@ export class FrameWork {
   simMs = 0;
   /** Its median GPU ms per frame; -1 when too few frames brought a reading. */
   gpuMs = -1;
-  /** The busier of the two medians on the judged basis, as a share of that basis's budget (`FRAME_BUDGET_MS` for `work`, `RENDER_BUDGET_MS` for `render`). */
+  /** The busier of the two medians on the judged basis (the GPU's alone on `gpu`), as a share of that basis's budget (`FRAME_BUDGET_MS` for `work` and `gpu`, `RENDER_BUDGET_MS` for `render`). */
   busy = 0;
-  /** The wall time the judged basis answers for: the sim's share of it comes off on the `render` basis (a frame the sim fills is not the render's to fix). */
+  /** The wall time the judged basis does not answer for: the sim's share on the `render` basis, the main thread's on `gpu` (a frame the CPU fills is not the render's, nor the GPU's, to fix). */
   private cutMs = 0;
   private readonly judge: Judge;
   private settle = SETTLE_MS;
@@ -116,6 +118,9 @@ export class FrameWork {
     if (this.judge === "render") {
       this.cutMs = this.simMs;
       this.busy = Math.max(this.renderMs, this.gpuMs) / RENDER_BUDGET_MS;
+    } else if (this.judge === "gpu") {
+      this.cutMs = this.workMs;
+      this.busy = this.gpuMs / FRAME_BUDGET_MS;
     } else {
       this.cutMs = 0;
       this.busy = Math.max(this.workMs, this.gpuMs) / FRAME_BUDGET_MS;

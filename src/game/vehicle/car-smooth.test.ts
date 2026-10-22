@@ -194,7 +194,8 @@ const ROLLED_EDGE_LIMIT_DEGREES = 50;
 const FLAT_CURVE_LIMIT_DEGREES = 5;
 
 const lidCreaseTable = [
-  { it: "a bonnet's shut line and lip corners (ring points 0, 4, 6 to 11)", style: "sedan", part: "bonnet", creaseLines: [0, 4, 6, 7, 8, 9, 10, 11], smoothLines: [1, 2, 3, 5, 12], creaseDegrees: CREASE_DEGREES.deckLid },
+  // The sedan's hood is crowned (`hood.crown`): its ring carries 3 dome points a side (17 points), so the shut line and lip corners sit at 0, 8, 10 to 15.
+  { it: "a bonnet's shut line and lip corners (ring points 0, 8, 10 to 15)", style: "sedan", part: "bonnet", creaseLines: [0, 8, 10, 11, 12, 13, 14, 15], smoothLines: [1, 2, 3, 4, 5, 6, 7, 9, 16], creaseDegrees: CREASE_DEGREES.deckLid },
   { it: "a sedan boot lid's shut line and lip corners (ring points 0, 4, 6 to 11)", style: "sedan", part: "boot", creaseLines: [0, 4, 6, 7, 8, 9, 10, 11], smoothLines: [1, 2, 3, 5, 12], creaseDegrees: CREASE_DEGREES.deckLid },
   { it: "a hatchback's tailgate edges (ring points 0, 4, 5, 6)", style: "hatchback", part: "boot", creaseLines: [0, 4, 5, 6], smoothLines: [1, 2, 3], creaseDegrees: CREASE_DEGREES.tailgate },
 ] as const;
@@ -675,7 +676,7 @@ const BASELINE_BY_STYLE = [
   { id: "sedan", drawCalls: 13, triangles: 5266, bodyVertices: 1587 },
   { id: "hatchback", drawCalls: 13, triangles: 5064, bodyVertices: 1587 },
   { id: "wagon", drawCalls: 13, triangles: 5088, bodyVertices: 1635 },
-  { id: "coupe", drawCalls: 13, triangles: 5152, bodyVertices: 1530 },
+  { id: "coupe", drawCalls: 16, triangles: 5152, bodyVertices: 1530 },
   { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
   { id: "police", drawCalls: 14, triangles: 5338, bodyVertices: 1587 },
   { id: "monster", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
@@ -712,7 +713,7 @@ const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; l
   coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 416 },
   pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 264 },
   police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 378 },
-  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 264 },
+  monster: { lips: 312, humps: 94, liners: 214, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 264 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and their stations then (the A-post's, every other post's). */
 const CHAMFERED_POST_RING = 11;
@@ -727,7 +728,7 @@ const CHAMFERED_POST_STATIONS = 2;
 function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number } {
   const body = makeChassisGeometry(style);
   const rings = (bootOpen: boolean, noseFill: boolean) => sliceZs(style, "drawn", bootOpen, noseFill).length;
-  const liners = (source: "drawn" | "cage") => makeWellLiners(style, source).reduce((n, g) => n + g.getAttribute("position").count, 0);
+  const liners = (source: "drawn" | "cage") => makeWellLiners(style, source, body).reduce((n, g) => n + g.getAttribute("position").count, 0);
   const posts = makeGreenhouseFrame(style, "drawn").filter((g) => POST_NAMES.includes(g.name));
   return {
     lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,
@@ -820,7 +821,10 @@ const SIM_CRASH_KPH = 48;
 // sim (each style's own frame and rig, its own cages and lids, the lifted centre, the tyre side rows and footprint), red on the union since
 // e4f74c6e; hatch and SUV were re-pinned by their lane and are unchanged here.
 const SIM_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "3b05ae33d289fbd2da191012091e617aeea30ad0c0072e4fdc3b07545ffd45b3" },
+  // CarSedan's shape data on top of CarRig's re-pin (sedan and police alike): crowned hood and its stations (f3ba51c8), the sedan's own front
+  // fascia (e17b83ac), mirror reach .128 (28843919), then the reference's arch radius .405 -> .375. Sedan 3b05ae33... -> 26331e81... (shape
+  // data) -> 92a72440... (arch); police 70734ab6... -> 2fe405f6... -> 1071e0a8....
+  { id: "sedan", digest: "92a72440a4cf53f0f791dfc487c995cf30328490e14f8a5581291e14918f68bf" },
   // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams.
   { id: "hatchback", digest: "674fca85d7893ab736a28bcff660adad5f319d6471bcd301a6bfa60bc8f7983e" },
@@ -830,7 +834,7 @@ const SIM_DIGEST_BY_STYLE = [
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
-  { id: "police", digest: "70734ab60eccfca209ff0e6e163c5a8f1c7e8c0ef501bf8ca8104e6b98ddb5e6" },
+  { id: "police", digest: "1071e0a8d52794a5b4df7b49cdf4e644455f5bf36fa869a247892e9055a5a481" },
   // The monster is its own body style (its own dims, cage and lifted class body), no longer the pickup's.
   { id: "monster", digest: "7a1610ef755890bc133f287a9c31f175de8e9d6d7ee310aba95af8fa653a4297" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
@@ -870,16 +874,18 @@ function cageSourceDigest(car: DeformableCar): string {
 // CarRig's single re-pin: sedan, coupe, pickup, police and monster's cage sources moved with each style's own panels, lids and hood, the wheel
 // tubs and the interior (union 1d751bfc); the monster's is no longer the pickup's.
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "b9e9e98ba9068979547f19b5638d909c0f93359b8550574b8abe840d3388eebe" },
+  // CarSedan's shape data and arch radius (as the sim digests above): sedan b9e9e98b... -> df8e0b97... -> 720053fe...; police 2466b278... -> 5e59494a... -> 23142cfa....
+  { id: "sedan", digest: "720053fe3bbd306de4e3f10dc1b98d120f9e657e4d9c1b5db6d80973fdb1b466" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams, the hatch's C-pillar top.
   { id: "hatchback", digest: "ce63b76a30c823bfbb334938b043b0f30e1fbc3d33255ddeb254d45733b1737b" },
   { id: "wagon", digest: "eb9db693294fddf0470fba46a10bf8c4181d12a8d392ef892fc4beb6c843f908" },
   { id: "coupe", digest: "fae75944c9d7c46dfa25624af496ca874cff628595859acd29f6d585ae2456b7" },
-  { id: "pickup", digest: "365bfae1e11bf43392fd4c981a39922a5b1f686fdc8860a0d1737e6a743cd583" },
-  { id: "police", digest: "2466b2789b5094d276c66155028c6d3cb0187b4a55ec4027966a326b4302b08f" },
-  { id: "monster", digest: "6bd3fbfd9838eebbee51077c0a1a413e5c5baa06b6a2b904cb5ebdae5fa78bfd" },
+  // Pickup and monster re-pinned for their thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
+  { id: "pickup", digest: "5e914ede89c07ac21bec7b8997641fe25db9f1eb75035ee912c4a0dd48b928cf" },
+  { id: "police", digest: "23142cfaa9b3170558c726feb09a56cb9782d946cbb1ab7ecdefd3610cebc58b" },
+  { id: "monster", digest: "ea8b2e2587a915177f279a2edfac3611fdd253740d9418000e6d99144f32c7fe" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {

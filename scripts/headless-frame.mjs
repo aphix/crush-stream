@@ -15,7 +15,8 @@
  * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--view hood|chase|far` follows the hash's car
  * (`car=<id>`) in that drive view instead, e.g. `--hash 'scene=race&car=coupe'`; `--at` is the sim seconds before the drawn frames.
  * `--tear` tears the named parts (`DetachPart.name`: hood, bumperF, archFL, ...) off every car before the framing and hides them, to
- * show what is under them (the engine bay, the crash bars, the bare metal).
+ * show what is under them (the engine bay, the crash bars, the bare metal). `--open doorL,doorR,trunk,quarterL,quarterR` swings those
+ * doors and the lid to their stops and peels those quarter panels as the Doors scene does, on every car, to show their inner faces.
  * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,
  * `trace-camera.mjs`: car space, orthographic for side and top), at the spec's size, so the shot lines up with trace-car's overlay;
  * `scripts/landing-shots.mjs` runs the pair. `--backdrop <colour>` draws the car alone over that colour (no garage room, no fog).
@@ -24,6 +25,7 @@
  * detail A/B arms) with its governor off; the JSON counts the cars cut to their body (`farCars`).
  * `--paint <colour>` paints the hash's car that colour, `--paint <style>=<colour>,...` every car of those styles (a livery, the
  * police's, stays): the landing shots and lineup sheets in each reference's colour.
+ * `--draw`, `--scale` and `--shadow` pin the quality knobs (`?draw=`, `?scale=`, `?shadow=`). A numeric `--scale` keeps the shot's size and shrinks the CSS box (`--size` over the scale), so the drawing buffer stays `--size`.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -78,6 +80,10 @@ const { values } = parseArgs({
     paint: { type: "string" },
     at: { type: "string", default: String(START_S) },
     tear: { type: "string" },
+    draw: { type: "string" },
+    scale: { type: "string" },
+    shadow: { type: "string" },
+    open: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -96,6 +102,10 @@ if (values.view !== undefined && seatView === undefined && landingView === null)
 if (landingView !== null && landingView.view !== values.view) throw new Error(`--view-camera ${values["view-camera"]}: a ${landingView.view} camera, not ${values.view}`);
 const W = landingView?.W ?? Number(size[1]);
 const H = landingView?.H ?? Number(size[2]);
+// The headless context cannot grow: a render scale draws the same buffer from a smaller CSS box.
+const renderScale = Number(values.scale);
+const CSS_W = renderScale > 0 ? Math.round(W / renderScale) : W;
+const CSS_H = renderScale > 0 ? Math.round(H / renderScale) : H;
 const out = resolve(values.out ?? `screenshots/headless-frame-${tier}.png`);
 const detail = values.detail === undefined ? null : values.detail === "off" ? "off" : Number(values.detail);
 if (typeof detail === "number" && !(Number.isInteger(detail) && detail >= 0)) throw new Error(`--detail ${values.detail}: a rung of the distance-detail ladder (0 or more) or off`);
@@ -140,13 +150,15 @@ const renderer = nativeRenderer(gl);
 
 stubBrowser();
 const page = new URL(location.href);
-location.search = `?fx=${tier}`;
+const q = new URLSearchParams({ fx: tier });
+for (const k of ["draw", "scale", "shadow"]) if (values[k] !== undefined) q.set(k, values[k]);
+location.search = `?${q}`;
 if (values.hash !== undefined) location.hash = `#${values.hash.replace(/^#/, "")}`;
 const stubElement = document.createElement;
 document.createElement = (tag) => (tag === "canvas" ? Object.assign(createCanvas(1, 1), { style: {}, addEventListener() {}, removeEventListener() {}, setAttribute() {} }) : stubElement(tag));
 Object.assign(globalThis, {
-  innerWidth: W,
-  innerHeight: H,
+  innerWidth: CSS_W,
+  innerHeight: CSS_H,
   // A desktop browser's pointer, so the engine takes the device class a desktop does.
   matchMedia: (query) => ({ matches: query === "(pointer: fine)", addEventListener() {} }),
   // three's file loader builds a `Request` from the page-relative URL, and reports its download with `ProgressEvent`s.
@@ -166,8 +178,8 @@ Object.assign(globalThis, {
 });
 const canvas = element();
 // The engine fits its lens to the canvas's box (`coverLens` reads all four edges).
-const box = { left: 0, top: 0, right: W, bottom: H, width: W, height: H };
-Object.assign(canvas, { clientWidth: W, clientHeight: H, getBoundingClientRect: () => box, getContext: () => gl });
+const box = { left: 0, top: 0, right: CSS_W, bottom: CSS_H, width: CSS_W, height: CSS_H };
+Object.assign(canvas, { clientWidth: CSS_W, clientHeight: CSS_H, getBoundingClientRect: () => box, getContext: () => gl });
 
 /** The page's file loads in flight (fetches, decodes), waited out by `settle`. */
 const loads = new Set();
@@ -244,6 +256,18 @@ for (const name of values.tear?.split(",") ?? []) {
     part.object.visible = false;
   }
 }
+/** `--open`'s poses: a door or the lid at its stop (the swing clamps), a quarter panel peeled the Doors scene's way. */
+const OPEN = {
+  doorL: (car) => car.setDoorOpen(-1, Math.PI),
+  doorR: (car) => car.setDoorOpen(1, Math.PI),
+  trunk: (car) => car.setLidOpen(Math.PI),
+  quarterL: (car) => car.setPanelOpen(-1, 0.45),
+  quarterR: (car) => car.setPanelOpen(1, 0.45),
+};
+for (const name of values.open?.split(",") ?? []) {
+  if (!(name in OPEN)) throw new Error(`--open ${name}: one of ${Object.keys(OPEN).join(", ")}`);
+  for (const car of engine["live"]()) OPEN[name](car);
+}
 if (camera !== undefined) {
   const [radius, pitch, angle] = camera;
   Object.assign(engine.view, { userFramed: true, radius, pitch, angle });
@@ -296,7 +320,7 @@ mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, await shot.encode("png"));
 const wheelsPx = shooting?.camera ? wheelMarks(shooting, w, h) : null;
 engine.dispose();
-const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
+const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
 process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 

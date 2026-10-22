@@ -79,6 +79,9 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | `hood.kind` | `"lid"` (default) or `"clamshell"`: the drawn lid laps the body's deck edge and shoulders 1 mm clear down to a side shut line on the fender top, where the drawn body's shoulder steps 3 mm in under the lid's edge (a groove, ramped in over 2 cm inside each lid end on body slices of its own) |
 | `hood.crown` | `[drop, at]`: the drawn hood's top is a parabola across x, `drop` (m) under its centre line at \|x\| `at` (m), so its centre stands `drop·(w/at)²` over an edge of half-width `w`; drawn in four chords a side (default: the deck lid's 2.1 cm bow, its outer point over the deck's crown). Drawn only: the cage keeps the plain lid |
 | `boot.lip` | Ducktail kick: the deck lid's top rises `rise` at its rear edge, or the tailgate's top edge kicks `rise` out, easing in over `depth` |
+| `boot.flush` | The drawn deck lid seats on the deck edge like the hood (its edge a groove over the deck edge, 5 mm wider than a plain lid), not a step up off it; the coupe's ducktail lid. Drawn only: the cage keeps the plain lid |
+| `windowTrim` | `"chrome"`: a chrome bead (2.2 cm across, 5 mm proud) round every pane's border; the door glass's rides its door at the glass's seat, the rest (quarters, windshield, rear glass on the body) is one body mesh, so +3 draws. Drawn only |
+| `chromeStrips` | With `windowTrim`: chrome strips on the body side, side-view `[z, y]` polylines `width` tall on both sides (rocker mouldings, a door handle bar). A strip wholly inside the door aperture rides the door's trim mesh, any other the body's; no draws added |
 | `roof.rails` | Two dark rails at \|x\| `x[0]`..`x[1]` over `z` [rear, front], their tops `rise` over the roof at their inner edge |
 | `roof.spoiler` | Body-colour wedge off the roof's rear end over `z` [tip, front edge]: underside at `y[0]`, top `y[1]` at the front edge, ±`halfWidth` |
 | `roof.glassPanel` | Dark panel a few mm proud of the roof over `z` [rear, front], `width` across |
@@ -90,8 +93,9 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | `bumpers.rear.hitch` | Black tow-hitch receiver under the rear bumper's middle |
 | `exhaust` | `tips` 1 (at `x`) or 2 (at ±`x`) at height `y`, `size` [w, h], `shape` `"round"` (oval) or `"rect"`: chrome with a dark throat, ending 4 mm inside the rear bumper's rearmost face (nothing stands past the tail) |
 | `door.mirror` | The style's own mirror: `cap` `"rounded"` or `"box"`, `size` [w out from the door, h, d along the car] (default 0.16 × 0.10 × 0.08), `finish` `"body"` (the door's paint, a look's door colour too), `"black"` or `"chrome"`. Its foot sits on the door/A-pillar skin at the seat, a stalk runs out to the cap where the cap leaves room, and the cap's outer face is at `mirrorReach`, drawn at its real size. Unset: the platform mirror, x-scaled to the reach. The sim's mirror (reach, seat, rest box, torn box) is the platform's either way |
-| `arch.lip` | Each wheel arch's lip: a strip round the opening's edge, its crown `flare` (m) proud of the body side, faired into the skin `width` out and rolled under the edge into the well, down the opening's sides to the rocker. `square` squares its outline (a superellipse round the round opening) and its face: a box flare. Merged into the body, seated on its drawn loft (`archLipGeometry`); it peels and tears with its arch's panel |
+| `arch.lip` | Each wheel arch's lip: a strip round the opening's edge, its crown `flare` (m) proud of the body side, faired into the skin `width` out and rolled under the edge into the well, down the opening's sides to the rocker. `square` squares its outline (a superellipse round the round opening) and its face: a box flare. `band` gives the round outline that stepped face (flat crown, its outer edge stepping down over 1.6 cm): a raised flare band. Its underside is the well's tone over the opening only; where a square outline stands out over the skin it is paint. Merged into the body, seated on its drawn loft (`archLipGeometry`); it peels and tears with its arch's panel |
 | `wheelTub` | A bed's wheel tubs (pickup, monster): over each wheel whose liner stands in a tub floor, a half cylinder `rise` (m) over the floor, `length` along the car, `width` in from the bed's side wall, in BOTH builds. The cage merges them last, so every other cage vertex keeps its id, and keeps them out of its hull's decimation: the hull is decimated exactly as the body without them, then the tubs' vertices follow it whole (`CAGE_TUB_VERTICES` of room past `CAGE_VERTICES`). Absent, the drawn body's hump hugs the liner (below) |
+| `tubWall` | A tub's rim width (m): how far in from the body side its side wall's top edge stands, seen from above, in both builds; the wall leans out to it from its foot, which stays 0.06 in (the wheel tubs, liners and boot hollow meet the foot). Default 0.06; pickup and monster 0.04 (a thin bed rim) |
 | `boot.outline` | A tailgate's edge: the reference's gate seam as [x, y] on the right side, top to bottom (held past its ends). The gate is lofted to it at each height, with a ring at each of its corners, in both builds; the face's cut takes its widest point. Where it steps in narrower than the cut (the hatch, ±.43 between its tail lamps), a drawn infill panel flush with the gate shuts the tail beside it, a 4 mm seam off the gate's edge (`bootInfill`), so no loft ring points are added. Read it with `tailgateHalf(style, y)`. Absent: the tail panel's half-width less 13.5 cm |
 
 Every drawn body also opens its boot and closes its wells, from the tables it already has (`bootCut`, `wellHumpGeometry`):
@@ -153,11 +157,14 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
   cowl and not a fin), one more `tubs` entry for the drawn loft only. The bay set fills it
   wall to wall up to the hood's underside: a dark block and black cover with bare-aluminium heads, intake, plenum and strut
   caps, steel rails and manifolds, black radiator, airbox and battery.
-- **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor, the wheel liners, each
-  well's ceiling inside its arch, an arch lip's roll underside and return, and the hood's underside are set so at build, on the drawn
-  body only (a panel torn and put back gets its rest tone, `PanelRegion.rest`). The drawn liners are two-sided (the paint culls back
-  faces), and over a tyre standing outboard of the body (the monster's) a half disc closes each well up to its crown, at a bed's wall
-  where one stands over the wheel. No texture, no draw.
+- **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor and the hood's underside.
+  `WELL_PANEL` (3) draws a wheel well flat near-black with no sheen (`bare-metal.ts`): the wheel liners, each well's ceiling inside
+  its arch, an arch lip's roll underside and return, and the trough corners an outboard tyre's arch looks onto (the monster's).
+  Both are set at build, on the drawn body only (a panel torn and put back gets its rest tone, `PanelRegion.rest`). The drawn
+  liners are two-sided (the paint culls back faces), their feet end at the rocker where it stands over the hub, and their outer
+  ends follow the body side 5-8 cm past the opening, 1 cm inside it, so no liner shows past the skin. Over a tyre standing outboard
+  of the body (the monster's) a half disc closes each well up to its crown, at a bed's wall where one stands over the wheel. No
+  texture, no draw.
 - **Bare metal:** the paint's `primer` attribute draws procedural riveted steel (`bare-metal.ts`: object-space seams, rivet
   rows, a tint per sheet), so a torn panel's or bumper's under-panel bends with the body and costs no texture or draw. A torn
   bumper bares the painted body it covered (`bumperBare`), a reset paints it again.

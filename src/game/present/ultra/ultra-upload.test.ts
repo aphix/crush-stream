@@ -71,7 +71,7 @@ describe("given Ultra's nine photographs, decoded as ImageBitmaps", () => {
   const sun = new THREE.DirectionalLight();
   let ultra: Ultra;
   before(async () => {
-    ultra = await Ultra.create({ renderer, scene, stage: { sun, envGain: 1, envIntensity: 1 }, queueWarm() {}, alive: () => true, phone: false });
+    ultra = await Ultra.create({ renderer, scene, stage: { sun, envGain: 1, envIntensity: 1, setUltraShadow() {} }, queueWarm() {}, alive: () => true, phone: false });
   });
 
   it("when Ultra loads, then each picture is uploaded once while open and closed after it, so no decoded copy stays in memory", () => {

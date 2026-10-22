@@ -18,6 +18,8 @@ const SEDAN = CAR_STYLES.sedan;
 const PAINT_FINISH_KEY = "car-paint-primer|finish-paint";
 /** One texel of the atlas (m): a reading's nearest texel centre lies within half of it. */
 const TEXEL = 0.004;
+/** A broad stroke's slope may step this far (m/m) off its two neighbours' mean from texel to texel: half the slope an 8-bit height step makes over a texel. */
+const CRINKLE_MAX = 0.006;
 
 /** The sedan with `details` instead of its own table: a new style object, so it bakes its own atlas. */
 function sedanWith(details: Details): BodyStyle {
@@ -49,10 +51,42 @@ describe("given a style's detail table baked to its atlas", () => {
     assert.equal(left.cavity, right.cavity, "cavity at x -0.3");
   });
 
+  it("when any style's bottom tile is read on its exhaust run, then the pipe stands proud and dark on both sides, and a car with no strokes of its own has it in no other tile", () => {
+    for (const style of Object.values(CAR_STYLES)) {
+      if (!style.details) continue;
+      const read = detailReader(style);
+      const pipe = style.exhaust?.x ?? 0.4;
+      for (const x of [pipe, -pipe]) {
+        const under = read("bottom", -0.5, x);
+        assert.ok(under.height >= 0.005 && under.cavity >= 0.4, `${style.id} at x ${x}: height ${under.height}, cavity ${under.cavity}`);
+      }
+    }
+    const bare = sedanWith({ lines: [], patches: [] });
+    const read = detailReader(bare);
+    const pipe = bare.exhaust?.x ?? 0.4;
+    assert.ok(read("bottom", -0.5, pipe).height >= 0.005 && read("top", -0.5, pipe).height === 0, "the pan's pipe lands in the bottom tile only");
+  });
+
+  it("when the shader is built, then a down-facing pixel reads the bottom tile in the top's place", () => {
+    const { fragmentShader } = compileHooks(detailPaint(SEDAN));
+    assert.ok(fragmentShader.includes("bool detailUnder = vDetailNormal.y < 0.0;") && fragmentShader.includes("detailUnder ? detailTiles[4] : detailTiles[1]"), "the bottom tile replaces the top's under the car");
+  });
+
   it("when a step runs forward along the side, then its left (above) stands its depth proud and its right (below) reads nothing", () => {
     const read = detailReader(sedanWith({ lines: [{ view: "side", points: [[-1, 0.7], [1, 0.7]], width: 0.012, depth: 0.003, profile: "step", cavity: 0 }], patches: [] }));
     within(read("side", 0, 0.7 + 0.012).height, 0.003, 0.1, "height a width left of the line");
     assert.equal(read("side", 0, 0.7 - 0.012).height, 0, "height a width right of the line");
+  });
+
+  it("when a broad, shallow u stroke is read across texel by texel, then its slope as the shader decodes it bends smoothly: no texel steps off its neighbours' mean, as 8-bit height differences hammer it", () => {
+    // 30 cm wide and 6 mm high: the slope peaks at 0.063 m/m, and its own bend from one texel to the next is under 0.3 mm/m.
+    const read = detailReader(sedanWith({ lines: [{ view: "side", points: [[-1, 0.5], [1, 0.5]], width: 0.3, depth: 0.006, profile: "u", cavity: 0 }], patches: [] }));
+    const slopes = Array.from({ length: 0.3 / TEXEL }, (_, k) => read("side", 0, 0.351 + k * TEXEL).slope[1]);
+    assert.ok(Math.max(...slopes.map(Math.abs)) > 0.05, `the stroke's slope reads: ${Math.max(...slopes.map(Math.abs))} m/m at most`);
+    for (let k = 1; k + 1 < slopes.length; k++) {
+      const step = Math.abs(slopes[k]! - (slopes[k - 1]! + slopes[k + 1]!) / 2);
+      assert.ok(step < CRINKLE_MAX, `texel ${k} across the stroke: slope ${slopes[k]} steps ${step} m/m off its neighbours' mean`);
+    }
   });
 
   it("when a patch is recessed with a rim, then its floor reads its depth and cavity, half way up its rim about half its depth, and outside nothing", () => {

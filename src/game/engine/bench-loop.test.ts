@@ -149,6 +149,22 @@ describe("given a loop whose state is in the address of its bench page", () => {
     assert.equal(wanted.racers, 4);
   });
 
+  it("when a loop starts from ?bench=city&draw=max&scale=2&shadow=high, then every step's address keeps the three quality arms", () => {
+    const custom = "?bench=city&draw=max&scale=2&shadow=high&extended=1";
+    let href = new URL(custom, base).toString();
+    const seen: string[] = [];
+    const loops = new Set<number>();
+    for (let run = runFromPage(custom, "k3x9q2"); run !== null && run.loop <= 2; run = advance(run)) {
+      href = stepHref(href, run);
+      const q = new URLSearchParams(searchOf(href));
+      assert.equal(`${q.get("draw")} ${q.get("scale")} ${q.get("shadow")}`, "max 2 high", `${run.loop} ${stepOf(run).id}`);
+      seen.push(stepOf(run).id);
+      loops.add(run.loop);
+    }
+    assert.ok(seen.length > 8, `the steps of both cycles ran (${seen.length} steps)`);
+    assert.equal([...loops].join(","), "1,2", "both cycles ran");
+  });
+
   it("when keep is turned off (keep=0) in the address on the second step, then the loop goes on to the last step and ends there", () => {
     const second = new URL(stepHref(base, { ...RUN, step: 1, keep: true }));
     second.searchParams.set("keep", "0");

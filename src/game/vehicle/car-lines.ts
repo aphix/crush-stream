@@ -36,6 +36,14 @@ export function rockerAt(z: number, style: BodyStyle): number {
   return style.rocker.y + (floorY(z, style) - style.dims.rideHeight);
 }
 
+/** A tub's rim width (m) unless the style sets its own: its foot's inset. */
+const TUB_WALL = 0.06;
+
+/** How far (m) a tub's side wall's top edge stands in from the body side: the style's `tubWall`, else `TUB_WALL`. */
+export function tubWall(style: BodyStyle): number {
+  return style.tubWall ?? TUB_WALL;
+}
+
 /** The side glass top's drop under the roof (m) unless the style sets its own: today's cant lip. */
 const GLASS_DROP = 0.075;
 /** The A-pillar's rear top corner stands this far (m) behind the windshield's top unless the style seats it. */

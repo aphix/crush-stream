@@ -212,10 +212,8 @@ export function crashBarGeometry(): THREE.BufferGeometry {
 const RED: Tone = [0xa8231c, 0.5, 0.2];
 /** The monster's half track (m): its axle tube runs hub to hub, and `CarUnderbody` scales it across another span. */
 export const AXLE_HALF_SPAN = 1.195;
-/** The coil-overs' line across the car (m): outboard in the wheel well, where its dark back wall leaves them in sight, clear of the steered tyre. */
-const COILOVER_X = 0.76;
-/** The rear pair's (m): the rear tyres never steer, so they stand further out, past the bed wall the rear well's back wall follows; the axle's shafts at `COILOVER_X` stay inside them. */
-const REAR_COILOVER_X = 0.79;
+/** The coil-overs' line across the car (m), both axles: inboard under the flare, inside the arch lip's shadow and 11 cm clear of the tyre's inner face. */
+const COILOVER_X = 0.68;
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _dir = new THREE.Vector3();
@@ -252,14 +250,13 @@ export function ladderFrameGeometry(): THREE.BufferGeometry {
     parts.push(box(0.09, 0.16, 4.1, BLACK, sign * 0.45, 0.26, -0.15));
     for (const axle of [-1.385, 1.385]) {
       const mid = -Math.sign(axle);
-      const x = axle < 0 ? REAR_COILOVER_X : COILOVER_X;
-      parts.push(box(0.42, 0.06, 0.34, BLACK, sign * 0.65, 0.26, axle));
-      parts.push(box(0.16, 0.05, 0.36, BLACK, sign * x, 0.72, axle));
+      parts.push(box(0.32, 0.06, 0.34, BLACK, sign * 0.6, 0.26, axle));
+      parts.push(box(0.16, 0.05, 0.36, BLACK, sign * COILOVER_X, 0.72, axle));
       parts.push(box(0.06, 0.3, 0.1, BLACK, sign * 0.5, 0.05, axle + mid * 0.95));
       parts.push(box(0.06, 0.22, 0.08, BLACK, sign * 0.35, 0.17, axle + mid * 0.75));
       for (const dz of [-0.12, 0.12]) {
-        parts.push(toned(new THREE.CylinderGeometry(0.065, 0.065, 0.77, 10), ...STEEL).translate(sign * x, 0.335, axle + dz));
-        parts.push(...coil(sign * x, 0.42, axle + dz));
+        parts.push(toned(new THREE.CylinderGeometry(0.065, 0.065, 0.77, 10), ...STEEL).translate(sign * COILOVER_X, 0.335, axle + dz));
+        parts.push(...coil(sign * COILOVER_X, 0.42, axle + dz));
       }
     }
   }

@@ -4,20 +4,21 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { BLACKOUT, INNER_PANEL } from "./constants.ts";
+import { BLACKOUT, CABIN_TRIM, INNER_PANEL, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
-import { makeShell, PANEL_NAMES, panelRegions, poseShell } from "./car-panels.ts";
+import { makeShell, PANEL_NAMES, panelRegions, poseShell, setPrimer } from "./car-panels.ts";
+import { bootCut, bootCutAt, makeHoodGeometry } from "./car-mesh.ts";
 import { DENT_MAX, newDentState, recordDent } from "./loose-dent.ts";
 import { runWall, type CrashResult } from "../contact/crash-scenarios.test-util.ts";
 import { assertSameNumbers, DT, paint } from "./test-support.ts";
 import { LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts";
 
-/** The body's paint attribute, joined: 0 paint, 1 primer, `INNER_PANEL` the unpainted bay trough, `BLACKOUT` gloss-black trim. */
+/** The body's paint attribute, joined: 0 paint, 1 primer, `INNER_PANEL` the unpainted bay trough, `WELL_PANEL` the wheel wells, `BLACKOUT` gloss-black trim, `CABIN_TRIM` the cabin. */
 const primerOf = (car: DeformableCar): string => Array.from(car.body.geometry.getAttribute("primer").array).join();
-/** The rest build's: paint, the headliner's primer, the trough's inner panel and the blacked-out trim (roof fittings, pillars, cowl) only. */
+/** The rest build's: paint, the trough's inner panel, the wells, the blacked-out trim (roof fittings, pillars, cowl) and the cabin's trim (blended at its tub's ends) only. */
 const restPrimer = (car: DeformableCar): string => {
   const rest = Array.from(makeChassisGeometry(car.style).getAttribute("primer").array);
-  assert.ok(rest.every((v) => v === 0 || v === 1 || v === INNER_PANEL || v === BLACKOUT), "a rest body holds only paint, primer, inner panel and blackout");
+  assert.ok(rest.every((v) => v === 0 || v === 1 || v === INNER_PANEL || v === WELL_PANEL || v === BLACKOUT || (v < 0 && v >= CABIN_TRIM)), "a rest body holds only paint, primer, inner panel, wells, blackout and cabin trim");
   return rest.join();
 };
 
@@ -266,5 +267,80 @@ describe("given a parked car that tears its hood and right quarter panel off and
     assert.equal(d.count, 0, "a 1 m/s touch dented");
     for (let i = 0; i < DENT_MAX + 5; i++) recordDent(d, o, new THREE.Vector3(0, 6, 0));
     assert.equal(d.count, DENT_MAX);
+  });
+});
+
+describe("given every style's detachable panels as they read once they come off", () => {
+  /** How many of `geo`'s vertices whose normal `face` keeps hold primer `tone`, of how many it keeps. */
+  const toneOf = (geo: THREE.BufferGeometry, face: (n: THREE.Vector3, v: number) => boolean, tone: number): { held: number; of: number } => {
+    const [primer, normal] = [geo.getAttribute(PRIMER_ATTRIBUTE), geo.getAttribute("normal")];
+    const n = new THREE.Vector3();
+    let [held, of] = [0, 0];
+    for (let v = 0; v < normal.count; v++) {
+      if (!face(n.fromBufferAttribute(normal, v), v)) continue;
+      of++;
+      if (primer?.getX(v) === tone) held++;
+    }
+    return { held, of };
+  };
+
+  it("when each car's drawn hood is read as it is built (a bulge and scoop merged in), then the lid's underside is an unpainted inner panel", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const hood = new DeformableCar(paint(), new THREE.Scene(), null, id).lookMeshes().hood.geometry;
+      // The lid's own vertices lead the merge; the bulge's and scoop's buried bases follow them.
+      const lid = makeHoodGeometry(CAR_STYLES[id]).getAttribute("position").count;
+      const { held, of } = toneOf(hood, (n, v) => v < lid && n.y < -0.5, INNER_PANEL);
+      assert.ok(of > 0 && held === of, `${id}: ${held} of ${of} hood underside vertices unpainted`);
+    }
+  });
+
+  it("when each style with a deck lid is read, then its boot's floor corners, the hollow a popped or torn lid shows, are the cabin's dark trim (the boot's carpet), not bare steel", () => {
+    let lined = 0;
+    for (const id of CAR_STYLE_IDS) {
+      const cut = bootCut(CAR_STYLES[id]);
+      if (!cut.lined) continue;
+      const body = makeChassisGeometry(CAR_STYLES[id]);
+      const { ring, slices } = body.userData.loft as { ring: number; slices: number };
+      const [pos, primer] = [body.getAttribute("position"), body.getAttribute(PRIMER_ATTRIBUTE)];
+      let [held, of] = [0, 0];
+      for (let s = 0; s < slices; s++) {
+        if (bootCutAt(pos.getZ(s * ring), cut).open < 1) continue;
+        for (const v of [s * ring, s * ring + ring - 1]) {
+          of++;
+          if (primer.getX(v) === CABIN_TRIM) held++;
+        }
+      }
+      assert.ok(of > 0 && held === of, `${id}: ${held} of ${of} boot floor corners cabin trim`);
+      lined++;
+    }
+    assert.ok(lined > 0, "some style has a deck lid's boot");
+  });
+
+  it("when each style's quarter and arch shells are built, then the front layer wears the panel's rest tones and the back layer, its inside once torn, is an unpainted inner panel", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const body = makeChassisGeometry(CAR_STYLES[id]);
+      for (const r of panelRegions(CAR_STYLES[id], body)) {
+        const primer = makeShell(r, body).getAttribute(PRIMER_ATTRIBUTE);
+        const n = r.verts.length;
+        assert.ok(primer !== undefined && primer.count === 2 * n, `${id} ${r.name}: a primer per shell vertex`);
+        let wrong = 0;
+        for (let k = 0; k < n; k++) if (primer.getX(k) !== r.rest[k] || primer.getX(n + k) !== INNER_PANEL) wrong++;
+        assert.equal(wrong, 0, `${id} ${r.name}: ${wrong} of ${n} vertices off their layer's tone`);
+      }
+    }
+  });
+
+  it("when a panel peels or tears off, then the under-panel left on the body is dark unpainted inner panel, and no vertex darker still at rest (a well's own tone) turns lighter", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const body = makeChassisGeometry(CAR_STYLES[id]);
+      const primer = body.getAttribute(PRIMER_ATTRIBUTE);
+      for (const r of panelRegions(CAR_STYLES[id], body)) {
+        setPrimer(r, body, true);
+        let lighter = 0;
+        for (let k = 0; k < r.verts.length; k++) if (primer.getX(r.verts[k]!) < Math.max(INNER_PANEL, r.rest[k]!)) lighter++;
+        assert.equal(lighter, 0, `${id} ${r.name}: ${lighter} under-panel vertices lighter than inner panel or their own darker rest tone`);
+        setPrimer(r, body, false);
+      }
+    }
   });
 });

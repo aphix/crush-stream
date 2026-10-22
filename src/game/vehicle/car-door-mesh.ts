@@ -8,12 +8,13 @@ import { rockerAt } from "./car-lines.ts";
 import { MIRROR_REACH, MIRROR_ROOT } from "./part-geometry.ts";
 import { doorCardGeometry } from "./interior-geometry.ts";
 import { PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
+import { CABIN_TRIM, PRIMER_ATTRIBUTE } from "./constants.ts";
 
 /** The platform door as the sim readers still take it (door contact, hull gap, wear, car-parts) until they read `style.door`; `mirrorX` is its mirror base out from the hinge. */
 export const DOOR = { ...PLATFORM_HARDPOINTS.door, mirrorX: 0.06 } as const;
 
 /** Door skin over the body side at its outer face (m). */
-const DOOR_PROUD = 0.003;
+export const DOOR_PROUD = 0.003;
 /** The door skin is a slab this thick (m) inboard of its outer face. */
 const DOOR_THICKNESS = 0.05;
 /** The skin covers the door cut with this much (m) past each end. */
@@ -220,6 +221,10 @@ export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  // The flat inner face (its rim and centre) is the cabin's dark trim, as the glass shows it; the skin and its rolled edge are paint.
+  const primer = new Float32Array(positions.length / 3);
+  for (const v of [...slabEdge, centre]) primer[v] = CABIN_TRIM;
+  geo.setAttribute(PRIMER_ATTRIBUTE, new THREE.Float32BufferAttribute(primer, 1));
   geo.setIndex(indices);
   geo.computeVertexNormals();
   return splitCreases(geo, CREASE_DEGREES.door);
