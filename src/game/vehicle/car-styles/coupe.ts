@@ -123,6 +123,8 @@ export const COUPE: BodyStyle = {
   roofZ: [-1.04, 0.1],
   /** Reference isos: the roof rolls heavily onto the rear glass's top and softly onto the windshield's, no flat cap at either end. */
   roofEnds: { rear: 0.13, front: 0.1 },
+  /** The reference's roof edge rolls straight into the side glass: no drip rail along the cant or down the pillar. */
+  roofDrip: 0,
   windshieldTop: [1.255, 0.12],
   // Round corners: the reference rear iso's four, about a sixth of the 0.53 m slant.
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96, bow: { base: -0.02, top: -0.04 }, round: 0.09 },
