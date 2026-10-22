@@ -93,20 +93,22 @@ const SEDAN_LAMP_SHAPES = {
   },
   // The fog pods in the bumper's corners, and the wide dark lower intake between them (front iso), its ends off the centre line's seam:
   // near as tall as the reference's (5 cm, against the grille's 26), 2.5 cm of body colour under the grille, down to the chin's tuck
-  // (under 0.225 the fascia faces the road: no skin for a lamp).
+  // (under 0.225 the fascia faces the road: no skin for a lamp). Met on the body too: the fascia's wrapped corner is held inside it.
   front: {
     loops: [
-      { points: [[0.5, 0.26], [0.7, 0.26], [0.7, 0.35], [0.5, 0.35]] },
+      { points: [[0.5, 0.26], [0.66, 0.26], [0.66, 0.35], [0.5, 0.35]] },
       { points: [[0.006, 0.275], [0.3, 0.273], [0.45, 0.27], [0.47, 0.255], [0.4, 0.232], [0.2, 0.228], [0.006, 0.226]] },
     ],
     lens: "dark",
     bezel: "black",
-    rounds: [{ at: [0.6, 0.305], r: 0.028, tone: "clear" }],
+    rounds: [{ at: [0.58, 0.305], r: 0.018, tone: "clear" }],
+    onBody: true,
   },
   // The reference's rear reflectors: thin red strips low on the bumper's corners (rear iso; side y ~0.49), not blocks.
   rear: {
     loops: [{ points: [[0.48, 0.47], [0.63, 0.47], [0.63, 0.5], [0.48, 0.5]] }],
     lens: "red",
+    onBody: true,
   },
 } as const;
 
@@ -116,7 +118,7 @@ const SEDAN_LAMP_SHAPES = {
  * top it reaches |x| 0.88 from the skin at 0.752: the door's mirrorReach 0.128. Its 0.12 width leaves the cap's inner face 8 mm off the
  * seat, over the foot (a cap wider than reach - 0.005 buries itself in the door).
  */
-export const SEDAN_MIRROR = { cap: "rounded", finish: "body", size: [0.12, 0.095, 0.145] } as const;
+export const SEDAN_MIRROR = { cap: "tear", finish: "body", size: [0.12, 0.095, 0.145] } as const;
 
 export const SEDAN: BodyStyle = {
   id: "sedan",
@@ -147,8 +149,9 @@ export const SEDAN: BodyStyle = {
    * the centre line, the dark cowl and wipers (`blackout.cowl`) between it and the glass. Hinged 2 cm behind that edge, as before.
    * Crowned as the reference's, one soft dome falling 6 cm from the centre line to |x| 0.66: the stations under it sit the fenders that
    * much under the centre line, which stays on the reference's side silhouette (yBelt = old + 0.021 - 0.06 ((hw - 0.07) / 0.66)^2).
+   * Its shut lines run onto the fender tops as the reference's: 9 cm inside the side at the nose, 18 at the cowl (top view, front iso).
    */
-  hood: { z0: 0.99, z1: 1.97, origin: [0.81, 0.97], crown: [0.06, 0.66] },
+  hood: { z0: 0.99, z1: 1.97, origin: [0.81, 0.97], crown: [0.06, 0.66], inset: [0.09, 0.18] },
   // Body-colour fascias, as the reference's: its black is the lower intake, grille and diffuser (`details`, grille, tail trim), not the
   // bumper. Seams off the gridded side reference: the front bumper up to the head lamp's lower edge and round to the front arch, the rear
   // one up to the tail lamp's lower edge (under the lid, its shut line) and round the quarter to the rear arch; both follow their arch's lip.
@@ -188,8 +191,9 @@ export const SEDAN: BodyStyle = {
        * The reference's rear bumper, one smooth face from under the lid down to its diffuser (silver-sedan-1.png, 70.1 px/m): leaning out
        * from 2 cm behind the tail panel at its top (0.62) to its rearmost (2.175, the dims' tail) at y 0.45-0.50, 2 cm forward by 0.41
        * where the dark diffuser band starts (rows at its edges, y 0.41 and 0.23, for the band's crisp edges), tucking 8 cm forward to its
-       * bottom at 0.23; flat across to |x| 0.48 before its corners wrap. The platform's stopped at 0.42, rounded over at its top like a
-       * pill, and left the body's tail and floor showing under it. Ten points, as the platform's.
+       * bottom at 0.23; flat across to |x| 0.42, then its corner turns onto the body side and runs along it (`wrap.end`): the plain wrap
+       * shrank its section into a pill. Its band rows (0.41-0.23) are the reference's black diffuser; its plate sits on the lid's tail face
+       * in the lid's recess (y 0.63-0.755), its inner face on the face's 2.109 at |x| 0.18.
        */
       fascia: [
         [0.1, -0.07],
@@ -204,8 +208,11 @@ export const SEDAN: BodyStyle = {
         [-0.29, -0.07],
       ],
       span: 0.76,
-      wrap: { from: 0.42, back: 0.24 },
+      wrap: { from: 0.42, back: 0.24, end: { corner: 0.12, stand: 0.007 } },
       trim: "body",
+      band: [0.23, 0.41],
+      plate: 0.685,
+      plateFace: { out: 0.041 },
       top: [[0, 0.61], [0.46, 0.61], [0.5, 0.738], [0.6, 0.738]],
       edge: [[-1.83, 0.738], [-1.81, 0.7], [-1.8, 0.665], [-1.76, 0.625], [-1.71, 0.595], [-1.62, 0.58], [-1.66, 0.5], [-1.683, 0.42], [-1.69, 0.32]],
     },
@@ -288,8 +295,9 @@ export const SEDAN: BodyStyle = {
   lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES },
   // The reference's shield: 0.74 across at the top, tapering to 0.66 at its rounded bottom corners (S08: (0.30, 0.308), (0.34, 0.33)),
   // its top up under the hood's front edge (~0.60, level with the head lamps' inner ends, front iso) as far as the bumper's loose box
-  // holds it: 0.30-0.585. Black: its slats and backing read dark under a thin chrome rim; all-chrome read as a light block (owner's front slice).
-  grille: { y: 0.443, size: [0.74, 0.284], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "black" },
+  // holds it: 0.30-0.585, its chrome rim (3 mm proud) inside that, so its face 3 mm behind the box's front at 2.055. Black: its slats and
+  // backing read dark under the thin rim; all-chrome read as a light block (owner's front slice).
+  grille: { y: 0.443, z: 2.052, size: [0.74, 0.264], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "black", bezel: 0.01 },
   /**
    * The reference's twin wide oval tips in the diffuser (gridded rear iso and side: |x| 0.47-0.64, y 0.27-0.33, ~3 cm proud), on the rear
    * bumper's face now that it reaches down over the diffuser (to 0.23).

@@ -13,8 +13,8 @@ const VENT = { depth: -0.005, rim: 0.006, pattern: { kind: "hslats", pitch: 0.01
 const BADGE = { depth: 0.002, rim: 0.003, cavity: 0 } as const;
 
 const SHARED_LINES: readonly Line[] = [
-  // The hood's side shut line on the drawn lid's edge (hw - 0.07, CarGreenhouse3's ca1dce92) from its rear edge (0.99) to the nose; the lid's straight rear edge is its own seam.
-  { view: "top", points: [[0.99, 0.72], [1.235, 0.72], [1.481, 0.695], [1.642, 0.679], [1.734, 0.676], [1.82, 0.622], [1.898, 0.504], [1.96, 0.435]], ...GAP },
+  // The hood's side shut line on the drawn lid's edge (hw - hood.inset: 0.18 at its rear edge, 0.99, to 0.09 at the nose); the lid's straight rear edge is its own seam.
+  { view: "top", points: [[0.99, 0.61], [1.235, 0.633], [1.481, 0.63], [1.642, 0.629], [1.734, 0.634], [1.82, 0.588], [1.898, 0.477], [1.96, 0.415]], ...GAP },
   { view: "front", points: [[0.4, 0.345], [0.55, 0.345], [0.62, 0.345]], ...GAP, width: 0.008 },
   { view: "side", points: [[0.71, 0.245], [0.4, 0.25], [0, 0.25], [-0.22, 0.25]], ...GAP },
   { view: "side", points: [[-1.05, 0.95], [-1.086, 0.86], [-1.085, 0.8], [-1.056, 0.75], [-1, 0.66], [-0.94, 0.59], [-0.9, 0.505], [-0.84, 0.4], [-0.795, 0.3], [-0.77, 0.26]], ...GAP },
@@ -62,7 +62,7 @@ const SEDAN_LINES: readonly Line[] = [
 const POLICE_LINES: readonly Line[] = [
   { view: "front", points: [[0, 0.29], [0.2, 0.29], [0.45, 0.29], [0.6, 0.29], [0.7, 0.29], [0.74, 0.29]], ...TRIM },
   { view: "top", points: [[-0.978, 0], [-0.984, 0.016], [-1, 0.022], [-1.016, 0.016], [-1.022, 0]], ...TRIM },
-  { view: "rear", points: [[0, 0.745], [0.15, 0.745], [0.15, 0.6], [0, 0.6]], ...TRIM },
+  { view: "rear", points: [[0, 0.745], [0.21, 0.745], [0.21, 0.6], [0, 0.6]], ...TRIM },
   { view: "rear", points: [[0, 0.4], [0.45, 0.4], [0.66, 0.4], [0.76, 0.4]], ...TRIM },
 ];
 

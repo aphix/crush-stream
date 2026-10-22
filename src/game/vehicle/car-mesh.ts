@@ -409,10 +409,11 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   // The deck edge drops into the style's own tubs (cabin, bed), not into the drawn bay: there it stays the fender's top under the hood's edge.
   const deckTub = tubAt(z, style, style.tubs).t;
   const [grooveOut, grooveDown] = source === "drawn" && style.hood.groove ? style.hood.groove.map((g) => g * bayAt(z, style)) : [0, 0];
+  const fenderIn = source === "drawn" ? hoodInset(z, style.hood) : HOOD_INSET;
   // The ring's half: deck crown and edge, the shoulder, the feature line, the tuck-under, the rocker, then the sill and the floor.
   const half: [number, number][] = [
     [lerp(hw - DECK_CROWN.inset, edge ?? hw - 0.06, tub.t), lerp(yb + DECK_CROWN.rise, tub.floor, tub.t)],
-    [lerp(hw - 0.07, hw - tubWall(style), deckTub) + grooveOut!, deckEdgeY(yb, deckTub) - grooveDown!],
+    [lerp(hw - fenderIn, hw - tubWall(style), deckTub) + grooveOut!, deckEdgeY(yb, deckTub) - grooveDown!],
     ...SHOULDER_RING.map((a) => side(yF + SHOULDER[1] * detSin(a))),
     side(yF),
     ...Array.from({ length: tuckRows }, (_, row) => side(lerp(yF, rockerY, (row + 1) / (tuckRows + 1)))),
@@ -661,6 +662,15 @@ const HOOD_SEAT = 0.003;
 const LIP_RINGS = [0.5, 1] as const;
 /** A clamshell lid's skin laps the body it wraps this far (m) clear in x and y: flush to the eye, never coincident with it. */
 const CLAMSHELL_GAP = 0.001;
+/** Behind the cowl a `hood.inset` fender's top edge eases back to `HOOD_INSET` over this far (m): no step where the hood's rear corner sits. */
+const HOOD_INSET_EASE = 0.3;
+
+/** How far (m) inside the station's half-width the side edge of a crowned `hood.inset` hood, and the fender's top edge beside it, stand at `z`; `HOOD_INSET` otherwise. */
+function hoodInset(z: number, hood: BodyStyle["hood"]): number {
+  if (!hood.inset || !hood.crown) return HOOD_INSET;
+  const [nose, cowl] = hood.inset;
+  return z < hood.z0 ? lerp(HOOD_INSET, cowl, THREE.MathUtils.smoothstep(z, hood.z0 - HOOD_INSET_EASE, hood.z0)) : lerp(cowl, nose, Math.min((z - hood.z0) / (hood.z1 - hood.z0), 1));
+}
 
 /** A lid's dome across it: [share of the half-width, share of the crown's rise over the edge] points from the centre line out, both ends left out. */
 type Dome = readonly (readonly [number, number])[];
@@ -692,7 +702,8 @@ function lidSection(z: number, style: BodyStyle, seated: boolean, crowned: BodyS
   const w = sl.hw - HOOD_INSET;
   // A rigid lid: its edge keeps the fender's height where a cabin tub's blend runs under its rear end (the coupe's and monster's), never bending into it.
   const edge = deckEdgeY(sl.yBelt, 0) + HOOD_SEAT;
-  if (crowned !== undefined) return { w, edge, crown: edge + crowned[0] * (w / crowned[1]) ** 2, dome: CROWN_DOME };
+  // An inset edge keeps the plain lid's crown (the centre line on the side silhouette) and its edge's height: the dome steepens to meet it.
+  if (crowned !== undefined) return { w: sl.hw - hoodInset(z, style.hood), edge, crown: edge + crowned[0] * (w / crowned[1]) ** 2, dome: CROWN_DOME };
   // The deck dome's chord from its shoulder to the edge passes within a millimetre of the closed deck's crown point: the dome steps out over it.
   const u = (sl.hw - DECK_CROWN.inset) / w;
   const over = (sl.yBelt + DECK_CROWN.rise + HOOD_SEAT - edge) / (crown - edge);
@@ -1056,12 +1067,13 @@ const END_SEGMENTS = { face: 2, corner: 5, run: 1 } as const;
 /** A lofted end's section thins to this share of its corner's tightest radius, so its hidden back never folds through itself. */
 const END_DEPTH_SHARE = 0.9;
 
-/** Bumper fascia: rounded top, intake recess, splitter lip, wrapped corners, the corners held inside `style`'s body side (or a lofted `wrap.end`). */
-export function makeBumperGeometry(front: boolean, style: BodyStyle): THREE.BufferGeometry {
+/** Bumper fascia: rounded top, intake recess, splitter lip, wrapped corners, the corners held inside `style`'s body side (or a lofted `wrap.end`). `rows` [first, last] lofts only those fascia rows, `proud` (m) out from the face, along the same path: an inlay. */
+export function makeBumperGeometry(front: boolean, style: BodyStyle, rows?: readonly [first: number, last: number], proud = 0): THREE.BufferGeometry {
   const s = front ? 1 : -1;
   const spec = front ? style.bumpers.front : style.bumpers.rear;
-  if (spec.wrap.end) return makeBumperWithEnds(s, spec, spec.wrap.end, style);
   const { seat, fascia, span, wrap } = spec;
+  const section = rows ? fascia.slice(rows[0], rows[1] + 1).map(([y, out]) => [y, out + proud] as const) : fascia;
+  if (wrap.end) return makeBumperWithEnds(s, spec, wrap.end, style, section);
   const wrapAt = (x: number) => Math.max(0, Math.abs(x) - wrap.from) / (span - wrap.from);
   const stations = 16;
   const rings: Pt[][] = [];
@@ -1071,13 +1083,13 @@ export function makeBumperGeometry(front: boolean, style: BodyStyle): THREE.Buff
     const x = lerp(-span, span, i / stations);
     const u = wrapAt(x);
     const crown = (1 - Math.abs(x) / (span + BUMPER_CROWN_RUN)) * 0.02;
-    rings.push(fascia.map(([y, out]) => ({ x: y + crown, y: out * (1 - u * BUMPER_WRAP_SHRINK) })));
+    rings.push(section.map(([y, out]) => ({ x: y + crown, y: out * (1 - u * BUMPER_WRAP_SHRINK) })));
     xs.push(x);
     wraps.push(u);
   }
   const geo = loftFromRings(rings, xs, 0, 1);
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
-  const n = fascia.length;
+  const n = section.length;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getZ(i);
     const ring = Math.min(stations, Math.floor(i / n));
@@ -1096,7 +1108,13 @@ export function makeBumperGeometry(front: boolean, style: BodyStyle): THREE.Buff
  * Bumper fascia with lofted ends: the face straight to `wrap.from`, a quarter-ellipse corner `end.corner` deep out to `end.stand`
  * off the body side, then a run along that side to `wrap.back`. The section keeps its outer face and thins its hidden back round the corner.
  */
-function makeBumperWithEnds(s: number, { seat, fascia, span, wrap }: BodyStyle["bumpers"]["front"], end: BumperEnd, style: BodyStyle): THREE.BufferGeometry {
+function makeBumperWithEnds(
+  s: number,
+  { seat, fascia, span, wrap }: BodyStyle["bumpers"]["front"],
+  end: BumperEnd,
+  style: BodyStyle,
+  section: BodyStyle["bumpers"]["front"]["fascia"],
+): THREE.BufferGeometry {
   const outMax = Math.max(...fascia.map(([, out]) => out));
   const depth = outMax - Math.min(...fascia.map(([, out]) => out));
   // The body side's widest half-width (m) over the fascia's heights, `d` back from the bumper's face.
@@ -1130,7 +1148,7 @@ function makeBumperWithEnds(s: number, { seat, fascia, span, wrap }: BodyStyle["
   for (let m = -half; m <= half; m++) {
     const p = path[Math.abs(m)]!;
     const crown = (1 - Math.min(p.x, span) / (span + BUMPER_CROWN_RUN)) * 0.02;
-    rings.push(fascia.map(([y, out]) => ({ x: y + crown, y: (out - outMax) * p.k })));
+    rings.push(section.map(([y, out]) => ({ x: y + crown, y: (out - outMax) * p.k })));
     ts.push(m / half);
   }
   const geo = loftFromRings(rings, ts, 0, 1);

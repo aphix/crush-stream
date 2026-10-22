@@ -251,6 +251,9 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
     const archAt = (z: number) => wheels.find(([, , wz]) => Math.abs(z - wz) < r);
     const openArchAt = (z: number) => wheels.some(([wx, , wz]) => Math.abs(z - wz) < r && Math.abs(wx) > sampleSlice(wz, style.profile).hw);
     for (let s = 0; s < zs.length; s++) for (const i of [0, n - 1]) primer[s * n + i] = trim[s]! > 0 ? tone(s) : (openArchAt(zs[s]!) ? WELL_PANEL : INNER_PANEL) * bay[s]!;
+    // A lid wrapping the tail cuts its face open too; the tail cap shares that ring's corners, so their floor trim would fade across the cap
+    // beside the lid (a dark V under each tail lamp): they stay paint.
+    if (cut.lined && cut.face) for (const i of [0, n - 1]) primer[i] = 0;
     for (const [copy, s] of wallTops) primer[copy] = tone(s);
     if (style.blackout?.cowl === true) {
       const [foot, hoodRear] = [style.windshield.base[1], style.hood.z0];

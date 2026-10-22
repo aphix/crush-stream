@@ -231,8 +231,8 @@ function lidEdgeAt(lid: THREE.BufferGeometry, slice: number, rolled: boolean): T
   return new THREE.Vector3(side.x, start.y + ((side.x - start.x) * (start.y - dome.y)) / (start.x - dome.x), side.z);
 }
 
-/** The sedan with the reference's hood crown: its top 6 cm under the centre line at |x| .66. */
-const CROWNED_SEDAN: BodyStyle = { ...CAR_STYLES.sedan, hood: { ...CAR_STYLES.sedan.hood, crown: [0.06, 0.66] } };
+/** The sedan with the reference's hood crown: its top 6 cm under the centre line at |x| .66, its edge at the plain inset (`hood.inset` steepens the dome). */
+const CROWNED_SEDAN: BodyStyle = { ...CAR_STYLES.sedan, hood: { ...CAR_STYLES.sedan.hood, crown: [0.06, 0.66], inset: undefined } };
 
 describe("given the lids as built", () => {
   for (const testCase of lidCreaseTable) {
@@ -278,10 +278,15 @@ describe("given the lids as built", () => {
       const want = drop * (edge.x / at) ** 2;
       assert.ok(Math.abs(rise - want) < 1e-4, `slice ${slice}: the centre stands ${(rise * 100).toFixed(2)} cm over the edge at |x| ${(-edge.x).toFixed(3)}, want ${(want * 100).toFixed(2)}`);
     }
-    const inner = (slice: number) => slice > 0 && slice < loft.slices - 2;
-    for (let line = 1; line < rim; line++) {
-      const turn = Math.max(...ringLineDihedrals(lid, line, inner));
-      assert.ok(turn < FLAT_CURVE_LIMIT_DEGREES, `dome ring line ${line} of ${rim - 1} turns ${turn.toFixed(2)}°`);
+    // The sedan's own hood, its edge inset, keeps the dome as smooth.
+    for (const style of [CROWNED_SEDAN, CAR_STYLES.sedan]) {
+      const hood = makeHoodGeometry(style);
+      const hoodLoft = loftOf(hood);
+      const inner = (slice: number) => slice > 0 && slice < hoodLoft.slices - 2;
+      for (let line = 1; line < rim; line++) {
+        const turn = Math.max(...ringLineDihedrals(hood, line, inner));
+        assert.ok(turn < FLAT_CURVE_LIMIT_DEGREES, `${style.hood.inset ? "inset" : "plain"} dome ring line ${line} of ${rim - 1} turns ${turn.toFixed(2)}°`);
+      }
     }
   });
 

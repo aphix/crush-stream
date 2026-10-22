@@ -80,11 +80,12 @@ export const POLICE: BodyStyle = {
   door: { ...SEDAN.door, mirror: { ...SEDAN_MIRROR, finish: "black" } },
   /**
    * The cruiser's bumpers are black plastic, front and rear (both references). The sedan's seams frame its own lamps; the cop's sit lower,
-   * inside its bumper corners, so its bumpers draw no seam of the sedan's.
+   * inside its bumper corners, so its bumpers draw no seam of the sedan's, and no diffuser band on the black. Its plate sits on the lid's
+   * tail face in its recess (y 0.6-0.745).
    */
   bumpers: {
     front: { ...SEDAN.bumpers.front, trim: "black", top: undefined, edge: undefined },
-    rear: { ...SEDAN.bumpers.rear, trim: "black", top: undefined, edge: undefined },
+    rear: { ...SEDAN.bumpers.rear, trim: "black", top: undefined, edge: undefined, band: undefined, plate: 0.67 },
   },
   /** The cruiser's two small round tips under the black bumper, one each side (rear iso: |x| ~0.5; inboard 0.4 on the sedan body's narrower tail floor). */
   exhaust: { tips: 2, x: 0.4, y: 0.3, size: [0.1, 0.06], shape: "round" },
