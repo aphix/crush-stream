@@ -13,7 +13,7 @@ import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift, centreLift } from "./car-cage-rig.ts";
 import { HUB_POP_MPS } from "../deform/deform-solve.ts";
-import { POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_POINTS, GROUND_LIFT_V, body, carrier, pointVel } from "./car-air-body.ts";
+import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_POINTS, GROUND_LIFT_V, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
 export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
@@ -255,7 +255,11 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
   return n;
 }
 
-/** What `loadPoints` loaded for a car and what it stood on: the tables are a function of the cage's fields (`serial` counts their fits), the lift and whether the car is a wreck. */
+/**
+ * What `loadPoints` loaded for a car and what it stood on: the tables are a function of the cage's fields (`serial` counts their fits),
+ * the lift and whether the car is a wreck. `x`, `y` and `z` are exactly its points (`bellyFrom` + the belly), so a restore copies those
+ * and no more: copied whole (`POINT_CAPACITY`, 590 since the held points, tubs and the hatch's sills), an intact car paid 14 KB a slice.
+ */
 interface LoadedPoints {
   serial: number;
   fields: CageFields;
@@ -330,27 +334,32 @@ export function loadPoints(car: DeformableCar): number {
     reach2 = Math.max(reach2, x * x + (h - comY) * (h - comY) + z * z);
   }
   _s[S_POINT_REACH] = Math.sqrt(reach2);
-  memo ??= {
-    serial: 0,
-    fields: car.cage.fields,
-    lift: 0,
-    wreck: false,
-    bellyFrom: 0,
-    reach: 0,
-    x: new Float64Array(POINT_CAPACITY),
-    y: new Float64Array(POINT_CAPACITY),
-    z: new Float64Array(POINT_CAPACITY),
-    absent: new Uint8Array(belly.length),
-  };
+  const count = bellyFrom + belly.length;
+  if (memo === undefined || memo.x.length !== count) {
+    memo = {
+      serial: 0,
+      fields: car.cage.fields,
+      lift: 0,
+      wreck: false,
+      bellyFrom: 0,
+      reach: 0,
+      x: new Float64Array(count),
+      y: new Float64Array(count),
+      z: new Float64Array(count),
+      absent: new Uint8Array(belly.length),
+    };
+  }
   memo.serial = car.cage.serial;
   memo.fields = car.cage.fields;
   memo.lift = lift;
   memo.wreck = wreck;
   memo.bellyFrom = bellyFrom;
   memo.reach = _s[S_POINT_REACH]!;
-  memo.x.set(POINT_X);
-  memo.y.set(POINT_Y);
-  memo.z.set(POINT_Z);
+  for (let k = 0; k < count; k++) {
+    memo.x[k] = POINT_X[k]!;
+    memo.y[k] = POINT_Y[k]!;
+    memo.z[k] = POINT_Z[k]!;
+  }
   memo.absent.set(BELLY_ABSENT);
   LOADED.set(car, memo);
   return bellyFrom;
