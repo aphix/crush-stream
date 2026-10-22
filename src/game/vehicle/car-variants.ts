@@ -371,6 +371,8 @@ export interface BodyStyle {
     hingeTop?: number;
     /** Drawn only: the door skin's outer face stands this far (m) over the body side inside its cut (absent `DOOR_PROUD`, 3 mm); 0: flush, the shut line a groove only. */
     proud?: number;
+    /** Drawn only: under the lowest body-ring row the skin carries, its outer face stands no less than this far (m) over the body side, easing in from `proud` at that row to this at the door's bottom edge and tapering in over the cut's ends like `proud`; those cells turn their diagonal on the hinge half so the lift reaches both end cells alike. The cut's ramp barely leaves the side down there (the rocker point never drops), so a flush skin lies within a millimetre of it and z-fights; absent: the skin holds `proud` all the way down. */
+    lowProud?: number;
     /** Drawn only: the body's rings at its cut's ends shade the panel either side from its own faces, a crease at the shut line, not rounded off by the cut's ramp; absent, one smooth normal across it. */
     shutCrease?: boolean;
   };
