@@ -68,38 +68,50 @@ function rest(cls: VehicleClassId, lost: readonly number[], secs = 5): Rest {
   // A hub standing out past the drawn side (the monster's 2.39 m track on its 1.71 m body: 0.34 m) has its corner that much farther in.
   const { track, width } = CAR_STYLES[CLASSES[cls].style].dims;
   const reach = CORNER_REACH + Math.max(0, (track - width) / 2);
-  const bodyY = (): number[] => {
+  /** The body mesh's lowest vertex overall and within `reach` of each hub in plan, world y and vertex index. */
+  const bodyY = (): { low: number[]; at: number[] } => {
     car.group.updateMatrixWorld(true);
     car.body.updateWorldMatrix(true, false);
     const pos = car.body.geometry.getAttribute("position");
     const hubs = HUBS.map((n) => car.deform.masses.find((m) => m.name === n)!.world);
     const low = [9, 9, 9, 9, 9];
+    const at = [-1, -1, -1, -1, -1];
+    const take = (i: number, k: number): void => {
+      if (_v.y >= low[i]!) return;
+      low[i] = _v.y;
+      at[i] = k;
+    };
     for (let k = 0; k < pos.count; k++) {
       _v.fromBufferAttribute(pos, k).applyMatrix4(car.body.matrixWorld);
-      low[4] = Math.min(low[4]!, _v.y);
-      for (let i = 0; i < 4; i++) if (Math.hypot(_v.x - hubs[i]!.x, _v.z - hubs[i]!.z) < reach) low[i] = Math.min(low[i]!, _v.y);
+      take(4, k);
+      for (let i = 0; i < 4; i++) if (Math.hypot(_v.x - hubs[i]!.x, _v.z - hubs[i]!.z) < reach) take(i, k);
     }
-    return low;
+    return { low, at };
   };
-  const fresh = bodyY();
+  /** World y now of body vertex `k`. */
+  const yOf = (k: number): number => _v.fromBufferAttribute(car.body.geometry.getAttribute("position"), k).applyMatrix4(car.body.matrixWorld).y;
+  const fresh = bodyY().low;
   car.applyImpact(car.group.position.clone().addScaledVector(car.forward, 2.05), car.forward.clone().negate(), 0.5, 0.5);
   for (const i of lost) car.deform.popHub(car.deform.masses.find((m) => m.name === HUBS[i])!);
   const w = newWorld([car]);
-  let before: number[] = [];
+  let before: { low: number[]; at: number[] } = { low: [], at: [] };
   for (let f = 0; f < secs * 60; f++) {
     if (f === (secs - 1) * 60) before = bodyY();
     stepWorld(w, DT);
     car.stepBreakage(DT);
     car.updateSkin();
   }
-  const low = bodyY();
+  const { low } = bodyY();
+  // How far the vertices that were the lows a second ago moved since: the same points, not whichever is lowest now (a standing hub's
+  // sub-millimetre jitter moved a muscle's corner circle over a vertex 41 mm lower and back). A corner with no vertex in reach reads none.
+  const drift = Math.max(0, ...before.at.map((k, i) => (k < 0 ? 0 : Math.abs(yOf(k) - before.low[i]!))));
   return {
     low: low[4]!,
     corners: lost.map((i) => low[i]!),
     fresh,
     all: low,
     speed: car.velocity.length(),
-    drift: Math.max(...low.map((y, i) => Math.abs(y - before[i]!))),
+    drift,
     down: car.wheelsDown,
   };
 }
