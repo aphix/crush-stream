@@ -15,7 +15,8 @@
  * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--view hood|chase|far` follows the hash's car
  * (`car=<id>`) in that drive view instead, e.g. `--hash 'scene=race&car=coupe'`; `--at` is the sim seconds before the drawn frames.
  * `--tear` tears the named parts (`DetachPart.name`: hood, bumperF, archFL, ...) off every car before the framing and hides them, to
- * show what is under them (the engine bay, the crash bars, the bare metal).
+ * show what is under them (the engine bay, the crash bars, the bare metal). `--open doorL,doorR,trunk,quarterL,quarterR` swings those
+ * doors and the lid to their stops and peels those quarter panels as the Doors scene does, on every car, to show their inner faces.
  * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,
  * `trace-camera.mjs`: car space, orthographic for side and top), at the spec's size, so the shot lines up with trace-car's overlay;
  * `scripts/landing-shots.mjs` runs the pair. `--backdrop <colour>` draws the car alone over that colour (no garage room, no fog).
@@ -82,6 +83,7 @@ const { values } = parseArgs({
     draw: { type: "string" },
     scale: { type: "string" },
     shadow: { type: "string" },
+    open: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -117,6 +119,8 @@ if (!existsSync(join(glDir, "dist/webgl.node"))) {
 }
 const { default: createGL } = await import("@kmamal/gl");
 const { createCanvas, ImageData, loadImage } = await import("@napi-rs/canvas");
+// This checkout's, not `--root`'s: an older tree draws through the same page `Worker`.
+const { PageWorker } = await import("../src/game/engine/page-worker.test-util.ts");
 
 const game = (path) => import(pathToFileURL(join(root, "src/game", path)).href);
 const { mulberry32 } = await game("world/placements.ts");
@@ -173,6 +177,13 @@ Object.assign(globalThis, {
   },
   fetch: (input) => track(servePublic(input)),
   createImageBitmap: (blob, options) => track(decodeBitmap(blob, options)),
+  // The page's workers on threads; the ragdoll world stays inline, as without one: its answers at thread timing would make two runs differ.
+  Worker: class extends PageWorker {
+    constructor(url) {
+      if (String(url).includes("ragdoll-worker")) throw new Error("headless-frame: the ragdoll world runs inline");
+      super(url);
+    }
+  },
 });
 const canvas = element();
 // The engine fits its lens to the canvas's box (`coverLens` reads all four edges).
@@ -232,6 +243,8 @@ await engine.ready;
 const readyMs = Math.round(performance.now() - bootAt);
 if (tier === "ultra" && !(await engine.loadUltra())) throw new Error("headless-frame: the Ultra look did not load (see the console)");
 engine.setFxTier(tier);
+// A pick of Ultra switches once its warm-up has linked the look (`pickUltra`).
+while (engine.cine.tier !== tier) await sleep(SETTLE_POLL_MS);
 if (detail !== null) {
   if (detail === "off") engine.detail.setDistances(Infinity, Infinity);
   else engine.detail.setLevel(detail);
@@ -253,6 +266,18 @@ for (const name of values.tear?.split(",") ?? []) {
     car["detachPart"](part, 0);
     part.object.visible = false;
   }
+}
+/** `--open`'s poses: a door or the lid at its stop (the swing clamps), a quarter panel peeled the Doors scene's way. */
+const OPEN = {
+  doorL: (car) => car.setDoorOpen(-1, Math.PI),
+  doorR: (car) => car.setDoorOpen(1, Math.PI),
+  trunk: (car) => car.setLidOpen(Math.PI),
+  quarterL: (car) => car.setPanelOpen(-1, 0.45),
+  quarterR: (car) => car.setPanelOpen(1, 0.45),
+};
+for (const name of values.open?.split(",") ?? []) {
+  if (!(name in OPEN)) throw new Error(`--open ${name}: one of ${Object.keys(OPEN).join(", ")}`);
+  for (const car of engine["live"]()) OPEN[name](car);
 }
 if (camera !== undefined) {
   const [radius, pitch, angle] = camera;

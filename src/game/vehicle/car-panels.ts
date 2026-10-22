@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, detSin, detCos, detAtan2, detAsin, PART_FAMILY } from "../kernel/physics-core.js";
-import { PRIMER_ATTRIBUTE } from "./constants.ts";
+import { INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { ROCKER, type V3 } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import type { BodyStyle } from "./car-variants.ts";
@@ -198,10 +198,17 @@ function region(name: PanelName, ids: number[], pos: Float32Array, primer: Float
   };
 }
 
-/** A panel's shell, posed on `body`'s current skin, unbent. */
+/**
+ * A panel's shell, posed on `body`'s current skin, unbent. Its front layer (vertices 0 to n - 1) wears the panel's rest tones, its back
+ * layer (n to 2n - 1, the panel's inside once it peels or tears) is an unpainted inner panel; the rim skirt between them blends the two.
+ */
 export function makeShell(r: PanelRegion, body: THREE.BufferGeometry): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(r.verts.length * 6), 3).setUsage(THREE.DynamicDrawUsage));
+  const n = r.verts.length;
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 6), 3).setUsage(THREE.DynamicDrawUsage));
+  const primer = new Float32Array(2 * n).fill(INNER_PANEL);
+  primer.set(r.rest);
+  g.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(primer, 1));
   g.setIndex(r.shell);
   poseShell(r, g, body, 0, 0);
   return g;
@@ -320,9 +327,12 @@ export function flutterShell(r: PanelRegion, object: THREE.Object3D, a: number):
   }
 }
 
-/** The under-panel: the panel's vertices on the body painted to primer (or back to their rest tone), by the paint's `primer` attribute. */
+/**
+ * The under-panel: the panel's vertices on the body turned to unpainted inner panel, the dark steel a torn panel bares (or back to their
+ * rest tone), by the paint's `primer` attribute. A vertex darker still at rest (a well's own tone) keeps it.
+ */
 export function setPrimer(r: PanelRegion, body: THREE.BufferGeometry, on: boolean): void {
   const attr = body.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
-  for (let k = 0; k < r.verts.length; k++) attr.setX(r.verts[k]!, on ? 1 : r.rest[k]!);
+  for (let k = 0; k < r.verts.length; k++) attr.setX(r.verts[k]!, on ? Math.max(INNER_PANEL, r.rest[k]!) : r.rest[k]!);
   attr.needsUpdate = true;
 }

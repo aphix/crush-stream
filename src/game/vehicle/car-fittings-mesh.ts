@@ -120,7 +120,8 @@ function scoopGeometries(b: HoodBulge, scoop: HoodScoop, style: BodyStyle): THRE
 export function withHoodBulge(hood: THREE.BufferGeometry, style: BodyStyle): THREE.BufferGeometry {
   const b = style.hood.bulge;
   if (!b) return hood;
-  const parts = [withTone(hood, PRIMER_ATTRIBUTE, 0), bulgeGeometry(b, style)];
+  // The lid keeps its own tones (its underside is an unpainted inner panel); only a lid built without them is painted through.
+  const parts = [hood.hasAttribute(PRIMER_ATTRIBUTE) ? hood : withTone(hood, PRIMER_ATTRIBUTE, 0), bulgeGeometry(b, style)];
   if (b.scoop) parts.push(...scoopGeometries(b, b.scoop, style));
   return markSkinDynamic(merged(parts, "hood bulge"));
 }

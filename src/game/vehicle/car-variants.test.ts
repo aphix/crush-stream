@@ -1242,6 +1242,29 @@ describe("given a body style's P1 parts", () => {
     assert.ok(cageHash(deckStyle) === cageHash(plainStyle) && cageHash(gateStyle) === cageHash(hatchback), "the cage builds are unchanged");
   });
 
+  it("when a deck lid is flush, then its edge seats on the deck edge like the hood's, lower and wider than the plain lid's step, its crown unchanged, and the cage builds are unchanged", () => {
+    const { coupe } = CAR_STYLES;
+    const bareDeck = { ...coupe.boot, flush: undefined };
+    const deck = coupe.boot;
+    assert.ok(deck.kind === "lid", "the coupe has a deck lid");
+    const plainStyle: BodyStyle = { ...coupe, boot: bareDeck };
+    const flushStyle: BodyStyle = { ...coupe, boot: { ...bareDeck, flush: true } };
+    const z = lerp(deck.z0, deck.z1, 0.5) - deck.origin[1];
+    const edgeAt = (g: THREE.BufferGeometry) => {
+      const pos = g.getAttribute("position");
+      let [w, y, crown] = [0, -Infinity, -Infinity];
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) - z) < 1e-6) [w, crown] = [Math.max(w, Math.abs(pos.getX(i))), Math.max(crown, pos.getY(i))];
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) - z) < 1e-6 && Math.abs(pos.getX(i)) > w - 1e-6) y = Math.max(y, pos.getY(i));
+      return { w, y, crown };
+    };
+    const [plain, flush] = [plainStyle, flushStyle].map((s) => edgeAt(makeTrunkGeometry(s)));
+    assert.ok(plain!.w > 0 && flush!.w > 0, "the control: both lids have a ring at mid deck");
+    assert.ok(plain!.y - flush!.y > 0.005, `the flush lid's edge (${flush!.y.toFixed(4)}) sits over 5 mm under the plain lid's step (${plain!.y.toFixed(4)})`);
+    assert.ok(flush!.w > plain!.w, `the flush lid runs out to the deck edge (half-width ${flush!.w.toFixed(4)} against ${plain!.w.toFixed(4)})`);
+    assertSameNumbers([flush!.crown], [plain!.crown], "the lid's crown", 1e-6);
+    assert.ok(cageHash(flushStyle) === cageHash(plainStyle), "the cage builds are unchanged");
+  });
+
   it("when a roof carries rails, then two dark rails stand on it between their |x| and z ends, their tops their rise over the roof at their inner edge, and the cage builds are unchanged", () => {
     const rails = { x: [0.45, 0.5], z: [-0.6, 0.4], rise: 0.04 } as const;
     const { style, body, from, all, dark } = roofParts({ rails });
@@ -1598,7 +1621,8 @@ describe("given a body style's P2 parts", () => {
     const batch = new LampBatch(2);
     batch.sync([car]);
     const got = new THREE.Matrix4();
-    batch.meshes[7]!.getMatrixAt(0, got);
+    const lidDraws = batch.slots[7]!;
+    lidDraws[lidDraws.length === 1 ? 0 : lid.variant]!.getMatrixAt(0, got);
     for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!) < 1e-6, `the opened lid's pose, element ${k}`);
   });
 
@@ -1967,7 +1991,8 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       for (const [wx, wy, wz] of carFrame(style).wheels) {
         const s = Math.sign(wx);
         let proud = 0;
-        for (let k = 0; k <= 10; k++) {
+        // From a tenth of its width over the opening's edge: on the edge itself the lip-less body's side turns in under it.
+        for (let k = 1; k <= 10; k++) {
           const y = wy + style.arch.radius + (k / 10) * lip.width;
           const out = (mesh: THREE.Mesh) => Math.abs(bodyHit(mesh, [s * 3, y, wz], [-s, 0, 0], 3)?.x ?? 0);
           proud = Math.max(proud, out(drawn) - out(plain));
@@ -2106,5 +2131,31 @@ describe("given a pull handle for a style's side details", () => {
       assert.ok(turn <= 35, `the outline turns ${turn.toFixed(1)}° at point ${i}: a corner, not a rounded end`);
     }
     assert.ok(bar !== undefined && bar.profile === "u" && bar.depth > 0 && bar.points.every(([z, py]) => py === y && z >= z1 && z <= z0), "a raised rounded bar inside the pocket, along its middle");
+  });
+});
+
+describe("given a style with chrome window trim", () => {
+  it("when its car is built, then a chrome bead rides each door at its glass's seat and one more the body, standing proud of the door glass, and a style without trim draws none", () => {
+    const chrome = trimMaterial(TRIM_CHROME, "chrome");
+    const trims = (car: DeformableCar) => {
+      const found: THREE.Mesh[] = [];
+      car.group.traverse((o) => void (o instanceof THREE.Mesh && o.name === "windowTrim" && found.push(o)));
+      return found;
+    };
+    assert.ok(trims(cars.coupe).every((m) => m.material === chrome), "every trim mesh wears the shared chrome");
+    const coupe = cars.coupe;
+    const parents = trims(coupe).map((m) => m.parent);
+    assert.equal(parents.length, 3, "three trim meshes: two doors and the body");
+    assert.ok(parents.includes(coupe["doorL"]) && parents.includes(coupe["doorR"]) && parents.includes(coupe.group), "one on each door, one on the body");
+    for (const door of [coupe["doorL"], coupe["doorR"]]) {
+      const trim = trims(coupe).find((m) => m.parent === door)!;
+      const pane = coupe["glassPanes"].find((g) => g.mesh.parent === door)!.mesh;
+      assert.ok(trim.position.equals(pane.position), "the door's trim sits at its glass's seat");
+      trim.geometry.computeBoundingBox();
+      pane.geometry.computeBoundingBox();
+      const out = (b: THREE.Box3) => Math.max(Math.abs(b.min.x), Math.abs(b.max.x));
+      assert.ok(out(trim.geometry.boundingBox!) > out(pane.geometry.boundingBox!), "the trim stands proud of the glass");
+    }
+    assert.equal(trims(cars.sedan).length, 0, "the control: a style without trim draws none");
   });
 });

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { hypot2 } from "../kernel/physics-core.js";
-import { INSTANCE_PART_VARIANT_ATTRIBUTE, lampEmissiveMap, makeLampUnit, withPartVariants, type LampKind } from "./car-materials.ts";
-import { brakeLampUnit, lampBatchGeometry, sideMarkerUnit } from "./part-variants.ts";
+import { lampEmissiveMap, makeLampUnit, type LampKind } from "./car-materials.ts";
+import { brakeLampUnit, lampBatchGeometries, sideMarkerUnit } from "./part-variants.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 
 /**
@@ -11,25 +11,26 @@ import { activeGround, NO_FLOOR } from "../world/ground.ts";
  */
 export interface LampPool {
   readonly spots: number;
-  readonly points: number;
+  readonly tails: number;
 }
-export const FULL_POOL: LampPool = { spots: 4, points: 4 };
-export const PHONE_POOL: LampPool = { spots: 2, points: 2 };
+export const FULL_POOL: LampPool = { spots: 4, tails: 4 };
+export const PHONE_POOL: LampPool = { spots: 2, tails: 2 };
 /** The pool a device links its programs with: the full one on a desktop or with `?lamps=full` (the A/B arm), else the phone's (every lit fragment loops over every light). */
 export const lampPoolFor = (desktop: boolean, lampsParam: string | null): LampPool => (desktop || lampsParam === "full" ? FULL_POOL : PHONE_POOL);
 
 /** Headlamp spot (exported for the fade tests: a lamp at weight 1 shows `intensity`). */
 export const HEAD = { color: 0xfff1d8, intensity: 40, distance: 22, angle: 0.5, penumbra: 0.55, decay: 2 };
-const TAIL = { color: 0xff2414, intensity: 0.5, distance: 2.5, decay: 2 };
+/** A tail lamp lights only the half-space behind its lens (a 90° cone): as a point light it reached forward through the glass into the
+ *  cabin and over the bed floor, a red glow the references never show. */
+const TAIL = { color: 0xff2414, intensity: 0.5, distance: 2.5, decay: 2, angle: Math.PI / 2, penumbra: 0.3 };
 /** A lit siren washes the car and the road round it; it outranks every tail lamp but the followed car's (`SIREN_RANK`). It sits
  *  `out` m over the lens: closer, it blew the lens itself out to orange under ACES (first cut: 6 at 0.3 m). */
 const SIREN = { red: 0xff1810, blue: 0x2848ff, intensity: 3, distance: 8, out: 0.8 };
 /** Headlamp aim: a point AIM m ahead dipped DIP m (≈5°), so the beam pools on the road. */
 const AIM = 10;
 const DIP = 0.9;
-/** Offsets along the lamp axis from its seat on the skin (the lens face is at +0.045, `makeLampUnit`):
- *  the tail light washes the bumper and road rather than the boot floor; the glow sprite clears the lens. */
-const TAIL_OUT = 0.5;
+/** The tail cone's apex sits this far (m) behind the lamp's seat on the skin, so the lens and the skin round it face away from it. */
+const TAIL_SINK = 0.02;
 /** Glow sprite world size (m). */
 const GLOW_SIZE = 0.7;
 const GLOW_OUT = 0.1;
@@ -208,12 +209,13 @@ const NO_FADE: LampFade = { w: new Float32Array(0), act: new Uint8Array(0) };
  * the middle of the view and the camera, and back as it leaves. The fixed light pools go to the best-ranked lamps: the followed car
  * (weight 1), then the cars of the clip being played (1), then (desktop) any lamp by how central and near it is (`realness`). A
  * lamp is only handed a pooled light when one is free, and gives it back when its weight is back at 0, so no lit light is ever
- * swapped for another. White spots for headlamps, short red points for tail lamps; a lit police siren takes a point too, recoloured
+ * swapped for another. White spots for headlamps, short red half-space spots for tail lamps; a lit police siren takes a tail spot too, recoloured
  * red or blue (colour and range are uniforms: the lights hash never changes) and cutting the weakest tail lamp if need be.
  */
 export class LampLights {
   readonly spots: THREE.SpotLight[] = [];
-  readonly points: THREE.PointLight[] = [];
+  /** Tail lamps' and sirens' lights. */
+  readonly tailSpots: THREE.SpotLight[] = [];
   readonly glow: THREE.Points;
   private readonly glowPos: THREE.BufferAttribute;
   private readonly glowCol: THREE.BufferAttribute;
@@ -241,16 +243,16 @@ export class LampLights {
 
   constructor(scene: THREE.Scene, maxLamps: number, pool: LampPool = FULL_POOL) {
     this.heads = new Ranking(pool.spots);
-    this.tails = new Ranking(pool.points);
+    this.tails = new Ranking(pool.tails);
     for (let i = 0; i < pool.spots; i++) {
       const s = new THREE.SpotLight(HEAD.color, 0, HEAD.distance, HEAD.angle, HEAD.penumbra, HEAD.decay);
       scene.add(s, s.target);
       this.spots.push(s);
     }
-    for (let i = 0; i < pool.points; i++) {
-      const p = new THREE.PointLight(TAIL.color, 0, TAIL.distance, TAIL.decay);
-      scene.add(p);
-      this.points.push(p);
+    for (let i = 0; i < pool.tails; i++) {
+      const s = new THREE.SpotLight(TAIL.color, 0, TAIL.distance, TAIL.angle, TAIL.penumbra, TAIL.decay);
+      scene.add(s, s.target);
+      this.tailSpots.push(s);
     }
     const geo = new THREE.BufferGeometry();
     this.glowPos = new THREE.BufferAttribute(new Float32Array(maxLamps * 3), 3).setUsage(THREE.DynamicDrawUsage);
@@ -396,14 +398,14 @@ export class LampLights {
   }
 
   /**
-   * Settle the real lights of one kind (`head`: spots, else points) and every lamp's weight for this frame. A lamp's weight slews
+   * Settle the real lights of one kind (`head`: spots, else tail spots) and every lamp's weight for this frame. A lamp's weight slews
    * towards its target over `FADE_S`; a lamp holds a pooled light (`act`) from the frame it is admitted at weight 0 until its weight
    * is back at 0, and a lamp is only admitted into a free light (never over a lit one), best-ranked first. Lights are packed best-first,
-   * unused ones at intensity 0. A siren takes its point at once, cutting the weakest tail lamps if it must.
+   * unused ones at intensity 0. A siren takes its tail spot at once, cutting the weakest tail lamps if it must.
    */
   private settle(head: boolean, ns: number): void {
     const rank = head ? this.heads : this.tails;
-    const lights = head ? this.spots.length : this.points.length;
+    const lights = head ? this.spots.length : this.tailSpots.length;
     const { want, stashFade, stashIdx, stashHead, stashScore, stashQ } = this;
     const kindOf = head ? 1 : 0;
     let cap = lights;
@@ -461,7 +463,7 @@ export class LampLights {
     for (let s = 0; s < ns; s++) if (stashHead[s] === kindOf && want[s] === 0 && stashFade[s]!.act[stashIdx[s]!] === 1) this.seatStashed(head, j++, s);
     for (; j < lights; j++) {
       if (head) this.spots[j]!.intensity = 0;
-      else this.points[j]!.intensity = 0;
+      else this.tailSpots[j]!.intensity = 0;
     }
   }
 
@@ -481,9 +483,12 @@ export class LampLights {
       s.intensity = HEAD.intensity * w;
       return;
     }
-    const l = this.points[j]!;
+    const l = this.tailSpots[j]!;
     const tail = kind === "tail";
-    l.position.copy(_pos).addScaledVector(_dir, tail ? TAIL_OUT : SIREN.out);
+    // A siren's spot hangs over its lens and points straight down: the same half-space a point there lit below it.
+    if (tail) l.position.copy(_pos).addScaledVector(_dir, -TAIL_SINK);
+    else l.position.copy(_pos).addScaledVector(_dir, SIREN.out);
+    l.target.position.copy(l.position).addScaledVector(_dir, tail ? 1 : -1);
     l.color.setHex(tail ? TAIL.color : kind === "red" ? SIREN.red : SIREN.blue);
     l.distance = tail ? TAIL.distance : SIREN.distance;
     l.intensity = tail ? TAIL.intensity * w : SIREN.intensity;
@@ -556,7 +561,7 @@ export class LampLights {
   }
 
   dispose(): void {
-    for (const l of [...this.spots, ...this.points]) l.dispose();
+    for (const l of [...this.spots, ...this.tailSpots]) l.dispose();
     const mat = this.glow.material as THREE.PointsMaterial;
     mat.map?.dispose();
     mat.dispose();
@@ -662,20 +667,19 @@ function seatShown(seat: THREE.Object3D): boolean {
 }
 
 /**
- * Every car's lamp units as four instanced draws (head / tail × lit / broken) instead of four meshes per car. A car
- * keeps a bare Object3D per lamp that it seats on the skin, parented to the class lift but out of the scene graph; `sync`
- * brings each shown seat's world matrix current from the lift's and copies it into the batch for the lamp's kind and state.
- * Styles that draw their own lamps (`lamps.shapes`) are variants in the same draws (`withPartVariants`); brake lamps, side markers
- * and the lamps' shares on the hood and boot lid take four more, drawn only while a car on screen has them.
+ * Every car's lamp units as instanced draws (head / tail × lit / broken) instead of four meshes per car. A car keeps a bare Object3D per
+ * lamp that it seats on the skin, parented to the class lift but out of the scene graph; `sync` brings each shown seat's world matrix
+ * current from the lift's and copies it into the draw for the lamp's kind, state and unit variant (styles that draw their own lamps,
+ * `lamps.shapes`, take a draw per variant; an empty one issues no draw call). Brake lamps, side markers and the lamps' shares on the
+ * hood and boot lid take more, drawn only while a car on screen has them.
  */
 export class LampBatch {
-  /** Head lit, head broken, tail lit, tail broken, brake, marker, the heads on the hood, the tails on the boot lid. */
+  /** Every draw, for the scene. */
   readonly meshes: readonly THREE.InstancedMesh[];
-  private readonly n = [0, 0, 0, 0, 0, 0, 0, 0];
-  /** Per mesh, its instances' unit variants; null where every unit is the platform's (and for the fittings). */
-  private readonly variants: (THREE.InstancedBufferAttribute | null)[] = [];
-  /** Per mesh, the per-instance attributes a sync uploads. */
-  private readonly uploads: THREE.BufferAttribute[][] = [];
+  /** Per slot (head lit, head broken, tail lit, tail broken, brake, marker, the heads on the hood, the tails on the boot lid), its draws by variant. */
+  readonly slots: readonly (readonly THREE.InstancedMesh[])[];
+  /** Per slot and variant, the instances packed this sync. */
+  private readonly n: Int32Array[];
   /** Geometries the batch built (the fittings' are shared). */
   private readonly own: THREE.BufferGeometry[] = [];
 
@@ -683,43 +687,26 @@ export class LampBatch {
     const mat = (look: (typeof LAMP_LOOK)[keyof typeof LAMP_LOOK]) =>
       new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.25, emissiveMap: lampEmissiveMap(), ...look });
     const plain = { head: mat(LAMP_LOOK.head), tail: mat(LAMP_LOOK.tail), broken: mat(LAMP_LOOK.broken) };
-    const meshes: THREE.InstancedMesh[] = [];
-    const add = (geo: THREE.BufferGeometry, m: THREE.Material, count: number, variants: THREE.InstancedBufferAttribute | null) => {
-      const mesh = new THREE.InstancedMesh(geo, m, count);
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      // Instances span the pad and move every frame; a stale bound would cull live lamps.
-      mesh.frustumCulled = false;
-      mesh.count = 0;
-      meshes.push(mesh);
-      this.variants.push(variants);
-      this.uploads.push(variants ? [mesh.instanceMatrix, variants] : [mesh.instanceMatrix]);
-    };
+    const slots: THREE.InstancedMesh[][] = [];
     for (const kind of ["head", "tail"] as const) {
-      // Lit and broken pack their own instances: a styled kind's two meshes each own a geometry for its per-instance variants.
-      const styled = [lampBatchGeometry(kind, capacity), lampBatchGeometry(kind, capacity)];
-      const shared = styled[0] ? null : makeLampUnit(kind);
-      for (const [k, look] of (["lit", "broken"] as const).entries()) {
-        const geo = styled[k] ?? shared!;
-        const m = look === "lit" ? plain[kind] : plain.broken;
-        add(geo, styled[k] ? withPartVariants(m.clone()) : m, capacity, styled[k] ? (geo.getAttribute(INSTANCE_PART_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute) : null);
-      }
-      this.own.push(...(shared ? [shared] : (styled as THREE.BufferGeometry[])));
+      const geos = lampBatchGeometries(kind) ?? [makeLampUnit(kind)];
+      this.own.push(...geos);
+      for (const m of [plain[kind], plain.broken]) slots.push(geos.map((geo) => lampDraw(geo, m, capacity)));
     }
-    add(brakeLampUnit(), plain.tail, capacity, null);
-    add(sideMarkerUnit(), plain.head, capacity * 2, null);
+    slots.push([lampDraw(brakeLampUnit(), plain.tail, capacity)], [lampDraw(sideMarkerUnit(), plain.head, capacity * 2)]);
     for (const [slot, look] of [["hood", plain.head], ["boot", plain.tail]] as const) {
-      const styled = lampBatchGeometry(slot, capacity);
-      const geo = styled ?? new THREE.BufferGeometry();
-      add(geo, styled ? withPartVariants(look.clone()) : look, capacity, styled ? (styled.getAttribute(INSTANCE_PART_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute) : null);
-      this.own.push(geo);
+      const geos = lampBatchGeometries(slot) ?? [new THREE.BufferGeometry()];
+      this.own.push(...geos);
+      slots.push(geos.map((geo) => lampDraw(geo, look, capacity)));
     }
-    this.meshes = meshes;
+    this.slots = slots;
+    this.meshes = slots.flat();
+    this.n = slots.map((s) => new Int32Array(s.length));
   }
 
   /** Pack the shown lamps of `cars` (the cars' own world matrices must be current). A seat off layer 0 (distance detail) is hidden. */
   sync(cars: readonly LampCar[]): void {
-    const n = this.n;
-    n.fill(0);
+    for (const c of this.n) c.fill(0);
     for (const car of cars) {
       for (const l of car.lamps) {
         if (!seatShown(l.seat)) continue;
@@ -727,24 +714,27 @@ export class LampBatch {
       }
       for (const f of car.lampFittings) if (seatShown(f.seat)) this.put(FITTING_MESH[f.kind], f.seat, f.variant);
     }
-    for (let b = 0; b < this.meshes.length; b++) {
-      this.meshes[b]!.count = n[b]!;
-      for (const attr of this.uploads[b]!) {
-        attr.clearUpdateRanges();
-        attr.addUpdateRange(0, n[b]! * attr.itemSize);
-        attr.needsUpdate = true;
+    for (let b = 0; b < this.slots.length; b++) {
+      for (let v = 0; v < this.slots[b]!.length; v++) {
+        const mesh = this.slots[b]![v]!;
+        const n = this.n[b]![v]!;
+        mesh.count = n;
+        mesh.instanceMatrix.clearUpdateRanges();
+        mesh.instanceMatrix.addUpdateRange(0, n * 16);
+        mesh.instanceMatrix.needsUpdate = true;
       }
     }
   }
 
   private put(b: number, seat: THREE.Object3D, variant: number): void {
-    const mesh = this.meshes[b]!;
-    const i = this.n[b]!;
+    const draws = this.slots[b]!;
+    const v = draws.length === 1 ? 0 : variant;
+    const mesh = draws[v]!;
+    const i = this.n[b]![v]!;
     if (i >= mesh.instanceMatrix.count) return;
     seat.updateWorldMatrix(false, false);
     mesh.setMatrixAt(i, seat.matrixWorld);
-    this.variants[b]?.setX(i, variant);
-    this.n[b] = i + 1;
+    this.n[b]![v] = i + 1;
   }
 
   dispose(): void {
@@ -752,4 +742,14 @@ export class LampBatch {
     for (const m of new Set(this.meshes.map((mesh) => mesh.material as THREE.Material))) m.dispose();
     for (const m of this.meshes) m.dispose();
   }
+}
+
+/** One instanced lamp draw of `geo` in `m` for `capacity` instances. */
+function lampDraw(geo: THREE.BufferGeometry, m: THREE.Material, capacity: number): THREE.InstancedMesh {
+  const mesh = new THREE.InstancedMesh(geo, m, capacity);
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  // Instances span the pad and move every frame; a stale bound would cull live lamps.
+  mesh.frustumCulled = false;
+  mesh.count = 0;
+  return mesh;
 }

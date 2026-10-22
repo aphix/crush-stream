@@ -20,7 +20,9 @@ const SHARED_LINES: readonly Line[] = [
   { view: "side", points: [[-1.05, 0.95], [-1.086, 0.86], [-1.085, 0.8], [-1.056, 0.75], [-1, 0.66], [-0.94, 0.59], [-0.9, 0.505], [-0.84, 0.4], [-0.795, 0.3], [-0.77, 0.26]], ...GAP },
   { view: "side", points: [[-0.77, 0.255], [-0.5, 0.252], [-0.22, 0.25]], ...GAP },
   { view: "side", points: [[1.52, 0.7], [1.37, 0.742], [1.2, 0.786], [1.02, 0.816], [0.84, 0.83], [0.73, 0.835]], ...CREASE },
-  { view: "side", points: [[0.73, 0.85], [0.4, 0.86], [0, 0.875], [-0.22, 0.89], [-0.6, 0.9], [-0.9, 0.92], [-1.06, 0.93]], ...CREASE },
+  // The shoulder along both doors: the reference's highlight peaks at y ~0.82, level from the front door to the rear one (silver-sedan-1.png,
+  // 70.1 px/m), 8 cm under the glass; it meets the front fender's crease at the door's front edge and the quarter's behind the rear door.
+  { view: "side", points: [[0.73, 0.835], [0.4, 0.828], [0, 0.822], [-0.5, 0.825], [-0.9, 0.84], [-1.09, 0.855]], ...CREASE },
   { view: "side", points: [[-1.06, 0.945], [-1.3, 0.94], [-1.5, 0.935], [-1.7, 0.94], [-1.9, 0.95], [-2, 0.955]], ...CREASE },
   { view: "side", points: [[-1.09, 0.855], [-1.3, 0.85], [-1.5, 0.85], [-1.7, 0.855]], ...CREASE },
   { view: "side", points: [[0.72, 0.405], [0.4, 0.395], [0, 0.385], [-0.22, 0.385], [-0.5, 0.385], [-0.75, 0.39]], ...CREASE, profile: "step", depth: -0.003 },
