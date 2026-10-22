@@ -151,14 +151,20 @@ node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
 - Not read: hood, arch, rocker, boot, `rideHeight`, `cabinHw`, `bPillar`, `quarter`, mirrors, the bumper fascia and span, and the
   door's hinge y and z, length and aperture.
 
-**`landing-shots.mjs`: the landing gate's eight shots.** For side, top, iso and rear-iso, the car alone (`ours`: the real engine in
-the garage at the high tier over a white backdrop, through headless-frame) and the car over its reference (`overlay`: trace-car),
-both through one camera spec (`trace-camera.mjs`), so each pair lines up pixel for pixel and every car is framed the same way:
+**`landing-shots.mjs`: the landing gate's shots.** For side, top, iso and rear-iso, the car alone (`ours`: the real engine in
+the garage at the high tier over a white backdrop, through headless-frame), the car over its reference (`overlay`: trace-car) and
+the two side by side (`pair`: the reference alone left, ours right), all through one camera spec (`trace-camera.mjs`) on one
+canvas, so they line up pixel for pixel and every car is framed the same way:
 
 ```sh
 CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
-  scripts/landing-shots.mjs --root <tree> --car <style> [--paint]   # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay}.png
+  scripts/landing-shots.mjs --root <tree> --car <style> [--paint]   # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay,pair}.png
 ```
+
+- Build side-by-sides only this way: a pair cropped or scaled per half (each to its own bounding box) misregisters. Each pair
+  marks the reference's wheels (yellow crosses: the iso picks, the side picture's tyre contacts) and where the engine drew ours
+  (magenta rings) on both halves. A wheel more than 5 reference pixels off, or a pair with nothing to register by (an iso with no
+  picks, a side picture whose tyres were not found), turns the label red and the exit nonzero. The top view is not registered.
 
 - Each car's `scripts/landing-views/<style>.json` holds its references, its iso crops (cut from the lineups; widen one that
   clips its car) and its iso cameras. Side and top are orthographic, spanned on the reference's bumper tips at the spec length,

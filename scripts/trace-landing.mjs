@@ -19,7 +19,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as THREE from "three";
-import { ViewPort, alphaMask, composeShot } from "./trace-core.mjs";
+import { ViewPort, alphaMask, composeShot, writePlate } from "./trace-core.mjs";
 import { iou, labelRegions, maskBox, round } from "./trace-metrics.mjs";
 import { refLayers, refPlate } from "./trace-ref.mjs";
 import { makeCamera, perspectiveSpec, project, solveCamera } from "./trace-camera.mjs";
@@ -102,9 +102,10 @@ function largestOnly(layers, W, H) {
 /**
  * An iso view of the stage's car over `ref` (a crop, or null): with the entry's stored camera the reference stands at its own scale
  * and the wheels' error is measured; without one, the brief's framing and the reference scaled to the car (a rough guide).
- * `solve`: fit the camera to the picked wheels first and store it. Writes the overlay to `out`; returns the fit and the camera spec.
+ * `solve`: fit the camera to the picked wheels first and store it. Writes the overlay to `out` (and the reference alone on the same
+ * canvas to `plateOut`, when given); returns the fit, the camera spec and the canvas pixels per crop pixel (`zoom`).
  */
-export async function isoTrace(game, stage, dims, ref, view, { style, entry, solve, lift, out }) {
+export async function isoTrace(game, stage, dims, ref, view, { style, entry, solve, lift, out, plateOut }) {
   const canvas = ref === null ? { W: ISO_SIZE[0], H: ISO_SIZE[1], pad: 0, at: (p) => p } : isoCanvas(ref);
   const { W, H } = canvas;
   const port = new ViewPort(game, W, H);
@@ -122,8 +123,9 @@ export async function isoTrace(game, stage, dims, ref, view, { style, entry, sol
   for (const set of [wheels, landmarks]) if (set) drawPicks(shot.ctx, set.points);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, await shot.canvas.encode("png"));
+  if (plateOut !== undefined && layers !== null) await writePlate(game, W, H, layers.plate, plateOut);
   const aligned = stored ? "stored camera" : ref === null ? "no reference" : "rough: no stored camera (pick wheels, then --solve)";
-  return { png: out, size: `${W}x${H}`, aligned, iou: layers && iou(carSil, layers.sil), wheels, landmarks, shadowPx: layers?.shadowPx ?? 0, camera: spec, glError };
+  return { png: out, size: `${W}x${H}`, zoom: ISO_ZOOM, aligned, iou: layers && iou(carSil, layers.sil), wheels, landmarks, shadowPx: layers?.shadowPx ?? 0, camera: spec, glError };
 }
 
 function nativeLayers(game, ref, canvas) {
@@ -154,7 +156,7 @@ function pickError(spec, picks, canvas) {
     const drawn = project(spec, point);
     const picked = canvas.at(pixel);
     const drawnCrop = [round(drawn[0] / ISO_ZOOM - canvas.pad, 1), round(drawn[1] / ISO_ZOOM - canvas.pad, 1)];
-    return { name, picked: pixel, drawn: drawnCrop, errPx: round(Math.hypot(drawn[0] - picked[0], drawn[1] - picked[1]) / ISO_ZOOM, 1), at: [picked, drawn] };
+    return { name, picked: pixel, drawn: drawnCrop, errPx: round(Math.hypot(drawn[0] - picked[0], drawn[1] - picked[1]) / ISO_ZOOM, 1), canvas: [round(picked[0], 1), round(picked[1], 1)], at: [picked, drawn] };
   });
   const e = points.map((p) => p.errPx);
   return { rmsPx: round(Math.sqrt(e.reduce((s, x) => s + x * x, 0) / e.length), 1), maxPx: Math.max(...e), points };
