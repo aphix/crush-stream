@@ -212,6 +212,14 @@ const FLAKE_FADE_START_M = 1.5;
 const FLAKE_FADE_END_M = 5;
 const TRIM_FADE_START_M = 4;
 const TRIM_FADE_END_M = 16;
+/**
+ * The peel is drawn 50 times its real relief so it survives the pixel at play distance; up close, where its 15 mm waves span many
+ * pixels, that relief reads as hammered metal, so it keeps `PEEL_NEAR_SHARE` of its height nearer than `PEEL_NEAR_M`, rising to the
+ * full tuned height at `PEEL_FULL_M` (the distance it was tuned at). Tuned from shots.
+ */
+const PEEL_NEAR_SHARE = 0.25;
+const PEEL_NEAR_M = 2;
+const PEEL_FULL_M = 4.5;
 /** Furthest any pixel of a finish mesh lies from its origin (m): a car is ~2.6 m corner to middle, the rest is crush and loose-panel slack. */
 const FINISH_MESH_REACH_M = 4;
 /** The weight of each plane is |object normal| to this power, normalised: 4 keeps a plane's blend to the corners where two planes meet. */
@@ -239,7 +247,8 @@ vec3 finishHeights(vec3 p, vec3 w) {
   return heights;
 }
 const vec3 finishFadeStart = vec3(${glslFloat(WAVE_FADE_START_M)}, ${glslFloat(PEEL_FADE_START_M)}, ${glslFloat(FLAKE_FADE_START_M)});
-const vec3 finishFadeEnd = vec3(${glslFloat(WAVE_FADE_END_M)}, ${glslFloat(PEEL_FADE_END_M)}, ${glslFloat(FLAKE_FADE_END_M)});`;
+const vec3 finishFadeEnd = vec3(${glslFloat(WAVE_FADE_END_M)}, ${glslFloat(PEEL_FADE_END_M)}, ${glslFloat(FLAKE_FADE_END_M)});
+const vec3 finishNearShare = vec3(1.0, ${glslFloat(PEEL_NEAR_SHARE)}, 1.0);`;
 
 /** The same three outputs for the trim: only the peel slot carries the grain. */
 const TRIM_HEIGHTS = /* glsl */ `
@@ -250,7 +259,8 @@ vec3 finishHeights(vec3 p, vec3 w) {
   return vec3(0.0, (grain - 0.5) * ${glslFloat(TRIM_GRAIN_HEIGHT_M)}, 0.0);
 }
 const vec3 finishFadeStart = vec3(${glslFloat(TRIM_FADE_START_M)});
-const vec3 finishFadeEnd = vec3(${glslFloat(TRIM_FADE_END_M)});`;
+const vec3 finishFadeEnd = vec3(${glslFloat(TRIM_FADE_END_M)});
+const vec3 finishNearShare = vec3(1.0);`;
 
 /**
  * Mikkelsen's screen-space bump (three's `perturbNormalArb`, bump_pars_fragment) on `surfaceNormal` (view space): the height
@@ -282,7 +292,8 @@ vec3 finishPerturbedNormal(vec3 surfaceNormal, vec2 heightSlope, float faceDirec
 
 /**
  * After the clear coat's normal is declared, unless every layer has faded on every pixel of the draw: each layer's height step one
- * pixel right and down (`dFdx` / `dFdy` of the triplanar heights: one sample set a pixel, not three), faded by view distance, then
+ * pixel right and down (`dFdx` / `dFdy` of the triplanar heights: one sample set a pixel, not three), faded by view distance (the peel
+ * also held to its near share up close), then
  * the base layer's normal takes waviness, peel and flake, and the clear coat's takes waviness and peel only (the peel lives in the
  * clear coat; the flake sits under it).
  */
@@ -291,7 +302,9 @@ if (finishMeshNear() < max(finishFadeEnd.x, max(finishFadeEnd.y, finishFadeEnd.z
   vec3 finishPoint = vFinishPos;
   vec3 finishWeights = finishPlaneWeights(normalize(vFinishNormal));
   vec3 finishHere = finishHeights(finishPoint, finishWeights);
-  vec3 finishFade = 1.0 - smoothstep(finishFadeStart, finishFadeEnd, vec3(length(vViewPosition)));
+  float finishDistance = length(vViewPosition);
+  vec3 finishFade = (1.0 - smoothstep(finishFadeStart, finishFadeEnd, vec3(finishDistance)))
+    * mix(finishNearShare, vec3(1.0), smoothstep(${glslFloat(PEEL_NEAR_M)}, ${glslFloat(PEEL_FULL_M)}, finishDistance));
   vec3 finishStepX = dFdx(finishHere) * finishFade;
   vec3 finishStepY = dFdy(finishHere) * finishFade;
   vec2 coatSlope = vec2(finishStepX.x + finishStepX.y, finishStepY.x + finishStepY.y);

@@ -6,8 +6,8 @@ import { CLASS_LIFT } from "./constants.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
 /**
- * Detail maps: a style's `details` (shut lines, creases, vents, grille bars) baked once into a height + cavity atlas with one tile
- * per view, drawn on the paint as a bump and a darkening at each pixel's rest point in the car frame, so a detail rides a crushed panel.
+ * Detail maps: a style's `details` (shut lines, creases, vents, grille bars) baked once into a height, cavity and slope atlas with one
+ * tile per view, drawn on the paint as a bump and a darkening at each pixel's rest point in the car frame, so a detail rides a crushed panel.
  */
 
 type Details = NonNullable<BodyStyle["details"]>;
@@ -25,6 +25,10 @@ const DETAIL_HEIGHT_MAX_M = 0.006;
 const HEIGHT_ZERO_BYTE = 128;
 const HEIGHT_STEPS = 127;
 const BYTE_MAX = 255;
+/** Bytes a texel: height, cavity and the height's slope along the tile's two axes (RGBA8; an RGB8 texture is padded to four on the GPU anyway). */
+const DETAIL_CHANNELS = 4;
+/** The slope cap (m/m): heights within ±6 mm two texels apart differ by at most 12 mm over 8 mm. */
+const DETAIL_SLOPE_MAX = (2 * DETAIL_HEIGHT_MAX_M) / (2 * DETAIL_TEXEL_M);
 /** A step's proud side falls back to the surface over this many stroke widths, so the step has no second edge where its band ends. */
 const STEP_SHOULDER_WIDTHS = 8;
 
@@ -242,17 +246,32 @@ function drawPatch(canvas: Canvas, tile: Tile, patch: DetailPatch): void {
   });
 }
 
-/** `details` baked for a car of `dims`: an RG8 atlas (R height about the middle byte, G cavity), its tiles' lookups written into `tiles` / `bounds`. */
+/**
+ * `details` baked for a car of `dims`: an RGBA8 atlas (R height about the middle byte, G cavity, B and A the height's slope along the
+ * tile's a and b axes from central differences of the float heights, square-root coded about the middle byte so a broad, shallow
+ * stroke's slope steps finely), its tiles' lookups written into `tiles` / `bounds`.
+ */
 function bakeDetailAtlas(details: Details, dims: BodyStyle["dims"], tiles: readonly THREE.Vector4[], bounds: readonly THREE.Vector4[]): THREE.DataTexture {
   const layout = tileLayout(dims);
   const { width, height } = layout;
   const canvas: Canvas = { heights: new Float32Array(width * height), cavities: new Float32Array(width * height), width };
   for (const line of details.lines) drawLine(canvas, layout.tiles[VIEWS.indexOf(line.view)]!, line);
   for (const patch of details.patches) drawPatch(canvas, layout.tiles[VIEWS.indexOf(patch.view)]!, patch);
-  const texels = new Uint8Array(width * height * 2);
-  for (let i = 0; i < width * height; i++) {
-    texels[2 * i] = Math.round(HEIGHT_ZERO_BYTE + clamp(canvas.heights[i]! / DETAIL_HEIGHT_MAX_M, -1, 1) * HEIGHT_STEPS);
-    texels[2 * i + 1] = Math.round(clamp01(canvas.cavities[i]!) * BYTE_MAX);
+  const texels = new Uint8Array(width * height * DETAIL_CHANNELS);
+  const h = canvas.heights;
+  const slopeByte = (rise: number) => {
+    const share = clamp(rise / (2 * DETAIL_TEXEL_M * DETAIL_SLOPE_MAX), -1, 1);
+    return Math.round(HEIGHT_ZERO_BYTE + Math.sign(share) * Math.sqrt(Math.abs(share)) * HEIGHT_STEPS);
+  };
+  for (let j = 0; j < height; j++) {
+    for (let i = 0; i < width; i++) {
+      const at = j * width + i;
+      const texel = DETAIL_CHANNELS * at;
+      texels[texel] = Math.round(HEIGHT_ZERO_BYTE + clamp(h[at]! / DETAIL_HEIGHT_MAX_M, -1, 1) * HEIGHT_STEPS);
+      texels[texel + 1] = Math.round(clamp01(canvas.cavities[at]!) * BYTE_MAX);
+      texels[texel + 2] = slopeByte(h[j * width + Math.min(i + 1, width - 1)]! - h[j * width + Math.max(i - 1, 0)]!);
+      texels[texel + 3] = slopeByte(h[Math.min(j + 1, height - 1) * width + i]! - h[Math.max(j - 1, 0) * width + i]!);
+    }
   }
   const reach = DETAIL_GUTTER_TEXELS - 0.5;
   for (let k = 0; k < VIEWS.length; k++) {
@@ -260,7 +279,7 @@ function bakeDetailAtlas(details: Details, dims: BodyStyle["dims"], tiles: reado
     tiles[k]!.set((t.x - t.a0 / DETAIL_TEXEL_M) / width, (t.y - t.b0 / DETAIL_TEXEL_M) / height, 1 / (DETAIL_TEXEL_M * width), 1 / (DETAIL_TEXEL_M * height));
     bounds[k]!.set((t.x - reach) / width, (t.y - reach) / height, (t.x + t.width + reach) / width, (t.y + t.height + reach) / height);
   }
-  const texture = new THREE.DataTexture(texels, width, height, THREE.RGFormat);
+  const texture = new THREE.DataTexture(texels, width, height, THREE.RGBAFormat);
   texture.generateMipmaps = true;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
@@ -276,22 +295,19 @@ uniform vec4 detailTiles[4];
 uniform vec4 detailBounds[4];
 varying vec3 vDetailPos;
 varying vec3 vDetailNormal;
-vec2 detailSample(vec4 tile, vec4 bounds, vec2 q) {
-  return texture2D(detailMap, clamp(tile.xy + q * tile.zw, bounds.xy, bounds.zw)).rg - vec2(${glslFloat(HEIGHT_ZERO_BYTE / BYTE_MAX)}, 0.0);
-}
-// A tile's height and cavity at q (xy) and its height's slope one pixel right and down (zw), from the texel differences along q: the
-// screen derivative of the filtered height is flat across each texel and steps between them, which draws a stroke as a sawtooth.
+// A tile's height and cavity at q (xy) and its height's slope one pixel right and down (zw), from the slope baked off the float heights:
+// a screen derivative of the filtered height steps at every texel (a sawtooth), and differences of 8-bit heights hammer a broad stroke.
 vec4 detailPlane(vec4 tile, vec4 bounds, vec2 q, vec2 qx, vec2 qy) {
-  vec2 here = detailSample(tile, bounds, q);
-  vec2 along = vec2(detailSample(tile, bounds, q + vec2(${glslFloat(DETAIL_TEXEL_M)}, 0.0)).r, detailSample(tile, bounds, q + vec2(0.0, ${glslFloat(DETAIL_TEXEL_M)})).r);
-  vec2 gradient = (along - here.r) / ${glslFloat(DETAIL_TEXEL_M)};
-  return vec4(here, dot(gradient, qx), dot(gradient, qy));
+  vec4 texel = texture2D(detailMap, clamp(tile.xy + q * tile.zw, bounds.xy, bounds.zw));
+  vec2 code = (texel.ba - ${glslFloat(HEIGHT_ZERO_BYTE / BYTE_MAX)}) * ${glslFloat(BYTE_MAX / HEIGHT_STEPS)};
+  vec2 gradient = code * abs(code) * ${glslFloat(DETAIL_SLOPE_MAX)};
+  return vec4(texel.r - ${glslFloat(HEIGHT_ZERO_BYTE / BYTE_MAX)}, texel.g, dot(gradient, qx), dot(gradient, qy));
 }`;
 
 /**
  * After the clear coat's normal, inside FinishLod's draw gate (`finishMeshNear`, so only with the finish on): the three view tiles
  * the rest normal faces blended as the finish's planes (the underside reads none), the cavity darkening the paint, and near enough
- * the height's slope (`detailPlane`'s texel differences) bending the base and coat normals.
+ * the height's slope (`detailPlane`'s baked slope) bending the base and coat normals.
  */
 const DETAIL_SURFACE = /* glsl */ `
 float detailCavity = 0.0;
@@ -311,7 +327,7 @@ if (detailNear < ${glslFloat(DETAIL_CAVITY_END_M)}) {
   detailCavity = detailTexel.g * (1.0 - smoothstep(${glslFloat(DETAIL_CAVITY_FADE_START_M)}, ${glslFloat(DETAIL_CAVITY_END_M)}, detailDistance));
   diffuseColor.rgb *= 1.0 - detailCavity;
   if (detailNear < ${glslFloat(DETAIL_BUMP_END_M)}) {
-    vec2 detailSlope = detailTexel.zw * ${glslFloat((BYTE_MAX / HEIGHT_STEPS) * DETAIL_HEIGHT_MAX_M)} * (1.0 - smoothstep(${glslFloat(DETAIL_BUMP_FADE_START_M)}, ${glslFloat(DETAIL_BUMP_END_M)}, detailDistance));
+    vec2 detailSlope = detailTexel.zw * (1.0 - smoothstep(${glslFloat(DETAIL_BUMP_FADE_START_M)}, ${glslFloat(DETAIL_BUMP_END_M)}, detailDistance));
     normal = finishPerturbedNormal(normal, detailSlope, faceDirection);
     #ifdef USE_CLEARCOAT
     clearcoatNormal = finishPerturbedNormal(clearcoatNormal, detailSlope, faceDirection);
