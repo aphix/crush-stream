@@ -447,9 +447,11 @@ export function wheelsAt(car: DeformableCar, within: number): number {
     // hub stands over across the whole drawn tread.
     const { r: tyreR, halfW } = car.frame.rig.tyre;
     wheelContact(_hub, _e, sc * (tyreR / PLATFORM_TYRE.r), sc * (halfW / PLATFORM_TYRE.halfW), car.slot, _hit);
-    TYRE_HUB.set(_hub, i * 3);
+    TYRE_HUB[i * 3] = _hub[0]!;
+    TYRE_HUB[i * 3 + 1] = _hub[1]!;
+    TYRE_HUB[i * 3 + 2] = _hub[2]!;
     TYRE_DIM[2 * i] = r;
-    TYRE_DIM[2 * i + 1] = car.frame.rig.tyre.halfW * sc;
+    TYRE_DIM[2 * i + 1] = halfW * sc;
     for (let k = 0; k < HIT_SIZE; k++) hit[o + k] = _hit[k]!;
     if (-_hit[C_TOUCH]! <= within && _hit[C_H]! > NO_FLOOR) mask |= 1 << i;
   }
@@ -476,6 +478,7 @@ export function readTyreSides(car: DeformableCar, n: number, stroke: number): nu
   const travel = v.length() * dt;
   const spring = (HUB_POP_MPS / stroke) ** 2;
   const wreck = car.deform.massActive;
+  unionTops(statics, travel);
   for (let i = 0; i < 4; i++) {
     const r = TYRE_DIM[2 * i]!;
     if (r === 0) continue;
@@ -484,8 +487,11 @@ export function readTyreSides(car: DeformableCar, n: number, stroke: number): nu
     const hy = TYRE_HUB[3 * i + 1]!;
     const hz = TYRE_HUB[3 * i + 2]!;
     const reach = r + half + travel;
-    const top = Math.max(solidTop(hx - reach, hx + reach, hz - reach, hz + reach), staticTop(statics, hx - reach, hx + reach, hz - reach, hz + reach));
-    if (top <= hy - r + STEP_MAX) continue;
+    const mount = hy - r + STEP_MAX;
+    // A surface whose bound over all four tyres' boxes (`unionTops`) is under this tyre's mount is under it over its own box too: not asked.
+    const solids = UNION_TOP[0]! <= mount ? -Infinity : solidTop(hx - reach, hx + reach, hz - reach, hz + reach);
+    const ground = UNION_TOP[1]! <= mount ? -Infinity : staticTop(statics, hx - reach, hx + reach, hz - reach, hz + reach);
+    if (Math.max(solids, ground) <= mount) continue;
     let over = 0;
     let ox = 0;
     let oz = 0;
@@ -527,6 +533,36 @@ export function readTyreSides(car: DeformableCar, n: number, stroke: number): nu
     if (over > 0) car.deform.shoveWheel(HUBS[i]!, ox * over, oz * over);
   }
   return n;
+}
+
+/** `unionTops`' bounds: the armed solids' and the static ground's, over the four tyres' boxes together. */
+const UNION_TOP = new Float64Array(2);
+
+/**
+ * Into `UNION_TOP`, the highest the armed solids and the static ground each stand over the four tyres' plan boxes taken together
+ * (`readTyreSides`' per tyre box): one raster read a surface instead of four, a bound that never falls as the box grows (`cellsOnly`),
+ * so a tyre whose mount stands over a surface's bound needs no read of its own of that surface. A car on open road asked 8 surface
+ * reads a slice for nothing; on a slope the downhill tyres still ask the ground their own.
+ */
+function unionTops(statics: Surface, travel: number): void {
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let z0 = Infinity;
+  let z1 = -Infinity;
+  for (let i = 0; i < 4; i++) {
+    const r = TYRE_DIM[2 * i]!;
+    if (r === 0) continue;
+    const reach = r + TYRE_DIM[2 * i + 1]! + travel;
+    const hx = TYRE_HUB[3 * i]!;
+    const hz = TYRE_HUB[3 * i + 2]!;
+    x0 = Math.min(x0, hx - reach);
+    x1 = Math.max(x1, hx + reach);
+    z0 = Math.min(z0, hz - reach);
+    z1 = Math.max(z1, hz + reach);
+  }
+  if (x0 === Infinity) return;
+  UNION_TOP[0] = solidTop(x0, x1, z0, z1, true);
+  UNION_TOP[1] = staticTop(statics, x0, x1, z0, z1, true);
 }
 
 /** How many of the wheels in `mask` stand on the world rather than on another car's top. */
