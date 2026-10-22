@@ -497,3 +497,22 @@ direction on a 7.6 m/s hit. Now a contact reading `HARDER_HIT` (1.5) times the a
   main 2.190 / 2.257 / 2.515 / 2.266 / 2.618 / 2.344 s; the re-arm alone 2.249 / 2.186 / 2.362 / 2.610 / 2.379 / 2.476 s; with both
   wake rules 2.249 / 2.186 / 2.362 / 3.158 / 2.379 / 2.476 s. In seed 4 the hatchback slept at 2.151 s. A pickup rocking at
   0.167 rad/s (rest is 0.163) within reach, not touching it, then woke it.
+
+### 12.14 A wreck rests on its nose or tail lip; a pitched pair meets as deep as its cages stand (CarRig rig-lip, REPLAY 158)
+
+The quadric decimation (`cage-mesh.ts` `decimate`) collapsed a nose lip's low points onto the rocker corner above them, so a wreck
+that lost a front wheel rested on that corner with the drawn lip 3 cm in the ground (hatchback 4.4, SUV 2.8). `holdUnderside` now
+holds, per side, each loft station's lowest point that lies on the lower convex hull of the side profile: the points a body on flat
+ground can stand on at some pitch.
+
+- **Over the budget, a wreck's alone.** Held inside the 220 `CAGE_VERTICES` they cost vertices elsewhere: an upside-down sedan lost
+  its cowl's sides and rested on the drawn A-pillar foot 7.3 cm in the ground (4.0 before). `decimate` therefore runs to its target
+  plus the points it held (`CAGE_HELD_VERTICES` of room, sedan 234 = 220 + 14), lays them last (`CageStyle.heldFrom`), and
+  `loadPoints` reads them only on a `massActive` car, as it does the sill samples.
+- **Pitched pair (`sat.ts` `endAt`).** A band whose end lands in a real column (`M_COLUMN`) standing short of the probe re-probes that
+  end, so a raised tail over a hood meets it as deep as the two cages stand: it read 10 cm shallow at some poses (`sat-pose.test.ts`).
+- **Cost** (worker, `ab-stage/stepw.mjs`: 16 cars, identical state in both arms, only `stepWorld` timed): cruising −0.7 / +1.5 %,
+  parked +0.5 / −2.3 %, so flat. City16 races, seeds 1-3, both arm orders: mean 0.999 (0.969-1.032), each run tracking its arm's wreck
+  count. Sixteen wrecks each with a front wheel popped: 0.67-0.72 ms a step against 2.07, because all 16 sleep on their lips
+  against 6 of 16 before.
+- **Rows:** wheel-rest minus front-left goes green for the sedan, police, hatch and SUV, and so does tumbled-rest's roof row (its cowl kept).
