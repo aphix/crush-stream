@@ -5,7 +5,7 @@ import { armTops, C_H, C_OWNER, HIT_SIZE, pointContact, PQ_SIZE, PQ_X, PQ_Y, PQ_
 import { cageLift } from "./car-cage-rig.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
 import { DeformableCar } from "./car.ts";
-import type { CarStyleId } from "./car-variants.ts";
+import { CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { paint } from "./test-support.ts";
 import { armKill, assignClass, killClass, type VehicleClassId } from "./vehicle-classes.ts";
@@ -131,6 +131,12 @@ export const TOP_PARTS = {
   deck: { x0: -0.6, x1: 0.6, z0: -2.0, z1: -1.0 },
 } as const satisfies Record<string, Region>;
 
+/** `TOP_PARTS` for `style`: the cabin is its own roof's span (`roofZ`), not the platform roof's, which reads the sedan's windshield once a head-on shatters its drawn pane. */
+export function topParts(style: CarStyleId): Record<keyof typeof TOP_PARTS, Region> {
+  const [z0, z1] = CAR_STYLES[style].roofZ;
+  return { ...TOP_PARTS, cabin: { x0: TOP_PARTS.cabin.x0, x1: TOP_PARTS.cabin.x1, z0, z1 } };
+}
+
 /** The underside between the wheels (the belly a car rests on another's roof by). */
 export const BELLY: Region = { x0: -0.5, x1: 0.5, z0: -1, z1: 1 };
 
@@ -148,8 +154,8 @@ export function drawnRange(field: DrawnField, region: Region): { top: number; bo
   return { top, bottom };
 }
 
-/** The signed gaps (m) of a collider's top over the drawn top in `region`: collider minus drawn, + is a collider above the drawn body. */
-export type TopGaps = { cells: number; p95: number; worstUp: number; worstDown: number; missing: number };
+/** The signed gaps (m) of a collider's top over the drawn top in `region`: collider minus drawn, + is a collider above the drawn body; `worst` words the cells it is worst at. */
+export type TopGaps = { cells: number; p95: number; worstUp: number; worstDown: number; missing: number; worst: string[] };
 
 /** The stated tolerance of a collider's top against the drawn top (docs/UNIFIED_CONTACT.md section 8: the cage within `SKIN` 0.2 m, ideally 5 cm): 95 % of cells within 5 cm, every cell within 10 cm, at most 2 % of drawn cells unanswered. */
 export const TOP_P95_M = 0.05;
@@ -162,7 +168,36 @@ export function topGapsOff(part: string, gaps: TopGaps): string[] {
   if (gaps.p95 > TOP_P95_M) off.push(`${part} p95 ${gaps.p95.toFixed(2)} m`);
   if (Math.max(gaps.worstUp, -gaps.worstDown) > TOP_WORST_M) off.push(`${part} worst ${gaps.worstUp > -gaps.worstDown ? `+${gaps.worstUp.toFixed(2)} m over` : `${gaps.worstDown.toFixed(2)} m under`} the drawn top`);
   if (gaps.missing > TOP_MISSING_SHARE * gaps.cells) off.push(`${part} no surface over ${gaps.missing} of ${gaps.cells} cells`);
+  if (off.length > 0) off[off.length - 1] += ` (worst: ${gaps.worst.join("; ")})`;
   return off;
+}
+
+/** How many cells of each kind (largest gap, no answer) a fit names as where it is worst. */
+const WORST_CELLS = 3;
+
+/** The cells a collider is worst at against the drawn body: the 3 with the largest |gap| and the first 3 with no answer, worded `(x, z) drawn D, hit H on label`. */
+export class WorstCells {
+  private readonly far: { size: number; text: string }[] = [];
+  private readonly none: string[] = [];
+
+  /** Cell at car-frame (`x`, `z`) drawn at `drawn`, answered `hit` (car frame; not finite: no answer, `gap` unused) with relief gap `gap`; `label` says what answered. */
+  add(x: number, z: number, drawn: number, hit: number, gap: number, label: string | undefined): void {
+    const answered = Number.isFinite(hit);
+    const size = answered ? Math.abs(gap) : 0;
+    if (answered ? this.far.length === WORST_CELLS && size <= this.far[WORST_CELLS - 1]!.size : this.none.length === WORST_CELLS) return;
+    const text = `(${x.toFixed(2)}, ${z.toFixed(2)}) drawn ${drawn.toFixed(3)}, hit ${answered ? hit.toFixed(3) : "none"}${label ? ` on ${label}` : ""}`;
+    if (!answered) {
+      this.none.push(text);
+      return;
+    }
+    const at = this.far.findIndex((c) => c.size < size);
+    this.far.splice(at < 0 ? this.far.length : at, 0, { size, text });
+    if (this.far.length > WORST_CELLS) this.far.pop();
+  }
+
+  words(): string[] {
+    return [...this.far.map((c) => c.text), ...this.none];
+  }
 }
 
 const _hit = new Float64Array(HIT_SIZE);
@@ -216,11 +251,12 @@ export function reliefGap(heights: Float32Array, i: number, j: number, gap: numb
  * answered NaN. The collider is a lattice of one drawn cell's spacing, so the worst gap is read to within one cell horizontally: an
  * answer inside the range the drawn top covers over the 3 x 3 cells about the cell counts as no gap (at a lip the drawn top jumps
  * within one cell, and no lattice of that spacing can be nearer than the jump's half); the 95th percentile is read the same way, over
- * those relief gaps.
+ * those relief gaps. `labelAt()`, read right after each `heightAt` call, says what answered it; the worst cells are worded with it.
  */
-export function gapsOver(car: DeformableCar, field: DrawnField, region: Region, heightAt: (x: number, y: number, z: number, lip: number) => number): TopGaps {
+export function gapsOver(car: DeformableCar, field: DrawnField, region: Region, heightAt: (x: number, y: number, z: number, lip: number) => number, labelAt?: () => string): TopGaps {
   car.group.updateMatrixWorld(true);
   const gaps: number[] = [];
+  const worst = new WorstCells();
   let missing = 0;
   let worstUp = 0;
   let worstDown = 0;
@@ -230,17 +266,20 @@ export function gapsOver(car: DeformableCar, field: DrawnField, region: Region, 
       if (!Number.isFinite(drawn)) continue;
       _w.set(cellX(i), drawn, cellZ(j)).applyMatrix4(car.group.matrixWorld);
       const h = heightAt(_w.x, _w.y, _w.z, relief(field.top, i, j, false) - drawn);
+      const label = labelAt?.();
       if (!Number.isFinite(h)) {
         missing++;
+        worst.add(cellX(i), cellZ(j), drawn, NaN, NaN, label);
         continue;
       }
       const off = reliefGap(field.top, i, j, h - _w.y);
       gaps.push(off);
       worstUp = Math.max(worstUp, off);
       worstDown = Math.min(worstDown, off);
+      worst.add(cellX(i), cellZ(j), drawn, h - (_w.y - drawn), off, label);
     }
   }
-  return { cells: gaps.length + missing, p95: p95(gaps), worstUp, worstDown, missing };
+  return { cells: gaps.length + missing, p95: p95(gaps), worstUp, worstDown, missing, worst: worst.words() };
 }
 
 const _roofs = new CarSurfaces();
@@ -281,7 +320,7 @@ export function topGaps(car: DeformableCar, field: DrawnField, region: Region): 
       if (Math.abs(_hit[C_H]! - was) < 1e-4) break;
     }
     return _hit[C_OWNER] === 0 ? _hit[C_H]! : NaN;
-  });
+  }, () => (_hit[C_OWNER] === 0 ? "car top" : "none"));
   armTops(null);
   return gaps;
 }

@@ -123,8 +123,10 @@ interface RoofParts {
   /**
    * Body-colour lip off the roof's rear end, ±`halfWidth`: its underside at y `y[0]`, its top `y[1]` at the front edge falling to the tip.
    * `ends` [slope, taper] (m): the top's side ends stand `slope` inboard of the underside's, and the tip's ends `taper` inboard of the front edge's.
+   * `round`: the tip's corners turn on a quarter ellipse in plan (`taper` across, the whole z run along) instead of the straight chamfer.
+   * `crown` (m): the top's middle stands this much over its sloped ends' tops (a parabola across, carrying the roof's crown over it); absent, level.
    */
-  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number] };
+  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number]; round?: boolean; crown?: number };
   /** Dark glass panel over the front seats, `width` (m) across, standing just proud of the roof skin. */
   glassPanel?: { z: readonly [number, number]; width: number };
 }
@@ -290,6 +292,9 @@ export interface PillarSpan {
   z?: readonly [number, number];
 }
 
+/** Drawn only: the windshield and the door glass's front edge as the player sees them (`BodyStyle.drawn`, `drawnStyle`). */
+export type DrawnTwin = Partial<Pick<BodyStyle, "windshield" | "windshieldTop" | "aPillarFoot" | "aPillarTop" | "aPillarKnee">>;
+
 export interface BodyStyle {
   id: CarStyleId;
   /** What the reference was measured to; the tables below are built to it (`car-variants.test.ts`). */
@@ -397,8 +402,13 @@ export interface BodyStyle {
    * (y, m): a deck under the drawn A-post's foot lower than the belt; a skirt of the post's own section hangs from the foot down to it,
    * so the cabin never shows through the gap; absent, none. `glassBar`: a slim divider bar standing on the side glass, belt to roof,
    * `width` [belt, top] about its centre line at `z` [belt, top], toned by `blackout.divider`; a flat strip with no cage post; absent, none.
+   * `rearSquare`: the plank rear post (no `cPillar`) squared, a truck cab's back corner: its rear edge on the side glass's plane like its
+   * front, so its face never turns to the tail, and a flat cab back panel from inside it over the rear glass's side edge; absent, the
+   * post's rear edge at the rear glass's corner.
    */
-  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number; glassBar?: Required<PillarSpan> };
+  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number; glassBar?: Required<PillarSpan>; rearSquare?: boolean };
+  /** Drawn only: the windshield and the door glass's front edge as the player sees them, in place of the style's own for every drawn part (`drawnStyle`); the cage, the dummies' panes, the cabin, the sim and the windshield's centre (the thrown driver's exit point) keep the style's own. */
+  drawn?: DrawnTwin;
   /**
    * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
    * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.
@@ -481,6 +491,8 @@ export interface BodyStyle {
     round?: number;
     kind: "bars" | "mesh" | "slats" | "hex";
     count?: number;
+    /** Its bars' or slats' width (m); absent, 12 mm (a mesh's 6 mm). */
+    bar?: number;
     badge?: number;
     /** A hex mesh's bars cross at ± this angle (rad) from the horizontal (flatter: wider diamonds, more rows); absent, 60°. */
     angle?: number;
@@ -524,3 +536,16 @@ export const CAR_STYLES: Readonly<Record<CarStyleId, BodyStyle>> = {
   police: POLICE,
   monster: MONSTER,
 };
+
+const DRAWN_STYLES = new WeakMap<BodyStyle, { twin: DrawnTwin; style: BodyStyle }>();
+
+/** `style` as drawn: its `drawn` twin's fields over its own, one object per twin (style-keyed caches such as `carFrame` hold); `style` itself without one. */
+export function drawnStyle(style: BodyStyle): BodyStyle {
+  const twin = style.drawn;
+  if (twin === undefined) return style;
+  const cached = DRAWN_STYLES.get(style);
+  if (cached?.twin === twin) return cached.style;
+  const drawn: BodyStyle = { ...style, ...twin };
+  DRAWN_STYLES.set(style, { twin, style: drawn });
+  return drawn;
+}

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CAGE_STEP, CAGE_VERTICES, type CageSource, CarCage } from "./car-cage.ts";
 import { cageGaps, cageLiveOf, cageOf, cageSourceOf, fitToDrawn } from "./car-cage.test-util.ts";
-import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGapsOff } from "./drawn-body.test-util.ts";
+import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_WORST_M, topGapsOff, topParts } from "./drawn-body.test-util.ts";
 
 /**
  * docs/UNIFIED_CONTACT.md stage 3, "the cage is the body": the cage fitted to a car is the drawn body, in every state the body
@@ -42,7 +42,7 @@ for (const body of BODIES) {
         fitToDrawn(car, cage);
         const field = drawnField(car);
         const wrong: string[] = [];
-        for (const [part, region] of Object.entries(TOP_PARTS)) {
+        for (const [part, region] of Object.entries(topParts(body.style))) {
           const g = cageGaps(car, cage, field, region);
           t.diagnostic(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
           if (cliffs.some((c) => c.part === part)) continue;
@@ -146,6 +146,10 @@ describe("given a pristine sedan's cage", () => {
 describe("given a car dropped on its roof, whose glass is gone and whose crushed roof the drawn interior pokes through", () => {
   it("when its cage is fitted with the glass off and as if it were on, then the tops differ over a gone pane's opening alone, never over the roof between them", () => {
     const car = carInState("rolled", "sedan", "sedan");
+    // The reference sedan's 2 m drop shatters no pane on its own (the laminated windshield stands in the cage either way): the fixture takes
+    // the rear glass off, a pane of the frame (a door's glass rides its door, no glass panel of the cage).
+    const rear = car.glassPanes.find((g) => g.name === "rear")!;
+    if (rear.state !== "shattered") car["shatterGlass"](rear);
     const off = cageOf(car);
     fitToDrawn(car, off);
     const live = cageLiveOf(car);

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, it } from "node:test";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLES, CAR_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId, type DrawnTwin } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantX, cantY, glassTopY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
 import { beltX, beltY } from "./car-lines.ts";
@@ -710,8 +710,9 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
     });
 
     it(`when a ${id}'s A-posts are laid along its windshield, then each laps the windshield's side edge within ${A_POST_EDGE_FOLLOW * 100} cm at every station under the roof and in side view its centre's offset from that edge varies under ${A_POST_EDGE_FOLLOW * 100} cm`, () => {
-      const glass = makeWindshield(CAR_STYLES[id]).getAttribute("position");
-      for (const post of makeGreenhouseFrame(CAR_STYLES[id], "drawn").filter((g) => g.name === "a")) {
+      const style = drawnStyle(CAR_STYLES[id]);
+      const glass = makeWindshield(style).getAttribute("position");
+      for (const post of makeGreenhouseFrame(style, "drawn").filter((g) => g.name === "a")) {
         const { ring, slices } = loftOf(post);
         const side = Math.sign(positionAt(post, 0).x);
         // The pane's side edge as drawn, base to top (its 10 × 8 grid): it falls with the roof's dome toward its top.
@@ -1013,6 +1014,39 @@ describe("given a style that stands a bar on its side glass (`pillars.glassBar`)
   });
 });
 
+/** A squared rear post's (`pillars.rearSquare`) outer face turns at most this far (m) in plan between its rear and front thirds; its cab back panel laps at least this far (m) over the rear glass's side edge. */
+const REAR_SQUARE_TURN = 0.01;
+const REAR_SQUARE_LAP = 0.01;
+/** The monster with its cab's back corners squared. */
+const SQUARED_MONSTER: BodyStyle = { ...CAR_STYLES.monster, pillars: { ...CAR_STYLES.monster.pillars, rearSquare: true } };
+
+describe("given a truck cab whose rear post is squared (`pillars.rearSquare`)", () => {
+  it(`when its drawn greenhouse is read, then each rear post's outer face runs along the car within ${REAR_SQUARE_TURN * 100} cm from its rear third to its front third at the belt (its head tucks under the roof's rolled rear end), a flat cab back panel facing the tail laps at least ${REAR_SQUARE_LAP * 100} cm over the rear glass's side edge on each side, and the cage is the plain monster's`, () => {
+    const drawn = makeGreenhouseFrame(SQUARED_MONSTER, "drawn");
+    const off: string[] = [];
+    for (const post of drawn.filter((g) => g.name === "rear")) {
+      const { ring } = loftOf(post);
+      const points = Array.from({ length: ring }, (_, k) => positionAt(post, k));
+      const [lo, hi] = [Math.min(...points.map((p) => p.z)), Math.max(...points.map((p) => p.z))];
+      const outerX = (inThird: (z: number) => boolean) => Math.max(...points.filter((p) => inThird(p.z)).map((p) => Math.abs(p.x)));
+      const [rearX, frontX] = [outerX((z) => z < lo + (hi - lo) / 3), outerX((z) => z > hi - (hi - lo) / 3)];
+      if (Math.abs(rearX - frontX) > REAR_SQUARE_TURN) off.push(`belt ring: outer face x ${rearX.toFixed(3)} at its rear third vs ${frontX.toFixed(3)} at its front`);
+    }
+    const panels = drawn.filter((g) => g.name === "cabBack");
+    if (panels.length !== 2) off.push(`${panels.length} cab back panels`);
+    for (const panel of panels) {
+      const p = Array.from({ length: panel.getAttribute("position").count }, (_, i) => positionAt(panel, i));
+      const inner = Math.min(...p.map((v) => Math.abs(v.x)));
+      if (inner > SQUARED_MONSTER.rearGlass.wBase / 2 - REAR_SQUARE_LAP) off.push(`cab back reaches in to x ${inner.toFixed(3)}`);
+      const normal = panel.getAttribute("normal");
+      for (let i = 0; i < normal.count; i++) if (normal.getZ(i) >= 0) off.push(`cab back normal ${i} z ${normal.getZ(i).toFixed(3)}: not facing the tail`);
+    }
+    const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join(";");
+    assert.ok(cage(SQUARED_MONSTER) === cage(CAR_STYLES.monster), "the squared monster's cage differs from the plain monster's");
+    assert.ok(off.length === 0, off.join("; "));
+  });
+});
+
 /** A flush sail's head (`cPillar.flush`) stands at most this far (m) over the drawn rear glass (a chrome bead's 5 mm, its rounded edge's 2.5 mm radius where the section rises steeply into it, and a mm), and laps at least this far in over its side edge, so the glass's edge lies under the sail. */
 const SAIL_FLUSH_HEIGHT = 0.0085;
 const SAIL_FLUSH_LAP_MIN = 0.005;
@@ -1191,7 +1225,8 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
 const BASELINE_BY_STYLE = [
   { id: "sedan", drawCalls: 13, triangles: 5266, bodyVertices: 1587 },
   { id: "hatchback", drawCalls: 13, triangles: 5064, bodyVertices: 1587 },
-  { id: "wagon", drawCalls: 13, triangles: 5088, bodyVertices: 1635 },
+  // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's.
+  { id: "wagon", drawCalls: 13, triangles: 5117, bodyVertices: 1635 },
   { id: "coupe", drawCalls: 16, triangles: 5152, bodyVertices: 1530 },
   { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
   { id: "police", drawCalls: 14, triangles: 5338, bodyVertices: 1587 },
@@ -1202,7 +1237,8 @@ const TRIANGLE_BUDGET = 1.6;
 /** The skin writes every body vertex each frame (its cost follows the count): the body's loft at most 1.2 x the baseline's vertices, which measured 1.2 x the baseline's skin time at most. */
 const BODY_VERTEX_BUDGET = 1.2;
 /** Each roof fitting kind's vertices as built (`makeRoofFittings`), merged into the body on top of its loft: red if a fitting grows. */
-const ROOF_FITTING_VERTICES = { rails: 220, glassPanel: 154, spoiler: 26 } as const;
+// The spoiler's re-pinned for the wagon's crowned top and rounded corners (the most rings and points any car's spoiler draws).
+const ROOF_FITTING_VERTICES = { rails: 220, glassPanel: 154, spoiler: 61 } as const;
 type RoofKind = keyof typeof ROOF_FITTING_VERTICES;
 
 /** `style`'s roof fittings' vertices, all together and per kind (each built alone). */
@@ -1446,6 +1482,35 @@ describe("given every body style's cage source, the tables its collision cage is
       assertSameDigest(cageSourceDigest(car), testCase.digest, `${testCase.id} cage source`);
     });
   }
+});
+
+/** The sedan with its windshield's base drawn 5 cm further back and its door glass starting 4 cm further back, its cage and sim on its own fields. */
+const SEDAN_TWIN: DrawnTwin = {
+  windshield: { ...CAR_STYLES.sedan.windshield, base: [CAR_STYLES.sedan.windshield.base[0], CAR_STYLES.sedan.windshield.base[1] - 0.05] },
+  aPillarFoot: CAR_STYLES.sedan.aPillarFoot - 0.04,
+};
+
+describe("given a style whose windshield is drawn apart from its cage (`drawn`)", () => {
+  it("when a car of it is built, then its windshield pane and its body's A-post and sail are the twin's, while its cage source, its sim masses at rest and the windshield's exit point stay the style's own", () => {
+    const joined = (geo: THREE.BufferGeometry) => Array.from(geo.getAttribute("position").array).join(",");
+    const paneOf = (car: DeformableCar) => car["glassPanes"].find((g) => g.name === "windshield")!.mesh.geometry;
+    const massesOf = (car: DeformableCar) => car.deform.masses.map(({ rest }) => `${rest.x},${rest.y},${rest.z}`).join(";");
+    const plain = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
+    CAR_STYLES.sedan.drawn = SEDAN_TWIN;
+    try {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
+      const off: string[] = [];
+      if (joined(paneOf(car)) !== joined(makeWindshield(drawnStyle(CAR_STYLES.sedan)))) off.push("the windshield pane is not the twin's");
+      if (joined(paneOf(car)) === joined(paneOf(plain))) off.push("the windshield pane did not move");
+      if (joined(car.body.geometry) === joined(plain.body.geometry)) off.push("the body's A-post and sail did not move");
+      if (String(paneOf(car).userData.centre) !== String(paneOf(plain).userData.centre)) off.push(`the exit point moved: ${paneOf(car).userData.centre} vs ${paneOf(plain).userData.centre}`);
+      if (massesOf(car) !== massesOf(plain)) off.push("the sim's masses at rest moved");
+      if (cageSourceDigest(car) !== cageSourceDigest(plain)) off.push("the cage source moved");
+      assert.ok(off.length === 0, off.join("; "));
+    } finally {
+      delete CAR_STYLES.sedan.drawn;
+    }
+  });
 });
 
 /** A drawn ring point may stand this far (m) outside the cage source's ring at the same station: rounding in the chord interpolation. The cage carries the ground, so a car resting on its flank sinks into it by whatever the drawn side stands proud. */
