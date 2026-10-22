@@ -464,4 +464,19 @@ describe("given the part batch over a resting field", () => {
     const was = before.split(",").map(Number);
     assert.ok(after.every((v, i) => v > was[i]!), `a moved car's draws must upload again: ${before} -> ${after.join(",")}`);
   });
+
+  test("when the boot warm hides every draw after a sync (its restore) and the field then syncs at rest, then each kind the monster draws (its frame and axles too) and its caster show again, uploading nothing", () => {
+    const { batch, car, draw } = stage();
+    const monster = car(8, "monster");
+    draw([monster]);
+    const instanced = [...batch.kinds.filter((m): m is THREE.InstancedMesh => m !== null && m.count > 0), ...batch.casters.filter((m) => m.count > 0)];
+    assert.ok(batch.kinds[PART_KIND.ladderFrame]!.count === 1 && batch.kinds[PART_KIND.axle]!.count === 2, "the control: the monster draws its frame and both axles");
+    const versions = () => instanced.map((m) => m.instanceMatrix.version).join(",");
+    const before = versions();
+    for (const m of [...instanced, batch.styled.mesh]) m.visible = false;
+    draw([monster]);
+    const hidden = [...instanced.filter((m) => !m.visible).map((m) => m.name || `kind ${batch.kinds.indexOf(m)}`), ...(batch.styled.mesh.visible ? [] : ["styled"])];
+    assert.equal(hidden.join(), "", "draws left hidden after the warm's restore");
+    assert.equal(versions(), before, "a resting field re-uploaded matrices");
+  });
 });
