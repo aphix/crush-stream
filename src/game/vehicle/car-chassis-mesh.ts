@@ -172,6 +172,9 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
       const w = INNER_PANEL * Math.max(bayAt(zs[s]!, style), cut.lined ? bootCutAt(zs[s]!, cut).open : 0);
       for (const i of [0, 1, n - 2, n - 1]) primer[s * n + i] = w;
     }
+    // The floor pan (each ring's floor-outer points and keel) is bare underseal, as a car on its roof shows it; the sill corners keep the paint the side shows.
+    const h = (n - 1) / 2;
+    for (let s = 0; s < zs.length; s++) for (const i of [h - 1, h, h + 1]) primer[s * n + i] = INNER_PANEL;
     primer.fill(INNER_PANEL, linerFrom, linerTo);
   }
   merged.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(primer, 1));

@@ -49,6 +49,24 @@ describe("given a style's detail table baked to its atlas", () => {
     assert.equal(left.cavity, right.cavity, "cavity at x -0.3");
   });
 
+  it("when any style's bottom tile is read on its exhaust run, then the pipe stands proud and dark on both sides, where its top tile has no pipe", () => {
+    for (const style of Object.values(CAR_STYLES)) {
+      if (!style.details) continue;
+      const read = detailReader(style);
+      const pipe = style.exhaust?.x ?? 0.4;
+      for (const x of [pipe, -pipe]) {
+        const under = read("bottom", -0.5, x);
+        assert.ok(under.height >= 0.005 && under.cavity >= 0.4, `${style.id} at x ${x}: height ${under.height}, cavity ${under.cavity}`);
+      }
+      assert.ok(read("top", -0.5, pipe).height < 0.005, `${style.id}: the top tile reads no pipe`);
+    }
+  });
+
+  it("when the shader is built, then a down-facing pixel reads the bottom tile in the top's place", () => {
+    const { fragmentShader } = compileHooks(detailPaint(SEDAN));
+    assert.ok(fragmentShader.includes("bool detailUnder = vDetailNormal.y < 0.0;") && fragmentShader.includes("detailUnder ? detailTiles[4] : detailTiles[1]"), "the bottom tile replaces the top's under the car");
+  });
+
   it("when a step runs forward along the side, then its left (above) stands its depth proud and its right (below) reads nothing", () => {
     const read = detailReader(sedanWith({ lines: [{ view: "side", points: [[-1, 0.7], [1, 0.7]], width: 0.012, depth: 0.003, profile: "step", cavity: 0 }], patches: [] }));
     within(read("side", 0, 0.7 + 0.012).height, 0.003, 0.1, "height a width left of the line");

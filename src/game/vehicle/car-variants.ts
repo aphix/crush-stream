@@ -128,11 +128,11 @@ interface BumperSpec {
   trim?: "body" | "chrome" | "black";
 }
 
-type DetailView = "side" | "top" | "front" | "rear";
+type DetailView = "side" | "top" | "front" | "rear" | "bottom";
 
 /** A stroke drawn on one view of the car, cut into (depth < 0) or raised from (depth > 0) the surface. */
 interface DetailLine {
-  /** "side": points [z, y], both sides of the car. "top": [z, x]. "front" / "rear": [x, y]. x >= 0 only: mirrored to -x. */
+  /** "side": points [z, y], both sides of the car. "top" / "bottom" (seen from below): [z, x]. "front" / "rear": [x, y]. x >= 0 only: mirrored to -x. */
   view: DetailView;
   /** Polyline (m, car frame, ground y = 0 before class lift, origin mid-axles, +z forward), at least 2 points. */
   points: readonly (readonly [number, number])[];
