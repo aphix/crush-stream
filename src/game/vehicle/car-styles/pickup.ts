@@ -153,5 +153,5 @@ export const PICKUP: BodyStyle = {
       { view: "rear", points: [[0, 0.5], [0.38, 0.5], [0.38, 0.64], [0, 0.64]], depth: -0.002, rim: 0.004, cavity: 0.6 },
     ],
   },
-  seats: { front: [0.36, 0.64, -0.03], rear: null },
+  seats: { front: [0.36, 0.64, 0.05], rear: null },
 };

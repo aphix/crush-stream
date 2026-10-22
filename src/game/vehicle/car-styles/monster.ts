@@ -122,8 +122,8 @@ export const MONSTER: BodyStyle = {
       { view: "side", points: [[-2.231, 0.962], [-2.231, 0.534]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "top", points: [[0.973, 0], [0.966, 0.722], [2.074, 0.722], [2.074, 0]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "top", points: [[2.103, 0], [1.024, 0]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
-      { view: "top", points: [[2.059, 0.313], [1.563, 0.342], [1.082, 0.372]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
-      { view: "top", points: [[2.074, 0.386], [1.592, 0.365], [1.111, 0.343]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
+      { view: "top", points: [[2.059, 0.313], [1.563, 0.342], [1.082, 0.372]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },
+      { view: "top", points: [[2.074, 0.386], [1.592, 0.365], [1.111, 0.343]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },
       { view: "top", points: [[-0.772, 0], [-0.772, 0.576], [0.365, 0.576], [0.365, 0]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "top", points: [[-0.813, 0], [-0.813, 0.838]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "top", points: [[-2.256, 0], [-2.256, 0.678], [-0.886, 0.678], [-0.886, 0]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
@@ -148,5 +148,5 @@ export const MONSTER: BodyStyle = {
       { view: "rear", points: [[0, 0.47], [0.32, 0.47], [0.32, 0.52], [0, 0.52]], depth: 0.002, rim: 0.003, cavity: 0.4 },
     ],
   },
-  seats: { front: [0.36, 0.64, 0], rear: [0.66, -0.52] },
+  seats: { front: [0.36, 0.64, 0], rear: [0.66, -0.48] },
 };
