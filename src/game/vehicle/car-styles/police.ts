@@ -40,27 +40,30 @@ const POLICE_LAMP_SHAPES = {
     loops: [
       {
         points: [
-          [0.42, 0.76, -2.12],
-          [0.46, 0.795, -2.1],
-          [0.53, 0.825, -2.065],
-          [0.62, 0.85, -2.0],
-          [0.7, 0.865, -1.9],
-          [0.72, 0.85, -1.88],
-          [0.72, 0.67, -1.88],
-          [0.7, 0.64, -1.9],
+          [0.42, 0.64, -2.12],
+          [0.47, 0.72, -2.1],
+          [0.53, 0.79, -2.07],
+          [0.59, 0.84, -2.03],
+          [0.65, 0.865, -1.97],
+          [0.7, 0.872, -1.91],
+          [0.735, 0.86, -1.85],
+          [0.75, 0.83, -1.79],
+          [0.755, 0.77, -1.76],
+          [0.755, 0.69, -1.76],
+          [0.75, 0.65, -1.78],
+          [0.73, 0.64, -1.85],
           [0.62, 0.64, -2.0],
           [0.52, 0.64, -2.07],
-          [0.42, 0.64, -2.12],
         ],
       },
     ],
-    // The cruiser's tail lamps are deep red with a lit band and dark ribs (rear iso), as tall as they are wide on the tail, their top
-    // rounding up from the inner edge to the corner: no amber top, no white reverse block.
+    // The cruiser's tail lamps are deep red with a lit band and dark ribs (rear iso): a rounded wedge, its inner edge leaning in to the
+    // tail's top corner, wrapping 10 cm onto the quarter.
     lens: "red",
     strips: [
-      { line: { points: [[0.42, 0.745], [0.72, 0.745]] }, width: 0.022, tone: "lit" },
-      { line: { points: [[0.56, 0.795], [0.72, 0.795]] }, width: 0.003, tone: "dark" },
-      { line: { points: [[0.42, 0.695], [0.72, 0.695]] }, width: 0.003, tone: "dark" },
+      { line: { points: [[0.5, 0.745, -2.09], [0.62, 0.745, -2.0], [0.72, 0.745, -1.87], [0.755, 0.745, -1.77]] }, width: 0.022, tone: "lit" },
+      { line: { points: [[0.55, 0.795, -2.06], [0.63, 0.795, -1.99], [0.72, 0.795, -1.87], [0.755, 0.795, -1.77]] }, width: 0.003, tone: "dark" },
+      { line: { points: [[0.46, 0.695, -2.1], [0.62, 0.695, -2.0], [0.72, 0.695, -1.87], [0.755, 0.695, -1.77]] }, width: 0.003, tone: "dark" },
     ],
   },
   front: {
@@ -93,6 +96,8 @@ export const POLICE: BodyStyle = {
   },
   /** The cruiser's two small round tips under the black bumper, one each side (rear iso: |x| ~0.5; inboard 0.4 on the sedan body's narrower tail floor). */
   exhaust: { tips: 2, x: 0.4, y: 0.3, size: [0.1, 0.06], shape: "round" },
+  /** The cruiser's A-posts take the livery's white. */
+  blackout: { ...SEDAN.blackout, a: false },
   /** The cruiser's rear window is black-tinted (rear iso), as the checklist's P1. */
   privacyGlass: { rear: true },
 };

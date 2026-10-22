@@ -2359,7 +2359,7 @@ describe("given a body style's P2 parts", () => {
     const shapes = sedan.lamps.shapes!;
     const off: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: { ...shapes, front: { ...shapes.front!, onBody: undefined } } } };
     const meetZ = (geo: THREE.BufferGeometry): number =>
-      new THREE.Raycaster(new THREE.Vector3(0.64, 0.28, 5), new THREE.Vector3(0, 0, -1)).intersectObject(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), false)[0]?.point.z ?? -Infinity;
+      new THREE.Raycaster(new THREE.Vector3(0.62, 0.3, 5), new THREE.Vector3(0, 0, -1)).intersectObject(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), false)[0]?.point.z ?? -Infinity;
     const skin = meetZ(makeChassisGeometry(sedan));
     const [lens, buried] = [sedan, off].map((style) => meetZ(drawnPart(PART_KIND.grille, style).geometry.clone().translate(0, seat.y + GRILLE_SEAT.y, seat.z + GRILLE_SEAT.z)));
     assert.ok(lens! > skin + 0.001 && buried! < skin, `the fog pod's lens at z ${lens!.toFixed(4)} (without the field ${buried!.toFixed(4)}), the body skin at ${skin.toFixed(4)}`);
