@@ -210,14 +210,15 @@ export function reliefGap(heights: Float32Array, i: number, j: number, gap: numb
 }
 
 /**
- * A collider's top over each drawn top cell of `region`, against the drawn top. `heightAt(x, y, z)` is the collider's answer at
- * the world point of a cell's drawn top (x, y, z; NaN where it has none). Reads the car's pose as it is (a tilted or lifted car
- * too). `missing` counts cells where `heightAt` answered NaN. The collider is a lattice of one drawn cell's spacing, so the worst
- * gap is read to within one cell horizontally: an answer inside the range the drawn top covers over the 3 x 3 cells about the cell
- * counts as no gap (at a lip the drawn top jumps within one cell, and no lattice of that spacing can be nearer than the jump's half);
- * the 95th percentile is read the same way, over those relief gaps.
+ * A collider's top over each drawn top cell of `region`, against the drawn top. `heightAt(x, y, z, lip)` is the collider's answer at
+ * the world point of a cell's drawn top (x, y, z; NaN where it has none), `lip` how far (m) the highest drawn top over the 3 x 3
+ * cells about it stands over it. Reads the car's pose as it is (a tilted or lifted car too). `missing` counts cells where `heightAt`
+ * answered NaN. The collider is a lattice of one drawn cell's spacing, so the worst gap is read to within one cell horizontally: an
+ * answer inside the range the drawn top covers over the 3 x 3 cells about the cell counts as no gap (at a lip the drawn top jumps
+ * within one cell, and no lattice of that spacing can be nearer than the jump's half); the 95th percentile is read the same way, over
+ * those relief gaps.
  */
-export function gapsOver(car: DeformableCar, field: DrawnField, region: Region, heightAt: (x: number, y: number, z: number) => number): TopGaps {
+export function gapsOver(car: DeformableCar, field: DrawnField, region: Region, heightAt: (x: number, y: number, z: number, lip: number) => number): TopGaps {
   car.group.updateMatrixWorld(true);
   const gaps: number[] = [];
   let missing = 0;
@@ -228,7 +229,7 @@ export function gapsOver(car: DeformableCar, field: DrawnField, region: Region, 
       const drawn = field.top[j * NX + i]!;
       if (!Number.isFinite(drawn)) continue;
       _w.set(cellX(i), drawn, cellZ(j)).applyMatrix4(car.group.matrixWorld);
-      const h = heightAt(_w.x, _w.y, _w.z);
+      const h = heightAt(_w.x, _w.y, _w.z, relief(field.top, i, j, false) - drawn);
       if (!Number.isFinite(h)) {
         missing++;
         continue;
@@ -251,9 +252,11 @@ const ASK_FROM = [0.05, 0.3, 0.75] as const;
 
 /**
  * The surface other cars stand on, over each drawn top cell of `region`, against the drawn top: the world point of the cell's
- * drawn top is asked from just over it, then higher (`ASK_FROM`) by a car 50 m up (`pointContact`, the one query wheels and
- * hull points use, the roofs armed as `stepWorld` arms them); the answer is the height of the highest surface under that
- * point and must be `car`'s own top (slot 0).
+ * drawn top is asked from just over it, then higher (`ASK_FROM`), then from just over the highest drawn top about it (its `lip`),
+ * by a car 50 m up (`pointContact`, the one query wheels and hull points use, the roofs armed as `stepWorld` arms them); the
+ * answer is the height of the highest surface under that point and must be `car`'s own top (slot 0). Asked from over the lip: a
+ * cell just behind a roof's end looks down a gone pane's hole (a pickup's cab after the head-on, the roof ending at its rear glass:
+ * drawn 0.63 m against the roof's 1.6 one cell on), and the surface over it stands at the roof, which `ASK_FROM` never reached.
  */
 export function topGaps(car: DeformableCar, field: DrawnField, region: Region): TopGaps {
   asker ??= buildCar("sedan", "sedan");
@@ -266,10 +269,11 @@ export function topGaps(car: DeformableCar, field: DrawnField, region: Region): 
   _roofs.sync(0, car);
   _roofs.sync(1, asker);
   armTops(_roofs);
-  const gaps = gapsOver(car, field, region, (x, y, z) => {
+  const gaps = gapsOver(car, field, region, (x, y, z, lip) => {
     // From just over the cell first, then higher where the collider stands over it (a surface counts from at most its reach above the asker).
     _hit[C_OWNER] = -1;
     for (let k = 0; k < ASK_FROM.length && _hit[C_OWNER] !== 0; k++) askFrom(x, y + ASK_FROM[k]!, z);
+    if (_hit[C_OWNER] !== 0) askFrom(x, y + lip + ASK_FROM[0], z);
     // A tilted car's frame reads the asking height too: ask again from just over the surface found, as a wheel on it would, until the answer holds still.
     for (let n = 0; n < 6 && _hit[C_OWNER] === 0 && Number.isFinite(_hit[C_H]!); n++) {
       const was = _hit[C_H]!;
