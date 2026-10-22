@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
-import { INNER_PANEL } from "./constants.ts";
+import { WELL_PANEL } from "./constants.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { floorY, rockerAt } from "./car-lines.ts";
 import { bootCut, ensureOutwardNormals, lerp, loftFromRings, sampleSlice, TUB_EDGE, WELL_LINER_WIDTH, type BodySource, type Pt } from "./car-mesh.ts";
@@ -18,21 +18,33 @@ function linerX(wx: number, wz: number, style: BodyStyle): number {
   return Math.abs(wx) > hw ? Math.sign(wx) * (hw - WELL_LINER_WIDTH / 2) : wx;
 }
 
+/** A drawn liner's outer end stands this far (m) inside the body side round its opening, behind the lip's return, so no end shows past the skin. */
+const LINER_TUCK = 0.01;
+
 /**
- * Each wheel's liner: a half-tube over the tyre. Drawn, it is two-sided (the paint culls back faces: the bay sees its outside, the
- * tyre its inside), and where the tyre stands outboard of the body (the monster's) it closes its inboard end, so the arch opens onto a
- * dark well up to its crown, not through the body: at the liner's end, or at a floor's side wall where one stands over it (the bed's,
- * which culls from the arch's side).
+ * Each wheel's liner: a half-tube over the tyre. Drawn, its outer end follows the `loft`'s side round the opening (`LINER_TUCK` in),
+ * it is two-sided (the paint culls back faces: the bay sees its outside, the tyre its inside), and where the tyre stands outboard of
+ * the body (the monster's) it closes its inboard end, so the arch opens onto a dark well up to its crown, not through the body: at the
+ * liner's end, or at a floor's side wall where one stands over it (the bed's, which culls from the arch's side).
  */
-export function makeWellLiners(style: BodyStyle, source: BodySource): THREE.BufferGeometry[] {
+export function makeWellLiners(style: BodyStyle, source: BodySource, loft?: THREE.BufferGeometry): THREE.BufferGeometry[] {
   const r = style.arch.radius;
   return carFrame(style).wheels.map(([wx, wy, wz]) => {
     const x = linerX(wx, wz, style);
-    const geo = new THREE.CylinderGeometry(r, r, WELL_LINER_WIDTH, 14, 1, true, 0, Math.PI);
+    // Drawn, each foot ends at the rocker over it where that stands above the hub, so no liner hangs below the body side.
+    const foot = (sign: number) => {
+      const c = source === "drawn" ? Math.min(1, (rockerAt(wz + sign * r, style) - wy) / r) : 0;
+      return c > 0 ? detAtan2(c, Math.sqrt(1 - c * c)) : 0;
+    };
+    // θ 0 is the front foot on the right side, the rear foot on the left (turned about y).
+    const [start, end] = wx > 0 ? [foot(1), foot(-1)] : [foot(-1), foot(1)];
+    const geo = new THREE.CylinderGeometry(r, r, WELL_LINER_WIDTH, 14, 1, true, start, Math.PI - start - end);
     geo.rotateZ(Math.PI / 2);
     geo.rotateY(wx > 0 ? 0 : Math.PI);
     geo.translate(x, wy, wz);
     if (source === "cage") return withLinerUv(geo);
+    if (!loft) throw new Error(`${style.id}: a drawn liner needs the drawn loft its ends fit inside`);
+    tuckOuterEnd(geo, loft, Math.sign(wx), Math.abs(x), wy, wz, r);
     const inside = geo.clone();
     const index = inside.getIndex()!;
     for (let t = 0; t < index.count; t += 3) {
@@ -42,9 +54,10 @@ export function makeWellLiners(style: BodyStyle, source: BodySource): THREE.Buff
     }
     const parts: THREE.BufferGeometry[] = [geo, inside];
     if (x !== wx) {
-      // A half disc over the hub, facing out through the opening.
+      // A half disc over the hub, facing out through the opening, its feet trimmed as the liner's (θ 0 is the rear foot on the right).
       const end = wellFloor(style, source, wy, wz) < Infinity ? sampleSlice(wz, style.profile).hw - BED_WALL_INSET + 2 * HUMP_SINK : Math.abs(x) - WELL_LINER_WIDTH / 2;
-      const cap = new THREE.CircleGeometry(r, 14, 0, Math.PI).rotateY((Math.sign(wx) * Math.PI) / 2);
+      const [capStart, capEnd] = wx > 0 ? [foot(-1), foot(1)] : [foot(1), foot(-1)];
+      const cap = new THREE.CircleGeometry(r, 14, capStart, Math.PI - capStart - capEnd).rotateY((Math.sign(wx) * Math.PI) / 2);
       parts.push(cap.translate(Math.sign(wx) * end, wy, wz));
     }
     const liner = mergeGeometries(parts, false);
@@ -58,6 +71,30 @@ function withLinerUv(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   const uv = geo.getAttribute("uv") as THREE.BufferAttribute;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.12, i / uv.count);
   return geo;
+}
+
+/** A liner's end is held inside the body side this far (m) past its opening (nearer, the opening's edge still rolls in), sampled every `STEP`. */
+const LINER_SKIN = { from: 0.05, to: 0.08, step: 0.005 } as const;
+
+/**
+ * Pulls the liner's outer-end vertices (|x| = `mid` + half its width, on side `side`) in to `LINER_TUCK` inside the loft's narrowest
+ * side over that band past the opening there (outward from the hub), never in past the liner's middle.
+ */
+function tuckOuterEnd(geo: THREE.BufferGeometry, loft: THREE.BufferGeometry, side: number, mid: number, wy: number, wz: number, r: number): void {
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  const outer = mid + WELL_LINER_WIDTH / 2;
+  for (let v = 0; v < pos.count; v++) {
+    if (pos.getX(v) * side < outer - 1e-6) continue;
+    const [y, z] = [pos.getY(v), pos.getZ(v)];
+    const [uy, uz] = [(y - wy) / r, (z - wz) / r];
+    let skin = Infinity;
+    for (let seek = LINER_SKIN.from; seek <= LINER_SKIN.to + 1e-9; seek += LINER_SKIN.step) {
+      const x = skinX(loft, side, y + uy * seek, z + uz * seek);
+      if (x > -Infinity) skin = Math.min(skin, x);
+    }
+    if (skin === Infinity) continue;
+    pos.setX(v, side * Math.max(mid, Math.min(outer, skin - LINER_TUCK)));
+  }
 }
 
 /** A hump clears the liner it closes by this much (m), and sinks this far into the floor and wall it stands on. */
@@ -143,26 +180,27 @@ const LIP_RETURN = 0.035;
 const LIP_STEP = 0.016;
 
 /**
- * The lip's section (m) as [out from the opening's edge, off the skin, primer tone]: its toe faired into the skin, its crown, rolled
- * round the edge and returned into the well, unpainted (`INNER_PANEL`) from the roll's underside so the edge reads over a dark gap.
+ * The lip's section (m) as [out from the opening's edge, off the skin, primer tone]: its toe faired into the skin (a `stepped` face
+ * rises over `LIP_STEP` to a flat crown, so its outer edge reads), its crown, rolled round the edge and returned into the well, toned
+ * as the well (`WELL_PANEL`) from the roll's underside so the edge reads over a dark gap.
  */
-function lipSection(flare: number, width: number, square: boolean): (readonly [number, number, number])[] {
+function lipSection(flare: number, width: number, stepped: boolean): (readonly [number, number, number])[] {
   const crown = 0.1 * width;
-  const section: (readonly [number, number, number])[] = square
+  const section: (readonly [number, number, number])[] = stepped
     ? [
         [width, -LIP_SINK, 0],
         [width - LIP_STEP, flare, 0],
         [crown, flare, 0],
-        [crown - LIP_ROLL, flare - LIP_ROLL, INNER_PANEL],
+        [crown - LIP_ROLL, flare - LIP_ROLL, WELL_PANEL],
       ]
     : [
         [width, -LIP_SINK, 0],
         [width * 0.45, flare * 0.6, 0],
         [crown, flare, 0],
         [crown - LIP_ROLL, flare - LIP_ROLL, 0],
-        [crown - 0.7 * LIP_ROLL, flare - 1.7 * LIP_ROLL, INNER_PANEL],
+        [crown - 0.7 * LIP_ROLL, flare - 1.7 * LIP_ROLL, WELL_PANEL],
       ];
-  section.push([Math.min(section.at(-1)![0], -LIP_SINK), -LIP_RETURN, INNER_PANEL]);
+  section.push([Math.min(section.at(-1)![0], -LIP_SINK), -LIP_RETURN, WELL_PANEL]);
   return section;
 }
 
@@ -218,6 +256,8 @@ function lipPath(style: BodyStyle, wy: number, wz: number, square: boolean): [nu
   return path;
 }
 
+/** A lip station further than this (m) out past the round opening stands over painted skin (a square outline's corners). */
+const LIP_OVER_SKIN = 0.005;
 /** Where a lip's point lands on no side triangle (the opening's chord between two rings), its skin is sought this far (m) further out, in 5 mm steps. */
 const LIP_SEEK = 0.03;
 
@@ -225,12 +265,13 @@ const LIP_SEEK = 0.03;
  * Each wheel arch's lip (`arch.lip`, drawn only): a strip round the opening's edge, its crown `flare` proud of the skin, faired into it
  * `width` out and rolled under the edge into the well; round the opening's arc, then straight down its sides to the rocker. It sits on
  * the drawn `loft` (its first ring × slices vertices). Its index holds the four lips in wheel order, `userData.perWheel` the index count
- * of each (`panelRegions` peels each with its arch), `userData.tone` each vertex's primer (the body's `PRIMER_ATTRIBUTE`).
+ * of each (`panelRegions` peels each with its arch), `userData.tone` each vertex's primer (the body's `PRIMER_ATTRIBUTE`): its underside
+ * is the well's only over the opening; where a square outline stands out over the skin past it, that underside is paint.
  */
 export function archLipGeometry(style: BodyStyle, loft: THREE.BufferGeometry): THREE.BufferGeometry | null {
   const lip = style.arch.lip;
   if (!lip) return null;
-  const section = lipSection(lip.flare, lip.width, lip.square === true);
+  const section = lipSection(lip.flare, lip.width, lip.square === true || lip.band === true);
   const m = section.length;
   const positions: number[] = [];
   const indices: number[] = [];
@@ -241,12 +282,14 @@ export function archLipGeometry(style: BodyStyle, loft: THREE.BufferGeometry): T
     const path = lipPath(style, wy, wz, lip.square === true);
     const first = positions.length / 3;
     for (const [z, y, uz, uy] of path) {
+      // Under the hub the opening runs straight down its sides (the legs), over it round the arc.
+      const overOpening = (y < wy ? Math.abs(z - wz) : Math.hypot(z - wz, y - wy)) <= style.arch.radius + LIP_OVER_SKIN;
       for (const [out, off, t] of section) {
         let skin = -Infinity;
         for (let seek = Math.max(out, 0); skin === -Infinity && seek <= Math.max(out, 0) + LIP_SEEK; seek += 0.005) skin = skinX(loft, side, y + uy * seek, z + uz * seek);
         if (skin === -Infinity) throw new Error(`${style.id}: no body side under the arch lip at y ${y}, z ${z}`);
         positions.push(side * (skin + off), y + uy * out, z + uz * out);
-        tone.push(t);
+        tone.push(overOpening ? t : 0);
       }
     }
     const from = indices.length;

@@ -632,7 +632,7 @@ const CHAMFERED_POST_RING = 11;
 function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number } {
   const body = makeChassisGeometry(style);
   const rings = (bootOpen: boolean, noseFill: boolean) => sliceZs(style, "drawn", bootOpen, noseFill).length;
-  const liners = (source: "drawn" | "cage") => makeWellLiners(style, source).reduce((n, g) => n + g.getAttribute("position").count, 0);
+  const liners = (source: "drawn" | "cage") => makeWellLiners(style, source, body).reduce((n, g) => n + g.getAttribute("position").count, 0);
   const posts = makeGreenhouseFrame(style, "drawn").filter((g) => POST_NAMES.includes(g.name));
   return {
     lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,

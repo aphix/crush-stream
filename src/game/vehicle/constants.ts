@@ -9,6 +9,8 @@ export const INTERIOR_MESH = "interior";
 export const PRIMER_ATTRIBUTE = "primer";
 /** `PRIMER_ATTRIBUTE` of the bay trough's walls and floor: dark bare steel (`bare-metal.ts` darkens past 1). */
 export const INNER_PANEL = 2;
+/** `PRIMER_ATTRIBUTE` of a wheel well (its liner, ceiling and the lip's return): flat near-black, so the arch reads over a dark well. */
+export const WELL_PANEL = 3;
 /** A bumper's per-vertex trim attribute: 0 the bumper's own trim, `FITTING_TONE` black or chrome (its exhaust tips and tow hitch, drawn in its one mesh). */
 export const FITTING_ATTRIBUTE = "fitting";
 export const FITTING_TONE = { black: 1, chrome: 2 } as const;
