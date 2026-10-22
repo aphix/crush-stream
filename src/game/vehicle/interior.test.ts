@@ -7,15 +7,15 @@ import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { BUMPER_F, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { makeHoodGeometry, TUB_EDGE } from "./car-mesh.ts";
+import { bayAt, bayTub, makeHoodGeometry, sampleSlice, TUB_EDGE } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
-import { bayTub, cabinGeometry, cageInterior, doorCardGeometry } from "./interior-geometry.ts";
+import { cabinGeometry, cageInterior, doorCardGeometry } from "./interior-geometry.ts";
 import { CarCabin, driverSeat } from "./interior.ts";
 import { PartBatch } from "./part-batch.ts";
-import { carPartSeats, PART_KIND, PART_KINDS, type PartSeat } from "./part-geometry.ts";
+import { carPartSeats, PART_KIND, PART_KINDS, partGeometry, type PartSeat } from "./part-geometry.ts";
 import { paint } from "./test-support.ts";
 import { carInState } from "./drawn-body.test-util.ts";
-import { STYLE_CLASS } from "./vehicle-classes.ts";
+import { assignClass, CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
 
 const mm = (v: THREE.Vector3): string => v.toArray().map((x) => x.toFixed(3)).join();
 
@@ -151,6 +151,7 @@ describe("given a field of one car of every style", () => {
     return Object.fromEntries(PART_KINDS.map((k) => [k, batch.meshes[k]!.count]));
   };
   const rows = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].seats.rear !== null).length;
+  const lifted = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].underbody).length;
 
   test("when the batch syncs, then each prop kind is one instanced draw holding the whole field's seats, and nothing under the hood or bumpers shows", () => {
     const counts = draw();
@@ -162,6 +163,9 @@ describe("given a field of one car of every style", () => {
     assert.equal(counts[PART_KIND.wheel], cars.length);
     assert.equal(counts[PART_KIND.engineBay], 0);
     assert.equal(counts[PART_KIND.crashBar], 0);
+    assert.equal(counts[PART_KIND.ladderFrame], lifted, "a frame only under a style with an undercarriage");
+    assert.equal(counts[PART_KIND.axle], 2 * lifted);
+    assert.ok(lifted > 0 && lifted < cars.length, "the control: the monster has one, the rest none");
   });
 
   test("when one car's hood and another's front bumper come off, then the bay and one crash bar show, in their kinds' one draw each", () => {
@@ -174,6 +178,70 @@ describe("given a field of one car of every style", () => {
     const reset = draw();
     assert.equal(reset[PART_KIND.engineBay], 0, "a reset closes the bay");
     assert.equal(reset[PART_KIND.crashBar], 0);
+  });
+});
+
+describe("given a monster truck of its class at rest on flat ground", () => {
+  const scene = new THREE.Scene();
+  const build = (style: "monster" | "pickup"): DeformableCar => {
+    const car = new DeformableCar(paint(), scene, null, style);
+    assignClass(car, "monster");
+    car.spawn(0, 0, 0);
+    car.group.updateMatrixWorld(true);
+    return car;
+  };
+  const monster = build("monster");
+  const batch = new PartBatch(1);
+  batch.sync([monster]);
+  const m = new THREE.Matrix4();
+  const v = new THREE.Vector3();
+
+  test("when the batch syncs, then its frame and both axles draw, and a pickup body on the same lift draws none of them", () => {
+    assert.equal(batch.meshes[PART_KIND.ladderFrame]!.count, 1);
+    assert.equal(batch.meshes[PART_KIND.axle]!.count, 2);
+    const plain = new PartBatch(1);
+    plain.sync([build("pickup")]);
+    assert.equal(plain.meshes[PART_KIND.ladderFrame]!.count + plain.meshes[PART_KIND.axle]!.count, 0);
+  });
+
+  test("when its axles are read, then each sits on its wheels' hubs, at the class's hub height (the drawn tyre's radius)", () => {
+    const hub = carFrame(monster.style).rig.tyre.r * CLASSES.monster.wheelScale;
+    const w = monster.wheels.map((wheel) => wheel.getWorldPosition(new THREE.Vector3()));
+    for (const [k, [a, b]] of [[0, 1], [2, 3]].entries()) {
+      batch.meshes[PART_KIND.axle]!.getMatrixAt(k, m);
+      v.setFromMatrixPosition(m);
+      const mid = w[a!]!.clone().add(w[b!]!).multiplyScalar(0.5);
+      assert.ok(v.distanceTo(mid) < 1e-4 && Math.abs(v.y - hub) < 1e-4, `axle ${k} at ${mm(v)}, hubs' midpoint ${mm(mid)}, hub height ${hub.toFixed(3)}`);
+    }
+  });
+
+  test("when every undercarriage vertex is read through its instance, then none is below the ground", () => {
+    let low = Infinity;
+    for (const kind of [PART_KIND.ladderFrame, PART_KIND.axle]) {
+      const mesh = batch.meshes[kind]!;
+      const pos = partGeometry(kind).getAttribute("position");
+      for (let k = 0; k < mesh.count; k++) {
+        mesh.getMatrixAt(k, m);
+        for (let i = 0; i < pos.count; i++) low = Math.min(low, v.fromBufferAttribute(pos, i).applyMatrix4(m).y);
+      }
+    }
+    assert.ok(low >= 0, `lowest undercarriage vertex at ${low.toFixed(3)} m`);
+  });
+
+  test("when its front-left wheel pops off, then the front axle still draws, its stub on the gone wheel's rest hub where it stood", () => {
+    const popped = build("monster");
+    const own = new PartBatch(1);
+    own.sync([popped]);
+    const before = new THREE.Matrix4();
+    own.meshes[PART_KIND.axle]!.getMatrixAt(0, before);
+    popped["dropWheel"](0, "hubFL");
+    popped.group.updateMatrixWorld(true);
+    own.sync([popped]);
+    assert.ok(popped.wheels[0]!.parent === scene, "the control: the wheel left the car");
+    assert.equal(own.meshes[PART_KIND.axle]!.count, 2, "both axles draw");
+    own.meshes[PART_KIND.axle]!.getMatrixAt(0, m);
+    const moved = Math.max(...m.elements.map((e, i) => Math.abs(e - before.elements[i]!)));
+    assert.ok(moved < 1e-4, `the front axle moved ${moved.toFixed(5)} off its rest place`);
   });
 });
 
@@ -222,6 +290,80 @@ describe("given every style's drawn body and hood", () => {
       for (let v = 0; v < hood.count; v++) if (hood.getX(v) === INNER_PANEL) under++;
       assert.ok(under > 0 && under < hood.count / 2, `${id}: ${under} of ${hood.count} hood vertices unpainted`);
       assert.equal(makeChassisGeometry(style, "cage").getAttribute(PRIMER_ATTRIBUTE).array.every((p) => p === 0), true, `${id}: the cage build is all paint`);
+    }
+  });
+
+  test("when a body's cabin tub ends near its engine bay, then a cowl of closed deck at least 5 cm long stands between their blends, not a fin", () => {
+    /** The closed deck (m) a cowl keeps between the cabin tub's blend and the bay's. */
+    const COWL = 0.05;
+    /** The deck crown's height (m) over the belt where no tub opens it (`halfRing`'s ring point 0). */
+    const CROWN = 0.012;
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const rear = bayTub(style)[0];
+      const front = Math.max(...style.tubs.map(([, b]) => b).filter((b) => b < rear));
+      if (!Number.isFinite(front)) continue;
+      const body = makeChassisGeometry(style);
+      const { ring, slices } = body.userData.loft as { ring: number; slices: number };
+      const pos = body.getAttribute("position");
+      const closed: number[] = [];
+      for (let s = 0; s < slices; s++) {
+        const z = pos.getZ(s * ring);
+        if (z < front + TUB_EDGE - 1e-6 || z > rear - TUB_EDGE + 1e-6) continue;
+        if (Math.abs(pos.getY(s * ring) - (sampleSlice(z, style.profile).yBelt + CROWN)) < 1e-5) closed.push(z);
+      }
+      const span = closed.length > 0 ? Math.max(...closed) - Math.min(...closed) : -1;
+      assert.ok(span >= COWL - 1e-6, `${id}: closed deck between z ${(front + TUB_EDGE).toFixed(3)} and ${(rear - TUB_EDGE).toFixed(3)} spans ${span.toFixed(3)} m over ${closed.length} slices`);
+    }
+  });
+
+  test("when a drawn hood is laid on its body, then every closed-deck vertex under it stands at least 1 mm under the hood's top (no flap, no z-fight), a clamshell's included", () => {
+    /** The least clearance (m) between the hood's top and the deck it covers. */
+    const CLEAR = 0.001;
+    const clamshell: BodyStyle = { ...CAR_STYLES.wagon, hood: { ...CAR_STYLES.wagon.hood, kind: "clamshell" } };
+    const cases: readonly (readonly [string, BodyStyle])[] = [...CAR_STYLE_IDS.map((id) => [id, CAR_STYLES[id]] as const), ["wagon with a clamshell", clamshell]];
+    const ray = new THREE.Raycaster();
+    const down = new THREE.Vector3(0, -1, 0);
+    for (const [id, style] of cases) {
+      const body = makeChassisGeometry(style);
+      const { ring, slices } = body.userData.loft as { ring: number; slices: number };
+      const pos = body.getAttribute("position");
+      const hood = new THREE.Mesh(makeHoodGeometry(style));
+      hood.position.set(0, style.hood.origin[0], style.hood.origin[1]);
+      hood.updateMatrixWorld();
+      let read = 0;
+      for (let s = 0; s < slices; s++) {
+        const z = pos.getZ(s * ring);
+        if (z < style.hood.z0 + 1e-3 || z > style.hood.z1 - 1e-3 || bayAt(z, style) > 0) continue;
+        for (const point of [0, ring - 1]) {
+          const v = new THREE.Vector3().fromBufferAttribute(pos, s * ring + point);
+          ray.set(new THREE.Vector3(v.x, v.y + 1, v.z), down);
+          const top = ray.intersectObject(hood, false)[0]?.point.y ?? -Infinity;
+          assert.ok(top - v.y >= CLEAR, `${id}: the deck at (${mm(v)}) stands ${((top - v.y) * 1000).toFixed(2)} mm under the hood's top`);
+          read++;
+        }
+      }
+      assert.ok(read > 0, `${id}: no closed deck under the hood`);
+    }
+  });
+
+  test("when a drawn hood's edge is read along its length, then it stands 7 mm over the belt at every station, its rear end too (a rigid lid never bends into a cabin tub's blend)", () => {
+    /** The fender's closed-deck top (4 mm over the belt) plus the hood's 3 mm seat over it. */
+    const EDGE_OVER_BELT = 0.007;
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      if (style.hood.kind === "clamshell") continue;
+      const hood = makeHoodGeometry(style);
+      const { ring, slices } = hood.userData.loft as { ring: number; slices: number };
+      const pos = hood.getAttribute("position");
+      const [oy, oz] = style.hood.origin;
+      for (let s = 0; s < slices; s++) {
+        for (const point of [0, ring - 9]) {
+          const v = new THREE.Vector3().fromBufferAttribute(pos, s * ring + point);
+          const over = v.y + oy - sampleSlice(v.z + oz, style.profile).yBelt;
+          assert.ok(Math.abs(over - EDGE_OVER_BELT) < 1e-5, `${id}: the hood's edge at z ${(v.z + oz).toFixed(3)} stands ${(over * 1000).toFixed(1)} mm over the belt`);
+        }
+      }
     }
   });
 });

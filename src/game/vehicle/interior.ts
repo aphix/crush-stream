@@ -1,14 +1,14 @@
 import * as THREE from "three";
 import type { StreamedDeformation } from "../deform/streamed-deform.ts";
-import { detCos, detSin } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { MassName } from "../kernel/rig-spec.ts";
 import type { DetachPart } from "./car-core.ts";
 import { beltX, floorY } from "./car-lines.ts";
-import { roofAt, sampleSlice } from "./car-mesh.ts";
+import { bayTub, roofAt, sampleSlice } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { BUMPER_F, DRIVER_SIDE, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
-import { bayTub, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
+import { AXLE_HALF_SPAN, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 
 /** Gap (m) between a seated head's top and the roof line over it (the roof skin, the headliner its inner face). */
@@ -232,6 +232,44 @@ export class CarCabin {
     const sy = (top + sink - floor) / (REF_CABIN.roof - REF_CABIN.floor);
     this.shell.scale.y = sy;
     this.shell.position.y = floor - REF_CABIN.floor * sy;
+  }
+}
+
+/** Each axle's wheels (`car.wheels` order FL, FR, RL, RR) from its −x end to its +x end: turned half round, the front one's +z points back, to the car's middle as the rear one's does. */
+const AXLE_ENDS = [[1, 0, Math.PI], [2, 3, 0]] as const;
+
+/** A lifted truck's undercarriage, `PartBatch` seats: the ladder frame rides the body, an axle rides each pair of wheels where they are drawn. */
+export class CarUnderbody {
+  /** Front, rear; they ride with the wheels (`assignClass` hangs them in the hub group). */
+  readonly axles: readonly PartSeat[];
+  private readonly wheels: readonly THREE.Object3D[];
+  /** Each wheel's rest hub: where a popped wheel's end of its axle stays. */
+  private readonly rests: readonly THREE.Vector3[];
+
+  constructor(seats: readonly PartSeat[], group: THREE.Object3D, wheels: readonly THREE.Object3D[]) {
+    const frame = seats.find((s) => s.kind === PART_KIND.ladderFrame)!;
+    this.axles = seats.filter((s) => s.kind === PART_KIND.axle);
+    this.wheels = wheels;
+    this.rests = wheels.map((w) => w.position.clone());
+    group.add(frame, ...this.axles);
+    this.follow();
+  }
+
+  /** Each axle onto its wheels' hubs, tilted with them; a wheel that left the car leaves its end on its rest hub. */
+  follow(): void {
+    for (let k = 0; k < 2; k++) {
+      const axle = this.axles[k]!;
+      const [from, to, turn] = AXLE_ENDS[k]!;
+      const a = this.wheels[from]!;
+      const b = this.wheels[to]!;
+      const p = a.parent === axle.parent ? a.position : this.rests[from]!;
+      const q = b.parent === axle.parent ? b.position : this.rests[to]!;
+      const across = hypot2(q.x - p.x, q.z - p.z);
+      axle.position.addVectors(p, q).multiplyScalar(0.5);
+      axle.rotation.set(0, turn, detAtan2(q.y - p.y, across));
+      axle.scale.set(hypot2(across, q.y - p.y) / (2 * AXLE_HALF_SPAN), 1, 1);
+      axle.updateMatrixWorld();
+    }
   }
 }
 

@@ -2,6 +2,48 @@ import type { BodyStyle } from "../car-variants.ts";
 import { st } from "./platform.ts";
 import { LIFTGATE } from "../hinge-spec.ts";
 
+/** Wagon's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const WAGON_LAMP_SHAPES = {
+  head: {
+    loops: [
+      { points: [[0.41, 0.79], [0.7, 0.81], [0.76, 0.845], [0.41, 0.85]] },
+      { side: true, points: [[1.92, 0.8], [1.7, 0.84], [1.68, 0.865], [1.92, 0.865]] },
+    ],
+    lens: "dark",
+    bezel: "black",
+    recess: 0.01,
+    strips: [{ line: { points: [[0.41, 0.85], [0.41, 0.8], [0.7, 0.815], [0.76, 0.845]] }, width: 0.008, tone: "lit" }],
+    rounds: [
+      { at: [0.47, 0.835], r: 0.012, tone: "lit" },
+      { at: [0.54, 0.835], r: 0.012, tone: "lit" },
+    ],
+  },
+  tail: {
+    loops: [
+      { points: [[0.62, 0.9], [0.68, 0.905], [0.68, 0.995], [0.62, 1.0]] },
+      { points: [[0.5, 0.9], [0.62, 0.9], [0.62, 1.0], [0.5, 1.0]] },
+      { side: true, points: [[-2.08, 0.91], [-1.74, 0.97], [-1.74, 0.99], [-2.08, 1.0]] },
+    ],
+    lens: "lit",
+    bezel: "black",
+    strips: [{ line: { points: [[0.5, 0.995], [0.68, 0.99]] }, width: 0.006, tone: "lit" }],
+    cells: [
+      { loop: { points: [[0, 0.91], [0.5, 0.91], [0.5, 0.98], [0, 0.98]] }, tone: "dark" },
+      { loop: { points: [[0.5, 0.9], [0.68, 0.9], [0.68, 0.94], [0.5, 0.94]] }, tone: "smoked" },
+      { loop: { points: [[0.5, 0.94], [0.55, 0.94], [0.55, 1.0], [0.5, 1.0]] }, tone: "clear" },
+    ],
+  },
+  front: {
+    loops: [{ points: [[0.52, 0.36], [0.72, 0.36], [0.72, 0.48], [0.52, 0.48]] }],
+    lens: "dark",
+    strips: [{ line: { points: [[0.52, 0.38], [0.72, 0.38]] }, width: 0.01, tone: "chrome" }],
+  },
+  rear: {
+    loops: [{ points: [[0.48, 0.45], [0.64, 0.45], [0.64, 0.47], [0.48, 0.47]] }],
+    lens: "red",
+  },
+} as const;
+
 /** Luxury SUV (the `wagon` id): tall clamshell nose, flat floating roof, a roof-hinged liftgate carrying the raked rear glass. */
 export const WAGON: BodyStyle = {
   id: "wagon",
@@ -11,7 +53,7 @@ export const WAGON: BodyStyle = {
   belt: { x: [[-1.97, 0.64], [-1.8, 0.7], [-1.6, 0.74], [-1.4, 0.77], [-1.2, 0.785]], y: [[-2.033, 1.095], [0.024, 1.07], [0.887, 1.062]] },
   rocker: { y: 0.28 },
   arch: { radius: 0.455, lip: { flare: 0.016, width: 0.055 } },
-  hood: { z0: 0.86, z1: 1.97, origin: [0.96, 0.84] },
+  hood: { z0: 0.86, z1: 1.97, origin: [0.96, 0.84], kind: "clamshell" },
   bumpers: {
     front: {
       seat: { y: 0.48, z: 1.9785 },
@@ -19,6 +61,8 @@ export const WAGON: BodyStyle = {
       span: 0.78,
       wrap: { from: 0.25, back: 0.3 },
       trim: "body",
+      top: [[0, 0.555], [0.36, 0.555], [0.4, 0.765], [0.62, 0.78], [0.66, 0.785]],
+      edge: [[1.86, 0.785], [1.75, 0.775], [1.5, 0.74], [1.62, 0.6], [1.7, 0.42], [1.72, 0.36]],
     },
     rear: {
       seat: { y: 0.54, z: 2.0555 },
@@ -26,9 +70,11 @@ export const WAGON: BodyStyle = {
       span: 0.66,
       wrap: { from: 0.35, back: 0.25 },
       trim: "body",
+      top: [[0, 0.62], [0.55, 0.62], [0.62, 0.615]],
+      edge: [[-2, 0.615], [-1.85, 0.6], [-1.68, 0.6], [-1.725, 0.45], [-1.735, 0.38]],
     },
   },
-  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.09, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655] },
+  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.09, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "rounded", finish: "black", size: [0.09, 0.13, 0.1] } },
   aPillarFoot: 0.66,
   aPillarTop: 0.17,
   glassTop: 0.05,
@@ -68,7 +114,7 @@ export const WAGON: BodyStyle = {
     st(1.793, 0.744, 0.92),
     st(1.86, 0.683, 0.906),
     st(1.928, 0.557, 0.86),
-    st(2.035, 0.36, 0.68),
+    st(2.035, 0.36, 0.84),
   ],
   roofZ: [-1.84, 0.3],
   windshieldTop: [1.45, 0.3],
@@ -79,10 +125,12 @@ export const WAGON: BodyStyle = {
   tubs: [[-1.96, 0.7, 0.38]],
   rearDoorSeam: -1.23,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE },
-  lamps: { head: [0.3, 0.8], tail: [0.62, 0.955] },
+  lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES },
+  grille: { y: 0.68, z: 2.025, size: [0.78, 0.24], bottom: 0.68, round: 0.03, kind: "hex", finish: "chrome" },
   seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },
   pillars: { b: { width: [0.088, 0.088] }, divider: { width: [0.105, 0.105] } },
   blackout: { a: true, sail: true, b: true, divider: true, rear: true },
+  privacyGlass: { rear: true, quarter: true },
   roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.82, -1.74], y: [1.46, 1.51], halfWidth: 0.5 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 } },
   exhaust: { tips: 2, x: 0.5, y: 0.47, size: [0.12, 0.05], shape: "rect" },
   details: {
@@ -90,14 +138,12 @@ export const WAGON: BodyStyle = {
       { view: "top", points: [[1.97, 0], [1.95, 0.35], [1.9, 0.52], [1.82, 0.62]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[0.88, 0], [0.86, 0.4], [0.85, 0.65], [0.88, 0.72]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[1.03, 0], [0.99, 0.3], [0.88, 0.55], [0.8, 0.65]], width: 0.01, depth: 0.002, profile: "u", cavity: 0.7 },
-      { view: "side", points: [[1.92, 0.865], [1.65, 0.92], [1.3, 0.99], [0.95, 1.05], [0.88, 1.07]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[1.92, 0.4], [1.65, 0.43], [1.45, 0.46], [1.25, 0.49]], width: 0.05, depth: 0.003, profile: "u", cavity: 0 },
       { view: "top", points: [[1.85, 0.6], [1.55, 0.6], [1.2, 0.6]], width: 0.03, depth: 0.0015, profile: "u", cavity: 0 },
       { view: "top", points: [[1.22, 0.46], [1.22, 0.58], [0.94, 0.58], [0.94, 0.46]], closed: true, width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
       { view: "front", points: [[0, 0.8], [0.39, 0.8], [0.39, 0.74], [0.34, 0.56], [0, 0.56]], width: 0.012, depth: 0.003, profile: "u", cavity: 0 },
       { view: "front", points: [[0.55, 0.53], [0.65, 0.53], [0.74, 0.53]], width: 0.012, depth: 0.003, profile: "u", cavity: 0 },
       { view: "front", points: [[0, 0.28], [0.58, 0.29]], width: 0.012, depth: 0.002, profile: "u", cavity: 0 },
-      { view: "side", points: [[1.5, 0.74], [1.62, 0.6], [1.7, 0.4], [1.74, 0.28]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "front", points: [[0.42, 0.78], [0.55, 0.78], [0.66, 0.76], [0.74, 0.8]], width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[1.44, 0.87], [1.42, 0.88]], width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "front", points: [[0.42, 0.83], [0.55, 0.83], [0.66, 0.84], [0.74, 0.86], [0.77, 0.87]], width: 0.012, depth: 0.003, profile: "u", cavity: 0 },
@@ -133,8 +179,6 @@ export const WAGON: BodyStyle = {
       { view: "rear", points: [[0.62, 0.99], [0.62, 0.91]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.5, 0.96], [0.8, 0.96]], width: 0.01, depth: 0.002, profile: "u", cavity: 0.7 },
       { view: "rear", points: [[0.5, 0.93], [0.8, 0.93]], width: 0.01, depth: 0.002, profile: "u", cavity: 0.7 },
-      { view: "side", points: [[-1.68, 0.6], [-1.95, 0.6]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "rear", points: [[0.6, 0.62], [0, 0.62]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-1.93, 0.45], [-1.97, 0.45]], width: 0.006, depth: 0.004, profile: "step", cavity: 0.85 },
       { view: "rear", points: [[0.6, 0.45], [0, 0.45]], width: 0.006, depth: 0.004, profile: "step", cavity: 0.85 },
     ],
