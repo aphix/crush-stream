@@ -68,13 +68,13 @@ function lowestDrawn(car: DeformableCar, ground: Ground): { clearance: number; m
   return lowest;
 }
 
-/** Stages `hit` on `ground` and runs it until both cars sleep (or `SETTLE_MAX_S`): the cars the hit left wrecks, at rest. */
-function wrecksAtRest(hit: Hit, ground: Ground): DeformableCar[] {
+/** Stages `hit` (each car's speed times `scale`) on `ground` and runs it until both cars sleep (or `SETTLE_MAX_S`): the cars the hit left wrecks, at rest. */
+function wrecksAtRest(hit: Hit, ground: Ground, scale = 1): DeformableCar[] {
   setGround(ground);
   const cars = [buildCar(hit.a === "monster" || hit.a === "truck" ? "pickup" : "sedan", hit.a), buildCar(hit.b === "monster" || hit.b === "truck" ? "pickup" : "sedan", hit.b)] as const;
   const [a, b] = cars;
-  launch(a, -5, 0, Math.PI / 2, hit.kphA / 3.6, 0);
-  launch(b, 5, hit.offset, -Math.PI / 2 + hit.yawB, (-hit.kphB / 3.6) * Math.cos(hit.yawB), (-hit.kphB / 3.6) * Math.sin(hit.yawB));
+  launch(a, -5, 0, Math.PI / 2, (scale * hit.kphA) / 3.6, 0);
+  launch(b, 5, hit.offset, -Math.PI / 2 + hit.yawB, ((-scale * hit.kphB) / 3.6) * Math.cos(hit.yawB), ((-scale * hit.kphB) / 3.6) * Math.sin(hit.yawB));
   for (const car of cars) {
     car.group.position.y = ground.heightAt(car.group.position.x, car.group.position.z, 1);
     layOnGround(car);
@@ -102,6 +102,25 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
           assert.ok(clearance >= -SINK_M, `lowest drawn point ${(clearance * 100).toFixed(1)} cm over the ground (negative: in it), on ${mesh}; asleep ${wreck.asleep}`);
         }
       });
+    }
+  }
+
+  // Each hit a little slower and faster, on gentler and steeper slopes: where a wreck comes to rest (on its wheels, side or roof) turns on
+  // every shape or tuning change, so one staged case flips with them; a defect that puts a wreck's drawn hub, wheel or part in the ground
+  // on some of the ways it can lie shows on a handful of them.
+  for (const scale of [0.9, 1.1]) {
+    for (const pitch of [5, 15]) {
+      for (const hit of HITS) {
+        it(`when ${hit.name}, ${scale < 1 ? "10 % slower" : "10 % faster"}, on a ${pitch}° slope, then no point of either wreck is drawn more than 3 cm in the ground under it`, () => {
+          const ground = new Slope(pitch);
+          const wrecks = wrecksAtRest(hit, ground, scale);
+          assert.ok(wrecks.length > 0, "the hit left no wreck");
+          for (const wreck of wrecks) {
+            const { clearance, mesh } = lowestDrawn(wreck, ground);
+            assert.ok(clearance >= -SINK_M, `lowest drawn point ${(clearance * 100).toFixed(1)} cm over the ground (negative: in it), on ${mesh}; asleep ${wreck.asleep}`);
+          }
+        });
+      }
     }
   }
 });

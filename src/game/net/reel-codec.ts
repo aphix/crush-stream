@@ -314,7 +314,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * differently. A clip of 156 or before no longer reads.
  * 158: a car's roof takes its imprint plane (the top other cars stand on, which the skin flattens to) only from a belly within 5 cm of the roof, above or
  * below; a car set down inside another (placed on its spot, or driven through it) no longer cuts the other's roof, pillars and upper sides to its own ride
- * height. Every car another car is set inside moves differently. A clip of 157 or before no longer reads.
+ * height. A wreck's hub springs act along its body's up (they acted along the world's), and its hubs stay planted only while it stands on its
+ * wheels: a wreck lying over or tumbling carries its hubs where its wheels are drawn (a monster on its side held them 0.4-0.9 m off, its
+ * wheels drawn in the ground), and a door jammed open on a wreck lying over stands out of the ground under it. Every crash moves differently.
+ * Every car another car is set inside moves differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
 const REPLAY_VERSION = 158;

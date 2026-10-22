@@ -426,16 +426,18 @@ describe("given every body style's panels cut from its smoothed loft", () => {
 const SIM_CRASH_KPH = 48;
 // Re-pinned for the skin reading a kept set once (its fit rest takes the set): the first difference is bumperFL's velocity at 0.0217 s, in the hit,
 // where the cage the contact reads first differs.
+// Every style re-pinned for the hubs' springs along the body's up while the wreck is not standing planted (`stepSuspension`): sedan,
+// hatchback, wagon 482d299b... -> f891b823..., coupe 457b9fa4... -> 250118b0..., pickup 39d6911c... -> e5802977..., police 08723ee0... -> ac2f704c....
 const SIM_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "482d299bbf62cfe82b9c5037a70fd22463affd183b1eb4e9f64b085bfaf11e30" },
-  { id: "hatchback", digest: "482d299bbf62cfe82b9c5037a70fd22463affd183b1eb4e9f64b085bfaf11e30" },
-  { id: "wagon", digest: "482d299bbf62cfe82b9c5037a70fd22463affd183b1eb4e9f64b085bfaf11e30" },
-  { id: "coupe", digest: "457b9fa4503b2875a323b0b3cce41ea536f3084148ba6bcea0a32b5bf2489bc8" },
-  { id: "pickup", digest: "39d6911ced53f424b1d8a4bcfaf450e76a96b78f19559f39664d5c6a7949bb87" },
+  { id: "sedan", digest: "f891b8239096ab52065b70573eea87dfb6263c76e69bc480990a0c4d9c420ead" },
+  { id: "hatchback", digest: "f891b8239096ab52065b70573eea87dfb6263c76e69bc480990a0c4d9c420ead" },
+  { id: "wagon", digest: "f891b8239096ab52065b70573eea87dfb6263c76e69bc480990a0c4d9c420ead" },
+  { id: "coupe", digest: "250118b047d4e261833670f6ae2511382d3be4a92802e8b27a354b971095579c" },
+  { id: "pickup", digest: "e580297745086e2def4ca87af234685ba297c9cf76544c15c307d98431ab3ec7" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
-  { id: "police", digest: "08723ee0b057fd7362b131572b0fae67c75b4b44cba69bb5c9097461202172fe" },
+  { id: "police", digest: "ac2f704cf9a3a54858a0c656ed7c0cef88597e66a3814ce5f174369b42ebf25e" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style crashed into the wall at 48 km/h by the engine's own step", () => {

@@ -98,10 +98,23 @@ const LIVE_SHELLS = 2;
 /** A bumper hung by one corner rolls about it this much at full hinge and full asymmetry (rad), and sags this far (m). */
 const BUMPER_ROLL = 0.6;
 const BUMPER_SAG = 0.06;
+/** A door's bottom stays this far (m) above the ground under it (`liftDoor`). */
+const DOOR_CLEAR = 0.04;
 /** A hanging bumper's lowest point stays this far (m) above the road under it, as a door's does. */
-const BUMPER_CLEAR = 0.04;
+const BUMPER_CLEAR = DOOR_CLEAR;
 /** Halvings that find the roll a hanging bumper rests on the road at (0.6 rad / 2⁸ = 2 mrad, 3 mm of the free end). */
 const BUMPER_REST_ITER = 8;
+
+/** The highest ground (m) under the plan corners of world box `b`, read from its top down; `NO_FLOOR` where there is none under any. */
+function groundUnderBox(b: THREE.Box3): number {
+  const ground = activeGround();
+  let high = NO_FLOOR;
+  for (let k = 0; k < 4; k++) {
+    const y = ground.heightAt(k & 1 ? b.max.x : b.min.x, k & 2 ? b.max.z : b.min.z, b.max.y);
+    if (y !== NO_FLOOR && (high === NO_FLOOR || y > high)) high = y;
+  }
+  return high;
+}
 /** A hinged part below this hinge value is not worn by the wind (a shell hardly standing). */
 const WEAR_MIN_T = 0.04;
 /** A contact is fresh when the last was over `TOUCH_GAP` s ago and the next lands within `TOUCH_NOW` s. */
@@ -317,13 +330,7 @@ export abstract class CarParts extends CarGlass {
       p.object.rotation.y = -sign * Math.max(t * DOOR_JAM, p.swing!.theta);
       p.object.position.x += sign * t * 0.06;
       p.object.updateWorldMatrix(true, false);
-      // Keep the door's bottom off the ground under it (not where there is none: off the fleet disc's rim), by a lift along the car's up: only on its wheels, where that is up (on its side or roof it points into the ground).
-      if (this.group.matrixWorld.elements[5]! >= UPRIGHT_UP_Y) {
-        _box.setFromObject(p.object);
-        const g = _doorW.setFromMatrixPosition(p.object.matrixWorld);
-        const gy = activeGround().heightAt(g.x, g.z, g.y);
-        if (gy !== NO_FLOOR && _box.min.y < gy + 0.04) p.object.position.y += gy + 0.04 - _box.min.y;
-      }
+      this.liftDoor(p.object);
     } else if (p.region) {
       if (p.folding) {
         if (!p.open || p.hingeT !== p.posed) this.shellPose(p);
@@ -359,6 +366,30 @@ export abstract class CarParts extends CarGlass {
       else lo = mid;
     }
     this.hungLack(o, x0, y0, px, lo);
+  }
+
+  /**
+   * Keeps door `o`'s bottom `DOOR_CLEAR` over the ground under it (not where there is none: off the fleet disc's rim). On its wheels it is
+   * lifted along the car's up over the ground at its hinge; lying over, where that points into the ground, along the world's up in its
+   * parent's frame (as `CarUnderbody.stub`) over the highest ground under its plan box (lying, it spans a metre of slope), a drawn pose only:
+   * a pickup on its left side drew its jammed-out left door 25.8 cm in the slope it lay on.
+   */
+  private liftDoor(o: THREE.Object3D): void {
+    _box.setFromObject(o);
+    const upright = this.group.matrixWorld.elements[5]! >= UPRIGHT_UP_Y;
+    const g = _doorW.setFromMatrixPosition(o.matrixWorld);
+    const gy = upright ? activeGround().heightAt(g.x, g.z, g.y) : groundUnderBox(_box);
+    if (gy === NO_FLOOR || _box.min.y >= gy + DOOR_CLEAR) return;
+    const lift = gy + DOOR_CLEAR - _box.min.y;
+    if (upright) {
+      o.position.y += lift;
+      return;
+    }
+    // The world's up in the parent's frame: its world matrix's row 1 (the car's groups carry no scale).
+    const e = o.parent!.matrixWorld.elements;
+    o.position.x += lift * e[1]!;
+    o.position.y += lift * e[5]!;
+    o.position.z += lift * e[9]!;
   }
 
   /** Pose `o` rolled `r` about its corner at `px` from (`x0`, `y0`) and return how far (m) its box is under `BUMPER_CLEAR` above the ground there: positive is too low. */
