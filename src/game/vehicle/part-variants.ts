@@ -183,11 +183,11 @@ function styleGrille(style: BodyStyle): THREE.BufferGeometry {
   const surround = indexed(new THREE.ExtrudeGeometry(ring, { depth: GRILLE.rimDepth, bevelEnabled: false })).translate(0, 0, face - GRILLE.rimDepth);
   const fine = g.kind === "mesh" || g.kind === "hex";
   const angles = { bars: [0], slats: [Math.PI / 2], mesh: [0, Math.PI / 2], hex: [HEX_ANGLE, -HEX_ANGLE] }[g.kind];
-  const fill = angles.flatMap((a) => (fine ? grilleBars(inner, a, undefined, GRILLE.meshBar, GRILLE.meshPitch, GRILLE.barDepth) : grilleBars(inner, a, g.count, GRILLE.bar, GRILLE.pitch, GRILLE.barDepth)));
+  const fill = angles.flatMap((a) => (fine ? grilleBars(inner, a, g.count, GRILLE.meshBar, GRILLE.meshPitch, GRILLE.barDepth) : grilleBars(inner, a, g.count, GRILLE.bar, GRILLE.pitch, GRILLE.barDepth)));
   const barZ = face - GRILLE.inset - GRILLE.barDepth / 2;
   const parts = [
     dark(new THREE.ShapeGeometry(new THREE.Shape(inner)), ...GRILLE_BACKING).translate(0, 0, face - GRILLE.backingSet),
-    finished(surround, g.finish),
+    finished(surround, g.rim ?? g.finish),
     ...fill.map((f) => finished(f.translate(0, 0, barZ), g.finish)),
   ];
   if (g.badge) parts.push(finished(new THREE.CylinderGeometry(g.badge, g.badge, GRILLE.badge, 24).rotateX(Math.PI / 2).translate(0, 0, face), "chrome"));

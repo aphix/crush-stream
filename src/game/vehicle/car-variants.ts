@@ -335,7 +335,7 @@ export interface BodyStyle {
   /**
    * The front grille (drawn only; it tears off with the front bumper): centre height `y` and face `z` (m, car frame; z absent: the platform
    * grille's face); `size` [w at the top, h], `bottom` its width at the bottom (a trapezoid; absent, w), corners rounded `round` (m); `kind`
-   * horizontal bars, vertical slats, a mesh of both or a diagonal (hex) mesh, `count` bars or slats (absent, at the default pitch); a round
+   * horizontal bars, vertical slats, a mesh of both or a diagonal (hex) mesh, `count` bars or slats (a mesh: lines each way; absent, at the default pitch); a round
    * `badge` of that radius at its centre; in `finish` (body: the body's paint). Absent: the platform grille.
    */
   grille?: {
@@ -350,6 +350,8 @@ export interface BodyStyle {
     finish: "black" | "chrome" | "body";
     /** Its top leaning back (rad) about its centre line, onto a raked face; absent, upright. */
     lean?: number;
+    /** The surround's own finish (a chrome frame round a black mesh); absent, `finish`. */
+    rim?: "black" | "chrome" | "body";
   };
   /**
    * Seats (m, car space): the driver's H-point [x, y, z], x across from the centre line on `DRIVER_SIDE` (the passenger mirrors him),
