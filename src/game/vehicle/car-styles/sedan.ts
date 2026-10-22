@@ -16,7 +16,7 @@ export const SEDAN: BodyStyle = {
   bPillar: { rear: -0.31, front: -0.21 },
   belt: { x: 0.74, y: [[-1.23, 1.0], [-1.15, 0.98], [-0.9, 0.948], [-0.5, 0.913], [0.4, 0.9], [0.92, 0.9]] },
   rocker: { y: 0.21 },
-  arch: { radius: 0.405 },
+  arch: { radius: 0.405, lip: { flare: 0.008, width: 0.035 } },
   hood: { z0: 0.88, z1: 1.97, origin: [0.81, 0.86] },
   /** Body-colour fascias, as the reference's: its black is the lower intake, grille and diffuser (`details`, grille, tail trim), not the bumper. */
   bumpers: {
@@ -97,6 +97,7 @@ export const SEDAN: BodyStyle = {
    * hung in the air past both.
    */
   exhaust: { tips: 2, x: 0.36, y: 0.31, size: [0.14, 0.055], shape: "round" },
+  seats: PLATFORM_HARDPOINTS.seats,
   details: SEDAN_DETAILS,
   camera: { ...PLATFORM_CAMERA, hood: [1.08, 1.2] },
 };

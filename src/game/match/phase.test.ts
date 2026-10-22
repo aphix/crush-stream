@@ -104,7 +104,7 @@ function carAt(x: number, vx: number): DeformableCar {
 
 describe("given two cars on the same line closing on each other", () => {
   it("when one drives at a parked one, then the predicted hit lies on the parked car's near face, on the line between them", () => {
-    const hit = { x: NaN, y: NaN, z: NaN, nx: NaN, nz: NaN };
+    const hit = { x: NaN, y: NaN, z: NaN, nx: NaN, nz: NaN, a: null, b: null };
     const parked = carAt(10, 0);
     const eta = pairEta([carAt(-10, 20), parked], hit);
     const near = 10 - parked.frame.half.z;
@@ -114,7 +114,7 @@ describe("given two cars on the same line closing on each other", () => {
   });
 
   it("when both drive at 10 m/s from either side of x = 0, then the predicted hit lies where they meet, x = 0", () => {
-    const hit = { x: NaN, y: NaN, z: NaN, nx: NaN, nz: NaN };
+    const hit = { x: NaN, y: NaN, z: NaN, nx: NaN, nz: NaN, a: null, b: null };
     pairEta([carAt(-10, 10), carAt(10, -10)], hit);
     assert.ok(Math.abs(hit.x) < 1e-9, `hit at x ${hit.x}`);
   });

@@ -1,4 +1,5 @@
-import type { BodyStyle } from "./car-variants.ts";
+import { hypot2 } from "../kernel/physics-core.js";
+import type { BodyStyle, PillarSpan } from "./car-variants.ts";
 
 /** Height at `z` along [z, y] stations in ascending z: linear between them, held past the ends. */
 function piecewise(stations: readonly (readonly [number, number])[], z: number): number {
@@ -55,10 +56,43 @@ export function aPillarTopZ(style: BodyStyle): number {
   return style.aPillarTop ?? style.windshieldTop[1] - A_PILLAR_TOP_BACK;
 }
 
-/** The drawn B-pillar's z band [rear, front] when the style sets its width (centred on `bPillar`), else null: the `bPillar` band. */
-export function bPillarBand(style: BodyStyle): readonly [number, number] | null {
-  const width = style.pillars?.b;
-  if (width === undefined) return null;
-  const mid = (style.bPillar.rear + style.bPillar.front) / 2;
-  return [mid - width / 2, mid + width / 2];
+/** The drawn A-post is this wide (m) in side view behind the windshield's edge line, so it never thins to a sliver. */
+const A_POST_WIDTH = 0.06;
+/** A door glass kneed onto the A-post runs this far (m) in under the post's rear edge. */
+const KNEE_TUCK = 0.01;
+
+/** The drawn A-post's rear edge at height `y` (z, m): `A_POST_WIDTH` behind the windshield's edge line in side view. */
+export function aPostRearZ(y: number, style: BodyStyle): number {
+  const { base } = style.windshield;
+  const [topY, topZ] = style.windshieldTop;
+  const [dz, dy] = [topZ - base[1], topY - base[0]];
+  return base[1] + (dz * (y - base[0]) - A_POST_WIDTH * hypot2(dz, dy)) / dy;
+}
+
+/**
+ * The door glass's front edge at height `y` (z, m), its foot at `footY` on the belt and its top at `topY` (held over it): straight from
+ * `aPillarFoot` to `aPillarTopZ`, or kneed at `aPillarKnee` onto the A-post's rear edge (`KNEE_TUCK` under it), the sail's black triangle
+ * under the knee.
+ */
+export function doorGlassFrontZ(y: number, footY: number, topY: number, style: BodyStyle): number {
+  const [foot, top, knee] = [style.aPillarFoot, aPillarTopZ(style), style.aPillarKnee];
+  if (knee === undefined) return foot + (top - foot) * Math.min((y - footY) / (topY - footY), 1);
+  const kneeZ = aPostRearZ(knee, style) + KNEE_TUCK;
+  return y <= knee ? foot + (kneeZ - foot) * ((y - footY) / (knee - footY)) : kneeZ + (top - kneeZ) * Math.min((y - knee) / (topY - knee), 1);
+}
+
+/** A drawn pillar's z bands [rear, front] at the belt and at the top. */
+type PillarBands = { belt: readonly [number, number]; top: readonly [number, number] };
+
+/** `span`'s bands about its centre line, upright at `mid` unless it leans. */
+export function pillarBands(span: PillarSpan, mid: number): PillarBands {
+  const [beltZ, topZ] = span.z ?? [mid, mid];
+  const [beltWidth, topWidth] = span.width;
+  return { belt: [beltZ - beltWidth / 2, beltZ + beltWidth / 2], top: [topZ - topWidth / 2, topZ + topWidth / 2] };
+}
+
+/** The drawn B-pillar's bands when the style sets them (about the `bPillar` band's middle), else null: the `bPillar` band. */
+export function bPillarBand(style: BodyStyle): PillarBands | null {
+  const b = style.pillars?.b;
+  return b === undefined ? null : pillarBands(b, (style.bPillar.rear + style.bPillar.front) / 2);
 }

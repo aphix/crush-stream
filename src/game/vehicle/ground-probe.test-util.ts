@@ -10,6 +10,7 @@ import { newWorld, stepWorld, type World } from "../engine/world-step.ts";
 import { setGround, type Ground } from "../world/ground.ts";
 import { blankPoint, blankProjection, pointOn, type Track } from "../world/track.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 
 /**
  * How a car sits on ANY `Ground`, read straight off its drawn pose, for the drop matrix (`ground-fit.test.ts`) and the
@@ -20,7 +21,7 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 export const FRAME = 1 / FRAME_HZ;
 export const DEG = 180 / Math.PI;
 
-/** The tyre's tread as `TYRE_PROFILE` draws it (wheel-local, axle along x): crown and shoulders, [axle offset, radius]. */
+/** The platform tyre's tread as `TYRE_PROFILE` draws it (wheel-local, axle along x): crown and shoulders, [axle offset, radius]; a car's own tyre scales it (`fit`). */
 const TREAD_RINGS = [
   [0, 0.32],
   [0.082, 0.314],
@@ -30,8 +31,8 @@ const TREAD_RINGS = [
 ] as const;
 /** Points round each tread ring (7.5° apart). */
 const TREAD_STEPS = 48;
-/** The body's front bumper corners, over the underside samples (car-local x, y, z). */
-const BUMPERS = [-1, 1].flatMap((sx) => [-1, 1].map((sz): [number, number, number] => [sx * 0.88, 0.35, sz * 2.22]));
+/** A bumper corner is a row (x, z, height) of `frame.hullUnder`'s last four. */
+const BUMPER_ROWS = 4;
 
 /** Height hints are the asking point plus this (m): the layer rule (`STEP_UP`, a ramp's kerb) reads them. */
 const HINT_ABOVE = 1;
@@ -148,6 +149,9 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   const gy = car.group.position.y;
   const gaps: number[] = [];
   const contacts = new Float64Array(12).fill(NaN);
+  const { r: tyreR, halfW: tyreHalfW } = car.frame.rig.tyre;
+  const kAcross = tyreHalfW / PLATFORM_TYRE.halfW;
+  const kRadius = tyreR / PLATFORM_TYRE.r;
   for (const [i, wh] of car.wheels.entries()) {
     wh.getWorldPosition(_hub[i]!);
     const hint = _hub[i]!.y;
@@ -168,7 +172,9 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
     // Each ring at `TREAD_STEPS` points, then at 1/32 of that step across the step either side of its lowest one: at a face's edge the
     // tread's lowest point over the face is where the ring crosses the edge, and the nearest of 48 points read up to 4 cm above it.
     if (!hullOnly) {
-      for (const [x, r] of TREAD_RINGS) {
+      for (const [ringX, ringR] of TREAD_RINGS) {
+        const x = ringX * kAcross;
+        const r = ringR * kRadius;
         let low = 0;
         let lowGap = Infinity;
         for (let a = 0; a < TREAD_STEPS; a++) {
@@ -229,7 +235,12 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
     const drawn = wreck ? sampleField(car.cage.fields.bottom, car.cage.style, x, z) : h;
     if (!Number.isNaN(drawn)) probe(`under(${x},${z})`, x, drawn, z);
   }
-  for (const [x, y, z] of BUMPERS) probe(`bumper(${x > 0 ? "+" : "-"}x,${z > 0 ? "front" : "rear"})`, x, y, z);
+  const under = car.frame.hullUnder;
+  for (let i = under.length - BUMPER_ROWS * 3; i < under.length; i += 3) {
+    const x = under[i]!;
+    const z = under[i + 1]!;
+    probe(`bumper(${x > 0 ? "+" : "-"}x,${z > 0 ? "front" : "rear"})`, x, under[i + 2]!, z);
+  }
   // The cage's vertices (the drawn body's points the rigid step meets surfaces with, in the body's frame), so a car on its side or
   // roof is judged on the points it lies on.
   const cagePos = car.cage.fields.pos;

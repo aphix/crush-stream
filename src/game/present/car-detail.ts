@@ -8,11 +8,12 @@ import { INTERIOR_MESH, LIGHT_BAR, SMALL_PART_SEAT } from "../vehicle/constants.
  *
  * - beyond `mid` it drops its small parts that cast no shadow (the trims, grille, mirrors and door linings are batched seats, glass:
  *   12 of its 20 draws) and its 4 lamps from the lamp batch. They are a few pixels there; body, interior, panels and wheels stay, and so do the hood,
- *   boot lid, doors and bumpers (`flushCasters`), whether or not they cast right now.
+ *   boot lid, doors and bumpers (`flushCasters`), whether or not they cast right now; an undamaged car's batched shadow (`restCaster`) stays.
  * - beyond `far` it draws its body alone: the interior, the panels, the wheels and every flush part (bumpers, hood, trunk, doors)
  *   leave the camera too, a wreck's as well as a whole car's (at 50 m a car is ~20 px on the phone and the body carries the paint
  *   and the dents). Only the police light bar stays: it is how a cop reads from afar. Loose bodies (a torn door, a dropped wheel)
- *   are not the car's meshes and keep drawing.
+ *   are not the car's meshes and keep drawing. The doors and panes a cut takes still on the car draw through `CoverBatch`, one
+ *   draw each for the field, so a cut car reads closed.
  *
  * Both cuts take meshes off the camera's layer 0 (so out of the shadow pass too), never `visible`, which stays the car's own
  * (broken lamps, loose parts). Each comes back within `BACK` of its distance (hysteresis). A car the camera frames (`keep`: the
@@ -60,7 +61,7 @@ function takeMid(car: DeformableCar): THREE.Object3D[] {
       parts.push(o);
       return;
     }
-    if (!(o instanceof THREE.Mesh) || o instanceof THREE.InstancedMesh || o.castShadow || car.flushCasters.includes(o) || o.name === INTERIOR_MESH || o.name === "panel") return;
+    if (!(o instanceof THREE.Mesh) || o instanceof THREE.InstancedMesh || o.castShadow || o === car.body || car.flushCasters.includes(o) || o.name === INTERIOR_MESH || o.name === "panel") return;
     o.layers.disable(0);
     parts.push(o);
   });

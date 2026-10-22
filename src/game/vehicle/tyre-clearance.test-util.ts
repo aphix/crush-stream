@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { makeWheelGeometry } from "./car-materials.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import type { DeformableCar } from "./car.ts";
 
 /**
@@ -13,6 +14,7 @@ const AXLE_NEAR = 0.45;
 
 const _m = new THREE.Matrix4();
 const _v = new THREE.Vector3();
+const _tyre = new THREE.Vector3();
 
 /** The highest triangle of `tris` over plan point (x, z), NaN if none. */
 function skinTop(tris: Float32Array, x: number, z: number): number {
@@ -40,7 +42,9 @@ function skinTop(tris: Float32Array, x: number, z: number): number {
 export function tyreClearance(car: DeformableCar, wheel: number, tris: Float32Array): number {
   const w = car.wheels[wheel]!;
   w.updateMatrixWorld(true);
-  _m.multiplyMatrices(car.group.matrixWorld.clone().invert(), w.matrixWorld);
+  const { r, halfW } = car.frame.rig.tyre;
+  // The drawn tyre: the wheel batch scales the platform mesh by the car's tyre (wheel-batch.ts).
+  _m.multiplyMatrices(car.group.matrixWorld.clone().invert(), w.matrixWorld).scale(_tyre.set(halfW / PLATFORM_TYRE.halfW, r / PLATFORM_TYRE.r, r / PLATFORM_TYRE.r));
   const hub = _v.setFromMatrixPosition(_m).clone();
   const near: number[] = [];
   for (let t = 0; t < tris.length; t += 9) {

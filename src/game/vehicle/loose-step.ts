@@ -78,6 +78,20 @@ export function newLooseShape(): LooseShape {
   return { points: new Float64Array(3 * SHAPE_POINTS), count: 0, centre: new THREE.Vector3(), invI: new THREE.Vector3(), reach: 0, asleep: false, sleepX: 0, sleepZ: 0, airborne: false, restFor: 0 };
 }
 
+/** `shape` as `newLooseShape` made it: not measured, awake, no sleep place. A body back on its car (`resetVisual`) flies afresh when next torn, as a new car's would. */
+export function clearShape(shape: LooseShape): void {
+  shape.points.fill(0);
+  shape.count = 0;
+  shape.centre.set(0, 0, 0);
+  shape.invI.set(0, 0, 0);
+  shape.reach = 0;
+  shape.asleep = false;
+  shape.sleepX = 0;
+  shape.sleepZ = 0;
+  shape.airborne = false;
+  shape.restFor = 0;
+}
+
 /** The thinnest a box's half extent is taken (m): a sheet of no thickness would have no spin about its own length. */
 const MIN_HALF = 0.01;
 const _box = new THREE.Box3();
@@ -171,10 +185,9 @@ const CP_MIDDLE_FROM = (60 * Math.PI) / 180;
 /** A sheet lying on what it slides on takes this uplift coefficient on its plan area from the wind over its top: Wang and Letchford's sheet flight-initiation tests (ICWE 2003) for the Wills, Lee and Wyatt threshold model. */
 const SHEET_LIFTOFF_CF = 0.15;
 
-/** Part masses (kg) from a 2011 Honda Accord's teardown (NHTSA mass-reduction study, DOT HS 811 666): hood 17.9, front door 29.5, trunk lid 12.4, front fender 3.7 (an arch flare is its fender). */
+/** Part masses (kg) from a 2011 Honda Accord's teardown (NHTSA mass-reduction study, DOT HS 811 666): hood 17.9, front door 29.5, front fender 3.7 (an arch flare is its fender). A trunk lid's is its car's (`HingeSpec.kg`). */
 const HOOD_KG = 17.9;
 const DOOR_KG = 29.5;
-const TRUNK_KG = 12.4;
 const FENDER_KG = 3.7;
 /** A rear quarter's outer skin: the fender's 0.85 mm steel (6.7 kg/m²) over a quarter's 1.3 m². */
 const QUARTER_KG = 8.7;
@@ -184,11 +197,12 @@ const BUMPER_KG = 8;
 const MIRROR_KG = 1.3;
 /** A full-width police light bar: about 30 lb. */
 const LIGHT_BAR_KG = 14;
-const PART_KG: Record<DetachPart["hinge"], number> = { cowl: HOOD_KG, tail: TRUNK_KG, door: DOOR_KG, "two-point": BUMPER_KG, bar: LIGHT_BAR_KG, quarter: QUARTER_KG, arch: FENDER_KG };
+const PART_KG: Record<Exclude<DetachPart["hinge"], "tail">, number> = { cowl: HOOD_KG, door: DOOR_KG, "two-point": BUMPER_KG, bar: LIGHT_BAR_KG, quarter: QUARTER_KG, arch: FENDER_KG };
 
 /** Torn part `p`'s mass (kg): what the wind on its plan area moves (`blow`). */
 export function partMass(p: DetachPart): number {
-  return p.mirror ? MIRROR_KG : PART_KG[p.hinge];
+  if (p.mirror) return MIRROR_KG;
+  return p.hinge === "tail" ? p.swing!.spec.kg : PART_KG[p.hinge];
 }
 
 const _qi = new THREE.Quaternion();

@@ -12,6 +12,7 @@ import { setGround } from "../world/ground.ts";
 import { Track, blankPoint, blankProjection, pointOn, type TrackPath } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 
 /**
  * Tyres on banked road. Bound 2 cm: a loaded tyre's sidewall squats about that much and the drawn road sits
@@ -38,7 +39,7 @@ function roadY(path: TrackPath, s: number, lat: number): number {
   return path.y[k]! + (path.y[b]! - path.y[k]!) * f - Math.max(-half, Math.min(half, lat)) * Math.tan(bank);
 }
 
-/** Tread points (wheel-local; axle along x) on the mesh's tyre crown, `TYRE_PROFILE` in car-materials.ts. */
+/** The platform tyre's tread points (wheel-local; axle along x) on the mesh's tyre crown, `TYRE_PROFILE` in car-materials.ts; a car's own tyre scales them. */
 const TREAD: THREE.Vector3[] = [];
 for (let a = 0; a < 48; a++) {
   const t = (a / 48) * Math.PI * 2;
@@ -71,10 +72,13 @@ function bankRun(track: Track, cls: VehicleClassId, lat: (half: number) => numbe
   car.spawnFacing(x0, z0, Math.atan2(pt.tx, pt.tz), 25);
   car.group.position.y = ground.heightAt(x0, z0, pt.y + 0.5);
   layOnGround(car);
+  const { r: tyreR, halfW: tyreHalfW } = car.frame.rig.tyre;
+  const kAcross = tyreHalfW / PLATFORM_TYRE.halfW;
+  const kRadius = tyreR / PLATFORM_TYRE.r;
+  const p = new THREE.Vector3();
   const w = newWorld([car]);
   const proj = blankProjection();
   const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
-  const p = new THREE.Vector3();
   let low = Infinity;
   let high = -Infinity;
   let where = "";
@@ -101,7 +105,7 @@ function bankRun(track: Track, cls: VehicleClassId, lat: (half: number) => numbe
     for (const [i, wh] of car.wheels.entries()) {
       let gap = Infinity;
       for (const t of TREAD) {
-        p.copy(t).applyMatrix4(wh.matrixWorld);
+        p.set(t.x * kAcross, t.y * kRadius, t.z * kRadius).applyMatrix4(wh.matrixWorld);
         gap = Math.min(gap, p.y - ground.heightAt(p.x, p.z, car.group.position.y + 0.5));
       }
       if (gap < low || gap > high) where = `wheel ${i} at s ${s.toFixed(0)} (bank ${(path.bank[proj.k]! * DEG).toFixed(1)}°)`;
