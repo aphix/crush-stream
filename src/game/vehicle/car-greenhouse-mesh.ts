@@ -527,7 +527,7 @@ const BELT_RAIL = "beltRail";
 /**
  * The drawn belt rail: the quarter glass's sill seal on the glass plane, along the pane's own belt edge (column by column) on into
  * the B-pillar, so it never stands off the sill; its depth runs square to the sill in plan where the sill turns in. Its ends are
- * buried in the C- and B-pillars.
+ * buried in the C- and B-pillars. Where the sill stands higher over the body's deck than its foot reaches, its foot goes down to the deck.
  */
 function drawnBeltRail(sign: number, style: BodyStyle): THREE.BufferGeometry {
   const sill = quarterSillZs(style);
@@ -543,7 +543,7 @@ function drawnBeltRail(sign: number, style: BodyStyle): THREE.BufferGeometry {
     const [behind, ahead] = [zs[Math.max(k - 1, 0)]!, zs[Math.min(k + 1, zs.length - 1)]!];
     const [dx, dz] = [beltX(ahead, style) - beltX(behind, style), ahead - behind];
     const run = hypot2(dx, dz);
-    return { rear: [outer, y - RAIL_FOOT, z], front: [outer, y + RAIL_LIP, z], inward: [dz / run, dx / run] };
+    return { rear: [outer, Math.min(y - RAIL_FOOT, sampleSlice(z, style.profile).yBelt), z], front: [outer, y + RAIL_LIP, z], inward: [dz / run, dx / run] };
   });
   const rail = roundedPillarAlong(sign, rails, 2 * RAIL_PROUD);
   rail.name = BELT_RAIL;
@@ -552,7 +552,7 @@ function drawnBeltRail(sign: number, style: BodyStyle): THREE.BufferGeometry {
 
 /** The sail is as deep (m) as the post it replaces; its two edges roll round at half that. */
 const SAIL_DEPTH = 0.05;
-/** Behind the side window's line the sail's foot sweeps out from the glass onto the haunch's shoulder over this run (m), in one chord. */
+/** Behind the side window's line the sail's foot sweeps out from the glass onto the haunch's shoulder over this run (m), in one chord, unless the style sets its own (`cPillar.sweep`). */
 export const SAIL_SWEEP = 0.15;
 /** The sail's stations along the haunch stand at most this far apart (m): the shoulder turns under 1 cm along it, so its foot keeps to it between them. */
 const SAIL_STEP = 0.35;
@@ -613,7 +613,8 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     const u = Math.abs(a) < 1e-9 ? -c / b : (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a);
     return lerp(tipY, topY, 1 - (1 - u) ** 2);
   };
-  const sweepZ = tipZ - SAIL_SWEEP;
+  const sweep = style.cPillar?.sweep ?? SAIL_SWEEP;
+  const sweepZ = tipZ - sweep;
   // Its rear end stops a shut line ahead of a deck lid's front edge: lying on over the lid, or flush with its face, the two skins would cross.
   const rear = style.boot.kind === "lid" ? Math.max(rb[2], style.boot.z0 + SAIL_LID_SHUT) : rb[2];
   // The glass corner's ring stands just behind the roof's rear end (insideRoof never reaches it there), its section the roof end's own, so the sail covers the end's wing outboard of the rear glass.
@@ -637,7 +638,6 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     .sort((a, b) => a - b)
     .filter((z, k, all) => k === 0 || z - all[k - 1]! > 1e-6);
   const r = SAIL_DEPTH / 2;
-  const inner = style.cPillar?.inner ?? SAIL_INNER;
   // A flush head stands on the drawn glass (fallen with the dome, round at its top corners), lapping its side edge.
   const glassHead = (z: number): readonly [number, number] => {
     const p = rearGlassInset(style, z, SAIL_FLUSH_LAP);
@@ -667,7 +667,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     // window's ahead of its corner, where its line has risen into the glass's top: a post's round would hang under that line.
     const headR = onGlass || (atRoofEnd && flush && roofEnd !== null) || (pinch > 0 && z > topZ) ? SAIL_FLUSH_STAND / 2 : r;
     // 0 on the window's line, 1 on the haunch: the foot's point and its tangent blend between the glass (its round edge's bottom on the line) and the shoulder.
-    const f = THREE.MathUtils.smoothstep(tipZ - z, 0, SAIL_SWEEP);
+    const f = THREE.MathUtils.smoothstep(tipZ - z, 0, sweep);
     // A pinched window's sail laps the glass with a bead's edge, a bead's height off it, so the window's point stays sharp; on the haunch its foot's edge is the full round.
     const [footR, footStand] = pinch > 0 ? [lerp(SAIL_FLUSH_STAND / 2, r, f), SAIL_FLUSH_STAND] : [r, ROOF_DRIP];
     // Where the window's line closes on the roof the section keeps a span of its depth (a pinched window's, of its two edges), never folding to a point.
@@ -723,7 +723,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
       ...edge(1),
       // The section thins from the foot's edge to the head's, so each rounded edge closes onto the inner face. A pinched sail's (its foot a
       // bead) holds the head's depth to mid-face: thinning all the way, its inner face bowed out where the section turns into the roof's end.
-      ...Array.from({ length: inner }, (_, k) => at(1 - k / (inner - 1), 2 * lerp(headR, footR, pinch > 0 ? Math.max(0, (2 * k) / (inner - 1) - 1) : k / (inner - 1)))),
+      ...Array.from({ length: SAIL_INNER }, (_, k) => at(1 - k / (SAIL_INNER - 1), 2 * lerp(headR, footR, pinch > 0 ? Math.max(0, (2 * k) / (SAIL_INNER - 1) - 1) : k / (SAIL_INNER - 1)))),
       ...edge(0).reverse(),
     ];
   };

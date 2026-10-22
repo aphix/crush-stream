@@ -837,7 +837,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
     it(`when a ${id}'s sail is read along its haunch, then each section's foot sits on the body's shoulder and its face leaves it within ${SAIL_LEAN_DEGREES}° of the shoulder's tangent`, (t) => {
       if (style.cPillar?.flat) return t.skip("a flat sail leaves the body where its line touches the section: its own row");
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
-      const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? drawnQuarter(style).zRearBot) - SAIL_SWEEP);
+      const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? drawnQuarter(style).zRearBot) - (style.cPillar?.sweep ?? SAIL_SWEEP));
       const { ring, slices } = loftOf(sail);
       let read = 0;
       for (let s = 0; s < slices; s++) {
@@ -889,7 +889,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
   for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.flat)) {
     it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm behind its ${SAIL_ROLL_BLEND_TEST * 100} cm ease into the roof end's roll, no body point stands outside its line by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
-      const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? drawnQuarter(style).zRearBot) - SAIL_SWEEP);
+      const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? drawnQuarter(style).zRearBot) - (style.cPillar?.sweep ?? SAIL_SWEEP));
       const { ring, slices } = loftOf(sail);
       const off: string[] = [];
       let read = 0;
@@ -1145,7 +1145,8 @@ const BASELINE_BY_STYLE = [
   { id: "wagon", drawCalls: 13, triangles: 5088, bodyVertices: 1635 },
   { id: "coupe", drawCalls: 16, triangles: 5152, bodyVertices: 1530 },
   { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
-  { id: "police", drawCalls: 14, triangles: 5338, bodyVertices: 1587 },
+  // The police re-pinned 5338 -> 5356 (1.6 x: 8540.8 -> 8569.6) for the sedan's quarter window (pinch mid ring, sail sweep ring): 8390 -> 8568 triangles.
+  { id: "police", drawCalls: 14, triangles: 5356, bodyVertices: 1587 },
   { id: "monster", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
 ] as const satisfies readonly { id: CarStyleId; drawCalls: number; triangles: number; bodyVertices: number }[];
 /** The stated budget: a car's triangles at most 1.6 x the baseline. */
@@ -1173,12 +1174,14 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
  * ramp copies (`door.shutCrease`) and its curved posts' section points past the chamfered box's as built, merged into the body on top of its loft: red if one grows.
  */
 const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; splitRings: number; wallTops: number; shutCopies: number; curvedPosts: number }> = {
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 52, shutCopies: 0, curvedPosts: 378 },
+  // Sedan and police: curvedPosts 378 -> 430: the pinched quarter window's mid ring (`cPillar.pinch`) and the sail's sweep ring 2 cm behind
+  // the window's point (`cPillar.sweep`), one 20-point sail ring a side each.
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 52, shutCopies: 0, curvedPosts: 430 },
   hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 18, shutCopies: 0, curvedPosts: 258 },
   wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, splitRings: 0, wallTops: 30, shutCopies: 0, curvedPosts: 258 },
   coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 46, shutCopies: 32, curvedPosts: 416 },
   pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, splitRings: 0, wallTops: 16, shutCopies: 0, curvedPosts: 226 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 52, shutCopies: 0, curvedPosts: 378 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 52, shutCopies: 0, curvedPosts: 430 },
   monster: { lips: 312, humps: 94, liners: 214, bootRings: 42, noseRings: 42, splitRings: 0, wallTops: 26, shutCopies: 0, curvedPosts: 226 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and their stations then (the A-post's, every other post's). */
