@@ -124,8 +124,8 @@ export const COUPE: BodyStyle = {
   // Round corners: the reference rear iso's four, about a sixth of the 0.53 m slant.
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96, bow: { base: -0.02, top: -0.04 }, round: 0.09 },
   quarter: { zRearBot: -0.96, zRearTop: -0.74 },
-  /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle. */
-  cPillar: { flush: true },
+  /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle: one broad flat fastback panel lapping the rear glass. */
+  cPillar: { flush: true, flat: true },
   midPillarZ: null,
   /** Reference side and rear iso: the quarter and rear glass read dark, no cabin or C-pillar post showing through. */
   privacyGlass: { rear: true, quarter: true },
@@ -186,5 +186,5 @@ export const COUPE: BodyStyle = {
       { view: "top", points: [[1.67, 0.006], [1.67, 0.24], [1.565, 0.24], [1.565, 0.006]], depth: -0.006, rim: 0.004, cavity: 0.9 },
     ],
   },
-  seats: { front: [0.36, 0.44, -0.15], rear: [0.46, -0.6] },
+  seats: { front: [0.36, 0.44, -0.15], rear: [0.47, -0.6] },
 };

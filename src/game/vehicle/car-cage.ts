@@ -33,8 +33,8 @@ import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 export const CAGE_STEP = 0.05;
 /** The decimation's vertex target: the body and its panels (lids, glass), which keeps the cage near 300 triangles. */
 export const CAGE_VERTICES = 220;
-/** The cage build's vertices a style's sill can be sampled from (`cageSourceOf`): welded, under its rocker line, between its axles. */
-function sillCandidates(style: BodyStyle): number {
+/** A style's cage build, counted: its sill candidates (`cageSourceOf`: welded, under its rocker line, between its axles) and loft stations. */
+function cageBuildCounts(style: BodyStyle): { sill: number; stations: number } {
   const geo = makeChassisGeometry(style, "cage");
   const pos = geo.getAttribute("position").array;
   let axleR = Infinity;
@@ -50,11 +50,15 @@ function sillCandidates(style: BodyStyle): number {
     if (y >= rockerAt(z, style) * 1e4 || z <= axleR || z >= axleF) continue;
     welded.add(`${Math.round(pos[i]! * 1e4)},${y},${Math.round(z * 1e4)}`);
   }
+  const stations = (geo.userData.loft as { slices: number }).slices;
   geo.dispose();
-  return welded.size;
+  return { sill: welded.size, stations };
 }
+const BUILD_COUNTS = CAR_STYLE_IDS.map((id) => cageBuildCounts(CAR_STYLES[id]));
 /** Room for a style's sill samples past the hull (`CageSource.sill`): every sample is one of its style's sill candidates, so the most any style has. */
-export const SILL_CAPACITY = Math.max(...CAR_STYLE_IDS.map((id) => sillCandidates(CAR_STYLES[id])));
+export const SILL_CAPACITY = Math.max(...BUILD_COUNTS.map((c) => c.sill));
+/** Room for the underside points the decimation holds over its target (`decimate`'s `held`): at most a station's lowest on each side, every station. */
+export const CAGE_HELD_VERTICES = Math.max(...BUILD_COUNTS.map((c) => 2 * c.stations));
 /** Room for a style's bed wheel tubs past its decimated hull (`CageSource.tubs`, kept whole): the most any style's cage build carries. */
 export const CAGE_TUB_VERTICES = Math.max(...CAR_STYLE_IDS.map((id) => wellHumpGeometry(CAR_STYLES[id], "cage")?.getAttribute("position").count ?? 0));
 /** The interior's vertex target: what shows through a gone pane (the dash, the headliner, the seats), a few boxes. */
@@ -120,6 +124,8 @@ export interface CageSource {
   readonly lattice: { readonly x: number; readonly z: number };
   /** The body's bed wheel tubs (`BodyStyle.wheelTub`): `count` vertices of `rest` from `from`, kept out of the decimation and whole past the hull. */
   readonly tubs: { readonly from: number; readonly count: number };
+  /** The body loft's vertices: the first `loft` of `rest`, one ring a station (the underside the decimation holds where it rises). */
+  readonly loft: number;
 }
 
 /** What a fit reads of the car now: a `SkinDynamic`, less its lattice coefficients (the cage is the shape-mode skin). */
@@ -173,6 +179,9 @@ export interface CageStyle {
   readonly u0: number;
   readonly v0: number;
   readonly vertexCount: number;
+  /** Of `vertexCount`, the `heldCount` underside points `decimate` held over `CAGE_VERTICES`, from `heldFrom` on: a wreck's alone (`loadPoints`). */
+  readonly heldCount: number;
+  readonly heldFrom: number;
   /**
    * The sill samples (`CageSource.sill`) follow the hull's vertices in the per-vertex tables and in `pos`: skinned as they are, on no
    * triangle, so no field reads them. A wreck's rigid step rests on them too (`loadPoints`): a crushed sill bends between the hull's
@@ -675,12 +684,12 @@ function sillOffHull(src: CageSource, hull: Int32Array): Int32Array {
 }
 
 /**
- * The hull: `src`'s body and panels decimated to `CAGE_VERTICES` exactly as the same body without its wheel tubs, then the tubs'
- * vertices (welded) and triangles after it, so the tubs cost the hull none of its budget.
+ * The hull: `src`'s body and panels decimated to `CAGE_VERTICES` (and the underside points it holds over that) exactly as the same body
+ * without its wheel tubs, then the tubs' vertices (welded) and triangles after it, so the tubs cost the hull none of its budget.
  */
-function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array } {
+function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array; held: number; heldFrom: number } {
   const { from, count } = src.tubs;
-  if (count === 0) return decimate(src.rest, src.index, src.group, CAGE_VERTICES);
+  if (count === 0) return decimate(src.rest, src.index, src.group, CAGE_VERTICES, src.loft);
   const to = from + count;
   const rest = new Float32Array(src.rest.length - count * 3);
   rest.set(src.rest.subarray(0, from * 3));
@@ -695,7 +704,7 @@ function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGr
     if (tri.every((v) => v >= from && v < to)) tubTris.push(...tri);
     else index.push(...tri.map((v) => (v < from ? v : v - count)));
   }
-  const hull = decimate(rest, index, group, CAGE_VERTICES);
+  const hull = decimate(rest, index, group, CAGE_VERTICES, Math.min(src.loft, from));
   const source = Array.from(hull.source, (v) => (v < from ? v : v + count));
   const slots = new Map<string, number>();
   const slotOf = new Int32Array(count);
@@ -717,8 +726,9 @@ function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGr
     tris.push(a, b, c);
     triGroup.push(src.group[tubTris[k]!]!);
   }
-  if (source.length > CAGE_VERTICES + CAGE_TUB_VERTICES) throw new Error(`${source.length} hull vertices, room for ${CAGE_VERTICES + CAGE_TUB_VERTICES}`);
-  return { source: Int32Array.from(source), tris: Uint16Array.from(tris), triGroup: Uint8Array.from(triGroup) };
+  const room = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_TUB_VERTICES;
+  if (source.length > room) throw new Error(`${source.length} hull vertices, room for ${room}`);
+  return { source: Int32Array.from(source), tris: Uint16Array.from(tris), triGroup: Uint8Array.from(triGroup), held: hull.held, heldFrom: hull.heldFrom };
 }
 
 function buildStyle(src: CageSource, step: number): CageStyle {
@@ -745,6 +755,8 @@ function buildStyle(src: CageSource, step: number): CageStyle {
     u0: -src.lattice.x,
     v0: -src.lattice.z,
     vertexCount: n,
+    heldCount: body.held,
+    heldFrom: body.heldFrom,
     sillCount: points - n,
     triCount: tris.length / 3,
     source,

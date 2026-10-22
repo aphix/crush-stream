@@ -355,9 +355,10 @@ export interface BodyStyle {
    * the side window's line; absent, a flat post. `tip` ([y, z]): where that line ends at the belt behind the quarter glass, the gloss-black
    * triangle between them filling the gap; absent, the line is the quarter glass's own rear edge. `flush`: the sail's head laps the rear
    * glass's side edge, standing on the glass and arriving level across it (one broad pillar rolling into the glass), not a rounded
-   * buttress beside it.
+   * buttress beside it. `flat`: on the haunch each section runs straight from its head down to where it touches the body's section
+   * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point.
    */
-  cPillar?: { tip?: YZ; flush?: boolean };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
   privacyGlass?: { rear?: boolean; quarter?: boolean };
   /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */
@@ -378,7 +379,7 @@ export interface BodyStyle {
   /**
    * Where the dummies' world takes the cabin to start (m, the cage's frame; `ragdoll-proxy.ts` `BELT_Y`): a cage top under it is a column
    * from under the ground (a hood, a deck, a bed), one over it a roof slab. Absent, `BELT_Y`'s 1 m: every car's hood and deck under it,
-   * every roof over it, but a truck's.
+   * every roof over it, but a truck's and the SUV's.
    */
   proxyBelt?: number;
   /** Rear door shut line on four-door bodies, or null. */

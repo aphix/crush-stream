@@ -17,6 +17,8 @@ import {
   roofAt,
   roofDome,
   roofTopY,
+  sampleSlice,
+  sectionPoints,
   shoulderTop,
   type BodySource,
   type Pt,
@@ -596,14 +598,29 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     const [tx, ty] = shoulder.tangent;
     // 0 on the window's line, 1 on the haunch: the foot's point and its tangent blend between the glass (its round edge's bottom on the line) and the shoulder.
     const f = THREE.MathUtils.smoothstep(tipZ - z, 0, SAIL_SWEEP);
-    const p0 = [lerp(onGlassPlane(z, lineY, style, ROOF_DRIP) + up[0] * r, shoulder.x - SAIL_SINK * ty, f), lerp(lineY + up[1] * r, shoulder.y + SAIL_SINK * tx, f)] as const;
+    // A flat sail (`cPillar.flat`) on the haunch runs straight from its head down to where that line touches the body's section: the
+    // most outboard reach per drop, so no body point stands outside it and the panel leaves the body tangent, with no hump and no crease.
+    const flat = style.cPillar?.flat === true && f === 1 && !atRoofEnd;
+    const touch = flat
+      ? sectionPoints(sampleSlice(z, style.profile), style, "drawn")
+          .filter((p) => p.x > 0 && p.y < head[1]!)
+          .reduce((a, b) => ((b.x - head[0]!) / (head[1]! - b.y) > (a.x - head[0]!) / (head[1]! - a.y) ? b : a))
+      : null;
+    const sink = touch ? SAIL_SINK / hypot2(head[0]! - touch.x, head[1]! - touch.y) : 0;
+    const p0 = touch
+      ? ([touch.x - sink * (head[1]! - touch.y), touch.y + sink * (head[0]! - touch.x)] as const)
+      : ([lerp(onGlassPlane(z, lineY, style, ROOF_DRIP) + up[0] * r, shoulder.x - SAIL_SINK * ty, f), lerp(lineY + up[1] * r, shoulder.y + SAIL_SINK * tx, f)] as const);
     const [dx, dy] = [lerp(up[0], tx, f), lerp(up[1], ty, f)];
     const reach = (SAIL_CONTROL * hypot2(head[0]! - p0[0], head[1]! - p0[1])) / hypot2(dx, dy);
     // A flush head arrives level across the glass: its control point runs out along the foot's tangent to the head's height, never inboard of the head, so the foot keeps its tangent.
     const level = onGlass ? Math.min((head[1]! - p0[1]) / dy, dx < 0 ? (head[0]! - p0[0]) / dx : Infinity) : 0;
     const k = Number.isFinite(level) && level > 0 ? level : reach;
     // At the roof's end the head arrives level, as the roof's roll does, its control point on the roll's outer corner.
-    const c = atRoofEnd ? ([roof.x + ROOF_LIP_OUT + ROOF_DRIP, roof.y] as const) : ([p0[0] + dx * k, p0[1] + dy * k] as const);
+    const c = atRoofEnd
+      ? ([roof.x + ROOF_LIP_OUT + ROOF_DRIP, roof.y] as const)
+      : touch
+        ? ([(p0[0] + head[0]!) / 2, (p0[1] + head[1]!) / 2] as const)
+        : ([p0[0] + dx * k, p0[1] + dy * k] as const);
     // The section's point at `s` along its Bézier, `depth` in along its normal (+x side: the tangent turned down, into the body).
     const at = (s: number, depth: number, roll = 0): Pt => {
       const [ax, ay] = [2 * (1 - s) * (c[0] - p0[0]) + 2 * s * (head[0]! - c[0]), 2 * (1 - s) * (c[1] - p0[1]) + 2 * s * (head[1]! - c[1])];
