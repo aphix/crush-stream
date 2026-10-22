@@ -262,6 +262,38 @@ describe("given the lids as built", () => {
       assert.ok(turn < FLAT_CURVE_LIMIT_DEGREES, `dome ring line ${line} of ${rim - 1} turns ${turn.toFixed(2)}°`);
     }
   });
+
+  it(`when the sedan's crowned deck lid (boot.crown) is read, then past its 25 cm ease-in its centre stands the parabola's drop over its edge at every deck station, its dome turns under ${FLAT_CURVE_LIMIT_DEGREES}° at each of its own vertices, and the cage's lid is the plain one`, () => {
+    /** The crown eases in over this far (m) from the lid's front edge; the tail fold's radius (m) ends the deck. */
+    const [RUN, FOLD] = [0.25, 0.08];
+    const style = CAR_STYLES.sedan;
+    const b = style.boot;
+    assert.ok(b.kind === "lid" && b.crown !== undefined, "the sedan's boot is a crowned deck lid");
+    const [drop, at] = b.crown;
+    const lid = makeTrunkGeometry(style);
+    const loft = loftOf(lid);
+    const pivotZ = (b.pivot ?? b.origin)[1];
+    const rim = loft.ring - 9;
+    let read = 0;
+    for (let slice = 0; slice < loft.slices; slice++) {
+      const edge = positionAt(lid, slice * loft.ring);
+      const z = edge.z + pivotZ;
+      if (z > b.z0 - RUN || z < b.z1 + FOLD + 1e-6) continue;
+      const rise = positionAt(lid, slice * loft.ring + rim / 2).y - edge.y;
+      const want = drop * (edge.x / at) ** 2;
+      assert.ok(Math.abs(rise - want) < 1e-4, `z ${z.toFixed(3)}: the centre stands ${(rise * 100).toFixed(2)} cm over the edge at |x| ${(-edge.x).toFixed(3)}, want ${(want * 100).toFixed(2)}`);
+      read++;
+    }
+    assert.ok(read >= 2, `only ${read} deck stations past the ease-in`);
+    const inner = (slice: number) => slice > 0 && slice < loft.slices - 2;
+    for (let line = 1; line < rim; line++) {
+      const turn = Math.max(...ringLineDihedrals(lid, line, inner));
+      assert.ok(turn < FLAT_CURVE_LIMIT_DEGREES, `dome ring line ${line} of ${rim - 1} turns ${turn.toFixed(2)}°`);
+    }
+    const plain: BodyStyle = { ...style, boot: { ...b, crown: undefined } };
+    const [cage, plainCage] = [makeTrunkGeometry(style, "cage"), makeTrunkGeometry(plain, "cage")].map((g) => (g.getAttribute("position").array as Float32Array).join(","));
+    assert.ok(cage === plainCage, "the cage's lid moved with the crown");
+  });
 });
 
 type PartCase = { readonly name: string; readonly make: (id: CarStyleId) => THREE.BufferGeometry; readonly creaseDegrees: number; readonly capsAreCuts: boolean };
@@ -433,7 +465,44 @@ describe("given every body style's drawn hood over its open engine bay", () => {
         assert.ok(step >= 0 && step <= HOOD_EDGE_STEP, `${id} hood edge at z ${z.toFixed(3)}: ${(step * 1000).toFixed(1)} mm over the fender`);
       }
     });
+
+    it(`when a ${id}'s fender deck edge is read beside its hood over the open bay, then it stands its hood.groove out and down (a shut-line slot onto the bay wall, none without one), and the cage's ring is the groove-less style's`, () => {
+      const style = CAR_STYLES[id];
+      const [out, down] = style.hood.groove ?? [0, 0];
+      const plain: BodyStyle = { ...style, hood: { ...style.hood, groove: undefined } };
+      let read = 0;
+      for (let z = style.hood.z0; z <= style.hood.z1; z += 0.05) {
+        const s = sampleSlice(z, style.profile);
+        const [grooved, flush] = [sectionPoints(s, style, "drawn"), sectionPoints(s, plain, "drawn")];
+        const [p, q] = [grooved[grooved.length - 2]!, flush[flush.length - 2]!];
+        const t = bayAt(z, style);
+        assert.ok(Math.abs(p.x - q.x - out * t) < 1e-9 && Math.abs(q.y - p.y - down * t) < 1e-9, `${id} z ${z.toFixed(2)}: deck edge moved ${((p.x - q.x) * 1000).toFixed(2)} out, ${((q.y - p.y) * 1000).toFixed(2)} down, want ${out * t * 1000}, ${down * t * 1000}`);
+        assert.ok(JSON.stringify(sectionPoints(s, style, "cage")) === JSON.stringify(sectionPoints(s, plain, "cage")), `${id} z ${z.toFixed(2)}: the cage ring moved with the groove`);
+        if (t === 1) read++;
+      }
+      assert.ok(read > 0, `${id}: no station over the open bay`);
+    });
   }
+
+  it("when the coupe's hood is laid on its body, then over the open bay a slot at least 3 mm wide parts its edge from the fender's deck edge, the fender under the hood's edge (reference: the hood and fender meet in a groove)", () => {
+    /** The slot's least width (m) between the hood's edge and the fender's deck edge where the bay is open. */
+    const SLOT = 0.003;
+    const style = CAR_STYLES.coupe;
+    const hood = makeHoodGeometry(style);
+    const loft = loftOf(hood);
+    const [oy, oz] = style.hood.origin;
+    let read = 0;
+    for (let slice = 1; slice < loft.slices - 1; slice++) {
+      const edge = positionAt(hood, slice * loft.ring + loft.ring - 9);
+      const z = edge.z + oz;
+      if (bayAt(z, style) < 1) continue;
+      const section = sectionPoints(sampleSlice(z, style.profile), style, "drawn");
+      const deckEdge = section[section.length - 2]!;
+      assert.ok(deckEdge.x - edge.x >= SLOT && deckEdge.y < edge.y + oy, `coupe z ${z.toFixed(3)}: the fender's deck edge stands ${((deckEdge.x - edge.x) * 1000).toFixed(1)} mm outboard of the hood's edge, ${((edge.y + oy - deckEdge.y) * 1000).toFixed(1)} mm under it`);
+      read++;
+    }
+    assert.ok(read > 0, "coupe: no hood station over the open bay");
+  });
 
   it(`when an SUV's clamshell is laid on its body, then its top edge and skirt stand within ${CLAMSHELL_LAP * 1000} mm of the body's deck edge and shoulder at every station, both ends included`, () => {
     const hood = makeHoodGeometry(CLAMSHELL_SUV);

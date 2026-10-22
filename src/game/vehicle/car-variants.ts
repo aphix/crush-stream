@@ -55,8 +55,11 @@ export interface BootLip {
 
 /** The panel's shape; `pivot` is where it turns (default `origin`): a hatch's or liftgate's roof hinge, a drop gate's bottom edge. `swing`: its latch, struts and limits (default by kind, `hinge-spec.ts`). */
 export type BootSpec = (
-  /** Deck lid lofted on the profile from z0 to z1, hinged at origin; with `drop` it wraps the tail, its face standing at z1. */
-  | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop }
+  /**
+   * Deck lid lofted on the profile from z0 to z1, hinged at origin; with `drop` it wraps the tail, its face standing at z1. `crown` [drop, at]
+   * (m, drawn only): its top domes as a parabola across x, `drop` under its centre line at |x| `at`, its edge (the shut line) kept.
+   */
+  | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop; crown?: readonly [drop: number, at: number] }
   /**
    * Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). `outline`:
    * its edge, the reference's gate seam, as [x, y] on the right side from top to bottom (held past its ends); absent, the tail panel's
@@ -288,8 +291,11 @@ export interface BodyStyle {
   glassTop?: number | readonly (readonly [number, number])[];
   /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it. */
   arch: { radius: number; lip?: ArchLip; wellWall?: number };
-  /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`. */
-  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number] };
+  /**
+   * Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`.
+   * `groove` [out, down] (m, drawn only): over the open bay the fender's deck edge beside a lid hood stands `out` outboard of the hood's edge and `down` lower, a shut-line slot onto the bay wall.
+   */
+  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; groove?: readonly [out: number, down: number] };
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;
