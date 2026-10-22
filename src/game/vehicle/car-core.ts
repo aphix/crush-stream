@@ -792,7 +792,7 @@ export abstract class CarCore {
 
   protected wearGlass(g: GlassPane, look: GlassLook): void {
     g.look = look;
-    g.mesh.material = glassMaterial(look, g.privacy ? _shade.setHex(g.tint).multiplyScalar(PRIVACY_SHADE).getHex() : g.tint);
+    g.mesh.material = glassMaterial(look, g.privacy ? _shade.setHex(g.tint).multiplyScalar(PRIVACY_SHADE).getHex() : g.tint, g.privacy);
   }
 
   /** The paints (sRGB) a style's body-colour parts take (`finish` "body"): the grille the body's, the mirror caps the doors'. */
