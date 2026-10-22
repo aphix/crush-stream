@@ -61,7 +61,10 @@ function lowestDrawn(car: DeformableCar, ground: Ground): { clearance: number; m
   car.group.traverse((o) => {
     if (!(o instanceof THREE.Mesh || o instanceof PartSeat)) return;
     for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p.name === "deform-rig" || !p.visible) return;
-    const position = o.geometry.getAttribute("position");
+    // A part seat shows its `drawn` part, not the platform shape the sim measures (`geometry`): the wipers' seat rides the windshield with
+    // their drawn blades in its car space, so the platform blades about the seat stood at the car's origin, ground level under the cab,
+    // and on a slope read 6.7 cm in it (CarTrucks9 5fc74f76, the truck>monster 10° row).
+    const position = (o instanceof PartSeat ? o.drawn : o.geometry).getAttribute("position");
     if (!position) return;
     for (let k = 0; k < position.count; k++) {
       _v.fromBufferAttribute(position, k).applyMatrix4(o.matrixWorld);
