@@ -341,6 +341,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * box leaves a corner empty: every torn part but the mirrors and the light bar. A bumper, door, quarter or arch no longer rests on a corner
  * where nothing is drawn (12-73 cm off its shell), and the keyframe carries each loose part's twenty points and its shell flag. A torn grille,
  * tail trim or mirror flies and collides as its style draws it, not as the platform part.
+ * The coupe's flanks carry their widest line 5-9 cm under the belt from its tail to its door (its reference's haunch crest), its quarter sill dips
+ * behind the door and rises to the window's point, and its roof's rear corner stands 2 cm wider.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

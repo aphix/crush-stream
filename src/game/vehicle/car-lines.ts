@@ -31,6 +31,11 @@ export function beltX(z: number, style: BodyStyle): number {
   return typeof x === "number" ? x : piecewise(x, z);
 }
 
+/** The style's `shoulder` drop (m) at `z`, undefined where it sets none. */
+export function shoulderDropAt(z: number, style: BodyStyle): number | undefined {
+  return style.shoulder === undefined ? undefined : piecewise(style.shoulder, z);
+}
+
 /** Floor pan height at `z`: the style's underside stations, or flat at the ride height. */
 export function floorY(z: number, style: BodyStyle): number {
   return style.underside ? piecewise(style.underside, z) : style.dims.rideHeight;

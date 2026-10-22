@@ -344,6 +344,8 @@ export interface BodyStyle {
   belt: { x: number | readonly (readonly [number, number])[]; y: readonly (readonly [number, number])[] };
   /** The body side's lowest line (m); under it the sill turns in to the floor pan at `dims.rideHeight`. */
   rocker: { y: number };
+  /** The body side's widest line's drop under the profile belt (m) as [z, drop] stations, linear between them and held past the ends; absent: FEATURE_DROP (0.1). A smaller drop gives a higher, tighter crest: the roll above it keeps its out radius and still rises to the deck edge. Feeds the cage too. */
+  shoulder?: readonly (readonly [number, number])[];
   /** Floor pan height as [z, y] stations in ascending z (linear between, held past the ends); absent = flat at `dims.rideHeight`. The rocker rides up with it. */
   underside?: readonly (readonly [number, number])[];
   /**

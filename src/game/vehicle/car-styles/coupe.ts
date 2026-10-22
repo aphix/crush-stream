@@ -65,8 +65,10 @@ export const COUPE: BodyStyle = {
   dims: { wheelbase: 2.385, overhang: { front: 0.823, rear: 0.915 }, track: 1.32, width: 1.571, height: 1.294, rideHeight: 0.182, wheel: { radius: 0.33, width: 0.2 } },
   ...PLATFORM_HARDPOINTS,
   windshield: { base: [0.93, 0.7], wBase: 1.32, wTop: 1.0, bow: { base: 0.015, top: 0.035 } },
-  // Reference side and rear iso: the quarter glass's sill rises from the door's belt to the window's point, its knots on the sill's end columns (one inside the run costs the belt rail a ring).
-  belt: { x: [[-1.5, 0.6], [-0.981, 0.65], [-0.5, 0.665], [0.5, 0.675]], y: [[-0.981, 0.925], [-0.53, 0.887], [-0.45, 0.888], [0.25, 0.892], [0.4, 0.905], [0.7, 0.93]] },
+  // Reference side and rear iso: the quarter glass's sill dips behind the door's belt and rises to the window's point. Belt knots sit on the drawn rail's columns (quarterSillZs: the y knot -0.6052 on the 6th, the x knot -0.48 on the B-post's front), since a knot between columns costs the rail a ring a side.
+  belt: { x: [[-1.5, 0.6], [-0.981, 0.65], [-0.48, 0.665], [0.5, 0.675]], y: [[-0.981, 0.925], [-0.6052, 0.883], [-0.45, 0.888], [0.25, 0.892], [0.4, 0.905], [0.7, 0.93]] },
+  // Reference side plate: the haunch's crest (its widest line) arcs from the tail's top corner up to the quarter window's point, then runs a few cm under the rising sill to the door.
+  shoulder: [[-2.054, 0.084], [-1.979, 0.083], [-1.899, 0.082], [-1.761, 0.084], [-1.662, 0.084], [-1.587, 0.086], [-1.49, 0.077], [-1.43, 0.073], [-1.359, 0.068], [-1.277, 0.063], [-1.216, 0.06], [-1.148, 0.056], [-1.088, 0.052], [-1.023, 0.049], [-0.49, 0.06], [-0.109, 0.055], [0.4, 0.1]],
   rocker: { y: 0.22 },
   underside: [[-2.114, 0.41], [-2.06, 0.31], [-1.96, 0.28], [-1.829, 0.282], [-1.818, 0.267], [-1.744, 0.267], [-1.729, 0.253], [-1.665, 0.257], [-1.644, 0.239], [-1.576, 0.242], [-1.572, 0.225], [-1.548, 0.225], [-1.533, 0.207], [-0.86, 0.182], [-0.835, 0.196], [0.381, 0.196], [0.399, 0.182], [0.723, 0.182], [1.689, 0.21], [1.782, 0.242], [1.893, 0.239], [1.985, 0.285], [2.014, 0.36], [2.017, 0.431]],
   // Flush skin: the reference runs the fender into the door with only a thin shut line (front iso), not a lit 3 mm step.
@@ -89,15 +91,16 @@ export const COUPE: BodyStyle = {
     st(-1.761, 0.72, 0.904),
     st(-1.662, 0.733, 0.917),
     st(-1.587, 0.74, 0.928),
-    // Reference side view: behind the quarter glass the shoulder runs back level with the window's point, no hump over it.
+    // Reference side view: behind the quarter glass the deck belt runs back level with the window's point, no hump over it (the haunch's arc is `shoulder`).
     st(-1.49, 0.745, 0.929),
     st(-1.43, 0.745, 0.93, 1.011, 0.42, 0.25),
     st(-1.359, 0.745, 0.93, 1.038, 0.43, 0.25),
     st(-1.277, 0.745, 0.93, 1.079, 0.44, 0.25),
     st(-1.216, 0.745, 0.93, 1.193, 0.45, 0.357),
     st(-1.148, 0.745, 0.928, 1.233, 0.46, 0.414),
-    st(-1.088, 0.745, 0.926, 1.259, 0.47, 0.623),
-    st(-1.023, 0.744, 0.924, 1.215, 0.48, 1),
+    // Reference isos: the roof's side edge runs on back into the sail's crest; its rear-corner waist is held at -3.7 cm (wider bulges the haunch blend over the rear glass).
+    st(-1.088, 0.745, 0.926, 1.259, 0.49, 0.623),
+    st(-1.023, 0.744, 0.924, 1.215, 0.5, 1),
     st(-0.825, 0.744, 0.904, 1.252, 0.52, 1),
     st(-0.109, 0.747, 0.868, 1.268, 0.53, 1),
     st(-0.043, 0.748, 0.866, 1.265, 0.53, 1),
@@ -134,8 +137,8 @@ export const COUPE: BodyStyle = {
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.92, bow: { base: -0.02, top: -0.04 }, round: 0.09, roundOutline: true },
   /** Reference side view: the quarter glass's rear point at z -0.95..-0.97, its rear edge leaning about 45°. */
   quarter: { zRearBot: -0.981, zRearTop: -0.74 },
-  /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle: one broad fastback panel lapping the rear glass, its roof end covering the glass corner's upper arc, the roll eased in from the deck up (`blend` .6: the reference's sail is one smooth surface, no straight crease; .9 lifts the rear head off the glass). The window's line rounds into its top line .074 ahead of the corner (reference side view: tangent at z -0.666). */
-  cPillar: { flush: true, flat: true, corner: 0.8, pinch: 0.074, blend: 0.6 },
+  /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle: one broad fastback panel lapping the rear glass, its roof end covering the glass corner's upper arc, the roll eased in from the deck up (`blend` .55: the reference's sail is one smooth surface, no straight crease; .9 lifts the rear head off the glass, and with the roof end's waist eased .6 bulges the haunch over the rear glass). The window's line rounds into its top line .074 ahead of the corner (reference side view: tangent at z -0.666). */
+  cPillar: { flush: true, flat: true, corner: 0.8, pinch: 0.074, blend: 0.55 },
   midPillarZ: null,
   /** Reference iso: the A-post comes down onto the cowl and the fender's top, under the belt at its foot, with no dark gap beneath it. */
   pillars: { aSeat: 0.87 },
