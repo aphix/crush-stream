@@ -120,8 +120,11 @@ interface HoodBulge {
 interface RoofParts {
   /** Two black rails, |x| from `x[0]` to `x[1]`, their tops `rise` (m) over the roof skin, sloping into it at both ends. */
   rails?: { x: readonly [number, number]; z: readonly [number, number]; rise: number };
-  /** Body-colour lip off the roof's rear end, ±`halfWidth`: its underside at y `y[0]`, its top `y[1]` at the front edge falling to the tip. */
-  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number };
+  /**
+   * Body-colour lip off the roof's rear end, ±`halfWidth`: its underside at y `y[0]`, its top `y[1]` at the front edge falling to the tip.
+   * `ends` [slope, taper] (m): the top's side ends stand `slope` inboard of the underside's, and the tip's ends `taper` inboard of the front edge's.
+   */
+  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number] };
   /** Dark glass panel over the front seats, `width` (m) across, standing just proud of the roof skin. */
   glassPanel?: { z: readonly [number, number]; width: number };
 }
@@ -154,6 +157,8 @@ interface LampShape {
   rounds?: readonly { at: LampPoint; side?: boolean; r: number; tone: LampTone }[];
   /** Bumper lamps only: also met on the body skin, the outermost hit winning, where a wrapped fascia corner is held inside the body. */
   onBody?: boolean;
+  /** The lens and cells' longest fill edge (m) before it is split onto the skin: shorter where a lens wraps a corner tighter than its chords. */
+  fill?: number;
 }
 
 /** Exhaust tips under the rear bumper: one at `x`, or two at ±`x`, centred at height `y`; `size` [w, h] (m) of the round (oval) or rectangular tip. */

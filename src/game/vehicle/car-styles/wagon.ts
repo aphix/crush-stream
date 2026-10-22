@@ -162,8 +162,9 @@ export const WAGON: BodyStyle = {
   // The reference's D-post reads gloss black like the glass beside it; its quarter glass a dark blur, not the garage's sharp mirror.
   blackout: { a: true, sail: true, b: true, divider: true, rear: true },
   privacyGlass: { rear: true, quarter: "matte" },
-  // The glass panel as the reference's isos: from 19 cm behind the windshield's top, 0.57 m long, 0.72 m across.
-  roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.82, -1.74], y: [1.46, 1.51], halfWidth: 0.5 }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
+  // The glass panel as the reference's isos: from 19 cm behind the windshield's top, 0.57 m long, 0.72 m across. The spoiler covers the roof's
+  // end out to its lip, its trailing corners cut 10 cm in plan as the reference's rounded roof corners.
+  roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.86, -1.74], y: [1.46, 1.51], halfWidth: 0.6, ends: [0.06, 0.1] }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
   exhaust: { tips: 2, x: 0.5, y: 0.42, size: [0.15, 0.05], shape: "round" },
   details: {
     lines: [
