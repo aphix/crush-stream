@@ -4,7 +4,7 @@ import { PART_FAMILY, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad, type YZ } from "./car-variants.ts";
 import { ROCKER, glassTopY, glassX, lerp, roofTopY, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
-import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, rockerAt, WINDSHIELD_BOW } from "./car-lines.ts";
+import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, rockerAt, sideBowZ, WINDSHIELD_BOW } from "./car-lines.ts";
 import { DOOR_PROUD } from "./car-door-mesh.ts";
 import { FITTING_ATTRIBUTE, GLASS_ATTRIBUTE, MATTE_PRIVACY } from "./constants.ts";
 import { mergeToned } from "./car-materials.ts";
@@ -20,13 +20,13 @@ export const DOOR_GLASS_SEAT = { x: -0.02, y: 0.52, z: -0.28 } as const;
 
 const _pt = new THREE.Vector3();
 
-/** A raked pane with its bow resolved, and `fall`: how far (m) its point at car `x`, `t` up from the base, sits under the flat quad. */
-type BowedQuad = GlassQuad & { bow: GlassBow; fall: (x: number, t: number) => number };
+/** A raked pane with its bow resolved, `fall`: how far (m) its point at car `x`, `t` up from the base, sits under the flat quad, and `ahead`: how far (z, m) its row `t` stands forward of it. */
+type BowedQuad = GlassQuad & { bow: GlassBow; fall: (x: number, t: number) => number; ahead?: (t: number) => number };
 
 /** Point of raked quad `q` in car space: `xn` −1…1 across, `t` 0…1 base to top, bowed along z at the centre line (none at the edges). */
 function quadPoint(q: BowedQuad, xn: number, t: number): THREE.Vector3 {
   const x = xn * lerp(q.wBase, q.wTop, t) * 0.5;
-  return _pt.set(x, lerp(q.base[0], q.top[0], t) - q.fall(x, t), lerp(q.base[1], q.top[1], t) + lerp(q.bow.base, q.bow.top, t) * (1 - xn * xn));
+  return _pt.set(x, lerp(q.base[0], q.top[0], t) - q.fall(x, t), lerp(q.base[1], q.top[1], t) + lerp(q.bow.base, q.bow.top, t) * (1 - xn * xn) + (q.ahead?.(t) ?? 0));
 }
 
 /** How far (m) a raked pane whose top edge lies at `topZ` falls under its flat quad at car `x`, `t` up from its base: its top edge follows the roof's dome across the car (none at the centre line), fading to the base. */
@@ -74,8 +74,9 @@ function makeGlassQuad(q: BowedQuad, { segX, segY }: QuadDraw): THREE.BufferGeom
 
 /** The windshield's quad on `style`: its base and widths, its top edge, its bow. */
 function windshieldQuad(style: BodyStyle): BowedQuad {
-  const { base, wBase, wTop, bow = WINDSHIELD_BOW } = style.windshield;
-  return { base, top: style.windshieldTop, wBase, wTop, bow, fall: domeFall(style, style.windshieldTop[1]) };
+  const { base, wBase, wTop, bow = WINDSHIELD_BOW, sideBow } = style.windshield;
+  const ahead = sideBow === undefined ? undefined : (t: number) => sideBowZ(sideBow, t);
+  return { base, top: style.windshieldTop, wBase, wTop, bow, fall: domeFall(style, style.windshieldTop[1]), ahead };
 }
 
 /** The rear glass's quad on `style`, its bow and fall resolved. */
@@ -130,7 +131,16 @@ function framedQuad(q: BowedQuad, [side, bottom, top]: readonly [number, number,
   const len = hypot2(q.top[0] - q.base[0], q.top[1] - q.base[1]);
   const at = (t: number): YZ => [lerp(q.base[0], q.top[0], t), lerp(q.base[1], q.top[1], t)];
   const [t0, t1] = [bottom / len, 1 - top / len];
-  return { base: at(t0), top: at(t1), wBase: lerp(q.wBase, q.wTop, t0) - 2 * side, wTop: lerp(q.wBase, q.wTop, t1) - 2 * side, bow: q.bow, fall: (x, t) => q.fall(x, lerp(t0, t1, t)) };
+  const ahead = q.ahead;
+  return {
+    base: at(t0),
+    top: at(t1),
+    wBase: lerp(q.wBase, q.wTop, t0) - 2 * side,
+    wTop: lerp(q.wBase, q.wTop, t1) - 2 * side,
+    bow: q.bow,
+    fall: (x, t) => q.fall(x, lerp(t0, t1, t)),
+    ahead: ahead && ((t) => ahead(lerp(t0, t1, t))),
+  };
 }
 
 /** `geo`'s `GLASS_ATTRIBUTE` with every vertex `frit` (1 black frit, 0 clear) and none privacy. */

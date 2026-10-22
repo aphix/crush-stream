@@ -313,15 +313,18 @@ export interface BodyStyle {
   /** Drawn only: how far (m) the roof's side rolls out past the cant line (the side glass's plane) at its bottom; absent 0.01 (a drip lip the pillars' faces meet flush); 0 rolls the roof flush into the glass, no drip rail. */
   roofDrip?: number;
   /**
-   * Drawn only: the roof's section from its crown down to its cant line as one curve (`roofArc`), a cubic Bézier leaving the crown level
+   * The drawn roof's section (the raked panes' tops follow its dome, `domeFall`, so it moves their cage-skinned rest and the sim too): from its crown down to its cant line as one curve (`roofArc`), a cubic Bézier leaving the crown level
    * and arriving along the side glass's plane: `crown`, its crown handle's share of the half-width (more: a broader top); `blend`, its
    * side handle's share of the section's height (more: a softer roll into the glass); `squareFront` (m), a run back from the front end
    * over which it eases into the dome's flat top and rolled lip, so a flat windshield's top corners stay under the roof. Absent, the
    * dome's flat top and its rolled side lip.
    */
   roofSection?: { crown: number; blend: number; squareFront?: number };
-  /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
-  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
+  /**
+   * Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`).
+   * `sideBow` (m): the pane bulges this far forward (z) at mid-height, none at its base and top: a convex side edge in side view; absent, straight.
+   */
+  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow; sideBow?: number };
   windshieldTop: YZ;
   /**
    * Windshield wipers parked along the glass's base (`styleWipers`): `count` blades (default 2), each `length` of the glass's base width
@@ -383,8 +386,9 @@ export interface BodyStyle {
    * `groove` [out, down] (m, drawn only): over the open bay the fender's deck edge beside a lid hood stands `out` outboard of the hood's edge and `down` lower, a shut-line slot onto the bay wall.
    * `nose` [drop, radius] (drawn only, `HoodNose`): the lid folds over the nose at z1 and runs down its face.
    * `inset` [nose, cowl] (m, drawn only, with `crown`): the side shut line's inset from the half-width, z1 to z0; the flat fender top runs in to it, the crown kept.
+   * `followGlass` (m): drawn only, the hood's rear edge runs this far in front of the windshield's base along its plan bow (the cowl between them), fading into the lid; absent, straight at `z0`.
    */
-  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; groove?: readonly [out: number, down: number]; nose?: HoodNose; inset?: readonly [nose: number, cowl: number] };
+  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; groove?: readonly [out: number, down: number]; nose?: HoodNose; inset?: readonly [nose: number, cowl: number]; followGlass?: number };
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;

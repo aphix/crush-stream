@@ -684,6 +684,13 @@ function distanceToLine(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): n
   return off.sub(along.multiplyScalar(off.dot(along))).length();
 }
 
+/** The sedan's windshield as the reference draws it: its base bowed hard in plan, its side edge convex, the hood's rear edge following it. */
+const WRAPPED_SEDAN: BodyStyle = {
+  ...CAR_STYLES.sedan,
+  windshield: { ...CAR_STYLES.sedan.windshield, base: [0.95, 0.88], bow: { base: 0.165, top: 0.02 }, sideBow: 0.036 },
+  hood: { ...CAR_STYLES.sedan.hood, followGlass: 0.04 },
+};
+
 describe("given every body style's drawn A-, B-, C- and divider posts", () => {
   for (const id of CAR_STYLE_IDS) {
     it(`when a ${id}'s posts are read at every station under the roof, then each section has ${POST_MIN_POINTS} points or more and every chord turns under ${POST_TURN_DEGREES}° from the one before`, () => {
@@ -708,9 +715,10 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
         assert.ok(read > 0 && (post.name !== "a" || read >= A_POST_STATIONS_SHOWN), `${id} ${post.name}: ${read} stations read under the roof`);
       }
     });
+  }
 
+  for (const [id, style] of [...CAR_STYLE_IDS.map((id) => [id, drawnStyle(CAR_STYLES[id])] as const), ["wrapped sedan", WRAPPED_SEDAN] as const]) {
     it(`when a ${id}'s A-posts are laid along its windshield, then each laps the windshield's side edge within ${A_POST_EDGE_FOLLOW * 100} cm at every station under the roof and in side view its centre's offset from that edge varies under ${A_POST_EDGE_FOLLOW * 100} cm`, () => {
-      const style = drawnStyle(CAR_STYLES[id]);
       const glass = makeWindshield(style).getAttribute("position");
       for (const post of makeGreenhouseFrame(style, "drawn").filter((g) => g.name === "a")) {
         const { ring, slices } = loftOf(post);
@@ -1501,6 +1509,30 @@ describe("given a style whose windshield is drawn apart from its cage (`drawn`)"
     } finally {
       delete CAR_STYLES.sedan.drawn;
     }
+  });
+});
+
+describe("given a sedan whose windshield wraps in plan and bulges in side view, its hood following it (`windshield.sideBow`, `hood.followGlass`)", () => {
+  it("when its pane, A-post and hood are built, then the pane's side edge stands sideBow forward of its chord at mid-height, the drawn A-post laps that edge within 1 cm at every height, and the hood's rear edge runs the cowl's width in front of the pane's base at every point across", () => {
+    const off: string[] = [];
+    const { base, sideBow } = WRAPPED_SEDAN.windshield;
+    const [, topZ] = WRAPPED_SEDAN.windshieldTop;
+    const glass = makeWindshield(WRAPPED_SEDAN).getAttribute("position");
+    // The pane's right column (its 11 x 9 grid), at mid-height.
+    const mid = 4 * 11 + 10;
+    const bulge = glass.getZ(mid) - THREE.MathUtils.lerp(base[1], topZ, 0.5);
+    if (Math.abs(bulge - sideBow!) > 1e-4) off.push(`the side edge bulges ${(bulge * 1000).toFixed(1)} mm at mid-height`);
+    const hood = makeHoodGeometry(WRAPPED_SEDAN);
+    const hp = hood.getAttribute("position");
+    const { ring } = loftOf(hood);
+    const [, oz] = WRAPPED_SEDAN.hood.origin;
+    for (let k = 0; k < ring; k++) {
+      const x = hp.getX(k);
+      const xn = Math.min(Math.abs(x) / (WRAPPED_SEDAN.windshield.wBase / 2), 1);
+      const want = base[1] + 0.165 * (1 - xn * xn) + 0.04;
+      if (Math.abs(hp.getZ(k) + oz - want) > 1e-4) off.push(`hood rear point ${k} at x ${x.toFixed(3)}: z ${(hp.getZ(k) + oz).toFixed(4)}, want ${want.toFixed(4)}`);
+    }
+    assert.ok(off.length === 0, off.join("; "));
   });
 });
 
