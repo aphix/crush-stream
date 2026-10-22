@@ -320,6 +320,33 @@ describe("given every part whose hard edges are declared, as built for every bod
   }
 });
 
+/** Styles whose drawn bumper still shades a fold over the bumper crease smooth, with its owner and the reading: the owner's ticket turns them live. */
+const BUMPER_FOLDS_OPEN: Partial<Record<CarStyleId, string>> = {
+  sedan: "CarLamps6: the seam cover's roll and tuck faces share normals across folds of 70° and more, front 115 of them",
+  hatchback: "CarLamps6: the seam cover's roll and tuck faces share normals across folds of 70° and more, front 113 of them",
+  wagon: "CarLamps6: the seam cover's roll and tuck faces share normals across folds of 70° and more, front 155 of them",
+};
+
+describe("given every style's bumpers as its car wears them (the fascia with its fittings and seam cover merged in)", () => {
+  for (const id of CAR_STYLE_IDS) {
+    const name = `when a ${id}'s drawn bumpers' edges are read against the bumper's ${CREASE_DEGREES.bumper}° crease, then no sharper edge shares its vertices: a fold the merge brought in shades as a crease, not a soft blob`;
+    if (BUMPER_FOLDS_OPEN[id] !== undefined) {
+      it.todo(`${name} (${BUMPER_FOLDS_OPEN[id]})`);
+      continue;
+    }
+    it(name, () => {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
+      for (const end of ["bumperF", "bumperR"] as const) {
+        const group: THREE.Object3D = car[end];
+        const mesh = group.children.find((o): o is THREE.Mesh => o instanceof THREE.Mesh);
+        assert.ok(mesh, `${id} ${end}: a drawn mesh`);
+        const census = censusOfEdges(mesh.geometry, CREASE_DEGREES.bumper, false);
+        assert.equal(census.sharpEdgesStillShared, 0, `${id} ${end}: ${census.sharpEdgesStillShared} of its ${census.sharpEdges} folds over ${CREASE_DEGREES.bumper}° shaded smooth`);
+      }
+    });
+  }
+});
+
 /** The loft's quads wind one way all round: a left-side quad one slice in from the tail (ring segment 3, the shoulder's lower chord) faces -x when outward. */
 const REFERENCE_SLICE = 1;
 const REFERENCE_SEGMENT = 3;
