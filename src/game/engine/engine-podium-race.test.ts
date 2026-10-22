@@ -59,7 +59,7 @@ function partState(car: DeformableCar, p: Part): PartState {
   // Hinged panels and bumpers flutter with the car's speed (`flapAngle`); the podium's cars stand still.
   car.flapSpeed = 0;
   car["posePart"](p);
-  return { detached: false, pose: poseOf(p), rest: [...p.restPos.toArray(), ...p.restQuat.toArray(), 1, 1, 1] };
+  return { detached: false, pose: poseOf(p), rest: [...p.restPos.toArray(), ...p.restQuat.toArray(), ...p.restScale.toArray()] };
 }
 
 /** Car `k` of the field's front four loses a wheel (not the third), has its hood and left door forced open, and cars 0 and 3 lose their front bumper. */

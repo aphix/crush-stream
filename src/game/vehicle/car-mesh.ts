@@ -93,13 +93,36 @@ export function roofAt(z: number, style: BodyStyle): { y: number; x: number } {
   return { y: lerp(sl.yBelt, sl.yRoof, c), x: lerp(sl.hw * 0.55, sl.cabinHw, c) };
 }
 
+/**
+ * The drawn roof's dome at `z` (`roofEnds`): its whole section's drop (m) and its crown's rise over the dome's edge (m). Over an end's
+ * run it rolls in a quarter ellipse (level with the roof where the run starts) onto that end's glass top; unset, none and `ROOF_CROWN`.
+ */
+export function roofDome(z: number, style: BodyStyle): { drop: number; crown: number } {
+  const runs = style.roofEnds;
+  const ends = [
+    { run: runs?.rear, z: style.roofZ[0], glassY: style.rearGlass.top[0] },
+    { run: runs?.front, z: style.roofZ[1], glassY: style.windshieldTop[0] },
+  ];
+  for (const end of ends) {
+    const d = Math.abs(z - end.z);
+    if (end.run === undefined || d >= end.run) continue;
+    const s = 1 - d / end.run;
+    const roll = 1 - Math.sqrt(1 - s * s);
+    const edge = roofAt(end.z, style).y;
+    return { drop: roll * Math.max(0, edge - end.glassY), crown: lerp(ROOF_CROWN, Math.max(0, end.glassY - edge), roll) };
+  }
+  return { drop: 0, crown: ROOF_CROWN };
+}
+
 /** Height of the roof panel's top at (`x`, `z`), the top ring of `makeRoofGeometry`: the centre-line crown, the dome's
- *  shoulder, then down to the cant line at the roof's half-width. */
+ *  shoulder, then down to the cant line at the roof's half-width; rolled onto the glass at the ends (`roofDome`). */
 export function roofTopY(x: number, z: number, style: BodyStyle): number {
   const r = roofAt(z, style);
-  const [us, ys] = ROOF_SHOULDER;
+  const { drop, crown } = roofDome(z, style);
+  const [us] = ROOF_SHOULDER;
+  const ys = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
   const u = Math.min(Math.abs(x) / r.x, 1);
-  return r.y + (u < us ? lerp(ROOF_CROWN, ys, u / us) : lerp(ys, 0, (u - us) / (1 - us)));
+  return r.y - drop + (u < us ? lerp(crown, ys, u / us) : lerp(ys, 0, (u - us) / (1 - us)));
 }
 
 /** The roof's cant line: its side lip's bottom, where the pillars end and the side glass plane leans to. */
@@ -742,12 +765,13 @@ function makeDeckPanel(
   const tk = 0.04;
   const skirt = 0.06;
   const [oy, oz] = origin;
+  // The skirt's upper point lies on its straight wall: a rolled lid and the drawn seated hood drop it (a clamshell lays it over the shoulder).
+  const plainWall = roll > 0 || (hood && !clamshell);
   const ring = (w: number, y: number, edge: number, crown: number, dome: Dome): Pt[] => {
     const points = dome.map(([u, v]) => ({ x: w * u, y: lerp(edge, crown, v) }));
     if (roll > 0 && points.length > 0 && points.at(-1)!.x >= w - roll) throw new Error(`${style.id}: a lid's ${roll} m edge roll reaches past its dome's last point`);
     const corner = rolledCorner(points.at(-1) ?? { x: 0, y: crown }, w, edge, roll);
-    // A rolled edge drops the skirt's upper point (its wall is straight between), so the roll costs the lid no vertex.
-    const skirtTop = roll > 0 ? [] : [{ x: w, y: y - skirt * 0.55 }];
+    const skirtTop = plainWall ? [] : [{ x: w, y: y - skirt * 0.55 }];
     return [
       ...corner.map((p) => ({ x: -p.x, y: p.y })).reverse(),
       ...points.map((p) => ({ x: -p.x, y: p.y })).reverse(),
@@ -801,8 +825,10 @@ function makeDeckPanel(
     bendOverTail(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, drop.w / wEnd, lean);
   }
   ensureOutwardNormals(geo);
-  // A rolled ring's corners are its first two points and the two before its skirt and underside's last six.
   const n = rings[0]!.length;
+  // The top's right edge (its side's top point): the skirt and underside's six corners and, unless dropped, the skirt's two upper points follow it.
+  geo.userData.lidEdge = n - 7 - (plainWall ? 0 : 2);
+  // A rolled ring's corners are its first two points and the two before its skirt and underside's last six.
   if (source === "drawn") splitCreases(geo, CREASE_DEGREES.deckLid, roll > 0 ? rollSmoothing(geo, [0, 1, n - 8, n - 7]) : undefined);
   geo.computeBoundingBox();
   return geo;

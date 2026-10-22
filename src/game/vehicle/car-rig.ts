@@ -11,7 +11,7 @@ import type { FaceBands } from "../deform/load-crush.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { PLATFORM_CABIN, PLATFORM_DIMS, PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
 import { CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
-import { floorY } from "./car-lines.ts";
+import { floorY, REAR_GLASS_BOW, WINDSHIELD_BOW } from "./car-lines.ts";
 
 type V3 = readonly [number, number, number];
 type Dims = BodyStyle["dims"];
@@ -177,13 +177,18 @@ function cabinCage(style: BodyStyle, base: CageSpec, xScale: number): CageSpec |
       const dy = spanned(P.windshieldTop[0], PLATFORM_DIMS.height, style.windshieldTop[0], style.dims.height);
       return moved(base, xScale, dy, spanned(P.roofZ[0], P.roofZ[1], style.roofZ[0], style.roofZ[1]), style.lightBar ? LIGHT_BAR_ROOM : 0);
     }
+    // The platform's glass cages wrap today's bow; a pane bowed deeper at its base carries its cage that much further out.
     case "glassFront": {
       const dy = spanned(H.windshield.base[0], P.windshieldTop[0], style.windshield.base[0], style.windshieldTop[0]);
-      return moved(base, xScale, dy, spanned(P.windshieldTop[1], H.windshield.base[1], style.windshieldTop[1], style.windshield.base[1]));
+      const cage = moved(base, xScale, dy, spanned(P.windshieldTop[1], H.windshield.base[1], style.windshieldTop[1], style.windshield.base[1]));
+      const reach = Math.max(0, (style.windshield.bow ?? WINDSHIELD_BOW).base - WINDSHIELD_BOW.base);
+      return { ...cage, max: [cage.max[0], cage.max[1], cage.max[2] + reach] };
     }
     case "glassRear": {
       const dy = spanned(P.rearGlass.base[0], P.rearGlass.top[0], glass.base[0], glass.top[0]);
-      return moved(base, xScale, dy, spanned(P.rearGlass.base[1], P.rearGlass.top[1], glass.base[1], glass.top[1]));
+      const cage = moved(base, xScale, dy, spanned(P.rearGlass.base[1], P.rearGlass.top[1], glass.base[1], glass.top[1]));
+      const reach = Math.min(0, (glass.bow ?? REAR_GLASS_BOW).base - REAR_GLASS_BOW.base);
+      return { ...cage, min: [cage.min[0], cage.min[1], cage.min[2] + reach] };
     }
     case "bonnet":
       return moved(base, xScale, lifted(style.hood.origin[0] - H.hood.origin[0]), spanned(H.hood.z0, H.hood.z1, style.hood.z0, style.hood.z1));

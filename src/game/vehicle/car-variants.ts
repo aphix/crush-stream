@@ -33,11 +33,19 @@ export interface ProfileStation {
 /** [y, z] in car space. */
 export type YZ = readonly [number, number];
 
+/** A raked pane's plan bow (m, along z, + forward): how far its centre line stands off its edges' line at the base and at the top. */
+export interface GlassBow {
+  base: number;
+  top: number;
+}
+
+/** A raked pane: its edges' base and top [y, z] and widths; `bow` its centre line's plan bow (default `REAR_GLASS_BOW`). */
 export interface GlassQuad {
   base: YZ;
   top: YZ;
   wBase: number;
   wTop: number;
+  bow?: GlassBow;
   /** Drawn only (the rear glass): the clear pane drawn in by [side, bottom, top] (m; sides across, bottom and top along its slope), the band out to the outline the glass's black frit. */
   frame?: readonly [number, number, number];
 }
@@ -84,6 +92,8 @@ interface HoodBulge {
   z1: number;
   width: number;
   rise: number;
+  /** Rolled pod (m): each flank rolls from the lid up to the crest over this width in an S-curve (level at both ends) instead of the 5 cm chamfer; the crest spans ±(width/2 - round). The scoop stands on the crest: scoop.width/2 <= width/2 - round. */
+  round?: number;
   /** Scoop on the bulge rising from its cowl end to a mouth facing forward at z `z`, `width` across, `height` (m) over the bulge: one opening, or two either side of a centre rib. */
   scoop?: { inlets: 1 | 2; z: number; width: number; height: number };
 }
@@ -183,6 +193,8 @@ interface BumperSpec {
   edge?: readonly (readonly [number, number])[];
   /** A rear bumper's number plate centre height (m, car frame); absent, `PLATE_RISE` over the seat. */
   plate?: number;
+  /** A rear plate's seating (drawn only): its rear face `out` (m, as `fascia`'s) behind the seat and its `color` (sRGB); absent, the platform plate's (0.09, cream). */
+  plateFace?: { out?: number; color?: number };
 }
 
 type DetailView = "side" | "top" | "front" | "rear" | "bottom";
@@ -253,8 +265,14 @@ export interface BodyStyle {
   profile: readonly ProfileStation[];
   /** Roof panel [rear, front] z. */
   roofZ: readonly [number, number];
-  /** Windshield: base [y, z] of its centre line and its widths at the base and the top (`windshieldTop`). */
-  windshield: { base: YZ; wBase: number; wTop: number };
+  /**
+   * Drawn only: over this run (m) in from each end the drawn roof rolls onto that end's glass top in a quarter ellipse, its crown
+   * settling to the glass top's height and its whole section dropping where the glass top sits under the dome's edge (`roofDome`);
+   * unset, the roof ends in its full section.
+   */
+  roofEnds?: { rear?: number; front?: number };
+  /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
+  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;
   /** B-pillar z band. */
   bPillar: { rear: number; front: number };
@@ -280,7 +298,11 @@ export interface BodyStyle {
     mirrorReach: number;
     mirrorHalfDepth: number;
     aperture: readonly [number, number];
-    mirror?: { cap: "rounded" | "box"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number] };
+    /**
+     * `lift` (m): head, glass and stalk stand this far higher than the seat, the foot growing up to meet them (default 0), for a mirror on a pedestal above the door skin's top.
+     * `mount` "glass": the seat stands on the door glass's plane at its z and height (`mirrorY` may stand over `halfHeight`), its foot leaning with the pane, as a tow mirror on the glass's front corner; absent, on the skin.
+     */
+    mirror?: { cap: "rounded" | "box"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; mount?: "glass" };
     hingeTop?: number;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
@@ -362,7 +384,7 @@ export interface BodyStyle {
    * The front grille (drawn only; it tears off with the front bumper): centre height `y` and face `z` (m, car frame; z absent: the platform
    * grille's face); `size` [w at the top, h], `bottom` its width at the bottom (a trapezoid; absent, w), corners rounded `round` (m); `kind`
    * horizontal bars, vertical slats, a mesh of both or a diagonal (hex) mesh, `count` bars or slats (a mesh: lines each way; absent, at the default pitch); a round
-   * `badge` of that radius at its centre; in `finish` (body: the body's paint). Absent: the platform grille.
+   * `badge` of that radius at its centre, a chrome `bezel` framing its edge; in `finish` (body: the body's paint). Absent: the platform grille.
    */
   grille?: {
     y: number;
@@ -373,6 +395,8 @@ export interface BodyStyle {
     kind: "bars" | "mesh" | "slats" | "hex";
     count?: number;
     badge?: number;
+    /** A chrome frame this wide (m) round the grille's outer edge, its face standing out past the grille's (drawn only). */
+    bezel?: number;
     finish: "black" | "chrome" | "body";
     /** Its top leaning back (rad) about its centre line, onto a raked face; absent, upright. */
     lean?: number;

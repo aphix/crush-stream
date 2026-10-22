@@ -312,9 +312,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * pane's middle, with his seat's turn velocity from there; the VIP rides in, and is thrown from, the -x seat; the derby AI's driver's door is the +x one,
  * and its reverse run-in aims 1.6 m out from a target's nose on either side (2.1 on the driver's). Every windshield throw and every derby car moves
  * differently. A clip of 156 or before no longer reads.
+ * 158: a driver thrown out of the windshield leaves from the pane's bowed middle (`userData.centre`), not its box's centre: 1 cm further forward on
+ * every car, and the coupe's pane bows deeper at its top. Every windshield throw moves differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 157;
+const REPLAY_VERSION = 158;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
