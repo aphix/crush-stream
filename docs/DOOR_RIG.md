@@ -207,8 +207,9 @@ not on a bumper, grille or boot. The pool's light and glow come from the seat's 
 class lift (truck +8 cm, monster +48 cm) raises them with the drawn lamp.
 
 Real lights come from a fixed pool created once in the `CrashEngine` constructor:
-`SPOT_POOL` = 4 white SpotLights for headlamps and `POINT_POOL` = 4 short red PointLights for tail
-lamps, with no shadows; a phone gets 2 + 2 (`PHONE_POOL`, `lampPoolFor`; `?lamps=full` gives it the
+`SPOT_POOL` = 4 white SpotLights for headlamps and 4 red tail SpotLights (`LampPool.tails`) whose 90° cone lights only the
+half-space behind the lens (a point light there reached forward into the cabin and bed as a red glow; a siren's hangs over its
+lens pointing down), with no shadows; a phone gets 2 + 2 (`PHONE_POOL`, `lampPoolFor`; `?lamps=full` gives it the
 full pool for an A/B). Lights are never added, removed or visibility-toggled at runtime. Doing that
 changes three's lights hash and recompiles every lit material (see 32c53c1). Off, broken and
 unassigned lights sit at intensity 0, like `impactLight` and `winnerLight`.
@@ -228,7 +229,7 @@ frame's wall `dt`) sets each lamp's target weight:
 The weight slews to its target over 0.3 s (`FADE_S`; a frame's step is capped, `FADE_DT_MAX`). The fixed
 pool is shared by the best-ranked lamps and handed over without ever swapping a lit light: a lamp is
 admitted into a *free* light (at weight 0, if its target is at least `ADMIT`), keeps it while it is
-among the best `SPOT_POOL` heads or `POINT_POOL` tails (a lamp already holding one ranks `HYSTERESIS`
+among the best `SPOT_POOL` heads or `LampPool.tails` tails (a lamp already holding one ranks `HYSTERESIS`
 higher, so none chatters at the cut), and gives it up only once its weight is back at 0 (so a slot may
 sit unused for a few frames while one lamp fades out and the next waits to fade in). The very first
 frame snaps instead of fading in. Lit lights are packed best-first, so a spare one is at intensity 0.

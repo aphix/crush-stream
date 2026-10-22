@@ -6,6 +6,7 @@ import { DETAIL_LEVELS, type CarDetail } from "../present/car-detail.ts";
 import { gpuRenderer } from "../present/auto-fx.ts";
 import type { DetailGovernor } from "../present/detail-governor.ts";
 import type { Cinematics } from "../present/engine-cine.ts";
+import type { PlayerQuality } from "../present/player-quality.ts";
 import { probeDepth } from "../present/depth-probe.ts";
 import { describePost, FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import type { DriverSeat } from "../vehicle/car-drive.ts";
@@ -23,8 +24,8 @@ import type { World } from "./world-step.ts";
 import { armedSolids } from "../world/surfaces.ts";
 import { PHASE, PHASE_COUNT, PHASE_NAMES, WORK, WORK_COUNT, WORK_NAMES } from "./sim-phases.ts";
 
-/** The timings both benches share: the window, the A/B blocks. The warm-up and the course are the plan's. */
-export const BENCH = { seed: 1, measureS: 30, blockS: 5, paceCycles: 2, fxCycles: 2, detailCycles: 2, skyCycles: 1, skyWaitS: 10, sweepS: 3, sweepShortS: 1, sweepMinFrames: 60, sweepCapS: 8 } as const;
+/** The timings both benches share: the window, the A/B blocks (`qualityCycles`: each quality knob's Auto and Max arms, once each like the sky's). The warm-up and the course are the plan's. */
+export const BENCH = { seed: 1, measureS: 30, blockS: 5, paceCycles: 2, fxCycles: 2, detailCycles: 2, skyCycles: 1, qualityCycles: 1, skyWaitS: 10, sweepS: 3, sweepShortS: 1, sweepMinFrames: 60, sweepCapS: 8 } as const;
 /** The key a rung's share of the window is kept under. */
 const rungKey = (level: number): string => `${DETAIL_LEVELS[level]?.far ?? "?"} m`;
 /** Samples kept: far above any display rate, so the window always fits. */
@@ -67,6 +68,8 @@ export interface BenchParts {
   ragdoll: Pick<RagdollSystem, "stats" | "traffic" | "placement">;
   /** The race's sky: the bytes of the picture it holds (0 until the strip is in, and for no sky). */
   sky: Pick<SkyDome, "textureBytes" | "drawn">;
+  /** The player's quality knobs: what the card records, and the bench's A/B arms set then put back. */
+  quality: Pick<PlayerQuality, "draw" | "scale" | "shadow" | "pinnedKnobs" | "picks" | "restore">;
 }
 
 /** The smallest step `performance.now()` takes over a 25 ms spin (ms): the browser's timer resolution as this page sees it. */
@@ -494,6 +497,7 @@ export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top:
     hatching: held(hud[SETTING_KEY.hatching]),
     rimLight: held(hud[SETTING_KEY.rimLight]),
     shadows: { enabled: renderer.shadowMap.enabled, type: ["Basic", "PCF", "PCFSoft", "VSM"][renderer.shadowMap.type] ?? String(renderer.shadowMap.type), map: `${sun.shadow.mapSize.x}x${sun.shadow.mapSize.y}`, casters },
+    quality: { draw: parts.quality.draw, scale: parts.quality.scale, shadow: parts.quality.shadow, pinned: parts.quality.pinnedKnobs },
     pixelRatio: renderer.getPixelRatio(),
     deviceRatio: Math.round(devicePixelRatio * 1000) / 1000,
     canvas: `${size.width}x${size.height}`,
@@ -519,7 +523,7 @@ function sharesOf(counts: Float64Array, order: Uint8Array, seen: number, frames:
   return shares;
 }
 
-export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "device" | "pageEvents" | "pageSeconds" | "pageState" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "sweepHitches" | "switches" | "frameStats" | "run"> {
+export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "abDraw" | "abScale" | "abShadow" | "device" | "pageEvents" | "pageSeconds" | "pageState" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "sweepHitches" | "switches" | "frameStats" | "run"> {
   const { race } = parts;
   const { n, iv } = s;
   const third = Math.floor(n / 3);

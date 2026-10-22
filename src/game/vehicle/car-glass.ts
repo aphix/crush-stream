@@ -1,9 +1,12 @@
 import * as THREE from "three";
-import { PART_FAMILY } from "../kernel/physics-core.js";
+import { PART_FAMILY, hypot2 } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad } from "./car-variants.ts";
-import { glassTopY, glassX, lerp } from "./car-mesh.ts";
-import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, WINDSHIELD_BOW } from "./car-lines.ts";
+import { ROCKER, glassTopY, glassX, lerp, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
+import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, rockerAt, WINDSHIELD_BOW } from "./car-lines.ts";
+import { DOOR_PROUD } from "./car-door-mesh.ts";
+import { FITTING_ATTRIBUTE } from "./constants.ts";
+import { mergeToned } from "./car-materials.ts";
 
 // Glass panes on the shared platform: windshield, rear glass, door and quarter glass, filling the greenhouse `car-greenhouse-mesh.ts` builds.
 
@@ -25,8 +28,13 @@ function quadPoint(q: BowedQuad, xn: number, t: number): THREE.Vector3 {
   return _pt.set(xn * w * 0.5, lerp(q.base[0], q.top[0], t), lerp(q.base[1], q.top[1], t) + lerp(q.bow.base, q.bow.top, t) * (1 - xn * xn));
 }
 
+/** How a raked pane is drawn: its grid (columns across, rows up), and `facing`, the way its outward normal runs along z. */
+type QuadDraw = { segX: number; segY: number; facing: 1 | -1 };
+const WINDSHIELD_DRAW: QuadDraw = { segX: 10, segY: 8, facing: 1 };
+const REAR_GLASS_DRAW: QuadDraw = { segX: 8, segY: 6, facing: -1 };
+
 /** Raked glass quad (windshield / rear glass), bowed along z at the centre line; `userData.centre` is its bowed centre (`glassWorld`). */
-function makeGlassQuad(q: BowedQuad, segX: number, segY: number): THREE.BufferGeometry {
+function makeGlassQuad(q: BowedQuad, { segX, segY }: QuadDraw): THREE.BufferGeometry {
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
@@ -66,11 +74,11 @@ function rearGlassQuad(style: BodyStyle): BowedQuad {
 }
 
 export function makeWindshield(style: BodyStyle = SEDAN): THREE.BufferGeometry {
-  return makeGlassQuad(windshieldQuad(style), 10, 8);
+  return makeGlassQuad(windshieldQuad(style), WINDSHIELD_DRAW);
 }
 
 export function makeRearGlass(style: BodyStyle = SEDAN): THREE.BufferGeometry {
-  return makeGlassQuad(rearGlassQuad(style), 8, 6);
+  return makeGlassQuad(rearGlassQuad(style), REAR_GLASS_DRAW);
 }
 
 /** A side pane's edge z at the belt (`bot`) and at the top, rear → front; a kneed front edge (`front`, z at a height share) gets a row at its knee (`kneeT`). */
@@ -113,12 +121,17 @@ function sidePoint(sign: number, style: BodyStyle, span: SideSpan, s: number, t:
   return _pt.set(sign * glassX(z, y, style), y, z);
 }
 
+/** A side pane's rows, belt to top (`t`): in thirds, and the front edge's knee. */
+function rowTs(span: SideSpan): number[] {
+  const ts = [0, 1 / 3, 2 / 3, 1];
+  if (span.kneeT !== undefined && span.kneeT > 0 && span.kneeT < 1 && !ts.includes(span.kneeT)) ts.splice(ts.findIndex((t) => t > span.kneeT!), 0, span.kneeT);
+  return ts;
+}
+
 /** Side glass from the belt to the roof cant (`sidePoint`). Positions are relative to `origin`. */
 function makeSideGlassPane(sign: number, style: BodyStyle, span: SideSpan, origin: readonly [number, number, number]): THREE.BufferGeometry {
   const segS = SIDE_PANE_COLUMNS;
-  // Belt to top in thirds, and the front edge's knee.
-  const ts = [0, 1 / 3, 2 / 3, 1];
-  if (span.kneeT !== undefined && span.kneeT > 0 && span.kneeT < 1 && !ts.includes(span.kneeT)) ts.splice(ts.findIndex((t) => t > span.kneeT!), 0, span.kneeT);
+  const ts = rowTs(span);
   const segT = ts.length - 1;
   const positions: number[] = [];
   const uvs: number[] = [];
@@ -148,16 +161,194 @@ function makeSideGlassPane(sign: number, style: BodyStyle, span: SideSpan, origi
   return geo;
 }
 
-/** Door glass in pane-local space: car.ts parents it to the door at `DOOR_GLASS_SEAT` (x mirrored on the left). */
-export function makeSideGlass(sign: number, style: BodyStyle = SEDAN): THREE.BufferGeometry {
+/** The door glass's origin in car space: its pane (and trim) positions are relative to it. */
+function doorGlassOrigin(sign: number, style: BodyStyle): [number, number, number] {
   const d = style.door;
   const o = DOOR_GLASS_SEAT;
-  return makeSideGlassPane(sign, style, doorSpan(style), [sign * (d.hingeX + o.x), d.hingeY + o.y, d.hingeZ + o.z]);
+  return [sign * (d.hingeX + o.x), d.hingeY + o.y, d.hingeZ + o.z];
+}
+
+/** Door glass in pane-local space: car.ts parents it to the door at `DOOR_GLASS_SEAT` (x mirrored on the left). */
+export function makeSideGlass(sign: number, style: BodyStyle = SEDAN): THREE.BufferGeometry {
+  return makeSideGlassPane(sign, style, doorSpan(style), doorGlassOrigin(sign, style));
 }
 
 /** Quarter glass from the B-pillar back to the C-pillar, on the body (car local). */
 export function makeRearSideGlass(sign: number, style: BodyStyle = SEDAN): THREE.BufferGeometry {
   return makeSideGlassPane(sign, style, quarterSpan(style), [0, 0, 0]);
+}
+
+/** Window trim: its width (m) across, straddling the pane's edge, a slim bead and not a seal. */
+const TRIM_WIDTH = 0.022;
+/** Window trim: its crest stands this far (m) over the glass, enough to catch a highlight. */
+const TRIM_PROUD = 0.005;
+/** Window trim: its two edges stand this far (m) over the glass, clear of it so they don't z-fight. */
+const TRIM_EDGE = 0.001;
+/** Window trim's cross-section, outer edge to inner edge: [offset (m) outward from the pane's edge, height (m) over the glass]. */
+const TRIM_SECTION = [[TRIM_WIDTH / 2, TRIM_EDGE], [0, TRIM_PROUD], [-TRIM_WIDTH / 2, TRIM_EDGE]] as const;
+
+/** A trim ribbon's mesh from `TRIM_SECTION` points at each vertex of a loop (`positions`); an open run (`closed` false) gets a wall at each end, appended to `positions`. `flip` when it winds the other way round to the winding that faces out. */
+function ribbonGeometry(positions: number[], flip: boolean, closed = true): THREE.BufferGeometry {
+  const sectionLength = TRIM_SECTION.length;
+  const loopLength = positions.length / 3 / sectionLength;
+  const indices: number[] = [];
+  for (let k = 0; k < (closed ? loopLength : loopLength - 1); k++) {
+    const a = k * sectionLength;
+    const b = ((k + 1) % loopLength) * sectionLength;
+    for (let o = 0; o < sectionLength - 1; o++) {
+      const [p0, p1, q0, q1] = [a + o, a + o + 1, b + o, b + o + 1];
+      if (flip) indices.push(p0, q0, p1, p1, q0, q1);
+      else indices.push(p0, p1, q0, p1, q1, q0);
+    }
+  }
+  if (!closed) {
+    // End walls on copies of the end sections, so they shade flat.
+    const runLength = positions.length;
+    for (const atStart of [true, false]) {
+      const base = positions.length / 3;
+      const from = atStart ? 0 : runLength - sectionLength * 3;
+      for (let i = from; i < from + sectionLength * 3; i++) positions.push(positions[i]!);
+      indices.push(...(atStart !== flip ? [base + 2, base + 1, base] : [base, base + 1, base + 2]));
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  // The chrome material's shader reads this attribute; 0 draws its own tone.
+  geo.setAttribute(FITTING_ATTRIBUTE, new THREE.Float32BufferAttribute(new Float32Array(positions.length / 3), 1));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** Chrome bead round a side pane's border, built on the pane's own `span` and `origin` so it lines up with the glass and shares its parent. */
+function makeSideGlassFrameFor(sign: number, style: BodyStyle, span: SideSpan, origin: readonly [number, number, number]): THREE.BufferGeometry {
+  const ts = rowTs(span);
+  const n = SIDE_PANE_COLUMNS;
+  // Counter-clockwise in (z, y), which the outward offset below relies on.
+  const loop: [number, number][] = [];
+  for (let i = 0; i < n; i++) loop.push([i / n, 0]);
+  for (let j = 0; j < ts.length - 1; j++) loop.push([1, ts[j]!]);
+  for (let i = n; i > 0; i--) loop.push([i / n, 1]);
+  for (let j = ts.length - 1; j > 0; j--) loop.push([0, ts[j]!]);
+  const pts = loop.map(([s, t]) => sidePoint(sign, style, span, s, t).clone());
+  const m = pts.length;
+  const positions: number[] = [];
+  for (let k = 0; k < m; k++) {
+    const [p, prev, next] = [pts[k]!, pts[(k + m - 1) % m]!, pts[(k + 1) % m]!];
+    const outZ = next.y - prev.y;
+    const outY = prev.z - next.z;
+    const len = hypot2(outZ, outY) || 1;
+    for (const [out, proud] of TRIM_SECTION) {
+      const z = p.z + (outZ / len) * out;
+      const y = p.y + (outY / len) * out;
+      positions.push(sign * (glassX(z, y, style) + proud) - origin[0], y - origin[1], z - origin[2]);
+    }
+  }
+  // The left side mirrors the right's winding.
+  return ribbonGeometry(positions, sign < 0);
+}
+
+type ChromeStrip = NonNullable<BodyStyle["chromeStrips"]>[number];
+
+/** A chrome strip's polyline gets a point at least this often (m), so the strip follows the skin's curve. */
+const STRIP_STEP = 0.1;
+
+/** `points` with extra points between them so no run is longer than `STRIP_STEP`. */
+function densified(points: ChromeStrip["points"]): [number, number][] {
+  const dense: [number, number][] = [[points[0]![0], points[0]![1]]];
+  for (let i = 1; i < points.length; i++) {
+    const [from, to] = [points[i - 1]!, points[i]!];
+    const runs = Math.ceil(hypot2(to[0] - from[0], to[1] - from[1]) / STRIP_STEP);
+    for (let run = 1; run <= runs; run++) dense.push([lerp(from[0], to[0], run / runs), lerp(from[1], to[1], run / runs)]);
+  }
+  return dense;
+}
+
+/** A strip rides the door when all its points lie inside the door cut. */
+function ridesDoor(strip: ChromeStrip, style: BodyStyle): boolean {
+  const [zRear, zFront] = style.door.aperture;
+  return strip.points.every(([z]) => z >= zRear && z <= zFront);
+}
+
+/** The door skin's outer half-width (m) at car-local `z` and height `y`: the body side line `makeDoorGeometry` follows, `DOOR_PROUD` over it. */
+function doorSkinX(z: number, y: number, style: BodyStyle): number {
+  const slice = sampleSlice(z, style.profile);
+  return sideX(y, slice.hw, slice.yBelt, rockerAt(z, style)) + DOOR_PROUD;
+}
+
+/** The drawn body's half-width (m) at car-local `z` and height `y`: its section ring's right side read up from the rocker, held at the rocker's below it and the deck crown's above. */
+function bodySkinX(z: number, y: number, style: BodyStyle): number {
+  const ring = sectionPoints(sampleSlice(z, style.profile), style, "drawn");
+  let lower = ring[ring.length - 1 - ROCKER]!;
+  for (let i = ring.length - ROCKER; i < ring.length; i++) {
+    const upper = ring[i]!;
+    if (y <= upper.y) return lerp(lower.x, upper.x, THREE.MathUtils.clamp((y - lower.y) / (upper.y - lower.y || 1), 0, 1));
+    lower = upper;
+  }
+  return lower.x;
+}
+
+/** Chrome strip on side `sign` as an open ribbon: `TRIM_SECTION` across its polyline in the side view, its offsets scaled to the strip's width, stood proud of the skin at `skinX` (half-width, m, at z and y). Positions are relative to `origin`. */
+function makeChromeStrip(sign: number, strip: ChromeStrip, skinX: (z: number, y: number) => number, origin: readonly [number, number, number]): THREE.BufferGeometry {
+  const points = densified(strip.points);
+  const widthScale = strip.width / TRIM_WIDTH;
+  const positions: number[] = [];
+  for (let k = 0; k < points.length; k++) {
+    const [z, y] = points[k]!;
+    const [prev, next] = [points[Math.max(k - 1, 0)]!, points[Math.min(k + 1, points.length - 1)]!];
+    const len = hypot2(next[0] - prev[0], next[1] - prev[1]) || 1;
+    for (const [out, proud] of TRIM_SECTION) {
+      const edgeZ = z + ((next[1] - prev[1]) / len) * out * widthScale;
+      const edgeY = y + ((prev[0] - next[0]) / len) * out * widthScale;
+      positions.push(sign * (skinX(edgeZ, edgeY) + proud) - origin[0], edgeY - origin[1], edgeZ - origin[2]);
+    }
+  }
+  return ribbonGeometry(positions, sign < 0, false);
+}
+
+/** Chrome trim round the door glass, with the door's chrome strips, in the glass's own space: car.ts parents it to the door at the pane's seat. */
+export function makeSideGlassFrame(sign: number, style: BodyStyle): THREE.BufferGeometry {
+  const origin = doorGlassOrigin(sign, style);
+  const frame = makeSideGlassFrameFor(sign, style, doorSpan(style), origin);
+  const strips = (style.chromeStrips ?? []).filter((strip) => ridesDoor(strip, style));
+  if (strips.length === 0) return frame;
+  return mergeToned([frame, ...strips.map((strip) => makeChromeStrip(sign, strip, (z, y) => doorSkinX(z, y, style), origin))], "door window trim");
+}
+
+/** Chrome ribbon round a raked pane's border: the points its own grid draws (`quadPoint`), offset outward in the pane's plane and stood proud along its outward normal. */
+function makeQuadGlassFrame(q: BowedQuad, { segX, facing }: QuadDraw): THREE.BufferGeometry {
+  const xs = Array.from({ length: segX + 1 }, (_, i) => (i / segX) * 2 - 1);
+  // Counter-clockwise in (across, up), which the edge offsets below rely on.
+  const pts = [...xs.map((xn) => quadPoint(q, xn, 0).clone()), ...xs.map((xn) => quadPoint(q, xn, 1).clone()).reverse()];
+  // The flat pane's normal: the bow tilts it under a millimetre across the ribbon.
+  const plane = new THREE.Vector3(0, q.base[1] - q.top[1], q.top[0] - q.base[0]).normalize();
+  const outward = plane.clone().multiplyScalar(facing);
+  const n = pts.length;
+  const edgeOuts = pts.map((p, k) => pts[(k + 1) % n]!.clone().sub(p).cross(plane).normalize());
+  const positions: number[] = [];
+  for (let k = 0; k < n; k++) {
+    const [before, after] = [edgeOuts[(k + n - 1) % n]!, edgeOuts[k]!];
+    const bisector = before.clone().add(after).normalize();
+    const reach = 1 / bisector.dot(before);
+    for (const [offset, proud] of TRIM_SECTION) {
+      const v = pts[k]!.clone().addScaledVector(bisector, offset * reach).addScaledVector(outward, proud);
+      positions.push(v.x, v.y, v.z);
+    }
+  }
+  // The unflipped winding faces against `plane`: the windshield faces out along it, the rear glass against it.
+  return ribbonGeometry(positions, facing > 0);
+}
+
+/** Chrome trim round the body's glass, one geometry on the body (car local): both quarter glasses, the windshield, and the rear glass unless it rides the tailgate (`rearOnBody` false), then the body's chrome strips on both sides. */
+export function makeBodyGlassFrames(style: BodyStyle, rearOnBody: boolean): THREE.BufferGeometry {
+  const frames = [-1, 1].map((sign) => makeSideGlassFrameFor(sign, style, quarterSpan(style), [0, 0, 0]));
+  frames.push(makeQuadGlassFrame(windshieldQuad(style), WINDSHIELD_DRAW));
+  if (rearOnBody) frames.push(makeQuadGlassFrame(rearGlassQuad(style), REAR_GLASS_DRAW));
+  for (const strip of style.chromeStrips ?? []) {
+    if (ridesDoor(strip, style)) continue;
+    for (const sign of [-1, 1]) frames.push(makeChromeStrip(sign, strip, (z, y) => bodySkinX(z, y, style), [0, 0, 0]));
+  }
+  return mergeToned(frames, "body window trim");
 }
 
 /**

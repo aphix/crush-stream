@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { dismissBootLoader } from "@/lib/boot-loader";
 import { Hud } from "@/components/hud";
 import { useDriver } from "@/components/use-driver";
+import { useQualityPrefs } from "@/components/use-quality";
 import { useDeepLinkJoin } from "@/components/use-deep-link-join";
 import type { CrashEngine } from "@/game/engine/engine";
 import { runBenchPage } from "@/components/bench-run";
@@ -29,6 +30,7 @@ export function CrashLab() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [booted, setBooted] = useState(false);
   const driver = useDriver();
+  const quality = useQualityPrefs();
   useDeepLinkJoin(engineRef);
   const newer = useUpdateCheck();
   const benchPage = useSyncExternalStore(subscribeNever, () => isBenchPage(window.location.search), () => false);
@@ -79,6 +81,11 @@ export function CrashLab() {
   useEffect(() => {
     if (booted) engineRef.current?.setDriver(driver.name, driver.car);
   }, [booted, driver.name, driver.car]);
+
+  // This browser's quality knobs reach the engine at boot and on every change; a bench page runs Auto unless its URL pins a knob.
+  useEffect(() => {
+    if (booted && !benchPage) engineRef.current?.setSavedQuality(quality.draw, quality.scale, quality.shadow);
+  }, [booted, benchPage, quality.draw, quality.scale, quality.shadow]);
 
   // A reload that landed on the new build is done with; the `?v=` it carried goes from the address.
   useEffect(() => settleOnLoad(__BUILD_SHA__), []);

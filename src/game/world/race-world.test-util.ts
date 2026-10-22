@@ -19,6 +19,7 @@ import { TRACKS } from "./tracks/index.ts";
 import { AI_EVERY_SLICE, type AiDifficulty } from "../ai/constants.ts";
 import { DEFAULT_RACE_OPTIONS, type CarRecord, type RaceResultRow, type RaceSnapshot } from "../match/types.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { ViewDistance } from "../present/player-quality.ts";
 
 /**
  * The whole race stack headless, as the browser runs it minus the renderer: `RaceDirector` (rules
@@ -98,6 +99,7 @@ export function makeWorld(survivalCourse?: unknown, tracks?: Map<string, Track>)
   const race = new RaceDirector({
     scene,
     camera,
+    view: new ViewDistance(camera, scene),
     sun: new THREE.DirectionalLight(),
     sunOffset: new THREE.Vector3(),
     sunRight: new THREE.Vector3(),

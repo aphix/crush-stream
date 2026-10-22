@@ -21,6 +21,7 @@ import { SURVIVAL, humanSlot, settleRun } from "../match/survival.ts";
 import { loadBest, saveBest } from "./survival-store.ts";
 import { DORMANT, TrafficBrain } from "../ai/traffic.ts";
 import type { TrackArt } from "../present/track-art.ts";
+import type { ViewDistance } from "../present/player-quality.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import { raceSight, sightLine, type Sight } from "../present/spectate-cam.ts";
@@ -43,6 +44,8 @@ export const TRAFFIC_NAME = "Traffic";
 interface RaceHost {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
+  /** The view distance: a course's far plane and fog are authored through it, drawn at the player's Draw distance. */
+  readonly view: ViewDistance;
   readonly sun: THREE.DirectionalLight;
   /** The offset (m) from the sun's shadow box centre to the sun for the time of day (`WorldStage.sunOffset`). */
   readonly sunOffset: THREE.Vector3;
@@ -274,7 +277,8 @@ export abstract class RaceField {
   /** A car whose driver was thrown out (`driverOut`) freewheels: no throttle, brake or steering and no engine braking (`DriveInput.neutral`), only the tyres and the road. */
   protected readonly coast: DriveInput = { ...idleDrive(), neutral: true };
   protected readonly proj = blankProjection();
-  protected saved: { background: THREE.Color | THREE.Texture | null; fog: THREE.Fog | THREE.FogExp2 | null; far: number } | null = null;
+  /** The sandbox's scene as `enter` found it; `far` and `density` are its authored far plane and fog density (`ViewDistance`), not the Draw distance's. */
+  protected saved: { background: THREE.Color | THREE.Texture | null; fog: THREE.Fog | THREE.FogExp2 | null; far: number; density: number } | null = null;
 
   /** `survivalCourse`: the Survival course's file (a test passes a variant); it is not in `TRACKS`, so the race menu never lists it. */
   constructor(host: RaceHost, survivalCourse: unknown = HAVANA) {
@@ -558,8 +562,7 @@ export abstract class RaceField {
     this.host.scene.fog = new THREE.FogExp2(sky.getHex(), env.fog);
     this.art = this.host.buildArt(tr, this.placed);
     if (this.art) this.host.scene.add(this.art.group);
-    this.host.camera.far = env.far;
-    this.host.camera.updateProjectionMatrix();
+    this.host.view.author(env.far, env.fog);
     this.host.setTimeOfDay(this.rules.timeOfDay);
     setGround(tr.ground());
     // Tyre marks cover the course instead of the sandbox disc.
