@@ -1521,8 +1521,8 @@ describe("given a body style's H2 hardpoints", () => {
 
   it("when a style blacks out its cowl, then the deck's crown from 5 cm under the windshield's foot to 5 cm under the hood's rear edge turns primer-dark, and nothing else does", () => {
     const sedan = CAR_STYLES.sedan;
-    // The hood's rear edge 6 cm ahead of the glass's foot: a strip of deck shows between them.
-    const open: BodyStyle = { ...sedan, blackout: undefined, hood: { ...sedan.hood, z0: sedan.windshield.base[1] + 0.06 } };
+    // The hood's rear edge 6 cm ahead of the glass's foot: a strip of deck shows between them (the cage's glass, no drawn twin or hood bend).
+    const open: BodyStyle = { ...sedan, blackout: undefined, drawn: undefined, hood: { ...sedan.hood, z0: sedan.windshield.base[1] + 0.06, followGlass: undefined } };
     const [was, now] = [makeChassisGeometry(open), makeChassisGeometry({ ...open, blackout: { cowl: true } })];
     const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
     const { ring, slices } = now.userData.loft as { ring: number; slices: number };
@@ -2125,23 +2125,25 @@ describe("given a body style's P1 parts", () => {
   });
 
   it("when a crowned hood sets its inset, then its side edge stands that far inside the station's side, the cowl's at z0 and the nose's at z1, at the plain edge's height under the plain crown, and the cage builds are unchanged", () => {
-    const plain: BodyStyle = { ...sedan, hood: { ...sedan.hood, inset: undefined } };
-    const [nose, cowl] = sedan.hood.inset!;
+    // The hood's rear edge straight at z0 (no `followGlass` bend), so the cowl's width reads at z0.
+    const straight: BodyStyle = { ...sedan, hood: { ...sedan.hood, followGlass: undefined } };
+    const plain: BodyStyle = { ...straight, hood: { ...straight.hood, inset: undefined } };
+    const [nose, cowl] = straight.hood.inset!;
     const halfWidth = (style: BodyStyle, z: number): number => {
       const pos = makeHoodGeometry(style).getAttribute("position");
       let w = 0;
       for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) + style.hood.origin[1] - z) < POSITION_TOL) w = Math.max(w, Math.abs(pos.getX(i)));
       return w;
     };
-    const { z0, z1 } = sedan.hood;
-    assertSameNumbers([halfWidth(plain, z0) - halfWidth(sedan, z0), halfWidth(plain, z1) - halfWidth(sedan, z1)], [cowl - 0.07, nose - 0.07], "the inset past the plain 0.07 at the cowl and the nose", 1e-4);
+    const { z0, z1 } = straight.hood;
+    assertSameNumbers([halfWidth(plain, z0) - halfWidth(straight, z0), halfWidth(plain, z1) - halfWidth(straight, z1)], [cowl - 0.07, nose - 0.07], "the inset past the plain 0.07 at the cowl and the nose", 1e-4);
     for (const z of [z0, (z0 + z1) / 2]) {
-      const hw = sampleSlice(z, sedan.profile).hw;
+      const hw = sampleSlice(z, straight.profile).hw;
       const edge = hw - lerp(cowl, nose, (z - z0) / (z1 - z0));
-      const heights = [deckTopY(edge, z, sedan, true), deckTopY(0, z, sedan, true)];
+      const heights = [deckTopY(edge, z, straight, true), deckTopY(0, z, straight, true)];
       assertSameNumbers(heights, [deckTopY(hw - 0.07, z, plain, true), deckTopY(0, z, plain, true)], `at z ${z} the inset edge and the crown against the plain hood's`, 1e-6);
     }
-    assert.ok(cageHash(sedan) === cageHash(plain), "the cage builds are unchanged");
+    assert.ok(cageHash(straight) === cageHash(plain), "the cage builds are unchanged");
   });
 
   it("when a hood bulge is rolled, then its flanks roll up from the lid in steps outside its crest, the crest stays inside the roll, and the cage builds are unchanged", () => {
@@ -2684,15 +2686,18 @@ function readMirror(style: BodyStyle): { inner: number; outer: number; cap: THRE
   return { inner, outer, cap, tip: new THREE.Color(colour.getX(tip), colour.getY(tip), colour.getZ(tip)), tipRoughness: (tone.getX(tip) * 101 - 0.5) / 100 };
 }
 
-/** A sedan built while its table door carries `mirror` (put back after). */
+/** A sedan built while its table door carries `mirror` (put back after); a fresh twin reference rebuilds its drawn style (cached per twin). */
 function sedanWithMirror(mirror: MirrorSpec): DeformableCar {
   const sedan = CAR_STYLES.sedan;
   const door = sedan.door;
+  const twin = sedan.drawn;
   sedan.door = { ...door, mirror };
+  sedan.drawn = twin && { ...twin };
   try {
     return new DeformableCar(PAINT, scene, null, "sedan");
   } finally {
     sedan.door = door;
+    sedan.drawn = twin;
   }
 }
 
