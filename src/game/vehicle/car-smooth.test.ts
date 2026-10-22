@@ -555,12 +555,12 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
 
 /** Each style's drawn wheel-well parts, its boot cut's loft rings, its nose's own rings (`noseRefined`, the roll's third chord), its tub walls' own top vertices and its curved posts' section points past the chamfered box's as built, merged into the body on top of its loft: red if one grows. */
 const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number }> = {
-  sedan: { lips: 360, humps: 0, bootRings: 63, noseRings: 147, wallTops: 42, curvedPosts: 96 },
+  sedan: { lips: 360, humps: 0, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
   hatchback: { lips: 360, humps: 94, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 96 },
   wagon: { lips: 360, humps: 94, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 96 },
   coupe: { lips: 360, humps: 94, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 64 },
-  pickup: { lips: 260, humps: 94, bootRings: 42, noseRings: 42, wallTops: 20, curvedPosts: 64 },
-  police: { lips: 360, humps: 0, bootRings: 63, noseRings: 147, wallTops: 42, curvedPosts: 96 },
+  pickup: { lips: 260, humps: 94, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 64 },
+  police: { lips: 360, humps: 0, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
   monster: { lips: 312, humps: 94, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 64 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn B-, C- and divider posts had before they curved. */
