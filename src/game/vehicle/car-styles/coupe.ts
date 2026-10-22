@@ -125,6 +125,8 @@ export const COUPE: BodyStyle = {
   /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle. */
   cPillar: {},
   midPillarZ: null,
+  /** Reference side and rear iso: the quarter and rear glass read dark, no cabin or C-pillar post showing through. */
+  privacyGlass: { rear: true, quarter: true },
   windowTrim: "chrome",
   chromeStrips: [
     { points: [[-0.79, 0.305], [-0.495, 0.305]], width: 0.016 },
@@ -166,7 +168,6 @@ export const COUPE: BodyStyle = {
       { view: "side", points: [[-0.834, 1.148], [-0.977, 1.105], [-1.148, 1.048], [-1.319, 0.977], [-1.433, 0.934]], width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.107, 1.205], [-0.207, 1.19], [-0.634, 1.183], [-0.848, 1.162], [-0.977, 1.133]], width: 0.014, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[-1.433, 0.991], [-1.461, 0.948], [-1.49, 0.891]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "top", points: [[1.64, 0], [0.84, 0]], width: 0.008, depth: -0.002, profile: "v", cavity: 0.4 },
       { view: "rear", points: [[0, 0.74], [0.75, 0.74]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.1 },
     ],
     patches: [
