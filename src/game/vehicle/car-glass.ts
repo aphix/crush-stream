@@ -91,6 +91,15 @@ function quarterSpan(style: BodyStyle): SideSpan {
   return { bot: [style.quarter.zRearBot, band.belt[0] + PANE_TUCK], top: [style.quarter.zRearTop, band.top[0] + PANE_TUCK] };
 }
 
+/** A side pane is this many columns long, rear to front: its belt edge is a polyline through the belt at their z. */
+const SIDE_PANE_COLUMNS = 6;
+
+/** The quarter glass's belt edge, rear to front: the z of each of its columns (its sill is `beltY` there, straight between). */
+export function quarterSillZs(style: BodyStyle): number[] {
+  const [rear, front] = quarterSpan(style).bot;
+  return Array.from({ length: SIDE_PANE_COLUMNS + 1 }, (_, i) => lerp(rear, front, i / SIDE_PANE_COLUMNS));
+}
+
 /** Point of a side pane in car space: `s` 0…1 rear to front, `t` 0…1 belt to top, leaning in with the tumblehome. */
 function sidePoint(sign: number, style: BodyStyle, span: SideSpan, s: number, t: number): THREE.Vector3 {
   const zt = lerp(span.top[0], span.top[1], s);
@@ -102,7 +111,7 @@ function sidePoint(sign: number, style: BodyStyle, span: SideSpan, s: number, t:
 
 /** Side glass from the belt to the roof cant (`sidePoint`). Positions are relative to `origin`. */
 function makeSideGlassPane(sign: number, style: BodyStyle, span: SideSpan, origin: readonly [number, number, number]): THREE.BufferGeometry {
-  const segS = 6;
+  const segS = SIDE_PANE_COLUMNS;
   // Belt to top in thirds, and the front edge's knee.
   const ts = [0, 1 / 3, 2 / 3, 1];
   if (span.kneeT !== undefined && span.kneeT > 0 && span.kneeT < 1 && !ts.includes(span.kneeT)) ts.splice(ts.findIndex((t) => t > span.kneeT!), 0, span.kneeT);

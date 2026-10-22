@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan } from "./car-variants.ts";
 import { aPillarTopZ, aPostRearZ, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands } from "./car-lines.ts";
+import { quarterSillZs } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
   ROOF_CROWN,
@@ -136,8 +137,8 @@ function boxFromCorners(
   return geo;
 }
 
-/** A pillar section's outer-face rear and front points at one station along it (+x side). */
-type Rail = { rear: V3; front: V3 };
+/** A pillar section's outer-face rear and front points at one station along it (+x side), and the plan direction [x share, z share] its depth runs in along (absent: straight in, -x). */
+type Rail = { rear: V3; front: V3; inward?: readonly [number, number] };
 
 /**
  * Pillar lofted through `rails` (belt to top), thickness inward, its corners rounded at `radius` (m) in `steps` chords, its outer
@@ -152,16 +153,17 @@ function roundedPillarAlong(
 ): THREE.BufferGeometry {
   const last = rails.length - 1;
   const stations = rails.map((_, k) => k / last);
-  const sections = rails.map((r) => filletedUnitSection(filletShare(thick, radius), filletShare(Math.abs(r.front[2] - r.rear[2]), radius), steps, crown / thick));
+  const sections = rails.map(({ rear, front }) =>
+    filletedUnitSection(filletShare(thick, radius), filletShare(hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2]), radius), steps, crown / thick),
+  );
   const geo = loftFromRings(sections, stations, 0, 1, ownCaps);
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
     const u = pos.getX(i);
     const w = pos.getY(i);
-    const { rear, front } = rails[Math.round(pos.getZ(i) * last)]!;
-    const outer = lerp(rear[0], front[0], w);
-    const x = sign > 0 ? outer - (1 - u) * thick : -(outer - u * thick);
-    pos.setXYZ(i, x, lerp(rear[1], front[1], w), lerp(rear[2], front[2], w));
+    const { rear, front, inward = [1, 0] } = rails[Math.round(pos.getZ(i) * last)]!;
+    const depth = (sign > 0 ? 1 - u : u) * thick;
+    pos.setXYZ(i, sign * (lerp(rear[0], front[0], w) - depth * inward[0]), lerp(rear[1], front[1], w), lerp(rear[2], front[2], w) + depth * inward[1]);
   }
   ensureOutwardNormals(geo);
   return geo;
@@ -280,26 +282,10 @@ function insideRoof(geo: THREE.BufferGeometry, style: BodyStyle, name: string): 
   return geo;
 }
 
-/** A filleted bar along z: `sectionX` x `sectionY` section, `length` long, centred on the origin. */
-function makeRoundedBar(sectionX: number, sectionY: number, length: number): THREE.BufferGeometry {
-  const section = filletedUnitSection(filletShare(sectionX), filletShare(sectionY)).map((p) => ({ x: (p.x - 0.5) * sectionX, y: (p.y - 0.5) * sectionY }));
-  const geo = loftFromRings([section, section], [-length / 2, length / 2], 0, 1);
-  ensureOutwardNormals(geo);
-  return geo;
-}
-
 export function makeBox(w: number, h: number, d: number, x: number, y: number, z: number): THREE.BufferGeometry {
   const geo = new THREE.BoxGeometry(w, h, d);
   geo.translate(x, y, z);
   return geo;
-}
-
-/** A `width` x `height` x `depth` bar centred on (`x`, `y`, `z`): the cage's plain box, the drawn body's chamfered bar along its longer side (x or z). */
-function makeBar(source: BodySource, width: number, height: number, depth: number, x: number, y: number, z: number): THREE.BufferGeometry {
-  if (source === "cage") return makeBox(width, height, depth, x, y, z);
-  const alongX = width > depth;
-  const bar = makeRoundedBar(alongX ? depth : width, height, alongX ? width : depth);
-  return (alongX ? bar.rotateY(Math.PI / 2) : bar).translate(x, y, z);
 }
 
 /** The cage's header bars are this tall (m). */
@@ -333,6 +319,42 @@ function glassTopFill(sign: number, style: BodyStyle, aTopZ: number): THREE.Buff
   const fill = loftFromRings(rings, zs, 0, 1);
   ensureOutwardNormals(fill);
   return [fill];
+}
+
+/** The drawn belt rail stands this far (m) out of the side glass's plane, flush with the pillars' outer faces at the belt, and as far in. */
+export const RAIL_PROUD = 0.01;
+/** The drawn belt rail's top stands this far (m) over the quarter glass's belt edge, just covering it; its foot is buried `RAIL_FOOT` under it. */
+export const RAIL_LIP = 0.005;
+const RAIL_FOOT = 0.025;
+/** A sill column off the straight line through its neighbours by less than this (m) is no bend: the rail spends no ring there. */
+const RAIL_STRAIGHT = 1e-4;
+/** Both builds' belt rail goes by this name (its rows pick it by it). */
+const BELT_RAIL = "beltRail";
+
+/**
+ * The drawn belt rail: the quarter glass's sill seal on the glass plane, along the pane's own belt edge (column by column) on into
+ * the B-pillar, so it never stands off the sill; its depth runs square to the sill in plan where the sill turns in. Its ends are
+ * buried in the C- and B-pillars.
+ */
+function drawnBeltRail(sign: number, style: BodyStyle): THREE.BufferGeometry {
+  const sill = quarterSillZs(style);
+  const columns = style.bPillar.front > sill.at(-1)! ? [...sill, style.bPillar.front] : sill;
+  const zs = columns.filter((z, k) => {
+    if (k === 0 || k === columns.length - 1) return true;
+    const [behind, ahead] = [columns[k - 1]!, columns[k + 1]!];
+    const t = (z - behind) / (ahead - behind);
+    return [beltX, beltY].some((line) => Math.abs(line(z, style) - lerp(line(behind, style), line(ahead, style), t)) > RAIL_STRAIGHT);
+  });
+  const rails = zs.map((z, k): Rail => {
+    const [outer, y] = [beltX(z, style) + RAIL_PROUD, beltY(z, style)];
+    const [behind, ahead] = [zs[Math.max(k - 1, 0)]!, zs[Math.min(k + 1, zs.length - 1)]!];
+    const [dx, dz] = [beltX(ahead, style) - beltX(behind, style), ahead - behind];
+    const run = hypot2(dx, dz);
+    return { rear: [outer, y - RAIL_FOOT, z], front: [outer, y + RAIL_LIP, z], inward: [dz / run, dx / run] };
+  });
+  const rail = roundedPillarAlong(sign, rails, 2 * RAIL_PROUD, { ownCaps: false });
+  rail.name = BELT_RAIL;
+  return rail;
 }
 
 export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry[] {
@@ -432,16 +454,19 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       );
     }
     if (aPost?.sail) parts.push(pillar(roundedPillarAlong(sign, aPost.sail, SAIL_THICK, { ownCaps: false }), "sail"));
-    // The belt rail runs from the C-pillar to the B-pillar along the sill, pitched with it and turned in plan where the sill narrows.
+    // The belt rail runs from the C-pillar to the B-pillar along the sill: the cage's box pitched straight between its ends, the drawn seal along the quarter glass's sill.
+    if (source === "drawn") {
+      parts.push(drawnBeltRail(sign, style), ...glassTopFill(sign, style, aTopZ));
+      continue;
+    }
     const [railRear, railFront] = [belt(q.zRearBot), belt(bp.front)];
     const [railRearX, railFrontX] = [beltXAt(q.zRearBot), beltXAt(bp.front)];
     const railRun = bp.front - q.zRearBot;
     const railPlan = railFrontX === railRearX ? railRun : hypot2(railRun, railFrontX - railRearX);
-    const rail = makeBar(source, 0.03, 0.03, hypot2(railPlan, railFront - railRear), 0, 0, 0).rotateX(-detAtan2(railFront - railRear, railPlan));
+    const rail = makeBox(0.03, 0.03, hypot2(railPlan, railFront - railRear), 0, 0, 0).rotateX(-detAtan2(railFront - railRear, railPlan));
     if (railFrontX !== railRearX) rail.rotateY(sign * detAtan2(railFrontX - railRearX, railRun));
     parts.push(rail.translate(sign * ((railRearX + railFrontX) / 2 + 0.015), (railRear + railFront) / 2 + 0.005, q.zRearBot + railRun * 0.5));
-    rail.name = "beltRail";
-    if (source === "drawn") parts.push(...glassTopFill(sign, style, aTopZ));
+    rail.name = BELT_RAIL;
   }
   // The cage keeps its header boxes until the rig derives the cabin cage; the drawn roof covers both glass tops, so it draws none.
   if (source === "cage") {
