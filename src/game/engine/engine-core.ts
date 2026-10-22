@@ -239,7 +239,7 @@ export abstract class EngineCore {
   protected readonly wheels = new WheelBatch(MAX_CARS * 4, (car) => this.detail.isFar(car));
   protected readonly lampBatch = new LampBatch(MAX_CARS * 2);
   protected readonly partBatch = new PartBatch(MAX_CARS);
-  protected readonly seated = new SeatedDrivers();
+  protected readonly seated = new SeatedDrivers((car) => this.detail.isMid(car));
   protected readonly coverBatch = new CoverBatch(MAX_CARS);
   protected lampLights!: LampLights;
   protected sparks!: SparkSystem;

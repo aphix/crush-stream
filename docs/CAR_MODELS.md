@@ -112,7 +112,7 @@ The cabin is shared props, placed per car by its spec (`vehicle/interior.ts` `Ca
 
 | Prop (`PART_KIND`) | Seats per car | Placed by |
 |---|---|---|
-| `interior`: the cabin shell (floor, tunnel and console, dash with binnacle and screen, headliner, side trim) | 1 | Mapped from `REF_CABIN` onto the car's cabin box: `belt.x` (sides), the cabin tub's floor, the roof line at the B-pillar (headliner), `rearBulkhead.z` to `windshield.base` |
+| `interior`: the cabin shell (floor, tunnel and console, dash with binnacle and screen, side trim) | 1 | Mapped from `REF_CABIN` onto the car's cabin box: `belt.x` (sides), the cabin tub's floor, 3 cm under the roof line at the B-pillar (top), `rearBulkhead.z` to `windshield.base` |
 | `seatFront` | 2 | `seats.front`, the passenger mirrored |
 | `seatRear` | 0 or 1 | `seats.rear`, stretched to the cabin's width |
 | `wheel` | 1 | Ahead of the driver's H-point (`WHEEL_AT`), leaned `WHEEL_TILT` |
@@ -132,7 +132,10 @@ far distance (by `INTERIOR_MESH`), the door cards and crash bars with the small 
   wears the car's driver look (`RagdollSystem.carDriverLook`, as he is thrown) and hides once `driverOut` is set or the far
   cut takes his seat. In the garage no one sits in the car: the standing dummy beside it is the driver. The National Mall's
   VIP rides with his hips on the passenger H-point (`seats.front` mirrored).
-- **Crush:** the headliner sinks with the roof mass (a load's crush too, `CarCabin.sinkHeadliner`), so the cabin never stands
+- **Headliner:** the drawn roof panel is a thin shell (the cage's stays a closed wedge): its inner face, inset 4 mm from the roof
+  skin's cants and crown, is the headliner, dark primer. It is skinned with the body, so it follows a crushed roof and never stands
+  outside it (`shellTwins` pairs each headliner vertex with the skin vertex it is inset from).
+- **Crush:** the cabin shell squeezes with the roof mass (a load's crush too, `CarCabin.squeezeUnderRoof`), so its dash never stands
   through a crushed roof. The bay rides the engine masses with its front no further out than the front bumper's masses (the
   nose); each crash bar rides its bumper's, its face on the bumper's seat.
 - **The engine bay:** the drawn body (never the cage) opens a trough under the hood (`bayTub`: from the hood's cowl edge or the
