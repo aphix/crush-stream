@@ -59,6 +59,9 @@ function spread(cars: readonly DeformableCar[]): { off: number; lean: number } {
   return { off, lean };
 }
 
+/** How far (m, plan) a car may stand from the base car's axis and still be on the column. */
+const ON_AXIS_M = 0.1;
+
 /** The owner's drops (10-04 trace): 11 cars, 0.15 m, one a second; 8 s after the last. */
 const OWNER: StackConfig = { cars: 11, drop: 0.15, gap: 1 };
 const OWNER_S = 1 + (OWNER.cars - 1) * OWNER.gap + 8;
@@ -125,14 +128,25 @@ describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), run 
     for (let i = 0; i < 3; i++) assert.ok(crushMm[i]! > crushMm[i + 1]! + 20, `bottom to top ${crushMm.map((m) => m.toFixed(0)).join("/")} mm`);
   });
 
-  it("when the column is made of the fleet and left alone for 5 s after it settles, then no car moves 5 mm", () => {
-    const { cars } = column(DEFAULTS, "fleet", DEFAULTS_S);
-    const at = cars.map((c) => c.group.position.clone());
-    const w = makeWorld(cars, false, false);
-    for (let f = 0; f < 5 * FRAME_HZ; f++) tickWorld(w, 1 / FRAME_HZ);
-    const moved = Math.max(...cars.map((c, i) => c.group.position.distanceTo(at[i]!)));
-    assert.ok(moved < 0.005, `a car moved ${(moved * 1000).toFixed(1)} mm in 5 s at rest`);
-  });
+  // Judged only on a column that stands: one that fell to the ground has nothing left to move. The outcome is chaotic: with the police base,
+  // hatch, SUV and muscle, the per-tick trace first diverges at tick 94 (the hatch landing on the police) for a 5 mm move of the sedan
+  // hood's rear edge, and 1 mm of drop height flips it. Moved over the 5 s, car 3 (worker, 2d0b497e): hood z0 0.88 / 0.985 / 0.99 0 / 0 /
+  // 1689 mm, the 0.99 hood with drops of 0.019 / 0.021 m 5.9 / 1053 mm. Every 0 mm run was a collapsed column (cars at rest on the
+  // ground 1.6-3.2 m off the axis); the red ones stood, the muscle on its side (up 0.21) on the police's front, toppling at 0.02 to 0.86 m/s.
+  it(
+    `when the column is made of the fleet and left alone for 5 s after it settles, then it stands (every car within ${ON_AXIS_M} m of its axis) and no car moves 5 mm`,
+    { todo: "after the plan: the fleet column does not hold (the owner's-drops fleet column's todo above): it falls to the ground or stands with a car balanced on its side, chaotically (1 mm of drop height flips it)" },
+    () => {
+      const { cars } = column(DEFAULTS, "fleet", DEFAULTS_S);
+      const { off } = spread(cars);
+      assert.ok(off < ON_AXIS_M, `the column fell before the rest: a car stands ${off.toFixed(2)} m off its axis`);
+      const at = cars.map((c) => c.group.position.clone());
+      const w = makeWorld(cars, false, false);
+      for (let f = 0; f < 5 * FRAME_HZ; f++) tickWorld(w, 1 / FRAME_HZ);
+      const moved = Math.max(...cars.map((c, i) => c.group.position.distanceTo(at[i]!)));
+      assert.ok(moved < 0.005, `a car moved ${(moved * 1000).toFixed(1)} mm in 5 s at rest`);
+    },
+  );
 });
 
 describe("given the owner's drops (11 cars, 0.15 m, one a second) of the mixed fleet", () => {

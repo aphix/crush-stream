@@ -5,7 +5,7 @@ import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt } from "./car
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
-import { INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { DECK_RISE, INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { bootPivot, roofHinged } from "./hinge-spec.ts";
 
 export const SEDAN = CAR_STYLES.sedan;
@@ -185,6 +185,11 @@ export function bayAt(z: number, style: BodyStyle): number {
   return tubAt(z, style, [bayTub(style)]).t;
 }
 
+/** How far (0..1) the drawn body's loft at `z` has dropped into the cabin's tub (the style's first, the seats' floor). */
+export function cabinAt(z: number, style: BodyStyle): number {
+  return style.tubs.length === 0 ? 0 : tubAt(z, style, style.tubs.slice(0, 1)).t;
+}
+
 function tubAt(z: number, style: BodyStyle, tubs: readonly (readonly [number, number, number])[]): { t: number; floor: number } {
   let t = 0;
   let floor = floorY(z, style);
@@ -342,6 +347,9 @@ const SILL_CORNER_RISE = 0.165 - 0.145;
 const SILL_ROWS = [0.235, 0.236, 0.234, 0.231, 0.226].map((y) => y - 0.2);
 const SILL_TUCK = 0.22 - 0.2;
 
+/** The closed deck's crown points stand this far (m) inside the station's half-width and over its belt. */
+const DECK_CROWN = { inset: 0.22, rise: DECK_RISE } as const;
+
 /**
  * Lower body ring (left half top→bottom, keel, right half bottom→top; the
  * wrap edge is the deck). Deck crown → deck edge → rounded shoulder → feature
@@ -369,7 +377,7 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [num
   const deckTub = tubAt(z, style, style.tubs).t;
   // The ring's half: deck crown and edge, the shoulder, the feature line, the tuck-under, the rocker, then the sill and the floor.
   const half: [number, number][] = [
-    [lerp(hw - 0.22, edge ?? hw - 0.06, tub.t), lerp(yb + 0.012, tub.floor, tub.t)],
+    [lerp(hw - DECK_CROWN.inset, edge ?? hw - 0.06, tub.t), lerp(yb + DECK_CROWN.rise, tub.floor, tub.t)],
     [lerp(hw - 0.07, hw - 0.06, deckTub), deckEdgeY(yb, deckTub)],
     ...SHOULDER_RING.map((a) => side(yF + SHOULDER[1] * detSin(a))),
     side(yF),
@@ -586,12 +594,12 @@ export const ROOF_CROWN = 0.026;
 /** The dome's shoulder: [share of the roof half-width, rise above the cant line (m)]. */
 export const ROOF_SHOULDER = [0.45, 0.018] as const;
 
-/** A deck lid's top stands `DECK_RISE` (m) over its station's belt, `DECK_INSET` (m) inside its half-width, domed `DECK_DOME` (m) at the centre line and 0.7 of that at `DECK_SHOULDER` of its half-width. */
-const DECK_RISE = 0.016;
+/** A deck lid's top stands `LID_RISE` (m) over its station's belt, `DECK_INSET` (m) inside its half-width, domed `DECK_DOME` (m) at the centre line and 0.7 of that at `DECK_SHOULDER` of its half-width. */
+const LID_RISE = 0.016;
 const DECK_INSET = 0.075;
 const DECK_DOME = 0.012;
 const DECK_SHOULDER = 0.45;
-/** The drawn hood's edge stands over the deck edge (ring point 1, `HOOD_INSET` m inside the station's half-width), `HOOD_SEAT` (m) over the fender: a groove, not a step. Its centre line keeps the deck lid's crown. */
+/** The drawn hood's edge stands over the deck edge (ring point 1, `HOOD_INSET` m inside the station's half-width), `HOOD_SEAT` (m) over the fender: a groove, not a step; its outer dome point stands `HOOD_SEAT` over the closed deck's crown. Its centre line keeps the deck lid's crown unless the style sets `hood.crown`. */
 const HOOD_INSET = 0.07;
 const HOOD_SEAT = 0.003;
 /** Where a boot lip's extra rings stand, as shares of its depth from the edge: the kick's curve needs them on a 6 cm ring spacing. */
@@ -599,23 +607,44 @@ const LIP_RINGS = [0.5, 1] as const;
 /** A clamshell lid's skin laps the body it wraps this far (m) clear in x and y: flush to the eye, never coincident with it. */
 const CLAMSHELL_GAP = 0.001;
 
-/** A deck lid's dome across it: 1 at the centre line, 0.7 at `DECK_SHOULDER` of its half-width, 0 at its edge (`u` its share of the half-width). */
-function deckDome(u: number): number {
-  return u < DECK_SHOULDER ? lerp(1, 0.7, u / DECK_SHOULDER) : lerp(0.7, 0, (Math.min(u, 1) - DECK_SHOULDER) / (1 - DECK_SHOULDER));
+/** A lid's dome across it: [share of the half-width, share of the crown's rise over the edge] points from the centre line out, both ends left out. */
+type Dome = readonly (readonly [number, number])[];
+/** A deck lid's dome: 0.7 of its rise at `DECK_SHOULDER` of its half-width. */
+const DECK_DOME_POINTS: Dome = [[DECK_SHOULDER, 0.7]];
+/** A crowned hood's dome (`hood.crown`): its parabola across x, 1 - u², drawn in this many chords a side, each turning under 5° on the sedan's 6 cm at |x| .66. */
+const CROWN_CHORDS = 4;
+const CROWN_DOME: Dome = Array.from({ length: CROWN_CHORDS - 1 }, (_, k) => [(k + 1) / CROWN_CHORDS, 1 - ((k + 1) / CROWN_CHORDS) ** 2] as const);
+
+/** A dome's share of its rise at `u` (share of the half-width): straight between its points, as the loft draws it. */
+function domeAt(dome: Dome, u: number): number {
+  let [u0, v0] = [0, 1];
+  for (const [u1, v1] of [...dome, [1, 0] as const]) {
+    if (u <= u1) return lerp(v0, v1, (u - u0) / (u1 - u0));
+    [u0, v0] = [u1, v1];
+  }
+  return 0;
 }
 
-/** A deck lid's half-width and its top's heights (car frame, m) at `z`: at its edge and at its crown. The drawn hood's edge rests on the fender beside it. */
-function lidSection(z: number, style: BodyStyle, hood: boolean): { w: number; edge: number; crown: number } {
+/** A deck lid's half-width, its top's heights (car frame, m) at `z` at its edge and at its crown, and its dome. The drawn hood's edge rests on the fender beside it. */
+function lidSection(z: number, style: BodyStyle, hood: boolean): { w: number; edge: number; crown: number; dome: Dome } {
   const sl = sampleSlice(z, style.profile);
-  const crown = sl.yBelt + DECK_RISE + DECK_DOME;
-  if (!hood) return { w: sl.hw - DECK_INSET, edge: sl.yBelt + DECK_RISE, crown };
-  return { w: sl.hw - HOOD_INSET, edge: deckEdgeY(sl.yBelt, tubAt(z, style, style.tubs).t) + HOOD_SEAT, crown };
+  const crown = sl.yBelt + LID_RISE + DECK_DOME;
+  if (!hood) return { w: sl.hw - DECK_INSET, edge: sl.yBelt + LID_RISE, crown, dome: DECK_DOME_POINTS };
+  const w = sl.hw - HOOD_INSET;
+  // A rigid lid: its edge keeps the fender's height where a cabin tub's blend runs under its rear end (the coupe's and monster's), never bending into it.
+  const edge = deckEdgeY(sl.yBelt, 0) + HOOD_SEAT;
+  const crowned = style.hood.crown;
+  if (crowned !== undefined) return { w, edge, crown: edge + crowned[0] * (w / crowned[1]) ** 2, dome: CROWN_DOME };
+  // The deck dome's chord from its shoulder to the edge passes within a millimetre of the closed deck's crown point: the dome steps out over it.
+  const u = (sl.hw - DECK_CROWN.inset) / w;
+  const over = (sl.yBelt + DECK_CROWN.rise + HOOD_SEAT - edge) / (crown - edge);
+  return { w, edge, crown, dome: [[u, Math.max(domeAt(DECK_DOME_POINTS, u), over)]] };
 }
 
 /** Height (car frame, m) of a deck lid's top at (`x`, `z`), as `makeDeckPanel` lofts it: the drawn `hood`'s, or a plain lid's. */
 export function deckTopY(x: number, z: number, style: BodyStyle, hood: boolean): number {
-  const { w, edge, crown } = lidSection(z, style, hood);
-  return lerp(edge, crown, deckDome(Math.abs(x) / w));
+  const { w, edge, crown, dome } = lidSection(z, style, hood);
+  return lerp(edge, crown, domeAt(dome, Math.min(Math.abs(x) / w, 1)));
 }
 
 /** How far (m) a boot lip lifts the panel `d` (m) in from its free edge: a quadratic kick from 0 at `depth` to `rise` at the edge. */
@@ -654,21 +683,24 @@ function makeDeckPanel(
   const tk = 0.04;
   const skirt = 0.06;
   const [oy, oz] = origin;
-  const ring = (w: number, y: number, edge: number, crown: number): Pt[] => [
-    { x: -w, y: edge },
-    { x: -w * DECK_SHOULDER, y: lerp(edge, crown, deckDome(DECK_SHOULDER)) },
-    { x: 0, y: crown },
-    { x: w * DECK_SHOULDER, y: lerp(edge, crown, deckDome(DECK_SHOULDER)) },
-    { x: w, y: edge },
-    { x: w, y: y - skirt * 0.55 },
-    { x: w, y: y - skirt },
-    { x: w - tk, y: y - skirt },
-    { x: w - tk, y: y - tk },
-    { x: -w + tk, y: y - tk },
-    { x: -w + tk, y: y - skirt },
-    { x: -w, y: y - skirt },
-    { x: -w, y: y - skirt * 0.55 },
-  ];
+  const ring = (w: number, y: number, edge: number, crown: number, dome: Dome): Pt[] => {
+    const points = dome.map(([u, v]) => ({ x: w * u, y: lerp(edge, crown, v) }));
+    return [
+      { x: -w, y: edge },
+      ...points.map((p) => ({ x: -p.x, y: p.y })).reverse(),
+      { x: 0, y: crown },
+      ...points,
+      { x: w, y: edge },
+      { x: w, y: y - skirt * 0.55 },
+      { x: w, y: y - skirt },
+      { x: w - tk, y: y - skirt },
+      { x: w - tk, y: y - tk },
+      { x: -w + tk, y: y - tk },
+      { x: -w + tk, y: y - skirt },
+      { x: -w, y: y - skirt },
+      { x: -w, y: y - skirt * 0.55 },
+    ];
+  };
   const fold = drop ? LID_FOLD_R : 0;
   const zEnd = z1 + fold;
   const rings: Pt[][] = [];
@@ -678,7 +710,7 @@ function makeDeckPanel(
     const sl = sampleSlice(z, style.profile);
     const lid = lidSection(z, style, hood);
     const kick = lipKick(Math.abs(zEnd - z), lip);
-    const r = ring(lid.w, sl.yBelt + DECK_RISE - oy, lid.edge - oy + kick, lid.crown - oy + kick);
+    const r = ring(lid.w, sl.yBelt + LID_RISE - oy, lid.edge - oy + kick, lid.crown - oy + kick, lid.dome);
     if (clamshell) wrapShoulder(r, sectionPoints(sl, style, "drawn"), oy, tk);
     rings.push(r);
     zs.push(z - oz);
@@ -686,13 +718,13 @@ function makeDeckPanel(
   // The fold and the face are lofted straight on past the deck's end (z = path length), then bent onto the tail below.
   const end = sampleSlice(zEnd, style.profile);
   const wEnd = end.hw - DECK_INSET;
-  const yc = end.yBelt + DECK_RISE - oy - fold;
+  const yc = end.yBelt + LID_RISE - oy - fold;
   const zA = zEnd - oz;
   const arc = (fold * Math.PI) / 2;
   if (drop) {
     const run = arc + yc - (drop.y - oy);
     for (let k = 1; k <= LID_FOLD_STEPS + LID_FACE_STEPS; k++) {
-      rings.push(ring(wEnd, 0, 0, DECK_DOME));
+      rings.push(ring(wEnd, 0, 0, DECK_DOME, DECK_DOME_POINTS));
       zs.push(zA - (k <= LID_FOLD_STEPS ? (k / LID_FOLD_STEPS) * arc : arc + ((k - LID_FOLD_STEPS) / LID_FACE_STEPS) * (run - arc)));
     }
   }
@@ -732,7 +764,8 @@ function wrapShoulder(ring: Pt[], body: readonly Pt[], oy: number, tk: number): 
   const upper = body[body.length - 3]!;
   const shut = body[body.length - 4]!;
   for (const sign of [1, -1]) {
-    const [rim, over, edge, inner] = sign > 0 ? ([4, 5, 6, 7] as const) : ([0, 12, 11, 10] as const);
+    const last = ring.length - 1;
+    const [rim, over, edge, inner] = sign > 0 ? [last - 8, last - 7, last - 6, last - 5] : [0, last, last - 1, last - 2];
     ring[rim] = { x: ring[rim]!.x, y: top.y + CLAMSHELL_GAP - oy };
     ring[over] = { x: sign * (upper.x + CLAMSHELL_GAP), y: upper.y + CLAMSHELL_GAP - oy };
     ring[edge] = { x: sign * (shut.x + CLAMSHELL_GAP), y: shut.y - oy };

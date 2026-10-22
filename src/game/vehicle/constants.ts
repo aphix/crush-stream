@@ -5,12 +5,27 @@ export const LIGHT_BAR = "lightBar";
 export const CLASS_LIFT = "classLift";
 export const CLASS_HUBS = "classHubs";
 export const INTERIOR_MESH = "interior";
-/** The body geometry's per-vertex paint attribute: 0 paint, 1 primer (a torn panel's vertices), `INNER_PANEL` an unpainted inner panel. */
+/**
+ * The body geometry's per-vertex paint attribute: 0 paint, 1 primer (a torn panel's vertices), `INNER_PANEL` an unpainted inner
+ * panel, `BLACKOUT` a blacked-out panel, `CABIN_TRIM` a cabin surface.
+ */
 export const PRIMER_ATTRIBUTE = "primer";
 /** `PRIMER_ATTRIBUTE` of the bay trough's walls and floor: dark bare steel (`bare-metal.ts` darkens past 1). */
 export const INNER_PANEL = 2;
 /** `PRIMER_ATTRIBUTE` of a wheel well (its liner, ceiling and the lip's return): flat near-black, so the arch reads over a dark well. */
 export const WELL_PANEL = 3;
+/**
+ * `PRIMER_ATTRIBUTE` of a blacked-out panel (pillars, sail, cowl, roof rails): gloss black under the paint's clear coat
+ * (`car-materials.ts`), as the references draw them. Below 0, so bare steel (`bare-metal.ts`, from 0.3 up) never reads it.
+ */
+export const BLACKOUT = -1;
+/** A rear deck's 12 mm kick (m) over its own line: the closed deck's crown over the belt, and a boot lid's lip at its free edge. */
+export const DECK_RISE = 0.012;
+/**
+ * `PRIMER_ATTRIBUTE` of a cabin surface the glass shows (the headliner, the cabin tub's floor and walls, the cowl and rear bulkhead
+ * walls, a door's inner face): matte dark trim with no clear coat (`car-materials.ts`), as the references' cabins read through the glass.
+ */
+export const CABIN_TRIM = -2;
 /** A bumper's per-vertex trim attribute: 0 the bumper's own trim, `FITTING_TONE` black or chrome (its exhaust tips and tow hitch, drawn in its one mesh). */
 export const FITTING_ATTRIBUTE = "fitting";
 export const FITTING_TONE = { black: 1, chrome: 2 } as const;
