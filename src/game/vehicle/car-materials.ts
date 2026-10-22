@@ -27,9 +27,30 @@ float capM = max(outgoingLight.r, max(outgoingLight.g, outgoingLight.b));
 if (capM > 0.7) outgoingLight *= (0.7 + 0.4 * (1.0 - exp((0.7 - capM) / 0.4))) / capM;
 #include <opaque_fragment>`;
 
+/**
+ * Specular anti-aliasing for the normals a car hook perturbs (the finish's waviness, peel, flake and trim grain; the detail map's grooves
+ * and vents): three widens roughness by the screen-space change of the unperturbed vertex normal only (`geometryRoughness`), so a
+ * perturbation finer than a pixel at play distance aliased into sparkle and crawl along feature lines and shut lines. The perturbation's
+ * own screen-space variance widens each lobe instead (Tokuyoshi and Kaplanyan's kernel, on alpha = roughness²): `SPEC_AA_SIGMA2` the pixel
+ * filter's variance, `SPEC_AA_KAPPA` the most any lobe widens. A surface no hook perturbs is untouched.
+ */
+const SPEC_AA_SIGMA2 = 0.25;
+const SPEC_AA_KAPPA = 0.18;
+const SPECULAR_AA = /* glsl */ `#include <lights_physical_fragment>
+vec3 specAaDx = dFdx( normal - nonPerturbedNormal );
+vec3 specAaDy = dFdy( normal - nonPerturbedNormal );
+float specAaAlpha = pow2( material.roughness );
+material.roughness = min( sqrt( sqrt( pow2( specAaAlpha ) + min( ${SPEC_AA_SIGMA2 * 2} * ( dot( specAaDx, specAaDx ) + dot( specAaDy, specAaDy ) ), ${SPEC_AA_KAPPA} ) ) ), 1.0 );
+#ifdef USE_CLEARCOAT
+specAaDx = dFdx( clearcoatNormal - nonPerturbedNormal );
+specAaDy = dFdy( clearcoatNormal - nonPerturbedNormal );
+specAaAlpha = pow2( material.clearcoatRoughness );
+material.clearcoatRoughness = min( sqrt( sqrt( pow2( specAaAlpha ) + min( ${SPEC_AA_SIGMA2 * 2} * ( dot( specAaDx, specAaDx ) + dot( specAaDy, specAaDy ) ), ${SPEC_AA_KAPPA} ) ) ), 1.0 );
+#endif`;
+
 function capHighlights<T extends THREE.MeshStandardMaterial>(m: T): T {
   m.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace("#include <opaque_fragment>", HIGHLIGHT_CAP);
+    shader.fragmentShader = shader.fragmentShader.replace("#include <opaque_fragment>", HIGHLIGHT_CAP).replace("#include <lights_physical_fragment>", SPECULAR_AA);
   };
   m.customProgramCacheKey = () => "car-highlight-cap";
   return m;
@@ -355,16 +376,18 @@ const PRIVACY_OPACITY = 0.93;
 /**
  * The one material every pane in `look` and `color` wears: a pane changes look by changing material, never by editing its own,
  * so a car's six panes and every other car's share it (the renderer re-sends a material's uniforms each time the draw
- * changes material, and a car's panes were six copies of one). `privacy` panes are near-opaque. Never edit what this returns.
+ * changes material, and a car's panes were six copies of one). `privacy` panes are near-opaque; `frit` panes draw their vertex
+ * colours (a framed rear glass's black band). Never edit what this returns.
  */
-export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR, privacy = false): THREE.MeshStandardMaterial {
-  const key = `${look}:${color}:${privacy}`;
+export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR, privacy = false, frit = false): THREE.MeshStandardMaterial {
+  const key = `${look}:${color}:${privacy}:${frit}`;
   let m = glassByLook.get(key);
   if (m === undefined) {
     m = makeGlassMaterial();
     m.color.setHex(color);
     m.opacity = privacy ? Math.max(GLASS_LOOKS[look].opacity, PRIVACY_OPACITY) : GLASS_LOOKS[look].opacity;
     m.roughness = GLASS_LOOKS[look].roughness;
+    m.vertexColors = frit;
     if (look === "cracked") m.map = getCrackMap();
     m.userData.shared = true;
     glassByLook.set(key, m);
@@ -716,6 +739,8 @@ const HUB = [0x8a909a, 0.35, 0.8] as const;
 const DARK_HUB = [0x232428, 0.55, 0.45] as const;
 /** The muscle car's polished rim lip. */
 const CHROME = [0xeef0f3, 0.12, 1] as const;
+/** The muscle car's mag dish: a satin alloy darker than `ALLOY`, so its polished lip reads brighter round it. */
+const MAG_DISH = [0x8e939a, 0.3, 0.92] as const;
 
 /** Bead and crown radius (m) of `TYRE_PROFILE`: the `tyre` weight runs 0 at the bead to 1 at the crown. */
 const ROAD_TYRE: readonly [number, number] = [0.205, 0.32];
@@ -748,6 +773,31 @@ function spokes(n: number, size: readonly [number, number, number], tone: readon
 /** A flat ring each face at `x` (m off centre), between radii `inner` and `outer`. */
 function faceRings(inner: number, outer: number, x: number, tone: readonly [number, number, number]): THREE.BufferGeometry[] {
   return [1, -1].map((side) => smeared(flatPart(new THREE.RingGeometry(inner, outer, 16).rotateY((side * Math.PI) / 2).translate(side * x, 0, 0), tone), 0));
+}
+
+/** A slot window's polar outline: from `r0` to `r1` (m) off the axle, `a0`/`a1` (rad) wide at each end, rounded by a quadratic curve at each corner over `round` of its depth. */
+function slotShape(r0: number, r1: number, a0: number, a1: number, round: number): THREE.Shape {
+  const p = (r: number, a: number): [number, number] => [r * detSin(a), r * detCos(a)];
+  const d = (r1 - r0) * round;
+  const [ia, ib, oa, ob] = [p(r0, -a0 / 2), p(r0, a0 / 2), p(r1, a1 / 2), p(r1, -a1 / 2)];
+  const [ia2, ib2, oa2, ob2] = [p(r0 + d, -a0 / 2), p(r0 + d, a0 / 2), p(r1 - d, a1 / 2), p(r1 - d, -a1 / 2)];
+  return new THREE.Shape()
+    .moveTo(...ia2).quadraticCurveTo(...ia, ...p(r0, 0)).quadraticCurveTo(...ib, ...ib2)
+    .lineTo(...oa2).quadraticCurveTo(...oa, ...p(r1, 0)).quadraticCurveTo(...ob, ...ob2)
+    .lineTo(...ia2);
+}
+
+/** Each face a solid dish of radius `r` at `x` (m off centre) in `tone`, with `n` dark slot windows (`slotShape`) 1 mm proud of it: a slotted mag. */
+function slottedDish(n: number, r: number, x: number, tone: readonly [number, number, number], slot: Parameters<typeof slotShape>): THREE.BufferGeometry[] {
+  const out: THREE.BufferGeometry[] = [];
+  for (const side of [1, -1]) {
+    out.push(smeared(flatPart(new THREE.CircleGeometry(r, 16).rotateY((side * Math.PI) / 2).translate(side * x, 0, 0), tone), 1));
+    for (let k = 0; k < n; k++) {
+      const window = new THREE.ShapeGeometry(slotShape(...slot), 2).rotateZ((k * 2 * Math.PI) / n).rotateY((side * Math.PI) / 2).translate(side * (x + 0.001), 0, 0);
+      out.push(smeared(flatPart(window, DARK_DISC), 1));
+    }
+  }
+  return out;
 }
 
 /** The rim designs the references show; each is one instanced draw in the wheel batch. */
@@ -789,7 +839,7 @@ function rimFace(design: WheelDesign): THREE.BufferGeometry[] {
     case "split10":
       return [...disc, ...spokes(5, [0.16, 0.15, 0.018], ALLOY, 0.2), hub(0.055, HUB)];
     case "mag5":
-      return [...disc, ...spokes(5, [0.11, 0.15, 0.065], ALLOY), ...faceRings(0.188, 0.222, 0.1, CHROME), hub(0.05, CHROME)];
+      return [...slottedDish(5, 0.19, 0.06, MAG_DISH, [0.07, 0.175, 0.5, 0.62, 0.15]), ...faceRings(0.18, 0.222, 0.1, CHROME), hub(0.05, CHROME)];
     case "six":
       return [...disc, ...spokes(6, [0.15, 0.15, 0.075], ALLOY), hub(0.08, DARK_HUB)];
     case "beadlock":

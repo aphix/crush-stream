@@ -4,6 +4,7 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { BODIES, carInState, drawnField, gapsOver, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGapsOff } from "../vehicle/drawn-body.test-util.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { BOX_FLOATS } from "./ragdoll-proxy.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
@@ -95,5 +96,35 @@ for (const testCase of proxyCases) {
         assert.deepEqual((await proxyGaps(t, testCase))[part], []);
       });
     }
+  });
+}
+
+/**
+ * The hood's and deck's regions (`TOP_PARTS`): on a truck, its hood and its open bed, where the proxy stands columns from under the
+ * ground, never a cabin's roof slab (a car's deck region reaches under its rear glass and, on the wagon, its roof).
+ */
+const LOW_PARTS = [TOP_PARTS.hood, TOP_PARTS.deck] as const;
+
+for (const b of BODIES.filter((body) => body.style === "pickup" || body.style === "monster")) {
+  describe(`given a dummy lying 3 m from a ${b.body} body untouched`, () => {
+    it("when its proxy's leaves are read, then each one over its hood and bed is a column from under the ground, none a roof slab hung over them", async () => {
+      const car = carInState("untouched", b.style, b.cls);
+      const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+      await ragdolls.preload();
+      ragdolls.update(FRAME, [], true, true, null);
+      ragdolls["spawn"]({ car: 3, p: new THREE.Vector3(3, 1.2, 0), q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
+      for (let f = 0; f < 3; f++) ragdolls.update(FRAME, [car], true, true, null);
+      const proxies = ragdolls["proxies"];
+      const fits = proxies["leafFits"];
+      const slabs: string[] = [];
+      // A leaf's floats: its centre (x, y, z), half sizes, turn; the first is the lower box under the cabin.
+      for (let k = 1; k < proxies["shapeN"][0]!; k++) {
+        const o = k * BOX_FLOATS;
+        const [x, y, z, hy] = [fits[o]!, fits[o + 1]!, fits[o + 2]!, fits[o + 4]!];
+        if (!LOW_PARTS.some((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1)) continue;
+        if (y - hy > 0) slabs.push(`leaf at x ${x.toFixed(2)} z ${z.toFixed(2)}: ${(y - hy).toFixed(2)}-${(y + hy).toFixed(2)} m`);
+      }
+      assert.deepEqual(slabs, []);
+    });
   });
 }

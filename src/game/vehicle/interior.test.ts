@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
 import { beltY, floorY } from "./car-lines.ts";
+import { makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { roofAt } from "./car-mesh.ts";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
@@ -430,7 +431,7 @@ describe("given every style's drawn body and hood", () => {
       const pos = hood.getAttribute("position");
       const [oy, oz] = style.hood.origin;
       for (let s = 0; s < slices; s++) {
-        for (const point of [0, ring - 9]) {
+        for (const point of [0, hood.userData.lidEdge as number]) {
           const v = new THREE.Vector3().fromBufferAttribute(pos, s * ring + point);
           const over = v.y + oy - sampleSlice(v.z + oz, style.profile).yBelt;
           assert.ok(Math.abs(over - EDGE_OVER_BELT) < 1e-5, `${id}: the hood's edge at z ${(v.z + oz).toFixed(3)} stands ${(over * 1000).toFixed(1)} mm over the belt`);
@@ -485,6 +486,21 @@ describe("given every style's drawn headliner, the roof skin's inner face", () =
       }
     });
   }
+
+  test("when every style's roof is drawn, then each headliner vertex is paired with the skin vertex it is inset from: within 1 cm of it, at its z, end caps included", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const geo = makeRoofGeometry(CAR_STYLES[id]);
+      const twins: unknown = geo.userData.shellTwins;
+      assert.ok(twins instanceof Int32Array && twins.length > 0, `${id}: the drawn roof names its headliner's vertices`);
+      const pos = geo.getAttribute("position");
+      const [head, skin] = [new THREE.Vector3(), new THREE.Vector3()];
+      for (let k = 0; k < twins.length; k += 2) {
+        head.fromBufferAttribute(pos, twins[k]!);
+        skin.fromBufferAttribute(pos, twins[k + 1]!);
+        assert.ok(head.distanceTo(skin) < 0.01 && head.z === skin.z, `${id}: headliner vertex ${twins[k]} at ${mm(head)} paired with skin vertex ${twins[k + 1]} at ${mm(skin)}`);
+      }
+    }
+  });
 });
 
 describe("given the door cards", () => {
@@ -535,19 +551,11 @@ describe("given every style's cabin as its glass shows it", () => {
 
   /** A drawn interior point may stand this far (m) past a pane or the roof line before it shows through: the glass's own thickness. */
   const THROUGH_M = 0.005;
-  /** Styles whose seat data still puts a seat through a pane, with their owner and the reading: the owning lane's ticket turns them live. */
-  const OPEN_FIT: Partial<Record<CarStyleId, string>> = {
 
-  };
   /** The z of the pane line from `base` to `top` ([y, z] each) at height `y`. */
   const paneZ = (y: number, [y0, z0]: readonly [number, number], [y1, z1]: readonly [number, number]): number => z0 + ((y - y0) / (y1 - y0)) * (z1 - z0);
   for (const id of CAR_STYLE_IDS) {
-    const name = `when a ${id}'s cabin is built, then no point of its shell, seats, bench or wheel stands over the roof line or through the side glass, the windshield or the rear glass`;
-    if (OPEN_FIT[id] !== undefined) {
-      test.todo(`${name} (${OPEN_FIT[id]})`);
-      continue;
-    }
-    test(name, () => {
+    test(`when a ${id}'s cabin is built, then no point of its shell, seats, bench or wheel stands over the roof line or through the side glass, the windshield or the rear glass`, () => {
       const style = CAR_STYLES[id];
       const seats = carPartSeats();
       new CarCabin(style, seats, new THREE.Group());

@@ -273,7 +273,7 @@ export abstract class CarParts extends CarGlass {
     p.folding = t > foldAt(p);
     p.object.position.copy(p.restPos);
     p.object.quaternion.copy(p.restQuat);
-    p.object.scale.set(1, 1, 1);
+    p.object.scale.copy(p.restScale);
 
     if (p.hinge === "two-point") {
       if (p.bumper) {
@@ -818,7 +818,7 @@ export abstract class CarParts extends CarGlass {
     const geometry = partGeometry(i === 0 ? PART_KIND.mirrorL : PART_KIND.mirrorR);
     geometry.computeBoundingBox();
     _seatDoor.compose(door.restPos, door.restQuat, _unitScale);
-    _seatMirror.compose(mirror.restPos, mirror.restQuat, _unitScale);
+    _seatMirror.compose(mirror.restPos, mirror.restQuat, mirror.restScale);
     const box = geometry.boundingBox!.clone().applyMatrix4(_seatDoor.multiply(_seatMirror));
     this.mirrorRestBoxes[i] = box;
     return box;

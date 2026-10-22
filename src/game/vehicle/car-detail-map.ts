@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { detSin, hypot2 } from "../kernel/physics-core.js";
 import { clamp, clamp01 } from "../kernel/scalar.ts";
-import { finishOn, glslFloat } from "./car-finish.ts";
+import { finishOn, glslFloat, MAP_ANISOTROPY } from "./car-finish.ts";
 import { CLASS_LIFT } from "./constants.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
@@ -314,6 +314,7 @@ function bakeDetailAtlas(style: BodyStyle, details: Details, tiles: readonly THR
   texture.generateMipmaps = true;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = MAP_ANISOTROPY;
   texture.needsUpdate = true;
   return texture;
 }

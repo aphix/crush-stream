@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { hypot2, detCos, detSin } from "../kernel/physics-core.js";
-import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
+import { hypot2, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
+import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type BumperEnd, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
 import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, tubWall } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
@@ -93,13 +93,36 @@ export function roofAt(z: number, style: BodyStyle): { y: number; x: number } {
   return { y: lerp(sl.yBelt, sl.yRoof, c), x: lerp(sl.hw * 0.55, sl.cabinHw, c) };
 }
 
+/**
+ * The drawn roof's dome at `z` (`roofEnds`): its whole section's drop (m) and its crown's rise over the dome's edge (m). Over an end's
+ * run it rolls in a quarter ellipse (level with the roof where the run starts) onto that end's glass top; unset, none and `ROOF_CROWN`.
+ */
+export function roofDome(z: number, style: BodyStyle): { drop: number; crown: number } {
+  const runs = style.roofEnds;
+  const ends = [
+    { run: runs?.rear, z: style.roofZ[0], glassY: style.rearGlass.top[0] },
+    { run: runs?.front, z: style.roofZ[1], glassY: style.windshieldTop[0] },
+  ];
+  for (const end of ends) {
+    const d = Math.abs(z - end.z);
+    if (end.run === undefined || d >= end.run) continue;
+    const s = 1 - d / end.run;
+    const roll = 1 - Math.sqrt(1 - s * s);
+    const edge = roofAt(end.z, style).y;
+    return { drop: roll * Math.max(0, edge - end.glassY), crown: lerp(ROOF_CROWN, Math.max(0, end.glassY - edge), roll) };
+  }
+  return { drop: 0, crown: ROOF_CROWN };
+}
+
 /** Height of the roof panel's top at (`x`, `z`), the top ring of `makeRoofGeometry`: the centre-line crown, the dome's
- *  shoulder, then down to the cant line at the roof's half-width. */
+ *  shoulder, then down to the cant line at the roof's half-width; rolled onto the glass at the ends (`roofDome`). */
 export function roofTopY(x: number, z: number, style: BodyStyle): number {
   const r = roofAt(z, style);
-  const [us, ys] = ROOF_SHOULDER;
+  const { drop, crown } = roofDome(z, style);
+  const [us] = ROOF_SHOULDER;
+  const ys = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
   const u = Math.min(Math.abs(x) / r.x, 1);
-  return r.y + (u < us ? lerp(ROOF_CROWN, ys, u / us) : lerp(ys, 0, (u - us) / (1 - us)));
+  return r.y - drop + (u < us ? lerp(crown, ys, u / us) : lerp(ys, 0, (u - us) / (1 - us)));
 }
 
 /** The roof's cant line: its side lip's bottom, where the pillars end and the side glass plane leans to. */
@@ -165,14 +188,14 @@ export const TUB_EDGE = 0.025;
 
 /** The bay opens `rear` (m) ahead of the hood's cowl edge or the windshield's foot, whichever is further forward, and stops `front` inside the hood's nose edge; `cowl` (m) of closed deck stays between its blend and the cabin tub's, so a cowl stands there and not a fin. */
 const BAY_CLEAR = { rear: 0.04, front: 0.08, cowl: 0.05 } as const;
-/** The trough's floor (m, car y): deep enough that the bay set stands tall in it, clear of the body's floor pan at 0.145. */
+/** The trough's default floor (m, car y; a style's `bayFloor` overrides it): deep enough that the bay set stands tall in it, clear of the body's floor pan at 0.145. */
 const BAY_FLOOR = 0.28;
 
 /** The drawn body's engine bay trough under the hood, as a tub [zRear, zFront, floorY] (`BodyStyle.tubs`): drawn only, the cage's deck stays closed. */
 export function bayTub(style: BodyStyle): readonly [number, number, number] {
   const rear = Math.max(style.hood.z0, style.windshield.base[1]) + BAY_CLEAR.rear;
   const cabinFront = Math.max(-Infinity, ...style.tubs.map(([, front]) => front).filter((front) => front < rear));
-  return [Math.max(rear, cabinFront + 2 * TUB_EDGE + BAY_CLEAR.cowl), style.hood.z1 - BAY_CLEAR.front, BAY_FLOOR];
+  return [Math.max(rear, cabinFront + 2 * TUB_EDGE + BAY_CLEAR.cowl), style.hood.z1 - BAY_CLEAR.front, style.bayFloor ?? BAY_FLOOR];
 }
 
 /** The open floors a body build lofts: the style's tubs, and on the drawn body the engine bay under the hood (`bayTub`). */
@@ -293,7 +316,8 @@ export function sideX(y: number, hw: number, yb: number, rockerY: number): numbe
     const sin = Math.min((y - yF) / SHOULDER[1], detSin(SHOULDER_TOP));
     return hw + SIDE_OUT - SHOULDER[0] * (1 - Math.sqrt(1 - sin * sin));
   }
-  const v = Math.min((yF - y) / (yF - rockerY), 1);
+  // A low nose's feature line can fall under its rocker (a bumper read past the nose, where the underside rises): fully tucked there.
+  const v = yF > rockerY ? Math.min((yF - y) / (yF - rockerY), 1) : 1;
   return hw + SIDE_OUT - TUCK * v * v;
 }
 
@@ -363,11 +387,11 @@ const DECK_CROWN = { inset: 0.22, rise: DECK_RISE } as const;
  * Lower body ring (left half top→bottom, keel, right half bottom→top; the
  * wrap edge is the deck). Deck crown → deck edge → rounded shoulder → feature
  * line → tuck-under → rocker → sill. Tubs open the deck into a floor with walls;
- * the door cut drops the side to the sill. Greenhouse is never lofted metal.
+ * the door cut drops the side to the sill (unless `doorCut` is off). Greenhouse is never lofted metal.
  */
-function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [number, number][] {
+function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorCut = true): [number, number][] {
   const { hw, yBelt: yb, z } = s;
-  const hole = doorAperture(z, style);
+  const hole = doorCut ? doorAperture(z, style) : 0;
   const rockerY = rockerAt(z, style);
   const floor = floorY(z, style);
   const tub = tubAt(z, style, bodyTubs(style, source));
@@ -384,10 +408,11 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [num
   const edge = wellEdge(z, hw, tub.t, floorClear, well, style, source);
   // The deck edge drops into the style's own tubs (cabin, bed), not into the drawn bay: there it stays the fender's top under the hood's edge.
   const deckTub = tubAt(z, style, style.tubs).t;
+  const [grooveOut, grooveDown] = source === "drawn" && style.hood.groove ? style.hood.groove.map((g) => g * bayAt(z, style)) : [0, 0];
   // The ring's half: deck crown and edge, the shoulder, the feature line, the tuck-under, the rocker, then the sill and the floor.
   const half: [number, number][] = [
     [lerp(hw - DECK_CROWN.inset, edge ?? hw - 0.06, tub.t), lerp(yb + DECK_CROWN.rise, tub.floor, tub.t)],
-    [lerp(hw - 0.07, hw - tubWall(style), deckTub), deckEdgeY(yb, deckTub)],
+    [lerp(hw - 0.07, hw - tubWall(style), deckTub) + grooveOut!, deckEdgeY(yb, deckTub) - grooveDown!],
     ...SHOULDER_RING.map((a) => side(yF + SHOULDER[1] * detSin(a))),
     side(yF),
     ...Array.from({ length: tuckRows }, (_, row) => side(lerp(yF, rockerY, (row + 1) / (tuckRows + 1)))),
@@ -479,6 +504,27 @@ export function sectionPoints(s: ProfileStation, style: BodyStyle, source: BodyS
   const left = half.map(([x, y]) => ({ x: -x, y }));
   const right = half.map(([x, y]) => ({ x, y })).reverse();
   return [...left, { x: 0, y: floorY(s.z, style) }, ...right];
+}
+
+/** The drawn body side's ring points [x, y] at `z` as if no door were cut there, top down from the shoulder's top to the rocker: the door skin's facets. */
+export function drawnSideRing(z: number, style: BodyStyle): [number, number][] {
+  const s = sampleSlice(z, style.profile);
+  const half = halfRing(s, style, "drawn", false);
+  holdInsideCageHull(half, halfRing(s, style, "cage", false));
+  return half.slice(2, ROCKER + 1);
+}
+
+/** The drawn body side's x at height `y` at `z`, uncut by any door: on `drawnSideRing`'s chords over its span, above and below it `sideX` held at the end point's offset off it. */
+export function drawnSideX(z: number, y: number, style: BodyStyle): number {
+  const ring = drawnSideRing(z, style);
+  for (let i = 1; i < ring.length; i++) {
+    const [[x0, y0], [x1, y1]] = [ring[i - 1]!, ring[i]!];
+    if (y <= y0 && y >= y1 && y0 > y1) return x0 + ((x1 - x0) * (y - y0)) / (y1 - y0);
+  }
+  const { hw, yBelt } = sampleSlice(z, style.profile);
+  const rockerY = rockerAt(z, style);
+  const [ex, ey] = y > ring[0]![1] ? ring[0]! : ring[ring.length - 1]!;
+  return sideX(y, hw, yBelt, rockerY) + ex - sideX(ey, hw, yBelt, rockerY);
 }
 
 export function loftFromRings(rings: Pt[][], zs: number[], u0: number, u1: number, capsOwnRings = true): THREE.BufferGeometry {
@@ -623,6 +669,10 @@ const DECK_DOME_POINTS: Dome = [[DECK_SHOULDER, 0.7]];
 /** A crowned hood's dome (`hood.crown`): its parabola across x, 1 - u², drawn in this many chords a side, each turning under 5° on the sedan's 6 cm at |x| .66. */
 const CROWN_CHORDS = 4;
 const CROWN_DOME: Dome = Array.from({ length: CROWN_CHORDS - 1 }, (_, k) => [(k + 1) / CROWN_CHORDS, 1 - ((k + 1) / CROWN_CHORDS) ** 2] as const);
+/** A crowned deck lid's dome (`boot.crown`): one point a side on its parabola, 1 - u² at half its half-width, so its ring keeps the plain lid's points. */
+const BOOT_CROWN_DOME: Dome = [[0.5, 0.75]];
+/** A crowned deck lid's crown eases in over this far (m) from its front edge, which tucks under the rear glass's base. */
+const BOOT_CROWN_RUN = 0.25;
 
 /** A dome's share of its rise at `u` (share of the half-width): straight between its points, as the loft draws it. */
 function domeAt(dome: Dome, u: number): number {
@@ -675,9 +725,33 @@ const LID_FOLD_STEPS = 3;
 const LID_FACE_STEPS = 2;
 
 /**
+ * The right side's rolled corner (`edgeRoll`) where a panel's top, coming in from `inner`, meets its upright side at (`w`, `top`): one
+ * chord from `roll` (m) back along the top down to the side at the angle that splits the corner's turn in two. Its two vertices shade
+ * round (`rollSmoothing`), so the roll costs one vertex a side. For the left side, mirror x and reverse. No roll: the sharp corner's one point.
+ */
+function rolledCorner(inner: Pt, w: number, top: number, roll: number): Pt[] {
+  if (roll <= 0) return [{ x: w, y: top }];
+  const run = hypot2(w - inner.x, top - inner.y);
+  const start = { x: w - (roll * (w - inner.x)) / run, y: top - (roll * (top - inner.y)) / run };
+  // The top falls `slope` (rad) toward the edge; the chord bisects the turn from it down to the upright side.
+  const chord = (detAtan2(inner.y - top, w - inner.x) + Math.PI / 2) / 2;
+  return [start, { x: w, y: start.y - (w - start.x) * (detSin(chord) / detCos(chord)) }];
+}
+
+/** Flags for `splitCreases` (kept as `userData.rolled`): the rolled corners' ring points `at` on every one of a loft's `slices`, so the roll shades round however sharp its turn. */
+function rollSmoothing(geo: THREE.BufferGeometry, at: readonly number[]): Uint8Array {
+  const { ring, slices } = geo.userData.loft as { ring: number; slices: number };
+  const smooth = new Uint8Array(geo.getAttribute("position").count);
+  for (let s = 0; s < slices; s++) for (const i of at) smooth[s * ring + i] = 1;
+  geo.userData.rolled = smooth;
+  return smooth;
+}
+
+/**
  * Lid lofted on the deck line (hood / trunk), local to its hinge origin. The drawn `hood` rests on the fenders (`lidSection`) and takes
  * the nose's rings (`noseRefined`); a `clamshell` lid wraps the body's shoulder to its side shut line; a `lip` kicks its top up at its end;
- * a `drop` folds it over the tail edge and down the rear face to `drop.y`, `drop.w` wide, the face at `z1`.
+ * a `drop` folds it over the tail edge and down the rear face to `drop.y`, `drop.w` wide, the face at `z1`; a deck lid's `crown` (`boot.crown`)
+ * domes its top, eased in from `z0` and back to the plain dome over the fold; a `roll` rounds its side edges.
  */
 function makeDeckPanel(
   style: BodyStyle,
@@ -685,28 +759,33 @@ function makeDeckPanel(
   z1: number,
   origin: YZ,
   source: BodySource,
-  { hood = false, seated = hood, clamshell = false, lip, drop }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop } = {},
+  { hood = false, seated = hood, clamshell = false, lip, drop, crown, roll = 0 }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop; crown?: readonly [number, number]; roll?: number } = {},
 ): THREE.BufferGeometry {
   const segs = 10;
   const tk = 0.04;
   const skirt = 0.06;
   const [oy, oz] = origin;
+  // The skirt's upper point lies on its straight wall: a rolled lid and the drawn seated hood drop it (a clamshell lays it over the shoulder).
+  const plainWall = roll > 0 || (hood && !clamshell);
   const ring = (w: number, y: number, edge: number, crown: number, dome: Dome): Pt[] => {
     const points = dome.map(([u, v]) => ({ x: w * u, y: lerp(edge, crown, v) }));
+    if (roll > 0 && points.length > 0 && points.at(-1)!.x >= w - roll) throw new Error(`${style.id}: a lid's ${roll} m edge roll reaches past its dome's last point`);
+    const corner = rolledCorner(points.at(-1) ?? { x: 0, y: crown }, w, edge, roll);
+    const skirtTop = plainWall ? [] : [{ x: w, y: y - skirt * 0.55 }];
     return [
-      { x: -w, y: edge },
+      ...corner.map((p) => ({ x: -p.x, y: p.y })).reverse(),
       ...points.map((p) => ({ x: -p.x, y: p.y })).reverse(),
       { x: 0, y: crown },
       ...points,
-      { x: w, y: edge },
-      { x: w, y: y - skirt * 0.55 },
+      ...corner,
+      ...skirtTop,
       { x: w, y: y - skirt },
       { x: w - tk, y: y - skirt },
       { x: w - tk, y: y - tk },
       { x: -w + tk, y: y - tk },
       { x: -w + tk, y: y - skirt },
       { x: -w, y: y - skirt },
-      { x: -w, y: y - skirt * 0.55 },
+      ...skirtTop.map((p) => ({ x: -p.x, y: p.y })),
     ];
   };
   const fold = drop ? LID_FOLD_R : 0;
@@ -714,11 +793,14 @@ function makeDeckPanel(
   const rings: Pt[][] = [];
   const zs: number[] = [];
   const stations = panelStations(segs, lip, Math.abs(zEnd - z0)).map((t) => lerp(z0, zEnd, t));
+  let endRise = DECK_DOME;
   for (const z of hood ? noseRefined(stations, style.profile) : stations) {
     const sl = sampleSlice(z, style.profile);
     const lid = lidSection(z, style, seated, hood ? style.hood.crown : undefined);
     const kick = lipKick(Math.abs(zEnd - z), lip);
-    const r = ring(lid.w, sl.yBelt + LID_RISE - oy, lid.edge - oy + kick, lid.crown - oy + kick, lid.dome);
+    const crownY = crown ? lerp(lid.crown, lid.edge + crown[0] * (lid.w / crown[1]) ** 2, THREE.MathUtils.smoothstep(Math.abs(z - z0), 0, BOOT_CROWN_RUN)) : lid.crown;
+    endRise = crownY - lid.edge;
+    const r = ring(lid.w, sl.yBelt + LID_RISE - oy, lid.edge - oy + kick, crownY - oy + kick, crown ? BOOT_CROWN_DOME : lid.dome);
     if (clamshell) wrapShoulder(r, sectionPoints(sl, style, "drawn"), oy, tk);
     rings.push(r);
     zs.push(z - oz);
@@ -732,7 +814,8 @@ function makeDeckPanel(
   if (drop) {
     const run = arc + yc - (drop.y - oy);
     for (let k = 1; k <= LID_FOLD_STEPS + LID_FACE_STEPS; k++) {
-      rings.push(ring(wEnd, 0, 0, DECK_DOME, DECK_DOME_POINTS));
+      const folding = crown !== undefined && k <= LID_FOLD_STEPS;
+      rings.push(folding ? ring(wEnd, 0, 0, lerp(endRise, DECK_DOME, k / LID_FOLD_STEPS), BOOT_CROWN_DOME) : ring(wEnd, 0, 0, DECK_DOME, DECK_DOME_POINTS));
       zs.push(zA - (k <= LID_FOLD_STEPS ? (k / LID_FOLD_STEPS) * arc : arc + ((k - LID_FOLD_STEPS) / LID_FACE_STEPS) * (run - arc)));
     }
   }
@@ -742,7 +825,11 @@ function makeDeckPanel(
     bendOverTail(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, drop.w / wEnd, lean);
   }
   ensureOutwardNormals(geo);
-  if (source === "drawn") splitCreases(geo, CREASE_DEGREES.deckLid);
+  const n = rings[0]!.length;
+  // The top's right edge (its side's top point): the skirt and underside's six corners and, unless dropped, the skirt's two upper points follow it.
+  geo.userData.lidEdge = n - 7 - (plainWall ? 0 : 2);
+  // A rolled ring's corners are its first two points and the two before its skirt and underside's last six.
+  if (source === "drawn") splitCreases(geo, CREASE_DEGREES.deckLid, roll > 0 ? rollSmoothing(geo, [0, 1, n - 8, n - 7]) : undefined);
   geo.computeBoundingBox();
   return geo;
 }
@@ -837,8 +924,8 @@ function gateLoft(rings: Pt[][], ys: number[], b: Tailgate): THREE.BufferGeometr
   return geo;
 }
 
-/** Hatch / tailgate: a slightly bowed panel leaning from its bottom edge [y0, z0] up to its hinge at its top edge, its edge on `tailgateHalf`; a `lip` kicks its top edge out. */
-function makeTailgate(style: BodyStyle, b: Tailgate, source: BodySource, lip?: BootLip): THREE.BufferGeometry {
+/** Hatch / tailgate: a slightly bowed panel leaning from its bottom edge [y0, z0] up to its hinge at its top edge, its edge on `tailgateHalf`; a `lip` kicks its top edge out; a `roll` rounds its side edges. */
+function makeTailgate(style: BodyStyle, b: Tailgate, source: BodySource, lip?: BootLip, roll = 0): THREE.BufferGeometry {
   const { y0 } = b;
   const [y1] = b.origin;
   const bow = 0.02;
@@ -856,19 +943,22 @@ function makeTailgate(style: BodyStyle, b: Tailgate, source: BodySource, lip?: B
     const y = lerp(y0, y1, t);
     const out = lipKick(y1 - y, lip);
     const w = tailgateHalf(style, y);
+    if (roll > 0 && mid >= w - roll) throw new Error(`${style.id}: a tailgate's ${roll} m edge roll reaches past its inner lines`);
+    const corner = rolledCorner({ x: mid, y: bowAt(mid) + out }, w, bowAt(w) + out, roll);
     rings.push([
-      { x: -w, y: bowAt(w) + out },
+      ...corner.map((p) => ({ x: -p.x, y: p.y })).reverse(),
       { x: -mid, y: bowAt(mid) + out },
       { x: 0, y: bow + out },
       { x: mid, y: bowAt(mid) + out },
-      { x: w, y: bowAt(w) + out },
+      ...corner,
       { x: w, y: -TAILGATE_TK },
       { x: -w, y: -TAILGATE_TK },
     ]);
     ys.push(y);
   }
   const geo = gateLoft(rings, ys, b);
-  if (source === "drawn") splitCreases(geo, CREASE_DEGREES.tailgate);
+  // A rolled ring's corners are its first two points and the two before its back edge's last two.
+  if (source === "drawn") splitCreases(geo, CREASE_DEGREES.tailgate, roll > 0 ? rollSmoothing(geo, [0, 1, 5, 6]) : undefined);
   geo.computeBoundingBox();
   return geo;
 }
@@ -924,11 +1014,16 @@ export function makeHoodGeometry(style: BodyStyle = SEDAN, source: BodySource = 
   return markSkinDynamic(geo);
 }
 
-/** Trunk lid, hatch or tailgate per style, the drawn build with its `lip`; local to the boot's pivot (`bootPivot`, [y, z]). */
+/** Trunk lid, hatch or tailgate per style, the drawn build with its `lip` and `edgeRoll`; local to the boot's pivot (`bootPivot`, [y, z]). */
 export function makeTrunkGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const b = style.boot;
-  const lip = source === "drawn" ? b.lip : undefined;
-  const g = b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, { lip, drop: b.drop, seated: source === "drawn" && b.flush === true }) : makeTailgate(style, b, source, lip);
+  const drawn = source === "drawn";
+  const lip = drawn ? b.lip : undefined;
+  const roll = drawn ? (b.edgeRoll ?? 0) : 0;
+  const g =
+    b.kind === "lid"
+      ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, { lip, drop: b.drop, seated: drawn && b.flush === true, crown: drawn ? b.crown : undefined, roll })
+      : makeTailgate(style, b, source, lip, roll);
   const [py, pz] = bootPivot(b);
   if (py !== b.origin[0] || pz !== b.origin[1]) g.translate(0, b.origin[0] - py, b.origin[1] - pz);
   return markSkinDynamic(g);
@@ -940,11 +1035,17 @@ const BUMPER_TUCK = 0.01;
 const BUMPER_WRAP_SHRINK = 0.228;
 /** The fascia top's crown runs out this far (m) past each end of its span. */
 const BUMPER_CROWN_RUN = 0.03;
+/** A lofted bumper end's segments per side: the flat face, the corner (18° each), the near-straight run along the body side; 16 in all, as the plain wrap's. */
+const END_SEGMENTS = { face: 2, corner: 5, run: 1 } as const;
+/** A lofted end's section thins to this share of its corner's tightest radius, so its hidden back never folds through itself. */
+const END_DEPTH_SHARE = 0.9;
 
-/** Bumper fascia: rounded top, intake recess, splitter lip, wrapped corners, the corners held inside `style`'s body side. */
+/** Bumper fascia: rounded top, intake recess, splitter lip, wrapped corners, the corners held inside `style`'s body side (or a lofted `wrap.end`). */
 export function makeBumperGeometry(front: boolean, style: BodyStyle): THREE.BufferGeometry {
   const s = front ? 1 : -1;
-  const { seat, fascia, span, wrap } = front ? style.bumpers.front : style.bumpers.rear;
+  const spec = front ? style.bumpers.front : style.bumpers.rear;
+  if (spec.wrap.end) return makeBumperWithEnds(s, spec, spec.wrap.end, style);
+  const { seat, fascia, span, wrap } = spec;
   const wrapAt = (x: number) => Math.max(0, Math.abs(x) - wrap.from) / (span - wrap.from);
   const stations = 16;
   const rings: Pt[][] = [];
@@ -970,6 +1071,59 @@ export function makeBumperGeometry(front: boolean, style: BodyStyle): THREE.Buff
     const slice = sampleSlice(s * seat.z + z, style.profile);
     const side = sideX(seat.y + y, slice.hw, slice.yBelt, rockerAt(s * seat.z + z, style)) - BUMPER_TUCK;
     pos.setXYZ(i, Math.sign(x) * Math.min(Math.abs(x), side), y, z);
+  }
+  ensureOutwardNormals(geo);
+  return splitCreases(geo, CREASE_DEGREES.bumper);
+}
+
+/**
+ * Bumper fascia with lofted ends: the face straight to `wrap.from`, a quarter-ellipse corner `end.corner` deep out to `end.stand`
+ * off the body side, then a run along that side to `wrap.back`. The section keeps its outer face and thins its hidden back round the corner.
+ */
+function makeBumperWithEnds(s: number, { seat, fascia, span, wrap }: BodyStyle["bumpers"]["front"], end: BumperEnd, style: BodyStyle): THREE.BufferGeometry {
+  const outMax = Math.max(...fascia.map(([, out]) => out));
+  const depth = outMax - Math.min(...fascia.map(([, out]) => out));
+  // The body side's widest half-width (m) over the fascia's heights, `d` back from the bumper's face.
+  const skinAt = (d: number) => {
+    const z = s * (seat.z + outMax - d);
+    const slice = sampleSlice(z, style.profile);
+    const rocker = rockerAt(z, style);
+    return Math.max(...fascia.map(([y]) => sideX(seat.y + y, slice.hw, slice.yBelt, rocker)));
+  };
+  const [a, b] = [skinAt(end.corner) + end.stand - wrap.from, end.corner];
+  const thin = Math.min(1, (END_DEPTH_SHARE * b * b) / (a * depth));
+  const { face, corner, run } = END_SEGMENTS;
+  const half = face + corner + run;
+  // Per ring from the middle out: the outer face's plan point (x, d back from the face), its outward normal, its section's depth share.
+  const path: { x: number; d: number; nx: number; nd: number; k: number }[] = [];
+  for (let m = 0; m <= half; m++) {
+    if (m <= face) {
+      path.push({ x: (wrap.from * m) / face, d: 0, nx: 0, nd: -1, k: 1 });
+    } else if (m <= face + corner) {
+      const q = ((m - face) / corner) * (Math.PI / 2);
+      const [sin, cos] = [detSin(q), detCos(q)];
+      const len = hypot2(b * sin, a * cos);
+      path.push({ x: wrap.from + a * sin, d: b * (1 - cos), nx: (b * sin) / len, nd: (-a * cos) / len, k: 1 - (1 - thin) * sin * sin });
+    } else {
+      const d = lerp(b, wrap.back, (m - face - corner) / run);
+      path.push({ x: skinAt(d) + end.stand, d, nx: 1, nd: 0, k: thin });
+    }
+  }
+  const rings: Pt[][] = [];
+  const ts: number[] = [];
+  for (let m = -half; m <= half; m++) {
+    const p = path[Math.abs(m)]!;
+    const crown = (1 - Math.min(p.x, span) / (span + BUMPER_CROWN_RUN)) * 0.02;
+    rings.push(fascia.map(([y, out]) => ({ x: y + crown, y: (out - outMax) * p.k })));
+    ts.push(m / half);
+  }
+  const geo = loftFromRings(rings, ts, 0, 1);
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const t = pos.getZ(i);
+    const p = path[Math.round(Math.abs(t) * half)]!;
+    const inset = pos.getY(i);
+    pos.setXYZ(i, Math.sign(t) * (p.x + p.nx * inset), pos.getX(i), s * (outMax - p.d - p.nd * inset));
   }
   ensureOutwardNormals(geo);
   return splitCreases(geo, CREASE_DEGREES.bumper);

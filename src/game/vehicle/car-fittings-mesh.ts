@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle } from "./car-variants.ts";
-import { FITTING_ATTRIBUTE, FITTING_TONE, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { FITTING_ATTRIBUTE, FITTING_TONE, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { splitCreases } from "./car-crease.ts";
 import { CREASE_DEGREES, deckTopY, ensureOutwardNormals, lerp, loftFromRings, roofTopY, type Pt } from "./car-mesh.ts";
 
@@ -17,10 +17,12 @@ type RoofParts = NonNullable<BodyStyle["roof"]>;
 
 /** An add-on's foot sinks this far (m) under the skin it stands on, so no seam opens where that skin domes. */
 const SINK = 0.005;
-/** Rings along a hood bulge; its ends ease in over `BULGE_RAMP` (m); its flanks lean in `BULGE_FLANK` (m) from foot to top. */
+/** Rings along a hood bulge; its ends ease in over `BULGE_RAMP` (m); its flanks lean in `BULGE_FLANK` (m) from foot to top unless it is rolled (`round`). */
 const BULGE_STATIONS = 16;
 const BULGE_RAMP = 0.15;
 const BULGE_FLANK = 0.05;
+/** Chords per flank of a rolled bulge (`round`): the fewest whose turns stay under the fitting crease angle, so it shades round. */
+const POD_STEPS = 2;
 /** A scoop rises over `SCOOP_LENGTH` (m) behind its mouth in `SCOOP_STATIONS` rings; a twin scoop's inlets stand `SCOOP_RIB` (m) apart, a razor groove so the pair reads as one raised piece. */
 const SCOOP_LENGTH = 0.32;
 const SCOOP_STATIONS = 4;
@@ -66,6 +68,18 @@ function bulgeTopY(b: HoodBulge, z: number, style: BodyStyle): number {
   return deckTopY(0, z, style, true) - SINK + (b.rise + SINK) * ease;
 }
 
+/** A rolled bulge's ring, in the wedge's order: the left foot, up an S-curve over `round` to the crest, across, and down the right flank to its foot. */
+function podRing(half: number, round: number, foot: number, top: number): Pt[] {
+  const left: Pt[] = [];
+  for (let k = 0; k <= POD_STEPS; k++) {
+    const t = k / POD_STEPS;
+    left.push({ x: -(half - round * t), y: lerp(foot, top, THREE.MathUtils.smoothstep(t, 0, 1)) });
+  }
+  const right: Pt[] = [];
+  for (let k = left.length - 1; k >= 0; k--) right.push({ x: -left[k]!.x, y: left[k]!.y });
+  return [...left, ...right];
+}
+
 function bulgeGeometry(b: HoodBulge, style: BodyStyle): THREE.BufferGeometry {
   const [oy, oz] = style.hood.origin;
   const half = b.width / 2;
@@ -75,18 +89,22 @@ function bulgeGeometry(b: HoodBulge, style: BodyStyle): THREE.BufferGeometry {
     const z = lerp(b.z0, b.z1, s / BULGE_STATIONS);
     const top = bulgeTopY(b, z, style) - oy;
     const foot = deckTopY(half, z, style, true) - SINK - oy;
-    rings.push([
-      { x: -half, y: foot },
-      { x: BULGE_FLANK - half, y: top },
-      { x: half - BULGE_FLANK, y: top },
-      { x: half, y: foot },
-    ]);
+    rings.push(
+      b.round
+        ? podRing(half, b.round, foot, top)
+        : [
+            { x: -half, y: foot },
+            { x: BULGE_FLANK - half, y: top },
+            { x: half - BULGE_FLANK, y: top },
+            { x: half, y: foot },
+          ],
+    );
     zs.push(z - oz);
   }
   return withTone(hardEdged(loftFromRings(rings, zs, 0, 1)), PRIMER_ATTRIBUTE, 0);
 }
 
-/** One wedge per inlet rising off the bulge to its mouth at `scoop.z`; the mouth (the loft's front cap, its last ring + 1 vertices) is primer-dark. */
+/** One wedge per inlet rising off the bulge to its mouth at `scoop.z`; the mouth (the loft's front cap, its last ring + 1 vertices) is a near-black opening (`WELL_PANEL`). */
 function scoopGeometries(b: HoodBulge, scoop: HoodScoop, style: BodyStyle): THREE.BufferGeometry[] {
   const [oy, oz] = style.hood.origin;
   const twin = scoop.inlets === 2;
@@ -111,7 +129,7 @@ function scoopGeometries(b: HoodBulge, scoop: HoodScoop, style: BodyStyle): THRE
     }
     const loft = loftFromRings(rings, zs, 0, 1);
     const count = loft.getAttribute("position").count;
-    inlets.push(hardEdged(withTone(loft, PRIMER_ATTRIBUTE, 1, count - rings[0]!.length - 1)));
+    inlets.push(hardEdged(withTone(loft, PRIMER_ATTRIBUTE, WELL_PANEL, count - rings[0]!.length - 1)));
   }
   return inlets;
 }
@@ -180,7 +198,7 @@ function railGeometry(rail: NonNullable<RoofParts["rails"]>, side: number, style
   return hardEdged(loftFromRings(rings, zs, 0, 1));
 }
 
-/** A thin panel following the roof's dome, `panel.width` across. */
+/** A thin panel following the roof's dome, `panel.width` across; its underside, sunk in the crowned roof, one chord edge to edge. */
 function glassPanelGeometry(panel: NonNullable<RoofParts["glassPanel"]>, style: BodyStyle): THREE.BufferGeometry {
   const half = panel.width / 2;
   const xs = [-half, -half / 2, 0, half / 2, half];
@@ -189,7 +207,7 @@ function glassPanelGeometry(panel: NonNullable<RoofParts["glassPanel"]>, style: 
   for (let s = 0; s <= PANEL_STATIONS; s++) {
     const z = lerp(panel.z[0], panel.z[1], s / PANEL_STATIONS);
     const top = xs.map((x) => ({ x, y: roofTopY(x, z, style) + PANEL_PROUD }));
-    const under = [...xs].reverse().map((x) => ({ x, y: roofTopY(x, z, style) - SINK }));
+    const under = [half, -half].map((x) => ({ x, y: roofTopY(x, z, style) - SINK }));
     rings.push([...top, ...under]);
     zs.push(z);
   }

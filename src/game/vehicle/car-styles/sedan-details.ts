@@ -5,7 +5,7 @@ type Details = NonNullable<BodyStyle["details"]>;
 type Line = Details["lines"][number];
 type Patch = Details["patches"][number];
 
-const GAP = { width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 } as const;
+const GAP = { width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 } as const;
 const CREASE = { width: 0.02, depth: 0.003, profile: "u", cavity: 0 } as const;
 const SEAL = { width: 0.012, depth: 0.002, profile: "u", cavity: 0.3 } as const;
 const TRIM = { width: 0.01, depth: -0.003, profile: "u", cavity: 0.4 } as const;
@@ -25,7 +25,9 @@ const SHARED_LINES: readonly Line[] = [
   { view: "side", points: [[0.73, 0.835], [0.4, 0.828], [0, 0.822], [-0.5, 0.825], [-0.9, 0.84], [-1.09, 0.855]], ...CREASE },
   { view: "side", points: [[-1.06, 0.945], [-1.3, 0.94], [-1.5, 0.935], [-1.7, 0.94], [-1.9, 0.95], [-2, 0.955]], ...CREASE },
   { view: "side", points: [[-1.09, 0.855], [-1.3, 0.85], [-1.5, 0.85], [-1.7, 0.855]], ...CREASE },
-  { view: "side", points: [[0.72, 0.405], [0.4, 0.395], [0, 0.385], [-0.22, 0.385], [-0.5, 0.385], [-0.75, 0.39]], ...CREASE, profile: "step", depth: -0.003 },
+  // The lower doors' character line: the reference's crisp highlight along both doors at y ~0.37-0.42 (silver-sedan-1.png, from the front
+  // handle's 0.762), the side turning under below it; a step 6 mm in so it reads at the iso's distance (3 mm did not).
+  { view: "side", points: [[0.72, 0.405], [0.4, 0.395], [0, 0.385], [-0.22, 0.385], [-0.5, 0.385], [-0.75, 0.39]], ...CREASE, profile: "step", depth: -0.006 },
   { view: "side", points: [[1.61, 0.16], [1.605, 0.335], [1.593, 0.427], [1.557, 0.513], [1.501, 0.586], [1.428, 0.642], [1.342, 0.678], [1.25, 0.69], [1.158, 0.678], [1.073, 0.642], [0.999, 0.586], [0.943, 0.513], [0.907, 0.427], [0.895, 0.335], [0.89, 0.16]], ...CREASE },
   { view: "side", points: [[-0.89, 0.16], [-0.895, 0.335], [-0.907, 0.427], [-0.943, 0.513], [-0.999, 0.586], [-1.073, 0.642], [-1.158, 0.678], [-1.25, 0.69], [-1.342, 0.678], [-1.428, 0.642], [-1.501, 0.586], [-1.557, 0.513], [-1.593, 0.427], [-1.605, 0.335], [-1.61, 0.16]], ...CREASE },
   { view: "top", points: [[0.28, 0.52], [0.1, 0.505], [-0.2, 0.5], [-0.5, 0.495], [-0.8, 0.495], [-1, 0.495], [-1.1, 0.49]], ...CREASE, depth: -0.003 },
@@ -65,12 +67,10 @@ const POLICE_LINES: readonly Line[] = [
 const SHARED_PATCHES: readonly Patch[] = [
   { view: "side", points: [[0.9, 0.655], [0.9, 0.69], [0.775, 0.69], [0.775, 0.655]], ...VENT },
   { view: "top", points: [[-1.96, 0], [-1.96, 0.04], [-2.03, 0.04], [-2.03, 0]], ...BADGE },
-  { view: "rear", points: [[0, 0.41], [0.4, 0.41], [0.64, 0.41], [0.6, 0.32], [0.58, 0.235], [0.3, 0.23], [0, 0.228]], depth: -0.004, rim: 0.008, pattern: { kind: "vslats", pitch: 0.06, bar: 0.01, depth: 0.004 }, cavity: 0.5 },
 ];
 
 const SEDAN_PATCHES: readonly Patch[] = [
   { view: "top", points: [[1.99, 0], [1.984, 0.014], [1.97, 0.02], [1.956, 0.014], [1.95, 0]], ...BADGE },
-  { view: "front", points: [[0, 0.3], [0.3, 0.298], [0.46, 0.296], [0.47, 0.27], [0.4, 0.216], [0.2, 0.213], [0, 0.212]], depth: -0.005, rim: 0.006, cavity: 0.7 },
   { view: "side", points: [[1.79, 0.5], [1.745, 0.5], [1.73, 0.31], [1.775, 0.31]], ...VENT },
   { view: "rear", points: [[0, 0.88], [0.035, 0.88], [0.035, 0.93], [0, 0.93]], ...BADGE },
 ];
