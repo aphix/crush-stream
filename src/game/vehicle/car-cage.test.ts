@@ -18,12 +18,9 @@ const interiorThroughRoof =
   "the drawn interior (its headliner stands 1.09 m over the origin and does not follow the roof mass) pokes up through the roof the drop crushed, so the drawn top is the interior and the cage's is the roof (the cage carries the interior over a gone pane's opening only: over the whole roof it takes stack-crush.test.ts to 6 of 8); after the plan: make the drawn interior follow the roof's crush";
 const roofCornerHole =
   "the decimation loses the wagon's roof rear corners (|x| .50-.60, z -1.75..-1.90): the cage's top reads 0.38 m there under the drawn roof's 1.46 (the cage source's own top there 1.459); after the overhaul: CarRig rig-hole 987f1739 (no vertex left on no triangle: worst -0.42), then the roof outline's corners held";
-const hoodBuckle =
-  "hood worst 0.115/0.120 m under the drawn top mid-hood (z 1.58, |x| .23-.32: drawn 1.215, cage 1.099) after the head-on; a 5 mm roof station move (st(-0.1) yRoof 1.655 -> 1.66) re-rolled the crush (union -0.012/-0.017); CarRig: the crush buckle the hood panel's cage misses";
 const edgeCliffs: readonly { key: string; part: string; measured: string; cause: string }[] = [
   { key: "sedan/rolled", part: "cabin", measured: "p95 0.060 (bar 0.05), worst 0.063 under (bar 0.10)", cause: interiorThroughRoof },
   { key: "pickup truck/rolled", part: "cabin", measured: "p95 0.060 (bar 0.05), worst 0.065 under (bar 0.10)", cause: interiorThroughRoof },
-  { key: "pickup truck/headon", part: "hood", measured: "p95 0.008, worst 0.120 under (bar 0.10)", cause: hoodBuckle },
   { key: "monster pickup/rolled", part: "cabin", measured: "p95 0.060 (bar 0.05), worst 0.065 under (bar 0.10)", cause: interiorThroughRoof },
   { key: "wagon/untouched", part: "deck", measured: "p95 0.043, worst 0.716 under (bar 0.10)", cause: roofCornerHole },
   { key: "wagon/loaded", part: "deck", measured: "p95 0.035, worst 0.722 under (bar 0.10)", cause: roofCornerHole },

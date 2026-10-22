@@ -2247,7 +2247,7 @@ describe("given a body style's P1 parts", () => {
   });
 
   it("when a rear bumper carries a hitch, then one black receiver stands under its middle, its top inside the bumper and its end past the bumper's face, and the cage builds are unchanged", () => {
-    const pickup = { ...CAR_STYLES.pickup, bumpers: { ...CAR_STYLES.pickup.bumpers, rear: { ...CAR_STYLES.pickup.bumpers.rear, hitch: false } }, exhaust: undefined };
+    const pickup = { ...CAR_STYLES.pickup, bumpers: { ...CAR_STYLES.pickup.bumpers, rear: { ...CAR_STYLES.pickup.bumpers.rear, hitch: false, band: undefined } }, exhaust: undefined };
     const style: BodyStyle = { ...pickup, bumpers: { ...pickup.bumpers, rear: { ...pickup.bumpers.rear, hitch: true } } };
     const fascia = makeBumperGeometry(false, pickup);
     assert.ok(withRearFittings(fascia, pickup) === fascia, "a bumper with no fittings comes back as built");
@@ -2346,6 +2346,24 @@ describe("given a body style's P1 parts", () => {
     const [bottom, top] = band!.map((y) => y - seat.y);
     assert.ok(inlay.box.min.y >= bottom! - 0.02 - POSITION_TOL && inlay.box.max.y <= top! + 0.02 + POSITION_TOL, `black y ${inlay.box.min.y.toFixed(3)}..${inlay.box.max.y.toFixed(3)}, the band ${bottom!.toFixed(3)}..${top!.toFixed(3)}`);
     assert.ok(inlay.box.max.x - inlay.box.min.x > 2 * wrap.from, `the band spans ${(inlay.box.max.x - inlay.box.min.x).toFixed(3)} m across`);
+  });
+
+  it("when the pickup's rear bumper is drawn, then its face is plain under a black top step", () => {
+    const pickup = CAR_STYLES.pickup;
+    // A plain face stands out within 3 mm up its middle; the platform's ribbed section spreads it by centimetres.
+    const FLAT_TOL = 0.003;
+    // Heights (m over the seat) up the face's middle, clear of the step's roll above and the chamfer below.
+    const HEIGHTS = [-0.05, -0.02, 0.01, 0.04, 0.07];
+    const mesh = new THREE.Mesh(makeBumperGeometry(false, pickup), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    const outs = HEIGHTS.map((y) => -(new THREE.Raycaster(new THREE.Vector3(0.05, y, -1), new THREE.Vector3(0, 0, 1)).intersectObject(mesh, false)[0]?.point.z ?? NaN));
+    const spread = Math.max(...outs) - Math.min(...outs);
+    assert.ok(spread <= FLAT_TOL, `the face stands ${outs.map((o) => o.toFixed(3)).join(", ")} m out up its middle, a ${spread.toFixed(3)} m spread`);
+    const style: BodyStyle = { ...pickup, bumpers: { ...pickup.bumpers, rear: { ...pickup.bumpers.rear, hitch: false } }, exhaust: undefined };
+    const fitted = withRearFittings(makeBumperGeometry(false, style), style);
+    assert.ok(fitted.hasAttribute(FITTING_ATTRIBUTE), "the rear bumper's band is merged in; without one it comes back as built");
+    const { box, count } = toneBox(fitted, FITTING_ATTRIBUTE, FITTING_TONE.black);
+    // The step's rows run 0.094-0.1 over the seat (the crown lifts them up to 2 cm at the middle); the face under it stays chrome.
+    assert.ok(count > 0 && box.min.y >= 0.08 && box.max.y >= 0.095, `${count} black vertices, y ${box.min.y.toFixed(3)}..${box.max.y.toFixed(3)} over the seat`);
   });
 });
 
@@ -2586,6 +2604,19 @@ describe("given a body style's P2 parts", () => {
     let [lo, hi] = [Infinity, -Infinity];
     for (let i = 0; i < pos.count; i++) if (painted.getX(i) !== 1 && pos.getY(i) < cap.min.y - POSITION_TOL) [lo, hi] = [Math.min(lo, pos.getZ(i)), Math.max(hi, pos.getZ(i))];
     assert.ok(hi - lo >= 0.055, `the foot runs ${(hi - lo).toFixed(3)} m along the door`);
+  });
+
+  it("when the pickup's mirror is drawn, then its head is the side plate's: 12-15 cm tall and rounded", () => {
+    const style = CAR_STYLES.pickup;
+    const scaleX = style.door.mirrorReach / MIRROR_REACH;
+    const pos = drawnPart(PART_KIND.mirrorR, style).geometry.getAttribute("position");
+    // The head's outer face and its rounded shoulders: the foot and stalk lie further in.
+    const HEAD_FACE = 0.02;
+    let [outer, lo, hi] = [-Infinity, Infinity, -Infinity];
+    for (let i = 0; i < pos.count; i++) outer = Math.max(outer, pos.getX(i) * scaleX);
+    for (let i = 0; i < pos.count; i++) if (pos.getX(i) * scaleX >= outer - HEAD_FACE) [lo, hi] = [Math.min(lo, pos.getY(i)), Math.max(hi, pos.getY(i))];
+    assert.ok(hi - lo >= 0.12 && hi - lo <= 0.15, `the head is ${(hi - lo).toFixed(3)} m tall at its outer face`);
+    assert.equal(style.door.mirror?.cap, "rounded", `the cap is ${style.door.mirror?.cap}`);
   });
 
   it("when the coupe is drawn, then a chrome badge rides each front fender ahead of its door where the reference side view has one (z .66-.73, y .42)", () => {
