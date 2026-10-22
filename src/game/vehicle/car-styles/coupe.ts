@@ -56,8 +56,8 @@ const MUSCLE_REAR_FASCIA = [
   [-0.095, -0.06],
 ] as const;
 
-/** Bullet mirror in the body colour seated low on the door: the reference side view's head is 10 cm long and 8.5 cm tall, centred .93 m up; its top view shows a broad foot along the door ([out, height, length] m). */
-const COUPE_MIRROR = { cap: "rounded", finish: "body", size: [0.09, 0.085, 0.1], lift: 0.04, stalk: 0.06 } as const;
+/** Bullet mirror in the body colour seated low on the door: the reference side view's head is 10 cm long and 8.5 cm tall, centred .928 m up; its top view shows a broad foot along the door ([out, height, length] m). */
+const COUPE_MIRROR = { cap: "rounded", finish: "body", size: [0.09, 0.085, 0.1], lift: 0.038, stalk: 0.06 } as const;
 
 /** Late-70s notchback muscle coupe (Celica Supra A40 proportions): long flat hood, flat roof, sloped rear glass, short ducktail deck. */
 export const COUPE: BodyStyle = {
