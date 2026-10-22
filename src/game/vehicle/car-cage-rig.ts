@@ -7,7 +7,7 @@ import type { BodyPartName } from "../kernel/rig-spec.ts";
 import { CarCage, type CageLive, type CageSource, P_CAP, P_CUT_X, P_CUT_Y, P_CUT_Z, P_ROOF_CLAMP } from "./car-cage.ts";
 import type { DeformableCar } from "./car.ts";
 import { hingePose, INTERIOR_MASSES } from "./part-pose.ts";
-import { makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
+import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { makeWindshield } from "./car-glass.ts";
 import { makeLightBar } from "./car-materials.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
@@ -24,7 +24,7 @@ import type { BodyStyle } from "./car-variants.ts";
  * rig's own protected fields) and the car's one cage: `CageRig` is the cage, the inputs it fits from (allocated once) and the refit.
  */
 
-/** A mesh over the body that the rig skins from one cage's lattice (`skinPanel`): the lids, the light bar, the skinned panes. */
+/** A mesh over the body that the rig skins from one cage's lattice (`skinPanel`): the lids, the light bar, the skinned panes, the bumpers. */
 interface Panel {
   mesh: THREE.Mesh;
   rest: Float32Array;
@@ -32,19 +32,52 @@ interface Panel {
   part: BodyPartName;
   /** Whether the panel is on the car now: its part not torn off, its pane not shattered (state, never the drawn mesh's parent). */
   on: () => boolean;
-  /** The part whose hinge poses it (`hingePose`); null for a skinned pane, which stands at `seat`. */
+  /** The part whose hinge poses it (`hingePose`); null for a skinned pane or a bumper, which stands at `seat`. */
   hinged: DetachPart | null;
   seat: THREE.Vector3;
+  /** Per vertex of its cage build (`cagePanelsOf`): 1 where the decimation may never collapse it (`CageSource.held`); absent, none. */
+  held?: Uint8Array;
+  /** A part on the body (a bumper), decimated on its own budget (`CageSource.apart`); its panels come last. */
+  apart?: boolean;
 }
 
 const ZERO = new THREE.Vector3();
 
-/** The rig's own protected fields the cage reads (element access reaches them): its cages, the cluster transforms, the mass positions, the net impact row, the skin's rest positions. */
+/** The rig's own protected fields the cage reads (element access reaches them): its cages and each part's, the cluster transforms, the mass positions, the net impact row, the skin's rest positions. */
 const CAGES = "cages";
+const CAGE_BY_PART = "cageByPart";
 const CLUSTER_XF = "clusterXf";
 const MASS_POS = "massPos";
 const NET_IMPACT = "netImpact";
 const REST_POS = "restPos";
+
+/** Part `part`'s shell as a panel of its own lattice cage (`part.cage`) standing at its rest seat, in the cage while `on`, decimated on its own budget. */
+function partPanel(part: DetachPart, on: () => boolean): Panel {
+  const mesh = part.object.children[0] as THREE.Mesh;
+  return { mesh, rest: mesh.geometry.getAttribute("position").array as Float32Array, origin: part.restPos, part: part.cage, on, hinged: null, seat: part.restPos, apart: true };
+}
+
+/** How far (m) behind a bumper's face its plan ends may stand: its first corner ring (a sedan's 9.8 mm back) reaches 10 cm wider than the face's flat. */
+const FACE_RING = 0.01;
+
+/** A bumper's plan points (`Panel.held`): its face's middle and the two ends of its face with its first corner ring (`FACE_RING`), frontmost (`front`) or rearmost. Decimated freely, the face went 1-1.5 cm back. */
+function facePoints(geometry: THREE.BufferGeometry, front: boolean): Uint8Array {
+  const pos = geometry.getAttribute("position");
+  const s = front ? 1 : -1;
+  let face = -Infinity;
+  for (let i = 0; i < pos.count; i++) face = Math.max(face, s * pos.getZ(i));
+  const within = (i: number, depth: number): boolean => s * pos.getZ(i) > face - depth - 1e-4;
+  let [lo, hi, middle] = [Infinity, -Infinity, Infinity];
+  for (let i = 0; i < pos.count; i++) {
+    if (within(i, FACE_RING)) {
+      lo = Math.min(lo, pos.getX(i));
+      hi = Math.max(hi, pos.getX(i));
+    }
+    if (within(i, 0)) middle = Math.min(middle, Math.abs(pos.getX(i)));
+  }
+  const at = (x: number, target: number): boolean => Math.abs(x - target) < 1e-4;
+  return Uint8Array.from({ length: pos.count }, (_, i) => ((within(i, FACE_RING) && (at(pos.getX(i), lo) || at(pos.getX(i), hi))) || (within(i, 0) && at(Math.abs(pos.getX(i)), middle)) ? 1 : 0));
+}
 
 /** `car`'s panels, in the order its source lays them out. */
 function panelsOf(car: DeformableCar): Panel[] {
@@ -64,17 +97,26 @@ function panelsOf(car: DeformableCar): Panel[] {
     const carrier = parts.find((p) => p.object === pane.mesh.parent);
     panels.push({ mesh: pane.mesh, rest: pane.restVerts, origin: ZERO, part: pane.skin, on: () => (holds || pane.state !== "shattered") && !carrier?.detached, hinged: null, seat: ZERO });
   }
+  // The bumpers stand proud of the body's nose and tail: the cage reaches the drawn face while they are on, the body's once one tears off.
+  for (const part of parts) if (part.bumper) panels.push(partPanel(part, () => !part.detached));
   return panels;
 }
 
-/** `panelsOf(car)` with the lids', light bar's and windshield's meshes and rest shapes the cage build draws (`makeHoodGeometry`, `makeTrunkGeometry`, `makeLightBar` as `cage`; the style's own windshield, not its `drawn` twin). */
+/**
+ * `panelsOf(car)` with the lids', light bar's, windshield's and bumpers' meshes and rest shapes the cage build draws (`makeHoodGeometry`,
+ * `makeTrunkGeometry`, `makeLightBar` as `cage`; the style's own windshield, not its `drawn` twin; each bumper's plain fascia, not its drawn add-ons).
+ */
 function cagePanelsOf(car: DeformableCar): Panel[] {
-  const cageLid = (panel: Panel, geometry: THREE.BufferGeometry): Panel => ({ ...panel, mesh: new THREE.Mesh(geometry), rest: Float32Array.from(geometry.getAttribute("position").array) });
+  const cageLid = (panel: Panel, geometry: THREE.BufferGeometry, held?: Uint8Array): Panel => ({ ...panel, mesh: new THREE.Mesh(geometry), rest: Float32Array.from(geometry.getAttribute("position").array), held });
   return panelsOf(car).map((panel) => {
     if (panel.part === "bonnet") return cageLid(panel, makeHoodGeometry(car.style, "cage"));
     if (panel.part === "boot") return cageLid(panel, makeTrunkGeometry(car.style, "cage"));
     if (panel.mesh === car[LIGHT_BAR]) return cageLid(panel, makeLightBar("cage"));
     if (panel.part === "glassFront" && car.style.drawn !== undefined) return cageLid(panel, makeWindshield(car.style));
+    if (panel.part === "bumperFront" || panel.part === "bumperRear") {
+      const bumper = makeBumperGeometry(panel.part === "bumperFront", car.style);
+      return cageLid(panel, bumper, facePoints(bumper, panel.part === "bumperFront"));
+    }
     return panel;
   });
 }
@@ -185,6 +227,8 @@ export function cageSourceOf(car: DeformableCar): CageSource {
   const rest = new Float32Array(total * 3);
   const index = new Uint32Array(triangles);
   const group = new Uint8Array(total);
+  const held = new Uint8Array(total);
+  const apart: { from: number; count: number }[] = [];
   const skinN = new Uint8Array(total);
   const skinXf = new Int32Array(total * SKIN_K);
   const skinW = new Float64Array(total * SKIN_K);
@@ -210,7 +254,7 @@ export function cageSourceOf(car: DeformableCar): CageSource {
   let vertex = bodyCount;
   let at = bodyIndex.count;
   for (const [k, panel] of panels.entries()) {
-    const cage = rig["cageByPart"].get(panel.part)!;
+    const cage = rig[CAGE_BY_PART].get(panel.part)!;
     const cageIndex = rig[CAGES].indexOf(cage);
     const inverse = new THREE.Vector3(1 / (cage.size.x || 1), 1 / (cage.size.y || 1), 1 / (cage.size.z || 1));
     const into = new THREE.Vector3().copy(panel.origin).sub(cage.min);
@@ -228,6 +272,8 @@ export function cageSourceOf(car: DeformableCar): CageSource {
       infUvw[v * INF_K * 4 + 2] = THREE.MathUtils.clamp((panel.rest[i * 3 + 2]! + into.z) * inverse.z, -0.15, 1.15);
       infUvw[v * INF_K * 4 + 3] = 1;
     }
+    if (panel.held) held.set(panel.held, vertex);
+    if (panel.apart) apart.push({ from: vertex, count });
     const panelIndex = panel.mesh.geometry.index!;
     for (let i = 0; i < panelIndex.count; i++) index[at + i] = panelIndex.getX(i) + vertex;
     vertex += count;
@@ -244,14 +290,14 @@ export function cageSourceOf(car: DeformableCar): CageSource {
   }
   const restCo = new Float64Array(rig[CAGES].length * 24);
   for (let p = 0; p < rig[CAGES].length; p++) cageCoeffs(rig[CAGES][p]!.restCorners, restCo, p * 24);
-  const panelGlass = Uint8Array.from(panels, (p) => (p.hinged === null ? 1 : 0));
+  const panelGlass = Uint8Array.from(panels, (p) => (rig[CAGE_BY_PART].get(p.part)!.glass ? 1 : 0));
   const interior = cageInterior();
   const interiorIndex = interior.index;
   if (interiorIndex === null) throw new Error("the interior mesh has no index");
   const interiorMass = Int32Array.from(INTERIOR_MASSES, (name) => rig.masses.findIndex((m) => m.name === name) * 3);
   const loft = cageBody.userData.loft as { ring: number; slices: number };
   const sill = sillSamples(bodyTables, bodyCount, rig.masses, car.style, loft);
-  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, panelCount: panels.length, panelOrigin, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill, lattice: car.frame.lattice, roofClampY: car.frame.rig.roofClampY, tubs: cageBody.userData.tubs as CageSource["tubs"], loft: loft.ring * loft.slices };
+  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, held, apart, panelCount: panels.length, panelOrigin, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill, lattice: car.frame.lattice, roofClampY: car.frame.rig.roofClampY, tubs: cageBody.userData.tubs as CageSource["tubs"], loft: loft.ring * loft.slices };
 }
 
 /** A car's cage on the lattice (or `step`), its style's build shared by every car of the style. */

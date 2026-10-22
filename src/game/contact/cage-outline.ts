@@ -136,12 +136,15 @@ export function sampleField(field: Float32Array, style: CageStyle, x: number, z:
 }
 
 /**
- * The lowest and highest height (`out[0]`, `out[1]`, m; frame, no class lift) of the covered nodes within `VERTICAL_WINDOW` nodes of
- * node (i, j): an outline node's own top and bottom are a sliver of the body's edge (a hood's lip, 5 mm thick), the body's height at
- * that place is what the window around it holds. Infinity, -Infinity when none is covered.
+ * The lowest and highest height (`out[0]`, `out[1]`, m; frame, no class lift) of the covered nodes of node (i, j)'s own part
+ * (`CageFields.part`) within `VERTICAL_WINDOW` nodes of it: an outline node's own top and bottom are a sliver of the body's edge (a hood's
+ * lip, 5 mm thick), the body's height at that place is what the window around it holds. A bumper is no sliver: its window never reads
+ * the body behind it (a pitched monster's tail bumper took its body's heights and met a cop's cowl it stood clear of), nor the body's it.
+ * Infinity, -Infinity when none is covered.
  */
 function bandAround(fields: CageFields, style: CageStyle, i: number, j: number, out: Float64Array): void {
   const { nu, nv } = style;
+  const own = fields.part[j * nu + i] ?? 0;
   const i1 = Math.min(nu - 1, i + VERTICAL_WINDOW);
   const j1 = Math.min(nv - 1, j + VERTICAL_WINDOW);
   let low = Infinity;
@@ -149,7 +152,7 @@ function bandAround(fields: CageFields, style: CageStyle, i: number, j: number, 
   for (let jj = Math.max(0, j - VERTICAL_WINDOW); jj <= j1; jj++) {
     for (let ii = Math.max(0, i - VERTICAL_WINDOW); ii <= i1; ii++) {
       const k = jj * nu + ii;
-      if (fields.covered[k] === 0) continue;
+      if (fields.covered[k] === 0 || fields.part[k] !== own) continue;
       if (fields.bottom[k]! < low) low = fields.bottom[k]!;
       if (fields.top[k]! > high) high = fields.top[k]!;
     }

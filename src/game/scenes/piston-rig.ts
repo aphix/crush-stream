@@ -218,6 +218,9 @@ export class PistonHead {
 
 const _p = new THREE.Vector3();
 const _n = new THREE.Vector3();
+const _v = new THREE.Vector3();
+const _toBody = new THREE.Matrix4();
+const _meshToBody = new THREE.Matrix4();
 
 function shiftVelocities(d: StreamedDeformation, dx: number, dz: number): void {
   for (const m of d.masses) {
@@ -306,19 +309,23 @@ export class PistonRig {
   }
 
   private measure(car: DeformableCar): void {
-    const pos = car.body.geometry.getAttribute("position") as THREE.BufferAttribute;
-    const arr = pos.array as Float32Array;
     const hw = this.config.faceWidth * 0.5;
     const y0 = PISTON.faceY - this.config.faceHeight * 0.5;
     const y1 = PISTON.faceY + this.config.faceHeight * 0.5;
+    // The paint a face meets first: the body's, and the bumpers' standing proud of its nose and tail, in the body's frame.
+    const paint = [car.body, ...car.lookMeshes().bumpers];
+    car.group.updateMatrixWorld(true);
+    _toBody.copy(car.body.matrixWorld).invert();
     for (const h of this.heads) {
       let skin = Infinity;
-      for (let i = 0; i < arr.length; i += 3) {
-        const x = arr[i]!;
-        const y = arr[i + 1]!;
-        const z = arr[i + 2]!;
-        if (y < y0 || y > y1 || Math.abs(h.lateral(x, z)) > hw) continue;
-        skin = Math.min(skin, h.along(x, z));
+      for (const mesh of paint) {
+        _meshToBody.multiplyMatrices(_toBody, mesh.matrixWorld);
+        const pos = mesh.geometry.getAttribute("position");
+        for (let i = 0; i < pos.count; i++) {
+          _v.fromBufferAttribute(pos, i).applyMatrix4(_meshToBody);
+          if (_v.y < y0 || _v.y > y1 || Math.abs(h.lateral(_v.x, _v.z)) > hw) continue;
+          skin = Math.min(skin, h.along(_v.x, _v.z));
+        }
       }
       let reach = Infinity;
       for (const m of car.deform.masses) {
