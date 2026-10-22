@@ -1098,6 +1098,27 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
   });
 
+  it("when the coupe's belt is read from its tail to the sail's foot (z -1.587 to -1.43), then it rises all the way: no crest under the sail's rear end, which drew a lit hump where the reference's sail meets the deck", () => {
+    const coupe = CAR_STYLES.coupe;
+    let prev = -Infinity;
+    for (let z = -1.587; z <= -1.43 + 1e-9; z += 0.005) {
+      const y = sampleSlice(z, coupe.profile).yBelt;
+      assert.ok(y >= prev - 1e-6, `the belt falls to ${y.toFixed(4)} at z ${z.toFixed(3)} from ${prev.toFixed(4)}`);
+      prev = y;
+    }
+  });
+
+  it("when the coupe's quarter window is drawn, then its glass reaches back to the reference's point (z -0.975 or further) and its sail runs on to where the reference's window line rounds into its top (z -0.666 ±1 cm)", () => {
+    const coupe = CAR_STYLES.coupe;
+    const pane = makeRearSideGlass(1, coupe).getAttribute("position");
+    let back = Infinity;
+    for (let i = 0; i < pane.count; i++) back = Math.min(back, pane.getZ(i));
+    const sail = makeGreenhouseFrame(coupe, "drawn").find((g) => g.name === "rear" && g.getAttribute("position").getX(0) > 0)!.getAttribute("position");
+    let front = -Infinity;
+    for (let i = 0; i < sail.count; i++) front = Math.max(front, sail.getZ(i));
+    assert.ok(back <= -0.975 && Math.abs(front + 0.666) <= 0.01, `the glass reaches z ${back.toFixed(3)}, the sail runs to z ${front.toFixed(3)}`);
+  });
+
   it("when the coupe's door is drawn, then its skin is flush with the body side inside its cut (door.proud 0), not a lit 3 mm step at the shut line", () => {
     /** Flush within this (m): the skin's chords between its rows. */
     const FLUSH = 0.001;
