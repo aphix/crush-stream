@@ -246,7 +246,7 @@ export function cageSourceOf(car: DeformableCar): CageSource {
   if (interiorIndex === null) throw new Error("the interior mesh has no index");
   const interiorMass = Int32Array.from(INTERIOR_MASSES, (name) => rig.masses.findIndex((m) => m.name === name) * 3);
   const sill = sillSamples(bodyTables, bodyCount, rig.masses, car.style, cageBody.userData.loft as { ring: number; slices: number });
-  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, panelCount: panels.length, panelOrigin, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill, lattice: car.frame.lattice, roofClampY: car.frame.rig.roofClampY };
+  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, panelCount: panels.length, panelOrigin, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill, lattice: car.frame.lattice, roofClampY: car.frame.rig.roofClampY, tubs: cageBody.userData.tubs as CageSource["tubs"] };
 }
 
 /** A car's cage on the lattice (or `step`), its style's build shared by every car of the style. */
@@ -313,9 +313,18 @@ export class CageRig {
 }
 
 /** How far (m) up `car`'s drawn body stands over its frame: its class's lift while upright, none once on its side (`bodyLift`), read off the pose, never off the drawn body (drawn only: heave and pitch). */
-export function cageLift(car: DeformableCar): number {
+export function cageLift(car: Pick<DeformableCar, "group" | "style">): number {
   const q = car.group.quaternion;
   return bodyLift(CLASSES[carClass(car)].lift, 1 - 2 * (q.x * q.x + q.z * q.z));
+}
+
+/**
+ * The height (m, car frame) of `car`'s rigid centre: its frame's stock centre (`comY`) carried up with the body by the class's lift
+ * (`cageLift`, fading as it lies over). At the stock 0.72 m a monster's centre stood 0.07 m over its hubs, under a body lifted 0.87 m,
+ * and a side hit on its tyres yawed it off with 2° of roll where it should trip.
+ */
+export function centreY(car: Pick<DeformableCar, "group" | "style" | "frame">): number {
+  return car.frame.comY + cageLift(car);
 }
 
 /** The highest (`high`) or lowest node of a cage field (m), the nodes with no height skipped. */

@@ -4,7 +4,8 @@ import * as THREE from "three";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { INTERIOR_MESH, SMALL_PART_SEAT } from "../vehicle/constants.ts";
-import { PART_KIND, type PartSeat } from "../vehicle/part-geometry.ts";
+import { BEHIND_GLASS, PART_KIND, type PartSeat } from "../vehicle/part-geometry.ts";
+import { PartBatch } from "../vehicle/part-batch.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { CarDetail, DETAIL_LEVELS, PHONE_LEVEL } from "./car-detail.ts";
 
@@ -72,7 +73,9 @@ describe("given a car and the farthest rung (small parts beyond 35 m, only the b
     detail.update([probe], camera, null, null);
     const meshes = drawn(probe, camera);
     assert.equal(casters(meshes), 0, "nothing of its own drawn casts: its flush shadow is the style's batched caster");
-    assert.ok(probe.shadowCaster.castShadow && probe.shadowCaster.layers.isEnabled(0), "its shadow caster stays in the batch");
+    const batch = new PartBatch(1);
+    batch.sync([probe]);
+    assert.equal(batch.casters.reduce((n, m) => n + m.count, 0), 1, "its shadow caster stays in the batch");
     for (const part of probe.flushCasters) assert.ok(meshes.includes(part), "a flush part left the camera");
   });
 });
@@ -191,7 +194,7 @@ describe("given a car that crosses the far distance", () => {
 describe("given a car's batched part seats", () => {
   const enabled = (seats: readonly PartSeat[]): boolean[] => seats.map((s) => s.layers.isEnabled(0));
 
-  test("when a car goes past the mid distance, then the small seats leave layer 0 and the interior kit's stay; past the far distance the interior kit goes too; back at 10 m, all are on again", () => {
+  test("when a car goes past the mid distance, then the small seats and the kit behind the glass leave layer 0 and the cabin and bay stay; past the far distance they go too; back at 10 m, all are on again", () => {
     const { camera, detail, car } = stage();
     const probe = car(10);
     const interior = probe.partSeats.filter((s) => s.name === INTERIOR_MESH);
@@ -208,7 +211,10 @@ describe("given a car's batched part seats", () => {
     assert.ok(enabled(small).every(Boolean) && enabled(interior).every(Boolean), "whole at 10 m");
     move(50);
     assert.ok(enabled(small).every((on) => !on), "the small seats are cut at 50 m");
-    assert.ok(enabled(interior).every(Boolean), "the interior kit stays until the far cut");
+    const glass = interior.filter((s) => BEHIND_GLASS.has(s.kind));
+    assert.equal(glass.map((s) => s.kind).join(), [PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.seatFront].join(), "the front seats, the bench and the wheel are seen through the glass");
+    assert.ok(enabled(glass).every((on) => !on), "the kit behind the glass goes with it at 50 m");
+    assert.ok(enabled(interior.filter((s) => !glass.includes(s))).every(Boolean), "the cabin and the bay stay until the far cut");
     move(80);
     assert.ok(enabled(interior).every((on) => !on), "the far cut takes the interior kit");
     assert.ok(enabled(small).every((on) => !on));

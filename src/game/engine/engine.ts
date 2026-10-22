@@ -172,7 +172,7 @@ export class CrashEngine extends EngineGarage {
   };
 
   /** What this device is (`deviceClass`), decided once from the GL context, the pointer and the user agent. */
-  private readonly deviceClass: DeviceClass;
+  protected readonly deviceClass: DeviceClass;
 
   constructor(canvas: HTMLCanvasElement, hudStore: HudStore, veil: HTMLElement) {
     super();
@@ -213,7 +213,9 @@ export class CrashEngine extends EngineGarage {
 
     this.glassDots = new GlassDotSystem(this.scene);
     this.ensureCars(INITIAL_HUD.carCount);
-    this.scene.add(...this.wheels.meshes, ...this.lampBatch.meshes, ...this.partBatch.meshes, ...this.partBatch.casters, this.partBatch.looseWarm, this.seated.mesh);
+    this.scene.add(this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.seated.mesh, this.coverBatch.group);
+    // Under the wheel shadow prisms, shown to the shadow pass alone: the casters cost no camera-pass draw.
+    this.wheels.meshes.at(-1)!.add(...this.partBatch.casters);
     const driverLook = (car: number, cop: boolean) => this.ragdolls.carDriverLook(car, cop);
     // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels, lamps, parts and seated drivers.
     this.scene.onBeforeRender = (renderer) => {
@@ -223,6 +225,7 @@ export class CrashEngine extends EngineGarage {
       this.partBatch.sync(drawn);
       // In the garage the standing dummy beside the car is the driver: no one sits in the car there.
       this.seated.sync(this.showGarage ? [] : drawn, driverLook);
+      this.coverBatch.sync(drawn);
     };
 
     this.debris = new DebrisSystem(this.scene);
@@ -352,7 +355,7 @@ export class CrashEngine extends EngineGarage {
       crash: (contact, normal) => this.cine.beginCrashCam(contact, normal, this.crashSight(), this.clock.hold),
       impact: (contact, normal, closing) => this.beginCinematic(contact, normal, closing, false),
       hit: this.hitFx,
-      fudge: (at, normal) => this.fudgeContact(at, normal),
+      fudge: (at, normal, strength) => this.fudgeContact(at, normal, strength),
       eject: (e, ride) => {
         this.ragdolls.launch(e, this.live(), ride);
         if (ride) this.ragdolls.follow();
@@ -430,7 +433,7 @@ export class CrashEngine extends EngineGarage {
     this.garage?.dispose();
     this.looks.dispose();
     this.rivals.dispose();
-    for (const batch of [this.wheels, this.lampBatch, this.partBatch, this.seated]) batch.dispose();
+    for (const batch of [this.wheels, this.lampBatch, this.partBatch, this.seated, this.coverBatch]) batch.dispose();
     this.sparks.dispose();
     this.fountains.dispose();
     this.debris.dispose();

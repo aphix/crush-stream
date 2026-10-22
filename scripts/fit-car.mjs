@@ -8,15 +8,16 @@
  *   R=/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop/silver-sedan
  *   CAP=2G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning scripts/fit-car.mjs \
  *     --style sedan --side $R/silver-sedan-1.png --side-span 3,299=4.221 --top $R/silver-sedan-2.png --top-span 3,292 \
- *     [--class sedan] [--side-ground 95] [--rounds 6] [--out-dir .tmp/fit/sedan]
+ *     [--class sedan] [--side-ground 95] [--rounds 6] [--out-dir .tmp/fit/sedan] [--lines-out src/game/vehicle/car-reference-lines.fixture.json]
  *
  * `--side-span x0,x1[=m]` scales the side picture (bumper tips, or wheel centres with the metres between them; default the spec
  * length), and its two tyres set z = 0. `--top-span x0,x1[=m]` marks the top picture's nose and tail columns, which land on the
  * side picture's nose and tail. Read once: dims, the glass hardpoints, belt, underside, the door's hinge x and the bumpers' seat z
  * and plan wrap; the mirror's reach is set from one build so its tip meets the reference's. Fitted: `profile` (yBelt or yRoof from
  * the side's top edge, hw from the plan; the end stations take widths only). The style file is never written.
+ * `--lines-out <json>` also stores the references' own lines under the style's key (`writeLines`), for `arch-bulge.test.ts`.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { CABIN_MIN, archZones, at, beltUnderShoulder, extractSide, extractTop, formatTable, glassZone, holdArches, inZones, outlineOf, planOf, tableFrom } from "./fit-extract.mjs";
@@ -57,6 +58,8 @@ const TYRE_TUCK = 0.01;
 const GUARD_TOL = { iou: 0.001, glass: 0.005, absCm: 0.2, maxCm: 1 };
 /** The top view's sides are judged this far (m) inside the reference's nose and tail: the ends' curves are the front and rear edges'. */
 const SIDE_TRIM = 0.3;
+/** `--lines-out` samples the reference's lines this often (m) along z: finer than any station gap the tables hold. */
+const LINE_STEP = 0.04;
 
 const t0 = performance.now();
 const { values } = parseArgs({
@@ -70,6 +73,7 @@ const { values } = parseArgs({
     "top-span": { type: "string" },
     rounds: { type: "string", default: "6" },
     "out-dir": { type: "string" },
+    "lines-out": { type: "string" },
   },
 });
 const id = values.style;
@@ -87,6 +91,7 @@ const stage = new CarStage(game);
 const side = await sideView();
 const arches = archZones(side.hubs);
 const top = await topView();
+if (values["lines-out"] !== undefined) writeLines(resolve(values["lines-out"]));
 side.read = extractSide(side.frame, side.layers.sil, side.layers.glass, side.hubs, game.CLASSES[cls].lift, glassZone(top.read, base));
 const start = { ...base, ...tableFrom(side.read, top.read, base, game.CLASSES[cls].wheelScale) };
 const before = await evaluate(null, "before");
@@ -147,6 +152,26 @@ async function topView() {
   const frame = refFrame("top", ref, ZOOM, pad, span.cols, span.metres ?? nose - tail, (nose + tail) / 2, (ref.box.v0 + ref.box.v1 + 1) / 2);
   const layers = refLayers(game, ref, frame, ZOOM, pad);
   return { frame, layers, port: new ViewPort(game, frame.W, frame.H), read: extractTop(frame, layers.sil, layers.glass, arches) };
+}
+
+/**
+ * The references' own lines into `path` (one key per style, the others kept): the side picture's top edge as heights over its
+ * tyres' ground (the drawn car's, class lift and all) and the plan's half-width (mirrors and handles cut, the arch flares kept),
+ * both every LINE_STEP along z from the side picture's hub midpoint.
+ */
+function writeLines(path) {
+  const r = (x) => Number(x.toFixed(3));
+  const sample = (table) => {
+    const out = [];
+    for (let z = table[0][0]; z <= table.at(-1)[0]; z += LINE_STEP) out.push([r(z), r(at(table, z))]);
+    return out;
+  };
+  const lines = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
+  lines[id] = { top: sample(outlineOf(side.frame, side.layers.sil)), plan: sample(planOf(top.frame, top.layers.sil)) };
+  const rows = Object.keys(lines)
+    .sort()
+    .map((k) => `  ${JSON.stringify(k)}: ${JSON.stringify(lines[k])}`);
+  writeFileSync(path, `{\n${rows.join(",\n")}\n}\n`);
 }
 
 /** Both views of `table` (null: the style as it stands) whole, with their overlays tagged `tag`. */

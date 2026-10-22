@@ -6,9 +6,9 @@ import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./ca
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import { CREASE_DEGREES, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
-import { archLipGeometry, wellHumpGeometry } from "./car-well-mesh.ts";
+import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
-import { makeGreenhouseFrame } from "./car-greenhouse-mesh.ts";
+import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { DeformableCar } from "./car.ts";
 import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
 import { cageSourceOf } from "./car-cage-rig.ts";
@@ -290,13 +290,14 @@ describe("given every body style's chassis, whose nose and tail roll into the en
   }
 });
 
-/** Of each side's greenhouse parts the B pillar and the rail are the near-rectangular ones (the A and C pillars lean in plan, so their section is a sheared parallelogram); the headers are the last two. */
+/** Of each side's greenhouse parts the B pillar and the rail are the near-rectangular ones (the A and C pillars lean in plan, so their section is a sheared parallelogram). */
 const roundedPartCases = [
   { name: "B pillar", pick: (parts: THREE.BufferGeometry[]) => parts[1]! },
-  { name: "side rail", pick: (parts: THREE.BufferGeometry[]) => parts[parts.length - 3]! },
-  { name: "windshield header", pick: (parts: THREE.BufferGeometry[]) => parts[parts.length - 2]! },
-  { name: "rear glass header", pick: (parts: THREE.BufferGeometry[]) => parts[parts.length - 1]! },
+  { name: "side rail", pick: (parts: THREE.BufferGeometry[]) => parts.find((g) => g.name === "beltRail")! },
 ] as const;
+
+/** At the cant line the drawn roof's side keeps normals of its own, pointing out at least this much (x share), not down with its underside's. */
+const ROOF_SIDE_NORMAL_X = 0.8;
 
 describe("given every body style's greenhouse frame", () => {
   for (const id of CAR_STYLE_IDS) {
@@ -310,6 +311,37 @@ describe("given every body style's greenhouse frame", () => {
         }
       });
     }
+  }
+});
+
+describe("given every body style's drawn roof and greenhouse", () => {
+  for (const id of CAR_STYLE_IDS) {
+    it(`when a ${id}'s drawn greenhouse is read, then no part of it crosses the centre line: the roof alone covers both glass tops, no header bar stands on it (the cage keeps its two boxes)`, () => {
+      const crossing = (source: "drawn" | "cage") =>
+        makeGreenhouseFrame(CAR_STYLES[id], source).filter((g) => {
+          g.computeBoundingBox();
+          return g.boundingBox!.min.x < 0 && g.boundingBox!.max.x > 0;
+        }).length;
+      assert.equal(crossing("cage"), 2, "the control: the cage's two header boxes");
+      assert.equal(crossing("drawn"), 0, `${id}: drawn parts across the roof`);
+    });
+
+    it(`when a ${id}'s drawn roof side is read at mid-roof, then its normals at the cant line point out (x over ${ROOF_SIDE_NORMAL_X}), not down with the underside's: no grey band along the roof's edge`, () => {
+      const style = CAR_STYLES[id];
+      const roof = makeRoofGeometry(style);
+      roof.computeVertexNormals();
+      const pos = roof.getAttribute("position") as THREE.BufferAttribute;
+      const normal = roof.getAttribute("normal") as THREE.BufferAttribute;
+      const z = (style.roofZ[0] + style.roofZ[1]) / 2;
+      // The right side's lowest ring point at the mid station (a loft station) is the cant line; a crease copy shares its position.
+      let cant = { y: Infinity, nx: -1 };
+      for (let i = 0; i < pos.count; i++) {
+        if (Math.abs(pos.getZ(i) - z) > 1e-5 || pos.getX(i) <= 1e-6) continue;
+        if (pos.getY(i) < cant.y) cant = { y: pos.getY(i), nx: normal.getX(i) };
+        else if (pos.getY(i) === cant.y) cant.nx = Math.max(cant.nx, normal.getX(i));
+      }
+      assert.ok(cant.nx > ROOF_SIDE_NORMAL_X, `${id}: the roof's side at the cant line (y ${cant.y}) has normal x ${cant.nx} at most`);
+    });
   }
 });
 
@@ -398,29 +430,34 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
 }
 
 /** Each style's drawn wheel-well parts and its boot cut's loft rings as built, merged into the body on top of its loft: red if one grows. */
-const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; bootRings: number }> = {
-  sedan: { lips: 360, humps: 0, bootRings: 63 },
-  hatchback: { lips: 360, humps: 94, bootRings: 42 },
-  wagon: { lips: 360, humps: 94, bootRings: 42 },
-  coupe: { lips: 360, humps: 94, bootRings: 42 },
-  pickup: { lips: 260, humps: 94, bootRings: 42 },
-  police: { lips: 360, humps: 0, bootRings: 63 },
-  monster: { lips: 312, humps: 94, bootRings: 42 },
+const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number }> = {
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63 },
+  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42 },
+  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42 },
+  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42 },
+  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 63 },
+  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42 },
 };
 
-/** `style`'s arch lips' and wheel humps' vertices (`archLipGeometry`, `wellHumpGeometry`) and the rings its boot cut adds to the loft. */
-function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; bootRings: number } {
+/**
+ * `style`'s arch lips' and wheel humps' vertices (`archLipGeometry`, `wellHumpGeometry`), its drawn liners' over the cage's one-sided
+ * liners (`makeWellLiners`: their insides and end caps), and the rings its boot cut adds to the loft.
+ */
+function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number } {
   const body = makeChassisGeometry(style);
+  const liners = (source: "drawn" | "cage") => makeWellLiners(style, source).reduce((n, g) => n + g.getAttribute("position").count, 0);
   return {
     lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,
-    humps: wellHumpGeometry(style)?.getAttribute("position").count ?? 0,
+    humps: wellHumpGeometry(style, "drawn")?.getAttribute("position").count ?? 0,
+    liners: liners("drawn") - liners("cage"),
     bootRings: (sliceZs(style, "drawn").length - sliceZs(style, "drawn", false).length) * loftOf(body).ring,
   };
 }
 
 describe("given every body style's car built whole", () => {
   for (const testCase of BASELINE_BY_STYLE) {
-    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting, arch lip, wheel hump and boot cut within its own count`, () => {
+    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting, arch lip, wheel hump, liner side and boot cut within its own count`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, testCase.id);
       let drawCalls = 0;
       let triangles = 0;
@@ -434,11 +471,11 @@ describe("given every body style's car built whole", () => {
       assert.ok(triangles <= testCase.triangles * TRIANGLE_BUDGET, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`);
       const fittings = roofFittingVertices(car.style);
       const wells = wellAndCutVertices(car.style);
-      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.bootRings;
+      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.liners - wells.bootRings;
       assert.ok(loft <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
       assertRoofFittingCaps(testCase.id, fittings.byKind);
       const cap = WELL_AND_CUT_VERTICES[testCase.id];
-      assert.ok(wells.lips <= cap.lips && wells.humps <= cap.humps && wells.bootRings <= cap.bootRings, `${testCase.id} ${JSON.stringify(wells)} against ${JSON.stringify(cap)}`);
+      assert.ok(wells.lips <= cap.lips && wells.humps <= cap.humps && wells.liners <= cap.liners && wells.bootRings <= cap.bootRings, `${testCase.id} ${JSON.stringify(wells)} against ${JSON.stringify(cap)}`);
     });
   }
 
@@ -448,7 +485,8 @@ describe("given every body style's car built whole", () => {
     const fittings = roofFittingVertices({ ...wagon, roof });
     assert.equal(fittings.byKind.length, 3, "the control: every kind is built");
     assertRoofFittingCaps("wagon", fittings.byKind);
-    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.all, makeChassisGeometry(wagon).getAttribute("position").count, "the fittings are all the body gains");
+    // Against the wagon with no fittings at all: the style itself may carry some.
+    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.all, makeChassisGeometry({ ...wagon, roof: undefined }).getAttribute("position").count, "the fittings are all the body gains");
   });
 });
 
@@ -525,6 +563,7 @@ describe("given every body style crashed into the wall at 48 km/h by the engine'
  * Every rest-only table `cageSourceOf` hands the cage (the cage mesh is decimated from them, so they fix the contact shape of every
  * hit, not only the scripted one), hashed as raw bytes in field order. Re-pinned for the sill following the cell's clusters: only the
  * sill vertices' cluster tables (skinN, skinXf, skinW) changed. Re-pinned for the sill samples a wreck rests on (`sill`, the last table).
+ * Re-pinned for the driver's side (`DRIVER_SIDE`, the steering wheel moved to +x): only `interiorRest` changed.
  */
 function cageSourceDigest(car: DeformableCar): string {
   const source = cageSourceOf(car);
@@ -539,7 +578,7 @@ function cageSourceDigest(car: DeformableCar): string {
 }
 
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "505b4c4fe9c4f34f8f3350c3530634eff8ae353dcfa168b128b9525112f4d52a" },
+  { id: "sedan", digest: "8d0ca6fec24787b820976ef5beb3b9bc33abd7d28ee2e89cdd0159374addc6cd" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   { id: "hatchback", digest: "ba4c934973909383e4f766d12db1f27bcd4798c25b2755e5eec2079791a13d9f" },

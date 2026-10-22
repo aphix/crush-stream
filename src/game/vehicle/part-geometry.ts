@@ -40,6 +40,8 @@ export const PART_KINDS: readonly PartKind[] = Object.values(PART_KIND);
 export const PART_PER_CAR: readonly number[] = PART_KINDS.map((k) => (k === PART_KIND.seatFront || k === PART_KIND.crashBar ? 2 : 1));
 /** The kinds the far distance cut takes with the cabin (`CarDetail`, by `INTERIOR_MESH`); the rest are small parts, cut at mid distance. */
 const INTERIOR_KINDS: ReadonlySet<number> = new Set([PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.engineBay]);
+/** The interior kit seen only through the glass: the mid cut takes it with the glass, as it takes the seated driver (`CarDetail`). */
+export const BEHIND_GLASS: ReadonlySet<number> = new Set([PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel]);
 
 /** The mirror arm's inner end, out from its seat (m). */
 export const MIRROR_ROOT = 0.02;
@@ -147,6 +149,7 @@ export function mirrorBatchGeometry(sign: number, capacity: number): THREE.Buffe
   geo.setAttribute(INSTANCE_MIRROR_VARIANT_ATTRIBUTE, new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(THREE.DynamicDrawUsage));
   return geo;
 }
+
 
 /** Grille slats in front-bumper space; the headlamps sit on the body (`makeLampUnit`). */
 function grille(): THREE.BufferGeometry {

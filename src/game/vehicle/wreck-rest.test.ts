@@ -7,6 +7,8 @@ import { FLAT_GROUND, Ground, setGround } from "../world/ground.ts";
 import { layOnGround } from "./car-air-points.ts";
 import type { DeformableCar } from "./car.ts";
 import { buildCar } from "./drawn-body.test-util.ts";
+import { REST_SPEED } from "./car-air-body.ts";
+import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { PartSeat } from "./part-geometry.ts";
 import type { VehicleClassId } from "./vehicle-classes.ts";
 
@@ -103,5 +105,19 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
         }
       });
     }
+  }
+
+  // A wreck lying over (up under `UPRIGHT_UP_Y`) with its low tyres on the ground rolled on them as if on its wheels, no row of it
+  // gripping: the monster wreck, on its side across the slope with its brakes held, rolled down it at 1.3 to 4.5 m/s, never asleep.
+  for (const hit of HITS) {
+    it(`when ${hit.name} on a 10° slope, then no wreck lying on its side or roof is still moving after ${SETTLE_MAX_S} s: none rolls away on the tyres of a side it lies on`, () => {
+      const wrecks = wrecksAtRest(hit, new Slope(10));
+      for (const wreck of wrecks) {
+        const upY = 1 - 2 * (wreck.group.quaternion.x ** 2 + wreck.group.quaternion.z ** 2);
+        if (upY >= UPRIGHT_UP_Y) continue;
+        const speed = wreck.velocity.length();
+        assert.ok(speed < REST_SPEED, `a wreck lying over (up ${upY.toFixed(2)}) still moves at ${speed.toFixed(2)} m/s after ${SETTLE_MAX_S} s`);
+      }
+    });
   }
 });

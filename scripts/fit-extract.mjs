@@ -359,7 +359,8 @@ export function formatTable(t) {
     `  windshieldTop: ${pair(t.windshieldTop)},`,
     `  rearGlass: { base: ${pair(t.rearGlass.base)}, top: ${pair(t.rearGlass.top)}, wBase: ${n(t.rearGlass.wBase)}, wTop: ${n(t.rearGlass.wTop)} },`,
     `  belt: { x: ${typeof t.belt.x === "number" ? n(t.belt.x) : pairs(t.belt.x)}, y: ${pairs(t.belt.y)} },`,
-    `  underside: ${pairs(t.underside)},`,
+    // A style without an underside (the pickup's, the monster's) keeps none when the guard turns the read one down.
+    ...(t.underside === undefined ? [] : [`  underside: ${pairs(t.underside)},`]),
     `  door: { ${Object.entries(t.door).map(([k, v]) => `${k}: ${Array.isArray(v) ? pair(v) : n(v)}`).join(", ")} },`,
     `  bumpers: { front: ${bumper(t.bumpers.front)}, rear: ${bumper(t.bumpers.rear)} },`,
   ].join("\n");

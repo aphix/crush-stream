@@ -14,7 +14,7 @@ import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
 import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
 import type { TopMet } from "./car-air-body.ts";
-import { wreckCentre } from "./car-air.ts";
+import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
 import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, type Lamp, type PartNetState } from "./car-core.ts";
 import {
@@ -141,9 +141,9 @@ export abstract class CarParts extends CarGlass {
   /** Pendulum drive, car frame: acceleration right, acceleration forward (m/s²), yaw rate (rad/s), yaw acceleration (rad/s²). */
   readonly swingDrive = new Float64Array(4);
   /**
-   * Once a frame, with the skin: an undamaged car casts its sun shadow from `shadowCaster` alone (body and every flush part
-   * merged at rest, one draw), so overhanging parts are not missing from it. Once the car has been hit or a part has hinged,
-   * swung or come off, the merged mesh stops and the body, hood, boot lid, doors and bumpers cast, one draw each.
+   * Once a frame, with the skin: an undamaged car casts its sun shadow from `restCaster` alone (body and every flush part
+   * at rest as one decimated shell, one draw per style), so overhanging parts are not missing from it. Once the car has been hit or a part has hinged,
+   * swung or come off, the caster stops and the body, hood, boot lid, doors and bumpers cast, one draw each.
    */
   protected settleCasters(): void {
     let flush = !this.crashed;
@@ -152,7 +152,7 @@ export abstract class CarParts extends CarGlass {
       flush = !p.detached && p.hingeT <= FLUSH_HINGE && (p.swing === null || p.swing.theta <= FLUSH_HINGE);
     }
     this.body.castShadow = !flush;
-    this.shadowCaster.castShadow = flush;
+    this.restCasts = flush;
     for (let i = 0; i < this.flushCasters.length; i++) this.flushCasters[i]!.castShadow = !flush;
   }
 
@@ -680,7 +680,7 @@ export abstract class CarParts extends CarGlass {
       this.interior.scale.set(1, 1, 1);
       this.interior.position.set(0, 0, 0);
       this.cabin.fit(null);
-      this.cabin.sinkHeadliner(this.deform.massLocal("roof").y);
+      this.cabin.squeezeUnderRoof(this.deform.massLocal("roof").y);
       return;
     }
     const l = this.deform.massLocal(INTERIOR_MASSES[0]);
@@ -690,7 +690,7 @@ export abstract class CarParts extends CarGlass {
     this.interior.scale.x = _interior[0]!;
     this.interior.position.set(_interior[1]!, _interior[2]!, _interior[3]!);
     this.cabin.fit(this.deform);
-    this.cabin.sinkHeadliner(this.deform.massLocal("roof").y);
+    this.cabin.squeezeUnderRoof(this.deform.massLocal("roof").y);
   }
 
   /** Once a frame on a crashed car (`updateSkin`, after the skin): the parts' poses a step left pending are written first, door glass rides its door. */
@@ -874,7 +874,7 @@ export abstract class CarParts extends CarGlass {
     looseOnCamera(p.object);
     if (p.region) this.trackShell(p);
     // Where the part sits about the body's centre of mass (a wreck's masses' centroid, else the box's): the car's spin carries it at ω × r, whatever else it is thrown with.
-    _com.copy(this.deform.massActive ? wreckCentre(this) : this.frame.centre).applyQuaternion(this.group.quaternion).add(this.group.position);
+    _com.copy(rigidCentre(this)).applyQuaternion(this.group.quaternion).add(this.group.position);
     _n.crossVectors(this.angular, _n.copy(wpos).sub(_com));
     p.object.position.copy(wpos);
     p.object.quaternion.copy(wquat);

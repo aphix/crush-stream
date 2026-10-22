@@ -5,9 +5,11 @@ import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
 import { DeformableCar } from "./car.ts";
 import { BUMPER_F } from "./constants.ts";
 import { INSTANCE_MIRROR_VARIANT_ATTRIBUTE, MIRROR_VARIANT_ATTRIBUTE } from "./car-materials.ts";
-import { CAR_STYLES } from "./car-variants.ts";
+import { CAR_STYLE_IDS, CAR_STYLES } from "./car-variants.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
+import { drawnDoorCard } from "./car-door-mesh.ts";
+import { cageInterior } from "./interior-geometry.ts";
 import { PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
 
@@ -69,12 +71,12 @@ describe("given the part batch and a few cars near the camera", () => {
     draw(cars);
     const sedan = batch.casters.find((m) => m.name === "shadow-caster-sedan")!;
     assert.equal(sedan.count, cars.length, "one instance per undamaged sedan");
-    assert.ok(sedan.geometry === cars[0]!.shadowCaster.geometry, "the batch draws the sedan's rest caster");
-    assert.ok(sedan.castShadow && !cars[0]!.shadowCaster.visible, "the batch casts, the car's own caster never draws");
+    assert.ok(sedan.geometry === cars[0]!.restCaster, "the batch draws the sedan's rest caster");
+    assert.ok(sedan.castShadow, "the batch casts");
     assert.equal(batch.casters.filter((m) => m.count > 0).length, 1, "one caster draw for a field of one style");
     const m = new THREE.Matrix4();
     sedan.getMatrixAt(1, m);
-    assertSameNumbers(m.elements, cars[1]!.shadowCaster.matrixWorld.elements, "the second sedan's caster instance", FLOAT32_SLACK);
+    assertSameNumbers(m.elements, cars[1]!.group.matrixWorld.elements, "the second sedan's caster instance", FLOAT32_SLACK);
   });
 
   test("when a car is synced, then its mirror's instance stands where the seat does", () => {
@@ -86,12 +88,14 @@ describe("given the part batch and a few cars near the camera", () => {
     assertSameNumbers(matrix.elements, only.partSeats[PART_KIND.mirrorR]!.matrixWorld.elements, "the mirror instance is the seat's world matrix", FLOAT32_SLACK);
   });
 
-  test("when every kind's mesh is read, then it draws the kind's one shared geometry; a mirror's draws its own, every style's mirror with the platform's first", () => {
+  test("when every kind's mesh is read, then it draws the kind's one shared geometry (a door card's: the one inside every door skin); a mirror's draws its own, every style's mirror with the platform's first", () => {
     const { batch } = stage();
     for (const kind of PART_KINDS) {
       const mesh = batch.meshes[kind]!;
       if (kind !== PART_KIND.mirrorL && kind !== PART_KIND.mirrorR) {
-        assert.equal(mesh.geometry, partGeometry(kind), `kind ${kind} (same object, not equal copies)`);
+        const card = kind === PART_KIND.liningL ? -1 : kind === PART_KIND.liningR ? 1 : 0;
+        // Identity, never a deep compare: a geometry holds big typed arrays.
+        assert.ok(mesh.geometry === (card !== 0 ? drawnDoorCard(card) : partGeometry(kind)), `kind ${kind} (same object, not equal copies)`);
         continue;
       }
       const platform = positions(partGeometry(kind));
@@ -111,10 +115,15 @@ describe("given the part batch and a car whose style has its own mirror", () => 
   });
 
   test("when it is synced beside a platform-mirror car, then its instance carries its variant and door paint, and the batch's geometry holds its mirror under that variant", () => {
-    const { batch, car, draw } = stage();
+    const { batch, draw } = stage();
+    // The neighbour is the first style that draws the platform mirror: which styles carry their own caps is the fleet table's business.
+    const plainId = CAR_STYLE_IDS.find((id) => CAR_STYLES[id].door.mirror === undefined);
+    assert.ok(plainId !== undefined, "some style draws the platform mirror");
+    const plain = new DeformableCar(paint(), new THREE.Scene(), null, plainId);
+    plain.spawn(0, 10, 0);
     const own = new DeformableCar({ ...paint(), body: 0x336699 }, new THREE.Scene(), null, "wagon");
     own.spawn(0, 10, 0);
-    draw([car(10), own]);
+    draw([plain, own]);
     const mesh = batch.meshes[PART_KIND.mirrorR]!;
     const seat = own.partSeats[PART_KIND.mirrorR]!;
     const variants = mesh.geometry.getAttribute(INSTANCE_MIRROR_VARIANT_ATTRIBUTE);
@@ -128,6 +137,24 @@ describe("given the part batch and a car whose style has its own mirror", () => 
       .filter((i) => tagged.getX(i) === seat.variant)
       .flatMap((i) => [at[i * 3]!, at[i * 3 + 1]!, at[i * 3 + 2]!]);
     assertSameNumbers(batched, Array.from(positions(seat.drawn)), "its variant's vertices are its drawn mirror's");
+  });
+
+  test("when the cage interior is built, then its steering wheel is on the car's left (+x), the driver's side", () => {
+    const attr = cageInterior().getAttribute("position");
+    let count = 0;
+    let sumX = 0;
+    // Only the wheel torus lies here: the dash is at |x| 0.41, the seats and their backs are lower or further back.
+    for (let i = 0; i < attr.count; i++) {
+      const x = attr.getX(i);
+      const y = attr.getY(i);
+      const z = attr.getZ(i);
+      if (Math.abs(x) < 0.38 && y > 0.55 && y < 0.8 && z > 0.2 && z < 0.5) {
+        count++;
+        sumX += x;
+      }
+    }
+    assert.ok(count > 0, "the wheel's vertices were found");
+    assert.ok(sumX / count > 0.15, `the wheel's mean car-local x is ${(sumX / count).toFixed(2)}`);
   });
 });
 

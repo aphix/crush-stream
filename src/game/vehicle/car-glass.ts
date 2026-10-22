@@ -3,7 +3,7 @@ import { PART_FAMILY } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassQuad } from "./car-variants.ts";
 import { glassTopY, glassX, lerp } from "./car-mesh.ts";
-import { aPillarTopZ, bPillarBand, beltY } from "./car-lines.ts";
+import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ } from "./car-lines.ts";
 
 // Glass panes on the shared platform: windshield, rear glass, door and quarter glass, filling the greenhouse `car-greenhouse-mesh.ts` builds.
 
@@ -64,47 +64,57 @@ export function makeRearGlass(style: BodyStyle = SEDAN): THREE.BufferGeometry {
   return makeGlassQuad(style.rearGlass, 8, 6, -0.015);
 }
 
-/** A side pane's edge z at the belt (`bot`) and at the top, rear → front. */
-type SideSpan = { bot: readonly [number, number]; top: readonly [number, number] };
+/** A side pane's edge z at the belt (`bot`) and at the top, rear → front; a kneed front edge (`front`, z at a height share) gets a row at its knee (`kneeT`). */
+type SideSpan = { bot: readonly [number, number]; top: readonly [number, number]; front?: (t: number) => number; kneeT?: number };
 
-/** The door glass rides its door, so its rear edge stays this far (m) inside the door's trailing edge at the belt and at the top. */
-const DOOR_GLASS_INSET = { bot: 0.03, top: 0.05 } as const;
-/** Under a B-pillar whose width the style sets, the side panes run this far (m) in under its edges. */
+/** The side panes run this far (m) in under the B-pillar's edges. */
 const PANE_TUCK = 0.01;
 
-/** Door glass: from inside the door's trailing edge (or under the drawn B-pillar) at the belt up to the A-pillar, from its foot on the belt to its top on the cant line. */
+/** Door glass: from in under the drawn B-pillar's front edge (`bPillarBand`) at the belt and the top up to the A-pillar, from its foot on the belt to its top on the cant line, kneed onto the A-post at `aPillarKnee`. */
 function doorSpan(style: BodyStyle): SideSpan {
   const band = bPillarBand(style);
-  const trailing = style.door.hingeZ - style.door.length;
-  const [bot, top] = band ? [band[1] - PANE_TUCK, band[1] - PANE_TUCK] : [trailing + DOOR_GLASS_INSET.bot, trailing + DOOR_GLASS_INSET.top];
-  return { bot: [bot, style.aPillarFoot], top: [top, aPillarTopZ(style)] };
+  const span: SideSpan = { bot: [band.belt[1] - PANE_TUCK, style.aPillarFoot], top: [band.top[1] - PANE_TUCK, aPillarTopZ(style)] };
+  const knee = style.aPillarKnee;
+  if (knee === undefined) return span;
+  const [footY, topY] = [beltY(style.aPillarFoot, style), glassTopY(aPillarTopZ(style), style)];
+  return { ...span, front: (t) => doorGlassFrontZ(lerp(footY, topY, t), footY, topY, style), kneeT: (knee - footY) / (topY - footY) };
 }
 
-/** Quarter glass: from the C-pillar forward to the B-pillar (under the drawn one when the style sets its width). */
+/** Quarter glass: from the C-pillar forward to in under the drawn B-pillar's rear edge. */
 function quarterSpan(style: BodyStyle): SideSpan {
   const band = bPillarBand(style);
-  const front = band ? band[0] + PANE_TUCK : style.bPillar.rear;
-  return { bot: [style.quarter.zRearBot, front], top: [style.quarter.zRearTop, front] };
+  return { bot: [style.quarter.zRearBot, band.belt[0] + PANE_TUCK], top: [style.quarter.zRearTop, band.top[0] + PANE_TUCK] };
+}
+
+/** A side pane is this many columns long, rear to front: its belt edge is a polyline through the belt at their z. */
+const SIDE_PANE_COLUMNS = 6;
+
+/** The quarter glass's belt edge, rear to front: the z of each of its columns (its sill is `beltY` there, straight between). */
+export function quarterSillZs(style: BodyStyle): number[] {
+  const [rear, front] = quarterSpan(style).bot;
+  return Array.from({ length: SIDE_PANE_COLUMNS + 1 }, (_, i) => lerp(rear, front, i / SIDE_PANE_COLUMNS));
 }
 
 /** Point of a side pane in car space: `s` 0…1 rear to front, `t` 0…1 belt to top, leaning in with the tumblehome. */
 function sidePoint(sign: number, style: BodyStyle, span: SideSpan, s: number, t: number): THREE.Vector3 {
   const zt = lerp(span.top[0], span.top[1], s);
   const zb = lerp(span.bot[0], span.bot[1], s);
-  const z = lerp(zb, zt, t);
+  const z = span.front ? lerp(lerp(span.bot[0], span.top[0], t), span.front(t), s) : lerp(zb, zt, t);
   const y = lerp(beltY(zb, style), glassTopY(zt, style), t);
   return _pt.set(sign * glassX(z, y, style), y, z);
 }
 
 /** Side glass from the belt to the roof cant (`sidePoint`). Positions are relative to `origin`. */
 function makeSideGlassPane(sign: number, style: BodyStyle, span: SideSpan, origin: readonly [number, number, number]): THREE.BufferGeometry {
-  const segS = 6;
-  const segT = 3;
+  const segS = SIDE_PANE_COLUMNS;
+  // Belt to top in thirds, and the front edge's knee.
+  const ts = [0, 1 / 3, 2 / 3, 1];
+  if (span.kneeT !== undefined && span.kneeT > 0 && span.kneeT < 1 && !ts.includes(span.kneeT)) ts.splice(ts.findIndex((t) => t > span.kneeT!), 0, span.kneeT);
+  const segT = ts.length - 1;
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
-  for (let j = 0; j <= segT; j++) {
-    const t = j / segT;
+  for (const t of ts) {
     for (let i = 0; i <= segS; i++) {
       const s = i / segS;
       const p = sidePoint(sign, style, span, s, t);

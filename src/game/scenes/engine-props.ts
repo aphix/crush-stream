@@ -69,8 +69,8 @@ const _bp = new THREE.Vector3();
 const _bRight = new THREE.Vector3();
 const _bFwd = new THREE.Vector3();
 
-/** Where a predicted hit lands: the point (a bumper's height above the ground) and the flat unit line the two meet along (`pairEta`: car a → car b; `contactEta`: car → slab). */
-export type PredictedHit = { x: number; y: number; z: number; nx: number; nz: number };
+/** Where a predicted hit lands: the point (a bumper's height above the ground), the flat unit line the two meet along (`pairEta`: car a → car b; `contactEta`: car → slab), and its cars (`b` null: the slab; both null before any prediction). */
+export type PredictedHit = { x: number; y: number; z: number; nx: number; nz: number; a: DeformableCar | null; b: DeformableCar | null };
 
 /** `hit`: where `car` (moving on) meets the slab face along `axis`, `toward` (±1) the face's side: its footprint's edge `reach` ahead of its centre, `t` s on. */
 function predictFace(hit: PredictedHit, car: DeformableCar, t: number, axis: THREE.Vector3, toward: number, reach: number): void {
@@ -79,6 +79,8 @@ function predictFace(hit: PredictedHit, car: DeformableCar, t: number, axis: THR
   hit.z = car.group.position.z + car.velocity.z * t + axis.z * toward * reach;
   hit.nx = axis.x * toward;
   hit.nz = axis.z * toward;
+  hit.a = car;
+  hit.b = null;
 }
 
 const _hb = new THREE.Vector3();
