@@ -121,7 +121,6 @@ export const PICKUP: BodyStyle = {
       { view: "side", points: [[-0.613, 1.142], [-2.125, 1.142]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[-2.089, 1.114], [-2.089, 0.635]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[1.768, 1.071], [1.341, 1.114], [0.913, 1.142], [0.713, 1.135]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
-      { view: "top", points: [[1.03, 0], [1.022, 0.608], [1.858, 0.608], [1.858, 0]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "top", points: [[1.843, 0], [1.052, 0]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
       { view: "top", points: [[1.74, 0.388], [1.374, 0.396], [1.037, 0.403]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },
       { view: "top", points: [[1.858, 0.403], [1.447, 0.418], [1.008, 0.432]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },

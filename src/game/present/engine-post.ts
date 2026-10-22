@@ -385,6 +385,16 @@ export class PostFX {
     return Promise.all(jobs);
   }
 
+  /** Link `scene` for this HDR target alone: for what draws only at the post tiers (the car finish), whose canvas twin never draws. */
+  warmHdr(scene: THREE.Scene, camera: THREE.Camera): Promise<unknown> {
+    const r = this.renderer;
+    const prev = r.getRenderTarget();
+    r.setRenderTarget(this.sceneRT);
+    const job = r.compileAsync(scene, camera);
+    r.setRenderTarget(prev);
+    return job;
+  }
+
   /**
    * Draws every pass of the chain once, to nothing (the caller holds a zero scissor on the canvas): each bloom target gets its storage and each
    * pass its first-draw link check and uniform lookup here, under the boot veil, not in the frame a tier with the chain is first picked

@@ -18,6 +18,8 @@
  * (and crop) from `scripts/landing-views/<style>.json`, and for side and top the span from the reference's own ends (the spec
  * length). `--solve` fits that iso camera to the picked wheels and stores it; `--grid <png>` writes the crop with a pixel grid
  * to pick them on. `--camera-out` writes the view's camera spec (`trace-camera.mjs`), which headless-frame's landing shots take.
+ * `--plate-out <png>` writes the reference alone on the overlay's canvas (landing-shots' pairs). JSON `zoom`: canvas pixels per
+ * reference pixel; side `refContactsPx`: where the reference's tyres touch the ground on that canvas.
  * `--ref-span x0,x1[=m]`: two pixel columns of the reference (bumper tips with `--anchor ends`, the default, or wheel centres with
  * `--anchor wheels`) are `m` metres apart (default: the style's spec `dims` length, or wheelbase; width or track in the front and
  * rear views). A side view then stands the reference's two tyres (found from its bottom edge) either side of z = 0, as car
@@ -38,7 +40,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { CarStage, OMIT_PARTS, VIEWS, ViewPort, bareFrame, beltOf, centreOnHubs, openGame, refFrame, traceView } from "./trace-core.mjs";
+import { CarStage, OMIT_PARTS, VIEWS, ViewPort, bareFrame, beltOf, centreOnHubs, openGame, refFrame, traceView, writePlate } from "./trace-core.mjs";
 import { orthoSpec } from "./trace-camera.mjs";
 import { REFS_DIR, isoTrace, loadLanding, writeGrid } from "./trace-landing.mjs";
 import { loadRef, refLayers } from "./trace-ref.mjs";
@@ -71,6 +73,7 @@ const { values } = parseArgs({
     zoom: { type: "string" },
     stations: { type: "string", default: "16" },
     "camera-out": { type: "string" },
+    "plate-out": { type: "string" },
     paint: { type: "string" },
     out: { type: "string" },
   },
@@ -101,7 +104,7 @@ const ref = refFile === undefined ? null : await loadRef(game, refFile, crop);
 if (values.grid !== undefined) await writeGrid(game, ref, resolve(values.grid));
 const stage = new CarStage(game, values.paint === undefined ? undefined : Number.parseInt(values.paint.replace(/^#/, ""), 16));
 const dims = stage.build(values.style, carClass, omit);
-const fit = iso ? await isoTrace(game, stage, dims, ref, view, { style: values.style, entry, solve: values.solve, lift: game.CLASSES[carClass].lift, out }) : await orthoView();
+const fit = iso ? await isoTrace(game, stage, dims, ref, view, { style: values.style, entry, solve: values.solve, lift: game.CLASSES[carClass].lift, out, plateOut: values["plate-out"] }) : await orthoView();
 if (values["camera-out"] !== undefined) {
   mkdirSync(dirname(resolve(values["camera-out"])), { recursive: true });
   writeFileSync(resolve(values["camera-out"]), `${JSON.stringify(fit.camera)}\n`);
@@ -135,7 +138,11 @@ async function orthoView() {
   const marks = { hubs, belt: beltOf(frame, layers.glass) };
   const opts = { out, points: values.points, stations, rows: V_STATIONS };
   const fit = await traceView(game, stage, new ViewPort(game, frame.W, frame.H), frame, layers, marks, opts);
-  return { size: `${frame.W}x${frame.H}`, pxPerM: Number(frame.ppm.toFixed(2)), refHubs: hubs, shadowPx: layers.shadowPx, ...fit, camera: orthoSpec(frame, VIEWS[view]) };
+  if (values["plate-out"] !== undefined) await writePlate(game, frame.W, frame.H, layers.plate, resolve(values["plate-out"]));
+  // The tyres' contacts, not their centres: the circle through the bottom edge reads the radius high where the arch meets the tyre.
+  const contact = (h) => [Number(frame.u(h.z).toFixed(1)), Number(frame.v(hubs.ground).toFixed(1))];
+  const refContactsPx = hubs === null ? null : { front: contact(hubs.front), rear: contact(hubs.rear) };
+  return { size: `${frame.W}x${frame.H}`, zoom, pxPerM: Number(frame.ppm.toFixed(2)), refHubs: hubs, refContactsPx, shadowPx: layers.shadowPx, ...fit, camera: orthoSpec(frame, VIEWS[view]) };
 }
 
 /** The spec length the reference span marks when it names none (`BodyStyle.dims`). */

@@ -10,7 +10,7 @@ import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
 import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop, readTyreSides } from "./car-air-points.ts";
-import { cageLift, centreY } from "./car-cage-rig.ts";
+import { centreLift, centreY } from "./car-cage-rig.ts";
 
 /** Crossings `wreckTop` let a wreck skip since `takeCrossingsSkipped` last read (a field of a const: the bench's work counter reads and zeroes it once a slice). */
 const prune = { skipped: 0 };
@@ -552,13 +552,13 @@ export const wreckInvI = new THREE.Vector3();
 /** `car`'s rigid centre in its frame: a wreck's masses' (`wreckCentre`), else its frame's stock centre lifted with its body (`centreY`). */
 export function rigidCentre(car: Pick<DeformableCar, "deform" | "frame" | "group" | "style">): THREE.Vector3 {
   if (car.deform.massActive) return wreckCentre(car);
-  const lift = cageLift(car);
+  const lift = centreLift(car);
   return lift === 0 ? car.frame.centre : _liftedCentre.set(0, car.frame.comY + lift, 0);
 }
 
 /**
  * A wreck's rigid body is its masses': its centre of mass is their centroid (frame coordinates, `_wreckCentre`; `velocity` is the
- * masses' mean, so the body must turn about it) lifted with the drawn body by its class's lift (`cageLift`: the masses stand on the
+ * masses' mean, so the body must turn about it) lifted with the drawn body (`centreLift`: the masses stand on the
  * stock frame, the body they are drawn as over it), and its inverse yaw inertia per unit mass their spread about it (`_wreckInvI`, the
  * rest the car box's). Returns the centre.
  */
@@ -590,7 +590,7 @@ export function wreckCentre(car: Pick<DeformableCar, "deform" | "frame" | "group
   for (const n of ms) if (n.dynamic) inertia += n.mass * ((n.local.x - cx) ** 2 + (n.local.z - cz) ** 2);
   const invI = car.frame.invI;
   wreckInvI.set(invI.x, inertia > 1e-9 ? m / inertia : invI.y, invI.z);
-  return _wreckCentre.set(cx, cy / m + cageLift(car), cz);
+  return _wreckCentre.set(cx, cy / m + centreLift(car), cz);
 }
 
 /**

@@ -196,12 +196,12 @@ describe("given a car's batched part seats", () => {
 
   test("when a car goes past the mid distance, then the small seats and the kit behind the glass leave layer 0 and the cabin and bay stay; past the far distance they go too; back at 10 m, all are on again", () => {
     const { camera, detail, car } = stage();
-    const probe = car(10);
+    const probe = car(10, "monster");
     const interior = probe.partSeats.filter((s) => s.name === INTERIOR_MESH);
     const small = probe.partSeats.filter((s) => s.name === SMALL_PART_SEAT);
     assert.equal(interior.map((s) => s.kind).join(), [PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.engineBay, PART_KIND.seatFront].join(), "the cabin, both front seats, the rear bench, the wheel and the bay go with the far cut");
     assert.equal(small.length + interior.length, probe.partSeats.length, "every seat is one or the other");
-    assert.equal(small.length, 8, "door cards, mirrors, grille, tail trim and the two crash bars are the small-part seats the mid cut takes by name");
+    assert.equal(small.length, 11, "door cards, mirrors, grille, tail trim, the two crash bars and a lifted truck's frame and two axles are the small-part seats the mid cut takes by name");
     const move = (at: number): void => {
       probe.group.position.z = at;
       probe.group.updateMatrixWorld(true);

@@ -733,6 +733,25 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(names.join(",") === "a,rear,sail,a,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
   });
 
+  it("when a style blacks out its cowl, then the deck's crown from 5 cm under the windshield's foot to 5 cm under the hood's rear edge turns primer-dark, and nothing else does", () => {
+    const sedan = CAR_STYLES.sedan;
+    // The hood's rear edge 6 cm ahead of the glass's foot: a strip of deck shows between them.
+    const open: BodyStyle = { ...sedan, blackout: undefined, hood: { ...sedan.hood, z0: sedan.windshield.base[1] + 0.06 } };
+    const [was, now] = [makeChassisGeometry(open), makeChassisGeometry({ ...open, blackout: { cowl: true } })];
+    const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
+    const { ring, slices } = now.userData.loft as { ring: number; slices: number };
+    const [from, to] = [sedan.windshield.base[1] - 0.05, open.hood.z0 + 0.05];
+    let turned = 0;
+    for (let v = 0; v < primer(now).count; v++) {
+      if (primer(now).getX(v) === primer(was).getX(v)) continue;
+      turned++;
+      const z = now.getAttribute("position").getZ(v);
+      const onCrown = v < ring * slices && (v % ring === 0 || v % ring === ring - 1);
+      assert.ok(onCrown && z >= from - 1e-6 && z <= to + 1e-6 && primer(now).getX(v) === 1, `vertex ${v} (ring point ${v % ring}) at z ${z} turned to ${primer(now).getX(v)}: off the cowl's crown [${from}, ${to}]`);
+    }
+    assert.ok(turned >= 4, `the cowl's crown on both sides at two slices at least: ${turned} vertices turned`);
+  });
+
   it("when a style leans its B-pillar and its divider, then the drawn pillars take their bands at the belt and the top, the side panes tuck under the B-pillar's edges, and the cage keeps its bands", () => {
     const wagon = CAR_STYLES.wagon;
     const m = wagon.midPillarZ!;
@@ -1024,8 +1043,8 @@ function readBulge(hood: THREE.BufferGeometry, style: BodyStyle): { raised: THRE
     if (primer !== null && primer.getX(i) === 1) {
       mouth.expandByPoint(p);
       forward = Math.min(forward, nrm.getZ(i));
-    } else if (p.y - deckTopY(p.x, p.z, style) > RAISED_M) raised.expandByPoint(p);
-    peak = Math.max(peak, p.y - deckTopY(0, p.z, style));
+    } else if (p.y - deckTopY(p.x, p.z, style, true) > RAISED_M) raised.expandByPoint(p);
+    peak = Math.max(peak, p.y - deckTopY(0, p.z, style, true));
   }
   return { raised, peak, mouth, forward };
 }
@@ -1628,7 +1647,7 @@ function openingCrossings(style: BodyStyle): string[] {
   if (b.kind === "lid" && !roofHinged(b)) {
     for (let z = b.z1 + LID_RIM + (b.drop ? LID_FOLD : 0); z <= b.z0 - LID_RIM; z += OPEN_GRID) {
       const half = sampleSlice(z, style.profile).hw - LID_EDGE;
-      for (let x = -half; x <= half; x += OPEN_GRID) at(bodyHit(body, [x, deckTopY(x, z, style) + 0.05, z], [0, -1, 0], OPEN_DEPTH));
+      for (let x = -half; x <= half; x += OPEN_GRID) at(bodyHit(body, [x, deckTopY(x, z, style, false) + 0.05, z], [0, -1, 0], OPEN_DEPTH));
     }
   }
   const face = faceOpening(style);

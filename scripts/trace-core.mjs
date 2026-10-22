@@ -325,6 +325,12 @@ export function composeShot(game, W, H, plate, carRgba, masks) {
   return { canvas, ctx };
 }
 
+/** The reference alone over white on the W x H canvas its overlay uses (landing-shots' pair: its left half), written to `out`. */
+export async function writePlate(game, W, H, plate, out) {
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, await composeShot(game, W, H, plate, new Uint8ClampedArray(W * H * 4), {}).canvas.encode("png"));
+}
+
 /** Grid lines every GRID_M in the view's world axes, labelled at whole metres. */
 function drawGrid(ctx, frame) {
   const { W, H, axes } = frame;
