@@ -7,7 +7,7 @@ import { firePiston, pistonLocality, PISTON_DENT_RADIUS, PISTON_FAR, type Piston
 import { transformSkinPointInto } from "../deform/shape-match.test-util.ts";
 import { REST_SHIFT, type ShapeCluster } from "../deform/shape-match.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { RES_SLOTS, type DeformMode, type MassNode } from "../deform/deform-rig.ts";
+import { RES_SLOTS, type DeformMode, type MassNode, type RigTables } from "../deform/deform-rig.ts";
 import { forModes } from "../vehicle/test-support.ts";
 
 /** The deformer internals the reference skin reads (private in production). */
@@ -22,6 +22,7 @@ type Internals = {
   deepCrush: boolean;
   bidirectional: boolean;
   masses: MassNode[];
+  rig: RigTables;
   clusters: ShapeCluster[];
   cages: { corners: THREE.Vector3[]; restCorners: THREE.Vector3[]; min: THREE.Vector3; size: THREE.Vector3 }[];
   cageByPart: Map<string, { corners: THREE.Vector3[]; min: THREE.Vector3; size: THREE.Vector3 }>;
@@ -173,11 +174,11 @@ function referenceSkin(d: Internals): Float32Array {
       py = ry + (py - ry) * t;
       pz = rz + (pz - rz) * t;
     }
-    if (ry > 1.05 && !d.deepCrush) py = THREE.MathUtils.clamp(py, ry - 0.1, ry + 0.08);
-    if (ry < 0.55) {
+    if (ry > d.rig.roofClampY && !d.deepCrush) py = THREE.MathUtils.clamp(py, ry - 0.1, ry + 0.08);
+    if (ry < d.rig.archTop) {
       for (const m of d.masses) {
         if (!m.hub) continue;
-        if (Math.hypot(rx - m.rest.x, rz - m.rest.z) > 0.4) continue;
+        if (Math.hypot(rx - m.rest.x, rz - m.rest.z) > d.rig.archPlant) continue;
         const hx = m.popped ? rx + m.local.x - m.rest.x : rx;
         const hz = m.popped ? rz + m.local.z - m.rest.z : rz;
         const keep = (m.popped ? 0.15 : 0.82) * Math.max(0, 1 - Math.hypot(px - hx, pz - hz) / ARCH_YIELD_M);
@@ -319,7 +320,7 @@ describe("given a car tapped at 3 km/h by a piston", () => {
       for (let i = 0; i < d.vertexCount; i++) {
         const rx = d.restPos[i * 3]!;
         const rz = d.restPos[i * 3 + 2]!;
-        if (d.restPos[i * 3 + 1]! >= 0.55 || !d.masses.some((m) => m.hub && Math.hypot(rx - m.rest.x, rz - m.rest.z) <= 0.4)) continue;
+        if (d.restPos[i * 3 + 1]! >= d.rig.archTop || !d.masses.some((m) => m.hub && Math.hypot(rx - m.rest.x, rz - m.rest.z) <= d.rig.archPlant)) continue;
         worst = Math.max(worst, Math.hypot(now[i * 3]! - rx, now[i * 3 + 2]! - rz));
       }
       assert.ok(worst <= 0.03, `arch skin moved ${worst.toFixed(3)} m in plan`);
@@ -339,7 +340,7 @@ function onSkinAnchors(car: DeformableCar, shot: PistonShotResult, tap: PistonSh
   const struck = shot.struck.map((s) => shot.names.indexOf(s.name));
   const share = new Float64Array(struck.length);
   let farSkin = 0;
-  for (let v = 0, k = 0; k < shot.skinRest.length; v++, k += 3) {
+  for (let v = 0, k = 0; k < shot.bodyVerts * 3; v++, k += 3) {
     const rx = shot.skinRest[k]!;
     const rz = shot.skinRest[k + 2]!;
     const dent = Math.hypot(rx - sx, shot.skinRest[k + 1]! - PISTON.faceY, rz - sz) < PISTON_DENT_RADIUS;

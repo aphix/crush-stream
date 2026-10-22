@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { beginFakeFall, DeformableCar } from "../vehicle/car.ts";
 import { BOOST } from "../vehicle/car-drive.ts";
-import { COMPACTOR } from "../scenes/compactor.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 import { PISTON_ORBIT_RATE, pistonBearing } from "../present/engine-pistons.ts";
 import { VAPOR_DEPTH, edgeAction, fleetEmptied, layoutFleet, layoutDerby, MAX_CARS, respawnSlot } from "../scenes/fleet.ts";
@@ -359,7 +358,6 @@ export abstract class EngineScenes extends EngineMinigames {
     this.sceneSeed = this.pinnedSeed ?? Math.floor(Math.random() * 0x1000000);
     // Under the fade's black or not, every transition, loop and reset empties the last scene here, before the scene spawns its cars.
     this.clearScene();
-    this.compactor.face = COMPACTOR.startFace;
     this.compactFxAt = 0;
     // Built on first entry, not at boot: its programs link with this switch (`queueWarm`), never in the boot warm-up.
     if (this.showRange && !this.rangeArt) {

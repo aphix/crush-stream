@@ -41,6 +41,12 @@ export function buildCar(style: CarStyleId, cls: VehicleClassId): DeformableCar 
   return car;
 }
 
+/** What `o` draws: a mesh's geometry, or a part seat's own `drawn` part while its `showIf` holds (`PartBatch.sync`); null for anything else. */
+export function drawnGeometry(o: THREE.Object3D): THREE.BufferGeometry | null {
+  if (o instanceof PartSeat) return o.showIf === null || o.showIf() ? o.drawn : null;
+  return o instanceof THREE.Mesh ? o.geometry : null;
+}
+
 /** Writes the owed skin and returns every visible mesh triangle of `car` in its own frame (x, y, z per vertex, 9 numbers a triangle). */
 export function drawnTriangles(car: DeformableCar): Float32Array {
   car.flushDeferredSkin();
@@ -52,11 +58,12 @@ export function drawnTriangles(car: DeformableCar): Float32Array {
   const v = new THREE.Vector3();
   const m = new THREE.Matrix4();
   car.group.traverse((o) => {
-    if (!(o instanceof THREE.Mesh || o instanceof PartSeat)) return;
+    const geometry = drawnGeometry(o);
+    if (geometry === null) return;
     for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p.name === "deform-rig" || !p.visible) return;
-    const pos = o.geometry.getAttribute("position");
+    const pos = geometry.getAttribute("position");
     if (!pos || pos.count === 0) return;
-    const index = o.geometry.index;
+    const index = geometry.index;
     const n = index ? index.count : pos.count;
     const out = new Float32Array(n * 3);
     m.multiplyMatrices(inverse, o.matrixWorld);

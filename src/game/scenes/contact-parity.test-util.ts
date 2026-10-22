@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { MassName } from "../kernel/rig-spec.ts";
-import { COMPACTOR, CompactorRig } from "./compactor.ts";
+import { CompactorRig } from "./compactor.ts";
 import { strikeCar, bodyHit, type ContactBox } from "../contact/external-contact.ts";
 import { launch as launchAt, makeCar, makeWorld, pooledCar, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { sliceSpeed } from "../contact/sat.ts";
@@ -300,7 +300,7 @@ function pressFrame(p: CompactorRig, target: number): void {
 /** Close the press (`CompactorRig`, the engine's) until `until` holds or the plates reach max. */
 export function pressUntil(until: (p: CompactorRig) => boolean): { state: CarState; face: number; work: number } {
   const p = new CompactorRig(parkCar());
-  for (let f = 0; f < 60 * 8 && !until(p); f++) pressFrame(p, COMPACTOR.maxFace);
+  for (let f = 0; f < 60 * 8 && !until(p); f++) pressFrame(p, p.faces.maxFace);
   // Hold the plates so the structure settles at that face.
   for (let f = 0; f < 30; f++) pressFrame(p, p.face);
   return { state: carState(p.car!), face: p.face, work: p.work };
@@ -364,7 +364,7 @@ class ForcePress extends CompactorRig {
     const start = (d: Delivered) => d.t[d.lost.findIndex((j) => j > 0.5)]!;
     this.tau = Math.min(start(force.nose), start(force.tail));
     this.end = Math.max(force.nose.t[force.nose.t.length - 1]!, force.tail.t[force.tail.t.length - 1]!);
-    const face = COMPACTOR.bumperZ + 0.02;
+    const face = this.faces.bumperZ + 0.02;
     this.plates = [
       { box: this.front, end: 1, given: force.nose, face, u: 0 },
       { box: this.rear, end: -1, given: force.tail, face, u: 0 },
@@ -411,8 +411,8 @@ class ForcePress extends CompactorRig {
       car.syncPose(dt);
     }
     for (const p of this.plates) {
-      if (this.spent || p.face <= COMPACTOR.maxFace) p.u = 0;
-      p.face = Math.max(COMPACTOR.maxFace, p.face - p.u * dt);
+      if (this.spent || p.face <= this.faces.maxFace) p.u = 0;
+      p.face = Math.max(this.faces.maxFace, p.face - p.u * dt);
       this.work += p.u * (p.end > 0 ? hit.frontJ : hit.rearJ);
     }
     this.face = Math.min(this.plates[0]!.face, this.plates[1]!.face);
@@ -424,7 +424,7 @@ class ForcePress extends CompactorRig {
 /** Push the press's plates with the force a sandwich's strikers delivered, until it is spent; the car's state after it settles. */
 export function pressByForce(force: SandwichForce): { state: CarState; face: number; work: number } {
   const p = new ForcePress(parkCar(), force);
-  for (let f = 0; f < 60 * 12 && !p.spent; f++) pressFrame(p, COMPACTOR.maxFace);
+  for (let f = 0; f < 60 * 12 && !p.spent; f++) pressFrame(p, p.faces.maxFace);
   for (let f = 0; f < 30; f++) pressFrame(p, p.face);
   return { state: carState(p.car!), face: p.face, work: p.work };
 }

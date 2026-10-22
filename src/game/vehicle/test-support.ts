@@ -33,6 +33,14 @@ export function mass<M extends { name: string }>(d: { masses: readonly M[] }, na
   return m;
 }
 
+type Placed = { local: THREE.Vector3; rest: THREE.Vector3 };
+
+/** How much nearer (m) mass `m` stands to `cell` along `axis` than at rest: the crush between them, read against the car's own rest gap. */
+export function closedOn(m: Placed, cell: Placed, axis: "x" | "y" | "z"): number {
+  const restGap = m.rest[axis] - cell.rest[axis];
+  return Math.sign(restGap) * (restGap - (m.local[axis] - cell.local[axis]));
+}
+
 // node:assert deep-diffs both sides on failure (Myers, O((N+M)·D)); two big float arrays once took 14.7 GB.
 // These report one mismatch instead of a diff (ARCHITECTURE C9).
 

@@ -6,6 +6,7 @@ import { GRAVITY, KPH_PER_MS } from "../kernel/constants.ts";
 import { CRASH, detAtan2 } from "../kernel/physics-core.js";
 import { PISTON_SHOT } from "./constants.ts";
 import { MU_TYRE } from "../world/surfaces.ts";
+import { MASS_SPECS, type MassName } from "../kernel/rig-spec.ts";
 
 type MassNode = StreamedDeformation["masses"][number];
 
@@ -68,30 +69,30 @@ export const PISTON = {
 
 type PistonPhase = "idle" | "accel" | "coast" | "retract";
 
-type Axis = { ax: number; az: number; nx: number; nz: number };
+type Axis = { nx: number; nz: number; aim: readonly MassName[] };
 
 const S = Math.SQRT1_2;
 /**
- * Axis point and inward unit per piston (car frame at rest). Corner axes run
- * at 45° between the bumper and wing particles of that corner (0.33 m either
- * side); mid axes cross the centre of the side.
+ * Inward unit per piston (car frame) and the particles its axis runs through at rest: a corner's 45° axis between its bumper
+ * and wing particles (its hub at the rear, which has no wing), a mid axis through the side's door or the bumper pair.
  */
 const AXES: Readonly<Record<PistonId, Axis>> = {
-  frontLeft: { ax: -0.945, az: 2.015, nx: S, nz: -S },
-  front: { ax: 0, az: 2.1, nx: 0, nz: -1 },
-  frontRight: { ax: 0.945, az: 2.015, nx: -S, nz: -S },
-  right: { ax: 0.88, az: 0.08, nx: -1, nz: 0 },
-  rearRight: { ax: 0.945, az: -2.015, nx: -S, nz: S },
-  rear: { ax: 0, az: -2.1, nx: 0, nz: 1 },
-  rearLeft: { ax: -0.945, az: -2.015, nx: S, nz: S },
-  left: { ax: -0.88, az: 0.08, nx: 1, nz: 0 },
+  frontLeft: { nx: S, nz: -S, aim: ["bumperFL", "wingFL"] },
+  front: { nx: 0, nz: -1, aim: ["bumperFL", "bumperFR"] },
+  frontRight: { nx: -S, nz: -S, aim: ["bumperFR", "wingFR"] },
+  right: { nx: -1, nz: 0, aim: ["doorR"] },
+  rearRight: { nx: -S, nz: S, aim: ["bumperRR", "hubRR"] },
+  rear: { nx: 0, nz: 1, aim: ["bumperRL", "bumperRR"] },
+  rearLeft: { nx: S, nz: S, aim: ["bumperRL", "hubRL"] },
+  left: { nx: 1, nz: 0, aim: ["doorL"] },
 };
 
 export class PistonHead {
   readonly id: PistonId;
   readonly index: number;
-  readonly ax: number;
-  readonly az: number;
+  /** Axis point (car frame at rest): the mean rest of the particles it aims at (`aim`), the platform's until a car is attached. */
+  ax = 0;
+  az = 0;
   readonly nx: number;
   readonly nz: number;
   /** Lateral unit across the face (n rotated +90° about Y). */
@@ -127,12 +128,25 @@ export class PistonHead {
     const a = AXES[id];
     this.id = id;
     this.index = index;
-    this.ax = a.ax;
-    this.az = a.az;
     this.nx = a.nx;
     this.nz = a.nz;
     this.tx = -a.nz;
     this.tz = a.nx;
+    this.aim(MASS_SPECS.map((m) => ({ name: m.name, rest: { x: m.rest[0], z: m.rest[2] } })));
+  }
+
+  /** Put the axis through the mean rest of the particles it aims at, out of `masses` (a car's, or the platform's). */
+  aim(masses: readonly { name: string; rest: { x: number; z: number } }[]): void {
+    const names = AXES[this.id].aim;
+    let x = 0;
+    let z = 0;
+    for (const name of names) {
+      const m = masses.find((n) => n.name === name)!;
+      x += m.rest.x;
+      z += m.rest.z;
+    }
+    this.ax = x / names.length;
+    this.az = z / names.length;
   }
 
   get firing(): boolean {
@@ -218,6 +232,32 @@ export class PistonHead {
 
 const _p = new THREE.Vector3();
 const _n = new THREE.Vector3();
+const _toCar = new THREE.Matrix4();
+
+/**
+ * Car-frame x, y, z of every vertex of the paint a face can meet: the body's, then each flush part's (lids, door skins, bumpers)
+ * as posed; a part torn off the car reads NaN.
+ */
+export function paintPoints(car: DeformableCar): Float32Array {
+  car.group.updateMatrixWorld(true);
+  const toCar = new THREE.Matrix4().copy(car.group.matrixWorld).invert();
+  const meshes = [car.body, ...car.flushCasters];
+  const out = new Float32Array(meshes.reduce((n, m) => n + m.geometry.getAttribute("position").count * 3, 0));
+  let at = 0;
+  for (const mesh of meshes) {
+    const pos = mesh.geometry.getAttribute("position");
+    let onCar = false;
+    for (let p = mesh.parent; p && !onCar; p = p.parent) onCar = p === car.group;
+    if (!onCar) {
+      out.fill(NaN, at, at + pos.count * 3);
+      at += pos.count * 3;
+      continue;
+    }
+    _toCar.multiplyMatrices(toCar, mesh.matrixWorld);
+    for (let i = 0; i < pos.count; i++, at += 3) _p.fromBufferAttribute(pos, i).applyMatrix4(_toCar).toArray(out, at);
+  }
+  return out;
+}
 
 function shiftVelocities(d: StreamedDeformation, dx: number, dz: number): void {
   for (const m of d.masses) {
@@ -295,19 +335,19 @@ export class PistonRig {
     if (this.car && !this.busy) this.measure(this.car);
   }
 
-  /** Take a car parked at the origin, yaw 0, at rest; measure each face's paint and contact pad. */
+  /** Take a car parked at the origin, yaw 0, at rest; aim each axis at its particles and measure each face's paint and contact pad. */
   attach(car: DeformableCar): void {
     this.car = car;
     car.parked = true;
     this.cell = car.deform.masses.find((m) => m.name === "cell") ?? null;
     this.time = 0;
     this.hitFresh = false;
+    for (const h of this.heads) h.aim(car.deform.masses);
     this.measure(car);
   }
 
   private measure(car: DeformableCar): void {
-    const pos = car.body.geometry.getAttribute("position") as THREE.BufferAttribute;
-    const arr = pos.array as Float32Array;
+    const arr = paintPoints(car);
     const hw = this.config.faceWidth * 0.5;
     const y0 = PISTON.faceY - this.config.faceHeight * 0.5;
     const y1 = PISTON.faceY + this.config.faceHeight * 0.5;
@@ -317,7 +357,7 @@ export class PistonRig {
         const x = arr[i]!;
         const y = arr[i + 1]!;
         const z = arr[i + 2]!;
-        if (y < y0 || y > y1 || Math.abs(h.lateral(x, z)) > hw) continue;
+        if (!(y >= y0 && y <= y1) || Math.abs(h.lateral(x, z)) > hw) continue;
         skin = Math.min(skin, h.along(x, z));
       }
       let reach = Infinity;
