@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
-import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, st } from "./car-styles/platform.ts";
+import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
 import { ROCKER, cantY, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
@@ -1972,5 +1972,25 @@ describe("given a style with privacy glass", () => {
     } finally {
       hatch.privacyGlass = was;
     }
+  });
+});
+
+describe("given a pull handle for a style's side details", () => {
+  it("when it is drawn from z 0.04 to -0.15 at y 0.76, 5 cm tall, then its pocket is a recessed pill (rounded ends, no corner sharper than 35°) filling that span, with a raised rounded bar along its middle", () => {
+    const [z0, z1, y, h] = [0.04, -0.15, 0.76, 0.05];
+    const { patches, lines } = pullHandle(z0, z1, y, h);
+    const [pocket] = patches;
+    const [bar] = lines;
+    assert.ok(pocket !== undefined && pocket.view === "side" && pocket.depth < 0 && pocket.cavity > 0, "one recessed, darkened side pocket");
+    const pts = pocket.points;
+    const zs = pts.map(([z]) => z);
+    const ys = pts.map(([, py]) => py);
+    assertSameNumbers([Math.min(...zs), Math.max(...zs), Math.min(...ys), Math.max(...ys)], [z1, z0, y - h / 2, y + h / 2], "the pocket fills the span", 1e-6);
+    for (let i = 0; i < pts.length; i++) {
+      const [a, b, c] = [pts[(i + pts.length - 1) % pts.length]!, pts[i]!, pts[(i + 1) % pts.length]!];
+      const turn = (new THREE.Vector2(b[0] - a[0], b[1] - a[1]).angleTo(new THREE.Vector2(c[0] - b[0], c[1] - b[1])) * 180) / Math.PI;
+      assert.ok(turn <= 35, `the outline turns ${turn.toFixed(1)}° at point ${i}: a corner, not a rounded end`);
+    }
+    assert.ok(bar !== undefined && bar.profile === "u" && bar.depth > 0 && bar.points.every(([z, py]) => py === y && z >= z1 && z <= z0), "a raised rounded bar inside the pocket, along its middle");
   });
 });

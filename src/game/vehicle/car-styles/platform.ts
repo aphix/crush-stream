@@ -1,4 +1,5 @@
 import { PLATFORM_TYRE } from "../../kernel/rig-spec.ts";
+import { detCos, detSin } from "../../kernel/physics-core.js";
 import type { BodyStyle, ProfileStation } from "../car-variants.ts";
 
 export function st(z: number, hw: number, yBelt: number, yRoof = yBelt, cabinHw = 0.5, cabin = 0): ProfileStation {
@@ -67,3 +68,35 @@ export const PLATFORM_HARDPOINTS = {
   aPillarFoot: 0.76,
   seats: { front: [0.36, 0.44, 0.08], rear: [0.46, -0.47] },
 } as const satisfies Pick<BodyStyle, "windshield" | "bPillar" | "belt" | "rocker" | "arch" | "hood" | "bumpers" | "door" | "aPillarFoot" | "seats">;
+
+type Details = NonNullable<BodyStyle["details"]>;
+
+/** A pull handle's pocket: recessed this deep (m) over a rim this wide, half dark (the references' slim handles sit in a shadowed dish). */
+const HANDLE_POCKET = { depth: -0.004, rim: 0.004, cavity: 0.45 } as const;
+/** Its bar: a rounded bead standing this proud (m), this share of the pocket's height wide. */
+const HANDLE_BAR = { depth: 0.004, share: 0.45 } as const;
+/** Points per rounded end of the pocket's outline. */
+const HANDLE_END_POINTS = 6;
+
+/**
+ * A slim pull handle in a car's side `details`, as the references draw them (not a box outline): a pill-shaped pocket from z `z0` to
+ * `z1` (m), `height` (m) tall, centred at `y`, recessed and darkened, and a raised rounded bar along its middle. Spread its `lines`
+ * and `patches` into the style's own.
+ */
+export function pullHandle(z0: number, z1: number, y: number, height: number): Details {
+  const r = height / 2;
+  const [front, rear] = [Math.max(z0, z1) - r, Math.min(z0, z1) + r];
+  const outline: [number, number][] = [];
+  for (let k = 0; k <= HANDLE_END_POINTS; k++) {
+    const a = -Math.PI / 2 + (Math.PI * k) / HANDLE_END_POINTS;
+    outline.push([front + r * detCos(a), y + r * detSin(a)]);
+  }
+  for (let k = 0; k <= HANDLE_END_POINTS; k++) {
+    const a = Math.PI / 2 + (Math.PI * k) / HANDLE_END_POINTS;
+    outline.push([rear + r * detCos(a), y + r * detSin(a)]);
+  }
+  return {
+    patches: [{ view: "side", points: outline, ...HANDLE_POCKET }],
+    lines: [{ view: "side", points: [[rear, y], [front, y]], width: Math.max(0.006, HANDLE_BAR.share * height), depth: HANDLE_BAR.depth, profile: "u", cavity: 0 }],
+  };
+}
