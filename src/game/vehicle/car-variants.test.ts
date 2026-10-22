@@ -1129,6 +1129,53 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(proudOf({ ...coupe, door: { ...coupe.door, proud: undefined } }) > FLUSH, "the control: the platform's skin stands proud");
   });
 
+  it("when the coupe's drawn A-post is seated on its deck (pillars.aSeat), then no level ray in from the side between the fender's top and the belt under the post's foot sees into the cabin, and the cage is unchanged", () => {
+    /** The post's foot ahead of the door's cut [z] (m), and the band between the deck there (.876-.887) and the belt (.913) [y]. */
+    const ZONE = { z: [0.65, 0.73], y: [0.88, 0.91] } as const;
+    /** A level ray in from the side whose first hit lies inboard of this (m) has passed under the post (its inner face x .656) into the cabin. */
+    const CABIN_X = 0.6;
+    const coupe = CAR_STYLES.coupe;
+    const seen = (s: BodyStyle) => {
+      const body = new THREE.Mesh(makeChassisGeometry(s, "drawn"), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+      const ray = new THREE.Raycaster();
+      let cabin = 0;
+      for (let z = ZONE.z[0]; z <= ZONE.z[1]; z += 0.005) {
+        for (let y = ZONE.y[0]; y <= ZONE.y[1]; y += 0.005) {
+          ray.set(new THREE.Vector3(2, y, z), new THREE.Vector3(-1, 0, 0));
+          const hit = ray.intersectObject(body)[0];
+          if (hit === undefined || hit.point.x < CABIN_X) cabin++;
+        }
+      }
+      return cabin;
+    };
+    const without: BodyStyle = { ...coupe, pillars: { ...coupe.pillars, aSeat: undefined } };
+    assert.ok(seen(without) > 0, "the control: without the seat the gap under the foot shows the cabin");
+    assert.ok(seen(coupe) === 0, `${seen(coupe)} level rays under the A-post's foot see into the cabin`);
+    const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
+    assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(coupe, "cage")), "the cage moved with the drawn seat");
+  });
+
+  it("when the coupe's body is drawn (door.shutCrease), then at each end of its door cut the side's shoulder and feature line keep the panel's own normal up to the shut line, not rolled off by the cut's ramp into a round cap", () => {
+    /** Within this (°) of the same points one ring further onto the panel: the ramp's faces tilted them 17-73°. */
+    const PANEL_TURN = 10;
+    /** The side's ring points from the shoulder down to the feature line (half-ring points 2 to 4, +x side). */
+    const SIDE = [2, 3, 4] as const;
+    const coupe = CAR_STYLES.coupe;
+    const turns = (s: BodyStyle) => {
+      const body = makeChassisGeometry(s, "drawn");
+      const { ring, slices } = body.userData.loft as { ring: number; slices: number };
+      const [pos, normal] = [body.getAttribute("position"), body.getAttribute("normal")];
+      const zs = Array.from({ length: slices }, (_, k) => pos.getZ(k * ring));
+      return s.door.aperture.flatMap((z, end) => {
+        const at = zs.findIndex((v) => Math.abs(v - z) < 1e-6);
+        const panel = end === 0 ? at - 1 : at + 1;
+        return SIDE.map((j) => THREE.MathUtils.radToDeg(new THREE.Vector3().fromBufferAttribute(normal, at * ring + ring - 1 - j).angleTo(new THREE.Vector3().fromBufferAttribute(normal, panel * ring + ring - 1 - j))));
+      });
+    };
+    assert.ok(Math.max(...turns({ ...coupe, door: { ...coupe.door, shutCrease: undefined } })) > PANEL_TURN, "the control: without the crease the ramp rolls the panel's end off");
+    assert.ok(Math.max(...turns(coupe)) <= PANEL_TURN, `the panel's end turns ${turns(coupe).map((t) => t.toFixed(1)).join(", ")}° off its next ring`);
+  });
+
   it("when a drawn A-post 10 cm wide or more is read at a station under the roof, then its outer face turns 25° or more across its width, outboard on both sides: a curved post from the side glass to the windshield, not a flat plank (the plank turned 15-20°)", () => {
     /** A post section's outer face in ring points (`postSection`: three chords a corner, then the crown's three points): its edges and the chords off them. */
     const FACE = { edge: [3, 7], next: [4, 6] } as const;
@@ -1219,18 +1266,19 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(names.join(",") === "a,rear,sail,a,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
   });
 
-  it("when the SUV's rear pillar is matte, then exactly the gloss-black rear pillar's vertices turn matte black, and the drawn shape is unchanged", () => {
+  it("when a style's rear pillar is matte, then exactly the gloss-black rear pillar's vertices turn matte black, and the drawn shape is unchanged", () => {
     const wagon = CAR_STYLES.wagon;
     const gloss: BodyStyle = { ...wagon, blackout: { ...wagon.blackout, rear: true } };
+    const matte: BodyStyle = { ...wagon, blackout: { ...wagon.blackout, rear: "matte" } };
     const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
-    const [was, now] = [makeChassisGeometry(gloss), makeChassisGeometry(wagon)];
+    const [was, now] = [makeChassisGeometry(gloss), makeChassisGeometry(matte)];
     let turned = 0;
     for (let i = 0; i < primer(now).count; i++) {
       if (primer(now).getX(i) === primer(was).getX(i)) continue;
       turned++;
       assert.ok(primer(was).getX(i) === BLACKOUT && primer(now).getX(i) === MATTE_BLACKOUT, `vertex ${i}: ${primer(was).getX(i)} → ${primer(now).getX(i)}`);
     }
-    const rear = makeGreenhouseFrame(wagon, "drawn").filter((g) => g.userData.matte === true);
+    const rear = makeGreenhouseFrame(matte, "drawn").filter((g) => g.userData.matte === true);
     assert.ok(rear.length === 2 && turned === rear.reduce((n, g) => n + g.getAttribute("position").count, 0), `${rear.length} matte pillars, ${turned} vertices turned`);
     const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
     assert.ok(bits(now) === bits(was), "the drawn body's shape is unchanged");
@@ -2194,6 +2242,48 @@ describe("given a body style's P2 parts", () => {
     assert.ok(mirrorSeatX(tear!.style) === mirrorSeatX(rounded!.style) && cageHash(tear!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
   });
 
+  it("when a mirror's cap is a nose, then its section tapers to its front face while its rear face (the glass's) keeps its full width, its inner face held, and the seat and cage builds are unchanged", () => {
+    const size = [0.12, 0.095, 0.145] as const;
+    const [w, , d] = size;
+    const [nose, rounded] = (["nose", "rounded"] as const).map((cap) => {
+      const style = mirrorStyle({ cap, finish: "body", size });
+      const { cap: box } = readMirror(style);
+      const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
+      const [pos, painted] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE)];
+      const scaleX = style.door.mirrorReach / MIRROR_REACH;
+      const [front, rear] = [new THREE.Box3(), new THREE.Box3()];
+      for (let i = 0; i < pos.count; i++) {
+        if (painted.getX(i) !== 1) continue;
+        const p = new THREE.Vector3(pos.getX(i) * scaleX, pos.getY(i), pos.getZ(i));
+        if (p.z >= box.max.z - 0.1 * d) front.expandByPoint(p);
+        if (p.z <= box.min.z + 0.1 * d) rear.expandByPoint(p);
+      }
+      return { style, inner: box.min.x, front: front.max.x - front.min.x, rear: rear.max.x - rear.min.x };
+    });
+    assert.ok(nose!.front < 0.65 * w && rounded!.front > 0.8 * w, `the cap's front tenth spans ${nose!.front.toFixed(3)} m (nose), ${rounded!.front.toFixed(3)} m (rounded) of its ${w}`);
+    assert.ok(nose!.rear > 0.8 * w, `the nose cap's rear tenth spans ${nose!.rear.toFixed(3)} m of its ${w}`);
+    assertSameNumbers([nose!.inner], [rounded!.inner], "the cap's inner face", 1e-4);
+    assert.ok(mirrorSeatX(nose!.style) === mirrorSeatX(rounded!.style) && cageHash(nose!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
+  });
+
+  it("when a mirror's cap is rounder (`round`), then its outer face's flat run is shorter by twice the radius it grows, and the seat and cage builds are unchanged", () => {
+    const size = [0.06, 0.12, 0.15] as const;
+    const [w, h] = size;
+    const [plain, round] = ([undefined, 0.48] as const).map((share) => {
+      const style = mirrorStyle({ cap: "rounded", finish: "body", size, ...(share === undefined ? {} : { round: share }) });
+      const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
+      const [pos, painted] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE)];
+      const scaleX = style.door.mirrorReach / MIRROR_REACH;
+      let outer = 0;
+      for (let i = 0; i < pos.count; i++) if (painted.getX(i) === 1) outer = Math.max(outer, Math.abs(pos.getX(i)) * scaleX);
+      const face = new THREE.Box3();
+      for (let i = 0; i < pos.count; i++) if (painted.getX(i) === 1 && Math.abs(pos.getX(i)) * scaleX >= outer - 1e-4) face.expandByPoint(new THREE.Vector3(0, pos.getY(i), pos.getZ(i)));
+      return { style, run: face.max.y - face.min.y };
+    });
+    assertSameNumbers([plain!.run, round!.run], [h - 2 * 0.35 * w, h - 2 * 0.48 * w], "the outer face's flat run up the cap (default, round 0.48)", 1e-4);
+    assert.ok(mirrorSeatX(round!.style) === mirrorSeatX(plain!.style) && cageHash(round!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
+  });
+
   it("when a mirror is lifted, then its cap rises that far over the seat while its foot still starts on the drawn skin, and the seat and cage builds are unchanged", () => {
     const spec = { cap: "rounded", finish: "body", size: [0.1, 0.07, 0.1] } as const;
     const flat = readMirror(mirrorStyle(spec));
@@ -3154,6 +3244,24 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         }
       }
       assert.ok(looked >= 16 && off.length === 0, `${id}: ${off.length} of ${looked} leg sight lines show no straight edge: ${off.slice(0, 6).join(", ")}`);
+    });
+  }
+
+  /** A squashed drawn opening (`arch.rise`) keeps this much (m) over a tyre risen to its spring's stop: the cage keeps the round one, so nothing else stops the tyre showing through the fender. */
+  const CROWN_CLEAR = 0.02;
+  for (const id of CAR_STYLE_IDS) {
+    const style = CAR_STYLES[id];
+    const rise = style.arch.rise;
+    if (rise === undefined) continue;
+    it(`when a ${id}'s tyres are risen to their spring's stop, then each tyre's top stands ${CROWN_CLEAR} m or more under its drawn arch's crown (${rise} of its radius over the hub)`, () => {
+      const cls = STYLE_CLASS[id];
+      const { lift, wheelScale } = CLASSES[cls];
+      const bump = SPRINGS[cls].travel / 2;
+      for (const [wx, wy, wz] of carFrame(style).wheels) {
+        const top = wy + style.dims.wheel.radius * (wheelScale - 1) - lift + bump + style.dims.wheel.radius * wheelScale;
+        const crown = wy + style.arch.radius * rise;
+        assert.ok(top + CROWN_CLEAR <= crown, `${id} wheel at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: its tyre's top at ${top.toFixed(3)} m stands ${(crown - top).toFixed(3)} m under the crown at ${crown.toFixed(3)} m`);
+      }
     });
   }
 });

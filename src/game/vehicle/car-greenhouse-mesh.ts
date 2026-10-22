@@ -19,6 +19,7 @@ import {
   roofArc,
   roofAt,
   roofDome,
+  roofSquareShare,
   roofTopY,
   sampleSlice,
   sectionPoints,
@@ -134,13 +135,6 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
     const { y: roofY, x } = roofAt(z, style);
     const { drop, crown, reach } = source === "drawn" ? roofDome(z, style) : { drop: 0, crown: ROOF_CROWN, reach: 1 };
     const y = roofY - drop;
-    const arc = source === "drawn" ? roofArc(z, style) : null;
-    if (arc) {
-      const half = ROOF_ARC_T.map(arc);
-      const skin = [...half.slice(1).reverse().map((p) => ({ x: -p.x, y: p.y })), ...half];
-      rings.push(shellRing(skin, (skin.length - 5) / 2, HEADLINER_INSET));
-      continue;
-    }
     const side: Pt[] =
       source === "cage"
         ? [
@@ -149,15 +143,20 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
           ]
         : roofRoll(x, y, lip, drip, ROOF_ROLL, reach).slice(0, -1);
     const shoulder = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
-    const skin = [
-      ...side.map((p) => ({ x: -p.x, y: p.y })),
-      { x: -x, y },
-      { x: -x * ROOF_SHOULDER[0], y: y + shoulder },
-      { x: 0, y: y + crown },
-      { x: x * ROOF_SHOULDER[0], y: y + shoulder },
-      { x, y },
-      ...[...side].reverse(),
-    ];
+    // The dome's right half, crown to cant line: as many points as `ROOF_ARC_T`, so `roofSquareShare` eases an arc into it point for point.
+    const dome = [{ x: 0, y: y + crown }, { x: x * ROOF_SHOULDER[0], y: y + shoulder }, { x, y }, ...[...side].reverse()];
+    const arc = source === "drawn" ? roofArc(z, style) : null;
+    if (arc) {
+      const share = roofSquareShare(z, style);
+      const half = ROOF_ARC_T.map((t, i) => {
+        const p = arc(t);
+        return share === 0 ? p : { x: lerp(p.x, dome[i]!.x, share), y: lerp(p.y, dome[i]!.y, share) };
+      });
+      const skin = [...half.slice(1).reverse().map((p) => ({ x: -p.x, y: p.y })), ...half];
+      rings.push(shellRing(skin, (skin.length - 5) / 2, HEADLINER_INSET));
+      continue;
+    }
+    const skin = [...dome.slice(1).reverse().map((p) => ({ x: -p.x, y: p.y })), ...dome];
     rings.push(source === "drawn" ? shellRing(skin, side.length, HEADLINER_INSET) : [...skin, { x: 0, y: y - 0.085 }]);
   }
   const geo = loftFromRings(rings, zs, 0.28, 0.72);
@@ -605,17 +604,19 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   const sweepZ = tipZ - SAIL_SWEEP;
   // Its rear end stops a shut line ahead of a deck lid's front edge: lying on over the lid, or flush with its face, the two skins would cross.
   const rear = style.boot.kind === "lid" ? Math.max(rb[2], style.boot.z0 + SAIL_LID_SHUT) : rb[2];
-  const haunch = Math.max(1, Math.ceil((sweepZ - rear) / SAIL_STEP));
   // The glass corner's ring stands just behind the roof's rear end (insideRoof never reaches it there), its section the roof end's own, so the sail covers the end's wing outboard of the rear glass.
   const roofEndZ = Math.max(rt[2], style.roofZ[0] - ROOF_TUCK);
+  // A flat sail's haunch sections are straight up to the roof's end, so they space evenly up to it: a sweep station between them only folds the face.
+  const haunchEnd = style.cPillar?.flat === true ? Math.max(sweepZ, roofEndZ) : sweepZ;
+  const haunch = Math.max(1, Math.ceil((haunchEnd - rear) / SAIL_STEP));
   const roof = roofAt(style.roofZ[0], style);
   const flush = style.cPillar?.flush === true;
   // A curved roof's (`roofSection`) end section on its drawn chords, crown to cant.
   const endArc = roofArc(style.roofZ[0], style);
   const roofEnd = endArc ? ROOF_ARC_T.map(endArc) : null;
   const zs = [
-    ...Array.from({ length: haunch }, (_, k) => lerp(rear, sweepZ, k / haunch)),
-    sweepZ,
+    ...Array.from({ length: haunch }, (_, k) => lerp(rear, haunchEnd, k / haunch)),
+    haunchEnd,
     tipZ,
     roofEndZ,
     topZ,
@@ -815,6 +816,20 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
             2,
           ),
     );
+    const seatY = aPost ? style.pillars?.aSeat : undefined;
+    if (seatY !== undefined) {
+      // The post's foot stands at the belt; a lower deck under it shows the cabin through the gap. The skirt is the foot's crowned outer face carried straight down into the deck
+      // (on down the post's own line it would run 10 cm forward, off the gap).
+      const foot = aPost!.post[0]!;
+      const low = { ...foot, rear: [foot.rear[0], seatY, foot.rear[2]] as V3, front: [foot.front[0], seatY, foot.front[2]] as V3 };
+      const crown = A_POST_CROWN * hypot2(hypot2(foot.front[0] - foot.rear[0], foot.front[1] - foot.rear[1]), foot.front[2] - foot.rear[2]);
+      const section = () => [{ x: 1, y: 0 }, { x: 1 + crown / A_POST_THICK, y: 0.5 }, { x: 1, y: 1 }];
+      const seat = roundedPillarAlong(sign, [low, foot], A_POST_THICK, { open: true, section });
+      // Its two outer quads only: the closing chord behind them would share their vertices and bend their normals into the panel.
+      seat.setIndex(Array.from(seat.getIndex()!.array.subarray(0, 12)));
+      seat.computeVertexNormals();
+      parts.push(Object.assign(pillar(seat, "a"), { name: "aSeat" }));
+    }
     const [bRear, bFront] = bBands.belt;
     const [bTopRear, bTopFront] = bBands.top;
     const bz = (bTopRear + bTopFront) * 0.5;

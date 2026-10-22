@@ -307,9 +307,11 @@ export interface BodyStyle {
   /**
    * Drawn only: the roof's section from its crown down to its cant line as one curve (`roofArc`), a cubic Bézier leaving the crown level
    * and arriving along the side glass's plane: `crown`, its crown handle's share of the half-width (more: a broader top); `blend`, its
-   * side handle's share of the section's height (more: a softer roll into the glass). Absent, the dome's flat top and its rolled side lip.
+   * side handle's share of the section's height (more: a softer roll into the glass); `squareFront` (m), a run back from the front end
+   * over which it eases into the dome's flat top and rolled lip, so a flat windshield's top corners stay under the roof. Absent, the
+   * dome's flat top and its rolled side lip.
    */
-  roofSection?: { crown: number; blend: number };
+  roofSection?: { crown: number; blend: number; squareFront?: number };
   /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
   windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;
@@ -328,7 +330,7 @@ export interface BodyStyle {
   underside?: readonly (readonly [number, number])[];
   /**
    * Front door: hinge axis at the A-pillar (±hingeX, hingeY, hingeZ), `length` hinge to trailing edge, skin ±halfHeight about the hinge, `aperture` [z0, z1] the body's front-door cut (the skin overlaps it 0.02 each end), mirror seated `mirrorY` over the hinge and `mirrorZ` (default 0) behind it, reaching `mirrorReach` out, ±mirrorHalfDepth deep.
-   * `mirror` (drawn only): its own mirror, `cap` rounded, box or tear (the rounded cap tapering to its rear face) of `size` [w out, h, d along z] (default `MIRROR_CAP_SIZE`) in `finish` (body: the door's paint), its outer face at `mirrorReach`, its foot on the skin; absent = the platform mirror x-scaled to the reach.
+   * `mirror` (drawn only): its own mirror, `cap` rounded, box, tear (the rounded cap tapering to its rear face) or nose (tapering to its front face, the glass's face full) of `size` [w out, h, d along z] (default `MIRROR_CAP_SIZE`) in `finish` (body: the door's paint), its outer face at `mirrorReach`, its foot on the skin; absent = the platform mirror x-scaled to the reach.
    * `hingeTop` (car y, m, drawn only): the skin's top edge at its hinge cut, its rows closing down to it over the hinge end's slope so the top meets the fender's deck edge there; absent = only the slope.
    */
   door: {
@@ -347,11 +349,14 @@ export interface BodyStyle {
      * `stalk` (m): the foot's length along the car, a slim post under the head; absent = 0.7 of the cap's depth.
      * `neck` (m): the foot runs this far below the head's bottom, an arm holding the head up off the belt; absent = 0.7 of the cap's height, hidden behind it.
      * `mount` "glass": the seat stands on the door glass's plane at its z and height (`mirrorY` may stand over `halfHeight`), its foot leaning with the pane, as a tow mirror on the glass's front corner; absent, on the skin.
+     * `round`: a rounded, tear or nose cap's edge radius as a share of its smallest side (absent `MIRROR_CAP_ROUND`, 0.35); toward 0.5 the outer end rounds right across that side.
      */
-    mirror?: { cap: "rounded" | "box" | "tear"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass" };
+    mirror?: { cap: "rounded" | "box" | "tear" | "nose"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass"; round?: number };
     hingeTop?: number;
     /** Drawn only: the door skin's outer face stands this far (m) over the body side inside its cut (absent `DOOR_PROUD`, 3 mm); 0: flush, the shut line a groove only. */
     proud?: number;
+    /** Drawn only: the body's rings at its cut's ends shade the panel either side from its own faces, a crease at the shut line, not rounded off by the cut's ramp; absent, one smooth normal across it. */
+    shutCrease?: boolean;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
   aPillarFoot: number;
@@ -388,9 +393,11 @@ export interface BodyStyle {
    * Drawn only: side-view pillar bands (`PillarSpan`). `a`: the A-post's width behind the windshield edge (absent 0.06). `b`: the
    * B-pillar, centred on its `bPillar` band unless it leans. `divider`: the post at `midPillarZ`. Absent: the `bPillar` band (its top
    * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` [x, y] (m): a point on the body's shoulder beside the
-   * rear glass's base; the plank rear post's (no `cPillar`) foot fans out to it, covering the cabin's opening there; absent, no fan.
+   * rear glass's base; the plank rear post's (no `cPillar`) foot fans out to it, covering the cabin's opening there; absent, no fan. `aSeat`
+   * (y, m): a deck under the drawn A-post's foot lower than the belt; a skirt of the post's own section hangs from the foot down to it,
+   * so the cabin never shows through the gap; absent, none.
    */
-  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number] };
+  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number };
   /**
    * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
    * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.
