@@ -65,7 +65,7 @@ export const MONSTER: BodyStyle = {
   aPillarTop: 0.41,
   bPillar: { rear: -0.19, front: -0.12 },
   arch: { radius: 0.47, lip: { flare: 0.025, width: 0.045, square: true, inset: 0.04 }, wellWall: 0.56 },
-  hood: { z0: 0.94, z1: 2.08, origin: [0.96, 0.92] },
+  hood: { z0: 0.94, z1: 2.1, origin: [0.96, 0.92], nose: [0.022, 0.02] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.39, z: 2.05 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black" },
     rear: { ...bumpers.rear, seat: { y: 0.44, z: 2.36 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black", hitch: true },
@@ -92,7 +92,7 @@ export const MONSTER: BodyStyle = {
   midPillarZ: null,
   rearBulkhead: { z: -0.79, yTop: 1.03 },
   tubs: [[-0.76, 0.96, 0.5], [-2.26, -0.82, 0.62]],
-  bayFloor: 0.34,
+  bayFloor: 0.36,
   wheelTub: { rise: 0.24, length: 0.82, width: 0.25 },
   tubWall: 0.04,
   // Its cage's hood tops stand 0.90-1.04 m and its bed rim 1.02 m, its roof from 1.38 m: the cabin starts 8 cm over the highest of them

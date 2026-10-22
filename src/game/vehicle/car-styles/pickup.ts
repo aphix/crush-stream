@@ -66,7 +66,7 @@ export const PICKUP: BodyStyle = {
   aPillarTop: 0.41,
   bPillar: { rear: -0.3, front: -0.23 },
   arch: { radius: 0.46, lip: { flare: 0.024, width: 0.065, square: true } },
-  hood: { z0: 1.03, z1: 1.86, origin: [1.2, 1.01] },
+  hood: { z0: 1.03, z1: 1.92, origin: [1.2, 1.01], nose: [0.034, 0.02] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.73, wrap: { from: 0.55, back: 0.12 }, fascia: TRUCK_FRONT_FASCIA, trim: "chrome" },
     rear: { ...bumpers.rear, seat: { y: 0.57, z: 2.13 }, span: 0.74, wrap: { from: 0.65, back: 0.05 }, trim: "chrome", hitch: true },
@@ -96,6 +96,7 @@ export const PICKUP: BodyStyle = {
   rearBulkhead: { z: -0.56, yTop: 1.2 },
   tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
   bayFloor: 0.34,
+  bayFront: 1.78,
   wheelTub: { rise: 0.19, length: 0.55, width: 0.22 },
   tubWall: 0.04,
   // Its cage's hood tops stand 1.04-1.23 m and its bed rim 1.18-1.20 m, its roof from 1.62 m: the cabin starts 7 cm over the highest

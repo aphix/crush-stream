@@ -369,6 +369,8 @@ export interface BodyStyle {
   tubs: readonly (readonly [number, number, number])[];
   /** The engine bay trough's floor (m, car y) under the hood (`bayTub`); absent, 0.28. A lifted body whose floor pan stands over that at the bay (the trucks) sets its pan height, so the trough the paint row and the bay set read is the one drawn. */
   bayFloor?: number;
+  /** The engine bay trough's front end (m, car z, `bayTub`); absent, 8 cm inside the hood's nose edge (`hood.z1`). A hood wrapping a nose on the profile's own nose rings keeps its bay off them. */
+  bayFront?: number;
   /** A bed's wheel tubs (both builds): over each wheel whose liner stands in a tub floor, a half cylinder `rise` (m) over the floor and `length` along the car, `width` in from the bed's side wall; absent, a drawn-only hump hugs the liner. */
   wheelTub?: { rise: number; length: number; width: number };
   /** A tub's rim width (m): its side wall's top edge stands this far in from the body side (its foot stays 6 cm in); absent, 6 cm. */
