@@ -165,14 +165,14 @@ export const TUB_EDGE = 0.025;
 
 /** The bay opens `rear` (m) ahead of the hood's cowl edge or the windshield's foot, whichever is further forward, and stops `front` inside the hood's nose edge; `cowl` (m) of closed deck stays between its blend and the cabin tub's, so a cowl stands there and not a fin. */
 const BAY_CLEAR = { rear: 0.04, front: 0.08, cowl: 0.05 } as const;
-/** The trough's floor (m, car y): deep enough that the bay set stands tall in it, clear of the body's floor pan at 0.145. */
+/** The trough's default floor (m, car y; a style's `bayFloor` overrides it): deep enough that the bay set stands tall in it, clear of the body's floor pan at 0.145. */
 const BAY_FLOOR = 0.28;
 
 /** The drawn body's engine bay trough under the hood, as a tub [zRear, zFront, floorY] (`BodyStyle.tubs`): drawn only, the cage's deck stays closed. */
 export function bayTub(style: BodyStyle): readonly [number, number, number] {
   const rear = Math.max(style.hood.z0, style.windshield.base[1]) + BAY_CLEAR.rear;
   const cabinFront = Math.max(-Infinity, ...style.tubs.map(([, front]) => front).filter((front) => front < rear));
-  return [Math.max(rear, cabinFront + 2 * TUB_EDGE + BAY_CLEAR.cowl), style.hood.z1 - BAY_CLEAR.front, BAY_FLOOR];
+  return [Math.max(rear, cabinFront + 2 * TUB_EDGE + BAY_CLEAR.cowl), style.hood.z1 - BAY_CLEAR.front, style.bayFloor ?? BAY_FLOOR];
 }
 
 /** The open floors a body build lofts: the style's tubs, and on the drawn body the engine bay under the hood (`bayTub`). */
