@@ -78,6 +78,7 @@ type EdgeCensus = { sharpEdges: number; sharpEdgesStillShared: number; smoothEdg
  * Every edge shared by exactly two faces of `geometry` (edges matched by the vertices' places, so a split edge still counts), against
  * `creaseDegrees`: the sharp ones (the faces' normals at least that far apart) must not share their vertices, the smooth ones must.
  * A loft's end caps (`loftFromRings` writes them after its quads) are the panel's cut ends, hard by construction: their seams are not read.
+ * A rolled edge's chord (`userData.rolled`: both its vertices flagged) shades round at any angle: the lid rows read it.
  */
 function censusOfEdges(geometry: THREE.BufferGeometry, creaseDegrees: number, capsAreCuts: boolean): EdgeCensus {
   const position = geometry.getAttribute("position");
@@ -85,6 +86,7 @@ function censusOfEdges(geometry: THREE.BufferGeometry, creaseDegrees: number, ca
   const placeOf = (vertex: number) => `${position.getX(vertex)},${position.getY(vertex)},${position.getZ(vertex)}`;
   const faces = new Map<string, { normal: THREE.Vector3; vertices: string; cut: boolean }[]>();
   const loft = geometry.userData.loft as { ring: number; slices: number } | undefined;
+  const rolled = geometry.userData.rolled as Uint8Array | undefined;
   const firstCapTriangle = capsAreCuts && loft ? 2 * loft.ring * (loft.slices - 1) : Infinity;
   for (let t = 0; t < index.count; t += 3) {
     const cut = t / 3 >= firstCapTriangle;
@@ -103,6 +105,8 @@ function censusOfEdges(geometry: THREE.BufferGeometry, creaseDegrees: number, ca
   const census: EdgeCensus = { sharpEdges: 0, sharpEdgesStillShared: 0, smoothEdgesSplit: 0, firstOffence: "none" };
   for (const [key, [first, second, ...rest]] of faces) {
     if (!first || !second || rest.length > 0 || first.cut !== second.cut) continue;
+    const [a, b] = first.vertices.split(",").map(Number) as [number, number];
+    if (first.vertices === second.vertices && rolled?.[a] === 1 && rolled[b] === 1) continue;
     const shared = first.vertices === second.vertices;
     const degrees = angleBetweenDegrees(first.normal, second.normal);
     if (degrees >= creaseDegrees) {
@@ -195,17 +199,23 @@ const FLAT_CURVE_LIMIT_DEGREES = 5;
 
 const lidCreaseTable = [
   // The sedan's hood is crowned (`hood.crown`): its ring carries 3 dome points a side (17 points), so the shut line and lip corners sit at 0, 8, 10 to 15.
-  { it: "a bonnet's shut line and lip corners (ring points 0, 8, 10 to 15)", style: "sedan", part: "bonnet", creaseLines: [0, 8, 10, 11, 12, 13, 14, 15], smoothLines: [1, 2, 3, 4, 5, 6, 7, 9, 16], creaseDegrees: CREASE_DEGREES.deckLid },
-  { it: "a sedan boot lid's shut line and lip corners (ring points 0, 4, 6 to 11)", style: "sedan", part: "boot", creaseLines: [0, 4, 6, 7, 8, 9, 10, 11], smoothLines: [1, 2, 3, 5, 12], creaseDegrees: CREASE_DEGREES.deckLid },
-  { it: "a hatchback's tailgate edges (ring points 0, 4, 5, 6)", style: "hatchback", part: "boot", creaseLines: [0, 4, 5, 6], smoothLines: [1, 2, 3], creaseDegrees: CREASE_DEGREES.tailgate },
+  { it: "a bonnet's shut line and lip corners (ring points 0, 8, 10 to 15)", style: "sedan", part: "bonnet", creaseLines: [0, 8, 10, 11, 12, 13, 14, 15], smoothLines: [1, 2, 3, 4, 5, 6, 7, 9, 16], rollLines: [], creaseDegrees: CREASE_DEGREES.deckLid },
+  // The sedan's boot rolls its side edges (`boot.edgeRoll`, one chord a side at 0-1 and 5-6, the skirt's upper point dropped): its skirt and underside corners at 7 to 12.
+  { it: "a sedan boot lid's skirt and underside corners (ring points 7 to 12)", style: "sedan", part: "boot", creaseLines: [7, 8, 9, 10, 11, 12], smoothLines: [2, 3, 4], rollLines: [0, 1, 5, 6], creaseDegrees: CREASE_DEGREES.deckLid },
+  { it: "a hatchback's tailgate edges (ring points 0, 4, 5, 6)", style: "hatchback", part: "boot", creaseLines: [0, 4, 5, 6], smoothLines: [1, 2, 3], rollLines: [], creaseDegrees: CREASE_DEGREES.tailgate },
+  // The wagon's gate rolls its side edges (`boot.edgeRoll`, one chord a side at 0-1 and 5-6): its back corners at 7 and 8.
+  { it: "a wagon's tailgate back corners (ring points 7, 8)", style: "wagon", part: "boot", creaseLines: [7, 8], smoothLines: [2, 3, 4], rollLines: [0, 1, 5, 6], creaseDegrees: CREASE_DEGREES.tailgate },
 ] as const;
+
+/** A rolled edge's one chord splits its corner's ~90° turn in two: each half turns at most this (°), shading round on shared vertices. */
+const ROLL_TURN_MAX_DEGREES = 50;
 
 /** The sedan with the reference's hood crown: its top 6 cm under the centre line at |x| .66. */
 const CROWNED_SEDAN: BodyStyle = { ...CAR_STYLES.sedan, hood: { ...CAR_STYLES.sedan.hood, crown: [0.06, 0.66] } };
 
 describe("given the lids as built", () => {
   for (const testCase of lidCreaseTable) {
-    it(`when ${testCase.it} are read, then each turns its declared ${testCase.creaseDegrees}° or more at vertices of its own, and the dome or bow turns under ${FLAT_CURVE_LIMIT_DEGREES}° as one vertex`, () => {
+    it(`when ${testCase.it} are read, then each turns its declared ${testCase.creaseDegrees}° or more at vertices of its own, a rolled edge's chord turns under ${ROLL_TURN_MAX_DEGREES}° on shared vertices, and the dome or bow turns under ${FLAT_CURVE_LIMIT_DEGREES}° as one vertex`, () => {
       const style = CAR_STYLES[testCase.style];
       const lid = testCase.part === "bonnet" ? makeHoodGeometry(style) : makeTrunkGeometry(style);
       const loft = loftOf(lid);
@@ -222,6 +232,13 @@ describe("given the lids as built", () => {
         assert.ok(Math.max(...angles) < FLAT_CURVE_LIMIT_DEGREES, `ring line ${line} turns ${Math.max(...angles)}°`);
         for (let slice = 1; slice < loft.slices - 1; slice++) {
           assert.equal(verticesAtSamePlace(lid, slice * loft.ring + line), 1, `ring line ${line} slice ${slice} is split: its curve is not smooth`);
+        }
+      }
+      for (const line of testCase.rollLines) {
+        const angles = ringLineDihedrals(lid, line, inner);
+        assert.ok(Math.max(...angles) < ROLL_TURN_MAX_DEGREES && Math.min(...angles) >= FLAT_CURVE_LIMIT_DEGREES, `rolled ring line ${line} turns ${Math.min(...angles).toFixed(1)}-${Math.max(...angles).toFixed(1)}°`);
+        for (let slice = 1; slice < loft.slices - 1; slice++) {
+          assert.equal(verticesAtSamePlace(lid, slice * loft.ring + line), 1, `rolled ring line ${line} slice ${slice} is split: the roll does not shade round`);
         }
       }
     });

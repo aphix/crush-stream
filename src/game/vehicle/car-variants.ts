@@ -72,6 +72,8 @@ export type BootSpec = (
   swing?: LidSwing;
   /** A drawn lid seated on the deck like the hood (its edge a groove over the deck edge, not a step up off it). Drawn only: the cage keeps the plain lid. */
   flush?: boolean;
+  /** Drawn only: the lid's or gate's side edges round over this radius (m) into its skirt or thickness, as the reference's; absent, a sharp corner. */
+  edgeRoll?: number;
 };
 
 /** Raised centre bulge on the drawn hood from z `z0` (cowl end) to `z1`, `width` (m) across, its top `rise` (m) over the lid's; it ramps into the lid at both ends. */
