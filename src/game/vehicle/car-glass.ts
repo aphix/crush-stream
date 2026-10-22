@@ -75,7 +75,7 @@ export function makeWindshield(style: BodyStyle = SEDAN): THREE.BufferGeometry {
 
 /** Glass quad `q` drawn in by its `frame` ([side, bottom, top], m: sides across, bottom and top along its slope). */
 function framedQuad(q: GlassQuad, [side, bottom, top]: readonly [number, number, number]): GlassQuad {
-  const len = Math.hypot(q.top[0] - q.base[0], q.top[1] - q.base[1]);
+  const len = hypot2(q.top[0] - q.base[0], q.top[1] - q.base[1]);
   const at = (t: number): YZ => [lerp(q.base[0], q.top[0], t), lerp(q.base[1], q.top[1], t)];
   const [t0, t1] = [bottom / len, 1 - top / len];
   return { base: at(t0), top: at(t1), wBase: lerp(q.wBase, q.wTop, t0) - 2 * side, wTop: lerp(q.wBase, q.wTop, t1) - 2 * side };

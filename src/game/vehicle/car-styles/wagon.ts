@@ -6,13 +6,13 @@ import { LIFTGATE } from "../hinge-spec.ts";
 const WAGON_LAMP_SHAPES = {
   head: {
     loops: [
-      { points: [[0.41, 0.715], [0.62, 0.795], [0.7, 0.808], [0.76, 0.82], [0.76, 0.835], [0.7, 0.83], [0.62, 0.8], [0.41, 0.75]] },
+      { points: [[0.41, 0.715], [0.62, 0.795], [0.7, 0.808], [0.76, 0.82], [0.76, 0.835], [0.7, 0.832], [0.62, 0.815], [0.41, 0.785]] },
       { side: true, points: [[1.92, 0.795], [1.7, 0.828], [1.68, 0.842], [1.8, 0.842], [1.86, 0.83], [1.92, 0.81]] },
     ],
     lens: "dark",
     bezel: "black",
     recess: 0.01,
-    strips: [{ line: { points: [[0.41, 0.75], [0.41, 0.722], [0.62, 0.797], [0.76, 0.826]] }, width: 0.008, tone: "lit" }],
+    strips: [{ line: { points: [[0.41, 0.775], [0.41, 0.722], [0.62, 0.797], [0.76, 0.826]] }, width: 0.008, tone: "lit" }],
     rounds: [
       { at: [0.47, 0.75], r: 0.01, tone: "lit" },
       { at: [0.54, 0.775], r: 0.01, tone: "lit" },
@@ -36,7 +36,7 @@ const WAGON_LAMP_SHAPES = {
   front: {
     loops: [{ points: [[0.52, 0.36], [0.72, 0.36], [0.72, 0.48], [0.52, 0.48]] }],
     lens: "dark",
-    strips: [{ line: { points: [[0.52, 0.38], [0.72, 0.38]] }, width: 0.01, tone: "chrome" }],
+    strips: [{ line: { points: [[0.52, 0.465], [0.72, 0.465]] }, width: 0.012, tone: "chrome" }],
   },
   rear: {
     loops: [{ points: [[0.48, 0.45], [0.64, 0.45], [0.64, 0.47], [0.48, 0.47]] }],
@@ -129,7 +129,7 @@ export const WAGON: BodyStyle = {
   rearDoorSeam: -1.23,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE, edgeRoll: 0.02 },
   lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES },
-  grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 16, finish: "black", rim: "chrome", lean: 0.387 },
+  grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 9, finish: "black", rim: "chrome", lean: 0.387 },
   seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },
   pillars: { b: { width: [0.088, 0.088] }, divider: { width: [0.105, 0.105] } },
   blackout: { a: true, sail: true, b: true, divider: true, rear: true },
