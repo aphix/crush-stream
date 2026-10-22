@@ -488,7 +488,12 @@ export interface BodyStyle {
     head: readonly [number, number];
     tail: readonly [number, number];
     shapes?: { head?: LampShape; tail?: LampShape; front?: LampShape; rear?: LampShape };
-    brake?: { at: readonly [number, number]; size: readonly [number, number] };
+    brake?: {
+      at: readonly [number, number];
+      size: readonly [number, number];
+      /** Metres the seated lamp sits recessed into the surface it meets, along its probe ray (default 0). */
+      inset?: number;
+    };
     sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number]; tint?: number }[];
     bulb?: "halogen" | "led";
   };

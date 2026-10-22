@@ -93,7 +93,8 @@ export const MONSTER: BodyStyle = {
   ],
   roofZ: [-0.7, 0.45],
   roofEnds: TRUCK_ROOF_ENDS,
-  roofSection: TRUCK_ROOF_SECTION,
+  // A flatter crown and a tighter edge roll, as the top plate's flat roof panel runs to 5 cm inside the edge.
+  roofSection: { ...TRUCK_ROOF_SECTION, crown: 0.75, blend: 0.8 },
   roofDrip: 0,
   windshieldTop: [1.46, 0.45],
   rearGlass: { base: [1.02, -0.78], top: [1.45, -0.7], wBase: 1.36, wTop: 1.18 },

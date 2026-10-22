@@ -521,6 +521,31 @@ describe("given the trucks' posts against their side plates' window outlines", (
   });
 });
 
+describe("given the pickup's door and B-post against its side plate", () => {
+  /** The side plate's door seam (z, m): vertical, reading -0.372 to -0.386 over the door's height (y .47-1.12); the rearmost reading is the cut's. */
+  const PLATE_SEAM_Z = -0.386;
+  /** The side plate's door glass's rear end at the belt (z, m), where the glass meets the B-post. */
+  const PLATE_GLASS_REAR_Z = -0.297;
+  /** The B-post's width (m) in the plate's side view at the belt and the top: a slim 4 cm band. */
+  const PLATE_B_WIDTH = 0.04;
+  /** How far (m) the cut and the glass's end may stand off the plate's readings: 1 cm. */
+  const PLATE_TOL = 0.01;
+  /** How far (m) the B band's width may stand off the plate's: 5 mm. */
+  const WIDTH_TOL = 0.005;
+
+  it("when the door's rear cut and the drawn B band are read, then the cut sits on the plate's door seam (z -0.386, within 1 cm), the B band is 4 cm wide (within 5 mm) at the belt and the top, and the door glass shows back to the plate's -0.297 at the belt (within 1 cm)", () => {
+    const pickup = drawnStyle(CAR_STYLES.pickup);
+    // The body's cut opens at the first z (1 mm steps) where `doorAperture` leaves 0: its rear end, feathered in from there.
+    const cut = Array.from({ length: 500 }, (_, k) => -0.5 + k * 0.001).find((z) => doorAperture(z, pickup) > 0);
+    assert.ok(cut !== undefined && Math.abs(cut - PLATE_SEAM_Z) <= PLATE_TOL, `the door's rear cut opens at z ${cut}, the plate's seam at ${PLATE_SEAM_Z}`);
+    const band = bPillarBand(pickup);
+    const [belt, top] = [band.belt, band.top].map(([rear, front]) => front - rear);
+    assert.ok(Math.abs(belt! - PLATE_B_WIDTH) <= WIDTH_TOL && Math.abs(top! - PLATE_B_WIDTH) <= WIDTH_TOL, `the B band is ${(belt! * 100).toFixed(1)} cm wide at the belt, ${(top! * 100).toFixed(1)} cm at the top`);
+    // The door glass shows up to the B band's front edge (its pane runs on a little way under the post).
+    assert.ok(Math.abs(band.belt[1] - PLATE_GLASS_REAR_Z) <= PLATE_TOL, `the door glass shows back to z ${band.belt[1].toFixed(3)} at the belt, the plate's at ${PLATE_GLASS_REAR_Z}`);
+  });
+});
+
 describe("given a coupe whose rear glass has round corners (rearGlass.round)", () => {
   const ROUND = 0.09;
   const coupe = CAR_STYLES.coupe;
@@ -1155,6 +1180,34 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(seen(hatch) === 0, `${seen(hatch)} rays see the cabin's floor between the D-pillar and the shoulder`);
     const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
     assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
+  });
+
+  it("when the pickup's cab back post fans its foot onto the shoulder (pillars.rearFoot), then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening beside the cab back, and the cage is unchanged", () => {
+    /** A ray down that hits under this height (m) has passed the body's top into the cabin: the shoulder stands at 1.17 beside the cab back. */
+    const FLOOR_Y = 0.8;
+    /** The cab back post's zone [x, z] (m): from the rear glass's base edge out to the shoulder, the cab back to the B-post's rear. */
+    const ZONE = { x: [0.55, 0.72], z: [-0.6, -0.33] } as const;
+    const pickup = CAR_STYLES.pickup;
+    const seen = (s: BodyStyle) => {
+      const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+      const meshes = [new THREE.Mesh(makeChassisGeometry(s, "drawn"), material), new THREE.Mesh(makeRearGlass(s), material)];
+      const ray = new THREE.Raycaster();
+      let floor = 0;
+      for (let z = ZONE.z[0]; z <= ZONE.z[1]; z += 0.01) {
+        for (let x = ZONE.x[0]; x <= ZONE.x[1]; x += 0.005) {
+          ray.set(new THREE.Vector3(x, 3, z), new THREE.Vector3(0, -1, 0));
+          const hit = ray.intersectObjects(meshes)[0];
+          if (hit !== undefined && hit.point.y < FLOOR_Y) floor++;
+        }
+      }
+      return floor;
+    };
+    const without: BodyStyle = { ...pickup, pillars: { ...pickup.pillars, rearFoot: undefined } };
+    assert.ok(seen(without) > 0, "the control: without the foot the opening shows");
+    const shown = seen(pickup);
+    assert.ok(shown === 0, `${shown} rays see the cabin's floor between the cab back and the shoulder`);
+    const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
+    assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(pickup, "cage")), "the cage moved with the drawn foot");
   });
 
   it("when the coupe's belt is read from its tail to the sail's foot (z -1.587 to -1.43), then it rises all the way: no crest under the sail's rear end, which drew a lit hump where the reference's sail meets the deck", () => {
