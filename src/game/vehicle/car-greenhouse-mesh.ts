@@ -464,9 +464,8 @@ function drawnBeltRail(sign: number, style: BodyStyle): THREE.BufferGeometry {
 
 /** The sail is as deep (m) as the post it replaces; its two edges roll round at half that. */
 const SAIL_DEPTH = 0.05;
-/** Behind the side window's line the sail's foot sweeps out from the glass onto the haunch's shoulder over this run (m), in `SAIL_SWEEP_CHORDS`. */
+/** Behind the side window's line the sail's foot sweeps out from the glass onto the haunch's shoulder over this run (m), in one chord. */
 export const SAIL_SWEEP = 0.15;
-const SAIL_SWEEP_CHORDS = 2;
 /** The sail's stations along the haunch stand at most this far apart (m): the shoulder turns under 1 cm along it, so its foot keeps to it between them. */
 const SAIL_STEP = 0.35;
 /** The sail's foot sits this far (m) under the shoulder it leaves, so where the two touch they never fight over a pixel. */
@@ -499,7 +498,8 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   const haunch = Math.max(1, Math.ceil((sweepZ - rear) / SAIL_STEP));
   const zs = [
     ...Array.from({ length: haunch }, (_, k) => lerp(rear, sweepZ, k / haunch)),
-    ...Array.from({ length: SAIL_SWEEP_CHORDS + 1 }, (_, k) => lerp(sweepZ, tipZ, k / SAIL_SWEEP_CHORDS)),
+    sweepZ,
+    tipZ,
     rt[2],
     topZ,
   ]
@@ -553,7 +553,8 @@ function cPillarTip(sign: number, style: BodyStyle, [tipY, tipZ]: YZ): THREE.Buf
   const q = style.quarter;
   const [topY, topZ] = [glassTopY(q.zRearTop, style), q.zRearTop];
   const front = Math.max(q.zRearBot, q.zRearTop) + TIP_LAP;
-  const zs = [tipZ, ...style.belt.y.map(([z]) => z).filter((z) => z > tipZ && z < front), front];
+  // Its buried bottom edge runs straight between its ends: the belt bends under 1 cm over its run.
+  const zs = [tipZ, front];
   const rings = zs.map((z): Pt[] => {
     const [low, high] = [beltY(z, style) - RAIL_FOOT, lerp(tipY, topY, Math.min((z - tipZ) / (topZ - tipZ), 1)) + TIP_LAP];
     const [lowX, highX] = [onGlassPlane(z, low, style, TIP_PROUD), onGlassPlane(z, high, style, TIP_PROUD)];
