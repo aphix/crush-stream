@@ -53,7 +53,7 @@ function KnobTrack<T extends string>({ label, name, values, picked, readout, tit
           </Button>
         ))}
       </div>
-      <span className="hud-label w-12 shrink-0 text-right tabular-nums">{readout}</span>
+      <span className="w-12 shrink-0 text-right font-display text-xs tabular-nums text-fg">{readout}</span>
     </div>
   );
 }
