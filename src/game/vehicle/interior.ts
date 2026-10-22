@@ -4,11 +4,11 @@ import { detCos, detSin } from "../kernel/physics-core.js";
 import type { MassName } from "../kernel/rig-spec.ts";
 import type { DetachPart } from "./car-core.ts";
 import { beltX, floorY } from "./car-lines.ts";
-import { roofAt, sampleSlice } from "./car-mesh.ts";
+import { bayTub, roofAt, sampleSlice } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { BUMPER_F, DRIVER_SIDE, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
-import { bayTub, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
+import { REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 
 /** Gap (m) between a seated head's top and the roof line over it (the roof skin, the headliner its inner face). */
