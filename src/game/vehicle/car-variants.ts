@@ -122,7 +122,8 @@ type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "chrome"
  * A lamp drawn to its outline (drawn only), met on the skin: its lens filling `loops` (a wrap round the corner is another loop) a few mm
  * proud of it, in `lens`; a `bezel` lip round each loop cresting `recess` (m) over the lens, so the lens sits in its own pocket and no face
  * lies on the skin's; `cells` (sections, a reverse or smoked cell, a band) over the lens in their own tones; `strips` (a DRL or LED line,
- * ribs) along open lines `width` wide; `rounds` (projector cells, fog lenses) of radius `r`.
+ * ribs) along open lines `width` wide; `rounds` (projector cells, fog lenses) of radius `r`. `overBody`: a bumper lamp met on the body's
+ * skin too, the nearer one winning, where the nose or tail corner stands proud of the fascia (the fascia alone hides it there).
  */
 interface LampShape {
   loops: readonly LampLoop[];
@@ -132,6 +133,7 @@ interface LampShape {
   cells?: readonly { loop: LampLoop; tone: LampTone }[];
   strips?: readonly { line: LampLoop; width: number; tone: LampTone }[];
   rounds?: readonly { at: LampPoint; side?: boolean; r: number; tone: LampTone }[];
+  overBody?: boolean;
 }
 
 /** Exhaust tips under the rear bumper: one at `x`, or two at ±`x`, centred at height `y`; `size` [w, h] (m) of the round (oval) or rectangular tip. */
@@ -195,6 +197,8 @@ interface BumperSpec {
   plate?: number;
   /** A rear plate's seating (drawn only): its rear face `out` (m, as `fascia`'s) behind the seat and its `color` (sRGB); absent, the platform plate's (0.09, cream). */
   plateFace?: { out?: number; color?: number };
+  /** A rear bumper drawn without the platform plate (its reference shows none): its tail trim is its rear bumper lamps alone. */
+  plateless?: boolean;
 }
 
 type DetailView = "side" | "top" | "front" | "rear" | "bottom";

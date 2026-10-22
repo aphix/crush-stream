@@ -36,17 +36,24 @@ const WAGON_LAMP_SHAPES = {
   front: {
     loops: [{ points: [[0.52, 0.36], [0.72, 0.36], [0.72, 0.48], [0.52, 0.48]] }],
     lens: "dark",
+    overBody: true,
     // The corner intake's bright blade, 2/3 of its width, and the silver splitter along the fascia's bottom lip (diffuse silver: chrome reads dark there).
     strips: [
       { line: { points: [[0.553, 0.43], [0.687, 0.43]] }, width: 0.018, tone: "clear" },
       { line: { points: [[0.006, 0.345], [0.2, 0.345], [0.35, 0.345], [0.5, 0.345], [0.64, 0.345]] }, width: 0.008, tone: "clear" },
     ],
   },
-  // The black diffuser band across the rear bumper's foot, its red reflector in it.
+  // The black diffuser band across the rear bumper's foot from its lip's crest up, its red reflector in it, in three tiles: one long ring
+  // round the bumper's wrap fills with holes.
   rear: {
-    loops: [{ points: [[0.006, 0.475], [0.64, 0.475], [0.64, 0.54], [0.006, 0.54]] }],
+    loops: [
+      { points: [[0.006, 0.487], [0.2, 0.487], [0.2, 0.54], [0.006, 0.54]] },
+      { points: [[0.2, 0.487], [0.4, 0.487], [0.4, 0.54], [0.2, 0.54]] },
+      { points: [[0.4, 0.487], [0.64, 0.487], [0.64, 0.54], [0.4, 0.54]] },
+    ],
     lens: "dark",
-    cells: [{ loop: { points: [[0.48, 0.48], [0.64, 0.48], [0.64, 0.5], [0.48, 0.5]] }, tone: "red" }],
+    overBody: true,
+    cells: [{ loop: { points: [[0.48, 0.49], [0.64, 0.49], [0.64, 0.51], [0.48, 0.51]] }, tone: "red" }],
   },
 } as const;
 

@@ -532,3 +532,24 @@ describe("given a device class and the page's ?lamps setting", () => {
     });
   }
 });
+
+describe("given the hatchback, whose tail lamp crosses the step from the infill to the quarter", () => {
+  it("when its right tail lamp is met from behind along its band, then every ray from the gate's edge to the corner meets the lens, with no body showing at the step", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
+    car.group.updateMatrixWorld(true);
+    const tail = car.lamps.find((l) => l.kind === "tail" && l.side > 0)!;
+    tail.seat.updateWorldMatrix(true, false);
+    const lens = new THREE.Mesh(drawnLamp(car.style, "tail", 1).geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    lens.matrixAutoUpdate = false;
+    lens.matrixWorld.copy(tail.seat.matrixWorld);
+    const ray = new THREE.Raycaster();
+    const gaps: string[] = [];
+    for (const y of [0.72, 0.75, 0.78]) {
+      for (let x = 0.45; x <= 0.66; x += 0.001) {
+        ray.set(new THREE.Vector3(x, y, -5), new THREE.Vector3(0, 0, 1));
+        if (ray.intersectObjects([car.body, lens], false)[0]?.object !== lens) gaps.push(`${x.toFixed(4)},${y}`);
+      }
+    }
+    assert.equal(gaps.join(" "), "", "rays along the band that meet the body before the lens, by x,y");
+  });
+});

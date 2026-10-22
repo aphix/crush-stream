@@ -238,14 +238,14 @@ const PLATFORM_PLATE_OUT = 0.09;
 /** The platform plate's roughness and metalness: a recoloured plate keeps its sheen. */
 const PLATE_SHEEN = [0.6, 0.1] as const;
 
-/** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height, its face and colour seated by `plateFace`) and the style's rear bumper lamps. */
+/** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height, its face and colour seated by `plateFace`; none on a `plateless` bumper) and the style's rear bumper lamps. */
 function rearFittings(style: BodyStyle): THREE.BufferGeometry {
-  const { seat, plate, plateFace } = style.bumpers.rear;
+  const { seat, plate, plateFace, plateless } = style.bumpers.rear;
   const trim = withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0).translate(0, plate === undefined ? 0 : plate - seat.y - PLATE_RISE, plateFace?.out === undefined ? 0 : PLATFORM_PLATE_OUT - plateFace.out);
   if (plateFace?.color !== undefined) toned(trim, plateFace.color, ...PLATE_SHEEN);
   if (!style.lamps.shapes?.rear) return trim;
   const lamps = bothSides(builtLamp(style, "rear").body).translate(0, -seat.y, seat.z);
-  return mergeToned([trim, lamps], "rear bumper fittings");
+  return plateless ? lamps : mergeToned([trim, lamps], "rear bumper fittings");
 }
 
 const frontKey = (style: BodyStyle): string | null =>
@@ -626,7 +626,7 @@ export function lampSeatAt(style: BodyStyle, kind: LampKind, side: number): THRE
 
 /**
  * `style`'s own `which` lamp met on its skin (car frame, right side): head and tail on the body, the share landing on the hood or boot lid
- * apart (that lid carries it); front and rear on that bumper's fascia. `side` -1 meets it on the left skin mirrored onto the right: the left
+ * apart (that lid carries it); front and rear on that bumper's fascia (and the body, `overBody`). `side` -1 meets it on the left skin mirrored onto the right: the left
  * half's triangles are not the right's mirror (a quad split on one diagonal mirrors onto the other), and round a corner they part by cm.
  */
 function builtLamp(style: BodyStyle, which: keyof LampShapes, side = 1): BuiltLamp {
@@ -640,11 +640,12 @@ function builtLamp(style: BodyStyle, which: keyof LampShapes, side = 1): BuiltLa
   const body: SkinSource = { geo: bodySkin(style), offset: new THREE.Vector3(), lid: false, mirror };
   const bumper = which === "front" || which === "rear";
   const seat = style.bumpers[front ? "front" : "rear"].seat;
+  const shape = style.lamps.shapes![which]!;
   const sources: SkinSource[] = bumper
-    ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false, mirror }]
+    ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false, mirror }, ...(shape.overBody ? [body] : [])]
     : [{ geo: front ? makeHoodGeometry(style) : makeTrunkGeometry(style), offset: new THREE.Vector3(0, ...(front ? style.hood.origin : bootPivot(style.boot))), lid: true, mirror }, body];
   const skin = new LampSkin(sources, zEnd, front ? 1 : -1, `${style.id} ${which} lamp${mirror ? " (left)" : ""}`);
-  const built = buildShape(style.lamps.shapes![which]!, skin, zEnd, (geo, t) => (bumper ? bumperTone : lampTone)(geo, t, kind));
+  const built = buildShape(shape, skin, zEnd, (geo, t) => (bumper ? bumperTone : lampTone)(geo, t, kind));
   if (!BUILT.has(style)) BUILT.set(style, new Map());
   BUILT.get(style)!.set(id, built);
   return built;
