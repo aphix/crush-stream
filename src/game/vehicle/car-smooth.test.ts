@@ -1152,8 +1152,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
   { id: "hatchback", digest: "c1b21432aa86e78d42c27f4cdfc4ba13bc36ba0d196efb0c1edd383c916d0784" },
   { id: "wagon", digest: "2d7badb7715e9f272e888e7f609e700b1344f625502a5801fc1863a4b2b65e17" },
-  // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), and its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above).
-  { id: "coupe", digest: "6d9050033dd05585abb912842030ae1190190ae7b6c8340781fbafc36f5018f4" },
+  // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above), and its drawn roof rolled onto the windshield's top (`roofEnds.front`).
+  { id: "coupe", digest: "83b21fbee58ab2628855d2917605f342099763f4c7a435e484fd02a5485af18c" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open; both trucks for the greenhouse's dome-following panes and posts.
