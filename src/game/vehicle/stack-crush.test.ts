@@ -5,7 +5,7 @@ import { DeformableCar } from "./car.ts";
 import { FLIGHT } from "./car-flight.ts";
 import { paint } from "./test-support.ts";
 import { makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
-import { FACE_LEFT, FACE_NOSE, FACE_RIGHT, FACE_TAIL, FACE_TOP, faceMax, faceStrength } from "../deform/load-crush.ts";
+import { FACE_LEFT, FACE_NOSE, FACE_RIGHT, FACE_TAIL, FACE_TOP, faceMax, faceStrength, IMPRINT_NONE } from "../deform/load-crush.ts";
 import { MASS_SPECS } from "../kernel/rig-spec.ts";
 import { crownY, keelY } from "./car-cage-rig.ts";
 
@@ -168,6 +168,47 @@ describe("given a car dropped onto one of its faces on the flat pad", () => {
       const d = [0.5, 1, 2].map((h) => drop(kind, h).deform.crush[face]!);
       assert.ok(d[1]! > d[0]! && d[2]! > d[1]!, `${kind} crush from 0.5 / 1 / 2 m: ${d.map((x) => x.toFixed(3)).join(" / ")} m`);
     }
+  });
+});
+
+/** How far (m) past the roof's packed depth its drawn top may sink: the imprint's own reach over the roof. */
+const DRAWN_SLACK = 0.05;
+/** Plan offset (m) of a car set down on a standing car's spot: the strip bench's slots 22 and 26 stood 23 and 19 mm apart, level, when 26's roof took an imprint plane 0.90 m under its crown from 22's belly (headless, 21.5 s after the staged crash). */
+const SAME_SPOT_M = 0.02;
+
+/** How far (m) the drawn body's top stands under its rest top once the owed skin is written: what a crushed roof leaves drawn. */
+function drawnTopSink(c: DeformableCar): number {
+  c.updateSkin();
+  const pos = c.body.geometry.getAttribute("position").array as Float32Array;
+  const rest = c.deform.restSkin;
+  let top = -Infinity;
+  let restTop = -Infinity;
+  for (let i = 1; i < pos.length; i += 3) {
+    top = Math.max(top, pos[i]!);
+    restTop = Math.max(restTop, rest[i]!);
+  }
+  return restTop - top;
+}
+
+describe("given a car's roof another car presses, which takes the belly's imprint for good", () => {
+  it("when a car settles on its roof, then the roof takes the imprint and its drawn top sinks no further than the roof's packed depth", () => {
+    const lower = stack(2).cars[0]!;
+    assert.notEqual(lower.deform.imprint[0], IMPRINT_NONE, "the control: a belly resting on the roof imprints it");
+    const sink = drawnTopSink(lower);
+    assert.ok(sink > 0.01 && sink <= faceMax(FACE_TOP) + DRAWN_SLACK, `the drawn roof sank ${sink.toFixed(3)} m`);
+  });
+
+  it("when a second car is set down on a wreck's spot, the second's belly inside its body, then the wreck's roof face is pressed but takes no imprint and its drawn top sinks no further than the roof's packed depth: a body inside the car is no belly on its roof, and the roof cut to it left the cabin open", () => {
+    const struck = new DeformableCar(paint(), new THREE.Scene());
+    struck.spawnFacing(0, 0, 0, 0);
+    struck.crashed = true;
+    const placed = new DeformableCar(paint(), new THREE.Scene());
+    placed.spawnFacing(SAME_SPOT_M, SAME_SPOT_M, 0, 0);
+    run(makeWorld([struck, placed], false, false), 0.25);
+    assert.ok(struck.deform.crush[FACE_TOP]! > 0, "the control: the belly inside the body pressed the roof's face");
+    const sink = drawnTopSink(struck);
+    assert.ok(sink <= faceMax(FACE_TOP) + DRAWN_SLACK, `the drawn roof sank ${sink.toFixed(3)} m (imprint plane ${struck.deform.imprint[0]!.toFixed(3)} m)`);
+    assert.equal(struck.deform.imprint[0], IMPRINT_NONE, `the roof took an imprint plane at ${struck.deform.imprint[0]!.toFixed(3)} m`);
   });
 });
 
