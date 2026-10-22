@@ -774,9 +774,10 @@ const SAIL_OUTER_POINTS = 6;
 
 /** The coupe on a curved roof section (`roofSection`): the sail rows read it beside every style as built. */
 const DOMED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, roofSection: { crown: 0.5, blend: 0.5 } };
-/** The coupe with its side window pinched (`cPillar.pinch`), and without (whatever it sets): the sail rows read the pinched one beside every style as built. */
+/** The coupe with its side window pinched (`cPillar.pinch`): the sail rows read it beside every style as built. */
 const PINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES.coupe.cPillar, pinch: 0.08 } };
-const UNPINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES.coupe.cPillar, pinch: undefined } };
+/** The control: the coupe unpinched with its quarter glass's sill held at the door's belt (before it rose to the window's point), whose sail cut across the window's point. */
+const UNPINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES.coupe.cPillar, pinch: undefined }, belt: { ...CAR_STYLES.coupe.belt, y: [[-0.981, 0.885], ...CAR_STYLES.coupe.belt.y.slice(1)] } };
 const SAIL_STYLES = [
   ...CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar).map((id) => [id, CAR_STYLES[id]] as const),
   ["domed coupe", DOMED_COUPE] as const,
@@ -1415,7 +1416,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Re-pinned for its rear glass's round outline (`rearGlass.roundOutline`): the frit's corner fans stand 1 cm in behind the pane as a backing, and the pane's drawn vertices are the glass panel's cage-skinned rest.
   // Re-pinned for its curved roof (`roofSection` .4/.6) and narrower rear glass top (`rearGlass.wTop` .92): the raked panes fall with the dome and the glass panel's cage-skinned rest moved.
   // Re-pinned for its belt's crest under the sail's foot dropped (profile z -1.49) and its quarter glass's point moved back (`quarter.zRearBot` -0.981, the belt's rear knots with it): the skin rows there and the glass panel's cage-skinned rest moved.
-  { id: "coupe", digest: "1cdca40793d0458084dca8852baf5f5d1170795c9c90ef62f9713579d2312766" },
+  // Re-pinned for its quarter glass's sill rising to the window's point (`belt.y` -0.981 .925) and its shoulder held level behind it (profile z -1.49 to -1.023 at .924-.93): the glass, its rail and the skin there moved.
+  { id: "coupe", digest: "034d75e5f0cc1b5c87f50f5e31114d29b2baef9c78452522b8d1dedf009c0c39" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open; both trucks for the greenhouse's dome-following panes and posts.

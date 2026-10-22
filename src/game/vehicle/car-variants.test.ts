@@ -1159,6 +1159,23 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(back <= -0.975 && Math.abs(front + 0.666) <= 0.01, `the glass reaches z ${back.toFixed(3)}, the sail runs to z ${front.toFixed(3)}`);
   });
 
+  it("when the coupe's quarter window and the body behind it are read in the side view, then the glass's sill rises from the door's belt to the window's point and the shoulder behind it runs back no higher than that point: the reference's line, with no hump over the window", () => {
+    /** Reference side view: the sill sits at the door's belt (y .88-.89) ahead of z -0.6 and the window's point stands at about .925. */
+    const [BELT_TOP, POINT_LOW] = [0.89, 0.92];
+    /** Behind the point the shoulder stands at most this far (m) over it: the reference's line holds the point's height. */
+    const OVER_POINT = 0.005;
+    const coupe = CAR_STYLES.coupe;
+    const pane = makeRearSideGlass(1, coupe).getAttribute("position");
+    let [tipZ, tipY, frontSill] = [Infinity, 0, Infinity];
+    for (let i = 0; i < pane.count; i++) {
+      if (pane.getZ(i) < tipZ) [tipZ, tipY] = [pane.getZ(i), pane.getY(i)];
+      if (pane.getZ(i) >= -0.6) frontSill = Math.min(frontSill, pane.getY(i));
+    }
+    let over = -Infinity;
+    for (let z = -1.49; z <= tipZ; z += 0.005) over = Math.max(over, sampleSlice(z, coupe.profile).yBelt - tipY);
+    assert.ok(frontSill <= BELT_TOP && tipY >= POINT_LOW && over <= OVER_POINT, `sill ${frontSill.toFixed(3)} ahead of z -0.6, point ${tipY.toFixed(3)} at z ${tipZ.toFixed(3)}, shoulder ${(over * 1000).toFixed(0)} mm over it`);
+  });
+
   it("when the coupe's door is drawn, then its skin is flush with the body side inside its cut (door.proud 0), not a lit 3 mm step at the shut line", () => {
     /** Flush within this (m): the skin's chords between its rows. */
     const FLUSH = 0.001;
