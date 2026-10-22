@@ -21,6 +21,9 @@ function seatProbe(seat: PartSeat): THREE.Mesh {
   return probe;
 }
 
+/** Triangles `g` draws. */
+const trianglesOf = (g: THREE.BufferGeometry): number => (g.index ? g.index.count : g.getAttribute("position").count) / 3;
+
 type LampRow = { kind: string; side: number; intact: boolean };
 /** Lamp order inside the car: head L, head R, tail L, tail R. */
 const HEAD_L = 0;
@@ -89,7 +92,7 @@ forModes("given a car whose lamps live on the body and break per corner", (mode)
     const batch = new LampBatch(2);
     batch.sync([car]);
     const shares = (["hood", "boot"] as const).map((k) => car.lampFittings.filter((f) => f.kind === k).length);
-    assert.equal(batch.slots.map((s) => s.reduce((n, m) => n + m.count, 0)).join(), [1, 1, 2, 0, 0, 0, ...shares, 0, 0, 0, 0, 0].join(), "drawn as head lit / head broken / tail running / tail broken, no brake lamp or marker, the lid shares as the style has them, none broken, none braking");
+    assert.equal(Array.from({ length: 13 }, (_, b) => batch.drawn(b)).join(), [1, 1, 2, 0, 0, 0, ...shares, 0, 0, 0, 0, 0].join(), "drawn as head lit / head broken / tail running / tail broken, no brake lamp or marker, the lid shares as the style has them, none broken, none braking");
   });
 
   it("when the front-left corner is crushed, then the crushed corner carries its lamp with the skin and the lamp stays seated on it", () => {
@@ -288,20 +291,24 @@ describe("given a monster-class car, whose lamp seats ride its lift", () => {
     const seatInLift = new THREE.Matrix4();
     const expected = new THREE.Matrix4();
     const got = new THREE.Matrix4();
-    for (const l of car.lamps) {
+    for (const [row, l] of car.lamps.entries()) {
       seatInLift.compose(l.seat.position, l.seat.quaternion, l.seat.scale);
       expected.multiplyMatrices(lift.matrixWorld, seatInLift);
-      const draws = batch.slots[l.kind === "head" ? 0 : 2]!;
-      const own = draws.length === 1 ? null : l.variant;
-      const slot = car.lamps.filter((other) => other.kind === l.kind && (own === null || other.variant === own)).indexOf(l);
-      draws[own ?? 0]!.getMatrixAt(slot, got);
+      batch.draw.matrixAt(row, got);
       for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - expected.elements[k]!) < 1e-5, `${l.kind} ${l.side} element ${k}`);
+      const unit = batch.draw.variants[batch.draw.variantAt(row)]!;
+      assert.equal(trianglesOf(unit), trianglesOf(drawnLamp(car.style, l.kind, l.side).geometry), `${l.kind} ${l.side} draws its own unit`);
     }
   });
 });
 
 describe("given the lamp batch and one car of each style", () => {
-  const tris = (g: THREE.BufferGeometry): number => (g.index ? g.index.count : g.getAttribute("position").count) / 3;
+  /** Triangles of the variant geometries that rows `from` up to `to` of the lamp draw show. */
+  const rowsTris = (batch: LampBatch, from: number, to: number): number => {
+    let sum = 0;
+    for (let r = from; r < to; r++) sum += trianglesOf(batch.draw.variants[batch.draw.variantAt(r)]!);
+    return sum;
+  };
 
   it("when one car of each style is packed, then its head and tail draws bill only its own lamp units' triangles, not the fleet's", () => {
     for (const id of CAR_STYLE_IDS) {
@@ -310,9 +317,13 @@ describe("given the lamp batch and one car of each style", () => {
       car.group.updateMatrixWorld(true);
       const batch = new LampBatch(8);
       batch.sync([car]);
-      const drawnTris = batch.slots.slice(0, 4).reduce((sum, draws) => sum + draws.reduce((n, m) => n + m.count * tris(m.geometry), 0), 0);
-      const expected = car.lamps.reduce((sum, l) => sum + tris(drawnLamp(car.style, l.kind, l.side).geometry), 0);
+      const expected = car.lamps.reduce((sum, l) => sum + trianglesOf(drawnLamp(car.style, l.kind, l.side).geometry), 0);
+      const heads = [0, 1, 2, 3].reduce((n, b) => n + batch.drawn(b), 0);
+      assert.equal(heads, car.lamps.length, `${id}: every lamp is packed as a head or tail seat`);
+      const drawnTris = rowsTris(batch, 0, car.lamps.length);
       assert.equal(drawnTris, expected, `${id}: the lamp batch bills ${drawnTris} triangles for lamps of ${expected}`);
+      const packed = rowsTris(batch, 0, batch.draw.count);
+      assert.equal(batch.draw.triangles, packed, `${id}: the one lamp draw bills ${batch.draw.triangles} triangles for seats of ${packed}`);
       batch.dispose();
     }
   });
@@ -323,9 +334,13 @@ describe("given the lamp batch and one car of each style", () => {
     const [lamps, parts] = [new LampBatch(8), new PartBatch(8)];
     lamps.sync([car]);
     parts.sync([car]);
-    const wrong = [...lamps.meshes, ...parts.meshes, ...parts.casters].filter((m) => m.visible !== m.count > 0);
+    const instanced = (m: THREE.Mesh): m is THREE.InstancedMesh => (m as THREE.InstancedMesh).isInstancedMesh === true;
+    const instancedDraws = [...parts.meshes, ...parts.casters].filter(instanced);
+    const wrong = instancedDraws.filter((m) => m.visible !== m.count > 0);
     assert.equal(wrong.length, 0, `draws shown while empty or hidden while filled: ${wrong.map((m) => `${m.name || m.geometry.name || "?"} (${m.count})`).join(", ")}`);
-    assert.ok(lamps.meshes.some((m) => m.count > 0) && parts.meshes.some((m) => m.count > 0), "nothing was packed");
+    assert.ok(lamps.draw.mesh.visible === (lamps.draw.triangles > 0), "the lamp draw is shown only while it bills triangles");
+    assert.ok(parts.styled.mesh.visible === (parts.styled.triangles > 0), "the styled part draw is shown only while it bills triangles");
+    assert.ok(lamps.draw.triangles > 0 && parts.styled.triangles > 0 && instancedDraws.some((m) => m.count > 0), "nothing was packed");
     lamps.dispose();
     parts.dispose();
   });
@@ -341,14 +356,13 @@ describe("given the lamp batch and one car of each style", () => {
       const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
       camera.position.copy(car.group.position).addScaledVector(car.forward, -8).setY(1.5);
       camera.lookAt(car.group.position);
-      const count = (b: number): number => batch.slots[b]!.reduce((n, m) => n + m.count, 0);
       /** [running, braking] tail draws, [running, braking] boot-lid share draws, [lit, dark] high brake lamp draws, and the tail glows summed. */
       const read = () => {
         batch.sync([car]);
         lights.update([car], camera, null);
         const c = lights.glow.geometry.getAttribute("color");
         const glow = car.lamps.reduce((g, l, i) => (l.kind === "tail" ? g + c.getX(i) : g), 0);
-        return { tails: [count(2), count(10)], shares: [count(7), count(11)], high: [count(4), count(12)], glow };
+        return { tails: [batch.drawn(2), batch.drawn(10)], shares: [batch.drawn(7), batch.drawn(11)], high: [batch.drawn(4), batch.drawn(12)], glow };
       };
       const shares = car.lampFittings.filter((f) => f.kind === "boot").length;
       const high = car.style.lamps.brake ? 1 : 0;
@@ -362,6 +376,30 @@ describe("given the lamp batch and one car of each style", () => {
       batch.dispose();
     }
     assert.ok(highs >= 2, `${highs} styles carry a high brake lamp`);
+  });
+
+  it("when a car taps its brakes, then the lamp draw re-colours its tails without rebuilding its geometry", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
+      car.spawnFacing(0, 0, 0, 0);
+      car.group.updateMatrixWorld(true);
+      const batch = new LampBatch(2);
+      batch.sync([car]);
+      const tail = car.lamps.findIndex((l) => l.kind === "tail");
+      assert.ok(tail >= 0, `${id}: the control: the car carries a tail lamp`);
+      const geo = batch.draw.mesh.geometry;
+      const [position, index] = [(geo.getAttribute("position") as THREE.BufferAttribute).version, geo.index!.version];
+      const glow = (): number => batch.draw.glowAt(tail, new THREE.Color()).r;
+      const off = glow();
+      car.drive.brake = 1;
+      batch.sync([car]);
+      assert.ok(batch.draw.mesh.geometry === geo, `${id}: braking swapped the draw's geometry`);
+      assert.equal((geo.getAttribute("position") as THREE.BufferAttribute).version, position, `${id}: braking re-uploaded the vertices`);
+      assert.equal(geo.index!.version, index, `${id}: braking re-uploaded the indices`);
+      assert.ok(batch.drawn(10) > 0, `${id}: no tail drawn braking`);
+      assert.ok(glow() > off, `${id}: tail glow red ${off.toFixed(3)} off the brakes, ${glow().toFixed(3)} on them`);
+      batch.dispose();
+    }
   });
 
   it("when a lamp breaks, then its share on the hood or boot lid goes dark with it and the other side's stays lit; when that lid tears off, both its shares go dark; a reset relights them", () => {
@@ -378,7 +416,7 @@ describe("given the lamp batch and one car of each style", () => {
         const drawn = (): string => {
           car.group.updateMatrixWorld(true);
           batch.sync([car]);
-          return [slot, slot + 2].map((b) => batch.slots[b]!.reduce((n, m) => n + m.count, 0)).join();
+          return [slot, slot + 2].map((b) => batch.drawn(b)).join();
         };
         assert.equal(drawn(), `${shares.length},0`, `${id} ${lid}: every share lit at rest`);
         car["breakLamp"](car.lamps.find((l) => l.kind === kind && l.side < 0)!);

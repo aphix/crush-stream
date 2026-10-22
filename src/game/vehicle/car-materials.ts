@@ -123,28 +123,8 @@ export function makeWheelMaterial(): THREE.MeshStandardMaterial {
   return m;
 }
 
-/** Per vertex 1 where a part takes its panel's paint (the instance colour), else 0. */
+/** Per vertex 1 where a part takes its panel's paint (its seat's tint, `SeatDraw`), else 0. */
 export const PAINTED_ATTRIBUTE = "painted";
-
-/** `m` painting its `painted` vertices with the instance colour (a styled part's panel paint). Chains `m`'s compile hook and key. */
-function withPaintedInstances<T extends THREE.MeshStandardMaterial>(m: T): T {
-  const hook = m.onBeforeCompile;
-  const key = m.customProgramCacheKey;
-  m.onBeforeCompile = (shader, renderer) => {
-    hook.call(m, shader, renderer);
-    shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", `#include <common>\nattribute float ${PAINTED_ATTRIBUTE};`)
-      .replace(
-        "#include <color_vertex>",
-        `vColor = vec4(color, 1.0);\n#ifdef USE_INSTANCING_COLOR\nvColor.rgb *= mix(vec3(1.0), instanceColor.rgb, ${PAINTED_ATTRIBUTE});\n#endif`,
-      );
-  };
-  m.customProgramCacheKey = () => `${key.call(m)}|painted-instances`;
-  return m;
-}
-
-/** The part batch's material for a kind drawn in style variants (mirrors, grille, tail trim): one draw per variant, painted per instance. */
-export const variantPartsMaterial = once((): THREE.MeshStandardMaterial => withPaintedInstances(makePartsMaterial()));
 
 /**
  * A car material's draw class: opaque draws of one class need one shader program, so `sortByDrawClass` (present/draw-order.ts)
