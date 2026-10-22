@@ -240,7 +240,8 @@ const QUAD_CAMERA = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 /**
  * MSAA samples of the HDR scene target per FX tier, [on a device whose pixel ratio is 1 or less, above it]: the desktop tiers (high,
  * ultra) always; low only at a pixel ratio of 1, where a CSS pixel is one drawn pixel and its edges stair the most (as the canvas's
- * MSAA gave it before); the plain tiers, which draw straight to an un-antialiased canvas, never.
+ * MSAA gave it before). The plain tiers have no scene target: they draw straight to the canvas and take its MSAA, which a ratio-1
+ * device's has (`makeRenderer`), so at a ratio of 1 every tier's edges are antialiased, as before, and above it high and ultra's are.
  */
 const SCENE_SAMPLES: Readonly<Record<FxTier, readonly [number, number]>> = { off: [0, 0], minimal: [0, 0], low: [4, 0], high: [4, 4], ultra: [4, 4] };
 

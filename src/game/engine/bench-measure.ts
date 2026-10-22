@@ -501,7 +501,7 @@ export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top:
     pixelRatio: renderer.getPixelRatio(),
     deviceRatio: Math.round(devicePixelRatio * 1000) / 1000,
     canvas: `${size.width}x${size.height}`,
-    antialias: sceneSamples(parts.cine.tier, devicePixelRatio) > 0,
+    antialias: renderer.getContext().getContextAttributes()?.antialias === true || sceneSamples(parts.cine.tier, devicePixelRatio) > 0,
     toneMapping: renderer.toneMapping,
     night: hud[SETTING_KEY.night] === true,
     wet: hud[SETTING_KEY.wet] === true,

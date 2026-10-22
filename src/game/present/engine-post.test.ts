@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
+import { makeRenderer } from "../engine/engine-renderer.ts";
 import { easeFade, FX_TIERS, PostFX } from "./engine-post.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -67,7 +68,7 @@ describe("given the post chain on a headless renderer and a print look's strengt
   });
 });
 
-describe("given the post chain on a headless renderer whose canvas has no MSAA, as every device's now has, on a device of pixel ratio 1 and one of 2", () => {
+describe("given the post chain on a headless renderer, on a device of pixel ratio 1 and one of 2", () => {
   const renderer = new THREE.WebGLRenderer({ canvas: element() });
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera();
@@ -102,5 +103,45 @@ describe("given the post chain on a headless renderer whose canvas has no MSAA, 
     }
     assert.equal(post.sceneRT, target, "the same target");
     assert.equal(steps.join(", "), `low 0 ${size}, high 4 ${size}`);
+  });
+
+  /** A canvas whose WebGL context reports the `antialias` the page asked it for (the stand-in's always says false). */
+  const askingCanvas = (): HTMLCanvasElement => {
+    const canvas = element();
+    const base = canvas.getContext("webgl2") as object;
+    canvas.getContext = ((kind: string, asked?: { antialias?: boolean }) =>
+      new Proxy(base, { get: (t, k) => (k === "getContextAttributes" ? () => ({ alpha: false, antialias: asked?.antialias === true }) : Reflect.get(t, k)) })) as never;
+    return canvas;
+  };
+  /**
+   * The edges each tier draws antialiased per device pixel ratio, wherever the scene is drawn: into the scene target with its samples (the
+   * post tiers) or straight to the canvas with its MSAA (the plain tiers). Ratio 1 keeps every tier's, as before; ratio 2 gains high and ultra's.
+   */
+  const EDGES = "dpr 1: off yes, minimal yes, low yes, high yes, ultra yes; dpr 2: off no, minimal no, low no, high yes, ultra yes";
+
+  it(`when the page's renderer is made on each device and each FX tier draws a frame, then the scene's edges are antialiased where it is drawn (${EDGES})`, () => {
+    const read = [1, 2].map((dpr) => {
+      (globalThis as { devicePixelRatio: number }).devicePixelRatio = dpr;
+      const page = makeRenderer(askingCanvas());
+      const post = new PostFX(page, dpr);
+      const draw = page.render.bind(page);
+      let edges = false;
+      page.render = (drawn, camera) => {
+        if (drawn === scene) {
+          const target = page.getRenderTarget();
+          edges = target === null ? page.getContextAttributes().antialias === true : target.samples > 0;
+        }
+        draw(drawn, camera);
+      };
+      const tiers = FX_TIERS.map((tier) => {
+        post.setTier(tier);
+        post.render(scene, camera, 1 / FRAME_HZ);
+        return `${tier} ${edges ? "yes" : "no"}`;
+      });
+      post.dispose();
+      return `dpr ${dpr}: ${tiers.join(", ")}`;
+    });
+    (globalThis as { devicePixelRatio: number }).devicePixelRatio = 1;
+    assert.equal(read.join("; "), EDGES);
   });
 });
