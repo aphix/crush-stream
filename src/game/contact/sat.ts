@@ -243,14 +243,20 @@ function deeperEnd(plan: Float32Array, style: CageStyle, outlineB: CageOutline, 
  * `dir` (+1 up, -1 down), placed again at that column's end (`BAND_INSET` inside, within its own band), the deeper of the two. The
  * middle's cell bounds the first placement, and a slanted band's end lands in another: a cop's hood under a 27° monster's tail stood
  * 1.7 cm lower in the end's cell than in the middle's, the end placed under the middle's top stood over it, and the pair read 0.10 m
- * shallow (0.408 m against the cages' 0.512). A band's heights (an outline's sliver, `meet`) are no column to place an end at.
+ * shallow (0.408 m against the cages' 0.512). A band's heights (an outline's sliver, `meet`) are no column to place an end at. Only where
+ * the end's column shares more than the two insets of the node's own band (as `deeperEnd` asks of the middle's): a raised monster
+ * tail's band (1.044-1.653 m) over a cop's column topped at 1.042 m was placed at 1.029, under its own bottom, and read 0.30-0.80 m deep
+ * where the cages stand apart (1 m up, 3.3 m back).
  */
 function endAt(at: number, dir: number, plan: Float32Array, style: CageStyle, outlineB: CageOutline, fields: CageFields): void {
   _in[I_AT] = at;
   meetAt(plan, style, outlineB, fields);
   const stand = dir > 0 ? _meet[M_STAND_HIGH]! : _meet[M_STAND_LOW]!;
   if (_meet[M_COLUMN] !== 1 || !((at - stand) * dir > 0)) return;
-  const end = dir > 0 ? Math.min(_in[I_A_HIGH]!, stand) - BAND_INSET : Math.max(_in[I_A_LOW]!, stand) + BAND_INSET;
+  const low = Math.max(_in[I_A_LOW]!, _meet[M_STAND_LOW]!);
+  const high = Math.min(_in[I_A_HIGH]!, _meet[M_STAND_HIGH]!);
+  if (high - low <= 2 * BAND_INSET) return;
+  const end = dir > 0 ? high - BAND_INSET : low + BAND_INSET;
   if ((at - end) * dir <= END_MOVED) return;
   _again.set(_meet);
   _in[I_AT] = end;
