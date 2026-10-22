@@ -2617,15 +2617,18 @@ function readMirror(style: BodyStyle): { inner: number; outer: number; cap: THRE
   return { inner, outer, cap, tip: new THREE.Color(colour.getX(tip), colour.getY(tip), colour.getZ(tip)), tipRoughness: (tone.getX(tip) * 101 - 0.5) / 100 };
 }
 
-/** A sedan built while its table door carries `mirror` (put back after). */
+/** A sedan built while its table door carries `mirror` (put back after); a fresh twin reference rebuilds its drawn style (cached per twin). */
 function sedanWithMirror(mirror: MirrorSpec): DeformableCar {
   const sedan = CAR_STYLES.sedan;
   const door = sedan.door;
+  const twin = sedan.drawn;
   sedan.door = { ...door, mirror };
+  sedan.drawn = twin && { ...twin };
   try {
     return new DeformableCar(PAINT, scene, null, "sedan");
   } finally {
     sedan.door = door;
+    sedan.drawn = twin;
   }
 }
 
