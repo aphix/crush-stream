@@ -29,6 +29,9 @@ const MUSCLE_REAR_FASCIA = [
   [-0.06, -0.06],
 ] as const;
 
+/** Small rounded bullet mirror in the body colour, as the reference's ([out, height, length] m). */
+const COUPE_MIRROR = { cap: "rounded", finish: "body", size: [0.1, 0.08, 0.12] } as const;
+
 /** Late-70s notchback muscle coupe (Celica Supra A40 proportions): long flat hood, flat roof, sloped rear glass, short ducktail deck. */
 export const COUPE: BodyStyle = {
   id: "coupe",
@@ -38,20 +41,20 @@ export const COUPE: BodyStyle = {
   belt: { x: [[-1.5, 0.6], [-0.96, 0.65], [-0.5, 0.665], [0.5, 0.675]], y: [[-0.95, 0.875], [0.55, 0.875], [0.7, 0.92]] },
   rocker: { y: 0.22 },
   underside: [[-2.114, 0.41], [-2.06, 0.31], [-1.96, 0.28], [-1.829, 0.282], [-1.818, 0.267], [-1.744, 0.267], [-1.729, 0.253], [-1.665, 0.257], [-1.644, 0.239], [-1.576, 0.242], [-1.572, 0.225], [-1.548, 0.225], [-1.533, 0.207], [-0.86, 0.182], [-0.835, 0.196], [0.381, 0.196], [0.399, 0.182], [0.723, 0.182], [1.689, 0.21], [1.782, 0.242], [1.893, 0.239], [1.985, 0.285], [2.014, 0.36], [2.017, 0.431]],
-  door: { hingeX: 0.74, hingeY: 0.555, hingeZ: 0.61, length: 1.1, halfHeight: 0.335, mirrorY: 0.3, mirrorZ: 0.3, mirrorReach: 0.12, mirrorHalfDepth: 0.08, aperture: [-0.49, 0.6] },
+  door: { hingeX: 0.74, hingeY: 0.555, hingeZ: 0.61, length: 1.1, halfHeight: 0.335, mirrorY: 0.3, mirrorZ: 0.3, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.49, 0.6], mirror: COUPE_MIRROR },
   aPillarFoot: 0.5,
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.0225, width: 0.06 } },
-  hood: { z0: 0.7, z1: 1.93, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.72, width: 0.62, rise: 0.03, scoop: { inlets: 2, z: 1.68, width: 0.52, height: 0.035 } } },
+  hood: { z0: 0.7, z1: 1.93, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.74, width: 0.62, rise: 0.03, scoop: { inlets: 2, z: 1.6, width: 0.52, height: 0.025 } } },
   bumpers: {
-    front: { ...bumpers.front, seat: { y: 0.366, z: 1.925 }, span: 0.6, wrap: { from: 0.3, back: 0.1 }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
+    front: { ...bumpers.front, seat: { y: 0.39, z: 1.925 }, span: 0.66, wrap: { from: 0.52, back: 0.12 }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
     rear: { ...bumpers.rear, seat: { y: 0.44, z: 2.0475 }, span: 0.72, wrap: { from: 0.5, back: 0.1 }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome" },
   },
   profile: [
-    st(-2.054, 0.54, 0.857),
-    st(-1.979, 0.635, 0.869),
-    st(-1.899, 0.685, 0.882),
+    st(-2.054, 0.62, 0.857),
+    st(-1.979, 0.67, 0.869),
+    st(-1.899, 0.7, 0.882),
     st(-1.761, 0.72, 0.904),
     st(-1.662, 0.733, 0.917),
     st(-1.587, 0.74, 0.928),
@@ -87,14 +90,14 @@ export const COUPE: BodyStyle = {
   roofZ: [-1.04, 0.1],
   windshieldTop: [1.255, 0.12],
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96 },
-  quarter: { zRearBot: -0.96, zRearTop: -0.88 },
+  quarter: { zRearBot: -0.96, zRearTop: -0.74 },
   midPillarZ: null,
   rearBulkhead: { z: -0.9, yTop: 0.89 },
   tubs: [[-0.9, 0.7, 0.3]],
   rearDoorSeam: null,
-  boot: { kind: "lid", z0: -1.5, z1: -2.04, origin: [0.975, -1.5] },
+  boot: { kind: "lid", z0: -1.5, z1: -2.04, origin: [0.975, -1.5], lip: { rise: 0.02, depth: 0.08 } },
   exhaust: { tips: 2, x: 0.45, y: 0.24, size: [0.085, 0.06], shape: "round" },
-  lamps: { head: [0.485, 0.51], tail: [0.4, 0.66] },
+  lamps: { head: [0.5, 0.575], tail: [0.37, 0.74] },
   camera: { hood: [1.12, 1.0], third: { dist: 6.1, height: 1.95, aimUp: 0.95 }, far: { dist: 9.9, height: 3.25, aimUp: 1.1 } },
   details: {
     lines: [
@@ -108,7 +111,7 @@ export const COUPE: BodyStyle = {
       { view: "side", points: [[0.506, 0.877], [0.307, 1.048], [0.107, 1.19], [-0.207, 1.19], [-0.506, 1.176], [-0.506, 0.877]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.52, 0.848], [0.421, 0.948], [0.307, 1.062], [0.192, 1.148], [0.107, 1.205]], width: 0.021, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[-0.506, 1.176], [-0.506, 0.891]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
-      { view: "side", points: [[-0.535, 1.162], [-0.82, 1.162], [-0.962, 0.92], [-0.948, 0.891], [-0.535, 0.891]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
+      { view: "side", points: [[-0.535, 1.162], [-0.74, 1.162], [-0.962, 0.905], [-0.948, 0.891], [-0.535, 0.891]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.691, 0.92], [0.535, 1.005], [0.335, 1.119], [0.093, 1.233]], width: 0.014, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[-0.834, 1.148], [-0.977, 1.105], [-1.148, 1.048], [-1.319, 0.977], [-1.433, 0.934]], width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.107, 1.205], [-0.207, 1.19], [-0.634, 1.183], [-0.848, 1.162], [-0.977, 1.133]], width: 0.014, depth: 0.002, profile: "u", cavity: 0.1 },
