@@ -7,7 +7,7 @@ import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { BUMPER_F, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { bayTub, makeHoodGeometry, sampleSlice, TUB_EDGE } from "./car-mesh.ts";
+import { bayAt, bayTub, makeHoodGeometry, sampleSlice, TUB_EDGE } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import { cabinGeometry, cageInterior, doorCardGeometry } from "./interior-geometry.ts";
 import { CarCabin, driverSeat } from "./interior.ts";
@@ -314,6 +314,56 @@ describe("given every style's drawn body and hood", () => {
       }
       const span = closed.length > 0 ? Math.max(...closed) - Math.min(...closed) : -1;
       assert.ok(span >= COWL - 1e-6, `${id}: closed deck between z ${(front + TUB_EDGE).toFixed(3)} and ${(rear - TUB_EDGE).toFixed(3)} spans ${span.toFixed(3)} m over ${closed.length} slices`);
+    }
+  });
+
+  test("when a drawn hood is laid on its body, then every closed-deck vertex under it stands at least 1 mm under the hood's top (no flap, no z-fight), a clamshell's included", () => {
+    /** The least clearance (m) between the hood's top and the deck it covers. */
+    const CLEAR = 0.001;
+    const clamshell: BodyStyle = { ...CAR_STYLES.wagon, hood: { ...CAR_STYLES.wagon.hood, kind: "clamshell" } };
+    const cases: readonly (readonly [string, BodyStyle])[] = [...CAR_STYLE_IDS.map((id) => [id, CAR_STYLES[id]] as const), ["wagon with a clamshell", clamshell]];
+    const ray = new THREE.Raycaster();
+    const down = new THREE.Vector3(0, -1, 0);
+    for (const [id, style] of cases) {
+      const body = makeChassisGeometry(style);
+      const { ring, slices } = body.userData.loft as { ring: number; slices: number };
+      const pos = body.getAttribute("position");
+      const hood = new THREE.Mesh(makeHoodGeometry(style));
+      hood.position.set(0, style.hood.origin[0], style.hood.origin[1]);
+      hood.updateMatrixWorld();
+      let read = 0;
+      for (let s = 0; s < slices; s++) {
+        const z = pos.getZ(s * ring);
+        if (z < style.hood.z0 + 1e-3 || z > style.hood.z1 - 1e-3 || bayAt(z, style) > 0) continue;
+        for (const point of [0, ring - 1]) {
+          const v = new THREE.Vector3().fromBufferAttribute(pos, s * ring + point);
+          ray.set(new THREE.Vector3(v.x, v.y + 1, v.z), down);
+          const top = ray.intersectObject(hood, false)[0]?.point.y ?? -Infinity;
+          assert.ok(top - v.y >= CLEAR, `${id}: the deck at (${mm(v)}) stands ${((top - v.y) * 1000).toFixed(2)} mm under the hood's top`);
+          read++;
+        }
+      }
+      assert.ok(read > 0, `${id}: no closed deck under the hood`);
+    }
+  });
+
+  test("when a drawn hood's edge is read along its length, then it stands 7 mm over the belt at every station, its rear end too (a rigid lid never bends into a cabin tub's blend)", () => {
+    /** The fender's closed-deck top (4 mm over the belt) plus the hood's 3 mm seat over it. */
+    const EDGE_OVER_BELT = 0.007;
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      if (style.hood.kind === "clamshell") continue;
+      const hood = makeHoodGeometry(style);
+      const { ring, slices } = hood.userData.loft as { ring: number; slices: number };
+      const pos = hood.getAttribute("position");
+      const [oy, oz] = style.hood.origin;
+      for (let s = 0; s < slices; s++) {
+        for (const point of [0, ring - 9]) {
+          const v = new THREE.Vector3().fromBufferAttribute(pos, s * ring + point);
+          const over = v.y + oy - sampleSlice(v.z + oz, style.profile).yBelt;
+          assert.ok(Math.abs(over - EDGE_OVER_BELT) < 1e-5, `${id}: the hood's edge at z ${(v.z + oz).toFixed(3)} stands ${(over * 1000).toFixed(1)} mm over the belt`);
+        }
+      }
     }
   });
 });
