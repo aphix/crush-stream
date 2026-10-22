@@ -141,6 +141,22 @@ describe("given a monster truck of its class at rest on flat ground", () => {
     }
     assert.ok(low >= 0, `lowest undercarriage vertex at ${low.toFixed(3)} m`);
   });
+
+  test("when its front-left wheel pops off, then the front axle still draws, its stub on the gone wheel's rest hub where it stood", () => {
+    const popped = build("monster");
+    const own = new PartBatch(1);
+    own.sync([popped]);
+    const before = new THREE.Matrix4();
+    own.meshes[PART_KIND.axle]!.getMatrixAt(0, before);
+    popped["dropWheel"](0, "hubFL");
+    popped.group.updateMatrixWorld(true);
+    own.sync([popped]);
+    assert.ok(popped.wheels[0]!.parent === scene, "the control: the wheel left the car");
+    assert.equal(own.meshes[PART_KIND.axle]!.count, 2, "both axles draw");
+    own.meshes[PART_KIND.axle]!.getMatrixAt(0, m);
+    const moved = Math.max(...m.elements.map((e, i) => Math.abs(e - before.elements[i]!)));
+    assert.ok(moved < 1e-4, `the front axle moved ${moved.toFixed(5)} off its rest place`);
+  });
 });
 
 describe("given a car whose front bumper is torn off", () => {

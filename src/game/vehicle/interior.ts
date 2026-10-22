@@ -209,26 +209,27 @@ export class CarUnderbody {
   /** Front, rear; they ride with the wheels (`assignClass` hangs them in the hub group). */
   readonly axles: readonly PartSeat[];
   private readonly wheels: readonly THREE.Object3D[];
+  /** Each wheel's rest hub: where a popped wheel's end of its axle stays. */
+  private readonly rests: readonly THREE.Vector3[];
 
   constructor(seats: readonly PartSeat[], group: THREE.Object3D, wheels: readonly THREE.Object3D[]) {
     const frame = seats.find((s) => s.kind === PART_KIND.ladderFrame)!;
     this.axles = seats.filter((s) => s.kind === PART_KIND.axle);
     this.wheels = wheels;
+    this.rests = wheels.map((w) => w.position.clone());
     group.add(frame, ...this.axles);
     this.follow();
   }
 
-  /** Each axle onto its wheels' hubs, tilted with them; an axle whose wheel left the car draws nothing. */
+  /** Each axle onto its wheels' hubs, tilted with them; a wheel that left the car leaves its end on its rest hub. */
   follow(): void {
     for (let k = 0; k < 2; k++) {
       const axle = this.axles[k]!;
       const [from, to, turn] = AXLE_ENDS[k]!;
       const a = this.wheels[from]!;
       const b = this.wheels[to]!;
-      axle.visible = a.parent === axle.parent && b.parent === axle.parent;
-      if (!axle.visible) continue;
-      const p = a.position;
-      const q = b.position;
+      const p = a.parent === axle.parent ? a.position : this.rests[from]!;
+      const q = b.parent === axle.parent ? b.position : this.rests[to]!;
       const across = hypot2(q.x - p.x, q.z - p.z);
       axle.position.addVectors(p, q).multiplyScalar(0.5);
       axle.rotation.set(0, turn, detAtan2(q.y - p.y, across));
