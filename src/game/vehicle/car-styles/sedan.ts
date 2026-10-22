@@ -133,11 +133,12 @@ export const SEDAN: BodyStyle = {
    */
   /**
    * The belt (the side glass's sill) runs at 0.90 to the door glass's front edge, then down to the cowl's corner at 0.86 by the
-   * windshield's foot, as the reference's A-pillar foot meets its fender (the crowned hood's fender line).
+   * windshield's foot, as the reference's A-pillar foot meets its fender (the crowned hood's fender line). Behind z -0.9 it kicks up
+   * to the quarter glass's point at 1.045 (the reference's window seal), drawn only: the cage's posts and rail stand ahead of it.
    */
   belt: {
     x: [[-1.2, 0.64], [-0.88, 0.7], [-0.5, 0.72], [0.4, 0.74]],
-    y: [[-1.23, 1.0], [-1.15, 0.98], [-0.9, 0.948], [-0.5, 0.913], [0.4, 0.9], [0.66, 0.9], [0.95, 0.86]],
+    y: [[-1.26, 1.045], [-1.2, 1.02], [-1.12, 0.99], [-1.02, 0.965], [-0.9, 0.948], [-0.5, 0.913], [0.4, 0.9], [0.66, 0.9], [0.95, 0.86]],
   },
   rocker: { y: 0.21 },
   /** The wheel opening about its hub as the reference's (.371, its top at .685); the lip overhangs it 1.5 cm so the dark well shows a thin gap. */
@@ -278,8 +279,11 @@ export const SEDAN: BodyStyle = {
   roofZ: [-1.159, 0.15],
   windshieldTop: [1.285, 0.15],
   rearGlass: { base: [1.02, -1.68], top: [1.235, -1.159], wBase: 1.05, wTop: 1.0 },
-  /** The quarter glass narrows to a point on the belt at -1.23, its raked edge running up to the rear door glass's top corner (reference side view). */
-  quarter: { zRearBot: -1.23, zRearTop: -0.88 },
+  /**
+   * The reference's quarter glass narrows to a point on the belt at -1.26, its top rounding over into the rear door's glass top (`cPillar.pinch`).
+   * Drawn only: the cage's C-post stands at -0.88, where the dummies' windshield rows hold.
+   */
+  quarter: { zRearBot: -0.88, zRearTop: -0.88, drawn: { zRearBot: -1.26, zRearTop: -0.88 } },
   midPillarZ: null,
   /**
    * The reference's B-pillar is gloss black and leans: 0.165 wide at the belt (z -0.21..-0.375), 0.105 at the roof (-0.27..-0.375), its
@@ -288,8 +292,8 @@ export const SEDAN: BodyStyle = {
    */
   pillars: { a: 0.035, b: { width: [0.165, 0.105], z: [-0.2925, -0.3225] } },
   blackout: { sail: true, b: true, cowl: true },
-  /** The C-pillar sails onto the haunch from the quarter glass's raked edge. */
-  cPillar: {},
+  /** The C-pillar sails onto the haunch from the quarter glass's rounded top (reference side view: y 1.18 at z -1.0, 1.131 at -1.1); the pinch's mid ring paid by one inner-face point a ring. */
+  cPillar: { pinch: 0.08, inner: 3 },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,

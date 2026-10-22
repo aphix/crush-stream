@@ -11,7 +11,7 @@ import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
 import { SAIL_SWEEP, makeGreenhouseFrame, makeRoofGeometry, postSection } from "./car-greenhouse-mesh.ts";
-import { makeWindshield, rearGlassCornerZ, rearGlassInset } from "./car-glass.ts";
+import { drawnQuarter, makeWindshield, rearGlassCornerZ, rearGlassInset } from "./car-glass.ts";
 import { DeformableCar } from "./car.ts";
 import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
 import { cageSourceOf } from "./car-cage-rig.ts";
@@ -806,7 +806,7 @@ const PINCH_FRONT_UNDER = 0.035;
  * rises out of the body loft's top at the glass) its glass shows past the sail for good, read mid-height between that top and the line.
  */
 function windowPointCover(style: BodyStyle): number {
-  const q = style.quarter;
+  const q = drawnQuarter(style);
   const [tipY, tipZ] = style.cPillar?.tip ?? [beltY(q.zRearBot, style), q.zRearBot];
   const [topY, topZ] = [glassTopY(q.zRearTop, style), q.zRearTop];
   const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
@@ -837,7 +837,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
     it(`when a ${id}'s sail is read along its haunch, then each section's foot sits on the body's shoulder and its face leaves it within ${SAIL_LEAN_DEGREES}° of the shoulder's tangent`, (t) => {
       if (style.cPillar?.flat) return t.skip("a flat sail leaves the body where its line touches the section: its own row");
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
-      const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
+      const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? drawnQuarter(style).zRearBot) - SAIL_SWEEP);
       const { ring, slices } = loftOf(sail);
       let read = 0;
       for (let s = 0; s < slices; s++) {
@@ -889,7 +889,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
   for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.flat)) {
     it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm behind its ${SAIL_ROLL_BLEND_TEST * 100} cm ease into the roof end's roll, no body point stands outside its line by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
-      const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
+      const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? drawnQuarter(style).zRearBot) - SAIL_SWEEP);
       const { ring, slices } = loftOf(sail);
       const off: string[] = [];
       let read = 0;
@@ -1353,9 +1353,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // CarSedan's shape data and arch radius (as the sim digests above): sedan b9e9e98b... -> df8e0b97... -> 720053fe...; police 2466b278... -> 5e59494a... -> 23142cfa....
   // Sedan and police re-pinned for the door glass's top-front corner kept in under the slim A-post (`aPillarTop` 0.143): 8540eed1 -> 2fc92389; police 5af761d2 -> d97239fa.
   // Then 0.13, so the cage's A-pillar box keeps the dummies' roof proxy off the windshield: 2fc92389 -> d4d091d3; police d97239fa -> 26d74836.
-  // Again for the quarter glass pinched to the belt (`quarter` -1.23/-0.88: the cage's C-post foot at -1.23) and the tail widened to the
-  // reference's plan: d4d091d3 -> 960df952; police 26d74836 -> fa94e508.
-  { id: "sedan", digest: "960df952a2f43b56e0bf08203d8b294463d819046f6dbaa89dfe19659791c357" },
+  // Again for the tail widened to the reference's plan: d4d091d3 -> 03293d37; police 26d74836 -> bb93a908.
+  { id: "sedan", digest: "03293d378326213da50b69d6c737880562cd2d823dcd2d8fe8fcefaa3a1125f5" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
@@ -1378,7 +1377,7 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Both trucks re-pinned for their smooth roof crown (`roofSection`, square over the windshield) the panes' tops follow; the pickup's for its
   // rear glass's top raised under the roof's rolled end (y 1.6 -> 1.635) and its panes taking the whole dome.
   { id: "pickup", digest: "e8952a810e3d68dfde1ac848197897460465a324ab97461be078652a83f87ad4" },
-  { id: "police", digest: "fa94e5082cc4bc28593d0557a5cec59cda78fbde1d0a0361b976f2d82c40084b" },
+  { id: "police", digest: "bb93a9082d0393e646fbc226fdb075fbda6f19d81cb54b371de3da40ef8becbc" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55).
   { id: "monster", digest: "50d67ae1e9b9dfa6344025060ff8c23afe70af78a80789f63b915ca2cb781875" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];

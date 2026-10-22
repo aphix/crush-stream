@@ -385,8 +385,8 @@ export interface BodyStyle {
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;
-  /** Side glass behind the B-pillar: rear edge z at the belt and at the top. */
-  quarter: { zRearBot: number; zRearTop: number };
+  /** Side glass behind the B-pillar: rear edge z at the belt and at the top. `drawn` (drawn only): the drawn pane, sail and trim's own; the cage's post and rail and the dummies' pane keep these. */
+  quarter: { zRearBot: number; zRearTop: number; drawn?: { zRearBot: number; zRearTop: number } };
   /** Extra pillar splitting the quarter glass (wagon C-pillar), or null. */
   midPillarZ: number | null;
   /**
@@ -414,9 +414,10 @@ export interface BodyStyle {
    * rear glass corners, a flush sail's head at the roof's end laps the glass's side edge this share of the way round its top corner's arc
    * (0 its side end, 1 its top end), so the head covers the arc above that point; absent 0.5, mid-arc. `pinch` (m): the side window's
    * line rounds over from its foot at the belt into the glass's top line this far ahead of `quarter.zRearTop` (one quadratic through that
-   * corner), so the window narrows to a point at the sail instead of ending on a straight rear edge; absent, the straight edge.
+   * corner), so the window narrows to a point at the sail instead of ending on a straight rear edge; absent, the straight edge. `inner`:
+   * points on each section's inner face (the cabin side), head to foot; absent 4.
    */
-  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; inner?: number };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Drawn only: the body paint's base roughness, clear coat and clear coat roughness (`makePaintMaterial`); absent the platform paint's (0.42, 0.72, 0.24). */

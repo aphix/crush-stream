@@ -306,10 +306,15 @@ function doorSpan(style: BodyStyle): SideSpan {
   return { ...span, front: (t) => doorGlassFrontZ(lerp(footY, topY, t), footY, topY, style), kneeT: (knee - footY) / (topY - footY) };
 }
 
-/** Quarter glass: from the C-pillar forward to in under the drawn B-pillar's rear edge. */
-function quarterSpan(style: BodyStyle): SideSpan {
+/** The drawn quarter glass's rear edge (`quarter.drawn`, else the cage's). */
+export function drawnQuarter(style: BodyStyle): { zRearBot: number; zRearTop: number } {
+  return style.quarter.drawn ?? style.quarter;
+}
+
+/** Quarter glass: from the C-pillar (the drawn one unless `quarter` is given) forward to in under the drawn B-pillar's rear edge. */
+function quarterSpan(style: BodyStyle, quarter = drawnQuarter(style)): SideSpan {
   const band = bPillarBand(style);
-  return { bot: [style.quarter.zRearBot, band.belt[0] + PANE_TUCK], top: [style.quarter.zRearTop, band.top[0] + PANE_TUCK] };
+  return { bot: [quarter.zRearBot, band.belt[0] + PANE_TUCK], top: [quarter.zRearTop, band.top[0] + PANE_TUCK] };
 }
 
 /** A side pane is this many columns long, rear to front: its belt edge is a polyline through the belt at their z. */
@@ -579,7 +584,7 @@ export function glassCorners(style: BodyStyle): Float32Array {
     for (let k = 0; k < 4; k++) {
       const across = k & 1;
       const t = k >> 1;
-      const v = p < 2 ? quadPoint(quads[p]!, across * 2 - 1, t) : sidePoint(sign, style, name.startsWith(PART_FAMILY.door) ? doorSpan(style) : quarterSpan(style), across, t);
+      const v = p < 2 ? quadPoint(quads[p]!, across * 2 - 1, t) : sidePoint(sign, style, name.startsWith(PART_FAMILY.door) ? doorSpan(style) : quarterSpan(style, style.quarter), across, t);
       v.toArray(out, p * 12 + k * 3);
     }
   }

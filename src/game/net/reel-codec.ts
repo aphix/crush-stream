@@ -331,8 +331,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * everything it draws, its seam cover included; the sedan's hood ends at z 0.99; the police light bar sits over the B-pillars. A driver thrown out
  * of the windshield leaves from the pane's bowed middle (`userData.centre`, 1 cm further forward), each raked pane's top corners fall onto the roof's
  * dome (`domeFall`, about 2 cm), and the hatchback's windshield reaches its reference's glass top (17 cm further back, 8 cm higher) with its rear glass
- * base and tailgate top at .905. The sedan's and police's quarter glass runs to a point on the belt (their C-post's foot with it) and their tails end
- * 3.5 cm wider. A car's collision cage keeps the underside it rests on out to its nose and tail lips (read once it is a wreck), so a
+ * base and tailgate top at .905. The sedan's and police's tails end 3.5 cm wider. A car's collision cage keeps the underside it rests on out to
+ * its nose and tail lips (read once it is a wreck), so a
  * wreck that loses a front wheel rests on its lip instead of rocking 3-4 cm in the ground, and a car pitched over another meets it as deep as the two
  * cages stand. A thrown driver meets each pane as its glass's own quad, and breaks it only with a blow on its face: a door strike no longer
  * cracks the windshield. Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.

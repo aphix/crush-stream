@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, ROOF_DRIP, roofDrip, WINDSHIELD_BOW } from "./car-lines.ts";
-import { domeFall, quarterSillZs, rearGlassCornerZ, rearGlassInset } from "./car-glass.ts";
+import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
   ROOF_ARC_T,
@@ -496,7 +496,7 @@ const DIVIDER: PillarSpan = { width: [0.08, 0.07] };
 function glassTopFill(sign: number, style: BodyStyle, aTopZ: number): THREE.BufferGeometry[] {
   const stations = style.glassTop;
   if (stations === undefined || typeof stations === "number") return [];
-  const zRear = style.quarter.zRearTop;
+  const zRear = drawnQuarter(style).zRearTop;
   const zs = [zRear, ...stations.map(([z]) => z).filter((z) => z > zRear && z < aTopZ), aTopZ];
   const rings = zs.map((z): Pt[] => {
     const low = glassTopY(z, style);
@@ -598,7 +598,7 @@ function onChords(points: Pt[], n: number): Pt[] {
  * shoulder along its tangent, then sweeps in onto the side window's line (`tip` up to the quarter glass's rear top corner), proud of the glass.
  */
 function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; rt: V3; ft: V3 }): THREE.BufferGeometry {
-  const q = style.quarter;
+  const q = drawnQuarter(style);
   const [tipY, tipZ] = style.cPillar?.tip ?? [beltY(q.zRearBot, style), q.zRearBot];
   const [topY, topZ] = [glassTopY(q.zRearTop, style), q.zRearTop];
   // A pinched window (`cPillar.pinch`): its line rounds over from the tip into the glass's top line `pinch` ahead of the corner, one
@@ -637,6 +637,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     .sort((a, b) => a - b)
     .filter((z, k, all) => k === 0 || z - all[k - 1]! > 1e-6);
   const r = SAIL_DEPTH / 2;
+  const inner = style.cPillar?.inner ?? SAIL_INNER;
   // A flush head stands on the drawn glass (fallen with the dome, round at its top corners), lapping its side edge.
   const glassHead = (z: number): readonly [number, number] => {
     const p = rearGlassInset(style, z, SAIL_FLUSH_LAP);
@@ -662,8 +663,9 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
       : roofEnd
         ? onChords([...roofEnd.filter((p) => p.x > head[0]!).reverse(), { x: head[0]!, y: head[1]! }], SAIL_ROOF_ROLL.length)
         : roofRoll(roof.x, roof.y, cantDrop(style), roofDrip(style), SAIL_ROOF_ROLL);
-    // Over the glass (a curved roof's end head too) the head's edge stays a bead's: a post's would stand out over the pane.
-    const headR = onGlass || (atRoofEnd && flush && roofEnd !== null) ? SAIL_FLUSH_STAND / 2 : r;
+    // Over the glass (a curved roof's end head too) the head's edge stays a bead's: a post's would stand out over the pane. So does a pinched
+    // window's ahead of its corner, where its line has risen into the glass's top: a post's round would hang under that line.
+    const headR = onGlass || (atRoofEnd && flush && roofEnd !== null) || (pinch > 0 && z > topZ) ? SAIL_FLUSH_STAND / 2 : r;
     // 0 on the window's line, 1 on the haunch: the foot's point and its tangent blend between the glass (its round edge's bottom on the line) and the shoulder.
     const f = THREE.MathUtils.smoothstep(tipZ - z, 0, SAIL_SWEEP);
     // A pinched window's sail laps the glass with a bead's edge, a bead's height off it, so the window's point stays sharp; on the haunch its foot's edge is the full round.
@@ -719,8 +721,9 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
         ? [at(0, 0), ...endFace.map((p) => ({ x: sign * p.x, y: p.y }))]
         : Array.from({ length: SAIL_OUTER }, (_, k) => at(onGlass ? (1 - detCos((Math.PI * k) / (SAIL_OUTER - 1))) / 2 : k / (SAIL_OUTER - 1), 0))),
       ...edge(1),
-      // The section thins from the foot's edge to the head's, so each rounded edge closes onto the inner face.
-      ...Array.from({ length: SAIL_INNER }, (_, k) => at(1 - k / (SAIL_INNER - 1), 2 * lerp(headR, footR, k / (SAIL_INNER - 1)))),
+      // The section thins from the foot's edge to the head's, so each rounded edge closes onto the inner face. A pinched sail's (its foot a
+      // bead) holds the head's depth to mid-face: thinning all the way, its inner face bowed out where the section turns into the roof's end.
+      ...Array.from({ length: inner }, (_, k) => at(1 - k / (inner - 1), 2 * lerp(headR, footR, pinch > 0 ? Math.max(0, (2 * k) / (inner - 1) - 1) : k / (inner - 1)))),
       ...edge(0).reverse(),
     ];
   };
@@ -772,7 +775,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
 const C_PILLAR_TIP = "cPillarTip";
 /** The gloss-black triangle on the side glass's plane between the quarter glass's rear edge and the side window's line down to `tip` ([y, z]) (drawn only). */
 function cPillarTip(sign: number, style: BodyStyle, [tipY, tipZ]: YZ): THREE.BufferGeometry {
-  const q = style.quarter;
+  const q = drawnQuarter(style);
   const [topY, topZ] = [glassTopY(q.zRearTop, style), q.zRearTop];
   const front = Math.max(q.zRearBot, q.zRearTop) + TIP_LAP;
   // Its buried bottom edge runs straight between its ends: the belt bends under 1 cm over its run.
@@ -802,7 +805,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   const belt = (z: number) => beltY(z, style);
   const bp = style.bPillar;
   const rg = style.rearGlass;
-  const q = style.quarter;
+  const q = source === "drawn" ? drawnQuarter(style) : style.quarter;
   const aTopZ = aPillarTopZ(style);
   const aPost = source === "drawn" ? aPostRails(style) : null;
   const bBands = bPillarBand(style, source);
