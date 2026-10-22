@@ -342,6 +342,28 @@ function rearFootPlate(sign: number, rb: V3, fb: V3, foot: V3): THREE.BufferGeom
   return geo;
 }
 
+/** A cab back panel laps this far (m) in over the rear glass's side edge, so no gap opens between the glass and a squared post. */
+const CAB_BACK_LAP = 0.02;
+
+/**
+ * The cab back beside a squared rear post (`pillars.rearSquare`, +x side; sign -1 mirrors): one flat panel facing the tail in the post's
+ * rear edge plane, from inside the post (half its `thick` in) to `CAB_BACK_LAP` over the rear glass's side edge, from its foot `rb` to its head `rt`.
+ */
+function cabBackPanel(sign: number, rb: V3, rt: V3, thick: number, rg: BodyStyle["rearGlass"]): THREE.BufferGeometry {
+  const corners: V3[] = [
+    [rb[0] - thick / 2, rb[1], rb[2]],
+    [rg.wBase / 2 - CAB_BACK_LAP, rb[1], rb[2]],
+    [rg.wTop / 2 - CAB_BACK_LAP, rt[1], rt[2]],
+    [rt[0] - thick / 2, rt[1], rt[2]],
+  ];
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(corners.flatMap(([x, y, z]) => [sign * x, y, z]), 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(8), 2));
+  geo.setIndex(sign > 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2]);
+  geo.computeVertexNormals();
+  return geo;
+}
+
 /** A glass bar stands this far (m) off the side glass's plane: clear of the pane, flat on it. */
 const GLASS_BAR_PROUD = 0.002;
 /** A glass bar's foot runs this far (m) under the belt, into the belt seal, like a post's. */
@@ -903,11 +925,23 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     // A drawn post's head follows the rear glass's top corner down the dome (`domeFall`), held inside the roof's span, where the
     // roof's clamp takes its whole top ring, not half of it.
     const [rtX, rtY, rtZ] = rearPillar.rt;
-    const heldPillar = { ...rearPillar, rt: [rtX, rtY - domeFall(style, rg.top[1])(rg.wTop / 2, 1), Math.max(rtZ, style.roofZ[0] + ROOF_TUCK)] } as const;
+    const [heldY, heldZ] = [rtY - domeFall(style, rg.top[1])(rg.wTop / 2, 1), Math.max(rtZ, style.roofZ[0] + ROOF_TUCK)];
     const sail = source === "drawn" ? style.cPillar : undefined;
+    // A squared post (`pillars.rearSquare`, a truck cab's back corner): its rear edge on the side glass's plane like its front, so its face never
+    // turns to the tail; a flat cab back panel closes the cab from inside it over the rear glass's side edge.
+    const squared = source === "drawn" && !sail && style.pillars?.rearSquare === true;
+    const [rbX, rbY, rbZ] = rearPillar.rb;
+    const heldPillar = squared
+      ? ({ ...rearPillar, rb: [rearPillar.fb[0], rbY, rbZ], rt: [rearPillar.ft[0], heldY, heldZ] } as const)
+      : ({ ...rearPillar, rb: [rbX, rbY, rbZ], rt: [rtX, heldY, heldZ] } as const);
     parts.push(pillar(source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : sail ? cPillarSail(sign, style, rearPillar) : roundedPillarFromCorners(sign, heldPillar, 0.05, true), "rear"));
+    if (squared) {
+      const cabBack = pillar(cabBackPanel(sign, heldPillar.rb, heldPillar.rt, 0.05, rg), "rear");
+      cabBack.name = "cabBack";
+      parts.push(cabBack);
+    }
     const rearFoot = source === "drawn" && !sail ? style.pillars?.rearFoot : undefined;
-    if (rearFoot) parts.push(rearFootPlate(sign, rearPillar.rb, rearPillar.fb, [rearFoot[0], rearFoot[1], rearPillar.rb[2]]));
+    if (rearFoot) parts.push(rearFootPlate(sign, heldPillar.rb, rearPillar.fb, [rearFoot[0], rearFoot[1], rearPillar.rb[2]]));
     if (sail?.tip) parts.push(cPillarTip(sign, style, sail.tip));
     if (m !== null) {
       const topZ = divider.z?.[1] ?? m;

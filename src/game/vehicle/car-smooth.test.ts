@@ -1012,6 +1012,39 @@ describe("given a style that stands a bar on its side glass (`pillars.glassBar`)
   });
 });
 
+/** A squared rear post's (`pillars.rearSquare`) outer face turns at most this far (m) in plan between its rear and front thirds; its cab back panel laps at least this far (m) over the rear glass's side edge. */
+const REAR_SQUARE_TURN = 0.01;
+const REAR_SQUARE_LAP = 0.01;
+/** The monster with its cab's back corners squared. */
+const SQUARED_MONSTER: BodyStyle = { ...CAR_STYLES.monster, pillars: { ...CAR_STYLES.monster.pillars, rearSquare: true } };
+
+describe("given a truck cab whose rear post is squared (`pillars.rearSquare`)", () => {
+  it(`when its drawn greenhouse is read, then each rear post's outer face runs along the car within ${REAR_SQUARE_TURN * 100} cm from its rear third to its front third at the belt (its head tucks under the roof's rolled rear end), a flat cab back panel facing the tail laps at least ${REAR_SQUARE_LAP * 100} cm over the rear glass's side edge on each side, and the cage is the plain monster's`, () => {
+    const drawn = makeGreenhouseFrame(SQUARED_MONSTER, "drawn");
+    const off: string[] = [];
+    for (const post of drawn.filter((g) => g.name === "rear")) {
+      const { ring } = loftOf(post);
+      const points = Array.from({ length: ring }, (_, k) => positionAt(post, k));
+      const [lo, hi] = [Math.min(...points.map((p) => p.z)), Math.max(...points.map((p) => p.z))];
+      const outerX = (inThird: (z: number) => boolean) => Math.max(...points.filter((p) => inThird(p.z)).map((p) => Math.abs(p.x)));
+      const [rearX, frontX] = [outerX((z) => z < lo + (hi - lo) / 3), outerX((z) => z > hi - (hi - lo) / 3)];
+      if (Math.abs(rearX - frontX) > REAR_SQUARE_TURN) off.push(`belt ring: outer face x ${rearX.toFixed(3)} at its rear third vs ${frontX.toFixed(3)} at its front`);
+    }
+    const panels = drawn.filter((g) => g.name === "cabBack");
+    if (panels.length !== 2) off.push(`${panels.length} cab back panels`);
+    for (const panel of panels) {
+      const p = Array.from({ length: panel.getAttribute("position").count }, (_, i) => positionAt(panel, i));
+      const inner = Math.min(...p.map((v) => Math.abs(v.x)));
+      if (inner > SQUARED_MONSTER.rearGlass.wBase / 2 - REAR_SQUARE_LAP) off.push(`cab back reaches in to x ${inner.toFixed(3)}`);
+      const normal = panel.getAttribute("normal");
+      for (let i = 0; i < normal.count; i++) if (normal.getZ(i) >= 0) off.push(`cab back normal ${i} z ${normal.getZ(i).toFixed(3)}: not facing the tail`);
+    }
+    const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join(";");
+    assert.ok(cage(SQUARED_MONSTER) === cage(CAR_STYLES.monster), "the squared monster's cage differs from the plain monster's");
+    assert.ok(off.length === 0, off.join("; "));
+  });
+});
+
 /** A flush sail's head (`cPillar.flush`) stands at most this far (m) over the drawn rear glass (a chrome bead's 5 mm, its rounded edge's 2.5 mm radius where the section rises steeply into it, and a mm), and laps at least this far in over its side edge, so the glass's edge lies under the sail. */
 const SAIL_FLUSH_HEIGHT = 0.0085;
 const SAIL_FLUSH_LAP_MIN = 0.005;
