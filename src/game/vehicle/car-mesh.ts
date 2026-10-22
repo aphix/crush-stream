@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { hypot2, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
+import { hypot2, detAcos, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type BumperEnd, type HoodNose, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
 import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, roofDrip, tubWall } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
@@ -779,18 +779,44 @@ const LID_FACE_STEPS = 2;
 /** A profile station this close (m) to a nose-wrapping hood's own ring is that ring's: no sliver of a gap. */
 const LID_KINK_MERGE = 0.005;
 
+/** The rolled edge's run at a ring: its plan taper and rise (m per m along the loft) and the x scale its ring takes after the build (a drop's fold). */
+type RollEdge = { taper: number; rise: number; scale: number };
+
 /**
  * The right side's rolled corner (`edgeRoll`) where a panel's top, coming in from `inner`, meets its upright side at (`w`, `top`): one
- * chord from `roll` (m) back along the top down to the side at the angle that splits the corner's turn in two. Its two vertices shade
- * round (`rollSmoothing`), so the roll costs one vertex a side. For the left side, mirror x and reverse. No roll: the sharp corner's one point.
+ * chord from `roll` (m) back along the top down to the side at the angle that splits the corner's turn in two. Its vertices shade
+ * round (`rollSmoothing`). For the left side, mirror x and reverse. No roll: the sharp corner's one point.
+ * Given the `edge`'s run, the roll is built square to it (its width and its turns read across the edge, not across the ring) in two
+ * chords, three equal turns: a lid's lip meets its tapering side at up to ~100°, which one chord cannot split under 50° a turn.
  */
-function rolledCorner(inner: Pt, w: number, top: number, roll: number): Pt[] {
+function rolledCorner(inner: Pt, w: number, top: number, roll: number, edge?: RollEdge): Pt[] {
   if (roll <= 0) return [{ x: w, y: top }];
-  const run = hypot2(w - inner.x, top - inner.y);
-  const start = { x: w - (roll * (w - inner.x)) / run, y: top - (roll * (top - inner.y)) / run };
-  // The top falls `slope` (rad) toward the edge; the chord bisects the turn from it down to the upright side.
-  const chord = (detAtan2(inner.y - top, w - inner.x) + Math.PI / 2) / 2;
-  return [start, { x: w, y: start.y - (w - start.x) * (detSin(chord) / detCos(chord)) }];
+  if (!edge) {
+    const run = hypot2(w - inner.x, top - inner.y);
+    const start = { x: w - (roll * (w - inner.x)) / run, y: top - (roll * (top - inner.y)) / run };
+    // The top falls `slope` (rad) toward the edge; the chord bisects the turn from it down to the upright side.
+    const chord = (detAtan2(inner.y - top, w - inner.x) + Math.PI / 2) / 2;
+    return [start, { x: w, y: start.y - (w - start.x) * (detSin(chord) / detCos(chord)) }];
+  }
+  const x = w * edge.scale;
+  const along = new THREE.Vector3(edge.taper, edge.rise, 1).normalize();
+  const out = new THREE.Vector3(x - inner.x * edge.scale, top - inner.y, 0);
+  const across = out.clone().addScaledVector(along, -out.dot(along)).length();
+  const start = { x: x - (roll * out.x) / across, y: top - (roll * out.y) / across };
+  const end = { x, y: top - roll / Math.sqrt(1 - along.y * along.y) };
+  const topNormal = out.clone().cross(along).normalize();
+  if (topNormal.y < 0) topNormal.negate();
+  const sideNormal = new THREE.Vector3(1, 0, -edge.taper).normalize();
+  // Two chords turn a third of the corner's turn each: their planes' normals stand a third and two thirds of the way round.
+  const turn = detAcos(THREE.MathUtils.clamp(topNormal.dot(sideNormal), -1, 1));
+  const [n1, n2] = [1, 2].map((k) => topNormal.clone().multiplyScalar(detSin(((3 - k) * turn) / 3)).addScaledVector(sideNormal, detSin((k * turn) / 3))) as [THREE.Vector3, THREE.Vector3];
+  const [r1, r2] = [n1.x * start.x + n1.y * start.y, n2.x * end.x + n2.y * end.y];
+  const det = n1.x * n2.y - n1.y * n2.x;
+  return [
+    { x: start.x / edge.scale, y: start.y },
+    { x: (r1 * n2.y - n1.y * r2) / det / edge.scale, y: (n1.x * r2 - n2.x * r1) / det },
+    { x: w, y: end.y },
+  ];
 }
 
 /** Flags for `splitCreases` (kept as `userData.rolled`): the rolled corners' ring points `at` on every one of a loft's `slices`, so the roll shades round however sharp its turn. */
@@ -823,10 +849,10 @@ function makeDeckPanel(
   const [oy, oz] = origin;
   // The skirt's upper point lies on its straight wall: a rolled lid and the drawn seated hood drop it (a clamshell lays it over the shoulder).
   const plainWall = roll > 0 || (hood && !clamshell);
-  const ring = (w: number, y: number, edge: number, crown: number, dome: Dome): Pt[] => {
+  const ring = (w: number, y: number, edge: number, crown: number, dome: Dome, rollEdge?: RollEdge): Pt[] => {
     const points = dome.map(([u, v]) => ({ x: w * u, y: lerp(edge, crown, v) }));
     if (roll > 0 && points.length > 0 && points.at(-1)!.x >= w - roll) throw new Error(`${style.id}: a lid's ${roll} m edge roll reaches past its dome's last point`);
-    const corner = rolledCorner(points.at(-1) ?? { x: 0, y: crown }, w, edge, roll);
+    const corner = rolledCorner(points.at(-1) ?? { x: 0, y: crown }, w, edge, roll, rollEdge);
     const skirtTop = plainWall ? [] : [{ x: w, y: y - skirt * 0.55 }];
     return [
       ...corner.map((p) => ({ x: -p.x, y: p.y })).reverse(),
@@ -857,14 +883,33 @@ function makeDeckPanel(
   const stations = kinks.length > 0 ? [...panel, ...kinks].sort((a, b) => a - b) : panel;
   let endRise = DECK_DOME;
   let endLid = { w: 0, base: 0, edge: 0, dome: DECK_DOME_POINTS };
-  for (const z of hood ? noseRefined(stations, style.profile) : stations) {
+  const deckZs = hood ? noseRefined(stations, style.profile) : stations;
+  const edgeAt = (z: number) => {
+    const lid = lidSection(z, style, seated, hood ? style.hood.crown : undefined);
+    return { w: lid.w, y: lid.edge + lipKick(Math.abs(zEnd - z), lip) };
+  };
+  // A rolled edge's run at deck ring `i`: the mitre of the edge's runs in from the rings either side of it.
+  const deckRun = (i: number): RollEdge | undefined => {
+    if (roll <= 0) return undefined;
+    const at = (j: number) => {
+      const z = deckZs[THREE.MathUtils.clamp(j, 0, deckZs.length - 1)]!;
+      const e = edgeAt(z);
+      return new THREE.Vector3(e.w, e.y, z);
+    };
+    const here = at(i);
+    const unit = (v: THREE.Vector3) => (v.lengthSq() > 0 ? v.normalize() : v);
+    const along = unit(here.clone().sub(at(i - 1))).add(unit(at(i + 1).sub(here)));
+    return { taper: along.x / along.z, rise: along.y / along.z, scale: 1 };
+  };
+  for (let i = 0; i < deckZs.length; i++) {
+    const z = deckZs[i]!;
     const sl = sampleSlice(z, style.profile);
     const lid = lidSection(z, style, seated, hood ? style.hood.crown : undefined);
     const kick = lipKick(Math.abs(zEnd - z), lip);
     const crownY = crown ? lerp(lid.crown, lid.edge + crown[0] * (lid.w / crown[1]) ** 2, THREE.MathUtils.smoothstep(Math.abs(z - z0), 0, BOOT_CROWN_RUN)) : lid.crown;
     endRise = crownY - lid.edge;
     endLid = { w: lid.w, base: sl.yBelt + LID_RISE - lid.edge, edge: lid.edge, dome: lid.dome };
-    const r = ring(lid.w, sl.yBelt + LID_RISE - oy, lid.edge - oy + kick, crownY - oy + kick, crown ? BOOT_CROWN_DOME : lid.dome);
+    const r = ring(lid.w, sl.yBelt + LID_RISE - oy, lid.edge - oy + kick, crownY - oy + kick, crown ? BOOT_CROWN_DOME : lid.dome, deckRun(i));
     if (clamshell) wrapShoulder(r, sectionPoints(sl, style, "drawn"), oy, tk);
     rings.push(r);
     zs.push(z - oz);
@@ -876,19 +921,29 @@ function makeDeckPanel(
   const yc = (nose ? endLid.edge : end.yBelt + LID_RISE) - oy - fold;
   const zA = zEnd - oz;
   const arc = (fold * Math.PI) / 2;
+  const wFace = drop ? drop.w / wEnd : 1;
   if (drop || nose) {
     const run = drop ? arc + yc - (drop.y - oy) : arc + Math.max(0, nose![0] - fold);
-    for (let k = 1; k <= LID_FOLD_STEPS + LID_FACE_STEPS; k++) {
+    const last = LID_FOLD_STEPS + LID_FACE_STEPS;
+    const pathAt = (k: number) => (k <= LID_FOLD_STEPS ? (k / LID_FOLD_STEPS) * arc : arc + ((k - LID_FOLD_STEPS) / LID_FACE_STEPS) * (run - arc));
+    // The x scale `bendOverEnd` gives a ring `s` (m) round the fold: a drop narrows to its face's width there.
+    const scaleAt = (s: number) => lerp(1, wFace, Math.min(s / fold, Math.PI / 2) / (Math.PI / 2));
+    const foldRun = (k: number): RollEdge | undefined => {
+      if (roll <= 0) return undefined;
+      const [a, b] = [pathAt(k - 1), pathAt(Math.min(last, k + 1))];
+      return { taper: (wEnd * (scaleAt(b) - scaleAt(a))) / (b - a), rise: 0, scale: scaleAt(pathAt(k)) };
+    };
+    for (let k = 1; k <= last; k++) {
       const folding = crown !== undefined && k <= LID_FOLD_STEPS;
       if (nose) rings.push(ring(endLid.w, endLid.base, 0, endRise, endLid.dome));
-      else rings.push(folding ? ring(wEnd, 0, 0, lerp(endRise, DECK_DOME, k / LID_FOLD_STEPS), BOOT_CROWN_DOME) : ring(wEnd, 0, 0, DECK_DOME, DECK_DOME_POINTS));
-      zs.push(zA + dir * (k <= LID_FOLD_STEPS ? (k / LID_FOLD_STEPS) * arc : arc + ((k - LID_FOLD_STEPS) / LID_FACE_STEPS) * (run - arc)));
+      else rings.push(folding ? ring(wEnd, 0, 0, lerp(endRise, DECK_DOME, k / LID_FOLD_STEPS), BOOT_CROWN_DOME, foldRun(k)) : ring(wEnd, 0, 0, DECK_DOME, DECK_DOME_POINTS, foldRun(k)));
+      zs.push(zA + dir * pathAt(k));
     }
   }
   const geo = loftFromRings(rings, zs, 0, 1);
   if (drop) {
     const lean = ((drop.z ?? z1) - z1) / (yc - (drop.y - oy));
-    bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, drop.w / wEnd, lean, fold, dir);
+    bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, wFace, lean, fold, dir);
   } else if (nose) bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, 1, 0, fold, dir);
   ensureOutwardNormals(geo);
   // The deck's own rings come first; a fold's follow them.
@@ -896,8 +951,8 @@ function makeDeckPanel(
   const n = rings[0]!.length;
   // The top's right edge (its side's top point): the skirt and underside's six corners and, unless dropped, the skirt's two upper points follow it.
   geo.userData.lidEdge = n - 7 - (plainWall ? 0 : 2);
-  // A rolled ring's corners are its first two points and the two before its skirt and underside's last six.
-  if (source === "drawn") splitCreases(geo, CREASE_DEGREES.deckLid, roll > 0 ? rollSmoothing(geo, [0, 1, n - 8, n - 7]) : undefined);
+  // A rolled ring's corners are its first three points and the three before its skirt and underside's last six.
+  if (source === "drawn") splitCreases(geo, CREASE_DEGREES.deckLid, roll > 0 ? rollSmoothing(geo, [0, 1, 2, n - 9, n - 8, n - 7]) : undefined);
   geo.computeBoundingBox();
   return geo;
 }

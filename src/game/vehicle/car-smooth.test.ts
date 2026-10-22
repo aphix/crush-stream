@@ -208,17 +208,17 @@ const lidCreaseTable = [
   { it: "a wagon's tailgate back corners (ring points 7, 8)", style: "wagon", part: "boot", rolledLid: false, creaseLines: [7, 8], smoothLines: [2, 3, 4], rollLines: [0, 1, 5, 6], creaseDegrees: CREASE_DEGREES.tailgate },
 ] as const;
 
-/** A rolled edge's one chord splits its corner's ~90° turn in two: each half turns at most this (°), shading round on shared vertices. */
+/** A rolled edge's chords split its corner's turn (~90°, up to ~100° at a tapering lid's lip): each turns at most this (°), shading round on shared vertices. */
 const ROLL_TURN_MAX_DEGREES = 50;
 
 /**
- * A rolled deck lid's ring (`boot.edgeRoll`, `n` points) runs side, roll start, dome, centre, dome, roll start, side, then its skirt and
- * underside's six corners: its roll lines, its top's lines between them, and its six creases.
+ * A rolled deck lid's ring (`boot.edgeRoll`, `n` points) runs side, roll middle, roll start, dome, centre, dome, roll start, roll middle,
+ * side, then its skirt and underside's six corners: its roll lines, its top's lines between them, and its six creases.
  */
 function rolledLidLines(n: number): { rollLines: number[]; smoothLines: number[]; creaseLines: number[] } {
   return {
-    rollLines: [0, 1, n - 8, n - 7],
-    smoothLines: Array.from({ length: n - 10 }, (_, k) => k + 2),
+    rollLines: [0, 1, 2, n - 9, n - 8, n - 7],
+    smoothLines: Array.from({ length: n - 12 }, (_, k) => k + 3),
     creaseLines: Array.from({ length: 6 }, (_, k) => n - 6 + k),
   };
 }
@@ -228,7 +228,7 @@ function lidEdgeAt(lid: THREE.BufferGeometry, slice: number, rolled: boolean): T
   const { ring } = loftOf(lid);
   const side = positionAt(lid, slice * ring);
   if (!rolled) return side;
-  const [start, dome] = [positionAt(lid, slice * ring + 1), positionAt(lid, slice * ring + 2)];
+  const [start, dome] = [positionAt(lid, slice * ring + 2), positionAt(lid, slice * ring + 3)];
   return new THREE.Vector3(side.x, start.y + ((side.x - start.x) * (start.y - dome.y)) / (start.x - dome.x), side.z);
 }
 
@@ -328,7 +328,7 @@ describe("given the lids as built", () => {
     const lid = makeTrunkGeometry(style);
     const loft = loftOf(lid);
     const pivotZ = (b.pivot ?? b.origin)[1];
-    // A rolled lid's top runs side, roll start, dome, centre, dome, roll start, side over its skirt and underside's last six points.
+    // A rolled lid's top runs side, roll middle, roll start, dome, centre, dome, roll start, roll middle, side over its skirt and underside's last six points.
     const rolled = b.edgeRoll !== undefined;
     const centre = rolled ? (loft.ring - 7) / 2 : (loft.ring - 9) / 2;
     const domeLines = rolled ? rolledLidLines(loft.ring).smoothLines : Array.from({ length: loft.ring - 10 }, (_, k) => k + 1);
