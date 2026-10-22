@@ -148,7 +148,7 @@ export interface PartNetState {
 
 type GlassState = "intact" | "cracked" | "shattered";
 
-/** Panes by place: doorL / doorR are the front side windows (they ride the doors, −x is the car's left). */
+/** Panes by place: doorL / doorR are the front side windows (they ride the doors; L is -x, the car's right with the nose +z, R is +x, its left: the driver's, `DRIVER_SIDE`). */
 export type GlassName = "windshield" | "rear" | "doorL" | "doorR" | "quarterL" | "quarterR";
 
 export type ExitPane = Extract<GlassName, "windshield" | "doorL" | "doorR">;
