@@ -25,7 +25,11 @@ export const SEDAN: BodyStyle = {
   },
   rocker: { y: 0.21 },
   arch: { radius: 0.405, lip: { flare: 0.008, width: 0.035 } },
-  hood: { z0: 0.88, z1: 1.97, origin: [0.81, 0.86] },
+  /**
+   * The hood's rear edge stands ahead of the windshield's foot (0.95), as the reference's: in its top view the bonnet ends ~1.0 on
+   * the centre line, the dark cowl and wipers (`blackout.cowl`) between it and the glass. Hinged 2 cm behind that edge, as before.
+   */
+  hood: { z0: 0.99, z1: 1.97, origin: [0.81, 0.97] },
   /** Body-colour fascias, as the reference's: its black is the lower intake, grille and diffuser (`details`, grille, tail trim), not the bumper. */
   bumpers: {
     front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.34, z: 1.965 }, span: 0.74, wrap: { from: 0.33, back: 0.242 }, trim: "body" },
@@ -91,7 +95,7 @@ export const SEDAN: BodyStyle = {
    * rear pillar are body colour.
    */
   pillars: { b: { width: [0.165, 0.105], z: [-0.2925, -0.3225] } },
-  blackout: { sail: true, b: true },
+  blackout: { sail: true, b: true, cowl: true },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,
