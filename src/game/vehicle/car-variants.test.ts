@@ -7,7 +7,7 @@ import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, st } from "./car-styles/platform.ts";
 import { ROCKER, cantY, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, rockerAt } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, rockerAt, tubWall } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
@@ -1690,7 +1690,7 @@ function linerInnerEdge(style: BodyStyle, wx: number, wz: number): number {
 /** A style without its arch lip. */
 const lipless = (style: BodyStyle): BodyStyle => ({ ...style, arch: { radius: style.arch.radius } });
 
-/** A bed's side wall stands this far (m) in from the body side (`halfRing`'s floor edge). */
+/** A bed's side wall stands this far (m) in from the body side at its foot (`halfRing`'s floor edge); its top edge at the style's `tubWall`. */
 const BED_WALL_INSET = 0.06;
 
 /** The wheels of `style` whose liner stands up through one of its tubs' floors, each with that floor's height. */
@@ -1823,6 +1823,22 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         }
       }
       assert.ok(worst >= 0, `${id}: a tyre stands ${(-worst).toFixed(3)} m through the bed at ${at}`);
+    });
+
+    it(`when a ${id}'s bed is looked down onto just outside and inside its wall's top edge, then the rim is ${tubWall(style)} m wide and the wall's face drops away inside it, in the drawn and the cage build`, () => {
+      const off: string[] = [];
+      const [, front, floor] = style.tubs.at(-1)!;
+      const z = front - 0.1;
+      const edge = sampleSlice(z, style.profile).hw - tubWall(style);
+      for (const source of ["drawn", "cage"] as const) {
+        const body = new THREE.Mesh(makeChassisGeometry(style, source), SIDED);
+        const down = (x: number): number => bodyHit(body, [x, 3, z], [0, -1, 0], 3)?.y ?? -Infinity;
+        const rim = down(edge + 0.006);
+        const inside = down(edge - 0.006);
+        if (rim < floor + 0.1) off.push(`${source} rim ${rim.toFixed(3)} (over ${(floor + 0.1).toFixed(3)})`);
+        if (rim - inside < 0.05) off.push(`${source} inside ${inside.toFixed(3)} (under ${(rim - 0.05).toFixed(3)})`);
+      }
+      assert.ok(off.length === 0, `${id} at z ${z.toFixed(2)}: ${off.join("; ")}`);
     });
   }
 

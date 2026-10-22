@@ -65,7 +65,7 @@ export const MONSTER: BodyStyle = {
   hood: { z0: 0.94, z1: 2.08, origin: [0.96, 0.92] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.39, z: 2.05 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black" },
-    rear: { ...bumpers.rear, seat: { y: 0.44, z: 2.36 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black" },
+    rear: { ...bumpers.rear, seat: { y: 0.44, z: 2.36 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black", hitch: true },
   },
   profile: [
     st(-2.3, 0.8, 1.02),
@@ -84,11 +84,13 @@ export const MONSTER: BodyStyle = {
   roofZ: [-0.7, 0.5],
   windshieldTop: [1.47, 0.5],
   rearGlass: { base: [1.02, -0.78], top: [1.45, -0.7], wBase: 1.36, wTop: 1.18 },
+  privacyGlass: { rear: true },
   quarter: { zRearBot: -0.64, zRearTop: -0.64 },
   midPillarZ: null,
   rearBulkhead: { z: -0.79, yTop: 1.03 },
   tubs: [[-0.76, 0.96, 0.5], [-2.26, -0.82, 0.62]],
   wheelTub: { rise: 0.24, length: 0.82, width: 0.25 },
+  tubWall: 0.04,
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
   lamps: { head: [0.55, 0.7], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, sideMarkers: [{ at: [0.88, -2.1], size: [0.06, 0.03] }] },
@@ -136,8 +138,8 @@ export const MONSTER: BodyStyle = {
       { view: "front", points: [[0, 0.52], [0.82, 0.52]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.1 },
     ],
     patches: [
-      { view: "side", points: [[0.064, 0.877], [-0.107, 0.877], [-0.107, 0.798], [0.064, 0.798]], depth: -0.004, rim: 0.004, cavity: 0.5 },
-      { view: "side", points: [[-0.463, 0.869], [-0.627, 0.869], [-0.627, 0.798], [-0.463, 0.798]], depth: -0.004, rim: 0.004, cavity: 0.5 },
+      { view: "side", points: [[0.055, 0.858], [-0.095, 0.858], [-0.095, 0.818], [0.055, 0.818]], depth: -0.005, rim: 0.004, cavity: 0.8 },
+      { view: "side", points: [[-0.47, 0.854], [-0.62, 0.854], [-0.62, 0.814], [-0.47, 0.814]], depth: -0.005, rim: 0.004, cavity: 0.8 },
       { view: "side", points: [[0.848, 0.763], [0.78, 0.763], [0.78, 0.724], [0.848, 0.724]], depth: -0.002, rim: 0.003, cavity: 0.3 },
       { view: "side", points: [[-1.953, 0.814], [-2.045, 0.814], [-2.045, 0.761], [-1.953, 0.761]], depth: -0.002, rim: 0.003, cavity: 0.3 },
       { view: "front", points: [[0.62, 0.36], [0.72, 0.36], [0.72, 0.42], [0.62, 0.42]], depth: -0.005, rim: 0.003, cavity: 0.5 },
