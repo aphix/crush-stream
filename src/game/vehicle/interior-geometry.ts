@@ -65,8 +65,8 @@ function onBack(geo: THREE.BufferGeometry, x: number, up: number, back: number):
 }
 
 /**
- * The cage's interior box, byte-for-byte the shape the first shared interior had: the cage field reads its up-facing triangles
- * through a gone pane, so the drawn kit can change without moving the sim. Built once, never disposed.
+ * The cage's interior box, the shape the first shared interior had with its wheel on the driver's side (`DRIVER_SIDE`): the cage
+ * field reads its up-facing triangles through a gone pane, so the drawn kit can change without moving the sim. Built once, never disposed.
  */
 export const cageInterior = once((): THREE.BufferGeometry => {
   const dark = [0x14161c, 0.94, 0.04] as const;

@@ -101,10 +101,11 @@ describe("given every car body style, whose panels are cut from each body's own 
       return Math.max(...[...r.verts].map((v) => pos.getZ(v)));
     };
     assert.ok(front("sedan") < -0.5, `sedan quarter reaches z=${front("sedan")}, past its rear door`);
-    for (const id of ["coupe", "pickup"] as const) {
-      const doorRear = CAR_STYLES[id].door.hingeZ - CAR_STYLES[id].door.length;
-      assert.ok(front(id) >= doorRear - FLOAT32_EDGE, `${id} quarter starts at z=${front(id)}, not reaching its door's rear edge ${doorRear}`);
-    }
+    // The pickup's extended cab ends in a rear-access panel: its quarter starts at that panel's seam, as a four-door's does.
+    const seam = CAR_STYLES.pickup.rearDoorSeam!;
+    assert.ok(Math.abs(front("pickup") - seam) <= FLOAT32_EDGE, `pickup quarter starts at z=${front("pickup")}, not at its rear-access panel's seam ${seam}`);
+    const doorRear = CAR_STYLES.coupe.door.hingeZ - CAR_STYLES.coupe.door.length;
+    assert.ok(front("coupe") >= doorRear - FLOAT32_EDGE, `coupe quarter starts at z=${front("coupe")}, not reaching its door's rear edge ${doorRear}`);
   });
 
   it("when the sedan's quarter panel is shelled flat and then bent, then the flat shell lies on the skin (4 mm proud, its sheet 2 cm behind) and the bent panel peels at its leading edge and holds at the tail", () => {

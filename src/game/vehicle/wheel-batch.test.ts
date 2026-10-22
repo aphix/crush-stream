@@ -56,7 +56,10 @@ describe("given the wheel batch and cars at two distances from the camera", () =
     assert.equal(far.count, 4);
     const matrix = new THREE.Matrix4();
     far.getMatrixAt(0, matrix);
-    assertSameNumbers(matrix.elements, cars[1]!.wheels[0]!.matrixWorld.elements, "the far wheel stands where the car's wheel group does", FLOAT32_SLACK);
+    // The one wheel mesh is the platform tyre: the drawn matrix is the wheel group's, scaled to the style's own tyre.
+    const { r, halfW } = cars[1]!.frame.rig.tyre;
+    const expected = cars[1]!.wheels[0]!.matrixWorld.clone().scale(new THREE.Vector3(halfW / PLATFORM_TYRE.halfW, r / PLATFORM_TYRE.r, r / PLATFORM_TYRE.r));
+    assertSameNumbers(matrix.elements, expected.elements, "the far wheel stands where the car's wheel group does, at the car's tyre size", FLOAT32_SLACK);
   });
 
   test("when the far car comes back inside the distance, then all eight wheels are full wheels", () => {

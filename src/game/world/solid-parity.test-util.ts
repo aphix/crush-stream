@@ -32,6 +32,9 @@ const FRAME = 1 / FRAME_HZ;
 const SETTLE = 2.5;
 /** Nose-to-face gap (m) a car is sent from. */
 const RUN_IN = 3;
+/** Steps (m) the start is moved out along the face's normal while the car's footprint there meets a solid, and the most it may be. */
+const STAGE_STEP = 0.1;
+const STAGE_MAX = 6;
 /** How far out (m) from the face the ground under the car's run is read: the run-in and a car's length. */
 const APPROACH = RUN_IN + 2 * carFrame(CAR_STYLES.sedan).footHalfL;
 
@@ -49,6 +52,8 @@ export type Outcome = {
   speed: number;
   /** How far (rad) the car's heading turned over the hit, positive toward the side the face's aim point was on (its right, for a positive offset). */
   turn: number;
+  /** How much further out (m) than `RUN_IN` the car was started, so that its footprint met no solid at its start (`courseRig`). */
+  staged: number;
 };
 
 /** A car class as a race car has it: its body, durability and the kill travel the default realism gives. */
@@ -71,6 +76,8 @@ type Rig = {
   /** One 1/60 s frame of the world. */
   frame(): void;
   ejections(): number;
+  /** The last aim's start beyond `RUN_IN` (m). */
+  staged(): number;
   done(): void;
 };
 
@@ -87,6 +94,7 @@ function barrierRig(car: DeformableCar): Rig {
     },
     frame: () => tickWorld(w),
     ejections: () => w.ejections.length,
+    staged: () => 0,
     done: () => {},
   };
 }
@@ -96,26 +104,40 @@ const COURSE_JSON = [...TRACKS, ...OFF_MENU];
 /** A face: the point on it the car aims at, and its unit normal out of the solid (toward the car). */
 type Face = { x: number; z: number; nx: number; nz: number };
 
-/** The race stack's walls and props, headless: the car is stepped by the engine's `stepWorld` with the director's `courseHit` as its end-of-slice hook. */
+/**
+ * The race stack's walls and props, headless: the car is stepped by the engine's `stepWorld` with the director's `courseHit` as its
+ * end-of-slice hook. The car starts `RUN_IN` out from the face, or further out along its normal (`STAGE_STEP` at a time, `staged`) until
+ * its footprint there meets no solid: a 5.3 m pickup sent at the monument's arm from `RUN_IN` started with its nose in the arm's tip, and
+ * the cell measured that instead of the hit.
+ */
 function courseRig(car: DeformableCar, id: string, face: (track: Track, colliders: readonly PropCollider[]) => Face): Rig {
   const w = raceWorld();
   w.race.showLobby(id);
   const track = new Track(COURSE_JSON.find((j) => parseTrack(j).id === id));
-  const f = face(track, propColliders(placeProps(track)));
+  const colliders = propColliders(placeProps(track));
+  const f = face(track, colliders);
   const world = newWorld([car]);
   world.ejection = new EjectionWatch();
   world.collide = (c, i, h) => w.race.courseHit(c, i, h);
   let ejected = 0;
   let acc = 0;
+  let staged = 0;
   return {
     car,
     face: f,
     aim: (c, speed, offset) => {
       const reach = strikeReach(c, "front");
-      // The car starts `offset` m to its left of the face's aim point, so that point is that far to its right.
-      const x = f.x + f.nx * (RUN_IN + reach) + f.nz * offset;
-      const z = f.z + f.nz * (RUN_IN + reach) - f.nx * offset;
       const yaw = Math.atan2(-f.nx, -f.nz);
+      // The car starts `offset` m to its left of the face's aim point, so that point is that far to its right.
+      const startX = (out: number): number => f.x + f.nx * (RUN_IN + reach + out) + f.nz * offset;
+      const startZ = (out: number): number => f.z + f.nz * (RUN_IN + reach + out) - f.nx * offset;
+      staged = 0;
+      while (footprintMeets(c, startX(staged), startZ(staged), yaw, colliders)) {
+        staged += STAGE_STEP;
+        if (staged > STAGE_MAX) throw new Error(`${id}: no start within ${STAGE_MAX} m out from the face where the car's footprint meets no solid`);
+      }
+      const x = startX(staged);
+      const z = startZ(staged);
       if (c.crashed) relaunchDamaged(c, x, z, yaw, -f.nx * speed, -f.nz * speed);
       else launch(c, x, z, yaw, -f.nx * speed, -f.nz * speed);
       // Both put the car at y = 0; the monument stands on an embankment 2-4 m up, and a car started under the ground is lifted onto it,
@@ -138,8 +160,58 @@ function courseRig(car: DeformableCar, id: string, face: (track: Track, collider
       }
     },
     ejections: () => ejected,
+    staged: () => staged,
     done: () => setGround(null),
   };
+}
+
+/**
+ * Whether `car`'s footprint (its cage's plan box), set at (`x`, `z`) turned to `yaw` on the ground there, meets any of `colliders` that
+ * stands within its height: the plan boxes (a circle by its radius) overlapping, and the solid's foot under the car's top, its top over
+ * the ground.
+ */
+function footprintMeets(car: DeformableCar, x: number, z: number, yaw: number, colliders: readonly PropCollider[]): boolean {
+  const plan = car.cage.fields.planBox;
+  const ground = activeGround().heightAt(x, z);
+  const foot = Number.isFinite(ground) ? ground : 0;
+  const roof = foot + 2 * car.frame.half.y + cageLift(car);
+  // The car's box: its middle in the world and its axes (right, forward), half extents along them.
+  const [s, c] = [Math.sin(yaw), Math.cos(yaw)];
+  const mx = (plan[0]! + plan[1]!) / 2;
+  const mz = (plan[2]! + plan[3]!) / 2;
+  const cx = x + c * mx + s * mz;
+  const cz = z - s * mx + c * mz;
+  const hx = (plan[1]! - plan[0]!) / 2;
+  const hz = (plan[3]! - plan[2]!) / 2;
+  for (const o of colliders) {
+    if (o.base >= roof || o.top <= foot) continue;
+    if (o.kind === "circle" ? circleMeetsBox(o.x, o.z, o.r, cx, cz, s, c, hx, hz) : boxesMeet(cx, cz, s, c, hx, hz, o.x, o.z, Math.sin(o.yaw), Math.cos(o.yaw), o.hx, o.hz)) return true;
+  }
+  return false;
+}
+
+/** Whether a circle at (`px`, `pz`) of radius `r` meets the box at (`cx`, `cz`) whose right axis is (cos, −sin) and forward (sin, cos) of yaw (`s`, `c`), half extents `hx` by `hz`. */
+function circleMeetsBox(px: number, pz: number, r: number, cx: number, cz: number, s: number, c: number, hx: number, hz: number): boolean {
+  const dx = px - cx;
+  const dz = pz - cz;
+  const u = Math.max(-hx, Math.min(hx, dx * c - dz * s));
+  const v = Math.max(-hz, Math.min(hz, dx * s + dz * c));
+  const ex = dx - (u * c + v * s);
+  const ez = dz - (-u * s + v * c);
+  return ex * ex + ez * ez < r * r;
+}
+
+/** Whether two plan boxes meet (separating axes): each at its middle, turned by its yaw's (sin, cos), with half extents across and along. */
+function boxesMeet(ax: number, az: number, as: number, ac: number, ahx: number, ahz: number, bx: number, bz: number, bs: number, bc: number, bhx: number, bhz: number): boolean {
+  const axes = [ac, -as, as, ac, bc, -bs, bs, bc];
+  for (let k = 0; k < axes.length; k += 2) {
+    const nx = axes[k]!;
+    const nz = axes[k + 1]!;
+    const reachA = ahx * Math.abs(ac * nx - as * nz) + ahz * Math.abs(as * nx + ac * nz);
+    const reachB = bhx * Math.abs(bc * nx - bs * nz) + bhz * Math.abs(bs * nx + bc * nz);
+    if (Math.abs((bx - ax) * nx + (bz - az) * nz) >= reachA + reachB) return false;
+  }
+  return true;
 }
 
 /** A straight stretch of `track` with a wall on the left, 12 m of road either side of its middle: its face, 1 m from the middle's line. */
@@ -231,7 +303,7 @@ export function strike(target: Target, cls: VehicleClassId, speed: number, hits 
       const heading = car.yaw;
       for (let f = 0; f < SETTLE / FRAME; f++) rig.frame();
       const d = car.deform;
-      out.push({ alive: d.drivetrainAlive, health: d.drivetrainHealth, travel: d.engineTravel, wheels: d.wheelsOn, ejected: rig.ejections() > 0, speed: car.velocity.length(), turn: car.yaw - heading });
+      out.push({ alive: d.drivetrainAlive, health: d.drivetrainHealth, travel: d.engineTravel, wheels: d.wheelsOn, ejected: rig.ejections() > 0, speed: car.velocity.length(), turn: car.yaw - heading, staged: rig.staged() });
     }
   } finally {
     rig.done();

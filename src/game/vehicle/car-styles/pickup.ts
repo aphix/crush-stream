@@ -19,7 +19,7 @@ const TRUCK_FRONT_FASCIA = [
 /** 80s regular-cab long-bed pickup (Toyota Pickup proportions): boxy cab, flat hood, open bed; the trunk part is the tailgate. */
 export const PICKUP: BodyStyle = {
   id: "pickup",
-  dims: { wheelbase: 2.575, overhang: { front: 0.683, rear: 0.93 }, track: 1.3, width: 1.573, height: 1.691, rideHeight: 0.34, wheel: { radius: 0.38, width: 0.24 } },
+  dims: { wheelbase: 2.575, overhang: { front: 0.683, rear: 0.93 }, track: 1.3, width: 1.584, height: 1.691, rideHeight: 0.34, wheel: { radius: 0.38, width: 0.24 } },
   ...PLATFORM_HARDPOINTS,
   windshield: { base: [1.21, 0.9], wBase: 1.36, wTop: 1.18 },
   belt: { x: 0.73, y: [[0, 1.12]] },
@@ -30,7 +30,7 @@ export const PICKUP: BodyStyle = {
   aPillarTop: 0.41,
   bPillar: { rear: -0.3, front: -0.23 },
   arch: { radius: 0.46, lip: { flare: 0.024, width: 0.065, square: true } },
-  hood: { z0: 0.92, z1: 1.9, origin: [1.2, 0.9] },
+  hood: { z0: 1.03, z1: 1.86, origin: [1.2, 1.01] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.76, wrap: { from: 0.55, back: 0.12 }, fascia: TRUCK_FRONT_FASCIA, trim: "chrome" },
     rear: { ...bumpers.rear, seat: { y: 0.57, z: 2.13 }, span: 0.74, wrap: { from: 0.65, back: 0.05 }, trim: "chrome" },
@@ -58,14 +58,15 @@ export const PICKUP: BodyStyle = {
   midPillarZ: null,
   rearBulkhead: { z: -0.56, yTop: 1.2 },
   tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
-  rearDoorSeam: null,
+  wheelTub: { rise: 0.19, length: 0.55, width: 0.22 },
+  rearDoorSeam: -0.41,
   boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15], pivot: [0.6, -2.15] },
   lamps: { head: [0.5, 0.85], tail: [0.58, 0.86] },
   camera: { hood: [1.42, 1.25], third: { dist: 6.4, height: 2.3, aimUp: 1.2 }, far: { dist: 10.3, height: 3.62, aimUp: 1.35 } },
   details: {
     lines: [
       { view: "side", points: [[0.706, 1.128], [0.699, 0.461]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-0.406, 1.59], [-0.421, 0.478]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.41, 1.142], [-0.421, 0.478]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[0.699, 0.462], [-0.414, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.428, 0.462], [-0.556, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.592, 1.142], [-0.599, 0.446]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },

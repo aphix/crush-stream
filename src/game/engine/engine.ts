@@ -172,7 +172,7 @@ export class CrashEngine extends EngineGarage {
   };
 
   /** What this device is (`deviceClass`), decided once from the GL context, the pointer and the user agent. */
-  private readonly deviceClass: DeviceClass;
+  protected readonly deviceClass: DeviceClass;
 
   constructor(canvas: HTMLCanvasElement, hudStore: HudStore, veil: HTMLElement) {
     super();
@@ -213,7 +213,9 @@ export class CrashEngine extends EngineGarage {
 
     this.glassDots = new GlassDotSystem(this.scene);
     this.ensureCars(INITIAL_HUD.carCount);
-    this.scene.add(...this.wheels.meshes, ...this.lampBatch.meshes, ...this.partBatch.meshes, ...this.partBatch.casters, this.partBatch.looseWarm, this.seated.mesh, ...this.coverBatch.meshes);
+    this.scene.add(this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.seated.mesh, ...this.coverBatch.meshes);
+    // Under the wheel shadow prisms, shown to the shadow pass alone: the casters cost no camera-pass draw.
+    this.wheels.meshes.at(-1)!.add(...this.partBatch.casters);
     const driverLook = (car: number, cop: boolean) => this.ragdolls.carDriverLook(car, cop);
     // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels, lamps, parts and seated drivers.
     this.scene.onBeforeRender = (renderer) => {

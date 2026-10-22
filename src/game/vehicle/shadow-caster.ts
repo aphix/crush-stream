@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
-/** Triangles a style's rest caster is decimated to: every style's shadow stays within half a percent of its full shell's. */
-const CASTER_TRIANGLES = 1000;
+/** Triangles a style's rest caster is decimated to: every style's shadow stays within the flush-casters bar of its full shell's. */
+const CASTER_TRIANGLES = 1200;
 /** Parts' seam vertices closer than this (m) weld into one, so the decimator sees one shell. */
 const WELD = 1e-4;
 /** meshoptimizer's error bound, relative to the shell's extent: 1 lets the triangle count alone stop it. */

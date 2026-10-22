@@ -24,6 +24,7 @@ import {
   makePaintMaterial,
   makeSirenMaterial,
   type LampKind,
+  withPushBar,
 } from "./car-materials.ts";
 import { carPartSeats, MIRROR_REACH, PART_KIND, PartSeat, styleMirrorDrawn } from "./part-geometry.ts";
 import { bumperBare, CarCabin } from "./interior.ts";
@@ -186,7 +187,7 @@ export interface PartNetState {
 
 type GlassState = "intact" | "cracked" | "shattered";
 
-/** Panes by place: doorL / doorR are the front side windows (they ride the doors, −x is the car's left). */
+/** Panes by place: doorL / doorR are the front side windows (they ride the doors; L is -x, the car's right with the nose +z, R is +x, its left: the driver's, `DRIVER_SIDE`). */
 export type GlassName = "windshield" | "rear" | "doorL" | "doorR" | "quarterL" | "quarterR";
 
 export type ExitPane = Extract<GlassName, "windshield" | "doorL" | "doorR">;
@@ -559,7 +560,9 @@ export abstract class CarCore {
     const g = new THREE.Group();
     const spec = front ? this.style.bumpers.front : this.style.bumpers.rear;
     const fascia = makeBumperGeometry(front, this.style);
-    const mesh = new THREE.Mesh(front ? fascia : withRearFittings(fascia, this.style), bumperMaterial(spec.trim, accent, body));
+    // A push bar is drawn only: merged into the front bumper, it follows the bumper's masses and tears off with it (its flying box is the bumper's as drawn).
+    const geometry = front ? (this.style.pushBar ? withPushBar(fascia) : fascia) : withRearFittings(fascia, this.style);
+    const mesh = new THREE.Mesh(geometry, bumperMaterial(spec.trim, accent, body));
     this.bumperMeshes.push(mesh);
     mesh.castShadow = true;
     this.flushCasters.push(mesh);

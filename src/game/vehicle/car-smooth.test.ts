@@ -445,7 +445,7 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; bo
   const body = makeChassisGeometry(style);
   return {
     lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,
-    humps: wellHumpGeometry(style)?.getAttribute("position").count ?? 0,
+    humps: wellHumpGeometry(style, "drawn")?.getAttribute("position").count ?? 0,
     bootRings: (sliceZs(style, "drawn").length - sliceZs(style, "drawn", false).length) * loftOf(body).ring,
   };
 }
@@ -558,6 +558,7 @@ describe("given every body style crashed into the wall at 48 km/h by the engine'
  * Every rest-only table `cageSourceOf` hands the cage (the cage mesh is decimated from them, so they fix the contact shape of every
  * hit, not only the scripted one), hashed as raw bytes in field order. Re-pinned for the sill following the cell's clusters: only the
  * sill vertices' cluster tables (skinN, skinXf, skinW) changed. Re-pinned for the sill samples a wreck rests on (`sill`, the last table).
+ * Re-pinned for the driver's side (`DRIVER_SIDE`, the steering wheel moved to +x): only `interiorRest` changed.
  */
 function cageSourceDigest(car: DeformableCar): string {
   const source = cageSourceOf(car);
@@ -572,7 +573,7 @@ function cageSourceDigest(car: DeformableCar): string {
 }
 
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "505b4c4fe9c4f34f8f3350c3530634eff8ae353dcfa168b128b9525112f4d52a" },
+  { id: "sedan", digest: "8d0ca6fec24787b820976ef5beb3b9bc33abd7d28ee2e89cdd0159374addc6cd" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   { id: "hatchback", digest: "ba4c934973909383e4f766d12db1f27bcd4798c25b2755e5eec2079791a13d9f" },

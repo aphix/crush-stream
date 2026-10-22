@@ -15,8 +15,8 @@ import { DT, paint } from "./test-support.ts";
 
 /** The share of the whole car's shadow the caster may leave lit, or shade beyond it (the bumpers stand a texel proud of the body). */
 const UNDAMAGED_MISSING_MAX = 0.012;
-/** A style's caster triangles: a third of its body alone, so the shadow pass costs less than the body casting did. */
-const CASTER_TRIANGLES_MAX = 1000;
+/** A style's caster triangles: under a quarter of its body and flush parts, so the shadow pass costs less than the body casting did. */
+const CASTER_TRIANGLES_MAX = 1200;
 
 const standingCar = (style: CarStyleId): DeformableCar => {
   const car = new DeformableCar(paint(), new THREE.Scene(), null, style);

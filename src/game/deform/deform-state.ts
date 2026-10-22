@@ -152,6 +152,12 @@ export abstract class DeformState extends DeformHit {
     }
   }
 
+  /** A tyre on a solid's side shoved wheel `name` back by (dx, dz) in world (`readTyreSides`, past its stroke): its hub's shove, as a face's on a planted hub. */
+  shoveWheel(name: MassName, dx: number, dz: number): void {
+    const m = this.massByName(name);
+    if (!m.popped) this.shoveHub(m, dx, dz);
+  }
+
   massLocal(name: MassName): THREE.Vector3 {
     return this.massByName(name).local;
   }
