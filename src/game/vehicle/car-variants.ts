@@ -200,11 +200,15 @@ interface DetailPatch {
   cavity: number;
 }
 
-/** A wheel arch's drawn lip: it stands `flare` (m) proud of the body side at the opening's edge, rolls into the well there and fairs into the skin `width` (m) out; `square` squares its outline and face (a box flare). */
+/**
+ * A wheel arch's drawn lip: it stands `flare` (m) proud of the body side at the opening's edge, rolls into the well there and fairs into
+ * the skin `width` (m) out; `square` squares its outline and face (a box flare), `band` gives the round outline that stepped face (a raised flare band).
+ */
 interface ArchLip {
   flare: number;
   width: number;
   square?: boolean;
+  band?: boolean;
 }
 
 /** A chase eye: `dist` behind and `height` over the car's origin, aimed `aimUp` over it (m). */

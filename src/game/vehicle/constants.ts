@@ -12,6 +12,8 @@ export const INTERIOR_MESH = "interior";
 export const PRIMER_ATTRIBUTE = "primer";
 /** `PRIMER_ATTRIBUTE` of the bay trough's walls and floor: dark bare steel (`bare-metal.ts` darkens past 1). */
 export const INNER_PANEL = 2;
+/** `PRIMER_ATTRIBUTE` of a wheel well (its liner, ceiling and the lip's return): flat near-black, so the arch reads over a dark well. */
+export const WELL_PANEL = 3;
 /**
  * `PRIMER_ATTRIBUTE` of a blacked-out panel (pillars, sail, cowl, roof rails): gloss black under the paint's clear coat
  * (`car-materials.ts`), as the references draw them. Below 0, so bare steel (`bare-metal.ts`, from 0.3 up) never reads it.
