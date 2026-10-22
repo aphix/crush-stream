@@ -78,8 +78,11 @@ export type BootSpec = (
   /**
    * Deck lid lofted on the profile from z0 to z1, hinged at origin; with `drop` it wraps the tail, its face standing at z1. `crown` [drop, at]
    * (m, drawn only): its top domes as a parabola across x, `drop` under its centre line at |x| `at`, its edge (the shut line) kept.
+   * `halfWidth` (m, drawn only, `flush` lids only): |x| of the lid's side edge, held under the profile's own (half-width less 7 cm); the body's
+   * boot hollow narrows with it, its rim 1 cm outboard of the edge at the deck edge's height, so the quarter top outboard of the groove stands
+   * 3 mm under the lid's edge, as the fender beside the hood does. Absent, the lid runs to the deck edge.
    */
-  | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop; crown?: readonly [drop: number, at: number] }
+  | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop; crown?: readonly [drop: number, at: number]; halfWidth?: number }
   /**
    * Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). `outline`:
    * its edge, the reference's gate seam, as [x, y] on the right side from top to bottom (held past its ends); absent, the tail panel's

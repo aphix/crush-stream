@@ -294,6 +294,8 @@ interface BootCut {
 const BOOT_GAP = 0.005;
 /** A face's opening stays this far (m) inside the panel that shuts it: the panel's edge closes over body, never over the hole. */
 const BOOT_LAP = 0.01;
+/** A flush deck lid's edge stands this far (m) inside the hollow's rim beside it: the 1 cm groove (the deck edge's hw - 0.07 against the rim's hw - 0.06). */
+const LID_GROOVE = 0.01;
 /** The face's cut runs at least this far (m) in from the tail: the opening's sill is the tail panel's top. */
 const FACE_DEPTH = 0.06;
 /** A hollow's floor stands at least this far (m) over the floor pan and over a wheel well's arch: inside the cage's hull, whose sill corner stands 2 cm over the pan. */
@@ -334,6 +336,11 @@ export function bootCutAt(z: number, cut: BootCut): { open: number; face: number
   const open = THREE.MathUtils.smoothstep(z, cut.rear - TUB_EDGE, cut.rear + TUB_EDGE) * (1 - THREE.MathUtils.smoothstep(z, cut.front - TUB_EDGE, cut.front + TUB_EDGE));
   const face = cut.face ? 1 - THREE.MathUtils.smoothstep(z, cut.face.front - TUB_EDGE, cut.face.front + TUB_EDGE) : 0;
   return { open, face };
+}
+
+/** A flush deck lid's drawn half-width cap (m, |x|, `boot.halfWidth`): its edge (`lidSection`) and the hollow's rim beside it (`halfRing`) stand under it. Infinity without one, for a lid that is not flush, and for a tailgate. */
+function flushLidCap(b: BodyStyle["boot"]): number {
+  return b.kind === "lid" && b.flush === true ? (b.halfWidth ?? Infinity) : Infinity;
 }
 
 /** Half-width (m) of the rear-door shut-line groove; seamInset sets its 9 mm depth (8e2dc49). */
@@ -473,16 +480,24 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   ];
   const boot = bootCut(style);
   const cut = source === "drawn" ? bootCutAt(z, boot) : { open: 0, face: 0 };
+  const lidCap = source === "drawn" ? flushLidCap(style.boot) : Infinity;
+  const lidWall = Math.min(hw - 0.06, lidCap + LID_GROOVE);
+  // A capped lid's quarter top runs straight back at the rim's x through the cut's ramps, so no twisted wedge opens into the hollow beside the lid's corners.
+  if (Number.isFinite(lidCap) && z <= boot.front + TUB_EDGE && z >= boot.rear - TUB_EDGE) {
+    half[0] = [Math.min(half[0]![0], lidWall), half[0]![1]];
+    half[1] = [Math.min(half[1]![0], lidWall), half[1]![1]];
+  }
   if (cut.open > 0) {
     // The hollow's floor stays inside the cage's hull: over its floor pan, and over a wheel's well.
     const hollow = Math.max(boot.floor, floor + BOOT_FLOOR_CLEAR, well >= 0.03 ? archY + BOOT_FLOOR_CLEAR : -Infinity);
-    const wall = lerp(hw - 0.06, Math.min(boot.face?.wall ?? hw, hw - 0.06), cut.face);
+    const wall = lerp(lidWall, Math.min(boot.face?.wall ?? hw, lidWall), cut.face);
     const bottom = lerp(hollow, Math.max(boot.face?.sill ?? 0, hollow), cut.face);
     half[0] = [lerp(half[0]![0], wall, cut.open), lerp(half[0]![1], bottom, cut.open)];
     // The wall's top takes the tub's rim (`tubWall`) as far as the cage's has dropped into the tub.
-    const inner = lerp(hw - 0.06, hw - tubWall(style), deckTub);
+    const inner = lerp(lidWall, hw - tubWall(style), deckTub);
     const rim = lerp(inner, Math.min(boot.face?.wall ?? hw, inner), cut.face);
-    half[1] = [lerp(half[1]![0], rim, cut.open), lerp(half[1]![1], yb - 0.006, cut.open)];
+    // A capped lid's rim keeps the closed deck edge's height: the quarter top beside the groove stands `HOOD_SEAT` under the lid's edge, as the fender beside the hood does.
+    half[1] = [lerp(half[1]![0], rim, cut.open), Number.isFinite(lidCap) ? half[1]![1] : lerp(half[1]![1], yb - 0.006, cut.open)];
   }
   // The door cut: every point above the rocker drops onto the sill's top, the last tuck row onto its far edge.
   const sill: [number, number][] = [
@@ -710,6 +725,8 @@ const LID_RISE = 0.016;
 const DECK_INSET = 0.075;
 const DECK_DOME = 0.012;
 const DECK_SHOULDER = 0.45;
+/** A capped lid's (`boot.halfWidth`) dome point stays at least this far (m) inboard of its edge: the closed deck's crown point can stand at or past a narrow edge. */
+const LID_DOME_EDGE = 0.02;
 /** The drawn hood's edge stands over the deck edge (ring point 1, `HOOD_INSET` m inside the station's half-width), `HOOD_SEAT` (m) over the fender: a groove, not a step; its outer dome point stands `HOOD_SEAT` over the closed deck's crown. Its centre line keeps the deck lid's crown unless the style sets `hood.crown`. */
 const HOOD_INSET = 0.07;
 const HOOD_SEAT = 0.003;
@@ -749,18 +766,18 @@ function domeAt(dome: Dome, u: number): number {
   return 0;
 }
 
-/** A deck lid's half-width, its top's heights (car frame, m) at `z` at its edge and at its crown, and its dome. A `seated` lid's edge (the drawn hood's, a flush boot lid's) rests on the deck edge beside it; `crowned` domes it as `hood.crown`. */
-function lidSection(z: number, style: BodyStyle, seated: boolean, crowned: BodyStyle["hood"]["crown"]): { w: number; edge: number; crown: number; dome: Dome } {
+/** A deck lid's half-width, its top's heights (car frame, m) at `z` at its edge and at its crown, and its dome. A `seated` lid's edge (the drawn hood's, a flush boot lid's) rests on the deck edge beside it, at most `halfWidth` (m, |x|) out; `crowned` domes it as `hood.crown`. */
+function lidSection(z: number, style: BodyStyle, seated: boolean, crowned: BodyStyle["hood"]["crown"], halfWidth = Infinity): { w: number; edge: number; crown: number; dome: Dome } {
   const sl = sampleSlice(z, style.profile);
   const crown = sl.yBelt + LID_RISE + DECK_DOME;
   if (!seated) return { w: sl.hw - DECK_INSET, edge: sl.yBelt + LID_RISE, crown, dome: DECK_DOME_POINTS };
-  const w = sl.hw - HOOD_INSET;
+  const w = Math.min(sl.hw - HOOD_INSET, halfWidth);
   // A rigid lid: its edge keeps the fender's height where a cabin tub's blend runs under its rear end (the coupe's and monster's), never bending into it.
   const edge = deckEdgeY(sl.yBelt, 0) + HOOD_SEAT;
   // An inset edge keeps the plain lid's crown (the centre line on the side silhouette) and its edge's height: the dome steepens to meet it.
   if (crowned !== undefined) return { w: sl.hw - hoodInset(z, style.hood), edge, crown: edge + crowned[0] * (w / crowned[1]) ** 2, dome: CROWN_DOME };
   // The deck dome's chord from its shoulder to the edge passes within a millimetre of the closed deck's crown point: the dome steps out over it.
-  const u = (sl.hw - DECK_CROWN.inset) / w;
+  const u = Math.min((sl.hw - DECK_CROWN.inset) / w, 1 - LID_DOME_EDGE / w);
   const over = (sl.yBelt + DECK_CROWN.rise + HOOD_SEAT - edge) / (crown - edge);
   return { w, edge, crown, dome: [[u, Math.max(domeAt(DECK_DOME_POINTS, u), over)]] };
 }
@@ -846,7 +863,7 @@ function rollSmoothing(geo: THREE.BufferGeometry, at: readonly number[]): Uint8A
  * the nose's rings (`noseRefined`); a `clamshell` lid wraps the body's shoulder to its side shut line; a `lip` kicks its top up at its end;
  * a `drop` folds it over the tail edge and down the rear face to `drop.y`, `drop.w` wide, the face at `z1`; a hood's `nose` folds it over
  * the nose and `nose[0]` down its face on a `nose[1]` radius, keeping its dome; a deck lid's `crown` (`boot.crown`) domes its top, eased
- * in from `z0` and back to the plain dome over the fold; a `roll` rounds its side edges.
+ * in from `z0` and back to the plain dome over the fold; a `roll` rounds its side edges; a seated lid's `halfWidth` (`boot.halfWidth`) caps its half-width.
  */
 function makeDeckPanel(
   style: BodyStyle,
@@ -854,7 +871,7 @@ function makeDeckPanel(
   z1: number,
   origin: YZ,
   source: BodySource,
-  { hood = false, seated = hood, clamshell = false, lip, drop, nose, crown, roll = 0 }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop; nose?: HoodNose; crown?: readonly [number, number]; roll?: number } = {},
+  { hood = false, seated = hood, clamshell = false, lip, drop, nose, crown, roll = 0, halfWidth = Infinity }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop; nose?: HoodNose; crown?: readonly [number, number]; roll?: number; halfWidth?: number } = {},
 ): THREE.BufferGeometry {
   const segs = 10;
   const tk = 0.04;
@@ -898,7 +915,7 @@ function makeDeckPanel(
   let endLid = { w: 0, base: 0, edge: 0, dome: DECK_DOME_POINTS };
   const deckZs = hood ? noseRefined(stations, style.profile) : stations;
   const edgeAt = (z: number) => {
-    const lid = lidSection(z, style, seated, hood ? style.hood.crown : undefined);
+    const lid = lidSection(z, style, seated, hood ? style.hood.crown : undefined, halfWidth);
     return { w: lid.w, y: lid.edge + lipKick(Math.abs(zEnd - z), lip) };
   };
   // A rolled edge's run at deck ring `i`: the mitre of the edge's runs in from the rings either side of it.
@@ -917,7 +934,7 @@ function makeDeckPanel(
   for (let i = 0; i < deckZs.length; i++) {
     const z = deckZs[i]!;
     const sl = sampleSlice(z, style.profile);
-    const lid = lidSection(z, style, seated, hood ? style.hood.crown : undefined);
+    const lid = lidSection(z, style, seated, hood ? style.hood.crown : undefined, halfWidth);
     const kick = lipKick(Math.abs(zEnd - z), lip);
     const crownY = crown ? lerp(lid.crown, lid.edge + crown[0] * (lid.w / crown[1]) ** 2, THREE.MathUtils.smoothstep(Math.abs(z - z0), 0, BOOT_CROWN_RUN)) : lid.crown;
     endRise = crownY - lid.edge;
@@ -1159,7 +1176,7 @@ export function makeTrunkGeometry(style: BodyStyle = SEDAN, source: BodySource =
   const roll = drawn ? (b.edgeRoll ?? 0) : 0;
   const g =
     b.kind === "lid"
-      ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, { lip, drop: b.drop, seated: drawn && b.flush === true, crown: drawn ? b.crown : undefined, roll })
+      ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, { lip, drop: b.drop, seated: drawn && b.flush === true, crown: drawn ? b.crown : undefined, roll, halfWidth: drawn ? flushLidCap(b) : undefined })
       : makeTailgate(style, b, source, lip, roll);
   const [py, pz] = bootPivot(b);
   if (py !== b.origin[0] || pz !== b.origin[1]) g.translate(0, b.origin[0] - py, b.origin[1] - pz);
