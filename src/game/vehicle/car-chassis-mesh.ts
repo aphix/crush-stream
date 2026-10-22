@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detSin } from "../kernel/physics-core.js";
-import { BLACKOUT, INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { BLACKOUT, CABIN_TRIM, INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
@@ -9,6 +9,7 @@ import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import {
   bayAt,
+  cabinAt,
   bootCut,
   bootInfill,
   bootCutAt,
@@ -168,16 +169,21 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
   // How far each drawn slice has dropped into the bay's trough or a lid's lined boot: their walls and floors are unpainted inner panel.
+  // How far it has dropped into the cabin's tub: its floor is dark cabin trim, as the glass shows it (the walls keep one vertex with the
+  // belt, so they shade from it to the trim; the door cards cover them).
   const cut = bootCut(style);
   const inner = source === "drawn" ? zs.map((z) => Math.max(bayAt(z, style), cut.lined ? bootCutAt(z, cut).open : 0)) : [];
+  const cabin = source === "drawn" ? zs.map((z, s) => (inner[s]! > 0 ? 0 : cabinAt(z, style))) : [];
   const wallTops = source === "drawn" ? splitWallTops(body, n, inner) : [];
   const roof = makeRoofGeometry(style, source);
   const parts: THREE.BufferGeometry[] = [body, roof];
   parts.push(...makeWellLiners(style, source));
   parts.push(...makeGreenhouseFrame(style, source));
-  parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
+  // The cowl wall under the dash and the wall behind the rear seats: cabin trim, as the glass shows them.
+  const cabinWall = (geo: THREE.BufferGeometry) => Object.assign(geo, { userData: { ...geo.userData, cabinTrim: true } });
+  parts.push(cabinWall(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72)));
   const rb = style.rearBulkhead;
-  parts.push(makeBox(1.16, rb.yTop - 0.34, 0.045, 0, (rb.yTop + 0.34) * 0.5, rb.z));
+  parts.push(cabinWall(makeBox(1.16, rb.yTop - 0.34, 0.045, 0, (rb.yTop + 0.34) * 0.5, rb.z)));
   // The wells' lips (drawn only) and humps (the cage's: a bed's wheel tubs), after every other cage part so each keeps its vertex ids;
   // each lip's triangles are kept for its arch's panel.
   const lips = source === "drawn" ? archLipGeometry(style, body) : null;
@@ -198,13 +204,15 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   if (fittings) parts.push(fittings.geometry);
   const merged = mergeGeometries(parts, false);
   if (!merged) throw new Error("Failed to merge chassis");
-  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): torn panels and the headliner; `BLACKOUT` gloss black: blacked-out
-  // pillars, roof rails and glass panel, the cowl; `INNER_PANEL` an unpainted inner panel.
+  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): torn panels; `BLACKOUT` gloss black: blacked-out pillars, roof rails and
+  // glass panel, the cowl; `CABIN_TRIM` the cabin: the headliner, the tub's floor and walls, the cowl and rear walls; `INNER_PANEL` an
+  // unpainted inner panel.
   const primer = new Float32Array(merged.getAttribute("position").count);
   let start = 0;
   for (const g of parts) {
     const count = g.getAttribute("position").count;
     if (g.userData.blackout === true) primer.fill(BLACKOUT, start, start + count);
+    if (g.userData.cabinTrim === true) primer.fill(CABIN_TRIM, start, start + count);
     start += count;
   }
   if (lips) primer.set(lips.userData.tone as Float32Array, lipFrom);
@@ -220,13 +228,14 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const roofFrom = body.getAttribute("position").count;
   const roofTwins: unknown = roof.userData.shellTwins;
   const twins = roofTwins instanceof Int32Array ? roofTwins.map((v) => v + roofFrom) : new Int32Array(0);
-  // The headliner (the roof's inner face) is dark primer, as the dark cabin shell's headliner was.
-  for (let k = 0; k < twins.length; k += 2) primer[twins[k]!] = 1;
+  // The headliner (the roof's inner face) is the cabin's dark trim.
+  for (let k = 0; k < twins.length; k += 2) primer[twins[k]!] = CABIN_TRIM;
   merged.userData.shellTwins = twins;
   if (fittings) primer.fill(BLACKOUT, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
   if (source === "drawn") {
-    // The trough's and the boot's floor corner on each side (ring points 0 and n - 1), and the walls' own copies of their tops.
-    for (let s = 0; s < zs.length; s++) for (const i of [0, n - 1]) primer[s * n + i] = INNER_PANEL * inner[s]!;
+    // The trough's, the boot's and the cabin's floor corner on each side (ring points 0 and n - 1), and the trough's and boot's walls'
+    // own copies of their tops.
+    for (let s = 0; s < zs.length; s++) for (const i of [0, n - 1]) primer[s * n + i] = cabin[s]! > 0 ? CABIN_TRIM * cabin[s]! : INNER_PANEL * inner[s]!;
     for (const [copy, s] of wallTops) primer[copy] = INNER_PANEL * inner[s]!;
     if (style.blackout?.cowl === true) {
       const [foot, hoodRear] = [style.windshield.base[1], style.hood.z0];
