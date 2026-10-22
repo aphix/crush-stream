@@ -52,6 +52,10 @@ function lowestDrawn(car: DeformableCar, ground: Ground): { clearance: number; m
   car.flushDeferredSkin();
   car.updateSkin();
   car.group.updateMatrixWorld(true);
+  // The truck's frame and axles are posed as PartBatch.sync poses them before it draws (`CarUnderbody.follow`): unposed they stood at the
+  // constructor's pose (a monster's popped-wheel axle stubs read 21-26 cm in the ground).
+  car.underbody?.follow();
+  car.group.updateMatrixWorld(true);
   const inverse = car.group.matrixWorld.clone().invert();
   const lowest = { clearance: Infinity, mesh: "" };
   car.group.traverse((o) => {

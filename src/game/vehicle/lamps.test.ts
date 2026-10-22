@@ -221,6 +221,7 @@ describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, hal
   /** The glow colours a lone car in `style` gets from the pool, head L and head R first, seen from ahead (a glow shows its lens's side only). */
   const glowOf = (style: BodyStyle): { rgb: ArrayLike<number>; n: number } => {
     const scene = new THREE.Scene();
+
     const car = new DeformableCar(paint(), scene, null, "hatchback");
     const restyled: { style: BodyStyle } = car; // `style` is readonly only to game code; the glow reads it per update
     restyled.style = style;
@@ -343,7 +344,6 @@ describe("given the lamp batch and one car of each style", () => {
     lamps.dispose();
     parts.dispose();
   });
-
   it("when a car is on its brakes, then its tail lamps and their lid shares draw bright and its high brake lamp lights; off the brakes the tails are dim running lights and the high brake lamp is dark; the tail glows brighten with them", () => {
     let highs = 0;
     for (const id of CAR_STYLE_IDS) {
@@ -430,6 +430,7 @@ describe("given the lamp batch and one car of each style", () => {
       }
     }
     assert.ok(lids >= 4, `${lids} lids carry lamp shares`);
+
   });
 });
 

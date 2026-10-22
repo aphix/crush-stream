@@ -3,7 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { PART_FAMILY, hypot2 } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad, type YZ } from "./car-variants.ts";
-import { ROCKER, glassTopY, glassX, lerp, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
+import { ROCKER, glassTopY, glassX, lerp, roofTopY, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
 import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, rockerAt, WINDSHIELD_BOW } from "./car-lines.ts";
 import { DOOR_PROUD } from "./car-door-mesh.ts";
 import { FITTING_ATTRIBUTE } from "./constants.ts";
@@ -20,13 +20,19 @@ export const DOOR_GLASS_SEAT = { x: -0.02, y: 0.52, z: -0.28 } as const;
 
 const _pt = new THREE.Vector3();
 
-/** A raked pane with its bow resolved. */
-type BowedQuad = GlassQuad & { bow: GlassBow };
+/** A raked pane with its bow resolved, and `fall`: how far (m) its point at car `x`, `t` up from the base, sits under the flat quad. */
+type BowedQuad = GlassQuad & { bow: GlassBow; fall: (x: number, t: number) => number };
 
 /** Point of raked quad `q` in car space: `xn` −1…1 across, `t` 0…1 base to top, bowed along z at the centre line (none at the edges). */
 function quadPoint(q: BowedQuad, xn: number, t: number): THREE.Vector3 {
-  const w = lerp(q.wBase, q.wTop, t);
-  return _pt.set(xn * w * 0.5, lerp(q.base[0], q.top[0], t), lerp(q.base[1], q.top[1], t) + lerp(q.bow.base, q.bow.top, t) * (1 - xn * xn));
+  const x = xn * lerp(q.wBase, q.wTop, t) * 0.5;
+  return _pt.set(x, lerp(q.base[0], q.top[0], t) - q.fall(x, t), lerp(q.base[1], q.top[1], t) + lerp(q.bow.base, q.bow.top, t) * (1 - xn * xn));
+}
+
+/** How far (m) a raked pane whose top edge lies at `topZ` falls under its flat quad at car `x`, `t` up from its base: its top edge follows the roof's dome across the car (none at the centre line), fading to the base. */
+export function domeFall(style: BodyStyle, topZ: number): (x: number, t: number) => number {
+  const crown = roofTopY(0, topZ, style);
+  return (x, t) => t * (crown - roofTopY(x, topZ, style));
 }
 
 /** How a raked pane is drawn: its grid (columns across, rows up), and `facing`, the way its outward normal runs along z. */
@@ -66,24 +72,24 @@ function makeGlassQuad(q: BowedQuad, { segX, segY }: QuadDraw): THREE.BufferGeom
 /** The windshield's quad on `style`: its base and widths, its top edge, its bow. */
 function windshieldQuad(style: BodyStyle): BowedQuad {
   const { base, wBase, wTop, bow = WINDSHIELD_BOW } = style.windshield;
-  return { base, top: style.windshieldTop, wBase, wTop, bow };
+  return { base, top: style.windshieldTop, wBase, wTop, bow, fall: domeFall(style, style.windshieldTop[1]) };
 }
 
-/** The rear glass's quad on `style`, its bow resolved. */
+/** The rear glass's quad on `style`, its bow and fall resolved. */
 function rearGlassQuad(style: BodyStyle): BowedQuad {
-  return { ...style.rearGlass, bow: style.rearGlass.bow ?? REAR_GLASS_BOW };
+  return { ...style.rearGlass, bow: style.rearGlass.bow ?? REAR_GLASS_BOW, fall: domeFall(style, style.rearGlass.top[1]) };
 }
 
 export function makeWindshield(style: BodyStyle = SEDAN): THREE.BufferGeometry {
   return makeGlassQuad(windshieldQuad(style), WINDSHIELD_DRAW);
 }
 
-/** Glass quad `q` drawn in by its `frame` ([side, bottom, top], m: sides across, bottom and top along its slope), bowed as `q`. */
+/** Glass quad `q` drawn in by its `frame` ([side, bottom, top], m: sides across, bottom and top along its slope), bowed and fallen as `q`. */
 function framedQuad(q: BowedQuad, [side, bottom, top]: readonly [number, number, number]): BowedQuad {
   const len = hypot2(q.top[0] - q.base[0], q.top[1] - q.base[1]);
   const at = (t: number): YZ => [lerp(q.base[0], q.top[0], t), lerp(q.base[1], q.top[1], t)];
   const [t0, t1] = [bottom / len, 1 - top / len];
-  return { base: at(t0), top: at(t1), wBase: lerp(q.wBase, q.wTop, t0) - 2 * side, wTop: lerp(q.wBase, q.wTop, t1) - 2 * side, bow: q.bow };
+  return { base: at(t0), top: at(t1), wBase: lerp(q.wBase, q.wTop, t0) - 2 * side, wTop: lerp(q.wBase, q.wTop, t1) - 2 * side, bow: q.bow, fall: (x, t) => q.fall(x, lerp(t0, t1, t)) };
 }
 
 /** A black frit band: rows of points (each row the same length) as a strip grid wound like `makeGlassQuad`'s, every vertex coloured black. */
@@ -104,16 +110,16 @@ function fritBand(rows: readonly THREE.Vector3[][]): THREE.BufferGeometry {
   return geo;
 }
 
-/** Chords along a frit's top and bottom edges: the 1.5 cm bow sags 1 mm off a quarter-width chord, under the band's own width. */
+/** Chords along a frit's top and bottom edges: the 1.5 cm bow and the dome's fall each bend about 1 mm off a quarter-width chord, under the band's own width. */
 const FRIT_CHORDS = 4;
 
-/** A framed rear glass: its pane drawn in by the `frame`, the band out to the outline its black frit, both bowed alike (vertex colour: the pane's material tints it). */
+/** A framed rear glass: its pane drawn in by the `frame`, the band out to the outline its black frit, both bowed and fallen alike (vertex colour: the pane's material tints it). */
 function framedGlass(q: BowedQuad, frame: readonly [number, number, number], draw: QuadDraw): THREE.BufferGeometry {
   const inner = framedQuad(q, frame);
   const pane = makeGlassQuad(inner, draw);
   pane.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(pane.getAttribute("position").count * 3).fill(1), 3));
   const along = (g: BowedQuad, t: number) => Array.from({ length: FRIT_CHORDS + 1 }, (_, i) => quadPoint(g, (i / FRIT_CHORDS) * 2 - 1, t).clone());
-  // The sides take no bow (it is zero at the pane's edges): one chord each.
+  // The sides take no bow (it is zero at the pane's edges) and the fall bends them under 2 mm off a chord: one chord each.
   const side = (xn: number) => [0, 1].map((t) => [quadPoint(q, xn, t).clone(), quadPoint(inner, xn, t).clone()]);
   const bands = [
     fritBand([along(q, 0), along(inner, 0)]),
@@ -126,9 +132,70 @@ function framedGlass(q: BowedQuad, frame: readonly [number, number, number], dra
   return geo;
 }
 
+/** Points each rounded corner's arc takes off each of its two edges. */
+const ROUND_STEPS = 3;
+
+/** A geometry of `points` ((s, t) on the pane, 0…1 across and up) at `at`'s positions, wound as `index`, every vertex coloured `colour`. */
+function paneGeometry(points: readonly (readonly [number, number])[], at: (s: number, t: number) => THREE.Vector3, index: number[], colour: number): THREE.BufferGeometry {
+  const geo = new THREE.BufferGeometry().setFromPoints(points.map(([s, t]) => at(s, t).clone()));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(points.flat(), 2));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(points.length * 3).fill(colour), 3));
+  geo.setIndex(index);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * An unframed pane whose clear glass has `round` (m) corners: its grid gains `ROUND_STEPS` lines through each corner's square, whose
+ * points map onto the corner's quarter circle (each square ring about the circle's centre onto the circle of its size); a black frit
+ * fan fills each square corner out to the arc, so the outline, and the trim round it, stay square.
+ */
+function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): THREE.BufferGeometry {
+  const len = hypot2(q.top[0] - q.base[0], q.top[1] - q.base[1]);
+  const [rS, rT] = [round / Math.min(q.wBase, q.wTop), round / len];
+  // A zone's lines, from its inner line out to the edge at 0 or 1.
+  const zone = (r: number, edge: number) => Array.from({ length: ROUND_STEPS + 1 }, (_, k) => (edge ? 1 - r + (k * r) / ROUND_STEPS : r - (k * r) / ROUND_STEPS));
+  const lines = (n: number, r: number) => [
+    ...zone(r, 0).reverse(),
+    ...Array.from({ length: n + 1 }, (_, k) => k / n).filter((s) => s > r + 0.5 / n && s < 1 - r - 0.5 / n),
+    ...zone(r, 1),
+  ];
+  const arc = (s: number, t: number): [number, number] => {
+    const [ds, dt] = [Math.max(rS - s, s - 1 + rS, 0) / rS, Math.max(rT - t, t - 1 + rT, 0) / rT];
+    if (ds === 0 || dt === 0) return [s, t];
+    const k = Math.max(ds, dt) / hypot2(ds, dt);
+    return [s < 0.5 ? rS * (1 - ds * k) : 1 - rS * (1 - ds * k), t < 0.5 ? rT * (1 - dt * k) : 1 - rT * (1 - dt * k)];
+  };
+  const at = (s: number, t: number) => quadPoint(q, s * 2 - 1, t);
+  const [ss, ts] = [lines(segX, rS), lines(segY, rT)];
+  const row = ss.length;
+  const grid: number[] = [];
+  for (let j = 0; j < ts.length - 1; j++) {
+    for (let i = 0; i < row - 1; i++) {
+      const a = j * row + i;
+      grid.push(a, a + 1, a + row, a + 1, a + row + 1, a + row);
+    }
+  }
+  const pane = paneGeometry(ts.flatMap((t) => ss.map((s) => arc(s, t))), at, grid, 1);
+  const fans = [0, 1].flatMap((sEdge) =>
+    [0, 1].map((tEdge) => {
+      const rim = [...zone(rS, sEdge).map((s): [number, number] => [s, tEdge]), ...zone(rT, tEdge).reverse().slice(1).map((t): [number, number] => [sEdge, t])].map(([s, t]) => arc(s, t));
+      // Counter-clockwise in (s, t), as the grid's triangles are.
+      const [[s0, t0], [s1, t1]] = [rim[0]!, rim[1]!];
+      if ((s0 - sEdge) * (t1 - tEdge) - (t0 - tEdge) * (s1 - sEdge) < 0) rim.reverse();
+      return paneGeometry([[sEdge, tEdge], ...rim], at, rim.slice(1).flatMap((_, k) => [0, k + 1, k + 2]), 0);
+    }),
+  );
+  const geo = mergeGeometries([pane, ...fans], false);
+  if (!geo) throw new Error("Failed to merge the rounded rear glass");
+  geo.userData.centre = quadPoint(q, 0, 0.5).toArray();
+  return geo;
+}
+
 export function makeRearGlass(style: BodyStyle = SEDAN): THREE.BufferGeometry {
   const quad = rearGlassQuad(style);
-  return quad.frame ? framedGlass(quad, quad.frame, REAR_GLASS_DRAW) : makeGlassQuad(quad, REAR_GLASS_DRAW);
+  if (quad.frame) return framedGlass(quad, quad.frame, REAR_GLASS_DRAW);
+  return quad.round ? roundedGlass(quad, quad.round, REAR_GLASS_DRAW) : makeGlassQuad(quad, REAR_GLASS_DRAW);
 }
 
 /** A side pane's edge z at the belt (`bot`) and at the top, rear → front; a kneed front edge (`front`, z at a height share) gets a row at its knee (`kneeT`). */
@@ -370,7 +437,7 @@ function makeQuadGlassFrame(q: BowedQuad, { segX, facing }: QuadDraw): THREE.Buf
   const xs = Array.from({ length: segX + 1 }, (_, i) => (i / segX) * 2 - 1);
   // Counter-clockwise in (across, up), which the edge offsets below rely on.
   const pts = [...xs.map((xn) => quadPoint(q, xn, 0).clone()), ...xs.map((xn) => quadPoint(q, xn, 1).clone()).reverse()];
-  // The flat pane's normal: the bow tilts it under a millimetre across the ribbon.
+  // The flat pane's normal: the bow and the fall tilt it under a millimetre across the ribbon.
   const plane = new THREE.Vector3(0, q.base[1] - q.top[1], q.top[0] - q.base[0]).normalize();
   const outward = plane.clone().multiplyScalar(facing);
   const n = pts.length;
@@ -408,7 +475,8 @@ export function makeBodyGlassFrames(style: BodyStyle, rearOnBody: boolean): THRE
  */
 export function glassCorners(style: BodyStyle): Float32Array {
   const out = new Float32Array(GLASS_NAMES.length * 12);
-  const quads = [windshieldQuad(style), rearGlassQuad(style)];
+  // A raked pane's slab lies on its plane through its middle, where a dummy strikes it: its top corners' fall is drawn only.
+  const quads = [windshieldQuad(style), rearGlassQuad(style)].map((q): BowedQuad => ({ ...q, fall: () => 0 }));
   for (let p = 0; p < GLASS_NAMES.length; p++) {
     const name = GLASS_NAMES[p]!;
     const sign = name.endsWith("L") ? -1 : 1;

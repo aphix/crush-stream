@@ -43,7 +43,9 @@ const SHARED_LINES: readonly Line[] = [
   { view: "side", points: [[0.8, 0.245], [0, 0.245], [-0.8, 0.245], [-0.8, 0.175], [0, 0.175], [0.8, 0.175]], closed: true, ...TRIM },
   { view: "side", points: [[0.78, 0.23], [0.62, 0.23]], ...TRIM },
   { view: "top", points: [[2.02, 0], [2.01, 0.25], [1.955, 0.4]], ...GAP },
-  { view: "top", points: [[2, 0.3], [1.86, 0.36], [1.7, 0.42], [1.5, 0.47], [1.25, 0.52], [1, 0.56], [0.9, 0.57]], ...CREASE, profile: "step" },
+  // The hood's two creases (silver-sedan-2.png top view, 68.5 px/m): |x| 0.237 at z 1.90 opening to 0.316 at 1.03, the bonnet's middle
+  // panel between them (was |x| 0.30 -> 0.57, off both the creases and the shut line).
+  { view: "top", points: [[1.95, 0.233], [1.9, 0.237], [1.6, 0.262], [1.3, 0.287], [1.03, 0.316], [1.0, 0.318]], ...CREASE, profile: "step" },
   { view: "front", points: [[0, 0.195], [0.3, 0.195], [0.45, 0.19], [0.58, 0.185], [0.66, 0.18], [0.72, 0.175]], ...TRIM },
   { view: "top", points: [[-2.08, 0], [-2.075, 0.25], [-2.05, 0.45], [-1.99, 0.58]], ...CREASE },
   { view: "top", points: [[-2.03, 0], [-2.03, 0.25], [-2.015, 0.5]], ...CREASE, depth: -0.003 },

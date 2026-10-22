@@ -719,8 +719,8 @@ const HUB = [0x8a909a, 0.35, 0.8] as const;
 const DARK_HUB = [0x232428, 0.55, 0.45] as const;
 /** The muscle car's polished rim lip. */
 const CHROME = [0xeef0f3, 0.12, 1] as const;
-/** The muscle car's mag dish: a satin alloy darker than `ALLOY`, so its polished lip reads brighter round it. */
-const MAG_DISH = [0x8e939a, 0.3, 0.92] as const;
+/** The muscle car's mag centre cap (reference: a big grey dome): 7.8 cm in radius, standing 4 cm over the dish ([r, x] m, lathed). */
+const MAG_CAP = [[0, -0.1], [0.05, -0.092], [0.078, -0.07], [0.078, 0.07], [0.05, 0.092], [0, 0.1]] as const;
 
 /** Bead and crown radius (m) of `TYRE_PROFILE`: the `tyre` weight runs 0 at the bead to 1 at the crown. */
 const ROAD_TYRE: readonly [number, number] = [0.205, 0.32];
@@ -819,7 +819,7 @@ function rimFace(design: WheelDesign): THREE.BufferGeometry[] {
     case "split10":
       return [...disc, ...spokes(5, [0.16, 0.15, 0.018], ALLOY, 0.2), hub(0.055, HUB)];
     case "mag5":
-      return [...slottedDish(5, 0.19, 0.06, MAG_DISH, [0.07, 0.175, 0.5, 0.62, 0.15]), ...faceRings(0.18, 0.222, 0.1, CHROME), hub(0.05, CHROME)];
+      return [...slottedDish(5, 0.19, 0.06, ALLOY, [0.075, 0.175, 0.45, 0.85, 0.15]), ...faceRings(0.18, 0.222, 0.1, CHROME), smeared(latheX(MAG_CAP, 10, null, 1, HUB), 0)];
     case "six":
       return [...disc, ...spokes(6, [0.15, 0.15, 0.075], ALLOY), hub(0.08, DARK_HUB)];
     case "beadlock":

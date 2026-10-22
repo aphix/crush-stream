@@ -40,9 +40,11 @@ const HATCHBACK_LAMP_SHAPES = {
     loops: [{ points: [[0.56, 0.3], [0.68, 0.3], [0.68, 0.34], [0.56, 0.34]] }],
     lens: "amber",
   },
+  // The black diffuser band across the rear bumper's foot, its red reflector in it.
   rear: {
-    loops: [{ points: [[0.48, 0.3], [0.64, 0.3], [0.64, 0.33], [0.48, 0.33]] }],
-    lens: "red",
+    loops: [{ points: [[0.006, 0.295], [0.64, 0.295], [0.64, 0.365], [0.006, 0.365]] }],
+    lens: "dark",
+    cells: [{ loop: { points: [[0.48, 0.3], [0.64, 0.3], [0.64, 0.33], [0.48, 0.33]] }, tone: "red" }],
   },
 } as const;
 
@@ -113,6 +115,8 @@ export const HATCHBACK: BodyStyle = {
     st(1.74, 0.45, 0.618),
   ],
   roofZ: [-1.151, 0.421],
+  // The windshield top stood 8 mm over the crown at the roof's front end, a raised strip: the crown rolls onto it.
+  roofEnds: { front: 0.12 },
   windshieldTop: [1.162, 0.421],
   rearGlass: { base: [0.94, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9, frame: [0.05, 0.06, 0.11] },
   quarter: { zRearBot: -1.174, zRearTop: -1.07 },
@@ -138,12 +142,12 @@ export const HATCHBACK: BodyStyle = {
     sideMarkers: [{ at: [0.62, 0.8], size: [0.045, 0.022] }],
   },
   grille: { y: 0.575, size: [0.72, 0.11], kind: "bars", count: 4, badge: 0.025, finish: "black" },
-  seats: { front: [0.35, 0.41, -0.1], rear: [0.41, -0.7] },
+  seats: { front: [0.35, 0.41, -0.1], rear: [0.47, -0.7] },
   pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] } },
   blackout: { b: true, divider: true },
   privacyGlass: { rear: true, quarter: true },
   roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.5 } },
-  exhaust: { tips: 2, x: 0.45, y: 0.27, size: [0.075, 0.045], shape: "round" },
+  exhaust: { tips: 2, x: 0.5, y: 0.24, size: [0.1, 0.045], shape: "round" },
   details: {
     lines: [
       { view: "top", points: [[1.68, 0], [1.69, 0.36], [1.64, 0.62], [1.55, 0.68]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },

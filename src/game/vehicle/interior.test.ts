@@ -104,7 +104,7 @@ describe("given every style's seats", () => {
     return out;
   };
 
-  test("when each cabin is built, then two sit in front at the floor plus 0.14 m, and the rear row (none in a pickup) stands between the B-pillar and the cab's back wall and under its roof line, clear of the front seats", () => {
+  test("when each cabin is built, then two sit in front at the floor plus 0.14 m, and the rear row (none in a pickup) stands between the B-pillar and the cab's back wall, under its roof line and over its floor pan, clear of the front seats", () => {
     for (const id of CAR_STYLE_IDS) {
       const style = CAR_STYLES[id];
       const seats = carPartSeats();
@@ -121,6 +121,8 @@ describe("given every style's seats", () => {
       assert.equal(behindWall.length, 0, `${id}: ${behindWall.length} bench vertices under the wall's top behind its face`);
       const overRoof = placed(bench, () => true).filter((p) => p.y > roofAt(p.z, style).y);
       assert.equal(overRoof.length, 0, `${id}: ${overRoof.length} bench vertices over the roof line, the highest ${Math.max(...overRoof.map((p) => p.y - roofAt(p.z, style).y)).toFixed(3)} m over it`);
+      const underFloor = placed(bench, () => true).filter((p) => p.y < floorY(p.z, style));
+      assert.equal(underFloor.length, 0, `${id}: ${underFloor.length} bench vertices under the floor pan, the lowest ${Math.min(...underFloor.map((p) => p.y - floorY(p.z, style))).toFixed(3)} m under it`);
       const cushion = new THREE.Box3().setFromPoints(placed(bench, (y) => y < 0));
       const inCushion = front.flatMap((s) => placed(s, () => true)).filter((p) => cushion.containsPoint(p));
       assert.equal(inCushion.length, 0, `${id}: ${inCushion.length} front seat vertices inside the bench's cushion`);
@@ -284,6 +286,24 @@ describe("given a monster truck of its class at rest on flat ground", () => {
     const moved = Math.max(...m.elements.map((e, i) => Math.abs(e - before.elements[i]!)));
     assert.ok(moved < 1e-4, `the front axle moved ${moved.toFixed(5)} off its rest place`);
   });
+
+  test("when its wheels are gone and it lies on its right side, then its axle stubs stand clear of the ground that side lies on", () => {
+    const lying = build("monster");
+    for (const [i, hub] of (["hubFL", "hubFR", "hubRL", "hubRR"] as const).entries()) lying["dropWheel"](i, hub);
+    lying.group.rotation.z = -Math.PI / 2;
+    lying.group.position.y = lying.style.dims.width / 2;
+    lying.group.updateMatrixWorld(true);
+    const own = new PartBatch(1);
+    own.sync([lying]);
+    const mesh = own.kinds[PART_KIND.axle]![0]!;
+    const pos = partGeometry(PART_KIND.axle).getAttribute("position");
+    let low = Infinity;
+    for (let k = 0; k < mesh.count; k++) {
+      mesh.getMatrixAt(k, m);
+      for (let i = 0; i < pos.count; i++) low = Math.min(low, v.fromBufferAttribute(pos, i).applyMatrix4(m).y);
+    }
+    assert.ok(low >= 0, `lowest axle vertex at ${low.toFixed(3)} m`);
+  });
 });
 
 describe("given a car whose front bumper is torn off", () => {
@@ -424,10 +444,11 @@ describe("given every style's drawn body and hood", () => {
       const style = CAR_STYLES[id];
       if (style.hood.kind === "clamshell") continue;
       const hood = makeHoodGeometry(style);
-      const { ring, slices } = hood.userData.loft as { ring: number; slices: number };
+      // Its deck's rings only: a nose fold (`hood.nose`) turns its edge down the nose's face.
+      const { ring } = hood.userData.loft as { ring: number };
       const pos = hood.getAttribute("position");
       const [oy, oz] = style.hood.origin;
-      for (let s = 0; s < slices; s++) {
+      for (let s = 0; s < (hood.userData.deckRings as number); s++) {
         for (const point of [0, hood.userData.lidEdge as number]) {
           const v = new THREE.Vector3().fromBufferAttribute(pos, s * ring + point);
           const over = v.y + oy - sampleSlice(v.z + oz, style.profile).yBelt;

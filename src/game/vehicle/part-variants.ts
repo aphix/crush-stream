@@ -95,7 +95,7 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const parts = [cap.translate(sign * (reach - w / 2), capY, 0)];
   const footOut = MIRROR_FOOT.out + MIRROR_FOOT_SINK;
   const footRows = spec.mount === "glass" ? GLASS_FOOT_ROWS : 1;
-  const foot = fitting(new THREE.BoxGeometry(footOut, h * MIRROR_FOOT.share + lift, d * MIRROR_FOOT.share, 1, footRows, 1)).translate(sign * (root - MIRROR_FOOT_SINK + footOut / 2), MIRROR_CAP_Y + lift / 2, 0);
+  const foot = fitting(new THREE.BoxGeometry(footOut, h * MIRROR_FOOT.share + lift, spec.stalk ?? d * MIRROR_FOOT.share, 1, footRows, 1)).translate(sign * (root - MIRROR_FOOT_SINK + footOut / 2), MIRROR_CAP_Y + lift / 2, 0);
   parts.push(spec.mount === "glass" ? alongGlass(foot, style, sign) : foot);
   const [stalkFrom, stalkTo] = [root + MIRROR_FOOT.out, reach - w + MIRROR_FOOT.out / 2];
   if (stalkTo > stalkFrom) parts.push(fitting(new THREE.BoxGeometry(stalkTo - stalkFrom, ...MIRROR_STALK)).translate((sign * (stalkFrom + stalkTo)) / 2, capY, 0));
