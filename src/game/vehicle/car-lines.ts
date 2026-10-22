@@ -1,6 +1,6 @@
 import { hypot2 } from "../kernel/physics-core.js";
 import type { BodySource } from "./car-mesh.ts";
-import type { BodyStyle, GlassBow, PillarSpan } from "./car-variants.ts";
+import type { BodyStyle, GlassBow, PillarSpan, YZ } from "./car-variants.ts";
 
 /** A windshield's plan bow where its style sets none: 2 cm forward at the centre, base to top. */
 export const WINDSHIELD_BOW: GlassBow = { base: 0.02, top: 0.02 };
@@ -88,9 +88,8 @@ export function sideBowZ(amount: number, t: number): number {
   return t <= 0 || t >= 1 ? 0 : amount * 4 * t * (1 - t);
 }
 
-/** The drawn A-post's rear edge at height `y` (z, m): `pillars.a` (else `A_POST_WIDTH`) behind the windshield's edge line in side view. */
-export function aPostRearZ(y: number, style: BodyStyle): number {
-  const { base } = style.windshield;
+/** The drawn A-post's rear edge at height `y` (z, m): `pillars.a` (else `A_POST_WIDTH`) behind the windshield's edge line in side view; `base` is where that edge starts (the pane's side base, `windshieldSideBase`, when its hood sets `followGlass`). */
+export function aPostRearZ(y: number, style: BodyStyle, base: YZ = style.windshield.base): number {
   const [topY, topZ] = style.windshieldTop;
   const [dz, dy] = [topZ - base[1], topY - base[0]];
   return base[1] + (dz * (y - base[0]) - (style.pillars?.a ?? A_POST_WIDTH) * hypot2(dz, dy)) / dy + sideBowZ(style.windshield.sideBow ?? 0, (y - base[0]) / dy);
@@ -99,12 +98,12 @@ export function aPostRearZ(y: number, style: BodyStyle): number {
 /**
  * The door glass's front edge at height `y` (z, m), its foot at `footY` on the belt and its top at `topY` (held over it): straight from
  * `aPillarFoot` to `aPillarTopZ`, or kneed at `aPillarKnee` onto the A-post's rear edge (`KNEE_TUCK` under it), the sail's black triangle
- * under the knee.
+ * under the knee. `base` is the windshield's side base the A-post's edge starts at (`aPostRearZ`).
  */
-export function doorGlassFrontZ(y: number, footY: number, topY: number, style: BodyStyle): number {
+export function doorGlassFrontZ(y: number, footY: number, topY: number, style: BodyStyle, base: YZ = style.windshield.base): number {
   const [foot, top, knee] = [style.aPillarFoot, aPillarTopZ(style), style.aPillarKnee];
   if (knee === undefined) return foot + (top - foot) * Math.min((y - footY) / (topY - footY), 1);
-  const kneeZ = aPostRearZ(knee, style) + KNEE_TUCK;
+  const kneeZ = aPostRearZ(knee, style, base) + KNEE_TUCK;
   return y <= knee ? foot + (kneeZ - foot) * ((y - footY) / (knee - footY)) : kneeZ + (top - kneeZ) * Math.min((y - knee) / (topY - knee), 1);
 }
 

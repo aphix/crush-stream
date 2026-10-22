@@ -5,7 +5,7 @@ import { beltY, floorY } from "./car-lines.ts";
 import { makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { roofAt } from "./car-mesh.ts";
 import { DeformableCar } from "./car.ts";
-import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, drawnStyle, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { BUMPER_F, CABIN_TRIM, INNER_PANEL, LID, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
@@ -480,7 +480,8 @@ describe("given every style's drawn body and hood", () => {
     const cases: readonly (readonly [string, BodyStyle])[] = [...CAR_STYLE_IDS.map((id) => [id, CAR_STYLES[id]] as const), ["wagon with a clamshell", clamshell]];
     const ray = new THREE.Raycaster();
     const down = new THREE.Vector3(0, -1, 0);
-    for (const [id, style] of cases) {
+    for (const [id, plain] of cases) {
+      const style = drawnStyle(plain);
       const body = makeChassisGeometry(style);
       const { ring, slices } = body.userData.loft as { ring: number; slices: number };
       const pos = body.getAttribute("position");
