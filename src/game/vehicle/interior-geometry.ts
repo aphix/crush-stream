@@ -5,7 +5,6 @@ import { detCos, detSin } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
 import { DRIVER_SIDE, INTERIOR_MESH } from "./constants.ts";
 import { mergeToned, toned } from "./car-materials.ts";
-import type { BodyStyle } from "./car-variants.ts";
 
 type Tone = readonly [color: number, roughness: number, metalness: number];
 

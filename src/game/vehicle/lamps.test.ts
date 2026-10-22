@@ -6,7 +6,9 @@ import { beltY } from "./car-lines.ts";
 import { roofAt } from "./car-mesh.ts";
 import { FULL_POOL, LampBatch, LampLights, type LampPool, lampPoolFor, PHONE_POOL } from "./lamp-lights.ts";
 import { drawnLamp } from "./part-variants.ts";
-import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
+import { PartBatch } from "./part-batch.ts";
+import { type BodyStyle, CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
+import { lampEmissiveMap } from "./car-materials.ts";
 import { assignClass, STYLE_CLASS, type VehicleClassId } from "./vehicle-classes.ts";
 import { CLASS_LIFT, INTERIOR_MESH, LID } from "./constants.ts";
 import { PartSeat } from "./part-geometry.ts";
@@ -204,6 +206,61 @@ describe("given each style with a high-mount brake lamp", () => {
   }
 });
 
+describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, halogen, LED), and under a dark lens", () => {
+  const BULBS = [undefined, "halogen", "led"] as const;
+  const styled = (bulb: (typeof BULBS)[number]): BodyStyle => ({ ...CAR_STYLES.hatchback, lamps: { ...CAR_STYLES.hatchback.lamps, bulb } });
+  /** Bluest blue/red of the first `n` `rgb` triples. */
+  const bluest = (rgb: ArrayLike<number>, n: number): number => {
+    let best = 0;
+    for (let i = 0; i < n; i++) best = Math.max(best, rgb[i * 3 + 2]! / Math.max(rgb[i * 3]!, 1e-6));
+    return best;
+  };
+  /** The glow colours a lone car in `style` gets from the pool, head L and head R first. */
+  const glowOf = (style: BodyStyle): { rgb: ArrayLike<number>; n: number } => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
+    camera.position.set(0, 3, -10);
+    camera.lookAt(0, 0, 20);
+    const car = new DeformableCar(paint(), scene, null, "hatchback");
+    const restyled: { style: BodyStyle } = car; // `style` is readonly only to game code; the glow reads it per update
+    restyled.style = style;
+    car.spawnFacing(0, 10, 0, 0);
+    const lights = new LampLights(scene, 12, FULL_POOL);
+    lights.update([car], camera, car);
+    return { rgb: lights.glow.geometry.getAttribute("color").array, n: lights.glow.geometry.drawRange.count };
+  };
+
+  it("when its lens is drawn, then the lit lens samples an emissive texel bluer from halogen to the neutral white to LED", () => {
+    const map = lampEmissiveMap().image.data as Uint8Array;
+    const ratios = BULBS.map((bulb) => {
+      const uv = drawnLamp(styled(bulb), "head", 1).geometry.getAttribute("uv");
+      const texels: number[] = [];
+      for (let i = 0; i < uv.count; i++) {
+        const at = (Math.floor(uv.getY(i) * 2) * 2 + Math.floor(uv.getX(i) * 2)) * 4;
+        if (map[at]! + map[at + 1]! + map[at + 2]! > 0) texels.push(map[at]!, map[at + 1]!, map[at + 2]!);
+      }
+      return bluest(texels, texels.length / 3);
+    });
+    assert.ok(ratios[1]! < ratios[0]! && ratios[0]! < ratios[2]!, `lit texel blue/red, none/halogen/led: ${ratios.map((r) => r.toFixed(3)).join("/")}`);
+  });
+
+  it("when the pool lights it, then its head glow is bluer from halogen to the neutral white to LED", () => {
+    const ratios = BULBS.map((bulb) => {
+      const { rgb, n } = glowOf(styled(bulb));
+      return bluest(rgb, n);
+    });
+    assert.ok(ratios[1]! < ratios[0]! && ratios[0]! < ratios[2]!, `head glow blue/red, none/halogen/led: ${ratios.map((r) => r.toFixed(3)).join("/")}`);
+  });
+
+  it("when its lens is dark (a lit DRL over it), then its head glow is under half the lit lens's, so the sprite never washes the lens white", () => {
+    const lit = CAR_STYLES.hatchback;
+    const head = lit.lamps.shapes!.head!;
+    const dark: BodyStyle = { ...lit, lamps: { ...lit.lamps, shapes: { ...lit.lamps.shapes, head: { ...head, lens: "dark" } } } };
+    const [a, b] = [glowOf(lit).rgb, glowOf(dark).rgb];
+    assert.ok(b[0]! < 0.5 * a[0]!, `head L glow red channel: lit lens ${a[0]!.toFixed(3)}, dark lens ${b[0]!.toFixed(3)}`);
+  });
+});
+
 describe("given a monster-class car, whose lamp seats ride its lift", () => {
   const dressed = (): DeformableCar => {
     const car = new DeformableCar(paint(), new THREE.Scene(), null, "pickup");
@@ -321,6 +378,19 @@ describe("given the lamp batch and one car of each style", () => {
       }
     }
     assert.ok(lids >= 4, `${lids} lids carry lamp shares`);
+  });
+
+  it("when one hatchback is packed, then every lamp and part draw left empty is hidden (no scene walk, upload or program switch) and every filled one shows", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
+    car.group.updateMatrixWorld(true);
+    const [lamps, parts] = [new LampBatch(8), new PartBatch(8)];
+    lamps.sync([car]);
+    parts.sync([car]);
+    const wrong = [...lamps.meshes, ...parts.meshes, ...parts.casters].filter((m) => m.visible !== m.count > 0);
+    assert.equal(wrong.length, 0, `draws shown while empty or hidden while filled: ${wrong.map((m) => `${m.name || m.geometry.name || "?"} (${m.count})`).join(", ")}`);
+    assert.ok(lamps.meshes.some((m) => m.count > 0) && parts.meshes.some((m) => m.count > 0), "nothing was packed");
+    lamps.dispose();
+    parts.dispose();
   });
 });
 

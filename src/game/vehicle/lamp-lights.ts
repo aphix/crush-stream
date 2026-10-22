@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { hypot2 } from "../kernel/physics-core.js";
 import { lampEmissiveMap, makeLampUnit, type LampKind } from "./car-materials.ts";
 import { brakeLampUnit, lampBatchGeometries, sideMarkerUnit } from "./part-variants.ts";
+import type { BodyStyle } from "./car-variants.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 
 /**
@@ -36,7 +37,8 @@ const TAIL_SINK = 0.02;
 /** Glow sprite world size (m). */
 const GLOW_SIZE = 0.7;
 const GLOW_OUT = 0.1;
-const GLOW_HEAD = [0.8, 0.7, 0.55] as const;
+/** Head glow by `lamps.bulb`: the neutral white, warm halogen, cool-white LED. */
+const GLOW_HEAD = { neutral: [0.8, 0.7, 0.55], halogen: [0.82, 0.64, 0.42], led: [0.7, 0.72, 0.74] } as const;
 const GLOW_TAIL = [0.55, 0.03, 0.015] as const;
 /** A tail lamp is a running light at this share of its brake brightness (lens, glow, light and pool) while its car is off the brakes. */
 const TAIL_RUNNING = 0.35;
@@ -45,6 +47,8 @@ const GLOW_BLUE = [0.08, 0.2, 1] as const;
 /** A body lamp's glow fades with the cosine between its lens axis and the camera: full to about 70° off the axis, gone past 95° (a
  *  lamp's lens is seen from its side, never from behind). */
 const GLOW_FACE = [-0.1, 0.35] as const;
+/** A lamp whose drawn lens is not lit (a dark lens with a lit DRL or projectors) glows this share: the full sprite washed its whole lens white. */
+const GLOW_DARK_LENS = 0.3;
 
 /** Fake pools, shaped like the real spot's pool on the road (dark at the lamp, brightest about a fifth along, then a fading fan). A headlamp's
  *  quad runs from the lamp's foot POOL_LEN times the way to where its beam meets the ground (to at most POOL_MAX m), POOL_WIDTH as wide as
@@ -155,6 +159,7 @@ function frameAt(pos: ArrayLike<number>, [a, b, c]: readonly [number, number, nu
 /** What the pool reads from a car; `DeformableCar` satisfies it. */
 interface LampHost {
   readonly group: THREE.Object3D;
+  readonly style: Pick<BodyStyle, "lamps">;
   readonly lampCount: number;
   /** Writes lamp `i`'s world seat on the skin and outward axis; returns its kind, or null once broken or dark. */
   lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3): GlowKind | null;
@@ -342,11 +347,13 @@ export class LampLights {
         }
         if (n * 3 >= gp.length) continue;
         _e.copy(_pos).addScaledVector(_dir, GLOW_OUT).toArray(gp, n * 3);
-        const c = kind === "head" ? GLOW_HEAD : kind === "tail" ? GLOW_TAIL : kind === "red" ? GLOW_RED : GLOW_BLUE;
+        const c = kind === "head" ? GLOW_HEAD[car.style.lamps.bulb ?? "neutral"] : kind === "tail" ? GLOW_TAIL : kind === "red" ? GLOW_RED : GLOW_BLUE;
         const bright = kind === "tail" && !car.braking ? TAIL_RUNNING : 1;
+        const lens = kind === "head" || kind === "tail" ? car.style.lamps.shapes?.[kind]?.lens : undefined;
+        const k = lens === undefined || lens === "lit" ? 1 : GLOW_DARK_LENS;
         // A body lamp's glow shows only on the side its lens faces: seen from behind the lens (past the body, through the cabin's glass)
         // it is dark. A siren shows all round.
-        const shown = (kind === "head" || kind === "tail" ? THREE.MathUtils.smoothstep(_e.subVectors(_cam, _pos).normalize().dot(_dir), GLOW_FACE[0], GLOW_FACE[1]) : 1) * bright;
+        const shown = (kind === "head" || kind === "tail" ? THREE.MathUtils.smoothstep(_e.subVectors(_cam, _pos).normalize().dot(_dir), GLOW_FACE[0], GLOW_FACE[1]) : 1) * bright * k;
         gc[n * 3] = c[0] * shown;
         gc[n * 3 + 1] = c[1] * shown;
         gc[n * 3 + 2] = c[2] * shown;
@@ -763,7 +770,10 @@ export class LampBatch {
       for (let v = 0; v < this.slots[b]!.length; v++) {
         const mesh = this.slots[b]![v]!;
         const n = this.n[b]![v]!;
+        if (n === 0 && mesh.count === 0) continue;
         mesh.count = n;
+        // An empty instanced draw still costs the scene walk, the upload and the program switch before three skips it.
+        mesh.visible = n > 0;
         mesh.instanceMatrix.clearUpdateRanges();
         mesh.instanceMatrix.addUpdateRange(0, n * 16);
         mesh.instanceMatrix.needsUpdate = true;
@@ -796,5 +806,6 @@ function lampDraw(geo: THREE.BufferGeometry, m: THREE.Material, capacity: number
   // Instances span the pad and move every frame; a stale bound would cull live lamps.
   mesh.frustumCulled = false;
   mesh.count = 0;
+  mesh.visible = false;
   return mesh;
 }
