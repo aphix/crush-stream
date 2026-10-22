@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, WINDSHIELD_BOW } from "./car-lines.ts";
 import { quarterSillZs } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
@@ -15,6 +15,7 @@ import {
   lerp,
   loftFromRings,
   roofAt,
+  roofDome,
   roofTopY,
   shoulderTop,
   type BodySource,
@@ -34,6 +35,8 @@ const HEADLINER_INSET = 0.004;
 const HEADLINER_POINTS = [4, 2, 0] as const;
 /** The roof's z segments: the cage's, and the drawn one's, fewer so its headliner keeps the body within its vertex budget (the chords sag 0.5 mm). */
 const ROOF_SEGS = { cage: 16, drawn: 12 } as const;
+/** A rolled end's run (`roofEnds`) gets drawn stations at these shares of it from the end: its quarter ellipse turns near the end. */
+const ROOF_ROLL_STATIONS = [0.04, 0.15, 0.4] as const;
 
 /** The drawn roof's side (+x), cant line up to the dome's edge at (`x`, `y`): a quarter ellipse `ROOF_LIP_OUT + ROOF_DRIP` out and `lip` down. */
 function roofRoll(x: number, y: number, lip: number): Pt[] {
@@ -54,6 +57,57 @@ function shellRing(skin: Pt[], cant: number, inset: number): Pt[] {
   return [...skin, ...inner];
 }
 
+/** The drawn roof's ends that bow in plan past the default bow (`WINDSHIELD_BOW`, `REAR_GLASS_BOW`) its flat ends already cover: z, bow (m), the glass top's half-width. */
+function roofEndBows(style: BodyStyle): { z: number; bow: number; half: number }[] {
+  return [
+    { z: style.roofZ[1], bow: (style.windshield.bow ?? WINDSHIELD_BOW).top - WINDSHIELD_BOW.top, half: style.windshield.wTop / 2 },
+    { z: style.roofZ[0], bow: (style.rearGlass.bow ?? REAR_GLASS_BOW).top - REAR_GLASS_BOW.top, half: style.rearGlass.wTop / 2 },
+  ].filter((end) => end.bow !== 0);
+}
+
+/**
+ * The drawn roof's `ends` bow in plan with the glass tops under them, fading to nothing at each glass's top corners. A headliner
+ * vertex (`twins`: each inner vertex, then the skin vertex it is inset from) moves as its skin vertex does, so it stays inset.
+ */
+function bowRoofEnds(geo: THREE.BufferGeometry, ends: readonly { z: number; bow: number; half: number }[], twins: readonly number[]): void {
+  const skinOf = new Map<number, number>();
+  for (let k = 0; k < twins.length; k += 2) skinOf.set(twins[k]!, twins[k + 1]!);
+  const pos = geo.getAttribute("position");
+  for (let v = 0; v < pos.count; v++) {
+    const end = ends.find((e) => Math.abs(pos.getZ(v) - e.z) < 1e-6);
+    if (!end) continue;
+    const xn = Math.min(1, Math.abs(pos.getX(skinOf.get(v) ?? v)) / end.half);
+    pos.setZ(v, end.z + end.bow * (1 - xn * xn));
+  }
+}
+
+/**
+ * Re-cuts the cap whose triangles start at index `first` (`ring`'s copy at vertex `base`) as a strip from the skin's arc to the
+ * headliner's points, keeping its facing: bowed, the ear-clip's skin-only slivers (crown to shoulders) fold the cap and tip its normals.
+ */
+function stripCap(index: THREE.BufferAttribute["array"], first: number, base: number, ring: readonly Pt[], cant: number): void {
+  const turn = (a: number, b: number, c: number) =>
+    (ring[b]!.x - ring[a]!.x) * (ring[c]!.y - ring[a]!.y) - (ring[b]!.y - ring[a]!.y) * (ring[c]!.x - ring[a]!.x);
+  const facing = Math.sign(turn(index[first]! - base, index[first + 1]! - base, index[first + 2]! - base));
+  const m = ring.length - HEADLINER_POINTS.length;
+  const inner = HEADLINER_POINTS.map((offset, j) => ({ v: m + j, skin: cant + offset })).reverse();
+  const tris: number[] = [];
+  let j = 0;
+  for (let i = 0; i < m - 1; i++) {
+    // Past the shoulder between two headliner points, the strip steps to the next one.
+    if (j + 1 < inner.length && 2 * i >= inner[j]!.skin + inner[j + 1]!.skin) {
+      tris.push(i, inner[j + 1]!.v, inner[j]!.v);
+      j++;
+    }
+    tris.push(i, i + 1, inner[j]!.v);
+  }
+  for (let t = 0; t < tris.length; t += 3) {
+    const [a, b, c] = [tris[t]!, tris[t + 1]!, tris[t + 2]!];
+    const swap = turn(a, b, c) * facing < 0;
+    index.set([base + a, base + (swap ? c : b), base + (swap ? b : c)], first + t);
+  }
+}
+
 /**
  * The roof panel. The cage keeps its knee-lip section down to a keel under the crown. The drawn roof's side rolls into the dome with
  * no shelf, and it is a thin shell: its inner face, inset `HEADLINER_INSET` from the skin's cants and crown, is the headliner
@@ -64,10 +118,17 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
   const lip = cantDrop(style);
   const segs = ROOF_SEGS[source];
   const rings: Pt[][] = [];
-  const zs: number[] = [];
-  for (let s = 0; s <= segs; s++) {
-    const z = lerp(z0, z1, s / segs);
-    const { y, x } = roofAt(z, style);
+  const zs = Array.from({ length: segs + 1 }, (_, s) => lerp(z0, z1, s / segs));
+  if (source === "drawn") {
+    const { rear, front } = style.roofEnds ?? {};
+    const rolled = [...(rear === undefined ? [] : ROOF_ROLL_STATIONS.map((k) => z0 + rear * k)), ...(front === undefined ? [] : ROOF_ROLL_STATIONS.map((k) => z1 - front * k))];
+    zs.push(...rolled.filter((z) => zs.every((w) => Math.abs(w - z) > 0.001)));
+    zs.sort((a, b) => a - b);
+  }
+  for (const z of zs) {
+    const { y: roofY, x } = roofAt(z, style);
+    const { drop, crown } = source === "drawn" ? roofDome(z, style) : { drop: 0, crown: ROOF_CROWN };
+    const y = roofY - drop;
     const side: Pt[] =
       source === "cage"
         ? [
@@ -75,27 +136,37 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
             { x: x + ROOF_LIP_KNEE[0], y: y - ROOF_LIP_KNEE[1] },
           ]
         : roofRoll(x, y, lip).slice(0, -1);
+    const shoulder = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
     const skin = [
       ...side.map((p) => ({ x: -p.x, y: p.y })),
       { x: -x, y },
-      { x: -x * ROOF_SHOULDER[0], y: y + ROOF_SHOULDER[1] },
-      { x: 0, y: y + ROOF_CROWN },
-      { x: x * ROOF_SHOULDER[0], y: y + ROOF_SHOULDER[1] },
+      { x: -x * ROOF_SHOULDER[0], y: y + shoulder },
+      { x: 0, y: y + crown },
+      { x: x * ROOF_SHOULDER[0], y: y + shoulder },
       { x, y },
       ...[...side].reverse(),
     ];
     rings.push(source === "drawn" ? shellRing(skin, side.length, HEADLINER_INSET) : [...skin, { x: 0, y: y - 0.085 }]);
-    zs.push(z);
   }
   const geo = loftFromRings(rings, zs, 0.28, 0.72);
   ensureOutwardNormals(geo);
   if (source === "cage") return geo;
-  // The loft's rings, then each end cap's own copy of its ring (`loftFromRings`).
+  // The loft's rings, then each end cap's own copy of its ring: the shell's ring is concave, so `loftFromRings` ear-clips its caps
+  // and adds no centre between the copies.
   const n = rings[0]!.length;
   const cant = (n - HEADLINER_POINTS.length - 5) / 2;
   const twins: number[] = [];
-  for (const base of [...zs.map((_, s) => s * n), zs.length * n, zs.length * n + n + 1]) {
+  for (const base of [...zs.map((_, s) => s * n), zs.length * n, zs.length * n + n]) {
     for (let j = 0; j < HEADLINER_POINTS.length; j++) twins.push(base + n - HEADLINER_POINTS.length + j, base + cant + HEADLINER_POINTS[j]!);
+  }
+  const ends = roofEndBows(style);
+  bowRoofEnds(geo, ends, twins);
+  // Each cap's ear-clip (`n` - 2 triangles) follows the loft's quads: the rear cap at `zs[0]`, then the front.
+  const capStart = (zs.length - 1) * n * 6;
+  const index = geo.getIndex()!.array;
+  for (const end of ends) {
+    const front = end.z === z1;
+    stripCap(index, capStart + (front ? 3 * (n - 2) : 0), zs.length * n + (front ? n : 0), rings[front ? rings.length - 1 : 0]!, cant);
   }
   const unsplit = geo.getAttribute("position").count;
   splitCreases(geo, ROOF_CREASE_DEGREES);
@@ -189,7 +260,7 @@ type Rail = { rear: V3; front: V3; inward?: readonly [number, number] };
 
 /**
  * Pillar lofted through `rails` (belt to top), thickness inward, its unit `section` at each rail's width (default: corners rounded at
- * `radius` (m) in `steps` chords, the outer face bulged `crown` (m)); sign -1 mirrors to the left without flipping the winding.
+ * `radius` (m) in `steps` chords, the outer face bulged `crown` (m)); sign -1 mirrors to the left, its outer face still at u = 1.
  * Its end caps share the end rings; `open`: both ends are buried (in the body, the roof's side), so it draws no caps.
  */
 function roundedPillarAlong(
@@ -222,22 +293,22 @@ function roundedPillarAlong(
     const u = pos.getX(i);
     const w = pos.getY(i);
     const { rear, front, inward = [1, 0] } = rails[Math.round(pos.getZ(i) * last)]!;
-    const depth = (sign > 0 ? 1 - u : u) * thick;
+    const depth = (1 - u) * thick;
     pos.setXYZ(i, sign * (lerp(rear[0], front[0], w) - depth * inward[0]), lerp(rear[1], front[1], w), lerp(rear[2], front[2], w) + depth * inward[1]);
   }
   ensureOutwardNormals(geo);
   return geo;
 }
 
-/** A drawn post's unit section (u across its `thick` depth, the outer face at 1; w across its `width`): `POST_ROUND` corners, the outer face crowned. */
-export function postSection(thick: number, width: number): Pt[] {
+/** A drawn post's unit section (u across its `thick` depth, the outer face at 1; w across its `width`): `POST_ROUND` corners, the outer face crowned `crown` (m). */
+export function postSection(thick: number, width: number, crown = PILLAR_CROWN): Pt[] {
   const radius = POST_ROUND * thick;
-  return filletedUnitSection(filletShare(thick, radius), filletShare(width, radius), POST_ROUND_STEPS, PILLAR_CROWN / thick);
+  return filletedUnitSection(filletShare(thick, radius), filletShare(width, radius), POST_ROUND_STEPS, crown / thick);
 }
 
 /**
  * Drawn post (`postSection`) mapped onto four outer-face corners (+x side), its depth straight in, or square to its face in plan when
- * `square` (the C-pillar, whose face turns toward the tail); sign -1 mirrors to the left without flipping the winding.
+ * `square` (the C-pillar, whose face turns toward the tail); sign -1 mirrors to the left.
  */
 function roundedPillarFromCorners(sign: number, c: { fb: V3; rb: V3; rt: V3; ft: V3 }, thick: number, square = false): THREE.BufferGeometry {
   const rails = [0, 1].map((v): Rail => {
@@ -251,6 +322,8 @@ function roundedPillarFromCorners(sign: number, c: { fb: V3; rb: V3; rt: V3; ft:
 
 /** The drawn A-post's depth inward (m): a slim post, not a slab. */
 const A_POST_THICK = 0.03;
+/** The drawn A-post's face crowns this share of its width: its normals fan ±30° across it, turning from the side glass to the windshield, not a flat plank. */
+const A_POST_CROWN = 0.13;
 /**
  * The drawn A-post's stations, base to top, as shares of its run: sixths, the fifth left out. Its rails run straight up to the cant
  * line, so the lower five show under every style's roof side; the top runs up into the roof. The fifth stands past the cant on some
@@ -290,9 +363,13 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const glassPlaneX = (y: number) => lerp(beltX(footZ, style), cantX(aTopZ, style), THREE.MathUtils.clamp((y - footY) / (cantTop - footY), 0, 1));
   const railAt = (t: number): Rail => {
     const y = lerp(footY, aTopY, t);
-    const postZ = aPostRearZ(y, style);
     const edge = lerp(edgeFoot, 1, t);
-    const [frontY, frontZ] = [lerp(base[0], topY, edge) - A_POST_LIFT * uz, lerp(base[1], topZ, edge) + A_POST_LIFT * uy];
+    const [rearZ, edgeZ] = [aPostRearZ(y, style), lerp(base[1], topZ, edge) + A_POST_LIFT * uy];
+    // The top station runs into the roof: its ring is moved back to lie a post's depth (its section's reach in z) inside the roof's
+    // span, where the roof's tuck holds all of it, not a blade past its end.
+    const back = t === 1 ? Math.max(0, Math.max(rearZ, edgeZ) - (style.roofZ[1] - ROOF_TUCK - A_POST_THICK)) : 0;
+    const [postZ, frontZ] = [rearZ - back, edgeZ - back];
+    const frontY = lerp(base[0], topY, edge) - A_POST_LIFT * uz;
     const [frontX, rearX] = [lerp(wBase, wTop, edge) / 2 + A_POST_LIFT, glassPlaneX(y) + A_POST_LIFT];
     const roofZ = THREE.MathUtils.clamp(postZ, style.roofZ[0], style.roofZ[1]);
     const rear: V3 = [underRoofSide(rearX, y, roofZ, style), y, postZ];
@@ -347,7 +424,7 @@ function roofOutlineX(y: number, roofY: number, roofX: number, lip: number): num
 function underRoofSide(x: number, y: number, z: number, style: BodyStyle): number {
   if (z < style.roofZ[0] || z > style.roofZ[1]) return x;
   const roof = roofAt(z, style);
-  return Math.min(x, roofOutlineX(y, roof.y, roof.x, cantDrop(style)) - ROOF_TUCK);
+  return Math.min(x, roofOutlineX(y, roof.y - roofDome(z, style).drop, roof.x, cantDrop(style)) - ROOF_TUCK);
 }
 
 /** The side glass's plane at (`y`, `z`), its lean from the belt to the cant line carried on past both, `proud` (m) out off it. */
@@ -581,7 +658,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   for (const sign of [-1, 1]) {
     parts.push(
       aPost
-        ? pillar(roundedPillarAlong(sign, aPost.post, A_POST_THICK, { open: true, section: (width) => postSection(A_POST_THICK, width) }), "a")
+        ? pillar(roundedPillarAlong(sign, aPost.post, A_POST_THICK, { open: true, section: (width) => postSection(A_POST_THICK, width, A_POST_CROWN * width) }), "a")
         : boxFromCorners(
             sign,
             {

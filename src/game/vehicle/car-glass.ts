@@ -2,9 +2,9 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { PART_FAMILY, hypot2 } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
-import { CAR_STYLES, type BodyStyle, type GlassQuad, type YZ } from "./car-variants.ts";
+import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad, type YZ } from "./car-variants.ts";
 import { ROCKER, glassTopY, glassX, lerp, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
-import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, rockerAt } from "./car-lines.ts";
+import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, rockerAt, WINDSHIELD_BOW } from "./car-lines.ts";
 import { DOOR_PROUD } from "./car-door-mesh.ts";
 import { FITTING_ATTRIBUTE } from "./constants.ts";
 import { mergeToned } from "./car-materials.ts";
@@ -20,30 +20,29 @@ export const DOOR_GLASS_SEAT = { x: -0.02, y: 0.52, z: -0.28 } as const;
 
 const _pt = new THREE.Vector3();
 
-/** Point of raked quad `q` in car space: `xn` −1…1 across, `t` 0…1 base to top, bowed by `bow` along z at the centre line. */
-function quadPoint(q: GlassQuad, xn: number, t: number, bow: number): THREE.Vector3 {
+/** A raked pane with its bow resolved. */
+type BowedQuad = GlassQuad & { bow: GlassBow };
+
+/** Point of raked quad `q` in car space: `xn` −1…1 across, `t` 0…1 base to top, bowed along z at the centre line (none at the edges). */
+function quadPoint(q: BowedQuad, xn: number, t: number): THREE.Vector3 {
   const w = lerp(q.wBase, q.wTop, t);
-  return _pt.set(xn * w * 0.5, lerp(q.base[0], q.top[0], t), lerp(q.base[1], q.top[1], t) + bow * (1 - xn * xn));
+  return _pt.set(xn * w * 0.5, lerp(q.base[0], q.top[0], t), lerp(q.base[1], q.top[1], t) + lerp(q.bow.base, q.bow.top, t) * (1 - xn * xn));
 }
 
-/** How a raked pane is drawn: its grid (columns across, rows up), its bow (m) along z at the centre line, and `facing`, the way its outward normal runs along z. */
-type QuadDraw = { segX: number; segY: number; bow: number; facing: 1 | -1 };
-/** The windshield bows forward this far (m) at its centre line. */
-const WINDSHIELD_BOW = 0.02;
-/** The rear glass bows back this far (m) at its centre line. */
-const REAR_GLASS_BOW = -0.015;
-const WINDSHIELD_DRAW: QuadDraw = { segX: 10, segY: 8, bow: WINDSHIELD_BOW, facing: 1 };
-const REAR_GLASS_DRAW: QuadDraw = { segX: 8, segY: 6, bow: REAR_GLASS_BOW, facing: -1 };
+/** How a raked pane is drawn: its grid (columns across, rows up), and `facing`, the way its outward normal runs along z. */
+type QuadDraw = { segX: number; segY: number; facing: 1 | -1 };
+const WINDSHIELD_DRAW: QuadDraw = { segX: 10, segY: 8, facing: 1 };
+const REAR_GLASS_DRAW: QuadDraw = { segX: 8, segY: 6, facing: -1 };
 
-/** Raked glass quad (windshield / rear glass), bowed along z at the centre line. */
-function makeGlassQuad(q: GlassQuad, { segX, segY, bow }: QuadDraw): THREE.BufferGeometry {
+/** Raked glass quad (windshield / rear glass), bowed along z at the centre line; `userData.centre` is its bowed centre (`glassWorld`). */
+function makeGlassQuad(q: BowedQuad, { segX, segY }: QuadDraw): THREE.BufferGeometry {
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
   for (let j = 0; j <= segY; j++) {
     const t = j / segY;
     for (let i = 0; i <= segX; i++) {
-      const p = quadPoint(q, (i / segX) * 2 - 1, t, bow);
+      const p = quadPoint(q, (i / segX) * 2 - 1, t);
       positions.push(p.x, p.y, p.z);
       uvs.push(i / segX, t);
     }
@@ -60,25 +59,31 @@ function makeGlassQuad(q: GlassQuad, { segX, segY, bow }: QuadDraw): THREE.Buffe
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geo.setIndex(indices);
   geo.computeVertexNormals();
+  geo.userData.centre = quadPoint(q, 0, 0.5).toArray();
   return geo;
 }
 
-/** The windshield's quad on `style`: its base and widths, its top edge. */
-function windshieldQuad(style: BodyStyle): GlassQuad {
-  const { base, wBase, wTop } = style.windshield;
-  return { base, top: style.windshieldTop, wBase, wTop };
+/** The windshield's quad on `style`: its base and widths, its top edge, its bow. */
+function windshieldQuad(style: BodyStyle): BowedQuad {
+  const { base, wBase, wTop, bow = WINDSHIELD_BOW } = style.windshield;
+  return { base, top: style.windshieldTop, wBase, wTop, bow };
+}
+
+/** The rear glass's quad on `style`, its bow resolved. */
+function rearGlassQuad(style: BodyStyle): BowedQuad {
+  return { ...style.rearGlass, bow: style.rearGlass.bow ?? REAR_GLASS_BOW };
 }
 
 export function makeWindshield(style: BodyStyle = SEDAN): THREE.BufferGeometry {
   return makeGlassQuad(windshieldQuad(style), WINDSHIELD_DRAW);
 }
 
-/** Glass quad `q` drawn in by its `frame` ([side, bottom, top], m: sides across, bottom and top along its slope). */
-function framedQuad(q: GlassQuad, [side, bottom, top]: readonly [number, number, number]): GlassQuad {
+/** Glass quad `q` drawn in by its `frame` ([side, bottom, top], m: sides across, bottom and top along its slope), bowed as `q`. */
+function framedQuad(q: BowedQuad, [side, bottom, top]: readonly [number, number, number]): BowedQuad {
   const len = hypot2(q.top[0] - q.base[0], q.top[1] - q.base[1]);
   const at = (t: number): YZ => [lerp(q.base[0], q.top[0], t), lerp(q.base[1], q.top[1], t)];
   const [t0, t1] = [bottom / len, 1 - top / len];
-  return { base: at(t0), top: at(t1), wBase: lerp(q.wBase, q.wTop, t0) - 2 * side, wTop: lerp(q.wBase, q.wTop, t1) - 2 * side };
+  return { base: at(t0), top: at(t1), wBase: lerp(q.wBase, q.wTop, t0) - 2 * side, wTop: lerp(q.wBase, q.wTop, t1) - 2 * side, bow: q.bow };
 }
 
 /** A black frit band: rows of points (each row the same length) as a strip grid wound like `makeGlassQuad`'s, every vertex coloured black. */
@@ -103,14 +108,13 @@ function fritBand(rows: readonly THREE.Vector3[][]): THREE.BufferGeometry {
 const FRIT_CHORDS = 4;
 
 /** A framed rear glass: its pane drawn in by the `frame`, the band out to the outline its black frit, both bowed alike (vertex colour: the pane's material tints it). */
-function framedGlass(q: GlassQuad, frame: readonly [number, number, number], draw: QuadDraw): THREE.BufferGeometry {
-  const { bow } = draw;
+function framedGlass(q: BowedQuad, frame: readonly [number, number, number], draw: QuadDraw): THREE.BufferGeometry {
   const inner = framedQuad(q, frame);
   const pane = makeGlassQuad(inner, draw);
   pane.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(pane.getAttribute("position").count * 3).fill(1), 3));
-  const along = (g: GlassQuad, t: number) => Array.from({ length: FRIT_CHORDS + 1 }, (_, i) => quadPoint(g, (i / FRIT_CHORDS) * 2 - 1, t, bow).clone());
+  const along = (g: BowedQuad, t: number) => Array.from({ length: FRIT_CHORDS + 1 }, (_, i) => quadPoint(g, (i / FRIT_CHORDS) * 2 - 1, t).clone());
   // The sides take no bow (it is zero at the pane's edges): one chord each.
-  const side = (xn: number) => [0, 1].map((t) => [quadPoint(q, xn, t, bow).clone(), quadPoint(inner, xn, t, bow).clone()]);
+  const side = (xn: number) => [0, 1].map((t) => [quadPoint(q, xn, t).clone(), quadPoint(inner, xn, t).clone()]);
   const bands = [
     fritBand([along(q, 0), along(inner, 0)]),
     fritBand([along(inner, 1), along(q, 1)]),
@@ -123,8 +127,8 @@ function framedGlass(q: GlassQuad, frame: readonly [number, number, number], dra
 }
 
 export function makeRearGlass(style: BodyStyle = SEDAN): THREE.BufferGeometry {
-  const { frame } = style.rearGlass;
-  return frame ? framedGlass(style.rearGlass, frame, REAR_GLASS_DRAW) : makeGlassQuad(style.rearGlass, REAR_GLASS_DRAW);
+  const quad = rearGlassQuad(style);
+  return quad.frame ? framedGlass(quad, quad.frame, REAR_GLASS_DRAW) : makeGlassQuad(quad, REAR_GLASS_DRAW);
 }
 
 /** A side pane's edge z at the belt (`bot`) and at the top, rear → front; a kneed front edge (`front`, z at a height share) gets a row at its knee (`kneeT`). */
@@ -362,10 +366,10 @@ export function makeSideGlassFrame(sign: number, style: BodyStyle): THREE.Buffer
 }
 
 /** Chrome ribbon round a raked pane's border: the points its own grid draws (`quadPoint`), offset outward in the pane's plane and stood proud along its outward normal. */
-function makeQuadGlassFrame(q: GlassQuad, { segX, bow, facing }: QuadDraw): THREE.BufferGeometry {
+function makeQuadGlassFrame(q: BowedQuad, { segX, facing }: QuadDraw): THREE.BufferGeometry {
   const xs = Array.from({ length: segX + 1 }, (_, i) => (i / segX) * 2 - 1);
   // Counter-clockwise in (across, up), which the edge offsets below rely on.
-  const pts = [...xs.map((xn) => quadPoint(q, xn, 0, bow).clone()), ...xs.map((xn) => quadPoint(q, xn, 1, bow).clone()).reverse()];
+  const pts = [...xs.map((xn) => quadPoint(q, xn, 0).clone()), ...xs.map((xn) => quadPoint(q, xn, 1).clone()).reverse()];
   // The flat pane's normal: the bow tilts it under a millimetre across the ribbon.
   const plane = new THREE.Vector3(0, q.base[1] - q.top[1], q.top[0] - q.base[0]).normalize();
   const outward = plane.clone().multiplyScalar(facing);
@@ -389,7 +393,7 @@ function makeQuadGlassFrame(q: GlassQuad, { segX, bow, facing }: QuadDraw): THRE
 export function makeBodyGlassFrames(style: BodyStyle, rearOnBody: boolean): THREE.BufferGeometry {
   const frames = [-1, 1].map((sign) => makeSideGlassFrameFor(sign, style, quarterSpan(style), [0, 0, 0]));
   frames.push(makeQuadGlassFrame(windshieldQuad(style), WINDSHIELD_DRAW));
-  if (rearOnBody) frames.push(makeQuadGlassFrame(style.rearGlass, REAR_GLASS_DRAW));
+  if (rearOnBody) frames.push(makeQuadGlassFrame(rearGlassQuad(style), REAR_GLASS_DRAW));
   for (const strip of style.chromeStrips ?? []) {
     if (ridesDoor(strip, style)) continue;
     for (const sign of [-1, 1]) frames.push(makeChromeStrip(sign, strip, (z, y) => bodySkinX(z, y, style), [0, 0, 0]));
@@ -404,14 +408,14 @@ export function makeBodyGlassFrames(style: BodyStyle, rearOnBody: boolean): THRE
  */
 export function glassCorners(style: BodyStyle): Float32Array {
   const out = new Float32Array(GLASS_NAMES.length * 12);
-  const quads = [windshieldQuad(style), style.rearGlass];
+  const quads = [windshieldQuad(style), rearGlassQuad(style)];
   for (let p = 0; p < GLASS_NAMES.length; p++) {
     const name = GLASS_NAMES[p]!;
     const sign = name.endsWith("L") ? -1 : 1;
     for (let k = 0; k < 4; k++) {
       const across = k & 1;
       const t = k >> 1;
-      const v = p < 2 ? quadPoint(quads[p]!, across * 2 - 1, t, 0) : sidePoint(sign, style, name.startsWith(PART_FAMILY.door) ? doorSpan(style) : quarterSpan(style), across, t);
+      const v = p < 2 ? quadPoint(quads[p]!, across * 2 - 1, t) : sidePoint(sign, style, name.startsWith(PART_FAMILY.door) ? doorSpan(style) : quarterSpan(style), across, t);
       v.toArray(out, p * 12 + k * 3);
     }
   }
