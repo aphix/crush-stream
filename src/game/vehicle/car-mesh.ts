@@ -397,7 +397,8 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   const floor = floorY(z, style);
   const tub = tubAt(z, style, bodyTubs(style, source));
   const { wheels } = carFrame(style);
-  const well = wheelWell(z, wheels, style.arch.radius);
+  // The drawn opening may stand lower than the cage's (`arch.rise`), under the round fender flare; the cage keeps the round one.
+  const well = wheelWell(z, wheels, style.arch.radius) * (source === "drawn" ? (style.arch.rise ?? 1) : 1);
   const archY = wheels[0]![1] + well;
   const inset = seamInset(z, style);
   const yF = yb - FEATURE_DROP;

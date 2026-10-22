@@ -250,13 +250,14 @@ function skinX(loft: THREE.BufferGeometry, side: number, y: number, z: number): 
   return best;
 }
 
-/** A lip's stations round the opening of the wheel at (`wy`, `wz`): [z, y] on its edge and the outward unit [uz, uy] there, rear foot to front foot. */
+/** A lip's stations round the opening of the wheel at (`wy`, `wz`): [z, y] on its edge and the outward unit [uz, uy] there, rear foot to front foot (its crown `arch.rise` × radius over the hub). */
 function lipPath(style: BodyStyle, wy: number, wz: number, square: boolean): [number, number, number, number][] {
   const r = style.arch.radius;
+  const rise = style.arch.rise ?? 1;
   const foot = (sign: number) => rockerAt(wz + sign * r, style);
   // The arc's end angle from the top: down to hub height, or up to where the rocker meets the opening over it.
   const reachDown = (sign: number) => {
-    const c = Math.min(1, (foot(sign) - wy) / r);
+    const c = Math.min(1, (foot(sign) - wy) / (r * rise));
     return foot(sign) < wy ? Math.PI / 2 : detAtan2(Math.sqrt(1 - c * c), c);
   };
   const path: [number, number, number, number][] = [];
@@ -267,7 +268,7 @@ function lipPath(style: BodyStyle, wy: number, wz: number, square: boolean): [nu
     const s = detSin(a);
     const c = detCos(a);
     const reach = square ? r * (Math.abs(s) ** LIP_SQUARE + Math.abs(c) ** LIP_SQUARE) ** (-1 / LIP_SQUARE) : r;
-    path.push([wz + reach * s, wy + reach * c, s, c]);
+    path.push([wz + reach * s, wy + reach * c * rise, s, c]);
   }
   if (foot(1) < wy) path.push([wz + r, foot(1), 1, 0]);
   return path;
@@ -302,7 +303,7 @@ export function archLipGeometry(style: BodyStyle, loft: THREE.BufferGeometry): T
     const first = positions.length / 3;
     for (const [z, y, uz, uy] of path) {
       // Under the hub the opening runs straight down its sides (the legs), over it round the arc.
-      const overOpening = (y < wy ? Math.abs(z - wz) : hypot2(z - wz, y - wy)) <= style.arch.radius + LIP_OVER_SKIN;
+      const overOpening = (y < wy ? Math.abs(z - wz) : hypot2(z - wz, (y - wy) / (style.arch.rise ?? 1))) <= style.arch.radius + LIP_OVER_SKIN;
       for (const [out, off, t] of section) {
         let skin = -Infinity;
         for (let seek = Math.max(out, 0); skin === -Infinity && seek <= Math.max(out, 0) + LIP_SEEK; seek += 0.005) skin = skinX(loft, side, y + uy * seek, z + uz * seek);
