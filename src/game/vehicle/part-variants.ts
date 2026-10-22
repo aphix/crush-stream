@@ -24,8 +24,8 @@ import { DRIVER_SIDE, FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
 import { windshieldPoint } from "./car-glass.ts";
 
 /**
- * A style's own drawn part where its spec asks for one (`door.mirror`, `grille`, `lamps.units`), in the seat's space: the seat, and the
- * platform geometry the sim measures (`PartSeat.geometry`), stay as they were. Each kind's variants share one batch draw (`variantBatchGeometry`).
+ * A style's own drawn part where its spec asks for one (`door.mirror`, `grille`, `lamps.units`), in the seat's space: drawn only while attached,
+ * the seat and the platform geometry the sim measures (`PartSeat.geometry`) stay as they were; a torn part flies and collides as drawn. Each kind's variants share one batch draw (`variantBatchGeometry`).
  */
 
 type Finish = "black" | "chrome" | "body";

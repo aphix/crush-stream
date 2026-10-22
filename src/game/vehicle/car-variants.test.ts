@@ -3,13 +3,14 @@ import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
+import type { LooseShape } from "./car-core.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
 import { CREASE_DEGREES, ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, sideBowZ, tubWall } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
-import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
+import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, type PartSeat } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
@@ -17,7 +18,7 @@ import { makeRoofFittings, withFrontBand, withHoodBulge, withRearFittings } from
 import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
-import { BOX_HALVES, boxShape, newLooseShape, partMass, stepLoose } from "./loose-step.ts";
+import { boxShape, newLooseShape, partMass, stepLoose } from "./loose-step.ts";
 import { armSolids, Surface } from "../world/surfaces.ts";
 import { wearCarLook } from "../present/car-look.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
@@ -2569,13 +2570,22 @@ function sedanWithMirror(mirror: MirrorSpec): DeformableCar {
   }
 }
 
-/** What the sim reads off car `car`'s mirror `i`: its seat's pose, its rest box, and the box its torn part flies as. */
-function mirrorSimReading(car: DeformableCar, i: 0 | 1): string {
-  const seat = car.partSeats[i === 0 ? PART_KIND.mirrorL : PART_KIND.mirrorR]!;
+function mirrorSeat(car: DeformableCar, i: 0 | 1): PartSeat {
+  return car.partSeats[i === 0 ? PART_KIND.mirrorL : PART_KIND.mirrorR]!;
+}
+
+/** What the sim reads off car `car`'s attached mirror `i`: its seat's pose and its rest box. */
+function mirrorRestReading(car: DeformableCar, i: 0 | 1): string {
+  const seat = mirrorSeat(car, i);
   const rest = car["mirrorRestBox"](i);
+  return [...seat.position.toArray(), ...seat.scale.toArray(), ...rest.min.toArray(), ...rest.max.toArray()].join();
+}
+
+/** The box car `car`'s torn mirror `i` flies as, in its seat's frame (`boxShape`). */
+function tornMirror(car: DeformableCar, i: 0 | 1): LooseShape {
   const torn = newLooseShape();
-  boxShape(torn, seat);
-  return [...seat.position.toArray(), ...seat.scale.toArray(), ...rest.min.toArray(), ...rest.max.toArray(), torn.reach, ...torn.centre.toArray(), ...torn.points].join();
+  boxShape(torn, mirrorSeat(car, i));
+  return torn;
 }
 
 /** Two faces z-fight when they face within this (deg) of each other: contour-defects' z-fight test reads 4. */
@@ -2891,7 +2901,7 @@ describe("given a body style's P2 parts", () => {
     }
   });
 
-  it("when a car's style carries its own mirror, then its seats and torn mirrors draw it in the door's paint, and a look's door colour, while every box the sim reads stays the platform mirror's", () => {
+  it("when a car's style carries its own mirror, then its seats and torn mirrors draw it in the door's paint, and a look's door colour, while its seat and rest box stay the platform mirror's and a torn one flies as it is drawn", () => {
     const own = sedanWithMirror({ cap: "rounded", finish: "body" });
     const plain = new DeformableCar(PAINT, scene, null, "sedan");
     const seat = own.partSeats[PART_KIND.mirrorR]!;
@@ -2900,7 +2910,26 @@ describe("given a body style's P2 parts", () => {
     wearCarLook(own, { ...NO_CAR_PICK, doors: 0x336699 }, null);
     assert.equal(seat.tint.getHex(), 0x336699, "and a look's door colour");
     for (const car of [own, plain]) for (const side of [-1, 1]) car.breakMirror(side, new THREE.Vector3(side, 0.5, 0));
-    for (const i of [0, 1] as const) assert.equal(mirrorSimReading(own, i), mirrorSimReading(plain, i), `mirror ${i}: seat, rest box and torn box`);
+    for (const i of [0, 1] as const) {
+      assert.equal(mirrorRestReading(own, i), mirrorRestReading(plain, i), `mirror ${i}: seat and rest box`);
+      const [torn, platformTorn] = [tornMirror(own, i), tornMirror(plain, i)];
+      assert.ok(torn.reach !== platformTorn.reach || !torn.half.equals(platformTorn.half), `mirror ${i}: the torn mirror flies as the style's own, not the platform's`);
+      const drawn = mirrorSeat(own, i).children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh)!.geometry.getAttribute("position");
+      const half = torn.half.clone().addScalar(1e-6);
+      const [lo, hi] = [torn.centre.clone().sub(half), torn.centre.clone().add(half)];
+      const p = new THREE.Vector3();
+      let outside = 0;
+      let farthest = 0;
+      for (let v = 0; v < drawn.count; v++) {
+        p.fromBufferAttribute(drawn, v);
+        const out = Math.max(lo.x - p.x, p.x - hi.x, lo.y - p.y, p.y - hi.y, lo.z - p.z, p.z - hi.z);
+        if (out > 0) {
+          outside++;
+          farthest = Math.max(farthest, out);
+        }
+      }
+      assert.equal(outside, 0, `mirror ${i}: ${outside} of ${drawn.count} drawn vertices stand outside the torn box, the farthest ${(farthest * 100).toFixed(1)} cm`);
+    }
     const loose = seat.children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh)!;
     const [painted, colour] = [loose.geometry.getAttribute(PAINTED_ATTRIBUTE), loose.geometry.getAttribute("color")];
     const k = Array.from({ length: painted.count }, (_, i) => i).find((i) => painted.getX(i) === 1)!;
@@ -3353,7 +3382,7 @@ describe("given a body style's P2 parts", () => {
       const part = car["parts"].find((p) => p.name === name)!;
       car["detachPart"](part, 0, new THREE.Vector3());
       boxShape(part.shape, part.object);
-      const half = new THREE.Vector3().fromArray(part.shape.points, BOX_HALVES).addScalar(1e-6);
+      const half = part.shape.half.clone().addScalar(1e-6);
       const box = new THREE.Box3(part.shape.centre.clone().sub(half), part.shape.centre.clone().add(half));
       let outside = 0;
       let worst = 0;
@@ -3375,8 +3404,9 @@ describe("given a body style's P2 parts", () => {
     }
   });
 
-  // ponytail: one box per torn part; an L/U bumper rests on the box's empty corner. Fix: two boxes from SHAPE_POINTS (2 x 8 corners).
-  it.todo("when a torn sedan bumper settles on flat ground or against a wall, then its drawn shell lies within 3 cm of every surface its loose box rests on (today the front bumper rolled 90° wedges its box's empty corner into the wall's foot: the shell hovers 13.4 cm off the ground and 16.2 cm off the wall; on the ground the centre of mass falls up to 20 cm (front) / 72 cm (rear) outside the shell's footprint)", () => {
+  // A torn bumper's shell is a U in plan (its swept ends and seam cover) and an L side-on: as one box it rested on the box's empty corner
+  // (rolled 90° into the wall's foot its shell hovered 13.4 cm off the ground and 16.2 cm off the wall), so it flies as its shell's own points.
+  it("when a torn sedan bumper settles on flat ground or against a wall, then its drawn shell lies within 3 cm of every surface its loose shape rests on", () => {
     const H = 1 / QUIET_HZ;
     const WALL_Z = 3;
     const HOVER = 0.03;

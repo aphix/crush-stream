@@ -1,7 +1,7 @@
 import type { DetachPart, LooseBody } from "./car-core.ts";
 import type { CarParts } from "./car-parts.ts";
 import { DENT_MAX, type DentState } from "./loose-dent.ts";
-import { BOX_HALVES, fitWheelShape, halfBox } from "./loose-step.ts";
+import { fitWheelShape, keyedShape, SHAPE_POINTS } from "./loose-step.ts";
 
 /** Netplay part slots: the most parts any style has (8, six body panels, plus the police light bar), so every car shares one layout. */
 export const PART_SLOTS = 15;
@@ -75,12 +75,19 @@ export function partState(car: CarParts, parts: readonly DetachPart[], buf: Floa
 /** A popped wheel: a loose body with the flag the car keeps of it. */
 type LooseWheel = LooseBody & { loose: boolean };
 
-/** Numbers a loose body takes in a keyframe's loose block: pose (position, quaternion), velocity, spin, the flags, the sleep place (x, z), the dents' count and their hits, a part's box (its middle and half extents, 0: not measured yet), then how long it has rested (`restFor`). */
+/**
+ * Numbers a loose body takes in a keyframe's loose block: pose (position, quaternion), velocity, spin, the flags, the sleep place (x, z), the
+ * dents' count and their hits, a part's shape (its middle and box half extents, 0: not measured yet), how long it has rested (`restFor`), then
+ * its shape's points (a part that flies as its shell's own, `LOOSE_SHELL`).
+ */
 const LOOSE_BOX = 17 + DENT_MAX * 4;
-const LOOSE_EACH = LOOSE_BOX + 7;
+const LOOSE_POINTS = LOOSE_BOX + 7;
+const LOOSE_EACH = LOOSE_POINTS + SHAPE_POINTS * 3;
 const LOOSE_ASLEEP = 1;
 const LOOSE_AIRBORNE = 2;
 const LOOSE_SHOWN = 4;
+/** Its shape is its shell's own points, not its box's (`boxShape`). */
+const LOOSE_SHELL = 8;
 /** Most numbers a loose block takes: its mask, then every body's. */
 export const LOOSE_STATE_MAX = 1 + LOOSE_BODIES * LOOSE_EACH;
 
@@ -128,14 +135,15 @@ function readLooseBody(body: LooseBody, dent: DentState | undefined, buf: Float6
   body.velocity.toArray(buf, at + 7);
   body.angular.toArray(buf, at + 10);
   const s = body.shape;
-  buf[at + 13] = (s.asleep ? LOOSE_ASLEEP : 0) | (s.airborne ? LOOSE_AIRBORNE : 0) | (o.visible ? LOOSE_SHOWN : 0);
+  buf[at + 13] = (s.asleep ? LOOSE_ASLEEP : 0) | (s.airborne ? LOOSE_AIRBORNE : 0) | (o.visible ? LOOSE_SHOWN : 0) | (s.count > 0 && !s.box ? LOOSE_SHELL : 0);
   buf[at + 14] = s.sleepX;
   buf[at + 15] = s.sleepZ;
   buf[at + 16] = dent?.count ?? 0;
   for (let k = 0; k < DENT_MAX * 4; k++) buf[at + 17 + k] = dent?.hits[k] ?? 0;
   s.centre.toArray(buf, at + LOOSE_BOX);
-  for (let k = 0; k < 3; k++) buf[at + LOOSE_BOX + 3 + k] = s.count === 0 ? 0 : s.points[BOX_HALVES + k]!;
+  for (let k = 0; k < 3; k++) buf[at + LOOSE_BOX + 3 + k] = s.count === 0 ? 0 : s.half.getComponent(k);
   buf[at + LOOSE_BOX + 6] = s.restFor;
+  for (let k = 0; k < SHAPE_POINTS * 3; k++) buf[at + LOOSE_POINTS + k] = s.points[k]!;
 }
 
 function putLooseBody(body: LooseBody, isWheel: boolean, dent: DentState | undefined, buf: Float64Array, at: number): void {
@@ -144,12 +152,13 @@ function putLooseBody(body: LooseBody, isWheel: boolean, dent: DentState | undef
   o.quaternion.fromArray(buf, at + 3);
   body.velocity.fromArray(buf, at + 7);
   body.angular.fromArray(buf, at + 10);
-  // Before the flags: shaping wakes it and says it flies. A part flies as the box it was measured as when it first flew, not its shell drawn now.
+  // Before the flags: shaping wakes it and says it flies. A part flies as the shape it was measured as when it first flew, not its shell drawn now.
   if (isWheel) fitWheelShape(body);
   else if (buf[at + LOOSE_BOX + 3] === 0) body.shape.count = 0;
   else {
     body.shape.centre.fromArray(buf, at + LOOSE_BOX);
-    halfBox(body.shape, buf[at + LOOSE_BOX + 3]!, buf[at + LOOSE_BOX + 4]!, buf[at + LOOSE_BOX + 5]!);
+    const box = (buf[at + 13]! & LOOSE_SHELL) === 0;
+    keyedShape(body.shape, buf[at + LOOSE_BOX + 3]!, buf[at + LOOSE_BOX + 4]!, buf[at + LOOSE_BOX + 5]!, box, buf, at + LOOSE_POINTS);
   }
   const s = body.shape;
   const flags = buf[at + 13]!;

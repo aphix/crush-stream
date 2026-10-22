@@ -70,12 +70,12 @@ export function landOn(pos: THREE.Vector3, vel: THREE.Vector3, floor: number, mu
   return pos.y - ground;
 }
 
-/** The body's own points, as many as its shape can hold: a box's eight corners and twelve edge middles, a wheel's two rims. */
-const SHAPE_POINTS = 20;
+/** The body's own points, as many as its shape can hold: a box's eight corners and twelve edge middles (or its shell's points farthest along those twenty ways), a wheel's two rims. */
+export const SHAPE_POINTS = 20;
 
-/** A shape for a body of at most `SHAPE_POINTS` points, empty until `boxShape` or `wheelShape` fills it. */
-export function newLooseShape(): LooseShape {
-  return { points: new Float64Array(3 * SHAPE_POINTS), count: 0, centre: new THREE.Vector3(), invI: new THREE.Vector3(), reach: 0, asleep: false, sleepX: 0, sleepZ: 0, airborne: false, restFor: 0 };
+/** A shape for a body of at most `SHAPE_POINTS` points, empty until `boxShape` or `wheelShape` fills it; `shell`: it may fly as its drawn shell's own points (`LooseShape.shell`). */
+export function newLooseShape(shell = false): LooseShape {
+  return { points: new Float64Array(3 * SHAPE_POINTS), count: 0, centre: new THREE.Vector3(), half: new THREE.Vector3(), box: false, shell, invI: new THREE.Vector3(), reach: 0, asleep: false, sleepX: 0, sleepZ: 0, airborne: false, restFor: 0 };
 }
 
 /** `shape` as `newLooseShape` made it: not measured, awake, no sleep place. A body back on its car (`resetVisual`) flies afresh when next torn, as a new car's would. */
@@ -83,6 +83,8 @@ export function clearShape(shape: LooseShape): void {
   shape.points.fill(0);
   shape.count = 0;
   shape.centre.set(0, 0, 0);
+  shape.half.set(0, 0, 0);
+  shape.box = false;
   shape.invI.set(0, 0, 0);
   shape.reach = 0;
   shape.asleep = false;
@@ -94,38 +96,131 @@ export function clearShape(shape: LooseShape): void {
 
 /** The thinnest a box's half extent is taken (m): a sheet of no thickness would have no spin about its own length. */
 const MIN_HALF = 0.01;
+/**
+ * How near (m) a drawn point must stand to every corner of its bounding box for a part that may (`LooseShape.shell`) to fly as that box. A box
+ * with a corner farther from its shell than this has an empty corner the part rests on: a torn bumper's wrapped ends and seam cover make it a U
+ * in plan and an L side-on (its corners 19-34 cm from the shell), and as one box its shell hovered 13.4 cm off the ground and 16.2 cm off a wall
+ * on that corner. It flies as its shell's own points.
+ */
+const CORNER_FILL = 0.02;
 const _box = new THREE.Box3();
 const _geoBox = new THREE.Box3();
+const _vertBox = new THREE.Box3();
 const _size = new THREE.Vector3();
+const _p = new THREE.Vector3();
+/** The drawn points a shape is measured over, in the part's own frame (x, y, z), grown as needed: measured once per flight. */
+const SHELL = { xyz: new Float64Array(3 * 1024), n: 0 };
 
-/** `object`'s meshes' bounds in its own frame, unioned into `_box` (`m`: the frame of `o` in `object`'s). */
-function growBox(o: THREE.Object3D, m: THREE.Matrix4): void {
+function shellPush(p: THREE.Vector3): void {
+  if (SHELL.n * 3 + 3 > SHELL.xyz.length) {
+    const grown = new Float64Array(SHELL.xyz.length * 2);
+    grown.set(SHELL.xyz);
+    SHELL.xyz = grown;
+  }
+  p.toArray(SHELL.xyz, SHELL.n * 3);
+  SHELL.n++;
+}
+
+/**
+ * `object`'s meshes' bounds in its own frame, unioned into `_box` (`m`: the frame of `o` in `object`'s), and with `shell` their points into
+ * `SHELL`: a mesh's vertices, or the corners of its bounding box where that is not its vertices' (a geometry whose box was set apart from
+ * them; no torn part's is today).
+ */
+function growBox(o: THREE.Object3D, m: THREE.Matrix4, shell: boolean): void {
   if (o instanceof THREE.Mesh) {
     const geo = o.geometry as THREE.BufferGeometry;
     if (geo.boundingBox === null) geo.computeBoundingBox();
     _box.union(_geoBox.copy(geo.boundingBox!).applyMatrix4(m));
+    if (shell) shellOf(geo, m);
   }
-  for (const child of o.children) growBox(child, new THREE.Matrix4().multiplyMatrices(m, child.matrix));
+  for (const child of o.children) growBox(child, new THREE.Matrix4().multiplyMatrices(m, child.matrix), shell);
+}
+
+/** `geo`'s points into `SHELL` in the part's frame (`m`): its vertices, or its bounding box's corners where that box is not its vertices'. */
+function shellOf(geo: THREE.BufferGeometry, m: THREE.Matrix4): void {
+  const pos = geo.getAttribute("position");
+  _vertBox.makeEmpty();
+  if (pos) for (let k = 0; k < pos.count; k++) _vertBox.expandByPoint(_p.fromBufferAttribute(pos, k));
+  if (pos && _vertBox.equals(geo.boundingBox!)) {
+    for (let k = 0; k < pos.count; k++) shellPush(_p.fromBufferAttribute(pos, k).applyMatrix4(m));
+    return;
+  }
+  const b = geo.boundingBox!;
+  for (let c = 0; c < 8; c++) shellPush(_p.set(c & 1 ? b.max.x : b.min.x, c & 2 ? b.max.y : b.min.y, c & 4 ? b.max.z : b.min.z).applyMatrix4(m));
 }
 
 /**
- * `shape` as `object`'s box in its own frame, as drawn (`halfBox`). Measured once per part, when it first flies (`stepLoose`), and again
- * when it has been put back on its car (`count` 0). Its drawn shape changes after (a crushed arch), so a keyframe carries the box.
+ * `shape` as `object` drawn, in its own frame: its bounding box (`halfBox`), or, for a shape that may (`LooseShape.shell`) and whose shell does
+ * not fill every corner of that box, its shell's own points (`supportShape`). Measured once per part, when it first flies (`stepLoose`), and
+ * again when it has been put back on its car (`count` 0). Its drawn shape changes after (a crushed arch), so a keyframe carries the shape.
  */
 export function boxShape(shape: LooseShape, object: THREE.Object3D): void {
   _box.makeEmpty();
-  growBox(object, new THREE.Matrix4());
+  SHELL.n = 0;
+  growBox(object, new THREE.Matrix4(), shape.shell);
   if (_box.isEmpty()) _box.set(_size.set(-MIN_HALF, -MIN_HALF, -MIN_HALF), _geoBox.max.set(MIN_HALF, MIN_HALF, MIN_HALF));
   _box.getCenter(shape.centre);
   _box.getSize(_size).multiplyScalar(0.5);
   halfBox(shape, Math.max(MIN_HALF, _size.x), Math.max(MIN_HALF, _size.y), Math.max(MIN_HALF, _size.z));
+  if (shape.shell && SHELL.n > 0 && !cornersFilled(shape)) supportShape(shape);
 }
 
-/** Index in a box shape's `points` of its last corner, (+hx, +hy, +hz): its half extents. */
-export const BOX_HALVES = 7 * 3;
+/** Whether a point of `SHELL` stands within `CORNER_FILL` of each of the eight corners of `shape`'s box. */
+function cornersFilled(shape: LooseShape): boolean {
+  const c = shape.centre;
+  for (let k = 0; k < BOX_CORNERS; k++) {
+    const cx = c.x + shape.points[k * 3]!;
+    const cy = c.y + shape.points[k * 3 + 1]!;
+    const cz = c.z + shape.points[k * 3 + 2]!;
+    let near = Infinity;
+    for (let i = 0; i < SHELL.n * 3 && near > CORNER_FILL * CORNER_FILL; i += 3) {
+      near = Math.min(near, (SHELL.xyz[i]! - cx) ** 2 + (SHELL.xyz[i + 1]! - cy) ** 2 + (SHELL.xyz[i + 2]! - cz) ** 2);
+    }
+    if (near > CORNER_FILL * CORNER_FILL) return false;
+  }
+  return true;
+}
+
+/**
+ * `shape`'s points as its shell's own: for each of its box's twenty points (`halfBox`, already in `points`), the shell point farthest along
+ * the way from the middle to it (the nearer to it of those as far), so every point a contact meets is drawn. Its box's inertia and plate stay.
+ */
+function supportShape(shape: LooseShape): void {
+  const c = shape.centre;
+  let reach = 0;
+  for (let k = 0; k < SHAPE_POINTS; k++) {
+    const bx = shape.points[k * 3]!;
+    const by = shape.points[k * 3 + 1]!;
+    const bz = shape.points[k * 3 + 2]!;
+    let far = -Infinity;
+    let near = Infinity;
+    let at = 0;
+    for (let i = 0; i < SHELL.n * 3; i += 3) {
+      const x = SHELL.xyz[i]! - c.x;
+      const y = SHELL.xyz[i + 1]! - c.y;
+      const z = SHELL.xyz[i + 2]! - c.z;
+      const along = x * bx + y * by + z * bz;
+      const off = (x - bx) ** 2 + (y - by) ** 2 + (z - bz) ** 2;
+      if (along > far + 1e-9 || (along > far - 1e-9 && off < near)) {
+        far = Math.max(far, along);
+        near = off;
+        at = i;
+      }
+    }
+    const px = SHELL.xyz[at]! - c.x;
+    const py = SHELL.xyz[at + 1]! - c.y;
+    const pz = SHELL.xyz[at + 2]! - c.z;
+    shape.points[k * 3] = px;
+    shape.points[k * 3 + 1] = py;
+    shape.points[k * 3 + 2] = pz;
+    reach = Math.max(reach, Math.sqrt(px * px + py * py + pz * pz));
+  }
+  shape.reach = reach;
+  shape.box = false;
+}
 
 /** `shape` as a box of half extents `hx`, `hy`, `hz` about its `centre`: its eight corners and twelve edge middles, and the inverse inertia per unit mass of a solid box that size (a hood is a sheet: its spin about its own length is as easy as its tilt). */
-export function halfBox(shape: LooseShape, hx: number, hy: number, hz: number): void {
+function halfBox(shape: LooseShape, hx: number, hy: number, hz: number): void {
   // The eight corners, then the middle of each of the twelve edges (a part across a roof's ridge rests on the ridge, not on its corners).
   for (let c = 0; c < 8; c++) {
     shape.points[c * 3] = c & 1 ? hx : -hx;
@@ -139,12 +234,32 @@ export function halfBox(shape: LooseShape, hx: number, hy: number, hz: number): 
     shape.points[o + 1] = axis === 1 ? 0 : e & (axis === 0 ? 1 : 2) ? hy : -hy;
     shape.points[o + 2] = axis === 2 ? 0 : e & 2 ? hz : -hz;
   }
+  shape.half.set(hx, hy, hz);
+  shape.box = true;
   shape.invI.set(3 / (hy * hy + hz * hz), 3 / (hx * hx + hz * hz), 3 / (hx * hx + hy * hy));
   shape.count = 20;
   shape.reach = Math.sqrt(hx * hx + hy * hy + hz * hz);
   shape.asleep = false;
   shape.airborne = false;
   shape.restFor = 0;
+}
+
+/** `shape` as a keyframe carries it (`part-state.ts`): its box of half extents `hx`, `hy`, `hz`, and its shell's twenty points from `src` at `at` unless it flies as the box. */
+export function keyedShape(shape: LooseShape, hx: number, hy: number, hz: number, box: boolean, src: Float64Array, at: number): void {
+  halfBox(shape, hx, hy, hz);
+  if (box) return;
+  let reach = 0;
+  for (let k = 0; k < SHAPE_POINTS * 3; k += 3) {
+    const px = src[at + k]!;
+    const py = src[at + k + 1]!;
+    const pz = src[at + k + 2]!;
+    shape.points[k] = px;
+    shape.points[k + 1] = py;
+    shape.points[k + 2] = pz;
+    reach = Math.max(reach, Math.sqrt(px * px + py * py + pz * pz));
+  }
+  shape.reach = reach;
+  shape.box = false;
 }
 
 /** `shape` as a wheel of `radius` and `width` (m), axle along its x: eight points round each rim; the inertia of a solid disk. */
@@ -156,6 +271,8 @@ function wheelShape(shape: LooseShape, radius: number, width: number): void {
     shape.points[k * 3 + 1] = radius * detSin(a);
     shape.points[k * 3 + 2] = radius * detCos(a);
   }
+  shape.half.set(width / 2, radius, radius);
+  shape.box = false;
   shape.invI.set(2 / (radius * radius), 1 / (radius * radius * 0.25 + (width * width) / 12), 1 / (radius * radius * 0.25 + (width * width) / 12));
   shape.count = 16;
   shape.reach = Math.sqrt(radius * radius + (width * width) / 4);
@@ -221,9 +338,9 @@ function blow(p: LooseBody, mass: number, dt: number): void {
   const speed2 = v.x * v.x + v.y * v.y + v.z * v.z;
   if (speed2 === 0) return;
   const s = p.shape;
-  const hx = s.points[BOX_HALVES]!;
-  const hy = s.points[BOX_HALVES + 1]!;
-  const hz = s.points[BOX_HALVES + 2]!;
+  const hx = s.half.x;
+  const hy = s.half.y;
+  const hz = s.half.z;
   const thin = hx <= hy && hx <= hz ? 0 : hy <= hz ? 1 : 2;
   const a = thin === 0 ? hy : hx;
   const b = thin === 2 ? hy : hz;
@@ -296,7 +413,7 @@ export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentSta
   if (!clear) {
     const end = loadShape(shape);
     // Flying free (the last step touched nothing) with no car's roof near, a box's twelve edge middles wait until a corner touches: a flat floor or a wall is met by a corner first (a crowned roof by an edge's middle, so a roof near tests all).
-    const first = shape.airborne && shape.count === 20 && roofs === 0 ? BOX_CORNERS : end;
+    const first = shape.airborne && shape.box && roofs === 0 ? BOX_CORNERS : end;
     n = readPoints(0, first, end, 0, false);
     if (n > 0 && first < end) n = readPoints(first, end, end, n, false);
   }
