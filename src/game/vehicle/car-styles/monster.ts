@@ -95,6 +95,9 @@ export const MONSTER: BodyStyle = {
   bayFloor: 0.34,
   wheelTub: { rise: 0.24, length: 0.82, width: 0.25 },
   tubWall: 0.04,
+  // Its cage's hood tops stand 0.90-1.04 m and its bed rim 1.02 m, its roof from 1.38 m: the cabin starts 8 cm over the highest of them
+  // (as the cars' 1 m stands 9 cm over theirs), so its hood's cowl and its bed rim are columns, not roof slabs.
+  proxyBelt: 1.12,
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
   lamps: { head: [0.55, 0.7], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, sideMarkers: [{ at: [0.88, -2.1], size: [0.06, 0.03] }] },
