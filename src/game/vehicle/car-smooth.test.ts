@@ -746,6 +746,35 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
   }
 });
 
+/** A flush sail's head (`cPillar.flush`) stands at most this far (m) over the rear glass's side edge (a chrome bead's 5 mm, its rounded edge's 2.5 mm radius where the section rises steeply into it, and a mm), and laps at least this far in over it, so the glass's edge lies under the sail. */
+const SAIL_FLUSH_HEIGHT = 0.0085;
+const SAIL_FLUSH_LAP_MIN = 0.005;
+
+describe("given every body style whose drawn sail laps the rear glass (`cPillar.flush`)", () => {
+  for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar?.flush)) {
+    it(`when a ${id}'s sail is read along the rear glass, then each section's head stands within ${SAIL_FLUSH_HEIGHT * 1000} mm over the glass and laps its side edge by at least ${SAIL_FLUSH_LAP_MIN * 1000} mm`, () => {
+      const style = CAR_STYLES[id];
+      const rg = style.rearGlass;
+      const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+      const { ring, slices } = loftOf(sail);
+      const off: string[] = [];
+      let read = 0;
+      for (let s = 0; s < slices; s++) {
+        const z = positionAt(sail, s * ring).z;
+        if (z < rg.base[1] || z >= style.roofZ[0] - SAIL_ROOF_GAP) continue;
+        read++;
+        const head = Array.from({ length: ring }, (_, k) => positionAt(sail, s * ring + k)).reduce((a, b) => (b.y > a.y ? b : a));
+        const u = THREE.MathUtils.clamp((z - rg.base[1]) / (rg.top[1] - rg.base[1]), 0, 1);
+        const over = head.y - THREE.MathUtils.lerp(rg.base[0], rg.top[0], u);
+        const lap = THREE.MathUtils.lerp(rg.wBase, rg.wTop, u) / 2 - head.x;
+        if (!(over > 0 && over <= SAIL_FLUSH_HEIGHT && lap >= SAIL_FLUSH_LAP_MIN)) off.push(`z ${z.toFixed(3)}: head ${(over * 1000).toFixed(1)} mm over the glass, ${(lap * 1000).toFixed(1)} mm in over its edge`);
+      }
+      assert.ok(read > 0, `${id}: no sail section along the rear glass`);
+      assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
+    });
+  }
+});
+
 describe("given every body style's greenhouse frame", () => {
   for (const id of CAR_STYLE_IDS) {
     for (const testCase of roundedPartCases) {
