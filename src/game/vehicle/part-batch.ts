@@ -26,6 +26,9 @@ export class PartBatch {
   /** Every undamaged car's sun shadow (`DeformableCar.restCaster`) as one draw per style, not one per car; the engine hangs them under the wheel shadow prisms (`WheelBatch`), so only the shadow pass draws them. */
   readonly casters: readonly THREE.InstancedMesh[];
   private readonly casterCounts = new Int32Array(CAR_STYLE_IDS.length);
+  /** Per caster and per kind, whether this sync changed a matrix its draw holds: an unchanged draw uploads nothing (a resting field). */
+  private readonly castersMoved = new Uint8Array(CAR_STYLE_IDS.length);
+  private readonly moved = new Uint8Array(PART_KINDS.length);
   /** The casters' own shadow depth material: on three's shared one, every instanced ↔ plain caster switch reselects the program. */
   private readonly casterDepth = new THREE.MeshDepthMaterial();
   /** A hidden mesh in the torn-part material: the boot warm draws it, so a first tear links no program. */
@@ -75,9 +78,11 @@ export class PartBatch {
   sync(cars: readonly DeformableCar[]): void {
     const counts = this.counts;
     counts.fill(0);
+    this.moved.fill(0);
     this.styled.begin();
     const casterCounts = this.casterCounts;
     casterCounts.fill(0);
+    this.castersMoved.fill(0);
     for (const car of cars) {
       car.underbody?.follow();
       for (const seat of car.partSeats) {
@@ -93,24 +98,26 @@ export class PartBatch {
         const n = counts[kind]!;
         if (!shown || !seat.layers.isEnabled(0) || n >= this.capacity[kind]! || (seat.showIf !== null && !seat.showIf())) continue;
         const mesh = this.kinds[kind]!;
-        if (mesh !== null) mesh.setMatrixAt(n, seat.matrixWorld);
-        else if (!this.styled.put(this.first[kind]! + seat.variant, seat.matrixWorld, seat.tint)) continue;
+        if (mesh !== null) {
+          if (storeMatrix(mesh, n, seat.matrixWorld)) this.moved[kind] = 1;
+        } else if (!this.styled.put(this.first[kind]! + seat.variant, seat.matrixWorld, seat.tint)) continue;
         counts[kind] = n + 1;
       }
       let casts = car.restCasts;
       for (let p: THREE.Object3D | null = car.group; casts && p; p = p.parent) casts = p.visible;
+      if (!casts) continue;
       const style = CAR_STYLE_IDS.indexOf(car.style.id);
       const n = casterCounts[style]!;
       const mesh = this.casters[style]!;
-      if (!casts || n >= mesh.instanceMatrix.count) continue;
+      if (n >= mesh.instanceMatrix.count) continue;
       mesh.geometry = car.restCaster;
-      mesh.setMatrixAt(n, car.group.matrixWorld);
+      if (storeMatrix(mesh, n, car.group.matrixWorld)) this.castersMoved[style] = 1;
       casterCounts[style] = n + 1;
     }
-    for (let s = 0; s < this.casters.length; s++) publish(this.casters[s]!, casterCounts[s]!);
+    for (let s = 0; s < this.casters.length; s++) publish(this.casters[s]!, casterCounts[s]!, this.castersMoved[s] === 1);
     for (let k = 0; k < this.kinds.length; k++) {
       const mesh = this.kinds[k];
-      if (mesh) publish(mesh, counts[k]!);
+      if (mesh) publish(mesh, counts[k]!, this.moved[k] === 1);
     }
     this.styled.end();
   }
@@ -131,15 +138,30 @@ export class PartBatch {
   }
 }
 
-/** Show `mesh`'s first `n` instances. */
-function publish(mesh: THREE.InstancedMesh, n: number): void {
-  if (n === 0 && mesh.count === 0) return;
-  mesh.count = n;
+/** Show `mesh`'s first `n` instances, uploading them only if their count or a matrix (`moved`) changed. */
+function publish(mesh: THREE.InstancedMesh, n: number, moved: boolean): void {
+  // Every sync, before the skip: the boot warm shows hidden draws and hides them again after its own sync, so a resting draw would stay hidden.
   // An empty instanced draw still costs the scene walk, the upload and the program switch before three skips it.
   mesh.visible = n > 0;
+  if (n === mesh.count && !moved) return;
+  mesh.count = n;
   mesh.instanceMatrix.clearUpdateRanges();
   mesh.instanceMatrix.addUpdateRange(0, n * 16);
   mesh.instanceMatrix.needsUpdate = true;
+}
+
+/** Instance `i` of `mesh` set to `m` as the buffer stores it (float32); true when that changed it. */
+function storeMatrix(mesh: THREE.InstancedMesh, i: number, m: THREE.Matrix4): boolean {
+  const a = mesh.instanceMatrix.array as Float32Array;
+  const e = m.elements;
+  let changed = false;
+  for (let k = 0; k < 16; k++) {
+    const v = Math.fround(e[k]!);
+    if (a[i * 16 + k] === v) continue;
+    a[i * 16 + k] = v;
+    changed = true;
+  }
+  return changed;
 }
 
 /** One instanced part draw of `geo` for `capacity` instances. */
