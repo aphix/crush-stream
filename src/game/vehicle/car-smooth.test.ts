@@ -677,13 +677,13 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
  * into the body on top of its loft: red if one grows.
  */
 const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number }> = {
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 264 },
-  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 296 },
-  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 296 },
-  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 264 },
-  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 264 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 264 },
-  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 264 },
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 226 },
+  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 258 },
+  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 258 },
+  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 226 },
+  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 226 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 226 },
+  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 226 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and the A-post's stations then. */
 const CHAMFERED_POST_RING = 11;
