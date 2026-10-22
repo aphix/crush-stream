@@ -17,7 +17,7 @@ import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, glassCorners, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, bumperMaterial, makeLightBar, trimMaterial } from "./car-materials.ts";
-import { boxShape, newLooseShape } from "./loose-step.ts";
+import { BOX_HALVES, boxShape, newLooseShape } from "./loose-step.ts";
 import { wearCarLook } from "../present/car-look.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
@@ -1456,20 +1456,15 @@ describe("given a body style's P2 parts", () => {
     for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!) < 1e-6, `the opened lid's pose, element ${k}`);
   });
 
-  it("when a bumper carries its seam, then it is the skin up to the seam on the end face and round the corner on both sides (rays from outside meet it 2 cm under the seam and the body 2 cm over), its torn box stays the fascia's, and a bumper without one draws as before", () => {
+  it("when a bumper carries its seam, then it is the skin up to the seam on the end face and round the corner on both sides (rays from outside meet it 2 cm under the seam and the body 2 cm over), and a bumper without one draws as before", () => {
     const style = CAR_STYLES.sedan;
     const { seat, top, edge } = style.bumpers.rear;
     assert.ok(top && edge, "the control: the sedan's rear bumper carries its seam");
     const fascia = withRearFittings(makeBumperGeometry(false, style), style);
-    fascia.computeBoundingBox();
-    const box = fascia.boundingBox!.clone();
     const drawn = withSeamCover(fascia, style, false);
-    assert.ok(drawn !== fascia && drawn.boundingBox!.equals(box), "the torn box stays the fascia's");
-    // A raycast skips a mesh outside its geometry's box, so the probe reads the drawn shape's own box.
-    const probe = drawn.clone();
-    probe.computeBoundingBox();
+    assert.ok(drawn !== fascia, "the control: the seam cover is merged in");
     const both = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-    const bumper = new THREE.Mesh(probe, both);
+    const bumper = new THREE.Mesh(drawn, both);
     bumper.position.set(0, seat.y, -seat.z);
     bumper.updateMatrixWorld();
     const body = new THREE.Mesh(makeChassisGeometry(style), both);
@@ -1495,6 +1490,34 @@ describe("given a body style's P2 parts", () => {
     }
     const plain = makeBumperGeometry(true, CAR_STYLES.coupe);
     assert.ok(withSeamCover(plain, CAR_STYLES.coupe, true) === plain, "a bumper with no seam is drawn as it was");
+  });
+
+  it("when a bumper carrying its seam is torn off, then its loose box (its flying shape and mass) holds every vertex it draws, the seam cover's too", () => {
+    const car = new DeformableCar(PAINT, scene, null, "sedan");
+    for (const name of ["bumperF", "bumperR"]) {
+      const part = car["parts"].find((p) => p.name === name)!;
+      car["detachPart"](part, 0, new THREE.Vector3());
+      boxShape(part.shape, part.object);
+      const half = new THREE.Vector3().fromArray(part.shape.points, BOX_HALVES).addScalar(1e-6);
+      const box = new THREE.Box3(part.shape.centre.clone().sub(half), part.shape.centre.clone().add(half));
+      let outside = 0;
+      let worst = 0;
+      const v = new THREE.Vector3();
+      part.object.updateMatrixWorld(true);
+      const toPart = part.object.matrixWorld.clone().invert();
+      part.object.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return;
+        const pos = o.geometry.getAttribute("position");
+        const m = toPart.clone().multiply(o.matrixWorld);
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(m);
+          if (box.containsPoint(v)) continue;
+          outside++;
+          worst = Math.max(worst, box.distanceToPoint(v));
+        }
+      });
+      assert.ok(outside === 0, `${name}: ${outside} drawn vertices outside its loose box, the farthest ${(worst * 100).toFixed(1)} cm`);
+    }
   });
 });
 

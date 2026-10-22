@@ -707,11 +707,8 @@ export function withSeamCover(bumper: THREE.BufferGeometry, style: BodyStyle, fr
   for (const [name, attr] of Object.entries(bumper.attributes)) {
     if (!cover.hasAttribute(name)) cover.setAttribute(name, new THREE.Float32BufferAttribute(new Float32Array(cover.getAttribute("position").count * attr.itemSize), attr.itemSize));
   }
-  bumper.computeBoundingBox();
   const out = mergeGeometries([bumper, cover]);
   if (!out) throw new Error(`Failed to merge the ${style.id} bumper's seam cover`);
-  // The torn bumper's box (its loose shape, its hang) stays the fascia's: the seam cover is drawn only.
-  out.boundingBox = bumper.boundingBox!.clone();
   return out;
 }
 
