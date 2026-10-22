@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { hypot3 } from "../kernel/physics-core.js";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
 /** Triangles a style's one-sided shell is decimated to: every style's shadow stays within the flush-casters bar of its full shell's. */
@@ -9,6 +10,8 @@ const WELD = 1e-4;
 const ANY_ERROR = 1;
 /** The two-sided sheets' (wheel liners') error bound, relative to their extent: they stop on shape, not on a count. */
 const SHEET_ERROR = 0.01;
+/** The decimated shell is pushed out along its own normals this far (m): its chords cut inside the full shell's outline, most at thin edges (a roof's cant rail, roof bars). */
+const CASTER_INFLATE = 0.006;
 
 // three's bundled meshoptimizer is WebAssembly, which iOS Lockdown Mode switches off: a static import would throw on load there,
 // so the caster keeps every triangle instead.
@@ -16,8 +19,9 @@ const simplifier = typeof WebAssembly === "object" ? (await import("three/addons
 await simplifier?.ready;
 
 /**
- * `meshes` (world matrices current, the car at the origin) as one position-only shell, decimated to `CASTER_TRIANGLES`. A two-sided
- * sheet (a triangle and its reversed twin) is decimated apart as one side and drawn both ways: welded together, the decimator drops it.
+ * `meshes` (world matrices current, the car at the origin) as one position-only shell, decimated to `CASTER_TRIANGLES` and pushed
+ * out `CASTER_INFLATE`. A two-sided sheet (a triangle and its reversed twin) is decimated apart as one side and drawn both ways:
+ * welded together, the decimator drops it.
  */
 export function restShell(meshes: readonly THREE.Mesh[]): THREE.BufferGeometry {
   const parts = meshes.map((m) => {
@@ -35,6 +39,7 @@ export function restShell(meshes: readonly THREE.Mesh[]): THREE.BufferGeometry {
   const [solid, sheet] = splitTwinSheets(index);
   const [keptSolid] = simplifier.simplify(solid, positions, 3, CASTER_TRIANGLES * 3, ANY_ERROR);
   const [keptSheet] = simplifier.simplify(sheet, positions, 3, 0, SHEET_ERROR);
+  inflate(positions, keptSolid);
   const out = new Uint32Array(keptSolid.length + keptSheet.length * 2);
   out.set(keptSolid);
   out.set(keptSheet, keptSolid.length);
@@ -44,6 +49,27 @@ export function restShell(meshes: readonly THREE.Mesh[]): THREE.BufferGeometry {
     out[o + 2] = keptSheet[t + 1]!;
   }
   return shell.setIndex(new THREE.BufferAttribute(out, 1));
+}
+
+/** Moves each vertex of the `index` triangles `CASTER_INFLATE` out along their area-weighted normal there. */
+function inflate(positions: Float32Array, index: Uint32Array): void {
+  const normals = new Float32Array(positions.length);
+  for (let t = 0; t < index.length; t += 3) {
+    const [a, b, c] = [index[t]! * 3, index[t + 1]! * 3, index[t + 2]! * 3];
+    const [ux, uy, uz] = [positions[b]! - positions[a]!, positions[b + 1]! - positions[a + 1]!, positions[b + 2]! - positions[a + 2]!];
+    const [vx, vy, vz] = [positions[c]! - positions[a]!, positions[c + 1]! - positions[a + 1]!, positions[c + 2]! - positions[a + 2]!];
+    const [nx, ny, nz] = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+    for (const v of [a, b, c]) {
+      normals[v] += nx;
+      normals[v + 1] += ny;
+      normals[v + 2] += nz;
+    }
+  }
+  for (let v = 0; v < positions.length; v += 3) {
+    const length = hypot3(normals[v]!, normals[v + 1]!, normals[v + 2]!);
+    if (length === 0) continue;
+    for (let k = 0; k < 3; k++) positions[v + k] += (normals[v + k]! / length) * CASTER_INFLATE;
+  }
 }
 
 /** `index`'s triangles without a twin on the same three vertices, and one side of each twinned pair. */

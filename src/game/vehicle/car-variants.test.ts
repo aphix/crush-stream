@@ -1965,7 +1965,8 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       for (const [wx, wy, wz] of carFrame(style).wheels) {
         const s = Math.sign(wx);
         let proud = 0;
-        for (let k = 0; k <= 10; k++) {
+        // From a tenth of its width over the opening's edge: on the edge itself the lip-less body's side turns in under it.
+        for (let k = 1; k <= 10; k++) {
           const y = wy + style.arch.radius + (k / 10) * lip.width;
           const out = (mesh: THREE.Mesh) => Math.abs(bodyHit(mesh, [s * 3, y, wz], [-s, 0, 0], 3)?.x ?? 0);
           proud = Math.max(proud, out(drawn) - out(plain));

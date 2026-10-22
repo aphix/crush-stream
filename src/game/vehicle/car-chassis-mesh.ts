@@ -236,9 +236,9 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   merged.userData.shellTwins = twins;
   if (fittings) primer.fill(BLACKOUT, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
   if (source === "drawn") {
-    // The trough's, the boot's and the cabin's floor corner on each side (ring points 0 and n - 1): the cabin's trim, inner panel, or
-    // the well's tone where the arch of a tyre standing outboard of the body (the monster's) spans the slice, seen through it; and the
-    // trough's and boot's walls' own copies of their tops.
+    // The trough's, the boot's and the cabin's floor corner on each side (ring points 0 and n - 1): their tone, or the well's where the
+    // arch of a tyre standing outboard of the body (the monster's) spans the slice, seen through it; and the trough's and boot's walls'
+    // own copies of their tops.
     const { wheels } = carFrame(style);
     const r = style.arch.radius;
     const archAt = (z: number) => wheels.find(([, , wz]) => Math.abs(z - wz) < r);

@@ -220,6 +220,9 @@ const TRIM_FADE_END_M = 16;
 const PEEL_NEAR_SHARE = 0.25;
 const PEEL_NEAR_M = 2;
 const PEEL_FULL_M = 4.5;
+/** Linear luma over which paint keeps its peel and flake: near-black albedo leaves their slopes as sparse glints that read as brown speckle. */
+const DARK_LUMA_FROM = 0.004;
+const DARK_LUMA_TO = 0.04;
 /** Furthest any pixel of a finish mesh lies from its origin (m): a car is ~2.6 m corner to middle, the rest is crush and loose-panel slack. */
 const FINISH_MESH_REACH_M = 4;
 /** The weight of each plane is |object normal| to this power, normalised: 4 keeps a plane's blend to the corners where two planes meet. */
@@ -248,7 +251,11 @@ vec3 finishHeights(vec3 p, vec3 w) {
 }
 const vec3 finishFadeStart = vec3(${glslFloat(WAVE_FADE_START_M)}, ${glslFloat(PEEL_FADE_START_M)}, ${glslFloat(FLAKE_FADE_START_M)});
 const vec3 finishFadeEnd = vec3(${glslFloat(WAVE_FADE_END_M)}, ${glslFloat(PEEL_FADE_END_M)}, ${glslFloat(FLAKE_FADE_END_M)});
-const vec3 finishNearShare = vec3(1.0, ${glslFloat(PEEL_NEAR_SHARE)}, 1.0);`;
+const vec3 finishNearShare = vec3(1.0, ${glslFloat(PEEL_NEAR_SHARE)}, 1.0);
+vec3 finishKeep(vec3 albedo) {
+  float keep = smoothstep(${glslFloat(DARK_LUMA_FROM)}, ${glslFloat(DARK_LUMA_TO)}, dot(albedo, vec3(0.2126, 0.7152, 0.0722)));
+  return vec3(1.0, keep, keep);
+}`;
 
 /** The same three outputs for the trim: only the peel slot carries the grain. */
 const TRIM_HEIGHTS = /* glsl */ `
@@ -260,7 +267,10 @@ vec3 finishHeights(vec3 p, vec3 w) {
 }
 const vec3 finishFadeStart = vec3(${glslFloat(TRIM_FADE_START_M)});
 const vec3 finishFadeEnd = vec3(${glslFloat(TRIM_FADE_END_M)});
-const vec3 finishNearShare = vec3(1.0);`;
+const vec3 finishNearShare = vec3(1.0);
+vec3 finishKeep(vec3 albedo) {
+  return vec3(1.0);
+}`;
 
 /**
  * Mikkelsen's screen-space bump (three's `perturbNormalArb`, bump_pars_fragment) on `surfaceNormal` (view space): the height
@@ -304,7 +314,8 @@ if (finishMeshNear() < max(finishFadeEnd.x, max(finishFadeEnd.y, finishFadeEnd.z
   vec3 finishHere = finishHeights(finishPoint, finishWeights);
   float finishDistance = length(vViewPosition);
   vec3 finishFade = (1.0 - smoothstep(finishFadeStart, finishFadeEnd, vec3(finishDistance)))
-    * mix(finishNearShare, vec3(1.0), smoothstep(${glslFloat(PEEL_NEAR_M)}, ${glslFloat(PEEL_FULL_M)}, finishDistance));
+    * mix(finishNearShare, vec3(1.0), smoothstep(${glslFloat(PEEL_NEAR_M)}, ${glslFloat(PEEL_FULL_M)}, finishDistance))
+    * finishKeep(diffuseColor.rgb);
   vec3 finishStepX = dFdx(finishHere) * finishFade;
   vec3 finishStepY = dFdy(finishHere) * finishFade;
   vec2 coatSlope = vec2(finishStepX.x + finishStepX.y, finishStepY.x + finishStepY.y);

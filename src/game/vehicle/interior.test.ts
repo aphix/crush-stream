@@ -535,6 +535,7 @@ describe("given every style's cabin as its glass shows it", () => {
 
   /** A drawn interior point may stand this far (m) past a pane or the roof line before it shows through: the glass's own thickness. */
   const THROUGH_M = 0.005;
+
   /** The z of the pane line from `base` to `top` ([y, z] each) at height `y`. */
   const paneZ = (y: number, [y0, z0]: readonly [number, number], [y1, z1]: readonly [number, number]): number => z0 + ((y - y0) / (y1 - y0)) * (z1 - z0);
   for (const id of CAR_STYLE_IDS) {

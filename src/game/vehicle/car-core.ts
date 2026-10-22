@@ -43,6 +43,8 @@ import { restShell } from "./shadow-caster.ts";
 const _inv = new THREE.Quaternion();
 const _lampQ = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
+/** The brake lamp's probe meets the rear glass from either face: a cab's brake lamp sits on its back glass, which the body skin doesn't hold. */
+const GLASS_PROBE = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
 const _shade = new THREE.Color();
 /** A privacy pane (`privacyGlass`) wears its colour this much darker (linear): the cargo behind dark-tinted rear glass reads dim, as in the references. */
 const PRIVACY_SHADE = 0.3;
@@ -638,22 +640,26 @@ export abstract class CarCore {
     return seat;
   }
 
-  /** `lamps.brake` on the skin met from behind at its [x, y], facing back; each of `lamps.sideMarkers` on both sides met from outboard at its [y, z], facing out. */
+  /** `lamps.brake` on the skin or the rear glass met from behind at its [x, y], facing back; each of `lamps.sideMarkers` on both sides met from outboard at its [y, z], facing out. */
   private addLampFittings(): void {
     const { brake, sideMarkers } = this.style.lamps;
     const skin = new THREE.Mesh(this.body.geometry);
     const ray = new THREE.Raycaster();
-    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number]) => {
+    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number], targets: THREE.Object3D[]) => {
       ray.set(from, toward);
-      const hit = ray.intersectObject(skin, false)[0];
+      const hit = ray.intersectObjects(targets, false)[0];
       if (!hit) throw new Error(`${this.style.id}: no skin for its ${kind} lamp from ${from.toArray().join()}`);
       const seat = this.lampSeat();
       seat.scale.set(size[0], size[1], 1);
       this.lampFittings.push({ seat, kind, anchor: anchorOnSkin(this.body.geometry, hit.point, _lampQ.setFromAxisAngle(_up, yaw)), variant: 0, share: null });
     };
-    if (brake) seatAt("brake", new THREE.Vector3(brake.at[0], brake.at[1], -LAMP_PROBE_REACH), new THREE.Vector3(0, 0, 1), Math.PI, brake.size);
+    if (brake) {
+      const glass = new THREE.Mesh(makeRearGlass(this.style), GLASS_PROBE);
+      seatAt("brake", new THREE.Vector3(brake.at[0], brake.at[1], -LAMP_PROBE_REACH), new THREE.Vector3(0, 0, 1), Math.PI, brake.size, [skin, glass]);
+      glass.geometry.dispose();
+    }
     for (const marker of sideMarkers ?? []) {
-      for (const side of [-1, 1]) seatAt("marker", new THREE.Vector3(side * LAMP_PROBE_REACH, marker.at[0], marker.at[1]), new THREE.Vector3(-side, 0, 0), (side * Math.PI) / 2, marker.size);
+      for (const side of [-1, 1]) seatAt("marker", new THREE.Vector3(side * LAMP_PROBE_REACH, marker.at[0], marker.at[1]), new THREE.Vector3(-side, 0, 0), (side * Math.PI) / 2, marker.size, [skin]);
     }
   }
 
