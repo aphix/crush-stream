@@ -512,6 +512,8 @@ type Dressable = {
   readonly wheels: readonly THREE.Object3D[];
   /** Lamp seats ride the lift like the body they sit on (bare objects, not children of the group). */
   readonly lamps: readonly { readonly seat: THREE.Object3D }[];
+  /** A lifted truck's axles ride the hubs with the wheels. */
+  readonly underbody: { readonly axles: readonly THREE.Object3D[] } | null;
   readonly style: { id: CarStyleId };
   readonly frame: Axles;
 };
@@ -543,7 +545,7 @@ export function assignClass(car: Dressable, id: VehicleClassId): void {
   for (let i = g.children.length - 1; i >= 0; i--) {
     const c = g.children[i]!;
     if (c === body || c === hubs) continue;
-    if (car.wheels.includes(c)) hubs!.add(c);
+    if (car.wheels.includes(c) || car.underbody?.axles.includes(c)) hubs!.add(c);
     else body.add(c);
   }
   for (const w of car.wheels) w.scale.setScalar(s.wheelScale);
