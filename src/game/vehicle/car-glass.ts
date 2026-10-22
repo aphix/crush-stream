@@ -5,7 +5,7 @@ import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad, type YZ } from "./car-variants.ts";
 import { ROCKER, glassTopY, glassX, lerp, roofTopY, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
 import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, rockerAt, WINDSHIELD_BOW } from "./car-lines.ts";
-import { DOOR_PROUD } from "./car-door-mesh.ts";
+import { doorSkinStand } from "./car-door-mesh.ts";
 import { FITTING_ATTRIBUTE, GLASS_ATTRIBUTE, MATTE_PRIVACY } from "./constants.ts";
 import { mergeToned } from "./car-materials.ts";
 
@@ -479,10 +479,10 @@ function ridesDoor(strip: ChromeStrip, style: BodyStyle): boolean {
   return strip.points.every(([z]) => z >= zRear && z <= zFront);
 }
 
-/** The door skin's outer half-width (m) at car-local `z` and height `y`: the body side line `makeDoorGeometry` follows, the style's door `proud` (`DOOR_PROUD` default) over it. */
-function doorSkinX(z: number, y: number, style: BodyStyle): number {
+/** The door skin's outer half-width (m) at car-local `z` and height `y`: the body side line `makeDoorGeometry` follows, its stand-off there (`stand`, `doorSkinStand`) over it. */
+function doorSkinX(z: number, y: number, style: BodyStyle, stand: (z: number, y: number) => number): number {
   const slice = sampleSlice(z, style.profile);
-  return sideX(y, slice.hw, slice.yBelt, rockerAt(z, style)) + (style.door.proud ?? DOOR_PROUD);
+  return sideX(y, slice.hw, slice.yBelt, rockerAt(z, style)) + stand(z, y);
 }
 
 /** The drawn body's half-width (m) at car-local `z` and height `y`: its section ring's right side read up from the rocker, held at the rocker's below it and the deck crown's above. */
@@ -521,7 +521,8 @@ export function makeSideGlassFrame(sign: number, style: BodyStyle): THREE.Buffer
   const frame = makeSideGlassFrameFor(sign, style, doorSpan(style), origin);
   const strips = (style.chromeStrips ?? []).filter((strip) => ridesDoor(strip, style));
   if (strips.length === 0) return frame;
-  return mergeToned([frame, ...strips.map((strip) => makeChromeStrip(sign, strip, (z, y) => doorSkinX(z, y, style), origin))], "door window trim");
+  const stand = doorSkinStand(style);
+  return mergeToned([frame, ...strips.map((strip) => makeChromeStrip(sign, strip, (z, y) => doorSkinX(z, y, style, stand), origin))], "door window trim");
 }
 
 /** Chrome ribbon round a raked pane's border: the points its own grid draws (`quadPoint`), offset outward in the pane's plane and stood proud along its outward normal. */
