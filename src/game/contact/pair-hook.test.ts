@@ -109,7 +109,7 @@ describe("given two cars hooked together (the front car's rear corner inside the
   describe("when every class pair drives flat out with the front car's rear corner 1 m inside the follower's nose", () => {
     for (const front of VEHICLE_CLASS_IDS) {
       for (const back of VEHICLE_CLASS_IDS) {
-        it(`then a ${front} ahead of a ${back} is in contact for under 1 s of the first 3 s and ends more than 6 m clear`, () => {
+        it(`then a ${front} ahead of a ${back} is not hooked: in contact for under 1 s of the first 3 s, none of the last second, and its centre ends farther from the other's than it started`, (t) => {
           const a = build(front);
           const b = build(back);
           // B faces +z at the origin; A's rear-right corner (0.95 right, 2.2 behind its origin) sits 0.6 m right of B's axis,
@@ -126,6 +126,9 @@ describe("given two cars hooked together (the front car's rear corner inside the
           const p = new THREE.Vector3();
           let acc = 0;
           let contact = 0;
+          let lastContact = -1;
+          const gapOf = (): number => Math.hypot(a.group.position.x - b.group.position.x, a.group.position.z - b.group.position.z);
+          const start = gapOf();
           for (let f = 0; f < 3 / FRAME; f++) {
             acc = Math.min(0.05, acc + FRAME);
             const vmax = sliceSpeed(cars);
@@ -137,11 +140,18 @@ describe("given two cars hooked together (the front car's rear corner inside the
               acc -= h;
               settleStep(cars, h, false);
             }
-            if (touching(a, b, n, p)) contact += FRAME;
+            if (touching(a, b, n, p)) {
+              contact += FRAME;
+              lastContact = (f + 1) * FRAME;
+            }
           }
-          const gap = Math.hypot(a.group.position.x - b.group.position.x, a.group.position.z - b.group.position.z);
+          // Not hooked is apart and staying apart, not a distance: two cars driven flat out side by side part by their speeds' difference
+          // alone (a truck ahead of a muscle: 3.4 m at the start, 5.85 m at 3 s after 0.15 s of contact, the muscle 3.6 m/s faster).
+          const gap = gapOf();
+          t.diagnostic(`contact ${contact.toFixed(2)} s, last at ${lastContact.toFixed(2)} s; centres ${start.toFixed(2)} -> ${gap.toFixed(2)} m`);
           assert.ok(contact < 1, `in contact ${contact.toFixed(2)} s of 3 s, centres ${gap.toFixed(1)} m apart: hooked`);
-          assert.ok(gap > 6, `centres only ${gap.toFixed(1)} m apart after 3 s`);
+          assert.ok(lastContact < 2, `still in contact at ${lastContact.toFixed(2)} s: hooked`);
+          assert.ok(gap > start, `centres ${start.toFixed(2)} -> ${gap.toFixed(2)} m apart after 3 s: held together`);
         });
       }
     }
