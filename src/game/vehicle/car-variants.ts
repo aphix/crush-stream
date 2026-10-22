@@ -397,8 +397,11 @@ export interface BodyStyle {
    * (y, m): a deck under the drawn A-post's foot lower than the belt; a skirt of the post's own section hangs from the foot down to it,
    * so the cabin never shows through the gap; absent, none. `glassBar`: a slim divider bar standing on the side glass, belt to roof,
    * `width` [belt, top] about its centre line at `z` [belt, top], toned by `blackout.divider`; a flat strip with no cage post; absent, none.
+   * `rearSquare`: the plank rear post (no `cPillar`) squared, a truck cab's back corner: its rear edge on the side glass's plane like its
+   * front, so its face never turns to the tail, and a flat cab back panel from inside it over the rear glass's side edge; absent, the
+   * post's rear edge at the rear glass's corner.
    */
-  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number; glassBar?: Required<PillarSpan> };
+  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number; glassBar?: Required<PillarSpan>; rearSquare?: boolean };
   /**
    * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
    * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.
