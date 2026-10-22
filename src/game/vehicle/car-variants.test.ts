@@ -7,7 +7,7 @@ import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
 import { CREASE_DEGREES, ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, tubWall } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, sideBowZ, tubWall } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
@@ -88,7 +88,10 @@ function behindWindshieldEdge(geo: THREE.BufferGeometry, style: BodyStyle): numb
   const run = Math.sqrt((topZ - baseZ) ** 2 + (topY - baseY) ** 2);
   const [uz, uy] = [(topZ - baseZ) / run, (topY - baseY) / run];
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
-  return Array.from({ length: pos.count }, (_, i) => (pos.getY(i) - baseY) * uz - (pos.getZ(i) - baseZ) * uy);
+  return Array.from({ length: pos.count }, (_, i) => {
+    const z = pos.getZ(i) - sideBowZ(style.windshield.sideBow ?? 0, (pos.getY(i) - baseY) / (topY - baseY));
+    return (pos.getY(i) - baseY) * uz - (z - baseZ) * uy;
+  });
 }
 
 /** Max |skinned − rest| of a panel skinned against an undeformed rig: >0 only where the cage clamps it. */

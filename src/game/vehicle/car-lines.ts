@@ -83,12 +83,17 @@ const A_POST_WIDTH = 0.06;
 /** A door glass kneed onto the A-post runs this far (m) in under the post's rear edge. */
 const KNEE_TUCK = 0.01;
 
+/** How far (z, m) a pane bulging `amount` at mid-height stands forward of its straight edge `t` (0 base, 1 top) up it; none outside. */
+export function sideBowZ(amount: number, t: number): number {
+  return t <= 0 || t >= 1 ? 0 : amount * 4 * t * (1 - t);
+}
+
 /** The drawn A-post's rear edge at height `y` (z, m): `pillars.a` (else `A_POST_WIDTH`) behind the windshield's edge line in side view. */
 export function aPostRearZ(y: number, style: BodyStyle): number {
   const { base } = style.windshield;
   const [topY, topZ] = style.windshieldTop;
   const [dz, dy] = [topZ - base[1], topY - base[0]];
-  return base[1] + (dz * (y - base[0]) - (style.pillars?.a ?? A_POST_WIDTH) * hypot2(dz, dy)) / dy;
+  return base[1] + (dz * (y - base[0]) - (style.pillars?.a ?? A_POST_WIDTH) * hypot2(dz, dy)) / dy + sideBowZ(style.windshield.sideBow ?? 0, (y - base[0]) / dy);
 }
 
 /**
