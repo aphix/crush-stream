@@ -9,6 +9,7 @@ import { PART_FAMILY } from "../kernel/physics-core.js";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
 import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
+import { centreLift } from "./car-cage-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { DOOR_GLASS_SEAT, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane } from "./car-glass.ts";
@@ -213,7 +214,7 @@ export interface GlassPane {
 
 /** Housing + lens on the body skin (never the bumper): breaks only from its own corner's crush. */
 export interface Lamp {
-  /** Its pose on the skin (`poseLamps`), in the class lift's frame (`assignClass` seats it). Parented for its world matrix, never a child: the scene's matrix pass and traversals skip it, `LampBatch.sync` and `lampWorld` bring its world matrix current. */
+  /** Its pose on the skin (`poseLamps`, which also composes its `matrix`), in the class lift's frame (`assignClass` seats it). Parented for its world matrix, never a child: the scene's matrix pass and traversals skip it, `LampBatch.sync` and `lampWorld` bring its world matrix current (forced: its `matrix` is static). */
   seat: THREE.Object3D;
   intact: boolean;
   kind: LampKind;
@@ -643,6 +644,8 @@ export abstract class CarCore {
     const seat = new THREE.Object3D();
     seat.name = LAMP_SEAT;
     seat.parent = this.group;
+    // Posed only when the skin moves (`poseLamps` composes it then), so its world matrix needs no compose a frame.
+    seat.matrixAutoUpdate = false;
     return seat;
   }
 
@@ -857,8 +860,15 @@ export abstract class CarCore {
 
   protected poseLamps(): void {
     const pos = (this.body.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
-    for (const l of this.lamps) poseOnSkin(l.anchor, pos, l.seat.position, l.seat.quaternion);
-    for (const f of this.lampFittings) if (f.anchor) poseOnSkin(f.anchor, pos, f.seat.position, f.seat.quaternion);
+    for (const l of this.lamps) {
+      poseOnSkin(l.anchor, pos, l.seat.position, l.seat.quaternion);
+      l.seat.updateMatrix();
+    }
+    for (const f of this.lampFittings) {
+      if (!f.anchor) continue;
+      poseOnSkin(f.anchor, pos, f.seat.position, f.seat.quaternion);
+      f.seat.updateMatrix();
+    }
   }
 
   get lampCount(): number {
@@ -875,7 +885,7 @@ export abstract class CarCore {
   lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3): GlowKind | null {
     const l = this.lamps[i];
     if (!l) return this.sirenWorld(i - this.lamps.length, pos, dir);
-    l.seat.updateWorldMatrix(true, false);
+    l.seat.updateWorldMatrix(true, false, true);
     pos.setFromMatrixPosition(l.seat.matrixWorld);
     dir.setFromMatrixColumn(l.seat.matrixWorld, 2).normalize();
     return l.intact ? l.kind : null;
@@ -921,7 +931,10 @@ export abstract class CarCore {
     this.sirenMat?.emissive.setRGB(lit === 1 ? SIREN_GAIN.red : 0, 0, lit === 2 ? SIREN_GAIN.blue : 0);
   }
 
-  /** Group matrix only: children refresh once per frame in the renderer (recursing the ~60-node car subtree here was ~40% of frame CPU at 10+ cars). */
+  /**
+   * Group matrix only: children refresh once per frame in the renderer (recursing the ~60-node car subtree here was ~40% of frame CPU at 10+ cars).
+   * The deform's `liftOffset` turns with the body: its rigid centre's lift over its masses (`centreLift`, along its up).
+   */
   refreshBasis(): void {
     this.group.updateWorldMatrix(false, false);
     this.forward.set(0, 0, 1).applyQuaternion(this.group.quaternion);
@@ -930,6 +943,11 @@ export abstract class CarCore {
     if (fl > 1e-6) this.fwdFlat.set(this.forward.x / fl, 0, this.forward.z / fl);
     else this.fwdFlat.set(0, 0, 1);
     this.rightFlat.set(this.fwdFlat.z, 0, -this.fwdFlat.x);
+    const lift = centreLift(this);
+    const off = this.deform.liftOffset;
+    // Unlifted (every class but the monster, and the monster lying over) the offset is zero: set once, not turned each call.
+    if (lift !== 0) off.set(0, lift, 0).applyQuaternion(this.group.quaternion);
+    else if (off.x !== 0 || off.y !== 0 || off.z !== 0) off.set(0, 0, 0);
   }
 
   /** The drive back as built: a car put on a spot carries no wheel, pedals, wheelspin, drift, grip or ramps over from where it was. */

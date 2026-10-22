@@ -66,7 +66,9 @@ function makeGlassQuad(q: BowedQuad, { segX, segY }: QuadDraw): THREE.BufferGeom
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geo.setIndex(indices);
   geo.computeVertexNormals();
-  geo.userData.centre = quadPoint(q, 0, 0.5).toArray();
+  const centre = quadPoint(q, 0, 0.5);
+  // Not `toArray()`: growing a fresh array through that shared three function sends its stores megamorphic for every per-frame caller.
+  geo.userData.centre = [centre.x, centre.y, centre.z];
   return geo;
 }
 
@@ -277,7 +279,8 @@ function roundedGlass(q: BowedQuad, round: number, { segX, segY, facing }: QuadD
   }
   const geo = mergeGeometries([pane, ...fans], false);
   if (!geo) throw new Error("Failed to merge the rounded rear glass");
-  geo.userData.centre = quadPoint(q, 0, 0.5).toArray();
+  const centre = quadPoint(q, 0, 0.5);
+  geo.userData.centre = [centre.x, centre.y, centre.z];
   return geo;
 }
 

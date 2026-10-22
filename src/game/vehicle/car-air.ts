@@ -136,6 +136,12 @@ function standsOnGround(c: number): boolean {
   return Math.abs(activeGround().heightAt(_row.x, _row.z, _row.y) - floor) < GROUND_MATCH;
 }
 
+/** The body is at rest: no loose part, under `REST_SPEED` in translation and in spin (a slice's gravity at rest, as `loose-step.ts` counts it). */
+function bodyAtRest(): boolean {
+  const { v, w, part } = body;
+  return !part && v.lengthSq() < REST_SPEED * REST_SPEED && w.lengthSq() < REST_SPEED * REST_SPEED;
+}
+
 /**
  * The Gauss-Seidel solve of `n` rows, then the lift out: `PASSES` (`REST_PASSES` at rest) passes at each row's lever (`reach`), a closing contact taking what
  * it needs (restitution `RESTITUTION` above `BOUNCE_V` on the first pass), a parting one giving back what it over-took, Coulomb
@@ -149,7 +155,7 @@ export function solveRows(n: number): void {
   let under = 0;
   // Each row's depth along its surface normal still to lift out (a steep face's vertical gap overstates it): `LEFT`.
   // A body at rest solves over more passes: its friction is rebuilt from 0 every slice and the residual slide integrates (a wreck at rest then sleeps, `integrateWreck`).
-  const atRest = !part && v.lengthSq() < REST_SPEED * REST_SPEED && w.lengthSq() < REST_SPEED * REST_SPEED;
+  const atRest = bodyAtRest();
   const passes = atRest ? REST_PASSES : PASSES;
   // A wreck at rest parts from the ground it stands in at `GROUND_LIFT_V` as a speed the solve gives the row: a positional lift hopped the body off its other rows (a 21 Hz hop, never asleep).
   // How deep its deepest such row still is goes to `S_LIFTING`: the wreck is not at rest until it is out (`restOrSleep`).
@@ -557,10 +563,10 @@ export function rigidCentre(car: Pick<DeformableCar, "deform" | "frame" | "group
 }
 
 /**
- * A wreck's rigid body is its masses': its centre of mass is their centroid (frame coordinates, `_wreckCentre`; `velocity` is the
- * masses' mean, so the body must turn about it) lifted with the drawn body (`centreLift`: the masses stand on the
- * stock frame, the body they are drawn as over it), and its inverse yaw inertia per unit mass their spread about it (`_wreckInvI`, the
- * rest the car box's). Returns the centre.
+ * A wreck's rigid body is its masses': its centre of mass is their centroid (frame coordinates, `_wreckCentre`) lifted with the drawn
+ * body (`centreLift`: the masses stand on the stock frame, the body they are drawn as over it), and its inverse yaw inertia per unit
+ * mass their spread about it (`_wreckInvI`, the rest the car box's). `velocity` is that centre's, and the body turns about it; the
+ * deform's masses ride it there (`liftOffset`). Returns the centre.
  */
 export function wreckCentre(car: Pick<DeformableCar, "deform" | "frame" | "group" | "style">): THREE.Vector3 {
   // A frozen wreck's masses stand still in its frame: the centre and inertia it had when its rigid step last read them.
@@ -881,16 +887,21 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // asks: in list order the first spent it, and a coupe's two rear tyres landing on a wagon's roof took 6.2 and 2.3 of 6.2 each and rolled
   // it off the column.
   springPushes(frame, tyres, stiff, damp, dt, q, v, w);
+  // A wreck at rest: its tyres' closing counts at their stops too (below).
+  const settling = body.wreck && bodyAtRest();
   for (let c = 0; c < tyres; c++) {
     if (!SOFT[c]) continue;
     // A tyre within a speculative gap of its stop whose spring pushes less than the weight the slice brings onto it rests on the stop,
     // held there like a body point (`GAPV`): left on its springs, a wreck's rear tyres just short of their stop under a four-car stack
     // fell onto it every other slice and the stack slid 29 mm off. A spring that carries the weight stays a spring: held at the stop
-    // whatever it pushed, a muscle car's rear tyres that landed on their stops off a 14 m/s jump stayed there, 11 cm down, for 2 s.
+    // whatever it pushed, a muscle car's rear tyres that landed on their stops off a 14 m/s jump stayed there, 11 cm down, for 2 s. A
+    // wreck at rest counts the closing its tyre already has too: weight alone, a monster wreck missing a rear wheel, resting on its stopped
+    // front tyre, the other and a body corner, fell onto the stop every other slice with the spin the stop's slice left it, its rows came
+    // and went and it never slept (rocking at 2 cm/s). Counted moving, landings went rigid on their stops (crest, slab-jump rows).
     if (SINK[c]! >= -SPECULATIVE_GAP) {
       weightClosing(c);
       reach(c, UP, N[c]!, q, false);
-      if (ASK[c]! < _s[S_WEIGHT]! * _s[S_REACH]!) {
+      if (ASK[c]! < (_s[S_WEIGHT]! + (settling ? CLOSING[c]! : 0)) * _s[S_REACH]!) {
         SOFT[c] = false;
         GAPV[c] = -SINK[c]! / dt;
       }

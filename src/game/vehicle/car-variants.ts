@@ -330,7 +330,7 @@ export interface BodyStyle {
   underside?: readonly (readonly [number, number])[];
   /**
    * Front door: hinge axis at the A-pillar (±hingeX, hingeY, hingeZ), `length` hinge to trailing edge, skin ±halfHeight about the hinge, `aperture` [z0, z1] the body's front-door cut (the skin overlaps it 0.02 each end), mirror seated `mirrorY` over the hinge and `mirrorZ` (default 0) behind it, reaching `mirrorReach` out, ±mirrorHalfDepth deep.
-   * `mirror` (drawn only): its own mirror, `cap` rounded, box or tear (the rounded cap tapering to its rear face) of `size` [w out, h, d along z] (default `MIRROR_CAP_SIZE`) in `finish` (body: the door's paint), its outer face at `mirrorReach`, its foot on the skin; absent = the platform mirror x-scaled to the reach.
+   * `mirror` (drawn only): its own mirror, `cap` rounded, box, tear (the rounded cap tapering to its rear face) or nose (tapering to its front face, the glass's face full) of `size` [w out, h, d along z] (default `MIRROR_CAP_SIZE`) in `finish` (body: the door's paint), its outer face at `mirrorReach`, its foot on the skin; absent = the platform mirror x-scaled to the reach.
    * `hingeTop` (car y, m, drawn only): the skin's top edge at its hinge cut, its rows closing down to it over the hinge end's slope so the top meets the fender's deck edge there; absent = only the slope.
    */
   door: {
@@ -349,8 +349,9 @@ export interface BodyStyle {
      * `stalk` (m): the foot's length along the car, a slim post under the head; absent = 0.7 of the cap's depth.
      * `neck` (m): the foot runs this far below the head's bottom, an arm holding the head up off the belt; absent = 0.7 of the cap's height, hidden behind it.
      * `mount` "glass": the seat stands on the door glass's plane at its z and height (`mirrorY` may stand over `halfHeight`), its foot leaning with the pane, as a tow mirror on the glass's front corner; absent, on the skin.
+     * `round`: a rounded, tear or nose cap's edge radius as a share of its smallest side (absent `MIRROR_CAP_ROUND`, 0.35); toward 0.5 the outer end rounds right across that side.
      */
-    mirror?: { cap: "rounded" | "box" | "tear"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass" };
+    mirror?: { cap: "rounded" | "box" | "tear" | "nose"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass"; round?: number };
     hingeTop?: number;
     /** Drawn only: the door skin's outer face stands this far (m) over the body side inside its cut (absent `DOOR_PROUD`, 3 mm); 0: flush, the shut line a groove only. */
     proud?: number;
@@ -406,9 +407,11 @@ export interface BodyStyle {
    * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point; on a curved roof its head eases from the
    * roof end's out to the post's top over the run ahead, not back out in one ring. `corner`: on a curved roof with round
    * rear glass corners, a flush sail's head at the roof's end laps the glass's side edge this share of the way round its top corner's arc
-   * (0 its side end, 1 its top end), so the head covers the arc above that point; absent 0.5, mid-arc.
+   * (0 its side end, 1 its top end), so the head covers the arc above that point; absent 0.5, mid-arc. `pinch` (m): the side window's
+   * line rounds over from its foot at the belt into the glass's top line this far ahead of `quarter.zRearTop` (one quadratic through that
+   * corner), so the window narrows to a point at the sail instead of ending on a straight rear edge; absent, the straight edge.
    */
-  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Drawn only: the body paint's base roughness, clear coat and clear coat roughness (`makePaintMaterial`); absent the platform paint's (0.42, 0.72, 0.24). */

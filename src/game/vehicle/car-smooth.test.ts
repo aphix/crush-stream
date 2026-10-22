@@ -4,7 +4,8 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
-import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
+import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantX, cantY, glassTopY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
+import { beltX, beltY } from "./car-lines.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
@@ -771,7 +772,52 @@ const SAIL_OUTER_POINTS = 6;
 
 /** The coupe on a curved roof section (`roofSection`): the sail rows read it beside every style as built. */
 const DOMED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, roofSection: { crown: 0.5, blend: 0.5 } };
-const SAIL_STYLES = [...CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar).map((id) => [id, CAR_STYLES[id]] as const), ["domed coupe", DOMED_COUPE] as const];
+/** The coupe with its side window pinched (`cPillar.pinch`), and without (whatever it sets): the sail rows read the pinched one beside every style as built. */
+const PINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES.coupe.cPillar, pinch: 0.08 } };
+const UNPINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES.coupe.cPillar, pinch: undefined } };
+const SAIL_STYLES = [
+  ...CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar).map((id) => [id, CAR_STYLES[id]] as const),
+  ["domed coupe", DOMED_COUPE] as const,
+  ["pinched coupe", PINCHED_COUPE] as const,
+];
+/** In the side view a pinched window's glass shows from at most this far (m) ahead of its point on, so the point reads sharp. */
+const WINDOW_POINT_SHOWS = 0.01;
+/** The window's point is read over this run (m) ahead of its tip, in steps of this (m). */
+const WINDOW_POINT_RUN = 0.1;
+const WINDOW_POINT_STEP = 0.001;
+/** At a pinched sail's front ring, where the window's line has rounded into the glass's top line, the sail reaches at most this far (m) under that line: two beads' span, not a post's depth cutting the rounded corner off. */
+const PINCH_FRONT_UNDER = 0.035;
+
+/**
+ * Side view of `style`'s +x window point: how far (m) ahead of the point (where the window's line, tip to the glass's top corner,
+ * rises out of the body loft's top at the glass) its glass shows past the sail for good, read mid-height between that top and the line.
+ */
+function windowPointCover(style: BodyStyle): number {
+  const q = style.quarter;
+  const [tipY, tipZ] = style.cPillar?.tip ?? [beltY(q.zRearBot, style), q.zRearBot];
+  const [topY, topZ] = [glassTopY(q.zRearTop, style), q.zRearTop];
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const sail = new THREE.Mesh(makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!, material);
+  const chassis = makeChassisGeometry(style);
+  const body = new THREE.Mesh(chassis, material);
+  const loftVertices = loftOf(chassis).ring * loftOf(chassis).slices;
+  const glassX = (z: number, y: number) => THREE.MathUtils.lerp(beltX(z, style), cantX(z, style), (y - beltY(z, style)) / (cantY(z, style) - beltY(z, style)));
+  const ray = new THREE.Raycaster();
+  let [point, shows] = [NaN, NaN];
+  for (let step = 0; step * WINDOW_POINT_STEP <= WINDOW_POINT_RUN; step++) {
+    const z = tipZ + step * WINDOW_POINT_STEP;
+    const line = tipY + ((topY - tipY) * (z - tipZ)) / (topZ - tipZ);
+    ray.set(new THREE.Vector3(glassX(z, line), line + 1, z), new THREE.Vector3(0, -1, 0));
+    const sill = ray.intersectObject(body).find((hit) => hit.face!.a < loftVertices)?.point.y ?? beltY(z, style);
+    if (line <= sill) continue;
+    if (Number.isNaN(point)) point = z;
+    const y = (sill + line) / 2;
+    ray.set(new THREE.Vector3(glassX(z, y), y, z), new THREE.Vector3(1, 0, 0));
+    if (ray.intersectObject(sail).length > 0) shows = NaN;
+    else if (Number.isNaN(shows)) shows = z;
+  }
+  return shows - point;
+}
 
 describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", () => {
   for (const [id, style] of SAIL_STYLES) {
@@ -889,6 +935,21 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         return Math.max(...folds) > SAIL_END_FOLD_DEGREES ? [`z ${at(s, 0).z.toFixed(3)}: ${folds.map((f) => f.toFixed(1)).join(", ")}°`] : [];
       });
       assert.ok(off.length === 0, `${id}: the outer face folds across ${off.join("; ")}`);
+    });
+  }
+  for (const [id, style] of SAIL_STYLES.filter(([, s]) => (s.cPillar?.pinch ?? 0) > 0)) {
+    it(`when a ${id}'s pinched side window is read in the side view, then its glass shows within ${WINDOW_POINT_SHOWS * 1000} mm of the window's point: the sail never cuts across it`, () => {
+      const blunt = windowPointCover(UNPINCHED_COUPE);
+      assert.ok(blunt > WINDOW_POINT_SHOWS, `the control: the coupe's unpinched window shows its glass ${(blunt * 1000).toFixed(0)} mm past its point`);
+      const cover = windowPointCover(style);
+      assert.ok(cover <= WINDOW_POINT_SHOWS, `${id}: the glass shows ${(cover * 1000).toFixed(0)} mm past the window's point`);
+    });
+    it(`when a ${id}'s pinched side window is read at its sail's front ring, then the sail reaches at most ${PINCH_FRONT_UNDER * 1000} mm under the glass's top line there: the window's line rounds into it`, () => {
+      const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+      const { ring, slices } = loftOf(sail);
+      const points = Array.from({ length: ring }, (_, k) => positionAt(sail, (slices - 1) * ring + k));
+      const under = glassTopY(points[0]!.z, style) - Math.min(...points.map((p) => p.y));
+      assert.ok(under <= PINCH_FRONT_UNDER, `${id}: at z ${points[0]!.z.toFixed(3)} the sail reaches ${(under * 1000).toFixed(1)} mm under the glass's top line`);
     });
   }
 });
@@ -1235,7 +1296,8 @@ const SIM_DIGEST_BY_STYLE = [
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
   { id: "police", digest: "1071e0a8d52794a5b4df7b49cdf4e644455f5bf36fa869a247892e9055a5a481" },
   // The monster is its own body style (its own dims, cage and lifted class body), no longer the pickup's.
-  { id: "monster", digest: "7a1610ef755890bc133f287a9c31f175de8e9d6d7ee310aba95af8fa653a4297" },
+  // Again when a wreck's masses rode its lifted centre, not their centroid (CarRig rig-seat): 7a1610ef... -> db09b87c...; the other six unchanged.
+  { id: "monster", digest: "db09b87c25c1d4e2c03d0f9a902d0f055f412591c298fb2878c3827357453f39" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style crashed into the wall at 48 km/h by the engine's own step", () => {
@@ -1284,8 +1346,10 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
   // The hatch's again for its windshield reaching the reference's glass top (`windshieldTop` [1.245, .245], `wTop` 1.03, roof ending there): a754e5e3... -> bd7135b8....
   // Again for its rear glass base and gate top dropped to the reference's (.94 -> .905): bd7135b8... -> b9336649....
-  { id: "hatchback", digest: "b933664934c54d1308d295eb996ca8575cf592f28101d6ea12a08fdee7372d64" },
-  { id: "wagon", digest: "367e3e9f9994b45c27fa7de342de7c0deee14a978bb430438240e2f3d7c7f5bb" },
+  // Again for its quarter glass's rear edge leaning forward to the reference's (top z -1.07 -> -.96, belt -1.174 -> -1.15) and its roof's rear lip tucked over the D-pillars (`roofEnds.rear` .019, flush): b9336649... -> 5a049815....
+  { id: "hatchback", digest: "5a04981599364c80bd64ba29794a5c70f939aff9056e80cdd456e2b23d57174b" },
+  // The SUV's for its quarter glass running back to a slim D-post (rear edge belt -1.945 -> -1.995, top -1.67 -> -1.72): 367e3e9f... -> 94bad84a....
+  { id: "wagon", digest: "94bad84a5ea583284c689433a0d79c7c7e88e6a59dfd738022f3ed3edcfc0cad" },
   // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above), and its drawn roof rolled onto the windshield's top (`roofEnds.front`).
   // Re-pinned for its rear glass's round outline (`rearGlass.roundOutline`): the frit's corner fans stand 1 cm in behind the pane as a backing, and the pane's drawn vertices are the glass panel's cage-skinned rest.
   // Re-pinned for its curved roof (`roofSection` .4/.6) and narrower rear glass top (`rearGlass.wTop` .92): the raked panes fall with the dome and the glass panel's cage-skinned rest moved.

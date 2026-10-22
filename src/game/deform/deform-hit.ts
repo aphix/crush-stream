@@ -226,8 +226,8 @@ export abstract class DeformHit extends DeformRig {
     out[o + 2] = this.bodyCos * dz - this.bodySin * dx + this.bodyC.z;
   }
 
-  /** The dynamic masses' centroid (x, y, z in a shared scratch: valid until the next call). */
-  private massCentre(): Float64Array {
+  /** The rigid body's centre: the dynamic masses' centroid off by `liftOffset` (x, y, z in a shared scratch: valid until the next call). */
+  private bodyCentre(): Float64Array {
     let mass = 0;
     _centre.fill(0);
     for (const m of this.masses) {
@@ -238,6 +238,9 @@ export abstract class DeformHit extends DeformRig {
       mass += m.mass;
     }
     if (mass > MIN_MASS_SUM) for (let k = 0; k < 3; k++) _centre[k]! /= mass;
+    _centre[0]! += this.liftOffset.x;
+    _centre[1]! += this.liftOffset.y;
+    _centre[2]! += this.liftOffset.z;
     return _centre;
   }
 
@@ -259,7 +262,7 @@ export abstract class DeformHit extends DeformRig {
   }
 
   protected writeShapeToMasses(): void {
-    const c = this.massCentre();
+    const c = this.bodyCentre();
     for (let i = 0; i < this.masses.length; i++) {
       const m = this.masses[i]!;
       if (!m.dynamic) continue;
@@ -459,8 +462,8 @@ export abstract class DeformHit extends DeformRig {
       mass += m.mass;
     }
     if (mass <= 0) return;
-    cx /= mass;
-    cz /= mass;
+    cx = cx / mass + this.liftOffset.x;
+    cz = cz / mass + this.liftOffset.z;
     const spin = this.bodyW.y;
     for (const m of this.masses) {
       if (!m.hub || m.popped || !m.dynamic) continue;
@@ -529,7 +532,7 @@ export abstract class DeformHit extends DeformRig {
 
   /**
    * The body's velocity, handed over at the group's origin (`worldVel`, with its spin `worldOmega`) to the masses just armed in that
-   * rigid field, moves to their centroid, the wreck's centre of mass where `Car.integrateWreck` reads it.
+   * rigid field, moves to its centre (their centroid off by `liftOffset`), the wreck's centre of mass where `Car.integrateWreck` reads it.
    */
   private seatVelocity(group: THREE.Object3D, worldVel: THREE.Vector3, worldOmega: THREE.Vector3): void {
     let mass = 0;
@@ -544,9 +547,9 @@ export abstract class DeformHit extends DeformRig {
       cz += m.world.z * m.mass;
     }
     if (mass < MIN_MASS_SUM) return;
-    const rx = cx / mass - group.position.x;
-    const ry = cy / mass - group.position.y;
-    const rz = cz / mass - group.position.z;
+    const rx = cx / mass + this.liftOffset.x - group.position.x;
+    const ry = cy / mass + this.liftOffset.y - group.position.y;
+    const rz = cz / mass + this.liftOffset.z - group.position.z;
     worldVel.x += worldOmega.y * rz - worldOmega.z * ry;
     worldVel.y += worldOmega.z * rx - worldOmega.x * rz;
     worldVel.z += worldOmega.x * ry - worldOmega.y * rx;
@@ -648,7 +651,7 @@ export abstract class DeformHit extends DeformRig {
     if (wsum < MIN_WEIGHT_SUM) return;
     const invW = 1 / wsum;
     const downDv = downMass > 1e-9 ? (j * down * invW) / downMass : 0;
-    const c = this.massCentre();
+    const c = this.bodyCentre();
     for (let i = 0; i < n; i++) {
       const m = masses[i]!;
       if (!m.dynamic) continue;
