@@ -139,7 +139,7 @@ export function roofArc(z: number, style: BodyStyle): ((t: number) => Pt) | null
 }
 
 /** The height of a half-section's `points` (crown first, x rising) at `x`, held at the last point's past it. */
-function arcY(points: readonly Pt[], x: number): number {
+export function arcY(points: readonly Pt[], x: number): number {
   for (let k = 1; k < points.length; k++) {
     const [a, b] = [points[k - 1]!, points[k]!];
     if (x <= b.x) return lerp(a.y, b.y, (x - a.x) / (b.x - a.x));

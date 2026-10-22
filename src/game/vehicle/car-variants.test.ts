@@ -1038,6 +1038,38 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
+  it("when a curved-roof style's (`roofSection`) drawn greenhouse parts are read against its drawn roof mesh, then no vertex over the roof's z span stands over the roof's skin as drawn: a ray down from above meets the roof at or over every vertex (the rolled squared front and the loft's chords between its rings included)", () => {
+    const ids = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].roofSection !== undefined);
+    assert.ok(ids.length >= 3, `only ${ids.length} styles set a roofSection`);
+    const ray = new THREE.Raycaster();
+    const from = new THREE.Vector3();
+    const down = new THREE.Vector3(0, -1, 0);
+    const over: { mm: number; text: string }[] = [];
+    for (const id of ids) {
+      const style = drawnStyle(CAR_STYLES[id]);
+      const roof = new THREE.Mesh(makeRoofGeometry(style, "drawn"), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+      let checked = 0;
+      for (const part of makeGreenhouseFrame(style, "drawn")) {
+        const pos = part.getAttribute("position") as THREE.BufferAttribute;
+        for (let i = 0; i < pos.count; i++) {
+          const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+          if (z < style.roofZ[0] || z > style.roofZ[1]) continue;
+          ray.set(from.set(x, y + 1, z), down);
+          const hit = ray.intersectObject(roof, false)[0];
+          // No hit: the vertex is outboard of the roof's plan, under its lip.
+          if (hit === undefined) continue;
+          checked++;
+          const mm = (y - hit.point.y) * 1000;
+          // 1e-6: float32 vertices, a ulp at 1.3 m is 1.2e-7.
+          if (y > hit.point.y + 1e-6) over.push({ mm, text: `${id} ${part.name} (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}) ${mm.toFixed(2)} mm over the drawn roof` });
+        }
+      }
+      assert.ok(checked > 0, `${id}: no greenhouse vertex met the drawn roof under it`);
+    }
+    over.sort((a, b) => b.mm - a.mm);
+    assert.equal(over.length, 0, `${over.length} greenhouse vertices stand over the drawn roof's skin, worst first: ${over.slice(0, 5).map((o) => o.text).join("; ")}`);
+  });
+
   it(`when any style's cage A-pillar box is read, then its rear top corner stands at least ${A_PILLAR_TOP_CLEAR * 100} cm behind the windshield's top edge, so the dummies' roof proxy stays off the pane`, () => {
     // The cage's first part is the left A box; its rearmost vertex is its rear top corner.
     const behind = (style: BodyStyle): number => style.windshieldTop[1] - partBox(makeGreenhouseFrame(style, "cage")[0]!).min.z;
