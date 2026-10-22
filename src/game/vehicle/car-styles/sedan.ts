@@ -105,7 +105,7 @@ const SEDAN_LAMP_SHAPES = {
   },
   // The reference's rear reflectors: thin red strips low on the bumper's corners (rear iso; side y ~0.49), not blocks.
   rear: {
-    loops: [{ points: [[0.54, 0.47], [0.7, 0.47], [0.7, 0.5], [0.54, 0.5]] }],
+    loops: [{ points: [[0.48, 0.47], [0.63, 0.47], [0.63, 0.5], [0.48, 0.5]] }],
     lens: "red",
   },
 } as const;
@@ -202,7 +202,7 @@ export const SEDAN: BodyStyle = {
         [-0.29, -0.07],
       ],
       span: 0.76,
-      wrap: { from: 0.48, back: 0.2 },
+      wrap: { from: 0.42, back: 0.24 },
       trim: "body",
       top: [[0, 0.61], [0.46, 0.61], [0.5, 0.738], [0.6, 0.738]],
       edge: [[-1.83, 0.738], [-1.81, 0.7], [-1.8, 0.665], [-1.76, 0.625], [-1.71, 0.595], [-1.62, 0.58], [-1.66, 0.5], [-1.683, 0.42], [-1.69, 0.32]],
