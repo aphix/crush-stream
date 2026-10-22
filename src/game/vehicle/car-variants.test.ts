@@ -476,6 +476,46 @@ describe("given the pickup whose roof's rear corners sit flush over its posts (r
     const [flush, lip] = [reachAtEnd(pickup), reachAtEnd(lipped)];
     assert.ok(flush < 1e-6 && lip > 0.05, `rear end past the dome's edge: flush ${flush.toFixed(4)} m, without flush ${lip.toFixed(4)} m`);
   });
+
+  it("when its roof is drawn, then its centre line ends within 1 cm of its rear glass's top in plan, as the reference's rolled rear edge does, not a ledge reaching past the glass", () => {
+    const pickup = CAR_STYLES.pickup;
+    const [roof, glass] = [makeRoofGeometry(pickup).getAttribute("position"), makeRearGlass(pickup).getAttribute("position")];
+    let roofZ = Infinity;
+    for (let v = 0; v < roof.count; v++) if (Math.abs(roof.getX(v)) < 1e-6) roofZ = Math.min(roofZ, roof.getZ(v));
+    let [topY, topZ] = [-Infinity, 0];
+    for (let i = 0; i < glass.count; i++) if (Math.abs(glass.getX(i)) < 1e-6 && glass.getY(i) > topY) [topY, topZ] = [glass.getY(i), glass.getZ(i)];
+    assert.ok(Math.abs(topZ - roofZ) <= 0.01, `the roof ends at z ${roofZ.toFixed(3)}, the rear glass's top at ${topZ.toFixed(3)}`);
+  });
+});
+
+describe("given the trucks' posts against their side plates' window outlines", () => {
+  /** How far (m) a side-view width may stand off the plate's reading: under a reference pixel and a half. */
+  const PLATE_TOL = 0.015;
+  /** `style`'s A-post and sail in side view at height `y` (m): its windshield's side edge less its door glass's front edge, both straight (`glassCorners`: windshield pane 0, door glass pane 3's front corners). */
+  const aWidthAt = (style: BodyStyle, y: number): number => {
+    const c = glassCorners(style);
+    const zAt = (y0: number, z0: number, y1: number, z1: number) => z0 + ((z1 - z0) * (y - y0)) / (y1 - y0);
+    return zAt(c[1]!, c[2]!, c[7]!, c[8]!) - zAt(c[3 * 12 + 4]!, c[3 * 12 + 5]!, c[3 * 12 + 10]!, c[3 * 12 + 11]!);
+  };
+
+  it("when the pickup's A-post and sail are read, then they span its side plate's 38.9 cm at the windshield's foot (y 1.248) and 27.4 cm at y 1.39", () => {
+    const pickup = CAR_STYLES.pickup;
+    const [foot, mid] = [aWidthAt(pickup, 1.248), aWidthAt(pickup, 1.39)];
+    assert.ok(Math.abs(foot - 0.389) <= PLATE_TOL && Math.abs(mid - 0.274) <= PLATE_TOL, `A-post and sail ${(foot * 100).toFixed(1)} cm at the foot, ${(mid * 100).toFixed(1)} cm at y 1.39`);
+  });
+
+  it("when the monster's B-post is drawn, then it stands upright between its door glasses where its side plate's does (z -.214 to -.128, 8.6 cm) at the belt and at the roof, not narrowing to 4 cm", () => {
+    const post = makeGreenhouseFrame(CAR_STYLES.monster, "drawn").find((g) => g.name === "b")!;
+    const pos = post.getAttribute("position") as THREE.BufferAttribute;
+    const box = partBox(post);
+    const [low, top]: number[][] = [[], []];
+    for (let i = 0; i < pos.count; i++) {
+      if (pos.getY(i) < box.min.y + 0.005) low.push(pos.getZ(i));
+      if (pos.getY(i) > box.max.y - 0.005) top.push(pos.getZ(i));
+    }
+    const spans = [Math.min(...low), Math.max(...low), Math.min(...top), Math.max(...top)];
+    assert.ok(spans.every((z, k) => Math.abs(z - [-0.214, -0.128][k % 2]!) <= 0.005), `B-post z at the belt [${spans.slice(0, 2).map((z) => z.toFixed(3))}], at the roof [${spans.slice(2).map((z) => z.toFixed(3))}]`);
+  });
 });
 
 describe("given a coupe whose rear glass has round corners (rearGlass.round)", () => {
@@ -1131,6 +1171,23 @@ describe("given a body style's H2 hardpoints", () => {
     let front = -Infinity;
     for (let i = 0; i < sail.count; i++) front = Math.max(front, sail.getZ(i));
     assert.ok(back <= -0.975 && Math.abs(front + 0.666) <= 0.01, `the glass reaches z ${back.toFixed(3)}, the sail runs to z ${front.toFixed(3)}`);
+  });
+
+  it("when the coupe's quarter window and the body behind it are read in the side view, then the glass's sill rises from the door's belt to the window's point and the shoulder behind it runs back no higher than that point: the reference's line, with no hump over the window", () => {
+    /** Reference side view: the sill sits at the door's belt (y .88-.89) ahead of z -0.6 and the window's point stands at about .925. */
+    const [BELT_TOP, POINT_LOW] = [0.89, 0.92];
+    /** Behind the point the shoulder stands at most this far (m) over it: the reference's line holds the point's height. */
+    const OVER_POINT = 0.005;
+    const coupe = CAR_STYLES.coupe;
+    const pane = makeRearSideGlass(1, coupe).getAttribute("position");
+    let [tipZ, tipY, frontSill] = [Infinity, 0, Infinity];
+    for (let i = 0; i < pane.count; i++) {
+      if (pane.getZ(i) < tipZ) [tipZ, tipY] = [pane.getZ(i), pane.getY(i)];
+      if (pane.getZ(i) >= -0.6) frontSill = Math.min(frontSill, pane.getY(i));
+    }
+    let over = -Infinity;
+    for (let z = -1.49; z <= tipZ; z += 0.005) over = Math.max(over, sampleSlice(z, coupe.profile).yBelt - tipY);
+    assert.ok(frontSill <= BELT_TOP && tipY >= POINT_LOW && over <= OVER_POINT, `sill ${frontSill.toFixed(3)} ahead of z -0.6, point ${tipY.toFixed(3)} at z ${tipZ.toFixed(3)}, shoulder ${(over * 1000).toFixed(0)} mm over it`);
   });
 
   it("when the coupe's door is drawn, then its skin is flush with the body side inside its cut (door.proud 0), not a lit 3 mm step at the shut line", () => {
@@ -2103,6 +2160,46 @@ describe("given a body style's P1 parts", () => {
     assertSameNumbers(widest, [0.44, 0.5, 0.4], "the front top's, front underside's and tip underside's half-widths", POSITION_TOL);
   });
 
+  it("when a spoiler's top carries a crown, then its front edge's top stands `crown` higher at its middle than at its sloped ends, and without it the top is level", () => {
+    const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5, ends: [0.06, 0.1] } as const;
+    const crown = 0.02;
+    // The highest front-edge vertex at |x| (the front cap's fan centre sits lower, on the centre line).
+    const topAt = (roof: NonNullable<BodyStyle["roof"]>, x: number): number => {
+      const { body, from } = roofParts(roof);
+      const pos = body.getAttribute("position");
+      let top = -Infinity;
+      for (let i = from; i < pos.count; i++) {
+        if (Math.abs(pos.getZ(i) - spoiler.z[1]) < POSITION_TOL && Math.abs(Math.abs(pos.getX(i)) - x) < 1e-4) top = Math.max(top, pos.getY(i));
+      }
+      return top;
+    };
+    const crowned = { spoiler: { ...spoiler, crown } };
+    assertSameNumbers([topAt(crowned, 0), topAt(crowned, 0.44), topAt({ spoiler }, 0.44)], [spoiler.y[1], spoiler.y[1] - crown, spoiler.y[1]], "the crowned top's height at its middle and its sloped ends, and the level top's at its ends", POSITION_TOL);
+  });
+
+  it("when a spoiler's tip rounds (round), then its underside's half-width follows a quarter ellipse from the front to the tip, wider mid-run than the straight chamfer", () => {
+    const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5, ends: [0.06, 0.1], round: true } as const;
+    const { body, from } = roofParts({ spoiler });
+    const pos = body.getAttribute("position");
+    // The run's ends as Float32 stores them: the ellipse is vertical at the tip, so a double's last bit there would read as a step.
+    const [rear, front] = [Math.fround(spoiler.z[0]), Math.fround(spoiler.z[1])];
+    const taper = spoiler.ends[1];
+    const interior = new Set<number>();
+    let worst = 0;
+    let mid = NaN;
+    for (let i = from; i < pos.count; i++) {
+      if (Math.abs(pos.getY(i) - spoiler.y[0]) >= POSITION_TOL) continue;
+      const u = (front - pos.getZ(i)) / (front - rear);
+      worst = Math.max(worst, Math.abs(Math.abs(pos.getX(i)) - (spoiler.halfWidth - taper * (1 - Math.sqrt(1 - u * u)))));
+      if (u > 0.01 && u < 0.99) interior.add(Math.round(u * 1000));
+      if (Math.abs(u - Math.SQRT1_2) < 1e-3) mid = Math.abs(pos.getX(i));
+    }
+    assert.ok(worst < 1e-6, `the underside strays ${worst} from the quarter ellipse`);
+    assert.ok(interior.size >= 3, `${interior.size} interior stations along the run`);
+    const wider = mid - (spoiler.halfWidth - taper * Math.SQRT1_2);
+    assert.ok(wider > 0.03, `at u 0.7071 the half-width stands ${wider} over the straight chamfer's`);
+  });
+
   it("when a bumper's trim is chrome, black or body, then it wears chrome, black plastic or the body's colour (unset: the car's accent trim), and no bumper or cage build changes", () => {
     const accent = 0x9aa0a8;
     const body = 0x7a1020;
@@ -2545,6 +2642,24 @@ describe("given a body style's P2 parts", () => {
     assertSameNumbers([size.x, size.y], [grille.size[0] + 2 * bezel, grille.size[1] + 2 * bezel], "the chrome frame's w and h", POSITION_TOL);
     assert.ok(chromeBox(drawnPart(PART_KIND.grille, { ...sedan, grille, lamps }).geometry).isEmpty(), "without the field, no chrome");
     assert.ok(cageHash({ ...sedan, grille: { ...grille, bezel } }) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a grille sets its bars' width (bar), then its middle bar stands that tall, and without the field 12 mm", () => {
+    const sedan = CAR_STYLES.sedan;
+    const grille = { y: 0.48, size: [0.6, 0.12], kind: "bars", count: 3, finish: "black" } as const;
+    const lamps = { ...sedan.lamps, shapes: undefined };
+    // The bars' front faces stand 4 mm behind the grille's face (its surround's front); the middle of three is the only one at the grille's centre height.
+    const middleBar = (g: NonNullable<BodyStyle["grille"]>): number => {
+      const geo = drawnPart(PART_KIND.grille, { ...sedan, grille: g, lamps }).geometry;
+      const { box } = toneBox(geo, null, 0);
+      const [pos, cy] = [geo.getAttribute("position"), box.getCenter(new THREE.Vector3()).y];
+      const ys: number[] = [];
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) - (box.max.z - 0.004)) < 1e-5 && Math.abs(pos.getY(i) - cy) < 0.01) ys.push(pos.getY(i));
+      return Math.max(...ys) - Math.min(...ys);
+    };
+    const bar = 0.007;
+    assertSameNumbers([middleBar({ ...grille, bar }), middleBar(grille)], [bar, 0.012], "the middle bar's height with the field and without", 1e-6);
+    assert.ok(cageHash({ ...sedan, grille: { ...grille, bar } }) === cageHash(sedan), "the cage builds are unchanged");
   });
 
   it("when a rear bumper sets its plate's height, then the plate's centre stands at it (unset: where the platform puts it), and the cage builds are unchanged", () => {

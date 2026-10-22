@@ -342,6 +342,51 @@ function rearFootPlate(sign: number, rb: V3, fb: V3, foot: V3): THREE.BufferGeom
   return geo;
 }
 
+/** A cab back panel laps this far (m) in over the rear glass's side edge, so no gap opens between the glass and a squared post. */
+const CAB_BACK_LAP = 0.02;
+
+/**
+ * The cab back beside a squared rear post (`pillars.rearSquare`, +x side; sign -1 mirrors): one flat panel facing the tail in the post's
+ * rear edge plane, from inside the post (half its `thick` in) to `CAB_BACK_LAP` over the rear glass's side edge, from its foot `rb` to its head `rt`.
+ */
+function cabBackPanel(sign: number, rb: V3, rt: V3, thick: number, rg: BodyStyle["rearGlass"]): THREE.BufferGeometry {
+  const corners: V3[] = [
+    [rb[0] - thick / 2, rb[1], rb[2]],
+    [rg.wBase / 2 - CAB_BACK_LAP, rb[1], rb[2]],
+    [rg.wTop / 2 - CAB_BACK_LAP, rt[1], rt[2]],
+    [rt[0] - thick / 2, rt[1], rt[2]],
+  ];
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(corners.flatMap(([x, y, z]) => [sign * x, y, z]), 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(8), 2));
+  geo.setIndex(sign > 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2]);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** A glass bar stands this far (m) off the side glass's plane: clear of the pane, flat on it. */
+const GLASS_BAR_PROUD = 0.002;
+/** A glass bar's foot runs this far (m) under the belt, into the belt seal, like a post's. */
+const GLASS_BAR_SINK = 0.02;
+
+/** The drawn glass bar (`pillars.glassBar`, +x side; sign -1 mirrors): a flat strip on the side glass from under the belt to the glass's top, then up into the roof's side. */
+function glassBar(sign: number, style: BodyStyle, { width: [wBelt, wTop], z: [zBelt, zTop] }: Required<PillarSpan>): THREE.BufferGeometry {
+  const at = (z: number, y: number): V3 => [sign * underRoofSide(onGlassPlane(z, y, style, GLASS_BAR_PROUD), y, z, style), y, z];
+  const row = (zc: number, w: number, y: (z: number) => number) => [at(zc - w / 2, y(zc - w / 2)), at(zc + w / 2, y(zc + w / 2))];
+  const corners = [
+    ...row(zBelt, wBelt, (z) => beltY(z, style) - GLASS_BAR_SINK),
+    ...row(zTop, wTop, (z) => glassTopY(z, style)),
+    ...row(zTop, wTop, (z) => cantY(z, style) + PILLAR_TOP_RISE),
+  ];
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(corners.flat(), 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(2 * corners.length), 2));
+  // Rows rear/front: (a, b) under (c, d); the +x side's quads wound outward, the mirror's reversed.
+  geo.setIndex([0, 2].flatMap((a) => (sign > 0 ? [a, a + 2, a + 3, a, a + 3, a + 1] : [a, a + 3, a + 2, a, a + 1, a + 3])));
+  geo.computeVertexNormals();
+  return geo;
+}
+
 /** The drawn A-post's depth inward (m): a slim post, not a slab. */
 const A_POST_THICK = 0.03;
 /** The drawn A-post's face crowns this share of its width: its normals fan ±30° across it, turning from the side glass to the windshield, not a flat plank. */
@@ -562,7 +607,7 @@ const SAIL_SINK = 0.002;
 const SAIL_LID_SHUT = 0.004;
 /** A sail section's Bézier control point lies this share of the foot-to-head run out along the foot's tangent. */
 const SAIL_CONTROL = 0.5;
-/** A flat sail (`cPillar.flat`) eases into the roof end's rolled section over this run (m) behind it: on the coupe, from its rear ring over its two haunch gaps. */
+/** A flat sail (`cPillar.flat`) eases into the roof end's rolled section over this run (m) behind it unless `cPillar.blend` says otherwise. */
 const SAIL_ROLL_BLEND = 0.45;
 /** Points along a sail section's outer face (foot to head) and its inner face, and the chords each of its rounded edges spends (30° each). */
 const SAIL_OUTER = 6;
@@ -607,7 +652,8 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   const frontZ = topZ + pinch;
   const bead = style.cPillar?.bead === true;
   const windowY = (z: number): number => {
-    if (z < tipZ) return tipY;
+    // At the tip itself too: an upright window edge (tip and top at one z) gives the front ring its whole run up from the belt.
+    if (z <= tipZ) return tipY;
     if (pinch === 0) return lerp(tipY, topY, (z - tipZ) / (topZ - tipZ));
     // z(u) = (1 - u)² tipZ + 2u(1 - u) topZ + u² frontZ, solved for u; y rises as 1 - (1 - u)² (the corner and front share topY).
     const [a, b, c] = [tipZ - 2 * topZ + frontZ, 2 * (topZ - tipZ), tipZ - Math.min(z, frontZ)];
@@ -646,7 +692,10 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   };
   // On a curved roof the roof end's head lies on that end's chords; lapping the glass, in over its top corner's arc at `cPillar.corner`
   // (mid-arc by default), so the chord from the ring behind follows the arc below it and the roof end meets it above (a ring of its own would cost 80 triangles).
-  const endX = !roofEnd ? roof.x : flush ? rearGlassInset(style, rearGlassCornerZ(style, style.cPillar?.corner ?? SAIL_CORNER) ?? roofEndZ, SAIL_FLUSH_LAP).x : roof.x;
+  // A curved roof end square to its cant (a truck cab's: no roll outboard of the post's head) laps the glass corner the same way, so its
+  // chords still cover the end's skin outboard of the glass.
+  const lapsEnd = roofEnd !== null && (flush || roofEnd.every((p) => p.x <= roof.x));
+  const endX = lapsEnd ? rearGlassInset(style, rearGlassCornerZ(style, style.cPillar?.corner ?? SAIL_CORNER) ?? roofEndZ, SAIL_FLUSH_LAP).x : roof.x;
   const endHead = [endX, roofEnd ? roofTopY(endX, style.roofZ[0], style) : roof.y] as const;
   const section = (z: number): Pt[] => {
     const atRoofEnd = z === roofEndZ && z < style.roofZ[0];
@@ -666,7 +715,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
         : roofRoll(roof.x, roof.y, cantDrop(style), roofDrip(style), SAIL_ROOF_ROLL);
     // Over the glass (a curved roof's end head too) the head's edge stays a bead's: a post's would stand out over the pane. So does a beaded
     // window's (`cPillar.bead`) ahead of its corner, where its line has risen into the glass's top: a post's round would hang under that line.
-    const headR = onGlass || (atRoofEnd && flush && roofEnd !== null) || (bead && z > topZ) ? SAIL_FLUSH_STAND / 2 : r;
+    const headR = onGlass || (atRoofEnd && lapsEnd) || (bead && z > topZ) ? SAIL_FLUSH_STAND / 2 : r;
     // 0 on the window's line, 1 on the haunch: the foot's point and its tangent blend between the glass (its round edge's bottom on the line) and the shoulder.
     const f = THREE.MathUtils.smoothstep(tipZ - z, 0, sweep);
     // A pinched window's sail laps the glass with a bead's edge, a bead's height off it, so the window's point stays sharp; on the haunch its foot's edge is the full round.
@@ -738,7 +787,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   const rings = zs.map((z): Pt[] => {
     const ring = section(z);
     const letGo = pinch > 0 ? 1 - ((z - roofEndZ) / (front - roofEndZ)) ** 2 : 1 - THREE.MathUtils.smoothstep(z, roofEndZ, front);
-    const w = !rollEnd || z === roofEndZ ? 0 : z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - SAIL_ROLL_BLEND, roofEndZ) : letGo;
+    const w = !rollEnd || z === roofEndZ ? 0 : z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - (style.cPillar?.blend ?? SAIL_ROLL_BLEND), roofEndZ) : letGo;
     if (w === 0) return ring;
     const [a, b] = [rollEnd![0]!, rollEnd![SAIL_OUTER - 1]!];
     const endRun = hypot2(b.x - a.x, b.y - a.y);
@@ -880,11 +929,23 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     // A drawn post's head follows the rear glass's top corner down the dome (`domeFall`), held inside the roof's span, where the
     // roof's clamp takes its whole top ring, not half of it.
     const [rtX, rtY, rtZ] = rearPillar.rt;
-    const heldPillar = { ...rearPillar, rt: [rtX, rtY - domeFall(style, rg.top[1])(rg.wTop / 2, 1), Math.max(rtZ, style.roofZ[0] + ROOF_TUCK)] } as const;
+    const [heldY, heldZ] = [rtY - domeFall(style, rg.top[1])(rg.wTop / 2, 1), Math.max(rtZ, style.roofZ[0] + ROOF_TUCK)];
     const sail = source === "drawn" ? style.cPillar : undefined;
+    // A squared post (`pillars.rearSquare`, a truck cab's back corner): its rear edge on the side glass's plane like its front, so its face never
+    // turns to the tail; a flat cab back panel closes the cab from inside it over the rear glass's side edge.
+    const squared = source === "drawn" && !sail && style.pillars?.rearSquare === true;
+    const [rbX, rbY, rbZ] = rearPillar.rb;
+    const heldPillar = squared
+      ? ({ ...rearPillar, rb: [rearPillar.fb[0], rbY, rbZ], rt: [rearPillar.ft[0], heldY, heldZ] } as const)
+      : ({ ...rearPillar, rb: [rbX, rbY, rbZ], rt: [rtX, heldY, heldZ] } as const);
     parts.push(pillar(source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : sail ? cPillarSail(sign, style, rearPillar) : roundedPillarFromCorners(sign, heldPillar, 0.05, true), "rear"));
+    if (squared) {
+      const cabBack = pillar(cabBackPanel(sign, heldPillar.rb, heldPillar.rt, 0.05, rg), "rear");
+      cabBack.name = "cabBack";
+      parts.push(cabBack);
+    }
     const rearFoot = source === "drawn" && !sail ? style.pillars?.rearFoot : undefined;
-    if (rearFoot) parts.push(rearFootPlate(sign, rearPillar.rb, rearPillar.fb, [rearFoot[0], rearFoot[1], rearPillar.rb[2]]));
+    if (rearFoot) parts.push(rearFootPlate(sign, heldPillar.rb, rearPillar.fb, [rearFoot[0], rearFoot[1], rearPillar.rb[2]]));
     if (sail?.tip) parts.push(cPillarTip(sign, style, sail.tip));
     if (m !== null) {
       const topZ = divider.z?.[1] ?? m;
@@ -907,6 +968,8 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       );
     }
     if (aPost?.sail) parts.push(pillar(roundedPillarAlong(sign, aPost.sail, SAIL_THICK), "sail"));
+    const bar = source === "drawn" ? style.pillars?.glassBar : undefined;
+    if (bar) parts.push(Object.assign(pillar(glassBar(sign, style, bar), "divider"), { name: "glassBar" }));
     // The belt rail runs from the C-pillar to the B-pillar along the sill: the cage's box pitched straight between its ends, the drawn seal along the quarter glass's sill.
     if (source === "drawn") {
       parts.push(drawnBeltRail(sign, style), ...glassTopFill(sign, style, aTopZ));

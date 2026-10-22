@@ -769,7 +769,7 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
 /** A sail's foot stands at most this far (m) off the body's shoulder point it leaves, its face within `SAIL_LEAN_DEGREES` of the shoulder's tangent there (a flat post's foot stands 7-15 cm inboard, 35-45° off). */
 const SAIL_FOOT_OFF = 0.005;
 const SAIL_LEAN_DEGREES = 10;
-/** A flat sail eases into the roof end's roll over this run (m) behind the roof's rear end, its face's shape off its chord changing at most this many m per m of length on the way: the haunch-to-roll line a jump of 4.8 cm over 7 cm made. */
+/** A flat sail eases into the roof end's roll over this run (m) behind the roof's rear end unless its `cPillar.blend` says otherwise, its face's shape off its chord changing at most this many m per m of length on the way: the haunch-to-roll line a jump of 4.8 cm over 7 cm made. */
 const SAIL_ROLL_BLEND_TEST = 0.45;
 const SAIL_SHAPE_RATE = 0.25;
 /** A flat sail's outer face folds at most this much (°) across any of its sections: the coupe's head jumping back out ahead of its roof end folded 54°, and a sweep station 7 cm behind the roof end, where the head turns in round the glass's corner, 40°: hard lines. */
@@ -787,9 +787,10 @@ const SAIL_OUTER_POINTS = 6;
 
 /** The coupe on a curved roof section (`roofSection`): the sail rows read it beside every style as built. */
 const DOMED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, roofSection: { crown: 0.5, blend: 0.5 } };
-/** The coupe with its side window pinched (`cPillar.pinch`), and without (whatever it sets): the sail rows read the pinched one beside every style as built. */
+/** The coupe with its side window pinched (`cPillar.pinch`): the sail rows read it beside every style as built. */
 const PINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES.coupe.cPillar, pinch: 0.08 } };
-const UNPINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES.coupe.cPillar, pinch: undefined } };
+/** The control: the coupe unpinched with its quarter glass's sill held at the door's belt (before it rose to the window's point), whose sail cut across the window's point. */
+const UNPINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES.coupe.cPillar, pinch: undefined }, belt: { ...CAR_STYLES.coupe.belt, y: [[-0.981, 0.885], ...CAR_STYLES.coupe.belt.y.slice(1)] } };
 const SAIL_STYLES = [
   ...CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar).map((id) => [id, CAR_STYLES[id]] as const),
   ["domed coupe", DOMED_COUPE] as const,
@@ -889,7 +890,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
   }
 
   for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.flat)) {
-    it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm behind its ${SAIL_ROLL_BLEND_TEST * 100} cm ease into the roof end's roll, no body point stands outside its line by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
+    it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm behind its ${(style.cPillar?.blend ?? SAIL_ROLL_BLEND_TEST) * 100} cm ease into the roof end's roll, no body point stands outside its line by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? drawnQuarter(style).zRearBot) - (style.cPillar?.sweep ?? SAIL_SWEEP));
       const { ring, slices } = loftOf(sail);
@@ -907,7 +908,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         const bow = Math.max(...face.map((p) => Math.abs(outside(p.x, p.y))));
         const body = sectionPoints(sampleSlice(foot.z, style.profile), style, "drawn").filter((p) => p.x > 0 && p.y < head.y);
         const proud = Math.max(...body.map((p) => outside(p.x, p.y)));
-        const straight = foot.z <= style.roofZ[0] - SAIL_ROLL_BLEND_TEST - SAIL_ROOF_GAP;
+        const straight = foot.z <= style.roofZ[0] - (style.cPillar?.blend ?? SAIL_ROLL_BLEND_TEST) - SAIL_ROOF_GAP;
         if ((straight && bow > SAIL_FLAT_BOW) || proud > SAIL_SINK_TEST + 1e-4 || proud < 0) off.push(`z ${foot.z.toFixed(3)}: face bows ${(bow * 1000).toFixed(1)} mm, body stands ${(proud * 1000).toFixed(1)} mm outside its line`);
       }
       assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
@@ -967,6 +968,95 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       assert.ok(under <= PINCH_FRONT_UNDER, `${id}: at z ${points[0]!.z.toFixed(3)} the sail reaches ${(under * 1000).toFixed(1)} mm under the glass's top line`);
     });
   }
+  it("when a truck cab (a curved roof square to its cant at the rear, an upright quarter window edge on the monster) sets any sail, then the sail builds whole: every vertex finite", () => {
+    const off: string[] = [];
+    for (const id of ["pickup", "monster"] as const)
+      for (const cPillar of [{}, { flat: true }, { flush: true }, { flat: true, flush: true }]) {
+        const sail = makeGreenhouseFrame({ ...CAR_STYLES[id], cPillar }, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+        const pos = sail.getAttribute("position");
+        let bad = 0;
+        for (let i = 0; i < pos.count; i++) if (!Number.isFinite(pos.getX(i) + pos.getY(i) + pos.getZ(i))) bad++;
+        if (bad > 0) off.push(`${id} ${JSON.stringify(cPillar)}: ${bad} of ${pos.count} vertices not finite`);
+      }
+    assert.ok(off.length === 0, off.join("; "));
+  });
+});
+
+/** A glass bar (`pillars.glassBar`) stands at most this far (m) off the side glass's plane, never under it; its ends keep their width and centre within this (m). */
+const GLASS_BAR_STAND = 0.003;
+const GLASS_BAR_FIT = 0.001;
+/** The sedan with the reference side view's 2.2 cm black bar on its rear door's glass. */
+const BARRED_SEDAN: BodyStyle = {
+  ...CAR_STYLES.sedan,
+  pillars: { ...CAR_STYLES.sedan.pillars, glassBar: { width: [0.022, 0.022], z: [-0.866, -0.884] } },
+  blackout: { ...CAR_STYLES.sedan.blackout, divider: true },
+};
+
+describe("given a style that stands a bar on its side glass (`pillars.glassBar`)", () => {
+  it(`when its drawn greenhouse is read, then each side carries one black strip on the glass, within ${GLASS_BAR_STAND * 1000} mm off its plane and never under it, its width about its centre line at the belt and at the top; the cage carries none`, () => {
+    const { width, z } = BARRED_SEDAN.pillars!.glassBar!;
+    const bars = makeGreenhouseFrame(BARRED_SEDAN, "drawn").filter((g) => g.name === "glassBar");
+    assert.ok(bars.length === 2, `${bars.length} bars drawn`);
+    assert.ok(makeGreenhouseFrame(BARRED_SEDAN, "cage").every((g) => g.name !== "glassBar"), "the cage carries a bar");
+    const off: string[] = [];
+    for (const bar of bars) {
+      if (bar.userData.blackout !== true) off.push("not toned black");
+      const p = Array.from({ length: bar.getAttribute("position").count }, (_, i) => positionAt(bar, i));
+      // Its surface, not only its corners: points over each triangle on a 4-step grid, read where the glass is.
+      const idx = bar.getIndex()!.array;
+      for (let t = 0; t < idx.length; t += 3) {
+        const [a, b, c] = [p[idx[t]!]!, p[idx[t + 1]!]!, p[idx[t + 2]!]!];
+        for (let i = 0; i <= 4; i++)
+          for (let j = 0; j <= 4 - i; j++) {
+            const v = a.clone().multiplyScalar(1 - (i + j) / 4).addScaledVector(b, i / 4).addScaledVector(c, j / 4);
+            if (v.y > glassTopY(v.z, BARRED_SEDAN) + 1e-4) continue;
+            const plane = THREE.MathUtils.lerp(beltX(v.z, BARRED_SEDAN), cantX(v.z, BARRED_SEDAN), (v.y - beltY(v.z, BARRED_SEDAN)) / (cantY(v.z, BARRED_SEDAN) - beltY(v.z, BARRED_SEDAN)));
+            const stand = Math.abs(v.x) - plane;
+            if (stand < 0 || stand > GLASS_BAR_STAND) off.push(`(${v.x.toFixed(3)}, ${v.y.toFixed(3)}, ${v.z.toFixed(3)}) stands ${(stand * 1000).toFixed(1)} mm off the glass`);
+          }
+      }
+      const ends = [p.filter((v) => v.y < beltY(v.z, BARRED_SEDAN) - 0.01), p.filter((v) => Math.abs(v.y - glassTopY(v.z, BARRED_SEDAN)) < 1e-4)];
+      for (const [k, end] of ends.entries()) {
+        const [lo, hi] = [Math.min(...end.map((v) => v.z)), Math.max(...end.map((v) => v.z))];
+        if (end.length !== 2 || Math.abs(hi - lo - width[k]!) > GLASS_BAR_FIT || Math.abs((hi + lo) / 2 - z[k]!) > GLASS_BAR_FIT)
+          off.push(`${k === 0 ? "belt" : "top"} end: ${end.length} points, z ${lo.toFixed(4)} to ${hi.toFixed(4)}`);
+      }
+    }
+    assert.ok(off.length === 0, off.join("; "));
+  });
+});
+
+/** A squared rear post's (`pillars.rearSquare`) outer face turns at most this far (m) in plan between its rear and front thirds; its cab back panel laps at least this far (m) over the rear glass's side edge. */
+const REAR_SQUARE_TURN = 0.01;
+const REAR_SQUARE_LAP = 0.01;
+/** The monster with its cab's back corners squared. */
+const SQUARED_MONSTER: BodyStyle = { ...CAR_STYLES.monster, pillars: { ...CAR_STYLES.monster.pillars, rearSquare: true } };
+
+describe("given a truck cab whose rear post is squared (`pillars.rearSquare`)", () => {
+  it(`when its drawn greenhouse is read, then each rear post's outer face runs along the car within ${REAR_SQUARE_TURN * 100} cm from its rear third to its front third at the belt (its head tucks under the roof's rolled rear end), a flat cab back panel facing the tail laps at least ${REAR_SQUARE_LAP * 100} cm over the rear glass's side edge on each side, and the cage is the plain monster's`, () => {
+    const drawn = makeGreenhouseFrame(SQUARED_MONSTER, "drawn");
+    const off: string[] = [];
+    for (const post of drawn.filter((g) => g.name === "rear")) {
+      const { ring } = loftOf(post);
+      const points = Array.from({ length: ring }, (_, k) => positionAt(post, k));
+      const [lo, hi] = [Math.min(...points.map((p) => p.z)), Math.max(...points.map((p) => p.z))];
+      const outerX = (inThird: (z: number) => boolean) => Math.max(...points.filter((p) => inThird(p.z)).map((p) => Math.abs(p.x)));
+      const [rearX, frontX] = [outerX((z) => z < lo + (hi - lo) / 3), outerX((z) => z > hi - (hi - lo) / 3)];
+      if (Math.abs(rearX - frontX) > REAR_SQUARE_TURN) off.push(`belt ring: outer face x ${rearX.toFixed(3)} at its rear third vs ${frontX.toFixed(3)} at its front`);
+    }
+    const panels = drawn.filter((g) => g.name === "cabBack");
+    if (panels.length !== 2) off.push(`${panels.length} cab back panels`);
+    for (const panel of panels) {
+      const p = Array.from({ length: panel.getAttribute("position").count }, (_, i) => positionAt(panel, i));
+      const inner = Math.min(...p.map((v) => Math.abs(v.x)));
+      if (inner > SQUARED_MONSTER.rearGlass.wBase / 2 - REAR_SQUARE_LAP) off.push(`cab back reaches in to x ${inner.toFixed(3)}`);
+      const normal = panel.getAttribute("normal");
+      for (let i = 0; i < normal.count; i++) if (normal.getZ(i) >= 0) off.push(`cab back normal ${i} z ${normal.getZ(i).toFixed(3)}: not facing the tail`);
+    }
+    const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join(";");
+    assert.ok(cage(SQUARED_MONSTER) === cage(CAR_STYLES.monster), "the squared monster's cage differs from the plain monster's");
+    assert.ok(off.length === 0, off.join("; "));
+  });
 });
 
 /** A flush sail's head (`cPillar.flush`) stands at most this far (m) over the drawn rear glass (a chrome bead's 5 mm, its rounded edge's 2.5 mm radius where the section rises steeply into it, and a mm), and laps at least this far in over its side edge, so the glass's edge lies under the sail. */
@@ -1147,7 +1237,8 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
 const BASELINE_BY_STYLE = [
   { id: "sedan", drawCalls: 13, triangles: 5266, bodyVertices: 1587 },
   { id: "hatchback", drawCalls: 13, triangles: 5064, bodyVertices: 1587 },
-  { id: "wagon", drawCalls: 13, triangles: 5088, bodyVertices: 1635 },
+  // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's.
+  { id: "wagon", drawCalls: 13, triangles: 5117, bodyVertices: 1635 },
   { id: "coupe", drawCalls: 16, triangles: 5152, bodyVertices: 1530 },
   { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
   // The police re-pinned 5338 -> 5356 (1.6 x: 8540.8 -> 8569.6) for the sedan's quarter window (pinch mid ring, sail sweep ring): 8390 -> 8568 triangles.
@@ -1159,7 +1250,8 @@ const TRIANGLE_BUDGET = 1.6;
 /** The skin writes every body vertex each frame (its cost follows the count): the body's loft at most 1.2 x the baseline's vertices, which measured 1.2 x the baseline's skin time at most. */
 const BODY_VERTEX_BUDGET = 1.2;
 /** Each roof fitting kind's vertices as built (`makeRoofFittings`), merged into the body on top of its loft: red if a fitting grows. */
-const ROOF_FITTING_VERTICES = { rails: 220, glassPanel: 154, spoiler: 26 } as const;
+// The spoiler's re-pinned for the wagon's crowned top and rounded corners (the most rings and points any car's spoiler draws).
+const ROOF_FITTING_VERTICES = { rails: 220, glassPanel: 154, spoiler: 61 } as const;
 type RoofKind = keyof typeof ROOF_FITTING_VERTICES;
 
 /** `style`'s roof fittings' vertices, all together and per kind (each built alone). */
@@ -1311,7 +1403,8 @@ const SIM_DIGEST_BY_STYLE = [
   // The coupe re-pinned for its nose deck lowered 0.5-2.8 cm over z 1.76-1.945 to the reference's side line.
   { id: "coupe", digest: "65a78223ec46889380f64c822f52c7f005d3fc135df3982a0eacc74dcc28635c" },
   // The pickup re-pinned for its hood wrapping the nose (`hood.z1` 1.86 -> 1.92): its hood's cage reaches the nose the wall meets.
-  { id: "pickup", digest: "2882c1543a80d731c8d0bc7fea0385a5fff906c4840f069772703abc9069c59f" },
+  // Again for its mid-cab roof raised to its dims' height (profile z -0.1): the wall hit's crush re-rolls.
+  { id: "pickup", digest: "282be859aa30e844b2da5fd686b597f6a881367502dd1ab2900bc77952eb5a4e" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
@@ -1376,7 +1469,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Re-pinned for its rear glass's round outline (`rearGlass.roundOutline`): the frit's corner fans stand 1 cm in behind the pane as a backing, and the pane's drawn vertices are the glass panel's cage-skinned rest.
   // Re-pinned for its curved roof (`roofSection` .4/.6) and narrower rear glass top (`rearGlass.wTop` .92): the raked panes fall with the dome and the glass panel's cage-skinned rest moved.
   // Re-pinned for its belt's crest under the sail's foot dropped (profile z -1.49) and its quarter glass's point moved back (`quarter.zRearBot` -0.981, the belt's rear knots with it): the skin rows there and the glass panel's cage-skinned rest moved.
-  { id: "coupe", digest: "1cdca40793d0458084dca8852baf5f5d1170795c9c90ef62f9713579d2312766" },
+  // Re-pinned for its quarter glass's sill rising to the window's point (`belt.y` -0.981 .925) and its shoulder held level behind it (profile z -1.49 to -1.023 at .924-.93): the glass, its rail and the skin there moved.
+  { id: "coupe", digest: "034d75e5f0cc1b5c87f50f5e31114d29b2baef9c78452522b8d1dedf009c0c39" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open; both trucks for the greenhouse's dome-following panes and posts.
@@ -1386,7 +1480,10 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Both trucks re-pinned for their smooth roof crown (`roofSection`, square over the windshield) the panes' tops follow; the pickup's for its
   // rear glass's top raised under the roof's rolled end (y 1.6 -> 1.635) and its panes taking the whole dome.
   // The pickup's again for its door glass starting back where the side plate's does (`aPillarFoot` .7 -> .6, `aPillarTop` .41 -> .34): the A-post box moved.
-  { id: "pickup", digest: "0b9b6e97b2becde393bada56d59a0c480517bbc57b7692e2dc39ab47f131e85b" },
+  // The pickup's again for its windshield's foot forward to the side plate's edge (`windshield.base` z .9 -> .957: the A-post box moved) and its roof's
+  // rear end over its rear glass's top (`roofZ[0]` -0.5 -> -0.46), its mid-cab roof 5 mm up to its dims' height.
+  // The pickup's again for its rear glass's bowed top standing just ahead of the roof's end (`rearGlass.top`), so none shows past it.
+  { id: "pickup", digest: "f8b02021ab29fe606fbcc6a0b965967193be8023b3088aadf297d30f7d3e6247" },
   { id: "police", digest: "bb93a9082d0393e646fbc226fdb075fbda6f19d81cb54b371de3da40ef8becbc" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55); again for its windshield base at the side
   // plate's (`windshield.base` [1.0, .92] -> [1.05, .98]) and its door glass starting back at .60 (`aPillarFoot` .74 -> .6): the glass-front and A-post boxes moved.

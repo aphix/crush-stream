@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGaps, topGapsOff } from "./drawn-body.test-util.ts";
+import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_WORST_M, topGaps, topGapsOff, topParts } from "./drawn-body.test-util.ts";
 
 /**
  * docs/UNIFIED_CONTACT.md stage 3, "the cage is the body": the surface other cars' wheels and hull points stand on is the
@@ -15,10 +15,20 @@ import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST
  */
 const interiorThroughRoof =
   "the drawn interior (its headliner stands 1.09 m over the origin and does not follow the roof mass) pokes up through the roof the drop crushed, up to 0.115 m over the drawn roof on 352 cells, and the cage is the roof there: the cage carries the interior over a gone pane's opening only, because over the whole roof it takes stack-crush.test.ts to 6 of 8 (the bottom roof 0.384 m under three cars, its band 0.12-0.26 m); after the plan: make the drawn interior follow the roof's crush";
+const roofCornerHole =
+  "the cage's decimation loses the wagon's roof rear corners (|x| .50-.60, z -1.75..-1.90), so the surface there stands far under the drawn roof, which now reaches into the deck box; turns back on with rig-roof/rig-hole after the overhaul (CarRig)";
+const hoodBuckle =
+  "hood worst 0.115/0.120 m under the drawn top mid-hood (z 1.58, |x| .23-.32: drawn 1.215, cage 1.099) after the head-on; a 5 mm roof station move (st(-0.1) yRoof 1.655 -> 1.66) re-rolled the crush (union -0.012/-0.017); CarRig: the crush buckle the hood panel's cage misses";
 const edgeCliffs: readonly { key: string; part: string; measured: string; cause: string }[] = [
   { key: "sedan/rolled", part: "cabin", measured: "p95 0.062 (bar 0.05), worst 0.079 under (bar 0.10)", cause: interiorThroughRoof },
   { key: "pickup truck/rolled", part: "cabin", measured: "p95 0.064 (bar 0.05), worst 0.078 under (bar 0.10)", cause: interiorThroughRoof },
+  { key: "pickup truck/headon", part: "hood", measured: "p95 0.044, worst 0.115 under (bar 0.10)", cause: hoodBuckle },
   { key: "monster pickup/rolled", part: "cabin", measured: "p95 0.064 (bar 0.05), worst 0.078 under (bar 0.10)", cause: interiorThroughRoof },
+  { key: "wagon/untouched", part: "deck", measured: "p95 0.044, worst 0.785 under (bar 0.10)", cause: roofCornerHole },
+  { key: "wagon/loaded", part: "deck", measured: "p95 0.038, worst 0.785 under (bar 0.10)", cause: roofCornerHole },
+  { key: "wagon/headon", part: "deck", measured: "p95 0.042, worst 0.701 under (bar 0.10)", cause: roofCornerHole },
+  { key: "wagon/rolled", part: "deck", measured: "p95 0.034, worst 0.746 under (bar 0.10)", cause: roofCornerHole },
+  { key: "wagon/airborne", part: "deck", measured: "p95 0.047, worst 0.295 under (bar 0.10), no surface over 17 of 504 cells", cause: roofCornerHole },
 ];
 
 const topCases = BODIES.flatMap((b) =>
@@ -39,7 +49,7 @@ for (const testCase of topCases) {
       const car = carInState(testCase.state, testCase.style, testCase.cls);
       const field = drawnField(car);
       const wrong: string[] = [];
-      for (const [part, region] of Object.entries(TOP_PARTS)) {
+      for (const [part, region] of Object.entries(topParts(testCase.style))) {
         const g = topGaps(car, field, region);
         t.diagnostic(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
         if (cliffs.some((c) => c.part === part)) continue;

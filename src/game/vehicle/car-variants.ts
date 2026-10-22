@@ -123,8 +123,10 @@ interface RoofParts {
   /**
    * Body-colour lip off the roof's rear end, ±`halfWidth`: its underside at y `y[0]`, its top `y[1]` at the front edge falling to the tip.
    * `ends` [slope, taper] (m): the top's side ends stand `slope` inboard of the underside's, and the tip's ends `taper` inboard of the front edge's.
+   * `round`: the tip's corners turn on a quarter ellipse in plan (`taper` across, the whole z run along) instead of the straight chamfer.
+   * `crown` (m): the top's middle stands this much over its sloped ends' tops (a parabola across, carrying the roof's crown over it); absent, level.
    */
-  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number] };
+  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number]; round?: boolean; crown?: number };
   /** Dark glass panel over the front seats, `width` (m) across, standing just proud of the roof skin. */
   glassPanel?: { z: readonly [number, number]; width: number };
 }
@@ -400,9 +402,13 @@ export interface BodyStyle {
    * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` [x, y] (m): a point on the body's shoulder beside the
    * rear glass's base; the plank rear post's (no `cPillar`) foot fans out to it, covering the cabin's opening there; absent, no fan. `aSeat`
    * (y, m): a deck under the drawn A-post's foot lower than the belt; a skirt of the post's own section hangs from the foot down to it,
-   * so the cabin never shows through the gap; absent, none.
+   * so the cabin never shows through the gap; absent, none. `glassBar`: a slim divider bar standing on the side glass, belt to roof,
+   * `width` [belt, top] about its centre line at `z` [belt, top], toned by `blackout.divider`; a flat strip with no cage post; absent, none.
+   * `rearSquare`: the plank rear post (no `cPillar`) squared, a truck cab's back corner: its rear edge on the side glass's plane like its
+   * front, so its face never turns to the tail, and a flat cab back panel from inside it over the rear glass's side edge; absent, the
+   * post's rear edge at the rear glass's corner.
    */
-  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number };
+  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number; glassBar?: Required<PillarSpan>; rearSquare?: boolean };
   /**
    * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
    * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.
@@ -422,8 +428,9 @@ export interface BodyStyle {
    * corner), so the window narrows to a point at the sail instead of ending on a straight rear edge; absent, the straight edge. `sweep`
    * (m): behind the window's point the sail's foot sweeps out onto the shoulder over this run; absent 0.15. `bead` (drawn only): ahead of a
    * pinched window's corner the sail's head is a bead, and its inner face holds the head's depth to mid-face; absent, a post's round head.
+   * `blend` (m): a flat sail takes on the roof end's roll over this run behind the roof's rear end (the rest of its haunch straight); absent 0.45.
    */
-  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; sweep?: number; bead?: boolean };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; sweep?: number; bead?: boolean; blend?: number };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Drawn only: the body paint's base roughness, clear coat and clear coat roughness (`makePaintMaterial`); absent the platform paint's (0.42, 0.72, 0.24). */
@@ -486,6 +493,8 @@ export interface BodyStyle {
     round?: number;
     kind: "bars" | "mesh" | "slats" | "hex";
     count?: number;
+    /** Its bars' or slats' width (m); absent, 12 mm (a mesh's 6 mm). */
+    bar?: number;
     badge?: number;
     /** A hex mesh's bars cross at ± this angle (rad) from the horizontal (flatter: wider diamonds, more rows); absent, 60°. */
     angle?: number;

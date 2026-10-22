@@ -65,12 +65,13 @@ export const PICKUP: BodyStyle = {
   id: "pickup",
   dims: { wheelbase: 2.575, overhang: { front: 0.683, rear: 0.93 }, track: 1.3, width: 1.584, height: 1.691, rideHeight: 0.34, wheel: { radius: 0.38, width: 0.24 } },
   ...PLATFORM_HARDPOINTS,
-  windshield: { base: [1.21, 0.9], wBase: 1.36, wTop: 1.18 },
+  // The side plate's windshield edge: z .913 at its foot (y 1.248), .713 at y 1.39.
+  windshield: { base: [1.21, 0.957], wBase: 1.36, wTop: 1.18 },
   belt: { x: 0.73, y: [[0, 1.12]] },
   rocker: { y: 0.45 },
   underside: [[-2.17, 0.52], [-1.96, 0.42], [-1.75, 0.38], [-1.5, 0.34], [1.6, 0.34], [1.76, 0.35], [1.93, 0.38]],
   door: { hingeX: 0.74, hingeY: 0.785, hingeZ: 0.7, length: 0.93, halfHeight: 0.335, mirrorY: 0.405, mirrorZ: 0.19, mirrorReach: 0.15, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69], mirror: TOW_MIRROR },
-  // The side plate's door glass starts .60 back at the belt and .33 at the roof: the A-post and its sail 17 cm wide at the roof, 26 at the windshield's base.
+  // The side plate's door glass starts .60 back at the belt and .33 at the roof, a sail filling up to the A-post.
   aPillarFoot: 0.6,
   aPillarTop: 0.34,
   bPillar: { rear: -0.3, front: -0.23 },
@@ -87,7 +88,7 @@ export const PICKUP: BodyStyle = {
     st(-0.95, 0.739, 1.18),
     st(-0.58, 0.749, 1.18),
     st(-0.5, 0.759, 1.2, 1.665, 0.58, 1),
-    st(-0.1, 0.759, 1.2, 1.655, 0.6, 1),
+    st(-0.1, 0.759, 1.2, 1.66, 0.6, 1),
     st(0.38, 0.759, 1.2, 1.625, 0.58, 1),
     st(0.98, 0.759, 1.19, 1.22, 0.58, 0.3),
     st(1.2, 0.749, 1.17),
@@ -96,14 +97,15 @@ export const PICKUP: BodyStyle = {
     st(1.86, 0.72, 1.04),
     st(1.92, 0.62, 0.96),
   ],
-  roofZ: [-0.5, 0.45],
+  roofZ: [-0.46, 0.45],
   roofEnds: TRUCK_ROOF_ENDS,
   roofSection: TRUCK_ROOF_SECTION,
   roofDrip: 0,
   windshieldTop: [1.6, 0.45],
-  // The reference's cab back stands near upright, its glass's top 3 cm under the roof's rolled rear edge (rear iso: a slim rounded
-  // edge, not a nose); at z -0.47..-0.5 the crushed cab's dummy-world roof stood 8-15 cm off the drawn one.
-  rearGlass: { base: [1.24, -0.55], top: [1.635, -0.45], wBase: 1.3, wTop: 1.12 },
+  // The reference's cab back stands near upright, its glass's top under the roof's rolled rear edge (rear iso: a slim rounded edge, not a nose).
+  // The pane's bowed centre (1.5 cm behind `top`) stands 5 mm ahead of `roofZ[0]`, so no glass shows past the roof's end in side view.
+  // At z -0.47..-0.5 the crushed cab's dummy-world roof stood 8-15 cm off the drawn one.
+  rearGlass: { base: [1.24, -0.55], top: [1.635, -0.44], wBase: 1.3, wTop: 1.12 },
   privacyGlass: { rear: true },
   quarter: { zRearBot: -0.3, zRearTop: -0.285 },
   midPillarZ: null,

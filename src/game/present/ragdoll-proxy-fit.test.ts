@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it, type TestContext } from "node:test";
+import type { RayColliderHit } from "@dimforge/rapier3d-simd";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { BODIES, carInState, drawnField, gapsOver, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGapsOff } from "../vehicle/drawn-body.test-util.ts";
+import { BODIES, carInState, drawnField, gapsOver, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGapsOff, topParts } from "../vehicle/drawn-body.test-util.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { BOX_FLOATS } from "./ragdoll-proxy.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -83,11 +84,22 @@ async function proxyGaps(t: TestContext, testCase: ProxyCase): Promise<Record<st
   const body = ragdolls["proxies"].carBodies[0]!;
   const down = { x: 0, y: -1, z: 0 };
   const off: Record<string, string[]> = {};
-  for (const [part, region] of Object.entries(TOP_PARTS)) {
-    const g = gapsOver(car, field, region, (x, y, z) => {
-      const hit = world.castRay(new R.Ray({ x, y: y + RAY_FROM_M, z }, down), RAY_LENGTH_M, true, undefined, undefined, undefined, undefined, (c) => c.parent() === body && c.collisionGroups() !== 0);
-      return hit === null ? NaN : y + RAY_FROM_M - hit.timeOfImpact;
-    });
+  let hit: RayColliderHit | null = null;
+  for (const [part, region] of Object.entries(topParts(testCase.style))) {
+    const g = gapsOver(
+      car,
+      field,
+      region,
+      (x, y, z) => {
+        hit = world.castRay(new R.Ray({ x, y: y + RAY_FROM_M, z }, down), RAY_LENGTH_M, true, undefined, undefined, undefined, undefined, (c) => c.parent() === body && c.collisionGroups() !== 0);
+        return hit === null ? NaN : y + RAY_FROM_M - hit.timeOfImpact;
+      },
+      () => {
+        if (hit === null) return "";
+        const shape = hit.collider.shapeType();
+        return String(R.ShapeType[shape] ?? shape);
+      },
+    );
     t.diagnostic(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
     off[part] = topGapsOff(part, g);
   }
