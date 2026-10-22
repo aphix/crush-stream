@@ -1579,13 +1579,16 @@ describe("given a body style's P2 parts", () => {
       }
       return best;
     };
-    // Every lid-share triangle has a corner on the lid (lens and bezel stand at most 1.6 cm off it); the body's share is probed in lamps.test.
-    const lidShare = drawnLamp(car.style, "boot", 0).geometry;
-    const [pos, index] = [lidShare.getAttribute("position"), lidShare.getIndex()!];
-    const off = Array.from({ length: pos.count }, (_, i) => gap(trunk, new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(trunk.matrixWorld)));
-    let loose = 0;
-    for (let t = 0; t < index.count; t += 3) if (Math.min(off[index.getX(t)]!, off[index.getX(t + 1)]!, off[index.getX(t + 2)]!) > 0.016) loose++;
-    assert.equal(loose, 0, "lid-share triangles off the lid");
+    // Every lid-share triangle, either side's, has a corner on the lid (lens and bezel stand at most 1.6 cm off it); the body's share is probed in lamps.test.
+    for (const side of [-1, 1]) {
+      const lidShare = drawnLamp(car.style, "boot", side).geometry;
+      const [pos, index] = [lidShare.getAttribute("position"), lidShare.getIndex()!];
+      const off = Array.from({ length: pos.count }, (_, i) => gap(trunk, new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(trunk.matrixWorld)));
+      let loose = 0;
+      for (let t = 0; t < index.count; t += 3) if (Math.min(off[index.getX(t)]!, off[index.getX(t + 1)]!, off[index.getX(t + 2)]!) > 0.016) loose++;
+      assert.ok(index.count > 0, `the lid carries side ${side}'s share`);
+      assert.equal(loose, 0, `side ${side}: lid-share triangles off the lid`);
+    }
     assert.ok(drawnLamp(car.style, "tail", 1).geometry.getIndex()!.count > 0, "the body keeps a share");
     trunk.rotation.x = 0.6;
     car.group.updateMatrixWorld(true);

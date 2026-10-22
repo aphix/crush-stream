@@ -23,9 +23,11 @@ export const HEAD = { color: 0xfff1d8, intensity: 40, distance: 22, angle: 0.5, 
 /** A tail lamp lights only the half-space behind its lens (a 90° cone): as a point light it reached forward through the glass into the
  *  cabin and over the bed floor, a red glow the references never show. */
 const TAIL = { color: 0xff2414, intensity: 0.5, distance: 2.5, decay: 2, angle: Math.PI / 2, penumbra: 0.3 };
-/** A lit siren washes the car and the road round it; it outranks every tail lamp but the followed car's (`SIREN_RANK`). It sits
- *  `out` m over the lens: closer, it blew the lens itself out to orange under ACES (first cut: 6 at 0.3 m). */
-const SIREN = { red: 0xff1810, blue: 0x2848ff, intensity: 3, distance: 8, out: 0.8 };
+/** A lit siren washes the road and the body beside the car on its lens's side; it outranks every tail lamp but the followed car's
+ *  (`SIREN_RANK`). Its spot hangs `out` m over the lens (closer, it blew the lens itself out to orange under ACES) and leans out of the
+ *  bar's side, dipped `dip` rad, its cone `angle` rad: down to `dip + angle` (about 70°) below the level, short of the roof's footprint,
+ *  so it never reaches the cabin under the roof (no lamp casts a shadow). Pointed straight down, it washed the seats blue and red. */
+const SIREN = { red: 0xff1810, blue: 0x2848ff, intensity: 3, distance: 8, out: 0.8, dip: 0.6, angle: 0.6 };
 /** Headlamp aim: a point AIM m ahead dipped DIP m (≈5°), so the beam pools on the road. */
 const AIM = 10;
 const DIP = 0.9;
@@ -38,6 +40,9 @@ const GLOW_HEAD = [0.8, 0.7, 0.55] as const;
 const GLOW_TAIL = [0.55, 0.03, 0.015] as const;
 const GLOW_RED = [1, 0.06, 0.04] as const;
 const GLOW_BLUE = [0.08, 0.2, 1] as const;
+/** A body lamp's glow fades with the cosine between its lens axis and the camera: full to about 70° off the axis, gone past 95° (a
+ *  lamp's lens is seen from its side, never from behind). */
+const GLOW_FACE = [-0.1, 0.35] as const;
 
 /** Fake pools, shaped like the real spot's pool on the road (dark at the lamp, brightest about a fifth along, then a fading fan). A headlamp's
  *  quad runs from the lamp's foot POOL_LEN times the way to where its beam meets the ground (to at most POOL_MAX m), POOL_WIDTH as wide as
@@ -332,9 +337,12 @@ export class LampLights {
         if (n * 3 >= gp.length) continue;
         _e.copy(_pos).addScaledVector(_dir, GLOW_OUT).toArray(gp, n * 3);
         const c = kind === "head" ? GLOW_HEAD : kind === "tail" ? GLOW_TAIL : kind === "red" ? GLOW_RED : GLOW_BLUE;
-        gc[n * 3] = c[0];
-        gc[n * 3 + 1] = c[1];
-        gc[n * 3 + 2] = c[2];
+        // A body lamp's glow shows only on the side its lens faces: seen from behind the lens (past the body, through the cabin's glass)
+        // it is dark. A siren shows all round.
+        const facing = kind === "head" || kind === "tail" ? THREE.MathUtils.smoothstep(_e.subVectors(_cam, _pos).normalize().dot(_dir), GLOW_FACE[0], GLOW_FACE[1]) : 1;
+        gc[n * 3] = c[0] * facing;
+        gc[n * 3 + 1] = c[1] * facing;
+        gc[n * 3 + 2] = c[2] * facing;
         n++;
         if (kind === "head" || kind === "tail") {
           _pos.toArray(st, ns * 6);
@@ -485,10 +493,15 @@ export class LampLights {
     }
     const l = this.tailSpots[j]!;
     const tail = kind === "tail";
-    // A siren's spot hangs over its lens and points straight down: the same half-space a point there lit below it.
-    if (tail) l.position.copy(_pos).addScaledVector(_dir, -TAIL_SINK);
-    else l.position.copy(_pos).addScaledVector(_dir, SIREN.out);
-    l.target.position.copy(l.position).addScaledVector(_dir, tail ? 1 : -1);
+    if (tail) {
+      l.position.copy(_pos).addScaledVector(_dir, -TAIL_SINK);
+      l.target.position.copy(l.position).add(_dir);
+    } else {
+      l.position.set(_pos.x, _pos.y + SIREN.out, _pos.z);
+      l.target.position.copy(l.position).add(_dir);
+      l.target.position.y -= Math.tan(SIREN.dip);
+    }
+    l.angle = tail ? TAIL.angle : SIREN.angle;
     l.color.setHex(tail ? TAIL.color : kind === "red" ? SIREN.red : SIREN.blue);
     l.distance = tail ? TAIL.distance : SIREN.distance;
     l.intensity = tail ? TAIL.intensity * w : SIREN.intensity;
@@ -650,14 +663,20 @@ const LAMP_LOOK = {
   broken: { color: 0x5a5c60, emissive: 0x1a1b1c, emissiveIntensity: 0.12 },
 } as const;
 
-/** A car as the lamp batch reads it: its lamps (seat, state, kind, unit variant) and its drawn-only lamp fittings. */
+/** A car as the lamp batch reads it: its lamps (seat, state, kind, unit variant) and its drawn-only lamp fittings (a lid's share with its lamp and lid). */
 interface LampCar {
   readonly lamps: readonly { readonly seat: THREE.Object3D; readonly intact: boolean; readonly kind: LampKind; readonly variant: number }[];
-  readonly lampFittings: readonly { readonly seat: THREE.Object3D; readonly kind: keyof typeof FITTING_MESH; readonly variant: number }[];
+  readonly lampFittings: readonly {
+    readonly seat: THREE.Object3D;
+    readonly kind: keyof typeof FITTING_MESH;
+    readonly variant: number;
+    readonly share: { readonly lamp: { readonly intact: boolean }; readonly lid: { readonly detached: boolean } | null } | null;
+  }[];
 }
 
-/** Each lamp fitting's mesh in `LampBatch.meshes`. */
+/** Each lamp fitting's mesh in `LampBatch.meshes`, and a lid share's broken one. */
 const FITTING_MESH = { brake: 4, marker: 5, hood: 6, boot: 7 } as const;
+const SHARE_BROKEN = { brake: -1, marker: -1, hood: 8, boot: 9 } as const;
 
 /** Whether `seat` shows: on the camera's layer (distance detail) and visible up its parent chain. */
 function seatShown(seat: THREE.Object3D): boolean {
@@ -676,7 +695,8 @@ function seatShown(seat: THREE.Object3D): boolean {
 export class LampBatch {
   /** Every draw, for the scene. */
   readonly meshes: readonly THREE.InstancedMesh[];
-  /** Per slot (head lit, head broken, tail lit, tail broken, brake, marker, the heads on the hood, the tails on the boot lid), its draws by variant. */
+  /** Per slot (head lit, head broken, tail lit, tail broken, brake, marker, the heads' shares on the hood, the tails' on the boot lid, and
+   *  those two shares broken), its draws by variant. */
   readonly slots: readonly (readonly THREE.InstancedMesh[])[];
   /** Per slot and variant, the instances packed this sync. */
   private readonly n: Int32Array[];
@@ -694,11 +714,13 @@ export class LampBatch {
       for (const m of [plain[kind], plain.broken]) slots.push(geos.map((geo) => lampDraw(geo, m, capacity)));
     }
     slots.push([lampDraw(brakeLampUnit(), plain.tail, capacity)], [lampDraw(sideMarkerUnit(), plain.head, capacity * 2)]);
-    for (const [slot, look] of [["hood", plain.head], ["boot", plain.tail]] as const) {
+    const shares = (["hood", "boot"] as const).map((slot) => {
       const geos = lampBatchGeometries(slot) ?? [new THREE.BufferGeometry()];
       this.own.push(...geos);
-      slots.push(geos.map((geo) => lampDraw(geo, look, capacity)));
-    }
+      return geos;
+    });
+    for (const [k, look] of [plain.head, plain.tail].entries()) slots.push(shares[k]!.map((geo) => lampDraw(geo, look, capacity)));
+    for (const geos of shares) slots.push(geos.map((geo) => lampDraw(geo, plain.broken, capacity)));
     this.slots = slots;
     this.meshes = slots.flat();
     this.n = slots.map((s) => new Int32Array(s.length));
@@ -712,7 +734,12 @@ export class LampBatch {
         if (!seatShown(l.seat)) continue;
         this.put((l.kind === "head" ? 0 : 2) + (l.intact ? 0 : 1), l.seat, l.variant);
       }
-      for (const f of car.lampFittings) if (seatShown(f.seat)) this.put(FITTING_MESH[f.kind], f.seat, f.variant);
+      for (const f of car.lampFittings) {
+        if (!seatShown(f.seat)) continue;
+        // A lid's share goes dark with its lamp, and once its lid has torn off.
+        const dark = f.share !== null && (!f.share.lamp.intact || f.share.lid?.detached === true);
+        this.put(dark ? SHARE_BROKEN[f.kind] : FITTING_MESH[f.kind], f.seat, f.variant);
+      }
     }
     for (let b = 0; b < this.slots.length; b++) {
       for (let v = 0; v < this.slots[b]!.length; v++) {
