@@ -251,6 +251,8 @@ export interface DetachPart {
   object: THREE.Object3D;
   restPos: THREE.Vector3;
   restQuat: THREE.Quaternion;
+  /** Its seat's rest scale: a mirror's stretches the platform mirror to its style's reach (`door.mirrorReach` over `MIRROR_REACH`). */
+  restScale: THREE.Vector3;
   cage:
     | "bumperFront"
     | "bumperRear"
@@ -739,6 +741,7 @@ export abstract class CarCore {
         object,
         restPos: object.position.clone(),
         restQuat: object.quaternion.clone(),
+        restScale: object.scale.clone(),
         cage,
         attachL,
         attachR,
