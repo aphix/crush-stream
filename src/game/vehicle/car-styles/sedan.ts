@@ -12,7 +12,7 @@ export const SEDAN_MIRROR = { cap: "rounded", finish: "body", size: [0.1, 0.12, 
 export const SEDAN: BodyStyle = {
   id: "sedan",
   dims: { wheelbase: 2.5, overhang: { front: 0.804, rear: 0.925 }, track: 1.36, width: 1.64, height: 1.337, rideHeight: 0.165, wheel: { radius: 0.342, width: PLATFORM_WHEEL.width } },
-  windshield: { base: [0.95, 0.93], wBase: 1.4, wTop: 1.16 },
+  windshield: { base: [0.95, 0.93], wBase: 1.4, wTop: 1.06 },
   bPillar: { rear: -0.31, front: -0.21 },
   /**
    * The sill's half-width narrows behind the B-pillar as the reference's (top grid: the side glass's outer line at |x| ~0.70 along the
