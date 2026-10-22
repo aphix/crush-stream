@@ -49,7 +49,7 @@ export function mirrorSeatX(style: BodyStyle): number {
   if (!Number.isNaN(onDoor)) return onDoor - armRoot;
   const z = d.hingeZ - (d.mirrorZ ?? 0);
   const sl = sampleSlice(z, style.profile);
-  return sideX(d.hingeY + d.mirrorY, sl.hw, sl.yBelt, rockerAt(z, style)) + DOOR_PROUD - d.hingeX - armRoot;
+  return sideX(d.hingeY + d.mirrorY, sl.hw, sl.yBelt, rockerAt(z, style)) + (d.proud ?? DOOR_PROUD) - d.hingeX - armRoot;
 }
 /**
  * Outer-face columns before the edge rolls are added. The face's rows between its edge rolls are the body ring's side rows, and over
@@ -171,7 +171,7 @@ function doorFaceVertex(style: BodyStyle, grid: DoorGrid, row: DoorRow, z: numbe
     station = y = Math.min(ringRowY(style, grid, row.ring, z), doorFaceVertex(style, grid, h - DOOR_EDGE_RADIUS, z).y - DOOR_EDGE_CLEARANCE);
   }
   const intoCut = Math.min(z + halfLength, halfLength - z) - DOOR_SKIN_OVERLAP;
-  const proud = DOOR_PROUD * THREE.MathUtils.clamp(intoCut / DOOR_TAPER, 0, 1);
+  const proud = (d.proud ?? DOOR_PROUD) * THREE.MathUtils.clamp(intoCut / DOOR_TAPER, 0, 1);
   const [zCar, yCar] = [d.hingeZ + doorSkinZ(style) + z, d.hingeY + y];
   const sl = sampleSlice(zCar, style.profile);
   const rockerY = rockerAt(zCar, style);

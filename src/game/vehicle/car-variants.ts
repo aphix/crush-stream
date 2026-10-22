@@ -350,6 +350,8 @@ export interface BodyStyle {
      */
     mirror?: { cap: "rounded" | "box" | "tear"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass" };
     hingeTop?: number;
+    /** Drawn only: the door skin's outer face stands this far (m) over the body side inside its cut (absent `DOOR_PROUD`, 3 mm); 0: flush, the shut line a groove only. */
+    proud?: number;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
   aPillarFoot: number;
@@ -380,9 +382,8 @@ export interface BodyStyle {
   /**
    * Drawn only: side-view pillar bands (`PillarSpan`). `a`: the A-post's width behind the windshield edge (absent 0.06). `b`: the
    * B-pillar, centred on its `bPillar` band unless it leans. `divider`: the post at `midPillarZ`. Absent: the `bPillar` band (its top
-   * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` [x, y] (m): the plank rear post's (no `cPillar`) foot
-   * corner beside the rear glass's base, set out onto the body's shoulder so its bottom edge covers the cabin's opening up to it; absent,
-   * 2 cm outside the glass's base corner, at its height.
+   * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` [x, y] (m): a point on the body's shoulder beside the
+   * rear glass's base; the plank rear post's (no `cPillar`) foot fans out to it, covering the cabin's opening there; absent, no fan.
    */
   pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number] };
   /**

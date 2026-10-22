@@ -1098,6 +1098,23 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
   });
 
+  it("when the coupe's door is drawn, then its skin is flush with the body side inside its cut (door.proud 0), not a lit 3 mm step at the shut line", () => {
+    /** Flush within this (m): the skin's chords between its rows. */
+    const FLUSH = 0.001;
+    const coupe = CAR_STYLES.coupe;
+    const { hingeX, hingeY, hingeZ, aperture } = coupe.door;
+    const [y, z] = [0.7, aperture[1] - 0.03];
+    const proudOf = (s: BodyStyle) => {
+      const door = new THREE.Mesh(makeDoorGeometry(1, s), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+      door.position.set(hingeX, hingeY, hingeZ + doorSkinZ(s));
+      door.updateMatrixWorld();
+      const hit = new THREE.Raycaster(new THREE.Vector3(2, y, z), new THREE.Vector3(-1, 0, 0)).intersectObject(door)[0]!;
+      return hit.point.x - drawnSideX(z, y, s);
+    };
+    assert.ok(Math.abs(proudOf(coupe)) <= FLUSH, `the door skin stands ${(proudOf(coupe) * 1000).toFixed(1)} mm off the body side`);
+    assert.ok(proudOf({ ...coupe, door: { ...coupe.door, proud: undefined } }) > FLUSH, "the control: the platform's skin stands proud");
+  });
+
   it("when a drawn A-post 10 cm wide or more is read at a station under the roof, then its outer face turns 25° or more across its width, outboard on both sides: a curved post from the side glass to the windshield, not a flat plank (the plank turned 15-20°)", () => {
     /** A post section's outer face in ring points (`postSection`: three chords a corner, then the crown's three points): its edges and the chords off them. */
     const FACE = { edge: [3, 7], next: [4, 6] } as const;
@@ -3106,9 +3123,9 @@ describe("given every style's doors and the shared door card", () => {
     return [...outerAt].map(([y, x]) => ({ x, y })).sort((a, b) => b.y - a.y);
   };
 
-  it("when a door skin is built, then its face meets the drawn body side (its ring's chords over the ring rows it carries, the side's curve past them) at both cut ends (hinge and latch slices: a shut line, not a step) and stands 3 mm proud 2 cm inside them", () => {
-    /** The face's stand-off (m) over the body side at a cut end, and 2 cm inside it. */
-    const WANT = [[0, 0], [0.02, 0.003]] as const;
+  it("when a door skin is built, then its face meets the drawn body side (its ring's chords over the ring rows it carries, the side's curve past them) at both cut ends (hinge and latch slices: a shut line, not a step) and stands its style's proud (3 mm unless `door.proud`) 2 cm inside them", () => {
+    /** The face's stand-off (m) over the body side at a cut end, and 2 cm inside it (null: the style's `door.proud`, else `DOOR_PROUD`). */
+    const WANT = [[0, 0], [0.02, null]] as const;
     /** Rows this near (m) the skin's top or bottom roll over its edge: left out. */
     const ROW_EDGE = 0.05;
     for (const id of CAR_STYLE_IDS) {
@@ -3133,7 +3150,8 @@ describe("given every style's doors and the shared door card", () => {
             const body = sideX(p.y, sl.hw, sl.yBelt, rockerAt(zCar, style)) + drawnSideX(zCar, held, style) - sideX(held, sl.hw, sl.yBelt, rockerAt(zCar, style));
             proud = Math.max(proud, p.x - body);
           }
-          assert.ok(Math.abs(proud - want) < 1e-5, `${id}: ${inside * 100} cm inside the ${end > 0 ? "hinge" : "latch"} end the skin stands ${proud * 1000} mm proud, want ${want * 1000}`);
+          const stand = want ?? d.proud ?? 0.003;
+          assert.ok(Math.abs(proud - stand) < 1e-5, `${id}: ${inside * 100} cm inside the ${end > 0 ? "hinge" : "latch"} end the skin stands ${proud * 1000} mm proud, want ${stand * 1000}`);
         }
       }
     }
