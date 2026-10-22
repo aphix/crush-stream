@@ -409,7 +409,7 @@ function rearBand(s, bumperBox, at, refY, behindZ, hubZ, label) {
 }
 
 /** Every region's scores and flags for the stage's built car, and its exterior defects (`contour-defects.mjs`). */
-export function contourOf(stage, styleId) {
+export function contourOf(stage, styleId, probe = null) {
   const car = stage.car;
   const style = car.style;
   const lift = stage.game.CLASSES[stage.game.STYLE_CLASS[styleId]].lift;
@@ -431,7 +431,7 @@ export function contourOf(stage, styleId) {
     bumper: bumper.isEmpty() ? null : rearBand(s, bumper, BUMPER_AT, bumper.max.y + TAIL_ABOVE, behindZ, hubZ, "rear bumper"),
     lowerLip: bumper.isEmpty() ? null : rearBand(s, bumper, LIP_AT, bumper.min.y + 0.5 * (bumper.max.y - bumper.min.y), behindZ, hubZ, "lower lip"),
   };
-  return { regions, defects: defectsOf(stage, style, lift, bumper, glass.min.y) };
+  return { regions, defects: defectsOf(stage, style, lift, bumper, glass.min.y, probe) };
 }
 
 /** The car's panel: rear and front three-quarter views in game shading with the flags as rings, its scores in lines under them. */
@@ -569,11 +569,13 @@ const game = await openGame(values.root);
 const styles = values.all ? ["sedan", "hatchback", "wagon", "coupe", "pickup"] : [values.car ?? "sedan"];
 const stage = new CarStage(game, PAINT);
 const port = values.png || values.sheet ? new ViewPort(game, SHOT[0], SHOT[1]) : null;
+// The z-fighting offset measure's window (`offsetNeeded`): its own small canvas, so the shots' frame is not drawn over.
+const probe = { game, port: new ViewPort(game, 128, 128), crossing: game.crossing };
 const panels = [];
 const plots = [];
 for (const style of styles) {
   stage.build(style, game.STYLE_CLASS[style]);
-  const found = contourOf(stage, style);
+  const found = contourOf(stage, style, probe);
   const { regions, defects } = found;
   console.log(JSON.stringify({ car: style, ...Object.fromEntries(Object.entries(regions).map(([k, r]) => [k, r?.score ?? null])), gaps: defects.gaps, zfight: defects.zfight, skipped: defects.skipped }));
   for (const s of defects.suggest) console.log(JSON.stringify({ kind: "suggest", car: style, ...s }));

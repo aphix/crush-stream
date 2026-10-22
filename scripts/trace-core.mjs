@@ -43,7 +43,7 @@ export async function openGame(root = join(import.meta.dirname, "..")) {
   if (!existsSync(join(glDir, "dist/webgl.node"))) throw new Error(`@kmamal/gl has no native binary. Fetch it once: node ${join(glDir, "scripts/install.mjs")}`);
   const game = (path) => import(pathToFileURL(join(root, "src/game", path)).href);
   await (await game("deform/skin-kernel.test-util.ts")).loadSkinKernelForTest();
-  const [gl, canvas, car, variants, classes, wheels, lamps, parts, partGeometry] = await Promise.all([
+  const [gl, canvas, car, variants, classes, wheels, lamps, parts, partGeometry, depthProbe] = await Promise.all([
     import("@kmamal/gl"),
     import("@napi-rs/canvas"),
     game("vehicle/car.ts"),
@@ -53,6 +53,7 @@ export async function openGame(root = join(import.meta.dirname, "..")) {
     game("vehicle/lamp-lights.ts"),
     game("vehicle/part-batch.ts"),
     game("vehicle/part-geometry.ts"),
+    game("present/depth-probe.ts"),
   ]);
   return {
     createGL: gl.default,
@@ -70,6 +71,7 @@ export async function openGame(root = join(import.meta.dirname, "..")) {
     LampBatch: lamps.LampBatch,
     PartBatch: parts.PartBatch,
     PART_KIND: partGeometry.PART_KIND,
+    crossing: depthProbe.crossing,
   };
 }
 
