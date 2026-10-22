@@ -285,6 +285,29 @@ describe("given the lids as built", () => {
     }
   });
 
+  it("when a hood that wraps the nose (hood.nose: the pickup's, 6.5 cm down on a 2 cm bend) is read, then its fold's last ring stands that drop under the deck's edge on the nose's face plane, every fold ring's edge lies on the bend or the face, and the cage's hood is the plain one", () => {
+    /** The pickup's hood run to its nose and folded down onto the grille's top. */
+    const [DROP, RADIUS] = [0.065, 0.02];
+    const pickup = CAR_STYLES.pickup;
+    const style: BodyStyle = { ...pickup, hood: { ...pickup.hood, z1: 1.92, nose: [DROP, RADIUS] } };
+    const hood = makeHoodGeometry(style);
+    const { ring, slices } = loftOf(hood);
+    const deck = hood.userData.deckRings as number;
+    const rim = hood.userData.lidEdge as number;
+    const [, oz] = style.hood.origin;
+    assert.ok(slices > deck, `${slices} rings, ${deck} of them the deck's: no fold`);
+    const top = positionAt(hood, (deck - 1) * ring + rim);
+    const [yc, zc] = [top.y - RADIUS, top.z];
+    for (let slice = deck; slice < slices; slice++) {
+      const p = positionAt(hood, slice * ring + rim);
+      const off = p.y >= yc ? Math.hypot(p.y - yc, p.z - zc) - RADIUS : p.z - zc - RADIUS;
+      assert.ok(Math.abs(off) < 1e-4, `fold ring ${slice - deck}: its edge stands ${(off * 1000).toFixed(2)} mm off the bend or face`);
+    }
+    const bottom = positionAt(hood, (slices - 1) * ring + rim);
+    assert.ok(Math.abs(top.y - bottom.y - DROP) < 1e-4 && Math.abs(bottom.z + oz - style.hood.z1) < 1e-4, `the fold ends ${((top.y - bottom.y) * 100).toFixed(2)} cm under the deck's edge at z ${(bottom.z + oz).toFixed(3)}, want ${DROP * 100} at ${style.hood.z1}`);
+    assert.ok(loftOf(makeHoodGeometry(style, "cage")).slices === loftOf(makeHoodGeometry({ ...style, hood: { ...style.hood, nose: undefined } }, "cage")).slices, "the cage's hood folds too");
+  });
+
   it(`when the sedan's crowned deck lid (boot.crown) is read, then past its 25 cm ease-in its centre stands the parabola's drop over its edge at every deck station, its dome turns under ${FLAT_CURVE_LIMIT_DEGREES}° at each of its own vertices, and the cage's lid is the plain one`, () => {
     /** The crown eases in over this far (m) from the lid's front edge; the tail fold's radius (m) ends the deck. */
     const [RUN, FOLD] = [0.25, 0.08];
@@ -445,7 +468,7 @@ describe("given every body style's drawn nose, whose plan and fender line turn h
       // The edge (the top's last point) stands a fixed inset inside the station's half-width: its chord's middle against the half-width there.
       const rim = hood.userData.lidEdge as number;
       const inset = (v: THREE.Vector3) => sampleSlice(v.z + oz, style.profile).hw - v.x;
-      for (let slice = 0; slice < hoodLoft.slices - 1; slice++) {
+      for (let slice = 0; slice < (hood.userData.deckRings as number) - 1; slice++) {
         const [a, b] = [positionAt(hood, slice * hoodLoft.ring + rim), positionAt(hood, (slice + 1) * hoodLoft.ring + rim)];
         if (b.z + oz < noseZ - NOSE_READ) continue;
         const sag = Math.abs(inset(a.clone().add(b).multiplyScalar(0.5)) - inset(a));
@@ -534,7 +557,7 @@ describe("given every body style's drawn hood over its open engine bay", () => {
       const hood = makeHoodGeometry(style);
       const loft = loftOf(hood);
       const [oy, oz] = style.hood.origin;
-      for (let slice = 1; slice < loft.slices - 1; slice++) {
+      for (let slice = 1; slice < (hood.userData.deckRings as number) - 1; slice++) {
         const edge = positionAt(hood, slice * loft.ring + (hood.userData.lidEdge as number));
         const z = edge.z + oz;
         // The section's right half, outward from its deck edge (ring point 1): the fender's top line the edge looks over.

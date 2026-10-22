@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { hypot2, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
-import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type BumperEnd, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
+import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type BumperEnd, type HoodNose, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
 import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, tubWall } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
@@ -750,8 +750,9 @@ function rollSmoothing(geo: THREE.BufferGeometry, at: readonly number[]): Uint8A
 /**
  * Lid lofted on the deck line (hood / trunk), local to its hinge origin. The drawn `hood` rests on the fenders (`lidSection`) and takes
  * the nose's rings (`noseRefined`); a `clamshell` lid wraps the body's shoulder to its side shut line; a `lip` kicks its top up at its end;
- * a `drop` folds it over the tail edge and down the rear face to `drop.y`, `drop.w` wide, the face at `z1`; a deck lid's `crown` (`boot.crown`)
- * domes its top, eased in from `z0` and back to the plain dome over the fold; a `roll` rounds its side edges.
+ * a `drop` folds it over the tail edge and down the rear face to `drop.y`, `drop.w` wide, the face at `z1`; a hood's `nose` folds it over
+ * the nose and `nose[0]` down its face on a `nose[1]` radius, keeping its dome; a deck lid's `crown` (`boot.crown`) domes its top, eased
+ * in from `z0` and back to the plain dome over the fold; a `roll` rounds its side edges.
  */
 function makeDeckPanel(
   style: BodyStyle,
@@ -759,7 +760,7 @@ function makeDeckPanel(
   z1: number,
   origin: YZ,
   source: BodySource,
-  { hood = false, seated = hood, clamshell = false, lip, drop, crown, roll = 0 }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop; crown?: readonly [number, number]; roll?: number } = {},
+  { hood = false, seated = hood, clamshell = false, lip, drop, nose, crown, roll = 0 }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop; nose?: HoodNose; crown?: readonly [number, number]; roll?: number } = {},
 ): THREE.BufferGeometry {
   const segs = 10;
   const tk = 0.04;
@@ -788,43 +789,51 @@ function makeDeckPanel(
       ...skirtTop.map((p) => ({ x: -p.x, y: p.y })),
     ];
   };
-  const fold = drop ? LID_FOLD_R : 0;
-  const zEnd = z1 + fold;
+  const fold = drop ? LID_FOLD_R : (nose?.[1] ?? 0);
+  // The fold runs on past z1 the way the lid runs: back for a deck lid, forward for a hood.
+  const dir = Math.sign(z1 - z0);
+  const zEnd = z1 - dir * fold;
   const rings: Pt[][] = [];
   const zs: number[] = [];
   const stations = panelStations(segs, lip, Math.abs(zEnd - z0)).map((t) => lerp(z0, zEnd, t));
   let endRise = DECK_DOME;
+  let endLid = { w: 0, base: 0, edge: 0, dome: DECK_DOME_POINTS };
   for (const z of hood ? noseRefined(stations, style.profile) : stations) {
     const sl = sampleSlice(z, style.profile);
     const lid = lidSection(z, style, seated, hood ? style.hood.crown : undefined);
     const kick = lipKick(Math.abs(zEnd - z), lip);
     const crownY = crown ? lerp(lid.crown, lid.edge + crown[0] * (lid.w / crown[1]) ** 2, THREE.MathUtils.smoothstep(Math.abs(z - z0), 0, BOOT_CROWN_RUN)) : lid.crown;
     endRise = crownY - lid.edge;
+    endLid = { w: lid.w, base: sl.yBelt + LID_RISE - lid.edge, edge: lid.edge, dome: lid.dome };
     const r = ring(lid.w, sl.yBelt + LID_RISE - oy, lid.edge - oy + kick, crownY - oy + kick, crown ? BOOT_CROWN_DOME : lid.dome);
     if (clamshell) wrapShoulder(r, sectionPoints(sl, style, "drawn"), oy, tk);
     rings.push(r);
     zs.push(z - oz);
   }
-  // The fold and the face are lofted straight on past the deck's end (z = path length), then bent onto the tail below.
+  const deckRings = rings.length;
+  // The fold and the face are lofted straight on past the deck's end (z = path length), then bent onto the end face below.
   const end = sampleSlice(zEnd, style.profile);
   const wEnd = end.hw - DECK_INSET;
-  const yc = end.yBelt + LID_RISE - oy - fold;
+  const yc = (nose ? endLid.edge : end.yBelt + LID_RISE) - oy - fold;
   const zA = zEnd - oz;
   const arc = (fold * Math.PI) / 2;
-  if (drop) {
-    const run = arc + yc - (drop.y - oy);
+  if (drop || nose) {
+    const run = drop ? arc + yc - (drop.y - oy) : arc + Math.max(0, nose![0] - fold);
     for (let k = 1; k <= LID_FOLD_STEPS + LID_FACE_STEPS; k++) {
       const folding = crown !== undefined && k <= LID_FOLD_STEPS;
-      rings.push(folding ? ring(wEnd, 0, 0, lerp(endRise, DECK_DOME, k / LID_FOLD_STEPS), BOOT_CROWN_DOME) : ring(wEnd, 0, 0, DECK_DOME, DECK_DOME_POINTS));
-      zs.push(zA - (k <= LID_FOLD_STEPS ? (k / LID_FOLD_STEPS) * arc : arc + ((k - LID_FOLD_STEPS) / LID_FACE_STEPS) * (run - arc)));
+      if (nose) rings.push(ring(endLid.w, endLid.base, 0, endRise, endLid.dome));
+      else rings.push(folding ? ring(wEnd, 0, 0, lerp(endRise, DECK_DOME, k / LID_FOLD_STEPS), BOOT_CROWN_DOME) : ring(wEnd, 0, 0, DECK_DOME, DECK_DOME_POINTS));
+      zs.push(zA + dir * (k <= LID_FOLD_STEPS ? (k / LID_FOLD_STEPS) * arc : arc + ((k - LID_FOLD_STEPS) / LID_FACE_STEPS) * (run - arc)));
     }
   }
   const geo = loftFromRings(rings, zs, 0, 1);
   if (drop) {
     const lean = ((drop.z ?? z1) - z1) / (yc - (drop.y - oy));
-    bendOverTail(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, drop.w / wEnd, lean);
-  }
+    bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, drop.w / wEnd, lean, fold, dir);
+  } else if (nose) bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, 1, 0, fold, dir);
   ensureOutwardNormals(geo);
+  // The deck's own rings come first; a fold's follow them.
+  geo.userData.deckRings = deckRings;
   const n = rings[0]!.length;
   // The top's right edge (its side's top point): the skirt and underside's six corners and, unless dropped, the skirt's two upper points follow it.
   geo.userData.lidEdge = n - 7 - (plainWall ? 0 : 2);
@@ -835,18 +844,19 @@ function makeDeckPanel(
 }
 
 /**
- * Bends the straight run lofted past `zA` (its z the path length, its y the offset off the panel) a quarter turn down over the
- * tail edge, about the fold's centre (`yc`, `zA`), then down the face, `lean` m of z per m down; x scales to `wFace` × on the way round.
+ * Bends the straight run lofted past `zA` (its z the path length along `dir`, its y the offset off the panel) a quarter turn down over
+ * the end edge on a `radius` bend about the fold's centre (`yc`, `zA`), then down the face, `lean` m of z per m down; x scales to `wFace` ×
+ * on the way round. A bend tighter than the skirt pinches the skirt and underside onto its axis, inside the body.
  */
-function bendOverTail(pos: THREE.BufferAttribute, zA: number, yc: number, wFace: number, lean: number): void {
-  const arc = (LID_FOLD_R * Math.PI) / 2;
+function bendOverEnd(pos: THREE.BufferAttribute, zA: number, yc: number, wFace: number, lean: number, radius: number, dir: number): void {
+  const arc = (radius * Math.PI) / 2;
   for (let i = 0; i < pos.count; i++) {
-    const s = zA - pos.getZ(i);
+    const s = dir * (pos.getZ(i) - zA);
     if (s < 1e-9) continue;
-    const turn = Math.min(s / LID_FOLD_R, Math.PI / 2);
-    const r = LID_FOLD_R + pos.getY(i);
+    const turn = Math.min(s / radius, Math.PI / 2);
+    const r = Math.max(0, radius + pos.getY(i));
     const down = Math.max(0, s - arc);
-    pos.setXYZ(i, pos.getX(i) * lerp(1, wFace, turn / (Math.PI / 2)), yc + r * detCos(turn) - down, zA - r * detSin(turn) + lean * down);
+    pos.setXYZ(i, pos.getX(i) * lerp(1, wFace, turn / (Math.PI / 2)), yc + r * detCos(turn) - down, zA + dir * r * detSin(turn) + lean * down);
   }
 }
 
@@ -1003,7 +1013,7 @@ export function bootInfill(style: BodyStyle): THREE.BufferGeometry[] {
 export function makeHoodGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const { z0, z1, origin, kind } = style.hood;
   const drawn = source === "drawn";
-  const geo = makeDeckPanel(style, z0, z1, origin, source, { hood: drawn, clamshell: drawn && kind === "clamshell" });
+  const geo = makeDeckPanel(style, z0, z1, origin, source, { hood: drawn, clamshell: drawn && kind === "clamshell", nose: drawn ? style.hood.nose : undefined });
   if (source === "drawn") {
     // Its underside, the lid over the bay, is an unpainted inner panel.
     const normal = geo.getAttribute("normal");
