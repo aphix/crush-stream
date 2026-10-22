@@ -101,8 +101,10 @@ export const MONSTER: BodyStyle = {
   proxyBelt: 1.12,
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
-  lamps: { head: [0.55, 0.69], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, bulb: "halogen", sideMarkers: [{ at: [0.788, -2.0], size: [0.085, 0.045] }, { at: [0.744, 0.814], size: [0.06, 0.032] }] },
-  grille: { y: 0.7, size: [0.8, 0.19], kind: "bars", count: 4, finish: "black" },
+  // The reference side plate's markers are a deep amber rear (~0xb0581e) and a duller red-amber front (~0xa04a3a): factors on the shared amber 0xff9a1a.
+  lamps: { head: [0.55, 0.69], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, bulb: "halogen", sideMarkers: [{ at: [0.788, -2.0], size: [0.085, 0.045], tint: 0xb095ff }, { at: [0.744, 0.814], size: [0.06, 0.032], tint: 0xa07fff }] },
+  // The reference's grille fills the face between its head lamps (inner edges x .445), its top and foot on theirs.
+  grille: { y: 0.69, size: [0.86, 0.19], kind: "bars", count: 4, finish: "black" },
   underbody: true,
   camera: { hood: [2.08, 1.27], third: { dist: 7.4, height: 3.0, aimUp: 1.7 }, far: { dist: 11.5, height: 4.3, aimUp: 1.9 } },
   details: {
@@ -138,10 +140,8 @@ export const MONSTER: BodyStyle = {
       { view: "top", points: [[-0.827, 0.772], [-2.344, 0.772]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "top", points: [[-0.827, 0.758], [-2.344, 0.758]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "top", points: [[-2.256, 0], [-2.256, 0.751]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "top", points: [[-0.915, 0.525], [-2.242, 0.525]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
-      { view: "top", points: [[-0.915, 0.35], [-2.242, 0.35]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
-      { view: "top", points: [[-0.915, 0.175], [-2.242, 0.175]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
-      { view: "top", points: [[-0.915, 0], [-2.242, 0]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
+      // The bed floor's ribs, 8.75 cm apart as the reference's rear iso reads.
+      ...[0.525, 0.4375, 0.35, 0.2625, 0.175, 0.0875, 0].map((x) => ({ view: "top", points: [[-0.915, x], [-2.242, x]], width: 0.02, depth: 0.003, profile: "u", cavity: 0 }) as const),
       { view: "front", points: [[0, 0.9], [0.7, 0.9]], width: 0.008, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "front", points: [[0, 0.52], [0.82, 0.52]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.1 },
       ...DOOR_PULLS.flatMap((h) => h.lines),

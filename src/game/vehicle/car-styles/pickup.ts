@@ -18,8 +18,8 @@ const TRUCK_FRONT_FASCIA = [
 
 /** The trucks' tall gloss-black tow-style mirror housing on the door glass's front corner, read off their isos ([out from the door, height, length along the car] m). */
 export const TOW_MIRROR = { cap: "box", finish: "black", size: [0.07, 0.22, 0.16], mount: "glass" } as const;
-/** The trucks' cab roofs roll onto their rear glass's and windshield's tops (reference isos: no flat cap overhanging either; run m). */
-export const TRUCK_ROOF_ENDS = { rear: 0.1, front: 0.09 } as const;
+/** The trucks' cab roofs roll onto their rear glass's and windshield's tops (reference isos: no flat cap overhanging either; run m), the rear corners flush over the posts. */
+export const TRUCK_ROOF_ENDS = { rear: 0.1, front: 0.09, flush: { rear: 1 } } as const;
 /** The cab door's slim pull, 15 x 4 cm. */
 const DOOR_PULL = pullHandle(-0.2, -0.35, 0.995, 0.04);
 /** Pickup's own lamps and bumper lamps, read off its reference isos and side/top crops. */
@@ -92,8 +92,8 @@ export const PICKUP: BodyStyle = {
   roofZ: [-0.5, 0.45],
   roofEnds: TRUCK_ROOF_ENDS,
   windshieldTop: [1.6, 0.45],
-  // The reference's cab back stands near upright: its rear glass's top meets the roof's rear end, no visor over it.
-  rearGlass: { base: [1.24, -0.55], top: [1.6, -0.5], wBase: 1.3, wTop: 1.12 },
+  // The reference's cab back stands near upright, its glass's top under the roof's rolled rear end; at z -0.48..-0.5 the crushed cab's dummy-world roof stood 8-10 cm off the drawn one.
+  rearGlass: { base: [1.24, -0.55], top: [1.6, -0.45], wBase: 1.3, wTop: 1.12 },
   // Its boxy cab's panes take a quarter of the roof's dome: at the full dome the windshield's top corners turned 3.1° and mirrored the garage's key light.
   domeFall: 0.25,
   privacyGlass: { rear: true },
@@ -110,8 +110,9 @@ export const PICKUP: BodyStyle = {
   proxyBelt: 1.3,
   rearDoorSeam: -0.41,
   boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15], pivot: [0.6, -2.15] },
-  lamps: { head: [0.5, 0.85], tail: [0.61, 0.93], shapes: PICKUP_LAMP_SHAPES, bulb: "halogen", brake: { at: [0, 1.585], size: [0.3, 0.06] } },
-  grille: { y: 0.85, size: [0.62, 0.225], kind: "bars", count: 3, finish: "black", rim: "chrome" },
+  lamps: { head: [0.5, 0.85], tail: [0.61, 0.93], shapes: PICKUP_LAMP_SHAPES, bulb: "halogen", brake: { at: [0, 1.565], size: [0.3, 0.06] } },
+  // The reference's grille fills the face between its head lamps (inner edges x .415), four bars deep.
+  grille: { y: 0.85, size: [0.79, 0.225], kind: "bars", count: 4, finish: "black", rim: "chrome" },
   camera: { hood: [1.42, 1.25], third: { dist: 6.4, height: 2.3, aimUp: 1.2 }, far: { dist: 10.3, height: 3.62, aimUp: 1.35 } },
   details: {
     lines: [
@@ -146,10 +147,8 @@ export const PICKUP: BodyStyle = {
       { view: "top", points: [[-2.056, 0], [-2.056, 0.579], [-0.678, 0.579], [-0.678, 0]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
       { view: "top", points: [[-0.634, 0.66], [-2.085, 0.66]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "top", points: [[-2.085, 0], [-2.085, 0.667]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "top", points: [[-0.707, 0.44], [-2.041, 0.44]], width: 0.029, depth: 0.003, profile: "u", cavity: 0 },
-      { view: "top", points: [[-0.707, 0.293], [-2.041, 0.293]], width: 0.029, depth: 0.003, profile: "u", cavity: 0 },
-      { view: "top", points: [[-0.707, 0.147], [-2.041, 0.147]], width: 0.029, depth: 0.003, profile: "u", cavity: 0 },
-      { view: "top", points: [[-0.707, 0], [-2.041, 0]], width: 0.029, depth: 0.003, profile: "u", cavity: 0 },
+      // The bed floor's ribs, 7.3 cm apart as the reference's rear iso reads.
+      ...[0.44, 0.367, 0.293, 0.22, 0.147, 0.073, 0].map((x) => ({ view: "top", points: [[-0.707, x], [-2.041, x]], width: 0.02, depth: 0.003, profile: "u", cavity: 0 }) as const),
       { view: "top", points: [[1.931, 0], [1.931, 0.623]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "top", points: [[1.623, 0.711], [0.788, 0.711]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
       { view: "top", points: [[-1.059, 0.74], [-1.968, 0.74]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },

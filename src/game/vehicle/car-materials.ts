@@ -738,9 +738,9 @@ export const RUBBER = [0x121214, 0.92, 0.05] as const;
 const ALLOY = [0xc9cdd4, 0.28, 0.92] as const;
 const DARK_DISC = [0x1c1d20, 0.7, 0.3] as const;
 const HUB = [0x8a909a, 0.35, 0.8] as const;
-/** A black-painted centre (pickup steel wheel, monster hub). */
+/** A black-painted centre (the pickup's alloy). */
 const DARK_HUB = [0x232428, 0.55, 0.45] as const;
-/** The muscle car's polished rim lip. */
+/** A polished rim lip (muscle, monster). */
 const CHROME = [0xeef0f3, 0.12, 1] as const;
 /** The muscle car's mag centre cap (reference: a big grey dome): 7.8 cm in radius, standing 4 cm over the dish ([r, x] m, lathed). */
 const MAG_CAP = [[0, -0.1], [0.05, -0.092], [0.078, -0.07], [0.078, 0.07], [0.05, 0.092], [0, 0.1]] as const;
@@ -844,9 +844,11 @@ function rimFace(design: WheelDesign): THREE.BufferGeometry[] {
     case "mag5":
       return [...slottedDish(5, 0.19, 0.06, ALLOY, [0.075, 0.175, 0.45, 0.85, 0.15]), ...faceRings(0.18, 0.222, 0.1, CHROME), smeared(latheX(MAG_CAP, 10, null, 1, HUB), 0)];
     case "six":
-      return [...disc, ...spokes(6, [0.15, 0.15, 0.075], ALLOY), hub(0.08, DARK_HUB)];
+      // The pickup's polished six-slot alloy, its black centre.
+      return [...slottedDish(6, 0.19, 0.07, ALLOY, [0.09, 0.17, 0.42, 0.62, 0.2]), hub(0.075, DARK_HUB)];
     case "beadlock":
-      return [...disc, ...spokes(6, [0.1, 0.15, 0.05], ALLOY), ...faceRings(0.17, 0.222, 0.104, ALLOY), hub(0.085, DARK_HUB)];
+      // The monster's polished deep dish, eight slots 5 cm in under its chrome lip ring.
+      return [...slottedDish(8, 0.19, 0.055, ALLOY, [0.105, 0.168, 0.32, 0.42, 0.25]), ...faceRings(0.17, 0.222, 0.104, CHROME), hub(0.05, HUB)];
   }
 }
 
