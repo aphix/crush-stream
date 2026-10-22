@@ -10,7 +10,7 @@ export const WAGON: BodyStyle = {
   bPillar: { rear: -0.325, front: -0.245 },
   belt: { x: [[-1.97, 0.64], [-1.8, 0.7], [-1.6, 0.74], [-1.4, 0.77], [-1.2, 0.785]], y: [[-2.033, 1.095], [0.024, 1.07], [0.887, 1.062]] },
   rocker: { y: 0.28 },
-  arch: { radius: 0.455 },
+  arch: { radius: 0.455, lip: { flare: 0.016, width: 0.055 } },
   hood: { z0: 0.86, z1: 1.97, origin: [0.96, 0.84] },
   bumpers: {
     front: {

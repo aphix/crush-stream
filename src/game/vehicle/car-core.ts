@@ -1,7 +1,6 @@
 // First: every quaternion built from here on, constants at load included, takes the engine-identical trig (kernel/three-trig.ts).
 import "../kernel/three-trig.ts";
 import * as THREE from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
@@ -11,7 +10,7 @@ import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } fro
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { DOOR, doorSkinZ, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
+import { DOOR, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { DOOR_GLASS_SEAT, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
@@ -25,7 +24,6 @@ import {
   makePaintMaterial,
   makeSirenMaterial,
   type LampKind,
-  shadowOnlyMaterial,
 } from "./car-materials.ts";
 import { carPartSeats, MIRROR_REACH, PART_KIND, PartSeat, styleMirrorDrawn } from "./part-geometry.ts";
 import { bumperBare, CarCabin } from "./interior.ts";
@@ -37,11 +35,15 @@ import { newDentState, type DentState } from "./loose-dent.ts";
 import { newLooseShape } from "./loose-step.ts";
 import { carClass, CLASSES, drivenAxles } from "./vehicle-classes.ts";
 import { bootPivot, lidSpec, roofHinged, type HingeSpec } from "./hinge-spec.ts";
+import { restShell } from "./shadow-caster.ts";
 const _p = new THREE.Vector3();
 const _inv = new THREE.Quaternion();
 const _lampQ = new THREE.Quaternion();
 const _lampE = new THREE.Euler();
-/** Each style's rest caster (body + flush parts), shared by its cars and drawn by `PartBatch.casters`; never disposed. */
+const _shade = new THREE.Color();
+/** A privacy pane (`privacyGlass`) wears its colour this much darker (linear): the cargo behind dark-tinted rear glass reads dim, as in the references. */
+const PRIVACY_SHADE = 0.3;
+/** Each style's decimated rest caster (body + flush parts), shared by its cars and drawn by `PartBatch.casters`; never disposed. */
 const casterByStyle = new WeakMap<BodyStyle, THREE.BufferGeometry>();
 
 const PANEL_SEATS: Record<PanelName, readonly [DetachPart["cage"], number, number]> = {
@@ -197,9 +199,11 @@ export type GlassPart = "roof" | "bonnet" | "boot" | "doorLeft" | "doorRight";
 export interface GlassPane {
   name: GlassName;
   mesh: THREE.Mesh;
-  /** The look it wears now and the colour it wears it in: it draws the shared `glassMaterial(look, tint)`. */
+  /** The look it wears now and the colour it wears it in: it draws the shared `glassMaterial(look, tint)`, `PRIVACY_SHADE` darker on a privacy pane. */
   look: GlassLook;
   tint: number;
+  /** The style tints it dark (`privacyGlass`). */
+  privacy: boolean;
   restPos: THREE.Vector3;
   restVerts: Float32Array | null;
   state: GlassState;
@@ -373,10 +377,12 @@ export abstract class CarCore {
   protected endReach = Infinity;
   protected endSqueeze = false;
   readonly lamps: Lamp[] = [];
-  /** Hood, boot lid, doors, bumpers: they lie on the shell until a crash or hinge moves them, so an undamaged car's sun shadow is `shadowCaster` alone (`CarParts.settleCasters`); far-car detail cuts treat them as casters anyway. */
+  /** Hood, boot lid, doors, bumpers: they lie on the shell until a crash or hinge moves them, so an undamaged car's sun shadow is `restCaster` alone (`CarParts.settleCasters`); far-car detail cuts treat them as casters anyway. */
   readonly flushCasters: THREE.Mesh[] = [];
-  /** The undamaged car's sun-shadow seat: body and every flush part at rest as one geometry, never drawn itself; `PartBatch.casters` draws it instanced per style while `castShadow` (`CarParts.settleCasters`) says the car is flush. */
-  readonly shadowCaster: THREE.Mesh;
+  /** The style's rest caster: body and every flush part at rest as one decimated shell in the car frame. `PartBatch.casters` draws it at the car's group, instanced per style, while `restCasts`. */
+  readonly restCaster: THREE.BufferGeometry;
+  /** Whether the car is flush (`CarParts.settleCasters`): its sun shadow is `restCaster`, and the body and flush parts cast none. */
+  restCasts = false;
   protected hullHelper: THREE.LineSegments | null = null;
   abstract readonly cage: CarCage;
   private bumperF: THREE.Group;
@@ -471,8 +477,11 @@ export abstract class CarCore {
     this.doorMeshR.castShadow = true;
     this.doorL.add(this.doorMeshL);
     this.doorR.add(this.doorMeshR);
-    this.doorL.add(this.partSeats[PART_KIND.liningL]!);
-    this.doorR.add(this.partSeats[PART_KIND.liningR]!);
+    // The sim measures each card's own box; a torn card draws as the batch does, inside every door skin.
+    for (const [door, kind, sign] of [[this.doorL, PART_KIND.liningL, -1], [this.doorR, PART_KIND.liningR, 1]] as const) {
+      this.partSeats[kind]!.drawn = drawnDoorCard(sign);
+      door.add(this.partSeats[kind]!);
+    }
     this.group.add(this.doorL, this.doorR);
 
     this.hoodRest = this.copyRest(this.hood.geometry);
@@ -489,8 +498,7 @@ export abstract class CarCore {
     this.bumperF = this.makeBumper(true, accent, livery?.body ?? paint.body);
     this.bumperR = this.makeBumper(false, accent, livery?.body ?? paint.body);
     this.group.add(this.bumperF, this.bumperR);
-    this.shadowCaster = this.makeShadowCaster();
-    this.group.add(this.shadowCaster);
+    this.restCaster = this.styleRestCaster();
     this.addLamps();
 
     const seatX = mirrorSeatX(this.style);
@@ -532,27 +540,15 @@ export abstract class CarCore {
     computeNormalsFast(geo);
   }
 
-  /** The style's rest caster (body + hood, boot lid, doors, bumpers in the car frame, positions only) on a hidden mesh that marks where the batch draws it. */
-  private makeShadowCaster(): THREE.Mesh {
+  /** The style's rest caster (body + hood, boot lid, doors, bumpers in the car frame, decimated), built by its first car. */
+  private styleRestCaster(): THREE.BufferGeometry {
     let geo = casterByStyle.get(this.style);
     if (!geo) {
       this.group.updateMatrixWorld(true); // group is at the origin here, so matrixWorld is the car frame
-      const parts = [this.body, ...this.flushCasters].map((m) => {
-        const src = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
-        return new THREE.BufferGeometry().setAttribute("position", src.getAttribute("position")).applyMatrix4(m.matrixWorld);
-      });
-      const merged = mergeGeometries(parts, false);
-      for (const g of parts) g.dispose();
-      if (!merged) throw new Error(`Failed to merge the ${this.style.id} shadow caster`);
-      merged.userData.shared = true;
-      casterByStyle.set(this.style, merged);
-      geo = merged;
+      geo = restShell([this.body, ...this.flushCasters]);
+      casterByStyle.set(this.style, geo);
     }
-    const mesh = new THREE.Mesh(geo, shadowOnlyMaterial());
-    mesh.visible = false;
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
-    return mesh;
+    return geo;
   }
 
   private makeBumper(front: boolean, accent: number, body: number): THREE.Group {
@@ -610,17 +606,21 @@ export abstract class CarCore {
     ) => {
       mesh.renderOrder = 2;
       parent.add(mesh);
-      this.glassPanes.push({
+      const privacy = (name === "rear" && style.privacyGlass?.rear === true) || (name.startsWith("quarter") && style.privacyGlass?.quarter === true);
+      const pane: GlassPane = {
         name,
         mesh,
         look: "fresh",
         tint: GLASS_COLOR,
+        privacy,
         restPos: mesh.position.clone(),
         restVerts: skin ? this.copyRest(mesh.geometry) : null,
         state: "intact",
         parts,
         skin,
-      });
+      };
+      this.glassPanes.push(pane);
+      if (privacy) this.wearGlass(pane, "fresh");
     };
     const glassMat = glassMaterial("fresh");
     const style = this.style;
@@ -742,7 +742,7 @@ export abstract class CarCore {
 
   protected wearGlass(g: GlassPane, look: GlassLook): void {
     g.look = look;
-    g.mesh.material = glassMaterial(look, g.tint);
+    g.mesh.material = glassMaterial(look, g.privacy ? _shade.setHex(g.tint).multiplyScalar(PRIVACY_SHADE).getHex() : g.tint);
   }
 
   /** The door paint (sRGB) a body-colour mirror cap (`door.mirror.finish` "body") takes; other caps keep their finish. */

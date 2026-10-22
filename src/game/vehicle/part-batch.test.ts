@@ -8,6 +8,7 @@ import { INSTANCE_MIRROR_VARIANT_ATTRIBUTE, MIRROR_VARIANT_ATTRIBUTE } from "./c
 import { CAR_STYLES } from "./car-variants.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
+import { drawnDoorCard } from "./car-door-mesh.ts";
 import { PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
 
@@ -69,12 +70,12 @@ describe("given the part batch and a few cars near the camera", () => {
     draw(cars);
     const sedan = batch.casters.find((m) => m.name === "shadow-caster-sedan")!;
     assert.equal(sedan.count, cars.length, "one instance per undamaged sedan");
-    assert.ok(sedan.geometry === cars[0]!.shadowCaster.geometry, "the batch draws the sedan's rest caster");
-    assert.ok(sedan.castShadow && !cars[0]!.shadowCaster.visible, "the batch casts, the car's own caster never draws");
+    assert.ok(sedan.geometry === cars[0]!.restCaster, "the batch draws the sedan's rest caster");
+    assert.ok(sedan.castShadow, "the batch casts");
     assert.equal(batch.casters.filter((m) => m.count > 0).length, 1, "one caster draw for a field of one style");
     const m = new THREE.Matrix4();
     sedan.getMatrixAt(1, m);
-    assertSameNumbers(m.elements, cars[1]!.shadowCaster.matrixWorld.elements, "the second sedan's caster instance", FLOAT32_SLACK);
+    assertSameNumbers(m.elements, cars[1]!.group.matrixWorld.elements, "the second sedan's caster instance", FLOAT32_SLACK);
   });
 
   test("when a car is synced, then its mirror's instance stands where the seat does", () => {
@@ -86,12 +87,14 @@ describe("given the part batch and a few cars near the camera", () => {
     assertSameNumbers(matrix.elements, only.partSeats[PART_KIND.mirrorR]!.matrixWorld.elements, "the mirror instance is the seat's world matrix", FLOAT32_SLACK);
   });
 
-  test("when every kind's mesh is read, then it draws the kind's one shared geometry; a mirror's draws its own, every style's mirror with the platform's first", () => {
+  test("when every kind's mesh is read, then it draws the kind's one shared geometry (a door card's: the one inside every door skin); a mirror's draws its own, every style's mirror with the platform's first", () => {
     const { batch } = stage();
     for (const kind of PART_KINDS) {
       const mesh = batch.meshes[kind]!;
       if (kind !== PART_KIND.mirrorL && kind !== PART_KIND.mirrorR) {
-        assert.equal(mesh.geometry, partGeometry(kind), `kind ${kind} (same object, not equal copies)`);
+        const card = kind === PART_KIND.liningL ? -1 : kind === PART_KIND.liningR ? 1 : 0;
+        // Identity, never a deep compare: a geometry holds big typed arrays.
+        assert.ok(mesh.geometry === (card !== 0 ? drawnDoorCard(card) : partGeometry(kind)), `kind ${kind} (same object, not equal copies)`);
         continue;
       }
       const platform = positions(partGeometry(kind));

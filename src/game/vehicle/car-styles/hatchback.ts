@@ -9,7 +9,7 @@ export const HATCHBACK: BodyStyle = {
   bPillar: { rear: -0.27, front: -0.19 },
   belt: { x: 0.75, y: [[-1.174, 0.881], [-0.939, 0.877], [-0.935, 0.856], [0.128, 0.838], [0.381, 0.809], [0.58, 0.824], [0.584, 0.852], [0.88, 0.852]] },
   rocker: { y: 0.2 },
-  arch: { radius: 0.35 },
+  arch: { radius: 0.35, lip: { flare: 0.009, width: 0.035 } },
   hood: { z0: 0.86, z1: 1.66, origin: [0.75, 0.84] },
   bumpers: {
     front: {

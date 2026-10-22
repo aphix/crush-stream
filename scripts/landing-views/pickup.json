@@ -1,4 +1,5 @@
 {
+  "paint": "#765c45",
   "side": {
     "ref": "ModernCarDesigns_SideAndTop/tan-pickup-truck/tan-pickup-truck-1.png"
   },
@@ -13,8 +14,47 @@
       535,
       430
     ],
-    "wheels": {},
-    "camera": null
+    "wheels": {
+      "fl": {
+        "hub": [
+          241,
+          366
+        ],
+        "contact": [
+          235,
+          414
+        ]
+      },
+      "rl": {
+        "hub": [
+          451,
+          210
+        ],
+        "contact": [
+          445,
+          257
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        9.2078,
+        9.6778,
+        13.135
+      ],
+      "target": [
+        8.7104,
+        9.1878,
+        12.4191
+      ],
+      "up": [
+        -0.2969,
+        0.8715,
+        -0.3904
+      ],
+      "fov": 12
+    },
+    "fov": 12
   },
   "rear-iso": {
     "ref": "ModernCarDesignIsometric_Rear.png",
@@ -24,7 +64,46 @@
       380,
       358
     ],
-    "wheels": {},
-    "camera": null
+    "wheels": {
+      "rr": {
+        "hub": [
+          216,
+          275
+        ],
+        "contact": [
+          210,
+          312
+        ]
+      },
+      "fr": {
+        "hub": [
+          344,
+          136
+        ],
+        "contact": [
+          340,
+          170
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        -7.4861,
+        10.74,
+        -14.3648
+      ],
+      "target": [
+        -7.0909,
+        10.2011,
+        -13.621
+      ],
+      "up": [
+        0.2648,
+        0.8423,
+        0.4696
+      ],
+      "fov": 12
+    },
+    "fov": 12
   }
 }

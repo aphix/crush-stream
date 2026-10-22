@@ -734,7 +734,7 @@ export class DeformableCar extends CarParts {
       // Meshes, lines and points alike: the hull overlay is a LineSegments, and freeing meshes alone left its buffer for good.
       const drawn = obj as THREE.Mesh | THREE.Line | THREE.Points;
       if (obj instanceof PartSeat) obj.dispose();
-      else if (!drawn.geometry?.userData.shared) drawn.geometry?.dispose();
+      else drawn.geometry?.dispose();
       for (const m of [drawn.material].flat()) if (m && !m.userData.shared) m.dispose();
       if (obj instanceof THREE.Light) obj.dispose();
     };

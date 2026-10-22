@@ -162,6 +162,13 @@ interface DetailPatch {
   cavity: number;
 }
 
+/** A wheel arch's drawn lip: it stands `flare` (m) proud of the body side at the opening's edge, rolls into the well there and fairs into the skin `width` (m) out; `square` squares its outline and face (a box flare). */
+interface ArchLip {
+  flare: number;
+  width: number;
+  square?: boolean;
+}
+
 /** A chase eye: `dist` behind and `height` over the car's origin, aimed `aimUp` over it (m). */
 interface ChaseEye {
   dist: number;
@@ -209,10 +216,12 @@ export interface BodyStyle {
   aPillarFoot: number;
   /** Where the A-pillar's rear edge meets the cant line (z, m): the door glass's top-front corner; absent = 5 cm behind the windshield's top. */
   aPillarTop?: number;
+  /** Where the door glass's front edge, rising from `aPillarFoot`, meets the A-post's rear edge (y, m); over it the edge runs in under the post to `aPillarTop`, under it the sail is a small triangle. Absent: one straight edge, the sail filling any gap to the post. */
+  aPillarKnee?: number;
   /** Side glass top: its drop under the roof (m, absent 0.075), the roof's side lip ending there too; or [z, y] stations (ascending, linear, held past the ends) under a 0.075 lip, painted fill between them and the lip. */
   glassTop?: number | readonly (readonly [number, number])[];
-  /** Wheel-arch opening radius (m) about each hub. */
-  arch: { radius: number };
+  /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening). */
+  arch: { radius: number; lip?: ArchLip };
   /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it. */
   hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge };
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
@@ -230,6 +239,8 @@ export interface BodyStyle {
   pillars?: { b?: number; divider?: { width: readonly [number, number]; z?: readonly [number, number] } };
   /** Drawn only: greenhouse parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar. */
   blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean };
+  /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
+  privacyGlass?: { rear?: boolean; quarter?: boolean };
   rearBulkhead: { z: number; yTop: number };
   /** Open floors visible through the glass: [zRear, zFront, floorY]. */
   tubs: readonly (readonly [number, number, number])[];

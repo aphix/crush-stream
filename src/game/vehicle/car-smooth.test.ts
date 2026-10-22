@@ -5,9 +5,10 @@ import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import { CREASE_DEGREES, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
-import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
+import { archLipGeometry, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
-import { makeGreenhouseFrame } from "./car-greenhouse-mesh.ts";
+import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { DeformableCar } from "./car.ts";
 import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
 import { cageSourceOf } from "./car-cage-rig.ts";
@@ -289,13 +290,14 @@ describe("given every body style's chassis, whose nose and tail roll into the en
   }
 });
 
-/** Of each side's greenhouse parts the B pillar and the rail are the near-rectangular ones (the A and C pillars lean in plan, so their section is a sheared parallelogram); the headers are the last two. */
+/** Of each side's greenhouse parts the B pillar and the rail are the near-rectangular ones (the A and C pillars lean in plan, so their section is a sheared parallelogram). */
 const roundedPartCases = [
   { name: "B pillar", pick: (parts: THREE.BufferGeometry[]) => parts[1]! },
-  { name: "side rail", pick: (parts: THREE.BufferGeometry[]) => parts[parts.length - 3]! },
-  { name: "windshield header", pick: (parts: THREE.BufferGeometry[]) => parts[parts.length - 2]! },
-  { name: "rear glass header", pick: (parts: THREE.BufferGeometry[]) => parts[parts.length - 1]! },
+  { name: "side rail", pick: (parts: THREE.BufferGeometry[]) => parts.find((g) => g.name === "beltRail")! },
 ] as const;
+
+/** At the cant line the drawn roof's side keeps normals of its own, pointing out at least this much (x share), not down with its underside's. */
+const ROOF_SIDE_NORMAL_X = 0.8;
 
 describe("given every body style's greenhouse frame", () => {
   for (const id of CAR_STYLE_IDS) {
@@ -309,6 +311,37 @@ describe("given every body style's greenhouse frame", () => {
         }
       });
     }
+  }
+});
+
+describe("given every body style's drawn roof and greenhouse", () => {
+  for (const id of CAR_STYLE_IDS) {
+    it(`when a ${id}'s drawn greenhouse is read, then no part of it crosses the centre line: the roof alone covers both glass tops, no header bar stands on it (the cage keeps its two boxes)`, () => {
+      const crossing = (source: "drawn" | "cage") =>
+        makeGreenhouseFrame(CAR_STYLES[id], source).filter((g) => {
+          g.computeBoundingBox();
+          return g.boundingBox!.min.x < 0 && g.boundingBox!.max.x > 0;
+        }).length;
+      assert.equal(crossing("cage"), 2, "the control: the cage's two header boxes");
+      assert.equal(crossing("drawn"), 0, `${id}: drawn parts across the roof`);
+    });
+
+    it(`when a ${id}'s drawn roof side is read at mid-roof, then its normals at the cant line point out (x over ${ROOF_SIDE_NORMAL_X}), not down with the underside's: no grey band along the roof's edge`, () => {
+      const style = CAR_STYLES[id];
+      const roof = makeRoofGeometry(style);
+      roof.computeVertexNormals();
+      const pos = roof.getAttribute("position") as THREE.BufferAttribute;
+      const normal = roof.getAttribute("normal") as THREE.BufferAttribute;
+      const z = (style.roofZ[0] + style.roofZ[1]) / 2;
+      // The right side's lowest ring point at the mid station (a loft station) is the cant line; a crease copy shares its position.
+      let cant = { y: Infinity, nx: -1 };
+      for (let i = 0; i < pos.count; i++) {
+        if (Math.abs(pos.getZ(i) - z) > 1e-5 || pos.getX(i) <= 1e-6) continue;
+        if (pos.getY(i) < cant.y) cant = { y: pos.getY(i), nx: normal.getX(i) };
+        else if (pos.getY(i) === cant.y) cant.nx = Math.max(cant.nx, normal.getX(i));
+      }
+      assert.ok(cant.nx > ROOF_SIDE_NORMAL_X, `${id}: the roof's side at the cant line (y ${cant.y}) has normal x ${cant.nx} at most`);
+    });
   }
 });
 
@@ -396,9 +429,30 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
   for (const [kind, n] of byKind) assert.ok(n <= ROOF_FITTING_VERTICES[kind], `${id} ${kind}: ${n} vertices against ${ROOF_FITTING_VERTICES[kind]}`);
 }
 
+/** Each style's drawn wheel-well parts and its boot cut's loft rings as built, merged into the body on top of its loft: red if one grows. */
+const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; bootRings: number }> = {
+  sedan: { lips: 360, humps: 0, bootRings: 63 },
+  hatchback: { lips: 360, humps: 94, bootRings: 42 },
+  wagon: { lips: 360, humps: 94, bootRings: 42 },
+  coupe: { lips: 360, humps: 94, bootRings: 42 },
+  pickup: { lips: 260, humps: 94, bootRings: 42 },
+  police: { lips: 360, humps: 0, bootRings: 63 },
+  monster: { lips: 312, humps: 94, bootRings: 42 },
+};
+
+/** `style`'s arch lips' and wheel humps' vertices (`archLipGeometry`, `wellHumpGeometry`) and the rings its boot cut adds to the loft. */
+function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; bootRings: number } {
+  const body = makeChassisGeometry(style);
+  return {
+    lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,
+    humps: wellHumpGeometry(style)?.getAttribute("position").count ?? 0,
+    bootRings: (sliceZs(style, "drawn").length - sliceZs(style, "drawn", false).length) * loftOf(body).ring,
+  };
+}
+
 describe("given every body style's car built whole", () => {
   for (const testCase of BASELINE_BY_STYLE) {
-    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting within its own count`, () => {
+    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting, arch lip, wheel hump and boot cut within its own count`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, testCase.id);
       let drawCalls = 0;
       let triangles = 0;
@@ -411,9 +465,12 @@ describe("given every body style's car built whole", () => {
       assert.equal(drawCalls, testCase.drawCalls);
       assert.ok(triangles <= testCase.triangles * TRIANGLE_BUDGET, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`);
       const fittings = roofFittingVertices(car.style);
-      const loft = car.body.geometry.getAttribute("position").count - fittings.all;
+      const wells = wellAndCutVertices(car.style);
+      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.bootRings;
       assert.ok(loft <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
       assertRoofFittingCaps(testCase.id, fittings.byKind);
+      const cap = WELL_AND_CUT_VERTICES[testCase.id];
+      assert.ok(wells.lips <= cap.lips && wells.humps <= cap.humps && wells.bootRings <= cap.bootRings, `${testCase.id} ${JSON.stringify(wells)} against ${JSON.stringify(cap)}`);
     });
   }
 
@@ -423,7 +480,8 @@ describe("given every body style's car built whole", () => {
     const fittings = roofFittingVertices({ ...wagon, roof });
     assert.equal(fittings.byKind.length, 3, "the control: every kind is built");
     assertRoofFittingCaps("wagon", fittings.byKind);
-    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.all, makeChassisGeometry(wagon).getAttribute("position").count, "the fittings are all the body gains");
+    // Against the wagon with no fittings at all: the style itself may carry some.
+    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.all, makeChassisGeometry({ ...wagon, roof: undefined }).getAttribute("position").count, "the fittings are all the body gains");
   });
 });
 
@@ -431,18 +489,24 @@ describe("given every body style's car built whole", () => {
 
 describe("given every body style's panels cut from its smoothed loft", () => {
   for (const id of CAR_STYLE_IDS) {
-    it(`when a ${id}'s panels are cut, then all ${PANEL_NAMES.length} exist, none shares a triangle with another, and every triangle indexes the loft`, () => {
+    it(`when a ${id}'s panels are cut, then all ${PANEL_NAMES.length} exist, none shares a triangle with another, and every triangle indexes the loft or, on an arch, that arch's own lip`, () => {
       const body = makeChassisGeometry(CAR_STYLES[id]);
       const loft = loftOf(body);
       const regions = panelRegions(CAR_STYLES[id], body);
       assert.equal(regions.length, PANEL_NAMES.length);
+      // Each arch lip's triangles (`archLipGeometry`), keyed as the regions key theirs.
+      const lips = body.userData.archLips as { from: number; perWheel: readonly number[] } | undefined;
+      const lipOf = new Map<string, string>();
+      for (let k = 0, at = lips?.from ?? 0; lips && k < lips.perWheel.length; at += lips.perWheel[k]!, k++) {
+        for (let t = at; t < at + lips.perWheel[k]!; t += 3) lipOf.set([0, 1, 2].map((v) => body.index!.getX(t + v)).join(","), PANEL_NAMES[2 + k]!);
+      }
       const seen = new Set<string>();
       for (const region of regions) {
         assert.ok(region.verts.length > 20 && region.tris.count >= 30 * 3, `${id} ${region.name} has ${region.tris.count / 3} triangles`);
         for (let t = 0; t < region.tris.count; t += 3) {
           const key = [0, 1, 2].map((k) => region.tris.getX(t + k)).join(",");
           assert.ok(!seen.has(key), `${id}: triangle ${key} is in two panels (${region.name})`);
-          assert.ok(region.tris.getX(t) < loft.ring * loft.slices, `${id} ${region.name}: a triangle outside the loft`);
+          assert.ok(region.tris.getX(t) < loft.ring * loft.slices || lipOf.get(key) === region.name, `${id} ${region.name}: a triangle outside the loft and its own lip`);
           seen.add(key);
         }
       }
