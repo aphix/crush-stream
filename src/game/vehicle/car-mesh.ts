@@ -358,11 +358,11 @@ const DECK_CROWN = { inset: 0.22, rise: DECK_RISE } as const;
  * Lower body ring (left half top→bottom, keel, right half bottom→top; the
  * wrap edge is the deck). Deck crown → deck edge → rounded shoulder → feature
  * line → tuck-under → rocker → sill. Tubs open the deck into a floor with walls;
- * the door cut drops the side to the sill. Greenhouse is never lofted metal.
+ * the door cut drops the side to the sill (unless `doorCut` is off). Greenhouse is never lofted metal.
  */
-function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [number, number][] {
+function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorCut = true): [number, number][] {
   const { hw, yBelt: yb, z } = s;
-  const hole = doorAperture(z, style);
+  const hole = doorCut ? doorAperture(z, style) : 0;
   const rockerY = rockerAt(z, style);
   const floor = floorY(z, style);
   const tub = tubAt(z, style, bodyTubs(style, source));
@@ -474,6 +474,27 @@ export function sectionPoints(s: ProfileStation, style: BodyStyle, source: BodyS
   const left = half.map(([x, y]) => ({ x: -x, y }));
   const right = half.map(([x, y]) => ({ x, y })).reverse();
   return [...left, { x: 0, y: floorY(s.z, style) }, ...right];
+}
+
+/** The drawn body side's ring points [x, y] at `z` as if no door were cut there, top down from the shoulder's top to the rocker: the door skin's facets. */
+export function drawnSideRing(z: number, style: BodyStyle): [number, number][] {
+  const s = sampleSlice(z, style.profile);
+  const half = halfRing(s, style, "drawn", false);
+  holdInsideCageHull(half, halfRing(s, style, "cage", false));
+  return half.slice(2, ROCKER + 1);
+}
+
+/** The drawn body side's x at height `y` at `z`, uncut by any door: on `drawnSideRing`'s chords over its span, above and below it `sideX` held at the end point's offset off it. */
+export function drawnSideX(z: number, y: number, style: BodyStyle): number {
+  const ring = drawnSideRing(z, style);
+  for (let i = 1; i < ring.length; i++) {
+    const [[x0, y0], [x1, y1]] = [ring[i - 1]!, ring[i]!];
+    if (y <= y0 && y >= y1 && y0 > y1) return x0 + ((x1 - x0) * (y - y0)) / (y1 - y0);
+  }
+  const { hw, yBelt } = sampleSlice(z, style.profile);
+  const rockerY = rockerAt(z, style);
+  const [ex, ey] = y > ring[0]![1] ? ring[0]! : ring[ring.length - 1]!;
+  return sideX(y, hw, yBelt, rockerY) + ex - sideX(ey, hw, yBelt, rockerY);
 }
 
 export function loftFromRings(rings: Pt[][], zs: number[], u0: number, u1: number, capsOwnRings = true): THREE.BufferGeometry {
