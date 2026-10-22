@@ -250,11 +250,15 @@ describe("given the lids as built", () => {
           assert.ok(verticesAtSamePlace(lid, slice * loft.ring + line) >= 2, `ring line ${line} slice ${slice} is one vertex: its crease is not split`);
         }
       }
+      // A lid that wraps the tail ends its deck on the lip's crest (its last deck ring): the kick turns 51-54° down into the fold there,
+      // the ducktail's hard edge across the dome, so that slice is split and every other is one vertex.
+      const crest = testCase.rolledLid ? (lid.userData.deckRings as number) - 1 : -1;
       for (const line of smoothLines) {
         const angles = ringLineDihedrals(lid, line, inner);
         assert.ok(Math.max(...angles) < FLAT_CURVE_LIMIT_DEGREES, `ring line ${line} turns ${Math.max(...angles)}°`);
         for (let slice = 1; slice < loft.slices - 1; slice++) {
-          assert.equal(verticesAtSamePlace(lid, slice * loft.ring + line), 1, `ring line ${line} slice ${slice} is split: its curve is not smooth`);
+          const want = slice === crest ? 2 : 1;
+          assert.equal(verticesAtSamePlace(lid, slice * loft.ring + line), want, `ring line ${line} slice ${slice}: ${want === 2 ? "the lip's crest is not a hard edge" : "split, its curve is not smooth"}`);
         }
       }
       for (const line of rollLines) {
