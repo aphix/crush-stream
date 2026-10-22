@@ -773,8 +773,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   { id: "sedan", digest: "8d0ca6fec24787b820976ef5beb3b9bc33abd7d28ee2e89cdd0159374addc6cd" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
-  // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams.
-  { id: "hatchback", digest: "460f0319eb1ae3bbdfd4cf2ac678dc6cbdd0eba3087824fe3b87464709725c92" },
+  // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams, the hatch's C-pillar top.
+  { id: "hatchback", digest: "ce63b76a30c823bfbb334938b043b0f30e1fbc3d33255ddeb254d45733b1737b" },
   { id: "wagon", digest: "eb9db693294fddf0470fba46a10bf8c4181d12a8d392ef892fc4beb6c843f908" },
   { id: "coupe", digest: "986eb8a7cb728f9b75067a62ea6c793b9f330c5d773dd0e9eac12d1dc09074b2" },
   { id: "pickup", digest: "494e523b2fff1803aaa9b226da64bbe63602ee4d68973be7888f9e2ca473eca8" },
