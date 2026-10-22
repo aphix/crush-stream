@@ -1,6 +1,9 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { PLATFORM_HARDPOINTS, st } from "./platform.ts";
+import { PLATFORM_HARDPOINTS, pullHandle, st } from "./platform.ts";
 import { TOW_MIRROR } from "./pickup.ts";
+
+/** The crew cab's slim front and rear door pulls, 15 x 4 cm. */
+const DOOR_PULLS = [pullHandle(0.055, -0.095, 0.838, 0.04), pullHandle(-0.47, -0.62, 0.834, 0.04)];
 
 const { bumpers } = PLATFORM_HARDPOINTS;
 /** Black steel bar bumper, 28 cm tall with a flat face 9 cm proud ([y, out] m, top to bottom). */
@@ -81,14 +84,15 @@ export const MONSTER: BodyStyle = {
     st(1.9, 0.8, 0.9),
     st(2.1, 0.78, 0.8),
   ],
-  roofZ: [-0.7, 0.5],
-  windshieldTop: [1.47, 0.5],
+  roofZ: [-0.7, 0.45],
+  windshieldTop: [1.46, 0.45],
   rearGlass: { base: [1.02, -0.78], top: [1.45, -0.7], wBase: 1.36, wTop: 1.18 },
   privacyGlass: { rear: true },
   quarter: { zRearBot: -0.64, zRearTop: -0.64 },
   midPillarZ: null,
   rearBulkhead: { z: -0.79, yTop: 1.03 },
   tubs: [[-0.76, 0.96, 0.5], [-2.26, -0.82, 0.62]],
+  bayFloor: 0.34,
   wheelTub: { rise: 0.24, length: 0.82, width: 0.25 },
   tubWall: 0.04,
   rearDoorSeam: -0.15,
@@ -102,7 +106,7 @@ export const MONSTER: BodyStyle = {
       { view: "side", points: [[0.72, 0.948], [0.713, 0.406]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.157, 1.404], [-0.164, 0.406]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.713, 1.39], [-0.72, 0.962], [-0.734, 0.406]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-0.763, 1.005], [-0.77, 0.392]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.763, 1.005], [-0.77, 0.392]], width: 0.025, depth: -0.006, profile: "v", cavity: 0.95 },
       { view: "side", points: [[0.713, 0.42], [-0.713, 0.42]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
       { view: "side", points: [[0.727, 0.948], [-0.741, 0.948]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[0.413, 1.397], [-0.128, 1.397], [-0.128, 0.976], [0.599, 0.976], [0.528, 1.19]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
@@ -125,7 +129,7 @@ export const MONSTER: BodyStyle = {
       { view: "top", points: [[2.059, 0.313], [1.563, 0.342], [1.082, 0.372]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },
       { view: "top", points: [[2.074, 0.386], [1.592, 0.365], [1.111, 0.343]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },
       { view: "top", points: [[-0.772, 0], [-0.772, 0.576], [0.365, 0.576], [0.365, 0]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
-      { view: "top", points: [[-0.813, 0], [-0.813, 0.838]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[-0.813, 0], [-0.813, 0.838]], width: 0.025, depth: -0.006, profile: "v", cavity: 0.95 },
       { view: "top", points: [[-2.256, 0], [-2.256, 0.678], [-0.886, 0.678], [-0.886, 0]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
       { view: "top", points: [[-0.827, 0.772], [-2.344, 0.772]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "top", points: [[-0.827, 0.758], [-2.344, 0.758]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
@@ -136,10 +140,10 @@ export const MONSTER: BodyStyle = {
       { view: "top", points: [[-0.915, 0], [-2.242, 0]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
       { view: "front", points: [[0, 0.9], [0.7, 0.9]], width: 0.008, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "front", points: [[0, 0.52], [0.82, 0.52]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.1 },
+      ...DOOR_PULLS.flatMap((h) => h.lines),
     ],
     patches: [
-      { view: "side", points: [[0.055, 0.858], [-0.095, 0.858], [-0.095, 0.818], [0.055, 0.818]], depth: -0.005, rim: 0.004, cavity: 0.8 },
-      { view: "side", points: [[-0.47, 0.854], [-0.62, 0.854], [-0.62, 0.814], [-0.47, 0.814]], depth: -0.005, rim: 0.004, cavity: 0.8 },
+      ...DOOR_PULLS.flatMap((h) => h.patches),
       { view: "side", points: [[0.848, 0.763], [0.78, 0.763], [0.78, 0.724], [0.848, 0.724]], depth: -0.002, rim: 0.003, cavity: 0.3 },
       { view: "side", points: [[-1.953, 0.814], [-2.045, 0.814], [-2.045, 0.761], [-1.953, 0.761]], depth: -0.002, rim: 0.003, cavity: 0.3 },
       { view: "front", points: [[0.62, 0.36], [0.72, 0.36], [0.72, 0.42], [0.62, 0.42]], depth: -0.005, rim: 0.003, cavity: 0.5 },

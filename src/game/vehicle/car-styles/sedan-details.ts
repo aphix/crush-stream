@@ -5,7 +5,7 @@ type Details = NonNullable<BodyStyle["details"]>;
 type Line = Details["lines"][number];
 type Patch = Details["patches"][number];
 
-const GAP = { width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 } as const;
+const GAP = { width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 } as const;
 const CREASE = { width: 0.02, depth: 0.003, profile: "u", cavity: 0 } as const;
 const SEAL = { width: 0.012, depth: 0.002, profile: "u", cavity: 0.3 } as const;
 const TRIM = { width: 0.01, depth: -0.003, profile: "u", cavity: 0.4 } as const;
