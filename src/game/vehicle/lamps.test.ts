@@ -209,6 +209,35 @@ describe("given each style with a high-mount brake lamp", () => {
   }
 });
 
+describe("given the monster's side markers with and without a `tint`", () => {
+  it("when the lamp batch packs them, then a tinted marker's colour is its look times the tint and an untinted one keeps the look", () => {
+    const plain = CAR_STYLES.monster;
+    const tint = 0x806040;
+    const markers = plain.lamps.sideMarkers ?? [];
+    assert.ok(markers.length > 0, "the control: the monster carries side markers");
+    const colours = (style: BodyStyle): string => {
+      const styles: Record<CarStyleId, BodyStyle> = CAR_STYLES;
+      styles.monster = style;
+      try {
+        const car = new DeformableCar(paint(), new THREE.Scene(), null, "monster");
+        car.group.updateMatrixWorld(true);
+        const batch = new LampBatch(2);
+        batch.sync([car]);
+        const rows = car.lampFittings.flatMap((f, i) => (f.kind === "marker" ? [car.lamps.length + i] : []));
+        const out = rows.map((row) => batch.draw.colorAt(row, new THREE.Color()).toArray().map((c) => c.toFixed(4)).join(" ")).join(", ");
+        batch.dispose();
+        return out;
+      } finally {
+        styles.monster = plain;
+      }
+    };
+    const want = new THREE.Color(tint).toArray().map((c) => c.toFixed(4)).join(" ");
+    assert.equal(colours(plain), Array.from({ length: markers.length * 2 }, () => "1.0000 1.0000 1.0000").join(", "), "untinted markers keep the head look's white");
+    const tinted: BodyStyle = { ...plain, lamps: { ...plain.lamps, sideMarkers: markers.map((m) => ({ ...m, tint })) } };
+    assert.equal(colours(tinted), Array.from({ length: markers.length * 2 }, () => want).join(", "), "tinted markers take the tint");
+  });
+});
+
 describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, halogen, LED), and under a dark lens", () => {
   const BULBS = [undefined, "halogen", "led"] as const;
   const styled = (bulb: (typeof BULBS)[number]): BodyStyle => ({ ...CAR_STYLES.hatchback, lamps: { ...CAR_STYLES.hatchback.lamps, bulb } });

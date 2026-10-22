@@ -671,6 +671,7 @@ const _tri = new THREE.Triangle();
 const _cam = new THREE.Vector3();
 const _pos = new THREE.Vector3();
 const _dir = new THREE.Vector3();
+const _tint = new THREE.Color();
 
 /** A lamp unit's look: lit head and tail (the tail stays below ACES's bright-red-to-yellow knee so its lens reads red
  *  under its own glow), the tail as a running light (`TAIL_RUNNING` of it) and dark (a high brake lamp off the brakes: its red lens
@@ -683,7 +684,7 @@ const LAMP_LOOK = {
   broken: { color: 0x5a5c60, emissive: 0x1a1b1c, emissiveIntensity: 0.12 },
 } as const;
 
-/** A car as the lamp batch reads it: its lamps (seat, state, kind, unit variant), whether it is on its brakes, and its drawn-only lamp fittings (a lid's share with its lamp and lid). */
+/** A car as the lamp batch reads it: its lamps (seat, state, kind, unit variant), whether it is on its brakes, and its drawn-only lamp fittings (a lid's share with its lamp and lid, a marker's tint). */
 interface LampCar {
   readonly lamps: readonly { readonly seat: THREE.Object3D; readonly intact: boolean; readonly kind: LampKind; readonly variant: number }[];
   readonly braking: boolean;
@@ -692,6 +693,7 @@ interface LampCar {
     readonly kind: keyof typeof FITTING_MESH;
     readonly variant: number;
     readonly share: { readonly lamp: { readonly intact: boolean }; readonly lid: { readonly detached: boolean } | null } | null;
+    readonly tint?: THREE.Color | null;
   }[];
 }
 
@@ -787,7 +789,7 @@ export class LampBatch {
         if (!seatShown(f.seat)) continue;
         // A lid's share goes dark with its lamp, and once its lid has torn off.
         const dark = f.share !== null && (!f.share.lamp.intact || f.share.lid?.detached === true);
-        this.put(dark ? SHARE_BROKEN[f.kind] : car.braking ? FITTING_BRAKING[f.kind] : FITTING_MESH[f.kind], f.seat, f.variant);
+        this.put(dark ? SHARE_BROKEN[f.kind] : car.braking ? FITTING_BRAKING[f.kind] : FITTING_MESH[f.kind], f.seat, f.variant, f.tint);
       }
     }
     this.draw.end();
@@ -798,10 +800,11 @@ export class LampBatch {
     return this.n[b]!;
   }
 
-  private put(b: number, seat: THREE.Object3D, variant: number): void {
+  private put(b: number, seat: THREE.Object3D, variant: number, tint?: THREE.Color | null): void {
     seat.updateWorldMatrix(false, false);
     const [color, glow] = this.looks[b]!;
-    if (this.draw.put(this.first[b]! + (this.variants[b] === 1 ? 0 : variant), seat.matrixWorld, color, glow)) this.n[b]!++;
+    const look = tint ? _tint.copy(color).multiply(tint) : color;
+    if (this.draw.put(this.first[b]! + (this.variants[b] === 1 ? 0 : variant), seat.matrixWorld, look, glow)) this.n[b]!++;
   }
 
   dispose(): void {
