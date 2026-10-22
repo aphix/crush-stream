@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
-import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
 import { CREASE_DEGREES, ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, tubWall } from "./car-lines.ts";
@@ -1027,8 +1027,9 @@ describe("given a body style's H2 hardpoints", () => {
   it("when any style's raked panes are built, then each top edge follows its style's share of the roof's dome across the car (`domeFall`; every top-edge vertex stands as far over the roof at its x as the edge's middle does, less the dome it does not take; no vertex of the pane, frit or round corner further), while the corners the thrown dummies fit their slab to stay on the pane's plane through its middle", () => {
     const off: string[] = [];
     for (const id of CAR_STYLE_IDS) {
-      const style = CAR_STYLES[id];
-      const corners = glassCorners(style);
+      const plain = CAR_STYLES[id];
+      const style = drawnStyle(plain);
+      const corners = glassCorners(plain);
       const panes = [
         { name: "windshield", top: style.windshieldTop, geo: makeWindshield(style), grid: true, segX: 10, segY: 8 },
         { name: "rear glass", top: style.rearGlass.top, geo: makeRearGlass(style), grid: !style.rearGlass.frame && !style.rearGlass.round, segX: 8, segY: 6 },
@@ -1046,7 +1047,8 @@ describe("given a body style's H2 hardpoints", () => {
           const over = overAt(pos.getX(segY * (segX + 1) + i), pos.getY(segY * (segX + 1) + i));
           if (Math.abs(over - middle) > 1e-5) off.push(`${id} ${name} top x ${pos.getX(segY * (segX + 1) + i).toFixed(3)}: ${(over * 1000).toFixed(1)} mm over the roof, its middle ${(middle * 1000).toFixed(1)} mm`);
         }
-        for (const k of [2, 3]) if (Math.abs(corners[p * 12 + k * 3 + 1]! - topY) > 1e-5) off.push(`${id} ${name} slab corner ${k}: y ${corners[p * 12 + k * 3 + 1]}, the pane's plane ${topY}`);
+        const planeY = (p === 0 ? plain.windshieldTop : plain.rearGlass.top)[0];
+        for (const k of [2, 3]) if (Math.abs(corners[p * 12 + k * 3 + 1]! - planeY) > 1e-5) off.push(`${id} ${name} slab corner ${k}: y ${corners[p * 12 + k * 3 + 1]}, the pane's plane ${planeY}`);
       }
     }
     assert.ok(off.length === 0, off.join("\n"));
@@ -1069,7 +1071,7 @@ describe("given a body style's H2 hardpoints", () => {
 
   it("when any style's drawn A-post is read, then it stands under 6 mm proud of the windshield's side edge as drawn, which falls with the roof's dome toward its top", () => {
     for (const id of CAR_STYLE_IDS) {
-      const style = CAR_STYLES[id];
+      const style = drawnStyle(CAR_STYLES[id]);
       const [baseY, baseZ] = style.windshield.base;
       const [topY, topZ] = style.windshieldTop;
       const along = (y: number, z: number) => (y - baseY) * (topY - baseY) + (z - baseZ) * (topZ - baseZ);

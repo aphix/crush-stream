@@ -12,7 +12,7 @@ import { carFrame, type CarFrame } from "./car-rig.ts";
 import { centreLift } from "./car-cage-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
-import { DOOR_GLASS_SEAT, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane, windshieldPoint } from "./car-glass.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
   LIGHT_BAR_FOOT,
@@ -33,7 +33,7 @@ import { carPartSeats, GRILLE_SEAT, MIRROR_REACH, PART_KIND, PartSeat } from "./
 import { drawnLamp, drawnPart, LAMP_PROBE_REACH, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
 import { bumperBare, CarCabin, CarUnderbody } from "./interior.ts";
 import type { CarCage } from "./car-cage.ts";
-import { CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLES, drawnStyle, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { anchorOnSkin, poseOnSkin, type GlowKind, type SkinAnchor } from "./lamp-lights.ts";
 import { panelRegions, type PanelName, type PanelRegion } from "./car-panels.ts";
 import { newDentState, type DentState } from "./loose-dent.ts";
@@ -462,7 +462,7 @@ export abstract class CarCore {
     const livery = this.style.livery;
     this.bodyMat = makePaintMaterial(livery?.body ?? paint.body, this.style.paintFinish);
     const doorMat = livery ? makePaintMaterial(livery.doors, this.style.paintFinish) : this.bodyMat;
-    const bodyGeo = makeChassisGeometry(this.style);
+    const bodyGeo = makeChassisGeometry(drawnStyle(this.style));
     this.regions = panelRegions(this.style, bodyGeo);
     this.body = new THREE.Mesh(bodyGeo, this.bodyMat);
     this.body.castShadow = true;
@@ -542,7 +542,7 @@ export abstract class CarCore {
       seat.scale.x = door.mirrorReach / MIRROR_REACH;
       doorGroup.add(seat);
     }
-    for (const seat of this.partSeats) ({ variant: seat.variant, geometry: seat.drawn } = drawnPart(seat.kind, this.style));
+    for (const seat of this.partSeats) ({ variant: seat.variant, geometry: seat.drawn } = drawnPart(seat.kind, drawnStyle(this.style)));
     this.setPartPaint(livery?.body ?? paint.body, livery?.doors ?? paint.body);
 
     this.addGlass();
@@ -699,8 +699,14 @@ export abstract class CarCore {
       if (privacy !== undefined && privacy !== false) privacyPane(mesh.geometry, privacy === "matte");
     };
     const glassMat = glassMaterial("fresh");
-    const style = this.style;
-    addPane("windshield", new THREE.Mesh(makeWindshield(style), glassMat), this.group, ["roof", "bonnet"], "glassFront");
+    const style = drawnStyle(this.style);
+    const windshield = makeWindshield(style);
+    if (style !== this.style) {
+      // The windshield's centre is the thrown driver's exit point (sim): the style's own pane's, wherever its drawn twin stands.
+      const centre = windshieldPoint(this.style, 0, 0.5);
+      windshield.userData.centre = [centre.x, centre.y, centre.z];
+    }
+    addPane("windshield", new THREE.Mesh(windshield, glassMat), this.group, ["roof", "bonnet"], "glassFront");
     // A roof-hinged hatch or liftgate carries its glass: the pane rides the lid (origin on its hinge line) at −pivot, so it swings, tears off and resets with it.
     const rear = new THREE.Mesh(makeRearGlass(style), glassMat);
     const inGate = roofHinged(style.boot);

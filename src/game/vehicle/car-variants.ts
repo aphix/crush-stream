@@ -292,6 +292,9 @@ export interface PillarSpan {
   z?: readonly [number, number];
 }
 
+/** Drawn only: the windshield and the door glass's front edge as the player sees them (`BodyStyle.drawn`, `drawnStyle`). */
+export type DrawnTwin = Partial<Pick<BodyStyle, "windshield" | "windshieldTop" | "aPillarFoot" | "aPillarTop" | "aPillarKnee">>;
+
 export interface BodyStyle {
   id: CarStyleId;
   /** What the reference was measured to; the tables below are built to it (`car-variants.test.ts`). */
@@ -404,6 +407,8 @@ export interface BodyStyle {
    * post's rear edge at the rear glass's corner.
    */
   pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number; glassBar?: Required<PillarSpan>; rearSquare?: boolean };
+  /** Drawn only: the windshield and the door glass's front edge as the player sees them, in place of the style's own for every drawn part (`drawnStyle`); the cage, the dummies' panes, the cabin, the sim and the windshield's centre (the thrown driver's exit point) keep the style's own. */
+  drawn?: DrawnTwin;
   /**
    * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
    * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.
@@ -531,3 +536,16 @@ export const CAR_STYLES: Readonly<Record<CarStyleId, BodyStyle>> = {
   police: POLICE,
   monster: MONSTER,
 };
+
+const DRAWN_STYLES = new WeakMap<BodyStyle, { twin: DrawnTwin; style: BodyStyle }>();
+
+/** `style` as drawn: its `drawn` twin's fields over its own, one object per twin (style-keyed caches such as `carFrame` hold); `style` itself without one. */
+export function drawnStyle(style: BodyStyle): BodyStyle {
+  const twin = style.drawn;
+  if (twin === undefined) return style;
+  const cached = DRAWN_STYLES.get(style);
+  if (cached?.twin === twin) return cached.style;
+  const drawn: BodyStyle = { ...style, ...twin };
+  DRAWN_STYLES.set(style, { twin, style: drawn });
+  return drawn;
+}
