@@ -307,9 +307,11 @@ export interface BodyStyle {
   /**
    * Drawn only: the roof's section from its crown down to its cant line as one curve (`roofArc`), a cubic Bézier leaving the crown level
    * and arriving along the side glass's plane: `crown`, its crown handle's share of the half-width (more: a broader top); `blend`, its
-   * side handle's share of the section's height (more: a softer roll into the glass). Absent, the dome's flat top and its rolled side lip.
+   * side handle's share of the section's height (more: a softer roll into the glass); `squareFront` (m), a run back from the front end
+   * over which it eases into the dome's flat top and rolled lip, so a flat windshield's top corners stay under the roof. Absent, the
+   * dome's flat top and its rolled side lip.
    */
-  roofSection?: { crown: number; blend: number };
+  roofSection?: { crown: number; blend: number; squareFront?: number };
   /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
   windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;
