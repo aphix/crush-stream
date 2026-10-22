@@ -3,7 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { PART_FAMILY, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad, type YZ } from "./car-variants.ts";
-import { ROCKER, followedHoodTopY, glassTopY, glassX, hoodRearZ, lerp, makeHoodGeometry, roofTopY, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
+import { ROCKER, followedHoodTopY, glassTopY, glassX, hoodRearZ, lerp, makeHoodGeometry, roofTopY, sampleSlice, sectionPoints, shoulderDrop, sideX } from "./car-mesh.ts";
 import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, rockerAt, sideBowZ, WINDSHIELD_BOW } from "./car-lines.ts";
 import { doorSkinStand } from "./car-door-mesh.ts";
 import { FITTING_ATTRIBUTE, GLASS_ATTRIBUTE, MATTE_PRIVACY } from "./constants.ts";
@@ -540,7 +540,7 @@ function ridesDoor(strip: ChromeStrip, style: BodyStyle): boolean {
 /** The door skin's outer half-width (m) at car-local `z` and height `y`: the body side line `makeDoorGeometry` follows, its stand-off there (`stand`, `doorSkinStand`) over it. */
 function doorSkinX(z: number, y: number, style: BodyStyle, stand: (z: number, y: number) => number): number {
   const slice = sampleSlice(z, style.profile);
-  return sideX(y, slice.hw, slice.yBelt, rockerAt(z, style)) + stand(z, y);
+  return sideX(y, slice.hw, slice.yBelt, rockerAt(z, style), shoulderDrop(z, style)) + stand(z, y);
 }
 
 /** The drawn body's half-width (m) at car-local `z` and height `y`: its section ring's right side read up from the rocker, held at the rocker's below it and the deck crown's above. */

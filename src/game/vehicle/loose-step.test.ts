@@ -13,8 +13,8 @@ import { CAR_STYLES } from "./car-variants.ts";
 import { crownY } from "./car-cage-rig.ts";
 import { SKIN } from "./car-surfaces.ts";
 import { MU_BODY, RESTITUTION, invInertia } from "./car-air-body.ts";
-import { AIR_DENSITY, BOX_HALVES, boxShape, newLooseShape, partMass, PLATE_CN_BROADSIDE, stepLoose } from "./loose-step.ts";
-import { corner, LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts";
+import { AIR_DENSITY, boxShape, newLooseShape, partMass, PLATE_CN_BROADSIDE, stepLoose } from "./loose-step.ts";
+import { corner, highest, LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts";
 import { assertSameDigest, paint } from "./test-support.ts";
 
 const H = 1 / QUIET_HZ;
@@ -126,7 +126,7 @@ function slide(withB: boolean): DetachPart {
  */
 function assertSlideStop(part: DetachPart): void {
   const travelled = part.object.position.z;
-  const [, mid, big] = Array.from(part.shape.points.subarray(BOX_HALVES, BOX_HALVES + 3)).sort((a, b) => a - b);
+  const [, mid, big] = part.shape.half.toArray().sort((a, b) => a - b);
   const k = (0.5 * AIR_DENSITY * PLATE_CN_BROADSIDE * 4 * mid! * big!) / partMass(part);
   const stop = Math.log(1 + (k * SLIDE_V ** 2) / (MU_BODY * GRAVITY)) / (2 * k);
   assert.equal(planSpeed(part), 0, "plan speed after twice its stopping time");
@@ -150,24 +150,40 @@ describe("given a front bumper torn off a parked car, sliding along the road at 
 const DROP = 0.5;
 /** Pushed across the roof at this speed (m/s): its slide friction stops it after v²/(2 μ g) ≈ 2.2 m, past the roof's edge. */
 const PUSH_V = 5;
+/**
+ * How long (s) the pushed bumper is run: it drops 1.3 m off the roof's edge, lands on an end of its U and rolls over its shell onto its back
+ * (at 2 rad/s, 1.5-2.1 s), at rest on the road 2.2 s after the push; as one box it was at rest within 2 s.
+ */
+const OFF_ROOF_S = 3;
 
-/** The bumper dropped onto parked car B's roof, left `rest` s, then pushed off it sideways for `slide` s; its lowest point (m) on the roof and at the end. */
-function roofDrop(l: Lot, at: number, rest: number, slide: number): { onRoof: number; restSpeed: number; end: THREE.Vector3; endLow: number; roofY: number } {
+/**
+ * The bumper dropped onto parked car B's roof, left `rest` s, then pushed off it sideways for `slide` s: how it rests on the roof (`onRoof`: its
+ * middle stands over B's roof, its plan within B's half width, and its top, the face it lies on, no lower than the crown less a top's skin)
+ * and its lowest point at the end. A torn bumper is a U in plan (its swept ends and seam cover): lying face down across the roof its ends hang
+ * down the roof's sides (0.54 m on the sedan), so neither its lowest point nor its box's middle (1.036 m up under a 1.332 m crown, flying as
+ * its shell: ticket B) says whether the roof holds it; its top does.
+ */
+function roofDrop(l: Lot, at: number, rest: number, slide: number): { onRoof: boolean; middle: THREE.Vector3; top: number; restSpeed: number; end: THREE.Vector3; endLow: number; roofY: number } {
   const b = l.cars[1]!;
   const roofY = b.group.position.y + crownY(b);
   throwPart(l, at, roofY + DROP, b.group.position.z, new THREE.Vector3(), rest);
-  const onRoof = lowest(l.part);
+  const middle = l.part.shape.centre.clone().applyQuaternion(l.part.object.quaternion).add(l.part.object.position);
+  const top = highest(l.part);
+  const onRoof = Math.abs(middle.x - b.group.position.x) < b.frame.half.x && top >= roofY - SKIN;
   const restSpeed = l.part.velocity.length();
   const o = l.part.object.position;
   throwPart(l, o.x, o.y, o.z, new THREE.Vector3(PUSH_V, 0, 0), slide);
-  return { onRoof, restSpeed, end: l.part.object.position.clone(), endLow: lowest(l.part), roofY };
+  return { onRoof, middle, top, restSpeed, end: l.part.object.position.clone(), endLow: lowest(l.part), roofY };
 }
+
+/** How long (s) the dropped bumper is left on the roof before it is read as resting there: a bumper whose seams stop short of the arches still rocks 0.26 m/s at 1 s and is asleep by 1.25 s. */
+const ROOF_SETTLE_S = 2;
 
 describe("given a front bumper torn off a parked car and dropped 0.5 m onto the roof of a second car parked beside it", () => {
   it("when it lands, then it rests on the roof; when pushed across it at 5 m/s, then it slides off the roof's edge and comes to rest on the road", () => {
     const l = lot(true);
-    const { onRoof, restSpeed, end, endLow, roofY } = roofDrop(l, B_X, 1, 2);
-    assert.ok(onRoof <= roofY + RESTS && onRoof >= roofY - SKIN, `lowest point ${onRoof.toFixed(3)} m up, roof crown ${roofY.toFixed(3)} m (a point ${SKIN} m under a top stands on it)`);
+    const { onRoof, middle, top, restSpeed, end, endLow, roofY } = roofDrop(l, B_X, ROOF_SETTLE_S, OFF_ROOF_S);
+    assert.ok(onRoof, `its middle at x ${(middle.x - B_X).toFixed(3)} m off B's, its top ${top.toFixed(3)} m up, roof crown ${roofY.toFixed(3)} m (a point ${SKIN} m under a top stands on it)`);
     assert.ok(restSpeed <= 2 * GRAVITY * H, `its speed resting on the roof: ${restSpeed.toFixed(4)} m/s, at most the jitter a step's gravity gives (${(2 * GRAVITY * H).toFixed(4)} m/s)`);
     const flank = B_X + l.cars[1]!.frame.half.x;
     assert.ok(end.x > flank, `ended at x ${end.x.toFixed(2)}, B's flank at ${flank.toFixed(2)}`);
@@ -314,9 +330,9 @@ describe("given two cars parked side by side and a bumper torn off one (loose pa
   it("when the bumper lands on the other car's roof and is pushed off it, then both cars' sim state is bit for bit what it is with the bumper lying on open road", () => {
     const onCar = lot(true);
     const away = lot(true);
-    const { onRoof, roofY } = roofDrop(onCar, B_X, 1, 2);
+    const { onRoof, top, roofY } = roofDrop(onCar, B_X, 1, 2);
     roofDrop(away, 40, 1, 2);
-    assert.ok(onRoof > roofY - SKIN, `the bumper rested on the roof (${onRoof.toFixed(3)} m up, crown ${roofY.toFixed(3)} m)`);
+    assert.ok(onRoof, `the bumper rested on the roof (its top ${top.toFixed(3)} m up, crown ${roofY.toFixed(3)} m)`);
     assertSameDigest(simState(onCar.cars), simState(away.cars), "every car's sim state with the bumper on the roof vs on open road");
   });
 });
@@ -474,7 +490,7 @@ function laidFlat(name: string, speed: number, yawDeg = 0): DetachPart {
   const part = car["parts"].find((p) => p.name === name)!;
   car["detachPart"](part, 0, new THREE.Vector3());
   boxShape(part.shape, part.object);
-  const h = part.shape.points.subarray(BOX_HALVES, BOX_HALVES + 3);
+  const h = part.shape.half.toArray();
   const thin = h[0]! <= h[1]! && h[0]! <= h[2]! ? 0 : h[1]! <= h[2]! ? 1 : 2;
   part.object.quaternion.setFromUnitVectors(new THREE.Vector3(thin === 0 ? 1 : 0, thin === 1 ? 1 : 0, thin === 2 ? 1 : 0), new THREE.Vector3(0, 1, 0));
   part.object.position.set(0, 0, 0);
@@ -527,46 +543,74 @@ describe(`given a torn sheet panel lying flat on the road, sliding at ${TORN_AT}
 const KERB_Z = 3;
 /** The share of its speed a panel keeps 0.05 s after meeting the kerb: `RESTITUTION` of the closing, less the road's friction over that time and, at 30°, the slide along the face the hit stops. */
 const KERB_KEEPS = 0.15;
+/** The arch flare's meets swept for a dead stop (the owner's report JRB7-K38W: torn panels stopped dead on a kerb): speeds (m/s) by yaws (°). */
+const SWEEP_SPEEDS = [14, 16, 17, 18, 19, 20, 22] as const;
+const SWEEP_YAWS = [20, 30, 40] as const;
+
+/**
+ * Torn part `name` laid flat on the road, sliding at `speed` m/s turned `yawDeg` into a 0.5 m kerb: its speed as its farthest point meets the
+ * kerb's face (`before`), its speed and its velocity along z (+ on toward the kerb) 0.05 s after (`after`, `away`).
+ */
+function kerbMeet(name: string, speed: number, yawDeg: number): { before: number; after: number; away: number } {
+  const kerb = new Surface();
+  kerb.addPrism({ x: 0, z: KERB_Z + 0.75, yaw: 0, hx: 20, hz: 0.75, base: 0, top: 0.5, id: 0 });
+  armSolids(kerb);
+  try {
+    const part = laidFlat(name, speed, yawDeg);
+    part.object.position.z = KERB_Z - 0.3 - part.shape.reach;
+    let before = NaN;
+    let after = NaN;
+    let away = NaN;
+    let hitAt = Infinity;
+    for (let t = H; t <= 1 && Number.isNaN(after); t += H) {
+      const now = part.velocity.length();
+      stepTorn(part);
+      if (hitAt === Infinity && farthest(part, new THREE.Vector3(0, 0, 1)) >= KERB_Z - 0.02) {
+        hitAt = t;
+        before = now;
+      }
+      if (t >= hitAt + 0.05) {
+        after = part.velocity.length();
+        away = part.velocity.z;
+      }
+    }
+    return { before, after, away };
+  } finally {
+    armSolids(null);
+  }
+}
 
 describe("given a torn panel lying flat on the road, sliding into a 0.5 m kerb", () => {
   const testCases = [
     { it: "when the arch flare meets it square at 15 m/s, then it bounces back off it", part: "archFL", speed: 15, yawDeg: 0 },
-    { it: "when the arch flare meets it at 30° and 18 m/s, then it bounces back off it", part: "archFL", speed: 18, yawDeg: 30 },
     { it: "when the quarter panel meets it square at 15 m/s, then it bounces back off it", part: "quarterL", speed: 15, yawDeg: 0 },
     { it: "when the quarter panel meets it square at 21 m/s, then it bounces back off it", part: "quarterL", speed: 21, yawDeg: 0 },
     { it: "when the quarter panel meets it at 30° and 18 m/s, then it bounces back off it", part: "quarterL", speed: 18, yawDeg: 30 },
   ] as const;
   for (const testCase of testCases) {
     it(`${testCase.it}, keeping at least ${KERB_KEEPS} of its speed`, () => {
-      const kerb = new Surface();
-      kerb.addPrism({ x: 0, z: KERB_Z + 0.75, yaw: 0, hx: 20, hz: 0.75, base: 0, top: 0.5, id: 0 });
-      armSolids(kerb);
-      try {
-        const part = laidFlat(testCase.part, testCase.speed, testCase.yawDeg);
-        part.object.position.z = KERB_Z - 0.3 - part.shape.reach;
-        let before = NaN;
-        let after = NaN;
-        let away = NaN;
-        let hitAt = Infinity;
-        for (let t = H; t <= 1 && Number.isNaN(after); t += H) {
-          const speed = part.velocity.length();
-          stepTorn(part);
-          if (hitAt === Infinity && farthest(part, new THREE.Vector3(0, 0, 1)) >= KERB_Z - 0.02) {
-            hitAt = t;
-            before = speed;
-          }
-          if (t >= hitAt + 0.05) {
-            after = part.velocity.length();
-            away = part.velocity.z;
-          }
-        }
-        assert.ok(after >= KERB_KEEPS * before, `${after.toFixed(2)} m/s 0.05 s after meeting it at ${before.toFixed(2)} m/s`);
-        assert.ok(away < 0, `moving ${away.toFixed(2)} m/s along z: away from the kerb`);
-      } finally {
-        armSolids(null);
-      }
+      const { before, after, away } = kerbMeet(testCase.part, testCase.speed, testCase.yawDeg);
+      assert.ok(after >= KERB_KEEPS * before, `${after.toFixed(2)} m/s 0.05 s after meeting it at ${before.toFixed(2)} m/s`);
+      assert.ok(away < 0, `moving ${away.toFixed(2)} m/s along z: away from the kerb`);
     });
   }
+
+  // As its drawn shell (ticket B) the arch flare's curved leading edge rides the kerb's face: at an angle it bounces back or vaults the kerb
+  // by the slice it meets it in (as its box, union 44ab48b3, it bounced back at all of these). Either is what the owner asked for: it does
+  // not stop dead there.
+  it(`when the arch flare meets it at ${SWEEP_SPEEDS.join(", ")} m/s and ${SWEEP_YAWS.join(", ")}°, then it never stops dead at it: it bounces back or vaults it, keeping at least ${KERB_KEEPS} of its speed`, (t) => {
+    const dead: string[] = [];
+    const rows: string[] = [];
+    for (const speed of SWEEP_SPEEDS) {
+      for (const yaw of SWEEP_YAWS) {
+        const { before, after, away } = kerbMeet("archFL", speed, yaw);
+        rows.push(`${speed}/${yaw}: ${before.toFixed(2)} -> ${after.toFixed(2)} m/s, ${away < 0 ? "back" : "over"} (${away.toFixed(2)} along z)`);
+        if (!(after >= KERB_KEEPS * before)) dead.push(`${speed} m/s at ${yaw}°: ${after.toFixed(2)} m/s 0.05 s after meeting it at ${before.toFixed(2)}`);
+      }
+    }
+    t.diagnostic(rows.join("; "));
+    assert.deepEqual(dead, []);
+  });
   // The arch flare square at 21 m/s, as its box (ticket B): a knife edge in the slice it meets the kerb at. The 0.375 m arch (CarSedan
   // 20334982) vaults it at exactly 21 m/s (0.05 s on: 7.72 m/s up, 0.14 m/s on toward it, 17.5 rad/s) and bounces back at 19, 20, 20.5,
   // 21.5, 22 and 23; the 0.405 m arch bounced back at all seven.

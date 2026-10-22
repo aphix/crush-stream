@@ -12,7 +12,8 @@ const FLOAT32_SLACK = 1e-4;
 const NEAR = 10;
 const MID = (DETAIL_LEVELS[0]!.mid + DETAIL_LEVELS[0]!.far) / 2;
 const FAR = DETAIL_LEVELS[0]!.far + 25;
-const DOORS = 2;
+/** The parts that close a car's openings: both doors, the hood and the boot lid. */
+const CLOSERS = 4;
 const PANES = 6;
 
 /** A 50 degree lens at the origin looking down +z; cars stand on the axis at the given distance, broadside. */
@@ -42,7 +43,7 @@ function stage(capacity = 4) {
 type Shown = { source: THREE.BufferGeometry; first: THREE.Vector3 };
 
 /** What a lane draws this frame, read through three's own skinning of the lane mesh. */
-function shown(batch: CoverBatch, lane: "doors" | "glass"): Shown[] {
+function shown(batch: CoverBatch, lane: "paint" | "glass"): Shown[] {
   const l = batch[lane];
   if (!l.mesh.visible) return [];
   l.mesh.skeleton.update();
@@ -64,17 +65,20 @@ function drawnSomehow(part: THREE.Mesh, covers: readonly Shown[]): boolean {
 
 describe("given the cover batch and an intact car broadside to the camera", () => {
   for (const style of CAR_STYLE_IDS) {
-    test(`when a ${style} stands ${FAR} m away (the far cut), then both doors and all six panes are still drawn, by the cover batch`, () => {
+    test(`when a ${style} stands ${FAR} m away (the far cut), then both doors, the hood over its engine bay, the boot lid over its boot and all six panes are still drawn, by the cover batch`, () => {
       const { batch, car, draw } = stage();
       const probe = car(FAR, style);
       draw([probe]);
       assert.equal(probe.body.layers.isEnabled(0), true, "the control: the body draws");
-      assert.equal(probe.apertureParts.filter((d) => d.layers.isEnabled(0)).length, 0, "the control: the far cut took the doors");
-      const doors = shown(batch, "doors");
+      assert.equal(probe.apertureParts.filter((d) => d.layers.isEnabled(0)).length, 0, "the control: the far cut took the doors and lids");
+      assert.equal(`${probe["hood"].layers.isEnabled(0)} ${probe["trunk"].layers.isEnabled(0)}`, "false false", "the control: the far cut took the hood and the boot lid");
+      const painted = shown(batch, "paint");
       const glass = shown(batch, "glass");
-      for (const door of probe.apertureParts) assert.ok(drawnSomehow(door, doors), `a ${style} door is a hole`);
+      for (const door of probe.apertureParts) assert.ok(drawnSomehow(door, painted), `a ${style} door or lid is a hole`);
+      assert.ok(drawnSomehow(probe["hood"], painted), `the ${style}'s engine bay is open: its hood is not drawn`);
+      assert.ok(drawnSomehow(probe["trunk"], painted), `the ${style}'s boot is open: its lid is not drawn`);
       for (const pane of probe.glassPanes) assert.ok(drawnSomehow(pane.mesh, glass), `the ${style}'s ${pane.name} pane is a hole`);
-      assert.equal(`${doors.length} ${glass.length}`, `${DOORS} ${PANES}`);
+      assert.equal(`${painted.length} ${glass.length}`, `${CLOSERS} ${PANES}`);
     });
   }
 
@@ -84,9 +88,9 @@ describe("given the cover batch and an intact car broadside to the camera", () =
     draw([probe]);
     const glass = shown(batch, "glass");
     assert.equal(probe.glassPanes.filter((g) => g.mesh.layers.isEnabled(0)).length, 0, "the control: the mid cut took the panes");
-    for (const door of probe.apertureParts) assert.ok(drawnSomehow(door, []), "a door drawn by its own mesh");
+    for (const door of probe.apertureParts) assert.ok(drawnSomehow(door, []), "a door or lid drawn by its own mesh");
     for (const pane of probe.glassPanes) assert.ok(drawnSomehow(pane.mesh, glass), `the ${pane.name} pane is a hole`);
-    assert.equal(`${shown(batch, "doors").length} ${glass.length}`, `0 ${PANES}`);
+    assert.equal(`${shown(batch, "paint").length} ${glass.length}`, `0 ${PANES}`);
   });
 
   test(`when it stands ${NEAR} m away, or comes back there from the far cut, then the batch draws nothing of it`, () => {
@@ -95,11 +99,11 @@ describe("given the cover batch and an intact car broadside to the camera", () =
     draw([probe]);
     probe.group.position.z = NEAR;
     draw([probe]);
-    assert.equal(`${shown(batch, "doors").length} ${shown(batch, "glass").length}`, "0 0");
-    assert.equal(`${batch["doors"].mesh.visible} ${batch["glass"].mesh.visible}`, "false false", "a lane covering nothing draws nothing");
+    assert.equal(`${shown(batch, "paint").length} ${shown(batch, "glass").length}`, "0 0");
+    assert.equal(`${batch["paint"].mesh.visible} ${batch["glass"].mesh.visible}`, "false false", "a lane covering nothing draws nothing");
     const collapsed = new THREE.Matrix4().makeScale(0, 0, 0);
-    for (const c of batch["doors"]["covers"]) assert.ok(c.bone.matrixWorld.equals(collapsed), "a part no car draws there collapses to a point");
-    for (const door of probe.apertureParts) assert.ok(drawnSomehow(door, []), "its door draws itself");
+    for (const c of batch["paint"]["covers"]) assert.ok(c.bone.matrixWorld.equals(collapsed), "a part no car draws there collapses to a point");
+    for (const door of probe.apertureParts) assert.ok(drawnSomehow(door, []), "its doors and lids draw themselves");
   });
 });
 
@@ -111,9 +115,9 @@ describe("given the cover batch and a far-cut car that has lost parts", () => {
     const door = probe["parts"].find((p) => p.name === "doorL")!;
     probe["detachPart"](door, 10);
     draw([probe]);
-    const doors = shown(batch, "doors");
+    const painted = shown(batch, "paint");
     const glass = shown(batch, "glass");
-    assert.equal(`${doors.length} ${glass.length}`, `${DOORS - 1} ${PANES - 1}`);
+    assert.equal(`${painted.length} ${glass.length}`, `${CLOSERS - 1} ${PANES - 1}`);
     const sidePane = probe.glassPanes.find((g) => g.name === "doorL")!;
     assert.ok(!glass.some((c) => c.source === sidePane.mesh.geometry), "the torn door's pane is not covered");
     let flying = 0;
@@ -153,13 +157,13 @@ describe("given a cover batch with room for one car", () => {
     for (let field = 0; field < 3; field++) {
       const cars = [car(FAR), car(FAR + 5), car(FAR + 10)];
       draw(cars);
-      const doors = shown(batch, "doors");
+      const painted = shown(batch, "paint");
       const glass = shown(batch, "glass");
       for (const c of cars) {
-        for (const door of c.apertureParts) assert.ok(drawnSomehow(door, doors), `field ${field}: a door is a hole`);
+        for (const door of c.apertureParts) assert.ok(drawnSomehow(door, painted), `field ${field}: a door or lid is a hole`);
         for (const pane of c.glassPanes) assert.ok(drawnSomehow(pane.mesh, glass), `field ${field}: a pane is a hole`);
       }
-      assert.equal(`${doors.length} ${glass.length}`, `${3 * DOORS} ${3 * PANES}`);
+      assert.equal(`${painted.length} ${glass.length}`, `${3 * CLOSERS} ${3 * PANES}`);
       for (const c of cars) c.dispose();
     }
   });
@@ -170,7 +174,7 @@ describe("given the cover batch's lanes holding a far car", () => {
     const { batch, car, draw } = stage();
     draw([car(FAR)]);
     const dynamic: string[] = [];
-    for (const lane of ["doors", "glass"] as const) {
+    for (const lane of ["paint", "glass"] as const) {
       const geo = batch[lane].mesh.geometry;
       assert.ok(geo.drawRange.count > 3, `the control: the ${lane} lane holds the car`);
       for (const [name, a] of [...Object.entries(geo.attributes), ["index", geo.index!] as const]) if ((a as THREE.BufferAttribute).usage !== THREE.StaticDrawUsage) dynamic.push(`${lane}.${name}`);

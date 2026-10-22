@@ -326,9 +326,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * tyre at the end of its springs rests on the stop (it fell onto it every other slice and never slept). Trunk
  * lids, hatches, the SUV liftgate and the pickup's drop gate swing on hinges: a rear crush pops the latch, a slam re-latches it, a hard stop, slam,
  * crush or hit tears it off (a loose lid weighs its car's share), struts raise a lid to its stop and a drop gate falls level on its cables; the
- * hatch's and SUV's rear glass rides its gate. Door glass ends 1 cm under its B-pillar's front edge; a mirror keeps its style's reach (sedan 0.157 m,
+ * hatch's and SUV's rear glass rides its gate. The monster's tailgate drops on a hinge at its foot, as the pickup's does. Door glass ends 1 cm under its B-pillar's front edge; a mirror keeps its style's reach (sedan 0.157 m,
  * 0.25 m behind its hinge; hatchback 0.075, SUV 0.065; it stood at the platform's 0.21) through a reset and every crash pose; a sedan's torn bumper flies as the box of
- * everything it draws, its seam cover included; the sedan's hood ends at z 0.99; the police light bar sits over the B-pillars. A driver thrown out
+ * everything it draws, its seam cover included; its seams no longer hook back over the wheel arches' tops, so each torn bumper's box is 6-7 cm shorter;
+ * the sedan's door glass meets a thrown driver at its drawn front edge;
+ * the sedan's hood ends at z 0.99; the police light bar sits over the B-pillars. A driver thrown out
  * of the windshield leaves from the pane's bowed middle (`userData.centre`, 1 cm further forward), each raked pane's top corners fall onto the roof's
  * dome (`domeFall`, about 2 cm), and the hatchback's windshield reaches its reference's glass top (17 cm further back, 8 cm higher) with its rear glass
  * base and tailgate top at .905, its roof rolling round into its side glass as the coupe's. The sedan's and police's tails end 3.5 cm wider. A car's collision cage keeps the underside it rests on out to its nose and tail lips (read once it is a wreck), so a
@@ -337,6 +339,12 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * cracks the windshield. A sedan dropped on its roof keeps its rear glass (its fastback frame stands clear of the crushed roof). A wreck
  * struck again re-arms its hit on the slice's hardest contact, whichever touched first, and a graze too soft to arm no longer shuts the
  * window on the face behind it: a derby sedan's 25 km/h side hits wear its drivetrain out in 6 (each counted its graze's 8 of 36, or none).
+ * A torn part flies as its drawn shell's own points (the shell point farthest along each of its box's twenty ways), not its box, where its
+ * box leaves a corner empty: every torn part but the mirrors and the light bar. A bumper, door, quarter or arch no longer rests on a corner
+ * where nothing is drawn (12-73 cm off its shell), and the keyframe carries each loose part's twenty points and its shell flag. A torn grille,
+ * tail trim or mirror flies and collides as its style draws it, not as the platform part.
+ * The coupe's flanks carry their widest line 5-9 cm under the belt from its tail to its door (its reference's haunch crest), its quarter sill dips
+ * behind the door and rises to the window's point, and its roof's rear corner stands 2 cm wider.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

@@ -269,6 +269,8 @@ export interface DetachPart {
   hinge: "cowl" | "tail" | "two-point" | "door" | "bar" | "quarter" | "arch";
   detached: boolean;
   folding: boolean;
+  /** Posed open for show (`showPose`), not by its hinge: the bay under a shown hood draws. */
+  shown: boolean;
   hingeT: number;
   /** The most `syncAttachedParts` may raise `hingeT` to: a panel pushed back onto the body stays dented below it. Host state, not netted. */
   hingeMax: number;
@@ -291,15 +293,28 @@ export interface DetachPart {
   /** The road held up part of the open arch shell's drop in its last pose (`poseShell`): it is re-posed while it rests there, and torn off it leaves free of the road (`detachPart`). */
   held: boolean;
   dent: DentState;
-  /** The box it flies as (`stepLoose`), preallocated; measured when it first flies. */
+  /** The shape it flies as (`stepLoose`), preallocated; measured when it first flies. */
   shape: LooseShape;
 }
 
-/** A loose body's points and inertia (`loose-step.ts`): `count` points (0: not measured yet) as offsets from its middle `centre`, in the object's own axes, and its inverse inertia per unit mass about those axes. */
+/**
+ * A loose body's points and inertia (`loose-step.ts`): `count` points (0: not measured yet) as offsets from its middle `centre`, in the object's
+ * own axes, and its inverse inertia per unit mass about those axes.
+ */
 export interface LooseShape {
   readonly points: Float64Array;
   count: number;
   readonly centre: THREE.Vector3;
+  /** The half extents (m) of its bounding box about `centre`, in its own axes: its inertia's box and its wind plate (`blow`). */
+  readonly half: THREE.Vector3;
+  /** Its points are that box's corners and edge middles (`halfBox`); else they are the drawn shell's own (`boxShape`) or a wheel's rims. */
+  box: boolean;
+  /**
+   * It flies as its drawn shell's own points where its box has an empty corner (`boxShape`): every torn part but the mirrors and the light
+   * bar. A torn bumper is a U in plan (its swept ends and seam cover) and an L side-on, a door, quarter or arch a curved sheet, and as a box
+   * each rested on a corner its shell does not fill (12-73 cm off anything drawn).
+   */
+  readonly shell: boolean;
   readonly invI: THREE.Vector3;
   /** The farthest a point is from `centre` (m): the body's bounding radius. */
   reach: number;
@@ -411,7 +426,7 @@ export abstract class CarCore {
   readonly restCaster: THREE.BufferGeometry;
   /** Whether the car is flush (`CarParts.settleCasters`): its sun shadow is `restCaster`, and the body and flush parts cast none. */
   restCasts = false;
-  /** The doors: the door cut drops the body's side to the sill, so a car with them off the camera is open there; a far-cut car draws them through `CoverBatch`. */
+  /** The parts that close the body's openings: the hood over the engine bay, the boot lid over the boot cut, the doors over the door cut to the sill. A far-cut car draws them through `CoverBatch`, so it is never see-through. */
   readonly apertureParts: THREE.Mesh[] = [];
   protected hullHelper: THREE.LineSegments | null = null;
   abstract readonly cage: CarCage;
@@ -526,7 +541,7 @@ export abstract class CarCore {
     this.flushCasters.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
     if (this.style.details) for (const mesh of [this.body, this.hood, this.trunk, this.doorMeshL, this.doorMeshR]) ensureRestFrame(mesh, this.group);
     for (const material of new Set([this.bodyMat, doorMat])) applyDetailMap(material, this.style);
-    this.apertureParts.push(this.doorMeshL, this.doorMeshR);
+    this.apertureParts.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
 
     const accent = livery?.accent ?? paint.accent;
     this.bumperF = this.makeBumper(true, accent, livery?.body ?? paint.body);
@@ -764,6 +779,7 @@ export abstract class CarCore {
         hinge,
         detached: false,
         folding: false,
+        shown: false,
         hingeT: 0,
         hingeMax: 1,
         fatigue: 0,
@@ -778,7 +794,9 @@ export abstract class CarCore {
         shellFlutter: 0,
         held: false,
         dent: newDentState(),
-        shape: newLooseShape(),
+        // Every torn part may fly as its drawn shell's own points where its box leaves a corner empty (`boxShape`; ticket B, the owner's:
+        // a curved panel's box corners stood 12-73 cm off anything drawn), but the mirrors and the light bar, which fly as their boxes.
+        shape: newLooseShape(!name.startsWith(PART_FAMILY.mirror) && name !== LIGHT_BAR),
       };
       this.parts.push(p);
       return p;

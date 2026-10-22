@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { hypot2, detAcos, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type BumperEnd, type HoodNose, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
-import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, roofDrip, tubWall, WINDSHIELD_BOW } from "./car-lines.ts";
+import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, roofDrip, shoulderDropAt, tubWall, WINDSHIELD_BOW } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
@@ -361,14 +361,24 @@ const SHOULDER_TOP = Math.PI / 3;
 /** Tuck-under from the feature line to the rocker (m, parabolic in height). */
 const TUCK = 0.03;
 
+/** The body side's widest-line drop under the belt at `z`: the style's `shoulder`, else `FEATURE_DROP`. */
+export function shoulderDrop(z: number, style: BodyStyle): number {
+  return shoulderDropAt(z, style) ?? FEATURE_DROP;
+}
+
+/** The shoulder's up radius (m) for a widest-line `drop`: it grows by the drop's change, so the roll still reaches the deck edge; exactly `SHOULDER[1]` at `FEATURE_DROP`. */
+function shoulderUp(drop: number): number {
+  return SHOULDER[1] + (drop - FEATURE_DROP);
+}
+
 /**
- * Body-side half-width at height `y` for a station of half-width `hw` and belt `yb`: the shoulder rolls in
+ * Body-side half-width at height `y` for a station of half-width `hw`, belt `yb` and widest-line `drop` under it: the shoulder rolls in
  * above the feature line, the side tucks under below it to the rocker at `rockerY`, C1 at the feature line. The door skin follows it too.
  */
-export function sideX(y: number, hw: number, yb: number, rockerY: number): number {
-  const yF = yb - FEATURE_DROP;
+export function sideX(y: number, hw: number, yb: number, rockerY: number, drop = FEATURE_DROP): number {
+  const yF = yb - drop;
   if (y >= yF) {
-    const sin = Math.min((y - yF) / SHOULDER[1], detSin(SHOULDER_TOP));
+    const sin = Math.min((y - yF) / shoulderUp(drop), detSin(SHOULDER_TOP));
     return hw + SIDE_OUT - SHOULDER[0] * (1 - Math.sqrt(1 - sin * sin));
   }
   // A low nose's feature line can fall under its rocker (a bumper read past the nose, where the underside rises): fully tucked there.
@@ -379,10 +389,12 @@ export function sideX(y: number, hw: number, yb: number, rockerY: number): numbe
 /** The drawn body side's shoulder point at `SHOULDER_TOP` (its ring point 2) at `z`, and the shoulder's unit tangent there, up toward the deck. */
 export function shoulderTop(z: number, style: BodyStyle): { x: number; y: number; tangent: readonly [number, number] } {
   const { hw, yBelt } = sampleSlice(z, style.profile);
-  const y = yBelt - FEATURE_DROP + SHOULDER[1] * detSin(SHOULDER_TOP);
-  const [dx, dy] = [-SHOULDER[0] * detSin(SHOULDER_TOP), SHOULDER[1] * detCos(SHOULDER_TOP)];
+  const drop = shoulderDrop(z, style);
+  const up = shoulderUp(drop);
+  const y = yBelt - drop + up * detSin(SHOULDER_TOP);
+  const [dx, dy] = [-SHOULDER[0] * detSin(SHOULDER_TOP), up * detCos(SHOULDER_TOP)];
   const run = hypot2(dx, dy);
-  return { x: sideX(y, hw, yBelt, 0) - seamInset(z, style), y, tangent: [dx / run, dy / run] };
+  return { x: sideX(y, hw, yBelt, 0, drop) - seamInset(z, style), y, tangent: [dx / run, dy / run] };
 }
 
 /** Shoulder arc angles sampled by the ring (rad), top down; the feature line (0) follows. Two 30° chords sag 3 mm. */
@@ -455,8 +467,10 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   const well = wheelWell(z, wheels, style.arch.radius) * (source === "drawn" ? (style.arch.rise ?? 1) : 1);
   const archY = wheels[0]![1] + well;
   const inset = seamInset(z, style);
-  const yF = yb - FEATURE_DROP;
-  const side = (y: number): [number, number] => [sideX(y, hw, yb, rockerY) - inset, y];
+  const drop = shoulderDrop(z, style);
+  const up = shoulderUp(drop);
+  const yF = yb - drop;
+  const side = (y: number): [number, number] => [sideX(y, hw, yb, rockerY, drop) - inset, y];
   const tuckRows = TUCK_ROWS[source];
   const rocker = FLARE_FIRST + tuckRows + 1;
   // The deck edge drops into the style's own tubs (cabin, bed), not into the drawn bay: there it stays the fender's top under the hood's edge.
@@ -471,7 +485,7 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   const half: [number, number][] = [
     [lerp(hw - DECK_CROWN.inset, edge ?? hw - 0.06, tub.t), lerp(yb + DECK_CROWN.rise, tub.floor, tub.t)],
     [lerp(hw - fenderIn, hw - tubWall(style), deckTub) + grooveOut!, deckEdgeY(yb, deckTub) - grooveDown!],
-    ...SHOULDER_RING.map((a) => side(yF + SHOULDER[1] * detSin(a))),
+    ...SHOULDER_RING.map((a) => side(yF + up * detSin(a))),
     side(yF),
     ...Array.from({ length: tuckRows }, (_, row) => side(lerp(yF, rockerY, (row + 1) / (tuckRows + 1)))),
     side(rockerY),
@@ -593,7 +607,8 @@ export function drawnSideX(z: number, y: number, style: BodyStyle): number {
   const { hw, yBelt } = sampleSlice(z, style.profile);
   const rockerY = rockerAt(z, style);
   const [ex, ey] = y > ring[0]![1] ? ring[0]! : ring[ring.length - 1]!;
-  return sideX(y, hw, yBelt, rockerY) + ex - sideX(ey, hw, yBelt, rockerY);
+  const drop = shoulderDrop(z, style);
+  return sideX(y, hw, yBelt, rockerY, drop) + ex - sideX(ey, hw, yBelt, rockerY, drop);
 }
 
 export function loftFromRings(rings: Pt[][], zs: number[], u0: number, u1: number, capsOwnRings = true): THREE.BufferGeometry {
@@ -832,6 +847,8 @@ const LID_FOLD_STEPS = 3;
 const LID_FACE_STEPS = 2;
 /** A profile station this close (m) to a nose-wrapping hood's own ring is that ring's: no sliver of a gap. */
 const LID_KINK_MERGE = 0.005;
+/** How far (m) each fold ring's held skirt stands past the ring before it: a strip of zero length is a zero-area face, which has no normal and glues the creases it touches. */
+const HOLD_STEP = 0.001;
 
 /** The rolled edge's run at a ring: its plan taper and rise (m per m along the loft) and the x scale its ring takes after the build (a drop's fold). */
 type RollEdge = { taper: number; rise: number; scale: number };
@@ -1011,7 +1028,10 @@ function makeDeckPanel(
   if (drop) {
     const lean = ((drop.z ?? z1) - z1) / (yc - (drop.y - oy));
     bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, wFace, lean, fold, dir);
-  } else if (nose) bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, 1, 0, fold, dir);
+  } else if (nose) {
+    bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, 1, 0, fold, dir);
+    holdUnderAxis(geo.getAttribute("position") as THREE.BufferAttribute, rings, deckRings, fold, dir);
+  }
   ensureOutwardNormals(geo);
   // The deck's own rings come first; a fold's follow them.
   geo.userData.deckRings = deckRings;
@@ -1027,7 +1047,7 @@ function makeDeckPanel(
 /**
  * Bends the straight run lofted past `zA` (its z the path length along `dir`, its y the offset off the panel) a quarter turn down over
  * the end edge on a `radius` bend about the fold's centre (`yc`, `zA`), then down the face, `lean` m of z per m down; x scales to `wFace` ×
- * on the way round. On a bend tighter than the skirt the skirt and underside turn on past its axis, behind the face inside the body.
+ * on the way round. On a bend tighter than the skirt, `holdUnderAxis` keeps the skirt and underside out of the fold.
  */
 function bendOverEnd(pos: THREE.BufferAttribute, zA: number, yc: number, wFace: number, lean: number, radius: number, dir: number): void {
   const arc = (radius * Math.PI) / 2;
@@ -1038,6 +1058,21 @@ function bendOverEnd(pos: THREE.BufferAttribute, zA: number, yc: number, wFace: 
     const r = radius + pos.getY(i);
     const down = Math.max(0, s - arc);
     pos.setXYZ(i, pos.getX(i) * lerp(1, wFace, turn / (Math.PI / 2)), yc + r * detCos(turn) - down, zA + dir * r * detSin(turn) + lean * down);
+  }
+}
+
+/**
+ * A nose fold tighter than the skirt turns the skirt and underside points under its axis (`radius` + y < 0) back over the deck's side walls:
+ * they are held on the deck's last ring instead, `HOLD_STEP` further on along the run for each fold ring, so the skirt runs straight on behind the nose.
+ */
+function holdUnderAxis(pos: THREE.BufferAttribute, rings: readonly Pt[][], deckRings: number, radius: number, dir: number): void {
+  const n = rings[0]!.length;
+  const deck = (deckRings - 1) * n;
+  for (let s = deckRings; s < rings.length; s++) {
+    for (let c = 0; c < n; c++) {
+      if (radius + rings[s]![c]!.y >= 0) continue;
+      pos.setXYZ(s * n + c, pos.getX(deck + c), pos.getY(deck + c), pos.getZ(deck + c) + dir * (s - deckRings + 1) * HOLD_STEP);
+    }
   }
 }
 
@@ -1263,8 +1298,9 @@ export function makeBumperGeometry(front: boolean, style: BodyStyle, rows?: read
     const u = i < (stations + 1) * n ? wraps[ring]! : wrapAt(x);
     const y = pos.getX(i);
     const z = s * (pos.getY(i) - u * wrap.back);
-    const slice = sampleSlice(s * seat.z + z, style.profile);
-    const side = sideX(seat.y + y, slice.hw, slice.yBelt, rockerAt(s * seat.z + z, style)) - BUMPER_TUCK;
+    const zBody = s * seat.z + z;
+    const slice = sampleSlice(zBody, style.profile);
+    const side = sideX(seat.y + y, slice.hw, slice.yBelt, rockerAt(zBody, style), shoulderDrop(zBody, style)) - BUMPER_TUCK;
     pos.setXYZ(i, Math.sign(x) * Math.min(Math.abs(x), side), y, z);
   }
   ensureOutwardNormals(geo);
@@ -1290,7 +1326,8 @@ function makeBumperWithEnds(
     const z = s * (seat.z + outMax - d);
     const slice = sampleSlice(z, style.profile);
     const rocker = rockerAt(z, style);
-    return Math.max(...fascia.map(([y]) => sideX(seat.y + y, slice.hw, slice.yBelt, rocker)));
+    const drop = shoulderDrop(z, style);
+    return Math.max(...fascia.map(([y]) => sideX(seat.y + y, slice.hw, slice.yBelt, rocker, drop)));
   };
   const [a, b] = [skinAt(end.corner) + end.stand - wrap.from, end.corner];
   const thin = Math.min(1, (END_DEPTH_SHARE * b * b) / (a * depth));

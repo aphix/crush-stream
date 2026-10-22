@@ -35,7 +35,9 @@ const MONSTER_LAMP_SHAPES = {
   },
   tail: {
     loops: [
-      { points: [[0.68, 0.62], [0.78, 0.62], [0.78, 0.98], [0.68, 0.98]] },
+      // The amber cell (y .71-.836) stands in its own window: the red lens runs under and over it, not beneath it (a cell over the lens z-fought it 1.5 mm apart).
+      { points: [[0.68, 0.62], [0.78, 0.62], [0.78, 0.71], [0.68, 0.71]] },
+      { points: [[0.68, 0.836], [0.78, 0.836], [0.78, 0.98], [0.68, 0.98]] },
       { side: true, points: [[-2.295, 0.62], [-2.255, 0.62], [-2.255, 0.98], [-2.295, 0.98]] },
     ],
     lens: "lit",
@@ -68,6 +70,9 @@ export const MONSTER: BodyStyle = {
   door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, hingeTop: 0.99, mirrorY: 0.315, mirrorZ: 0.27, mirrorReach: 0.16, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75], mirror: MONSTER_MIRROR },
   aPillarFoot: 0.6,
   aPillarTop: 0.41,
+  // The door glass's front edge knees onto the A-post's rear edge at the mirror head's top, so the post stays an even tube over a small black sail.
+  aPillarKnee: 1.15,
+  blackout: { sail: true },
   bPillar: { rear: -0.19, front: -0.12 },
   // The side plate's B-post stands upright between the door glasses, z -.214 to -.128.
   pillars: { b: { width: [0.086, 0.086], z: [-0.171, -0.171] } },
@@ -110,7 +115,8 @@ export const MONSTER: BodyStyle = {
   // (as the cars' 1 m stands 9 cm over theirs), so its hood's cowl and its bed rim are columns, not roof slabs.
   proxyBelt: 1.12,
   rearDoorSeam: -0.15,
-  boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
+  // The bed gate drops from its bottom edge, as the pickup's does (unset, it hinged at its top and swung up like a hatch).
+  boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3], pivot: [0.45, -2.3] },
   // The reference side plate's markers are a deep amber rear (~0xb0581e) and a duller red-amber front (~0xa04a3a): factors on the shared amber 0xff9a1a.
   lamps: { head: [0.55, 0.69], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, bulb: "halogen", sideMarkers: [{ at: [0.788, -2.0], size: [0.085, 0.045], tint: 0xb095ff }, { at: [0.744, 0.814], size: [0.06, 0.032], tint: 0xa07fff }] },
   // The reference's grille fills the face between its head lamps (inner edges x .445), its top and foot on theirs.

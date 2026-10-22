@@ -28,7 +28,7 @@ const HEADLINER_DROP = 0.03;
 /** The bay's sides stand this far (m) inside the nose's narrowest station over it; its top this far under the deck line (the hood lid's underside). */
 const BAY_INSET = 0.06;
 const HOOD_UNDER = 0.024;
-/** The bay shows once the hood hinges open past this; a crash bar once its bumper hangs past this. */
+/** The bay shows once the hood hinges open past this (or is shown open); a crash bar once its bumper hangs past this. */
 const BAY_OPEN = 0.05;
 const BAR_OPEN = 0.5;
 /** A gone bumper bares the body from this far (m) inside its seat out, up to this far over it. */
@@ -205,7 +205,7 @@ export class CarCabin {
     const hood = parts.find((p) => p.name === LID.hood)!;
     const front = parts.find((p) => p.name === BUMPER_F)!;
     const rear = parts.find((p) => p.bumper && p !== front)!;
-    this.under[0]!.showIf = () => hood.detached || hood.hingeT > BAY_OPEN;
+    this.under[0]!.showIf = () => hood.detached || hood.shown || hood.hingeT > BAY_OPEN;
     this.under[1]!.showIf = () => front.detached || front.hingeT > BAR_OPEN;
     this.under[2]!.showIf = () => rear.detached || rear.hingeT > BAR_OPEN;
   }

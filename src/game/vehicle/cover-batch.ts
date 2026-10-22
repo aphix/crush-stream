@@ -3,9 +3,11 @@ import { makeGlassMaterial, makePaintMaterial, PRIVACY_SHADE } from "./car-mater
 import { GLASS_ATTRIBUTE } from "./constants.ts";
 import type { DeformableCar } from "./car.ts";
 
-/** A door's room in its lane at first (vertices, indices; the sedan's is 280 and 1038); a lane grows when a field outgrows it. */
-const DOOR_VERTICES = 384;
-const DOOR_INDICES = 1536;
+/** A car's parts in the paint lane: its two doors, its hood and its boot lid. */
+const CLOSERS = 4;
+/** A paint part's room in its lane at first (vertices, indices); a lane grows when a field outgrows it. */
+const PART_VERTICES = 384;
+const PART_INDICES = 1536;
 /** A pane's room (vertices, indices). */
 const PANE_VERTICES = 64;
 const PANE_INDICES = 256;
@@ -203,34 +205,34 @@ function cut(car: DeformableCar, part: THREE.Object3D): boolean {
 }
 
 /**
- * The doors and panes the distance detail has cut, drawn as two draws for the whole field so a cut car still reads closed: the body's
- * door cut is open to the sill and its greenhouse is glass. A torn door or a shattered pane is not the car's to cover: its hole stays.
+ * The doors, lids and panes the distance detail has cut, drawn as two draws for the whole field so a cut car still reads closed: the body's
+ * door cut is open to the sill, its bay and boot are open under their lids, and its greenhouse is glass. A torn door or lid or a shattered pane is not the car's to cover: its hole stays.
  */
 export class CoverBatch {
-  /** The doors, then the glass. */
+  /** The paint lane (doors and lids), then the glass. */
   readonly meshes: readonly THREE.SkinnedMesh[];
   /** The one object the scene holds: the draws under a group that is never hidden, so `ParkingScene` keeps a draw hidden at its pass that `sync` then shows. */
   readonly group = new THREE.Group();
-  private readonly doors: CoverLane;
+  private readonly paint: CoverLane;
   private readonly glass: CoverLane;
 
   constructor(cars: number) {
-    this.doors = new CoverLane(makePaintMaterial(0xffffff), cars * 2, DOOR_VERTICES, DOOR_INDICES);
+    this.paint = new CoverLane(makePaintMaterial(0xffffff), cars * CLOSERS, PART_VERTICES, PART_INDICES);
     this.glass = new CoverLane(makeGlassMaterial(), cars * 6, PANE_VERTICES, PANE_INDICES);
     this.glass.mesh.renderOrder = 2;
-    this.meshes = [this.doors.mesh, this.glass.mesh];
+    this.meshes = [this.paint.mesh, this.glass.mesh];
     this.group.add(...this.meshes);
   }
 
-  /** Pack the cut doors and panes of `cars` (world matrices must be current). */
+  /** Pack the cut doors, lids and panes of `cars` (world matrices must be current). */
   sync(cars: readonly DeformableCar[]): void {
-    this.doors.begin();
+    this.paint.begin();
     this.glass.begin();
     for (const car of cars) {
-      for (const door of car.apertureParts) if (cut(car, door)) this.doors.add(door);
+      for (const part of car.apertureParts) if (cut(car, part)) this.paint.add(part);
       for (const pane of car.glassPanes) if (cut(car, pane.mesh)) this.glass.add(pane.mesh);
     }
-    this.doors.end();
+    this.paint.end();
     this.glass.end();
   }
 

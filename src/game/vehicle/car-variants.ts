@@ -128,8 +128,9 @@ interface RoofParts {
    * `ends` [slope, taper] (m): the top's side ends stand `slope` inboard of the underside's, and the tip's ends `taper` inboard of the front edge's.
    * `round`: the tip's corners turn on a quarter ellipse in plan (`taper` across, the whole z run along) instead of the straight chamfer.
    * `crown` (m): the top's middle stands this much over its sloped ends' tops (a parabola across, carrying the roof's crown over it); absent, level.
+   * `bow` (m): the front edge bows back in plan, its middle this far behind its ends on a parabola across (as a rear glass top's plan bow), easing to none at the tip; absent, straight.
    */
-  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number]; round?: boolean; crown?: number };
+  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number]; round?: boolean; crown?: number; bow?: number };
   /** Dark glass panel over the front seats, `width` (m) across, standing just proud of the roof skin. */
   glassPanel?: { z: readonly [number, number]; width: number };
 }
@@ -343,6 +344,8 @@ export interface BodyStyle {
   belt: { x: number | readonly (readonly [number, number])[]; y: readonly (readonly [number, number])[] };
   /** The body side's lowest line (m); under it the sill turns in to the floor pan at `dims.rideHeight`. */
   rocker: { y: number };
+  /** The body side's widest line's drop under the profile belt (m) as [z, drop] stations, linear between them and held past the ends; absent: FEATURE_DROP (0.1). A smaller drop gives a higher, tighter crest: the roll above it keeps its out radius and still rises to the deck edge. Feeds the cage too. */
+  shoulder?: readonly (readonly [number, number])[];
   /** Floor pan height as [z, y] stations in ascending z (linear between, held past the ends); absent = flat at `dims.rideHeight`. The rocker rides up with it. */
   underside?: readonly (readonly [number, number])[];
   /**
@@ -367,8 +370,9 @@ export interface BodyStyle {
      * `neck` (m): the foot runs this far below the head's bottom, an arm holding the head up off the belt; absent = 0.7 of the cap's height, hidden behind it.
      * `mount` "glass": the seat stands on the door glass's plane at its z and height (`mirrorY` may stand over `halfHeight`), its foot leaning with the pane, as a tow mirror on the glass's front corner; absent, on the skin.
      * `round`: a rounded, tear or nose cap's edge radius as a share of its smallest side (absent `MIRROR_CAP_ROUND`, 0.35); toward 0.5 the outer end rounds right across that side.
+     * `taper`: a tear or nose cap's small face's section as a share of its full one (absent `MIRROR_TEAR`, 0.6); toward 1 the cap reads as a fuller pod.
      */
-    mirror?: { cap: "rounded" | "box" | "tear" | "nose"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass"; round?: number };
+    mirror?: { cap: "rounded" | "box" | "tear" | "nose"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass"; round?: number; taper?: number };
     hingeTop?: number;
     /** Drawn only: the door skin's outer face stands this far (m) over the body side inside its cut (absent `DOOR_PROUD`, 3 mm); 0: flush, the shut line a groove only. */
     proud?: number;
