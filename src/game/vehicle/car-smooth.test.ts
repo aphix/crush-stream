@@ -705,13 +705,13 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
  * into the body on top of its loft: red if one grows.
  */
 const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number }> = {
-  // The sedan's, police's and coupe's C-pillar is a sail (`cPillar`): 6 or 7 sections of 19 points a side, not a post's 2 of 11.
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 416 },
+  // The sedan's, police's and coupe's C-pillar is a sail (`cPillar`): 5 or 6 sections of 19 points a side, not a post's 2 of 11.
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 378 },
   hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 296 },
   wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 296 },
-  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 454 },
+  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 416 },
   pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 264 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 416 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 378 },
   monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 264 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and their stations then (the A-post's, every other post's). */
