@@ -17,6 +17,8 @@ export const INNER_PANEL = 2;
  * (`car-materials.ts`), as the references draw them. Below 0, so bare steel (`bare-metal.ts`, from 0.3 up) never reads it.
  */
 export const BLACKOUT = -1;
+/** A rear deck's 12 mm kick (m) over its own line: the closed deck's crown over the belt, and a boot lid's lip at its free edge. */
+export const DECK_RISE = 0.012;
 /** A bumper's per-vertex trim attribute: 0 the bumper's own trim, `FITTING_TONE` black or chrome (its exhaust tips and tow hitch, drawn in its one mesh). */
 export const FITTING_ATTRIBUTE = "fitting";
 export const FITTING_TONE = { black: 1, chrome: 2 } as const;

@@ -5,7 +5,7 @@ import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt } from "./car
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
-import { INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { DECK_RISE, INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { bootPivot, roofHinged } from "./hinge-spec.ts";
 
 export const SEDAN = CAR_STYLES.sedan;
@@ -343,7 +343,7 @@ const SILL_ROWS = [0.235, 0.236, 0.234, 0.231, 0.226].map((y) => y - 0.2);
 const SILL_TUCK = 0.22 - 0.2;
 
 /** The closed deck's crown points stand this far (m) inside the station's half-width and over its belt. */
-const DECK_CROWN = { inset: 0.22, rise: 0.012 } as const;
+const DECK_CROWN = { inset: 0.22, rise: DECK_RISE } as const;
 
 /**
  * Lower body ring (left half top→bottom, keel, right half bottom→top; the
