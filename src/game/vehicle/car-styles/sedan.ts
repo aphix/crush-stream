@@ -58,10 +58,6 @@ const SEDAN_LAMP_SHAPES = {
           [0.69, 0.87, -1.88],
           [0.63, 0.87, -1.96],
           [0.55, 0.866, -2.05],
-          [0.45, 0.855, -2.1],
-          [0.4, 0.842, -2.12],
-          [0.4, 0.776, -2.12],
-          [0.45, 0.772, -2.1],
           [0.55, 0.765, -2.05],
           [0.63, 0.757, -1.96],
           [0.69, 0.756, -1.88],
@@ -78,14 +74,14 @@ const SEDAN_LAMP_SHAPES = {
           points: [
             [0.74, 0.842, -1.73],
             [0.69, 0.855, -1.88],
-            [0.55, 0.851, -2.05],
-            [0.41, 0.828, -2.115],
+            [0.56, 0.851, -2.05],
           ],
         },
         width: 0.012,
         tone: "lit",
       },
-      { line: { points: [[0, 0.809], [0.4, 0.809]] }, width: 0.006, tone: "chrome" },
+      // The reference's chrome bar across the lid joins the tails at their mid-height; the lamps stop at the lid's shut line.
+      { line: { points: [[0, 0.815], [0.55, 0.815]] }, width: 0.012, tone: "chrome" },
     ],
   },
   front: {
