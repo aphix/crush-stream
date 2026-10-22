@@ -341,3 +341,40 @@ describe("given a front bumper hung by one corner on a car standing on the road 
     assert.equal(walks, 1);
   });
 });
+
+/** How far (m) the arch shell's body skin stands over the road on the sunk wreck: under the flap's 4 cm drop at hinge value 1. */
+const SKIN_OVER_ROAD = 0.02;
+
+describe("given a front arch shell hanging off a wreck sitting low on the road (its flap rests on the road, it is not drawn through it)", () => {
+  /** The world height (m) of the lowest of `p`'s drawn shell vertices, or, with `skin`, of the body skin it is cut from. */
+  const lowest = (car: Probe, p: DetachPart, skin = false): number => {
+    if (!skin) return new THREE.Box3().setFromObject(p.object, true).min.y;
+    car.body.updateWorldMatrix(true, false);
+    const pos = car.body.geometry.getAttribute("position");
+    const v = new THREE.Vector3();
+    return Math.min(...Array.from(p.region!.verts, (g) => v.fromBufferAttribute(pos, g).applyMatrix4(car.body.matrixWorld).y));
+  };
+  /** A crashed car lowered until the front arch's skin stands `SKIN_OVER_ROAD` over the road, as a crushed wreck sits. */
+  const sunk = (): Probe => {
+    const car = crashed();
+    car.group.position.y -= lowest(car, car.part("archFL"), true) - SKIN_OVER_ROAD;
+    car.group.updateMatrixWorld(true);
+    return car;
+  };
+
+  it("when the arch shell is hinged to full, then its lowest point stands on the road, not the 2 cm under it its drop would take it", () => {
+    const car = sunk();
+    const p = car.hang("archFL", 1);
+    assert.ok(lowest(car, p) >= 0, `the arch shell's lowest point is ${(-lowest(car, p) * 100).toFixed(1)} cm under the road`);
+    assert.ok(lowest(car, p) < SKIN_OVER_ROAD, `the arch shell hangs ${(lowest(car, p) * 100).toFixed(1)} cm over the road: its flap did not drop to it`);
+  });
+
+  it("when the shell resting on the road is torn off, then it leaves bent as its hinge alone bends it, as the same shell torn off a car standing high", () => {
+    const low = sunk();
+    assert.ok(low.hang("archFL", 1).held, "the sunk wreck's shell does not rest on the road: there is no hold to tear it free of");
+    const high = crashed();
+    high.hang("archFL", 1);
+    const shape = (car: Probe) => ((car.tear("archFL").object as THREE.Mesh).geometry.getAttribute("position") as THREE.BufferAttribute).array;
+    assertSameNumbers(shape(low), shape(high), "torn shell vertices");
+  });
+});

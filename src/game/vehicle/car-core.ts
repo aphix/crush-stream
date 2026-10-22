@@ -283,6 +283,10 @@ export interface DetachPart {
   open: boolean;
   /** The hinge value the open shell was last posed at (`shellPose`): an attached panel is re-posed only when it changes (a changed skin re-poses all, `skinPanels`). */
   posed: number;
+  /** The shell flutter its last pose bent with (`shellPose`), -1..1: a re-pose for the road alone bends with it again. */
+  shellFlutter: number;
+  /** The road held up part of the open arch shell's drop in its last pose (`poseShell`): it is re-posed while it rests there, and torn off it leaves free of the road (`detachPart`). */
+  held: boolean;
   dent: DentState;
   /** The box it flies as (`stepLoose`), preallocated; measured when it first flies. */
   shape: LooseShape;
@@ -755,6 +759,8 @@ export abstract class CarCore {
         bare: null,
         open: false,
         posed: -1,
+        shellFlutter: 0,
+        held: false,
         dent: newDentState(),
         shape: newLooseShape(),
       };
