@@ -11,39 +11,41 @@ const POLICE_LAMP_SHAPES = {
     loops: [
       {
         points: [
-          [0.44, 0.56, 1.975],
-          [0.66, 0.56, 1.79],
-          [0.66, 0.47, 1.79],
-          [0.44, 0.47, 1.975],
+          [0.44, 0.6, 1.975],
+          [0.66, 0.6, 1.79],
+          [0.66, 0.48, 1.79],
+          [0.44, 0.48, 1.975],
         ],
       },
     ],
-    lens: "lit",
+    // The halogen glow fills the reflector's middle, its chrome rim round it, the hood's edge right over the lamp (front iso).
+    lens: "chrome",
     bezel: "chrome",
     cells: [
       {
         loop: {
           points: [
-            [0.66, 0.56, 1.79],
-            [0.76, 0.56, 1.66],
-            [0.76, 0.47, 1.66],
-            [0.66, 0.47, 1.79],
+            [0.66, 0.6, 1.79],
+            [0.74, 0.58, 1.68],
+            [0.74, 0.48, 1.68],
+            [0.66, 0.48, 1.79],
           ],
         },
         tone: "amber",
       },
+      { loop: { points: [[0.46, 0.585, 1.958], [0.64, 0.585, 1.807], [0.64, 0.495, 1.807], [0.46, 0.495, 1.958]] }, tone: "lit" },
     ],
-    strips: [{ line: { points: [[0.44, 0.515, 1.975], [0.66, 0.515, 1.79]] }, width: 0.006, tone: "dark" }],
   },
   tail: {
     loops: [
       {
         points: [
-          [0.42, 0.85, -2.12],
-          [0.52, 0.85, -2.07],
+          [0.42, 0.76, -2.12],
+          [0.46, 0.795, -2.1],
+          [0.53, 0.825, -2.065],
           [0.62, 0.85, -2.0],
-          [0.7, 0.85, -1.9],
-          [0.72, 0.82, -1.88],
+          [0.7, 0.865, -1.9],
+          [0.72, 0.85, -1.88],
           [0.72, 0.67, -1.88],
           [0.7, 0.64, -1.9],
           [0.62, 0.64, -2.0],
@@ -52,11 +54,12 @@ const POLICE_LAMP_SHAPES = {
         ],
       },
     ],
-    // The cruiser's tail lamps are deep red with a lit band and dark ribs (rear iso): no amber top, no white reverse block.
+    // The cruiser's tail lamps are deep red with a lit band and dark ribs (rear iso), as tall as they are wide on the tail, their top
+    // rounding up from the inner edge to the corner: no amber top, no white reverse block.
     lens: "red",
     strips: [
       { line: { points: [[0.42, 0.745], [0.72, 0.745]] }, width: 0.022, tone: "lit" },
-      { line: { points: [[0.42, 0.795], [0.72, 0.795]] }, width: 0.003, tone: "dark" },
+      { line: { points: [[0.56, 0.795], [0.72, 0.795]] }, width: 0.003, tone: "dark" },
       { line: { points: [[0.42, 0.695], [0.72, 0.695]] }, width: 0.003, tone: "dark" },
     ],
   },
