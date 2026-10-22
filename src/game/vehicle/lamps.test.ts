@@ -140,7 +140,7 @@ describe("given every body style fitted with its own lamps", () => {
       car.group.updateMatrixWorld(true);
       const exterior: THREE.Object3D[] = [];
       car.group.traverse((o) => {
-        if (!(o instanceof THREE.Mesh || o instanceof PartSeat) || o.name === INTERIOR_MESH || o === car.shadowCaster) return;
+        if (!(o instanceof THREE.Mesh || o instanceof PartSeat) || o.name === INTERIOR_MESH) return;
         for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p.name === "deform-rig" || !p.visible) return;
         exterior.push(o instanceof PartSeat ? seatProbe(o) : o);
       });

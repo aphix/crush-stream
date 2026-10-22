@@ -1365,7 +1365,7 @@ describe("given a body style's P2 parts", () => {
     const lid = car.lampFittings.find((f) => f.kind === "boot");
     assert.ok(lid, "the hatch carries a share of the tails");
     const trunk = lid.seat.parent as THREE.Mesh;
-    assert.ok(trunk.parent && trunk.position.z === car.style.boot.origin[1], "riding the lid itself");
+    assert.ok(trunk.parent && trunk.position.z === bootPivot(car.style.boot)[1], "riding the lid itself");
     car.group.updateMatrixWorld(true);
     // Nearest distance (m) from a car-frame point to a mesh's surface.
     const gap = (mesh: THREE.Mesh, p: THREE.Vector3): number => {

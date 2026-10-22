@@ -27,19 +27,35 @@ const ray = new THREE.Raycaster();
 const _o = new THREE.Vector3();
 const _d = new THREE.Vector3();
 
-/** The first hit (world) on `meshes` from `origin` along `dir`, or null. */
-function hit(meshes: readonly THREE.Object3D[], origin: THREE.Vector3, dir: THREE.Vector3): THREE.Vector3 | null {
+/** The skin a read may land on: the hood, the boot lid, and the drawn body's loft alone (its first triangles, `userData.loft`). */
+interface Skin {
+  readonly meshes: readonly THREE.Object3D[];
+  readonly body: THREE.Mesh;
+  readonly loftTris: number;
+}
+
+/** The car's skin: the greenhouse frame, belt seals and bulkheads merged into the body after its loft are no shoulder. */
+function skinOf(body: THREE.Mesh, hood: THREE.Mesh, trunk: THREE.Mesh): Skin {
+  const { ring, slices } = body.geometry.userData.loft as { ring: number; slices: number };
+  return { meshes: [body, hood, trunk], body, loftTris: (slices - 1) * ring * 2 };
+}
+
+/** The first hit (world) on `skin` from `origin` along `dir`, or null. */
+function hit(skin: Skin, origin: THREE.Vector3, dir: THREE.Vector3): THREE.Vector3 | null {
   ray.set(origin, dir);
-  return ray.intersectObjects(meshes as THREE.Object3D[], false)[0]?.point ?? null;
+  const hits = ray.intersectObjects(skin.meshes as THREE.Object3D[], false);
+  return hits.find((h) => h.object !== skin.body || (h.faceIndex ?? Infinity) < skin.loftTris)?.point ?? null;
 }
 
 /**
- * The worst hump in `pts` ([z, v], z ascending): how far a sample stands over the higher of the lowest samples either side of it,
- * so a side that only climbs or falls toward one end of the stretch (a nose, a cowl) scores nothing.
+ * The worst hump in `pts` ([z, v], z ascending) peaking between z `lo` and `hi`: how far a sample stands over the higher of the
+ * lowest samples either side of it, so a side that only climbs or falls toward one end of the stretch (a nose, a cowl) scores
+ * nothing.
  */
-function hump(pts: readonly (readonly [number, number])[]): readonly [number, number] {
+function hump(pts: readonly (readonly [number, number])[], lo: number, hi: number): readonly [number, number] {
   let worst: readonly [number, number] = [0, 0];
   for (let i = 1; i < pts.length - 1; i++) {
+    if (pts[i]![0] < lo || pts[i]![0] > hi) continue;
     let before = Infinity;
     let after = Infinity;
     for (let j = 0; j < i; j++) before = Math.min(before, pts[j]![1]);
@@ -51,16 +67,17 @@ function hump(pts: readonly (readonly [number, number])[]): readonly [number, nu
 }
 
 /**
- * Each arch's humps on `id`'s drawn body (body, hood, boot lid): over the arch's stretch, the side's half-width at the belt and the
- * shoulder's top, each scored by `hump`. The fitter's arch zone is the same stretch: a plan read that took the flare for the body
- * side swells both here.
+ * Each arch's humps on `id`'s drawn body (body loft, hood, boot lid): the side's half-width at the belt and the shoulder's top,
+ * sampled over the arch's stretch (the fitter's arch zone, where a plan read that took the flare for the body side swelled both)
+ * and scored by `hump` for peaks over the wheel opening (hub ± one arch radius). A peak at the stretch's ends is the cowl's or
+ * the C-pillar foot's, not the wheel's.
  */
 function archHumps(id: CarStyleId): string[] {
   const style = CAR_STYLES[id];
   const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
   car.group.updateMatrixWorld(true);
   const look = car.lookMeshes();
-  const meshes = [look.body, look.hood, look.trunk];
+  const skin = skinOf(look.body, look.hood, look.trunk);
   const reach = ARCH_SPAN * style.arch.radius;
   const out: string[] = [];
   for (const hub of carFrame(style).wheels.filter((w) => w[0] > 0)) {
@@ -73,13 +90,13 @@ function archHumps(id: CarStyleId): string[] {
     };
     for (let z = z0; z <= z1 + 1e-9; z += STEP_M) {
       const belt = sampleSlice(z, style.profile).yBelt;
-      const side = hit(meshes, _o.set(3, belt - BELT_READ_M, z), _d.set(-1, 0, 0));
+      const side = hit(skin, _o.set(3, belt - BELT_READ_M, z), _d.set(-1, 0, 0));
       add("half-width at the belt", z, side?.x ?? null);
-      const top = side === null ? null : (hit(meshes, _o.set(side.x - TOP_INSET_M, 3, z), _d.set(0, -1, 0))?.y ?? null);
+      const top = side === null ? null : (hit(skin, _o.set(side.x - TOP_INSET_M, 3, z), _d.set(0, -1, 0))?.y ?? null);
       add("shoulder top", z, top !== null && top > belt - CABIN_DROP_M ? top : null);
     }
     for (const [name, pts] of reads) {
-      const [z, h] = hump(pts);
+      const [z, h] = hump(pts, hub[2] - style.arch.radius, hub[2] + style.arch.radius);
       if (h > BULGE_M) out.push(`${id} ${hub[2] > 0 ? "front" : "rear"} arch: ${name} humps ${(h * 100).toFixed(1)} cm at z ${z.toFixed(2)}`);
     }
   }
