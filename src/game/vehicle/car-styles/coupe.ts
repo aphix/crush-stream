@@ -120,7 +120,8 @@ export const COUPE: BodyStyle = {
   /** Reference rear iso: the roof rolls heavily onto the rear glass's top, no flat cap there. */
   roofEnds: { rear: 0.13 },
   windshieldTop: [1.255, 0.12],
-  rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96, bow: { base: -0.02, top: -0.04 } },
+  // Round corners: the reference rear iso's four, about a sixth of the 0.53 m slant.
+  rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96, bow: { base: -0.02, top: -0.04 }, round: 0.09 },
   quarter: { zRearBot: -0.96, zRearTop: -0.74 },
   /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle. */
   cPillar: { flush: true },

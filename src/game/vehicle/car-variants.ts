@@ -48,6 +48,8 @@ export interface GlassQuad {
   bow?: GlassBow;
   /** Drawn only (the rear glass): the clear pane drawn in by [side, bottom, top] (m; sides across, bottom and top along its slope), the band out to the outline the glass's black frit. */
   frame?: readonly [number, number, number];
+  /** Drawn only (an unframed rear glass): the clear pane's corners rounded to this radius (m), the glass's black frit filling out to the square outline. */
+  round?: number;
 }
 
 /** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
