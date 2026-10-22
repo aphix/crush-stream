@@ -42,9 +42,8 @@ const WAGON_LAMP_SHAPES = {
     ],
   },
   front: {
-    // The reference's corner intake: a tall recess, its inboard edge leaning out toward its foot, its bright blade across its upper third
-    // from inboard of it, turning up at its outer end.
-    loops: [{ points: [[0.525, 0.555], [0.7, 0.555], [0.725, 0.535], [0.73, 0.37], [0.71, 0.345], [0.6, 0.345], [0.575, 0.36], [0.53, 0.53]] }],
+    // The reference's corner intake: a tall, narrow recess above the lower intake, its bright blade across its upper third from inboard of it.
+    loops: [{ points: [[0.6, 0.555], [0.7, 0.555], [0.725, 0.535], [0.73, 0.37], [0.71, 0.345], [0.64, 0.345], [0.62, 0.36], [0.61, 0.48]] }],
     lens: "dark",
     onBody: true,
     fill: 0.03,
@@ -75,7 +74,7 @@ export const WAGON: BodyStyle = {
   belt: { x: [[-1.97, 0.64], [-1.8, 0.7], [-1.6, 0.74], [-1.4, 0.77], [-1.2, 0.785]], y: [[-2.033, 1.095], [0.024, 1.07], [0.887, 1.062]] },
   rocker: { y: 0.28 },
   arch: { radius: 0.455, lip: { flare: 0.016, width: 0.055 } },
-  hood: { z0: 0.86, z1: 1.93, origin: [0.96, 0.84], kind: "clamshell", crown: [0.03, 0.7] },
+  hood: { z0: 0.86, z1: 1.93, origin: [0.96, 0.84], kind: "clamshell", crown: [0.03, 0.7], followGlass: -0.05 },
   bumpers: {
     front: {
       seat: { y: 0.48, z: 1.9785 },
@@ -145,6 +144,8 @@ export const WAGON: BodyStyle = {
   ],
   roofZ: [-1.84, 0.3],
   windshieldTop: [1.45, 0.3],
+  // The A-post upright and even as its reference side plate's band (drawn twin: the windshield's side edge bows back in plan to the roof's square front, the cage keeps the style's own).
+  drawn: { windshield: { base: [1.1, 0.73], wBase: 1.42, wTop: 0.98, bow: { base: 0.18, top: 0.023 }, seat: true }, aPillarFoot: 0.675, aPillarTop: 0.175 },
   // The rear glass's top as wide as the roof end lets it (its post-top clamp), so the D-post's edges run near parallel.
   rearGlass: { base: [1.1, -2.065], top: [1.47, -1.79], wBase: 1.22, wTop: 0.96 },
   // The quarter glass runs back to a slim D-post of even width, as the reference's rear iso.
@@ -164,9 +165,9 @@ export const WAGON: BodyStyle = {
   // The reference's D-post reads gloss black like the glass beside it; its quarter glass a dark blur, not the garage's sharp mirror.
   blackout: { a: true, sail: true, b: true, divider: true, rear: true },
   privacyGlass: { rear: true, quarter: "matte" },
-  // The glass panel as the reference's isos: from 19 cm behind the windshield's top, 0.57 m long, 0.72 m across. The spoiler covers the roof's
-  // end out to its lip carrying the roof's crown, its trailing corners rounded 10 cm in plan as the reference's roof corners.
-  roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.86, -1.74], y: [1.46, 1.51], halfWidth: 0.6, ends: [0.06, 0.1], round: true, crown: 0.026 }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
+  // The glass panel as the reference's isos: from 19 cm behind the windshield's top, 0.57 m long, 0.72 m across. The spoiler caps the roof's
+  // last drawn chord from its ring (z -1.662) flush with the roof's crown, so no face stands over the sagging chord; trailing corners rounded.
+  roof: { rails: { x: [0.5, 0.56], z: [-1.64, 0.12], rise: 0.03 }, spoiler: { z: [-1.86, -1.662], y: [1.46, 1.516], halfWidth: 0.6, ends: [0.06, 0.1], round: true, crown: 0.026 }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
   exhaust: { tips: 2, x: 0.5, y: 0.42, size: [0.15, 0.05], shape: "round" },
   details: {
     lines: [
@@ -204,7 +205,6 @@ export const WAGON: BodyStyle = {
       { view: "side", points: [[-1.3, 0.6], [-1.67, 0.6], [-1.95, 0.6]], width: 0.03, depth: 0.002, profile: "u", cavity: 0 },
       { view: "side", points: [[-1.51, 0.95], [-1.54, 0.99], [-1.57, 1.01], [-1.6, 0.99], [-1.63, 0.95], [-1.6, 0.91], [-1.57, 0.89], [-1.54, 0.91]], closed: true, width: 0.01, depth: -0.005, profile: "v", cavity: 0.85 },
       { view: "top", points: [[0.04, 0.5], [-0.7, 0.5], [-1.3, 0.5], [-1.57, 0.49]], width: 0.035, depth: 0.006, profile: "u", cavity: 0 },
-      { view: "top", points: [[-1.64, 0.55], [-1.7, 0.3], [-1.72, 0]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[-1.83, 0.55], [-1.83, 0]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[-1.6, 0], [-1.6, 0.55]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-1.6, 1.52], [-1.85, 1.4], [-2.07, 1.11], [-2.115, 0.9], [-2.125, 0.66]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
@@ -221,8 +221,8 @@ export const WAGON: BodyStyle = {
       { view: "top", points: [[1.18, 0.47], [1.18, 0.55], [1, 0.55], [1, 0.47]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.02, bar: 0.006, depth: 0.004 }, cavity: 0.7 },
       { view: "front", points: [[0, 0.58], [0.025, 0.585], [0.035, 0.6], [0.025, 0.615], [0, 0.62]], depth: 0.003, rim: 0.004, cavity: 0 },
       // The lower intake and the corner intake's recess end where the corner intake's dark lens does: no stepped edge.
-      { view: "front", points: [[0, 0.48], [0.543, 0.48], [0.575, 0.36], [0.575, 0.31], [0, 0.31]], depth: -0.006, rim: 0.004, cavity: 0.95 },
-      { view: "front", points: [[0.525, 0.555], [0.7, 0.555], [0.725, 0.535], [0.73, 0.37], [0.71, 0.345], [0.6, 0.345], [0.575, 0.36], [0.53, 0.53]], depth: -0.006, rim: 0.004, cavity: 0.95 },
+      { view: "front", points: [[0, 0.48], [0.61, 0.48], [0.62, 0.36], [0.62, 0.31], [0, 0.31]], depth: -0.006, rim: 0.004, cavity: 0.95 },
+      { view: "front", points: [[0.6, 0.555], [0.7, 0.555], [0.725, 0.535], [0.73, 0.37], [0.71, 0.345], [0.64, 0.345], [0.62, 0.36], [0.61, 0.48]], depth: -0.006, rim: 0.004, cavity: 0.95 },
       { view: "front", points: [[0.485, 0.758], [0.555, 0.758], [0.555, 0.803], [0.485, 0.803]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "side", points: [[0.92, 0.89], [0.92, 0.925], [0.47, 0.925], [0.47, 0.89]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0.5, 0.91], [0.8, 0.91], [0.8, 0.99], [0.5, 0.99]], depth: -0.004, rim: 0.004, cavity: 0 },

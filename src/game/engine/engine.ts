@@ -74,6 +74,8 @@ const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _bn = new THREE.Vector3();
 const _bp = new THREE.Vector3();
+/** No cars: the showcase's set outside its scene. */
+const NO_CARS: readonly DeformableCar[] = [];
 
 export class CrashEngine extends EngineGarage {
   /** Resolves when `warmPrograms` is done (a failure is logged): the loop simulates and draws only after it, so play never links a program. */
@@ -225,8 +227,8 @@ export class CrashEngine extends EngineGarage {
       this.lampBatch.night = this.stage.night;
       this.lampBatch.sync(drawn);
       this.partBatch.sync(drawn);
-      // In the garage the standing dummy beside the car is the driver: no one sits in the car there.
-      this.seated.sync(this.showGarage ? [] : drawn, driverLook);
+      // In the garage the standing dummy beside the car is the driver, and the showcase's cars show their empty cabins: no one sits in the car there.
+      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook);
       this.coverBatch.sync(drawn);
     };
 
@@ -378,15 +380,17 @@ export class CrashEngine extends EngineGarage {
   /** The scratch list `drawnCars` rewrites in place. */
   private readonly drawnBuf: DeformableCar[] = [];
 
-  /** The cars the wheel, lamp and part batches draw (instanced, not meshes of the car): the field's, and the podium's own while it stands (it hides the field). */
+  /** The cars the wheel, lamp and part batches draw (instanced, not meshes of the car): the field's, the podium's own while it stands (it hides the field), and the showcase's set in its scene. */
   private drawnCars(): readonly DeformableCar[] {
     const live = this.live();
     const stand = this.podium.cars();
-    if (stand.length === 0) return live;
+    const set = this.showShowcase && this.showcase ? this.showcase.cars : NO_CARS;
+    if (stand.length === 0 && set.length === 0) return live;
     const out = this.drawnBuf;
     out.length = 0;
     for (let i = 0; i < live.length; i++) out.push(live[i]!);
     for (let i = 0; i < stand.length; i++) out.push(stand[i]!);
+    for (let i = 0; i < set.length; i++) out.push(set[i]!);
     return out;
   }
 

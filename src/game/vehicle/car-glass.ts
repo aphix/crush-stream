@@ -3,7 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { PART_FAMILY, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad, type YZ } from "./car-variants.ts";
-import { ROCKER, glassTopY, glassX, lerp, roofTopY, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
+import { ROCKER, followedHoodTopY, glassTopY, glassX, hoodRearZ, lerp, makeHoodGeometry, roofTopY, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
 import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, rockerAt, sideBowZ, WINDSHIELD_BOW } from "./car-lines.ts";
 import { doorSkinStand } from "./car-door-mesh.ts";
 import { FITTING_ATTRIBUTE, GLASS_ATTRIBUTE, MATTE_PRIVACY } from "./constants.ts";
@@ -34,6 +34,45 @@ export function domeFall(style: BodyStyle, topZ: number): (x: number, t: number)
   const crown = roofTopY(0, topZ, style);
   const share = style.domeFall ?? 1;
   return (x, t) => share * t * (crown - roofTopY(x, topZ, style));
+}
+
+/** A seated pane's base (`windshield.seat`) stands this far (m) over the drawn hood's top: clear of it, closer than the eye reads as a gap. */
+const WINDSHIELD_SEAT = 0.002;
+/** The seat's ray starts this far (m) over the pane's highest base, clear of any hood top under it. */
+const HOOD_PROBE_LIFT = 0.1;
+
+/** A seated style's drawn hood as the car places it (its hinge origin), built once per style object: the pane's seat reads its top as drawn. */
+const HOOD_PROBES = new WeakMap<BodyStyle, THREE.Mesh>();
+const HOOD_PROBE_MATERIAL = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+const _hoodRay = new THREE.Raycaster();
+const _hoodFrom = new THREE.Vector3();
+const _down = new THREE.Vector3(0, -1, 0);
+
+/** Height (car frame, m) of `style`'s drawn hood's top at (`x`, `z`), read from its mesh with a ray down from `ceiling`; the bend's formula (`followedHoodTopY`) where no hood lies (past its width). */
+function drawnHoodTopY(style: BodyStyle, x: number, z: number, ceiling: number): number {
+  let probe = HOOD_PROBES.get(style);
+  if (probe === undefined) {
+    probe = new THREE.Mesh(makeHoodGeometry(style), HOOD_PROBE_MATERIAL);
+    probe.position.set(0, style.hood.origin[0], style.hood.origin[1]);
+    probe.updateMatrixWorld(true);
+    HOOD_PROBES.set(style, probe);
+  }
+  _hoodRay.set(_hoodFrom.set(x, ceiling, z), _down);
+  return _hoodRay.intersectObject(probe)[0]?.point.y ?? followedHoodTopY(x, z, style);
+}
+
+/** Height (m) of the windshield's base at column `xn` (−1…1): `base[0]`, or with `windshield.seat` the drawn hood's top there along the pane's bow (`WINDSHIELD_SEAT` over it, read off the hood's mesh), never above `base[0]`. A hood ending in front of the glass seats it on its rear edge. */
+export function windshieldBaseY(style: BodyStyle, xn: number): number {
+  const { base, wBase, bow = WINDSHIELD_BOW, seat } = style.windshield;
+  if (seat !== true) return base[0];
+  const x = (Math.abs(xn) * wBase) / 2;
+  const zGlass = base[1] + bow.base * (1 - xn * xn);
+  return Math.min(base[0], drawnHoodTopY(style, x, Math.max(zGlass, hoodRearZ(x, style)), base[0] + HOOD_PROBE_LIFT) + WINDSHIELD_SEAT);
+}
+
+/** The windshield's base as its side edge stands, [y, z]: the A-post and the door glass's knee run along that edge. */
+export function windshieldSideBase(style: BodyStyle): YZ {
+  return [windshieldBaseY(style, 1), style.windshield.base[1]];
 }
 
 /** How a raked pane is drawn: its grid (columns across, rows up), and `facing`, the way its outward normal runs along z. */
@@ -74,9 +113,12 @@ function makeGlassQuad(q: BowedQuad, { segX, segY }: QuadDraw): THREE.BufferGeom
 
 /** The windshield's quad on `style`: its base and widths, its top edge, its bow. */
 function windshieldQuad(style: BodyStyle): BowedQuad {
-  const { base, wBase, wTop, bow = WINDSHIELD_BOW, sideBow } = style.windshield;
+  const { base, wBase, wTop, bow = WINDSHIELD_BOW, sideBow, seat } = style.windshield;
   const ahead = sideBow === undefined ? undefined : (t: number) => sideBowZ(sideBow, t);
-  return { base, top: style.windshieldTop, wBase, wTop, bow, fall: domeFall(style, style.windshieldTop[1]), ahead };
+  const dome = domeFall(style, style.windshieldTop[1]);
+  // quadPoint lays x = xn * lerp(wBase, wTop, t) / 2: dividing it out gives the column's xn; the seat's drop fades to nothing at the top.
+  const fall = seat !== true ? dome : (x: number, t: number) => dome(x, t) + (1 - t) * (base[0] - windshieldBaseY(style, x / (lerp(wBase, wTop, t) / 2)));
+  return { base, top: style.windshieldTop, wBase, wTop, bow, fall, ahead };
 }
 
 /** The rear glass's quad on `style`, its bow and fall resolved. */
@@ -313,7 +355,8 @@ function doorSpan(style: BodyStyle): SideSpan {
   const knee = style.aPillarKnee;
   if (knee === undefined) return span;
   const [footY, topY] = [beltY(style.aPillarFoot, style), glassTopY(aPillarTopZ(style), style)];
-  return { ...span, front: (t) => doorGlassFrontZ(lerp(footY, topY, t), footY, topY, style), kneeT: (knee - footY) / (topY - footY) };
+  const base = windshieldSideBase(style);
+  return { ...span, front: (t) => doorGlassFrontZ(lerp(footY, topY, t), footY, topY, style, base), kneeT: (knee - footY) / (topY - footY) };
 }
 
 /** The drawn quarter glass's rear edge (`quarter.drawn`, else the cage's). */

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
+import { PartSeat } from "./part-geometry.ts";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeShell, panelRegions, type PanelRegion, poseShell, STAND_MAX } from "./car-panels.ts";
@@ -339,6 +340,27 @@ describe("given a front bumper hung by one corner on a car standing on the road 
     const p = car.hang("bumperF", 1);
     assert.ok(Math.abs(p.object.rotation.z) > 0.05, "the bumper did not hang by a corner, so no roll was searched");
     assert.equal(walks, 1);
+  });
+
+  it("when the car stood 10 m lower at its last full matrix update, then the hung bumper's fit still reads the bumper where it is: its drawn bounds stay on the road", () => {
+    const car = cornerCrashed();
+    // A static seat (the grille's) is not re-derived from its moved parent by an update that does not force it (three r186's
+    // `matrixWorldNeedsUpdate`): one fitted with `Box3.setFromObject` read the seat where the car last stood, 10 m down here (19 m off
+    // on the slope of wreck-rest's truck-into-monster hit), and lifted the bumper by that much.
+    car.group.position.y -= 10;
+    car.group.updateMatrixWorld(true);
+    car.group.position.y += 10;
+    const p = car.hang("bumperF", 1);
+    p.object.updateWorldMatrix(true, true);
+    const drawn = new THREE.Box3();
+    const box = new THREE.Box3();
+    p.object.traverseVisible((o) => {
+      const geometry = o instanceof PartSeat ? o.drawn : o instanceof THREE.Mesh ? (o.geometry as THREE.BufferGeometry) : null;
+      if (geometry === null) return;
+      if (geometry.boundingBox === null) geometry.computeBoundingBox();
+      drawn.union(box.copy(geometry.boundingBox!).applyMatrix4(o.matrixWorld));
+    });
+    assert.ok(drawn.min.y >= -1e-6 && drawn.min.y < 0.08, `the drawn bumper's low end stands ${drawn.min.y.toFixed(3)} m over the road`);
   });
 });
 

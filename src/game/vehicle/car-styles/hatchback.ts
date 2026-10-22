@@ -16,8 +16,8 @@ const HATCHBACK_LAMP_SHAPES = {
     // The reference's reflector split: a grey bar across the lens a little under its middle.
     strips: [{ line: { points: [[0.41, 0.535], [0.665, 0.535]] }, width: 0.01, tone: "smoked" }],
   },
-  // A slim band split at the gate's outline (the gate's piece inboard of x .43) and again at the infill's step wall (x .621 → .635 up the
-  // band): the outer lens starts on the wall's top edge and falls down it in front of the wall, then wraps the corner onto the quarter.
+  // A slim band split at the gate's outline (inboard of x .43) and at the infill's step wall (x .621 → .635 up the band): the outer lens falls
+  // down the wall, then wraps the corner onto the quarter, dropping to the quarter's lamp height (y .62) as the reference's side view.
   tail: {
     loops: [
       {
@@ -29,7 +29,8 @@ const HATCHBACK_LAMP_SHAPES = {
       {
         points: [
           [0.6243, 0.74, -1.9], [0.665, 0.74, -1.9],
-          [0.85, 0.74, -1.67], [0.85, 0.75, -1.6], [0.85, 0.8, -1.58], [0.85, 0.82, -1.63],
+          [0.85, 0.74, -1.67], [0.85, 0.68, -1.667], [0.85, 0.64, -1.66], [0.85, 0.62, -1.635], [0.85, 0.62, -1.61], [0.85, 0.635, -1.597],
+          [0.85, 0.75, -1.592], [0.85, 0.8, -1.585], [0.85, 0.82, -1.63],
           [0.665, 0.815, -1.9], [0.638, 0.82, -1.9], [0.6347, 0.82, -1.9], [0.6337, 0.815, -1.9], [0.6303, 0.8, -1.9], [0.6283, 0.78, -1.9],
           [0.6263, 0.76, -1.9],
         ],
@@ -76,7 +77,7 @@ export const HATCHBACK: BodyStyle = {
   belt: { x: 0.75, y: [[-1.174, 0.881], [-0.939, 0.877], [-0.935, 0.856], [0.128, 0.838], [0.381, 0.809], [0.58, 0.824], [0.584, 0.852], [0.88, 0.852]] },
   rocker: { y: 0.2 },
   arch: { radius: 0.35, lip: { flare: 0.009, width: 0.035 } },
-  hood: { z0: 0.86, z1: 1.66, origin: [0.75, 0.84] },
+  hood: { z0: 0.86, z1: 1.66, origin: [0.75, 0.84], followGlass: -0.043 },
   bumpers: {
     front: {
       seat: { y: 0.38, z: 1.7245 },
@@ -147,6 +148,8 @@ export const HATCHBACK: BodyStyle = {
   roofSection: { crown: 0.4, blend: 0.9, squareFront: 0.12 },
   roofDrip: 0,
   windshieldTop: [1.245, 0.245],
+  // The A-post upright and even as its reference side plate's band (drawn twin: the windshield's side edge bows back in plan, the cage keeps the style's own).
+  drawn: { windshield: { base: [0.891, 0.658], wBase: 1.38, wTop: 1.03, bow: { base: 0.245, top: 0.048 }, seat: true }, windshieldTop: [1.245, 0.22], aPillarFoot: 0.61, aPillarTop: 0.17 },
   // The rear glass's top as wide as the top view's (1.0 of the roof end's 1.04), so the D-pillar narrows to a pinch at the roof;
   // a slim frit beside it keeps the painted post, not a dark band, between the glass areas.
   rearGlass: { base: [0.905, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 1.0, frame: [0.03, 0.06, 0.11] },
@@ -206,7 +209,6 @@ export const HATCHBACK: BodyStyle = {
       { view: "side", points: [[1.4225, 0.27], [1.381, 0.425], [1.2675, 0.538], [1.1125, 0.58], [0.9575, 0.538], [0.844, 0.425], [0.8025, 0.27]], width: 0.02, depth: 0.006, profile: "u", cavity: 0 },
       { view: "side", points: [[-0.8025, 0.27], [-0.844, 0.425], [-0.9575, 0.538], [-1.1125, 0.58], [-1.2675, 0.538], [-1.381, 0.425], [-1.4225, 0.27]], width: 0.02, depth: 0.006, profile: "u", cavity: 0 },
       { view: "side", points: [[-1.28, 0.8], [-1.43, 0.8], [-1.43, 0.64], [-1.28, 0.64]], closed: true, width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-1.595, 0.82], [-1.6, 0.72], [-1.6, 0.62]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "side", points: [[0.56, 0.875], [-0.26, 0.875], [-0.89, 0.875], [-1.17, 0.875]], width: 0.015, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[0.52, 0.875], [0.37, 1.05], [0.22, 1.21], [0, 1.23], [-0.26, 1.23], [-0.26, 0.875]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[-0.31, 0.875], [-0.31, 1.22], [-0.8, 1.21], [-0.86, 1.2], [-0.89, 0.875]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },

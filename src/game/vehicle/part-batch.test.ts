@@ -4,7 +4,8 @@ import * as THREE from "three";
 import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
 import { DeformableCar } from "./car.ts";
 import { BUMPER_F, DRIVER_SIDE } from "./constants.ts";
-import { CAR_STYLES, CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLES, CAR_STYLE_IDS, drawnStyle, type CarStyleId } from "./car-variants.ts";
+import { windshieldBaseY } from "./car-glass.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
 import { drawnDoorCard } from "./car-door-mesh.ts";
@@ -247,7 +248,7 @@ describe("given the part batch and one car of each style, its windshield whole a
     for (const id of CAR_STYLE_IDS) {
       const { batch, car, draw } = stage(1);
       const only = car(10, id);
-      const style = CAR_STYLES[id];
+      const style = drawnStyle(CAR_STYLES[id]);
       draw([only]);
       const seat = only.partSeats[PART_KIND.wipers]!;
       const pane = only.glassPanes.find((g) => g.name === "windshield")!.mesh;
@@ -258,7 +259,8 @@ describe("given the part batch and one car of each style, its windshield whole a
         assert.ok(Math.sign(tip[0]! - pivot[0]!) === (style.wipers?.park ?? DRIVER_SIDE), `${id}: a blade parks from x ${pivot[0]!.toFixed(2)} to ${tip[0]!.toFixed(2)}`);
         const share = Math.abs(tip[0]! - pivot[0]!) / style.windshield.wBase;
         assert.ok(share > 0.25 && share < 0.55, `${id}: a blade spans ${share.toFixed(2)} of the base width`);
-        assert.ok(pivot[1]! > style.windshield.base[0] && pivot[1]! < style.windshield.base[0] + 0.06, `${id}: a pivot at y ${pivot[1]!.toFixed(3)}, just over the glass's base ${style.windshield.base[0]}`);
+        const floor = windshieldBaseY(style, pivot[0]! / (style.windshield.wBase / 2));
+        assert.ok(pivot[1]! > floor && pivot[1]! < floor + 0.06, `${id}: a pivot at y ${pivot[1]!.toFixed(3)}, just over the glass's base ${floor.toFixed(3)} at its column`);
       }
       const off = offGlass(seat.drawn, pane.geometry);
       const [low, high] = [Math.min(...off), Math.max(...off)];
@@ -301,15 +303,18 @@ describe("given the part batch and a car whose style has its own mirror", () => 
 
   test("when it is synced beside a platform-mirror car, then its mirror draws in its own variant, painted its door's colour, and that draw's geometry is its mirror", () => {
     const { batch, draw } = stage();
-    // Every real style carries its own mirror now: the neighbour is a hatchback stripped of its own for its build, so it draws the platform's.
+    // Every real style carries its own mirror now: the neighbour is a hatchback stripped of its own for its build, so it draws the platform's; a fresh twin reference rebuilds its drawn style (cached per twin).
     const hatch = CAR_STYLES.hatchback;
     const hatchDoor = hatch.door;
+    const hatchTwin = hatch.drawn;
     hatch.door = { ...hatchDoor, mirror: undefined };
     let plain: DeformableCar;
     try {
+      hatch.drawn = hatchTwin && { ...hatchTwin };
       plain = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
     } finally {
       hatch.door = hatchDoor;
+      hatch.drawn = hatchTwin;
     }
     plain.spawn(0, 10, 0);
     const own = new DeformableCar({ ...paint(), body: 0x336699 }, new THREE.Scene(), null, "wagon");
