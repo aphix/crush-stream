@@ -338,6 +338,8 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
   /** The side hit's contact is read slice by slice (s): the one slice it was read over, and the most of it read (a tenth of its 8 m/s's travel, 0.4 m). */
   const EPISODE_SLICE = 0.0026;
   const EPISODE_S = 0.05;
+  /** The least push (m) back toward the middle the stack must give over that contact: half the 238 mm it gave when the row was restaged to read it so (125f2db0), so a push that loses half of itself fails. */
+  const MIN_PUSH = 0.119;
   /** How far (m) the corners of `wreck`'s plan box (the footprint a prism meets, `prop-contact.ts` `footprint`) stand outside derby box `id` in plan; negative inside. */
   const footprintClear = (wreck: DeformableCar, id: number): number => {
     const box = DERBY_BOXES[id]!;
@@ -382,7 +384,7 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
       if (met.size > 0 && hit.walls.length === 0 && hit.towardMiddle <= 0) break;
     }
     assert.ok(met.size > 0 && [...met].every((i) => i === 54), `met the stack alone: ${[...met]}`);
-    assert.ok(towardMiddle > 0.001, `pushed ${(towardMiddle * 1000).toFixed(1)} mm back toward the middle over the contact`);
+    assert.ok(towardMiddle >= MIN_PUSH, `pushed ${(towardMiddle * 1000).toFixed(1)} mm back toward the middle over the contact (at least ${MIN_PUSH * 1000} mm)`);
   });
 
   it("when it is held 0.3 m inside the tyre stack 54's side at rest, a metre under the top, then it is pushed out of the stack within the slices the push-out speed implies, every slice within its zip bound", () => {
