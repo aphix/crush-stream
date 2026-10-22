@@ -1603,15 +1603,16 @@ describe("given a body style's P1 parts", () => {
     const lip = { rise: 0.025, depth: 0.08 };
     const { coupe, hatchback } = CAR_STYLES;
     const { lip: ownLip, ...bareDeck } = coupe.boot;
-    const gate = hatchback.boot;
+    const { lip: gateLip, ...gate } = hatchback.boot;
     assert.ok(bareDeck.kind === "lid" && gate.kind === "tailgate", "the coupe has a deck lid, the hatchback a tailgate");
-    // The plain deck is the coupe's lid without its own ducktail, so the measured rise is the test lip's alone.
+    // The plain deck and gate are the coupe's lid and the hatch's gate without their own lips, so the measured rise is the test lip's alone.
     const deck = bareDeck;
     const plainStyle: BodyStyle = { ...coupe, boot: bareDeck };
     const deckStyle: BodyStyle = { ...coupe, boot: { ...bareDeck, lip } };
+    const plainGateStyle: BodyStyle = { ...hatchback, boot: gate };
     const gateStyle: BodyStyle = { ...hatchback, boot: { ...gate, lip } };
-    assert.ok(ownLip === undefined || ownLip.rise > 0, "the coupe's own lip, if any, rises");
-    const [plainDeck, lipDeck, plainGate, lipGate] = [plainStyle, deckStyle, hatchback, gateStyle].map((s) => makeTrunkGeometry(s));
+    assert.ok((ownLip === undefined || ownLip.rise > 0) && (gateLip === undefined || gateLip.rise < 0), "the coupe's own lip, if any, rises; the hatch's, if any, rolls in");
+    const [plainDeck, lipDeck, plainGate, lipGate] = [plainStyle, deckStyle, plainGateStyle, gateStyle].map((s) => makeTrunkGeometry(s));
     const edge = deck.z1 - deck.origin[1];
     const deckIn = lerp(deck.z0, deck.z1, 0.8) - deck.origin[1];
     const gateTop = gate.origin[0] - bootPivot(gate)[0];
@@ -1620,7 +1621,7 @@ describe("given a body style's P1 parts", () => {
     const face = (g: THREE.BufferGeometry, at: number) => extremeAt(g, 1, at, 2, -1);
     assertSameNumbers([top(lipDeck!, edge) - top(plainDeck!, edge), top(lipDeck!, deckIn) - top(plainDeck!, deckIn)], [lip.rise, 0], "the deck lid's top over the plain one's at its rear edge and 0.13 m in", 1e-5);
     assertSameNumbers([face(plainGate!, gateTop) - face(lipGate!, gateTop), face(plainGate!, gateDown) - face(lipGate!, gateDown)], [lip.rise, 0], "the tailgate's face behind the plain one's at its top edge and 0.15 m down", 1e-5);
-    assert.ok(cageHash(deckStyle) === cageHash(plainStyle) && cageHash(gateStyle) === cageHash(hatchback), "the cage builds are unchanged");
+    assert.ok(cageHash(deckStyle) === cageHash(plainStyle) && cageHash(gateStyle) === cageHash(plainGateStyle) && cageHash(plainGateStyle) === cageHash(hatchback), "the cage builds are unchanged");
   });
 
   it("when a deck lid is flush, then its edge seats on the deck edge like the hood's, lower and wider than the plain lid's step, its crown unchanged, and the cage builds are unchanged", () => {
@@ -2108,6 +2109,21 @@ describe("given a body style's P2 parts", () => {
     const grille = { y: 0.48, z: sedan.bumpers.front.seat.z + 0.07, size: [0.6, 0.16], kind: "hex", finish: "black" } as const;
     const tris = (count: number) => drawnPart(PART_KIND.grille, { ...sedan, grille: { ...grille, count }, lamps: { ...sedan.lamps, shapes: undefined } }).geometry.getIndex()!.count / 3;
     assert.ok(tris(16) - tris(8) === 2 * 8 * 12, `16 lines each way draw ${tris(16) - tris(8)} triangles more than 8`);
+  });
+
+  it("when a hex grille gives its bars' angle, then their front edges run at ± that angle and none at the default 60°", () => {
+    const sedan = CAR_STYLES.sedan;
+    const seat = sedan.bumpers.front.seat;
+    const grille = { y: 0.48, z: seat.z + 0.07, size: [0.6, 0.16], kind: "hex", count: 8, angle: 0.37, finish: "black" } as const;
+    const pos = drawnPart(PART_KIND.grille, { ...sedan, grille, lamps: { ...sedan.lamps, shapes: undefined } }).geometry.getAttribute("position");
+    const front = grille.z - seat.z - GRILLE_SEAT.z - 0.004;
+    const ends = Array.from({ length: pos.count }, (_, i) => i).filter((i) => Math.abs(pos.getZ(i) - front) < 1e-5).map((i) => new THREE.Vector2(pos.getX(i), pos.getY(i)));
+    const edgesAt = (angle: number): number => {
+      let n = 0;
+      for (const a of ends) for (const b of ends) if (b.x - a.x > 0.03 && Math.abs(Math.abs(Math.atan2(b.y - a.y, b.x - a.x)) - angle) < 1e-3) n++;
+      return n;
+    };
+    assert.ok(edgesAt(grille.angle) > 0 && edgesAt(Math.PI / 3) === 0, `bar edges at ±${grille.angle}: ${edgesAt(grille.angle)}, at ±60°: ${edgesAt(Math.PI / 3)}`);
   });
 
   it("when a rear glass has a frame, then its clear pane is drawn that far inside the outline, the band out to the outline is its black frit, and the car's pane wears its vertex colours", () => {

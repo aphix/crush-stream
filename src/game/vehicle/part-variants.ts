@@ -206,7 +206,8 @@ function styleGrille(style: BodyStyle): THREE.BufferGeometry {
   ring.holes.push(new THREE.Path(inner));
   const surround = indexed(new THREE.ExtrudeGeometry(ring, { depth: GRILLE.rimDepth, bevelEnabled: false })).translate(0, 0, face - GRILLE.rimDepth);
   const fine = g.kind === "mesh" || g.kind === "hex";
-  const angles = { bars: [0], slats: [Math.PI / 2], mesh: [0, Math.PI / 2], hex: [HEX_ANGLE, -HEX_ANGLE] }[g.kind];
+  const hex = g.angle ?? HEX_ANGLE;
+  const angles = { bars: [0], slats: [Math.PI / 2], mesh: [0, Math.PI / 2], hex: [hex, -hex] }[g.kind];
   const fill = angles.flatMap((a) => (fine ? grilleBars(inner, a, g.count, GRILLE.meshBar, GRILLE.meshPitch, GRILLE.barDepth) : grilleBars(inner, a, g.count, GRILLE.bar, GRILLE.pitch, GRILLE.barDepth)));
   const barZ = face - GRILLE.inset - GRILLE.barDepth / 2;
   const parts = [

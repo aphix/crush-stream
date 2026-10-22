@@ -145,7 +145,8 @@ export const WAGON: BodyStyle = {
   rearDoorSeam: -1.23,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE, edgeRoll: 0.02 },
   lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES, bulb: "led" },
-  grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 9, finish: "black", rim: "chrome", lean: 0.387 },
+  // The reference's wide diamond mesh: about nine across and four rows down.
+  grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 11, angle: 0.37, finish: "black", rim: "chrome", lean: 0.387 },
   seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },
   pillars: { b: { width: [0.088, 0.088] }, divider: { width: [0.105, 0.105] } },
   blackout: { a: true, sail: true, b: true, divider: true, rear: true },
@@ -213,7 +214,8 @@ export const WAGON: BodyStyle = {
       { view: "rear", points: [[0, 0.91], [0.5, 0.91], [0.5, 0.98], [0, 0.98]], depth: 0, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0, 0.62], [0.6, 0.62], [0.6, 0.66], [0, 0.66]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0.485, 0.278], [0.615, 0.278], [0.615, 0.323], [0.485, 0.323]], depth: -0.006, rim: 0.004, cavity: 0.7 },
-      { view: "rear", points: [[0, 0.68], [0.28, 0.68], [0.28, 0.82], [0, 0.82]], depth: -0.006, rim: 0.004, cavity: 0 },
+      // The gate's pressed plate recess under the lettering band; the reference leaves it empty (no plate).
+      { view: "rear", points: [[0, 0.77], [0.36, 0.77], [0.39, 0.778], [0.4, 0.8], [0.4, 0.905], [0, 0.905]], depth: -0.006, rim: 0.008, cavity: 0.2 },
       { view: "rear", points: [[0.475, 0.773], [0.525, 0.773], [0.525, 0.788], [0.475, 0.788]], depth: 0.002, rim: 0.004, cavity: 0 },
       { view: "rear", points: [[0, 0.3], [0.7, 0.3], [0.7, 0.445], [0, 0.445]], depth: -0.004, rim: 0.004, pattern: { kind: "hslats", pitch: 0.03, bar: 0.006, depth: -0.004 }, cavity: 0.85 },
       // The black sill cladding between the arches, under the door bottoms' beads.
