@@ -1563,6 +1563,26 @@ describe("given a body style's P1 parts", () => {
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 
+  it("when a hood bulge sets a mouth, then its nose ring stands at full rise where the plain pod's sits on the lid, so its front cap is a face looking forward, and the cage builds are unchanged", () => {
+    const plainBulge = { z0: 0.9, z1: 1.8, width: 0.4, rise: 0.04 } as const;
+    const plain: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge: plainBulge } };
+    const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge: { ...plainBulge, mouth: true } } };
+    /** The most any hood vertex at the bulge's nose end (z1) stands over the lid's centre line. */
+    const noseTop = (s: BodyStyle): number => {
+      const [oy, oz] = s.hood.origin;
+      const pos = withHoodBulge(makeHoodGeometry(s), s).getAttribute("position");
+      let top = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        const [vy, vz] = [pos.getY(i) + oy, pos.getZ(i) + oz];
+        if (Math.abs(vz - plainBulge.z1) < 1e-4) top = Math.max(top, vy - deckTopY(0, vz, s, true));
+      }
+      return top;
+    };
+    assertSameNumbers([noseTop(style)], [plainBulge.rise], "the mouth pod's nose ring over the lid", 1e-6);
+    assert.ok(noseTop(plain) < RAISED_M, `the plain pod's nose stands ${noseTop(plain).toFixed(4)} m over the lid`);
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
   it("when a hood bulge sets a groove, then mid-pod its crest dips that deep on the centre line, where the plain pod's crest has no vertex at all, and the cage builds are unchanged", () => {
     const bulge = { z0: 0.9, z1: 1.8, width: 0.6, rise: 0.04, round: 0.1 } as const;
     /** Over the bulge's mid ring, among the vertices standing over the lid: the crest's top less the top on the centre line (Infinity: none there). */

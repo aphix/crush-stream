@@ -73,8 +73,8 @@ export const COUPE: BodyStyle = {
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.012, width: 0.05, band: true } },
-  /** Reference side view: nothing stands over the low flat pod, so its twin vents are recessed (details), not a raised scoop. */
-  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.7, width: 0.595, cowlWidth: 0.7, rise: 0.025, round: 0.025, cowlRamp: 0.12, groove: 0.008 }, groove: [0.004, 0.0016] },
+  /** Reference: the pod's straight front edge (top view) is a face holding two dark intake mouths (isos), no higher than the pod (side view). */
+  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.69, width: 0.595, cowlWidth: 0.7, rise: 0.025, round: 0.025, cowlRamp: 0.12, groove: 0.008, mouth: true }, groove: [0.004, 0.0016] },
   bumpers: {
     // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin.
     front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.3, back: 0.24, end: { corner: 0.15, stand: 0.03 } }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
@@ -182,8 +182,8 @@ export const COUPE: BodyStyle = {
       { view: "rear", points: [[0, 0.63], [0.035, 0.64], [0.05, 0.66], [0.035, 0.68], [0, 0.69]], depth: 0.0015, rim: 0.002, cavity: 0.1 },
       { view: "rear", points: [[0, 0.3], [0.16, 0.3], [0.16, 0.42], [0, 0.42]], depth: -0.005, rim: 0.004, cavity: 0.6 },
       { view: "front", points: [[0, 0.32], [0.7, 0.32], [0.7, 0.38], [0, 0.38]], depth: 0.003, rim: 0.003, cavity: 0.2 },
-      // Twin hood vents on the pod's front ramp, either side of its centre groove (reference isos: dark mouths seen from the front and the rear).
-      { view: "top", points: [[1.67, 0.006], [1.67, 0.24], [1.565, 0.24], [1.565, 0.006]], depth: -0.006, rim: 0.004, cavity: 0.9 },
+      // The pod's twin intake mouths on its front face, a 2.4 cm body-colour rib between them.
+      { view: "front", points: [[0.012, 0.8], [0.29, 0.8], [0.29, 0.86], [0.012, 0.86]], depth: -0.006, rim: 0.003, cavity: 0.95 },
     ],
   },
   seats: { front: [0.36, 0.44, -0.15], rear: [0.47, -0.6] },
