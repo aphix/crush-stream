@@ -909,7 +909,7 @@ describe("given every body style whose drawn sail laps the rear glass (`cPillar.
       assert.ok(end !== undefined, `${id}: no section at the roof's rear end`);
       const section = Array.from({ length: ring }, (_, k) => positionAt(sail, end * ring + k));
       const head = section.reduce((a, b) => (b.y > a.y ? b : a));
-      const lap = rearGlassInset(style, rearGlassCornerZ(style)!, 0).x - head.x;
+      const lap = rearGlassInset(style, rearGlassCornerZ(style, 0.5)!, 0).x - head.x;
       assert.ok(lap >= SAIL_FLUSH_LAP_MIN, `${id}: the roof end's head (x ${head.x.toFixed(3)}) ${(lap * 1000).toFixed(1)} mm in over the corner's mid-arc`);
       // The roof's rear end (its end ring, bowed with the glass top) as z by x, +x side.
       const roof = makeRoofGeometry(style).getAttribute("position") as THREE.BufferAttribute;
@@ -925,6 +925,24 @@ describe("given every body style whose drawn sail laps the rear glass (`cPillar.
       }
     });
   }
+
+  it("when a curved-roof coupe's flush sail sets cPillar.corner, then its roof-end head laps the rear glass's round top corner at that share of the arc, where the mid-arc head stands outboard of it", () => {
+    /** A share past the mid-arc, so the corner's upper half is covered from the roof end. */
+    const SHARE = 0.8;
+    const coupe = CAR_STYLES.coupe;
+    const base: BodyStyle = { ...coupe, roofSection: coupe.roofSection ?? { crown: 0.5, blend: 0.5 }, cPillar: { ...coupe.cPillar, flush: true, corner: undefined } };
+    const turned: BodyStyle = { ...base, cPillar: { ...base.cPillar, corner: SHARE } };
+    /** The x of the head of `style`'s sail section at the roof's rear end, +x side. */
+    const endHeadX = (style: BodyStyle): number => {
+      const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+      const { ring, slices } = loftOf(sail);
+      const end = Array.from({ length: slices }, (_, s) => s).find((s) => positionAt(sail, s * ring).z < style.roofZ[0] && positionAt(sail, s * ring).z >= style.roofZ[0] - SAIL_ROOF_GAP)!;
+      return Array.from({ length: ring }, (_, k) => positionAt(sail, end * ring + k)).reduce((a, b) => (b.y > a.y ? b : a)).x;
+    };
+    const edge = rearGlassInset(turned, rearGlassCornerZ(turned, SHARE)!, 0).x;
+    const [lap, midLap] = [edge - endHeadX(turned), edge - endHeadX(base)];
+    assert.ok(lap >= SAIL_FLUSH_LAP_MIN && midLap < SAIL_FLUSH_LAP_MIN, `in over the arc at ${SHARE}: ${(lap * 1000).toFixed(1)} mm with the field, ${(midLap * 1000).toFixed(1)} mm with the mid-arc head`);
+  });
 });
 
 describe("given every body style's greenhouse frame", () => {
@@ -1250,7 +1268,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   { id: "wagon", digest: "367e3e9f9994b45c27fa7de342de7c0deee14a978bb430438240e2f3d7c7f5bb" },
   // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above), and its drawn roof rolled onto the windshield's top (`roofEnds.front`).
   // Re-pinned for its rear glass's round outline (`rearGlass.roundOutline`): the frit's corner fans stand 1 cm in behind the pane as a backing, and the pane's drawn vertices are the glass panel's cage-skinned rest.
-  { id: "coupe", digest: "b5a7a1eacbe829e6f67a27ee10aa2220a644aec217aa2c728d0ae32fe042b3e2" },
+  // Re-pinned for its curved roof (`roofSection` .4/.6) and narrower rear glass top (`rearGlass.wTop` .92): the raked panes fall with the dome and the glass panel's cage-skinned rest moved.
+  { id: "coupe", digest: "f96f0bb535401216423cc5326dd46e9ddf661103b5741083caa181d8a25ae2f7" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open; both trucks for the greenhouse's dome-following panes and posts.

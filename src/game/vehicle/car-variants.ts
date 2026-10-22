@@ -391,9 +391,11 @@ export interface BodyStyle {
    * triangle between them filling the gap; absent, the line is the quarter glass's own rear edge. `flush`: the sail's head laps the rear
    * glass's side edge, standing on the glass and arriving level across it (one broad pillar rolling into the glass), not a rounded
    * buttress beside it. `flat`: on the haunch each section runs straight from its head down to where it touches the body's section
-   * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point.
+   * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point. `corner`: on a curved roof with round
+   * rear glass corners, a flush sail's head at the roof's end laps the glass's side edge this share of the way round its top corner's arc
+   * (0 its side end, 1 its top end), so the head covers the arc above that point; absent 0.5, mid-arc.
    */
-  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */
