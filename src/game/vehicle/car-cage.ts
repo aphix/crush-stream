@@ -33,10 +33,7 @@ import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 export const CAGE_STEP = 0.05;
 /** The decimation's vertex target: the body and its panels (lids, glass), which keeps the cage near 300 triangles. */
 export const CAGE_VERTICES = 220;
-/**
- * A style's cage build, counted: its vertices a sill can be sampled from (`cageSourceOf`: welded, under its rocker line, between its axles)
- * and its loft's stations (`userData.loft.slices`).
- */
+/** A style's cage build, counted: its sill candidates (`cageSourceOf`: welded, under its rocker line, between its axles) and loft stations. */
 function cageBuildCounts(style: BodyStyle): { sill: number; stations: number } {
   const geo = makeChassisGeometry(style, "cage");
   const pos = geo.getAttribute("position").array;
@@ -182,11 +179,7 @@ export interface CageStyle {
   readonly u0: number;
   readonly v0: number;
   readonly vertexCount: number;
-  /**
-   * Of `vertexCount`, the underside points the decimation held over `CAGE_VERTICES` (`decimate`'s `held`), `heldCount` of them from
-   * `heldFrom` on. Only a wreck stands on them (`loadPoints`): the lip a car with a wheel gone rests on; a car on its tyres never does, and
-   * read every slice they cost an intact 16-car race 8.5-12 % of its step.
-   */
+  /** Of `vertexCount`, the `heldCount` underside points `decimate` held over `CAGE_VERTICES`, from `heldFrom` on: a wreck's alone (`loadPoints`). */
   readonly heldCount: number;
   readonly heldFrom: number;
   /**
