@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detSin } from "../kernel/physics-core.js";
-import { BLACKOUT, CABIN_TRIM, INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { BLACKOUT, CABIN_TRIM, INNER_PANEL, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
@@ -168,16 +168,19 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const n = rings[0]!.length;
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
-  // How far each drawn slice has dropped into the bay's trough or a lid's lined boot: their walls and floors are unpainted inner panel.
-  // How far it has dropped into the cabin's tub: its floor is dark cabin trim, as the glass shows it (the walls keep one vertex with the
-  // belt, so they shade from it to the trim; the door cards cover them).
+  // How far each drawn slice has dropped into the bay's trough: its walls and floor are unpainted inner panel. Into a lid's lined boot: its
+  // walls and floor are the cabin's dark trim, the boot's carpet as the references' popped lids show it. Into the cabin's tub: its floor
+  // is dark cabin trim, as the glass shows it (the tub's walls keep one vertex with the belt, so they shade from it to the trim; the door
+  // cards cover them).
   const cut = bootCut(style);
-  const inner = source === "drawn" ? zs.map((z) => Math.max(bayAt(z, style), cut.lined ? bootCutAt(z, cut).open : 0)) : [];
-  const cabin = source === "drawn" ? zs.map((z, s) => (inner[s]! > 0 ? 0 : cabinAt(z, style))) : [];
-  const wallTops = source === "drawn" ? splitWallTops(body, n, inner) : [];
+  const bay = source === "drawn" ? zs.map((z) => bayAt(z, style)) : [];
+  const boot = source === "drawn" ? zs.map((z) => (cut.lined ? bootCutAt(z, cut).open : 0)) : [];
+  const trim = bay.map((b, s) => (b > 0 ? 0 : boot[s]! > 0 ? boot[s]! : cabinAt(zs[s]!, style)));
+  const tone = (s: number): number => (trim[s]! > 0 ? CABIN_TRIM * trim[s]! : INNER_PANEL * bay[s]!);
+  const wallTops = source === "drawn" ? splitWallTops(body, n, bay.map((b, s) => Math.max(b, boot[s]!))) : [];
   const roof = makeRoofGeometry(style, source);
   const parts: THREE.BufferGeometry[] = [body, roof];
-  parts.push(...makeWellLiners(style, source));
+  parts.push(...makeWellLiners(style, source, body));
   parts.push(...makeGreenhouseFrame(style, source));
   // The cowl wall under the dash and the wall behind the rear seats: cabin trim, as the glass shows them.
   const cabinWall = (geo: THREE.BufferGeometry) => Object.assign(geo, { userData: { ...geo.userData, cabinTrim: true } });
@@ -212,7 +215,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   for (const g of parts) {
     const count = g.getAttribute("position").count;
     if (g.userData.blackout === true) primer.fill(BLACKOUT, start, start + count);
-    if (g.userData.cabinTrim === true) primer.fill(CABIN_TRIM, start, start + count);
+    if (g.userData.cabinTrim === true && source === "drawn") primer.fill(CABIN_TRIM, start, start + count);
     start += count;
   }
   if (lips) primer.set(lips.userData.tone as Float32Array, lipFrom);
@@ -228,34 +231,37 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const roofFrom = body.getAttribute("position").count;
   const roofTwins: unknown = roof.userData.shellTwins;
   const twins = roofTwins instanceof Int32Array ? roofTwins.map((v) => v + roofFrom) : new Int32Array(0);
-  // The headliner (the roof's inner face) is the cabin's dark trim.
-  for (let k = 0; k < twins.length; k += 2) primer[twins[k]!] = CABIN_TRIM;
+  // The drawn headliner (the roof's inner face) is the cabin's dark trim; the cage build is all paint.
+  if (source === "drawn") for (let k = 0; k < twins.length; k += 2) primer[twins[k]!] = CABIN_TRIM;
   merged.userData.shellTwins = twins;
   if (fittings) primer.fill(BLACKOUT, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
   if (source === "drawn") {
-    // The trough's, the boot's and the cabin's floor corner on each side (ring points 0 and n - 1), and the trough's and boot's walls'
+    // The trough's, the boot's and the cabin's floor corner on each side (ring points 0 and n - 1): their tone, or the well's where the
+    // arch of a tyre standing outboard of the body (the monster's) spans the slice, seen through it; and the trough's and boot's walls'
     // own copies of their tops.
-    for (let s = 0; s < zs.length; s++) for (const i of [0, n - 1]) primer[s * n + i] = cabin[s]! > 0 ? CABIN_TRIM * cabin[s]! : INNER_PANEL * inner[s]!;
-    for (const [copy, s] of wallTops) primer[copy] = INNER_PANEL * inner[s]!;
+    const { wheels } = carFrame(style);
+    const r = style.arch.radius;
+    const archAt = (z: number) => wheels.find(([, , wz]) => Math.abs(z - wz) < r);
+    const openArchAt = (z: number) => wheels.some(([wx, , wz]) => Math.abs(z - wz) < r && Math.abs(wx) > sampleSlice(wz, style.profile).hw);
+    for (let s = 0; s < zs.length; s++) for (const i of [0, n - 1]) primer[s * n + i] = trim[s]! > 0 ? tone(s) : (openArchAt(zs[s]!) ? WELL_PANEL : INNER_PANEL) * bay[s]!;
+    for (const [copy, s] of wallTops) primer[copy] = tone(s);
     if (style.blackout?.cowl === true) {
       const [foot, hoodRear] = [style.windshield.base[1], style.hood.z0];
       for (let s = 0; s < zs.length; s++) if (zs[s]! >= Math.min(foot, hoodRear) - COWL_LAP && zs[s]! <= Math.max(foot, hoodRear) + COWL_LAP) for (const i of [0, n - 1]) primer[s * n + i] = BLACKOUT;
     }
-    // Each well's ceiling inside an arch, unpainted like its liner so the lip reads over a dark gap: the sill's two points, and the last
+    // Each well's ceiling inside an arch, toned like its liner so the lip reads over a dark gap: the sill's two points, and the last
     // tuck row and rocker once the tuck row over them sits under the arch's lip (`halfRing` lifts it toward the edge), so no painted side fades into them.
-    const { wheels } = carFrame(style);
-    const r = style.arch.radius;
     for (let s = 0; s < zs.length; s++) {
-      const wheel = wheels.find(([, , wz]) => Math.abs(zs[s]! - wz) < r);
+      const wheel = archAt(zs[s]!);
       if (!wheel) continue;
       const edge = wheel[1] + Math.sqrt(r * r - (zs[s]! - wheel[2]) ** 2);
       const atEdge = rings[s]![ROCKER - 2]!.y <= edge + (style.arch.lip?.width ?? 0);
-      for (let i = atEdge ? ROCKER - 1 : ROCKER + 1; i <= ROCKER + 2; i++) primer[s * n + i] = primer[s * n + n - 1 - i] = INNER_PANEL;
+      for (let i = atEdge ? ROCKER - 1 : ROCKER + 1; i <= ROCKER + 2; i++) primer[s * n + i] = primer[s * n + n - 1 - i] = WELL_PANEL;
     }
     // The floor pan (each ring's floor-outer points and keel) is bare underseal, as a car on its roof shows it; the sill corners keep the paint the side shows.
     const h = (n - 1) / 2;
     for (let s = 0; s < zs.length; s++) for (const i of [h - 1, h, h + 1]) primer[s * n + i] = INNER_PANEL;
-    primer.fill(INNER_PANEL, linerFrom, linerTo);
+    primer.fill(WELL_PANEL, linerFrom, linerTo);
   }
   merged.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(primer, 1));
   return markSkinDynamic(merged);

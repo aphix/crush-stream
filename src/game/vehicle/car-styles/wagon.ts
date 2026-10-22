@@ -199,6 +199,7 @@ export const WAGON: BodyStyle = {
       { view: "rear", points: [[0.485, 0.278], [0.615, 0.278], [0.615, 0.323], [0.485, 0.323]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0, 0.68], [0.28, 0.68], [0.28, 0.82], [0, 0.82]], depth: -0.006, rim: 0.004, cavity: 0 },
       { view: "rear", points: [[0.475, 0.773], [0.525, 0.773], [0.525, 0.788], [0.475, 0.788]], depth: 0.002, rim: 0.004, cavity: 0 },
+      { view: "rear", points: [[0, 0.3], [0.7, 0.3], [0.7, 0.445], [0, 0.445]], depth: -0.004, rim: 0.004, pattern: { kind: "hslats", pitch: 0.03, bar: 0.006, depth: -0.004 }, cavity: 0.85 },
     ],
   },
 };

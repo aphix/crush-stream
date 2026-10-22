@@ -16,7 +16,7 @@ export type UltraHost = {
 };
 
 /**
- * Fetch the Ultra code (its own chunk: nothing else imports it) and its assets, about 3.5 MB (a phone fetches about 0.4 MB of images instead of 2.0). Null, logged, when either fails.
+ * Fetch the Ultra code (its own chunk: nothing else imports it) and its assets, about 12 MB: the 1.4 MB sky, 10.1 MB of KTX2 images and three's 0.6 MB Basis transcoder (a phone fetches 2.3 MB of images instead of 10.1). Null, logged, when either fails.
  * This file is the only one the engine imports as a value (`Ultra` above is a type, erased from the build).
  */
 export async function loadUltra(host: UltraHost): Promise<Ultra | null> {
