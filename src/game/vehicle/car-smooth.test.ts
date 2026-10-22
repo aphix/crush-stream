@@ -1301,8 +1301,9 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // The pickup's again for its door glass starting back where the side plate's does (`aPillarFoot` .7 -> .6, `aPillarTop` .41 -> .34): the A-post box moved.
   { id: "pickup", digest: "0b9b6e97b2becde393bada56d59a0c480517bbc57b7692e2dc39ab47f131e85b" },
   { id: "police", digest: "26d74836366ea758cb090a8f2908702c95392a9fe06faecc1d598e2f9b13404e" },
-  // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55).
-  { id: "monster", digest: "50d67ae1e9b9dfa6344025060ff8c23afe70af78a80789f63b915ca2cb781875" },
+  // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55); again for its windshield base at the side
+  // plate's (`windshield.base` [1.0, .92] -> [1.05, .98]) and its door glass starting back at .60 (`aPillarFoot` .74 -> .6): the glass-front and A-post boxes moved.
+  { id: "monster", digest: "f52b18f7c2f6f4e1a77020397c5841a894e2d773b4a3a38c80b123faee458a80" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {
