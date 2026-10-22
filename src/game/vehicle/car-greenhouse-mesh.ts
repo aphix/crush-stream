@@ -605,6 +605,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   // quadratic Bézier (tip, corner, front), so the sail runs forward to its end and takes a ring at its middle.
   const pinch = style.cPillar?.pinch ?? 0;
   const frontZ = topZ + pinch;
+  const bead = style.cPillar?.bead === true;
   const windowY = (z: number): number => {
     if (z < tipZ) return tipY;
     if (pinch === 0) return lerp(tipY, topY, (z - tipZ) / (topZ - tipZ));
@@ -663,9 +664,9 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
       : roofEnd
         ? onChords([...roofEnd.filter((p) => p.x > head[0]!).reverse(), { x: head[0]!, y: head[1]! }], SAIL_ROOF_ROLL.length)
         : roofRoll(roof.x, roof.y, cantDrop(style), roofDrip(style), SAIL_ROOF_ROLL);
-    // Over the glass (a curved roof's end head too) the head's edge stays a bead's: a post's would stand out over the pane. So does a pinched
-    // window's ahead of its corner, where its line has risen into the glass's top: a post's round would hang under that line.
-    const headR = onGlass || (atRoofEnd && flush && roofEnd !== null) || (pinch > 0 && z > topZ) ? SAIL_FLUSH_STAND / 2 : r;
+    // Over the glass (a curved roof's end head too) the head's edge stays a bead's: a post's would stand out over the pane. So does a beaded
+    // window's (`cPillar.bead`) ahead of its corner, where its line has risen into the glass's top: a post's round would hang under that line.
+    const headR = onGlass || (atRoofEnd && flush && roofEnd !== null) || (bead && z > topZ) ? SAIL_FLUSH_STAND / 2 : r;
     // 0 on the window's line, 1 on the haunch: the foot's point and its tangent blend between the glass (its round edge's bottom on the line) and the shoulder.
     const f = THREE.MathUtils.smoothstep(tipZ - z, 0, sweep);
     // A pinched window's sail laps the glass with a bead's edge, a bead's height off it, so the window's point stays sharp; on the haunch its foot's edge is the full round.
@@ -721,9 +722,9 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
         ? [at(0, 0), ...endFace.map((p) => ({ x: sign * p.x, y: p.y }))]
         : Array.from({ length: SAIL_OUTER }, (_, k) => at(onGlass ? (1 - detCos((Math.PI * k) / (SAIL_OUTER - 1))) / 2 : k / (SAIL_OUTER - 1), 0))),
       ...edge(1),
-      // The section thins from the foot's edge to the head's, so each rounded edge closes onto the inner face. A pinched sail's (its foot a
-      // bead) holds the head's depth to mid-face: thinning all the way, its inner face bowed out where the section turns into the roof's end.
-      ...Array.from({ length: SAIL_INNER }, (_, k) => at(1 - k / (SAIL_INNER - 1), 2 * lerp(headR, footR, pinch > 0 ? Math.max(0, (2 * k) / (SAIL_INNER - 1) - 1) : k / (SAIL_INNER - 1)))),
+      // The section thins from the foot's edge to the head's, so each rounded edge closes onto the inner face. A beaded sail holds the head's
+      // depth to mid-face: thinning all the way, its inner face bowed out where the section turns into the roof's end.
+      ...Array.from({ length: SAIL_INNER }, (_, k) => at(1 - k / (SAIL_INNER - 1), 2 * lerp(headR, footR, bead ? Math.max(0, (2 * k) / (SAIL_INNER - 1) - 1) : k / (SAIL_INNER - 1)))),
       ...edge(0).reverse(),
     ];
   };

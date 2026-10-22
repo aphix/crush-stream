@@ -293,10 +293,11 @@ export const SEDAN: BodyStyle = {
   pillars: { a: 0.035, b: { width: [0.165, 0.105], z: [-0.2925, -0.3225] } },
   blackout: { sail: true, b: true, cowl: true },
   /**
-   * The C-pillar sails onto the haunch from the quarter glass's rounded top (reference side view: y 1.18 at z -1.0, 1.131 at -1.1). Its
-   * foot drops onto the shoulder 2 cm behind the window's point, which stands over the deck there: a long sweep left a see-through wedge under it.
+   * The C-pillar sails onto the haunch from the quarter glass's rounded top (reference side view: y 1.18 at z -1.0, 1.131 at -1.1), lapping
+   * it with a bead so the post's round never hangs under the rounded corner. Its foot drops onto the shoulder 2 cm behind the window's
+   * point, which stands over the deck there: a long sweep left a see-through wedge under it.
    */
-  cPillar: { pinch: 0.08, sweep: 0.02 },
+  cPillar: { pinch: 0.08, sweep: 0.02, bead: true },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,
@@ -316,10 +317,10 @@ export const SEDAN: BodyStyle = {
   // backing inside a thin chrome bezel; the surround stays black (an all-chrome shield read as a light block).
   grille: { y: 0.443, z: 2.052, size: [0.74, 0.264], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "chrome", rim: "black", bezel: 0.01 },
   /**
-   * The reference's twin wide oval tips in the diffuser (gridded rear iso and side: |x| 0.47-0.64, y 0.27-0.33, ~3 cm proud), on the rear
-   * bumper's face now that it reaches down over the diffuser (to 0.23).
+   * The reference's twin wide oval tips in the diffuser (y 0.27-0.33, inner end |x| ~0.37), on the rear bumper's face (down to 0.23).
+   * Their outer end stops at 0.575, where the face starts wrapping forward round the corner: past it a tip stands out of the corner.
    */
-  exhaust: { tips: 2, x: 0.555, y: 0.3, size: [0.17, 0.06], shape: "round" },
+  exhaust: { tips: 2, x: 0.475, y: 0.3, size: [0.2, 0.06], shape: "round" },
   seats: PLATFORM_HARDPOINTS.seats,
   details: SEDAN_DETAILS,
   camera: { ...PLATFORM_CAMERA, hood: [1.08, 1.2] },
