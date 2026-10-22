@@ -319,12 +319,28 @@ export function cageLift(car: Pick<DeformableCar, "group" | "style">): number {
 }
 
 /**
- * The height (m, car frame) of `car`'s rigid centre: its frame's stock centre (`comY`) carried up with the body by the class's lift
- * (`cageLift`, fading as it lies over). At the stock 0.72 m a monster's centre stood 0.07 m over its hubs, under a body lifted 0.87 m,
- * and a side hit on its tyres yawed it off with 2° of roll where it should trip.
+ * The share of a lifted car's mass that rises with its body (`centreLift`): the sprung mass (frame, engine, cab, bed) rises the class's
+ * whole lift, the unsprung (wheels, tyres, axles) only as far as its bigger tyres raise its hubs. An estimate for the one lifted class, a
+ * 2.9 t monster truck: four 44" wheel-and-tyre sets of about 110 kg and two solid axles of about 175 kg are 27 % of it.
  */
+const SPRUNG_SHARE = 0.73;
+
+/**
+ * How far (m) up its frame `car`'s rigid centre stands over its stock frame's (`comY`): the sprung share of its body's lift (`cageLift`,
+ * fading as it lies over) and the unsprung share of its hubs' rise, faded with it. The monster's (lift 0.87 m, hubs raised 0.26 m by its
+ * 1.73× tyres) is 0.81 of its lift, 0.71 m. At the stock 0.72 m its centre stood 0.07 m over its hubs under a body lifted 0.87 m, and a
+ * side hit on its tyres yawed it off with 2° of roll where it should trip.
+ */
+export function centreLift(car: Pick<DeformableCar, "group" | "style" | "frame">): number {
+  const cls = CLASSES[carClass(car)];
+  if (cls.lift === 0) return 0;
+  const hubRise = car.frame.rig.tyre.r * (cls.wheelScale - 1);
+  return cageLift(car) * (SPRUNG_SHARE + ((1 - SPRUNG_SHARE) * hubRise) / cls.lift);
+}
+
+/** The height (m, car frame) of `car`'s rigid centre: its frame's stock centre (`comY`) carried up by `centreLift`. */
 export function centreY(car: Pick<DeformableCar, "group" | "style" | "frame">): number {
-  return car.frame.comY + cageLift(car);
+  return car.frame.comY + centreLift(car);
 }
 
 /** The highest (`high`) or lowest node of a cage field (m), the nodes with no height skipped. */
