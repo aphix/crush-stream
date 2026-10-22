@@ -17,7 +17,8 @@
  * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,
  * `trace-camera.mjs`: car space, orthographic for side and top), at the spec's size, so the shot lines up with trace-car's overlay;
  * `scripts/landing-shots.mjs` runs the pair. `--backdrop <colour>` draws the car alone over that colour (no garage room, no fog).
- * `--detail <rung>` pins the distance-detail ladder's rung (0 desktop, 2 the phone's start) with its governor off.
+ * `--detail <rung>` pins the distance-detail ladder's rung (`DETAIL_LEVELS`: 0 desktop, 2 the phone's start; `off`: no cuts, the bench's
+ * detail A/B arms) with its governor off; the JSON counts the cars cut to their body (`farCars`).
  * `--paint <colour>` paints the hash's car that colour, `--paint <style>=<colour>,...` every car of those styles (a livery, the
  * police's, stays): the landing shots and lineup sheets in each reference's colour.
  */
@@ -90,8 +91,8 @@ if (landingView !== null && landingView.view !== values.view) throw new Error(`-
 const W = landingView?.W ?? Number(size[1]);
 const H = landingView?.H ?? Number(size[2]);
 const out = resolve(values.out ?? `screenshots/headless-frame-${tier}.png`);
-const detail = values.detail === undefined ? null : Number(values.detail);
-if (detail !== null && !(Number.isInteger(detail) && detail >= 0)) throw new Error(`--detail ${values.detail}: a rung of the distance-detail ladder, 0 or more`);
+const detail = values.detail === undefined ? null : values.detail === "off" ? "off" : Number(values.detail);
+if (typeof detail === "number" && !(Number.isInteger(detail) && detail >= 0)) throw new Error(`--detail ${values.detail}: a rung of the distance-detail ladder (0 or more) or off`);
 
 // WSL: Mesa's d3d12 driver reaches the host GPU through /dev/dxg; without it Mesa draws on the CPU. Elsewhere Mesa has no d3d12 driver.
 if (existsSync("/dev/dxg")) process.env.GALLIUM_DRIVER ??= "d3d12";
@@ -213,7 +214,8 @@ const readyMs = Math.round(performance.now() - bootAt);
 if (tier === "ultra" && !(await engine.loadUltra())) throw new Error("headless-frame: the Ultra look did not load (see the console)");
 engine.setFxTier(tier);
 if (detail !== null) {
-  engine.detail.setLevel(detail);
+  if (detail === "off") engine.detail.setDistances(Infinity, Infinity);
+  else engine.detail.setLevel(detail);
   engine.detailGov.frame = () => null;
 }
 
@@ -262,6 +264,7 @@ for (let f = 0; f < frames; f++) {
 const glError = gl.getError();
 const { render, memory, programs } = three.info;
 const counts = { calls: render.calls, triangles: render.triangles, programs: programs.length, textures: memory.textures, geometries: memory.geometries };
+const farCars = engine["cars"].filter((car) => engine["detail"].isFar(car)).length;
 
 const w = canvas.width;
 const h = canvas.height;
@@ -276,7 +279,7 @@ mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, await shot.encode("png"));
 
 engine.dispose();
-const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
+const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
 process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 

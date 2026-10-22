@@ -11,7 +11,7 @@ import { PistonBank } from "../present/engine-pistons.ts";
 import { DoorRig, type RamShot } from "../scenes/door-rig.ts";
 import { DoorRam } from "../present/engine-doors.ts";
 import { INITIAL_HUD } from "../hud/hud-store.ts";
-import { beginImpact, FUDGE_GAP, holdForThrow, pairEta, phaseClock, struck } from "../match/phase.ts";
+import { beginImpact, FUDGE_GAP, fudgeStrength, holdForThrow, pairEta, phaseClock, struck } from "../match/phase.ts";
 import { IMPACT_MIN } from "../match/highlights.ts";
 import { newWorld } from "./world-step.ts";
 import { EjectionWatch } from "../vehicle/ejection.ts";
@@ -48,6 +48,7 @@ import { TraceRecorder, type TraceClock, type TraceSetup } from "./engine-trace.
 import { DerbyMatch } from "../match/derby.ts";
 import { LampBatch, LampLights } from "../vehicle/lamp-lights.ts";
 import { PartBatch } from "../vehicle/part-batch.ts";
+import { CoverBatch } from "../vehicle/cover-batch.ts";
 import { DriverSeat } from "../vehicle/car-drive.ts";
 import { GamepadInput, type Rumble } from "../vehicle/gamepad.ts";
 import { impactRumble, landingRumble, SLIDE_EVERY, slideRumble } from "../present/rumble.ts";
@@ -234,6 +235,7 @@ export abstract class EngineCore {
   protected readonly wheels = new WheelBatch(MAX_CARS * 4, (car) => this.detail.isFar(car));
   protected readonly lampBatch = new LampBatch(MAX_CARS * 2);
   protected readonly partBatch = new PartBatch(MAX_CARS);
+  protected readonly coverBatch = new CoverBatch(MAX_CARS);
   protected lampLights!: LampLights;
   protected sparks!: SparkSystem;
   protected fountains!: Fountains;
@@ -650,7 +652,7 @@ export abstract class EngineCore {
   }
 
   /** Where the first hit coming lands, as of the last `contactEta`. */
-  protected readonly predicted: PredictedHit = { x: 0, y: 0, z: 0, nx: 1, nz: 0 };
+  protected readonly predicted: PredictedHit = { x: 0, y: 0, z: 0, nx: 1, nz: 0, a: null, b: null };
   private fudgedAt = -Infinity;
   /**
    * Sim seconds to the first hit coming between the live cars, or a car and the slab (`pairEta`), Infinity if none; `predicted` says where.
@@ -665,18 +667,20 @@ export abstract class EngineCore {
   }
   /**
    * Sparks and dust on a hit's point before the cars meet, where the contact is still being worked out: the slow-mo has
-   * eased in (the sandbox's `fudgePredicted`, the reel's `fudge`).
+   * eased in (the sandbox's `fudgePredicted`, the reel's `fudge`). `strength` (0..1, `fudgeStrength`) scales the burst.
    */
-  protected fudgeContact(at: THREE.Vector3, normal: THREE.Vector3): void {
-    this.sparks.poof(at, normal, 10 * this.fxDensity);
-    this.debris.burst(at, normal, 4 * this.fxDensity);
+  protected fudgeContact(at: THREE.Vector3, normal: THREE.Vector3, strength: number): void {
+    this.sparks.poof(at, normal, 10 * this.fxDensity * strength);
+    this.debris.burst(at, normal, 4 * this.fxDensity * strength);
   }
-  /** While the pre-impact slow-mo eases in, every `FUDGE_GAP` wall s: the fudge on the predicted contact point. */
+  /** While the pre-impact slow-mo eases in, every `FUDGE_GAP` wall s: the fudge on the predicted contact point, once its cars' drawn bodies are near it (`fudgeStrength`). */
   protected fudgePredicted(): void {
-    if (this.elapsedWall - this.fudgedAt < FUDGE_GAP) return;
-    this.fudgedAt = this.elapsedWall;
     const p = this.predicted;
-    this.fudgeContact(_v.set(p.x, p.y, p.z), _n.set(p.nx, 0, p.nz));
+    if (this.elapsedWall - this.fudgedAt < FUDGE_GAP || !p.a) return;
+    const strength = fudgeStrength(p.x, p.z, p.a, p.b);
+    if (strength <= 0) return;
+    this.fudgedAt = this.elapsedWall;
+    this.fudgeContact(_v.set(p.x, p.y, p.z), _n.set(p.nx, 0, p.nz), strength);
   }
   /** The crash's hit: slow-mo, kick, flash and burst; `crashCam` overrides the sandbox's rule for the crash cam (the reel always wants it). */
   protected beginCinematic(contact: THREE.Vector3, normal: THREE.Vector3, impulse: number, crashCam?: boolean): void {
