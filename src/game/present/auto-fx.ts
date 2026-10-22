@@ -170,10 +170,20 @@ export class AutoFx {
     this.host?.resume(current);
   }
 
-  private switch(to: FxTier): FxTier | null {
+  /** Drop the window under way and the streaks it fed (a lost context's frames drew nothing): the next window starts after a settle. */
+  restart(): void {
+    this.dropWindow();
+    this.host?.restart();
+  }
+
+  private dropWindow(): void {
     this.win.restart();
     this.slow = 0;
     this.upRun = 0;
+  }
+
+  private switch(to: FxTier): FxTier | null {
+    this.dropWindow();
     if (to === this.tier) return null;
     this.tier = to;
     return to;
