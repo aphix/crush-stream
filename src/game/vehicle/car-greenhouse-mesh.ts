@@ -650,8 +650,9 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   const section = (z: number): Pt[] => {
     const atRoofEnd = z === roofEndZ && z < style.roofZ[0];
     const onGlass = flush && z < roofEndZ;
-    // The head's rounded edge ends at the post's top corner (`r` over the section's end), buried in the roof's side like the post's top.
-    const corner = z <= rt[2] ? [lerp(rb[0], rt[0], (z - rb[2]) / (rt[2] - rb[2])), lerp(rb[1], rt[1], (z - rb[2]) / (rt[2] - rb[2]))] : [lerp(rt[0], ft[0], (z - rt[2]) / (ft[2] - rt[2])), lerp(rt[1], ft[1], (z - rt[2]) / (ft[2] - rt[2]))];
+    // The head's rounded edge ends at the post's top corner (`r` over the section's end), buried in the roof's side like the post's top;
+    // ahead of that corner (a pinched window's front ring) it holds the corner.
+    const corner = z <= rt[2] ? [lerp(rb[0], rt[0], (z - rb[2]) / (rt[2] - rb[2])), lerp(rb[1], rt[1], (z - rb[2]) / (rt[2] - rb[2]))] : [lerp(rt[0], ft[0], Math.min(1, (z - rt[2]) / (ft[2] - rt[2]))), lerp(rt[1], ft[1], Math.min(1, (z - rt[2]) / (ft[2] - rt[2])))];
     const post = [corner[0]!, corner[1]! - r] as const;
     // A flat sail's head eases from the roof end's out to the post's top over the run ahead, so its rings never jump back out under the roof.
     const ahead = style.cPillar?.flat === true && roofEnd !== null && z > roofEndZ ? (z - roofEndZ) / (frontZ - roofEndZ) : 1;
@@ -729,9 +730,12 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   // the flat haunch meets the roll, nor where the roll meets the post.
   const rollEnd = style.cPillar?.flat === true && roofEndZ < style.roofZ[0] ? section(roofEndZ) : null;
   const front = zs[zs.length - 1]!;
+  // Ahead of the roof end a pinched window's mid ring stands mid-run, where a smoothstep let-go turns fastest: that sail keeps the roll
+  // level off the roof end and lets it go toward its front ring, where the section narrows to the post's sliver anyway.
   const rings = zs.map((z): Pt[] => {
     const ring = section(z);
-    const w = !rollEnd || z === roofEndZ ? 0 : z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - SAIL_ROLL_BLEND, roofEndZ) : 1 - THREE.MathUtils.smoothstep(z, roofEndZ, front);
+    const letGo = pinch > 0 ? 1 - ((z - roofEndZ) / (front - roofEndZ)) ** 2 : 1 - THREE.MathUtils.smoothstep(z, roofEndZ, front);
+    const w = !rollEnd || z === roofEndZ ? 0 : z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - SAIL_ROLL_BLEND, roofEndZ) : letGo;
     if (w === 0) return ring;
     const [a, b] = [rollEnd![0]!, rollEnd![SAIL_OUTER - 1]!];
     const endRun = hypot2(b.x - a.x, b.y - a.y);

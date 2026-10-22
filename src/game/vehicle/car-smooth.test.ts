@@ -4,7 +4,8 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
-import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
+import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantX, cantY, glassTopY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
+import { beltX, beltY } from "./car-lines.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
@@ -771,7 +772,52 @@ const SAIL_OUTER_POINTS = 6;
 
 /** The coupe on a curved roof section (`roofSection`): the sail rows read it beside every style as built. */
 const DOMED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, roofSection: { crown: 0.5, blend: 0.5 } };
-const SAIL_STYLES = [...CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar).map((id) => [id, CAR_STYLES[id]] as const), ["domed coupe", DOMED_COUPE] as const];
+/** The coupe with its side window pinched (`cPillar.pinch`), and without (whatever it sets): the sail rows read the pinched one beside every style as built. */
+const PINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES.coupe.cPillar, pinch: 0.08 } };
+const UNPINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES.coupe.cPillar, pinch: undefined } };
+const SAIL_STYLES = [
+  ...CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar).map((id) => [id, CAR_STYLES[id]] as const),
+  ["domed coupe", DOMED_COUPE] as const,
+  ["pinched coupe", PINCHED_COUPE] as const,
+];
+/** In the side view a pinched window's glass shows from at most this far (m) ahead of its point on, so the point reads sharp. */
+const WINDOW_POINT_SHOWS = 0.01;
+/** The window's point is read over this run (m) ahead of its tip, in steps of this (m). */
+const WINDOW_POINT_RUN = 0.1;
+const WINDOW_POINT_STEP = 0.001;
+/** At a pinched sail's front ring, where the window's line has rounded into the glass's top line, the sail reaches at most this far (m) under that line: two beads' span, not a post's depth cutting the rounded corner off. */
+const PINCH_FRONT_UNDER = 0.035;
+
+/**
+ * Side view of `style`'s +x window point: how far (m) ahead of the point (where the window's line, tip to the glass's top corner,
+ * rises out of the body loft's top at the glass) its glass shows past the sail for good, read mid-height between that top and the line.
+ */
+function windowPointCover(style: BodyStyle): number {
+  const q = style.quarter;
+  const [tipY, tipZ] = style.cPillar?.tip ?? [beltY(q.zRearBot, style), q.zRearBot];
+  const [topY, topZ] = [glassTopY(q.zRearTop, style), q.zRearTop];
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const sail = new THREE.Mesh(makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!, material);
+  const chassis = makeChassisGeometry(style);
+  const body = new THREE.Mesh(chassis, material);
+  const loftVertices = loftOf(chassis).ring * loftOf(chassis).slices;
+  const glassX = (z: number, y: number) => THREE.MathUtils.lerp(beltX(z, style), cantX(z, style), (y - beltY(z, style)) / (cantY(z, style) - beltY(z, style)));
+  const ray = new THREE.Raycaster();
+  let [point, shows] = [NaN, NaN];
+  for (let step = 0; step * WINDOW_POINT_STEP <= WINDOW_POINT_RUN; step++) {
+    const z = tipZ + step * WINDOW_POINT_STEP;
+    const line = tipY + ((topY - tipY) * (z - tipZ)) / (topZ - tipZ);
+    ray.set(new THREE.Vector3(glassX(z, line), line + 1, z), new THREE.Vector3(0, -1, 0));
+    const sill = ray.intersectObject(body).find((hit) => hit.face!.a < loftVertices)?.point.y ?? beltY(z, style);
+    if (line <= sill) continue;
+    if (Number.isNaN(point)) point = z;
+    const y = (sill + line) / 2;
+    ray.set(new THREE.Vector3(glassX(z, y), y, z), new THREE.Vector3(1, 0, 0));
+    if (ray.intersectObject(sail).length > 0) shows = NaN;
+    else if (Number.isNaN(shows)) shows = z;
+  }
+  return shows - point;
+}
 
 describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", () => {
   for (const [id, style] of SAIL_STYLES) {
@@ -889,6 +935,21 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         return Math.max(...folds) > SAIL_END_FOLD_DEGREES ? [`z ${at(s, 0).z.toFixed(3)}: ${folds.map((f) => f.toFixed(1)).join(", ")}°`] : [];
       });
       assert.ok(off.length === 0, `${id}: the outer face folds across ${off.join("; ")}`);
+    });
+  }
+  for (const [id, style] of SAIL_STYLES.filter(([, s]) => (s.cPillar?.pinch ?? 0) > 0)) {
+    it(`when a ${id}'s pinched side window is read in the side view, then its glass shows within ${WINDOW_POINT_SHOWS * 1000} mm of the window's point: the sail never cuts across it`, () => {
+      const blunt = windowPointCover(UNPINCHED_COUPE);
+      assert.ok(blunt > WINDOW_POINT_SHOWS, `the control: the coupe's unpinched window shows its glass ${(blunt * 1000).toFixed(0)} mm past its point`);
+      const cover = windowPointCover(style);
+      assert.ok(cover <= WINDOW_POINT_SHOWS, `${id}: the glass shows ${(cover * 1000).toFixed(0)} mm past the window's point`);
+    });
+    it(`when a ${id}'s pinched side window is read at its sail's front ring, then the sail reaches at most ${PINCH_FRONT_UNDER * 1000} mm under the glass's top line there: the window's line rounds into it`, () => {
+      const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+      const { ring, slices } = loftOf(sail);
+      const points = Array.from({ length: ring }, (_, k) => positionAt(sail, (slices - 1) * ring + k));
+      const under = glassTopY(points[0]!.z, style) - Math.min(...points.map((p) => p.y));
+      assert.ok(under <= PINCH_FRONT_UNDER, `${id}: at z ${points[0]!.z.toFixed(3)} the sail reaches ${(under * 1000).toFixed(1)} mm under the glass's top line`);
     });
   }
 });
