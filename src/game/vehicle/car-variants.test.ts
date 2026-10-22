@@ -1458,6 +1458,32 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
+  it("when the sedan's belt rail runs on behind the quarter glass's point (cPillar.railRun), then no level ray in from the side between its deck and the window's line behind the point passes under the sail into the cabin", () => {
+    /** The band over the deck's crown (belt .99 + 12 mm kick = 1.002) up to the window's line: the belt at the point, 1.045 [y], 2 mm steps; its columns 2 mm apart behind the point, short of the rail's end. */
+    const [DECK_Y, STEP, COLUMNS] = [1.003, 0.002, 9] as const;
+    /** A level ray in from the side whose first hit lies inboard of this (m) has passed under the sail's foot and over the deck: the rail's face stands at .65, the sail's foot outboard of it. */
+    const CABIN_X = 0.6;
+    const sedan = CAR_STYLES.sedan;
+    const tipZ = sedan.quarter.drawn!.zRearBot;
+    const seen = (s: BodyStyle) => {
+      const body = new THREE.Mesh(makeChassisGeometry(s, "drawn"), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+      const ray = new THREE.Raycaster();
+      let cabin = 0;
+      for (let column = 1; column <= COLUMNS; column++) {
+        const z = tipZ - column * STEP;
+        for (let y = DECK_Y; y <= beltY(tipZ, s); y += STEP) {
+          ray.set(new THREE.Vector3(2, y, z), new THREE.Vector3(-1, 0, 0));
+          const hit = ray.intersectObject(body)[0];
+          if (hit === undefined || hit.point.x < CABIN_X) cabin++;
+        }
+      }
+      return cabin;
+    };
+    const without: BodyStyle = { ...sedan, cPillar: { ...sedan.cPillar, railRun: undefined } };
+    assert.ok(seen(without) > 0, "the control: without the run-on the slit behind the window's point shows the cabin");
+    assert.ok(seen(sedan) === 0, `${seen(sedan)} level rays behind the window's point see into the cabin`);
+  });
+
   it("when the side glass drops less under the roof, then the glass top, the roof's side lip and the pillar tops rise with it", () => {
     const sedan: BodyStyle = { ...CAR_STYLES.sedan, glassTop: undefined };
     const moved: BodyStyle = { ...sedan, glassTop: 0.05 };

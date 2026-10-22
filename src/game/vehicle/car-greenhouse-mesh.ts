@@ -573,6 +573,7 @@ const BELT_RAIL = "beltRail";
  * The drawn belt rail: the quarter glass's sill seal on the glass plane, along the pane's own belt edge (column by column) on into
  * the B-pillar, so it never stands off the sill; its depth runs square to the sill in plan where the sill turns in. Its ends are
  * buried in the C- and B-pillars. Where the sill stands higher over the body's deck than its foot reaches, its foot goes down to the deck.
+ * `cPillar.railRun` runs the rear ring on that far further back, flat, its depth direction kept.
  */
 function drawnBeltRail(sign: number, style: BodyStyle): THREE.BufferGeometry {
   const sill = quarterSillZs(style);
@@ -590,7 +591,12 @@ function drawnBeltRail(sign: number, style: BodyStyle): THREE.BufferGeometry {
     const run = hypot2(dx, dz);
     return { rear: [outer, Math.min(y - RAIL_FOOT, sampleSlice(z, style.profile).yBelt), z], front: [outer, y + RAIL_LIP, z], inward: [dz / run, dx / run] };
   });
-  const rail = roundedPillarAlong(sign, rails, 2 * RAIL_PROUD);
+  // A copy of the first ring keeps its own `inward`: a recomputed one turns the ring and its lengthwise edges past the 50 degree row.
+  const railRun = style.cPillar?.railRun ?? 0;
+  const lead = rails[0]!;
+  const runZ = lead.rear[2] - railRun;
+  const runOn: Rail = { ...lead, rear: [lead.rear[0], lead.rear[1], runZ], front: [lead.front[0], lead.front[1], runZ] };
+  const rail = roundedPillarAlong(sign, railRun > 0 ? [runOn, ...rails] : rails, 2 * RAIL_PROUD);
   rail.name = BELT_RAIL;
   return rail;
 }

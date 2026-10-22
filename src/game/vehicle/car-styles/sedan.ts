@@ -298,9 +298,10 @@ export const SEDAN: BodyStyle = {
   /**
    * The C-pillar sails onto the haunch from the quarter glass's rounded top (reference side view: y 1.18 at z -1.0, 1.131 at -1.1), lapping
    * it with a bead so the post's round never hangs under the rounded corner. Its foot drops onto the shoulder 2 cm behind the window's
-   * point, which stands over the deck there: a long sweep left a see-through wedge under it.
+   * point, which stands over the deck there: a long sweep left a see-through wedge under it. Its belt rail runs on 1.5 cm behind the point
+   * (`railRun`), so no side ray passes under the sail's foot.
    */
-  cPillar: { pinch: 0.08, sweep: 0.02, bead: true },
+  cPillar: { pinch: 0.08, sweep: 0.02, bead: true, railRun: 0.015 },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,
