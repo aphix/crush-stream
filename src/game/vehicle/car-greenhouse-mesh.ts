@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan } from "./car-variants.ts";
-import { aPillarTopZ, aPostRearZ, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands } from "./car-lines.ts";
 import { quarterSillZs } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
@@ -369,9 +369,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   const q = style.quarter;
   const aTopZ = aPillarTopZ(style);
   const aPost = source === "drawn" ? aPostRails(style) : null;
-  // The drawn B-pillar takes the style's bands; else the `bPillar` band, its top 3 cm narrower.
-  const bSpan = source === "drawn" ? style.pillars?.b : undefined;
-  const bBands = bSpan ? pillarBands(bSpan, (bp.rear + bp.front) / 2) : { belt: [bp.rear, bp.front] as const, top: [bp.rear + 0.015, bp.front - 0.015] as const };
+  const bBands = bPillarBand(style, source);
   const m = style.midPillarZ;
   const divider = (source === "drawn" ? style.pillars?.divider : undefined) ?? DIVIDER;
   const black = (source === "drawn" ? style.blackout : undefined) ?? {};
@@ -401,7 +399,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     );
     const [bRear, bFront] = bBands.belt;
     const [bTopRear, bTopFront] = bBands.top;
-    const bz = bSpan?.z?.[1] ?? (bp.rear + bp.front) * 0.5;
+    const bz = (bTopRear + bTopFront) * 0.5;
     const bTop = cantY(bz, style) + (source === "cage" ? 0.05 : PILLAR_TOP_RISE);
     parts.push(
       pillar(
