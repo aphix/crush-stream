@@ -15,9 +15,22 @@ const TRUCK_FRONT_FASCIA = [
   [-0.14, 0.05],
   [-0.14, -0.07],
 ] as const;
+/** The rear step bumper's section ([y, out] m, top to bottom): a flat top step rolling onto a plain vertical face, no ribs (reference rear iso). */
+const TRUCK_REAR_FASCIA = [
+  [0.1, -0.07],
+  [0.1, 0.06],
+  [0.094, 0.082],
+  [0.084, 0.088],
+  [-0.084, 0.088],
+  [-0.094, 0.082],
+  [-0.1, 0.07],
+  [-0.1, -0.07],
+] as const;
 
 /** The trucks' tall gloss-black tow-style mirror housing on the door glass's front corner, read off their isos ([out from the door, height, length along the car] m). */
 export const TOW_MIRROR = { cap: "box", finish: "black", size: [0.07, 0.22, 0.16], mount: "glass" } as const;
+/** The pickup's mirror (side plate): a rounded black head about 13 cm tall, centred 1.22 m up on a short arm to the glass sill. */
+const PICKUP_MIRROR = { ...TOW_MIRROR, cap: "rounded", size: [0.07, 0.135, 0.15], lift: 0.02, neck: 0.04, stalk: 0.045 } as const;
 /** The trucks' cab roofs roll onto their rear glass's and windshield's tops (reference isos: no flat cap overhanging either; run m), the rear
  *  corners tucking flush over the posts along the C-posts' chamfered tops (quarter glass to rear glass, 15-17 cm), no ear past them. */
 export const TRUCK_ROOF_ENDS = { rear: 0.17, front: 0.09, flush: { rear: 1 } } as const;
@@ -70,7 +83,7 @@ export const PICKUP: BodyStyle = {
   belt: { x: 0.73, y: [[0, 1.12]] },
   rocker: { y: 0.45 },
   underside: [[-2.17, 0.52], [-1.96, 0.42], [-1.75, 0.38], [-1.5, 0.34], [1.6, 0.34], [1.76, 0.35], [1.93, 0.38]],
-  door: { hingeX: 0.74, hingeY: 0.785, hingeZ: 0.7, length: 0.93, halfHeight: 0.335, mirrorY: 0.405, mirrorZ: 0.19, mirrorReach: 0.15, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69], mirror: TOW_MIRROR },
+  door: { hingeX: 0.74, hingeY: 0.785, hingeZ: 0.7, length: 0.93, halfHeight: 0.335, mirrorY: 0.405, mirrorZ: 0.19, mirrorReach: 0.15, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69], mirror: PICKUP_MIRROR },
   // The side plate's door glass starts .60 back at the belt and .33 at the roof, a sail filling up to the A-post.
   aPillarFoot: 0.6,
   aPillarTop: 0.34,
@@ -79,7 +92,8 @@ export const PICKUP: BodyStyle = {
   hood: { z0: 1.03, z1: 1.92, origin: [1.2, 1.01], nose: [0.034, 0.02] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.73, wrap: { from: 0.55, back: 0.12 }, fascia: TRUCK_FRONT_FASCIA, trim: "chrome", band: [0.41, 0.51] },
-    rear: { ...bumpers.rear, seat: { y: 0.57, z: 2.13 }, span: 0.74, wrap: { from: 0.65, back: 0.05 }, trim: "chrome", hitch: true },
+    // The tailgate drops onto the step: its top is a black rubber pad (band over the step's rows), the face plain chrome.
+    rear: { ...bumpers.rear, seat: { y: 0.57, z: 2.13 }, span: 0.74, wrap: { from: 0.65, back: 0.05 }, fascia: TRUCK_REAR_FASCIA, trim: "chrome", hitch: true, band: [0.66, 0.68] },
   },
   profile: [
     st(-2.16, 0.66, 1.18),
@@ -87,9 +101,10 @@ export const PICKUP: BodyStyle = {
     st(-1.6, 0.739, 1.18),
     st(-0.95, 0.739, 1.18),
     st(-0.58, 0.749, 1.18),
-    st(-0.5, 0.759, 1.2, 1.665, 0.58, 1),
-    st(-0.1, 0.759, 1.2, 1.66, 0.6, 1),
-    st(0.38, 0.759, 1.2, 1.625, 0.58, 1),
+    // The cab's roof edge and side-glass tops stand at the top plate's 0.585 m half-width (cabinHw + the lip), the glass leaning in under it.
+    st(-0.5, 0.759, 1.2, 1.665, 0.505, 1),
+    st(-0.1, 0.759, 1.2, 1.66, 0.51, 1),
+    st(0.38, 0.759, 1.2, 1.625, 0.505, 1),
     st(0.98, 0.759, 1.19, 1.22, 0.58, 0.3),
     st(1.2, 0.749, 1.17),
     st(1.5, 0.746, 1.12),
@@ -99,13 +114,13 @@ export const PICKUP: BodyStyle = {
   ],
   roofZ: [-0.46, 0.45],
   roofEnds: TRUCK_ROOF_ENDS,
-  roofSection: TRUCK_ROOF_SECTION,
+  // A flatter crown and a tighter edge roll, as the top plate's flat roof panel runs to 5 cm inside the edge.
+  roofSection: { ...TRUCK_ROOF_SECTION, crown: 0.75, blend: 0.8 },
   roofDrip: 0,
   windshieldTop: [1.6, 0.45],
-  // The reference's cab back stands near upright, its glass's top under the roof's rolled rear edge (rear iso: a slim rounded edge, not a nose).
-  // The pane's bowed centre (1.5 cm behind `top`) stands 5 mm ahead of `roofZ[0]`, so no glass shows past the roof's end in side view.
-  // At z -0.47..-0.5 the crushed cab's dummy-world roof stood 8-15 cm off the drawn one.
-  rearGlass: { base: [1.24, -0.55], top: [1.635, -0.44], wBase: 1.3, wTop: 1.12 },
+  // The cab back stands near upright, the glass's bowed top just ahead of the roof's rolled end and inside its chamfered corners (rear iso),
+  // so none shows past the roof in side view; set further back, the crushed cab's dummy-world roof stood 8-15 cm off the drawn one.
+  rearGlass: { base: [1.24, -0.55], top: [1.635, -0.44], wBase: 1.3, wTop: 0.96 },
   privacyGlass: { rear: true },
   quarter: { zRearBot: -0.3, zRearTop: -0.285 },
   midPillarZ: null,

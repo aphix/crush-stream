@@ -1352,8 +1352,8 @@ const SIM_DIGEST_BY_STYLE = [
   // The coupe re-pinned for its nose deck lowered 0.5-2.8 cm over z 1.76-1.945 to the reference's side line.
   { id: "coupe", digest: "65a78223ec46889380f64c822f52c7f005d3fc135df3982a0eacc74dcc28635c" },
   // The pickup re-pinned for its hood wrapping the nose (`hood.z1` 1.86 -> 1.92): its hood's cage reaches the nose the wall meets.
-  // Again for its mid-cab roof raised to its dims' height (profile z -0.1): the wall hit's crush re-rolls.
-  { id: "pickup", digest: "282be859aa30e844b2da5fd686b597f6a881367502dd1ab2900bc77952eb5a4e" },
+  // Its cab roof narrowed to the top plate's (profile cabinHw) brings the wall hit back to the same crush as before its mid-cab roof rose.
+  { id: "pickup", digest: "2882c1543a80d731c8d0bc7fea0385a5fff906c4840f069772703abc9069c59f" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
@@ -1431,7 +1431,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // The pickup's again for its windshield's foot forward to the side plate's edge (`windshield.base` z .9 -> .957: the A-post box moved) and its roof's
   // rear end over its rear glass's top (`roofZ[0]` -0.5 -> -0.46), its mid-cab roof 5 mm up to its dims' height.
   // The pickup's again for its rear glass's bowed top standing just ahead of the roof's end (`rearGlass.top`), so none shows past it.
-  { id: "pickup", digest: "f8b02021ab29fe606fbcc6a0b965967193be8023b3088aadf297d30f7d3e6247" },
+  // The pickup's again for its cab narrowed to the top plate's roof edge (profile cabinHw) and its rear glass's top narrowed inside the roof's end.
+  { id: "pickup", digest: "c50231fa9a7dd766eb8fddf521f622dfdea5da2e3ba1a1a3fa7e04b50bed1c71" },
   { id: "police", digest: "26d74836366ea758cb090a8f2908702c95392a9fe06faecc1d598e2f9b13404e" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55); again for its windshield base at the side
   // plate's (`windshield.base` [1.0, .92] -> [1.05, .98]) and its door glass starting back at .60 (`aPillarFoot` .74 -> .6): the glass-front and A-post boxes moved.
