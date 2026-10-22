@@ -4,7 +4,7 @@ import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { ReelPeople } from "../present/grounds-art.ts";
 import type { Ejection } from "../vehicle/ejection.ts";
 import type { CarSurfaces } from "../vehicle/car-surfaces.ts";
-import { beginImpact, CONTACT_HOLD, easeTimeScale, FUDGE_GAP, impactScale, laterImpact, phaseClock, PRE_IMPACT_LEAD, SLOMO_HOLD, stepPhase, THROW_HOLD, type CrashPhase, type PhaseClock } from "../match/phase.ts";
+import { beginImpact, CONTACT_HOLD, easeTimeScale, FUDGE_GAP, fudgeStrength, impactScale, laterImpact, phaseClock, PRE_IMPACT_LEAD, SLOMO_HOLD, stepPhase, THROW_HOLD, type CrashPhase, type PhaseClock } from "../match/phase.ts";
 import { clipTitle, MAX_HITS, type HighlightClip, type Reel } from "../match/highlights.ts";
 import type { ReelHud, SaveResult, ViewBox } from "../match/types.ts";
 import { mulberry32 } from "../world/placements.ts";
@@ -229,8 +229,8 @@ export type ReelHost = {
   crash(contact: THREE.Vector3, normal: THREE.Vector3): void;
   /** A clip's first impact, the cars meet: the kick, flash and burst. */
   impact(contact: THREE.Vector3, normal: THREE.Vector3, closing: number): void;
-  /** The clip's first impact is still ahead, the slow-mo easing in: sparks and dust on its point (called every `FUDGE_GAP` wall s until the cars meet). */
-  fudge(contact: THREE.Vector3, normal: THREE.Vector3): void;
+  /** The clip's first impact is still ahead, the slow-mo easing in: sparks and dust on its point, `strength` (0..1, `fudgeStrength`: by its cars' drawn bodies) of a full burst (at most every `FUDGE_GAP` wall s until the cars meet, none while they are not near). */
+  fudge(contact: THREE.Vector3, normal: THREE.Vector3, strength: number): void;
   /** A replay's car–car hit: sparks. */
   hit(contact: THREE.Vector3, normal: THREE.Vector3, impulse: number): void;
   /** A driver in the clip was thrown out (`ClipSim.take`, `e.car` the engine slot): his dummy flies, from the recording's numbers; `ride`: he was thrown in the clip's own crash, so the camera follows his flight (only such a driver is ever framed by the ride). */
@@ -637,9 +637,13 @@ export class ReelDirector {
     c.targetScale = c.timeScale;
     c.wallSinceImpact = w >= tl.contact ? w - tl.contact : 0;
     if (w >= tl.onset && w < tl.contact && w - this.fudgedAt >= FUDGE_GAP) {
-      this.fudgedAt = w;
-      this.firstHit(p);
-      this.host.fudge(_c.setY(_c.y + 0.4), _n);
+      const { clip } = p;
+      const strength = fudgeStrength(clip.x, clip.z, sim.cars[clip.firstA]!, clip.firstB >= 0 ? sim.cars[clip.firstB]! : null);
+      if (strength > 0) {
+        this.fudgedAt = w;
+        this.firstHit(p);
+        this.host.fudge(_c.setY(_c.y + 0.4), _n, strength);
+      }
     }
     const target = simAt(tl, w);
     const deadline = performance.now() + this.stepBudgetMs;

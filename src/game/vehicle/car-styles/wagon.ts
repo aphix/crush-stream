@@ -124,7 +124,7 @@ export const WAGON: BodyStyle = {
   lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES },
   grille: { y: 0.72, size: [0.8, 0.28], bottom: 0.62, round: 0.03, kind: "hex", finish: "chrome" },
   seats: { front: [-0.37, 0.53, -0.15], rear: [0.54, -0.95] },
-  pillars: { b: 0.088, divider: { width: [0.105, 0.105] } },
+  pillars: { b: { width: [0.088, 0.088] }, divider: { width: [0.105, 0.105] } },
   blackout: { a: true, sail: true, b: true, divider: true, rear: true },
   roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.82, -1.74], y: [1.46, 1.51], halfWidth: 0.5 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 } },
   exhaust: { tips: 2, x: 0.5, y: 0.47, size: [0.12, 0.05], shape: "rect" },
