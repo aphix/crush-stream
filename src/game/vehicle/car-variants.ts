@@ -266,8 +266,8 @@ export interface BodyStyle {
   glassTop?: number | readonly (readonly [number, number])[];
   /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening). */
   arch: { radius: number; lip?: ArchLip };
-  /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it. */
-  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge };
+  /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`. */
+  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number] };
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;

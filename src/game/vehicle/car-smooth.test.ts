@@ -199,6 +199,9 @@ const lidCreaseTable = [
   { it: "a hatchback's tailgate edges (ring points 0, 4, 5, 6)", style: "hatchback", part: "boot", creaseLines: [0, 4, 5, 6], smoothLines: [1, 2, 3], creaseDegrees: CREASE_DEGREES.tailgate },
 ] as const;
 
+/** The sedan with the reference's hood crown: its top 6 cm under the centre line at |x| .66. */
+const CROWNED_SEDAN: BodyStyle = { ...CAR_STYLES.sedan, hood: { ...CAR_STYLES.sedan.hood, crown: [0.06, 0.66] } };
+
 describe("given the lids as built", () => {
   for (const testCase of lidCreaseTable) {
     it(`when ${testCase.it} are read, then each turns its declared ${testCase.creaseDegrees}° or more at vertices of its own, and the dome or bow turns under ${FLAT_CURVE_LIMIT_DEGREES}° as one vertex`, () => {
@@ -222,6 +225,25 @@ describe("given the lids as built", () => {
       }
     });
   }
+
+  it(`when a crowned hood (the sedan's: 6 cm under the centre at |x| .66) is read, then its centre stands that parabola's drop over its edge at every station and its dome, edge to edge, turns under ${FLAT_CURVE_LIMIT_DEGREES}° at each of its own vertices`, () => {
+    const [drop, at] = CROWNED_SEDAN.hood.crown!;
+    const lid = makeHoodGeometry(CROWNED_SEDAN);
+    const loft = loftOf(lid);
+    // The top runs edge, dome points, centre, dome points, edge; the skirt and underside are the ring's last 8 points.
+    const rim = loft.ring - 9;
+    for (let slice = 0; slice < loft.slices; slice++) {
+      const edge = positionAt(lid, slice * loft.ring);
+      const rise = positionAt(lid, slice * loft.ring + rim / 2).y - edge.y;
+      const want = drop * (edge.x / at) ** 2;
+      assert.ok(Math.abs(rise - want) < 1e-4, `slice ${slice}: the centre stands ${(rise * 100).toFixed(2)} cm over the edge at |x| ${(-edge.x).toFixed(3)}, want ${(want * 100).toFixed(2)}`);
+    }
+    const inner = (slice: number) => slice > 0 && slice < loft.slices - 2;
+    for (let line = 1; line < rim; line++) {
+      const turn = Math.max(...ringLineDihedrals(lid, line, inner));
+      assert.ok(turn < FLAT_CURVE_LIMIT_DEGREES, `dome ring line ${line} of ${rim - 1} turns ${turn.toFixed(2)}°`);
+    }
+  });
 });
 
 type PartCase = { readonly name: string; readonly make: (id: CarStyleId) => THREE.BufferGeometry; readonly creaseDegrees: number; readonly capsAreCuts: boolean };
@@ -318,10 +340,11 @@ describe("given every body style's drawn nose, whose plan and fender line turn h
       const hood = makeHoodGeometry(style);
       const hoodLoft = loftOf(hood);
       const [, oz] = style.hood.origin;
-      // The edge (ring point 4) stands a fixed inset inside the station's half-width: its chord's middle against the half-width there.
+      // The edge (the top's last point) stands a fixed inset inside the station's half-width: its chord's middle against the half-width there.
+      const rim = hoodLoft.ring - 9;
       const inset = (v: THREE.Vector3) => sampleSlice(v.z + oz, style.profile).hw - v.x;
       for (let slice = 0; slice < hoodLoft.slices - 1; slice++) {
-        const [a, b] = [positionAt(hood, slice * hoodLoft.ring + 4), positionAt(hood, (slice + 1) * hoodLoft.ring + 4)];
+        const [a, b] = [positionAt(hood, slice * hoodLoft.ring + rim), positionAt(hood, (slice + 1) * hoodLoft.ring + rim)];
         if (b.z + oz < noseZ - NOSE_READ) continue;
         const sag = Math.abs(inset(a.clone().add(b).multiplyScalar(0.5)) - inset(a));
         assert.ok(sag <= NOSE_CHORD_SAG, `${id} hood edge between z ${(a.z + oz).toFixed(3)} and ${(b.z + oz).toFixed(3)}: ${(sag * 1000).toFixed(1)} mm off its plan line`);
@@ -380,7 +403,7 @@ describe("given every body style's drawn hood over its open engine bay", () => {
       const loft = loftOf(hood);
       const [oy, oz] = style.hood.origin;
       for (let slice = 1; slice < loft.slices - 1; slice++) {
-        const edge = positionAt(hood, slice * loft.ring + 4);
+        const edge = positionAt(hood, slice * loft.ring + loft.ring - 9);
         const z = edge.z + oz;
         // The section's right half, outward from its deck edge (ring point 1): the fender's top line the edge looks over.
         const section = sectionPoints(sampleSlice(z, style.profile), style, "drawn");
@@ -402,7 +425,7 @@ describe("given every body style's drawn hood over its open engine bay", () => {
       const z = positionAt(hood, slice * loft.ring).z + oz;
       // The section's right half from its 30° shoulder point up to its deck edge.
       const chain = sectionPoints(sampleSlice(z, CLAMSHELL_SUV.profile), CLAMSHELL_SUV, "drawn").slice(-4, -1);
-      for (const k of [4, 5, 6]) {
+      for (const k of [loft.ring - 9, loft.ring - 8, loft.ring - 7]) {
         const p = positionAt(hood, slice * loft.ring + k);
         const off = distanceToChain({ x: p.x, y: p.y + oy }, chain);
         assert.ok(off > 0 && off <= CLAMSHELL_LAP, `z ${z.toFixed(3)} ring point ${k}: ${(off * 1000).toFixed(2)} mm off the body`);
