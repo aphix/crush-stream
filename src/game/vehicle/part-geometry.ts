@@ -92,8 +92,9 @@ function styleMirror(spec: MirrorSpec, reach: number, sign: number): THREE.Buffe
   const [w, h, d] = spec.size ?? MIRROR_CAP_SIZE;
   const scaleX = reach / MIRROR_REACH;
   const root = MIRROR_ROOT * scaleX;
+  // A black housing is gloss (the references' piano black), not the bumpers' satin plastic.
   const [trim, tone] =
-    spec.finish === "chrome" ? [TRIM_CHROME, TRIM_FINISH.chrome] : spec.finish === "black" ? [TRIM_BLACK, TRIM_FINISH.plastic] : [PAINT_COLOR_TONE.getHex(), TRIM_FINISH.paint];
+    spec.finish === "chrome" ? [TRIM_CHROME, TRIM_FINISH.chrome] : spec.finish === "black" ? [TRIM_BLACK, TRIM_FINISH.gloss] : [PAINT_COLOR_TONE.getHex(), TRIM_FINISH.paint];
   const fitting = spec.finish === "chrome" ? ([TRIM_CHROME, TRIM_FINISH.chrome] as const) : ([0x1c1e22, { roughness: 0.5, metalness: 0.3 }] as const);
   // RoundedBoxGeometry comes unindexed; the mirror's other parts are indexed, and a merge takes one kind.
   const capShape = spec.cap === "rounded" ? mergeVertices(new RoundedBoxGeometry(w, h, d, 2, MIRROR_CAP_ROUND * Math.min(w, h, d))) : new THREE.BoxGeometry(w, h, d);
