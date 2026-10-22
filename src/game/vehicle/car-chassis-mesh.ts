@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detSin } from "../kernel/physics-core.js";
-import { INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { BLACKOUT, INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
@@ -198,13 +198,13 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   if (fittings) parts.push(fittings.geometry);
   const merged = mergeGeometries(parts, false);
   if (!merged) throw new Error("Failed to merge chassis");
-  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): torn panels, roof rails/glass panel and blacked-out pillars;
-  // `INNER_PANEL` an unpainted inner panel.
+  // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): torn panels and the headliner; `BLACKOUT` gloss black: blacked-out
+  // pillars, roof rails and glass panel, the cowl; `INNER_PANEL` an unpainted inner panel.
   const primer = new Float32Array(merged.getAttribute("position").count);
   let start = 0;
   for (const g of parts) {
     const count = g.getAttribute("position").count;
-    if (g.userData.blackout === true) primer.fill(1, start, start + count);
+    if (g.userData.blackout === true) primer.fill(BLACKOUT, start, start + count);
     start += count;
   }
   if (lips) primer.set(lips.userData.tone as Float32Array, lipFrom);
@@ -223,14 +223,14 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   // The headliner (the roof's inner face) is dark primer, as the dark cabin shell's headliner was.
   for (let k = 0; k < twins.length; k += 2) primer[twins[k]!] = 1;
   merged.userData.shellTwins = twins;
-  if (fittings) primer.fill(1, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
+  if (fittings) primer.fill(BLACKOUT, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
   if (source === "drawn") {
     // The trough's and the boot's floor corner on each side (ring points 0 and n - 1), and the walls' own copies of their tops.
     for (let s = 0; s < zs.length; s++) for (const i of [0, n - 1]) primer[s * n + i] = INNER_PANEL * inner[s]!;
     for (const [copy, s] of wallTops) primer[copy] = INNER_PANEL * inner[s]!;
     if (style.blackout?.cowl === true) {
       const [foot, hoodRear] = [style.windshield.base[1], style.hood.z0];
-      for (let s = 0; s < zs.length; s++) if (zs[s]! >= Math.min(foot, hoodRear) - COWL_LAP && zs[s]! <= Math.max(foot, hoodRear) + COWL_LAP) for (const i of [0, n - 1]) primer[s * n + i] = 1;
+      for (let s = 0; s < zs.length; s++) if (zs[s]! >= Math.min(foot, hoodRear) - COWL_LAP && zs[s]! <= Math.max(foot, hoodRear) + COWL_LAP) for (const i of [0, n - 1]) primer[s * n + i] = BLACKOUT;
     }
     // Each well's ceiling inside an arch, unpainted like its liner so the lip reads over a dark gap: the sill's two points, and the last
     // tuck row and rocker once the tuck row over them sits under the arch's lip (`halfRing` lifts it toward the edge), so no painted side fades into them.
