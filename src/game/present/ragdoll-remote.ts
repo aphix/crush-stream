@@ -6,6 +6,7 @@ import { CLASS_LIFT } from "../vehicle/constants.ts";
 import { carClass, classStats } from "../vehicle/vehicle-classes.ts";
 import type { TrackJson } from "../world/track-schema.ts";
 import type { Throw } from "./engine-ragdoll.ts";
+import { store3d, store4d } from "../kernel/store.ts";
 import {
   CAR_FLAGS,
   CAR_FLOATS,
@@ -261,15 +262,15 @@ export class RagdollRemote {
 
   /** A car's record in a frame (`CAR_FLOATS` floats at `o`). */
   private record(car: DeformableCar, block: Float64Array, o: number): void {
-    car.group.position.toArray(block, o + CAR_POSITION);
-    car.group.quaternion.toArray(block, o + CAR_QUATERNION);
-    car.velocity.toArray(block, o + CAR_VELOCITY);
+    store3d(block, o + CAR_POSITION, car.group.position);
+    store4d(block, o + CAR_QUATERNION, car.group.quaternion);
+    store3d(block, o + CAR_VELOCITY, car.velocity);
     let flags = (car.falling ? FLAG_FALLING : 0) | (car.vaporized ? FLAG_VAPORIZED : 0);
     const lift = this.liftOf(car);
     if (lift !== null) {
       flags |= FLAG_LIFT;
-      lift.position.toArray(block, o + CAR_LIFT_POSITION);
-      lift.quaternion.toArray(block, o + CAR_LIFT_QUATERNION);
+      store3d(block, o + CAR_LIFT_POSITION, lift.position);
+      store4d(block, o + CAR_LIFT_QUATERNION, lift.quaternion);
     }
     block[o + CAR_SPEED] = car.speed;
     block[o + CAR_FLAGS] = flags;

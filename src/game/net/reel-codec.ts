@@ -321,7 +321,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * drawn tread, and meets a solid's sides (a wall, the slab, a prism's flank) at four hub-height points through the shared crash path, giving over its
  * class's spring travel before the face holds it (a monster whose keel clears the slab stops on its tyres); the slab keeps each car off it by its own
  * box, a car on its side drags that side's tyres, and a wreck pressed into the ground stays awake until it is out. A lifted car (the monster) turns,
- * lands and is thrown about a centre risen by its sprung share of the lift (0.81 of the monster's 0.87 m), and a respawn re-attaches it there. Trunk
+ * lands and is thrown about a centre risen by its sprung share of the lift (0.81 of the monster's 0.87 m), and a respawn re-attaches it there; as a
+ * wreck its masses ride that centre too, and its fading lift as it lies over moves the centre without moving its momentum; a wreck at rest on a
+ * tyre at the end of its springs rests on the stop (it fell onto it every other slice and never slept). Trunk
  * lids, hatches, the SUV liftgate and the pickup's drop gate swing on hinges: a rear crush pops the latch, a slam re-latches it, a hard stop, slam,
  * crush or hit tears it off (a loose lid weighs its car's share), struts raise a lid to its stop and a drop gate falls level on its cables; the
  * hatch's and SUV's rear glass rides its gate. Door glass ends 1 cm under its B-pillar's front edge; a mirror keeps its style's reach (sedan 0.157 m,
@@ -332,7 +334,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * base and tailgate top at .905. The sedan's and police's quarter glass runs to a point on the belt (their C-post's foot with it) and their tails end
  * 3.5 cm wider. A car's collision cage keeps the underside it rests on out to its nose and tail lips (read once it is a wreck), so a
  * wreck that loses a front wheel rests on its lip instead of rocking 3-4 cm in the ground, and a car pitched over another meets it as deep as the two
- * cages stand. Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
+ * cages stand. A thrown driver meets each pane as its glass's own quad, and breaks it only with a blow on its face: a door strike no longer
+ * cracks the windshield. Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
 const REPLAY_VERSION = 158;

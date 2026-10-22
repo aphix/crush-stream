@@ -535,7 +535,12 @@ export class DeformableCar extends CarParts {
     this.pitch = g.rotation.x;
     this.roll = g.rotation.z;
     g.updateWorldMatrix(false, false);
-    _c.copy(centre).applyMatrix4(g.matrixWorld);
+    // The masses go back about the centre at the body's new pose: a lifted wreck's (`centreLift`) moves along its frame as the body tips.
+    // `velocity` is its centre of mass's, which that inner shift leaves as it was. Carried to the new centre (`velocity` += ω × the shift),
+    // a monster wreck tumbling at 9 rad/s gained 6.1 m/s upward in free fall as its lift faded. An unlifted one's stays where it was (its
+    // masses stand still in the frame through the step), so it is not read again.
+    const turned = CLASSES[carClass(this)].lift === 0 ? centre : wreckCentre(this);
+    _c.copy(turned).applyMatrix4(g.matrixWorld);
     for (const m of ms) {
       m.world.copy(m.local).applyMatrix4(g.matrixWorld);
       _r.copy(m.world).sub(_c);
@@ -543,7 +548,7 @@ export class DeformableCar extends CarParts {
     }
     // A frozen wreck (`EPICENTER`) keeps what this step read: its masses stand still in the frame from here on.
     if (this.deform.frozen) {
-      this.deform.frozenCentre.copy(centre);
+      this.deform.frozenCentre.copy(turned);
       this.deform.frozenInvI.copy(wreckInvI);
       this.deform.frozenReady = true;
     }
