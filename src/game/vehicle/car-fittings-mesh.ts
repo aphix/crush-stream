@@ -21,10 +21,10 @@ const SINK = 0.005;
 const BULGE_STATIONS = 16;
 const BULGE_RAMP = 0.15;
 const BULGE_FLANK = 0.05;
-/** A scoop rises over `SCOOP_LENGTH` (m) behind its mouth in `SCOOP_STATIONS` rings; a twin scoop's inlets stand `SCOOP_RIB` (m) apart. */
+/** A scoop rises over `SCOOP_LENGTH` (m) behind its mouth in `SCOOP_STATIONS` rings; a twin scoop's inlets stand `SCOOP_RIB` (m) apart, a razor groove so the pair reads as one raised piece. */
 const SCOOP_LENGTH = 0.32;
 const SCOOP_STATIONS = 4;
-const SCOOP_RIB = 0.04;
+const SCOOP_RIB = 0.006;
 /** Rings along a roof rail, its ends easing into the roof over `RAIL_RAMP` (m). */
 const RAIL_STATIONS = 12;
 const RAIL_RAMP = 0.08;

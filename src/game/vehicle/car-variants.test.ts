@@ -1136,12 +1136,16 @@ describe("given a body style's P1 parts", () => {
   it("when a boot carries a lip, then a deck lid's top rises its rise at the rear edge, a tailgate's top edge kicks its rise out, nothing moves past its depth from the edge, and the cage builds are unchanged", () => {
     const lip = { rise: 0.025, depth: 0.08 };
     const { coupe, hatchback } = CAR_STYLES;
-    const deck = coupe.boot;
+    const { lip: ownLip, ...bareDeck } = coupe.boot;
     const gate = hatchback.boot;
-    assert.ok(deck.kind === "lid" && gate.kind === "tailgate", "the coupe has a deck lid, the hatchback a tailgate");
-    const deckStyle: BodyStyle = { ...coupe, boot: { ...deck, lip } };
+    assert.ok(bareDeck.kind === "lid" && gate.kind === "tailgate", "the coupe has a deck lid, the hatchback a tailgate");
+    // The plain deck is the coupe's lid without its own ducktail, so the measured rise is the test lip's alone.
+    const deck = bareDeck;
+    const plainStyle: BodyStyle = { ...coupe, boot: bareDeck };
+    const deckStyle: BodyStyle = { ...coupe, boot: { ...bareDeck, lip } };
     const gateStyle: BodyStyle = { ...hatchback, boot: { ...gate, lip } };
-    const [plainDeck, lipDeck, plainGate, lipGate] = [coupe, deckStyle, hatchback, gateStyle].map((s) => makeTrunkGeometry(s));
+    assert.ok(ownLip === undefined || ownLip.rise > 0, "the coupe's own lip, if any, rises");
+    const [plainDeck, lipDeck, plainGate, lipGate] = [plainStyle, deckStyle, hatchback, gateStyle].map((s) => makeTrunkGeometry(s));
     const edge = deck.z1 - deck.origin[1];
     const deckIn = lerp(deck.z0, deck.z1, 0.8) - deck.origin[1];
     const gateTop = gate.origin[0] - bootPivot(gate)[0];
@@ -1150,7 +1154,7 @@ describe("given a body style's P1 parts", () => {
     const face = (g: THREE.BufferGeometry, at: number) => extremeAt(g, 1, at, 2, -1);
     assertSameNumbers([top(lipDeck!, edge) - top(plainDeck!, edge), top(lipDeck!, deckIn) - top(plainDeck!, deckIn)], [lip.rise, 0], "the deck lid's top over the plain one's at its rear edge and 0.13 m in", 1e-5);
     assertSameNumbers([face(plainGate!, gateTop) - face(lipGate!, gateTop), face(plainGate!, gateDown) - face(lipGate!, gateDown)], [lip.rise, 0], "the tailgate's face behind the plain one's at its top edge and 0.15 m down", 1e-5);
-    assert.ok(cageHash(deckStyle) === cageHash(coupe) && cageHash(gateStyle) === cageHash(hatchback), "the cage builds are unchanged");
+    assert.ok(cageHash(deckStyle) === cageHash(plainStyle) && cageHash(gateStyle) === cageHash(hatchback), "the cage builds are unchanged");
   });
 
   it("when a roof carries rails, then two dark rails stand on it between their |x| and z ends, their tops their rise over the roof at their inner edge, and the cage builds are unchanged", () => {

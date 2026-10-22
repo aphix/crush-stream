@@ -99,7 +99,6 @@ export const MONSTER: BodyStyle = {
       { view: "top", points: [[-0.915, 0], [-2.242, 0]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
       { view: "front", points: [[0, 0.9], [0.7, 0.9]], width: 0.008, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "front", points: [[0, 0.52], [0.82, 0.52]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.1 },
-      { view: "rear", points: [[0, 0.45], [0.67, 0.45], [0.67, 1.02], [0, 1.02]], width: 0.008, depth: -0.004, profile: "v", cavity: 0.85 },
     ],
     patches: [
       { view: "side", points: [[0.064, 0.877], [-0.107, 0.877], [-0.107, 0.798], [0.064, 0.798]], depth: -0.004, rim: 0.004, cavity: 0.5 },
