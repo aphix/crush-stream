@@ -36,6 +36,10 @@ import { cageSourceOf } from "./car-cage-rig.ts";
 import { CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
 
 const PAINT = { body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" };
+/** The sedan's rear seam cover, both sides: a band from the seam to the fascia's top, kept inside the car's triangle budget. */
+const SEAM_COVER_TRIANGLES = 160;
+/** A seam cover vertex stands at most this far (m) off the body skin: its 6 mm lift plus a chord's sag across a corner. */
+const SEAM_COVER_OFF = 0.015;
 const scene = new THREE.Scene();
 const cars: Record<CarStyleId, DeformableCar> = {
   sedan: new DeformableCar(PAINT, scene, null, "sedan"),
@@ -1757,6 +1761,8 @@ describe("given a body style's P2 parts", () => {
     const fascia = withRearFittings(makeBumperGeometry(false, style), style);
     const drawn = withSeamCover(fascia, style, false);
     assert.ok(drawn !== fascia, "the control: the seam cover is merged in");
+    const cover = (drawn.index!.count - fascia.index!.count) / 3;
+    assert.ok(cover <= SEAM_COVER_TRIANGLES, `the cover bills ${cover} triangles, over ${SEAM_COVER_TRIANGLES}: a band down to the fascia, not the skin it hides`);
     const both = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
     const bumper = new THREE.Mesh(drawn, both);
     bumper.position.set(0, seat.y, -seat.z);
@@ -1784,6 +1790,32 @@ describe("given a body style's P2 parts", () => {
     }
     const plain = makeBumperGeometry(true, CAR_STYLES.coupe);
     assert.ok(withSeamCover(plain, CAR_STYLES.coupe, true) === plain, "a bumper with no seam is drawn as it was");
+  });
+
+  it("when a style's bumpers carry their seams, then every seam cover vertex lies on the body skin (no fold of the band stands off an edge)", () => {
+    const both = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const ray = new THREE.Raycaster();
+    const [p, n] = [new THREE.Vector3(), new THREE.Vector3()];
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const body = new THREE.Mesh(makeChassisGeometry(style), both);
+      for (const front of [true, false]) {
+        const { seat } = style.bumpers[front ? "front" : "rear"];
+        const fascia = front ? makeBumperGeometry(true, style) : withRearFittings(makeBumperGeometry(false, style), style);
+        const drawn = withSeamCover(fascia, style, front);
+        if (drawn === fascia) continue;
+        const [pos, nrm] = [drawn.getAttribute("position"), drawn.getAttribute("normal")];
+        let off = 0;
+        for (let i = fascia.getAttribute("position").count; i < pos.count; i++) {
+          p.fromBufferAttribute(pos, i).add(new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z));
+          n.fromBufferAttribute(nrm, i).normalize();
+          ray.set(p.clone().addScaledVector(n, 0.05), n.clone().negate());
+          const hit = ray.intersectObject(body, false)[0];
+          off = Math.max(off, hit ? Math.abs(hit.distance - 0.05) : Infinity);
+        }
+        assert.ok(off < SEAM_COVER_OFF, `${id} ${front ? "front" : "rear"}: a cover vertex ${(off * 100).toFixed(1)} cm off the skin`);
+      }
+    }
   });
 
   it("when a bumper carrying its seam is torn off, then its loose box (its flying shape and mass) holds every vertex it draws, the seam cover's too", () => {
