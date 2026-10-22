@@ -20,17 +20,17 @@ const WAGON_LAMP_SHAPES = {
   },
   tail: {
     loops: [
-      { points: [[0.62, 0.99], [0.74, 1.0], [0.74, 1.05], [0.62, 1.06]] },
-      { points: [[0.5, 0.99], [0.62, 0.99], [0.62, 1.06], [0.5, 1.06]] },
-      { side: true, points: [[-2.12, 0.99], [-1.97, 1.02], [-1.97, 1.05], [-2.12, 1.06]] },
+      { points: [[0.62, 0.9], [0.68, 0.905], [0.68, 0.995], [0.62, 1.0]] },
+      { points: [[0.5, 0.9], [0.62, 0.9], [0.62, 1.0], [0.5, 1.0]] },
+      { side: true, points: [[-2.08, 0.91], [-1.74, 0.97], [-1.74, 0.99], [-2.08, 1.0]] },
     ],
     lens: "lit",
     bezel: "black",
-    strips: [{ line: { points: [[0.5, 1.055], [0.74, 1.045]] }, width: 0.006, tone: "lit" }],
+    strips: [{ line: { points: [[0.5, 0.995], [0.68, 0.99]] }, width: 0.006, tone: "lit" }],
     cells: [
-      { loop: { points: [[0, 1.0], [0.5, 1.0], [0.5, 1.05], [0, 1.05]] }, tone: "dark" },
-      { loop: { points: [[0.5, 0.99], [0.74, 0.99], [0.74, 1.02], [0.5, 1.02]] }, tone: "smoked" },
-      { loop: { points: [[0.5, 1.02], [0.55, 1.02], [0.55, 1.06], [0.5, 1.06]] }, tone: "clear" },
+      { loop: { points: [[0, 0.91], [0.5, 0.91], [0.5, 0.98], [0, 0.98]] }, tone: "dark" },
+      { loop: { points: [[0.5, 0.9], [0.68, 0.9], [0.68, 0.94], [0.5, 0.94]] }, tone: "smoked" },
+      { loop: { points: [[0.5, 0.94], [0.55, 0.94], [0.55, 1.0], [0.5, 1.0]] }, tone: "clear" },
     ],
   },
   front: {
@@ -121,7 +121,7 @@ export const WAGON: BodyStyle = {
   tubs: [[-1.96, 0.7, 0.38]],
   rearDoorSeam: -1.2,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE },
-  lamps: { head: [0.57, 0.828], tail: [0.635, 1.025], shapes: WAGON_LAMP_SHAPES },
+  lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES },
   grille: { y: 0.72, size: [0.8, 0.28], bottom: 0.62, round: 0.03, kind: "hex", finish: "chrome" },
   seats: { front: [-0.37, 0.53, -0.15], rear: [0.54, -0.95] },
   pillars: { b: 0.088, divider: { width: [0.105, 0.105] } },

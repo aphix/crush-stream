@@ -20,6 +20,7 @@ import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, type PartKind } from "./part-geometry.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
+import { bootPivot } from "./hinge-spec.ts";
 
 /**
  * A style's own drawn part where its spec asks for one (`door.mirror`, `grille`, `lamps.units`), in the seat's space: the seat, and the
@@ -581,7 +582,7 @@ function builtLamp(style: BodyStyle, which: keyof LampShapes): BuiltLamp {
   const seat = style.bumpers[front ? "front" : "rear"].seat;
   const sources: SkinSource[] = bumper
     ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false }]
-    : [{ geo: front ? makeHoodGeometry(style) : makeTrunkGeometry(style), offset: new THREE.Vector3(0, ...(front ? style.hood.origin : style.boot.origin)), lid: true }, body];
+    : [{ geo: front ? makeHoodGeometry(style) : makeTrunkGeometry(style), offset: new THREE.Vector3(0, ...(front ? style.hood.origin : bootPivot(style.boot))), lid: true }, body];
   const skin = new LampSkin(sources, zEnd, front ? 1 : -1, `${style.id} ${which} lamp`);
   const built = buildShape(style.lamps.shapes![which]!, skin, zEnd, (geo, t) => (bumper ? bumperTone : lampTone)(geo, t, kind));
   if (!BUILT.has(style)) BUILT.set(style, new Map());
@@ -615,9 +616,9 @@ function styleLamp(style: BodyStyle, kind: LampKind, side: number): THREE.Buffer
   return geo.applyMatrix4(rest.invert());
 }
 
-/** The share of `style`'s `kind` lamps its lid carries (the tails' on the boot lid, the heads' on the hood), both sides, in that lid's space (its origin). */
+/** The share of `style`'s `kind` lamps its lid carries (the tails' on the boot lid, the heads' on the hood), both sides, in that lid's space (the hood's origin, the boot's pivot). */
 function lidLamp(style: BodyStyle, kind: LampKind): THREE.BufferGeometry {
-  const [y, z] = kind === "head" ? style.hood.origin : style.boot.origin;
+  const [y, z] = kind === "head" ? style.hood.origin : bootPivot(style.boot);
   return bothSides(builtLamp(style, kind).lid).translate(0, -y, -z);
 }
 
