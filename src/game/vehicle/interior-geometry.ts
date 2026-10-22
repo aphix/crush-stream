@@ -35,15 +35,6 @@ export const WHEEL_GRIP = [0.175, 0, -0.01] as const;
 export const REF_CABIN = { halfX: 0.8, floor: 0.3, roof: 1.3, rear: -0.72, front: 1.03 } as const;
 /** The engine bay the bay set is drawn for (m, car space): a car's bay box maps onto it. Its top is the platform hood's underside at the bay's middle. */
 export const REF_BAY = { halfX: 0.75, floor: 0.36, top: 0.709, rear: 1.07, front: 1.9 } as const;
-/** The bay opens this far (m) ahead of the hood's cowl edge or the windshield's foot, whichever is further forward, and stops this far inside the hood's nose edge. */
-const BAY_CLEAR = { rear: 0.04, front: 0.08 } as const;
-/** The trough's floor (m, car y): deep enough that the bay set stands tall in it, clear of the body's floor pan at 0.145. */
-const BAY_FLOOR = 0.28;
-
-/** The drawn body's engine bay trough under the hood, as a tub [zRear, zFront, floorY] (`BodyStyle.tubs`): drawn only, the cage's deck stays closed. */
-export function bayTub(style: BodyStyle): readonly [number, number, number] {
-  return [Math.max(style.hood.z0, style.windshield.base[1]) + BAY_CLEAR.rear, style.hood.z1 - BAY_CLEAR.front, BAY_FLOOR];
-}
 
 /** A flat-toned box at (x, y, z), tipped `rx` (rad) about x first. */
 const box = (w: number, h: number, d: number, tone: Tone, x: number, y: number, z: number, rx = 0): THREE.BufferGeometry =>
