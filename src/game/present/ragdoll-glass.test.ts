@@ -131,6 +131,17 @@ describe("given a parked car's glass (each pane intact, then cracked, then shatt
   }
 });
 
+describe("given a parked sedan's intact glass and a thrown dummy whose torso alone meets the car, aimed at the front of its left door window", () => {
+  // The windshield's slab is its glass's own quad: a cuboid on the pane's mean width stood 11 cm past its header's ends over the door
+  // window's front, and a door strike cracked the windshield (union 44c33a2a). The door window's own state is the door rows' (todo).
+  it("when his torso strikes the left door window at 10 m/s, then the windshield stays intact", async (t) => {
+    const { throws, glass } = await strikes("doorL", DOOR_UP, 0, "chest", true, [10]);
+    t.diagnostic(`glass ${JSON.stringify(glass)}; throws ${show(throws)}`);
+    assert.ok(throws[0]!.before < -9, `the torso came at the door at ${(-throws[0]!.before).toFixed(2)} m/s`);
+    assert.equal(glass.windshield, "intact", "the windshield's state");
+  });
+});
+
 describe("given a parked car's intact windshield and whole thrown dummies", () => {
   it("when two dummies strike it chest first at 10 m/s, one after the other, then the first leaves it cracked and the second shatters it", async (t) => {
     const once = await strikes("windshield", 0.1, 0, "chest", false, [10]);
