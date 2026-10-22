@@ -409,18 +409,29 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
   const rounded: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: ROUND, roundOutline: undefined } };
   const outlined: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: ROUND, roundOutline: true } };
 
-  it("when its rear glass is built with a round outline (roundOutline: the coupe's), then no vertex is black frit and the glass keeps the corner's arc in from each square corner, as the bead does", () => {
+  it("when its rear glass is built with a round outline (roundOutline: the coupe's), then its glass keeps the corner's arc in from each square corner, as the bead does, and its frit corners stand 1 cm in behind the plain build's as a backing", () => {
+    /** The backing's inset (m) behind the pane. */
+    const INSET = 0.01;
     const geo = makeRearGlass(outlined);
-    const pos = geo.getAttribute("position");
+    const plain = makeRearGlass(rounded);
+    const [pos, flat] = [geo.getAttribute("position"), plain.getAttribute("position")];
     const tone = geo.getAttribute(GLASS_ATTRIBUTE);
+    assert.ok(pos.count === flat.count, `${pos.count} vertices against the plain build's ${flat.count}`);
     let frit = 0;
-    for (let i = 0; i < pos.count; i++) if (tone.getX(i) !== 0) frit++;
-    assert.ok(frit === 0, `${frit} vertices of black frit`);
+    for (let i = 0; i < pos.count; i++) {
+      const off = new THREE.Vector3().fromBufferAttribute(pos, i).distanceTo(new THREE.Vector3().fromBufferAttribute(flat, i));
+      if (tone.getX(i) === 0) assert.ok(off < 1e-6, `clear vertex ${i} moved ${off} m`);
+      else {
+        frit++;
+        assert.ok(Math.abs(off - INSET) < 1e-4, `frit vertex ${i} stands ${(off * 1000).toFixed(1)} mm off the plain build's`);
+      }
+    }
+    assert.ok(frit > 0, "no frit backing");
     const squarePos = makeRearGlass(square).getAttribute("position");
     for (const k of [0, 8, 54, 62]) {
       const corner = new THREE.Vector3().fromBufferAttribute(squarePos, k);
       let near = Infinity;
-      for (let i = 0; i < pos.count; i++) near = Math.min(near, corner.distanceTo(new THREE.Vector3().fromBufferAttribute(pos, i)));
+      for (let i = 0; i < pos.count; i++) if (tone.getX(i) === 0) near = Math.min(near, corner.distanceTo(new THREE.Vector3().fromBufferAttribute(pos, i)));
       assert.ok(near > 0.9 * ROUND * (Math.SQRT2 - 1), `corner ${k}: the glass reaches ${near.toFixed(4)} m off it`);
     }
   });
