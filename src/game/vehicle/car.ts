@@ -783,7 +783,7 @@ export class DeformableCar extends CarParts {
       if (loose !== p.detached) {
         // The host tore it off: this client throws its own copy (debris is per player; the host's pose is not sent).
         if (loose) {
-          if (p.region) this.shellPose(p);
+          if (p.region) this.shellPose(p, false);
           this.detachPart(p, 0);
         } else {
           p.object.removeFromParent();

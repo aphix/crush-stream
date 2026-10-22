@@ -10,40 +10,58 @@ const HATCHBACK_LAMP_SHAPES = {
     recess: 0.01,
     cells: [
       { loop: { points: [[0.665, 0.48], [0.7, 0.48], [0.7, 0.6], [0.665, 0.601]] }, tone: "amber" },
-      { loop: { side: true, points: [[1.72, 0.48], [1.62, 0.48], [1.62, 0.59], [1.72, 0.6]] }, tone: "amber" },
+      { loop: { side: true, points: [[1.72, 0.48], [1.67, 0.48], [1.67, 0.595], [1.72, 0.6]] }, tone: "amber" },
     ],
   },
-  // A slim band split on the gate's outline: the gate's piece inboard of x .43, the body's on the infill under the outline's slant, round
-  // the corner past the infill's 3 cm step and onto the quarter.
+  // A slim band split at the gate's outline (the gate's piece inboard of x .43) and again at the infill's step wall (x .621 → .635 up the
+  // band): the outer lens starts on the wall's top edge and falls down it in front of the wall, then wraps the corner onto the quarter.
   tail: {
     loops: [
-      { points: [[0.445, 0.72], [0.6, 0.71], [0.6, 0.815], [0.445, 0.785]] },
-      { points: [[0.635, 0.708], [0.665, 0.704], [0.665, 0.815], [0.635, 0.82]] },
+      {
+        points: [
+          [0.445, 0.72, -1.9], [0.6, 0.71, -1.9], [0.6122, 0.7085, -1.9], [0.6134, 0.72, -1.9], [0.6154, 0.74, -1.9], [0.617, 0.76, -1.9],
+          [0.619, 0.78, -1.9], [0.621, 0.8, -1.9], [0.6244, 0.815, -1.9], [0.6254, 0.82, -1.9], [0.6, 0.815, -1.9], [0.445, 0.785, -1.9],
+        ],
+      },
+      {
+        points: [
+          [0.6208, 0.7085, -1.9], [0.626, 0.707, -1.9], [0.665, 0.704, -1.9],
+          [0.85, 0.704, -1.69], [0.85, 0.72, -1.6], [0.85, 0.8, -1.58], [0.85, 0.82, -1.63],
+          [0.665, 0.815, -1.9], [0.638, 0.82, -1.9], [0.6347, 0.82, -1.9], [0.6337, 0.815, -1.9], [0.6303, 0.8, -1.9], [0.6283, 0.78, -1.9],
+          [0.6263, 0.76, -1.9], [0.6243, 0.74, -1.9], [0.6223, 0.72, -1.9],
+        ],
+      },
       { points: [[0.27, 0.735], [0.42, 0.725], [0.42, 0.79], [0.27, 0.79]] },
-      { side: true, points: [[-1.69, 0.704], [-1.6, 0.72], [-1.58, 0.8], [-1.63, 0.82]] },
     ],
     lens: "lit",
     bezel: "black",
     recess: 0.01,
     strips: [
       { line: { points: [[0.28, 0.775], [0.41, 0.772]] }, width: 0.02, tone: "lit" },
-      { line: { points: [[0.455, 0.772], [0.59, 0.8]] }, width: 0.02, tone: "lit" },
-      { line: { points: [[0.64, 0.802], [0.66, 0.8]] }, width: 0.02, tone: "lit" },
+      { line: { points: [[0.455, 0.772], [0.59, 0.8], [0.616, 0.8]] }, width: 0.02, tone: "lit" },
+      { line: { points: [[0.634, 0.8], [0.66, 0.8]] }, width: 0.02, tone: "lit" },
     ],
     cells: [
       { loop: { points: [[0.27, 0.735], [0.35, 0.73], [0.35, 0.78], [0.27, 0.78]] }, tone: "clear" },
-      { loop: { points: [[0.445, 0.72], [0.6, 0.71], [0.6, 0.75], [0.445, 0.75]] }, tone: "smoked" },
-      { loop: { points: [[0.635, 0.708], [0.665, 0.704], [0.665, 0.75], [0.635, 0.75]] }, tone: "smoked" },
+      {
+        loop: { points: [[0.445, 0.72], [0.6, 0.71], [0.6122, 0.7085], [0.6134, 0.72], [0.6154, 0.74], [0.6162, 0.75], [0.445, 0.75]] },
+        tone: "smoked",
+      },
+      {
+        loop: { points: [[0.6208, 0.7085], [0.626, 0.707], [0.665, 0.704], [0.665, 0.75], [0.6253, 0.75], [0.6243, 0.74], [0.6223, 0.72]] },
+        tone: "smoked",
+      },
     ],
   },
   front: {
-    loops: [{ points: [[0.56, 0.3], [0.68, 0.3], [0.68, 0.34], [0.56, 0.34]] }],
+    loops: [{ points: [[0.575, 0.305], [0.665, 0.305], [0.665, 0.335], [0.575, 0.335]] }],
     lens: "amber",
+    onBody: true,
   },
-  // The black diffuser band across the rear bumper's foot, its red reflector in it.
+  // The black diffuser band across the rear bumper's foot (matte: a glossy one mirrors the ground on its down-facing lip), its red reflector in it.
   rear: {
     loops: [{ points: [[0.006, 0.295], [0.64, 0.295], [0.64, 0.365], [0.006, 0.365]] }],
-    lens: "dark",
+    lens: "black",
     cells: [{ loop: { points: [[0.48, 0.3], [0.64, 0.3], [0.64, 0.33], [0.48, 0.33]] }, tone: "red" }],
   },
 } as const;
@@ -55,7 +73,7 @@ const HANDLES = [pullHandle(0, -0.18, 0.7575, 0.025), pullHandle(-0.8, -0.97, 0.
 export const HATCHBACK: BodyStyle = {
   id: "hatchback",
   dims: { wheelbase: 2.225, overhang: { front: 0.6975, rear: 0.6775 }, track: 1.37, width: 1.621, height: 1.309, rideHeight: 0.15, wheel: { radius: 0.29, width: 0.17 } },
-  windshield: { base: [0.891, 0.883], wBase: 1.38, wTop: 0.86 },
+  windshield: { base: [0.891, 0.883], wBase: 1.38, wTop: 1.03 },
   bPillar: { rear: -0.27, front: -0.19 },
   belt: { x: 0.75, y: [[-1.174, 0.881], [-0.939, 0.877], [-0.935, 0.856], [0.128, 0.838], [0.381, 0.809], [0.58, 0.824], [0.584, 0.852], [0.88, 0.852]] },
   rocker: { y: 0.2 },
@@ -79,11 +97,12 @@ export const HATCHBACK: BodyStyle = {
       trim: "body",
       top: [[0, 0.555], [0.4, 0.56], [0.64, 0.57]],
       edge: [[-1.69, 0.565], [-1.66, 0.5], [-1.44, 0.5], [-1.48, 0.4], [-1.5, 0.3]],
+      plateless: true,
     },
   },
   door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62], mirror: { cap: "rounded", finish: "body", size: [0.1, 0.1, 0.075] } },
   aPillarFoot: 0.73,
-  aPillarTop: 0.3,
+  aPillarTop: 0.212,
   glassTop: 0.045,
   camera: { hood: [1.09, 1.0], third: { dist: 5.4, height: 1.85, aimUp: 0.95 }, far: { dist: 8.8, height: 3.1, aimUp: 1.1 } },
   underside: [[-1.791, 0.456], [-1.759, 0.278], [-1.705, 0.225], [-1.652, 0.207], [-1.57, 0.214], [-1.559, 0.203], [-0.625, 0.168], [-0.611, 0.153], [0.577, 0.153], [0.591, 0.168], [0.687, 0.168], [1.618, 0.15], [1.682, 0.164], [1.729, 0.21], [1.782, 0.3], [1.8, 0.367]],
@@ -114,10 +133,11 @@ export const HATCHBACK: BodyStyle = {
     st(1.7, 0.61, 0.67),
     st(1.74, 0.45, 0.618),
   ],
-  roofZ: [-1.151, 0.421],
-  // The windshield top stood 8 mm over the crown at the roof's front end, a raised strip: the crown rolls onto it.
+  // The windshield reaches the roof's flat front (the reference's glass top), its corners flush with the dome's edge.
+  roofZ: [-1.151, 0.245],
+  // The glass top sits 7 mm under the crown: the crown rolls down onto it.
   roofEnds: { front: 0.12 },
-  windshieldTop: [1.162, 0.421],
+  windshieldTop: [1.245, 0.245],
   rearGlass: { base: [0.94, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9, frame: [0.05, 0.06, 0.11] },
   quarter: { zRearBot: -1.174, zRearTop: -1.07 },
   midPillarZ: -0.86,
@@ -130,6 +150,8 @@ export const HATCHBACK: BodyStyle = {
     origin: [0.94, -1.615],
     z0: -1.75,
     pivot: [1.277, -1.15],
+    // The gate's top edge rolls forward onto the rear glass's base (it stood 8-10 mm proud of it: a shelf across the iso).
+    lip: { rise: -0.01, depth: 0.06 },
     // The reference's gate seam: ±.62-.66 above the tail lamps, stepping in to ±.43 between them.
     outline: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84], [0.43, 0.8], [0.43, 0.6]],
   },
@@ -138,6 +160,7 @@ export const HATCHBACK: BodyStyle = {
     head: [0.545, 0.545],
     tail: [0.603, 0.76],
     shapes: HATCHBACK_LAMP_SHAPES,
+    bulb: "halogen",
     brake: { at: [0, 1.231], size: [0.34, 0.012] },
     sideMarkers: [{ at: [0.62, 0.8], size: [0.045, 0.022] }],
   },
@@ -186,11 +209,6 @@ export const HATCHBACK: BodyStyle = {
       { view: "side", points: [[-1.09, 1.25], [-1.1, 1.24], [-1.35, 1.05], [-1.58, 0.92], [-1.6, 0.9]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.62, 0.84], [0.43, 0.8], [0.43, 0.6], [0, 0.56]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "rear", points: [[0.75, 0.82], [0.62, 0.83], [0.43, 0.82], [0.43, 0.64], [0.6, 0.61], [0.74, 0.6]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-1.66, 0.82], [-1.58, 0.8], [-1.6, 0.62], [-1.68, 0.6]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "rear", points: [[0.6, 0.64], [0.6, 0.76]], width: 0.03, depth: -0.006, profile: "step", cavity: 0.85 },
-      { view: "rear", points: [[0.64, 0.64], [0.64, 0.76]], width: 0.03, depth: -0.006, profile: "step", cavity: 0.85 },
-      { view: "rear", points: [[0.68, 0.64], [0.68, 0.76]], width: 0.03, depth: -0.006, profile: "step", cavity: 0.85 },
       { view: "rear", points: [[0, 0.98], [0.17, 0.98]], width: 0.02, depth: 0.006, profile: "u", cavity: 0.7 },
       { view: "rear", points: [[0.58, 0.5], [0.6, 0.5]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       ...HANDLES.flatMap((h) => h.lines),

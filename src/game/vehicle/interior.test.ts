@@ -22,9 +22,6 @@ import { assignClass, CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
 
 const mm = (v: THREE.Vector3): string => v.toArray().map((x) => x.toFixed(3)).join();
 
-/** Instances a kind draws this sync, over all its variant draws. */
-const drawn = (batch: PartBatch, kind: number): number => batch.kinds[kind]!.reduce((n, m) => n + m.count, 0);
-
 /** A car whose private parts a row can tear and read. */
 class Probe extends DeformableCar {
   part(name: string) {
@@ -156,7 +153,7 @@ describe("given a field of one car of every style", () => {
   const draw = (): Record<number, number> => {
     for (const c of cars) c.group.updateMatrixWorld(true);
     batch.sync(cars);
-    return Object.fromEntries(PART_KINDS.map((k) => [k, drawn(batch, k)]));
+    return Object.fromEntries(PART_KINDS.map((k) => [k, batch.drawn(k)]));
   };
   const rows = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].seats.rear !== null).length;
   const lifted = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].underbody).length;
@@ -189,6 +186,58 @@ describe("given a field of one car of every style", () => {
   });
 });
 
+describe("given cars whose crash moves the engine bay, the crash bars and the cabin shell", () => {
+  /** The kinds posed every frame (`PoseBlend`, `posePart`, `CarUnderbody.follow`): their seats keep three's own matrix update. */
+  const LIVE: readonly number[] = [PART_KIND.mirrorL, PART_KIND.mirrorR, PART_KIND.axle];
+  const own = new THREE.Matrix4();
+  const expected = new THREE.Matrix4();
+
+  /** Each seat's flag, and for a static seat in the scene graph its world matrix against `parent × compose(position, quaternion, scale)`. */
+  const assertSeats = (car: DeformableCar, what: string): void => {
+    car.group.updateMatrixWorld(true);
+    for (const seat of car.partSeats) {
+      const live = LIVE.includes(seat.kind);
+      assert.equal(seat.matrixAutoUpdate, live, `${what}: kind ${seat.kind} matrixAutoUpdate`);
+      if (live || seat.parent === null) continue;
+      own.compose(seat.position, seat.quaternion, seat.scale);
+      expected.multiplyMatrices(seat.parent.matrixWorld, own);
+      let gap = 0;
+      for (let k = 0; k < 16; k++) gap = Math.max(gap, Math.abs(seat.matrixWorld.elements[k]! - expected.elements[k]!));
+      assert.ok(gap < 1e-6, `${what}: kind ${seat.kind} world matrix is ${gap.toExponential(1)} off its parent's times its own pose`);
+    }
+  };
+
+  /** The furthest any `kinds` seat of `car` stands (position, scale) from where `rest`'s does. */
+  const moved = (car: DeformableCar, rest: DeformableCar, kinds: readonly number[]): number => {
+    let far = 0;
+    for (let i = 0; i < car.partSeats.length; i++) {
+      const seat = car.partSeats[i]!;
+      if (!kinds.includes(seat.kind)) continue;
+      far = Math.max(far, seat.position.distanceTo(rest.partSeats[i]!.position), seat.scale.distanceTo(rest.partSeats[i]!.scale));
+    }
+    return far;
+  };
+
+  test("when a car is crashed and refitted, then every static part seat keeps matrixAutoUpdate off and its world matrix is its parent's times its own pose", () => {
+    const scene = new THREE.Scene();
+    for (const id of CAR_STYLE_IDS) {
+      const car = new DeformableCar(paint(), scene, null, id);
+      car.spawn(0, 0, 0);
+      assertSeats(car, `${id} built`);
+    }
+    const rest = carInState("untouched", "sedan", STYLE_CLASS.sedan);
+    for (const [state, kinds] of [["loaded", [PART_KIND.interior]], ["headon", [PART_KIND.engineBay, PART_KIND.crashBar]]] as const) {
+      const car = carInState(state, "sedan", STYLE_CLASS.sedan);
+      car.flushDeferredSkin();
+      car.updateSkin();
+      assert.ok(moved(car, rest, kinds) > 1e-3, `${state}: the control: the crash moved its seats of kinds ${kinds.join()}`);
+      assertSeats(car, `${state} crashed`);
+      car.resetVisual();
+      assertSeats(car, `${state} refitted`);
+    }
+  });
+});
+
 describe("given a monster truck of its class at rest on flat ground", () => {
   const scene = new THREE.Scene();
   const build = (style: "monster" | "pickup"): DeformableCar => {
@@ -205,18 +254,18 @@ describe("given a monster truck of its class at rest on flat ground", () => {
   const v = new THREE.Vector3();
 
   test("when the batch syncs, then its frame and both axles draw, and a pickup body on the same lift draws none of them", () => {
-    assert.equal(drawn(batch, PART_KIND.ladderFrame), 1);
-    assert.equal(drawn(batch, PART_KIND.axle), 2);
+    assert.equal(batch.drawn(PART_KIND.ladderFrame), 1);
+    assert.equal(batch.drawn(PART_KIND.axle), 2);
     const plain = new PartBatch(1);
     plain.sync([build("pickup")]);
-    assert.equal(drawn(plain, PART_KIND.ladderFrame) + drawn(plain, PART_KIND.axle), 0);
+    assert.equal(plain.drawn(PART_KIND.ladderFrame) + plain.drawn(PART_KIND.axle), 0);
   });
 
   test("when its axles are read, then each sits on its wheels' hubs, at the class's hub height (the drawn tyre's radius)", () => {
     const hub = carFrame(monster.style).rig.tyre.r * CLASSES.monster.wheelScale;
     const w = monster.wheels.map((wheel) => wheel.getWorldPosition(new THREE.Vector3()));
     for (const [k, [a, b]] of [[0, 1], [2, 3]].entries()) {
-      batch.kinds[PART_KIND.axle]![0]!.getMatrixAt(k, m);
+      batch.kinds[PART_KIND.axle]!.getMatrixAt(k, m);
       v.setFromMatrixPosition(m);
       const mid = w[a!]!.clone().add(w[b!]!).multiplyScalar(0.5);
       assert.ok(v.distanceTo(mid) < 1e-4 && Math.abs(v.y - hub) < 1e-4, `axle ${k} at ${mm(v)}, hubs' midpoint ${mm(mid)}, hub height ${hub.toFixed(3)}`);
@@ -226,7 +275,7 @@ describe("given a monster truck of its class at rest on flat ground", () => {
   test("when every undercarriage vertex is read through its instance, then none is below the ground", () => {
     let low = Infinity;
     for (const kind of [PART_KIND.ladderFrame, PART_KIND.axle]) {
-      const mesh = batch.kinds[kind]![0]!;
+      const mesh = batch.kinds[kind]!;
       const pos = partGeometry(kind).getAttribute("position");
       for (let k = 0; k < mesh.count; k++) {
         mesh.getMatrixAt(k, m);
@@ -279,13 +328,13 @@ describe("given a monster truck of its class at rest on flat ground", () => {
     const own = new PartBatch(1);
     own.sync([popped]);
     const before = new THREE.Matrix4();
-    own.kinds[PART_KIND.axle]![0]!.getMatrixAt(0, before);
+    own.kinds[PART_KIND.axle]!.getMatrixAt(0, before);
     popped["dropWheel"](0, "hubFL");
     popped.group.updateMatrixWorld(true);
     own.sync([popped]);
     assert.ok(popped.wheels[0]!.parent === scene, "the control: the wheel left the car");
-    assert.equal(drawn(own, PART_KIND.axle), 2, "both axles draw");
-    own.kinds[PART_KIND.axle]![0]!.getMatrixAt(0, m);
+    assert.equal(own.drawn(PART_KIND.axle), 2, "both axles draw");
+    own.kinds[PART_KIND.axle]!.getMatrixAt(0, m);
     const moved = Math.max(...m.elements.map((e, i) => Math.abs(e - before.elements[i]!)));
     assert.ok(moved < 1e-4, `the front axle moved ${moved.toFixed(5)} off its rest place`);
   });
@@ -298,7 +347,7 @@ describe("given a monster truck of its class at rest on flat ground", () => {
     lying.group.updateMatrixWorld(true);
     const own = new PartBatch(1);
     own.sync([lying]);
-    const mesh = own.kinds[PART_KIND.axle]![0]!;
+    const mesh = own.kinds[PART_KIND.axle]!;
     const pos = partGeometry(PART_KIND.axle).getAttribute("position");
     let low = Infinity;
     for (let k = 0; k < mesh.count; k++) {

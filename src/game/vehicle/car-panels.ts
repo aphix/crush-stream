@@ -239,19 +239,30 @@ function bend(r: PanelRegion, k: number, x: number, z: number, t: number, flutte
  * Rebuild `shell` from the body's skin, bent by hinge value `t`: a quarter panel peels from its leading edge
  * about the vertical hinge line at its tail; an arch flare flaps out at both feet (`flutter` -1..1 shakes it).
  * Vertices are relative to the region's origin, the part's frame.
+ * `floor` (drawn only) is the road under the shell in the body's frame: a body point p stands `floor · [p, 1]` m above the road,
+ * along its normal, and one metre up the body lifts it `floor[1]`. An arch flare's free ends drop only as far as the road lets
+ * them: a point whose body skin is already in the road keeps to the skin. Returns whether the road held any of the drop.
  */
-export function poseShell(r: PanelRegion, shell: THREE.BufferGeometry, body: THREE.BufferGeometry, t: number, flutter: number): void {
+export function poseShell(r: PanelRegion, shell: THREE.BufferGeometry, body: THREE.BufferGeometry, t: number, flutter: number, floor: Float64Array | null = null): boolean {
   const bp = (body.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
   const bn = (body.getAttribute("normal") as THREE.BufferAttribute).array as Float32Array;
   const attr = shell.getAttribute("position") as THREE.BufferAttribute;
   const o = attr.array as Float32Array;
   const nv = r.verts.length;
+  let held = false;
   for (let k = 0; k < nv; k++) {
     const g = r.verts[k]! * 3;
     const x = bp[g]!;
     const y = bp[g + 1]!;
     const z = bp[g + 2]!;
     bend(r, k, x, z, t, flutter);
+    if (floor !== null && _shift[1]! < 0) {
+      const room = dropRoom(floor, x, y, z);
+      if (room < -_shift[1]!) {
+        _shift[1] = -room;
+        held = true;
+      }
+    }
     for (let c = 0, at = k * 3, sign = PROUD; c < 2; c++, at += nv * 3, sign = -THICK) {
       o[at] = x + _shift[0]! + bn[g]! * sign - r.origin.x;
       o[at + 1] = y + _shift[1]! + bn[g + 1]! * sign - r.origin.y;
@@ -263,6 +274,24 @@ export function poseShell(r: PanelRegion, shell: THREE.BufferGeometry, body: THR
   // The shell moved: a scrape test against its box (`setFromObject`) must not read the last pose's.
   shell.boundingBox = null;
   shell.boundingSphere = null; // three rebuilds it when it next culls, so a torn panel is culled like any mesh
+  return held;
+}
+
+/** Whether `poseShell` on `floor` would hold any of region `r`'s drop at hinge value `t` and `flutter`. */
+export function shellReaches(r: PanelRegion, body: THREE.BufferGeometry, t: number, flutter: number, floor: Float64Array): boolean {
+  if (r.kind === "quarter") return false;
+  const bp = (body.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
+  for (let k = 0; k < r.verts.length; k++) {
+    const g = r.verts[k]! * 3;
+    bend(r, k, bp[g]!, bp[g + 2]!, t, flutter);
+    if (_shift[1]! < 0 && dropRoom(floor, bp[g]!, bp[g + 1]!, bp[g + 2]!) < -_shift[1]!) return true;
+  }
+  return false;
+}
+
+/** How far (m, ≥ 0) body point (x, y, z), shifted sideways by `bend`'s last `_shift`, can drop before it meets `floor` (`poseShell`). */
+function dropRoom(floor: Float64Array, x: number, y: number, z: number): number {
+  return Math.max(0, (floor[0]! * (x + _shift[0]!) + floor[1]! * y + floor[2]! * (z + _shift[2]!) + floor[3]!) / floor[1]!);
 }
 
 const _v = new THREE.Vector3();

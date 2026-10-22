@@ -1,6 +1,6 @@
 import type { BodyStyle } from "../car-variants.ts";
 import { PLATFORM_HARDPOINTS, pullHandle, st } from "./platform.ts";
-import { TOW_MIRROR } from "./pickup.ts";
+import { TOW_MIRROR, TRUCK_ROOF_ENDS } from "./pickup.ts";
 
 /** The crew cab's slim front and rear door pulls, 15 x 4 cm. */
 const DOOR_PULLS = [pullHandle(0.055, -0.095, 0.838, 0.04), pullHandle(-0.47, -0.62, 0.834, 0.04)];
@@ -21,13 +21,13 @@ const MONSTER_BUMPER_FASCIA = [
 /** Monster's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const MONSTER_LAMP_SHAPES = {
   head: {
-    loops: [{ points: [[0.445, 0.605], [0.655, 0.605], [0.655, 0.795], [0.445, 0.795]] }],
+    loops: [{ points: [[0.445, 0.595], [0.655, 0.595], [0.655, 0.785], [0.445, 0.785]] }],
     lens: "lit",
     bezel: "black",
     recess: 0.02,
     cells: [
-      { loop: { points: [[0.665, 0.615], [0.735, 0.615], [0.735, 0.785], [0.665, 0.785]] }, tone: "amber" },
-      { loop: { side: true, points: [[2.08, 0.615], [2.01, 0.615], [2.01, 0.785], [2.08, 0.785]] }, tone: "amber" },
+      { loop: { points: [[0.665, 0.605], [0.735, 0.605], [0.735, 0.775], [0.665, 0.775]] }, tone: "amber" },
+      { loop: { side: true, points: [[2.08, 0.605], [2.01, 0.605], [2.01, 0.775], [2.08, 0.775]] }, tone: "amber" },
     ],
   },
   tail: {
@@ -64,8 +64,8 @@ export const MONSTER: BodyStyle = {
   aPillarFoot: 0.74,
   aPillarTop: 0.41,
   bPillar: { rear: -0.19, front: -0.12 },
-  arch: { radius: 0.47, lip: { flare: 0.025, width: 0.045, square: true, inset: 0.04 }, wellWall: 0.56 },
-  hood: { z0: 0.94, z1: 2.08, origin: [0.96, 0.92] },
+  arch: { radius: 0.47, rise: 0.83, lip: { flare: 0.028, width: 0.085, square: true, inset: 0.03 }, wellWall: 0.56 },
+  hood: { z0: 0.94, z1: 2.1, origin: [0.96, 0.92], nose: [0.022, 0.02] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.39, z: 2.05 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black" },
     rear: { ...bumpers.rear, seat: { y: 0.44, z: 2.36 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black", hitch: true },
@@ -85,6 +85,7 @@ export const MONSTER: BodyStyle = {
     st(2.1, 0.78, 0.8),
   ],
   roofZ: [-0.7, 0.45],
+  roofEnds: TRUCK_ROOF_ENDS,
   windshieldTop: [1.46, 0.45],
   rearGlass: { base: [1.02, -0.78], top: [1.45, -0.7], wBase: 1.36, wTop: 1.18 },
   privacyGlass: { rear: true },
@@ -92,16 +93,18 @@ export const MONSTER: BodyStyle = {
   midPillarZ: null,
   rearBulkhead: { z: -0.79, yTop: 1.03 },
   tubs: [[-0.76, 0.96, 0.5], [-2.26, -0.82, 0.62]],
-  bayFloor: 0.34,
-  wheelTub: { rise: 0.24, length: 0.82, width: 0.25 },
+  bayFloor: 0.36,
+  wheelTub: { rise: 0.21, length: 0.82, width: 0.25 },
   tubWall: 0.04,
   // Its cage's hood tops stand 0.90-1.04 m and its bed rim 1.02 m, its roof from 1.38 m: the cabin starts 8 cm over the highest of them
   // (as the cars' 1 m stands 9 cm over theirs), so its hood's cowl and its bed rim are columns, not roof slabs.
   proxyBelt: 1.12,
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
-  lamps: { head: [0.55, 0.7], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, bulb: "halogen", sideMarkers: [{ at: [0.788, -2.0], size: [0.085, 0.045] }, { at: [0.744, 0.814], size: [0.06, 0.032] }] },
-  grille: { y: 0.7, size: [0.8, 0.19], kind: "bars", count: 4, finish: "black" },
+  // The reference side plate's markers are a deep amber rear (~0xb0581e) and a duller red-amber front (~0xa04a3a): factors on the shared amber 0xff9a1a.
+  lamps: { head: [0.55, 0.69], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, bulb: "halogen", sideMarkers: [{ at: [0.788, -2.0], size: [0.085, 0.045], tint: 0xb095ff }, { at: [0.744, 0.814], size: [0.06, 0.032], tint: 0xa07fff }] },
+  // The reference's grille fills the face between its head lamps (inner edges x .445), its top and foot on theirs.
+  grille: { y: 0.69, size: [0.86, 0.19], kind: "bars", count: 4, finish: "black" },
   underbody: true,
   camera: { hood: [2.08, 1.27], third: { dist: 7.4, height: 3.0, aimUp: 1.7 }, far: { dist: 11.5, height: 4.3, aimUp: 1.9 } },
   details: {
@@ -137,10 +140,8 @@ export const MONSTER: BodyStyle = {
       { view: "top", points: [[-0.827, 0.772], [-2.344, 0.772]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "top", points: [[-0.827, 0.758], [-2.344, 0.758]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "top", points: [[-2.256, 0], [-2.256, 0.751]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "top", points: [[-0.915, 0.525], [-2.242, 0.525]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
-      { view: "top", points: [[-0.915, 0.35], [-2.242, 0.35]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
-      { view: "top", points: [[-0.915, 0.175], [-2.242, 0.175]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
-      { view: "top", points: [[-0.915, 0], [-2.242, 0]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
+      // The bed floor's ribs, 8.75 cm apart as the reference's rear iso reads.
+      ...[0.525, 0.4375, 0.35, 0.2625, 0.175, 0.0875, 0].map((x) => ({ view: "top", points: [[-0.915, x], [-2.242, x]], width: 0.02, depth: 0.003, profile: "u", cavity: 0 }) as const),
       { view: "front", points: [[0, 0.9], [0.7, 0.9]], width: 0.008, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "front", points: [[0, 0.52], [0.82, 0.52]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.1 },
       ...DOOR_PULLS.flatMap((h) => h.lines),

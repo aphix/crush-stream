@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { once } from "../kernel/scalar.ts";
-import { detCos, detSin } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import {
   LAMP_BULB_UV,
   makeLampUnit,
@@ -20,7 +20,8 @@ import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, PLATE_
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { glassX, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { bootPivot } from "./hinge-spec.ts";
-import { FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
+import { DRIVER_SIDE, FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
+import { windshieldPoint } from "./car-glass.ts";
 
 /**
  * A style's own drawn part where its spec asks for one (`door.mirror`, `grille`, `lamps.units`), in the seat's space: the seat, and the
@@ -229,7 +230,8 @@ function styleGrille(style: BodyStyle): THREE.BufferGeometry {
   ring.holes.push(new THREE.Path(inner));
   const surround = indexed(new THREE.ExtrudeGeometry(ring, { depth: GRILLE.rimDepth, bevelEnabled: false })).translate(0, 0, face - GRILLE.rimDepth);
   const fine = g.kind === "mesh" || g.kind === "hex";
-  const angles = { bars: [0], slats: [Math.PI / 2], mesh: [0, Math.PI / 2], hex: [HEX_ANGLE, -HEX_ANGLE] }[g.kind];
+  const hex = g.angle ?? HEX_ANGLE;
+  const angles = { bars: [0], slats: [Math.PI / 2], mesh: [0, Math.PI / 2], hex: [hex, -hex] }[g.kind];
   const fill = angles.flatMap((a) => (fine ? grilleBars(inner, a, g.count, GRILLE.meshBar, GRILLE.meshPitch, GRILLE.barDepth) : grilleBars(inner, a, g.count, GRILLE.bar, GRILLE.pitch, GRILLE.barDepth)));
   const barZ = face - GRILLE.inset - GRILLE.barDepth / 2;
   const parts = [
@@ -262,14 +264,14 @@ const PLATFORM_PLATE_OUT = 0.09;
 /** The platform plate's roughness and metalness: a recoloured plate keeps its sheen. */
 const PLATE_SHEEN = [0.6, 0.1] as const;
 
-/** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height, its face and colour seated by `plateFace`) and the style's rear bumper lamps. */
+/** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height, its face and colour seated by `plateFace`; none on a `plateless` bumper) and the style's rear bumper lamps. */
 function rearFittings(style: BodyStyle): THREE.BufferGeometry {
-  const { seat, plate, plateFace } = style.bumpers.rear;
+  const { seat, plate, plateFace, plateless } = style.bumpers.rear;
   const trim = withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0).translate(0, plate === undefined ? 0 : plate - seat.y - PLATE_RISE, plateFace?.out === undefined ? 0 : PLATFORM_PLATE_OUT - plateFace.out);
   if (plateFace?.color !== undefined) toned(trim, plateFace.color, ...PLATE_SHEEN);
   if (!style.lamps.shapes?.rear) return trim;
   const lamps = bothSides(builtLamp(style, "rear").body).translate(0, -seat.y, seat.z);
-  return mergeToned([trim, lamps], "rear bumper fittings");
+  return plateless ? lamps : mergeToned([trim, lamps], "rear bumper fittings");
 }
 
 const frontKey = (style: BodyStyle): string | null =>
@@ -303,7 +305,7 @@ const LAMP_SEAM_NUDGE = [0, 0.01, -0.01, 0.02, -0.02, 0.03, -0.03, 0.04, -0.04] 
 const LAMP_REFINE_PASSES = 8;
 /** The lit lenses (sRGB): head white, tail red; the other tones (`SHAPE_TONE`) never glow. */
 const LAMP_TONE = { head: 0xf4f1e8, tail: 0xc4121c } as const;
-const SHAPE_TONE: Record<Exclude<LampTone, "lit">, number> = { clear: 0xd8dde2, red: 0x8a0c12, amber: 0xff9a1a, smoked: 0x2a1a1c, dark: 0x0e0f11, chrome: TRIM_CHROME };
+const SHAPE_TONE: Record<Exclude<LampTone, "lit">, number> = { clear: 0xd8dde2, red: 0x8a0c12, amber: 0xff9a1a, smoked: 0x2a1a1c, dark: 0x0e0f11, black: TRIM_BLACK, chrome: TRIM_CHROME };
 /** u on the lamp emissive mask (`lampEmissiveMap`): the dark housing texel and the lit lens texel. */
 const LAMP_TEXEL = { housing: 0.25, lens: 0.75 } as const;
 /** How far out (m) a lamp point's ray starts to meet the skin: past any body. */
@@ -326,9 +328,10 @@ function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind, bul
   return geo;
 }
 
-/** A bumper lamp's tone in the part batch (never lit): chrome in the trim's finish, the rest glossy in their colour. */
+/** A bumper lamp's tone in the part batch (never lit): chrome and black in the trim's finishes, the rest glossy in their colour. */
 function bumperTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind): THREE.BufferGeometry {
-  return tone === "chrome" ? finished(geo, "chrome") : dark(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0.3, 0.1);
+  if (tone === "chrome" || tone === "black") return finished(geo, tone);
+  return dark(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0.3, 0.1);
 }
 
 /** A lamp point met on the skin: where, the skin's outward normal there, and whether it lies on the boot lid. */
@@ -653,7 +656,7 @@ export function lampSeatAt(style: BodyStyle, kind: LampKind, side: number): THRE
 
 /**
  * `style`'s own `which` lamp met on its skin (car frame, right side): head and tail on the body, the share landing on the hood or boot lid
- * apart (that lid carries it); front and rear on that bumper's fascia. `side` -1 meets it on the left skin mirrored onto the right: the left
+ * apart (that lid carries it); front and rear on that bumper's fascia (and the body, `onBody`). `side` -1 meets it on the left skin mirrored onto the right: the left
  * half's triangles are not the right's mirror (a quad split on one diagonal mirrors onto the other), and round a corner they part by cm.
  */
 function builtLamp(style: BodyStyle, which: keyof LampShapes, side = 1): BuiltLamp {
@@ -726,6 +729,8 @@ const SEAM_COVER_BAND = [0, 1] as const;
 const SEAM_COVER_TUCK = 0.02;
 /** Its dark roll along the seam: this wide (m) out past the seam and down to this deep (m) in the skin, the shut line drawn in the mesh. */
 const SEAM_COVER_ROLL = { out: 0.004, sink: 0.001 } as const;
+/** A seam bend (rad) past which its roll is cut into separate strips: a 4 mm roll over 7 mm of lift turns its faces 70° apart across a 78° bend, so strips sharing a hairpin's vertex are a fold shaded smooth. */
+const SEAM_COVER_BEND = (60 * Math.PI) / 180;
 const SEAM_COVERS = new WeakMap<BodyStyle, Map<boolean, THREE.BufferGeometry | null>>();
 
 /** `parts` merged, each vertex carrying its part's `FITTING_TONE` (0: the bumper's own trim). */
@@ -734,6 +739,17 @@ function fittingsMerged(parts: readonly (readonly [THREE.BufferGeometry, number]
   const out = mergeGeometries(parts.map(([geo]) => geo));
   if (!out) throw new Error(`Failed to merge the ${what}`);
   return out;
+}
+
+/** `line` cut into runs at every point it bends more than `SEAM_COVER_BEND`: the bend closes one run and opens the next, so its two sides keep vertices of their own. */
+function seamRuns(line: readonly SkinPoint[]): SkinPoint[][] {
+  const runs: SkinPoint[][] = [[line[0]!]];
+  for (let i = 1; i < line.length; i++) {
+    runs[runs.length - 1]!.push(line[i]!);
+    const next = line[i + 1];
+    if (next && next.p.clone().sub(line[i]!.p).angleTo(line[i]!.p.clone().sub(line[i - 1]!.p)) > SEAM_COVER_BEND) runs.push([line[i]!]);
+  }
+  return runs;
 }
 
 /** One side's seam cover in the car frame, right side (`mirror`: met on the left skin mirrored onto the right): a band met on the skin down from the seam, and its dark roll. */
@@ -745,10 +761,9 @@ function seamCoverSide(style: BodyStyle, front: boolean, top: SeamLine, edge: Se
   const drop = Math.max(...top.map(([, y]) => y)) - face;
   const seam = skin.densify([...top.map((p) => skin.at(p)), ...edge.map((p) => skin.at(p, true))], false);
   const band = lampRibbon(skin, seam, false, SEAM_COVER_BAND.map((f) => [axis * f * drop, SEAM_COVER_UP] as const), true);
-  const roll = lampRibbon(skin, seam, false, [[0, SEAM_COVER_UP], [-axis * SEAM_COVER_ROLL.out, -SEAM_COVER_ROLL.sink]]);
   const [panel] = patchGeometry(band, 0);
-  const [shut] = patchGeometry(roll, 0);
-  return fittingsMerged([[panel, 0], [shut, FITTING_TONE.black]], "bumper seam cover");
+  const shut = seamRuns(seam).map((run) => patchGeometry(lampRibbon(skin, run, false, [[0, SEAM_COVER_UP], [-axis * SEAM_COVER_ROLL.out, -SEAM_COVER_ROLL.sink]]), 0)[0]);
+  return fittingsMerged([[panel, 0], ...shut.map((g) => [g, FITTING_TONE.black] as const)], "bumper seam cover");
 }
 
 /**
@@ -801,6 +816,90 @@ export const brakeLampUnit = once(() =>
 /** A side marker, 1 m square (its seat scales it to a `lamps.sideMarkers` size): an unlit amber lens. Shared, never disposed. */
 export const sideMarkerUnit = once(() => lampTone(new THREE.BoxGeometry(1, 1, 0.012).translate(0, 0, 0.004), "amber", "head"));
 
+// ---- wipers ----------------------------------------------------------------------------------------------------------------
+
+/** Where the parked blades lie: this far (m) up the windshield's slope from its base, over the cowl's lip. */
+const WIPER_PARK_UP = 0.035;
+/** Each blade's rubber [width up the glass, height off it] and its gap off the glass (m); the arm over it, and how far along the blade it reaches. */
+const WIPER_BLADE = { w: 0.018, h: 0.01, gap: 0.004 } as const;
+const WIPER_ARM = { w: 0.012, h: 0.008, reach: 0.85 } as const;
+/** The pivot cap's edge (m), standing on the arm's root. */
+const WIPER_PIVOT = 0.028;
+/** Stations along a blade: it follows the glass's bow across the car. */
+const WIPER_STATIONS = 8;
+/** Where each of a pair's pivots stands across the glass's base width (car x over the width; the tips run toward `park`). */
+const WIPER_PAIR_PIVOTS = [-0.44, -0.02] as const;
+/** A style's wipers where it sets none: two blades, each 0.42 of the glass base, parked toward the driver. */
+const WIPER_DEFAULT = { count: 2, length: 0.42, park: DRIVER_SIDE } as const;
+
+/**
+ * A tube of rectangular section swept along `centres`, each station's section spanned by its own `w` (across the tube, up the glass) and
+ * `n` (out of the glass) unit axes: four sides and two end caps.
+ */
+function sweptBar(centres: readonly THREE.Vector3[], ws: readonly THREE.Vector3[], ns: readonly THREE.Vector3[], width: number, height: number): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const;
+  for (let i = 0; i < centres.length; i++) {
+    for (const [a, b] of corners) {
+      const p = centres[i]!.clone().addScaledVector(ws[i]!, (a * width) / 2).addScaledVector(ns[i]!, (b * height) / 2);
+      positions.push(p.x, p.y, p.z);
+    }
+  }
+  const index: number[] = [];
+  for (let i = 0; i < centres.length - 1; i++) {
+    for (let k = 0; k < 4; k++) {
+      const [a, b, c, d] = [i * 4 + k, i * 4 + ((k + 1) % 4), (i + 1) * 4 + ((k + 1) % 4), (i + 1) * 4 + k];
+      index.push(a, b, c, a, c, d);
+    }
+  }
+  const last = (centres.length - 1) * 4;
+  index.push(0, 2, 1, 0, 3, 2, last, last + 1, last + 2, last, last + 2, last + 3);
+  const geo = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(positions, 3)).setIndex(index);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * `style`'s wipers, in car space (their seat rides the windshield pane at its origin): each blade parked `WIPER_PARK_UP` up the glass from its
+ * base, its rubber on the glass's bow across the car, its arm over it from the pivot, a cap on the pivot; black plastic. `userData.blades`:
+ * each blade's pivot and tip on the glass.
+ */
+function styleWipers(style: BodyStyle): THREE.BufferGeometry {
+  const { count, length, park } = { ...WIPER_DEFAULT, ...style.wipers };
+  const { base, wBase, wTop } = style.windshield;
+  const top = style.windshieldTop;
+  const t = WIPER_PARK_UP / hypot2(top[0] - base[0], top[1] - base[1]);
+  const half = (wBase + (wTop - wBase) * t) / 2;
+  const pivots = count === 2 ? WIPER_PAIR_PIVOTS.map((s) => s * wBase) : [(-length * wBase) / 2];
+  const parts: THREE.BufferGeometry[] = [];
+  const blades: { pivot: number[]; tip: number[] }[] = [];
+  for (const from of pivots) {
+    const xs = Array.from({ length: WIPER_STATIONS + 1 }, (_, i) => park * (from + (length * wBase * i) / WIPER_STATIONS));
+    const at = xs.map((x) => windshieldPoint(style, x / half, t));
+    const ws = xs.map((x) => windshieldPoint(style, x / half, t + 0.01).sub(windshieldPoint(style, x / half, t)).normalize());
+    const ns = at.map((p, i) => {
+      const along = at[Math.min(i + 1, at.length - 1)]!.clone().sub(at[Math.max(i - 1, 0)]!);
+      const n = along.cross(ws[i]!).normalize();
+      return n.z < 0 ? n.negate() : n;
+    });
+    const lifted = (lift: number, upTo = 1) => at.slice(0, Math.round(WIPER_STATIONS * upTo) + 1).map((p, i) => p.clone().addScaledVector(ns[i]!, lift));
+    const rubber = lifted(WIPER_BLADE.gap + WIPER_BLADE.h / 2);
+    const arm = lifted(WIPER_BLADE.gap + WIPER_BLADE.h + WIPER_ARM.h / 2, WIPER_ARM.reach);
+    parts.push(sweptBar(rubber, ws, ns, WIPER_BLADE.w, WIPER_BLADE.h), sweptBar(arm, ws, ns, WIPER_ARM.w, WIPER_ARM.h));
+    parts.push(sweptBar([0, 1].map((k) => at[0]!.clone().addScaledVector(ns[0]!, WIPER_BLADE.gap + WIPER_BLADE.h + k * WIPER_PIVOT)), [ws[0]!, ws[0]!], [at[1]!.clone().sub(at[0]!).normalize(), at[1]!.clone().sub(at[0]!).normalize()], WIPER_PIVOT, WIPER_PIVOT));
+    blades.push({ pivot: at[0]!.toArray(), tip: at[WIPER_STATIONS]!.toArray() });
+  }
+  const geo = mergeToned(
+    parts.map((g) => dark(g, TRIM_BLACK, TRIM_FINISH.plastic.roughness, TRIM_FINISH.plastic.metalness)),
+    "style wipers",
+  );
+  geo.userData.blades = blades;
+  return geo;
+}
+
+/** A style's wipers' variant key: they lie on its own windshield (its data and its dome's fall), so every style draws its own. */
+const wipersKey = (style: BodyStyle): string => `${style.id}|${JSON.stringify([style.windshield, style.windshieldTop, style.wipers ?? null])}`;
+
 // ---- the variant table -----------------------------------------------------------------------------------------------------
 
 /** A batch drawn in style variants: its platform geometry, the sides its seats stand on, and a style's key (null: the platform part) and build. */
@@ -820,6 +919,7 @@ const SLOTS = {
   tail: { base: once(() => makeLampUnit("tail")), sides: [-1, 1], key: (style, side) => lampKey(style, "tail", side), build: (style, side) => styleLamp(style, "tail", side) },
   boot: { base: noLidLamp, sides: [-1, 1], key: (style, side) => lampKey(style, "tail", side), build: (style, side) => lidLamp(style, "tail", side) },
   hood: { base: noLidLamp, sides: [-1, 1], key: (style, side) => lampKey(style, "head", side), build: (style, side) => lidLamp(style, "head", side) },
+  wipers: { base: () => partGeometry(PART_KIND.wipers), sides: [0], key: wipersKey, build: styleWipers },
 } as const satisfies Record<string, Slot>;
 type SlotName = keyof typeof SLOTS;
 
@@ -828,6 +928,7 @@ const PART_SLOT: Partial<Record<PartKind, SlotName>> = {
   [PART_KIND.mirrorR]: "mirrorR",
   [PART_KIND.grille]: "grille",
   [PART_KIND.tailTrim]: "tailTrim",
+  [PART_KIND.wipers]: "wipers",
 };
 
 /** Per slot: its variants (0 the platform geometry, then one per distinct key the fleet table asks for) and their keys. */

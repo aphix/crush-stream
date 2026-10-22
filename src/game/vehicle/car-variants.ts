@@ -48,8 +48,13 @@ export interface GlassQuad {
   bow?: GlassBow;
   /** Drawn only (the rear glass): the clear pane drawn in by [side, bottom, top] (m; sides across, bottom and top along its slope), the band out to the outline the glass's black frit. */
   frame?: readonly [number, number, number];
-  /** Drawn only (an unframed rear glass): the clear pane's corners rounded to this radius (m), the glass's black frit filling out to the square outline. */
+  /**
+   * Drawn only (an unframed rear glass): the clear pane's corners rounded to this radius (m), the chrome bead round them with it; the glass's
+   * black frit fills out to the square outline, unless `roundOutline` rounds the glass's own outline too: the frit corners stand 1 cm in
+   * behind it, a dark backing seen only through the gaps round the arcs, and the body shows up to the bead.
+   */
   round?: number;
+  roundOutline?: boolean;
 }
 
 /** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
@@ -105,6 +110,8 @@ interface HoodBulge {
   cowlWidth?: number;
   /** A twin pod: a V groove this deep (m), 6 mm wide, down the crest's centre line, in line with a twin scoop's rib; absent none. */
   groove?: number;
+  /** Its nose end an intake's face: the pod stands at full rise to z1 and ends square, its front cap facing forward for `details` to draw the mouths on, instead of easing into the lid over 0.15. */
+  mouth?: boolean;
   /** Scoop on the bulge rising from its cowl end to a mouth facing forward at z `z`, `width` across, `height` (m) over the bulge: one opening, or two either side of a centre rib. */
   scoop?: { inlets: 1 | 2; z: number; width: number; height: number };
 }
@@ -126,14 +133,15 @@ interface LampLoop {
   side?: boolean;
   points: readonly LampPoint[];
 }
-/** A lens tone: `lit` the kind's lit lens (head white, tail red); the rest never glow. */
-type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "chrome";
+/** A lens tone: `lit` the kind's lit lens (head white, tail red); `black` the trim's matte black plastic (a valance or diffuser band); the rest never glow. */
+type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "black" | "chrome";
 
 /**
  * A lamp drawn to its outline (drawn only), met on the skin: its lens filling `loops` (a wrap round the corner is another loop) a few mm
  * proud of it, in `lens`; a `bezel` lip round each loop cresting `recess` (m) over the lens, so the lens sits in its own pocket and no face
  * lies on the skin's; `cells` (sections, a reverse or smoked cell, a band) over the lens in their own tones; `strips` (a DRL or LED line,
- * ribs) along open lines `width` wide; `rounds` (projector cells, fog lenses) of radius `r`.
+ * ribs) along open lines `width` wide; `rounds` (projector cells, fog lenses) of radius `r`. `onBody`: a bumper lamp met on the body's
+ * skin too, the nearer one winning, where the nose or tail corner stands proud of the fascia (the fascia alone hides it there).
  */
 interface LampShape {
   loops: readonly LampLoop[];
@@ -208,8 +216,10 @@ interface BumperSpec {
   plate?: number;
   /** A rear plate's seating (drawn only): its rear face `out` (m, as `fascia`'s) behind the seat and its `color` (sRGB); absent, the platform plate's (0.09, cream). */
   plateFace?: { out?: number; color?: number };
-  /** Drawn only: the fascia rows whose height (m, car y) lies in [bottom, top] carry a black inlay just proud of the face, a diffuser band. */
+  /** Drawn only: the fascia rows whose height (m, car y) lies in [bottom, top] carry a black inlay just proud of the face (a rear diffuser band, a truck's front valance). */
   band?: readonly [bottom: number, top: number];
+  /** A rear bumper drawn without the platform plate (its reference shows none): its tail trim is its rear bumper lamps alone. */
+  plateless?: boolean;
 }
 
 type DetailView = "side" | "top" | "front" | "rear" | "bottom";
@@ -283,12 +293,20 @@ export interface BodyStyle {
   /**
    * Drawn only: over this run (m) in from each end the drawn roof rolls onto that end's glass top in a quarter ellipse, its crown
    * settling to the glass top's height and its whole section dropping where the glass top sits under the dome's edge (`roofDome`);
-   * unset, the roof ends in its full section.
+   * unset, the roof ends in its full section. `flush` (0..1 per end, absent 0): the share of the side lip's reach past the dome's
+   * edge that end tucks in at the end itself, fading out over its run, so a boxy cab's roof corners sit flush over its posts.
    */
-  roofEnds?: { rear?: number; front?: number };
+  roofEnds?: { rear?: number; front?: number; flush?: { rear?: number; front?: number } };
+  /** Drawn only: how far (m) the roof's side rolls out past the cant line (the side glass's plane) at its bottom; absent 0.01 (a drip lip the pillars' faces meet flush); 0 rolls the roof flush into the glass, no drip rail. */
+  roofDrip?: number;
   /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
   windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;
+  /**
+   * Windshield wipers parked along the glass's base (`styleWipers`): `count` blades (default 2), each `length` of the glass's base width
+   * (default 0.42), their tips toward `park` (+1 the car's left, the driver's side of a left-hand drive car: the default, `DRIVER_SIDE`).
+   */
+  wipers?: { count?: 1 | 2; length?: number; park?: 1 | -1 };
   /** B-pillar z band. */
   bPillar: { rear: number; front: number };
   /** Side glass sill: its half-width (one value, or [z, x] stations where the sill narrows toward a tail), and its height as [z, y] stations; stations ascend in z, linear between, held past the ends. */
@@ -329,8 +347,8 @@ export interface BodyStyle {
   aPillarKnee?: number;
   /** Side glass top: its drop under the roof (m, absent 0.075), the roof's side lip ending there too; or [z, y] stations (ascending, linear, held past the ends) under a 0.075 lip, painted fill between them and the lip. */
   glassTop?: number | readonly (readonly [number, number])[];
-  /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it. */
-  arch: { radius: number; lip?: ArchLip; wellWall?: number };
+  /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it; `rise` (drawn only, absent 1) the opening's crown height over the hub as a fraction of `radius`: an elliptic opening, as wide at hub height, its lip following it under the round fender flare. */
+  arch: { radius: number; lip?: ArchLip; wellWall?: number; rise?: number };
   /** Drawn only: [z0, z1] (m): each body loft gap whose middle lies in it gets a ring there, where the flank turns hard between stations (an arch's flare); the cage keeps its rings. */
   ringSplit?: readonly [z0: number, z1: number];
   /**
@@ -375,6 +393,10 @@ export interface BodyStyle {
   tubs: readonly (readonly [number, number, number])[];
   /** The engine bay trough's floor (m, car y) under the hood (`bayTub`); absent, 0.28. A lifted body whose floor pan stands over that at the bay (the trucks) sets its pan height, so the trough the paint row and the bay set read is the one drawn. */
   bayFloor?: number;
+  /** The engine bay trough's front end (m, car z, `bayTub`); absent, 8 cm inside the hood's nose edge (`hood.z1`). A hood wrapping a nose on the profile's own nose rings keeps its bay off them. */
+  bayFront?: number;
+  /** How much of the roof's dome a raked pane's top edge falls with (`domeFall`, 0..1), and its posts with it; absent, 1. A flat-roofed cab takes less, so its panes' corners twist less. */
+  domeFall?: number;
   /** A bed's wheel tubs (both builds): over each wheel whose liner stands in a tub floor, a half cylinder `rise` (m) over the floor and `length` along the car, `width` in from the bed's side wall; absent, a drawn-only hump hugs the liner. */
   wheelTub?: { rise: number; length: number; width: number };
   /** A tub's rim width (m): its side wall's top edge stands this far in from the body side (its foot stays 6 cm in); absent, 6 cm. */
@@ -394,7 +416,8 @@ export interface BodyStyle {
    * riding its seat (a tail's share that lands on the boot lid rides the lid, lit with the tails); `front` / `rear` lamps, reflectors and
    * pods on that bumper's fascia (unlit, torn off with it). Absent, the platform housing (`LAMP_HOUSING`, standing 4.5 cm proud).
    * `brake`: a high-mount brake lamp `size` [w, h] met on the skin or the rear glass from behind at [x, y] (a pickup's cab glass); `sideMarkers`:
-   * amber markers on each side met from outboard at [y, z]. Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
+   * amber markers on each side met from outboard at [y, z], `tint` (sRGB) multiplied into the shared amber lens (absent, the amber as is).
+   * Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
    * `bulb`: the head lamps' light, warm halogen or cool-white LED, in their lit lens pieces and glow; absent, the neutral white.
    */
   lamps: {
@@ -402,7 +425,7 @@ export interface BodyStyle {
     tail: readonly [number, number];
     shapes?: { head?: LampShape; tail?: LampShape; front?: LampShape; rear?: LampShape };
     brake?: { at: readonly [number, number]; size: readonly [number, number] };
-    sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number] }[];
+    sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number]; tint?: number }[];
     bulb?: "halogen" | "led";
   };
   /**
@@ -420,6 +443,8 @@ export interface BodyStyle {
     kind: "bars" | "mesh" | "slats" | "hex";
     count?: number;
     badge?: number;
+    /** A hex mesh's bars cross at ± this angle (rad) from the horizontal (flatter: wider diamonds, more rows); absent, 60°. */
+    angle?: number;
     /** A chrome frame this wide (m) round the grille's outer edge, its face standing out past the grille's (drawn only). */
     bezel?: number;
     finish: "black" | "chrome" | "body";

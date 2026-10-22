@@ -6,7 +6,7 @@ import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad, type YZ } fr
 import { ROCKER, glassTopY, glassX, lerp, roofTopY, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
 import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, rockerAt, WINDSHIELD_BOW } from "./car-lines.ts";
 import { DOOR_PROUD } from "./car-door-mesh.ts";
-import { FITTING_ATTRIBUTE } from "./constants.ts";
+import { FITTING_ATTRIBUTE, GLASS_ATTRIBUTE } from "./constants.ts";
 import { mergeToned } from "./car-materials.ts";
 
 // Glass panes on the shared platform: windshield, rear glass, door and quarter glass, filling the greenhouse `car-greenhouse-mesh.ts` builds.
@@ -32,7 +32,8 @@ function quadPoint(q: BowedQuad, xn: number, t: number): THREE.Vector3 {
 /** How far (m) a raked pane whose top edge lies at `topZ` falls under its flat quad at car `x`, `t` up from its base: its top edge follows the roof's dome across the car (none at the centre line), fading to the base. */
 export function domeFall(style: BodyStyle, topZ: number): (x: number, t: number) => number {
   const crown = roofTopY(0, topZ, style);
-  return (x, t) => t * (crown - roofTopY(x, topZ, style));
+  const share = style.domeFall ?? 1;
+  return (x, t) => share * t * (crown - roofTopY(x, topZ, style));
 }
 
 /** How a raked pane is drawn: its grid (columns across, rows up), and `facing`, the way its outward normal runs along z. */
@@ -84,6 +85,11 @@ export function makeWindshield(style: BodyStyle = SEDAN): THREE.BufferGeometry {
   return makeGlassQuad(windshieldQuad(style), WINDSHIELD_DRAW);
 }
 
+/** A point of `style`'s windshield in car space: `xn` −1…1 across, `t` 0…1 its base to its top, on its bow and its dome's fall (a fresh vector). */
+export function windshieldPoint(style: BodyStyle, xn: number, t: number): THREE.Vector3 {
+  return quadPoint(windshieldQuad(style), xn, t).clone();
+}
+
 /** Glass quad `q` drawn in by its `frame` ([side, bottom, top], m: sides across, bottom and top along its slope), bowed and fallen as `q`. */
 function framedQuad(q: BowedQuad, [side, bottom, top]: readonly [number, number, number]): BowedQuad {
   const len = hypot2(q.top[0] - q.base[0], q.top[1] - q.base[1]);
@@ -92,12 +98,26 @@ function framedQuad(q: BowedQuad, [side, bottom, top]: readonly [number, number,
   return { base: at(t0), top: at(t1), wBase: lerp(q.wBase, q.wTop, t0) - 2 * side, wTop: lerp(q.wBase, q.wTop, t1) - 2 * side, bow: q.bow, fall: (x, t) => q.fall(x, lerp(t0, t1, t)) };
 }
 
-/** A black frit band: rows of points (each row the same length) as a strip grid wound like `makeGlassQuad`'s, every vertex coloured black. */
+/** `geo`'s `GLASS_ATTRIBUTE` with every vertex `frit` (1 black frit, 0 clear) and none privacy. */
+function glassTone(geo: THREE.BufferGeometry, frit: 0 | 1): THREE.BufferGeometry {
+  const tone = new THREE.Float32BufferAttribute(new Float32Array(geo.getAttribute("position").count * 2), 2);
+  if (frit) for (let i = 0; i < tone.count; i++) tone.setX(i, 1);
+  return geo.setAttribute(GLASS_ATTRIBUTE, tone);
+}
+
+/** Marks every vertex of `geo`, a privacy pane's (`privacyGlass`): `glassMaterial` darkens it and floors its opacity; a frit vertex stays black. */
+export function privacyPane(geo: THREE.BufferGeometry): void {
+  if (!geo.hasAttribute(GLASS_ATTRIBUTE)) glassTone(geo, 0);
+  const tone = geo.getAttribute(GLASS_ATTRIBUTE);
+  for (let i = 0; i < tone.count; i++) tone.setY(i, 1);
+}
+
+/** A black frit band: rows of points (each row the same length) as a strip grid wound like `makeGlassQuad`'s, every vertex frit. */
 function fritBand(rows: readonly THREE.Vector3[][]): THREE.BufferGeometry {
   const n = rows[0]!.length;
   const geo = new THREE.BufferGeometry().setFromPoints(rows.flat());
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(rows.flatMap((row, j) => row.flatMap((_, i) => [i / (n - 1), j / (rows.length - 1)])), 2));
-  geo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(rows.length * n * 3), 3));
+  glassTone(geo, 1);
   const indices: number[] = [];
   for (let j = 0; j < rows.length - 1; j++) {
     for (let i = 0; i < n - 1; i++) {
@@ -113,11 +133,11 @@ function fritBand(rows: readonly THREE.Vector3[][]): THREE.BufferGeometry {
 /** Chords along a frit's top and bottom edges: the 1.5 cm bow and the dome's fall each bend about 1 mm off a quarter-width chord, under the band's own width. */
 const FRIT_CHORDS = 4;
 
-/** A framed rear glass: its pane drawn in by the `frame`, the band out to the outline its black frit, both bowed and fallen alike (vertex colour: the pane's material tints it). */
+/** A framed rear glass: its pane drawn in by the `frame`, the band out to the outline its black frit, both bowed and fallen alike (`glassTone`: the frit's vertices are black). */
 function framedGlass(q: BowedQuad, frame: readonly [number, number, number], draw: QuadDraw): THREE.BufferGeometry {
   const inner = framedQuad(q, frame);
   const pane = makeGlassQuad(inner, draw);
-  pane.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(pane.getAttribute("position").count * 3).fill(1), 3));
+  glassTone(pane, 0);
   const along = (g: BowedQuad, t: number) => Array.from({ length: FRIT_CHORDS + 1 }, (_, i) => quadPoint(g, (i / FRIT_CHORDS) * 2 - 1, t).clone());
   // The sides take no bow (it is zero at the pane's edges) and the fall bends them under 2 mm off a chord: one chord each.
   const side = (xn: number) => [0, 1].map((t) => [quadPoint(q, xn, t).clone(), quadPoint(inner, xn, t).clone()]);
@@ -135,22 +155,18 @@ function framedGlass(q: BowedQuad, frame: readonly [number, number, number], dra
 /** Points each rounded corner's arc takes off each of its two edges. */
 const ROUND_STEPS = 3;
 
-/** A geometry of `points` ((s, t) on the pane, 0…1 across and up) at `at`'s positions, wound as `index`, every vertex coloured `colour`. */
-function paneGeometry(points: readonly (readonly [number, number])[], at: (s: number, t: number) => THREE.Vector3, index: number[], colour: number): THREE.BufferGeometry {
+/** A geometry of `points` ((s, t) on the pane, 0…1 across and up) at `at`'s positions, wound as `index`, every vertex `frit` (1 black frit, 0 clear). */
+function paneGeometry(points: readonly (readonly [number, number])[], at: (s: number, t: number) => THREE.Vector3, index: number[], frit: 0 | 1): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry().setFromPoints(points.map(([s, t]) => at(s, t).clone()));
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(points.flat(), 2));
-  geo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(points.length * 3).fill(colour), 3));
+  glassTone(geo, frit);
   geo.setIndex(index);
   geo.computeVertexNormals();
   return geo;
 }
 
-/**
- * An unframed pane whose clear glass has `round` (m) corners: its grid gains `ROUND_STEPS` lines through each corner's square, whose
- * points map onto the corner's quarter circle (each square ring about the circle's centre onto the circle of its size); a black frit
- * fan fills each square corner out to the arc, so the outline, and the trim round it, stay square.
- */
-function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): THREE.BufferGeometry {
+/** `round` (m) corners on `q`'s (s, t) square: the zones' lines (`ROUND_STEPS + 1` per corner), `arc` mapping a corner-square point onto its quarter circle, `rim` a corner's arc from its horizontal-edge tangent point to its vertical-edge one. */
+function roundCorners(q: BowedQuad, round: number) {
   const len = hypot2(q.top[0] - q.base[0], q.top[1] - q.base[1]);
   const [rS, rT] = [round / Math.min(q.wBase, q.wTop), round / len];
   // A zone's lines, from its inner line out to the edge at 0 or 1.
@@ -166,6 +182,41 @@ function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): TH
     const k = Math.max(ds, dt) / hypot2(ds, dt);
     return [s < 0.5 ? rS * (1 - ds * k) : 1 - rS * (1 - ds * k), t < 0.5 ? rT * (1 - dt * k) : 1 - rT * (1 - dt * k)];
   };
+  const rim = (sEdge: number, tEdge: number): [number, number][] =>
+    [...zone(rS, sEdge).map((s): [number, number] => [s, tEdge]), ...zone(rT, tEdge).reverse().slice(1).map((t): [number, number] => [sEdge, t])].map(([s, t]) => arc(s, t));
+  return { rS, rT, lines, arc, rim };
+}
+
+/** The chrome bead takes every this-many'th point of a corner's arc: 34° chords on the coupe's 9 cm round (4 mm sag), which keeps the coupe under its triangle budget. */
+const BEAD_ARC_STRIDE = 2;
+
+/** The rounded pane's chrome outline in (s, t), counter-clockwise from its left edge's lower tangent point: each corner's arc (`BEAD_ARC_STRIDE`), and the grid's columns along the bottom and top (the bow and the dome's fall curve them). */
+function roundedOutline(q: BowedQuad, round: number, segX: number): [number, number][] {
+  const { rS, lines, rim } = roundCorners(q, round);
+  const corner = (sEdge: number, tEdge: number) => rim(sEdge, tEdge).filter((_, k) => k % BEAD_ARC_STRIDE === 0);
+  // `lines` runs the left corner zone, the columns, the right corner zone: only the columns lie between the arcs.
+  const columns = lines(segX, rS).slice(ROUND_STEPS + 1, -(ROUND_STEPS + 1));
+  return [
+    ...corner(0, 0).reverse(),
+    ...columns.map((s): [number, number] => [s, 0]),
+    ...corner(1, 0),
+    ...corner(1, 1).reverse(),
+    ...[...columns].reverse().map((s): [number, number] => [s, 1]),
+    ...corner(0, 1),
+  ];
+}
+
+/** A round-outlined pane's frit corners stand this far (m) in behind its plane: a dark backing seen only through the gaps the body leaves round its arcs (the cabin showed there). */
+const ROUND_BACKING_INSET = 0.01;
+
+/**
+ * An unframed pane whose clear glass has `round` (m) corners: its grid gains `ROUND_STEPS` lines through each corner's square, whose
+ * points map onto the corner's quarter circle (each square ring about the circle's centre onto the circle of its size); a black frit
+ * fan fills each square corner out to the arc, so the glass's outline stays square, while the chrome bead follows the arcs. With
+ * `roundOutline` the fans stand `ROUND_BACKING_INSET` in behind the pane: the glass's outline is the arcs, the fans a backing.
+ */
+function roundedGlass(q: BowedQuad, round: number, { segX, segY, facing }: QuadDraw): THREE.BufferGeometry {
+  const { rS, rT, lines, arc, rim: cornerRim } = roundCorners(q, round);
   const at = (s: number, t: number) => quadPoint(q, s * 2 - 1, t);
   const [ss, ts] = [lines(segX, rS), lines(segY, rT)];
   const row = ss.length;
@@ -176,16 +227,21 @@ function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): TH
       grid.push(a, a + 1, a + row, a + 1, a + row + 1, a + row);
     }
   }
-  const pane = paneGeometry(ts.flatMap((t) => ss.map((s) => arc(s, t))), at, grid, 1);
+  const pane = paneGeometry(ts.flatMap((t) => ss.map((s) => arc(s, t))), at, grid, 0);
   const fans = [0, 1].flatMap((sEdge) =>
     [0, 1].map((tEdge) => {
-      const rim = [...zone(rS, sEdge).map((s): [number, number] => [s, tEdge]), ...zone(rT, tEdge).reverse().slice(1).map((t): [number, number] => [sEdge, t])].map(([s, t]) => arc(s, t));
+      const rim = cornerRim(sEdge, tEdge);
       // Counter-clockwise in (s, t), as the grid's triangles are.
       const [[s0, t0], [s1, t1]] = [rim[0]!, rim[1]!];
       if ((s0 - sEdge) * (t1 - tEdge) - (t0 - tEdge) * (s1 - sEdge) < 0) rim.reverse();
-      return paneGeometry([[sEdge, tEdge], ...rim], at, rim.slice(1).flatMap((_, k) => [0, k + 1, k + 2]), 0);
+      return paneGeometry([[sEdge, tEdge], ...rim], at, rim.slice(1).flatMap((_, k) => [0, k + 1, k + 2]), 1);
     }),
   );
+  if (q.roundOutline) {
+    // In along the pane's inward normal (the flat pane's: the bow and fall tilt it under a millimetre over a corner).
+    const inward = new THREE.Vector3(0, q.base[1] - q.top[1], q.top[0] - q.base[0]).normalize().multiplyScalar(-facing * ROUND_BACKING_INSET);
+    for (const fan of fans) fan.translate(inward.x, inward.y, inward.z);
+  }
   const geo = mergeGeometries([pane, ...fans], false);
   if (!geo) throw new Error("Failed to merge the rounded rear glass");
   geo.userData.centre = quadPoint(q, 0, 0.5).toArray();
@@ -436,7 +492,11 @@ export function makeSideGlassFrame(sign: number, style: BodyStyle): THREE.Buffer
 function makeQuadGlassFrame(q: BowedQuad, { segX, facing }: QuadDraw): THREE.BufferGeometry {
   const xs = Array.from({ length: segX + 1 }, (_, i) => (i / segX) * 2 - 1);
   // Counter-clockwise in (across, up), which the edge offsets below rely on.
-  const pts = [...xs.map((xn) => quadPoint(q, xn, 0).clone()), ...xs.map((xn) => quadPoint(q, xn, 1).clone()).reverse()];
+  const at = (xn: number, t: number) => quadPoint(q, xn, t).clone();
+  const pts =
+    q.round && !q.frame
+      ? roundedOutline(q, q.round, segX).map(([s, t]) => at(s * 2 - 1, t))
+      : [...xs.map((xn) => at(xn, 0)), ...xs.map((xn) => at(xn, 1)).reverse()];
   // The flat pane's normal: the bow and the fall tilt it under a millimetre across the ribbon.
   const plane = new THREE.Vector3(0, q.base[1] - q.top[1], q.top[0] - q.base[0]).normalize();
   const outward = plane.clone().multiplyScalar(facing);

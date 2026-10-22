@@ -94,14 +94,15 @@ export function roofAt(z: number, style: BodyStyle): { y: number; x: number } {
 }
 
 /**
- * The drawn roof's dome at `z` (`roofEnds`): its whole section's drop (m) and its crown's rise over the dome's edge (m). Over an end's
- * run it rolls in a quarter ellipse (level with the roof where the run starts) onto that end's glass top; unset, none and `ROOF_CROWN`.
+ * The drawn roof's dome at `z` (`roofEnds`): its whole section's drop (m), its crown's rise over the dome's edge (m) and the share of its
+ * side lip's reach it keeps (`roofEnds.flush`). Over an end's run it rolls in a quarter ellipse (level with the roof where the run starts)
+ * onto that end's glass top; unset, none, `ROOF_CROWN` and the whole reach.
  */
-export function roofDome(z: number, style: BodyStyle): { drop: number; crown: number } {
+export function roofDome(z: number, style: BodyStyle): { drop: number; crown: number; reach: number } {
   const runs = style.roofEnds;
   const ends = [
-    { run: runs?.rear, z: style.roofZ[0], glassY: style.rearGlass.top[0] },
-    { run: runs?.front, z: style.roofZ[1], glassY: style.windshieldTop[0] },
+    { run: runs?.rear, z: style.roofZ[0], glassY: style.rearGlass.top[0], flush: runs?.flush?.rear ?? 0 },
+    { run: runs?.front, z: style.roofZ[1], glassY: style.windshieldTop[0], flush: runs?.flush?.front ?? 0 },
   ];
   for (const end of ends) {
     const d = Math.abs(z - end.z);
@@ -109,9 +110,9 @@ export function roofDome(z: number, style: BodyStyle): { drop: number; crown: nu
     const s = 1 - d / end.run;
     const roll = 1 - Math.sqrt(1 - s * s);
     const edge = roofAt(end.z, style).y;
-    return { drop: roll * Math.max(0, edge - end.glassY), crown: lerp(ROOF_CROWN, Math.max(0, end.glassY - edge), roll) };
+    return { drop: roll * Math.max(0, edge - end.glassY), crown: lerp(ROOF_CROWN, Math.max(0, end.glassY - edge), roll), reach: 1 - end.flush * s };
   }
-  return { drop: 0, crown: ROOF_CROWN };
+  return { drop: 0, crown: ROOF_CROWN, reach: 1 };
 }
 
 /** Height of the roof panel's top at (`x`, `z`), the top ring of `makeRoofGeometry`: the centre-line crown, the dome's
@@ -195,7 +196,7 @@ const BAY_FLOOR = 0.28;
 export function bayTub(style: BodyStyle): readonly [number, number, number] {
   const rear = Math.max(style.hood.z0, style.windshield.base[1]) + BAY_CLEAR.rear;
   const cabinFront = Math.max(-Infinity, ...style.tubs.map(([, front]) => front).filter((front) => front < rear));
-  return [Math.max(rear, cabinFront + 2 * TUB_EDGE + BAY_CLEAR.cowl), style.hood.z1 - BAY_CLEAR.front, style.bayFloor ?? BAY_FLOOR];
+  return [Math.max(rear, cabinFront + 2 * TUB_EDGE + BAY_CLEAR.cowl), style.bayFront ?? style.hood.z1 - BAY_CLEAR.front, style.bayFloor ?? BAY_FLOOR];
 }
 
 /** The open floors a body build lofts: the style's tubs, and on the drawn body the engine bay under the hood (`bayTub`). */
@@ -396,18 +397,20 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   const floor = floorY(z, style);
   const tub = tubAt(z, style, bodyTubs(style, source));
   const { wheels } = carFrame(style);
-  const well = wheelWell(z, wheels, style.arch.radius);
+  // The drawn opening may stand lower than the cage's (`arch.rise`), under the round fender flare; the cage keeps the round one.
+  const well = wheelWell(z, wheels, style.arch.radius) * (source === "drawn" ? (style.arch.rise ?? 1) : 1);
   const archY = wheels[0]![1] + well;
   const inset = seamInset(z, style);
   const yF = yb - FEATURE_DROP;
   const side = (y: number): [number, number] => [sideX(y, hw, yb, rockerY) - inset, y];
   const tuckRows = TUCK_ROWS[source];
   const rocker = FLARE_FIRST + tuckRows + 1;
-  // A tub's floor stays flat over wheels whose tyres it clears (the pickup's bed), or that stand outboard of the body (the monster's).
-  const floorClear = tub.t > 0 && wheels.every(([wx, wy]) => Math.abs(wx) > hw || wy + style.dims.wheel.radius < tub.floor);
-  const edge = wellEdge(z, hw, tub.t, floorClear, well, style, source);
   // The deck edge drops into the style's own tubs (cabin, bed), not into the drawn bay: there it stays the fender's top under the hood's edge.
   const deckTub = tubAt(z, style, style.tubs).t;
+  // A tub's floor stays flat over wheels whose tyres it clears (the pickup's bed), or that stand outboard of the body (the monster's);
+  // the drawn bay's floor is the cage's closed deck, so it takes the arch's lift as the cage's sill does.
+  const floorClear = deckTub > 0 && wheels.every(([wx, wy]) => Math.abs(wx) > hw || wy + style.dims.wheel.radius < tub.floor);
+  const edge = wellEdge(z, hw, tub.t, floorClear, well, style, source);
   const [grooveOut, grooveDown] = source === "drawn" && style.hood.groove ? style.hood.groove.map((g) => g * bayAt(z, style)) : [0, 0];
   const fenderIn = source === "drawn" ? hoodInset(z, style.hood) : HOOD_INSET;
   // The ring's half: deck crown and edge, the shoulder, the feature line, the tuck-under, the rocker, then the sill and the floor.
@@ -429,7 +432,10 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
     const wall = lerp(hw - 0.06, Math.min(boot.face?.wall ?? hw, hw - 0.06), cut.face);
     const bottom = lerp(hollow, Math.max(boot.face?.sill ?? 0, hollow), cut.face);
     half[0] = [lerp(half[0]![0], wall, cut.open), lerp(half[0]![1], bottom, cut.open)];
-    half[1] = [lerp(half[1]![0], wall, cut.open), lerp(half[1]![1], yb - 0.006, cut.open)];
+    // The wall's top takes the tub's rim (`tubWall`) as far as the cage's has dropped into the tub.
+    const inner = lerp(hw - 0.06, hw - tubWall(style), deckTub);
+    const rim = lerp(inner, Math.min(boot.face?.wall ?? hw, inner), cut.face);
+    half[1] = [lerp(half[1]![0], rim, cut.open), lerp(half[1]![1], yb - 0.006, cut.open)];
   }
   // The door cut: every point above the rocker drops onto the sill's top, the last tuck row onto its far edge.
   const sill: [number, number][] = [

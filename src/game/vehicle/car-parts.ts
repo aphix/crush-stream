@@ -8,7 +8,7 @@ import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import type { StirCar } from "../world/surfaces.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import type { MassName } from "../kernel/rig-spec.ts";
-import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox } from "./car-panels.ts";
+import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox, shellReaches } from "./car-panels.ts";
 import { setBare } from "./interior.ts";
 import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
@@ -84,6 +84,8 @@ const BUMPER_SAG = 0.06;
 const BUMPER_CLEAR = 0.04;
 /** Halvings that find the roll a hanging bumper rests on the road at (0.6 rad / 2⁸ = 2 mrad, 3 mm of the free end). */
 const BUMPER_REST_ITER = 8;
+/** A hanging arch shell's flap drops no lower than this (m) above the road under it: it rests on the road, not through it. */
+const SHELL_CLEAR = 0.005;
 /** A hinged part below this hinge value is not worn by the wind (a shell hardly standing). */
 const WEAR_MIN_T = 0.04;
 /** A contact is fresh when the last was over `TOUCH_GAP` s ago and the next lands within `TOUCH_NOW` s. */
@@ -112,6 +114,10 @@ const _poseSig = new Float64Array(7 * 20 + 20);
 /** An input moved less than this (m, rad or the unit of the value) from what the parts were last posed at is no change: a resting wreck's masses are re-derived through the frame's inverse each slice and differ by 1e-13. A nanometre moves no pixel; a slow creep is seen once it adds up, as the comparison is against the last pose, not the last slice. */
 const POSE_EPSILON = 1e-9;
 const _hinge = new Float64Array(7);
+/** The road under an arch shell in its body's frame (`shellFloor`, `poseShell`'s `floor`), and the world point and normal it is read at. */
+const _floor = new Float64Array(4);
+const _floorAt = new THREE.Vector3();
+const _floorN = new THREE.Vector3();
 
 /**
  * Detachable parts: attached-part posing, door hinges and mirrors, glass following, breakage and detaching,
@@ -266,8 +272,11 @@ export abstract class CarParts extends CarGlass {
   /** Counts every write of an attached part's pose (`posePart`, the reset): a car whose count has not moved has nothing new for `PoseBlend` to take. */
   partWrites = 0;
 
-  /** Rest pose plus the hinge value `hingeT` (crash) and, on doors and mirrors, the free swing. */
-  protected posePart(p: DetachPart): void {
+  /**
+   * Rest pose plus the hinge value `hingeT` (crash) and, on doors and mirrors, the free swing. `onRoad` false poses an arch shell free of
+   * the road under it, where its hinge alone puts it: a torn shell leaves from that pose (`detachPart`), which replays read.
+   */
+  protected posePart(p: DetachPart, onRoad = true): void {
     this.partWrites++;
     const t = p.hingeT;
     p.folding = t > foldAt(p);
@@ -315,7 +324,14 @@ export abstract class CarParts extends CarGlass {
       }
     } else if (p.region) {
       if (p.folding) {
-        if (!p.open || p.hingeT !== p.posed) this.shellPose(p);
+        if (!p.open || p.hingeT !== p.posed) this.shellPose(p, onRoad);
+        else if (!onRoad) {
+          if (p.held) this.bendShell(p, null);
+        } else {
+          // The car moved over the road: a shell resting on it follows it, and one its drop now reaches comes to rest on it.
+          const floor = this.shellFloor(p);
+          if (p.held || (floor !== null && shellReaches(p.region, this.body.geometry, p.posed, p.shellFlutter, floor))) this.bendShell(p, floor);
+        }
         const a = this.flapAngle(p);
         if (a > 0) flutterShell(p.region, p.object, a);
       } else if (p.open) this.closePanel(p);
@@ -853,7 +869,7 @@ export abstract class CarParts extends CarGlass {
     if (p.detached) return;
     // The part leaves in the pose its state gives now, not the last frame's (poses are written once a frame, `poseParts`; a door
     // torn off by `swingHinges` finds none pending).
-    this.posePart(p);
+    this.posePart(p, false);
     p.detached = true;
     p.shape.count = 0;
     this.group.updateMatrixWorld();
@@ -912,11 +928,39 @@ export abstract class CarParts extends CarGlass {
     return Math.max((this.roofRestY - this.deform.massLocal("roof").y) / BAR_TEAR_SINK, this.deform.hitSpeedValue / BAR_TEAR_MPS);
   }
 
-  /** A panel's shell, built if need be and bent to its hinge value on the current skin. */
-  protected shellPose(p: DetachPart): void {
+  /** A panel's shell, built if need be and bent to its hinge value on the current skin: attached (`onRoad`), its drop rests on the road under it. */
+  protected shellPose(p: DetachPart, onRoad = true): void {
     this.openPanel(p);
-    poseShell(p.region!, (p.object as THREE.Mesh).geometry, this.body.geometry, p.hingeT, detSin(this.deform.crushElapsed * 22));
     p.posed = p.hingeT;
+    p.shellFlutter = detSin(this.deform.crushElapsed * 22);
+    this.bendShell(p, onRoad ? this.shellFloor(p) : null);
+  }
+
+  /** Bend the open shell to its last pose's hinge value and flutter, its drop held off `floor` (`poseShell`; null: free of the road). */
+  private bendShell(p: DetachPart, floor: Float64Array | null): void {
+    p.held = poseShell(p.region!, (p.object as THREE.Mesh).geometry, this.body.geometry, p.posed, p.shellFlutter, floor);
+  }
+
+  /**
+   * The road under arch shell `p` as `poseShell`'s `floor` in the body's frame: the plane the ground's height and normal under the
+   * shell's middle give, lifted `SHELL_CLEAR`. Null for a quarter panel (it never drops), with no ground under it, or on a car
+   * not on its wheels (on its side, the body's up runs along the road).
+   */
+  private shellFloor(p: DetachPart): Float64Array | null {
+    if (p.region!.kind === "quarter") return null;
+    const frame = this.body.parent!;
+    frame.updateWorldMatrix(true, false);
+    const e = frame.matrixWorld.elements;
+    const at = _floorAt.copy(p.region!.origin).applyMatrix4(frame.matrixWorld);
+    const ground = activeGround();
+    const gy = ground.heightAt(at.x, at.z, at.y);
+    if (gy === NO_FLOOR) return null;
+    const n = ground.normalAt(at.x, at.z, _floorN, at.y);
+    _floor[0] = n.x * e[0]! + n.y * e[1]! + n.z * e[2]!;
+    _floor[1] = n.x * e[4]! + n.y * e[5]! + n.z * e[6]!;
+    _floor[2] = n.x * e[8]! + n.y * e[9]! + n.z * e[10]!;
+    _floor[3] = n.x * (e[12]! - at.x) + n.y * (e[13]! - gy) + n.z * (e[14]! - at.z) - SHELL_CLEAR;
+    return _floor[1]! < UPRIGHT_UP_Y ? null : _floor;
   }
 
   /** A torn shell counts against the car's cap: past `LIVE_SHELLS` the oldest stops being drawn. */
@@ -938,6 +982,7 @@ export abstract class CarParts extends CarGlass {
   /** The panel is back on the car (reset): the shell leaves the scene and the body is paint again. */
   protected closePanel(p: DetachPart): void {
     p.open = false;
+    p.held = false;
     p.object.visible = true;
     p.object.removeFromParent();
     const at = this.liveShells.indexOf(p);

@@ -4,18 +4,20 @@ import { LIFTGATE } from "../hinge-spec.ts";
 
 /** Wagon's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const WAGON_LAMP_SHAPES = {
+  // Its DRL a rounded loop in the inner end, then a line along the bottom curling up the outer end, as the reference's; the amber
+  // indicator at the corner. The lens's bottom keeps 1 cm over the bumper's top seam.
   head: {
     loops: [
-      { points: [[0.41, 0.715], [0.62, 0.795], [0.7, 0.808], [0.76, 0.82], [0.76, 0.835], [0.7, 0.832], [0.62, 0.815], [0.41, 0.785]] },
+      { points: [[0.41, 0.715], [0.62, 0.787], [0.66, 0.795], [0.7, 0.797], [0.76, 0.8], [0.76, 0.835], [0.7, 0.832], [0.62, 0.815], [0.41, 0.785]] },
       { side: true, points: [[1.92, 0.795], [1.7, 0.828], [1.68, 0.842], [1.8, 0.842], [1.86, 0.83], [1.92, 0.81]] },
     ],
     lens: "dark",
     bezel: "black",
     recess: 0.01,
-    strips: [{ line: { points: [[0.41, 0.775], [0.41, 0.722], [0.62, 0.797], [0.76, 0.826]] }, width: 0.008, tone: "lit" }],
-    rounds: [
-      { at: [0.47, 0.75], r: 0.01, tone: "lit" },
-      { at: [0.54, 0.775], r: 0.01, tone: "lit" },
+    cells: [{ loop: { side: true, points: [[1.86, 0.815], [1.76, 0.825], [1.72, 0.836], [1.8, 0.84], [1.86, 0.83]] }, tone: "amber" }],
+    strips: [
+      { line: { points: [[0.43, 0.727], [0.54, 0.766], [0.54, 0.784], [0.43, 0.746], [0.43, 0.727]] }, width: 0.008, tone: "lit" },
+      { line: { points: [[0.55, 0.772], [0.62, 0.793], [0.7, 0.803], [0.745, 0.806], [0.75, 0.828]] }, width: 0.008, tone: "lit" },
     ],
   },
   tail: {
@@ -36,17 +38,24 @@ const WAGON_LAMP_SHAPES = {
   front: {
     loops: [{ points: [[0.52, 0.36], [0.72, 0.36], [0.72, 0.48], [0.52, 0.48]] }],
     lens: "dark",
+    onBody: true,
     // The corner intake's bright blade, 2/3 of its width, and the silver splitter along the fascia's bottom lip (diffuse silver: chrome reads dark there).
     strips: [
       { line: { points: [[0.553, 0.43], [0.687, 0.43]] }, width: 0.018, tone: "clear" },
-      { line: { points: [[0.006, 0.345], [0.2, 0.345], [0.35, 0.345], [0.5, 0.345], [0.64, 0.345]] }, width: 0.008, tone: "clear" },
+      { line: { points: [[0.006, 0.345], [0.2, 0.345], [0.35, 0.345], [0.5, 0.345], [0.64, 0.345]] }, width: 0.014, tone: "clear" },
     ],
   },
-  // The black diffuser band across the rear bumper's foot, its red reflector in it.
+  // The black diffuser band across the rear bumper's foot from its lip's crest up, its red reflector in it, in three tiles: one long ring
+  // round the bumper's wrap fills with holes.
   rear: {
-    loops: [{ points: [[0.006, 0.475], [0.64, 0.475], [0.64, 0.54], [0.006, 0.54]] }],
-    lens: "dark",
-    cells: [{ loop: { points: [[0.48, 0.48], [0.64, 0.48], [0.64, 0.5], [0.48, 0.5]] }, tone: "red" }],
+    loops: [
+      { points: [[0.006, 0.487], [0.2, 0.487], [0.2, 0.54], [0.006, 0.54]] },
+      { points: [[0.2, 0.487], [0.4, 0.487], [0.4, 0.54], [0.2, 0.54]] },
+      { points: [[0.4, 0.487], [0.64, 0.487], [0.64, 0.54], [0.4, 0.54]] },
+    ],
+    lens: "black",
+    onBody: true,
+    cells: [{ loop: { points: [[0.48, 0.49], [0.64, 0.49], [0.64, 0.51], [0.48, 0.51]] }, tone: "red" }],
   },
 } as const;
 
@@ -81,6 +90,7 @@ export const WAGON: BodyStyle = {
       trim: "body",
       top: [[0, 0.62], [0.55, 0.62], [0.62, 0.615]],
       edge: [[-2, 0.615], [-1.85, 0.6], [-1.68, 0.6], [-1.725, 0.45], [-1.735, 0.38]],
+      plateless: true,
     },
   },
   door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.09, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "rounded", finish: "black", size: [0.09, 0.13, 0.1] } },
@@ -136,8 +146,9 @@ export const WAGON: BodyStyle = {
   proxyBelt: 1.19,
   rearDoorSeam: -1.23,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE, edgeRoll: 0.02 },
-  lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES },
-  grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 9, finish: "black", rim: "chrome", lean: 0.387 },
+  lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES, bulb: "led" },
+  // The reference's wide diamond mesh: about nine across and four rows down.
+  grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 11, angle: 0.37, finish: "black", rim: "chrome", lean: 0.387 },
   seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },
   pillars: { b: { width: [0.088, 0.088] }, divider: { width: [0.105, 0.105] } },
   blackout: { a: true, sail: true, b: true, divider: true, rear: true },
@@ -205,7 +216,8 @@ export const WAGON: BodyStyle = {
       { view: "rear", points: [[0, 0.91], [0.5, 0.91], [0.5, 0.98], [0, 0.98]], depth: 0, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0, 0.62], [0.6, 0.62], [0.6, 0.66], [0, 0.66]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0.485, 0.278], [0.615, 0.278], [0.615, 0.323], [0.485, 0.323]], depth: -0.006, rim: 0.004, cavity: 0.7 },
-      { view: "rear", points: [[0, 0.68], [0.28, 0.68], [0.28, 0.82], [0, 0.82]], depth: -0.006, rim: 0.004, cavity: 0 },
+      // The gate's pressed plate recess under the lettering band; the reference leaves it empty (no plate).
+      { view: "rear", points: [[0, 0.77], [0.36, 0.77], [0.39, 0.778], [0.4, 0.8], [0.4, 0.905], [0, 0.905]], depth: -0.006, rim: 0.008, cavity: 0.2 },
       { view: "rear", points: [[0.475, 0.773], [0.525, 0.773], [0.525, 0.788], [0.475, 0.788]], depth: 0.002, rim: 0.004, cavity: 0 },
       { view: "rear", points: [[0, 0.3], [0.7, 0.3], [0.7, 0.445], [0, 0.445]], depth: -0.004, rim: 0.004, pattern: { kind: "hslats", pitch: 0.03, bar: 0.006, depth: -0.004 }, cavity: 0.85 },
       // The black sill cladding between the arches, under the door bottoms' beads.

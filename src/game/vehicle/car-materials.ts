@@ -4,7 +4,7 @@ import { once } from "../kernel/scalar.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { applyFinish, glslFloat } from "./car-finish.ts";
 import { BARE_METAL_FRAGMENT, BARE_METAL_VERTEX } from "./bare-metal.ts";
-import { FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
+import { FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE } from "./constants.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
 /** The shared car textures and materials (paint, tone grid, glass, crack map, lamp mask) and the multi-tone part helpers; the small parts built on them are in `part-geometry.ts`. */
@@ -123,28 +123,8 @@ export function makeWheelMaterial(): THREE.MeshStandardMaterial {
   return m;
 }
 
-/** Per vertex 1 where a part takes its panel's paint (the instance colour), else 0. */
+/** Per vertex 1 where a part takes its panel's paint (its seat's tint, `SeatDraw`), else 0. */
 export const PAINTED_ATTRIBUTE = "painted";
-
-/** `m` painting its `painted` vertices with the instance colour (a styled part's panel paint). Chains `m`'s compile hook and key. */
-function withPaintedInstances<T extends THREE.MeshStandardMaterial>(m: T): T {
-  const hook = m.onBeforeCompile;
-  const key = m.customProgramCacheKey;
-  m.onBeforeCompile = (shader, renderer) => {
-    hook.call(m, shader, renderer);
-    shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", `#include <common>\nattribute float ${PAINTED_ATTRIBUTE};`)
-      .replace(
-        "#include <color_vertex>",
-        `vColor = vec4(color, 1.0);\n#ifdef USE_INSTANCING_COLOR\nvColor.rgb *= mix(vec3(1.0), instanceColor.rgb, ${PAINTED_ATTRIBUTE});\n#endif`,
-      );
-  };
-  m.customProgramCacheKey = () => `${key.call(m)}|painted-instances`;
-  return m;
-}
-
-/** The part batch's material for a kind drawn in style variants (mirrors, grille, tail trim): one draw per variant, painted per instance. */
-export const variantPartsMaterial = once((): THREE.MeshStandardMaterial => withPaintedInstances(makePartsMaterial()));
 
 /**
  * A car material's draw class: opaque draws of one class need one shader program, so `sortByDrawClass` (present/draw-order.ts)
@@ -348,18 +328,20 @@ export function mergeToned(parts: THREE.BufferGeometry[], what: string): THREE.B
 export const GLASS_COLOR = 0x1a2832;
 
 export function makeGlassMaterial(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
-    color: GLASS_COLOR,
-    metalness: 0.18,
-    roughness: 0.08,
-    transparent: true,
-    opacity: 0.72,
-    side: THREE.DoubleSide,
-    // Panes are near-planar: each pixel sees one face, so three's back-then-front two-pass draw
-    // only doubled the draws and re-resolved the program twice per pane per frame.
-    forceSinglePass: true,
-    depthWrite: true,
-  });
+  return withGlassTone(
+    new THREE.MeshStandardMaterial({
+      color: GLASS_COLOR,
+      metalness: 0.18,
+      roughness: 0.08,
+      transparent: true,
+      opacity: 0.72,
+      side: THREE.DoubleSide,
+      // Panes are near-planar: each pixel sees one face, so three's back-then-front two-pass draw
+      // only doubled the draws and re-resolved the program twice per pane per frame.
+      forceSinglePass: true,
+      depthWrite: true,
+    }),
+  );
 }
 
 /** What a pane looks like: as built, cleared by a reset (`resetGlass`), or cracked (`crackGlass`). */
@@ -370,24 +352,42 @@ const GLASS_LOOKS = {
   cracked: { opacity: 0.55, roughness: 0.32 },
 } as const satisfies Record<GlassLook, { opacity: number; roughness: number }>;
 const glassByLook = new Map<string, THREE.MeshStandardMaterial>();
+/** A privacy pane's colour this much darker (linear): the cargo behind dark-tinted rear glass reads dim, as in the references. */
+export const PRIVACY_SHADE = 0.3;
 /** A privacy pane's floor opacity: its tint alone still let ~28% of the cabin through, so the reference's black rear glass read clear. */
 const PRIVACY_OPACITY = 0.93;
+
+/** Per-vertex glass tone (`GLASS_ATTRIBUTE`): x 1 black frit, y 1 privacy (darker by `PRIVACY_SHADE`, opacity floored before the crack map multiplies alpha, as `material.opacity` was); 0 on a mesh without one. */
+function withGlassTone<T extends THREE.MeshStandardMaterial>(m: T): T {
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", `#include <common>\nattribute vec2 ${GLASS_ATTRIBUTE};\nvarying vec2 vGlassTone;`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\nvGlassTone = ${GLASS_ATTRIBUTE};`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vGlassTone;")
+      .replace(
+        "#include <map_fragment>",
+        `diffuseColor.a = max(diffuseColor.a, vGlassTone.y * ${glslFloat(PRIVACY_OPACITY)});\n#include <map_fragment>\ndiffuseColor.rgb *= 1.0 - max(vGlassTone.x, vGlassTone.y * (1.0 - ${glslFloat(PRIVACY_SHADE)}));`,
+      );
+  };
+  m.customProgramCacheKey = () => "car-glass-tone";
+  return m;
+}
 
 /**
  * The one material every pane in `look` and `color` wears: a pane changes look by changing material, never by editing its own,
  * so a car's six panes and every other car's share it (the renderer re-sends a material's uniforms each time the draw
- * changes material, and a car's panes were six copies of one). `privacy` panes are near-opaque; `frit` panes draw their vertex
- * colours (a framed rear glass's black band). Never edit what this returns.
+ * changes material, and a car's panes were six copies of one). Privacy panes and the black frit band are per-vertex
+ * (`GLASS_ATTRIBUTE`), so they wear it too. Never edit what this returns.
  */
-export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR, privacy = false, frit = false): THREE.MeshStandardMaterial {
-  const key = `${look}:${color}:${privacy}:${frit}`;
+export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR): THREE.MeshStandardMaterial {
+  const key = `${look}:${color}`;
   let m = glassByLook.get(key);
   if (m === undefined) {
     m = makeGlassMaterial();
     m.color.setHex(color);
-    m.opacity = privacy ? Math.max(GLASS_LOOKS[look].opacity, PRIVACY_OPACITY) : GLASS_LOOKS[look].opacity;
+    m.opacity = GLASS_LOOKS[look].opacity;
     m.roughness = GLASS_LOOKS[look].roughness;
-    m.vertexColors = frit;
     if (look === "cracked") m.map = getCrackMap();
     m.userData.shared = true;
     glassByLook.set(key, m);
@@ -455,14 +455,14 @@ export function makeLampUnit(kind: LampKind): THREE.BufferGeometry {
   return mergeToned([housing.translate(0, 0, 0.015), lens.translate(0, 0, 0.03)], "lamp unit");
 }
 
-/** The head bulbs' lens texels (sRGB bytes) under the head lamp's white emissive: halogen warm, LED cool white, as the references light them. */
-const LAMP_BULB_TEXEL = { halogen: [255, 238, 226], led: [240, 247, 255] } as const;
+/** The head bulbs' lens texels (linear multipliers of the head lamp's white emissive): halogen an amber past the post's bloom threshold, so its lens glows warm with a halo as the references light it; LED cool white. */
+const LAMP_BULB_TEXEL = { halogen: [2.4, 1.6, 0.8], led: [240 / 255, 247 / 255, 1] } as const;
 /**
- * 2×2 emissive mask for the lamps, by (u, v): housing (.25, .25) black, lens (.75, .75) white, and the head bulbs' lens texels, halogen
- * (.75, .25) warm and LED (.25, .75) cool (`LAMP_BULB_UV`). Shared, never disposed.
+ * 2×2 emissive mask for the lamps (float, so a bulb can sit over 1), by (u, v): housing (.25, .25) black, lens (.75, .75) white, and
+ * the head bulbs' lens texels, halogen (.75, .25) and LED (.25, .75) (`LAMP_BULB_UV`). Shared, never disposed.
  */
 export const lampEmissiveMap = once((): THREE.DataTexture => {
-  const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255, ...LAMP_BULB_TEXEL.halogen, 255, ...LAMP_BULB_TEXEL.led, 255, 255, 255, 255, 255]), 2, 2);
+  const t = new THREE.DataTexture(new Float32Array([0, 0, 0, 1, ...LAMP_BULB_TEXEL.halogen, 1, ...LAMP_BULB_TEXEL.led, 1, 1, 1, 1, 1]), 2, 2, THREE.RGBAFormat, THREE.FloatType);
   t.needsUpdate = true;
   return t;
 });
@@ -738,9 +738,9 @@ export const RUBBER = [0x121214, 0.92, 0.05] as const;
 const ALLOY = [0xc9cdd4, 0.28, 0.92] as const;
 const DARK_DISC = [0x1c1d20, 0.7, 0.3] as const;
 const HUB = [0x8a909a, 0.35, 0.8] as const;
-/** A black-painted centre (pickup steel wheel, monster hub). */
+/** A black-painted centre (the pickup's alloy). */
 const DARK_HUB = [0x232428, 0.55, 0.45] as const;
-/** The muscle car's polished rim lip. */
+/** A polished rim lip (muscle, monster). */
 const CHROME = [0xeef0f3, 0.12, 1] as const;
 /** The muscle car's mag centre cap (reference: a big grey dome): 7.8 cm in radius, standing 4 cm over the dish ([r, x] m, lathed). */
 const MAG_CAP = [[0, -0.1], [0.05, -0.092], [0.078, -0.07], [0.078, 0.07], [0.05, 0.092], [0, 0.1]] as const;
@@ -844,9 +844,11 @@ function rimFace(design: WheelDesign): THREE.BufferGeometry[] {
     case "mag5":
       return [...slottedDish(5, 0.19, 0.06, ALLOY, [0.075, 0.175, 0.45, 0.85, 0.15]), ...faceRings(0.18, 0.222, 0.1, CHROME), smeared(latheX(MAG_CAP, 10, null, 1, HUB), 0)];
     case "six":
-      return [...disc, ...spokes(6, [0.15, 0.15, 0.075], ALLOY), hub(0.08, DARK_HUB)];
+      // The pickup's polished six-slot alloy, its black centre.
+      return [...slottedDish(6, 0.19, 0.07, ALLOY, [0.09, 0.17, 0.42, 0.62, 0.2]), hub(0.075, DARK_HUB)];
     case "beadlock":
-      return [...disc, ...spokes(6, [0.1, 0.15, 0.05], ALLOY), ...faceRings(0.17, 0.222, 0.104, ALLOY), hub(0.085, DARK_HUB)];
+      // The monster's polished deep dish, eight slots 5 cm in under its chrome lip ring.
+      return [...slottedDish(8, 0.19, 0.055, ALLOY, [0.105, 0.168, 0.32, 0.42, 0.25]), ...faceRings(0.17, 0.222, 0.104, CHROME), hub(0.05, HUB)];
   }
 }
 

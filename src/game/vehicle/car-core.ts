@@ -7,11 +7,11 @@ import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
-import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
+import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
-import { DOOR_GLASS_SEAT, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane } from "./car-glass.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
   LIGHT_BAR_FOOT,
@@ -45,9 +45,6 @@ const _lampQ = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
 /** The brake lamp's probe meets the rear glass from either face: a cab's brake lamp sits on its back glass, which the body skin doesn't hold. */
 const GLASS_PROBE = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-const _shade = new THREE.Color();
-/** A privacy pane (`privacyGlass`) wears its colour this much darker (linear): the cargo behind dark-tinted rear glass reads dim, as in the references. */
-const PRIVACY_SHADE = 0.3;
 /** Each style's decimated rest caster (body + flush parts), shared by its cars and drawn by `PartBatch.casters`; never disposed. */
 const casterByStyle = new WeakMap<BodyStyle, THREE.BufferGeometry>();
 
@@ -204,11 +201,9 @@ export type GlassPart = "roof" | "bonnet" | "boot" | "doorLeft" | "doorRight";
 export interface GlassPane {
   name: GlassName;
   mesh: THREE.Mesh;
-  /** The look it wears now and the colour it wears it in: it draws the shared `glassMaterial(look, tint)`, `PRIVACY_SHADE` darker on a privacy pane. */
+  /** The look it wears now and the colour it wears it in: it draws the shared `glassMaterial(look, tint)`. */
   look: GlassLook;
   tint: number;
-  /** The style tints it dark (`privacyGlass`). */
-  privacy: boolean;
   restPos: THREE.Vector3;
   restVerts: Float32Array | null;
   state: GlassState;
@@ -243,6 +238,8 @@ interface LampFitting {
   variant: number;
   /** A share's lamp on the body and its lid's part (set once the parts are registered); null on the brake and the markers. */
   share: { lamp: Lamp; lid: DetachPart | null } | null;
+  /** A marker's tint (`lamps.sideMarkers[].tint`), multiplied into its unit's colour; null for the rest. */
+  tint: THREE.Color | null;
 }
 
 export interface DetachPart {
@@ -288,6 +285,10 @@ export interface DetachPart {
   open: boolean;
   /** The hinge value the open shell was last posed at (`shellPose`): an attached panel is re-posed only when it changes (a changed skin re-poses all, `skinPanels`). */
   posed: number;
+  /** The shell flutter its last pose bent with (`shellPose`), -1..1: a re-pose for the road alone bends with it again. */
+  shellFlutter: number;
+  /** The road held up part of the open arch shell's drop in its last pose (`poseShell`): it is re-posed while it rests there, and torn off it leaves free of the road (`detachPart`). */
+  held: boolean;
   dent: DentState;
   /** The box it flies as (`stepLoose`), preallocated; measured when it first flies. */
   shape: LooseShape;
@@ -544,6 +545,8 @@ export abstract class CarCore {
     this.setPartPaint(livery?.body ?? paint.body, livery?.doors ?? paint.body);
 
     this.addGlass();
+    // The wipers ride the windshield pane (their geometry is in its car space): they go where it goes, and hide with it once it shatters.
+    this.glassPanes.find((g) => g.name === "windshield")!.mesh.add(this.partSeats[PART_KIND.wipers]!);
     this.registerParts();
     this.cabin.watch(this.parts);
     this.buildHullHelper();
@@ -588,7 +591,7 @@ export abstract class CarCore {
     const spec = front ? this.style.bumpers.front : this.style.bumpers.rear;
     const fascia = makeBumperGeometry(front, this.style);
     // A push bar is drawn only: merged into the front bumper, it follows the bumper's masses and tears off with it (its flying box is the bumper's as drawn).
-    const drawn = front ? (this.style.pushBar ? withPushBar(fascia) : fascia) : withRearFittings(fascia, this.style);
+    const drawn = front ? withFrontBand(this.style.pushBar ? withPushBar(fascia) : fascia, this.style) : withRearFittings(fascia, this.style);
     const mesh = new THREE.Mesh(withSeamCover(drawn, this.style, front), bumperMaterial(spec.trim, accent, body));
     this.bumperMeshes.push(mesh);
     mesh.castShadow = true;
@@ -599,6 +602,7 @@ export abstract class CarCore {
     if (front) {
       const grille = this.partSeats[PART_KIND.grille]!;
       grille.position.set(0, GRILLE_SEAT.y, GRILLE_SEAT.z);
+      grille.updateMatrix();
       g.add(grille);
     }
     return g;
@@ -628,7 +632,7 @@ export abstract class CarCore {
         const seat = this.lampSeat();
         seat.parent = lid;
         const lamp = this.lamps.find((l) => l.kind === (kind === "hood" ? "head" : "tail") && l.side === side)!;
-        this.lampFittings.push({ seat, kind, anchor: null, variant: share.variant, share: { lamp, lid: null } });
+        this.lampFittings.push({ seat, kind, anchor: null, variant: share.variant, share: { lamp, lid: null }, tint: null });
       }
     }
     this.addLampFittings();
@@ -647,13 +651,14 @@ export abstract class CarCore {
     const { brake, sideMarkers } = this.style.lamps;
     const skin = new THREE.Mesh(this.body.geometry);
     const ray = new THREE.Raycaster();
-    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number], targets: THREE.Object3D[]) => {
+    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number], targets: THREE.Object3D[], tint?: number) => {
       ray.set(from, toward);
       const hit = ray.intersectObjects(targets, false)[0];
       if (!hit) throw new Error(`${this.style.id}: no skin for its ${kind} lamp from ${from.toArray().join()}`);
       const seat = this.lampSeat();
       seat.scale.set(size[0], size[1], 1);
-      this.lampFittings.push({ seat, kind, anchor: anchorOnSkin(this.body.geometry, hit.point, _lampQ.setFromAxisAngle(_up, yaw)), variant: 0, share: null });
+      const anchor = anchorOnSkin(this.body.geometry, hit.point, _lampQ.setFromAxisAngle(_up, yaw));
+      this.lampFittings.push({ seat, kind, anchor, variant: 0, share: null, tint: tint === undefined ? null : new THREE.Color(tint) });
     };
     if (brake) {
       const glass = new THREE.Mesh(makeRearGlass(this.style), GLASS_PROBE);
@@ -661,7 +666,7 @@ export abstract class CarCore {
       glass.geometry.dispose();
     }
     for (const marker of sideMarkers ?? []) {
-      for (const side of [-1, 1]) seatAt("marker", new THREE.Vector3(side * LAMP_PROBE_REACH, marker.at[0], marker.at[1]), new THREE.Vector3(-side, 0, 0), (side * Math.PI) / 2, marker.size, [skin]);
+      for (const side of [-1, 1]) seatAt("marker", new THREE.Vector3(side * LAMP_PROBE_REACH, marker.at[0], marker.at[1]), new THREE.Vector3(-side, 0, 0), (side * Math.PI) / 2, marker.size, [skin], marker.tint);
     }
   }
 
@@ -681,7 +686,6 @@ export abstract class CarCore {
         mesh,
         look: "fresh",
         tint: GLASS_COLOR,
-        privacy,
         restPos: mesh.position.clone(),
         restVerts: skin ? this.copyRest(mesh.geometry) : null,
         state: "intact",
@@ -689,7 +693,7 @@ export abstract class CarCore {
         skin,
       };
       this.glassPanes.push(pane);
-      if (privacy || mesh.geometry.hasAttribute("color")) this.wearGlass(pane, "fresh");
+      if (privacy) privacyPane(mesh.geometry);
     };
     const glassMat = glassMaterial("fresh");
     const style = this.style;
@@ -759,6 +763,8 @@ export abstract class CarCore {
         bare: null,
         open: false,
         posed: -1,
+        shellFlutter: 0,
+        held: false,
         dent: newDentState(),
         shape: newLooseShape(),
       };
@@ -826,8 +832,7 @@ export abstract class CarCore {
 
   protected wearGlass(g: GlassPane, look: GlassLook): void {
     g.look = look;
-    const tint = g.privacy ? _shade.setHex(g.tint).multiplyScalar(PRIVACY_SHADE).getHex() : g.tint;
-    g.mesh.material = glassMaterial(look, tint, g.privacy, g.mesh.geometry.hasAttribute("color"));
+    g.mesh.material = glassMaterial(look, g.tint);
   }
 
   /** The paints (sRGB) a style's body-colour parts take (`finish` "body"): the grille the body's, the mirror caps the doors'. */

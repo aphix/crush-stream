@@ -34,6 +34,11 @@ part lifts off its body and settles, it never folds into it). No random draw: sp
 
 - quarter panel / arch flare: the whole shell mesh turns about its hinge line (`flutterShell`, a transform: **no vertex rebuild,
   no upload**); a quarter about the vertical line at its tail, an arch flare about the line along z at its top;
+  an arch flare's free ends also drop (`FLAP_DROP` 4 cm × hinge value, `poseShell`) only as far as the road under the shell lets
+  them, 5 mm (`SHELL_CLEAR`) over the plane of the ground's height and normal under its middle, while the car is on its wheels;
+  a point whose body skin is already in the road keeps to the skin (a sedan wreck drew its flap 4.2 cm in the road). Drawn only:
+  the held shell is re-posed as the car moves over the road, and torn off it leaves bent as its hinge alone bends it, the pose
+  replays already throw (`detachPart` poses it free);
 - hanging bumper: its roll about the corner it hangs by grows by the flutter.
   The bumper's box stays 4 cm (`BUMPER_CLEAR`) above the ground under it: a bumper hangs rolled about its corner up to
   `BUMPER_ROLL` = 0.6 rad, cut (by halving, `hangBumper`) to the roll at which its free end rests on the road (a sedan's bumper rides
