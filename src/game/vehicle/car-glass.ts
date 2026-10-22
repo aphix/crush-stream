@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { PART_FAMILY, hypot2 } from "../kernel/physics-core.js";
+import { PART_FAMILY, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
 import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad, type YZ } from "./car-variants.ts";
 import { ROCKER, glassTopY, glassX, lerp, roofTopY, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
@@ -104,12 +104,13 @@ export function rearGlassInset(style: BodyStyle, z: number, inset: number): THRE
   return quadPoint(q, xn - (2 * inset) / lerp(q.wBase, q.wTop, t), t).clone();
 }
 
-/** The car z where `style`'s drawn rear glass's side edge (+x) stands mid-way round its top corner's arc; null for square corners. */
-export function rearGlassCornerZ(style: BodyStyle): number | null {
+/** The car z where `style`'s drawn rear glass's side edge (+x) stands `share` of the way round its top corner's arc (0 its side end, 1 its top end); null for square corners. */
+export function rearGlassCornerZ(style: BodyStyle, share: number): number | null {
   const q = rearGlassQuad(style);
   if (!q.round) return null;
   const { rS, rT } = roundCorners(q, q.round);
-  const [t, xn] = [1 - rT + rT * Math.SQRT1_2, 1 - 2 * rS + 2 * rS * Math.SQRT1_2];
+  const angle = (share * Math.PI) / 2;
+  const [t, xn] = [1 - rT + rT * detSin(angle), 1 - 2 * rS + 2 * rS * detCos(angle)];
   return lerp(q.base[1], q.top[1], t) + lerp(q.bow.base, q.bow.top, t) * (1 - xn * xn);
 }
 

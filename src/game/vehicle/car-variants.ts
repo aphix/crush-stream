@@ -133,8 +133,9 @@ interface LampLoop {
   side?: boolean;
   points: readonly LampPoint[];
 }
-/** A lens tone: `lit` the kind's lit lens (head white, tail red); `black` the trim's matte black plastic (a valance or diffuser band); the rest never glow. */
-type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "black" | "chrome";
+/** A lens tone: `lit` the kind's lit lens (head white, tail red); `black` the trim's matte black plastic (a valance or diffuser band); `cavity` the grille
+ *  backing's matte near-black (an open intake reading as a hole, not a gloss panel mirroring the road); the rest never glow. */
+type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "black" | "chrome" | "cavity";
 
 /**
  * A lamp drawn to its outline (drawn only), met on the skin: its lens filling `loops` (a wrap round the corner is another loop) a few mm
@@ -218,6 +219,8 @@ interface BumperSpec {
   plateFace?: { out?: number; color?: number };
   /** Drawn only: the fascia rows whose height (m, car y) lies in [bottom, top] carry a black inlay just proud of the face (a rear diffuser band, a truck's front valance). */
   band?: readonly [bottom: number, top: number];
+  /** With `band` on a lofted-end bumper (`wrap.end`): the inlay stops at the last ring whose face point stands within this |x| (m), so the corners stay body colour; absent, it runs the bumper's whole width. */
+  bandHalfWidth?: number;
   /** A rear bumper drawn without the platform plate (its reference shows none): its tail trim is its rear bumper lamps alone. */
   plateless?: boolean;
 }
@@ -391,9 +394,11 @@ export interface BodyStyle {
    * triangle between them filling the gap; absent, the line is the quarter glass's own rear edge. `flush`: the sail's head laps the rear
    * glass's side edge, standing on the glass and arriving level across it (one broad pillar rolling into the glass), not a rounded
    * buttress beside it. `flat`: on the haunch each section runs straight from its head down to where it touches the body's section
-   * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point.
+   * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point. `corner`: on a curved roof with round
+   * rear glass corners, a flush sail's head at the roof's end laps the glass's side edge this share of the way round its top corner's arc
+   * (0 its side end, 1 its top end), so the head covers the arc above that point; absent 0.5, mid-arc.
    */
-  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */

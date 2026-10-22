@@ -10,6 +10,7 @@ import { makeWheelGeometry, RUBBER, treadNormalMap } from "./car-materials.ts";
 import { FLAT_DEVIATION, mapBytes, SIDEWALL_RELIEF_MIN, strongestDeviationSampledAt } from "./tyre-map.test-util.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 
 function bbox(geo: THREE.BufferGeometry) {
   geo.computeBoundingBox();
@@ -185,15 +186,15 @@ describe("given the assembled rest-pose sedan (chassis, hood, trunk, doors and g
   });
 });
 
-describe("given the sedan's wheel mesh (tyre, rim and hub)", () => {
+describe("given the road wheel mesh (tyre, rim and hub) the wheel batch scales to each car's tyre by r / PLATFORM_TYRE.r", () => {
   const geo = makeWheelGeometry();
   const pos = geo.getAttribute("position");
   const nrm = geo.getAttribute("normal");
   const uv1 = geo.getAttribute("uv1");
   const radius = (i: number) => Math.hypot(pos.getY(i), pos.getZ(i));
-  const tyreR = carFrame(CAR_STYLES.sedan).rig.tyre.r;
+  const tyreR = PLATFORM_TYRE.r;
 
-  it("when the largest radius is measured, then the tread crown equals the rig's tyre radius within 1e-6 m, so the wheel neither floats nor sinks", () => {
+  it("when the largest radius is measured, then the tread crown equals the platform tyre radius the batch scales from within 1e-6 m, so every car's wheel neither floats nor sinks", () => {
     let r = 0;
     for (let i = 0; i < pos.count; i++) r = Math.max(r, radius(i));
     assert.ok(Math.abs(r - tyreR) < 1e-6, `crown ${r} vs tyre radius ${tyreR}`);
