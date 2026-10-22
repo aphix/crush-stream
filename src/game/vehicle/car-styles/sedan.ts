@@ -14,7 +14,15 @@ export const SEDAN: BodyStyle = {
   dims: { wheelbase: 2.5, overhang: { front: 0.804, rear: 0.925 }, track: 1.36, width: 1.64, height: 1.337, rideHeight: 0.165, wheel: { radius: 0.342, width: PLATFORM_WHEEL.width } },
   windshield: { base: [0.95, 0.93], wBase: 1.4, wTop: 1.16 },
   bPillar: { rear: -0.31, front: -0.21 },
-  belt: { x: 0.74, y: [[-1.23, 1.0], [-1.15, 0.98], [-0.9, 0.948], [-0.5, 0.913], [0.4, 0.9], [0.92, 0.9]] },
+  /**
+   * The sill's half-width narrows behind the B-pillar as the reference's (top grid: the side glass's outer line at |x| ~0.70 along the
+   * rear door, tapering to ~0.63 where the rear pillar's foot meets the haunch at z -1.2): one 0.74 stood the rear pillar's foot on the
+   * body side where the tail narrows to hw 0.72-0.76.
+   */
+  belt: {
+    x: [[-1.2, 0.64], [-0.88, 0.7], [-0.5, 0.72], [0.4, 0.74]],
+    y: [[-1.23, 1.0], [-1.15, 0.98], [-0.9, 0.948], [-0.5, 0.913], [0.4, 0.9], [0.92, 0.9]],
+  },
   rocker: { y: 0.21 },
   arch: { radius: 0.405, lip: { flare: 0.008, width: 0.035 } },
   hood: { z0: 0.88, z1: 1.97, origin: [0.81, 0.86] },
@@ -26,6 +34,8 @@ export const SEDAN: BodyStyle = {
   door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
   aPillarFoot: 0.66,
   aPillarTop: 0.08,
+  /** The door glass's front edge rises from the foot to the A-post at y 1.0 (the mirror cap's top), as the reference's: only the foot's small triangle below is the black sail. */
+  aPillarKnee: 1.0,
   glassTop: 0.05,
   underside: [
     [-2.14, 0.35],
@@ -62,11 +72,8 @@ export const SEDAN: BodyStyle = {
     st(0.751, 0.808, 0.9, 1.085, 0.5, 1),
     st(0.886, 0.795, 0.904, 1.03, 0.5, 0.5),
     st(0.986, 0.79, 0.906, 0.922, 0.5, 0.25),
-    st(1.096, 0.787, 0.891),
     st(1.235, 0.79, 0.873),
-    st(1.314, 0.79, 0.859),
     st(1.481, 0.765, 0.832),
-    st(1.578, 0.76, 0.802),
     st(1.642, 0.749, 0.79),
     st(1.734, 0.746, 0.758),
     st(1.82, 0.692, 0.712),
@@ -79,11 +86,11 @@ export const SEDAN: BodyStyle = {
   quarter: { zRearBot: -0.88, zRearTop: -0.88 },
   midPillarZ: null,
   /**
-   * The reference's B-pillar is gloss black: 0.10 wide at the roof (z -0.27..-0.37) and 0.17 at the belt, where the front door frame's
-   * leaning rear edge (z -0.21 at the belt, -0.27 at the top) joins it. An even width can't lean: 0.12 splits it (2 cm wide at the top,
-   * 5 cm narrow at the belt). The sail by the mirror is black too; the A-post and the rear pillar are body colour.
+   * The reference's B-pillar is gloss black and leans: 0.165 wide at the belt (z -0.21..-0.375), 0.105 at the roof (-0.27..-0.375), its
+   * rear edge upright, its front edge the front door frame's leaning rear edge. The sail by the mirror is black too; the A-post and the
+   * rear pillar are body colour.
    */
-  pillars: { b: 0.12 },
+  pillars: { b: { width: [0.165, 0.105], z: [-0.2925, -0.3225] } },
   blackout: { sail: true, b: true },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
