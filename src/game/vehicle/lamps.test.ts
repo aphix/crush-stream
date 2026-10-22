@@ -723,6 +723,32 @@ describe("given a device class and the page's ?lamps setting", () => {
   }
 });
 
+describe("given the lamp pool updating a lit car's glows every frame", () => {
+  it("when it stores each lamp's glow and stash, then it never goes through three's shared Vector3.toArray (megamorphic once the cars are built)", () => {
+    const scene = new THREE.Scene();
+    const car = new DeformableCar(paint(), scene);
+    car.spawnFacing(0, 10, 0, 0);
+    car.group.updateMatrixWorld(true);
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
+    camera.position.copy(car.group.position).addScaledVector(car.forward, 8).setY(1.5);
+    camera.lookAt(car.group.position);
+    const lights = new LampLights(scene, 12, FULL_POOL);
+    const toArray = THREE.Vector3.prototype.toArray;
+    let calls = 0;
+    THREE.Vector3.prototype.toArray = function (this: THREE.Vector3, ...args: Parameters<typeof toArray>) {
+      calls++;
+      return toArray.apply(this, args);
+    } as typeof toArray;
+    try {
+      lights.update([car], camera, car);
+    } finally {
+      THREE.Vector3.prototype.toArray = toArray;
+    }
+    assert.ok(lights.glow.geometry.drawRange.count >= 4, `the control: ${lights.glow.geometry.drawRange.count} glows stored`);
+    assert.equal(calls, 0, "Vector3.toArray calls in one update");
+  });
+});
+
 describe("given the hatchback, whose tail lamp crosses the step from the infill to the quarter", () => {
   it("when its right tail lamp is met from behind along its band, then every ray from the gate's edge to the corner meets the lens, with no body showing at the step", () => {
     const car = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
