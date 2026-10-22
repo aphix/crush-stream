@@ -164,3 +164,17 @@ describe("given a cover batch with room for one car", () => {
     }
   });
 });
+
+describe("given the cover batch's lanes holding a far car", () => {
+  test("when their buffers are read, then every one keeps three's static usage hint (a dynamic one may sit in host memory the GPU reads every frame)", () => {
+    const { batch, car, draw } = stage();
+    draw([car(FAR)]);
+    const dynamic: string[] = [];
+    for (const lane of ["doors", "glass"] as const) {
+      const geo = batch[lane].mesh.geometry;
+      assert.ok(geo.drawRange.count > 3, `the control: the ${lane} lane holds the car`);
+      for (const [name, a] of [...Object.entries(geo.attributes), ["index", geo.index!] as const]) if ((a as THREE.BufferAttribute).usage !== THREE.StaticDrawUsage) dynamic.push(`${lane}.${name}`);
+    }
+    assert.equal(dynamic.join(","), "");
+  });
+});

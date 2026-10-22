@@ -168,10 +168,10 @@ class CoverLane {
   private makeGeometry(): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry();
     for (const [name, size] of [["position", 3], ["normal", 3], ["color", 3], ["skinWeight", 4]] as const) {
-      g.setAttribute(name, new THREE.BufferAttribute(new Float32Array(this.maxVertices * size), size).setUsage(THREE.DynamicDrawUsage));
+      g.setAttribute(name, new THREE.BufferAttribute(new Float32Array(this.maxVertices * size), size));
     }
-    g.setAttribute("skinIndex", new THREE.BufferAttribute(new Uint16Array(this.maxVertices * 4), 4).setUsage(THREE.DynamicDrawUsage));
-    const index = new THREE.BufferAttribute(new Uint32Array(this.maxIndices), 1).setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute("skinIndex", new THREE.BufferAttribute(new Uint16Array(this.maxVertices * 4), 4));
+    const index = new THREE.BufferAttribute(new Uint32Array(this.maxIndices), 1);
     index.array.set([0, 1, 2]);
     g.setIndex(index);
     g.setDrawRange(0, this.indexCount);
