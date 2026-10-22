@@ -172,6 +172,8 @@ export const COUPE: BodyStyle = {
       { view: "side", points: [[0.791, 0.292], [-0.007, 0.285], [-0.82, 0.278]], width: 0.021, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[0.763, 0.242], [-0.036, 0.235], [-0.777, 0.228]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
       { view: "side", points: [[1.889, 0.72], [1.732, 0.741], [1.504, 0.763], [1.219, 0.77], [0.934, 0.777], [0.606, 0.784], [0.05, 0.791], [-0.506, 0.798], [-0.991, 0.813], [-1.49, 0.841], [-1.975, 0.863]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
+      // Rear quarter's kick-up crease over the rear wheel (the owner's 1970 Nova SS, box-fitted to this car): a crisp ridge from behind the arch's top rising to the tail.
+      { view: "side", points: [[-1.31, 0.68], [-1.62, 0.72], [-1.93, 0.76]], width: 0.016, depth: 0.003, profile: "u", cavity: 0 },
       { view: "side", points: [[0.506, 0.895], [0.307, 1.048], [0.107, 1.19], [-0.207, 1.19], [-0.506, 1.176], [-0.506, 0.89]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.52, 0.848], [0.421, 0.948], [0.307, 1.062], [0.192, 1.148], [0.107, 1.205]], width: 0.021, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[-0.506, 1.176], [-0.506, 0.891]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
