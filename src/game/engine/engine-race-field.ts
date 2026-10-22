@@ -238,6 +238,7 @@ export abstract class RaceField {
     store: (id) => this.putAway(id, this.host.live()[id]!),
     hidden: (x, z) => this.hidden(x, z),
     down: (id) => this.deadFor[id]! > 0,
+    speed: (id) => this.host.live()[id]!.velocity.length(),
     sirens: (id, on) => {
       const car = this.host.live()[id]!;
       if (car.sirens !== on) car.setSirens(on);

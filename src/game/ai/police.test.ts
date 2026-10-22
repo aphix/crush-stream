@@ -6,6 +6,7 @@ import { MIN_LIFE, OUT_RANGE, PoliceBrain } from "./police.ts";
 import { sightRange } from "./cop-sight.ts";
 import type { HunterWorld } from "./cop-brain.ts";
 import { RaceBrain } from "./race-ai.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 import { idleDrive } from "../vehicle/car-drive.ts";
 import { blankProjection } from "../world/track.ts";
 import { BEAT, pt, rig, track } from "./police-rig.test-util.ts";
@@ -195,6 +196,7 @@ describe("given two packs of cops, each with a parked stakeout, and a racer pass
         park: (id, x, _y, z) => placed.push({ id, x, z }),
         store: () => {},
         down: () => false,
+        speed: (id) => hypot2(cars[id]!.vx, cars[id]!.vz),
         sirens: () => {},
         hidden: () => false,
       };

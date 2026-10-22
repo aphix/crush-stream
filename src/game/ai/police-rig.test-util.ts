@@ -3,6 +3,7 @@ import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { PoliceBrain } from "./police.ts";
 import type { HunterWorld } from "./cop-brain.ts";
 import { RaceBrain } from "./race-ai.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 import { blankPoint, blankProjection, Track } from "../world/track.ts";
 import oval from "../world/tracks/oval.json" with { type: "json" };
 
@@ -36,6 +37,7 @@ export function rig(units = 2, seed = 1, leadShare = 0.4, racers = 1) {
       stored.push(id);
     },
     down: (id) => knockedOut.has(id),
+    speed: (id) => hypot2(cars[id]!.vx, cars[id]!.vz),
     sirens: () => {},
     hidden: () => !camera.sees,
   };

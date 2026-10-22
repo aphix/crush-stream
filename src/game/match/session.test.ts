@@ -13,6 +13,7 @@ import { PoliceBrain } from "../ai/police.ts";
 import type { HunterWorld } from "../ai/cop-brain.ts";
 import { RaceBrain } from "../ai/race-ai.ts";
 import { blankAiCar, type AiCar } from "../ai/derby-ai.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 
 const _pt = blankPoint();
 
@@ -494,6 +495,7 @@ describe("given a three-lap race with one car on the oval and a PARKED stakeout 
       },
       store: () => {},
       down: () => false,
+      speed: (id) => hypot2(cars[id]!.vx, cars[id]!.vz),
       sirens: () => {},
       hidden: () => false,
     };

@@ -379,13 +379,13 @@ export class PoliceBrain extends CopBrain {
   /**
    * Unit `u` may be put away: no player sees it (this camera, `world.hidden`, nor a netplay peer by its racer sight; not every racer's: on a short
    * course the racers cover, one always sees it), it has been on the road `MIN_LIFE` s unless it is `knockedOut` (or stuck) or out of range of every
-   * racer, and it is stopped (as the stall rule puts one away where it stands) or clear of every racer's near range.
+   * racer, and it is stopped (the body's own live speed `world.speed`, not the drive-start snapshot's planar one) or clear of every racer's near range.
    */
   private mayStore(u: number, knockedOut: boolean, world: HunterWorld): boolean {
     const car = this.fieldCars[this.first + u]!;
     if (!world.hidden(car.x, car.z) || !this.sight.hiddenCar(car, this.peers)) return false;
     const old = knockedOut || this.now - this.bornAt[u]! >= MIN_LIFE || this.sight.gap > OUT_RANGE;
-    return old && (this.sight.gap >= this.sight.range.near + SIGHT_MARGIN || hypot2(car.vx, car.vz) <= KNOCK);
+    return old && (this.sight.gap >= this.sight.range.near + SIGHT_MARGIN || world.speed(this.first + u) <= KNOCK);
   }
 
   /** Park a fresh pack of `PACK_START` ahead of a random racer still racing. False when no spot out of sight was found for it: the cars are still free. */

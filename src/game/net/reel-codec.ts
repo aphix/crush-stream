@@ -317,7 +317,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * height. A wreck's hub springs act along its body's up (they acted along the world's), and its hubs stay planted only while it stands on its
  * wheels: a wreck lying over or tumbling carries its hubs where its wheels are drawn (a monster on its side held them 0.4-0.9 m off, its
  * wheels drawn in the ground), and a door jammed open on a wreck lying over stands out of the ground under it. Every crash moves differently.
- * Every car another car is set inside moves differently. A clip of 157 or before no longer reads.
+ * A cop knocked out near a racer is put away only once its body has stopped every way (it was by its plan speed at the slice's start): a race
+ * with police puts its cops away at other times. Every car another car is set inside moves differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
 const REPLAY_VERSION = 158;

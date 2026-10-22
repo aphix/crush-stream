@@ -14,6 +14,7 @@ import type { PropCollider } from "../world/placements.ts";
 import { blankProjection, projectPath, Track } from "../world/track.ts";
 import { HAVANA } from "../world/tracks/havana.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 
 const track = new Track(HAVANA);
 const spec = track.survival!;
@@ -50,6 +51,7 @@ function rig(opts: { hidden?: (x: number, z: number) => boolean; colliders?: Pro
       return h;
     },
     down: (id) => down.has(id),
+    speed: (id) => hypot2(cars[id]!.vx, cars[id]!.vz),
     sirens: () => {},
   };
   const brain = new HunterBrain(track, opts.colliders ?? [], 1, first, count, opts.seed ?? 5);
