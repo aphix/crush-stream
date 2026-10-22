@@ -25,13 +25,20 @@ const PICKUP_LAMP_SHAPES = {
     ],
     lens: "lit",
     bezel: "chrome",
-    recess: 0.012,
-    cells: [{ loop: { points: [[0.62, 0.75], [0.68, 0.75], [0.68, 0.95], [0.62, 0.95]] }, tone: "amber" }],
+    recess: 0.015,
+    cells: [
+      { loop: { points: [[0.62, 0.75], [0.68, 0.75], [0.68, 0.95], [0.62, 0.95]] }, tone: "amber" },
+      { loop: { side: true, points: [[1.9, 0.75], [1.82, 0.75], [1.82, 0.95], [1.9, 0.95]] }, tone: "amber" },
+    ],
   },
   tail: {
-    loops: [{ points: [[0.56, 0.73], [0.66, 0.73], [0.66, 1.13], [0.56, 1.13]] }],
+    loops: [
+      { points: [[0.56, 0.73], [0.66, 0.73], [0.66, 1.13], [0.56, 1.13]] },
+      { side: true, points: [[-2.155, 0.73], [-2.115, 0.73], [-2.115, 1.13], [-2.155, 1.13]] },
+    ],
     lens: "lit",
     bezel: "black",
+    recess: 0.01,
     cells: [{ loop: { points: [[0.56, 0.87], [0.66, 0.87], [0.66, 0.95], [0.56, 0.95]] }, tone: "clear" }],
   },
   front: {

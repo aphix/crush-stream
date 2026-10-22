@@ -155,13 +155,13 @@ describe("given every body style fitted with its own lamps", () => {
         const m = l.seat.matrixWorld;
         axis.setFromMatrixColumn(m, 2).normalize();
         assert.ok(axis.z * (l.kind === "head" ? 1 : -1) > 0.99, `${name} faces ${axis.toArray().map((v) => v.toFixed(2))}`);
-        // Up to 40 of its drawn triangles, each probed from 0.6 m out along its normal: the first surface met must be the body skin (not air,
-        // a bumper, grille or lid over the lamp) within 2 cm of the triangle, so no lens chord dives into the skin round a corner.
+        // Every drawn triangle, probed from 0.6 m out along its normal: the first surface met must be the body skin (not air, a bumper,
+        // grille or lid over the lamp) within 2 cm of the triangle, so no lens chord dives into the skin and no bezel floats off a corner.
         const unit = drawnLamp(car.style, l.kind, l.side).geometry;
         const [upos, unrm, uidx] = [unit.getAttribute("position"), unit.getAttribute("normal"), unit.getIndex()!];
         const tris = uidx.count / 3;
         const [c, n, v] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
-        for (let t = 0; t < tris; t += Math.max(1, Math.floor(tris / 40))) {
+        for (let t = 0; t < tris; t++) {
           c.set(0, 0, 0);
           n.set(0, 0, 0);
           for (let k = 0; k < 3; k++) {

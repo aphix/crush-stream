@@ -10,7 +10,7 @@ import { ROCKER, cantY, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBum
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, rockerAt } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
-import { drawnLamp, drawnPart, lampRest, lampSeatAt } from "./part-variants.ts";
+import { drawnLamp, drawnPart, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
@@ -963,6 +963,8 @@ describe("given a body style's detail table", () => {
 const RAISED_M = 0.005;
 /** Float32 positions hold a part's numbers to about this (m). */
 const POSITION_TOL = 1e-5;
+/** Each side's lamp meets its own skin (the left's triangles are not the right's mirror), so its extent mirrors the other's to the meets' rounding (m). */
+const OWN_SKIN_MIRROR_TOL = 1e-4;
 
 /** Short sha-256 of geometries' positions and indices: two builds hash alike only when they are the same to the bit. */
 function geometryHash(geometries: readonly THREE.BufferGeometry[]): string {
@@ -1368,7 +1370,7 @@ describe("given a body style's P2 parts", () => {
     const [l, r] = [lens[0]!, lens[1]!];
     assert.ok(!r.footprint.isEmpty(), "the control: the lit lens is drawn");
     assertSameNumbers([r.footprint.min.x, r.footprint.max.x, r.footprint.min.y, r.footprint.max.y], [x - 0.08, x + 0.08, y - 0.03, y + 0.03], "the lens fills its outline", 0.003);
-    assertSameNumbers([l.drawn.min.x, l.drawn.max.x], [-r.drawn.max.x, -r.drawn.min.x], "the left lamp mirrors the right", POSITION_TOL);
+    assertSameNumbers([l.drawn.min.x, l.drawn.max.x], [-r.drawn.max.x, -r.drawn.min.x], "the left lamp mirrors the right", OWN_SKIN_MIRROR_TOL);
     for (const [side, s] of [["right", r], ["left", l]] as const) assert.ok(s.low > 0.001 && s.high < 0.006, `the ${side} lens stands ${(s.low * 1000).toFixed(1)}-${(s.high * 1000).toFixed(1)} mm off the skin`);
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
@@ -1443,6 +1445,47 @@ describe("given a body style's P2 parts", () => {
     const got = new THREE.Matrix4();
     batch.meshes[7]!.getMatrixAt(0, got);
     for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!) < 1e-6, `the opened lid's pose, element ${k}`);
+  });
+
+  it("when a bumper carries its seam, then it is the skin up to the seam on the end face and round the corner on both sides (rays from outside meet it 2 cm under the seam and the body 2 cm over), its torn box stays the fascia's, and a bumper without one draws as before", () => {
+    const style = CAR_STYLES.sedan;
+    const { seat, top, edge } = style.bumpers.rear;
+    assert.ok(top && edge, "the control: the sedan's rear bumper carries its seam");
+    const fascia = withRearFittings(makeBumperGeometry(false, style), style);
+    fascia.computeBoundingBox();
+    const box = fascia.boundingBox!.clone();
+    const drawn = withSeamCover(fascia, style, false);
+    assert.ok(drawn !== fascia && drawn.boundingBox!.equals(box), "the torn box stays the fascia's");
+    // A raycast skips a mesh outside its geometry's box, so the probe reads the drawn shape's own box.
+    const probe = drawn.clone();
+    probe.computeBoundingBox();
+    const both = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const bumper = new THREE.Mesh(probe, both);
+    bumper.position.set(0, seat.y, -seat.z);
+    bumper.updateMatrixWorld();
+    const body = new THREE.Mesh(makeChassisGeometry(style), both);
+    const ray = new THREE.Raycaster();
+    const meets = (from: THREE.Vector3, dir: THREE.Vector3): string => {
+      ray.set(from, dir);
+      const hit = ray.intersectObjects([body, bumper], false)[0];
+      return hit ? (hit.object === bumper ? "bumper" : "body") : "nothing";
+    };
+    const tail = style.profile[0]!.z;
+    for (const side of [1, -1]) {
+      for (const [x, y] of top.slice(1)) {
+        for (const [dy, want] of [[-0.02, "bumper"], [0.02, "body"]] as const) {
+          assert.equal(meets(new THREE.Vector3(side * x, y + dy, tail - 5), new THREE.Vector3(0, 0, 1)), want, `end face [${side * x}, ${y + dy}]`);
+        }
+      }
+      // The seam's run back along the quarter, before it turns down the arch's lip.
+      for (const [z, y] of edge.slice(0, 5)) {
+        for (const [dy, want] of [[-0.02, "bumper"], [0.02, "body"]] as const) {
+          assert.equal(meets(new THREE.Vector3(side * 5, y + dy, z), new THREE.Vector3(-side, 0, 0)), want, `side [${z}, ${y + dy}] (${side < 0 ? "left" : "right"})`);
+        }
+      }
+    }
+    const plain = makeBumperGeometry(true, CAR_STYLES.coupe);
+    assert.ok(withSeamCover(plain, CAR_STYLES.coupe, true) === plain, "a bumper with no seam is drawn as it was");
   });
 });
 

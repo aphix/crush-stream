@@ -152,6 +152,12 @@ interface BumperSpec {
   wrap: { from: number; back: number };
   /** What the bumper is drawn in: the body's paint colour, chrome or black; absent, the car's accent trim. */
   trim?: "body" | "chrome" | "black";
+  /**
+   * Its seam (drawn only, both or neither): the bumper wraps its corner up to it as the visible skin (`withSeamCover`) and tears off with it.
+   * `top` its top edge on the end face, [x, y] from inboard out to the corner; `edge` on round the corner and down the side, [z, y], to its foot.
+   */
+  top?: readonly (readonly [number, number])[];
+  edge?: readonly (readonly [number, number])[];
 }
 
 type DetailView = "side" | "top" | "front" | "rear";

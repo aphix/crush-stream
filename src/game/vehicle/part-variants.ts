@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { once } from "../kernel/scalar.ts";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import {
@@ -21,6 +21,7 @@ import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, type P
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { bootPivot } from "./hinge-spec.ts";
+import { FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
 
 /**
  * A style's own drawn part where its spec asks for one (`door.mirror`, `grille`, `lamps.units`), in the seat's space: the seat, and the
@@ -276,12 +277,16 @@ interface Patch {
   index: number[];
 }
 
-/** A skin a lamp is met on: `geo` moved `offset` into the car frame; `lid` for the boot lid's. */
+/** A skin a lamp is met on: `geo` moved `offset` into the car frame; `lid` for the boot lid's; `mirror` its left half mirrored onto the right (x negated). */
 interface SkinSource {
   geo: THREE.BufferGeometry;
   offset: THREE.Vector3;
   lid: boolean;
+  mirror: boolean;
 }
+
+/** The skin meshes' material, only ever raycast: both faces met. Shared, never disposed. */
+const SKIN_PROBE_MATERIAL = once(() => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
 
 /** `src`'s triangles in the car frame as a raycastable mesh: those whose bounds meet `box`, or all of them. */
 function skinMesh(src: SkinSource, box: THREE.Box3 | null): THREE.Mesh {
@@ -291,17 +296,20 @@ function skinMesh(src: SkinSource, box: THREE.Box3 | null): THREE.Mesh {
   const keep: number[] = [];
   const tri = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   const bounds = new THREE.Box3();
+  const scale = new THREE.Vector3(src.mirror ? -1 : 1, 1, 1);
   for (let t = 0; t < n; t += 3) {
-    for (let k = 0; k < 3; k++) tri[k]!.fromBufferAttribute(pos, index ? index.getX(t + k) : t + k).add(src.offset);
+    for (let k = 0; k < 3; k++) tri[k]!.fromBufferAttribute(pos, index ? index.getX(t + k) : t + k).add(src.offset).multiply(scale);
     if (box && !box.intersectsBox(bounds.setFromPoints(tri))) continue;
     for (const v of tri) keep.push(v.x, v.y, v.z);
   }
-  return new THREE.Mesh(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(keep, 3)));
+  // Double-sided: a panel wound inward (a gate's outer skin over its hollow) is still met from outside; `cast` turns its normal out.
+  return new THREE.Mesh(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(keep, 3)), SKIN_PROBE_MATERIAL());
 }
 
 /**
  * The skin a lamp's points are met on, the first hit winning (the lid over the body): an [x, y] from outside along the end axis, a side
  * [z, y] from outboard, an [x, y, z] by the nearer of both. After `narrow`, only the skin near the lamp is kept for the points between.
+ * `reach`: the longest step along an outline and how far out a point between met points starts its ray (`LAMP_STEP`, `LAMP_RECAST`).
  */
 class LampSkin {
   private readonly ray = new THREE.Raycaster();
@@ -309,14 +317,16 @@ class LampSkin {
   private readonly zEnd: number;
   private readonly axis: number;
   private readonly what: string;
+  private readonly reach: { step: number; recast: number };
   private readonly lids = new Set<THREE.Object3D>();
   private meshes: THREE.Mesh[];
 
-  constructor(sources: readonly SkinSource[], zEnd: number, axis: number, what: string) {
+  constructor(sources: readonly SkinSource[], zEnd: number, axis: number, what: string, reach = { step: LAMP_STEP, recast: LAMP_RECAST }) {
     this.sources = sources;
     this.zEnd = zEnd;
     this.axis = axis;
     this.what = what;
+    this.reach = reach;
     this.meshes = this.meshesNear(null);
   }
 
@@ -364,18 +374,18 @@ class LampSkin {
     return hit;
   }
 
-  /** `q` met on the skin along `-n` from `LAMP_RECAST` out, no deeper than as far again inside; `q` itself where the skin is missed (a shut-line gap). */
+  /** `q` met on the skin along `-n` from `reach.recast` out, no deeper than as far again inside; `q` itself where the skin is missed (a shut-line gap). */
   onto(q: THREE.Vector3, n: THREE.Vector3, lid: boolean): SkinPoint {
-    return this.cast(q.clone().addScaledVector(n, LAMP_RECAST), n.clone().negate(), 2 * LAMP_RECAST) ?? { p: q, n, lid };
+    return this.cast(q.clone().addScaledVector(n, this.reach.recast), n.clone().negate(), 2 * this.reach.recast) ?? { p: q, n, lid };
   }
 
-  /** `points` with blends met between them until no step is longer than `LAMP_STEP` (`closed`: round the loop). */
+  /** `points` with blends met between them until no step is longer than `reach.step` (`closed`: round the loop). */
   densify(points: readonly SkinPoint[], closed: boolean): SkinPoint[] {
     const out: SkinPoint[] = [];
     for (let i = 0; i < (closed ? points.length : points.length - 1); i++) {
       const [a, b] = [points[i]!, points[(i + 1) % points.length]!];
       out.push(a);
-      const k = Math.ceil(a.p.distanceTo(b.p) / LAMP_STEP);
+      const k = Math.ceil(a.p.distanceTo(b.p) / this.reach.step);
       for (let j = 1; j < k; j++) out.push(this.onto(a.p.clone().lerp(b.p, j / k), a.n.clone().lerp(b.n, j / k).normalize(), 2 * j < k ? a.lid : b.lid));
     }
     if (!closed) out.push(points[points.length - 1]!);
@@ -397,10 +407,10 @@ function facingOut(patch: Patch): Patch {
 
 /**
  * `ring` (a densified outline) filled: triangulated unwrapped round the corner ([x plus the distance back from the end face, y], so a
- * wrapping lamp lies flat), then every edge longer than `LAMP_FILL_STEP` (`LAMP_STEP` across a lid's seam, so the lid's share ends at
- * its edge) split at its midpoint met on the skin, until none is (a split edge splits both its triangles, so no crack opens).
+ * wrapping lamp lies flat), then every edge longer than `fillStep` (`LAMP_STEP` across a lid's seam, so the lid's share ends at its edge)
+ * split at its midpoint met on the skin, until none is (a split edge splits both its triangles, so no crack opens).
  */
-function lampFill(skin: LampSkin, ring: readonly SkinPoint[], zEnd: number): Patch {
+function lampFill(skin: LampSkin, ring: readonly SkinPoint[], zEnd: number, fillStep = LAMP_FILL_STEP): Patch {
   const points = [...ring];
   let index = THREE.ShapeUtils.triangulateShape(ring.map(({ p }) => new THREE.Vector2(p.x + Math.abs(p.z - zEnd), p.y)), []).flat();
   const key = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
@@ -410,7 +420,7 @@ function lampFill(skin: LampSkin, ring: readonly SkinPoint[], zEnd: number): Pat
       for (let k = 0; k < 3; k++) {
         const [a, b] = [index[t + k]!, index[t + ((k + 1) % 3)]!];
         const [pa, pb] = [points[a]!, points[b]!];
-        if (mid.has(key(a, b)) || pa.p.distanceTo(pb.p) <= (pa.lid === pb.lid ? LAMP_FILL_STEP : LAMP_STEP)) continue;
+        if (mid.has(key(a, b)) || pa.p.distanceTo(pb.p) <= (pa.lid === pb.lid ? fillStep : LAMP_STEP)) continue;
         mid.set(key(a, b), points.push(skin.onto(pa.p.clone().lerp(pb.p, 0.5), pa.n.clone().add(pb.n).normalize(), pa.lid && pb.lid)) - 1);
       }
     }
@@ -546,9 +556,9 @@ function buildShape(shape: LampShape, skin: LampSkin, zEnd: number, tone: (geo: 
   return { body: mergeToned(body, "style lamp"), lid: mergeToned(lid, "style lamp on the lid") };
 }
 
-/** Each style's drawn body skin, its lamps as built (`builtLamp`) and its lamp seats (`lampSeatAt`), once per style object. */
+/** Each style's drawn body skin, its lamps as built (`builtLamp`, by which and side) and its lamp seats (`lampSeatAt`), once per style object. */
 const BODY_SKIN = new WeakMap<BodyStyle, THREE.BufferGeometry>();
-const BUILT = new WeakMap<BodyStyle, Map<keyof LampShapes, BuiltLamp>>();
+const BUILT = new WeakMap<BodyStyle, Map<string, BuiltLamp>>();
 const SEATS = new WeakMap<BodyStyle, Map<string, THREE.Vector3>>();
 
 function bodySkin(style: BodyStyle): THREE.BufferGeometry {
@@ -570,23 +580,29 @@ export function lampSeatAt(style: BodyStyle, kind: LampKind, side: number): THRE
   return new THREE.Vector3(side * seat.x, seat.y, seat.z);
 }
 
-/** `style`'s own `which` lamp met on its skin (car frame, right side): head and tail on the body, the share landing on the hood or boot lid apart (that lid carries it); front and rear on that bumper's fascia. */
-function builtLamp(style: BodyStyle, which: keyof LampShapes): BuiltLamp {
-  const cached = BUILT.get(style)?.get(which);
+/**
+ * `style`'s own `which` lamp met on its skin (car frame, right side): head and tail on the body, the share landing on the hood or boot lid
+ * apart (that lid carries it); front and rear on that bumper's fascia. `side` -1 meets it on the left skin mirrored onto the right: the left
+ * half's triangles are not the right's mirror (a quad split on one diagonal mirrors onto the other), and round a corner they part by cm.
+ */
+function builtLamp(style: BodyStyle, which: keyof LampShapes, side = 1): BuiltLamp {
+  const id = `${which}${side}`;
+  const cached = BUILT.get(style)?.get(id);
   if (cached) return cached;
   const front = which === "head" || which === "front";
   const kind: LampKind = front ? "head" : "tail";
   const zEnd = lampEndZ(kind, style);
-  const body: SkinSource = { geo: bodySkin(style), offset: new THREE.Vector3(), lid: false };
+  const mirror = side < 0;
+  const body: SkinSource = { geo: bodySkin(style), offset: new THREE.Vector3(), lid: false, mirror };
   const bumper = which === "front" || which === "rear";
   const seat = style.bumpers[front ? "front" : "rear"].seat;
   const sources: SkinSource[] = bumper
-    ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false }]
-    : [{ geo: front ? makeHoodGeometry(style) : makeTrunkGeometry(style), offset: new THREE.Vector3(0, ...(front ? style.hood.origin : bootPivot(style.boot))), lid: true }, body];
-  const skin = new LampSkin(sources, zEnd, front ? 1 : -1, `${style.id} ${which} lamp`);
+    ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false, mirror }]
+    : [{ geo: front ? makeHoodGeometry(style) : makeTrunkGeometry(style), offset: new THREE.Vector3(0, ...(front ? style.hood.origin : bootPivot(style.boot))), lid: true, mirror }, body];
+  const skin = new LampSkin(sources, zEnd, front ? 1 : -1, `${style.id} ${which} lamp${mirror ? " (left)" : ""}`);
   const built = buildShape(style.lamps.shapes![which]!, skin, zEnd, (geo, t) => (bumper ? bumperTone : lampTone)(geo, t, kind));
   if (!BUILT.has(style)) BUILT.set(style, new Map());
-  BUILT.get(style)!.set(which, built);
+  BUILT.get(style)!.set(id, built);
   return built;
 }
 
@@ -610,7 +626,7 @@ function bothSides(geo: THREE.BufferGeometry): THREE.BufferGeometry {
 
 /** `style`'s own `kind` lamp on side `side` (its body share), in lamp space at its seat's rest. */
 function styleLamp(style: BodyStyle, kind: LampKind, side: number): THREE.BufferGeometry {
-  const geo = builtLamp(style, kind).body.clone();
+  const geo = builtLamp(style, kind, side).body.clone();
   if (side < 0) mirrorX(geo);
   const rest = new THREE.Matrix4().compose(lampSeatAt(style, kind, side), lampRest(kind, style, new THREE.Quaternion()), new THREE.Vector3(1, 1, 1));
   return geo.applyMatrix4(rest.invert());
@@ -619,7 +635,84 @@ function styleLamp(style: BodyStyle, kind: LampKind, side: number): THREE.Buffer
 /** The share of `style`'s `kind` lamps its lid carries (the tails' on the boot lid, the heads' on the hood), both sides, in that lid's space (the hood's origin, the boot's pivot). */
 function lidLamp(style: BodyStyle, kind: LampKind): THREE.BufferGeometry {
   const [y, z] = kind === "head" ? style.hood.origin : bootPivot(style.boot);
-  return bothSides(builtLamp(style, kind).lid).translate(0, -y, -z);
+  const left = builtLamp(style, kind, -1).lid.clone();
+  mirrorX(left);
+  return mergeToned([builtLamp(style, kind).lid.clone(), left], "both sides").translate(0, -y, -z);
+}
+
+// ---- bumper seam covers ----------------------------------------------------------------------------------------------------
+
+type SeamLine = NonNullable<BodyStyle["bumpers"]["front"]["edge"]>;
+
+/** The seam cover's lift (m) off the body skin: over the sag of its fill's chords (12 cm on a 35 cm corner sags 5 mm), well under the fascia's 6-9 cm. */
+const SEAM_COVER_UP = 0.006;
+/** Its outline's step and its fill's longest edge (m), and how far out (m) a point between met points starts its ray: past the sag of the first fill's chords right across the corner. */
+const SEAM_COVER_MESH = { step: 0.06, fill: 0.12, recast: 0.6 } as const;
+/** Its dark roll along the seam: this wide (m) out past the seam and down to this deep (m) in the skin, the shut line drawn in the mesh. */
+const SEAM_COVER_ROLL = { out: 0.004, sink: 0.001 } as const;
+/** On the end face the cover runs at least this far (m) under the seam's lowest point, tucked under the fascia's top. */
+const SEAM_COVER_TUCK = 0.02;
+const SEAM_COVERS = new WeakMap<BodyStyle, Map<boolean, THREE.BufferGeometry | null>>();
+
+/** `parts` merged, each vertex carrying its part's `FITTING_TONE` (0: the bumper's own trim). */
+function fittingsMerged(parts: readonly (readonly [THREE.BufferGeometry, number])[], what: string): THREE.BufferGeometry {
+  for (const [geo, tone] of parts) geo.setAttribute(FITTING_ATTRIBUTE, new THREE.Float32BufferAttribute(new Float32Array(geo.getAttribute("position").count).fill(tone), 1));
+  const out = mergeGeometries(parts.map(([geo]) => geo));
+  if (!out) throw new Error(`Failed to merge the ${what}`);
+  return out;
+}
+
+/** One side's seam cover in the car frame, right side (`mirror`: met on the left skin mirrored onto the right): the panel and its dark roll. */
+function seamCoverSide(style: BodyStyle, front: boolean, top: SeamLine, edge: SeamLine, mirror: boolean): THREE.BufferGeometry {
+  const { seat, fascia } = style.bumpers[front ? "front" : "rear"];
+  const [zEnd, axis] = [lampEndZ(front ? "head" : "tail", style), front ? 1 : -1];
+  const skin = new LampSkin([{ geo: bodySkin(style), offset: new THREE.Vector3(), lid: false, mirror }], zEnd, axis, `${style.id} ${front ? "front" : "rear"} bumper seam`, SEAM_COVER_MESH);
+  const face = Math.min(seat.y + Math.max(...fascia.map(([y]) => y)), Math.min(...top.map(([, y]) => y)) - SEAM_COVER_TUCK);
+  const [x0, xc, foot] = [top[0]![0], top[top.length - 1]![0], edge[edge.length - 1]![1]];
+  const under: [number, number][] = [[xc, foot], [xc, face], [x0, face]];
+  const seam = [...top.map((p) => skin.at(p)), ...edge.map((p) => skin.at(p, true))];
+  const closing = under.map((p) => skin.at(p));
+  skin.narrow([...seam, ...closing]);
+  const roll = lampRibbon(skin, skin.densify(seam, false), false, [[0, SEAM_COVER_UP], [-axis * SEAM_COVER_ROLL.out, -SEAM_COVER_ROLL.sink]]);
+  const [panel] = patchGeometry(lampFill(skin, skin.densify([...seam, ...closing], true), zEnd, SEAM_COVER_MESH.fill), SEAM_COVER_UP);
+  const [shut] = patchGeometry(roll, 0);
+  return fittingsMerged([[panel, 0], [shut, FITTING_TONE.black]], "bumper seam cover");
+}
+
+/**
+ * `front` bumper's seam cover in its group's space, both sides (null without its `top` and `edge`): the body skin from the seam down, met
+ * `SEAM_COVER_UP` proud; on the end face from `top` to under the fascia's top, round the corner and down the side along `edge` to its foot.
+ */
+function seamCover(style: BodyStyle, front: boolean): THREE.BufferGeometry | null {
+  const cached = SEAM_COVERS.get(style)?.get(front);
+  if (cached !== undefined) return cached;
+  const { seat, top, edge } = style.bumpers[front ? "front" : "rear"];
+  let cover: THREE.BufferGeometry | null = null;
+  if (top && edge) {
+    const left = seamCoverSide(style, front, top, edge, true);
+    mirrorX(left);
+    cover = fittingsMerged([[seamCoverSide(style, front, top, edge, false), 0], [left, 0]], "bumper seam cover").translate(0, -seat.y, -(front ? seat.z : -seat.z));
+  }
+  if (!SEAM_COVERS.has(style)) SEAM_COVERS.set(style, new Map());
+  SEAM_COVERS.get(style)!.set(front, cover);
+  return cover;
+}
+
+/** `bumper` (its group's drawn geometry: the fascia, a rear one with its fittings) with `style`'s seam cover merged in; itself without one. */
+export function withSeamCover(bumper: THREE.BufferGeometry, style: BodyStyle, front: boolean): THREE.BufferGeometry {
+  const built = seamCover(style, front);
+  if (!built) return bumper;
+  const cover = built.clone();
+  if (!bumper.hasAttribute(FITTING_ATTRIBUTE)) bumper.setAttribute(FITTING_ATTRIBUTE, new THREE.Float32BufferAttribute(new Float32Array(bumper.getAttribute("position").count), 1));
+  for (const [name, attr] of Object.entries(bumper.attributes)) {
+    if (!cover.hasAttribute(name)) cover.setAttribute(name, new THREE.Float32BufferAttribute(new Float32Array(cover.getAttribute("position").count * attr.itemSize), attr.itemSize));
+  }
+  bumper.computeBoundingBox();
+  const out = mergeGeometries([bumper, cover]);
+  if (!out) throw new Error(`Failed to merge the ${style.id} bumper's seam cover`);
+  // The torn bumper's box (its loose shape, its hang) stays the fascia's: the seam cover is drawn only.
+  out.boundingBox = bumper.boundingBox!.clone();
+  return out;
 }
 
 /** No lamp on the lid: the lid slot's platform variant. Shared, never disposed. */

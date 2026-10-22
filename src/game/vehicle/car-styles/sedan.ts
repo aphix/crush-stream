@@ -109,9 +109,25 @@ export const SEDAN: BodyStyle = {
   rocker: { y: 0.21 },
   arch: { radius: 0.405, lip: { flare: 0.008, width: 0.035 } },
   hood: { z0: 0.88, z1: 1.97, origin: [0.81, 0.86] },
+  // Seams off the gridded side reference: the front bumper up to the head lamp's lower edge and round to the front arch, the rear one up
+  // to the tail lamp's lower edge (under the lid, its shut line) and round the quarter to the rear arch; both follow their arch's lip down.
   bumpers: {
-    front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.34, z: 1.965 }, span: 0.74, wrap: { from: 0.33, back: 0.242 } },
-    rear: { ...PLATFORM_HARDPOINTS.bumpers.rear, seat: { y: 0.52, z: 2.088 }, span: 0.76, wrap: { from: 0.3, back: 0.25 } },
+    front: {
+      ...PLATFORM_HARDPOINTS.bumpers.front,
+      seat: { y: 0.34, z: 1.965 },
+      span: 0.74,
+      wrap: { from: 0.33, back: 0.242 },
+      top: [[0, 0.555], [0.42, 0.57], [0.52, 0.567], [0.62, 0.571]],
+      edge: [[1.7, 0.58], [1.61, 0.595], [1.66, 0.5], [1.683, 0.42], [1.69, 0.32], [1.67, 0.22]],
+    },
+    rear: {
+      ...PLATFORM_HARDPOINTS.bumpers.rear,
+      seat: { y: 0.52, z: 2.088 },
+      span: 0.76,
+      wrap: { from: 0.3, back: 0.25 },
+      top: [[0, 0.64], [0.34, 0.64], [0.4, 0.75], [0.6, 0.75]],
+      edge: [[-1.83, 0.75], [-1.81, 0.71], [-1.8, 0.665], [-1.76, 0.625], [-1.71, 0.595], [-1.62, 0.58], [-1.66, 0.5], [-1.683, 0.42], [-1.69, 0.32]],
+    },
   },
   door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74] },
   aPillarFoot: 0.93,

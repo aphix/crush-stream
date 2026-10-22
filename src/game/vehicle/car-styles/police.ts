@@ -72,6 +72,8 @@ export const POLICE: BodyStyle = {
   livery: COP_LIVERY,
   lightBar: true,
   pushBar: true,
+  // The sedan's seams frame its own lamps; the cop's sit lower, inside its bumper corners, so its bumpers draw no seam of the sedan's.
+  bumpers: { front: { ...SEDAN.bumpers.front, top: undefined, edge: undefined }, rear: { ...SEDAN.bumpers.rear, top: undefined, edge: undefined } },
   lamps: { head: [0.55, 0.515], tail: [0.596, 0.745], shapes: POLICE_LAMP_SHAPES },
   grille: { y: 0.47, size: [0.6, 0.12], kind: "bars", count: 3, finish: "black" },
   details: POLICE_DETAILS,

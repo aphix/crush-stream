@@ -6,13 +6,13 @@ import { LIFTGATE } from "../hinge-spec.ts";
 const WAGON_LAMP_SHAPES = {
   head: {
     loops: [
-      { points: [[0.41, 0.79], [0.7, 0.81], [0.76, 0.85], [0.41, 0.86]] },
-      { side: true, points: [[1.92, 0.8], [1.7, 0.84], [1.68, 0.87], [1.92, 0.87]] },
+      { points: [[0.41, 0.79], [0.7, 0.81], [0.76, 0.845], [0.41, 0.85]] },
+      { side: true, points: [[1.92, 0.8], [1.7, 0.84], [1.68, 0.865], [1.92, 0.865]] },
     ],
     lens: "dark",
     bezel: "black",
     recess: 0.01,
-    strips: [{ line: { points: [[0.41, 0.86], [0.41, 0.8], [0.7, 0.815], [0.76, 0.85]] }, width: 0.008, tone: "lit" }],
+    strips: [{ line: { points: [[0.41, 0.85], [0.41, 0.8], [0.7, 0.815], [0.76, 0.845]] }, width: 0.008, tone: "lit" }],
     rounds: [
       { at: [0.47, 0.835], r: 0.012, tone: "lit" },
       { at: [0.54, 0.835], r: 0.012, tone: "lit" },

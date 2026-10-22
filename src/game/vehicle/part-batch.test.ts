@@ -5,7 +5,7 @@ import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
 import { DeformableCar } from "./car.ts";
 import { BUMPER_F } from "./constants.ts";
 import { INSTANCE_PART_VARIANT_ATTRIBUTE, PART_VARIANT_ATTRIBUTE } from "./car-materials.ts";
-import { CAR_STYLES } from "./car-variants.ts";
+import { CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
 import { drawnDoorCard } from "./car-door-mesh.ts";
@@ -35,8 +35,8 @@ function stage(capacity = 16) {
   camera.updateMatrixWorld(true);
   const detail = new CarDetail();
   const batch = new PartBatch(capacity);
-  const car = (at: number) => {
-    const made = new DeformableCar(paint(), scene, null, "sedan");
+  const car = (at: number, style: CarStyleId = "sedan") => {
+    const made = new DeformableCar(paint(), scene, null, style);
     made.spawn(0, at, 0);
     made.group.updateMatrixWorld(true);
     return made;
@@ -216,7 +216,8 @@ describe("given the part batch and a car that loses a door or its front bumper",
 
   test("when the torn bumper is dented at its grille, then only the grille's own mesh moves, within the dent's reach of the contact", () => {
     const { car } = stage();
-    const only = car(10);
+    // The cop's bumper carries no seam cover, so its grille is the top the dent meets from above.
+    const only = car(10, "police");
     const bumper = only["parts"].find((p) => p.name === BUMPER_F)!;
     only["detachPart"](bumper, 0, SHOVE);
     const seat = only.partSeats[PART_KIND.grille]!;

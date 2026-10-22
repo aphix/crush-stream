@@ -23,13 +23,16 @@ const COUPE_LAMP_SHAPES = {
     loops: [{ points: [[0.4, 0.485], [0.6, 0.485], [0.6, 0.665], [0.4, 0.665]] }],
     lens: "lit",
     bezel: "chrome",
-    recess: 0.012,
+    recess: 0.024,
   },
   tail: {
-    loops: [{ points: [[0.22, 0.67], [0.52, 0.67], [0.52, 0.81], [0.22, 0.81]] }],
+    loops: [
+      { points: [[0.22, 0.67], [0.55, 0.67], [0.55, 0.81], [0.22, 0.81]] },
+      { side: true, points: [[-2.045, 0.67], [-2.0, 0.67], [-2.0, 0.81], [-2.045, 0.81]] },
+    ],
     lens: "lit",
     bezel: "chrome",
-    recess: 0.012,
+    recess: 0.015,
     cells: [{ loop: { points: [[0, 0.67], [0.22, 0.67], [0.22, 0.81], [0, 0.81]] }, tone: "dark" }],
     strips: [
       { line: { points: [[0.23, 0.71], [0.51, 0.71]] }, width: 0.004, tone: "dark" },

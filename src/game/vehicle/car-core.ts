@@ -26,7 +26,7 @@ import {
   type LampKind,
 } from "./car-materials.ts";
 import { carPartSeats, GRILLE_SEAT, MIRROR_REACH, PART_KIND, PartSeat } from "./part-geometry.ts";
-import { drawnLamp, drawnPart, LAMP_PROBE_REACH, lampRest, lampSeatAt } from "./part-variants.ts";
+import { drawnLamp, drawnPart, LAMP_PROBE_REACH, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
 import { bumperBare, CarCabin } from "./interior.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
@@ -574,7 +574,7 @@ export abstract class CarCore {
     const g = new THREE.Group();
     const spec = front ? this.style.bumpers.front : this.style.bumpers.rear;
     const fascia = makeBumperGeometry(front, this.style);
-    const mesh = new THREE.Mesh(front ? fascia : withRearFittings(fascia, this.style), bumperMaterial(spec.trim, accent, body));
+    const mesh = new THREE.Mesh(withSeamCover(front ? fascia : withRearFittings(fascia, this.style), this.style, front), bumperMaterial(spec.trim, accent, body));
     this.bumperMeshes.push(mesh);
     mesh.castShadow = true;
     this.flushCasters.push(mesh);
