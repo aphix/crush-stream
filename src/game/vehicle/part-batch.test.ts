@@ -189,6 +189,60 @@ describe("given the part batch and one car of each style, its windshield whole a
     return out;
   };
 
+  /**
+   * How far (m) each point of `part` (in `seat`'s space) stands past `car`'s drawn outline in the side view: the car's shown meshes (body,
+   * lids, doors, glass, bumpers) projected along its x onto (z, y), their union the outline; 0 for a point it covers.
+   */
+  const pastOutline = (car: DeformableCar, seat: THREE.Object3D, part: THREE.BufferGeometry): number[] => {
+    car.group.updateMatrixWorld(true);
+    const toCar = car.group.matrixWorld.clone().invert();
+    const tris: number[] = [];
+    const v = new THREE.Vector3();
+    car.group.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible || p.name === "deform-rig") return;
+      const pos = o.geometry.getAttribute("position");
+      if (!pos) return;
+      const m = toCar.clone().multiply(o.matrixWorld);
+      const index = o.geometry.index;
+      const n = index ? index.count : pos.count;
+      for (let t = 0; t + 2 < n; t += 3) {
+        for (let c = 0; c < 3; c++) {
+          v.fromBufferAttribute(pos, index ? index.getX(t + c) : t + c).applyMatrix4(m);
+          tris.push(v.z, v.y);
+        }
+      }
+    });
+    const f = Float64Array.from(tris);
+    const toSeat = toCar.clone().multiply(seat.matrixWorld);
+    const pos = part.getAttribute("position");
+    const [p, a, b, q] = [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()];
+    const toEdge = (): number => {
+      const ab = q.subVectors(b, a);
+      const s = THREE.MathUtils.clamp(p.clone().sub(a).dot(ab) / Math.max(ab.lengthSq(), 1e-18), 0, 1);
+      return p.distanceTo(a.clone().addScaledVector(ab, s));
+    };
+    return Array.from({ length: pos.count }, (_, k) => {
+      v.fromBufferAttribute(pos, k).applyMatrix4(toSeat);
+      p.set(v.z, v.y);
+      let best = Infinity;
+      for (let t = 0; t < f.length && best > 0; t += 6) {
+        const [az, ay, bz, by, cz, cy] = [f[t]!, f[t + 1]!, f[t + 2]!, f[t + 3]!, f[t + 4]!, f[t + 5]!];
+        if (p.x < Math.min(az, bz, cz) - best || p.x > Math.max(az, bz, cz) + best || p.y < Math.min(ay, by, cy) - best || p.y > Math.max(ay, by, cy) + best) continue;
+        const d1 = (p.x - bz) * (ay - by) - (az - bz) * (p.y - by);
+        const d2 = (p.x - cz) * (by - cy) - (bz - cz) * (p.y - cy);
+        const d3 = (p.x - az) * (cy - ay) - (cz - az) * (p.y - ay);
+        if (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) best = 0;
+        for (const [i, j] of [[0, 2], [2, 4], [4, 0]] as const) {
+          a.set(f[t + i]!, f[t + i + 1]!);
+          b.set(f[t + j]!, f[t + j + 1]!);
+          best = Math.min(best, toEdge());
+        }
+      }
+      return best;
+    });
+  };
+
   test(`when each car is synced, then its own wipers draw (one seat, its style's variant, riding the windshield): each blade parked along the glass's base, its tip toward the driver's side (x +${DRIVER_SIDE}), a share of the base width, the whole part on the glass's outside within ${OVER_GLASS * 100} cm of it; once the windshield shatters, they are gone with it`, () => {
     for (const id of CAR_STYLE_IDS) {
       const { batch, car, draw } = stage(1);
@@ -214,6 +268,25 @@ describe("given the part batch and one car of each style, its windshield whole a
       assert.equal(`${batch.drawn(PART_KIND.wipers)} ${rowsOf(batch, PART_KIND.wipers).length}`, "0 0", `${id}: wipers drawn over a shattered windshield`);
       batch.dispose();
     }
+  });
+
+  /** How far (m) a wiper may show past the side outline: its blade and arm, 1.4 and 2.2 cm off the glass at the glass's foot, a line over the cowl. */
+  const PAST_OUTLINE = 0.025;
+
+  // The coupe's side landing shot showed its far wiper's pivot cap, a 2.8 cm block 4.2 cm off the glass at its outer foot, floating over the cowl.
+  test("when each car is seen from its side, then its wipers show past the outline of its body, lids and glass by no more than their blades and arms (nothing floats over the cowl)", () => {
+    const past: string[] = [];
+    for (const id of CAR_STYLE_IDS) {
+      const { batch, car, draw } = stage(1);
+      const only = car(10, id);
+      draw([only]);
+      const seat = only.partSeats[PART_KIND.wipers]!;
+      const out = pastOutline(only, seat, seat.drawn);
+      const far = Math.max(...out);
+      if (far > PAST_OUTLINE) past.push(`${id}: ${out.filter((d) => d > PAST_OUTLINE).length} points past it, up to ${(far * 100).toFixed(1)} cm`);
+      batch.dispose();
+    }
+    assert.equal(past.join("; "), "");
   });
 });
 

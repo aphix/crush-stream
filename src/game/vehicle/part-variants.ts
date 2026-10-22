@@ -826,8 +826,11 @@ const WIPER_PARK_UP = 0.035;
 /** Each blade's rubber [width up the glass, height off it] and its gap off the glass (m); the arm over it, and how far along the blade it reaches. */
 const WIPER_BLADE = { w: 0.018, h: 0.01, gap: 0.004 } as const;
 const WIPER_ARM = { w: 0.012, h: 0.008, reach: 0.85 } as const;
-/** The pivot cap's edge (m), standing on the arm's root. */
-const WIPER_PIVOT = 0.028;
+/**
+ * The pivot cap: a boss `w` (m) square round the arm's root, as thick as the arm (`h`), its top flush with the arm's. (A 2.8 cm cube stacked
+ * on the arm stood 4.2 cm off the glass and floated over the cowl in the coupe's side view.)
+ */
+const WIPER_PIVOT = { w: 0.028, h: WIPER_ARM.h } as const;
 /** Stations along a blade: it follows the glass's bow across the car. */
 const WIPER_STATIONS = 8;
 /** Where each of a pair's pivots stands across the glass's base width (car x over the width; the tips run toward `park`). */
@@ -889,7 +892,7 @@ function styleWipers(style: BodyStyle): THREE.BufferGeometry {
     const rubber = lifted(WIPER_BLADE.gap + WIPER_BLADE.h / 2);
     const arm = lifted(WIPER_BLADE.gap + WIPER_BLADE.h + WIPER_ARM.h / 2, WIPER_ARM.reach);
     parts.push(sweptBar(rubber, ws, ns, WIPER_BLADE.w, WIPER_BLADE.h), sweptBar(arm, ws, ns, WIPER_ARM.w, WIPER_ARM.h));
-    parts.push(sweptBar([0, 1].map((k) => at[0]!.clone().addScaledVector(ns[0]!, WIPER_BLADE.gap + WIPER_BLADE.h + k * WIPER_PIVOT)), [ws[0]!, ws[0]!], [at[1]!.clone().sub(at[0]!).normalize(), at[1]!.clone().sub(at[0]!).normalize()], WIPER_PIVOT, WIPER_PIVOT));
+    parts.push(sweptBar([0, 1].map((k) => at[0]!.clone().addScaledVector(ns[0]!, WIPER_BLADE.gap + WIPER_BLADE.h + k * WIPER_PIVOT.h)), [ws[0]!, ws[0]!], [at[1]!.clone().sub(at[0]!).normalize(), at[1]!.clone().sub(at[0]!).normalize()], WIPER_PIVOT.w, WIPER_PIVOT.w));
     blades.push({ pivot: at[0]!.toArray(), tip: at[WIPER_STATIONS]!.toArray() });
   }
   const geo = mergeToned(
