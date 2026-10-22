@@ -969,6 +969,31 @@ forModes("given a car whose hit armed at a low barrier speed, touched again befo
   });
 });
 
+forModes("given a wreck settled after a 7.6 m/s side hit, its wear counted against a 250 limit (no engine travel limit)", (spawn) => {
+  it("when a 25 km/h side hit's contacts come in one slice, a 3 m/s graze and the 6.8 m/s face, then it wears as much whichever touches first, and as much again after a graze too soft to arm", () => {
+    // The slice's contacts come in the order the cage's points meet the face: the graze first armed the hit and the face rode it (8 of
+    // its 36 wear), or touched below the floor and shut the quiet window on the face (none), so a derby sedan's side hits never wore it out.
+    const door = new THREE.Vector3(0.95, 0.36, 0);
+    const inward = new THREE.Vector3(-1, 0, 0);
+    const worn = (contacts: readonly number[]): string => {
+      const s = spawn(0, 7.6, new THREE.Vector3(-0.9, 0, 0.02).normalize(), door);
+      for (let i = 0; i < 121; i++) stepWreck(s, DT);
+      assert.ok(s.d.quietTime() > 0.3, `quiet ${s.d.quietTime().toFixed(3)} s: nothing to re-arm`);
+      s.d.wreckEnergy = 250;
+      s.d.killTravel = Infinity;
+      for (const ebs of contacts) {
+        s.d.rearmHit(door, inward, ebs, ebs);
+        s.d.notifyContact();
+      }
+      return `wear share ${(1 - s.d.drivetrainHealth).toFixed(6)}, hit speed ${s.d.hitSpeedValue.toFixed(4)} m/s`;
+    };
+    const face = worn([6.8]);
+    assert.equal(worn([3, 6.8]), face, "the graze touched first");
+    assert.equal(worn([6.8, 3]), face, "the face touched first");
+    assert.equal(worn([2.7, 6.8]), face, "a graze under the re-arm floor touched first");
+  });
+});
+
 forModes("given a car driving hard into a rigid wall (16 to 20 m/s)", (spawn, mode) => {
   it("when the right-front corner hits the wall 0.62 m off centre for 24 steps, then it crushes over 1.25 times as far as the left-front corner (1.15 times in shape mode) and over 8 cm", () => {
     const s = spawn(0.62, 16);

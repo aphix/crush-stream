@@ -74,7 +74,7 @@ function cagePanelsOf(car: DeformableCar): Panel[] {
     if (panel.part === "bonnet") return cageLid(panel, makeHoodGeometry(car.style, "cage"));
     if (panel.part === "boot") return cageLid(panel, makeTrunkGeometry(car.style, "cage"));
     if (panel.mesh === car[LIGHT_BAR]) return cageLid(panel, makeLightBar("cage"));
-    if (panel.part === "glassFront") return cageLid(panel, makeWindshield(car.style));
+    if (panel.part === "glassFront" && car.style.drawn !== undefined) return cageLid(panel, makeWindshield(car.style));
     return panel;
   });
 }

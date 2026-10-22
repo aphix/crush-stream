@@ -9,6 +9,7 @@ import { RESPAWN_DELAY } from "../match/session.ts";
 import { DRIVE } from "../vehicle/car-drive.ts";
 import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import { ejectionVelocity } from "../vehicle/ejection.ts";
+import { standingBite } from "../vehicle/wheel-bite.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import type { CarRecord } from "../match/types.ts";
@@ -36,6 +37,8 @@ after(() => {
 
 /** A race on the oval with three AI rivals; the player's seat drives. */
 function start(noReset: boolean): { acc: number } {
+  watch.car = null;
+  watch.drove = true;
   const r = w.race;
   r.command({ type: "quit" });
   r.command({ type: "options", options: { trackId: "oval", laps: 3, aiCount: 3, noReset, aggression: 0.35 } });
@@ -62,10 +65,15 @@ function drivePlayer(): void {
   intent.gas = racing ? 1 : 0;
 }
 
+/** Before each step: whether `applyDrive` is about to run the watched car's input. */
+function sampleDrive(): void {
+  if (watch.car) watch.drove = drives(watch.car);
+}
+
 /** One rendered frame with the player driving. */
 function tick(state: { acc: number }): void {
   drivePlayer();
-  frame(w, state);
+  frame(w, state, sampleDrive);
 }
 
 /** Frames until the race clock reads `t` s. */
@@ -75,14 +83,22 @@ function runTo(state: { acc: number }, t: number): void {
 
 const rec = (id: number): CarRecord => w.race.snapshot()!.cars.find((c) => c.id === id)!;
 
+/** The car the row watches, and whether `applyDrive` ran its input on the frame's last step (sampled before the step: its physics moves the wheels after). */
+const watch: { car: DeformableCar | null; drove: boolean } = { car: null, drove: true };
+
+/** `applyDrive` runs a car's input: drivetrain alive, a wheel down, and bite; else it zeroes the pedals. */
+function drives(car: DeformableCar): boolean {
+  return car.deform.drivetrainAlive && car.wheelsDown !== 0 && standingBite(car) > 0;
+}
+
 /**
- * The car's last applied pedals and wheel: all zero and freewheeling is neutral. A car with nothing to drive reads idle instead (`applyDrive`'s
- * idle state: pedals zero, nothing driven): its drivetrain is dead, or no wheel is on the ground. A side hit's fuel cut (`stalledS`) is no
- * idle state: the drive runs, its gas zero.
+ * The car's last applied pedals and wheel: all zero and freewheeling is neutral. A car with nothing to drive on the frame's last step reads idle
+ * instead (`applyDrive`'s idle state: pedals zero, nothing driven): its drivetrain is dead, no wheel is on the ground, or the wheels down have
+ * no bite (`standingBite`: on a side, a roof or against a wall), sampled before the step. A side hit's fuel cut (`stalledS`) is no idle state.
  */
 function neutral(car: DeformableCar): boolean {
   const d = car.drive;
-  const nothingToDrive = !car.deform.drivetrainAlive || car.wheelsDown === 0;
+  const nothingToDrive = watch.car === car && !watch.drove;
   return d.throttle === 0 && d.brake === 0 && d.steer === 0 && !d.ebrake && !d.boost && (d.neutral || nothingToDrive);
 }
 
@@ -98,6 +114,7 @@ describe("given a 3-lap oval race of 3 AI rivals, 5 s in, with one car's driver 
       const state = start(false);
       runTo(state, 5);
       const car = w.cars[who.id]!;
+      watch.car = car;
       const v0 = car.velocity.length();
       assert.ok(v0 > 8, `${who.name} runs at ${v0.toFixed(1)} m/s before the throw`);
       assert.equal(rec(who.id).status, "racing");
@@ -114,7 +131,7 @@ describe("given a 3-lap oval race of 3 AI rivals, 5 s in, with one car's driver 
         if (died < 0 && r.status === "respawning") died = t;
         if (died >= 0 && r.status === "racing") back = t;
         if (back < 0) {
-          assert.ok(neutral(car), `frame at +${t.toFixed(2)} s: throttle ${car.drive.throttle}, brake ${car.drive.brake}, steer ${car.drive.steer}`);
+          assert.ok(neutral(car), `frame at +${t.toFixed(2)} s: throttle ${car.drive.throttle}, brake ${car.drive.brake}, steer ${car.drive.steer}, ebrake ${car.drive.ebrake}, boost ${car.drive.boost}, neutral ${car.drive.neutral}, drove ${watch.drove}`);
           assert.equal(car.driverOut, "windshield", "his seat stays empty until the reset");
           if (Number.isNaN(shedAt) && t >= 0.3) {
             shedAt = t;
@@ -145,11 +162,12 @@ describe("given a 3-lap oval race of 3 AI rivals, 5 s in, with one car's driver 
       const state = start(true);
       runTo(state, 5);
       const car = w.cars[who.id]!;
+      watch.car = car;
       const t0 = w.race.time;
       car.driverOut = "doorL";
       for (let n = 0; n < 60 * 8; n++) {
         tick(state);
-        assert.ok(neutral(car), `frame at +${(w.race.time - t0).toFixed(2)} s: throttle ${car.drive.throttle}, brake ${car.drive.brake}, steer ${car.drive.steer}`);
+        assert.ok(neutral(car), `frame at +${(w.race.time - t0).toFixed(2)} s: throttle ${car.drive.throttle}, brake ${car.drive.brake}, steer ${car.drive.steer}, ebrake ${car.drive.ebrake}, boost ${car.drive.boost}, neutral ${car.drive.neutral}, drove ${watch.drove}`);
       }
       assert.equal(rec(who.id).status, "out", "no resets: out of the race");
       assert.equal(car.driverOut, "doorL", "and he stays out");

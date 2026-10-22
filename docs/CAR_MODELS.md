@@ -105,7 +105,9 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | `blackout` | Parts drawn gloss black by the paint's `primer` attribute: `a` (A-post), `sail`, `b`, `divider`, `rear` (the pillar to the rear glass; `"matte"`: black at black plastic's roughness, no clear coat), and `cowl`: the deck from 5 cm under the windshield's foot to 5 cm under the hood's rear edge (put `hood.z0` ahead of `windshield.base` to show a strip) |
 | `privacyGlass` | Dark-tinted `rear` and `quarter` panes (`true`); `"matte"`: also rough (0.4), so the pane reads a dark blur, not a sharp mirror |
 | `paintFinish` | Drawn only: the body paint's `roughness`, `clearcoat` and `clearcoatRoughness` (the hood, lid and doors too); absent the platform paint's (0.42, 0.72, 0.24). The coupe's (0.55, 0.5, 0.45) is a softer sheen |
+| `quarter.drawn` | Drawn only: the quarter glass's own rear edge (`zRearBot`, `zRearTop`) for its pane, chrome trim, belt rail, sail (`cPillar`, its `pinch` rounding from this top corner) and tip panel. The cage's C-post and belt rail and the thrown dummies' quarter pane keep `quarter`. The sedan sets `{ zRearBot: -1.26, zRearTop: -0.88 }` over its cage's -0.88/-0.88 (its belt rising to 1.045 there, drawn only behind z -0.9); the police inherits it |
 | `cPillar` | The C-pillar drawn as a sail instead of a flat post: lofted from the haunch's shoulder (tangent to it) up to the rear glass's side edge and the roof, its front on the side window's line, its rear end 4 mm ahead of a deck lid. `tip` [y, z]: where that line meets the belt behind the quarter glass, with a gloss-black panel on the glass plane filling the gap. Absent `tip`: the line is the quarter glass's rear edge. `flush`: along the rear glass the sail's head laps 11 mm in over the drawn glass's side edge (round at its top corners), standing 5 mm on the glass where it has fallen with the dome, and arriving level across it (one broad pillar rolling into the glass) instead of a rounded buttress beside it; on a curved roof (`roofSection`) the roof-end ring lies on the roof end's own chords, its head in over a round top corner's arc at `corner` (share of the arc from its side end, 0, to its top end, 1; absent 0.5, mid-arc) and its ring bowed with the roof's end. `flat`: on the haunch each section runs straight from its head down to the point where that line touches the body's section (the most outboard reach per drop), its foot sunk 2 mm. That makes one broad, flat fastback panel that leaves the body tangent, with no hump, fin or crease (the coupe's). The roof-end ring and the sweep onto the window line keep their shapes; on a curved roof the rings ahead of the roof end ease their head from the roof end's out to the post's top (linear in z), so the sail does not fold across itself at the roof's rear corner; its haunch stations space evenly up to the roof end (no sweep station between, where the head turning in round the glass's corner folded the face 40°). `pinch` (m): the window's line rounds over from its tip into the glass's top line this far ahead of the quarter glass's top corner (one quadratic through that corner, which keeps the straight edge's slope at the tip); the sail runs forward to its end with a ring mid-curve, its head holding the post's top corner ahead of it, and along the line its foot is a 2.5 mm bead standing 5 mm off the glass instead of the post's 25 mm round, so the window narrows to a sharp point (the glass shows within 1 cm of where the line rises out of the body). Where the tip sits is data: a tip under the body's top shows the point where the line rises out of it |
+| `cPillar.pinch` (sail), `cPillar.sweep`, `cPillar.bead`, `cPillar.railRun` | `bead` (drawn only, absent off): a pinched sail's inner face holds the head's depth to mid-face before thinning to the foot's bead (thinning all the way bowed it out 36° where the section turns into the roof's end), and ahead of the quarter's top corner its head is a bead too, so its front ring stands within 1 cm under the glass's top line where that line is the cant (the post's round hung 44 mm under it). The sedan sets it; the coupe's pinch reads its own rows without it. `sweep` (m, absent 0.15): behind the window's point the sail's foot drops onto the shoulder over this run; a point standing over the deck needs a short one (the sedan's 0.02) or a see-through wedge shows under the foot. Every drawn belt rail's foot reaches down to the body's deck where the sill stands higher over it than the rail's 2.5 cm (other styles byte-identical). `railRun` (m, drawn only): the belt rail runs on this far behind the quarter glass's rear point (`quarter.drawn.zRearBot`), under the sail's foot, closing the see-through slit there; absent, it ends at the point. The sedan sets 0.015; the police inherits it |
 | `bumpers.front.trim`, `bumpers.rear.trim` | `"body"` (its body colour, painted finish), `"chrome"` or `"black"`; unset, the car's accent trim. A player's bumper colour still recolours it |
 | `bumpers.rear.hitch` | Black tow-hitch receiver under the rear bumper's middle |
 | `bumpers.rear.plate` | The number plate's centre height (m, car frame; drawn only); absent, `PLATE_RISE` (3 cm) over the bumper's seat. `plateFace` {`out`, `color`}: the plate's rear face (m, as `fascia`'s out) and colour; absent the platform plate's (0.09, cream) |
@@ -118,7 +120,9 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | `door.shutCrease` | Drawn only: at each end of the door cut the body ring on the panel side gets its own copies of its points from the crown to the rocker for the cut's ramp, so the fender and quarter shade from their own faces up to the shut line, not rolled off into a round cap by the ramp (no triangles added; the coupe's +32 vertices). Absent: one smooth normal across the ring. The coupe sets it |
 | `arch.lip` | Each wheel arch's lip: a strip round the opening's edge, its crown `flare` (m) proud of the body side, faired into the skin `width` out and rolled under the edge into the well, down the opening's sides to the rocker. `square` squares its outline (a superellipse round the round opening) and its face: a box flare. `band` gives the round outline that stepped face (flat crown, its outer edge stepping down over 1.6 cm): a raised flare band. Its underside is the well's tone over the opening only; where a square outline stands out over the skin it is paint. Merged into the body, seated on its drawn loft (`archLipGeometry`); it peels and tears with its arch's panel |
 | `arch.rise` | Drawn only: the opening's crown height over the hub as a fraction of `arch.radius` (absent 1, the round opening). Under 1 the drawn opening is an ellipse, as wide at hub height, its crown lower; the lip follows it, the fender flare and the dark well liner stay round over it, and the cage keeps the round opening (no digest moves). The monster sets 0.83 (crown 8 cm lower; with its lip's `inset` 0.03 and `width` 0.085 the visible opening tops out where its side reference's does) |
+| `arch.feet` | Drawn only: each opening's front and rear edge gets a ring either side of it, 4 mm apart (`ARCH_FOOT` either side), so its legs drop straight from the arc's foot to the rocker under the lip's legs. The nearest plain station within 6 cm outside a leg (`FOOT_SNAP`; never a knot) moves onto its outer ring, so a leg usually adds one ring. Absent, each leg spans the gap between its nearest stations (7-13 cm) as one facet, leaning out up to 5 cm at the rocker. The cage keeps its rings. The sedan sets it (+4 rings); the police inherits it |
 | `ringSplit` | Drawn only: `[z0, z1]` (m). Every body loft gap whose middle falls in that range gets an extra ring there. Use it where the flank turns hard between stations, as the side rows lift onto an arch's flare. The cage keeps its own rings. The sedan sets `[1.4, 1.57]`, splitting the front arch's two gaps over z 1.39-1.58 (+2 rings, 46 vertices). The police inherits it |
+| `bareDoorCut` | Drawn only: inside the front door's cut (between its feathered edges) the loft keeps only its knots' rings, none of the plain stations: there the ring is the bare sill and floor, straight along z under the door skin. The cage keeps its rings. The sedan sets it (7 rings fewer, paying for its `arch.feet` under its triangle budget); the police inherits it |
 | `wheelTub` | A bed's wheel tubs (pickup, monster): over each wheel whose liner stands in a tub floor, a half cylinder `rise` (m) over the floor, `length` along the car, `width` in from the bed's side wall, in BOTH builds. The cage merges them last, so every other cage vertex keeps its id, and keeps them out of its hull's decimation: the hull is decimated exactly as the body without them, then the tubs' vertices follow it whole (`CAGE_TUB_VERTICES` of room past `CAGE_VERTICES`). Absent, the drawn body's hump hugs the liner (below) |
 | `tubWall` | A tub's rim width (m): how far in from the body side its side wall's top edge stands, seen from above, in both builds; the wall leans out to it from its foot, which stays 0.06 in (the wheel tubs, liners and boot hollow meet the foot). Default 0.06; the pickup and monster 0.04 (a thin bed rim). The pickup's rim stands over the dummies' default 1 m proxy belt, so it needs its own `proxyBelt` (1.3) to keep the bed open in their world |
 | `bayFloor` | The engine bay trough's floor height (m) under the hood (`bayTub`), which the bay set and the bay-paint row read. Default 0.28; the pickup sets its floor pan's 0.34, which stands over it, and the monster 0.36 (its 0.34 pan plus the cage sill corner's 2 cm rise, so the trough's floor corner stays inside the cage's ring) |
@@ -321,3 +325,68 @@ node --disable-warning=ExperimentalWarning scripts/trace-car.mjs --style sedan -
 - The PNG: the car orange, outlined magenta; the reference outlined cyan; the car's glass lime, the reference's blue. The
   reference's glass is its dark, grey pixels (an Otsu cut, printed as `refThreshold`); a grey ground shadow on an opaque backdrop
   is left out of its silhouette (`shadowPx`). Full usage is in each script's header.
+
+**`contour-sections.mjs`: surface contour and exterior defects, per region.** It checks the shape only; it is not an airflow tool.
+Findings are for the mesh's owner to take or leave, since some edges and overhangs are intended.
+
+How to run it. Add `--png` for one car's shot; `--all` runs the five bodies (police shares the sedan's mesh, monster the pickup's;
+name either with `--car`):
+
+```sh
+CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
+  scripts/contour-sections.mjs --root <tree> --car <style> [--png <out>]          # JSON lines on stdout
+  scripts/contour-sections.mjs --root <tree> --all --sheet <png> [--curves <png>]  # every body
+```
+
+How to read it. Each car prints one JSON line with its region scores, `gaps` and `zfight`. After it come zero or more
+`{"kind":"suggest", ...}` lines. The sheet shows each car from its rear and front three-quarters, in game shading, with rings on
+the left side's findings and the scores under the views:
+- Yellow, orange and red rings are shape findings: mild, bad, and the worst in that region.
+- Cyan rings are gaps and stand-offs: bigger and bolder when bad.
+- Magenta rings are z-fighting.
+
+Then the raw section curves: blue for glass, dark for trim, and cool to warm by turn elsewhere. Read the region numbers against
+the same region on the other cars, not against a fixed bar.
+
+- The surface:
+  - For the shape scores: the body, lids, door skins, bumpers, glass and window trim.
+  - For the defects, also the style's mirrors, grille, tail trim, wipers and lamp units.
+  - Small fittings are skipped everywhere (`smallFittings` in `contour-core.mjs`: exhaust tips, tow hitch).
+  - So are the style's intended edges where the roof shape is scored (`intendedEdges`: roof spoiler, roof rails).
+- Sections cut the surface with planes at fixed stations. In each plane, a fan of rays keeps the outer contour: raw samples
+  every 0.25°, never smoothed. A miss or a jump of over 5 cm splits it. `turn` is the direction change across 4 cm of contour,
+  not scored across a seam (glass, body, bumper). 45° is about a 5 cm radius, 25° about 9 cm.
+- `roofEdge`: cuts across the roof at 25, 50 and 75 % of `roofZ`, and along it at 0, ±20 % and ±32 % of the body's width.
+  - `turnAcross` is the shoulder roll; `turnAlong` the roof's front and rear ends.
+  - `ledgeMm` is a step above the side glass: a roof cap overhanging what is under it.
+  - `offRoofMm` is the same step under an intended part: a spoiler standing off the roof, a gap you see into.
+  - `hoodBaseStepMm` is the widest open seam the lengthwise cuts cross round the hood's rear edge and the windshield base.
+  - `shelfMm` is the roof's outset past the side glass top; `crownMm` the crown.
+- `aPillar` / `rearPillar`: six horizontal cuts through the side glass. Each measures the body band from the windshield (rear
+  glass) to the side glass, on its own side.
+  - `widthMm` is the band per height, and `spreadPct` is (max − min) / median.
+  - `jumpMm` is the change between neighbouring heights, `leanDeg` the lean, and `turn` the hardest facet.
+  - A height reads n/a, counted in `naReasons`, when:
+    - `noGlass`: there is no glass edge;
+    - `seeThrough`: the cut sees through to the far side (no surface on the near side there; pickup A-pillar top, hatchback D-pillar);
+    - `tooWide`: the band is over 0.6 m.
+- `bumper` / `lowerLip`: horizontal cuts behind the rear arch, at 35–80 % of the rear bumper's height and at its bottom 4–22 %.
+  `turn` is the squarest wrap corner. `projSpreadMm` is how much the outset over the face above changes round the wrap (p5–p95);
+  `stepMm` the change between neighbouring cuts.
+- `gaps` (`contour-defects.mjs`): each panel's open edges (an edge one triangle uses) that are seen from outside, measured to the
+  nearest other panel within 8 cm:
+  - `gap` mm where the edge stops short of that surface: an open seam you see into.
+  - `stand` mm where it stands off the surface: a glass edge over the body, a bumper lip off the body.
+  - Each place gives its `region` and the parts involved.
+- `zfight`: triangles of any parts (the same part too) facing within 4° and within 2 mm of one plane, overlapping. Each place
+  gives `areaCm2` of overlap and `sepMm`. 2 mm fights at chase range, so a lamp unit or grille set 1–2 mm proud of the body
+  shows up here.
+- `suggest` lines carry a fix only where it is certain, labelled `"confidence":"high"` with the reading they fix. For now they
+  cover z-fighting between one detail (lamp unit, grille, tail trim, wipers, mirror) and one panel:
+  - Two surfaces in one place (under 0.05 mm apart): `push out` the detail by `mm` along `along`.
+  - Otherwise: `polygonOffset`, the `polygonOffsetFactor` / `polygonOffsetUnits` the detail's `material` needs. Each comes from
+    `depth-probe.ts`'s two ladders, run as the race camera sees the place at 5, 20 and 80 m (`ranges`), on a 24-bit depth target
+    as the browser's. It is the smallest offset that shows the detail on 95 % of its pixels; factor is in game pixels of slope,
+    units in depth steps. It is printed only when every range measured and some range needs an offset.
+  - Gaps, stand-offs and turns print no suggestion yet; nothing is printed when unsure.
+  - The lines are data for a lane, or later a builder, to take or leave; no builder reads them.

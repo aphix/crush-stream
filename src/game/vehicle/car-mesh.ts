@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { hypot2, detAcos, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type BumperEnd, type HoodNose, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
-import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, roofDrip, tubWall } from "./car-lines.ts";
+import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, roofDrip, tubWall, WINDSHIELD_BOW } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
@@ -241,7 +241,7 @@ const BAY_FLOOR = 0.28;
 
 /** The drawn body's engine bay trough under the hood, as a tub [zRear, zFront, floorY] (`BodyStyle.tubs`): drawn only, the cage's deck stays closed. */
 export function bayTub(style: BodyStyle): readonly [number, number, number] {
-  const rear = Math.max(style.hood.z0, style.windshield.base[1]) + BAY_CLEAR.rear;
+  const rear = Math.max(hoodRearZ(0, style), style.windshield.base[1]) + BAY_CLEAR.rear;
   const cabinFront = Math.max(-Infinity, ...style.tubs.map(([, front]) => front).filter((front) => front < rear));
   return [Math.max(rear, cabinFront + 2 * TUB_EDGE + BAY_CLEAR.cowl), style.bayFront ?? style.hood.z1 - BAY_CLEAR.front, style.bayFloor ?? BAY_FLOOR];
 }
@@ -736,6 +736,8 @@ const LIP_RINGS = [0.5, 1] as const;
 const CLAMSHELL_GAP = 0.001;
 /** Behind the cowl a `hood.inset` fender's top edge eases back to `HOOD_INSET` over this far (m): no step where the hood's rear corner sits. */
 const HOOD_INSET_EASE = 0.3;
+/** A hood following the glass (`hood.followGlass`) bends its rear edge back to straight over this run (m): longer than any bow, so its rings never cross. */
+const HOOD_FOLLOW_RUN = 0.3;
 
 /** How far (m) inside the station's half-width the side edge of a crowned `hood.inset` hood, and the fender's top edge beside it, stand at `z`; `HOOD_INSET` otherwise. */
 function hoodInset(z: number, hood: BodyStyle["hood"]): number {
@@ -786,6 +788,15 @@ function lidSection(z: number, style: BodyStyle, seated: boolean, crowned: BodyS
 export function deckTopY(x: number, z: number, style: BodyStyle, hood: boolean): number {
   const { w, edge, crown, dome } = lidSection(z, style, hood, hood ? style.hood.crown : undefined);
   return lerp(edge, crown, domeAt(dome, Math.min(Math.abs(x) / w, 1)));
+}
+
+/** The drawn hood's rear edge (z, car frame) at `x`: `hood.z0`, or `hood.followGlass` in front of the windshield's base along its plan bow. */
+export function hoodRearZ(x: number, style: BodyStyle): number {
+  const gap = style.hood.followGlass;
+  if (gap === undefined) return style.hood.z0;
+  const { base, wBase, bow = WINDSHIELD_BOW } = style.windshield;
+  const xn = Math.min(Math.abs(x) / (wBase / 2), 1);
+  return base[1] + bow.base * (1 - xn * xn) + gap;
 }
 
 /** How far (m) a boot lip lifts the panel `d` (m) in from its free edge: a quadratic kick from 0 at `depth` to `rise` at the edge. */
@@ -971,6 +982,19 @@ function makeDeckPanel(
     }
   }
   const geo = loftFromRings(rings, zs, 0, 1);
+  const follow = hood && source === "drawn" ? style.hood.followGlass : undefined;
+  if (follow !== undefined) {
+    // The rear edge moves onto `hoodRearZ`, fading to nothing `HOOD_FOLLOW_RUN` in; each point keeps its height over the belt where it lands.
+    const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      const z = pos.getZ(i) + oz;
+      const fade = 1 - (z - z0) / HOOD_FOLLOW_RUN;
+      if (fade <= 0) continue;
+      const moved = z + (hoodRearZ(pos.getX(i), style) - z0) * fade;
+      pos.setZ(i, moved - oz);
+      pos.setY(i, pos.getY(i) + sampleSlice(moved, style.profile).yBelt - sampleSlice(z, style.profile).yBelt);
+    }
+  }
   if (drop) {
     const lean = ((drop.z ?? z1) - z1) / (yc - (drop.y - oy));
     bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, wFace, lean, fold, dir);

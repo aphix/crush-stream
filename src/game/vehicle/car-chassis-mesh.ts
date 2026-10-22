@@ -20,6 +20,7 @@ import {
   ROCKER,
   TUB_EDGE,
   ensureOutwardNormals,
+  hoodRearZ,
   loftFromRings,
   noseRefined,
   recessShutLine,
@@ -79,6 +80,10 @@ function insetRing(ring: Pt[], inset: number): Pt[] {
 
 /** A cut's ring this close (m) to another knot's is that knot's. */
 const KNOT_MERGE = 0.005;
+/** An arch's leg rings (`arch.feet`) stand this far (m) either side of the opening's edge: the inner one's well (over 3 cm) still lifts it to the arch, the outer stays on the rocker. */
+const ARCH_FOOT = 0.002;
+/** A plain loft station this close (m) outside an arch's leg moves onto the leg's outer ring, so each leg adds one ring, not two. */
+const FOOT_SNAP = 0.06;
 
 /**
  * Loft stations: warped base spacing (≈7 cm at nose/tail, 13 cm mid) plus feature edges, and the roll's own rings at each end. `bootOpen`
@@ -113,7 +118,9 @@ export function sliceZs(style: BodyStyle, source: BodySource, bootOpen = source 
   if (source === "cage") return zs.sort((a, b) => a - b);
   const rollRear = z0 + END_ROLL_LENGTH;
   const rollFront = z1 - END_ROLL_LENGTH;
-  const stations = zs.filter((z) => z > rollRear + ROLL_CLEARANCE && z < rollFront - ROLL_CLEARANCE);
+  // A bare door cut keeps only its knots' rings: inside it the ring is the sill and floor, straight along z.
+  const [cutIn, cutOut] = style.bareDoorCut ? [a0 + DOOR_EDGE, a1 - DOOR_EDGE] : [Infinity, -Infinity];
+  const stations = zs.filter((z) => z > rollRear + ROLL_CLEARANCE && z < rollFront - ROLL_CLEARANCE && (z <= cutIn || z >= cutOut || knots.includes(z)));
   stations.push(...cutKnots.filter((k) => k > rollRear && k <= rollRear + ROLL_CLEARANCE));
   const noseSteps = noseFill ? NOSE_ROLL_STEPS : END_ROLL_STEPS;
   for (let step = 0; step <= END_ROLL_STEPS; step++) stations.push(z0 + END_ROLL_LENGTH * (1 - detSin((step / END_ROLL_STEPS) * (Math.PI / 2))));
@@ -125,6 +132,24 @@ export function sliceZs(style: BodyStyle, source: BodySource, bootOpen = source 
       const mid = (stations[k - 1]! + stations[k]!) / 2;
       if (mid >= split[0] && mid <= split[1]) stations.splice(k, 0, mid);
     }
+  }
+  if (style.arch.feet) {
+    const r = style.arch.radius;
+    for (const wz of new Set(carFrame(style).wheels.map(([, , z]) => z))) {
+      for (const out of [-1, 1]) {
+        const leg = wz + out * r;
+        // The nearest plain station just outside the leg moves onto the leg's outer ring; without one the leg adds it.
+        let near = -1;
+        for (let k = 0; k < stations.length; k++) {
+          const gap = out * (stations[k]! - leg);
+          if (gap > 0 && gap < FOOT_SNAP && !knots.includes(stations[k]!) && (near < 0 || gap < out * (stations[near]! - leg))) near = k;
+        }
+        if (near < 0) stations.push(leg + out * ARCH_FOOT);
+        else stations[near] = leg + out * ARCH_FOOT;
+        stations.push(leg - out * ARCH_FOOT);
+      }
+    }
+    stations.sort((a, b) => a - b);
   }
   return noseFill ? noseRefined(stations, p) : stations;
 }
@@ -289,7 +314,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
     if (cut.lined && cut.face) for (const i of [0, n - 1]) primer[i] = 0;
     for (const [copy, s] of wallTops) primer[copy] = tone(s);
     if (style.blackout?.cowl === true) {
-      const [foot, hoodRear] = [style.windshield.base[1], style.hood.z0];
+      const [foot, hoodRear] = [style.windshield.base[1], hoodRearZ(0, style)];
       for (let s = 0; s < zs.length; s++) if (zs[s]! >= Math.min(foot, hoodRear) - COWL_LAP && zs[s]! <= Math.max(foot, hoodRear) + COWL_LAP) for (const i of [0, n - 1]) primer[s * n + i] = BLACKOUT;
     }
     // Each well's ceiling inside an arch, toned like its liner so the lip reads over a dark gap: the sill's two points, and the last

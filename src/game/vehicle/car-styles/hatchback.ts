@@ -5,12 +5,14 @@ import { pullHandle, st } from "./platform.ts";
 const HATCHBACK_LAMP_SHAPES = {
   head: {
     // The lens's foot 1.5 cm over the bumper's top (.47 + its 1 cm crown there), so the bezel's foot clears the bumper running under it.
-    loops: [{ points: [[0.4, 0.495], [0.68, 0.495], [0.7, 0.6], [0.4, 0.61]] }],
+    // It wraps the corner and runs back along the fender to z 1.5, as the reference's side view.
+    loops: [{ points: [[0.4, 0.495], [0.68, 0.495], [0.85, 0.497, 1.5], [0.85, 0.6, 1.5], [0.7, 0.6], [0.4, 0.61]] }],
     lens: "lit",
     bezel: "black",
     recess: 0.01,
-    // The amber at the lens's outer end, round the corner (the lens's edge at z 1.649 foot, 1.631 top).
-    cells: [{ loop: { side: true, points: [[1.675, 0.495], [1.652, 0.495], [1.635, 0.598], [1.66, 0.6]] }, tone: "amber" }],
+    fill: 0.035,
+    // The reference's amber: the lens's run along the fender behind its corner.
+    cells: [{ loop: { side: true, points: [[1.605, 0.497], [1.5, 0.497], [1.5, 0.6], [1.6, 0.6]] }, tone: "amber" }],
     // The reference's reflector split: a grey bar across the lens a little under its middle.
     strips: [{ line: { points: [[0.41, 0.535], [0.665, 0.535]] }, width: 0.01, tone: "smoked" }],
   },
@@ -54,9 +56,9 @@ const HATCHBACK_LAMP_SHAPES = {
     lens: "amber",
     onBody: true,
   },
-  // The black diffuser band across the rear bumper's foot (matte: a glossy one mirrors the ground on its down-facing lip), its red reflector in it.
+  // The red reflector's black housing at the lower lip's outer end (the lip's black is the bumper's `band`).
   rear: {
-    loops: [{ points: [[0.006, 0.295], [0.64, 0.295], [0.64, 0.365], [0.006, 0.365]] }],
+    loops: [{ points: [[0.475, 0.297], [0.645, 0.297], [0.645, 0.333], [0.475, 0.333]] }],
     lens: "black",
     cells: [{ loop: { points: [[0.48, 0.3], [0.64, 0.3], [0.64, 0.33], [0.48, 0.33]] }, tone: "red" }],
   },
@@ -93,7 +95,9 @@ export const HATCHBACK: BodyStyle = {
       seat: { y: 0.41, z: 1.702 },
       fascia: [[0.15, -0.07], [0.15, 0.02], [0.132, 0.062], [0.075, 0.08], [0.027, 0.074], [-0.018, 0.062], [-0.075, 0.064], [-0.105, 0.088], [-0.15, 0.075], [-0.15, -0.07]],
       span: 0.66,
-      wrap: { from: 0.46, back: 0.1 },
+      // The lower lip turns the corners on lofted ends and runs back to the arch at an even stand-off, its black the fascia's own rows.
+      wrap: { from: 0.4, back: 0.3, end: { corner: 0.26, stand: 0.008 } },
+      band: [0.26, 0.335],
       trim: "body",
       top: [[0, 0.555], [0.4, 0.56], [0.64, 0.57]],
       edge: [[-1.69, 0.565], [-1.66, 0.5], [-1.44, 0.5], [-1.48, 0.4], [-1.5, 0.3]],
@@ -139,9 +143,14 @@ export const HATCHBACK: BodyStyle = {
   // The glass top sits 7 mm under the crown: the crown rolls down onto it. The rear end's side lip tucks in over the D-pillars' tops;
   // its run is under 2 cm, so its near roll station merges into the roof's end ring and the body stays within its vertex budget.
   roofEnds: { front: 0.12, rear: 0.019, flush: { rear: 1 } },
+  // The reference's roof rolls round into the side glass with a gentle crown: no flat plate on a hard shoulder, no drip rail.
+  roofSection: { crown: 0.4, blend: 0.9, squareFront: 0.12 },
+  roofDrip: 0,
   windshieldTop: [1.245, 0.245],
-  rearGlass: { base: [0.905, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9, frame: [0.05, 0.06, 0.11] },
-  // The quarter glass's rear edge leans forward as the reference's, leaving a broad D-pillar at the roof.
+  // The rear glass's top as wide as the top view's (1.0 of the roof end's 1.04), so the D-pillar narrows to a pinch at the roof;
+  // a slim frit beside it keeps the painted post, not a dark band, between the glass areas.
+  rearGlass: { base: [0.905, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 1.0, frame: [0.03, 0.06, 0.11] },
+  // The quarter glass's rear edge leans forward as the reference's side view.
   quarter: { zRearBot: -1.15, zRearTop: -0.96 },
   midPillarZ: -0.86,
   rearBulkhead: { z: -0.95, yTop: 0.8 },

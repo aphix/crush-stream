@@ -305,6 +305,14 @@ export abstract class DeformRig {
   protected lastPower = -0;
   /** `elapsed` when the current hit began (beginCrush, rearmHit): the sliding-drag clock (`sinceHit`). */
   protected hitAt = -0;
+  /** `lastContact` before the slice now touching (`touchNow`): a re-arm reads the quiet the wreck had when its slice began. Read within one slice only, so not netted. */
+  protected touchedBefore = -10;
+  /** `elapsed` of the slice whose contact re-armed the hit (`rearmHit`), with that contact's EBS and what it found: a harder contact of the same slice takes the hit over. Read within one slice only. */
+  protected armedAt = -1;
+  protected armedEbs = 0;
+  protected armedEnd = 0;
+  protected armedEnd2 = 0;
+  protected armedWear = 0;
   protected wrinkleAmp = -0;
   /** `slabTravel`'s low mark of `crumpleTravelCorner` this hit. */
   protected cornerLow = Infinity;
@@ -587,6 +595,8 @@ export abstract class DeformRig {
     this.energyTravel = false;
     this.lastPower = -10;
     this.hitAt = -0;
+    this.touchedBefore = -10;
+    this.armedAt = -1;
     this.wrinkleAmp = -0;
     this.cornerLow = Infinity;
     this.prevYaw = 0;
