@@ -9,6 +9,7 @@ import {
   ROOF_CROWN,
   ROOF_LIP_OUT,
   ROOF_SHOULDER,
+  arcY,
   cantX,
   cantY,
   ensureOutwardNormals,
@@ -113,17 +114,10 @@ function stripCap(index: THREE.BufferAttribute["array"], first: number, base: nu
   }
 }
 
-/**
- * The roof panel. The cage keeps its knee-lip section down to a keel under the crown. The drawn roof's side rolls into the dome with
- * no shelf, and it is a thin shell: its inner face, inset `HEADLINER_INSET` from the skin's cants and crown, is the headliner
- * (`userData.shellTwins`: each inner vertex, then the skin vertex it is inset from).
- */
-export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry {
+/** The drawn roof loft's ring stations (z, ascending): `ROOF_SEGS` even ones, plus each rolled end's `ROOF_ROLL_STATIONS` in the drawn roof. */
+function roofRingZs(style: BodyStyle, source: BodySource): number[] {
   const [z0, z1] = style.roofZ;
-  const lip = cantDrop(style);
-  const drip = roofDrip(style);
   const segs = ROOF_SEGS[source];
-  const rings: Pt[][] = [];
   const zs = Array.from({ length: segs + 1 }, (_, s) => lerp(z0, z1, s / segs));
   if (source === "drawn") {
     const { rear, front } = style.roofEnds ?? {};
@@ -131,6 +125,20 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
     zs.push(...rolled.filter((z) => zs.every((w) => Math.abs(w - z) > 0.001)));
     zs.sort((a, b) => a - b);
   }
+  return zs;
+}
+
+/**
+ * The roof panel. The cage keeps its knee-lip section down to a keel under the crown. The drawn roof's side rolls into the dome with
+ * no shelf, and it is a thin shell: its inner face, inset `HEADLINER_INSET` from the skin's cants and crown, is the headliner
+ * (`userData.shellTwins`: each inner vertex, then the skin vertex it is inset from).
+ */
+export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry {
+  const [, z1] = style.roofZ;
+  const lip = cantDrop(style);
+  const drip = roofDrip(style);
+  const rings: Pt[][] = [];
+  const zs = roofRingZs(style, source);
   for (const z of zs) {
     const { y: roofY, x } = roofAt(z, style);
     const { drop, crown, reach } = source === "drawn" ? roofDome(z, style) : { drop: 0, crown: ROOF_CROWN, reach: 1 };
@@ -145,13 +153,8 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
     const shoulder = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
     // The dome's right half, crown to cant line: as many points as `ROOF_ARC_T`, so `roofSquareShare` eases an arc into it point for point.
     const dome = [{ x: 0, y: y + crown }, { x: x * ROOF_SHOULDER[0], y: y + shoulder }, { x, y }, ...[...side].reverse()];
-    const arc = source === "drawn" ? roofArc(z, style) : null;
-    if (arc) {
-      const share = roofSquareShare(z, style);
-      const half = ROOF_ARC_T.map((t, i) => {
-        const p = arc(t);
-        return share === 0 ? p : { x: lerp(p.x, dome[i]!.x, share), y: lerp(p.y, dome[i]!.y, share) };
-      });
+    const half = source === "drawn" ? roofHalf(z, style) : null;
+    if (half) {
       const skin = [...half.slice(1).reverse().map((p) => ({ x: -p.x, y: p.y })), ...half];
       rings.push(shellRing(skin, (skin.length - 5) / 2, HEADLINER_INSET));
       continue;
@@ -481,6 +484,37 @@ const ROOF_LIP_KNEE = [0.07, 0.03] as const;
 /** A pillar's top stops this far (m) inside the roof's surface, so the two never fight over a pixel. */
 const ROOF_TUCK = 0.002;
 
+/** The drawn roof's skin half-section (+x, crown to cant) at `z`, as `makeRoofGeometry` builds it on a `roofSection`: its arc, eased point for point into the dome's rolled side over a squared front (`roofSquareShare`); null without a `roofSection`. */
+function roofHalf(z: number, style: BodyStyle): Pt[] | null {
+  const arc = roofArc(z, style);
+  if (!arc) return null;
+  const { y: roofY, x } = roofAt(z, style);
+  const { drop, crown, reach } = roofDome(z, style);
+  const y = roofY - drop;
+  const side = roofRoll(x, y, cantDrop(style), roofDrip(style), ROOF_ROLL, reach).slice(0, -1);
+  const shoulder = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
+  const dome = [{ x: 0, y: y + crown }, { x: x * ROOF_SHOULDER[0], y: y + shoulder }, { x, y }, ...[...side].reverse()];
+  const share = roofSquareShare(z, style);
+  return ROOF_ARC_T.map((t, i) => {
+    const p = arc(t);
+    return share === 0 ? p : { x: lerp(p.x, dome[i]!.x, share), y: lerp(p.y, dome[i]!.y, share) };
+  });
+}
+
+/** The drawn roof loft's skin height at (`x`, `z`): its section between the two rings round `z`, lerped point for point as the loft joins them, never above the analytic skin; null without a `roofSection`. */
+function roofMeshY(x: number, z: number, style: BodyStyle): number | null {
+  const skin = roofHalf(z, style);
+  if (!skin) return null;
+  const zs = roofRingZs(style, "drawn");
+  const k = THREE.MathUtils.clamp(zs.findIndex((r) => r >= z), 1, zs.length - 1);
+  const [a, b] = [roofHalf(zs[k - 1]!, style)!, roofHalf(zs[k]!, style)!];
+  const u = (z - zs[k - 1]!) / (zs[k]! - zs[k - 1]!);
+  const chord = a.map((p, i) => ({ x: lerp(p.x, b[i]!.x, u), y: lerp(p.y, b[i]!.y, u) }));
+  // Past the lerped section's lip (a rolled end narrowing its reach between rings) the loft doesn't cover `x`: the analytic skin only, never the lip's foot.
+  const onSkin = arcY(skin, x);
+  return x <= chord[chord.length - 1]!.x ? Math.min(arcY(chord, x), onSkin) : onSkin;
+}
+
 /** The drawn roof section's half-width (m) at height `y` over a station at (`roofX`, `roofY`): along its rolled side (`reach` of its lip), the dome's edge over it, none under the cant line. */
 function roofOutlineX(y: number, roofY: number, roofX: number, lip: number, drip: number, reach: number): number {
   if (y <= roofY - lip) return Infinity;
@@ -509,7 +543,7 @@ function onGlassPlane(z: number, y: number, style: BodyStyle, proud: number): nu
   return lerp(beltX(z, style), cantX(z, style), (y - belt) / (cant - belt)) + proud;
 }
 
-/** Holds every vertex of `geo` over the roof's z span inside the roof's section (in under its lip, under its skin), so a pillar's top runs into the roof, not through it; names it `name`. */
+/** Holds every vertex of `geo` over the roof's z span inside the roof's section (in under its lip, under its skin as the loft draws it: its chords; its rolled side over a squared front too), so a pillar's top runs into the roof, not through it; names it `name`. */
 function insideRoof(geo: THREE.BufferGeometry, style: BodyStyle, name: string): THREE.BufferGeometry {
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
@@ -517,7 +551,8 @@ function insideRoof(geo: THREE.BufferGeometry, style: BodyStyle, name: string): 
     if (z < style.roofZ[0] || z > style.roofZ[1]) continue;
     const x = pos.getX(i);
     const half = underRoofSide(Math.abs(x), pos.getY(i), z, style);
-    pos.setXY(i, Math.sign(x) * half, Math.min(pos.getY(i), roofTopY(half, z, style) - ROOF_TUCK));
+    const skin = roofMeshY(half, z, style);
+    pos.setXY(i, Math.sign(x) * half, Math.min(pos.getY(i), (skin ?? roofTopY(half, z, style)) - ROOF_TUCK));
   }
   geo.name = name;
   return geo;
