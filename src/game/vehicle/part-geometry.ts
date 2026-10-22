@@ -114,6 +114,8 @@ export class PartSeat extends THREE.Object3D {
     this.geometry = partGeometry(kind);
     this.drawn = this.geometry;
     this.name = INTERIOR_KINDS.has(kind) ? INTERIOR_MESH : SMALL_PART_SEAT;
+    // Each writer of a static seat's pose calls `updateMatrix`; mirrors are posed every frame (`PoseBlend`, `posePart`), axles by `CarUnderbody.follow`.
+    this.matrixAutoUpdate = kind === PART_KIND.mirrorL || kind === PART_KIND.mirrorR || kind === PART_KIND.axle;
   }
 
   get loose(): boolean {

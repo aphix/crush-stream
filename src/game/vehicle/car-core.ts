@@ -598,6 +598,7 @@ export abstract class CarCore {
     if (front) {
       const grille = this.partSeats[PART_KIND.grille]!;
       grille.position.set(0, GRILLE_SEAT.y, GRILLE_SEAT.z);
+      grille.updateMatrix();
       g.add(grille);
     }
     return g;
