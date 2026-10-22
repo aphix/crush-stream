@@ -15,7 +15,7 @@ import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, glassCorners, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { makeWellLiners } from "./car-well-mesh.ts";
-import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, TRIM_BLACK, TRIM_CHROME, bumperMaterial, makeLightBar, trimMaterial } from "./car-materials.ts";
+import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, bumperMaterial, makeLightBar, trimMaterial } from "./car-materials.ts";
 import { boxShape, newLooseShape } from "./loose-step.ts";
 import { wearCarLook } from "../present/car-look.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
@@ -187,9 +187,11 @@ describe("given every body style's spec dimensions (`BodyStyle.dims`)", () => {
       // The floor is the body's (a bumper may hang under it: the monster's).
       const floor = new THREE.Box3().setFromObject(cars[id].body).min.y;
       const half = d.wheelbase / 2;
+      // A push bar stands its reach past the nose the spec gives (the length spec leaves it off, as the height leaves off the light bar).
+      const guard = CAR_STYLES[id].pushBar ? PUSH_BAR_REACH : 0;
       assertSameNumbers(
         [b.max.z, b.min.z, b.max.x - b.min.x, b.max.y, floor],
-        [half + d.overhang.front, -half - d.overhang.rear, d.width, d.height, d.rideHeight],
+        [half + d.overhang.front + guard, -half - d.overhang.rear, d.width, d.height, d.rideHeight],
         `${id} nose, tail, width, roof, floor`,
         DIMS_TOL,
       );
@@ -611,7 +613,8 @@ describe("given a body style's H2 hardpoints", () => {
   });
 
   it("when the A-pillar's top moves back, then the door glass's top-front corner and the pillar's rear top corner (its post's, or the sail's behind it) follow it", () => {
-    const sedan = CAR_STYLES.sedan;
+    // The straight edge: the sedan's own knee off.
+    const sedan: BodyStyle = { ...CAR_STYLES.sedan, aPillarKnee: undefined };
     // 30 cm behind the windshield's top: behind the A-post's own rear top, so the sail reaches back to it.
     const top = sedan.windshieldTop[1] - 0.3;
     const moved: BodyStyle = { ...sedan, aPillarTop: top };
@@ -674,7 +677,8 @@ describe("given a body style's H2 hardpoints", () => {
   });
 
   it("when a style knees its door glass onto the A-post (aPillarKnee), then the glass's front edge meets the post's rear edge there and the sail ends there: a small triangle at the foot, glass over it", () => {
-    const sedan = CAR_STYLES.sedan;
+    // The control has no knee: the sedan's own off.
+    const sedan: BodyStyle = { ...CAR_STYLES.sedan, aPillarKnee: undefined };
     const gap: BodyStyle = { ...sedan, pillars: undefined, aPillarFoot: sedan.windshield.base[1] - 0.4 };
     const knee = beltY(gap.aPillarFoot, gap) + 0.1;
     const kneed: BodyStyle = { ...gap, aPillarKnee: knee };
