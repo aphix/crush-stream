@@ -6,7 +6,7 @@ import { PISTON_ORBIT_RATE, PistonBank } from "../present/engine-pistons.ts";
 import { DoorRam } from "../present/engine-doors.ts";
 import { sliceSpeed } from "../contact/sat.ts";
 import { PACE_BUDGET_MS, SimPacer } from "./sim-pace.ts";
-import { SETTING_KEY } from "./constants.ts";
+import { QUALITY_QUERY, SETTING_KEY } from "./constants.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
 import { INITIAL_HUD, type HudStore } from "../hud/hud-store.ts";
 import { easeTimeScale, PRE_IMPACT_LEAD, preImpact, stepPhase, struck } from "../match/phase.ts";
@@ -23,6 +23,7 @@ import { SKY_MODES } from "../present/sky-dome.ts";
 import { AutoFx, deviceClass, gpuRenderer, type DeviceClass } from "../present/auto-fx.ts";
 import { PHONE_LEVEL } from "../present/car-detail.ts";
 import { DetailGovernor } from "../present/detail-governor.ts";
+import { DRAW_DISTANCES, knobValue, PlayerQuality, RENDER_SCALES, SHADOW_QUALITIES } from "../present/player-quality.ts";
 import { makeRenderer } from "./engine-renderer.ts";
 import { DebrisSystem, SparkSystem, GlassDotSystem, TireSmokeSystem } from "../present/engine-fx.ts";
 import { Fountains } from "./engine-fountains.ts";
@@ -244,6 +245,10 @@ export class CrashEngine extends EngineGarage {
     // A phone starts on the nearer rung (a ~20 px car loses nothing the eye can use); the governor walks either way from the first match.
     this.detailGov = new DetailGovernor(desktop ? 0 : PHONE_LEVEL);
     this.detail.setLevel(this.detailGov.level);
+    this.quality = new PlayerQuality({ renderer: this.renderer, camera: this.camera, scene: this.scene, stage: this.stage, detail: this.detail, post: this.cine.post }, window.devicePixelRatio || 1);
+    // `?draw=`, `?scale=`, `?shadow=` pin those knobs for the session (bench A/B); the HUD's pick still wins.
+    const query = new URLSearchParams(window.location.search);
+    this.quality.pinFromPage(knobValue(DRAW_DISTANCES, query.get(QUALITY_QUERY.draw)), knobValue(RENDER_SCALES, query.get(QUALITY_QUERY.scale)), knobValue(SHADOW_QUALITIES, query.get(QUALITY_QUERY.shadow)));
     this.audio = new GameAudio(this.camera, desktop);
     this.audio.setVolumes(this.musicVolume, this.engineVolume);
     this.trace = new TraceRecorder({
@@ -302,6 +307,7 @@ export class CrashEngine extends EngineGarage {
     return new RaceDirector({
       scene: this.scene,
       camera: this.camera,
+      view: this.quality.view,
       sun: this.sun,
       sunOffset: this.stage.sunOffset,
       sunRight: this.stage.sunRight,
@@ -461,7 +467,8 @@ export class CrashEngine extends EngineGarage {
 
   /**
    * The adaptive quality and the pacer as the page booted them: the FX tier on its first tier, a new tier policy (`AutoFx`: its learned ceiling and climb streak), a new
-   * detail governor at its start rung and a pacer with nothing owed or learned (`SimPacer.reset`). A bench loop runs every step in one page; each step starts from here,
+   * detail governor at its start rung, Auto's render scale at its top rung (the quality knobs, the page's `?draw=`/`?scale=`/`?shadow=` arms included, stay as they are) and a pacer with nothing owed or learned
+   * (`SimPacer.reset`). A bench loop runs every step in one page; each step starts from here,
    * so what an earlier step taught the policy, the governor or the pacer never decides a later one. Call it before `benchParts()`: the parts hold the governor.
    */
   resetAdaptiveQuality(): void {
@@ -470,6 +477,7 @@ export class CrashEngine extends EngineGarage {
     this.autoFx = new AutoFx(this.deviceClass !== "software", true, desktop);
     this.detailGov = new DetailGovernor(desktop ? 0 : PHONE_LEVEL);
     this.detail.setLevel(this.detailGov.level);
+    this.quality.restartAuto();
     this.pace.reset();
   }
 
@@ -481,6 +489,7 @@ export class CrashEngine extends EngineGarage {
     this.cine.contextRestored();
     this.autoFx.restart();
     this.detailGov.restart();
+    this.quality.scaleGov.restart();
     const ultra = this.cine.tier === "ultra";
     if (this.cine.ultra) {
       if (ultra) this.cine.setTier("high");

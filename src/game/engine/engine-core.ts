@@ -34,6 +34,7 @@ import { activeGround } from "../world/ground.ts";
 import { BARRIER_HALF } from "../contact/sat.ts";
 import type { AutoFx } from "../present/auto-fx.ts";
 import type { DetailGovernor } from "../present/detail-governor.ts";
+import type { PlayerQuality } from "../present/player-quality.ts";
 import { DebrisSystem, SparkSystem, GlassDotSystem, TireSmokeSystem } from "../present/engine-fx.ts";
 import type { Fountains } from "./engine-fountains.ts";
 import type { GameAudio } from "../present/game-audio.ts";
@@ -229,6 +230,8 @@ export abstract class EngineCore {
   protected fxLoading = false;
   /** The distance detail's rung (`present/detail-governor.ts`), chosen by how the match runs; `fxFrame` applies it to `detail` while the tier is automatic. */
   protected detailGov!: DetailGovernor;
+  /** The player's Draw distance, Render scale and Shadows over Auto (`present/player-quality.ts`). */
+  protected quality!: PlayerQuality;
   protected impactLightLife = 0;
   protected envMap: THREE.Texture | null = null;
   protected debris!: DebrisSystem;

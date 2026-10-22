@@ -6,7 +6,7 @@ import type { Ultra } from "./ultra.ts";
 export type UltraHost = {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
-  stage: Pick<WorldStage, "sun" | "envGain" | "envIntensity">;
+  stage: Pick<WorldStage, "sun" | "envGain" | "envIntensity" | "setUltraShadow">;
   /** Compile what the scene draws (the engine's `queueWarm`): Ultra asks for it after it changes lighting or materials. */
   queueWarm(): void;
   /** False once the engine is disposed. */
