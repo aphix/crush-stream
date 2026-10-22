@@ -26,6 +26,10 @@ export const SKY_ARM = { procedural: "procedural", full: "full", off: "off" } as
  */
 export type SkyPin = (typeof SKY_ARM)[keyof typeof SKY_ARM];
 
+/** The two arms of each quality A/B, the keys of `BenchResult.abDraw`/`abScale`/`abShadow`: Auto, and the knob's top value. */
+export const QUALITY_ARM = { auto: "auto", max: "max" } as const;
+type QualityBlocks = { auto: Block; max: Block };
+
 export interface Stat {
   mean: number;
   p50: number;
@@ -93,11 +97,13 @@ export interface BenchSettings {
   skyPlayer: SkyMode;
   /** The sky the bench pinned (`skyPinOf`): the procedural sky on a race, none on the Lab. Absent on a card from before the procedural default: it pinned `sky`. */
   skyPin?: SkyPin;
+  /** The player's quality knobs the run held (the URL's `?draw=`/`?scale=`/`?shadow=`, else Auto: a bench page never reads the browser's saved ones) and which the URL pinned; absent on older cards. */
+  quality?: { draw: string; scale: string; shadow: string; pinned: string };
   depth: { bits: number; subpixelBits: number; contextDepth: boolean; fragmentHighFloat: { precision: number; rangeMin: number; rangeMax: number } | null; near: number; far: number; logarithmicDepthBuffer: boolean; probe: DepthProbe };
 }
 
-/** The stretches of a run in order: the grid and warm-up, the sampled window, the four A/Bs, then the replay of the run's own crash (`PAGE_PHASES[PHASE_WARM]` ...). */
-export const PAGE_PHASES = ["warm", "window", "ab-pace", "ab-detail", "ab-fx", "ab-sky", "replay", "sweep"] as const;
+/** The stretches of a run in order: the grid and warm-up, the sampled window, the A/Bs, then the replay of the run's own crash (`PAGE_PHASES[PHASE_WARM]` ...). Indices only grow (posted cards name them): the quality A/Bs run before the replay but come last. */
+export const PAGE_PHASES = ["warm", "window", "ab-pace", "ab-detail", "ab-fx", "ab-sky", "replay", "sweep", "ab-draw", "ab-scale", "ab-shadow"] as const;
 export const PHASE_WARM = 0;
 export const PHASE_WINDOW = 1;
 export const PHASE_AB_PACE = 2;
@@ -106,6 +112,9 @@ export const PHASE_AB_FX = 4;
 export const PHASE_AB_SKY = 5;
 export const PHASE_REPLAY = 6;
 export const PHASE_SWEEP = 7;
+export const PHASE_AB_DRAW = 8;
+export const PHASE_AB_SCALE = 9;
+export const PHASE_AB_SHADOW = 10;
 
 /** Mean and 95th percentile of one reading (ms). */
 export interface Pair {
@@ -325,6 +334,10 @@ export interface BenchResult {
   abDetail: Record<string, Block> | null;
   /** The sky pinned at the top tier the window ran: the procedural sky (absent on a card from before it was the default), the painted strip, then no sky (null: the Lab, which has no sky). */
   abSky: { procedural?: Block; full: Block; off: Block } | null;
+  /** The draw distance, render scale and shadows each alternated Auto / its top value at the window's tier, the others at the run's own (absent on an older card). */
+  abDraw?: QualityBlocks | null;
+  abScale?: QualityBlocks | null;
+  abShadow?: QualityBlocks | null;
   /** The cosmetic Rapier world (the thrown drivers' and knocked props'): `world.step()` over the sampled window, and the world's size. */
   ragdoll: RagdollCost;
   /** The run's own crash replayed as a highlight at each FX tier (null: no clip, `replayWhy` says why). */
@@ -415,6 +428,10 @@ function skyArmLines(ab: NonNullable<BenchResult["abSky"]>): string[] {
     if (block) lines.push(`${lines.length ? "                " : "A/B sky pinned: "}${arm(key, block)}`);
   }
   return lines;
+}
+/** Each quality A/B's two arms on the card, the first under the title; `top` labels the knob's top arm. */
+function qualityArmLines(title: string, ab: QualityBlocks, top: string = QUALITY_ARM.max): string[] {
+  return [`${title}${arm(QUALITY_ARM.auto, ab.auto)}`, `${" ".repeat(title.length)}${arm(top, ab.max)}`];
 }
 const pair = (p: Pair): string => `${f1(p.mean)}/${f1(p.p95)}`;
 const ragdollLine = (g: RagdollCost): string => `ragdoll world: ${g.steps} steps, step ${g.stepMs.mean.toFixed(2)} ms mean / ${g.stepMs.p95.toFixed(2)} p95, ${g.colliders} colliders, ${g.bodies} bodies`;
@@ -529,6 +546,7 @@ export function describeBench(r: BenchResult): string[] {
     `fx tier: ${tiers}${s.fxAuto ? " (auto)" : ""}   post chain at the top tier: ${s.post}`,
     `detail: only the body drawn beyond ${Object.entries(r.detailPct).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} for ${Math.round(v)} %`).join(", ")} of the window`,
     `shadows ${s.shadows.enabled ? `${s.shadows.type} ${s.shadows.map}, ${s.shadows.casters} casters` : "off"}   pixel ratio ${s.pixelRatio} of device ${s.deviceRatio}, canvas ${s.canvas}, ${s.antialias ? "MSAA" : "no MSAA"}   fx density ${f1(s.fxDensity)}, cel ${s.celLook === null ? "auto" : f1(s.celLook)}, dots ${strengthOf(s.halftone)}, hatch ${strengthOf(s.hatching)}, rim ${strengthOf(s.rimLight)}   night ${s.night ? "on" : "off"}, wet ${s.wet ? "on" : "off"}, realism ${f1(s.realism)}, squash ${f1(s.squash)}, buckle ${f1(s.buckle)}, deform ${s.deformMode}, sky ${s.skyPin ?? s.sky} pinned by the bench (your setting ${s.skyPlayer}, put back after; ${s.skyDetail} on every tier), drawn ${windowSky(r.pageSeconds)}`,
+    ...(s.quality ? [`quality: draw ${s.quality.draw}, scale ${s.quality.scale}, shadows ${s.quality.shadow}${s.quality.pinned ? ` (the URL pinned ${s.quality.pinned})` : ""}`] : []),
     `depth: ${s.depth.bits} bits (drawing buffer${s.depth.contextDepth ? "" : ", none requested"}), subpixel ${s.depth.subpixelBits} bits, fragment highp ${s.depth.fragmentHighFloat ? `${s.depth.fragmentHighFloat.precision} bits, range 2^${s.depth.fragmentHighFloat.rangeMin}..2^${s.depth.fragmentHighFloat.rangeMax}` : "not supported"}, camera near ${s.depth.near} far ${s.depth.far}, log depth ${s.depth.logarithmicDepthBuffer ? "on" : "off"}, ${describeDepthProbe(s.depth.probe)}`,
     ...(abPace && abFx && abDetail
       ? [
@@ -540,6 +558,9 @@ export function describeBench(r: BenchResult): string[] {
       ...(abFx.ultra ? [`               ${arm(FX_TIER_ULTRA, abFx.ultra)}`] : []),
       ...DETAIL_ARMS.map((a, i) => `${i ? "                   " : "A/B detail pinned: "}${arm(a.key === "off" ? "no cuts" : `body beyond ${a.key}`, abDetail[a.key]!)}`),
       ...(r.abSky ? skyArmLines(r.abSky) : []),
+      ...(r.abDraw ? qualityArmLines("A/B draw distance pinned: ", r.abDraw) : []),
+      ...(r.abScale ? qualityArmLines("A/B render scale pinned: ", r.abScale, "2") : []),
+      ...(r.abShadow ? qualityArmLines("A/B shadows pinned: ", r.abShadow) : []),
         ]
       : [`quick bench: the window alone (no A/B blocks, no replay: the extended bench has them)`]),
     ...(r.run.extended ? replayLines(r.replay, r.replayWhy) : []),
