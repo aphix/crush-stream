@@ -5,6 +5,7 @@ import { GUARD_AT_POST, GUARD_DOWN, GUARD_IN, GUARD_RUNNING_IN, GUARD_RUNNING_OU
 import type { DeformableCar } from "../vehicle/car.ts";
 import { cageLift, crownY, keelY } from "../vehicle/car-cage-rig.ts";
 import { SAMPLE, sampleAt } from "../vehicle/car-cage.ts";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { driverSeat } from "../vehicle/interior.ts";
 import type { Ground } from "../world/ground.ts";
 import { insidePolygon } from "../world/terrain.ts";
@@ -67,9 +68,11 @@ const BOARD_SPEED = 2.5;
 /** How far (m) outside the passenger door he stands to get in; he goes back in when the car is `GIVE_UP` m off and off the grounds. */
 const DOOR_OUT = 1.1;
 const GIVE_UP = 45;
-/** How far (m) from the driver's torso a thrown passenger leaves: beside him (car +x) out of the windshield, behind him out of a door. */
+/** How far (m) from the driver's torso a thrown passenger leaves: beside him (toward the passenger's side) out of the windshield, behind him out of a door. */
 const BESIDE = 0.75;
 const BEHIND = 0.8;
+/** His window: the passenger's, across from the driver's (`DRIVER_SIDE`). */
+const PASSENGER_PANE = DRIVER_SIDE > 0 ? "doorL" : "doorR";
 /** The secret's flash (ms; the owner: "a slow bright flash"): its swell, hold at full glare, and fade. */
 const NUKE_FLASH = { rise: 1800, hold: 500, fade: 4200 } as const;
 

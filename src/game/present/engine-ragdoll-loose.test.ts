@@ -158,10 +158,11 @@ describe("given a driver thrown out of a car", () => {
     for (let f = 0; f < 150 && !(a.crashed && b.crashed); f++) tickWorld(w);
     for (let f = 0; f < CRUSH_FRAMES; f++) tickWorld(w);
     // A forced throw (a mini game's) takes the crushed car as it stands: the same `launch` a disabling hit's does.
-    w.world.ejection.throwDriverNow(w.cars, 0);
-    w.world.ejection.throwDriverNow(w.cars, 1);
+    const watch = w.world.ejection!;
+    watch.throwDriverNow(w.cars, 0);
+    watch.throwDriverNow(w.cars, 1);
     const seen: { car: number; off: number; part: number }[] = [];
-    for (const e of w.world.ejection.take()) {
+    for (const e of watch.take()) {
       sys.launch(e, w.cars);
       seen.push({ car: e.car, ...offSeat(sys["dolls"][sys["lastSlot"]]!, w.cars[e.car]!) });
     }
