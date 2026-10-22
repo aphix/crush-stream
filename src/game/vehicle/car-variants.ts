@@ -143,6 +143,8 @@ interface LampShape {
   cells?: readonly { loop: LampLoop; tone: LampTone }[];
   strips?: readonly { line: LampLoop; width: number; tone: LampTone }[];
   rounds?: readonly { at: LampPoint; side?: boolean; r: number; tone: LampTone }[];
+  /** Bumper lamps only: also met on the body skin, the outermost hit winning, where a wrapped fascia corner is held inside the body. */
+  onBody?: boolean;
 }
 
 /** Exhaust tips under the rear bumper: one at `x`, or two at ±`x`, centred at height `y`; `size` [w, h] (m) of the round (oval) or rectangular tip. */
@@ -206,6 +208,8 @@ interface BumperSpec {
   plate?: number;
   /** A rear plate's seating (drawn only): its rear face `out` (m, as `fascia`'s) behind the seat and its `color` (sRGB); absent, the platform plate's (0.09, cream). */
   plateFace?: { out?: number; color?: number };
+  /** Drawn only: the fascia rows whose height (m, car y) lies in [bottom, top] carry a black inlay just proud of the face, a diffuser band. */
+  band?: readonly [bottom: number, top: number];
 }
 
 type DetailView = "side" | "top" | "front" | "rear" | "bottom";
@@ -295,7 +299,7 @@ export interface BodyStyle {
   underside?: readonly (readonly [number, number])[];
   /**
    * Front door: hinge axis at the A-pillar (±hingeX, hingeY, hingeZ), `length` hinge to trailing edge, skin ±halfHeight about the hinge, `aperture` [z0, z1] the body's front-door cut (the skin overlaps it 0.02 each end), mirror seated `mirrorY` over the hinge and `mirrorZ` (default 0) behind it, reaching `mirrorReach` out, ±mirrorHalfDepth deep.
-   * `mirror` (drawn only): its own mirror, `cap` rounded or box of `size` [w out, h, d along z] (default `MIRROR_CAP_SIZE`) in `finish` (body: the door's paint), its outer face at `mirrorReach`, its foot on the skin; absent = the platform mirror x-scaled to the reach.
+   * `mirror` (drawn only): its own mirror, `cap` rounded, box or tear (the rounded cap tapering to its rear face) of `size` [w out, h, d along z] (default `MIRROR_CAP_SIZE`) in `finish` (body: the door's paint), its outer face at `mirrorReach`, its foot on the skin; absent = the platform mirror x-scaled to the reach.
    * `hingeTop` (car y, m, drawn only): the skin's top edge at its hinge cut, its rows closing down to it over the hinge end's slope so the top meets the fender's deck edge there; absent = only the slope.
    */
   door: {
@@ -314,7 +318,7 @@ export interface BodyStyle {
      * `stalk` (m): the foot's length along the car, a slim post under the head; absent = 0.7 of the cap's depth.
      * `mount` "glass": the seat stands on the door glass's plane at its z and height (`mirrorY` may stand over `halfHeight`), its foot leaning with the pane, as a tow mirror on the glass's front corner; absent, on the skin.
      */
-    mirror?: { cap: "rounded" | "box"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; mount?: "glass" };
+    mirror?: { cap: "rounded" | "box" | "tear"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; mount?: "glass" };
     hingeTop?: number;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
@@ -333,8 +337,9 @@ export interface BodyStyle {
    * Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`.
    * `groove` [out, down] (m, drawn only): over the open bay the fender's deck edge beside a lid hood stands `out` outboard of the hood's edge and `down` lower, a shut-line slot onto the bay wall.
    * `nose` [drop, radius] (drawn only, `HoodNose`): the lid folds over the nose at z1 and runs down its face.
+   * `inset` [nose, cowl] (m, drawn only, with `crown`): the side shut line's inset from the half-width, z1 to z0; the flat fender top runs in to it, the crown kept.
    */
-  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; groove?: readonly [out: number, down: number]; nose?: HoodNose };
+  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; groove?: readonly [out: number, down: number]; nose?: HoodNose; inset?: readonly [nose: number, cowl: number] };
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;

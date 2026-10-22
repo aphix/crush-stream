@@ -74,6 +74,25 @@ const MIRROR_CAP_Y = 0.01;
 /** Mirror feet and stalks: black plastic, unless the mirror is chrome. */
 const MIRROR_FITTING = [0x1c1e22, 0.5, 0.3] as const;
 
+/** A tear cap's section at its rear face as a share of its nose's, as the reference's sedan mirror sweeps in toward its glass. */
+const MIRROR_TEAR = 0.6;
+
+/** `geo` (a centred w x h x d rounded box, outward +`sign`) tapered linearly to `MIRROR_TEAR` at its rear face (z -d/2), its inner face held; normals by the taper's inverse transpose. */
+function tearCap(geo: THREE.BufferGeometry, sign: number, w: number, d: number): THREE.BufferGeometry {
+  const pos = geo.getAttribute("position");
+  const nrm = geo.getAttribute("normal");
+  const ds = (1 - MIRROR_TEAR) / d;
+  const n = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+    const s = MIRROR_TEAR + ds * (z + d / 2);
+    n.set(nrm.getX(i) / s, nrm.getY(i) / s, nrm.getZ(i) - (ds * (x + (sign * w) / 2) * nrm.getX(i) + ds * y * nrm.getY(i)) / s).normalize();
+    pos.setXYZ(i, s * x - sign * (w / 2) * (1 - s), s * y, z);
+    nrm.setXYZ(i, n.x, n.y, n.z);
+  }
+  return geo;
+}
+
 /**
  * `style`'s own mirror on side `sign`: a foot on the skin at the arm root, a stalk out to the cap where the cap leaves room, the cap in its
  * finish with its outer face at `mirrorReach`, the glass on its rear face. Built at its real size, then divided by the seat's x-scale (kept
@@ -89,7 +108,8 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const capY = MIRROR_CAP_Y + lift;
   const fitting = (geo: THREE.BufferGeometry) => (spec.finish === "chrome" ? finished(geo, "chrome") : dark(geo, ...MIRROR_FITTING));
   // RoundedBoxGeometry comes unindexed; the other pieces are indexed, and a merge takes one kind.
-  const capShape = spec.cap === "rounded" ? mergeVertices(new RoundedBoxGeometry(w, h, d, 2, MIRROR_CAP_ROUND * Math.min(w, h, d))) : new THREE.BoxGeometry(w, h, d);
+  const rounded = spec.cap === "box" ? null : mergeVertices(new RoundedBoxGeometry(w, h, d, 2, MIRROR_CAP_ROUND * Math.min(w, h, d)));
+  const capShape = rounded ? (spec.cap === "tear" ? tearCap(rounded, sign, w, d) : rounded) : new THREE.BoxGeometry(w, h, d);
   // A black housing is gloss (the references' piano black), not the grilles' and bumpers' satin plastic.
   const cap = spec.finish === "black" ? dark(capShape, TRIM_BLACK, TRIM_FINISH.gloss.roughness, TRIM_FINISH.gloss.metalness) : finished(capShape, spec.finish);
   const parts = [cap.translate(sign * (reach - w / 2), capY, 0)];
@@ -99,8 +119,11 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   parts.push(spec.mount === "glass" ? alongGlass(foot, style, sign) : foot);
   const [stalkFrom, stalkTo] = [root + MIRROR_FOOT.out, reach - w + MIRROR_FOOT.out / 2];
   if (stalkTo > stalkFrom) parts.push(fitting(new THREE.BoxGeometry(stalkTo - stalkFrom, ...MIRROR_STALK)).translate((sign * (stalkFrom + stalkTo)) / 2, capY, 0));
-  const glass = dark(new THREE.PlaneGeometry(w * MIRROR_GLASS.share[0], h * MIRROR_GLASS.share[1]), 0x9aa8b4, 0.08, 0.7).rotateY(Math.PI);
-  parts.push(glass.translate(sign * (reach - w / 2), capY, -d / 2 - MIRROR_GLASS.proud));
+  const tear = spec.cap === "tear";
+  const [glassW, glassH] = tear ? [w * MIRROR_TEAR * MIRROR_GLASS.share[0], h * MIRROR_TEAR * MIRROR_GLASS.share[1]] : [w * MIRROR_GLASS.share[0], h * MIRROR_GLASS.share[1]];
+  const glassCx = tear ? sign * (reach - w / 2) - sign * (w / 2) * (1 - MIRROR_TEAR) : sign * (reach - w / 2);
+  const glass = dark(new THREE.PlaneGeometry(glassW, glassH), 0x9aa8b4, 0.08, 0.7).rotateY(Math.PI);
+  parts.push(glass.translate(glassCx, capY, -d / 2 - MIRROR_GLASS.proud));
   return mergeToned(parts, "style mirror").scale(1 / scaleX, 1, 1);
 }
 
@@ -644,11 +667,12 @@ function builtLamp(style: BodyStyle, which: keyof LampShapes, side = 1): BuiltLa
   const body: SkinSource = { geo: bodySkin(style), offset: new THREE.Vector3(), lid: false, mirror };
   const bumper = which === "front" || which === "rear";
   const seat = style.bumpers[front ? "front" : "rear"].seat;
+  const shape = style.lamps.shapes![which]!;
   const sources: SkinSource[] = bumper
-    ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false, mirror }]
+    ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false, mirror }, ...(shape.onBody ? [body] : [])]
     : [{ geo: front ? makeHoodGeometry(style) : makeTrunkGeometry(style), offset: new THREE.Vector3(0, ...(front ? style.hood.origin : bootPivot(style.boot))), lid: true, mirror }, body];
   const skin = new LampSkin(sources, zEnd, front ? 1 : -1, `${style.id} ${which} lamp${mirror ? " (left)" : ""}`);
-  const built = buildShape(style.lamps.shapes![which]!, skin, zEnd, (geo, t) => (bumper ? bumperTone(geo, t, kind) : lampTone(geo, t, kind, style.lamps.bulb)));
+  const built = buildShape(shape, skin, zEnd, (geo, t) => (bumper ? bumperTone(geo, t, kind) : lampTone(geo, t, kind, style.lamps.bulb)));
   if (!BUILT.has(style)) BUILT.set(style, new Map());
   BUILT.get(style)!.set(id, built);
   return built;

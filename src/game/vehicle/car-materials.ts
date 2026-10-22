@@ -507,6 +507,8 @@ export function makeLightBar(): THREE.BufferGeometry {
  *  As the reference cruiser's (front iso): uprights at |x| 0.36 about 4 cm ahead of the face, the top bar at y ~0.62 just over the
  *  hood's leading edge, the lower bar at the grille's foot. */
 const PUSH_BAR = { gap: 0.015, tube: 0.05, x: 0.36, above: 0.18, span: 0.38, plate: 0.025 } as const;
+/** A push bar tube's sides: round steel as the reference's, the square box read as a plank at the chase camera. */
+const PUSH_BAR_SIDES = 10;
 /** How far (m) a push bar's pads stand ahead of its bumper's face: a car's length spec leaves it off, as its height leaves off the light bar. */
 export const PUSH_BAR_REACH = PUSH_BAR.gap + PUSH_BAR.tube + PUSH_BAR.plate;
 
@@ -518,12 +520,13 @@ export function withPushBar(bumper: THREE.BufferGeometry): THREE.BufferGeometry 
   const { gap, tube, x, above, span, plate } = PUSH_BAR;
   const z = max.z + gap + tube / 2;
   const top = max.y + above;
-  const box = (w: number, h: number, d: number, bx: number, by: number, bz: number) => new THREE.BoxGeometry(w, h, d).translate(bx, by, bz);
-  const parts = [bumper, box(2 * x + tube, tube, tube, 0, top - tube / 2, z), box(2 * span, tube, tube, 0, max.y - tube, z)];
+  // A tube `length` long along y, then turned onto its axis.
+  const pipe = (length: number) => new THREE.CylinderGeometry(tube / 2, tube / 2, length, PUSH_BAR_SIDES);
+  const parts = [bumper, pipe(2 * x + tube).rotateZ(Math.PI / 2).translate(0, top - tube / 2, z), pipe(2 * span).rotateZ(Math.PI / 2).translate(0, max.y - tube, z)];
   for (const side of [-1, 1]) {
-    parts.push(box(tube, top - min.y, tube, side * x, (top + min.y) / 2, z));
-    parts.push(box(0.07, 0.22, plate, side * x, max.y + above / 2, z + tube / 2 + plate / 2));
-    parts.push(box(tube, tube, gap + tube, side * x, max.y - tube, max.z + (gap + tube) / 2));
+    parts.push(pipe(top - min.y).translate(side * x, (top + min.y) / 2, z));
+    parts.push(new THREE.BoxGeometry(0.07, 0.22, plate).translate(side * x, max.y + above / 2, z + tube / 2 + plate / 2));
+    parts.push(pipe(gap + tube).rotateX(Math.PI / 2).translate(side * x, max.y - tube, max.z + (gap + tube) / 2));
   }
   const geo = mergeGeometries(parts, false);
   for (const g of parts) g.dispose();
