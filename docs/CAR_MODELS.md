@@ -41,6 +41,9 @@ it is a drop gate, a pivot over 0.2 m above the panel's top edge is a roof-hinge
 optional `swing` is its `LidSwing` (mass, struts, stop rise, latch and tear bars), default the preset for its kind;
 [`DOOR_RIG.md`](DOOR_RIG.md), Lids), `lamps`, and the
 optional `livery` and `lightBar`. `rig` overrides the soft-body cages a body's panels need.
+Drawn only: `rearGlass.frame` `[side, bottom, top]` (m) draws the clear pane that far inside the outline and the band out to it as
+the glass's black frit, so it swings, breaks and tears with the pane; `grille.lean` (rad) leans the grille's top back about its centre line onto a raked face;
+`grille.rim` draws the surround in its own finish (a chrome frame round a black mesh; absent, `finish`); a mesh or hex grille's `count` sets its lines each way (absent, the default pitch).
 Optional `details` holds the car's fine contours (panel gaps, shut lines, creases, vents, grille bars, lamp internals) as strokes and patches drawn on its side, top, front and rear views; the detail-map system bakes them into height and cavity maps read at the skin's rest position, so they ride a crushed panel.
 
 The hardpoints place the openings and the lower body, each per car:

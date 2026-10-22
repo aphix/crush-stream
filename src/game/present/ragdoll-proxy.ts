@@ -25,7 +25,11 @@ export const PANES = GLASS_NAMES.length;
  * it aside. A bridge deck clears a road under it by more.
  */
 export const UNDER = 1;
-/** Where the cabin starts in the cage's frame (m): every cage body's hood and deck top stays under it (0.62-0.91 m), every roof is over it (1.19-1.37 m). */
+/**
+ * Where the cabin starts in the cage's frame (m) when a style names none (`BodyStyle.proxyBelt`): the cars' hood and deck tops stand
+ * under it (0.62-0.91 m), their roofs over it (1.19-1.37 m). A truck's hood and bed rim stand over it (the pickup's up to 1.23 m) and it
+ * names its own.
+ */
 export const BELT_Y = 1;
 /** The top (m, cage frame) of the lower box under the cabin: under the doors' flank (0.80-0.83 m on every cage body) and every hood and deck. */
 export const SILL_Y = 0.8;
@@ -391,29 +395,29 @@ export class ProxyFitter {
     }
   }
 
-  /** Fills `side` for the `nodes` of the lattice: 0 where no leaf holds the node, else 2 over the belt (`BELT_Y`) and 1 under it. */
-  private markSides(f: CageFields, nodes: number): void {
+  /** Fills `side` for the `nodes` of the lattice: 0 where no leaf holds the node, else 2 over `belt` (m, the cabin's start) and 1 under it. */
+  private markSides(f: CageFields, nodes: number, belt: number): void {
     for (let n = 0; n < nodes; n++) {
       const top = f.top[n]!;
-      this.side[n] = f.covered[n] === 1 && this.glassNode[n] === 0 && Number.isFinite(top) ? (top > BELT_Y ? 2 : 1) : 0;
+      this.side[n] = f.covered[n] === 1 && this.glassNode[n] === 0 && Number.isFinite(top) ? (top > belt ? 2 : 1) : 0;
     }
   }
 
   /**
    * Fits the leaves to `f` on `style`'s lattice (the body mesh's frame), `plan` its plan distance field, `glass` its panes' corners
    * and `paneBits` their states (`markGlass`): the plan's covered nodes not under a standing pane are cut into rectangles of the
-   * nodes under the belt and of those over it (cutting the one whose top spreads most over its area, `cut`) until none spreads
-   * over `LEAF_RANGE` or the boxes are used. A leaf under the belt is a column from `UNDER` under the ground up to the middle of
-   * its spread (a hood, a deck, a bed), one over it a slab there (the roof), with the lower box under the cabin (the roof leaves
-   * of `CABIN_SIDE` nodes each way and over) from `UNDER` under the ground to the sill (first box, only when there is a cabin).
-   * Writes `boxes` and `count`.
+   * nodes under the belt (`belt`, m: the body style's, `BELT_Y` unless it names one) and of those over it (cutting the one whose top
+   * spreads most over its area, `cut`) until none spreads over `LEAF_RANGE` or the boxes are used. A leaf under the belt is a column
+   * from `UNDER` under the ground up to the middle of its spread (a hood, a deck, a bed), one over it a slab there (the roof), with the
+   * lower box under the cabin (the roof leaves of `CABIN_SIDE` nodes each way and over) from `UNDER` under the ground to the sill (first
+   * box, only when there is a cabin). Writes `boxes` and `count`.
    */
-  fit(f: CageFields, style: CageStyle, plan: Float32Array, glass: Float32Array, paneBits: number): void {
+  fit(f: CageFields, style: CageStyle, plan: Float32Array, glass: Float32Array, paneBits: number, belt: number): void {
     const { nu, nv, step, u0, v0 } = style;
     this.plan = plan;
     this.nu = nu;
     this.markGlass(f, style, glass, paneBits);
-    this.markSides(f, nu * nv);
+    this.markSides(f, nu * nv, belt);
     let leaves = 0;
     for (let side = 0; side < 2; side++) {
       this.roof[leaves] = side;

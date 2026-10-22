@@ -36,6 +36,10 @@ import { cageSourceOf } from "./car-cage-rig.ts";
 import { CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
 
 const PAINT = { body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" };
+/** The sedan's rear seam cover, both sides: a band from the seam to the fascia's top, kept inside the car's triangle budget. */
+const SEAM_COVER_TRIANGLES = 160;
+/** A seam cover vertex stands at most this far (m) off the body skin: its 6 mm lift plus a chord's sag across a corner. */
+const SEAM_COVER_OFF = 0.015;
 const scene = new THREE.Scene();
 const cars: Record<CarStyleId, DeformableCar> = {
   sedan: new DeformableCar(PAINT, scene, null, "sedan"),
@@ -683,6 +687,27 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
+  it("when any style's car is reset and its mirrors posed, then each mirror's seat still stretches the platform mirror to the style's own reach", () => {
+    const wrong: string[] = [];
+    for (const id of CAR_STYLE_IDS) {
+      const car = new DeformableCar(PAINT, scene, null, id);
+      const want = CAR_STYLES[id].door.mirrorReach;
+      const read = (when: string): void => {
+        for (const name of ["mirrorL", "mirrorR"]) {
+          const reach = car["parts"].find((p) => p.name === name)!.object.scale.x * MIRROR_REACH;
+          if (Math.abs(reach - want) > 1e-9) wrong.push(`${id} ${name} ${when}: reach ${reach.toFixed(3)} m, its door's ${want}`);
+        }
+      };
+      read("built");
+      car.resetVisual();
+      read("reset");
+      for (const p of car["parts"]) if (p.mirror) car["posePart"](p);
+      read("posed");
+      car.dispose();
+    }
+    assert.deepEqual(wrong, []);
+  });
+
   it("when a mirror sits back along a door whose side narrows rearward, then its arm still starts on the door skin there", () => {
     const coupe = CAR_STYLES.coupe;
     // The side tapers 6 cm over the mirror's 0.3 m, so a seat taken at the hinge stands off the skin.
@@ -1129,6 +1154,33 @@ describe("given a body style's H2 hardpoints", () => {
         worst = Math.max(worst, past);
       }
       assert.ok(worst <= 0.01, `${id}: a dark lip vertex stands ${(worst * 100).toFixed(1)} cm out past the opening, over painted skin`);
+    });
+  }
+
+  for (const id of CAR_STYLE_IDS) {
+    const inset = CAR_STYLES[id].arch.lip?.inset;
+    if (inset === undefined) continue;
+    it(`when the ${id}'s arch lips stand ${inset} m in over their openings, then from outside each arch's top reads painted lip down to that far under the opening's edge, where the lip-less arch shows the well`, () => {
+      const style = CAR_STYLES[id];
+      const plain: BodyStyle = { ...style, arch: { ...style.arch, lip: { ...style.arch.lip!, inset: undefined } } };
+      /** The lowest height (m, under the arch's top) a ray in from outside over each wheel's top still meets paint at. */
+      const paintedDown = (s: BodyStyle) => {
+        const drawn = new THREE.Mesh(makeChassisGeometry(s), FRONT);
+        let worst = Infinity;
+        for (const [wx, wy, wz] of carFrame(s).wheels) {
+          let down = 0;
+          for (let d = 0.005; d < 0.15; d += 0.005) {
+            const hit = toneHit(drawn, [Math.sign(wx) * 3, wy + s.arch.radius - d, wz], [-Math.sign(wx), 0, 0], 6);
+            if (!hit || hit.tone !== 0) break;
+            down = d;
+          }
+          worst = Math.min(worst, down);
+        }
+        return worst;
+      };
+      const [lipped, bare] = [paintedDown(style), paintedDown(plain)];
+      assert.ok(bare < inset / 2, `the control: the lip-less ${id} arch reads paint ${(bare * 100).toFixed(1)} cm under its top`);
+      assert.ok(lipped >= inset - 0.01, `the ${id} arch reads paint only ${(lipped * 100).toFixed(1)} cm under its top, its lip stands ${inset * 100} cm in`);
     });
   }
 
@@ -1725,6 +1777,65 @@ describe("given a body style's P2 parts", () => {
     assert.ok(badge.length > 0, "a chrome badge at the centre of a black grille");
   });
 
+  it("when a grille leans, then its face's top and bottom edges stand where the lean turns them about its centre line on its face", () => {
+    const sedan = CAR_STYLES.sedan;
+    const seat = sedan.bumpers.front.seat;
+    const grille = { y: 0.48, z: seat.z + 0.07, size: [0.6, 0.16], kind: "hex", finish: "black", lean: 0.4 } as const;
+    const pos = drawnPart(PART_KIND.grille, { ...sedan, grille, lamps: { ...sedan.lamps, shapes: undefined } }).geometry.getAttribute("position");
+    const [cy, face, half] = [grille.y - seat.y - GRILLE_SEAT.y, grille.z - seat.z - GRILLE_SEAT.z, grille.size[1] / 2];
+    const [dy, dz] = [half * Math.cos(grille.lean), half * Math.sin(grille.lean)];
+    const has = (y: number, z: number): boolean => Array.from({ length: pos.count }, (_, i) => i).some((i) => Math.abs(Math.abs(pos.getX(i)) - 0.3) < 1e-4 && Math.abs(pos.getY(i) - y) < 1e-4 && Math.abs(pos.getZ(i) - z) < 1e-4);
+    assert.ok(has(cy + dy, face - dz), `the face's top corners lean back to ${(cy + dy).toFixed(4)}, ${(face - dz).toFixed(4)}`);
+    assert.ok(has(cy - dy, face + dz), `the face's bottom corners stand out to ${(cy - dy).toFixed(4)}, ${(face + dz).toFixed(4)}`);
+  });
+
+  it("when a grille's surround takes its own finish, then the ring out to the grille's edge turns chrome and its mesh stays black", () => {
+    const sedan = CAR_STYLES.sedan;
+    const grille = { y: 0.48, z: sedan.bumpers.front.seat.z + 0.07, size: [0.6, 0.16], kind: "hex", finish: "black" } as const;
+    const chrome = new THREE.Color(TRIM_CHROME);
+    const black = new THREE.Color(TRIM_BLACK);
+    const tones = (spec: NonNullable<BodyStyle["grille"]>) => {
+      const geo = drawnPart(PART_KIND.grille, { ...sedan, grille: spec, lamps: { ...sedan.lamps, shapes: undefined } }).geometry;
+      const [pos, col] = [geo.getAttribute("position"), geo.getAttribute("color")];
+      const is = (i: number, c: THREE.Color) => Math.abs(col.getX(i) - c.r) < 1e-6 && Math.abs(col.getY(i) - c.g) < 1e-6 && Math.abs(col.getZ(i) - c.b) < 1e-6;
+      let [chromeN, blackN, reach] = [0, 0, 0];
+      for (let i = 0; i < pos.count; i++) {
+        if (is(i, chrome)) [chromeN, reach] = [chromeN + 1, Math.max(reach, Math.abs(pos.getX(i)))];
+        else if (is(i, black)) blackN++;
+      }
+      return { chromeN, blackN, reach };
+    };
+    const plain = tones(grille);
+    const rimmed = tones({ ...grille, rim: "chrome" });
+    assert.ok(plain.chromeN === 0 && rimmed.chromeN > 0, `chrome vertices: ${plain.chromeN} plain, ${rimmed.chromeN} rimmed`);
+    assert.ok(Math.abs(rimmed.reach - grille.size[0] / 2) < 1e-4, `the chrome reaches ${rimmed.reach.toFixed(4)} across, the grille's edge ${grille.size[0] / 2}`);
+    assert.ok(rimmed.blackN === plain.blackN - rimmed.chromeN && rimmed.blackN > 0, `only the surround turned: black ${plain.blackN} -> ${rimmed.blackN}`);
+  });
+
+  it("when a hex grille gives a count, then it draws that many lines each way, one 12-triangle bar each", () => {
+    const sedan = CAR_STYLES.sedan;
+    const grille = { y: 0.48, z: sedan.bumpers.front.seat.z + 0.07, size: [0.6, 0.16], kind: "hex", finish: "black" } as const;
+    const tris = (count: number) => drawnPart(PART_KIND.grille, { ...sedan, grille: { ...grille, count }, lamps: { ...sedan.lamps, shapes: undefined } }).geometry.getIndex()!.count / 3;
+    assert.ok(tris(16) - tris(8) === 2 * 8 * 12, `16 lines each way draw ${tris(16) - tris(8)} triangles more than 8`);
+  });
+
+  it("when a rear glass has a frame, then its clear pane is drawn that far inside the outline, the band out to the outline is its black frit, and the car's pane wears its vertex colours", () => {
+    const hatch = CAR_STYLES.hatchback;
+    const q = hatch.rearGlass;
+    const [side, bottom] = q.frame!;
+    const geo = makeRearGlass(hatch);
+    const [pos, colour] = [geo.getAttribute("position"), geo.getAttribute("color")];
+    const ids = Array.from({ length: pos.count }, (_, i) => i);
+    const [clear, frit] = [ids.filter((i) => colour.getX(i) === 1), ids.filter((i) => colour.getX(i) === 0)];
+    const reach = (of: number[]): number[] => [Math.max(...of.map((i) => Math.abs(pos.getX(i)))), Math.min(...of.map((i) => pos.getY(i)))];
+    const len = Math.hypot(q.top[0] - q.base[0], q.top[1] - q.base[1]);
+    const paneFoot = [lerp(q.wBase, q.wTop, bottom / len) / 2 - side, q.base[0] + (bottom * (q.top[0] - q.base[0])) / len];
+    assertSameNumbers([...reach(clear), ...reach(frit)], [...paneFoot, q.wBase / 2, q.base[0]], "the clear pane's and the frit's half-width and foot", 1e-5);
+    const pane = cars.hatchback["glassPanes"].find((p) => p.name === "rear")!;
+    assert.ok((pane.mesh.material as THREE.MeshStandardMaterial).vertexColors, "the car's rear pane draws its frit");
+    assert.ok(!makeRearGlass({ ...hatch, rearGlass: { ...q, frame: undefined } }).hasAttribute("color"), "no frit without a frame");
+  });
+
   it("when a style puts lamps on its bumpers, then the grille seat draws the front ones on the fascia and the tail trim the rear ones, with no shared dark strip across the tail", () => {
     const sedan = CAR_STYLES.sedan;
     const meet = (front: boolean, x: number, y: number): number => {
@@ -1794,6 +1905,8 @@ describe("given a body style's P2 parts", () => {
     const fascia = withRearFittings(makeBumperGeometry(false, style), style);
     const drawn = withSeamCover(fascia, style, false);
     assert.ok(drawn !== fascia, "the control: the seam cover is merged in");
+    const cover = (drawn.index!.count - fascia.index!.count) / 3;
+    assert.ok(cover <= SEAM_COVER_TRIANGLES, `the cover bills ${cover} triangles, over ${SEAM_COVER_TRIANGLES}: a band down to the fascia, not the skin it hides`);
     const both = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
     const bumper = new THREE.Mesh(drawn, both);
     bumper.position.set(0, seat.y, -seat.z);
@@ -1821,6 +1934,32 @@ describe("given a body style's P2 parts", () => {
     }
     const plain = makeBumperGeometry(true, CAR_STYLES.coupe);
     assert.ok(withSeamCover(plain, CAR_STYLES.coupe, true) === plain, "a bumper with no seam is drawn as it was");
+  });
+
+  it("when a style's bumpers carry their seams, then every seam cover vertex lies on the body skin (no fold of the band stands off an edge)", () => {
+    const both = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const ray = new THREE.Raycaster();
+    const [p, n] = [new THREE.Vector3(), new THREE.Vector3()];
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const body = new THREE.Mesh(makeChassisGeometry(style), both);
+      for (const front of [true, false]) {
+        const { seat } = style.bumpers[front ? "front" : "rear"];
+        const fascia = front ? makeBumperGeometry(true, style) : withRearFittings(makeBumperGeometry(false, style), style);
+        const drawn = withSeamCover(fascia, style, front);
+        if (drawn === fascia) continue;
+        const [pos, nrm] = [drawn.getAttribute("position"), drawn.getAttribute("normal")];
+        let off = 0;
+        for (let i = fascia.getAttribute("position").count; i < pos.count; i++) {
+          p.fromBufferAttribute(pos, i).add(new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z));
+          n.fromBufferAttribute(nrm, i).normalize();
+          ray.set(p.clone().addScaledVector(n, 0.05), n.clone().negate());
+          const hit = ray.intersectObject(body, false)[0];
+          off = Math.max(off, hit ? Math.abs(hit.distance - 0.05) : Infinity);
+        }
+        assert.ok(off < SEAM_COVER_OFF, `${id} ${front ? "front" : "rear"}: a cover vertex ${(off * 100).toFixed(1)} cm off the skin`);
+      }
+    }
   });
 
   it("when a bumper carrying its seam is torn off, then its loose box (its flying shape and mass) holds every vertex it draws, the seam cover's too", () => {
@@ -2154,8 +2293,10 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         let proud = 0;
         // From a tenth of its width over the opening's edge: on the edge itself the lip-less body's side turns in under it.
         for (let k = 1; k <= 10; k++) {
-          const y = wy + style.arch.radius + (k / 10) * lip.width;
-          const out = (mesh: THREE.Mesh) => Math.abs(bodyHit(mesh, [s * 3, y, wz], [-s, 0, 0], 3)?.x ?? 0);
+          // An inset lip (`lip.inset`) stands over the opening's top: it is read from there, against the skin at the top it seats on.
+          const y = wy + style.arch.radius - (lip.inset ?? 0) + (k / 10) * lip.width;
+          const at = (mesh: THREE.Mesh, h: number) => Math.abs(bodyHit(mesh, [s * 3, h, wz], [-s, 0, 0], 3)?.x ?? 0);
+          const out = (mesh: THREE.Mesh) => at(mesh, mesh === plain ? Math.max(y, wy + style.arch.radius) : y);
           proud = Math.max(proud, out(drawn) - out(plain));
         }
         assert.ok(Math.abs(proud - lip.flare) < LIP_TOL, `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: the lip stands ${proud.toFixed(4)} m proud`);
@@ -2173,7 +2314,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         const top = wy + style.arch.radius;
         const skin = Math.abs(bodyHit(plain, [s * 3, top, wz], [-s, 0, 0], 3)!.x);
         const at = `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}`;
-        const crown = toneHit(drawn, [s * 3, top + 0.3 * lip.width, wz], [-s, 0, 0], 3);
+        const crown = toneHit(drawn, [s * 3, top - (lip.inset ?? 0) + 0.3 * lip.width, wz], [-s, 0, 0], 3);
         const onLip = crown !== null && crown.at >= lips.from && crown.at < lipEnd;
         assert.ok(onLip && crown.tone === 0, `${at}: from outside, ${onLip ? `the lip's crown is toned ${crown.tone}` : "the lip is not met"}`);
         const seen = WELL_GAP.map((d) => toneHit(drawn, [s * (skin - d), wy, wz], [0, 1, 0], style.arch.radius)?.tone ?? NaN);

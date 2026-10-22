@@ -11,7 +11,7 @@ import { BARRIER_HALF } from "../contact/sat.ts";
 import { hypot3 } from "../kernel/physics-core.js";
 import { PURSE_BODIES, type Purses } from "./ragdoll-purse.ts";
 import { CAR_BOX } from "./ragdoll-props.ts";
-import { BOX_FLOATS, PANE_GONE, PANES, PROXY_BOXES, ProxyFitter, UNDER } from "./ragdoll-proxy.ts";
+import { BELT_Y, BOX_FLOATS, PANE_GONE, PANES, PROXY_BOXES, ProxyFitter, UNDER } from "./ragdoll-proxy.ts";
 import type { Doll } from "./ragdoll-body.ts";
 import { carGroups, FIXED_GROUPS, MAX_ACC, SLOTS, STEP } from "./ragdoll-config.ts";
 
@@ -252,7 +252,7 @@ export class CarProxies {
       this.fitted[i] = car;
       this.lift[i] = lift;
       this.serial[i] = cage.serial;
-      this.shape(i, cage, lift, bits);
+      this.shape(i, cage, lift, bits, car.style.proxyBelt ?? BELT_Y);
     }
     this.paneBits[i] = bits;
   }
@@ -374,15 +374,15 @@ export class CarProxies {
   }
 
   /**
-   * Car i's colliders fitted to `cage` raised by `lift` (`ProxyFitter`): each leaf and pane slab in its place, the leaves
-   * unused (and those they replace) in or out of the world, and what the props' squeeze (`CAR_BOX`) and the reach read of the
-   * car: the cage's plan extent, its height and `UNDER`.
+   * Car i's colliders fitted to `cage` raised by `lift` (`ProxyFitter`, the cabin from `belt` up): each leaf and pane slab in its place,
+   * the leaves unused (and those they replace) in or out of the world, and what the props' squeeze (`CAR_BOX`) and the reach read of
+   * the car: the cage's plan extent, its height and `UNDER`.
    */
-  private shape(i: number, cage: CageView, lift: number, paneBits: number): void {
+  private shape(i: number, cage: CageView, lift: number, paneBits: number, belt: number): void {
     const fitter = this.fitter;
     const f = cage.fields;
     const was = this.shapeN[i]!;
-    fitter.fit(f, cage.style, cage.planField(), this.glass[i]!, paneBits);
+    fitter.fit(f, cage.style, cage.planField(), this.glass[i]!, paneBits, belt);
     fitter.fitPanes(f, cage.style, this.glass[i]!);
     // The fit is kept per car: `cull` builds the leaves and slabs a dummy is near from it.
     const leafO = i * PROXY_BOXES * BOX_FLOATS;

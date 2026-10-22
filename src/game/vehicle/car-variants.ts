@@ -46,6 +46,8 @@ export interface GlassQuad {
   wBase: number;
   wTop: number;
   bow?: GlassBow;
+  /** Drawn only (the rear glass): the clear pane drawn in by [side, bottom, top] (m; sides across, bottom and top along its slope), the band out to the outline the glass's black frit. */
+  frame?: readonly [number, number, number];
 }
 
 /** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
@@ -234,6 +236,8 @@ interface ArchLip {
   width: number;
   square?: boolean;
   band?: boolean;
+  /** The whole lip stands this far (m) in from the opening's edge, over it, so the opening reads smaller than the arch it covers (drawn only). */
+  inset?: number;
 }
 
 /** A chase eye: `dist` behind and `height` over the car's origin, aimed `aimUp` over it (m). */
@@ -344,6 +348,12 @@ export interface BodyStyle {
   wheelTub?: { rise: number; length: number; width: number };
   /** A tub's rim width (m): its side wall's top edge stands this far in from the body side (its foot stays 6 cm in); absent, 6 cm. */
   tubWall?: number;
+  /**
+   * Where the dummies' world takes the cabin to start (m, the cage's frame; `ragdoll-proxy.ts` `BELT_Y`): a cage top under it is a column
+   * from under the ground (a hood, a deck, a bed), one over it a roof slab. Absent, `BELT_Y`'s 1 m: every car's hood and deck under it,
+   * every roof over it, but a truck's.
+   */
+  proxyBelt?: number;
   /** Rear door shut line on four-door bodies, or null. */
   rearDoorSeam: number | null;
   boot: BootSpec;
@@ -365,7 +375,7 @@ export interface BodyStyle {
   /**
    * The front grille (drawn only; it tears off with the front bumper): centre height `y` and face `z` (m, car frame; z absent: the platform
    * grille's face); `size` [w at the top, h], `bottom` its width at the bottom (a trapezoid; absent, w), corners rounded `round` (m); `kind`
-   * horizontal bars, vertical slats, a mesh of both or a diagonal (hex) mesh, `count` bars or slats (absent, at the default pitch); a round
+   * horizontal bars, vertical slats, a mesh of both or a diagonal (hex) mesh, `count` bars or slats (a mesh: lines each way; absent, at the default pitch); a round
    * `badge` of that radius at its centre; in `finish` (body: the body's paint). Absent: the platform grille.
    */
   grille?: {
@@ -378,6 +388,10 @@ export interface BodyStyle {
     count?: number;
     badge?: number;
     finish: "black" | "chrome" | "body";
+    /** Its top leaning back (rad) about its centre line, onto a raked face; absent, upright. */
+    lean?: number;
+    /** The surround's own finish (a chrome frame round a black mesh); absent, `finish`. */
+    rim?: "black" | "chrome" | "body";
   };
   /**
    * Seats (m, car space): the driver's H-point [x, y, z], x across from the centre line on `DRIVER_SIDE` (the passenger mirrors him),
