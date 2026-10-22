@@ -17,6 +17,32 @@ const MUSCLE_FRONT_FASCIA = [
   [-0.135, -0.07],
 ] as const;
 
+/** Coupe's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const COUPE_LAMP_SHAPES = {
+  head: {
+    loops: [{ points: [[0.4, 0.485], [0.6, 0.485], [0.6, 0.665], [0.4, 0.665]] }],
+    lens: "lit",
+    bezel: "chrome",
+    recess: 0.024,
+  },
+  tail: {
+    loops: [
+      { points: [[0.22, 0.67], [0.55, 0.67], [0.55, 0.81], [0.22, 0.81]] },
+      { side: true, points: [[-2.045, 0.67], [-2.0, 0.67], [-2.0, 0.81], [-2.045, 0.81]] },
+    ],
+    lens: "lit",
+    bezel: "chrome",
+    recess: 0.015,
+    cells: [{ loop: { points: [[0, 0.67], [0.22, 0.67], [0.22, 0.81], [0, 0.81]] }, tone: "dark" }],
+    strips: [
+      { line: { points: [[0.23, 0.71], [0.51, 0.71]] }, width: 0.004, tone: "dark" },
+      { line: { points: [[0.23, 0.74], [0.51, 0.74]] }, width: 0.004, tone: "dark" },
+      { line: { points: [[0.23, 0.77], [0.51, 0.77]] }, width: 0.004, tone: "dark" },
+      { line: { points: [[0, 0.812], [0.22, 0.812]] }, width: 0.006, tone: "chrome" },
+    ],
+  },
+} as const;
+
 /** Chrome rear bar under the tail-lamp band: 12 cm tall, 6 cm proud, rounded top and bottom, no splitter ([y, out] m, top to bottom). */
 const MUSCLE_REAR_FASCIA = [
   [0.06, -0.06],
@@ -96,8 +122,17 @@ export const COUPE: BodyStyle = {
   tubs: [[-0.9, 0.7, 0.3]],
   rearDoorSeam: null,
   boot: { kind: "lid", z0: -1.5, z1: -2.04, origin: [0.975, -1.5], lip: { rise: 0.02, depth: 0.08 } },
+  lamps: {
+    head: [0.5, 0.575],
+    tail: [0.37, 0.74],
+    shapes: COUPE_LAMP_SHAPES,
+    sideMarkers: [
+      { at: [0.58, 1.78], size: [0.05, 0.045] },
+      { at: [0.62, -1.88], size: [0.05, 0.04] },
+    ],
+  },
+  grille: { y: 0.575, size: [0.56, 0.18], kind: "mesh", badge: 0.03, finish: "black" },
   exhaust: { tips: 2, x: 0.45, y: 0.24, size: [0.085, 0.06], shape: "round" },
-  lamps: { head: [0.5, 0.575], tail: [0.37, 0.74] },
   camera: { hood: [1.12, 1.0], third: { dist: 6.1, height: 1.95, aimUp: 0.95 }, far: { dist: 9.9, height: 3.25, aimUp: 1.1 } },
   details: {
     lines: [

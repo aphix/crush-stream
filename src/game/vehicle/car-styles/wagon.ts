@@ -2,6 +2,48 @@ import type { BodyStyle } from "../car-variants.ts";
 import { st } from "./platform.ts";
 import { LIFTGATE } from "../hinge-spec.ts";
 
+/** Wagon's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const WAGON_LAMP_SHAPES = {
+  head: {
+    loops: [
+      { points: [[0.41, 0.79], [0.7, 0.81], [0.76, 0.845], [0.41, 0.85]] },
+      { side: true, points: [[1.92, 0.8], [1.7, 0.84], [1.68, 0.865], [1.92, 0.865]] },
+    ],
+    lens: "dark",
+    bezel: "black",
+    recess: 0.01,
+    strips: [{ line: { points: [[0.41, 0.85], [0.41, 0.8], [0.7, 0.815], [0.76, 0.845]] }, width: 0.008, tone: "lit" }],
+    rounds: [
+      { at: [0.47, 0.835], r: 0.012, tone: "lit" },
+      { at: [0.54, 0.835], r: 0.012, tone: "lit" },
+    ],
+  },
+  tail: {
+    loops: [
+      { points: [[0.62, 0.9], [0.68, 0.905], [0.68, 0.995], [0.62, 1.0]] },
+      { points: [[0.5, 0.9], [0.62, 0.9], [0.62, 1.0], [0.5, 1.0]] },
+      { side: true, points: [[-2.08, 0.91], [-1.74, 0.97], [-1.74, 0.99], [-2.08, 1.0]] },
+    ],
+    lens: "lit",
+    bezel: "black",
+    strips: [{ line: { points: [[0.5, 0.995], [0.68, 0.99]] }, width: 0.006, tone: "lit" }],
+    cells: [
+      { loop: { points: [[0, 0.91], [0.5, 0.91], [0.5, 0.98], [0, 0.98]] }, tone: "dark" },
+      { loop: { points: [[0.5, 0.9], [0.68, 0.9], [0.68, 0.94], [0.5, 0.94]] }, tone: "smoked" },
+      { loop: { points: [[0.5, 0.94], [0.55, 0.94], [0.55, 1.0], [0.5, 1.0]] }, tone: "clear" },
+    ],
+  },
+  front: {
+    loops: [{ points: [[0.52, 0.36], [0.72, 0.36], [0.72, 0.48], [0.52, 0.48]] }],
+    lens: "dark",
+    strips: [{ line: { points: [[0.52, 0.38], [0.72, 0.38]] }, width: 0.01, tone: "chrome" }],
+  },
+  rear: {
+    loops: [{ points: [[0.48, 0.45], [0.64, 0.45], [0.64, 0.47], [0.48, 0.47]] }],
+    lens: "red",
+  },
+} as const;
+
 /** Luxury SUV (the `wagon` id): tall clamshell nose, flat floating roof, a roof-hinged liftgate carrying the raked rear glass. */
 export const WAGON: BodyStyle = {
   id: "wagon",
@@ -79,7 +121,8 @@ export const WAGON: BodyStyle = {
   tubs: [[-1.96, 0.7, 0.38]],
   rearDoorSeam: -1.23,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE },
-  lamps: { head: [0.3, 0.8], tail: [0.62, 0.955] },
+  lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES },
+  grille: { y: 0.72, size: [0.8, 0.28], bottom: 0.62, round: 0.03, kind: "hex", finish: "chrome" },
   seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },
   pillars: { b: { width: [0.088, 0.088] }, divider: { width: [0.105, 0.105] } },
   blackout: { a: true, sail: true, b: true, divider: true, rear: true },
