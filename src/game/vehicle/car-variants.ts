@@ -376,9 +376,10 @@ export interface BodyStyle {
   /**
    * Drawn only: side-view pillar bands (`PillarSpan`). `a`: the A-post's width behind the windshield edge (absent 0.06). `b`: the
    * B-pillar, centred on its `bPillar` band unless it leans. `divider`: the post at `midPillarZ`. Absent: the `bPillar` band (its top
-   * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`.
+   * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` (y, m): the plank rear post's (no `cPillar`) foot
+   * corner, dropped onto the belt beside the rear glass's base; absent, the glass's base y.
    */
-  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan };
+  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: number };
   /**
    * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
    * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.

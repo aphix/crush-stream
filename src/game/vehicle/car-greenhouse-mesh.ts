@@ -827,7 +827,8 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     // A drawn post's head follows the rear glass's top corner down the dome (`domeFall`), held inside the roof's span, where the
     // roof's clamp takes its whole top ring, not half of it.
     const [rtX, rtY, rtZ] = rearPillar.rt;
-    const heldPillar = { ...rearPillar, rt: [rtX, rtY - domeFall(style, rg.top[1])(rg.wTop / 2, 1), Math.max(rtZ, style.roofZ[0] + ROOF_TUCK)] } as const;
+    const [rbX, rbY, rbZ] = rearPillar.rb;
+    const heldPillar = { ...rearPillar, rb: [rbX, style.pillars?.rearFoot ?? rbY, rbZ], rt: [rtX, rtY - domeFall(style, rg.top[1])(rg.wTop / 2, 1), Math.max(rtZ, style.roofZ[0] + ROOF_TUCK)] } as const;
     const sail = source === "drawn" ? style.cPillar : undefined;
     parts.push(pillar(source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : sail ? cPillarSail(sign, style, rearPillar) : roundedPillarFromCorners(sign, heldPillar, 0.05, true), "rear"));
     if (sail?.tip) parts.push(cPillarTip(sign, style, sail.tip));
