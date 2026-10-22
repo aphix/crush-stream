@@ -10,7 +10,7 @@ import { ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, gl
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, rockerAt, tubWall } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
-import { drawnLamp, drawnPart, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
+import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
@@ -2423,6 +2423,19 @@ describe("given a body style's P2 parts", () => {
       assert.ok(band.length > 0, `${id}: no black plastic in the tail trim`);
       assert.equal(band.filter((i) => uv.getX(i) !== texel).length, 0, `${id}: black vertices off the plastic finish's texel`);
     }
+  });
+
+  it("when a bumper lamp's lens is a cavity, then the sedan's lower intake under the grille is filled in the grille backing's matte near-black, not a glossy dark lens mirroring the road", () => {
+    const backing = toned(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3)), ...GRILLE_BACKING);
+    const tone = (g: THREE.BufferGeometry, i: number) => [g.getAttribute("color").getX(i), g.getAttribute("color").getY(i), g.getAttribute("color").getZ(i), g.getAttribute("uv").getX(i)].join();
+    const key = tone(backing, 0);
+    const sedan = CAR_STYLES.sedan;
+    const y0 = sedan.bumpers.front.seat.y + GRILLE_SEAT.y;
+    const grille = drawnPart(PART_KIND.grille, sedan).geometry;
+    const pos = grille.getAttribute("position");
+    const intake = Array.from({ length: pos.count }, (_, i) => i).filter((i) => Math.abs(pos.getX(i)) < 0.4 && pos.getY(i) + y0 > 0.23 && pos.getY(i) + y0 < 0.27);
+    const filled = intake.filter((i) => tone(grille, i) === key).length;
+    assert.ok(filled > intake.length / 2, `${filled} of ${intake.length} intake vertices in the grille backing's tone (the rest its bezel lip)`);
   });
 
   it("when a tail lamp's outline runs onto the boot lid, then the lid carries that share and opens with it, and the body keeps the rest", () => {

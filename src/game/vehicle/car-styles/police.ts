@@ -40,30 +40,29 @@ const POLICE_LAMP_SHAPES = {
     loops: [
       {
         points: [
-          [0.42, 0.64, -2.12],
-          [0.47, 0.72, -2.1],
-          [0.53, 0.79, -2.07],
-          [0.59, 0.84, -2.03],
-          [0.65, 0.865, -1.97],
-          [0.7, 0.872, -1.91],
-          [0.735, 0.86, -1.85],
-          [0.75, 0.83, -1.79],
+          [0.52, 0.64, -2.07],
+          [0.55, 0.72, -2.06],
+          [0.59, 0.8, -2.03],
+          [0.63, 0.86, -1.99],
+          [0.68, 0.895, -1.93],
+          [0.72, 0.9, -1.88],
+          [0.74, 0.885, -1.83],
+          [0.75, 0.85, -1.79],
           [0.755, 0.77, -1.76],
           [0.755, 0.69, -1.76],
           [0.75, 0.65, -1.78],
           [0.73, 0.64, -1.85],
           [0.62, 0.64, -2.0],
-          [0.52, 0.64, -2.07],
         ],
       },
     ],
-    // The cruiser's tail lamps are deep red with a lit band and dark ribs (rear iso): a rounded wedge, its inner edge leaning in to the
-    // tail's top corner, wrapping 10 cm onto the quarter.
+    // The cruiser's tail lamps are deep red with a lit band and dark ribs (rear iso): a rounded wedge a little taller than wide, its
+    // inner edge leaning in to the tail's top corner, wrapping 10 cm onto the quarter.
     lens: "red",
     strips: [
-      { line: { points: [[0.5, 0.745, -2.09], [0.62, 0.745, -2.0], [0.72, 0.745, -1.87], [0.755, 0.745, -1.77]] }, width: 0.022, tone: "lit" },
-      { line: { points: [[0.55, 0.795, -2.06], [0.63, 0.795, -1.99], [0.72, 0.795, -1.87], [0.755, 0.795, -1.77]] }, width: 0.003, tone: "dark" },
-      { line: { points: [[0.46, 0.695, -2.1], [0.62, 0.695, -2.0], [0.72, 0.695, -1.87], [0.755, 0.695, -1.77]] }, width: 0.003, tone: "dark" },
+      { line: { points: [[0.58, 0.745, -2.04], [0.62, 0.745, -2.0], [0.72, 0.745, -1.87], [0.755, 0.745, -1.77]] }, width: 0.022, tone: "lit" },
+      { line: { points: [[0.61, 0.795, -2.01], [0.63, 0.795, -1.99], [0.72, 0.795, -1.87], [0.755, 0.795, -1.77]] }, width: 0.003, tone: "dark" },
+      { line: { points: [[0.56, 0.695, -2.05], [0.62, 0.695, -2.0], [0.72, 0.695, -1.87], [0.755, 0.695, -1.77]] }, width: 0.003, tone: "dark" },
     ],
   },
   front: {
