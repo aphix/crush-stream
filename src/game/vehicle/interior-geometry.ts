@@ -221,6 +221,10 @@ export function crashBarGeometry(): THREE.BufferGeometry {
 const RED: Tone = [0xa8231c, 0.5, 0.2];
 /** The monster's half track (m): its axle tube runs hub to hub, and `CarUnderbody` scales it across another span. */
 export const AXLE_HALF_SPAN = 1.195;
+/** The coil-overs' line across the car (m): outboard in the wheel well, where its dark back wall leaves them in sight, clear of the steered tyre. */
+const COILOVER_X = 0.76;
+/** The rear pair's (m): the rear tyres never steer, so they stand further out, past the bed wall the rear well's back wall follows; the axle's shafts at `COILOVER_X` stay inside them. */
+const REAR_COILOVER_X = 0.79;
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _dir = new THREE.Vector3();
@@ -234,17 +238,26 @@ function rod(a: readonly number[], b: readonly number[], r: number, tone: Tone):
 }
 
 /**
- * The lifted truck's ladder frame in its body's space (the class lift's, the floor 0.34 up): rails and crossmembers under the floor,
- * the transfer case, the steering box, and each corner's shock bodies hanging over its axle, which the axle's shafts slide into.
+ * The lifted truck's ladder frame in its body's space (the class lift's, the floor 0.34 up): rails and crossmembers up against the
+ * floor, the transfer case, the steering box, the links' mounts, and each corner's coil-overs standing up into the wheel well from
+ * their bracket on the rail, which the axle's shafts slide into.
  */
 export function ladderFrameGeometry(): THREE.BufferGeometry {
-  const parts = [box(0.3, 0.2, 0.36, RED, 0, 0.02, 0.05), box(0.14, 0.14, 0.18, BLACK, 0.36, 0.12, 1.6)];
-  for (const z of [1.75, 0.75, -0.35, -1.3, -2.1]) parts.push(box(0.9, 0.08, 0.08, BLACK, 0, 0.2, z));
+  const parts = [box(0.24, 0.14, 0.3, RED, 0, 0.02, 0), box(0.14, 0.14, 0.18, BLACK, 0.36, 0.2, 1.6)];
+  for (const z of [1.75, 0.635, -0.635, -2.1]) parts.push(box(0.9, 0.08, 0.08, BLACK, 0, 0.28, z));
   for (const sign of [-1, 1]) {
-    parts.push(box(0.09, 0.14, 4.1, BLACK, sign * 0.45, 0.2, -0.15));
+    parts.push(box(0.09, 0.16, 4.1, BLACK, sign * 0.45, 0.26, -0.15));
     for (const axle of [-1.385, 1.385]) {
-      parts.push(box(0.36, 0.06, 0.34, BLACK, sign * 0.62, 0.24, axle));
-      for (const dz of [-0.12, 0.12]) parts.push(toned(new THREE.CylinderGeometry(0.07, 0.07, 0.4, 10), ...STEEL).translate(sign * 0.72, 0.07, axle + dz));
+      const mid = -Math.sign(axle);
+      const x = axle < 0 ? REAR_COILOVER_X : COILOVER_X;
+      parts.push(box(0.42, 0.06, 0.34, BLACK, sign * 0.65, 0.26, axle));
+      parts.push(box(0.16, 0.05, 0.36, BLACK, sign * x, 0.72, axle));
+      parts.push(box(0.06, 0.3, 0.1, BLACK, sign * 0.5, 0.05, axle + mid * 0.95));
+      parts.push(box(0.06, 0.22, 0.08, BLACK, sign * 0.35, 0.17, axle + mid * 0.75));
+      for (const dz of [-0.12, 0.12]) {
+        parts.push(toned(new THREE.CylinderGeometry(0.065, 0.065, 0.77, 10), ...STEEL).translate(sign * x, 0.335, axle + dz));
+        parts.push(toned(new THREE.CylinderGeometry(0.085, 0.085, 0.36, 10), ...ALU).translate(sign * x, 0.42, axle + dz));
+      }
     }
   }
   return mergeToned(parts, "ladder frame");
@@ -268,8 +281,8 @@ export function solidAxleGeometry(): THREE.BufferGeometry {
     parts.push(rod([sign * 0.55, -0.02, 0.05], [sign * 0.5, 0.2, 0.95], 0.03, BLACK));
     parts.push(rod([sign * 0.22, 0.14, 0.1], [sign * 0.35, 0.32, 0.75], 0.03, BLACK));
     for (const dz of [-0.12, 0.12]) {
-      parts.push(rod([sign * 0.72, 0.06, dz], [sign * 0.72, 0.42, dz], 0.025, ALU));
-      parts.push(box(0.1, 0.06, 0.1, BLACK, sign * 0.72, 0.06, dz));
+      parts.push(rod([sign * COILOVER_X, 0.06, dz], [sign * COILOVER_X, 0.45, dz], 0.025, ALU));
+      parts.push(box(0.1, 0.06, 0.1, BLACK, sign * COILOVER_X, 0.06, dz));
     }
   }
   return mergeToned(parts, "solid axle");
