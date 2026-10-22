@@ -320,10 +320,9 @@ export const SEDAN: BodyStyle = {
   // The reference's head lamps are cool-white LED strips.
   lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES, bulb: "led" },
   // The reference's shield: 0.74 across at the top, tapering to 0.66 at its rounded bottom corners, its top up under the hood's front edge
-  // as far as the bumper's loose box holds it (0.30-0.57: the box's top is the seam cover's, 1 cm under the head lamps), its face 3 mm
-  // behind the box's front at 2.055. Bright slats on the dark backing inside a thin chrome bezel; the surround stays black (an all-chrome
-  // shield read as a light block).
-  grille: { y: 0.435, z: 2.052, size: [0.74, 0.248], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "chrome", rim: "black", bezel: 0.01 },
+  // (0.30-0.585), its face 3 mm behind the bumper's front at 2.055. Bright slats on the dark backing inside a thin chrome bezel; the
+  // surround stays black (an all-chrome shield read as a light block).
+  grille: { y: 0.443, z: 2.052, size: [0.74, 0.264], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "chrome", rim: "black", bezel: 0.01 },
   /**
    * The reference's twin wide oval tips in the diffuser (y 0.27-0.33, inner end |x| ~0.37), on the rear bumper's face (down to 0.23).
    * Their outer end stops at 0.53, inside the face's corner round, standing ~2.6 cm out of it as the reference's tips stand ~3 cm proud.
