@@ -10,7 +10,7 @@ import { FRAME } from "../vehicle/ground-probe.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
-import { assignClass, VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
+import { assignClass, CLASSES, VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
 import { droop, SPRINGS } from "../vehicle/car-suspension.ts";
 import { fit } from "../vehicle/ground-probe.test-util.ts";
 
@@ -156,11 +156,11 @@ describe("given a car driven end-on up a ramp, with a slab between the ramps", (
     });
   }
 
-  it(`when it jumps the slab at 14 m/s in every vehicle class, then the springs take the landing and stop swinging (all under 1 cm) within ${SWING_S} s (the monster ${MONSTER_SWING_S} s), and the body's sill stays off the ground`, (t) => {
+  it(`when it jumps the slab at 14 m/s in every vehicle class on its own body, then the springs take the landing and stop swinging (all under 1 cm) within ${SWING_S} s (the monster ${MONSTER_SWING_S} s), and the body's sill stays off the ground`, (t) => {
     const failures: string[] = [];
     const sill = new THREE.Vector3();
     for (const cls of VEHICLE_CLASS_IDS) {
-      const { ramps, w, car } = scene(true);
+      const { ramps, w, car } = scene(true, CLASSES[cls].style);
       car.spawnFacing(0, -14, 0, 14);
       assignClass(car, cls);
       const body = car.group.getObjectByName("classLift")!;
