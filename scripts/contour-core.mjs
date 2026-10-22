@@ -13,7 +13,10 @@ export const deg = (r) => (r * 180) / Math.PI;
 export const r1 = (x) => (x === null || x === undefined || !Number.isFinite(x) ? null : Math.round(x * 10) / 10);
 export const mm = (m) => (m === null || m === undefined ? null : Math.round(m * 1000));
 
-/** The car's drawn surface as world triangles (9 floats each) with their mesh kind. */
+/** The per-vertex tone a merged fitting's triangles carry (`FITTING_ATTRIBUTE` in vehicle/constants.ts): 0 on the part itself, > 0 on an exhaust tip, hitch or inlay merged into it. */
+export const FITTING_ATTRIBUTE = "fitting";
+
+/** The car's drawn surface as world triangles (9 floats each) with their mesh kind and whether each is a merged fitting's (`fit`). */
 export function surfaceOf(car) {
   car.group.updateMatrixWorld(true);
   const look = car.lookMeshes();
@@ -36,9 +39,11 @@ export function surfaceOf(car) {
   });
   const tris = [];
   const kinds = [];
+  const fits = [];
   const v = new THREE.Vector3();
   for (const [mesh, kind] of meshes) {
     const pos = mesh.geometry.getAttribute("position");
+    const fit = mesh.geometry.getAttribute(FITTING_ATTRIBUTE);
     const index = mesh.geometry.index;
     const n = index ? index.count : pos.count;
     for (let t = 0; t + 2 < n; t += 3) {
@@ -47,9 +52,10 @@ export function surfaceOf(car) {
         tris.push(v.x, v.y, v.z);
       }
       kinds.push(kind);
+      fits.push(fit && fit.getX(index ? index.getX(t) : t) > 0 ? 1 : 0);
     }
   }
-  return { tri: Float64Array.from(tris), kind: Uint8Array.from(kinds) };
+  return { tri: Float64Array.from(tris), kind: Uint8Array.from(kinds), fit: Uint8Array.from(fits) };
 }
 
 /** The box (world) of the surface's triangles of `kinds`, optionally only those with z on one side (`zSign`). */
@@ -158,18 +164,18 @@ export function smallFittings(style, rearBumper, lift) {
   return out;
 }
 
-/** `s` without the triangles whose middle is in one of `boxes` (`smallFittings`). */
+/** `s` without the fittings' own triangles (`fit`) whose middle is in one of `boxes` (`smallFittings`): the part they are merged into stays whole. */
 export function dropBoxes(s, boxes) {
   if (!boxes.length) return s;
   const keep = [];
   for (let t = 0; t < s.kind.length; t++) {
     const o = t * 9;
     _p.set((s.tri[o] + s.tri[o + 3] + s.tri[o + 6]) / 3, (s.tri[o + 1] + s.tri[o + 4] + s.tri[o + 7]) / 3, (s.tri[o + 2] + s.tri[o + 5] + s.tri[o + 8]) / 3);
-    if (!boxes.some((b) => b.box.containsPoint(_p))) keep.push(t);
+    if (!s.fit[t] || !boxes.some((b) => b.box.containsPoint(_p))) keep.push(t);
   }
   const tri = new Float64Array(keep.length * 9);
   for (const [i, t] of keep.entries()) tri.set(s.tri.subarray(t * 9, t * 9 + 9), i * 9);
-  return { tri, kind: Uint8Array.from(keep, (t) => s.kind[t]) };
+  return { tri, kind: Uint8Array.from(keep, (t) => s.kind[t]), fit: Uint8Array.from(keep, (t) => s.fit[t]) };
 }
 
 /** A sample's colour: glass blue, trim dark, an unscored body sample grey, a scored one cool (0°) to warm (60° and over) by its turn. */

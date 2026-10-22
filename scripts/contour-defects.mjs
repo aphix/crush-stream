@@ -15,7 +15,7 @@
  * whose edges all stand off by one height on an intended roof part (the field and value that seat it). Nothing where it is unsure.
  */
 import * as THREE from "three";
-import { GLASS, K, intendedEdges, mm, r1, smallFittings } from "./contour-core.mjs";
+import { FITTING_ATTRIBUTE, GLASS, K, intendedEdges, mm, r1, smallFittings } from "./contour-core.mjs";
 
 /** Spatial hash cell (m). */
 const CELL = 0.05;
@@ -50,6 +50,11 @@ const ZF_PLACE_CM2 = 0.3;
 const GAP_PLACE_M = 0.15;
 /** A ray that meets nothing within this (m) has left the car. */
 const ESCAPE_M = 6;
+/**
+ * The visibility rays start this far (m) off an open edge: under any skin it is tucked beneath (a pillar's top tucks 2 mm under the
+ * roof, `ROOF_TUCK`), so a buried edge's rays meet that skin and it counts as covered.
+ */
+const RAY_START_M = 0.0001;
 /** The part batch kinds on the outside of the car. */
 const EXTERIOR_PARTS = ["mirrorL", "mirrorR", "grille", "tailTrim", "wipers"];
 
@@ -95,13 +100,16 @@ export function partsOf(stage, skip) {
   const kind = [];
   for (const [pi, e] of entries.entries()) {
     const pos = e.geo.getAttribute("position");
+    const fit = e.geo.getAttribute(FITTING_ATTRIBUTE);
     const index = e.geo.index;
     const n = index ? index.count : pos.count;
     for (let t = 0; t + 2 < n; t += 3) {
       _a.fromBufferAttribute(pos, index ? index.getX(t) : t).applyMatrix4(e.matrix);
       _b.fromBufferAttribute(pos, index ? index.getX(t + 1) : t + 1).applyMatrix4(e.matrix);
       _c.fromBufferAttribute(pos, index ? index.getX(t + 2) : t + 2).applyMatrix4(e.matrix);
-      if (skip.some((f) => f.box.containsPoint(_m.set((_a.x + _b.x + _c.x) / 3, (_a.y + _b.y + _c.y) / 3, (_a.z + _b.z + _c.z) / 3)))) continue;
+      // A small fitting's own triangles only (merged into its bumper, `fit` > 0): the bumper round it stays whole, no false open edge.
+      const own = fit && fit.getX(index ? index.getX(t) : t) > 0;
+      if (own && skip.some((f) => f.box.containsPoint(_m.set((_a.x + _b.x + _c.x) / 3, (_a.y + _b.y + _c.y) / 3, (_a.z + _b.z + _c.z) / 3)))) continue;
       tri.push(_a.x, _a.y, _a.z, _b.x, _b.y, _b.z, _c.x, _c.y, _c.z);
       part.push(pi);
       kind.push(e.kind);
@@ -248,7 +256,7 @@ function freeEdges(s, cells, ctx) {
     const near = nearestOther(s, cells, m, s.part[e.t]);
     if (near === null || near.d < Math.min(GAP_MIN, STAND_MIN)) continue;
     // Seen from outside: one of three rays off the edge, out of the car, meets nothing.
-    const off = m.clone().addScaledVector(n, 0.002);
+    const off = m.clone().addScaledVector(n, RAY_START_M);
     const side = b.clone().sub(a).normalize().cross(n).normalize();
     const seen = [n, n.clone().add(side).normalize(), n.clone().sub(side).normalize()].some((d) => !blocked(s, cells, off, d, stamp, ++tick));
     if (!seen) continue;
