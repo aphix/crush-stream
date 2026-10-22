@@ -274,6 +274,8 @@ export interface BodyStyle {
   roof?: RoofParts;
   /** Exhaust tips, drawn in the rear bumper (they tear off with it). */
   exhaust?: Exhaust;
+  /** The lifted truck's undercarriage under the body (`hangUnderbody`): ladder frame, coil-over pairs, driveshafts and steering on the body, a solid axle on each pair of hubs. Drawn only, for the monster's lift. */
+  underbody?: boolean;
   /** Fine contours drawn as detail maps, not geometry: strokes and patches on the side, top, front and rear views, car-frame metres, x >= 0 mirrored. */
   details?: { lines: readonly DetailLine[]; patches: readonly DetailPatch[] };
   /** Cameras (m, car frame as drawn, a class lift included): the hood eye [y, z] over the bonnet ahead of the windshield base, and the chase and far chase eyes `dist` behind and `height` over the car's origin, aimed `aimUp` over it; absent = `PLATFORM_CAMERA`. */

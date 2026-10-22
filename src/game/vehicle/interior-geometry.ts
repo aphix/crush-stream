@@ -217,3 +217,60 @@ export function crashBarGeometry(): THREE.BufferGeometry {
   for (const sign of [-1, 1]) parts.push(box(0.08, 0.08, 0.1, STEEL, sign * 0.5, 0, -0.11));
   return mergeToned(parts, "crash bar");
 }
+
+const RED: Tone = [0xa8231c, 0.5, 0.2];
+/** The monster's half track (m): its axle tube runs hub to hub, and `CarUnderbody` scales it across another span. */
+export const AXLE_HALF_SPAN = 1.195;
+
+const _up = new THREE.Vector3(0, 1, 0);
+const _dir = new THREE.Vector3();
+
+/** A round bar from `a` to `b` (x, y, z). */
+function rod(a: readonly number[], b: readonly number[], r: number, tone: Tone): THREE.BufferGeometry {
+  _dir.set(b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!);
+  const geo = toned(new THREE.CylinderGeometry(r, r, _dir.length(), 8), ...tone);
+  geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(_up, _dir.normalize()));
+  return geo.translate((a[0]! + b[0]!) / 2, (a[1]! + b[1]!) / 2, (a[2]! + b[2]!) / 2);
+}
+
+/**
+ * The lifted truck's ladder frame in its body's space (the class lift's, the floor 0.34 up): rails and crossmembers under the floor,
+ * the transfer case, the steering box, and each corner's shock bodies hanging over its axle, which the axle's shafts slide into.
+ */
+export function ladderFrameGeometry(): THREE.BufferGeometry {
+  const parts = [box(0.3, 0.2, 0.36, RED, 0, 0.02, 0.05), box(0.14, 0.14, 0.18, BLACK, 0.36, 0.12, 1.6)];
+  for (const z of [1.75, 0.75, -0.35, -1.3, -2.1]) parts.push(box(0.9, 0.08, 0.08, BLACK, 0, 0.2, z));
+  for (const sign of [-1, 1]) {
+    parts.push(box(0.09, 0.14, 4.1, BLACK, sign * 0.45, 0.2, -0.15));
+    for (const axle of [-1.385, 1.385]) {
+      parts.push(box(0.36, 0.06, 0.34, BLACK, sign * 0.62, 0.24, axle));
+      for (const dz of [-0.12, 0.12]) parts.push(toned(new THREE.CylinderGeometry(0.07, 0.07, 0.4, 10), ...STEEL).translate(sign * 0.72, 0.07, axle + dz));
+    }
+  }
+  return mergeToned(parts, "ladder frame");
+}
+
+/**
+ * A solid axle about its hubs' midpoint, +x along the axle, +z toward the car's middle: the tube, knuckles and diff, the shock shafts
+ * up into the frame's bodies, the trailing links and the driveshaft toward the frame, the tie rod outboard.
+ */
+export function solidAxleGeometry(): THREE.BufferGeometry {
+  const half = AXLE_HALF_SPAN;
+  const parts = [
+    rod([-half + 0.05, 0, 0], [half - 0.05, 0, 0], 0.065, BLACK),
+    toned(new THREE.SphereGeometry(0.16, 12, 8), ...ENGINE).translate(0, 0, 0.02),
+    rod([0, 0.05, 0.15], [0, 0.27, 1.25], 0.04, STEEL),
+    rod([-0.8, 0.05, -0.18], [0.8, 0.05, -0.18], 0.025, STEEL),
+  ];
+  for (const sign of [-1, 1]) {
+    parts.push(rod([sign * 0.82, 0, 0], [sign * 0.96, 0, 0], 0.11, BLACK));
+    parts.push(box(0.06, 0.05, 0.2, BLACK, sign * 0.84, 0.05, -0.09));
+    parts.push(rod([sign * 0.55, -0.02, 0.05], [sign * 0.5, 0.2, 0.95], 0.03, BLACK));
+    parts.push(rod([sign * 0.22, 0.14, 0.1], [sign * 0.35, 0.32, 0.75], 0.03, BLACK));
+    for (const dz of [-0.12, 0.12]) {
+      parts.push(rod([sign * 0.72, 0.06, dz], [sign * 0.72, 0.42, dz], 0.025, ALU));
+      parts.push(box(0.1, 0.06, 0.1, BLACK, sign * 0.72, 0.06, dz));
+    }
+  }
+  return mergeToned(parts, "solid axle");
+}
