@@ -1265,6 +1265,35 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(proudOf({ ...coupe, door: { ...coupe.door, proud: undefined } }) > FLUSH, "the control: the platform's skin stands proud");
   });
 
+  it("when the coupe's flush door's skin is read at its lower corners beside the body's door-cut ramps, then the skin stands clear of the ramp (no coplanar skin to z-fight)", (t) => {
+    /** The skin stands at least this far (m) off the ramp: the flush skin without lowProud (the control) lies within it, coplanar enough for the contour tool's z-fight finding (2 mm and 4°). */
+    const MIN_CLEAR = 0.001;
+    /** The ramp is read this far (m) inside each cut end, and at these heights (m; the door's bottom edge is .22). */
+    const IN = 0.013;
+    const HEIGHTS = [0.27, 0.3, 0.33];
+    const coupe = CAR_STYLES.coupe;
+    const { hingeX, hingeY, hingeZ, aperture } = coupe.door;
+    const clearances = (s: BodyStyle) => {
+      const door = new THREE.Mesh(makeDoorGeometry(1, s), SIDED);
+      door.position.set(hingeX, hingeY, hingeZ + doorSkinZ(s));
+      door.updateMatrixWorld();
+      const body = new THREE.Mesh(makeChassisGeometry(s, "drawn"), SIDED);
+      return [aperture[0] + IN, aperture[1] - IN].flatMap((z) =>
+        HEIGHTS.flatMap((y) => {
+          const [skin, side] = [bodyHit(door, [2, y, z], [-1, 0, 0], 3), bodyHit(body, [2, y, z], [-1, 0, 0], 3)];
+          return skin && side ? [{ z, y, clear: skin.x - side.x }] : [];
+        }),
+      );
+    };
+    const stock = clearances(coupe);
+    for (const { z, y, clear } of stock) t.diagnostic(`ramp clear z=${z.toFixed(3)} y=${y.toFixed(2)} mm=${(clear * 1000).toFixed(2)}`);
+    assert.ok(stock.length > 0, "the door's skin and the body are met at the cut's ends");
+    const control = clearances({ ...coupe, door: { ...coupe.door, lowProud: undefined } });
+    for (const { z, y, clear } of control) t.diagnostic(`control ramp clear z=${z.toFixed(3)} y=${y.toFixed(2)} mm=${(clear * 1000).toFixed(2)}`);
+    for (const { z, y, clear } of stock) assert.ok(clear >= MIN_CLEAR, `the skin stands ${(clear * 1000).toFixed(2)} mm off the ramp at z ${z.toFixed(3)} y ${y}, ${MIN_CLEAR * 1000} mm asked`);
+    assert.ok(Math.min(...control.map((r) => r.clear)) < MIN_CLEAR, "the control: without lowProud the skin lies within the ramp's z-fight band");
+  });
+
   it("when the coupe's drawn A-post is seated on its deck (pillars.aSeat), then no level ray in from the side between the fender's top and the belt under the post's foot sees into the cabin, and the cage is unchanged", () => {
     /** The post's foot ahead of the door's cut [z] (m), and the band between the deck there (.876-.887) and the belt (.913) [y]. */
     const ZONE = { z: [0.65, 0.73], y: [0.88, 0.91] } as const;
@@ -1633,6 +1662,58 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(Math.abs(faceZ - lofted.rear - front.wrap.back) < 0.001, `the lofted end runs ${faceZ - lofted.rear} m back from the face, ${front.wrap.back} asked`);
     assert.ok(lofted.stand >= front.wrap.end.stand - 0.001, `the lofted end stands ${lofted.stand} m off the skin, ${front.wrap.end.stand} asked`);
     assert.ok(wrapped.stand <= 0, `the plain wrap's end stands ${wrapped.stand} m off the skin: held inside it`);
+  });
+
+  it("when the coupe's rear chrome bar is read round its corner, then its section keeps its full depth (no thinned corner) and the corner turns on a radius of at least 12 cm in plan", (t) => {
+    /** Every ring round the corner and along the run keeps at least this share of the face section's depth. */
+    const FULL_DEPTH = 0.95;
+    /** The corner's tightest plan radius (m): a tighter turn reads as a kink in the chrome, not a round. */
+    const MIN_RADIUS = 0.12;
+    /** Float32 position noise (m) when a ring is matched to a depth. */
+    const NOISE = 1e-4;
+    /** The control's corner depth (m): a quarter-ellipse this shallow turns far tighter than MIN_RADIUS. */
+    const TIGHT_CORNER = 0.05;
+    const read = (style: BodyStyle) => {
+      const { fascia, wrap } = style.bumpers.rear;
+      assert.ok(wrap.end, "the rear bar has lofted ends");
+      const bar = makeBumperGeometry(false, style);
+      const { ring, slices } = bar.userData.loft as { ring: number; slices: number };
+      const pos = bar.getAttribute("position");
+      // The middle ring is the face's; the rings after it run out along +x.
+      const mid = (slices - 1) / 2;
+      const point = new THREE.Vector3();
+      // A ring's section lies on one line in plan (the outline's normal), so its depth is the plan span between its extreme vertices.
+      const depthAt = (r: number) => {
+        const box = new THREE.Box3();
+        for (let j = 0; j < ring; j++) box.expandByPoint(point.fromBufferAttribute(pos, r * ring + j));
+        return Math.hypot(box.max.x - box.min.x, box.max.z - box.min.z);
+      };
+      const outs = fascia.map(([, out]) => out);
+      const faceDepth = depthAt(mid);
+      assert.ok(Math.abs(faceDepth - (Math.max(...outs) - Math.min(...outs))) < NOISE, `the face ring reads ${faceDepth} m deep, the fascia's section ${Math.max(...outs) - Math.min(...outs)} m`);
+      const rings = Array.from({ length: slices - mid }, (_, k) => mid + k);
+      const shares = rings.map((r) => depthAt(r) / faceDepth);
+      // The outline: each ring's outer-face vertex, as |x| and d back from the face.
+      const outer = outs.indexOf(Math.max(...outs));
+      const faceZ = pos.getZ(mid * ring + outer);
+      const outline = rings.map((r) => ({ x: Math.abs(pos.getX(r * ring + outer)), d: Math.abs(pos.getZ(r * ring + outer) - faceZ) }));
+      const b = wrap.end.corner;
+      const turn = outline.find((p) => p.d >= b - NOISE);
+      assert.ok(turn, `no ring of the outline reaches the corner's ${b} m depth`);
+      const a = turn.x - wrap.from;
+      // The corner is a quarter-ellipse a out by b back: its tightest radius is at the end of its longer axis.
+      return { shares, a, b, radius: Math.min((b * b) / a, (a * a) / b) };
+    };
+    const coupe = CAR_STYLES.coupe;
+    const { shares, a, b, radius } = read(coupe);
+    t.diagnostic(`rear bar depth share by ring from the face: ${shares.map((s) => s.toFixed(2)).join(" ")}`);
+    t.diagnostic(`rear bar corner ${(a * 1000).toFixed(0)} mm out by ${(b * 1000).toFixed(0)} mm back: plan radius ${(radius * 1000).toFixed(0)} mm`);
+    assert.ok(Math.min(...shares) >= FULL_DEPTH, `the section thins to ${(Math.min(...shares) * 100).toFixed(0)}% of its face's depth round the corner, ${FULL_DEPTH * 100}% asked`);
+    assert.ok(radius >= MIN_RADIUS, `the corner turns on a ${(radius * 1000).toFixed(0)} mm radius in plan, ${MIN_RADIUS * 1000} mm asked`);
+    const { rear } = coupe.bumpers;
+    assert.ok(rear.wrap.end, "the control: the coupe's rear bar has lofted ends");
+    const tight = read({ ...coupe, bumpers: { ...coupe.bumpers, rear: { ...rear, wrap: { ...rear.wrap, end: { ...rear.wrap.end, corner: TIGHT_CORNER } } } } });
+    assert.ok(tight.radius < MIN_RADIUS, `the control: a ${TIGHT_CORNER * 1000} mm deep corner turns on ${(tight.radius * 1000).toFixed(0)} mm`);
   });
 
   it("when the hatchback's front bumper is built, then its face runs straight across to its corners as the reference's: at |x| 0.40-0.45 within 1 cm of its middle's reach", () => {
