@@ -8,13 +8,17 @@ const WAGON_LAMP_SHAPES = {
   // indicator at the corner. The lens's bottom keeps 1 cm over the bumper's top seam.
   head: {
     loops: [
-      { points: [[0.41, 0.685], [0.62, 0.77], [0.66, 0.78], [0.7, 0.797], [0.76, 0.8], [0.76, 0.835], [0.7, 0.832], [0.62, 0.815], [0.41, 0.785]] },
+      { points: [[0.41, 0.685], [0.62, 0.77], [0.66, 0.78], [0.7, 0.797], [0.76, 0.8], [0.76, 0.835], [0.7, 0.832], [0.62, 0.815], [0.55, 0.8], [0.41, 0.805]] },
       { side: true, points: [[1.92, 0.795], [1.7, 0.828], [1.68, 0.842], [1.8, 0.842], [1.86, 0.83], [1.92, 0.81]] },
     ],
     lens: "dark",
     bezel: "black",
     recess: 0.01,
-    cells: [{ loop: { side: true, points: [[1.86, 0.815], [1.76, 0.825], [1.72, 0.836], [1.8, 0.84], [1.86, 0.83]] }, tone: "amber" }],
+    cells: [
+      { loop: { side: true, points: [[1.86, 0.815], [1.76, 0.825], [1.72, 0.836], [1.8, 0.84], [1.86, 0.83]] }, tone: "amber" },
+      // The reference's chrome reflector over its DRL loop, behind the clear glass.
+      { loop: { points: [[0.44, 0.75], [0.54, 0.787], [0.6, 0.8], [0.6, 0.806], [0.55, 0.797], [0.44, 0.797]] }, tone: "chrome" },
+    ],
     strips: [
       { line: { points: [[0.43, 0.705], [0.54, 0.748], [0.54, 0.77], [0.43, 0.73], [0.43, 0.705]] }, width: 0.008, tone: "lit" },
       { line: { points: [[0.55, 0.752], [0.62, 0.78], [0.7, 0.803], [0.745, 0.806], [0.75, 0.828]] }, width: 0.008, tone: "lit" },
@@ -220,8 +224,8 @@ export const WAGON: BodyStyle = {
       { view: "rear", points: [[0, 0.91], [0.5, 0.91], [0.5, 0.98], [0, 0.98]], depth: 0, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0, 0.62], [0.6, 0.62], [0.6, 0.66], [0, 0.66]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0.485, 0.278], [0.615, 0.278], [0.615, 0.323], [0.485, 0.323]], depth: -0.006, rim: 0.004, cavity: 0.7 },
-      // The gate's pressed plate recess under the lettering band; the reference leaves it empty (no plate).
-      { view: "rear", points: [[0, 0.77], [0.36, 0.77], [0.39, 0.778], [0.4, 0.8], [0.4, 0.905], [0, 0.905]], depth: -0.006, rim: 0.008, cavity: 0.2 },
+      // The gate's pressed plate recess under the lettering band; the reference leaves it empty (no plate), its cavity shadowed.
+      { view: "rear", points: [[0, 0.77], [0.36, 0.77], [0.39, 0.778], [0.4, 0.8], [0.4, 0.905], [0, 0.905]], depth: -0.006, rim: 0.008, cavity: 0.6 },
       { view: "rear", points: [[0.475, 0.773], [0.525, 0.773], [0.525, 0.788], [0.475, 0.788]], depth: 0.002, rim: 0.004, cavity: 0 },
       { view: "rear", points: [[0, 0.3], [0.7, 0.3], [0.7, 0.445], [0, 0.445]], depth: -0.004, rim: 0.004, pattern: { kind: "hslats", pitch: 0.03, bar: 0.006, depth: -0.004 }, cavity: 0.85 },
       // The black sill cladding between the arches, under the door bottoms' beads.
