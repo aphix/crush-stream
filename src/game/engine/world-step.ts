@@ -10,7 +10,7 @@ import { armCrushRows, takeCrossingsSkipped } from "../vehicle/car-air.ts";
 import { contactHz } from "../vehicle/car-air-points.ts";
 import { REST_SPEED } from "../vehicle/car-air-body.ts";
 import { CarSurfaces, REACH } from "../vehicle/car-surfaces.ts";
-import { armTops } from "../world/surfaces.ts";
+import { armTops, calmSolids } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { STOCK_PAINT } from "../vehicle/constants.ts";
 import { FINE_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
@@ -466,6 +466,7 @@ export function stepWorld(w: World, dt: number): void {
   w.ejection?.step(cars, dt);
   w.shape = slices - 1;
   armTops(null);
+  calmSolids();
 }
 
 /**
