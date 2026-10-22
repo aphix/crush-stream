@@ -1252,18 +1252,19 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(names.join(",") === "a,rear,sail,a,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
   });
 
-  it("when the SUV's rear pillar is matte, then exactly the gloss-black rear pillar's vertices turn matte black, and the drawn shape is unchanged", () => {
+  it("when a style's rear pillar is matte, then exactly the gloss-black rear pillar's vertices turn matte black, and the drawn shape is unchanged", () => {
     const wagon = CAR_STYLES.wagon;
     const gloss: BodyStyle = { ...wagon, blackout: { ...wagon.blackout, rear: true } };
+    const matte: BodyStyle = { ...wagon, blackout: { ...wagon.blackout, rear: "matte" } };
     const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
-    const [was, now] = [makeChassisGeometry(gloss), makeChassisGeometry(wagon)];
+    const [was, now] = [makeChassisGeometry(gloss), makeChassisGeometry(matte)];
     let turned = 0;
     for (let i = 0; i < primer(now).count; i++) {
       if (primer(now).getX(i) === primer(was).getX(i)) continue;
       turned++;
       assert.ok(primer(was).getX(i) === BLACKOUT && primer(now).getX(i) === MATTE_BLACKOUT, `vertex ${i}: ${primer(was).getX(i)} → ${primer(now).getX(i)}`);
     }
-    const rear = makeGreenhouseFrame(wagon, "drawn").filter((g) => g.userData.matte === true);
+    const rear = makeGreenhouseFrame(matte, "drawn").filter((g) => g.userData.matte === true);
     assert.ok(rear.length === 2 && turned === rear.reduce((n, g) => n + g.getAttribute("position").count, 0), `${rear.length} matte pillars, ${turned} vertices turned`);
     const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
     assert.ok(bits(now) === bits(was), "the drawn body's shape is unchanged");
@@ -2199,6 +2200,30 @@ describe("given a body style's P2 parts", () => {
     assert.ok(tear!.rear < 0.65 * w && rounded!.rear > 0.8 * w, `the cap's rear tenth spans ${tear!.rear.toFixed(3)} m (tear), ${rounded!.rear.toFixed(3)} m (rounded) of its ${w}`);
     assertSameNumbers([tear!.inner], [rounded!.inner], "the cap's inner face", 1e-4);
     assert.ok(mirrorSeatX(tear!.style) === mirrorSeatX(rounded!.style) && cageHash(tear!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
+  });
+
+  it("when a mirror's cap is a nose, then its section tapers to its front face while its rear face (the glass's) keeps its full width, its inner face held, and the seat and cage builds are unchanged", () => {
+    const size = [0.12, 0.095, 0.145] as const;
+    const [w, , d] = size;
+    const [nose, rounded] = (["nose", "rounded"] as const).map((cap) => {
+      const style = mirrorStyle({ cap, finish: "body", size });
+      const { cap: box } = readMirror(style);
+      const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
+      const [pos, painted] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE)];
+      const scaleX = style.door.mirrorReach / MIRROR_REACH;
+      const [front, rear] = [new THREE.Box3(), new THREE.Box3()];
+      for (let i = 0; i < pos.count; i++) {
+        if (painted.getX(i) !== 1) continue;
+        const p = new THREE.Vector3(pos.getX(i) * scaleX, pos.getY(i), pos.getZ(i));
+        if (p.z >= box.max.z - 0.1 * d) front.expandByPoint(p);
+        if (p.z <= box.min.z + 0.1 * d) rear.expandByPoint(p);
+      }
+      return { style, inner: box.min.x, front: front.max.x - front.min.x, rear: rear.max.x - rear.min.x };
+    });
+    assert.ok(nose!.front < 0.65 * w && rounded!.front > 0.8 * w, `the cap's front tenth spans ${nose!.front.toFixed(3)} m (nose), ${rounded!.front.toFixed(3)} m (rounded) of its ${w}`);
+    assert.ok(nose!.rear > 0.8 * w, `the nose cap's rear tenth spans ${nose!.rear.toFixed(3)} m of its ${w}`);
+    assertSameNumbers([nose!.inner], [rounded!.inner], "the cap's inner face", 1e-4);
+    assert.ok(mirrorSeatX(nose!.style) === mirrorSeatX(rounded!.style) && cageHash(nose!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
   });
 
   it("when a mirror is lifted, then its cap rises that far over the seat while its foot still starts on the drawn skin, and the seat and cage builds are unchanged", () => {

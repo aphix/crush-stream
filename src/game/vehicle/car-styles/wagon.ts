@@ -99,8 +99,8 @@ export const WAGON: BodyStyle = {
       band: [0.43, 0.53],
     },
   },
-  // The reference's mirror stands about 4 cm past the body side and runs 17 cm along it, 10 cm tall (top view, iso).
-  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.065, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "rounded", finish: "black", size: [0.06, 0.1, 0.16] } },
+  // The reference's mirror: a black head tapering to its nose, standing clear over the belt on a slim neck, about 4 cm past the body side, 17 cm along it.
+  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.065, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "nose", finish: "black", size: [0.06, 0.13, 0.17], lift: 0.09, neck: 0.035, stalk: 0.06 } },
   aPillarFoot: 0.66,
   aPillarTop: 0.17,
   glassTop: 0.05,
@@ -158,10 +158,11 @@ export const WAGON: BodyStyle = {
   grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 11, angle: 0.37, finish: "black", rim: "chrome", lean: 0.387 },
   seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },
   pillars: { b: { width: [0.088, 0.088] }, divider: { width: [0.105, 0.105] } },
-  // The reference's D-post and quarter glass read a dark blur, not the garage's sharp mirror.
-  blackout: { a: true, sail: true, b: true, divider: true, rear: "matte" },
+  // The reference's D-post reads gloss black like the glass beside it; its quarter glass a dark blur, not the garage's sharp mirror.
+  blackout: { a: true, sail: true, b: true, divider: true, rear: true },
   privacyGlass: { rear: true, quarter: "matte" },
-  roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.82, -1.74], y: [1.46, 1.51], halfWidth: 0.5 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 } },
+  // The glass panel as the reference's isos: from 19 cm behind the windshield's top, 0.57 m long, 0.72 m across.
+  roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.82, -1.74], y: [1.46, 1.51], halfWidth: 0.5 }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
   exhaust: { tips: 2, x: 0.5, y: 0.42, size: [0.15, 0.05], shape: "round" },
   details: {
     lines: [
