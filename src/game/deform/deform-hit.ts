@@ -368,6 +368,7 @@ export abstract class DeformHit extends DeformRig {
     this.elapsed = 0;
     this.lastContact = 0;
     this.hitAt = 0;
+    this.armedAt = -1;
     this.cornerLow = Infinity;
     this.wrinkleAmp = 0;
     this.dirty = true;
@@ -400,7 +401,18 @@ export abstract class DeformHit extends DeformRig {
   notifyContact(): void {
     if (!this.massActive) return;
     this.thaw();
+    this.touchNow();
+  }
+
+  /** Marks a touch now, keeping the last touch before this slice (`touchedBefore`) for the slice's re-arm. */
+  private touchNow(): void {
+    if (this.lastContact !== this.elapsed) this.touchedBefore = this.lastContact;
     this.lastContact = this.elapsed;
+  }
+
+  /** The quiet a re-arm reads: the wreck's before this slice's touches, so a touch too soft to arm does not shut the window on a harder one after it in its slice. A slice that began the crash reads its own touch (its contacts are that hit's). */
+  private sliceQuiet(): number {
+    return this.lastContact === this.elapsed && this.hitAt !== this.elapsed ? this.elapsed - this.touchedBefore : this.quietTime();
   }
 
   quietTime(): number {
@@ -408,19 +420,32 @@ export abstract class DeformHit extends DeformRig {
   }
 
   /**
-   * A fresh contact on a wreck: after REARM_QUIET without contact, or at HARDER_HIT times the armed hit's EBS (else a door graze's
-   * hit sizes the nose hit that follows it into a pile), a hit of at least REARM_EBS takes over the hit frame and adds its EBS² to
-   * the struck end, so repeated hard hits keep crushing (and can reach the engine block) instead of reusing the first hit's stroke.
+   * A fresh contact on a wreck: after REARM_QUIET without contact before its slice (`sliceQuiet`), or at HARDER_HIT times the armed
+   * hit's EBS (else a door graze's hit sizes the nose hit that follows it into a pile), a hit of at least REARM_EBS takes over the hit
+   * frame and adds its EBS² to the struck end, so repeated hard hits keep crushing (and can reach the engine block) instead of reusing
+   * the first hit's stroke. A slice re-arms on its hardest contact, whichever touched first: a harder one in the slice that re-armed
+   * takes the hit over, what the softer one added undone (a 25 km/h side hit armed on a 2.8 m/s graze and dropped its 6.8 m/s face).
    * False when the contact belongs to the current hit or is too soft.
    */
   rearmHit(localPoint: THREE.Vector3, localInward: THREE.Vector3, impulse: number, ebs: number): boolean {
-    if (!this.massActive || ebs < REARM_EBS || (this.quietTime() < REARM_QUIET && ebs < HARDER_HIT * this.hitSpeed)) return false;
+    if (!this.massActive || ebs < REARM_EBS) return false;
+    const again = this.armedAt === this.elapsed && this.hitAt === this.elapsed;
+    if (again ? ebs <= this.armedEbs : this.sliceQuiet() < REARM_QUIET && ebs < HARDER_HIT * this.hitSpeed) return false;
     this.thaw();
+    if (again) {
+      this.endEbs2[this.armedEnd] = this.armedEnd2;
+      this.wear = this.armedWear;
+    }
     this.impactLocal.copy(localPoint);
     this.impactInward.copy(localInward).normalize();
     this.snapImpactToNearestMass();
     const end = this.struckEnd();
     const e = Math.min(ebs, 70);
+    this.armedAt = this.elapsed;
+    this.armedEbs = ebs;
+    this.armedEnd = end;
+    this.armedEnd2 = this.endEbs2[end]!;
+    this.armedWear = this.wear;
     this.endEbs2[end] = this.endEbs2[end]! + e * e;
     this.wear += Math.min(e * e, WEAR_HIT);
     this.hitSpeed = Math.min(70, Math.sqrt(this.endEbs2[end]!));
@@ -428,7 +453,7 @@ export abstract class DeformHit extends DeformRig {
     this.impulse = THREE.MathUtils.clamp(impulse, 4, 70);
     this.crushing = true;
     this.dirty = true;
-    this.lastContact = this.elapsed;
+    this.touchNow();
     this.hitAt = this.elapsed;
     this.cornerLow = Infinity;
     // Base = damage as `clampLocal` reads it: `local − rest` in the frame the next followGroup keeps. Both modes

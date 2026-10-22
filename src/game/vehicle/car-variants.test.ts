@@ -2089,7 +2089,7 @@ describe("given a body style's P1 parts", () => {
 
   it("when a deck lid is flush, then its edge seats on the deck edge like the hood's, lower and wider than the plain lid's step, its crown unchanged, and the cage builds are unchanged", () => {
     const { coupe } = CAR_STYLES;
-    const bareDeck = { ...coupe.boot, flush: undefined };
+    const bareDeck = { ...coupe.boot, flush: undefined, halfWidth: undefined };
     const deck = coupe.boot;
     assert.ok(deck.kind === "lid", "the coupe has a deck lid");
     const plainStyle: BodyStyle = { ...coupe, boot: bareDeck };
@@ -3141,9 +3141,11 @@ describe("given a body style's P2 parts", () => {
 /** Ray spacing (m) over an opening, and how far inside its edges the rays stay (m): clear of the lid's shut line and the hollow's ramps. */
 const OPEN_GRID = 0.04;
 const OPEN_EDGE = 0.03;
-/** A deck lid's edge stands 7.5 cm in from its station's half-width; the rays stay 4.5 cm further in. A lid wrapping the tail folds over its last 8 cm. */
+/** A deck lid's edge stands 7.5 cm in from its station's half-width, or at its flush `boot.halfWidth` if that is nearer the centre line; the rays stay 4.5 cm further in. A lid wrapping the tail folds over its last 8 cm. */
 const LID_EDGE = 0.12;
 const LID_FOLD = 0.08;
+/** The rays stay this far (m) inside a flush lid's `boot.halfWidth`: the 4.5 cm `LID_EDGE` keeps them inside the default lid's own edge. */
+const LID_RAYS_IN = 0.045;
 /** The opening's rim (the tail panel's top, the rear window's sill) stands up to this far (m) inside a deck lid's ends: the hollow's ramp, and the loft's last station before the tail's roll. */
 const LID_RIM = 0.08;
 /** How far (m) under a deck lid's top, or in through a face, a ray looks for body standing in the opening. */
@@ -3201,7 +3203,7 @@ function openingCrossings(style: BodyStyle): string[] {
   const at = (p: THREE.Vector3 | null) => p && hits.push(`(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`);
   if (b.kind === "lid" && !roofHinged(b)) {
     for (let z = b.z1 + LID_RIM + (b.drop ? LID_FOLD : 0); z <= b.z0 - LID_RIM; z += OPEN_GRID) {
-      const half = sampleSlice(z, style.profile).hw - LID_EDGE;
+      const half = Math.min(sampleSlice(z, style.profile).hw - LID_EDGE, b.flush === true && b.halfWidth !== undefined ? b.halfWidth - LID_RAYS_IN : Infinity);
       for (let x = -half; x <= half; x += OPEN_GRID) at(bodyHit(body, [x, deckTopY(x, z, style, false) + 0.05, z], [0, -1, 0], OPEN_DEPTH));
     }
   }
@@ -3242,6 +3244,53 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       assert.ok(hits.length === 0, `${id}: ${hits.length} rays meet body in the opening, first ${hits.slice(0, 4).join(" ")}`);
     });
   }
+
+  /** The reference coupe's deck lid seam (|x|, m): the lid's side edge; the body's hollow stands 1 cm outboard of it. */
+  const COUPE_LID_SEAM = 0.54;
+  /** The quarter top beside the lid's groove reads flush while it stands no more than this far (m) under the lid's edge. */
+  const FLUSH_UNDER = 0.01;
+  /** The lid's edge height is read off its vertices within this far in |x| of its seam and in z of mid-lid (m): its ring's top corner. */
+  const LID_EDGE_NEAR = { x: 0.003, z: 0.03 } as const;
+  /** The quarter top outboard of the lid stands within a few mm of the belt while the hollow beside it is over 10 cm deep: a ray down that finds body further (m) under the belt, or none, went through a wedge. */
+  const QUARTER_UNDER_BELT = 0.02;
+  /** The scan along the lid starts and stops this far (m) inside its ends, which are the cut's ramps' closed end rings, and steps this far (m). */
+  const SCAN_INSET = 0.005;
+  const SCAN_STEP = 0.01;
+  it("when the coupe's deck lid is drawn, then its edge stands at the reference's seam (|x| .54) along its whole length, the groove beside it opens into the hollow, the quarter top outboard of it stands flush (within 1 cm under the lid's edge), along its whole length including the cut's ramps at both ends, and the cage builds are unchanged", () => {
+    const { coupe } = CAR_STYLES;
+    const b = coupe.boot;
+    assert.ok(b.kind === "lid" && b.flush === true, "the coupe's boot is a flush deck lid");
+    const [py, pz] = bootPivot(b);
+    const zMid = lerp(b.z0, b.z1, 0.5);
+    const lid = makeTrunkGeometry(coupe).getAttribute("position");
+    let reach = 0;
+    let edgeY = -Infinity;
+    for (let i = 0; i < lid.count; i++) {
+      const x = Math.abs(lid.getX(i));
+      reach = Math.max(reach, x);
+      if (Math.abs(x - COUPE_LID_SEAM) < LID_EDGE_NEAR.x && Math.abs(lid.getZ(i) + pz - zMid) < LID_EDGE_NEAR.z) edgeY = Math.max(edgeY, lid.getY(i) + py);
+    }
+    assertSameNumbers([reach], [COUPE_LID_SEAM], "the lid's widest point (|x|)", 1e-4);
+    assert.ok(Number.isFinite(edgeY), "the control: the lid has a vertex at its seam at mid-lid");
+    const body = new THREE.Mesh(makeChassisGeometry(coupe), SIDED);
+    const down = (x: number) => bodyHit(body, [x, edgeY + 0.05, zMid], [0, -1, 0], OPEN_DEPTH);
+    assert.ok(down(COUPE_LID_SEAM + 0.005) === null, "the groove beside the lid's edge is open into the hollow");
+    for (const x of [COUPE_LID_SEAM + 0.02, COUPE_LID_SEAM + 0.06]) {
+      const hit = down(x);
+      assert.ok(hit !== null && hit.y <= edgeY && edgeY - hit.y < FLUSH_UNDER, `the quarter top at |x| ${x.toFixed(2)} stands at ${hit?.y.toFixed(4)}, within ${FLUSH_UNDER * 1000} mm under the lid's edge ${edgeY.toFixed(4)}`);
+    }
+    const scanZs = Array.from({ length: Math.floor((b.z0 - b.z1 - 2 * SCAN_INSET) / SCAN_STEP + 1e-6) + 1 }, (_, k) => b.z0 - SCAN_INSET - k * SCAN_STEP);
+    const wedges: string[] = [];
+    for (const z of scanZs) {
+      const belt = sampleSlice(z, coupe.profile).yBelt;
+      for (const x of [COUPE_LID_SEAM + 0.02, COUPE_LID_SEAM + 0.04]) {
+        const hit = bodyHit(body, [x, belt + 0.05, z], [0, -1, 0], OPEN_DEPTH);
+        if (hit === null || belt - hit.y > QUARTER_UNDER_BELT) wedges.push(`${z.toFixed(3)}@${x.toFixed(2)}:${hit?.y.toFixed(4) ?? "none"}`);
+      }
+    }
+    assert.ok(wedges.length === 0, `the quarter top stands within ${QUARTER_UNDER_BELT * 1000} mm of the belt along the whole lid, but ${wedges.length} rays fell through (z@x:y): ${wedges.join(" ")}`);
+    assert.ok(cageHash(coupe) === cageHash({ ...coupe, boot: { ...b, halfWidth: undefined } }), "the cage builds are unchanged");
+  });
 
   it("when the hatch's tailgate is built on its seam's outline, then its edge stands on the outline at each of the outline's corners, in the drawn and the cage build", () => {
     const b = CAR_STYLES.hatchback.boot;

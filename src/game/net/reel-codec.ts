@@ -331,12 +331,13 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * everything it draws, its seam cover included; the sedan's hood ends at z 0.99; the police light bar sits over the B-pillars. A driver thrown out
  * of the windshield leaves from the pane's bowed middle (`userData.centre`, 1 cm further forward), each raked pane's top corners fall onto the roof's
  * dome (`domeFall`, about 2 cm), and the hatchback's windshield reaches its reference's glass top (17 cm further back, 8 cm higher) with its rear glass
- * base and tailgate top at .905. The sedan's and police's tails end 3.5 cm wider. A car's collision cage keeps the underside it rests on out to
- * its nose and tail lips (read once it is a wreck), so a
+ * base and tailgate top at .905, its roof rolling round into its side glass as the coupe's. The sedan's and police's tails end 3.5 cm wider. A car's collision cage keeps the underside it rests on out to its nose and tail lips (read once it is a wreck), so a
  * wreck that loses a front wheel rests on its lip instead of rocking 3-4 cm in the ground, and a car pitched over another meets it as deep as the two
  * cages stand. A thrown driver meets each pane as its glass's own quad, and breaks it only with a blow on its face: a door strike no longer
- * cracks the windshield. A sedan dropped on its roof keeps its rear glass (its fastback frame stands clear of the crushed roof). Every car
- * crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
+ * cracks the windshield. A sedan dropped on its roof keeps its rear glass (its fastback frame stands clear of the crushed roof). A wreck
+ * struck again re-arms its hit on the slice's hardest contact, whichever touched first, and a graze too soft to arm no longer shuts the
+ * window on the face behind it: a derby sedan's 25 km/h side hits wear its drivetrain out in 6 (each counted its graze's 8 of 36, or none).
+ * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
 const REPLAY_VERSION = 158;

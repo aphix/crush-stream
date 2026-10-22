@@ -89,6 +89,7 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | `hood.inset` | `[nose, cowl]` (m), with `hood.crown`: the drawn hood's side shut line stands that far inside the station's half-width (default 0.07), linear from `cowl` at `z0` to `nose` at `z1`. The fender's top edge beside it moves in with it at its own height, so the fender top runs flat out to the shoulder; the hood keeps its crown on the centre line and its edge at the fender's height, its dome steepening to meet the narrower edge. Behind `z0` the fender edge eases back to 0.07 over 30 cm. Drawn only: the cage keeps the plain lid and deck edge (a raised fender top stood 1.4 cm outside the cage ring) |
 | `boot.lip` | Ducktail kick: the deck lid's top rises `rise` at its rear edge, or the tailgate's top edge kicks `rise` out, easing in over `depth` |
 | `boot.flush` | The drawn deck lid seats on the deck edge like the hood (its edge a groove over the deck edge, 5 mm wider than a plain lid), not a step up off it; the coupe's ducktail lid. Drawn only: the cage keeps the plain lid |
+| `boot.halfWidth` | Drawn only, `flush` lids only: \|x\| (m) of the deck lid's side edge, held under the profile's own (half-width less 7 cm); the body's boot hollow narrows with it, its rim 1 cm outboard of the edge and at the closed deck edge's height, so the quarter top reads as a flat strip outboard of a groove, 3 mm under the lid's edge as the fender beside the hood does. The coupe's reference seam is .54. Absent, the lid runs to the deck edge and the hollow's rim drops 1 cm under the closed deck's edge. The cage keeps the plain lid and its closed deck |
 | `boot.crown` | `[drop, at]` (m): the drawn deck lid's top is a parabola across x, `drop` under its centre line at \|x\| `at`, so its centre stands `drop·(w/at)²` over its edge (the shut line, unchanged); one dome point a side, so no vertices are added. It eases in over 25 cm from the lid's front edge (which tucks under the rear glass's base) and back to the plain dome over the tail fold. Drawn only: the cage keeps the plain lid |
 | `boot.edgeRoll` | Drawn only: the lid's or gate's side edges round over this radius (m) into its skirt; absent, a sharp corner. A tailgate rolls in one chord a side. A deck lid's roll is built square to its edge's run (its width and turns read across the edge as it tapers in plan and rises into the lip, the fold's narrowing undone first) in two chords a side, three equal turns: at the sedan's lip the top meets its tapering side at 100°, which one chord could not split under 50°. Its six roll lines shade round |
 | `windowTrim` | `"chrome"`: a chrome bead (1 cm across, 5 mm proud) round every pane's border; the door glass's rides its door at the glass's seat, the rest (quarters, windshield, rear glass on the body) is one body mesh, so +3 draws. Drawn only |
@@ -324,3 +325,68 @@ node --disable-warning=ExperimentalWarning scripts/trace-car.mjs --style sedan -
 - The PNG: the car orange, outlined magenta; the reference outlined cyan; the car's glass lime, the reference's blue. The
   reference's glass is its dark, grey pixels (an Otsu cut, printed as `refThreshold`); a grey ground shadow on an opaque backdrop
   is left out of its silhouette (`shadowPx`). Full usage is in each script's header.
+
+**`contour-sections.mjs`: surface contour and exterior defects, per region.** It checks the shape only; it is not an airflow tool.
+Findings are for the mesh's owner to take or leave, since some edges and overhangs are intended.
+
+How to run it. Add `--png` for one car's shot; `--all` runs the five bodies (police shares the sedan's mesh, monster the pickup's;
+name either with `--car`):
+
+```sh
+CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
+  scripts/contour-sections.mjs --root <tree> --car <style> [--png <out>]          # JSON lines on stdout
+  scripts/contour-sections.mjs --root <tree> --all --sheet <png> [--curves <png>]  # every body
+```
+
+How to read it. Each car prints one JSON line with its region scores, `gaps` and `zfight`. After it come zero or more
+`{"kind":"suggest", ...}` lines. The sheet shows each car from its rear and front three-quarters, in game shading, with rings on
+the left side's findings and the scores under the views:
+- Yellow, orange and red rings are shape findings: mild, bad, and the worst in that region.
+- Cyan rings are gaps and stand-offs: bigger and bolder when bad.
+- Magenta rings are z-fighting.
+
+Then the raw section curves: blue for glass, dark for trim, and cool to warm by turn elsewhere. Read the region numbers against
+the same region on the other cars, not against a fixed bar.
+
+- The surface:
+  - For the shape scores: the body, lids, door skins, bumpers, glass and window trim.
+  - For the defects, also the style's mirrors, grille, tail trim, wipers and lamp units.
+  - Small fittings are skipped everywhere (`smallFittings` in `contour-core.mjs`: exhaust tips, tow hitch).
+  - So are the style's intended edges where the roof shape is scored (`intendedEdges`: roof spoiler, roof rails).
+- Sections cut the surface with planes at fixed stations. In each plane, a fan of rays keeps the outer contour: raw samples
+  every 0.25°, never smoothed. A miss or a jump of over 5 cm splits it. `turn` is the direction change across 4 cm of contour,
+  not scored across a seam (glass, body, bumper). 45° is about a 5 cm radius, 25° about 9 cm.
+- `roofEdge`: cuts across the roof at 25, 50 and 75 % of `roofZ`, and along it at 0, ±20 % and ±32 % of the body's width.
+  - `turnAcross` is the shoulder roll; `turnAlong` the roof's front and rear ends.
+  - `ledgeMm` is a step above the side glass: a roof cap overhanging what is under it.
+  - `offRoofMm` is the same step under an intended part: a spoiler standing off the roof, a gap you see into.
+  - `hoodBaseStepMm` is the widest open seam the lengthwise cuts cross round the hood's rear edge and the windshield base.
+  - `shelfMm` is the roof's outset past the side glass top; `crownMm` the crown.
+- `aPillar` / `rearPillar`: six horizontal cuts through the side glass. Each measures the body band from the windshield (rear
+  glass) to the side glass, on its own side.
+  - `widthMm` is the band per height, and `spreadPct` is (max − min) / median.
+  - `jumpMm` is the change between neighbouring heights, `leanDeg` the lean, and `turn` the hardest facet.
+  - A height reads n/a, counted in `naReasons`, when:
+    - `noGlass`: there is no glass edge;
+    - `seeThrough`: the cut sees through to the far side (no surface on the near side there; pickup A-pillar top, hatchback D-pillar);
+    - `tooWide`: the band is over 0.6 m.
+- `bumper` / `lowerLip`: horizontal cuts behind the rear arch, at 35–80 % of the rear bumper's height and at its bottom 4–22 %.
+  `turn` is the squarest wrap corner. `projSpreadMm` is how much the outset over the face above changes round the wrap (p5–p95);
+  `stepMm` the change between neighbouring cuts.
+- `gaps` (`contour-defects.mjs`): each panel's open edges (an edge one triangle uses) that are seen from outside, measured to the
+  nearest other panel within 8 cm:
+  - `gap` mm where the edge stops short of that surface: an open seam you see into.
+  - `stand` mm where it stands off the surface: a glass edge over the body, a bumper lip off the body.
+  - Each place gives its `region` and the parts involved.
+- `zfight`: triangles of any parts (the same part too) facing within 4° and within 2 mm of one plane, overlapping. Each place
+  gives `areaCm2` of overlap and `sepMm`. 2 mm fights at chase range, so a lamp unit or grille set 1–2 mm proud of the body
+  shows up here.
+- `suggest` lines carry a fix only where it is certain, labelled `"confidence":"high"` with the reading they fix. For now they
+  cover z-fighting between one detail (lamp unit, grille, tail trim, wipers, mirror) and one panel:
+  - Two surfaces in one place (under 0.05 mm apart): `push out` the detail by `mm` along `along`.
+  - Otherwise: `polygonOffset`, the `polygonOffsetFactor` / `polygonOffsetUnits` the detail's `material` needs. Each comes from
+    `depth-probe.ts`'s two ladders, run as the race camera sees the place at 5, 20 and 80 m (`ranges`), on a 24-bit depth target
+    as the browser's. It is the smallest offset that shows the detail on 95 % of its pixels; factor is in game pixels of slope,
+    units in depth steps. It is printed only when every range measured and some range needs an offset.
+  - Gaps, stand-offs and turns print no suggestion yet; nothing is printed when unsure.
+  - The lines are data for a lane, or later a builder, to take or leave; no builder reads them.
