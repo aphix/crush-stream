@@ -594,7 +594,7 @@ const DECK_RISE = 0.016;
 const DECK_INSET = 0.075;
 const DECK_DOME = 0.012;
 const DECK_SHOULDER = 0.45;
-/** The drawn hood's edge stands over the deck edge (ring point 1, `HOOD_INSET` m inside the station's half-width), `HOOD_SEAT` (m) over the fender: a groove, not a step; its outer dome point stands `HOOD_SEAT` over the closed deck's crown. Its centre line keeps the deck lid's crown. */
+/** The drawn hood's edge stands over the deck edge (ring point 1, `HOOD_INSET` m inside the station's half-width), `HOOD_SEAT` (m) over the fender: a groove, not a step; its outer dome point stands `HOOD_SEAT` over the closed deck's crown. Its centre line keeps the deck lid's crown unless the style sets `hood.crown`. */
 const HOOD_INSET = 0.07;
 const HOOD_SEAT = 0.003;
 /** Where a boot lip's extra rings stand, as shares of its depth from the edge: the kick's curve needs them on a 6 cm ring spacing. */
@@ -606,6 +606,9 @@ const CLAMSHELL_GAP = 0.001;
 type Dome = readonly (readonly [number, number])[];
 /** A deck lid's dome: 0.7 of its rise at `DECK_SHOULDER` of its half-width. */
 const DECK_DOME_POINTS: Dome = [[DECK_SHOULDER, 0.7]];
+/** A crowned hood's dome (`hood.crown`): its parabola across x, 1 - u², drawn in this many chords a side, each turning under 5° on the sedan's 6 cm at |x| .66. */
+const CROWN_CHORDS = 4;
+const CROWN_DOME: Dome = Array.from({ length: CROWN_CHORDS - 1 }, (_, k) => [(k + 1) / CROWN_CHORDS, 1 - ((k + 1) / CROWN_CHORDS) ** 2] as const);
 
 /** A dome's share of its rise at `u` (share of the half-width): straight between its points, as the loft draws it. */
 function domeAt(dome: Dome, u: number): number {
@@ -625,6 +628,8 @@ function lidSection(z: number, style: BodyStyle, hood: boolean): { w: number; ed
   const w = sl.hw - HOOD_INSET;
   // A rigid lid: its edge keeps the fender's height where a cabin tub's blend runs under its rear end (the coupe's and monster's), never bending into it.
   const edge = deckEdgeY(sl.yBelt, 0) + HOOD_SEAT;
+  const crowned = style.hood.crown;
+  if (crowned !== undefined) return { w, edge, crown: edge + crowned[0] * (w / crowned[1]) ** 2, dome: CROWN_DOME };
   // The deck dome's chord from its shoulder to the edge passes within a millimetre of the closed deck's crown point: the dome steps out over it.
   const u = (sl.hw - DECK_CROWN.inset) / w;
   const over = (sl.yBelt + DECK_CROWN.rise + HOOD_SEAT - edge) / (crown - edge);
