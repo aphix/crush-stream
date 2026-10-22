@@ -53,8 +53,8 @@ export abstract class DeformFreeze extends DeformContact {
   }
 
   /**
-   * The body is rigid now: every mass takes the rigid body's velocity and spin (`followGroup`'s `bodyV`, `bodyW`) about their centroid. `rigid`: the
-   * drivetrain runs, so the turn is applyDrive's and the body keeps none of its own. A frozen wreck (`stepFrozen`) runs only this.
+   * The body is rigid now: every mass takes the rigid body's velocity and spin (`followGroup`'s `bodyV`, `bodyW`) about its centre (their centroid
+   * off by `liftOffset`). `rigid`: the drivetrain runs, so the turn is applyDrive's and the body keeps none of its own. A frozen wreck (`stepFrozen`) runs only this.
    */
   protected rideBody(rigid: boolean): void {
     let cx = 0,
@@ -70,9 +70,9 @@ export abstract class DeformFreeze extends DeformContact {
       msum += m.mass;
     }
     if (msum > MIN_MASS_SUM) {
-      cx /= msum;
-      cy /= msum;
-      cz /= msum;
+      cx = cx / msum + this.liftOffset.x;
+      cy = cy / msum + this.liftOffset.y;
+      cz = cz / msum + this.liftOffset.z;
       // A driven wreck's turn is applyDrive's (its tyres, not this rule, stop a wreck's spin): the body keeps none of its own.
       if (rigid) this.bodyW.y = 0;
       const wx = this.bodyW.x;

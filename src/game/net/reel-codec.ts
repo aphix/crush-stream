@@ -321,7 +321,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * drawn tread, and meets a solid's sides (a wall, the slab, a prism's flank) at four hub-height points through the shared crash path, giving over its
  * class's spring travel before the face holds it (a monster whose keel clears the slab stops on its tyres); the slab keeps each car off it by its own
  * box, a car on its side drags that side's tyres, and a wreck pressed into the ground stays awake until it is out. A lifted car (the monster) turns,
- * lands and is thrown about a centre risen by its sprung share of the lift (0.81 of the monster's 0.87 m), and a respawn re-attaches it there. Trunk
+ * lands and is thrown about a centre risen by its sprung share of the lift (0.81 of the monster's 0.87 m), and a respawn re-attaches it there; as a
+ * wreck its masses ride that centre too, and its fading lift as it lies over moves the centre without moving its momentum. Trunk
  * lids, hatches, the SUV liftgate and the pickup's drop gate swing on hinges: a rear crush pops the latch, a slam re-latches it, a hard stop, slam,
  * crush or hit tears it off (a loose lid weighs its car's share), struts raise a lid to its stop and a drop gate falls level on its cables; the
  * hatch's and SUV's rear glass rides its gate. Door glass ends 1 cm under its B-pillar's front edge; a mirror keeps its style's reach (sedan 0.128 m,

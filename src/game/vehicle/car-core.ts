@@ -9,6 +9,7 @@ import { PART_FAMILY } from "../kernel/physics-core.js";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
 import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
+import { centreLift } from "./car-cage-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { DOOR_GLASS_SEAT, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane } from "./car-glass.ts";
@@ -921,7 +922,10 @@ export abstract class CarCore {
     this.sirenMat?.emissive.setRGB(lit === 1 ? SIREN_GAIN.red : 0, 0, lit === 2 ? SIREN_GAIN.blue : 0);
   }
 
-  /** Group matrix only: children refresh once per frame in the renderer (recursing the ~60-node car subtree here was ~40% of frame CPU at 10+ cars). */
+  /**
+   * Group matrix only: children refresh once per frame in the renderer (recursing the ~60-node car subtree here was ~40% of frame CPU at 10+ cars).
+   * The deform's `liftOffset` turns with the body: its rigid centre's lift over its masses (`centreLift`, along its up).
+   */
   refreshBasis(): void {
     this.group.updateWorldMatrix(false, false);
     this.forward.set(0, 0, 1).applyQuaternion(this.group.quaternion);
@@ -930,6 +934,7 @@ export abstract class CarCore {
     if (fl > 1e-6) this.fwdFlat.set(this.forward.x / fl, 0, this.forward.z / fl);
     else this.fwdFlat.set(0, 0, 1);
     this.rightFlat.set(this.fwdFlat.z, 0, -this.fwdFlat.x);
+    this.deform.liftOffset.set(0, centreLift(this), 0).applyQuaternion(this.group.quaternion);
   }
 
   /** The drive back as built: a car put on a spot carries no wheel, pedals, wheelspin, drift, grip or ramps over from where it was. */
