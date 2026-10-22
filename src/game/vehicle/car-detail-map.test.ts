@@ -77,6 +77,21 @@ describe("given a style's detail table baked to its atlas", () => {
     within(between.cavity, 0.8, 0.02, "cavity between bars");
   });
 
+  it("when a patch meets the mirror line (x 0), then its floor runs on across it with no rim there, and its outer edges keep theirs", () => {
+    const read = detailReader(
+      sedanWith({
+        lines: [],
+        patches: [
+          { view: "front", points: [[0, 0.3], [0.2, 0.3], [0.2, 0.5], [0, 0.5]], depth: -0.005, rim: 0.02, cavity: 0.6 },
+          { view: "top", points: [[-0.2, 0], [0.2, 0], [0.2, 0.1], [-0.2, 0.1]], depth: -0.005, rim: 0.02, cavity: 0.6 },
+        ],
+      }),
+    );
+    within(read("front", TEXEL / 2, 0.4).height, -0.005, 0.02, "front height beside x 0");
+    within(read("top", 0, TEXEL / 2).height, -0.005, 0.02, "top height beside x 0");
+    within(read("front", 0.19, 0.4).height, -0.0025, 0.2, "front height half way up the outer rim");
+  });
+
   it("when a stroke runs past the nose, then it ends at the side tile's edge and nothing wraps to the tail", () => {
     const nose = SEDAN.dims.wheelbase / 2 + SEDAN.dims.overhang.front;
     const tail = -(SEDAN.dims.wheelbase / 2 + SEDAN.dims.overhang.rear);
@@ -177,6 +192,14 @@ describe("given the detail compile hook on a paint material", () => {
       assert.equal(vertexShader.split("attribute vec3 sprayNrm;").length - 1, 1, "sprayNrm declarations");
     });
   }
+
+  it("when the finish is on, then the front tile prints only ahead of the front axle and the rear tile only behind the rear axle, so a cab's back wall or a gate's inner face takes neither", () => {
+    const { uniforms, fragmentShader } = compileHooks(detailPaint(style));
+    const ends = uniforms.detailEnds?.value as THREE.Vector2 | undefined;
+    assert.ok(ends !== undefined, "the axles' z reach the shader");
+    assert.equal(`${ends.x} ${ends.y}`, `${style.dims.wheelbase / 2} ${-style.dims.wheelbase / 2}`, "front and rear axle z");
+    assert.ok(fragmentShader.includes("if (detailFront ? vDetailPos.z < detailEnds.x : vDetailPos.z > detailEnds.y) detailWeights.z = 0.0;"), "the end tile's weight is cut between the axles");
+  });
 
   it("when the style has no details, then the material keeps its hook, its program key and samples no texture, unlike one with details", () => {
     const bare = makePaintMaterial(0x336699);

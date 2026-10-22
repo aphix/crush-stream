@@ -102,14 +102,15 @@ const SEDAN_LAMP_SHAPES = {
 
 /**
  * The reference's mirror: a rounded body-colour housing seated on the door. Off the gridded side and top: the cap stands y 0.85-0.975 (h 0.12),
- * runs about 0.10 along the car, and reaches |x| 0.88 from the skin at 0.75. At the sim's reach (0.105, tip |x| 0.857) a 0.10 cap's inner
- * face sits 5 mm off the skin over the foot; the platform-proposed 0.17 would bury 6.5 cm of cap through the door glass.
+ * runs about 0.10 along the car, and reaches |x| 0.88 from the skin at 0.752: the door's mirrorReach 0.128. Its 0.12 width leaves the cap's
+ * inner face 8 mm off the seat, over the foot (a cap wider than reach - 0.005 buries itself in the door).
  */
-export const SEDAN_MIRROR = { cap: "rounded", finish: "body", size: [0.1, 0.12, 0.1] } as const;
+export const SEDAN_MIRROR = { cap: "rounded", finish: "body", size: [0.12, 0.12, 0.1] } as const;
 
 export const SEDAN: BodyStyle = {
   id: "sedan",
   dims: { wheelbase: 2.5, overhang: { front: 0.804, rear: 0.925 }, track: 1.36, width: 1.64, height: 1.337, rideHeight: 0.165, wheel: { radius: 0.342, width: PLATFORM_WHEEL.width } },
+  /** wTop stays 1.16: the top view's 1.06 header narrowed the roof cage the house-of-cards stack rests on (its roofs gave 94 mm, bar 15). */
   windshield: { base: [0.95, 0.93], wBase: 1.4, wTop: 1.16 },
   bPillar: { rear: -0.31, front: -0.21 },
   /**
@@ -123,7 +124,11 @@ export const SEDAN: BodyStyle = {
   },
   rocker: { y: 0.21 },
   arch: { radius: 0.405, lip: { flare: 0.008, width: 0.035 } },
-  hood: { z0: 0.88, z1: 1.97, origin: [0.81, 0.86] },
+  /**
+   * The hood's rear edge stands ahead of the windshield's foot (0.95), as the reference's: in its top view the bonnet ends ~1.0 on
+   * the centre line, the dark cowl and wipers (`blackout.cowl`) between it and the glass. Hinged 2 cm behind that edge, as before.
+   */
+  hood: { z0: 0.99, z1: 1.97, origin: [0.81, 0.97] },
   // Body-colour fascias, as the reference's: its black is the lower intake, grille and diffuser (`details`, grille, tail trim), not the
   // bumper. Seams off the gridded side reference: the front bumper up to the head lamp's lower edge and round to the front arch, the rear
   // one up to the tail lamp's lower edge (under the lid, its shut line) and round the quarter to the rear arch; both follow their arch's lip.
@@ -147,7 +152,7 @@ export const SEDAN: BodyStyle = {
       edge: [[-1.83, 0.738], [-1.81, 0.7], [-1.8, 0.665], [-1.76, 0.625], [-1.71, 0.595], [-1.62, 0.58], [-1.66, 0.5], [-1.683, 0.42], [-1.69, 0.32]],
     },
   },
-  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
+  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.128, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
   aPillarFoot: 0.66,
   aPillarTop: 0.08,
   /** The door glass's front edge rises from the foot to the A-post at y 1.0 (the mirror cap's top), as the reference's: only the foot's small triangle below is the black sail. */
@@ -207,7 +212,7 @@ export const SEDAN: BodyStyle = {
    * rear pillar are body colour.
    */
   pillars: { b: { width: [0.165, 0.105], z: [-0.2925, -0.3225] } },
-  blackout: { sail: true, b: true },
+  blackout: { sail: true, b: true, cowl: true },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,
@@ -219,7 +224,7 @@ export const SEDAN: BodyStyle = {
    */
   boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45 }, lip: { rise: 0.012, depth: 0.06 } },
   lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES },
-  grille: { y: 0.43, size: [0.74, 0.26], round: 0.05, kind: "slats", count: 13, finish: "chrome" },
+  grille: { y: 0.43, size: [0.74, 0.26], round: 0.05, kind: "slats", count: 19, finish: "chrome" },
   /**
    * The reference's twin wide oval tips in the diffuser (gridded rear iso and side: |x| 0.47-0.64, y 0.27-0.33, ~3 cm proud). Ours sit
    * inboard at |x| 0.36: the body's tail floor only reaches |x| 0.48 (0.8 hw) and the bumper face sweeps back from 0.33, so wider tips

@@ -162,6 +162,8 @@ interface BumperSpec {
    */
   top?: readonly (readonly [number, number])[];
   edge?: readonly (readonly [number, number])[];
+  /** A rear bumper's number plate centre height (m, car frame); absent, `PLATE_RISE` over the seat. */
+  plate?: number;
 }
 
 type DetailView = "side" | "top" | "front" | "rear";
@@ -264,8 +266,8 @@ export interface BodyStyle {
   glassTop?: number | readonly (readonly [number, number])[];
   /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening). */
   arch: { radius: number; lip?: ArchLip };
-  /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it. */
-  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge };
+  /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`. */
+  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number] };
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;
@@ -338,6 +340,8 @@ export interface BodyStyle {
   roof?: RoofParts;
   /** Exhaust tips, drawn in the rear bumper (they tear off with it). */
   exhaust?: Exhaust;
+  /** The lifted truck's undercarriage under the body (`hangUnderbody`): ladder frame, coil-over pairs, driveshafts and steering on the body, a solid axle on each pair of hubs. Drawn only, for the monster's lift. */
+  underbody?: boolean;
   /** Fine contours drawn as detail maps, not geometry: strokes and patches on the side, top, front and rear views, car-frame metres, x >= 0 mirrored. */
   details?: { lines: readonly DetailLine[]; patches: readonly DetailPatch[] };
   /** Cameras (m, car frame as drawn, a class lift included): the hood eye [y, z] over the bonnet ahead of the windshield base, and the chase and far chase eyes `dist` behind and `height` over the car's origin, aimed `aimUp` over it; absent = `PLATFORM_CAMERA`. */

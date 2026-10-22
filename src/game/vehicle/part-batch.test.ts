@@ -25,8 +25,8 @@ const GRILLE_NORMAL = new THREE.Vector3(0.05, -1, -0.02).normalize();
 const HARD_BOUNCE = 3 * DENT_MIN_DV;
 /** loose-dent's reach (m), which it keeps private: skin within this of the contact moves. */
 const DENT_REACH = 0.26;
-/** Seats of a kind one car at rest draws: its `PART_PER_CAR`, and none of the bay or the crash bars (hood and bumpers on). */
-const atRest = (kind: number): number => (kind === PART_KIND.engineBay || kind === PART_KIND.crashBar ? 0 : PART_PER_CAR[kind]!);
+/** Seats of a kind one car at rest draws: its `PART_PER_CAR`, and none of the bay or the crash bars (hood and bumpers on), nor a lifted truck's undercarriage (a sedan has none). */
+const atRest = (kind: number): number => (kind === PART_KIND.engineBay || kind === PART_KIND.crashBar || kind === PART_KIND.ladderFrame || kind === PART_KIND.axle ? 0 : PART_PER_CAR[kind]!);
 
 /** A 50 degree lens at the origin looking down +z; cars stand on the axis at the given distance. */
 function stage(capacity = 16) {

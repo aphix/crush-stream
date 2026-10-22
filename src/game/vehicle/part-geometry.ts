@@ -3,9 +3,9 @@ import { once } from "../kernel/scalar.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import { INTERIOR_MESH, SMALL_PART_SEAT } from "./constants.ts";
 import { loosePartsMaterial, mergeToned, PAINTED_ATTRIBUTE, toned } from "./car-materials.ts";
-import { cabinGeometry, crashBarGeometry, doorCardGeometry, engineBayGeometry, frontSeatGeometry, rearSeatGeometry, wheelGeometry } from "./interior-geometry.ts";
+import { cabinGeometry, crashBarGeometry, doorCardGeometry, engineBayGeometry, frontSeatGeometry, ladderFrameGeometry, rearSeatGeometry, solidAxleGeometry, wheelGeometry } from "./interior-geometry.ts";
 
-/** A car's static parts, in `PartBatch.meshes` order: the cabin shell, door cards, mirrors, grille, tail trim, then the interior kit and the bay set (`CarCabin`). */
+/** A car's static parts, in `PartBatch.meshes` order: the cabin shell, door cards, mirrors, grille, tail trim, then the interior kit and the bay set (`CarCabin`), then a lifted truck's undercarriage (`CarUnderbody`). */
 export const PART_KIND = {
   interior: 0,
   liningL: 1,
@@ -19,11 +19,13 @@ export const PART_KIND = {
   wheel: 9,
   engineBay: 10,
   crashBar: 11,
+  ladderFrame: 12,
+  axle: 13,
 } as const;
 export type PartKind = (typeof PART_KIND)[keyof typeof PART_KIND];
 export const PART_KINDS: readonly PartKind[] = Object.values(PART_KIND);
-/** Seats of each kind on one car (`PartBatch` sizes each kind's draw by it): two front seats, a crash bar at each end. */
-export const PART_PER_CAR: readonly number[] = PART_KINDS.map((k) => (k === PART_KIND.seatFront || k === PART_KIND.crashBar ? 2 : 1));
+/** Seats of each kind on one car (`PartBatch` sizes each kind's draw by it): two front seats, a crash bar at each end, two axles. */
+export const PART_PER_CAR: readonly number[] = PART_KINDS.map((k) => (k === PART_KIND.seatFront || k === PART_KIND.crashBar || k === PART_KIND.axle ? 2 : 1));
 /** The kinds the far distance cut takes with the cabin (`CarDetail`, by `INTERIOR_MESH`); the rest are small parts, cut at mid distance. */
 const INTERIOR_KINDS: ReadonlySet<number> = new Set([PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.engineBay]);
 /** The interior kit seen only through the glass: the mid cut takes it with the glass, as it takes the seated driver (`CarDetail`). */
@@ -52,12 +54,14 @@ function grille(): THREE.BufferGeometry {
   return toned(new THREE.BoxGeometry(0.72, 0.16, 0.06, 4, 2, 1), 0x1a1c20, 0.55, 0.45);
 }
 
+/** The plate's centre over the rear bumper's seat (m) where the bumper sets no `plate` height. */
+export const PLATE_RISE = 0.03;
 /**
  * The number plate in rear-bumper space; the tail lamps sit on the body, a style's bumper lamps and diffuser join it (`part-variants.ts`).
  * The bumper's seat is 0.05 m inside the body's tail station, so the plate stands 8 cm behind the seat, 2 cm proud of the tail face.
  */
 function tailTrim(): THREE.BufferGeometry {
-  return toned(new THREE.BoxGeometry(0.36, 0.11, 0.02), 0xd8d4cc, 0.6, 0.1).translate(0, 0.03, -0.08);
+  return toned(new THREE.BoxGeometry(0.36, 0.11, 0.02), 0xd8d4cc, 0.6, 0.1).translate(0, PLATE_RISE, -0.08);
 }
 
 /** Built once, shared by every car; a car's dispose skips it (engine teardown frees only its GPU copy). */
@@ -74,6 +78,8 @@ const GEOMETRY = [
   once(wheelGeometry),
   once(engineBayGeometry),
   once(crashBarGeometry),
+  once(ladderFrameGeometry),
+  once(solidAxleGeometry),
 ] as const;
 
 export const partGeometry = (kind: PartKind): THREE.BufferGeometry => GEOMETRY[kind]();

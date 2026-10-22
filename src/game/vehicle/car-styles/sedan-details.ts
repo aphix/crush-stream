@@ -15,8 +15,8 @@ const VENT = { depth: -0.005, rim: 0.006, pattern: { kind: "hslats", pitch: 0.01
 const BADGE = { depth: 0.002, rim: 0.003, cavity: 0 } as const;
 
 const SHARED_LINES: readonly Line[] = [
-  { view: "top", points: [[0.8, 0.66], [0.9, 0.65], [1, 0.645], [1.1, 0.64], [1.19, 0.63], [1.3, 0.615], [1.37, 0.6], [1.47, 0.58], [1.55, 0.56], [1.66, 0.53], [1.77, 0.5], [1.88, 0.46], [1.96, 0.42]], ...GAP },
-  { view: "top", points: [[0.81, 0.66], [0.92, 0.55], [1.02, 0.36], [1.06, 0.19], [1.07, 0]], ...GAP },
+  // The hood's side shut line on the drawn lid's edge (hw - 0.07, CarGreenhouse3's ca1dce92) from its rear edge (0.99) to the nose; the lid's straight rear edge is its own seam.
+  { view: "top", points: [[0.99, 0.72], [1.235, 0.72], [1.481, 0.695], [1.642, 0.679], [1.734, 0.676], [1.82, 0.622], [1.898, 0.504], [1.96, 0.435]], ...GAP },
   { view: "front", points: [[0.63, 0.58], [0.62, 0.52], [0.62, 0.45], [0.62, 0.38], [0.62, 0.3], [0.64, 0.26]], ...GAP },
   { view: "front", points: [[0.4, 0.345], [0.55, 0.345], [0.62, 0.345]], ...GAP, width: 0.008 },
   { view: "side", points: [[0.69, 0.89], [0.705, 0.84], [0.72, 0.78], [0.727, 0.65], [0.73, 0.5], [0.727, 0.38], [0.72, 0.27], [0.71, 0.245]], ...GAP },
@@ -121,6 +121,8 @@ const POLICE_PATCHES: readonly Patch[] = [
   { view: "front", points: [[0, 0.27], [0.38, 0.27], [0.38, 0.21], [0, 0.21]], ...VENT },
   { view: "front", points: [[0.52, 0.27], [0.66, 0.27], [0.66, 0.225], [0.52, 0.225]], ...VENT },
   { view: "rear", points: [[0, 0.82], [0.025, 0.795], [0, 0.77]], ...BADGE },
+  // The roof's black antenna dome on the centre line (cop isos; R ~22 mm at z -1.0): a raised dark disc in the roof's height map.
+  { view: "top", points: [[-0.978, 0], [-0.984, 0.0156], [-1.0, 0.022], [-1.016, 0.0156], [-1.022, 0]], depth: 0.006, rim: 0.012, cavity: 0.9 },
 ];
 
 /** Every sedan flank, top, nose and tail detail the two measurement scouts reported. */

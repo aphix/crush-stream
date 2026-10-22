@@ -28,7 +28,7 @@ import {
 } from "./car-materials.ts";
 import { carPartSeats, GRILLE_SEAT, MIRROR_REACH, PART_KIND, PartSeat } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, LAMP_PROBE_REACH, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
-import { bumperBare, CarCabin } from "./interior.ts";
+import { bumperBare, CarCabin, CarUnderbody } from "./interior.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { anchorOnSkin, poseOnSkin, type GlowKind, type SkinAnchor } from "./lamp-lights.ts";
@@ -424,6 +424,8 @@ export abstract class CarCore {
   readonly interior: THREE.Group;
   /** The interior kit, the engine bay and the crash bars, placed by the style. */
   protected readonly cabin: CarCabin;
+  /** The lifted truck's frame and axles (`BodyStyle.underbody`); null on other styles. */
+  readonly underbody: CarUnderbody | null;
   private mirrorL: PartSeat;
   private mirrorR: PartSeat;
   /** The static parts, drawn by PartBatch: one of each kind indexed by PartKind, then the further ones (`carPartSeats`). */
@@ -545,6 +547,7 @@ export abstract class CarCore {
       this.wheels.push(w);
       this.looseWheels.push({ object: w, velocity: new THREE.Vector3(), angular: new THREE.Vector3(), radius: this.frame.rig.tyre.r, shape: newLooseShape(), loose: false });
     }
+    this.underbody = this.style.underbody ? new CarUnderbody(this.partSeats, this.group, this.wheels) : null;
     this.group.castShadow = true;
   }
 

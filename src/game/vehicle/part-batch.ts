@@ -76,6 +76,7 @@ export class PartBatch {
     const casterCounts = this.casterCounts;
     casterCounts.fill(0);
     for (const car of cars) {
+      car.underbody?.follow();
       for (const seat of car.partSeats) {
         let shown = seat.visible;
         let attached = false;

@@ -73,7 +73,7 @@ export const POLICE: BodyStyle = {
   lightBar: true,
   pushBar: true,
   lamps: { head: [0.55, 0.515], tail: [0.596, 0.745], shapes: POLICE_LAMP_SHAPES },
-  grille: { y: 0.47, size: [0.6, 0.12], kind: "bars", count: 3, finish: "black" },
+  grille: { y: 0.44, size: [0.58, 0.21], kind: "bars", count: 6, badge: 0.025, finish: "black" },
   details: POLICE_DETAILS,
   /** The cruiser's mirrors are black plastic: a body-colour cap would take the white door paint. */
   door: { ...SEDAN.door, mirror: { ...SEDAN_MIRROR, finish: "black" } },
