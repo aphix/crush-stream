@@ -408,7 +408,8 @@ export interface BodyStyle {
    * riding its seat (a tail's share that lands on the boot lid rides the lid, lit with the tails); `front` / `rear` lamps, reflectors and
    * pods on that bumper's fascia (unlit, torn off with it). Absent, the platform housing (`LAMP_HOUSING`, standing 4.5 cm proud).
    * `brake`: a high-mount brake lamp `size` [w, h] met on the skin or the rear glass from behind at [x, y] (a pickup's cab glass); `sideMarkers`:
-   * amber markers on each side met from outboard at [y, z]. Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
+   * amber markers on each side met from outboard at [y, z], `tint` (sRGB) multiplied into the shared amber lens (absent, the amber as is).
+   * Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
    * `bulb`: the head lamps' light, warm halogen or cool-white LED, in their lit lens pieces and glow; absent, the neutral white.
    */
   lamps: {
@@ -416,7 +417,7 @@ export interface BodyStyle {
     tail: readonly [number, number];
     shapes?: { head?: LampShape; tail?: LampShape; front?: LampShape; rear?: LampShape };
     brake?: { at: readonly [number, number]; size: readonly [number, number] };
-    sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number] }[];
+    sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number]; tint?: number }[];
     bulb?: "halogen" | "led";
   };
   /**

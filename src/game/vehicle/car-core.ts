@@ -238,6 +238,8 @@ interface LampFitting {
   variant: number;
   /** A share's lamp on the body and its lid's part (set once the parts are registered); null on the brake and the markers. */
   share: { lamp: Lamp; lid: DetachPart | null } | null;
+  /** A marker's tint (`lamps.sideMarkers[].tint`), multiplied into its unit's colour; null for the rest. */
+  tint: THREE.Color | null;
 }
 
 export interface DetachPart {
@@ -625,7 +627,7 @@ export abstract class CarCore {
         const seat = this.lampSeat();
         seat.parent = lid;
         const lamp = this.lamps.find((l) => l.kind === (kind === "hood" ? "head" : "tail") && l.side === side)!;
-        this.lampFittings.push({ seat, kind, anchor: null, variant: share.variant, share: { lamp, lid: null } });
+        this.lampFittings.push({ seat, kind, anchor: null, variant: share.variant, share: { lamp, lid: null }, tint: null });
       }
     }
     this.addLampFittings();
@@ -644,13 +646,14 @@ export abstract class CarCore {
     const { brake, sideMarkers } = this.style.lamps;
     const skin = new THREE.Mesh(this.body.geometry);
     const ray = new THREE.Raycaster();
-    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number], targets: THREE.Object3D[]) => {
+    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number], targets: THREE.Object3D[], tint?: number) => {
       ray.set(from, toward);
       const hit = ray.intersectObjects(targets, false)[0];
       if (!hit) throw new Error(`${this.style.id}: no skin for its ${kind} lamp from ${from.toArray().join()}`);
       const seat = this.lampSeat();
       seat.scale.set(size[0], size[1], 1);
-      this.lampFittings.push({ seat, kind, anchor: anchorOnSkin(this.body.geometry, hit.point, _lampQ.setFromAxisAngle(_up, yaw)), variant: 0, share: null });
+      const anchor = anchorOnSkin(this.body.geometry, hit.point, _lampQ.setFromAxisAngle(_up, yaw));
+      this.lampFittings.push({ seat, kind, anchor, variant: 0, share: null, tint: tint === undefined ? null : new THREE.Color(tint) });
     };
     if (brake) {
       const glass = new THREE.Mesh(makeRearGlass(this.style), GLASS_PROBE);
@@ -658,7 +661,7 @@ export abstract class CarCore {
       glass.geometry.dispose();
     }
     for (const marker of sideMarkers ?? []) {
-      for (const side of [-1, 1]) seatAt("marker", new THREE.Vector3(side * LAMP_PROBE_REACH, marker.at[0], marker.at[1]), new THREE.Vector3(-side, 0, 0), (side * Math.PI) / 2, marker.size, [skin]);
+      for (const side of [-1, 1]) seatAt("marker", new THREE.Vector3(side * LAMP_PROBE_REACH, marker.at[0], marker.at[1]), new THREE.Vector3(-side, 0, 0), (side * Math.PI) / 2, marker.size, [skin], marker.tint);
     }
   }
 
