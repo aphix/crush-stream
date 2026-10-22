@@ -353,8 +353,8 @@ export interface BodyStyle {
   aPillarKnee?: number;
   /** Side glass top: its drop under the roof (m, absent 0.075), the roof's side lip ending there too; or [z, y] stations (ascending, linear, held past the ends) under a 0.075 lip, painted fill between them and the lip. */
   glassTop?: number | readonly (readonly [number, number])[];
-  /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it. */
-  arch: { radius: number; lip?: ArchLip; wellWall?: number };
+  /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it; `rise` (drawn only, absent 1) the opening's crown height over the hub as a fraction of `radius`: an elliptic opening, as wide at hub height, its lip following it under the round fender flare. */
+  arch: { radius: number; lip?: ArchLip; wellWall?: number; rise?: number };
   /** Drawn only: [z0, z1] (m): each body loft gap whose middle lies in it gets a ring there, where the flank turns hard between stations (an arch's flare); the cage keeps its rings. */
   ringSplit?: readonly [z0: number, z1: number];
   /**
@@ -377,8 +377,11 @@ export interface BodyStyle {
    * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`.
    */
   pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan };
-  /** Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar, and the cowl (the deck between the hood's rear edge and the windshield's foot). */
-  blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean; cowl?: boolean };
+  /**
+   * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
+   * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.
+   */
+  blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean | "matte"; cowl?: boolean };
   /**
    * Drawn only: the C-pillar as a sail lofted from the haunch's shoulder, tangent to it, up to the rear glass and the roof, its front on
    * the side window's line; absent, a flat post. `tip` ([y, z]): where that line ends at the belt behind the quarter glass, the gloss-black
@@ -388,8 +391,8 @@ export interface BodyStyle {
    * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point.
    */
   cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean };
-  /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
-  privacyGlass?: { rear?: boolean; quarter?: boolean };
+  /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
+  privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */
   windowTrim?: "chrome";
   /** Chrome strips on the body side (drawn only, with `windowTrim`): side-view polylines [z, y] (m), `width` (m) tall, on the skin's +x and -x. A strip whose points all lie inside the door aperture rides the door; any other rides the body. */

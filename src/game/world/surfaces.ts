@@ -1821,10 +1821,10 @@ export function clearOf(skip: number, x: number, z: number, r: number, y: number
   return (s === null || staticTop(s, x - r, x + r, z - r, z + r) < y) && (o === null || staticTop(o, x - r, x + r, z - r, z + r) < y) && topsTop(skip, x - r, x + r, z - r, z + r) === -Infinity;
 }
 
-/** `staticTop` over the armed solids alone (-Infinity: none armed). */
-export function solidTop(xMin: number, xMax: number, zMin: number, zMax: number): number {
+/** `staticTop` over the armed solids alone (-Infinity: none armed); `cellsOnly` as `staticTop`'s (a bound that never falls as the box grows). */
+export function solidTop(xMin: number, xMax: number, zMin: number, zMax: number, cellsOnly = false): number {
   if (GQ.on) GQ.calls[G.solidTop] = GQ.calls[G.solidTop]! + 1;
-  return live.solids === null ? -Infinity : staticTop(live.solids, xMin, xMax, zMin, zMax);
+  return live.solids === null ? -Infinity : staticTop(live.solids, xMin, xMax, zMin, zMax, cellsOnly);
 }
 
 /** `patchOf` the contact `seek` found would report. */

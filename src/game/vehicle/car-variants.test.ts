@@ -28,7 +28,7 @@ import { PLATFORM_RIG } from "../deform/deform-rig.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { LampBatch } from "./lamp-lights.ts";
 import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
-import { BLACKOUT, FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE, LIGHT_BAR, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
+import { BLACKOUT, FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE, LIGHT_BAR, MATTE_BLACKOUT, MATTE_PRIVACY, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { bootPivot, lidSpec, roofHinged } from "./hinge-spec.ts";
 import { SPRINGS } from "./car-suspension.ts";
 import { CarCage } from "./car-cage.ts";
@@ -1141,6 +1141,23 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(names.join(",") === "a,rear,sail,a,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
   });
 
+  it("when the SUV's rear pillar is matte, then exactly the gloss-black rear pillar's vertices turn matte black, and the drawn shape is unchanged", () => {
+    const wagon = CAR_STYLES.wagon;
+    const gloss: BodyStyle = { ...wagon, blackout: { ...wagon.blackout, rear: true } };
+    const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
+    const [was, now] = [makeChassisGeometry(gloss), makeChassisGeometry(wagon)];
+    let turned = 0;
+    for (let i = 0; i < primer(now).count; i++) {
+      if (primer(now).getX(i) === primer(was).getX(i)) continue;
+      turned++;
+      assert.ok(primer(was).getX(i) === BLACKOUT && primer(now).getX(i) === MATTE_BLACKOUT, `vertex ${i}: ${primer(was).getX(i)} → ${primer(now).getX(i)}`);
+    }
+    const rear = makeGreenhouseFrame(wagon, "drawn").filter((g) => g.userData.matte === true);
+    assert.ok(rear.length === 2 && turned === rear.reduce((n, g) => n + g.getAttribute("position").count, 0), `${rear.length} matte pillars, ${turned} vertices turned`);
+    const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
+    assert.ok(bits(now) === bits(was), "the drawn body's shape is unchanged");
+  });
+
   it("when a style blacks out its cowl, then the deck's crown from 5 cm under the windshield's foot to 5 cm under the hood's rear edge turns primer-dark, and nothing else does", () => {
     const sedan = CAR_STYLES.sedan;
     // The hood's rear edge 6 cm ahead of the glass's foot: a strip of deck shows between them.
@@ -1397,12 +1414,12 @@ describe("given a body style's H2 hardpoints", () => {
       if (!lips) return;
       const pos = lips.getAttribute("position");
       const tone = lips.userData.tone as Float32Array;
-      const r = style.arch.radius;
+      const [r, rise] = [style.arch.radius, style.arch.rise ?? 1];
       let worst = 0;
       for (let v = 0; v < pos.count; v++) {
         if (tone[v] === 0) continue;
         const [y, z] = [pos.getY(v), pos.getZ(v)];
-        const past = Math.min(...carFrame(style).wheels.map(([, wy, wz]) => (y < wy ? Math.abs(z - wz) : Math.hypot(y - wy, z - wz)))) - r;
+        const past = Math.min(...carFrame(style).wheels.map(([, wy, wz]) => (y < wy ? Math.abs(z - wz) : Math.hypot((y - wy) / rise, z - wz)))) - r;
         worst = Math.max(worst, past);
       }
       assert.ok(worst <= 0.01, `${id}: a dark lip vertex stands ${(worst * 100).toFixed(1)} cm out past the opening, over painted skin`);
@@ -1422,7 +1439,7 @@ describe("given a body style's H2 hardpoints", () => {
         for (const [wx, wy, wz] of carFrame(s).wheels) {
           let down = 0;
           for (let d = 0.005; d < 0.15; d += 0.005) {
-            const hit = toneHit(drawn, [Math.sign(wx) * 3, wy + s.arch.radius - d, wz], [-Math.sign(wx), 0, 0], 6);
+            const hit = toneHit(drawn, [Math.sign(wx) * 3, wy + s.arch.radius * (s.arch.rise ?? 1) - d, wz], [-Math.sign(wx), 0, 0], 6);
             if (!hit || hit.tone !== 0) break;
             down = d;
           }
@@ -2403,7 +2420,7 @@ describe("given a body style's P2 parts", () => {
     const shapes = sedan.lamps.shapes!;
     const off: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: { ...shapes, front: { ...shapes.front!, onBody: undefined } } } };
     const meetZ = (geo: THREE.BufferGeometry): number =>
-      new THREE.Raycaster(new THREE.Vector3(0.64, 0.28, 5), new THREE.Vector3(0, 0, -1)).intersectObject(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), false)[0]?.point.z ?? -Infinity;
+      new THREE.Raycaster(new THREE.Vector3(0.62, 0.3, 5), new THREE.Vector3(0, 0, -1)).intersectObject(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), false)[0]?.point.z ?? -Infinity;
     const skin = meetZ(makeChassisGeometry(sedan));
     const [lens, buried] = [sedan, off].map((style) => meetZ(drawnPart(PART_KIND.grille, style).geometry.clone().translate(0, seat.y + GRILLE_SEAT.y, seat.z + GRILLE_SEAT.z)));
     assert.ok(lens! > skin + 0.001 && buried! < skin, `the fog pod's lens at z ${lens!.toFixed(4)} (without the field ${buried!.toFixed(4)}), the body skin at ${skin.toFixed(4)}`);
@@ -2727,7 +2744,7 @@ function linerInnerEdge(style: BodyStyle, wx: number, wz: number): number {
 }
 
 /** A style without its arch lip. */
-const lipless = (style: BodyStyle): BodyStyle => ({ ...style, arch: { radius: style.arch.radius } });
+const lipless = (style: BodyStyle): BodyStyle => ({ ...style, arch: { radius: style.arch.radius, rise: style.arch.rise } });
 
 /** A bed's side wall stands this far (m) in from the body side at its foot (`halfRing`'s floor edge); its top edge at the style's `tubWall`. */
 const BED_WALL_INSET = 0.06;
@@ -2902,13 +2919,14 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       const plain = new THREE.Mesh(makeChassisGeometry(lipless(style)), SIDED);
       for (const [wx, wy, wz] of carFrame(style).wheels) {
         const s = Math.sign(wx);
+        const top = wy + style.arch.radius * (style.arch.rise ?? 1);
         let proud = 0;
         // From a tenth of its width over the opening's edge: on the edge itself the lip-less body's side turns in under it.
         for (let k = 1; k <= 10; k++) {
           // An inset lip (`lip.inset`) stands over the opening's top: it is read from there, against the skin at the top it seats on.
-          const y = wy + style.arch.radius - (lip.inset ?? 0) + (k / 10) * lip.width;
+          const y = top - (lip.inset ?? 0) + (k / 10) * lip.width;
           const at = (mesh: THREE.Mesh, h: number) => Math.abs(bodyHit(mesh, [s * 3, h, wz], [-s, 0, 0], 3)?.x ?? 0);
-          const out = (mesh: THREE.Mesh) => at(mesh, mesh === plain ? Math.max(y, wy + style.arch.radius) : y);
+          const out = (mesh: THREE.Mesh) => at(mesh, mesh === plain ? Math.max(y, top) : y);
           proud = Math.max(proud, out(drawn) - out(plain));
         }
         assert.ok(Math.abs(proud - lip.flare) < LIP_TOL, `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: the lip stands ${proud.toFixed(4)} m proud`);
@@ -2923,7 +2941,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       const lipEnd = lips.from + lips.perWheel.reduce((n, c) => n + c, 0);
       for (const [wx, wy, wz] of carFrame(style).wheels) {
         const s = Math.sign(wx);
-        const top = wy + style.arch.radius;
+        const top = wy + style.arch.radius * (style.arch.rise ?? 1);
         const skin = Math.abs(bodyHit(plain, [s * 3, top, wz], [-s, 0, 0], 3)!.x);
         const at = `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}`;
         const crown = toneHit(drawn, [s * 3, top - (lip.inset ?? 0) + 0.3 * lip.width, wz], [-s, 0, 0], 3);
@@ -2941,20 +2959,35 @@ describe("given a body style's boot opening, its open floors and its arch lips (
     if (outboard.length === 0) continue;
     it(`when a ${id}'s arches over tyres standing outboard of its body are looked into from the side, then every sight line through the opening meets the dark well, none the far side`, () => {
       const drawn = new THREE.Mesh(makeChassisGeometry(style), FRONT);
-      const r = style.arch.radius;
+      const [r, rise] = [style.arch.radius, style.arch.rise ?? 1];
       for (const [wx, wy, wz] of outboard) {
         const s = Math.sign(wx);
         const off: string[] = [];
         let looked = 0;
-        for (let y = wy; y < wy + r; y += 0.05) {
+        for (let y = wy; y < wy + r * rise; y += 0.05) {
           for (let z = wz - r; z <= wz + r; z += 0.05) {
-            if (Math.hypot(z - wz, y - wy) > r - WELL_RIM || y < rockerAt(z, style) + WELL_RIM) continue;
+            if (Math.hypot(z - wz, (y - wy) / rise) > r - WELL_RIM || y < rockerAt(z, style) + WELL_RIM) continue;
             looked++;
             const hit = toneHit(drawn, [s * 3, y, z], [-s, 0, 0], 6);
             if (!hit || hit.tone < WELL_DARK) off.push(`(y ${y.toFixed(2)}, z ${z.toFixed(2)}) ${hit ? `toned ${hit.tone.toFixed(2)}` : "through"}`);
           }
         }
         assert.ok(looked > 20 && off.length === 0, `${id} arch at z ${wz.toFixed(2)}: ${off.length} of ${looked} sight lines meet paint or nothing: ${off.slice(0, 6).join(", ")}`);
+      }
+    });
+  }
+
+  for (const id of CAR_STYLE_IDS) {
+    const rise = CAR_STYLES[id].arch.rise;
+    if (rise === undefined) continue;
+    it(`when a ${id}'s lip-less arches are looked at from outside, then each opening crowns ${rise} of its radius over the hub: paint 1 cm over that, the dark well 2 cm under it`, () => {
+      const style = lipless(CAR_STYLES[id]);
+      const drawn = new THREE.Mesh(makeChassisGeometry(style), FRONT);
+      for (const [wx, wy, wz] of carFrame(style).wheels) {
+        const s = Math.sign(wx);
+        const top = wy + style.arch.radius * rise;
+        const [over, under] = [top + 0.01, top - 0.02].map((y) => toneHit(drawn, [s * 3, y, wz], [-s, 0, 0], 6)?.tone ?? NaN);
+        assert.ok(over === 0 && under! >= WELL_DARK, `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: toned ${over} 1 cm over its crown, ${under} 2 cm under`);
       }
     });
   }
@@ -3105,6 +3138,16 @@ describe("given a style with privacy glass", () => {
     } finally {
       hatch.privacyGlass = was;
     }
+  });
+
+  it("when the SUV's quarter glass is matte, then its quarter panes carry the matte privacy tone on every vertex and its rear glass plain privacy", () => {
+    const car = new DeformableCar(PAINT, new THREE.Scene(), null, "wagon");
+    const tones = (name: string): string => {
+      const tone = car["glassPanes"].find((g) => g.name === name)!.mesh.geometry.getAttribute(GLASS_ATTRIBUTE);
+      return [...new Set(Array.from({ length: tone.count }, (_, i) => tone.getY(i)))].join();
+    };
+    const read = ["rear", "quarterL", "quarterR"].map(tones).join(" ");
+    assert.ok(read === `1 ${MATTE_PRIVACY} ${MATTE_PRIVACY}`, `privacy tones rear, quarterL, quarterR: ${read}`);
   });
 });
 

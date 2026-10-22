@@ -97,12 +97,13 @@ const SEDAN_LAMP_SHAPES = {
   // Met on the body too: the fascia's wrapped corner is held inside it.
   front: {
     loops: [
-      { points: [[0.5, 0.26], [0.66, 0.26], [0.66, 0.35], [0.5, 0.35]] },
+      // The reference's fog pod: a round recess, 13 x 8 cm, held inboard of the fascia's wrapped corner (|x| 0.66).
+      { points: [[0.63, 0.305], [0.621, 0.325], [0.598, 0.34], [0.565, 0.345], [0.533, 0.34], [0.509, 0.325], [0.5, 0.305], [0.509, 0.285], [0.533, 0.27], [0.565, 0.265], [0.598, 0.27], [0.621, 0.285]] },
       { points: [[0.006, 0.285], [0.3, 0.278], [0.45, 0.276], [0.48, 0.262], [0.4, 0.226], [0.2, 0.222], [0.006, 0.222]] },
     ],
     lens: "dark",
     bezel: "black",
-    rounds: [{ at: [0.58, 0.305], r: 0.018, tone: "clear" }],
+    rounds: [{ at: [0.565, 0.305], r: 0.018, tone: "clear" }],
     onBody: true,
   },
   // The reference's rear reflectors: thin red strips low on the bumper's corners (rear iso; side y ~0.49), not blocks.
@@ -139,8 +140,8 @@ export const SEDAN: BodyStyle = {
     y: [[-1.23, 1.0], [-1.15, 0.98], [-0.9, 0.948], [-0.5, 0.913], [0.4, 0.9], [0.66, 0.9], [0.95, 0.86]],
   },
   rocker: { y: 0.21 },
-  /** The wheel opening about its hub as the reference's: 26 px of silver-sedan-1.png (70.1 px/m) is .371, its top at .685 over the ground. */
-  arch: { radius: 0.375, lip: { flare: 0.008, width: 0.035 } },
+  /** The wheel opening about its hub as the reference's (.371, its top at .685); the lip overhangs it 1.5 cm so the dark well shows a thin gap. */
+  arch: { radius: 0.375, lip: { flare: 0.008, width: 0.035, inset: 0.015 } },
   /** The flank under the feature line lifts onto the front arch's flare hardest over z 1.39-1.58, between 9-10 cm stations: split those two gaps. */
   ringSplit: [1.4, 1.57],
   /**
@@ -213,15 +214,16 @@ export const SEDAN: BodyStyle = {
       trim: "body",
       band: [0.23, 0.41],
       plate: 0.685,
-      plateFace: { out: 0.041 },
+      // The plate sits 6 mm proud of the recess floor (2.109), as the reference's.
+      plateFace: { out: 0.027 },
       top: [[0, 0.61], [0.46, 0.61], [0.5, 0.738], [0.6, 0.738]],
       edge: [[-1.83, 0.738], [-1.81, 0.7], [-1.8, 0.665], [-1.76, 0.625], [-1.71, 0.595], [-1.62, 0.58], [-1.66, 0.5], [-1.683, 0.42], [-1.69, 0.32]],
     },
   },
   door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.128, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
   aPillarFoot: 0.66,
-  /** The door glass's top-front corner, as far in under the slim A-post's rear edge as under the default 6 cm post's at 0.08. */
-  aPillarTop: 0.143,
+  /** The door glass's top-front corner, tucked under the slim A-post; past ~0.14 the cage's A-pillar box lifts the dummy proxy's roof over the windshield. */
+  aPillarTop: 0.13,
   /** The door glass's front edge rises from the foot to the A-post at y 1.0 (the mirror cap's top), as the reference's: only the foot's small triangle below is the black sail. */
   aPillarKnee: 1.0,
   glassTop: 0.05,
@@ -275,11 +277,11 @@ export const SEDAN: BodyStyle = {
   midPillarZ: null,
   /**
    * The reference's B-pillar is gloss black and leans: 0.165 wide at the belt (z -0.21..-0.375), 0.105 at the roof (-0.27..-0.375), its
-   * rear edge upright, its front edge the front door frame's leaning rear edge. The sail by the mirror is black too; the A-post (3.5 cm
-   * behind the windshield's edge, side view) and the rear pillar are body colour.
+   * rear edge upright, its front edge the front door frame's leaning rear edge. The sail and the A-post's glass trim are gloss black too;
+   * the rear pillar is body colour.
    */
   pillars: { a: 0.035, b: { width: [0.165, 0.105], z: [-0.2925, -0.3225] } },
-  blackout: { sail: true, b: true, cowl: true },
+  blackout: { a: true, sail: true, b: true, cowl: true },
   /** The side window's line ends at the belt here, behind the quarter glass (reference side view); the C-pillar sails onto the haunch. */
   cPillar: { tip: [0.99, -1.23] },
   rearBulkhead: { z: -0.72, yTop: 0.84 },

@@ -26,11 +26,18 @@ export const DECK_RISE = 0.012;
  * walls, a door's inner face): matte dark trim with no clear coat (`car-materials.ts`), as the references' cabins read through the glass.
  */
 export const CABIN_TRIM = -2;
+/** `PRIMER_ATTRIBUTE` of a matte blacked-out part (`blackout` "matte"): the gloss black at black plastic's roughness, its clear coat off (`car-materials.ts`). */
+export const MATTE_BLACKOUT = -1.25;
 /** A bumper's per-vertex trim attribute: 0 the bumper's own trim, `FITTING_TONE` black or chrome (its exhaust tips and tow hitch, drawn in its one mesh). */
 export const FITTING_ATTRIBUTE = "fitting";
 export const FITTING_TONE = { black: 1, chrome: 2 } as const;
-/** A glass pane's per-vertex tone, a vec2 (`glassMaterial`'s hook reads it; a mesh without it reads 0, 0: clear glass): x 1 on black frit, y 1 on a privacy pane (darker, its opacity floored). */
+/**
+ * A glass pane's per-vertex tone, a vec2 (`glassMaterial`'s hook reads it; a mesh without it reads 0, 0: clear glass): x 1 on black frit,
+ * y 1 on a privacy pane (darker, its opacity floored), `MATTE_PRIVACY` on a matte one (rougher too).
+ */
 export const GLASS_ATTRIBUTE = "glassTone";
+/** `GLASS_ATTRIBUTE` y of a matte privacy pane (`privacyGlass` "matte"): over 1, so the privacy shade reads it as 1. */
+export const MATTE_PRIVACY = 2;
 export const BUMPER_F = "bumperF";
 /** The name of a car's head or tail lamp seat (`Object3D.name`): `addLamps` names it, the distance cut finds it. */
 export const LAMP_SEAT = "lampSeat";
