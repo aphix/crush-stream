@@ -1,4 +1,5 @@
 import { hypot2 } from "../kernel/physics-core.js";
+import type { BodySource } from "./car-mesh.ts";
 import type { BodyStyle, PillarSpan } from "./car-variants.ts";
 
 /** Height at `z` along [z, y] stations in ascending z: linear between them, held past the ends. */
@@ -91,8 +92,12 @@ export function pillarBands(span: PillarSpan, mid: number): PillarBands {
   return { belt: [beltZ - beltWidth / 2, beltZ + beltWidth / 2], top: [topZ - topWidth / 2, topZ + topWidth / 2] };
 }
 
-/** The drawn B-pillar's bands when the style sets them (about the `bPillar` band's middle), else null: the `bPillar` band. */
-export function bPillarBand(style: BodyStyle): PillarBands | null {
-  const b = style.pillars?.b;
-  return b === undefined ? null : pillarBands(b, (style.bPillar.rear + style.bPillar.front) / 2);
+/** A B-pillar the style doesn't size narrows this far (m) on each edge from the belt to its top. */
+const B_TOP_NARROW = 0.015;
+
+/** The B-pillar's bands: the drawn one's from the style's `pillars.b` (about the `bPillar` band's middle) when it sets them, else the `bPillar` band, its top `B_TOP_NARROW` in on each edge. */
+export function bPillarBand(style: BodyStyle, source: BodySource = "drawn"): PillarBands {
+  const { rear, front } = style.bPillar;
+  const b = source === "drawn" ? style.pillars?.b : undefined;
+  return b === undefined ? { belt: [rear, front], top: [rear + B_TOP_NARROW, front - B_TOP_NARROW] } : pillarBands(b, (rear + front) / 2);
 }

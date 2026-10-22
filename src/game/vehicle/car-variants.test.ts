@@ -601,14 +601,15 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(Math.abs(root - skin) < 0.005, `mirror 0.3 m back: arm starts at x ${root}, door skin at x ${skin}`);
   });
 
-  it("when the door and the A-pillar foot move, then the door glass spans from the door's trailing edge to the pillar's foot", () => {
+  it("when a style that sets no B widths moves its B-pillar band, then the door glass's rear edge and the quarter glass's front edge follow the band, 1 cm in under its edges at the belt and the top, wherever the door's trailing edge is", () => {
     const sedan = CAR_STYLES.sedan;
-    // Without the style's own B band, which ends the pane at the band instead.
-    const moved: BodyStyle = { ...sedan, pillars: undefined, aPillarFoot: 0.88, door: { ...sedan.door, hingeZ: 0.74, length: 1.0 } };
-    const box = partBox(makeSideGlass(1, moved));
-    const { hingeZ } = moved.door;
-    const [rear, front] = [box.min.z + hingeZ + DOOR_GLASS_SEAT.z, box.max.z + hingeZ + DOOR_GLASS_SEAT.z];
-    assert.ok(Math.abs(rear - (0.74 - 1.0 + 0.03)) < 0.005, `door glass rear edge at z ${rear}, door trailing edge -0.26 + 0.03`);
+    // The door's trailing edge (hingeZ - length = -0.26) 4 cm ahead of the band's front edge: the panes follow the band, not the door.
+    const moved: BodyStyle = { ...sedan, pillars: undefined, bPillar: { rear: -0.4, front: -0.3 }, aPillarFoot: 0.88, door: { ...sedan.door, hingeZ: 0.74, length: 1.0 } };
+    // glassCorners: doorR is pane 3, its rear corners (across 0) at the base and the top; quarterR is pane 5, its front corners (across 1).
+    const c = glassCorners(moved);
+    const edges = [c[3 * 12 + 2]!, c[3 * 12 + 6 + 2]!, c[5 * 12 + 3 + 2]!, c[5 * 12 + 9 + 2]!];
+    assertSameNumbers(edges, [-0.31, -0.325, -0.39, -0.375], "door glass rear and quarter glass front edges at the belt and the top (z), band [-0.4, -0.3] narrowing 1.5 cm a side at its top", 1e-5);
+    const front = partBox(makeSideGlass(1, moved)).max.z + moved.door.hingeZ + DOOR_GLASS_SEAT.z;
     assert.ok(front > 0.86 && front < 0.95, `door glass front edge at z ${front}, around the A-pillar foot 0.88`);
   });
 
@@ -700,7 +701,7 @@ describe("given a body style's H2 hardpoints", () => {
     const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
     const [was, now] = [makeChassisGeometry(wagon), makeChassisGeometry(dark)];
     // A turned vertex lies on the B-pillar's or the divider's band (the wagon's divider is 10.5 cm wide), 1 cm at most past its edges.
-    const bands = [bPillarBand(wagon)!, pillarBands(wagon.pillars!.divider!, wagon.midPillarZ!)];
+    const bands = [bPillarBand(wagon), pillarBands(wagon.pillars!.divider!, wagon.midPillarZ!)];
     const onBand = (z: number) => bands.some(({ belt, top }) => z > Math.min(belt[0], top[0]) - 0.01 && z < Math.max(belt[1], top[1]) + 0.01);
     let turned = 0;
     for (let i = 0; i < primer(now).count; i++) {
