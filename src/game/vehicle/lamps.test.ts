@@ -3,16 +3,16 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { FULL_POOL, LampBatch, LampLights, type LampPool, lampPoolFor, PHONE_POOL } from "./lamp-lights.ts";
-import { LAMP_HOUSING } from "./car-materials.ts";
+import { drawnLamp } from "./part-variants.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { assignClass, STYLE_CLASS, type VehicleClassId } from "./vehicle-classes.ts";
 import { CLASS_LIFT, INTERIOR_MESH } from "./constants.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { DT, forModes, paint } from "./test-support.ts";
 
-/** A seat has no `raycast`; a mesh of its shared geometry at its world pose stands in for it. */
+/** A seat has no `raycast`; a mesh of what it draws (`drawn`: a style's own grille or mirror) at its world pose stands in for it. */
 function seatProbe(seat: PartSeat): THREE.Mesh {
-  const probe = new THREE.Mesh(seat.geometry);
+  const probe = new THREE.Mesh(seat.drawn);
   probe.matrixWorld.copy(seat.matrixWorld);
   return probe;
 }
@@ -84,7 +84,8 @@ forModes("given a car whose lamps live on the body and break per corner", (mode)
     assert.deepEqual(out, ["headL"], `lamps out: ${out.join(",") || "none"}`);
     const batch = new LampBatch(2);
     batch.sync([car]);
-    assert.deepEqual(batch.meshes.map((m) => m.count), [1, 1, 2, 0], "drawn as head lit / head broken / tail lit / tail broken");
+    const shares = (["hood", "boot"] as const).map((k) => car.lampFittings.filter((f) => f.kind === k).length);
+    assert.equal(batch.meshes.map((m) => m.count).join(), [1, 1, 2, 0, 0, 0, ...shares].join(), "drawn as head lit / head broken / tail lit / tail broken, no brake lamp or marker, the lid shares as the style has them");
   });
 
   it("when the front-left corner is crushed, then the crushed corner carries its lamp with the skin and the lamp stays seated on it", () => {
@@ -133,7 +134,7 @@ describe("given a car whose front bumper is torn off with no corner crush (a det
 describe("given every body style fitted with its own lamps", () => {
   const bodies: [CarStyleId, VehicleClassId][] = [...CAR_STYLE_IDS.map((s): [CarStyleId, VehicleClassId] => [s, STYLE_CLASS[s]]), ["pickup", "monster"]];
   for (const [style, cls] of bodies) {
-    it(`when a ${style} body is given the ${cls} class, then each housing sits whole on its end panel, faces out, and lights from where it is drawn`, () => {
+    it(`when a ${style} body is given the ${cls} class, then each lamp lies on its end panel's skin, faces out, and lights from where it is drawn`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, style);
       assignClass(car, cls);
       car.group.updateMatrixWorld(true);
@@ -144,8 +145,6 @@ describe("given every body style fitted with its own lamps", () => {
         exterior.push(o instanceof PartSeat ? seatProbe(o) : o);
       });
       const ray = new THREE.Raycaster();
-      const x = new THREE.Vector3();
-      const y = new THREE.Vector3();
       const axis = new THREE.Vector3();
       const q = new THREE.Vector3();
       const pos = new THREE.Vector3();
@@ -154,22 +153,28 @@ describe("given every body style fitted with its own lamps", () => {
         const name = `${l.kind}${l.side < 0 ? "L" : "R"}`;
         l.seat.updateWorldMatrix(true, false);
         const m = l.seat.matrixWorld;
-        x.setFromMatrixColumn(m, 0).normalize();
-        y.setFromMatrixColumn(m, 1).normalize();
         axis.setFromMatrixColumn(m, 2).normalize();
         assert.ok(axis.z * (l.kind === "head" ? 1 : -1) > 0.99, `${name} faces ${axis.toArray().map((v) => v.toFixed(2))}`);
-        // 5×5 probes over the housing's back face, each cast in from outside along the lamp axis: the first surface met
-        // must be the body skin within 1.5 cm of the seat plane (not air, not a bumper, grille or boot over the lamp).
-        const [w, h] = LAMP_HOUSING[l.kind];
-        for (let a = 0; a <= 4; a++) {
-          for (let b = 0; b <= 4; b++) {
-            q.setFromMatrixPosition(m).addScaledVector(x, (a / 4 - 0.5) * w).addScaledVector(y, (b / 4 - 0.5) * h);
-            ray.set(q.clone().addScaledVector(axis, 0.6), axis.clone().negate());
-            const hit = ray.intersectObjects(exterior, false)[0];
-            assert.ok(hit?.object === car.body, `${name} probe ${a},${b} meets ${hit ? hit.object.name || hit.object.parent?.name || "a part" : "nothing"}`);
-            const off = 0.6 - hit.distance;
-            assert.ok(Math.abs(off) < 0.015, `${name} probe ${a},${b}: skin ${(off * 100).toFixed(1)} cm off the seat plane`);
+        // Every drawn triangle, probed from 0.6 m out along its normal: the first surface met must be the body skin (not air, a bumper,
+        // grille or lid over the lamp) within 2 cm of the triangle, so no lens chord dives into the skin and no bezel floats off a corner.
+        const unit = drawnLamp(car.style, l.kind, l.side).geometry;
+        const [upos, unrm, uidx] = [unit.getAttribute("position"), unit.getAttribute("normal"), unit.getIndex()!];
+        const tris = uidx.count / 3;
+        const [c, n, v] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+        for (let t = 0; t < tris; t++) {
+          c.set(0, 0, 0);
+          n.set(0, 0, 0);
+          for (let k = 0; k < 3; k++) {
+            c.add(v.fromBufferAttribute(upos, uidx.getX(3 * t + k)).divideScalar(3));
+            n.add(v.fromBufferAttribute(unrm, uidx.getX(3 * t + k)));
           }
+          c.applyMatrix4(m);
+          n.transformDirection(m);
+          ray.set(q.copy(c).addScaledVector(n, 0.6), n.clone().negate());
+          const hit = ray.intersectObjects(exterior, false)[0];
+          assert.ok(hit?.object === car.body, `${name} probe ${t} at ${c.toArray().map((e) => e.toFixed(3))} meets ${hit ? hit.object.name || hit.object.parent?.name || "a part" : "nothing"}`);
+          const off = 0.6 - hit.distance;
+          assert.ok(Math.abs(off) < 0.02, `${name} probe ${t}: skin ${(off * 100).toFixed(1)} cm off the lamp`);
         }
         car.lampWorld(i, pos, dir);
         assert.ok(pos.distanceTo(q.setFromMatrixPosition(m)) < 1e-6, `${name} lights from ${pos.distanceTo(q).toFixed(3)} m off the drawn lamp`);

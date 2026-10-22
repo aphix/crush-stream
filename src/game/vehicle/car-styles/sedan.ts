@@ -2,6 +2,104 @@ import type { BodyStyle } from "../car-variants.ts";
 import { CABIN_TUB, PLATFORM_CAMERA, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
 import { SEDAN_DETAILS } from "./sedan-details.ts";
 
+/** Sedan's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const SEDAN_LAMP_SHAPES = {
+  head: {
+    loops: [
+      {
+        points: [
+          [0.42, 0.575, 1.97],
+          [0.52, 0.572, 1.92],
+          [0.62, 0.576, 1.84],
+          [0.7, 0.585, 1.7],
+          [0.75, 0.605, 1.6],
+          [0.78, 0.65, 1.54],
+          [0.785, 0.7, 1.515],
+          [0.76, 0.69, 1.6],
+          [0.73, 0.682, 1.66],
+          [0.7, 0.675, 1.72],
+          [0.65, 0.665, 1.8],
+          [0.58, 0.645, 1.88],
+          [0.5, 0.62, 1.93],
+          [0.42, 0.6, 1.97],
+        ],
+      },
+    ],
+    lens: "clear",
+    bezel: "black",
+    recess: 0.012,
+    strips: [
+      {
+        line: {
+          points: [
+            [0.43, 0.583, 1.965],
+            [0.62, 0.584, 1.835],
+            [0.7, 0.593, 1.7],
+            [0.75, 0.612, 1.6],
+            [0.78, 0.655, 1.54],
+            [0.785, 0.695, 1.52],
+          ],
+        },
+        width: 0.01,
+        tone: "lit",
+      },
+      { line: { points: [[0.66, 0.668, 1.81], [0.715, 0.668, 1.67]] }, width: 0.004, tone: "dark" },
+      { line: { points: [[0.66, 0.652, 1.81], [0.715, 0.652, 1.67]] }, width: 0.004, tone: "dark" },
+      { line: { points: [[0.66, 0.636, 1.81], [0.715, 0.636, 1.67]] }, width: 0.004, tone: "dark" },
+    ],
+    rounds: [{ at: [0.56, 0.597, 1.89], r: 0.02, tone: "lit" }],
+  },
+  tail: {
+    loops: [
+      {
+        points: [
+          [0.745, 0.855, -1.72],
+          [0.725, 0.864, -1.81],
+          [0.69, 0.87, -1.88],
+          [0.63, 0.87, -1.96],
+          [0.55, 0.866, -2.05],
+          [0.45, 0.855, -2.1],
+          [0.4, 0.842, -2.12],
+          [0.4, 0.776, -2.12],
+          [0.45, 0.772, -2.1],
+          [0.55, 0.765, -2.05],
+          [0.63, 0.757, -1.96],
+          [0.69, 0.756, -1.88],
+          [0.725, 0.768, -1.81],
+          [0.745, 0.8, -1.74],
+        ],
+      },
+    ],
+    lens: "lit",
+    bezel: "chrome",
+    strips: [
+      {
+        line: {
+          points: [
+            [0.74, 0.842, -1.73],
+            [0.69, 0.855, -1.88],
+            [0.55, 0.851, -2.05],
+            [0.41, 0.828, -2.115],
+          ],
+        },
+        width: 0.012,
+        tone: "lit",
+      },
+      { line: { points: [[0, 0.809], [0.4, 0.809]] }, width: 0.006, tone: "chrome" },
+    ],
+  },
+  front: {
+    loops: [{ points: [[0.5, 0.26], [0.7, 0.26], [0.7, 0.35], [0.5, 0.35]] }],
+    lens: "dark",
+    bezel: "black",
+    rounds: [{ at: [0.6, 0.305], r: 0.028, tone: "clear" }],
+  },
+  rear: {
+    loops: [{ points: [[0.54, 0.455], [0.7, 0.455], [0.7, 0.535], [0.54, 0.535]] }],
+    lens: "red",
+  },
+} as const;
+
 /**
  * The reference's mirror: a rounded body-colour housing seated on the door. Off the gridded side and top: the cap stands y 0.85-0.975 (h 0.12),
  * runs about 0.10 along the car, and reaches |x| 0.88 from the skin at 0.75. At the sim's reach (0.105, tip |x| 0.857) a 0.10 cap's inner
@@ -26,10 +124,28 @@ export const SEDAN: BodyStyle = {
   rocker: { y: 0.21 },
   arch: { radius: 0.405, lip: { flare: 0.008, width: 0.035 } },
   hood: { z0: 0.88, z1: 1.97, origin: [0.81, 0.86] },
-  /** Body-colour fascias, as the reference's: its black is the lower intake, grille and diffuser (`details`, grille, tail trim), not the bumper. */
+  // Body-colour fascias, as the reference's: its black is the lower intake, grille and diffuser (`details`, grille, tail trim), not the
+  // bumper. Seams off the gridded side reference: the front bumper up to the head lamp's lower edge and round to the front arch, the rear
+  // one up to the tail lamp's lower edge (under the lid, its shut line) and round the quarter to the rear arch; both follow their arch's lip.
   bumpers: {
-    front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.34, z: 1.965 }, span: 0.74, wrap: { from: 0.33, back: 0.242 }, trim: "body" },
-    rear: { ...PLATFORM_HARDPOINTS.bumpers.rear, seat: { y: 0.52, z: 2.088 }, span: 0.76, wrap: { from: 0.3, back: 0.25 }, trim: "body" },
+    front: {
+      ...PLATFORM_HARDPOINTS.bumpers.front,
+      seat: { y: 0.34, z: 1.965 },
+      span: 0.74,
+      wrap: { from: 0.33, back: 0.242 },
+      trim: "body",
+      top: [[0, 0.545], [0.42, 0.558], [0.52, 0.555], [0.62, 0.559]],
+      edge: [[1.7, 0.568], [1.61, 0.583], [1.66, 0.5], [1.683, 0.42], [1.69, 0.32], [1.67, 0.22]],
+    },
+    rear: {
+      ...PLATFORM_HARDPOINTS.bumpers.rear,
+      seat: { y: 0.52, z: 2.088 },
+      span: 0.76,
+      wrap: { from: 0.3, back: 0.25 },
+      trim: "body",
+      top: [[0, 0.61], [0.46, 0.61], [0.5, 0.738], [0.6, 0.738]],
+      edge: [[-1.83, 0.738], [-1.81, 0.7], [-1.8, 0.665], [-1.76, 0.625], [-1.71, 0.595], [-1.62, 0.58], [-1.66, 0.5], [-1.683, 0.42], [-1.69, 0.32]],
+    },
   },
   door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
   aPillarFoot: 0.66,
@@ -102,7 +218,8 @@ export const SEDAN: BodyStyle = {
    * and kicks up into the lip at its rear edge (gridded side: crest y 0.955 over z -2.0..-2.09, ~1.2 cm proud of the deck line).
    */
   boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45 }, lip: { rise: 0.012, depth: 0.06 } },
-  lamps: { head: [0.26, 0.575], tail: [0.34, 0.8] },
+  lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES },
+  grille: { y: 0.43, size: [0.74, 0.26], round: 0.05, kind: "slats", count: 13, finish: "chrome" },
   /**
    * The reference's twin wide oval tips in the diffuser (gridded rear iso and side: |x| 0.47-0.64, y 0.27-0.33, ~3 cm proud). Ours sit
    * inboard at |x| 0.36: the body's tail floor only reaches |x| 0.48 (0.8 hw) and the bumper face sweeps back from 0.33, so wider tips

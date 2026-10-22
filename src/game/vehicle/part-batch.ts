@@ -1,9 +1,10 @@
 import * as THREE from "three";
-import { INSTANCE_MIRROR_VARIANT_ATTRIBUTE, loosePartsMaterial, mirrorPartsMaterial, partsMaterial, shadowOnlyMaterial } from "./car-materials.ts";
+import { INSTANCE_PART_VARIANT_ATTRIBUTE, loosePartsMaterial, partsMaterial, shadowOnlyMaterial, variantPartsMaterial } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS } from "./car-variants.ts";
 import { drawnDoorCard } from "./car-door-mesh.ts";
-import { mirrorBatchGeometry, PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
+import { PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
+import { partBatchGeometry } from "./part-variants.ts";
 
 /** A caster's stand-in until its style's first car syncs: the program links at the warm, before any car of the style draws. */
 const NO_CASTER = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([], 3));
@@ -11,7 +12,8 @@ const NO_CASTER = new THREE.BufferGeometry().setAttribute("position", new THREE.
 /**
  * Every car's static parts (cabin, door cards, mirrors, grille, tail trim, seats, wheel, engine bay, crash bars) as one instanced draw per
  * kind. A loose part draws as its own mesh; a cut seat (layer 0 off, `CarDetail`), a hidden car or a seat whose `showIf` fails draws nothing.
- * Each mirror draw holds every style's mirror: an instance carries its car's variant and door paint (`mirrorPartsMaterial`).
+ * A kind a style may draw its own way (mirrors, grille) holds every style's variant in its one draw: an instance carries its car's variant
+ * and panel paint (`withPartVariants`).
  */
 export class PartBatch {
   readonly meshes: readonly THREE.InstancedMesh[];
@@ -25,7 +27,7 @@ export class PartBatch {
   private readonly counts = new Int32Array(PART_KINDS.length);
   /** Instances each kind holds: `cars` cars' worth (`PART_PER_CAR`). */
   private readonly capacity: Int32Array;
-  /** Per kind, its instances' mirror variants; null for a kind that is not a mirror. */
+  /** Per kind, its instances' variants; null for a kind with one shape. */
   private readonly variants: (THREE.InstancedBufferAttribute | null)[] = [];
   /** Per kind, then per style's caster, the per-instance attributes a sync uploads. */
   private readonly uploads: THREE.InstancedBufferAttribute[][] = [];
@@ -34,13 +36,12 @@ export class PartBatch {
     this.capacity = Int32Array.from(PART_KINDS, (kind) => cars * PART_PER_CAR[kind]!);
     const meshes: THREE.InstancedMesh[] = [];
     for (const kind of PART_KINDS) {
-      const side = kind === PART_KIND.mirrorL ? -1 : kind === PART_KIND.mirrorR ? 1 : 0;
       const capacity = this.capacity[kind]!;
+      const styled = partBatchGeometry(kind, capacity);
       const card = kind === PART_KIND.liningL ? -1 : kind === PART_KIND.liningR ? 1 : 0;
-      const geometry = side !== 0 ? mirrorBatchGeometry(side, capacity) : card !== 0 ? drawnDoorCard(card) : partGeometry(kind);
-      const mesh = new THREE.InstancedMesh(geometry, side === 0 ? partsMaterial() : mirrorPartsMaterial(), capacity);
+      const mesh = new THREE.InstancedMesh(styled ?? (card !== 0 ? drawnDoorCard(card) : partGeometry(kind)), styled ? variantPartsMaterial() : partsMaterial(), capacity);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      const variants = side === 0 ? null : (geometry.getAttribute(INSTANCE_MIRROR_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute);
+      const variants = styled ? (styled.getAttribute(INSTANCE_PART_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute) : null;
       if (variants) mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.DynamicDrawUsage);
       this.variants.push(variants);
       this.uploads.push(variants ? [mesh.instanceMatrix, mesh.instanceColor!, variants] : [mesh.instanceMatrix]);
@@ -120,7 +121,7 @@ export class PartBatch {
     }
   }
 
-  /** The batch's material and its non-mirror geometries are shared (never disposed here); its mirror geometries are its own. */
+  /** The batch's material and its one-shape geometries are shared (never disposed here); its variant geometries are its own. */
   dispose(): void {
     for (const [k, mesh] of this.meshes.entries()) {
       mesh.dispose();

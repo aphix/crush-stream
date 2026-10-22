@@ -4,8 +4,8 @@ import * as THREE from "three";
 import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
 import { DeformableCar } from "./car.ts";
 import { BUMPER_F } from "./constants.ts";
-import { INSTANCE_MIRROR_VARIANT_ATTRIBUTE, MIRROR_VARIANT_ATTRIBUTE } from "./car-materials.ts";
-import { CAR_STYLE_IDS, CAR_STYLES } from "./car-variants.ts";
+import { INSTANCE_PART_VARIANT_ATTRIBUTE, PART_VARIANT_ATTRIBUTE } from "./car-materials.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
 import { drawnDoorCard } from "./car-door-mesh.ts";
@@ -36,8 +36,8 @@ function stage(capacity = 16) {
   camera.updateMatrixWorld(true);
   const detail = new CarDetail();
   const batch = new PartBatch(capacity);
-  const car = (at: number) => {
-    const made = new DeformableCar(paint(), scene, null, "sedan");
+  const car = (at: number, style: CarStyleId = "sedan") => {
+    const made = new DeformableCar(paint(), scene, null, style);
     made.spawn(0, at, 0);
     made.group.updateMatrixWorld(true);
     return made;
@@ -88,19 +88,20 @@ describe("given the part batch and a few cars near the camera", () => {
     assertSameNumbers(matrix.elements, only.partSeats[PART_KIND.mirrorR]!.matrixWorld.elements, "the mirror instance is the seat's world matrix", FLOAT32_SLACK);
   });
 
-  test("when every kind's mesh is read, then it draws the kind's one shared geometry (a door card's: the one inside every door skin); a mirror's draws its own, every style's mirror with the platform's first", () => {
+  test("when every kind's mesh is read, then it draws the kind's one shared geometry (a door card's: the one inside every door skin), or, for a kind a style draws its own way (mirrors, grille, tail trim), every variant with the platform part first", () => {
     const { batch } = stage();
+    const styled: readonly number[] = [PART_KIND.mirrorL, PART_KIND.mirrorR, PART_KIND.grille, PART_KIND.tailTrim];
     for (const kind of PART_KINDS) {
       const mesh = batch.meshes[kind]!;
-      if (kind !== PART_KIND.mirrorL && kind !== PART_KIND.mirrorR) {
+      if (!styled.includes(kind)) {
         const card = kind === PART_KIND.liningL ? -1 : kind === PART_KIND.liningR ? 1 : 0;
         // Identity, never a deep compare: a geometry holds big typed arrays.
         assert.ok(mesh.geometry === (card !== 0 ? drawnDoorCard(card) : partGeometry(kind)), `kind ${kind} (same object, not equal copies)`);
         continue;
       }
       const platform = positions(partGeometry(kind));
-      assertSameNumbers(Array.from(positions(mesh.geometry)).slice(0, platform.length), platform, `kind ${kind}: the platform mirror leads its geometry`);
-      assert.equal(mesh.geometry.getAttribute(MIRROR_VARIANT_ATTRIBUTE).getX(0), 0, `kind ${kind}: as variant 0`);
+      assertSameNumbers(Array.from(positions(mesh.geometry)).slice(0, platform.length), platform, `kind ${kind}: the platform part leads its geometry`);
+      assert.equal(mesh.geometry.getAttribute(PART_VARIANT_ATTRIBUTE).getX(0), 0, `kind ${kind}: as variant 0`);
     }
   });
 });
@@ -126,12 +127,12 @@ describe("given the part batch and a car whose style has its own mirror", () => 
     draw([plain, own]);
     const mesh = batch.meshes[PART_KIND.mirrorR]!;
     const seat = own.partSeats[PART_KIND.mirrorR]!;
-    const variants = mesh.geometry.getAttribute(INSTANCE_MIRROR_VARIANT_ATTRIBUTE);
+    const variants = mesh.geometry.getAttribute(INSTANCE_PART_VARIANT_ATTRIBUTE);
     assert.ok(mesh.count === 2 && variants.getX(0) === 0 && seat.variant > 0 && variants.getX(1) === seat.variant, `variants ${variants.getX(0)}, ${variants.getX(1)} of ${seat.variant}`);
     const tint = new THREE.Color();
     mesh.getColorAt(1, tint);
     assert.equal(tint.getHex(), 0x336699, "the instance colour is its door's paint");
-    const tagged = mesh.geometry.getAttribute(MIRROR_VARIANT_ATTRIBUTE);
+    const tagged = mesh.geometry.getAttribute(PART_VARIANT_ATTRIBUTE);
     const at = positions(mesh.geometry);
     const batched = Array.from({ length: tagged.count }, (_, i) => i)
       .filter((i) => tagged.getX(i) === seat.variant)
@@ -239,11 +240,12 @@ describe("given the part batch and a car that loses a door or its front bumper",
 
   test("when the torn bumper is dented at its grille, then only the grille's own mesh moves, within the dent's reach of the contact", () => {
     const { car } = stage();
-    const only = car(10);
+    // The cop's bumper carries no seam cover, so its grille is the top the dent meets from above.
+    const only = car(10, "police");
     const bumper = only["parts"].find((p) => p.name === BUMPER_F)!;
     only["detachPart"](bumper, 0, SHOVE);
     const seat = only.partSeats[PART_KIND.grille]!;
-    const shared = positions(partGeometry(PART_KIND.grille));
+    const shared = positions(seat.drawn);
     const sharedBefore = Float32Array.from(shared);
     // The dent's normal is read in the part's frame; an upright part makes it the one above.
     bumper.object.quaternion.identity();
