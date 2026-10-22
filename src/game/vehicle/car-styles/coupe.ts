@@ -134,8 +134,8 @@ export const COUPE: BodyStyle = {
   /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle: one broad flat fastback panel lapping the rear glass, its roof end covering the glass corner's upper arc. */
   cPillar: { flush: true, flat: true, corner: 0.8 },
   midPillarZ: null,
-  /** Reference side and rear iso: the quarter and rear glass read dark, no cabin or C-pillar post showing through. */
-  privacyGlass: { rear: true, quarter: true },
+  /** Reference side and rear iso: the quarter and rear glass read dark, no cabin or C-pillar post showing through; the rear pane's reflections soft, no sharp glint at its round corners. */
+  privacyGlass: { rear: "matte", quarter: true },
   windowTrim: "chrome",
   chromeStrips: [
     { points: [[-0.79, 0.305], [-0.495, 0.305]], width: 0.016 },
