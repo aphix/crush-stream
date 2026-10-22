@@ -283,6 +283,11 @@ export interface BodyStyle {
   /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
   windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;
+  /**
+   * Windshield wipers parked along the glass's base (`styleWipers`): `count` blades (default 2), each `length` of the glass's base width
+   * (default 0.42), their tips toward `park` (+1 the car's left, the driver's side of a left-hand drive car: the default, `DRIVER_SIDE`).
+   */
+  wipers?: { count?: 1 | 2; length?: number; park?: 1 | -1 };
   /** B-pillar z band. */
   bPillar: { rear: number; front: number };
   /** Side glass sill: its half-width (one value, or [z, x] stations where the sill narrows toward a tail), and its height as [z, y] stations; stations ascend in z, linear between, held past the ends. */
