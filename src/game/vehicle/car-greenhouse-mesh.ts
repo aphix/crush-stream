@@ -539,6 +539,8 @@ const SAIL_SINK = 0.002;
 const SAIL_LID_SHUT = 0.004;
 /** A sail section's Bézier control point lies this share of the foot-to-head run out along the foot's tangent. */
 const SAIL_CONTROL = 0.5;
+/** A flat sail (`cPillar.flat`) eases into the roof end's rolled section over this run (m) behind it: on the coupe, from its rear ring over its two haunch gaps. */
+const SAIL_ROLL_BLEND = 0.45;
 /** Points along a sail section's outer face (foot to head) and its inner face, and the chords each of its rounded edges spends (30° each). */
 const SAIL_OUTER = 6;
 const SAIL_INNER = 4;
@@ -581,7 +583,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     .filter((z, k, all) => k === 0 || z - all[k - 1]! > 1e-6);
   const r = SAIL_DEPTH / 2;
   const rg = style.rearGlass;
-  const rings = zs.map((z): Pt[] => {
+  const section = (z: number): Pt[] => {
     const atRoofEnd = z === roofEndZ && z < style.roofZ[0];
     const onGlass = style.cPillar?.flush === true && z < roofEndZ;
     // The head's rounded edge ends at the post's top corner (`r` over the section's end), buried in the roof's side like the post's top.
@@ -643,6 +645,28 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
       ...Array.from({ length: SAIL_INNER }, (_, k) => at(1 - k / (SAIL_INNER - 1), 2 * lerp(headR, r, k / (SAIL_INNER - 1)))),
       ...edge(0).reverse(),
     ];
+  };
+  // A flat sail takes on the roof end's roll over the run behind it: each outer point moves toward that section's own place off its chord,
+  // mapped onto the ring's chord, so no line stands where the flat haunch meets the roll.
+  const rollEnd = style.cPillar?.flat === true && roofEndZ < style.roofZ[0] ? section(roofEndZ) : null;
+  const rings = zs.map((z): Pt[] => {
+    const ring = section(z);
+    const w = rollEnd && z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - SAIL_ROLL_BLEND, roofEndZ) : 0;
+    if (w === 0) return ring;
+    const [a, b] = [rollEnd![0]!, rollEnd![SAIL_OUTER - 1]!];
+    const endRun = hypot2(b.x - a.x, b.y - a.y);
+    const [eu, ev] = [(b.x - a.x) / endRun, (b.y - a.y) / endRun];
+    const [foot, head] = [ring[0]!, ring[SAIL_OUTER - 1]!];
+    const run = hypot2(head.x - foot.x, head.y - foot.y);
+    const [ux, uy] = [(head.x - foot.x) / run, (head.y - foot.y) / run];
+    for (let k = 1; k < SAIL_OUTER - 1; k++) {
+      const [p, q] = [rollEnd![k]!, ring[k]!];
+      // The roll end's point as a share along its chord and an offset off it (+ turned left of the chord), and the ring's point's share along its own.
+      const [t, n] = [((p.x - a.x) * eu + (p.y - a.y) * ev) / endRun, eu * (p.y - a.y) - ev * (p.x - a.x)];
+      const s = lerp(((q.x - foot.x) * ux + (q.y - foot.y) * uy) / run, t, w);
+      ring[k] = { x: foot.x + s * run * ux - w * n * uy, y: foot.y + s * run * uy + w * n * ux };
+    }
+    return ring;
   });
   const sail = loftFromRings(rings, zs, 0, 1);
   ensureOutwardNormals(sail);

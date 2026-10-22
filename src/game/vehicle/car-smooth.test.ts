@@ -745,6 +745,9 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
 /** A sail's foot stands at most this far (m) off the body's shoulder point it leaves, its face within `SAIL_LEAN_DEGREES` of the shoulder's tangent there (a flat post's foot stands 7-15 cm inboard, 35-45° off). */
 const SAIL_FOOT_OFF = 0.005;
 const SAIL_LEAN_DEGREES = 10;
+/** A flat sail eases into the roof end's roll over this run (m) behind the roof's rear end, its face's shape off its chord changing at most this many m per m of length on the way: the haunch-to-roll line a jump of 4.8 cm over 7 cm made. */
+const SAIL_ROLL_BLEND_TEST = 0.45;
+const SAIL_SHAPE_RATE = 0.25;
 /** Sections read along the haunch, behind the run where the sail's foot sweeps in onto the side window's line: at least this many (its rear end and the sweep's start). */
 const SAIL_HAUNCH_SECTIONS = 2;
 /** The sail's section at the roof's rear end stands at most this far (m) behind it, so the roof's end outboard of the rear glass never shows past the sail's head. */
@@ -813,7 +816,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
   }
 
   for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar?.flat)) {
-    it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm, no body point stands outside it by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
+    it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm behind its ${SAIL_ROLL_BLEND_TEST * 100} cm ease into the roof end's roll, no body point stands outside its line by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
       const style = CAR_STYLES[id];
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
@@ -832,9 +835,32 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         const bow = Math.max(...face.map((p) => Math.abs(outside(p.x, p.y))));
         const body = sectionPoints(sampleSlice(foot.z, style.profile), style, "drawn").filter((p) => p.x > 0 && p.y < head.y);
         const proud = Math.max(...body.map((p) => outside(p.x, p.y)));
-        if (bow > SAIL_FLAT_BOW || proud > SAIL_SINK_TEST + 1e-4 || proud < 0) off.push(`z ${foot.z.toFixed(3)}: face bows ${(bow * 1000).toFixed(1)} mm, body stands ${(proud * 1000).toFixed(1)} mm outside its line`);
+        const straight = foot.z <= style.roofZ[0] - SAIL_ROLL_BLEND_TEST - SAIL_ROOF_GAP;
+        if ((straight && bow > SAIL_FLAT_BOW) || proud > SAIL_SINK_TEST + 1e-4 || proud < 0) off.push(`z ${foot.z.toFixed(3)}: face bows ${(bow * 1000).toFixed(1)} mm, body stands ${(proud * 1000).toFixed(1)} mm outside its line`);
       }
       assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
+      assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
+    });
+    it(`when a ${id}'s flat sail is read from its rear end to the roof's rear end, then its outer face's shape off its chord changes at most ${SAIL_SHAPE_RATE} m per m of length between sections (no line where the flat haunch meets the roof's roll)`, () => {
+      const style = CAR_STYLES[id];
+      const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+      const { ring, slices } = loftOf(sail);
+      // Each section's outer points' offsets (m, + outboard) off its foot-to-head chord, up to and including the roof end's section.
+      const profiles: { z: number; offsets: number[] }[] = [];
+      for (let s = 0; s < slices; s++) {
+        const face = Array.from({ length: SAIL_OUTER_POINTS }, (_, k) => positionAt(sail, s * ring + k));
+        const [foot, head] = [face[0]!, face.at(-1)!];
+        if (foot.z >= style.roofZ[0]) break;
+        const run = Math.hypot(head.x - foot.x, head.y - foot.y);
+        profiles.push({ z: foot.z, offsets: face.map((p) => ((p.x - foot.x) * (head.y - foot.y) - (p.y - foot.y) * (head.x - foot.x)) / run) });
+      }
+      const off: string[] = [];
+      for (let i = 1; i < profiles.length; i++) {
+        const [a, b] = [profiles[i - 1]!, profiles[i]!];
+        const rate = Math.max(...a.offsets.map((o, k) => Math.abs(b.offsets[k]! - o))) / (b.z - a.z);
+        if (rate > SAIL_SHAPE_RATE) off.push(`z ${a.z.toFixed(3)} to ${b.z.toFixed(3)}: ${rate.toFixed(2)} m per m`);
+      }
+      assert.ok(profiles.length >= 3, `${id}: ${profiles.length} sections up to the roof's rear end`);
       assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
     });
   }
