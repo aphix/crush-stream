@@ -5,10 +5,18 @@ export const LIGHT_BAR = "lightBar";
 export const CLASS_LIFT = "classLift";
 export const CLASS_HUBS = "classHubs";
 export const INTERIOR_MESH = "interior";
-/** The body geometry's per-vertex paint attribute: 0 paint, 1 primer (a torn panel's vertices), `INNER_PANEL` an unpainted inner panel. */
+/**
+ * The body geometry's per-vertex paint attribute: 0 paint, 1 primer (a torn panel's vertices), `INNER_PANEL` an unpainted inner
+ * panel, `BLACKOUT` a blacked-out panel.
+ */
 export const PRIMER_ATTRIBUTE = "primer";
 /** `PRIMER_ATTRIBUTE` of the bay trough's walls and floor: dark bare steel (`bare-metal.ts` darkens past 1). */
 export const INNER_PANEL = 2;
+/**
+ * `PRIMER_ATTRIBUTE` of a blacked-out panel (pillars, sail, cowl, roof rails): gloss black under the paint's clear coat
+ * (`car-materials.ts`), as the references draw them. Below 0, so bare steel (`bare-metal.ts`, from 0.3 up) never reads it.
+ */
+export const BLACKOUT = -1;
 /** A bumper's per-vertex trim attribute: 0 the bumper's own trim, `FITTING_TONE` black or chrome (its exhaust tips and tow hitch, drawn in its one mesh). */
 export const FITTING_ATTRIBUTE = "fitting";
 export const FITTING_TONE = { black: 1, chrome: 2 } as const;

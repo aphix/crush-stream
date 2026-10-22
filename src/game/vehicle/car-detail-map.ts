@@ -229,14 +229,18 @@ function patternCover(pattern: Pattern, u: number, v: number): number {
   return clamp(DETAIL_TEXEL_M / 2 + pattern.bar / 2 - d, 0, Math.min(DETAIL_TEXEL_M, pattern.bar)) / DETAIL_TEXEL_M;
 }
 
-/** Distance (m) from (a, b) to the outline of `points`, signed + inside (even-odd). */
-function signedPolygonDistance(points: DetailPatch["points"], a: number, b: number): number {
+/** Each view's mirrored axis in its points ([a, b] index): an outline edge lying on x = 0 is the car's middle, not the patch's edge. */
+const MIRROR_AXIS: Readonly<Record<DetailView, 0 | 1 | null>> = { side: null, top: 1, front: 0, rear: 0 };
+
+/** Distance (m) from (a, b) to the outline of `points`, signed + inside (even-odd); edges on the `mirror` axis's zero are skipped. */
+function signedPolygonDistance(points: DetailPatch["points"], a: number, b: number, mirror: 0 | 1 | null): number {
   let inside = false;
   let nearest = Infinity;
   for (let k = 0, m = points.length - 1; k < points.length; m = k++) {
     const [pa, pb] = points[k]!;
     const [qa, qb] = points[m]!;
     if (pb > b !== qb > b && a < ((qa - pa) * (b - pb)) / (qb - pb) + pa) inside = !inside;
+    if (mirror !== null && points[k]![mirror] === 0 && points[m]![mirror] === 0) continue;
     const da = qa - pa;
     const db = qb - pb;
     const length2 = da * da + db * db;
@@ -259,8 +263,9 @@ function drawPatch(canvas: Canvas, tile: Tile, patch: DetailPatch): void {
     bMax = Math.max(bMax, b);
   }
   const pattern = patch.pattern;
+  const mirror = MIRROR_AXIS[patch.view];
   forTexels(tile, aMin - DETAIL_TEXEL_M, aMax + DETAIL_TEXEL_M, bMin - DETAIL_TEXEL_M, bMax + DETAIL_TEXEL_M, canvas.width, (a, b, at) => {
-    const floor = clamp01((signedPolygonDistance(patch.points, a, b) + DETAIL_TEXEL_M / 2) / (patch.rim + DETAIL_TEXEL_M));
+    const floor = clamp01((signedPolygonDistance(patch.points, a, b, mirror) + DETAIL_TEXEL_M / 2) / (patch.rim + DETAIL_TEXEL_M));
     if (floor === 0) return;
     const bars = pattern ? patternCover(pattern, a - aMin, b - bMin) : 0;
     combine(canvas, at, floor * (patch.depth + (pattern ? pattern.depth * bars : 0)), floor * patch.cavity * (1 - bars));
@@ -300,6 +305,7 @@ const DETAIL_PARS = /* glsl */ `
 uniform sampler2D detailMap;
 uniform vec4 detailTiles[5];
 uniform vec4 detailBounds[5];
+uniform vec2 detailEnds;
 varying vec3 vDetailPos;
 varying vec3 vDetailNormal;
 vec2 detailSample(vec4 tile, vec4 bounds, vec2 q) {
@@ -316,8 +322,9 @@ vec4 detailPlane(vec4 tile, vec4 bounds, vec2 q, vec2 qx, vec2 qy) {
 
 /**
  * After the clear coat's normal, inside FinishLod's draw gate (`finishMeshNear`, so only with the finish on): the three view tiles
- * the rest normal faces blended as the finish's planes (a down-facing one reads the bottom tile for the top's), the cavity darkening
- * the paint, and near enough the height's slope (`detailPlane`'s texel differences) bending the base and coat normals.
+ * the rest normal faces blended as the finish's planes (a down-facing one reads the bottom tile for the top's; the front tile only
+ * ahead of the front axle, the rear only behind the rear axle), the cavity darkening the paint, and near enough the height's slope
+ * (`detailPlane`'s texel differences) bending the base and coat normals.
  */
 const DETAIL_SURFACE = /* glsl */ `
 float detailCavity = 0.0;
@@ -327,6 +334,7 @@ if (detailNear < ${glslFloat(DETAIL_CAVITY_END_M)}) {
   bool detailUnder = vDetailNormal.y < 0.0;
   float detailX = abs(vDetailPos.x);
   bool detailFront = vDetailNormal.z >= 0.0;
+  if (detailFront ? vDetailPos.z < detailEnds.x : vDetailPos.z > detailEnds.y) detailWeights.z = 0.0;
   vec2 detailSide = vDetailPos.zy;
   vec2 detailTop = vec2(vDetailPos.z, detailX);
   vec2 detailEnd = vec2(detailX, vDetailPos.y);
@@ -355,6 +363,8 @@ type DetailUniforms = {
   detailMap: THREE.IUniform<THREE.DataTexture | null>;
   detailTiles: THREE.IUniform<THREE.Vector4[]>;
   detailBounds: THREE.IUniform<THREE.Vector4[]>;
+  /** The front and rear axles' z (m): the end tiles print only past them. */
+  detailEnds: THREE.IUniform<THREE.Vector2>;
 };
 
 /** One set of uniforms per style, shared by every material of its cars; its atlas is baked when the style's first car is built (race setup, before the warm-up), so no draw or tier flip bakes; never disposed. */
@@ -363,7 +373,13 @@ const uniformsByStyle = new WeakMap<BodyStyle, DetailUniforms>();
 function detailUniforms(style: BodyStyle): DetailUniforms {
   let uniforms = uniformsByStyle.get(style);
   if (uniforms === undefined) {
-    uniforms = { detailMap: { value: null }, detailTiles: { value: VIEWS.map(() => new THREE.Vector4()) }, detailBounds: { value: VIEWS.map(() => new THREE.Vector4()) } };
+    const axle = style.dims.wheelbase / 2;
+    uniforms = {
+      detailMap: { value: null },
+      detailTiles: { value: VIEWS.map(() => new THREE.Vector4()) },
+      detailBounds: { value: VIEWS.map(() => new THREE.Vector4()) },
+      detailEnds: { value: new THREE.Vector2(axle, -axle) },
+    };
     uniformsByStyle.set(style, uniforms);
   }
   return uniforms;

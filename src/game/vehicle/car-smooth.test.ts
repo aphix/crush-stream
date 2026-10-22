@@ -199,6 +199,9 @@ const lidCreaseTable = [
   { it: "a hatchback's tailgate edges (ring points 0, 4, 5, 6)", style: "hatchback", part: "boot", creaseLines: [0, 4, 5, 6], smoothLines: [1, 2, 3], creaseDegrees: CREASE_DEGREES.tailgate },
 ] as const;
 
+/** The sedan with the reference's hood crown: its top 6 cm under the centre line at |x| .66. */
+const CROWNED_SEDAN: BodyStyle = { ...CAR_STYLES.sedan, hood: { ...CAR_STYLES.sedan.hood, crown: [0.06, 0.66] } };
+
 describe("given the lids as built", () => {
   for (const testCase of lidCreaseTable) {
     it(`when ${testCase.it} are read, then each turns its declared ${testCase.creaseDegrees}° or more at vertices of its own, and the dome or bow turns under ${FLAT_CURVE_LIMIT_DEGREES}° as one vertex`, () => {
@@ -222,6 +225,25 @@ describe("given the lids as built", () => {
       }
     });
   }
+
+  it(`when a crowned hood (the sedan's: 6 cm under the centre at |x| .66) is read, then its centre stands that parabola's drop over its edge at every station and its dome, edge to edge, turns under ${FLAT_CURVE_LIMIT_DEGREES}° at each of its own vertices`, () => {
+    const [drop, at] = CROWNED_SEDAN.hood.crown!;
+    const lid = makeHoodGeometry(CROWNED_SEDAN);
+    const loft = loftOf(lid);
+    // The top runs edge, dome points, centre, dome points, edge; the skirt and underside are the ring's last 8 points.
+    const rim = loft.ring - 9;
+    for (let slice = 0; slice < loft.slices; slice++) {
+      const edge = positionAt(lid, slice * loft.ring);
+      const rise = positionAt(lid, slice * loft.ring + rim / 2).y - edge.y;
+      const want = drop * (edge.x / at) ** 2;
+      assert.ok(Math.abs(rise - want) < 1e-4, `slice ${slice}: the centre stands ${(rise * 100).toFixed(2)} cm over the edge at |x| ${(-edge.x).toFixed(3)}, want ${(want * 100).toFixed(2)}`);
+    }
+    const inner = (slice: number) => slice > 0 && slice < loft.slices - 2;
+    for (let line = 1; line < rim; line++) {
+      const turn = Math.max(...ringLineDihedrals(lid, line, inner));
+      assert.ok(turn < FLAT_CURVE_LIMIT_DEGREES, `dome ring line ${line} of ${rim - 1} turns ${turn.toFixed(2)}°`);
+    }
+  });
 });
 
 type PartCase = { readonly name: string; readonly make: (id: CarStyleId) => THREE.BufferGeometry; readonly creaseDegrees: number; readonly capsAreCuts: boolean };
@@ -318,10 +340,11 @@ describe("given every body style's drawn nose, whose plan and fender line turn h
       const hood = makeHoodGeometry(style);
       const hoodLoft = loftOf(hood);
       const [, oz] = style.hood.origin;
-      // The edge (ring point 4) stands a fixed inset inside the station's half-width: its chord's middle against the half-width there.
+      // The edge (the top's last point) stands a fixed inset inside the station's half-width: its chord's middle against the half-width there.
+      const rim = hoodLoft.ring - 9;
       const inset = (v: THREE.Vector3) => sampleSlice(v.z + oz, style.profile).hw - v.x;
       for (let slice = 0; slice < hoodLoft.slices - 1; slice++) {
-        const [a, b] = [positionAt(hood, slice * hoodLoft.ring + 4), positionAt(hood, (slice + 1) * hoodLoft.ring + 4)];
+        const [a, b] = [positionAt(hood, slice * hoodLoft.ring + rim), positionAt(hood, (slice + 1) * hoodLoft.ring + rim)];
         if (b.z + oz < noseZ - NOSE_READ) continue;
         const sag = Math.abs(inset(a.clone().add(b).multiplyScalar(0.5)) - inset(a));
         assert.ok(sag <= NOSE_CHORD_SAG, `${id} hood edge between z ${(a.z + oz).toFixed(3)} and ${(b.z + oz).toFixed(3)}: ${(sag * 1000).toFixed(1)} mm off its plan line`);
@@ -380,7 +403,7 @@ describe("given every body style's drawn hood over its open engine bay", () => {
       const loft = loftOf(hood);
       const [oy, oz] = style.hood.origin;
       for (let slice = 1; slice < loft.slices - 1; slice++) {
-        const edge = positionAt(hood, slice * loft.ring + 4);
+        const edge = positionAt(hood, slice * loft.ring + loft.ring - 9);
         const z = edge.z + oz;
         // The section's right half, outward from its deck edge (ring point 1): the fender's top line the edge looks over.
         const section = sectionPoints(sampleSlice(z, style.profile), style, "drawn");
@@ -402,7 +425,7 @@ describe("given every body style's drawn hood over its open engine bay", () => {
       const z = positionAt(hood, slice * loft.ring).z + oz;
       // The section's right half from its 30° shoulder point up to its deck edge.
       const chain = sectionPoints(sampleSlice(z, CLAMSHELL_SUV.profile), CLAMSHELL_SUV, "drawn").slice(-4, -1);
-      for (const k of [4, 5, 6]) {
+      for (const k of [loft.ring - 9, loft.ring - 8, loft.ring - 7]) {
         const p = positionAt(hood, slice * loft.ring + k);
         const off = distanceToChain({ x: p.x, y: p.y + oy }, chain);
         assert.ok(off > 0 && off <= CLAMSHELL_LAP, `z ${z.toFixed(3)} ring point ${k}: ${(off * 1000).toFixed(2)} mm off the body`);
@@ -724,8 +747,9 @@ const SIM_CRASH_KPH = 48;
 const SIM_DIGEST_BY_STYLE = [
   { id: "sedan", digest: "482d299bbf62cfe82b9c5037a70fd22463affd183b1eb4e9f64b085bfaf11e30" },
   // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
-  { id: "hatchback", digest: "56765eb4cf171c369b1c5dd0dc9a9b95dddc35fef363c304a0a13e7ab9716fad" },
-  { id: "wagon", digest: "ee9063937f7634ff346b016cd7f58f41d4d62c2bef1ae57e9cceb8e43495f298" },
+  // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams.
+  { id: "hatchback", digest: "674fca85d7893ab736a28bcff660adad5f319d6471bcd301a6bfa60bc8f7983e" },
+  { id: "wagon", digest: "728e19f0a34f06b705de92b836b11640013dff0bc01857f6bd173b0308be8b37" },
   { id: "coupe", digest: "40338da7598383475ddc25e15b9e759e2f8bbbadf3856d43f2fcf84d61960b77" },
   { id: "pickup", digest: "075726ca358aeba30f6036888aa7d8f9340e5b972178bdd6aef3a2ebbc1480f3" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
@@ -772,8 +796,9 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   { id: "sedan", digest: "8d0ca6fec24787b820976ef5beb3b9bc33abd7d28ee2e89cdd0159374addc6cd" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
-  { id: "hatchback", digest: "ba4c934973909383e4f766d12db1f27bcd4798c25b2755e5eec2079791a13d9f" },
-  { id: "wagon", digest: "61041e1b4bf248102eeecd2037608e51ff6217088b070e2811527c43611378d2" },
+  // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams.
+  { id: "hatchback", digest: "460f0319eb1ae3bbdfd4cf2ac678dc6cbdd0eba3087824fe3b87464709725c92" },
+  { id: "wagon", digest: "eb9db693294fddf0470fba46a10bf8c4181d12a8d392ef892fc4beb6c843f908" },
   { id: "coupe", digest: "986eb8a7cb728f9b75067a62ea6c793b9f330c5d773dd0e9eac12d1dc09074b2" },
   { id: "pickup", digest: "494e523b2fff1803aaa9b226da64bbe63602ee4d68973be7888f9e2ca473eca8" },
   { id: "police", digest: "44c94fa5daa8c1c3dd5672c2bdb1a80ef92666e5c027c7698814ddf6b7de1796" },

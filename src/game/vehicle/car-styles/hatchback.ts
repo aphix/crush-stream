@@ -1,6 +1,51 @@
 import type { BodyStyle } from "../car-variants.ts";
 import { st } from "./platform.ts";
 
+/** Hatchback's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const HATCHBACK_LAMP_SHAPES = {
+  head: {
+    loops: [{ points: [[0.4, 0.48], [0.68, 0.48], [0.7, 0.6], [0.4, 0.61]] }],
+    lens: "lit",
+    bezel: "black",
+    recess: 0.01,
+    cells: [
+      { loop: { points: [[0.61, 0.48], [0.7, 0.48], [0.7, 0.6], [0.61, 0.602]] }, tone: "amber" },
+      { loop: { side: true, points: [[1.72, 0.48], [1.62, 0.48], [1.62, 0.59], [1.72, 0.6]] }, tone: "amber" },
+    ],
+  },
+  // A slim band split on the gate's outline: the gate's piece inboard of x .43, the body's on the infill under the outline's slant, round
+  // the corner past the infill's 3 cm step and onto the quarter.
+  tail: {
+    loops: [
+      { points: [[0.445, 0.72], [0.6, 0.71], [0.6, 0.815], [0.445, 0.785]] },
+      { points: [[0.635, 0.708], [0.665, 0.704], [0.665, 0.815], [0.635, 0.82]] },
+      { points: [[0.27, 0.735], [0.42, 0.725], [0.42, 0.79], [0.27, 0.79]] },
+      { side: true, points: [[-1.69, 0.704], [-1.6, 0.72], [-1.58, 0.8], [-1.63, 0.82]] },
+    ],
+    lens: "lit",
+    bezel: "black",
+    recess: 0.01,
+    strips: [
+      { line: { points: [[0.28, 0.775], [0.41, 0.772]] }, width: 0.02, tone: "lit" },
+      { line: { points: [[0.455, 0.772], [0.59, 0.8]] }, width: 0.02, tone: "lit" },
+      { line: { points: [[0.64, 0.802], [0.66, 0.8]] }, width: 0.02, tone: "lit" },
+    ],
+    cells: [
+      { loop: { points: [[0.27, 0.735], [0.35, 0.73], [0.35, 0.78], [0.27, 0.78]] }, tone: "clear" },
+      { loop: { points: [[0.445, 0.72], [0.6, 0.71], [0.6, 0.75], [0.445, 0.75]] }, tone: "smoked" },
+      { loop: { points: [[0.635, 0.708], [0.665, 0.704], [0.665, 0.75], [0.635, 0.75]] }, tone: "smoked" },
+    ],
+  },
+  front: {
+    loops: [{ points: [[0.56, 0.3], [0.68, 0.3], [0.68, 0.34], [0.56, 0.34]] }],
+    lens: "amber",
+  },
+  rear: {
+    loops: [{ points: [[0.48, 0.3], [0.64, 0.3], [0.64, 0.33], [0.48, 0.33]] }],
+    lens: "red",
+  },
+} as const;
+
 /** Compact five-door: boxy face, near-vertical hatch under a roof spoiler. */
 export const HATCHBACK: BodyStyle = {
   id: "hatchback",
@@ -18,6 +63,8 @@ export const HATCHBACK: BodyStyle = {
       span: 0.7,
       wrap: { from: 0.25, back: 0.19 },
       trim: "body",
+      top: [[0, 0.47], [0.4, 0.47], [0.62, 0.47]],
+      edge: [[1.72, 0.47], [1.45, 0.47], [1.485, 0.38], [1.5, 0.3]],
     },
     rear: {
       seat: { y: 0.41, z: 1.702 },
@@ -25,9 +72,11 @@ export const HATCHBACK: BodyStyle = {
       span: 0.66,
       wrap: { from: 0.46, back: 0.1 },
       trim: "body",
+      top: [[0, 0.555], [0.4, 0.56], [0.64, 0.57]],
+      edge: [[-1.69, 0.565], [-1.66, 0.5], [-1.44, 0.5], [-1.48, 0.4], [-1.5, 0.3]],
     },
   },
-  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62] },
+  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62], mirror: { cap: "rounded", finish: "body", size: [0.1, 0.1, 0.075] } },
   aPillarFoot: 0.73,
   aPillarTop: 0.3,
   glassTop: 0.045,
@@ -77,12 +126,21 @@ export const HATCHBACK: BodyStyle = {
     // The reference's gate seam: ±.62-.66 above the tail lamps, stepping in to ±.43 between them.
     outline: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84], [0.43, 0.8], [0.43, 0.6]],
   },
-  lamps: { head: [0.34, 0.54], tail: [0.59, 0.72] },
+  // The high brake lamp: a thin strip on the spoiler's trailing edge (2 cm tall there); the amber side repeater on the front fender, as the reference's.
+  lamps: {
+    head: [0.545, 0.545],
+    tail: [0.603, 0.76],
+    shapes: HATCHBACK_LAMP_SHAPES,
+    brake: { at: [0, 1.231], size: [0.34, 0.012] },
+    sideMarkers: [{ at: [0.62, 0.8], size: [0.045, 0.022] }],
+  },
+  grille: { y: 0.575, size: [0.72, 0.11], kind: "bars", count: 4, badge: 0.025, finish: "black" },
   seats: { front: [0.35, 0.41, -0.1], rear: [0.41, -0.7] },
   pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] } },
   blackout: { b: true, divider: true },
+  privacyGlass: { rear: true, quarter: true },
   roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.5 } },
-  exhaust: { tips: 2, x: 0.45, y: 0.3, size: [0.075, 0.045], shape: "round" },
+  exhaust: { tips: 2, x: 0.45, y: 0.27, size: [0.075, 0.045], shape: "round" },
   details: {
     lines: [
       { view: "top", points: [[1.68, 0], [1.69, 0.36], [1.64, 0.62], [1.55, 0.68]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
@@ -103,7 +161,6 @@ export const HATCHBACK: BodyStyle = {
       { view: "side", points: [[-0.8025, 0.27], [-0.844, 0.425], [-0.9575, 0.538], [-1.1125, 0.58], [-1.2675, 0.538], [-1.381, 0.425], [-1.4225, 0.27]], width: 0.02, depth: 0.006, profile: "u", cavity: 0 },
       { view: "side", points: [[-1.28, 0.8], [-1.43, 0.8], [-1.43, 0.64], [-1.28, 0.64]], closed: true, width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-1.595, 0.82], [-1.6, 0.72], [-1.6, 0.62]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-1.45, 0.5], [-1.6, 0.5], [-1.7, 0.5]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "side", points: [[0.56, 0.875], [-0.26, 0.875], [-0.89, 0.875], [-1.17, 0.875]], width: 0.015, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[0.52, 0.875], [0.37, 1.05], [0.22, 1.21], [0, 1.23], [-0.26, 1.23], [-0.26, 0.875]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[-0.31, 0.875], [-0.31, 1.22], [-0.8, 1.21], [-0.86, 1.2], [-0.89, 0.875]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
@@ -115,8 +172,6 @@ export const HATCHBACK: BodyStyle = {
       { view: "front", points: [[0, 0.64], [0.38, 0.64], [0.38, 0.5], [0, 0.5]], closed: true, width: 0.015, depth: 0.005, profile: "step", cavity: 0.85 },
       { view: "side", points: [[1.62, 0.62], [1.48, 0.6], [1.5, 0.47]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "front", points: [[0.78, 0.47], [0.7, 0.47], [0.4, 0.49], [0.4, 0.64], [0.66, 0.64], [0.76, 0.62]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "front", points: [[0, 0.47], [0.5, 0.47], [0.73, 0.48], [0.78, 0.47]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[1.78, 0.47], [1.4, 0.47]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "side", points: [[1.78, 0.31], [1.55, 0.31]], width: 0.01, depth: 0.004, profile: "step", cavity: 0.7 },
       { view: "top", points: [[-1.1, 0.57], [-1.09, 0]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[-0.97, 0.52], [-1.0, 0]], width: 0.12, depth: 0.006, profile: "u", cavity: 0 },
@@ -124,7 +179,6 @@ export const HATCHBACK: BodyStyle = {
       { view: "side", points: [[-1.09, 1.25], [-1.1, 1.24], [-1.35, 1.05], [-1.58, 0.92], [-1.6, 0.9]], width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.62, 0.84], [0.43, 0.8], [0.43, 0.6], [0, 0.56]], width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "rear", points: [[0, 0.56], [0.43, 0.56], [0.6, 0.57], [0.72, 0.58]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.75, 0.82], [0.62, 0.83], [0.43, 0.82], [0.43, 0.64], [0.6, 0.61], [0.74, 0.6]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-1.66, 0.82], [-1.58, 0.8], [-1.6, 0.62], [-1.68, 0.6]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.6, 0.64], [0.6, 0.76]], width: 0.03, depth: -0.006, profile: "step", cavity: 0.85 },
@@ -145,12 +199,12 @@ export const HATCHBACK: BodyStyle = {
       { view: "front", points: [[0.64, 0.5], [0.74, 0.5], [0.74, 0.62], [0.64, 0.62]], depth: -0.006, rim: 0.004, cavity: 0 },
       { view: "front", points: [[0.4, 0.34], [0.58, 0.34], [0.58, 0.39], [0.4, 0.39]], depth: -0.004, rim: 0.004, cavity: 0 },
       { view: "side", points: [[1.71, 0.32], [1.78, 0.32], [1.78, 0.38], [1.71, 0.38]], depth: 0.003, rim: 0.004, cavity: 0 },
-      { view: "front", points: [[0, 0.27], [0.5, 0.27], [0.5, 0.37], [0, 0.37]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.012, bar: 0.006, depth: -0.006 }, cavity: 0.7 },
+      { view: "front", points: [[0, 0.18], [0.5, 0.18], [0.5, 0.3], [0, 0.3]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.012, bar: 0.006, depth: -0.006 }, cavity: 0.85 },
       { view: "front", points: [[0.515, 0.235], [0.645, 0.235], [0.645, 0.305], [0.515, 0.305]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0.43, 0.7], [0.55, 0.7], [0.55, 0.76], [0.43, 0.76]], depth: -0.006, rim: 0.004, cavity: 0 },
       { view: "rear", points: [[0, 0.865], [0.055, 0.8], [0, 0.735]], depth: 0.004, rim: 0.004, cavity: 0 },
-      { view: "rear", points: [[0, 0.19], [0.62, 0.19], [0.62, 0.38], [0, 0.38]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.02, bar: 0.008, depth: -0.006 }, cavity: 0.7 },
-      { view: "rear", points: [[0.45, 0.27], [0.48, 0.235], [0.6, 0.235], [0.63, 0.27], [0.6, 0.305], [0.48, 0.305]], depth: -0.006, rim: 0.004, cavity: 0.7 },
+      { view: "rear", points: [[0, 0.2], [0.62, 0.2], [0.62, 0.3], [0, 0.3]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.02, bar: 0.008, depth: -0.006 }, cavity: 0.85 },
+      { view: "rear", points: [[0.36, 0.27], [0.39, 0.235], [0.51, 0.235], [0.54, 0.27], [0.51, 0.305], [0.39, 0.305]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0.55, 0.31], [0.74, 0.31], [0.74, 0.35], [0.55, 0.35]], depth: -0.003, rim: 0.004, cavity: 0 },
     ],
   },
