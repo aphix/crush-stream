@@ -41,6 +41,9 @@ it is a drop gate, a pivot over 0.2 m above the panel's top edge is a roof-hinge
 optional `swing` is its `LidSwing` (mass, struts, stop rise, latch and tear bars), default the preset for its kind;
 [`DOOR_RIG.md`](DOOR_RIG.md), Lids), `lamps`, and the
 optional `livery` and `lightBar`. `rig` overrides the soft-body cages a body's panels need.
+Drawn only: `rearGlass.frame` `[side, bottom, top]` (m) draws the clear pane that far inside the outline and the band out to it as
+the glass's black frit, so it swings, breaks and tears with the pane; `grille.lean` (rad) leans the grille's top back about its centre line onto a raked face;
+`grille.rim` draws the surround in its own finish (a chrome frame round a black mesh; absent, `finish`); a mesh or hex grille's `count` sets its lines each way (absent, the default pitch).
 Optional `details` holds the car's fine contours (panel gaps, shut lines, creases, vents, grille bars, lamp internals) as strokes and patches drawn on its side, top, front and rear views; the detail-map system bakes them into height and cavity maps read at the skin's rest position, so they ride a crushed panel.
 
 The hardpoints place the openings and the lower body, each per car:
@@ -78,6 +81,7 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | `hood.bulge` | Raised centre bulge on the drawn hood from `z0` to `z1`, `width` across, its top `rise` over the lid, easing into it at both ends. `scoop` (`inlets` 1 or 2, mouth at `z`, `width`, `height` over the bulge) rises toward a mouth facing forward, drawn dark. Merged into the hood (`withHoodBulge`): the bonnet's skin crushes it |
 | `hood.kind` | `"lid"` (default) or `"clamshell"`: the drawn lid laps the body's deck edge and shoulders 1 mm clear down to a side shut line on the fender top, where the drawn body's shoulder steps 3 mm in under the lid's edge (a groove, ramped in over 2 cm inside each lid end on body slices of its own) |
 | `hood.crown` | `[drop, at]`: the drawn hood's top is a parabola across x, `drop` (m) under its centre line at \|x\| `at` (m), so its centre stands `drop·(w/at)²` over an edge of half-width `w`; drawn in four chords a side (default: the deck lid's 2.1 cm bow, its outer point over the deck's crown). Drawn only: the cage keeps the plain lid |
+| `hood.groove` | `[out, down]` (m): over the open bay, the fender's deck edge beside a lid hood stands `out` outboard of the hood's edge and `down` lower, a shut-line slot onto the bay wall instead of the fender meeting the skirt flush. Keep the moved point under the deck-edge-to-shoulder chord (about 0.38 m down per m out) so the drawn ring stays inside the cage's. Drawn only |
 | `boot.lip` | Ducktail kick: the deck lid's top rises `rise` at its rear edge, or the tailgate's top edge kicks `rise` out, easing in over `depth` |
 | `boot.flush` | The drawn deck lid seats on the deck edge like the hood (its edge a groove over the deck edge, 5 mm wider than a plain lid), not a step up off it; the coupe's ducktail lid. Drawn only: the cage keeps the plain lid |
 | `windowTrim` | `"chrome"`: a chrome bead (2.2 cm across, 5 mm proud) round every pane's border; the door glass's rides its door at the glass's seat, the rest (quarters, windshield, rear glass on the body) is one body mesh, so +3 draws. Drawn only |

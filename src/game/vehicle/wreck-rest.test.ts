@@ -10,7 +10,7 @@ import { buildCar } from "./drawn-body.test-util.ts";
 import { REST_SPEED } from "./car-air-body.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { PartSeat } from "./part-geometry.ts";
-import type { VehicleClassId } from "./vehicle-classes.ts";
+import { CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
 
 /**
  * A wreck rests on its own crushed underside. A head-on crush pushes a sill or a fender down in the car's frame, which moves a body
@@ -70,10 +70,10 @@ function lowestDrawn(car: DeformableCar, ground: Ground): { clearance: number; m
   return lowest;
 }
 
-/** Stages `hit` on `ground` and runs it until both cars sleep (or `SETTLE_MAX_S`): the cars the hit left wrecks, at rest. */
+/** Stages `hit` on `ground` and runs it until both cars sleep (or `SETTLE_MAX_S`): the cars the hit left wrecks, at rest. Each class on its own body (`CLASSES[cls].style`). */
 function wrecksAtRest(hit: Hit, ground: Ground): DeformableCar[] {
   setGround(ground);
-  const cars = [buildCar(hit.a === "monster" || hit.a === "truck" ? "pickup" : "sedan", hit.a), buildCar(hit.b === "monster" || hit.b === "truck" ? "pickup" : "sedan", hit.b)] as const;
+  const cars = [buildCar(CLASSES[hit.a].style, hit.a), buildCar(CLASSES[hit.b].style, hit.b)] as const;
   const [a, b] = cars;
   launch(a, -5, 0, Math.PI / 2, hit.kphA / 3.6, 0);
   launch(b, 5, hit.offset, -Math.PI / 2 + hit.yawB, (-hit.kphB / 3.6) * Math.cos(hit.yawB), (-hit.kphB / 3.6) * Math.sin(hit.yawB));
