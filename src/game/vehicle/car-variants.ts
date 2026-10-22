@@ -150,6 +150,9 @@ interface CarDims {
   wheel: { radius: number; width: number };
 }
 
+/** A bumper's lofted end (m): how far back its corner turns, and how far its face stands off the body side along the run. */
+export type BumperEnd = { corner: number; stand: number };
+
 /** A bumper: where its group sits and the section its fascia is lofted from. */
 interface BumperSpec {
   /** Group seat (m): its height, and its distance from the car's middle. */
@@ -158,8 +161,11 @@ interface BumperSpec {
   fascia: readonly (readonly [number, number])[];
   /** Half-width (m) of the fascia across the car. */
   span: number;
-  /** Fascia corner sweep: `from` the |x| (m) where it starts sweeping back, `back` how far (m) its end sweeps back from the face. */
-  wrap: { from: number; back: number };
+  /**
+   * Fascia corner sweep: `from` the |x| (m) where it starts sweeping back, `back` how far (m) its end sweeps back from the face.
+   * `end` (drawn only): a lofted end instead, its corner turning over `corner` (m) back from the face, then running along the body side to `back`, its face `stand` (m) off the skin.
+   */
+  wrap: { from: number; back: number; end?: BumperEnd };
   /** What the bumper is drawn in: the body's paint colour, chrome or black; absent, the car's accent trim. */
   trim?: "body" | "chrome" | "black";
   /**
@@ -252,6 +258,7 @@ export interface BodyStyle {
   /**
    * Front door: hinge axis at the A-pillar (±hingeX, hingeY, hingeZ), `length` hinge to trailing edge, skin ±halfHeight about the hinge, `aperture` [z0, z1] the body's front-door cut (the skin overlaps it 0.02 each end), mirror seated `mirrorY` over the hinge and `mirrorZ` (default 0) behind it, reaching `mirrorReach` out, ±mirrorHalfDepth deep.
    * `mirror` (drawn only): its own mirror, `cap` rounded or box of `size` [w out, h, d along z] (default `MIRROR_CAP_SIZE`) in `finish` (body: the door's paint), its outer face at `mirrorReach`, its foot on the skin; absent = the platform mirror x-scaled to the reach.
+   * `hingeTop` (car y, m, drawn only): the skin's top edge at its hinge cut, its rows closing down to it over the hinge end's slope so the top meets the fender's deck edge there; absent = only the slope.
    */
   door: {
     hingeX: number;
@@ -265,6 +272,7 @@ export interface BodyStyle {
     mirrorHalfDepth: number;
     aperture: readonly [number, number];
     mirror?: { cap: "rounded" | "box"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number] };
+    hingeTop?: number;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
   aPillarFoot: number;
@@ -308,6 +316,8 @@ export interface BodyStyle {
   rearBulkhead: { z: number; yTop: number };
   /** Open floors visible through the glass: [zRear, zFront, floorY]. */
   tubs: readonly (readonly [number, number, number])[];
+  /** The engine bay trough's floor (m, car y) under the hood (`bayTub`); absent, 0.28. A lifted body whose floor pan stands over that at the bay (the trucks) sets its pan height, so the trough the paint row and the bay set read is the one drawn. */
+  bayFloor?: number;
   /** A bed's wheel tubs (both builds): over each wheel whose liner stands in a tub floor, a half cylinder `rise` (m) over the floor and `length` along the car, `width` in from the bed's side wall; absent, a drawn-only hump hugs the liner. */
   wheelTub?: { rise: number; length: number; width: number };
   /** A tub's rim width (m): its side wall's top edge stands this far in from the body side (its foot stays 6 cm in); absent, 6 cm. */
