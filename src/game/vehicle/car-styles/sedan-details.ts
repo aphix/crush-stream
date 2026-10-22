@@ -65,7 +65,6 @@ const POLICE_LINES: readonly Line[] = [
 const SHARED_PATCHES: readonly Patch[] = [
   { view: "side", points: [[0.9, 0.655], [0.9, 0.69], [0.775, 0.69], [0.775, 0.655]], ...VENT },
   { view: "top", points: [[-1.96, 0], [-1.96, 0.04], [-2.03, 0.04], [-2.03, 0]], ...BADGE },
-  { view: "rear", points: [[0, 0.41], [0.4, 0.41], [0.64, 0.41], [0.6, 0.32], [0.58, 0.235], [0.3, 0.23], [0, 0.228]], depth: -0.004, rim: 0.008, pattern: { kind: "vslats", pitch: 0.06, bar: 0.01, depth: 0.004 }, cavity: 0.5 },
 ];
 
 const SEDAN_PATCHES: readonly Patch[] = [
