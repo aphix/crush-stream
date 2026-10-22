@@ -6,7 +6,7 @@ import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./ca
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import { CREASE_DEGREES, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
-import { archLipGeometry, wellHumpGeometry } from "./car-well-mesh.ts";
+import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
 import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { DeformableCar } from "./car.ts";
@@ -430,29 +430,34 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
 }
 
 /** Each style's drawn wheel-well parts and its boot cut's loft rings as built, merged into the body on top of its loft: red if one grows. */
-const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; bootRings: number }> = {
-  sedan: { lips: 360, humps: 0, bootRings: 63 },
-  hatchback: { lips: 360, humps: 94, bootRings: 42 },
-  wagon: { lips: 360, humps: 94, bootRings: 42 },
-  coupe: { lips: 360, humps: 94, bootRings: 42 },
-  pickup: { lips: 260, humps: 94, bootRings: 42 },
-  police: { lips: 360, humps: 0, bootRings: 63 },
-  monster: { lips: 312, humps: 94, bootRings: 42 },
+const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number }> = {
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63 },
+  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42 },
+  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42 },
+  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42 },
+  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 63 },
+  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42 },
 };
 
-/** `style`'s arch lips' and wheel humps' vertices (`archLipGeometry`, `wellHumpGeometry`) and the rings its boot cut adds to the loft. */
-function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; bootRings: number } {
+/**
+ * `style`'s arch lips' and wheel humps' vertices (`archLipGeometry`, `wellHumpGeometry`), its drawn liners' over the cage's one-sided
+ * liners (`makeWellLiners`: their insides and end caps), and the rings its boot cut adds to the loft.
+ */
+function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number } {
   const body = makeChassisGeometry(style);
+  const liners = (source: "drawn" | "cage") => makeWellLiners(style, source).reduce((n, g) => n + g.getAttribute("position").count, 0);
   return {
     lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,
     humps: wellHumpGeometry(style, "drawn")?.getAttribute("position").count ?? 0,
+    liners: liners("drawn") - liners("cage"),
     bootRings: (sliceZs(style, "drawn").length - sliceZs(style, "drawn", false).length) * loftOf(body).ring,
   };
 }
 
 describe("given every body style's car built whole", () => {
   for (const testCase of BASELINE_BY_STYLE) {
-    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting, arch lip, wheel hump and boot cut within its own count`, () => {
+    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting, arch lip, wheel hump, liner side and boot cut within its own count`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, testCase.id);
       let drawCalls = 0;
       let triangles = 0;
@@ -466,11 +471,11 @@ describe("given every body style's car built whole", () => {
       assert.ok(triangles <= testCase.triangles * TRIANGLE_BUDGET, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`);
       const fittings = roofFittingVertices(car.style);
       const wells = wellAndCutVertices(car.style);
-      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.bootRings;
+      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.liners - wells.bootRings;
       assert.ok(loft <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
       assertRoofFittingCaps(testCase.id, fittings.byKind);
       const cap = WELL_AND_CUT_VERTICES[testCase.id];
-      assert.ok(wells.lips <= cap.lips && wells.humps <= cap.humps && wells.bootRings <= cap.bootRings, `${testCase.id} ${JSON.stringify(wells)} against ${JSON.stringify(cap)}`);
+      assert.ok(wells.lips <= cap.lips && wells.humps <= cap.humps && wells.liners <= cap.liners && wells.bootRings <= cap.bootRings, `${testCase.id} ${JSON.stringify(wells)} against ${JSON.stringify(cap)}`);
     });
   }
 

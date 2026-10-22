@@ -119,10 +119,13 @@ const { HudStore } = await game("hud/hud-store.ts");
 const { FX_TIERS } = await game("present/engine-post.ts");
 const { FRAME_HZ } = await game("kernel/constants.ts");
 const { DRIVER_CARS } = await game("match/types.ts");
-/** The body style the hash's `car=` boots: it names a car-menu id (a class, e.g. `muscle` for the coupe body, or a style), or null. */
+/** The body style the hash's `car=` boots (a car-menu id: a class, e.g. `muscle` for the coupe body), or null; any other id would boot the default sedan unnoticed. */
 const hashStyle = (() => {
   const id = new URLSearchParams(values.hash ?? "").get("car");
-  return id === null ? null : (DRIVER_CARS.find((d) => d.id === id)?.style ?? id);
+  if (id === null) return null;
+  const style = DRIVER_CARS.find((d) => d.id === id)?.style;
+  if (style === undefined) throw new Error(`--hash car=${id}: not a car-menu id (${DRIVER_CARS.map((d) => `${d.id} = ${d.style}`).join(", ")})`);
+  return style;
 })();
 if (!FX_TIERS.includes(tier)) throw new Error(`--tier ${tier}: one of ${FX_TIERS.join(", ")}`);
 

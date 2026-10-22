@@ -16,6 +16,7 @@ import {
   DOOR_EDGE,
   SEAM_HALF,
   SEDAN,
+  ROCKER,
   TUB_EDGE,
   ensureOutwardNormals,
   loftFromRings,
@@ -122,7 +123,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   ensureOutwardNormals(body);
   const roof = makeRoofGeometry(style, source);
   const parts: THREE.BufferGeometry[] = [body, roof];
-  parts.push(...makeWellLiners(style));
+  parts.push(...makeWellLiners(style, source));
   parts.push(...makeGreenhouseFrame(style, source));
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
   const rb = style.rearBulkhead;
@@ -131,6 +132,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   // each lip's triangles are kept for its arch's panel.
   const lips = source === "drawn" ? archLipGeometry(style, body) : null;
   const lipIndex = parts.reduce((n, g) => n + g.getIndex()!.count, 0);
+  const lipFrom = parts.reduce((n, g) => n + g.getAttribute("position").count, 0);
   if (lips) parts.push(lips);
   const humps = wellHumpGeometry(style, source);
   // The cage's tubs: kept out of its hull's decimation (`CageSource.tubs`).
@@ -155,6 +157,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
     if (g.userData.blackout === true) primer.fill(1, start, start + count);
     start += count;
   }
+  if (lips) primer.set(lips.userData.tone as Float32Array, lipFrom);
   for (const g of parts) g.dispose();
   merged.computeVertexNormals();
   merged.computeBoundingBox();
@@ -177,6 +180,17 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
     for (let s = 0; s < zs.length; s++) {
       const w = INNER_PANEL * Math.max(bayAt(zs[s]!, style), cut.lined ? bootCutAt(zs[s]!, cut).open : 0);
       for (const i of [0, 1, n - 2, n - 1]) primer[s * n + i] = w;
+    }
+    // Each well's ceiling inside an arch, unpainted like its liner so the lip reads over a dark gap: the sill's two points, and the last
+    // tuck row and rocker once the tuck row over them sits under the arch's lip (`halfRing` lifts it toward the edge), so no painted side fades into them.
+    const { wheels } = carFrame(style);
+    const r = style.arch.radius;
+    for (let s = 0; s < zs.length; s++) {
+      const wheel = wheels.find(([, , wz]) => Math.abs(zs[s]! - wz) < r);
+      if (!wheel) continue;
+      const edge = wheel[1] + Math.sqrt(r * r - (zs[s]! - wheel[2]) ** 2);
+      const atEdge = rings[s]![ROCKER - 2]!.y <= edge + (style.arch.lip?.width ?? 0);
+      for (let i = atEdge ? ROCKER - 1 : ROCKER + 1; i <= ROCKER + 2; i++) primer[s * n + i] = primer[s * n + n - 1 - i] = INNER_PANEL;
     }
     primer.fill(INNER_PANEL, linerFrom, linerTo);
   }
