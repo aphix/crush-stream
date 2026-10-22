@@ -94,7 +94,6 @@ export const PICKUP: BodyStyle = {
   rearBulkhead: { z: -0.56, yTop: 1.2 },
   tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
   wheelTub: { rise: 0.19, length: 0.55, width: 0.22 },
-  tubWall: 0.04,
   rearDoorSeam: -0.41,
   boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15], pivot: [0.6, -2.15] },
   lamps: { head: [0.5, 0.85], tail: [0.61, 0.93], shapes: PICKUP_LAMP_SHAPES, brake: { at: [0, 1.66], size: [0.3, 0.06] } },
