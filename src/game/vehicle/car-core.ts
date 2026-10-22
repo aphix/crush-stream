@@ -11,7 +11,7 @@ import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
-import { DOOR_GLASS_SEAT, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane } from "./car-glass.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
   LIGHT_BAR_FOOT,
@@ -45,9 +45,6 @@ const _lampQ = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
 /** The brake lamp's probe meets the rear glass from either face: a cab's brake lamp sits on its back glass, which the body skin doesn't hold. */
 const GLASS_PROBE = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-const _shade = new THREE.Color();
-/** A privacy pane (`privacyGlass`) wears its colour this much darker (linear): the cargo behind dark-tinted rear glass reads dim, as in the references. */
-const PRIVACY_SHADE = 0.3;
 /** Each style's decimated rest caster (body + flush parts), shared by its cars and drawn by `PartBatch.casters`; never disposed. */
 const casterByStyle = new WeakMap<BodyStyle, THREE.BufferGeometry>();
 
@@ -204,11 +201,9 @@ export type GlassPart = "roof" | "bonnet" | "boot" | "doorLeft" | "doorRight";
 export interface GlassPane {
   name: GlassName;
   mesh: THREE.Mesh;
-  /** The look it wears now and the colour it wears it in: it draws the shared `glassMaterial(look, tint)`, `PRIVACY_SHADE` darker on a privacy pane. */
+  /** The look it wears now and the colour it wears it in: it draws the shared `glassMaterial(look, tint)`. */
   look: GlassLook;
   tint: number;
-  /** The style tints it dark (`privacyGlass`). */
-  privacy: boolean;
   restPos: THREE.Vector3;
   restVerts: Float32Array | null;
   state: GlassState;
@@ -683,7 +678,6 @@ export abstract class CarCore {
         mesh,
         look: "fresh",
         tint: GLASS_COLOR,
-        privacy,
         restPos: mesh.position.clone(),
         restVerts: skin ? this.copyRest(mesh.geometry) : null,
         state: "intact",
@@ -691,7 +685,7 @@ export abstract class CarCore {
         skin,
       };
       this.glassPanes.push(pane);
-      if (privacy || mesh.geometry.hasAttribute("color")) this.wearGlass(pane, "fresh");
+      if (privacy) privacyPane(mesh.geometry);
     };
     const glassMat = glassMaterial("fresh");
     const style = this.style;
@@ -828,8 +822,7 @@ export abstract class CarCore {
 
   protected wearGlass(g: GlassPane, look: GlassLook): void {
     g.look = look;
-    const tint = g.privacy ? _shade.setHex(g.tint).multiplyScalar(PRIVACY_SHADE).getHex() : g.tint;
-    g.mesh.material = glassMaterial(look, tint, g.privacy, g.mesh.geometry.hasAttribute("color"));
+    g.mesh.material = glassMaterial(look, g.tint);
   }
 
   /** The paints (sRGB) a style's body-colour parts take (`finish` "body"): the grille the body's, the mirror caps the doors'. */

@@ -4,7 +4,7 @@ import { once } from "../kernel/scalar.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { applyFinish, glslFloat } from "./car-finish.ts";
 import { BARE_METAL_FRAGMENT, BARE_METAL_VERTEX } from "./bare-metal.ts";
-import { FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
+import { FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE } from "./constants.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
 /** The shared car textures and materials (paint, tone grid, glass, crack map, lamp mask) and the multi-tone part helpers; the small parts built on them are in `part-geometry.ts`. */
@@ -328,18 +328,20 @@ export function mergeToned(parts: THREE.BufferGeometry[], what: string): THREE.B
 export const GLASS_COLOR = 0x1a2832;
 
 export function makeGlassMaterial(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
-    color: GLASS_COLOR,
-    metalness: 0.18,
-    roughness: 0.08,
-    transparent: true,
-    opacity: 0.72,
-    side: THREE.DoubleSide,
-    // Panes are near-planar: each pixel sees one face, so three's back-then-front two-pass draw
-    // only doubled the draws and re-resolved the program twice per pane per frame.
-    forceSinglePass: true,
-    depthWrite: true,
-  });
+  return withGlassTone(
+    new THREE.MeshStandardMaterial({
+      color: GLASS_COLOR,
+      metalness: 0.18,
+      roughness: 0.08,
+      transparent: true,
+      opacity: 0.72,
+      side: THREE.DoubleSide,
+      // Panes are near-planar: each pixel sees one face, so three's back-then-front two-pass draw
+      // only doubled the draws and re-resolved the program twice per pane per frame.
+      forceSinglePass: true,
+      depthWrite: true,
+    }),
+  );
 }
 
 /** What a pane looks like: as built, cleared by a reset (`resetGlass`), or cracked (`crackGlass`). */
@@ -350,24 +352,42 @@ const GLASS_LOOKS = {
   cracked: { opacity: 0.55, roughness: 0.32 },
 } as const satisfies Record<GlassLook, { opacity: number; roughness: number }>;
 const glassByLook = new Map<string, THREE.MeshStandardMaterial>();
+/** A privacy pane's colour this much darker (linear): the cargo behind dark-tinted rear glass reads dim, as in the references. */
+export const PRIVACY_SHADE = 0.3;
 /** A privacy pane's floor opacity: its tint alone still let ~28% of the cabin through, so the reference's black rear glass read clear. */
 const PRIVACY_OPACITY = 0.93;
+
+/** Per-vertex glass tone (`GLASS_ATTRIBUTE`): x 1 black frit, y 1 privacy (darker by `PRIVACY_SHADE`, opacity floored before the crack map multiplies alpha, as `material.opacity` was); 0 on a mesh without one. */
+function withGlassTone<T extends THREE.MeshStandardMaterial>(m: T): T {
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", `#include <common>\nattribute vec2 ${GLASS_ATTRIBUTE};\nvarying vec2 vGlassTone;`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\nvGlassTone = ${GLASS_ATTRIBUTE};`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vGlassTone;")
+      .replace(
+        "#include <map_fragment>",
+        `diffuseColor.a = max(diffuseColor.a, vGlassTone.y * ${glslFloat(PRIVACY_OPACITY)});\n#include <map_fragment>\ndiffuseColor.rgb *= 1.0 - max(vGlassTone.x, vGlassTone.y * (1.0 - ${glslFloat(PRIVACY_SHADE)}));`,
+      );
+  };
+  m.customProgramCacheKey = () => "car-glass-tone";
+  return m;
+}
 
 /**
  * The one material every pane in `look` and `color` wears: a pane changes look by changing material, never by editing its own,
  * so a car's six panes and every other car's share it (the renderer re-sends a material's uniforms each time the draw
- * changes material, and a car's panes were six copies of one). `privacy` panes are near-opaque; `frit` panes draw their vertex
- * colours (a framed rear glass's black band). Never edit what this returns.
+ * changes material, and a car's panes were six copies of one). Privacy panes and the black frit band are per-vertex
+ * (`GLASS_ATTRIBUTE`), so they wear it too. Never edit what this returns.
  */
-export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR, privacy = false, frit = false): THREE.MeshStandardMaterial {
-  const key = `${look}:${color}:${privacy}:${frit}`;
+export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR): THREE.MeshStandardMaterial {
+  const key = `${look}:${color}`;
   let m = glassByLook.get(key);
   if (m === undefined) {
     m = makeGlassMaterial();
     m.color.setHex(color);
-    m.opacity = privacy ? Math.max(GLASS_LOOKS[look].opacity, PRIVACY_OPACITY) : GLASS_LOOKS[look].opacity;
+    m.opacity = GLASS_LOOKS[look].opacity;
     m.roughness = GLASS_LOOKS[look].roughness;
-    m.vertexColors = frit;
     if (look === "cracked") m.map = getCrackMap();
     m.userData.shared = true;
     glassByLook.set(key, m);

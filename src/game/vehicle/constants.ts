@@ -29,6 +29,8 @@ export const CABIN_TRIM = -2;
 /** A bumper's per-vertex trim attribute: 0 the bumper's own trim, `FITTING_TONE` black or chrome (its exhaust tips and tow hitch, drawn in its one mesh). */
 export const FITTING_ATTRIBUTE = "fitting";
 export const FITTING_TONE = { black: 1, chrome: 2 } as const;
+/** A glass pane's per-vertex tone, a vec2 (`glassMaterial`'s hook reads it; a mesh without it reads 0, 0: clear glass): x 1 on black frit, y 1 on a privacy pane (darker, its opacity floored). */
+export const GLASS_ATTRIBUTE = "glassTone";
 export const BUMPER_F = "bumperF";
 /** The name of a car's head or tail lamp seat (`Object3D.name`): `addLamps` names it, the distance cut finds it. */
 export const LAMP_SEAT = "lampSeat";

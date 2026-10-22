@@ -6,7 +6,7 @@ import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad, type YZ } fr
 import { ROCKER, glassTopY, glassX, lerp, roofTopY, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
 import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, rockerAt, WINDSHIELD_BOW } from "./car-lines.ts";
 import { DOOR_PROUD } from "./car-door-mesh.ts";
-import { FITTING_ATTRIBUTE } from "./constants.ts";
+import { FITTING_ATTRIBUTE, GLASS_ATTRIBUTE } from "./constants.ts";
 import { mergeToned } from "./car-materials.ts";
 
 // Glass panes on the shared platform: windshield, rear glass, door and quarter glass, filling the greenhouse `car-greenhouse-mesh.ts` builds.
@@ -98,12 +98,26 @@ function framedQuad(q: BowedQuad, [side, bottom, top]: readonly [number, number,
   return { base: at(t0), top: at(t1), wBase: lerp(q.wBase, q.wTop, t0) - 2 * side, wTop: lerp(q.wBase, q.wTop, t1) - 2 * side, bow: q.bow, fall: (x, t) => q.fall(x, lerp(t0, t1, t)) };
 }
 
-/** A black frit band: rows of points (each row the same length) as a strip grid wound like `makeGlassQuad`'s, every vertex coloured black. */
+/** `geo`'s `GLASS_ATTRIBUTE` with every vertex `frit` (1 black frit, 0 clear) and none privacy. */
+function glassTone(geo: THREE.BufferGeometry, frit: 0 | 1): THREE.BufferGeometry {
+  const tone = new THREE.Float32BufferAttribute(new Float32Array(geo.getAttribute("position").count * 2), 2);
+  if (frit) for (let i = 0; i < tone.count; i++) tone.setX(i, 1);
+  return geo.setAttribute(GLASS_ATTRIBUTE, tone);
+}
+
+/** Marks every vertex of `geo`, a privacy pane's (`privacyGlass`): `glassMaterial` darkens it and floors its opacity; a frit vertex stays black. */
+export function privacyPane(geo: THREE.BufferGeometry): void {
+  if (!geo.hasAttribute(GLASS_ATTRIBUTE)) glassTone(geo, 0);
+  const tone = geo.getAttribute(GLASS_ATTRIBUTE);
+  for (let i = 0; i < tone.count; i++) tone.setY(i, 1);
+}
+
+/** A black frit band: rows of points (each row the same length) as a strip grid wound like `makeGlassQuad`'s, every vertex frit. */
 function fritBand(rows: readonly THREE.Vector3[][]): THREE.BufferGeometry {
   const n = rows[0]!.length;
   const geo = new THREE.BufferGeometry().setFromPoints(rows.flat());
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(rows.flatMap((row, j) => row.flatMap((_, i) => [i / (n - 1), j / (rows.length - 1)])), 2));
-  geo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(rows.length * n * 3), 3));
+  glassTone(geo, 1);
   const indices: number[] = [];
   for (let j = 0; j < rows.length - 1; j++) {
     for (let i = 0; i < n - 1; i++) {
@@ -119,11 +133,11 @@ function fritBand(rows: readonly THREE.Vector3[][]): THREE.BufferGeometry {
 /** Chords along a frit's top and bottom edges: the 1.5 cm bow and the dome's fall each bend about 1 mm off a quarter-width chord, under the band's own width. */
 const FRIT_CHORDS = 4;
 
-/** A framed rear glass: its pane drawn in by the `frame`, the band out to the outline its black frit, both bowed and fallen alike (vertex colour: the pane's material tints it). */
+/** A framed rear glass: its pane drawn in by the `frame`, the band out to the outline its black frit, both bowed and fallen alike (`glassTone`: the frit's vertices are black). */
 function framedGlass(q: BowedQuad, frame: readonly [number, number, number], draw: QuadDraw): THREE.BufferGeometry {
   const inner = framedQuad(q, frame);
   const pane = makeGlassQuad(inner, draw);
-  pane.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(pane.getAttribute("position").count * 3).fill(1), 3));
+  glassTone(pane, 0);
   const along = (g: BowedQuad, t: number) => Array.from({ length: FRIT_CHORDS + 1 }, (_, i) => quadPoint(g, (i / FRIT_CHORDS) * 2 - 1, t).clone());
   // The sides take no bow (it is zero at the pane's edges) and the fall bends them under 2 mm off a chord: one chord each.
   const side = (xn: number) => [0, 1].map((t) => [quadPoint(q, xn, t).clone(), quadPoint(inner, xn, t).clone()]);
@@ -141,11 +155,11 @@ function framedGlass(q: BowedQuad, frame: readonly [number, number, number], dra
 /** Points each rounded corner's arc takes off each of its two edges. */
 const ROUND_STEPS = 3;
 
-/** A geometry of `points` ((s, t) on the pane, 0…1 across and up) at `at`'s positions, wound as `index`, every vertex coloured `colour`. */
-function paneGeometry(points: readonly (readonly [number, number])[], at: (s: number, t: number) => THREE.Vector3, index: number[], colour: number): THREE.BufferGeometry {
+/** A geometry of `points` ((s, t) on the pane, 0…1 across and up) at `at`'s positions, wound as `index`, every vertex `frit` (1 black frit, 0 clear). */
+function paneGeometry(points: readonly (readonly [number, number])[], at: (s: number, t: number) => THREE.Vector3, index: number[], frit: 0 | 1): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry().setFromPoints(points.map(([s, t]) => at(s, t).clone()));
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(points.flat(), 2));
-  geo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(points.length * 3).fill(colour), 3));
+  glassTone(geo, frit);
   geo.setIndex(index);
   geo.computeVertexNormals();
   return geo;
@@ -182,14 +196,14 @@ function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): TH
       grid.push(a, a + 1, a + row, a + 1, a + row + 1, a + row);
     }
   }
-  const pane = paneGeometry(ts.flatMap((t) => ss.map((s) => arc(s, t))), at, grid, 1);
+  const pane = paneGeometry(ts.flatMap((t) => ss.map((s) => arc(s, t))), at, grid, 0);
   const fans = [0, 1].flatMap((sEdge) =>
     [0, 1].map((tEdge) => {
       const rim = [...zone(rS, sEdge).map((s): [number, number] => [s, tEdge]), ...zone(rT, tEdge).reverse().slice(1).map((t): [number, number] => [sEdge, t])].map(([s, t]) => arc(s, t));
       // Counter-clockwise in (s, t), as the grid's triangles are.
       const [[s0, t0], [s1, t1]] = [rim[0]!, rim[1]!];
       if ((s0 - sEdge) * (t1 - tEdge) - (t0 - tEdge) * (s1 - sEdge) < 0) rim.reverse();
-      return paneGeometry([[sEdge, tEdge], ...rim], at, rim.slice(1).flatMap((_, k) => [0, k + 1, k + 2]), 0);
+      return paneGeometry([[sEdge, tEdge], ...rim], at, rim.slice(1).flatMap((_, k) => [0, k + 1, k + 2]), 1);
     }),
   );
   const geo = mergeGeometries([pane, ...fans], false);
