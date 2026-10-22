@@ -85,9 +85,12 @@ export const PICKUP: BodyStyle = {
   rocker: { y: 0.45 },
   underside: [[-2.17, 0.52], [-1.96, 0.42], [-1.75, 0.38], [-1.5, 0.34], [1.6, 0.34], [1.76, 0.35], [1.93, 0.38]],
   door: { hingeX: 0.74, hingeY: 0.785, hingeZ: 0.7, length: 1.09, halfHeight: 0.335, mirrorY: 0.405, mirrorZ: 0.19, mirrorReach: 0.15, mirrorHalfDepth: 0.08, aperture: [-0.38, 0.69], mirror: PICKUP_MIRROR },
-  // The side plate's door glass starts .60 back at the belt and .33 at the roof, a sail filling up to the A-post.
+  // The side plate's door glass starts .60 back at the belt and .33 at the roof (the cage and the dummies' glass keep these).
   aPillarFoot: 0.6,
   aPillarTop: 0.34,
+  // Drawn, the glass's front edge knees onto the A-post's rear edge at the mirror head's top, so the post stays an even tube over a small black sail.
+  drawn: { aPillarKnee: 1.28, aPillarTop: 0.38 },
+  blackout: { sail: true },
   bPillar: { rear: -0.33, front: -0.29 },
   // The regular cab's door runs back to the side plate's seam; its glass ends at the plate's -0.29 / -0.265 behind a slim 4 cm post band; the C-post's foot meets the cab-back shoulder, as the hatchback's.
   pillars: { b: { z: [-0.31, -0.275], width: [0.04, 0.04] }, rearFoot: [0.718, 1.173] },

@@ -35,7 +35,9 @@ const MONSTER_LAMP_SHAPES = {
   },
   tail: {
     loops: [
-      { points: [[0.68, 0.62], [0.78, 0.62], [0.78, 0.98], [0.68, 0.98]] },
+      // The amber cell (y .71-.836) stands in its own window: the red lens runs under and over it, not beneath it (a cell over the lens z-fought it 1.5 mm apart).
+      { points: [[0.68, 0.62], [0.78, 0.62], [0.78, 0.71], [0.68, 0.71]] },
+      { points: [[0.68, 0.836], [0.78, 0.836], [0.78, 0.98], [0.68, 0.98]] },
       { side: true, points: [[-2.295, 0.62], [-2.255, 0.62], [-2.255, 0.98], [-2.295, 0.98]] },
     ],
     lens: "lit",
@@ -68,6 +70,9 @@ export const MONSTER: BodyStyle = {
   door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, hingeTop: 0.99, mirrorY: 0.315, mirrorZ: 0.27, mirrorReach: 0.16, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75], mirror: MONSTER_MIRROR },
   aPillarFoot: 0.6,
   aPillarTop: 0.41,
+  // The door glass's front edge knees onto the A-post's rear edge at the mirror head's top, so the post stays an even tube over a small black sail.
+  aPillarKnee: 1.15,
+  blackout: { sail: true },
   bPillar: { rear: -0.19, front: -0.12 },
   // The side plate's B-post stands upright between the door glasses, z -.214 to -.128.
   pillars: { b: { width: [0.086, 0.086], z: [-0.171, -0.171] } },
