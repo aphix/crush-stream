@@ -231,8 +231,9 @@ export interface Lamp {
 }
 
 /**
- * A drawn-only lamp, never broken, no light of its own: on the skin (`lamps.brake`, `lamps.sideMarkers`; seated and lifted as a lamp), or
- * the heads' share on the hood / the tails' on the boot lid (`hood` / `boot`: riding that lid, lit with its lamps, `anchor` null).
+ * A drawn-only lamp, no light of its own: on the skin (`lamps.brake`, `lamps.sideMarkers`; seated and lifted as a lamp, never broken), or
+ * a head's share on the hood / a tail's on the boot lid (`hood` / `boot`: riding that lid, `anchor` null), drawn broken once its lamp
+ * breaks or its lid tears off.
  */
 interface LampFitting {
   seat: THREE.Object3D;
@@ -240,6 +241,8 @@ interface LampFitting {
   anchor: SkinAnchor | null;
   /** Its variant in the lamp batch (`drawnLamp`); 0 for the shared brake and marker units. */
   variant: number;
+  /** A share's lamp on the body and its lid's part (set once the parts are registered); null on the brake and the markers. */
+  share: { lamp: Lamp; lid: DetachPart | null } | null;
 }
 
 export interface DetachPart {
@@ -617,11 +620,14 @@ export abstract class CarCore {
       }
     }
     for (const [kind, lid] of [["hood", this.hood], ["boot", this.trunk]] as const) {
-      const share = drawnLamp(this.style, kind, 0);
-      if (share.geometry.getAttribute("position").count === 0) continue;
-      const seat = this.lampSeat();
-      seat.parent = lid;
-      this.lampFittings.push({ seat, kind, anchor: null, variant: share.variant });
+      for (const side of [-1, 1]) {
+        const share = drawnLamp(this.style, kind, side);
+        if (share.geometry.getAttribute("position").count === 0) continue;
+        const seat = this.lampSeat();
+        seat.parent = lid;
+        const lamp = this.lamps.find((l) => l.kind === (kind === "hood" ? "head" : "tail") && l.side === side)!;
+        this.lampFittings.push({ seat, kind, anchor: null, variant: share.variant, share: { lamp, lid: null } });
+      }
     }
     this.addLampFittings();
     this.resetLamps();
@@ -645,7 +651,7 @@ export abstract class CarCore {
       if (!hit) throw new Error(`${this.style.id}: no skin for its ${kind} lamp from ${from.toArray().join()}`);
       const seat = this.lampSeat();
       seat.scale.set(size[0], size[1], 1);
-      this.lampFittings.push({ seat, kind, anchor: anchorOnSkin(this.body.geometry, hit.point, _lampQ.setFromAxisAngle(_up, yaw)), variant: 0 });
+      this.lampFittings.push({ seat, kind, anchor: anchorOnSkin(this.body.geometry, hit.point, _lampQ.setFromAxisAngle(_up, yaw)), variant: 0, share: null });
     };
     if (brake) {
       const glass = new THREE.Mesh(makeRearGlass(this.style), GLASS_PROBE);
@@ -758,8 +764,9 @@ export abstract class CarCore {
     };
     add(BUMPER_F, this.bumperF, "bumperFront", 1, 2, "two-point", 0.42).bare = bumperBare(this.style, this.body.geometry, true);
     add("bumperR", this.bumperR, "bumperRear", 16, 17, "two-point", 0.4).bare = bumperBare(this.style, this.body.geometry, false);
-    add(LID.hood, this.hood, "bonnet", 3, 3, "cowl", 0.5);
+    const hood = add(LID.hood, this.hood, "bonnet", 3, 3, "cowl", 0.5);
     this.lidPart = add(LID.trunk, this.trunk, "boot", 18, 18, "tail", 0.48, newSwing(lidSpec(this.style.boot)));
+    for (const f of this.lampFittings) if (f.share) f.share.lid = f.kind === "hood" ? hood : this.lidPart;
     const doors = doorSpec(this.style.door);
     const doorL = add("doorL", this.doorL, "doorLeft", 6, 6, "door", 0.4, newSwing(doors));
     const doorR = add("doorR", this.doorR, "doorRight", 7, 7, "door", 0.4, newSwing(doors));
@@ -860,7 +867,7 @@ export abstract class CarCore {
     return l.intact ? l.kind : null;
   }
 
-  /** Siren `k` (0 red, 1 blue) when lit on an attached bar: its lens centre on the skinned bar, axis up. */
+  /** Siren `k` (0 red, 1 blue) when lit on an attached bar: its lens centre on the skinned bar, axis out of the bar's side the lens sits on. */
   private sirenWorld(k: number, pos: THREE.Vector3, dir: THREE.Vector3): GlowKind | null {
     const bar = this.lightBar;
     if (!bar || this.lightBarPart!.detached || this.sirenLit !== k + 1) return null;
@@ -872,9 +879,11 @@ export abstract class CarCore {
       pos.y += a.getY(v);
       pos.z += a.getZ(v);
     }
+    pos.multiplyScalar(1 / count);
+    const side = Math.sign(pos.x);
     bar.updateWorldMatrix(true, false);
-    pos.multiplyScalar(1 / count).applyMatrix4(bar.matrixWorld);
-    dir.setFromMatrixColumn(bar.matrixWorld, 1).normalize();
+    pos.applyMatrix4(bar.matrixWorld);
+    dir.setFromMatrixColumn(bar.matrixWorld, 0).normalize().multiplyScalar(side);
     return k === 0 ? "red" : "blue";
   }
 

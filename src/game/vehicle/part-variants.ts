@@ -635,12 +635,12 @@ function styleLamp(style: BodyStyle, kind: LampKind, side: number): THREE.Buffer
   return geo.applyMatrix4(rest.invert());
 }
 
-/** The share of `style`'s `kind` lamps its lid carries (the tails' on the boot lid, the heads' on the hood), both sides, in that lid's space (the hood's origin, the boot's pivot). */
-function lidLamp(style: BodyStyle, kind: LampKind): THREE.BufferGeometry {
+/** The share of `style`'s `kind` lamp on `side` its lid carries (a tail's on the boot lid, a head's on the hood), in that lid's space (the hood's origin, the boot's pivot). */
+function lidLamp(style: BodyStyle, kind: LampKind, side: number): THREE.BufferGeometry {
   const [y, z] = kind === "head" ? style.hood.origin : bootPivot(style.boot);
-  const left = builtLamp(style, kind, -1).lid.clone();
-  mirrorX(left);
-  return mergeToned([builtLamp(style, kind).lid.clone(), left], "both sides").translate(0, -y, -z);
+  const share = builtLamp(style, kind, side).lid.clone();
+  if (side < 0) mirrorX(share);
+  return share.translate(0, -y, -z);
 }
 
 // ---- bumper seam covers ----------------------------------------------------------------------------------------------------
@@ -749,8 +749,8 @@ const SLOTS = {
   tailTrim: { base: () => partGeometry(PART_KIND.tailTrim), sides: [0], key: rearKey, build: rearFittings },
   head: { base: once(() => makeLampUnit("head")), sides: [-1, 1], key: (style, side) => lampKey(style, "head", side), build: (style, side) => styleLamp(style, "head", side) },
   tail: { base: once(() => makeLampUnit("tail")), sides: [-1, 1], key: (style, side) => lampKey(style, "tail", side), build: (style, side) => styleLamp(style, "tail", side) },
-  boot: { base: noLidLamp, sides: [0], key: (style) => lampKey(style, "tail", 0), build: (style) => lidLamp(style, "tail") },
-  hood: { base: noLidLamp, sides: [0], key: (style) => lampKey(style, "head", 0), build: (style) => lidLamp(style, "head") },
+  boot: { base: noLidLamp, sides: [-1, 1], key: (style, side) => lampKey(style, "tail", side), build: (style, side) => lidLamp(style, "tail", side) },
+  hood: { base: noLidLamp, sides: [-1, 1], key: (style, side) => lampKey(style, "head", side), build: (style, side) => lidLamp(style, "head", side) },
 } as const satisfies Record<string, Slot>;
 type SlotName = keyof typeof SLOTS;
 
