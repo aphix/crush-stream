@@ -663,6 +663,16 @@ describe("given a deck lid that wraps the tail (boot.drop)", () => {
   });
 });
 
+describe("given the trucks' bed gates", () => {
+  it("when a truck's bed gate opens, then it drops level from its bottom edge (drop gate, a quarter turn down), the pickup's and the monster's alike", () => {
+    for (const id of ["pickup", "monster"] as const) {
+      const s = lidSpec(CAR_STYLES[id].boot);
+      const read = `${s.dir} ${s.stop.toFixed(4)} ${s.kg} ${roofHinged(CAR_STYLES[id].boot)}`;
+      assert.ok(read === "-1 1.5708 22 false", `${id}: dir, stop, kg, roof-hinged ${read}`);
+    }
+  });
+});
+
 /** A police car through a square `kph` wall hit (shape mode), and its bar. */
 function copThroughWall(kph: number): { car: DeformableCar; detached: string[]; bar: THREE.Mesh } {
   const car = new DeformableCar(PAINT, new THREE.Scene(), null, "police");

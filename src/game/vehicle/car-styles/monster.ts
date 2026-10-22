@@ -115,7 +115,8 @@ export const MONSTER: BodyStyle = {
   // (as the cars' 1 m stands 9 cm over theirs), so its hood's cowl and its bed rim are columns, not roof slabs.
   proxyBelt: 1.12,
   rearDoorSeam: -0.15,
-  boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
+  // The bed gate drops from its bottom edge, as the pickup's does (unset, it hinged at its top and swung up like a hatch).
+  boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3], pivot: [0.45, -2.3] },
   // The reference side plate's markers are a deep amber rear (~0xb0581e) and a duller red-amber front (~0xa04a3a): factors on the shared amber 0xff9a1a.
   lamps: { head: [0.55, 0.69], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, bulb: "halogen", sideMarkers: [{ at: [0.788, -2.0], size: [0.085, 0.045], tint: 0xb095ff }, { at: [0.744, 0.814], size: [0.06, 0.032], tint: 0xa07fff }] },
   // The reference's grille fills the face between its head lamps (inner edges x .445), its top and foot on theirs.
