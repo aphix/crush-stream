@@ -70,7 +70,6 @@ const SHARED_PATCHES: readonly Patch[] = [
 
 const SEDAN_PATCHES: readonly Patch[] = [
   { view: "top", points: [[1.99, 0], [1.984, 0.014], [1.97, 0.02], [1.956, 0.014], [1.95, 0]], ...BADGE },
-  { view: "front", points: [[0, 0.3], [0.3, 0.298], [0.46, 0.296], [0.47, 0.27], [0.4, 0.216], [0.2, 0.213], [0, 0.212]], depth: -0.005, rim: 0.006, cavity: 0.7 },
   { view: "side", points: [[1.79, 0.5], [1.745, 0.5], [1.73, 0.31], [1.775, 0.31]], ...VENT },
   { view: "rear", points: [[0, 0.88], [0.035, 0.88], [0.035, 0.93], [0, 0.93]], ...BADGE },
 ];

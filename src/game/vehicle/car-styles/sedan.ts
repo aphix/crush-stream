@@ -90,11 +90,13 @@ const SEDAN_LAMP_SHAPES = {
       { line: { points: [[0, 0.809], [0.4, 0.809]] }, width: 0.006, tone: "chrome" },
     ],
   },
-  // The fog pods in the bumper's corners, and the wide dark lower intake between them (front iso), its ends off the centre line's seam.
+  // The fog pods in the bumper's corners, and the wide dark lower intake between them (front iso), its ends off the centre line's seam:
+  // near as tall as the reference's (5 cm, against the grille's 26), 2.5 cm of body colour under the grille, down to the chin's tuck
+  // (under 0.225 the fascia faces the road: no skin for a lamp).
   front: {
     loops: [
       { points: [[0.5, 0.26], [0.7, 0.26], [0.7, 0.35], [0.5, 0.35]] },
-      { points: [[0.006, 0.298], [0.3, 0.296], [0.45, 0.292], [0.46, 0.272], [0.42, 0.262], [0.006, 0.262]] },
+      { points: [[0.006, 0.275], [0.3, 0.273], [0.45, 0.27], [0.47, 0.255], [0.4, 0.232], [0.2, 0.228], [0.006, 0.226]] },
     ],
     lens: "dark",
     bezel: "black",
@@ -258,8 +260,10 @@ export const SEDAN: BodyStyle = {
    */
   boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45 }, lip: { rise: DECK_RISE, depth: 0.06 } },
   lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES },
-  // The reference's chrome shield: 0.74 across at the top, tapering to 0.66 at its rounded bottom corners (S08: (0.30, 0.308), (0.34, 0.33)).
-  grille: { y: 0.43, size: [0.74, 0.26], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "chrome" },
+  // The reference's shield: 0.74 across at the top, tapering to 0.66 at its rounded bottom corners (S08: (0.30, 0.308), (0.34, 0.33)).
+  // Black: its slats and backing read dark under a thin chrome rim; all-chrome read as a light block (owner's front slice). Its face at
+  // 2.068, so the backing (1.2 cm behind it) clears the fascia's 2.054 nose: at the platform's face (2.055) the body showed between the slats.
+  grille: { y: 0.43, z: 2.068, size: [0.74, 0.26], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "black" },
   /**
    * The reference's twin wide oval tips in the diffuser (gridded rear iso and side: |x| 0.47-0.64, y 0.27-0.33, ~3 cm proud). Ours sit
    * inboard at |x| 0.36: the body's tail floor only reaches |x| 0.48 (0.8 hw) and the bumper face sweeps back from 0.33, so wider tips
