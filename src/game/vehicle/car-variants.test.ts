@@ -13,7 +13,7 @@ import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from 
 import { drawnLamp, drawnPart, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
+import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
@@ -1928,6 +1928,19 @@ describe("given a body style's P1 parts", () => {
     assert.ok(inlay!.box.min.y >= bottom! - POSITION_TOL && inlay!.box.max.y <= top! + 0.02 + POSITION_TOL, `black y ${inlay!.box.min.y.toFixed(3)}..${inlay!.box.max.y.toFixed(3)}, the band ${bottom!.toFixed(3)}..${top!.toFixed(3)}`);
     assert.ok(inlay!.box.max.x - inlay!.box.min.x > 2 * wrap.from, `the band spans ${(inlay!.box.max.x - inlay!.box.min.x).toFixed(3)} m across`);
     assert.ok(cageHash(sedan) === cageHash(plain), "the cage builds are unchanged");
+  });
+
+  it("when the pickup's front bumper sets a band (its valance), then the fascia rows in it carry a black inlay across the face between its heights, and a front bumper without one is drawn as it was", () => {
+    const pickup = CAR_STYLES.pickup;
+    const { seat, band, wrap } = pickup.bumpers.front;
+    const plain: BodyStyle = { ...pickup, bumpers: { ...pickup.bumpers, front: { ...pickup.bumpers.front, band: undefined } } };
+    const bare = makeBumperGeometry(true, plain);
+    assert.ok(withFrontBand(bare, plain) === bare, "a front bumper without a band is its plain geometry");
+    const inlay = toneBox(withFrontBand(makeBumperGeometry(true, pickup), pickup), FITTING_ATTRIBUTE, FITTING_TONE.black);
+    assert.ok(inlay.count > 0, "the band draws black vertices");
+    const [bottom, top] = band!.map((y) => y - seat.y);
+    assert.ok(inlay.box.min.y >= bottom! - 0.02 - POSITION_TOL && inlay.box.max.y <= top! + 0.02 + POSITION_TOL, `black y ${inlay.box.min.y.toFixed(3)}..${inlay.box.max.y.toFixed(3)}, the band ${bottom!.toFixed(3)}..${top!.toFixed(3)}`);
+    assert.ok(inlay.box.max.x - inlay.box.min.x > 2 * wrap.from, `the band spans ${(inlay.box.max.x - inlay.box.min.x).toFixed(3)} m across`);
   });
 });
 

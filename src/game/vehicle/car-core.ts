@@ -7,7 +7,7 @@ import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
-import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
+import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
@@ -591,7 +591,7 @@ export abstract class CarCore {
     const spec = front ? this.style.bumpers.front : this.style.bumpers.rear;
     const fascia = makeBumperGeometry(front, this.style);
     // A push bar is drawn only: merged into the front bumper, it follows the bumper's masses and tears off with it (its flying box is the bumper's as drawn).
-    const drawn = front ? (this.style.pushBar ? withPushBar(fascia) : fascia) : withRearFittings(fascia, this.style);
+    const drawn = front ? withFrontBand(this.style.pushBar ? withPushBar(fascia) : fascia, this.style) : withRearFittings(fascia, this.style);
     const mesh = new THREE.Mesh(withSeamCover(drawn, this.style, front), bumperMaterial(spec.trim, accent, body));
     this.bumperMeshes.push(mesh);
     mesh.castShadow = true;
