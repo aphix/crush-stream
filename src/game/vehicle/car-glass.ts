@@ -1,7 +1,8 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { PART_FAMILY, hypot2 } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
-import { CAR_STYLES, type BodyStyle, type GlassQuad } from "./car-variants.ts";
+import { CAR_STYLES, type BodyStyle, type GlassQuad, type YZ } from "./car-variants.ts";
 import { ROCKER, glassTopY, glassX, lerp, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
 import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, rockerAt } from "./car-lines.ts";
 import { DOOR_PROUD } from "./car-door-mesh.ts";
@@ -72,8 +73,58 @@ export function makeWindshield(style: BodyStyle = SEDAN): THREE.BufferGeometry {
   return makeGlassQuad(windshieldQuad(style), WINDSHIELD_DRAW);
 }
 
+/** Glass quad `q` drawn in by its `frame` ([side, bottom, top], m: sides across, bottom and top along its slope). */
+function framedQuad(q: GlassQuad, [side, bottom, top]: readonly [number, number, number]): GlassQuad {
+  const len = Math.hypot(q.top[0] - q.base[0], q.top[1] - q.base[1]);
+  const at = (t: number): YZ => [lerp(q.base[0], q.top[0], t), lerp(q.base[1], q.top[1], t)];
+  const [t0, t1] = [bottom / len, 1 - top / len];
+  return { base: at(t0), top: at(t1), wBase: lerp(q.wBase, q.wTop, t0) - 2 * side, wTop: lerp(q.wBase, q.wTop, t1) - 2 * side };
+}
+
+/** A black frit band: rows of points (each row the same length) as a strip grid wound like `makeGlassQuad`'s, every vertex coloured black. */
+function fritBand(rows: readonly THREE.Vector3[][]): THREE.BufferGeometry {
+  const n = rows[0]!.length;
+  const geo = new THREE.BufferGeometry().setFromPoints(rows.flat());
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(rows.flatMap((row, j) => row.flatMap((_, i) => [i / (n - 1), j / (rows.length - 1)])), 2));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(rows.length * n * 3), 3));
+  const indices: number[] = [];
+  for (let j = 0; j < rows.length - 1; j++) {
+    for (let i = 0; i < n - 1; i++) {
+      const a = j * n + i;
+      indices.push(a, a + 1, a + n, a + 1, a + n + 1, a + n);
+    }
+  }
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** Chords along a frit's top and bottom edges: the 1.5 cm bow sags 1 mm off a quarter-width chord, under the band's own width. */
+const FRIT_CHORDS = 4;
+
+/** A framed rear glass: its pane drawn in by the `frame`, the band out to the outline its black frit, both bowed alike (vertex colour: the pane's material tints it). */
+function framedGlass(q: GlassQuad, frame: readonly [number, number, number], draw: QuadDraw): THREE.BufferGeometry {
+  const { bow } = draw;
+  const inner = framedQuad(q, frame);
+  const pane = makeGlassQuad(inner, draw);
+  pane.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(pane.getAttribute("position").count * 3).fill(1), 3));
+  const along = (g: GlassQuad, t: number) => Array.from({ length: FRIT_CHORDS + 1 }, (_, i) => quadPoint(g, (i / FRIT_CHORDS) * 2 - 1, t, bow).clone());
+  // The sides take no bow (it is zero at the pane's edges): one chord each.
+  const side = (xn: number) => [0, 1].map((t) => [quadPoint(q, xn, t, bow).clone(), quadPoint(inner, xn, t, bow).clone()]);
+  const bands = [
+    fritBand([along(q, 0), along(inner, 0)]),
+    fritBand([along(inner, 1), along(q, 1)]),
+    fritBand(side(1).map(([outer, clear]) => [clear!, outer!])),
+    fritBand(side(-1)),
+  ];
+  const geo = mergeGeometries([pane, ...bands], false);
+  if (!geo) throw new Error("Failed to merge the framed rear glass");
+  return geo;
+}
+
 export function makeRearGlass(style: BodyStyle = SEDAN): THREE.BufferGeometry {
-  return makeGlassQuad(style.rearGlass, REAR_GLASS_DRAW);
+  const { frame } = style.rearGlass;
+  return frame ? framedGlass(style.rearGlass, frame, REAR_GLASS_DRAW) : makeGlassQuad(style.rearGlass, REAR_GLASS_DRAW);
 }
 
 /** A side pane's edge z at the belt (`bot`) and at the top, rear → front; a kneed front edge (`front`, z at a height share) gets a row at its knee (`kneeT`). */

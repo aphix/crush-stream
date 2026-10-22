@@ -1602,6 +1602,65 @@ describe("given a body style's P2 parts", () => {
     assert.ok(badge.length > 0, "a chrome badge at the centre of a black grille");
   });
 
+  it("when a grille leans, then its face's top and bottom edges stand where the lean turns them about its centre line on its face", () => {
+    const sedan = CAR_STYLES.sedan;
+    const seat = sedan.bumpers.front.seat;
+    const grille = { y: 0.48, z: seat.z + 0.07, size: [0.6, 0.16], kind: "hex", finish: "black", lean: 0.4 } as const;
+    const pos = drawnPart(PART_KIND.grille, { ...sedan, grille, lamps: { ...sedan.lamps, shapes: undefined } }).geometry.getAttribute("position");
+    const [cy, face, half] = [grille.y - seat.y - GRILLE_SEAT.y, grille.z - seat.z - GRILLE_SEAT.z, grille.size[1] / 2];
+    const [dy, dz] = [half * Math.cos(grille.lean), half * Math.sin(grille.lean)];
+    const has = (y: number, z: number): boolean => Array.from({ length: pos.count }, (_, i) => i).some((i) => Math.abs(Math.abs(pos.getX(i)) - 0.3) < 1e-4 && Math.abs(pos.getY(i) - y) < 1e-4 && Math.abs(pos.getZ(i) - z) < 1e-4);
+    assert.ok(has(cy + dy, face - dz), `the face's top corners lean back to ${(cy + dy).toFixed(4)}, ${(face - dz).toFixed(4)}`);
+    assert.ok(has(cy - dy, face + dz), `the face's bottom corners stand out to ${(cy - dy).toFixed(4)}, ${(face + dz).toFixed(4)}`);
+  });
+
+  it("when a grille's surround takes its own finish, then the ring out to the grille's edge turns chrome and its mesh stays black", () => {
+    const sedan = CAR_STYLES.sedan;
+    const grille = { y: 0.48, z: sedan.bumpers.front.seat.z + 0.07, size: [0.6, 0.16], kind: "hex", finish: "black" } as const;
+    const chrome = new THREE.Color(TRIM_CHROME);
+    const black = new THREE.Color(TRIM_BLACK);
+    const tones = (spec: NonNullable<BodyStyle["grille"]>) => {
+      const geo = drawnPart(PART_KIND.grille, { ...sedan, grille: spec, lamps: { ...sedan.lamps, shapes: undefined } }).geometry;
+      const [pos, col] = [geo.getAttribute("position"), geo.getAttribute("color")];
+      const is = (i: number, c: THREE.Color) => Math.abs(col.getX(i) - c.r) < 1e-6 && Math.abs(col.getY(i) - c.g) < 1e-6 && Math.abs(col.getZ(i) - c.b) < 1e-6;
+      let [chromeN, blackN, reach] = [0, 0, 0];
+      for (let i = 0; i < pos.count; i++) {
+        if (is(i, chrome)) [chromeN, reach] = [chromeN + 1, Math.max(reach, Math.abs(pos.getX(i)))];
+        else if (is(i, black)) blackN++;
+      }
+      return { chromeN, blackN, reach };
+    };
+    const plain = tones(grille);
+    const rimmed = tones({ ...grille, rim: "chrome" });
+    assert.ok(plain.chromeN === 0 && rimmed.chromeN > 0, `chrome vertices: ${plain.chromeN} plain, ${rimmed.chromeN} rimmed`);
+    assert.ok(Math.abs(rimmed.reach - grille.size[0] / 2) < 1e-4, `the chrome reaches ${rimmed.reach.toFixed(4)} across, the grille's edge ${grille.size[0] / 2}`);
+    assert.ok(rimmed.blackN === plain.blackN - rimmed.chromeN && rimmed.blackN > 0, `only the surround turned: black ${plain.blackN} -> ${rimmed.blackN}`);
+  });
+
+  it("when a hex grille gives a count, then it draws that many lines each way, one 12-triangle bar each", () => {
+    const sedan = CAR_STYLES.sedan;
+    const grille = { y: 0.48, z: sedan.bumpers.front.seat.z + 0.07, size: [0.6, 0.16], kind: "hex", finish: "black" } as const;
+    const tris = (count: number) => drawnPart(PART_KIND.grille, { ...sedan, grille: { ...grille, count }, lamps: { ...sedan.lamps, shapes: undefined } }).geometry.getIndex()!.count / 3;
+    assert.ok(tris(16) - tris(8) === 2 * 8 * 12, `16 lines each way draw ${tris(16) - tris(8)} triangles more than 8`);
+  });
+
+  it("when a rear glass has a frame, then its clear pane is drawn that far inside the outline, the band out to the outline is its black frit, and the car's pane wears its vertex colours", () => {
+    const hatch = CAR_STYLES.hatchback;
+    const q = hatch.rearGlass;
+    const [side, bottom] = q.frame!;
+    const geo = makeRearGlass(hatch);
+    const [pos, colour] = [geo.getAttribute("position"), geo.getAttribute("color")];
+    const ids = Array.from({ length: pos.count }, (_, i) => i);
+    const [clear, frit] = [ids.filter((i) => colour.getX(i) === 1), ids.filter((i) => colour.getX(i) === 0)];
+    const reach = (of: number[]): number[] => [Math.max(...of.map((i) => Math.abs(pos.getX(i)))), Math.min(...of.map((i) => pos.getY(i)))];
+    const len = Math.hypot(q.top[0] - q.base[0], q.top[1] - q.base[1]);
+    const paneFoot = [lerp(q.wBase, q.wTop, bottom / len) / 2 - side, q.base[0] + (bottom * (q.top[0] - q.base[0])) / len];
+    assertSameNumbers([...reach(clear), ...reach(frit)], [...paneFoot, q.wBase / 2, q.base[0]], "the clear pane's and the frit's half-width and foot", 1e-5);
+    const pane = cars.hatchback["glassPanes"].find((p) => p.name === "rear")!;
+    assert.ok((pane.mesh.material as THREE.MeshStandardMaterial).vertexColors, "the car's rear pane draws its frit");
+    assert.ok(!makeRearGlass({ ...hatch, rearGlass: { ...q, frame: undefined } }).hasAttribute("color"), "no frit without a frame");
+  });
+
   it("when a style puts lamps on its bumpers, then the grille seat draws the front ones on the fascia and the tail trim the rear ones, with no shared dark strip across the tail", () => {
     const sedan = CAR_STYLES.sedan;
     const meet = (front: boolean, x: number, y: number): number => {
