@@ -48,8 +48,13 @@ export interface GlassQuad {
   bow?: GlassBow;
   /** Drawn only (the rear glass): the clear pane drawn in by [side, bottom, top] (m; sides across, bottom and top along its slope), the band out to the outline the glass's black frit. */
   frame?: readonly [number, number, number];
-  /** Drawn only (an unframed rear glass): the clear pane's corners rounded to this radius (m), the glass's black frit filling out to the square outline. */
+  /**
+   * Drawn only (an unframed rear glass): the clear pane's corners rounded to this radius (m), the chrome bead round them with it; the glass's
+   * black frit fills out to the square outline, unless `roundOutline` rounds the glass's own outline too: the frit corners stand 1 cm in
+   * behind it, a dark backing seen only through the gaps round the arcs, and the body shows up to the bead.
+   */
   round?: number;
+  roundOutline?: boolean;
 }
 
 /** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
@@ -292,6 +297,8 @@ export interface BodyStyle {
    * edge that end tucks in at the end itself, fading out over its run, so a boxy cab's roof corners sit flush over its posts.
    */
   roofEnds?: { rear?: number; front?: number; flush?: { rear?: number; front?: number } };
+  /** Drawn only: how far (m) the roof's side rolls out past the cant line (the side glass's plane) at its bottom; absent 0.01 (a drip lip the pillars' faces meet flush); 0 rolls the roof flush into the glass, no drip rail. */
+  roofDrip?: number;
   /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
   windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, WINDSHIELD_BOW } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, ROOF_DRIP, roofDrip, WINDSHIELD_BOW } from "./car-lines.ts";
 import { domeFall, quarterSillZs } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
@@ -25,8 +25,6 @@ import {
   type V3,
 } from "./car-mesh.ts";
 
-/** The drawn roof's side runs this far (m) past the cant line: the side glass sits under it and the pillars, as proud of the glass, meet it flush. */
-const ROOF_DRIP = 0.01;
 /** The drawn roof's side rolls up from the cant line into its dome's edge through a quarter ellipse at these angles (rad, 0 at the cant line). */
 const ROOF_ROLL = [0, Math.PI / 6, Math.PI / 3, Math.PI / 2] as const;
 /** The drawn roof's side meets its flat underside near 90°: split there, so the side keeps its own normals instead of shading half down (a grey band). */
@@ -40,9 +38,9 @@ const ROOF_SEGS = { cage: 16, drawn: 12 } as const;
 /** A rolled end's run (`roofEnds`) gets drawn stations at these shares of it from the end: its quarter ellipse turns near the end; two keep a coupe rolled at both ends within its body's vertex budget. */
 const ROOF_ROLL_STATIONS = [0.05, 0.25] as const;
 
-/** The drawn roof's side (+x), cant line up to the dome's edge at (`x`, `y`): a quarter ellipse `reach` × (`ROOF_LIP_OUT + ROOF_DRIP`) out and `lip` down. */
-function roofRoll(x: number, y: number, lip: number, angles: readonly number[] = ROOF_ROLL, reach = 1): Pt[] {
-  return angles.map((a) => ({ x: x + reach * (ROOF_LIP_OUT + ROOF_DRIP) * detCos(a), y: y - lip * (1 - detSin(a)) }));
+/** The drawn roof's side (+x), cant line up to the dome's edge at (`x`, `y`): a quarter ellipse `reach` × (`ROOF_LIP_OUT + drip`) out and `lip` down. */
+function roofRoll(x: number, y: number, lip: number, drip: number, angles: readonly number[] = ROOF_ROLL, reach = 1): Pt[] {
+  return angles.map((a) => ({ x: x + reach * (ROOF_LIP_OUT + drip) * detCos(a), y: y - lip * (1 - detSin(a)) }));
 }
 
 /** `skin` (an open section, left side over the crown to the right side, its left cant at `cant`) and its `HEADLINER_POINTS` `inset` inside it. */
@@ -118,6 +116,7 @@ function stripCap(index: THREE.BufferAttribute["array"], first: number, base: nu
 export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry {
   const [z0, z1] = style.roofZ;
   const lip = cantDrop(style);
+  const drip = roofDrip(style);
   const segs = ROOF_SEGS[source];
   const rings: Pt[][] = [];
   const zs = Array.from({ length: segs + 1 }, (_, s) => lerp(z0, z1, s / segs));
@@ -137,7 +136,7 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
             { x: x + ROOF_LIP_OUT, y: y - lip },
             { x: x + ROOF_LIP_KNEE[0], y: y - ROOF_LIP_KNEE[1] },
           ]
-        : roofRoll(x, y, lip, ROOF_ROLL, reach).slice(0, -1);
+        : roofRoll(x, y, lip, drip, ROOF_ROLL, reach).slice(0, -1);
     const shoulder = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
     const skin = [
       ...side.map((p) => ({ x: -p.x, y: p.y })),
@@ -408,16 +407,16 @@ function postRearmost({ rear, front, inward = [1, 0] }: Rail, thick: number): V3
   return rearmost;
 }
 
-/** The cage roof's side lip: from the cant line `ROOF_LIP_OUT` (m) past the roof's half-width up to its knee, `ROOF_LIP_KNEE` [past the half-width, under the roof] (m), then in to the dome's edge. */
+/** The cant line's reach (m) past the roof's half-width: the cage roof's side lip runs from it up to its knee, `ROOF_LIP_KNEE` [past the half-width, under the roof] (m), then in to the dome's edge; the drawn roof's roll runs out this far plus `roofDrip`. */
 const ROOF_LIP_OUT = 0.08;
 const ROOF_LIP_KNEE = [0.07, 0.03] as const;
 /** A pillar's top stops this far (m) inside the roof's surface, so the two never fight over a pixel. */
 const ROOF_TUCK = 0.002;
 
 /** The drawn roof section's half-width (m) at height `y` over a station at (`roofX`, `roofY`): along its rolled side (`reach` of its lip), the dome's edge over it, none under the cant line. */
-function roofOutlineX(y: number, roofY: number, roofX: number, lip: number, reach: number): number {
+function roofOutlineX(y: number, roofY: number, roofX: number, lip: number, drip: number, reach: number): number {
   if (y <= roofY - lip) return Infinity;
-  const roll = roofRoll(roofX, roofY, lip, ROOF_ROLL, reach);
+  const roll = roofRoll(roofX, roofY, lip, drip, ROOF_ROLL, reach);
   for (let k = 1; k < roll.length; k++) {
     const [a, b] = [roll[k - 1]!, roll[k]!];
     if (y <= b.y) return lerp(a.x, b.x, (y - a.y) / (b.y - a.y));
@@ -430,7 +429,7 @@ function underRoofSide(x: number, y: number, z: number, style: BodyStyle): numbe
   if (z < style.roofZ[0] || z > style.roofZ[1]) return x;
   const roof = roofAt(z, style);
   const { drop, reach } = roofDome(z, style);
-  return Math.min(x, roofOutlineX(y, roof.y - drop, roof.x, cantDrop(style), reach) - ROOF_TUCK);
+  return Math.min(x, roofOutlineX(y, roof.y - drop, roof.x, cantDrop(style), roofDrip(style), reach) - ROOF_TUCK);
 }
 
 /** The side glass's plane at (`y`, `z`), its lean from the belt to the cant line carried on past both, `proud` (m) out off it. */
@@ -620,7 +619,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     const k = Number.isFinite(level) && level > 0 ? level : reach;
     // At the roof's end the head arrives level, as the roof's roll does, its control point on the roll's outer corner.
     const c = atRoofEnd
-      ? ([roof.x + ROOF_LIP_OUT + ROOF_DRIP, roof.y] as const)
+      ? ([roof.x + ROOF_LIP_OUT + roofDrip(style), roof.y] as const)
       : touch
         ? ([(p0[0] + head[0]!) / 2, (p0[1] + head[1]!) / 2] as const)
         : ([p0[0] + dx * k, p0[1] + dy * k] as const);
@@ -639,7 +638,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     return [
       // A flush head's control point lies near it, so the section turns hardest there: its outer points crowd toward both ends (the foot keeps its tangent).
       ...(atRoofEnd
-        ? [at(0, 0), ...roofRoll(roof.x, roof.y, cantDrop(style), SAIL_ROOF_ROLL).map((p) => ({ x: sign * p.x, y: p.y }))]
+        ? [at(0, 0), ...roofRoll(roof.x, roof.y, cantDrop(style), roofDrip(style), SAIL_ROOF_ROLL).map((p) => ({ x: sign * p.x, y: p.y }))]
         : Array.from({ length: SAIL_OUTER }, (_, k) => at(onGlass ? (1 - detCos((Math.PI * k) / (SAIL_OUTER - 1))) / 2 : k / (SAIL_OUTER - 1), 0))),
       ...edge(1),
       // The section thins from the foot's edge to the head's, so each rounded edge closes onto the inner face.
@@ -647,12 +646,14 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
       ...edge(0).reverse(),
     ];
   };
-  // A flat sail takes on the roof end's roll over the run behind it: each outer point moves toward that section's own place off its chord,
-  // mapped onto the ring's chord, so no line stands where the flat haunch meets the roll.
+  // A flat sail takes on the roof end's roll over the run behind it, and lets it go over the run ahead of it to its front ring (the post's
+  // top): each outer point moves toward that section's own place off its chord, mapped onto the ring's chord, so no line stands where
+  // the flat haunch meets the roll, nor where the roll meets the post.
   const rollEnd = style.cPillar?.flat === true && roofEndZ < style.roofZ[0] ? section(roofEndZ) : null;
+  const front = zs[zs.length - 1]!;
   const rings = zs.map((z): Pt[] => {
     const ring = section(z);
-    const w = rollEnd && z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - SAIL_ROLL_BLEND, roofEndZ) : 0;
+    const w = !rollEnd || z === roofEndZ ? 0 : z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - SAIL_ROLL_BLEND, roofEndZ) : 1 - THREE.MathUtils.smoothstep(z, roofEndZ, front);
     if (w === 0) return ring;
     const [a, b] = [rollEnd![0]!, rollEnd![SAIL_OUTER - 1]!];
     const endRun = hypot2(b.x - a.x, b.y - a.y);

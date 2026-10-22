@@ -186,6 +186,58 @@ describe("given a field of one car of every style", () => {
   });
 });
 
+describe("given cars whose crash moves the engine bay, the crash bars and the cabin shell", () => {
+  /** The kinds posed every frame (`PoseBlend`, `posePart`, `CarUnderbody.follow`): their seats keep three's own matrix update. */
+  const LIVE: readonly number[] = [PART_KIND.mirrorL, PART_KIND.mirrorR, PART_KIND.axle];
+  const own = new THREE.Matrix4();
+  const expected = new THREE.Matrix4();
+
+  /** Each seat's flag, and for a static seat in the scene graph its world matrix against `parent × compose(position, quaternion, scale)`. */
+  const assertSeats = (car: DeformableCar, what: string): void => {
+    car.group.updateMatrixWorld(true);
+    for (const seat of car.partSeats) {
+      const live = LIVE.includes(seat.kind);
+      assert.equal(seat.matrixAutoUpdate, live, `${what}: kind ${seat.kind} matrixAutoUpdate`);
+      if (live || seat.parent === null) continue;
+      own.compose(seat.position, seat.quaternion, seat.scale);
+      expected.multiplyMatrices(seat.parent.matrixWorld, own);
+      let gap = 0;
+      for (let k = 0; k < 16; k++) gap = Math.max(gap, Math.abs(seat.matrixWorld.elements[k]! - expected.elements[k]!));
+      assert.ok(gap < 1e-6, `${what}: kind ${seat.kind} world matrix is ${gap.toExponential(1)} off its parent's times its own pose`);
+    }
+  };
+
+  /** The furthest any `kinds` seat of `car` stands (position, scale) from where `rest`'s does. */
+  const moved = (car: DeformableCar, rest: DeformableCar, kinds: readonly number[]): number => {
+    let far = 0;
+    for (let i = 0; i < car.partSeats.length; i++) {
+      const seat = car.partSeats[i]!;
+      if (!kinds.includes(seat.kind)) continue;
+      far = Math.max(far, seat.position.distanceTo(rest.partSeats[i]!.position), seat.scale.distanceTo(rest.partSeats[i]!.scale));
+    }
+    return far;
+  };
+
+  test("when a car is crashed and refitted, then every static part seat keeps matrixAutoUpdate off and its world matrix is its parent's times its own pose", () => {
+    const scene = new THREE.Scene();
+    for (const id of CAR_STYLE_IDS) {
+      const car = new DeformableCar(paint(), scene, null, id);
+      car.spawn(0, 0, 0);
+      assertSeats(car, `${id} built`);
+    }
+    const rest = carInState("untouched", "sedan", STYLE_CLASS.sedan);
+    for (const [state, kinds] of [["loaded", [PART_KIND.interior]], ["headon", [PART_KIND.engineBay, PART_KIND.crashBar]]] as const) {
+      const car = carInState(state, "sedan", STYLE_CLASS.sedan);
+      car.flushDeferredSkin();
+      car.updateSkin();
+      assert.ok(moved(car, rest, kinds) > 1e-3, `${state}: the control: the crash moved its seats of kinds ${kinds.join()}`);
+      assertSeats(car, `${state} crashed`);
+      car.resetVisual();
+      assertSeats(car, `${state} refitted`);
+    }
+  });
+});
+
 describe("given a monster truck of its class at rest on flat ground", () => {
   const scene = new THREE.Scene();
   const build = (style: "monster" | "pickup"): DeformableCar => {

@@ -6,7 +6,7 @@ import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
-import { ROCKER, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
+import { ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, rockerAt, tubWall } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
@@ -14,7 +14,7 @@ import { drawnLamp, drawnPart, lampRest, lampSeatAt, withSeamCover } from "./par
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
-import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
 import { BOX_HALVES, boxShape, newLooseShape, partMass, stepLoose } from "./loose-step.ts";
@@ -421,8 +421,36 @@ describe("given the pickup whose roof's rear corners sit flush over its posts (r
 describe("given a coupe whose rear glass has round corners (rearGlass.round)", () => {
   const ROUND = 0.09;
   const coupe = CAR_STYLES.coupe;
-  const square: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: undefined } };
-  const rounded: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: ROUND } };
+  const square: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: undefined, roundOutline: undefined } };
+  const rounded: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: ROUND, roundOutline: undefined } };
+  const outlined: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: ROUND, roundOutline: true } };
+
+  it("when its rear glass is built with a round outline (roundOutline: the coupe's), then its glass keeps the corner's arc in from each square corner, as the bead does, and its frit corners stand 1 cm in behind the plain build's as a backing", () => {
+    /** The backing's inset (m) behind the pane. */
+    const INSET = 0.01;
+    const geo = makeRearGlass(outlined);
+    const plain = makeRearGlass(rounded);
+    const [pos, flat] = [geo.getAttribute("position"), plain.getAttribute("position")];
+    const tone = geo.getAttribute(GLASS_ATTRIBUTE);
+    assert.ok(pos.count === flat.count, `${pos.count} vertices against the plain build's ${flat.count}`);
+    let frit = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const off = new THREE.Vector3().fromBufferAttribute(pos, i).distanceTo(new THREE.Vector3().fromBufferAttribute(flat, i));
+      if (tone.getX(i) === 0) assert.ok(off < 1e-6, `clear vertex ${i} moved ${off} m`);
+      else {
+        frit++;
+        assert.ok(Math.abs(off - INSET) < 1e-4, `frit vertex ${i} stands ${(off * 1000).toFixed(1)} mm off the plain build's`);
+      }
+    }
+    assert.ok(frit > 0, "no frit backing");
+    const squarePos = makeRearGlass(square).getAttribute("position");
+    for (const k of [0, 8, 54, 62]) {
+      const corner = new THREE.Vector3().fromBufferAttribute(squarePos, k);
+      let near = Infinity;
+      for (let i = 0; i < pos.count; i++) if (tone.getX(i) === 0) near = Math.min(near, corner.distanceTo(new THREE.Vector3().fromBufferAttribute(pos, i)));
+      assert.ok(near > 0.9 * ROUND * (Math.SQRT2 - 1), `corner ${k}: the glass reaches ${near.toFixed(4)} m off it`);
+    }
+  });
 
   it("when its rear glass is built, then the clear pane keeps a corner's arc in from each square corner (the arc's middle lies r(√2 − 1) off it), black frit fills out to the corner, and the outline and the pane's centre stay the square pane's", () => {
     const geo = makeRearGlass(rounded);
@@ -445,6 +473,26 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
     const [box, squareBox] = [partBox(geo), partBox(makeRearGlass(square))];
     assert.ok(box.min.distanceTo(squareBox.min) < 1e-6 && box.max.distanceTo(squareBox.max) < 1e-6, "the outline is the square pane's");
     assert.ok(`${geo.userData.centre}` === `${makeRearGlass(square).userData.centre}`, `centre ${geo.userData.centre}`);
+  });
+
+  it("when its chrome bead is built (windowTrim), then the bead keeps the corner's arc in from each square corner too, not a sharp mitre on it", () => {
+    /** The bead's nearest point to a square corner: at least half the arc's middle's r(√2 − 1) off it (a sharp mitre sits on it, the section's outward offset away). */
+    const BEAD_ARC = 0.5 * ROUND * (Math.SQRT2 - 1);
+    const near = (style: BodyStyle): number[] => {
+      const pos = makeBodyGlassFrames(style, true).getAttribute("position");
+      const rg = style.rearGlass;
+      return [-1, 1].flatMap((sx) =>
+        [rg.base, rg.top].map(([y, z], k) => {
+          const corner = new THREE.Vector3((sx * (k === 0 ? rg.wBase : rg.wTop)) / 2, y, z);
+          let d = Infinity;
+          for (let i = 0; i < pos.count; i++) d = Math.min(d, corner.distanceTo(new THREE.Vector3().fromBufferAttribute(pos, i)));
+          return d;
+        }),
+      );
+    };
+    const [round, sharp] = [near(rounded), near(square)];
+    assert.ok(Math.min(...sharp) < BEAD_ARC, `the control: the square pane's bead stands ${sharp.map((d) => d.toFixed(4)).join(", ")} m off its corners`);
+    assert.ok(Math.min(...round) >= BEAD_ARC, `the bead stands ${round.map((d) => d.toFixed(4)).join(", ")} m off the square corners, want ${BEAD_ARC.toFixed(4)} or more`);
   });
 });
 
@@ -842,6 +890,18 @@ describe("given a body style's H2 hardpoints", () => {
           }
         }
       }
+    }
+  });
+
+  it("when a style without a drip (roofDrip 0: the coupe's) is read, then its drawn roof's side stands nowhere out past the cant line (the side glass's plane): it rolls into the glass, no rail", () => {
+    const ids = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].roofDrip === 0);
+    assert.ok(ids.length > 0, "no style sets roofDrip 0");
+    for (const id of ids) {
+      const style = CAR_STYLES[id];
+      const pos = makeRoofGeometry(style).getAttribute("position") as THREE.BufferAttribute;
+      let out = -Infinity;
+      for (let i = 0; i < pos.count; i++) out = Math.max(out, Math.abs(pos.getX(i)) - cantX(pos.getZ(i), style));
+      assert.ok(out <= 1e-6, `${id}: the roof's side stands ${(out * 1000).toFixed(1)} mm out past the cant line`);
     }
   });
 

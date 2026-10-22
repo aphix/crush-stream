@@ -165,12 +165,8 @@ function paneGeometry(points: readonly (readonly [number, number])[], at: (s: nu
   return geo;
 }
 
-/**
- * An unframed pane whose clear glass has `round` (m) corners: its grid gains `ROUND_STEPS` lines through each corner's square, whose
- * points map onto the corner's quarter circle (each square ring about the circle's centre onto the circle of its size); a black frit
- * fan fills each square corner out to the arc, so the outline, and the trim round it, stay square.
- */
-function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): THREE.BufferGeometry {
+/** `round` (m) corners on `q`'s (s, t) square: the zones' lines (`ROUND_STEPS + 1` per corner), `arc` mapping a corner-square point onto its quarter circle, `rim` a corner's arc from its horizontal-edge tangent point to its vertical-edge one. */
+function roundCorners(q: BowedQuad, round: number) {
   const len = hypot2(q.top[0] - q.base[0], q.top[1] - q.base[1]);
   const [rS, rT] = [round / Math.min(q.wBase, q.wTop), round / len];
   // A zone's lines, from its inner line out to the edge at 0 or 1.
@@ -186,6 +182,41 @@ function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): TH
     const k = Math.max(ds, dt) / hypot2(ds, dt);
     return [s < 0.5 ? rS * (1 - ds * k) : 1 - rS * (1 - ds * k), t < 0.5 ? rT * (1 - dt * k) : 1 - rT * (1 - dt * k)];
   };
+  const rim = (sEdge: number, tEdge: number): [number, number][] =>
+    [...zone(rS, sEdge).map((s): [number, number] => [s, tEdge]), ...zone(rT, tEdge).reverse().slice(1).map((t): [number, number] => [sEdge, t])].map(([s, t]) => arc(s, t));
+  return { rS, rT, lines, arc, rim };
+}
+
+/** The chrome bead takes every this-many'th point of a corner's arc: 34° chords on the coupe's 9 cm round (4 mm sag), which keeps the coupe under its triangle budget. */
+const BEAD_ARC_STRIDE = 2;
+
+/** The rounded pane's chrome outline in (s, t), counter-clockwise from its left edge's lower tangent point: each corner's arc (`BEAD_ARC_STRIDE`), and the grid's columns along the bottom and top (the bow and the dome's fall curve them). */
+function roundedOutline(q: BowedQuad, round: number, segX: number): [number, number][] {
+  const { rS, lines, rim } = roundCorners(q, round);
+  const corner = (sEdge: number, tEdge: number) => rim(sEdge, tEdge).filter((_, k) => k % BEAD_ARC_STRIDE === 0);
+  // `lines` runs the left corner zone, the columns, the right corner zone: only the columns lie between the arcs.
+  const columns = lines(segX, rS).slice(ROUND_STEPS + 1, -(ROUND_STEPS + 1));
+  return [
+    ...corner(0, 0).reverse(),
+    ...columns.map((s): [number, number] => [s, 0]),
+    ...corner(1, 0),
+    ...corner(1, 1).reverse(),
+    ...[...columns].reverse().map((s): [number, number] => [s, 1]),
+    ...corner(0, 1),
+  ];
+}
+
+/** A round-outlined pane's frit corners stand this far (m) in behind its plane: a dark backing seen only through the gaps the body leaves round its arcs (the cabin showed there). */
+const ROUND_BACKING_INSET = 0.01;
+
+/**
+ * An unframed pane whose clear glass has `round` (m) corners: its grid gains `ROUND_STEPS` lines through each corner's square, whose
+ * points map onto the corner's quarter circle (each square ring about the circle's centre onto the circle of its size); a black frit
+ * fan fills each square corner out to the arc, so the glass's outline stays square, while the chrome bead follows the arcs. With
+ * `roundOutline` the fans stand `ROUND_BACKING_INSET` in behind the pane: the glass's outline is the arcs, the fans a backing.
+ */
+function roundedGlass(q: BowedQuad, round: number, { segX, segY, facing }: QuadDraw): THREE.BufferGeometry {
+  const { rS, rT, lines, arc, rim: cornerRim } = roundCorners(q, round);
   const at = (s: number, t: number) => quadPoint(q, s * 2 - 1, t);
   const [ss, ts] = [lines(segX, rS), lines(segY, rT)];
   const row = ss.length;
@@ -199,13 +230,18 @@ function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): TH
   const pane = paneGeometry(ts.flatMap((t) => ss.map((s) => arc(s, t))), at, grid, 0);
   const fans = [0, 1].flatMap((sEdge) =>
     [0, 1].map((tEdge) => {
-      const rim = [...zone(rS, sEdge).map((s): [number, number] => [s, tEdge]), ...zone(rT, tEdge).reverse().slice(1).map((t): [number, number] => [sEdge, t])].map(([s, t]) => arc(s, t));
+      const rim = cornerRim(sEdge, tEdge);
       // Counter-clockwise in (s, t), as the grid's triangles are.
       const [[s0, t0], [s1, t1]] = [rim[0]!, rim[1]!];
       if ((s0 - sEdge) * (t1 - tEdge) - (t0 - tEdge) * (s1 - sEdge) < 0) rim.reverse();
       return paneGeometry([[sEdge, tEdge], ...rim], at, rim.slice(1).flatMap((_, k) => [0, k + 1, k + 2]), 1);
     }),
   );
+  if (q.roundOutline) {
+    // In along the pane's inward normal (the flat pane's: the bow and fall tilt it under a millimetre over a corner).
+    const inward = new THREE.Vector3(0, q.base[1] - q.top[1], q.top[0] - q.base[0]).normalize().multiplyScalar(-facing * ROUND_BACKING_INSET);
+    for (const fan of fans) fan.translate(inward.x, inward.y, inward.z);
+  }
   const geo = mergeGeometries([pane, ...fans], false);
   if (!geo) throw new Error("Failed to merge the rounded rear glass");
   geo.userData.centre = quadPoint(q, 0, 0.5).toArray();
@@ -456,7 +492,11 @@ export function makeSideGlassFrame(sign: number, style: BodyStyle): THREE.Buffer
 function makeQuadGlassFrame(q: BowedQuad, { segX, facing }: QuadDraw): THREE.BufferGeometry {
   const xs = Array.from({ length: segX + 1 }, (_, i) => (i / segX) * 2 - 1);
   // Counter-clockwise in (across, up), which the edge offsets below rely on.
-  const pts = [...xs.map((xn) => quadPoint(q, xn, 0).clone()), ...xs.map((xn) => quadPoint(q, xn, 1).clone()).reverse()];
+  const at = (xn: number, t: number) => quadPoint(q, xn, t).clone();
+  const pts =
+    q.round && !q.frame
+      ? roundedOutline(q, q.round, segX).map(([s, t]) => at(s * 2 - 1, t))
+      : [...xs.map((xn) => at(xn, 0)), ...xs.map((xn) => at(xn, 1)).reverse()];
   // The flat pane's normal: the bow and the fall tilt it under a millimetre across the ribbon.
   const plane = new THREE.Vector3(0, q.base[1] - q.top[1], q.top[0] - q.base[0]).normalize();
   const outward = plane.clone().multiplyScalar(facing);

@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
+import "../kernel/rapier-node.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { roofAt } from "../vehicle/car-mesh.ts";
 import { CAR_STYLE_IDS, CAR_STYLES } from "../vehicle/car-variants.ts";
 import { driverSeat } from "../vehicle/interior.ts";
 import { PART_KIND, partGeometry } from "../vehicle/part-geometry.ts";
 import { paint } from "../vehicle/test-support.ts";
-import { driverLook } from "./driver-look.ts";
+import { driverLook, type DriverLook } from "./driver-look.ts";
 import { BONES_ATTRIBUTE, LEFT_LEG } from "./dummy-rig.ts";
 import { seatedGeometry } from "./dummy-skin.ts";
 import { JOINTS, PARTS } from "./ragdoll-body.ts";
+import { RagdollSystem } from "./engine-ragdoll.ts";
 import { SeatedDrivers } from "./seated-drivers.ts";
 
 /** A seated thigh rests on the cushion: the hip joint stands its half-thickness (`PARTS` 0.075) over the top, give or take the foam. */
@@ -137,6 +139,36 @@ describe("given the seated drivers' batch and two cars", () => {
     cars[0]!.driverOut = "windshield";
     drivers.sync(cars, look);
     assert.equal(drivers.mesh.count, 1, "the thrown driver's slot is still drawn");
+    drivers.dispose();
+  });
+});
+
+describe("given the seated drivers fed by the ragdoll system's driver looks", () => {
+  test("when the seated drivers sync twice with nothing changed, then each car's driver look is the same object, and a new look seed rebuilds it", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
+    car.spawn(0, 0, 0);
+    car.group.updateMatrixWorld(true);
+    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    const drivers = new SeatedDrivers(() => false);
+    const seen: DriverLook[] = [];
+    const look = (c: number, cop: boolean) => {
+      const l = ragdolls.carDriverLook(c, cop);
+      seen.push(l);
+      return l;
+    };
+    const tag = (l: DriverLook) => `${l.woman}/${l.shirt}/${l.hair}`;
+    let other = 2;
+    while (tag(driverLook(other, 0)) === tag(driverLook(1, 0))) other++;
+    ragdolls.lookSeed = 1;
+    drivers.sync([car], look);
+    drivers.sync([car], look);
+    assert.equal(seen.length, 2, "each sync asked for the one shown car's look");
+    assert.ok(seen[0] === seen[1], "the same look object while nothing changed");
+    assert.equal(tag(seen[0]!), tag(driverLook(1, 0)), "the look of seed 1");
+    ragdolls.lookSeed = other;
+    drivers.sync([car], look);
+    assert.ok(seen[2] !== seen[0], "a new seed rebuilds the look");
+    assert.equal(tag(seen[2]!), tag(driverLook(other, 0)), "the look of the new seed");
     drivers.dispose();
   });
 });

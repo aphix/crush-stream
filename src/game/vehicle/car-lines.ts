@@ -59,6 +59,14 @@ export function cantDrop(style: BodyStyle): number {
   return typeof style.glassTop === "number" ? style.glassTop : GLASS_DROP;
 }
 
+/** The drawn roof's side runs this far (m) past the cant line unless the style sets its own `roofDrip`; the pillars and the sail's foot stand this far proud of the side glass, meeting that drip flush. */
+export const ROOF_DRIP = 0.01;
+
+/** How far (m) the drawn roof's side rolls out past the cant line at its bottom: the style's `roofDrip`, else `ROOF_DRIP`. */
+export function roofDrip(style: BodyStyle): number {
+  return style.roofDrip ?? ROOF_DRIP;
+}
+
 /** The side glass top's own height at `z` from the style's stations, or null where it follows the cant line. */
 export function glassTopStation(z: number, style: BodyStyle): number | null {
   const g = style.glassTop;
