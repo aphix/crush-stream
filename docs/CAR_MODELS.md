@@ -76,7 +76,7 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | Field | Meaning |
 |---|---|
 | `hood.bulge` | Raised centre bulge on the drawn hood from `z0` to `z1`, `width` across, its top `rise` over the lid, easing into it at both ends. `scoop` (`inlets` 1 or 2, mouth at `z`, `width`, `height` over the bulge) rises toward a mouth facing forward, drawn dark. Merged into the hood (`withHoodBulge`): the bonnet's skin crushes it |
-| `hood.kind` | `"lid"` (default) or `"clamshell"`: the drawn lid wraps over the body's shoulders to a side shut line on the fender top |
+| `hood.kind` | `"lid"` (default) or `"clamshell"`: the drawn lid laps the body's deck edge and shoulders 1 mm clear down to a side shut line on the fender top, where the drawn body's shoulder steps 3 mm in under the lid's edge (a groove, ramped in over 2 cm inside each lid end on body slices of its own) |
 | `boot.lip` | Ducktail kick: the deck lid's top rises `rise` at its rear edge, or the tailgate's top edge kicks `rise` out, easing in over `depth` |
 | `roof.rails` | Two dark rails at \|x\| `x[0]`..`x[1]` over `z` [rear, front], their tops `rise` over the roof at their inner edge |
 | `roof.spoiler` | Body-colour wedge off the roof's rear end over `z` [tip, front edge]: underside at `y[0]`, top `y[1]` at the front edge, ±`halfWidth` |

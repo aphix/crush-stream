@@ -20,8 +20,10 @@ import {
   ensureOutwardNormals,
   loftFromRings,
   noseRefined,
+  recessShutLine,
   sampleSlice,
   sectionPoints,
+  SHUT_RAMP,
   type BodySource,
   type Pt,
 } from "./car-mesh.ts";
@@ -89,6 +91,8 @@ export function sliceZs(style: BodyStyle, source: BodySource, bootOpen = source 
   for (const [a, b] of bodyTubs(style, source)) knots.push(a - TUB_EDGE, a + TUB_EDGE, b - TUB_EDGE, b + TUB_EDGE);
   const seam = style.rearDoorSeam;
   if (seam !== null) knots.push(seam - SEAM_HALF, seam, seam + SEAM_HALF);
+  const { z0: hoodRear, z1: hoodFront, kind } = style.hood;
+  if (source === "drawn" && kind === "clamshell") knots.push(hoodRear, hoodRear + SHUT_RAMP, hoodFront - SHUT_RAMP, hoodFront);
   // The boot's cut keeps its ramps' rings even inside the tail roll's clearance, so its opening ends where the lid's does. A cut
   // carrying an open floor on through the tail ramps in on that floor's own rings.
   const cut = bootOpen ? bootCut(style) : null;
@@ -153,7 +157,11 @@ const COWL_LAP = 0.05;
 
 export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const zs = sliceZs(style, source);
-  const sectionAt = (z: number) => sectionPoints(sampleSlice(z, style.profile), style, source);
+  const sectionAt = (z: number) => {
+    const ring = sectionPoints(sampleSlice(z, style.profile), style, source);
+    if (source === "drawn") recessShutLine(ring, z, style);
+    return ring;
+  };
   const rings = zs.map((z) => (source === "cage" ? sectionAt(z) : insetRing(sectionAt(z), endRollInset(z, style.profile))));
   const n = rings[0]!.length;
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");

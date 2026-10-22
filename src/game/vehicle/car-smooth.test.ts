@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
-import { CREASE_DEGREES, bayAt, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { CREASE_DEGREES, SHUT_RAMP, bayAt, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, wellHumpGeometry } from "./car-well-mesh.ts";
@@ -334,6 +334,24 @@ describe("given every body style's drawn nose, whose plan and fender line turn h
 const WALL_TOP_NORMAL_Y = 0.5;
 /** The drawn hood's edge stands at most this far (m) over the fender 2 mm outboard of it: a groove, not a step. */
 const HOOD_EDGE_STEP = 0.005;
+/** A clamshell's top edge and skirt (ring points 4, 5, 6) stand off the body's deck edge and shoulder by more than 0 and at most this (m): flush, never coincident. */
+const CLAMSHELL_LAP = 0.002;
+/** Under a clamshell's side shut line the body's 30° point stands at least this far (m) inboard of the line the lid's edge laps: a groove. */
+const SHUT_GROOVE = 0.0025;
+/** The SUV with a clamshell nose, its hood otherwise its own. */
+const CLAMSHELL_SUV: BodyStyle = { ...CAR_STYLES.wagon, hood: { ...CAR_STYLES.wagon.hood, kind: "clamshell" } };
+
+/** Distance (m) from `p` to the polyline `chain`. */
+function distanceToChain(p: { x: number; y: number }, chain: readonly { x: number; y: number }[]): number {
+  let best = Infinity;
+  for (let k = 1; k < chain.length; k++) {
+    const [a, b] = [chain[k - 1]!, chain[k]!];
+    const [dx, dy] = [b.x - a.x, b.y - a.y];
+    const t = THREE.MathUtils.clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy), 0, 1);
+    best = Math.min(best, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
+  }
+  return best;
+}
 
 describe("given every body style's drawn hood over its open engine bay", () => {
   for (const id of CAR_STYLE_IDS) {
@@ -375,6 +393,42 @@ describe("given every body style's drawn hood over its open engine bay", () => {
       }
     });
   }
+
+  it(`when an SUV's clamshell is laid on its body, then its top edge and skirt stand within ${CLAMSHELL_LAP * 1000} mm of the body's deck edge and shoulder at every station, both ends included`, () => {
+    const hood = makeHoodGeometry(CLAMSHELL_SUV);
+    const loft = loftOf(hood);
+    const [oy, oz] = CLAMSHELL_SUV.hood.origin;
+    for (let slice = 0; slice < loft.slices; slice++) {
+      const z = positionAt(hood, slice * loft.ring).z + oz;
+      // The section's right half from its 30° shoulder point up to its deck edge.
+      const chain = sectionPoints(sampleSlice(z, CLAMSHELL_SUV.profile), CLAMSHELL_SUV, "drawn").slice(-4, -1);
+      for (const k of [4, 5, 6]) {
+        const p = positionAt(hood, slice * loft.ring + k);
+        const off = distanceToChain({ x: p.x, y: p.y + oy }, chain);
+        assert.ok(off > 0 && off <= CLAMSHELL_LAP, `z ${z.toFixed(3)} ring point ${k}: ${(off * 1000).toFixed(2)} mm off the body`);
+      }
+    }
+  });
+
+  it(`when an SUV's body is read under its clamshell's side shut line, then its 30° shoulder point steps ${SHUT_GROOVE * 1000} mm or more in, and not at all on the slice at the lid's rear end`, () => {
+    const body = makeChassisGeometry(CLAMSHELL_SUV);
+    const loft = loftOf(body);
+    const { z0, z1 } = CLAMSHELL_SUV.hood;
+    const shut = loft.ring - 4;
+    let [grooved, rearEnd] = [0, 0];
+    for (let slice = 0; slice < loft.slices; slice++) {
+      const v = positionAt(body, slice * loft.ring + shut);
+      const step = sectionPoints(sampleSlice(v.z, CLAMSHELL_SUV.profile), CLAMSHELL_SUV, "drawn")[shut]!.x - v.x;
+      if (Math.abs(v.z - z0) < 1e-6) {
+        assert.ok(Math.abs(step) < 1e-6, `the slice at the lid's rear end steps ${(step * 1000).toFixed(2)} mm`);
+        rearEnd++;
+      } else if (v.z > z0 + SHUT_RAMP && v.z < z1 - SHUT_RAMP) {
+        assert.ok(step >= SHUT_GROOVE, `z ${v.z.toFixed(3)}: the shut line steps ${(step * 1000).toFixed(2)} mm in`);
+        grooved++;
+      }
+    }
+    assert.ok(rearEnd === 1 && grooved > 0, `${rearEnd} slices at the lid's rear end, ${grooved} under its shut line`);
+  });
 });
 
 /** Of each side's greenhouse parts the B pillar and the rail are the near-rectangular ones (the A and C pillars lean in plan, so their section is a sheared parallelogram). */

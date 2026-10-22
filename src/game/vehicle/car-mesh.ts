@@ -585,8 +585,8 @@ const HOOD_INSET = 0.07;
 const HOOD_SEAT = 0.003;
 /** Where a boot lip's extra rings stand, as shares of its depth from the edge: the kick's curve needs them on a 6 cm ring spacing. */
 const LIP_RINGS = [0.5, 1] as const;
-/** A clamshell lid stands this far (m) clear of the body shoulder it wraps. */
-const CLAMSHELL_GAP = 0.006;
+/** A clamshell lid's skin laps the body it wraps this far (m) clear in x and y: flush to the eye, never coincident with it. */
+const CLAMSHELL_GAP = 0.001;
 
 /** A deck lid's dome across it: 1 at the centre line, 0.7 at `DECK_SHOULDER` of its half-width, 0 at its edge (`u` its share of the half-width). */
 function deckDome(u: number): number {
@@ -712,16 +712,37 @@ function bendOverTail(pos: THREE.BufferAttribute, zA: number, yc: number, wFace:
   }
 }
 
-/** A clamshell: the lid ring's skirt moved out over the body ring's shoulder (`body`: its right half ends shoulder 30°, shoulder 60°, deck edge, crown), `CLAMSHELL_GAP` clear, down to the 30° point, the side shut line. */
+/**
+ * A clamshell: the lid ring's top edge and skirt laid `CLAMSHELL_GAP` over the body ring's deck edge and shoulder (`body`: its right half
+ * ends shoulder 30°, shoulder 60°, deck edge, crown), down to the 30° point, the side shut line.
+ */
 function wrapShoulder(ring: Pt[], body: readonly Pt[], oy: number, tk: number): void {
+  const top = body[body.length - 2]!;
   const upper = body[body.length - 3]!;
   const shut = body[body.length - 4]!;
   for (const sign of [1, -1]) {
-    const [over, edge, inner] = sign > 0 ? ([5, 6, 7] as const) : ([12, 11, 10] as const);
+    const [rim, over, edge, inner] = sign > 0 ? ([4, 5, 6, 7] as const) : ([0, 12, 11, 10] as const);
+    ring[rim] = { x: ring[rim]!.x, y: top.y + CLAMSHELL_GAP - oy };
     ring[over] = { x: sign * (upper.x + CLAMSHELL_GAP), y: upper.y + CLAMSHELL_GAP - oy };
     ring[edge] = { x: sign * (shut.x + CLAMSHELL_GAP), y: shut.y - oy };
     ring[inner] = { x: sign * (shut.x + CLAMSHELL_GAP - tk), y: shut.y - oy };
   }
+}
+
+/** Under a clamshell's side shut line the drawn body's 30° shoulder point steps in this far (m): the lid's edge meets a groove, not a step. */
+const SHUT_RECESS = 0.003;
+/** The groove ramps in over this run (m) inside each lid end, between body slices of its own (`sliceZs`), so no dent shows past the lid. */
+export const SHUT_RAMP = 0.02;
+/** The section ring's left 30° shoulder point (after the deck crown, the deck edge and the 60° point); the right one mirrors it. */
+const SHUT_POINT = 1 + SHOULDER_RING.length;
+
+/** Steps the drawn body ring's shut-line points (`wrapShoulder`'s `shut`) in under a clamshell lid at `z`. */
+export function recessShutLine(ring: Pt[], z: number, style: BodyStyle): void {
+  if (style.hood.kind !== "clamshell") return;
+  const { z0, z1 } = style.hood;
+  const recess = SHUT_RECESS * THREE.MathUtils.smoothstep(z, z0, z0 + SHUT_RAMP) * (1 - THREE.MathUtils.smoothstep(z, z1 - SHUT_RAMP, z1));
+  ring[SHUT_POINT]!.x += recess;
+  ring[ring.length - 1 - SHUT_POINT]!.x -= recess;
 }
 
 /** Without an `outline`, the tailgate stops this far (m) inside the tail panel's half-width: the tail lamps stand upright in the corners. */
