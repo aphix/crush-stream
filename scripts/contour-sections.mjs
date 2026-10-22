@@ -68,6 +68,8 @@ const BUMPER_AT = [0.35, 0.5, 0.65, 0.8];
 const LIP_AT = [0.04, 0.1, 0.16, 0.22];
 /** The tail panel's cut stands this far (m) over the bumper's top: the bumper's outset is measured from it. */
 const TAIL_ABOVE = 0.05;
+/** The bumper and lip window starts this far (m) behind the rear arch opening's lip. */
+const ARCH_CLEAR = 0.02;
 /** Neutral paint for the screenshots: the rings stand out on it. */
 const PAINT = 0xa4a8ae;
 const SHOT = [900, 560];
@@ -425,7 +427,10 @@ export function contourOf(stage, styleId, probe = null) {
   const hubs = car.wheels.map((w) => w.getWorldPosition(new THREE.Vector3()));
   const hubZ = Math.min(...hubs.map((h) => h.z));
   const radius = Math.max(...car.wheels.map((w) => new THREE.Box3().setFromObject(w).getSize(new THREE.Vector3()).y / 2), 0.3);
-  const behindZ = hubZ - radius * 1.05;
+  // The bumper and lip window starts behind the rear arch's opening and its lip (style data), or the wheel's reach where that is
+  // further: the arch lip's turn into the well is the arch's, not the bumper's.
+  const archReach = (style.arch?.radius ?? 0) + (style.arch?.lip?.width ?? 0) + ARCH_CLEAR;
+  const behindZ = hubZ - Math.max(radius * 1.05, archReach);
   const bodyBox = boxOf(s, [K.body]);
   const width = bodyBox.max.x - bodyBox.min.x;
   const regions = {
