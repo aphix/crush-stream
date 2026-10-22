@@ -58,6 +58,7 @@ export const MONSTER: BodyStyle = {
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
   lamps: { head: [0.5, 0.62], tail: [0.73, 0.8] },
+  underbody: true,
   camera: { hood: [2.08, 1.27], third: { dist: 7.4, height: 3.0, aimUp: 1.7 }, far: { dist: 11.5, height: 4.3, aimUp: 1.9 } },
   details: {
     lines: [

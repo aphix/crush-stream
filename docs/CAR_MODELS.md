@@ -123,11 +123,15 @@ The cabin is shared props, placed per car by its spec (`vehicle/interior.ts` `Ca
 | `liningL`, `liningR`: door cards | 1 each | Door space; each keeps the first lining's box exactly (a torn door's loose box is sim) |
 | `engineBay` | 1 | Mapped from `REF_BAY` onto the trough under the hood; shown while the hood is off or open |
 | `crashBar` | 2 | Each bumper's seat; shown while that bumper is off or hanging |
+| `ladderFrame`: rails, crossmembers, transfer case, steering box, shock bodies | 0 or 1 | `underbody: true` (the monster): in the class-lift body's space, under the floor (`CarUnderbody`) |
+| `axle`: tube, diff, knuckles, shock shafts, trailing links, driveshaft, tie rod | 0 or 2 | `underbody: true`: each pair of drawn wheels' hub midpoint, tilted and spanned to them every sync; hung in the class hub group (`assignClass`); none while either wheel is off the car |
 
 Every prop kind is one `InstancedMesh` for the whole field (`PartBatch`, `PART_PER_CAR`): adding a car adds instances, never
 draws. At rest the interior costs six draws for the whole field (cabin, both door-card sides, front seats, rear bench, wheel) and the
-seated drivers one more; the bay and the crash bars draw only while exposed. `CarDetail` takes the cabin, seats, wheel and bay at its
-far distance (by `INTERIOR_MESH`), the door cards and crash bars with the small parts at mid distance.
+seated drivers one more; the bay and the crash bars draw only while exposed, the undercarriage (two draws) only while a monster is in
+the field. `CarDetail` takes the cabin, seats, wheel and bay at its far distance (by `INTERIOR_MESH`), the door cards, crash bars
+and undercarriage with the small parts at mid distance. The undercarriage is drawn only: the cage, hull and contact shapes never
+see it; each axle's shock shafts slide into the frame's shock bodies, so the pair telescopes through the suspension's travel.
 
 - **Seat lean:** seats and the seated driver lean `SEAT_RECLINE` back; under a low roof the seat leans further (to
   `SEAT_RECLINE` + 0.35 rad) until the driver's head clears the roof line by 5 cm.
@@ -143,7 +147,8 @@ far distance (by `INTERIOR_MESH`), the door cards and crash bars with the small 
   through a crushed roof. The bay rides the engine masses with its front no further out than the front bumper's masses (the
   nose); each crash bar rides its bumper's, its face on the bumper's seat.
 - **The engine bay:** the drawn body (never the cage) opens a trough under the hood (`bayTub`: from the hood's cowl edge or the
-  windshield's foot to inside the nose, floor at 0.28 m), one more `tubs` entry for the drawn loft only. The bay set fills it
+  windshield's foot to inside the nose, floor at 0.28 m, and at least 5 cm of closed deck behind its blend after the cabin tub's, a
+  cowl and not a fin), one more `tubs` entry for the drawn loft only. The bay set fills it
   wall to wall up to the hood's underside: a dark block and black cover with bare-aluminium heads, intake, plenum and strut
   caps, steel rails and manifolds, black radiator, airbox and battery.
 - **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor, the wheel liners, each

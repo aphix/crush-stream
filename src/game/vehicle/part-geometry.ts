@@ -17,9 +17,9 @@ import {
   TRIM_FINISH,
 } from "./car-materials.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
-import { cabinGeometry, crashBarGeometry, doorCardGeometry, engineBayGeometry, frontSeatGeometry, rearSeatGeometry, wheelGeometry } from "./interior-geometry.ts";
+import { cabinGeometry, crashBarGeometry, doorCardGeometry, engineBayGeometry, frontSeatGeometry, ladderFrameGeometry, rearSeatGeometry, solidAxleGeometry, wheelGeometry } from "./interior-geometry.ts";
 
-/** A car's static parts, in `PartBatch.meshes` order: the cabin shell, door cards, mirrors, grille, tail trim, then the interior kit and the bay set (`CarCabin`). */
+/** A car's static parts, in `PartBatch.meshes` order: the cabin shell, door cards, mirrors, grille, tail trim, then the interior kit and the bay set (`CarCabin`), then a lifted truck's undercarriage (`CarUnderbody`). */
 export const PART_KIND = {
   interior: 0,
   liningL: 1,
@@ -33,11 +33,13 @@ export const PART_KIND = {
   wheel: 9,
   engineBay: 10,
   crashBar: 11,
+  ladderFrame: 12,
+  axle: 13,
 } as const;
 type PartKind = (typeof PART_KIND)[keyof typeof PART_KIND];
 export const PART_KINDS: readonly PartKind[] = Object.values(PART_KIND);
-/** Seats of each kind on one car (`PartBatch` sizes each kind's draw by it): two front seats, a crash bar at each end. */
-export const PART_PER_CAR: readonly number[] = PART_KINDS.map((k) => (k === PART_KIND.seatFront || k === PART_KIND.crashBar ? 2 : 1));
+/** Seats of each kind on one car (`PartBatch` sizes each kind's draw by it): two front seats, a crash bar at each end, two axles. */
+export const PART_PER_CAR: readonly number[] = PART_KINDS.map((k) => (k === PART_KIND.seatFront || k === PART_KIND.crashBar || k === PART_KIND.axle ? 2 : 1));
 /** The kinds the far distance cut takes with the cabin (`CarDetail`, by `INTERIOR_MESH`); the rest are small parts, cut at mid distance. */
 const INTERIOR_KINDS: ReadonlySet<number> = new Set([PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.engineBay]);
 /** The interior kit seen only through the glass: the mid cut takes it with the glass, as it takes the seated driver (`CarDetail`). */
@@ -183,6 +185,8 @@ const GEOMETRY = [
   once(wheelGeometry),
   once(engineBayGeometry),
   once(crashBarGeometry),
+  once(ladderFrameGeometry),
+  once(solidAxleGeometry),
 ] as const;
 
 export const partGeometry = (kind: PartKind): THREE.BufferGeometry => GEOMETRY[kind]();
