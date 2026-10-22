@@ -59,12 +59,14 @@ export const MONSTER: BodyStyle = {
   id: "monster",
   dims: { wheelbase: 2.77, overhang: { front: 0.755, rear: 1.065 }, track: 2.39, width: 1.712, height: 1.511, rideHeight: 0.34, wheel: { radius: 0.355, width: 0.364 } },
   ...PLATFORM_HARDPOINTS,
-  windshield: { base: [1.0, 0.92], wBase: 1.46, wTop: 1.3 },
+  // The side plate's windshield edge stands .80 back at y 1.19 and .55 at 1.40: its base 2 cm over the hood's crown, 6 cm further forward.
+  windshield: { base: [1.05, 0.98], wBase: 1.46, wTop: 1.3 },
   belt: { x: 0.8, y: [[0, 1.0]] },
   rocker: { y: 0.4 },
   underside: [[-2.4, 0.38], [-2.1, 0.34], [2.1, 0.34]],
-  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, mirrorY: 0.315, mirrorZ: 0.27, mirrorReach: 0.16, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75], mirror: MONSTER_MIRROR },
-  aPillarFoot: 0.74,
+  // The skin's top meets the fender's deck at the hinge cut (`hingeTop`): the door glass starts .60 back at the belt as the side plate's, a sail under the mirror.
+  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, hingeTop: 0.99, mirrorY: 0.315, mirrorZ: 0.27, mirrorReach: 0.16, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75], mirror: MONSTER_MIRROR },
+  aPillarFoot: 0.6,
   aPillarTop: 0.41,
   bPillar: { rear: -0.19, front: -0.12 },
   arch: { radius: 0.47, rise: 0.83, lip: { flare: 0.028, width: 0.085, square: true, inset: 0.03 }, wellWall: 0.56 },

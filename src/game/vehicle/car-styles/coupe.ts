@@ -26,7 +26,7 @@ const COUPE_LAMP_SHAPES = {
     recess: 0.008,
   },
   tail: {
-    // Rear iso: deep red lenses in chrome bezels rounded about a quarter of their height at each corner, three segments each, a black centre band between them edged in chrome.
+    // Rear iso: deep red lenses in chrome bezels rounded about a quarter of their height at each corner, three segments each, a black centre band between them edged in chrome, a chrome ring badge (8 cm across) in its middle.
     loops: [
       { points: [[0.305, 0.58], [0.555, 0.58], [0.5775, 0.586], [0.594, 0.6025], [0.6, 0.625], [0.6, 0.725], [0.594, 0.7475], [0.5775, 0.764], [0.555, 0.77], [0.305, 0.77], [0.2825, 0.764], [0.266, 0.7475], [0.26, 0.725], [0.26, 0.625], [0.266, 0.6025], [0.2825, 0.586]] },
     ],
@@ -39,6 +39,7 @@ const COUPE_LAMP_SHAPES = {
       { line: { points: [[0.487, 0.59], [0.487, 0.76]] }, width: 0.004, tone: "dark" },
       { line: { points: [[0, 0.772], [0.26, 0.772]] }, width: 0.006, tone: "chrome" },
       { line: { points: [[0, 0.578], [0.26, 0.578]] }, width: 0.006, tone: "chrome" },
+      { line: { points: [[0, 0.715], [0.0153, 0.712], [0.0283, 0.7033], [0.037, 0.6903], [0.04, 0.675], [0.037, 0.6597], [0.0283, 0.6467], [0.0153, 0.638], [0, 0.635]] }, width: 0.01, tone: "chrome" },
     ],
   },
 } as const;
@@ -55,8 +56,8 @@ const MUSCLE_REAR_FASCIA = [
   [-0.095, -0.06],
 ] as const;
 
-/** Bullet mirror in the body colour on a slim dark stalk, as the reference's side view and iso: an 8.5 cm long, 6.5 cm tall head standing 6 cm over its seat on the door top, the stalk 2.5 cm along the car ([out, height, length] m). */
-const COUPE_MIRROR = { cap: "rounded", finish: "body", size: [0.09, 0.065, 0.085], lift: 0.06, stalk: 0.025 } as const;
+/** Bullet mirror in the body colour seated low on the door: the reference side view's head is 10 cm long and 8.5 cm tall, centred .928 m up; its top view shows a broad foot along the door ([out, height, length] m). */
+const COUPE_MIRROR = { cap: "rounded", finish: "body", size: [0.09, 0.085, 0.1], lift: 0.038, stalk: 0.06 } as const;
 
 /** Late-70s notchback muscle coupe (Celica Supra A40 proportions): long flat hood, flat roof, sloped rear glass, short ducktail deck. */
 export const COUPE: BodyStyle = {
@@ -73,8 +74,8 @@ export const COUPE: BodyStyle = {
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.012, width: 0.05, band: true } },
-  /** Reference: the pod's straight front edge (top view) is a face holding two dark intake mouths (isos), no higher than the pod (side view). */
-  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.69, width: 0.595, cowlWidth: 0.7, rise: 0.025, round: 0.025, cowlRamp: 0.12, groove: 0.008, mouth: true }, groove: [0.004, 0.0016] },
+  /** Reference: the pod's straight front edge (top view) is a face holding two dark intake mouths (isos), no higher than the pod (side view); its flanks are soft (round .045 leans them under the fitting crease), not a hard-lit black band in the side view. */
+  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.69, width: 0.595, cowlWidth: 0.7, rise: 0.025, round: 0.045, cowlRamp: 0.12, groove: 0.008, mouth: true }, groove: [0.004, 0.0016] },
   bumpers: {
     // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin.
     front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.3, back: 0.24, end: { corner: 0.15, stand: 0.03 } }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
@@ -143,6 +144,8 @@ export const COUPE: BodyStyle = {
     { points: [[-0.485, 0.305], [0.05, 0.3], [0.595, 0.305]], width: 0.016 },
     { points: [[0.605, 0.305], [0.8, 0.305]], width: 0.016 },
     { points: [[-0.44, 0.745], [-0.3, 0.745]], width: 0.022 },
+    // Front fender badge ahead of the door (reference side view and front iso): a chrome bar 7 cm long.
+    { points: [[0.734, 0.42], [0.663, 0.42]], width: 0.028 },
   ],
   rearBulkhead: { z: -0.9, yTop: 0.89 },
   tubs: [[-0.9, 0.7, 0.3]],
@@ -181,16 +184,11 @@ export const COUPE: BodyStyle = {
       { view: "side", points: [[0.691, 0.92], [0.535, 1.005], [0.335, 1.119], [0.093, 1.233]], width: 0.014, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[-0.834, 1.148], [-0.977, 1.105], [-1.148, 1.048], [-1.319, 0.977], [-1.433, 0.934]], width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.107, 1.205], [-0.207, 1.19], [-0.634, 1.183], [-0.848, 1.162], [-0.977, 1.133]], width: 0.014, depth: 0.002, profile: "u", cavity: 0.1 },
-      { view: "side", points: [[-1.433, 0.991], [-1.461, 0.948], [-1.49, 0.891]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "rear", points: [[0, 0.74], [0.75, 0.74]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.1 },
     ],
     patches: [
       { view: "side", points: [[-0.307, 0.756], [-0.435, 0.756], [-0.435, 0.727], [-0.307, 0.727]], depth: -0.004, rim: 0.004, cavity: 0.5 },
-      { view: "side", points: [[0.734, 0.435], [0.663, 0.435], [0.663, 0.406], [0.734, 0.406]], depth: 0.0015, rim: 0.002, cavity: 0.1 },
       { view: "side", points: [[1.689, 0.535], [1.618, 0.535], [1.618, 0.478], [1.689, 0.478]], depth: -0.002, rim: 0.003, cavity: 0.3 },
       { view: "side", points: [[-1.661, 0.556], [-1.746, 0.556], [-1.746, 0.52], [-1.661, 0.52]], depth: -0.002, rim: 0.003, cavity: 0.3 },
-      { view: "rear", points: [[0, 0.6], [0.31, 0.6], [0.31, 0.72], [0, 0.72]], depth: -0.002, rim: 0.003, cavity: 0.8 },
-      { view: "rear", points: [[0, 0.63], [0.035, 0.64], [0.05, 0.66], [0.035, 0.68], [0, 0.69]], depth: 0.0015, rim: 0.002, cavity: 0.1 },
       { view: "rear", points: [[0, 0.3], [0.16, 0.3], [0.16, 0.42], [0, 0.42]], depth: -0.005, rim: 0.004, cavity: 0.6 },
       { view: "front", points: [[0, 0.32], [0.7, 0.32], [0.7, 0.38], [0, 0.38]], depth: 0.003, rim: 0.003, cavity: 0.2 },
       // The pod's twin intake mouths on its front face, a 2.4 cm body-colour rib between them.
