@@ -17,19 +17,19 @@ const HATCHBACK_LAMP_SHAPES = {
     loops: [
       {
         points: [
-          [0.445, 0.72, -1.9], [0.6, 0.71, -1.9], [0.6122, 0.7085, -1.9], [0.6134, 0.72, -1.9], [0.6154, 0.74, -1.9], [0.617, 0.76, -1.9],
+          [0.445, 0.74, -1.9], [0.6, 0.74, -1.9], [0.6154, 0.74, -1.9], [0.617, 0.76, -1.9],
           [0.619, 0.78, -1.9], [0.621, 0.8, -1.9], [0.6244, 0.815, -1.9], [0.6254, 0.82, -1.9], [0.6, 0.815, -1.9], [0.445, 0.785, -1.9],
         ],
       },
       {
         points: [
-          [0.6208, 0.7085, -1.9], [0.626, 0.707, -1.9], [0.665, 0.704, -1.9],
-          [0.85, 0.704, -1.69], [0.85, 0.72, -1.6], [0.85, 0.8, -1.58], [0.85, 0.82, -1.63],
+          [0.6243, 0.74, -1.9], [0.665, 0.74, -1.9],
+          [0.85, 0.74, -1.67], [0.85, 0.75, -1.6], [0.85, 0.8, -1.58], [0.85, 0.82, -1.63],
           [0.665, 0.815, -1.9], [0.638, 0.82, -1.9], [0.6347, 0.82, -1.9], [0.6337, 0.815, -1.9], [0.6303, 0.8, -1.9], [0.6283, 0.78, -1.9],
-          [0.6263, 0.76, -1.9], [0.6243, 0.74, -1.9], [0.6223, 0.72, -1.9],
+          [0.6263, 0.76, -1.9],
         ],
       },
-      { points: [[0.27, 0.735], [0.42, 0.725], [0.42, 0.79], [0.27, 0.79]] },
+      { points: [[0.27, 0.75], [0.42, 0.742], [0.42, 0.79], [0.27, 0.79]] },
     ],
     lens: "lit",
     bezel: "black",
@@ -40,15 +40,7 @@ const HATCHBACK_LAMP_SHAPES = {
       { line: { points: [[0.634, 0.8], [0.66, 0.8]] }, width: 0.02, tone: "lit" },
     ],
     cells: [
-      { loop: { points: [[0.27, 0.735], [0.35, 0.73], [0.35, 0.78], [0.27, 0.78]] }, tone: "clear" },
-      {
-        loop: { points: [[0.445, 0.72], [0.6, 0.71], [0.6122, 0.7085], [0.6134, 0.72], [0.6154, 0.74], [0.6162, 0.75], [0.445, 0.75]] },
-        tone: "smoked",
-      },
-      {
-        loop: { points: [[0.6208, 0.7085], [0.626, 0.707], [0.665, 0.704], [0.665, 0.75], [0.6253, 0.75], [0.6243, 0.74], [0.6223, 0.72]] },
-        tone: "smoked",
-      },
+      { loop: { points: [[0.27, 0.75], [0.35, 0.746], [0.35, 0.78], [0.27, 0.78]] }, tone: "clear" },
     ],
   },
   front: {
@@ -137,7 +129,7 @@ export const HATCHBACK: BodyStyle = {
   // The glass top sits 7 mm under the crown: the crown rolls down onto it.
   roofEnds: { front: 0.12 },
   windshieldTop: [1.245, 0.245],
-  rearGlass: { base: [0.94, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9, frame: [0.05, 0.06, 0.11] },
+  rearGlass: { base: [0.905, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9, frame: [0.05, 0.06, 0.11] },
   quarter: { zRearBot: -1.174, zRearTop: -1.07 },
   midPillarZ: -0.86,
   rearBulkhead: { z: -0.95, yTop: 0.8 },
@@ -146,7 +138,7 @@ export const HATCHBACK: BodyStyle = {
   boot: {
     kind: "tailgate",
     y0: 0.57,
-    origin: [0.94, -1.615],
+    origin: [0.905, -1.615],
     z0: -1.75,
     pivot: [1.277, -1.15],
     // The gate's top edge rolls forward onto the rear glass's base (it stood 8-10 mm proud of it: a shelf across the iso).
@@ -205,11 +197,17 @@ export const HATCHBACK: BodyStyle = {
       { view: "side", points: [[1.78, 0.31], [1.55, 0.31]], width: 0.01, depth: 0.004, profile: "step", cavity: 0.7 },
       { view: "top", points: [[-1.1, 0.57], [-1.09, 0]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[-0.97, 0.52], [-1.0, 0]], width: 0.12, depth: 0.006, profile: "u", cavity: 0 },
-      { view: "rear", points: [[0, 1.25], [0.57, 1.24], [0.64, 1.05], [0.66, 0.92], [0, 0.9]], width: 0.03, depth: 0.003, profile: "u", cavity: 0.7 },
+      { view: "rear", points: [[0, 1.25], [0.57, 1.24], [0.64, 1.05], [0.66, 0.92]], width: 0.03, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[-1.09, 1.25], [-1.1, 1.24], [-1.35, 1.05], [-1.58, 0.92], [-1.6, 0.9]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.62, 0.84], [0.43, 0.8], [0.43, 0.6], [0, 0.56]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0, 0.98], [0.17, 0.98]], width: 0.02, depth: 0.006, profile: "u", cavity: 0.7 },
+      // The gate's model script under its right lamp (mirrored: a palindrome of symmetric letters reads on both sides).
+      { view: "rear", points: [[0.26, 0.6], [0.2725, 0.625], [0.285, 0.6]], width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "rear", points: [[0.266, 0.61], [0.279, 0.61]], width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "rear", points: [[0.295, 0.625], [0.3075, 0.6], [0.32, 0.625]], width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "rear", points: [[0.33, 0.6], [0.3425, 0.625], [0.355, 0.6]], width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "rear", points: [[0.336, 0.61], [0.349, 0.61]], width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
       { view: "rear", points: [[0.58, 0.5], [0.6, 0.5]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       ...HANDLES.flatMap((h) => h.lines),
     ],
@@ -225,7 +223,9 @@ export const HATCHBACK: BodyStyle = {
       { view: "side", points: [[1.71, 0.32], [1.78, 0.32], [1.78, 0.38], [1.71, 0.38]], depth: 0.003, rim: 0.004, cavity: 0 },
       { view: "front", points: [[0, 0.18], [0.5, 0.18], [0.5, 0.3], [0, 0.3]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.012, bar: 0.006, depth: -0.006 }, cavity: 0.85 },
       { view: "front", points: [[0.515, 0.235], [0.645, 0.235], [0.645, 0.305], [0.515, 0.305]], depth: -0.006, rim: 0.004, cavity: 0.7 },
-      { view: "rear", points: [[0.43, 0.7], [0.55, 0.7], [0.55, 0.76], [0.43, 0.76]], depth: -0.006, rim: 0.004, cavity: 0 },
+      { view: "rear", points: [[0.43, 0.74], [0.55, 0.74], [0.55, 0.76], [0.43, 0.76]], depth: -0.006, rim: 0.004, cavity: 0 },
+      // The gate's top edge seats in the glass's black frit, as the reference's: no painted ledge catching the sky.
+      { view: "top", points: [[-1.57, 0], [-1.57, 0.62], [-1.62, 0.62], [-1.62, 0]], depth: 0, rim: 0.004, cavity: 0.9 },
       { view: "rear", points: [[0, 0.865], [0.055, 0.8], [0, 0.735]], depth: 0.004, rim: 0.004, cavity: 0 },
       { view: "rear", points: [[0, 0.2], [0.62, 0.2], [0.62, 0.3], [0, 0.3]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.02, bar: 0.008, depth: -0.006 }, cavity: 0.85 },
       { view: "rear", points: [[0.36, 0.27], [0.39, 0.235], [0.51, 0.235], [0.54, 0.27], [0.51, 0.305], [0.39, 0.305]], depth: -0.006, rim: 0.004, cavity: 0.7 },

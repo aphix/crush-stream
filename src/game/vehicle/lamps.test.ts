@@ -697,7 +697,7 @@ describe("given the hatchback, whose tail lamp crosses the step from the infill 
     lens.matrixWorld.copy(tail.seat.matrixWorld);
     const ray = new THREE.Raycaster();
     const gaps: string[] = [];
-    for (const y of [0.72, 0.75, 0.78]) {
+    for (const y of [0.75, 0.765, 0.78]) {
       for (let x = 0.45; x <= 0.66; x += 0.001) {
         ray.set(new THREE.Vector3(x, y, -5), new THREE.Vector3(0, 0, 1));
         if (ray.intersectObjects([car.body, lens], false)[0]?.object !== lens) gaps.push(`${x.toFixed(4)},${y}`);
