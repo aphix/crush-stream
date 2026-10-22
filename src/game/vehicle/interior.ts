@@ -88,6 +88,22 @@ function fitBox(seat: PartSeat, ref: { halfX: number; y0: number; y1: number; z0
   seat.position.set(0, y0 - ref.y0 * sy, z0 - ref.z0 * sz);
 }
 
+/** Half the cab's back wall (m): its drawn box is 4.5 cm deep about `rearBulkhead.z` (`makeChassisGeometry`). The bench's back stands this far off its face (m). */
+const WALL_HALF = 0.0225;
+const BENCH_GAP = 0.01;
+
+/** The depth (z) scale, at most 1, that keeps the bench seated at `back` ([y, z]) ahead of the back wall under its top: a 2+2 coupe's shallow bench. */
+function benchDepth(bench: THREE.BufferGeometry, [y, z]: readonly [number, number], wall: BodyStyle["rearBulkhead"]): number {
+  const pos = bench.getAttribute("position");
+  const room = z - wall.z - WALL_HALF - BENCH_GAP;
+  let depth = 1;
+  for (let i = 0; i < pos.count; i++) {
+    const behind = -pos.getZ(i);
+    if (behind > 0 && y + pos.getY(i) < wall.yTop) depth = Math.min(depth, room / behind);
+  }
+  return depth;
+}
+
 const _bay = new THREE.Vector3();
 const _mass = new THREE.Vector3();
 
@@ -136,6 +152,7 @@ export class CarCabin {
     const back = style.seats.rear;
     if (back) {
       place(rear!, 0, back[0], back[1], 0, halfX / REF_CABIN.halfX);
+      rear!.scale.z = benchDepth(rear!.geometry, back, style.rearBulkhead);
       this.pose.add(rear!);
     }
 
