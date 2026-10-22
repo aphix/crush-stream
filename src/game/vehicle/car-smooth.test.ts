@@ -966,8 +966,8 @@ const SIM_DIGEST_BY_STYLE = [
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's boot foot.
   { id: "hatchback", digest: "d1b0dbd003d50435d78a1243c66bf76a5ec1ec028cf24e4fb18dca1ea3ea1ece" },
   { id: "wagon", digest: "fc6cc21e004714d20934221b94eb6569779793efef30cb3fa48572c937cd1b88" },
-  // The coupe re-pinned for its nose crown at z 1.9 dropped 2.5 mm, so the hood's last chord clears the deck it covers.
-  { id: "coupe", digest: "ddb38853702981fec0ab7f975ad3c023108290dee79372fbc8c3eb8268123379" },
+  // The coupe re-pinned for its nose deck lowered 0.5-2.8 cm over z 1.76-1.945 to the reference's side line.
+  { id: "coupe", digest: "65a78223ec46889380f64c822f52c7f005d3fc135df3982a0eacc74dcc28635c" },
   { id: "pickup", digest: "8ac3348022ccf861dcc32220681d991fadaba4b58f4cd87233f0374f7bfb5731" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
@@ -1019,8 +1019,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
   { id: "hatchback", digest: "42b4ca457d2712b398a8e0066d64d641a7b4d4b690fad50702b7f14e488e0f4b" },
   { id: "wagon", digest: "2d73e075b0b3df350ab6052aa084e24fb2b41a6a2d297ee7b6baa0ddb311118f" },
-  // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), and its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above).
-  { id: "coupe", digest: "4aa06910b7d4d7937471a9044c5449ed07c01414f52299a9899fdefd929e785d" },
+  // The coupe re-pinned for its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back) and its nose deck lowered 0.5-2.8 cm over z 1.76-1.945 (as its sim digest above).
+  { id: "coupe", digest: "45f273f130b3633ca492c437e62550698eaf1647eef90029c996a39ee9e74740" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open.
