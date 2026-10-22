@@ -15,14 +15,13 @@ const FRAME = 1 / FRAME_HZ;
 /** Torso height (m) of the dummy standing on the ground (`PARTS`), and his upper arm's height hanging against raised over his head. */
 const TORSO_STANDING = PARTS[0].c[1];
 const ARM_HANGING = PARTS[2].c[1];
-/** Metres from the car's origin to its nose, and how far (m) a figure struck by it stands ahead of that. */
-const NOSE = 2.1;
+/** How far (m) ahead of the car's nose (its cage's plan box front, as `runsDown` reads it) a figure struck by it stands. */
 const AHEAD = 0.25;
 
 /** A car at `mps` m/s along +z, its nose `AHEAD` m short of the origin where guard `guard` stands, and the strike it makes (`fell`). */
 function struck(guard: number, mps: number) {
   const car = makeCar();
-  launch(car, 0.3, -NOSE - AHEAD, 0, 0, mps);
+  launch(car, 0.3, -car.cage.fields.planBox[3]! - AHEAD, 0, 0, mps);
   assert.ok(runsDown(car, 0, 0, 0), "the car meets the figure");
   return { car, cars: [car], strike: fell(car, 0, guard, 0, 0, 0, 0, 1, blankStrike()) };
 }
