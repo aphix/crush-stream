@@ -122,8 +122,10 @@ Every drawn body also opens its boot and closes its wells, from the tables it al
 The roof parts are merged into the drawn body after its other parts (the body's skin crushes them with the roof); rails and
 panel, and blacked-out pillars, are drawn dark by the paint's `primer` attribute. Exhaust tips and the hitch are merged into the rear bumper
 (`withRearFittings`), so they tear off with it; their chrome and black come from the trim material's `fitting` attribute, so
-no part adds a draw call. Every style's mirror is one variant in the part batch's two mirror draws: an instance draws its own
-variant and paints a body-colour cap from its instance colour (`mirrorPartsMaterial`), so mirrors stay at two draws for any fleet.
+no part adds a draw call. Every style's mirror, grille and tail trim is one variant in the part batch's one styled draw (`SeatDraw`):
+a seat draws its own variant and paints its body-colour share from its seat's tint, so styled parts stay at one draw for any fleet.
+The lamps are one draw too: each lamp seat carries its look (lit, running, braking, dark, broken) in the seat texture, so a brake
+tap or a broken lamp re-colours a seat without rebuilding the draw's geometry. No `BatchedMesh`: Firefox lacks WEBGL_multi_draw.
 
 ## Interior, engine bay and bare metal
 
@@ -141,7 +143,7 @@ The cabin is shared props, placed per car by its spec (`vehicle/interior.ts` `Ca
 | `ladderFrame`: rails, crossmembers, transfer case, steering box, shock bodies | 0 or 1 | `underbody: true` (the monster): in the class-lift body's space, under the floor (`CarUnderbody`) |
 | `axle`: tube, diff, knuckles, shock shafts, trailing links, driveshaft, tie rod | 0 or 2 | `underbody: true`: each pair of drawn wheels' hub midpoint, tilted and spanned to them every sync; hung in the class hub group (`assignClass`); none while either wheel is off the car |
 
-Every prop kind is one `InstancedMesh` for the whole field (`PartBatch`, `PART_PER_CAR`): adding a car adds instances, never
+Every plain prop kind is one `InstancedMesh` for the whole field (`PartBatch`, `PART_PER_CAR`): adding a car adds instances, never
 draws. At rest the interior costs six draws for the whole field (cabin, both door-card sides, front seats, rear bench, wheel) and the
 seated drivers one more; the bay and the crash bars draw only while exposed, the undercarriage (two draws) only while a monster is in
 the field. `CarDetail` takes the cabin, seats, wheel and bay at its far distance (by `INTERIOR_MESH`), the door cards, crash bars

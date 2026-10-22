@@ -22,9 +22,6 @@ import { assignClass, CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
 
 const mm = (v: THREE.Vector3): string => v.toArray().map((x) => x.toFixed(3)).join();
 
-/** Instances a kind draws this sync, over all its variant draws. */
-const drawn = (batch: PartBatch, kind: number): number => batch.kinds[kind]!.reduce((n, m) => n + m.count, 0);
-
 /** A car whose private parts a row can tear and read. */
 class Probe extends DeformableCar {
   part(name: string) {
@@ -154,7 +151,7 @@ describe("given a field of one car of every style", () => {
   const draw = (): Record<number, number> => {
     for (const c of cars) c.group.updateMatrixWorld(true);
     batch.sync(cars);
-    return Object.fromEntries(PART_KINDS.map((k) => [k, drawn(batch, k)]));
+    return Object.fromEntries(PART_KINDS.map((k) => [k, batch.drawn(k)]));
   };
   const rows = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].seats.rear !== null).length;
   const lifted = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].underbody).length;
@@ -203,18 +200,18 @@ describe("given a monster truck of its class at rest on flat ground", () => {
   const v = new THREE.Vector3();
 
   test("when the batch syncs, then its frame and both axles draw, and a pickup body on the same lift draws none of them", () => {
-    assert.equal(drawn(batch, PART_KIND.ladderFrame), 1);
-    assert.equal(drawn(batch, PART_KIND.axle), 2);
+    assert.equal(batch.drawn(PART_KIND.ladderFrame), 1);
+    assert.equal(batch.drawn(PART_KIND.axle), 2);
     const plain = new PartBatch(1);
     plain.sync([build("pickup")]);
-    assert.equal(drawn(plain, PART_KIND.ladderFrame) + drawn(plain, PART_KIND.axle), 0);
+    assert.equal(plain.drawn(PART_KIND.ladderFrame) + plain.drawn(PART_KIND.axle), 0);
   });
 
   test("when its axles are read, then each sits on its wheels' hubs, at the class's hub height (the drawn tyre's radius)", () => {
     const hub = carFrame(monster.style).rig.tyre.r * CLASSES.monster.wheelScale;
     const w = monster.wheels.map((wheel) => wheel.getWorldPosition(new THREE.Vector3()));
     for (const [k, [a, b]] of [[0, 1], [2, 3]].entries()) {
-      batch.kinds[PART_KIND.axle]![0]!.getMatrixAt(k, m);
+      batch.kinds[PART_KIND.axle]!.getMatrixAt(k, m);
       v.setFromMatrixPosition(m);
       const mid = w[a!]!.clone().add(w[b!]!).multiplyScalar(0.5);
       assert.ok(v.distanceTo(mid) < 1e-4 && Math.abs(v.y - hub) < 1e-4, `axle ${k} at ${mm(v)}, hubs' midpoint ${mm(mid)}, hub height ${hub.toFixed(3)}`);
@@ -224,7 +221,7 @@ describe("given a monster truck of its class at rest on flat ground", () => {
   test("when every undercarriage vertex is read through its instance, then none is below the ground", () => {
     let low = Infinity;
     for (const kind of [PART_KIND.ladderFrame, PART_KIND.axle]) {
-      const mesh = batch.kinds[kind]![0]!;
+      const mesh = batch.kinds[kind]!;
       const pos = partGeometry(kind).getAttribute("position");
       for (let k = 0; k < mesh.count; k++) {
         mesh.getMatrixAt(k, m);
@@ -277,13 +274,13 @@ describe("given a monster truck of its class at rest on flat ground", () => {
     const own = new PartBatch(1);
     own.sync([popped]);
     const before = new THREE.Matrix4();
-    own.kinds[PART_KIND.axle]![0]!.getMatrixAt(0, before);
+    own.kinds[PART_KIND.axle]!.getMatrixAt(0, before);
     popped["dropWheel"](0, "hubFL");
     popped.group.updateMatrixWorld(true);
     own.sync([popped]);
     assert.ok(popped.wheels[0]!.parent === scene, "the control: the wheel left the car");
-    assert.equal(drawn(own, PART_KIND.axle), 2, "both axles draw");
-    own.kinds[PART_KIND.axle]![0]!.getMatrixAt(0, m);
+    assert.equal(own.drawn(PART_KIND.axle), 2, "both axles draw");
+    own.kinds[PART_KIND.axle]!.getMatrixAt(0, m);
     const moved = Math.max(...m.elements.map((e, i) => Math.abs(e - before.elements[i]!)));
     assert.ok(moved < 1e-4, `the front axle moved ${moved.toFixed(5)} off its rest place`);
   });

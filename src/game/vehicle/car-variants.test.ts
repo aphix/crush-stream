@@ -2017,10 +2017,12 @@ describe("given a body style's P2 parts", () => {
     car.group.updateMatrixWorld(true);
     const batch = new LampBatch(2);
     batch.sync([car]);
-    const got = new THREE.Matrix4();
-    const lidDraws = batch.slots[7]!;
-    lidDraws[lidDraws.length === 1 ? 0 : lid.variant]!.getMatrixAt(0, got);
+    // Rows pack the lamps, then the fittings in order (all shown here): the lid's row follows the lamps and the fittings before it.
+    const row = car.lamps.length + car.lampFittings.indexOf(lid);
+    const got = batch.draw.matrixAt(row, new THREE.Matrix4());
     for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!) < 1e-6, `the opened lid's pose, element ${k}`);
+    const drawnShare = batch.draw.variants[batch.draw.variantAt(row)]!.getIndex()!.count;
+    assert.equal(drawnShare, drawnLamp(car.style, "boot", lid.share!.lamp.side).geometry.getIndex()!.count, "the lid's row draws its own share");
   });
 
   it("when a bumper carries its seam, then it is the skin up to the seam on the end face and round the corner on both sides (rays from outside meet it 2 cm under the seam and the body 2 cm over), and a bumper without one draws as before", () => {

@@ -845,8 +845,8 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
 
 /**
  * Measured by building every style's car: the visible meshes a car draws, the triangles they hold, and the body mesh's vertices (what the
- * skin writes each frame, so what its cost follows). `drawCalls` counts the car's own meshes: its seven static parts are seats `PartBatch`
- * draws, one instanced draw per kind for every car.
+ * skin writes each frame, so what its cost follows). `drawCalls` counts the car's own meshes: its static parts are seats `PartBatch` draws
+ * (the plain kinds one instanced draw each, the styled kinds one `SeatDraw` for every car), none of them the car's meshes.
  */
 const BASELINE_BY_STYLE = [
   { id: "sedan", drawCalls: 13, triangles: 5266, bodyVertices: 1587 },
