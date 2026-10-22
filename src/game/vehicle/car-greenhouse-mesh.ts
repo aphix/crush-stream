@@ -250,7 +250,7 @@ type Rail = { rear: V3; front: V3; inward?: readonly [number, number] };
 
 /**
  * Pillar lofted through `rails` (belt to top), thickness inward, its unit `section` at each rail's width (default: corners rounded at
- * `radius` (m) in `steps` chords, the outer face bulged `crown` (m)); sign -1 mirrors to the left without flipping the winding.
+ * `radius` (m) in `steps` chords, the outer face bulged `crown` (m)); sign -1 mirrors to the left, its outer face still at u = 1.
  * Its end caps share the end rings; `open`: both ends are buried (in the body, the roof's side), so it draws no caps.
  */
 function roundedPillarAlong(
@@ -283,7 +283,7 @@ function roundedPillarAlong(
     const u = pos.getX(i);
     const w = pos.getY(i);
     const { rear, front, inward = [1, 0] } = rails[Math.round(pos.getZ(i) * last)]!;
-    const depth = (sign > 0 ? 1 - u : u) * thick;
+    const depth = (1 - u) * thick;
     pos.setXYZ(i, sign * (lerp(rear[0], front[0], w) - depth * inward[0]), lerp(rear[1], front[1], w), lerp(rear[2], front[2], w) + depth * inward[1]);
   }
   ensureOutwardNormals(geo);
@@ -298,7 +298,7 @@ export function postSection(thick: number, width: number, crown = PILLAR_CROWN):
 
 /**
  * Drawn post (`postSection`) mapped onto four outer-face corners (+x side), its depth straight in, or square to its face in plan when
- * `square` (the C-pillar, whose face turns toward the tail); sign -1 mirrors to the left without flipping the winding.
+ * `square` (the C-pillar, whose face turns toward the tail); sign -1 mirrors to the left.
  */
 function roundedPillarFromCorners(sign: number, c: { fb: V3; rb: V3; rt: V3; ft: V3 }, thick: number, square = false): THREE.BufferGeometry {
   const rails = [0, 1].map((v): Rail => {
@@ -353,10 +353,12 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const glassPlaneX = (y: number) => lerp(beltX(footZ, style), cantX(aTopZ, style), THREE.MathUtils.clamp((y - footY) / (cantTop - footY), 0, 1));
   const railAt = (t: number): Rail => {
     const y = lerp(footY, aTopY, t);
-    const postZ = aPostRearZ(y, style);
     const edge = lerp(edgeFoot, 1, t);
-    // The top station runs into the roof: its front is held inside the roof's span, where the roof's tuck holds it, not a blade past its end.
-    const frontZ = Math.min(lerp(base[1], topZ, edge) + A_POST_LIFT * uy, t === 1 ? style.roofZ[1] - ROOF_TUCK : Infinity);
+    const [rearZ, edgeZ] = [aPostRearZ(y, style), lerp(base[1], topZ, edge) + A_POST_LIFT * uy];
+    // The top station runs into the roof: its ring is moved back to lie a post's depth (its section's reach in z) inside the roof's
+    // span, where the roof's tuck holds all of it, not a blade past its end.
+    const back = t === 1 ? Math.max(0, Math.max(rearZ, edgeZ) - (style.roofZ[1] - ROOF_TUCK - A_POST_THICK)) : 0;
+    const [postZ, frontZ] = [rearZ - back, edgeZ - back];
     const frontY = lerp(base[0], topY, edge) - A_POST_LIFT * uz;
     const [frontX, rearX] = [lerp(wBase, wTop, edge) / 2 + A_POST_LIFT, glassPlaneX(y) + A_POST_LIFT];
     const roofZ = THREE.MathUtils.clamp(postZ, style.roofZ[0], style.roofZ[1]);
@@ -646,7 +648,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   for (const sign of [-1, 1]) {
     parts.push(
       aPost
-        ? pillar(roundedPillarAlong(sign, aPost.post, A_POST_THICK, { open: true, section: (width) => postSection(A_POST_THICK, width) }), "a")
+        ? pillar(roundedPillarAlong(sign, aPost.post, A_POST_THICK, { open: true, section: (width) => postSection(A_POST_THICK, width, A_POST_CROWN * width) }), "a")
         : boxFromCorners(
             sign,
             {

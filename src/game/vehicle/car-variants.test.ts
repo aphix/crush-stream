@@ -723,6 +723,48 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
+  it("when any style's drawn A-post is read, then its top station lies inside the roof's z span, so the roof holds its whole top ring: no blade past the roof's front end", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      for (const post of makeGreenhouseFrame(style, "drawn").filter((g) => g.name === "a")) {
+        const { ring, slices } = post.userData.loft as { ring: number; slices: number };
+        const pos = post.getAttribute("position") as THREE.BufferAttribute;
+        for (let k = (slices - 1) * ring; k < slices * ring; k++) {
+          assert.ok(pos.getZ(k) <= style.roofZ[1], `${id}: A-post top vertex (${pos.getX(k)}, ${pos.getY(k)}, ${pos.getZ(k)}) past the roof's front end ${style.roofZ[1]}`);
+        }
+      }
+    }
+  });
+
+  it("when a drawn A-post 10 cm wide or more is read at a station under the roof, then its outer face turns 25° or more across its width, outboard on both sides: a curved post from the side glass to the windshield, not a flat plank (the plank turned 15-20°)", () => {
+    /** A post section's outer face in ring points (`postSection`: three chords a corner, then the crown's three points): its edges and the chords off them. */
+    const FACE = { edge: [3, 7], next: [4, 6] } as const;
+    /** A 10 cm post's outer face between its 13.5 mm corners (m): narrower posts read round at any crown. */
+    const WIDE_FACE = 0.073;
+    let read = 0;
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      for (const post of makeGreenhouseFrame(style, "drawn").filter((g) => g.name === "a")) {
+        const { ring, slices } = post.userData.loft as { ring: number; slices: number };
+        const pos = post.getAttribute("position") as THREE.BufferAttribute;
+        for (let slice = 0; slice < slices; slice++) {
+          const at = (k: number) => new THREE.Vector3().fromBufferAttribute(pos, slice * ring + k);
+          const points = Array.from({ length: ring }, (_, k) => at(k));
+          if (points.some((p) => p.z >= style.roofZ[0] && p.z <= style.roofZ[1] && p.y > cantY(p.z, style))) continue;
+          const [a, b] = [at(FACE.edge[0]), at(FACE.edge[1])];
+          if (a.distanceTo(b) < WIDE_FACE) continue;
+          read++;
+          const centre = points.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(ring);
+          const mid = a.clone().add(b).multiplyScalar(0.5);
+          assert.ok(Math.abs(mid.x) > Math.abs(centre.x), `${id} station ${slice}: the crowned face stands inboard of the post's centre (x ${mid.x} vs ${centre.x})`);
+          const turn = at(FACE.next[0]).sub(a).angleTo(b.clone().sub(at(FACE.next[1])));
+          assert.ok(turn >= THREE.MathUtils.degToRad(25), `${id} station ${slice}: the outer face turns ${THREE.MathUtils.radToDeg(turn).toFixed(1)}° across ${(a.distanceTo(b) * 1000).toFixed(0)} mm`);
+        }
+      }
+    }
+    assert.ok(read > 0, "no A-post station 10 cm wide under the roof");
+  });
+
   it("when a style's door glass starts further back than the A-post's width, then a sail fills the gap from the post to the glass at the belt", () => {
     const sedan = CAR_STYLES.sedan;
     const moved: BodyStyle = { ...sedan, aPillarFoot: sedan.windshield.base[1] - 0.4 };
