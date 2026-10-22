@@ -33,8 +33,17 @@ const FLAG_BAD = 2;
 const ZF_ANGLE = 4;
 const ZF_EPS = 0.002;
 const ZF_AREA = 2e-6;
-/** A suggested z-fighting fix stands the detail this far (m) off the panel it fights: clear of the depth buffer's reach at chase range. */
-const ZF_FIX_M = 0.003;
+/** Two surfaces under this (m) apart are in one place (a true overlap): a geometric fix. Apart, a polygon offset is measured. */
+const TRUE_OVERLAP_M = 0.00005;
+/** The camera ranges (m) the offset must hold at: up close (garage, near chase), chase, derby and far camera. */
+const OFFSET_RANGES = [5, 20, 80];
+/** The race camera's lens and planes and its view (`depth-probe.ts`), which the measure's pixels stand for. */
+const PROBE_LENS = { fov: 62, near: 0.1, far: 900, w: 1280, h: 800 };
+/** depth-probe.ts's ladders, run on past their top for parts a few millimetres apart at 80 m. */
+const FACTORS = [0, 1 / 128, 1 / 64, 1 / 32, 1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8];
+const UNITS = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384];
+/** A range whose detail covers fewer probe pixels than this is not measured: no suggestion from it. */
+const OFFSET_MIN_PX = 40;
 /** Findings closer than PLACE_M (m) are one place (a long run of them one place too); a z-fighting place under ZF_PLACE_CM2 (cm²) is left out. */
 const PLACE_M = 0.15;
 const ZF_PLACE_CM2 = 0.3;
@@ -348,7 +357,7 @@ function zFighting(s, cells, ctx) {
         const ccw = (poly) => ((poly[1][0] - poly[0][0]) * (poly[2][1] - poly[0][1]) - (poly[1][1] - poly[0][1]) * (poly[2][0] - poly[0][0]) < 0 ? poly.reverse() : poly);
         const overlap = area(clipPoly(ccw(Q), ccw(P)));
         if (overlap < ZF_AREA) continue;
-        items.push({ p: T.getMidpoint(new THREE.Vector3()), area: overlap, sep, parts: [s.part[i], s.part[j]], areas: [areas[i], areas[j]], n: ni.clone() });
+        items.push({ p: T.getMidpoint(new THREE.Vector3()), area: overlap, sep, parts: [s.part[i], s.part[j]], tris: [i, j], areas: [areas[i], areas[j]], n: ni.clone() });
       }
     }
   }
@@ -359,7 +368,12 @@ function zFighting(s, cells, ctx) {
     const partSet = [...new Set(g.flatMap((x) => x.parts))];
     const partArea = new Map(partSet.map((p) => [p, 0]));
     for (const x of g) for (const [k, pi] of x.parts.entries()) partArea.set(pi, partArea.get(pi) + x.areas[k]);
+    // Each part's triangles in the place, for the depth measure (`offsetNeeded`).
+    const tris = new Map(partSet.map((pi) => [pi, new Set()]));
+    for (const x of g) for (const [k, pi] of x.parts.entries()) tris.get(pi).add(x.tris[k]);
     return {
+      tris,
+      partIdx: partSet,
       at: worst.p.toArray().map((c) => Math.round(c * 1000) / 1000),
       p: worst.p,
       areaCm2: r1(total * 1e4),
@@ -374,8 +388,111 @@ function zFighting(s, cells, ctx) {
     .filter((z) => z.areaCm2 >= ZF_PLACE_CM2);
 }
 
-/** The car's exterior defects and the fixes certain enough to suggest. */
-export function defectsOf(stage, style, lift, rearBumper, belt) {
+/** The material a detail draws with: the lamp units' one draw, the seated parts' one styled draw. */
+const MATERIAL_OF = (name) => (name.startsWith("lamp unit") ? "LampBatch draw material (lamp-lights.ts)" : "PartBatch styled draw material (part-batch.ts)");
+
+/**
+ * The polygon offset a detail's material needs to show over the panel it fights: the place's own triangles of each, the panel drawn
+ * first (`LessEqual`) and the detail after it (`Less`, offset), seen at each of OFFSET_RANGES (m) through the race camera's lens and
+ * planes (`depth-probe.ts`: 62°, 0.1-900 m, a 1280 x 800 view), zoomed with a view offset so the place fills the probe's window. The
+ * offset is tried up depth-probe's two ladders, alone: `factor` (pixels of the detail's depth slope, `polygonOffsetFactor`, scaled
+ * back to the game's pixel) and `units` (24-bit depth steps, `polygonOffsetUnits`). Per range, the smallest that shows the detail on
+ * 95 % of its own pixels (`crossing`), or null past the ladder.
+ */
+function offsetNeeded(probe, s, z, detailIdx, panelIdx) {
+  const { port, crossing } = probe;
+  // The browser's canvas depth is 24-bit (DEPTH24_STENCIL8); the headless canvas's is 32: draw into a target whose depth three makes
+  // DEPTH_COMPONENT24, so a step is the game's.
+  const target = new THREE.WebGLRenderTarget(port.W, port.H, { depthBuffer: true, stencilBuffer: false });
+  const pixels = new Uint8Array(port.W * port.H * 4);
+  const draw = (cam) => {
+    port.renderer.setRenderTarget(target);
+    port.renderer.setClearColor(0x000000, 1);
+    port.renderer.clear();
+    port.renderer.render(scene, cam);
+    port.renderer.readRenderTargetPixels(target, 0, 0, port.W, port.H, pixels);
+    port.renderer.setRenderTarget(null);
+    port.renderer.setClearColor(0x000000, 0);
+    return pixels;
+  };
+  const geometry = (set) => {
+    const pos = new Float32Array(set.size * 9);
+    let k = 0;
+    for (const t of set) pos.set(s.tri.subarray(t * 9, t * 9 + 9), 9 * k++);
+    return new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  };
+  const flat = (rgb, strict) => new THREE.MeshBasicMaterial({ color: rgb, side: THREE.DoubleSide, depthFunc: strict ? THREE.LessDepth : THREE.LessEqualDepth });
+  const panel = new THREE.Mesh(geometry(z.tris.get(panelIdx)), flat(0xff0000, false));
+  const detail = new THREE.Mesh(geometry(z.tris.get(detailIdx)), flat(0x00ff00, true));
+  detail.material.polygonOffset = true;
+  detail.renderOrder = 1;
+  panel.frustumCulled = detail.frustumCulled = false;
+  const scene = new THREE.Scene().add(panel, detail);
+  const box = new THREE.Box3().setFromObject(detail);
+  const centre = box.getCenter(new THREE.Vector3());
+  const size = Math.max(box.getSize(new THREE.Vector3()).length(), 0.01);
+  // Seen off its normal by 30°, toward the sky: as a chase or derby camera looks down onto a car's panels.
+  const n = new THREE.Vector3().fromArray(z.normal).normalize();
+  const view = n.clone().multiplyScalar(Math.cos(Math.PI / 6)).add(new THREE.Vector3(0, 1, 0).projectOnPlane(n).normalize().multiplyScalar(Math.sin(Math.PI / 6))).normalize();
+  const share = (cam, mask) => {
+    const rgba = draw(cam);
+    let shown = 0;
+    let all = 0;
+    for (let i = 0; i < mask.length; i++) {
+      if (!mask[i]) continue;
+      all++;
+      if (rgba[i * 4 + 1] > 127) shown++;
+    }
+    return all ? shown / all : 0;
+  };
+  const out = OFFSET_RANGES.map((range) => {
+    const cam = new THREE.PerspectiveCamera(PROBE_LENS.fov, PROBE_LENS.w / PROBE_LENS.h, PROBE_LENS.near, PROBE_LENS.far);
+    cam.position.copy(centre).addScaledVector(view, range);
+    cam.lookAt(centre);
+    cam.updateMatrixWorld(true);
+    // The game's pixel there, and the zoom that makes the place span the probe's window.
+    const gamePx = (2 * range * Math.tan((PROBE_LENS.fov * Math.PI) / 360)) / PROBE_LENS.h;
+    const zoom = Math.max(1, (0.8 * port.H * gamePx) / size);
+    const [W, H] = [PROBE_LENS.w * zoom, PROBE_LENS.h * zoom];
+    cam.setViewOffset(W, H, W / 2 - port.W / 2, H / 2 - port.H / 2, port.W, port.H);
+    // The detail's own pixels: drawn alone.
+    panel.visible = false;
+    detail.material.polygonOffsetFactor = detail.material.polygonOffsetUnits = 0;
+    const own = draw(cam);
+    const mask = new Uint8Array(port.W * port.H);
+    for (let i = 0; i < mask.length; i++) mask[i] = own[i * 4 + 1] > 127 ? 1 : 0;
+    panel.visible = true;
+    // Up the ladder until the detail shows on 95 % of its pixels; past that every rung shows it too.
+    const ladder = (values, set) => {
+      const out = [];
+      for (const v of values) {
+        set(v);
+        out.push(out.at(-1) >= 0.95 ? 1 : share(cam, mask));
+      }
+      return out;
+    };
+    const byFactor = ladder(FACTORS, (v) => {
+      detail.material.polygonOffsetFactor = -v;
+      detail.material.polygonOffsetUnits = 0;
+    });
+    const byUnits = ladder(UNITS, (v) => {
+      detail.material.polygonOffsetFactor = 0;
+      detail.material.polygonOffsetUnits = -v;
+    });
+    const f = crossing(FACTORS, byFactor, 0.95);
+    const u = crossing(UNITS, byUnits, 0.95);
+    return { rangeM: range, factor: f === null ? null : Math.round((f / zoom) * 1000) / 1000, units: u === null ? null : Math.round(u), pixels: mask.reduce((a, b) => a + b, 0) };
+  });
+  target.dispose();
+  for (const m of [panel, detail]) {
+    m.geometry.dispose();
+    m.material.dispose();
+  }
+  return out;
+}
+
+/** The car's exterior defects and the fixes certain enough to suggest; `probe` ({ game, port, crossing }) measures z-fighting's offsets. */
+export function defectsOf(stage, style, lift, rearBumper, belt, probe) {
   const car = stage.car;
   const skip = smallFittings(style, rearBumper, lift);
   const s = partsOf(stage, skip);
@@ -385,12 +502,26 @@ export function defectsOf(stage, style, lift, rearBumper, belt) {
   const edges = freeEdges(s, cells, ctx);
   const zf = zFighting(s, cells, ctx);
   const suggest = [];
-  // Certain: a place between exactly one detail (a lamp unit or a seated part) and one panel: the detail goes out to ZF_FIX_M off it.
+  // A place between exactly one detail (a lamp unit or a seated part) and one panel. Two surfaces in one place (under TRUE_OVERLAP_M
+  // apart) are one too many: push the detail out. Apart, its material's polygon offset clears it at every range, measured.
   const detail = (name) => name.startsWith("lamp unit") || EXTERIOR_PARTS.includes(name);
   for (const z of zf) {
-    const details = z.parts.filter(detail);
-    if (z.parts.length !== 2 || details.length !== 1) continue;
-    suggest.push({ fix: "push out", part: details[0], from: z.parts.find((p) => !detail(p)), mm: Math.round((ZF_FIX_M * 1000 - z.sepMm) * 10) / 10, along: z.normal, at: z.at, reads: `z-fighting ${z.areaCm2} cm² at ${z.region}, ${z.sepMm} mm apart`, confidence: "high" });
+    const details = z.partIdx.filter((pi) => detail(s.names[pi]));
+    if (z.partIdx.length !== 2 || details.length !== 1) continue;
+    const [d, p] = [details[0], z.partIdx.find((pi) => pi !== details[0])];
+    const reads = `z-fighting ${z.areaCm2} cm² at ${z.region}, ${z.sepMm} mm apart`;
+    if (z.sepMm < TRUE_OVERLAP_M * 1000) {
+      suggest.push({ fix: "push out", part: s.names[d], from: s.names[p], mm: 1, along: z.normal, at: z.at, reads, confidence: "high" });
+      continue;
+    }
+    if (!probe) continue;
+    const ranges = offsetNeeded(probe, s, z, d, p);
+    // Certain only where every range was measured on enough pixels and cleared within the ladder.
+    if (ranges.some((r) => r.pixels < OFFSET_MIN_PX || (r.factor === null && r.units === null))) continue;
+    // A detail that already shows at every range without an offset fights nowhere it is drawn: nothing to fix.
+    if (ranges.every((r) => r.factor === 0 || r.units === 0)) continue;
+    const worst = (k) => (ranges.every((r) => r[k] !== null) ? Math.max(...ranges.map((r) => r[k])) : null);
+    suggest.push({ fix: "polygonOffset", part: s.names[d], from: s.names[p], material: MATERIAL_OF(s.names[d]), polygonOffsetFactor: worst("factor") === null ? null : -worst("factor"), polygonOffsetUnits: worst("units") === null ? null : -worst("units"), ranges, at: z.at, reads, confidence: "high" });
   }
   const intended = intendedEdges(style, lift);
   for (const e of edges) {
@@ -404,7 +535,7 @@ export function defectsOf(stage, style, lift, rearBumper, belt) {
     }
   }
   const strip = (x) => {
-    const { p: _p, heights: _h, points: _q, ...rest } = x;
+    const { p: _p, heights: _h, points: _q, tris: _t, partIdx: _i, ...rest } = x;
     return rest;
   };
   return { gaps: edges.map(strip), zfight: zf.map(strip), suggest, flags: [...edges.map((e) => ({ p: e.p.toArray(), level: e.level, colour: "gap" })), ...zf.map((z) => ({ p: z.p.toArray(), level: z.level, colour: "zfight" }))], skipped: skip.map((f) => f.name) };

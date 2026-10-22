@@ -377,7 +377,12 @@ the same region on the other cars, not against a fixed bar.
 - `zfight`: triangles of any parts (the same part too) facing within 4° and within 2 mm of one plane, overlapping. Each place
   gives `areaCm2` of overlap and `sepMm`. 2 mm fights at chase range, so a lamp unit or grille set 1–2 mm proud of the body
   shows up here.
-- `suggest` lines carry a fix only where it is certain, labelled `"confidence":"high"` with the reading they fix. For now that is
-  z-fighting between one detail (lamp unit, grille, tail trim, wipers, mirror) and one panel: push the detail out by `mm` along
-  `along` to stand 3 mm off. Gaps, stand-offs and turns print no suggestion yet; nothing is printed when unsure. The lines are
-  data for a lane, or later a builder, to take or leave; no builder reads them.
+- `suggest` lines carry a fix only where it is certain, labelled `"confidence":"high"` with the reading they fix. For now they
+  cover z-fighting between one detail (lamp unit, grille, tail trim, wipers, mirror) and one panel:
+  - Two surfaces in one place (under 0.05 mm apart): `push out` the detail by `mm` along `along`.
+  - Otherwise: `polygonOffset`, the `polygonOffsetFactor` / `polygonOffsetUnits` the detail's `material` needs. Each comes from
+    `depth-probe.ts`'s two ladders, run as the race camera sees the place at 5, 20 and 80 m (`ranges`), on a 24-bit depth target
+    as the browser's. It is the smallest offset that shows the detail on 95 % of its pixels; factor is in game pixels of slope,
+    units in depth steps. It is printed only when every range measured and some range needs an offset.
+  - Gaps, stand-offs and turns print no suggestion yet; nothing is printed when unsure.
+  - The lines are data for a lane, or later a builder, to take or leave; no builder reads them.
