@@ -372,6 +372,11 @@ describe("given the ramps with no slab between them, and a car that is or become
     assert.deepEqual(flags.list, []);
   });
 
+/**
+ * The speed (m/s) under which a landed wreck is coming to rest: the frames the stale-speed guard reads. Sliding faster, a wreck's velocity
+ * (its masses' mean) carries its masses' rebound off a landing while the ground holds its height: 0.077 m/s for one frame at 6 m/s.
+ */
+const NEAR_REST = 0.5;
   it("when that struck car has landed and come to rest, then it has no vertical speed and takes the flat ground's pitch and roll", (t) => {
     const { w, car } = scene(false);
     car.spawnFacing(0, -14, 0, 15);
@@ -384,8 +389,8 @@ describe("given the ramps with no slab between them, and a car that is or become
         struck = true;
         car.applyImpact(car.group.localToWorld(new THREE.Vector3(0.9, 0.5, 0.4)), car.right.clone().negate(), 8, 8);
       }
-      // In flight its apex holds y still under up to g·frame/2 of speed; the stale speed this guards is a landed one.
-      if (!car.airborne && Math.abs(p.y - lastY) < 1e-4) stale = Math.max(stale, Math.abs(car.velocity.y));
+      // In flight its apex holds y still under up to g·frame/2 of speed; the stale speed this guards is a landed one, coming to rest.
+      if (!car.airborne && car.velocity.length() < NEAR_REST && Math.abs(p.y - lastY) < 1e-4) stale = Math.max(stale, Math.abs(car.velocity.y));
       lastY = p.y;
     });
     const pitch = car.group.rotation.x;
