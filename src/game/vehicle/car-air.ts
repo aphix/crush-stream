@@ -788,17 +788,21 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     let zMin = Infinity;
     let zMax = -Infinity;
     let low = Infinity;
+    // Compares, not `Math.min`/`max`: the same bounds (the points are finite; a -0 against a +0 is the same box once `pad` is
+    // added), and no builtin call per point while this function runs below TurboFan, where each one boxed its double (1.2 M a
+    // 20 s race, 19.5 MB).
     for (let i = 0; i < pointEnd; i++) {
       const x = POINT_X[i]!;
       const y = POINT_Y[i]! - stockY;
       const z = POINT_Z[i]!;
       const rx = _e[0]! * x + _e[3]! * y + _e[6]! * z;
       const rz = _e[2]! * x + _e[5]! * y + _e[8]! * z;
-      xMin = Math.min(xMin, rx);
-      xMax = Math.max(xMax, rx);
-      zMin = Math.min(zMin, rz);
-      zMax = Math.max(zMax, rz);
-      low = Math.min(low, _e[1]! * x + _e[4]! * y + _e[7]! * z);
+      const ry = _e[1]! * x + _e[4]! * y + _e[7]! * z;
+      if (rx < xMin) xMin = rx;
+      if (rx > xMax) xMax = rx;
+      if (rz < zMin) zMin = rz;
+      if (rz > zMax) zMax = rz;
+      if (ry < low) low = ry;
     }
     const descent = (Math.max(0, -v.y) + turn) * dt + SPECULATIVE_GAP + CLEAR_ROUND;
     const x0 = centreOfMass.x + xMin - pad;
