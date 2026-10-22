@@ -3,7 +3,7 @@ import { sortByDrawClass } from "../present/draw-order.ts";
 
 /**
  * Lit shaders skip a point or spot light's BRDF where the light adds nothing: past its range, outside its cone,
- * or at intensity 0. Every lit program carries the lamp pool's 4 spots and 4 points (`lamp-lights.ts`: changing
+ * or at intensity 0. Every lit program carries the lamp pool's 4 head and 4 tail spots (`lamp-lights.ts`: changing
  * the count relinks every program), the impact flash and the derby winner's spot, and three ran the full BRDF
  * for each of them on every fragment. Exact: three already zeroes such a light's colour and clears `visible`.
  */
