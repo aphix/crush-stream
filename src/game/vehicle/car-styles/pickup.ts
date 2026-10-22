@@ -18,7 +18,6 @@ const TRUCK_FRONT_FASCIA = [
 
 /** The trucks' tall gloss-black tow-style mirror housing, read off their isos ([out from the door, height, length along the car] m). */
 export const TOW_MIRROR = { cap: "box", finish: "black", size: [0.07, 0.22, 0.16] } as const;
-
 /** Pickup's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const PICKUP_LAMP_SHAPES = {
   head: {
@@ -49,6 +48,7 @@ const PICKUP_LAMP_SHAPES = {
     lens: "dark",
   },
 } as const;
+
 
 /** 80s regular-cab long-bed pickup (Toyota Pickup proportions): boxy cab, flat hood, open bed; the trunk part is the tailgate. */
 export const PICKUP: BodyStyle = {

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { once } from "../kernel/scalar.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
-import { applyFinish } from "./car-finish.ts";
+import { applyFinish, glslFloat } from "./car-finish.ts";
 import { BARE_METAL_FRAGMENT, BARE_METAL_VERTEX } from "./bare-metal.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
 import type { BodyStyle } from "./car-variants.ts";
@@ -51,9 +51,9 @@ function withPrimer<T extends THREE.MeshStandardMaterial>(m: T): T {
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>\nvarying float vPrimer;\n${BARE_METAL_FRAGMENT.pars}`)
       .replace("#include <map_fragment>", `#include <map_fragment>\ndiffuseColor.rgb *= vec3(${PAINT_COLOR_TONE.r}, ${PAINT_COLOR_TONE.g}, ${PAINT_COLOR_TONE.b});`)
-      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\nroughnessFactor *= ${PAINT_ROUGHNESS_TONE};\n${BARE_METAL_FRAGMENT.roughness}`)
-      .replace("#include <metalnessmap_fragment>", `#include <metalnessmap_fragment>\n${BARE_METAL_FRAGMENT.metalness}`)
-      .replace("#include <color_fragment>", `#include <color_fragment>\n${BARE_METAL_FRAGMENT.color}`)
+      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\nroughnessFactor *= ${PAINT_ROUGHNESS_TONE};\n${BARE_METAL_FRAGMENT.roughness}\n${GLOSS_BLACK.roughness}`)
+      .replace("#include <metalnessmap_fragment>", `#include <metalnessmap_fragment>\n${BARE_METAL_FRAGMENT.metalness}\n${GLOSS_BLACK.metalness}`)
+      .replace("#include <color_fragment>", `#include <color_fragment>\n${BARE_METAL_FRAGMENT.color}\n${GLOSS_BLACK.color}`)
       .replace("#include <lights_physical_fragment>", `#include <lights_physical_fragment>\n${BARE_METAL_FRAGMENT.clearcoat}`);
   };
   m.customProgramCacheKey = () => "car-paint-primer";
@@ -170,11 +170,15 @@ export function makePaintMaterial(color: number): THREE.MeshPhysicalMaterial {
 
 const trimByKey = new Map<string, THREE.MeshStandardMaterial>();
 
-/** Trim finishes: the accent trim's satin, chrome, black plastic, and a painted bumper's (the paint's metalness and roughness, no clear coat). */
+/**
+ * Trim finishes: the accent trim's satin, chrome, black plastic, gloss black (blacked-out trim and black mirror housings: piano black,
+ * crisp highlights), and a painted bumper's (the paint's metalness and roughness, no clear coat).
+ */
 export const TRIM_FINISH = {
   satin: { metalness: 0.55, roughness: 0.38 },
   chrome: { metalness: 0.95, roughness: 0.16 },
   plastic: { metalness: 0.3, roughness: 0.6 },
+  gloss: { metalness: 0.05, roughness: 0.14 },
   paint: { metalness: 0.2, roughness: 0.42 },
 } as const;
 
@@ -187,6 +191,16 @@ function glslTone(hex: number): string {
   const c = new THREE.Color(hex);
   return `vec3(${c.r}, ${c.g}, ${c.b})`;
 }
+
+/**
+ * A `BLACKOUT` vertex (primer below 0) on the paint: the black trim's colour, as smooth as gloss trim, under the paint's own clear coat:
+ * the references' blacked-out pillars, cowls and roof rails are piano black with crisp highlights, not bare steel or satin plastic.
+ */
+const GLOSS_BLACK = {
+  color: `float glossW = smoothstep(0.3, 0.6, -vPrimer);\ndiffuseColor.rgb = mix(diffuseColor.rgb, ${glslTone(TRIM_BLACK)}, glossW);`,
+  roughness: `roughnessFactor = mix(roughnessFactor, ${glslFloat(TRIM_FINISH.gloss.roughness)}, glossW);`,
+  metalness: `metalnessFactor = mix(metalnessFactor, ${glslFloat(TRIM_FINISH.gloss.metalness)}, glossW);`,
+};
 
 /** Fittings drawn in the trim's one mesh: a `FITTING_ATTRIBUTE` vertex (0 on a mesh without one) of a `FITTING_TONE` takes that tone's colour and finish. Wraps `capHighlights`' compile hook. */
 function withFittings<T extends THREE.MeshStandardMaterial>(m: T): T {
@@ -332,19 +346,21 @@ const GLASS_LOOKS = {
   cracked: { opacity: 0.55, roughness: 0.32 },
 } as const satisfies Record<GlassLook, { opacity: number; roughness: number }>;
 const glassByLook = new Map<string, THREE.MeshStandardMaterial>();
+/** A privacy pane's floor opacity: its tint alone still let ~28% of the cabin through, so the reference's black rear glass read clear. */
+const PRIVACY_OPACITY = 0.93;
 
 /**
  * The one material every pane in `look` and `color` wears: a pane changes look by changing material, never by editing its own,
  * so a car's six panes and every other car's share it (the renderer re-sends a material's uniforms each time the draw
- * changes material, and a car's panes were six copies of one). Never edit what this returns.
+ * changes material, and a car's panes were six copies of one). `privacy` panes are near-opaque. Never edit what this returns.
  */
-export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR): THREE.MeshStandardMaterial {
-  const key = `${look}:${color}`;
+export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR, privacy = false): THREE.MeshStandardMaterial {
+  const key = `${look}:${color}:${privacy}`;
   let m = glassByLook.get(key);
   if (m === undefined) {
     m = makeGlassMaterial();
     m.color.setHex(color);
-    m.opacity = GLASS_LOOKS[look].opacity;
+    m.opacity = privacy ? Math.max(GLASS_LOOKS[look].opacity, PRIVACY_OPACITY) : GLASS_LOOKS[look].opacity;
     m.roughness = GLASS_LOOKS[look].roughness;
     if (look === "cracked") m.map = getCrackMap();
     m.userData.shared = true;

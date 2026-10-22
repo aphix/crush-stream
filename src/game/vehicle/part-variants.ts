@@ -87,7 +87,9 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const fitting = (geo: THREE.BufferGeometry) => (spec.finish === "chrome" ? finished(geo, "chrome") : dark(geo, ...MIRROR_FITTING));
   // RoundedBoxGeometry comes unindexed; the other pieces are indexed, and a merge takes one kind.
   const capShape = spec.cap === "rounded" ? mergeVertices(new RoundedBoxGeometry(w, h, d, 2, MIRROR_CAP_ROUND * Math.min(w, h, d))) : new THREE.BoxGeometry(w, h, d);
-  const parts = [finished(capShape, spec.finish).translate(sign * (reach - w / 2), MIRROR_CAP_Y, 0)];
+  // A black housing is gloss (the references' piano black), not the grilles' and bumpers' satin plastic.
+  const cap = spec.finish === "black" ? dark(capShape, TRIM_BLACK, TRIM_FINISH.gloss.roughness, TRIM_FINISH.gloss.metalness) : finished(capShape, spec.finish);
+  const parts = [cap.translate(sign * (reach - w / 2), MIRROR_CAP_Y, 0)];
   const footOut = MIRROR_FOOT.out + MIRROR_FOOT_SINK;
   parts.push(fitting(new THREE.BoxGeometry(footOut, h * MIRROR_FOOT.share, d * MIRROR_FOOT.share)).translate(sign * (root - MIRROR_FOOT_SINK + footOut / 2), MIRROR_CAP_Y, 0));
   const [stalkFrom, stalkTo] = [root + MIRROR_FOOT.out, reach - w + MIRROR_FOOT.out / 2];
