@@ -1,5 +1,5 @@
 import { carSprayLayout, SPRAY_FACE, SPRAY_PALETTE, type SprayLayout, type SprayPaint } from "../match/look-data.ts";
-import { aPillarTopZ, beltY } from "../vehicle/car-lines.ts";
+import { beltY } from "../vehicle/car-lines.ts";
 import { COP_LIVERY } from "../vehicle/car-styles/police.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
 import type { DeviceClass } from "./auto-fx.ts";
@@ -70,9 +70,10 @@ function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
   const sill = style.rocker.y + SILL;
   const [doorCut, doorFront] = style.door.aperture;
   const doorRear = style.rearDoorSeam ?? doorCut;
-  // As the reference cruiser's: the roof is white up to the windshield header, the A-pillars stay black with the bonnet.
+  // As the reference cruiser's: the roof is white up to the windshield header, and the A-pillars white down to the windshield's foot
+  // (above the belt); the bonnet, cowl and front fenders stay black.
   const roofFront = style.windshieldTop[1];
-  const pillarFront = aPillarTopZ(style);
+  const pillarFront = style.windshield.base[1];
   const glassRear = style.rearGlass.base[1];
   const wordMid = (style.bPillar.rear + style.bPillar.front) / 2;
   const baseline = (beltY(wordMid, style) + sill - CAP) / 2;

@@ -4,10 +4,10 @@ import { SEDAN_DETAILS } from "./sedan-details.ts";
 
 /**
  * The reference's mirror: a rounded body-colour housing seated on the door. Off the gridded side and top: the cap stands y 0.85-0.975 (h 0.12),
- * runs about 0.10 along the car, and reaches |x| 0.88 from the skin at 0.75. At the sim's reach (0.105, tip |x| 0.857) a 0.10 cap's inner
- * face sits 5 mm off the skin over the foot; the platform-proposed 0.17 would bury 6.5 cm of cap through the door glass.
+ * runs about 0.10 along the car, and reaches |x| 0.88 from the skin at 0.752: the door's mirrorReach 0.128. Its 0.12 width leaves the cap's
+ * inner face 8 mm off the seat, over the foot (a cap wider than reach - 0.005 buries itself in the door).
  */
-export const SEDAN_MIRROR = { cap: "rounded", finish: "body", size: [0.1, 0.12, 0.1] } as const;
+export const SEDAN_MIRROR = { cap: "rounded", finish: "body", size: [0.12, 0.12, 0.1] } as const;
 
 export const SEDAN: BodyStyle = {
   id: "sedan",
@@ -36,7 +36,7 @@ export const SEDAN: BodyStyle = {
     front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.34, z: 1.965 }, span: 0.74, wrap: { from: 0.33, back: 0.242 }, trim: "body" },
     rear: { ...PLATFORM_HARDPOINTS.bumpers.rear, seat: { y: 0.52, z: 2.088 }, span: 0.76, wrap: { from: 0.3, back: 0.25 }, trim: "body" },
   },
-  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
+  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.128, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
   aPillarFoot: 0.66,
   aPillarTop: 0.08,
   /** The door glass's front edge rises from the foot to the A-post at y 1.0 (the mirror cap's top), as the reference's: only the foot's small triangle below is the black sail. */

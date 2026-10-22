@@ -121,6 +121,8 @@ const POLICE_PATCHES: readonly Patch[] = [
   { view: "front", points: [[0, 0.27], [0.38, 0.27], [0.38, 0.21], [0, 0.21]], ...VENT },
   { view: "front", points: [[0.52, 0.27], [0.66, 0.27], [0.66, 0.225], [0.52, 0.225]], ...VENT },
   { view: "rear", points: [[0, 0.82], [0.025, 0.795], [0, 0.77]], ...BADGE },
+  // The roof's black antenna dome on the centre line (cop isos; R ~22 mm at z -1.0): a raised dark disc in the roof's height map.
+  { view: "top", points: [[-0.978, 0], [-0.984, 0.0156], [-1.0, 0.022], [-1.016, 0.0156], [-1.022, 0]], depth: 0.006, rim: 0.012, cavity: 0.9 },
 ];
 
 /** Every sedan flank, top, nose and tail detail the two measurement scouts reported. */

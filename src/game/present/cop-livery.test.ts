@@ -42,7 +42,7 @@ const rgbaHex = (rgba: Uint8Array, i: number): number => (rgba[i * 4]! << 16) | 
 describe("given the police style's livery drawn into a spray bitmap", () => {
   const spray = copSpray(CAR_STYLES.police, "desktop")!;
 
-  it("when it is read, then the roof and the C-pillars beside the rear glass are white, POLICE stands black on both flanks, and the nose, tail, rear quarters and the skin under the rear glass stay bare (the black body)", () => {
+  it("when it is read, then the roof, the A-pillars and the C-pillars beside the rear glass are white, POLICE stands black on both flanks, and the nose, front fenders, tail, rear quarters and the skin under the rear glass stay bare (the black body)", () => {
     const { layout } = spray;
     assert.equal(spray.texels[texelAt(layout, ROOF_BARE, UP)], WHITE, "roof");
     for (const face of [SPRAY_FACE.left, SPRAY_FACE.right]) assert.ok(inkCount(spray, layout, face, BLACK) > 100, `letters on face ${face}`);
@@ -52,6 +52,9 @@ describe("given the police style's livery drawn into a spray bitmap", () => {
     // The rear glass spans |x| < 0.51 at z -1.4 (police: the sedan's quad, 1.05 wide at -1.68 to 1.0 at -1.159).
     assert.equal(spray.texels[texelAt(layout, [0, 1.15, -1.4], UP)], 0, "under the rear glass");
     assert.equal(spray.texels[texelAt(layout, [0.65, 1.1, -1.4], UP)], WHITE, "C-pillar beside the rear glass");
+    // The A-post over the belt (0.9) at z 0.6, between the door glass's front edge and the windshield's foot (0.93): white, as the reference's.
+    assert.equal(spray.texels[texelAt(layout, [0.75, 1.0, 0.6], [1, 0, 0])], WHITE, "A-pillar");
+    assert.equal(spray.texels[texelAt(layout, [0.8, 0.75, 0.85], [1, 0, 0])], 0, "front fender, ahead of the door, under the belt");
     assert.equal(spray.palette[WHITE], COP_LIVERY.doors);
     assert.equal(spray.palette[BLACK], COP_LIVERY.body);
   });
