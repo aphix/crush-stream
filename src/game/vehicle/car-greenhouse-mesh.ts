@@ -27,17 +27,41 @@ const ROOF_DRIP = 0.01;
 const ROOF_ROLL = [0, Math.PI / 6, Math.PI / 3, Math.PI / 2] as const;
 /** The drawn roof's side meets its flat underside near 90°: split there, so the side keeps its own normals instead of shading half down (a grey band). */
 const ROOF_CREASE_DEGREES = 60;
+/** The drawn headliner stands this far (m) inside the roof skin: a few mm, the skin's inner face, never past it. */
+const HEADLINER_INSET = 0.004;
+/** The skin points the headliner is inset from, past the left side's roll: right cant, crown, left cant (the dome bows 4 mm past the chords between). */
+const HEADLINER_POINTS = [4, 2, 0] as const;
+/** The roof's z segments: the cage's, and the drawn one's, fewer so its headliner keeps the body within its vertex budget (the chords sag 0.5 mm). */
+const ROOF_SEGS = { cage: 16, drawn: 12 } as const;
 
 /** The drawn roof's side (+x), cant line up to the dome's edge at (`x`, `y`): a quarter ellipse `ROOF_LIP_OUT + ROOF_DRIP` out and `lip` down. */
 function roofRoll(x: number, y: number, lip: number): Pt[] {
   return ROOF_ROLL.map((a) => ({ x: x + (ROOF_LIP_OUT + ROOF_DRIP) * detCos(a), y: y - lip * (1 - detSin(a)) }));
 }
 
-/** The roof panel. The cage keeps its knee-lip section; the drawn roof's side rolls into the dome with no shelf. */
+/** `skin` (an open section, left side over the crown to the right side, its left cant at `cant`) and its `HEADLINER_POINTS` `inset` inside it. */
+function shellRing(skin: Pt[], cant: number, inset: number): Pt[] {
+  const inner: Pt[] = [];
+  for (const offset of HEADLINER_POINTS) {
+    const k = cant + offset;
+    const tx = skin[k + 1]!.x - skin[k - 1]!.x;
+    const ty = skin[k + 1]!.y - skin[k - 1]!.y;
+    const len = hypot2(tx, ty);
+    // Left to right over the crown, (-ty, tx) is the skin's outward normal.
+    inner.push({ x: skin[k]!.x + (ty / len) * inset, y: skin[k]!.y - (tx / len) * inset });
+  }
+  return [...skin, ...inner];
+}
+
+/**
+ * The roof panel. The cage keeps its knee-lip section down to a keel under the crown. The drawn roof's side rolls into the dome with
+ * no shelf, and it is a thin shell: its inner face, inset `HEADLINER_INSET` from the skin's cants and crown, is the headliner
+ * (`userData.shellTwins`: each inner vertex, then the skin vertex it is inset from).
+ */
 export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry {
   const [z0, z1] = style.roofZ;
   const lip = cantDrop(style);
-  const segs = 16;
+  const segs = ROOF_SEGS[source];
   const rings: Pt[][] = [];
   const zs: number[] = [];
   for (let s = 0; s <= segs; s++) {
@@ -50,7 +74,7 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
             { x: x + ROOF_LIP_KNEE[0], y: y - ROOF_LIP_KNEE[1] },
           ]
         : roofRoll(x, y, lip).slice(0, -1);
-    rings.push([
+    const skin = [
       ...side.map((p) => ({ x: -p.x, y: p.y })),
       { x: -x, y },
       { x: -x * ROOF_SHOULDER[0], y: y + ROOF_SHOULDER[1] },
@@ -58,13 +82,33 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
       { x: x * ROOF_SHOULDER[0], y: y + ROOF_SHOULDER[1] },
       { x, y },
       ...[...side].reverse(),
-      { x: 0, y: y - 0.085 },
-    ]);
+    ];
+    rings.push(source === "drawn" ? shellRing(skin, side.length, HEADLINER_INSET) : [...skin, { x: 0, y: y - 0.085 }]);
     zs.push(z);
   }
   const geo = loftFromRings(rings, zs, 0.28, 0.72);
   ensureOutwardNormals(geo);
-  return source === "cage" ? geo : splitCreases(geo, ROOF_CREASE_DEGREES);
+  if (source === "cage") return geo;
+  // The loft's rings, then each end cap's own copy of its ring (`loftFromRings`).
+  const n = rings[0]!.length;
+  const cant = (n - HEADLINER_POINTS.length - 5) / 2;
+  const twins: number[] = [];
+  for (const base of [...zs.map((_, s) => s * n), zs.length * n, zs.length * n + n + 1]) {
+    for (let j = 0; j < HEADLINER_POINTS.length; j++) twins.push(base + n - HEADLINER_POINTS.length + j, base + cant + HEADLINER_POINTS[j]!);
+  }
+  const unsplit = geo.getAttribute("position").count;
+  splitCreases(geo, ROOF_CREASE_DEGREES);
+  // A crease's copy of a headliner vertex (`splitCreases` appends them) is a headliner vertex too.
+  const pos = geo.getAttribute("position");
+  const key = (v: number) => `${pos.getX(v)},${pos.getY(v)},${pos.getZ(v)}`;
+  const skinOf = new Map<string, number>();
+  for (let k = 0; k < twins.length; k += 2) skinOf.set(key(twins[k]!), twins[k + 1]!);
+  for (let v = unsplit; v < pos.count; v++) {
+    const skin = skinOf.get(key(v));
+    if (skin !== undefined) twins.push(v, skin);
+  }
+  geo.userData.shellTwins = Int32Array.from(twins);
+  return geo;
 }
 
 /**

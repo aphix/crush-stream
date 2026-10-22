@@ -2,16 +2,16 @@ import { carSprayLayout, SPRAY_FACE, SPRAY_PALETTE, type SprayLayout, type Spray
 import { aPillarTopZ, beltY } from "../vehicle/car-lines.ts";
 import { COP_LIVERY } from "../vehicle/car-styles/police.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
+import type { DeviceClass } from "./auto-fx.ts";
+import { RIVAL_SPRAY_MAX_SIDE } from "./rival-look.ts";
 import { SprayBitmap } from "./spray.ts";
 
 /**
  * A cop's black-and-white livery as spray paint: white roof, pillars and doors over the black body and POLICE across both
- * doors, drawn from the style's own tables into its spray layout. It rides the paint's spray patch, so it links no program a
- * sprayed car does not.
+ * doors, drawn from the style's own tables into its spray layout. The skin under the rear glass stays bare, so the glass reads
+ * the black body's tint, as the reference's. It rides the paint's spray patch, so it links no program a sprayed car does not.
  */
 
-/** The AI cops' bitmap: 512 texels a side stand a door letter ~12 texels tall (the 256 garage bitmap gives 6). */
-const COP_LAYOUT = carSprayLayout(512);
 const WHITE = 1;
 const BLACK = 2;
 /** The presets with the livery's own white and black on their inks, so the letters and panels match the body and door paint. */
@@ -36,7 +36,7 @@ const POLICE: readonly Glyph[] = [
 const WORD_LENGTH = POLICE.reduce((sum, g) => sum + g.w * CAP + STROKE, 0) + GAP * (POLICE.length - 1);
 
 const paints = new Map<string, SprayPaint>();
-const sprays = new Map<BodyStyle, SprayBitmap>();
+const sprays = new Map<string, SprayBitmap>();
 
 /** Style `style`'s livery as paint of `layout` (cached), or null for a car that is no cop: a style with a light bar is a cop's. */
 export function copPaint(style: BodyStyle, layout: SprayLayout): SprayPaint | null {
@@ -47,23 +47,26 @@ export function copPaint(style: BodyStyle, layout: SprayLayout): SprayPaint | nu
   return paint;
 }
 
-/** What a cop with no player's look wears: one mipmapped bitmap per style, shared and never disposed; null for a car that is no cop. */
-export function copSpray(style: BodyStyle): SprayBitmap | null {
-  const paint = copPaint(style, COP_LAYOUT);
+/** What a cop with no player's look wears on a `klass` device: one mipmapped bitmap per style, shared by its every car and never disposed; null for a car that is no cop. */
+export function copSpray(style: BodyStyle, klass: DeviceClass): SprayBitmap | null {
+  // As fine as a rival's spray may be on the device: at a desktop's 512 a door letter stands ~12 texels tall, at a phone's 256 ~6.
+  const layout = carSprayLayout(RIVAL_SPRAY_MAX_SIDE[klass]);
+  const paint = copPaint(style, layout);
   if (!paint) return null;
-  let spray = sprays.get(style);
+  const key = `${style.id} ${layout.w}`;
+  let spray = sprays.get(key);
   if (!spray) {
-    spray = new SprayBitmap(COP_LAYOUT, true);
+    spray = new SprayBitmap(layout, true);
     spray.load(paint);
-    sprays.set(style, spray);
+    sprays.set(key, spray);
   }
   return spray;
 }
 
 function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
   const texels = new Uint8Array(layout.w * layout.h);
-  const [, yMin, zMin] = layout.min;
-  const [, yMax, zMax] = layout.max;
+  const [xMin, yMin, zMin] = layout.min;
+  const [xMax, yMax, zMax] = layout.max;
   const sill = style.rocker.y + SILL;
   const [doorCut, doorFront] = style.door.aperture;
   const doorRear = style.rearDoorSeam ?? doorCut;
@@ -81,7 +84,7 @@ function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
         const y = yMin + ((ty + 0.5) / fh) * (yMax - yMin);
         const greenhouse = z > glassRear && z < (face === SPRAY_FACE.top ? roofFront : pillarFront);
         let ink = 0;
-        if (face === SPRAY_FACE.top) ink = greenhouse ? WHITE : 0;
+        if (face === SPRAY_FACE.top) ink = greenhouse && !underRearGlass(xMin + ((ty + 0.5) / fh) * (xMax - xMin), z, style) ? WHITE : 0;
         else {
           if (y > beltY(z, style) ? greenhouse : y > sill && z > doorRear && z < doorFront) ink = WHITE;
           // The word reads left to right to someone facing each flank: front to rear on the +x face, rear to front on the −x face.
@@ -93,6 +96,13 @@ function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
     }
   }
   return { texels, palette: PALETTE };
+}
+
+/** Whether plan point (`x`, `z`) lies under `style`'s rear glass (its quad's widths are full widths). */
+function underRearGlass(x: number, z: number, style: BodyStyle): boolean {
+  const { base, top, wBase, wTop } = style.rearGlass;
+  const t = (z - base[1]) / (top[1] - base[1]);
+  return t >= 0 && t <= 1 && Math.abs(x) < (wBase + (wTop - wBase) * t) / 2;
 }
 
 /** Whether the point `along` m into the word and `up` m above its baseline lies on a letter's stroke. */

@@ -20,6 +20,8 @@ describe("given the real engine drawing a city race and then the derby", () => {
   /** The direct children of the engine's scene that the renderer found hidden in its last draw of it. */
   let hiddenWhenDrawn: string[] = [];
   let arenaDrawn = false;
+  /** Per wheel-batch draw (`WheelBatch.meshes`, the shadow prisms last): whether the graph the renderer last drew held it. */
+  let wheelDrawsInGraph = "";
   const scene = (): CrashEngine["scene"] => engine["scene"];
   /** Frames with the event loop turning between them, as the browser's loop does: the warm-ups `queueWarm` starts finish. */
   const run = async (seconds: number): Promise<void> => {
@@ -36,6 +38,13 @@ describe("given the real engine drawing a city race and then the derby", () => {
       if (drawn !== scene()) return;
       hiddenWhenDrawn = drawn.children.filter((child) => !child.visible && !(child as THREE.Light).isLight).map((child) => child.name || child.type);
       arenaDrawn = drawn.children.includes(engine["arena"]) && engine["arena"].visible;
+      wheelDrawsInGraph = engine["wheels"].meshes
+        .map((mesh) => {
+          let p: THREE.Object3D | null = mesh;
+          while (p && p !== drawn) p = p.parent;
+          return p === drawn;
+        })
+        .join();
     };
     Object.assign(engine["renderer"], { render, compile() {}, compileAsync: () => Promise.resolve() });
     await engine.ready;
@@ -58,6 +67,10 @@ describe("given the real engine drawing a city race and then the derby", () => {
     let found = false;
     scene().traverse((object) => void (found ||= object === engine["arena"]));
     assert.equal(found, true);
+  });
+
+  it("when the race has run, then every wheel draw is in the graph the renderer draws, the shadow prisms hidden outside the shadow pass and the designs no car uses included", () => {
+    assert.equal(wheelDrawsInGraph, engine["wheels"].meshes.map(() => true).join());
   });
 
   it("when the derby is picked, then the arena is drawn in the scene again", async () => {

@@ -11,7 +11,7 @@ import { BUMPER_F, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { bayTub, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 
-/** Gap (m) between a seated head's top and the roof line over it: the roof skin and the headliner. */
+/** Gap (m) between a seated head's top and the roof line over it (the roof skin, the headliner its inner face). */
 const HEAD_CLEAR = 0.05;
 /** The seated dummy's head centre along his back from the H-point, its radius, and his shoulders along his back (m): `PARTS`/`JOINTS` over the hips' 0.84. */
 const HEAD = { up: 0.79, r: 0.11 } as const;
@@ -21,7 +21,7 @@ const RECLINE_MAX = 0.35;
 const RECLINE_STEP = 0.01;
 /** The driver's soles: across from his H-point (his hips' half-spread), ahead of it, and over the cabin floor (m). */
 const FEET = { x: 0.09, ahead: 0.8, lift: 0.04 } as const;
-/** The cabin's sides stand this far (m) inside the side glass sill, its headliner this far under the roof line at the B-pillar. */
+/** The cabin's sides stand this far (m) inside the side glass sill, the top of its `REF_CABIN` box this far under the roof line at the B-pillar. */
 const CABIN_INSET = 0.05;
 const HEADLINER_DROP = 0.03;
 /** The bay's sides stand this far (m) inside the nose's narrowest station over it; its top this far under the deck line (the hood lid's underside). */
@@ -102,7 +102,7 @@ export class CarCabin {
   private readonly rests: readonly THREE.Vector3[];
   /** Rest positions of the masses the bay and bars ride: engine, front bumper, rear bumper, each pair [left, right]. */
   private readonly massRest: readonly (readonly [MassName, THREE.Vector3])[];
-  /** The cabin shell, its floor and headliner (car space, m) at rest, and the roof mass's rest height: the headliner sinks with the roof. */
+  /** The cabin shell, its floor and top (car space, m) at rest, and the roof mass's rest height: the shell squeezes under the roof. */
   private readonly shell: PartSeat;
   private readonly shellY: readonly [floor: number, top: number];
   private readonly roofRest: number;
@@ -190,8 +190,8 @@ export class CarCabin {
     bay.position.z = zRear + engine! - REF_BAY.rear * sz;
   }
 
-  /** The headliner sinks by the roof mass's drop to `roofY` (car space; null: at rest), a load's crush too, so it never stands through the crushed roof. */
-  sinkHeadliner(roofY: number | null): void {
+  /** The shell squeezes by the roof mass's drop to `roofY` (car space; null: at rest), a load's crush too: its dash and screen stand 0.3 m under the roof line, less than a 0.4 m crush. */
+  squeezeUnderRoof(roofY: number | null): void {
     const [floor, top] = this.shellY;
     // The pose already moved the shell by the cell's y; only the roof's further drop squeezes it.
     const sink = roofY === null ? 0 : Math.min(0, roofY - this.roofRest - this.pose.position.y);

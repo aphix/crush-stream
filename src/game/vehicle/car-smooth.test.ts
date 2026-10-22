@@ -573,7 +573,7 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; bo
   const posts = makeGreenhouseFrame(style, "drawn").filter((g) => POST_NAMES.includes(g.name));
   return {
     lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,
-    humps: wellHumpGeometry(style)?.getAttribute("position").count ?? 0,
+    humps: wellHumpGeometry(style, "drawn")?.getAttribute("position").count ?? 0,
     bootRings: (rings(true, true) - rings(false, true)) * loftOf(body).ring,
     noseRings: (rings(true, true) - rings(true, false)) * loftOf(body).ring,
     wallTops: body.userData.wallTops as number,

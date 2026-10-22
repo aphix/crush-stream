@@ -32,7 +32,7 @@ import { addCars, withCars, type Occluder, type Sight } from "../present/spectat
 import { ChaseSolids, OccluderPool } from "../present/chase-solids.ts";
 import { activeGround } from "../world/ground.ts";
 import { BARRIER_HALF } from "../contact/sat.ts";
-import type { AutoFx } from "../present/auto-fx.ts";
+import type { AutoFx, DeviceClass } from "../present/auto-fx.ts";
 import type { DetailGovernor } from "../present/detail-governor.ts";
 import { DebrisSystem, SparkSystem, GlassDotSystem, TireSmokeSystem } from "../present/engine-fx.ts";
 import type { Fountains } from "./engine-fountains.ts";
@@ -110,6 +110,8 @@ const FLEET_PAINT: CarPaint[] = [
 export abstract class EngineCore {
   /** Defined by `CrashEngine` (its host callbacks reach every layer). */
   protected abstract readonly net: NetPlay;
+  /** What this device is (`deviceClass`): how fine a spray bitmap it draws. */
+  protected abstract readonly deviceClass: DeviceClass;
   protected abstract emitHud(): void;
   /** The page URL's `#` follows the HUD state (`EngineShare`). */
   protected abstract syncShareUrl(): void;
@@ -237,7 +239,7 @@ export abstract class EngineCore {
   protected readonly wheels = new WheelBatch(MAX_CARS * 4, (car) => this.detail.isFar(car));
   protected readonly lampBatch = new LampBatch(MAX_CARS * 2);
   protected readonly partBatch = new PartBatch(MAX_CARS);
-  protected readonly seated = new SeatedDrivers();
+  protected readonly seated = new SeatedDrivers((car) => this.detail.isMid(car));
   protected readonly coverBatch = new CoverBatch(MAX_CARS);
   protected lampLights!: LampLights;
   protected sparks!: SparkSystem;
@@ -527,7 +529,7 @@ export abstract class EngineCore {
     if (look) look.carSpray.underlay(copPaint(car.style, look.carSpray.layout));
     // A car with no player's look wears its rival spray when the race or derby has one for it (the first dress runs before `race` is assigned).
     const seed = look || !this.race ? null : rivalSeedOf(slot, this.race, this.derbyMode ? { round: this.derbyRound, seated: this.derbySeated } : null);
-    if (seed === null) wearCarLook(car, look?.car ?? NO_CAR_PICK, look?.carSpray ?? copSpray(car.style));
+    if (seed === null) wearCarLook(car, look?.car ?? NO_CAR_PICK, look?.carSpray ?? copSpray(car.style, this.deviceClass));
     else wearCarLook(car, NO_CAR_PICK, this.rivals.of(seed, slot, lookColours(car, NO_CAR_PICK).body));
     applyCarFinish(car.group, finishForTier(this.cine.tier));
   }

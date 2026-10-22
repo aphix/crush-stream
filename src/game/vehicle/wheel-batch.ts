@@ -122,6 +122,11 @@ const SHADOW_WIDTH = 0.224;
 export class WheelBatch {
   /** The full-detail wheels per design in `WHEEL_DESIGNS` order, the far ones, then the shadow prisms (shown to the shadow pass only). */
   readonly meshes: readonly THREE.InstancedMesh[];
+  /**
+   * The one object the scene holds: every draw in `meshes` under a group that is never hidden, so a scene that takes its hidden
+   * children out of the graph (`ParkingScene`) keeps the prisms, hidden outside the shadow pass, and the empty design draws.
+   */
+  readonly group = new THREE.Group();
   /** One lane per design, in `WHEEL_DESIGNS` order. */
   private readonly near: readonly WheelLane[];
   private readonly far: WheelLane;
@@ -151,6 +156,7 @@ export class WheelBatch {
     this.shadow.visible = false;
     this.shadow.count = 0;
     this.meshes = [...this.near.map((l) => l.mesh), this.far.mesh, this.shadow];
+    this.group.add(...this.meshes);
   }
 
   /** Show the shadow prisms to `renderer`'s shadow pass and to nothing else. */

@@ -57,8 +57,12 @@ export interface BootLip {
 export type BootSpec = (
   /** Deck lid lofted on the profile from z0 to z1, hinged at origin; with `drop` it wraps the tail, its face standing at z1. */
   | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop }
-  /** Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). */
-  | { kind: "tailgate"; y0: number; origin: YZ; z0?: number }
+  /**
+   * Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). `outline`:
+   * its edge, the reference's gate seam, as [x, y] on the right side from top to bottom (held past its ends); absent, the tail panel's
+   * half-width less the corners the lamps stand in.
+   */
+  | { kind: "tailgate"; y0: number; origin: YZ; z0?: number; outline?: readonly (readonly [number, number])[] }
 ) & { lip?: BootLip; pivot?: YZ; swing?: LidSwing };
 
 /** Raised centre bulge on the drawn hood from z `z0` (cowl end) to `z1`, `width` (m) across, its top `rise` (m) over the lid's; it ramps into the lid at both ends. */
@@ -250,6 +254,8 @@ export interface BodyStyle {
   rearBulkhead: { z: number; yTop: number };
   /** Open floors visible through the glass: [zRear, zFront, floorY]. */
   tubs: readonly (readonly [number, number, number])[];
+  /** A bed's wheel tubs (both builds): over each wheel whose liner stands in a tub floor, a half cylinder `rise` (m) over the floor and `length` along the car, `width` in from the bed's side wall; absent, a drawn-only hump hugs the liner. */
+  wheelTub?: { rise: number; length: number; width: number };
   /** Rear door shut line on four-door bodies, or null. */
   rearDoorSeam: number | null;
   boot: BootSpec;

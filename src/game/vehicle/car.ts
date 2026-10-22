@@ -6,7 +6,7 @@ import { DOOR } from "./car-door-mesh.ts";
 import { activeGround } from "../world/ground.ts";
 import { CarParts } from "./car-parts.ts";
 import { END_WINDOW, type PartNetState, REARM_QUIET_S } from "./car-core.ts";
-import { REST_SPEED } from "./car-air-body.ts";
+import { REST_SPEED, _s, S_LIFTING } from "./car-air-body.ts";
 import { FLIGHT_BORNE, FLIGHT_CONTACT, FLIGHT_DOWN, FLIGHT_DRIFT, FLIGHT_END_AGO, FLIGHT_END_REACH, FLIGHT_END_SQUEEZE, FLIGHT_EULER, FLIGHT_INV_YAW, FLIGHT_POSITION, FLIGHT_QUATERNION, FLIGHT_RAMPS, FLIGHT_REST, FLIGHT_SLEEP, FLIGHT_SPIN, FLIGHT_STALL, FLIGHT_VELOCITY, FLIGHT_WHEEL_RATE, FLIGHT_WHEEL_SPIN } from "./car-flight.ts";
 import { onWreckTop, readContact } from "./car-air-points.ts";
 import { stepFree, wreckCentre, wreckInvI } from "./car-air.ts";
@@ -18,7 +18,7 @@ import { clearDents } from "./loose-dent.ts";
 import { clearShape } from "./loose-step.ts";
 import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
-import { CageRig } from "./car-cage-rig.ts";
+import { CageRig, centreY } from "./car-cage-rig.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
@@ -37,6 +37,12 @@ const _wantQuaternion = new THREE.Quaternion();
 
 /** A wreck rests this long (s) before it sleeps: a toppling pile pauses on the way over, and a monster settling on a bank creeps to its pose for most of a second after it first slows under `REST_SPEED`. */
 const WRECK_REST_S = 1;
+/**
+ * How deep (m) a wreck at rest may still stand in the world's ground and sleep. It parts from it at `GROUND_LIFT_V`, under
+ * `REST_SPEED`: a monster rolled onto its side (its body's lift fading onto its frame, `cageLift`) slept rising at 5 cm/s with its
+ * drawn body 18.6 cm in the ground.
+ */
+const SLEEP_SINK = 0.01;
 /** How far (m) a hub's car-frame place re-derived from its world place may be from the place its clamp pinned, in the slice a freeze starts in, before the pin is kept (`integrateWreck`). */
 const HUB_PIN_MAX = 0.3;
 /** Each wheel's contact standing on level road, as built and at a spawn (`resetContact`): no lift, the normal up, full grip, the world's. */
@@ -230,7 +236,7 @@ export class DeformableCar extends CarParts {
     this.interior.scale.set(1, 1, 1);
     this.interior.position.set(0, 0, 0);
     this.cabin.fit(null);
-    this.cabin.sinkHeadliner(null);
+    this.cabin.squeezeUnderRoof(null);
 
     this.endAgo.fill(9);
     this.endReach = Infinity;
@@ -277,7 +283,7 @@ export class DeformableCar extends CarParts {
     if (rigid) {
       // A rigid body (`stepFree`) takes the hit on its masses: its centre's velocity carried to the group's origin, as `land` does, and a wreck's masses keep their dents. Its masses fly it on (`syncPose`)
       // and hand it back to `stepFree` once their contact window closes; left rigid, nothing ever landed it and its drive stayed idled (8 s, stopped, on the stunt course).
-      this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, this.frame.comY, 0).applyQuaternion(this.group.quaternion)));
+      this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, centreY(this), 0).applyQuaternion(this.group.quaternion)));
       if (this.crashed) {
         this.deform.armMasses(this.group, this.velocity, this.angular);
         this.deform.unstep(this.flewDt);
@@ -417,7 +423,7 @@ export class DeformableCar extends CarParts {
 
   /** A wreck flying as a rigid body (`stepFree`) with three wheels on the world goes back to its masses (`armed`), taking its centre's velocity less the spin's carry (a body crushed only by a load has no masses and stands on its wheels). */
   private landWreck(): void {
-    this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, this.frame.comY, 0).applyQuaternion(this.group.quaternion)));
+    this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, centreY(this), 0).applyQuaternion(this.group.quaternion)));
     this.angular.set(0, this.angular.y, 0);
     this.speed = hypot2(this.velocity.x, this.velocity.z);
     this.deform.armMasses(this.group, this.velocity, this.angular);
@@ -547,9 +553,9 @@ export class DeformableCar extends CarParts {
     this.stepLooseParts(dt, this.slot, this.surfaces);
   }
 
-  /** A wreck at rest for `WRECK_REST_S` on three wheels or more, and not crushing, falls asleep where it lies. */
+  /** A wreck at rest for `WRECK_REST_S` on three wheels or more, not crushing and out of the ground (`SLEEP_SINK`), falls asleep where it lies. */
   private restOrSleep(dt: number): void {
-    const rest = !this.moving;
+    const rest = !this.moving && _s[S_LIFTING]! <= SLEEP_SINK;
     if (!this.deform.crushing && this.contacts >= 3 && rest) {
       if ((this.restS += dt) >= WRECK_REST_S) {
         this.velocity.set(0, 0, 0);
@@ -901,7 +907,7 @@ export class DeformableCar extends CarParts {
 
 /**
  * Start the fake fall: the soft body stops (`massActive` off; its state is left as it is) and the car flies on as the rigid step
- * flies every body, off the world's ground, with the `angular` it has and the `velocity` it has at its own centre (`frame.comY`; a wreck's body
+ * flies every body, off the world's ground, with the `angular` it has and the `velocity` it has at its own centre (`centreY`; a wreck's body
  * turned about its masses' centroid, so the spin carries the difference). `keepMotion`: a replay or netplay client has set the pose,
  * `velocity` and `angular` already.
  */
@@ -909,7 +915,7 @@ export function beginFakeFall(car: DeformableCar, keepMotion = false): void {
   if (car.deform.massActive && !keepMotion) {
     car.group.updateMatrixWorld(false);
     _p.copy(wreckCentre(car)).applyMatrix4(car.group.matrixWorld);
-    _c.set(0, car.frame.comY, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
+    _c.set(0, centreY(car), 0).applyQuaternion(car.group.quaternion).add(car.group.position);
     car.velocity.add(_v.crossVectors(car.angular, _c.sub(_p)));
   }
   car.deform.massActive = false;
