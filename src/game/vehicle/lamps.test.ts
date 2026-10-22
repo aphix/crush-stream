@@ -191,6 +191,46 @@ describe("given every body style fitted with its own lamps", () => {
   }
 });
 
+describe("given the hatchback's tail lamps, whose outer lens wraps the tail corner's roll", () => {
+  it("when every lens triangle over the corner is probed along its normal, then the body skin never stands more than 2 mm in front of it (under the bezel's crest)", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
+    assignClass(car, STYLE_CLASS.hatchback);
+    car.group.updateMatrixWorld(true);
+    const ray = new THREE.Raycaster();
+    const tri = new THREE.Triangle();
+    const [a, b, c, n, p] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    // Barycentric samples: the centroid, the edge midpoints and three points near the corners.
+    const samples = [[1 / 3, 1 / 3], [0.5, 0.5], [0, 0.5], [0.5, 0], [0.7, 0.15], [0.15, 0.7], [0.15, 0.15]];
+    let probed = 0;
+    for (const l of car.lamps.filter((x) => x.kind === "tail")) {
+      l.seat.updateWorldMatrix(true, false);
+      const g = drawnLamp(car.style, l.kind, l.side).geometry;
+      const [pos, ix] = [g.getAttribute("position"), g.getIndex()!];
+      let worst = 0;
+      let where = "";
+      for (let t = 0; t < ix.count / 3; t++) {
+        a.fromBufferAttribute(pos, ix.getX(3 * t)).applyMatrix4(l.seat.matrixWorld);
+        b.fromBufferAttribute(pos, ix.getX(3 * t + 1)).applyMatrix4(l.seat.matrixWorld);
+        c.fromBufferAttribute(pos, ix.getX(3 * t + 2)).applyMatrix4(l.seat.matrixWorld);
+        tri.set(a, b, c).getNormal(n);
+        for (const [u, v] of samples) {
+          p.set(0, 0, 0).addScaledVector(a, 1 - u! - v!).addScaledVector(b, u!).addScaledVector(c, v!);
+          if (Math.abs(p.x) < 0.6) continue;
+          ray.set(p.clone().addScaledVector(n, 0.3), n.clone().negate());
+          ray.far = 0.35;
+          const hit = ray.intersectObject(car.body, false)[0];
+          // Only the skin under the lens (facing its way, within 15 mm): a bezel's wall or a far face across the corner is not a poke.
+          if (!hit || hit.face!.normal.dot(n) < 0.5 || 0.3 - hit.distance > 0.015) continue;
+          probed++;
+          if (0.3 - hit.distance > worst) [worst, where] = [0.3 - hit.distance, p.toArray().map((e) => e.toFixed(3)).join(",")];
+        }
+      }
+      assert.ok(worst <= 0.002, `tail ${l.side < 0 ? "L" : "R"}: the skin stands ${(worst * 1000).toFixed(1)} mm in front of the lens at ${where}`);
+    }
+    assert.ok(probed > 200, `the control: ${probed} samples met the skin over the corner`);
+  });
+});
+
 describe("given each style with a high-mount brake lamp", () => {
   const styles = CAR_STYLE_IDS.filter((s) => CAR_STYLES[s].lamps.brake);
   it("the control: some style has one", () => assert.ok(styles.length > 0));

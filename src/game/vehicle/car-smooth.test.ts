@@ -130,11 +130,13 @@ const SIDE_HALF_FIRST = 2;
 const SIDE_HALF_LAST = 4;
 /** Slices nearer than this (m) to the end faces are the rolled ends. */
 const END_SLICES = 3;
-/** The front door's cut runs from z 0 to 0.54 (`doorAperture`): the side there drops to the sill and faces up, so no outward test reads it. */
+/** The platform's front door cut runs from z 0 to 0.54 (`doorAperture`): the side there drops to the sill and faces up, so no outward test at rest reads it. */
 const DOOR_CUT_Z = [-0.05, 0.6] as const;
+/** A slice standing on a door cut's end (to float32) is the full side, read like any other. */
+const DOOR_CUT_END = 1e-4;
 
-/** The slice's ring points on the body's side (both halves), with the vertex's ring-centroid estimate of "outward". */
-function outerSidePoints(geometry: THREE.BufferGeometry, normals: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): { vertex: number; normal: THREE.Vector3; outward: THREE.Vector3 }[] {
+/** The slice's ring points on the body's side (both halves) whose `rest` z lies outside the door cut `doorCut`, with the vertex's ring-centroid estimate of "outward". */
+function outerSidePoints(geometry: THREE.BufferGeometry, normals: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, doorCut: readonly [number, number], rest: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): { vertex: number; normal: THREE.Vector3; outward: THREE.Vector3 }[] {
   const loft = loftOf(geometry);
   const halfCount = (loft.ring - 1) / 2;
   const centre = new THREE.Vector3();
@@ -151,7 +153,7 @@ function outerSidePoints(geometry: THREE.BufferGeometry, normals: THREE.BufferAt
       if (k === halfCount || half > SIDE_HALF_LAST || half < SIDE_HALF_FIRST) continue;
       const vertex = slice * loft.ring + k;
       const at = positionAt(geometry, vertex);
-      if (!isEnd && at.z > DOOR_CUT_Z[0] && at.z < DOOR_CUT_Z[1]) continue;
+      if (!isEnd && rest.getZ(vertex) > doorCut[0] + DOOR_CUT_END && rest.getZ(vertex) < doorCut[1] - DOOR_CUT_END) continue;
       points.push({ vertex, normal: new THREE.Vector3().fromBufferAttribute(normals, vertex), outward: at.clone().sub(isEnd ? centre : ringCentre).normalize() });
     }
   }
@@ -185,7 +187,7 @@ describe("given every body style's rest meshes (chassis, bonnet, boot, doors, bu
 
     it(`when a ${testCase.id}'s body side and ends are read, then every normal points outward (dot with the centroid direction above 0)`, () => {
       const chassis = meshes[0]![1];
-      for (const point of outerSidePoints(chassis, chassis.getAttribute("normal"))) {
+      for (const point of outerSidePoints(chassis, chassis.getAttribute("normal"), DOOR_CUT_Z, chassis.getAttribute("position"))) {
         assert.ok(point.normal.dot(point.outward) > 0, `${testCase.id} vertex ${point.vertex}: normal ${point.normal.dot(point.outward)} against outward`);
       }
     });
@@ -1099,9 +1101,12 @@ function crushedByWall(id: CarStyleId): DeformableCar {
   return car;
 }
 
-/** No normal (`normals`) of `geometry` on the side or ends points into the hull past `CRUSHED_OUTWARD_DOT_FLOOR`. */
-function assertFacesOut(label: string, geometry: THREE.BufferGeometry, normals: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): void {
-  for (const point of outerSidePoints(geometry, normals)) {
+/**
+ * No normal (`normals`) of `geometry` on the side or ends points into the hull past `CRUSHED_OUTWARD_DOT_FLOOR`, outside `style`'s own door
+ * cut (`door.aperture`): its sill and feathered jambs lie under the door skin, and a crush shears their slivers past each other there.
+ */
+function assertFacesOut(label: string, geometry: THREE.BufferGeometry, normals: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, style: BodyStyle): void {
+  for (const point of outerSidePoints(geometry, normals, style.door.aperture, makeChassisGeometry(style).getAttribute("position"))) {
     assert.ok(point.normal.dot(point.outward) > CRUSHED_OUTWARD_DOT_FLOOR, `${label} vertex ${point.vertex}: crushed normal ${point.normal.dot(point.outward)} against outward`);
   }
 }
@@ -1115,7 +1120,7 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
         const length = Math.hypot(normals.getX(vertex), normals.getY(vertex), normals.getZ(vertex));
         assert.ok(Number.isFinite(length) && Math.abs(length - 1) < 1e-4, `${id} vertex ${vertex}: crushed normal length ${length}`);
       }
-      assertFacesOut(id, geometry, normals);
+      assertFacesOut(id, geometry, normals, CAR_STYLES[id]);
     });
   }
   // A class whose tyres ride free of the body (the monster's) runs no tyre hold: its drawn skin, read above, is the sim's.
@@ -1127,7 +1132,7 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
       const geometry = car.body.geometry.clone();
       geometry.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(written), 3));
       geometry.computeVertexNormals();
-      assertFacesOut(`${id} sim skin`, geometry, geometry.getAttribute("normal"));
+      assertFacesOut(`${id} sim skin`, geometry, geometry.getAttribute("normal"), CAR_STYLES[id]);
     });
   }
 });
@@ -1370,7 +1375,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above), and its drawn roof rolled onto the windshield's top (`roofEnds.front`).
   // Re-pinned for its rear glass's round outline (`rearGlass.roundOutline`): the frit's corner fans stand 1 cm in behind the pane as a backing, and the pane's drawn vertices are the glass panel's cage-skinned rest.
   // Re-pinned for its curved roof (`roofSection` .4/.6) and narrower rear glass top (`rearGlass.wTop` .92): the raked panes fall with the dome and the glass panel's cage-skinned rest moved.
-  { id: "coupe", digest: "f96f0bb535401216423cc5326dd46e9ddf661103b5741083caa181d8a25ae2f7" },
+  // Re-pinned for its belt's crest under the sail's foot dropped (profile z -1.49) and its quarter glass's point moved back (`quarter.zRearBot` -0.981, the belt's rear knots with it): the skin rows there and the glass panel's cage-skinned rest moved.
+  { id: "coupe", digest: "1cdca40793d0458084dca8852baf5f5d1170795c9c90ef62f9713579d2312766" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open; both trucks for the greenhouse's dome-following panes and posts.
@@ -1379,10 +1385,12 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // panes' tops follow; the pickup's again for its rear glass's top back at z -0.45 (at -0.5 the crushed cab's dummy-world roof stood 8 cm off the drawn one).
   // Both trucks re-pinned for their smooth roof crown (`roofSection`, square over the windshield) the panes' tops follow; the pickup's for its
   // rear glass's top raised under the roof's rolled end (y 1.6 -> 1.635) and its panes taking the whole dome.
-  { id: "pickup", digest: "e8952a810e3d68dfde1ac848197897460465a324ab97461be078652a83f87ad4" },
+  // The pickup's again for its door glass starting back where the side plate's does (`aPillarFoot` .7 -> .6, `aPillarTop` .41 -> .34): the A-post box moved.
+  { id: "pickup", digest: "0b9b6e97b2becde393bada56d59a0c480517bbc57b7692e2dc39ab47f131e85b" },
   { id: "police", digest: "bb93a9082d0393e646fbc226fdb075fbda6f19d81cb54b371de3da40ef8becbc" },
-  // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55).
-  { id: "monster", digest: "50d67ae1e9b9dfa6344025060ff8c23afe70af78a80789f63b915ca2cb781875" },
+  // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55); again for its windshield base at the side
+  // plate's (`windshield.base` [1.0, .92] -> [1.05, .98]) and its door glass starting back at .60 (`aPillarFoot` .74 -> .6): the glass-front and A-post boxes moved.
+  { id: "monster", digest: "f52b18f7c2f6f4e1a77020397c5841a894e2d773b4a3a38c80b123faee458a80" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {

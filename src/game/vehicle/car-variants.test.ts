@@ -6,7 +6,7 @@ import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
-import { ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
+import { CREASE_DEGREES, ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, tubWall } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
@@ -1112,6 +1112,27 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
   });
 
+  it("when the coupe's belt is read from its tail to the sail's foot (z -1.587 to -1.43), then it rises all the way: no crest under the sail's rear end, which drew a lit hump where the reference's sail meets the deck", () => {
+    const coupe = CAR_STYLES.coupe;
+    let prev = -Infinity;
+    for (let z = -1.587; z <= -1.43 + 1e-9; z += 0.005) {
+      const y = sampleSlice(z, coupe.profile).yBelt;
+      assert.ok(y >= prev - 1e-6, `the belt falls to ${y.toFixed(4)} at z ${z.toFixed(3)} from ${prev.toFixed(4)}`);
+      prev = y;
+    }
+  });
+
+  it("when the coupe's quarter window is drawn, then its glass reaches back to the reference's point (z -0.975 or further) and its sail runs on to where the reference's window line rounds into its top (z -0.666 ±1 cm)", () => {
+    const coupe = CAR_STYLES.coupe;
+    const pane = makeRearSideGlass(1, coupe).getAttribute("position");
+    let back = Infinity;
+    for (let i = 0; i < pane.count; i++) back = Math.min(back, pane.getZ(i));
+    const sail = makeGreenhouseFrame(coupe, "drawn").find((g) => g.name === "rear" && g.getAttribute("position").getX(0) > 0)!.getAttribute("position");
+    let front = -Infinity;
+    for (let i = 0; i < sail.count; i++) front = Math.max(front, sail.getZ(i));
+    assert.ok(back <= -0.975 && Math.abs(front + 0.666) <= 0.01, `the glass reaches z ${back.toFixed(3)}, the sail runs to z ${front.toFixed(3)}`);
+  });
+
   it("when the coupe's door is drawn, then its skin is flush with the body side inside its cut (door.proud 0), not a lit 3 mm step at the shut line", () => {
     /** Flush within this (m): the skin's chords between its rows. */
     const FLUSH = 0.001;
@@ -1471,6 +1492,12 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(Math.abs(faceZ - lofted.rear - front.wrap.back) < 0.001, `the lofted end runs ${faceZ - lofted.rear} m back from the face, ${front.wrap.back} asked`);
     assert.ok(lofted.stand >= front.wrap.end.stand - 0.001, `the lofted end stands ${lofted.stand} m off the skin, ${front.wrap.end.stand} asked`);
     assert.ok(wrapped.stand <= 0, `the plain wrap's end stands ${wrapped.stand} m off the skin: held inside it`);
+  });
+
+  it("when the hatchback's front bumper is built, then its face runs straight across to its corners as the reference's: at |x| 0.40-0.45 within 1 cm of its middle's reach", () => {
+    const hatch = makeBumperGeometry(true, CAR_STYLES.hatchback);
+    const gap = bumperReachAt(hatch, 0, 0.05) - bumperReachAt(hatch, 0.4, 0.45);
+    assert.ok(Math.abs(gap) < 0.01, `the bumper's face at |x| 0.40-0.45 stands ${gap.toFixed(3)} m behind its middle`);
   });
 
   it("when its door hinge moves with the door's trailing edge kept, then the door glass stays in the same window: it rides on its door's own hinge", () => {
@@ -1846,6 +1873,25 @@ describe("given a body style's P1 parts", () => {
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 
+  it("when the coupe's hood pod is drawn, then its flank leans off the lid and its crest under the fitting crease, so it shades smooth with the hood as the reference's soft pod does, not a hard-lit black band in the side view", () => {
+    const style = CAR_STYLES.coupe;
+    const bulge = style.hood.bulge!;
+    const hood = withHoodBulge(makeHoodGeometry(style), style);
+    const [oy, oz] = style.hood.origin;
+    const zMid = (bulge.z0 + bulge.z1) / 2;
+    const pos = hood.getAttribute("position");
+    const raised: { x: number; y: number }[] = [];
+    for (let i = 0; i < pos.count; i++) {
+      const [x, y, z] = [pos.getX(i), pos.getY(i) + oy, pos.getZ(i) + oz];
+      if (x > 0 && Math.abs(z - zMid) < 1e-3 && y - deckTopY(x, z, style, true) > RAISED_M) raised.push({ x, y });
+    }
+    const top = Math.max(...raised.map((v) => v.y));
+    const crestX = Math.max(...raised.filter((v) => top - v.y < 1e-4).map((v) => v.x));
+    const flank = raised.reduce((a, v) => (v.x > a.x ? v : a));
+    const lean = (Math.atan2(top - flank.y, flank.x - crestX) * 180) / Math.PI;
+    assert.ok(lean < CREASE_DEGREES.fitting, `the flank leans ${lean.toFixed(1)} deg off the lid, past the ${CREASE_DEGREES.fitting} deg fitting crease`);
+  });
+
   it("when a hood bulge sets a cowl ramp and a cowl width, then it widens toward its cowl end and eases into the lid over that run there, its nose end as without them, and the cage builds are unchanged", () => {
     const plainBulge = { z0: 0.9, z1: 1.8, width: 0.4, rise: 0.04 } as const;
     const plain: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge: plainBulge } };
@@ -2040,6 +2086,21 @@ describe("given a body style's P1 parts", () => {
     assert.ok(all.count > 0 && dark.count === 0, `${all.count} roof-part vertices, ${dark.count} of them dark`);
     assertSameNumbers([...all.box.min.toArray(), ...all.box.max.toArray()], [-0.5, 1.15, -0.95, 0.5, 1.22, -0.8], "the spoiler's box", POSITION_TOL);
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a spoiler's ends slope and taper, then its top's ends stand `slope` inboard of its underside's and its tip's `taper` inboard of its front edge's", () => {
+    const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5, ends: [0.06, 0.1] } as const;
+    const { body, from } = roofParts({ spoiler });
+    const pos = body.getAttribute("position");
+    // The widest |x| of the front edge's top, the front edge's underside and the tip's underside.
+    const widest = [0, 0, 0];
+    for (let i = from; i < pos.count; i++) {
+      const under = Math.abs(pos.getY(i) - spoiler.y[0]) < POSITION_TOL;
+      const front = Math.abs(pos.getZ(i) - spoiler.z[1]) < POSITION_TOL;
+      const k = front ? (under ? 1 : 0) : under ? 2 : -1;
+      if (k >= 0) widest[k] = Math.max(widest[k]!, Math.abs(pos.getX(i)));
+    }
+    assertSameNumbers(widest, [0.44, 0.5, 0.4], "the front top's, front underside's and tip underside's half-widths", POSITION_TOL);
   });
 
   it("when a bumper's trim is chrome, black or body, then it wears chrome, black plastic or the body's colour (unset: the car's accent trim), and no bumper or cage build changes", () => {
@@ -2384,6 +2445,42 @@ describe("given a body style's P2 parts", () => {
     }
     const { cap, tip } = readMirror(mirrorStyle({ cap: "rounded", finish: "body" }));
     assert.ok(!cap.isEmpty() && tip.getHex() === PAINT_COLOR_TONE.getHex(), `body: the cap is painted, its outer face 0x${tip.getHexString()}`);
+  });
+
+  it("when the coupe's mirror is drawn, then its head is the reference side view's (10 cm long, 8.5 cm tall, centred .93 m up, seated low on the door) on a foot running 6 cm along the door, not a 6.5 cm cap lifted on a slim stalk", () => {
+    const style = CAR_STYLES.coupe;
+    const { cap } = readMirror(style);
+    const size = cap.getSize(new THREE.Vector3());
+    const centre = style.door.hingeY + style.door.mirrorY + (cap.min.y + cap.max.y) / 2;
+    assert.ok(Math.abs(centre - 0.93) <= 0.01 && size.y >= 0.08 && size.z >= 0.095, `the head is ${size.z.toFixed(3)} m long, ${size.y.toFixed(3)} m tall, centred ${centre.toFixed(3)} m up`);
+    const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
+    const [pos, painted] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE)];
+    let [lo, hi] = [Infinity, -Infinity];
+    for (let i = 0; i < pos.count; i++) if (painted.getX(i) !== 1 && pos.getY(i) < cap.min.y - POSITION_TOL) [lo, hi] = [Math.min(lo, pos.getZ(i)), Math.max(hi, pos.getZ(i))];
+    assert.ok(hi - lo >= 0.055, `the foot runs ${(hi - lo).toFixed(3)} m along the door`);
+  });
+
+  it("when the coupe is drawn, then a chrome badge rides each front fender ahead of its door where the reference side view has one (z .66-.73, y .42)", () => {
+    const pos = makeBodyGlassFrames(CAR_STYLES.coupe, true).getAttribute("position");
+    const sides = new Set<number>();
+    for (let i = 0; i < pos.count; i++) {
+      const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+      if (z > 0.65 && z < 0.745 && y > 0.4 && y < 0.44) sides.add(Math.sign(x));
+    }
+    assert.ok(sides.has(1) && sides.has(-1), `chrome at the badge on sides [${[...sides].join(", ")}]`);
+  });
+
+  it("when the coupe's tail lamps are drawn, then a chrome ring badge sits in the middle of the black panel between them, as the reference rear iso's", () => {
+    const style = CAR_STYLES.coupe;
+    const rest = new THREE.Matrix4().compose(lampSeatAt(style, "tail", 1), lampRest("tail", style, new THREE.Quaternion()), new THREE.Vector3(1, 1, 1));
+    const geo = drawnLamp(style, "tail", 1).geometry.clone().applyMatrix4(rest);
+    const [pos, colour] = [geo.getAttribute("position"), geo.getAttribute("color")];
+    let chrome = 0;
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(pos.getX(i)) > 0.035 || pos.getY(i) < 0.64 || pos.getY(i) > 0.71) continue;
+      if (new THREE.Color(colour.getX(i), colour.getY(i), colour.getZ(i)).getHex() === TRIM_CHROME) chrome++;
+    }
+    assert.ok(chrome > 0, "no chrome in the middle of the panel between the tail lamps");
   });
 
   it("when a style has no mirror or grille of its own, then its seats draw the platform parts", () => {

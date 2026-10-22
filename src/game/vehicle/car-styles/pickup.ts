@@ -70,8 +70,9 @@ export const PICKUP: BodyStyle = {
   rocker: { y: 0.45 },
   underside: [[-2.17, 0.52], [-1.96, 0.42], [-1.75, 0.38], [-1.5, 0.34], [1.6, 0.34], [1.76, 0.35], [1.93, 0.38]],
   door: { hingeX: 0.74, hingeY: 0.785, hingeZ: 0.7, length: 0.93, halfHeight: 0.335, mirrorY: 0.405, mirrorZ: 0.19, mirrorReach: 0.15, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69], mirror: TOW_MIRROR },
-  aPillarFoot: 0.7,
-  aPillarTop: 0.41,
+  // The side plate's door glass starts .60 back at the belt and .33 at the roof: the A-post and its sail 17 cm wide at the roof, 26 at the windshield's base.
+  aPillarFoot: 0.6,
+  aPillarTop: 0.34,
   bPillar: { rear: -0.3, front: -0.23 },
   arch: { radius: 0.46, lip: { flare: 0.024, width: 0.065, square: true } },
   hood: { z0: 1.03, z1: 1.92, origin: [1.2, 1.01], nose: [0.034, 0.02] },
