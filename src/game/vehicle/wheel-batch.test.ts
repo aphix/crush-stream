@@ -222,6 +222,13 @@ describe("given the reference cars' rim designs", () => {
     assert.ok(STYLE_WHEELS.wagon.tint.getHex() === STYLE_WHEELS.sedan.tint.getHex(), `SUV rim ${STYLE_WHEELS.wagon.tint.getHexString()} against the sedan's silver`);
   });
 
+  test("when the monster's rims are drawn, then they are the reference's dark gunmetal: their tint takes the alloy under a third of its light", () => {
+    /** The most of the alloy's linear light the monster's tint keeps (its side plate's rims read ~0x3a-0x64 against the alloy's 0xc9). */
+    const GUNMETAL_SHARE = 1 / 3;
+    const { r, g, b } = STYLE_WHEELS.monster.tint;
+    assert.ok(Math.max(r, g, b) < GUNMETAL_SHARE, `monster rim tint ${STYLE_WHEELS.monster.tint.getHexString()}`);
+  });
+
   test("when the SUV's rim is built, then its lip reaches the reference's share of the tyre and its tyre's bead sits inside the lip, the sedan's rim unchanged", () => {
     const rubber = new THREE.Color(RUBBER[0]).toArray().map(Math.fround);
     const reach = (design: WheelDesign): [number, number] => {
