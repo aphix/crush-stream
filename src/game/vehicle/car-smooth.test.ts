@@ -1505,7 +1505,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55); again for its windshield base at the side
   // plate's (`windshield.base` [1.0, .92] -> [1.05, .98]) and its door glass starting back at .60 (`aPillarFoot` .74 -> .6): the glass-front and A-post boxes moved.
   // Again for its roof's flatter crown and tighter edge roll (`roofSection` crown .75, blend .8), as the pickup's.
-  { id: "monster", digest: "1893488550b96f86cc190274a321644a40d1aefe80848f9af60be73778d103ea" },
+  // The monster's again for its bed gate hinged at its bottom edge (`boot.pivot` [.45, -2.3]): it dropped open from its top like a hatch; the gate panel's origin and its rest local to it moved: 18934885... -> fc41fe09....
+  { id: "monster", digest: "fc41fe099f2f110fe4887864af7fb8fd61283276488f81e7675ea78e37f9ffd7" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {

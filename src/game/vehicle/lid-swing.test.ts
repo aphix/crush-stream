@@ -15,7 +15,7 @@ import { paint } from "./test-support.ts";
  */
 
 const H = 1 / FINE_HZ;
-const LIDS: readonly CarStyleId[] = ["sedan", "hatchback", "wagon", "pickup"];
+const LIDS: readonly CarStyleId[] = ["sedan", "hatchback", "wagon", "pickup", "monster"];
 
 function parked(id: CarStyleId): DeformableCar {
   const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
