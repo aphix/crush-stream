@@ -7,7 +7,7 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { PART_KIND, PartSeat } from "../vehicle/part-geometry.ts";
 import { leftoverCrumple, snapshotPoints } from "./physics-util.ts";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
-import { DT, dummyGeom, forModes, mass, paint } from "../vehicle/test-support.ts";
+import { closedOn, DT, dummyGeom, forModes, mass, paint } from "../vehicle/test-support.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, PARKED, runPair, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { classCar } from "../vehicle/ejection.test-util.ts";
 import { sliceSpeed } from "../contact/sat.ts";
@@ -426,11 +426,11 @@ describe("given a corner crushed to within 0.12 m of its wheel hub", () => {
   });
 });
 
-describe("given an engine block made of a left and a right half, 0.60 m apart", () => {
-  it("when a car hits a wall at 56 km/h with a 40 % offset, and a car is T-boned at 50 km/h, then the halves stay within 1.2 cm of their 0.60 m spacing on the offset-hit car and on both T-bone cars", () => {
+describe("given an engine block made of a left and a right half", () => {
+  it("when a car hits a wall at 56 km/h with a 40 % offset, and a car is T-boned at 50 km/h, then the halves stay within 1.2 cm of their rest spacing on the offset-hit car and on both T-bone cars", () => {
     const [struck, bullet] = runPair(0, 50, "t-bone");
     for (const [name, r] of [["offset56", runWall(56, 0.4)], ["struck", struck], ["bullet", bullet]] as const) {
-      assert.ok(r.engineGapErr <= 0.012, `${name}: engineL–engineR off 0.60 by ${r.engineGapErr.toFixed(3)} m`);
+      assert.ok(r.engineGapErr <= 0.012, `${name}: engineL–engineR off their rest spacing by ${r.engineGapErr.toFixed(3)} m`);
     }
   });
 });
@@ -539,7 +539,7 @@ function tbone(squash: number): { door: number; gap: number } {
     if (since < 0 && a.crashed) since = 0;
     if (since < 0 || !a.deform.massActive || !b.deform.massActive) continue;
     since += 1 / FRAME_HZ;
-    if (since <= 0.3) door = Math.max(door, 0.78 - (mass(a.deform, "doorR").local.x - mass(a.deform, "cell").local.x));
+    if (since <= 0.3) door = Math.max(door, closedOn(mass(a.deform, "doorR"), mass(a.deform, "cell"), "x"));
     gap = Math.min(gap, mass(b.deform, "cell").world.x - mass(a.deform, "cell").world.x);
   }
   return { door, gap };
@@ -975,7 +975,8 @@ describe("given a car's glass panes, named for ragdoll ejection (a thrown-out dr
     const car = new DeformableCar(paint(), new THREE.Scene(), (origin) => bursts.push(origin.clone()));
     car.spawn(4, 9, 0);
     const at = (name: "windshield" | "doorL" | "doorR") => car.group.worldToLocal(car.glassWorld(name, new THREE.Vector3()));
-    assert.ok(at("windshield").z > 0.6 && Math.abs(at("windshield").x) < 0.05, `windshield at ${at("windshield").toArray()}`);
+    const doorsZ = Math.max(at("doorL").z, at("doorR").z);
+    assert.ok(at("windshield").z > doorsZ && Math.abs(at("windshield").x) < 0.05, `windshield at ${at("windshield").toArray()}, ahead of the door panes at z ${doorsZ}`);
     assert.ok(at("doorL").x < -0.6 && at("doorR").x > 0.6, `doors at ${at("doorL").x} / ${at("doorR").x}`);
     assert.equal(car.smashGlass("doorL"), true);
     assert.equal(car.smashGlass("doorL"), false, "a shattered pane smashed twice");
