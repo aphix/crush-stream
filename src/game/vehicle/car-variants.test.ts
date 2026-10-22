@@ -28,7 +28,7 @@ import { PLATFORM_RIG } from "../deform/deform-rig.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { LampBatch } from "./lamp-lights.ts";
 import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
-import { BLACKOUT, FITTING_ATTRIBUTE, FITTING_TONE, LIGHT_BAR, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
+import { BLACKOUT, FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE, LIGHT_BAR, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { bootPivot, lidSpec, roofHinged } from "./hinge-spec.ts";
 import { SPRINGS } from "./car-suspension.ts";
 import { CarCage } from "./car-cage.ts";
@@ -411,8 +411,8 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
   it("when its rear glass is built, then the clear pane keeps a corner's arc in from each square corner (the arc's middle lies r(√2 − 1) off it), black frit fills out to the corner, and the outline and the pane's centre stay the square pane's", () => {
     const geo = makeRearGlass(rounded);
     const pos = geo.getAttribute("position");
-    const colour = geo.getAttribute("color");
-    assert.ok(colour !== undefined, "the rounded pane carries its frit's vertex colour");
+    const tone = geo.getAttribute(GLASS_ATTRIBUTE);
+    assert.ok(tone !== undefined, "the rounded pane carries its frit's glass tone");
     // The square pane's corners as drawn (its 8 × 6 grid's), fallen with the roof's dome at the top.
     const squarePos = makeRearGlass(square).getAttribute("position");
     for (const k of [0, 8, 54, 62]) {
@@ -420,7 +420,7 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
       let [clear, frit] = [Infinity, Infinity];
       for (let i = 0; i < pos.count; i++) {
         const d = corner.distanceTo(new THREE.Vector3().fromBufferAttribute(pos, i));
-        if (colour.getX(i) === 1) clear = Math.min(clear, d);
+        if (tone.getX(i) === 0) clear = Math.min(clear, d);
         else frit = Math.min(frit, d);
       }
       assert.ok(clear > 0.9 * ROUND * (Math.SQRT2 - 1) && clear < 1.2 * ROUND * (Math.SQRT2 - 1), `corner ${k}: the clear pane's nearest point ${clear.toFixed(4)} m off it`);
@@ -2201,14 +2201,14 @@ describe("given a body style's P2 parts", () => {
     assert.ok(tris(16) - tris(8) === 2 * 8 * 12, `16 lines each way draw ${tris(16) - tris(8)} triangles more than 8`);
   });
 
-  it("when a rear glass has a frame, then its clear pane is drawn that far inside the outline, the band out to the outline is its black frit, and the car's pane wears its vertex colours", () => {
+  it("when a rear glass has a frame, then its clear pane is drawn that far inside the outline, the band out to the outline is its black frit, and the car's pane carries its per-vertex glass tone", () => {
     const hatch = CAR_STYLES.hatchback;
     const q = hatch.rearGlass;
     const [side, bottom] = q.frame!;
     const geo = makeRearGlass(hatch);
-    const [pos, colour] = [geo.getAttribute("position"), geo.getAttribute("color")];
+    const [pos, tone] = [geo.getAttribute("position"), geo.getAttribute(GLASS_ATTRIBUTE)];
     const ids = Array.from({ length: pos.count }, (_, i) => i);
-    const [clear, frit] = [ids.filter((i) => colour.getX(i) === 1), ids.filter((i) => colour.getX(i) === 0)];
+    const [clear, frit] = [ids.filter((i) => tone.getX(i) === 0), ids.filter((i) => tone.getX(i) === 1)];
     const reach = (of: number[]): number[] => [Math.max(...of.map((i) => Math.abs(pos.getX(i)))), Math.min(...of.map((i) => pos.getY(i)))];
     const t0 = bottom / Math.hypot(q.top[0] - q.base[0], q.top[1] - q.base[1]);
     const half = lerp(q.wBase, q.wTop, t0) / 2 - side;
@@ -2216,8 +2216,8 @@ describe("given a body style's P2 parts", () => {
     const paneFoot = [half, q.base[0] + t0 * (q.top[0] - q.base[0]) - domeFall(hatch, q.top[1])(half, t0)];
     assertSameNumbers([...reach(clear), ...reach(frit)], [...paneFoot, q.wBase / 2, q.base[0]], "the clear pane's and the frit's half-width and foot", 1e-5);
     const pane = cars.hatchback["glassPanes"].find((p) => p.name === "rear")!;
-    assert.ok((pane.mesh.material as THREE.MeshStandardMaterial).vertexColors, "the car's rear pane draws its frit");
-    assert.ok(!makeRearGlass({ ...hatch, rearGlass: { ...q, frame: undefined } }).hasAttribute("color"), "no frit without a frame");
+    assert.ok(pane.mesh.geometry.hasAttribute(GLASS_ATTRIBUTE), "the car's rear pane carries its frit");
+    assert.ok(!makeRearGlass({ ...hatch, rearGlass: { ...q, frame: undefined } }).hasAttribute(GLASS_ATTRIBUTE), "no frit without a frame");
   });
 
   it("when a style puts lamps on its bumpers, then the grille seat draws the front ones on the fascia and the tail trim the rear ones, with no shared dark strip across the tail", () => {
@@ -2928,17 +2928,25 @@ describe("given every style's doors and the shared door card", () => {
 });
 
 describe("given a style with privacy glass", () => {
-  it("when its car is built, and again after a player recolours its glass, then its rear and quarter panes wear the colour well under half as light, its windshield and door panes the colour itself", () => {
+  it("when its car is built, and again after a player recolours its glass, then its rear and quarter panes are marked privacy on every vertex, its windshield and door panes are not, and every pane wears the one colour", () => {
     const hatch = CAR_STYLES.hatchback;
     const was = hatch.privacyGlass;
     hatch.privacyGlass = { rear: true, quarter: true };
     try {
       const car = new DeformableCar(PAINT, new THREE.Scene(), null, "hatchback");
-      const light = (name: string) => (car["glassPanes"].find((g) => g.name === name)!.mesh.material as THREE.MeshStandardMaterial).color.getHSL({ h: 0, s: 0, l: 0 }).l;
+      const pane = (name: string) => car["glassPanes"].find((g) => g.name === name)!;
+      const colour = (name: string) => (pane(name).mesh.material as THREE.MeshStandardMaterial).color;
+      const privacy = (name: string): number[] => {
+        const geo = pane(name).mesh.geometry;
+        if (!geo.hasAttribute(GLASS_ATTRIBUTE)) return [0];
+        const tone = geo.getAttribute(GLASS_ATTRIBUTE);
+        return Array.from({ length: tone.count }, (_, i) => tone.getY(i));
+      };
       for (const pass of ["built", "recoloured"]) {
         if (pass === "recoloured") car.setGlassTint(0x6688aa);
-        for (const dark of ["rear", "quarterL", "quarterR"]) assert.ok(light(dark) < 0.5 * light("windshield"), `${pass}: ${dark} ${light(dark)} against the windshield's ${light("windshield")}`);
-        assert.ok(light("doorR") === light("windshield"), `${pass}: the door pane wears the colour itself`);
+        for (const dark of ["rear", "quarterL", "quarterR"]) assert.ok(privacy(dark).every((y) => y === 1), `${pass}: ${dark} is marked privacy on every vertex`);
+        for (const clear of ["windshield", "doorL", "doorR"]) assert.ok(privacy(clear).every((y) => y === 0), `${pass}: ${clear} is not marked privacy`);
+        for (const g of car["glassPanes"]) assert.ok(colour(g.name).equals(colour("windshield")), `${pass}: ${g.name} wears the windshield's colour`);
       }
     } finally {
       hatch.privacyGlass = was;
