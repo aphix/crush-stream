@@ -16,7 +16,7 @@ import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
-import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, trimMaterial } from "./car-materials.ts";
+import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
 import { BOX_HALVES, boxShape, newLooseShape, partMass, stepLoose } from "./loose-step.ts";
 import { armSolids, Surface } from "../world/surfaces.ts";
 import { wearCarLook } from "../present/car-look.ts";
@@ -2253,6 +2253,66 @@ describe("given a body style's P2 parts", () => {
     const skin = meetZ(makeChassisGeometry(sedan));
     const [lens, buried] = [sedan, off].map((style) => meetZ(drawnPart(PART_KIND.grille, style).geometry.clone().translate(0, seat.y + GRILLE_SEAT.y, seat.z + GRILLE_SEAT.z)));
     assert.ok(lens! > skin + 0.001 && buried! < skin, `the fog pod's lens at z ${lens!.toFixed(4)} (without the field ${buried!.toFixed(4)}), the body skin at ${skin.toFixed(4)}`);
+  });
+
+  it("when the hatchback's and the SUV's bumper lamps are met from outside, then each lens, cell and strip is drawn in front of the body and the fascia, where the nose or tail corner stands proud of the bumper too", () => {
+    const mid = (pts: readonly (readonly number[])[]): [number, number] => [pts.reduce((s, p) => s + p[0]!, 0) / pts.length, pts.reduce((s, p) => s + p[1]!, 0) / pts.length];
+    const ray = new THREE.Raycaster();
+    const hidden: string[] = [];
+    let proud = 0;
+    for (const id of ["hatchback", "wagon"] as const) {
+      const style = CAR_STYLES[id];
+      for (const front of [true, false]) {
+        const shape = style.lamps.shapes?.[front ? "front" : "rear"];
+        if (!shape) continue;
+        const { seat } = style.bumpers[front ? "front" : "rear"];
+        const z = front ? seat.z : -seat.z;
+        const fitting = new THREE.Mesh(drawnPart(front ? PART_KIND.grille : PART_KIND.tailTrim, style).geometry);
+        fitting.position.set(0, seat.y + (front ? GRILLE_SEAT.y : 0), z + (front ? GRILLE_SEAT.z : 0));
+        const fascia = new THREE.Mesh(makeBumperGeometry(front, style));
+        fascia.position.set(0, seat.y, z);
+        const body = new THREE.Mesh(makeChassisGeometry(style));
+        for (const m of [fitting, fascia, body]) m.updateMatrixWorld(true);
+        const at = [
+          ...shape.loops.filter((l) => !l.side).map((l) => mid(l.points)),
+          ...(shape.cells ?? []).map((c) => mid(c.loop.points)),
+          ...(shape.strips ?? []).flatMap((s) => s.line.points.slice(1).map((p, i) => mid([s.line.points[i]!, p]))),
+        ];
+        for (const [x, y] of at) {
+          ray.set(new THREE.Vector3(x, y, front ? 5 : -5), new THREE.Vector3(0, 0, front ? -1 : 1));
+          if (ray.intersectObjects([fitting, fascia, body], false)[0]?.object !== fitting) hidden.push(`${id} ${front ? "front" : "rear"} ${x.toFixed(3)},${y.toFixed(3)}`);
+          if (ray.intersectObjects([fascia, body], false)[0]?.object === body) proud++;
+        }
+      }
+    }
+    assert.equal(hidden.join(" "), "", "bumper lamp points the body or the fascia hides");
+    assert.ok(proud >= 3, `the control: the body stands proud of the fascia at ${proud} of them`);
+  });
+
+  it("when a rear bumper is plateless, then its tail trim is its bumper lamps alone, with no platform plate in it", () => {
+    const plate = partGeometry(PART_KIND.tailTrim).getAttribute("color");
+    const cream = [plate.getX(0), plate.getY(0), plate.getZ(0)].join();
+    const creams = (id: CarStyleId): number => {
+      const c = drawnPart(PART_KIND.tailTrim, CAR_STYLES[id]).geometry.getAttribute("color");
+      return Array.from({ length: c.count }, (_, i) => [c.getX(i), c.getY(i), c.getZ(i)].join()).filter((k) => k === cream).length;
+    };
+    for (const id of ["hatchback", "wagon"] as const) {
+      assert.equal(creams(id), 0, `plate vertices in the ${id}'s tail trim`);
+      assert.ok(CAR_STYLES[id].bumpers.rear.plateless, `the ${id}'s reference shows no plate on its bumper`);
+    }
+    assert.ok(creams("sedan") > 0, "the control: the sedan's trim carries the plate");
+  });
+
+  it("when a bumper lamp's lens is black, then the hatchback's and the SUV's diffuser bands are the trim's matte black plastic, not a glossy dark lens", () => {
+    const plastic = toned(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3)), TRIM_BLACK, TRIM_FINISH.plastic.roughness, TRIM_FINISH.plastic.metalness);
+    const [black, texel] = [Array.from(plastic.getAttribute("color").array).join(), plastic.getAttribute("uv").getX(0)];
+    for (const id of ["hatchback", "wagon"] as const) {
+      const trim = drawnPart(PART_KIND.tailTrim, CAR_STYLES[id]).geometry;
+      const [c, uv] = [trim.getAttribute("color"), trim.getAttribute("uv")];
+      const band = Array.from({ length: c.count }, (_, i) => i).filter((i) => [c.getX(i), c.getY(i), c.getZ(i)].join() === black);
+      assert.ok(band.length > 0, `${id}: no black plastic in the tail trim`);
+      assert.equal(band.filter((i) => uv.getX(i) !== texel).length, 0, `${id}: black vertices off the plastic finish's texel`);
+    }
   });
 
   it("when a tail lamp's outline runs onto the boot lid, then the lid carries that share and opens with it, and the body keeps the rest", () => {

@@ -263,14 +263,14 @@ const PLATFORM_PLATE_OUT = 0.09;
 /** The platform plate's roughness and metalness: a recoloured plate keeps its sheen. */
 const PLATE_SHEEN = [0.6, 0.1] as const;
 
-/** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height, its face and colour seated by `plateFace`) and the style's rear bumper lamps. */
+/** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height, its face and colour seated by `plateFace`; none on a `plateless` bumper) and the style's rear bumper lamps. */
 function rearFittings(style: BodyStyle): THREE.BufferGeometry {
-  const { seat, plate, plateFace } = style.bumpers.rear;
+  const { seat, plate, plateFace, plateless } = style.bumpers.rear;
   const trim = withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0).translate(0, plate === undefined ? 0 : plate - seat.y - PLATE_RISE, plateFace?.out === undefined ? 0 : PLATFORM_PLATE_OUT - plateFace.out);
   if (plateFace?.color !== undefined) toned(trim, plateFace.color, ...PLATE_SHEEN);
   if (!style.lamps.shapes?.rear) return trim;
   const lamps = bothSides(builtLamp(style, "rear").body).translate(0, -seat.y, seat.z);
-  return mergeToned([trim, lamps], "rear bumper fittings");
+  return plateless ? lamps : mergeToned([trim, lamps], "rear bumper fittings");
 }
 
 const frontKey = (style: BodyStyle): string | null =>
@@ -304,7 +304,7 @@ const LAMP_SEAM_NUDGE = [0, 0.01, -0.01, 0.02, -0.02, 0.03, -0.03, 0.04, -0.04] 
 const LAMP_REFINE_PASSES = 8;
 /** The lit lenses (sRGB): head white, tail red; the other tones (`SHAPE_TONE`) never glow. */
 const LAMP_TONE = { head: 0xf4f1e8, tail: 0xc4121c } as const;
-const SHAPE_TONE: Record<Exclude<LampTone, "lit">, number> = { clear: 0xd8dde2, red: 0x8a0c12, amber: 0xff9a1a, smoked: 0x2a1a1c, dark: 0x0e0f11, chrome: TRIM_CHROME };
+const SHAPE_TONE: Record<Exclude<LampTone, "lit">, number> = { clear: 0xd8dde2, red: 0x8a0c12, amber: 0xff9a1a, smoked: 0x2a1a1c, dark: 0x0e0f11, black: TRIM_BLACK, chrome: TRIM_CHROME };
 /** u on the lamp emissive mask (`lampEmissiveMap`): the dark housing texel and the lit lens texel. */
 const LAMP_TEXEL = { housing: 0.25, lens: 0.75 } as const;
 /** How far out (m) a lamp point's ray starts to meet the skin: past any body. */
@@ -327,9 +327,10 @@ function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind, bul
   return geo;
 }
 
-/** A bumper lamp's tone in the part batch (never lit): chrome in the trim's finish, the rest glossy in their colour. */
+/** A bumper lamp's tone in the part batch (never lit): chrome and black in the trim's finishes, the rest glossy in their colour. */
 function bumperTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind): THREE.BufferGeometry {
-  return tone === "chrome" ? finished(geo, "chrome") : dark(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0.3, 0.1);
+  if (tone === "chrome" || tone === "black") return finished(geo, tone);
+  return dark(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0.3, 0.1);
 }
 
 /** A lamp point met on the skin: where, the skin's outward normal there, and whether it lies on the boot lid. */
@@ -654,7 +655,7 @@ export function lampSeatAt(style: BodyStyle, kind: LampKind, side: number): THRE
 
 /**
  * `style`'s own `which` lamp met on its skin (car frame, right side): head and tail on the body, the share landing on the hood or boot lid
- * apart (that lid carries it); front and rear on that bumper's fascia. `side` -1 meets it on the left skin mirrored onto the right: the left
+ * apart (that lid carries it); front and rear on that bumper's fascia (and the body, `onBody`). `side` -1 meets it on the left skin mirrored onto the right: the left
  * half's triangles are not the right's mirror (a quad split on one diagonal mirrors onto the other), and round a corner they part by cm.
  */
 function builtLamp(style: BodyStyle, which: keyof LampShapes, side = 1): BuiltLamp {
