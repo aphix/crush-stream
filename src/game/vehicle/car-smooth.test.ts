@@ -198,8 +198,8 @@ const ROLLED_EDGE_LIMIT_DEGREES = 50;
 const FLAT_CURVE_LIMIT_DEGREES = 5;
 
 const lidCreaseTable = [
-  // The sedan's hood is crowned (`hood.crown`): its ring carries 3 dome points a side (17 points), so the shut line and lip corners sit at 0, 8, 10 to 15.
-  { it: "a bonnet's shut line and lip corners (ring points 0, 8, 10 to 15)", style: "sedan", part: "bonnet", rolledLid: false, creaseLines: [0, 8, 10, 11, 12, 13, 14, 15], smoothLines: [1, 2, 3, 4, 5, 6, 7, 9, 16], rollLines: [], creaseDegrees: CREASE_DEGREES.deckLid },
+  // The sedan's hood is crowned (`hood.crown`): its ring carries 3 dome points a side and its skirt's straight wall no upper point (15 points), so the shut line and lip corners sit at 0, 8, 9 to 14.
+  { it: "a bonnet's shut line and lip corners (ring points 0, 8, 9 to 14)", style: "sedan", part: "bonnet", rolledLid: false, creaseLines: [0, 8, 9, 10, 11, 12, 13, 14], smoothLines: [1, 2, 3, 4, 5, 6, 7], rollLines: [], creaseDegrees: CREASE_DEGREES.deckLid },
   // The sedan's boot rolls its side edges (`boot.edgeRoll`): its ring lines are read off its ring (`rolledLidLines`).
   { it: "a sedan boot lid's rolled edges, dome and skirt corners", style: "sedan", part: "boot", rolledLid: true, creaseLines: [], smoothLines: [], rollLines: [], creaseDegrees: CREASE_DEGREES.deckLid },
   { it: "a hatchback's tailgate edges (ring points 0, 4, 5, 6)", style: "hatchback", part: "boot", rolledLid: false, creaseLines: [0, 4, 5, 6], smoothLines: [1, 2, 3], rollLines: [], creaseDegrees: CREASE_DEGREES.tailgate },
@@ -270,8 +270,8 @@ describe("given the lids as built", () => {
     const [drop, at] = CROWNED_SEDAN.hood.crown!;
     const lid = makeHoodGeometry(CROWNED_SEDAN);
     const loft = loftOf(lid);
-    // The top runs edge, dome points, centre, dome points, edge; the skirt and underside are the ring's last 8 points.
-    const rim = loft.ring - 9;
+    // The top runs edge, dome points, centre, dome points, edge (`userData.lidEdge`); the skirt and underside follow.
+    const rim = lid.userData.lidEdge as number;
     for (let slice = 0; slice < loft.slices; slice++) {
       const edge = positionAt(lid, slice * loft.ring);
       const rise = positionAt(lid, slice * loft.ring + rim / 2).y - edge.y;
@@ -443,7 +443,7 @@ describe("given every body style's drawn nose, whose plan and fender line turn h
       const hoodLoft = loftOf(hood);
       const [, oz] = style.hood.origin;
       // The edge (the top's last point) stands a fixed inset inside the station's half-width: its chord's middle against the half-width there.
-      const rim = hoodLoft.ring - 9;
+      const rim = hood.userData.lidEdge as number;
       const inset = (v: THREE.Vector3) => sampleSlice(v.z + oz, style.profile).hw - v.x;
       for (let slice = 0; slice < hoodLoft.slices - 1; slice++) {
         const [a, b] = [positionAt(hood, slice * hoodLoft.ring + rim), positionAt(hood, (slice + 1) * hoodLoft.ring + rim)];
@@ -505,7 +505,7 @@ describe("given every body style's drawn hood over its open engine bay", () => {
       const loft = loftOf(hood);
       const [oy, oz] = style.hood.origin;
       for (let slice = 1; slice < loft.slices - 1; slice++) {
-        const edge = positionAt(hood, slice * loft.ring + loft.ring - 9);
+        const edge = positionAt(hood, slice * loft.ring + (hood.userData.lidEdge as number));
         const z = edge.z + oz;
         // The section's right half, outward from its deck edge (ring point 1): the fender's top line the edge looks over.
         const section = sectionPoints(sampleSlice(z, style.profile), style, "drawn");
@@ -545,7 +545,7 @@ describe("given every body style's drawn hood over its open engine bay", () => {
     const [oy, oz] = style.hood.origin;
     let read = 0;
     for (let slice = 1; slice < loft.slices - 1; slice++) {
-      const edge = positionAt(hood, slice * loft.ring + loft.ring - 9);
+      const edge = positionAt(hood, slice * loft.ring + (hood.userData.lidEdge as number));
       const z = edge.z + oz;
       if (bayAt(z, style) < 1) continue;
       const section = sectionPoints(sampleSlice(z, style.profile), style, "drawn");

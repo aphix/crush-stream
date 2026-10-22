@@ -430,7 +430,7 @@ describe("given every style's drawn body and hood", () => {
       const pos = hood.getAttribute("position");
       const [oy, oz] = style.hood.origin;
       for (let s = 0; s < slices; s++) {
-        for (const point of [0, ring - 9]) {
+        for (const point of [0, hood.userData.lidEdge as number]) {
           const v = new THREE.Vector3().fromBufferAttribute(pos, s * ring + point);
           const over = v.y + oy - sampleSlice(v.z + oz, style.profile).yBelt;
           assert.ok(Math.abs(over - EDGE_OVER_BELT) < 1e-5, `${id}: the hood's edge at z ${(v.z + oz).toFixed(3)} stands ${(over * 1000).toFixed(1)} mm over the belt`);

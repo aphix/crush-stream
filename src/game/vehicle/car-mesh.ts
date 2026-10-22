@@ -742,12 +742,13 @@ function makeDeckPanel(
   const tk = 0.04;
   const skirt = 0.06;
   const [oy, oz] = origin;
+  // The skirt's upper point lies on its straight wall: a rolled lid and the drawn seated hood drop it (a clamshell lays it over the shoulder).
+  const plainWall = roll > 0 || (hood && !clamshell);
   const ring = (w: number, y: number, edge: number, crown: number, dome: Dome): Pt[] => {
     const points = dome.map(([u, v]) => ({ x: w * u, y: lerp(edge, crown, v) }));
     if (roll > 0 && points.length > 0 && points.at(-1)!.x >= w - roll) throw new Error(`${style.id}: a lid's ${roll} m edge roll reaches past its dome's last point`);
     const corner = rolledCorner(points.at(-1) ?? { x: 0, y: crown }, w, edge, roll);
-    // A rolled edge drops the skirt's upper point (its wall is straight between), so the roll costs the lid no vertex.
-    const skirtTop = roll > 0 ? [] : [{ x: w, y: y - skirt * 0.55 }];
+    const skirtTop = plainWall ? [] : [{ x: w, y: y - skirt * 0.55 }];
     return [
       ...corner.map((p) => ({ x: -p.x, y: p.y })).reverse(),
       ...points.map((p) => ({ x: -p.x, y: p.y })).reverse(),
@@ -801,8 +802,10 @@ function makeDeckPanel(
     bendOverTail(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, drop.w / wEnd, lean);
   }
   ensureOutwardNormals(geo);
-  // A rolled ring's corners are its first two points and the two before its skirt and underside's last six.
   const n = rings[0]!.length;
+  // The top's right edge (its side's top point): the skirt and underside's six corners and, unless dropped, the skirt's two upper points follow it.
+  geo.userData.lidEdge = n - 7 - (plainWall ? 0 : 2);
+  // A rolled ring's corners are its first two points and the two before its skirt and underside's last six.
   if (source === "drawn") splitCreases(geo, CREASE_DEGREES.deckLid, roll > 0 ? rollSmoothing(geo, [0, 1, n - 8, n - 7]) : undefined);
   geo.computeBoundingBox();
   return geo;
