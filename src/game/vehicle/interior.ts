@@ -7,7 +7,7 @@ import { beltX } from "./car-lines.ts";
 import { roofAt, sampleSlice } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import type { BodyStyle } from "./car-variants.ts";
-import { BUMPER_F, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { BUMPER_F, DRIVER_SIDE, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { bayTub, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 
@@ -57,7 +57,8 @@ function reclineUnder(style: BodyStyle, hip: THREE.Vector3): number {
 export function driverSeat(style: BodyStyle): DriverPlace {
   const known = driverSeats.get(style);
   if (known) return known;
-  const hip = new THREE.Vector3(...style.seats.front);
+  const [across, up, along] = style.seats.front;
+  const hip = new THREE.Vector3(DRIVER_SIDE * across, up, along);
   const recline = reclineUnder(style, hip);
   // The wheel follows his shoulders as a lower roof leans him back.
   const wheel = new THREE.Vector3(...WHEEL_AT)

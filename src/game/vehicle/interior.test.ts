@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
-import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { BUMPER_F, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeHoodGeometry, TUB_EDGE } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
-import { bayTub, doorCardGeometry } from "./interior-geometry.ts";
-import { CarCabin } from "./interior.ts";
+import { bayTub, cabinGeometry, cageInterior, doorCardGeometry } from "./interior-geometry.ts";
+import { CarCabin, driverSeat } from "./interior.ts";
 import { PartBatch } from "./part-batch.ts";
 import { carPartSeats, PART_KIND, PART_KINDS, type PartSeat } from "./part-geometry.ts";
 import { paint } from "./test-support.ts";
@@ -28,7 +28,7 @@ class Probe extends DeformableCar {
 }
 
 describe("given a style with seats of its own", () => {
-  const own: BodyStyle = { ...CAR_STYLES.sedan, seats: { front: [-0.41, 0.47, -0.08], rear: [0.5, -0.5] } };
+  const own: BodyStyle = { ...CAR_STYLES.sedan, seats: { front: [0.41, 0.47, -0.08], rear: [0.5, -0.5] } };
   const build = (style: BodyStyle) => {
     const seats = carPartSeats();
     new CarCabin(style, seats, new THREE.Group());
@@ -36,10 +36,10 @@ describe("given a style with seats of its own", () => {
     return { front: of(PART_KIND.seatFront), rear: of(PART_KIND.seatRear)[0]! };
   };
 
-  test("when its cabin is built, then the driver's seat stands on its H-point, the passenger's mirrors it and the rear bench is on its row", () => {
+  test("when its cabin is built, then the driver's seat stands on its H-point on the driver's side, the passenger's mirrors it and the rear bench is on its row", () => {
     const { front, rear } = build(own);
-    assert.equal(mm(front[0]!.position), "-0.410,0.470,-0.080");
-    assert.equal(mm(front[1]!.position), "0.410,0.470,-0.080");
+    assert.equal(mm(front[0]!.position), "0.410,0.470,-0.080");
+    assert.equal(mm(front[1]!.position), "-0.410,0.470,-0.080");
     assert.equal(mm(rear.position), "0.000,0.500,-0.500");
     assert.ok(rear.parent !== null, "the bench is in the cabin");
   });
@@ -47,6 +47,77 @@ describe("given a style with seats of its own", () => {
   test("when it has no rear row, then no bench is placed in its cabin", () => {
     const { rear } = build({ ...own, seats: { ...own.seats, rear: null } });
     assert.equal(rear.parent, null);
+  });
+});
+
+describe("given every style and the cage interior, with the driver on the car's left (+x)", () => {
+  /** The mean x of `geometry`'s vertices that `inside` keeps, and how many it kept. */
+  const meanX = (geometry: THREE.BufferGeometry, inside: (x: number, y: number, z: number) => boolean): { x: number; count: number } => {
+    const pos = geometry.getAttribute("position");
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < pos.count; i++) {
+      if (!inside(pos.getX(i), pos.getY(i), pos.getZ(i))) continue;
+      sum += pos.getX(i);
+      count++;
+    }
+    return { x: sum / count, count };
+  };
+
+  test("when the cabins are built, then the driver's H-point, his seat, his wheel, the dash binnacle and the cage interior's wheel are all on the left", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const seat = driverSeat(style);
+      assert.ok(seat.hip.x > 0.2 && seat.wheel.x > 0.2, `${id}: H-point x ${seat.hip.x.toFixed(2)}, wheel x ${seat.wheel.x.toFixed(2)}`);
+      const seats = carPartSeats();
+      new CarCabin(style, seats, new THREE.Group());
+      const driver = seats.find((s) => s.kind === PART_KIND.seatFront)!;
+      const wheel = seats.find((s) => s.kind === PART_KIND.wheel)!;
+      assert.ok(driver.position.x > 0.2 && wheel.position.x > 0.2, `${id}: drawn driver's seat x ${driver.position.x.toFixed(2)}, wheel x ${wheel.position.x.toFixed(2)}`);
+    }
+    // The binnacle's top (the screen stands on the centre line, the dash top lower); the cage interior's wheel torus alone in its box.
+    const binnacle = meanX(cabinGeometry(), (x, y) => y > 0.9 && Math.abs(x) > 0.17);
+    const cageWheel = meanX(cageInterior(), (x, y, z) => Math.abs(x) < 0.38 && y > 0.55 && y < 0.8 && z > 0.2 && z < 0.5);
+    assert.ok(binnacle.count > 0 && binnacle.x > 0.2, `the dash binnacle's mean x ${binnacle.x.toFixed(2)} (${binnacle.count} vertices)`);
+    assert.ok(cageWheel.count > 0 && cageWheel.x > 0.15, `the cage interior's wheel mean x ${cageWheel.x.toFixed(2)} (${cageWheel.count} vertices)`);
+  });
+});
+
+describe("given every style's seats", () => {
+  /** Rear rows per style: a regular-cab pickup has none; the monster is a crew cab; the coupe is a 2+2. */
+  const REAR_ROWS: Readonly<Record<CarStyleId, number>> = { sedan: 1, police: 1, hatchback: 1, wagon: 1, coupe: 1, pickup: 0, monster: 1 };
+  /** The front H-point stands this far (m) over the cabin floor. */
+  const HIP_OVER_FLOOR = 0.14;
+  /** Half the cab back wall's thickness (m): the drawn wall box is 4.5 cm deep about `rearBulkhead.z`. */
+  const WALL_HALF = 0.0225;
+  /** `seat`'s geometry in the cabin's frame (x, y, z per vertex), the vertices `keep` takes by their own (seat-space) height. */
+  const placed = (seat: PartSeat, keep: (y: number) => boolean): THREE.Vector3[] => {
+    seat.updateMatrix();
+    const pos = seat.geometry.getAttribute("position");
+    const out: THREE.Vector3[] = [];
+    for (let i = 0; i < pos.count; i++) if (keep(pos.getY(i))) out.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(seat.matrix));
+    return out;
+  };
+
+  test("when each cabin is built, then two sit in front at the floor plus 0.14 m, and the rear row (none in a pickup) stands between the B-pillar and the cab's back wall, clear of the front seats", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const seats = carPartSeats();
+      new CarCabin(style, seats, new THREE.Group());
+      const front = seats.filter((s) => s.kind === PART_KIND.seatFront && s.parent !== null);
+      const rear = seats.filter((s) => s.kind === PART_KIND.seatRear && s.parent !== null);
+      assert.equal(`${front.length} front, ${rear.length} rear`, `2 front, ${REAR_ROWS[id]} rear`, id);
+      assert.ok(Math.abs(driverSeat(style).hip.y - style.tubs[0]![2] - HIP_OVER_FLOOR) < 1e-9, `${id}: H-point ${driverSeat(style).hip.y} over the floor ${style.tubs[0]![2]}`);
+      const bench = rear[0];
+      if (!bench) continue;
+      const { z: wall, yTop } = style.rearBulkhead;
+      assert.ok(bench.position.z > wall && bench.position.z <= style.bPillar.rear, `${id}: bench H-point z ${bench.position.z} outside the wall ${wall} .. B-pillar ${style.bPillar.rear}`);
+      const behindWall = placed(bench, () => true).filter((p) => p.y < yTop && p.z < wall + WALL_HALF);
+      assert.equal(behindWall.length, 0, `${id}: ${behindWall.length} bench vertices under the wall's top behind its face`);
+      const cushion = new THREE.Box3().setFromPoints(placed(bench, (y) => y < 0));
+      const inCushion = front.flatMap((s) => placed(s, () => true)).filter((p) => cushion.containsPoint(p));
+      assert.equal(inCushion.length, 0, `${id}: ${inCushion.length} front seat vertices inside the bench's cushion`);
+    }
   });
 });
 

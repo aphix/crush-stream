@@ -3,7 +3,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
-import { INTERIOR_MESH } from "./constants.ts";
+import { DRIVER_SIDE, INTERIOR_MESH } from "./constants.ts";
 import { mergeToned, toned } from "./car-materials.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
@@ -79,7 +79,7 @@ export const cageInterior = once((): THREE.BufferGeometry => {
     part(0.82, 0.2, 0.24, dark, 0, 0.6, 0.48),
     part(0.78, 0.02, 1.05, vinyl, 0, 1.08, 0.02),
     part(0.8, 0.55, 0.04, vinyl, 0, 0.62, -0.62),
-    toned(new THREE.TorusGeometry(0.11, 0.016, 8, 16), 0x2a2c32, 0.55, 0.2).rotateX(0.55).translate(-0.22, 0.68, 0.36),
+    toned(new THREE.TorusGeometry(0.11, 0.016, 8, 16), 0x2a2c32, 0.55, 0.2).rotateX(0.55).translate(DRIVER_SIDE * 0.22, 0.68, 0.36),
   ];
   for (const x of [-0.2, 0.2]) {
     parts.push(part(0.3, 0.08, 0.36, seat, x, 0.4, 0.06));
@@ -100,8 +100,8 @@ export function cabinGeometry(): THREE.BufferGeometry {
     rounded(1.56, 0.18, 0.42, 0.04, TRIM).translate(0, 0.73, 0.62),
     box(1.56, 0.05, 0.5, SOFT, 0, 0.835, 0.65, 0.08),
     box(1.3, 0.012, 0.01, ACCENT, 0, 0.79, 0.41),
-    box(0.36, 0.08, 0.16, SOFT, -0.36, 0.89, 0.5),
-    box(0.3, 0.06, 0.01, GLOSS, -0.36, 0.875, 0.42, -0.2),
+    box(0.36, 0.08, 0.16, SOFT, DRIVER_SIDE * 0.36, 0.89, 0.5),
+    box(0.3, 0.06, 0.01, GLOSS, DRIVER_SIDE * 0.36, 0.875, 0.42, -0.2),
     box(0.26, 0.15, 0.015, GLOSS, 0, 0.93, 0.47, -0.25),
   ];
   for (const sign of [-1, 1]) {
