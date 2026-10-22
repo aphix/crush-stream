@@ -606,6 +606,27 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
+  it("when any style's car is reset and its mirrors posed, then each mirror's seat still stretches the platform mirror to the style's own reach", () => {
+    const wrong: string[] = [];
+    for (const id of CAR_STYLE_IDS) {
+      const car = new DeformableCar(PAINT, scene, null, id);
+      const want = CAR_STYLES[id].door.mirrorReach;
+      const read = (when: string): void => {
+        for (const name of ["mirrorL", "mirrorR"]) {
+          const reach = car["parts"].find((p) => p.name === name)!.object.scale.x * MIRROR_REACH;
+          if (Math.abs(reach - want) > 1e-9) wrong.push(`${id} ${name} ${when}: reach ${reach.toFixed(3)} m, its door's ${want}`);
+        }
+      };
+      read("built");
+      car.resetVisual();
+      read("reset");
+      for (const p of car["parts"]) if (p.mirror) car["posePart"](p);
+      read("posed");
+      car.dispose();
+    }
+    assert.deepEqual(wrong, []);
+  });
+
   it("when a mirror sits back along a door whose side narrows rearward, then its arm still starts on the door skin there", () => {
     const coupe = CAR_STYLES.coupe;
     // The side tapers 6 cm over the mirror's 0.3 m, so a seat taken at the hinge stands off the skin.

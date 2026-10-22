@@ -267,7 +267,7 @@ export class DeformableCar extends CarParts {
       p.object.position.copy(p.restPos);
       p.object.quaternion.copy(p.restQuat);
       p.object.rotation.set(0, 0, 0);
-      p.object.scale.set(1, 1, 1);
+      p.object.scale.copy(p.restScale);
       p.object.visible = true;
       p.velocity.set(0, 0, 0);
       p.angular.set(0, 0, 0);
