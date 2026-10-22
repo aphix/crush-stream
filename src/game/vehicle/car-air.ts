@@ -11,6 +11,7 @@ import { EPICENTER } from "../deform/epicenter.ts";
 import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
 import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop, readTyreSides } from "./car-air-points.ts";
 import { centreLift, centreY } from "./car-cage-rig.ts";
+import { store3d } from "../kernel/store.ts";
 
 /** Crossings `wreckTop` let a wreck skip since `takeCrossingsSkipped` last read (a field of a const: the bench's work counter reads and zeroes it once a slice). */
 const prune = { skipped: 0 };
@@ -98,7 +99,7 @@ function noteClosing(c: number, closing: number): void {
   if (closing <= CRASH.grazeMps || plan < MIN_SIDE_PLAN) return;
   _crushNormal.set(N[c]!.x / plan, 0, N[c]!.z / plan);
   CLOSE_FIRST[c] = -(_vp.x * _crushNormal.x + _vp.z * _crushNormal.z);
-  _crushPoint.copy(centreOfMass).add(R[c]!).toArray(CRUSH_POINT, c * 3);
+  store3d(CRUSH_POINT, c * 3, _crushPoint.copy(centreOfMass).add(R[c]!));
 }
 
 /**
@@ -386,13 +387,13 @@ const _centre = new THREE.Vector3();
 
 /** What the stepping car and the cars its rows rest on move at, before the solve gives them any impulse: the speeds their crush is armed with. */
 function snapshotRows(car: DeformableCar, n: number): void {
-  car.velocity.toArray(PRE_A, 0);
-  car.angular.toArray(PRE_A, 3);
+  store3d(PRE_A, 0, car.velocity);
+  store3d(PRE_A, 3, car.angular);
   for (let c = 0; c < n; c++) {
     const o = HELD[c];
     if (o === null || o === undefined) continue;
-    o.velocity.toArray(PRE_B, c * 6);
-    o.angular.toArray(PRE_B, c * 6 + 3);
+    store3d(PRE_B, c * 6, o.velocity);
+    store3d(PRE_B, c * 6 + 3, o.angular);
   }
 }
 
