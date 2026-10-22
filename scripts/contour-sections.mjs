@@ -5,13 +5,13 @@
  *
  *   CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
  *     scripts/contour-sections.mjs --root <tree> --car <style> [--png <out.png>]
- *   ... scripts/contour-sections.mjs --root <tree> --all --sheet <out.png>     (every style: one JSON line each, one sheet)
+ *   ... scripts/contour-sections.mjs --root <tree> --all --sheet <out.png>     (the five bodies: one JSON line each, one sheet)
  *
- * The surface: the body, lids, door skins, bumpers, glass panes and window trim as drawn (`lookMeshes`, `glassPanes`); no wheels,
- * lamps, mirrors or other batched parts. Each station cuts every triangle with a plane (exact, no renderer) and a fan of rays in that
- * plane, from outside toward a centre, keeps the outermost hit: the section's outer contour, a raw sample every 0.25°, never smoothed.
- * A ray that hits nothing is a miss and splits the contour; so does a jump over STEP_M between neighbouring hits (a ledge or an
- * overhang the fan cannot see under), whose length is reported as a step.
+ * The surface: the body, lids, door skins, bumpers, glass panes and window trim as drawn (`lookMeshes`, `glassPanes`), less the style's
+ * small fittings (`smallFittings`: exhaust tips, tow hitch); no wheels, lamps or batched parts. Each station cuts every triangle with a
+ * plane (exact, no renderer) and a fan of rays in that plane, from outside toward a centre, keeps the outermost hit: the section's
+ * outer contour, a raw sample every 0.25°, never smoothed. A ray that hits nothing is a miss and splits the contour; so does a jump
+ * over STEP_M between neighbouring hits (a ledge or an overhang the fan cannot see under), whose length is reported as a step.
  *
  * `turn`: the direction change (degrees) across ARC_M of contour centred on a sample (the chords to the samples ARC_M/2 behind and ahead):
  * a corner of radius r turns ARC_M / r radians there, so 45° is a radius of about 5 cm and 25° about 9 cm. A window that crosses a
@@ -19,9 +19,11 @@
  *
  * Regions and what each number catches:
  * - roofEdge (cuts across the roof at 25/50/75 % of `roofZ` and along it at 0, ±20 % and ±32 % of the body's width; the body
- *   above the side glass's top): `turnAcross` the hardest shoulder roll, `turnAlong` the hardest roof end, `ledgeMm` the largest
- *   step above the side glass (a roof cap overhanging what is under it), `shelfMm` how far the roof skin stands out past the side
- *   glass top below it, `crownMm` the roof's rise from 70 % of its half-width to the centre.
+ *   above the side glass's top, less the style's intended edges, `intendedEdges`: its spoiler and rails): `turnAcross` the hardest
+ *   shoulder roll, `turnAlong` the hardest roof end, `ledgeMm` the largest step above the side glass (a roof cap overhanging what is
+ *   under it), `offRoofMm` that step under an intended part (a spoiler off the roof), `hoodBaseStepMm` the widest open seam round
+ *   the hood's rear edge and the windshield base, `shelfMm` how far the roof skin stands out past the side glass top below it,
+ *   `crownMm` the roof's rise from 70 % of its half-width to the centre.
  * - aPillar / rearPillar (horizontal cuts at six heights through the side glass): the body run between the windshield (rear glass)
  *   and the side glass, each side. `widthMm` per height (the visible band, arc length glass edge to glass edge), `spreadPct` its
  *   (max − min) / median (a swollen or pinched band), `jumpMm` the largest change between neighbouring heights, `leanDeg` the band's
@@ -31,25 +33,29 @@
  *   the bumper, the bumper's middle for the lip) changes round the wrap (5th to 95th percentile of the rays), `stepMm` the largest
  *   change between neighbouring heights' contours.
  *
- * Prints one JSON line per car. `--curves <png>`: every car's section curves, raw samples coloured by turn. `--png`: the car in game
+ * Prints one JSON line per car, with its exterior `gaps` and `zfight` (`contour-defects.mjs`), then a `{"kind":"suggest"}` line per
+ * fix certain enough to print. `--curves <png>`: every car's section curves, raw samples coloured by turn. `--png`: the car in game
  * shading from the rear and the front three-quarters (its left side), rings at the flagged samples: yellow mild, orange bad, red the
- * region's worst; scores under it. `--sheet`: every car's panel and its section curves, stacked.
+ * region's worst, cyan a gap or stand-off, magenta z-fighting; scores under it. `--sheet`: every car's panel and its curves, stacked.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 import * as THREE from "three";
 import { CarStage, ViewPort, openGame } from "./trace-core.mjs";
+import { GLASS, K, boxOf, cut, deg, dropBoxes, intendedAt, intendedEdges, mm, r1, sampleColour, smallFittings, stackCanvases, surfaceOf, threeQuarter, world } from "./contour-core.mjs";
+import { defectsOf } from "./contour-defects.mjs";
 
-/** Mesh kinds of the surface: glass (windshield, rear, side), trim and bumper tell seams from turns. */
-const K = { body: 0, windshield: 1, rear: 2, side: 3, trim: 4, bumper: 5 };
-const GLASS = new Set([K.windshield, K.rear, K.side]);
 /** Fan ray spacing (degrees), the turn window (m) and the neighbour jump (m) that splits a contour as a step. */
 const FAN_STEP = 0.25;
 const ARC_M = 0.04;
 const STEP_M = 0.05;
 /** A pillar band wider than this (m) is not a pillar: the cut missed a glass edge at that height. */
 const BAND_MAX_M = 0.6;
+/** A pillar band's samples stand at least this far (m) out on their own side: one past it is the far side, seen through the near. */
+const NEAR_SIDE = 0.3;
+/** A jump between neighbouring lengthwise samples round the hood's rear edge and the windshield base over this (m) is an open seam. */
+const HOOD_STEP_M = 0.012;
 /** Flag levels: a turn this many degrees is mild, then bad; a pillar band this much over its median width (share) likewise. */
 const TURN_FLAG = [25, 45];
 const WIDTH_FLAG = [0.15, 0.3];
@@ -66,91 +72,8 @@ const TAIL_ABOVE = 0.05;
 const PAINT = 0xa4a8ae;
 const SHOT = [900, 560];
 const RING = { 1: "rgba(255,220,0,0.9)", 2: "rgba(255,140,0,0.95)", 3: "rgba(230,20,20,1)" };
-
-const deg = (r) => (r * 180) / Math.PI;
-const r1 = (x) => (x === null || !Number.isFinite(x) ? null : Math.round(x * 10) / 10);
-const mm = (m) => (m === null ? null : Math.round(m * 1000));
-
-/** The car's drawn surface as world triangles (9 floats each) with their mesh kind. */
-function surfaceOf(car) {
-  car.group.updateMatrixWorld(true);
-  const look = car.lookMeshes();
-  const meshes = [];
-  const shown = (o) => {
-    for (let p = o; p; p = p.parent) if (!p.visible) return false;
-    return true;
-  };
-  const add = (mesh, kind) => {
-    if (mesh?.isMesh && shown(mesh) && !meshes.some(([m]) => m === mesh)) meshes.push([mesh, kind]);
-  };
-  for (const pane of car.glassPanes) add(pane.mesh, pane.name === "windshield" ? K.windshield : pane.name === "rear" ? K.rear : K.side);
-  for (const m of look.bumpers) add(m, K.bumper);
-  add(look.body, K.body);
-  add(look.hood, K.body);
-  add(look.trunk, K.body);
-  for (const m of look.doors) add(m, K.body);
-  car.group.traverse((o) => {
-    if (o.isMesh && o.name === "windowTrim") add(o, K.trim);
-  });
-  const tris = [];
-  const kinds = [];
-  const v = new THREE.Vector3();
-  for (const [mesh, kind] of meshes) {
-    const pos = mesh.geometry.getAttribute("position");
-    const index = mesh.geometry.index;
-    const n = index ? index.count : pos.count;
-    for (let t = 0; t + 2 < n; t += 3) {
-      for (let c = 0; c < 3; c++) {
-        v.fromBufferAttribute(pos, index ? index.getX(t + c) : t + c).applyMatrix4(mesh.matrixWorld);
-        tris.push(v.x, v.y, v.z);
-      }
-      kinds.push(kind);
-    }
-  }
-  return { tri: Float64Array.from(tris), kind: Uint8Array.from(kinds) };
-}
-
-/** The box (world) of the surface's triangles of `kinds`, optionally only those with z on one side (`zSign`). */
-function boxOf(s, kinds, zSign = 0) {
-  const box = new THREE.Box3();
-  const v = new THREE.Vector3();
-  for (let t = 0; t < s.kind.length; t++) {
-    if (!kinds.includes(s.kind[t])) continue;
-    for (let c = 0; c < 3; c++) {
-      v.fromArray(s.tri, t * 9 + c * 3);
-      if (zSign === 0 || Math.sign(v.z) === zSign) box.expandByPoint(v);
-    }
-  }
-  return box;
-}
-
-/** In-plane axes per cut axis: x cuts read (z, y), y cuts (x, z), z cuts (x, y). */
-const PLANE = { 0: [2, 1], 1: [0, 2], 2: [0, 1] };
-
-/** Every triangle cut by the plane `axis` = `value`: segments [u0, v0, u1, v1] in the plane's axes, and each one's mesh kind. */
-function cut(s, axis, value) {
-  const [ui, vi] = PLANE[axis];
-  const seg = [];
-  const kind = [];
-  const d = [0, 0, 0];
-  for (let t = 0; t < s.kind.length; t++) {
-    const o = t * 9;
-    for (let c = 0; c < 3; c++) d[c] = s.tri[o + c * 3 + axis] - value || 1e-12;
-    if ((d[0] > 0 && d[1] > 0 && d[2] > 0) || (d[0] < 0 && d[1] < 0 && d[2] < 0)) continue;
-    const pts = [];
-    for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) {
-      if (d[a] * d[b] >= 0) continue;
-      const k = d[a] / (d[a] - d[b]);
-      const pa = o + a * 3;
-      const pb = o + b * 3;
-      pts.push(s.tri[pa + ui] + k * (s.tri[pb + ui] - s.tri[pa + ui]), s.tri[pa + vi] + k * (s.tri[pb + vi] - s.tri[pa + vi]));
-    }
-    if (pts.length !== 4) continue;
-    seg.push(...pts);
-    kind.push(s.kind[t]);
-  }
-  return { seg: Float64Array.from(seg), kind: Uint8Array.from(kind) };
-}
+/** Defect rings: a gap or stand-off cyan, z-fighting magenta (bigger rings, bolder when bad). */
+const DEFECT_RING = { gap: "rgba(0,200,255,0.95)", zfight: "rgba(255,0,220,0.95)" };
 
 /**
  * Rays in the cut's plane from `R` m out toward (cu, cv), one every FAN_STEP degrees from `a0` to `a1`: each sample the outermost hit
@@ -229,16 +152,6 @@ function scoreTurns(run) {
   return run;
 }
 
-/** A sample's world point from a cut on `axis` at `value`. */
-function world(axis, value, s) {
-  const p = [0, 0, 0];
-  const [ui, vi] = PLANE[axis];
-  p[axis] = value;
-  p[ui] = s.u;
-  p[vi] = s.v;
-  return p;
-}
-
 /** Flags at the scored samples of one region: each sample at or over the mild turn, the worst as level 3. */
 function turnFlags(samples, axis, value) {
   return samples.filter((s) => s.turn !== null && s.turn >= TURN_FLAG[0]).map((s) => ({ p: world(axis, value, s), level: s.turn >= TURN_FLAG[1] ? 2 : 1, score: s.turn }));
@@ -265,26 +178,47 @@ function median(values) {
 /**
  * Roof edge: transverse cuts through the roof (the contour above the side glass top) and lengthwise cuts down the roof's middle and
  * over its shoulders (its front and rear ends where it meets the glass or a cab wall). A ledge is a step in a contour above the side
- * glass top: the fan passing under a roof cap that overhangs what is below it.
+ * glass top: the fan passing under a roof cap that overhangs what is below it. The style's intended edges (`intendedEdges`: its roof
+ * spoiler and rails) are fittings, not the roof: no turn or ledge on them is scored.
  */
-function roofEdge(s, style, belt, glassTop, width) {
+function roofEdge(s, style, belt, glassTop, width, intended) {
   const [zr, zf] = style.roofZ;
   const flags = [];
   const turns = [];
   const shelves = [];
   const crowns = [];
   const ledges = [];
+  const offRoof = [];
+  const hoodSteps = [];
   const curves = [];
+  const wsBase = style.windshield.base[1];
   const scoreCut = (axis, value, cu, cv, label, group) => {
     const samples = fan(cut(s, axis, value), cu, cv, 3, 0, 180);
     const { runs, steps } = runsOf(samples);
     for (const run of runs) scoreTurns(run);
-    // The roof: body above the side glass top; lengthwise, within a quarter metre of the roof's ends.
+    // The roof: body above the side glass top, off the intended edges; lengthwise, within a quarter metre of the roof's ends.
+    const free = (p) => intendedAt(intended, world(axis, value, p)) === null;
     const roof = samples.filter((p) => !p.miss && !GLASS.has(p.kind) && p.kind !== K.trim && p.v > glassTop - 0.03 && (axis === 2 || (p.u > zr - 0.25 && p.u < zf + 0.25)));
-    const region = roof.filter((p) => p.turn !== null);
+    const region = roof.filter((p) => p.turn !== null && free(p));
     turns.push({ axis, turn: maxOf(region.map((p) => p.turn)) });
     flags.push(...turnFlags(region, axis, value));
-    for (const st of steps) if (st.a.v > glassTop - 0.1 && st.b.v > glassTop - 0.1) ledges.push({ len: st.len, p: world(axis, value, st.a) });
+    for (const st of steps) {
+      if (st.a.v < glassTop - 0.1 || st.b.v < glassTop - 0.1) continue;
+      // On an intended edge (a spoiler) the step is the fan passing under it: the part stands off the roof, a gap you see into.
+      if (free(st.a) && free(st.b)) ledges.push({ len: st.len, p: world(axis, value, st.a) });
+      else offRoof.push({ len: st.len, p: world(axis, value, st.a) });
+    }
+    // Lengthwise: a step between neighbouring samples round the hood's rear edge and the windshield's base (an open seam you see into).
+    if (axis === 0) {
+      for (let i = 1; i < samples.length; i++) {
+        const [a, b] = [samples[i - 1], samples[i]];
+        const inZone = (p) => !p.miss && p.u > wsBase - 0.35 && p.u < wsBase + 0.15 && p.v > belt - 0.4;
+        if (!inZone(a) || !inZone(b)) continue;
+        // The seam's width: how far apart the two sides are (an open seam is a few cm; the fan crossing onto another face is not a seam).
+        const jump = Math.hypot(a.u - b.u, a.v - b.v);
+        if (jump > HOOD_STEP_M && jump < 0.1) hoodSteps.push({ len: jump, p: world(axis, value, a.r < b.r ? a : b) });
+      }
+    }
     curves.push({ group, axis, label, samples });
     return { samples, roof };
   };
@@ -309,12 +243,18 @@ function roofEdge(s, style, belt, glassTop, width) {
   for (const f of ROOF_ALONG) scoreCut(0, f * width, (zr + zf) / 2, belt, `x ${(f * width).toFixed(2)}`, "roof along");
   const ledge = ledges.reduce((a, st) => (a === null || st.len > a.len ? st : a), null);
   if (ledge) flags.push({ p: ledge.p, level: ledge.len >= 0.08 ? 2 : 1, score: 300 + ledge.len * 1000 });
+  const off = offRoof.reduce((a, st) => (a === null || st.len > a.len ? st : a), null);
+  if (off) flags.push({ p: off.p, level: 2, score: 400 + off.len * 1000, colour: "gap" });
+  const hood = hoodSteps.reduce((a, st) => (a === null || st.len > a.len ? st : a), null);
+  if (hood) flags.push({ p: hood.p, level: hood.len >= 2 * HOOD_STEP_M ? 2 : 1, score: 400 + hood.len * 1000, colour: "gap" });
   return {
     score: {
       turnAcross: r1(maxOf(turns.filter((t) => t.axis === 2).map((t) => t.turn))),
       turnAlong: r1(maxOf(turns.filter((t) => t.axis === 0).map((t) => t.turn))),
       turnPerCut: turns.map((t) => r1(t.turn)),
       ledgeMm: mm(ledge?.len ?? 0),
+      offRoofMm: mm(off?.len ?? 0),
+      hoodBaseStepMm: mm(hood?.len ?? 0),
       shelfMm: mm(maxOf(shelves)),
       crownMm: mm(crowns.length ? Math.min(...crowns) : null),
     },
@@ -327,6 +267,8 @@ function roofEdge(s, style, belt, glassTop, width) {
 function pillars(s, glassBox, front) {
   const stations = [];
   const flagsTurn = [];
+  /** Why a height's band reads n/a, counted over both sides: no glass edge there, the cut sees through to the far side, wider than BAND_MAX_M. */
+  const reasons = { noGlass: 0, seeThrough: 0, tooWide: 0 };
   const curves = [];
   const zc = (glassBox.min.z + glassBox.max.z) / 2;
   for (const f of PILLAR_AT) {
@@ -339,20 +281,29 @@ function pillars(s, glassBox, front) {
       const { runs } = runsOf(samples);
       for (const run of runs) scoreTurns(run);
       if (side > 0) curves.push({ group: front ? "A-pillar" : "rear pillar", axis: 1, label: `y ${y.toFixed(2)}`, samples });
-      // In sweep order (misses kept): front, the first side glass sample and the last windshield sample before it; rear, the first rear
-      // glass sample and the last side glass sample before it. The band between must be unbroken (no miss) and narrower than BAND_MAX_M.
-      const first = samples.findIndex((p) => !p.miss && p.kind === (front ? K.side : K.rear));
+      // In sweep order (misses kept), on this side of the car (side × x over NEAR_SIDE): front, the first side glass sample and the last
+      // windshield sample before it; rear, the first rear glass sample and the last side glass sample before it. The band between must
+      // stay on this side (a sample past it is the cut seeing through to the far side: `seeThrough`), unbroken and under BAND_MAX_M.
+      const near = (p) => !p.miss && side * p.u > NEAR_SIDE;
+      const first = samples.findIndex((p) => near(p) && p.kind === (front ? K.side : K.rear));
       let last = -1;
-      for (let i = 0; i < first; i++) if (!samples[i].miss && samples[i].kind === (front ? K.windshield : K.side)) last = i;
-      if (first < 0 || last < 0 || samples.slice(last, first + 1).some((p) => p.miss)) {
+      for (let i = 0; i < first; i++) if (near(samples[i]) && samples[i].kind === (front ? K.windshield : K.side)) last = i;
+      const band = first < 0 || last < 0 ? [] : samples.slice(last, first + 1);
+      if (!band.length || band.some((p) => p.miss)) {
         perSide.push(null);
+        reasons.noGlass++;
         continue;
       }
-      const band = samples.slice(last, first + 1);
+      if (band.some((p) => !near(p))) {
+        perSide.push(null);
+        reasons.seeThrough++;
+        continue;
+      }
       let width = 0;
       for (let i = 1; i < band.length; i++) width += Math.hypot(band[i].u - band[i - 1].u, band[i].v - band[i - 1].v);
       if (width > BAND_MAX_M) {
         perSide.push(null);
+        reasons.tooWide++;
         continue;
       }
       const body = band.slice(1, -1).filter((p) => !GLASS.has(p.kind));
@@ -395,6 +346,7 @@ function pillars(s, glassBox, front) {
       jumpMm: mm(jump),
       leanDeg: leansOk.length ? r1(leansOk.reduce((a, b) => a + b, 0) / leansOk.length) : null,
       turn: r1(maxOf(stations.flatMap((st) => st.sides.filter(Boolean).map((sd) => sd.turn)))),
+      naReasons: reasons,
     },
     flags: worstOf(flags),
     curves,
@@ -456,13 +408,16 @@ function rearBand(s, bumperBox, at, refY, behindZ, hubZ, label) {
   return { score: { turn: r1(maxOf(turns)), turnPerStation: turns.map(r1), projSpreadMm: mm(spread), stepMm: mm(step) }, flags: worstOf(flags), curves };
 }
 
-/** Every region's scores and flags for the stage's built car. */
-export function contourOf(stage) {
+/** Every region's scores and flags for the stage's built car, and its exterior defects (`contour-defects.mjs`). */
+export function contourOf(stage, styleId) {
   const car = stage.car;
   const style = car.style;
-  const s = surfaceOf(car);
+  const lift = stage.game.CLASSES[stage.game.STYLE_CLASS[styleId]].lift;
+  const whole = surfaceOf(car);
+  const bumper = boxOf(whole, [K.bumper], -1);
+  // The small fittings (exhaust tips, tow hitch) are fine as they are: no score reads them.
+  const s = dropBoxes(whole, smallFittings(style, bumper, lift));
   const glass = boxOf(s, [K.side]);
-  const bumper = boxOf(s, [K.bumper], -1);
   const hubs = car.wheels.map((w) => w.getWorldPosition(new THREE.Vector3()));
   const hubZ = Math.min(...hubs.map((h) => h.z));
   const radius = Math.max(...car.wheels.map((w) => new THREE.Box3().setFromObject(w).getSize(new THREE.Vector3()).y / 2), 0.3);
@@ -470,32 +425,20 @@ export function contourOf(stage) {
   const bodyBox = boxOf(s, [K.body]);
   const width = bodyBox.max.x - bodyBox.min.x;
   const regions = {
-    roofEdge: roofEdge(s, style, glass.min.y, glass.max.y, width),
+    roofEdge: roofEdge(s, style, glass.min.y, glass.max.y, width, intendedEdges(style, lift)),
     aPillar: pillars(s, glass, true),
     rearPillar: pillars(s, glass, false),
     bumper: bumper.isEmpty() ? null : rearBand(s, bumper, BUMPER_AT, bumper.max.y + TAIL_ABOVE, behindZ, hubZ, "rear bumper"),
     lowerLip: bumper.isEmpty() ? null : rearBand(s, bumper, LIP_AT, bumper.min.y + 0.5 * (bumper.max.y - bumper.min.y), behindZ, hubZ, "lower lip"),
   };
-  return regions;
-}
-
-/** A perspective camera on the car's left three-quarters, from behind (`rear`) or ahead, a little above the roof. */
-function threeQuarter(box, rear, W, H) {
-  const c = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  const cam = new THREE.PerspectiveCamera(24, W / H, 0.1, 100);
-  const d = size.z * 1.55;
-  cam.position.set(c.x + d * 0.55, c.y + size.y * 1.3, c.z + (rear ? -1 : 1) * d * 0.8);
-  cam.lookAt(c.x, c.y - size.y * 0.1, c.z);
-  cam.updateMatrixWorld(true);
-  return cam;
+  return { regions, defects: defectsOf(stage, style, lift, bumper, glass.min.y) };
 }
 
 /** The car's panel: rear and front three-quarter views in game shading with the flags as rings, its scores in lines under them. */
-async function panel(game, stage, port, style, regions) {
+async function panel(game, stage, port, style, { regions, defects }) {
   const [W, H] = SHOT;
   const box = new THREE.Box3().setFromObject(stage.car.group);
-  const lines = scoreLines(style, regions);
+  const lines = scoreLines(style, regions, defects);
   const canvas = game.createCanvas(W * 2 + 10, H + 22 + lines.length * 18 + 8);
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = "#fff";
@@ -514,16 +457,17 @@ async function panel(game, stage, port, style, regions) {
     ctx.fillRect(ox, 22, W, H);
     ctx.drawImage(tmp, ox, 22);
     const v = new THREE.Vector3();
-    const all = Object.values(regions).flatMap((r) => r?.flags ?? []);
+    const all = [...Object.values(regions).flatMap((r) => r?.flags ?? []), ...defects.flags];
     for (const level of [1, 2, 3]) {
       for (const f of all) {
+        // The left side's rings (the shot shows it), and every defect ring on the centre line.
         if (f.level !== level || f.p[0] < -0.05) continue;
         v.fromArray(f.p).project(cam);
         const [u, w] = [ox + ((v.x + 1) / 2) * W, 22 + ((1 - v.y) / 2) * H];
-        ctx.strokeStyle = RING[level];
-        ctx.lineWidth = level === 3 ? 3 : 2;
+        ctx.strokeStyle = f.colour ? DEFECT_RING[f.colour] : RING[level];
+        ctx.lineWidth = level >= 2 ? 3 : 2;
         ctx.beginPath();
-        ctx.arc(u, w, level === 3 ? 8 : 5, 0, Math.PI * 2);
+        ctx.arc(u, w, f.colour ? 7 + level * 2 : level === 3 ? 8 : 5, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
@@ -534,19 +478,6 @@ async function panel(game, stage, port, style, regions) {
   ctx.font = "15px monospace";
   for (const [i, line] of lines.entries()) ctx.fillText(line, 6, H + 22 + 18 * (i + 1));
   return canvas;
-}
-
-/** A sample's colour: glass blue, trim dark, an unscored body sample grey, a scored one cool (0°) to warm (60° and over) by its turn. */
-function sampleColour(p) {
-  if (GLASS.has(p.kind)) return "rgb(70,130,200)";
-  if (p.kind === K.trim) return "rgb(50,50,50)";
-  if (p.turn === null || p.turn === undefined) return "rgb(160,160,160)";
-  const t = Math.min(1, p.turn / 60);
-  const stops = [[40, 90, 255], [0, 190, 120], [240, 200, 0], [230, 20, 20]];
-  const k = Math.min(2, Math.floor(t * 3));
-  const f = t * 3 - k;
-  const c = stops[k].map((a, i) => Math.round(a + f * (stops[k + 1][i] - a)));
-  return `rgb(${c.join(",")})`;
 }
 
 /** Plot axes per cut: across the roof (x right, y up), along it (front at the left, y up), the horizontal cuts in plan (front at the left, the car's left up). */
@@ -597,15 +528,21 @@ function sectionPanel(game, style, regions) {
   return canvas;
 }
 
-function scoreLines(style, regions) {
+function scoreLines(style, regions, defects) {
   const r = regions;
   const f = (x, unit = "") => (x === null || x === undefined ? "n/a" : `${x}${unit}`);
+  const top = (list, fmt) => [...list].sort((a, b) => b.level - a.level || b.score - a.score).slice(0, 4).map(fmt).join("; ") || "none";
+  const gaps = defects.gaps.map((g) => ({ ...g, score: g.mm }));
+  const zf = defects.zfight.map((z) => ({ ...z, score: z.areaCm2 }));
+  const na = (p) => (p.score.widthMm.some((w) => w === null) ? `  n/a: ${Object.entries(p.score.naReasons).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ")}` : "");
   return [
-    `roofEdge   turn across ${f(r.roofEdge.score.turnAcross, "°")} along ${f(r.roofEdge.score.turnAlong, "°")}  ledge ${f(r.roofEdge.score.ledgeMm, " mm")}  shelf ${f(r.roofEdge.score.shelfMm, " mm")}  crown ${f(r.roofEdge.score.crownMm, " mm")}`,
-    `aPillar    width ${r.aPillar.score.widthMm.map((w) => f(w)).join("/")} mm  spread ${f(r.aPillar.score.spreadPct, "%")}  jump ${f(r.aPillar.score.jumpMm, " mm")}  lean ${f(r.aPillar.score.leanDeg, "°")}  turn ${f(r.aPillar.score.turn, "°")}`,
-    `rearPillar width ${r.rearPillar.score.widthMm.map((w) => f(w)).join("/")} mm  spread ${f(r.rearPillar.score.spreadPct, "%")}  jump ${f(r.rearPillar.score.jumpMm, " mm")}  lean ${f(r.rearPillar.score.leanDeg, "°")}  turn ${f(r.rearPillar.score.turn, "°")}`,
+    `roofEdge   turn across ${f(r.roofEdge.score.turnAcross, "°")} along ${f(r.roofEdge.score.turnAlong, "°")}  ledge ${f(r.roofEdge.score.ledgeMm, " mm")}  shelf ${f(r.roofEdge.score.shelfMm, " mm")}  crown ${f(r.roofEdge.score.crownMm, " mm")}  spoiler off roof ${f(r.roofEdge.score.offRoofMm, " mm")}  hood/windshield seam ${f(r.roofEdge.score.hoodBaseStepMm, " mm")}`,
+    `aPillar    width ${r.aPillar.score.widthMm.map((w) => f(w)).join("/")} mm  spread ${f(r.aPillar.score.spreadPct, "%")}  jump ${f(r.aPillar.score.jumpMm, " mm")}  lean ${f(r.aPillar.score.leanDeg, "°")}  turn ${f(r.aPillar.score.turn, "°")}${na(r.aPillar)}`,
+    `rearPillar width ${r.rearPillar.score.widthMm.map((w) => f(w)).join("/")} mm  spread ${f(r.rearPillar.score.spreadPct, "%")}  jump ${f(r.rearPillar.score.jumpMm, " mm")}  lean ${f(r.rearPillar.score.leanDeg, "°")}  turn ${f(r.rearPillar.score.turn, "°")}${na(r.rearPillar)}`,
     `bumper     turn ${f(r.bumper?.score.turn, "°")}  projSpread ${f(r.bumper?.score.projSpreadMm, " mm")}  step ${f(r.bumper?.score.stepMm, " mm")}`,
-    `lowerLip   turn ${f(r.lowerLip?.score.turn, "°")}  projSpread ${f(r.lowerLip?.score.projSpreadMm, " mm")}  step ${f(r.lowerLip?.score.stepMm, " mm")}`,
+    `lowerLip   turn ${f(r.lowerLip?.score.turn, "°")}  projSpread ${f(r.lowerLip?.score.projSpreadMm, " mm")}  step ${f(r.lowerLip?.score.stepMm, " mm")}   (skipped: ${defects.skipped.join(", ") || "none"})`,
+    `gaps (cyan) ${defects.gaps.length}: ${top(gaps, (g) => `${g.kind} ${g.mm} mm ${g.region}`)}`,
+    `z-fight (magenta) ${defects.zfight.length}: ${top(zf, (z) => `${z.areaCm2} cm² ${z.region} (${z.parts.slice(0, 2).join(" / ")})`)}`,
     "rings: yellow mild (turn ≥ 25° in 4 cm, band ≥ 15 % over median), orange bad (≥ 45°, ≥ 30 %), red the region's worst",
   ];
 }
@@ -623,35 +560,27 @@ const { values } = parseArgs({
 
 /** `canvases` stacked into one PNG at `out`. */
 async function stack(canvases, out) {
-  const W = Math.max(...canvases.map((p) => p.width));
-  const H = canvases.reduce((a, p) => a + p.height + 6, 0);
-  const sheet = game.createCanvas(W, H);
-  const ctx = sheet.getContext("2d");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, W, H);
-  let y = 0;
-  for (const p of canvases) {
-    ctx.drawImage(p, 0, y);
-    y += p.height + 6;
-  }
   mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, await sheet.encode("png"));
+  writeFileSync(out, await stackCanvases(game, canvases).encode("png"));
 }
 
 const game = await openGame(values.root);
-const styles = values.all ? game.CAR_STYLE_IDS : [values.car ?? "sedan"];
+// The police car is the sedan's body and the monster the pickup's: `--all` draws the five bodies; `--car` takes any style.
+const styles = values.all ? ["sedan", "hatchback", "wagon", "coupe", "pickup"] : [values.car ?? "sedan"];
 const stage = new CarStage(game, PAINT);
 const port = values.png || values.sheet ? new ViewPort(game, SHOT[0], SHOT[1]) : null;
 const panels = [];
 const plots = [];
 for (const style of styles) {
   stage.build(style, game.STYLE_CLASS[style]);
-  const regions = contourOf(stage);
-  console.log(JSON.stringify({ car: style, ...Object.fromEntries(Object.entries(regions).map(([k, r]) => [k, r?.score ?? null])) }));
+  const found = contourOf(stage, style);
+  const { regions, defects } = found;
+  console.log(JSON.stringify({ car: style, ...Object.fromEntries(Object.entries(regions).map(([k, r]) => [k, r?.score ?? null])), gaps: defects.gaps, zfight: defects.zfight, skipped: defects.skipped }));
+  for (const s of defects.suggest) console.log(JSON.stringify({ kind: "suggest", car: style, ...s }));
   const plot = values.curves || values.sheet ? sectionPanel(game, style, regions) : null;
   if (values.curves) plots.push(plot);
   if (port) {
-    const canvas = await panel(game, stage, port, style, regions);
+    const canvas = await panel(game, stage, port, style, found);
     if (values.png) {
       mkdirSync(dirname(values.png), { recursive: true });
       writeFileSync(values.png, await canvas.encode("png"));
