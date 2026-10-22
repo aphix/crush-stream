@@ -158,7 +158,7 @@ describe("given every body style fitted with its own lamps", () => {
       const dir = new THREE.Vector3();
       for (const [i, l] of car.lamps.entries()) {
         const name = `${l.kind}${l.side < 0 ? "L" : "R"}`;
-        l.seat.updateWorldMatrix(true, false);
+        l.seat.updateWorldMatrix(true, false, true);
         const m = l.seat.matrixWorld;
         axis.setFromMatrixColumn(m, 2).normalize();
         assert.ok(axis.z * (l.kind === "head" ? 1 : -1) > 0.99, `${name} faces ${axis.toArray().map((v) => v.toFixed(2))}`);
@@ -342,6 +342,43 @@ describe("given a monster-class car, whose lamp seats ride its lift", () => {
       const unit = batch.draw.variants[batch.draw.variantAt(row)]!;
       assert.equal(trianglesOf(unit), trianglesOf(drawnLamp(car.style, l.kind, l.side).geometry), `${l.kind} ${l.side} draws its own unit`);
     }
+  });
+
+  it("when the car moves and its lamps are read and packed again, then no lamp seat composes its matrix, and each still follows the lift", () => {
+    const car = dressed();
+    const batch = new LampBatch(8);
+    const pos = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    for (let i = 0; i < car.lamps.length; i++) car.lampWorld(i, pos, dir);
+    batch.sync([car]);
+    let composed = 0;
+    for (const seat of [...car.lamps.map((l) => l.seat), ...car.lampFittings.map((f) => f.seat)]) {
+      const own = seat.updateMatrix.bind(seat);
+      seat.updateMatrix = () => {
+        composed++;
+        own();
+      };
+    }
+    const lift = car.group.getObjectByName(CLASS_LIFT)!;
+    const seatInLift = new THREE.Matrix4();
+    const expected = new THREE.Vector3();
+    const inLift = (l: (typeof car.lamps)[number]) => expected.setFromMatrixPosition(seatInLift.compose(l.seat.position, l.seat.quaternion, l.seat.scale).premultiply(lift.matrixWorld));
+    // Read alone, then packed alone after a second move: each must bring the seat's world matrix current itself.
+    car.group.position.x += 3;
+    car.group.updateMatrixWorld(true);
+    for (const [i, l] of car.lamps.entries()) {
+      car.lampWorld(i, pos, dir);
+      assert.ok(pos.distanceTo(inLift(l)) < 1e-6, `${l.kind} ${l.side} lights from ${pos.distanceTo(expected).toFixed(3)} m off its seat in the moved lift`);
+    }
+    car.group.position.z += 2;
+    car.group.updateMatrixWorld(true);
+    batch.sync([car]);
+    const packed = new THREE.Matrix4();
+    for (const [i, l] of car.lamps.entries()) {
+      const drawnAt = pos.setFromMatrixPosition(batch.draw.matrixAt(i, packed));
+      assert.ok(drawnAt.distanceTo(inLift(l)) < 1e-5, `${l.kind} ${l.side} drawn ${drawnAt.distanceTo(expected).toFixed(3)} m off its seat in the moved lift`);
+    }
+    assert.equal(composed, 0, "lamp seat matrices composed on a frame the skin did not move");
   });
 });
 
@@ -735,12 +772,38 @@ describe("given a device class and the page's ?lamps setting", () => {
   }
 });
 
+describe("given the lamp pool updating a lit car's glows every frame", () => {
+  it("when it stores each lamp's glow and stash, then it never goes through three's shared Vector3.toArray (megamorphic once the cars are built)", () => {
+    const scene = new THREE.Scene();
+    const car = new DeformableCar(paint(), scene);
+    car.spawnFacing(0, 10, 0, 0);
+    car.group.updateMatrixWorld(true);
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
+    camera.position.copy(car.group.position).addScaledVector(car.forward, 8).setY(1.5);
+    camera.lookAt(car.group.position);
+    const lights = new LampLights(scene, 12, FULL_POOL);
+    const toArray = THREE.Vector3.prototype.toArray;
+    let calls = 0;
+    THREE.Vector3.prototype.toArray = function (this: THREE.Vector3, ...args: Parameters<typeof toArray>) {
+      calls++;
+      return toArray.apply(this, args);
+    } as typeof toArray;
+    try {
+      lights.update([car], camera, car);
+    } finally {
+      THREE.Vector3.prototype.toArray = toArray;
+    }
+    assert.ok(lights.glow.geometry.drawRange.count >= 4, `the control: ${lights.glow.geometry.drawRange.count} glows stored`);
+    assert.equal(calls, 0, "Vector3.toArray calls in one update");
+  });
+});
+
 describe("given the hatchback, whose tail lamp crosses the step from the infill to the quarter", () => {
   it("when its right tail lamp is met from behind along its band, then every ray from the gate's edge to the corner meets the lens, with no body showing at the step", () => {
     const car = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
     car.group.updateMatrixWorld(true);
     const tail = car.lamps.find((l) => l.kind === "tail" && l.side > 0)!;
-    tail.seat.updateWorldMatrix(true, false);
+    tail.seat.updateWorldMatrix(true, false, true);
     const lens = new THREE.Mesh(drawnLamp(car.style, "tail", 1).geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
     lens.matrixAutoUpdate = false;
     lens.matrixWorld.copy(tail.seat.matrixWorld);
