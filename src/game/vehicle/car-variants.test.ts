@@ -1067,26 +1067,35 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
-  it("when a style drops its plank rear post's foot (pillars.rearFoot), then the drawn post's lowest point at the rear glass's base falls by the foot's drop, and the cage is unchanged", () => {
-    /** A foot dropped this far (m) under the hatchback's rear glass base. */
-    const DROP = 0.035;
+  it("when the hatchback's plank rear post fans its foot onto the shoulder (pillars.rearFoot), then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening behind the quarter glass, and the cage is unchanged", () => {
+    /** A ray down that hits under this height (m) has passed the body's top into the cabin: the shoulder stands at 0.86-0.91 there. */
+    const FLOOR_Y = 0.8;
+    /** The D-pillar's zone behind the quarter glass [x, z] (m): from the rear glass's base edge out to the shoulder, glass base to the quarter's rear. */
+    const ZONE = { x: [0.55, 0.7], z: [-1.62, -1.2] } as const;
     const hatch = CAR_STYLES.hatchback;
-    const dropped: BodyStyle = { ...hatch, pillars: { ...hatch.pillars, rearFoot: hatch.rearGlass.base[0] - DROP } };
-    const footY = (s: BodyStyle) => {
-      const posts = makeGreenhouseFrame(s, "drawn").filter((g) => g.name === "rear");
-      assert.ok(posts.length === 2, `${posts.length} rear posts`);
-      let low = Infinity;
-      for (const post of posts) {
-        const pos = post.getAttribute("position");
-        // The foot corner stands 1 cm behind the rear glass's base: the post's points behind the base are its foot's.
-        for (let i = 0; i < pos.count; i++) if (pos.getZ(i) < s.rearGlass.base[1]) low = Math.min(low, pos.getY(i));
+    const seen = (s: BodyStyle) => {
+      const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+      const gate = new THREE.Mesh(makeTrunkGeometry(s), material);
+      const [py, pz] = bootPivot(s.boot);
+      gate.position.set(0, py, pz);
+      gate.updateMatrixWorld();
+      const meshes = [new THREE.Mesh(makeChassisGeometry(s, "drawn"), material), new THREE.Mesh(makeRearGlass(s), material), gate];
+      const ray = new THREE.Raycaster();
+      let floor = 0;
+      for (let z = ZONE.z[0]; z <= ZONE.z[1]; z += 0.01) {
+        for (let x = ZONE.x[0]; x <= ZONE.x[1]; x += 0.005) {
+          ray.set(new THREE.Vector3(x, 3, z), new THREE.Vector3(0, -1, 0));
+          const hit = ray.intersectObjects(meshes)[0];
+          if (hit !== undefined && hit.point.y < FLOOR_Y) floor++;
+        }
       }
-      return low;
+      return floor;
     };
-    const fall = footY(hatch) - footY(dropped);
-    assert.ok(Math.abs(fall - DROP) < 0.001, `the post's foot falls ${(fall * 1000).toFixed(1)} mm, want ${DROP * 1000}`);
+    const without: BodyStyle = { ...hatch, pillars: { ...hatch.pillars, rearFoot: undefined } };
+    assert.ok(seen(without) > 0, "the control: without the foot the opening shows");
+    assert.ok(seen(hatch) === 0, `${seen(hatch)} rays see the cabin's floor between the D-pillar and the shoulder`);
     const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
-    assert.ok(bits(makeChassisGeometry(dropped, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
+    assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
   });
 
   it("when a drawn A-post 10 cm wide or more is read at a station under the roof, then its outer face turns 25° or more across its width, outboard on both sides: a curved post from the side glass to the windshield, not a flat plank (the plank turned 15-20°)", () => {

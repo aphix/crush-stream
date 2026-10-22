@@ -190,6 +190,34 @@ describe("given the light bar and the push bar as the reference cruiser wears th
     assert.ok(meanX(bar, blueFirst, blueCount) < -0.2, `blue lens at x ${meanX(bar, blueFirst, blueCount)}`);
   });
 
+  it("when the light bar is built, then each lens is domed, its top falling over its front and back edges, with a white lamp cell at its centre standing proud of its faces, as the reference's", () => {
+    /** A domed lens's top falls at least this far (m) over its outer 1.5 cm front and back (its 3.5 cm round: 10 mm); a brick's falls none. */
+    const DOME_DROP = 0.008;
+    /** Over its outer this far (m) of half-depth, front and back. */
+    const EDGE_RUN = 0.015;
+    /** A white cell's vertex colour (linear) is over this in every channel; the clear takedown module's is under it. */
+    const WHITE = 0.8;
+    const bar = makeLightBar();
+    const pos = bar.getAttribute("position");
+    const color = bar.getAttribute("color");
+    for (const [first, count] of LIGHT_BAR_LENS) {
+      let [top, edgeTop, depth] = [-Infinity, -Infinity, 0];
+      for (let v = first; v < first + count; v++) depth = Math.max(depth, Math.abs(pos.getZ(v)));
+      for (let v = first; v < first + count; v++) {
+        top = Math.max(top, pos.getY(v));
+        if (Math.abs(pos.getZ(v)) > depth - EDGE_RUN) edgeTop = Math.max(edgeTop, pos.getY(v));
+      }
+      const x = meanX(bar, first, count);
+      assert.ok(top - edgeTop >= DOME_DROP, `lens at x ${x.toFixed(2)}: its top falls ${((top - edgeTop) * 1000).toFixed(1)} mm over its edges, want ${DOME_DROP * 1000} or more`);
+      let proud = -Infinity;
+      for (let v = 0; v < pos.count; v++) {
+        if (Math.abs(pos.getX(v) - x) > 0.05 || color.getX(v) < WHITE || color.getY(v) < WHITE || color.getZ(v) < WHITE) continue;
+        proud = Math.max(proud, Math.abs(pos.getZ(v)) - depth);
+      }
+      assert.ok(proud > 0, `lens at x ${x.toFixed(2)}: no white cell stands proud of its faces at its centre`);
+    }
+  });
+
   it("when a front bumper takes a push bar, then one geometry stands its uprights ahead of the bumper's face and above its top, the bumper's own vertices first and unmoved", () => {
     const bumper = makeBumperGeometry(true, CAR_STYLES.police);
     bumper.computeBoundingBox();

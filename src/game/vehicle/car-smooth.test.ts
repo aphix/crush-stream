@@ -756,6 +756,8 @@ const SAIL_LEAN_DEGREES = 10;
 /** A flat sail eases into the roof end's roll over this run (m) behind the roof's rear end, its face's shape off its chord changing at most this many m per m of length on the way: the haunch-to-roll line a jump of 4.8 cm over 7 cm made. */
 const SAIL_ROLL_BLEND_TEST = 0.45;
 const SAIL_SHAPE_RATE = 0.25;
+/** A flat sail's outer face folds at most this much (°) across its roof end's section: the coupe's head jumping back out ahead of it folded 54°, a hard line. */
+const SAIL_END_FOLD_DEGREES = 25;
 /** Sections read along the haunch, behind the run where the sail's foot sweeps in onto the side window's line: at least this many (its rear end and the sweep's start). */
 const SAIL_HAUNCH_SECTIONS = 2;
 /** The sail's section at the roof's rear end stands at most this far (m) behind it, so the roof's end outboard of the rear glass never shows past the sail's head. */
@@ -871,6 +873,19 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       }
       assert.ok(profiles.length >= 3, `${id}: ${profiles.length} sections up to the roof's rear end`);
       assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
+    });
+    it(`when a ${id}'s flat sail is read across its roof end's section, then its outer face folds at most ${SAIL_END_FOLD_DEGREES}° there between the strips behind and ahead (no hard line from the roof's rear corner down to the quarter)`, () => {
+      const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+      const { ring, slices } = loftOf(sail);
+      const end = Array.from({ length: slices }, (_, s) => s).find((s) => positionAt(sail, s * ring).z < style.roofZ[0] && positionAt(sail, s * ring).z >= style.roofZ[0] - SAIL_ROOF_GAP);
+      const at = (s: number, k: number) => positionAt(sail, s * ring + k);
+      const normal = (s: number, k: number) => {
+        const [a, b, c, d] = [at(s, k), at(s, k + 1), at(s + 1, k), at(s + 1, k + 1)];
+        return b.clone().sub(a).cross(c.clone().sub(a)).add(d.clone().sub(b).cross(c.clone().sub(b))).normalize();
+      };
+      assert.ok(end !== undefined && end > 0 && end < slices - 1, `${id}: no section inside the sail at the roof's rear end`);
+      const folds = Array.from({ length: SAIL_OUTER_POINTS - 1 }, (_, k) => THREE.MathUtils.radToDeg(normal(end - 1, k).angleTo(normal(end, k))));
+      assert.ok(Math.max(...folds) <= SAIL_END_FOLD_DEGREES, `${id}: the outer face folds ${folds.map((f) => f.toFixed(1)).join(", ")}° across the roof end's section`);
     });
   }
 });

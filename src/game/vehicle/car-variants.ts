@@ -380,10 +380,11 @@ export interface BodyStyle {
   /**
    * Drawn only: side-view pillar bands (`PillarSpan`). `a`: the A-post's width behind the windshield edge (absent 0.06). `b`: the
    * B-pillar, centred on its `bPillar` band unless it leans. `divider`: the post at `midPillarZ`. Absent: the `bPillar` band (its top
-   * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` (y, m): the plank rear post's (no `cPillar`) foot
-   * corner, dropped onto the belt beside the rear glass's base; absent, the glass's base y.
+   * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` [x, y] (m): the plank rear post's (no `cPillar`) foot
+   * corner beside the rear glass's base, set out onto the body's shoulder so its bottom edge covers the cabin's opening up to it; absent,
+   * 2 cm outside the glass's base corner, at its height.
    */
-  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: number };
+  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number] };
   /**
    * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
    * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.
@@ -395,7 +396,8 @@ export interface BodyStyle {
    * triangle between them filling the gap; absent, the line is the quarter glass's own rear edge. `flush`: the sail's head laps the rear
    * glass's side edge, standing on the glass and arriving level across it (one broad pillar rolling into the glass), not a rounded
    * buttress beside it. `flat`: on the haunch each section runs straight from its head down to where it touches the body's section
-   * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point. `corner`: on a curved roof with round
+   * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point; on a curved roof its head eases from the
+   * roof end's out to the post's top over the run ahead, not back out in one ring. `corner`: on a curved roof with round
    * rear glass corners, a flush sail's head at the roof's end laps the glass's side edge this share of the way round its top corner's arc
    * (0 its side end, 1 its top end), so the head covers the arc above that point; absent 0.5, mid-arc.
    */
