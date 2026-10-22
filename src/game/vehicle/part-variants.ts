@@ -183,15 +183,17 @@ function styleGrille(style: BodyStyle): THREE.BufferGeometry {
   const surround = indexed(new THREE.ExtrudeGeometry(ring, { depth: GRILLE.rimDepth, bevelEnabled: false })).translate(0, 0, face - GRILLE.rimDepth);
   const fine = g.kind === "mesh" || g.kind === "hex";
   const angles = { bars: [0], slats: [Math.PI / 2], mesh: [0, Math.PI / 2], hex: [HEX_ANGLE, -HEX_ANGLE] }[g.kind];
-  const fill = angles.flatMap((a) => (fine ? grilleBars(inner, a, undefined, GRILLE.meshBar, GRILLE.meshPitch, GRILLE.barDepth) : grilleBars(inner, a, g.count, GRILLE.bar, GRILLE.pitch, GRILLE.barDepth)));
+  const fill = angles.flatMap((a) => (fine ? grilleBars(inner, a, g.count, GRILLE.meshBar, GRILLE.meshPitch, GRILLE.barDepth) : grilleBars(inner, a, g.count, GRILLE.bar, GRILLE.pitch, GRILLE.barDepth)));
   const barZ = face - GRILLE.inset - GRILLE.barDepth / 2;
   const parts = [
     dark(new THREE.ShapeGeometry(new THREE.Shape(inner)), ...GRILLE_BACKING).translate(0, 0, face - GRILLE.backingSet),
-    finished(surround, g.finish),
+    finished(surround, g.rim ?? g.finish),
     ...fill.map((f) => finished(f.translate(0, 0, barZ), g.finish)),
   ];
   if (g.badge) parts.push(finished(new THREE.CylinderGeometry(g.badge, g.badge, GRILLE.badge, 24).rotateX(Math.PI / 2).translate(0, 0, face), "chrome"));
-  return mergeToned(parts, "style grille").translate(0, g.y - seat.y - GRILLE_SEAT.y, 0);
+  const geo = mergeToned(parts, "style grille");
+  if (g.lean) geo.translate(0, 0, -face).rotateX(-g.lean).translate(0, 0, face);
+  return geo.translate(0, g.y - seat.y - GRILLE_SEAT.y, 0);
 }
 
 /** The front bumper's drawn fittings in the grille seat's space: the style's grille (or the platform's) and its front bumper lamps. */
@@ -460,8 +462,8 @@ function loopSign(loop: readonly SkinPoint[]): number {
   return area.dot(normal) >= 0 ? 1 : -1;
 }
 
-/** Rows of points along `line` (densified), each `[out, up]` off its line point: out across the line (away from a closed loop's inside) and met on the skin again, so a bezel's foot hugs a curving corner; then up along the skin normal. Stitched into quads. */
-function lampRibbon(skin: LampSkin, line: readonly SkinPoint[], closed: boolean, rows: readonly (readonly [number, number])[]): Patch {
+/** Rows of points along `line` (densified), each `[out, up]` off its line point: out across the line (away from a closed loop's inside) and met on the skin again, so a bezel's foot hugs a curving corner; then up along the skin normal. Stitched into quads. `hug`: a row whose point misses the skin (off its edge) folds back onto the row before, never standing in the air. */
+function lampRibbon(skin: LampSkin, line: readonly SkinPoint[], closed: boolean, rows: readonly (readonly [number, number])[], hug = false): Patch {
   const n = line.length;
   const sign = closed ? loopSign(line) : 1;
   const points: SkinPoint[] = [];
@@ -469,8 +471,12 @@ function lampRibbon(skin: LampSkin, line: readonly SkinPoint[], closed: boolean,
     const s = line[i]!;
     const [prev, next] = closed ? [line[(i + n - 1) % n]!, line[(i + 1) % n]!] : [line[Math.max(0, i - 1)]!, line[Math.min(n - 1, i + 1)]!];
     const out = new THREE.Vector3().crossVectors(next.p.clone().sub(prev.p), s.n).normalize().multiplyScalar(sign);
+    let last = s;
     for (const [o, up] of rows) {
-      const at = o === 0 ? s : skin.onto(s.p.clone().addScaledVector(out, o), s.n, s.lid);
+      const q = s.p.clone().addScaledVector(out, o);
+      let at = o === 0 ? s : skin.onto(q, s.n, s.lid);
+      if (hug && at.p === q) at = last;
+      last = at;
       points.push({ p: at.p.clone().addScaledVector(at.n, up), n: at.n, lid: s.lid });
     }
   }
@@ -647,14 +653,16 @@ function lidLamp(style: BodyStyle, kind: LampKind, side: number): THREE.BufferGe
 
 type SeamLine = NonNullable<BodyStyle["bumpers"]["front"]["edge"]>;
 
-/** The seam cover's lift (m) off the body skin: over the sag of its fill's chords (12 cm on a 35 cm corner sags 5 mm), well under the fascia's 6-9 cm. */
+/** The seam cover's lift (m) off the body skin: over the sag of its chords (12 cm on a 35 cm corner sags 5 mm), well under the fascia's 6-9 cm. */
 const SEAM_COVER_UP = 0.006;
-/** Its outline's step and its fill's longest edge (m), and how far out (m) a point between met points starts its ray: past the sag of the first fill's chords right across the corner. */
-const SEAM_COVER_MESH = { step: 0.06, fill: 0.12, recast: 0.6 } as const;
+/** Its seam's longest step (m), and how far out (m) a point between met points starts its ray: past the sag of a chord right across the corner. */
+const SEAM_COVER_MESH = { step: 0.12, recast: 0.6 } as const;
+/** Its band's rows across the seam, as fractions of the drop from the seam's top to under the fascia's top: the skin the fascia leaves bare, no more. */
+const SEAM_COVER_BAND = [0, 1] as const;
+/** On the end face the band runs at least this far (m) under the seam's lowest point, tucked under the fascia's top. */
+const SEAM_COVER_TUCK = 0.02;
 /** Its dark roll along the seam: this wide (m) out past the seam and down to this deep (m) in the skin, the shut line drawn in the mesh. */
 const SEAM_COVER_ROLL = { out: 0.004, sink: 0.001 } as const;
-/** On the end face the cover runs at least this far (m) under the seam's lowest point, tucked under the fascia's top. */
-const SEAM_COVER_TUCK = 0.02;
 const SEAM_COVERS = new WeakMap<BodyStyle, Map<boolean, THREE.BufferGeometry | null>>();
 
 /** `parts` merged, each vertex carrying its part's `FITTING_TONE` (0: the bumper's own trim). */
@@ -665,19 +673,17 @@ function fittingsMerged(parts: readonly (readonly [THREE.BufferGeometry, number]
   return out;
 }
 
-/** One side's seam cover in the car frame, right side (`mirror`: met on the left skin mirrored onto the right): the panel and its dark roll. */
+/** One side's seam cover in the car frame, right side (`mirror`: met on the left skin mirrored onto the right): a band met on the skin down from the seam, and its dark roll. */
 function seamCoverSide(style: BodyStyle, front: boolean, top: SeamLine, edge: SeamLine, mirror: boolean): THREE.BufferGeometry {
   const { seat, fascia } = style.bumpers[front ? "front" : "rear"];
   const [zEnd, axis] = [lampEndZ(front ? "head" : "tail", style), front ? 1 : -1];
   const skin = new LampSkin([{ geo: bodySkin(style), offset: new THREE.Vector3(), lid: false, mirror }], zEnd, axis, `${style.id} ${front ? "front" : "rear"} bumper seam`, SEAM_COVER_MESH);
   const face = Math.min(seat.y + Math.max(...fascia.map(([y]) => y)), Math.min(...top.map(([, y]) => y)) - SEAM_COVER_TUCK);
-  const [x0, xc, foot] = [top[0]![0], top[top.length - 1]![0], edge[edge.length - 1]![1]];
-  const under: [number, number][] = [[xc, foot], [xc, face], [x0, face]];
-  const seam = [...top.map((p) => skin.at(p)), ...edge.map((p) => skin.at(p, true))];
-  const closing = under.map((p) => skin.at(p));
-  skin.narrow([...seam, ...closing]);
-  const roll = lampRibbon(skin, skin.densify(seam, false), false, [[0, SEAM_COVER_UP], [-axis * SEAM_COVER_ROLL.out, -SEAM_COVER_ROLL.sink]]);
-  const [panel] = patchGeometry(lampFill(skin, skin.densify([...seam, ...closing], true), zEnd, SEAM_COVER_MESH.fill), SEAM_COVER_UP);
+  const drop = Math.max(...top.map(([, y]) => y)) - face;
+  const seam = skin.densify([...top.map((p) => skin.at(p)), ...edge.map((p) => skin.at(p, true))], false);
+  const band = lampRibbon(skin, seam, false, SEAM_COVER_BAND.map((f) => [axis * f * drop, SEAM_COVER_UP] as const), true);
+  const roll = lampRibbon(skin, seam, false, [[0, SEAM_COVER_UP], [-axis * SEAM_COVER_ROLL.out, -SEAM_COVER_ROLL.sink]]);
+  const [panel] = patchGeometry(band, 0);
   const [shut] = patchGeometry(roll, 0);
   return fittingsMerged([[panel, 0], [shut, FITTING_TONE.black]], "bumper seam cover");
 }
