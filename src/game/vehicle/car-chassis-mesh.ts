@@ -18,6 +18,7 @@ import {
   TUB_EDGE,
   ensureOutwardNormals,
   loftFromRings,
+  noseRefined,
   sampleSlice,
   sectionPoints,
   type BodySource,
@@ -33,14 +34,15 @@ const SLICE_WARP = 1.166;
 /**
  * The nose and tail roll over in a quarter ellipse `END_ROLL_LENGTH` (m) long: it leaves the straight loft that far from the end
  * face (inside the bumper seat, so the loft at the seat is the straight loft) and ends `END_ROLL_INSET` (m) pulled in at the flat
- * face, in `END_ROLL_STEPS` chords; the last chord then meets the face at 40°, not 90°. The inset stays small because a head lamp's
- * housing stands within 1 cm of the nose's top corner, and the skin may recede 1.5 cm under it (`lamps.test.ts`). The first base
- * station past the roll (7 cm from the end face) is dropped when closer than `ROLL_CLEARANCE` (m) to the roll's first ring: the roll's
- * own three rings already resolve that end, and every ring costs the skin 21 vertices a frame.
+ * face, in `END_ROLL_STEPS` chords. The inset stays small because a head lamp's housing stands within 1 cm of the nose's top corner,
+ * and the skin may recede 1.5 cm under it (`lamps.test.ts`). A base station closer than `ROLL_CLEARANCE` (m) to the roll's first
+ * ring is dropped: the roll's own rings resolve that end, and every ring costs the skin 21 vertices a frame.
  */
 const END_ROLL_LENGTH = 0.03;
 const END_ROLL_INSET = 0.015;
 const END_ROLL_STEPS = 2;
+/** The drawn nose rolls over in one chord more: its corner is the one in view. */
+const NOSE_ROLL_STEPS = 3;
 const ROLL_CLEARANCE = 0.045;
 
 /** Where along the roll the ring at `z` is: 0 on the straight loft, 1 at the end face (the sine of the roll's angle). */
@@ -75,9 +77,9 @@ const KNOT_MERGE = 0.005;
 
 /**
  * Loft stations: warped base spacing (≈7 cm at nose/tail, 13 cm mid) plus feature edges, and the roll's own rings at each end. `bootOpen`
- * (the drawn body's) adds the boot cut's ramps.
+ * (the drawn body's) adds the boot cut's ramps, `noseFill` (the drawn body's) the nose's own rings (`noseRefined`, `NOSE_ROLL_STEPS`).
  */
-export function sliceZs(style: BodyStyle, source: BodySource, bootOpen = source === "drawn"): number[] {
+export function sliceZs(style: BodyStyle, source: BodySource, bootOpen = source === "drawn", noseFill = source === "drawn"): number[] {
   const p = style.profile;
   const z0 = p[0]!.z;
   const z1 = p[p.length - 1]!.z;
@@ -106,19 +108,59 @@ export function sliceZs(style: BodyStyle, source: BodySource, bootOpen = source 
   const rollFront = z1 - END_ROLL_LENGTH;
   const stations = zs.filter((z) => z > rollRear + ROLL_CLEARANCE && z < rollFront - ROLL_CLEARANCE);
   stations.push(...cutKnots.filter((k) => k > rollRear && k <= rollRear + ROLL_CLEARANCE));
-  for (let step = 0; step <= END_ROLL_STEPS; step++) {
-    const progress = detSin((step / END_ROLL_STEPS) * (Math.PI / 2));
-    stations.push(z0 + END_ROLL_LENGTH * (1 - progress), z1 - END_ROLL_LENGTH * (1 - progress));
-  }
-  return stations.sort((a, b) => a - b);
+  const noseSteps = noseFill ? NOSE_ROLL_STEPS : END_ROLL_STEPS;
+  for (let step = 0; step <= END_ROLL_STEPS; step++) stations.push(z0 + END_ROLL_LENGTH * (1 - detSin((step / END_ROLL_STEPS) * (Math.PI / 2))));
+  for (let step = 0; step <= noseSteps; step++) stations.push(z1 - END_ROLL_LENGTH * (1 - detSin((step / noseSteps) * (Math.PI / 2))));
+  stations.sort((a, b) => a - b);
+  return noseFill ? noseRefined(stations, p) : stations;
 }
+
+/**
+ * A tub's wall top (ring points 1 and n - 2 at each slice `inner` marks): the wall under it gets its own copy of the vertex, so the fender
+ * strip beside a hood or lid shades by its own faces, not the wall's twenty times larger area. Returns each copy's id and its slice.
+ */
+function splitWallTops(body: THREE.BufferGeometry, ring: number, inner: readonly number[]): [number, number][] {
+  const pos = body.getAttribute("position");
+  const uv = body.getAttribute("uv");
+  const index = body.getIndex()!.array;
+  const positions = Array.from(pos.array);
+  const uvs = Array.from(uv.array);
+  const copies: [number, number][] = [];
+  for (let s = 0; s < inner.length; s++) {
+    if (inner[s] === 0) continue;
+    // The wall is ring segment 0 on the left (points 0 to 1) and n - 2 on the right (points n - 2 to n - 1), on the quads either side of the slice.
+    for (const [point, segment] of [[1, 0], [ring - 2, ring - 2]] as const) {
+      const v = s * ring + point;
+      const copy = positions.length / 3;
+      positions.push(pos.getX(v), pos.getY(v), pos.getZ(v));
+      uvs.push(uv.getX(v), uv.getY(v));
+      for (const quad of [s - 1, s]) {
+        if (quad < 0 || quad >= inner.length - 1) continue;
+        for (let k = (quad * ring + segment) * 6; k < (quad * ring + segment + 1) * 6; k++) if (index[k] === v) index[k] = copy;
+      }
+      copies.push([copy, s]);
+    }
+  }
+  body.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  body.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  body.computeVertexNormals();
+  return copies;
+}
+
+/** A `blackout.cowl` darkens the deck from this far (m) under the windshield's foot to as far under the hood's rear edge. */
+const COWL_LAP = 0.05;
 
 export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const zs = sliceZs(style, source);
   const sectionAt = (z: number) => sectionPoints(sampleSlice(z, style.profile), style, source);
   const rings = zs.map((z) => (source === "cage" ? sectionAt(z) : insetRing(sectionAt(z), endRollInset(z, style.profile))));
+  const n = rings[0]!.length;
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
+  // How far each drawn slice has dropped into the bay's trough or a lid's lined boot: their walls and floors are unpainted inner panel.
+  const cut = bootCut(style);
+  const inner = source === "drawn" ? zs.map((z) => Math.max(bayAt(z, style), cut.lined ? bootCutAt(z, cut).open : 0)) : [];
+  const wallTops = source === "drawn" ? splitWallTops(body, n, inner) : [];
   const parts: THREE.BufferGeometry[] = [body, makeRoofGeometry(style, source)];
   parts.push(...makeWellLiners(style));
   parts.push(...makeGreenhouseFrame(style, source));
@@ -127,7 +169,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   parts.push(makeBox(1.16, rb.yTop - 0.34, 0.045, 0, (rb.yTop + 0.34) * 0.5, rb.z));
   // The drawn wells' lips and humps (the cage carries neither), before the fittings; each lip's triangles are kept for its arch's panel.
   const lips = source === "drawn" ? archLipGeometry(style, body) : null;
-  const lipIndex = parts.reduce((n, g) => n + g.getIndex()!.count, 0);
+  const lipIndex = parts.reduce((total, g) => total + g.getIndex()!.count, 0);
   if (lips) parts.push(lips);
   const humps = source === "drawn" ? wellHumpGeometry(style) : null;
   if (humps) parts.push(humps);
@@ -154,16 +196,17 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   merged.computeBoundingBox();
   merged.computeBoundingSphere();
   // The loft is merged first: its vertex `s * ring + i` and its first (slices - 1) * ring * 2 triangles (`panelRegions` cuts panels out of them).
-  merged.userData.loft = { ring: rings[0]!.length, slices: zs.length };
+  merged.userData.loft = { ring: n, slices: zs.length };
+  merged.userData.wallTops = wallTops.length;
   if (lips) merged.userData.archLips = { from: lipIndex, perWheel: lips.userData.perWheel as number[] };
   if (fittings) primer.fill(1, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
   if (source === "drawn") {
-    // The bay trough's and a lid's lined boot's floor corner and wall top on each side: ring points 0, 1 and their mirrors.
-    const n = rings[0]!.length;
-    const cut = bootCut(style);
-    for (let s = 0; s < zs.length; s++) {
-      const w = INNER_PANEL * Math.max(bayAt(zs[s]!, style), cut.lined ? bootCutAt(zs[s]!, cut).open : 0);
-      for (const i of [0, 1, n - 2, n - 1]) primer[s * n + i] = w;
+    // The trough's and the boot's floor corner on each side (ring points 0 and n - 1), and the walls' own copies of their tops.
+    for (let s = 0; s < zs.length; s++) for (const i of [0, n - 1]) primer[s * n + i] = INNER_PANEL * inner[s]!;
+    for (const [copy, s] of wallTops) primer[copy] = INNER_PANEL * inner[s]!;
+    if (style.blackout?.cowl === true) {
+      const [foot, hoodRear] = [style.windshield.base[1], style.hood.z0];
+      for (let s = 0; s < zs.length; s++) if (zs[s]! >= Math.min(foot, hoodRear) - COWL_LAP && zs[s]! <= Math.max(foot, hoodRear) + COWL_LAP) for (const i of [0, n - 1]) primer[s * n + i] = 1;
     }
     primer.fill(INNER_PANEL, linerFrom, linerTo);
   }
