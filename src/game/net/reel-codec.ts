@@ -328,7 +328,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * crush or hit tears it off (a loose lid weighs its car's share), struts raise a lid to its stop and a drop gate falls level on its cables; the
  * hatch's and SUV's rear glass rides its gate. The monster's tailgate drops on a hinge at its foot, as the pickup's does. Door glass ends 1 cm under its B-pillar's front edge; a mirror keeps its style's reach (sedan 0.157 m,
  * 0.25 m behind its hinge; hatchback 0.075, SUV 0.065; it stood at the platform's 0.21) through a reset and every crash pose; a sedan's torn bumper flies as the box of
- * everything it draws, its seam cover included; the sedan's door glass meets a thrown driver at its drawn front edge;
+ * everything it draws, its seam cover included; its seams no longer hook back over the wheel arches' tops, so each torn bumper's box is 6-7 cm shorter;
+ * the sedan's door glass meets a thrown driver at its drawn front edge;
  * the sedan's hood ends at z 0.99; the police light bar sits over the B-pillars. A driver thrown out
  * of the windshield leaves from the pane's bowed middle (`userData.centre`, 1 cm further forward), each raked pane's top corners fall onto the roof's
  * dome (`domeFall`, about 2 cm), and the hatchback's windshield reaches its reference's glass top (17 cm further back, 8 cm higher) with its rear glass

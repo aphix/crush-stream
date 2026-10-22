@@ -75,6 +75,8 @@ const SEDAN_LAMP_SHAPES = {
     // The reference's tail lens is deep red; only its LED strip glows (the strip below stays `lit`). A slim strip: 10 cm at the corner,
     // its bottom edge rising to a 2 cm point at each end (rear iso, side).
     lens: "red",
+    // Fill edges 3 cm at most: one long sliver of the lens across the tail cap's crease (|x| .60) stood 1 mm over its neighbour.
+    fill: 0.03,
     bezel: "chrome",
     strips: [
       {
@@ -188,7 +190,7 @@ export const SEDAN: BodyStyle = {
       wrap: { from: 0.33, back: 0.242, end: { corner: 0.2, stand: 0.004 } },
       trim: "body",
       top: [[0, 0.545], [0.42, 0.558], [0.52, 0.555], [0.62, 0.559]],
-      edge: [[1.7, 0.568], [1.61, 0.583], [1.66, 0.5], [1.683, 0.42], [1.69, 0.32], [1.67, 0.22]],
+      edge: [[1.7, 0.568], [1.69, 0.45], [1.683, 0.42], [1.69, 0.32], [1.67, 0.22]],
     },
     rear: {
       ...PLATFORM_HARDPOINTS.bumpers.rear,
@@ -198,9 +200,10 @@ export const SEDAN: BodyStyle = {
        * from 2 cm behind the tail panel at its top (0.62) in one straight lean (a rounded shoulder read as a bulge) to its rearmost (2.175,
        * the dims' tail) at y 0.45-0.50, 2 cm forward by 0.41 where the dark diffuser band starts (rows at its edges, y 0.41 and 0.23, for
        * the band's crisp edges), tucking 8 cm forward to its
-       * bottom at 0.23; flat across to |x| 0.42, then its corner turns at the tail panel's end onto the body side and runs along it just
-       * inside the skin (`wrap.end`), no step: the plain wrap shrank its section into a pill. Its band rows (0.41-0.23) are the reference's black diffuser, ending on the tail face (|x| 0.55) with the
-       * corners body colour; its plate sits on the lid's tail face in the lid's recess (y 0.63-0.755), its inner face on the face's 2.109 at |x| 0.18.
+       * bottom at 0.23; flat across to |x| 0.40, then its corner turns on a 30 cm round onto the body side and runs along it 1-2 cm inside
+       * the skin (`wrap.end`), no step: the plain wrap shrank its section into a pill. Its band rows (0.41-0.23) are the reference's
+       * black diffuser, carried round the corner to |x| 0.64; its plate sits on the lid's tail face in the lid's recess (y 0.63-0.755),
+       * its inner face on the face's 2.109 at |x| 0.18.
        */
       fascia: [
         [0.1, -0.07],
@@ -216,17 +219,17 @@ export const SEDAN: BodyStyle = {
         [-0.29, -0.07],
       ],
       span: 0.76,
-      // Its corner a round of the fascia's own depth from |x| 0.46, turning onto the quarter at the body skin's angle: a shallower corner
-      // thinned the section to a fifth (a squared foot under it) and ended square to the tail panel against a skin still 43 deg off it.
-      wrap: { from: 0.46, back: 0.385, end: { corner: 0.18, stand: -0.045 } },
+      // Its corner a round 0.30 deep from |x| 0.40, as the reference's tail plan (~.25-.35 m radius), turning onto the quarter at the body
+      // skin's angle and running 2 cm inside it, so the wrap reads as one skin with the quarter; the black diffuser band follows it round.
+      wrap: { from: 0.4, back: 0.385, end: { corner: 0.3, stand: -0.02 } },
       trim: "body",
       band: [0.23, 0.41],
-      bandHalfWidth: 0.55,
+      bandHalfWidth: 0.64,
       plate: 0.685,
       // The plate sits 6 mm proud of the recess floor (2.109), as the reference's.
       plateFace: { out: 0.027 },
-      top: [[0, 0.61], [0.46, 0.61], [0.5, 0.738], [0.6, 0.738]],
-      edge: [[-1.83, 0.738], [-1.81, 0.7], [-1.8, 0.665], [-1.76, 0.625], [-1.71, 0.595], [-1.62, 0.58], [-1.66, 0.5], [-1.683, 0.42], [-1.69, 0.32]],
+      top: [[0, 0.61], [0.46, 0.61], [0.6, 0.738]],
+      edge: [[-1.83, 0.738], [-1.8, 0.69], [-1.77, 0.645], [-1.745, 0.6], [-1.72, 0.55], [-1.7, 0.46], [-1.69, 0.37], [-1.69, 0.32]],
     },
   },
   door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.25, mirrorReach: 0.157, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
@@ -329,12 +332,12 @@ export const SEDAN: BodyStyle = {
   // The reference's head lamps are cool-white LED strips.
   lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES, bulb: "led" },
   // The reference's shield: 0.74 across at the top, tapering to 0.66 at its rounded bottom corners, its top up under the hood's front edge
-  // as far as the bumper's loose box holds it (0.30-0.585), its face 3 mm behind the box's front at 2.055. Bright slats on the dark
-  // backing inside a thin chrome bezel; the surround stays black (an all-chrome shield read as a light block).
+  // (0.30-0.585), its face 3 mm behind the bumper's front at 2.055. Bright slats on the dark backing inside a thin chrome bezel; the
+  // surround stays black (an all-chrome shield read as a light block).
   grille: { y: 0.443, z: 2.052, size: [0.74, 0.264], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "chrome", rim: "black", bezel: 0.01 },
   /**
    * The reference's twin wide oval tips in the diffuser (y 0.27-0.33, inner end |x| ~0.37), on the rear bumper's face (down to 0.23).
-   * Their outer end stops at 0.53, 2 cm into the face's corner round (the reference's tips stand ~3 cm proud): further out a tip stands out of the corner.
+   * Their outer end stops at 0.53, inside the face's corner round, standing ~2.6 cm out of it as the reference's tips stand ~3 cm proud.
    */
   exhaust: { tips: 2, x: 0.455, y: 0.3, size: [0.15, 0.06], shape: "round" },
   seats: PLATFORM_HARDPOINTS.seats,

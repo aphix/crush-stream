@@ -2600,6 +2600,30 @@ describe("given a body style's P1 parts", () => {
     });
   }
 
+  for (const id of CAR_STYLE_IDS) {
+    const style = CAR_STYLES[id];
+    const { seat, fascia, wrap } = style.bumpers.rear;
+    const end = wrap.end;
+    if (!end || end.stand > 0) continue;
+    it(`when a ${id}'s rear bumper end tucks onto the body side, then its run lies within 2.5 cm of the skin (one skin with the quarter, not a block set deep in it) and its corner turns at least 25 cm deep (round, not a square end)`, () => {
+      // The corner's last ring and the run's: `end.corner` forward of the rearmost point; the rings before it are the corner round the tail.
+      const runZ = -(seat.z + Math.max(...fascia.map(([, out]) => out))) + end.corner - POSITION_TOL;
+      const pos = makeBumperGeometry(false, style).getAttribute("position");
+      let [nearest, at, read] = [-Infinity, "", 0];
+      for (let i = 0; i < pos.count; i++) {
+        const [x, y, z] = [Math.abs(pos.getX(i)), pos.getY(i) + seat.y, pos.getZ(i) - seat.z];
+        const slice = sampleSlice(z, style.profile);
+        const rocker = rockerAt(z, style);
+        if (x <= wrap.from || z < runZ || y < rocker || y > slice.yBelt) continue;
+        read++;
+        const proud = x - sideX(y, slice.hw, slice.yBelt, rocker);
+        if (proud > nearest) [nearest, at] = [proud, `x ${x.toFixed(3)} y ${y.toFixed(3)} z ${z.toFixed(3)}`];
+      }
+      assert.ok(read > 0 && nearest >= -BUMPER_RUN_INSIDE, `${id}: of ${read} run vertices the nearest stands ${(-nearest * 1000).toFixed(1)} mm inside the body side, at ${at}`);
+      assert.ok(end.corner >= BUMPER_CORNER_MIN, `${id}: the corner turns ${end.corner} m deep, under ${BUMPER_CORNER_MIN}: a square end`);
+    });
+  }
+
   it("when the pickup's front bumper sets a band (its valance), then the fascia rows in it carry a black inlay across the face between its heights, and a front bumper without one is drawn as it was", () => {
     const pickup = CAR_STYLES.pickup;
     const { seat, band, wrap } = pickup.bumpers.front;
@@ -3688,6 +3712,10 @@ const ARCH_LEG_SIGHT = 0.01;
 const ARCH_LEG_DEPTH = 0.03;
 /** A tucked bumper end (`wrap.end.stand` ≤ 0) may stand this far (m) out of the body side: its section's rounding between rows. */
 const BUMPER_FLUSH = 0.002;
+/** A tucked bumper's corner turns on at least this plan depth (m): the reference's tail plan reads a 25-35 cm radius, a short one is a square end. */
+const BUMPER_CORNER_MIN = 0.25;
+/** A tucked bumper's run lies at most this far (m) inside the body side, one skin with the quarter: at 3.7 cm in it read as a block set deep in it, ending in a shelf. */
+const BUMPER_RUN_INSIDE = 0.025;
 const SIDED = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
 /** The paint's sidedness: a ray skips back faces, as the paint culls them. */
 const FRONT = new THREE.MeshBasicMaterial({ side: THREE.FrontSide });
