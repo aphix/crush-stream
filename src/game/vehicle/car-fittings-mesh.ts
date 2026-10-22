@@ -90,16 +90,16 @@ function bulgeGeometry(b: HoodBulge, style: BodyStyle): THREE.BufferGeometry {
     const half = lerp(rearHalf, frontHalf, s / BULGE_STATIONS);
     const top = bulgeTopY(b, z, style) - oy;
     const foot = deckTopY(half, z, style, true) - SINK - oy;
-    rings.push(
-      b.round
-        ? podRing(half, b.round, foot, top)
-        : [
-            { x: -half, y: foot },
-            { x: BULGE_FLANK - half, y: top },
-            { x: half - BULGE_FLANK, y: top },
-            { x: half, y: foot },
-          ],
-    );
+    const ring = b.round
+      ? podRing(half, b.round, foot, top)
+      : [
+          { x: -half, y: foot },
+          { x: BULGE_FLANK - half, y: top },
+          { x: half - BULGE_FLANK, y: top },
+          { x: half, y: foot },
+        ];
+    if (b.groove) ring.splice(ring.length / 2, 0, { x: -SCOOP_RIB / 2, y: top }, { x: 0, y: top - b.groove }, { x: SCOOP_RIB / 2, y: top });
+    rings.push(ring);
     zs.push(z - oz);
   }
   return withTone(hardEdged(loftFromRings(rings, zs, 0, 1)), PRIMER_ATTRIBUTE, 0);

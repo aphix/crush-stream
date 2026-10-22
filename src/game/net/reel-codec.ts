@@ -314,7 +314,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * differently. A clip of 156 or before no longer reads.
  * 158: a driver thrown out of the windshield leaves from the pane's bowed middle (`userData.centre`), not its box's centre: 1 cm further forward on
  * every car, and the coupe's pane bows deeper at its top; each raked pane's top corners fall onto the roof's dome (`domeFall`, about 2 cm), which
- * moves the panes' cage-skinned rest on every car. Every windshield throw moves differently. A clip of 157 or before no longer reads.
+ * moves the panes' cage-skinned rest on every car. A car's collision cage keeps the underside it rests on out to its nose and tail lips (over its
+ * vertex budget, read once it is a wreck), so a wreck that loses a front wheel rests and sleeps on its lip instead of rocking 3-4 cm in the ground,
+ * and a car pitched over another meets it as deep as the two cages stand (it read 10 cm shallow at some poses). Every windshield throw moves
+ * differently, and wrecks on their noses and tails and pitched pairs come to rest and push differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
 const REPLAY_VERSION = 158;

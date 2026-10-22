@@ -153,7 +153,7 @@ describe("given every body style's tyre (its dims' wheel), drawn by the one plat
   }
 });
 
-/** The rim each reference car shows: sedan and SUV split ten-spoke (the SUV's dark), hatch and police five-spoke, muscle slotted mag, pickup six-spoke steel, monster beadlock. */
+/** The rim each reference car shows: sedan and SUV split ten-spoke (both silver), hatch and police five-spoke, muscle slotted mag, pickup six-spoke steel, monster beadlock. */
 const REFERENCE_RIMS: Readonly<Record<CarStyleId, WheelDesign>> = {
   sedan: "split10",
   hatchback: "five",
@@ -208,7 +208,7 @@ describe("given the reference cars' rim designs", () => {
     });
   }
 
-  test("when the designs' wheel geometries are compared, then each is its own shape and the SUV's split ten-spoke is tinted darker than the sedan's", () => {
+  test("when the designs' wheel geometries are compared, then each is its own shape and the SUV's split ten-spoke is the sedan's silver", () => {
     const { batch } = stage();
     const shapes = batch.meshes.slice(0, WHEEL_DESIGNS.length).map((m) => {
       const p = m.geometry.getAttribute("position");
@@ -217,7 +217,7 @@ describe("given the reference cars' rim designs", () => {
       return `${p.count}/${sum.toFixed(3)}`;
     });
     assert.equal(new Set(shapes).size, WHEEL_DESIGNS.length, shapes.join(" "));
-    assert.ok(STYLE_WHEELS.wagon.tint.getHSL({ h: 0, s: 0, l: 0 }).l < 0.5 * STYLE_WHEELS.sedan.tint.getHSL({ h: 0, s: 0, l: 0 }).l, "SUV rim dark");
+    assert.ok(STYLE_WHEELS.wagon.tint.getHex() === STYLE_WHEELS.sedan.tint.getHex(), `SUV rim ${STYLE_WHEELS.wagon.tint.getHexString()} against the sedan's silver`);
   });
 
   test("when the coupe's slotted mag is built, then its outward face is solid all round between its windows and its lip, and dark only in five windows inside", () => {

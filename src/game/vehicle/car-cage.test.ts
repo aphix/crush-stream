@@ -46,11 +46,13 @@ for (const body of BODIES) {
 }
 
 describe("given the cage's vertex budget", () => {
-  it("when a style's cage is built, then it has about a hundred vertices", () => {
+  it("when a style's cage is built, then it has its budget's vertices and the underside points held over it, and about three hundred triangles", (t) => {
     const car = carInState("untouched", "sedan", "sedan");
     const cage = cageOf(car);
-    assert.ok(cage.style.vertexCount <= CAGE_VERTICES + 2 && cage.style.vertexCount >= CAGE_VERTICES / 2, `${cage.style.vertexCount} vertices`);
-    assert.ok(cage.style.triCount >= 150 && cage.style.triCount <= 330, `${cage.style.triCount} triangles`);
+    const { vertexCount, heldCount, triCount } = cage.style;
+    t.diagnostic(`${vertexCount} vertices (${heldCount} of them the underside held over the ${CAGE_VERTICES}), ${triCount} triangles`);
+    assert.ok(vertexCount <= CAGE_VERTICES + heldCount + 2 && vertexCount >= CAGE_VERTICES / 2, `${vertexCount} vertices, ${heldCount} held`);
+    assert.ok(triCount >= 150 && triCount <= 330 + 2 * heldCount, `${triCount} triangles`);
   });
 });
 

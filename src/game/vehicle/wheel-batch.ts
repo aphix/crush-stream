@@ -20,7 +20,7 @@ const _drawn = new THREE.Matrix4();
 export const STYLE_WHEELS: Readonly<Record<CarStyleId, { design: WheelDesign; tint: THREE.Color }>> = {
   sedan: { design: "split10", tint: UNTINTED },
   hatchback: { design: "five", tint: UNTINTED },
-  wagon: { design: "split10", tint: new THREE.Color(0x5c6068) },
+  wagon: { design: "split10", tint: UNTINTED },
   coupe: { design: "mag5", tint: UNTINTED },
   pickup: { design: "six", tint: UNTINTED },
   police: { design: "five", tint: new THREE.Color(0xc4c8ce) },

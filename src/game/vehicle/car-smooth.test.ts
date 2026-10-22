@@ -751,11 +751,16 @@ const SAIL_HAUNCH_SECTIONS = 2;
 const SAIL_ROOF_GAP = 0.003;
 /** A roof end skin point the sail's section misses by at most this much (m) still reads as covered: a pixel at the shot's closest range. */
 const SAIL_ROOF_COVER = 0.001;
+/** A flat sail's outer face (its first `SAIL_OUTER_POINTS` ring points) bows at most this far (m) off its foot-to-head line; the body under it stands at most the sail's foot sink (m) outside that line. */
+const SAIL_FLAT_BOW = 0.001;
+const SAIL_SINK_TEST = 0.002;
+const SAIL_OUTER_POINTS = 6;
 
 describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", () => {
   for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar)) {
-    it(`when a ${id}'s sail is read along its haunch, then each section's foot sits on the body's shoulder and its face leaves it within ${SAIL_LEAN_DEGREES}° of the shoulder's tangent`, () => {
+    it(`when a ${id}'s sail is read along its haunch, then each section's foot sits on the body's shoulder and its face leaves it within ${SAIL_LEAN_DEGREES}° of the shoulder's tangent`, (t) => {
       const style = CAR_STYLES[id];
+      if (style.cPillar?.flat) return t.skip("a flat sail leaves the body where its line touches the section: its own row");
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
       const { ring, slices } = loftOf(sail);
@@ -804,6 +809,33 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         assert.ok(inside || near <= SAIL_ROOF_COVER, `${id}: the roof end's skin at (x ${x.toFixed(3)}, y ${y.toFixed(3)}) stands ${(near * 1000).toFixed(1)} mm outside the sail's section`);
       }
       assert.ok(read > 0, `${id}: no roof end skin outboard of the rear glass read`);
+    });
+  }
+
+  for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar?.flat)) {
+    it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm, no body point stands outside it by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
+      const style = CAR_STYLES[id];
+      const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+      const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
+      const { ring, slices } = loftOf(sail);
+      const off: string[] = [];
+      let read = 0;
+      for (let s = 0; s < slices; s++) {
+        const foot = positionAt(sail, s * ring);
+        if (foot.z > haunchZ) continue;
+        read++;
+        const face = Array.from({ length: SAIL_OUTER_POINTS }, (_, k) => positionAt(sail, s * ring + k));
+        const head = face.at(-1)!;
+        const [ux, uy] = [(head.x - foot.x) / Math.hypot(head.x - foot.x, head.y - foot.y), (head.y - foot.y) / Math.hypot(head.x - foot.x, head.y - foot.y)];
+        // Signed distance outboard of the foot-to-head line (+x side: the line's normal turned up and out).
+        const outside = (x: number, y: number) => (x - foot.x) * uy - (y - foot.y) * ux;
+        const bow = Math.max(...face.map((p) => Math.abs(outside(p.x, p.y))));
+        const body = sectionPoints(sampleSlice(foot.z, style.profile), style, "drawn").filter((p) => p.x > 0 && p.y < head.y);
+        const proud = Math.max(...body.map((p) => outside(p.x, p.y)));
+        if (bow > SAIL_FLAT_BOW || proud > SAIL_SINK_TEST + 1e-4 || proud < 0) off.push(`z ${foot.z.toFixed(3)}: face bows ${(bow * 1000).toFixed(1)} mm, body stands ${(proud * 1000).toFixed(1)} mm outside its line`);
+      }
+      assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
+      assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
     });
   }
 });
@@ -1095,10 +1127,12 @@ const SIM_DIGEST_BY_STYLE = [
   { id: "sedan", digest: "92a72440a4cf53f0f791dfc487c995cf30328490e14f8a5581291e14918f68bf" },
   // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's boot foot.
-  { id: "hatchback", digest: "d1b0dbd003d50435d78a1243c66bf76a5ec1ec028cf24e4fb18dca1ea3ea1ece" },
-  { id: "wagon", digest: "fc6cc21e004714d20934221b94eb6569779793efef30cb3fa48572c937cd1b88" },
-  // The coupe re-pinned for its nose crown at z 1.9 dropped 2.5 mm, so the hood's last chord clears the deck it covers.
-  { id: "coupe", digest: "ddb38853702981fec0ab7f975ad3c023108290dee79372fbc8c3eb8268123379" },
+  // The hatchback's again when the cage kept the underside a body rests on, over its vertex budget (CarRig rig-lip): d1b0dbd0... ->
+  // ace6af8c...; the other six unchanged.
+  { id: "hatchback", digest: "ace6af8c1eafbd870a4cbdc0590679ed80e57225de749ba3dd38933ff7a4576e" },
+  { id: "wagon", digest: "1a7eff9992e80f8e83b536069ed0e6d91c71c41c5a70267b1d8d6bbe50865260" },
+  // The coupe re-pinned for its nose deck lowered 0.5-2.8 cm over z 1.76-1.945 to the reference's side line.
+  { id: "coupe", digest: "65a78223ec46889380f64c822f52c7f005d3fc135df3982a0eacc74dcc28635c" },
   { id: "pickup", digest: "8ac3348022ccf861dcc32220681d991fadaba4b58f4cd87233f0374f7bfb5731" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
@@ -1150,13 +1184,13 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
-  { id: "hatchback", digest: "c1b21432aa86e78d42c27f4cdfc4ba13bc36ba0d196efb0c1edd383c916d0784" },
-  { id: "wagon", digest: "2d7badb7715e9f272e888e7f609e700b1344f625502a5801fc1863a4b2b65e17" },
-  // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), and its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above).
-  { id: "coupe", digest: "6d9050033dd05585abb912842030ae1190190ae7b6c8340781fbafc36f5018f4" },
+  { id: "hatchback", digest: "a754e5e373f501c475d3f3900641113c9c2d1c1e90f5cef395ed9857bc1f3b55" },
+  { id: "wagon", digest: "367e3e9f9994b45c27fa7de342de7c0deee14a978bb430438240e2f3d7c7f5bb" },
+  // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), and its nose deck lowered to the reference's side line.
+  { id: "coupe", digest: "0e9c66c1e396e065b6e7d87a10ab60ce92de3c06f46aba5028483d58aa2e68d2" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
-  // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open.
+  // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open; both trucks for the greenhouse's dome-following panes and posts.
   { id: "pickup", digest: "214a0ec7b44e78d9b257b9268b841eb1c735d784cc50f39bd855dde83a55aa2e" },
   { id: "police", digest: "5af761d2cd219ffa91bbabcd7d0dad28fc102b3ef1411cd90380345f3c4db455" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55).
