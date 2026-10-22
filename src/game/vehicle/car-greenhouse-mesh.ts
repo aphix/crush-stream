@@ -617,7 +617,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
       // A flush head's control point lies near it, so the section turns hardest there: its outer points crowd toward both ends (the foot keeps its tangent).
       ...(atRoofEnd
         ? [at(0, 0), ...roofRoll(roof.x, roof.y, cantDrop(style), SAIL_ROOF_ROLL).map((p) => ({ x: sign * p.x, y: p.y }))]
-        : Array.from({ length: SAIL_OUTER }, (_, k) => at(onGlass ? (1 - Math.cos((Math.PI * k) / (SAIL_OUTER - 1))) / 2 : k / (SAIL_OUTER - 1), 0))),
+        : Array.from({ length: SAIL_OUTER }, (_, k) => at(onGlass ? (1 - detCos((Math.PI * k) / (SAIL_OUTER - 1))) / 2 : k / (SAIL_OUTER - 1), 0))),
       ...edge(1),
       // The section thins from the foot's edge to the head's, so each rounded edge closes onto the inner face.
       ...Array.from({ length: SAIL_INNER }, (_, k) => at(1 - k / (SAIL_INNER - 1), 2 * lerp(headR, r, k / (SAIL_INNER - 1)))),
