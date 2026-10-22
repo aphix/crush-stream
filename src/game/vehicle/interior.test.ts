@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
 import { floorY } from "./car-lines.ts";
+import { roofAt } from "./car-mesh.ts";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { BUMPER_F, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
@@ -100,7 +101,7 @@ describe("given every style's seats", () => {
     return out;
   };
 
-  test("when each cabin is built, then two sit in front at the floor plus 0.14 m, and the rear row (none in a pickup) stands between the B-pillar and the cab's back wall, clear of the front seats", () => {
+  test("when each cabin is built, then two sit in front at the floor plus 0.14 m, and the rear row (none in a pickup) stands between the B-pillar and the cab's back wall and under its roof line, clear of the front seats", () => {
     for (const id of CAR_STYLE_IDS) {
       const style = CAR_STYLES[id];
       const seats = carPartSeats();
@@ -115,6 +116,8 @@ describe("given every style's seats", () => {
       assert.ok(bench.position.z > wall && bench.position.z <= style.bPillar.rear, `${id}: bench H-point z ${bench.position.z} outside the wall ${wall} .. B-pillar ${style.bPillar.rear}`);
       const behindWall = placed(bench, () => true).filter((p) => p.y < yTop && p.z < wall + WALL_HALF);
       assert.equal(behindWall.length, 0, `${id}: ${behindWall.length} bench vertices under the wall's top behind its face`);
+      const overRoof = placed(bench, () => true).filter((p) => p.y > roofAt(p.z, style).y);
+      assert.equal(overRoof.length, 0, `${id}: ${overRoof.length} bench vertices over the roof line, the highest ${Math.max(...overRoof.map((p) => p.y - roofAt(p.z, style).y)).toFixed(3)} m over it`);
       const cushion = new THREE.Box3().setFromPoints(placed(bench, (y) => y < 0));
       const inCushion = front.flatMap((s) => placed(s, () => true)).filter((p) => cushion.containsPoint(p));
       assert.equal(inCushion.length, 0, `${id}: ${inCushion.length} front seat vertices inside the bench's cushion`);

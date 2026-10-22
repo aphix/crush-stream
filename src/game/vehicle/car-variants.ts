@@ -247,8 +247,8 @@ export interface BodyStyle {
    * 0.08 / 0.07 wide, upright at `midPillarZ`.
    */
   pillars?: { b?: PillarSpan; divider?: PillarSpan };
-  /** Drawn only: greenhouse parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar. */
-  blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean };
+  /** Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar, and the cowl (the deck between the hood's rear edge and the windshield's foot). */
+  blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean; cowl?: boolean };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
   privacyGlass?: { rear?: boolean; quarter?: boolean };
   rearBulkhead: { z: number; yTop: number };
