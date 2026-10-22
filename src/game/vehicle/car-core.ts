@@ -411,7 +411,7 @@ export abstract class CarCore {
   readonly restCaster: THREE.BufferGeometry;
   /** Whether the car is flush (`CarParts.settleCasters`): its sun shadow is `restCaster`, and the body and flush parts cast none. */
   restCasts = false;
-  /** The doors: the door cut drops the body's side to the sill, so a car with them off the camera is open there; a far-cut car draws them through `CoverBatch`. */
+  /** The parts that close the body's openings: the hood over the engine bay, the boot lid over the boot cut, the doors over the door cut to the sill. A far-cut car draws them through `CoverBatch`, so it is never see-through. */
   readonly apertureParts: THREE.Mesh[] = [];
   protected hullHelper: THREE.LineSegments | null = null;
   abstract readonly cage: CarCage;
@@ -526,7 +526,7 @@ export abstract class CarCore {
     this.flushCasters.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
     if (this.style.details) for (const mesh of [this.body, this.hood, this.trunk, this.doorMeshL, this.doorMeshR]) ensureRestFrame(mesh, this.group);
     for (const material of new Set([this.bodyMat, doorMat])) applyDetailMap(material, this.style);
-    this.apertureParts.push(this.doorMeshL, this.doorMeshR);
+    this.apertureParts.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
 
     const accent = livery?.accent ?? paint.accent;
     this.bumperF = this.makeBumper(true, accent, livery?.body ?? paint.body);
