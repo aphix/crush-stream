@@ -320,8 +320,9 @@ export interface BodyStyle {
    * on the tail panel, standing upright in its corners beside a tailgate. `shapes` (drawn only): `head` / `tail` each kind's own lamp
    * riding its seat (a tail's share that lands on the boot lid rides the lid, lit with the tails); `front` / `rear` lamps, reflectors and
    * pods on that bumper's fascia (unlit, torn off with it). Absent, the platform housing (`LAMP_HOUSING`, standing 4.5 cm proud).
-   * `brake`: a high-mount brake lamp `size` [w, h] met on the skin from behind at [x, y] (a pickup's cab); `sideMarkers`: amber markers
-   * on each side met from outboard at [y, z]. Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
+   * `brake`: a high-mount brake lamp `size` [w, h] met on the skin or the rear glass from behind at [x, y] (a pickup's cab glass); `sideMarkers`:
+   * amber markers on each side met from outboard at [y, z]. Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
+   * `bulb`: the head lamps' light, warm halogen or cool-white LED, in their lit lens pieces and glow; absent, the neutral white.
    */
   lamps: {
     head: readonly [number, number];
@@ -329,6 +330,7 @@ export interface BodyStyle {
     shapes?: { head?: LampShape; tail?: LampShape; front?: LampShape; rear?: LampShape };
     brake?: { at: readonly [number, number]; size: readonly [number, number] };
     sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number] }[];
+    bulb?: "halogen" | "led";
   };
   /**
    * The front grille (drawn only; it tears off with the front bumper): centre height `y` and face `z` (m, car frame; z absent: the platform

@@ -432,12 +432,20 @@ export function makeLampUnit(kind: LampKind): THREE.BufferGeometry {
   return mergeToned([housing.translate(0, 0, 0.015), lens.translate(0, 0, 0.03)], "lamp unit");
 }
 
-/** 2×1 emissive mask for `makeLampUnit`: black housing texel, white lens texel. Shared, never disposed. */
+/** The head bulbs' lens texels (sRGB bytes) under the head lamp's white emissive: halogen warm, LED cool white, as the references light them. */
+const LAMP_BULB_TEXEL = { halogen: [255, 238, 226], led: [240, 247, 255] } as const;
+/**
+ * 2×2 emissive mask for the lamps, by (u, v): housing (.25, .25) black, lens (.75, .75) white, and the head bulbs' lens texels, halogen
+ * (.75, .25) warm and LED (.25, .75) cool (`LAMP_BULB_UV`). Shared, never disposed.
+ */
 export const lampEmissiveMap = once((): THREE.DataTexture => {
-  const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255, 255, 255, 255, 255]), 2, 1);
+  const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255, ...LAMP_BULB_TEXEL.halogen, 255, ...LAMP_BULB_TEXEL.led, 255, 255, 255, 255, 255]), 2, 2);
   t.needsUpdate = true;
   return t;
 });
+
+/** Where a head lens with its `lamps.bulb` samples `lampEmissiveMap` ([u, v]). */
+export const LAMP_BULB_UV = { halogen: [0.75, 0.25], led: [0.25, 0.75] } as const;
 
 /** Light bar lens texels in `sirenEmissiveMap` order: housing, red lens, blue lens. */
 const SIREN_U = [1 / 6, 3 / 6, 5 / 6] as const;

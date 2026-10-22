@@ -4,6 +4,7 @@ import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometr
 import { once } from "../kernel/scalar.ts";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import {
+  LAMP_BULB_UV,
   makeLampUnit,
   mergeToned,
   PAINT_COLOR_TONE,
@@ -256,9 +257,12 @@ export function lampRest(kind: LampKind, style: BodyStyle, out: THREE.Quaternion
 /** The end face's z a `kind` lamp seats on (the profile's nose or tail station). */
 const lampEndZ = (kind: LampKind, style: BodyStyle): number => (kind === "head" ? style.profile[style.profile.length - 1]!.z : style.profile[0]!.z);
 
-function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind): THREE.BufferGeometry {
+/** `geo` in lamp `tone`; a lit head lens under its `bulb` samples that bulb's emissive texel instead of the plain white. */
+function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind, bulb?: BodyStyle["lamps"]["bulb"]): THREE.BufferGeometry {
   toned(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0, 0);
-  (geo.getAttribute("uv").array as Float32Array).fill(tone === "lit" ? LAMP_TEXEL.lens : LAMP_TEXEL.housing);
+  const uv = geo.getAttribute("uv").array as Float32Array;
+  uv.fill(tone === "lit" ? LAMP_TEXEL.lens : LAMP_TEXEL.housing);
+  if (tone === "lit" && kind === "head" && bulb) for (let i = 0; i < uv.length; i += 2) uv.set(LAMP_BULB_UV[bulb], i);
   return geo;
 }
 
@@ -607,7 +611,7 @@ function builtLamp(style: BodyStyle, which: keyof LampShapes, side = 1): BuiltLa
     ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false, mirror }]
     : [{ geo: front ? makeHoodGeometry(style) : makeTrunkGeometry(style), offset: new THREE.Vector3(0, ...(front ? style.hood.origin : bootPivot(style.boot))), lid: true, mirror }, body];
   const skin = new LampSkin(sources, zEnd, front ? 1 : -1, `${style.id} ${which} lamp${mirror ? " (left)" : ""}`);
-  const built = buildShape(style.lamps.shapes![which]!, skin, zEnd, (geo, t) => (bumper ? bumperTone : lampTone)(geo, t, kind));
+  const built = buildShape(style.lamps.shapes![which]!, skin, zEnd, (geo, t) => (bumper ? bumperTone(geo, t, kind) : lampTone(geo, t, kind, style.lamps.bulb)));
   if (!BUILT.has(style)) BUILT.set(style, new Map());
   BUILT.get(style)!.set(id, built);
   return built;
@@ -726,7 +730,7 @@ const noLidLamp = once(() =>
 
 const lampKey = (style: BodyStyle, kind: LampKind, side: number): string | null => {
   const shape = style.lamps.shapes?.[kind];
-  return shape ? `${style.id}|${kind}|${side}|${JSON.stringify(shape)}|${JSON.stringify(style.lamps[kind])}` : null;
+  return shape ? `${style.id}|${kind}|${side}|${JSON.stringify(shape)}|${JSON.stringify(style.lamps[kind])}${kind === "head" && style.lamps.bulb ? `|${style.lamps.bulb}` : ""}` : null;
 };
 
 /** The high-mount brake lamp, 1 m square (its seat scales it to `lamps.brake.size`): a dark housing, a lit red lens. Shared, never disposed. */
