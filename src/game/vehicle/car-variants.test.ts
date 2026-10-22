@@ -6,7 +6,7 @@ import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
-import { ROCKER, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
+import { ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, rockerAt, tubWall } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
@@ -14,7 +14,7 @@ import { drawnLamp, drawnPart, lampRest, lampSeatAt, withSeamCover } from "./par
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
-import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
 import { BOX_HALVES, boxShape, newLooseShape, partMass, stepLoose } from "./loose-step.ts";
@@ -430,6 +430,26 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
     assert.ok(box.min.distanceTo(squareBox.min) < 1e-6 && box.max.distanceTo(squareBox.max) < 1e-6, "the outline is the square pane's");
     assert.ok(`${geo.userData.centre}` === `${makeRearGlass(square).userData.centre}`, `centre ${geo.userData.centre}`);
   });
+
+  it("when its chrome bead is built (windowTrim), then the bead keeps the corner's arc in from each square corner too, not a sharp mitre on it", () => {
+    /** The bead's nearest point to a square corner: at least half the arc's middle's r(√2 − 1) off it (a sharp mitre sits on it, the section's outward offset away). */
+    const BEAD_ARC = 0.5 * ROUND * (Math.SQRT2 - 1);
+    const near = (style: BodyStyle): number[] => {
+      const pos = makeBodyGlassFrames(style, true).getAttribute("position");
+      const rg = style.rearGlass;
+      return [-1, 1].flatMap((sx) =>
+        [rg.base, rg.top].map(([y, z], k) => {
+          const corner = new THREE.Vector3((sx * (k === 0 ? rg.wBase : rg.wTop)) / 2, y, z);
+          let d = Infinity;
+          for (let i = 0; i < pos.count; i++) d = Math.min(d, corner.distanceTo(new THREE.Vector3().fromBufferAttribute(pos, i)));
+          return d;
+        }),
+      );
+    };
+    const [round, sharp] = [near(rounded), near(square)];
+    assert.ok(Math.min(...sharp) < BEAD_ARC, `the control: the square pane's bead stands ${sharp.map((d) => d.toFixed(4)).join(", ")} m off its corners`);
+    assert.ok(Math.min(...round) >= BEAD_ARC, `the bead stands ${round.map((d) => d.toFixed(4)).join(", ")} m off the square corners, want ${BEAD_ARC.toFixed(4)} or more`);
+  });
 });
 
 /** The owner's lids (docs/DOOR_RIG.md, Lids): a sedan's lid hinged at the rear window's base wraps the tail down to its lamps; a hatch is a roof-hinged lid wrapping down a leaning tail face to just above the bumper. */
@@ -826,6 +846,18 @@ describe("given a body style's H2 hardpoints", () => {
           }
         }
       }
+    }
+  });
+
+  it("when a style without a drip (roofDrip 0: the coupe's) is read, then its drawn roof's side stands nowhere out past the cant line (the side glass's plane): it rolls into the glass, no rail", () => {
+    const ids = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].roofDrip === 0);
+    assert.ok(ids.length > 0, "no style sets roofDrip 0");
+    for (const id of ids) {
+      const style = CAR_STYLES[id];
+      const pos = makeRoofGeometry(style).getAttribute("position") as THREE.BufferAttribute;
+      let out = -Infinity;
+      for (let i = 0; i < pos.count; i++) out = Math.max(out, Math.abs(pos.getX(i)) - cantX(pos.getZ(i), style));
+      assert.ok(out <= 1e-6, `${id}: the roof's side stands ${(out * 1000).toFixed(1)} mm out past the cant line`);
     }
   });
 

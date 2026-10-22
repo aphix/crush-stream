@@ -48,7 +48,7 @@ export interface GlassQuad {
   bow?: GlassBow;
   /** Drawn only (the rear glass): the clear pane drawn in by [side, bottom, top] (m; sides across, bottom and top along its slope), the band out to the outline the glass's black frit. */
   frame?: readonly [number, number, number];
-  /** Drawn only (an unframed rear glass): the clear pane's corners rounded to this radius (m), the glass's black frit filling out to the square outline. */
+  /** Drawn only (an unframed rear glass): the clear pane's corners rounded to this radius (m), the chrome bead round them with it; the glass's black frit fills out to the square outline. */
   round?: number;
 }
 
@@ -291,6 +291,8 @@ export interface BodyStyle {
    * unset, the roof ends in its full section.
    */
   roofEnds?: { rear?: number; front?: number };
+  /** Drawn only: how far (m) the roof's side rolls out past the cant line (the side glass's plane) at its bottom; absent 0.01 (a drip lip the pillars' faces meet flush); 0 rolls the roof flush into the glass, no drip rail. */
+  roofDrip?: number;
   /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
   windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;
