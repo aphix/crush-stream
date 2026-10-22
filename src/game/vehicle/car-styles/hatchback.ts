@@ -122,8 +122,14 @@ export const HATCHBACK: BodyStyle = {
     // The reference's gate seam: ±.62-.66 above the tail lamps, stepping in to ±.43 between them.
     outline: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84], [0.43, 0.8], [0.43, 0.6]],
   },
-  // The high brake lamp: a thin strip on the spoiler's trailing edge (2 cm tall there), as the reference's.
-  lamps: { head: [0.545, 0.545], tail: [0.603, 0.76], shapes: HATCHBACK_LAMP_SHAPES, brake: { at: [0, 1.231], size: [0.34, 0.012] } },
+  // The high brake lamp: a thin strip on the spoiler's trailing edge (2 cm tall there); the amber side repeater on the front fender, as the reference's.
+  lamps: {
+    head: [0.545, 0.545],
+    tail: [0.603, 0.76],
+    shapes: HATCHBACK_LAMP_SHAPES,
+    brake: { at: [0, 1.231], size: [0.34, 0.012] },
+    sideMarkers: [{ at: [0.62, 0.8], size: [0.045, 0.022] }],
+  },
   grille: { y: 0.53, size: [0.66, 0.1], kind: "bars", count: 4, badge: 0.025, finish: "black" },
   seats: { front: [0.35, 0.41, -0.1], rear: [0.41, -0.7] },
   pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] } },
