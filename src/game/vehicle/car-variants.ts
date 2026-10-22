@@ -294,11 +294,19 @@ export interface BodyStyle {
    * Drawn only: over this run (m) in from each end the drawn roof rolls onto that end's glass top in a quarter ellipse, its crown
    * settling to the glass top's height and its whole section dropping where the glass top sits under the dome's edge (`roofDome`);
    * unset, the roof ends in its full section. `flush` (0..1 per end, absent 0): the share of the side lip's reach past the dome's
-   * edge that end tucks in at the end itself, fading out over its run, so a boxy cab's roof corners sit flush over its posts.
+   * edge that end tucks in at the end itself, fading out over its run, so a boxy cab's roof corners sit flush over its posts. `glassBow`
+   * (per end): that end bows in plan with its glass top's whole bow, not only past the default bow, so a roof rolled level onto its glass
+   * top meets it with no slit between them.
    */
-  roofEnds?: { rear?: number; front?: number; flush?: { rear?: number; front?: number } };
+  roofEnds?: { rear?: number; front?: number; flush?: { rear?: number; front?: number }; glassBow?: { rear?: boolean; front?: boolean } };
   /** Drawn only: how far (m) the roof's side rolls out past the cant line (the side glass's plane) at its bottom; absent 0.01 (a drip lip the pillars' faces meet flush); 0 rolls the roof flush into the glass, no drip rail. */
   roofDrip?: number;
+  /**
+   * Drawn only: the roof's section from its crown down to its cant line as one curve (`roofArc`), a cubic Bézier leaving the crown level
+   * and arriving along the side glass's plane: `crown`, its crown handle's share of the half-width (more: a broader top); `blend`, its
+   * side handle's share of the section's height (more: a softer roll into the glass). Absent, the dome's flat top and its rolled side lip.
+   */
+  roofSection?: { crown: number; blend: number };
   /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
   windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;

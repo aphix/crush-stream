@@ -464,4 +464,31 @@ describe("given the part batch over a resting field", () => {
     const was = before.split(",").map(Number);
     assert.ok(after.every((v, i) => v > was[i]!), `a moved car's draws must upload again: ${before} -> ${after.join(",")}`);
   });
+
+  test("when the boot warm hides every draw after a sync (its restore) and the field then syncs at rest, then each kind the monster draws (its frame and axles too) and its caster show again, uploading nothing", () => {
+    const { batch, car, draw } = stage();
+    const monster = car(8, "monster");
+    draw([monster]);
+    const instanced = [...batch.kinds.filter((m): m is THREE.InstancedMesh => m !== null && m.count > 0), ...batch.casters.filter((m) => m.count > 0)];
+    assert.ok(batch.kinds[PART_KIND.ladderFrame]!.count === 1 && batch.kinds[PART_KIND.axle]!.count === 2, "the control: the monster draws its frame and both axles");
+    const versions = () => instanced.map((m) => m.instanceMatrix.version).join(",");
+    const before = versions();
+    for (const m of [...instanced, batch.styled.mesh]) m.visible = false;
+    draw([monster]);
+    const hidden = [...instanced.filter((m) => !m.visible).map((m) => m.name || `kind ${batch.kinds.indexOf(m)}`), ...(batch.styled.mesh.visible ? [] : ["styled"])];
+    assert.equal(hidden.join(), "", "draws left hidden after the warm's restore");
+    assert.equal(versions(), before, "a resting field re-uploaded matrices");
+  });
+});
+
+describe("given the part batch's styled draw after a sync that built its geometry", () => {
+  test("when its buffers are read, then every one keeps three's static usage hint (a dynamic one may sit in host memory the GPU reads every frame)", () => {
+    const { batch, car, draw } = stage();
+    draw([car(8), car(12, "wagon")]);
+    const geo = batch.styled.mesh.geometry;
+    assert.ok(geo.drawRange.count > 0, "the control: the styled draw packed seats");
+    const dynamic: string[] = [];
+    for (const [name, a] of [...Object.entries(geo.attributes), ["index", geo.index!] as const]) if ((a as THREE.BufferAttribute).usage !== THREE.StaticDrawUsage) dynamic.push(name);
+    assert.equal(dynamic.join(","), "");
+  });
 });
