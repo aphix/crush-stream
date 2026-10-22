@@ -114,6 +114,8 @@ if (!existsSync(join(glDir, "dist/webgl.node"))) {
 }
 const { default: createGL } = await import("@kmamal/gl");
 const { createCanvas, ImageData, loadImage } = await import("@napi-rs/canvas");
+// This checkout's, not `--root`'s: an older tree draws through the same page `Worker`.
+const { PageWorker } = await import("../src/game/engine/page-worker.test-util.ts");
 
 const game = (path) => import(pathToFileURL(join(root, "src/game", path)).href);
 const { mulberry32 } = await game("world/placements.ts");
@@ -167,6 +169,13 @@ Object.assign(globalThis, {
   },
   fetch: (input) => track(servePublic(input)),
   createImageBitmap: (blob, options) => track(decodeBitmap(blob, options)),
+  // The page's workers on threads; the ragdoll world stays inline, as without one: its answers at thread timing would make two runs differ.
+  Worker: class extends PageWorker {
+    constructor(url) {
+      if (String(url).includes("ragdoll-worker")) throw new Error("headless-frame: the ragdoll world runs inline");
+      super(url);
+    }
+  },
 });
 const canvas = element();
 // The engine fits its lens to the canvas's box (`coverLens` reads all four edges).
@@ -226,6 +235,8 @@ await engine.ready;
 const readyMs = Math.round(performance.now() - bootAt);
 if (tier === "ultra" && !(await engine.loadUltra())) throw new Error("headless-frame: the Ultra look did not load (see the console)");
 engine.setFxTier(tier);
+// A pick of Ultra switches once its warm-up has linked the look (`pickUltra`).
+while (engine.cine.tier !== tier) await sleep(SETTLE_POLL_MS);
 if (detail !== null) {
   if (detail === "off") engine.detail.setDistances(Infinity, Infinity);
   else engine.detail.setLevel(detail);

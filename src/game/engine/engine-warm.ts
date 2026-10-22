@@ -1,9 +1,25 @@
 import * as THREE from "three";
 import { getCrackMap, makeGlassMaterial } from "../vehicle/car-materials.ts";
-import { applyCarFinish, finishedMaterials } from "../vehicle/car-finish.ts";
+import { applyCarFinish, finishedMaterials, finishForTier } from "../vehicle/car-finish.ts";
 import { warmCrashPath } from "./world-step.ts";
 import { loadSkinKernel, skinKernel } from "../deform/skin-kernel.ts";
 import { EngineCore } from "./engine-core.ts";
+import type { Ultra } from "../present/ultra/ultra.ts";
+
+/** Ms between polls of a parallel link, three's `compileAsync` interval. */
+const LINK_POLL_MS = 10;
+// Executor form: the tsconfig lib predates `Promise.withResolvers`.
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/** three's `WebGLProgram.isReady` (KHR_parallel_shader_compile's completion status), missing from its types. */
+const isLinked = (program: unknown): boolean =>
+  typeof program !== "object" || program === null || !("isReady" in program) || typeof program.isReady !== "function" || program.isReady() === true;
+/**
+ * New programs one step of an Ultra pick's warm-up links and draws. Where the GPU process links and builds a program's first draw on its
+ * main thread (ANGLE over desktop GL), the frame waiting on a step stalls about 70 ms a program; all of Ultra's at once stalled it seconds.
+ */
+const ULTRA_STEP_PROGRAMS = 3;
+/** Frames the loop draws after a step's draws before the next step: that GPU work lands in them, not in the next step's or the switch's. */
+const ULTRA_STEP_FRAMES = 2;
 
 /**
  * Shader warm-up: links every program before the loop runs, then warms new scene content as it appears.
@@ -14,6 +30,10 @@ export abstract class EngineWarm extends EngineCore {
   protected warmsInFlight = 0;
   /** Until the boot warm-up resolves (`ready`), the loop reads input only; after it, new scene content warms through `queueWarm`. */
   protected warming = true;
+  /** Frames the engine has drawn. */
+  protected framesDrawn = 0;
+  /** True once a loop draws the frames (the page's animation loop, then the bench's own); tests and headless-frame draw theirs by hand. */
+  protected loopDraws = false;
   /** Whether the WASM skin is loaded (else every car skins in JS). The probes read it from `window.__crush`. */
   get skinKernelReady(): boolean {
     return skinKernel() !== null;
@@ -88,6 +108,15 @@ export abstract class EngineWarm extends EngineCore {
     this.drawWarm(gained);
   }
 
+  /**
+   * Resolves once every program made since `before` has linked. three's `compileAsync` polls each material's current program, which a
+   * frame drawing another look sets back to that look's, so it would resolve before a worn look's programs are in.
+   */
+  private async linkedSince(before: ReadonlySet<unknown>): Promise<void> {
+    const gl = this.renderer.getContext();
+    while (!this.disposed && !gl.isContextLost() && (this.renderer.info.programs ?? []).some((p) => !before.has(p) && !isLinked(p))) await sleep(LINK_POLL_MS);
+  }
+
   /** Every material in the scene holding a program that `before` did not (three keeps a material's programs by key). */
   private materialsWithNewPrograms(before: ReadonlySet<unknown>): Set<THREE.Material> {
     const gained = new Set<THREE.Material>();
@@ -101,11 +130,35 @@ export abstract class EngineWarm extends EngineCore {
     return gained;
   }
 
-  /**
-   * The zero-scissor draws of `warmScene`: every mesh, or with `only`, just the meshes wearing one of those materials (the rest are
-   * muted by material, not object, so a drawn mesh under a muted one, the purse pool under the dummies, still draws).
-   */
+  /** The zero-scissor draws of `warmScene`: both finish states into the canvas and the HDR target, the post passes and the mark map. */
   private drawWarm(only: ReadonlySet<THREE.Material> | null): void {
+    const r = this.renderer;
+    const hdr = this.cine.post.sceneRT;
+    this.staged(only, () => {
+      this.eachFinish(
+        () => {
+          for (const target of [null, hdr]) {
+            r.setRenderTarget(target);
+            r.render(this.scene, this.camera);
+          }
+        },
+        () => {
+          r.setRenderTarget(hdr);
+          r.render(this.scene, this.camera);
+        },
+      );
+      this.cine.post.prime();
+    });
+    this.cine.marks.warm(r);
+    r.setRenderTarget(null);
+  }
+
+  /**
+   * Run `draw` with a zero scissor on the canvas and the HDR target and every mesh shown and unculled, or with `only`, just the meshes
+   * wearing one of those materials (the rest are muted by material, not object, so a drawn mesh under a muted one, the purse pool under
+   * the dummies, still draws); then put it all back.
+   */
+  private staged(only: ReadonlySet<THREE.Material> | null, draw: () => void): void {
     const shown: THREE.Object3D[] = [];
     const culled: THREE.Object3D[] = [];
     const hiddenMats: THREE.Material[] = [];
@@ -133,23 +186,9 @@ export abstract class EngineWarm extends EngineCore {
     r.setScissorTest(true);
     hdr.scissor.set(0, 0, 0, 0);
     hdr.scissorTest = true;
-    this.eachFinish(
-      () => {
-        for (const target of [null, hdr]) {
-          r.setRenderTarget(target);
-          r.render(this.scene, this.camera);
-        }
-      },
-      () => {
-        r.setRenderTarget(hdr);
-        r.render(this.scene, this.camera);
-      },
-    );
-    this.cine.post.prime();
+    draw();
     hdr.scissorTest = false;
     r.setScissorTest(false);
-    this.cine.marks.warm(r);
-    r.setRenderTarget(null);
     for (const o of shown) o.visible = false;
     for (const o of culled) o.frustumCulled = true;
     for (const m of hiddenMats) m.visible = false;
@@ -185,5 +224,73 @@ export abstract class EngineWarm extends EngineCore {
         .catch((err: unknown) => console.error("Crush Stream program warm-up failed", err))
         .finally(() => this.warmsInFlight--);
     });
+  }
+
+  /**
+   * Link and draw `ultra`'s programs (its sky as the environment, its dressed surfaces, the car finish its tier draws) into the HDR target,
+   * the only output its tier draws the scene into, while the frames still draw the current look: a few programs a step, with frames
+   * between (`ULTRA_STEP_PROGRAMS`), so neither a step nor the switch after the last stalls a frame. Stops once `wanted` reads false, or
+   * once a context restore disposes `ultra` (the restore's pick loads another).
+   */
+  protected async warmUltra(ultra: Ultra, wanted: () => boolean): Promise<void> {
+    this.warmsInFlight++;
+    await this.warmUltraSteps(ultra, () => wanted() && this.cine.ultra === ultra && !this.disposed)
+      .catch((err: unknown) => console.error("Crush Stream Ultra warm-up failed", err))
+      .finally(() => this.warmsInFlight--);
+  }
+
+  private async warmUltraSteps(ultra: Ultra, going: () => boolean): Promise<void> {
+    this.scene.unparkAll();
+    const drawn: THREE.Object3D[] = [];
+    this.scene.traverse((o) => {
+      if ((o as THREE.Mesh).material !== undefined) drawn.push(o);
+    });
+    const hdr = this.cine.post.sceneRT;
+    for (let next = 0; next < drawn.length && going(); ) {
+      const before = new Set(this.renderer.info.programs ?? []);
+      next = this.wearingUltra(ultra, () => this.compileInto(hdr, drawn, next, before.size + ULTRA_STEP_PROGRAMS));
+      const gained = this.materialsWithNewPrograms(before);
+      if (gained.size === 0) continue;
+      await this.linkedSince(before);
+      if (!going()) return;
+      this.wearingUltra(ultra, () =>
+        this.staged(gained, () => {
+          this.renderer.setRenderTarget(hdr);
+          this.renderer.render(this.scene, this.camera);
+        }),
+      );
+      this.renderer.setRenderTarget(null);
+      await this.framesPass(ULTRA_STEP_FRAMES);
+    }
+  }
+
+  /** Compile `objects` from `from` on for `target` until the renderer holds `programs` programs; the index it stopped at. */
+  private compileInto(target: THREE.WebGLRenderTarget, objects: readonly THREE.Object3D[], from: number, programs: number): number {
+    const r = this.renderer;
+    const prev = r.getRenderTarget();
+    r.setRenderTarget(target);
+    let i = from;
+    while (i < objects.length && (r.info.programs ?? []).length < programs) r.compile(objects[i++]!, this.camera, this.scene);
+    r.setRenderTarget(prev);
+    return i;
+  }
+
+  /** `fn` run wearing `ultra` and the car finish its tier draws, both put back before the next frame draws. */
+  private wearingUltra<T>(ultra: Ultra, fn: () => T): T {
+    const finished = finishedMaterials(this.scene);
+    ultra.wear(true);
+    applyCarFinish(this.scene, finishForTier("ultra"));
+    try {
+      return fn();
+    } finally {
+      applyCarFinish(this.scene, finished);
+      ultra.wear(false);
+    }
+  }
+
+  /** Resolves once the loop has drawn `frames` more frames; at once where no loop draws them. */
+  private async framesPass(frames: number): Promise<void> {
+    const until = this.framesDrawn + frames;
+    while (this.loopDraws && !this.disposed && this.framesDrawn < until) await sleep(LINK_POLL_MS);
   }
 }

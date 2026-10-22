@@ -45,6 +45,8 @@ export abstract class EngineInput extends EngineRigs {
   protected abstract tickInner(now: number): void;
   /** The last FX pick is Ultra (a pick of another tier, or Auto, while it loads cancels the switch). */
   private ultraWanted = false;
+  /** Counts the picks of Ultra: a warm-up and its switch belong to the pick that started them, not to an earlier one still stepping. */
+  private ultraPicks = 0;
   private ultraLoad: Promise<boolean> | null = null;
   private readonly pickAt = new THREE.Vector3();
 
@@ -132,11 +134,11 @@ export abstract class EngineInput extends EngineRigs {
 
   /**
    * Cinematic FX quality (`FX_TIERS`): off and minimal draw straight to the canvas; minimal adds tyre marks and the crash cam, low / high / ultra the
-   * post chain. The user's pick turns the auto tier off. Ultra is fetched on its first pick (`loadUltra`) and the tier changes when it is in.
+   * post chain. The user's pick turns the auto tier off. A pick of Ultra switches once it is loaded and warmed (`pickUltra`), a few frames later.
    */
   setFxTier(tier: FxTier): void {
     this.ultraWanted = tier === "ultra";
-    if (tier === "ultra" && this.cine.ultra === null) {
+    if (tier === "ultra" && this.cine.tier !== "ultra") {
       void this.pickUltra();
       return;
     }
@@ -193,13 +195,20 @@ export abstract class EngineInput extends EngineRigs {
     return this.ultraLoad;
   }
 
-  /** A pick of Ultra: load it, then switch if it is still the player's last pick. */
+  /**
+   * A pick of Ultra: load it (its first pick), link and draw its programs while the frames draw the current look (`warmUltra`: the scene
+   * may hold content Ultra never wore since its last pick), then switch if it is still the player's last pick and still the loaded look.
+   */
   private async pickUltra(): Promise<void> {
+    const pick = ++this.ultraPicks;
+    const current = (): boolean => this.ultraWanted && this.ultraPicks === pick;
     this.fxLoading = true;
     this.emitHud();
-    const loaded = await this.loadUltra();
-    this.fxLoading = false;
-    if (loaded && this.ultraWanted) {
+    await this.loadUltra();
+    const ultra = this.cine.ultra;
+    if (current() && ultra !== null) await this.warmUltra(ultra, current);
+    if (this.ultraPicks === pick) this.fxLoading = false;
+    if (current() && ultra !== null && this.cine.ultra === ultra && this.cine.tier !== "ultra") {
       this.autoFx.auto = false;
       this.cine.setTier("ultra");
     }

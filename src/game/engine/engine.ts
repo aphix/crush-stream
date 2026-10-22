@@ -414,6 +414,7 @@ export class CrashEngine extends EngineGarage {
    */
   start(): void {
     this.last = performance.now();
+    this.loopDraws = true;
     this.renderer.setAnimationLoop(this.tick);
   }
 
@@ -654,6 +655,7 @@ export class CrashEngine extends EngineGarage {
     if (!this.skipDraw) {
       this.scene.sync(this.warmsInFlight === 0);
       this.cine.render(this.scene, this.camera, wallDt, this.markFocus());
+      this.framesDrawn++;
     }
     this.renderMs = performance.now() - drawAt;
     this.blend.restore();
