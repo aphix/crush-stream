@@ -168,13 +168,16 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const n = rings[0]!.length;
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
-  // How far each drawn slice has dropped into the bay's trough or a lid's lined boot: their walls and floors are unpainted inner panel.
-  // How far it has dropped into the cabin's tub: its floor is dark cabin trim, as the glass shows it (the walls keep one vertex with the
-  // belt, so they shade from it to the trim; the door cards cover them).
+  // How far each drawn slice has dropped into the bay's trough: its walls and floor are unpainted inner panel. Into a lid's lined boot: its
+  // walls and floor are the cabin's dark trim, the boot's carpet as the references' popped lids show it. Into the cabin's tub: its floor
+  // is dark cabin trim, as the glass shows it (the tub's walls keep one vertex with the belt, so they shade from it to the trim; the door
+  // cards cover them).
   const cut = bootCut(style);
-  const inner = source === "drawn" ? zs.map((z) => Math.max(bayAt(z, style), cut.lined ? bootCutAt(z, cut).open : 0)) : [];
-  const cabin = source === "drawn" ? zs.map((z, s) => (inner[s]! > 0 ? 0 : cabinAt(z, style))) : [];
-  const wallTops = source === "drawn" ? splitWallTops(body, n, inner) : [];
+  const bay = source === "drawn" ? zs.map((z) => bayAt(z, style)) : [];
+  const boot = source === "drawn" ? zs.map((z) => (cut.lined ? bootCutAt(z, cut).open : 0)) : [];
+  const trim = bay.map((b, s) => (b > 0 ? 0 : boot[s]! > 0 ? boot[s]! : cabinAt(zs[s]!, style)));
+  const tone = (s: number): number => (trim[s]! > 0 ? CABIN_TRIM * trim[s]! : INNER_PANEL * bay[s]!);
+  const wallTops = source === "drawn" ? splitWallTops(body, n, bay.map((b, s) => Math.max(b, boot[s]!))) : [];
   const roof = makeRoofGeometry(style, source);
   const parts: THREE.BufferGeometry[] = [body, roof];
   parts.push(...makeWellLiners(style, source));
@@ -212,7 +215,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   for (const g of parts) {
     const count = g.getAttribute("position").count;
     if (g.userData.blackout === true) primer.fill(BLACKOUT, start, start + count);
-    if (g.userData.cabinTrim === true) primer.fill(CABIN_TRIM, start, start + count);
+    if (g.userData.cabinTrim === true && source === "drawn") primer.fill(CABIN_TRIM, start, start + count);
     start += count;
   }
   if (lips) primer.set(lips.userData.tone as Float32Array, lipFrom);
@@ -228,15 +231,15 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const roofFrom = body.getAttribute("position").count;
   const roofTwins: unknown = roof.userData.shellTwins;
   const twins = roofTwins instanceof Int32Array ? roofTwins.map((v) => v + roofFrom) : new Int32Array(0);
-  // The headliner (the roof's inner face) is the cabin's dark trim.
-  for (let k = 0; k < twins.length; k += 2) primer[twins[k]!] = CABIN_TRIM;
+  // The drawn headliner (the roof's inner face) is the cabin's dark trim; the cage build is all paint.
+  if (source === "drawn") for (let k = 0; k < twins.length; k += 2) primer[twins[k]!] = CABIN_TRIM;
   merged.userData.shellTwins = twins;
   if (fittings) primer.fill(BLACKOUT, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
   if (source === "drawn") {
     // The trough's, the boot's and the cabin's floor corner on each side (ring points 0 and n - 1), and the trough's and boot's walls'
     // own copies of their tops.
-    for (let s = 0; s < zs.length; s++) for (const i of [0, n - 1]) primer[s * n + i] = cabin[s]! > 0 ? CABIN_TRIM * cabin[s]! : INNER_PANEL * inner[s]!;
-    for (const [copy, s] of wallTops) primer[copy] = INNER_PANEL * inner[s]!;
+    for (let s = 0; s < zs.length; s++) for (const i of [0, n - 1]) primer[s * n + i] = tone(s);
+    for (const [copy, s] of wallTops) primer[copy] = tone(s);
     if (style.blackout?.cowl === true) {
       const [foot, hoodRear] = [style.windshield.base[1], style.hood.z0];
       for (let s = 0; s < zs.length; s++) if (zs[s]! >= Math.min(foot, hoodRear) - COWL_LAP && zs[s]! <= Math.max(foot, hoodRear) + COWL_LAP) for (const i of [0, n - 1]) primer[s * n + i] = BLACKOUT;
