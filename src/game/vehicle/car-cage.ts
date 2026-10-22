@@ -120,6 +120,8 @@ export interface CageSource {
   readonly lattice: { readonly x: number; readonly z: number };
   /** The body's bed wheel tubs (`BodyStyle.wheelTub`): `count` vertices of `rest` from `from`, kept out of the decimation and whole past the hull. */
   readonly tubs: { readonly from: number; readonly count: number };
+  /** The body loft's vertices: the first `loft` of `rest`, one ring a station (the underside the decimation holds where it rises). */
+  readonly loft: number;
 }
 
 /** What a fit reads of the car now: a `SkinDynamic`, less its lattice coefficients (the cage is the shape-mode skin). */
@@ -680,7 +682,7 @@ function sillOffHull(src: CageSource, hull: Int32Array): Int32Array {
  */
 function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array } {
   const { from, count } = src.tubs;
-  if (count === 0) return decimate(src.rest, src.index, src.group, CAGE_VERTICES);
+  if (count === 0) return decimate(src.rest, src.index, src.group, CAGE_VERTICES, src.loft);
   const to = from + count;
   const rest = new Float32Array(src.rest.length - count * 3);
   rest.set(src.rest.subarray(0, from * 3));
@@ -695,7 +697,7 @@ function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGr
     if (tri.every((v) => v >= from && v < to)) tubTris.push(...tri);
     else index.push(...tri.map((v) => (v < from ? v : v - count)));
   }
-  const hull = decimate(rest, index, group, CAGE_VERTICES);
+  const hull = decimate(rest, index, group, CAGE_VERTICES, Math.min(src.loft, from));
   const source = Array.from(hull.source, (v) => (v < from ? v : v + count));
   const slots = new Map<string, number>();
   const slotOf = new Int32Array(count);

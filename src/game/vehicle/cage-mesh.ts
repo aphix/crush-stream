@@ -30,12 +30,46 @@ const MIN_COS = 0.2;
 const BOUNDARY_WEIGHT = 100;
 
 /**
+ * Marks in `held` the loft's underside points a body resting on flat ground can stand on: on either side of the mirror plane, each
+ * station's (one rest z) lowest ring point, of those the ones on the lower convex hull of the side profile (z, y). A point over the
+ * chord between two others is never the lowest at any pitch; one on the hull is at some, and the cage carries the ground on its
+ * vertices alone. Without them the quadric collapsed a nose lip's low points onto the rocker corner above them, and a wreck down on its
+ * nose rested on that corner: the sedan's drawn lip at the front-left stood 3 cm in the ground (hatchback 4.4 cm, the SUV 2.8). The
+ * loft is the first `lofted` of the mesh's vertices (`reps` their mesh ids). Of equal heights at a station the outermost.
+ */
+function holdUnderside(px: Float64Array, py: Float64Array, pz: Float64Array, reps: readonly number[], lofted: number, held: Uint8Array): void {
+  const lowest = new Map<string, number>();
+  for (let v = 0; v < px.length; v++) {
+    if (reps[v]! >= lofted || Math.abs(px[v]!) < 1e-4) continue;
+    const key = `${Math.round(pz[v]! * 1e4)}:${Math.sign(px[v]!)}`;
+    const at = lowest.get(key);
+    if (at === undefined || py[v]! < py[at]! || (py[v]! === py[at]! && Math.abs(px[v]!) > Math.abs(px[at]!))) lowest.set(key, v);
+  }
+  for (const side of [-1, 1]) {
+    const run = [...lowest.values()].filter((v) => Math.sign(px[v]!) === side).sort((a, b) => pz[a]! - pz[b]!);
+    // Monotone chain: a point that leaves no left turn from the two before it is over their chord.
+    const hull: number[] = [];
+    for (const c of run) {
+      while (hull.length >= 2) {
+        const a = hull[hull.length - 2]!;
+        const b = hull[hull.length - 1]!;
+        if ((pz[b]! - pz[a]!) * (py[c]! - py[a]!) - (py[b]! - py[a]!) * (pz[c]! - pz[a]!) > 0) break;
+        hull.pop();
+      }
+      hull.push(c);
+    }
+    for (const v of hull) held[v] = 1;
+  }
+}
+
+/**
  * The drawn mesh's vertices that stay and the triangles between them: edge-collapse decimation by quadric error (Garland
  * and Heckbert 1997), each collapse moving one end onto the other (never to a new place), so every cage vertex is a
  * vertex of the drawn mesh and takes that vertex's skin weights as they are. Vertices at one rest position are one
- * (the mesh splits them for its normals). Build-time only: allocates freely, runs once per style.
+ * (the mesh splits them for its normals). `lofted`: the body loft's vertices, the first of the mesh, whose underside a body rests on
+ * is held (`holdUnderside`). Build-time only: allocates freely, runs once per style.
  */
-export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Uint8Array, target: number): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array } {
+export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Uint8Array, target: number, lofted = 0): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array } {
   const meshVertices = rest.length / 3;
   // Weld by rest position, within one mesh (a panel's vertex at the body's is not the body's).
   const weld = new Int32Array(meshVertices);
@@ -163,6 +197,7 @@ export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Ui
     if (group[reps[v]!] !== 0) continue;
     if (pz[v]! > zFront - 1e-4 || (pz[v]! < zBack + 1e-4 && py[v]! < (tailLow + tailHigh) / 2)) noseCap[v] = 1;
   }
+  holdUnderside(px, py, pz, reps, lofted, noseCap);
 
   const tmp = new Float64Array(QUADRIC);
   /** Cost of moving `from` onto `to`: the merged quadric at `to`'s place; Infinity when a neighbouring triangle would fold over. */
