@@ -684,7 +684,7 @@ const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; l
   coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 264 },
   pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 264 },
   police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 264 },
-  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 264 },
+  monster: { lips: 312, humps: 94, liners: 214, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 264 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and the A-post's stations then. */
 const CHAMFERED_POST_RING = 11;
