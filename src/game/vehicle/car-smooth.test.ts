@@ -657,7 +657,7 @@ describe("given every body style's drawn hood over its open engine bay", () => {
 
 /** Of each side's greenhouse parts the B pillar and the rail are the near-rectangular ones (the A and C pillars lean in plan, so their section is a sheared parallelogram). */
 const roundedPartCases = [
-  { name: "B pillar", pick: (parts: THREE.BufferGeometry[]) => parts[1]! },
+  { name: "B pillar", pick: (parts: THREE.BufferGeometry[]) => parts.find((g) => g.name === "b")! },
   { name: "side rail", pick: (parts: THREE.BufferGeometry[]) => parts.find((g) => g.name === "beltRail")! },
 ] as const;
 
@@ -756,7 +756,7 @@ const SAIL_LEAN_DEGREES = 10;
 /** A flat sail eases into the roof end's roll over this run (m) behind the roof's rear end, its face's shape off its chord changing at most this many m per m of length on the way: the haunch-to-roll line a jump of 4.8 cm over 7 cm made. */
 const SAIL_ROLL_BLEND_TEST = 0.45;
 const SAIL_SHAPE_RATE = 0.25;
-/** A flat sail's outer face folds at most this much (°) across its roof end's section: the coupe's head jumping back out ahead of it folded 54°, a hard line. */
+/** A flat sail's outer face folds at most this much (°) across any of its sections: the coupe's head jumping back out ahead of its roof end folded 54°, and a sweep station 7 cm behind the roof end, where the head turns in round the glass's corner, 40°: hard lines. */
 const SAIL_END_FOLD_DEGREES = 25;
 /** Sections read along the haunch, behind the run where the sail's foot sweeps in onto the side window's line: at least this many (its rear end and the sweep's start). */
 const SAIL_HAUNCH_SECTIONS = 2;
@@ -874,7 +874,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       assert.ok(profiles.length >= 3, `${id}: ${profiles.length} sections up to the roof's rear end`);
       assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
     });
-    it(`when a ${id}'s flat sail is read across its roof end's section, then its outer face folds at most ${SAIL_END_FOLD_DEGREES}° there between the strips behind and ahead (no hard line from the roof's rear corner down to the quarter)`, () => {
+    it(`when a ${id}'s flat sail is read across each of its sections, then its outer face folds at most ${SAIL_END_FOLD_DEGREES}° there between the strips behind and ahead (no hard line from the roof's rear corner down to the quarter)`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const { ring, slices } = loftOf(sail);
       const end = Array.from({ length: slices }, (_, s) => s).find((s) => positionAt(sail, s * ring).z < style.roofZ[0] && positionAt(sail, s * ring).z >= style.roofZ[0] - SAIL_ROOF_GAP);
@@ -884,8 +884,11 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         return b.clone().sub(a).cross(c.clone().sub(a)).add(d.clone().sub(b).cross(c.clone().sub(b))).normalize();
       };
       assert.ok(end !== undefined && end > 0 && end < slices - 1, `${id}: no section inside the sail at the roof's rear end`);
-      const folds = Array.from({ length: SAIL_OUTER_POINTS - 1 }, (_, k) => THREE.MathUtils.radToDeg(normal(end - 1, k).angleTo(normal(end, k))));
-      assert.ok(Math.max(...folds) <= SAIL_END_FOLD_DEGREES, `${id}: the outer face folds ${folds.map((f) => f.toFixed(1)).join(", ")}° across the roof end's section`);
+      const off = Array.from({ length: slices - 2 }, (_, i) => i + 1).flatMap((s) => {
+        const folds = Array.from({ length: SAIL_OUTER_POINTS - 1 }, (_, k) => THREE.MathUtils.radToDeg(normal(s - 1, k).angleTo(normal(s, k))));
+        return Math.max(...folds) > SAIL_END_FOLD_DEGREES ? [`z ${at(s, 0).z.toFixed(3)}: ${folds.map((f) => f.toFixed(1)).join(", ")}°`] : [];
+      });
+      assert.ok(off.length === 0, `${id}: the outer face folds across ${off.join("; ")}`);
     });
   }
 });
@@ -1092,17 +1095,17 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
 
 /**
  * Each style's drawn wheel-well parts (lips, humps, liner sides), its boot cut's loft rings, its nose's own rings (`noseRefined`, the
- * roll's third chord), its split gaps' rings and their wall tops (`ringSplit`), its tub walls' own top vertices and its curved posts' section points past the
- * chamfered box's as built, merged into the body on top of its loft: red if one grows.
+ * roll's third chord), its split gaps' rings and their wall tops (`ringSplit`), its tub walls' own top vertices, its door cut's end rings'
+ * ramp copies (`door.shutCrease`) and its curved posts' section points past the chamfered box's as built, merged into the body on top of its loft: red if one grows.
  */
-const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; splitRings: number; wallTops: number; curvedPosts: number }> = {
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, splitRings: 46, wallTops: 50, curvedPosts: 378 },
-  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 18, curvedPosts: 258 },
-  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, splitRings: 0, wallTops: 30, curvedPosts: 258 },
-  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 46, curvedPosts: 416 },
-  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, splitRings: 0, wallTops: 16, curvedPosts: 226 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, splitRings: 46, wallTops: 50, curvedPosts: 378 },
-  monster: { lips: 312, humps: 94, liners: 214, bootRings: 42, noseRings: 42, splitRings: 0, wallTops: 26, curvedPosts: 226 },
+const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; splitRings: number; wallTops: number; shutCopies: number; curvedPosts: number }> = {
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, splitRings: 46, wallTops: 50, shutCopies: 0, curvedPosts: 378 },
+  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 18, shutCopies: 0, curvedPosts: 258 },
+  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, splitRings: 0, wallTops: 30, shutCopies: 0, curvedPosts: 258 },
+  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 46, shutCopies: 32, curvedPosts: 416 },
+  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, splitRings: 0, wallTops: 16, shutCopies: 0, curvedPosts: 226 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, splitRings: 46, wallTops: 50, shutCopies: 0, curvedPosts: 378 },
+  monster: { lips: 312, humps: 94, liners: 214, bootRings: 42, noseRings: 42, splitRings: 0, wallTops: 26, shutCopies: 0, curvedPosts: 226 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and their stations then (the A-post's, every other post's). */
 const CHAMFERED_POST_RING = 11;
@@ -1114,7 +1117,7 @@ const CHAMFERED_POST_STATIONS = 2;
  * liners (`makeWellLiners`: their insides and end caps), the rings its boot cut and its nose add to the loft, its walls' top copies, and
  * its posts' vertices past the chamfered posts' (`CHAMFERED_POST_RING` a station on `CHAMFERED_A_POST_STATIONS` or `CHAMFERED_POST_STATIONS`).
  */
-function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; splitRings: number; wallTops: number; curvedPosts: number } {
+function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; splitRings: number; wallTops: number; shutCopies: number; curvedPosts: number } {
   const body = makeChassisGeometry(style);
   const unsplit = makeChassisGeometry({ ...style, ringSplit: undefined });
   const rings = (bootOpen: boolean, noseFill: boolean) => sliceZs(style, "drawn", bootOpen, noseFill).length;
@@ -1128,6 +1131,7 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; li
     noseRings: (rings(true, true) - rings(true, false)) * loftOf(body).ring,
     splitRings: body.getAttribute("position").count - unsplit.getAttribute("position").count,
     wallTops: unsplit.userData.wallTops as number,
+    shutCopies: body.userData.shutCopies as number,
     curvedPosts: posts.reduce((n, g) => n + loftOf(g).ring * loftOf(g).slices - CHAMFERED_POST_RING * (g.name === "a" ? CHAMFERED_A_POST_STATIONS : CHAMFERED_POST_STATIONS), 0),
   };
 }
@@ -1148,7 +1152,7 @@ describe("given every body style's car built whole", () => {
       assert.ok(triangles <= testCase.triangles * TRIANGLE_BUDGET, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`);
       const fittings = roofFittingVertices(car.style);
       const wells = wellAndCutVertices(car.style);
-      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.liners - wells.bootRings - wells.noseRings - wells.splitRings - wells.wallTops - wells.curvedPosts;
+      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.liners - wells.bootRings - wells.noseRings - wells.splitRings - wells.wallTops - wells.shutCopies - wells.curvedPosts;
       assert.ok(loft <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
       assertRoofFittingCaps(testCase.id, fittings.byKind);
       const cap = WELL_AND_CUT_VERTICES[testCase.id];
