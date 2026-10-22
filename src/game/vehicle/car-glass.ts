@@ -476,10 +476,10 @@ function ridesDoor(strip: ChromeStrip, style: BodyStyle): boolean {
   return strip.points.every(([z]) => z >= zRear && z <= zFront);
 }
 
-/** The door skin's outer half-width (m) at car-local `z` and height `y`: the body side line `makeDoorGeometry` follows, `DOOR_PROUD` over it. */
+/** The door skin's outer half-width (m) at car-local `z` and height `y`: the body side line `makeDoorGeometry` follows, the style's door `proud` (`DOOR_PROUD` default) over it. */
 function doorSkinX(z: number, y: number, style: BodyStyle): number {
   const slice = sampleSlice(z, style.profile);
-  return sideX(y, slice.hw, slice.yBelt, rockerAt(z, style)) + DOOR_PROUD;
+  return sideX(y, slice.hw, slice.yBelt, rockerAt(z, style)) + (style.door.proud ?? DOOR_PROUD);
 }
 
 /** The drawn body's half-width (m) at car-local `z` and height `y`: its section ring's right side read up from the rocker, held at the rocker's below it and the deck crown's above. */
