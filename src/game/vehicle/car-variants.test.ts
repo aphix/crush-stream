@@ -16,7 +16,7 @@ import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, glassCorners, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { makeWellLiners } from "./car-well-mesh.ts";
-import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, bumperMaterial, makeLightBar, trimMaterial } from "./car-materials.ts";
+import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, trimMaterial } from "./car-materials.ts";
 import { BOX_HALVES, boxShape, newLooseShape, partMass, stepLoose } from "./loose-step.ts";
 import { armSolids, Surface } from "../world/surfaces.ts";
 import { wearCarLook } from "../present/car-look.ts";
@@ -28,7 +28,7 @@ import { PLATFORM_RIG } from "../deform/deform-rig.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { LampBatch } from "./lamp-lights.ts";
 import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
-import { FITTING_ATTRIBUTE, FITTING_TONE, LIGHT_BAR, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { BLACKOUT, FITTING_ATTRIBUTE, FITTING_TONE, LIGHT_BAR, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { bootPivot, lidSpec, roofHinged } from "./hinge-spec.ts";
 import { SPRINGS } from "./car-suspension.ts";
 import { CarCage } from "./car-cage.ts";
@@ -649,13 +649,20 @@ describe("given a body style's H2 hardpoints", () => {
         const proud = -Math.min(...side);
         // The post's front stands 4 mm off the glass; the old slab stood 1-2 cm over it.
         assert.ok(proud < 0.006, `${id} aPillarTop ${aPillarTopZ(style)}: the post stands ${proud} m proud of the windshield's edge line`);
-        // Side-view width across the windshield's edge, ring by ring along the post (its stations, belt to top).
+        // Side-view width across the windshield's edge, ring by ring along the post (its stations, belt to top); a station reaching up past
+        // the cant line into the roof's side is held in under the roof's skin (checked below), so it is buried, not read.
         const { ring, slices } = post!.userData.loft as { ring: number; slices: number };
+        const pos = post!.getAttribute("position") as THREE.BufferAttribute;
+        let read = 0;
         for (let slice = 0; slice < slices; slice++) {
-          const behind = side.slice(slice * ring, (slice + 1) * ring);
+          const ks = Array.from({ length: ring }, (_, k) => slice * ring + k);
+          if (ks.some((i) => pos.getZ(i) >= style.roofZ[0] && pos.getZ(i) <= style.roofZ[1] && pos.getY(i) > cantY(pos.getZ(i), style))) continue;
+          read++;
+          const behind = ks.map((i) => side[i]!);
           const width = Math.max(...behind) - Math.min(...behind);
           assert.ok(width > 0.058, `${id} aPillarTop ${aPillarTopZ(style)}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}`);
         }
+        assert.ok(read >= slices - 2, `${id} aPillarTop ${aPillarTopZ(style)}: ${read} of ${slices} stations show under the roof`);
         // Every drawn greenhouse part (A-post, sail, B, rear, divider, rail, fills) stays in the roof: under its skin, and in under its side over the cant line.
         for (const part of makeGreenhouseFrame(style, "drawn")) {
           const pos = part.getAttribute("position") as THREE.BufferAttribute;
@@ -706,7 +713,7 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(Math.abs(front - (aPostRearZ(knee, kneed) + 0.01)) < 1e-5, `the door glass's front edge at the knee stands at z ${front}, 1 cm under the post's rear edge ${aPostRearZ(knee, kneed)}`);
   });
 
-  it("when a style blacks out greenhouse parts, then exactly their drawn vertices turn primer-dark, and the drawn shape and the cage are unchanged", () => {
+  it("when a style blacks out greenhouse parts, then exactly their drawn vertices turn gloss black, and the drawn shape and the cage are unchanged", () => {
     // The style may black out parts of its own: the row's control is the wagon with none.
     const wagon: BodyStyle = { ...CAR_STYLES.wagon, blackout: undefined };
     const dark: BodyStyle = { ...wagon, blackout: { b: true, divider: true } };
@@ -721,6 +728,7 @@ describe("given a body style's H2 hardpoints", () => {
       turned++;
       const z = now.getAttribute("position").getZ(i);
       assert.ok(onBand(z), `vertex ${i} at z ${z} turned dark: off the B-pillar and divider bands ${JSON.stringify(bands)}`);
+      assert.ok(primer(now).getX(i) === BLACKOUT, `vertex ${i} turned to ${primer(now).getX(i)}: blacked-out pillars are gloss black (BLACKOUT), not bare-steel primer`);
     }
     const pillars = makeGreenhouseFrame(dark, "drawn").filter((g) => g.userData.blackout === true);
     assert.equal(pillars.length, 4, "two B-pillars and two dividers");
@@ -747,7 +755,7 @@ describe("given a body style's H2 hardpoints", () => {
       turned++;
       const z = now.getAttribute("position").getZ(v);
       const onCrown = v < ring * slices && (v % ring === 0 || v % ring === ring - 1);
-      assert.ok(onCrown && z >= from - 1e-6 && z <= to + 1e-6 && primer(now).getX(v) === 1, `vertex ${v} (ring point ${v % ring}) at z ${z} turned to ${primer(now).getX(v)}: off the cowl's crown [${from}, ${to}]`);
+      assert.ok(onCrown && z >= from - 1e-6 && z <= to + 1e-6 && primer(now).getX(v) === BLACKOUT, `vertex ${v} (ring point ${v % ring}) at z ${z} turned to ${primer(now).getX(v)}: off the cowl's crown [${from}, ${to}]`);
     }
     assert.ok(turned >= 4, `the cowl's crown on both sides at two slices at least: ${turned} vertices turned`);
   });
@@ -1075,7 +1083,7 @@ function roofParts(roof: NonNullable<BodyStyle["roof"]>): { style: BodyStyle; bo
   const style: BodyStyle = { ...CAR_STYLES.sedan, roof };
   const body = makeChassisGeometry(style);
   const from = makeChassisGeometry(CAR_STYLES.sedan).getAttribute("position").count;
-  return { style, body, from, all: toneBox(body, null, 0, from), dark: toneBox(body, PRIMER_ATTRIBUTE, 1, from) };
+  return { style, body, from, all: toneBox(body, null, 0, from), dark: toneBox(body, PRIMER_ATTRIBUTE, BLACKOUT, from) };
 }
 
 /** Over the body's vertices from `from` on: the least |x|, and the most any stands over the roof skin at `x` (at its own x when null). */
@@ -1277,12 +1285,15 @@ function mirrorStyle(mirror: MirrorSpec): BodyStyle {
   return { ...sedan, door: { ...sedan.door, mirrorReach: 0.17, mirror } };
 }
 
-/** `style`'s right drawn mirror in the car frame (its seat's x-scale applied): its innermost and outermost x, the box of its painted cap, and its outermost vertex's colour. */
-function readMirror(style: BodyStyle): { inner: number; outer: number; cap: THREE.Box3; tip: THREE.Color } {
+/**
+ * `style`'s right drawn mirror in the car frame (its seat's x-scale applied): its innermost and outermost x, the box of its painted cap,
+ * and its outermost vertex's colour and roughness (`toned` stores roughness in u as (round(r * 100) + 0.5) / 101).
+ */
+function readMirror(style: BodyStyle): { inner: number; outer: number; cap: THREE.Box3; tip: THREE.Color; tipRoughness: number } {
   const scaleX = style.door.mirrorReach / MIRROR_REACH;
   const seat = style.door.hingeX + mirrorSeatX(style);
   const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
-  const [pos, painted, colour] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE), geo.getAttribute("color")];
+  const [pos, painted, colour, tone] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE), geo.getAttribute("color"), geo.getAttribute("uv")];
   const cap = new THREE.Box3();
   let [inner, outer, tip] = [Infinity, -Infinity, 0];
   for (let i = 0; i < pos.count; i++) {
@@ -1291,7 +1302,7 @@ function readMirror(style: BodyStyle): { inner: number; outer: number; cap: THRE
     if (x > outer) [outer, tip] = [x, i];
     if (painted.getX(i) === 1) cap.expandByPoint(new THREE.Vector3(x, pos.getY(i), pos.getZ(i)));
   }
-  return { inner, outer, cap, tip: new THREE.Color(colour.getX(tip), colour.getY(tip), colour.getZ(tip)) };
+  return { inner, outer, cap, tip: new THREE.Color(colour.getX(tip), colour.getY(tip), colour.getZ(tip)), tipRoughness: (tone.getX(tip) * 101 - 0.5) / 100 };
 }
 
 /** A sedan built while its table door carries `mirror` (put back after). */
@@ -1328,11 +1339,12 @@ describe("given a body style's P2 parts", () => {
     assert.ok(cageHash(style) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
   });
 
-  it("when a mirror's finish is black or chrome, then its cap wears that tone and nothing takes paint; when it is body, its cap carries the paint's tone for its door's colour", () => {
+  it("when a mirror's finish is black or chrome, then its cap wears that tone and nothing takes paint, a black one gloss as the references' are; when it is body, its cap carries the paint's tone for its door's colour", () => {
     for (const [finish, hex] of [["black", TRIM_BLACK], ["chrome", TRIM_CHROME]] as const) {
-      const { cap, tip } = readMirror(mirrorStyle({ cap: "box", finish }));
+      const { cap, tip, tipRoughness } = readMirror(mirrorStyle({ cap: "box", finish }));
       assert.ok(cap.isEmpty(), `${finish}: nothing is painted`);
       assert.equal(tip.getHex(), hex, `${finish}: the cap's outer face`);
+      if (finish === "black") assert.ok(tipRoughness <= TRIM_FINISH.gloss.roughness + 0.01, `black: the cap's roughness ${tipRoughness} is gloss (${TRIM_FINISH.gloss.roughness}), not satin plastic`);
     }
     const { cap, tip } = readMirror(mirrorStyle({ cap: "rounded", finish: "body" }));
     assert.ok(!cap.isEmpty() && tip.getHex() === PAINT_COLOR_TONE.getHex(), `body: the cap is painted, its outer face 0x${tip.getHexString()}`);

@@ -303,7 +303,7 @@ process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 /**
  * `--paint`: one colour (hex) for the hash's car, or `<style>=<colour>` pairs; a car whose style fixes its paint (a livery) keeps
  * it. The hinged panels wear their own copies of the body paint, so every material still in the body's colour takes the new one;
- * a body-finish mirror cap is a part-batch tint, set as the garage look sets it (`setMirrorPaint`).
+ * a body-finish mirror cap or grille is a part-batch tint, set as the garage look sets it (`setPartPaint`).
  */
 function paintCars(spec) {
   const pairs = spec.includes("=") ? spec.split(",").map((p) => p.split("=")) : [[hashStyle, spec]];
