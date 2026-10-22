@@ -9,7 +9,8 @@ const WAGON_LAMP_SHAPES = {
   head: {
     loops: [
       { points: [[0.41, 0.685], [0.62, 0.77], [0.66, 0.78], [0.7, 0.797], [0.76, 0.8], [0.76, 0.835], [0.7, 0.832], [0.62, 0.815], [0.55, 0.8], [0.41, 0.805]] },
-      { side: true, points: [[1.92, 0.795], [1.7, 0.828], [1.68, 0.842], [1.8, 0.842], [1.86, 0.83], [1.92, 0.81]] },
+      // Its side run sweeps back and up along the fender to z 1.58, its bright underline on to 1.46 curling up, as the reference's side view.
+      { side: true, points: [[1.92, 0.795], [1.75, 0.82], [1.6, 0.845], [1.575, 0.858], [1.62, 0.864], [1.75, 0.85], [1.86, 0.83], [1.92, 0.81]] },
     ],
     lens: "dark",
     bezel: "black",
@@ -22,6 +23,7 @@ const WAGON_LAMP_SHAPES = {
     strips: [
       { line: { points: [[0.43, 0.705], [0.54, 0.748], [0.54, 0.77], [0.43, 0.73], [0.43, 0.705]] }, width: 0.008, tone: "lit" },
       { line: { points: [[0.55, 0.752], [0.62, 0.78], [0.7, 0.803], [0.745, 0.806], [0.75, 0.828]] }, width: 0.008, tone: "lit" },
+      { line: { side: true, points: [[1.9, 0.8], [1.75, 0.822], [1.6, 0.846], [1.5, 0.852], [1.46, 0.862]] }, width: 0.008, tone: "lit" },
     ],
   },
   tail: {
@@ -52,14 +54,9 @@ const WAGON_LAMP_SHAPES = {
       { line: { points: [[0.006, 0.345], [0.2, 0.345], [0.35, 0.345], [0.5, 0.345], [0.64, 0.345]] }, width: 0.014, tone: "clear" },
     ],
   },
-  // The black diffuser band across the rear bumper's foot from its lip's crest up, its red reflector in it, in three tiles: one long ring
-  // round the bumper's wrap fills with holes.
+  // The red reflector's black housing in the black valance (the valance is the bumper's `band`).
   rear: {
-    loops: [
-      { points: [[0.006, 0.487], [0.2, 0.487], [0.2, 0.54], [0.006, 0.54]] },
-      { points: [[0.2, 0.487], [0.4, 0.487], [0.4, 0.54], [0.2, 0.54]] },
-      { points: [[0.4, 0.487], [0.64, 0.487], [0.64, 0.54], [0.4, 0.54]] },
-    ],
+    loops: [{ points: [[0.475, 0.485], [0.645, 0.485], [0.645, 0.515], [0.475, 0.515]] }],
     lens: "black",
     onBody: true,
     cells: [{ loop: { points: [[0.48, 0.49], [0.64, 0.49], [0.64, 0.51], [0.48, 0.51]] }, tone: "red" }],
@@ -93,7 +90,8 @@ export const WAGON: BodyStyle = {
       seat: { y: 0.54, z: 2.0555 },
       fascia: [[0.1, -0.07], [0.1, 0.02], [0.088, 0.062], [0.05, 0.08], [0.018, 0.074], [-0.012, 0.062], [-0.05, 0.064], [-0.07, 0.088], [-0.1, 0.075], [-0.1, -0.07]],
       span: 0.66,
-      wrap: { from: 0.35, back: 0.25 },
+      // The lip turns the corners on lofted ends and runs back to the arch's foot at an even stand-off.
+      wrap: { from: 0.24, back: 0.41, end: { corner: 0.32, stand: 0.02 } },
       trim: "body",
       top: [[0, 0.62], [0.55, 0.62], [0.62, 0.615]],
       edge: [[-2, 0.615], [-1.85, 0.6], [-1.68, 0.6], [-1.725, 0.45], [-1.735, 0.38]],
@@ -147,9 +145,10 @@ export const WAGON: BodyStyle = {
   ],
   roofZ: [-1.84, 0.3],
   windshieldTop: [1.45, 0.3],
-  rearGlass: { base: [1.1, -2.065], top: [1.47, -1.79], wBase: 1.22, wTop: 0.92 },
-  // The quarter glass runs back to a slim D-post, as the reference's rear iso.
-  quarter: { zRearBot: -1.995, zRearTop: -1.72 },
+  // The rear glass's top as wide as the roof end lets it (its post-top clamp), so the D-post's edges run near parallel.
+  rearGlass: { base: [1.1, -2.065], top: [1.47, -1.79], wBase: 1.22, wTop: 0.96 },
+  // The quarter glass runs back to a slim D-post of even width, as the reference's rear iso.
+  quarter: { zRearBot: -1.99, zRearTop: -1.76 },
   midPillarZ: -1.2,
   rearBulkhead: { z: -1.3, yTop: 1.0 },
   tubs: [[-1.96, 0.7, 0.38]],
@@ -234,7 +233,7 @@ export const WAGON: BodyStyle = {
       // The gate's pressed plate recess under the lettering band; the reference leaves it empty (no plate), its cavity shadowed.
       { view: "rear", points: [[0, 0.77], [0.36, 0.77], [0.39, 0.778], [0.4, 0.8], [0.4, 0.905], [0, 0.905]], depth: -0.006, rim: 0.008, cavity: 0.6 },
       { view: "rear", points: [[0.475, 0.773], [0.525, 0.773], [0.525, 0.788], [0.475, 0.788]], depth: 0.002, rim: 0.004, cavity: 0 },
-      { view: "rear", points: [[0, 0.3], [0.7, 0.3], [0.7, 0.445], [0, 0.445]], depth: -0.004, rim: 0.004, pattern: { kind: "hslats", pitch: 0.03, bar: 0.006, depth: -0.004 }, cavity: 0.85 },
+      { view: "rear", points: [[0, 0.3], [0.7, 0.3], [0.7, 0.465], [0, 0.465]], depth: -0.004, rim: 0.004, pattern: { kind: "hslats", pitch: 0.03, bar: 0.006, depth: -0.004 }, cavity: 0.85 },
       // The black sill cladding between the arches, under the door bottoms' beads.
       { view: "side", points: [[0.76, 0.26], [-0.76, 0.26], [-0.76, 0.345], [0.76, 0.345]], depth: 0, rim: 0.002, cavity: 0.9 },
       ...HANDLES.flatMap((h) => h.patches),
