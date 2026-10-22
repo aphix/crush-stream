@@ -103,6 +103,8 @@ interface HoodBulge {
   cowlRamp?: number;
   /** Its width (m) at the cowl end (z0), narrowing linearly to `width` at z1, for a pod that widens toward the windshield; absent = `width` throughout. */
   cowlWidth?: number;
+  /** A twin pod: a V groove this deep (m), 6 mm wide, down the crest's centre line, in line with a twin scoop's rib; absent none. */
+  groove?: number;
   /** Scoop on the bulge rising from its cowl end to a mouth facing forward at z `z`, `width` across, `height` (m) over the bulge: one opening, or two either side of a centre rib. */
   scoop?: { inlets: 1 | 2; z: number; width: number; height: number };
 }
