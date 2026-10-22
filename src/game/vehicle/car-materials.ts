@@ -798,13 +798,26 @@ function slotShape(r0: number, r1: number, a0: number, a1: number, round: number
     .lineTo(...ia2);
 }
 
-/** Each face a solid dish of radius `r` at `x` (m off centre) in `tone`, with `n` dark slot windows (`slotShape`) 1 mm proud of it: a slotted mag. */
-function slottedDish(n: number, r: number, x: number, tone: readonly [number, number, number], slot: Parameters<typeof slotShape>): THREE.BufferGeometry[] {
+/** `g`'s face normals (±x) bent toward the axle, 0 at the centre to `bend` rad at radius `r`: a flat face that shades as a concave dish. */
+function dished(g: THREE.BufferGeometry, r: number, bend: number): THREE.BufferGeometry {
+  const [p, n] = [g.getAttribute("position"), g.getAttribute("normal")];
+  for (let i = 0; i < p.count; i++) {
+    const rho = Math.sqrt(p.getY(i) ** 2 + p.getZ(i) ** 2);
+    const a = bend * Math.min(rho / r, 1);
+    const k = rho > 0 ? detSin(a) / rho : 0;
+    n.setXYZ(i, Math.sign(n.getX(i)) * detCos(a), -p.getY(i) * k, -p.getZ(i) * k);
+  }
+  return g;
+}
+
+/** Each face a solid dish of radius `r` at `x` (m off centre) in `tone`, with `n` dark slot windows (`slotShape`) 1 mm proud of it: a slotted mag; `bend` (rad) shades it `dished`. */
+function slottedDish(n: number, r: number, x: number, tone: readonly [number, number, number], slot: Parameters<typeof slotShape>, bend = 0): THREE.BufferGeometry[] {
+  const face = (g: THREE.BufferGeometry) => (bend ? dished(g, r, bend) : g);
   const out: THREE.BufferGeometry[] = [];
   for (const side of [1, -1]) {
-    out.push(smeared(flatPart(new THREE.CircleGeometry(r, 16).rotateY((side * Math.PI) / 2).translate(side * x, 0, 0), tone), 1));
+    out.push(smeared(flatPart(face(new THREE.CircleGeometry(r, 16).rotateY((side * Math.PI) / 2).translate(side * x, 0, 0)), tone), 1));
     for (let k = 0; k < n; k++) {
-      const window = new THREE.ShapeGeometry(slotShape(...slot), 2).rotateZ((k * 2 * Math.PI) / n).rotateY((side * Math.PI) / 2).translate(side * (x + 0.001), 0, 0);
+      const window = face(new THREE.ShapeGeometry(slotShape(...slot), 2).rotateZ((k * 2 * Math.PI) / n).rotateY((side * Math.PI) / 2).translate(side * (x + 0.001), 0, 0));
       out.push(smeared(flatPart(window, DARK_DISC), 1));
     }
   }
@@ -835,6 +848,11 @@ function rebeaded(bead: number, crown: number): (readonly [number, number])[] {
   return TYRE_PROFILE.map(([r, x]) => [bead + (r - ROAD_TYRE[0]) * k, x] as const);
 }
 
+/** A design's rim and face slid inboard by this share of their offsets (absent: none), so the tall sidewall stands proud of the lip as the monster reference's wraps its rim. */
+const RIM_INSET: Partial<Record<WheelDesign, number>> = { beadlock: 0.9 };
+/** How far (rad) the beadlock's dish shades toward the axle at its edge: the reference's deep polished bowl. */
+const BEADLOCK_DISH_BEND = 0.5;
+
 function monsterTyre(): THREE.BufferGeometry[] {
   const [bead, base] = MONSTER_TYRE;
   const parts = [smeared(latheX(rebeaded(bead, base), 24, TYRE_TREAD_V, TREAD_REPEATS, RUBBER), 0, [bead, ROAD_TYRE[1]])];
@@ -864,7 +882,7 @@ function rimFace(design: WheelDesign): THREE.BufferGeometry[] {
       return [...slottedDish(6, 0.19, 0.07, ALLOY, [0.09, 0.17, 0.42, 0.62, 0.2]), hub(0.075, DARK_HUB)];
     case "beadlock":
       // The monster's polished deep dish, eight slots 5 cm in under its chrome lip ring.
-      return [...slottedDish(8, 0.19, 0.055, ALLOY, [0.105, 0.168, 0.32, 0.42, 0.25]), ...faceRings(0.17, 0.222, 0.104, CHROME), hub(0.05, HUB)];
+      return [...slottedDish(8, 0.19, 0.055, ALLOY, [0.105, 0.168, 0.32, 0.42, 0.25], BEADLOCK_DISH_BEND), ...faceRings(0.17, 0.222, 0.104, CHROME), hub(0.05, HUB)];
   }
 }
 
@@ -876,7 +894,7 @@ function rimFace(design: WheelDesign): THREE.BufferGeometry[] {
 export function makeWheelGeometry(design: WheelDesign = "five"): THREE.BufferGeometry {
   const rim = [smeared(latheX(RIM_PROFILE, 16, null, 1, ALLOY), 0), ...rimFace(design)];
   const k = RIM_SCALE[design];
-  if (k !== undefined) for (const g of rim) g.scale(1, k, k);
+  if (k !== undefined) for (const g of rim) g.scale(RIM_INSET[design] ?? 1, k, k);
   if (design === "beadlock") return mergeToned([...monsterTyre(), ...rim], "wheel");
   if (k === undefined) return mergeToned([smeared(latheX(TYRE_PROFILE, 24, TYRE_TREAD_V, TREAD_REPEATS, RUBBER), 0, ROAD_TYRE), ...rim], "wheel");
   const bead = ROAD_TYRE[0] * k;

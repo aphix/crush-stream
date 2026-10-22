@@ -2074,6 +2074,23 @@ describe("given a body style's P2 parts", () => {
     assert.ok(cageHash(slim) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
   });
 
+  it("when a mirror sets a neck, then its foot reaches that far under the cap's bottom, where without one it hides behind the cap, and the seat and cage builds are unchanged", () => {
+    const spec = { cap: "rounded", finish: "body", size: [0.07, 0.14, 0.125] } as const;
+    /** The lowest unpainted vertex (the foot) under the painted cap's bottom (m; negative = above it). */
+    const reach = (style: BodyStyle): number => {
+      const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
+      const [pos, painted] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE)];
+      let low = Infinity;
+      for (let i = 0; i < pos.count; i++) if (painted.getX(i) !== 1) low = Math.min(low, pos.getY(i));
+      return readMirror(style).cap.min.y - low;
+    };
+    const necked = mirrorStyle({ ...spec, neck: 0.04 });
+    assert.ok(reach(mirrorStyle(spec)) < 0, `without a neck the foot reaches ${reach(mirrorStyle(spec)).toFixed(4)} m under the cap`);
+    assertSameNumbers([reach(necked)], [0.04], "the neck's reach under the cap", POSITION_TOL);
+    assert.ok(mirrorSeatX(necked) === mirrorSeatX(mirrorStyle(spec)), "the seat is unchanged");
+    assert.ok(cageHash(necked) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
+  });
+
   it("when a mirror is mounted on the door glass, then its foot lies on the drawn pane up its height and nowhere sinks into it, the pane's lean followed, which the same seat on the skin does not", () => {
     /** Every drawn mirror vertex over the drawn pane, as [its gap (m) out from the pane, its height] (car frame). */
     const paneGaps = (style: BodyStyle): [number, number][] => {

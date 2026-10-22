@@ -301,6 +301,20 @@ describe("given a monster truck of its class at rest on flat ground", () => {
     assert.ok(worst <= 0, `a frame vertex at ${at} stands ${(worst * 100).toFixed(1)} cm past the body side`);
   });
 
+  test("when its frame is read in body space, then lower rails run between the wheels at the hubs' height on each side, and its springs are dark steel, as the side reference's", () => {
+    const [pos, col] = [partGeometry(PART_KIND.ladderFrame).getAttribute("position"), partGeometry(PART_KIND.ladderFrame).getAttribute("color")];
+    const LOW = -0.12;
+    const span = [-1, 1].map((side) => {
+      let [lo, hi] = [Infinity, -Infinity];
+      for (let i = 0; i < pos.count; i++) if (pos.getY(i) < LOW && pos.getX(i) * side > 0.3) [lo, hi] = [Math.min(lo, pos.getZ(i)), Math.max(hi, pos.getZ(i))];
+      return `${lo.toFixed(2)}..${hi.toFixed(2)}`;
+    });
+    assert.equal(span.join(" "), "-1.20..1.20 -1.20..1.20", `frame under body y ${LOW} along z, each side`);
+    let bright = 0;
+    for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getX(i)) > 0.6 && pos.getY(i) > 0.3 && pos.getY(i) < 0.6) bright = Math.max(bright, col.getX(i), col.getY(i), col.getZ(i));
+    assert.ok(bright < 0.2, `the springs' brightest channel ${bright.toFixed(3)} (linear)`);
+  });
+
   test("when each drawn well is looked into from the side at its springs' height, then the first well surface stands inboard of the springs, so they show against it", () => {
     /** The springs' band in body space (m): over the bracket boxes, under the top mount. */
     const SPRING = { low: 0.3, high: 0.6, inboard: 0.5, along: 0.25 } as const;

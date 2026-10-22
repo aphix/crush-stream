@@ -240,6 +240,23 @@ describe("given the reference cars' rim designs", () => {
     assert.ok(Math.abs(sedanLip - 0.216 / PLATFORM_TYRE.r) < 1e-6, `sedan lip ${sedanLip.toFixed(4)} of the crown`);
   });
 
+  test("when the monster's beadlock is built, then its whole rim stands inboard of its tyre's bead and its dish shades as a bowl, tilting toward the axle at its edge", () => {
+    const rubber = new THREE.Color(RUBBER[0]).toArray().map(Math.fround);
+    const g = makeWheelGeometry("beadlock");
+    const [pos, col, nrm] = [g.getAttribute("position"), g.getAttribute("color"), g.getAttribute("normal")];
+    let [rimOut, beadR, beadX, dishX, dishTilt] = [0, Infinity, 0, Infinity, 0];
+    for (let i = 0; i < pos.count; i++) {
+      const [x, r] = [Math.abs(pos.getX(i)), Math.hypot(pos.getY(i), pos.getZ(i))];
+      if (col.getX(i) === rubber[0] && col.getY(i) === rubber[1] && col.getZ(i) === rubber[2]) {
+        if (r < beadR - 1e-6) [beadR, beadX] = [r, x];
+      } else [rimOut, dishX] = [Math.max(rimOut, x), Math.min(dishX, x)];
+    }
+    // The dish is the face nearest the hub plane (its windows 1 mm proud of it); the hub's stub ends far outboard of both.
+    for (let i = 0; i < pos.count; i++) if (Math.abs(Math.abs(pos.getX(i)) - dishX) < 0.002) dishTilt = Math.max(dishTilt, Math.acos(Math.min(1, Math.abs(nrm.getX(i)))));
+    assert.ok(rimOut < beadX, `the rim reaches x ${rimOut.toFixed(4)}, the tyre's bead stands at ${beadX.toFixed(4)}`);
+    assert.ok(dishTilt > 0.45, `the dish's normals tilt at most ${dishTilt.toFixed(3)} rad`);
+  });
+
   test("when the coupe's slotted mag is built, then its outward face is solid all round between its windows and its lip, and dark only in five windows inside", () => {
     const dark = outwardFaceDark(makeWheelGeometry("mag5"));
     const round = (r: number) => Array.from({ length: RING_SAMPLES }, (_, k) => dark(r * detCos((2 * Math.PI * k) / RING_SAMPLES), r * detSin((2 * Math.PI * k) / RING_SAMPLES)));
