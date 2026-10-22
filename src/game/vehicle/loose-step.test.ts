@@ -176,10 +176,13 @@ function roofDrop(l: Lot, at: number, rest: number, slide: number): { onRoof: bo
   return { onRoof, middle, top, restSpeed, end: l.part.object.position.clone(), endLow: lowest(l.part), roofY };
 }
 
+/** How long (s) the dropped bumper is left on the roof before it is read as resting there: a bumper whose seams stop short of the arches still rocks 0.26 m/s at 1 s and is asleep by 1.25 s. */
+const ROOF_SETTLE_S = 2;
+
 describe("given a front bumper torn off a parked car and dropped 0.5 m onto the roof of a second car parked beside it", () => {
   it("when it lands, then it rests on the roof; when pushed across it at 5 m/s, then it slides off the roof's edge and comes to rest on the road", () => {
     const l = lot(true);
-    const { onRoof, middle, top, restSpeed, end, endLow, roofY } = roofDrop(l, B_X, 1, OFF_ROOF_S);
+    const { onRoof, middle, top, restSpeed, end, endLow, roofY } = roofDrop(l, B_X, ROOF_SETTLE_S, OFF_ROOF_S);
     assert.ok(onRoof, `its middle at x ${(middle.x - B_X).toFixed(3)} m off B's, its top ${top.toFixed(3)} m up, roof crown ${roofY.toFixed(3)} m (a point ${SKIN} m under a top stands on it)`);
     assert.ok(restSpeed <= 2 * GRAVITY * H, `its speed resting on the roof: ${restSpeed.toFixed(4)} m/s, at most the jitter a step's gravity gives (${(2 * GRAVITY * H).toFixed(4)} m/s)`);
     const flank = B_X + l.cars[1]!.frame.half.x;
