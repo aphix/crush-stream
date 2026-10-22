@@ -2,11 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
+import { beltY } from "./car-lines.ts";
+import { roofAt } from "./car-mesh.ts";
 import { FULL_POOL, LampBatch, LampLights, type LampPool, lampPoolFor, PHONE_POOL } from "./lamp-lights.ts";
 import { drawnLamp } from "./part-variants.ts";
-import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { assignClass, STYLE_CLASS, type VehicleClassId } from "./vehicle-classes.ts";
-import { CLASS_LIFT, INTERIOR_MESH } from "./constants.ts";
+import { CLASS_LIFT, INTERIOR_MESH, LID } from "./constants.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { DT, forModes, paint } from "./test-support.ts";
 
@@ -85,7 +87,7 @@ forModes("given a car whose lamps live on the body and break per corner", (mode)
     const batch = new LampBatch(2);
     batch.sync([car]);
     const shares = (["hood", "boot"] as const).map((k) => car.lampFittings.filter((f) => f.kind === k).length);
-    assert.equal(batch.slots.map((s) => s.reduce((n, m) => n + m.count, 0)).join(), [1, 1, 2, 0, 0, 0, ...shares].join(), "drawn as head lit / head broken / tail lit / tail broken, no brake lamp or marker, the lid shares as the style has them");
+    assert.equal(batch.slots.map((s) => s.reduce((n, m) => n + m.count, 0)).join(), [1, 1, 2, 0, 0, 0, ...shares, 0, 0, 0, 0, 0].join(), "drawn as head lit / head broken / tail running / tail broken, no brake lamp or marker, the lid shares as the style has them, none broken, none braking");
   });
 
   it("when the front-left corner is crushed, then the crushed corner carries its lamp with the skin and the lamp stays seated on it", () => {
@@ -184,6 +186,24 @@ describe("given every body style fitted with its own lamps", () => {
   }
 });
 
+describe("given each style with a high-mount brake lamp", () => {
+  const styles = CAR_STYLE_IDS.filter((s) => CAR_STYLES[s].lamps.brake);
+  it("the control: some style has one", () => assert.ok(styles.length > 0));
+  for (const style of styles) {
+    it(`when a ${style} is built, then its brake lamp sits on the first surface met from behind, the body or the rear glass, not inside the cabin`, () => {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, style);
+      const brake = car.lampFittings.find((f) => f.kind === "brake")!;
+      car.group.updateMatrixWorld(true);
+      const glass = car.glassPanes.find((p) => p.name === "rear")!.mesh;
+      const seat = brake.seat.position;
+      const hit = new THREE.Raycaster(new THREE.Vector3(seat.x, seat.y, -5), new THREE.Vector3(0, 0, 1)).intersectObjects([car.body, glass], false)[0];
+      assert.ok(hit, `${style}: nothing behind its brake lamp`);
+      const name = hit.object === glass ? "the rear glass" : "the body";
+      assert.ok(Math.abs(hit.point.z - seat.z) < 0.01, `${style}: brake lamp at z ${seat.z.toFixed(3)}, ${name} met from behind at z ${hit.point.z.toFixed(3)}`);
+    });
+  }
+});
+
 describe("given a monster-class car, whose lamp seats ride its lift", () => {
   const dressed = (): DeformableCar => {
     const car = new DeformableCar(paint(), new THREE.Scene(), null, "pickup");
@@ -237,6 +257,71 @@ describe("given the lamp batch and one car of each style", () => {
       batch.dispose();
     }
   });
+
+  it("when a car is on its brakes, then its tail lamps and their lid shares draw bright and its high brake lamp lights; off the brakes the tails are dim running lights and the high brake lamp is dark; the tail glows brighten with them", () => {
+    let highs = 0;
+    for (const id of CAR_STYLE_IDS) {
+      const scene = new THREE.Scene();
+      const car = new DeformableCar(paint(), scene, null, id);
+      car.spawnFacing(0, 0, 0, 0);
+      car.group.updateMatrixWorld(true);
+      const batch = new LampBatch(2);
+      const lights = new LampLights(scene, car.lampCount);
+      const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
+      camera.position.copy(car.group.position).addScaledVector(car.forward, -8).setY(1.5);
+      camera.lookAt(car.group.position);
+      const count = (b: number): number => batch.slots[b]!.reduce((n, m) => n + m.count, 0);
+      /** [running, braking] tail draws, [running, braking] boot-lid share draws, [lit, dark] high brake lamp draws, and the tail glows summed. */
+      const read = () => {
+        batch.sync([car]);
+        lights.update([car], camera, null);
+        const c = lights.glow.geometry.getAttribute("color");
+        const glow = car.lamps.reduce((g, l, i) => (l.kind === "tail" ? g + c.getX(i) : g), 0);
+        return { tails: [count(2), count(10)], shares: [count(7), count(11)], high: [count(4), count(12)], glow };
+      };
+      const shares = car.lampFittings.filter((f) => f.kind === "boot").length;
+      const high = car.style.lamps.brake ? 1 : 0;
+      highs += high;
+      const off = read();
+      car.drive.brake = 1;
+      const on = read();
+      assert.deepEqual([off.tails, off.shares, off.high], [[2, 0], [shares, 0], [0, high]], `${id} off the brakes`);
+      assert.deepEqual([on.tails, on.shares, on.high], [[0, 2], [0, shares], [high, 0]], `${id} on the brakes`);
+      assert.ok(off.glow > 0 && on.glow > 2 * off.glow, `${id}: tail glows ${off.glow.toFixed(3)} off the brakes, ${on.glow.toFixed(3)} on them`);
+      batch.dispose();
+    }
+    assert.ok(highs >= 2, `${highs} styles carry a high brake lamp`);
+  });
+
+  it("when a lamp breaks, then its share on the hood or boot lid goes dark with it and the other side's stays lit; when that lid tears off, both its shares go dark; a reset relights them", () => {
+    let lids = 0;
+    for (const id of CAR_STYLE_IDS) {
+      for (const [kind, lid, slot] of [["head", LID.hood, 6], ["tail", LID.trunk, 7]] as const) {
+        const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
+        car.spawn(0, 0, 0);
+        const shares = car.lampFittings.filter((f) => f.kind === (kind === "head" ? "hood" : "boot"));
+        if (shares.length === 0) continue;
+        lids++;
+        const batch = new LampBatch(2);
+        /** The share draws packed [lit, broken]. */
+        const drawn = (): string => {
+          car.group.updateMatrixWorld(true);
+          batch.sync([car]);
+          return [slot, slot + 2].map((b) => batch.slots[b]!.reduce((n, m) => n + m.count, 0)).join();
+        };
+        assert.equal(drawn(), `${shares.length},0`, `${id} ${lid}: every share lit at rest`);
+        car["breakLamp"](car.lamps.find((l) => l.kind === kind && l.side < 0)!);
+        const left = shares.filter((f) => f.share?.lamp.side === -1).length;
+        assert.equal(drawn(), `${shares.length - left},${left}`, `${id} ${lid}: the left lamp broke`);
+        car["detachPart"](car["parts"].find((p) => p.name === lid)!, 0);
+        assert.equal(drawn(), `0,${shares.length}`, `${id} ${lid}: the lid tore off`);
+        car.resetVisual();
+        assert.equal(drawn(), `${shares.length},0`, `${id} ${lid}: reset`);
+        batch.dispose();
+      }
+    }
+    assert.ok(lids >= 4, `${lids} lids carry lamp shares`);
+  });
 });
 
 describe("given the lamp light pool with a followed car far ahead, a nearer car between and a nearest car behind the camera", () => {
@@ -270,6 +355,12 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
       if (s.intensity > 0 && p.distanceTo(s.position) < 1e-6) return true;
     }
     return false;
+  };
+  /** Whether a light reaches `p` at all: within its range and, for a spot, inside its cone. */
+  const reaches = (l: THREE.PointLight | THREE.SpotLight, p: THREE.Vector3): boolean => {
+    const to = p.clone().sub(l.position);
+    if (to.length() >= l.distance) return false;
+    return !(l instanceof THREE.SpotLight) || to.angleTo(l.target.position.clone().sub(l.position)) < l.angle;
   };
 
   it("when the pool updates, then the followed car's headlamps get spots first, then the cars on the middle tile, and every intact lamp glows", () => {
@@ -323,6 +414,30 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     assert.equal(new DeformableCar(paint(), scene).lampCount, 4, "a car without a light bar grew siren slots");
   });
 
+  it("when a police car's sirens flash, then each siren's light reaches the road beside the car on its lens's side and nothing of the cabin under the roof (the seats' tops, the wheel, the headliner's middle)", () => {
+    const { lights, scene, camera, far } = rig();
+    const cop = new DeformableCar(paint(), scene, null, "police");
+    cop.spawnFacing(-3, 8, 0, 0);
+    cop.group.updateMatrixWorld(true);
+    cop.setSirens(true);
+    const style = cop.style;
+    const z = (style.roofZ[0] + style.roofZ[1]) / 2;
+    const [belt, roof] = [beltY(z, style), roofAt(z, style).y];
+    const cabin = [-0.36, 0, 0.36].flatMap((x) => [belt - 0.05, roof - 0.12].map((y) => cop.group.localToWorld(new THREE.Vector3(x, y, z))));
+    const lens = new THREE.Vector3();
+    const out = new THREE.Vector3();
+    for (const now of [0.1, 0.35]) {
+      lights.update([far, cop], camera, far, now);
+      const l = lights.tailSpots.find((p) => p.intensity > 1);
+      assert.ok(l, `t=${now}: no siren lit`);
+      for (let i = 0; i < cop.lampCount; i++) if (cop.lampWorld(i, lens, out) === "red" || cop.lampWorld(i, lens, out) === "blue") break;
+      const road = lens.clone().addScaledVector(out, 1.6).setY(0.05);
+      assert.ok(reaches(l, road), `t=${now}: the siren misses the road beside the car at ${road.toArray().map((e) => e.toFixed(2))}`);
+      const lit = cabin.filter((p) => reaches(l, p));
+      assert.equal(lit.length, 0, `t=${now}: the siren reaches the cabin at ${lit.map((p) => cop.group.worldToLocal(p.clone()).toArray().map((e) => e.toFixed(2)).join()).join("; ")}`);
+    }
+  });
+
   it("when the pool is the phone's, then it holds 2 head spots and 2 tail spots, the followed car's two headlamps take both spots, and every intact lamp still glows", () => {
     const { lights, scene, camera, far, near, behind } = rig(PHONE_POOL);
     lights.update([far, near, behind], camera, far);
@@ -360,12 +475,6 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     lights.update([far, near], camera, far);
     const pos = new THREE.Vector3();
     const dir = new THREE.Vector3();
-    /** Whether a light reaches `p` at all: within its range and, for a spot, inside its cone. */
-    const reaches = (l: THREE.PointLight | THREE.SpotLight, p: THREE.Vector3): boolean => {
-      const to = p.clone().sub(l.position);
-      if (to.length() >= l.distance) return false;
-      return !(l instanceof THREE.SpotLight) || to.angleTo(l.target.position.clone().sub(l.position)) < l.angle;
-    };
     let tails = 0;
     for (let i = 0; i < far.lampCount; i++) {
       if (far.lampWorld(i, pos, dir) !== "tail") continue;
@@ -378,6 +487,33 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
       assert.ok(reaches(l, behind), `tail lamp ${i}'s light misses the road behind it`);
     }
     assert.equal(tails, 2);
+  });
+});
+
+describe("given each style's car alone at night, its lamps' glows seen from 8 m ahead and 8 m behind", () => {
+  it("when the camera stands ahead, then its headlamps glow and its tail lamps' glows are dark (seen through the cabin's glass or past the body, a lens never shows from behind), and from behind the reverse", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const scene = new THREE.Scene();
+      const car = new DeformableCar(paint(), scene, null, id);
+      car.spawnFacing(0, 0, 0, 0);
+      car.group.updateMatrixWorld(true);
+      const lights = new LampLights(scene, car.lampCount);
+      const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
+      /** Each lamp's glow (summed colour) with the camera 8 m along the car's heading times `ahead`, 1.5 m up. */
+      const glows = (ahead: number): number[] => {
+        camera.position.copy(car.group.position).addScaledVector(car.forward, 8 * ahead).setY(1.5);
+        camera.lookAt(car.group.position);
+        lights.update([car], camera, null);
+        const c = lights.glow.geometry.getAttribute("color");
+        return car.lamps.map((_, i) => c.getX(i) + c.getY(i) + c.getZ(i));
+      };
+      const lit = (row: number[], kind: string) => car.lamps.map((l, i) => [l.kind, row[i]!] as const).filter(([k]) => k === kind).map(([, g]) => g);
+      const [front, back] = [glows(1), glows(-1)];
+      assert.ok(lit(front, "head").every((g) => g > 0.5), `${id}: headlamp glows from ahead ${lit(front, "head")}`);
+      assert.deepEqual(lit(front, "tail"), [0, 0], `${id}: tail lamp glows seen from ahead`);
+      assert.ok(lit(back, "tail").every((g) => g > 0.1), `${id}: tail lamp glows from behind ${lit(back, "tail")}`);
+      assert.deepEqual(lit(back, "head"), [0, 0], `${id}: headlamp glows seen from behind`);
+    }
   });
 });
 

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { hypot2, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
-import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
+import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type BumperEnd, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
 import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, tubWall } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
@@ -363,11 +363,11 @@ const DECK_CROWN = { inset: 0.22, rise: DECK_RISE } as const;
  * Lower body ring (left half top→bottom, keel, right half bottom→top; the
  * wrap edge is the deck). Deck crown → deck edge → rounded shoulder → feature
  * line → tuck-under → rocker → sill. Tubs open the deck into a floor with walls;
- * the door cut drops the side to the sill. Greenhouse is never lofted metal.
+ * the door cut drops the side to the sill (unless `doorCut` is off). Greenhouse is never lofted metal.
  */
-function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource): [number, number][] {
+function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorCut = true): [number, number][] {
   const { hw, yBelt: yb, z } = s;
-  const hole = doorAperture(z, style);
+  const hole = doorCut ? doorAperture(z, style) : 0;
   const rockerY = rockerAt(z, style);
   const floor = floorY(z, style);
   const tub = tubAt(z, style, bodyTubs(style, source));
@@ -479,6 +479,27 @@ export function sectionPoints(s: ProfileStation, style: BodyStyle, source: BodyS
   const left = half.map(([x, y]) => ({ x: -x, y }));
   const right = half.map(([x, y]) => ({ x, y })).reverse();
   return [...left, { x: 0, y: floorY(s.z, style) }, ...right];
+}
+
+/** The drawn body side's ring points [x, y] at `z` as if no door were cut there, top down from the shoulder's top to the rocker: the door skin's facets. */
+export function drawnSideRing(z: number, style: BodyStyle): [number, number][] {
+  const s = sampleSlice(z, style.profile);
+  const half = halfRing(s, style, "drawn", false);
+  holdInsideCageHull(half, halfRing(s, style, "cage", false));
+  return half.slice(2, ROCKER + 1);
+}
+
+/** The drawn body side's x at height `y` at `z`, uncut by any door: on `drawnSideRing`'s chords over its span, above and below it `sideX` held at the end point's offset off it. */
+export function drawnSideX(z: number, y: number, style: BodyStyle): number {
+  const ring = drawnSideRing(z, style);
+  for (let i = 1; i < ring.length; i++) {
+    const [[x0, y0], [x1, y1]] = [ring[i - 1]!, ring[i]!];
+    if (y <= y0 && y >= y1 && y0 > y1) return x0 + ((x1 - x0) * (y - y0)) / (y1 - y0);
+  }
+  const { hw, yBelt } = sampleSlice(z, style.profile);
+  const rockerY = rockerAt(z, style);
+  const [ex, ey] = y > ring[0]![1] ? ring[0]! : ring[ring.length - 1]!;
+  return sideX(y, hw, yBelt, rockerY) + ex - sideX(ey, hw, yBelt, rockerY);
 }
 
 export function loftFromRings(rings: Pt[][], zs: number[], u0: number, u1: number, capsOwnRings = true): THREE.BufferGeometry {
@@ -977,11 +998,17 @@ const BUMPER_TUCK = 0.01;
 const BUMPER_WRAP_SHRINK = 0.228;
 /** The fascia top's crown runs out this far (m) past each end of its span. */
 const BUMPER_CROWN_RUN = 0.03;
+/** A lofted bumper end's segments per side: the flat face, the corner (18° each), the near-straight run along the body side; 16 in all, as the plain wrap's. */
+const END_SEGMENTS = { face: 2, corner: 5, run: 1 } as const;
+/** A lofted end's section thins to this share of its corner's tightest radius, so its hidden back never folds through itself. */
+const END_DEPTH_SHARE = 0.9;
 
-/** Bumper fascia: rounded top, intake recess, splitter lip, wrapped corners, the corners held inside `style`'s body side. */
+/** Bumper fascia: rounded top, intake recess, splitter lip, wrapped corners, the corners held inside `style`'s body side (or a lofted `wrap.end`). */
 export function makeBumperGeometry(front: boolean, style: BodyStyle): THREE.BufferGeometry {
   const s = front ? 1 : -1;
-  const { seat, fascia, span, wrap } = front ? style.bumpers.front : style.bumpers.rear;
+  const spec = front ? style.bumpers.front : style.bumpers.rear;
+  if (spec.wrap.end) return makeBumperWithEnds(s, spec, spec.wrap.end, style);
+  const { seat, fascia, span, wrap } = spec;
   const wrapAt = (x: number) => Math.max(0, Math.abs(x) - wrap.from) / (span - wrap.from);
   const stations = 16;
   const rings: Pt[][] = [];
@@ -1007,6 +1034,59 @@ export function makeBumperGeometry(front: boolean, style: BodyStyle): THREE.Buff
     const slice = sampleSlice(s * seat.z + z, style.profile);
     const side = sideX(seat.y + y, slice.hw, slice.yBelt, rockerAt(s * seat.z + z, style)) - BUMPER_TUCK;
     pos.setXYZ(i, Math.sign(x) * Math.min(Math.abs(x), side), y, z);
+  }
+  ensureOutwardNormals(geo);
+  return splitCreases(geo, CREASE_DEGREES.bumper);
+}
+
+/**
+ * Bumper fascia with lofted ends: the face straight to `wrap.from`, a quarter-ellipse corner `end.corner` deep out to `end.stand`
+ * off the body side, then a run along that side to `wrap.back`. The section keeps its outer face and thins its hidden back round the corner.
+ */
+function makeBumperWithEnds(s: number, { seat, fascia, span, wrap }: BodyStyle["bumpers"]["front"], end: BumperEnd, style: BodyStyle): THREE.BufferGeometry {
+  const outMax = Math.max(...fascia.map(([, out]) => out));
+  const depth = outMax - Math.min(...fascia.map(([, out]) => out));
+  // The body side's widest half-width (m) over the fascia's heights, `d` back from the bumper's face.
+  const skinAt = (d: number) => {
+    const z = s * (seat.z + outMax - d);
+    const slice = sampleSlice(z, style.profile);
+    const rocker = rockerAt(z, style);
+    return Math.max(...fascia.map(([y]) => sideX(seat.y + y, slice.hw, slice.yBelt, rocker)));
+  };
+  const [a, b] = [skinAt(end.corner) + end.stand - wrap.from, end.corner];
+  const thin = Math.min(1, (END_DEPTH_SHARE * b * b) / (a * depth));
+  const { face, corner, run } = END_SEGMENTS;
+  const half = face + corner + run;
+  // Per ring from the middle out: the outer face's plan point (x, d back from the face), its outward normal, its section's depth share.
+  const path: { x: number; d: number; nx: number; nd: number; k: number }[] = [];
+  for (let m = 0; m <= half; m++) {
+    if (m <= face) {
+      path.push({ x: (wrap.from * m) / face, d: 0, nx: 0, nd: -1, k: 1 });
+    } else if (m <= face + corner) {
+      const q = ((m - face) / corner) * (Math.PI / 2);
+      const [sin, cos] = [detSin(q), detCos(q)];
+      const len = hypot2(b * sin, a * cos);
+      path.push({ x: wrap.from + a * sin, d: b * (1 - cos), nx: (b * sin) / len, nd: (-a * cos) / len, k: 1 - (1 - thin) * sin * sin });
+    } else {
+      const d = lerp(b, wrap.back, (m - face - corner) / run);
+      path.push({ x: skinAt(d) + end.stand, d, nx: 1, nd: 0, k: thin });
+    }
+  }
+  const rings: Pt[][] = [];
+  const ts: number[] = [];
+  for (let m = -half; m <= half; m++) {
+    const p = path[Math.abs(m)]!;
+    const crown = (1 - Math.min(p.x, span) / (span + BUMPER_CROWN_RUN)) * 0.02;
+    rings.push(fascia.map(([y, out]) => ({ x: y + crown, y: (out - outMax) * p.k })));
+    ts.push(m / half);
+  }
+  const geo = loftFromRings(rings, ts, 0, 1);
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const t = pos.getZ(i);
+    const p = path[Math.round(Math.abs(t) * half)]!;
+    const inset = pos.getY(i);
+    pos.setXYZ(i, Math.sign(t) * (p.x + p.nx * inset), pos.getX(i), s * (outMax - p.d - p.nd * inset));
   }
   ensureOutwardNormals(geo);
   return splitCreases(geo, CREASE_DEGREES.bumper);
