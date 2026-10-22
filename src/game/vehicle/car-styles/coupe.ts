@@ -26,9 +26,9 @@ const COUPE_LAMP_SHAPES = {
     recess: 0.008,
   },
   tail: {
-    // Rear iso: deep red lenses out to the corner in rounded chrome bezels, three segments each, a black centre band between them edged in chrome.
+    // Rear iso: deep red lenses in chrome bezels rounded about a quarter of their height at each corner, three segments each, a black centre band between them edged in chrome.
     loops: [
-      { points: [[0.285, 0.58], [0.575, 0.58], [0.592, 0.587], [0.6, 0.605], [0.6, 0.745], [0.592, 0.763], [0.575, 0.77], [0.285, 0.77], [0.268, 0.763], [0.26, 0.745], [0.26, 0.605], [0.268, 0.587]] },
+      { points: [[0.305, 0.58], [0.555, 0.58], [0.5775, 0.586], [0.594, 0.6025], [0.6, 0.625], [0.6, 0.725], [0.594, 0.7475], [0.5775, 0.764], [0.555, 0.77], [0.305, 0.77], [0.2825, 0.764], [0.266, 0.7475], [0.26, 0.725], [0.26, 0.625], [0.266, 0.6025], [0.2825, 0.586]] },
       { side: true, points: [[-2.045, 0.58], [-2.0, 0.58], [-2.0, 0.77], [-2.045, 0.77]] },
     ],
     lens: "red",
@@ -40,6 +40,9 @@ const COUPE_LAMP_SHAPES = {
       { line: { points: [[0.487, 0.59], [0.487, 0.76]] }, width: 0.004, tone: "dark" },
       { line: { points: [[0, 0.772], [0.26, 0.772]] }, width: 0.006, tone: "chrome" },
       { line: { points: [[0, 0.578], [0.26, 0.578]] }, width: 0.006, tone: "chrome" },
+      // Reference side view: the corner lens in three segments too.
+      { line: { side: true, points: [[-2.045, 0.643], [-2.0, 0.643]] }, width: 0.004, tone: "dark" },
+      { line: { side: true, points: [[-2.045, 0.707], [-2.0, 0.707]] }, width: 0.004, tone: "dark" },
     ],
   },
 } as const;
@@ -73,7 +76,8 @@ export const COUPE: BodyStyle = {
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.012, width: 0.05, band: true } },
-  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.71, width: 0.56, cowlWidth: 0.68, rise: 0.03, round: 0.04, cowlRamp: 0.12, groove: 0.008, scoop: { inlets: 2, z: 1.69, width: 0.48, height: 0.035 } }, groove: [0.004, 0.0016] },
+  /** Reference: the pod's straight front edge (top view) is a face holding two dark intake mouths (isos), no higher than the pod (side view). */
+  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.69, width: 0.595, cowlWidth: 0.7, rise: 0.025, round: 0.025, cowlRamp: 0.12, groove: 0.008, mouth: true }, groove: [0.004, 0.0016] },
   bumpers: {
     // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin.
     front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.3, back: 0.24, end: { corner: 0.15, stand: 0.03 } }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
@@ -117,8 +121,8 @@ export const COUPE: BodyStyle = {
     st(1.957, 0.64, 0.57),
   ],
   roofZ: [-1.04, 0.1],
-  /** Reference rear iso: the roof rolls heavily onto the rear glass's top, no flat cap there. */
-  roofEnds: { rear: 0.13 },
+  /** Reference isos: the roof rolls heavily onto the rear glass's top and softly onto the windshield's, no flat cap at either end. */
+  roofEnds: { rear: 0.13, front: 0.1 },
   windshieldTop: [1.255, 0.12],
   // Round corners: the reference rear iso's four, about a sixth of the 0.53 m slant.
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96, bow: { base: -0.02, top: -0.04 }, round: 0.09 },
@@ -181,6 +185,8 @@ export const COUPE: BodyStyle = {
       { view: "rear", points: [[0, 0.63], [0.035, 0.64], [0.05, 0.66], [0.035, 0.68], [0, 0.69]], depth: 0.0015, rim: 0.002, cavity: 0.1 },
       { view: "rear", points: [[0, 0.3], [0.16, 0.3], [0.16, 0.42], [0, 0.42]], depth: -0.005, rim: 0.004, cavity: 0.6 },
       { view: "front", points: [[0, 0.32], [0.7, 0.32], [0.7, 0.38], [0, 0.38]], depth: 0.003, rim: 0.003, cavity: 0.2 },
+      // The pod's twin intake mouths on its front face, a 2.4 cm body-colour rib between them.
+      { view: "front", points: [[0.012, 0.8], [0.29, 0.8], [0.29, 0.86], [0.012, 0.86]], depth: -0.006, rim: 0.003, cavity: 0.95 },
     ],
   },
   seats: { front: [0.36, 0.44, -0.15], rear: [0.47, -0.6] },

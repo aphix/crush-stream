@@ -195,7 +195,7 @@ const BAY_FLOOR = 0.28;
 export function bayTub(style: BodyStyle): readonly [number, number, number] {
   const rear = Math.max(style.hood.z0, style.windshield.base[1]) + BAY_CLEAR.rear;
   const cabinFront = Math.max(-Infinity, ...style.tubs.map(([, front]) => front).filter((front) => front < rear));
-  return [Math.max(rear, cabinFront + 2 * TUB_EDGE + BAY_CLEAR.cowl), style.hood.z1 - BAY_CLEAR.front, style.bayFloor ?? BAY_FLOOR];
+  return [Math.max(rear, cabinFront + 2 * TUB_EDGE + BAY_CLEAR.cowl), style.bayFront ?? style.hood.z1 - BAY_CLEAR.front, style.bayFloor ?? BAY_FLOOR];
 }
 
 /** The open floors a body build lofts: the style's tubs, and on the drawn body the engine bay under the hood (`bayTub`). */
@@ -403,11 +403,12 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   const side = (y: number): [number, number] => [sideX(y, hw, yb, rockerY) - inset, y];
   const tuckRows = TUCK_ROWS[source];
   const rocker = FLARE_FIRST + tuckRows + 1;
-  // A tub's floor stays flat over wheels whose tyres it clears (the pickup's bed), or that stand outboard of the body (the monster's).
-  const floorClear = tub.t > 0 && wheels.every(([wx, wy]) => Math.abs(wx) > hw || wy + style.dims.wheel.radius < tub.floor);
-  const edge = wellEdge(z, hw, tub.t, floorClear, well, style, source);
   // The deck edge drops into the style's own tubs (cabin, bed), not into the drawn bay: there it stays the fender's top under the hood's edge.
   const deckTub = tubAt(z, style, style.tubs).t;
+  // A tub's floor stays flat over wheels whose tyres it clears (the pickup's bed), or that stand outboard of the body (the monster's);
+  // the drawn bay's floor is the cage's closed deck, so it takes the arch's lift as the cage's sill does.
+  const floorClear = deckTub > 0 && wheels.every(([wx, wy]) => Math.abs(wx) > hw || wy + style.dims.wheel.radius < tub.floor);
+  const edge = wellEdge(z, hw, tub.t, floorClear, well, style, source);
   const [grooveOut, grooveDown] = source === "drawn" && style.hood.groove ? style.hood.groove.map((g) => g * bayAt(z, style)) : [0, 0];
   const fenderIn = source === "drawn" ? hoodInset(z, style.hood) : HOOD_INSET;
   // The ring's half: deck crown and edge, the shoulder, the feature line, the tuck-under, the rocker, then the sill and the floor.
@@ -429,7 +430,10 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
     const wall = lerp(hw - 0.06, Math.min(boot.face?.wall ?? hw, hw - 0.06), cut.face);
     const bottom = lerp(hollow, Math.max(boot.face?.sill ?? 0, hollow), cut.face);
     half[0] = [lerp(half[0]![0], wall, cut.open), lerp(half[0]![1], bottom, cut.open)];
-    half[1] = [lerp(half[1]![0], wall, cut.open), lerp(half[1]![1], yb - 0.006, cut.open)];
+    // The wall's top takes the tub's rim (`tubWall`) as far as the cage's has dropped into the tub.
+    const inner = lerp(hw - 0.06, hw - tubWall(style), deckTub);
+    const rim = lerp(inner, Math.min(boot.face?.wall ?? hw, inner), cut.face);
+    half[1] = [lerp(half[1]![0], rim, cut.open), lerp(half[1]![1], yb - 0.006, cut.open)];
   }
   // The door cut: every point above the rocker drops onto the sill's top, the last tuck row onto its far edge.
   const sill: [number, number][] = [

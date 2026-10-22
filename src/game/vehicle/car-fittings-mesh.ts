@@ -66,9 +66,10 @@ function merged(parts: THREE.BufferGeometry[], what: string): THREE.BufferGeomet
   return geo;
 }
 
-/** Height (car frame, m) of a bulge's top at `z`: its rise eased in at both ends from just under the lid, at the cowl end over `cowlRamp`. */
+/** Height (car frame, m) of a bulge's top at `z`: its rise eased in at both ends from just under the lid, at the cowl end over `cowlRamp`; a `mouth` nose stands at full rise. */
 function bulgeTopY(b: HoodBulge, z: number, style: BodyStyle): number {
-  const ease = Math.min(THREE.MathUtils.smoothstep(z - b.z0, 0, b.cowlRamp ?? BULGE_RAMP), THREE.MathUtils.smoothstep(b.z1 - z, 0, BULGE_RAMP));
+  const nose = b.mouth ? 1 : THREE.MathUtils.smoothstep(b.z1 - z, 0, BULGE_RAMP);
+  const ease = Math.min(THREE.MathUtils.smoothstep(z - b.z0, 0, b.cowlRamp ?? BULGE_RAMP), nose);
   return deckTopY(0, z, style, true) - SINK + (b.rise + SINK) * ease;
 }
 

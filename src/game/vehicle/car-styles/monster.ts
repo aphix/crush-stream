@@ -21,13 +21,13 @@ const MONSTER_BUMPER_FASCIA = [
 /** Monster's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const MONSTER_LAMP_SHAPES = {
   head: {
-    loops: [{ points: [[0.445, 0.605], [0.655, 0.605], [0.655, 0.795], [0.445, 0.795]] }],
+    loops: [{ points: [[0.445, 0.595], [0.655, 0.595], [0.655, 0.785], [0.445, 0.785]] }],
     lens: "lit",
     bezel: "black",
     recess: 0.02,
     cells: [
-      { loop: { points: [[0.665, 0.615], [0.735, 0.615], [0.735, 0.785], [0.665, 0.785]] }, tone: "amber" },
-      { loop: { side: true, points: [[2.08, 0.615], [2.01, 0.615], [2.01, 0.785], [2.08, 0.785]] }, tone: "amber" },
+      { loop: { points: [[0.665, 0.605], [0.735, 0.605], [0.735, 0.775], [0.665, 0.775]] }, tone: "amber" },
+      { loop: { side: true, points: [[2.08, 0.605], [2.01, 0.605], [2.01, 0.775], [2.08, 0.775]] }, tone: "amber" },
     ],
   },
   tail: {
@@ -65,7 +65,7 @@ export const MONSTER: BodyStyle = {
   aPillarTop: 0.41,
   bPillar: { rear: -0.19, front: -0.12 },
   arch: { radius: 0.47, lip: { flare: 0.025, width: 0.045, square: true, inset: 0.04 }, wellWall: 0.56 },
-  hood: { z0: 0.94, z1: 2.08, origin: [0.96, 0.92] },
+  hood: { z0: 0.94, z1: 2.1, origin: [0.96, 0.92], nose: [0.022, 0.02] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.39, z: 2.05 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black" },
     rear: { ...bumpers.rear, seat: { y: 0.44, z: 2.36 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black", hitch: true },
@@ -92,15 +92,15 @@ export const MONSTER: BodyStyle = {
   midPillarZ: null,
   rearBulkhead: { z: -0.79, yTop: 1.03 },
   tubs: [[-0.76, 0.96, 0.5], [-2.26, -0.82, 0.62]],
-  bayFloor: 0.34,
-  wheelTub: { rise: 0.24, length: 0.82, width: 0.25 },
+  bayFloor: 0.36,
+  wheelTub: { rise: 0.21, length: 0.82, width: 0.25 },
   tubWall: 0.04,
   // Its cage's hood tops stand 0.90-1.04 m and its bed rim 1.02 m, its roof from 1.38 m: the cabin starts 8 cm over the highest of them
   // (as the cars' 1 m stands 9 cm over theirs), so its hood's cowl and its bed rim are columns, not roof slabs.
   proxyBelt: 1.12,
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
-  lamps: { head: [0.55, 0.7], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, bulb: "halogen", sideMarkers: [{ at: [0.788, -2.0], size: [0.085, 0.045] }, { at: [0.744, 0.814], size: [0.06, 0.032] }] },
+  lamps: { head: [0.55, 0.69], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, bulb: "halogen", sideMarkers: [{ at: [0.788, -2.0], size: [0.085, 0.045] }, { at: [0.744, 0.814], size: [0.06, 0.032] }] },
   grille: { y: 0.7, size: [0.8, 0.19], kind: "bars", count: 4, finish: "black" },
   underbody: true,
   camera: { hood: [2.08, 1.27], third: { dist: 7.4, height: 3.0, aimUp: 1.7 }, far: { dist: 11.5, height: 4.3, aimUp: 1.9 } },

@@ -842,7 +842,10 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
-  it("when any style's raked panes are built, then each top edge follows the roof's dome across the car (every top-edge vertex stands as far over the roof at its x as the edge's middle does, no vertex of the pane, frit or round corner further), while the corners the thrown dummies fit their slab to stay on the pane's plane through its middle", () => {
+  /** The pickup windshield's top-corner turn (°) from its flat pane: at 3.1° the corner mirrored the garage's key light into a bloom blob in the landing iso; at its quarter dome (0.76°) it does not. */
+  const PICKUP_CORNER_TURN_DEG = 1;
+
+  it("when any style's raked panes are built, then each top edge follows its style's share of the roof's dome across the car (`domeFall`; every top-edge vertex stands as far over the roof at its x as the edge's middle does, less the dome it does not take; no vertex of the pane, frit or round corner further), while the corners the thrown dummies fit their slab to stay on the pane's plane through its middle", () => {
     const off: string[] = [];
     for (const id of CAR_STYLE_IDS) {
       const style = CAR_STYLES[id];
@@ -853,7 +856,8 @@ describe("given a body style's H2 hardpoints", () => {
       ];
       for (const [p, { name, top: [topY, topZ], geo, grid, segX, segY }] of panes.entries()) {
         const middle = topY - roofTopY(0, topZ, style);
-        const overAt = (x: number, y: number) => y - roofTopY(x, topZ, style);
+        const share = style.domeFall ?? 1;
+        const overAt = (x: number, y: number) => y - roofTopY(x, topZ, style) - (1 - share) * (roofTopY(0, topZ, style) - roofTopY(x, topZ, style));
         const pos = geo.getAttribute("position");
         for (let i = 0; i < pos.count; i++) {
           const over = overAt(pos.getX(i), pos.getY(i));
@@ -867,6 +871,21 @@ describe("given a body style's H2 hardpoints", () => {
       }
     }
     assert.ok(off.length === 0, off.join("\n"));
+  });
+
+  it(`when the pickup's windshield is built, then its top corners' normals turn under ${PICKUP_CORNER_TURN_DEG}° from the flat pane's and follow its own faces: at the roof's whole dome they turned 3.1° and mirrored the garage's key light`, () => {
+    const pickup = CAR_STYLES.pickup;
+    const [geo, flat] = [makeWindshield(pickup), makeWindshield({ ...pickup, domeFall: 0 })];
+    const [pos, normal, flatNormal] = [geo.getAttribute("position"), geo.getAttribute("normal"), flat.getAttribute("normal")];
+    const at = (a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, k: number) => new THREE.Vector3().fromBufferAttribute(a, k);
+    const [segX, segY] = [10, 8];
+    for (const [k, across] of [[segY * (segX + 1), 1], [segY * (segX + 1) + segX, -1]] as const) {
+      const turn = THREE.MathUtils.radToDeg(at(normal, k).angleTo(at(flatNormal, k)));
+      assert.ok(turn < PICKUP_CORNER_TURN_DEG, `top corner ${k}: its normal turns ${turn.toFixed(2)}° from the flat pane's`);
+      const face = at(pos, k + across).sub(at(pos, k)).cross(at(pos, k - segX - 1).sub(at(pos, k))).normalize();
+      const off = THREE.MathUtils.radToDeg(Math.min(face.angleTo(at(normal, k)), face.negate().angleTo(at(normal, k))));
+      assert.ok(off < 0.5, `top corner ${k}: its normal ${off.toFixed(2)}° off its own face's`);
+    }
   });
 
   it("when any style's drawn A-post is read, then it stands under 6 mm proud of the windshield's side edge as drawn, which falls with the roof's dome toward its top", () => {
@@ -1580,6 +1599,26 @@ describe("given a body style's P1 parts", () => {
     // Ring 4 is 0.225 m in from the cowl end: past the 0.15 m ramp at full rise, still on the 0.4 m one.
     assert.ok(ring(style, 4).top < plainBulge.rise * 0.6 && Math.abs(ring(plain, 4).top - plainBulge.rise) < 1e-6, `ring 4 stands ${ring(style, 4).top.toFixed(4)} m with the cowl ramp, ${ring(plain, 4).top.toFixed(4)} without`);
     assert.ok(ring(style, 15).top === ring(plain, 15).top, "the nose end eases in as before");
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a hood bulge sets a mouth, then its nose ring stands at full rise where the plain pod's sits on the lid, so its front cap is a face looking forward, and the cage builds are unchanged", () => {
+    const plainBulge = { z0: 0.9, z1: 1.8, width: 0.4, rise: 0.04 } as const;
+    const plain: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge: plainBulge } };
+    const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge: { ...plainBulge, mouth: true } } };
+    /** The most any hood vertex at the bulge's nose end (z1) stands over the lid's centre line. */
+    const noseTop = (s: BodyStyle): number => {
+      const [oy, oz] = s.hood.origin;
+      const pos = withHoodBulge(makeHoodGeometry(s), s).getAttribute("position");
+      let top = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        const [vy, vz] = [pos.getY(i) + oy, pos.getZ(i) + oz];
+        if (Math.abs(vz - plainBulge.z1) < 1e-4) top = Math.max(top, vy - deckTopY(0, vz, s, true));
+      }
+      return top;
+    };
+    assertSameNumbers([noseTop(style)], [plainBulge.rise], "the mouth pod's nose ring over the lid", 1e-6);
+    assert.ok(noseTop(plain) < RAISED_M, `the plain pod's nose stands ${noseTop(plain).toFixed(4)} m over the lid`);
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 

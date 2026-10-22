@@ -105,6 +105,8 @@ interface HoodBulge {
   cowlWidth?: number;
   /** A twin pod: a V groove this deep (m), 6 mm wide, down the crest's centre line, in line with a twin scoop's rib; absent none. */
   groove?: number;
+  /** Its nose end an intake's face: the pod stands at full rise to z1 and ends square, its front cap facing forward for `details` to draw the mouths on, instead of easing into the lid over 0.15. */
+  mouth?: boolean;
   /** Scoop on the bulge rising from its cowl end to a mouth facing forward at z `z`, `width` across, `height` (m) over the bulge: one opening, or two either side of a centre rib. */
   scoop?: { inlets: 1 | 2; z: number; width: number; height: number };
 }
@@ -380,6 +382,10 @@ export interface BodyStyle {
   tubs: readonly (readonly [number, number, number])[];
   /** The engine bay trough's floor (m, car y) under the hood (`bayTub`); absent, 0.28. A lifted body whose floor pan stands over that at the bay (the trucks) sets its pan height, so the trough the paint row and the bay set read is the one drawn. */
   bayFloor?: number;
+  /** The engine bay trough's front end (m, car z, `bayTub`); absent, 8 cm inside the hood's nose edge (`hood.z1`). A hood wrapping a nose on the profile's own nose rings keeps its bay off them. */
+  bayFront?: number;
+  /** How much of the roof's dome a raked pane's top edge falls with (`domeFall`, 0..1), and its posts with it; absent, 1. A flat-roofed cab takes less, so its panes' corners twist less. */
+  domeFall?: number;
   /** A bed's wheel tubs (both builds): over each wheel whose liner stands in a tub floor, a half cylinder `rise` (m) over the floor and `length` along the car, `width` in from the bed's side wall; absent, a drawn-only hump hugs the liner. */
   wheelTub?: { rise: number; length: number; width: number };
   /** A tub's rim width (m): its side wall's top edge stands this far in from the body side (its foot stays 6 cm in); absent, 6 cm. */
