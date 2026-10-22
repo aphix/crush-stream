@@ -124,7 +124,7 @@ export const WAGON: BodyStyle = {
   rearBulkhead: { z: -1.3, yTop: 1.0 },
   tubs: [[-1.96, 0.7, 0.38]],
   rearDoorSeam: -1.23,
-  boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE },
+  boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE, edgeRoll: 0.02 },
   lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES },
   grille: { y: 0.68, z: 2.025, size: [0.78, 0.24], bottom: 0.68, round: 0.03, kind: "hex", finish: "black" },
   seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },
