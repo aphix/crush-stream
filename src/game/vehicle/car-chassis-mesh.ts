@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detSin } from "../kernel/physics-core.js";
-import { INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { INNER_PANEL, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
@@ -173,7 +173,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const wallTops = source === "drawn" ? splitWallTops(body, n, inner) : [];
   const roof = makeRoofGeometry(style, source);
   const parts: THREE.BufferGeometry[] = [body, roof];
-  parts.push(...makeWellLiners(style, source));
+  parts.push(...makeWellLiners(style, source, body));
   parts.push(...makeGreenhouseFrame(style, source));
   parts.push(makeBox(1.2, 0.52, 0.045, 0, 0.6, 0.72));
   const rb = style.rearBulkhead;
@@ -225,25 +225,28 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   merged.userData.shellTwins = twins;
   if (fittings) primer.fill(1, primer.length - fittingCount, primer.length - fittingCount + fittings.dark);
   if (source === "drawn") {
-    // The trough's and the boot's floor corner on each side (ring points 0 and n - 1), and the walls' own copies of their tops.
-    for (let s = 0; s < zs.length; s++) for (const i of [0, n - 1]) primer[s * n + i] = INNER_PANEL * inner[s]!;
+    // The trough's and the boot's floor corner on each side (ring points 0 and n - 1): inner panel, or the well's tone where the arch
+    // of a tyre standing outboard of the body (the monster's) spans the slice, seen through it; and the walls' own copies of their tops.
+    const { wheels } = carFrame(style);
+    const r = style.arch.radius;
+    const archAt = (z: number) => wheels.find(([, , wz]) => Math.abs(z - wz) < r);
+    const openArchAt = (z: number) => wheels.some(([wx, , wz]) => Math.abs(z - wz) < r && Math.abs(wx) > sampleSlice(wz, style.profile).hw);
+    for (let s = 0; s < zs.length; s++) for (const i of [0, n - 1]) primer[s * n + i] = (openArchAt(zs[s]!) ? WELL_PANEL : INNER_PANEL) * inner[s]!;
     for (const [copy, s] of wallTops) primer[copy] = INNER_PANEL * inner[s]!;
     if (style.blackout?.cowl === true) {
       const [foot, hoodRear] = [style.windshield.base[1], style.hood.z0];
       for (let s = 0; s < zs.length; s++) if (zs[s]! >= Math.min(foot, hoodRear) - COWL_LAP && zs[s]! <= Math.max(foot, hoodRear) + COWL_LAP) for (const i of [0, n - 1]) primer[s * n + i] = 1;
     }
-    // Each well's ceiling inside an arch, unpainted like its liner so the lip reads over a dark gap: the sill's two points, and the last
+    // Each well's ceiling inside an arch, toned like its liner so the lip reads over a dark gap: the sill's two points, and the last
     // tuck row and rocker once the tuck row over them sits under the arch's lip (`halfRing` lifts it toward the edge), so no painted side fades into them.
-    const { wheels } = carFrame(style);
-    const r = style.arch.radius;
     for (let s = 0; s < zs.length; s++) {
-      const wheel = wheels.find(([, , wz]) => Math.abs(zs[s]! - wz) < r);
+      const wheel = archAt(zs[s]!);
       if (!wheel) continue;
       const edge = wheel[1] + Math.sqrt(r * r - (zs[s]! - wheel[2]) ** 2);
       const atEdge = rings[s]![ROCKER - 2]!.y <= edge + (style.arch.lip?.width ?? 0);
-      for (let i = atEdge ? ROCKER - 1 : ROCKER + 1; i <= ROCKER + 2; i++) primer[s * n + i] = primer[s * n + n - 1 - i] = INNER_PANEL;
+      for (let i = atEdge ? ROCKER - 1 : ROCKER + 1; i <= ROCKER + 2; i++) primer[s * n + i] = primer[s * n + n - 1 - i] = WELL_PANEL;
     }
-    primer.fill(INNER_PANEL, linerFrom, linerTo);
+    primer.fill(WELL_PANEL, linerFrom, linerTo);
   }
   merged.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(primer, 1));
   return markSkinDynamic(merged);

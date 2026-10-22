@@ -5,10 +5,11 @@ import { floorY } from "./car-lines.ts";
 import { roofAt } from "./car-mesh.ts";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
-import { BUMPER_F, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { BUMPER_F, INNER_PANEL, LID, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeHoodGeometry, TUB_EDGE } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
+import { makeWellLiners } from "./car-well-mesh.ts";
 import { bayTub, cabinGeometry, cageInterior, doorCardGeometry } from "./interior-geometry.ts";
 import { CarCabin, driverSeat } from "./interior.ts";
 import { PartBatch } from "./part-batch.ts";
@@ -199,7 +200,7 @@ describe("given a car whose front bumper is torn off", () => {
 });
 
 describe("given every style's drawn body and hood", () => {
-  test("when their paint is read, then the bay trough's walls and floor, the wheel liners and the hood's underside are unpainted inner panel, and nothing else on the deck is", () => {
+  test("when their paint is read, then the bay trough's walls and floor and the hood's underside are unpainted inner panel, and nothing else on the deck is", () => {
     for (const id of CAR_STYLE_IDS) {
       const style = CAR_STYLES[id];
       const body = makeChassisGeometry(style);
@@ -222,6 +223,34 @@ describe("given every style's drawn body and hood", () => {
       for (let v = 0; v < hood.count; v++) if (hood.getX(v) === INNER_PANEL) under++;
       assert.ok(under > 0 && under < hood.count / 2, `${id}: ${under} of ${hood.count} hood vertices unpainted`);
       assert.equal(makeChassisGeometry(style, "cage").getAttribute(PRIMER_ATTRIBUTE).array.every((p) => p === 0), true, `${id}: the cage build is all paint`);
+    }
+  });
+
+  test("when their paint is read, then every wheel liner vertex and nothing over the wells is toned as the dark well", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const body = makeChassisGeometry(style);
+      const paintOf = body.getAttribute(PRIMER_ATTRIBUTE);
+      const pos = body.getAttribute("position");
+      const linerTop = carFrame(style).wheels[0]![1] + style.arch.radius;
+      const key = (a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, v: number) => `${a.getX(v).toFixed(5)},${a.getY(v).toFixed(5)},${a.getZ(v).toFixed(5)}`;
+      const linerAt = new Set<string>();
+      for (const liner of makeWellLiners(style, "drawn", body)) {
+        const lp = liner.getAttribute("position");
+        for (let v = 0; v < lp.count; v++) linerAt.add(key(lp, v));
+      }
+      let onLiner = 0;
+      let painted = 0;
+      for (let v = 0; v < pos.count; v++) {
+        if (!linerAt.has(key(pos, v))) continue;
+        onLiner++;
+        if (paintOf.getX(v) !== WELL_PANEL) painted++;
+      }
+      let over = 0;
+      for (let v = 0; v < pos.count; v++) if (paintOf.getX(v) === WELL_PANEL && pos.getY(v) > linerTop + 0.1) over++;
+      assert.ok(onLiner > 0, `${id}: no liner vertices found in the body`);
+      assert.equal(painted, 0, `${id}: ${painted} of ${onLiner} liner vertices not toned as the well`);
+      assert.equal(over, 0, `${id}: well-toned vertices over the wells`);
     }
   });
 });
