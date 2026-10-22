@@ -292,9 +292,10 @@ export interface BodyStyle {
   /**
    * Drawn only: over this run (m) in from each end the drawn roof rolls onto that end's glass top in a quarter ellipse, its crown
    * settling to the glass top's height and its whole section dropping where the glass top sits under the dome's edge (`roofDome`);
-   * unset, the roof ends in its full section.
+   * unset, the roof ends in its full section. `flush` (0..1 per end, absent 0): the share of the side lip's reach past the dome's
+   * edge that end tucks in at the end itself, fading out over its run, so a boxy cab's roof corners sit flush over its posts.
    */
-  roofEnds?: { rear?: number; front?: number };
+  roofEnds?: { rear?: number; front?: number; flush?: { rear?: number; front?: number } };
   /** Drawn only: how far (m) the roof's side rolls out past the cant line (the side glass's plane) at its bottom; absent 0.01 (a drip lip the pillars' faces meet flush); 0 rolls the roof flush into the glass, no drip rail. */
   roofDrip?: number;
   /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */

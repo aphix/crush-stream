@@ -94,14 +94,15 @@ export function roofAt(z: number, style: BodyStyle): { y: number; x: number } {
 }
 
 /**
- * The drawn roof's dome at `z` (`roofEnds`): its whole section's drop (m) and its crown's rise over the dome's edge (m). Over an end's
- * run it rolls in a quarter ellipse (level with the roof where the run starts) onto that end's glass top; unset, none and `ROOF_CROWN`.
+ * The drawn roof's dome at `z` (`roofEnds`): its whole section's drop (m), its crown's rise over the dome's edge (m) and the share of its
+ * side lip's reach it keeps (`roofEnds.flush`). Over an end's run it rolls in a quarter ellipse (level with the roof where the run starts)
+ * onto that end's glass top; unset, none, `ROOF_CROWN` and the whole reach.
  */
-export function roofDome(z: number, style: BodyStyle): { drop: number; crown: number } {
+export function roofDome(z: number, style: BodyStyle): { drop: number; crown: number; reach: number } {
   const runs = style.roofEnds;
   const ends = [
-    { run: runs?.rear, z: style.roofZ[0], glassY: style.rearGlass.top[0] },
-    { run: runs?.front, z: style.roofZ[1], glassY: style.windshieldTop[0] },
+    { run: runs?.rear, z: style.roofZ[0], glassY: style.rearGlass.top[0], flush: runs?.flush?.rear ?? 0 },
+    { run: runs?.front, z: style.roofZ[1], glassY: style.windshieldTop[0], flush: runs?.flush?.front ?? 0 },
   ];
   for (const end of ends) {
     const d = Math.abs(z - end.z);
@@ -109,9 +110,9 @@ export function roofDome(z: number, style: BodyStyle): { drop: number; crown: nu
     const s = 1 - d / end.run;
     const roll = 1 - Math.sqrt(1 - s * s);
     const edge = roofAt(end.z, style).y;
-    return { drop: roll * Math.max(0, edge - end.glassY), crown: lerp(ROOF_CROWN, Math.max(0, end.glassY - edge), roll) };
+    return { drop: roll * Math.max(0, edge - end.glassY), crown: lerp(ROOF_CROWN, Math.max(0, end.glassY - edge), roll), reach: 1 - end.flush * s };
   }
-  return { drop: 0, crown: ROOF_CROWN };
+  return { drop: 0, crown: ROOF_CROWN, reach: 1 };
 }
 
 /** Height of the roof panel's top at (`x`, `z`), the top ring of `makeRoofGeometry`: the centre-line crown, the dome's

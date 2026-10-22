@@ -38,9 +38,9 @@ const ROOF_SEGS = { cage: 16, drawn: 12 } as const;
 /** A rolled end's run (`roofEnds`) gets drawn stations at these shares of it from the end: its quarter ellipse turns near the end; two keep a coupe rolled at both ends within its body's vertex budget. */
 const ROOF_ROLL_STATIONS = [0.05, 0.25] as const;
 
-/** The drawn roof's side (+x), cant line up to the dome's edge at (`x`, `y`): a quarter ellipse `ROOF_LIP_OUT + drip` out and `lip` down. */
-function roofRoll(x: number, y: number, lip: number, drip: number, angles: readonly number[] = ROOF_ROLL): Pt[] {
-  return angles.map((a) => ({ x: x + (ROOF_LIP_OUT + drip) * detCos(a), y: y - lip * (1 - detSin(a)) }));
+/** The drawn roof's side (+x), cant line up to the dome's edge at (`x`, `y`): a quarter ellipse `reach` × (`ROOF_LIP_OUT + drip`) out and `lip` down. */
+function roofRoll(x: number, y: number, lip: number, drip: number, angles: readonly number[] = ROOF_ROLL, reach = 1): Pt[] {
+  return angles.map((a) => ({ x: x + reach * (ROOF_LIP_OUT + drip) * detCos(a), y: y - lip * (1 - detSin(a)) }));
 }
 
 /** `skin` (an open section, left side over the crown to the right side, its left cant at `cant`) and its `HEADLINER_POINTS` `inset` inside it. */
@@ -128,7 +128,7 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
   }
   for (const z of zs) {
     const { y: roofY, x } = roofAt(z, style);
-    const { drop, crown } = source === "drawn" ? roofDome(z, style) : { drop: 0, crown: ROOF_CROWN };
+    const { drop, crown, reach } = source === "drawn" ? roofDome(z, style) : { drop: 0, crown: ROOF_CROWN, reach: 1 };
     const y = roofY - drop;
     const side: Pt[] =
       source === "cage"
@@ -136,7 +136,7 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
             { x: x + ROOF_LIP_OUT, y: y - lip },
             { x: x + ROOF_LIP_KNEE[0], y: y - ROOF_LIP_KNEE[1] },
           ]
-        : roofRoll(x, y, lip, drip).slice(0, -1);
+        : roofRoll(x, y, lip, drip, ROOF_ROLL, reach).slice(0, -1);
     const shoulder = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
     const skin = [
       ...side.map((p) => ({ x: -p.x, y: p.y })),
@@ -413,10 +413,10 @@ const ROOF_LIP_KNEE = [0.07, 0.03] as const;
 /** A pillar's top stops this far (m) inside the roof's surface, so the two never fight over a pixel. */
 const ROOF_TUCK = 0.002;
 
-/** The drawn roof section's half-width (m) at height `y` over a station at (`roofX`, `roofY`): along its rolled side, the dome's edge over it, none under the cant line. */
-function roofOutlineX(y: number, roofY: number, roofX: number, lip: number, drip: number): number {
+/** The drawn roof section's half-width (m) at height `y` over a station at (`roofX`, `roofY`): along its rolled side (`reach` of its lip), the dome's edge over it, none under the cant line. */
+function roofOutlineX(y: number, roofY: number, roofX: number, lip: number, drip: number, reach: number): number {
   if (y <= roofY - lip) return Infinity;
-  const roll = roofRoll(roofX, roofY, lip, drip);
+  const roll = roofRoll(roofX, roofY, lip, drip, ROOF_ROLL, reach);
   for (let k = 1; k < roll.length; k++) {
     const [a, b] = [roll[k - 1]!, roll[k]!];
     if (y <= b.y) return lerp(a.x, b.x, (y - a.y) / (b.y - a.y));
@@ -428,7 +428,8 @@ function roofOutlineX(y: number, roofY: number, roofX: number, lip: number, drip
 function underRoofSide(x: number, y: number, z: number, style: BodyStyle): number {
   if (z < style.roofZ[0] || z > style.roofZ[1]) return x;
   const roof = roofAt(z, style);
-  return Math.min(x, roofOutlineX(y, roof.y - roofDome(z, style).drop, roof.x, cantDrop(style), roofDrip(style)) - ROOF_TUCK);
+  const { drop, reach } = roofDome(z, style);
+  return Math.min(x, roofOutlineX(y, roof.y - drop, roof.x, cantDrop(style), roofDrip(style), reach) - ROOF_TUCK);
 }
 
 /** The side glass's plane at (`y`, `z`), its lean from the belt to the cant line carried on past both, `proud` (m) out off it. */

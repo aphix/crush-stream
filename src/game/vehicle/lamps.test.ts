@@ -232,7 +232,8 @@ describe("given the monster's side markers with and without a `tint`", () => {
       }
     };
     const want = new THREE.Color(tint).toArray().map((c) => c.toFixed(4)).join(" ");
-    assert.equal(colours(plain), Array.from({ length: markers.length * 2 }, () => "1.0000 1.0000 1.0000").join(", "), "untinted markers keep the head look's white");
+    const untinted: BodyStyle = { ...plain, lamps: { ...plain.lamps, sideMarkers: markers.map((m) => ({ at: m.at, size: m.size })) } };
+    assert.equal(colours(untinted), Array.from({ length: markers.length * 2 }, () => "1.0000 1.0000 1.0000").join(", "), "untinted markers keep the head look's white");
     const tinted: BodyStyle = { ...plain, lamps: { ...plain.lamps, sideMarkers: markers.map((m) => ({ ...m, tint })) } };
     assert.equal(colours(tinted), Array.from({ length: markers.length * 2 }, () => want).join(", "), "tinted markers take the tint");
   });

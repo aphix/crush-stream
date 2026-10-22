@@ -402,6 +402,22 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
   });
 });
 
+describe("given the pickup whose roof's rear corners sit flush over its posts (roofEnds.flush.rear 1)", () => {
+  it("when its roof is drawn, then no skin vertex at the rear end stands past the dome's edge, while without `flush` the side lip reaches past it there", () => {
+    const pickup = CAR_STYLES.pickup;
+    const lipped: BodyStyle = { ...pickup, roofEnds: { ...pickup.roofEnds, flush: undefined } };
+    const z0 = pickup.roofZ[0];
+    const reachAtEnd = (style: BodyStyle): number => {
+      const pos = makeRoofGeometry(style).getAttribute("position") as THREE.BufferAttribute;
+      let x = -Infinity;
+      for (let v = 0; v < pos.count; v++) if (Math.abs(pos.getZ(v) - z0) < 1e-6) x = Math.max(x, pos.getX(v));
+      return x - roofAt(z0, style).x;
+    };
+    const [flush, lip] = [reachAtEnd(pickup), reachAtEnd(lipped)];
+    assert.ok(flush < 1e-6 && lip > 0.05, `rear end past the dome's edge: flush ${flush.toFixed(4)} m, without flush ${lip.toFixed(4)} m`);
+  });
+});
+
 describe("given a coupe whose rear glass has round corners (rearGlass.round)", () => {
   const ROUND = 0.09;
   const coupe = CAR_STYLES.coupe;
