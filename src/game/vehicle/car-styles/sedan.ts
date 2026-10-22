@@ -260,10 +260,11 @@ export const SEDAN: BodyStyle = {
    */
   boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45 }, lip: { rise: DECK_RISE, depth: 0.06 } },
   lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES },
-  // The reference's shield: 0.74 across at the top, tapering to 0.66 at its rounded bottom corners (S08: (0.30, 0.308), (0.34, 0.33)).
+  // The reference's shield: 0.74 across at the top, tapering to 0.66 at its rounded bottom corners (S08: (0.30, 0.308), (0.34, 0.33)),
+  // its top under the hood's front edge (~0.60, level with the head lamps' inner ends, front iso): 0.30-0.60.
   // Black: its slats and backing read dark under a thin chrome rim; all-chrome read as a light block (owner's front slice). Its face at
   // 2.068, so the backing (1.2 cm behind it) clears the fascia's 2.054 nose: at the platform's face (2.055) the body showed between the slats.
-  grille: { y: 0.43, z: 2.068, size: [0.74, 0.26], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "black" },
+  grille: { y: 0.45, z: 2.068, size: [0.74, 0.3], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "black" },
   /**
    * The reference's twin wide oval tips in the diffuser (gridded rear iso and side: |x| 0.47-0.64, y 0.27-0.33, ~3 cm proud). Ours sit
    * inboard at |x| 0.36: the body's tail floor only reaches |x| 0.48 (0.8 hw) and the bumper face sweeps back from 0.33, so wider tips
