@@ -8,10 +8,8 @@ const HATCHBACK_LAMP_SHAPES = {
     lens: "lit",
     bezel: "black",
     recess: 0.01,
-    cells: [
-      { loop: { points: [[0.665, 0.48], [0.7, 0.48], [0.7, 0.6], [0.665, 0.601]] }, tone: "amber" },
-      { loop: { side: true, points: [[1.72, 0.48], [1.67, 0.48], [1.67, 0.595], [1.72, 0.6]] }, tone: "amber" },
-    ],
+    // The amber at the lens's outer end, round the corner (the lens's edge at z 1.649 foot, 1.631 top).
+    cells: [{ loop: { side: true, points: [[1.675, 0.48], [1.652, 0.48], [1.635, 0.598], [1.66, 0.6]] }, tone: "amber" }],
   },
   // A slim band split at the gate's outline (the gate's piece inboard of x .43) and again at the infill's step wall (x .621 → .635 up the
   // band): the outer lens starts on the wall's top edge and falls down it in front of the wall, then wraps the corner onto the quarter.
@@ -100,7 +98,8 @@ export const HATCHBACK: BodyStyle = {
       plateless: true,
     },
   },
-  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62], mirror: { cap: "rounded", finish: "body", size: [0.1, 0.1, 0.075] } },
+  // The reference's mirror stands about 3 cm past the body side and runs 12 cm along it (top view).
+  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.075, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62], mirror: { cap: "rounded", finish: "body", size: [0.065, 0.1, 0.14] } },
   aPillarFoot: 0.73,
   aPillarTop: 0.212,
   glassTop: 0.045,
@@ -164,7 +163,8 @@ export const HATCHBACK: BodyStyle = {
     brake: { at: [0, 1.231], size: [0.34, 0.012] },
     sideMarkers: [{ at: [0.62, 0.8], size: [0.045, 0.022] }],
   },
-  grille: { y: 0.575, size: [0.72, 0.11], kind: "bars", count: 4, badge: 0.025, finish: "black" },
+  // A flush band on the nose's flat front (skin z 1.74), as the reference's: no box side showing.
+  grille: { y: 0.575, z: 1.748, size: [0.72, 0.11], kind: "bars", count: 4, badge: 0.025, finish: "black" },
   seats: { front: [0.35, 0.41, -0.1], rear: [0.47, -0.7] },
   pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] } },
   blackout: { b: true, divider: true },

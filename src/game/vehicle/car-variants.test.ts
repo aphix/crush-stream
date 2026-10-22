@@ -28,7 +28,7 @@ import { PLATFORM_RIG } from "../deform/deform-rig.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { LampBatch } from "./lamp-lights.ts";
 import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
-import { BLACKOUT, FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE, LIGHT_BAR, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
+import { BLACKOUT, FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE, LIGHT_BAR, MATTE_BLACKOUT, MATTE_PRIVACY, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { bootPivot, lidSpec, roofHinged } from "./hinge-spec.ts";
 import { SPRINGS } from "./car-suspension.ts";
 import { CarCage } from "./car-cage.ts";
@@ -1095,6 +1095,23 @@ describe("given a body style's H2 hardpoints", () => {
     const sailed: BodyStyle = { ...wagon, aPillarFoot: wagon.windshield.base[1] - 0.4, blackout: { a: true, sail: true, rear: true } };
     const names = makeGreenhouseFrame(sailed, "drawn").filter((g) => g.userData.blackout === true).map((g) => g.name || "rear");
     assert.ok(names.join(",") === "a,rear,sail,a,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
+  });
+
+  it("when the SUV's rear pillar is matte, then exactly the gloss-black rear pillar's vertices turn matte black, and the drawn shape is unchanged", () => {
+    const wagon = CAR_STYLES.wagon;
+    const gloss: BodyStyle = { ...wagon, blackout: { ...wagon.blackout, rear: true } };
+    const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
+    const [was, now] = [makeChassisGeometry(gloss), makeChassisGeometry(wagon)];
+    let turned = 0;
+    for (let i = 0; i < primer(now).count; i++) {
+      if (primer(now).getX(i) === primer(was).getX(i)) continue;
+      turned++;
+      assert.ok(primer(was).getX(i) === BLACKOUT && primer(now).getX(i) === MATTE_BLACKOUT, `vertex ${i}: ${primer(was).getX(i)} → ${primer(now).getX(i)}`);
+    }
+    const rear = makeGreenhouseFrame(wagon, "drawn").filter((g) => g.userData.matte === true);
+    assert.ok(rear.length === 2 && turned === rear.reduce((n, g) => n + g.getAttribute("position").count, 0), `${rear.length} matte pillars, ${turned} vertices turned`);
+    const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
+    assert.ok(bits(now) === bits(was), "the drawn body's shape is unchanged");
   });
 
   it("when a style blacks out its cowl, then the deck's crown from 5 cm under the windshield's foot to 5 cm under the hood's rear edge turns primer-dark, and nothing else does", () => {
@@ -3077,6 +3094,16 @@ describe("given a style with privacy glass", () => {
     } finally {
       hatch.privacyGlass = was;
     }
+  });
+
+  it("when the SUV's quarter glass is matte, then its quarter panes carry the matte privacy tone on every vertex and its rear glass plain privacy", () => {
+    const car = new DeformableCar(PAINT, new THREE.Scene(), null, "wagon");
+    const tones = (name: string): string => {
+      const tone = car["glassPanes"].find((g) => g.name === name)!.mesh.geometry.getAttribute(GLASS_ATTRIBUTE);
+      return [...new Set(Array.from({ length: tone.count }, (_, i) => tone.getY(i)))].join();
+    };
+    const read = ["rear", "quarterL", "quarterR"].map(tones).join(" ");
+    assert.ok(read === `1 ${MATTE_PRIVACY} ${MATTE_PRIVACY}`, `privacy tones rear, quarterL, quarterR: ${read}`);
   });
 });
 

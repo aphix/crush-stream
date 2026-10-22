@@ -8,7 +8,7 @@ const WAGON_LAMP_SHAPES = {
   // indicator at the corner. The lens's bottom keeps 1 cm over the bumper's top seam.
   head: {
     loops: [
-      { points: [[0.41, 0.715], [0.62, 0.787], [0.66, 0.795], [0.7, 0.797], [0.76, 0.8], [0.76, 0.835], [0.7, 0.832], [0.62, 0.815], [0.41, 0.785]] },
+      { points: [[0.41, 0.685], [0.62, 0.77], [0.66, 0.78], [0.7, 0.797], [0.76, 0.8], [0.76, 0.835], [0.7, 0.832], [0.62, 0.815], [0.41, 0.785]] },
       { side: true, points: [[1.92, 0.795], [1.7, 0.828], [1.68, 0.842], [1.8, 0.842], [1.86, 0.83], [1.92, 0.81]] },
     ],
     lens: "dark",
@@ -16,8 +16,8 @@ const WAGON_LAMP_SHAPES = {
     recess: 0.01,
     cells: [{ loop: { side: true, points: [[1.86, 0.815], [1.76, 0.825], [1.72, 0.836], [1.8, 0.84], [1.86, 0.83]] }, tone: "amber" }],
     strips: [
-      { line: { points: [[0.43, 0.727], [0.54, 0.766], [0.54, 0.784], [0.43, 0.746], [0.43, 0.727]] }, width: 0.008, tone: "lit" },
-      { line: { points: [[0.55, 0.772], [0.62, 0.793], [0.7, 0.803], [0.745, 0.806], [0.75, 0.828]] }, width: 0.008, tone: "lit" },
+      { line: { points: [[0.43, 0.705], [0.54, 0.748], [0.54, 0.77], [0.43, 0.73], [0.43, 0.705]] }, width: 0.008, tone: "lit" },
+      { line: { points: [[0.55, 0.752], [0.62, 0.78], [0.7, 0.803], [0.745, 0.806], [0.75, 0.828]] }, width: 0.008, tone: "lit" },
     ],
   },
   tail: {
@@ -79,8 +79,8 @@ export const WAGON: BodyStyle = {
       span: 0.78,
       wrap: { from: 0.25, back: 0.3 },
       trim: "body",
-      top: [[0.4, 0.7], [0.62, 0.775], [0.66, 0.785]],
-      edge: [[1.86, 0.785], [1.75, 0.775], [1.5, 0.74], [1.62, 0.6], [1.7, 0.42], [1.72, 0.36]],
+      top: [[0.4, 0.668], [0.62, 0.756], [0.66, 0.766]],
+      edge: [[1.86, 0.766], [1.75, 0.756], [1.5, 0.74], [1.62, 0.6], [1.7, 0.42], [1.72, 0.36]],
     },
     rear: {
       seat: { y: 0.54, z: 2.0555 },
@@ -91,9 +91,12 @@ export const WAGON: BodyStyle = {
       top: [[0, 0.62], [0.55, 0.62], [0.62, 0.615]],
       edge: [[-2, 0.615], [-1.85, 0.6], [-1.68, 0.6], [-1.725, 0.45], [-1.735, 0.38]],
       plateless: true,
+      // The reference's black valance: the fascia's own rows from its foot over the lip's crest, so nothing chords under the crest.
+      band: [0.43, 0.53],
     },
   },
-  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.09, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "rounded", finish: "black", size: [0.09, 0.13, 0.1] } },
+  // The reference's mirror stands about 4 cm past the body side and runs 17 cm along it, 10 cm tall (top view, iso).
+  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.065, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "rounded", finish: "black", size: [0.06, 0.1, 0.16] } },
   aPillarFoot: 0.66,
   aPillarTop: 0.17,
   glassTop: 0.05,
@@ -151,8 +154,9 @@ export const WAGON: BodyStyle = {
   grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 11, angle: 0.37, finish: "black", rim: "chrome", lean: 0.387 },
   seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },
   pillars: { b: { width: [0.088, 0.088] }, divider: { width: [0.105, 0.105] } },
-  blackout: { a: true, sail: true, b: true, divider: true, rear: true },
-  privacyGlass: { rear: true, quarter: true },
+  // The reference's D-post and quarter glass read a dark blur, not the garage's sharp mirror.
+  blackout: { a: true, sail: true, b: true, divider: true, rear: "matte" },
+  privacyGlass: { rear: true, quarter: "matte" },
   roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.82, -1.74], y: [1.46, 1.51], halfWidth: 0.5 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 } },
   exhaust: { tips: 2, x: 0.5, y: 0.42, size: [0.15, 0.05], shape: "round" },
   details: {
