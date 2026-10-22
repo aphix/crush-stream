@@ -187,7 +187,7 @@ export const SEDAN: BodyStyle = {
       wrap: { from: 0.33, back: 0.242, end: { corner: 0.2, stand: 0.004 } },
       trim: "body",
       top: [[0, 0.545], [0.42, 0.558], [0.52, 0.555], [0.62, 0.559]],
-      edge: [[1.7, 0.568], [1.61, 0.583], [1.66, 0.5], [1.683, 0.42], [1.69, 0.32], [1.67, 0.22]],
+      edge: [[1.7, 0.568], [1.69, 0.45], [1.683, 0.42], [1.69, 0.32], [1.67, 0.22]],
     },
     rear: {
       ...PLATFORM_HARDPOINTS.bumpers.rear,
@@ -225,7 +225,7 @@ export const SEDAN: BodyStyle = {
       // The plate sits 6 mm proud of the recess floor (2.109), as the reference's.
       plateFace: { out: 0.027 },
       top: [[0, 0.61], [0.46, 0.61], [0.5, 0.738], [0.6, 0.738]],
-      edge: [[-1.83, 0.738], [-1.81, 0.7], [-1.8, 0.665], [-1.76, 0.625], [-1.71, 0.595], [-1.62, 0.58], [-1.66, 0.5], [-1.683, 0.42], [-1.69, 0.32]],
+      edge: [[-1.83, 0.738], [-1.8, 0.69], [-1.77, 0.645], [-1.745, 0.6], [-1.72, 0.55], [-1.7, 0.46], [-1.69, 0.37], [-1.69, 0.32]],
     },
   },
   door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.25, mirrorReach: 0.157, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
@@ -317,9 +317,10 @@ export const SEDAN: BodyStyle = {
   // The reference's head lamps are cool-white LED strips.
   lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES, bulb: "led" },
   // The reference's shield: 0.74 across at the top, tapering to 0.66 at its rounded bottom corners, its top up under the hood's front edge
-  // as far as the bumper's loose box holds it (0.30-0.585), its face 3 mm behind the box's front at 2.055. Bright slats on the dark
-  // backing inside a thin chrome bezel; the surround stays black (an all-chrome shield read as a light block).
-  grille: { y: 0.443, z: 2.052, size: [0.74, 0.264], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "chrome", rim: "black", bezel: 0.01 },
+  // as far as the bumper's loose box holds it (0.30-0.57: the box's top is the seam cover's, 1 cm under the head lamps), its face 3 mm
+  // behind the box's front at 2.055. Bright slats on the dark backing inside a thin chrome bezel; the surround stays black (an all-chrome
+  // shield read as a light block).
+  grille: { y: 0.435, z: 2.052, size: [0.74, 0.248], bottom: 0.66, round: 0.05, kind: "slats", count: 19, finish: "chrome", rim: "black", bezel: 0.01 },
   /**
    * The reference's twin wide oval tips in the diffuser (y 0.27-0.33, inner end |x| ~0.37), on the rear bumper's face (down to 0.23).
    * Their outer end stops at 0.53, 2 cm into the face's corner round (the reference's tips stand ~3 cm proud): further out a tip stands out of the corner.
