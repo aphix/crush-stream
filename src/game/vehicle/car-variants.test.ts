@@ -2076,7 +2076,8 @@ describe("given a body style's P2 parts", () => {
     const sedan = CAR_STYLES.sedan;
     const [x, y] = [0.53, 0.51];
     const loop = { points: [[x - 0.08, y - 0.03], [x + 0.08, y - 0.03], [x + 0.08, y + 0.03], [x - 0.08, y + 0.03]] } as const;
-    const style: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, head: [x, y], shapes: { head: { loops: [loop], lens: "lit", bezel: "chrome" } } } };
+    // The neutral bulb: its lit lens is the tone (u 0.75) this row reads.
+    const style: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, bulb: undefined, head: [x, y], shapes: { head: { loops: [loop], lens: "lit", bezel: "chrome" } } } };
     const skin = new THREE.Mesh(makeChassisGeometry(style));
     const ray = new THREE.Raycaster();
     const lens = [-1, 1].map((side) => {

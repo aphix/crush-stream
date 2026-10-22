@@ -292,7 +292,8 @@ export const SEDAN: BodyStyle = {
    * (side IoU .977 -> .9759).
    */
   boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45 }, lip: { rise: DECK_RISE, depth: 0.06 }, crown: [0.02, 0.6], edgeRoll: 0.015 },
-  lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES },
+  // The reference's head lamps are cool-white LED strips.
+  lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES, bulb: "led" },
   // The reference's shield: 0.74 across at the top, tapering to 0.66 at its rounded bottom corners (S08: (0.30, 0.308), (0.34, 0.33)),
   // its top up under the hood's front edge (~0.60, level with the head lamps' inner ends, front iso) as far as the bumper's loose box
   // holds it: 0.30-0.585, its chrome rim (3 mm proud) inside that, so its face 3 mm behind the box's front at 2.055. Black: its slats and

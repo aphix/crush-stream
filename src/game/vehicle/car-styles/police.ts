@@ -73,7 +73,8 @@ export const POLICE: BodyStyle = {
   livery: COP_LIVERY,
   lightBar: true,
   pushBar: true,
-  lamps: { head: [0.55, 0.515], tail: [0.596, 0.745], shapes: POLICE_LAMP_SHAPES },
+  // The cruiser's head lamps are warm halogen reflectors (front iso).
+  lamps: { head: [0.55, 0.515], tail: [0.596, 0.745], shapes: POLICE_LAMP_SHAPES, bulb: "halogen" },
   grille: { y: 0.44, size: [0.58, 0.21], kind: "bars", count: 6, badge: 0.025, finish: "black" },
   details: POLICE_DETAILS,
   /** The cruiser's mirrors are black plastic: a body-colour cap would take the white door paint. */
