@@ -4,6 +4,7 @@ import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometr
 import { once } from "../kernel/scalar.ts";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import {
+  LAMP_BULB_UV,
   makeLampUnit,
   mergeToned,
   PAINT_COLOR_TONE,
@@ -17,7 +18,7 @@ import {
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, PLATE_RISE, type PartKind } from "./part-geometry.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
+import { glassX, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { bootPivot } from "./hinge-spec.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
 
@@ -62,6 +63,8 @@ const MIRROR_CAP_ROUND = 0.35;
 const MIRROR_FOOT = { out: 0.018, share: 0.7 } as const;
 /** The foot's inner face sits this far (m) into the skin, so no crack shows where the skin curves away from the pad. */
 const MIRROR_FOOT_SINK = 0.002;
+/** A glass-mounted foot's rows of vertices up its height, so its lean follows the pane's bend at the belt instead of cutting through it. */
+const GLASS_FOOT_ROWS = 4;
 /** The stalk from the foot to the cap: [h, d] (m). */
 const MIRROR_STALK = [0.028, 0.034] as const;
 /** The glass on the cap's rear face: its share of the cap's w and h, and how far (m) behind the face it stands. */
@@ -74,7 +77,7 @@ const MIRROR_FITTING = [0x1c1e22, 0.5, 0.3] as const;
 /**
  * `style`'s own mirror on side `sign`: a foot on the skin at the arm root, a stalk out to the cap where the cap leaves room, the cap in its
  * finish with its outer face at `mirrorReach`, the glass on its rear face. Built at its real size, then divided by the seat's x-scale (kept
- * for the sim), so it draws unsquashed.
+ * for the sim), so it draws unsquashed. A `lift` stands the cap, glass and stalk that far (m) higher than the seat, the foot growing up to meet them.
  */
 function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const spec: MirrorSpec = style.door.mirror!;
@@ -82,29 +85,50 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const [w, h, d] = spec.size ?? MIRROR_CAP_SIZE;
   const scaleX = reach / MIRROR_REACH;
   const root = MIRROR_ROOT * scaleX;
+  const lift = spec.lift ?? 0;
+  const capY = MIRROR_CAP_Y + lift;
   const fitting = (geo: THREE.BufferGeometry) => (spec.finish === "chrome" ? finished(geo, "chrome") : dark(geo, ...MIRROR_FITTING));
   // RoundedBoxGeometry comes unindexed; the other pieces are indexed, and a merge takes one kind.
   const capShape = spec.cap === "rounded" ? mergeVertices(new RoundedBoxGeometry(w, h, d, 2, MIRROR_CAP_ROUND * Math.min(w, h, d))) : new THREE.BoxGeometry(w, h, d);
   // A black housing is gloss (the references' piano black), not the grilles' and bumpers' satin plastic.
   const cap = spec.finish === "black" ? dark(capShape, TRIM_BLACK, TRIM_FINISH.gloss.roughness, TRIM_FINISH.gloss.metalness) : finished(capShape, spec.finish);
-  const parts = [cap.translate(sign * (reach - w / 2), MIRROR_CAP_Y, 0)];
+  const parts = [cap.translate(sign * (reach - w / 2), capY, 0)];
   const footOut = MIRROR_FOOT.out + MIRROR_FOOT_SINK;
-  parts.push(fitting(new THREE.BoxGeometry(footOut, h * MIRROR_FOOT.share, d * MIRROR_FOOT.share)).translate(sign * (root - MIRROR_FOOT_SINK + footOut / 2), MIRROR_CAP_Y, 0));
+  const footRows = spec.mount === "glass" ? GLASS_FOOT_ROWS : 1;
+  const foot = fitting(new THREE.BoxGeometry(footOut, h * MIRROR_FOOT.share + lift, spec.stalk ?? d * MIRROR_FOOT.share, 1, footRows, 1)).translate(sign * (root - MIRROR_FOOT_SINK + footOut / 2), MIRROR_CAP_Y + lift / 2, 0);
+  parts.push(spec.mount === "glass" ? alongGlass(foot, style, sign) : foot);
   const [stalkFrom, stalkTo] = [root + MIRROR_FOOT.out, reach - w + MIRROR_FOOT.out / 2];
-  if (stalkTo > stalkFrom) parts.push(fitting(new THREE.BoxGeometry(stalkTo - stalkFrom, ...MIRROR_STALK)).translate((sign * (stalkFrom + stalkTo)) / 2, MIRROR_CAP_Y, 0));
+  if (stalkTo > stalkFrom) parts.push(fitting(new THREE.BoxGeometry(stalkTo - stalkFrom, ...MIRROR_STALK)).translate((sign * (stalkFrom + stalkTo)) / 2, capY, 0));
   const glass = dark(new THREE.PlaneGeometry(w * MIRROR_GLASS.share[0], h * MIRROR_GLASS.share[1]), 0x9aa8b4, 0.08, 0.7).rotateY(Math.PI);
-  parts.push(glass.translate(sign * (reach - w / 2), MIRROR_CAP_Y, -d / 2 - MIRROR_GLASS.proud));
+  parts.push(glass.translate(sign * (reach - w / 2), capY, -d / 2 - MIRROR_GLASS.proud));
   return mergeToned(parts, "style mirror").scale(1 / scaleX, 1, 1);
 }
 
-const mirrorKey = (style: BodyStyle): string | null => (style.door.mirror ? `${JSON.stringify(style.door.mirror)}|${style.door.mirrorReach}` : null);
+/** `geo` (seat space, real size) with each vertex's x moved by the door glass's lean away from the seat's x: a glass-mounted foot lies on the pane. */
+function alongGlass(geo: THREE.BufferGeometry, style: BodyStyle, sign: number): THREE.BufferGeometry {
+  const d = style.door;
+  const [z0, y0] = [d.hingeZ - (d.mirrorZ ?? 0), d.hingeY + d.mirrorY];
+  const x0 = glassX(z0, y0, style);
+  const pos = geo.getAttribute("position");
+  for (let i = 0; i < pos.count; i++) pos.setX(i, pos.getX(i) + sign * (glassX(z0 + pos.getZ(i), y0 + pos.getY(i), style) - x0));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** A style mirror's variant key: its spec and reach, and for a glass mount the style and seat, whose pane its foot follows. */
+const mirrorKey = (style: BodyStyle): string | null => {
+  const d = style.door;
+  if (!d.mirror) return null;
+  const seat = d.mirror.mount === "glass" ? `|${style.id}|${d.mirrorY}|${d.mirrorZ ?? 0}` : "";
+  return `${JSON.stringify(d.mirror)}|${d.mirrorReach}${seat}`;
+};
 
 // ---- grille ----------------------------------------------------------------------------------------------------------------
 
 type GrilleSpec = NonNullable<BodyStyle["grille"]>;
 
-/** Grille build (m): the surround's `rim` width and depth, the dark backing set `backingSet` behind the face, its bars/slats `bar` wide at `pitch` (without a `count`), `barDepth` deep and standing `inset` behind the face; a mesh's finer `meshBar` at `meshPitch`; the badge's depth. */
-const GRILLE = { rim: 0.022, rimDepth: 0.03, backingSet: 0.012, bar: 0.012, pitch: 0.045, barDepth: 0.014, inset: 0.004, meshBar: 0.006, meshPitch: 0.03, badge: 0.008 } as const;
+/** Grille build (m): the surround's `rim` width and depth, the dark backing set `backingSet` behind the face, its bars/slats `bar` wide at `pitch` (without a `count`), `barDepth` deep and standing `inset` behind the face; a mesh's finer `meshBar` at `meshPitch`; the badge's depth; a bezel's front stands `bezelProud` over the face. */
+const GRILLE = { rim: 0.022, rimDepth: 0.03, backingSet: 0.012, bar: 0.012, pitch: 0.045, barDepth: 0.014, inset: 0.004, meshBar: 0.006, meshPitch: 0.03, badge: 0.008, bezelProud: 0.003 } as const;
 /** Points along each rounded corner of a grille outline. */
 const GRILLE_CORNER_STEPS = 4;
 /** A hex grille's bars cross at ± this angle (rad) from the horizontal: a diamond lattice. */
@@ -170,7 +194,7 @@ function grilleBars(poly: readonly THREE.Vector2[], angle: number, count: number
   return bars;
 }
 
-/** `style.grille` in the grille seat's space (`GRILLE_SEAT` on the front bumper): a surround in its finish round a dark backing, its bars, slats or mesh in the finish, a chrome badge. */
+/** `style.grille` in the grille seat's space (`GRILLE_SEAT` on the front bumper): a surround in its finish round a dark backing, its bars, slats or mesh in the finish, a chrome badge, a chrome bezel. */
 function styleGrille(style: BodyStyle): THREE.BufferGeometry {
   const g: GrilleSpec = style.grille!;
   const seat = style.bumpers.front.seat;
@@ -191,6 +215,12 @@ function styleGrille(style: BodyStyle): THREE.BufferGeometry {
     ...fill.map((f) => finished(f.translate(0, 0, barZ), g.finish)),
   ];
   if (g.badge) parts.push(finished(new THREE.CylinderGeometry(g.badge, g.badge, GRILLE.badge, 24).rotateX(Math.PI / 2).translate(0, 0, face), "chrome"));
+  if (g.bezel) {
+    // ponytail: a uniform offset is exact for a rectangle; a trapezoid's slanted sides widen by sec(slope) of it, under 1 mm at a 3 cm bezel.
+    const frame = new THREE.Shape(grilleOutline(w + 2 * g.bezel, bottom + 2 * g.bezel, h + 2 * g.bezel, round > 0 ? round + g.bezel : 0));
+    frame.holes.push(new THREE.Path(grilleOutline(w, bottom, h, round)));
+    parts.push(finished(indexed(new THREE.ExtrudeGeometry(frame, { depth: GRILLE.rimDepth + GRILLE.bezelProud, bevelEnabled: false })).translate(0, 0, face - GRILLE.rimDepth), "chrome"));
+  }
   const geo = mergeToned(parts, "style grille");
   if (g.lean) geo.translate(0, 0, -face).rotateX(-g.lean).translate(0, 0, face);
   return geo.translate(0, g.y - seat.y - GRILLE_SEAT.y, 0);
@@ -204,10 +234,16 @@ function frontFittings(style: BodyStyle): THREE.BufferGeometry {
   return mergeToned([grille, bothSides(builtLamp(style, "front").body).translate(0, -seat.y - GRILLE_SEAT.y, -seat.z - GRILLE_SEAT.z)], "front bumper fittings");
 }
 
-/** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height) and the style's rear bumper lamps. */
+/** The platform plate's rear face (m) behind its seat: `tailTrim`'s centre 0.08 back plus half its 0.02 depth. */
+const PLATFORM_PLATE_OUT = 0.09;
+/** The platform plate's roughness and metalness: a recoloured plate keeps its sheen. */
+const PLATE_SHEEN = [0.6, 0.1] as const;
+
+/** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height, its face and colour seated by `plateFace`) and the style's rear bumper lamps. */
 function rearFittings(style: BodyStyle): THREE.BufferGeometry {
-  const { seat, plate } = style.bumpers.rear;
-  const trim = withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0).translate(0, plate === undefined ? 0 : plate - seat.y - PLATE_RISE, 0);
+  const { seat, plate, plateFace } = style.bumpers.rear;
+  const trim = withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0).translate(0, plate === undefined ? 0 : plate - seat.y - PLATE_RISE, plateFace?.out === undefined ? 0 : PLATFORM_PLATE_OUT - plateFace.out);
+  if (plateFace?.color !== undefined) toned(trim, plateFace.color, ...PLATE_SHEEN);
   if (!style.lamps.shapes?.rear) return trim;
   const lamps = bothSides(builtLamp(style, "rear").body).translate(0, -seat.y, seat.z);
   return mergeToned([trim, lamps], "rear bumper fittings");
@@ -216,7 +252,7 @@ function rearFittings(style: BodyStyle): THREE.BufferGeometry {
 const frontKey = (style: BodyStyle): string | null =>
   style.grille || style.lamps.shapes?.front ? `${style.id}|${JSON.stringify(style.grille)}|${JSON.stringify(style.lamps.shapes?.front)}|${JSON.stringify(style.bumpers.front)}` : null;
 const rearKey = (style: BodyStyle): string | null =>
-  style.lamps.shapes?.rear || style.bumpers.rear.plate !== undefined ? `${style.id}|${JSON.stringify(style.lamps.shapes?.rear)}|${JSON.stringify(style.bumpers.rear)}` : null;
+  style.lamps.shapes?.rear || style.bumpers.rear.plate !== undefined || style.bumpers.rear.plateFace ? `${style.id}|${JSON.stringify(style.lamps.shapes?.rear)}|${JSON.stringify(style.bumpers.rear)}` : null;
 
 // ---- lamps -----------------------------------------------------------------------------------------------------------------
 
@@ -258,9 +294,12 @@ export function lampRest(kind: LampKind, style: BodyStyle, out: THREE.Quaternion
 /** The end face's z a `kind` lamp seats on (the profile's nose or tail station). */
 const lampEndZ = (kind: LampKind, style: BodyStyle): number => (kind === "head" ? style.profile[style.profile.length - 1]!.z : style.profile[0]!.z);
 
-function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind): THREE.BufferGeometry {
+/** `geo` in lamp `tone`; a lit head lens under its `bulb` samples that bulb's emissive texel instead of the plain white. */
+function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind, bulb?: BodyStyle["lamps"]["bulb"]): THREE.BufferGeometry {
   toned(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0, 0);
-  (geo.getAttribute("uv").array as Float32Array).fill(tone === "lit" ? LAMP_TEXEL.lens : LAMP_TEXEL.housing);
+  const uv = geo.getAttribute("uv").array as Float32Array;
+  uv.fill(tone === "lit" ? LAMP_TEXEL.lens : LAMP_TEXEL.housing);
+  if (tone === "lit" && kind === "head" && bulb) for (let i = 0; i < uv.length; i += 2) uv.set(LAMP_BULB_UV[bulb], i);
   return geo;
 }
 
@@ -609,7 +648,7 @@ function builtLamp(style: BodyStyle, which: keyof LampShapes, side = 1): BuiltLa
     ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false, mirror }]
     : [{ geo: front ? makeHoodGeometry(style) : makeTrunkGeometry(style), offset: new THREE.Vector3(0, ...(front ? style.hood.origin : bootPivot(style.boot))), lid: true, mirror }, body];
   const skin = new LampSkin(sources, zEnd, front ? 1 : -1, `${style.id} ${which} lamp${mirror ? " (left)" : ""}`);
-  const built = buildShape(style.lamps.shapes![which]!, skin, zEnd, (geo, t) => (bumper ? bumperTone : lampTone)(geo, t, kind));
+  const built = buildShape(style.lamps.shapes![which]!, skin, zEnd, (geo, t) => (bumper ? bumperTone(geo, t, kind) : lampTone(geo, t, kind, style.lamps.bulb)));
   if (!BUILT.has(style)) BUILT.set(style, new Map());
   BUILT.get(style)!.set(id, built);
   return built;
@@ -728,7 +767,7 @@ const noLidLamp = once(() =>
 
 const lampKey = (style: BodyStyle, kind: LampKind, side: number): string | null => {
   const shape = style.lamps.shapes?.[kind];
-  return shape ? `${style.id}|${kind}|${side}|${JSON.stringify(shape)}|${JSON.stringify(style.lamps[kind])}` : null;
+  return shape ? `${style.id}|${kind}|${side}|${JSON.stringify(shape)}|${JSON.stringify(style.lamps[kind])}${kind === "head" && style.lamps.bulb ? `|${style.lamps.bulb}` : ""}` : null;
 };
 
 /** The high-mount brake lamp, 1 m square (its seat scales it to `lamps.brake.size`): a dark housing, a lit red lens. Shared, never disposed. */

@@ -14,6 +14,7 @@ import * as finishModule from "./car-finish.ts";
 import type * as CarFinish from "./car-finish.ts";
 import { makePaintMaterial, trimMaterial } from "./car-materials.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
+import { GARAGE } from "../present/garage-art.ts";
 
 /** What a car material's program key is with the finish off: the strings these tests prove an OFF material still has (the trim's names its fittings hook). */
 const PAINT_KEY_TODAY = "car-paint-primer";
@@ -275,6 +276,22 @@ describe("given a car material being compiled", () => {
     });
   }
 
+  for (const kind of ["paint", "trim"] as const) {
+    it(`when a ${kind} material compiles with the finish on, then after the finish perturbs its normals and three adds its own geometry roughness, the perturbation's screen-space change widens the base${kind === "paint" ? " and clear coat" : ""} lobe before any light is summed: a peel or grain finer than a pixel blurs instead of sparkling`, () => {
+      const material = materialOfKind(kind, kind === "paint" ? 0x203047 : 0x203048);
+      switchFinish(material, true);
+      const { fragment } = compile(material);
+      const perturbed = fragment.indexOf("normal = finishPerturbedNormal(normal, ");
+      const threeWidens = fragment.indexOf("material.roughness += geometryRoughness;");
+      const widened = fragment.indexOf("material.roughness = min( sqrt( sqrt( pow2( specAaAlpha )");
+      const coatWidened = fragment.indexOf("material.clearcoatRoughness = min( sqrt( sqrt( pow2( specAaAlpha )");
+      const lit = fragment.indexOf("vec3 geometryPosition = - vViewPosition;");
+      assert.ok(fragment.includes("vec3 specAaDx = dFdx( normal - nonPerturbedNormal );"), `${kind}: the variance reads the perturbation alone (three already widens for the vertex normal's own change)`);
+      assert.ok(perturbed >= 0 && perturbed < threeWidens && threeWidens < widened && widened < lit, `${kind}: perturbation ${perturbed}, three's widening ${threeWidens}, the perturbation's ${widened}, lighting ${lit}`);
+      assert.ok(coatWidened > widened && coatWidened < lit, `${kind}: the clear coat's widening (${coatWidened}) follows the base's, before lighting`);
+    });
+  }
+
   it("when a paint material compiles with the finish on, then the base normal also gets the flake term the clear coat does not", () => {
     const material = materialOfKind("paint", 0x203043);
     switchFinish(material, true);
@@ -283,12 +300,14 @@ describe("given a car material being compiled", () => {
     assert.ok(fragment.includes("clearcoatNormal = finishPerturbedNormal(clearcoatNormal, coatSlope"), "clear coat: waviness and peel only");
   });
 
-  it("when a paint material compiles with the finish on, then its orange peel keeps a quarter of its relief nearer than 2 m and all of it from 4.5 m: drawn 50 times real, close up it reads as hammered metal; the trim's grain keeps all of its", () => {
+  it("when a paint material compiles with the finish on, then its orange peel keeps a quarter of its relief nearer than 2 m and all of it only past the garage's opening orbit: drawn 50 times real, nearer it reads as hammered metal; the trim's grain keeps all of its", () => {
     const nearShare = (kind: "paint" | "trim") => {
       const material = materialOfKind(kind, 0x203045);
       switchFinish(material, true);
       const lines = compile(material).fragment.split("\n").map((line) => line.trim());
-      assert.ok(lines.includes("* mix(finishNearShare, vec3(1.0), smoothstep(2.0, 4.5, finishDistance))"), `${kind}: the near share rises to full from 2 to 4.5 m`);
+      const ramp = lines.find((line) => line.startsWith("* mix(finishNearShare, vec3(1.0), smoothstep(")) ?? "";
+      const [near, full] = (/smoothstep\(([\d.]+), ([\d.]+), finishDistance\)\)$/.exec(ramp) ?? []).slice(1).map(Number);
+      assert.ok(near === 2 && full! > GARAGE.shot.radius, `${kind}: the near share rises to full from ${near} to ${full} m, the garage opening at ${GARAGE.shot.radius} m (${ramp})`);
       return lines.find((line) => line.startsWith("const vec3 finishNearShare"));
     };
     assert.equal(nearShare("paint"), "const vec3 finishNearShare = vec3(1.0, 0.25, 1.0);", "paint: waviness and flake in full, the peel a quarter up close");

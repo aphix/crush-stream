@@ -17,10 +17,12 @@ type RoofParts = NonNullable<BodyStyle["roof"]>;
 
 /** An add-on's foot sinks this far (m) under the skin it stands on, so no seam opens where that skin domes. */
 const SINK = 0.005;
-/** Rings along a hood bulge; its ends ease in over `BULGE_RAMP` (m); its flanks lean in `BULGE_FLANK` (m) from foot to top. */
+/** Rings along a hood bulge; its ends ease in over `BULGE_RAMP` (m); its flanks lean in `BULGE_FLANK` (m) from foot to top unless it is rolled (`round`). */
 const BULGE_STATIONS = 16;
 const BULGE_RAMP = 0.15;
 const BULGE_FLANK = 0.05;
+/** Chords per flank of a rolled bulge (`round`): the fewest whose turns stay under the fitting crease angle, so it shades round. */
+const POD_STEPS = 2;
 /** A scoop rises over `SCOOP_LENGTH` (m) behind its mouth in `SCOOP_STATIONS` rings; a twin scoop's inlets stand `SCOOP_RIB` (m) apart, a razor groove so the pair reads as one raised piece. */
 const SCOOP_LENGTH = 0.32;
 const SCOOP_STATIONS = 4;
@@ -60,27 +62,44 @@ function merged(parts: THREE.BufferGeometry[], what: string): THREE.BufferGeomet
   return geo;
 }
 
-/** Height (car frame, m) of a bulge's top at `z`: its rise eased in at both ends from just under the lid. */
+/** Height (car frame, m) of a bulge's top at `z`: its rise eased in at both ends from just under the lid, at the cowl end over `cowlRamp`. */
 function bulgeTopY(b: HoodBulge, z: number, style: BodyStyle): number {
-  const ease = THREE.MathUtils.smoothstep(Math.min(z - b.z0, b.z1 - z), 0, BULGE_RAMP);
+  const ease = Math.min(THREE.MathUtils.smoothstep(z - b.z0, 0, b.cowlRamp ?? BULGE_RAMP), THREE.MathUtils.smoothstep(b.z1 - z, 0, BULGE_RAMP));
   return deckTopY(0, z, style, true) - SINK + (b.rise + SINK) * ease;
+}
+
+/** A rolled bulge's ring, in the wedge's order: the left foot, up an S-curve over `round` to the crest, across, and down the right flank to its foot. */
+function podRing(half: number, round: number, foot: number, top: number): Pt[] {
+  const left: Pt[] = [];
+  for (let k = 0; k <= POD_STEPS; k++) {
+    const t = k / POD_STEPS;
+    left.push({ x: -(half - round * t), y: lerp(foot, top, THREE.MathUtils.smoothstep(t, 0, 1)) });
+  }
+  const right: Pt[] = [];
+  for (let k = left.length - 1; k >= 0; k--) right.push({ x: -left[k]!.x, y: left[k]!.y });
+  return [...left, ...right];
 }
 
 function bulgeGeometry(b: HoodBulge, style: BodyStyle): THREE.BufferGeometry {
   const [oy, oz] = style.hood.origin;
-  const half = b.width / 2;
+  const [rearHalf, frontHalf] = [(b.cowlWidth ?? b.width) / 2, b.width / 2];
   const rings: Pt[][] = [];
   const zs: number[] = [];
   for (let s = 0; s <= BULGE_STATIONS; s++) {
     const z = lerp(b.z0, b.z1, s / BULGE_STATIONS);
+    const half = lerp(rearHalf, frontHalf, s / BULGE_STATIONS);
     const top = bulgeTopY(b, z, style) - oy;
     const foot = deckTopY(half, z, style, true) - SINK - oy;
-    rings.push([
-      { x: -half, y: foot },
-      { x: BULGE_FLANK - half, y: top },
-      { x: half - BULGE_FLANK, y: top },
-      { x: half, y: foot },
-    ]);
+    rings.push(
+      b.round
+        ? podRing(half, b.round, foot, top)
+        : [
+            { x: -half, y: foot },
+            { x: BULGE_FLANK - half, y: top },
+            { x: half - BULGE_FLANK, y: top },
+            { x: half, y: foot },
+          ],
+    );
     zs.push(z - oz);
   }
   return withTone(hardEdged(loftFromRings(rings, zs, 0, 1)), PRIMER_ATTRIBUTE, 0);

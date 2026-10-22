@@ -23,7 +23,7 @@ const COUPE_LAMP_SHAPES = {
     loops: [{ points: [[0.4, 0.51], [0.6, 0.51], [0.6, 0.67], [0.4, 0.67]] }],
     lens: "lit",
     bezel: "chrome",
-    recess: 0.024,
+    recess: 0.008,
   },
   tail: {
     // Rear iso: deep red lenses out to the corner in rounded chrome bezels, three segments each, a black centre band between them edged in chrome.
@@ -56,15 +56,15 @@ const MUSCLE_REAR_FASCIA = [
   [-0.095, -0.06],
 ] as const;
 
-/** Rounded bullet mirror in the body colour, as the reference's side view: 11 cm long, 11 cm tall ([out, height, length] m). */
-const COUPE_MIRROR = { cap: "rounded", finish: "body", size: [0.1, 0.11, 0.11] } as const;
+/** Bullet mirror in the body colour on a slim dark stalk, as the reference's side view and iso: an 8.5 cm long, 6.5 cm tall head standing 6 cm over its seat on the door top, the stalk 2.5 cm along the car ([out, height, length] m). */
+const COUPE_MIRROR = { cap: "rounded", finish: "body", size: [0.09, 0.065, 0.085], lift: 0.06, stalk: 0.025 } as const;
 
 /** Late-70s notchback muscle coupe (Celica Supra A40 proportions): long flat hood, flat roof, sloped rear glass, short ducktail deck. */
 export const COUPE: BodyStyle = {
   id: "coupe",
   dims: { wheelbase: 2.385, overhang: { front: 0.823, rear: 0.915 }, track: 1.32, width: 1.571, height: 1.294, rideHeight: 0.182, wheel: { radius: 0.33, width: 0.2 } },
   ...PLATFORM_HARDPOINTS,
-  windshield: { base: [0.93, 0.7], wBase: 1.32, wTop: 1.0 },
+  windshield: { base: [0.93, 0.7], wBase: 1.32, wTop: 1.0, bow: { base: 0.015, top: 0.035 } },
   belt: { x: [[-1.5, 0.6], [-0.96, 0.65], [-0.5, 0.665], [0.5, 0.675]], y: [[-0.95, 0.885], [-0.45, 0.888], [0.25, 0.892], [0.4, 0.905], [0.7, 0.93]] },
   rocker: { y: 0.22 },
   underside: [[-2.114, 0.41], [-2.06, 0.31], [-1.96, 0.28], [-1.829, 0.282], [-1.818, 0.267], [-1.744, 0.267], [-1.729, 0.253], [-1.665, 0.257], [-1.644, 0.239], [-1.576, 0.242], [-1.572, 0.225], [-1.548, 0.225], [-1.533, 0.207], [-0.86, 0.182], [-0.835, 0.196], [0.381, 0.196], [0.399, 0.182], [0.723, 0.182], [1.689, 0.21], [1.782, 0.242], [1.893, 0.239], [1.985, 0.285], [2.014, 0.36], [2.017, 0.431]],
@@ -73,11 +73,11 @@ export const COUPE: BodyStyle = {
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.012, width: 0.05, band: true } },
-  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.96, z1: 1.74, width: 0.64, rise: 0.03, scoop: { inlets: 2, z: 1.68, width: 0.56, height: 0.04 } }, groove: [0.004, 0.0016] },
+  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.74, z1: 1.71, width: 0.56, cowlWidth: 0.68, rise: 0.025, round: 0.04, cowlRamp: 0.3, scoop: { inlets: 2, z: 1.69, width: 0.48, height: 0.05 } }, groove: [0.004, 0.0016] },
   bumpers: {
     // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin.
     front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.3, back: 0.24, end: { corner: 0.15, stand: 0.03 } }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
-    rear: { ...bumpers.rear, seat: { y: 0.425, z: 2.0475 }, span: 0.72, wrap: { from: 0.45, back: 0.2, end: { corner: 0.1, stand: 0.03 } }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome", plate: 0.37 },
+    rear: { ...bumpers.rear, seat: { y: 0.425, z: 2.0475 }, span: 0.72, wrap: { from: 0.45, back: 0.2, end: { corner: 0.1, stand: 0.03 } }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome", plate: 0.29, plateFace: { out: 0.015, color: 0x1c1e22 } },
   },
   profile: [
     st(-2.054, 0.62, 0.857),
@@ -111,17 +111,18 @@ export const COUPE: BodyStyle = {
     st(1.62, 0.748, 0.8),
     st(1.76, 0.733, 0.785),
     st(1.84, 0.708, 0.768),
-    st(1.9, 0.68, 0.752),
+    st(1.9, 0.68, 0.7495),
     st(1.93, 0.662, 0.735),
     st(1.945, 0.652, 0.728),
     st(1.957, 0.64, 0.57),
   ],
   roofZ: [-1.04, 0.1],
   windshieldTop: [1.255, 0.12],
-  rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96 },
+  // Round corners: the reference rear iso's four, about a sixth of the 0.53 m slant.
+  rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96, bow: { base: -0.02, top: -0.04 }, round: 0.09 },
   quarter: { zRearBot: -0.96, zRearTop: -0.74 },
   /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle. */
-  cPillar: {},
+  cPillar: { flush: true },
   midPillarZ: null,
   windowTrim: "chrome",
   chromeStrips: [
@@ -139,11 +140,11 @@ export const COUPE: BodyStyle = {
     tail: [0.37, 0.675],
     shapes: COUPE_LAMP_SHAPES,
     sideMarkers: [
-      { at: [0.52, 1.6], size: [0.05, 0.045] },
-      { at: [0.55, -1.73], size: [0.05, 0.04] },
+      { at: [0.51, 1.665], size: [0.065, 0.07] },
+      { at: [0.54, -1.73], size: [0.08, 0.035] },
     ],
   },
-  grille: { y: 0.585, size: [0.78, 0.17], kind: "bars", count: 6, badge: 0.03, finish: "black" },
+  grille: { y: 0.585, size: [0.75, 0.14], kind: "bars", count: 6, badge: 0.03, finish: "black", bezel: 0.015 },
   exhaust: { tips: 2, x: 0.45, y: 0.24, size: [0.085, 0.06], shape: "round" },
   camera: { hood: [1.12, 1.0], third: { dist: 6.1, height: 1.95, aimUp: 0.95 }, far: { dist: 9.9, height: 3.25, aimUp: 1.1 } },
   details: {
@@ -163,7 +164,7 @@ export const COUPE: BodyStyle = {
       { view: "side", points: [[-0.834, 1.148], [-0.977, 1.105], [-1.148, 1.048], [-1.319, 0.977], [-1.433, 0.934]], width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.107, 1.205], [-0.207, 1.19], [-0.634, 1.183], [-0.848, 1.162], [-0.977, 1.133]], width: 0.014, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[-1.433, 0.991], [-1.461, 0.948], [-1.49, 0.891]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "top", points: [[1.68, 0], [0.96, 0]], width: 0.008, depth: -0.002, profile: "v", cavity: 0.4 },
+      { view: "top", points: [[1.64, 0], [0.84, 0]], width: 0.008, depth: -0.002, profile: "v", cavity: 0.4 },
       { view: "rear", points: [[0, 0.74], [0.75, 0.74]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.1 },
     ],
     patches: [
@@ -177,5 +178,5 @@ export const COUPE: BodyStyle = {
       { view: "front", points: [[0, 0.32], [0.7, 0.32], [0.7, 0.38], [0, 0.38]], depth: 0.003, rim: 0.003, cavity: 0.2 },
     ],
   },
-  seats: { front: [0.36, 0.44, -0.15], rear: [0.46, -0.6] },
+  seats: { front: [0.36, 0.44, -0.15], rear: [0.47, -0.6] },
 };

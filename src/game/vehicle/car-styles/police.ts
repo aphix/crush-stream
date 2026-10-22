@@ -52,12 +52,13 @@ const POLICE_LAMP_SHAPES = {
         ],
       },
     ],
-    lens: "lit",
-    cells: [
-      { loop: { points: [[0.42, 0.775], [0.72, 0.775], [0.72, 0.85], [0.42, 0.85]] }, tone: "amber" },
-      { loop: { points: [[0.42, 0.64], [0.52, 0.64], [0.52, 0.7], [0.42, 0.7]] }, tone: "clear" },
+    // The cruiser's tail lamps are deep red with a lit band and dark ribs (rear iso): no amber top, no white reverse block.
+    lens: "red",
+    strips: [
+      { line: { points: [[0.42, 0.745], [0.72, 0.745]] }, width: 0.022, tone: "lit" },
+      { line: { points: [[0.42, 0.795], [0.72, 0.795]] }, width: 0.003, tone: "dark" },
+      { line: { points: [[0.42, 0.695], [0.72, 0.695]] }, width: 0.003, tone: "dark" },
     ],
-    strips: [{ line: { points: [[0.42, 0.775], [0.72, 0.775]] }, width: 0.003, tone: "dark" }],
   },
   front: {
     loops: [{ points: [[0.52, 0.25], [0.66, 0.25], [0.66, 0.29], [0.52, 0.29]] }],
@@ -86,7 +87,7 @@ export const POLICE: BodyStyle = {
     rear: { ...SEDAN.bumpers.rear, trim: "black", top: undefined, edge: undefined },
   },
   /** The cruiser's two small round tips under the black bumper, one each side (rear iso: |x| ~0.5; inboard 0.4 on the sedan body's narrower tail floor). */
-  exhaust: { tips: 2, x: 0.4, y: 0.3, size: [0.06, 0.06], shape: "round" },
+  exhaust: { tips: 2, x: 0.4, y: 0.3, size: [0.1, 0.06], shape: "round" },
   /** The cruiser's rear window is black-tinted (rear iso), as the checklist's P1. */
   privacyGlass: { rear: true },
 };

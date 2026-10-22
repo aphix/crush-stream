@@ -109,13 +109,14 @@ export class CarStage {
     return dims;
   }
 
-  /** Shows every part but `omit`'s (names from OMIT_PARTS). */
+  /** Shows every part but `omit`'s (names from OMIT_PARTS). The batches show their filled draws on sync, so an omitted batch hides after it. */
   show(omit) {
-    for (const name of OMIT_PARTS) for (const o of this.named(name)) o.visible = !omit.includes(name);
+    for (const name of OMIT_PARTS) if (!(name in this.batch)) for (const o of this.named(name)) o.visible = !omit.includes(name);
     this.scene.updateMatrixWorld(true);
     this.wheels.sync([this.car], SHADOWLESS);
     this.lamps.sync([this.car]);
     this.parts.sync([this.car]);
+    for (const [name, meshes] of Object.entries(this.batch)) if (omit.includes(name)) for (const o of meshes) o.visible = false;
   }
 
   named(name) {

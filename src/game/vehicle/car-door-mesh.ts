@@ -3,7 +3,7 @@ import { hypot2, detSin } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { splitCreases } from "./car-crease.ts";
-import { CREASE_DEGREES, SEDAN, drawnSideRing, drawnSideX, sampleSlice, sideX } from "./car-mesh.ts";
+import { CREASE_DEGREES, SEDAN, drawnSideRing, drawnSideX, glassX, sampleSlice, sideX } from "./car-mesh.ts";
 import { rockerAt } from "./car-lines.ts";
 import { MIRROR_REACH, MIRROR_ROOT } from "./part-geometry.ts";
 import { doorCardGeometry } from "./interior-geometry.ts";
@@ -28,12 +28,17 @@ export function doorSkinZ(style: BodyStyle): number {
   return (z0 + z1) / 2 - style.door.hingeZ;
 }
 
-/** The mirror's seat in door space: x on the drawn door skin (the vertex grid's flat triangles) where the mirror is inside the door cut and the face's height, else on the body side, less the arm root's offset at the mirror's x-scale, so the arm starts on the skin. */
+/**
+ * The mirror's seat in door space: x on the drawn door skin (the vertex grid's flat triangles) where the mirror is inside the door cut and the
+ * face's height, else on the body side, or on the door glass's plane for a glass mount, less the arm root's offset at the mirror's x-scale, so
+ * the arm starts on the surface.
+ */
 export function mirrorSeatX(style: BodyStyle): number {
   const d = style.door;
+  const armRoot = MIRROR_ROOT * (d.mirrorReach / MIRROR_REACH);
+  if (d.mirror?.mount === "glass") return glassX(d.hingeZ - (d.mirrorZ ?? 0), d.hingeY + d.mirrorY, style) - d.hingeX - armRoot;
   const grid = doorGrid(style);
   const zl = -(d.mirrorZ ?? 0) - doorSkinZ(style);
-  const armRoot = MIRROR_ROOT * (d.mirrorReach / MIRROR_REACH);
   const { columns } = grid;
   const cutHalf = grid.halfLength - DOOR_SKIN_OVERLAP;
   let upper = 1;

@@ -25,7 +25,9 @@ const SHARED_LINES: readonly Line[] = [
   { view: "side", points: [[0.73, 0.835], [0.4, 0.828], [0, 0.822], [-0.5, 0.825], [-0.9, 0.84], [-1.09, 0.855]], ...CREASE },
   { view: "side", points: [[-1.06, 0.945], [-1.3, 0.94], [-1.5, 0.935], [-1.7, 0.94], [-1.9, 0.95], [-2, 0.955]], ...CREASE },
   { view: "side", points: [[-1.09, 0.855], [-1.3, 0.85], [-1.5, 0.85], [-1.7, 0.855]], ...CREASE },
-  { view: "side", points: [[0.72, 0.405], [0.4, 0.395], [0, 0.385], [-0.22, 0.385], [-0.5, 0.385], [-0.75, 0.39]], ...CREASE, profile: "step", depth: -0.003 },
+  // The lower doors' character line: the reference's crisp highlight along both doors at y ~0.37-0.42 (silver-sedan-1.png, from the front
+  // handle's 0.762), the side turning under below it; a step 6 mm in so it reads at the iso's distance (3 mm did not).
+  { view: "side", points: [[0.72, 0.405], [0.4, 0.395], [0, 0.385], [-0.22, 0.385], [-0.5, 0.385], [-0.75, 0.39]], ...CREASE, profile: "step", depth: -0.006 },
   { view: "side", points: [[1.61, 0.16], [1.605, 0.335], [1.593, 0.427], [1.557, 0.513], [1.501, 0.586], [1.428, 0.642], [1.342, 0.678], [1.25, 0.69], [1.158, 0.678], [1.073, 0.642], [0.999, 0.586], [0.943, 0.513], [0.907, 0.427], [0.895, 0.335], [0.89, 0.16]], ...CREASE },
   { view: "side", points: [[-0.89, 0.16], [-0.895, 0.335], [-0.907, 0.427], [-0.943, 0.513], [-0.999, 0.586], [-1.073, 0.642], [-1.158, 0.678], [-1.25, 0.69], [-1.342, 0.678], [-1.428, 0.642], [-1.501, 0.586], [-1.557, 0.513], [-1.593, 0.427], [-1.605, 0.335], [-1.61, 0.16]], ...CREASE },
   { view: "top", points: [[0.28, 0.52], [0.1, 0.505], [-0.2, 0.5], [-0.5, 0.495], [-0.8, 0.495], [-1, 0.495], [-1.1, 0.49]], ...CREASE, depth: -0.003 },
@@ -41,7 +43,9 @@ const SHARED_LINES: readonly Line[] = [
   { view: "side", points: [[0.8, 0.245], [0, 0.245], [-0.8, 0.245], [-0.8, 0.175], [0, 0.175], [0.8, 0.175]], closed: true, ...TRIM },
   { view: "side", points: [[0.78, 0.23], [0.62, 0.23]], ...TRIM },
   { view: "top", points: [[2.02, 0], [2.01, 0.25], [1.955, 0.4]], ...GAP },
-  { view: "top", points: [[2, 0.3], [1.86, 0.36], [1.7, 0.42], [1.5, 0.47], [1.25, 0.52], [1, 0.56], [0.9, 0.57]], ...CREASE, profile: "step" },
+  // The hood's two creases (silver-sedan-2.png top view, 68.5 px/m): |x| 0.237 at z 1.90 opening to 0.316 at 1.03, the bonnet's middle
+  // panel between them (was |x| 0.30 -> 0.57, off both the creases and the shut line).
+  { view: "top", points: [[1.95, 0.233], [1.9, 0.237], [1.6, 0.262], [1.3, 0.287], [1.03, 0.316], [1.0, 0.318]], ...CREASE, profile: "step" },
   { view: "front", points: [[0, 0.195], [0.3, 0.195], [0.45, 0.19], [0.58, 0.185], [0.66, 0.18], [0.72, 0.175]], ...TRIM },
   { view: "top", points: [[-2.08, 0], [-2.075, 0.25], [-2.05, 0.45], [-1.99, 0.58]], ...CREASE },
   { view: "top", points: [[-2.03, 0], [-2.03, 0.25], [-2.015, 0.5]], ...CREASE, depth: -0.003 },

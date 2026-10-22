@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
 import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
-import { treadNormalMap, WHEEL_DESIGNS, type WheelDesign } from "./car-materials.ts";
+import { makeWheelGeometry, treadNormalMap, WHEEL_DESIGNS, type WheelDesign } from "./car-materials.ts";
 import { DeformableCar } from "./car.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
 import { STYLE_WHEELS, WheelBatch } from "./wheel-batch.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
+import { detCos, detSin } from "../kernel/physics-core.js";
 
 /** The instance matrix is float32: a wheel's position of a few hundred metres is stored within 1e-4 m. */
 const FLOAT32_SLACK = 1e-4;
@@ -152,7 +153,7 @@ describe("given every body style's tyre (its dims' wheel), drawn by the one plat
   }
 });
 
-/** The rim each reference car shows: sedan and SUV split ten-spoke (the SUV's dark), hatch and police five-spoke, muscle slotted mag, pickup six-spoke steel, monster beadlock. */
+/** The rim each reference car shows: sedan and SUV split ten-spoke (both silver), hatch and police five-spoke, muscle slotted mag, pickup six-spoke steel, monster beadlock. */
 const REFERENCE_RIMS: Readonly<Record<CarStyleId, WheelDesign>> = {
   sedan: "split10",
   hatchback: "five",
@@ -163,6 +164,41 @@ const REFERENCE_RIMS: Readonly<Record<CarStyleId, WheelDesign>> = {
   monster: "beadlock",
 };
 
+/** Vertex red (linear) under which a tone is dark: between the dark disc's and the alloy's. */
+const DARK_RED = 0.2;
+/** Angles sampled round each circle, 1 degree apart. */
+const RING_SAMPLES = 360;
+/** Radius (m) between a mag's slot windows' outer end and its lip, where its dish must show no dark all round. */
+const DISH_RADII = [0.178] as const;
+/** Radius (m) sampled across a mag's slot windows, outside its hub cap. */
+const WINDOW_RADIUS = 0.11;
+/** Barycentric slack: a sample on an edge every layer shares (all are 16-sided) must not fall out of both triangles by rounding. */
+const EDGE_TOL = 1e-9;
+
+/** The +x face of `g` as seen from outside: whether the outermost +x-facing triangle over (y, z) is dark; throws where none covers it. */
+function outwardFaceDark(g: THREE.BufferGeometry): (y: number, z: number) => boolean {
+  const flat = g.toNonIndexed();
+  const [pos, nrm, col] = [flat.getAttribute("position"), flat.getAttribute("normal"), flat.getAttribute("color")];
+  const faces: { yz: [number, number, number, number, number, number]; x: number; dark: boolean }[] = [];
+  for (let t = 0; t < pos.count; t += 3) {
+    if (nrm.getX(t) <= 0.9) continue;
+    faces.push({ yz: [pos.getY(t), pos.getZ(t), pos.getY(t + 1), pos.getZ(t + 1), pos.getY(t + 2), pos.getZ(t + 2)], x: pos.getX(t), dark: col.getX(t) < DARK_RED });
+  }
+  return (y, z) => {
+    let top: (typeof faces)[number] | null = null;
+    for (const f of faces) {
+      const [y0, z0, y1, z1, y2, z2] = f.yz;
+      const det = (z1 - z2) * (y0 - y2) + (y2 - y1) * (z0 - z2);
+      if (det === 0) continue;
+      const l0 = ((z1 - z2) * (y - y2) + (y2 - y1) * (z - z2)) / det;
+      const l1 = ((z2 - z0) * (y - y2) + (y0 - y2) * (z - z2)) / det;
+      if (l0 >= -EDGE_TOL && l1 >= -EDGE_TOL && l0 + l1 <= 1 + EDGE_TOL && (!top || f.x > top.x)) top = f;
+    }
+    assert.ok(top, `no +x face over y ${y.toFixed(3)} z ${z.toFixed(3)}`);
+    return top.dark;
+  };
+}
+
 describe("given the reference cars' rim designs", () => {
   for (const id of CAR_STYLE_IDS) {
     test(`when a ${id} alone is drawn, then its four wheels are all in its reference design's draw and no other wheel draw holds any`, () => {
@@ -172,7 +208,7 @@ describe("given the reference cars' rim designs", () => {
     });
   }
 
-  test("when the designs' wheel geometries are compared, then each is its own shape and the SUV's split ten-spoke is tinted darker than the sedan's", () => {
+  test("when the designs' wheel geometries are compared, then each is its own shape and the SUV's split ten-spoke is the sedan's silver", () => {
     const { batch } = stage();
     const shapes = batch.meshes.slice(0, WHEEL_DESIGNS.length).map((m) => {
       const p = m.geometry.getAttribute("position");
@@ -181,7 +217,16 @@ describe("given the reference cars' rim designs", () => {
       return `${p.count}/${sum.toFixed(3)}`;
     });
     assert.equal(new Set(shapes).size, WHEEL_DESIGNS.length, shapes.join(" "));
-    assert.ok(STYLE_WHEELS.wagon.tint.getHSL({ h: 0, s: 0, l: 0 }).l < 0.5 * STYLE_WHEELS.sedan.tint.getHSL({ h: 0, s: 0, l: 0 }).l, "SUV rim dark");
+    assert.ok(STYLE_WHEELS.wagon.tint.getHex() === STYLE_WHEELS.sedan.tint.getHex(), `SUV rim ${STYLE_WHEELS.wagon.tint.getHexString()} against the sedan's silver`);
+  });
+
+  test("when the coupe's slotted mag is built, then its outward face is solid all round between its windows and its lip, and dark only in five windows inside", () => {
+    const dark = outwardFaceDark(makeWheelGeometry("mag5"));
+    const round = (r: number) => Array.from({ length: RING_SAMPLES }, (_, k) => dark(r * detCos((2 * Math.PI * k) / RING_SAMPLES), r * detSin((2 * Math.PI * k) / RING_SAMPLES)));
+    for (const r of DISH_RADII) assert.equal(round(r).filter(Boolean).length, 0, `dark samples round r ${r}`);
+    const windows = round(WINDOW_RADIUS);
+    const runs = windows.filter((d, k) => d && !windows[(k + 1) % RING_SAMPLES]).length;
+    assert.equal(runs, 5, `${windows.filter(Boolean).length} of ${RING_SAMPLES} samples dark round r ${WINDOW_RADIUS}`);
   });
 });
 

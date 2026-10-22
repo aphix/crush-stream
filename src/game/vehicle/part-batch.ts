@@ -56,6 +56,7 @@ export class PartBatch {
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.frustumCulled = false;
       mesh.count = 0;
+      mesh.visible = false;
       mesh.castShadow = true;
       mesh.receiveShadow = false;
       return mesh;
@@ -109,7 +110,10 @@ export class PartBatch {
   }
 
   private publish(mesh: THREE.InstancedMesh, n: number): void {
+    if (n === 0 && mesh.count === 0) return;
     mesh.count = n;
+    // An empty instanced draw still costs the scene walk, the upload and the program switch before three skips it.
+    mesh.visible = n > 0;
     upload(mesh.instanceMatrix, n);
     if (mesh.instanceColor) upload(mesh.instanceColor, n);
   }
@@ -143,6 +147,7 @@ function partDraw(geo: THREE.BufferGeometry, styled: boolean, capacity: number):
   // Instances span the pad and move every frame; a stale bound would cull live parts.
   mesh.frustumCulled = false;
   mesh.count = 0;
+  mesh.visible = false;
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   return mesh;
