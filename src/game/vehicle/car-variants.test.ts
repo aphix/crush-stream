@@ -2164,6 +2164,23 @@ describe("given a body style's P1 parts", () => {
     assertSameNumbers([topAt(crowned, 0), topAt(crowned, 0.44), topAt({ spoiler }, 0.44)], [spoiler.y[1], spoiler.y[1] - crown, spoiler.y[1]], "the crowned top's height at its middle and its sloped ends, and the level top's at its ends", POSITION_TOL);
   });
 
+  it("when a spoiler's front edge bows (bow), then its middle stands `bow` behind its front corners in plan, its tip unmoved, and the cage builds are unchanged", () => {
+    const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5, ends: [0.06, 0.1], crown: 0.02 } as const;
+    const bow = 0.015;
+    const { style, body, from } = roofParts({ spoiler: { ...spoiler, bow } });
+    const pos = body.getAttribute("position");
+    // The frontmost z on the centre line and at the front corners (|x| = halfWidth), and the rearmost z anywhere.
+    let [centre, corner, tip] = [-Infinity, -Infinity, Infinity];
+    for (let i = from; i < pos.count; i++) {
+      const [x, z] = [Math.abs(pos.getX(i)), pos.getZ(i)];
+      if (x < 1e-4) centre = Math.max(centre, z);
+      if (Math.abs(x - spoiler.halfWidth) < 1e-4) corner = Math.max(corner, z);
+      tip = Math.min(tip, z);
+    }
+    assertSameNumbers([centre, corner, tip], [spoiler.z[1] - bow, spoiler.z[1], spoiler.z[0]], "the bowed front's middle and corners, and the tip", POSITION_TOL);
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
   it("when a spoiler's tip rounds (round), then its underside's half-width follows a quarter ellipse from the front to the tip, wider mid-run than the straight chamfer", () => {
     const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5, ends: [0.06, 0.1], round: true } as const;
     const { body, from } = roofParts({ spoiler });
@@ -2188,29 +2205,45 @@ describe("given a body style's P1 parts", () => {
   });
 
   it("when the wagon's spoiler caps the roof's last drawn chord, then its front edge's crowned top sits on the drawn roof (within 2 mm) and its sloped ends never stand over it", () => {
-    const style = CAR_STYLES.wagon;
-    const spoiler = style.roof!.spoiler!;
-    const pos = makeRoofFittings({ ...style, roof: { spoiler } })!.geometry.getAttribute("position");
-    const roof = new THREE.Mesh(makeRoofGeometry(style), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
-    const ray = new THREE.Raycaster();
-    // The front cap's fan centre sits lower than its edge: take each x's highest front vertex.
-    const tops = new Map<string, number>();
-    for (let i = 0; i < pos.count; i++) {
-      if (Math.abs(pos.getZ(i) - spoiler.z[1]) >= POSITION_TOL) continue;
-      const x = (Math.round(pos.getX(i) * 1000) / 1000).toFixed(3);
-      tops.set(x, Math.max(tops.get(x) ?? -Infinity, pos.getY(i)));
-    }
+    const spoiler = CAR_STYLES.wagon.roof!.spoiler!;
+    const over = spoilerFrontOverRoof(CAR_STYLES.wagon);
     const reach = spoiler.halfWidth - (spoiler.ends?.[0] ?? 0) + POSITION_TOL;
     const off: string[] = [];
-    for (const [x, top] of tops) {
-      ray.set(new THREE.Vector3(Number(x), 3, spoiler.z[1]), new THREE.Vector3(0, -1, 0));
-      const hit = ray.intersectObject(roof, false)[0];
-      const over = hit ? top - hit.point.y : Infinity;
+    for (const [x, o] of over) {
       // The sloped ends may tuck under the roof's roll; only standing over it shows.
-      if (over > 0.002 || (Math.abs(Number(x)) <= reach && over < -0.002)) off.push(`${x}:${hit ? `${(over * 1000) | 0}mm` : "no roof"}`);
+      if (o === null || o > 0.002 || (Math.abs(Number(x)) <= reach && o < -0.002)) off.push(`${x}:${o === null ? "no roof" : `${(o * 1000) | 0}mm`}`);
     }
-    assert.ok(tops.size >= 5, `front-top vertices met: ${tops.size}`);
+    assert.ok(over.size >= 5, `front-top vertices met: ${over.size}`);
     assert.equal(off.join(" "), "", "spoiler front-top vertices off the drawn roof, by x");
+  });
+
+  it("when the hatch's spoiler caps the roof's rear end, then its front, bowed back with the glass top, stands on the roof's end (no run over the roof skin to fight it), its front edge's crowned top never falls under the drawn roof and sits within 5 mm of it across the crown, and no point of the rear glass's bowed top or frit stands over its top (no dark sliver between them)", () => {
+    const style = CAR_STYLES.hatchback;
+    const spoiler = style.roof!.spoiler!;
+    assert.ok(Math.abs(spoiler.z[1] - style.roofZ[0]) <= 0.003, `the front at z ${spoiler.z[1]}, the roof's end at ${style.roofZ[0]}`);
+    const reach = spoiler.halfWidth - (spoiler.ends?.[0] ?? 0) + POSITION_TOL;
+    // The roof's crown run, inside its roll down to the tucked cant.
+    const crown = 0.3;
+    const off: string[] = [];
+    for (const [x, o] of spoilerFrontOverRoof(style)) {
+      // Past the roof's tucked cant the front stands over the D-pillars' tops: nothing to sit on.
+      if (o === null || Math.abs(Number(x)) > reach) continue;
+      if (o < 0 || (Math.abs(Number(x)) <= crown && o > 0.005)) off.push(`${x}:${(o * 1000).toFixed(1)}mm`);
+    }
+    assert.equal(off.join(" "), "", "spoiler front-top vertices under the drawn roof, or standing over 5 mm off it across the crown, by x");
+    // The glass's top bows 15 mm behind the roof's straight end at its centre: the spoiler's falling top must still cover it.
+    const lip = new THREE.Mesh(makeRoofFittings(style)!.geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    const glass = makeRearGlass(style).getAttribute("position");
+    const ray = new THREE.Raycaster();
+    const over: string[] = [];
+    for (let i = 0; i < glass.count; i++) {
+      const [x, y, z] = [glass.getX(i), glass.getY(i), glass.getZ(i)];
+      if (z > spoiler.z[1] || z < spoiler.z[0] || Math.abs(x) > reach) continue;
+      ray.set(new THREE.Vector3(x, 3, z), new THREE.Vector3(0, -1, 0));
+      const hit = ray.intersectObject(lip, false)[0];
+      if (!hit || hit.point.y < y) over.push(`(${x.toFixed(3)}, ${z.toFixed(3)}): ${hit ? `${((y - hit.point.y) * 1000).toFixed(1)} mm over` : "no spoiler"}`);
+    }
+    assert.equal(over.join(" "), "", "rear glass vertices standing over the spoiler's top");
   });
 
   it("when a bumper's trim is chrome, black or body, then it wears chrome, black plastic or the body's colour (unset: the car's accent trim), and no bumper or cage build changes", () => {
@@ -2308,6 +2341,30 @@ describe("given a body style's P1 parts", () => {
     assert.ok(inlay.box.max.x - inlay.box.min.x > 2 * wrap.from, `the band spans ${(inlay.box.max.x - inlay.box.min.x).toFixed(3)} m across`);
   });
 });
+
+/** `style`'s spoiler front edge: each front-top vertex's x (the highest at that x: a cap's fan centre sits lower) and how far (m) it stands over the drawn roof straight below (null: no roof under it). */
+function spoilerFrontOverRoof(style: BodyStyle): Map<string, number | null> {
+  const spoiler = style.roof!.spoiler!;
+  const pos = makeRoofFittings({ ...style, roof: { spoiler } })!.geometry.getAttribute("position");
+  const roof = new THREE.Mesh(makeRoofGeometry(style), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  // The front edge: its ring, bowed back up to `bow` at its middle.
+  const back = spoiler.z[1] - (spoiler.bow ?? 0) - POSITION_TOL;
+  const tops = new Map<string, { y: number; z: number }>();
+  for (let i = 0; i < pos.count; i++) {
+    const z = pos.getZ(i);
+    if (z > spoiler.z[1] + POSITION_TOL || z < back) continue;
+    const x = (Math.round(pos.getX(i) * 1000) / 1000).toFixed(3);
+    if (pos.getY(i) > (tops.get(x)?.y ?? -Infinity)) tops.set(x, { y: pos.getY(i), z });
+  }
+  const ray = new THREE.Raycaster();
+  const over = new Map<string, number | null>();
+  for (const [x, top] of tops) {
+    ray.set(new THREE.Vector3(Number(x), 3, top.z), new THREE.Vector3(0, -1, 0));
+    const hit = ray.intersectObject(roof, false)[0];
+    over.set(x, hit ? top.y - hit.point.y : null);
+  }
+  return over;
+}
 
 type MirrorSpec = NonNullable<BodyStyle["door"]["mirror"]>;
 /** A drawn mirror's foot meets the drawn skin at its seat within this (m). */
@@ -2413,6 +2470,30 @@ describe("given a body style's P2 parts", () => {
     assert.ok(nose!.rear > 0.8 * w, `the nose cap's rear tenth spans ${nose!.rear.toFixed(3)} m of its ${w}`);
     assertSameNumbers([nose!.inner], [rounded!.inner], "the cap's inner face", 1e-4);
     assert.ok(mirrorSeatX(nose!.style) === mirrorSeatX(rounded!.style) && cageHash(nose!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
+  });
+
+  it("when a nose cap sets its taper, then its front face keeps that share of its section (a fuller pod) while its rear face keeps its full width and its inner face holds, and the seat and cage builds are unchanged", () => {
+    const size = [0.12, 0.095, 0.145] as const;
+    const [w, , d] = size;
+    const [full, plain] = ([0.85, undefined] as const).map((taper) => {
+      const style = mirrorStyle({ cap: "nose", finish: "body", size, taper });
+      const { cap: box } = readMirror(style);
+      const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
+      const [pos, painted] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE)];
+      const scaleX = style.door.mirrorReach / MIRROR_REACH;
+      const [front, rear] = [new THREE.Box3(), new THREE.Box3()];
+      for (let i = 0; i < pos.count; i++) {
+        if (painted.getX(i) !== 1) continue;
+        const p = new THREE.Vector3(pos.getX(i) * scaleX, pos.getY(i), pos.getZ(i));
+        if (p.z >= box.max.z - 0.1 * d) front.expandByPoint(p);
+        if (p.z <= box.min.z + 0.1 * d) rear.expandByPoint(p);
+      }
+      return { style, inner: box.min.x, front: front.max.x - front.min.x, rear: rear.max.x - rear.min.x };
+    });
+    assert.ok(full!.front > 0.65 * w && plain!.front < 0.6 * w, `the cap's front tenth spans ${full!.front.toFixed(3)} m (taper .85), ${plain!.front.toFixed(3)} m (default) of its ${w}`);
+    assert.ok(full!.rear > 0.8 * w, `the tapered cap's rear tenth spans ${full!.rear.toFixed(3)} m of its ${w}`);
+    assertSameNumbers([full!.inner], [plain!.inner], "the cap's inner face", 1e-4);
+    assert.ok(mirrorSeatX(full!.style) === mirrorSeatX(plain!.style) && cageHash(full!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
   });
 
   it("when a mirror's cap is rounder (`round`), then its outer face's flat run is shorter by twice the radius it grows, and the seat and cage builds are unchanged", () => {
@@ -2546,6 +2627,27 @@ describe("given a body style's P2 parts", () => {
     let [lo, hi] = [Infinity, -Infinity];
     for (let i = 0; i < pos.count; i++) if (painted.getX(i) !== 1 && pos.getY(i) < cap.min.y - POSITION_TOL) [lo, hi] = [Math.min(lo, pos.getZ(i)), Math.max(hi, pos.getZ(i))];
     assert.ok(hi - lo >= 0.055, `the foot runs ${(hi - lo).toFixed(3)} m along the door`);
+  });
+
+  it("when the hatch's and SUV's mirrors are drawn, then their heads run as long as the references' pods (hatch 16 cm, SUV 19 cm along the door) and each cap's inner face stands clear of its foot's (no two faces within the 2 mm that fight at range)", () => {
+    const want = { hatchback: 0.16, wagon: 0.19 } as const;
+    const off: string[] = [];
+    for (const id of ["hatchback", "wagon"] as const) {
+      const style = CAR_STYLES[id];
+      const { inner } = readMirror(style);
+      const [seat, scaleX] = [style.door.hingeX + mirrorSeatX(style), style.door.mirrorReach / MIRROR_REACH];
+      const pos = drawnPart(PART_KIND.mirrorR, style).geometry.getAttribute("position");
+      const box = new THREE.Box3().setFromBufferAttribute(pos as THREE.BufferAttribute);
+      // The cap alone: past the foot's run along the door, ahead of the glass on its rear face.
+      const half = style.door.mirror!.stalk! / 2 + POSITION_TOL;
+      let capInner = Infinity;
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i)) > half && pos.getZ(i) > box.min.z + 0.001) capInner = Math.min(capInner, seat + pos.getX(i) * scaleX);
+      // The glass stands 2 mm behind the cap's rear face.
+      const long = box.max.z - box.min.z - 0.002;
+      if (long < want[id] - POSITION_TOL) off.push(`${id}: head ${long.toFixed(3)} m long`);
+      if (capInner - inner < 0.003) off.push(`${id}: cap's inner face ${((capInner - inner) * 1000).toFixed(1)} mm off the foot's`);
+    }
+    assert.equal(off.join("; "), "");
   });
 
   it("when the coupe is drawn, then a chrome badge rides each front fender ahead of its door where the reference side view has one (z .66-.73, y .42)", () => {

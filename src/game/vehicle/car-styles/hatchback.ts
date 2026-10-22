@@ -105,8 +105,8 @@ export const HATCHBACK: BodyStyle = {
       plateless: true,
     },
   },
-  // The reference's mirror: a body-colour head tapering to its nose, standing clear over the belt on a black sail in the glass's front corner, about 3 cm past the body side.
-  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.075, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62], mirror: { cap: "nose", finish: "body", size: [0.065, 0.12, 0.14], lift: 0.075, neck: 0.03, stalk: 0.1, round: 0.48 } },
+  // The reference's mirror: a body-colour pod tapering gently to its nose, 16 cm along the door, standing clear over the belt on a slim black foot in the glass's front corner, about 3 cm past the body side.
+  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.075, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62], mirror: { cap: "nose", finish: "body", size: [0.065, 0.125, 0.16], lift: 0.075, neck: 0.015, stalk: 0.07, round: 0.48, taper: 0.8 } },
   aPillarFoot: 0.73,
   aPillarTop: 0.212,
   glassTop: 0.045,
@@ -142,8 +142,8 @@ export const HATCHBACK: BodyStyle = {
   // The windshield reaches the roof's flat front (the reference's glass top), its corners flush with the dome's edge.
   roofZ: [-1.151, 0.245],
   // The glass top sits 7 mm under the crown: the crown rolls down onto it. The rear end's side lip tucks in over the D-pillars' tops;
-  // its run is under 2 cm, so its near roll station merges into the roof's end ring and the body stays within its vertex budget.
-  roofEnds: { front: 0.12, rear: 0.019, flush: { rear: 1 } },
+  // its run is under 2 cm, so its near roll station merges into the roof's end ring and the body stays within its vertex budget. The end bows back with the rear glass's top (glassBow), so no slit opens between them.
+  roofEnds: { front: 0.12, rear: 0.019, flush: { rear: 1 }, glassBow: { rear: true } },
   // The reference's roof rolls round into the side glass with a gentle crown: no flat plate on a hard shoulder, no drip rail.
   roofSection: { crown: 0.4, blend: 0.9, squareFront: 0.12 },
   roofDrip: 0,
@@ -185,8 +185,9 @@ export const HATCHBACK: BodyStyle = {
   pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] }, rearFoot: [0.68, 0.895] },
   blackout: { b: true, divider: true },
   privacyGlass: { rear: true, quarter: true },
-  // The spoiler spans the roof's rear end out to its side lip, carrying the roof's crown, its side ends sloping down over the lip's tuck onto the D-pillars' tops.
-  roof: { spoiler: { z: [-1.24, -1.1], y: [1.22, 1.28], halfWidth: 0.6, ends: [0.06, 0.04], crown: 0.026 } },
+  // The spoiler starts at the roof's rear end, its front edge bowed back with the glass top's plan bow: no run over the roof skin to fight it,
+  // no glass top or frit poking over it. It ends on the roof end's tucked corners, its side ends sloping down onto the D-pillars' tops.
+  roof: { spoiler: { z: [-1.24, -1.149], y: [1.22, 1.2795], halfWidth: 0.53, ends: [0.1, 0.04], crown: 0.025, bow: 0.015 } },
   exhaust: { tips: 2, x: 0.5, y: 0.24, size: [0.1, 0.045], shape: "round" },
   details: {
     lines: [

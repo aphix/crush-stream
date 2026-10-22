@@ -240,9 +240,23 @@ function glassPanelGeometry(panel: NonNullable<RoofParts["glassPanel"]>, style: 
   return hardEdged(loftFromRings(rings, zs, 0, 1));
 }
 
+/** `geo` (a spoiler's loft) with its front edge bowed back in plan by `spoiler.bow` at its middle, a parabola across its half-width, easing to none at the tip. */
+function bowSpoilerFront(geo: THREE.BufferGeometry, spoiler: NonNullable<RoofParts["spoiler"]>): THREE.BufferGeometry {
+  const bow = spoiler.bow ?? 0;
+  if (!bow) return geo;
+  const [tip, front] = spoiler.z;
+  const pos = geo.getAttribute("position");
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i) / spoiler.halfWidth;
+    const z = pos.getZ(i);
+    pos.setZ(i, z - bow * (1 - x * x) * ((z - tip) / (front - tip)));
+  }
+  return geo;
+}
+
 /**
  * A wedge off the roof's rear end: flat underside, its top falling from the front edge to the tip, its side ends sloped and tapered by `ends`;
- * `round` turns the tip's corners on a quarter ellipse in plan, `crown` bows the top across.
+ * `round` turns the tip's corners on a quarter ellipse in plan, `crown` bows the top across, `bow` sweeps the front edge back in plan.
  */
 function spoilerGeometry(spoiler: NonNullable<RoofParts["spoiler"]>): THREE.BufferGeometry {
   const [under, top] = spoiler.y;
@@ -255,7 +269,7 @@ function spoilerGeometry(spoiler: NonNullable<RoofParts["spoiler"]>): THREE.Buff
       { x: half - slope, y },
       { x: half, y: under },
     ];
-    return hardEdged(loftFromRings([ring(lerp(under, top, SPOILER_TIP), hw - taper), ring(top, hw)], [...spoiler.z], 0, 1));
+    return hardEdged(bowSpoilerFront(loftFromRings([ring(lerp(under, top, SPOILER_TIP), hw - taper), ring(top, hw)], [...spoiler.z], 0, 1), spoiler));
   }
   const crown = spoiler.crown ?? 0;
   const shares: readonly number[] = crown ? SPOILER_CROWN_SHARES : [-1, 1];
@@ -270,7 +284,7 @@ function spoilerGeometry(spoiler: NonNullable<RoofParts["spoiler"]>): THREE.Buff
     return [{ x: -half, y: under }, ...shares.map((share) => ({ x: share * reach, y: topAt(share) })), { x: half, y: under }];
   };
   const us = spoiler.round ? Array.from({ length: SPOILER_ROUND_RINGS + 1 }, (_, k) => detSin((Math.PI / 2) * ((SPOILER_ROUND_RINGS - k) / SPOILER_ROUND_RINGS))) : [1, 0];
-  return hardEdged(loftFromRings(us.map(ringAt), us.map((u) => lerp(spoiler.z[1], spoiler.z[0], u)), 0, 1));
+  return hardEdged(bowSpoilerFront(loftFromRings(us.map(ringAt), us.map((u) => lerp(spoiler.z[1], spoiler.z[0], u)), 0, 1), spoiler));
 }
 
 /** `style.roof`'s rails, glass panel and spoiler as one geometry (car frame) for the drawn body, its first `dark` vertices (rails, panel) drawn primer-dark; null without roof parts. */
