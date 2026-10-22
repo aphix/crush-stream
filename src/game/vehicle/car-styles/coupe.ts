@@ -2,15 +2,15 @@ import type { BodyStyle } from "../car-variants.ts";
 import { PLATFORM_HARDPOINTS, st } from "./platform.ts";
 
 const { bumpers } = PLATFORM_HARDPOINTS;
-/** Chrome wrap bumper over a black air dam: the face 17 cm tall and 9 cm proud, the dam 4 cm lower and 6 cm behind it ([y, out] m, top to bottom). */
+/** Chrome bar bumper over a black air dam: a flat face 9 cm proud with rounded top and bottom edges, 17 cm tall, the dam 4 cm lower and 6 cm behind it ([y, out] m, top to bottom). */
 const MUSCLE_FRONT_FASCIA = [
   [0.083, -0.07],
-  [0.083, 0.03],
-  [0.075, 0.07],
-  [0.04, 0.088],
-  [0, 0.09],
-  [-0.04, 0.088],
-  [-0.066, 0.07],
+  [0.083, 0.062],
+  [0.078, 0.082],
+  [0.068, 0.09],
+  [-0.052, 0.09],
+  [-0.062, 0.084],
+  [-0.07, 0.072],
   [-0.083, 0.07],
   [-0.083, 0],
   [-0.135, -0.03],
@@ -71,10 +71,11 @@ export const COUPE: BodyStyle = {
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.012, width: 0.05, band: true } },
-  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.74, width: 0.62, rise: 0.03, scoop: { inlets: 2, z: 1.6, width: 0.52, height: 0.025 } } },
+  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.96, z1: 1.74, width: 0.64, rise: 0.03, scoop: { inlets: 2, z: 1.68, width: 0.56, height: 0.04 } } },
   bumpers: {
-    front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.52, back: 0.2 }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
-    rear: { ...bumpers.rear, seat: { y: 0.425, z: 2.0475 }, span: 0.72, wrap: { from: 0.45, back: 0.2 }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome", plate: 0.37 },
+    // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin.
+    front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.3, back: 0.24, end: { corner: 0.15, stand: 0.03 } }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
+    rear: { ...bumpers.rear, seat: { y: 0.425, z: 2.0475 }, span: 0.72, wrap: { from: 0.45, back: 0.2, end: { corner: 0.1, stand: 0.03 } }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome", plate: 0.37 },
   },
   profile: [
     st(-2.054, 0.62, 0.857),
@@ -140,7 +141,7 @@ export const COUPE: BodyStyle = {
       { at: [0.55, -1.73], size: [0.05, 0.04] },
     ],
   },
-  grille: { y: 0.585, size: [0.78, 0.17], kind: "mesh", badge: 0.03, finish: "black" },
+  grille: { y: 0.585, size: [0.78, 0.17], kind: "bars", count: 6, badge: 0.03, finish: "black" },
   exhaust: { tips: 2, x: 0.45, y: 0.24, size: [0.085, 0.06], shape: "round" },
   camera: { hood: [1.12, 1.0], third: { dist: 6.1, height: 1.95, aimUp: 0.95 }, far: { dist: 9.9, height: 3.25, aimUp: 1.1 } },
   details: {
@@ -159,17 +160,8 @@ export const COUPE: BodyStyle = {
       { view: "side", points: [[0.691, 0.92], [0.535, 1.005], [0.335, 1.119], [0.093, 1.233]], width: 0.014, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[-0.834, 1.148], [-0.977, 1.105], [-1.148, 1.048], [-1.319, 0.977], [-1.433, 0.934]], width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.107, 1.205], [-0.207, 1.19], [-0.634, 1.183], [-0.848, 1.162], [-0.977, 1.133]], width: 0.014, depth: 0.002, profile: "u", cavity: 0.1 },
-      { view: "side", points: [[2.017, 0.449], [1.775, 0.449]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
-      { view: "side", points: [[2.003, 0.249], [1.775, 0.249]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
-      { view: "side", points: [[2.003, 0.428], [1.775, 0.428], [1.775, 0.385], [2.003, 0.385]], closed: true, width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
-      { view: "side", points: [[1.775, 0.449], [1.775, 0.264]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
-      { view: "side", points: [[-1.889, 0.506], [-2.074, 0.506]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
-      { view: "side", points: [[-1.918, 0.307], [-2.074, 0.321]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
-      { view: "side", points: [[-1.903, 0.463], [-2.06, 0.463], [-2.06, 0.421], [-1.903, 0.421]], closed: true, width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[-1.433, 0.991], [-1.461, 0.948], [-1.49, 0.891]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "top", points: [[2.002, 0], [2.002, 0.199], [1.987, 0.493], [1.943, 0.611]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
-      { view: "top", points: [[1.6, 0], [0.78, 0]], width: 0.008, depth: -0.002, profile: "v", cavity: 0.4 },
-      { view: "top", points: [[-2.09, 0], [-2.09, 0.346]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
+      { view: "top", points: [[1.68, 0], [0.96, 0]], width: 0.008, depth: -0.002, profile: "v", cavity: 0.4 },
       { view: "rear", points: [[0, 0.74], [0.75, 0.74]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.1 },
     ],
     patches: [

@@ -28,7 +28,7 @@ import { PLATFORM_RIG } from "../deform/deform-rig.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { LampBatch } from "./lamp-lights.ts";
 import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
-import { BLACKOUT, FITTING_ATTRIBUTE, FITTING_TONE, LIGHT_BAR, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { BLACKOUT, FITTING_ATTRIBUTE, FITTING_TONE, LIGHT_BAR, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { bootPivot, lidSpec, roofHinged } from "./hinge-spec.ts";
 import { SPRINGS } from "./car-suspension.ts";
 import { CarCage } from "./car-cage.ts";
@@ -900,6 +900,32 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(Math.abs(sedanGap) < 0.01, `platform-wrap bumper's corner at |x| 0.35-0.45 stands ${sedanGap} m behind its middle, under 0.01`);
   });
 
+  it("when a bumper has lofted ends, then each runs on along the body side to `back`, its face `stand` off the skin there, where the plain wrap of the same bumper stays inside the skin", () => {
+    const coupe = CAR_STYLES.coupe;
+    const { front } = coupe.bumpers;
+    assert.ok(front.wrap.end, "the control: the coupe's front bumper has lofted ends");
+    const plain: BodyStyle = { ...coupe, bumpers: { ...coupe.bumpers, front: { ...front, wrap: { from: front.wrap.from, back: front.wrap.back } } } };
+    // The bumper's rearmost z (car frame), and how far its rearmost ring's outermost point stands past the body side at its height (m).
+    const endOf = (style: BodyStyle) => {
+      const pos = makeBumperGeometry(true, style).getAttribute("position");
+      let rear = Infinity;
+      for (let i = 0; i < pos.count; i++) rear = Math.min(rear, pos.getZ(i));
+      let stand = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        if (pos.getZ(i) > rear + 0.005) continue;
+        const [z, y] = [front.seat.z + pos.getZ(i), front.seat.y + pos.getY(i)];
+        const slice = sampleSlice(z, coupe.profile);
+        stand = Math.max(stand, Math.abs(pos.getX(i)) - sideX(y, slice.hw, slice.yBelt, rockerAt(z, coupe)));
+      }
+      return { rear: front.seat.z + rear, stand };
+    };
+    const [lofted, wrapped] = [endOf(coupe), endOf(plain)];
+    const faceZ = front.seat.z + Math.max(...front.fascia.map(([, out]) => out));
+    assert.ok(Math.abs(faceZ - lofted.rear - front.wrap.back) < 0.001, `the lofted end runs ${faceZ - lofted.rear} m back from the face, ${front.wrap.back} asked`);
+    assert.ok(lofted.stand >= front.wrap.end.stand - 0.001, `the lofted end stands ${lofted.stand} m off the skin, ${front.wrap.end.stand} asked`);
+    assert.ok(wrapped.stand <= 0, `the plain wrap's end stands ${wrapped.stand} m off the skin: held inside it`);
+  });
+
   it("when its door hinge moves with the door's trailing edge kept, then the door glass stays in the same window: it rides on its door's own hinge", () => {
     const moved: BodyStyle = { ...sedan, door: { ...sedan.door, hingeX: 0.8, hingeY: 0.79, hingeZ: 0.7, length: sedan.door.length + 0.15 } };
     const inCar = (style: BodyStyle) => {
@@ -1097,7 +1123,7 @@ function toneBox(geometry: THREE.BufferGeometry, attribute: string | null, tone:
   return { box, count };
 }
 
-/** A hood (`withHoodBulge`) read in the car frame: the box of the vertices standing over the lid, the highest point over the lid's centre line, and its primer-dark mouths' box and least forward normal. */
+/** A hood (`withHoodBulge`) read in the car frame: the box of the vertices standing over the lid, the highest point over the lid's centre line, and its near-black mouths' box and least forward normal. */
 function readBulge(hood: THREE.BufferGeometry, style: BodyStyle): { raised: THREE.Box3; peak: number; mouth: THREE.Box3; forward: number } {
   const [oy, oz] = style.hood.origin;
   const pos = hood.getAttribute("position");
@@ -1110,7 +1136,7 @@ function readBulge(hood: THREE.BufferGeometry, style: BodyStyle): { raised: THRE
   let forward = 1;
   for (let i = 0; i < pos.count; i++) {
     p.set(pos.getX(i), pos.getY(i) + oy, pos.getZ(i) + oz);
-    if (primer !== null && primer.getX(i) === 1) {
+    if (primer !== null && primer.getX(i) === WELL_PANEL) {
       mouth.expandByPoint(p);
       forward = Math.min(forward, nrm.getZ(i));
     } else if (p.y - deckTopY(p.x, p.z, style, true) > RAISED_M) raised.expandByPoint(p);
