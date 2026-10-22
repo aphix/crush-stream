@@ -228,6 +228,22 @@ describe("given a monster truck of its class at rest on flat ground", () => {
     assert.ok(low >= 0, `lowest undercarriage vertex at ${low.toFixed(3)} m`);
   });
 
+  test("when its frame is read in body space, then every vertex over a wheel (the coil-overs and their brackets) stands inside the body side, under the flare", () => {
+    const pos = partGeometry(PART_KIND.ladderFrame).getAttribute("position");
+    const { radius } = monster.style.arch;
+    let worst = -Infinity;
+    let at = "";
+    for (const wheel of carFrame(monster.style).wheels) {
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        if (Math.abs(v.z - wheel[2]) > radius) continue;
+        const past = Math.abs(v.x) - sampleSlice(v.z, monster.style.profile).hw;
+        if (past > worst) [worst, at] = [past, mm(v)];
+      }
+    }
+    assert.ok(worst <= 0, `a frame vertex at ${at} stands ${(worst * 100).toFixed(1)} cm past the body side`);
+  });
+
   test("when its front-left wheel pops off, then the front axle still draws, its stub on the gone wheel's rest hub where it stood", () => {
     const popped = build("monster");
     const own = new PartBatch(1);
