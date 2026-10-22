@@ -489,6 +489,7 @@ export class CrashEngine extends EngineGarage {
     this.cine.contextRestored();
     this.autoFx.restart();
     this.detailGov.restart();
+    this.quality.scaleGov.restart();
     const ultra = this.cine.tier === "ultra";
     if (this.cine.ultra) {
       if (ultra) this.cine.setTier("high");
