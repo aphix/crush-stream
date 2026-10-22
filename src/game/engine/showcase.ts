@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
 import { ShowcaseArt } from "../present/showcase-art.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
 
 /** The screen box the pointer's client coordinates are read in (the canvas's `getBoundingClientRect`). */
 type Rect = { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
@@ -8,12 +9,14 @@ type Rect = { readonly left: number; readonly top: number; readonly width: numbe
 const _ndc = new THREE.Vector2();
 
 /**
- * The showcase's runtime (`#scene=showcase`, reachable by link only): its set (`ShowcaseArt`) and the press that knocks a figure
- * over. A press on a standing figure hands him to `knock` (the ragdoll world takes him, as it takes a guard a car runs down) and
- * the set lets him go; a press elsewhere still turns the camera. A reset stands everyone up again.
+ * The showcase's runtime (`#scene=showcase`, reachable by link only): its set (`ShowcaseArt`), its people and its cars, and the
+ * press that knocks a figure over. A press on a standing figure hands him to `knock` (the ragdoll world takes him, as it takes a
+ * guard a car runs down) and the set lets him go; a press elsewhere still turns the camera. A reset stands everyone up again.
  */
 export class Showcase {
   readonly art = new ShowcaseArt();
+  /** The set's cars (`art.carOf`), built on first entering the scene: drawn, never stepped. */
+  readonly cars: DeformableCar[] = [];
   private readonly camera: THREE.Camera;
   private readonly rect: () => Rect;
   private readonly knock: (slot: number) => boolean;

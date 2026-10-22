@@ -73,6 +73,8 @@ const BAR_TEAR_MPS = 60 / 3.6;
 const PANEL_HINGE = { quarter: { on: 0.05, range: 0.45 }, arch: { on: 0.15, range: 0.5 } } as const;
 const PANEL_TEAR = 0.8;
 const PANEL_TEAR_MPS = 50 / 3.6;
+/** A hood or lid crushed past this hinge value tears off (`evaluateBreakage`): the furthest a crash opens it on the car. */
+const LID_TEAR_T = 0.78;
 /** A panel's shell stands from this hinge value. */
 const PANEL_OPEN = 0.03;
 /** At most `LIVE_SHELLS` of a car's torn shells are drawn: the oldest vanish (each is a draw). */
@@ -118,6 +120,9 @@ const _hinge = new Float64Array(7);
 const _floor = new Float64Array(4);
 const _floorAt = new THREE.Vector3();
 const _floorN = new THREE.Vector3();
+
+/** The showcase's and landing shots' poses of a car: as built, every door and lid open, every part off. */
+export type CarPose = "intact" | "open" | "stripped";
 
 /**
  * Detachable parts: attached-part posing, door hinges and mirrors, glass following, breakage and detaching,
@@ -409,6 +414,40 @@ export abstract class CarParts extends CarGlass {
   /** Unlatch the trunk lid and leave it at rest `theta` open (rad, up to its stop); 0 shuts and latches it. */
   setLidOpen(theta: number): void {
     this.setSwingOpen(this.lidPart, theta);
+  }
+
+  /**
+   * Pose a car just reset (`spawnFacing`) for display, nothing stepped: "open" swings the doors and boot to their stops and the hood as far as a crash opens it;
+   * "stripped" takes every part and pane off the drawn car (none handed to the world); "intact" leaves it as built. A reset (`resetVisual`) undoes it.
+   */
+  showPose(pose: CarPose): void {
+    // A stripped part is off the car without the world holding it (`detachPart`), which only an uncrashed car's steps leave alone.
+    if (this.crashed || this.deform.massActive) throw new Error("showPose: a crashed car steps its parts; pose one just reset (spawnFacing)");
+    if (pose === "intact") return;
+    // A door's pose reads the group's world matrix (its clearance over the ground).
+    this.group.updateMatrixWorld(true);
+    if (pose === "open") {
+      this.setDoorOpen(-1, this.doorHinge(-1).spec.stop);
+      this.setDoorOpen(1, this.doorHinge(1).spec.stop);
+      this.setLidOpen(this.lidHinge().spec.stop);
+      for (const p of this.parts) {
+        if (p.hinge !== "cowl") continue;
+        p.hingeT = LID_TEAR_T;
+        this.posePart(p);
+      }
+      return;
+    }
+    for (const p of this.parts) {
+      if (p.detached) continue;
+      if (p.region) this.openPanel(p);
+      if (p.bare) setBare(p.bare, this.body.geometry, true);
+      p.detached = true;
+      p.object.visible = false;
+    }
+    for (const g of this.glassPanes) {
+      g.state = "shattered";
+      g.mesh.visible = false;
+    }
   }
 
   private setSwingOpen(p: DetachPart, theta: number): void {
@@ -779,11 +818,11 @@ export abstract class CarParts extends CarGlass {
       let should = false;
       if (p.mirror) should = p.hingeT > 0.5;
       else if (p.bumper) should = p.hingeT > 0.7 && ebs >= BUMPER_TEAR_MPS;
-      else if (p.hinge === "cowl") should = p.hingeT > 0.78;
+      else if (p.hinge === "cowl") should = p.hingeT > LID_TEAR_T;
       else if (p.hinge === "door" || p.hinge === "tail") {
         // A lid crushed this far is off whatever the speed; an open door or lid hit hard enough past its `tearT` is torn off (C1).
         const s = p.swing!.spec;
-        should = (p.hinge === "tail" && p.hingeT > 0.78) || (p.hingeT > s.tearT && (this.deform.bidirectional || ebs >= s.tearMps));
+        should = (p.hinge === "tail" && p.hingeT > LID_TEAR_T) || (p.hingeT > s.tearT && (this.deform.bidirectional || ebs >= s.tearMps));
       } else if (p.region) should = p.hingeT > PANEL_TEAR && ebs >= PANEL_TEAR_MPS;
       if (should) this.detachPart(p, impulse);
     }

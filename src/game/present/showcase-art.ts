@@ -7,11 +7,14 @@ import { ELDER_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { FACE } from "./dummy-faces.ts";
 import { JEANS, OUTFIT, type DriverLook } from "./driver-look.ts";
 import { blankStance, guardDress, People, walkStance, type Stance } from "./people.ts";
+import type { CarPose } from "../vehicle/car-parts.ts";
+import type { CarStyleId } from "../vehicle/car-variants.ts";
 
 /**
  * The showcase's set: every kind of person the game draws, standing in rows (`ROWS`) on the sandbox's disc so the owner can
- * survey how each looks and moves. A row is data: how its figures stand and where; the next kind of thing (props, cars,
- * prefabs) gets a row of its own beside these.
+ * survey how each looks and moves, and behind them three rows of cars (`CAR_ROWS`), one of every style in each, as built, with
+ * every door and lid open, and stripped to the cabin. A row is data: how its figures stand and where; the next kind of thing
+ * (props, prefabs) gets a row of its own beside these.
  */
 
 /** One figure: its dress (`cop`: a uniform, else a civilian `look`), and whether he stands `square` to the line instead of turned to the eye. */
@@ -52,6 +55,19 @@ const ROWS: readonly { name: string; z: number; pose: (out: Stance) => Stance }[
 const SPACING = 1.5;
 const SLOTS = ROWS.length * FIGURES.length;
 
+/** The car rows' styles, left to right, as the car reference's lineup orders them. */
+const CAR_STYLES: readonly CarStyleId[] = ["sedan", "coupe", "monster", "pickup", "police", "hatchback", "wagon"];
+/** The car rows behind the people, front to back (`z`, m): as built, every door and lid open, every part off (`showPose`). */
+const CAR_ROWS: readonly { pose: CarPose; z: number }[] = [
+  { pose: "intact", z: -9 },
+  { pose: "open", z: -16 },
+  { pose: "stripped", z: -23 },
+];
+/** Metres between neighbouring cars in a row: the longest turned to the eye with both doors at their stops clears the next. */
+const CAR_SPACING = 5.5;
+/** The cars' heading (rad; 0 faces the eye): front and left side to the eye, as the reference's iso shows them. */
+export const SHOWCASE_CAR_YAW = -Math.PI / 5;
+
 /** The eye the scene opens on (m; it looks at `look`), the sandbox car's parking spot out of sight, and a knock (m/s up, and away from the eye along -z). */
 export const SHOWCASE_EYE = { x: 0, y: 1.5, z: 8, lookX: 0, lookY: 1, lookZ: 0 };
 export const SHOWCASE_CAR = { x: 60, z: 60 };
@@ -65,6 +81,7 @@ export class ShowcaseArt {
   readonly group = new THREE.Group();
   readonly people = new People(SLOTS);
   readonly slots = SLOTS;
+  readonly carSlots = CAR_ROWS.length * CAR_STYLES.length;
   private readonly floor = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), new THREE.MeshLambertMaterial({ color: STUDIO_FLOOR }), GROUND_LEVEL.runoff);
 
   constructor() {
@@ -98,6 +115,14 @@ export class ShowcaseArt {
   /** Where slot `slot` stands (world, feet) into `out`. */
   markOf(slot: number, out: THREE.Vector3): THREE.Vector3 {
     return out.set(((slot % FIGURES.length) - (FIGURES.length - 1) / 2) * SPACING, 0, ROWS[Math.floor(slot / FIGURES.length)]!.z);
+  }
+
+  /** Car slot `slot`: its style, pose and column (left to right), and where it stands (world, ground) into `out`. */
+  carOf(slot: number, out: THREE.Vector3): { style: CarStyleId; pose: CarPose; column: number } {
+    const column = slot % CAR_STYLES.length;
+    const row = CAR_ROWS[Math.floor(slot / CAR_STYLES.length)]!;
+    out.set((column - (CAR_STYLES.length - 1) / 2) * CAR_SPACING, 0, row.z);
+    return { style: CAR_STYLES[column]!, pose: row.pose, column };
   }
 
   figureOf(slot: number): Figure {
