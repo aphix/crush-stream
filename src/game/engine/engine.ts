@@ -213,7 +213,7 @@ export class CrashEngine extends EngineGarage {
 
     this.glassDots = new GlassDotSystem(this.scene);
     this.ensureCars(INITIAL_HUD.carCount);
-    this.scene.add(this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.seated.mesh, ...this.coverBatch.meshes);
+    this.scene.add(this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.seated.mesh, this.coverBatch.group);
     // Under the wheel shadow prisms, shown to the shadow pass alone: the casters cost no camera-pass draw.
     this.wheels.meshes.at(-1)!.add(...this.partBatch.casters);
     const driverLook = (car: number, cop: boolean) => this.ragdolls.carDriverLook(car, cop);
