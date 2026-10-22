@@ -263,14 +263,17 @@ function roofEdge(s, style, belt, glassTop, width, intended) {
   };
 }
 
-/** Pillars: horizontal cuts through the side glass's height, the body band between the windshield (rear glass) and the side glass. */
-function pillars(s, glassBox, front) {
+/**
+ * Pillars: horizontal cuts through the side glass's height, the body band between the windshield (rear glass) and the side glass. The
+ * fans stand on `zc`, the hubs' midpoint: a centre no glass edit moves, so where its samples land on a pillar's crease (and the turn
+ * read there) changes only with the pillar.
+ */
+function pillars(s, glassBox, front, zc) {
   const stations = [];
   const flagsTurn = [];
   /** Why a height's band reads n/a, counted over both sides: no glass edge there, the cut sees through to the far side, wider than BAND_MAX_M. */
   const reasons = { noGlass: 0, seeThrough: 0, tooWide: 0 };
   const curves = [];
-  const zc = (glassBox.min.z + glassBox.max.z) / 2;
   for (const f of PILLAR_AT) {
     const y = glassBox.min.y + f * (glassBox.max.y - glassBox.min.y);
     const c = cut(s, 1, y);
@@ -426,8 +429,8 @@ export function contourOf(stage, styleId, probe = null) {
   const width = bodyBox.max.x - bodyBox.min.x;
   const regions = {
     roofEdge: roofEdge(s, style, glass.min.y, glass.max.y, width, intendedEdges(style, lift)),
-    aPillar: pillars(s, glass, true),
-    rearPillar: pillars(s, glass, false),
+    aPillar: pillars(s, glass, true, (Math.max(...hubs.map((h) => h.z)) + hubZ) / 2),
+    rearPillar: pillars(s, glass, false, (Math.max(...hubs.map((h) => h.z)) + hubZ) / 2),
     bumper: bumper.isEmpty() ? null : rearBand(s, bumper, BUMPER_AT, bumper.max.y + TAIL_ABOVE, behindZ, hubZ, "rear bumper"),
     lowerLip: bumper.isEmpty() ? null : rearBand(s, bumper, LIP_AT, bumper.min.y + 0.5 * (bumper.max.y - bumper.min.y), behindZ, hubZ, "lower lip"),
   };
