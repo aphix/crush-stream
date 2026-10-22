@@ -58,6 +58,10 @@ const SEDAN_LAMP_SHAPES = {
           [0.69, 0.87, -1.88],
           [0.63, 0.87, -1.96],
           [0.55, 0.866, -2.05],
+          [0.45, 0.855, -2.1],
+          [0.4, 0.842, -2.12],
+          [0.4, 0.776, -2.12],
+          [0.45, 0.772, -2.1],
           [0.55, 0.765, -2.05],
           [0.63, 0.757, -1.96],
           [0.69, 0.756, -1.88],
@@ -74,14 +78,14 @@ const SEDAN_LAMP_SHAPES = {
           points: [
             [0.74, 0.842, -1.73],
             [0.69, 0.855, -1.88],
-            [0.56, 0.851, -2.05],
+            [0.55, 0.851, -2.05],
+            [0.41, 0.828, -2.115],
           ],
         },
         width: 0.012,
         tone: "lit",
       },
-      // The reference's chrome bar across the lid joins the tails at their mid-height; the lamps stop at the lid's shut line.
-      { line: { points: [[0, 0.815], [0.55, 0.815]] }, width: 0.012, tone: "chrome" },
+      { line: { points: [[0, 0.809], [0.4, 0.809]] }, width: 0.006, tone: "chrome" },
     ],
   },
   front: {
@@ -220,7 +224,7 @@ export const SEDAN: BodyStyle = {
    */
   boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45 }, lip: { rise: 0.012, depth: 0.06 } },
   lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES },
-  grille: { y: 0.43, size: [0.74, 0.26], round: 0.05, kind: "slats", count: 13, finish: "chrome" },
+  grille: { y: 0.43, size: [0.74, 0.26], round: 0.05, kind: "slats", count: 19, finish: "chrome" },
   /**
    * The reference's twin wide oval tips in the diffuser (gridded rear iso and side: |x| 0.47-0.64, y 0.27-0.33, ~3 cm proud). Ours sit
    * inboard at |x| 0.36: the body's tail floor only reaches |x| 0.48 (0.8 hw) and the bumper face sweeps back from 0.33, so wider tips
