@@ -143,7 +143,8 @@ far distance (by `INTERIOR_MESH`), the door cards and crash bars with the small 
   through a crushed roof. The bay rides the engine masses with its front no further out than the front bumper's masses (the
   nose); each crash bar rides its bumper's, its face on the bumper's seat.
 - **The engine bay:** the drawn body (never the cage) opens a trough under the hood (`bayTub`: from the hood's cowl edge or the
-  windshield's foot to inside the nose, floor at 0.28 m), one more `tubs` entry for the drawn loft only. The bay set fills it
+  windshield's foot to inside the nose, floor at 0.28 m, and at least 5 cm of closed deck behind its blend after the cabin tub's, a
+  cowl and not a fin), one more `tubs` entry for the drawn loft only. The bay set fills it
   wall to wall up to the hood's underside: a dark block and black cover with bare-aluminium heads, intake, plenum and strut
   caps, steel rails and manifolds, black radiator, airbox and battery.
 - **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor, the wheel liners, each

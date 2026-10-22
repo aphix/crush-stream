@@ -7,9 +7,9 @@ import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { BUMPER_F, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { makeHoodGeometry, TUB_EDGE } from "./car-mesh.ts";
+import { bayTub, makeHoodGeometry, sampleSlice, TUB_EDGE } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
-import { bayTub, cabinGeometry, cageInterior, doorCardGeometry } from "./interior-geometry.ts";
+import { cabinGeometry, cageInterior, doorCardGeometry } from "./interior-geometry.ts";
 import { CarCabin, driverSeat } from "./interior.ts";
 import { PartBatch } from "./part-batch.ts";
 import { carPartSeats, PART_KIND, PART_KINDS, type PartSeat } from "./part-geometry.ts";
@@ -222,6 +222,30 @@ describe("given every style's drawn body and hood", () => {
       for (let v = 0; v < hood.count; v++) if (hood.getX(v) === INNER_PANEL) under++;
       assert.ok(under > 0 && under < hood.count / 2, `${id}: ${under} of ${hood.count} hood vertices unpainted`);
       assert.equal(makeChassisGeometry(style, "cage").getAttribute(PRIMER_ATTRIBUTE).array.every((p) => p === 0), true, `${id}: the cage build is all paint`);
+    }
+  });
+
+  test("when a body's cabin tub ends near its engine bay, then a cowl of closed deck at least 5 cm long stands between their blends, not a fin", () => {
+    /** The closed deck (m) a cowl keeps between the cabin tub's blend and the bay's. */
+    const COWL = 0.05;
+    /** The deck crown's height (m) over the belt where no tub opens it (`halfRing`'s ring point 0). */
+    const CROWN = 0.012;
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const rear = bayTub(style)[0];
+      const front = Math.max(...style.tubs.map(([, b]) => b).filter((b) => b < rear));
+      if (!Number.isFinite(front)) continue;
+      const body = makeChassisGeometry(style);
+      const { ring, slices } = body.userData.loft as { ring: number; slices: number };
+      const pos = body.getAttribute("position");
+      const closed: number[] = [];
+      for (let s = 0; s < slices; s++) {
+        const z = pos.getZ(s * ring);
+        if (z < front + TUB_EDGE - 1e-6 || z > rear - TUB_EDGE + 1e-6) continue;
+        if (Math.abs(pos.getY(s * ring) - (sampleSlice(z, style.profile).yBelt + CROWN)) < 1e-5) closed.push(z);
+      }
+      const span = closed.length > 0 ? Math.max(...closed) - Math.min(...closed) : -1;
+      assert.ok(span >= COWL - 1e-6, `${id}: closed deck between z ${(front + TUB_EDGE).toFixed(3)} and ${(rear - TUB_EDGE).toFixed(3)} spans ${span.toFixed(3)} m over ${closed.length} slices`);
     }
   });
 });
