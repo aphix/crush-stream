@@ -57,6 +57,9 @@ export interface LidDrop {
   z?: number;
 }
 
+/** Drawn only: a hood that wraps the nose, folding over it on a `radius` (m) bend and running `drop` (m) down its face from its edge, onto the grille's top. */
+export type HoodNose = readonly [drop: number, radius: number];
+
 /** Ducktail kick on a boot's free edge (a deck lid's rear edge, a tailgate's top edge): it rises `rise` (m) outward at the edge, easing to the panel over `depth` (m). */
 export interface BootLip {
   rise: number;
@@ -315,11 +318,14 @@ export interface BodyStyle {
   glassTop?: number | readonly (readonly [number, number])[];
   /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it. */
   arch: { radius: number; lip?: ArchLip; wellWall?: number };
+  /** Drawn only: [z0, z1] (m): each body loft gap whose middle lies in it gets a ring there, where the flank turns hard between stations (an arch's flare); the cage keeps its rings. */
+  ringSplit?: readonly [z0: number, z1: number];
   /**
    * Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`.
    * `groove` [out, down] (m, drawn only): over the open bay the fender's deck edge beside a lid hood stands `out` outboard of the hood's edge and `down` lower, a shut-line slot onto the bay wall.
+   * `nose` [drop, radius] (drawn only, `HoodNose`): the lid folds over the nose at z1 and runs down its face.
    */
-  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; groove?: readonly [out: number, down: number] };
+  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; groove?: readonly [out: number, down: number]; nose?: HoodNose };
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;

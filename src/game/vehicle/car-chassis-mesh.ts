@@ -119,6 +119,13 @@ export function sliceZs(style: BodyStyle, source: BodySource, bootOpen = source 
   for (let step = 0; step <= END_ROLL_STEPS; step++) stations.push(z0 + END_ROLL_LENGTH * (1 - detSin((step / END_ROLL_STEPS) * (Math.PI / 2))));
   for (let step = 0; step <= noseSteps; step++) stations.push(z1 - END_ROLL_LENGTH * (1 - detSin((step / noseSteps) * (Math.PI / 2))));
   stations.sort((a, b) => a - b);
+  const split = style.ringSplit;
+  if (split) {
+    for (let k = stations.length - 1; k > 0; k--) {
+      const mid = (stations[k - 1]! + stations[k]!) / 2;
+      if (mid >= split[0] && mid <= split[1]) stations.splice(k, 0, mid);
+    }
+  }
   return noseFill ? noseRefined(stations, p) : stations;
 }
 
