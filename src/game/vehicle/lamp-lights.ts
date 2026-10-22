@@ -38,6 +38,8 @@ const GLOW_SIZE = 0.7;
 const GLOW_OUT = 0.1;
 const GLOW_HEAD = [0.8, 0.7, 0.55] as const;
 const GLOW_TAIL = [0.55, 0.03, 0.015] as const;
+/** A tail lamp is a running light at this share of its brake brightness (lens, glow, light and pool) while its car is off the brakes. */
+const TAIL_RUNNING = 0.35;
 const GLOW_RED = [1, 0.06, 0.04] as const;
 const GLOW_BLUE = [0.08, 0.2, 1] as const;
 /** A body lamp's glow fades with the cosine between its lens axis and the camera: full to about 70° off the axis, gone past 95° (a
@@ -156,6 +158,8 @@ interface LampHost {
   readonly lampCount: number;
   /** Writes lamp `i`'s world seat on the skin and outward axis; returns its kind, or null once broken or dark. */
   lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3): GlowKind | null;
+  /** Whether the car is on its brakes: its tail lamps burn bright, not as running lights. */
+  readonly braking: boolean;
   /** Advance the siren flash to `now` (s); no-op without sirens on. */
   flashSirens(now: number): void;
 }
@@ -232,13 +236,14 @@ export class LampLights {
   middleTile = true;
   /** Fake pools: one instanced ground decal for every head and tail lamp, at (1 − weight) of its colour. */
   readonly pools: THREE.InstancedMesh;
-  /** This frame's head and tail lamps: world seat and axis (6 floats each), kind (1 head), fade state and lamp index, target weight and rank score. */
+  /** This frame's head and tail lamps: world seat and axis (6 floats each), kind (1 head), fade state and lamp index, target weight, rank score and brightness (`TAIL_RUNNING` for a tail off the brakes). */
   private readonly stash: Float32Array;
   private readonly stashHead: Uint8Array;
   private readonly stashFade: LampFade[];
   private readonly stashIdx: Uint8Array;
   private readonly stashQ: Float32Array;
   private readonly stashScore: Float32Array;
+  private readonly stashBright: Float32Array;
   /** Scratch for `settle`: 1 where the lamp is in its kind's best-ranked set this frame. */
   private readonly want: Uint8Array;
   private readonly fades = new WeakMap<LampHost, LampFade>();
@@ -284,6 +289,7 @@ export class LampLights {
     this.stashIdx = new Uint8Array(maxLamps);
     this.stashQ = new Float32Array(maxLamps);
     this.stashScore = new Float32Array(maxLamps);
+    this.stashBright = new Float32Array(maxLamps);
     this.want = new Uint8Array(maxLamps);
     // The engine makes `pools` a ground decal (`groundMaterial`, `levelOrder`): that layer is above this one.
     this.pools = new THREE.InstancedMesh(
@@ -337,12 +343,13 @@ export class LampLights {
         if (n * 3 >= gp.length) continue;
         _e.copy(_pos).addScaledVector(_dir, GLOW_OUT).toArray(gp, n * 3);
         const c = kind === "head" ? GLOW_HEAD : kind === "tail" ? GLOW_TAIL : kind === "red" ? GLOW_RED : GLOW_BLUE;
+        const bright = kind === "tail" && !car.braking ? TAIL_RUNNING : 1;
         // A body lamp's glow shows only on the side its lens faces: seen from behind the lens (past the body, through the cabin's glass)
         // it is dark. A siren shows all round.
-        const facing = kind === "head" || kind === "tail" ? THREE.MathUtils.smoothstep(_e.subVectors(_cam, _pos).normalize().dot(_dir), GLOW_FACE[0], GLOW_FACE[1]) : 1;
-        gc[n * 3] = c[0] * facing;
-        gc[n * 3 + 1] = c[1] * facing;
-        gc[n * 3 + 2] = c[2] * facing;
+        const shown = (kind === "head" || kind === "tail" ? THREE.MathUtils.smoothstep(_e.subVectors(_cam, _pos).normalize().dot(_dir), GLOW_FACE[0], GLOW_FACE[1]) : 1) * bright;
+        gc[n * 3] = c[0] * shown;
+        gc[n * 3 + 1] = c[1] * shown;
+        gc[n * 3 + 2] = c[2] * shown;
         n++;
         if (kind === "head" || kind === "tail") {
           _pos.toArray(st, ns * 6);
@@ -354,6 +361,7 @@ export class LampLights {
           this.stashIdx[ns] = i;
           this.stashQ[ns] = q;
           this.stashScore[ns] = score;
+          this.stashBright[ns] = bright;
           if (score > 0) (kind === "head" ? this.heads : this.tails).offer(-score - (fade.act[i] === 1 ? HYSTERESIS : 0), _pos, _dir, kind, ns);
           ns++;
         } else {
@@ -377,7 +385,7 @@ export class LampLights {
     let np = 0;
     for (let s = 0; s < ns; s++) {
       const a = this.stashFade[s]!.act[this.stashIdx[s]!] === 1 ? 1 - this.stashFade[s]!.w[this.stashIdx[s]!]! : 1;
-      if (a > 0) np = this.addPool(np, s, a);
+      if (a > 0) np = this.addPool(np, s, a * this.stashBright[s]!);
     }
     this.pools.count = np;
     this.pools.instanceMatrix.needsUpdate = true;
@@ -478,7 +486,7 @@ export class LampLights {
   private seatStashed(head: boolean, j: number, s: number): void {
     _pos.fromArray(this.stash, s * 6);
     _dir.fromArray(this.stash, s * 6 + 3);
-    this.seat(head, j, head ? "head" : "tail", this.stashFade[s]!.w[this.stashIdx[s]!]!);
+    this.seat(head, j, head ? "head" : "tail", this.stashFade[s]!.w[this.stashIdx[s]!]! * this.stashBright[s]!);
   }
 
   /** Aim pooled light `j` of its kind from the lamp in `_pos` / `_dir`, at `w` of its full intensity (a siren is always full). */
@@ -656,16 +664,20 @@ const _pos = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 
 /** A lamp unit's look: lit head and tail (the tail stays below ACES's bright-red-to-yellow knee so its lens reads red
- *  under its own glow) and broken (either kind). The lens alone emits: `lampEmissiveMap` masks the housing. */
+ *  under its own glow), the tail as a running light (`TAIL_RUNNING` of it) and dark (a high brake lamp off the brakes: its red lens
+ *  unlit), and broken (either kind). The lens alone emits: `lampEmissiveMap` masks the housing. */
 const LAMP_LOOK = {
   head: { color: 0xffffff, emissive: 0xf4f1e8, emissiveIntensity: 1.15 },
   tail: { color: 0xffffff, emissive: 0xe01018, emissiveIntensity: 1.1 },
+  running: { color: 0xffffff, emissive: 0xe01018, emissiveIntensity: 1.1 * TAIL_RUNNING },
+  off: { color: 0xffffff, emissive: 0x000000, emissiveIntensity: 0 },
   broken: { color: 0x5a5c60, emissive: 0x1a1b1c, emissiveIntensity: 0.12 },
 } as const;
 
-/** A car as the lamp batch reads it: its lamps (seat, state, kind, unit variant) and its drawn-only lamp fittings (a lid's share with its lamp and lid). */
+/** A car as the lamp batch reads it: its lamps (seat, state, kind, unit variant), whether it is on its brakes, and its drawn-only lamp fittings (a lid's share with its lamp and lid). */
 interface LampCar {
   readonly lamps: readonly { readonly seat: THREE.Object3D; readonly intact: boolean; readonly kind: LampKind; readonly variant: number }[];
+  readonly braking: boolean;
   readonly lampFittings: readonly {
     readonly seat: THREE.Object3D;
     readonly kind: keyof typeof FITTING_MESH;
@@ -674,9 +686,13 @@ interface LampCar {
   }[];
 }
 
-/** Each lamp fitting's mesh in `LampBatch.meshes`, and a lid share's broken one. */
-const FITTING_MESH = { brake: 4, marker: 5, hood: 6, boot: 7 } as const;
+/** Each lamp fitting's mesh in `LampBatch.meshes`, a lid share's broken one, and its draw while the car brakes (the tails' share and the
+ *  high brake lamp burn bright; off the brakes the share is a running light and the high brake lamp dark). */
+const FITTING_MESH = { brake: 12, marker: 5, hood: 6, boot: 7 } as const;
 const SHARE_BROKEN = { brake: -1, marker: -1, hood: 8, boot: 9 } as const;
+const FITTING_BRAKING = { brake: 4, marker: 5, hood: 6, boot: 11 } as const;
+/** A tail lamp's draw while its car brakes. */
+const TAIL_BRAKING = 10;
 
 /** Whether `seat` shows: on the camera's layer (distance detail) and visible up its parent chain. */
 function seatShown(seat: THREE.Object3D): boolean {
@@ -695,8 +711,9 @@ function seatShown(seat: THREE.Object3D): boolean {
 export class LampBatch {
   /** Every draw, for the scene. */
   readonly meshes: readonly THREE.InstancedMesh[];
-  /** Per slot (head lit, head broken, tail lit, tail broken, brake, marker, the heads' shares on the hood, the tails' on the boot lid, and
-   *  those two shares broken), its draws by variant. */
+  /** Per slot (head lit, head broken, tail running, tail broken, high brake lamp lit, marker, the heads' shares on the hood, the tails'
+   *  on the boot lid, those two shares broken, then the tail lamps and their lid shares braking and the high brake lamp dark), its draws
+   *  by variant. */
   readonly slots: readonly (readonly THREE.InstancedMesh[])[];
   /** Per slot and variant, the instances packed this sync. */
   private readonly n: Int32Array[];
@@ -706,12 +723,12 @@ export class LampBatch {
   constructor(capacity: number) {
     const mat = (look: (typeof LAMP_LOOK)[keyof typeof LAMP_LOOK]) =>
       new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.25, emissiveMap: lampEmissiveMap(), ...look });
-    const plain = { head: mat(LAMP_LOOK.head), tail: mat(LAMP_LOOK.tail), broken: mat(LAMP_LOOK.broken) };
+    const plain = { head: mat(LAMP_LOOK.head), tail: mat(LAMP_LOOK.tail), running: mat(LAMP_LOOK.running), off: mat(LAMP_LOOK.off), broken: mat(LAMP_LOOK.broken) };
     const slots: THREE.InstancedMesh[][] = [];
+    const unit = { head: lampBatchGeometries("head") ?? [makeLampUnit("head")], tail: lampBatchGeometries("tail") ?? [makeLampUnit("tail")] };
     for (const kind of ["head", "tail"] as const) {
-      const geos = lampBatchGeometries(kind) ?? [makeLampUnit(kind)];
-      this.own.push(...geos);
-      for (const m of [plain[kind], plain.broken]) slots.push(geos.map((geo) => lampDraw(geo, m, capacity)));
+      this.own.push(...unit[kind]);
+      for (const m of [kind === "head" ? plain.head : plain.running, plain.broken]) slots.push(unit[kind].map((geo) => lampDraw(geo, m, capacity)));
     }
     slots.push([lampDraw(brakeLampUnit(), plain.tail, capacity)], [lampDraw(sideMarkerUnit(), plain.head, capacity * 2)]);
     const shares = (["hood", "boot"] as const).map((slot) => {
@@ -719,8 +736,9 @@ export class LampBatch {
       this.own.push(...geos);
       return geos;
     });
-    for (const [k, look] of [plain.head, plain.tail].entries()) slots.push(shares[k]!.map((geo) => lampDraw(geo, look, capacity)));
+    for (const [k, look] of [plain.head, plain.running].entries()) slots.push(shares[k]!.map((geo) => lampDraw(geo, look, capacity)));
     for (const geos of shares) slots.push(geos.map((geo) => lampDraw(geo, plain.broken, capacity)));
+    slots.push(unit.tail.map((geo) => lampDraw(geo, plain.tail, capacity)), shares[1]!.map((geo) => lampDraw(geo, plain.tail, capacity)), [lampDraw(brakeLampUnit(), plain.off, capacity)]);
     this.slots = slots;
     this.meshes = slots.flat();
     this.n = slots.map((s) => new Int32Array(s.length));
@@ -732,13 +750,13 @@ export class LampBatch {
     for (const car of cars) {
       for (const l of car.lamps) {
         if (!seatShown(l.seat)) continue;
-        this.put((l.kind === "head" ? 0 : 2) + (l.intact ? 0 : 1), l.seat, l.variant);
+        this.put(!l.intact ? (l.kind === "head" ? 1 : 3) : l.kind === "head" ? 0 : car.braking ? TAIL_BRAKING : 2, l.seat, l.variant);
       }
       for (const f of car.lampFittings) {
         if (!seatShown(f.seat)) continue;
         // A lid's share goes dark with its lamp, and once its lid has torn off.
         const dark = f.share !== null && (!f.share.lamp.intact || f.share.lid?.detached === true);
-        this.put(dark ? SHARE_BROKEN[f.kind] : FITTING_MESH[f.kind], f.seat, f.variant);
+        this.put(dark ? SHARE_BROKEN[f.kind] : car.braking ? FITTING_BRAKING[f.kind] : FITTING_MESH[f.kind], f.seat, f.variant);
       }
     }
     for (let b = 0; b < this.slots.length; b++) {

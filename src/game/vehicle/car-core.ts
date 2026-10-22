@@ -856,6 +856,11 @@ export abstract class CarCore {
     return this.lamps.length + (this.lightBar ? LIGHT_BAR_LENS.length : 0);
   }
 
+  /** Whether the brake pedal is down (any of it, as a brake-light switch reads it): the tail lamps burn bright and the high brake lamp lights. A clip replays the recorded input through `applyDrive`, so it reads the same there. */
+  get braking(): boolean {
+    return this.drive.brake > 0;
+  }
+
   /** Writes lamp `i`'s world seat on the skin and outward axis; returns its kind, or null once broken. Past the body lamps come the light bar's
    *  sirens (red, blue), lit only while flashing. Via the full parent chain: a class lift (truck, monster) raises the lamps with the body. */
   lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3): GlowKind | null {

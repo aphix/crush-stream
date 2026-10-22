@@ -87,7 +87,7 @@ forModes("given a car whose lamps live on the body and break per corner", (mode)
     const batch = new LampBatch(2);
     batch.sync([car]);
     const shares = (["hood", "boot"] as const).map((k) => car.lampFittings.filter((f) => f.kind === k).length);
-    assert.equal(batch.slots.map((s) => s.reduce((n, m) => n + m.count, 0)).join(), [1, 1, 2, 0, 0, 0, ...shares, 0, 0].join(), "drawn as head lit / head broken / tail lit / tail broken, no brake lamp or marker, the lid shares as the style has them, none broken");
+    assert.equal(batch.slots.map((s) => s.reduce((n, m) => n + m.count, 0)).join(), [1, 1, 2, 0, 0, 0, ...shares, 0, 0, 0, 0, 0].join(), "drawn as head lit / head broken / tail running / tail broken, no brake lamp or marker, the lid shares as the style has them, none broken, none braking");
   });
 
   it("when the front-left corner is crushed, then the crushed corner carries its lamp with the skin and the lamp stays seated on it", () => {
@@ -256,6 +256,41 @@ describe("given the lamp batch and one car of each style", () => {
       assert.equal(drawnTris, expected, `${id}: the lamp batch bills ${drawnTris} triangles for lamps of ${expected}`);
       batch.dispose();
     }
+  });
+
+  it("when a car is on its brakes, then its tail lamps and their lid shares draw bright and its high brake lamp lights; off the brakes the tails are dim running lights and the high brake lamp is dark; the tail glows brighten with them", () => {
+    let highs = 0;
+    for (const id of CAR_STYLE_IDS) {
+      const scene = new THREE.Scene();
+      const car = new DeformableCar(paint(), scene, null, id);
+      car.spawnFacing(0, 0, 0, 0);
+      car.group.updateMatrixWorld(true);
+      const batch = new LampBatch(2);
+      const lights = new LampLights(scene, car.lampCount);
+      const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
+      camera.position.copy(car.group.position).addScaledVector(car.forward, -8).setY(1.5);
+      camera.lookAt(car.group.position);
+      const count = (b: number): number => batch.slots[b]!.reduce((n, m) => n + m.count, 0);
+      /** [running, braking] tail draws, [running, braking] boot-lid share draws, [lit, dark] high brake lamp draws, and the tail glows summed. */
+      const read = () => {
+        batch.sync([car]);
+        lights.update([car], camera, null);
+        const c = lights.glow.geometry.getAttribute("color");
+        const glow = car.lamps.reduce((g, l, i) => (l.kind === "tail" ? g + c.getX(i) : g), 0);
+        return { tails: [count(2), count(10)], shares: [count(7), count(11)], high: [count(4), count(12)], glow };
+      };
+      const shares = car.lampFittings.filter((f) => f.kind === "boot").length;
+      const high = car.style.lamps.brake ? 1 : 0;
+      highs += high;
+      const off = read();
+      car.drive.brake = 1;
+      const on = read();
+      assert.deepEqual([off.tails, off.shares, off.high], [[2, 0], [shares, 0], [0, high]], `${id} off the brakes`);
+      assert.deepEqual([on.tails, on.shares, on.high], [[0, 2], [0, shares], [high, 0]], `${id} on the brakes`);
+      assert.ok(off.glow > 0 && on.glow > 2 * off.glow, `${id}: tail glows ${off.glow.toFixed(3)} off the brakes, ${on.glow.toFixed(3)} on them`);
+      batch.dispose();
+    }
+    assert.ok(highs >= 2, `${highs} styles carry a high brake lamp`);
   });
 
   it("when a lamp breaks, then its share on the hood or boot lid goes dark with it and the other side's stays lit; when that lid tears off, both its shares go dark; a reset relights them", () => {
