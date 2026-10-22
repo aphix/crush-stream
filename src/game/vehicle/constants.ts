@@ -17,6 +17,8 @@ export const INNER_PANEL = 2;
  * (`car-materials.ts`), as the references draw them. Below 0, so bare steel (`bare-metal.ts`, from 0.3 up) never reads it.
  */
 export const BLACKOUT = -1;
+/** A rear deck's 12 mm kick (m) over its own line: the closed deck's crown over the belt, and a boot lid's lip at its free edge. */
+export const DECK_RISE = 0.012;
 /**
  * `PRIMER_ATTRIBUTE` of a cabin surface the glass shows (the headliner, the cabin tub's floor and walls, the cowl and rear bulkhead
  * walls, a door's inner face): matte dark trim with no clear coat (`car-materials.ts`), as the references' cabins read through the glass.

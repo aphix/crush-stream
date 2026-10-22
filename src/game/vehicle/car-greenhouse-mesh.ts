@@ -241,25 +241,27 @@ function roundedPillarFromCorners(sign: number, c: { fb: V3; rb: V3; rt: V3; ft:
 
 /** The drawn A-post's depth inward (m): a slim post, not a slab. */
 const A_POST_THICK = 0.03;
-/** Stations along the drawn A-post, base to top: enough for the roof to bend its top (each costs the skin a ring a frame). */
-const A_POST_STATIONS = 3;
+/** Stations along the drawn A-post, base to top: the side glass's lean and the roof's tuck bend its rails smoothly between them, never at one kink. */
+const A_POST_STATIONS = 7;
 /** The drawn A-post stands this far (m) off the windshield's edge and the side glass, outward, so neither glass shows through it. */
 const A_POST_LIFT = 0.004;
 /** A drawn pillar's top runs this far (m) up past the cant line, buried in the roof's side. */
 const PILLAR_TOP_RISE = 0.03;
-/** The drawn A-post's corners are cut at this radius (m), one chord each (the body's smooth normals round them; each chord more costs the skin 4 vertices a station). */
-const A_POST_ROUND = 0.012;
 /** The sail (the panel between the A-post and the door glass) is this thick (m), on the side glass plane. */
 const SAIL_THICK = 0.02;
 /** A sail narrower than this (m) at every station is not drawn. */
 const SAIL_MIN = 0.005;
 /** Where the door glass runs under the post the sail thins to this (m), never to nothing, so its faces keep their normals. */
 const SAIL_EDGE = 0.001;
+/** Stations along the sail, base to its top. */
+const SAIL_STATIONS = 3;
 
 /**
- * The drawn A-post's rails and its sail's, base to top. The post runs along the windshield's edge, `aPostRearZ` behind it in side
- * view; the door glass's front edge (`doorGlassFrontZ`) under it is covered, and where that edge lies further back the sail fills the
- * gap at the same height up to the glass's knee (or the post's top), so no style's glass layout leaves a hole or a sliver.
+ * The drawn A-post's rails and its sail's, base to top. The post's front rail runs along the windshield's edge (carried down the
+ * edge's line to the belt when the belt lies under the windshield's base, so its foot lies level in the cowl); its rear rail runs
+ * `aPostRearZ` behind it in side view, across the side glass's lean from the door glass's foot to its top-front corner; its depth runs
+ * square to its face in plan. The sail fills from the post's rear edge to the door glass's front edge (`doorGlassFrontZ`) up to the
+ * glass's knee (or the post's top), so no glass layout leaves a hole or a sliver.
  */
 function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const { base, wBase, wTop } = style.windshield;
@@ -268,27 +270,46 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const [uz, uy] = [(topZ - base[1]) / run, (topY - base[0]) / run];
   const [footZ, aTopZ] = [style.aPillarFoot, aPillarTopZ(style)];
   const [footY, aTopY] = [beltY(footZ, style), cantY(aTopZ, style) + PILLAR_TOP_RISE];
-  const post: Rail[] = [];
-  for (let k = 0; k < A_POST_STATIONS; k++) {
-    const t = k / (A_POST_STATIONS - 1);
+  const edgeFoot = Math.min(0, (footY - base[0]) / (topY - base[0]));
+  const glassTop = glassTopY(aTopZ, style);
+  const cantTop = cantY(aTopZ, style);
+  const glassPlaneX = (y: number) => lerp(beltX(footZ, style), cantX(aTopZ, style), THREE.MathUtils.clamp((y - footY) / (cantTop - footY), 0, 1));
+  const railAt = (t: number): Rail => {
     const y = lerp(footY, aTopY, t);
     const postZ = aPostRearZ(y, style);
-    const rear: V3 = [underRoofSide(glassX(postZ, y, style) + A_POST_LIFT, y, postZ, style), y, postZ];
-    const [frontY, frontZ] = [lerp(base[0], topY, t) - A_POST_LIFT * uz, lerp(base[1], topZ, t) + A_POST_LIFT * uy];
-    const front: V3 = [underRoofSide(lerp(wBase, wTop, t) / 2 + A_POST_LIFT, frontY, frontZ, style), frontY, frontZ];
-    post.push({ rear, front });
-  }
-  const glassTop = glassTopY(aTopZ, style);
+    const edge = lerp(edgeFoot, 1, t);
+    const [frontY, frontZ] = [lerp(base[0], topY, edge) - A_POST_LIFT * uz, lerp(base[1], topZ, edge) + A_POST_LIFT * uy];
+    const [frontX, rearX] = [lerp(wBase, wTop, edge) / 2 + A_POST_LIFT, glassPlaneX(y) + A_POST_LIFT];
+    const roofZ = THREE.MathUtils.clamp(postZ, style.roofZ[0], style.roofZ[1]);
+    const rear: V3 = [underRoofSide(rearX, y, roofZ, style), y, postZ];
+    const front: V3 = [underRoofSide(frontX, frontY, frontZ, style), frontY, frontZ];
+    // Square to the face after the roof's tuck: squaring it before shears the top stations' corners past 35°.
+    const [dx, dz] = [front[0] - rear[0], front[2] - rear[2]];
+    return { rear, front, inward: [dz / hypot2(dx, dz), dx / hypot2(dx, dz)] };
+  };
+  const post = Array.from({ length: A_POST_STATIONS }, (_, k) => railAt(k / (A_POST_STATIONS - 1)));
   const sail: Rail[] = [];
   let sailWidth = 0;
-  for (let k = 0; k < A_POST_STATIONS; k++) {
-    const y = lerp(footY, style.aPillarKnee ?? aTopY, k / (A_POST_STATIONS - 1));
-    const [postZ, glassZ] = [aPostRearZ(y, style), doorGlassFrontZ(y, footY, glassTop, style)];
-    const sailZ = Math.min(glassZ, postZ - SAIL_EDGE);
-    sail.push({ rear: [glassX(sailZ, y, style), y, sailZ], front: [glassX(postZ, y, style), y, postZ] });
-    sailWidth = Math.max(sailWidth, postZ - glassZ);
+  for (let k = 0; k < SAIL_STATIONS; k++) {
+    const y = lerp(footY, style.aPillarKnee ?? aTopY, k / (SAIL_STATIONS - 1));
+    const front = postRearmost(railAt((y - footY) / (aTopY - footY)), A_POST_THICK);
+    const sailZ = Math.min(doorGlassFrontZ(y, footY, glassTop, style), front[2] - SAIL_EDGE);
+    const rear: V3 = [glassX(sailZ, y, style), y, sailZ];
+    sail.push({ rear, front });
+    sailWidth = Math.max(sailWidth, hypot2(front[0] - rear[0], front[2] - rear[2]));
   }
   return { post, sail: sailWidth > SAIL_MIN ? sail : null };
+}
+
+/** The point of `rail`'s drawn post section (`postSection`, +x side) on its rear side furthest back: where the sail behind the post meets it. */
+function postRearmost({ rear, front, inward = [1, 0] }: Rail, thick: number): V3 {
+  const width = hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2]);
+  let rearmost: V3 = [rear[0], rear[1], Infinity];
+  for (const p of postSection(thick, width)) {
+    const depth = (1 - p.x) * thick;
+    if (p.y < 1e-6 && rear[2] + depth * inward[1] < rearmost[2]) rearmost = [rear[0] - depth * inward[0], rear[1], rear[2] + depth * inward[1]];
+  }
+  return rearmost;
 }
 
 /** The cage roof's side lip: from the cant line `ROOF_LIP_OUT` (m) past the roof's half-width up to its knee, `ROOF_LIP_KNEE` [past the half-width, under the roof] (m), then in to the dome's edge. */
@@ -437,7 +458,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   for (const sign of [-1, 1]) {
     parts.push(
       aPost
-        ? pillar(roundedPillarAlong(sign, aPost.post, A_POST_THICK, { radius: A_POST_ROUND, ownCaps: false, crown: PILLAR_CROWN }), "a")
+        ? pillar(roundedPillarAlong(sign, aPost.post, A_POST_THICK, { ownCaps: false, section: (width) => postSection(A_POST_THICK, width) }), "a")
         : boxFromCorners(
             sign,
             {
