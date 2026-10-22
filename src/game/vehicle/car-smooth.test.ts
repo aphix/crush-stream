@@ -1096,7 +1096,7 @@ const SIM_DIGEST_BY_STYLE = [
   // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's boot foot.
   { id: "hatchback", digest: "d1b0dbd003d50435d78a1243c66bf76a5ec1ec028cf24e4fb18dca1ea3ea1ece" },
-  { id: "wagon", digest: "fc6cc21e004714d20934221b94eb6569779793efef30cb3fa48572c937cd1b88" },
+  { id: "wagon", digest: "1a7eff9992e80f8e83b536069ed0e6d91c71c41c5a70267b1d8d6bbe50865260" },
   // The coupe re-pinned for its nose crown at z 1.9 dropped 2.5 mm, so the hood's last chord clears the deck it covers.
   { id: "coupe", digest: "ddb38853702981fec0ab7f975ad3c023108290dee79372fbc8c3eb8268123379" },
   { id: "pickup", digest: "8ac3348022ccf861dcc32220681d991fadaba4b58f4cd87233f0374f7bfb5731" },
@@ -1150,8 +1150,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
-  { id: "hatchback", digest: "c1b21432aa86e78d42c27f4cdfc4ba13bc36ba0d196efb0c1edd383c916d0784" },
-  { id: "wagon", digest: "2d7badb7715e9f272e888e7f609e700b1344f625502a5801fc1863a4b2b65e17" },
+  { id: "hatchback", digest: "a754e5e373f501c475d3f3900641113c9c2d1c1e90f5cef395ed9857bc1f3b55" },
+  { id: "wagon", digest: "367e3e9f9994b45c27fa7de342de7c0deee14a978bb430438240e2f3d7c7f5bb" },
   // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), and its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above).
   { id: "coupe", digest: "6d9050033dd05585abb912842030ae1190190ae7b6c8340781fbafc36f5018f4" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
