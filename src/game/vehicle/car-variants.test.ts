@@ -1476,6 +1476,12 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(wrapped.stand <= 0, `the plain wrap's end stands ${wrapped.stand} m off the skin: held inside it`);
   });
 
+  it("when the hatchback's front bumper is built, then its face runs straight across to its corners as the reference's: at |x| 0.40-0.45 within 1 cm of its middle's reach", () => {
+    const hatch = makeBumperGeometry(true, CAR_STYLES.hatchback);
+    const gap = bumperReachAt(hatch, 0, 0.05) - bumperReachAt(hatch, 0.4, 0.45);
+    assert.ok(Math.abs(gap) < 0.01, `the bumper's face at |x| 0.40-0.45 stands ${gap.toFixed(3)} m behind its middle`);
+  });
+
   it("when its door hinge moves with the door's trailing edge kept, then the door glass stays in the same window: it rides on its door's own hinge", () => {
     const moved: BodyStyle = { ...sedan, door: { ...sedan.door, hingeX: 0.8, hingeY: 0.79, hingeZ: 0.7, length: sedan.door.length + 0.15 } };
     const inCar = (style: BodyStyle) => {
