@@ -725,6 +725,25 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(names.join(",") === "a,rear,sail,a,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
   });
 
+  it("when a style blacks out its cowl, then the deck's crown from 5 cm under the windshield's foot to 5 cm under the hood's rear edge turns primer-dark, and nothing else does", () => {
+    const sedan = CAR_STYLES.sedan;
+    // The hood's rear edge 6 cm ahead of the glass's foot: a strip of deck shows between them.
+    const open: BodyStyle = { ...sedan, blackout: undefined, hood: { ...sedan.hood, z0: sedan.windshield.base[1] + 0.06 } };
+    const [was, now] = [makeChassisGeometry(open), makeChassisGeometry({ ...open, blackout: { cowl: true } })];
+    const primer = (g: THREE.BufferGeometry) => g.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
+    const { ring, slices } = now.userData.loft as { ring: number; slices: number };
+    const [from, to] = [sedan.windshield.base[1] - 0.05, open.hood.z0 + 0.05];
+    let turned = 0;
+    for (let v = 0; v < primer(now).count; v++) {
+      if (primer(now).getX(v) === primer(was).getX(v)) continue;
+      turned++;
+      const z = now.getAttribute("position").getZ(v);
+      const onCrown = v < ring * slices && (v % ring === 0 || v % ring === ring - 1);
+      assert.ok(onCrown && z >= from - 1e-6 && z <= to + 1e-6 && primer(now).getX(v) === 1, `vertex ${v} (ring point ${v % ring}) at z ${z} turned to ${primer(now).getX(v)}: off the cowl's crown [${from}, ${to}]`);
+    }
+    assert.ok(turned >= 4, `the cowl's crown on both sides at two slices at least: ${turned} vertices turned`);
+  });
+
   it("when a style leans its B-pillar and its divider, then the drawn pillars take their bands at the belt and the top, the side panes tuck under the B-pillar's edges, and the cage keeps its bands", () => {
     const wagon = CAR_STYLES.wagon;
     const m = wagon.midPillarZ!;
@@ -878,7 +897,7 @@ describe("given a body style's H2 hardpoints", () => {
   it("when its tyres stand outboard of the body, then the wheel-well liners stay inside the body side", () => {
     const moved: BodyStyle = { ...sedan, dims: { ...sedan.dims, track: 2.2 } };
     const wheels = carFrame(moved).wheels;
-    for (const [k, liner] of makeWellLiners(moved).entries()) {
+    for (const [k, liner] of makeWellLiners(moved, "drawn").entries()) {
       const wz = wheels[k]![2];
       const side = sampleSlice(wz, moved.profile).hw;
       const box = partBox(liner);
@@ -1014,8 +1033,8 @@ function readBulge(hood: THREE.BufferGeometry, style: BodyStyle): { raised: THRE
     if (primer !== null && primer.getX(i) === 1) {
       mouth.expandByPoint(p);
       forward = Math.min(forward, nrm.getZ(i));
-    } else if (p.y - deckTopY(p.x, p.z, style) > RAISED_M) raised.expandByPoint(p);
-    peak = Math.max(peak, p.y - deckTopY(0, p.z, style));
+    } else if (p.y - deckTopY(p.x, p.z, style, true) > RAISED_M) raised.expandByPoint(p);
+    peak = Math.max(peak, p.y - deckTopY(0, p.z, style, true));
   }
   return { raised, peak, mouth, forward };
 }
@@ -1338,11 +1357,31 @@ const LID_RIM = 0.08;
 const OPEN_DEPTH = 0.15;
 /** How near (m) a lip's measured stand-off comes to its `flare`: its section's straight facets span the fender flare's 2.2 cm bump. */
 const LIP_TOL = 0.003;
+/** Up from the hub, the first face over the well this far (m) in past the body side is dark: the arch's edge reads over a gap, not a painted sliver. */
+const WELL_GAP = [0.01, 0.02, 0.03] as const;
+/** Primer past which the paint has turned to the inner panel's dark (`bare-metal.ts` darkens bare steel from 1.2 to 1.8). */
+const WELL_DARK = 1.5;
+/** Looking into an arch from the side, its rim (the lip and its return) is left out this far (m): the lip's own row covers it. */
+const WELL_RIM = 0.05;
 const SIDED = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+/** The paint's sidedness: a ray skips back faces, as the paint culls them. */
+const FRONT = new THREE.MeshBasicMaterial({ side: THREE.FrontSide });
 
 /** The point where a ray from `from` heading `dir` first meets `body` within `far` (m), or null. */
 function bodyHit(body: THREE.Mesh, from: THREE.Vector3Tuple, dir: THREE.Vector3Tuple, far: number): THREE.Vector3 | null {
   return new THREE.Raycaster(new THREE.Vector3(...from), new THREE.Vector3(...dir), 0, far).intersectObject(body, false)[0]?.point ?? null;
+}
+
+/** The first face a ray from `from` heading `dir` meets on `body` within `far` (m): its index offset and the primer the paint blends where it struck. */
+function toneHit(body: THREE.Mesh, from: THREE.Vector3Tuple, dir: THREE.Vector3Tuple, far: number): { at: number; tone: number } | null {
+  const hit = new THREE.Raycaster(new THREE.Vector3(...from), new THREE.Vector3(...dir), 0, far).intersectObject(body, false)[0];
+  if (!hit?.face || hit.faceIndex == null) return null;
+  const pos = body.geometry.getAttribute("position");
+  const primer = body.geometry.getAttribute(PRIMER_ATTRIBUTE);
+  const ids = [hit.face.a, hit.face.b, hit.face.c];
+  const [a, b, c] = ids.map((v) => new THREE.Vector3().fromBufferAttribute(pos, v));
+  const w = THREE.Triangle.getBarycoord(hit.point, a!, b!, c!, new THREE.Vector3())!;
+  return { at: hit.faceIndex * 3, tone: w.x * primer.getX(ids[0]!) + w.y * primer.getX(ids[1]!) + w.z * primer.getX(ids[2]!) };
 }
 
 /** The rear face's opening of a tailgate, or of a lid wrapping the tail: its half-width at a height, its sill and its top (m). */
@@ -1364,7 +1403,7 @@ function openingCrossings(style: BodyStyle): string[] {
   if (b.kind === "lid" && !roofHinged(b)) {
     for (let z = b.z1 + LID_RIM + (b.drop ? LID_FOLD : 0); z <= b.z0 - LID_RIM; z += OPEN_GRID) {
       const half = sampleSlice(z, style.profile).hw - LID_EDGE;
-      for (let x = -half; x <= half; x += OPEN_GRID) at(bodyHit(body, [x, deckTopY(x, z, style) + 0.05, z], [0, -1, 0], OPEN_DEPTH));
+      for (let x = -half; x <= half; x += OPEN_GRID) at(bodyHit(body, [x, deckTopY(x, z, style, false) + 0.05, z], [0, -1, 0], OPEN_DEPTH));
     }
   }
   const face = faceOpening(style);
@@ -1550,6 +1589,48 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         assert.ok(Math.abs(proud - lip.flare) < LIP_TOL, `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: the lip stands ${proud.toFixed(4)} m proud`);
       }
       assert.ok(cageHash(style) === cageHash(lipless(style)), "the cage build is unchanged");
+    });
+    it(`when a ${id}'s arch tops are looked at from outside and from under, then the lip's crown is painted and, up to ${WELL_GAP.at(-1)} m in past the body side, the well over the tyre is unpainted (a lit edge over a dark gap)`, () => {
+      const body = makeChassisGeometry(style);
+      const drawn = new THREE.Mesh(body, FRONT);
+      const plain = new THREE.Mesh(makeChassisGeometry(lipless(style)), SIDED);
+      const lips = body.userData.archLips as { from: number; perWheel: readonly number[] };
+      const lipEnd = lips.from + lips.perWheel.reduce((n, c) => n + c, 0);
+      for (const [wx, wy, wz] of carFrame(style).wheels) {
+        const s = Math.sign(wx);
+        const top = wy + style.arch.radius;
+        const skin = Math.abs(bodyHit(plain, [s * 3, top, wz], [-s, 0, 0], 3)!.x);
+        const at = `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}`;
+        const crown = toneHit(drawn, [s * 3, top + 0.3 * lip.width, wz], [-s, 0, 0], 3);
+        const onLip = crown !== null && crown.at >= lips.from && crown.at < lipEnd;
+        assert.ok(onLip && crown.tone === 0, `${at}: from outside, ${onLip ? `the lip's crown is toned ${crown.tone}` : "the lip is not met"}`);
+        const seen = WELL_GAP.map((d) => toneHit(drawn, [s * (skin - d), wy, wz], [0, 1, 0], style.arch.radius)?.tone ?? NaN);
+        assert.ok(seen.every((t) => t >= WELL_DARK), `${at}: ${WELL_GAP.join(", ")} m in past the skin, up from the hub, the well is toned ${seen.map((t) => t.toFixed(2)).join(", ")}`);
+      }
+    });
+  }
+
+  for (const id of CAR_STYLE_IDS) {
+    const style = CAR_STYLES[id];
+    const outboard = carFrame(style).wheels.filter(([wx, , wz]) => Math.abs(wx) > sampleSlice(wz, style.profile).hw);
+    if (outboard.length === 0) continue;
+    it(`when a ${id}'s arches over tyres standing outboard of its body are looked into from the side, then every sight line through the opening meets the dark well, none the far side`, () => {
+      const drawn = new THREE.Mesh(makeChassisGeometry(style), FRONT);
+      const r = style.arch.radius;
+      for (const [wx, wy, wz] of outboard) {
+        const s = Math.sign(wx);
+        const off: string[] = [];
+        let looked = 0;
+        for (let y = wy; y < wy + r; y += 0.05) {
+          for (let z = wz - r; z <= wz + r; z += 0.05) {
+            if (Math.hypot(z - wz, y - wy) > r - WELL_RIM || y < rockerAt(z, style) + WELL_RIM) continue;
+            looked++;
+            const hit = toneHit(drawn, [s * 3, y, z], [-s, 0, 0], 6);
+            if (!hit || hit.tone < WELL_DARK) off.push(`(y ${y.toFixed(2)}, z ${z.toFixed(2)}) ${hit ? `toned ${hit.tone.toFixed(2)}` : "through"}`);
+          }
+        }
+        assert.ok(looked > 20 && off.length === 0, `${id} arch at z ${wz.toFixed(2)}: ${off.length} of ${looked} sight lines meet paint or nothing: ${off.slice(0, 6).join(", ")}`);
+      }
     });
   }
 });

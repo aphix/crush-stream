@@ -90,17 +90,30 @@ function fitBox(seat: PartSeat, ref: { halfX: number; y0: number; y1: number; z0
 
 /** Half the cab's back wall (m): its drawn box is 4.5 cm deep about `rearBulkhead.z`. */
 const WALL_HALF = 0.0225;
-/** Air (m) between the bench's back and the wall's face, so the two never z-fight. */
+/** Air (m) between the bench and the wall's face or the roof line, so they never z-fight. */
 const BENCH_GAP = 0.01;
+/** The step (m) the roof line is read back from the bench's H-point at: as fine as the gap. */
+const BENCH_STEP = 0.01;
 
-/** The depth (z) scale, at most 1, that keeps the bench seated at `back` ([y, z]) ahead of the back wall under its top: a 2+2 coupe's shallow bench. */
-function benchDepth(bench: THREE.BufferGeometry, [y, z]: readonly [number, number], wall: BodyStyle["rearBulkhead"]): number {
+/**
+ * The depth (z) scale, at most 1, that keeps the bench seated at `back` ([y, z]) in the cab: ahead of the back wall under its top,
+ * and under the roof line over it (a pickup cab's ends at its back glass, the bed's wall top behind it). A 2+2's or a crew cab's shallow bench.
+ */
+function benchDepth(bench: THREE.BufferGeometry, [y, z]: readonly [number, number], style: BodyStyle): number {
+  const wall = style.rearBulkhead;
   const pos = bench.getAttribute("position");
-  const room = z - wall.z - WALL_HALF - BENCH_GAP;
   let depth = 1;
   for (let i = 0; i < pos.count; i++) {
     const behind = -pos.getZ(i);
-    if (behind > 0 && y + pos.getY(i) < wall.yTop) depth = Math.min(depth, room / behind);
+    if (behind <= 0) continue;
+    const at = y + pos.getY(i);
+    let room = at < wall.yTop ? z - wall.z - WALL_HALF - BENCH_GAP : behind;
+    for (let r = 0; r < room; r += BENCH_STEP) {
+      if (roofAt(z - r, style).y >= at + BENCH_GAP) continue;
+      room = Math.max(0, r - BENCH_STEP);
+      break;
+    }
+    depth = Math.min(depth, room / behind);
   }
   return depth;
 }
@@ -153,7 +166,7 @@ export class CarCabin {
     const back = style.seats.rear;
     if (back) {
       place(rear!, 0, back[0], back[1], 0, halfX / REF_CABIN.halfX);
-      rear!.scale.z = benchDepth(rear!.geometry, back, style.rearBulkhead);
+      rear!.scale.z = benchDepth(rear!.geometry, back, style);
       this.pose.add(rear!);
     }
 

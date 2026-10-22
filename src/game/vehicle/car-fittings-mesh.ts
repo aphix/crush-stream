@@ -63,7 +63,7 @@ function merged(parts: THREE.BufferGeometry[], what: string): THREE.BufferGeomet
 /** Height (car frame, m) of a bulge's top at `z`: its rise eased in at both ends from just under the lid. */
 function bulgeTopY(b: HoodBulge, z: number, style: BodyStyle): number {
   const ease = THREE.MathUtils.smoothstep(Math.min(z - b.z0, b.z1 - z), 0, BULGE_RAMP);
-  return deckTopY(0, z, style) - SINK + (b.rise + SINK) * ease;
+  return deckTopY(0, z, style, true) - SINK + (b.rise + SINK) * ease;
 }
 
 function bulgeGeometry(b: HoodBulge, style: BodyStyle): THREE.BufferGeometry {
@@ -74,7 +74,7 @@ function bulgeGeometry(b: HoodBulge, style: BodyStyle): THREE.BufferGeometry {
   for (let s = 0; s <= BULGE_STATIONS; s++) {
     const z = lerp(b.z0, b.z1, s / BULGE_STATIONS);
     const top = bulgeTopY(b, z, style) - oy;
-    const foot = deckTopY(half, z, style) - SINK - oy;
+    const foot = deckTopY(half, z, style, true) - SINK - oy;
     rings.push([
       { x: -half, y: foot },
       { x: BULGE_FLANK - half, y: top },
