@@ -180,14 +180,15 @@ export class SeatDraw {
     geo.setDrawRange(0, k);
   }
 
-  /** A fresh geometry with room for `vertices` and `indices` and then some (a GL buffer never grows in place). */
+  /** A fresh geometry with room for `vertices` and `indices` and then some (a GL buffer never grows in place). Its buffers keep three's
+   *  static usage hint: only a rebuild writes them, and a driver may place a dynamic buffer in host memory the GPU reads every frame. */
   private grow(vertices: number, indices: number): void {
     this.room = { vertices: Math.ceil(vertices * SEAT_GROW), indices: Math.ceil(indices * SEAT_GROW) };
     const geo = new THREE.BufferGeometry();
     const sizes = { position: 3, normal: 3, uv: 2, color: 3, [PAINTED_ATTRIBUTE]: 1 } as Record<string, number>;
-    for (const name of this.attributes) geo.setAttribute(name, dynamic(new Float32Array(this.room.vertices * sizes[name]!), sizes[name]!));
-    geo.setAttribute(SEAT_ATTRIBUTE, dynamic(new Float32Array(this.room.vertices), 1));
-    geo.setIndex(dynamic(new Uint32Array(this.room.indices), 1));
+    for (const name of this.attributes) geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(this.room.vertices * sizes[name]!), sizes[name]!));
+    geo.setAttribute(SEAT_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(this.room.vertices), 1));
+    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(this.room.indices), 1));
     geo.setDrawRange(0, 0);
     this.mesh.geometry.dispose();
     this.mesh.geometry = geo;
@@ -200,10 +201,6 @@ export class SeatDraw {
     for (const m of this.flat.values()) m.dispose();
     this.texture.dispose();
   }
-}
-
-function dynamic(array: Float32Array | Uint32Array, itemSize: number): THREE.BufferAttribute {
-  return new THREE.BufferAttribute(array, itemSize).setUsage(THREE.DynamicDrawUsage);
 }
 
 /** Mark the first `items` items of `attr` for upload. */
