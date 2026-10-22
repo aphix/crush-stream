@@ -192,18 +192,20 @@ const CABIN_TONE = [0x16191d, 0.85, 0.05] as const;
 /**
  * A `BLACKOUT` vertex (primer -1) on the paint: the black trim's colour, as smooth as gloss trim, under the paint's own clear coat: the
  * references' blacked-out pillars, cowls and roof rails are piano black with crisp highlights, not bare steel or satin plastic. A
- * `CABIN_TRIM` vertex (primer -2): the cabin's matte dark trim, its clear coat off.
+ * `MATTE_BLACKOUT` vertex (-1.25): that black at black plastic's roughness, its clear coat off. A `CABIN_TRIM` vertex (primer -2): the
+ * cabin's matte dark trim, its clear coat off.
  */
 const GLOSS_BLACK = {
   color: [
     "float glossW = smoothstep(0.3, 0.6, -vPrimer) - smoothstep(1.3, 1.6, -vPrimer);",
+    "float matteW = smoothstep(1.0, 1.25, -vPrimer) * glossW;",
     "float cabinW = smoothstep(1.3, 1.6, -vPrimer);",
     `diffuseColor.rgb = mix(diffuseColor.rgb, ${glslTone(TRIM_BLACK)}, glossW);`,
     `diffuseColor.rgb = mix(diffuseColor.rgb, ${glslTone(CABIN_TONE[0])}, cabinW);`,
   ].join("\n"),
-  roughness: `roughnessFactor = mix(mix(roughnessFactor, ${glslFloat(TRIM_FINISH.gloss.roughness)}, glossW), ${glslFloat(CABIN_TONE[1])}, cabinW);`,
+  roughness: `roughnessFactor = mix(mix(mix(roughnessFactor, ${glslFloat(TRIM_FINISH.gloss.roughness)}, glossW), ${glslFloat(TRIM_FINISH.plastic.roughness)}, matteW), ${glslFloat(CABIN_TONE[1])}, cabinW);`,
   metalness: `metalnessFactor = mix(mix(metalnessFactor, ${glslFloat(TRIM_FINISH.gloss.metalness)}, glossW), ${glslFloat(CABIN_TONE[2])}, cabinW);`,
-  clearcoat: "#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= 1.0 - cabinW;\n#endif",
+  clearcoat: "#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= (1.0 - cabinW) * (1.0 - matteW);\n#endif",
 };
 
 /** Fittings drawn in the trim's one mesh: a `FITTING_ATTRIBUTE` vertex (0 on a mesh without one) of a `FITTING_TONE` takes that tone's colour and finish. Wraps `capHighlights`' compile hook. */
@@ -356,8 +358,10 @@ const glassByLook = new Map<string, THREE.MeshStandardMaterial>();
 export const PRIVACY_SHADE = 0.3;
 /** A privacy pane's floor opacity: its tint alone still let ~28% of the cabin through, so the reference's black rear glass read clear. */
 const PRIVACY_OPACITY = 0.93;
+/** A matte privacy pane's roughness: the reference SUV's quarter glass reads a dark blur, not the sky's sharp mirror. */
+const MATTE_GLASS_ROUGHNESS = 0.4;
 
-/** Per-vertex glass tone (`GLASS_ATTRIBUTE`): x 1 black frit, y 1 privacy (darker by `PRIVACY_SHADE`, opacity floored before the crack map multiplies alpha, as `material.opacity` was); 0 on a mesh without one. */
+/** Per-vertex glass tone (`GLASS_ATTRIBUTE`): x 1 black frit, y 1 privacy (darker by `PRIVACY_SHADE`, opacity floored before the crack map multiplies alpha, as `material.opacity` was), y `MATTE_PRIVACY` matte privacy (rougher too); 0 on a mesh without one. */
 function withGlassTone<T extends THREE.MeshStandardMaterial>(m: T): T {
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
@@ -367,7 +371,11 @@ function withGlassTone<T extends THREE.MeshStandardMaterial>(m: T): T {
       .replace("#include <common>", "#include <common>\nvarying vec2 vGlassTone;")
       .replace(
         "#include <map_fragment>",
-        `diffuseColor.a = max(diffuseColor.a, vGlassTone.y * ${glslFloat(PRIVACY_OPACITY)});\n#include <map_fragment>\ndiffuseColor.rgb *= 1.0 - max(vGlassTone.x, vGlassTone.y * (1.0 - ${glslFloat(PRIVACY_SHADE)}));`,
+        `float privacy = min(vGlassTone.y, 1.0);\ndiffuseColor.a = max(diffuseColor.a, privacy * ${glslFloat(PRIVACY_OPACITY)});\n#include <map_fragment>\ndiffuseColor.rgb *= 1.0 - max(vGlassTone.x, privacy * (1.0 - ${glslFloat(PRIVACY_SHADE)}));`,
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, ${glslFloat(MATTE_GLASS_ROUGHNESS)}, clamp(vGlassTone.y - 1.0, 0.0, 1.0));`,
       );
   };
   m.customProgramCacheKey = () => "car-glass-tone";
@@ -803,9 +811,9 @@ function slottedDish(n: number, r: number, x: number, tone: readonly [number, nu
   return out;
 }
 
-/** The rim designs the references show; each is one instanced draw in the wheel batch. */
-export type WheelDesign = "five" | "split10" | "mag5" | "six" | "beadlock";
-export const WHEEL_DESIGNS: readonly WheelDesign[] = ["five", "split10", "mag5", "six", "beadlock"];
+/** The rim designs the references show; each is one instanced draw in the wheel batch. `split10l`: `split10` on the SUV's larger rim. */
+export type WheelDesign = "five" | "split10" | "mag5" | "six" | "beadlock" | "split10l";
+export const WHEEL_DESIGNS: readonly WheelDesign[] = ["five", "split10", "mag5", "six", "beadlock", "split10l"];
 
 /** Mud-terrain lugs round the monster tyre: pitches, and each block's [across, radial, round] size (m) and chevron yaw (rad). */
 const MONSTER_LUGS = 22;
@@ -815,14 +823,21 @@ const LUG_CHEVRON = 0.45;
 const LUG_RISE = 0.024;
 /** Monster tyre: bead radius (m) for a tall sidewall on the small rim, and its crown under the lugs, whose tops are the rig's crown. */
 const MONSTER_TYRE: readonly [number, number] = [0.165, ROAD_TYRE[1] - LUG_RISE];
-/** The monster's rim and face shrunk about the axle: the reference rim is half the tyre's height. */
-const MONSTER_RIM = 0.8;
+/**
+ * A design's rim and face scaled about the axle, its tyre's bead moved with them (absent: the road rim, lip at .675 of the crown).
+ * The monster's reference rim is half the tyre's height; the SUV's lip reaches .76 of it (reference side: .74 to the tyre, .80 to its own).
+ */
+const RIM_SCALE: Partial<Record<WheelDesign, number>> = { beadlock: 0.8, split10l: 1.12 };
+
+/** `TYRE_PROFILE` with its bead at `bead` and its crown at `crown`, the sidewall's shape stretched between. */
+function rebeaded(bead: number, crown: number): (readonly [number, number])[] {
+  const k = (crown - bead) / (ROAD_TYRE[1] - ROAD_TYRE[0]);
+  return TYRE_PROFILE.map(([r, x]) => [bead + (r - ROAD_TYRE[0]) * k, x] as const);
+}
 
 function monsterTyre(): THREE.BufferGeometry[] {
   const [bead, base] = MONSTER_TYRE;
-  const k = (base - bead) / (ROAD_TYRE[1] - ROAD_TYRE[0]);
-  const profile = TYRE_PROFILE.map(([r, x]) => [bead + (r - ROAD_TYRE[0]) * k, x] as const);
-  const parts = [smeared(latheX(profile, 24, TYRE_TREAD_V, TREAD_REPEATS, RUBBER), 0, [bead, ROAD_TYRE[1]])];
+  const parts = [smeared(latheX(rebeaded(bead, base), 24, TYRE_TREAD_V, TREAD_REPEATS, RUBBER), 0, [bead, ROAD_TYRE[1]])];
   for (let k2 = 0; k2 < MONSTER_LUGS; k2++) {
     for (const s of [1, -1]) {
       const lug = new THREE.BoxGeometry(...LUG_SIZE).rotateY(s * LUG_CHEVRON).translate((s * LUG_SIZE[0]) / 2, ROAD_TYRE[1] - LUG_SIZE[1] / 2, 0);
@@ -840,6 +855,7 @@ function rimFace(design: WheelDesign): THREE.BufferGeometry[] {
     case "five":
       return [...disc, ...spokes(5, [0.17, 0.15, 0.042], ALLOY), hub(0.062, HUB)];
     case "split10":
+    case "split10l":
       return [...disc, ...spokes(5, [0.16, 0.15, 0.018], ALLOY, 0.2), hub(0.055, HUB)];
     case "mag5":
       return [...slottedDish(5, 0.19, 0.06, ALLOY, [0.075, 0.175, 0.45, 0.85, 0.15]), ...faceRings(0.18, 0.222, 0.1, CHROME), smeared(latheX(MAG_CAP, 10, null, 1, HUB), 0)];
@@ -859,9 +875,12 @@ function rimFace(design: WheelDesign): THREE.BufferGeometry[] {
  */
 export function makeWheelGeometry(design: WheelDesign = "five"): THREE.BufferGeometry {
   const rim = [smeared(latheX(RIM_PROFILE, 16, null, 1, ALLOY), 0), ...rimFace(design)];
-  if (design !== "beadlock") return mergeToned([smeared(latheX(TYRE_PROFILE, 24, TYRE_TREAD_V, TREAD_REPEATS, RUBBER), 0, ROAD_TYRE), ...rim], "wheel");
-  for (const g of rim) g.scale(1, MONSTER_RIM, MONSTER_RIM);
-  return mergeToned([...monsterTyre(), ...rim], "wheel");
+  const k = RIM_SCALE[design];
+  if (k !== undefined) for (const g of rim) g.scale(1, k, k);
+  if (design === "beadlock") return mergeToned([...monsterTyre(), ...rim], "wheel");
+  if (k === undefined) return mergeToned([smeared(latheX(TYRE_PROFILE, 24, TYRE_TREAD_V, TREAD_REPEATS, RUBBER), 0, ROAD_TYRE), ...rim], "wheel");
+  const bead = ROAD_TYRE[0] * k;
+  return mergeToned([smeared(latheX(rebeaded(bead, ROAD_TYRE[1]), 24, TYRE_TREAD_V, TREAD_REPEATS, RUBBER), 0, [bead, ROAD_TYRE[1]]), ...rim], "wheel");
 }
 
 /** Which of `TYRE_PROFILE`'s nine points the far wheel keeps: bead, shoulder, crown, shoulder, bead. */

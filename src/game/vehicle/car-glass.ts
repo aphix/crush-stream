@@ -6,7 +6,7 @@ import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad, type YZ } fr
 import { ROCKER, glassTopY, glassX, lerp, roofTopY, sampleSlice, sectionPoints, sideX } from "./car-mesh.ts";
 import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, rockerAt, WINDSHIELD_BOW } from "./car-lines.ts";
 import { DOOR_PROUD } from "./car-door-mesh.ts";
-import { FITTING_ATTRIBUTE, GLASS_ATTRIBUTE } from "./constants.ts";
+import { FITTING_ATTRIBUTE, GLASS_ATTRIBUTE, MATTE_PRIVACY } from "./constants.ts";
 import { mergeToned } from "./car-materials.ts";
 
 // Glass panes on the shared platform: windshield, rear glass, door and quarter glass, filling the greenhouse `car-greenhouse-mesh.ts` builds.
@@ -105,11 +105,11 @@ function glassTone(geo: THREE.BufferGeometry, frit: 0 | 1): THREE.BufferGeometry
   return geo.setAttribute(GLASS_ATTRIBUTE, tone);
 }
 
-/** Marks every vertex of `geo`, a privacy pane's (`privacyGlass`): `glassMaterial` darkens it and floors its opacity; a frit vertex stays black. */
-export function privacyPane(geo: THREE.BufferGeometry): void {
+/** Marks every vertex of `geo`, a privacy pane's (`privacyGlass`): `glassMaterial` darkens it and floors its opacity (and roughens a `matte` one); a frit vertex stays black. */
+export function privacyPane(geo: THREE.BufferGeometry, matte: boolean): void {
   if (!geo.hasAttribute(GLASS_ATTRIBUTE)) glassTone(geo, 0);
   const tone = geo.getAttribute(GLASS_ATTRIBUTE);
-  for (let i = 0; i < tone.count; i++) tone.setY(i, 1);
+  for (let i = 0; i < tone.count; i++) tone.setY(i, matte ? MATTE_PRIVACY : 1);
 }
 
 /** A black frit band: rows of points (each row the same length) as a strip grid wound like `makeGlassQuad`'s, every vertex frit. */

@@ -131,7 +131,7 @@ class CoverLane {
     const vertices = cover.source.attributes.position!.count;
     const tone = cover.source.attributes[GLASS_ATTRIBUTE];
     for (let i = 0; i < vertices; i++) {
-      const lit = tone ? 1 - Math.max(tone.getX(i), tone.getY(i) * (1 - PRIVACY_SHADE)) : 1;
+      const lit = tone ? 1 - Math.max(tone.getX(i), Math.min(tone.getY(i), 1) * (1 - PRIVACY_SHADE)) : 1;
       to.setXYZ(cover.vertexStart + i, color.r * lit, color.g * lit, color.b * lit);
     }
     to.addUpdateRange(cover.vertexStart * 3, vertices * 3);

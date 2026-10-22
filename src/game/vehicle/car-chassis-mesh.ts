@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detSin } from "../kernel/physics-core.js";
-import { BLACKOUT, CABIN_TRIM, INNER_PANEL, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
+import { BLACKOUT, CABIN_TRIM, INNER_PANEL, MATTE_BLACKOUT, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
@@ -221,7 +221,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   let start = 0;
   for (const g of parts) {
     const count = g.getAttribute("position").count;
-    if (g.userData.blackout === true) primer.fill(BLACKOUT, start, start + count);
+    if (g.userData.blackout === true) primer.fill(g.userData.matte === true ? MATTE_BLACKOUT : BLACKOUT, start, start + count);
     if (g.userData.cabinTrim === true && source === "drawn") primer.fill(CABIN_TRIM, start, start + count);
     start += count;
   }

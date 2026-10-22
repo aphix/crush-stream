@@ -719,7 +719,8 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   // A drawn pillar runs into the roof (never through it), named and toned by its `blackout` key; the cage keeps its boxes.
   const pillar = (geo: THREE.BufferGeometry, name: keyof NonNullable<BodyStyle["blackout"]>) => {
     if (source === "cage") return geo;
-    geo.userData.blackout = black[name] === true;
+    geo.userData.blackout = black[name] === true || black[name] === "matte";
+    geo.userData.matte = black[name] === "matte";
     return insideRoof(geo, style, name);
   };
   // A drawn pillar's top corner sits on the side glass's plane, `proud` off it, in under the roof's side; the cage keeps `cageX`.
