@@ -4,18 +4,20 @@ import { LIFTGATE } from "../hinge-spec.ts";
 
 /** Wagon's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const WAGON_LAMP_SHAPES = {
+  // Its DRL a rounded loop in the inner end, then a line along the bottom curling up the outer end, as the reference's; the amber
+  // indicator at the corner. The lens's bottom keeps 1 cm over the bumper's top seam.
   head: {
     loops: [
-      { points: [[0.41, 0.715], [0.62, 0.795], [0.7, 0.808], [0.76, 0.82], [0.76, 0.835], [0.7, 0.832], [0.62, 0.815], [0.41, 0.785]] },
+      { points: [[0.41, 0.715], [0.62, 0.787], [0.66, 0.795], [0.7, 0.797], [0.76, 0.8], [0.76, 0.835], [0.7, 0.832], [0.62, 0.815], [0.41, 0.785]] },
       { side: true, points: [[1.92, 0.795], [1.7, 0.828], [1.68, 0.842], [1.8, 0.842], [1.86, 0.83], [1.92, 0.81]] },
     ],
     lens: "dark",
     bezel: "black",
     recess: 0.01,
-    strips: [{ line: { points: [[0.41, 0.775], [0.41, 0.722], [0.62, 0.797], [0.76, 0.826]] }, width: 0.008, tone: "lit" }],
-    rounds: [
-      { at: [0.47, 0.75], r: 0.01, tone: "lit" },
-      { at: [0.54, 0.775], r: 0.01, tone: "lit" },
+    cells: [{ loop: { side: true, points: [[1.86, 0.815], [1.76, 0.825], [1.72, 0.836], [1.8, 0.84], [1.86, 0.83]] }, tone: "amber" }],
+    strips: [
+      { line: { points: [[0.43, 0.727], [0.54, 0.766], [0.54, 0.784], [0.43, 0.746], [0.43, 0.727]] }, width: 0.008, tone: "lit" },
+      { line: { points: [[0.55, 0.772], [0.62, 0.793], [0.7, 0.803], [0.745, 0.806], [0.75, 0.828]] }, width: 0.008, tone: "lit" },
     ],
   },
   tail: {
@@ -40,7 +42,7 @@ const WAGON_LAMP_SHAPES = {
     // The corner intake's bright blade, 2/3 of its width, and the silver splitter along the fascia's bottom lip (diffuse silver: chrome reads dark there).
     strips: [
       { line: { points: [[0.553, 0.43], [0.687, 0.43]] }, width: 0.018, tone: "clear" },
-      { line: { points: [[0.006, 0.345], [0.2, 0.345], [0.35, 0.345], [0.5, 0.345], [0.64, 0.345]] }, width: 0.008, tone: "clear" },
+      { line: { points: [[0.006, 0.345], [0.2, 0.345], [0.35, 0.345], [0.5, 0.345], [0.64, 0.345]] }, width: 0.014, tone: "clear" },
     ],
   },
   // The black diffuser band across the rear bumper's foot from its lip's crest up, its red reflector in it, in three tiles: one long ring

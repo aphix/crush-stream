@@ -10,7 +10,7 @@ const HATCHBACK_LAMP_SHAPES = {
     recess: 0.01,
     cells: [
       { loop: { points: [[0.665, 0.48], [0.7, 0.48], [0.7, 0.6], [0.665, 0.601]] }, tone: "amber" },
-      { loop: { side: true, points: [[1.72, 0.48], [1.62, 0.48], [1.62, 0.59], [1.72, 0.6]] }, tone: "amber" },
+      { loop: { side: true, points: [[1.72, 0.48], [1.67, 0.48], [1.67, 0.595], [1.72, 0.6]] }, tone: "amber" },
     ],
   },
   // A slim band split at the gate's outline (the gate's piece inboard of x .43) and again at the infill's step wall (x .621 → .635 up the
@@ -54,7 +54,7 @@ const HATCHBACK_LAMP_SHAPES = {
     ],
   },
   front: {
-    loops: [{ points: [[0.56, 0.3], [0.68, 0.3], [0.68, 0.34], [0.56, 0.34]] }],
+    loops: [{ points: [[0.575, 0.305], [0.665, 0.305], [0.665, 0.335], [0.575, 0.335]] }],
     lens: "amber",
     overBody: true,
   },
