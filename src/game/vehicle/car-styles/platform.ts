@@ -80,10 +80,10 @@ const HANDLE_END_POINTS = 6;
 
 /**
  * A slim pull handle in a car's side `details`, as the references draw them (not a box outline): a pill-shaped pocket from z `z0` to
- * `z1` (m), `height` (m) tall, centred at `y`, recessed and darkened, and a raised rounded bar along its middle. Spread its `lines`
- * and `patches` into the style's own.
+ * `z1` (m), `height` (m) tall, centred at `y`, recessed and darkened by `cavity` (a black pull darker), and a raised rounded bar along
+ * its middle. Spread its `lines` and `patches` into the style's own.
  */
-export function pullHandle(z0: number, z1: number, y: number, height: number): Details {
+export function pullHandle(z0: number, z1: number, y: number, height: number, cavity: number = HANDLE_POCKET.cavity): Details {
   const r = height / 2;
   const [front, rear] = [Math.max(z0, z1) - r, Math.min(z0, z1) + r];
   const outline: [number, number][] = [];
@@ -96,7 +96,7 @@ export function pullHandle(z0: number, z1: number, y: number, height: number): D
     outline.push([rear + r * detCos(a), y + r * detSin(a)]);
   }
   return {
-    patches: [{ view: "side", points: outline, ...HANDLE_POCKET }],
+    patches: [{ view: "side", points: outline, ...HANDLE_POCKET, cavity }],
     lines: [{ view: "side", points: [[rear, y], [front, y]], width: Math.max(0.006, HANDLE_BAR.share * height), depth: HANDLE_BAR.depth, profile: "u", cavity: 0 }],
   };
 }

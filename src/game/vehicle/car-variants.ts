@@ -307,9 +307,11 @@ export interface BodyStyle {
   /**
    * Drawn only: the roof's section from its crown down to its cant line as one curve (`roofArc`), a cubic Bézier leaving the crown level
    * and arriving along the side glass's plane: `crown`, its crown handle's share of the half-width (more: a broader top); `blend`, its
-   * side handle's share of the section's height (more: a softer roll into the glass). Absent, the dome's flat top and its rolled side lip.
+   * side handle's share of the section's height (more: a softer roll into the glass); `squareFront` (m), a run back from the front end
+   * over which it eases into the dome's flat top and rolled lip, so a flat windshield's top corners stay under the roof. Absent, the
+   * dome's flat top and its rolled side lip.
    */
-  roofSection?: { crown: number; blend: number };
+  roofSection?: { crown: number; blend: number; squareFront?: number };
   /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
   windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;
@@ -353,6 +355,8 @@ export interface BodyStyle {
     hingeTop?: number;
     /** Drawn only: the door skin's outer face stands this far (m) over the body side inside its cut (absent `DOOR_PROUD`, 3 mm); 0: flush, the shut line a groove only. */
     proud?: number;
+    /** Drawn only: the body's rings at its cut's ends shade the panel either side from its own faces, a crease at the shut line, not rounded off by the cut's ramp; absent, one smooth normal across it. */
+    shutCrease?: boolean;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
   aPillarFoot: number;
@@ -384,9 +388,11 @@ export interface BodyStyle {
    * Drawn only: side-view pillar bands (`PillarSpan`). `a`: the A-post's width behind the windshield edge (absent 0.06). `b`: the
    * B-pillar, centred on its `bPillar` band unless it leans. `divider`: the post at `midPillarZ`. Absent: the `bPillar` band (its top
    * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` [x, y] (m): a point on the body's shoulder beside the
-   * rear glass's base; the plank rear post's (no `cPillar`) foot fans out to it, covering the cabin's opening there; absent, no fan.
+   * rear glass's base; the plank rear post's (no `cPillar`) foot fans out to it, covering the cabin's opening there; absent, no fan. `aSeat`
+   * (y, m): a deck under the drawn A-post's foot lower than the belt; a skirt of the post's own section hangs from the foot down to it,
+   * so the cabin never shows through the gap; absent, none.
    */
-  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number] };
+  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number };
   /**
    * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
    * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.

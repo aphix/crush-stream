@@ -402,15 +402,25 @@ describe("given the long jump's thrown driver, the best car type (the monster tr
   /** The farthest signs (m) the incline's unboosted throw reaches, without and with the vertical carry: the limp dummy lands and stops on the sand where the old stiff one skidded on. The game's reach is `THROW_BOOST.longJump`'s, pinned in `minigame-sizing.test.ts`. */
   const FARTHEST_SIGN_INCLINE = 40;
   const FARTHEST_SIGN_WITH_CARRY = 50;
-  it(`when he is thrown from the flat range and from the incline, then the flat range throws him short of the 50 sign, the incline past the ${FARTHEST_SIGN_INCLINE} sign and farther than the flat range, and with the ejection carrying the car's climb he is past the ${FARTHEST_SIGN_WITH_CARRY} sign`, async (t) => {
+  /**
+   * The farthest sign (m) the flat range's throw may reach, the monster's (Main, the owner's ruling: keep its throw): its lifted body and
+   * own class throw it 51.9 m on the flat (sign 50; the bar was 40, below the 50 sign), on the union f2a8062d.
+   */
+  const FARTHEST_SIGN_FLAT = 50;
+  it(`when he is thrown from the flat range and from the incline, then the flat range throws him no farther than the ${FARTHEST_SIGN_FLAT} sign, the incline past the ${FARTHEST_SIGN_INCLINE} sign, and with the ejection carrying the car's climb he is past the ${FARTHEST_SIGN_WITH_CARRY} sign`, async (t) => {
     const flat = await bestDistance(false, false);
     const incline = await bestDistance(true, false);
     const inclineWithCarry = await bestDistance(true, true);
     t.diagnostic(`long jump, best of lifts at ${LIFT_CHOICES.join(", ")}: flat ${flat.toFixed(1)} m (sign ${farthestSign(flat)}), incline ${incline.toFixed(1)} m (sign ${farthestSign(incline)}), incline with the vertical carry ${inclineWithCarry.toFixed(1)} m (sign ${farthestSign(inclineWithCarry)})`);
-    assert.ok(farthestSign(flat) <= 40, `flat sign ${farthestSign(flat)}`);
+    assert.ok(farthestSign(flat) <= FARTHEST_SIGN_FLAT, `flat sign ${farthestSign(flat)}`);
     assert.ok(farthestSign(incline) >= FARTHEST_SIGN_INCLINE, `incline sign ${farthestSign(incline)}`);
-    assert.ok(incline > flat + 3, `incline ${incline} against flat ${flat}`);
     assert.ok(farthestSign(inclineWithCarry) >= FARTHEST_SIGN_WITH_CARRY, `incline with carry sign ${farthestSign(inclineWithCarry)}`);
+  });
+
+  it("when he is thrown from the flat range and from the incline, then the incline throws him over 3 m farther", { todo: "after the overhaul: the incline out-throws the flat range; union f2a8062d: flat 51.9 m, incline 49.4 m (the monster's flat throw kept, Main)" }, async () => {
+    const flat = await bestDistance(false, false);
+    const incline = await bestDistance(true, false);
+    assert.ok(incline > flat + 3, `incline ${incline} against flat ${flat}`);
   });
 });
 
