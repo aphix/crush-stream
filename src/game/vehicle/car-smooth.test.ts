@@ -884,9 +884,10 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945).
   { id: "coupe", digest: "07208a77ebde9a8441a8671d73a84a547a27d6f70ed1813fd327a5db15fa93fa" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
-  { id: "pickup", digest: "365bfae1e11bf43392fd4c981a39922a5b1f686fdc8860a0d1737e6a743cd583" },
+  // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
+  { id: "pickup", digest: "1c94ef0982232d8ed7a9c59f2cc37d17d0e14cc4f344c8b25399f48c7c16e8a3" },
   { id: "police", digest: "23142cfaa9b3170558c726feb09a56cb9782d946cbb1ab7ecdefd3610cebc58b" },
-  { id: "monster", digest: "ea8b2e2587a915177f279a2edfac3611fdd253740d9418000e6d99144f32c7fe" },
+  { id: "monster", digest: "2bfc248baa1c9dd1bcd29824fbe66555074dc9d948ec65e335ca0848c18f13f3" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {
