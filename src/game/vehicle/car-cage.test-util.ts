@@ -1,7 +1,7 @@
 import type { CarCage, CageLive } from "./car-cage.ts";
 import { CageRig } from "./car-cage-rig.ts";
 import type { DeformableCar } from "./car.ts";
-import { cellI, cellJ, cellX, cellZ, type DrawnField, NX, type Region, reliefGap, type TopGaps } from "./drawn-body.test-util.ts";
+import { cellI, cellJ, cellX, cellZ, type DrawnField, NX, type Region, reliefGap, type TopGaps, WorstCells } from "./drawn-body.test-util.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
 
 export { cageOf, cageSourceOf } from "./car-cage-rig.ts";
@@ -55,6 +55,7 @@ export function cageGaps(car: DeformableCar, cage: CarCage, drawn: DrawnField, r
   const field = which === "top" ? cage.fields.top : cage.fields.bottom;
   const reference = which === "top" ? drawn.top : drawn.bottom;
   const gaps: number[] = [];
+  const worst = new WorstCells();
   let missing = 0;
   let worstUp = 0;
   let worstDown = 0;
@@ -65,15 +66,17 @@ export function cageGaps(car: DeformableCar, cage: CarCage, drawn: DrawnField, r
       const h = fieldAt(cage, field, cellX(i), cellZ(j));
       if (!Number.isFinite(h)) {
         missing++;
+        worst.add(cellX(i), cellZ(j), y, NaN, NaN, `cage ${which}`);
         continue;
       }
       const gap = reliefGap(reference, i, j, h + lift - y);
       gaps.push(gap);
       worstUp = Math.max(worstUp, gap);
       worstDown = Math.min(worstDown, gap);
+      worst.add(cellX(i), cellZ(j), y, h + lift, gap, `cage ${which}`);
     }
   }
   const sorted = gaps.map(Math.abs).sort((p, q) => p - q);
-  return { cells: gaps.length + missing, p95: sorted.length === 0 ? 0 : sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))]!, worstUp, worstDown, missing };
+  return { cells: gaps.length + missing, p95: sorted.length === 0 ? 0 : sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))]!, worstUp, worstDown, missing, worst: worst.words() };
 }
 
