@@ -102,9 +102,10 @@ export const PICKUP: BodyStyle = {
   roofSection: TRUCK_ROOF_SECTION,
   roofDrip: 0,
   windshieldTop: [1.6, 0.45],
-  // The reference's cab back stands near upright, its glass's top 3 cm under the roof's rolled rear edge (rear iso: a slim rounded
-  // edge, not a nose); at z -0.47..-0.5 the crushed cab's dummy-world roof stood 8-15 cm off the drawn one.
-  rearGlass: { base: [1.24, -0.55], top: [1.635, -0.45], wBase: 1.3, wTop: 1.12 },
+  // The reference's cab back stands near upright, its glass's top under the roof's rolled rear edge (rear iso: a slim rounded edge, not a nose).
+  // The pane's bowed centre (1.5 cm behind `top`) stands 5 mm ahead of `roofZ[0]`, so no glass shows past the roof's end in side view.
+  // At z -0.47..-0.5 the crushed cab's dummy-world roof stood 8-15 cm off the drawn one.
+  rearGlass: { base: [1.24, -0.55], top: [1.635, -0.44], wBase: 1.3, wTop: 1.12 },
   privacyGlass: { rear: true },
   quarter: { zRearBot: -0.3, zRearTop: -0.285 },
   midPillarZ: null,
