@@ -123,8 +123,10 @@ interface RoofParts {
   /**
    * Body-colour lip off the roof's rear end, ±`halfWidth`: its underside at y `y[0]`, its top `y[1]` at the front edge falling to the tip.
    * `ends` [slope, taper] (m): the top's side ends stand `slope` inboard of the underside's, and the tip's ends `taper` inboard of the front edge's.
+   * `round`: the tip's corners turn on a quarter ellipse in plan (`taper` across, the whole z run along) instead of the straight chamfer.
+   * `crown` (m): the top's middle stands this much over its sloped ends' tops (a parabola across, carrying the roof's crown over it); absent, level.
    */
-  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number] };
+  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number]; round?: boolean; crown?: number };
   /** Dark glass panel over the front seats, `width` (m) across, standing just proud of the roof skin. */
   glassPanel?: { z: readonly [number, number]; width: number };
 }
@@ -484,6 +486,8 @@ export interface BodyStyle {
     round?: number;
     kind: "bars" | "mesh" | "slats" | "hex";
     count?: number;
+    /** Its bars' or slats' width (m); absent, 12 mm (a mesh's 6 mm). */
+    bar?: number;
     badge?: number;
     /** A hex mesh's bars cross at ± this angle (rad) from the horizontal (flatter: wider diamonds, more rows); absent, 60°. */
     angle?: number;

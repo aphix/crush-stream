@@ -1223,7 +1223,8 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
 const BASELINE_BY_STYLE = [
   { id: "sedan", drawCalls: 13, triangles: 5266, bodyVertices: 1587 },
   { id: "hatchback", drawCalls: 13, triangles: 5064, bodyVertices: 1587 },
-  { id: "wagon", drawCalls: 13, triangles: 5088, bodyVertices: 1635 },
+  // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's.
+  { id: "wagon", drawCalls: 13, triangles: 5117, bodyVertices: 1635 },
   { id: "coupe", drawCalls: 16, triangles: 5152, bodyVertices: 1530 },
   { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
   { id: "police", drawCalls: 14, triangles: 5338, bodyVertices: 1587 },
@@ -1234,7 +1235,8 @@ const TRIANGLE_BUDGET = 1.6;
 /** The skin writes every body vertex each frame (its cost follows the count): the body's loft at most 1.2 x the baseline's vertices, which measured 1.2 x the baseline's skin time at most. */
 const BODY_VERTEX_BUDGET = 1.2;
 /** Each roof fitting kind's vertices as built (`makeRoofFittings`), merged into the body on top of its loft: red if a fitting grows. */
-const ROOF_FITTING_VERTICES = { rails: 220, glassPanel: 154, spoiler: 26 } as const;
+// The spoiler's re-pinned for the wagon's crowned top and rounded corners (the most rings and points any car's spoiler draws).
+const ROOF_FITTING_VERTICES = { rails: 220, glassPanel: 154, spoiler: 61 } as const;
 type RoofKind = keyof typeof ROOF_FITTING_VERTICES;
 
 /** `style`'s roof fittings' vertices, all together and per kind (each built alone). */

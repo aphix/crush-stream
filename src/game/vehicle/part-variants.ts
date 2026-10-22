@@ -234,7 +234,7 @@ function styleGrille(style: BodyStyle): THREE.BufferGeometry {
   const fine = g.kind === "mesh" || g.kind === "hex";
   const hex = g.angle ?? HEX_ANGLE;
   const angles = { bars: [0], slats: [Math.PI / 2], mesh: [0, Math.PI / 2], hex: [hex, -hex] }[g.kind];
-  const fill = angles.flatMap((a) => (fine ? grilleBars(inner, a, g.count, GRILLE.meshBar, GRILLE.meshPitch, GRILLE.barDepth) : grilleBars(inner, a, g.count, GRILLE.bar, GRILLE.pitch, GRILLE.barDepth)));
+  const fill = angles.flatMap((a) => (fine ? grilleBars(inner, a, g.count, g.bar ?? GRILLE.meshBar, GRILLE.meshPitch, GRILLE.barDepth) : grilleBars(inner, a, g.count, g.bar ?? GRILLE.bar, GRILLE.pitch, GRILLE.barDepth)));
   const barZ = face - GRILLE.inset - GRILLE.barDepth / 2;
   const parts = [
     dark(new THREE.ShapeGeometry(new THREE.Shape(inner)), ...GRILLE_BACKING).translate(0, 0, face - GRILLE.backingSet),

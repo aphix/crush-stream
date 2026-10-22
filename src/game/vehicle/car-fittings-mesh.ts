@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { detSin } from "../kernel/physics-core.js";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
@@ -35,6 +36,10 @@ const PANEL_STATIONS = 8;
 const PANEL_PROUD = 0.004;
 /** The spoiler's top at its tip stands this share of its height over its underside. */
 const SPOILER_TIP = 0.35;
+/** A rounded spoiler tip's corner turns in this many chords: four turn the quarter 22.5° each, under the fitting crease so the corner shades round. */
+const SPOILER_ROUND_RINGS = 4;
+/** A crowned spoiler top's points across, as shares of its half-run: four chords carry the parabola, each turning under the fitting crease. */
+const SPOILER_CROWN_SHARES = [-1, -0.5, 0, 0.5, 1] as const;
 /** Exhaust tip: tube `length` (m), its end `recess` (m) inside the bumper's rearmost face (tips sit in the lower band; nothing stands past the tail), a dark throat `throat` of its size standing `throatProud` (m) off its end. */
 const TIP = { length: 0.14, recess: 0.004, throat: 0.72, throatProud: 0.002, segments: 14 } as const;
 /** Tow-hitch receiver: `size` (m) square, `length` long, reaching `reach` (m) past the bumper face, its top `tuck` (m) up into the bumper. */
@@ -235,18 +240,37 @@ function glassPanelGeometry(panel: NonNullable<RoofParts["glassPanel"]>, style: 
   return hardEdged(loftFromRings(rings, zs, 0, 1));
 }
 
-/** A wedge off the roof's rear end: flat underside, its top falling from the front edge to the tip, its side ends sloped and tapered by `ends`. */
+/**
+ * A wedge off the roof's rear end: flat underside, its top falling from the front edge to the tip, its side ends sloped and tapered by `ends`;
+ * `round` turns the tip's corners on a quarter ellipse in plan, `crown` bows the top across.
+ */
 function spoilerGeometry(spoiler: NonNullable<RoofParts["spoiler"]>): THREE.BufferGeometry {
   const [under, top] = spoiler.y;
   const [slope, taper] = spoiler.ends ?? [0, 0];
-  const ring = (y: number, hw: number): Pt[] => [
-    { x: -hw, y: under },
-    { x: -(hw - slope), y },
-    { x: hw - slope, y },
-    { x: hw, y: under },
-  ];
   const hw = spoiler.halfWidth;
-  return hardEdged(loftFromRings([ring(lerp(under, top, SPOILER_TIP), hw - taper), ring(top, hw)], [...spoiler.z], 0, 1));
+  if (!spoiler.round && !spoiler.crown) {
+    const ring = (y: number, half: number): Pt[] => [
+      { x: -half, y: under },
+      { x: -(half - slope), y },
+      { x: half - slope, y },
+      { x: half, y: under },
+    ];
+    return hardEdged(loftFromRings([ring(lerp(under, top, SPOILER_TIP), hw - taper), ring(top, hw)], [...spoiler.z], 0, 1));
+  }
+  const crown = spoiler.crown ?? 0;
+  const shares: readonly number[] = crown ? SPOILER_CROWN_SHARES : [-1, 1];
+  // `u` runs 0 at the front edge to 1 at the tip.
+  const ringAt = (u: number): Pt[] => {
+    const half = hw - (spoiler.round ? taper * (1 - Math.sqrt(1 - u * u)) : taper * u);
+    const reach = half - slope;
+    const topAt = (share: number): number => {
+      const front = top - crown * share * share;
+      return lerp(front, lerp(under, front, SPOILER_TIP), u);
+    };
+    return [{ x: -half, y: under }, ...shares.map((share) => ({ x: share * reach, y: topAt(share) })), { x: half, y: under }];
+  };
+  const us = spoiler.round ? Array.from({ length: SPOILER_ROUND_RINGS + 1 }, (_, k) => detSin((Math.PI / 2) * ((SPOILER_ROUND_RINGS - k) / SPOILER_ROUND_RINGS))) : [1, 0];
+  return hardEdged(loftFromRings(us.map(ringAt), us.map((u) => lerp(spoiler.z[1], spoiler.z[0], u)), 0, 1));
 }
 
 /** `style.roof`'s rails, glass panel and spoiler as one geometry (car frame) for the drawn body, its first `dark` vertices (rails, panel) drawn primer-dark; null without roof parts. */

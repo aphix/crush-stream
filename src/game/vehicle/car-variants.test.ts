@@ -2085,6 +2085,46 @@ describe("given a body style's P1 parts", () => {
     assertSameNumbers(widest, [0.44, 0.5, 0.4], "the front top's, front underside's and tip underside's half-widths", POSITION_TOL);
   });
 
+  it("when a spoiler's top carries a crown, then its front edge's top stands `crown` higher at its middle than at its sloped ends, and without it the top is level", () => {
+    const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5, ends: [0.06, 0.1] } as const;
+    const crown = 0.02;
+    // The highest front-edge vertex at |x| (the front cap's fan centre sits lower, on the centre line).
+    const topAt = (roof: NonNullable<BodyStyle["roof"]>, x: number): number => {
+      const { body, from } = roofParts(roof);
+      const pos = body.getAttribute("position");
+      let top = -Infinity;
+      for (let i = from; i < pos.count; i++) {
+        if (Math.abs(pos.getZ(i) - spoiler.z[1]) < POSITION_TOL && Math.abs(Math.abs(pos.getX(i)) - x) < 1e-4) top = Math.max(top, pos.getY(i));
+      }
+      return top;
+    };
+    const crowned = { spoiler: { ...spoiler, crown } };
+    assertSameNumbers([topAt(crowned, 0), topAt(crowned, 0.44), topAt({ spoiler }, 0.44)], [spoiler.y[1], spoiler.y[1] - crown, spoiler.y[1]], "the crowned top's height at its middle and its sloped ends, and the level top's at its ends", POSITION_TOL);
+  });
+
+  it("when a spoiler's tip rounds (round), then its underside's half-width follows a quarter ellipse from the front to the tip, wider mid-run than the straight chamfer", () => {
+    const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5, ends: [0.06, 0.1], round: true } as const;
+    const { body, from } = roofParts({ spoiler });
+    const pos = body.getAttribute("position");
+    // The run's ends as Float32 stores them: the ellipse is vertical at the tip, so a double's last bit there would read as a step.
+    const [rear, front] = [Math.fround(spoiler.z[0]), Math.fround(spoiler.z[1])];
+    const taper = spoiler.ends[1];
+    const interior = new Set<number>();
+    let worst = 0;
+    let mid = NaN;
+    for (let i = from; i < pos.count; i++) {
+      if (Math.abs(pos.getY(i) - spoiler.y[0]) >= POSITION_TOL) continue;
+      const u = (front - pos.getZ(i)) / (front - rear);
+      worst = Math.max(worst, Math.abs(Math.abs(pos.getX(i)) - (spoiler.halfWidth - taper * (1 - Math.sqrt(1 - u * u)))));
+      if (u > 0.01 && u < 0.99) interior.add(Math.round(u * 1000));
+      if (Math.abs(u - Math.SQRT1_2) < 1e-3) mid = Math.abs(pos.getX(i));
+    }
+    assert.ok(worst < 1e-6, `the underside strays ${worst} from the quarter ellipse`);
+    assert.ok(interior.size >= 3, `${interior.size} interior stations along the run`);
+    const wider = mid - (spoiler.halfWidth - taper * Math.SQRT1_2);
+    assert.ok(wider > 0.03, `at u 0.7071 the half-width stands ${wider} over the straight chamfer's`);
+  });
+
   it("when a bumper's trim is chrome, black or body, then it wears chrome, black plastic or the body's colour (unset: the car's accent trim), and no bumper or cage build changes", () => {
     const accent = 0x9aa0a8;
     const body = 0x7a1020;
@@ -2505,6 +2545,24 @@ describe("given a body style's P2 parts", () => {
     assertSameNumbers([size.x, size.y], [grille.size[0] + 2 * bezel, grille.size[1] + 2 * bezel], "the chrome frame's w and h", POSITION_TOL);
     assert.ok(chromeBox(drawnPart(PART_KIND.grille, { ...sedan, grille, lamps }).geometry).isEmpty(), "without the field, no chrome");
     assert.ok(cageHash({ ...sedan, grille: { ...grille, bezel } }) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a grille sets its bars' width (bar), then its middle bar stands that tall, and without the field 12 mm", () => {
+    const sedan = CAR_STYLES.sedan;
+    const grille = { y: 0.48, size: [0.6, 0.12], kind: "bars", count: 3, finish: "black" } as const;
+    const lamps = { ...sedan.lamps, shapes: undefined };
+    // The bars' front faces stand 4 mm behind the grille's face (its surround's front); the middle of three is the only one at the grille's centre height.
+    const middleBar = (g: NonNullable<BodyStyle["grille"]>): number => {
+      const geo = drawnPart(PART_KIND.grille, { ...sedan, grille: g, lamps }).geometry;
+      const { box } = toneBox(geo, null, 0);
+      const [pos, cy] = [geo.getAttribute("position"), box.getCenter(new THREE.Vector3()).y];
+      const ys: number[] = [];
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) - (box.max.z - 0.004)) < 1e-5 && Math.abs(pos.getY(i) - cy) < 0.01) ys.push(pos.getY(i));
+      return Math.max(...ys) - Math.min(...ys);
+    };
+    const bar = 0.007;
+    assertSameNumbers([middleBar({ ...grille, bar }), middleBar(grille)], [bar, 0.012], "the middle bar's height with the field and without", 1e-6);
+    assert.ok(cageHash({ ...sedan, grille: { ...grille, bar } }) === cageHash(sedan), "the cage builds are unchanged");
   });
 
   it("when a rear bumper sets its plate's height, then the plate's centre stands at it (unset: where the platform puts it), and the cage builds are unchanged", () => {
