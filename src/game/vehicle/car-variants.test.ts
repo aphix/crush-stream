@@ -3088,6 +3088,24 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       }
     });
   }
+
+  /** A squashed drawn opening (`arch.rise`) keeps this much (m) over a tyre risen to its spring's stop: the cage keeps the round one, so nothing else stops the tyre showing through the fender. */
+  const CROWN_CLEAR = 0.02;
+  for (const id of CAR_STYLE_IDS) {
+    const style = CAR_STYLES[id];
+    const rise = style.arch.rise;
+    if (rise === undefined) continue;
+    it(`when a ${id}'s tyres are risen to their spring's stop, then each tyre's top stands ${CROWN_CLEAR} m or more under its drawn arch's crown (${rise} of its radius over the hub)`, () => {
+      const cls = STYLE_CLASS[id];
+      const { lift, wheelScale } = CLASSES[cls];
+      const bump = SPRINGS[cls].travel / 2;
+      for (const [wx, wy, wz] of carFrame(style).wheels) {
+        const top = wy + style.dims.wheel.radius * (wheelScale - 1) - lift + bump + style.dims.wheel.radius * wheelScale;
+        const crown = wy + style.arch.radius * rise;
+        assert.ok(top + CROWN_CLEAR <= crown, `${id} wheel at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: its tyre's top at ${top.toFixed(3)} m stands ${(crown - top).toFixed(3)} m under the crown at ${crown.toFixed(3)} m`);
+      }
+    });
+  }
 });
 
 describe("given every style's doors and the shared door card", () => {

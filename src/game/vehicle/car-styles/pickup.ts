@@ -18,10 +18,14 @@ const TRUCK_FRONT_FASCIA = [
 
 /** The trucks' tall gloss-black tow-style mirror housing on the door glass's front corner, read off their isos ([out from the door, height, length along the car] m). */
 export const TOW_MIRROR = { cap: "box", finish: "black", size: [0.07, 0.22, 0.16], mount: "glass" } as const;
-/** The trucks' cab roofs roll onto their rear glass's and windshield's tops (reference isos: no flat cap overhanging either; run m), the rear corners flush over the posts. */
-export const TRUCK_ROOF_ENDS = { rear: 0.1, front: 0.09, flush: { rear: 1 } } as const;
-/** The cab door's slim pull, 15 x 4 cm. */
-const DOOR_PULL = pullHandle(-0.2, -0.35, 0.995, 0.04);
+/** The trucks' cab roofs roll onto their rear glass's and windshield's tops (reference isos: no flat cap overhanging either; run m), the rear
+ *  corners tucking flush over the posts along the C-posts' chamfered tops (quarter glass to rear glass, 15-17 cm), no ear past them. */
+export const TRUCK_ROOF_ENDS = { rear: 0.17, front: 0.09, flush: { rear: 1 } } as const;
+/** The trucks' cab roofs are one smooth crown rolling into the side glass (owner, reference rear iso), no flat cap over a lip; square
+ *  over the windshield's top as the front iso, so its flat pane's corners stay under the roof (a pane bent with the dome mirrors the key light). */
+export const TRUCK_ROOF_SECTION = { crown: 0.55, blend: 0.6, squareFront: 0.15 } as const;
+/** The cab door's slim black pull, 15 x 4 cm, 6 cm ahead of the door's rear cut (z -0.22) as the reference isos place it. */
+const DOOR_PULL = pullHandle(-0.01, -0.16, 0.995, 0.04, 0.8);
 /** Pickup's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const PICKUP_LAMP_SHAPES = {
   head: {
@@ -40,13 +44,13 @@ const PICKUP_LAMP_SHAPES = {
   },
   tail: {
     loops: [
-      { points: [[0.56, 0.73], [0.66, 0.73], [0.66, 1.13], [0.56, 1.13]] },
-      { side: true, points: [[-2.155, 0.73], [-2.115, 0.73], [-2.115, 1.13], [-2.155, 1.13]] },
+      { points: [[0.6, 0.73], [0.66, 0.73], [0.66, 1.13], [0.6, 1.13]] },
+      { side: true, points: [[-2.155, 0.73], [-2.065, 0.73], [-2.065, 1.13], [-2.155, 1.13]] },
     ],
     lens: "lit",
     bezel: "black",
     recess: 0.01,
-    cells: [{ loop: { points: [[0.56, 0.87], [0.66, 0.87], [0.66, 0.95], [0.56, 0.95]] }, tone: "clear" }],
+    cells: [{ loop: { points: [[0.6, 0.87], [0.66, 0.87], [0.66, 0.95], [0.6, 0.95]] }, tone: "clear" }],
   },
   front: {
     // Its bumper lamps sit in the black valance under the chrome bar.
@@ -82,7 +86,7 @@ export const PICKUP: BodyStyle = {
     st(-0.95, 0.739, 1.18),
     st(-0.58, 0.749, 1.18),
     st(-0.5, 0.759, 1.2, 1.665, 0.58, 1),
-    st(-0.1, 0.759, 1.2, 1.655, 0.6, 1),
+    st(-0.1, 0.759, 1.2, 1.665, 0.6, 1),
     st(0.38, 0.759, 1.2, 1.625, 0.58, 1),
     st(0.98, 0.759, 1.19, 1.22, 0.58, 0.3),
     st(1.2, 0.749, 1.17),
@@ -91,13 +95,15 @@ export const PICKUP: BodyStyle = {
     st(1.86, 0.72, 1.04),
     st(1.92, 0.62, 0.96),
   ],
-  roofZ: [-0.5, 0.45],
+  // The roof ends 1 cm past its rear glass's top: the reference rear iso's glass sits right under the roof's rolled edge, no overhang.
+  roofZ: [-0.46, 0.45],
   roofEnds: TRUCK_ROOF_ENDS,
+  roofSection: TRUCK_ROOF_SECTION,
+  roofDrip: 0,
   windshieldTop: [1.6, 0.45],
-  // The reference's cab back stands near upright, its glass's top under the roof's rolled rear end; at z -0.48..-0.5 the crushed cab's dummy-world roof stood 8-10 cm off the drawn one.
-  rearGlass: { base: [1.24, -0.55], top: [1.6, -0.45], wBase: 1.3, wTop: 1.12 },
-  // Its boxy cab's panes take a quarter of the roof's dome: at the full dome the windshield's top corners turned 3.1° and mirrored the garage's key light.
-  domeFall: 0.25,
+  // The reference's cab back stands near upright, its glass's top 3 cm under the roof's rolled rear edge (rear iso: a slim rounded
+  // edge, not a nose); at z -0.48..-0.5 the crushed cab's dummy-world roof stood 8-10 cm off the drawn one.
+  rearGlass: { base: [1.24, -0.55], top: [1.635, -0.45], wBase: 1.3, wTop: 1.12 },
   privacyGlass: { rear: true },
   quarter: { zRearBot: -0.3, zRearTop: -0.285 },
   midPillarZ: null,
@@ -112,13 +118,14 @@ export const PICKUP: BodyStyle = {
   proxyBelt: 1.3,
   rearDoorSeam: -0.41,
   boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15], pivot: [0.6, -2.15] },
-  lamps: { head: [0.5, 0.85], tail: [0.61, 0.93], shapes: PICKUP_LAMP_SHAPES, bulb: "halogen", brake: { at: [0, 1.565], size: [0.3, 0.06] } },
+  lamps: { head: [0.5, 0.85], tail: [0.63, 0.93], shapes: PICKUP_LAMP_SHAPES, bulb: "halogen", brake: { at: [0, 1.6], size: [0.3, 0.06] } },
   // The reference's grille fills the face between its head lamps (inner edges x .415), four bars deep.
   grille: { y: 0.85, size: [0.79, 0.225], kind: "bars", count: 4, finish: "black", rim: "chrome" },
   camera: { hood: [1.42, 1.25], third: { dist: 6.4, height: 2.3, aimUp: 1.2 }, far: { dist: 10.3, height: 3.62, aimUp: 1.35 } },
   details: {
     lines: [
       { view: "side", points: [[0.706, 1.128], [0.699, 0.461]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.22, 1.125], [-0.22, 0.464]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.41, 1.142], [-0.421, 0.478]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[0.699, 0.462], [-0.414, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.428, 0.462], [-0.556, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },

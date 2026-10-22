@@ -19,6 +19,7 @@ import {
   roofArc,
   roofAt,
   roofDome,
+  roofSquareShare,
   roofTopY,
   sampleSlice,
   sectionPoints,
@@ -134,13 +135,6 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
     const { y: roofY, x } = roofAt(z, style);
     const { drop, crown, reach } = source === "drawn" ? roofDome(z, style) : { drop: 0, crown: ROOF_CROWN, reach: 1 };
     const y = roofY - drop;
-    const arc = source === "drawn" ? roofArc(z, style) : null;
-    if (arc) {
-      const half = ROOF_ARC_T.map(arc);
-      const skin = [...half.slice(1).reverse().map((p) => ({ x: -p.x, y: p.y })), ...half];
-      rings.push(shellRing(skin, (skin.length - 5) / 2, HEADLINER_INSET));
-      continue;
-    }
     const side: Pt[] =
       source === "cage"
         ? [
@@ -149,15 +143,20 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
           ]
         : roofRoll(x, y, lip, drip, ROOF_ROLL, reach).slice(0, -1);
     const shoulder = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
-    const skin = [
-      ...side.map((p) => ({ x: -p.x, y: p.y })),
-      { x: -x, y },
-      { x: -x * ROOF_SHOULDER[0], y: y + shoulder },
-      { x: 0, y: y + crown },
-      { x: x * ROOF_SHOULDER[0], y: y + shoulder },
-      { x, y },
-      ...[...side].reverse(),
-    ];
+    // The dome's right half, crown to cant line: as many points as `ROOF_ARC_T`, so `roofSquareShare` eases an arc into it point for point.
+    const dome = [{ x: 0, y: y + crown }, { x: x * ROOF_SHOULDER[0], y: y + shoulder }, { x, y }, ...[...side].reverse()];
+    const arc = source === "drawn" ? roofArc(z, style) : null;
+    if (arc) {
+      const share = roofSquareShare(z, style);
+      const half = ROOF_ARC_T.map((t, i) => {
+        const p = arc(t);
+        return share === 0 ? p : { x: lerp(p.x, dome[i]!.x, share), y: lerp(p.y, dome[i]!.y, share) };
+      });
+      const skin = [...half.slice(1).reverse().map((p) => ({ x: -p.x, y: p.y })), ...half];
+      rings.push(shellRing(skin, (skin.length - 5) / 2, HEADLINER_INSET));
+      continue;
+    }
+    const skin = [...dome.slice(1).reverse().map((p) => ({ x: -p.x, y: p.y })), ...dome];
     rings.push(source === "drawn" ? shellRing(skin, side.length, HEADLINER_INSET) : [...skin, { x: 0, y: y - 0.085 }]);
   }
   const geo = loftFromRings(rings, zs, 0.28, 0.72);
