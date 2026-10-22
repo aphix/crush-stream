@@ -121,16 +121,18 @@ export const COUPE: BodyStyle = {
     st(1.957, 0.64, 0.57),
   ],
   roofZ: [-1.04, 0.1],
-  /** Reference isos: the roof rolls heavily onto the rear glass's top and softly onto the windshield's, no flat cap at either end. */
-  roofEnds: { rear: 0.13, front: 0.1 },
+  /** Reference isos: the roof rolls heavily onto the rear glass's top (bowed with it) and softly onto the windshield's, no flat cap at either end. */
+  roofEnds: { rear: 0.13, front: 0.1, glassBow: { rear: true } },
   /** The reference's roof edge rolls straight into the side glass: no drip rail along the cant or down the pillar. */
   roofDrip: 0,
+  /** Reference isos: one round dome, its highlight a soft gradient out to the sides, rolling into the side glass and the sail. */
+  roofSection: { crown: 0.4, blend: 0.6 },
   windshieldTop: [1.255, 0.12],
   // Round corners: the reference rear iso's four, about a sixth of the 0.53 m slant, the glass itself round to the bead (no black corners).
-  rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96, bow: { base: -0.02, top: -0.04 }, round: 0.09, roundOutline: true },
+  rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.92, bow: { base: -0.02, top: -0.04 }, round: 0.09, roundOutline: true },
   quarter: { zRearBot: -0.96, zRearTop: -0.74 },
-  /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle: one broad flat fastback panel lapping the rear glass. */
-  cPillar: { flush: true, flat: true },
+  /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle: one broad flat fastback panel lapping the rear glass, its roof end covering the glass corner's upper arc. */
+  cPillar: { flush: true, flat: true, corner: 0.8 },
   midPillarZ: null,
   /** Reference side and rear iso: the quarter and rear glass read dark, no cabin or C-pillar post showing through. */
   privacyGlass: { rear: true, quarter: true },
