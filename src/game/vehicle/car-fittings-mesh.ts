@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle } from "./car-variants.ts";
-import { FITTING_ATTRIBUTE, FITTING_TONE, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { FITTING_ATTRIBUTE, FITTING_TONE, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { splitCreases } from "./car-crease.ts";
 import { CREASE_DEGREES, deckTopY, ensureOutwardNormals, lerp, loftFromRings, roofTopY, type Pt } from "./car-mesh.ts";
 
@@ -86,7 +86,7 @@ function bulgeGeometry(b: HoodBulge, style: BodyStyle): THREE.BufferGeometry {
   return withTone(hardEdged(loftFromRings(rings, zs, 0, 1)), PRIMER_ATTRIBUTE, 0);
 }
 
-/** One wedge per inlet rising off the bulge to its mouth at `scoop.z`; the mouth (the loft's front cap, its last ring + 1 vertices) is primer-dark. */
+/** One wedge per inlet rising off the bulge to its mouth at `scoop.z`; the mouth (the loft's front cap, its last ring + 1 vertices) is a near-black opening (`WELL_PANEL`). */
 function scoopGeometries(b: HoodBulge, scoop: HoodScoop, style: BodyStyle): THREE.BufferGeometry[] {
   const [oy, oz] = style.hood.origin;
   const twin = scoop.inlets === 2;
@@ -111,7 +111,7 @@ function scoopGeometries(b: HoodBulge, scoop: HoodScoop, style: BodyStyle): THRE
     }
     const loft = loftFromRings(rings, zs, 0, 1);
     const count = loft.getAttribute("position").count;
-    inlets.push(hardEdged(withTone(loft, PRIMER_ATTRIBUTE, 1, count - rings[0]!.length - 1)));
+    inlets.push(hardEdged(withTone(loft, PRIMER_ATTRIBUTE, WELL_PANEL, count - rings[0]!.length - 1)));
   }
   return inlets;
 }

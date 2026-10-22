@@ -535,19 +535,11 @@ describe("given every style's cabin as its glass shows it", () => {
 
   /** A drawn interior point may stand this far (m) past a pane or the roof line before it shows through: the glass's own thickness. */
   const THROUGH_M = 0.005;
-  /** Styles whose seat data still puts a seat through a pane, with their owner and the reading: the owning lane's ticket turns them live. */
-  const OPEN_FIT: Partial<Record<CarStyleId, string>> = {
 
-  };
   /** The z of the pane line from `base` to `top` ([y, z] each) at height `y`. */
   const paneZ = (y: number, [y0, z0]: readonly [number, number], [y1, z1]: readonly [number, number]): number => z0 + ((y - y0) / (y1 - y0)) * (z1 - z0);
   for (const id of CAR_STYLE_IDS) {
-    const name = `when a ${id}'s cabin is built, then no point of its shell, seats, bench or wheel stands over the roof line or through the side glass, the windshield or the rear glass`;
-    if (OPEN_FIT[id] !== undefined) {
-      test.todo(`${name} (${OPEN_FIT[id]})`);
-      continue;
-    }
-    test(name, () => {
+    test(`when a ${id}'s cabin is built, then no point of its shell, seats, bench or wheel stands over the roof line or through the side glass, the windshield or the rear glass`, () => {
       const style = CAR_STYLES[id];
       const seats = carPartSeats();
       new CarCabin(style, seats, new THREE.Group());

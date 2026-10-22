@@ -70,9 +70,10 @@ function isCrease(normals: Float64Array, f: number, g: number, smoothDot: number
  * (the angle between the two face normals) is copied once per smooth fan of faces, so the vertex normals (this function
  * recomputes them) are hard across the crease and averaged everywhere else. The copies keep every attribute and their
  * position exactly, so a skin that welds by rest position (`wrinkleSeeds`) moves them as one. The original vertices keep
- * their index (the first fan of each vertex), the copies are appended, and the triangle order is unchanged.
+ * their index (the first fan of each vertex), the copies are appended, and the triangle order is unchanged. An edge between two
+ * vertices `smooth` flags stays smooth at any angle (a rolled edge's chord shades round on its own vertices).
  */
-export function splitCreases(geometry: THREE.BufferGeometry, creaseDegrees: number): THREE.BufferGeometry {
+export function splitCreases(geometry: THREE.BufferGeometry, creaseDegrees: number, smooth?: Uint8Array): THREE.BufferGeometry {
   const index = geometry.getIndex();
   if (!index) throw new Error("splitCreases: the geometry must be indexed");
   const indices = index.array;
@@ -101,7 +102,7 @@ export function splitCreases(geometry: THREE.BufferGeometry, creaseDegrees: numb
       for (let j = i + 1; j < faces.length; j++) {
         const f = faces[i]!;
         const g = faces[j]!;
-        if (isCrease(normals, f, g, smoothDot)) continue;
+        if (isCrease(normals, f, g, smoothDot) && !(smooth?.[low] === 1 && smooth[high] === 1)) continue;
         joinCorners(parents, cornerOnVertex(indices, f, low), cornerOnVertex(indices, g, low));
         joinCorners(parents, cornerOnVertex(indices, f, high), cornerOnVertex(indices, g, high));
       }
