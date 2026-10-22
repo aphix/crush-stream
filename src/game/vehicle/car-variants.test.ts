@@ -1466,6 +1466,29 @@ describe("given a body style's P1 parts", () => {
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 
+  it("when a hood bulge sets a groove, then mid-pod its crest dips that deep on the centre line, where the plain pod's crest has no vertex at all, and the cage builds are unchanged", () => {
+    const bulge = { z0: 0.9, z1: 1.8, width: 0.6, rise: 0.04, round: 0.1 } as const;
+    /** Over the bulge's mid ring, among the vertices standing over the lid: the crest's top less the top on the centre line (Infinity: none there). */
+    const dip = (b: NonNullable<BodyStyle["hood"]["bulge"]>): number => {
+      const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge: b } };
+      const [oy, oz] = style.hood.origin;
+      const zMid = (b.z0 + b.z1) / 2;
+      const pos = withHoodBulge(makeHoodGeometry(style), style).getAttribute("position");
+      let [crest, centre] = [-Infinity, -Infinity];
+      for (let i = 0; i < pos.count; i++) {
+        const [x, y, z] = [pos.getX(i), pos.getY(i) + oy, pos.getZ(i) + oz];
+        if (Math.abs(z - zMid) > 1e-3 || y - deckTopY(x, z, style, true) <= RAISED_M) continue;
+        crest = Math.max(crest, y);
+        if (Math.abs(x) < 1e-6) centre = Math.max(centre, y);
+      }
+      return crest - centre;
+    };
+    const grooved = { ...bulge, groove: 0.004 };
+    assertSameNumbers([dip(grooved)], [0.004], "the grooved crest's dip on the centre line", 1e-6);
+    assert.ok(dip(bulge) === Infinity, `the plain crest dips ${dip(bulge)} on the centre line`);
+    assert.ok(cageHash({ ...sedan, hood: { ...sedan.hood, bulge: grooved } }) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
   it("when a hood is a clamshell, then its sides wrap over the body's shoulder to a shut line on the fender top, clear of the body there, and the cage builds are unchanged", () => {
     const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, kind: "clamshell" } };
     const z = lerp(sedan.hood.z0, sedan.hood.z1, 0.5);

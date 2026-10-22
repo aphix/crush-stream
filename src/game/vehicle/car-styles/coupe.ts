@@ -73,7 +73,7 @@ export const COUPE: BodyStyle = {
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.012, width: 0.05, band: true } },
-  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.74, z1: 1.71, width: 0.56, cowlWidth: 0.68, rise: 0.025, round: 0.04, cowlRamp: 0.3, scoop: { inlets: 2, z: 1.69, width: 0.48, height: 0.05 } }, groove: [0.004, 0.0016] },
+  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.71, width: 0.56, cowlWidth: 0.68, rise: 0.03, round: 0.04, cowlRamp: 0.12, groove: 0.008, scoop: { inlets: 2, z: 1.69, width: 0.48, height: 0.035 } }, groove: [0.004, 0.0016] },
   bumpers: {
     // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin.
     front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.3, back: 0.24, end: { corner: 0.15, stand: 0.03 } }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
@@ -117,6 +117,8 @@ export const COUPE: BodyStyle = {
     st(1.957, 0.64, 0.57),
   ],
   roofZ: [-1.04, 0.1],
+  /** Reference rear iso: the roof rolls heavily onto the rear glass's top, no flat cap there. */
+  roofEnds: { rear: 0.13 },
   windshieldTop: [1.255, 0.12],
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96, bow: { base: -0.02, top: -0.04 } },
   quarter: { zRearBot: -0.96, zRearTop: -0.74 },
@@ -138,6 +140,7 @@ export const COUPE: BodyStyle = {
     head: [0.5, 0.59],
     tail: [0.37, 0.675],
     shapes: COUPE_LAMP_SHAPES,
+    bulb: "halogen",
     sideMarkers: [
       { at: [0.51, 1.665], size: [0.065, 0.07] },
       { at: [0.54, -1.73], size: [0.08, 0.035] },
