@@ -257,6 +257,12 @@ export interface BodyStyle {
   profile: readonly ProfileStation[];
   /** Roof panel [rear, front] z. */
   roofZ: readonly [number, number];
+  /**
+   * Drawn only: over this run (m) in from each end the drawn roof rolls onto that end's glass top in a quarter ellipse, its crown
+   * settling to the glass top's height and its whole section dropping where the glass top sits under the dome's edge (`roofDome`);
+   * unset, the roof ends in its full section.
+   */
+  roofEnds?: { rear?: number; front?: number };
   /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
   windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;

@@ -360,6 +360,44 @@ describe("given a sedan whose windshield and rear glass bow deep in plan", () =>
   });
 });
 
+describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", () => {
+  /** Each end's run (m), and a rear glass top 6 cm under the dome's edge (the coupe's fastback read), so the rear's whole section drops. */
+  const RUNS = { rear: 0.15, front: 0.12 } as const;
+  const FASTBACK_DROP = 0.06;
+  const coupe = CAR_STYLES.coupe;
+  const rearTop: BodyStyle["rearGlass"]["top"] = [roofAt(coupe.roofZ[0], coupe).y - FASTBACK_DROP, coupe.rearGlass.top[1]];
+  const rolled: BodyStyle = { ...coupe, roofEnds: RUNS, rearGlass: { ...coupe.rearGlass, top: rearTop } };
+  const roof = makeRoofGeometry(rolled);
+  const pos = roof.getAttribute("position") as THREE.BufferAttribute;
+  const headliner = new Set(Array.from(roof.userData.shellTwins as Int32Array).filter((_, k) => k % 2 === 0));
+
+  it("when its roof is drawn, then each end's crown (bowed in plan with its glass) sits at its glass top's height, and past the runs the crown is the plain coupe's", () => {
+    const crowns: { y: number; z: number }[] = [];
+    for (let v = 0; v < pos.count; v++) if (Math.abs(pos.getX(v)) < 1e-6 && !headliner.has(v)) crowns.push({ y: pos.getY(v), z: pos.getZ(v) });
+    crowns.sort((a, b) => a.z - b.z);
+    const [rear, front] = [crowns[0]!, crowns[crowns.length - 1]!];
+    assert.ok(Math.abs(rear.y - rearTop[0]) < 1e-5 && Math.abs(front.y - coupe.windshieldTop[0]) < 1e-5, `end crowns at y ${rear.y} / ${front.y}, the glass tops ${rearTop[0]} / ${coupe.windshieldTop[0]}`);
+    const inside = crowns.filter((c) => c.z > coupe.roofZ[0] + RUNS.rear && c.z < coupe.roofZ[1] - RUNS.front);
+    assert.ok(inside.length > 0, "no crown read between the runs");
+    for (const c of inside) assert.ok(Math.abs(c.y - roofTopY(0, c.z, coupe)) < 1e-5, `crown at z ${c.z}: y ${c.y}, the plain coupe's ${roofTopY(0, c.z, coupe)}`);
+  });
+
+  it("when its roof's dome is read, then every skin vertex over the dome (inside its edges) is at roofTopY, and every drawn greenhouse part stays under roofTopY: the posts' clamp follows the rolled ends", () => {
+    for (let v = 0; v < pos.count; v++) {
+      const [x, y, z] = [pos.getX(v), pos.getY(v), pos.getZ(v)];
+      if (headliner.has(v) || z < rolled.roofZ[0] || z > rolled.roofZ[1] || Math.abs(x) > roofAt(z, rolled).x + 1e-6 || y < roofTopY(roofAt(z, rolled).x, z, rolled) - 1e-6) continue;
+      assert.ok(Math.abs(y - roofTopY(x, z, rolled)) < 1e-5, `dome vertex (${x}, ${y}, ${z}): roofTopY ${roofTopY(x, z, rolled)}`);
+    }
+    for (const part of makeGreenhouseFrame(rolled, "drawn")) {
+      const at = part.getAttribute("position") as THREE.BufferAttribute;
+      for (let i = 0; i < at.count; i++) {
+        const [x, y, z] = [at.getX(i), at.getY(i), at.getZ(i)];
+        if (z >= rolled.roofZ[0] && z <= rolled.roofZ[1]) assert.ok(y <= roofTopY(x, z, rolled) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the rolled roof (${roofTopY(x, z, rolled)})`);
+      }
+    }
+  });
+});
+
 /** The owner's lids (docs/DOOR_RIG.md, Lids): a sedan's lid hinged at the rear window's base wraps the tail down to its lamps; a hatch is a roof-hinged lid wrapping down a leaning tail face to just above the bumper. */
 const WRAPPED: readonly [string, BodyStyle][] = [
   ["sedan", CAR_STYLES.sedan],

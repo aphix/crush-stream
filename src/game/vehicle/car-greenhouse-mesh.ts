@@ -15,6 +15,7 @@ import {
   lerp,
   loftFromRings,
   roofAt,
+  roofDome,
   roofTopY,
   shoulderTop,
   type BodySource,
@@ -34,6 +35,8 @@ const HEADLINER_INSET = 0.004;
 const HEADLINER_POINTS = [4, 2, 0] as const;
 /** The roof's z segments: the cage's, and the drawn one's, fewer so its headliner keeps the body within its vertex budget (the chords sag 0.5 mm). */
 const ROOF_SEGS = { cage: 16, drawn: 12 } as const;
+/** A rolled end's run (`roofEnds`) gets drawn stations at these shares of it from the end: its quarter ellipse turns near the end. */
+const ROOF_ROLL_STATIONS = [0.04, 0.15, 0.4] as const;
 
 /** The drawn roof's side (+x), cant line up to the dome's edge at (`x`, `y`): a quarter ellipse `ROOF_LIP_OUT + ROOF_DRIP` out and `lip` down. */
 function roofRoll(x: number, y: number, lip: number): Pt[] {
@@ -115,10 +118,17 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
   const lip = cantDrop(style);
   const segs = ROOF_SEGS[source];
   const rings: Pt[][] = [];
-  const zs: number[] = [];
-  for (let s = 0; s <= segs; s++) {
-    const z = lerp(z0, z1, s / segs);
-    const { y, x } = roofAt(z, style);
+  const zs = Array.from({ length: segs + 1 }, (_, s) => lerp(z0, z1, s / segs));
+  if (source === "drawn") {
+    const { rear, front } = style.roofEnds ?? {};
+    const rolled = [...(rear === undefined ? [] : ROOF_ROLL_STATIONS.map((k) => z0 + rear * k)), ...(front === undefined ? [] : ROOF_ROLL_STATIONS.map((k) => z1 - front * k))];
+    zs.push(...rolled.filter((z) => zs.every((w) => Math.abs(w - z) > 0.001)));
+    zs.sort((a, b) => a - b);
+  }
+  for (const z of zs) {
+    const { y: roofY, x } = roofAt(z, style);
+    const { drop, crown } = source === "drawn" ? roofDome(z, style) : { drop: 0, crown: ROOF_CROWN };
+    const y = roofY - drop;
     const side: Pt[] =
       source === "cage"
         ? [
@@ -126,17 +136,17 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
             { x: x + ROOF_LIP_KNEE[0], y: y - ROOF_LIP_KNEE[1] },
           ]
         : roofRoll(x, y, lip).slice(0, -1);
+    const shoulder = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
     const skin = [
       ...side.map((p) => ({ x: -p.x, y: p.y })),
       { x: -x, y },
-      { x: -x * ROOF_SHOULDER[0], y: y + ROOF_SHOULDER[1] },
-      { x: 0, y: y + ROOF_CROWN },
-      { x: x * ROOF_SHOULDER[0], y: y + ROOF_SHOULDER[1] },
+      { x: -x * ROOF_SHOULDER[0], y: y + shoulder },
+      { x: 0, y: y + crown },
+      { x: x * ROOF_SHOULDER[0], y: y + shoulder },
       { x, y },
       ...[...side].reverse(),
     ];
     rings.push(source === "drawn" ? shellRing(skin, side.length, HEADLINER_INSET) : [...skin, { x: 0, y: y - 0.085 }]);
-    zs.push(z);
   }
   const geo = loftFromRings(rings, zs, 0.28, 0.72);
   ensureOutwardNormals(geo);
@@ -414,7 +424,7 @@ function roofOutlineX(y: number, roofY: number, roofX: number, lip: number): num
 function underRoofSide(x: number, y: number, z: number, style: BodyStyle): number {
   if (z < style.roofZ[0] || z > style.roofZ[1]) return x;
   const roof = roofAt(z, style);
-  return Math.min(x, roofOutlineX(y, roof.y, roof.x, cantDrop(style)) - ROOF_TUCK);
+  return Math.min(x, roofOutlineX(y, roof.y - roofDome(z, style).drop, roof.x, cantDrop(style)) - ROOF_TUCK);
 }
 
 /** The side glass's plane at (`y`, `z`), its lean from the belt to the cant line carried on past both, `proud` (m) out off it. */
