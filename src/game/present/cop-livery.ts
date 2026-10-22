@@ -74,7 +74,8 @@ function drawLivery(style: BodyStyle, layout: SprayLayout): SprayPaint {
   // (above the belt); the bonnet, cowl and front fenders stay black.
   const roofFront = style.windshieldTop[1];
   const pillarFront = style.windshield.base[1];
-  const glassRear = style.rearGlass.base[1];
+  // The pillars' white stops at the deck lid's front shut line: the lid's strip beside the rear glass is the black deck's.
+  const glassRear = Math.max(style.rearGlass.base[1], style.boot.kind === "lid" ? style.boot.z0 : -Infinity);
   const wordMid = (style.bPillar.rear + style.bPillar.front) / 2;
   const baseline = (beltY(wordMid, style) + sill - CAP) / 2;
   for (const face of [SPRAY_FACE.left, SPRAY_FACE.right, SPRAY_FACE.top]) {

@@ -366,11 +366,11 @@ export interface BodyStyle {
   /** Extra pillar splitting the quarter glass (wagon C-pillar), or null. */
   midPillarZ: number | null;
   /**
-   * Drawn only: side-view pillar bands (`PillarSpan`). `b`: the B-pillar, centred on its `bPillar` band unless it leans, the side
-   * panes tucked under it. `divider`: the post at `midPillarZ`. Absent: the `bPillar` band (its top 3 cm narrower); a divider
-   * 0.08 / 0.07 wide, upright at `midPillarZ`.
+   * Drawn only: side-view pillar bands (`PillarSpan`). `a`: the A-post's width behind the windshield edge (absent 0.06). `b`: the
+   * B-pillar, centred on its `bPillar` band unless it leans. `divider`: the post at `midPillarZ`. Absent: the `bPillar` band (its top
+   * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`.
    */
-  pillars?: { b?: PillarSpan; divider?: PillarSpan };
+  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan };
   /** Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar, and the cowl (the deck between the hood's rear edge and the windshield's foot). */
   blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean; cowl?: boolean };
   /**

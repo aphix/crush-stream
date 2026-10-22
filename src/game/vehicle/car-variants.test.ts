@@ -853,7 +853,7 @@ describe("given a body style's H2 hardpoints", () => {
     assertSameNumbers([doorTopFrontZ(unset), aPillarTopZ(unset)], [stock, stock], "unset: 5 cm behind the windshield's top", 1e-5);
   });
 
-  it("when any style's drawn A-pillar is read, then it is a post along the windshield's edge: never proud of the glass, 6 cm wide in side view, its top under the roof skin; also with its top at the windshield's", () => {
+  it("when any style's drawn A-pillar is read, then it is a post along the windshield's edge: never proud of the glass, its width in side view (6 cm unless the style sets `pillars.a`), its top under the roof skin; also with its top at the windshield's", () => {
     for (const id of CAR_STYLE_IDS) {
       const stock = CAR_STYLES[id];
       for (const style of [stock, { ...stock, aPillarTop: stock.windshieldTop[1] - 0.02 }]) {
@@ -873,7 +873,10 @@ describe("given a body style's H2 hardpoints", () => {
           read++;
           const behind = ks.map((i) => side[i]!);
           const width = Math.max(...behind) - Math.min(...behind);
-          assert.ok(width > 0.058, `${id} aPillarTop ${aPillarTopZ(style)}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}`);
+          const set = style.pillars?.a;
+          const want = (set ?? 0.06) - 0.002;
+          assert.ok(width > want, `${id} aPillarTop ${aPillarTopZ(style)}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}, under ${want}`);
+          if (set !== undefined) assert.ok(width < set + 0.01, `${id}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}, its pillars.a ${set}`);
         }
         assert.ok(read >= slices - 2, `${id} aPillarTop ${aPillarTopZ(style)}: ${read} of ${slices} stations show under the roof`);
         // Every drawn greenhouse part (A-post, sail, B, rear, divider, rail, fills) stays in the roof: under its skin, and in under its side over the cant line.
@@ -2336,7 +2339,9 @@ describe("given a body style's P2 parts", () => {
   });
 
   it("when a bumper lamp is met on the body too, then its lens stands proud of the body skin where the fascia's wrapped corner is held inside it", () => {
-    const sedan = CAR_STYLES.sedan;
+    // The row's fascia wraps plainly: its corner held inside the body, which a lofted end (`wrap.end`) stands off.
+    const stock = CAR_STYLES.sedan;
+    const sedan: BodyStyle = { ...stock, bumpers: { ...stock.bumpers, front: { ...stock.bumpers.front, wrap: { ...stock.bumpers.front.wrap!, end: undefined } } } };
     const { seat } = sedan.bumpers.front;
     const shapes = sedan.lamps.shapes!;
     const off: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: { ...shapes, front: { ...shapes.front!, onBody: undefined } } } };

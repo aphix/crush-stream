@@ -250,11 +250,15 @@ describe("given the lids as built", () => {
           assert.ok(verticesAtSamePlace(lid, slice * loft.ring + line) >= 2, `ring line ${line} slice ${slice} is one vertex: its crease is not split`);
         }
       }
+      // A lid that wraps the tail ends its deck on the lip's crest (its last deck ring): the kick turns 51-54° down into the fold there,
+      // the ducktail's hard edge across the dome, so that slice is split and every other is one vertex.
+      const crest = testCase.rolledLid ? (lid.userData.deckRings as number) - 1 : -1;
       for (const line of smoothLines) {
         const angles = ringLineDihedrals(lid, line, inner);
         assert.ok(Math.max(...angles) < FLAT_CURVE_LIMIT_DEGREES, `ring line ${line} turns ${Math.max(...angles)}°`);
         for (let slice = 1; slice < loft.slices - 1; slice++) {
-          assert.equal(verticesAtSamePlace(lid, slice * loft.ring + line), 1, `ring line ${line} slice ${slice} is split: its curve is not smooth`);
+          const want = slice === crest ? 2 : 1;
+          assert.equal(verticesAtSamePlace(lid, slice * loft.ring + line), want, `ring line ${line} slice ${slice}: ${want === 2 ? "the lip's crest is not a hard edge" : "split, its curve is not smooth"}`);
         }
       }
       for (const line of rollLines) {
@@ -1212,7 +1216,8 @@ function cageSourceDigest(car: DeformableCar): string {
 // the coupe also for its rear glass's round corners (`rearGlass.round`).
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // CarSedan's shape data and arch radius (as the sim digests above): sedan b9e9e98b... -> df8e0b97... -> 720053fe...; police 2466b278... -> 5e59494a... -> 23142cfa....
-  { id: "sedan", digest: "8540eed1a6c3d6687d0537a71d94115392b0c5f5d78422d90662c8d25efc248d" },
+  // Sedan and police re-pinned for the door glass's top-front corner kept in under the slim A-post (`aPillarTop` 0.143): 8540eed1 -> 2fc92389; police 5af761d2 -> d97239fa.
+  { id: "sedan", digest: "2fc92389770b8e00c4d7ebdaf8f4ce146f46123d137c520c85c1fb310107b324" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
@@ -1229,7 +1234,7 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // the pickup's for its panes taking a quarter of the roof's dome (`domeFall` .25); both for their roofs rolling onto their glass tops (`roofEnds`), which the
   // panes' tops follow; the pickup's again for its rear glass's top back at z -0.45 (at -0.5 the crushed cab's dummy-world roof stood 8 cm off the drawn one).
   { id: "pickup", digest: "e65c828a688d9635d6aad5b64db21090cfc7257dc7d33c31eb08d1a7c27f3527" },
-  { id: "police", digest: "5af761d2cd219ffa91bbabcd7d0dad28fc102b3ef1411cd90380345f3c4db455" },
+  { id: "police", digest: "d97239fa21b9cf10f9ed7c91095314b375d0f236bc2b81c311dd2e1b1147b81e" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55).
   { id: "monster", digest: "f2ef66a28dd2081b6ddc96ea24f743f6d8b978d5ee983b17faaa66d7c4200489" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];

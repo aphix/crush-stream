@@ -83,12 +83,12 @@ const A_POST_WIDTH = 0.06;
 /** A door glass kneed onto the A-post runs this far (m) in under the post's rear edge. */
 const KNEE_TUCK = 0.01;
 
-/** The drawn A-post's rear edge at height `y` (z, m): `A_POST_WIDTH` behind the windshield's edge line in side view. */
+/** The drawn A-post's rear edge at height `y` (z, m): `pillars.a` (else `A_POST_WIDTH`) behind the windshield's edge line in side view. */
 export function aPostRearZ(y: number, style: BodyStyle): number {
   const { base } = style.windshield;
   const [topY, topZ] = style.windshieldTop;
   const [dz, dy] = [topZ - base[1], topY - base[0]];
-  return base[1] + (dz * (y - base[0]) - A_POST_WIDTH * hypot2(dz, dy)) / dy;
+  return base[1] + (dz * (y - base[0]) - (style.pillars?.a ?? A_POST_WIDTH) * hypot2(dz, dy)) / dy;
 }
 
 /**
