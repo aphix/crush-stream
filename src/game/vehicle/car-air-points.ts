@@ -11,7 +11,7 @@ import { carClass } from "./vehicle-classes.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
-import { cageLift } from "./car-cage-rig.ts";
+import { cageLift, centreLift } from "./car-cage-rig.ts";
 import { HUB_POP_MPS } from "../deform/deform-solve.ts";
 import { POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_POINTS, GROUND_LIFT_V, body, carrier, pointVel } from "./car-air-body.ts";
 
@@ -294,8 +294,8 @@ export function loadPoints(car: DeformableCar): number {
   const { pos, panelOn } = car.cage.fields;
   const { vertexCount, vertexGroup, sillCount } = car.cage.style;
   const { belly } = car.frame;
-  // The reach about the body's centre, lifted with it as its points are (`centreY`).
-  const comY = car.frame.comY + lift;
+  // The reach about the body's centre (`centreY`), its points lifted with the drawn body (`lift`).
+  const comY = car.frame.comY + centreLift(car);
   let reach2 = 0;
   let n = 0;
   for (let k = 0, end = vertexCount + (wreck ? sillCount : 0); k < end; k++) {
