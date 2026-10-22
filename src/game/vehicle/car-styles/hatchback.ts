@@ -77,7 +77,7 @@ export const HATCHBACK: BodyStyle = {
   belt: { x: 0.75, y: [[-1.174, 0.881], [-0.939, 0.877], [-0.935, 0.856], [0.128, 0.838], [0.381, 0.809], [0.58, 0.824], [0.584, 0.852], [0.88, 0.852]] },
   rocker: { y: 0.2 },
   arch: { radius: 0.35, lip: { flare: 0.009, width: 0.035 } },
-  hood: { z0: 0.86, z1: 1.66, origin: [0.75, 0.84] },
+  hood: { z0: 0.86, z1: 1.66, origin: [0.75, 0.84], followGlass: -0.043 },
   bumpers: {
     front: {
       seat: { y: 0.38, z: 1.7245 },
@@ -148,6 +148,8 @@ export const HATCHBACK: BodyStyle = {
   roofSection: { crown: 0.4, blend: 0.9, squareFront: 0.12 },
   roofDrip: 0,
   windshieldTop: [1.245, 0.245],
+  // The A-post upright and even as its reference side plate's band (drawn twin: the windshield's side edge bows back in plan, the cage keeps the style's own).
+  drawn: { windshield: { base: [0.891, 0.658], wBase: 1.38, wTop: 1.03, bow: { base: 0.245, top: 0.048 }, seat: true }, windshieldTop: [1.245, 0.22], aPillarFoot: 0.61, aPillarTop: 0.17 },
   // The rear glass's top as wide as the top view's (1.0 of the roof end's 1.04), so the D-pillar narrows to a pinch at the roof;
   // a slim frit beside it keeps the painted post, not a dark band, between the glass areas.
   rearGlass: { base: [0.905, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 1.0, frame: [0.03, 0.06, 0.11] },

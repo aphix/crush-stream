@@ -76,7 +76,7 @@ export const COUPE: BodyStyle = {
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.012, width: 0.05, band: true } },
   /** Reference: the pod's straight front edge (top view) is a face holding two dark intake mouths (isos), no higher than the pod (side view); its flanks are soft (round .045 leans them under the fitting crease), not a hard-lit black band in the side view. */
-  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.69, width: 0.595, cowlWidth: 0.7, rise: 0.025, round: 0.045, cowlRamp: 0.12, groove: 0.008, mouth: true }, groove: [0.004, 0.0016] },
+  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.69, width: 0.595, cowlWidth: 0.7, rise: 0.025, round: 0.045, cowlRamp: 0.12, groove: 0.008, mouth: true }, groove: [0.004, 0.0016], followGlass: -0.015 },
   bumpers: {
     // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin. Reference rear iso and top plate: the rear bar turns its corner on a round of about its own depth, keeping its full section, and runs on close to the quarter.
     front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.3, back: 0.24, end: { corner: 0.15, stand: 0.03 } }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
@@ -128,6 +128,8 @@ export const COUPE: BodyStyle = {
   /** Reference isos: one round dome, its highlight a soft gradient out to the sides, rolling into the side glass and the sail. */
   roofSection: { crown: 0.4, blend: 0.6 },
   windshieldTop: [1.255, 0.12],
+  // The A-post upright and even as its reference side plate's band (drawn twin: the windshield's side edge bows back in plan, the cage keeps the style's own).
+  drawn: { windshield: { base: [0.9, 0.52], wBase: 1.32, wTop: 1.0, bow: { base: 0.18, top: 0.035 }, seat: true }, aPillarFoot: 0.404, aPillarTop: 0.096 },
   // Round corners: the reference rear iso's four, about a sixth of the 0.53 m slant, the glass itself round to the bead (no black corners).
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.92, bow: { base: -0.02, top: -0.04 }, round: 0.09, roundOutline: true },
   /** Reference side view: the quarter glass's rear point at z -0.95..-0.97, its rear edge leaning about 45°. */

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, ROOF_DRIP, roofDrip, sideBowZ, WINDSHIELD_BOW } from "./car-lines.ts";
-import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset } from "./car-glass.ts";
+import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset, windshieldSideBase } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
   ROOF_ARC_T,
@@ -418,13 +418,16 @@ const SAIL_STATIONS = 3;
  * glass's knee (or the post's top), so no glass layout leaves a hole or a sliver.
  */
 function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
-  const { base, wBase, wTop } = style.windshield;
+  const { wBase, wTop } = style.windshield;
+  const base = windshieldSideBase(style);
   const [topY, topZ] = style.windshieldTop;
   const run = hypot2(topZ - base[1], topY - base[0]);
   const [uz, uy] = [(topZ - base[1]) / run, (topY - base[0]) / run];
   const [footZ, aTopZ] = [style.aPillarFoot, aPillarTopZ(style)];
   const [footY, aTopY] = [beltY(footZ, style), cantY(aTopZ, style) + PILLAR_TOP_RISE];
-  const edgeFoot = Math.min(0, (footY - base[0]) / (topY - base[0]));
+  const footEdge = (footY - base[0]) / (topY - base[0]);
+  // A seated pane's side base follows the hood, so its edge line meets the belt above that base as often as below it: the post starts at the belt either way.
+  const edgeFoot = style.windshield.seat === true ? footEdge : Math.min(0, footEdge);
   const glassTop = glassTopY(aTopZ, style);
   const cantTop = cantY(aTopZ, style);
   const glassPlaneX = (y: number) => lerp(beltX(footZ, style), cantX(aTopZ, style), THREE.MathUtils.clamp((y - footY) / (cantTop - footY), 0, 1));
@@ -432,7 +435,7 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const railAt = (t: number): Rail => {
     const y = lerp(footY, aTopY, t);
     const edge = lerp(edgeFoot, 1, t);
-    const [rearZ, edgeZ] = [aPostRearZ(y, style), lerp(base[1], topZ, edge) + A_POST_LIFT * uy + sideBowZ(style.windshield.sideBow ?? 0, edge)];
+    const [rearZ, edgeZ] = [aPostRearZ(y, style, base), lerp(base[1], topZ, edge) + A_POST_LIFT * uy + sideBowZ(style.windshield.sideBow ?? 0, edge)];
     // The top station runs into the roof: its ring is moved back to lie a post's depth (its section's reach in z) inside the roof's
     // span, where the roof's tuck holds all of it, not a blade past its end.
     const back = t === 1 ? Math.max(0, Math.max(rearZ, edgeZ) - (style.roofZ[1] - ROOF_TUCK - A_POST_THICK)) : 0;
@@ -454,7 +457,7 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   for (let k = 0; k < SAIL_STATIONS; k++) {
     const y = lerp(footY, style.aPillarKnee ?? aTopY, k / (SAIL_STATIONS - 1));
     const front = postRearmost(railAt((y - footY) / (aTopY - footY)), A_POST_THICK);
-    const sailZ = Math.min(doorGlassFrontZ(y, footY, glassTop, style), front[2] - SAIL_EDGE);
+    const sailZ = Math.min(doorGlassFrontZ(y, footY, glassTop, style, base), front[2] - SAIL_EDGE);
     const rear: V3 = [glassX(sailZ, y, style), y, sailZ];
     sail.push({ rear, front });
     sailWidth = Math.max(sailWidth, hypot2(front[0] - rear[0], front[2] - rear[2]));

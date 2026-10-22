@@ -15,7 +15,7 @@ import {
   TRIM_FINISH,
   type LampKind,
 } from "./car-materials.ts";
-import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, drawnStyle, type BodyStyle } from "./car-variants.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, PLATE_RISE, type PartKind } from "./part-geometry.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { glassX, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
@@ -893,7 +893,7 @@ function sweptBar(
 }
 
 /**
- * `style`'s wipers, in car space (their seat rides the windshield pane at its origin): each blade parked `WIPER_PARK_UP` up the glass from its
+ * `style`'s wipers (as drawn: `drawnStyle`), in car space (their seat rides the windshield pane at its origin): each blade parked `WIPER_PARK_UP` up the glass from its
  * base, its rubber on the glass's bow across the car, its arm over it from the pivot, a cap on the pivot; black plastic. `userData.blades`:
  * each blade's pivot and tip on the glass.
  */
@@ -934,7 +934,7 @@ function styleWipers(style: BodyStyle): THREE.BufferGeometry {
   return geo;
 }
 
-/** A style's wipers' variant key: they lie on its own windshield (its data and its dome's fall), so every style draws its own. */
+/** A style's wipers' variant key: they lie on its own windshield (its data and its dome's fall), so every style draws its own. Keyed and built on the style as drawn (`drawnStyle`: a twin's seated windshield), whichever of it or the plain style a caller holds. */
 const wipersKey = (style: BodyStyle): string => `${style.id}|${JSON.stringify([style.windshield, style.windshieldTop, style.wipers ?? null])}`;
 
 // ---- the variant table -----------------------------------------------------------------------------------------------------
@@ -956,7 +956,7 @@ const SLOTS = {
   tail: { base: once(() => makeLampUnit("tail")), sides: [-1, 1], key: (style, side) => lampKey(style, "tail", side), build: (style, side) => styleLamp(style, "tail", side) },
   boot: { base: noLidLamp, sides: [-1, 1], key: (style, side) => lampKey(style, "tail", side), build: (style, side) => lidLamp(style, "tail", side) },
   hood: { base: noLidLamp, sides: [-1, 1], key: (style, side) => lampKey(style, "head", side), build: (style, side) => lidLamp(style, "head", side) },
-  wipers: { base: () => partGeometry(PART_KIND.wipers), sides: [0], key: wipersKey, build: styleWipers },
+  wipers: { base: () => partGeometry(PART_KIND.wipers), sides: [0], key: (style) => wipersKey(drawnStyle(style)), build: (style) => styleWipers(drawnStyle(style)) },
 } as const satisfies Record<string, Slot>;
 type SlotName = keyof typeof SLOTS;
 
