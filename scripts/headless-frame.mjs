@@ -59,6 +59,8 @@ const YARDSTICK_VS = "#version 300 es\nlayout(location = 0) in vec2 a; void main
 const BUILTIN_IDS = /\bgl_(VertexID|InstanceID)\b/g;
 /** How often `settle` looks again: three checks an async compile every 10 ms where `KHR_parallel_shader_compile` is missing (here). */
 const SETTLE_POLL_MS = 5;
+/** A wheel-batch instance centred this near (m) one of the shot car's wheels is that wheel (another car's stands metres off). */
+const WHEEL_MATCH_M = 0.5;
 
 const { values } = parseArgs({
   options: {
@@ -299,8 +301,9 @@ process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 
 /**
- * `--paint`: one colour for the hash's car, or `<style>=<colour>` pairs; a car whose style fixes its paint (a livery) keeps it. The
- * hinged panels wear their own copies of the body paint, so every material still in the body's colour takes the new one.
+ * `--paint`: one colour (hex) for the hash's car, or `<style>=<colour>` pairs; a car whose style fixes its paint (a livery) keeps
+ * it. The hinged panels wear their own copies of the body paint, so every material still in the body's colour takes the new one;
+ * a body-finish mirror cap or grille is a part-batch tint, set as the garage look sets it (`setPartPaint`).
  */
 function paintCars(spec) {
   const pairs = spec.includes("=") ? spec.split(",").map((p) => p.split("=")) : [[hashStyle, spec]];
@@ -313,35 +316,46 @@ function paintCars(spec) {
     car.group.traverse((o) => {
       for (const m of [o.material ?? []].flat()) if (m.color?.getHex() === was) m.color.set(colour);
     });
+    const hex = Number.parseInt(colour.replace(/^#/, ""), 16);
+    car.setPartPaint(hex, hex);
   }
 }
 
 /**
  * Where the shot drew the car's wheels (px on its W x H frame), named as trace-car's picks are (`fl`, `fr`, `rl`, `rr`; +x is the
- * car's left): `centre` the hub, `hub` the hub on the tyre's outer face, `contact` that face at the tyre's bottom. A wheel's size
- * is its design's drawn geometry (the batch mesh the car's wheels fill) at the wheel's scale; the loaded tyre's flat is a vertex
- * shader's, so `contact` is the round tyre's bottom, as trace-car's car points are.
+ * car's left): `centre` the hub, `hub` the hub on the wheels' outer face, `contact` that face at their bottom. The face and the
+ * bottom are the drawn wheels' box in car space (each batch instance's geometry box through its instance matrix, as trace-car's
+ * measure takes them), so both tools mark the same points; the loaded tyre's flat is a vertex shader's and neither sees it.
  */
 function wheelMarks({ THREE, car, camera }, W, H) {
-  const geometry = engine.wheels.meshes.find((m) => m.visible && m.count > 0)?.geometry;
-  if (geometry === undefined) return null;
-  geometry.computeBoundingBox();
-  const { min, max } = geometry.boundingBox;
   const toCar = car.group.matrixWorld.clone().invert();
+  const centres = car.wheels.map((w) => new THREE.Vector3().setFromMatrixPosition(w.matrixWorld).applyMatrix4(toCar));
+  const box = new THREE.Box3();
+  const piece = new THREE.Box3();
+  const instance = new THREE.Matrix4();
+  const mid = new THREE.Vector3();
+  for (const mesh of engine.wheels.meshes) {
+    if (!mesh.visible || mesh.count === 0) continue;
+    mesh.geometry.computeBoundingBox();
+    for (let i = 0; i < mesh.count; i++) {
+      mesh.getMatrixAt(i, instance);
+      piece.copy(mesh.geometry.boundingBox).applyMatrix4(instance.premultiply(mesh.matrixWorld).premultiply(toCar));
+      if (centres.some((c) => c.distanceTo(piece.getCenter(mid)) < WHEEL_MATCH_M)) box.union(piece);
+    }
+  }
+  if (box.isEmpty()) return null;
   const px = (x, y, z) => {
     const p = new THREE.Vector3(x, y, z).applyMatrix4(car.group.matrixWorld).project(camera);
     return [Number((((p.x + 1) / 2) * W).toFixed(1)), Number((((1 - p.y) / 2) * H).toFixed(1))];
   };
   const marks = {};
-  for (const wheel of car.wheels) {
-    const scale = new THREE.Vector3().setFromMatrixScale(wheel.matrixWorld);
-    const c = new THREE.Vector3().setFromMatrixPosition(wheel.matrixWorld).applyMatrix4(toCar);
-    const face = c.x + Math.sign(c.x) * Math.max(-min.x, max.x) * scale.x;
-    const bottom = c.y - ((max.y - min.y) / 2) * scale.y;
-    marks[`${c.z > 0 ? "f" : "r"}${c.x > 0 ? "l" : "r"}`] = { centre: px(c.x, c.y, c.z), hub: px(face, c.y, c.z), contact: px(face, bottom, c.z) };
+  for (const c of centres) {
+    const face = c.x > 0 ? box.max.x : box.min.x;
+    marks[`${c.z > 0 ? "f" : "r"}${c.x > 0 ? "l" : "r"}`] = { centre: px(c.x, c.y, c.z), hub: px(face, c.y, c.z), contact: px(face, box.min.y, c.z) };
   }
   return marks;
 }
+
 /**
  * Every drawn frame from here goes through `spec`'s camera (trace-camera, car space, placed on the hash's car) and/or over a flat
  * `backdrop` colour with the garage room and fog gone. The engine's own camera keeps running unchanged: the detail, skin and lamp

@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { INNER_PANEL, WELL_PANEL } from "./constants.ts";
+import { BLACKOUT, CABIN_TRIM, INNER_PANEL, WELL_PANEL } from "./constants.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { makeShell, PANEL_NAMES, panelRegions, poseShell } from "./car-panels.ts";
 import { DENT_MAX, newDentState, recordDent } from "./loose-dent.ts";
@@ -12,12 +12,12 @@ import { runWall, type CrashResult } from "../contact/crash-scenarios.test-util.
 import { assertSameNumbers, DT, paint } from "./test-support.ts";
 import { LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts";
 
-/** The body's paint attribute, joined: 0 paint, 1 primer, `INNER_PANEL` the unpainted bay trough, `WELL_PANEL` the wheel wells. */
+/** The body's paint attribute, joined: 0 paint, 1 primer, `INNER_PANEL` the unpainted bay trough, `WELL_PANEL` the wheel wells, `BLACKOUT` gloss-black trim, `CABIN_TRIM` the cabin. */
 const primerOf = (car: DeformableCar): string => Array.from(car.body.geometry.getAttribute("primer").array).join();
-/** The rest build's: paint, the roof fittings' dark primer, the trough's inner panel and the wells only. */
+/** The rest build's: paint, the trough's inner panel, the wells, the blacked-out trim (roof fittings, pillars, cowl) and the cabin's trim (blended at its tub's ends) only. */
 const restPrimer = (car: DeformableCar): string => {
   const rest = Array.from(makeChassisGeometry(car.style).getAttribute("primer").array);
-  assert.ok(rest.every((v) => v === 0 || v === 1 || v === INNER_PANEL || v === WELL_PANEL), "a rest body holds only paint, primer, inner panel and wells");
+  assert.ok(rest.every((v) => v === 0 || v === 1 || v === INNER_PANEL || v === WELL_PANEL || v === BLACKOUT || (v < 0 && v >= CABIN_TRIM)), "a rest body holds only paint, primer, inner panel, wells, blackout and cabin trim");
   return rest.join();
 };
 

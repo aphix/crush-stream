@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { WELL_PANEL } from "./constants.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { floorY, rockerAt } from "./car-lines.ts";
@@ -283,7 +283,7 @@ export function archLipGeometry(style: BodyStyle, loft: THREE.BufferGeometry): T
     const first = positions.length / 3;
     for (const [z, y, uz, uy] of path) {
       // Under the hub the opening runs straight down its sides (the legs), over it round the arc.
-      const overOpening = (y < wy ? Math.abs(z - wz) : Math.hypot(z - wz, y - wy)) <= style.arch.radius + LIP_OVER_SKIN;
+      const overOpening = (y < wy ? Math.abs(z - wz) : hypot2(z - wz, y - wy)) <= style.arch.radius + LIP_OVER_SKIN;
       for (const [out, off, t] of section) {
         let skin = -Infinity;
         for (let seek = Math.max(out, 0); skin === -Infinity && seek <= Math.max(out, 0) + LIP_SEEK; seek += 0.005) skin = skinX(loft, side, y + uy * seek, z + uz * seek);

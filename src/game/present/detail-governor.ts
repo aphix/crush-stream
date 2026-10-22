@@ -43,8 +43,7 @@ export class DetailGovernor {
    */
   frame(ms: number, lostMs: number, workMs: number, renderMs: number, gpuMs: number, matching: boolean): number | null {
     if (!matching) {
-      this.win.restart();
-      this.lostMs = this.slow = this.fine = 0;
+      this.restart();
       return null;
     }
     const counted = !this.win.settling;
@@ -74,10 +73,15 @@ export class DetailGovernor {
     return this.move(this.level - 1);
   }
 
-  private move(to: number): number {
-    this.level = to;
+  /** Drop the window under way and its counts (outside a match, or a lost context's frames that drew nothing). */
+  restart(): void {
     this.win.restart();
     this.lostMs = this.slow = this.fine = 0;
+  }
+
+  private move(to: number): number {
+    this.level = to;
+    this.restart();
     return to;
   }
 }

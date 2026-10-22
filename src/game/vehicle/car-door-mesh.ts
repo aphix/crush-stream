@@ -8,6 +8,7 @@ import { rockerAt } from "./car-lines.ts";
 import { MIRROR_REACH, MIRROR_ROOT } from "./part-geometry.ts";
 import { doorCardGeometry } from "./interior-geometry.ts";
 import { PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
+import { CABIN_TRIM, PRIMER_ATTRIBUTE } from "./constants.ts";
 
 /** The platform door as the sim readers still take it (door contact, hull gap, wear, car-parts) until they read `style.door`; `mirrorX` is its mirror base out from the hinge. */
 export const DOOR = { ...PLATFORM_HARDPOINTS.door, mirrorX: 0.06 } as const;
@@ -18,6 +19,8 @@ const DOOR_PROUD = 0.003;
 const DOOR_THICKNESS = 0.05;
 /** The skin covers the door cut with this much (m) past each end. */
 const DOOR_SKIN_OVERLAP = 0.02;
+/** The skin's face meets the body side at each cut end and stands `DOOR_PROUD` proud this far (m) inside it, so the hinge and latch slices read as shut lines, not steps. */
+const DOOR_TAPER = 0.02;
 
 /** The door skin's centre along z in hinge space: the door cut's middle. */
 export function doorSkinZ(style: BodyStyle): number {
@@ -96,7 +99,12 @@ function doorGrid(style: BodyStyle): DoorGrid {
   const skinLength = z1 - z0 + 2 * DOOR_SKIN_OVERLAP;
   const halfLength = skinLength / 2;
   const rowInterior = Array.from({ length: DOOR_ROWS - 1 }, (_, k) => h * (1 - 2 * (1 - (k + 1) / DOOR_ROWS) ** DOOR_ROW_WARP));
-  const columnInterior = Array.from({ length: DOOR_COLUMNS - 1 }, (_, k) => -halfLength + (skinLength * (k + 1)) / DOOR_COLUMNS);
+  const taperFromOutline = DOOR_SKIN_OVERLAP + DOOR_TAPER;
+  const columnInterior = [
+    -halfLength + taperFromOutline,
+    ...Array.from({ length: DOOR_COLUMNS - 1 }, (_, k) => -halfLength + (skinLength * (k + 1)) / DOOR_COLUMNS),
+    halfLength - taperFromOutline,
+  ];
   return { h, halfLength, skinLength, rows: doorStations(h, rowInterior), columns: doorStations(halfLength, columnInterior) };
 }
 
@@ -109,7 +117,9 @@ function doorFaceVertex(style: BodyStyle, grid: DoorGrid, rowStation: number, z:
   if (z < -(halfLength - DOOR_REAR_SLOPE.fromEdge)) y += (-(halfLength - DOOR_REAR_SLOPE.fromEdge) - z) * DOOR_REAR_SLOPE.rise;
   const zCar = d.hingeZ + doorSkinZ(style) + z;
   const sl = sampleSlice(zCar, style.profile);
-  const outer = sideX(d.hingeY + y, sl.hw, sl.yBelt, rockerAt(zCar, style)) + DOOR_PROUD - d.hingeX;
+  const intoCut = Math.min(z + halfLength, halfLength - z) - DOOR_SKIN_OVERLAP;
+  const proud = DOOR_PROUD * THREE.MathUtils.clamp(intoCut / DOOR_TAPER, 0, 1);
+  const outer = sideX(d.hingeY + y, sl.hw, sl.yBelt, rockerAt(zCar, style)) + proud - d.hingeX;
   const drop = doorEdgeDrop(Math.min(rowStation + h, h - rowStation), Math.min(z + halfLength, halfLength - z));
   return { x: outer - drop, y, outer };
 }
@@ -211,6 +221,10 @@ export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  // The flat inner face (its rim and centre) is the cabin's dark trim, as the glass shows it; the skin and its rolled edge are paint.
+  const primer = new Float32Array(positions.length / 3);
+  for (const v of [...slabEdge, centre]) primer[v] = CABIN_TRIM;
+  geo.setAttribute(PRIMER_ATTRIBUTE, new THREE.Float32BufferAttribute(primer, 1));
   geo.setIndex(indices);
   geo.computeVertexNormals();
   return splitCreases(geo, CREASE_DEGREES.door);
