@@ -2418,6 +2418,84 @@ function mirrorSimReading(car: DeformableCar, i: 0 | 1): string {
   return [...seat.position.toArray(), ...seat.scale.toArray(), ...rest.min.toArray(), ...rest.max.toArray(), torn.reach, ...torn.centre.toArray(), ...torn.points].join();
 }
 
+/** Two faces z-fight when they face within this (deg) of each other: contour-defects' z-fight test reads 4. */
+const BURIED_FACING_DEG = 4;
+/** ...and their planes lie within this (m): 2.5 mm, past contour-defects' 2 mm so the mirror glass's 2.0 mm stand-off from its cap's rear face is caught. */
+const BURIED_PLANE_GAP = 0.0025;
+/** A centroid is over a triangle when its barycentric coordinates are all at least minus this: float rounding along an edge. */
+const BURIED_BARY_TOL = 1e-4;
+/** Overlapping pairs the failure message names. */
+const BURIED_SHOWN = 3;
+
+/** One triangle of a part: its corners, unit normal, centroid and area. */
+interface PartTriangle {
+  a: THREE.Vector3;
+  b: THREE.Vector3;
+  c: THREE.Vector3;
+  normal: THREE.Vector3;
+  centre: THREE.Vector3;
+  area: number;
+}
+
+/** `geo`'s triangles with an area, indexed or not. */
+function partTriangles(geo: THREE.BufferGeometry): PartTriangle[] {
+  const pos = geo.getAttribute("position");
+  const index = geo.getIndex();
+  const corner = (k: number) => new THREE.Vector3().fromBufferAttribute(pos, index ? index.getX(k) : k);
+  const tris: PartTriangle[] = [];
+  for (let k = 0; k < (index ? index.count : pos.count); k += 3) {
+    const [a, b, c] = [corner(k), corner(k + 1), corner(k + 2)];
+    const cross = b.clone().sub(a).cross(c.clone().sub(a));
+    const area = cross.length() / 2;
+    if (area > 0) tris.push({ a, b, c, normal: cross.divideScalar(2 * area), centre: a.clone().add(b).add(c).divideScalar(3), area });
+  }
+  return tris;
+}
+
+/** Whether `p`, projected onto `t`'s plane, lies inside `t` (every barycentric coordinate at least minus `BURIED_BARY_TOL`). */
+function overTriangle(p: THREE.Vector3, t: PartTriangle): boolean {
+  const e1 = t.b.clone().sub(t.a);
+  const e2 = t.c.clone().sub(t.a);
+  const ep = p.clone().sub(t.a);
+  const [d11, d12, d22, dp1, dp2] = [e1.dot(e1), e1.dot(e2), e2.dot(e2), ep.dot(e1), ep.dot(e2)];
+  const det = d11 * d22 - d12 * d12;
+  const v = (d22 * dp1 - d12 * dp2) / det;
+  const w = (d11 * dp2 - d12 * dp1) / det;
+  return v >= -BURIED_BARY_TOL && w >= -BURIED_BARY_TOL && 1 - v - w >= -BURIED_BARY_TOL;
+}
+
+/** The centre of the smaller triangle of each pair in `tris` that faces the same way, lies in one plane with the other and sits over it: a buried duplicate face. */
+function buriedFaces(tris: readonly PartTriangle[]): THREE.Vector3[] {
+  const found: THREE.Vector3[] = [];
+  const gap = new THREE.Vector3();
+  const sameWay = Math.cos(THREE.MathUtils.degToRad(BURIED_FACING_DEG));
+  for (let i = 0; i < tris.length; i++) {
+    for (let j = i + 1; j < tris.length; j++) {
+      const [p, q] = [tris[i]!, tris[j]!];
+      if (p.normal.dot(q.normal) < sameWay || Math.abs(gap.subVectors(q.centre, p.centre).dot(p.normal)) >= BURIED_PLANE_GAP) continue;
+      const [small, big] = p.area <= q.area ? [p, q] : [q, p];
+      if (overTriangle(small.centre, big)) found.push(small.centre);
+    }
+  }
+  return found;
+}
+
+describe("given every body style's door mirror and wipers", () => {
+  it("when their triangles are compared pairwise, then no two face the same way in one plane over each other (a buried duplicate face that z-fights)", () => {
+    const first: string[] = [];
+    let count = 0;
+    for (const id of CAR_STYLE_IDS) {
+      for (const [part, kind] of [["mirrorL", PART_KIND.mirrorL], ["mirrorR", PART_KIND.mirrorR], ["wipers", PART_KIND.wipers]] as const) {
+        for (const at of buriedFaces(partTriangles(drawnPart(kind, CAR_STYLES[id]).geometry))) {
+          count++;
+          if (first.length < BURIED_SHOWN) first.push(`${id} ${part} at (${at.x.toFixed(3)}, ${at.y.toFixed(3)}, ${at.z.toFixed(3)})`);
+        }
+      }
+    }
+    assert.ok(count === 0, `${count} buried coplanar pairs: ${first.join("; ")}`);
+  });
+});
+
 describe("given a body style's P2 parts", () => {
   it("when a door carries its own mirror, then its cap is its own size, unsquashed, its outer face at the door's mirror reach, its foot on the drawn skin at the seat, and the seat and cage builds are unchanged", () => {
     const size = [0.14, 0.09, 0.07] as const;

@@ -94,6 +94,22 @@ function taperCap(geo: THREE.BufferGeometry, sign: number, w: number, d: number,
   return geo;
 }
 
+/** A vertex lies on the cap's rear plane within this (m): the rounded box's flat rear vertices sit on it to float rounding. */
+const MIRROR_REAR_PLANE_TOL = 1e-6;
+
+/** `geo` (an indexed centred rounded box, depth `d`) without the triangles wholly on its rear plane z = -d/2: that flat quad is buried under the glass (`MIRROR_GLASS.proud` behind it) and z-fights with it. */
+function withoutRearFace(geo: THREE.BufferGeometry, d: number): THREE.BufferGeometry {
+  const pos = geo.getAttribute("position");
+  const index = geo.getIndex()!;
+  const kept: number[] = [];
+  for (let i = 0; i < index.count; i += 3) {
+    let onRear = true;
+    for (let k = 0; k < 3; k++) if (Math.abs(pos.getZ(index.getX(i + k)) + d / 2) >= MIRROR_REAR_PLANE_TOL) onRear = false;
+    if (!onRear) kept.push(index.getX(i), index.getX(i + 1), index.getX(i + 2));
+  }
+  return geo.setIndex(kept);
+}
+
 /**
  * `style`'s own mirror on side `sign`: a foot on the skin at the arm root, a stalk out to the cap where the cap leaves room, the cap in its
  * finish with its outer face at `mirrorReach`, the glass on its rear face. Built at its real size, then divided by the seat's x-scale (kept
@@ -109,7 +125,7 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const capY = MIRROR_CAP_Y + lift;
   const fitting = (geo: THREE.BufferGeometry) => (spec.finish === "chrome" ? finished(geo, "chrome") : dark(geo, ...MIRROR_FITTING));
   // RoundedBoxGeometry comes unindexed; the other pieces are indexed, and a merge takes one kind.
-  const rounded = spec.cap === "box" ? null : mergeVertices(new RoundedBoxGeometry(w, h, d, 2, (spec.round ?? MIRROR_CAP_ROUND) * Math.min(w, h, d)));
+  const rounded = spec.cap === "box" ? null : withoutRearFace(mergeVertices(new RoundedBoxGeometry(w, h, d, 2, (spec.round ?? MIRROR_CAP_ROUND) * Math.min(w, h, d))), d);
   const capShape = rounded ? (spec.cap === "tear" ? taperCap(rounded, sign, w, d, -1) : spec.cap === "nose" ? taperCap(rounded, sign, w, d, 1) : rounded) : new THREE.BoxGeometry(w, h, d);
   // A black housing is gloss (the references' piano black), not the grilles' and bumpers' satin plastic.
   const cap = spec.finish === "black" ? dark(capShape, TRIM_BLACK, TRIM_FINISH.gloss.roughness, TRIM_FINISH.gloss.metalness) : finished(capShape, spec.finish);
@@ -826,11 +842,13 @@ const WIPER_PARK_UP = 0.035;
 /** Each blade's rubber [width up the glass, height off it] and its gap off the glass (m); the arm over it, and how far along the blade it reaches. */
 const WIPER_BLADE = { w: 0.018, h: 0.01, gap: 0.004 } as const;
 const WIPER_ARM = { w: 0.012, h: 0.008, reach: 0.85 } as const;
+/** The boss's top stands this far (m) over the arm's, so the two tops never share a plane and z-fight. */
+const WIPER_PIVOT_PROUD = 0.003;
 /**
- * The pivot cap: a boss `w` (m) square round the arm's root, as thick as the arm (`h`), its top flush with the arm's. (A 2.8 cm cube stacked
- * on the arm stood 4.2 cm off the glass and floated over the cowl in the coupe's side view.)
+ * The pivot cap: a boss `w` (m) square round the arm's root, as thick as the arm plus `WIPER_PIVOT_PROUD` (`h`), its top 3 mm over the arm's.
+ * (A 2.8 cm cube stacked on the arm stood 4.2 cm off the glass and floated over the cowl in the coupe's side view.)
  */
-const WIPER_PIVOT = { w: 0.028, h: WIPER_ARM.h } as const;
+const WIPER_PIVOT = { w: 0.028, h: WIPER_ARM.h + WIPER_PIVOT_PROUD } as const;
 /** Stations along a blade: it follows the glass's bow across the car. */
 const WIPER_STATIONS = 8;
 /** Where each of a pair's pivots stands across the glass's base width (car x over the width; the tips run toward `park`). */
@@ -840,9 +858,17 @@ const WIPER_DEFAULT = { count: 2, length: 0.42, park: DRIVER_SIDE } as const;
 
 /**
  * A tube of rectangular section swept along `centres`, each station's section spanned by its own `w` (across the tube, up the glass) and
- * `n` (out of the glass) unit axes: four sides and two end caps.
+ * `n` (out of the glass) unit axes: four sides and two end caps (`ends: "last"` drops the first, a buried face). A tube is wound outward
+ * only where `ws` x `ns` points along it.
  */
-function sweptBar(centres: readonly THREE.Vector3[], ws: readonly THREE.Vector3[], ns: readonly THREE.Vector3[], width: number, height: number): THREE.BufferGeometry {
+function sweptBar(
+  centres: readonly THREE.Vector3[],
+  ws: readonly THREE.Vector3[],
+  ns: readonly THREE.Vector3[],
+  width: number,
+  height: number,
+  ends: "both" | "last" = "both",
+): THREE.BufferGeometry {
   const positions: number[] = [];
   const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const;
   for (let i = 0; i < centres.length; i++) {
@@ -859,7 +885,8 @@ function sweptBar(centres: readonly THREE.Vector3[], ws: readonly THREE.Vector3[
     }
   }
   const last = (centres.length - 1) * 4;
-  index.push(0, 2, 1, 0, 3, 2, last, last + 1, last + 2, last, last + 2, last + 3);
+  if (ends === "both") index.push(0, 2, 1, 0, 3, 2);
+  index.push(last, last + 1, last + 2, last, last + 2, last + 3);
   const geo = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(positions, 3)).setIndex(index);
   geo.computeVertexNormals();
   return geo;
@@ -892,7 +919,9 @@ function styleWipers(style: BodyStyle): THREE.BufferGeometry {
     const rubber = lifted(WIPER_BLADE.gap + WIPER_BLADE.h / 2);
     const arm = lifted(WIPER_BLADE.gap + WIPER_BLADE.h + WIPER_ARM.h / 2, WIPER_ARM.reach);
     parts.push(sweptBar(rubber, ws, ns, WIPER_BLADE.w, WIPER_BLADE.h), sweptBar(arm, ws, ns, WIPER_ARM.w, WIPER_ARM.h));
-    parts.push(sweptBar([0, 1].map((k) => at[0]!.clone().addScaledVector(ns[0]!, WIPER_BLADE.gap + WIPER_BLADE.h + k * WIPER_PIVOT.h)), [ws[0]!, ws[0]!], [at[1]!.clone().sub(at[0]!).normalize(), at[1]!.clone().sub(at[0]!).normalize()], WIPER_PIVOT.w, WIPER_PIVOT.w));
+    const alongBlade = ns[0]!.clone().cross(ws[0]!);
+    const capCentres = [0, 1].map((k) => at[0]!.clone().addScaledVector(ns[0]!, WIPER_BLADE.gap + WIPER_BLADE.h + k * WIPER_PIVOT.h));
+    parts.push(sweptBar(capCentres, [ws[0]!, ws[0]!], [alongBlade, alongBlade], WIPER_PIVOT.w, WIPER_PIVOT.w, "last"));
     const [pivot, tip] = [at[0]!, at[WIPER_STATIONS]!];
     // Not `toArray()`: growing a fresh array through that shared three function sends its stores megamorphic for every per-frame caller.
     blades.push({ pivot: [pivot.x, pivot.y, pivot.z], tip: [tip.x, tip.y, tip.z] });
