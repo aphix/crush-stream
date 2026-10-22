@@ -142,10 +142,11 @@ export const COUPE: BodyStyle = {
   /** Reference isos: the navy paint has a soft sheen, the roof dome dark with a broad dull highlight, not a hot white patch. */
   paintFinish: { roughness: 0.55, clearcoat: 0.5, clearcoatRoughness: 0.45 },
   windowTrim: "chrome",
+  // The rocker strips stop short of the arch lips' toes (z ±.7625): past them the skin they seat on takes a flare the loft doesn't draw.
   chromeStrips: [
-    { points: [[-0.79, 0.305], [-0.495, 0.305]], width: 0.016 },
+    { points: [[-0.7, 0.305], [-0.495, 0.305]], width: 0.016 },
     { points: [[-0.485, 0.305], [0.05, 0.3], [0.595, 0.305]], width: 0.016 },
-    { points: [[0.605, 0.305], [0.8, 0.305]], width: 0.016 },
+    { points: [[0.605, 0.305], [0.75, 0.305]], width: 0.016 },
     { points: [[-0.44, 0.745], [-0.3, 0.745]], width: 0.022 },
     // Front fender badge ahead of the door (reference side view and front iso): a chrome bar 7 cm long.
     { points: [[0.734, 0.42], [0.663, 0.42]], width: 0.028 },
