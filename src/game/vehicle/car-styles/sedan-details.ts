@@ -5,7 +5,7 @@ type Details = NonNullable<BodyStyle["details"]>;
 type Line = Details["lines"][number];
 type Patch = Details["patches"][number];
 
-const GAP = { width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 } as const;
+const GAP = { width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 } as const;
 const CREASE = { width: 0.02, depth: 0.003, profile: "u", cavity: 0 } as const;
 const SEAL = { width: 0.012, depth: 0.002, profile: "u", cavity: 0.3 } as const;
 const TRIM = { width: 0.01, depth: -0.003, profile: "u", cavity: 0.4 } as const;
@@ -65,12 +65,10 @@ const POLICE_LINES: readonly Line[] = [
 const SHARED_PATCHES: readonly Patch[] = [
   { view: "side", points: [[0.9, 0.655], [0.9, 0.69], [0.775, 0.69], [0.775, 0.655]], ...VENT },
   { view: "top", points: [[-1.96, 0], [-1.96, 0.04], [-2.03, 0.04], [-2.03, 0]], ...BADGE },
-  { view: "rear", points: [[0, 0.41], [0.4, 0.41], [0.64, 0.41], [0.6, 0.32], [0.58, 0.235], [0.3, 0.23], [0, 0.228]], depth: -0.004, rim: 0.008, pattern: { kind: "vslats", pitch: 0.06, bar: 0.01, depth: 0.004 }, cavity: 0.5 },
 ];
 
 const SEDAN_PATCHES: readonly Patch[] = [
   { view: "top", points: [[1.99, 0], [1.984, 0.014], [1.97, 0.02], [1.956, 0.014], [1.95, 0]], ...BADGE },
-  { view: "front", points: [[0, 0.3], [0.3, 0.298], [0.46, 0.296], [0.47, 0.27], [0.4, 0.216], [0.2, 0.213], [0, 0.212]], depth: -0.005, rim: 0.006, cavity: 0.7 },
   { view: "side", points: [[1.79, 0.5], [1.745, 0.5], [1.73, 0.31], [1.775, 0.31]], ...VENT },
   { view: "rear", points: [[0, 0.88], [0.035, 0.88], [0.035, 0.93], [0, 0.93]], ...BADGE },
 ];

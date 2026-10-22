@@ -288,11 +288,27 @@ describe("given a car material being compiled", () => {
       const material = materialOfKind(kind, 0x203045);
       switchFinish(material, true);
       const lines = compile(material).fragment.split("\n").map((line) => line.trim());
-      assert.ok(lines.includes("* mix(finishNearShare, vec3(1.0), smoothstep(2.0, 4.5, finishDistance));"), `${kind}: the near share rises to full from 2 to 4.5 m`);
+      assert.ok(lines.includes("* mix(finishNearShare, vec3(1.0), smoothstep(2.0, 4.5, finishDistance))"), `${kind}: the near share rises to full from 2 to 4.5 m`);
       return lines.find((line) => line.startsWith("const vec3 finishNearShare"));
     };
     assert.equal(nearShare("paint"), "const vec3 finishNearShare = vec3(1.0, 0.25, 1.0);", "paint: waviness and flake in full, the peel a quarter up close");
     assert.equal(nearShare("trim"), "const vec3 finishNearShare = vec3(1.0);", "trim: its grain in full");
+  });
+
+  it("when a paint material compiles with the finish on, then near-black paint drops its peel and flake (their sparse glints read as brown speckle) from a linear luma of 0.04 down to 0.004, after the tone and spray set its albedo; the trim keeps its grain", () => {
+    const keepOf = (kind: "paint" | "trim") => {
+      const material = materialOfKind(kind, 0x203046);
+      switchFinish(material, true);
+      const fragment = compile(material).fragment;
+      const lines = fragment.split("\n").map((line) => line.trim());
+      const gate = lines.indexOf("* finishKeep(diffuseColor.rgb);");
+      assert.ok(gate > lines.findIndex((line) => line.startsWith("vec3 finishFade =")), `${kind}: the fade takes the albedo's keep`);
+      const albedoAt = fragment.indexOf("diffuseColor *= sampledDiffuseColor");
+      assert.ok(albedoAt >= 0 && fragment.indexOf("* finishKeep(diffuseColor.rgb);") > albedoAt, `${kind}: read after the map has set the albedo`);
+      return lines[lines.indexOf("vec3 finishKeep(vec3 albedo) {") + 1];
+    };
+    assert.equal(keepOf("paint"), "float keep = smoothstep(0.004, 0.04, dot(albedo, vec3(0.2126, 0.7152, 0.0722)));", "paint: peel and flake fade out on near-black");
+    assert.equal(keepOf("trim"), "return vec3(1.0);", "trim: its grain in full");
   });
 
   const gateCases = [

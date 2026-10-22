@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { st } from "./platform.ts";
+import { pullHandle, st } from "./platform.ts";
 
 /** Hatchback's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const HATCHBACK_LAMP_SHAPES = {
@@ -9,7 +9,7 @@ const HATCHBACK_LAMP_SHAPES = {
     bezel: "black",
     recess: 0.01,
     cells: [
-      { loop: { points: [[0.61, 0.48], [0.7, 0.48], [0.7, 0.6], [0.61, 0.602]] }, tone: "amber" },
+      { loop: { points: [[0.665, 0.48], [0.7, 0.48], [0.7, 0.6], [0.665, 0.601]] }, tone: "amber" },
       { loop: { side: true, points: [[1.72, 0.48], [1.62, 0.48], [1.62, 0.59], [1.72, 0.6]] }, tone: "amber" },
     ],
   },
@@ -45,6 +45,9 @@ const HATCHBACK_LAMP_SHAPES = {
     lens: "red",
   },
 } as const;
+
+/** The door pull handles at the reference's places: front z 0..-0.18, rear -0.8..-0.97, both at y 0.7575. */
+const HANDLES = [pullHandle(0, -0.18, 0.7575, 0.025), pullHandle(-0.8, -0.97, 0.7575, 0.025)];
 
 /** Compact five-door: boxy face, near-vertical hatch under a roof spoiler. */
 export const HATCHBACK: BodyStyle = {
@@ -111,7 +114,7 @@ export const HATCHBACK: BodyStyle = {
   ],
   roofZ: [-1.151, 0.421],
   windshieldTop: [1.162, 0.421],
-  rearGlass: { base: [0.94, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9 },
+  rearGlass: { base: [0.94, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9, frame: [0.05, 0.06, 0.11] },
   quarter: { zRearBot: -1.174, zRearTop: -1.07 },
   midPillarZ: -0.86,
   rearBulkhead: { z: -0.95, yTop: 0.8 },
@@ -121,7 +124,7 @@ export const HATCHBACK: BodyStyle = {
     kind: "tailgate",
     y0: 0.57,
     origin: [0.94, -1.615],
-    z0: -1.76,
+    z0: -1.75,
     pivot: [1.277, -1.15],
     // The reference's gate seam: ±.62-.66 above the tail lamps, stepping in to ±.43 between them.
     outline: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84], [0.43, 0.8], [0.43, 0.6]],
@@ -143,24 +146,24 @@ export const HATCHBACK: BodyStyle = {
   exhaust: { tips: 2, x: 0.45, y: 0.27, size: [0.075, 0.045], shape: "round" },
   details: {
     lines: [
-      { view: "top", points: [[1.68, 0], [1.69, 0.36], [1.64, 0.62], [1.55, 0.68]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "top", points: [[1.55, 0.68], [1.22, 0.7], [1.0, 0.69], [0.82, 0.66]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "top", points: [[0.8, 0.66], [0.79, 0.5], [0.86, 0.31], [0.89, 0]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[1.68, 0], [1.69, 0.36], [1.64, 0.62], [1.55, 0.68]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[1.55, 0.68], [1.22, 0.7], [1.0, 0.69], [0.82, 0.66]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[0.8, 0.66], [0.79, 0.5], [0.86, 0.31], [0.89, 0]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[1.66, 0.38], [1.35, 0.39], [1.05, 0.41], [0.88, 0.42]], width: 0.03, depth: 0.003, profile: "u", cavity: 0 },
       { view: "top", points: [[0.72, 0.6], [0.89, 0]], width: 0.006, depth: -0.004, profile: "step", cavity: 0.85 },
-      { view: "side", points: [[0.58, 0.87], [0.64, 0.76], [0.645, 0.5], [0.63, 0.28]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[0.63, 0.28], [0.2, 0.27], [-0.26, 0.27]], width: 0.006, depth: -0.005, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-0.26, 0.88], [-0.26, 0.75], [-0.26, 0.5], [-0.27, 0.28]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-0.27, 0.28], [-0.6, 0.27], [-0.83, 0.3], [-1.06, 0.57]], width: 0.006, depth: -0.005, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-1.06, 0.88], [-1.07, 0.75], [-1.07, 0.6]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[0.58, 0.87], [0.64, 0.76], [0.645, 0.5], [0.63, 0.28]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[0.63, 0.28], [0.2, 0.27], [-0.26, 0.27]], width: 0.01, depth: -0.005, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.26, 0.88], [-0.26, 0.75], [-0.26, 0.5], [-0.27, 0.28]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.27, 0.28], [-0.6, 0.27], [-0.83, 0.3], [-1.06, 0.57]], width: 0.01, depth: -0.005, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-1.06, 0.88], [-1.07, 0.75], [-1.07, 0.6]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.89, 0.875], [-0.86, 1.2]], width: 0.03, depth: 0.002, profile: "u", cavity: 0.7 },
       { view: "side", points: [[0.6, 0.47], [-0.2, 0.46], [-0.8, 0.45]], width: 0.02, depth: 0.003, profile: "u", cavity: 0 },
       { view: "side", points: [[0.74, 0.25], [-0.1, 0.23], [-0.82, 0.22]], width: 0.02, depth: -0.004, profile: "step", cavity: 0 },
       { view: "side", points: [[1.62, 0.62], [1.35, 0.68], [0.95, 0.75], [0.65, 0.77], [0, 0.78], [-0.6, 0.79], [-1.1, 0.8], [-1.45, 0.81], [-1.62, 0.8]], width: 0.02, depth: 0.003, profile: "u", cavity: 0 },
       { view: "side", points: [[1.4225, 0.27], [1.381, 0.425], [1.2675, 0.538], [1.1125, 0.58], [0.9575, 0.538], [0.844, 0.425], [0.8025, 0.27]], width: 0.02, depth: 0.006, profile: "u", cavity: 0 },
       { view: "side", points: [[-0.8025, 0.27], [-0.844, 0.425], [-0.9575, 0.538], [-1.1125, 0.58], [-1.2675, 0.538], [-1.381, 0.425], [-1.4225, 0.27]], width: 0.02, depth: 0.006, profile: "u", cavity: 0 },
-      { view: "side", points: [[-1.28, 0.8], [-1.43, 0.8], [-1.43, 0.64], [-1.28, 0.64]], closed: true, width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-1.595, 0.82], [-1.6, 0.72], [-1.6, 0.62]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-1.28, 0.8], [-1.43, 0.8], [-1.43, 0.64], [-1.28, 0.64]], closed: true, width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-1.595, 0.82], [-1.6, 0.72], [-1.6, 0.62]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "side", points: [[0.56, 0.875], [-0.26, 0.875], [-0.89, 0.875], [-1.17, 0.875]], width: 0.015, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[0.52, 0.875], [0.37, 1.05], [0.22, 1.21], [0, 1.23], [-0.26, 1.23], [-0.26, 0.875]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[-0.31, 0.875], [-0.31, 1.22], [-0.8, 1.21], [-0.86, 1.2], [-0.89, 0.875]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
@@ -170,29 +173,26 @@ export const HATCHBACK: BodyStyle = {
       { view: "top", points: [[0.24, 0.58], [0.22, 0]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[0.2, 1.26], [-0.5, 1.27], [-1.05, 1.26]], width: 0.015, depth: -0.005, profile: "v", cavity: 0.85 },
       { view: "front", points: [[0, 0.64], [0.38, 0.64], [0.38, 0.5], [0, 0.5]], closed: true, width: 0.015, depth: 0.005, profile: "step", cavity: 0.85 },
-      { view: "side", points: [[1.62, 0.62], [1.48, 0.6], [1.5, 0.47]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "front", points: [[0.78, 0.47], [0.7, 0.47], [0.4, 0.49], [0.4, 0.64], [0.66, 0.64], [0.76, 0.62]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[1.62, 0.62], [1.48, 0.6], [1.5, 0.47]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "front", points: [[0.78, 0.47], [0.7, 0.47], [0.4, 0.49], [0.4, 0.64], [0.66, 0.64], [0.76, 0.62]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "side", points: [[1.78, 0.31], [1.55, 0.31]], width: 0.01, depth: 0.004, profile: "step", cavity: 0.7 },
-      { view: "top", points: [[-1.1, 0.57], [-1.09, 0]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[-1.1, 0.57], [-1.09, 0]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[-0.97, 0.52], [-1.0, 0]], width: 0.12, depth: 0.006, profile: "u", cavity: 0 },
       { view: "rear", points: [[0, 1.25], [0.57, 1.24], [0.64, 1.05], [0.66, 0.92], [0, 0.9]], width: 0.03, depth: 0.003, profile: "u", cavity: 0.7 },
-      { view: "side", points: [[-1.09, 1.25], [-1.1, 1.24], [-1.35, 1.05], [-1.58, 0.92], [-1.6, 0.9]], width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "rear", points: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "rear", points: [[0.62, 0.84], [0.43, 0.8], [0.43, 0.6], [0, 0.56]], width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "rear", points: [[0.75, 0.82], [0.62, 0.83], [0.43, 0.82], [0.43, 0.64], [0.6, 0.61], [0.74, 0.6]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-1.66, 0.82], [-1.58, 0.8], [-1.6, 0.62], [-1.68, 0.6]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-1.09, 1.25], [-1.1, 1.24], [-1.35, 1.05], [-1.58, 0.92], [-1.6, 0.9]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "rear", points: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "rear", points: [[0.62, 0.84], [0.43, 0.8], [0.43, 0.6], [0, 0.56]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "rear", points: [[0.75, 0.82], [0.62, 0.83], [0.43, 0.82], [0.43, 0.64], [0.6, 0.61], [0.74, 0.6]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-1.66, 0.82], [-1.58, 0.8], [-1.6, 0.62], [-1.68, 0.6]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.6, 0.64], [0.6, 0.76]], width: 0.03, depth: -0.006, profile: "step", cavity: 0.85 },
       { view: "rear", points: [[0.64, 0.64], [0.64, 0.76]], width: 0.03, depth: -0.006, profile: "step", cavity: 0.85 },
       { view: "rear", points: [[0.68, 0.64], [0.68, 0.76]], width: 0.03, depth: -0.006, profile: "step", cavity: 0.85 },
       { view: "rear", points: [[0, 0.98], [0.17, 0.98]], width: 0.02, depth: 0.006, profile: "u", cavity: 0.7 },
-      { view: "rear", points: [[0.58, 0.5], [0.6, 0.5]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[0, 0.742], [-0.18, 0.742]], width: 0.006, depth: -0.003, profile: "v", cavity: 0.6 },
-      { view: "side", points: [[-0.8, 0.742], [-0.97, 0.742]], width: 0.006, depth: -0.003, profile: "v", cavity: 0.6 },
+      { view: "rear", points: [[0.58, 0.5], [0.6, 0.5]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      ...HANDLES.flatMap((h) => h.lines),
     ],
     patches: [
       { view: "side", points: [[0.8025, 0.6175], [0.7575, 0.6175], [0.7575, 0.6425], [0.8025, 0.6425]], depth: 0.004, rim: 0.004, cavity: 0 },
-      { view: "side", points: [[0, 0.745], [-0.18, 0.745], [-0.18, 0.77], [0, 0.77]], depth: 0.004, rim: 0.004, cavity: 0 },
-      { view: "side", points: [[-0.8, 0.745], [-0.97, 0.745], [-0.97, 0.77], [-0.8, 0.77]], depth: 0.004, rim: 0.004, cavity: 0 },
       { view: "top", points: [[-0.815, 0], [-0.815, 0.0225], [-0.945, 0.0225], [-0.945, 0]], depth: 0.006, rim: 0.004, cavity: 0 },
       { view: "front", points: [[0, 0.63], [0.36, 0.63], [0.36, 0.52], [0, 0.52]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.02, bar: 0.008, depth: -0.006 }, cavity: 0.8 },
       { view: "front", points: [[0, 0.6], [0.0225, 0.57], [0, 0.54]], depth: 0.006, rim: 0.004, cavity: 0 },
@@ -208,6 +208,7 @@ export const HATCHBACK: BodyStyle = {
       { view: "rear", points: [[0, 0.2], [0.62, 0.2], [0.62, 0.3], [0, 0.3]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.02, bar: 0.008, depth: -0.006 }, cavity: 0.85 },
       { view: "rear", points: [[0.36, 0.27], [0.39, 0.235], [0.51, 0.235], [0.54, 0.27], [0.51, 0.305], [0.39, 0.305]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0.55, 0.31], [0.74, 0.31], [0.74, 0.35], [0.55, 0.35]], depth: -0.003, rim: 0.004, cavity: 0 },
+      ...HANDLES.flatMap((h) => h.patches),
     ],
   },
 };

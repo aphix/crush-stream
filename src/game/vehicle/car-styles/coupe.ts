@@ -68,12 +68,12 @@ export const COUPE: BodyStyle = {
   belt: { x: [[-1.5, 0.6], [-0.96, 0.65], [-0.5, 0.665], [0.5, 0.675]], y: [[-0.95, 0.885], [-0.45, 0.888], [0.25, 0.892], [0.4, 0.905], [0.7, 0.93]] },
   rocker: { y: 0.22 },
   underside: [[-2.114, 0.41], [-2.06, 0.31], [-1.96, 0.28], [-1.829, 0.282], [-1.818, 0.267], [-1.744, 0.267], [-1.729, 0.253], [-1.665, 0.257], [-1.644, 0.239], [-1.576, 0.242], [-1.572, 0.225], [-1.548, 0.225], [-1.533, 0.207], [-0.86, 0.182], [-0.835, 0.196], [0.381, 0.196], [0.399, 0.182], [0.723, 0.182], [1.689, 0.21], [1.782, 0.242], [1.893, 0.239], [1.985, 0.285], [2.014, 0.36], [2.017, 0.431]],
-  door: { hingeX: 0.74, hingeY: 0.555, hingeZ: 0.61, length: 1.1, halfHeight: 0.335, mirrorY: 0.325, mirrorZ: 0.3, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.49, 0.6], mirror: COUPE_MIRROR },
+  door: { hingeX: 0.74, hingeY: 0.555, hingeZ: 0.61, length: 1.1, halfHeight: 0.335, mirrorY: 0.325, mirrorZ: 0.3, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.49, 0.6], mirror: COUPE_MIRROR, hingeTop: 0.866 },
   aPillarFoot: 0.5,
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.012, width: 0.05, band: true } },
-  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.8, z1: 1.76, width: 0.46, rise: 0.02, round: 0.04, scoop: { inlets: 2, z: 1.64, width: 0.38, height: 0.03 } } },
+  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.8, z1: 1.76, width: 0.46, rise: 0.02, round: 0.04, scoop: { inlets: 2, z: 1.64, width: 0.38, height: 0.03 } }, groove: [0.004, 0.0016] },
   bumpers: {
     // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin.
     front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.3, back: 0.24, end: { corner: 0.15, stand: 0.03 } }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },

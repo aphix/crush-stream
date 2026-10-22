@@ -64,7 +64,7 @@ export const MONSTER: BodyStyle = {
   aPillarFoot: 0.74,
   aPillarTop: 0.41,
   bPillar: { rear: -0.19, front: -0.12 },
-  arch: { radius: 0.47, lip: { flare: 0.022, width: 0.085, square: true }, wellWall: 0.56 },
+  arch: { radius: 0.47, lip: { flare: 0.025, width: 0.045, square: true, inset: 0.04 }, wellWall: 0.56 },
   hood: { z0: 0.94, z1: 2.08, origin: [0.96, 0.92] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.39, z: 2.05 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black" },
@@ -95,6 +95,9 @@ export const MONSTER: BodyStyle = {
   bayFloor: 0.34,
   wheelTub: { rise: 0.24, length: 0.82, width: 0.25 },
   tubWall: 0.04,
+  // Its cage's hood tops stand 0.90-1.04 m and its bed rim 1.02 m, its roof from 1.38 m: the cabin starts 8 cm over the highest of them
+  // (as the cars' 1 m stands 9 cm over theirs), so its hood's cowl and its bed rim are columns, not roof slabs.
+  proxyBelt: 1.12,
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
   lamps: { head: [0.55, 0.7], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, sideMarkers: [{ at: [0.788, -2.0], size: [0.085, 0.045] }, { at: [0.744, 0.814], size: [0.06, 0.032] }] },
@@ -106,7 +109,7 @@ export const MONSTER: BodyStyle = {
       { view: "side", points: [[0.72, 0.948], [0.713, 0.406]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.157, 1.404], [-0.164, 0.406]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.713, 1.39], [-0.72, 0.962], [-0.734, 0.406]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-0.763, 1.005], [-0.77, 0.392]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.763, 1.005], [-0.77, 0.392]], width: 0.025, depth: -0.006, profile: "v", cavity: 0.95 },
       { view: "side", points: [[0.713, 0.42], [-0.713, 0.42]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
       { view: "side", points: [[0.727, 0.948], [-0.741, 0.948]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[0.413, 1.397], [-0.128, 1.397], [-0.128, 0.976], [0.599, 0.976], [0.528, 1.19]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
@@ -129,7 +132,7 @@ export const MONSTER: BodyStyle = {
       { view: "top", points: [[2.059, 0.313], [1.563, 0.342], [1.082, 0.372]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },
       { view: "top", points: [[2.074, 0.386], [1.592, 0.365], [1.111, 0.343]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },
       { view: "top", points: [[-0.772, 0], [-0.772, 0.576], [0.365, 0.576], [0.365, 0]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
-      { view: "top", points: [[-0.813, 0], [-0.813, 0.838]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[-0.813, 0], [-0.813, 0.838]], width: 0.025, depth: -0.006, profile: "v", cavity: 0.95 },
       { view: "top", points: [[-2.256, 0], [-2.256, 0.678], [-0.886, 0.678], [-0.886, 0]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
       { view: "top", points: [[-0.827, 0.772], [-2.344, 0.772]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "top", points: [[-0.827, 0.758], [-2.344, 0.758]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },

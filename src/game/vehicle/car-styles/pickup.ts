@@ -97,9 +97,12 @@ export const PICKUP: BodyStyle = {
   tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
   bayFloor: 0.34,
   wheelTub: { rise: 0.19, length: 0.55, width: 0.22 },
+  // Its cage's hood tops stand 1.04-1.23 m and its bed rim 1.18-1.20 m, its roof from 1.62 m: the cabin starts 7 cm over the highest
+  // of them (as the cars' 1 m stands 9 cm over theirs), so its hood and bed are columns, not roof slabs floating over the bed floor.
+  proxyBelt: 1.3,
   rearDoorSeam: -0.41,
   boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15], pivot: [0.6, -2.15] },
-  lamps: { head: [0.5, 0.85], tail: [0.61, 0.93], shapes: PICKUP_LAMP_SHAPES, brake: { at: [0, 1.66], size: [0.3, 0.06] } },
+  lamps: { head: [0.5, 0.85], tail: [0.61, 0.93], shapes: PICKUP_LAMP_SHAPES, brake: { at: [0, 1.585], size: [0.3, 0.06] } },
   grille: { y: 0.85, size: [0.62, 0.225], kind: "bars", count: 3, finish: "black" },
   camera: { hood: [1.42, 1.25], third: { dist: 6.4, height: 2.3, aimUp: 1.2 }, far: { dist: 10.3, height: 3.62, aimUp: 1.35 } },
   details: {
@@ -108,7 +111,7 @@ export const PICKUP: BodyStyle = {
       { view: "side", points: [[-0.41, 1.142], [-0.421, 0.478]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[0.699, 0.462], [-0.414, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.428, 0.462], [-0.556, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-0.592, 1.142], [-0.599, 0.446]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.592, 1.142], [-0.599, 0.446]], width: 0.025, depth: -0.006, profile: "v", cavity: 0.95 },
       { view: "side", points: [[0.627, 1.121], [-0.342, 1.121]], width: 0.021, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[0.328, 1.562], [-0.314, 1.569], [-0.314, 1.142], [0.57, 1.128], [0.513, 1.276]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.913, 1.248], [0.713, 1.39], [0.471, 1.604], [0.328, 1.619]], width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
@@ -131,7 +134,7 @@ export const PICKUP: BodyStyle = {
       { view: "top", points: [[1.74, 0.388], [1.374, 0.396], [1.037, 0.403]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },
       { view: "top", points: [[1.858, 0.403], [1.447, 0.418], [1.008, 0.432]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },
       { view: "top", points: [[-0.514, 0], [-0.514, 0.564], [0.395, 0.564], [0.395, 0]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
-      { view: "top", points: [[-0.641, 0], [-0.641, 0.726]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[-0.641, 0], [-0.641, 0.726]], width: 0.025, depth: -0.006, profile: "v", cavity: 0.95 },
       { view: "top", points: [[-2.056, 0], [-2.056, 0.579], [-0.678, 0.579], [-0.678, 0]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
       { view: "top", points: [[-0.634, 0.66], [-2.085, 0.66]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "top", points: [[-2.085, 0], [-2.085, 0.667]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },

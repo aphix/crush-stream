@@ -20,6 +20,8 @@ function linerX(wx: number, wz: number, style: BodyStyle): number {
 
 /** A drawn liner's outer end stands this far (m) inside the body side round its opening, behind the lip's return, so no end shows past the skin. */
 const LINER_TUCK = 0.01;
+/** A liner's arc segments: the cage's housing as the sim cut it; the drawn one, dark and seen through the arch, in fewer chords. */
+const LINER_SEGMENTS = { cage: 14, drawn: 10 } as const;
 
 /**
  * Each wheel's liner: a half-tube over the tyre. Drawn, its outer end follows the `loft`'s side round the opening (`LINER_TUCK` in),
@@ -40,7 +42,7 @@ export function makeWellLiners(style: BodyStyle, source: BodySource, loft?: THRE
     };
     // θ 0 is the front foot on the right side, the rear foot on the left (turned about y).
     const [start, end] = wx > 0 ? [foot(1), foot(-1)] : [foot(-1), foot(1)];
-    const geo = new THREE.CylinderGeometry(r, r, WELL_LINER_WIDTH + widen, 14, 1, true, start, Math.PI - start - end);
+    const geo = new THREE.CylinderGeometry(r, r, WELL_LINER_WIDTH + widen, LINER_SEGMENTS[source], 1, true, start, Math.PI - start - end);
     geo.rotateZ(Math.PI / 2);
     geo.rotateY(wx > 0 ? 0 : Math.PI);
     geo.translate(x - (Math.sign(wx) * widen) / 2, wy, wz);
@@ -62,7 +64,7 @@ export function makeWellLiners(style: BodyStyle, source: BodySource, loft?: THRE
       const end = wall ?? (floor < Infinity ? bedWall : Math.abs(x) - WELL_LINER_WIDTH / 2);
       const [capStart, capEnd] = wx > 0 ? [foot(-1), foot(1)] : [foot(1), foot(-1)];
       const turn = (Math.sign(wx) * Math.PI) / 2;
-      const cap = new THREE.CircleGeometry(r, 14, capStart, Math.PI - capStart - capEnd).rotateY(turn);
+      const cap = new THREE.CircleGeometry(r, LINER_SEGMENTS.drawn, capStart, Math.PI - capStart - capEnd).rotateY(turn);
       // An inboard wall stands behind the bed's side wall: over the bed floor the opening still meets a cap at that wall.
       if (wall !== undefined && floor < Infinity) parts.push(overFloor(r, floor - wy).rotateY(turn).translate(Math.sign(wx) * bedWall, wy, wz));
       parts.push(cap.translate(Math.sign(wx) * end, wy, wz));
@@ -117,7 +119,8 @@ const HUMP_SINK = 0.005;
 const BED_WALL_INSET = 0.06;
 /** Its top's inner edge is rounded off over this much (m); rings along it, from floor to floor over the wheel. */
 const HUMP_ROUND = 0.03;
-const HUMP_STEPS = 8;
+/** A hump's rings along the car: a style's wheel tub (in the cage too) in the sim's eight; the drawn body's own hump in six. */
+const HUMP_STEPS = { tub: 8, drawn: 6 } as const;
 
 /** The open floor (m) the liner of the wheel at (`wy`, `wz`) stands up through (the style's tubs, and drawn the boot's hollow; not the bay), or Infinity. */
 function wellFloor(style: BodyStyle, source: BodySource, wy: number, wz: number): number {
@@ -142,6 +145,7 @@ export function wellHumpGeometry(style: BodyStyle, source: BodySource): THREE.Bu
   const tub = style.wheelTub;
   if (source === "cage" && !tub) return null;
   const r = style.arch.radius;
+  const steps = tub ? HUMP_STEPS.tub : HUMP_STEPS.drawn;
   const humps: THREE.BufferGeometry[] = [];
   for (const [wx, wy, wz] of carFrame(style).wheels) {
     const floor = wellFloor(style, source, wy, wz);
@@ -154,8 +158,8 @@ export function wellHumpGeometry(style: BodyStyle, source: BodySource): THREE.Bu
     const side = Math.sign(wx);
     const rings: Pt[][] = [];
     const zs: number[] = [];
-    for (let k = 0; k <= HUMP_STEPS; k++) {
-      const a = (k / HUMP_STEPS - 0.5) * Math.PI;
+    for (let k = 0; k <= steps; k++) {
+      const a = (k / steps - 0.5) * Math.PI;
       const z = wz + half * detSin(a);
       const wall = sampleSlice(z, style.profile).hw - BED_WALL_INSET + HUMP_SINK;
       const top = floor + Math.max(rise * detCos(a), 2 * HUMP_SINK);
@@ -172,7 +176,7 @@ export function wellHumpGeometry(style: BodyStyle, source: BodySource): THREE.Bu
       );
       zs.push(z);
     }
-    if (inner >= rings[HUMP_STEPS / 2]![0]!.x * side) continue;
+    if (inner >= rings[steps / 2]![0]!.x * side) continue;
     const hump = loftFromRings(rings, zs, 0, 1, false);
     ensureOutwardNormals(hump);
     humps.push(hump);
@@ -284,7 +288,9 @@ const LIP_SEEK = 0.03;
 export function archLipGeometry(style: BodyStyle, loft: THREE.BufferGeometry): THREE.BufferGeometry | null {
   const lip = style.arch.lip;
   if (!lip) return null;
-  const section = lipSection(lip.flare, lip.width, lip.square === true || lip.band === true);
+  const inset = lip.inset ?? 0;
+  if (inset >= lip.width) throw new Error(`${style.id}: an arch lip's ${inset} m inset leaves its toe off the skin (width ${lip.width})`);
+  const section = lipSection(lip.flare, lip.width, lip.square === true || lip.band === true).map(([out, off, t]) => [out - inset, off, t] as const);
   const m = section.length;
   const positions: number[] = [];
   const indices: number[] = [];

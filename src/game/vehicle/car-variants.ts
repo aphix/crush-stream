@@ -38,6 +38,8 @@ export interface GlassQuad {
   top: YZ;
   wBase: number;
   wTop: number;
+  /** Drawn only (the rear glass): the clear pane drawn in by [side, bottom, top] (m; sides across, bottom and top along its slope), the band out to the outline the glass's black frit. */
+  frame?: readonly [number, number, number];
 }
 
 /** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
@@ -55,8 +57,11 @@ export interface BootLip {
 
 /** The panel's shape; `pivot` is where it turns (default `origin`): a hatch's or liftgate's roof hinge, a drop gate's bottom edge. `swing`: its latch, struts and limits (default by kind, `hinge-spec.ts`). */
 export type BootSpec = (
-  /** Deck lid lofted on the profile from z0 to z1, hinged at origin; with `drop` it wraps the tail, its face standing at z1. */
-  | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop }
+  /**
+   * Deck lid lofted on the profile from z0 to z1, hinged at origin; with `drop` it wraps the tail, its face standing at z1. `crown` [drop, at]
+   * (m, drawn only): its top domes as a parabola across x, `drop` under its centre line at |x| `at`, its edge (the shut line) kept.
+   */
+  | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop; crown?: readonly [drop: number, at: number] }
   /**
    * Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). `outline`:
    * its edge, the reference's gate seam, as [x, y] on the right side from top to bottom (held past its ends); absent, the tail panel's
@@ -69,6 +74,8 @@ export type BootSpec = (
   swing?: LidSwing;
   /** A drawn lid seated on the deck like the hood (its edge a groove over the deck edge, not a step up off it). Drawn only: the cage keeps the plain lid. */
   flush?: boolean;
+  /** Drawn only: the lid's or gate's side edges round over this radius (m) into its skirt or thickness, as the reference's; absent, a sharp corner. */
+  edgeRoll?: number;
 };
 
 /** Raised centre bulge on the drawn hood from z `z0` (cowl end) to `z1`, `width` (m) across, its top `rise` (m) over the lid's; it ramps into the lid at both ends. */
@@ -225,6 +232,8 @@ interface ArchLip {
   width: number;
   square?: boolean;
   band?: boolean;
+  /** The whole lip stands this far (m) in from the opening's edge, over it, so the opening reads smaller than the arch it covers (drawn only). */
+  inset?: number;
 }
 
 /** A chase eye: `dist` behind and `height` over the car's origin, aimed `aimUp` over it (m). */
@@ -262,6 +271,7 @@ export interface BodyStyle {
   /**
    * Front door: hinge axis at the A-pillar (±hingeX, hingeY, hingeZ), `length` hinge to trailing edge, skin ±halfHeight about the hinge, `aperture` [z0, z1] the body's front-door cut (the skin overlaps it 0.02 each end), mirror seated `mirrorY` over the hinge and `mirrorZ` (default 0) behind it, reaching `mirrorReach` out, ±mirrorHalfDepth deep.
    * `mirror` (drawn only): its own mirror, `cap` rounded or box of `size` [w out, h, d along z] (default `MIRROR_CAP_SIZE`) in `finish` (body: the door's paint), its outer face at `mirrorReach`, its foot on the skin; absent = the platform mirror x-scaled to the reach.
+   * `hingeTop` (car y, m, drawn only): the skin's top edge at its hinge cut, its rows closing down to it over the hinge end's slope so the top meets the fender's deck edge there; absent = only the slope.
    */
   door: {
     hingeX: number;
@@ -279,6 +289,7 @@ export interface BodyStyle {
      * `mount` "glass": the seat stands on the door glass's plane at its z and height (`mirrorY` may stand over `halfHeight`), its foot leaning with the pane, as a tow mirror on the glass's front corner; absent, on the skin.
      */
     mirror?: { cap: "rounded" | "box"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; mount?: "glass" };
+    hingeTop?: number;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
   aPillarFoot: number;
@@ -290,8 +301,11 @@ export interface BodyStyle {
   glassTop?: number | readonly (readonly [number, number])[];
   /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it. */
   arch: { radius: number; lip?: ArchLip; wellWall?: number };
-  /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`. */
-  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number] };
+  /**
+   * Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`.
+   * `groove` [out, down] (m, drawn only): over the open bay the fender's deck edge beside a lid hood stands `out` outboard of the hood's edge and `down` lower, a shut-line slot onto the bay wall.
+   */
+  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; groove?: readonly [out: number, down: number] };
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;
@@ -328,6 +342,12 @@ export interface BodyStyle {
   wheelTub?: { rise: number; length: number; width: number };
   /** A tub's rim width (m): its side wall's top edge stands this far in from the body side (its foot stays 6 cm in); absent, 6 cm. */
   tubWall?: number;
+  /**
+   * Where the dummies' world takes the cabin to start (m, the cage's frame; `ragdoll-proxy.ts` `BELT_Y`): a cage top under it is a column
+   * from under the ground (a hood, a deck, a bed), one over it a roof slab. Absent, `BELT_Y`'s 1 m: every car's hood and deck under it,
+   * every roof over it, but a truck's.
+   */
+  proxyBelt?: number;
   /** Rear door shut line on four-door bodies, or null. */
   rearDoorSeam: number | null;
   boot: BootSpec;
@@ -349,7 +369,7 @@ export interface BodyStyle {
   /**
    * The front grille (drawn only; it tears off with the front bumper): centre height `y` and face `z` (m, car frame; z absent: the platform
    * grille's face); `size` [w at the top, h], `bottom` its width at the bottom (a trapezoid; absent, w), corners rounded `round` (m); `kind`
-   * horizontal bars, vertical slats, a mesh of both or a diagonal (hex) mesh, `count` bars or slats (absent, at the default pitch); a round
+   * horizontal bars, vertical slats, a mesh of both or a diagonal (hex) mesh, `count` bars or slats (a mesh: lines each way; absent, at the default pitch); a round
    * `badge` of that radius at its centre, a chrome `bezel` framing its edge; in `finish` (body: the body's paint). Absent: the platform grille.
    */
   grille?: {
@@ -364,6 +384,10 @@ export interface BodyStyle {
     /** A chrome frame this wide (m) round the grille's outer edge, its face standing out past the grille's (drawn only). */
     bezel?: number;
     finish: "black" | "chrome" | "body";
+    /** Its top leaning back (rad) about its centre line, onto a raked face; absent, upright. */
+    lean?: number;
+    /** The surround's own finish (a chrome frame round a black mesh); absent, `finish`. */
+    rim?: "black" | "chrome" | "body";
   };
   /**
    * Seats (m, car space): the driver's H-point [x, y, z], x across from the centre line on `DRIVER_SIDE` (the passenger mirrors him),

@@ -17,6 +17,8 @@
  * `--tear` tears the named parts (`DetachPart.name`: hood, bumperF, archFL, ...) off every car before the framing and hides them, to
  * show what is under them (the engine bay, the crash bars, the bare metal). `--open doorL,doorR,trunk,quarterL,quarterR` swings those
  * doors and the lid to their stops and peels those quarter panels as the Doors scene does, on every car, to show their inner faces.
+ * `--sirens` flashes every light bar (with `night=1` in the hash: the lamps as seen in a night pursuit). `--break headL,headR,tailL,tailR`
+ * breaks those lamps on every car, as a corner crush does. `--brake` holds every car's brake pedal down (its brake lamps lit).
  * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,
  * `trace-camera.mjs`: car space, orthographic for side and top), at the spec's size, so the shot lines up with trace-car's overlay;
  * `scripts/landing-shots.mjs` runs the pair. `--backdrop <colour>` draws the car alone over that colour (no garage room, no fog).
@@ -80,10 +82,13 @@ const { values } = parseArgs({
     paint: { type: "string" },
     at: { type: "string", default: String(START_S) },
     tear: { type: "string" },
+    open: { type: "string" },
+    sirens: { type: "boolean" },
+    break: { type: "string" },
+    brake: { type: "boolean" },
     draw: { type: "string" },
     scale: { type: "string" },
     shadow: { type: "string" },
-    open: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -119,6 +124,8 @@ if (!existsSync(join(glDir, "dist/webgl.node"))) {
 }
 const { default: createGL } = await import("@kmamal/gl");
 const { createCanvas, ImageData, loadImage } = await import("@napi-rs/canvas");
+// This checkout's, not `--root`'s: an older tree draws through the same page `Worker`.
+const { PageWorker } = await import("../src/game/engine/page-worker.test-util.ts");
 
 const game = (path) => import(pathToFileURL(join(root, "src/game", path)).href);
 const { mulberry32 } = await game("world/placements.ts");
@@ -175,6 +182,13 @@ Object.assign(globalThis, {
   },
   fetch: (input) => track(servePublic(input)),
   createImageBitmap: (blob, options) => track(decodeBitmap(blob, options)),
+  // The page's workers on threads; the ragdoll world stays inline, as without one: its answers at thread timing would make two runs differ.
+  Worker: class extends PageWorker {
+    constructor(url) {
+      if (String(url).includes("ragdoll-worker")) throw new Error("headless-frame: the ragdoll world runs inline");
+      super(url);
+    }
+  },
 });
 const canvas = element();
 // The engine fits its lens to the canvas's box (`coverLens` reads all four edges).
@@ -234,6 +248,8 @@ await engine.ready;
 const readyMs = Math.round(performance.now() - bootAt);
 if (tier === "ultra" && !(await engine.loadUltra())) throw new Error("headless-frame: the Ultra look did not load (see the console)");
 engine.setFxTier(tier);
+// A pick of Ultra switches once its warm-up has linked the look (`pickUltra`).
+while (engine.cine.tier !== tier) await sleep(SETTLE_POLL_MS);
 if (detail !== null) {
   if (detail === "off") engine.detail.setDistances(Infinity, Infinity);
   else engine.detail.setLevel(detail);
@@ -267,6 +283,16 @@ const OPEN = {
 for (const name of values.open?.split(",") ?? []) {
   if (!(name in OPEN)) throw new Error(`--open ${name}: one of ${Object.keys(OPEN).join(", ")}`);
   for (const car of engine["live"]()) OPEN[name](car);
+}
+// `--brake`: each step's drive writes the pedal (`applyDrive`), so the pedal is pinned down on the drive itself, not set once.
+if (values.brake) for (const car of engine["live"]()) Object.defineProperty(car.drive, "brake", { get: () => 1, set() {} });
+// `--sirens`: every car with a light bar flashes it, as a police car in pursuit does.
+if (values.sirens) for (const car of engine["live"]()) car.setSirens(true);
+/** `--break`'s lamps: `car.lamps` holds the heads (left, right) then the tails. */
+const LAMP_AT = { headL: 0, headR: 1, tailL: 2, tailR: 3 };
+for (const name of values.break?.split(",") ?? []) {
+  if (!(name in LAMP_AT)) throw new Error(`--break ${name}: one of ${Object.keys(LAMP_AT).join(", ")}`);
+  for (const car of engine["live"]()) car["breakLamp"](car["lamps"][LAMP_AT[name]]);
 }
 if (camera !== undefined) {
   const [radius, pitch, angle] = camera;

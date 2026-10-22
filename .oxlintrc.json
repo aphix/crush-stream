@@ -27,6 +27,7 @@
     "node_modules/**",
     "src/routeTree.gen.ts",
     "public/audio/**",
+    "public/basis/**",
     "kernels/motor/**"
   ],
   "rules": {
