@@ -90,8 +90,8 @@ export const HATCHBACK: BodyStyle = {
       plateless: true,
     },
   },
-  // The reference's mirror stands about 3 cm past the body side and runs 12 cm along it (top view).
-  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.075, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62], mirror: { cap: "rounded", finish: "body", size: [0.065, 0.1, 0.14] } },
+  // The reference's mirror: a body-colour head tapering to its nose, standing clear over the belt on a black sail in the glass's front corner, about 3 cm past the body side.
+  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.075, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62], mirror: { cap: "nose", finish: "body", size: [0.065, 0.12, 0.14], lift: 0.075, neck: 0.03, stalk: 0.1 } },
   aPillarFoot: 0.73,
   aPillarTop: 0.212,
   glassTop: 0.045,
@@ -126,11 +126,13 @@ export const HATCHBACK: BodyStyle = {
   ],
   // The windshield reaches the roof's flat front (the reference's glass top), its corners flush with the dome's edge.
   roofZ: [-1.151, 0.245],
-  // The glass top sits 7 mm under the crown: the crown rolls down onto it.
-  roofEnds: { front: 0.12 },
+  // The glass top sits 7 mm under the crown: the crown rolls down onto it. The rear end's side lip tucks in over the D-pillars' tops;
+  // its run is under 2 cm, so its near roll station merges into the roof's end ring and the body stays within its vertex budget.
+  roofEnds: { front: 0.12, rear: 0.019, flush: { rear: 1 } },
   windshieldTop: [1.245, 0.245],
   rearGlass: { base: [0.905, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9, frame: [0.05, 0.06, 0.11] },
-  quarter: { zRearBot: -1.174, zRearTop: -1.07 },
+  // The quarter glass's rear edge leans forward as the reference's, leaving a broad D-pillar at the roof.
+  quarter: { zRearBot: -1.15, zRearTop: -0.96 },
   midPillarZ: -0.86,
   rearBulkhead: { z: -0.95, yTop: 0.8 },
   tubs: [[-1.56, 0.7, 0.27]],
@@ -163,7 +165,8 @@ export const HATCHBACK: BodyStyle = {
   pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] }, rearFoot: [0.68, 0.895] },
   blackout: { b: true, divider: true },
   privacyGlass: { rear: true, quarter: true },
-  roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.5 } },
+  // The spoiler spans the roof's rear end, its side ends flush over the D-pillars' tops.
+  roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.52 } },
   exhaust: { tips: 2, x: 0.5, y: 0.24, size: [0.1, 0.045], shape: "round" },
   details: {
     lines: [
@@ -188,7 +191,7 @@ export const HATCHBACK: BodyStyle = {
       { view: "side", points: [[0.56, 0.875], [-0.26, 0.875], [-0.89, 0.875], [-1.17, 0.875]], width: 0.015, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[0.52, 0.875], [0.37, 1.05], [0.22, 1.21], [0, 1.23], [-0.26, 1.23], [-0.26, 0.875]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[-0.31, 0.875], [-0.31, 1.22], [-0.8, 1.21], [-0.86, 1.2], [-0.89, 0.875]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
-      { view: "side", points: [[-0.93, 1.18], [-1.17, 1.04], [-1.17, 0.9], [-0.93, 0.88]], closed: true, width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
+      { view: "side", points: [[-0.92, 1.215], [-0.96, 1.215], [-1.15, 0.89], [-0.92, 0.88]], closed: true, width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[-0.25, 0.88], [-0.25, 1.23]], width: 0.08, depth: 0.002, profile: "u", cavity: 0.7 },
       { view: "top", points: [[0.7, 0.62], [0.79, 0.5], [0.86, 0.31], [0.89, 0]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "top", points: [[0.24, 0.58], [0.22, 0]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },
@@ -200,16 +203,10 @@ export const HATCHBACK: BodyStyle = {
       { view: "top", points: [[-1.1, 0.57], [-1.09, 0]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[-0.97, 0.52], [-1.0, 0]], width: 0.12, depth: 0.006, profile: "u", cavity: 0 },
       { view: "rear", points: [[0, 1.25], [0.57, 1.24], [0.64, 1.05], [0.66, 0.92]], width: 0.03, depth: 0.003, profile: "u", cavity: 0.7 },
-      { view: "side", points: [[-1.09, 1.25], [-1.1, 1.24], [-1.35, 1.05], [-1.58, 0.92], [-1.6, 0.9]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "rear", points: [[0.5, 1.22], [0.576, 1.05], [0.624, 0.92], [0.631, 0.9]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.62, 0.84], [0.43, 0.8], [0.43, 0.6], [0, 0.56]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0, 0.98], [0.17, 0.98]], width: 0.02, depth: 0.006, profile: "u", cavity: 0.7 },
-      // The gate's model script under its right lamp (mirrored: a palindrome of symmetric letters reads on both sides).
-      { view: "rear", points: [[0.26, 0.6], [0.2725, 0.625], [0.285, 0.6]], width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
-      { view: "rear", points: [[0.266, 0.61], [0.279, 0.61]], width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
-      { view: "rear", points: [[0.295, 0.625], [0.3075, 0.6], [0.32, 0.625]], width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
-      { view: "rear", points: [[0.33, 0.6], [0.3425, 0.625], [0.355, 0.6]], width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
-      { view: "rear", points: [[0.336, 0.61], [0.349, 0.61]], width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
       { view: "rear", points: [[0.58, 0.5], [0.6, 0.5]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       ...HANDLES.flatMap((h) => h.lines),
     ],
@@ -226,6 +223,8 @@ export const HATCHBACK: BodyStyle = {
       { view: "front", points: [[0, 0.18], [0.5, 0.18], [0.5, 0.3], [0, 0.3]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.012, bar: 0.006, depth: -0.006 }, cavity: 0.85 },
       { view: "front", points: [[0.515, 0.235], [0.645, 0.235], [0.645, 0.305], [0.515, 0.305]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0.43, 0.74], [0.55, 0.74], [0.55, 0.76], [0.43, 0.76]], depth: -0.006, rim: 0.004, cavity: 0 },
+      // The model badge under the right lamp: a plain raised plate.
+      { view: "rear", points: [[0.26, 0.6], [0.355, 0.6], [0.355, 0.625], [0.26, 0.625]], depth: 0.002, rim: 0.003, cavity: 0 },
       // The gate's top edge seats in the glass's black frit, as the reference's: no painted ledge catching the sky.
       { view: "top", points: [[-1.57, 0], [-1.57, 0.62], [-1.62, 0.62], [-1.62, 0]], depth: 0, rim: 0.004, cavity: 0.9 },
       { view: "rear", points: [[0, 0.865], [0.055, 0.8], [0, 0.735]], depth: 0.004, rim: 0.004, cavity: 0 },
