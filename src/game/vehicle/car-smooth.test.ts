@@ -244,6 +244,38 @@ describe("given the lids as built", () => {
       assert.ok(turn < FLAT_CURVE_LIMIT_DEGREES, `dome ring line ${line} of ${rim - 1} turns ${turn.toFixed(2)}°`);
     }
   });
+
+  it(`when the sedan's crowned deck lid (boot.crown) is read, then past its 25 cm ease-in its centre stands the parabola's drop over its edge at every deck station, its dome turns under ${FLAT_CURVE_LIMIT_DEGREES}° at each of its own vertices, and the cage's lid is the plain one`, () => {
+    /** The crown eases in over this far (m) from the lid's front edge; the tail fold's radius (m) ends the deck. */
+    const [RUN, FOLD] = [0.25, 0.08];
+    const style = CAR_STYLES.sedan;
+    const b = style.boot;
+    assert.ok(b.kind === "lid" && b.crown !== undefined, "the sedan's boot is a crowned deck lid");
+    const [drop, at] = b.crown;
+    const lid = makeTrunkGeometry(style);
+    const loft = loftOf(lid);
+    const pivotZ = (b.pivot ?? b.origin)[1];
+    const rim = loft.ring - 9;
+    let read = 0;
+    for (let slice = 0; slice < loft.slices; slice++) {
+      const edge = positionAt(lid, slice * loft.ring);
+      const z = edge.z + pivotZ;
+      if (z > b.z0 - RUN || z < b.z1 + FOLD + 1e-6) continue;
+      const rise = positionAt(lid, slice * loft.ring + rim / 2).y - edge.y;
+      const want = drop * (edge.x / at) ** 2;
+      assert.ok(Math.abs(rise - want) < 1e-4, `z ${z.toFixed(3)}: the centre stands ${(rise * 100).toFixed(2)} cm over the edge at |x| ${(-edge.x).toFixed(3)}, want ${(want * 100).toFixed(2)}`);
+      read++;
+    }
+    assert.ok(read >= 2, `only ${read} deck stations past the ease-in`);
+    const inner = (slice: number) => slice > 0 && slice < loft.slices - 2;
+    for (let line = 1; line < rim; line++) {
+      const turn = Math.max(...ringLineDihedrals(lid, line, inner));
+      assert.ok(turn < FLAT_CURVE_LIMIT_DEGREES, `dome ring line ${line} of ${rim - 1} turns ${turn.toFixed(2)}°`);
+    }
+    const plain: BodyStyle = { ...style, boot: { ...b, crown: undefined } };
+    const [cage, plainCage] = [makeTrunkGeometry(style, "cage"), makeTrunkGeometry(plain, "cage")].map((g) => (g.getAttribute("position").array as Float32Array).join(","));
+    assert.ok(cage === plainCage, "the cage's lid moved with the crown");
+  });
 });
 
 type PartCase = { readonly name: string; readonly make: (id: CarStyleId) => THREE.BufferGeometry; readonly creaseDegrees: number; readonly capsAreCuts: boolean };
