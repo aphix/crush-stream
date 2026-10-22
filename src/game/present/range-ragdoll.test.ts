@@ -233,7 +233,7 @@ describe(`given the ejection range with a hard handbrake turn ${TURN_AT} m befor
       // The monster's body clears the slab (keel 1.21 m over its 0.81 m top): its tyres meet it, side-on at 22.5 m/s closing (65° off the run-up at
       // 24.1 m/s), the side-loaded wheels are shoved into their wells (`shoveWheel`), and it rides up the slab's face on them without rolling over.
       // With its centre lifted by the whole body lift it climbed onto the slab (origin 1.07 m up, 49° of pitch); lifted by its sprung share
-      // (`centreLift`, 0.81 of it) it rises 0.77 m and leans 33° at most. The throw is the speed a hit took (`peakClosing`): riding up, it loses
+      // (`centreLift`, 0.81 of it) and on a tread as wide as drawn it rises 0.61 m and leans 24° at most. The throw is the speed a hit took (`peakClosing`): riding up, it loses
       // too little of it for the alive bar, so nobody is thrown. It was thrown out of the side window while the slab's plan met a body its keel
       // cleared and its centre stood 0.07 m over its hubs (`centreY`).
       if (type.id === "monster") {
