@@ -2,10 +2,12 @@ import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, ROOF_DRIP, roofDrip, WINDSHIELD_BOW } from "./car-lines.ts";
-import { domeFall, quarterSillZs } from "./car-glass.ts";
+import { domeFall, quarterSillZs, rearGlassCornerZ, rearGlassInset } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
+  ROOF_ARC_T,
   ROOF_CROWN,
+  ROOF_LIP_OUT,
   ROOF_SHOULDER,
   cantX,
   cantY,
@@ -14,6 +16,7 @@ import {
   glassX,
   lerp,
   loftFromRings,
+  roofArc,
   roofAt,
   roofDome,
   roofTopY,
@@ -57,11 +60,12 @@ function shellRing(skin: Pt[], cant: number, inset: number): Pt[] {
   return [...skin, ...inner];
 }
 
-/** The drawn roof's ends that bow in plan past the default bow (`WINDSHIELD_BOW`, `REAR_GLASS_BOW`) its flat ends already cover: z, bow (m), the glass top's half-width. */
+/** The drawn roof's ends that bow in plan past the default bow (`WINDSHIELD_BOW`, `REAR_GLASS_BOW`) its flat ends already cover, or with the glass's whole bow (`roofEnds.glassBow`): z, bow (m), the glass top's half-width. */
 function roofEndBows(style: BodyStyle): { z: number; bow: number; half: number }[] {
+  const whole = style.roofEnds?.glassBow;
   return [
-    { z: style.roofZ[1], bow: (style.windshield.bow ?? WINDSHIELD_BOW).top - WINDSHIELD_BOW.top, half: style.windshield.wTop / 2 },
-    { z: style.roofZ[0], bow: (style.rearGlass.bow ?? REAR_GLASS_BOW).top - REAR_GLASS_BOW.top, half: style.rearGlass.wTop / 2 },
+    { z: style.roofZ[1], bow: (style.windshield.bow ?? WINDSHIELD_BOW).top - (whole?.front ? 0 : WINDSHIELD_BOW.top), half: style.windshield.wTop / 2 },
+    { z: style.roofZ[0], bow: (style.rearGlass.bow ?? REAR_GLASS_BOW).top - (whole?.rear ? 0 : REAR_GLASS_BOW.top), half: style.rearGlass.wTop / 2 },
   ].filter((end) => end.bow !== 0);
 }
 
@@ -130,6 +134,13 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
     const { y: roofY, x } = roofAt(z, style);
     const { drop, crown, reach } = source === "drawn" ? roofDome(z, style) : { drop: 0, crown: ROOF_CROWN, reach: 1 };
     const y = roofY - drop;
+    const arc = source === "drawn" ? roofArc(z, style) : null;
+    if (arc) {
+      const half = ROOF_ARC_T.map(arc);
+      const skin = [...half.slice(1).reverse().map((p) => ({ x: -p.x, y: p.y })), ...half];
+      rings.push(shellRing(skin, (skin.length - 5) / 2, HEADLINER_INSET));
+      continue;
+    }
     const side: Pt[] =
       source === "cage"
         ? [
@@ -407,8 +418,7 @@ function postRearmost({ rear, front, inward = [1, 0] }: Rail, thick: number): V3
   return rearmost;
 }
 
-/** The cant line's reach (m) past the roof's half-width: the cage roof's side lip runs from it up to its knee, `ROOF_LIP_KNEE` [past the half-width, under the roof] (m), then in to the dome's edge; the drawn roof's roll runs out this far plus `roofDrip`. */
-const ROOF_LIP_OUT = 0.08;
+/** The cage roof's side lip runs from the cant line (`ROOF_LIP_OUT`) up to its knee [past the half-width, under the roof] (m), then in to the dome's edge; the drawn roof's roll runs out to the cant line plus `roofDrip`. */
 const ROOF_LIP_KNEE = [0.07, 0.03] as const;
 /** A pillar's top stops this far (m) inside the roof's surface, so the two never fight over a pixel. */
 const ROOF_TUCK = 0.002;
@@ -424,9 +434,12 @@ function roofOutlineX(y: number, roofY: number, roofX: number, lip: number, drip
   return roofX;
 }
 
-/** `x` held `ROOF_TUCK` in under the drawn roof's side at (`y`, `z`); unchanged off the roof's z span or under its cant line. */
+/** `x` held `ROOF_TUCK` in under the drawn roof's side at (`y`, `z`); unchanged off the roof's z span or under its cant line. A curved roof
+ *  (`roofSection`) holds it inside the cant line only: over its shallow top a point drops onto the skin (`insideRoof`), never slides in. */
 function underRoofSide(x: number, y: number, z: number, style: BodyStyle): number {
   if (z < style.roofZ[0] || z > style.roofZ[1]) return x;
+  const cant = roofArc(z, style)?.(1);
+  if (cant) return y <= cant.y ? x : Math.min(x, cant.x - ROOF_TUCK);
   const roof = roofAt(z, style);
   const { drop, reach } = roofDome(z, style);
   return Math.min(x, roofOutlineX(y, roof.y - drop, roof.x, cantDrop(style), roofDrip(style), reach) - ROOF_TUCK);
@@ -555,6 +568,18 @@ const TIP_LAP = 0.01;
 /** The triangle stands this far (m) out of the side glass's plane, over the quarter glass it laps. */
 const TIP_PROUD = 0.004;
 
+/** Polyline `points` as `n` points on its own chords, keeping every vertex (so a section laid on it covers it exactly): its longest chords halved. */
+function onChords(points: Pt[], n: number): Pt[] {
+  if (points.length > n) throw new Error(`${points.length} polyline points past the ${n} a section takes`);
+  const len = (j: number) => hypot2(points[j]!.x - points[j - 1]!.x, points[j]!.y - points[j - 1]!.y);
+  while (points.length < n) {
+    let k = 1;
+    for (let j = 2; j < points.length; j++) if (len(j) > len(k)) k = j;
+    points.splice(k, 0, { x: (points[k - 1]!.x + points[k]!.x) / 2, y: (points[k - 1]!.y + points[k]!.y) / 2 });
+  }
+  return points;
+}
+
 /**
  * The drawn C-pillar as a sail (`cPillar`): lofted along z through sections that each run as a quadratic Bézier from a foot to a head,
  * `SAIL_DEPTH` deep with rounded edges. The head follows the flat post's top edge (`rb` → `rt` → `ft`); the foot leaves the haunch's
@@ -571,6 +596,10 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   // The glass corner's ring stands just behind the roof's rear end (insideRoof never reaches it there), its section the roof end's own, so the sail covers the end's wing outboard of the rear glass.
   const roofEndZ = Math.max(rt[2], style.roofZ[0] - ROOF_TUCK);
   const roof = roofAt(style.roofZ[0], style);
+  const flush = style.cPillar?.flush === true;
+  // A curved roof's (`roofSection`) end section on its drawn chords, crown to cant.
+  const endArc = roofArc(style.roofZ[0], style);
+  const roofEnd = endArc ? ROOF_ARC_T.map(endArc) : null;
   const zs = [
     ...Array.from({ length: haunch }, (_, k) => lerp(rear, sweepZ, k / haunch)),
     sweepZ,
@@ -582,16 +611,29 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     .sort((a, b) => a - b)
     .filter((z, k, all) => k === 0 || z - all[k - 1]! > 1e-6);
   const r = SAIL_DEPTH / 2;
-  const rg = style.rearGlass;
+  // A flush head stands on the drawn glass (fallen with the dome, round at its top corners), lapping its side edge.
+  const glassHead = (z: number): readonly [number, number] => {
+    const p = rearGlassInset(style, z, SAIL_FLUSH_LAP);
+    return [p.x, p.y + SAIL_FLUSH_STAND];
+  };
+  // On a curved roof the roof end's head lies on that end's chords; lapping the glass, in over its top corner's mid-arc, so the chord
+  // from the ring behind follows the arc's lower half and the roof end meets its upper half (a ring of its own would cost 80 triangles).
+  const endX = !roofEnd ? roof.x : flush ? rearGlassInset(style, rearGlassCornerZ(style) ?? roofEndZ, SAIL_FLUSH_LAP).x : roof.x;
+  const endHead = [endX, roofEnd ? roofTopY(endX, style.roofZ[0], style) : roof.y] as const;
   const section = (z: number): Pt[] => {
     const atRoofEnd = z === roofEndZ && z < style.roofZ[0];
-    const onGlass = style.cPillar?.flush === true && z < roofEndZ;
+    const onGlass = flush && z < roofEndZ;
     // The head's rounded edge ends at the post's top corner (`r` over the section's end), buried in the roof's side like the post's top.
     const corner = z <= rt[2] ? [lerp(rb[0], rt[0], (z - rb[2]) / (rt[2] - rb[2])), lerp(rb[1], rt[1], (z - rb[2]) / (rt[2] - rb[2]))] : [lerp(rt[0], ft[0], (z - rt[2]) / (ft[2] - rt[2])), lerp(rt[1], ft[1], (z - rt[2]) / (ft[2] - rt[2]))];
-    const u = THREE.MathUtils.clamp((z - rg.base[1]) / (rg.top[1] - rg.base[1]), 0, 1);
-    const glassEdge = [lerp(rg.wBase, rg.wTop, u) / 2 - SAIL_FLUSH_LAP, lerp(rg.base[0], rg.top[0], u) + SAIL_FLUSH_STAND] as const;
-    const head = atRoofEnd ? ([roof.x, roof.y] as const) : onGlass ? glassEdge : ([corner[0]!, corner[1]! - r] as const);
-    const headR = onGlass ? SAIL_FLUSH_STAND / 2 : r;
+    const head = atRoofEnd ? endHead : onGlass ? glassHead(z) : ([corner[0]!, corner[1]! - r] as const);
+    // The roof end's outer face from the cant line up to the head: the roof's roll, or a curved roof's chords outboard of the head.
+    const endFace = !atRoofEnd
+      ? null
+      : roofEnd
+        ? onChords([...roofEnd.filter((p) => p.x > head[0]!).reverse(), { x: head[0]!, y: head[1]! }], SAIL_ROOF_ROLL.length)
+        : roofRoll(roof.x, roof.y, cantDrop(style), roofDrip(style), SAIL_ROOF_ROLL);
+    // Over the glass (a curved roof's end head too) the head's edge stays a bead's: a post's would stand out over the pane.
+    const headR = onGlass || (atRoofEnd && flush && roofEnd !== null) ? SAIL_FLUSH_STAND / 2 : r;
     // Where the window's line closes on the roof the section keeps a span of its depth, never folding to a point.
     const lineY = Math.min(z >= tipZ ? lerp(tipY, topY, (z - tipZ) / (topZ - tipZ)) : tipY, head[1]! - SAIL_DEPTH - r);
     const [upX, upY] = [cantX(z, style) - beltX(z, style), cantY(z, style) - beltY(z, style)];
@@ -617,9 +659,13 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     // A flush head arrives level across the glass: its control point runs out along the foot's tangent to the head's height, never inboard of the head, so the foot keeps its tangent.
     const level = onGlass ? Math.min((head[1]! - p0[1]) / dy, dx < 0 ? (head[0]! - p0[0]) / dx : Infinity) : 0;
     const k = Number.isFinite(level) && level > 0 ? level : reach;
-    // At the roof's end the head arrives level, as the roof's roll does, its control point on the roll's outer corner.
-    const c = atRoofEnd
-      ? ([roof.x + ROOF_LIP_OUT + roofDrip(style), roof.y] as const)
+    // At the roof's end the head arrives as the roof does: level, its control point on the roll's outer corner, or along a curved roof's chord.
+    const below = endFace?.[endFace.length - 2];
+    const shrink = below ? hypot2(below.x - head[0]!, below.y - head[1]!) / (ROOF_LIP_OUT + roofDrip(style)) : 1;
+    const c = endFace
+      ? roofEnd
+        ? ([head[0]! + (below!.x - head[0]!) / shrink, head[1]! + (below!.y - head[1]!) / shrink] as const)
+        : ([roof.x + ROOF_LIP_OUT + roofDrip(style), roof.y] as const)
       : touch
         ? ([(p0[0] + head[0]!) / 2, (p0[1] + head[1]!) / 2] as const)
         : ([p0[0] + dx * k, p0[1] + dy * k] as const);
@@ -637,8 +683,8 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     const edge = (s: number) => Array.from({ length: SAIL_EDGE_CHORDS - 1 }, (_, j) => at(s, 0, (Math.PI * (j + 1)) / SAIL_EDGE_CHORDS));
     return [
       // A flush head's control point lies near it, so the section turns hardest there: its outer points crowd toward both ends (the foot keeps its tangent).
-      ...(atRoofEnd
-        ? [at(0, 0), ...roofRoll(roof.x, roof.y, cantDrop(style), roofDrip(style), SAIL_ROOF_ROLL).map((p) => ({ x: sign * p.x, y: p.y }))]
+      ...(endFace
+        ? [at(0, 0), ...endFace.map((p) => ({ x: sign * p.x, y: p.y }))]
         : Array.from({ length: SAIL_OUTER }, (_, k) => at(onGlass ? (1 - detCos((Math.PI * k) / (SAIL_OUTER - 1))) / 2 : k / (SAIL_OUTER - 1), 0))),
       ...edge(1),
       // The section thins from the foot's edge to the head's, so each rounded edge closes onto the inner face.
@@ -671,6 +717,18 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     return ring;
   });
   const sail = loftFromRings(rings, zs, 0, 1);
+  // A curved roof's end head comes in over the glass, where the roof's end bows back with the glass top (`bowRoofEnds`, drawn on chords
+  // between its end ring's points): that ring bows with those chords, a tuck behind them.
+  const bow = roofEnd ? roofEndBows(style).find((end) => end.z === style.roofZ[0]) : undefined;
+  const bowAt = (x: number) => (bow ? bow.bow * (1 - Math.min(1, x / bow.half) ** 2) : 0);
+  const at = sail.getAttribute("position");
+  for (let v = 0; bow && v < at.count; v++) {
+    if (Math.abs(at.getZ(v) - roofEndZ) > 1e-6) continue;
+    const x = Math.abs(at.getX(v));
+    const k = roofEnd!.findIndex((p) => p.x >= x);
+    const [a, b] = k <= 0 ? [roofEnd!.at(k)!, roofEnd!.at(k)!] : [roofEnd![k - 1]!, roofEnd![k]!];
+    at.setZ(v, roofEndZ + (a === b ? bowAt(a.x) : lerp(bowAt(a.x), bowAt(b.x), (x - a.x) / (b.x - a.x))));
+  }
   ensureOutwardNormals(sail);
   return sail;
 }

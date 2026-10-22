@@ -7,7 +7,7 @@ import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
 import { ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, rockerAt, tubWall } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, tubWall } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
@@ -397,6 +397,66 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
       for (let i = 0; i < at.count; i++) {
         const [x, y, z] = [at.getX(i), at.getY(i), at.getZ(i)];
         if (z >= rolled.roofZ[0] && z <= rolled.roofZ[1]) assert.ok(y <= roofTopY(x, z, rolled) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the rolled roof (${roofTopY(x, z, rolled)})`);
+      }
+    }
+  });
+
+  it("when its roof's rear end bows with the rear glass's whole bow (roofEnds.glassBow.rear), then its crown meets the glass top's centre in plan (no slit), where the plain end stands the default bow ahead of it", () => {
+    // The roof's rear crown z (its centre-line skin's rearmost) less the rear glass top's centre z.
+    const endGap = (style: BodyStyle): number => {
+      const [roof, glass] = [makeRoofGeometry(style).getAttribute("position"), makeRearGlass(style).getAttribute("position")];
+      let roofZ = Infinity;
+      for (let v = 0; v < roof.count; v++) if (Math.abs(roof.getX(v)) < 1e-6) roofZ = Math.min(roofZ, roof.getZ(v));
+      let [topY, topZ] = [-Infinity, 0];
+      for (let i = 0; i < glass.count; i++) if (Math.abs(glass.getX(i)) < 1e-6 && glass.getY(i) > topY) [topY, topZ] = [glass.getY(i), glass.getZ(i)];
+      return roofZ - topZ;
+    };
+    const plain: BodyStyle = { ...coupe, roofEnds: { ...coupe.roofEnds, glassBow: undefined } };
+    const met: BodyStyle = { ...plain, roofEnds: { ...plain.roofEnds, glassBow: { rear: true } } };
+    const [open, shut] = [endGap(plain), endGap(met)];
+    assert.ok(Math.abs(shut) < 1e-4 && Math.abs(open + REAR_GLASS_BOW.top) < 1e-4, `rear crown ${(shut * 1000).toFixed(1)} mm ahead of the glass top with glassBow, ${(open * 1000).toFixed(1)} mm without`);
+  });
+});
+
+describe("given a coupe whose roof's section is one curve from crown to cant (roofSection)", () => {
+  /** The curve's handles, and how steeply (°) its chord across half its half-width falls at mid-roof: a dome there, where the plain coupe's flat top lies within 4°. */
+  const SECTION = { crown: 0.5, blend: 0.5 } as const;
+  const DOME_SLOPE_DEGREES = 6;
+  const coupe: BodyStyle = { ...CAR_STYLES.coupe, roofSection: undefined };
+  const domed: BodyStyle = { ...coupe, roofSection: SECTION };
+  const midZ = lerp(coupe.roofZ[0], coupe.roofZ[1], 0.5);
+  /** `style`'s drawn roof skin vertices (no headliner) and, at mid-roof, its +x half from the crown out to the cant line. */
+  const skinOf = (style: BodyStyle): { pos: THREE.BufferAttribute; skin: number[]; mid: THREE.Vector2[] } => {
+    const roof = makeRoofGeometry(style);
+    const pos = roof.getAttribute("position") as THREE.BufferAttribute;
+    const headliner = new Set(Array.from(roof.userData.shellTwins as Int32Array).filter((_, k) => k % 2 === 0));
+    const skin = Array.from({ length: pos.count }, (_, v) => v).filter((v) => !headliner.has(v));
+    const mid = new Map<string, THREE.Vector2>();
+    for (const v of skin) if (Math.abs(pos.getZ(v) - midZ) < 1e-6 && pos.getX(v) > -1e-9) mid.set(`${pos.getX(v)},${pos.getY(v)}`, new THREE.Vector2(pos.getX(v), pos.getY(v)));
+    return { pos, skin, mid: [...mid.values()].sort((a, b) => a.x - b.x) };
+  };
+
+  it(`when its roof is drawn, then at mid-roof it falls away across its half-width (its chord at half of it sloping past ${DOME_SLOPE_DEGREES}°, where the plain coupe's lies flat) from the plain coupe's crown out to its cant line`, () => {
+    const slopeAtHalf = (mid: THREE.Vector2[]) => {
+      const k = mid.findIndex((p) => p.x >= mid[mid.length - 1]!.x / 2);
+      return THREE.MathUtils.radToDeg(Math.atan2(mid[k - 1]!.y - mid[k]!.y, mid[k]!.x - mid[k - 1]!.x));
+    };
+    const [plain, dome] = [skinOf(coupe).mid, skinOf(domed).mid];
+    const [plainCant, domeCant] = [plain[plain.length - 1]!, dome[dome.length - 1]!];
+    assert.ok(Math.abs(dome[0]!.y - plain[0]!.y) < 1e-6 && domeCant.distanceTo(plainCant) < 1e-6, `crown y ${dome[0]!.y} (plain ${plain[0]!.y}), cant (${domeCant.x}, ${domeCant.y}) (plain (${plainCant.x}, ${plainCant.y}))`);
+    assert.ok(slopeAtHalf(dome) > DOME_SLOPE_DEGREES && slopeAtHalf(plain) < DOME_SLOPE_DEGREES, `chord at half the half-width: ${slopeAtHalf(dome).toFixed(1)}° (plain ${slopeAtHalf(plain).toFixed(1)}°)`);
+  });
+
+  it("when its roof's skin is read, then every skin vertex between its ends is at roofTopY, and every drawn greenhouse part stays under roofTopY: the posts' clamp follows the curve", () => {
+    const { pos, skin } = skinOf(domed);
+    const inside = skin.filter((v) => pos.getZ(v) >= domed.roofZ[0] && pos.getZ(v) <= domed.roofZ[1]);
+    assert.ok(inside.length > 0, "no skin vertex read");
+    for (const v of inside) assert.ok(Math.abs(pos.getY(v) - roofTopY(pos.getX(v), pos.getZ(v), domed)) < 1e-5, `skin vertex ${v} (${pos.getX(v)}, ${pos.getY(v)}, ${pos.getZ(v)}): roofTopY ${roofTopY(pos.getX(v), pos.getZ(v), domed)}`);
+    for (const part of makeGreenhouseFrame(domed, "drawn")) {
+      const at = part.getAttribute("position") as THREE.BufferAttribute;
+      for (let i = 0; i < at.count; i++) {
+        const [x, y, z] = [at.getX(i), at.getY(i), at.getZ(i)];
+        if (z >= domed.roofZ[0] && z <= domed.roofZ[1]) assert.ok(y <= roofTopY(x, z, domed) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the curved roof (${roofTopY(x, z, domed)})`);
       }
     }
   });

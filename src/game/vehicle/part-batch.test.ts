@@ -480,3 +480,15 @@ describe("given the part batch over a resting field", () => {
     assert.equal(versions(), before, "a resting field re-uploaded matrices");
   });
 });
+
+describe("given the part batch's styled draw after a sync that built its geometry", () => {
+  test("when its buffers are read, then every one keeps three's static usage hint (a dynamic one may sit in host memory the GPU reads every frame)", () => {
+    const { batch, car, draw } = stage();
+    draw([car(8), car(12, "wagon")]);
+    const geo = batch.styled.mesh.geometry;
+    assert.ok(geo.drawRange.count > 0, "the control: the styled draw packed seats");
+    const dynamic: string[] = [];
+    for (const [name, a] of [...Object.entries(geo.attributes), ["index", geo.index!] as const]) if ((a as THREE.BufferAttribute).usage !== THREE.StaticDrawUsage) dynamic.push(name);
+    assert.equal(dynamic.join(","), "");
+  });
+});
