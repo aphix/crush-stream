@@ -86,7 +86,7 @@ export const PICKUP: BodyStyle = {
     st(-0.95, 0.739, 1.18),
     st(-0.58, 0.749, 1.18),
     st(-0.5, 0.759, 1.2, 1.665, 0.58, 1),
-    st(-0.1, 0.759, 1.2, 1.665, 0.6, 1),
+    st(-0.1, 0.759, 1.2, 1.655, 0.6, 1),
     st(0.38, 0.759, 1.2, 1.625, 0.58, 1),
     st(0.98, 0.759, 1.19, 1.22, 0.58, 0.3),
     st(1.2, 0.749, 1.17),
@@ -95,14 +95,13 @@ export const PICKUP: BodyStyle = {
     st(1.86, 0.72, 1.04),
     st(1.92, 0.62, 0.96),
   ],
-  // The roof ends 1 cm past its rear glass's top: the reference rear iso's glass sits right under the roof's rolled edge, no overhang.
-  roofZ: [-0.46, 0.45],
+  roofZ: [-0.5, 0.45],
   roofEnds: TRUCK_ROOF_ENDS,
   roofSection: TRUCK_ROOF_SECTION,
   roofDrip: 0,
   windshieldTop: [1.6, 0.45],
   // The reference's cab back stands near upright, its glass's top 3 cm under the roof's rolled rear edge (rear iso: a slim rounded
-  // edge, not a nose); at z -0.48..-0.5 the crushed cab's dummy-world roof stood 8-10 cm off the drawn one.
+  // edge, not a nose); at z -0.47..-0.5 the crushed cab's dummy-world roof stood 8-15 cm off the drawn one.
   rearGlass: { base: [1.24, -0.55], top: [1.635, -0.45], wBase: 1.3, wTop: 1.12 },
   privacyGlass: { rear: true },
   quarter: { zRearBot: -0.3, zRearTop: -0.285 },

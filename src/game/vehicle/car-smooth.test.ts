@@ -1296,9 +1296,9 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Both trucks re-pinned for their hoods wrapping the nose (`hood.z1` pickup 1.92, monster 2.10); the monster's for its lower bed humps (`wheelTub.rise` .21),
   // the pickup's for its panes taking a quarter of the roof's dome (`domeFall` .25); both for their roofs rolling onto their glass tops (`roofEnds`), which the
   // panes' tops follow; the pickup's again for its rear glass's top back at z -0.45 (at -0.5 the crushed cab's dummy-world roof stood 8 cm off the drawn one).
-  // Both trucks re-pinned for their smooth roof crown (`roofSection`, square over the windshield) the panes' tops follow; the pickup's for its roof
-  // ending over its rear glass's top (`roofZ` -0.46), that top raised to 1.635, the pane taking the whole dome and its level cab roof (station -0.1 at 1.665).
-  { id: "pickup", digest: "5fcc066201a8d14a53b1297b482603a254259ddb4b66cc6de2116e9d9f7be340" },
+  // Both trucks re-pinned for their smooth roof crown (`roofSection`, square over the windshield) the panes' tops follow; the pickup's for its
+  // rear glass's top raised under the roof's rolled end (y 1.6 -> 1.635) and its panes taking the whole dome.
+  { id: "pickup", digest: "e8952a810e3d68dfde1ac848197897460465a324ab97461be078652a83f87ad4" },
   { id: "police", digest: "26d74836366ea758cb090a8f2908702c95392a9fe06faecc1d598e2f9b13404e" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55).
   { id: "monster", digest: "50d67ae1e9b9dfa6344025060ff8c23afe70af78a80789f63b915ca2cb781875" },
