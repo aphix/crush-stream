@@ -47,6 +47,10 @@ const _doorW = new THREE.Vector3();
 const _c = new THREE.Vector3();
 const _com = new THREE.Vector3();
 const _drawn = new THREE.Box3();
+const _hoodHinge = new THREE.Vector3();
+const _hoodSwung = new THREE.Vector3();
+const _hoodTurn = new THREE.Quaternion();
+const _xAxis = new THREE.Vector3(1, 0, 0);
 
 /**
  * Grows `box` by what `o` and its descendants draw, at their world matrices as they stand: a visible mesh's geometry, a part seat's `drawn`
@@ -91,6 +95,10 @@ const PANEL_TEAR = 0.8;
 const PANEL_TEAR_MPS = 50 / 3.6;
 /** A hood or lid crushed past this hinge value tears off (`evaluateBreakage`): the furthest a crash opens it on the car. */
 const LID_TEAR_T = 0.78;
+/** The angle (rad) a shown open hood stands at about its rear edge: the owner's open-hood photos, hood against belt line in their side views. */
+const HOOD_SHOW_OPEN = THREE.MathUtils.degToRad(32);
+/** The hood's rear-edge band (m, from its rearmost point): the vertices it hinges along. */
+const HOOD_EDGE_BAND = 0.01;
 /** A panel's shell stands from this hinge value. */
 const PANEL_OPEN = 0.03;
 /** At most `LIVE_SHELLS` of a car's torn shells are drawn: the oldest vanish (each is a draw). */
@@ -435,7 +443,7 @@ export abstract class CarParts extends CarGlass {
   }
 
   /**
-   * Pose a car just reset (`spawnFacing`) for display, nothing stepped: "open" swings the doors and boot to their stops and the hood as far as a crash opens it;
+   * Pose a car just reset (`spawnFacing`) for display, nothing stepped: "open" swings the doors and boot to their stops and the hood up on its rear edge as a real one opens;
    * "stripped" takes every part and pane off the drawn car (none handed to the world); "intact" leaves it as built. A reset (`resetVisual`) undoes it.
    */
   showPose(pose: CarPose): void {
@@ -450,8 +458,7 @@ export abstract class CarParts extends CarGlass {
       this.setLidOpen(this.lidHinge().spec.stop);
       for (const p of this.parts) {
         if (p.hinge !== "cowl") continue;
-        p.hingeT = LID_TEAR_T;
-        this.posePart(p);
+        this.showHoodOpen(p);
       }
       return;
     }
@@ -466,6 +473,22 @@ export abstract class CarParts extends CarGlass {
       g.state = "shattered";
       g.mesh.visible = false;
     }
+  }
+
+  /** The hood turned nose-up `HOOD_SHOW_OPEN` about its rear edge at the cowl, as a real one opens; its hinge value stays 0, so the crash's pop and the cage keep it shut. */
+  private showHoodOpen(p: DetachPart): void {
+    const pos = (p.object as THREE.Mesh).geometry.getAttribute("position") as THREE.BufferAttribute;
+    let zMin = Infinity;
+    for (let i = 0; i < pos.count; i++) zMin = Math.min(zMin, pos.getZ(i));
+    let yEdge = -Infinity;
+    for (let i = 0; i < pos.count; i++) if (pos.getZ(i) < zMin + HOOD_EDGE_BAND) yEdge = Math.max(yEdge, pos.getY(i));
+    _hoodHinge.set(0, yEdge, zMin);
+    _hoodTurn.setFromAxisAngle(_xAxis, -HOOD_SHOW_OPEN);
+    p.object.quaternion.copy(p.restQuat).multiply(_hoodTurn);
+    _hoodSwung.copy(_hoodHinge).applyQuaternion(_hoodTurn);
+    p.object.position.copy(_hoodHinge).sub(_hoodSwung).applyQuaternion(p.restQuat).add(p.restPos);
+    p.shown = true;
+    this.partWrites++;
   }
 
   private setSwingOpen(p: DetachPart, theta: number): void {

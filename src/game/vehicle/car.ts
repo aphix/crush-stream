@@ -254,6 +254,7 @@ export class DeformableCar extends CarParts {
       if (p.bare) setBare(p.bare, this.body.geometry, false);
       p.detached = false;
       p.folding = false;
+      p.shown = false;
       p.hingeT = 0;
       p.hingeMax = 1;
       p.fatigue = 0;

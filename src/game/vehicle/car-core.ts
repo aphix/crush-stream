@@ -269,6 +269,8 @@ export interface DetachPart {
   hinge: "cowl" | "tail" | "two-point" | "door" | "bar" | "quarter" | "arch";
   detached: boolean;
   folding: boolean;
+  /** Posed open for show (`showPose`), not by its hinge: the bay under a shown hood draws. */
+  shown: boolean;
   hingeT: number;
   /** The most `syncAttachedParts` may raise `hingeT` to: a panel pushed back onto the body stays dented below it. Host state, not netted. */
   hingeMax: number;
@@ -777,6 +779,7 @@ export abstract class CarCore {
         hinge,
         detached: false,
         folding: false,
+        shown: false,
         hingeT: 0,
         hingeMax: 1,
         fatigue: 0,
