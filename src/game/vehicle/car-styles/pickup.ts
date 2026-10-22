@@ -97,6 +97,7 @@ export const PICKUP: BodyStyle = {
   tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
   bayFloor: 0.34,
   wheelTub: { rise: 0.19, length: 0.55, width: 0.22 },
+  tubWall: 0.04,
   // Its cage's hood tops stand 1.04-1.23 m and its bed rim 1.18-1.20 m, its roof from 1.62 m: the cabin starts 7 cm over the highest
   // of them (as the cars' 1 m stands 9 cm over theirs), so its hood and bed are columns, not roof slabs floating over the bed floor.
   proxyBelt: 1.3,
