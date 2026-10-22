@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { hypot2, detCos, detSin } from "../kernel/physics-core.js";
+import { hypot2, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
 import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, tubWall } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
@@ -675,9 +675,32 @@ const LID_FOLD_STEPS = 3;
 const LID_FACE_STEPS = 2;
 
 /**
+ * The right side's rolled corner (`edgeRoll`) where a panel's top, coming in from `inner`, meets its upright side at (`w`, `top`): one
+ * chord from `roll` (m) back along the top down to the side at the angle that splits the corner's turn in two. Its two vertices shade
+ * round (`rollSmoothing`), so the roll costs one vertex a side. For the left side, mirror x and reverse. No roll: the sharp corner's one point.
+ */
+function rolledCorner(inner: Pt, w: number, top: number, roll: number): Pt[] {
+  if (roll <= 0) return [{ x: w, y: top }];
+  const run = hypot2(w - inner.x, top - inner.y);
+  const start = { x: w - (roll * (w - inner.x)) / run, y: top - (roll * (top - inner.y)) / run };
+  // The top falls `slope` (rad) toward the edge; the chord bisects the turn from it down to the upright side.
+  const chord = (detAtan2(inner.y - top, w - inner.x) + Math.PI / 2) / 2;
+  return [start, { x: w, y: start.y - (w - start.x) * (detSin(chord) / detCos(chord)) }];
+}
+
+/** Flags for `splitCreases` (kept as `userData.rolled`): the rolled corners' ring points `at` on every one of a loft's `slices`, so the roll shades round however sharp its turn. */
+function rollSmoothing(geo: THREE.BufferGeometry, at: readonly number[]): Uint8Array {
+  const { ring, slices } = geo.userData.loft as { ring: number; slices: number };
+  const smooth = new Uint8Array(geo.getAttribute("position").count);
+  for (let s = 0; s < slices; s++) for (const i of at) smooth[s * ring + i] = 1;
+  geo.userData.rolled = smooth;
+  return smooth;
+}
+
+/**
  * Lid lofted on the deck line (hood / trunk), local to its hinge origin. The drawn `hood` rests on the fenders (`lidSection`) and takes
  * the nose's rings (`noseRefined`); a `clamshell` lid wraps the body's shoulder to its side shut line; a `lip` kicks its top up at its end;
- * a `drop` folds it over the tail edge and down the rear face to `drop.y`, `drop.w` wide, the face at `z1`.
+ * a `drop` folds it over the tail edge and down the rear face to `drop.y`, `drop.w` wide, the face at `z1`; a `roll` rounds its side edges.
  */
 function makeDeckPanel(
   style: BodyStyle,
@@ -685,7 +708,7 @@ function makeDeckPanel(
   z1: number,
   origin: YZ,
   source: BodySource,
-  { hood = false, seated = hood, clamshell = false, lip, drop }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop } = {},
+  { hood = false, seated = hood, clamshell = false, lip, drop, roll = 0 }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop; roll?: number } = {},
 ): THREE.BufferGeometry {
   const segs = 10;
   const tk = 0.04;
@@ -693,20 +716,24 @@ function makeDeckPanel(
   const [oy, oz] = origin;
   const ring = (w: number, y: number, edge: number, crown: number, dome: Dome): Pt[] => {
     const points = dome.map(([u, v]) => ({ x: w * u, y: lerp(edge, crown, v) }));
+    if (roll > 0 && points.length > 0 && points.at(-1)!.x >= w - roll) throw new Error(`${style.id}: a lid's ${roll} m edge roll reaches past its dome's last point`);
+    const corner = rolledCorner(points.at(-1) ?? { x: 0, y: crown }, w, edge, roll);
+    // A rolled edge drops the skirt's upper point (its wall is straight between), so the roll costs the lid no vertex.
+    const skirtTop = roll > 0 ? [] : [{ x: w, y: y - skirt * 0.55 }];
     return [
-      { x: -w, y: edge },
+      ...corner.map((p) => ({ x: -p.x, y: p.y })).reverse(),
       ...points.map((p) => ({ x: -p.x, y: p.y })).reverse(),
       { x: 0, y: crown },
       ...points,
-      { x: w, y: edge },
-      { x: w, y: y - skirt * 0.55 },
+      ...corner,
+      ...skirtTop,
       { x: w, y: y - skirt },
       { x: w - tk, y: y - skirt },
       { x: w - tk, y: y - tk },
       { x: -w + tk, y: y - tk },
       { x: -w + tk, y: y - skirt },
       { x: -w, y: y - skirt },
-      { x: -w, y: y - skirt * 0.55 },
+      ...skirtTop.map((p) => ({ x: -p.x, y: p.y })),
     ];
   };
   const fold = drop ? LID_FOLD_R : 0;
@@ -742,7 +769,9 @@ function makeDeckPanel(
     bendOverTail(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, drop.w / wEnd, lean);
   }
   ensureOutwardNormals(geo);
-  if (source === "drawn") splitCreases(geo, CREASE_DEGREES.deckLid);
+  // A rolled ring's corners are its first two points and the two before its skirt and underside's last six.
+  const n = rings[0]!.length;
+  if (source === "drawn") splitCreases(geo, CREASE_DEGREES.deckLid, roll > 0 ? rollSmoothing(geo, [0, 1, n - 8, n - 7]) : undefined);
   geo.computeBoundingBox();
   return geo;
 }
@@ -837,8 +866,8 @@ function gateLoft(rings: Pt[][], ys: number[], b: Tailgate): THREE.BufferGeometr
   return geo;
 }
 
-/** Hatch / tailgate: a slightly bowed panel leaning from its bottom edge [y0, z0] up to its hinge at its top edge, its edge on `tailgateHalf`; a `lip` kicks its top edge out. */
-function makeTailgate(style: BodyStyle, b: Tailgate, source: BodySource, lip?: BootLip): THREE.BufferGeometry {
+/** Hatch / tailgate: a slightly bowed panel leaning from its bottom edge [y0, z0] up to its hinge at its top edge, its edge on `tailgateHalf`; a `lip` kicks its top edge out; a `roll` rounds its side edges. */
+function makeTailgate(style: BodyStyle, b: Tailgate, source: BodySource, lip?: BootLip, roll = 0): THREE.BufferGeometry {
   const { y0 } = b;
   const [y1] = b.origin;
   const bow = 0.02;
@@ -856,19 +885,22 @@ function makeTailgate(style: BodyStyle, b: Tailgate, source: BodySource, lip?: B
     const y = lerp(y0, y1, t);
     const out = lipKick(y1 - y, lip);
     const w = tailgateHalf(style, y);
+    if (roll > 0 && mid >= w - roll) throw new Error(`${style.id}: a tailgate's ${roll} m edge roll reaches past its inner lines`);
+    const corner = rolledCorner({ x: mid, y: bowAt(mid) + out }, w, bowAt(w) + out, roll);
     rings.push([
-      { x: -w, y: bowAt(w) + out },
+      ...corner.map((p) => ({ x: -p.x, y: p.y })).reverse(),
       { x: -mid, y: bowAt(mid) + out },
       { x: 0, y: bow + out },
       { x: mid, y: bowAt(mid) + out },
-      { x: w, y: bowAt(w) + out },
+      ...corner,
       { x: w, y: -TAILGATE_TK },
       { x: -w, y: -TAILGATE_TK },
     ]);
     ys.push(y);
   }
   const geo = gateLoft(rings, ys, b);
-  if (source === "drawn") splitCreases(geo, CREASE_DEGREES.tailgate);
+  // A rolled ring's corners are its first two points and the two before its back edge's last two.
+  if (source === "drawn") splitCreases(geo, CREASE_DEGREES.tailgate, roll > 0 ? rollSmoothing(geo, [0, 1, 5, 6]) : undefined);
   geo.computeBoundingBox();
   return geo;
 }
@@ -924,11 +956,16 @@ export function makeHoodGeometry(style: BodyStyle = SEDAN, source: BodySource = 
   return markSkinDynamic(geo);
 }
 
-/** Trunk lid, hatch or tailgate per style, the drawn build with its `lip`; local to the boot's pivot (`bootPivot`, [y, z]). */
+/** Trunk lid, hatch or tailgate per style, the drawn build with its `lip` and `edgeRoll`; local to the boot's pivot (`bootPivot`, [y, z]). */
 export function makeTrunkGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const b = style.boot;
-  const lip = source === "drawn" ? b.lip : undefined;
-  const g = b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, { lip, drop: b.drop, seated: source === "drawn" && b.flush === true }) : makeTailgate(style, b, source, lip);
+  const drawn = source === "drawn";
+  const lip = drawn ? b.lip : undefined;
+  const roll = drawn ? (b.edgeRoll ?? 0) : 0;
+  const g =
+    b.kind === "lid"
+      ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, { lip, drop: b.drop, seated: drawn && b.flush === true, roll })
+      : makeTailgate(style, b, source, lip, roll);
   const [py, pz] = bootPivot(b);
   if (py !== b.origin[0] || pz !== b.origin[1]) g.translate(0, b.origin[0] - py, b.origin[1] - pz);
   return markSkinDynamic(g);

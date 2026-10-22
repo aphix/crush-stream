@@ -1265,6 +1265,44 @@ describe("given a body style's P1 parts", () => {
     assert.ok(cageHash(flushStyle) === cageHash(plainStyle), "the cage builds are unchanged");
   });
 
+  /** A rolled lid edge's sharpest turn (°): its one chord splits the corner's ~90° turn in two; a sharp corner turns ~90°. */
+  const ROLLED_TURN_MAX = 50;
+  for (const id of CAR_STYLE_IDS) {
+    const style = CAR_STYLES[id];
+    if (style.boot.edgeRoll === undefined) continue;
+    it(`when the ${id}'s ${style.boot.kind === "lid" ? "boot lid" : "tailgate"} is drawn with its edgeRoll, then its side edges turn under ${ROLLED_TURN_MAX}° (the field-less build turns ~90°), and the cage builds are unchanged`, () => {
+      const plain: BodyStyle = { ...style, boot: { ...style.boot, edgeRoll: undefined } };
+      /** The sharpest turn (°) along a ring at mid panel over its right-hand top and upper side (the upper share of its height). */
+      const edgeTurn = (s: BodyStyle) => {
+        const geo = makeTrunkGeometry(s);
+        const { ring, slices } = geo.userData.loft as { ring: number; slices: number };
+        const pos = geo.getAttribute("position");
+        const at = Math.floor(slices / 2) * ring;
+        const p = Array.from({ length: ring }, (_, i) => [pos.getX(at + i), pos.getY(at + i), pos.getZ(at + i)] as const);
+        // The ring's plane holds two of x/y/z; across it, x and the panel's other varying axis (y for a lid, z for an upright gate).
+        const spanY = Math.max(...p.map((q) => q[1])) - Math.min(...p.map((q) => q[1]));
+        const spanZ = Math.max(...p.map((q) => q[2])) - Math.min(...p.map((q) => q[2]));
+        const up = spanY >= spanZ ? 1 : 2;
+        const sign = up === 1 ? 1 : -1;
+        const h = p.map((q) => sign * q[up]);
+        const [hi, lo] = [Math.max(...h), Math.min(...h)];
+        let worst = 0;
+        for (let i = 0; i < ring; i++) {
+          if (p[i]![0] <= 0 || h[i]! < hi - 0.6 * (hi - lo)) continue;
+          const [a, b] = [p[(i + ring - 1) % ring]!, p[(i + 1) % ring]!];
+          const [ux, uh, vx, vh] = [p[i]![0] - a[0], h[i]! - sign * a[up], b[0] - p[i]![0], sign * b[up] - h[i]!];
+          const turn = THREE.MathUtils.radToDeg(Math.abs(Math.atan2(ux * vh - uh * vx, ux * vx + uh * vh)));
+          worst = Math.max(worst, turn);
+        }
+        return worst;
+      };
+      const [rolled, sharp] = [edgeTurn(style), edgeTurn(plain)];
+      assert.ok(sharp > 80, `the control: the field-less ${id} lid's edge turns ${sharp.toFixed(1)}°`);
+      assert.ok(rolled < ROLLED_TURN_MAX, `the ${id} lid's rolled edge turns ${rolled.toFixed(1)}° at its sharpest`);
+      assert.ok(cageHash(style) === cageHash(plain), "the cage builds are unchanged");
+    });
+  }
+
   it("when a roof carries rails, then two dark rails stand on it between their |x| and z ends, their tops their rise over the roof at their inner edge, and the cage builds are unchanged", () => {
     const rails = { x: [0.45, 0.5], z: [-0.6, 0.4], rise: 0.04 } as const;
     const { style, body, from, all, dark } = roofParts({ rails });
