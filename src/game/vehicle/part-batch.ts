@@ -148,6 +148,9 @@ function partDraw(geo: THREE.BufferGeometry, capacity: number): THREE.InstancedM
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   // Instances span the pad and move every frame; a stale bound would cull live parts.
   mesh.frustumCulled = false;
+  // At the scene root with an identity transform: three need not compose its matrices every frame.
+  mesh.matrixAutoUpdate = false;
+  mesh.matrixWorldAutoUpdate = false;
   mesh.count = 0;
   mesh.visible = false;
   mesh.castShadow = false;

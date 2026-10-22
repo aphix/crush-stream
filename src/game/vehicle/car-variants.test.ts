@@ -874,7 +874,7 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
-  /** The pickup windshield's top-corner turn (°) from its flat pane: at 3.1° the corner mirrored the garage's key light into a bloom blob in the landing iso; at its quarter dome (0.76°) it does not. */
+  /** The pickup windshield's top-corner turn (°) from its flat pane: at 3.1° the corner mirrored the garage's key light into a bloom blob in the landing iso; at 0.76° (a quarter of the dome) it did not. */
   const PICKUP_CORNER_TURN_DEG = 1;
 
   it("when any style's raked panes are built, then each top edge follows its style's share of the roof's dome across the car (`domeFall`; every top-edge vertex stands as far over the roof at its x as the edge's middle does, less the dome it does not take; no vertex of the pane, frit or round corner further), while the corners the thrown dummies fit their slab to stay on the pane's plane through its middle", () => {

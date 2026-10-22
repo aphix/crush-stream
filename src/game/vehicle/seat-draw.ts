@@ -52,7 +52,9 @@ export class SeatDraw {
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), seatMaterial(material, this.texture, look));
     // Seats span the pad and move every frame; a stale bound would cull live ones.
     this.mesh.frustumCulled = false;
+    // At the scene root with an identity transform: three need not compose its matrices every frame.
     this.mesh.matrixAutoUpdate = false;
+    this.mesh.matrixWorldAutoUpdate = false;
     this.mesh.visible = false;
     // The real attribute set from the start, so the boot warm links the program the race draws with.
     this.grow(1, 3);
