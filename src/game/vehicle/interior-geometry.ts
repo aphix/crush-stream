@@ -237,6 +237,18 @@ function rod(a: readonly number[], b: readonly number[], r: number, tone: Tone):
   return geo.translate((a[0]! + b[0]!) / 2, (a[1]! + b[1]!) / 2, (a[2]! + b[2]!) / 2);
 }
 
+/** Turns a coil-over's spring shows (the coils' tone bands, the gaps' dark and set in), at its 0.36 m length. */
+const SPRING_TURNS = 4;
+
+/** A coil spring centred at (x, y, z) as open rings, coil and gap in turn: reads as wound wire without the wire's triangles. */
+function coil(x: number, y: number, z: number): THREE.BufferGeometry[] {
+  const bands = 2 * SPRING_TURNS - 1;
+  const h = 0.36 / bands;
+  return Array.from({ length: bands }, (_, i) =>
+    toned(new THREE.CylinderGeometry(i % 2 ? 0.075 : 0.085, i % 2 ? 0.075 : 0.085, h, 10, 1, true), ...(i % 2 ? BLACK : ALU)).translate(x, y - 0.18 + (i + 0.5) * h, z),
+  );
+}
+
 /**
  * The lifted truck's ladder frame in its body's space (the class lift's, the floor 0.34 up): rails and crossmembers up against the
  * floor, the transfer case, the steering box, the links' mounts, and each corner's coil-overs standing up into the wheel well from
@@ -256,7 +268,7 @@ export function ladderFrameGeometry(): THREE.BufferGeometry {
       parts.push(box(0.06, 0.22, 0.08, BLACK, sign * 0.35, 0.17, axle + mid * 0.75));
       for (const dz of [-0.12, 0.12]) {
         parts.push(toned(new THREE.CylinderGeometry(0.065, 0.065, 0.77, 10), ...STEEL).translate(sign * x, 0.335, axle + dz));
-        parts.push(toned(new THREE.CylinderGeometry(0.085, 0.085, 0.36, 10), ...ALU).translate(sign * x, 0.42, axle + dz));
+        parts.push(...coil(sign * x, 0.42, axle + dz));
       }
     }
   }
