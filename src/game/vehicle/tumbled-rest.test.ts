@@ -120,6 +120,9 @@ const cm = (m: number): string => `${(m * 100).toFixed(1)} cm`;
 
 describe("given a car dropped onto its roof on the flat pad, from 0.5 and from 2 m, and left to rest", () => {
   for (const { style, cls } of FLEET) {
+    // On union 9d49c86f the sedan rests on its roof (0.5 and 2 m alike) pitched 8.7° with its drawn A-pillar foot, car (-0.66, 0.98, 0.75),
+    // 4.0 cm in the ground: on the 4 cm bar (`BODY_SINK_M`). Its cage keeps the cowl's sides there, (±0.670, 0.960, 0.900) and (±0.715,
+    // 0.871, 0.990); a cage without them read 7.3 cm (CarRig rig-lip, before its held underside left the budget).
     it(`when it is a ${cls}, then the drawn body and roof crown stay out of the ground, and its mirrors and lamps with them`, () => {
       for (const height of [0.5, 2]) {
         const { car, lowest } = dropped(style, cls, "roof", height);
