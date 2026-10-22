@@ -123,7 +123,7 @@ export const HATCHBACK: BodyStyle = {
   },
   lamps: { head: [0.545, 0.55], tail: [0.603, 0.718], shapes: HATCHBACK_LAMP_SHAPES },
   grille: { y: 0.53, size: [0.66, 0.1], kind: "bars", count: 4, badge: 0.025, finish: "black" },
-  seats: { front: [-0.35, 0.4, -0.1], rear: [0.41, -0.85] },
+  seats: { front: [0.35, 0.41, -0.1], rear: [0.41, -0.7] },
   pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] } },
   blackout: { b: true, divider: true },
   roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.5 } },

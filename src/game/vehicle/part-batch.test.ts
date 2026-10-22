@@ -9,6 +9,7 @@ import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
 import { drawnDoorCard } from "./car-door-mesh.ts";
+import { cageInterior } from "./interior-geometry.ts";
 import { PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry } from "./part-geometry.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
 
@@ -137,6 +138,24 @@ describe("given the part batch and a car whose style has its own mirror", () => 
       .filter((i) => tagged.getX(i) === seat.variant)
       .flatMap((i) => [at[i * 3]!, at[i * 3 + 1]!, at[i * 3 + 2]!]);
     assertSameNumbers(batched, Array.from(positions(seat.drawn)), "its variant's vertices are its drawn mirror's");
+  });
+
+  test("when the cage interior is built, then its steering wheel is on the car's left (+x), the driver's side", () => {
+    const attr = cageInterior().getAttribute("position");
+    let count = 0;
+    let sumX = 0;
+    // Only the wheel torus lies here: the dash is at |x| 0.41, the seats and their backs are lower or further back.
+    for (let i = 0; i < attr.count; i++) {
+      const x = attr.getX(i);
+      const y = attr.getY(i);
+      const z = attr.getZ(i);
+      if (Math.abs(x) < 0.38 && y > 0.55 && y < 0.8 && z > 0.2 && z < 0.5) {
+        count++;
+        sumX += x;
+      }
+    }
+    assert.ok(count > 0, "the wheel's vertices were found");
+    assert.ok(sumX / count > 0.15, `the wheel's mean car-local x is ${(sumX / count).toFixed(2)}`);
   });
 });
 

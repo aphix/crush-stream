@@ -24,6 +24,8 @@ export interface PanelRegion {
   side: -1 | 1;
   /** Body vertex of each shell vertex. */
   verts: Uint16Array;
+  /** Each shell vertex's rest primer (`PRIMER_ATTRIBUTE`): what `setPrimer` puts back (an arch lip's return is unpainted). */
+  rest: Float32Array;
   /** Peel weight per vertex: 0 at the hinge, 1 at the free end. */
   w: Float32Array;
   /** The panel's rest centroid in car space: its part's origin. */
@@ -74,6 +76,7 @@ export function panelRegions(style: BodyStyle, body: THREE.BufferGeometry): read
 function cut(style: BodyStyle, body: THREE.BufferGeometry): PanelRegion[] {
   const { ring: n, slices } = body.userData.loft as { ring: number; slices: number };
   const pos = (body.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
+  const primer = body.getAttribute(PRIMER_ATTRIBUTE)?.array as Float32Array | undefined;
   // The quarter runs from behind the rear door's shut line (on a two-door, behind the door) to the tail corner.
   const zFront = style.rearDoorSeam ?? style.door.hingeZ - style.door.length;
   const zTail = style.profile[0]!.z + 0.15;
@@ -114,10 +117,10 @@ function cut(style: BodyStyle, body: THREE.BufferGeometry): PanelRegion[] {
       for (const end = at + lips.perWheel[k]!; at < end; at++) tris[PANEL_NAMES[2 + k]!].push(index[at]!);
     }
   }
-  return PANEL_NAMES.map((name) => region(name, tris[name], pos, wheels));
+  return PANEL_NAMES.map((name) => region(name, tris[name], pos, primer, wheels));
 }
 
-function region(name: PanelName, ids: number[], pos: Float32Array, wheels: readonly V3[]): PanelRegion {
+function region(name: PanelName, ids: number[], pos: Float32Array, primer: Float32Array | undefined, wheels: readonly V3[]): PanelRegion {
   const local = new Map<number, number>();
   const verts: number[] = [];
   const tris: number[] = [];
@@ -183,6 +186,7 @@ function region(name: PanelName, ids: number[], pos: Float32Array, wheels: reado
     kind,
     side,
     verts: Uint16Array.from(verts),
+    rest: Float32Array.from(verts, (g) => primer?.[g] ?? 0),
     w,
     origin,
     pivot: kind === "quarter" ? [pn ? px / pn : side * 0.8, zMin] : [pn ? px / pn : side * 0.88, pn ? py / pn : yMax],
@@ -316,9 +320,9 @@ export function flutterShell(r: PanelRegion, object: THREE.Object3D, a: number):
   }
 }
 
-/** The under-panel: the panel's vertices on the body painted to primer (or back to paint), by the paint's `primer` attribute. */
+/** The under-panel: the panel's vertices on the body painted to primer (or back to their rest tone), by the paint's `primer` attribute. */
 export function setPrimer(r: PanelRegion, body: THREE.BufferGeometry, on: boolean): void {
   const attr = body.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
-  for (const v of r.verts) attr.setX(v, on ? 1 : 0);
+  for (let k = 0; k < r.verts.length; k++) attr.setX(r.verts[k]!, on ? 1 : r.rest[k]!);
   attr.needsUpdate = true;
 }

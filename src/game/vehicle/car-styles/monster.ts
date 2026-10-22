@@ -145,4 +145,5 @@ export const MONSTER: BodyStyle = {
       { view: "rear", points: [[0, 0.47], [0.32, 0.47], [0.32, 0.52], [0, 0.52]], depth: 0.002, rim: 0.003, cavity: 0.4 },
     ],
   },
+  seats: { front: [0.36, 0.64, 0], rear: [0.66, -0.52] },
 };

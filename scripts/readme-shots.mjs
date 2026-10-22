@@ -364,8 +364,8 @@ const SCENES = {
   },
 };
 
-/** Every car body the garage offers (`DRIVER_CARS`: the five classes, then the two styles that drive as the sedan). */
-const CAR_SHOT_IDS = ["sedan", "hatchback", "wagon", "muscle", "truck", "monster", "police"];
+/** Every car body the garage offers, by its `car=` menu id (`DRIVER_CARS`: each class on its own body; a style id boots the default sedan). */
+const CAR_SHOT_IDS = ["sedan", "hatch", "suv", "muscle", "truck", "monster", "police"];
 
 /** The survey shots of the car-surface work (docs/CINEMATIC.md "Car finish"): each car in the garage, two distances in a race, a crushed car. */
 for (const id of CAR_SHOT_IDS) {

@@ -174,4 +174,5 @@ export const COUPE: BodyStyle = {
       { view: "front", points: [[0, 0.32], [0.7, 0.32], [0.7, 0.38], [0, 0.38]], depth: 0.003, rim: 0.003, cavity: 0.2 },
     ],
   },
+  seats: { front: [0.36, 0.44, -0.15], rear: [0.46, -0.6] },
 };
