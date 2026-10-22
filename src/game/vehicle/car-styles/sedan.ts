@@ -4,14 +4,15 @@ import { SEDAN_DETAILS } from "./sedan-details.ts";
 
 /**
  * The reference's mirror: a rounded body-colour housing seated on the door. Off the gridded side and top: the cap stands y 0.85-0.975 (h 0.12),
- * runs about 0.10 along the car, and reaches |x| 0.88 from the skin at 0.75. At the sim's reach (0.105, tip |x| 0.857) a 0.10 cap's inner
- * face sits 5 mm off the skin over the foot; the platform-proposed 0.17 would bury 6.5 cm of cap through the door glass.
+ * runs about 0.10 along the car, and reaches |x| 0.88 from the skin at 0.752: the door's mirrorReach 0.128. Its 0.12 width leaves the cap's
+ * inner face 8 mm off the seat, over the foot (a cap wider than reach - 0.005 buries itself in the door).
  */
-export const SEDAN_MIRROR = { cap: "rounded", finish: "body", size: [0.1, 0.12, 0.1] } as const;
+export const SEDAN_MIRROR = { cap: "rounded", finish: "body", size: [0.12, 0.12, 0.1] } as const;
 
 export const SEDAN: BodyStyle = {
   id: "sedan",
   dims: { wheelbase: 2.5, overhang: { front: 0.804, rear: 0.925 }, track: 1.36, width: 1.64, height: 1.337, rideHeight: 0.165, wheel: { radius: 0.342, width: PLATFORM_WHEEL.width } },
+  /** wTop stays 1.16: the top view's 1.06 header narrowed the roof cage the house-of-cards stack rests on (its roofs gave 94 mm, bar 15). */
   windshield: { base: [0.95, 0.93], wBase: 1.4, wTop: 1.16 },
   bPillar: { rear: -0.31, front: -0.21 },
   /**
@@ -25,13 +26,17 @@ export const SEDAN: BodyStyle = {
   },
   rocker: { y: 0.21 },
   arch: { radius: 0.405, lip: { flare: 0.008, width: 0.035 } },
-  hood: { z0: 0.88, z1: 1.97, origin: [0.81, 0.86] },
+  /**
+   * The hood's rear edge stands ahead of the windshield's foot (0.95), as the reference's: in its top view the bonnet ends ~1.0 on
+   * the centre line, the dark cowl and wipers (`blackout.cowl`) between it and the glass. Hinged 2 cm behind that edge, as before.
+   */
+  hood: { z0: 0.99, z1: 1.97, origin: [0.81, 0.97] },
   /** Body-colour fascias, as the reference's: its black is the lower intake, grille and diffuser (`details`, grille, tail trim), not the bumper. */
   bumpers: {
     front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.34, z: 1.965 }, span: 0.74, wrap: { from: 0.33, back: 0.242 }, trim: "body" },
     rear: { ...PLATFORM_HARDPOINTS.bumpers.rear, seat: { y: 0.52, z: 2.088 }, span: 0.76, wrap: { from: 0.3, back: 0.25 }, trim: "body" },
   },
-  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
+  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.128, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
   aPillarFoot: 0.66,
   aPillarTop: 0.08,
   /** The door glass's front edge rises from the foot to the A-post at y 1.0 (the mirror cap's top), as the reference's: only the foot's small triangle below is the black sail. */
@@ -91,12 +96,17 @@ export const SEDAN: BodyStyle = {
    * rear pillar are body colour.
    */
   pillars: { b: { width: [0.165, 0.105], z: [-0.2925, -0.3225] } },
-  blackout: { sail: true, b: true },
+  blackout: { sail: true, b: true, cowl: true },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,
-  /** The reference's ducktail: the deck dips into a shallow groove at z -2.03 and kicks up into the lip at its rear edge (gridded side: crest y 0.955 over z -2.0..-2.09, ~1.2 cm proud of the deck line). */
-  boot: { kind: "lid", z0: -1.65, z1: -2.06, origin: [0.97, -1.62], lip: { rise: 0.012, depth: 0.06 } },
+  /**
+   * The owner's sedan lid: hinged at the rear glass's base, it wraps the tail (deck plus the upper rear face). The reference's lid seam
+   * (rear iso) runs down the tail face through each tail lamp's inner third (|x| ~0.53 at the lamps) to the plate recess's bottom
+   * (y ~0.62), its bottom corners at |x| ~0.45; the face stands on the tail at -2.10. The ducktail: the deck dips into a shallow groove
+   * and kicks up into the lip at its rear edge (gridded side: crest y 0.955 over z -2.0..-2.09, ~1.2 cm proud of the deck line).
+   */
+  boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45 }, lip: { rise: 0.012, depth: 0.06 } },
   lamps: { head: [0.26, 0.575], tail: [0.34, 0.8] },
   /**
    * The reference's twin wide oval tips in the diffuser (gridded rear iso and side: |x| 0.47-0.64, y 0.27-0.33, ~3 cm proud). Ours sit

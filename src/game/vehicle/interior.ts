@@ -3,12 +3,12 @@ import type { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { MassName } from "../kernel/rig-spec.ts";
 import type { DetachPart } from "./car-core.ts";
-import { beltX } from "./car-lines.ts";
-import { roofAt, sampleSlice } from "./car-mesh.ts";
+import { beltX, floorY } from "./car-lines.ts";
+import { bayTub, roofAt, sampleSlice } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import type { BodyStyle } from "./car-variants.ts";
-import { BUMPER_F, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
-import { AXLE_HALF_SPAN, bayTub, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
+import { BUMPER_F, DRIVER_SIDE, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { AXLE_HALF_SPAN, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 
 /** Gap (m) between a seated head's top and the roof line over it (the roof skin, the headliner its inner face). */
@@ -57,7 +57,8 @@ function reclineUnder(style: BodyStyle, hip: THREE.Vector3): number {
 export function driverSeat(style: BodyStyle): DriverPlace {
   const known = driverSeats.get(style);
   if (known) return known;
-  const hip = new THREE.Vector3(...style.seats.front);
+  const [across, up, along] = style.seats.front;
+  const hip = new THREE.Vector3(DRIVER_SIDE * across, up, along);
   const recline = reclineUnder(style, hip);
   // The wheel follows his shoulders as a lower roof leans him back.
   const wheel = new THREE.Vector3(...WHEEL_AT)
@@ -85,6 +86,36 @@ function fitBox(seat: PartSeat, ref: { halfX: number; y0: number; y1: number; z0
   const sz = (z1 - z0) / (ref.z1 - ref.z0);
   seat.scale.set(halfX / ref.halfX, sy, sz);
   seat.position.set(0, y0 - ref.y0 * sy, z0 - ref.z0 * sz);
+}
+
+/** Half the cab's back wall (m): its drawn box is 4.5 cm deep about `rearBulkhead.z`. */
+const WALL_HALF = 0.0225;
+/** Air (m) between the bench and the wall's face or the roof line, so they never z-fight. */
+const BENCH_GAP = 0.01;
+/** The step (m) the roof line is read back from the bench's H-point at: as fine as the gap. */
+const BENCH_STEP = 0.01;
+
+/**
+ * The depth (z) scale, at most 1, that keeps the bench seated at `back` ([y, z]) in the cab: ahead of the back wall under its top,
+ * and under the roof line over it (a pickup cab's ends at its back glass, the bed's wall top behind it). A 2+2's or a crew cab's shallow bench.
+ */
+function benchDepth(bench: THREE.BufferGeometry, [y, z]: readonly [number, number], style: BodyStyle): number {
+  const wall = style.rearBulkhead;
+  const pos = bench.getAttribute("position");
+  let depth = 1;
+  for (let i = 0; i < pos.count; i++) {
+    const behind = -pos.getZ(i);
+    if (behind <= 0) continue;
+    const at = y + pos.getY(i);
+    let room = at < wall.yTop ? z - wall.z - WALL_HALF - BENCH_GAP : behind;
+    for (let r = 0; r < room; r += BENCH_STEP) {
+      if (roofAt(z - r, style).y >= at + BENCH_GAP) continue;
+      room = Math.max(0, r - BENCH_STEP);
+      break;
+    }
+    depth = Math.min(depth, room / behind);
+  }
+  return depth;
 }
 
 const _bay = new THREE.Vector3();
@@ -135,12 +166,15 @@ export class CarCabin {
     const back = style.seats.rear;
     if (back) {
       place(rear!, 0, back[0], back[1], 0, halfX / REF_CABIN.halfX);
+      rear!.scale.z = benchDepth(rear!.geometry, back, style);
       this.pose.add(rear!);
     }
 
-    const [zRear, zFront, bayFloor] = bayTub(style);
+    const [zRear, zFront, troughFloor] = bayTub(style);
     let bayHalf = Infinity;
     for (let z = zRear; z <= zFront; z += 0.1) bayHalf = Math.min(bayHalf, sampleSlice(z, style.profile).hw - BAY_INSET);
+    // On the floor pan where it rides over the trough's floor, as the drawn trough is (`tubAt`); over a bay the pan only rises toward the nose.
+    const bayFloor = Math.max(troughFloor, floorY(zRear, style), floorY(zFront, style));
     const bayTop = sampleSlice((zRear + zFront) * 0.5, style.profile).yBelt - HOOD_UNDER;
     fitBox(bay!, { halfX: REF_BAY.halfX, y0: REF_BAY.floor, y1: REF_BAY.top, z0: REF_BAY.rear, z1: REF_BAY.front }, bayHalf, bayFloor, bayTop, zRear, zFront);
     this.bayZ = [zRear, zFront];

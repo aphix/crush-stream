@@ -213,7 +213,9 @@ export class CrashEngine extends EngineGarage {
 
     this.glassDots = new GlassDotSystem(this.scene);
     this.ensureCars(INITIAL_HUD.carCount);
-    this.scene.add(this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, ...this.partBatch.casters, this.partBatch.looseWarm, this.seated.mesh, ...this.coverBatch.meshes);
+    this.scene.add(this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.seated.mesh, this.coverBatch.group);
+    // Under the wheel shadow prisms, shown to the shadow pass alone: the casters cost no camera-pass draw.
+    this.wheels.meshes.at(-1)!.add(...this.partBatch.casters);
     const driverLook = (car: number, cop: boolean) => this.ragdolls.carDriverLook(car, cop);
     // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels, lamps, parts and seated drivers.
     this.scene.onBeforeRender = (renderer) => {
@@ -234,7 +236,7 @@ export class CrashEngine extends EngineGarage {
     this.ragdolls.poles = this.poles;
     this.ragdolls.lookOf = (car) => this.looks.of(car, this.ownCar());
     this.lab.dolls = this.ragdolls;
-    this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion);
+    this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
     const fxParam = FX_TIERS.find((t) => t === new URLSearchParams(window.location.search).get(SETTING_KEY.fx));
     this.cine.marks.phone = !desktop;
@@ -275,6 +277,8 @@ export class CrashEngine extends EngineGarage {
     window.addEventListener("keydown", this.onKey);
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("blur", this.onBlur);
+    // three calls preventDefault on webglcontextlost (so the browser may restore) and rebuilds its own state on restore; the rest is ours.
+    canvas.addEventListener("webglcontextrestored", this.onContextRestored);
     this.pad.attach(() => this.emitHud());
     this.view.attach();
     try {
@@ -293,9 +297,9 @@ export class CrashEngine extends EngineGarage {
       .then(() => {
         this.warming = false;
         if (fxParam === "ultra") this.setFxTier("ultra");
-        // Only a throw needs Rapier, so boot never waits for it: it loads in the background from here, and a car
-        // disabled before it is in simply throws nobody (`EjectionWatch` only judges edges it saw).
-        this.ragdolls.preload().catch((err: unknown) => console.error("Crush Stream ragdoll load failed", err));
+        // Only a throw needs Rapier, so boot never waits for it: it loads in the background from here, and a car disabled before
+        // it is in simply throws nobody (`EjectionWatch` only judges edges it saw). Its purse pool joins the scene then: warm it.
+        this.ragdolls.preload().then(() => this.queueWarm(), (err: unknown) => console.error("Crush Stream ragdoll load failed", err));
       });
   }
 
@@ -454,6 +458,7 @@ export class CrashEngine extends EngineGarage {
     const g = window as unknown as { __crush?: CrashEngine };
     if (g.__crush === this) delete g.__crush;
     const gl = this.renderer.getContext();
+    this.renderer.domElement.removeEventListener("webglcontextrestored", this.onContextRestored);
     this.renderer.dispose();
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
@@ -472,6 +477,26 @@ export class CrashEngine extends EngineGarage {
     this.detail.setLevel(this.detailGov.level);
     this.pace.reset();
   }
+
+  /**
+   * The browser gave the context back: the timer's queries, the PMREM environments (the studio's; Ultra's sky with its handle) and every
+   * program's link went with the old one, and the load windows counted frames that drew nothing.
+   */
+  private readonly onContextRestored = (): void => {
+    this.cine.contextRestored();
+    this.autoFx.restart();
+    this.detailGov.restart();
+    const ultra = this.cine.tier === "ultra";
+    if (this.cine.ultra) {
+      if (ultra) this.cine.setTier("high");
+      this.cine.ultra.dispose();
+      this.cine.ultra = null;
+    }
+    void this.attachStudioEnv().then(() => {
+      if (ultra) this.setFxTier("ultra");
+    });
+    this.queueWarm();
+  };
 
   private tick = (now: number): void => {
     if (this.disposed) return;

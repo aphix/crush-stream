@@ -522,8 +522,9 @@ type Dressable = {
 /**
  * Give `car` a class: stats for `applyDrive`, plus the monster / truck stance.
  * Body parts ride a lift group and the wheels a hub group inside the car's
- * group, so the physics frame (masses, hulls, contacts) stays stock. Run it
- * again after every respawn: a re-attached part lands back on the plain group.
+ * group, so the physics frame (masses, hulls, contacts) stays stock. A respawn
+ * or a host's state puts torn parts and wheels back under these groups
+ * (`DeformableCar.resetVisual`, `writeNetState`).
  */
 export function assignClass(car: Dressable, id: VehicleClassId): void {
   assigned.set(car, id);

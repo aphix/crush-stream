@@ -536,11 +536,14 @@ export class Cinematics {
   private punch = 0;
   /** The crash cam (the camera half of the crash): `impact` starts it, `direct` runs it. */
   readonly crash: CrashCam;
-  private readonly gpu: GpuTimer | null;
+  private gpu: GpuTimer | null;
+  /** The engine's draw warm-up (`EngineWarm.queueWarm`): links and draws what the scene draws next, outside a frame. */
+  private readonly queueWarm: () => void;
 
-  constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, view: ChaseCamera, fx: FxRefs, maxCars: number, reduceMotion: boolean) {
+  constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, view: ChaseCamera, fx: FxRefs, maxCars: number, reduceMotion: boolean, queueWarm: () => void) {
     this.renderer = renderer;
     this.scene = scene;
+    this.queueWarm = queueWarm;
     this.gpu = GpuTimer.create(renderer.getContext() as WebGL2RenderingContext);
     this.view = view;
     this.fx = fx;
@@ -581,13 +584,10 @@ export class Cinematics {
 
   /**
    * Every car in the scene wears the paint finish on the tiers that draw it (`finishForTier`); a new or re-dressed car gets the tier's
-   * state from `dressCar`. A switch once programs exist links the changed programs now, async on the post chain's own target (a tier
-   * switch is a menu moment; first use in a frame cost a 50-800 ms stall); before the first link the boot warm-up does it, and Ultra's
-   * switch is also covered by the full warm its `enable` queues.
+   * state from `dressCar`. A change queues the draw warm-up, which links and draws both states, so the next frame links nothing.
    */
   private dressCarFinish(tier: FxTier): void {
-    if (!applyCarFinish(this.scene, finishForTier(tier)) || (this.renderer.info.programs?.length ?? 0) === 0) return;
-    this.post.warm(this.scene, this.view.camera, []).catch((err: unknown) => console.error("Crush Stream car finish warm-up failed", err));
+    if (applyCarFinish(this.scene, finishForTier(tier))) this.queueWarm();
   }
 
   /** Sim time multiplier for this frame: eased below 1 during a hit-stop (`WARP_IN`/`WARP_OUT`). */
@@ -691,6 +691,11 @@ export class Cinematics {
   /** GPU ms of the newest finished draw since the last call; -1 when none finished or the browser has no timer. */
   gpuMs(): number {
     return this.gpu ? this.gpu.take() : -1;
+  }
+
+  /** The context came back (`webglcontextrestored`): the timer's queries died with the old one. */
+  contextRestored(): void {
+    this.gpu = GpuTimer.create(this.renderer.getContext() as WebGL2RenderingContext);
   }
 
   dispose(): void {

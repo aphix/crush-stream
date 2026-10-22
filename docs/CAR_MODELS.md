@@ -58,7 +58,7 @@ The hardpoints place the openings and the lower body, each per car:
 | `underside` | Optional floor pan height as `[z, y]` stations (linear between, held past the ends): the underside's rise to the nose and tail. Absent, the floor is flat at `dims.rideHeight` |
 | `door` | Front doors: hinge axis `hingeX`, `hingeY`, `hingeZ` at the A-pillar, `length` hinge to trailing edge, skin ±`halfHeight` about the hinge, and `aperture` `[z0, z1]`, the body's door cut (the skin covers it, 2 cm past each end). The door glass rides the door; its rear edge stands 1 cm under the drawn B-pillar's front edge at the belt and the top (`pillars.b`, else the `bPillar` band), whatever the door's length, so put the trailing edge at the B-pillar. The mirror seats itself on the door skin at `mirrorY` over the hinge and `mirrorZ` behind it (default 0), drawn to reach `mirrorReach` out, ±`mirrorHalfDepth` deep |
 | `arch` | Wheel-arch opening radius about each hub |
-| `hood` | Bonnet span `z0` (cowl) to `z1` (nose) and its hinge `origin` `[y, z]` |
+| `hood` | Bonnet span `z0` (cowl) to `z1` (nose) and its hinge `origin` `[y, z]`. The drawn hood rests on the fenders: its edge 6.5 cm inside the station's half-width, 3 mm over the fender top beside it (a groove, not a step), its centre line `yBelt` + 2.8 cm |
 | `bumpers.front`, `bumpers.rear` | Group `seat` (height, distance from the middle), `fascia` section `[y, out]` top to bottom, `span` (half-width), and `wrap`: the `|x|` where the fascia's corner starts sweeping back (`from`) and how far its end sweeps (`back`) |
 | `seats` | The driver's H-point `front` `[x, y, z]` (he sits on −x, the passenger mirrors him) and the rear bench's `rear` `[y, z]` on the centre line, or `null` with no rear row (the regular-cab truck). The drawn seats, the seated driver and the sim's seat read it |
 
@@ -76,19 +76,21 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | Field | Meaning |
 |---|---|
 | `hood.bulge` | Raised centre bulge on the drawn hood from `z0` to `z1`, `width` across, its top `rise` over the lid, easing into it at both ends. `scoop` (`inlets` 1 or 2, mouth at `z`, `width`, `height` over the bulge) rises toward a mouth facing forward, drawn dark. Merged into the hood (`withHoodBulge`): the bonnet's skin crushes it |
-| `hood.kind` | `"lid"` (default) or `"clamshell"`: the drawn lid wraps over the body's shoulders to a side shut line on the fender top |
+| `hood.kind` | `"lid"` (default) or `"clamshell"`: the drawn lid laps the body's deck edge and shoulders 1 mm clear down to a side shut line on the fender top, where the drawn body's shoulder steps 3 mm in under the lid's edge (a groove, ramped in over 2 cm inside each lid end on body slices of its own) |
 | `boot.lip` | Ducktail kick: the deck lid's top rises `rise` at its rear edge, or the tailgate's top edge kicks `rise` out, easing in over `depth` |
 | `roof.rails` | Two dark rails at \|x\| `x[0]`..`x[1]` over `z` [rear, front], their tops `rise` over the roof at their inner edge |
 | `roof.spoiler` | Body-colour wedge off the roof's rear end over `z` [tip, front edge]: underside at `y[0]`, top `y[1]` at the front edge, ±`halfWidth` |
 | `roof.glassPanel` | Dark panel a few mm proud of the roof over `z` [rear, front], `width` across |
 | `pillars.b` | The drawn B-pillar's side-view band: `width` [belt, top] (z) and optional centre `z` [belt, top] (a leaning post, e.g. a front door frame whose rear edge leans into it); absent `z`, centred on `bPillar`. Absent: the `bPillar` band, its top 3 cm narrower. Either way the door and quarter glass tuck 1 cm under its edges at the belt and the top |
 | `pillars.divider` | The drawn post at `midPillarZ`: `width` [belt, top] (z) and optional `z` [belt, top] (a leaning post). Absent: 0.08 / 0.07 wide, upright at `midPillarZ` |
-| `blackout` | Greenhouse parts drawn gloss black by the paint's `primer` attribute: `a` (A-post), `sail`, `b`, `divider`, `rear` (the pillar to the rear glass) |
+| `blackout` | Parts drawn gloss black by the paint's `primer` attribute: `a` (A-post), `sail`, `b`, `divider`, `rear` (the pillar to the rear glass), and `cowl`: the deck from 5 cm under the windshield's foot to 5 cm under the hood's rear edge (put `hood.z0` ahead of `windshield.base` to show a strip) |
 | `bumpers.front.trim`, `bumpers.rear.trim` | `"body"` (its body colour, painted finish), `"chrome"` or `"black"`; unset, the car's accent trim. A player's bumper colour still recolours it |
 | `bumpers.rear.hitch` | Black tow-hitch receiver under the rear bumper's middle |
 | `exhaust` | `tips` 1 (at `x`) or 2 (at ±`x`) at height `y`, `size` [w, h], `shape` `"round"` (oval) or `"rect"`: chrome with a dark throat, ending 4 mm inside the rear bumper's rearmost face (nothing stands past the tail) |
 | `door.mirror` | The style's own mirror: `cap` `"rounded"` or `"box"`, `size` [w out from the door, h, d along the car] (default 0.16 × 0.10 × 0.08), `finish` `"body"` (the door's paint, a look's door colour too), `"black"` or `"chrome"`. Its foot sits on the door/A-pillar skin at the seat, a stalk runs out to the cap where the cap leaves room, and the cap's outer face is at `mirrorReach`, drawn at its real size. Unset: the platform mirror, x-scaled to the reach. The sim's mirror (reach, seat, rest box, torn box) is the platform's either way |
 | `arch.lip` | Each wheel arch's lip: a strip round the opening's edge, its crown `flare` (m) proud of the body side, faired into the skin `width` out and rolled under the edge into the well, down the opening's sides to the rocker. `square` squares its outline (a superellipse round the round opening) and its face: a box flare. Merged into the body, seated on its drawn loft (`archLipGeometry`); it peels and tears with its arch's panel |
+| `wheelTub` | A bed's wheel tubs (pickup, monster): over each wheel whose liner stands in a tub floor, a half cylinder `rise` (m) over the floor, `length` along the car, `width` in from the bed's side wall, in BOTH builds. The cage merges them last, so every other cage vertex keeps its id, and keeps them out of its hull's decimation: the hull is decimated exactly as the body without them, then the tubs' vertices follow it whole (`CAGE_TUB_VERTICES` of room past `CAGE_VERTICES`). Absent, the drawn body's hump hugs the liner (below) |
+| `boot.outline` | A tailgate's edge: the reference's gate seam as [x, y] on the right side, top to bottom (held past its ends). The gate is lofted to it at each height, with a ring at each of its corners, in both builds; the face's cut takes its widest point. Where it steps in narrower than the cut (the hatch, ±.43 between its tail lamps), a drawn infill panel flush with the gate shuts the tail beside it, a 4 mm seam off the gate's edge (`bootInfill`), so no loft ring points are added. Read it with `tailgateHalf(style, y)`. Absent: the tail panel's half-width less 13.5 cm |
 
 Every drawn body also opens its boot and closes its wells, from the tables it already has (`bootCut`, `wellHumpGeometry`):
 - **Boot opening.** Under a deck lid hinged at its front, a hollow (an unpainted inner panel) from the lid's front edge to its rear
@@ -99,6 +101,8 @@ Every drawn body also opens its boot and closes its wells, from the tables it al
 - **Open floors and wheel humps.** A drawn open floor (a bed, a cargo floor, a boot; not the engine bay) stays flat over the wheels.
   Where a wheel's liner stands up through one, a hump closes it: from the floor's side wall in to past the liner's inner edge, its top a
   half ellipse 1.5 cm over the liner's arc. The liner is the cage's own wheel housing, so the hump stands where the sim already does.
+  A bed with `wheelTub` gets the reference's tall wheel tubs instead, one at each side over each wheel, in the drawn body and the cage;
+  no tyre risen to its spring's stop stands through the bed between its walls (`car-variants.test.ts`).
 
 The roof parts are merged into the drawn body after its other parts (the body's skin crushes them with the roof); rails and
 panel, and blacked-out pillars, are drawn dark by the paint's `primer` attribute. Exhaust tips and the hitch are merged into the rear bumper
@@ -143,11 +147,15 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
   through a crushed roof. The bay rides the engine masses with its front no further out than the front bumper's masses (the
   nose); each crash bar rides its bumper's, its face on the bumper's seat.
 - **The engine bay:** the drawn body (never the cage) opens a trough under the hood (`bayTub`: from the hood's cowl edge or the
-  windshield's foot to inside the nose, floor at 0.28 m), one more `tubs` entry for the drawn loft only. The bay set fills it
+  windshield's foot to inside the nose, floor at 0.28 m, and at least 5 cm of closed deck behind its blend after the cabin tub's, a
+  cowl and not a fin), one more `tubs` entry for the drawn loft only. The bay set fills it
   wall to wall up to the hood's underside: a dark block and black cover with bare-aluminium heads, intake, plenum and strut
   caps, steel rails and manifolds, black radiator, airbox and battery.
-- **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor, the wheel liners and
-  the hood's underside are set so at build, on the drawn body only. No texture, no draw.
+- **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor, the wheel liners, each
+  well's ceiling inside its arch, an arch lip's roll underside and return, and the hood's underside are set so at build, on the drawn
+  body only (a panel torn and put back gets its rest tone, `PanelRegion.rest`). The drawn liners are two-sided (the paint culls back
+  faces), and over a tyre standing outboard of the body (the monster's) a half disc closes each well up to its crown, at a bed's wall
+  where one stands over the wheel. No texture, no draw.
 - **Bare metal:** the paint's `primer` attribute draws procedural riveted steel (`bare-metal.ts`: object-space seams, rivet
   rows, a tint per sheet), so a torn panel's or bumper's under-panel bends with the body and costs no texture or draw. A torn
   bumper bares the painted body it covered (`bumperBare`), a reset paints it again.
@@ -207,18 +215,28 @@ node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
   4 cm under the shoulder), `underside`, `door.hingeX` (the plan at the hinge), `bumpers.*.seat.z` (lip on the end) and
   `bumpers.*.wrap` (the plan's end corners). Fitted: `profile`. `arch-bulge.test.ts` holds every style to it, fitted or hand-set:
   over each arch's stretch, the drawn half-width at the belt and the shoulder's top stand no more than 1 cm over the lowest body
-  either side of them.
+  either side of them (each on its own run: hood, cabin, boot deck). Within 25 cm of a glass base (the deck's rise to the rear
+  glass, the cowl, the sail foot) both are judged instead against the reference: neither may stand more than 1 cm outside the
+  picture's plan or side top edge at the same z. Those lines are `src/game/vehicle/car-reference-lines.fixture.json`, one key per style (the police
+  answers to the sedan's), written by `fit-car --lines-out <that file>` from the same pictures and spans; rerun it when a
+  reference or its span changes.
 - Not read: hood, arch, rocker, boot, `rideHeight`, `cabinHw`, `bPillar`, `quarter`, mirrors, the bumper fascia and span, and the
   door's hinge y and z, length and aperture.
 
-**`landing-shots.mjs`: the landing gate's eight shots.** For side, top, iso and rear-iso, the car alone (`ours`: the real engine in
-the garage at the high tier over a white backdrop, through headless-frame) and the car over its reference (`overlay`: trace-car),
-both through one camera spec (`trace-camera.mjs`), so each pair lines up pixel for pixel and every car is framed the same way:
+**`landing-shots.mjs`: the landing gate's shots.** For side, top, iso and rear-iso, the car alone (`ours`: the real engine in
+the garage at the high tier over a white backdrop, through headless-frame), the car over its reference (`overlay`: trace-car) and
+the two side by side (`pair`: the reference alone left, ours right), all through one camera spec (`trace-camera.mjs`) on one
+canvas, so they line up pixel for pixel and every car is framed the same way:
 
 ```sh
 CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
-  scripts/landing-shots.mjs --root <tree> --car <style> [--paint]   # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay}.png
+  scripts/landing-shots.mjs --root <tree> --car <style> [--paint]   # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay,pair}.png
 ```
+
+- Build side-by-sides only this way: a pair cropped or scaled per half (each to its own bounding box) misregisters. Each pair
+  marks the reference's wheels (yellow crosses: the iso picks, the side picture's tyre contacts) and where the engine drew ours
+  (magenta rings) on both halves. A wheel more than 5 reference pixels off, or a pair with nothing to register by (an iso with no
+  picks, a side picture whose tyres were not found), turns the label red and the exit nonzero. The top view is not registered.
 
 - Each car's `scripts/landing-views/<style>.json` holds its references, its iso crops (cut from the lineups; widen one that
   clips its car) and its iso cameras. Side and top are orthographic, spanned on the reference's bumper tips at the spec length,

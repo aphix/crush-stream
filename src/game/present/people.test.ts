@@ -12,8 +12,9 @@ import { setGround } from "../world/ground.ts";
 import type { DriverLook } from "./driver-look.ts";
 import { VIP_LOOK } from "./dummy-dress.ts";
 import { GroundsArt } from "./grounds-art.ts";
-import { GuardSquad, People, VipEscort, nukeFlash } from "./people.ts";
+import { GuardSquad, People, VIP_SLOT, VipEscort, nukeFlash } from "./people.ts";
 import { drawnTriangles } from "../vehicle/drawn-body.test-util.ts";
+import { PARTS } from "./ragdoll-body.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { driverSeat } from "../vehicle/interior.ts";
@@ -244,7 +245,7 @@ describe("given the National Mall's guard squad, inside the house until the alar
 });
 
 describe("given the VIP riding with the squad inside", () => {
-  it("when he is in the passenger seat, then one figure is drawn, not the squad's empty places too", () => {
+  it("when he is in the passenger seat, then one figure is drawn, not the squad's empty places too, and he sits on the car's right (-x), across from the driver", () => {
     const art = new GroundsArt(spec, ground, new THREE.Group());
     const car = makeCar();
     launch(car, NORTH_LAWN.x, NORTH_LAWN.z, 0, 0, 0);
@@ -253,6 +254,10 @@ describe("given the VIP riding with the squad inside", () => {
     const drawn = art["people"].group.children.find((c): c is DummyMesh => c instanceof DummyMesh)!;
     const slots = spec.count + 1;
     assert.equal(drawn.count, drawn.instanceMatrix.count / slots, "the draw ends after slot 0");
+    // The slot is the instance, so his place is the torso part's pose (`DummyMesh.partPoint` of its rest centre), not an instance matrix.
+    const torso = drawn.partPoint(VIP_SLOT, 0, new THREE.Vector3().fromArray(PARTS[0]!.c), new THREE.Vector3());
+    const local = torso.x - car.group.position.x;
+    assert.ok(local < -0.2, `the VIP sits on the car's right (-x), across from the driver: car-local x ${local.toFixed(2)}`);
   });
 
   it("when the next race starts (`GroundsArt.reset`), then he is back inside: no figure is drawn and, the secret in again, he does not come out", () => {

@@ -11,7 +11,7 @@ import { carClass } from "./vehicle-classes.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
-import { cageLift } from "./car-cage-rig.ts";
+import { cageLift, centreLift } from "./car-cage-rig.ts";
 import { HUB_POP_MPS } from "../deform/deform-solve.ts";
 import { POINT_CAPACITY, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_POINTS, GROUND_LIFT_V, body, carrier, pointVel } from "./car-air-body.ts";
 
@@ -293,7 +293,9 @@ export function loadPoints(car: DeformableCar): number {
   }
   const { pos, panelOn } = car.cage.fields;
   const { vertexCount, vertexGroup, sillCount } = car.cage.style;
-  const { belly, comY } = car.frame;
+  const { belly } = car.frame;
+  // The reach about the body's centre (`centreY`), its points lifted with the drawn body (`lift`).
+  const comY = car.frame.comY + centreLift(car);
   let reach2 = 0;
   let n = 0;
   for (let k = 0, end = vertexCount + (wreck ? sillCount : 0); k < end; k++) {
@@ -458,12 +460,16 @@ export function wheelsAt(car: DeformableCar, within: number): number {
  * bottoms it out. Its push slows the point's closing slice by slice; once it has stopped, the tyre comes back out at no more than a body
  * at rest parts from what it stands in (`GROUND_LIFT_V`): the hit's energy is spent, not thrown back (the spring's own push sent a truck
  * back off an 8 m/s wall hit at 1.2 m/s). A rigid tyre stopped a monster's 29 m/s in one 4 ms slice.
+ * Bottomed on a wreck, the wheel goes back into its well: the face shoves its hub by the depth past the stroke (`shoveWheel`, torn off
+ * past a wheel's diameter) while the bottomed spring still pushes the body. Held rigid there, a sedan's front tyres (0.40 m behind its
+ * bumper) stopped its nose's crush dead once it passed them, at 14-20 m/s on the range's slab.
  */
-export function readTyreSides(n: number, stroke: number): number {
+export function readTyreSides(car: DeformableCar, n: number, stroke: number): number {
   const { v, w, dt, skip } = body;
   const statics = activeGround();
   const travel = v.length() * dt;
   const spring = (HUB_POP_MPS / stroke) ** 2;
+  const wreck = car.deform.massActive;
   for (let i = 0; i < 4; i++) {
     const r = TYRE_DIM[2 * i]!;
     if (r === 0) continue;
@@ -474,6 +480,9 @@ export function readTyreSides(n: number, stroke: number): number {
     const reach = r + half + travel;
     const top = Math.max(solidTop(hx - reach, hx + reach, hz - reach, hz + reach), staticTop(statics, hx - reach, hx + reach, hz - reach, hz + reach));
     if (top <= hy - r + STEP_MAX) continue;
+    let over = 0;
+    let ox = 0;
+    let oz = 0;
     for (const [across, along] of TYRE_POINTS) {
       const a = across * half;
       const f = along * r;
@@ -499,10 +508,17 @@ export function readTyreSides(n: number, stroke: number): number {
       // The tyre is no face of the body: the face it presses takes no load crush (a yielding face let the tyre sink 28 cm into the slab).
       SLOT[n] = body.surf.slot(OWN[n]!, N[n]!, false, body.q, FOLLOW[n]!);
       const depth = TYRE_HIT[C_DEPTH]!;
-      SINK[n] = depth - stroke;
-      GAPV[n] = depth < stroke ? Math.max(CLOSING[n]! - spring * depth * dt, -GROUND_LIFT_V) : 0;
+      const shoved = wreck && depth >= stroke;
+      SINK[n] = shoved ? 0 : depth - stroke;
+      GAPV[n] = depth < stroke || shoved ? Math.max(CLOSING[n]! - spring * Math.min(depth, stroke) * dt, -GROUND_LIFT_V) : 0;
+      if (shoved && depth - stroke > over) {
+        over = depth - stroke;
+        ox = N[n]!.x;
+        oz = N[n]!.z;
+      }
       n++;
     }
+    if (over > 0) car.deform.shoveWheel(HUBS[i]!, ox * over, oz * over);
   }
   return n;
 }

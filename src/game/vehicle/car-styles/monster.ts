@@ -54,6 +54,7 @@ export const MONSTER: BodyStyle = {
   midPillarZ: null,
   rearBulkhead: { z: -0.79, yTop: 1.03 },
   tubs: [[-0.76, 0.96, 0.5], [-2.26, -0.82, 0.62]],
+  wheelTub: { rise: 0.24, length: 0.82, width: 0.25 },
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
   lamps: { head: [0.5, 0.62], tail: [0.73, 0.8] },
@@ -111,4 +112,5 @@ export const MONSTER: BodyStyle = {
       { view: "rear", points: [[0, 0.47], [0.32, 0.47], [0.32, 0.52], [0, 0.52]], depth: 0.002, rim: 0.003, cavity: 0.4 },
     ],
   },
+  seats: { front: [0.36, 0.64, 0], rear: [0.66, -0.52] },
 };

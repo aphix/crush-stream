@@ -308,9 +308,13 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * more it sleeps at once as before. A keyframe's loose block carries each body's rest time (one number more). A clip of 154 or before no longer reads.
  * 156: a sleeping torn part or popped wheel is stirred only by the roof of a car that moves, as a sleeping wreck is: beside or on a resting wreck it sleeps
  * on, where it had stepped every slice and crept (up to 8 mm a second). Every part that lies near a resting car moves differently. A clip of 155 or before no longer reads.
+ * 157: the driver sits on the car's left (`DRIVER_SIDE`, car-local +x; he sat at -x): a driver thrown out of the windshield leaves 0.25 m to +x of the
+ * pane's middle, with his seat's turn velocity from there; the VIP rides in, and is thrown from, the -x seat; the derby AI's driver's door is the +x one,
+ * and its reverse run-in aims 1.6 m out from a target's nose on either side (2.1 on the driver's). Every windshield throw and every derby car moves
+ * differently. A clip of 156 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 156;
+const REPLAY_VERSION = 157;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

@@ -304,12 +304,20 @@ varying vec3 vDetailPos;
 varying vec3 vDetailNormal;
 vec2 detailSample(vec4 tile, vec4 bounds, vec2 q) {
   return texture2D(detailMap, clamp(tile.xy + q * tile.zw, bounds.xy, bounds.zw)).rg - vec2(${glslFloat(HEIGHT_ZERO_BYTE / BYTE_MAX)}, 0.0);
+}
+// A tile's height and cavity at q (xy) and its height's slope one pixel right and down (zw), from the texel differences along q: the
+// screen derivative of the filtered height is flat across each texel and steps between them, which draws a stroke as a sawtooth.
+vec4 detailPlane(vec4 tile, vec4 bounds, vec2 q, vec2 qx, vec2 qy) {
+  vec2 here = detailSample(tile, bounds, q);
+  vec2 along = vec2(detailSample(tile, bounds, q + vec2(${glslFloat(DETAIL_TEXEL_M)}, 0.0)).r, detailSample(tile, bounds, q + vec2(0.0, ${glslFloat(DETAIL_TEXEL_M)})).r);
+  vec2 gradient = (along - here.r) / ${glslFloat(DETAIL_TEXEL_M)};
+  return vec4(here, dot(gradient, qx), dot(gradient, qy));
 }`;
 
 /**
  * After the clear coat's normal, inside FinishLod's draw gate (`finishMeshNear`, so only with the finish on): the three view tiles
  * the rest normal faces blended as the finish's planes (a down-facing one reads the bottom tile for the top's), the cavity darkening
- * the paint, and near enough the height's screen-space slope bending the base and coat normals.
+ * the paint, and near enough the height's slope (`detailPlane`'s texel differences) bending the base and coat normals.
  */
 const DETAIL_SURFACE = /* glsl */ `
 float detailCavity = 0.0;
@@ -319,15 +327,17 @@ if (detailNear < ${glslFloat(DETAIL_CAVITY_END_M)}) {
   bool detailUnder = vDetailNormal.y < 0.0;
   float detailX = abs(vDetailPos.x);
   bool detailFront = vDetailNormal.z >= 0.0;
-  vec2 detailTexel = detailWeights.x * detailSample(detailTiles[0], detailBounds[0], vDetailPos.zy)
-    + detailWeights.y * detailSample(detailUnder ? detailTiles[4] : detailTiles[1], detailUnder ? detailBounds[4] : detailBounds[1], vec2(vDetailPos.z, detailX))
-    + detailWeights.z * detailSample(detailFront ? detailTiles[2] : detailTiles[3], detailFront ? detailBounds[2] : detailBounds[3], vec2(detailX, vDetailPos.y));
-  float detailHeight = detailTexel.r * ${glslFloat((BYTE_MAX / HEIGHT_STEPS) * DETAIL_HEIGHT_MAX_M)};
+  vec2 detailSide = vDetailPos.zy;
+  vec2 detailTop = vec2(vDetailPos.z, detailX);
+  vec2 detailEnd = vec2(detailX, vDetailPos.y);
+  vec4 detailTexel = detailWeights.x * detailPlane(detailTiles[0], detailBounds[0], detailSide, dFdx(detailSide), dFdy(detailSide))
+    + detailWeights.y * detailPlane(detailUnder ? detailTiles[4] : detailTiles[1], detailUnder ? detailBounds[4] : detailBounds[1], detailTop, dFdx(detailTop), dFdy(detailTop))
+    + detailWeights.z * detailPlane(detailFront ? detailTiles[2] : detailTiles[3], detailFront ? detailBounds[2] : detailBounds[3], detailEnd, dFdx(detailEnd), dFdy(detailEnd));
   float detailDistance = length(vViewPosition);
   detailCavity = detailTexel.g * (1.0 - smoothstep(${glslFloat(DETAIL_CAVITY_FADE_START_M)}, ${glslFloat(DETAIL_CAVITY_END_M)}, detailDistance));
   diffuseColor.rgb *= 1.0 - detailCavity;
   if (detailNear < ${glslFloat(DETAIL_BUMP_END_M)}) {
-    vec2 detailSlope = vec2(dFdx(detailHeight), dFdy(detailHeight)) * (1.0 - smoothstep(${glslFloat(DETAIL_BUMP_FADE_START_M)}, ${glslFloat(DETAIL_BUMP_END_M)}, detailDistance));
+    vec2 detailSlope = detailTexel.zw * ${glslFloat((BYTE_MAX / HEIGHT_STEPS) * DETAIL_HEIGHT_MAX_M)} * (1.0 - smoothstep(${glslFloat(DETAIL_BUMP_FADE_START_M)}, ${glslFloat(DETAIL_BUMP_END_M)}, detailDistance));
     normal = finishPerturbedNormal(normal, detailSlope, faceDirection);
     #ifdef USE_CLEARCOAT
     clearcoatNormal = finishPerturbedNormal(clearcoatNormal, detailSlope, faceDirection);

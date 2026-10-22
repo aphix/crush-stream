@@ -57,8 +57,12 @@ export interface BootLip {
 export type BootSpec = (
   /** Deck lid lofted on the profile from z0 to z1, hinged at origin; with `drop` it wraps the tail, its face standing at z1. */
   | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop }
-  /** Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). */
-  | { kind: "tailgate"; y0: number; origin: YZ; z0?: number }
+  /**
+   * Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). `outline`:
+   * its edge, the reference's gate seam, as [x, y] on the right side from top to bottom (held past its ends); absent, the tail panel's
+   * half-width less the corners the lamps stand in.
+   */
+  | { kind: "tailgate"; y0: number; origin: YZ; z0?: number; outline?: readonly (readonly [number, number])[] }
 ) & { lip?: BootLip; pivot?: YZ; swing?: LidSwing };
 
 /** Raised centre bulge on the drawn hood from z `z0` (cowl end) to `z1`, `width` (m) across, its top `rise` (m) over the lid's; it ramps into the lid at both ends. */
@@ -243,13 +247,15 @@ export interface BodyStyle {
    * 0.08 / 0.07 wide, upright at `midPillarZ`.
    */
   pillars?: { b?: PillarSpan; divider?: PillarSpan };
-  /** Drawn only: greenhouse parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar. */
-  blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean };
+  /** Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar, and the cowl (the deck between the hood's rear edge and the windshield's foot). */
+  blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean; cowl?: boolean };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
   privacyGlass?: { rear?: boolean; quarter?: boolean };
   rearBulkhead: { z: number; yTop: number };
   /** Open floors visible through the glass: [zRear, zFront, floorY]. */
   tubs: readonly (readonly [number, number, number])[];
+  /** A bed's wheel tubs (both builds): over each wheel whose liner stands in a tub floor, a half cylinder `rise` (m) over the floor and `length` along the car, `width` in from the bed's side wall; absent, a drawn-only hump hugs the liner. */
+  wheelTub?: { rise: number; length: number; width: number };
   /** Rear door shut line on four-door bodies, or null. */
   rearDoorSeam: number | null;
   boot: BootSpec;
@@ -260,8 +266,8 @@ export interface BodyStyle {
    */
   lamps: { head: readonly [number, number]; tail: readonly [number, number] };
   /**
-   * Seats (m, car space): the driver's H-point [x, y, z] (he sits on -x; the passenger mirrors him), and the rear bench's [y, z] on the
-   * centre line, or null with no rear row (a regular cab). The drawn seats, the seated driver and the sim's seat all read it.
+   * Seats (m, car space): the driver's H-point [x, y, z], x across from the centre line on `DRIVER_SIDE` (the passenger mirrors him),
+   * and the rear bench's [y, z] on the centre line, or null with no rear row (a regular cab). The drawn seats, the seated driver and the sim's seat all read it.
    */
   seats: { front: readonly [number, number, number]; rear: readonly [number, number] | null };
   /** Fixed paint, or none (the fleet paint). */

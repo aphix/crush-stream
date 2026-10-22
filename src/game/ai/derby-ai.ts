@@ -1,5 +1,6 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { chargeBoost, clearDrive, DRIVE, idleDrive, topUpBoost, type DriveInput } from "../vehicle/car-drive.ts";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { mood } from "./ai-aggression.ts";
@@ -51,9 +52,6 @@ export const DERBY_RULES = {
 
 /** The derby field's aggression slider: a maximum, each driver rolls its own under it (ai-aggression.ts). */
 export const DEFAULT_DERBY_AGGRESSION = 1;
-
-/** The steering wheel sits at local x −0.22 (part-geometry `interior`): the driver's door is the −x side. */
-const DRIVER_SIDE = -1;
 
 function wrapPi(a: number): number {
   let x = a;
@@ -622,9 +620,9 @@ export class DerbyBrain {
   }
 
   /**
-   * Tail first into its front wheel on our side (the bumper corner on the driver's side). From beside or
-   * behind it, stage wide of that corner so the run-in meets the wheel, not the door. Nose toward it and
-   * rolling: a handbrake J-turn brings the tail round in one go. Returns true while J-turning.
+   * Tail first into its front wheel on our side. From beside or behind it, stage wide of that corner so the
+   * run-in meets the wheel, not the door. Nose toward it and rolling: a handbrake J-turn brings the tail
+   * round in one go. Returns true while J-turning.
    */
   private attackReverse(self: AiCar, tgt: AiCar, p: Personality, d: number): boolean {
     const out = this.out;
@@ -641,7 +639,7 @@ export class DerbyBrain {
     // lane out from its nose, the further out the further off its axis we are, so the run-in straightens.
     // Circling without closing in (it keeps its own tail to us): take whatever end is there, tail to tail.
     const direct = this.chase[self.id]! > 1.2 || this.tighten[self.id]! > 0;
-    const reach = direct ? 0 : (side === DRIVER_SIDE ? 2.1 : 1.6) + Math.min(6, 0.45 * d) * (1 - Math.max(0, ahead));
+    const reach = direct ? 0 : 1.6 + Math.min(6, 0.45 * d) * (1 - Math.max(0, ahead));
     const wide = direct ? 0 : (0.3 + 3.1 * smooth(-0.3, 0.5, -ahead)) * side;
     let ax = _aim.x + ofx * reach + ofz * wide;
     let az = _aim.z + ofz * reach - ofx * wide;

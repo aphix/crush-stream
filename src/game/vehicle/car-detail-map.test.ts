@@ -175,6 +175,12 @@ describe("given the detail compile hook on a paint material", () => {
     assert.ok(fragmentShader.includes("float detailX = abs(vDetailPos.x);"), "the top and end tiles are read at |x|, mirroring the x >= 0 strokes");
   });
 
+  it("when the finish is on, then the bump's slope comes from texel differences along each tile, never from the screen derivative of the filtered height", () => {
+    const { fragmentShader } = compileHooks(detailPaint(style));
+    assert.ok(fragmentShader.includes("vec4 detailPlane(vec4 tile, vec4 bounds, vec2 q, vec2 qx, vec2 qy)"), "each tile reads its own slope");
+    assert.ok(!/dFdx\(detail(Height|Texel)/.test(fragmentShader), "no screen derivative of the sampled height: it steps at every texel");
+  });
+
   for (const testCase of CHAINS) {
     it(testCase.it, () => {
       const material = makePaintMaterial(0x336699);
