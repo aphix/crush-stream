@@ -31,11 +31,20 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
   stand-in and the debug views (the cars' helpers and the thrown dummies' rig lines and particle spheres) added; the scene is drawn with every mesh shown and unculled through a zero-area scissor, so
   shadow-depth variants link, every uniform location is fetched and every texture uploads. The loop reads input from
   `start()` but only simulates and draws after `ready`.
-- New scene content warms where it appears: a race course's art (`buildArt`) and new cars (`buildCar`) queue the same
-  warm-up, so it runs in the setup menu or the countdown.
+- New scene content warms where it appears: a race course's art (`buildArt`), new cars (`buildCar`) and the thrown dummies'
+  purse pool (it joins the scene once Rapier is in, after boot) queue the same warm-up, so it runs in the setup menu, the
+  countdown or the sandbox's first seconds. After boot a warm-up draws only the meshes whose material gained a program.
+- Both car finish states warm whatever the tier (`EngineWarm.eachFinish`): plain paint for both outputs, the finish (it
+  draws only at `high` and `ultra`) for the HDR target alone, so it has no canvas twin. A tier switch that changes the
+  finish queues the same warm-up, which finds every program linked and drawn and skips its draws. When a switch only
+  compiled them, its first frame drew 6 new programs and took 162–194 ms (`check:programs`, headless ANGLE/GL).
 - Hidden direct children of the scene (a rig, the arena, a pooled car) are parked out of its graph while no warm-up runs
   (`ParkingScene.sync`, once a frame before the draw): the matrix pass and traversals skip them. Every warm-up starts by
   putting them all back (`unparkAll`), so a hidden mode's programs link with the rest.
+- A lost WebGL context that the browser gives back (`webglcontextrestored`) has lost every program and GPU object. three
+  rebuilds its own state. The engine (`onContextRestored`) re-runs the warm-up, which links and draws the whole scene again.
+  It also makes a new `GpuTimer` (the old queries died) and re-bakes the studio environment and Ultra's sky, whose PMREM
+  targets lost their contents. Auto's and the detail governor's windows start over: the frames while lost drew nothing.
 - Post render targets and the mark map are allocated once and resized in place, so a tier switch allocates nothing, with two
   exceptions: on a desktop a switch between a 1024 mark-map tier (minimal, low) and a 2048 one (high, ultra) reallocates the mark map and
   wipes it, and a canvas resize while a plain tier (off, minimal) is up frees the post targets, so the next switch to a post
@@ -43,8 +52,13 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
 - One material per draw kind: track art gives each draw kind its own copy of a material (`TrackArt.forDraw`) and
   instanced casters their own depth material, so three never re-selects a program between plain and instanced draws.
 - `npm run check:programs` plays the sandbox (fleet crash with cracked glass, drive, night / wet, every FX tier but Ultra, every
-  scene, debug views) and a race on every course, and fails if any program links after the boot warm-up or between a
-  race's green light and its end. Ultra links its programs on its first pick, by design ([`CINEMATIC.md`](CINEMATIC.md)).
+  scene, debug views), a race on every course, and Auto's one-tier steps mid-race in a sprayed city field. Booted at High,
+  that field steps down to Minimal and back up; booted at Low, it climbs to High and drops back. A program is its id with its
+  key, so one freed and linked again counts. The check fails if any program links after the boot warm-up (with the purse
+  pool's background warm once Rapier is in) or between a race's green light and its end, if a tier switch links a program
+  or draws one for the first time inside a frame, or if a finish program exists for the canvas. It prints each switch's
+  first three frames' draw ms, the programs held per tier and the finish programs by key. Ultra links its programs on its
+  first pick, by design ([`CINEMATIC.md`](CINEMATIC.md)).
 
 **The `minimal` tier** (the default, `INITIAL_HUD.fxTier`; `?fx=` sets it) renders straight to the canvas: no HDR target,
 bloom, grade, vignette, grain or blur. It keeps every effect that needs no post (tyre marks, tyre smoke, slip sparks, shake,

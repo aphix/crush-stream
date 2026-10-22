@@ -85,6 +85,32 @@ interface RoofParts {
   glassPanel?: { z: readonly [number, number]; width: number };
 }
 
+/** A lamp point (m, car frame, right side; the left mirrors it): [x, y] met on the lamp's end face from outside (or, in a `side` loop, [z, y] met on the body side from outboard), or [x, y, z] on the skin as given. */
+type LampPoint = readonly [number, number] | readonly [number, number, number];
+/** Points round a closed outline (or along a strip's line) on the skin; `side`: side-view [z, y] points, a wrap round the corner. */
+interface LampLoop {
+  side?: boolean;
+  points: readonly LampPoint[];
+}
+/** A lens tone: `lit` the kind's lit lens (head white, tail red); the rest never glow. */
+type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "chrome";
+
+/**
+ * A lamp drawn to its outline (drawn only), met on the skin: its lens filling `loops` (a wrap round the corner is another loop) a few mm
+ * proud of it, in `lens`; a `bezel` lip round each loop cresting `recess` (m) over the lens, so the lens sits in its own pocket and no face
+ * lies on the skin's; `cells` (sections, a reverse or smoked cell, a band) over the lens in their own tones; `strips` (a DRL or LED line,
+ * ribs) along open lines `width` wide; `rounds` (projector cells, fog lenses) of radius `r`.
+ */
+interface LampShape {
+  loops: readonly LampLoop[];
+  lens: LampTone;
+  bezel?: "chrome" | "black";
+  recess?: number;
+  cells?: readonly { loop: LampLoop; tone: LampTone }[];
+  strips?: readonly { line: LampLoop; width: number; tone: LampTone }[];
+  rounds?: readonly { at: LampPoint; side?: boolean; r: number; tone: LampTone }[];
+}
+
 /** Exhaust tips under the rear bumper: one at `x`, or two at ±`x`, centred at height `y`; `size` [w, h] (m) of the round (oval) or rectangular tip. */
 interface Exhaust {
   tips: 1 | 2;
@@ -130,6 +156,14 @@ interface BumperSpec {
   wrap: { from: number; back: number };
   /** What the bumper is drawn in: the body's paint colour, chrome or black; absent, the car's accent trim. */
   trim?: "body" | "chrome" | "black";
+  /**
+   * Its seam (drawn only, both or neither): the bumper wraps its corner up to it as the visible skin (`withSeamCover`) and tears off with it.
+   * `top` its top edge on the end face, [x, y] from inboard out to the corner; `edge` on round the corner and down the side, [z, y], to its foot.
+   */
+  top?: readonly (readonly [number, number])[];
+  edge?: readonly (readonly [number, number])[];
+  /** A rear bumper's number plate centre height (m, car frame); absent, `PLATE_RISE` over the seat. */
+  plate?: number;
 }
 
 type DetailView = "side" | "top" | "front" | "rear";
@@ -261,10 +295,36 @@ export interface BodyStyle {
   boot: BootSpec;
   /**
    * Lamp seats [x, y] (m, right side; the left mirrors it) on the end panels: the head lamps on the nose, the tail lamps
-   * on the tail panel, standing upright in its corners beside a tailgate. Each housing sits whole on the skin, clear of
-   * the bumpers, grille and boot (`lamps.test.ts`).
+   * on the tail panel, standing upright in its corners beside a tailgate. `shapes` (drawn only): `head` / `tail` each kind's own lamp
+   * riding its seat (a tail's share that lands on the boot lid rides the lid, lit with the tails); `front` / `rear` lamps, reflectors and
+   * pods on that bumper's fascia (unlit, torn off with it). Absent, the platform housing (`LAMP_HOUSING`, standing 4.5 cm proud).
+   * `brake`: a high-mount brake lamp `size` [w, h] met on the skin from behind at [x, y] (a pickup's cab); `sideMarkers`: amber markers
+   * on each side met from outboard at [y, z]. Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
    */
-  lamps: { head: readonly [number, number]; tail: readonly [number, number] };
+  lamps: {
+    head: readonly [number, number];
+    tail: readonly [number, number];
+    shapes?: { head?: LampShape; tail?: LampShape; front?: LampShape; rear?: LampShape };
+    brake?: { at: readonly [number, number]; size: readonly [number, number] };
+    sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number] }[];
+  };
+  /**
+   * The front grille (drawn only; it tears off with the front bumper): centre height `y` and face `z` (m, car frame; z absent: the platform
+   * grille's face); `size` [w at the top, h], `bottom` its width at the bottom (a trapezoid; absent, w), corners rounded `round` (m); `kind`
+   * horizontal bars, vertical slats, a mesh of both or a diagonal (hex) mesh, `count` bars or slats (absent, at the default pitch); a round
+   * `badge` of that radius at its centre; in `finish` (body: the body's paint). Absent: the platform grille.
+   */
+  grille?: {
+    y: number;
+    z?: number;
+    size: readonly [number, number];
+    bottom?: number;
+    round?: number;
+    kind: "bars" | "mesh" | "slats" | "hex";
+    count?: number;
+    badge?: number;
+    finish: "black" | "chrome" | "body";
+  };
   /**
    * Seats (m, car space): the driver's H-point [x, y, z], x across from the centre line on `DRIVER_SIDE` (the passenger mirrors him),
    * and the rear bench's [y, z] on the centre line, or null with no rear row (a regular cab). The drawn seats, the seated driver and the sim's seat all read it.
@@ -280,6 +340,8 @@ export interface BodyStyle {
   roof?: RoofParts;
   /** Exhaust tips, drawn in the rear bumper (they tear off with it). */
   exhaust?: Exhaust;
+  /** The lifted truck's undercarriage under the body (`hangUnderbody`): ladder frame, coil-over pairs, driveshafts and steering on the body, a solid axle on each pair of hubs. Drawn only, for the monster's lift. */
+  underbody?: boolean;
   /** Fine contours drawn as detail maps, not geometry: strokes and patches on the side, top, front and rear views, car-frame metres, x >= 0 mirrored. */
   details?: { lines: readonly DetailLine[]; patches: readonly DetailPatch[] };
   /** Cameras (m, car frame as drawn, a class lift included): the hood eye [y, z] over the bonnet ahead of the windshield base, and the chase and far chase eyes `dist` behind and `height` over the car's origin, aimed `aimUp` over it; absent = `PLATFORM_CAMERA`. */
