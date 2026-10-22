@@ -13,7 +13,7 @@ import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from 
 import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
+import { makeRoofFittings, withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
@@ -2187,6 +2187,32 @@ describe("given a body style's P1 parts", () => {
     assert.ok(wider > 0.03, `at u 0.7071 the half-width stands ${wider} over the straight chamfer's`);
   });
 
+  it("when the wagon's spoiler caps the roof's last drawn chord, then its front edge's crowned top sits on the drawn roof (within 2 mm) and its sloped ends never stand over it", () => {
+    const style = CAR_STYLES.wagon;
+    const spoiler = style.roof!.spoiler!;
+    const pos = makeRoofFittings({ ...style, roof: { spoiler } })!.geometry.getAttribute("position");
+    const roof = new THREE.Mesh(makeRoofGeometry(style), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    const ray = new THREE.Raycaster();
+    // The front cap's fan centre sits lower than its edge: take each x's highest front vertex.
+    const tops = new Map<string, number>();
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(pos.getZ(i) - spoiler.z[1]) >= POSITION_TOL) continue;
+      const x = (Math.round(pos.getX(i) * 1000) / 1000).toFixed(3);
+      tops.set(x, Math.max(tops.get(x) ?? -Infinity, pos.getY(i)));
+    }
+    const reach = spoiler.halfWidth - (spoiler.ends?.[0] ?? 0) + POSITION_TOL;
+    const off: string[] = [];
+    for (const [x, top] of tops) {
+      ray.set(new THREE.Vector3(Number(x), 3, spoiler.z[1]), new THREE.Vector3(0, -1, 0));
+      const hit = ray.intersectObject(roof, false)[0];
+      const over = hit ? top - hit.point.y : Infinity;
+      // The sloped ends may tuck under the roof's roll; only standing over it shows.
+      if (over > 0.002 || (Math.abs(Number(x)) <= reach && over < -0.002)) off.push(`${x}:${hit ? `${(over * 1000) | 0}mm` : "no roof"}`);
+    }
+    assert.ok(tops.size >= 5, `front-top vertices met: ${tops.size}`);
+    assert.equal(off.join(" "), "", "spoiler front-top vertices off the drawn roof, by x");
+  });
+
   it("when a bumper's trim is chrome, black or body, then it wears chrome, black plastic or the body's colour (unset: the car's accent trim), and no bumper or cage build changes", () => {
     const accent = 0x9aa0a8;
     const body = 0x7a1020;
@@ -2888,6 +2914,23 @@ describe("given a body style's P2 parts", () => {
     const intake = Array.from({ length: pos.count }, (_, i) => i).filter((i) => Math.abs(pos.getX(i)) < 0.4 && pos.getY(i) + y0 > 0.23 && pos.getY(i) + y0 < 0.27);
     const filled = intake.filter((i) => tone(grille, i) === key).length;
     assert.ok(filled > intake.length / 2, `${filled} of ${intake.length} intake vertices in the grille backing's tone (the rest its bezel lip)`);
+  });
+
+  it("when the wagon's corner intake is read above its lower intake, then its dark recess starts no further inboard than x .59, as the reference's narrow recess", () => {
+    const style = CAR_STYLES.wagon;
+    const { seat } = style.bumpers.front;
+    const geo = drawnPart(PART_KIND.grille, style).geometry.clone().translate(0, seat.y + GRILLE_SEAT.y, seat.z + GRILLE_SEAT.z);
+    const [pos, col] = [geo.getAttribute("position"), geo.getAttribute("color")];
+    let [inner, count] = [Infinity, 0];
+    for (let i = 0; i < pos.count; i++) {
+      // 0x0e0f11 is the dark lens tone (`SHAPE_TONE.dark`).
+      if (pos.getY(i) > 0.5 && new THREE.Color(col.getX(i), col.getY(i), col.getZ(i)).getHex() === 0x0e0f11) {
+        inner = Math.min(inner, Math.abs(pos.getX(i)));
+        count++;
+      }
+    }
+    assert.ok(count > 0, "no dark lens vertices above the lower intake");
+    assert.ok(inner >= 0.59 - POSITION_TOL, `corner recess's inboard edge at x ${inner.toFixed(3)}`);
   });
 
   it("when a tail lamp's outline runs onto the boot lid, then the lid carries that share and opens with it, and the body keeps the rest", () => {

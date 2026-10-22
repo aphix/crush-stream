@@ -229,6 +229,27 @@ describe("given the hatchback's tail lamps, whose outer lens wraps the tail corn
     }
     assert.ok(probed > 200, `the control: ${probed} samples met the skin over the corner`);
   });
+
+  it("when its outer lens is followed round the corner onto the quarter, then it drops to the reference's side-view lamp height (y .63 or lower) with its front edge at z -1.60", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
+    assignClass(car, STYLE_CLASS.hatchback);
+    car.group.updateMatrixWorld(true);
+    const tail = car.lamps.find((l) => l.kind === "tail" && l.side > 0)!;
+    tail.seat.updateWorldMatrix(true, false);
+    const g = drawnLamp(car.style, "tail", 1).geometry.clone().applyMatrix4(tail.seat.matrixWorld);
+    const [pos, uv] = [g.getAttribute("position"), g.getAttribute("uv")];
+    let [minY, maxZ, count] = [Infinity, -Infinity, 0];
+    for (let i = 0; i < pos.count; i++) {
+      // The lit lens only (u .75 on the emissive mask), out past the corner's start.
+      if (uv.getX(i) !== 0.75 || Math.abs(pos.getX(i)) <= 0.66) continue;
+      minY = Math.min(minY, pos.getY(i));
+      maxZ = Math.max(maxZ, pos.getZ(i));
+      count++;
+    }
+    assert.ok(count > 0, "no lit lens vertices out on the quarter");
+    assert.ok(minY <= 0.63, `outer lens bottom on the quarter at y ${minY.toFixed(3)}`);
+    assert.ok(maxZ >= -1.6, `outer lens front edge at z ${maxZ.toFixed(3)}`);
+  });
 });
 
 describe("given each style with a high-mount brake lamp", () => {
