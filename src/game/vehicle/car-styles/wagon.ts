@@ -126,6 +126,8 @@ export const WAGON: BodyStyle = {
   midPillarZ: -1.2,
   rearBulkhead: { z: -1.3, yTop: 1.0 },
   tubs: [[-1.96, 0.7, 0.38]],
+  // Hood tops to 1.10 m and tail deck to 1.12 m, roof from 1.45 m: the cabin starts 7 cm over the highest, as the trucks' do.
+  proxyBelt: 1.19,
   rearDoorSeam: -1.23,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE, edgeRoll: 0.02 },
   lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES },
@@ -135,7 +137,7 @@ export const WAGON: BodyStyle = {
   blackout: { a: true, sail: true, b: true, divider: true, rear: true },
   privacyGlass: { rear: true, quarter: true },
   roof: { rails: { x: [0.5, 0.56], z: [-1.72, 0.12], rise: 0.03 }, spoiler: { z: [-1.82, -1.74], y: [1.46, 1.51], halfWidth: 0.5 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 } },
-  exhaust: { tips: 2, x: 0.5, y: 0.47, size: [0.12, 0.05], shape: "rect" },
+  exhaust: { tips: 2, x: 0.5, y: 0.42, size: [0.15, 0.05], shape: "round" },
   details: {
     lines: [
       { view: "top", points: [[1.97, 0], [1.95, 0.35], [1.9, 0.52], [1.82, 0.62]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },

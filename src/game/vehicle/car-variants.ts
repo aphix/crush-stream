@@ -337,7 +337,7 @@ export interface BodyStyle {
   /**
    * Where the dummies' world takes the cabin to start (m, the cage's frame; `ragdoll-proxy.ts` `BELT_Y`): a cage top under it is a column
    * from under the ground (a hood, a deck, a bed), one over it a roof slab. Absent, `BELT_Y`'s 1 m: every car's hood and deck under it,
-   * every roof over it, but a truck's.
+   * every roof over it, but a truck's and the SUV's.
    */
   proxyBelt?: number;
   /** Rear door shut line on four-door bodies, or null. */
