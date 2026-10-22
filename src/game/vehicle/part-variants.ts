@@ -702,6 +702,8 @@ const SEAM_COVER_BAND = [0, 1] as const;
 const SEAM_COVER_TUCK = 0.02;
 /** Its dark roll along the seam: this wide (m) out past the seam and down to this deep (m) in the skin, the shut line drawn in the mesh. */
 const SEAM_COVER_ROLL = { out: 0.004, sink: 0.001 } as const;
+/** A seam bend (rad) past which its roll is cut into separate strips: a 4 mm roll over 7 mm of lift turns its faces 70° apart across a 78° bend, so strips sharing a hairpin's vertex are a fold shaded smooth. */
+const SEAM_COVER_BEND = (60 * Math.PI) / 180;
 const SEAM_COVERS = new WeakMap<BodyStyle, Map<boolean, THREE.BufferGeometry | null>>();
 
 /** `parts` merged, each vertex carrying its part's `FITTING_TONE` (0: the bumper's own trim). */
@@ -710,6 +712,17 @@ function fittingsMerged(parts: readonly (readonly [THREE.BufferGeometry, number]
   const out = mergeGeometries(parts.map(([geo]) => geo));
   if (!out) throw new Error(`Failed to merge the ${what}`);
   return out;
+}
+
+/** `line` cut into runs at every point it bends more than `SEAM_COVER_BEND`: the bend closes one run and opens the next, so its two sides keep vertices of their own. */
+function seamRuns(line: readonly SkinPoint[]): SkinPoint[][] {
+  const runs: SkinPoint[][] = [[line[0]!]];
+  for (let i = 1; i < line.length; i++) {
+    runs[runs.length - 1]!.push(line[i]!);
+    const next = line[i + 1];
+    if (next && next.p.clone().sub(line[i]!.p).angleTo(line[i]!.p.clone().sub(line[i - 1]!.p)) > SEAM_COVER_BEND) runs.push([line[i]!]);
+  }
+  return runs;
 }
 
 /** One side's seam cover in the car frame, right side (`mirror`: met on the left skin mirrored onto the right): a band met on the skin down from the seam, and its dark roll. */
@@ -721,10 +734,9 @@ function seamCoverSide(style: BodyStyle, front: boolean, top: SeamLine, edge: Se
   const drop = Math.max(...top.map(([, y]) => y)) - face;
   const seam = skin.densify([...top.map((p) => skin.at(p)), ...edge.map((p) => skin.at(p, true))], false);
   const band = lampRibbon(skin, seam, false, SEAM_COVER_BAND.map((f) => [axis * f * drop, SEAM_COVER_UP] as const), true);
-  const roll = lampRibbon(skin, seam, false, [[0, SEAM_COVER_UP], [-axis * SEAM_COVER_ROLL.out, -SEAM_COVER_ROLL.sink]]);
   const [panel] = patchGeometry(band, 0);
-  const [shut] = patchGeometry(roll, 0);
-  return fittingsMerged([[panel, 0], [shut, FITTING_TONE.black]], "bumper seam cover");
+  const shut = seamRuns(seam).map((run) => patchGeometry(lampRibbon(skin, run, false, [[0, SEAM_COVER_UP], [-axis * SEAM_COVER_ROLL.out, -SEAM_COVER_ROLL.sink]]), 0)[0]);
+  return fittingsMerged([[panel, 0], ...shut.map((g) => [g, FITTING_TONE.black] as const)], "bumper seam cover");
 }
 
 /**

@@ -371,9 +371,8 @@ describe("given every part whose hard edges are declared, as built for every bod
 
 /** Styles whose drawn bumper still shades a fold over the bumper crease smooth, with its owner and the reading: the owner's ticket turns them live. */
 const BUMPER_FOLDS_OPEN: Partial<Record<CarStyleId, string>> = {
-  sedan: "CarLamps6: the seam cover's roll and tuck faces share normals across folds of 70° and more, front 115 of them",
-  hatchback: "CarLamps6: the seam cover's roll and tuck faces share normals across folds of 70° and more, front 113 of them",
-  wagon: "CarLamps6: the seam cover's roll and tuck faces share normals across folds of 70° and more, front 155 of them",
+  sedan: "lamps lane: the seam cover's band, met on the skin across the bumper's side corner, welds front 5 folds of 70° and more",
+  wagon: "lamps lane: the seam cover's band, met on the skin across the bumper's side corner, welds front 2 folds of 70° and more",
 };
 
 describe("given every style's bumpers as its car wears them (the fascia with its fittings and seam cover merged in)", () => {
@@ -390,7 +389,7 @@ describe("given every style's bumpers as its car wears them (the fascia with its
         const mesh = group.children.find((o): o is THREE.Mesh => o instanceof THREE.Mesh);
         assert.ok(mesh, `${id} ${end}: a drawn mesh`);
         const census = censusOfEdges(mesh.geometry, CREASE_DEGREES.bumper, false);
-        assert.equal(census.sharpEdgesStillShared, 0, `${id} ${end}: ${census.sharpEdgesStillShared} of its ${census.sharpEdges} folds over ${CREASE_DEGREES.bumper}° shaded smooth`);
+        assert.equal(census.sharpEdgesStillShared, 0, `${id} ${end}: ${census.sharpEdgesStillShared} of its ${census.sharpEdges} folds over ${CREASE_DEGREES.bumper}° shaded smooth; first: ${census.firstOffence}`);
       }
     });
   }
