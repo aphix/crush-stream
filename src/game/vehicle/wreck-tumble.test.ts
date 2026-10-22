@@ -5,21 +5,28 @@ import { DeformableCar } from "./car.ts";
 import { assignClass, CLASSES } from "./vehicle-classes.ts";
 import { paint, DT } from "./test-support.ts";
 import { rigidCentre } from "./car-air.ts";
+import { centreLift } from "./car-cage-rig.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
+import { GRAVITY } from "../kernel/constants.ts";
 
 /**
  * A lifted wreck's rigid step turns it about its centre of mass, its masses' centroid lifted with its body (`wreckCentre`, `centreLift`:
  * the monster's 0.71 m, fading as the body tips past `UPRIGHT_UP_Y`), the physical one: the masses are its stock frame, without the
- * lifted body's mass. The deform reads `velocity` at the masses' centroid instead (`armMasses`' seatVelocity, its momentum hold), and the
- * two stand ω × lift apart: a monster wreck tumbling off the owner's stack column at 9 rad/s ended with its masses 11.7 m/s off its body
- * (stack-column, union 5af15133). Read about the rigid centre, the masses' momentum should be the body's.
+ * lifted body's mass. The deform read `velocity` at the masses' centroid instead (`armMasses`' seatVelocity, its rigid ride), and the
+ * two stood ω × lift apart: a monster wreck tumbling off the owner's stack column at 9 rad/s ended with its masses 11.7 m/s off its body
+ * (stack-column, union 5af15133); this row read 5.16 m/s off at up 0.50 (union 721a9201). Read about the rigid centre, the masses'
+ * momentum is the body's.
  */
-const splitAtCentre =
-  "after the overhaul (Main ruling (c)): the deform reads velocity at the lifted wreck centre (seatVelocity, its momentum hold); union 721a9201 reads 5.16 m/s off at up 0.50; an unlifted wreck centre reads 0.00 but drops the monster wreck's centre of mass 0.71 m, and 7 rest rows read it (CarRig rig-lift ce1c7955, parked)";
 const SPIN = 9;
 const SECONDS = 0.5;
 /** How far (m/s) the masses' vertical velocity, referred to the rigid centre, may stand off the body's. */
 const OFF_MAX = 0.5;
+/**
+ * How far (m/s) the body's vertical velocity may stand off free fall's. Its lift fading moves its centre along its frame, and its momentum
+ * stays: `velocity` carried to the moved centre (+= ω × the shift) read 6.13 m/s off here (+4.37 m/s against −1.76 at step 10, the lift
+ * gone); the union 1c63fe59 and this read 0.00.
+ */
+const FALL_OFF_MAX = 0.1;
 
 /** A monster wreck 6 m up, its masses live (armed at rest), then rolling about its length at `SPIN` rad/s about its rigid centre, masses and body alike. */
 function tumbling(): DeformableCar {
@@ -52,7 +59,7 @@ function massesAtCentre(car: DeformableCar): number {
 }
 
 describe("given a monster wreck tumbling in the air at 9 rad/s about its length, its lifted centre falling to its masses' as it lies over", () => {
-  it(`when it tumbles for ${SECONDS} s, then its masses' vertical velocity about its centre stays within ${OFF_MAX} m/s of its body's`, { todo: splitAtCentre }, (t) => {
+  it(`when it tumbles for ${SECONDS} s, then its masses' vertical velocity about its centre stays within ${OFF_MAX} m/s of its body's`, (t) => {
     const car = tumbling();
     const w = newWorld([car]);
     let worst = 0;
@@ -68,5 +75,22 @@ describe("given a monster wreck tumbling in the air at 9 rad/s about its length,
     t.diagnostic(`worst ${worst.toFixed(2)} m/s (${at})`);
     assert.ok(car.deform.massActive, "the monster is no wreck");
     assert.ok(worst < OFF_MAX, `the masses stood ${worst.toFixed(2)} m/s off the body (${at})`);
+  });
+
+  it(`when it tumbles for ${SECONDS} s, its lift fading as it lies over, then its body falls as gravity has it: its vertical velocity within ${FALL_OFF_MAX} m/s of −g t`, (t) => {
+    const car = tumbling();
+    const w = newWorld([car]);
+    let worst = 0;
+    let at = "";
+    for (let f = 0; f < SECONDS / DT; f++) {
+      stepWorld(w, DT);
+      const fall = -GRAVITY * (f + 1) * DT;
+      const off = Math.abs(car.velocity.y - fall);
+      if (off <= worst) continue;
+      worst = off;
+      at = `step ${f}: body ${car.velocity.y.toFixed(2)} m/s, −g t ${fall.toFixed(2)}, lift ${centreLift(car).toFixed(2)} m`;
+    }
+    t.diagnostic(`worst ${worst.toFixed(2)} m/s (${at})`);
+    assert.ok(worst < FALL_OFF_MAX, `the body's fall stood ${worst.toFixed(2)} m/s off gravity's (${at})`);
   });
 });

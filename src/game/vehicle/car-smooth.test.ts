@@ -1296,7 +1296,8 @@ const SIM_DIGEST_BY_STYLE = [
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
   { id: "police", digest: "1071e0a8d52794a5b4df7b49cdf4e644455f5bf36fa869a247892e9055a5a481" },
   // The monster is its own body style (its own dims, cage and lifted class body), no longer the pickup's.
-  { id: "monster", digest: "7a1610ef755890bc133f287a9c31f175de8e9d6d7ee310aba95af8fa653a4297" },
+  // Again when a wreck's masses rode its lifted centre, not their centroid (CarRig rig-seat): 7a1610ef... -> db09b87c...; the other six unchanged.
+  { id: "monster", digest: "db09b87c25c1d4e2c03d0f9a902d0f055f412591c298fb2878c3827357453f39" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style crashed into the wall at 48 km/h by the engine's own step", () => {

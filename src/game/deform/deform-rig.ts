@@ -344,9 +344,19 @@ export abstract class DeformRig {
   }
 
   protected prevYaw = 0;
-  /** The rigid body's velocity and spin (`followGroup`'s arguments, kept: the car's own vectors; a restored wreck's from `DeformableCar.solverState`) the masses ride when the structure is rigid and the wheels are freed against. */
+  /**
+   * The rigid body's velocity and spin (`followGroup`'s arguments, kept: the car's own vectors; a restored wreck's from `DeformableCar.solverState`) the masses ride when the
+   * structure is rigid and the wheels are freed against: `bodyV` is its centre's, the masses' centroid stood `liftOffset` off.
+   */
   bodyV = new THREE.Vector3();
   bodyW = new THREE.Vector3();
+  /**
+   * The rigid body's centre's offset (m, world) from the masses' centroid: a lifted class's body rises over the stock frame its masses are, and
+   * its centre of mass with it (`centreLift`, along its up). Kept by the car at its pose (`CarCore.refreshBasis`); zero for an unlifted class.
+   * Read at the centroid, the monster wreck's masses rode its body ω × 0.71 m off the centre it turned about: 11.7 m/s apart tumbling off the
+   * owner's stack column (union 5af15133).
+   */
+  readonly liftOffset = new THREE.Vector3();
   /** Share (0–1) of the read pitch/roll the frame takes, and the sim time it was last eased at (followGroup). */
   protected lean = 1;
   protected leanAt = -Infinity;
