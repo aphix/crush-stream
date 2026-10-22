@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { FULL_POOL, LampBatch, LampLights, type LampPool, lampPoolFor, PHONE_POOL } from "./lamp-lights.ts";
 import { drawnLamp } from "./part-variants.ts";
-import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { assignClass, STYLE_CLASS, type VehicleClassId } from "./vehicle-classes.ts";
 import { CLASS_LIFT, INTERIOR_MESH } from "./constants.ts";
 import { PartSeat } from "./part-geometry.ts";
@@ -180,6 +180,24 @@ describe("given every body style fitted with its own lamps", () => {
         assert.ok(pos.distanceTo(q.setFromMatrixPosition(m)) < 1e-6, `${name} lights from ${pos.distanceTo(q).toFixed(3)} m off the drawn lamp`);
         assert.ok(dir.dot(axis) > 0.9999, `${name} light axis off the lamp's`);
       }
+    });
+  }
+});
+
+describe("given each style with a high-mount brake lamp", () => {
+  const styles = CAR_STYLE_IDS.filter((s) => CAR_STYLES[s].lamps.brake);
+  it("the control: some style has one", () => assert.ok(styles.length > 0));
+  for (const style of styles) {
+    it(`when a ${style} is built, then its brake lamp sits on the first surface met from behind, the body or the rear glass, not inside the cabin`, () => {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, style);
+      const brake = car.lampFittings.find((f) => f.kind === "brake")!;
+      car.group.updateMatrixWorld(true);
+      const glass = car.glassPanes.find((p) => p.name === "rear")!.mesh;
+      const seat = brake.seat.position;
+      const hit = new THREE.Raycaster(new THREE.Vector3(seat.x, seat.y, -5), new THREE.Vector3(0, 0, 1)).intersectObjects([car.body, glass], false)[0];
+      assert.ok(hit, `${style}: nothing behind its brake lamp`);
+      const name = hit.object === glass ? "the rear glass" : "the body";
+      assert.ok(Math.abs(hit.point.z - seat.z) < 0.01, `${style}: brake lamp at z ${seat.z.toFixed(3)}, ${name} met from behind at z ${hit.point.z.toFixed(3)}`);
     });
   }
 });
