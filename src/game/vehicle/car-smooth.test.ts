@@ -1019,8 +1019,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
   { id: "hatchback", digest: "42b4ca457d2712b398a8e0066d64d641a7b4d4b690fad50702b7f14e488e0f4b" },
   { id: "wagon", digest: "2d73e075b0b3df350ab6052aa084e24fb2b41a6a2d297ee7b6baa0ddb311118f" },
-  // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945).
-  { id: "coupe", digest: "07208a77ebde9a8441a8671d73a84a547a27d6f70ed1813fd327a5db15fa93fa" },
+  // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), and for its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back).
+  { id: "coupe", digest: "ae4b4ab5181661d4cbe3ebba45735555374ef490398c962ccf8895f84dbabf9b" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   { id: "pickup", digest: "1c94ef0982232d8ed7a9c59f2cc37d17d0e14cc4f344c8b25399f48c7c16e8a3" },

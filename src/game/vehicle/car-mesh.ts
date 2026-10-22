@@ -93,13 +93,36 @@ export function roofAt(z: number, style: BodyStyle): { y: number; x: number } {
   return { y: lerp(sl.yBelt, sl.yRoof, c), x: lerp(sl.hw * 0.55, sl.cabinHw, c) };
 }
 
+/**
+ * The drawn roof's dome at `z` (`roofEnds`): its whole section's drop (m) and its crown's rise over the dome's edge (m). Over an end's
+ * run it rolls in a quarter ellipse (level with the roof where the run starts) onto that end's glass top; unset, none and `ROOF_CROWN`.
+ */
+export function roofDome(z: number, style: BodyStyle): { drop: number; crown: number } {
+  const runs = style.roofEnds;
+  const ends = [
+    { run: runs?.rear, z: style.roofZ[0], glassY: style.rearGlass.top[0] },
+    { run: runs?.front, z: style.roofZ[1], glassY: style.windshieldTop[0] },
+  ];
+  for (const end of ends) {
+    const d = Math.abs(z - end.z);
+    if (end.run === undefined || d >= end.run) continue;
+    const s = 1 - d / end.run;
+    const roll = 1 - Math.sqrt(1 - s * s);
+    const edge = roofAt(end.z, style).y;
+    return { drop: roll * Math.max(0, edge - end.glassY), crown: lerp(ROOF_CROWN, Math.max(0, end.glassY - edge), roll) };
+  }
+  return { drop: 0, crown: ROOF_CROWN };
+}
+
 /** Height of the roof panel's top at (`x`, `z`), the top ring of `makeRoofGeometry`: the centre-line crown, the dome's
- *  shoulder, then down to the cant line at the roof's half-width. */
+ *  shoulder, then down to the cant line at the roof's half-width; rolled onto the glass at the ends (`roofDome`). */
 export function roofTopY(x: number, z: number, style: BodyStyle): number {
   const r = roofAt(z, style);
-  const [us, ys] = ROOF_SHOULDER;
+  const { drop, crown } = roofDome(z, style);
+  const [us] = ROOF_SHOULDER;
+  const ys = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
   const u = Math.min(Math.abs(x) / r.x, 1);
-  return r.y + (u < us ? lerp(ROOF_CROWN, ys, u / us) : lerp(ys, 0, (u - us) / (1 - us)));
+  return r.y - drop + (u < us ? lerp(crown, ys, u / us) : lerp(ys, 0, (u - us) / (1 - us)));
 }
 
 /** The roof's cant line: its side lip's bottom, where the pillars end and the side glass plane leans to. */
