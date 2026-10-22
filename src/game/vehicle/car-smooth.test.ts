@@ -130,11 +130,13 @@ const SIDE_HALF_FIRST = 2;
 const SIDE_HALF_LAST = 4;
 /** Slices nearer than this (m) to the end faces are the rolled ends. */
 const END_SLICES = 3;
-/** The front door's cut runs from z 0 to 0.54 (`doorAperture`): the side there drops to the sill and faces up, so no outward test reads it. */
+/** The platform's front door cut runs from z 0 to 0.54 (`doorAperture`): the side there drops to the sill and faces up, so no outward test at rest reads it. */
 const DOOR_CUT_Z = [-0.05, 0.6] as const;
+/** A slice standing on a door cut's end (to float32) is the full side, read like any other. */
+const DOOR_CUT_END = 1e-4;
 
-/** The slice's ring points on the body's side (both halves), with the vertex's ring-centroid estimate of "outward". */
-function outerSidePoints(geometry: THREE.BufferGeometry, normals: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): { vertex: number; normal: THREE.Vector3; outward: THREE.Vector3 }[] {
+/** The slice's ring points on the body's side (both halves) whose `rest` z lies outside the door cut `doorCut`, with the vertex's ring-centroid estimate of "outward". */
+function outerSidePoints(geometry: THREE.BufferGeometry, normals: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, doorCut: readonly [number, number], rest: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): { vertex: number; normal: THREE.Vector3; outward: THREE.Vector3 }[] {
   const loft = loftOf(geometry);
   const halfCount = (loft.ring - 1) / 2;
   const centre = new THREE.Vector3();
@@ -151,7 +153,7 @@ function outerSidePoints(geometry: THREE.BufferGeometry, normals: THREE.BufferAt
       if (k === halfCount || half > SIDE_HALF_LAST || half < SIDE_HALF_FIRST) continue;
       const vertex = slice * loft.ring + k;
       const at = positionAt(geometry, vertex);
-      if (!isEnd && at.z > DOOR_CUT_Z[0] && at.z < DOOR_CUT_Z[1]) continue;
+      if (!isEnd && rest.getZ(vertex) > doorCut[0] + DOOR_CUT_END && rest.getZ(vertex) < doorCut[1] - DOOR_CUT_END) continue;
       points.push({ vertex, normal: new THREE.Vector3().fromBufferAttribute(normals, vertex), outward: at.clone().sub(isEnd ? centre : ringCentre).normalize() });
     }
   }
@@ -185,7 +187,7 @@ describe("given every body style's rest meshes (chassis, bonnet, boot, doors, bu
 
     it(`when a ${testCase.id}'s body side and ends are read, then every normal points outward (dot with the centroid direction above 0)`, () => {
       const chassis = meshes[0]![1];
-      for (const point of outerSidePoints(chassis, chassis.getAttribute("normal"))) {
+      for (const point of outerSidePoints(chassis, chassis.getAttribute("normal"), DOOR_CUT_Z, chassis.getAttribute("position"))) {
         assert.ok(point.normal.dot(point.outward) > 0, `${testCase.id} vertex ${point.vertex}: normal ${point.normal.dot(point.outward)} against outward`);
       }
     });
@@ -1086,9 +1088,12 @@ function crushedByWall(id: CarStyleId): DeformableCar {
   return car;
 }
 
-/** No normal (`normals`) of `geometry` on the side or ends points into the hull past `CRUSHED_OUTWARD_DOT_FLOOR`. */
-function assertFacesOut(label: string, geometry: THREE.BufferGeometry, normals: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): void {
-  for (const point of outerSidePoints(geometry, normals)) {
+/**
+ * No normal (`normals`) of `geometry` on the side or ends points into the hull past `CRUSHED_OUTWARD_DOT_FLOOR`, outside `style`'s own door
+ * cut (`door.aperture`): its sill and feathered jambs lie under the door skin, and a crush shears their slivers past each other there.
+ */
+function assertFacesOut(label: string, geometry: THREE.BufferGeometry, normals: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, style: BodyStyle): void {
+  for (const point of outerSidePoints(geometry, normals, style.door.aperture, makeChassisGeometry(style).getAttribute("position"))) {
     assert.ok(point.normal.dot(point.outward) > CRUSHED_OUTWARD_DOT_FLOOR, `${label} vertex ${point.vertex}: crushed normal ${point.normal.dot(point.outward)} against outward`);
   }
 }
@@ -1102,7 +1107,7 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
         const length = Math.hypot(normals.getX(vertex), normals.getY(vertex), normals.getZ(vertex));
         assert.ok(Number.isFinite(length) && Math.abs(length - 1) < 1e-4, `${id} vertex ${vertex}: crushed normal length ${length}`);
       }
-      assertFacesOut(id, geometry, normals);
+      assertFacesOut(id, geometry, normals, CAR_STYLES[id]);
     });
   }
   // A class whose tyres ride free of the body (the monster's) runs no tyre hold: its drawn skin, read above, is the sim's.
@@ -1114,7 +1119,7 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
       const geometry = car.body.geometry.clone();
       geometry.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(written), 3));
       geometry.computeVertexNormals();
-      assertFacesOut(`${id} sim skin`, geometry, geometry.getAttribute("normal"));
+      assertFacesOut(`${id} sim skin`, geometry, geometry.getAttribute("normal"), CAR_STYLES[id]);
     });
   }
 });
