@@ -292,6 +292,15 @@ export function sideX(y: number, hw: number, yb: number, rockerY: number): numbe
   return hw + SIDE_OUT - TUCK * v * v;
 }
 
+/** The drawn body side's shoulder point at `SHOULDER_TOP` (its ring point 2) at `z`, and the shoulder's unit tangent there, up toward the deck. */
+export function shoulderTop(z: number, style: BodyStyle): { x: number; y: number; tangent: readonly [number, number] } {
+  const { hw, yBelt } = sampleSlice(z, style.profile);
+  const y = yBelt - FEATURE_DROP + SHOULDER[1] * detSin(SHOULDER_TOP);
+  const [dx, dy] = [-SHOULDER[0] * detSin(SHOULDER_TOP), SHOULDER[1] * detCos(SHOULDER_TOP)];
+  const run = hypot2(dx, dy);
+  return { x: sideX(y, hw, yBelt, 0) - seamInset(z, style), y, tangent: [dx / run, dy / run] };
+}
+
 /** Shoulder arc angles sampled by the ring (rad), top down; the feature line (0) follows. Two 30° chords sag 3 mm. */
 const SHOULDER_RING = [SHOULDER_TOP, Math.PI / 6] as const;
 /**

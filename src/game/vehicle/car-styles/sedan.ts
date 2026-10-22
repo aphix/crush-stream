@@ -214,6 +214,8 @@ export const SEDAN: BodyStyle = {
    */
   pillars: { b: { width: [0.165, 0.105], z: [-0.2925, -0.3225] } },
   blackout: { sail: true, b: true, cowl: true },
+  /** The side window's line ends at the belt here, behind the quarter glass (reference side view); the C-pillar sails onto the haunch. */
+  cPillar: { tip: [0.99, -1.23] },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,

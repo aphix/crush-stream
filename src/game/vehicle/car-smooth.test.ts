@@ -4,12 +4,12 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
-import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
-import { makeGreenhouseFrame, makeRoofGeometry, postSection } from "./car-greenhouse-mesh.ts";
+import { SAIL_SWEEP, makeGreenhouseFrame, makeRoofGeometry, postSection } from "./car-greenhouse-mesh.ts";
 import { DeformableCar } from "./car.ts";
 import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
 import { cageSourceOf } from "./car-cage-rig.ts";
@@ -541,6 +541,34 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
   });
 });
 
+/** A sail's foot stands at most this far (m) off the body's shoulder point it leaves, its face within `SAIL_LEAN_DEGREES` of the shoulder's tangent there (a flat post's foot stands 7-15 cm inboard, 35-45° off). */
+const SAIL_FOOT_OFF = 0.005;
+const SAIL_LEAN_DEGREES = 10;
+/** Sections read along the haunch, behind the run where the sail's foot sweeps in onto the side window's line: at least this many (its rear end and the sweep's start). */
+const SAIL_HAUNCH_SECTIONS = 2;
+
+describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", () => {
+  for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar)) {
+    it(`when a ${id}'s sail is read along its haunch, then each section's foot sits on the body's shoulder and its face leaves it within ${SAIL_LEAN_DEGREES}° of the shoulder's tangent`, () => {
+      const style = CAR_STYLES[id];
+      const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+      const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
+      const { ring, slices } = loftOf(sail);
+      let read = 0;
+      for (let s = 0; s < slices; s++) {
+        const [foot, next] = [positionAt(sail, s * ring), positionAt(sail, s * ring + 1)];
+        if (foot.z > haunchZ) continue;
+        read++;
+        const shoulder = shoulderTop(foot.z, style);
+        const off = Math.hypot(foot.x - shoulder.x, foot.y - shoulder.y);
+        const lean = angleBetweenDegrees(next.sub(foot).normalize(), new THREE.Vector3(shoulder.tangent[0], shoulder.tangent[1], 0));
+        assert.ok(off <= SAIL_FOOT_OFF && lean < SAIL_LEAN_DEGREES, `${id} z ${foot.z.toFixed(3)}: foot ${(off * 1000).toFixed(1)} mm off the shoulder, face ${lean.toFixed(1)}° off its tangent`);
+      }
+      assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
+    });
+  }
+});
+
 describe("given every body style's greenhouse frame", () => {
   for (const id of CAR_STYLE_IDS) {
     for (const testCase of roundedPartCases) {
@@ -677,22 +705,24 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
  * into the body on top of its loft: red if one grows.
  */
 const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number }> = {
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 264 },
+  // The sedan's, police's and coupe's C-pillar is a sail (`cPillar`): 6 or 7 sections of 19 points a side, not a post's 2 of 11.
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 416 },
   hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 296 },
   wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 296 },
-  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 264 },
+  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 454 },
   pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 264 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 264 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 416 },
   monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 264 },
 };
-/** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and the A-post's stations then. */
+/** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and their stations then (the A-post's, every other post's). */
 const CHAMFERED_POST_RING = 11;
 const CHAMFERED_A_POST_STATIONS = 3;
+const CHAMFERED_POST_STATIONS = 2;
 
 /**
  * `style`'s arch lips' and wheel humps' vertices (`archLipGeometry`, `wellHumpGeometry`), its drawn liners' over the cage's one-sided
  * liners (`makeWellLiners`: their insides and end caps), the rings its boot cut and its nose add to the loft, its walls' top copies, and
- * its posts' vertices past the chamfered posts' (`CHAMFERED_POST_RING` a station, the A-post on `CHAMFERED_A_POST_STATIONS`).
+ * its posts' vertices past the chamfered posts' (`CHAMFERED_POST_RING` a station on `CHAMFERED_A_POST_STATIONS` or `CHAMFERED_POST_STATIONS`).
  */
 function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number } {
   const body = makeChassisGeometry(style);
@@ -706,7 +736,7 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; li
     bootRings: (rings(true, true) - rings(false, true)) * loftOf(body).ring,
     noseRings: (rings(true, true) - rings(true, false)) * loftOf(body).ring,
     wallTops: body.userData.wallTops as number,
-    curvedPosts: posts.reduce((n, g) => n + loftOf(g).ring * loftOf(g).slices - CHAMFERED_POST_RING * (g.name === "a" ? CHAMFERED_A_POST_STATIONS : loftOf(g).slices), 0),
+    curvedPosts: posts.reduce((n, g) => n + loftOf(g).ring * loftOf(g).slices - CHAMFERED_POST_RING * (g.name === "a" ? CHAMFERED_A_POST_STATIONS : CHAMFERED_POST_STATIONS), 0),
   };
 }
 

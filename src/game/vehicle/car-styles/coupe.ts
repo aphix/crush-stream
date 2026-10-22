@@ -117,6 +117,8 @@ export const COUPE: BodyStyle = {
   windshieldTop: [1.255, 0.12],
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96 },
   quarter: { zRearBot: -0.96, zRearTop: -0.74 },
+  /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle. */
+  cPillar: {},
   midPillarZ: null,
   rearBulkhead: { z: -0.9, yTop: 0.89 },
   tubs: [[-0.9, 0.7, 0.3]],
