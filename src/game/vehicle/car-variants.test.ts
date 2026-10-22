@@ -1592,7 +1592,8 @@ describe("given a body style's P2 parts", () => {
     const batch = new LampBatch(2);
     batch.sync([car]);
     const got = new THREE.Matrix4();
-    batch.meshes[7]!.getMatrixAt(0, got);
+    const lidDraws = batch.slots[7]!;
+    lidDraws[lidDraws.length === 1 ? 0 : lid.variant]!.getMatrixAt(0, got);
     for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!) < 1e-6, `the opened lid's pose, element ${k}`);
   });
 
