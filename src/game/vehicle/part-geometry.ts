@@ -36,7 +36,7 @@ export const BEHIND_GLASS: ReadonlySet<number> = new Set([PART_KIND.seatFront, P
 export const MIRROR_ROOT = 0.02;
 /** The mirror glass's reach from its seat (m): a car's `door.mirrorReach` scales the platform mirror to it (the seat's x-scale, which the sim's boxes read). */
 export const MIRROR_REACH = 0.21;
-/** The grille seat on the front bumper (m, bumper space): the platform grille's centre, which the sim's box keeps for every style. */
+/** The grille seat on the front bumper (m, bumper space): the platform grille's centre, which the sim's box keeps for every style while the grille is attached. */
 export const GRILLE_SEAT = { y: 0.1, z: 0.06 } as const;
 
 function mirror(sign: number): THREE.BufferGeometry {
@@ -96,7 +96,7 @@ export const partGeometry = (kind: PartKind): THREE.BufferGeometry => GEOMETRY[k
  * mesh was. A torn part draws as a child mesh of its seat instead (`loosen`); the clone is kept across `fasten`, so its dents persist.
  */
 export class PartSeat extends THREE.Object3D {
-  /** The shape the sim measures; `drawn` is what shows (a style's own part, `drawnPart`), in the same seat space. */
+  /** The shape the sim measures while attached; `drawn` is what shows (a style's own part, `drawnPart`), in the same seat space, and what a torn seat flies as. */
   readonly geometry: THREE.BufferGeometry;
   drawn: THREE.BufferGeometry;
   /** `drawn`'s variant among its kind's batch draws (`partBatchGeometries`); 0 for the platform part. */
@@ -124,12 +124,9 @@ export class PartSeat extends THREE.Object3D {
 
   loosen(): void {
     if (this.looseMesh === null) {
+      // A torn seat flies and collides as drawn (owner ruling); only an attached one is the platform's to the sim.
       const geo = this.drawn.clone();
-      if (this.drawn !== this.geometry) {
-        // The torn part flies as the box the sim knows (`boxShape`, `Box3.setFromObject`), whatever it draws.
-        this.geometry.computeBoundingBox();
-        geo.boundingBox = this.geometry.boundingBox!.clone();
-      }
+      geo.computeBoundingBox();
       this.looseMesh = new THREE.Mesh(geo, loosePartsMaterial());
       this.looseMesh.castShadow = false;
       this.looseMesh.receiveShadow = false;

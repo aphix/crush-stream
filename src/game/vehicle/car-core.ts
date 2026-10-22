@@ -291,15 +291,28 @@ export interface DetachPart {
   /** The road held up part of the open arch shell's drop in its last pose (`poseShell`): it is re-posed while it rests there, and torn off it leaves free of the road (`detachPart`). */
   held: boolean;
   dent: DentState;
-  /** The box it flies as (`stepLoose`), preallocated; measured when it first flies. */
+  /** The shape it flies as (`stepLoose`), preallocated; measured when it first flies. */
   shape: LooseShape;
 }
 
-/** A loose body's points and inertia (`loose-step.ts`): `count` points (0: not measured yet) as offsets from its middle `centre`, in the object's own axes, and its inverse inertia per unit mass about those axes. */
+/**
+ * A loose body's points and inertia (`loose-step.ts`): `count` points (0: not measured yet) as offsets from its middle `centre`, in the object's
+ * own axes, and its inverse inertia per unit mass about those axes.
+ */
 export interface LooseShape {
   readonly points: Float64Array;
   count: number;
   readonly centre: THREE.Vector3;
+  /** The half extents (m) of its bounding box about `centre`, in its own axes: its inertia's box and its wind plate (`blow`). */
+  readonly half: THREE.Vector3;
+  /** Its points are that box's corners and edge middles (`halfBox`); else they are the drawn shell's own (`boxShape`) or a wheel's rims. */
+  box: boolean;
+  /**
+   * It flies as its drawn shell's own points where its box has an empty corner (`boxShape`): every torn part but the mirrors and the light
+   * bar. A torn bumper is a U in plan (its swept ends and seam cover) and an L side-on, a door, quarter or arch a curved sheet, and as a box
+   * each rested on a corner its shell does not fill (12-73 cm off anything drawn).
+   */
+  readonly shell: boolean;
   readonly invI: THREE.Vector3;
   /** The farthest a point is from `centre` (m): the body's bounding radius. */
   reach: number;
@@ -778,7 +791,9 @@ export abstract class CarCore {
         shellFlutter: 0,
         held: false,
         dent: newDentState(),
-        shape: newLooseShape(),
+        // Every torn part may fly as its drawn shell's own points where its box leaves a corner empty (`boxShape`; ticket B, the owner's:
+        // a curved panel's box corners stood 12-73 cm off anything drawn), but the mirrors and the light bar, which fly as their boxes.
+        shape: newLooseShape(!name.startsWith(PART_FAMILY.mirror) && name !== LIGHT_BAR),
       };
       this.parts.push(p);
       return p;

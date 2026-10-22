@@ -337,6 +337,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * cracks the windshield. A sedan dropped on its roof keeps its rear glass (its fastback frame stands clear of the crushed roof). A wreck
  * struck again re-arms its hit on the slice's hardest contact, whichever touched first, and a graze too soft to arm no longer shuts the
  * window on the face behind it: a derby sedan's 25 km/h side hits wear its drivetrain out in 6 (each counted its graze's 8 of 36, or none).
+ * A torn part flies as its drawn shell's own points (the shell point farthest along each of its box's twenty ways), not its box, where its
+ * box leaves a corner empty: every torn part but the mirrors and the light bar. A bumper, door, quarter or arch no longer rests on a corner
+ * where nothing is drawn (12-73 cm off its shell), and the keyframe carries each loose part's twenty points and its shell flag. A torn grille,
+ * tail trim or mirror flies and collides as its style draws it, not as the platform part.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
