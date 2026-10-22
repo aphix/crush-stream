@@ -230,7 +230,7 @@ function patternCover(pattern: Pattern, u: number, v: number): number {
 }
 
 /** Each view's mirrored axis in its points ([a, b] index): an outline edge lying on x = 0 is the car's middle, not the patch's edge. */
-const MIRROR_AXIS: Readonly<Record<DetailView, 0 | 1 | null>> = { side: null, top: 1, front: 0, rear: 0 };
+const MIRROR_AXIS: Readonly<Record<DetailView, 0 | 1 | null>> = { side: null, top: 1, bottom: 1, front: 0, rear: 0 };
 
 /** Distance (m) from (a, b) to the outline of `points`, signed + inside (even-odd); edges on the `mirror` axis's zero are skipped. */
 function signedPolygonDistance(points: DetailPatch["points"], a: number, b: number, mirror: 0 | 1 | null): number {
