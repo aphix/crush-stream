@@ -1,5 +1,5 @@
 import { hypot2 } from "../kernel/physics-core.js";
-import type { BodyStyle } from "./car-variants.ts";
+import type { BodyStyle, PillarSpan } from "./car-variants.ts";
 
 /** Height at `z` along [z, y] stations in ascending z: linear between them, held past the ends. */
 function piecewise(stations: readonly (readonly [number, number])[], z: number): number {
@@ -81,10 +81,18 @@ export function doorGlassFrontZ(y: number, footY: number, topY: number, style: B
   return y <= knee ? foot + (kneeZ - foot) * ((y - footY) / (knee - footY)) : kneeZ + (top - kneeZ) * Math.min((y - knee) / (topY - knee), 1);
 }
 
-/** The drawn B-pillar's z band [rear, front] when the style sets its width (centred on `bPillar`), else null: the `bPillar` band. */
-export function bPillarBand(style: BodyStyle): readonly [number, number] | null {
-  const width = style.pillars?.b;
-  if (width === undefined) return null;
-  const mid = (style.bPillar.rear + style.bPillar.front) / 2;
-  return [mid - width / 2, mid + width / 2];
+/** A drawn pillar's z bands [rear, front] at the belt and at the top. */
+type PillarBands = { belt: readonly [number, number]; top: readonly [number, number] };
+
+/** `span`'s bands about its centre line, upright at `mid` unless it leans. */
+export function pillarBands(span: PillarSpan, mid: number): PillarBands {
+  const [beltZ, topZ] = span.z ?? [mid, mid];
+  const [beltWidth, topWidth] = span.width;
+  return { belt: [beltZ - beltWidth / 2, beltZ + beltWidth / 2], top: [topZ - topWidth / 2, topZ + topWidth / 2] };
+}
+
+/** The drawn B-pillar's bands when the style sets them (about the `bPillar` band's middle), else null: the `bPillar` band. */
+export function bPillarBand(style: BodyStyle): PillarBands | null {
+  const b = style.pillars?.b;
+  return b === undefined ? null : pillarBands(b, (style.bPillar.rear + style.bPillar.front) / 2);
 }
