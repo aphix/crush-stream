@@ -17,7 +17,8 @@ import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, glassCorners, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, bumperMaterial, makeLightBar, trimMaterial } from "./car-materials.ts";
-import { BOX_HALVES, boxShape, newLooseShape } from "./loose-step.ts";
+import { BOX_HALVES, boxShape, newLooseShape, partMass, stepLoose } from "./loose-step.ts";
+import { armSolids, Surface } from "../world/surfaces.ts";
 import { wearCarLook } from "../present/car-look.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
@@ -26,7 +27,7 @@ import { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { PLATFORM_RIG } from "../deform/deform-rig.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 import { LampBatch } from "./lamp-lights.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, LIGHT_BAR, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { bootPivot, lidSpec, roofHinged } from "./hinge-spec.ts";
 import { SPRINGS } from "./car-suspension.ts";
@@ -1518,6 +1519,52 @@ describe("given a body style's P2 parts", () => {
       });
       assert.ok(outside === 0, `${name}: ${outside} drawn vertices outside its loose box, the farthest ${(worst * 100).toFixed(1)} cm`);
     }
+  });
+
+  // ponytail: one box per torn part; an L/U bumper rests on the box's empty corner. Fix: two boxes from SHAPE_POINTS (2 x 8 corners).
+  it.todo("when a torn sedan bumper settles on flat ground or against a wall, then its drawn shell lies within 3 cm of every surface its loose box rests on (today the front bumper rolled 90° wedges its box's empty corner into the wall's foot: the shell hovers 13.4 cm off the ground and 16.2 cm off the wall; on the ground the centre of mass falls up to 20 cm (front) / 72 cm (rear) outside the shell's footprint)", () => {
+    const H = 1 / QUIET_HZ;
+    const WALL_Z = 3;
+    const HOVER = 0.03;
+    const RESTS_ON = 0.01;
+    const cases = [
+      { name: "bumperF", euler: [0, 0, Math.PI / 2], wall: true },
+      ...["bumperF", "bumperR"].flatMap((name) => [[0, 0, 0], [Math.PI, 0, 0], [Math.PI / 2, 0, 0], [0.4, 0.7, 0.3]].map((euler) => ({ name, euler, wall: false }))),
+    ] as const;
+    const fails: string[] = [];
+    for (const c of cases) {
+      const walls = new Surface();
+      walls.addPrism({ x: 0, z: WALL_Z + 0.15, yaw: 0, hx: 6, hz: 0.15, base: 0, top: 2, id: 0 });
+      armSolids(c.wall ? walls : null);
+      try {
+        const car = new DeformableCar(PAINT, new THREE.Scene(), null, "sedan");
+        const part = car["parts"].find((p) => p.name === c.name)!;
+        car["detachPart"](part, 0, new THREE.Vector3());
+        part.object.position.set(0, c.wall ? 0.6 : 0.9, c.wall ? WALL_Z - 1.2 : 0);
+        part.object.quaternion.setFromEuler(new THREE.Euler(...c.euler));
+        part.velocity.set(0, 0, c.wall ? 4 : 0);
+        part.angular.set(c.wall ? 0 : 0.3, c.wall ? 0 : 0.2, c.wall ? 0 : -0.25);
+        for (let t = 0; t < 5 && !part.shape.asleep; t += H) stepLoose(part, H, -1, undefined, undefined, partMass(part));
+        part.object.updateMatrixWorld(true);
+        const s = part.shape;
+        const corners = Array.from({ length: s.count }, (_, k) => new THREE.Vector3().fromArray(s.points, 3 * k).add(s.centre).applyQuaternion(part.object.quaternion).add(part.object.position));
+        const faces = [{ surface: "ground", gap: (p: THREE.Vector3) => p.y }, ...(c.wall ? [{ surface: "wall", gap: (p: THREE.Vector3) => WALL_Z - p.z }] : [])];
+        for (const f of faces) {
+          if (corners.filter((p) => f.gap(p) < RESTS_ON).length < 3) continue;
+          let shell = Infinity;
+          const v = new THREE.Vector3();
+          part.object.traverse((o) => {
+            if (!(o instanceof THREE.Mesh)) return;
+            const pos = o.geometry.getAttribute("position");
+            for (let i = 0; i < pos.count; i++) shell = Math.min(shell, f.gap(v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld)));
+          });
+          if (shell > HOVER) fails.push(`${c.name} ${c.euler.map((e) => e.toFixed(2))}${c.wall ? " into the wall" : ""}: rests on the ${f.surface}, its shell ${(shell * 100).toFixed(1)} cm off it`);
+        }
+      } finally {
+        armSolids(null);
+      }
+    }
+    assert.ok(fails.length === 0, fails.join("; "));
   });
 });
 
