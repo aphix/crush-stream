@@ -935,6 +935,12 @@ describe("given two cars driving head-on at each other, in shape deform mode", (
     for (let i = 0; i < 2; i++) assert.ok(nose(fast[i]!) > 1.4 * nose(slow[i]!), `56=${nose(fast[i]!).toFixed(3)} 28=${nose(slow[i]!).toFixed(3)}`);
   });
 
+  // The thrown-driver rows stage this hit as the one that kills both engines (`ragdoll-trigger`): with the contact hull's decimation
+  // changed (lid outlines held over its budget) the noses crushed 0.267 m, not 0.549, and both engines lived.
+  it("when each car drives at 56 km/h, then both engines are pushed back far enough to die", () => {
+    for (const [i, r] of fast.entries()) assert.equal(r.drivetrainAlive, false, `car ${i}: engine pushed back ${r.engineMax.toFixed(3)} m, nose ${nose(r).toFixed(3)} m`);
+  });
+
   it("when they hit at 28 km/h each with full overlap, then the impact point stays within 0.2 m of the centre line on both cars", () => {
     for (const r of slow) assert.ok(Math.abs(r.impactLocalX) < 0.2, `impactLocal.x=${r.impactLocalX.toFixed(3)}`);
   });

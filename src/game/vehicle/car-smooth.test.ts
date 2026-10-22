@@ -11,7 +11,7 @@ import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
 import { SAIL_SWEEP, makeGreenhouseFrame, makeRoofGeometry, postSection } from "./car-greenhouse-mesh.ts";
-import { drawnQuarter, makeWindshield, rearGlassCornerZ, rearGlassInset } from "./car-glass.ts";
+import { drawnQuarter, makeWindshield, rearGlassCornerZ, rearGlassInset, windshieldBaseY } from "./car-glass.ts";
 import { DeformableCar } from "./car.ts";
 import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
 import { cageSourceOf } from "./car-cage-rig.ts";
@@ -704,6 +704,9 @@ const WRAPPED_SEDAN: BodyStyle = {
   hood: { ...CAR_STYLES.sedan.hood, followGlass: 0.04 },
 };
 
+/** `WRAPPED_SEDAN` with its hood running 2 cm under the glass's base, as the references draw it, and its pane seated on that hood (`windshield.seat`). */
+const TUCKED_SEDAN: BodyStyle = { ...WRAPPED_SEDAN, windshield: { ...WRAPPED_SEDAN.windshield, seat: true }, hood: { ...WRAPPED_SEDAN.hood, followGlass: -0.02 } };
+
 describe("given every body style's drawn A-, B-, C- and divider posts", () => {
   for (const id of CAR_STYLE_IDS) {
     it(`when a ${id}'s posts are read at every station under the roof, then each section has ${POST_MIN_POINTS} points or more and every chord turns under ${POST_TURN_DEGREES}° from the one before`, () => {
@@ -1360,7 +1363,7 @@ describe("given every body style's car built whole", () => {
 describe("given every body style's panels cut from its smoothed loft", () => {
   for (const id of CAR_STYLE_IDS) {
     it(`when a ${id}'s panels are cut, then all ${PANEL_NAMES.length} exist, none shares a triangle with another, and every triangle indexes the loft or, on an arch, that arch's own lip`, () => {
-      const body = makeChassisGeometry(CAR_STYLES[id]);
+      const body = makeChassisGeometry(drawnStyle(CAR_STYLES[id]));
       const loft = loftOf(body);
       const regions = panelRegions(CAR_STYLES[id], body);
       assert.equal(regions.length, PANEL_NAMES.length);
@@ -1496,11 +1499,13 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // rear end over its rear glass's top (`roofZ[0]` -0.5 -> -0.46), its mid-cab roof 5 mm up to its dims' height.
   // The pickup's again for its rear glass's bowed top standing just ahead of the roof's end (`rearGlass.top`), so none shows past it.
   // The pickup's again for its cab narrowed to the top plate's roof edge (profile cabinHw) and its rear glass's top narrowed inside the roof's end.
-  { id: "pickup", digest: "c50231fa9a7dd766eb8fddf521f622dfdea5da2e3ba1a1a3fa7e04b50bed1c71" },
+  // Again for its door run back to the side plate's seam (`door.aperture`) with the B and rear post boxes behind it (`bPillar`, `quarter`).
+  { id: "pickup", digest: "47b06c11ceba2cb94ee2f16796aa9561d710a2ed9f04d043215dd095d1d282f2" },
   { id: "police", digest: "bb93a9082d0393e646fbc226fdb075fbda6f19d81cb54b371de3da40ef8becbc" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55); again for its windshield base at the side
   // plate's (`windshield.base` [1.0, .92] -> [1.05, .98]) and its door glass starting back at .60 (`aPillarFoot` .74 -> .6): the glass-front and A-post boxes moved.
-  { id: "monster", digest: "f52b18f7c2f6f4e1a77020397c5841a894e2d773b4a3a38c80b123faee458a80" },
+  // Again for its roof's flatter crown and tighter edge roll (`roofSection` crown .75, blend .8), as the pickup's.
+  { id: "monster", digest: "1893488550b96f86cc190274a321644a40d1aefe80848f9af60be73778d103ea" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {
@@ -1541,6 +1546,13 @@ describe("given a style whose windshield is drawn apart from its cage (`drawn`)"
   });
 });
 
+/** A pane's base vertex stands at most this far (m) over the hood's top. */
+const PANE_OVER_HOOD_M = 0.01;
+/** The probe ray starts this far (m) over the pane's base vertex: clear of the hood's skin, so it reads the hood's top, never its underside. */
+const PANE_PROBE_LIFT_M = 0.05;
+/** The drawn A-post's lowest point stands at most this far (m) over the windshield's side base. */
+const A_POST_FOOT_SLACK_M = 0.005;
+
 describe("given a sedan whose windshield wraps in plan and bulges in side view, its hood following it (`windshield.sideBow`, `hood.followGlass`)", () => {
   it("when its pane, A-post and hood are built, then the pane's side edge stands sideBow forward of its chord at mid-height, the drawn A-post laps that edge within 1 cm at every height, and the hood's rear edge runs the cowl's width in front of the pane's base at every point across", () => {
     const off: string[] = [];
@@ -1561,6 +1573,33 @@ describe("given a sedan whose windshield wraps in plan and bulges in side view, 
       const want = base[1] + 0.165 * (1 - xn * xn) + 0.04;
       if (Math.abs(hp.getZ(k) + oz - want) > 1e-4) off.push(`hood rear point ${k} at x ${x.toFixed(3)}: z ${(hp.getZ(k) + oz).toFixed(4)}, want ${want.toFixed(4)}`);
     }
+    assert.ok(off.length === 0, off.join("; "));
+  });
+  it("when its hood tucks under the glass's base, then the pane's base sits on the hood's top at every column (under 1 cm over it, never into it), and the drawn A-post's foot stands on that base", () => {
+    const off: string[] = [];
+    const glass = makeWindshield(TUCKED_SEDAN).getAttribute("position");
+    const hood = makeHoodGeometry(TUCKED_SEDAN);
+    const hp = hood.getAttribute("position");
+    const [oy, oz] = TUCKED_SEDAN.hood.origin;
+    const mesh = new THREE.Mesh(hood, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    mesh.position.set(0, oy, oz);
+    mesh.updateMatrixWorld(true);
+    // The hood's rear ring is as wide as the cowl: the pane's outer columns stand past it, over the fender, where no hood lies to read.
+    const hoodHalf = Math.max(...Array.from({ length: loftOf(hood).ring }, (_, k) => Math.abs(hp.getX(k))));
+    const ray = new THREE.Raycaster();
+    // The pane's base row is the first 11 vertices of its 11 x 9 grid.
+    for (let i = 0; i <= 10; i++) {
+      const [x, y, z] = [glass.getX(i), glass.getY(i), glass.getZ(i)];
+      if (Math.abs(x) > hoodHalf) continue;
+      ray.set(new THREE.Vector3(x, y + PANE_PROBE_LIFT_M, z), new THREE.Vector3(0, -1, 0));
+      const hit = ray.intersectObject(mesh)[0];
+      if (hit === undefined) off.push(`column ${i} (x ${x.toFixed(3)}): no hood under the pane's base`);
+      else if (y - hit.point.y < 0 || y - hit.point.y > PANE_OVER_HOOD_M) off.push(`column ${i} (x ${x.toFixed(3)}): the base stands ${((y - hit.point.y) * 1000).toFixed(1)} mm over the hood`);
+    }
+    const post = makeGreenhouseFrame(TUCKED_SEDAN, "drawn").find((g) => g.name === "a")!;
+    const foot = Math.min(...Array.from({ length: post.getAttribute("position").count }, (_, k) => post.getAttribute("position").getY(k)));
+    const side = windshieldBaseY(TUCKED_SEDAN, 1);
+    if (foot > side + A_POST_FOOT_SLACK_M) off.push(`the A-post's foot stands ${((foot - side) * 1000).toFixed(1)} mm over the pane's side base`);
     assert.ok(off.length === 0, off.join("; "));
   });
 });

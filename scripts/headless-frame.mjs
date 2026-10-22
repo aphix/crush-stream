@@ -8,7 +8,7 @@
  *
  *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png]
  *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--view hood] [--at 8] [--tear hood,bumperF]
- *     [--view side|top|iso|rear-iso --view-camera <json>] [--backdrop '#ffffff'] [--detail 2] [--paint '#8b8a8d' | --paint coupe=#2a313e,...]
+ *     [--view side|top|iso|rear-iso --view-camera <json>] [--backdrop '#ffffff'] [--detail 2] [--paint '#8b8a8d' | --paint coupe=#2a313e,...] [--state intact|open|stripped]
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
  * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
@@ -17,6 +17,8 @@
  * `--tear` tears the named parts (`DetachPart.name`: hood, bumperF, archFL, ...) off every car before the framing and hides them, to
  * show what is under them (the engine bay, the crash bars, the bare metal). `--open doorL,doorR,trunk,quarterL,quarterR` swings those
  * doors and the lid to their stops and peels those quarter panels as the Doors scene does, on every car, to show their inner faces.
+ * `--state` poses the hash's cars (`showPose`); `--camera r,pitch,angle[,x,y,z]` in a free-eye scene (the showcase) sets the eye about
+ * the point x,y,z (default the origin), looking at it.
  * `--sirens` flashes every light bar (with `night=1` in the hash: the lamps as seen in a night pursuit). `--break headL,headR,tailL,tailR`
  * breaks those lamps on every car, as a corner crush does. `--brake` holds every car's brake pedal down (its brake lamps lit).
  * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,
@@ -83,6 +85,7 @@ const { values } = parseArgs({
     at: { type: "string", default: String(START_S) },
     tear: { type: "string" },
     open: { type: "string" },
+    state: { type: "string", default: "intact" },
     sirens: { type: "boolean" },
     break: { type: "string" },
     brake: { type: "boolean" },
@@ -100,7 +103,7 @@ const camera = values.camera?.split(",").map(Number);
 if (!Number.isInteger(frames) || frames < 1) throw new Error(`--frames ${values.frames}: a whole number of frames, at least 1`);
 if (size === null) throw new Error(`--size ${values.size}: width x height, e.g. 1280x800`);
 if (!(atS >= 0)) throw new Error(`--at ${values.at}: sim seconds, 0 or more`);
-if (camera !== undefined && (camera.length !== 3 || !camera.every(Number.isFinite))) throw new Error(`--camera ${values.camera}: radius,pitch,angle, e.g. 2.4,0.12,2.1`);
+if (camera !== undefined && ((camera.length !== 3 && camera.length !== 6) || !camera.every(Number.isFinite))) throw new Error(`--camera ${values.camera}: radius,pitch,angle[,x,y,z], e.g. 2.4,0.12,2.1`);
 const seatView = values.view === undefined ? undefined : SEAT_VIEWS[values.view];
 const landingView = LANDING_VIEWS.includes(values.view) ? JSON.parse(readFileSync(resolve(values["view-camera"] ?? ""), "utf8")) : null;
 if (values.view !== undefined && seatView === undefined && landingView === null) throw new Error(`--view ${values.view}: hood, chase, far, ${LANDING_VIEWS.join(", ")}`);
@@ -284,6 +287,9 @@ for (const name of values.open?.split(",") ?? []) {
   if (!(name in OPEN)) throw new Error(`--open ${name}: one of ${Object.keys(OPEN).join(", ")}`);
   for (const car of engine["live"]()) OPEN[name](car);
 }
+// `--state`: the hash's cars in a presentation pose (`showPose`, the showcase's): as built, every door and lid open, or every part off.
+if (!["intact", "open", "stripped"].includes(values.state)) throw new Error(`--state ${values.state}: intact, open or stripped`);
+if (values.state !== "intact") for (const car of engine["live"]()) car.showPose(values.state);
 // `--brake`: each step's drive writes the pedal (`applyDrive`), so the pedal is pinned down on the drive itself, not set once.
 if (values.brake) for (const car of engine["live"]()) Object.defineProperty(car.drive, "brake", { get: () => 1, set() {} });
 // `--sirens`: every car with a light bar flashes it, as a police car in pursuit does.
@@ -295,8 +301,13 @@ for (const name of values.break?.split(",") ?? []) {
   for (const car of engine["live"]()) car["breakLamp"](car["lamps"][LAMP_AT[name]]);
 }
 if (camera !== undefined) {
-  const [radius, pitch, angle] = camera;
-  Object.assign(engine.view, { userFramed: true, radius, pitch, angle });
+  const [radius, pitch, angle, x = 0, y = 0, z = 0] = camera;
+  // The free eye (the showcase's) has no orbit: it is put at radius, pitch and angle about x,y,z, looking at it, and flies from there.
+  if (engine.view.flying) {
+    engine["camera"].position.set(x + Math.sin(angle) * radius * Math.cos(pitch), y + radius * Math.sin(pitch), z + Math.cos(angle) * radius * Math.cos(pitch));
+    engine["camera"].lookAt(x, y, z);
+    engine.view.free.begun = false;
+  } else Object.assign(engine.view, { userFramed: true, radius, pitch, angle });
   engine.advance(FRAMING_S, { frameDt: FRAME });
   await settle();
 }

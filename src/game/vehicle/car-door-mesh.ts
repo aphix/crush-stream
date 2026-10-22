@@ -14,7 +14,7 @@ import { CABIN_TRIM, PRIMER_ATTRIBUTE } from "./constants.ts";
 export const DOOR = { ...PLATFORM_HARDPOINTS.door, mirrorX: 0.06 } as const;
 
 /** Door skin over the body side at its outer face (m). */
-export const DOOR_PROUD = 0.003;
+const DOOR_PROUD = 0.003;
 /** The door skin is a slab this thick (m) inboard of its outer face. */
 const DOOR_THICKNESS = 0.05;
 /** The skin covers the door cut with this much (m) past each end. */
@@ -151,6 +151,25 @@ function ringRowY(style: BodyStyle, grid: DoorGrid, ring: number, z: number): nu
   return THREE.MathUtils.lerp(at(-1), at(1), THREE.MathUtils.clamp((z + cut) / (2 * cut), 0, 1));
 }
 
+/** The skin's stand-off (m) over the body side at car height `yCar`, before the cut-end taper: its `proud` (`DOOR_PROUD` default) and, with `door.lowProud`, no less than that easing in below the lowest ring row it carries (`ringY`, car y; undefined: none) to the door's bottom edge. */
+function doorStand(d: BodyStyle["door"], ringY: number | undefined, yCar: number): number {
+  const proud = d.proud ?? DOOR_PROUD;
+  if (d.lowProud === undefined || ringY === undefined) return proud;
+  return Math.max(proud, d.lowProud * THREE.MathUtils.clamp((ringY - yCar) / (ringY - (d.hingeY - d.halfHeight)), 0, 1));
+}
+
+/** The lowest body-ring row the skin carries at door-space `z`, as car height (m); undefined where it carries none (the grid's edge-roll pass). */
+function lowestRingY(style: BodyStyle, grid: DoorGrid, z: number): number | undefined {
+  const row = grid.rows.find((r): r is { ring: number } => typeof r !== "number");
+  return row === undefined ? undefined : style.door.hingeY + ringRowY(style, grid, row.ring, z);
+}
+
+/** `doorStand` for what rides on the skin (the chrome strips) at car-local `z` and height `y`, before the cut-end taper. */
+export function doorSkinStand(style: BodyStyle): (z: number, y: number) => number {
+  const grid = doorGrid(style);
+  return (z, y) => doorStand(style.door, lowestRingY(style, grid, z - style.door.hingeZ - doorSkinZ(style)), y);
+}
+
 /**
  * The drawn outer-face vertex on `row` at column `z` (door space): `x` after the edge roll, `y` after the edge rows' end slopes, `outer`
  * before the roll, `station` the row's height before the slopes. A ring row is held `DOOR_EDGE_CLEARANCE` under the top roll's start.
@@ -171,17 +190,17 @@ function doorFaceVertex(style: BodyStyle, grid: DoorGrid, row: DoorRow, z: numbe
     station = y = Math.min(ringRowY(style, grid, row.ring, z), doorFaceVertex(style, grid, h - DOOR_EDGE_RADIUS, z).y - DOOR_EDGE_CLEARANCE);
   }
   const intoCut = Math.min(z + halfLength, halfLength - z) - DOOR_SKIN_OVERLAP;
-  const proud = (d.proud ?? DOOR_PROUD) * THREE.MathUtils.clamp(intoCut / DOOR_TAPER, 0, 1);
   const [zCar, yCar] = [d.hingeZ + doorSkinZ(style) + z, d.hingeY + y];
   const sl = sampleSlice(zCar, style.profile);
   const rockerY = rockerAt(zCar, style);
   // On the ring's chords over the span of the ring rows the face carries, so it meets the body there; above and below it, on the side's
   // curve, held continuous at the span's ends.
   const ringRows = grid.rows.filter((r): r is { ring: number } => typeof r !== "number");
+  const bottom = lowestRingY(style, grid, z);
+  const proud = doorStand(d, bottom, yCar) * THREE.MathUtils.clamp(intoCut / DOOR_TAPER, 0, 1);
   let side = sideX(yCar, sl.hw, sl.yBelt, rockerY);
-  if (ringRows.length > 0) {
+  if (bottom !== undefined) {
     const top = d.hingeY + ringRowY(style, grid, ringRows[ringRows.length - 1]!.ring, z);
-    const bottom = d.hingeY + ringRowY(style, grid, ringRows[0]!.ring, z);
     const held = THREE.MathUtils.clamp(yCar, bottom, top);
     side += drawnSideX(zCar, held, style) - sideX(held, sl.hw, sl.yBelt, rockerY);
   }
@@ -252,13 +271,21 @@ export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.
     }
   }
   const faceVertices = positions.length / 3;
+  const firstRingRow = rows.findIndex((row) => typeof row !== "number");
+  // The lifted bottom row (door.lowProud) sits on the cell diagonal's low end at the latch end only; mirror the diagonal on the hinge half so the lift reaches the same share of both end cells.
+  const mirrored = style.door.lowProud !== undefined;
   for (let r = 0; r < rows.length - 1; r++) {
     for (let c = 0; c < columns.length - 1; c++) {
       const a = r * columns.length + c;
       const b = a + 1;
       const above = a + columns.length;
-      tri(a, b, above, sign < 0);
-      tri(b, above + 1, above, sign < 0);
+      if (mirrored && r < firstRingRow && columns[c]! >= 0) {
+        tri(a, b, above + 1, sign < 0);
+        tri(a, above + 1, above, sign < 0);
+      } else {
+        tri(a, b, above, sign < 0);
+        tri(b, above + 1, above, sign < 0);
+      }
     }
   }
   const loop = gridPerimeter(columns.length, rows.length);

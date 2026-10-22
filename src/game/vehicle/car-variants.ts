@@ -328,8 +328,9 @@ export interface BodyStyle {
   /**
    * Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`).
    * `sideBow` (m): the pane bulges this far forward (z) at mid-height, none at its base and top: a convex side edge in side view; absent, straight.
+   * `seat`: drawn only, set it in a `drawn` twin's `windshield`: the base row sits `WINDSHIELD_SEAT` over the hood's top at every column (the hood as `hood.followGlass` bends it, or straight at `hood.z0`), never above `base[0]`; the A-post and the door glass's foot follow it.
    */
-  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow; sideBow?: number };
+  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow; sideBow?: number; seat?: boolean };
   windshieldTop: YZ;
   /**
    * Windshield wipers parked along the glass's base (`styleWipers`): `count` blades (default 2), each `length` of the glass's base width
@@ -371,6 +372,8 @@ export interface BodyStyle {
     hingeTop?: number;
     /** Drawn only: the door skin's outer face stands this far (m) over the body side inside its cut (absent `DOOR_PROUD`, 3 mm); 0: flush, the shut line a groove only. */
     proud?: number;
+    /** Drawn only: under the lowest body-ring row the skin carries, its outer face stands no less than this far (m) over the body side, easing in from `proud` at that row to this at the door's bottom edge and tapering in over the cut's ends like `proud`; those cells turn their diagonal on the hinge half so the lift reaches both end cells alike. The cut's ramp barely leaves the side down there (the rocker point never drops), so a flush skin lies within a millimetre of it and z-fights; absent: the skin holds `proud` all the way down. */
+    lowProud?: number;
     /** Drawn only: the body's rings at its cut's ends shade the panel either side from its own faces, a crease at the shut line, not rounded off by the cut's ramp; absent, one smooth normal across it. */
     shutCrease?: boolean;
   };
@@ -488,7 +491,12 @@ export interface BodyStyle {
     head: readonly [number, number];
     tail: readonly [number, number];
     shapes?: { head?: LampShape; tail?: LampShape; front?: LampShape; rear?: LampShape };
-    brake?: { at: readonly [number, number]; size: readonly [number, number] };
+    brake?: {
+      at: readonly [number, number];
+      size: readonly [number, number];
+      /** Metres the seated lamp sits recessed into the surface it meets, along its probe ray (default 0). */
+      inset?: number;
+    };
     sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number]; tint?: number }[];
     bulb?: "halogen" | "led";
   };

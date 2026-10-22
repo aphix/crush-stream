@@ -738,6 +738,8 @@ const CLAMSHELL_GAP = 0.001;
 const HOOD_INSET_EASE = 0.3;
 /** A hood following the glass (`hood.followGlass`) bends its rear edge back to straight over this run (m): longer than any bow, so its rings never cross. */
 const HOOD_FOLLOW_RUN = 0.3;
+/** Past the pane's base corner a clamshell hood following the glass eases its rear edge back to `z0` over this far (m) in x, so its wrapped skirt keeps the body's shut ramp. */
+const CLAMSHELL_FOLLOW_EASE = 0.1;
 
 /** How far (m) inside the station's half-width the side edge of a crowned `hood.inset` hood, and the fender's top edge beside it, stand at `z`; `HOOD_INSET` otherwise. */
 function hoodInset(z: number, hood: BodyStyle["hood"]): number {
@@ -790,13 +792,24 @@ export function deckTopY(x: number, z: number, style: BodyStyle, hood: boolean):
   return lerp(edge, crown, domeAt(dome, Math.min(Math.abs(x) / w, 1)));
 }
 
-/** The drawn hood's rear edge (z, car frame) at `x`: `hood.z0`, or `hood.followGlass` in front of the windshield's base along its plan bow. */
+/** The drawn hood's rear edge (z, car frame) at `x`: `hood.z0`, or `hood.followGlass` in front of the windshield's base along its plan bow; a clamshell's eases back to `z0` past the base's corner (`CLAMSHELL_FOLLOW_EASE`). */
 export function hoodRearZ(x: number, style: BodyStyle): number {
   const gap = style.hood.followGlass;
   if (gap === undefined) return style.hood.z0;
   const { base, wBase, bow = WINDSHIELD_BOW } = style.windshield;
   const xn = Math.min(Math.abs(x) / (wBase / 2), 1);
-  return base[1] + bow.base * (1 - xn * xn) + gap;
+  const rear = base[1] + bow.base * (1 - xn * xn) + gap;
+  if (style.hood.kind !== "clamshell" || Math.abs(x) <= wBase / 2) return rear;
+  return lerp(rear, style.hood.z0, THREE.MathUtils.smoothstep(Math.abs(x), wBase / 2, wBase / 2 + CLAMSHELL_FOLLOW_EASE));
+}
+
+/** Height (car frame, m) of the drawn hood's top at (`x`, `z`): once `hood.followGlass` bends its rear edge onto `hoodRearZ(x)`, the lid's top at the point `makeDeckPanel`'s bend carries to `z`, riding the belt where it lands; the straight lid's (rear edge at `hood.z0`) without it. */
+export function followedHoodTopY(x: number, z: number, style: BodyStyle): number {
+  const { z0 } = style.hood;
+  const shift = hoodRearZ(x, style) - z0;
+  // The bend carries a lid point zo to zo + shift * (1 - (zo - z0) / HOOD_FOLLOW_RUN), linear in zo: inverted exactly. A `z` behind the moved rear edge has no lid: the edge answers.
+  const zo = z - z0 >= HOOD_FOLLOW_RUN ? z : z0 + Math.max(0, (z - z0 - shift) / (1 - shift / HOOD_FOLLOW_RUN));
+  return deckTopY(x, zo, style, true) + sampleSlice(z, style.profile).yBelt - sampleSlice(zo, style.profile).yBelt;
 }
 
 /** How far (m) a boot lip lifts the panel `d` (m) in from its free edge: a quadratic kick from 0 at `depth` to `rise` at the edge. */

@@ -39,8 +39,8 @@ export const TRUCK_ROOF_ENDS = { rear: 0.17, front: 0.09, flush: { rear: 1 } } a
 /** The trucks' cab roofs are one smooth crown rolling into the side glass (owner, reference rear iso), no flat cap over a lip; square
  *  over the windshield's top as the front iso, so its flat pane's corners stay under the roof (a pane bent with the dome mirrors the key light). */
 export const TRUCK_ROOF_SECTION = { crown: 0.55, blend: 0.6, squareFront: 0.15 } as const;
-/** The cab door's slim black pull, 15 x 4 cm, 6 cm ahead of the door's rear cut (z -0.22) as the reference isos place it. */
-const DOOR_PULL = pullHandle(-0.01, -0.16, 0.995, 0.04, 0.8);
+/** The cab door's slim black pull, 15 x 4 cm, 6 cm ahead of the door's rear cut (z -0.38) as the reference isos place it. */
+const DOOR_PULL = pullHandle(-0.17, -0.32, 0.995, 0.04, 0.8);
 /** Pickup's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const PICKUP_LAMP_SHAPES = {
   head: {
@@ -51,10 +51,9 @@ const PICKUP_LAMP_SHAPES = {
     lens: "lit",
     bezel: "chrome",
     recess: 0.015,
-    // The amber corner lamps sit beside the lower head lamp only, as the reference's front iso shows.
+    // The amber corner lamp sits beside the lower head lamp only, as the reference's front iso shows: one cell, met from the side (a twin met from the front drew 4.5 mm over the same skin and z-fought).
     cells: [
-      { loop: { points: [[0.62, 0.75], [0.67, 0.75], [0.67, 0.85], [0.62, 0.85]] }, tone: "amber" },
-      { loop: { side: true, points: [[1.9, 0.75], [1.84, 0.75], [1.84, 0.85], [1.9, 0.85]] }, tone: "amber" },
+      { loop: { side: true, points: [[1.915, 0.75], [1.84, 0.75], [1.84, 0.85], [1.915, 0.85]] }, tone: "amber" },
     ],
   },
   tail: {
@@ -85,11 +84,13 @@ export const PICKUP: BodyStyle = {
   belt: { x: 0.73, y: [[0, 1.12]] },
   rocker: { y: 0.45 },
   underside: [[-2.17, 0.52], [-1.96, 0.42], [-1.75, 0.38], [-1.5, 0.34], [1.6, 0.34], [1.76, 0.35], [1.93, 0.38]],
-  door: { hingeX: 0.74, hingeY: 0.785, hingeZ: 0.7, length: 0.93, halfHeight: 0.335, mirrorY: 0.405, mirrorZ: 0.19, mirrorReach: 0.15, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69], mirror: PICKUP_MIRROR },
+  door: { hingeX: 0.74, hingeY: 0.785, hingeZ: 0.7, length: 1.09, halfHeight: 0.335, mirrorY: 0.405, mirrorZ: 0.19, mirrorReach: 0.15, mirrorHalfDepth: 0.08, aperture: [-0.38, 0.69], mirror: PICKUP_MIRROR },
   // The side plate's door glass starts .60 back at the belt and .33 at the roof, a sail filling up to the A-post.
   aPillarFoot: 0.6,
   aPillarTop: 0.34,
-  bPillar: { rear: -0.3, front: -0.23 },
+  bPillar: { rear: -0.33, front: -0.29 },
+  // The regular cab's door runs back to the side plate's seam; its glass ends at the plate's -0.29 / -0.265 behind a slim 4 cm post band; the C-post's foot meets the cab-back shoulder, as the hatchback's.
+  pillars: { b: { z: [-0.31, -0.275], width: [0.04, 0.04] }, rearFoot: [0.718, 1.173] },
   arch: { radius: 0.46, lip: { flare: 0.024, width: 0.065, square: true } },
   hood: { z0: 1.03, z1: 1.92, origin: [1.2, 1.01], nose: [0.034, 0.02] },
   bumpers: {
@@ -124,7 +125,7 @@ export const PICKUP: BodyStyle = {
   // so none shows past the roof in side view; set further back, the crushed cab's dummy-world roof stood 8-15 cm off the drawn one.
   rearGlass: { base: [1.24, -0.55], top: [1.635, -0.44], wBase: 1.3, wTop: 0.96 },
   privacyGlass: { rear: true },
-  quarter: { zRearBot: -0.3, zRearTop: -0.285 },
+  quarter: { zRearBot: -0.33, zRearTop: -0.295 },
   midPillarZ: null,
   rearBulkhead: { z: -0.56, yTop: 1.2 },
   tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
@@ -137,17 +138,16 @@ export const PICKUP: BodyStyle = {
   proxyBelt: 1.3,
   rearDoorSeam: -0.41,
   boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15], pivot: [0.6, -2.15] },
-  lamps: { head: [0.5, 0.85], tail: [0.63, 0.93], shapes: PICKUP_LAMP_SHAPES, bulb: "halogen", brake: { at: [0, 1.6], size: [0.3, 0.06] } },
+  // The high-mount stop lamp sits on the rear glass's top just under the roof's lip (rear iso), recessed so it stands no nub past the cab in side view.
+  lamps: { head: [0.5, 0.85], tail: [0.63, 0.93], shapes: PICKUP_LAMP_SHAPES, bulb: "halogen", brake: { at: [0, 1.6], size: [0.25, 0.04], inset: 0.014 } },
   // The reference's grille fills the face between its head lamps (inner edges x .415), four bars deep.
   grille: { y: 0.85, size: [0.79, 0.225], kind: "bars", count: 4, finish: "black", rim: "chrome" },
   camera: { hood: [1.42, 1.25], third: { dist: 6.4, height: 2.3, aimUp: 1.2 }, far: { dist: 10.3, height: 3.62, aimUp: 1.35 } },
   details: {
     lines: [
       { view: "side", points: [[0.706, 1.128], [0.699, 0.461]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-0.22, 1.125], [-0.22, 0.464]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-0.41, 1.142], [-0.421, 0.478]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[0.699, 0.462], [-0.414, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-0.428, 0.462], [-0.556, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[0.699, 0.462], [-0.374, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.388, 0.462], [-0.556, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.592, 1.142], [-0.599, 0.446]], width: 0.025, depth: -0.006, profile: "v", cavity: 0.95 },
       { view: "side", points: [[0.627, 1.121], [-0.342, 1.121]], width: 0.021, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[0.328, 1.562], [-0.314, 1.569], [-0.314, 1.142], [0.57, 1.128], [0.513, 1.276]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },

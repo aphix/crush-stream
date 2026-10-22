@@ -8,14 +8,17 @@ import { ROLE, ROW_TEXELS } from "../present/dummy-rig.ts";
 import { SHOWCASE_EYE, SHOWCASE_LIGHT } from "../present/showcase-art.ts";
 import { ELDER_LOOK } from "../present/dummy-dress.ts";
 import { OUTFIT, type DriverLook } from "../present/driver-look.ts";
+import { CAR_STYLE_IDS } from "../vehicle/car-variants.ts";
+import { PART_KIND } from "../vehicle/part-geometry.ts";
 import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
- * The showcase (`#scene=showcase`, by link only): every kind of person the game draws standing in rows in one draw, and a press on
- * one knocks him into the ragdoll world as a car-struck guard goes.
+ * The showcase (`#scene=showcase`, by link only): every kind of person the game draws standing in rows in one draw, a press on
+ * one knocks him into the ragdoll world as a car-struck guard goes, and behind them stand three rows of cars (as built, doors and
+ * lids open, stripped) drawn but never stepped.
  */
 
 const FRAME = 1 / FRAME_HZ;
@@ -144,5 +147,26 @@ describe("given the real engine booted on #scene=showcase", () => {
     engine.reset();
     assert.equal(engine["ragdolls"]["dolls"][slot].live, false, "the dummy is gone");
     for (let s = 0; s < art().slots; s++) assert.ok(standing(s), `slot ${s} is back on its mark`);
+  });
+
+  it("when the set stands, then behind the people three rows of cars stand, one of each style in each: as built, every door and lid at its stop with the hood popped, and every part and pane off, each with its cabin drawn and nobody in it", () => {
+    const cars = engine["showcase"]!.cars;
+    const styles = CAR_STYLE_IDS.length;
+    assert.equal(cars.length, 3 * styles, "three rows of every style");
+    for (let row = 0; row < 3; row++) assert.equal(new Set(cars.slice(row * styles, (row + 1) * styles).map((c) => c.style.id)).size, styles, `row ${row}: one of each style`);
+    for (let k = 0; k < cars.length; k++) {
+      const car = cars[k]!;
+      const row = Math.floor(k / styles);
+      const parts: { name: string; hinge: string; hingeT: number; detached: boolean; object: { visible: boolean } }[] = car["parts"];
+      const hood = parts.find((p) => p.hinge === "cowl")!;
+      const id = `row ${row} ${car.style.id}`;
+      if (row === 0) assert.equal(`${car.doorAngle(-1)} ${car.doorAngle(1)} ${car.lidAngle()} ${hood.hingeT} ${parts.every((p) => !p.detached && p.object.visible)} ${car.glassPanes.every((g) => g.mesh.visible)}`, "0 0 0 0 true true", `${id}: as built`);
+      if (row === 1) assert.equal(`${car.doorAngle(-1) === car.doorHinge(-1).spec.stop} ${car.doorAngle(1) === car.doorHinge(1).spec.stop} ${car.lidAngle() === car.lidHinge().spec.stop} ${hood.hingeT} ${parts.every((p) => !p.detached)}`, "true true true 0.78 true", `${id}: doors ${car.doorAngle(-1).toFixed(3)}/${car.doorAngle(1).toFixed(3)}, lid ${car.lidAngle().toFixed(3)} at their stops, the hood popped`);
+      if (row === 2) assert.equal(`${parts.filter((p) => !p.detached || p.object.visible).map((p) => p.name)} ${car.glassPanes.filter((g) => g.mesh.visible).length}`, " 0", `${id}: parts or panes still drawn`);
+      assert.ok(car.group.visible && car.group.parent === engine["scene"], `${id}: in the scene`);
+    }
+    const batch = engine["partBatch"];
+    batch.sync(engine["drawnCars"]());
+    assert.equal(`${batch.drawn(PART_KIND.interior)} ${batch.drawn(PART_KIND.seatFront)} ${batch.drawn(PART_KIND.mirrorL)} ${batch.drawn(PART_KIND.liningL)}`, `${3 * styles} ${2 * 3 * styles} ${2 * styles} ${2 * styles}`, "every car's cabin and both front seats drawn; mirrors and door linings on the first two rows only");
   });
 });

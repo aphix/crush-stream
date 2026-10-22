@@ -74,7 +74,7 @@ export const WAGON: BodyStyle = {
   belt: { x: [[-1.97, 0.64], [-1.8, 0.7], [-1.6, 0.74], [-1.4, 0.77], [-1.2, 0.785]], y: [[-2.033, 1.095], [0.024, 1.07], [0.887, 1.062]] },
   rocker: { y: 0.28 },
   arch: { radius: 0.455, lip: { flare: 0.016, width: 0.055 } },
-  hood: { z0: 0.86, z1: 1.93, origin: [0.96, 0.84], kind: "clamshell", crown: [0.03, 0.7] },
+  hood: { z0: 0.86, z1: 1.93, origin: [0.96, 0.84], kind: "clamshell", crown: [0.03, 0.7], followGlass: -0.05 },
   bumpers: {
     front: {
       seat: { y: 0.48, z: 1.9785 },
@@ -144,6 +144,8 @@ export const WAGON: BodyStyle = {
   ],
   roofZ: [-1.84, 0.3],
   windshieldTop: [1.45, 0.3],
+  // The A-post upright and even as its reference side plate's band (drawn twin: the windshield's side edge bows back in plan to the roof's square front, the cage keeps the style's own).
+  drawn: { windshield: { base: [1.1, 0.73], wBase: 1.42, wTop: 0.98, bow: { base: 0.18, top: 0.023 }, seat: true }, aPillarFoot: 0.675, aPillarTop: 0.175 },
   // The rear glass's top as wide as the roof end lets it (its post-top clamp), so the D-post's edges run near parallel.
   rearGlass: { base: [1.1, -2.065], top: [1.47, -1.79], wBase: 1.22, wTop: 0.96 },
   // The quarter glass runs back to a slim D-post of even width, as the reference's rear iso.

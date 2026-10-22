@@ -521,6 +521,31 @@ describe("given the trucks' posts against their side plates' window outlines", (
   });
 });
 
+describe("given the pickup's door and B-post against its side plate", () => {
+  /** The side plate's door seam (z, m): vertical, reading -0.372 to -0.386 over the door's height (y .47-1.12); the rearmost reading is the cut's. */
+  const PLATE_SEAM_Z = -0.386;
+  /** The side plate's door glass's rear end at the belt (z, m), where the glass meets the B-post. */
+  const PLATE_GLASS_REAR_Z = -0.297;
+  /** The B-post's width (m) in the plate's side view at the belt and the top: a slim 4 cm band. */
+  const PLATE_B_WIDTH = 0.04;
+  /** How far (m) the cut and the glass's end may stand off the plate's readings: 1 cm. */
+  const PLATE_TOL = 0.01;
+  /** How far (m) the B band's width may stand off the plate's: 5 mm. */
+  const WIDTH_TOL = 0.005;
+
+  it("when the door's rear cut and the drawn B band are read, then the cut sits on the plate's door seam (z -0.386, within 1 cm), the B band is 4 cm wide (within 5 mm) at the belt and the top, and the door glass shows back to the plate's -0.297 at the belt (within 1 cm)", () => {
+    const pickup = drawnStyle(CAR_STYLES.pickup);
+    // The body's cut opens at the first z (1 mm steps) where `doorAperture` leaves 0: its rear end, feathered in from there.
+    const cut = Array.from({ length: 500 }, (_, k) => -0.5 + k * 0.001).find((z) => doorAperture(z, pickup) > 0);
+    assert.ok(cut !== undefined && Math.abs(cut - PLATE_SEAM_Z) <= PLATE_TOL, `the door's rear cut opens at z ${cut}, the plate's seam at ${PLATE_SEAM_Z}`);
+    const band = bPillarBand(pickup);
+    const [belt, top] = [band.belt, band.top].map(([rear, front]) => front - rear);
+    assert.ok(Math.abs(belt! - PLATE_B_WIDTH) <= WIDTH_TOL && Math.abs(top! - PLATE_B_WIDTH) <= WIDTH_TOL, `the B band is ${(belt! * 100).toFixed(1)} cm wide at the belt, ${(top! * 100).toFixed(1)} cm at the top`);
+    // The door glass shows up to the B band's front edge (its pane runs on a little way under the post).
+    assert.ok(Math.abs(band.belt[1] - PLATE_GLASS_REAR_Z) <= PLATE_TOL, `the door glass shows back to z ${band.belt[1].toFixed(3)} at the belt, the plate's at ${PLATE_GLASS_REAR_Z}`);
+  });
+});
+
 describe("given a coupe whose rear glass has round corners (rearGlass.round)", () => {
   const ROUND = 0.09;
   const coupe = CAR_STYLES.coupe;
@@ -1157,6 +1182,34 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
   });
 
+  it("when the pickup's cab back post fans its foot onto the shoulder (pillars.rearFoot), then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening beside the cab back, and the cage is unchanged", () => {
+    /** A ray down that hits under this height (m) has passed the body's top into the cabin: the shoulder stands at 1.17 beside the cab back. */
+    const FLOOR_Y = 0.8;
+    /** The cab back post's zone [x, z] (m): from the rear glass's base edge out to the shoulder, the cab back to the B-post's rear. */
+    const ZONE = { x: [0.55, 0.72], z: [-0.6, -0.33] } as const;
+    const pickup = CAR_STYLES.pickup;
+    const seen = (s: BodyStyle) => {
+      const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+      const meshes = [new THREE.Mesh(makeChassisGeometry(s, "drawn"), material), new THREE.Mesh(makeRearGlass(s), material)];
+      const ray = new THREE.Raycaster();
+      let floor = 0;
+      for (let z = ZONE.z[0]; z <= ZONE.z[1]; z += 0.01) {
+        for (let x = ZONE.x[0]; x <= ZONE.x[1]; x += 0.005) {
+          ray.set(new THREE.Vector3(x, 3, z), new THREE.Vector3(0, -1, 0));
+          const hit = ray.intersectObjects(meshes)[0];
+          if (hit !== undefined && hit.point.y < FLOOR_Y) floor++;
+        }
+      }
+      return floor;
+    };
+    const without: BodyStyle = { ...pickup, pillars: { ...pickup.pillars, rearFoot: undefined } };
+    assert.ok(seen(without) > 0, "the control: without the foot the opening shows");
+    const shown = seen(pickup);
+    assert.ok(shown === 0, `${shown} rays see the cabin's floor between the cab back and the shoulder`);
+    const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
+    assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(pickup, "cage")), "the cage moved with the drawn foot");
+  });
+
   it("when the coupe's belt is read from its tail to the sail's foot (z -1.587 to -1.43), then it rises all the way: no crest under the sail's rear end, which drew a lit hump where the reference's sail meets the deck", () => {
     const coupe = CAR_STYLES.coupe;
     let prev = -Infinity;
@@ -1210,6 +1263,35 @@ describe("given a body style's H2 hardpoints", () => {
     };
     assert.ok(Math.abs(proudOf(coupe)) <= FLUSH, `the door skin stands ${(proudOf(coupe) * 1000).toFixed(1)} mm off the body side`);
     assert.ok(proudOf({ ...coupe, door: { ...coupe.door, proud: undefined } }) > FLUSH, "the control: the platform's skin stands proud");
+  });
+
+  it("when the coupe's flush door's skin is read at its lower corners beside the body's door-cut ramps, then the skin stands clear of the ramp (no coplanar skin to z-fight)", (t) => {
+    /** The skin stands at least this far (m) off the ramp: the flush skin without lowProud (the control) lies within it, coplanar enough for the contour tool's z-fight finding (2 mm and 4°). */
+    const MIN_CLEAR = 0.001;
+    /** The ramp is read this far (m) inside each cut end, and at these heights (m; the door's bottom edge is .22). */
+    const IN = 0.013;
+    const HEIGHTS = [0.27, 0.3, 0.33];
+    const coupe = CAR_STYLES.coupe;
+    const { hingeX, hingeY, hingeZ, aperture } = coupe.door;
+    const clearances = (s: BodyStyle) => {
+      const door = new THREE.Mesh(makeDoorGeometry(1, s), SIDED);
+      door.position.set(hingeX, hingeY, hingeZ + doorSkinZ(s));
+      door.updateMatrixWorld();
+      const body = new THREE.Mesh(makeChassisGeometry(s, "drawn"), SIDED);
+      return [aperture[0] + IN, aperture[1] - IN].flatMap((z) =>
+        HEIGHTS.flatMap((y) => {
+          const [skin, side] = [bodyHit(door, [2, y, z], [-1, 0, 0], 3), bodyHit(body, [2, y, z], [-1, 0, 0], 3)];
+          return skin && side ? [{ z, y, clear: skin.x - side.x }] : [];
+        }),
+      );
+    };
+    const stock = clearances(coupe);
+    for (const { z, y, clear } of stock) t.diagnostic(`ramp clear z=${z.toFixed(3)} y=${y.toFixed(2)} mm=${(clear * 1000).toFixed(2)}`);
+    assert.ok(stock.length > 0, "the door's skin and the body are met at the cut's ends");
+    const control = clearances({ ...coupe, door: { ...coupe.door, lowProud: undefined } });
+    for (const { z, y, clear } of control) t.diagnostic(`control ramp clear z=${z.toFixed(3)} y=${y.toFixed(2)} mm=${(clear * 1000).toFixed(2)}`);
+    for (const { z, y, clear } of stock) assert.ok(clear >= MIN_CLEAR, `the skin stands ${(clear * 1000).toFixed(2)} mm off the ramp at z ${z.toFixed(3)} y ${y}, ${MIN_CLEAR * 1000} mm asked`);
+    assert.ok(Math.min(...control.map((r) => r.clear)) < MIN_CLEAR, "the control: without lowProud the skin lies within the ramp's z-fight band");
   });
 
   it("when the coupe's drawn A-post is seated on its deck (pillars.aSeat), then no level ray in from the side between the fender's top and the belt under the post's foot sees into the cabin, and the cage is unchanged", () => {
@@ -1580,6 +1662,58 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(Math.abs(faceZ - lofted.rear - front.wrap.back) < 0.001, `the lofted end runs ${faceZ - lofted.rear} m back from the face, ${front.wrap.back} asked`);
     assert.ok(lofted.stand >= front.wrap.end.stand - 0.001, `the lofted end stands ${lofted.stand} m off the skin, ${front.wrap.end.stand} asked`);
     assert.ok(wrapped.stand <= 0, `the plain wrap's end stands ${wrapped.stand} m off the skin: held inside it`);
+  });
+
+  it("when the coupe's rear chrome bar is read round its corner, then its section keeps its full depth (no thinned corner) and the corner turns on a radius of at least 12 cm in plan", (t) => {
+    /** Every ring round the corner and along the run keeps at least this share of the face section's depth. */
+    const FULL_DEPTH = 0.95;
+    /** The corner's tightest plan radius (m): a tighter turn reads as a kink in the chrome, not a round. */
+    const MIN_RADIUS = 0.12;
+    /** Float32 position noise (m) when a ring is matched to a depth. */
+    const NOISE = 1e-4;
+    /** The control's corner depth (m): a quarter-ellipse this shallow turns far tighter than MIN_RADIUS. */
+    const TIGHT_CORNER = 0.05;
+    const read = (style: BodyStyle) => {
+      const { fascia, wrap } = style.bumpers.rear;
+      assert.ok(wrap.end, "the rear bar has lofted ends");
+      const bar = makeBumperGeometry(false, style);
+      const { ring, slices } = bar.userData.loft as { ring: number; slices: number };
+      const pos = bar.getAttribute("position");
+      // The middle ring is the face's; the rings after it run out along +x.
+      const mid = (slices - 1) / 2;
+      const point = new THREE.Vector3();
+      // A ring's section lies on one line in plan (the outline's normal), so its depth is the plan span between its extreme vertices.
+      const depthAt = (r: number) => {
+        const box = new THREE.Box3();
+        for (let j = 0; j < ring; j++) box.expandByPoint(point.fromBufferAttribute(pos, r * ring + j));
+        return Math.hypot(box.max.x - box.min.x, box.max.z - box.min.z);
+      };
+      const outs = fascia.map(([, out]) => out);
+      const faceDepth = depthAt(mid);
+      assert.ok(Math.abs(faceDepth - (Math.max(...outs) - Math.min(...outs))) < NOISE, `the face ring reads ${faceDepth} m deep, the fascia's section ${Math.max(...outs) - Math.min(...outs)} m`);
+      const rings = Array.from({ length: slices - mid }, (_, k) => mid + k);
+      const shares = rings.map((r) => depthAt(r) / faceDepth);
+      // The outline: each ring's outer-face vertex, as |x| and d back from the face.
+      const outer = outs.indexOf(Math.max(...outs));
+      const faceZ = pos.getZ(mid * ring + outer);
+      const outline = rings.map((r) => ({ x: Math.abs(pos.getX(r * ring + outer)), d: Math.abs(pos.getZ(r * ring + outer) - faceZ) }));
+      const b = wrap.end.corner;
+      const turn = outline.find((p) => p.d >= b - NOISE);
+      assert.ok(turn, `no ring of the outline reaches the corner's ${b} m depth`);
+      const a = turn.x - wrap.from;
+      // The corner is a quarter-ellipse a out by b back: its tightest radius is at the end of its longer axis.
+      return { shares, a, b, radius: Math.min((b * b) / a, (a * a) / b) };
+    };
+    const coupe = CAR_STYLES.coupe;
+    const { shares, a, b, radius } = read(coupe);
+    t.diagnostic(`rear bar depth share by ring from the face: ${shares.map((s) => s.toFixed(2)).join(" ")}`);
+    t.diagnostic(`rear bar corner ${(a * 1000).toFixed(0)} mm out by ${(b * 1000).toFixed(0)} mm back: plan radius ${(radius * 1000).toFixed(0)} mm`);
+    assert.ok(Math.min(...shares) >= FULL_DEPTH, `the section thins to ${(Math.min(...shares) * 100).toFixed(0)}% of its face's depth round the corner, ${FULL_DEPTH * 100}% asked`);
+    assert.ok(radius >= MIN_RADIUS, `the corner turns on a ${(radius * 1000).toFixed(0)} mm radius in plan, ${MIN_RADIUS * 1000} mm asked`);
+    const { rear } = coupe.bumpers;
+    assert.ok(rear.wrap.end, "the control: the coupe's rear bar has lofted ends");
+    const tight = read({ ...coupe, bumpers: { ...coupe.bumpers, rear: { ...rear, wrap: { ...rear.wrap, end: { ...rear.wrap.end, corner: TIGHT_CORNER } } } } });
+    assert.ok(tight.radius < MIN_RADIUS, `the control: a ${TIGHT_CORNER * 1000} mm deep corner turns on ${(tight.radius * 1000).toFixed(0)} mm`);
   });
 
   it("when the hatchback's front bumper is built, then its face runs straight across to its corners as the reference's: at |x| 0.40-0.45 within 1 cm of its middle's reach", () => {

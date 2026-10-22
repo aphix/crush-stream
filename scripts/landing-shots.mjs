@@ -8,15 +8,16 @@
  * `scripts/landing-views/<car>.json` (`trace-landing.mjs`).
  *
  *   CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
- *     scripts/landing-shots.mjs --root <tree> --car <style> [--paint] [--out-dir <tree>/.tmp/shots/landing] [--views side,top,iso,rear-iso]
+ *     scripts/landing-shots.mjs --root <tree> --car <style> [--paint] [--state intact|open|stripped] [--out-dir <tree>/.tmp/shots/landing] [--views side,top,iso,rear-iso]
  *
  * `--paint` paints the car its reference's colour (the landing file's `paint`; a livery stays) in both shots, so they compare like
  * for like; without it "ours" wears the garage paint and the overlay the trace orange.
+ * `--state` shoots ours posed (`showPose`: every door and lid open, or every part off), its files tagged `-<state>`; the overlay and pair stay the reference's check.
  * Registration: each pair marks the reference's wheels (yellow crosses: the isos' picked hubs and contacts, the side picture's own
  * tyre contacts) and where the engine drew ours (magenta rings), on both halves. A wheel further apart than REGISTRATION_PX reference
  * pixels, or a pair with nothing to register by (an iso without picks, a side picture whose tyres were not found), fails: a red
  * label and a nonzero exit. The top view shows no wheels; it is framed by the side picture's ends and is not registered.
- * Writes `<out-dir>/<car>-<view>-{ours,overlay,pair}.png` (each view's camera spec and reference plate in `<out-dir>/camera/`) and
+ * Writes `<out-dir>/<car>-<view>[-<state>]-{ours,overlay,pair}.png` (each view's camera spec and reference plate in `<out-dir>/camera/`) and
  * prints one JSON line: per view the overlay's IoU, the isos' wheel error, the registration and the PNGs. The runs go one after
  * another inside this one process's memory cap.
  */
@@ -47,12 +48,15 @@ const { values } = parseArgs({
     "out-dir": { type: "string" },
     views: { type: "string", default: VIEWS.join(",") },
     paint: { type: "boolean", default: false },
+    state: { type: "string", default: "intact" },
   },
 });
 if (values.root === undefined || values.car === undefined) throw new Error("--root <tree> and --car <style> are required (usage in the file header)");
 const root = resolve(values.root);
 const car = values.car;
 const views = values.views.split(",");
+const state = values.state;
+const tag = state === "intact" ? "" : `-${state}`;
 if (!views.every((v) => VIEWS.includes(v))) throw new Error(`--views ${values.views}: some of ${VIEWS.join(", ")}`);
 const outDir = resolve(values["out-dir"] ?? join(root, ".tmp/shots/landing"));
 mkdirSync(join(outDir, "camera"), { recursive: true });
@@ -66,12 +70,12 @@ const shots = {};
 for (const view of views) {
   const camera = join(outDir, "camera", `${car}-${view}.json`);
   const plate = join(outDir, "camera", `${car}-${view}-plate.png`);
-  const overlay = join(outDir, `${car}-${view}-overlay.png`);
-  const ours = join(outDir, `${car}-${view}-ours.png`);
-  const pair = join(outDir, `${car}-${view}-pair.png`);
+  const overlay = join(outDir, `${car}-${view}${tag}-overlay.png`);
+  const ours = join(outDir, `${car}-${view}${tag}-ours.png`);
+  const pair = join(outDir, `${car}-${view}${tag}-pair.png`);
   const painted = paint === null ? [] : ["--paint", paint];
   const trace = run("trace-car.mjs", ["--root", root, "--style", car, "--view", view, "--landing", "--camera-out", camera, "--plate-out", plate, "--out", overlay, ...painted]);
-  const frame = run("headless-frame.mjs", ["--root", root, "--hash", `scene=garage&car=${menuId}`, "--view", view, "--view-camera", camera, "--backdrop", BACKDROP, "--at", SETTLE_S, "--frames", FRAMES, "--out", ours, ...painted]);
+  const frame = run("headless-frame.mjs", ["--root", root, "--hash", `scene=garage&car=${menuId}`, "--view", view, "--view-camera", camera, "--backdrop", BACKDROP, "--at", SETTLE_S, "--frames", FRAMES, "--out", ours, "--state", state, ...painted]);
   const marks = registration(view, trace, frame.wheelsPx);
   await writePair(pair, plate, ours, marks, `${car} ${view}: one camera (${trace.aligned ?? "orthographic"}), one ${trace.size} canvas`);
   const error = (set) => (set ? { rmsPx: set.rmsPx, maxPx: set.maxPx } : null);
@@ -88,7 +92,7 @@ for (const view of views) {
     linkFailures: frame.linkFailures.length,
   };
 }
-process.stdout.write(`${JSON.stringify({ car, root, shots, ms: Math.round(performance.now() - t0) })}\n`);
+process.stdout.write(`${JSON.stringify({ car, state, root, shots, ms: Math.round(performance.now() - t0) })}\n`);
 process.exitCode = Object.values(shots).every((s) => s.glError === 0 && s.linkFailures === 0 && s.registration.ok) ? 0 : 1;
 
 /** One of this checkout's scripts on `root`'s game; its last stdout line is its JSON. */

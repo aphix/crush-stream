@@ -70,17 +70,17 @@ export const COUPE: BodyStyle = {
   rocker: { y: 0.22 },
   underside: [[-2.114, 0.41], [-2.06, 0.31], [-1.96, 0.28], [-1.829, 0.282], [-1.818, 0.267], [-1.744, 0.267], [-1.729, 0.253], [-1.665, 0.257], [-1.644, 0.239], [-1.576, 0.242], [-1.572, 0.225], [-1.548, 0.225], [-1.533, 0.207], [-0.86, 0.182], [-0.835, 0.196], [0.381, 0.196], [0.399, 0.182], [0.723, 0.182], [1.689, 0.21], [1.782, 0.242], [1.893, 0.239], [1.985, 0.285], [2.014, 0.36], [2.017, 0.431]],
   // Flush skin: the reference runs the fender into the door with only a thin shut line (front iso), not a lit 3 mm step.
-  door: { hingeX: 0.74, hingeY: 0.555, hingeZ: 0.61, length: 1.1, halfHeight: 0.335, mirrorY: 0.325, mirrorZ: 0.3, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.49, 0.6], mirror: COUPE_MIRROR, hingeTop: 0.866, proud: 0, shutCrease: true },
+  door: { hingeX: 0.74, hingeY: 0.555, hingeZ: 0.61, length: 1.1, halfHeight: 0.335, mirrorY: 0.325, mirrorZ: 0.3, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.49, 0.6], mirror: COUPE_MIRROR, hingeTop: 0.866, proud: 0, lowProud: 0.005, shutCrease: true },
   aPillarFoot: 0.5,
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.012, width: 0.05, band: true } },
   /** Reference: the pod's straight front edge (top view) is a face holding two dark intake mouths (isos), no higher than the pod (side view); its flanks are soft (round .045 leans them under the fitting crease), not a hard-lit black band in the side view. */
-  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.69, width: 0.595, cowlWidth: 0.7, rise: 0.025, round: 0.045, cowlRamp: 0.12, groove: 0.008, mouth: true }, groove: [0.004, 0.0016] },
+  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.69, width: 0.595, cowlWidth: 0.7, rise: 0.025, round: 0.045, cowlRamp: 0.12, groove: 0.008, mouth: true }, groove: [0.004, 0.0016], followGlass: -0.015 },
   bumpers: {
-    // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin.
+    // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin. Reference rear iso and top plate: the rear bar turns its corner on a round of about its own depth, keeping its full section, and runs on close to the quarter.
     front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.3, back: 0.24, end: { corner: 0.15, stand: 0.03 } }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
-    rear: { ...bumpers.rear, seat: { y: 0.425, z: 2.0475 }, span: 0.72, wrap: { from: 0.45, back: 0.2, end: { corner: 0.1, stand: 0.03 } }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome", plate: 0.29, plateFace: { out: 0.015, color: 0x1c1e22 } },
+    rear: { ...bumpers.rear, seat: { y: 0.425, z: 2.0475 }, span: 0.72, wrap: { from: 0.55, back: 0.2, end: { corner: 0.15, stand: 0.015 } }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome", plate: 0.29, plateFace: { out: 0.015, color: 0x1c1e22 } },
   },
   profile: [
     st(-2.054, 0.62, 0.857),
@@ -128,6 +128,8 @@ export const COUPE: BodyStyle = {
   /** Reference isos: one round dome, its highlight a soft gradient out to the sides, rolling into the side glass and the sail. */
   roofSection: { crown: 0.4, blend: 0.6 },
   windshieldTop: [1.255, 0.12],
+  // The A-post upright and even as its reference side plate's band (drawn twin: the windshield's side edge bows back in plan, the cage keeps the style's own).
+  drawn: { windshield: { base: [0.9, 0.52], wBase: 1.32, wTop: 1.0, bow: { base: 0.18, top: 0.035 }, seat: true }, aPillarFoot: 0.404, aPillarTop: 0.096 },
   // Round corners: the reference rear iso's four, about a sixth of the 0.53 m slant, the glass itself round to the bead (no black corners).
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.92, bow: { base: -0.02, top: -0.04 }, round: 0.09, roundOutline: true },
   /** Reference side view: the quarter glass's rear point at z -0.95..-0.97, its rear edge leaning about 45°. */
