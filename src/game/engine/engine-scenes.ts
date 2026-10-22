@@ -13,7 +13,8 @@ import { LabFlick } from "./lab-flick.ts";
 import { Garage } from "./garage.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import { Showcase } from "./showcase.ts";
-import { SHOWCASE_CAR, SHOWCASE_EYE, SHOWCASE_KNOCK, SHOWCASE_LIGHT } from "../present/showcase-art.ts";
+import { SHOWCASE_CAR, SHOWCASE_CAR_YAW, SHOWCASE_EYE, SHOWCASE_KNOCK, SHOWCASE_LIGHT, type ShowcaseArt } from "../present/showcase-art.ts";
+import { STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
 import { ownLook } from "../present/driver-look.ts";
 import { heldPose, type LabPresetId } from "../scenes/lab.ts";
@@ -384,9 +385,13 @@ export abstract class EngineScenes extends EngineMinigames {
     if (this.showShowcase && !this.showcase) {
       this.showcase = new Showcase(this.camera, () => this.canvas.getBoundingClientRect(), (slot) => this.knockShowcase(slot));
       this.scene.add(this.showcase.art.group);
+      for (let slot = 0; slot < this.showcase.art.carSlots; slot++) this.showcase.cars.push(this.showcaseCar(this.showcase.art, slot));
       this.queueWarm();
     }
-    if (this.showcase) this.showcase.art.group.visible = this.showShowcase;
+    if (this.showcase) {
+      this.showcase.art.group.visible = this.showShowcase;
+      for (const car of this.showcase.cars) car.group.visible = this.showShowcase;
+    }
     // In the Lab a press on a car picks it for a flick, in the garage it sprays it (can on), in the showcase it knocks a figure over; elsewhere every press is the camera's.
     this.view.take = this.showLab ? this.labFlick : this.showGarage ? this.garage : this.showShowcase ? this.showcase : null;
     if (this.race.active) {
@@ -503,12 +508,26 @@ export abstract class EngineScenes extends EngineMinigames {
     this.parkExtras();
   }
 
-  /** The cars sit out of sight: the showcase is the people. Everyone stands on his mark again. */
+  /** The field's car sits out of sight: the set's cars stand posed as built (`showcaseCar`), and every figure stands on his mark again. */
   private spawnShowcase(): void {
     const car = this.carA;
     car.group.visible = false;
     car.spawnFacing(SHOWCASE_CAR.x, SHOWCASE_CAR.z, 0, 0);
     this.showcase!.art.stand();
+  }
+
+  /** The showcase's car `slot` (`ShowcaseArt.carOf`), dressed and posed once as the podium stands its cars: outside the field, so drawn (`drawnCars`) but never stepped; a fleet paint, never the player's own. */
+  private showcaseCar(art: ShowcaseArt, slot: number): DeformableCar {
+    const { style, pose, column } = art.carOf(slot, _v);
+    const car = this.buildCar(column + 1, { cls: STYLE_CLASS[style], style });
+    car.spawnFacing(_v.x, _v.z, SHOWCASE_CAR_YAW, 0);
+    this.dressCar(car);
+    car.followHubs(false);
+    car.showPose(pose);
+    car.updateSkin();
+    car.group.visible = true;
+    car.group.updateMatrixWorld(true);
+    return car;
   }
 
   /** The free eye on the front row, entering the scene (`FreeCam` starts from the camera's pose). */
