@@ -185,6 +185,11 @@ export function bayAt(z: number, style: BodyStyle): number {
   return tubAt(z, style, [bayTub(style)]).t;
 }
 
+/** How far (0..1) the drawn body's loft at `z` has dropped into the cabin's tub (the style's first, the seats' floor). */
+export function cabinAt(z: number, style: BodyStyle): number {
+  return style.tubs.length === 0 ? 0 : tubAt(z, style, style.tubs.slice(0, 1)).t;
+}
+
 function tubAt(z: number, style: BodyStyle, tubs: readonly (readonly [number, number, number])[]): { t: number; floor: number } {
   let t = 0;
   let floor = floorY(z, style);

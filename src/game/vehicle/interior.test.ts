@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
-import { floorY } from "./car-lines.ts";
+import { beltY, floorY } from "./car-lines.ts";
 import { roofAt } from "./car-mesh.ts";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
-import { BUMPER_F, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { BUMPER_F, CABIN_TRIM, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { makeDoorGeometry } from "./car-door-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { bayAt, bayTub, makeHoodGeometry, sampleSlice, TUB_EDGE } from "./car-mesh.ts";
+import { bayAt, bayTub, glassX, makeHoodGeometry, sampleSlice, TUB_EDGE } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import { cabinGeometry, cageInterior, doorCardGeometry } from "./interior-geometry.ts";
 import { CarCabin, driverSeat } from "./interior.ts";
@@ -426,4 +427,77 @@ describe("given the door cards", () => {
       assert.equal(box(card.boundingBox!), box(lining.boundingBox!), `side ${sign}`);
     }
   });
+});
+
+describe("given every style's cabin as its glass shows it", () => {
+  test("when the drawn body and doors are read, then the headliner, the cabin tub's floor corners away from its blends, and each door's flat inner face are dark cabin trim, not body paint or bare steel", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const body = makeChassisGeometry(style);
+      const primer = body.getAttribute(PRIMER_ATTRIBUTE);
+      const pos = body.getAttribute("position");
+      const twins = body.userData.shellTwins as Int32Array;
+      for (let k = 0; k < twins.length; k += 2) assert.equal(primer.getX(twins[k]!), CABIN_TRIM, `${id}: headliner vertex ${twins[k]}`);
+      const { ring, slices } = body.userData.loft as { ring: number; slices: number };
+      const [zRear, zFront] = style.tubs[0]!;
+      let floor = 0;
+      for (let s = 0; s < slices; s++) {
+        const z = pos.getZ(s * ring);
+        if (z < zRear + 2 * TUB_EDGE || z > zFront - 2 * TUB_EDGE || bayAt(z, style) > 0) continue;
+        for (const i of [0, ring - 1]) assert.equal(primer.getX(s * ring + i), CABIN_TRIM, `${id}: cabin floor corner at z ${z.toFixed(3)}, ring point ${i}`);
+        floor++;
+      }
+      assert.ok(floor >= 4, `${id}: ${floor} cabin floor slices read`);
+      for (const sign of [-1, 1]) {
+        const door = makeDoorGeometry(sign, style);
+        const [doorPrimer, normal] = [door.getAttribute(PRIMER_ATTRIBUTE), door.getAttribute("normal")];
+        let inner = 0;
+        for (let v = 0; v < normal.count; v++) {
+          if (sign * normal.getX(v) > -0.99) continue;
+          inner++;
+          assert.equal(doorPrimer?.getX(v), CABIN_TRIM, `${id} door ${sign}: inner-face vertex ${v}`);
+        }
+        assert.ok(inner > 0, `${id} door ${sign}: an inner face`);
+      }
+    }
+  });
+
+  /** A drawn interior point may stand this far (m) past a pane or the roof line before it shows through: the glass's own thickness. */
+  const THROUGH_M = 0.005;
+  /** Styles whose seat data still puts a seat through a pane, with their owner and the reading: the owning lane's ticket turns them live. */
+  const OPEN_FIT: Partial<Record<CarStyleId, string>> = {
+    pickup: "CarTrucks2: the front seat back stands 7.4 cm through the cab's rear window at (0.27, 1.36, -0.59)",
+    monster: "CarTrucks2: the rear bench stands 3.5 cm through the rear window at (-0.23, 1.26, -0.77)",
+  };
+  /** The z of the pane line from `base` to `top` ([y, z] each) at height `y`. */
+  const paneZ = (y: number, [y0, z0]: readonly [number, number], [y1, z1]: readonly [number, number]): number => z0 + ((y - y0) / (y1 - y0)) * (z1 - z0);
+  for (const id of CAR_STYLE_IDS) {
+    const name = `when a ${id}'s cabin is built, then no point of its shell, seats, bench or wheel stands over the roof line or through the side glass, the windshield or the rear glass`;
+    if (OPEN_FIT[id] !== undefined) {
+      test.todo(`${name} (${OPEN_FIT[id]})`);
+      continue;
+    }
+    test(name, () => {
+      const style = CAR_STYLES[id];
+      const seats = carPartSeats();
+      new CarCabin(style, seats, new THREE.Group());
+      const kinds = new Set<number>([PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel]);
+      const through: string[] = [];
+      const [ws, wsTop, rg] = [style.windshield.base, style.windshieldTop, style.rearGlass];
+      for (const seat of seats) {
+        if (!kinds.has(seat.kind) || seat.parent === null) continue;
+        seat.updateMatrix();
+        const pos = seat.geometry.getAttribute("position");
+        for (let i = 0; i < pos.count; i++) {
+          const p = new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(seat.matrix);
+          const at = `kind ${seat.kind} at (${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
+          if (p.z >= style.roofZ[0] && p.z <= style.roofZ[1] && p.y > roofAt(p.z, style).y + THROUGH_M) through.push(`over the roof line: ${at}`);
+          if (p.y > beltY(p.z, style) && Math.abs(p.x) > glassX(p.z, p.y, style) + THROUGH_M) through.push(`through the side glass: ${at}`);
+          if (p.y > ws[0] && p.y < wsTop[0] && p.z > paneZ(p.y, ws, wsTop) + THROUGH_M) through.push(`through the windshield: ${at}`);
+          if (p.y > rg.base[0] && p.y < rg.top[0] && p.z < paneZ(p.y, rg.base, rg.top) - THROUGH_M) through.push(`through the rear glass: ${at}`);
+        }
+      }
+      assert.equal(through.length, 0, `${id}: ${through.length} interior points outside the greenhouse, e.g. ${through.slice(0, 3).join("; ")}`);
+    });
+  }
 });

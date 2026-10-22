@@ -26,7 +26,7 @@ import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { captureSubmitShown } from "@/game/hud/submit-rules";
 import { copyText } from "@/lib/clipboard";
 import { sendSubmission, type Parcel } from "@/lib/submissions/status";
-import { ChangedDot, FIELD, NumberField, RangeRow } from "@/components/hud-controls";
+import { ChangedDot, FIELD, NumberField, RangeRow, SEGMENT, TRACK } from "@/components/hud-controls";
 import type { CrashEngine } from "@/game/engine/engine";
 import { KNOBS } from "@/game/hud/knobs";
 import { SUBSECTION_OPEN, SUBSECTION_STORAGE_KEY, subsectionOf, type DebugSubsection } from "@/game/hud/debug-subsections";
@@ -41,11 +41,8 @@ import { audioLevels } from "@/game/hud/audio-levels";
 import { useStoredString } from "@/components/use-stored-string";
 import { VoiceDevicePickers } from "@/components/voice-device-pickers";
 import { useDriver } from "@/components/use-driver";
+import { QualityRows } from "@/components/quality-rows";
 import { cn } from "@/lib/utils";
-
-/** Option buttons inside a segmented track: 44 px on touch. Five-option tracks wrap at three per row: one row of five overflows the panel. */
-const SEGMENT = "h-11 px-1 text-xs pointer-fine:h-7";
-const TRACK = "grid min-w-0 flex-1 gap-0.5 rounded-md bg-surface-2 p-0.5";
 
 /** The storage key of the open sections: the menu reads it to know whether any is open (`HudSections` writes it). */
 const HUD_SECTIONS_KEY = "crush.hud.sections";
@@ -177,7 +174,6 @@ function Toggle({ on, label, onClick, changed, children }: { on: boolean; label:
 function PlaybackSection({ state, engine }: HudProps) {
   const ch = (id: SettingId) => isChanged(state, id);
   const [scaleText, setScaleText] = useState("");
-
   useEffect(() => {
     setScaleText(state.userTimeScale == null ? "" : String(state.userTimeScale));
   }, [state.userTimeScale]);
@@ -259,6 +255,7 @@ function PlaybackSection({ state, engine }: HudProps) {
           ))}
         </div>
       </div>
+      <QualityRows state={state} engine={engine} />
       {/* The cel look is part of the post chain: low / high only (minimal and off draw straight to the canvas). */}
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
