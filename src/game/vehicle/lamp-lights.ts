@@ -349,7 +349,7 @@ export class LampLights {
         _e.copy(_pos).addScaledVector(_dir, GLOW_OUT).toArray(gp, n * 3);
         const c = kind === "head" ? GLOW_HEAD[car.style.lamps.bulb ?? "neutral"] : kind === "tail" ? GLOW_TAIL : kind === "red" ? GLOW_RED : GLOW_BLUE;
         const bright = kind === "tail" && !car.braking ? TAIL_RUNNING : 1;
-        const lens = kind === "head" || kind === "tail" ? car.style.lamps.shapes?.[kind]?.lens : undefined;
+        const lens = kind === "head" ? car.style.lamps.shapes?.head?.lens : undefined;
         const k = lens === undefined || lens === "lit" ? 1 : GLOW_DARK_LENS;
         // A body lamp's glow shows only on the side its lens faces: seen from behind the lens (past the body, through the cabin's glass)
         // it is dark. A siren shows all round.

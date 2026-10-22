@@ -219,12 +219,13 @@ describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, hal
   const glowOf = (style: BodyStyle): { rgb: ArrayLike<number>; n: number } => {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
-    camera.position.set(0, 3, -10);
-    camera.lookAt(0, 0, 20);
     const car = new DeformableCar(paint(), scene, null, "hatchback");
     const restyled: { style: BodyStyle } = car; // `style` is readonly only to game code; the glow reads it per update
     restyled.style = style;
     car.spawnFacing(0, 10, 0, 0);
+    // Ahead of the car: a lamp's glow fades out seen from behind its lens.
+    camera.position.copy(car.group.position).addScaledVector(car.forward, 8).setY(1.5);
+    camera.lookAt(car.group.position);
     const lights = new LampLights(scene, 12, FULL_POOL);
     lights.update([car], camera, car);
     return { rgb: lights.glow.geometry.getAttribute("color").array, n: lights.glow.geometry.drawRange.count };
