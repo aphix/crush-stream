@@ -221,20 +221,27 @@ const TURNS: readonly [string, number, ExitPane][] = [
 
 /** How far (deg) a car's up leans from the world's when it lies on its side: a car leaning less has not rolled over. */
 const ON_ITS_SIDE_DEG = 90;
+/**
+ * How far (m) the monster's origin must rise up the slab's face on its shoved tyres: half the slab's height. At its stock centre (0.07 m over
+ * its hubs) it yawed off the slab with 0.03 m of rise.
+ */
+const RIDE_UP_M = BARRIER_TOP / 2;
 
 describe(`given the ejection range with a hard handbrake turn ${TURN_AT} m before the barrier, so the car slides into it sideways while still moving fast toward it`, () => {
   for (const type of SLIDERS) {
     for (const [side, steer, pane] of TURNS) {
       // The monster's body clears the slab (keel 1.21 m over its 0.81 m top): its tyres meet it, side-on at 22.5 m/s closing (65° off the run-up at
-      // 24.1 m/s), the side-loaded wheels are shoved into their wells (`shoveWheel`), and it climbs onto the slab: 49° of pitch, 17° of roll, its
-      // origin 1.07 m up, 249 g for the one slice, health 0.97. The throw is the speed a hit took (`peakClosing`): climbing on, it loses too little
-      // of it for the alive bar, so nobody is thrown. It was thrown out of the side window while the slab's plan met a body its keel cleared and
-      // its centre stood 0.07 m over its hubs (`centreY`).
+      // 24.1 m/s), the side-loaded wheels are shoved into their wells (`shoveWheel`), and it rides up the slab's face on them without rolling over.
+      // With its centre lifted by the whole body lift it climbed onto the slab (origin 1.07 m up, 49° of pitch); lifted by its sprung share
+      // (`centreLift`, 0.81 of it) and on a tread as wide as drawn it rises 0.61 m and leans 24° at most. The throw is the speed a hit took (`peakClosing`): riding up, it loses
+      // too little of it for the alive bar, so nobody is thrown. It was thrown out of the side window while the slab's plan met a body its keel
+      // cleared and its centre stood 0.07 m over its hubs (`centreY`).
       if (type.id === "monster") {
-        it(`when a ${type.label} swings its nose ${side} and slides into the barrier, then its tyres meet the slab and are shoved into their wells, it climbs onto the slab without rolling over, and nobody is thrown`, async () => {
+        it(`when a ${type.label} swings its nose ${side} and slides into the barrier, then its tyres meet the slab and are shoved into their wells, it rides up the slab's face on them without rolling over, and nobody is thrown`, async (t) => {
           const s = await slideIn(type, steer);
+          t.diagnostic(`${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s, rose to ${s.top.toFixed(2)} m, leant ${s.lean.toFixed(0)}° at most, ${s.run.ejections} throws`);
           assert.ok(s.heading >= 60 && s.speed >= 20, `${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s`);
-          assert.ok(s.top >= BARRIER_TOP && s.lean < ON_ITS_SIDE_DEG, `${type.id}: rose to ${s.top.toFixed(2)} m, leant ${s.lean.toFixed(0)}° at most`);
+          assert.ok(s.top >= RIDE_UP_M && s.lean < ON_ITS_SIDE_DEG, `${type.id}: rose to ${s.top.toFixed(2)} m, leant ${s.lean.toFixed(0)}° at most`);
           assert.equal(s.run.ejections, 0, `${type.id}: ${s.run.ejections} throws`);
         });
         continue;
