@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it, type TestContext } from "node:test";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { BODIES, carInState, drawnField, gapsOver, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGapsOff } from "../vehicle/drawn-body.test-util.ts";
+import { BODIES, carInState, drawnField, gapsOver, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGapsOff, topParts } from "../vehicle/drawn-body.test-util.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { BOX_FLOATS } from "./ragdoll-proxy.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -83,7 +83,7 @@ async function proxyGaps(t: TestContext, testCase: ProxyCase): Promise<Record<st
   const body = ragdolls["proxies"].carBodies[0]!;
   const down = { x: 0, y: -1, z: 0 };
   const off: Record<string, string[]> = {};
-  for (const [part, region] of Object.entries(TOP_PARTS)) {
+  for (const [part, region] of Object.entries(topParts(testCase.style))) {
     const g = gapsOver(car, field, region, (x, y, z) => {
       const hit = world.castRay(new R.Ray({ x, y: y + RAY_FROM_M, z }, down), RAY_LENGTH_M, true, undefined, undefined, undefined, undefined, (c) => c.parent() === body && c.collisionGroups() !== 0);
       return hit === null ? NaN : y + RAY_FROM_M - hit.timeOfImpact;

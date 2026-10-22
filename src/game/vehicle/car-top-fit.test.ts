@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGaps, topGapsOff } from "./drawn-body.test-util.ts";
+import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_WORST_M, topGaps, topGapsOff, topParts } from "./drawn-body.test-util.ts";
 
 /**
  * docs/UNIFIED_CONTACT.md stage 3, "the cage is the body": the surface other cars' wheels and hull points stand on is the
@@ -39,7 +39,7 @@ for (const testCase of topCases) {
       const car = carInState(testCase.state, testCase.style, testCase.cls);
       const field = drawnField(car);
       const wrong: string[] = [];
-      for (const [part, region] of Object.entries(TOP_PARTS)) {
+      for (const [part, region] of Object.entries(topParts(testCase.style))) {
         const g = topGaps(car, field, region);
         t.diagnostic(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
         if (cliffs.some((c) => c.part === part)) continue;

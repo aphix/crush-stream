@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CAGE_STEP, CAGE_VERTICES, type CageSource, CarCage } from "./car-cage.ts";
 import { cageGaps, cageLiveOf, cageOf, cageSourceOf, fitToDrawn } from "./car-cage.test-util.ts";
-import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGapsOff } from "./drawn-body.test-util.ts";
+import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_WORST_M, topGapsOff, topParts } from "./drawn-body.test-util.ts";
 
 /**
  * docs/UNIFIED_CONTACT.md stage 3, "the cage is the body": the cage fitted to a car is the drawn body, in every state the body
@@ -39,7 +39,7 @@ for (const body of BODIES) {
         fitToDrawn(car, cage);
         const field = drawnField(car);
         const wrong: string[] = [];
-        for (const [part, region] of Object.entries(TOP_PARTS)) {
+        for (const [part, region] of Object.entries(topParts(body.style))) {
           const g = cageGaps(car, cage, field, region);
           t.diagnostic(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
           if (cliffs.some((c) => c.part === part)) continue;
