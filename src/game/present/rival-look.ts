@@ -83,7 +83,7 @@ export function rivalLook(seed: number, slot: number, bodyColour: number): { rea
  */
 const RIVAL_SPRAY_SIDE: Record<FxTier, number> = { off: 128, minimal: 128, low: 128, high: 256, ultra: 512 };
 /** The finest side a device class draws (the memory below: a phone's 512 field is 83 MiB beside the page's own): a mobile pick of Ultra draws the rivals at High's 256. */
-const RIVAL_SPRAY_MAX_SIDE: Record<DeviceClass, number> = { desktop: 512, mobile: 256, software: 512 };
+export const RIVAL_SPRAY_MAX_SIDE: Record<DeviceClass, number> = { desktop: 512, mobile: 256, software: 512 };
 
 /** What a slot's bitmap was drawn for. */
 type Drawn = { readonly bitmap: SprayBitmap; seed: number; body: number };

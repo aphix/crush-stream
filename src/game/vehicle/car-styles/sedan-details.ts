@@ -13,7 +13,6 @@ const LAMP_INNER = { width: 0.008, depth: 0.002, profile: "u", cavity: 0 } as co
 const TRIM = { width: 0.01, depth: -0.003, profile: "u", cavity: 0.4 } as const;
 const VENT = { depth: -0.005, rim: 0.006, pattern: { kind: "hslats", pitch: 0.012, bar: 0.004, depth: 0.003 }, cavity: 0.7 } as const;
 const BADGE = { depth: 0.002, rim: 0.003, cavity: 0 } as const;
-const EXHAUST = { depth: -0.006, rim: 0.006, cavity: 0.9 } as const;
 
 const SHARED_LINES: readonly Line[] = [
   { view: "top", points: [[0.8, 0.66], [0.9, 0.65], [1, 0.645], [1.1, 0.64], [1.19, 0.63], [1.3, 0.615], [1.37, 0.6], [1.47, 0.58], [1.55, 0.56], [1.66, 0.53], [1.77, 0.5], [1.88, 0.46], [1.96, 0.42]], ...GAP },
@@ -34,7 +33,6 @@ const SHARED_LINES: readonly Line[] = [
   { view: "side", points: [[-1.06, 0.945], [-1.3, 0.94], [-1.5, 0.935], [-1.7, 0.94], [-1.9, 0.95], [-2, 0.955]], ...CREASE },
   { view: "side", points: [[-1.09, 0.855], [-1.3, 0.85], [-1.5, 0.85], [-1.7, 0.855]], ...CREASE },
   { view: "side", points: [[0.72, 0.405], [0.4, 0.395], [0, 0.385], [-0.22, 0.385], [-0.5, 0.385], [-0.75, 0.39]], ...CREASE, profile: "step", depth: -0.003 },
-  { view: "top", points: [[2, 0.25], [1.74, 0.28], [1.41, 0.315], [1.05, 0.34]], ...CREASE },
   { view: "side", points: [[1.61, 0.16], [1.605, 0.335], [1.593, 0.427], [1.557, 0.513], [1.501, 0.586], [1.428, 0.642], [1.342, 0.678], [1.25, 0.69], [1.158, 0.678], [1.073, 0.642], [0.999, 0.586], [0.943, 0.513], [0.907, 0.427], [0.895, 0.335], [0.89, 0.16]], ...CREASE },
   { view: "side", points: [[-0.89, 0.16], [-0.895, 0.335], [-0.907, 0.427], [-0.943, 0.513], [-0.999, 0.586], [-1.073, 0.642], [-1.158, 0.678], [-1.25, 0.69], [-1.342, 0.678], [-1.428, 0.642], [-1.501, 0.586], [-1.557, 0.513], [-1.593, 0.427], [-1.605, 0.335], [-1.61, 0.16]], ...CREASE },
   { view: "top", points: [[0.28, 0.52], [0.1, 0.505], [-0.2, 0.5], [-0.5, 0.495], [-0.8, 0.495], [-1, 0.495], [-1.1, 0.49]], ...CREASE, depth: -0.003 },
@@ -115,7 +113,6 @@ const SEDAN_PATCHES: readonly Patch[] = [
   { view: "front", points: [[0.5, 0.345], [0.7, 0.345], [0.7, 0.245], [0.5, 0.245]], ...VENT },
   { view: "side", points: [[1.79, 0.5], [1.745, 0.5], [1.73, 0.31], [1.775, 0.31]], ...VENT },
   { view: "rear", points: [[0, 0.88], [0.035, 0.88], [0.035, 0.93], [0, 0.93]], ...BADGE },
-  { view: "rear", points: [[0.47, 0.327], [0.5, 0.33], [0.6, 0.33], [0.63, 0.327], [0.64, 0.315], [0.64, 0.285], [0.63, 0.273], [0.6, 0.27], [0.5, 0.27], [0.47, 0.273], [0.46, 0.285], [0.46, 0.315]], ...EXHAUST },
 ];
 
 const POLICE_PATCHES: readonly Patch[] = [
@@ -124,7 +121,6 @@ const POLICE_PATCHES: readonly Patch[] = [
   { view: "front", points: [[0, 0.27], [0.38, 0.27], [0.38, 0.21], [0, 0.21]], ...VENT },
   { view: "front", points: [[0.52, 0.27], [0.66, 0.27], [0.66, 0.225], [0.52, 0.225]], ...VENT },
   { view: "rear", points: [[0, 0.82], [0.025, 0.795], [0, 0.77]], ...BADGE },
-  { view: "rear", points: [[0.478, 0.245], [0.485, 0.265], [0.506, 0.273], [0.527, 0.265], [0.534, 0.245], [0.527, 0.225], [0.506, 0.217], [0.485, 0.225]], ...EXHAUST },
 ];
 
 /** Every sedan flank, top, nose and tail detail the two measurement scouts reported. */
@@ -133,7 +129,7 @@ export const SEDAN_DETAILS: Details = {
   patches: [...SHARED_PATCHES, ...SEDAN_PATCHES],
 };
 
-/** The sedan body with the cop's own front fascia and tail lamps/tips swapped in for the sedan's. */
+/** The sedan body with the cop's own front fascia and tail lamps swapped in for the sedan's (exhaust tips are geometry: `exhaust`). */
 export const POLICE_DETAILS: Details = {
   lines: [...SHARED_LINES, ...POLICE_LINES],
   patches: [...SHARED_PATCHES, ...POLICE_PATCHES],
