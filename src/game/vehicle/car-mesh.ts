@@ -1073,13 +1073,16 @@ const END_SEGMENTS = { face: 2, corner: 5, run: 1 } as const;
 /** A lofted end's section thins to this share of its corner's tightest radius, so its hidden back never folds through itself. */
 const END_DEPTH_SHARE = 0.9;
 
-/** Bumper fascia: rounded top, intake recess, splitter lip, wrapped corners, the corners held inside `style`'s body side (or a lofted `wrap.end`). `rows` [first, last] lofts only those fascia rows, `proud` (m) out from the face, along the same path: an inlay. */
-export function makeBumperGeometry(front: boolean, style: BodyStyle, rows?: readonly [first: number, last: number], proud = 0): THREE.BufferGeometry {
+/**
+ * Bumper fascia: rounded top, intake recess, splitter lip, wrapped corners, the corners held inside `style`'s body side (or a lofted `wrap.end`). `rows` [first, last] lofts only those fascia rows, `proud` (m) out from the face, along the same path: an inlay;
+ * `reach` (m): with lofted ends, the inlay stops at the last ring whose face point stands within |x| `reach`.
+ */
+export function makeBumperGeometry(front: boolean, style: BodyStyle, rows?: readonly [first: number, last: number], proud = 0, reach = Infinity): THREE.BufferGeometry {
   const s = front ? 1 : -1;
   const spec = front ? style.bumpers.front : style.bumpers.rear;
   const { seat, fascia, span, wrap } = spec;
   const section = rows ? fascia.slice(rows[0], rows[1] + 1).map(([y, out]) => [y, out + proud] as const) : fascia;
-  if (wrap.end) return makeBumperWithEnds(s, spec, wrap.end, style, section);
+  if (wrap.end) return makeBumperWithEnds(s, spec, wrap.end, style, section, reach);
   const wrapAt = (x: number) => Math.max(0, Math.abs(x) - wrap.from) / (span - wrap.from);
   const stations = 16;
   const rings: Pt[][] = [];
@@ -1120,6 +1123,7 @@ function makeBumperWithEnds(
   end: BumperEnd,
   style: BodyStyle,
   section: BodyStyle["bumpers"]["front"]["fascia"],
+  reach: number,
 ): THREE.BufferGeometry {
   const outMax = Math.max(...fascia.map(([, out]) => out));
   const depth = outMax - Math.min(...fascia.map(([, out]) => out));
@@ -1149,19 +1153,22 @@ function makeBumperWithEnds(
       path.push({ x: skinAt(d) + end.stand, d, nx: 1, nd: 0, k: thin });
     }
   }
+  // Rings out to the last whose face point stands within `reach` (path x only grows outward); at least one each side.
+  let last = half;
+  while (last > 1 && path[last]!.x > reach) last--;
   const rings: Pt[][] = [];
   const ts: number[] = [];
-  for (let m = -half; m <= half; m++) {
+  for (let m = -last; m <= last; m++) {
     const p = path[Math.abs(m)]!;
     const crown = (1 - Math.min(p.x, span) / (span + BUMPER_CROWN_RUN)) * 0.02;
     rings.push(section.map(([y, out]) => ({ x: y + crown, y: (out - outMax) * p.k })));
-    ts.push(m / half);
+    ts.push(m / last);
   }
   const geo = loftFromRings(rings, ts, 0, 1);
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
     const t = pos.getZ(i);
-    const p = path[Math.round(Math.abs(t) * half)]!;
+    const p = path[Math.round(Math.abs(t) * last)]!;
     const inset = pos.getY(i);
     pos.setXYZ(i, Math.sign(t) * (p.x + p.nx * inset), pos.getX(i), s * (outMax - p.d - p.nd * inset));
   }

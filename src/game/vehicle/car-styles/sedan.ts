@@ -195,8 +195,8 @@ export const SEDAN: BodyStyle = {
        * the dims' tail) at y 0.45-0.50, 2 cm forward by 0.41 where the dark diffuser band starts (rows at its edges, y 0.41 and 0.23, for
        * the band's crisp edges), tucking 8 cm forward to its
        * bottom at 0.23; flat across to |x| 0.42, then its corner turns onto the body side and runs along it (`wrap.end`): the plain wrap
-       * shrank its section into a pill. Its band rows (0.41-0.23) are the reference's black diffuser; its plate sits on the lid's tail face
-       * in the lid's recess (y 0.63-0.755), its inner face on the face's 2.109 at |x| 0.18.
+       * shrank its section into a pill. Its band rows (0.41-0.23) are the reference's black diffuser, ending on the tail face (|x| 0.55) with the
+       * corners body colour; its plate sits on the lid's tail face in the lid's recess (y 0.63-0.755), its inner face on the face's 2.109 at |x| 0.18.
        */
       fascia: [
         [0.1, -0.07],
@@ -215,6 +215,7 @@ export const SEDAN: BodyStyle = {
       wrap: { from: 0.42, back: 0.24, end: { corner: 0.12, stand: 0.007 } },
       trim: "body",
       band: [0.23, 0.41],
+      bandHalfWidth: 0.55,
       plate: 0.685,
       // The plate sits 6 mm proud of the recess floor (2.109), as the reference's.
       plateFace: { out: 0.027 },

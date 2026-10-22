@@ -1935,8 +1935,8 @@ describe("given a body style's P1 parts", () => {
     });
   }
 
-  it("when a rear bumper sets a band, then the fascia rows in it carry a black inlay across the face between its heights, and the cage builds are unchanged", () => {
-    const { seat, band, wrap } = sedan.bumpers.rear;
+  it("when a rear bumper sets a band, then the fascia rows in it carry a black inlay across the face between its heights, out to its `bandHalfWidth` and no further round the corners, and the cage builds are unchanged", () => {
+    const { seat, band, wrap, bandHalfWidth } = sedan.bumpers.rear;
     const plain: BodyStyle = { ...sedan, bumpers: { ...sedan.bumpers, rear: { ...sedan.bumpers.rear, band: undefined } } };
     const [inlay, bare] = [sedan, plain].map((style) => toneBox(withRearFittings(makeBumperGeometry(false, style), style), FITTING_ATTRIBUTE, FITTING_TONE.black));
     assert.ok(inlay!.count > bare!.count, `${inlay!.count} black vertices with the band, ${bare!.count} without`);
@@ -1944,6 +1944,9 @@ describe("given a body style's P1 parts", () => {
     // The fascia's top crown lifts its rows up to 2 cm at the centre line.
     assert.ok(inlay!.box.min.y >= bottom! - POSITION_TOL && inlay!.box.max.y <= top! + 0.02 + POSITION_TOL, `black y ${inlay!.box.min.y.toFixed(3)}..${inlay!.box.max.y.toFixed(3)}, the band ${bottom!.toFixed(3)}..${top!.toFixed(3)}`);
     assert.ok(inlay!.box.max.x - inlay!.box.min.x > 2 * wrap.from, `the band spans ${(inlay!.box.max.x - inlay!.box.min.x).toFixed(3)} m across`);
+    const tipless: BodyStyle = { ...sedan, exhaust: undefined };
+    const reach = toneBox(withRearFittings(makeBumperGeometry(false, tipless), tipless), FITTING_ATTRIBUTE, FITTING_TONE.black).box;
+    assert.ok(Math.max(-reach.min.x, reach.max.x) <= bandHalfWidth! + POSITION_TOL, `black (tips off) out to |x| ${Math.max(-reach.min.x, reach.max.x).toFixed(3)}, the band's half-width ${bandHalfWidth}`);
     assert.ok(cageHash(sedan) === cageHash(plain), "the cage builds are unchanged");
   });
 
