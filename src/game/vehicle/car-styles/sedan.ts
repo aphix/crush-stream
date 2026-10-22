@@ -93,13 +93,13 @@ const SEDAN_LAMP_SHAPES = {
     ],
   },
   // The fog pods in the bumper's corners, and the wide dark lower intake between them (front iso), its ends off the centre line's seam:
-  // 6.5 cm of upright face down to the chin (the reference's runs to its bottom edge), 2.5 cm of body colour under the grille.
+  // 5.4 cm of upright face down to the chin (the reference's runs to its bottom edge), 2.5 cm of body colour under the grille.
   // Met on the body too: the fascia's wrapped corner is held inside it.
   front: {
     loops: [
       // The reference's fog pod: a round recess, 13 x 8 cm, held inboard of the fascia's wrapped corner (|x| 0.66).
       { points: [[0.63, 0.305], [0.621, 0.325], [0.598, 0.34], [0.565, 0.345], [0.533, 0.34], [0.509, 0.325], [0.5, 0.305], [0.509, 0.285], [0.533, 0.27], [0.565, 0.265], [0.598, 0.27], [0.621, 0.285]] },
-      { points: [[0.006, 0.285], [0.3, 0.278], [0.45, 0.276], [0.48, 0.262], [0.4, 0.226], [0.2, 0.222], [0.006, 0.222]] },
+      { points: [[0.006, 0.276], [0.3, 0.274], [0.45, 0.27], [0.48, 0.258], [0.4, 0.226], [0.2, 0.222], [0.006, 0.222]] },
     ],
     lens: "cavity",
     bezel: "black",
@@ -162,9 +162,10 @@ export const SEDAN: BodyStyle = {
       /**
        * The reference's nose profile (silver-sedan-1.png pixels, 70.1 px/m): its face stands near upright, most forward (2.054, the dims'
        * nose) at y 0.39-0.43, which is its grille's face (the grille's own 2.055, the bumper's loose box front), 2.035-2.045 down to
-       * 0.225 (the intake's upright face), tucks back to 2.01 at 0.208 and closes at 0.20 on the body's underside; no splitter lip standing proud at 0.27. The shell's
-       * nose (2.054) stands under the grille's bottom rim (y 0.29); behind its backing (1.2 cm behind its face, from y 0.322) the fascia
-       * stands at 2.039: at 2.054 it showed between the slats.
+       * 0.225 (the intake's upright face), tucks back to 2.01 at 0.208 and closes at 0.20 on the body's underside; no splitter lip standing proud at 0.27.
+       * The shell's nose (2.054) stands under the grille's bottom rim (y 0.29) and steps back to the intake's upright face (2.043 from y 0.28),
+       * so the intake reads from above (front iso) and its lip stays inside the loose box; behind the grille's backing (1.2 cm behind its face,
+       * from y 0.322) the fascia stands at 2.039: at 2.054 it showed between the slats.
        */
       fascia: [
         [0.1, -0.07],
@@ -173,7 +174,8 @@ export const SEDAN: BodyStyle = {
         [0.08, 0.072],
         [-0.02, 0.074],
         [-0.05, 0.089],
-        [-0.09, 0.07],
+        [-0.06, 0.078],
+        [-0.09, 0.078],
         [-0.115, 0.066],
         [-0.132, 0.046],
         [-0.14, -0.07],
