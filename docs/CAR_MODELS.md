@@ -194,11 +194,16 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
   outside it (`shellTwins` pairs each headliner vertex with the skin vertex it is inset from).
 - **Crush:** the cabin shell squeezes with the roof mass (a load's crush too, `CarCabin.squeezeUnderRoof`), so its dash never stands
   through a crushed roof. The bay rides the engine masses with its front no further out than the front bumper's masses (the
-  nose); each crash bar rides its bumper's, its face on the bumper's seat.
+  nose); each crash bar rides its bumper's, its face on the bumper's seat. Neither rides its masses sideways past the wheels'
+  inner faces (rest hub less tyre half-width).
+- **Door skins:** each door shell is skinned by the body paint's own rule (`DeformRig.bindPoints`: its parent masses and shape
+  clusters, the cabin's D1 rule), so a struck door dents with its masses; its hinge pose turns it after. A torn door flies as its
+  rest shell (its loose shape is sim).
 - **The engine bay:** the drawn body (never the cage) opens a trough under the hood (`bayTub`: from the hood's cowl edge or the
   windshield's foot to inside the nose, floor at 0.28 m, and at least 5 cm of closed deck behind its blend after the cabin tub's, a
   cowl and not a fin), one more `tubs` entry for the drawn loft only. The bay set fills it
-  wall to wall up to the hood's underside: a dark block and black cover with bare-aluminium heads, intake, plenum and strut
+  wall to wall, no wider than the front wheels' inner faces, up to the hood's underside (the crash bars too fit between the wheels):
+  a dark block and black cover with bare-aluminium heads, intake, plenum and strut
   caps, steel rails and manifolds, black radiator, airbox and battery.
 - **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor and the hood's underside.
   `WELL_PANEL` (3) draws a wheel well flat near-black with no sheen (`bare-metal.ts`): the wheel liners, each well's ceiling inside

@@ -8,7 +8,7 @@ import { bayTub, roofAt, sampleSlice } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { BUMPER_F, DRIVER_SIDE, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
-import { AXLE_HALF_SPAN, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
+import { AXLE_HALF_SPAN, CRASH_BAR_HALF, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 
@@ -146,6 +146,8 @@ export class CarCabin {
   /** The bay's rear and front at rest (m, car z), and each of `under`'s z drift this frame. */
   private readonly bayZ: readonly [rear: number, front: number];
   private readonly driftZ = new Float64Array(3);
+  /** How far (m) each of `under` may ride its masses sideways before its side meets a wheel's inner face. */
+  private readonly roomX: Float64Array;
 
   constructor(style: BodyStyle, seats: readonly PartSeat[], group: THREE.Object3D) {
     const of = (kind: number) => seats.filter((s) => s.kind === kind);
@@ -177,7 +179,10 @@ export class CarCabin {
     }
 
     const [zRear, zFront, troughFloor] = bayTub(style);
-    let bayHalf = Infinity;
+    // The bay and the crash bars stand between the wheels' inner faces: a narrow-track car's wheels stand inside its nose's sides.
+    const frame = carFrame(style);
+    const wellsIn = frame.halfTrack - frame.rig.tyre.halfW;
+    let bayHalf = wellsIn;
     for (let z = zRear; z <= zFront; z += 0.1) bayHalf = Math.min(bayHalf, sampleSlice(z, style.profile).hw - BAY_INSET);
     // On the floor pan where it rides over the trough's floor, as the drawn trough is (`tubAt`); over a bay the pan only rises toward the nose.
     const bayFloor = Math.max(troughFloor, floorY(zRear, style), floorY(zFront, style));
@@ -188,13 +193,17 @@ export class CarCabin {
     bars[0]!.position.set(0, front.seat.y, front.seat.z);
     bars[1]!.position.set(0, tail.seat.y, -tail.seat.z);
     bars[1]!.rotation.set(0, Math.PI, 0);
+    const barHalf = Math.min(CRASH_BAR_HALF, wellsIn);
+    for (const bar of bars) bar.scale.x = barHalf / CRASH_BAR_HALF;
+    // ponytail: the wheels' rest faces; a hub the crush carries inboard is not followed.
+    this.roomX = Float64Array.of(wellsIn - bayHalf, wellsIn - barHalf, wellsIn - barHalf);
     bars[0]!.updateMatrix();
     bars[1]!.updateMatrix();
     group.add(this.pose, bay!, ...bars);
 
     this.under = [bay!, ...bars];
     this.rests = this.under.map((s) => s.position.clone());
-    const rig = carFrame(style).rig.masses;
+    const rig = frame.rig.masses;
     const restOf = (name: MassName): readonly [MassName, THREE.Vector3] => [name, new THREE.Vector3(...rig.find((m) => m.name === name)!.rest)];
     this.massRest = (["engineL", "engineR", "bumperFL", "bumperFR", "bumperRL", "bumperRR"] as const).map(restOf);
     this.roofRest = restOf("roof")[1].y;
@@ -210,7 +219,7 @@ export class CarCabin {
     this.under[2]!.showIf = () => rear.detached || rear.hingeT > BAR_OPEN;
   }
 
-  /** The bay rides the engine masses through a crush, its front no further out than the nose (the front bumper's masses), and each bar its bumper's: once a frame on a crashed car, at rest without (`deform` null). */
+  /** The bay rides the engine masses through a crush, its front no further out than the nose (the front bumper's masses), and each bar its bumper's, none sideways into a wheel: once a frame on a crashed car, at rest without (`deform` null). */
   fit(deform: StreamedDeformation | null): void {
     for (let k = 0; k < this.under.length; k++) {
       const seat = this.under[k]!;
@@ -222,6 +231,7 @@ export class CarCabin {
       _bay.copy(deform.massLocal(l)).sub(lRest);
       _mass.copy(deform.massLocal(r)).sub(rRest);
       seat.position.add(_bay.add(_mass).multiplyScalar(0.5));
+      seat.position.x = THREE.MathUtils.clamp(seat.position.x, -this.roomX[k]!, this.roomX[k]!);
       this.driftZ[k] = _bay.z;
     }
     const [zRear, zFront] = this.bayZ;

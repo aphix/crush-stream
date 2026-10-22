@@ -10,7 +10,7 @@ import {
 import type { BodyPartName, MassName } from "../kernel/rig-spec.ts";
 import { DeformParticleHelper, DeformRigHelper } from "./deform-helper.ts";
 import { DeformHit } from "./deform-hit.ts";
-import type { Beam, MassNode } from "./deform-rig.ts";
+import { RES_SLOTS, SKIN_K, type Beam, type MassNode, type PointSkin } from "./deform-rig.ts";
 import { CageStrain, maxCompression, sensorsByPart } from "./cage-measure.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { FAR_SIDE_DOT, MIN_IMPACT_ZONE, MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
@@ -532,6 +532,51 @@ export abstract class DeformState extends DeformHit {
       arr[r] = cageAxis(co, 0, u, v, w);
       arr[r + 1] = cageAxis(co, 8, u, v, w);
       arr[r + 2] = cageAxis(co, 16, u, v, w);
+    }
+    attr.needsUpdate = true;
+    computeNormalsFast(geometry);
+  }
+
+  /**
+   * A mesh outside the body skin written as the body paint is (A5, `bindPoints`): its rest points `rest`, in its own frame seated at car-frame
+   * `origin`, ride their parent masses and cluster maps as of the last bake. The lattice mode skins it by its cage `name` (`skinPanel`), as it
+   * skins the body by the cages.
+   */
+  skinPoints(geometry: THREE.BufferGeometry, rest: Float32Array, skin: PointSkin, name: BodyPartName, origin: THREE.Vector3): void {
+    if (this.mode !== "shape") {
+      this.skinPanel(geometry, rest, name, origin);
+      return;
+    }
+    const attr = geometry.getAttribute("position") as THREE.BufferAttribute;
+    const arr = attr.array as Float32Array;
+    const X = this.clusterXf;
+    const pos = this.massPos;
+    const { sN, sXf, sW, rJ, rW, rC } = skin;
+    for (let i = 0, r = 0; i < skin.count; i++, r += 3) {
+      const dx = rest[r]! + origin.x - rC[r]!;
+      const dy = rest[r + 1]! + origin.y - rC[r + 1]!;
+      const dz = rest[r + 2]! + origin.z - rC[r + 2]!;
+      const n = sN[i]!;
+      let px = n > 0 ? 0 : dx,
+        py = n > 0 ? 0 : dy,
+        pz = n > 0 ? 0 : dz;
+      for (let k = i * SKIN_K, e = k + n; k < e; k++) {
+        const o = sXf[k]!;
+        const w = sW[k]!;
+        px += (X[o]! * dx + X[o + 1]! * dy + X[o + 2]! * dz) * w;
+        py += (X[o + 3]! * dx + X[o + 4]! * dy + X[o + 5]! * dz) * w;
+        pz += (X[o + 6]! * dx + X[o + 7]! * dy + X[o + 8]! * dz) * w;
+      }
+      for (let k = i * RES_SLOTS, e = k + RES_SLOTS; k < e; k++) {
+        const j = rJ[k]!;
+        const w = rW[k]!;
+        px += pos[j]! * w;
+        py += pos[j + 1]! * w;
+        pz += pos[j + 2]! * w;
+      }
+      arr[r] = px - origin.x;
+      arr[r + 1] = py - origin.y;
+      arr[r + 2] = pz - origin.z;
     }
     attr.needsUpdate = true;
     computeNormalsFast(geometry);

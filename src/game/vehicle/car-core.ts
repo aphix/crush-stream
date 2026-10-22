@@ -2,6 +2,7 @@
 import "../kernel/three-trig.ts";
 import * as THREE from "three";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
+import type { PointSkin } from "../deform/deform-rig.ts";
 import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
@@ -446,6 +447,11 @@ export abstract class CarCore {
   protected doorRRest: Float32Array;
   protected hoodOrigin: THREE.Vector3;
   protected trunkOrigin: THREE.Vector3;
+  /** Each door skin's rest seat in the car frame (hinge + `doorSkinZ`), and its A5 tables there: it skins as the body paint does, the hinge pose turning it after. */
+  protected doorLOrigin: THREE.Vector3;
+  protected doorROrigin: THREE.Vector3;
+  protected doorLSkin: PointSkin;
+  protected doorRSkin: PointSkin;
   /** The cabin's pose, holding its shell, seats and wheel (`CarCabin`): `fitInterior` moves it with the crushed cell. */
   readonly interior: THREE.Group;
   /** The interior kit, the engine bay and the crash bars, placed by the style. */
@@ -538,6 +544,12 @@ export abstract class CarCore {
     this.doorRRest = this.copyRest(this.doorMeshR.geometry);
     this.hoodOrigin = this.hood.position.clone();
     this.trunkOrigin = this.trunk.position.clone();
+    this.doorLOrigin = this.doorL.position.clone().add(this.doorMeshL.position);
+    this.doorROrigin = this.doorR.position.clone().add(this.doorMeshR.position);
+    this.doorLSkin = this.deform.bindPoints(this.doorLRest, this.doorLOrigin);
+    this.doorRSkin = this.deform.bindPoints(this.doorRRest, this.doorROrigin);
+    // The ground lift a hinged door's pose takes (`posePart`) reads its rest box, not the dent its skin writes.
+    for (const mesh of [this.doorMeshL, this.doorMeshR]) mesh.geometry.computeBoundingBox();
     this.flushCasters.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
     if (this.style.details) for (const mesh of [this.body, this.hood, this.trunk, this.doorMeshL, this.doorMeshR]) ensureRestFrame(mesh, this.group);
     for (const material of new Set([this.bodyMat, doorMat])) applyDetailMap(material, this.style);
