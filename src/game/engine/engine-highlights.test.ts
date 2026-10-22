@@ -6,16 +6,17 @@ import { blankPoint, Track } from "../world/track.ts";
 import stunt from "../world/tracks/stunt.json" with { type: "json" };
 import city from "../world/tracks/city.json" with { type: "json" };
 import { frame, makeWorld, type World } from "../world/race-world.test-util.ts";
-import { FUDGE_GAP, phaseClock } from "../match/phase.ts";
+import { bodyGap, FUDGE_FULL, FUDGE_GAP, FUDGE_NONE, phaseClock } from "../match/phase.ts";
 import { carLayout } from "../net/car-pose.ts";
 import { packReel, unpackReel } from "../net/reel-codec.ts";
 import { FLIGHT_S, ReelDirector, simAt, type ReelHost } from "./engine-highlights.ts";
 import { ClipSim } from "./engine-replay.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import type { Reel } from "../match/highlights.ts";
+import type { HighlightClip, Reel } from "../match/highlights.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { stage } from "./reel-view.test-util.ts";
 
 /** The city course with the staged head-on's cars (2 and 3) and the player's and car 1: no field around them to crash into. */
 const FIELD = { trackId: "city", laps: 1, aiCount: 3, noReset: false, aggression: 1 };
@@ -35,6 +36,18 @@ function stageHeadOn(w: World, aMps: number, bMps: number): void {
   track.pointAt(158, pt);
   w.cars[3]!.spawnFacing(pt.x, pt.z, Math.atan2(pt.tx, pt.tz) + Math.PI, bMps);
 }
+
+/** Car 1 driven at the stunt course's wall at `mps` a second into the race (`stage`'s wall hit, as the reel's kicker-wall test stages it). */
+function stageWall(w: World, mps: number): void {
+  const track = new Track(stunt);
+  const state = { acc: 0 };
+  for (let n = 0; w.race.time < 1 && n < 900; n++) frame(w, state);
+  stage(track, w.cars[1]!, w.cars[0]!, { kind: "wall", at: WALL_AT * track.length, speed: mps, side: -1 });
+}
+/** Where (share of the lap) the staged wall hit drives off the road: the stunt course's kicker, whose wall a staged car is known to hit. */
+const WALL_AT = 0.38;
+/** A wall hit's touch is the lone car's wall contact this near (m) the recorded point: its other scrapes on the way there are not it. */
+const WALL_NEAR = 4;
 
 /** A reel host on a harness world: its slot cars, its course, no FX. */
 function hostOf(w: World): ReelHost {
@@ -169,6 +182,94 @@ function assertDrawingKeepsReplay(w: World, clip: Reel["clips"][number], hz: num
   assertSameNumbers(stateOf(cars), drawn, `${hz} Hz: the replay's final state with a drawn frame inside every step`);
 }
 
+/** A spark or debris call the reel threw: which, on which play, after how many of the replay's steps, at what strength, and its point's gap (m) to the first impact's farther drawn body (`hitGap`). */
+type Thrown = { pass: number; done: number; path: string; strength: number; gap: number };
+
+/** Plan gap (m) from `clip`'s recorded impact point to the drawn bodies of its first impact's cars, as replay `d` draws them: `pick` of the pair's two (the lone car of a wall hit alone). */
+function hitGap(d: ReelDirector, clip: HighlightClip, pick: (a: number, b: number) => number): number {
+  const cars = d["cur"]!.sim.cars;
+  const a = bodyGap(cars[clip.firstA]!, clip.x, clip.z);
+  return clip.firstB >= 0 ? pick(a, bodyGap(cars[clip.firstB]!, clip.x, clip.z)) : a;
+}
+
+/**
+ * Two plays of `reel`'s first clip (the first and its restart): every spark and debris call the reel throws (`impact`, `fudge`, `hit`) with the steps the
+ * replay had run; per play, the step its first impact's cars first touch (the pair's SAT hit, or the lone car's wall hit by the point), the widest
+ * gap from the point to their farther drawn body while the slow-mo eased in, and whether one body stood on the point (within `FUDGE_FULL`) while the other was `FUDGE_NONE` or more off.
+ */
+function playTwice(w: World, reel: Reel): { touch: number[]; widest: number[]; lopsided: boolean[]; thrown: Thrown[] } {
+  const clip = reel.clips[0]!;
+  const touch = [Infinity, Infinity];
+  const widest = [0, 0];
+  const lopsided = [false, false];
+  const thrown: Thrown[] = [];
+  const wallHit = w.race.onWallHit;
+  const slot = clip.cars[clip.firstA]!.slot;
+  let clockS = 0;
+  mock.method(performance, "now", () => clockS * 1000);
+  try {
+    const note = (path: string, strength: number): void => void thrown.push({ pass: d["pass"], done: d["cur"]!.sim.step, path, strength, gap: hitGap(d, clip, Math.max) });
+    const d: ReelDirector = new ReelDirector({
+      ...hostOf(w),
+      impact: () => note("flash and burst", 1),
+      fudge: (_at, _n, strength) => note("fudge", strength),
+      hit: () => note("hit sparks", 1),
+    });
+    const met = (step: number): void => void (touch[d["pass"]] = Math.min(touch[d["pass"]]!, step));
+    w.race.onWallHit = (i, closing, x, z) => {
+      if (clip.firstB < 0 && i === slot && Math.hypot(x - clip.x, z - clip.z) < WALL_NEAR) met(d["cur"]!.sim.step);
+      wallHit(i, closing, x, z);
+    };
+    d.stepBudgetMs = Infinity;
+    d.play(reel, 0);
+    const { sim, tl } = d["clips"][0]!;
+    const pairHit = sim.world.pairHit!;
+    sim.world.pairHit = (a, b, hit) => {
+      if (Math.min(a, b) === Math.min(clip.firstA, clip.firstB) && Math.max(a, b) === Math.max(clip.firstA, clip.firstB)) met(sim.step);
+      pairHit(a, b, hit);
+    };
+    const loop: number = d["loopWall"];
+    for (let n = 1; (clockS = n / 60) < 2 * loop - 1; n++) {
+      d.frame(clockS);
+      const wall: number = d["wall"];
+      if (d["flying"] || wall < tl.onset || wall >= tl.contact) continue;
+      const far = hitGap(d, clip, Math.max);
+      widest[d["pass"]] = Math.max(widest[d["pass"]]!, far);
+      if (far >= FUDGE_NONE && hitGap(d, clip, Math.min) <= FUDGE_FULL) lopsided[d["pass"]] = true;
+    }
+  } finally {
+    mock.restoreAll();
+    w.race.onWallHit = wallHit;
+  }
+  return { touch, widest, lopsided, thrown };
+}
+
+/**
+ * On the first play and the restart alike: the fudge throws only with the hit's drawn bodies (both of a pair) within `FUDGE_NONE` of the point (whole
+ * within `FUDGE_FULL`), though the slow-mo began with one farther off, and still throws once they reach it; nothing else comes before the step the
+ * cars touch, and the flash and burst come. `parked`: the struck car stood on the point while the other was still coming (the case that needs both).
+ */
+function assertFudgeOnlyByBody(w: World, reel: Reel, parked = false): void {
+  const { touch, widest, lopsided, thrown } = playTwice(w, reel);
+  for (const pass of [0, 1]) {
+    const label = pass === 0 ? "first play" : "restart";
+    const at = touch[pass]!;
+    assert.ok(Number.isFinite(at), `${label}: the first impact's cars never touched`);
+    assert.ok(widest[pass]! >= FUDGE_NONE, `${label}: the farther body was only ${widest[pass]!.toFixed(2)} m off the point as the slow-mo eased in: nothing for the gate to hold back`);
+    if (parked) assert.ok(lopsided[pass], `${label}: no moment with the struck car on the point and the other ${FUDGE_NONE} m or more off: the case is not staged`);
+    const mine = thrown.filter((t) => t.pass === pass);
+    const fudge = mine.filter((t) => t.path === "fudge");
+    assert.ok(fudge.length >= 1, `${label}: no fudge burst, though the cars reached the point`);
+    const far = fudge.filter((t) => !(t.gap < FUDGE_NONE && t.strength > 0));
+    assert.equal(far.length, 0, `${label}: fudge thrown ${far.map((t) => `${t.gap.toFixed(2)} m off a body at strength ${t.strength.toFixed(2)}, ${at - t.done} steps before the touch`).join("; ")}`);
+    const weak = fudge.filter((t) => t.gap <= FUDGE_FULL && t.strength !== 1);
+    assert.equal(weak.length, 0, `${label}: fudge at ${weak.map((t) => `strength ${t.strength.toFixed(2)} ${t.gap.toFixed(2)} m off a body`).join("; ")} (whole within ${FUDGE_FULL} m)`);
+    assert.ok(mine.some((t) => t.path === "flash and burst"), `${label}: no flash and burst`);
+    const early = mine.filter((t) => t.path !== "fudge" && t.done < at);
+    assert.equal(early.length, 0, `${label}: ${early.map((t) => `${t.path} ${at - t.done} steps before the touch (step ${at})`).join(", ")}`);
+  }
+}
+
 describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s car head-on a second in, and its clip opens with its focus car driving, recorded as a highlight reel", () => {
   const fast = recorded(async (a) => {
     race(a, FIELD, SEED);
@@ -227,18 +328,20 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
     }
   });
 
-  it("when its slow-mo eases in, then the crash cam begins before it, sparks and dust are asked for at the clip's recorded impact point every FUDGE_GAP until the cars meet and never after, and the flash and burst go off once, as they meet", () => {
+  it("when its slow-mo eases in, then the crash cam begins before it, sparks and dust are asked for at the clip's recorded impact point at most every FUDGE_GAP, only once both cars' drawn bodies are within FUDGE_NONE of it, until the cars meet and never after, and the flash and burst go off once, as they meet", () => {
     const { w: a, reel } = fast;
     const clip = reel.clips[0]!;
-    const seen = { crash: [] as number[], impact: [] as number[], fudge: [] as number[], off: 0 };
+    const seen = { crash: [] as number[], impact: [] as number[], fudge: [] as number[], off: 0, gap: 0, strength: 1 };
     let wall = 0;
-    const d = new ReelDirector({
+    const d: ReelDirector = new ReelDirector({
       ...hostOf(a),
       crash: () => seen.crash.push(wall),
       impact: () => seen.impact.push(wall),
-      fudge: (at) => {
+      fudge: (at, _n, strength) => {
         seen.fudge.push(wall);
         seen.off = Math.max(seen.off, Math.hypot(at.x - clip.x, at.z - clip.z));
+        seen.gap = Math.max(seen.gap, hitGap(d, clip, Math.max));
+        seen.strength = Math.min(seen.strength, strength);
       },
     });
     d.stepBudgetMs = Infinity;
@@ -252,12 +355,14 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
     assert.equal(seen.impact.length, 1, "the flash and burst went off once");
     assert.ok(seen.impact[0]! >= at(tl.contact) && seen.impact[0]! < at(tl.contact) + frame, `the flash and burst went off at ${seen.impact[0]!.toFixed(3)} s, not as the cars meet (${at(tl.contact).toFixed(3)})`);
     assert.ok(seen.fudge.length >= 1, "no sparks or dust before the hit");
-    assert.ok(seen.fudge[0]! >= at(tl.onset) && seen.fudge[0]! < at(tl.onset) + frame, `the first sparks at ${seen.fudge[0]!.toFixed(3)} s, not as the slow-mo starts (${at(tl.onset).toFixed(3)})`);
     assert.ok(seen.fudge.at(-1)! < at(tl.contact), `sparks and dust still asked for at ${seen.fudge.at(-1)!.toFixed(3)} s, after the cars met (${at(tl.contact).toFixed(3)})`);
     for (let k = 1; k < seen.fudge.length; k++) assert.ok(seen.fudge[k]! - seen.fudge[k - 1]! >= FUDGE_GAP - 1e-9, `sparks ${k} came ${(seen.fudge[k]! - seen.fudge[k - 1]!).toFixed(3)} s after the last`);
     assert.ok(seen.off < 1e-6, `sparks were asked for ${seen.off} m off the recorded impact point`);
-    const wanted = (tl.contact - tl.onset) / FUDGE_GAP;
-    assert.ok(Math.abs(seen.fudge.length - wanted) <= 2, `${seen.fudge.length} sparks calls over ${(tl.contact - tl.onset).toFixed(2)} s, one per ${FUDGE_GAP}`);
+    assert.ok(seen.gap < FUDGE_NONE && seen.strength > 0, `sparks asked for with the farther drawn body ${seen.gap.toFixed(2)} m off the point (none from ${FUDGE_NONE} m), at strength ${seen.strength}`);
+  });
+
+  it("when its reel plays and restarts, then on each play the fudge throws only with both drawn bodies of the head-on's cars by the point and nothing else comes before the step they touch", () => {
+    assertFudgeOnlyByBody(fast.w, fast.reel);
   });
 
   it("when it plays at 60 and at 240 Hz, then the car moving through the slow-motion is drawn moving on every frame, and drawing frames never changes the replay", () => {
@@ -465,6 +570,32 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
       }
     }
     assert.ok(worst < 1e-6, `the second play's camera differs from the first's by ${worst.toExponential(2)} (m, quaternion or deg) at frame ${at} (${((at + 1) / 60).toFixed(2)} s into the loop)`);
+  });
+});
+
+describe("given a stunt race whose first crash is a car driven into the kicker's wall at 32 m/s a second in, recorded as a highlight reel", () => {
+  const walled = recorded(async (a) => {
+    race(a, { ...FIELD, trackId: "stunt", aiCount: 1 }, 3);
+    stageWall(a, 32);
+    return recordedReel(a);
+  });
+
+  it("when its reel plays and restarts, then on each play the fudge throws only by the car's drawn body and nothing else comes before the step it touches the wall", () => {
+    assert.ok(walled.reel.clips[0]!.firstB < 0, "the first clip is not a wall hit");
+    assertFudgeOnlyByBody(walled.w, walled.reel);
+  });
+});
+
+describe("given a city race whose first crash is a 30 m/s car driven into a parked car a second in, recorded as a highlight reel", () => {
+  const parked = recorded(async (a) => {
+    race(a, FIELD, SEED);
+    stageHeadOn(a, 30, 0);
+    return recordedReel(a);
+  });
+
+  it("when its reel plays and restarts, then on each play no fudge burst comes while the striking car is still FUDGE_NONE or more off the point, though the parked car's bumper is on it, and nothing else comes before the step they touch", () => {
+    assert.ok(parked.reel.clips[0]!.firstB >= 0, "the first clip is not a car-car hit");
+    assertFudgeOnlyByBody(parked.w, parked.reel, true);
   });
 });
 
