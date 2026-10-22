@@ -132,6 +132,8 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const lipIndex = parts.reduce((n, g) => n + g.getIndex()!.count, 0);
   if (lips) parts.push(lips);
   const humps = wellHumpGeometry(style, source);
+  // The cage's tubs: kept out of its hull's decimation (`CageSource.tubs`).
+  const tubs = { from: parts.reduce((n, g) => n + g.getAttribute("position").count, 0), count: source === "cage" ? (humps?.getAttribute("position").count ?? 0) : 0 };
   if (humps) parts.push(humps);
   if (source === "drawn") parts.push(...bootInfill(style));
   // The wheel liners, merged after the loft and roof: unpainted like the bay they rise into.
@@ -156,6 +158,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   merged.computeVertexNormals();
   merged.computeBoundingBox();
   merged.computeBoundingSphere();
+  merged.userData.tubs = tubs;
   // The loft is merged first: its vertex `s * ring + i` and its first (slices - 1) * ring * 2 triangles (`panelRegions` cuts panels out of them).
   merged.userData.loft = { ring: rings[0]!.length, slices: zs.length };
   if (lips) merged.userData.archLips = { from: lipIndex, perWheel: lips.userData.perWheel as number[] };
