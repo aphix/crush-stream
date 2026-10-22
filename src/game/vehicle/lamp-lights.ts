@@ -241,6 +241,12 @@ export class LampLights {
   private readonly viewProj = new THREE.Matrix4();
   /** Whether any car's lamps may earn real lights by screen position (desktop; a phone's budget keeps them to the followed car and the highlight). */
   middleTile = true;
+  /**
+   * Night (the time of day, `WorldStage.night`; the engine sets it every frame). By day a car's head lamps, and its tail lamps while it
+   * is off the brakes, are off: no glow, real light or pool. Brake lamps (the tails while it brakes) and police sirens light at any hour.
+   * Drawn only. Night until set: the pool's lit behaviour is night's.
+   */
+  night = true;
   /** Fake pools: one instanced ground decal for every head and tail lamp, at (1 − weight) of its colour. */
   readonly pools: THREE.InstancedMesh;
   /** This frame's head and tail lamps: world seat and axis (6 floats each), kind (1 head), fade state and lamp index, target weight, rank score and brightness (`TAIL_RUNNING` for a tail off the brakes). */
@@ -342,7 +348,8 @@ export class LampLights {
       const bonus = this.bonus(car, followed, highlight);
       for (let i = 0; i < car.lampCount; i++) {
         const kind = car.lampWorld(i, _pos, _dir);
-        if (!kind) {
+        // Dark (`!kind`: broken, or a siren not lit just now), or by day a lamp that burns only at night: no glow, light or pool.
+        if (!kind || (!this.night && (kind === "head" || (kind === "tail" && !car.braking)))) {
           fade.w[i] = 0;
           fade.act[i] = 0;
           continue;
