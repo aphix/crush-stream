@@ -24,7 +24,8 @@ export const STYLE_WHEELS: Readonly<Record<CarStyleId, { design: WheelDesign; ti
   coupe: { design: "mag5", tint: UNTINTED },
   pickup: { design: "six", tint: UNTINTED },
   police: { design: "five", tint: new THREE.Color(0xc4c8ce) },
-  monster: { design: "beadlock", tint: UNTINTED },
+  // The side plate's six-slot beadlocks are dark gunmetal (~0x3a-0x64 there), not polished alloy.
+  monster: { design: "beadlock", tint: new THREE.Color(0x828486) },
 };
 
 /** A tyre's vertical rate (N/m): a passenger tyre near 2.2 bar; a class's kerb weight over four flattens its foot by weight / rate. */
