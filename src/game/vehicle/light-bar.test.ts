@@ -208,7 +208,7 @@ describe("given the light bar and the push bar as the reference cruiser wears th
     assert.equal(moved, 0, "the bumper's own vertices moved");
   });
 
-  it("when a police and a sedan are built, then the police's front bumper mesh carries its push bar and the sedan's is its bare fascia with its seam cover, their rear bumpers alike but for that cover", () => {
+  it("when a police and a sedan are built, then the police's front bumper mesh carries its push bar and the sedan's is its bare fascia with its seam cover, and each rear bumper is its own fascia (the sedan's with its cover)", () => {
     const scene = new THREE.Scene();
     const [police, sedan] = (["police", "sedan"] as const).map((id) => new DeformableCar(paint(), scene, null, id));
     const box = (car: DeformableCar, i: 0 | 1): THREE.Box3 => {
@@ -225,9 +225,9 @@ describe("given the light bar and the push bar as the reference cruiser wears th
     const [cop, plain] = [box(police!, 0), box(sedan!, 0)];
     assert.ok(plain.equals(covered), `sedan front bumper face ${plain.max.z}, top ${plain.max.y}: its fascia's with its seam cover`);
     assert.ok(cop.max.z - bare.max.z > 0.08 && cop.max.y - bare.max.y > 0.15, `police front bumper face ${cop.max.z} (bare fascia ${bare.max.z}), top ${cop.max.y} (bare fascia ${bare.max.y})`);
-    const rear = withRearFittings(makeBumperGeometry(false, CAR_STYLES.sedan), CAR_STYLES.sedan);
-    const sedanRear = geoBox(rear).clone();
     const [copRear, plainRear] = [box(police!, 1), box(sedan!, 1)];
-    assert.ok(copRear.equals(sedanRear) && plainRear.equals(geoBox(withSeamCover(rear, CAR_STYLES.sedan, false))), "the rear bumpers stand alike but for the sedan's seam cover");
+    const copFascia = geoBox(withRearFittings(makeBumperGeometry(false, CAR_STYLES.police), CAR_STYLES.police));
+    const sedanDrawn = geoBox(withSeamCover(withRearFittings(makeBumperGeometry(false, CAR_STYLES.sedan), CAR_STYLES.sedan), CAR_STYLES.sedan, false));
+    assert.ok(copRear.equals(copFascia) && plainRear.equals(sedanDrawn), "each rear bumper is its own fascia, the sedan's with its seam cover");
   });
 });
