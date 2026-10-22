@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
-import { CREASE_DEGREES, SHUT_RAMP, bayAt, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
@@ -463,25 +463,66 @@ const roundedPartCases = [
 /** At the cant line the drawn roof's side keeps normals of its own, pointing out at least this much (x share), not down with its underside's. */
 const ROOF_SIDE_NORMAL_X = 0.8;
 
-/** The drawn posts the curved section (`postSection`) builds: the B-pillar, the C-pillar ("rear") and the divider. */
-const POST_NAMES = ["b", "rear", "divider"];
+/** The drawn posts the curved section (`postSection`) builds: the A-post, the B-pillar, the C-pillar ("rear") and the divider. */
+const POST_NAMES = ["a", "b", "rear", "divider"];
 /** A drawn post's section: at least this many points, each chord turning under `POST_TURN_DEGREES` from the one before, and its depth sides' chords under a third of its depth (its corners rounded, not chamfered). */
 const POST_MIN_POINTS = 12;
 const POST_TURN_DEGREES = 35;
+/** At least this many of the A-post's stations show under the roof's side (the rest run up into it). */
+const A_POST_STATIONS_SHOWN = 5;
+/** The drawn A-post laps the windshield's side edge within this (m) at every station, and in side view its section's centre keeps its offset from that edge within this along the post: it follows the edge, never twisting off it. */
+const A_POST_EDGE_FOLLOW = 0.01;
 
-describe("given every body style's drawn B-, C- and divider posts", () => {
+/** Distance (m) from `p` to the line through `a` and `b`. */
+function distanceToLine(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): number {
+  const along = b.clone().sub(a).normalize();
+  const off = p.clone().sub(a);
+  return off.sub(along.multiplyScalar(off.dot(along))).length();
+}
+
+describe("given every body style's drawn A-, B-, C- and divider posts", () => {
   for (const id of CAR_STYLE_IDS) {
-    it(`when a ${id}'s posts are read at the belt, then each section has ${POST_MIN_POINTS} points or more and every chord turns under ${POST_TURN_DEGREES}° from the one before`, () => {
-      const posts = makeGreenhouseFrame(CAR_STYLES[id], "drawn").filter((g) => POST_NAMES.includes(g.name));
-      assert.ok(posts.length >= 4, `${id}: ${posts.length} posts`);
+    it(`when a ${id}'s posts are read at every station under the roof, then each section has ${POST_MIN_POINTS} points or more and every chord turns under ${POST_TURN_DEGREES}° from the one before`, () => {
+      const style = CAR_STYLES[id];
+      const posts = makeGreenhouseFrame(style, "drawn").filter((g) => POST_NAMES.includes(g.name));
+      assert.ok(posts.filter((g) => g.name === "a").length === 2 && posts.length >= 6, `${id}: ${posts.length} posts`);
+      // A station reaching up past the cant line into the roof's side has its points held in under the roof (`insideRoof`).
+      const held = (p: THREE.Vector3) => p.z >= style.roofZ[0] && p.z <= style.roofZ[1] && p.y > cantY(p.z, style);
       for (const post of posts) {
-        const { ring } = loftOf(post);
+        const { ring, slices } = loftOf(post);
         assert.ok(ring >= POST_MIN_POINTS, `${id} ${post.name}: ${ring} section points`);
-        const at = (k: number) => positionAt(post, (k + ring) % ring);
-        for (let k = 0; k < ring; k++) {
-          const turn = angleBetweenDegrees(at(k).sub(at(k - 1)).normalize(), at(k + 1).sub(at(k)).normalize());
-          assert.ok(turn < POST_TURN_DEGREES, `${id} ${post.name} section point ${k} turns ${turn.toFixed(1)}°`);
+        let read = 0;
+        for (let slice = 0; slice < slices; slice++) {
+          const at = (k: number) => positionAt(post, slice * ring + ((k + ring) % ring));
+          if (Array.from({ length: ring }, (_, k) => at(k)).some(held)) continue;
+          read++;
+          for (let k = 0; k < ring; k++) {
+            const turn = angleBetweenDegrees(at(k).sub(at(k - 1)).normalize(), at(k + 1).sub(at(k)).normalize());
+            assert.ok(turn < POST_TURN_DEGREES, `${id} ${post.name} station ${slice} section point ${k} turns ${turn.toFixed(1)}°`);
+          }
         }
+        assert.ok(read > 0 && (post.name !== "a" || read >= A_POST_STATIONS_SHOWN), `${id} ${post.name}: ${read} stations read under the roof`);
+      }
+    });
+
+    it(`when a ${id}'s A-posts are laid along its windshield, then each laps the windshield's side edge within ${A_POST_EDGE_FOLLOW * 100} cm at every station under the roof and in side view its centre's offset from that edge varies under ${A_POST_EDGE_FOLLOW * 100} cm`, () => {
+      const { base, wBase, wTop } = CAR_STYLES[id].windshield;
+      const [topY, topZ] = CAR_STYLES[id].windshieldTop;
+      for (const post of makeGreenhouseFrame(CAR_STYLES[id], "drawn").filter((g) => g.name === "a")) {
+        const { ring, slices } = loftOf(post);
+        const side = Math.sign(positionAt(post, 0).x);
+        const [edgeBase, edgeTop] = [new THREE.Vector3((side * wBase) / 2, base[0], base[1]), new THREE.Vector3((side * wTop) / 2, topY, topZ)];
+        const sideView = (p: THREE.Vector3) => p.clone().setX(0);
+        const offsets: number[] = [];
+        for (let slice = 0; slice < slices - 1; slice++) {
+          const section = Array.from({ length: ring }, (_, k) => positionAt(post, slice * ring + k));
+          const lap = Math.min(...section.map((p) => distanceToLine(p, edgeBase, edgeTop)));
+          assert.ok(lap <= A_POST_EDGE_FOLLOW, `${id} station ${slice}: the post stands ${(lap * 100).toFixed(1)} cm off the windshield's edge`);
+          const centre = section.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(ring);
+          offsets.push(distanceToLine(sideView(centre), sideView(edgeBase), sideView(edgeTop)));
+        }
+        const drift = Math.max(...offsets) - Math.min(...offsets);
+        assert.ok(drift < A_POST_EDGE_FOLLOW, `${id}: the post's centre runs ${offsets.map((d) => (d * 100).toFixed(1)).join(", ")} cm off the edge`);
       }
     });
   }
@@ -636,21 +677,22 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
  * into the body on top of its loft: red if one grows.
  */
 const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number }> = {
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
-  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 96 },
-  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 96 },
-  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 64 },
-  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 64 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
-  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 64 },
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 264 },
+  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 296 },
+  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 296 },
+  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 264 },
+  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 264 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 264 },
+  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 264 },
 };
-/** The chamfered box section (eight corner points, three crown points) the drawn B-, C- and divider posts had before they curved. */
+/** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and the A-post's stations then. */
 const CHAMFERED_POST_RING = 11;
+const CHAMFERED_A_POST_STATIONS = 3;
 
 /**
  * `style`'s arch lips' and wheel humps' vertices (`archLipGeometry`, `wellHumpGeometry`), its drawn liners' over the cage's one-sided
  * liners (`makeWellLiners`: their insides and end caps), the rings its boot cut and its nose add to the loft, its walls' top copies, and
- * its posts' section points past `CHAMFERED_POST_RING`.
+ * its posts' vertices past the chamfered posts' (`CHAMFERED_POST_RING` a station, the A-post on `CHAMFERED_A_POST_STATIONS`).
  */
 function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number } {
   const body = makeChassisGeometry(style);
@@ -664,7 +706,7 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; li
     bootRings: (rings(true, true) - rings(false, true)) * loftOf(body).ring,
     noseRings: (rings(true, true) - rings(true, false)) * loftOf(body).ring,
     wallTops: body.userData.wallTops as number,
-    curvedPosts: posts.reduce((n, g) => n + (loftOf(g).ring - CHAMFERED_POST_RING) * loftOf(g).slices, 0),
+    curvedPosts: posts.reduce((n, g) => n + loftOf(g).ring * loftOf(g).slices - CHAMFERED_POST_RING * (g.name === "a" ? CHAMFERED_A_POST_STATIONS : loftOf(g).slices), 0),
   };
 }
 
@@ -744,20 +786,23 @@ describe("given every body style's panels cut from its smoothed loft", () => {
 const SIM_CRASH_KPH = 48;
 // Re-pinned for the skin reading a kept set once (its fit rest takes the set): the first difference is bumperFL's velocity at 0.0217 s, in the hit,
 // where the cage the contact reads first differs.
+// CarRig's single re-pin (union 1d751bfc with the tread as wide as drawn): sedan, coupe, pickup, police and monster moved with the car overhaul's
+// sim (each style's own frame and rig, its own cages and lids, the lifted centre, the tyre side rows and footprint), red on the union since
+// e4f74c6e; hatch and SUV were re-pinned by their lane and are unchanged here.
 const SIM_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "482d299bbf62cfe82b9c5037a70fd22463affd183b1eb4e9f64b085bfaf11e30" },
+  { id: "sedan", digest: "3b05ae33d289fbd2da191012091e617aeea30ad0c0072e4fdc3b07545ffd45b3" },
   // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams.
   { id: "hatchback", digest: "674fca85d7893ab736a28bcff660adad5f319d6471bcd301a6bfa60bc8f7983e" },
   { id: "wagon", digest: "728e19f0a34f06b705de92b836b11640013dff0bc01857f6bd173b0308be8b37" },
-  { id: "coupe", digest: "40338da7598383475ddc25e15b9e759e2f8bbbadf3856d43f2fcf84d61960b77" },
-  { id: "pickup", digest: "075726ca358aeba30f6036888aa7d8f9340e5b972178bdd6aef3a2ebbc1480f3" },
+  { id: "coupe", digest: "caa1fdf8cd6c154cc71882a4e87b5a98cc33ac904a46b3eb3611523ed07c3c14" },
+  { id: "pickup", digest: "8ac3348022ccf861dcc32220681d991fadaba4b58f4cd87233f0374f7bfb5731" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
-  { id: "police", digest: "08723ee0b057fd7362b131572b0fae67c75b4b44cba69bb5c9097461202172fe" },
-  // The monster's body is the pickup's: given the monster class, the pickup body and the monster body hash the same (7c249b89...).
-  { id: "monster", digest: "1ff87dbcbd27c05353eff1ccdb9d5dff37ab793c99f3a382c5f053e1ce878386" },
+  { id: "police", digest: "70734ab60eccfca209ff0e6e163c5a8f1c7e8c0ef501bf8ca8104e6b98ddb5e6" },
+  // The monster is its own body style (its own dims, cage and lifted class body), no longer the pickup's.
+  { id: "monster", digest: "7a1610ef755890bc133f287a9c31f175de8e9d6d7ee310aba95af8fa653a4297" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style crashed into the wall at 48 km/h by the engine's own step", () => {
@@ -792,17 +837,20 @@ function cageSourceDigest(car: DeformableCar): string {
   return hash.digest("hex");
 }
 
+// CarRig's single re-pin: sedan, coupe, pickup, police and monster's cage sources moved with each style's own panels, lids and hood, the wheel
+// tubs and the interior (union 1d751bfc); the monster's is no longer the pickup's.
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "8d0ca6fec24787b820976ef5beb3b9bc33abd7d28ee2e89cdd0159374addc6cd" },
+  { id: "sedan", digest: "b9e9e98ba9068979547f19b5638d909c0f93359b8550574b8abe840d3388eebe" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
-  // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams.
-  { id: "hatchback", digest: "460f0319eb1ae3bbdfd4cf2ac678dc6cbdd0eba3087824fe3b87464709725c92" },
+  // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams, the hatch's C-pillar top.
+  { id: "hatchback", digest: "ce63b76a30c823bfbb334938b043b0f30e1fbc3d33255ddeb254d45733b1737b" },
   { id: "wagon", digest: "eb9db693294fddf0470fba46a10bf8c4181d12a8d392ef892fc4beb6c843f908" },
-  { id: "coupe", digest: "986eb8a7cb728f9b75067a62ea6c793b9f330c5d773dd0e9eac12d1dc09074b2" },
-  { id: "pickup", digest: "494e523b2fff1803aaa9b226da64bbe63602ee4d68973be7888f9e2ca473eca8" },
-  { id: "police", digest: "44c94fa5daa8c1c3dd5672c2bdb1a80ef92666e5c027c7698814ddf6b7de1796" },
-  { id: "monster", digest: "494e523b2fff1803aaa9b226da64bbe63602ee4d68973be7888f9e2ca473eca8" },
+  { id: "coupe", digest: "fae75944c9d7c46dfa25624af496ca874cff628595859acd29f6d585ae2456b7" },
+  // Pickup and monster re-pinned for their thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
+  { id: "pickup", digest: "5e914ede89c07ac21bec7b8997641fe25db9f1eb75035ee912c4a0dd48b928cf" },
+  { id: "police", digest: "2466b2789b5094d276c66155028c6d3cb0187b4a55ec4027966a326b4302b08f" },
+  { id: "monster", digest: "ea8b2e2587a915177f279a2edfac3611fdd253740d9418000e6d99144f32c7fe" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {

@@ -1,5 +1,6 @@
 import type { FxTier } from "../present/engine-post.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
+import { SHADOW_LEVELS, type DrawDistance, type RenderScale, type ShadowQuality } from "../present/player-quality.ts";
 import type { SceneId } from "../scenes/scene-id.ts";
 import type { StackConfig } from "../scenes/stack-rig.ts";
 import type { LabPresetId } from "../scenes/lab.ts";
@@ -117,6 +118,14 @@ export type CrashHudState = {
   fxAuto: boolean;
   /** The Ultra tier was picked and is downloading (its code, sky and textures, about 3.5 MB); the tier changes when it arrives. */
   fxLoading: boolean;
+  /** The player's Draw distance, Render scale and Shadows (saved per browser): "auto" leaves each to the game. */
+  drawDistance: DrawDistance;
+  renderScale: RenderScale;
+  shadowQuality: ShadowQuality;
+  /** What they give now: the camera's far plane (m), the renderer's pixel ratio and the sun's shadow map edge (texels). */
+  viewFar: number;
+  pixelRatio: number;
+  shadowMap: number;
   /**
    * Cel look held on at this strength (0-1), under the scene-switch pulse; null = Auto, the pulse alone. It shows
    * at the post tiers only (low / high).
@@ -266,6 +275,12 @@ export const INITIAL_HUD: CrashHudState = {
   fxTier: "minimal",
   fxAuto: true,
   fxLoading: false,
+  drawDistance: "auto",
+  renderScale: "auto",
+  shadowQuality: "auto",
+  viewFar: 180,
+  pixelRatio: 1,
+  shadowMap: SHADOW_LEVELS.auto.map,
   celLook: null,
   proceduralSky: 0.4,
   halftone: null,

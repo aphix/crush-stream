@@ -12,6 +12,7 @@ import { driverCarApplies } from "../match/driver-pick.ts";
 import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import { RIM_LIGHT } from "../present/rim-light.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
+import type { DrawDistance, RenderScale, ShadowQuality } from "../present/player-quality.ts";
 import { KNOBS, type KnobId } from "../hud/knobs.ts";
 import { loadUltra as fetchUltra } from "../present/ultra/load.ts";
 import { boostPadButton, gameKey } from "../vehicle/drive-input.ts";
@@ -72,7 +73,7 @@ export abstract class EngineInput extends EngineRigs {
 
   /** The protected parts the `?bench=` pages time (`engine-bench.ts`). */
   benchParts(): BenchParts {
-    return { renderer: this.renderer, cine: this.cine, scene: this.scene, camera: this.camera, sun: this.sun, race: this.race, seat: this.seat, live: () => this.live(), detail: this.detail, governor: this.detailGov, world: this.world, ragdoll: this.ragdolls, sky: this.stage.sky };
+    return { renderer: this.renderer, cine: this.cine, scene: this.scene, camera: this.camera, sun: this.sun, race: this.race, seat: this.seat, live: () => this.live(), detail: this.detail, governor: this.detailGov, quality: this.quality, world: this.world, ragdoll: this.ragdolls, sky: this.stage.sky };
   }
 
   /** The touch HUD's stick and buttons; merged into the pad on every poll, so every pad path takes them. */
@@ -151,6 +152,30 @@ export abstract class EngineInput extends EngineRigs {
     this.emitHud();
   }
 
+  /** The player's Draw distance (Auto: the scene's own far plane and fog); the FX tier's Auto and the governors keep running. */
+  setDrawDistance(value: DrawDistance): void {
+    this.quality.setDraw(value);
+    this.emitHud();
+  }
+
+  /** The player's Render scale (Auto: the governed rung); nothing else changes. */
+  setRenderScale(value: RenderScale): void {
+    this.quality.setScale(value);
+    this.emitHud();
+  }
+
+  /** The player's Shadows (Auto: 1024² over ±24 m); nothing else changes. */
+  setShadows(value: ShadowQuality): void {
+    this.quality.setShadow(value);
+    this.emitHud();
+  }
+
+  /** This browser's saved knobs (`CrashLab`, at boot and on every change; stored text, anything else is Auto): a knob the page's URL set keeps it. */
+  setSavedQuality(draw: string, scale: string, shadow: string): void {
+    this.quality.setSaved(draw, scale, shadow);
+    this.emitHud();
+  }
+
   /** True once the Ultra look is loaded (the bench awaits it before its Ultra arm). Fetches it on the first call; false, logged, when that fails. */
   loadUltra(): Promise<boolean> {
     if (this.cine.ultra !== null) return Promise.resolve(true);
@@ -218,7 +243,7 @@ export abstract class EngineInput extends EngineRigs {
   /** The pacer's `lost` at the last frame: what a frame gave up is the difference. */
   private lostSeen = 0;
 
-  /** Per frame after boot: the auto FX tier and, while it is automatic, a running match's distance-detail rung, from how full the frame is; `lostSimS` is the pacer's running total of sim time given up (s). */
+  /** Per frame after boot: the auto FX tier and, while it is automatic, a running match's distance-detail rung and Auto render scale's rung, from how full the frame is; `lostSimS` is the pacer's running total of sim time given up (s). */
   protected fxFrame(wallDt: number, lostSimS: number): void {
     this.stage.setSkyTier(this.cine.tier);
     const p = this.race.phase;
@@ -227,10 +252,15 @@ export abstract class EngineInput extends EngineRigs {
     this.lostSeen = lostSimS;
     const gpuMs = this.cine.gpuMs();
     if (this.autoFx.auto) {
-      const level = this.detailGov.frame(wallDt * 1000, lost * 1000, this.workMs, this.renderMs, gpuMs, matchTime !== null && matchTime >= 0);
+      const matching = matchTime !== null && matchTime >= 0;
+      const level = this.detailGov.frame(wallDt * 1000, lost * 1000, this.workMs, this.renderMs, gpuMs, matching);
       if (level !== null) {
         console.info(`Crush Stream detail auto: ${DETAIL_LEVELS[level]!.far} m`);
         this.detail.setLevel(level);
+      }
+      if (this.quality.govern(wallDt * 1000, this.workMs, this.renderMs, gpuMs, matching)) {
+        console.info(`Crush Stream render scale auto: ${this.quality.pixelRatio}`);
+        this.emitHud();
       }
     }
     const tier = this.autoFx.frame(wallDt * 1000, this.workMs, this.renderMs, gpuMs, matchTime);
@@ -610,6 +640,9 @@ export abstract class EngineInput extends EngineRigs {
         viewW: s.viewW,
         viewH: s.viewH,
         pixelRatio: Math.round(s.pixelRatio * 100) / 100,
+        drawDistance: this.quality.draw,
+        renderScale: this.quality.scale,
+        shadowQuality: this.quality.shadow,
       },
     };
   }

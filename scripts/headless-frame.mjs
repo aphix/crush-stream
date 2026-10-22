@@ -24,6 +24,7 @@
  * detail A/B arms) with its governor off; the JSON counts the cars cut to their body (`farCars`).
  * `--paint <colour>` paints the hash's car that colour, `--paint <style>=<colour>,...` every car of those styles (a livery, the
  * police's, stays): the landing shots and lineup sheets in each reference's colour.
+ * `--draw`, `--scale` and `--shadow` pin the quality knobs (`?draw=`, `?scale=`, `?shadow=`). A numeric `--scale` keeps the shot's size and shrinks the CSS box (`--size` over the scale), so the drawing buffer stays `--size`.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -78,6 +79,9 @@ const { values } = parseArgs({
     paint: { type: "string" },
     at: { type: "string", default: String(START_S) },
     tear: { type: "string" },
+    draw: { type: "string" },
+    scale: { type: "string" },
+    shadow: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -96,6 +100,10 @@ if (values.view !== undefined && seatView === undefined && landingView === null)
 if (landingView !== null && landingView.view !== values.view) throw new Error(`--view-camera ${values["view-camera"]}: a ${landingView.view} camera, not ${values.view}`);
 const W = landingView?.W ?? Number(size[1]);
 const H = landingView?.H ?? Number(size[2]);
+// The headless context cannot grow: a render scale draws the same buffer from a smaller CSS box.
+const renderScale = Number(values.scale);
+const CSS_W = renderScale > 0 ? Math.round(W / renderScale) : W;
+const CSS_H = renderScale > 0 ? Math.round(H / renderScale) : H;
 const out = resolve(values.out ?? `screenshots/headless-frame-${tier}.png`);
 const detail = values.detail === undefined ? null : values.detail === "off" ? "off" : Number(values.detail);
 if (typeof detail === "number" && !(Number.isInteger(detail) && detail >= 0)) throw new Error(`--detail ${values.detail}: a rung of the distance-detail ladder (0 or more) or off`);
@@ -140,13 +148,15 @@ const renderer = nativeRenderer(gl);
 
 stubBrowser();
 const page = new URL(location.href);
-location.search = `?fx=${tier}`;
+const q = new URLSearchParams({ fx: tier });
+for (const k of ["draw", "scale", "shadow"]) if (values[k] !== undefined) q.set(k, values[k]);
+location.search = `?${q}`;
 if (values.hash !== undefined) location.hash = `#${values.hash.replace(/^#/, "")}`;
 const stubElement = document.createElement;
 document.createElement = (tag) => (tag === "canvas" ? Object.assign(createCanvas(1, 1), { style: {}, addEventListener() {}, removeEventListener() {}, setAttribute() {} }) : stubElement(tag));
 Object.assign(globalThis, {
-  innerWidth: W,
-  innerHeight: H,
+  innerWidth: CSS_W,
+  innerHeight: CSS_H,
   // A desktop browser's pointer, so the engine takes the device class a desktop does.
   matchMedia: (query) => ({ matches: query === "(pointer: fine)", addEventListener() {} }),
   // three's file loader builds a `Request` from the page-relative URL, and reports its download with `ProgressEvent`s.
@@ -166,8 +176,8 @@ Object.assign(globalThis, {
 });
 const canvas = element();
 // The engine fits its lens to the canvas's box (`coverLens` reads all four edges).
-const box = { left: 0, top: 0, right: W, bottom: H, width: W, height: H };
-Object.assign(canvas, { clientWidth: W, clientHeight: H, getBoundingClientRect: () => box, getContext: () => gl });
+const box = { left: 0, top: 0, right: CSS_W, bottom: CSS_H, width: CSS_W, height: CSS_H };
+Object.assign(canvas, { clientWidth: CSS_W, clientHeight: CSS_H, getBoundingClientRect: () => box, getContext: () => gl });
 
 /** The page's file loads in flight (fetches, decodes), waited out by `settle`. */
 const loads = new Set();
@@ -296,14 +306,14 @@ mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, await shot.encode("png"));
 const wheelsPx = shooting?.camera ? wheelMarks(shooting, w, h) : null;
 engine.dispose();
-const result = { root, tier, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
+const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
 process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 
 /**
  * `--paint`: one colour (hex) for the hash's car, or `<style>=<colour>` pairs; a car whose style fixes its paint (a livery) keeps
  * it. The hinged panels wear their own copies of the body paint, so every material still in the body's colour takes the new one;
- * a body-finish mirror cap is a part-batch tint, set as the garage look sets it (`setMirrorPaint`).
+ * a body-finish mirror cap or grille is a part-batch tint, set as the garage look sets it (`setPartPaint`).
  */
 function paintCars(spec) {
   const pairs = spec.includes("=") ? spec.split(",").map((p) => p.split("=")) : [[hashStyle, spec]];
@@ -316,7 +326,8 @@ function paintCars(spec) {
     car.group.traverse((o) => {
       for (const m of [o.material ?? []].flat()) if (m.color?.getHex() === was) m.color.set(colour);
     });
-    car.setMirrorPaint(Number.parseInt(colour.replace(/^#/, ""), 16));
+    const hex = Number.parseInt(colour.replace(/^#/, ""), 16);
+    car.setPartPaint(hex, hex);
   }
 }
 
