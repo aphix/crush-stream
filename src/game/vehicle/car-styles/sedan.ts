@@ -89,8 +89,12 @@ const SEDAN_LAMP_SHAPES = {
       { line: { points: [[0, 0.809], [0.4, 0.809]] }, width: 0.006, tone: "chrome" },
     ],
   },
+  // The fog pods in the bumper's corners, and the wide dark lower intake between them (front iso), its ends off the centre line's seam.
   front: {
-    loops: [{ points: [[0.5, 0.26], [0.7, 0.26], [0.7, 0.35], [0.5, 0.35]] }],
+    loops: [
+      { points: [[0.5, 0.26], [0.7, 0.26], [0.7, 0.35], [0.5, 0.35]] },
+      { points: [[0.006, 0.298], [0.3, 0.296], [0.45, 0.292], [0.46, 0.272], [0.42, 0.262], [0.006, 0.262]] },
+    ],
     lens: "dark",
     bezel: "black",
     rounds: [{ at: [0.6, 0.305], r: 0.028, tone: "clear" }],
@@ -144,6 +148,24 @@ export const SEDAN: BodyStyle = {
     front: {
       ...PLATFORM_HARDPOINTS.bumpers.front,
       seat: { y: 0.34, z: 1.965 },
+      /**
+       * The reference's nose profile (silver-sedan-1.png pixels, 70.1 px/m): its face stands near upright, most forward (2.054, the dims'
+       * nose) at y 0.39-0.43 under the grille, 2.035-2.045 down to 0.25, tucks back to 1.99 at 0.205 and closes at 0.20 on the body's
+       * underside; no splitter lip standing proud at 0.27.
+       */
+      fascia: [
+        [0.1, -0.07],
+        [0.1, 0.03],
+        [0.095, 0.06],
+        [0.08, 0.08],
+        [0.05, 0.089],
+        [0, 0.077],
+        [-0.05, 0.072],
+        [-0.09, 0.07],
+        [-0.115, 0.055],
+        [-0.135, 0.025],
+        [-0.14, -0.07],
+      ],
       span: 0.74,
       wrap: { from: 0.33, back: 0.242 },
       trim: "body",
