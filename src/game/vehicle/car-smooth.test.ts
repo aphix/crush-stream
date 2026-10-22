@@ -826,7 +826,8 @@ const SIM_DIGEST_BY_STYLE = [
   { id: "sedan", digest: "92a72440a4cf53f0f791dfc487c995cf30328490e14f8a5581291e14918f68bf" },
   // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams.
-  { id: "hatchback", digest: "674fca85d7893ab736a28bcff660adad5f319d6471bcd301a6bfa60bc8f7983e" },
+  // The hatchback's again when the cage kept the underside a body rests on (CarRig rig-lip): 674fca85... -> b1cfea45...; the others' unchanged.
+  { id: "hatchback", digest: "b1cfea451ddc28abcd42af60e60da25c12c281370e5eeb67795bb75e5acef309" },
   { id: "wagon", digest: "728e19f0a34f06b705de92b836b11640013dff0bc01857f6bd173b0308be8b37" },
   // The coupe re-pinned for its crisper nose: the hood's lip reaches z 1.945 over a held station there.
   { id: "coupe", digest: "e1f4d131860fc9399df4a841b9396cbc374c5460d7ef44939560ff9c71defc1a" },
