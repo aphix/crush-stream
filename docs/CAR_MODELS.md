@@ -321,40 +321,62 @@ node --disable-warning=ExperimentalWarning scripts/trace-car.mjs --style sedan -
   reference's glass is its dark, grey pixels (an Otsu cut, printed as `refThreshold`); a grey ground shadow on an opaque backdrop
   is left out of its silhouette (`shadowPx`). Full usage is in each script's header.
 
-**`contour-sections.mjs`: surface contour, per region.** This checks the shape only; it is not an airflow tool. It cuts the drawn
-surface with planes at fixed stations: the body, lids, door skins, bumpers, glass and window trim, but not wheels, lamps or batched
-parts. In each plane, a fan of rays from outside keeps the outer contour, one raw sample every 0.25°, never smoothed. A miss or a
-jump of over 5 cm splits the contour; a jump is reported as a step. Each region is scored on its own, never as one smoothness
-number. A turn across a seam (glass to body, bumper to body) is not scored, because those edges are crisp on purpose.
+**`contour-sections.mjs`: surface contour and exterior defects, per region.** It checks the shape only; it is not an airflow tool.
+Findings are for the mesh's owner to take or leave, since some edges and overhangs are intended.
+
+How to run it. Add `--png` for one car's shot; `--all` runs the five bodies (police shares the sedan's mesh, monster the pickup's;
+name either with `--car`):
 
 ```sh
 CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
-  scripts/contour-sections.mjs --root <tree> --car <style> [--png <out>]          # one JSON line
-  scripts/contour-sections.mjs --root <tree> --all --sheet <png> [--curves <png>]  # every style
+  scripts/contour-sections.mjs --root <tree> --car <style> [--png <out>]          # JSON lines on stdout
+  scripts/contour-sections.mjs --root <tree> --all --sheet <png> [--curves <png>]  # every body
 ```
 
-- `turn` is the direction change across 4 cm of contour. A corner of radius r turns 4 cm / r there: 45° is about a 5 cm
-  radius, 25° about 9 cm.
-- `roofEdge`:
-  - Cuts across the roof at 25, 50 and 75 % of `roofZ`, and cuts along it at 0, ±20 % and ±32 % of the body's width.
-  - `turnAcross` is the hardest shoulder roll. `turnAlong` is the roof's hardest front or rear end.
-  - `ledgeMm` is the largest step above the side glass: a roof cap overhanging what is under it.
-  - `shelfMm` is how far the roof skin stands out past the side glass top.
-  - `crownMm` is the rise from 70 % of the roof's half-width to the centre.
-- `aPillar` / `rearPillar`:
-  - Six horizontal cuts through the side glass's height. Each measures the body band from the windshield (rear glass) to the side
-    glass.
-  - `widthMm` is the visible band per height, edge to edge along the contour. `spreadPct` is (max − min) / median.
-  - `jumpMm` is the largest change between neighbouring heights. `leanDeg` is the lean from vertical. `turn` is the hardest facet
-    inside the band.
-  - A height where the cut misses a glass edge, or the band is wider than 0.6 m, reads n/a.
-  - A band drawn by a batched part (a truck's pillar posts) is not in the surface and reads n/a.
-- `bumper` / `lowerLip`:
-  - Horizontal cuts at 35–80 % of the rear bumper's height, and at its bottom 4–22 %, behind the rear arch.
-  - `turn` is the squarest wrap corner.
-  - `projSpreadMm` is how much the band's outset over the face above it changes round the wrap, between the 5th and 95th
-    percentiles of the rays. The face above is the tail panel for the bumper and the bumper's middle for the lip.
-  - `stepMm` is the largest change between neighbouring cuts.
-- The PNG is game shading from the rear and front three-quarters. Rings mark the flagged samples: yellow for mild (turn ≥ 25°, band
-  ≥ 15 % over its median), orange for bad (≥ 45°, ≥ 30 %), red for the region's worst. The scores go under the views.
-- `--curves` plots the section curves: raw samples coloured cool to warm by turn, glass blue, trim dark.
+How to read it. Each car prints one JSON line with its region scores, `gaps` and `zfight`. After it come zero or more
+`{"kind":"suggest", ...}` lines. The sheet shows each car from its rear and front three-quarters, in game shading, with rings on
+the left side's findings and the scores under the views:
+- Yellow, orange and red rings are shape findings: mild, bad, and the worst in that region.
+- Cyan rings are gaps and stand-offs: bigger and bolder when bad.
+- Magenta rings are z-fighting.
+
+Then the raw section curves: blue for glass, dark for trim, and cool to warm by turn elsewhere. Read the region numbers against
+the same region on the other cars, not against a fixed bar.
+
+- The surface:
+  - For the shape scores: the body, lids, door skins, bumpers, glass and window trim.
+  - For the defects, also the style's mirrors, grille, tail trim, wipers and lamp units.
+  - Small fittings are skipped everywhere (`smallFittings` in `contour-core.mjs`: exhaust tips, tow hitch).
+  - So are the style's intended edges where the roof shape is scored (`intendedEdges`: roof spoiler, roof rails).
+- Sections cut the surface with planes at fixed stations. In each plane, a fan of rays keeps the outer contour: raw samples
+  every 0.25°, never smoothed. A miss or a jump of over 5 cm splits it. `turn` is the direction change across 4 cm of contour,
+  not scored across a seam (glass, body, bumper). 45° is about a 5 cm radius, 25° about 9 cm.
+- `roofEdge`: cuts across the roof at 25, 50 and 75 % of `roofZ`, and along it at 0, ±20 % and ±32 % of the body's width.
+  - `turnAcross` is the shoulder roll; `turnAlong` the roof's front and rear ends.
+  - `ledgeMm` is a step above the side glass: a roof cap overhanging what is under it.
+  - `offRoofMm` is the same step under an intended part: a spoiler standing off the roof, a gap you see into.
+  - `hoodBaseStepMm` is the widest open seam the lengthwise cuts cross round the hood's rear edge and the windshield base.
+  - `shelfMm` is the roof's outset past the side glass top; `crownMm` the crown.
+- `aPillar` / `rearPillar`: six horizontal cuts through the side glass. Each measures the body band from the windshield (rear
+  glass) to the side glass, on its own side.
+  - `widthMm` is the band per height, and `spreadPct` is (max − min) / median.
+  - `jumpMm` is the change between neighbouring heights, `leanDeg` the lean, and `turn` the hardest facet.
+  - A height reads n/a, counted in `naReasons`, when:
+    - `noGlass`: there is no glass edge;
+    - `seeThrough`: the cut sees through to the far side (no surface on the near side there; pickup A-pillar top, hatchback D-pillar);
+    - `tooWide`: the band is over 0.6 m.
+- `bumper` / `lowerLip`: horizontal cuts behind the rear arch, at 35–80 % of the rear bumper's height and at its bottom 4–22 %.
+  `turn` is the squarest wrap corner. `projSpreadMm` is how much the outset over the face above changes round the wrap (p5–p95);
+  `stepMm` the change between neighbouring cuts.
+- `gaps` (`contour-defects.mjs`): each panel's open edges (an edge one triangle uses) that are seen from outside, measured to the
+  nearest other panel within 8 cm:
+  - `gap` mm where the edge stops short of that surface: an open seam you see into.
+  - `stand` mm where it stands off the surface: a glass edge over the body, a bumper lip off the body.
+  - Each place gives its `region` and the parts involved.
+- `zfight`: triangles of any parts (the same part too) facing within 4° and within 2 mm of one plane, overlapping. Each place
+  gives `areaCm2` of overlap and `sepMm`. 2 mm fights at chase range, so a lamp unit or grille set 1–2 mm proud of the body
+  shows up here.
+- `suggest` lines carry a fix only where it is certain, labelled `"confidence":"high"` with the reading they fix. For now that is
+  z-fighting between one detail (lamp unit, grille, tail trim, wipers, mirror) and one panel: push the detail out by `mm` along
+  `along` to stand 3 mm off. Gaps, stand-offs and turns print no suggestion yet; nothing is printed when unsure. The lines are
+  data for a lane, or later a builder, to take or leave; no builder reads them.
