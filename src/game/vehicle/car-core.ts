@@ -11,7 +11,7 @@ import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { DOOR, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
-import { DOOR_GLASS_SEAT, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield } from "./car-glass.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
   LIGHT_BAR_FOOT,
@@ -24,6 +24,8 @@ import {
   makePaintMaterial,
   makeSirenMaterial,
   type LampKind,
+  TRIM_CHROME,
+  trimMaterial,
   withPushBar,
 } from "./car-materials.ts";
 import { carPartSeats, GRILLE_SEAT, MIRROR_REACH, PART_KIND, PartSeat } from "./part-geometry.ts";
@@ -694,6 +696,19 @@ export abstract class CarCore {
     addPane("doorR", sideR, this.doorR, ["doorRight", "roof"]);
     addPane("quarterL", new THREE.Mesh(makeRearSideGlass(-1, style), glassMat), this.group, ["roof", "doorLeft"]);
     addPane("quarterR", new THREE.Mesh(makeRearSideGlass(1, style), glassMat), this.group, ["roof", "doorRight"]);
+    if (style.windowTrim === "chrome") {
+      const chrome = trimMaterial(TRIM_CHROME, "chrome");
+      // Drawn only (no shadow, so the detail cut hides it with the glass); each rides its pane's parent at the pane's seat.
+      const addTrim = (geometry: THREE.BufferGeometry, parent: THREE.Object3D, at?: THREE.Vector3): void => {
+        const mesh = new THREE.Mesh(geometry, chrome);
+        mesh.name = "windowTrim";
+        if (at) mesh.position.copy(at);
+        parent.add(mesh);
+      };
+      addTrim(makeSideGlassFrame(-1, style), this.doorL, sideL.position);
+      addTrim(makeSideGlassFrame(1, style), this.doorR, sideR.position);
+      addTrim(makeBodyGlassFrames(style, !inGate), this.group);
+    }
   }
 
   private registerParts(): void {
