@@ -129,3 +129,30 @@ describe("given the governor outside a match, at the match's start and when it i
     assert.equal(new DetailGovernor(-3).level, 0);
   });
 });
+
+/** Feeds `seconds` of matching frames of one fixed shape to Auto render scale's ladder (three rungs, judged on the GPU); every rung it moved to, joined with ",". */
+function renderScaleRungs(start: number, seconds: number, wallMs: number, workMs: number, gpuMs: number): string {
+  const gov = new DetailGovernor(start, 2, "gpu");
+  const rungsMoved: number[] = [];
+  for (let t = 0; t < seconds * 1000; t += wallMs) {
+    const to = gov.frame(wallMs, 0, workMs, workMs, gpuMs, true);
+    if (to !== null) rungsMoved.push(to);
+  }
+  return rungsMoved.join(",");
+}
+
+// The CPU-bound row is the GPU-bound row's control: only the main thread's share differs.
+const renderScaleCases = [
+  { it: "when the frames come every 25 ms on 4 ms of main-thread work and no GPU timer (GPU-bound), then it steps down both rungs", start: 0, wallMs: 25, workMs: 4, gpuMs: NO_GPU, expected: "1,2" },
+  { it: "when the frames come every 25 ms on 22 ms of main-thread work and no GPU timer (CPU-bound), then it never steps: a full main thread is not the render scale's to fix", start: 0, wallMs: 25, workMs: 22, gpuMs: NO_GPU, expected: "" },
+  { it: "when the GPU timer reads 20 ms a frame on 3 ms of main-thread work, then it steps down both rungs", start: 0, wallMs: 20, workMs: 3, gpuMs: 20, expected: "1,2" },
+  { it: "when the GPU timer reads 5 ms a frame on the 60 Hz vsync from the lowest rung, then it climbs back to the top", start: 2, wallMs: 1000 / 60, workMs: 3, gpuMs: 5, expected: "1,0" },
+] as const;
+
+describe("given Auto render scale's ladder (three rungs) judged on the GPU's basis", () => {
+  for (const testCase of renderScaleCases) {
+    test(testCase.it, () => {
+      assert.equal(renderScaleRungs(testCase.start, 30, testCase.wallMs, testCase.workMs, testCase.gpuMs), testCase.expected);
+    });
+  }
+});

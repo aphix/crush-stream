@@ -18,6 +18,8 @@ export const EXTENDED_QUERY = "extended";
 export const COURSE_QUERY = "course";
 /** The page queries that shape the strip bench (`benchPlan`): a loop carries them onto every step. */
 export const STRIP_QUERY = { cars: "cars", same: "same", len: "len", props: "props", traffic: "traffic" } as const;
+/** The page queries that pin the player's quality knobs for the session (`?draw=max&scale=2&shadow=high`): read at boot, carried onto every loop step, recorded on the card. */
+export const QUALITY_QUERY = { draw: "draw", scale: "scale", shadow: "shadow" } as const;
 /** The bench card's look (the card, the chooser before a loop): a dark panel top-left over the game. */
 export const BENCH_CARD_STYLE =
   "position:fixed;left:8px;top:8px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;z-index:99999;padding:8px 10px;" +
