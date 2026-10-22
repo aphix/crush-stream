@@ -58,14 +58,33 @@ export function overHead(head: Head, ys: readonly number[], out: number, role: n
   });
 }
 
-export type Lofted = { position: number[]; bones: number[]; roleKind: number[]; print: number[]; index: number[] };
+export type Lofted = { position: number[]; bones: number[]; roleKind: number[]; print: number[]; index: number[]; coarse: number[] };
 
-/** Shell `shell` into `mesh`: its rings joined side to side (a band takes its lower ring's role), its ends closed by a fan to a pole. The winding faces out only for rings running top to bottom. */
+/** The coarse loft's fewest sides a ring keeps: a hexagon still reads round on a seated driver seen through the glass. */
+const COARSE_SIDES = 6;
+/** The coarse loft skips a ring nearer than this (m: its height's, half widths' and middle's changes summed) to the last one it kept. */
+const COARSE_RING_GAP = 0.04;
+
+/**
+ * Shell `shell` into `mesh`: its rings joined side to side (a band takes its lower ring's role), its ends closed by a fan to a pole. The winding faces out only for rings running top to bottom.
+ * `mesh.coarse` gets the same shell over the same vertices with fewer sides and rings (`COARSE_SIDES`, `COARSE_RING_GAP`), its ends and its role changes kept;
+ * a brim (`frontPower`) keeps them all, its shape being its few front sides.
+ */
 export function loft(shell: Shell, mesh: Lofted): void {
   for (let r = 1; r < shell.rings.length; r++) {
     if (shell.rings[r]![0] > shell.rings[r - 1]![0]) throw new RangeError(`a shell's ring at y = ${shell.rings[r]![0]} is above the one before it (rings run top to bottom, else the shell is drawn inside out)`);
   }
   const sides = shell.sides;
+  const whole = shell.frontPower !== undefined;
+  let step = whole ? 1 : Math.max(1, Math.floor(sides / COARSE_SIDES));
+  while (sides % step !== 0) step--;
+  const last = shell.rings.length - 1;
+  const keep = shell.rings.map((ring, r) => whole || r === 0 || r === last || ring[4] !== shell.rings[r - 1]![4] || ring[4] !== shell.rings[r + 1]![4]);
+  for (let r = 1, kept = 0; r < last; r++) {
+    const [a, b] = [shell.rings[kept]!, shell.rings[r]!];
+    if (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) + Math.abs(a[3] - b[3]) >= COARSE_RING_GAP) keep[r] = true;
+    if (keep[r]) kept = r;
+  }
   const phase = Math.PI / sides;
   const addVertex = (y: number, x: number, z: number, role: number): number => {
     mesh.bones.push(shell.bone, shell.bone, 0);
@@ -83,6 +102,7 @@ export function loft(shell: Shell, mesh: Lofted): void {
       return addVertex(y, shell.x + across + scale * halfWidth * Math.cos(angle), middleZ + scale * halfDepth * toFront * frontScale, role);
     }),
   );
+  let upper = rings[0]!;
   for (let r = 0; r + 1 < rings.length; r++) {
     const role = shell.rings[r + 1]![4];
     // Where the ring above differs, the band gets its own copy of it: every triangle is one role at all three corners, so its colour stops at the ring.
@@ -91,11 +111,19 @@ export function loft(shell: Shell, mesh: Lofted): void {
       const [a, b, c, d] = [top[k]!, top[(k + 1) % sides]!, rings[r + 1]![(k + 1) % sides]!, rings[r + 1]![k]!];
       mesh.index.push(a, b, d, b, c, d);
     }
+    // A coarse band runs from the last kept ring to the next; a role change keeps both its rings, so a span between two is one role.
+    if (keep[r]) upper = top;
+    if (!keep[r + 1]) continue;
+    for (let k = 0; k < sides; k += step) {
+      const [a, b, c, d] = [upper[k]!, upper[(k + step) % sides]!, rings[r + 1]![(k + step) % sides]!, rings[r + 1]![k]!];
+      mesh.coarse.push(a, b, d, b, c, d);
+    }
   }
   const close = (ring: number[], at: Ring, poleOffset: number, up: boolean): void => {
     const pole = addVertex(at[0] + poleOffset, shell.x + (at[7] ?? 0), at[3], at[4]);
     for (let k = 0; k < sides; k++) mesh.index.push(pole, up ? ring[(k + 1) % sides]! : ring[k]!, up ? ring[k]! : ring[(k + 1) % sides]!);
+    for (let k = 0; k < sides; k += step) mesh.coarse.push(pole, up ? ring[(k + step) % sides]! : ring[k]!, up ? ring[k]! : ring[(k + step) % sides]!);
   };
   if (shell.top !== undefined) close(rings[0]!, shell.rings[0]!, shell.top, true);
-  if (shell.bottom !== undefined) close(rings[rings.length - 1]!, shell.rings[shell.rings.length - 1]!, -shell.bottom, false);
+  if (shell.bottom !== undefined) close(rings[last]!, shell.rings[last]!, -shell.bottom, false);
 }

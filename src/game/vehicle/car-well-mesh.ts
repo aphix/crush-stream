@@ -3,12 +3,12 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import type { BodyStyle } from "./car-variants.ts";
 import { floorY, rockerAt } from "./car-lines.ts";
-import { bootCut, ensureOutwardNormals, lerp, loftFromRings, sampleSlice, TUB_EDGE, WELL_LINER_WIDTH, type Pt } from "./car-mesh.ts";
+import { bootCut, ensureOutwardNormals, lerp, loftFromRings, sampleSlice, TUB_EDGE, WELL_LINER_WIDTH, type BodySource, type Pt } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 
 /**
- * The wheel wells: the liner over each tyre (in both builds: the cage carries it), and on the drawn body only the arch's lip round
- * its opening and the hump that closes the liner where it stands up through an open floor (a bed, a cargo floor, a boot).
+ * The wheel wells: the liner over each tyre (in both builds: the cage carries it), the hump that closes the liner where it stands up
+ * through an open floor (a bed's wheel tubs in both builds, else the drawn body's only), and on the drawn body the arch's lip.
  */
 
 /** The liner's middle across the car: over the tyre, or held inside the body side where the tyre stands outboard of it (the monster's). */
@@ -32,19 +32,24 @@ export function makeWellLiners(style: BodyStyle): THREE.BufferGeometry[] {
 /** A hump clears the liner it closes by this much (m), and sinks this far into the floor and wall it stands on. */
 const HUMP_CLEAR = 0.015;
 const HUMP_SINK = 0.005;
+/** The floor's side wall stands this far (m) in from the body side (`halfRing`'s floor edge). */
+const BED_WALL_INSET = 0.06;
 /** Its top's inner edge is rounded off over this much (m); rings along it, from floor to floor over the wheel. */
 const HUMP_ROUND = 0.03;
 const HUMP_STEPS = 8;
 
 /**
- * Over each wheel whose liner stands up through an open floor (the style's tubs and the boot's hollow; not the bay), a hump from the
- * floor's side wall in to just past the liner's inner edge, its top a half ellipse over the liner's arc: the floor between the humps
- * stays flat (`halfRing`), and no open liner end shows in the bed. Null when no liner reaches above an open floor.
+ * Over each wheel whose liner stands up through an open floor (the style's tubs, and on the drawn body the boot's hollow; not the bay),
+ * a hump from the floor's side wall inward, its top a half ellipse along the car: a style's `wheelTub` in both builds, else on the drawn
+ * body one to just past the liner's inner edge, 1.5 cm over the liner's arc. The floor between the humps stays flat (`halfRing`). Null
+ * when there is none.
  */
-export function wellHumpGeometry(style: BodyStyle): THREE.BufferGeometry | null {
+export function wellHumpGeometry(style: BodyStyle, source: BodySource): THREE.BufferGeometry | null {
+  const tub = style.wheelTub;
+  if (source === "cage" && !tub) return null;
   const r = style.arch.radius;
-  const cut = bootCut(style);
-  const floors = [...style.tubs, [cut.rear, cut.front, cut.floor] as const];
+  const cut = source === "drawn" ? bootCut(style) : null;
+  const floors = cut ? [...style.tubs, [cut.rear, cut.front, cut.floor] as const] : style.tubs;
   const humps: THREE.BufferGeometry[] = [];
   for (const [wx, wy, wz] of carFrame(style).wheels) {
     let floor = Infinity;
@@ -54,16 +59,18 @@ export function wellHumpGeometry(style: BodyStyle): THREE.BufferGeometry | null 
       if (wy + r > top && wz + reach > z0 + TUB_EDGE && wz - reach < z1 - TUB_EDGE) floor = Math.min(floor, top);
     }
     if (floor === Infinity) continue;
-    const rise = wy + r + HUMP_CLEAR - floor;
-    const half = (floor > wy ? Math.sqrt(r * r - (floor - wy) ** 2) : r) + HUMP_CLEAR;
-    const inner = Math.abs(linerX(wx, wz, style)) - WELL_LINER_WIDTH / 2 - HUMP_CLEAR - HUMP_ROUND;
+    const rise = tub ? tub.rise : wy + r + HUMP_CLEAR - floor;
+    const half = tub ? tub.length / 2 : (floor > wy ? Math.sqrt(r * r - (floor - wy) ** 2) : r) + HUMP_CLEAR;
+    const inner = tub
+      ? sampleSlice(wz, style.profile).hw - BED_WALL_INSET - tub.width
+      : Math.abs(linerX(wx, wz, style)) - WELL_LINER_WIDTH / 2 - HUMP_CLEAR - HUMP_ROUND;
     const side = Math.sign(wx);
     const rings: Pt[][] = [];
     const zs: number[] = [];
     for (let k = 0; k <= HUMP_STEPS; k++) {
       const a = (k / HUMP_STEPS - 0.5) * Math.PI;
       const z = wz + half * detSin(a);
-      const wall = sampleSlice(z, style.profile).hw - 0.06 + HUMP_SINK;
+      const wall = sampleSlice(z, style.profile).hw - BED_WALL_INSET + HUMP_SINK;
       const top = floor + Math.max(rise * detCos(a), 2 * HUMP_SINK);
       const round = Math.min(HUMP_ROUND, (top - floor) / 2);
       const bottom = floor - HUMP_SINK;

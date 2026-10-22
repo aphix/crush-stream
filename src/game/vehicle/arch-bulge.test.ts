@@ -105,9 +105,7 @@ function archHumps(id: CarStyleId): string[] {
 }
 
 /** Styles whose stations still carry a hump on lane-cars: its owner and the reading. The owning car lane's ticket turns its cell live. */
-const OPEN_HUMPS: Partial<Record<CarStyleId, string>> = {
-  wagon: "CarHatchSuv: rear arch half-width at the belt humps 1.8 cm at z -1.61",
-};
+const OPEN_HUMPS: Partial<Record<CarStyleId, string>> = {};
 
 describe("arch humps", () => {
   for (const id of CAR_STYLE_IDS) {

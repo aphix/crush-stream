@@ -57,8 +57,12 @@ export interface BootLip {
 export type BootSpec = (
   /** Deck lid lofted on the profile from z0 to z1, hinged at origin; with `drop` it wraps the tail, its face standing at z1. */
   | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop }
-  /** Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). */
-  | { kind: "tailgate"; y0: number; origin: YZ; z0?: number }
+  /**
+   * Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). `outline`:
+   * its edge, the reference's gate seam, as [x, y] on the right side from top to bottom (held past its ends); absent, the tail panel's
+   * half-width less the corners the lamps stand in.
+   */
+  | { kind: "tailgate"; y0: number; origin: YZ; z0?: number; outline?: readonly (readonly [number, number])[] }
 ) & { lip?: BootLip; pivot?: YZ; swing?: LidSwing };
 
 /** Raised centre bulge on the drawn hood from z `z0` (cowl end) to `z1`, `width` (m) across, its top `rise` (m) over the lid's; it ramps into the lid at both ends. */
@@ -176,6 +180,12 @@ interface ChaseEye {
   aimUp: number;
 }
 
+/** A drawn pillar's side-view band: `width` [belt, top] (z, m) about its centre line at `z` [belt, top]; absent `z`, upright on its style's mark. */
+export interface PillarSpan {
+  width: readonly [number, number];
+  z?: readonly [number, number];
+}
+
 export interface BodyStyle {
   id: CarStyleId;
   /** What the reference was measured to; the tables below are built to it (`car-variants.test.ts`). */
@@ -232,11 +242,11 @@ export interface BodyStyle {
   /** Extra pillar splitting the quarter glass (wagon C-pillar), or null. */
   midPillarZ: number | null;
   /**
-   * Drawn only: side-view widths along z (m). `b`: the B-pillar, centred on its band, even from belt to top, the side panes
-   * tucked under it. `divider`: the post at `midPillarZ`, its widths and its z at the belt and at the top (a leaning post).
-   * Absent: the `bPillar` band (its top 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`.
+   * Drawn only: side-view pillar bands (`PillarSpan`). `b`: the B-pillar, centred on its `bPillar` band unless it leans, the side
+   * panes tucked under it. `divider`: the post at `midPillarZ`. Absent: the `bPillar` band (its top 3 cm narrower); a divider
+   * 0.08 / 0.07 wide, upright at `midPillarZ`.
    */
-  pillars?: { b?: number; divider?: { width: readonly [number, number]; z?: readonly [number, number] } };
+  pillars?: { b?: PillarSpan; divider?: PillarSpan };
   /** Drawn only: greenhouse parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar. */
   blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
@@ -244,6 +254,8 @@ export interface BodyStyle {
   rearBulkhead: { z: number; yTop: number };
   /** Open floors visible through the glass: [zRear, zFront, floorY]. */
   tubs: readonly (readonly [number, number, number])[];
+  /** A bed's wheel tubs (both builds): over each wheel whose liner stands in a tub floor, a half cylinder `rise` (m) over the floor and `length` along the car, `width` in from the bed's side wall; absent, a drawn-only hump hugs the liner. */
+  wheelTub?: { rise: number; length: number; width: number };
   /** Rear door shut line on four-door bodies, or null. */
   rearDoorSeam: number | null;
   boot: BootSpec;

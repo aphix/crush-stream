@@ -4,11 +4,13 @@ import { HAND_LENGTH, KNEE_HALF_BAND, restFits, RIG_KNEE_Y } from "./dummy-fit.t
 import { FACE_FRONT_FROM, FACE_FRONT_TO, FACE_HALF_WIDTH, FACE_SPAN, headAt, measureHead, RIM_AT } from "./dummy-head.ts";
 import { scalpHairline } from "./dummy-hair.ts";
 import { loft, type Lofted } from "./dummy-loft.ts";
-import { BONES_ATTRIBUTE, BUILD, EVERY_BUILD, HEAD, KINDS_ATTRIBUTE, LEFT_ARM, LEFT_LEG, NO_PRINT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, PRINT_ATTRIBUTE, RIGHT_ARM, RIGHT_LEG, ROLE, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, smooth, TORSO, type Fit } from "./dummy-rig.ts";
-import { hangAttribute } from "./dummy-garments.ts";
+import { BONES_ATTRIBUTE, BUILD, EVERY_BUILD, FLAGS_AT, HEAD, isDrawn, KINDS_ATTRIBUTE, LEFT_ARM, LEFT_LEG, NO_PRINT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, PRINT_ATTRIBUTE, RIGHT_ARM, RIGHT_LEG, ROLE, ROW_TEXELS, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, smooth, TORSO, type Fit } from "./dummy-rig.ts";
+import { dressRow } from "./dummy-dress.ts";
+import { BELT_BOTTOM, hangAttribute } from "./dummy-garments.ts";
 import { wearFor } from "./dummy-wear.ts";
 import { bustWeights } from "./dummy-jiggle.ts";
 import { once } from "../kernel/scalar.ts";
+import { decimate } from "../vehicle/cage-mesh.ts";
 
 /**
  * The dummy's one continuous body: `dummyGeometry` takes the three fitted bodies (one topology, three rest position sets), gives
@@ -76,12 +78,12 @@ function interleave(a: ArrayLike<number>, aSize: number, b: ArrayLike<number>, b
   return out;
 }
 
-/** The baked bodies, plus each build's wear lofted on after. One vertex order; three position attributes. */
-function buildDummyGeometry(): THREE.BufferGeometry {
+/** The baked bodies, plus each build's wear lofted on after (one vertex order; three position attributes), and the wear's coarse index (`Lofted.coarse`). */
+function buildDummy(): { geometry: THREE.BufferGeometry; coarseWear: number[] } {
   const { man, woman, portly } = restFits();
   const index = Array.from(bodyIndex());
   const { bones, roleKind, print } = paintBody(man);
-  const wear: Lofted = { position: [], bones: [], roleKind: [], print: [], index: [] };
+  const wear: Lofted = { position: [], bones: [], roleKind: [], print: [], index: [], coarse: [] };
   for (const [build, fit] of [[BUILD.MAN, man], [BUILD.WOMAN, woman], [BUILD.PORTLY, portly]] as const) for (const shell of wearFor(build, fit)) loft(shell, wear);
   const count = BODY_VERTICES + wear.position.length / 3;
   const hang = hangAttribute(man, portly, count);
@@ -115,9 +117,59 @@ function buildDummyGeometry(): THREE.BufferGeometry {
   geometry.setAttribute(KINDS_ATTRIBUTE, new THREE.Float32BufferAttribute(interleave(kinds, 2, bust, 2), 4));
   geometry.setIndex(index);
   geometry.computeVertexNormals();
+  return { geometry, coarseWear: wear.coarse.map((vertex) => vertex + BODY_VERTICES) };
+}
+
+const dummy = once(buildDummy);
+
+/** The one body every DummyMesh draws, built on first use and shared: only engine teardown disposes it. */
+export const dummyGeometry = (): THREE.BufferGeometry => dummy().geometry;
+
+/** Thigh and shin bones (`PARTS` 6-9): a seated driver's legs are under the dash, and so is the bare torso under the belt. */
+const LEG_BONES = [LEFT_LEG, LEFT_LEG + 1, RIGHT_LEG, RIGHT_LEG + 1];
+/** The vertices the seated driver's body keeps: about 0.9k triangles, the most of a seated figure's budget. */
+const SEATED_BODY_VERTICES = 450;
+
+/** The slot flags (`dressRow`) of every look a seated driver wears: a man or a woman, his clothes or a cop's, with a cap or a moustache or not (`driverLook`, `pickedLook`). */
+function seatedFlags(): number[] {
+  const row = new Float32Array(ROW_TEXELS * 4);
+  const flags: number[] = [];
+  for (const woman of [false, true]) for (const cop of [false, true]) for (const hat of [null, 0]) for (const mustache of [false, true]) {
+    dressRow(row, 0, cop, { woman, shirt: 0, pants: 0, hair: 0, hat, mustache });
+    flags.push(row[FLAGS_AT * 4]!);
+  }
+  return flags;
+}
+
+/**
+ * `dummyGeometry` as a driver shows through the glass: its own attributes (dress, builds and pose rows as they are) under an index of the
+ * triangles some seated driver's look wears, off the legs and above the belt, the body's decimated onto its own vertices (`decimate`), the wear's coarse loft.
+ */
+function buildSeatedGeometry(): THREE.BufferGeometry {
+  const { geometry: full, coarseWear } = dummy();
+  const index = full.index!.array;
+  const bones = full.getAttribute(BONES_ATTRIBUTE);
+  const kinds = full.getAttribute(KINDS_ATTRIBUTE);
+  const rest = full.getAttribute("position");
+  const worn = seatedFlags();
+  const hidden = (v: number) => LEG_BONES.includes(bones.getX(v)) || LEG_BONES.includes(bones.getY(v)) || (bones.getY(v) === TORSO && bones.getX(v) === TORSO && rest.getY(v) < BELT_BOTTOM) || !worn.some((flags) => isDrawn(kinds.getY(v), flags));
+  const shown = (triangles: ArrayLike<number>, to: number, into: number[]) => {
+    for (let t = 0; t < to; t += 3) if (!hidden(triangles[t]!) && !hidden(triangles[t + 1]!) && !hidden(triangles[t + 2]!)) into.push(triangles[t]!, triangles[t + 1]!, triangles[t + 2]!);
+    return into;
+  };
+  const body = shown(index, bodyIndex().length, []);
+  const vertices = [...new Set(body)];
+  const local = new Map(vertices.map((v, i) => [v, i]));
+  // Weld groups by colour role, from 1: `decimate` pins group 0's nose and tail (a car body's).
+  const group = Uint8Array.from(vertices, (v) => kinds.getX(v) + 1);
+  const at = Float32Array.from(vertices.flatMap((v) => [rest.getX(v), rest.getY(v), rest.getZ(v)]));
+  const { source, tris } = decimate(at, body.map((v) => local.get(v)!), group, SEATED_BODY_VERTICES);
+  const geometry = new THREE.BufferGeometry();
+  for (const [name, attribute] of Object.entries(full.attributes)) geometry.setAttribute(name, attribute);
+  geometry.setIndex(shown(coarseWear, coarseWear.length, Array.from(tris, (k) => vertices[source[k]!]!)));
   return geometry;
 }
 
-/** The one body every DummyMesh draws, built on first use and shared: only engine teardown disposes it. */
-export const dummyGeometry = once(buildDummyGeometry);
+/** The seated drivers' body (`SeatedDrivers`), built on first use and shared like `dummyGeometry`, whose attributes it draws. */
+export const seatedGeometry = once(buildSeatedGeometry);
 
