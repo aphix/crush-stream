@@ -158,7 +158,7 @@ describe("given every body style fitted with its own lamps", () => {
       const dir = new THREE.Vector3();
       for (const [i, l] of car.lamps.entries()) {
         const name = `${l.kind}${l.side < 0 ? "L" : "R"}`;
-        l.seat.updateWorldMatrix(true, false);
+        l.seat.updateWorldMatrix(true, false, true);
         const m = l.seat.matrixWorld;
         axis.setFromMatrixColumn(m, 2).normalize();
         assert.ok(axis.z * (l.kind === "head" ? 1 : -1) > 0.99, `${name} faces ${axis.toArray().map((v) => v.toFixed(2))}`);
@@ -342,6 +342,43 @@ describe("given a monster-class car, whose lamp seats ride its lift", () => {
       const unit = batch.draw.variants[batch.draw.variantAt(row)]!;
       assert.equal(trianglesOf(unit), trianglesOf(drawnLamp(car.style, l.kind, l.side).geometry), `${l.kind} ${l.side} draws its own unit`);
     }
+  });
+
+  it("when the car moves and its lamps are read and packed again, then no lamp seat composes its matrix, and each still follows the lift", () => {
+    const car = dressed();
+    const batch = new LampBatch(8);
+    const pos = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    for (let i = 0; i < car.lamps.length; i++) car.lampWorld(i, pos, dir);
+    batch.sync([car]);
+    let composed = 0;
+    for (const seat of [...car.lamps.map((l) => l.seat), ...car.lampFittings.map((f) => f.seat)]) {
+      const own = seat.updateMatrix.bind(seat);
+      seat.updateMatrix = () => {
+        composed++;
+        own();
+      };
+    }
+    const lift = car.group.getObjectByName(CLASS_LIFT)!;
+    const seatInLift = new THREE.Matrix4();
+    const expected = new THREE.Vector3();
+    const inLift = (l: (typeof car.lamps)[number]) => expected.setFromMatrixPosition(seatInLift.compose(l.seat.position, l.seat.quaternion, l.seat.scale).premultiply(lift.matrixWorld));
+    // Read alone, then packed alone after a second move: each must bring the seat's world matrix current itself.
+    car.group.position.x += 3;
+    car.group.updateMatrixWorld(true);
+    for (const [i, l] of car.lamps.entries()) {
+      car.lampWorld(i, pos, dir);
+      assert.ok(pos.distanceTo(inLift(l)) < 1e-6, `${l.kind} ${l.side} lights from ${pos.distanceTo(expected).toFixed(3)} m off its seat in the moved lift`);
+    }
+    car.group.position.z += 2;
+    car.group.updateMatrixWorld(true);
+    batch.sync([car]);
+    const packed = new THREE.Matrix4();
+    for (const [i, l] of car.lamps.entries()) {
+      const drawnAt = pos.setFromMatrixPosition(batch.draw.matrixAt(i, packed));
+      assert.ok(drawnAt.distanceTo(inLift(l)) < 1e-5, `${l.kind} ${l.side} drawn ${drawnAt.distanceTo(expected).toFixed(3)} m off its seat in the moved lift`);
+    }
+    assert.equal(composed, 0, "lamp seat matrices composed on a frame the skin did not move");
   });
 });
 
@@ -591,6 +628,55 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     }
   });
 
+  /** What the pool shows this frame: glows drawn, head spots and tail spots lit, ground pools laid. */
+  const shows = (lights: LampLights): string =>
+    `glows ${lights.glow.geometry.drawRange.count}, head spots ${lights.spots.filter((s) => s.intensity > 0).length}, tail spots ${lights.tailSpots.filter((s) => s.intensity > 0).length}, pools ${lights.pools.count}`;
+
+  it("when night turns to day, then no car's head lamps, nor its tail lamps off the brakes, glow, take a real light or lay a pool; when night falls again they all come back", () => {
+    const { lights, camera, far, near, behind } = rig();
+    const frames = (night: boolean): string => {
+      lights.night = night;
+      // Real lights ease in over `FADE_S` (0.3 s): ten 0.1 s frames settle them.
+      for (let f = 0; f < 10; f++) lights.update([far, near, behind], camera, far, 0, undefined, 0.1);
+      return shows(lights);
+    };
+    const read = [frames(true), frames(false), frames(true)];
+    assert.equal(read[1], "glows 0, head spots 0, tail spots 0, pools 0", "by day");
+    for (const night of [read[0]!, read[2]!]) assert.ok(/^glows 12, head spots 4, tail spots 4, pools [1-9]/.test(night), `at night: ${night}`);
+  });
+
+  it("when it is day, then a braking car's tail lamps still glow, take real lights and draw lit lenses, and a police car's sirens still flash, while every head lamp and running tail stays off, its lens unlit", () => {
+    const { lights, scene, camera, far, near } = rig();
+    const cop = new DeformableCar(paint(), scene, null, "police");
+    cop.spawnFacing(-3, 8, 0, 0);
+    cop.setSirens(true);
+    lights.night = false;
+    far.drive.brake = 1;
+    lights.update([far, near, cop], camera, far, 0.1);
+    const siren = lights.tailSpots.filter((p) => p.intensity > 1).length;
+    // The followed car's two braking tails and the one siren lit at t = 0.1: three glows, three tail spots; no head spot.
+    assert.equal(`${shows(lights)}, siren spots ${siren}`, "glows 3, head spots 0, tail spots 3, pools 0, siren spots 1");
+
+    // The lens looks the lamp batch draws (`LAMP_SLOTS`): lit head 0, running tail 2, braking tail 10, high brake lit 4, hood share 6,
+    // boot share running 7 and braking 11; their unlit day looks 13 (head), 14 (tail), 15 (hood share), 16 (boot share).
+    const cars = [far, near, cop];
+    for (const c of cars) c.group.updateMatrixWorld(true);
+    const batch = new LampBatch(cars.length);
+    const lenses = (night: boolean): string => {
+      batch.night = night;
+      batch.sync(cars);
+      const d = (b: number) => batch.drawn(b);
+      return `heads ${d(0)} lit ${d(13)} unlit, running tails ${d(2)} lit ${d(14)} unlit, braking tails ${d(10)}, high brake ${d(4)}, hood shares ${d(6)} lit ${d(15)} unlit, boot shares ${d(7)} lit ${d(16)} unlit ${d(11)} braking`;
+    };
+    const count = (list: readonly DeformableCar[], kind: string) => list.reduce((n, c) => n + c.lamps.filter((l) => l.kind === kind).length + c.lampFittings.filter((f) => f.kind === kind).length, 0);
+    const [heads, running, braking, high, hoods, boots, brakingBoots] = [count(cars, "head"), count([near, cop], "tail"), count([far], "tail"), count([far], "brake"), count(cars, "hood"), count([near, cop], "boot"), count([far], "boot")];
+    const want = (day: boolean) =>
+      `heads ${day ? 0 : heads} lit ${day ? heads : 0} unlit, running tails ${day ? 0 : running} lit ${day ? running : 0} unlit, braking tails ${braking}, high brake ${high}, hood shares ${day ? 0 : hoods} lit ${day ? hoods : 0} unlit, boot shares ${day ? 0 : boots} lit ${day ? boots : 0} unlit ${brakingBoots} braking`;
+    assert.equal(`day: ${lenses(false)}; night: ${lenses(true)}`, `day: ${want(true)}; night: ${want(false)}`);
+    assert.ok(heads > 0 && running > 0 && braking > 0, `the cars carry ${heads} heads, ${running} running tails, ${braking} braking tails`);
+    batch.dispose();
+  });
+
   it("when the pool is the phone's, then it holds 2 head spots and 2 tail spots, the followed car's two headlamps take both spots, and every intact lamp still glows", () => {
     const { lights, scene, camera, far, near, behind } = rig(PHONE_POOL);
     lights.update([far, near, behind], camera, far);
@@ -686,12 +772,38 @@ describe("given a device class and the page's ?lamps setting", () => {
   }
 });
 
+describe("given the lamp pool updating a lit car's glows every frame", () => {
+  it("when it stores each lamp's glow and stash, then it never goes through three's shared Vector3.toArray (megamorphic once the cars are built)", () => {
+    const scene = new THREE.Scene();
+    const car = new DeformableCar(paint(), scene);
+    car.spawnFacing(0, 10, 0, 0);
+    car.group.updateMatrixWorld(true);
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
+    camera.position.copy(car.group.position).addScaledVector(car.forward, 8).setY(1.5);
+    camera.lookAt(car.group.position);
+    const lights = new LampLights(scene, 12, FULL_POOL);
+    const toArray = THREE.Vector3.prototype.toArray;
+    let calls = 0;
+    THREE.Vector3.prototype.toArray = function (this: THREE.Vector3, ...args: Parameters<typeof toArray>) {
+      calls++;
+      return toArray.apply(this, args);
+    } as typeof toArray;
+    try {
+      lights.update([car], camera, car);
+    } finally {
+      THREE.Vector3.prototype.toArray = toArray;
+    }
+    assert.ok(lights.glow.geometry.drawRange.count >= 4, `the control: ${lights.glow.geometry.drawRange.count} glows stored`);
+    assert.equal(calls, 0, "Vector3.toArray calls in one update");
+  });
+});
+
 describe("given the hatchback, whose tail lamp crosses the step from the infill to the quarter", () => {
   it("when its right tail lamp is met from behind along its band, then every ray from the gate's edge to the corner meets the lens, with no body showing at the step", () => {
     const car = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
     car.group.updateMatrixWorld(true);
     const tail = car.lamps.find((l) => l.kind === "tail" && l.side > 0)!;
-    tail.seat.updateWorldMatrix(true, false);
+    tail.seat.updateWorldMatrix(true, false, true);
     const lens = new THREE.Mesh(drawnLamp(car.style, "tail", 1).geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
     lens.matrixAutoUpdate = false;
     lens.matrixWorld.copy(tail.seat.matrixWorld);

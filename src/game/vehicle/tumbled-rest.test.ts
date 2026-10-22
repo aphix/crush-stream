@@ -92,7 +92,7 @@ function lowestDrawn(car: DeformableCar, crown: ReadonlySet<number>): Lowest {
     });
   }
   for (const lamp of car.lamps) {
-    lamp.seat.updateWorldMatrix(true, false);
+    lamp.seat.updateWorldMatrix(true, false, true);
     low = { ...low, lamps: Math.min(low.lamps, lowestY(makeLampUnit(lamp.kind), lamp.seat.matrixWorld)) };
   }
   return low;

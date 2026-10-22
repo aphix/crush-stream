@@ -158,6 +158,13 @@ function frameAt(pos: ArrayLike<number>, [a, b, c]: readonly [number, number, nu
   _m.makeBasis(_t, _d.crossVectors(_n, _t), _n);
 }
 
+/** `v` into `out` at `at`. Not `Vector3.toArray`: the cars' build feeds that one shared function every array kind, so its stores go megamorphic. */
+function store3(out: Float32Array, at: number, v: THREE.Vector3): void {
+  out[at] = v.x;
+  out[at + 1] = v.y;
+  out[at + 2] = v.z;
+}
+
 /** What the pool reads from a car; `DeformableCar` satisfies it. */
 interface LampHost {
   readonly group: THREE.Object3D;
@@ -241,6 +248,12 @@ export class LampLights {
   private readonly viewProj = new THREE.Matrix4();
   /** Whether any car's lamps may earn real lights by screen position (desktop; a phone's budget keeps them to the followed car and the highlight). */
   middleTile = true;
+  /**
+   * Night (the time of day, `WorldStage.night`; the engine sets it every frame). By day a car's head lamps, and its tail lamps while it
+   * is off the brakes, are off: no glow, real light or pool. Brake lamps (the tails while it brakes) and police sirens light at any hour.
+   * Drawn only. Night until set: the pool's lit behaviour is night's.
+   */
+  night = true;
   /** Fake pools: one instanced ground decal for every head and tail lamp, at (1 − weight) of its colour. */
   readonly pools: THREE.InstancedMesh;
   /** This frame's head and tail lamps: world seat and axis (6 floats each), kind (1 head), fade state and lamp index, target weight, rank score and brightness (`TAIL_RUNNING` for a tail off the brakes). */
@@ -342,13 +355,14 @@ export class LampLights {
       const bonus = this.bonus(car, followed, highlight);
       for (let i = 0; i < car.lampCount; i++) {
         const kind = car.lampWorld(i, _pos, _dir);
-        if (!kind) {
+        // Dark (`!kind`: broken, or a siren not lit just now), or by day a lamp that burns only at night: no glow, light or pool.
+        if (!kind || (!this.night && (kind === "head" || (kind === "tail" && !car.braking)))) {
           fade.w[i] = 0;
           fade.act[i] = 0;
           continue;
         }
         if (n * 3 >= gp.length) continue;
-        _e.copy(_pos).addScaledVector(_dir, GLOW_OUT).toArray(gp, n * 3);
+        store3(gp, n * 3, _e.copy(_pos).addScaledVector(_dir, GLOW_OUT));
         const c = kind === "head" ? GLOW_HEAD[car.style.lamps.bulb ?? "neutral"] : kind === "tail" ? GLOW_TAIL : kind === "red" ? GLOW_RED : GLOW_BLUE;
         const bright = kind === "tail" && !car.braking ? TAIL_RUNNING : 1;
         const lens = kind === "head" ? car.style.lamps.shapes?.head?.lens : undefined;
@@ -361,8 +375,8 @@ export class LampLights {
         gc[n * 3 + 2] = c[2] * shown;
         n++;
         if (kind === "head" || kind === "tail") {
-          _pos.toArray(st, ns * 6);
-          _dir.toArray(st, ns * 6 + 3);
+          store3(st, ns * 6, _pos);
+          store3(st, ns * 6 + 3, _dir);
           const q = bonus > 0 ? 1 : this.realness(_pos);
           const score = q > 0 ? q + bonus : 0;
           this.stashHead[ns] = kind === "head" ? 1 : 0;
@@ -706,7 +720,8 @@ const FITTING_BRAKING = { brake: 4, marker: 5, hood: 6, boot: 11 } as const;
 const TAIL_BRAKING = 10;
 
 /** Per slot, the lamp family its seats draw and its look: head lit, head broken, tail running, tail broken, high brake lamp lit, marker,
- *  the heads' shares on the hood, the tails' on the boot lid, those two shares broken, the tails and their share braking, high brake dark. */
+ *  the heads' shares on the hood, the tails' on the boot lid, those two shares broken, the tails and their share braking, high brake dark,
+ *  and by day (`BY_DAY`) the head, running tail and their shares unlit. */
 const LAMP_SLOTS = [
   ["head", LAMP_LOOK.head],
   ["head", LAMP_LOOK.broken],
@@ -721,7 +736,15 @@ const LAMP_SLOTS = [
   ["tail", LAMP_LOOK.tail],
   ["boot", LAMP_LOOK.tail],
   ["brake", LAMP_LOOK.off],
+  ["head", LAMP_LOOK.off],
+  ["tail", LAMP_LOOK.off],
+  ["hood", LAMP_LOOK.off],
+  ["boot", LAMP_LOOK.off],
 ] as const;
+
+/** Each slot's by day: a lit head lamp, a running tail and their lid shares draw their unlit lens; every other slot (broken, braking, the high brake lamp, a marker) is its own. */
+const UNLIT_BY_DAY = new Map([[0, 13], [2, 14], [6, 15], [7, 16]]);
+const BY_DAY = Int8Array.from(LAMP_SLOTS, (_, b) => UNLIT_BY_DAY.get(b) ?? b);
 
 /** Whether `seat` shows: on the camera's layer (distance detail) and visible up its parent chain. */
 function seatShown(seat: THREE.Object3D): boolean {
@@ -740,6 +763,8 @@ export class LampBatch {
   /** Every draw, for the scene. */
   readonly meshes: readonly THREE.Mesh[];
   readonly draw: SeatDraw;
+  /** Night (`WorldStage.night`, as `LampLights.night`; the engine sets both every frame): by day the head and running tail lenses are unlit (`BY_DAY`). */
+  night = true;
   /** Per slot (`LAMP_SLOTS`), the seats packed this sync. */
   private readonly n = new Int32Array(LAMP_SLOTS.length);
   /** Per slot, its family's first variant in the draw and how many it has. */
@@ -800,8 +825,9 @@ export class LampBatch {
     return this.n[b]!;
   }
 
-  private put(b: number, seat: THREE.Object3D, variant: number, tint?: THREE.Color | null): void {
-    seat.updateWorldMatrix(false, false);
+  private put(slot: number, seat: THREE.Object3D, variant: number, tint?: THREE.Color | null): void {
+    seat.updateWorldMatrix(false, false, true);
+    const b = this.night ? slot : BY_DAY[slot]!;
     const [color, glow] = this.looks[b]!;
     const look = tint ? _tint.copy(color).multiply(tint) : color;
     if (this.draw.put(this.first[b]! + (this.variants[b] === 1 ? 0 : variant), seat.matrixWorld, look, glow)) this.n[b]!++;

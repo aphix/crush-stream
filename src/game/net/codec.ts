@@ -65,8 +65,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 35: a clip's keyframes carry each mass's skin fit rest (REPLAY 142), so peers on 34 would misread a host's clip.
 36: a clip's keyframes carry each wreck's solid hold of its last slice (two more solver doubles, REPLAY 146), so peers on 35 would misread a host's clip.
 37: a clip's keyframes carry each loose body's rest time (one more number per torn part or popped wheel, REPLAY 155), so peers on 36 would misread a host's clip.
+38: a car's body style may be the monster's own (`CAR_STYLE_IDS` appends `monster`) and its class the hatch or the SUV (`VEHICLE_CLASS_IDS` appends `hatch`, `suv`), and the trunk slot's two floats carry its lid's swing and latch (REPLAY 158), so peers on 37 would misread those cars' body, class and lid.
 */
-export const NET_VERSION = 37;
+export const NET_VERSION = 38;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 58.3 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
