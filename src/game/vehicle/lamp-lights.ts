@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { hypot2 } from "../kernel/physics-core.js";
+import { store3f } from "../kernel/store.ts";
 import { lampEmissiveMap, makeLampUnit, type LampKind } from "./car-materials.ts";
 import { brakeLampUnit, lampBatchGeometries, sideMarkerUnit } from "./part-variants.ts";
 import { SeatDraw } from "./seat-draw.ts";
@@ -156,13 +157,6 @@ function frameAt(pos: ArrayLike<number>, [a, b, c]: readonly [number, number, nu
   _t.subVectors(_b, _a).normalize();
   _n.crossVectors(_t, _d.subVectors(_c, _a)).normalize();
   _m.makeBasis(_t, _d.crossVectors(_n, _t), _n);
-}
-
-/** `v` into `out` at `at`. Not `Vector3.toArray`: the cars' build feeds that one shared function every array kind, so its stores go megamorphic. */
-function store3(out: Float32Array, at: number, v: THREE.Vector3): void {
-  out[at] = v.x;
-  out[at + 1] = v.y;
-  out[at + 2] = v.z;
 }
 
 /** What the pool reads from a car; `DeformableCar` satisfies it. */
@@ -362,7 +356,7 @@ export class LampLights {
           continue;
         }
         if (n * 3 >= gp.length) continue;
-        store3(gp, n * 3, _e.copy(_pos).addScaledVector(_dir, GLOW_OUT));
+        store3f(gp, n * 3, _e.copy(_pos).addScaledVector(_dir, GLOW_OUT));
         const c = kind === "head" ? GLOW_HEAD[car.style.lamps.bulb ?? "neutral"] : kind === "tail" ? GLOW_TAIL : kind === "red" ? GLOW_RED : GLOW_BLUE;
         const bright = kind === "tail" && !car.braking ? TAIL_RUNNING : 1;
         const lens = kind === "head" ? car.style.lamps.shapes?.head?.lens : undefined;
@@ -375,8 +369,8 @@ export class LampLights {
         gc[n * 3 + 2] = c[2] * shown;
         n++;
         if (kind === "head" || kind === "tail") {
-          store3(st, ns * 6, _pos);
-          store3(st, ns * 6 + 3, _dir);
+          store3f(st, ns * 6, _pos);
+          store3f(st, ns * 6 + 3, _dir);
           const q = bonus > 0 ? 1 : this.realness(_pos);
           const score = q > 0 ? q + bonus : 0;
           this.stashHead[ns] = kind === "head" ? 1 : 0;

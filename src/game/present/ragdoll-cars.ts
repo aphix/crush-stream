@@ -9,6 +9,7 @@ import { carClass, classStats } from "../vehicle/vehicle-classes.ts";
 import { disable, type Rapier } from "../kernel/rapier.ts";
 import { BARRIER_HALF } from "../contact/sat.ts";
 import { hypot3 } from "../kernel/physics-core.js";
+import { store3f, store4f } from "../kernel/store.ts";
 import { PURSE_BODIES, type Purses } from "./ragdoll-purse.ts";
 import { CAR_BOX } from "./ragdoll-props.ts";
 import { BELT_Y, BOX_FLOATS, PANE_CORNERS, PANE_FLOATS, PANE_GONE, PANES, PROXY_BOXES, ProxyFitter, UNDER } from "./ragdoll-proxy.ts";
@@ -205,8 +206,8 @@ export class CarProxies {
       this.on[i] = 1;
     }
     if (!jump) a.copyWithin(o, o + 7, o + 14);
-    p.toArray(a, o + 7);
-    q.toArray(a, o + 10);
+    store3f(a, o + 7, p);
+    store4f(a, o + 10, q);
     if (!jump) return;
     a.copyWithin(o, o + 7, o + 14);
     body.setTranslation(p, false);
