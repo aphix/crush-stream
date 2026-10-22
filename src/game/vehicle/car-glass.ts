@@ -173,8 +173,8 @@ export function makeRearSideGlass(sign: number, style: BodyStyle = SEDAN): THREE
   return makeSideGlassPane(sign, style, quarterSpan(style), [0, 0, 0]);
 }
 
-/** Window trim: its width (m) across, straddling the pane's edge, a slim bead and not a seal. */
-const TRIM_WIDTH = 0.022;
+/** Window trim: its width (m) across, straddling the pane's edge: a 1 cm bright bead, as the references' window chrome. */
+const TRIM_WIDTH = 0.01;
 /** Window trim: its crest stands this far (m) over the glass, enough to catch a highlight. */
 const TRIM_PROUD = 0.005;
 /** Window trim: its two edges stand this far (m) over the glass, clear of it so they don't z-fight. */
