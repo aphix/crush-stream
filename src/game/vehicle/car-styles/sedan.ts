@@ -134,7 +134,8 @@ export const SEDAN: BodyStyle = {
     y: [[-1.23, 1.0], [-1.15, 0.98], [-0.9, 0.948], [-0.5, 0.913], [0.4, 0.9], [0.66, 0.9], [0.95, 0.86]],
   },
   rocker: { y: 0.21 },
-  arch: { radius: 0.405, lip: { flare: 0.008, width: 0.035 } },
+  /** The wheel opening about its hub as the reference's: 26 px of silver-sedan-1.png (70.1 px/m) is .371, its top at .685 over the ground. */
+  arch: { radius: 0.375, lip: { flare: 0.008, width: 0.035 } },
   /**
    * The hood's rear edge stands ahead of the windshield's foot (0.95), as the reference's: in its top view the bonnet ends ~1.0 on
    * the centre line, the dark cowl and wipers (`blackout.cowl`) between it and the glass. Hinged 2 cm behind that edge, as before.
