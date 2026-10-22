@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
-import { copDriver } from "../vehicle/ejection.ts";
+import { copDriver, thrownFrom, type Ejection } from "../vehicle/ejection.ts";
 import { driverSeat } from "../vehicle/interior.ts";
 import { PART_KIND } from "../vehicle/part-geometry.ts";
 import type { DriverLook } from "./driver-look.ts";
@@ -56,7 +56,7 @@ const poses = new WeakMap<BodyStyle, SeatedPose>();
  * `style`'s driver sat on his drawn seat (`driverSeat`): hips on the H-point, back on the seat's lean, hands on the wheel's grips,
  * soles on the floor ahead. Built once per style. The pose a thrown driver can start from, so the seated one hands over without a jump.
  */
-function seatedPose(style: BodyStyle): SeatedPose {
+export function seatedPose(style: BodyStyle): SeatedPose {
   const known = poses.get(style);
   if (known) return known;
   const seat = driverSeat(style);
@@ -113,6 +113,29 @@ const _turn = new THREE.Quaternion();
 const _scale = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _q = new THREE.Quaternion();
+const _cabin = new THREE.Matrix4();
+const _frame = new THREE.Matrix4();
+const ONE = new THREE.Vector3(1, 1, 1);
+
+/** Floats a part takes in `seatAtThrow`'s pose: its centre, then its turn. */
+export const SEAT_FLOATS = 7;
+
+/** `car`'s driver where he sat as `e` threw him (world, `PARTS` order): `seatedPose` in his cabin as the car draws it (its crush, class lift and ride), on the car frame the event holds. */
+export function seatAtThrow(e: Ejection, car: DeformableCar): Float32Array {
+  car.interior.updateWorldMatrix(true, false);
+  thrownFrom(e, _at, _turn);
+  _cabin.copy(car.group.matrixWorld).invert().multiply(car.interior.matrixWorld).premultiply(_frame.compose(_at, _turn, ONE));
+  _cabin.decompose(_at, _turn, _scale);
+  const pose = seatedPose(car.style);
+  const seat = new Float32Array(PARTS.length * SEAT_FLOATS);
+  for (let k = 0; k < PARTS.length; k++) {
+    _p.copy(pose.p[k]!).applyMatrix4(_cabin);
+    _q.copy(_turn).multiply(pose.q[k]!);
+    _p.toArray(seat, k * SEAT_FLOATS);
+    _q.toArray(seat, k * SEAT_FLOATS + 3);
+  }
+  return seat;
+}
 
 /**
  * Every car's driver, seated in it while he is in: one instanced draw (`DummyMesh` on `seatedGeometry`), the drivers shown packed

@@ -2,14 +2,18 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { makeCar } from "../contact/crash-scenarios.test-util.ts";
+import { FREEWHEEL, launch as drive, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { DeformableCar } from "../vehicle/car.ts";
 import { blankEjection, type Ejection } from "../vehicle/ejection.ts";
+import { paint } from "../vehicle/test-support.ts";
+import { assignClass, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import { setGround } from "../world/ground.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
-import { ARM, type Doll, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
+import { type Doll, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
 import { hinge } from "./ragdoll-pose.test-util.ts";
 import type { ReleaseScale } from "./ragdoll-boxes.ts";
+import { seatedPose } from "./seated-drivers.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const DEG = 180 / Math.PI;
@@ -21,16 +25,44 @@ const ARMS_DOWN_BY_SECONDS = 0.8;
 const SHOULDER_LINE = SHOULDER_Y - PARTS[0].c[1];
 /** The launch's total linear momentum against the rigid launch it replaces, as a share of it (f32 velocities: 1e-7 each). */
 const MOMENTUM_TOLERANCE = 1e-4;
-/** How near (m, rad) the launch pose is to the standing dummy laid out at the ejection's torso point and turned (an f32 body position at 300 m). */
+/** How far (m) a part's farthest corner may leave from where he sat in the event's car (an f32 body position at 300 m), and from where he was drawn seated in a real crash: no pop at the hand-over. */
 const POSE_TOLERANCE = 1e-4;
+const SEAT_TOLERANCE = 0.01;
 /** Height (m) the ejections start at: far over the sand, so the first second is all air. */
 const START_HEIGHT = 12;
-const _q = new THREE.Quaternion();
+/** Frames (s × 60) the head-on runs on after both cars first crush, before the throw: the cabins have moved with their cells by then. */
+const CRUSH_FRAMES = 6;
 
 const AXIS_X = new THREE.Vector3(1, 0, 0);
 const LEAN = new THREE.Quaternion().setFromAxisAngle(AXIS_X, (80 * Math.PI) / 180);
 const SIDE = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2).multiply(LEAN);
-const ARM_OVER = new THREE.Quaternion().setFromAxisAngle(AXIS_X, Math.PI);
+
+/** The farthest any corner of `doll`'s parts stands from the same part seated in `car` (`seatedPose` on the cabin's world matrix, as `SeatedDrivers` draws him), and that part. */
+function offSeat(doll: Doll, car: DeformableCar): { off: number; part: number } {
+  car.group.updateMatrixWorld(true);
+  const pose = seatedPose(car.style);
+  const frame = car.interior.matrixWorld;
+  const turn = new THREE.Quaternion();
+  frame.decompose(new THREE.Vector3(), turn, new THREE.Vector3());
+  let worst = { off: 0, part: -1 };
+  for (const [k, body] of doll.bodies.entries()) {
+    const satAt = pose.p[k]!.clone().applyMatrix4(frame);
+    const satTurn = turn.clone().multiply(pose.q[k]!);
+    const t = body.translation();
+    const r = body.rotation();
+    const at = new THREE.Vector3(t.x, t.y, t.z);
+    const q = new THREE.Quaternion(r.x, r.y, r.z, r.w);
+    const h = PARTS[k]!.h;
+    for (const sx of [-1, 1])
+      for (const sy of [-1, 1])
+        for (const sz of [-1, 1]) {
+          const c = new THREE.Vector3(sx * h[0], sy * h[1], sz * h[2]);
+          const off = c.clone().applyQuaternion(q).add(at).distanceTo(c.applyQuaternion(satTurn).add(satAt));
+          if (off > worst.off) worst = { off, part: k };
+        }
+  }
+  return worst;
+}
 
 /** Ejections as the sim makes them: head first out of the pane (80° lean), somersault 3 rad/s about the shoulder line, his own velocity out of the car on top of the car's. */
 const SHOTS: readonly { name: string; quat: THREE.Quaternion; carVel: THREE.Vector3; rel: THREE.Vector3; spin: THREE.Vector3 }[] = [
@@ -50,15 +82,15 @@ function ejection(shot: (typeof SHOTS)[number]): Ejection {
   return e;
 }
 
-/** A ragdoll system on flat sand with no cars, `shot` thrown out of a car (through `launch`, as the sim does); the doll in slot 0. */
-async function thrown(shot: (typeof SHOTS)[number], scale?: ReleaseScale): Promise<{ sys: RagdollSystem; doll: Doll; e: Ejection }> {
+/** A ragdoll system on flat sand, `shot` thrown out of `car` (through `launch`, as the sim does); the doll in slot 0. */
+async function thrown(shot: (typeof SHOTS)[number], scale?: ReleaseScale, car = makeCar()): Promise<{ sys: RagdollSystem; doll: Doll; e: Ejection }> {
   const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
   await sys.preload();
   setGround(null);
   sys.update(FRAME, [], true, false, null);
   const e = ejection(shot);
-  if (scale) sys.launch(e, [makeCar()], true, scale);
-  else sys.launch(e, [makeCar()]);
+  if (scale) sys.launch(e, [car], true, scale);
+  else sys.launch(e, [car]);
   return { sys, doll: sys["dolls"][0]!, e };
 }
 
@@ -86,13 +118,6 @@ function fly(sys: RagdollSystem, doll: Doll): { elbow: number; knee: number; arm
 const _r = new THREE.Vector3();
 const _p = new THREE.Vector3();
 
-/** Part `k`'s centre from the torso's, rigidly turned with it: the standing layout, the arms raised over the head about their shoulders (`spawn`'s own recipe). */
-function offset(k: number, q: THREE.Quaternion, into: THREE.Vector3): THREE.Vector3 {
-  const c = PARTS[k]!.c;
-  const t0 = PARTS[0].c;
-  return into.set(c[0] - t0[0], (ARM(k) ? 2 * SHOULDER_Y - c[1] : c[1]) - t0[1], c[2] - t0[2]).applyQuaternion(q);
-}
-
 describe("given a driver thrown out of a car", () => {
   it(`when he flies, then in the first ${FLIGHT_SECONDS} s an elbow and a knee each bend at least ${BEND_MIN_DEGREES}° and both forearms drop below the shoulder line by ${ARMS_DOWN_BY_SECONDS} s, in each of the four ejections`, async () => {
     for (const shot of SHOTS) {
@@ -106,38 +131,63 @@ describe("given a driver thrown out of a car", () => {
     }
   });
 
-  it("when he has just been thrown, then every part is where the dive puts it: the standing layout turned with his torso, arms raised over his head, joints straight", async () => {
-    for (const shot of SHOTS) {
-      const { sys, doll, e } = await thrown(shot);
-      for (const [k, body] of doll.bodies.entries()) {
-        const at = offset(k, e.quat, _r).add(e.pos);
-        const was = body.translation();
-        assert.ok(_p.set(was.x, was.y, was.z).distanceTo(at) < POSE_TOLERANCE, `${shot.name}: part ${k} is ${_p.distanceTo(at).toFixed(4)} m from the dive's layout`);
-        const turned = new THREE.Quaternion().copy(e.quat);
-        if (ARM(k)) turned.multiply(ARM_OVER);
-        const r = body.rotation();
-        const sign = turned.dot(_q.set(r.x, r.y, r.z, r.w)) < 0 ? -1 : 1;
-        const off = Math.max(Math.abs(turned.x - sign * r.x), Math.abs(turned.y - sign * r.y), Math.abs(turned.z - sign * r.z), Math.abs(turned.w - sign * r.w));
-        assert.ok(off < POSE_TOLERANCE, `${shot.name}: part ${k} is turned ${off.toFixed(5)} off the dive's layout`);
+  it("when he has just been thrown, then every part leaves from where he sat in the car the event holds, the class lift included: the seated driver hands over without a jump", async () => {
+    for (const id of ["sedan", "monster"] as const) {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
+      assignClass(car, STYLE_CLASS[id]);
+      for (const shot of SHOTS) {
+        // The car the event holds: at his torso point (no car-local offset), its turn his lean out of the windshield undone.
+        car.group.position.set(-300, START_HEIGHT, 0);
+        car.group.quaternion.copy(shot.quat).multiply(LEAN.clone().invert());
+        const { sys, doll } = await thrown(shot, undefined, car);
+        const { off, part } = offSeat(doll, car);
+        sys.dispose();
+        assert.ok(off < POSE_TOLERANCE, `${id}, ${shot.name}: part ${part} leaves ${off.toFixed(4)} m from where he sat`);
       }
-      sys.dispose();
     }
+  });
+
+  it(`when two cars have crushed into each other head-on at 56 km/h each and both drivers are thrown, then each leaves from where he is drawn seated that very step, every part within ${SEAT_TOLERANCE * 100} cm`, async () => {
+    const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    await sys.preload();
+    const a = makeCar();
+    const b = makeCar();
+    drive(a, -5, 0, Math.PI / 2, 56 / 3.6, 0);
+    drive(b, 5, 0, -Math.PI / 2, -56 / 3.6, 0);
+    const w = makeWorld([a, b], false, false, FREEWHEEL);
+    for (let f = 0; f < 150 && !(a.crashed && b.crashed); f++) tickWorld(w);
+    for (let f = 0; f < CRUSH_FRAMES; f++) tickWorld(w);
+    // A forced throw (a mini game's) takes the crushed car as it stands: the same `launch` a disabling hit's does.
+    w.world.ejection.throwDriverNow(w.cars, 0);
+    w.world.ejection.throwDriverNow(w.cars, 1);
+    const seen: { car: number; off: number; part: number }[] = [];
+    for (const e of w.world.ejection.take()) {
+      sys.launch(e, w.cars);
+      seen.push({ car: e.car, ...offSeat(sys["dolls"][sys["lastSlot"]]!, w.cars[e.car]!) });
+    }
+    sys.dispose();
+    const said = seen.map((s) => `car ${s.car}: part ${s.part} ${s.off.toFixed(4)} m`).join("; ");
+    assert.ok(a.crashed && b.crashed, "the head-on crushed both");
+    assert.equal(seen.length, 2, `both drivers thrown: ${said}`);
+    assert.ok(seen.every((s) => s.off < SEAT_TOLERANCE), `a driver leaves from off his drawn seat: ${said}`);
   });
 
   for (const [name, scale] of [
     ["unscaled", undefined],
     ["on the range minigames' release scale", { forward: 0.4, upward: 0.7, elevation: null }],
   ] as const) {
-    it(`when he is thrown ${name}, then his loosened limbs carry the momentum of the rigid launch (his velocity plus spin times each part's offset, all ten parts) within ${MOMENTUM_TOLERANCE * 100}%`, async () => {
+    it(`when he is thrown ${name}, then his loosened limbs carry the momentum of the rigid launch (his velocity plus spin times each part's offset from his torso as he sat, all ten parts) within ${MOMENTUM_TOLERANCE * 100}%`, async () => {
       for (const shot of SHOTS) {
         const { sys, doll, e } = await thrown(shot, scale);
         const launched = new THREE.Vector3().copy(e.carVel).add(e.rel);
         if (scale) launched.set(launched.x * scale.forward, launched.y * scale.upward, launched.z * scale.forward);
         const expected = new THREE.Vector3();
         const got = new THREE.Vector3();
-        for (const [k, body] of doll.bodies.entries()) {
+        const torso = doll.bodies[0]!.translation();
+        for (const body of doll.bodies) {
           const m = body.mass();
-          expected.addScaledVector(launched, m).addScaledVector(_p.copy(shot.spin).cross(offset(k, e.quat, _r)), m);
+          const at = body.translation();
+          expected.addScaledVector(launched, m).addScaledVector(_p.copy(shot.spin).cross(_r.set(at.x - torso.x, at.y - torso.y, at.z - torso.z)), m);
           const v = body.linvel();
           got.x += m * v.x;
           got.y += m * v.y;

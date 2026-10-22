@@ -45,6 +45,7 @@ import { dollGroups, FIXED_GROUPS, knockedGroups, MAX_ACC, propGroups, SLOTS, ST
 import { RagdollDebug } from "./ragdoll-debug.ts";
 import { RagdollRemote, type PostTraffic } from "./ragdoll-remote.ts";
 import { RideAlong } from "./ragdoll-ride.ts";
+import { SEAT_FLOATS, seatAtThrow } from "./seated-drivers.ts";
 import type { RideFrame } from "./ride-cam.ts";
 import type { Sight } from "./spectate-cam.ts";
 import { AIR_ANGULAR, AIR_LINEAR, ARM, blendPose, CALM_FOR, type Doll, GROUND_ANGULAR, GROUND_LINEAR, give, isCalm, JOINTS, limit, limp, PARTS, readPose, SETTLE_AFTER, SETTLE_ANGULAR, SETTLE_LINEAR, SHOULDER_Y } from "./ragdoll-body.ts";
@@ -94,8 +95,8 @@ const ITERATIONS = 4;
 /** Rapier's internal solver passes per iteration (default 1): at the first touch of a 29 m/s throw one pass rose energy 75–325 J in a frame at 1/120 and 26–30 J (1 of 5 runs) at 1/480 and 1/960; two at most 0.6 J over 60 runs (60/144/240 Hz). */
 const INTERNAL_PASSES = 2;
 
-/** A throw, placed: car (-1: none, `place`; else the one he ignores for `GRACE` s), torso point and orientation, linear and angular velocity (world), sim seconds waiting, a police driver, whether the ride-along may frame him, whether his purse flies too (unset: when his look is a woman's), arms hanging (a figure thrown standing) instead of raised, a look of his own (unset: his car's driver's), and whether his limbs leave loose (`limp`: a driver thrown out of a car). */
-export type Throw = { car: number; p: THREE.Vector3; q: THREE.Quaternion; v: THREE.Vector3; w: THREE.Vector3; age: number; cop: boolean; rides: boolean; purse?: boolean; armsDown?: boolean; look?: DriverLook; loose?: boolean };
+/** A throw, placed: car (-1: none, `place`; else the one he ignores for `GRACE` s), torso point and orientation, linear and angular velocity (world), sim seconds waiting, a police driver, whether the ride-along may frame him, whether his purse flies too (unset: when his look is a woman's), arms hanging (a figure thrown standing) instead of raised, a look of his own (unset: his car's driver's), whether his limbs leave loose (`limp`: a driver thrown out of a car), and where he sat (`seatAtThrow`: each part leaves from there; unset: the standing layout at `p` turned `q`). */
+export type Throw = { car: number; p: THREE.Vector3; q: THREE.Quaternion; v: THREE.Vector3; w: THREE.Vector3; age: number; cop: boolean; rides: boolean; purse?: boolean; armsDown?: boolean; look?: DriverLook; loose?: boolean; seat?: Float32Array };
 
 /** What a dummy sent to the worker looks like, applied (`mesh.dress`, `spray`, `Purses.paint`) once the worker says which slot he took. */
 type Dressing = { cop: boolean; look: DriverLook; spray: SprayBitmap | null; purse: boolean; car: number; seed: number };
@@ -115,12 +116,21 @@ const Y = new THREE.Vector3(0, 1, 0);
 const _w = new THREE.Vector3();
 const _roll = new THREE.Vector3();
 const _com = new THREE.Vector3();
-/** A thrown driver's centre of mass from his torso, standing, arms raised (`spawn`'s layout; the parts' masses go as their volumes): his roll turns about it. */
-const RAISED_COM = PARTS.reduce((sum, p, k) => {
-  const m = p.h[0] * p.h[1] * p.h[2];
-  const y = ARM(k) ? 2 * SHOULDER_Y - p.c[1] : p.c[1];
-  return sum.add(_r.set(p.c[0] - PARTS[0].c[0], y - PARTS[0].c[1], p.c[2] - PARTS[0].c[2]).multiplyScalar(m));
-}, new THREE.Vector3()).divideScalar(PARTS.reduce((sum, p) => sum + p.h[0] * p.h[1] * p.h[2], 0));
+/** A seated driver's centre of mass from his torso (world, `seatAtThrow`'s pose; the parts' masses go as their volumes): his roll turns about it. */
+function seatCom(seat: Float32Array, out: THREE.Vector3): THREE.Vector3 {
+  out.set(0, 0, 0);
+  let mass = 0;
+  for (let k = 0; k < PARTS.length; k++) {
+    const h = PARTS[k]!.h;
+    const m = h[0] * h[1] * h[2];
+    const o = k * SEAT_FLOATS;
+    out.x += m * (seat[o]! - seat[0]!);
+    out.y += m * (seat[o + 1]! - seat[1]!);
+    out.z += m * (seat[o + 2]! - seat[2]!);
+    mass += m;
+  }
+  return out.divideScalar(mass);
+}
 
 /**
  * A part whose velocity jumps by this much (m/s) in one step has hit something (gravity adds 0.08 per step): the skin
@@ -691,7 +701,7 @@ export class RagdollSystem {
   /**
    * A driver is thrown out of `cars[e.car]`: the exit pane smashes and the way out gets its cover (`onExit`) now, the
    * dummy flies now or (Rapier still loading) once it is in. The sim's own event (`EjectionWatch`), a netplay host's
-   * message or a highlight clip's record: the dummy starts from the event's numbers alone, so the same event is the
+   * message or a highlight clip's record: the dummy starts from the event's numbers and his cabin as his car draws it then (`seatAtThrow`), so the same event is the
    * same throw wherever it is launched. `rides` false: the ride-along never frames him (a reel's throw from another
    * crash than its own, `ownThrow`). `releaseScale` changes his launch velocity (the range minigames' boost: `forward` scales the horizontal, `upward` the vertical, `elevation` turns the whole of the scaled horizontal speed up to an angle; unset: the event's own).
    */
@@ -704,7 +714,8 @@ export class RagdollSystem {
     const side = e.exit === "windshield" ? 0 : e.exit === "doorL" ? -1 : 1;
     car.glassWorld(e.exit, _c).addScaledVector(e.dir, 0.5);
     _cq.copy(car.group.quaternion).multiply(_qx.setFromAxisAngle(Y, (side * Math.PI) / 2));
-    t.p.copy(e.pos);
+    t.seat = seatAtThrow(e, car);
+    t.p.fromArray(t.seat);
     t.q.copy(e.quat);
     t.w.copy(e.spin);
     ejectionVelocity(e, t.v);
@@ -714,7 +725,7 @@ export class RagdollSystem {
     if (flight > 0) {
       t.w.add(_roll.copy(t.v).multiplyScalar(EJECT_ROLL / flight));
       // About his centre of mass, not the torso point he is placed by: the roll moves none of him along.
-      t.v.sub(_roll.cross(_com.copy(RAISED_COM).applyQuaternion(t.q)));
+      t.v.sub(_roll.cross(seatCom(t.seat, _com)));
     }
     t.car = e.car;
     t.age = 0;
@@ -803,6 +814,7 @@ export class RagdollSystem {
     t.look = dress?.look;
     t.rides = false;
     t.loose = false;
+    t.seat = undefined;
     return this.spawn(t, slot, life);
   }
 
@@ -817,6 +829,8 @@ export class RagdollSystem {
     if (this.mode !== "remote" && !this.world) return;
     this.driverThrows[car] = undefined;
     passengerThrow(ride, t.p);
+    // He leaves standing beside the driver's way out, not from the driver's seat.
+    t.seat = undefined;
     t.age = 0;
     if (this.mode === "remote") this.launchRemote(t, this.cars, look);
     else this.spawn(t, -1, this.thrownLife, look);
@@ -848,19 +862,29 @@ export class RagdollSystem {
     this.despawn(slot);
     const d = this.dolls[slot]!;
     const t0 = PARTS[0]!.c;
+    const seat = t.seat;
     const groups = thrownGroups(slot, t.car);
     for (let k = 0; k < PARTS.length; k++) {
       const b = d.bodies[k]!;
-      const c = PARTS[k]!.c;
-      // A raised arm is the hanging one turned over about its shoulder.
-      const y = ARM(k) && !t.armsDown ? 2 * SHOULDER_Y - c[1] : c[1];
-      _r.set(c[0] - t0[0], y - t0[1], c[2] - t0[2]).applyQuaternion(t.q);
-      _v.x = t.p.x + _r.x;
-      _v.y = t.p.y + _r.y;
-      _v.z = t.p.z + _r.z;
+      if (seat) {
+        const o = k * SEAT_FLOATS;
+        _r.set(seat[o]! - seat[0]!, seat[o + 1]! - seat[1]!, seat[o + 2]! - seat[2]!);
+        _v.x = seat[o]!;
+        _v.y = seat[o + 1]!;
+        _v.z = seat[o + 2]!;
+        _qx.set(seat[o + 3]!, seat[o + 4]!, seat[o + 5]!, seat[o + 6]!);
+      } else {
+        const c = PARTS[k]!.c;
+        // A raised arm is the hanging one turned over about its shoulder.
+        const y = ARM(k) && !t.armsDown ? 2 * SHOULDER_Y - c[1] : c[1];
+        _r.set(c[0] - t0[0], y - t0[1], c[2] - t0[2]).applyQuaternion(t.q);
+        _v.x = t.p.x + _r.x;
+        _v.y = t.p.y + _r.y;
+        _v.z = t.p.z + _r.z;
+        _qx.copy(t.q);
+        if (ARM(k) && !t.armsDown) _qx.multiply(_arm);
+      }
       b.setTranslation(_v, false);
-      _qx.copy(t.q);
-      if (ARM(k) && !t.armsDown) _qx.multiply(_arm);
       b.setRotation(_qx, false);
       // Rigid motion: v + ω × r.
       _s.copy(t.w).cross(_r);

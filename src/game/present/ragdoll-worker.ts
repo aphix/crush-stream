@@ -92,6 +92,7 @@ function throwDummy(world: RagdollSystem, m: Extract<ToWorker, { type: "throw" }
     purse: m.purse,
     armsDown: m.armsDown,
     loose: m.loose,
+    seat: m.seat ?? undefined,
   };
   world.lookSeed = m.lookSeed;
   spawned.push({ id: m.id, slot: world.spawn(throwing) });
