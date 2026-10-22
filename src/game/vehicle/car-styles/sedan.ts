@@ -70,7 +70,8 @@ const SEDAN_LAMP_SHAPES = {
         ],
       },
     ],
-    lens: "lit",
+    // The reference's tail lens is deep red; only its LED strip glows (the strip below stays `lit`).
+    lens: "red",
     bezel: "chrome",
     strips: [
       {

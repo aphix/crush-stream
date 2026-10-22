@@ -316,7 +316,8 @@ function paintCars(spec) {
     car.group.traverse((o) => {
       for (const m of [o.material ?? []].flat()) if (m.color?.getHex() === was) m.color.set(colour);
     });
-    car.setMirrorPaint(Number.parseInt(colour.replace(/^#/, ""), 16));
+    const hex = Number.parseInt(colour.replace(/^#/, ""), 16);
+    car.setPartPaint(hex, hex);
   }
 }
 
