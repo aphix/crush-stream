@@ -143,7 +143,7 @@ export const HATCHBACK: BodyStyle = {
   blackout: { b: true, divider: true },
   privacyGlass: { rear: true, quarter: true },
   roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.5 } },
-  exhaust: { tips: 2, x: 0.45, y: 0.27, size: [0.075, 0.045], shape: "round" },
+  exhaust: { tips: 2, x: 0.5, y: 0.24, size: [0.1, 0.045], shape: "round" },
   details: {
     lines: [
       { view: "top", points: [[1.68, 0], [1.69, 0.36], [1.64, 0.62], [1.55, 0.68]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
