@@ -1298,7 +1298,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // panes' tops follow; the pickup's again for its rear glass's top back at z -0.45 (at -0.5 the crushed cab's dummy-world roof stood 8 cm off the drawn one).
   // Both trucks re-pinned for their smooth roof crown (`roofSection`, square over the windshield) the panes' tops follow; the pickup's for its
   // rear glass's top raised under the roof's rolled end (y 1.6 -> 1.635) and its panes taking the whole dome.
-  { id: "pickup", digest: "e8952a810e3d68dfde1ac848197897460465a324ab97461be078652a83f87ad4" },
+  // The pickup's again for its door glass starting back where the side plate's does (`aPillarFoot` .7 -> .6, `aPillarTop` .41 -> .34): the A-post box moved.
+  { id: "pickup", digest: "0b9b6e97b2becde393bada56d59a0c480517bbc57b7692e2dc39ab47f131e85b" },
   { id: "police", digest: "26d74836366ea758cb090a8f2908702c95392a9fe06faecc1d598e2f9b13404e" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55).
   { id: "monster", digest: "50d67ae1e9b9dfa6344025060ff8c23afe70af78a80789f63b915ca2cb781875" },
