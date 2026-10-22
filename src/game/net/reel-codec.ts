@@ -316,8 +316,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * every car, and the coupe's pane bows deeper at its top; each raked pane's top corners fall onto the roof's dome (`domeFall`, about 2 cm), which
  * moves the panes' cage-skinned rest on every car. A car's collision cage keeps the underside it rests on out to its nose and tail lips (over its
  * vertex budget, read once it is a wreck), so a wreck that loses a front wheel rests and sleeps on its lip instead of rocking 3-4 cm in the ground,
- * and a car pitched over another meets it as deep as the two cages stand (it read 10 cm shallow at some poses). Every windshield throw moves
- * differently, and wrecks on their noses and tails and pitched pairs come to rest and push differently. A clip of 157 or before no longer reads.
+ * and a car pitched over another meets it as deep as the two cages stand (it read 10 cm shallow at some poses). The hatchback's windshield reaches
+ * its reference's glass top (17 cm further back, 8 cm higher, 1.03 m wide there) and its roof ends there, so its cage's pane, A-posts and header
+ * stand there too. Every windshield throw moves differently, a hatch's cabin front is struck on its new cage, and wrecks on their noses and tails
+ * and pitched pairs come to rest and push differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
 const REPLAY_VERSION = 158;

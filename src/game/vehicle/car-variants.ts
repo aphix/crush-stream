@@ -443,6 +443,8 @@ export interface BodyStyle {
     kind: "bars" | "mesh" | "slats" | "hex";
     count?: number;
     badge?: number;
+    /** A hex mesh's bars cross at ± this angle (rad) from the horizontal (flatter: wider diamonds, more rows); absent, 60°. */
+    angle?: number;
     /** A chrome frame this wide (m) round the grille's outer edge, its face standing out past the grille's (drawn only). */
     bezel?: number;
     finish: "black" | "chrome" | "body";

@@ -73,7 +73,7 @@ const HANDLES = [pullHandle(0, -0.18, 0.7575, 0.025), pullHandle(-0.8, -0.97, 0.
 export const HATCHBACK: BodyStyle = {
   id: "hatchback",
   dims: { wheelbase: 2.225, overhang: { front: 0.6975, rear: 0.6775 }, track: 1.37, width: 1.621, height: 1.309, rideHeight: 0.15, wheel: { radius: 0.29, width: 0.17 } },
-  windshield: { base: [0.891, 0.883], wBase: 1.38, wTop: 0.86 },
+  windshield: { base: [0.891, 0.883], wBase: 1.38, wTop: 1.03 },
   bPillar: { rear: -0.27, front: -0.19 },
   belt: { x: 0.75, y: [[-1.174, 0.881], [-0.939, 0.877], [-0.935, 0.856], [0.128, 0.838], [0.381, 0.809], [0.58, 0.824], [0.584, 0.852], [0.88, 0.852]] },
   rocker: { y: 0.2 },
@@ -102,7 +102,7 @@ export const HATCHBACK: BodyStyle = {
   },
   door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62], mirror: { cap: "rounded", finish: "body", size: [0.1, 0.1, 0.075] } },
   aPillarFoot: 0.73,
-  aPillarTop: 0.3,
+  aPillarTop: 0.212,
   glassTop: 0.045,
   camera: { hood: [1.09, 1.0], third: { dist: 5.4, height: 1.85, aimUp: 0.95 }, far: { dist: 8.8, height: 3.1, aimUp: 1.1 } },
   underside: [[-1.791, 0.456], [-1.759, 0.278], [-1.705, 0.225], [-1.652, 0.207], [-1.57, 0.214], [-1.559, 0.203], [-0.625, 0.168], [-0.611, 0.153], [0.577, 0.153], [0.591, 0.168], [0.687, 0.168], [1.618, 0.15], [1.682, 0.164], [1.729, 0.21], [1.782, 0.3], [1.8, 0.367]],
@@ -133,10 +133,11 @@ export const HATCHBACK: BodyStyle = {
     st(1.7, 0.61, 0.67),
     st(1.74, 0.45, 0.618),
   ],
-  roofZ: [-1.151, 0.421],
-  // The windshield top stood 8 mm over the crown at the roof's front end, a raised strip: the crown rolls onto it.
+  // The windshield reaches the roof's flat front (the reference's glass top), its corners flush with the dome's edge.
+  roofZ: [-1.151, 0.245],
+  // The glass top sits 7 mm under the crown: the crown rolls down onto it.
   roofEnds: { front: 0.12 },
-  windshieldTop: [1.162, 0.421],
+  windshieldTop: [1.245, 0.245],
   rearGlass: { base: [0.94, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9, frame: [0.05, 0.06, 0.11] },
   quarter: { zRearBot: -1.174, zRearTop: -1.07 },
   midPillarZ: -0.86,
@@ -149,6 +150,8 @@ export const HATCHBACK: BodyStyle = {
     origin: [0.94, -1.615],
     z0: -1.75,
     pivot: [1.277, -1.15],
+    // The gate's top edge rolls forward onto the rear glass's base (it stood 8-10 mm proud of it: a shelf across the iso).
+    lip: { rise: -0.01, depth: 0.06 },
     // The reference's gate seam: ±.62-.66 above the tail lamps, stepping in to ±.43 between them.
     outline: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84], [0.43, 0.8], [0.43, 0.6]],
   },
@@ -206,11 +209,6 @@ export const HATCHBACK: BodyStyle = {
       { view: "side", points: [[-1.09, 1.25], [-1.1, 1.24], [-1.35, 1.05], [-1.58, 0.92], [-1.6, 0.9]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "rear", points: [[0.62, 0.84], [0.43, 0.8], [0.43, 0.6], [0, 0.56]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "rear", points: [[0.75, 0.82], [0.62, 0.83], [0.43, 0.82], [0.43, 0.64], [0.6, 0.61], [0.74, 0.6]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-1.66, 0.82], [-1.58, 0.8], [-1.6, 0.62], [-1.68, 0.6]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "rear", points: [[0.6, 0.64], [0.6, 0.76]], width: 0.03, depth: -0.006, profile: "step", cavity: 0.85 },
-      { view: "rear", points: [[0.64, 0.64], [0.64, 0.76]], width: 0.03, depth: -0.006, profile: "step", cavity: 0.85 },
-      { view: "rear", points: [[0.68, 0.64], [0.68, 0.76]], width: 0.03, depth: -0.006, profile: "step", cavity: 0.85 },
       { view: "rear", points: [[0, 0.98], [0.17, 0.98]], width: 0.02, depth: 0.006, profile: "u", cavity: 0.7 },
       { view: "rear", points: [[0.58, 0.5], [0.6, 0.5]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
       ...HANDLES.flatMap((h) => h.lines),
