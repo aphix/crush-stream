@@ -20,6 +20,7 @@ import {
   ROCKER,
   TUB_EDGE,
   ensureOutwardNormals,
+  hoodRearZ,
   loftFromRings,
   noseRefined,
   recessShutLine,
@@ -313,7 +314,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
     if (cut.lined && cut.face) for (const i of [0, n - 1]) primer[i] = 0;
     for (const [copy, s] of wallTops) primer[copy] = tone(s);
     if (style.blackout?.cowl === true) {
-      const [foot, hoodRear] = [style.windshield.base[1], style.hood.z0];
+      const [foot, hoodRear] = [style.windshield.base[1], hoodRearZ(0, style)];
       for (let s = 0; s < zs.length; s++) if (zs[s]! >= Math.min(foot, hoodRear) - COWL_LAP && zs[s]! <= Math.max(foot, hoodRear) + COWL_LAP) for (const i of [0, n - 1]) primer[s * n + i] = BLACKOUT;
     }
     // Each well's ceiling inside an arch, toned like its liner so the lip reads over a dark gap: the sill's two points, and the last

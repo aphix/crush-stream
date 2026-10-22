@@ -473,7 +473,8 @@ export abstract class CarCore {
     this.cabin = new CarCabin(this.style, this.partSeats, this.group);
     this.interior = this.cabin.pose;
 
-    this.hood = new THREE.Mesh(withHoodBulge(makeHoodGeometry(this.style), this.style), this.bodyMat);
+    const drawn = drawnStyle(this.style);
+    this.hood = new THREE.Mesh(withHoodBulge(makeHoodGeometry(drawn), drawn), this.bodyMat);
     this.hood.castShadow = true;
     this.hood.position.set(0, this.style.hood.origin[0], this.style.hood.origin[1]);
     this.group.add(this.hood);

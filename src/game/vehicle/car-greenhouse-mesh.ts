@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, ROOF_DRIP, roofDrip, WINDSHIELD_BOW } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, ROOF_DRIP, roofDrip, sideBowZ, WINDSHIELD_BOW } from "./car-lines.ts";
 import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
@@ -432,7 +432,7 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const railAt = (t: number): Rail => {
     const y = lerp(footY, aTopY, t);
     const edge = lerp(edgeFoot, 1, t);
-    const [rearZ, edgeZ] = [aPostRearZ(y, style), lerp(base[1], topZ, edge) + A_POST_LIFT * uy];
+    const [rearZ, edgeZ] = [aPostRearZ(y, style), lerp(base[1], topZ, edge) + A_POST_LIFT * uy + sideBowZ(style.windshield.sideBow ?? 0, edge)];
     // The top station runs into the roof: its ring is moved back to lie a post's depth (its section's reach in z) inside the roof's
     // span, where the roof's tuck holds all of it, not a blade past its end.
     const back = t === 1 ? Math.max(0, Math.max(rearZ, edgeZ) - (style.roofZ[1] - ROOF_TUCK - A_POST_THICK)) : 0;
