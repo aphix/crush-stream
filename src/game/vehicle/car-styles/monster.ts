@@ -5,6 +5,9 @@ import { TOW_MIRROR, TRUCK_ROOF_ENDS } from "./pickup.ts";
 /** The crew cab's slim front and rear door pulls, 15 x 4 cm. */
 const DOOR_PULLS = [pullHandle(0.055, -0.095, 0.838, 0.04), pullHandle(-0.47, -0.62, 0.834, 0.04)];
 
+/** The side reference's tow mirror: a rounded black head 14 cm tall, its top within 1 cm of the reference's, on a 4.5 cm arm reaching 4 cm under it. */
+const MONSTER_MIRROR = { ...TOW_MIRROR, cap: "rounded", size: [0.07, 0.14, 0.125], lift: 0.035, neck: 0.04, stalk: 0.045 } as const;
+
 const { bumpers } = PLATFORM_HARDPOINTS;
 /** Black steel bar bumper, 28 cm tall with a flat face 9 cm proud ([y, out] m, top to bottom). */
 const MONSTER_BUMPER_FASCIA = [
@@ -60,7 +63,7 @@ export const MONSTER: BodyStyle = {
   belt: { x: 0.8, y: [[0, 1.0]] },
   rocker: { y: 0.4 },
   underside: [[-2.4, 0.38], [-2.1, 0.34], [2.1, 0.34]],
-  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, mirrorY: 0.315, mirrorZ: 0.27, mirrorReach: 0.16, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75], mirror: TOW_MIRROR },
+  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, mirrorY: 0.315, mirrorZ: 0.27, mirrorReach: 0.16, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75], mirror: MONSTER_MIRROR },
   aPillarFoot: 0.74,
   aPillarTop: 0.41,
   bPillar: { rear: -0.19, front: -0.12 },

@@ -563,6 +563,8 @@ const SAIL_ROOF_ROLL = [0, Math.PI / 12, Math.PI / 6, Math.PI / 3, Math.PI / 2] 
 /** A flush sail's head (`cPillar.flush`) stands this far (m) on the rear glass, a chrome bead's height, and laps the glass's edge this far: half the bead, so the seam lies under it. */
 const SAIL_FLUSH_STAND = 0.005;
 const SAIL_FLUSH_LAP = 0.011;
+/** A flush sail's roof-end head laps the rear glass's round top corner this share of the way round its arc unless `cPillar.corner` says otherwise: mid-arc, so the ring behind follows the arc's lower half. */
+const SAIL_CORNER = 0.5;
 /** The triangle behind the quarter glass laps this far (m) over the glass's rear edge and this far under the sail's foot. */
 const TIP_LAP = 0.01;
 /** The triangle stands this far (m) out of the side glass's plane, over the quarter glass it laps. */
@@ -616,9 +618,9 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     const p = rearGlassInset(style, z, SAIL_FLUSH_LAP);
     return [p.x, p.y + SAIL_FLUSH_STAND];
   };
-  // On a curved roof the roof end's head lies on that end's chords; lapping the glass, in over its top corner's mid-arc, so the chord
-  // from the ring behind follows the arc's lower half and the roof end meets its upper half (a ring of its own would cost 80 triangles).
-  const endX = !roofEnd ? roof.x : flush ? rearGlassInset(style, rearGlassCornerZ(style) ?? roofEndZ, SAIL_FLUSH_LAP).x : roof.x;
+  // On a curved roof the roof end's head lies on that end's chords; lapping the glass, in over its top corner's arc at `cPillar.corner`
+  // (mid-arc by default), so the chord from the ring behind follows the arc below it and the roof end meets it above (a ring of its own would cost 80 triangles).
+  const endX = !roofEnd ? roof.x : flush ? rearGlassInset(style, rearGlassCornerZ(style, style.cPillar?.corner ?? SAIL_CORNER) ?? roofEndZ, SAIL_FLUSH_LAP).x : roof.x;
   const endHead = [endX, roofEnd ? roofTopY(endX, style.roofZ[0], style) : roof.y] as const;
   const section = (z: number): Pt[] => {
     const atRoofEnd = z === roofEndZ && z < style.roofZ[0];

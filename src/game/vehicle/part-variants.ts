@@ -116,7 +116,9 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const parts = [cap.translate(sign * (reach - w / 2), capY, 0)];
   const footOut = MIRROR_FOOT.out + MIRROR_FOOT_SINK;
   const footRows = spec.mount === "glass" ? GLASS_FOOT_ROWS : 1;
-  const foot = fitting(new THREE.BoxGeometry(footOut, h * MIRROR_FOOT.share + lift, spec.stalk ?? d * MIRROR_FOOT.share, 1, footRows, 1)).translate(sign * (root - MIRROR_FOOT_SINK + footOut / 2), MIRROR_CAP_Y + lift / 2, 0);
+  const neck = spec.neck;
+  const [footH, footY] = neck === undefined ? [h * MIRROR_FOOT.share + lift, MIRROR_CAP_Y + lift / 2] : [(h * (1 + MIRROR_FOOT.share)) / 2 + neck, capY + (h * (MIRROR_FOOT.share - 1)) / 4 - neck / 2];
+  const foot = fitting(new THREE.BoxGeometry(footOut, footH, spec.stalk ?? d * MIRROR_FOOT.share, 1, footRows, 1)).translate(sign * (root - MIRROR_FOOT_SINK + footOut / 2), footY, 0);
   parts.push(spec.mount === "glass" ? alongGlass(foot, style, sign) : foot);
   const [stalkFrom, stalkTo] = [root + MIRROR_FOOT.out, reach - w + MIRROR_FOOT.out / 2];
   if (stalkTo > stalkFrom) parts.push(fitting(new THREE.BoxGeometry(stalkTo - stalkFrom, ...MIRROR_STALK)).translate((sign * (stalkFrom + stalkTo)) / 2, capY, 0));
@@ -160,7 +162,7 @@ const HEX_ANGLE = Math.PI / 3;
 /** The platform grille's depth (m): a style grille without its own `z` puts its face where the platform box's was. */
 const PLATFORM_GRILLE_DEPTH = 0.06;
 /** The grille's dark backing: almost black, matte. */
-const GRILLE_BACKING = [0x0b0c0e, 0.85, 0.1] as const;
+export const GRILLE_BACKING = [0x0b0c0e, 0.85, 0.1] as const;
 
 /** `geo` with a trivial index where it has none: merged variants are all indexed. */
 function indexed(geo: THREE.BufferGeometry): THREE.BufferGeometry {
@@ -305,7 +307,7 @@ const LAMP_SEAM_NUDGE = [0, 0.01, -0.01, 0.02, -0.02, 0.03, -0.03, 0.04, -0.04] 
 const LAMP_REFINE_PASSES = 8;
 /** The lit lenses (sRGB): head white, tail red; the other tones (`SHAPE_TONE`) never glow. */
 const LAMP_TONE = { head: 0xf4f1e8, tail: 0xc4121c } as const;
-const SHAPE_TONE: Record<Exclude<LampTone, "lit">, number> = { clear: 0xd8dde2, red: 0x8a0c12, amber: 0xff9a1a, smoked: 0x2a1a1c, dark: 0x0e0f11, black: TRIM_BLACK, chrome: TRIM_CHROME };
+const SHAPE_TONE: Record<Exclude<LampTone, "lit">, number> = { clear: 0xd8dde2, red: 0x8a0c12, amber: 0xff9a1a, smoked: 0x2a1a1c, dark: 0x0e0f11, black: TRIM_BLACK, chrome: TRIM_CHROME, cavity: GRILLE_BACKING[0] };
 /** u on the lamp emissive mask (`lampEmissiveMap`): the dark housing texel and the lit lens texel. */
 const LAMP_TEXEL = { housing: 0.25, lens: 0.75 } as const;
 /** How far out (m) a lamp point's ray starts to meet the skin: past any body. */
@@ -328,9 +330,10 @@ function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind, bul
   return geo;
 }
 
-/** A bumper lamp's tone in the part batch (never lit): chrome and black in the trim's finishes, the rest glossy in their colour. */
+/** A bumper lamp's tone in the part batch (never lit): chrome and black in the trim's finishes, a cavity as the grille's backing, the rest glossy in their colour. */
 function bumperTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind): THREE.BufferGeometry {
   if (tone === "chrome" || tone === "black") return finished(geo, tone);
+  if (tone === "cavity") return dark(geo, ...GRILLE_BACKING);
   return dark(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0.3, 0.1);
 }
 

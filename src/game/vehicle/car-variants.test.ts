@@ -10,7 +10,7 @@ import { ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, gl
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, tubWall } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
-import { drawnLamp, drawnPart, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
+import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
@@ -2017,8 +2017,8 @@ describe("given a body style's P1 parts", () => {
     });
   }
 
-  it("when a rear bumper sets a band, then the fascia rows in it carry a black inlay across the face between its heights, and the cage builds are unchanged", () => {
-    const { seat, band, wrap } = sedan.bumpers.rear;
+  it("when a rear bumper sets a band, then the fascia rows in it carry a black inlay across the face between its heights, out to its `bandHalfWidth` and no further round the corners, and the cage builds are unchanged", () => {
+    const { seat, band, wrap, bandHalfWidth } = sedan.bumpers.rear;
     const plain: BodyStyle = { ...sedan, bumpers: { ...sedan.bumpers, rear: { ...sedan.bumpers.rear, band: undefined } } };
     const [inlay, bare] = [sedan, plain].map((style) => toneBox(withRearFittings(makeBumperGeometry(false, style), style), FITTING_ATTRIBUTE, FITTING_TONE.black));
     assert.ok(inlay!.count > bare!.count, `${inlay!.count} black vertices with the band, ${bare!.count} without`);
@@ -2026,6 +2026,9 @@ describe("given a body style's P1 parts", () => {
     // The fascia's top crown lifts its rows up to 2 cm at the centre line.
     assert.ok(inlay!.box.min.y >= bottom! - POSITION_TOL && inlay!.box.max.y <= top! + 0.02 + POSITION_TOL, `black y ${inlay!.box.min.y.toFixed(3)}..${inlay!.box.max.y.toFixed(3)}, the band ${bottom!.toFixed(3)}..${top!.toFixed(3)}`);
     assert.ok(inlay!.box.max.x - inlay!.box.min.x > 2 * wrap.from, `the band spans ${(inlay!.box.max.x - inlay!.box.min.x).toFixed(3)} m across`);
+    const tipless: BodyStyle = { ...sedan, exhaust: undefined };
+    const reach = toneBox(withRearFittings(makeBumperGeometry(false, tipless), tipless), FITTING_ATTRIBUTE, FITTING_TONE.black).box;
+    assert.ok(Math.max(-reach.min.x, reach.max.x) <= bandHalfWidth! + POSITION_TOL, `black (tips off) out to |x| ${Math.max(-reach.min.x, reach.max.x).toFixed(3)}, the band's half-width ${bandHalfWidth}`);
     assert.ok(cageHash(sedan) === cageHash(plain), "the cage builds are unchanged");
   });
 
@@ -2154,6 +2157,23 @@ describe("given a body style's P2 parts", () => {
     assertSameNumbers([footLength(mirrorStyle(spec)), footLength(slim)], [0.07, 0.025], "the foot's length along the car", POSITION_TOL);
     assert.ok(mirrorSeatX(slim) === mirrorSeatX(mirrorStyle(spec)), "the seat is unchanged");
     assert.ok(cageHash(slim) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
+  });
+
+  it("when a mirror sets a neck, then its foot reaches that far under the cap's bottom, where without one it hides behind the cap, and the seat and cage builds are unchanged", () => {
+    const spec = { cap: "rounded", finish: "body", size: [0.07, 0.14, 0.125] } as const;
+    /** The lowest unpainted vertex (the foot) under the painted cap's bottom (m; negative = above it). */
+    const reach = (style: BodyStyle): number => {
+      const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
+      const [pos, painted] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE)];
+      let low = Infinity;
+      for (let i = 0; i < pos.count; i++) if (painted.getX(i) !== 1) low = Math.min(low, pos.getY(i));
+      return readMirror(style).cap.min.y - low;
+    };
+    const necked = mirrorStyle({ ...spec, neck: 0.04 });
+    assert.ok(reach(mirrorStyle(spec)) < 0, `without a neck the foot reaches ${reach(mirrorStyle(spec)).toFixed(4)} m under the cap`);
+    assertSameNumbers([reach(necked)], [0.04], "the neck's reach under the cap", POSITION_TOL);
+    assert.ok(mirrorSeatX(necked) === mirrorSeatX(mirrorStyle(spec)), "the seat is unchanged");
+    assert.ok(cageHash(necked) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
   });
 
   it("when a mirror is mounted on the door glass, then its foot lies on the drawn pane up its height and nowhere sinks into it, the pane's lean followed, which the same seat on the skin does not", () => {
@@ -2522,6 +2542,19 @@ describe("given a body style's P2 parts", () => {
       assert.ok(band.length > 0, `${id}: no black plastic in the tail trim`);
       assert.equal(band.filter((i) => uv.getX(i) !== texel).length, 0, `${id}: black vertices off the plastic finish's texel`);
     }
+  });
+
+  it("when a bumper lamp's lens is a cavity, then the sedan's lower intake under the grille is filled in the grille backing's matte near-black, not a glossy dark lens mirroring the road", () => {
+    const backing = toned(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3)), ...GRILLE_BACKING);
+    const tone = (g: THREE.BufferGeometry, i: number) => [g.getAttribute("color").getX(i), g.getAttribute("color").getY(i), g.getAttribute("color").getZ(i), g.getAttribute("uv").getX(i)].join();
+    const key = tone(backing, 0);
+    const sedan = CAR_STYLES.sedan;
+    const y0 = sedan.bumpers.front.seat.y + GRILLE_SEAT.y;
+    const grille = drawnPart(PART_KIND.grille, sedan).geometry;
+    const pos = grille.getAttribute("position");
+    const intake = Array.from({ length: pos.count }, (_, i) => i).filter((i) => Math.abs(pos.getX(i)) < 0.4 && pos.getY(i) + y0 > 0.23 && pos.getY(i) + y0 < 0.27);
+    const filled = intake.filter((i) => tone(grille, i) === key).length;
+    assert.ok(filled > intake.length / 2, `${filled} of ${intake.length} intake vertices in the grille backing's tone (the rest its bezel lip)`);
   });
 
   it("when a tail lamp's outline runs onto the boot lid, then the lid carries that share and opens with it, and the body keeps the rest", () => {
