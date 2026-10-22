@@ -85,7 +85,7 @@ const FRAMED_BEST_HEIGHT_MINIMUM = 150;
 const UPWARD_CUT_FACTOR = 0.8;
 
 /** The five classes whose full-throttle speed at Ring Fling's lip is within 1% of one another (32.2 to 32.5 m/s); the muscle (35.6) and the monster (38.2) are the higher lines. */
-const STANDARD_CLASS_IDS: readonly string[] = ["sedan", "truck", "police", "hatchback", "wagon"];
+const STANDARD_CLASS_IDS: readonly string[] = ["sedan", "truck", "police", "hatch", "suv"];
 /** The speed shares of the best run that the Ring Fling sweep walks through. */
 const RING_SWEEP = { first: 0.6, last: 1, step: 0.02 } as const;
 

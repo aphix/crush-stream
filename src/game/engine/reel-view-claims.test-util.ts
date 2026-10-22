@@ -1,6 +1,8 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
+import { fleetClass } from "../scenes/fleet.ts";
+import { headOnThrowsBoth } from "../vehicle/ejection.test-util.ts";
 import type { World } from "../world/race-world.test-util.ts";
 import { hold, survivalWorld } from "../world/survival-run.test-util.ts";
 import type { Track } from "../world/track.ts";
@@ -33,8 +35,10 @@ export function survivalOn(seed: number): World {
 
 /** Head-ons, wall hits both sides and a T-bone at these shares of the lap, all moved on by `shift` of it. */
 export function crashes(len: number, shift: number): Crash[] {
+  // Slots 1 and 2 are the first head-on's staged pair: the closing alone must throw both drivers, with 5 % to spare.
+  const firstHeadOn = Math.ceil(1.05 * headOnThrowsBoth(fleetClass(1), fleetClass(2)));
   return [
-    { kind: "headOn", at: len * (0.22 + shift), speed: 20 },
+    { kind: "headOn", at: len * (0.22 + shift), speed: firstHeadOn },
     { kind: "wall", at: len * (0.38 + shift), speed: 24, side: 1 },
     { kind: "tBone", at: len * (0.55 + shift), speed: 22 },
     { kind: "headOn", at: len * (0.7 + shift), speed: 22 },

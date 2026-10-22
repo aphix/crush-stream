@@ -35,6 +35,7 @@ import {
   type DriveProfile,
   type LipFlight,
   type LongJumpDesign,
+  MINIMUM_SPEED,
 } from "./minigame-profile.test-util.ts";
 import { RANGE } from "./range.ts";
 
@@ -51,37 +52,6 @@ const PARKED_SLIDE_LIMIT = 0.5;
 const PARKED_HOLD_DEGREES = 20;
 /** The slowest (m/s) any class may carry through the climb's last stretch, below its bar: it never stalls. */
 const CLIMB_STALL_ALLOWANCE = 1;
-
-/** Per station and car type: the least speed (m/s) its centre may have at the climb's foot and as it reaches the lip, measured with 0.5 m/s of room. */
-const MINIMUM_SPEED: Readonly<Record<MinigameMode, Readonly<Record<string, { foot: number; lip: number }>>>> = {
-  longJump: {
-    sedan: { foot: 17.5, lip: 25 },
-    muscle: { foot: 18, lip: 27 },
-    truck: { foot: 17.5, lip: 24.5 },
-    monster: { foot: 19, lip: 26.5 },
-    police: { foot: 17.5, lip: 24.5 },
-    hatch: { foot: 17.5, lip: 25 },
-    suv: { foot: 17.5, lip: 25 },
-  },
-  highJump: {
-    sedan: { foot: 31, lip: 26.5 },
-    muscle: { foot: 34, lip: 29.5 },
-    truck: { foot: 31, lip: 26 },
-    monster: { foot: 34.5, lip: 35 },
-    police: { foot: 31, lip: 26.5 },
-    hatch: { foot: 31, lip: 26.5 },
-    suv: { foot: 31, lip: 26.5 },
-  },
-  ringFling: {
-    sedan: { foot: 29.5, lip: 32 },
-    muscle: { foot: 32, lip: 35.5 },
-    truck: { foot: 29, lip: 32 },
-    monster: { foot: 32.5, lip: 37.5 },
-    police: { foot: 29.5, lip: 32 },
-    hatch: { foot: 29.5, lip: 32 },
-    suv: { foot: 29.5, lip: 32 },
-  },
-};
 
 function table(rows: readonly (readonly [string, ClimbRun])[]): string {
   return rows.map(([label, run]) => `${label.padEnd(9)} reached ${run.reachedLip} foot ${run.footSpeed.toFixed(1)} lip nose ${run.lipSpeed.toFixed(1)} centre ${run.lipCentreSpeed.toFixed(1)} slowest ${run.slowestOnClimb.toFixed(1)} m/s`).join("\n");
@@ -254,8 +224,8 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
    */
   const SWEEP_DEGREES = [HIGH_JUMP_KICKER.lipPitchDegrees, 65, 70, 75, 80];
   const LIP_SPEED_FLOOR = 17;
-  /** The radius (m) the kicker had before the retune, which cliffs the sedan family's climb. */
-  const OLD_RADIUS = 20;
+  /** A radius (m) tight enough to cliff the sedan's climb (the old 20 m did the platform sedan's; the sedan's own higher keel clears it). */
+  const TIGHT_RADIUS = 9;
   const sedan = DRIVER_CARS.find((type) => type.id === "sedan")!;
 
   it("when every car type climbs each pitch, then all reach the lip at any of them (no tyre treats the face as a wall) and the sedan's lip speed falls with the pitch yet stays over the floor even at the steepest", (t) => {
@@ -274,17 +244,17 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
     assert.ok(sedanCentre[sedanCentre.length - 1]! >= LIP_SPEED_FLOOR, `the sedan's lip speed at the steepest swept pitch ${sedanCentre[sedanCentre.length - 1]}: the climb has no wall in the sweep`);
   });
 
-  it("when the old radius of 20 m is swept to the same steepest pitch, then the sedan's lip speed is under the floor: the floor row can fail", () => {
+  it(`when a tight radius of ${TIGHT_RADIUS} m is swept to the same steepest pitch, then the sedan's lip speed is under the floor: the floor row can fail`, () => {
     const steepest = SWEEP_DEGREES[SWEEP_DEGREES.length - 1]!;
-    const run = driveToLip(sedan, highJumpVariant(OLD_RADIUS, steepest, RUN_UP_LENGTH.highJump), FINE_CELL);
-    assert.ok(run.lipCentreSpeed < LIP_SPEED_FLOOR, `old-radius sedan at ${steepest} deg: ${run.lipCentreSpeed}`);
+    const run = driveToLip(sedan, highJumpVariant(TIGHT_RADIUS, steepest, RUN_UP_LENGTH.highJump), FINE_CELL);
+    assert.ok(run.lipCentreSpeed < LIP_SPEED_FLOOR, `tight-radius sedan at ${steepest} deg: ${run.lipCentreSpeed}`);
   });
 
-  it("when the shipped pitch is given the old radius of 20 m, then the sedan reaches the lip under the speed the shipped kicker gives it: the climb row can fail", () => {
+  it(`when the shipped pitch is given a tight radius of ${TIGHT_RADIUS} m, then the sedan reaches the lip under the speed the shipped kicker gives it: the climb row can fail`, () => {
     const shipped = driveToLip(sedan, stationDriveProfile("highJump"), FINE_CELL);
-    const tighter = driveToLip(sedan, highJumpVariant(OLD_RADIUS, HIGH_JUMP_KICKER.lipPitchDegrees, RUN_UP_LENGTH.highJump), FINE_CELL);
+    const tighter = driveToLip(sedan, highJumpVariant(TIGHT_RADIUS, HIGH_JUMP_KICKER.lipPitchDegrees, RUN_UP_LENGTH.highJump), FINE_CELL);
     assert.ok(shipped.lipCentreSpeed >= MINIMUM_SPEED.highJump.sedan!.lip, "shipped meets its bar");
-    assert.ok(tighter.lipCentreSpeed < MINIMUM_SPEED.highJump.sedan!.lip, `the old radius gives ${tighter.lipCentreSpeed}`);
+    assert.ok(tighter.lipCentreSpeed < MINIMUM_SPEED.highJump.sedan!.lip, `the tight radius gives ${tighter.lipCentreSpeed}`);
   });
 
   it("when the sweep's builder is given the shipped numbers, then its floor is the shipped floor", () => {

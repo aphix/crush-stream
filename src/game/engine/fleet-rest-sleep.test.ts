@@ -10,8 +10,8 @@ import { makeEngine, replay } from "./fleet-rest.test-util.ts";
  */
 /** Jitter seeds, in turn on one fresh engine. */
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
-/** The hatchback sleeps by this sim second at the median seed (the hop kept it awake past 2.9 s). */
-const SLEEPS_BY = 2.7;
+/** The hatchback, on its own body's dims, sleeps by this sim second at the median seed (the hop kept it awake past 2.9 s). */
+const SLEEPS_BY = 2.8;
 /** Seeds that sleep after this sim second or never are late: one rest restarted by a stir, or a sleeper held on two contacts to the end. */
 const LATE_BY = 3.0;
 /** At most this many of the eight seeds are late: before the skin read a kept dent once, the sill rule's tree had two (seed 6 at 3.31 s, seed 7 never), main before it one (seed 2 never). */

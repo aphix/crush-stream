@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
+import { ejectThreshold } from "./ejection.ts";
 import { launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { armKill, assignClass, CLASSES, DEFAULT_REALISM, HANDLING, type VehicleClassId } from "./vehicle-classes.ts";
 import { paint } from "./test-support.ts";
@@ -36,6 +37,22 @@ export function classCar(cls: VehicleClassId): DeformableCar {
   car.deform.setMode(INITIAL_HUD.deformMode);
   armKill(car.deform, cls, HANDLING.realism, "default");
   return car;
+}
+
+/** The closing speed (m/s) at which a hit on a running car of class `cls` throws its driver outside a mini game (`ejectThreshold`). */
+export function ejectBar(cls: VehicleClassId): number {
+  const car = classCar(cls);
+  const bar = ejectThreshold(car, false);
+  car.dispose();
+  return bar;
+}
+
+/** `striker`'s share of the closing into `struck` (`EjectionWatch.peakClosing`: the striker's mass over the pair's). */
+export const strikerShare = (striker: VehicleClassId, struck: VehicleClassId): number => CLASSES[striker].mass / (CLASSES[striker].mass + CLASSES[struck].mass);
+
+/** The speed (m/s) each car of a head-on between classes `a` and `b` needs for both drivers to be thrown by the closing alone (`peakClosing`: each takes the other's mass share of the 2v closing against its `ejectBar`). */
+export function headOnThrowsBoth(a: VehicleClassId, b: VehicleClassId): number {
+  return Math.max(ejectBar(a) / (2 * strikerShare(b, a)), ejectBar(b) / (2 * strikerShare(a, b)));
 }
 
 export type Hit = "head-on" | "t-bone" | "rear-end";
