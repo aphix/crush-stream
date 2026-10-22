@@ -334,7 +334,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * base and tailgate top at .905. A car's collision cage keeps the underside it rests on out to its nose and tail lips (read once it is a wreck), so a
  * wreck that loses a front wheel rests on its lip instead of rocking 3-4 cm in the ground, and a car pitched over another meets it as deep as the two
  * cages stand. A thrown driver meets each pane as its glass's own quad, and breaks it only with a blow on its face: a door strike no longer
- * cracks the windshield. Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
+ * cracks the windshield. A sedan dropped on its roof keeps its rear glass (its fastback frame stands clear of the crushed roof). Every car
+ * crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
 const REPLAY_VERSION = 158;
