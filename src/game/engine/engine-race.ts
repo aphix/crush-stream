@@ -133,7 +133,7 @@ export class RaceDirector extends RaceHudLayer {
     this.survival = survival;
     this.mirrored = false;
     const scene = this.host.scene;
-    this.saved = { background: scene.background as THREE.Color | null, fog: scene.fog, far: this.host.camera.far };
+    this.saved = { background: scene.background as THREE.Color | null, fog: scene.fog, far: this.host.view.far, density: this.host.view.density };
     this.host.seat.drivable = (i) => (this.free ? i === this.self : this.entrants[i]?.kind === "player" && this.session != null && !this.spectating);
     if (survival && !menu) {
       this.entrants = this.field();
@@ -186,8 +186,7 @@ export class RaceDirector extends RaceHudLayer {
     if (s) {
       this.host.scene.background = s.background;
       this.host.scene.fog = s.fog;
-      this.host.camera.far = s.far;
-      this.host.camera.updateProjectionMatrix();
+      this.host.view.author(s.far, s.density);
     }
     this.saved = null;
     const sun = this.host.sun;

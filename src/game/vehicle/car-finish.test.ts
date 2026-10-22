@@ -283,6 +283,18 @@ describe("given a car material being compiled", () => {
     assert.ok(fragment.includes("clearcoatNormal = finishPerturbedNormal(clearcoatNormal, coatSlope"), "clear coat: waviness and peel only");
   });
 
+  it("when a paint material compiles with the finish on, then its orange peel keeps a quarter of its relief nearer than 2 m and all of it from 4.5 m: drawn 50 times real, close up it reads as hammered metal; the trim's grain keeps all of its", () => {
+    const nearShare = (kind: "paint" | "trim") => {
+      const material = materialOfKind(kind, 0x203045);
+      switchFinish(material, true);
+      const lines = compile(material).fragment.split("\n").map((line) => line.trim());
+      assert.ok(lines.includes("* mix(finishNearShare, vec3(1.0), smoothstep(2.0, 4.5, finishDistance));"), `${kind}: the near share rises to full from 2 to 4.5 m`);
+      return lines.find((line) => line.startsWith("const vec3 finishNearShare"));
+    };
+    assert.equal(nearShare("paint"), "const vec3 finishNearShare = vec3(1.0, 0.25, 1.0);", "paint: waviness and flake in full, the peel a quarter up close");
+    assert.equal(nearShare("trim"), "const vec3 finishNearShare = vec3(1.0);", "trim: its grain in full");
+  });
+
   const gateCases = [
     {
       it: "when a paint material compiles with the finish on, then its broad fetch stops past 90 m, its grain fetch past 18 m and the whole block past 90 m from the mesh, reach 4 m",

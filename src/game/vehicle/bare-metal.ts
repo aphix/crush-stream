@@ -15,6 +15,8 @@ const STEEL_ROUGHNESS = 0.55;
 const STEEL_METALNESS = 0.75;
 /** The share of that steel's colour an unpainted inner panel keeps (`primer` 2, the bay trough): dark grey under the engine. */
 const INNER_SHADE = 0.25;
+/** A wheel well's flat colour (linear RGB, `primer` 3): no rivets and no sheen, so a sunlit liner still reads as the dark well. */
+const WELL_DARK = 0.012;
 
 const f = (x: number): string => (Number.isInteger(x) ? `${x}.0` : `${x}`);
 
@@ -49,8 +51,8 @@ vec3 bareMetal(vec3 p, vec3 n) {
 /** Fragment replacements, each appended after its include: the colour, roughness, metalness and clearcoat give way to the steel by `bareW`. */
 export const BARE_METAL_FRAGMENT = {
   pars: FUNCTIONS,
-  color: `float bareW = smoothstep(0.3, 0.6, vPrimer);\ndiffuseColor.rgb = mix(diffuseColor.rgb, bareMetal(vBarePos, vBareN), bareW);\ndiffuseColor.rgb *= mix(1.0, ${f(INNER_SHADE)}, smoothstep(1.2, 1.8, vPrimer));`,
-  roughness: `roughnessFactor = mix(roughnessFactor, ${f(STEEL_ROUGHNESS)}, bareW);`,
-  metalness: `metalnessFactor = mix(metalnessFactor, ${f(STEEL_METALNESS)}, bareW);`,
+  color: `float bareW = smoothstep(0.3, 0.6, vPrimer);\nfloat wellW = smoothstep(2.2, 2.8, vPrimer);\ndiffuseColor.rgb = mix(diffuseColor.rgb, bareMetal(vBarePos, vBareN), bareW);\ndiffuseColor.rgb *= mix(1.0, ${f(INNER_SHADE)}, smoothstep(1.2, 1.8, vPrimer));\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${f(WELL_DARK)}), wellW);`,
+  roughness: `roughnessFactor = mix(mix(roughnessFactor, ${f(STEEL_ROUGHNESS)}, bareW), 1.0, wellW);`,
+  metalness: `metalnessFactor = mix(metalnessFactor, ${f(STEEL_METALNESS)}, bareW) * (1.0 - wellW);`,
   clearcoat: "#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= 1.0 - bareW;\n#endif",
 } as const;

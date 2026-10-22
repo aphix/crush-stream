@@ -4,12 +4,10 @@ import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometr
 import { once } from "../kernel/scalar.ts";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import {
-  INSTANCE_PART_VARIANT_ATTRIBUTE,
   makeLampUnit,
   mergeToned,
   PAINT_COLOR_TONE,
   PAINTED_ATTRIBUTE,
-  PART_VARIANT_ATTRIBUTE,
   toned,
   TRIM_BLACK,
   TRIM_CHROME,
@@ -803,29 +801,27 @@ export function drawnLamp(style: BodyStyle, slot: LampKind | "hood" | "boot", si
   return drawnVariant(slot, style, side);
 }
 
-/** Slot `name`'s batch geometry: every variant, each vertex tagged with its own, and a per-instance variant for `capacity` instances (the batch owns it); null while no style in the fleet table draws its own. */
-function variantBatchGeometry(name: SlotName, capacity: number): THREE.BufferGeometry | null {
+/**
+ * Slot `name`'s variants as the batches draw them, one draw each (`painted` set on every one); null while no style in the fleet table draws
+ * its own. One merged draw billed every instance the whole fleet's variants: 15 head-lamp units each, about 26k triangles per car.
+ */
+function variantGeometries(name: SlotName): THREE.BufferGeometry[] | null {
   const entry = VARIANTS().get(name)!;
   if (entry.geometries.length === 1) return null;
-  const parts = entry.geometries.map((geometry, k) => {
+  return entry.geometries.map((geometry) => {
     const g = geometry.clone();
-    const n = g.getAttribute("position").count;
-    g.setAttribute(PART_VARIANT_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(n).fill(k), 1));
     if (!g.getAttribute(PAINTED_ATTRIBUTE)) withPainted(g, 0);
     return g;
   });
-  const geo = mergeToned(parts, "part variants");
-  geo.setAttribute(INSTANCE_PART_VARIANT_ATTRIBUTE, new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(THREE.DynamicDrawUsage));
-  return geo;
 }
 
-/** The part batch's geometry for `kind` (`variantBatchGeometry`); null for a kind with one shape. */
-export function partBatchGeometry(kind: PartKind, capacity: number): THREE.BufferGeometry | null {
+/** The part batch's geometries for `kind`, by variant (`variantGeometries`); null for a kind with one shape. */
+export function partBatchGeometries(kind: PartKind): THREE.BufferGeometry[] | null {
   const name = PART_SLOT[kind];
-  return name ? variantBatchGeometry(name, capacity) : null;
+  return name ? variantGeometries(name) : null;
 }
 
-/** The lamp batch's geometry for `slot` (`variantBatchGeometry`); null while every style draws the platform unit (or, on a lid, none). */
-export function lampBatchGeometry(slot: LampKind | "hood" | "boot", capacity: number): THREE.BufferGeometry | null {
-  return variantBatchGeometry(slot, capacity);
+/** The lamp batch's geometries for `slot`, by variant (`variantGeometries`); null while every style draws the platform unit (or, on a lid, none). */
+export function lampBatchGeometries(slot: LampKind | "hood" | "boot"): THREE.BufferGeometry[] | null {
+  return variantGeometries(slot);
 }

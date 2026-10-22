@@ -8,6 +8,7 @@ import { rowElevation, SKY_LOOKS, SkyDome, skyDetailFor, type SkyDetail, type Sk
 import { SANDBOX_SKY } from "./sky-procedural.ts";
 import type { FxTier } from "./engine-post.ts";
 import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
+import { SHADOW_LEVELS, type ShadowLevel } from "./player-quality.ts";
 
 /** The sandbox's asphalt disc: its UVs span this many metres (its texture repeats 18 times across). */
 export const STAGE_DIAMETER = 96;
@@ -221,8 +222,6 @@ const SUN_BEARING = detAtan2(DEFAULT_SUN_OFFSET.x, -DEFAULT_SUN_OFFSET.z);
 const LOW_SUN = THREE.MathUtils.degToRad(12);
 /** The moon's light stays between these elevations (rad) whatever the picture has: lower stretches the shadows, higher flattens them. */
 const MOON_ELEVATION = { min: THREE.MathUtils.degToRad(20), max: THREE.MathUtils.degToRad(60) };
-/** The shadow camera reaches this far (m) past the shadow box's centre, beyond the sun's own distance (60 m over the default 25.8). */
-const SHADOW_REACH = 34;
 /** Where the unshadowed fill shines from (m) when a daylight sets no `fillAt`: across the sky from the default sun. */
 const DEFAULT_FILL_AT = [10, 12, -14] as const;
 /** The sky light's colour from below: what the dark asphalt bounces back up. */
@@ -257,7 +256,7 @@ function mixHex(out: THREE.Color, day: number, night: number, k: number): void {
 }
 
 /**
- * The sun's shadow bias, from the map's texel (the box's width over its resolution: 4.7 cm at 48 m / 1024). A normal offset of a
+ * The sun's shadow bias, from the map's texel (the box's width over its resolution: 4.7 cm at Auto's 48 m / 1024). A normal offset of a
  * quarter texel stops a lit surface shading itself at grazing sun; the constant depth bias, half of the old -0.0004 (a fraction of
  * the 2..60 m depth range: 2.3 cm down to 1.2 cm), covers what the offset leaves, so a shadow starts at its caster's foot.
  * Picked by a grid sweep (depth bias 0 to -0.0004, normal offset 0 to 0.64 texel) against the same frame drawn with a 4096 map, on
@@ -268,7 +267,7 @@ function mixHex(out: THREE.Color, day: number, night: number, k: number): void {
  */
 const SUN_NORMAL_BIAS_TEXELS = 0.25;
 const SUN_DEPTH_BIAS = -0.0002;
-export function setSunBias(shadow: THREE.DirectionalLightShadow): void {
+function setSunBias(shadow: THREE.DirectionalLightShadow): void {
   const cam = shadow.camera;
   shadow.normalBias = (SUN_NORMAL_BIAS_TEXELS * (cam.right - cam.left)) / shadow.mapSize.x;
   shadow.bias = SUN_DEPTH_BIAS;
@@ -285,6 +284,9 @@ export class WorldStage {
   private readonly hemi: THREE.HemisphereLight;
   /** The shadow-casting sun (the race director moves its shadow box with the followed car). */
   readonly sun: THREE.DirectionalLight;
+  /** The player's Shadows level, and Ultra's map edge while it is on (0: off): the sun's map is the larger, its box the level's. */
+  private shadowLevel: ShadowLevel = SHADOW_LEVELS.auto;
+  private ultraMap = 0;
   private readonly fill: THREE.DirectionalLight;
   private readonly scene: THREE.Scene;
   night = false;
@@ -321,15 +323,9 @@ export class WorldStage {
     const dir = new THREE.DirectionalLight(DAY.sun[0], DAY.sun[1]);
     dir.position.copy(DEFAULT_SUN_OFFSET);
     dir.castShadow = true;
-    dir.shadow.mapSize.set(1024, 1024);
     dir.shadow.camera.near = 2;
-    dir.shadow.camera.far = DEFAULT_SUN_OFFSET.length() + SHADOW_REACH;
-    dir.shadow.camera.left = -24;
-    dir.shadow.camera.right = 24;
-    dir.shadow.camera.top = 24;
-    dir.shadow.camera.bottom = -24;
-    setSunBias(dir.shadow);
     this.sun = dir;
+    this.fitShadow();
     scene.add(dir);
     this.fill = new THREE.DirectionalLight(DAY.fill[0], DAY.fill[1]);
     this.fill.position.fromArray(DEFAULT_FILL_AT);
@@ -456,12 +452,37 @@ export class WorldStage {
     }
   }
 
+  /** The player's Shadows: the sun's box and map, live (a map resize relinks nothing; three reallocates it on the next shadow pass). */
+  setShadowLevel(level: ShadowLevel): void {
+    this.shadowLevel = level;
+    this.fitShadow();
+  }
+
+  /** Ultra's sun map edge while Ultra is on, 0 when off: it raises the map, never the player's box. */
+  setUltraShadow(map: number): void {
+    this.ultraMap = map;
+    this.fitShadow();
+  }
+
+  private fitShadow(): void {
+    const shadow = this.sun.shadow;
+    const level = this.shadowLevel;
+    const map = Math.max(level.map, this.ultraMap);
+    shadow.mapSize.set(map, map);
+    const cam = shadow.camera;
+    cam.left = cam.bottom = -level.half;
+    cam.right = cam.top = level.half;
+    cam.far = this.sunOffset.length() + level.reach;
+    cam.updateProjectionMatrix();
+    setSunBias(shadow);
+  }
+
   /** The shadow camera's axes for `sunOffset`, reaching past it. */
   private aimSun(): void {
     this.sunRight.set(0, 1, 0).cross(this.sunOffset).normalize();
     this.sunUp.copy(this.sunOffset).cross(this.sunRight).normalize();
     const cam = this.sun.shadow.camera;
-    cam.far = this.sunOffset.length() + SHADOW_REACH;
+    cam.far = this.sunOffset.length() + this.shadowLevel.reach;
     cam.updateProjectionMatrix();
     this.sky.setSun(this.sunOffset);
   }
