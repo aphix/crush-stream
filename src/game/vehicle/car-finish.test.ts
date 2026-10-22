@@ -275,6 +275,22 @@ describe("given a car material being compiled", () => {
     });
   }
 
+  for (const kind of ["paint", "trim"] as const) {
+    it(`when a ${kind} material compiles with the finish on, then after the finish perturbs its normals and three adds its own geometry roughness, the perturbation's screen-space change widens the base${kind === "paint" ? " and clear coat" : ""} lobe before any light is summed: a peel or grain finer than a pixel blurs instead of sparkling`, () => {
+      const material = materialOfKind(kind, kind === "paint" ? 0x203047 : 0x203048);
+      switchFinish(material, true);
+      const { fragment } = compile(material);
+      const perturbed = fragment.indexOf("normal = finishPerturbedNormal(normal, ");
+      const threeWidens = fragment.indexOf("material.roughness += geometryRoughness;");
+      const widened = fragment.indexOf("material.roughness = min( sqrt( sqrt( pow2( specAaAlpha )");
+      const coatWidened = fragment.indexOf("material.clearcoatRoughness = min( sqrt( sqrt( pow2( specAaAlpha )");
+      const lit = fragment.indexOf("vec3 geometryPosition = - vViewPosition;");
+      assert.ok(fragment.includes("vec3 specAaDx = dFdx( normal - nonPerturbedNormal );"), `${kind}: the variance reads the perturbation alone (three already widens for the vertex normal's own change)`);
+      assert.ok(perturbed >= 0 && perturbed < threeWidens && threeWidens < widened && widened < lit, `${kind}: perturbation ${perturbed}, three's widening ${threeWidens}, the perturbation's ${widened}, lighting ${lit}`);
+      assert.ok(coatWidened > widened && coatWidened < lit, `${kind}: the clear coat's widening (${coatWidened}) follows the base's, before lighting`);
+    });
+  }
+
   it("when a paint material compiles with the finish on, then the base normal also gets the flake term the clear coat does not", () => {
     const material = materialOfKind("paint", 0x203043);
     switchFinish(material, true);
