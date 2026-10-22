@@ -954,6 +954,18 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       assert.ok(under <= PINCH_FRONT_UNDER, `${id}: at z ${points[0]!.z.toFixed(3)} the sail reaches ${(under * 1000).toFixed(1)} mm under the glass's top line`);
     });
   }
+  it("when a truck cab (a curved roof square to its cant at the rear, an upright quarter window edge on the monster) sets any sail, then the sail builds whole: every vertex finite", () => {
+    const off: string[] = [];
+    for (const id of ["pickup", "monster"] as const)
+      for (const cPillar of [{}, { flat: true }, { flush: true }, { flat: true, flush: true }]) {
+        const sail = makeGreenhouseFrame({ ...CAR_STYLES[id], cPillar }, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+        const pos = sail.getAttribute("position");
+        let bad = 0;
+        for (let i = 0; i < pos.count; i++) if (!Number.isFinite(pos.getX(i) + pos.getY(i) + pos.getZ(i))) bad++;
+        if (bad > 0) off.push(`${id} ${JSON.stringify(cPillar)}: ${bad} of ${pos.count} vertices not finite`);
+      }
+    assert.ok(off.length === 0, off.join("; "));
+  });
 });
 
 /** A flush sail's head (`cPillar.flush`) stands at most this far (m) over the drawn rear glass (a chrome bead's 5 mm, its rounded edge's 2.5 mm radius where the section rises steeply into it, and a mm), and laps at least this far in over its side edge, so the glass's edge lies under the sail. */
