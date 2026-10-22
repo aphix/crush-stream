@@ -476,6 +476,46 @@ describe("given the pickup whose roof's rear corners sit flush over its posts (r
     const [flush, lip] = [reachAtEnd(pickup), reachAtEnd(lipped)];
     assert.ok(flush < 1e-6 && lip > 0.05, `rear end past the dome's edge: flush ${flush.toFixed(4)} m, without flush ${lip.toFixed(4)} m`);
   });
+
+  it("when its roof is drawn, then its centre line ends within 1 cm of its rear glass's top in plan, as the reference's rolled rear edge does, not a ledge reaching past the glass", () => {
+    const pickup = CAR_STYLES.pickup;
+    const [roof, glass] = [makeRoofGeometry(pickup).getAttribute("position"), makeRearGlass(pickup).getAttribute("position")];
+    let roofZ = Infinity;
+    for (let v = 0; v < roof.count; v++) if (Math.abs(roof.getX(v)) < 1e-6) roofZ = Math.min(roofZ, roof.getZ(v));
+    let [topY, topZ] = [-Infinity, 0];
+    for (let i = 0; i < glass.count; i++) if (Math.abs(glass.getX(i)) < 1e-6 && glass.getY(i) > topY) [topY, topZ] = [glass.getY(i), glass.getZ(i)];
+    assert.ok(Math.abs(topZ - roofZ) <= 0.01, `the roof ends at z ${roofZ.toFixed(3)}, the rear glass's top at ${topZ.toFixed(3)}`);
+  });
+});
+
+describe("given the trucks' posts against their side plates' window outlines", () => {
+  /** How far (m) a side-view width may stand off the plate's reading: under a reference pixel and a half. */
+  const PLATE_TOL = 0.015;
+  /** `style`'s A-post and sail in side view at height `y` (m): its windshield's side edge less its door glass's front edge, both straight (`glassCorners`: windshield pane 0, door glass pane 3's front corners). */
+  const aWidthAt = (style: BodyStyle, y: number): number => {
+    const c = glassCorners(style);
+    const zAt = (y0: number, z0: number, y1: number, z1: number) => z0 + ((z1 - z0) * (y - y0)) / (y1 - y0);
+    return zAt(c[1]!, c[2]!, c[7]!, c[8]!) - zAt(c[3 * 12 + 4]!, c[3 * 12 + 5]!, c[3 * 12 + 10]!, c[3 * 12 + 11]!);
+  };
+
+  it("when the pickup's A-post and sail are read, then they span its side plate's 38.9 cm at the windshield's foot (y 1.248) and 27.4 cm at y 1.39", () => {
+    const pickup = CAR_STYLES.pickup;
+    const [foot, mid] = [aWidthAt(pickup, 1.248), aWidthAt(pickup, 1.39)];
+    assert.ok(Math.abs(foot - 0.389) <= PLATE_TOL && Math.abs(mid - 0.274) <= PLATE_TOL, `A-post and sail ${(foot * 100).toFixed(1)} cm at the foot, ${(mid * 100).toFixed(1)} cm at y 1.39`);
+  });
+
+  it("when the monster's B-post is drawn, then it stands upright between its door glasses where its side plate's does (z -.214 to -.128, 8.6 cm) at the belt and at the roof, not narrowing to 4 cm", () => {
+    const post = makeGreenhouseFrame(CAR_STYLES.monster, "drawn").find((g) => g.name === "b")!;
+    const pos = post.getAttribute("position") as THREE.BufferAttribute;
+    const box = partBox(post);
+    const [low, top]: number[][] = [[], []];
+    for (let i = 0; i < pos.count; i++) {
+      if (pos.getY(i) < box.min.y + 0.005) low.push(pos.getZ(i));
+      if (pos.getY(i) > box.max.y - 0.005) top.push(pos.getZ(i));
+    }
+    const spans = [Math.min(...low), Math.max(...low), Math.min(...top), Math.max(...top)];
+    assert.ok(spans.every((z, k) => Math.abs(z - [-0.214, -0.128][k % 2]!) <= 0.005), `B-post z at the belt [${spans.slice(0, 2).map((z) => z.toFixed(3))}], at the roof [${spans.slice(2).map((z) => z.toFixed(3))}]`);
+  });
 });
 
 describe("given a coupe whose rear glass has round corners (rearGlass.round)", () => {
@@ -1117,6 +1157,23 @@ describe("given a body style's H2 hardpoints", () => {
     let front = -Infinity;
     for (let i = 0; i < sail.count; i++) front = Math.max(front, sail.getZ(i));
     assert.ok(back <= -0.975 && Math.abs(front + 0.666) <= 0.01, `the glass reaches z ${back.toFixed(3)}, the sail runs to z ${front.toFixed(3)}`);
+  });
+
+  it("when the coupe's quarter window and the body behind it are read in the side view, then the glass's sill rises from the door's belt to the window's point and the shoulder behind it runs back no higher than that point: the reference's line, with no hump over the window", () => {
+    /** Reference side view: the sill sits at the door's belt (y .88-.89) ahead of z -0.6 and the window's point stands at about .925. */
+    const [BELT_TOP, POINT_LOW] = [0.89, 0.92];
+    /** Behind the point the shoulder stands at most this far (m) over it: the reference's line holds the point's height. */
+    const OVER_POINT = 0.005;
+    const coupe = CAR_STYLES.coupe;
+    const pane = makeRearSideGlass(1, coupe).getAttribute("position");
+    let [tipZ, tipY, frontSill] = [Infinity, 0, Infinity];
+    for (let i = 0; i < pane.count; i++) {
+      if (pane.getZ(i) < tipZ) [tipZ, tipY] = [pane.getZ(i), pane.getY(i)];
+      if (pane.getZ(i) >= -0.6) frontSill = Math.min(frontSill, pane.getY(i));
+    }
+    let over = -Infinity;
+    for (let z = -1.49; z <= tipZ; z += 0.005) over = Math.max(over, sampleSlice(z, coupe.profile).yBelt - tipY);
+    assert.ok(frontSill <= BELT_TOP && tipY >= POINT_LOW && over <= OVER_POINT, `sill ${frontSill.toFixed(3)} ahead of z -0.6, point ${tipY.toFixed(3)} at z ${tipZ.toFixed(3)}, shoulder ${(over * 1000).toFixed(0)} mm over it`);
   });
 
   it("when the coupe's door is drawn, then its skin is flush with the body side inside its cut (door.proud 0), not a lit 3 mm step at the shut line", () => {

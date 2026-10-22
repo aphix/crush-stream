@@ -65,8 +65,8 @@ export const COUPE: BodyStyle = {
   dims: { wheelbase: 2.385, overhang: { front: 0.823, rear: 0.915 }, track: 1.32, width: 1.571, height: 1.294, rideHeight: 0.182, wheel: { radius: 0.33, width: 0.2 } },
   ...PLATFORM_HARDPOINTS,
   windshield: { base: [0.93, 0.7], wBase: 1.32, wTop: 1.0, bow: { base: 0.015, top: 0.035 } },
-  // The belt's rear knots sit at the quarter glass's point (`quarter.zRearBot`): one inside the sill's run costs the belt rail a ring, or bows its top off the glass's edge.
-  belt: { x: [[-1.5, 0.6], [-0.981, 0.65], [-0.5, 0.665], [0.5, 0.675]], y: [[-0.981, 0.885], [-0.45, 0.888], [0.25, 0.892], [0.4, 0.905], [0.7, 0.93]] },
+  // Reference side and rear iso: the quarter glass's sill rises from the door's belt to the window's point, its knots on the sill's end columns (one inside the run costs the belt rail a ring).
+  belt: { x: [[-1.5, 0.6], [-0.981, 0.65], [-0.5, 0.665], [0.5, 0.675]], y: [[-0.981, 0.925], [-0.53, 0.887], [-0.45, 0.888], [0.25, 0.892], [0.4, 0.905], [0.7, 0.93]] },
   rocker: { y: 0.22 },
   underside: [[-2.114, 0.41], [-2.06, 0.31], [-1.96, 0.28], [-1.829, 0.282], [-1.818, 0.267], [-1.744, 0.267], [-1.729, 0.253], [-1.665, 0.257], [-1.644, 0.239], [-1.576, 0.242], [-1.572, 0.225], [-1.548, 0.225], [-1.533, 0.207], [-0.86, 0.182], [-0.835, 0.196], [0.381, 0.196], [0.399, 0.182], [0.723, 0.182], [1.689, 0.21], [1.782, 0.242], [1.893, 0.239], [1.985, 0.285], [2.014, 0.36], [2.017, 0.431]],
   // Flush skin: the reference runs the fender into the door with only a thin shut line (front iso), not a lit 3 mm step.
@@ -89,14 +89,15 @@ export const COUPE: BodyStyle = {
     st(-1.761, 0.72, 0.904),
     st(-1.662, 0.733, 0.917),
     st(-1.587, 0.74, 0.928),
-    st(-1.49, 0.745, 0.944),
-    st(-1.43, 0.745, 0.953, 1.011, 0.42, 0.25),
-    st(-1.359, 0.745, 0.945, 1.038, 0.43, 0.25),
-    st(-1.277, 0.745, 0.937, 1.079, 0.44, 0.25),
+    // Reference side view: behind the quarter glass the shoulder runs back level with the window's point, no hump over it.
+    st(-1.49, 0.745, 0.929),
+    st(-1.43, 0.745, 0.93, 1.011, 0.42, 0.25),
+    st(-1.359, 0.745, 0.93, 1.038, 0.43, 0.25),
+    st(-1.277, 0.745, 0.93, 1.079, 0.44, 0.25),
     st(-1.216, 0.745, 0.93, 1.193, 0.45, 0.357),
-    st(-1.148, 0.745, 0.923, 1.233, 0.46, 0.414),
-    st(-1.088, 0.745, 0.917, 1.259, 0.47, 0.623),
-    st(-1.023, 0.744, 0.912, 1.215, 0.48, 1),
+    st(-1.148, 0.745, 0.928, 1.233, 0.46, 0.414),
+    st(-1.088, 0.745, 0.926, 1.259, 0.47, 0.623),
+    st(-1.023, 0.744, 0.924, 1.215, 0.48, 1),
     st(-0.825, 0.744, 0.904, 1.252, 0.52, 1),
     st(-0.109, 0.747, 0.868, 1.268, 0.53, 1),
     st(-0.043, 0.748, 0.866, 1.265, 0.53, 1),
@@ -131,8 +132,8 @@ export const COUPE: BodyStyle = {
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.92, bow: { base: -0.02, top: -0.04 }, round: 0.09, roundOutline: true },
   /** Reference side view: the quarter glass's rear point at z -0.95..-0.97, its rear edge leaning about 45°. */
   quarter: { zRearBot: -0.981, zRearTop: -0.74 },
-  /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle: one broad flat fastback panel lapping the rear glass, its roof end covering the glass corner's upper arc. The window's line rounds into its top line .074 ahead of the corner (reference side view: tangent at z -0.666). */
-  cPillar: { flush: true, flat: true, corner: 0.8, pinch: 0.074 },
+  /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle: one broad fastback panel lapping the rear glass, its roof end covering the glass corner's upper arc, the roll eased in from the deck up (`blend` .6: the reference's sail is one smooth surface, no straight crease; .9 lifts the rear head off the glass). The window's line rounds into its top line .074 ahead of the corner (reference side view: tangent at z -0.666). */
+  cPillar: { flush: true, flat: true, corner: 0.8, pinch: 0.074, blend: 0.6 },
   midPillarZ: null,
   /** Reference iso: the A-post comes down onto the cowl and the fender's top, under the belt at its foot, with no dark gap beneath it. */
   pillars: { aSeat: 0.87 },
@@ -173,7 +174,7 @@ export const COUPE: BodyStyle = {
       { view: "side", points: [[0.592, 0.848], [0.592, 0.606], [0.606, 0.321]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.506, 0.891], [-0.506, 0.606], [-0.506, 0.321]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[0.606, 0.307], [0.05, 0.299], [-0.506, 0.307]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[0.506, 0.895], [0.25, 0.894], [-0.45, 0.89], [-0.962, 0.905]], width: 0.021, depth: 0.002, profile: "u", cavity: 0.1 },
+      { view: "side", points: [[0.506, 0.895], [0.25, 0.894], [-0.45, 0.89], [-0.962, 0.93]], width: 0.021, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[0.791, 0.292], [-0.007, 0.285], [-0.82, 0.278]], width: 0.021, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[0.763, 0.242], [-0.036, 0.235], [-0.777, 0.228]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
       { view: "side", points: [[1.889, 0.72], [1.732, 0.741], [1.504, 0.763], [1.219, 0.77], [0.934, 0.777], [0.606, 0.784], [0.05, 0.791], [-0.506, 0.798], [-0.991, 0.813], [-1.49, 0.841], [-1.975, 0.863]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
@@ -182,7 +183,7 @@ export const COUPE: BodyStyle = {
       { view: "side", points: [[0.506, 0.895], [0.307, 1.048], [0.107, 1.19], [-0.207, 1.19], [-0.506, 1.176], [-0.506, 0.89]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.52, 0.848], [0.421, 0.948], [0.307, 1.062], [0.192, 1.148], [0.107, 1.205]], width: 0.021, depth: 0.002, profile: "u", cavity: 0.1 },
       { view: "side", points: [[-0.506, 1.176], [-0.506, 0.891]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
-      { view: "side", points: [[-0.535, 1.162], [-0.666, 1.162], [-0.714, 1.146], [-0.782, 1.098], [-0.872, 1.017], [-0.983, 0.905], [-0.969, 0.891], [-0.535, 0.891]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
+      { view: "side", points: [[-0.535, 1.162], [-0.666, 1.162], [-0.713, 1.148], [-0.782, 1.108], [-0.871, 1.04], [-0.983, 0.944], [-0.969, 0.93], [-0.535, 0.892]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.691, 0.92], [0.535, 1.005], [0.335, 1.119], [0.093, 1.233]], width: 0.014, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[-0.834, 1.148], [-0.977, 1.105], [-1.148, 1.048], [-1.319, 0.977], [-1.433, 0.934]], width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
       { view: "side", points: [[0.107, 1.205], [-0.207, 1.19], [-0.634, 1.183], [-0.848, 1.162], [-0.977, 1.133]], width: 0.014, depth: 0.002, profile: "u", cavity: 0.1 },
