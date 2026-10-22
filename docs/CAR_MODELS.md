@@ -207,7 +207,11 @@ node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
   4 cm under the shoulder), `underside`, `door.hingeX` (the plan at the hinge), `bumpers.*.seat.z` (lip on the end) and
   `bumpers.*.wrap` (the plan's end corners). Fitted: `profile`. `arch-bulge.test.ts` holds every style to it, fitted or hand-set:
   over each arch's stretch, the drawn half-width at the belt and the shoulder's top stand no more than 1 cm over the lowest body
-  either side of them.
+  either side of them (each on its own run: hood, cabin, boot deck). Within 25 cm of a glass base (the deck's rise to the rear
+  glass, the cowl, the sail foot) both are judged instead against the reference: neither may stand more than 1 cm outside the
+  picture's plan or side top edge at the same z. Those lines are `src/game/vehicle/car-reference-lines.fixture.json`, one key per style (the police
+  answers to the sedan's), written by `fit-car --lines-out <that file>` from the same pictures and spans; rerun it when a
+  reference or its span changes.
 - Not read: hood, arch, rocker, boot, `rideHeight`, `cabinHw`, `bPillar`, `quarter`, mirrors, the bumper fascia and span, and the
   door's hinge y and z, length and aperture.
 
