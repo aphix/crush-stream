@@ -26,18 +26,20 @@ const COUPE_LAMP_SHAPES = {
     recess: 0.024,
   },
   tail: {
+    // Rear iso: deep red lenses out to the corner in rounded chrome bezels, three segments each, a black centre band between them edged in chrome.
     loops: [
-      { points: [[0.22, 0.58], [0.55, 0.58], [0.55, 0.77], [0.22, 0.77]] },
+      { points: [[0.285, 0.58], [0.575, 0.58], [0.592, 0.587], [0.6, 0.605], [0.6, 0.745], [0.592, 0.763], [0.575, 0.77], [0.285, 0.77], [0.268, 0.763], [0.26, 0.745], [0.26, 0.605], [0.268, 0.587]] },
       { side: true, points: [[-2.045, 0.58], [-2.0, 0.58], [-2.0, 0.77], [-2.045, 0.77]] },
     ],
-    lens: "lit",
+    lens: "red",
     bezel: "chrome",
     recess: 0.015,
-    cells: [{ loop: { points: [[0, 0.58], [0.22, 0.58], [0.22, 0.77], [0, 0.77]] }, tone: "dark" }],
+    cells: [{ loop: { points: [[0, 0.58], [0.26, 0.58], [0.26, 0.77], [0, 0.77]] }, tone: "dark" }],
     strips: [
-      { line: { points: [[0.23, 0.643], [0.51, 0.643]] }, width: 0.004, tone: "dark" },
-      { line: { points: [[0.23, 0.707], [0.51, 0.707]] }, width: 0.004, tone: "dark" },
-      { line: { points: [[0, 0.772], [0.22, 0.772]] }, width: 0.006, tone: "chrome" },
+      { line: { points: [[0.373, 0.59], [0.373, 0.76]] }, width: 0.004, tone: "dark" },
+      { line: { points: [[0.487, 0.59], [0.487, 0.76]] }, width: 0.004, tone: "dark" },
+      { line: { points: [[0, 0.772], [0.26, 0.772]] }, width: 0.006, tone: "chrome" },
+      { line: { points: [[0, 0.578], [0.26, 0.578]] }, width: 0.006, tone: "chrome" },
     ],
   },
 } as const;
@@ -54,8 +56,8 @@ const MUSCLE_REAR_FASCIA = [
   [-0.095, -0.06],
 ] as const;
 
-/** Small rounded bullet mirror in the body colour, as the reference's ([out, height, length] m). */
-const COUPE_MIRROR = { cap: "rounded", finish: "body", size: [0.1, 0.08, 0.12] } as const;
+/** Rounded bullet mirror in the body colour, as the reference's side view: 11 cm long, 11 cm tall ([out, height, length] m). */
+const COUPE_MIRROR = { cap: "rounded", finish: "body", size: [0.1, 0.11, 0.11] } as const;
 
 /** Late-70s notchback muscle coupe (Celica Supra A40 proportions): long flat hood, flat roof, sloped rear glass, short ducktail deck. */
 export const COUPE: BodyStyle = {
@@ -66,7 +68,7 @@ export const COUPE: BodyStyle = {
   belt: { x: [[-1.5, 0.6], [-0.96, 0.65], [-0.5, 0.665], [0.5, 0.675]], y: [[-0.95, 0.885], [-0.45, 0.888], [0.25, 0.892], [0.4, 0.905], [0.7, 0.93]] },
   rocker: { y: 0.22 },
   underside: [[-2.114, 0.41], [-2.06, 0.31], [-1.96, 0.28], [-1.829, 0.282], [-1.818, 0.267], [-1.744, 0.267], [-1.729, 0.253], [-1.665, 0.257], [-1.644, 0.239], [-1.576, 0.242], [-1.572, 0.225], [-1.548, 0.225], [-1.533, 0.207], [-0.86, 0.182], [-0.835, 0.196], [0.381, 0.196], [0.399, 0.182], [0.723, 0.182], [1.689, 0.21], [1.782, 0.242], [1.893, 0.239], [1.985, 0.285], [2.014, 0.36], [2.017, 0.431]],
-  door: { hingeX: 0.74, hingeY: 0.555, hingeZ: 0.61, length: 1.1, halfHeight: 0.335, mirrorY: 0.3, mirrorZ: 0.3, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.49, 0.6], mirror: COUPE_MIRROR },
+  door: { hingeX: 0.74, hingeY: 0.555, hingeZ: 0.61, length: 1.1, halfHeight: 0.335, mirrorY: 0.325, mirrorZ: 0.3, mirrorReach: 0.105, mirrorHalfDepth: 0.08, aperture: [-0.49, 0.6], mirror: COUPE_MIRROR },
   aPillarFoot: 0.5,
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
