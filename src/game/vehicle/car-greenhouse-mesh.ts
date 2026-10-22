@@ -281,13 +281,11 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
     const [frontY, frontZ] = [lerp(base[0], topY, edge) - A_POST_LIFT * uz, lerp(base[1], topZ, edge) + A_POST_LIFT * uy];
     const [frontX, rearX] = [lerp(wBase, wTop, edge) / 2 + A_POST_LIFT, glassPlaneX(y) + A_POST_LIFT];
     const roofZ = THREE.MathUtils.clamp(postZ, style.roofZ[0], style.roofZ[1]);
-    // The depth's plan direction from the rails before the roof's tuck, so it turns smoothly into the roof.
-    const [dx, dz] = [frontX - rearX, frontZ - postZ];
-    return {
-      rear: [underRoofSide(rearX, y, roofZ, style), y, postZ],
-      front: [underRoofSide(frontX, frontY, frontZ, style), frontY, frontZ],
-      inward: [dz / hypot2(dx, dz), dx / hypot2(dx, dz)],
-    };
+    const rear: V3 = [underRoofSide(rearX, y, roofZ, style), y, postZ];
+    const front: V3 = [underRoofSide(frontX, frontY, frontZ, style), frontY, frontZ];
+    // Square to the face after the roof's tuck: squaring it before shears the top stations' corners past 35°.
+    const [dx, dz] = [front[0] - rear[0], front[2] - rear[2]];
+    return { rear, front, inward: [dz / hypot2(dx, dz), dx / hypot2(dx, dz)] };
   };
   const post = Array.from({ length: A_POST_STATIONS }, (_, k) => railAt(k / (A_POST_STATIONS - 1)));
   const sail: Rail[] = [];

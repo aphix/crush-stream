@@ -641,13 +641,20 @@ describe("given a body style's H2 hardpoints", () => {
         const proud = -Math.min(...side);
         // The post's front stands 4 mm off the glass; the old slab stood 1-2 cm over it.
         assert.ok(proud < 0.006, `${id} aPillarTop ${aPillarTopZ(style)}: the post stands ${proud} m proud of the windshield's edge line`);
-        // Side-view width across the windshield's edge, ring by ring along the post (its stations, belt to top).
+        // Side-view width across the windshield's edge, ring by ring along the post (its stations, belt to top); a station reaching up past
+        // the cant line into the roof's side is held in under the roof's skin (checked below), so it is buried, not read.
         const { ring, slices } = post!.userData.loft as { ring: number; slices: number };
+        const pos = post!.getAttribute("position") as THREE.BufferAttribute;
+        let read = 0;
         for (let slice = 0; slice < slices; slice++) {
-          const behind = side.slice(slice * ring, (slice + 1) * ring);
+          const ks = Array.from({ length: ring }, (_, k) => slice * ring + k);
+          if (ks.some((i) => pos.getZ(i) >= style.roofZ[0] && pos.getZ(i) <= style.roofZ[1] && pos.getY(i) > cantY(pos.getZ(i), style))) continue;
+          read++;
+          const behind = ks.map((i) => side[i]!);
           const width = Math.max(...behind) - Math.min(...behind);
           assert.ok(width > 0.058, `${id} aPillarTop ${aPillarTopZ(style)}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}`);
         }
+        assert.ok(read >= slices - 2, `${id} aPillarTop ${aPillarTopZ(style)}: ${read} of ${slices} stations show under the roof`);
         // Every drawn greenhouse part (A-post, sail, B, rear, divider, rail, fills) stays in the roof: under its skin, and in under its side over the cant line.
         for (const part of makeGreenhouseFrame(style, "drawn")) {
           const pos = part.getAttribute("position") as THREE.BufferAttribute;
