@@ -9,7 +9,7 @@ import { PUSH_SPEED } from "../deform/push-budget.ts";
 import { HIT_AHEAD, impulseCar, markApproach, wallBounce } from "./pair-contact.ts";
 import { BELLY_ABSENT, POINT_X, POINT_Y, POINT_Z, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { loadPoints } from "../vehicle/car-air-points.ts";
-import { cageLift } from "../vehicle/car-cage-rig.ts";
+import { cageLift, centreY } from "../vehicle/car-cage-rig.ts";
 
 /** What a scene does with a car's prop contacts (`propContact`): the race records and draws them, the Lab reads them back. */
 export type PropHits = {
@@ -314,7 +314,7 @@ function askPoint(car: DeformableCar, s: Surface, lx: number, ly: number, lz: nu
   const q = car.group.quaternion;
   const pos = car.group.position;
   _pw.set(lx, ly, lz).applyQuaternion(q).add(pos);
-  _pr.subVectors(_pw, pos).sub(_pcom.set(0, car.frame.comY, 0).applyQuaternion(q));
+  _pr.subVectors(_pw, pos).sub(_pcom.set(0, centreY(car), 0).applyQuaternion(q));
   _pv.crossVectors(car.angular, _pr).add(car.velocity);
   _pq[PQ_X] = _pw.x;
   _pq[PQ_Y] = _pw.y;

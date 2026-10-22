@@ -66,8 +66,10 @@ describe("given a fixed solid (a course wall, a solid box prop, the flank of a m
     for (const [target, classes] of CELLS) {
       for (const cls of classes) {
         for (const speed of [SURVIVABLE, LETHAL]) {
-          it(`when a ${cls} drives into the ${target} at ${speed} m/s, then it throws the driver as the barrier does, crushes within ${HEALTH_BAND} of the barrier's drivetrain health, and the car comes off no faster`, () => {
-            matches(`${cls} ${target} ${speed}`, strike(target, cls, speed), strike("barrier", cls, speed));
+          it(`when a ${cls} drives into the ${target} at ${speed} m/s, then it throws the driver as the barrier does, crushes within ${HEALTH_BAND} of the barrier's drivetrain health, and the car comes off no faster`, (t) => {
+            const solid = strike(target, cls, speed);
+            if (solid[0]!.staged > 0) t.diagnostic(`${cls} started ${solid[0]!.staged.toFixed(1)} m further out than the run-in: its footprint there met a solid`);
+            matches(`${cls} ${target} ${speed}`, solid, strike("barrier", cls, speed));
           });
         }
       }

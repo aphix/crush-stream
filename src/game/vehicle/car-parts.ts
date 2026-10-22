@@ -14,7 +14,7 @@ import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
 import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
 import type { TopMet } from "./car-air-body.ts";
-import { wreckCentre } from "./car-air.ts";
+import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
 import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, type Lamp, type PartNetState } from "./car-core.ts";
 import {
@@ -874,7 +874,7 @@ export abstract class CarParts extends CarGlass {
     looseOnCamera(p.object);
     if (p.region) this.trackShell(p);
     // Where the part sits about the body's centre of mass (a wreck's masses' centroid, else the box's): the car's spin carries it at ω × r, whatever else it is thrown with.
-    _com.copy(this.deform.massActive ? wreckCentre(this) : this.frame.centre).applyQuaternion(this.group.quaternion).add(this.group.position);
+    _com.copy(rigidCentre(this)).applyQuaternion(this.group.quaternion).add(this.group.position);
     _n.crossVectors(this.angular, _n.copy(wpos).sub(_com));
     p.object.position.copy(wpos);
     p.object.quaternion.copy(wquat);

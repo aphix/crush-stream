@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { SAMPLE, sampleAt, type CageFields, type CageStyle } from "../vehicle/car-cage.ts";
 import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
+import { PLATFORM_HALF } from "../vehicle/car-rig.ts";
 import { hypot2 } from "../deform/physics-util.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { FINE_HZ } from "../kernel/constants.ts";
@@ -34,6 +35,14 @@ export function sliceSpeed(cars: readonly DeformableCar[]): number {
   return vmax;
 }
 
+/**
+ * The clip's keeps on the platform (m from the car's origin): its nose (2.05) and its cabin's side (1.08), each carried by this car's
+ * own box over the platform's (`PLATFORM_HALF`). On the platform's alone, a shorter coupe sliding sideways at 24 m/s was clipped to a
+ * stop 2 cm short of the slab, its body never touching it and no hit armed (`strikeCar`).
+ */
+const NOSE_KEEP = 2.05;
+const CABIN_KEEP = 1.08;
+
 /** Keep the cabin from crossing the jersey face. leftover=1 → bumper still on the face. */
 export function clipCarToBarrier(
   car: DeformableCar,
@@ -49,9 +58,9 @@ export function clipCarToBarrier(
   const pz = car.group.position.z - origin.z;
   const lx = px * _bRight.x + pz * _bRight.z;
   const lz = px * _bFwd.x + pz * _bFwd.z;
-  const alongFwd = Math.abs(car.fwdFlat.x * _bRight.x + car.fwdFlat.z * _bRight.z) * 2.05;
+  const alongFwd = Math.abs(car.fwdFlat.x * _bRight.x + car.fwdFlat.z * _bRight.z) * (NOSE_KEEP + (car.frame.half.z - PLATFORM_HALF.z));
   const bumperKeep = hx + 0.22 + alongFwd * 0.85 * leftover;
-  const cabinKeep = hx + 1.08;
+  const cabinKeep = hx + CABIN_KEEP + (car.frame.half.x - PLATFORM_HALF.x);
   const minLx = THREE.MathUtils.lerp(cabinKeep, bumperKeep, leftover);
   if (Math.abs(lz) > BARRIER_HALF.z + 1.1) return false;
   // Face from position — a rebound vel flip must not drag the car through the slab.

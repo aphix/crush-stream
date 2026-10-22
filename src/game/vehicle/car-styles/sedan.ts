@@ -143,7 +143,7 @@ export const SEDAN: BodyStyle = {
       span: 0.76,
       wrap: { from: 0.3, back: 0.25 },
       trim: "body",
-      top: [[0, 0.64], [0.34, 0.64], [0.4, 0.75], [0.6, 0.75]],
+      top: [[0, 0.61], [0.46, 0.61], [0.5, 0.75], [0.6, 0.75]],
       edge: [[-1.83, 0.75], [-1.81, 0.71], [-1.8, 0.665], [-1.76, 0.625], [-1.71, 0.595], [-1.62, 0.58], [-1.66, 0.5], [-1.683, 0.42], [-1.69, 0.32]],
     },
   },
@@ -211,8 +211,13 @@ export const SEDAN: BodyStyle = {
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,
-  /** The reference's ducktail: the deck dips into a shallow groove at z -2.03 and kicks up into the lip at its rear edge (gridded side: crest y 0.955 over z -2.0..-2.09, ~1.2 cm proud of the deck line). */
-  boot: { kind: "lid", z0: -1.65, z1: -2.06, origin: [0.97, -1.62], lip: { rise: 0.012, depth: 0.06 } },
+  /**
+   * The owner's sedan lid: hinged at the rear glass's base, it wraps the tail (deck plus the upper rear face). The reference's lid seam
+   * (rear iso) runs down the tail face through each tail lamp's inner third (|x| ~0.53 at the lamps) to the plate recess's bottom
+   * (y ~0.62), its bottom corners at |x| ~0.45; the face stands on the tail at -2.10. The ducktail: the deck dips into a shallow groove
+   * and kicks up into the lip at its rear edge (gridded side: crest y 0.955 over z -2.0..-2.09, ~1.2 cm proud of the deck line).
+   */
+  boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45 }, lip: { rise: 0.012, depth: 0.06 } },
   lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES },
   grille: { y: 0.43, size: [0.74, 0.26], round: 0.05, kind: "slats", count: 13, finish: "chrome" },
   /**
