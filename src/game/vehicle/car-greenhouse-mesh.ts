@@ -39,8 +39,8 @@ const ROOF_SEGS = { cage: 16, drawn: 12 } as const;
 const ROOF_ROLL_STATIONS = [0.04, 0.15, 0.4] as const;
 
 /** The drawn roof's side (+x), cant line up to the dome's edge at (`x`, `y`): a quarter ellipse `ROOF_LIP_OUT + ROOF_DRIP` out and `lip` down. */
-function roofRoll(x: number, y: number, lip: number): Pt[] {
-  return ROOF_ROLL.map((a) => ({ x: x + (ROOF_LIP_OUT + ROOF_DRIP) * detCos(a), y: y - lip * (1 - detSin(a)) }));
+function roofRoll(x: number, y: number, lip: number, angles: readonly number[] = ROOF_ROLL): Pt[] {
+  return angles.map((a) => ({ x: x + (ROOF_LIP_OUT + ROOF_DRIP) * detCos(a), y: y - lip * (1 - detSin(a)) }));
 }
 
 /** `skin` (an open section, left side over the crown to the right side, its left cant at `cant`) and its `HEADLINER_POINTS` `inset` inside it. */
@@ -535,9 +535,14 @@ const SAIL_LID_SHUT = 0.004;
 /** A sail section's Bézier control point lies this share of the foot-to-head run out along the foot's tangent. */
 const SAIL_CONTROL = 0.5;
 /** Points along a sail section's outer face (foot to head) and its inner face, and the chords each of its rounded edges spends (30° each). */
-const SAIL_OUTER = 5;
+const SAIL_OUTER = 6;
 const SAIL_INNER = 4;
 const SAIL_EDGE_CHORDS = 6;
+/** At the roof's rear end the sail's outer face runs from its foot onto the roof's roll, the roll's first chord halved (where it turns hardest) so the section turns under 35° at every point; `SAIL_OUTER` - 1 long. */
+const SAIL_ROOF_ROLL = [0, Math.PI / 12, Math.PI / 6, Math.PI / 3, Math.PI / 2] as const;
+/** A flush sail's head (`cPillar.flush`) stands this far (m) on the rear glass, a chrome bead's height, and laps the glass's edge this far: half the bead, so the seam lies under it. */
+const SAIL_FLUSH_STAND = 0.005;
+const SAIL_FLUSH_LAP = 0.011;
 /** The triangle behind the quarter glass laps this far (m) over the glass's rear edge and this far under the sail's foot. */
 const TIP_LAP = 0.01;
 /** The triangle stands this far (m) out of the side glass's plane, over the quarter glass it laps. */
@@ -556,21 +561,30 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   // Its rear end stops a shut line ahead of a deck lid's front edge: lying on over the lid, or flush with its face, the two skins would cross.
   const rear = style.boot.kind === "lid" ? Math.max(rb[2], style.boot.z0 + SAIL_LID_SHUT) : rb[2];
   const haunch = Math.max(1, Math.ceil((sweepZ - rear) / SAIL_STEP));
+  // The glass corner's ring stands just behind the roof's rear end (insideRoof never reaches it there), its section the roof end's own, so the sail covers the end's wing outboard of the rear glass.
+  const roofEndZ = Math.max(rt[2], style.roofZ[0] - ROOF_TUCK);
+  const roof = roofAt(style.roofZ[0], style);
   const zs = [
     ...Array.from({ length: haunch }, (_, k) => lerp(rear, sweepZ, k / haunch)),
     sweepZ,
     tipZ,
-    rt[2],
+    roofEndZ,
     topZ,
   ]
     .filter((z) => z >= rear && z <= topZ)
     .sort((a, b) => a - b)
     .filter((z, k, all) => k === 0 || z - all[k - 1]! > 1e-6);
   const r = SAIL_DEPTH / 2;
+  const rg = style.rearGlass;
   const rings = zs.map((z): Pt[] => {
+    const atRoofEnd = z === roofEndZ && z < style.roofZ[0];
+    const onGlass = style.cPillar?.flush === true && z < roofEndZ;
     // The head's rounded edge ends at the post's top corner (`r` over the section's end), buried in the roof's side like the post's top.
     const corner = z <= rt[2] ? [lerp(rb[0], rt[0], (z - rb[2]) / (rt[2] - rb[2])), lerp(rb[1], rt[1], (z - rb[2]) / (rt[2] - rb[2]))] : [lerp(rt[0], ft[0], (z - rt[2]) / (ft[2] - rt[2])), lerp(rt[1], ft[1], (z - rt[2]) / (ft[2] - rt[2]))];
-    const head = [corner[0]!, corner[1]! - r] as const;
+    const u = THREE.MathUtils.clamp((z - rg.base[1]) / (rg.top[1] - rg.base[1]), 0, 1);
+    const glassEdge = [lerp(rg.wBase, rg.wTop, u) / 2 - SAIL_FLUSH_LAP, lerp(rg.base[0], rg.top[0], u) + SAIL_FLUSH_STAND] as const;
+    const head = atRoofEnd ? ([roof.x, roof.y] as const) : onGlass ? glassEdge : ([corner[0]!, corner[1]! - r] as const);
+    const headR = onGlass ? SAIL_FLUSH_STAND / 2 : r;
     // Where the window's line closes on the roof the section keeps a span of its depth, never folding to a point.
     const lineY = Math.min(z >= tipZ ? lerp(tipY, topY, (z - tipZ) / (topZ - tipZ)) : tipY, head[1]! - SAIL_DEPTH - r);
     const [upX, upY] = [cantX(z, style) - beltX(z, style), cantY(z, style) - beltY(z, style)];
@@ -582,7 +596,11 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     const p0 = [lerp(onGlassPlane(z, lineY, style, ROOF_DRIP) + up[0] * r, shoulder.x - SAIL_SINK * ty, f), lerp(lineY + up[1] * r, shoulder.y + SAIL_SINK * tx, f)] as const;
     const [dx, dy] = [lerp(up[0], tx, f), lerp(up[1], ty, f)];
     const reach = (SAIL_CONTROL * hypot2(head[0]! - p0[0], head[1]! - p0[1])) / hypot2(dx, dy);
-    const c = [p0[0] + dx * reach, p0[1] + dy * reach] as const;
+    // A flush head arrives level across the glass: its control point runs out along the foot's tangent to the head's height, never inboard of the head, so the foot keeps its tangent.
+    const level = onGlass ? Math.min((head[1]! - p0[1]) / dy, dx < 0 ? (head[0]! - p0[0]) / dx : Infinity) : 0;
+    const k = Number.isFinite(level) && level > 0 ? level : reach;
+    // At the roof's end the head arrives level, as the roof's roll does, its control point on the roll's outer corner.
+    const c = atRoofEnd ? ([roof.x + ROOF_LIP_OUT + ROOF_DRIP, roof.y] as const) : ([p0[0] + dx * k, p0[1] + dy * k] as const);
     // The section's point at `s` along its Bézier, `depth` in along its normal (+x side: the tangent turned down, into the body).
     const at = (s: number, depth: number, roll = 0): Pt => {
       const [ax, ay] = [2 * (1 - s) * (c[0] - p0[0]) + 2 * s * (head[0]! - c[0]), 2 * (1 - s) * (c[1] - p0[1]) + 2 * s * (head[1]! - c[1])];
@@ -590,14 +608,19 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
       const [ux, uy] = [ax / run, ay / run];
       const [x, y] = [(1 - s) ** 2 * p0[0] + 2 * s * (1 - s) * c[0] + s * s * head[0]!, (1 - s) ** 2 * p0[1] + 2 * s * (1 - s) * c[1] + s * s * head[1]!];
       // A rounded edge: `roll` (0..π) turns from the outer face round past the end (forward at the head, back at the foot) to the inner face.
-      const [along, inward] = [r * detSin(roll) * (s === 0 ? -1 : 1), roll === 0 ? depth : r - r * detCos(roll)];
+      const edgeR = s === 0 ? r : headR;
+      const [along, inward] = [edgeR * detSin(roll) * (s === 0 ? -1 : 1), roll === 0 ? depth : edgeR - edgeR * detCos(roll)];
       return { x: sign * (x + along * ux - inward * uy), y: y + along * uy + inward * ux };
     };
     const edge = (s: number) => Array.from({ length: SAIL_EDGE_CHORDS - 1 }, (_, j) => at(s, 0, (Math.PI * (j + 1)) / SAIL_EDGE_CHORDS));
     return [
-      ...Array.from({ length: SAIL_OUTER }, (_, k) => at(k / (SAIL_OUTER - 1), 0)),
+      // A flush head's control point lies near it, so the section turns hardest there: its outer points crowd toward both ends (the foot keeps its tangent).
+      ...(atRoofEnd
+        ? [at(0, 0), ...roofRoll(roof.x, roof.y, cantDrop(style), SAIL_ROOF_ROLL).map((p) => ({ x: sign * p.x, y: p.y }))]
+        : Array.from({ length: SAIL_OUTER }, (_, k) => at(onGlass ? (1 - detCos((Math.PI * k) / (SAIL_OUTER - 1))) / 2 : k / (SAIL_OUTER - 1), 0))),
       ...edge(1),
-      ...Array.from({ length: SAIL_INNER }, (_, k) => at(1 - k / (SAIL_INNER - 1), SAIL_DEPTH)),
+      // The section thins from the foot's edge to the head's, so each rounded edge closes onto the inner face.
+      ...Array.from({ length: SAIL_INNER }, (_, k) => at(1 - k / (SAIL_INNER - 1), 2 * lerp(headR, r, k / (SAIL_INNER - 1)))),
       ...edge(0).reverse(),
     ];
   });

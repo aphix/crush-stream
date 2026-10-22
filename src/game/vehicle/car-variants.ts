@@ -322,6 +322,8 @@ export interface BodyStyle {
   glassTop?: number | readonly (readonly [number, number])[];
   /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it. */
   arch: { radius: number; lip?: ArchLip; wellWall?: number };
+  /** Drawn only: [z0, z1] (m): each body loft gap whose middle lies in it gets a ring there, where the flank turns hard between stations (an arch's flare); the cage keeps its rings. */
+  ringSplit?: readonly [z0: number, z1: number];
   /**
    * Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`.
    * `groove` [out, down] (m, drawn only): over the open bay the fender's deck edge beside a lid hood stands `out` outboard of the hood's edge and `down` lower, a shut-line slot onto the bay wall.
@@ -345,9 +347,11 @@ export interface BodyStyle {
   /**
    * Drawn only: the C-pillar as a sail lofted from the haunch's shoulder, tangent to it, up to the rear glass and the roof, its front on
    * the side window's line; absent, a flat post. `tip` ([y, z]): where that line ends at the belt behind the quarter glass, the gloss-black
-   * triangle between them filling the gap; absent, the line is the quarter glass's own rear edge.
+   * triangle between them filling the gap; absent, the line is the quarter glass's own rear edge. `flush`: the sail's head laps the rear
+   * glass's side edge, standing on the glass and arriving level across it (one broad pillar rolling into the glass), not a rounded
+   * buttress beside it.
    */
-  cPillar?: { tip?: YZ };
+  cPillar?: { tip?: YZ; flush?: boolean };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
   privacyGlass?: { rear?: boolean; quarter?: boolean };
   /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */
