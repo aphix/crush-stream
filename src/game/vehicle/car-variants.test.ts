@@ -3245,3 +3245,15 @@ describe("given a style with chrome window trim", () => {
     assert.equal(trims(cars.sedan).length, 0, "the control: a style without trim draws none");
   });
 });
+
+describe("given a style's paint finish (paintFinish)", () => {
+  it("when the coupe (which sets one) and the sedan (which does not) are built, then the coupe's body paint takes its roughness and clear coat and the sedan's keeps the platform paint's", () => {
+    const finish = CAR_STYLES.coupe.paintFinish!;
+    const read = (id: CarStyleId) => {
+      const m = cars[id].lookMeshes().bodyPaint;
+      return `${m.roughness}/${m.clearcoat}/${m.clearcoatRoughness}`;
+    };
+    assert.ok(read("coupe") === `${finish.roughness}/${finish.clearcoat}/${finish.clearcoatRoughness}`, `coupe paint ${read("coupe")}`);
+    assert.ok(read("sedan") === "0.42/0.72/0.24", `sedan paint ${read("sedan")}`);
+  });
+});

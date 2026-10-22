@@ -141,7 +141,10 @@ export function drawClassOf(m: THREE.Material): number {
   return (m.userData.drawClass as number | undefined) ?? 0;
 }
 
-export function makePaintMaterial(color: number): THREE.MeshPhysicalMaterial {
+/** The platform paint's finish: a glossy base under a sharp clear coat. A style's `paintFinish` replaces it. */
+const PAINT_FINISH = { roughness: 0.42, clearcoat: 0.72, clearcoatRoughness: 0.24 } as const;
+
+export function makePaintMaterial(color: number, finish: NonNullable<BodyStyle["paintFinish"]> = PAINT_FINISH): THREE.MeshPhysicalMaterial {
   return classed(
     applyFinish(
       withPrimer(
@@ -149,9 +152,9 @@ export function makePaintMaterial(color: number): THREE.MeshPhysicalMaterial {
           new THREE.MeshPhysicalMaterial({
             color,
             metalness: 0.2,
-            roughness: 0.42,
-            clearcoat: 0.72,
-            clearcoatRoughness: 0.24,
+            roughness: finish.roughness,
+            clearcoat: finish.clearcoat,
+            clearcoatRoughness: finish.clearcoatRoughness,
             side: THREE.FrontSide,
           }),
         ),

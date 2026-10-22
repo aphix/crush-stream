@@ -136,6 +136,8 @@ export const COUPE: BodyStyle = {
   midPillarZ: null,
   /** Reference side and rear iso: the quarter and rear glass read dark, no cabin or C-pillar post showing through; the rear pane's reflections soft, no sharp glint at its round corners. */
   privacyGlass: { rear: "matte", quarter: true },
+  /** Reference isos: the navy paint has a soft sheen, the roof dome dark with a broad dull highlight, not a hot white patch. */
+  paintFinish: { roughness: 0.55, clearcoat: 0.5, clearcoatRoughness: 0.45 },
   windowTrim: "chrome",
   chromeStrips: [
     { points: [[-0.79, 0.305], [-0.495, 0.305]], width: 0.016 },

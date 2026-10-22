@@ -401,6 +401,8 @@ export interface BodyStyle {
   cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
+  /** Drawn only: the body paint's base roughness, clear coat and clear coat roughness (`makePaintMaterial`); absent the platform paint's (0.42, 0.72, 0.24). */
+  paintFinish?: { roughness: number; clearcoat: number; clearcoatRoughness: number };
   /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */
   windowTrim?: "chrome";
   /** Chrome strips on the body side (drawn only, with `windowTrim`): side-view polylines [z, y] (m), `width` (m) tall, on the skin's +x and -x. A strip whose points all lie inside the door aperture rides the door; any other rides the body. */
