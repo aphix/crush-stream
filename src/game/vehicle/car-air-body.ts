@@ -5,6 +5,7 @@ import { carFrame, type CarFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
 import { CAGE_TUB_VERTICES, CAGE_VERTICES, SILL_CAPACITY } from "./car-cage.ts";
+import { centreY } from "./car-cage-rig.ts";
 
 export const G = 9.6;
 /** Sizes the per-slice tables and the unbound body: every frame's belly and wheels share the sedan's layout. */
@@ -100,7 +101,7 @@ export const _lift = new THREE.Vector3();
  * per call): the impulse `give` and `push` give and the part of it that stops closing, the speed `reach` reads, the closing the weight
  * brings (`weightClosing`) and the depth `bodyContact` takes.
  */
-export const _s = new Float64Array(6);
+export const _s = new Float64Array(7);
 export const S_J = 0;
 export const S_JD = 1;
 export const S_REACH = 2;
@@ -108,6 +109,8 @@ export const S_WEIGHT = 3;
 export const S_PEN = 4;
 /** How far (m) the farthest loaded body point stands from the centre of mass (`loadPoints`). */
 export const S_POINT_REACH = 5;
+/** How deep (m) the deepest row a wreck at rest still lifts out of the world's ground stands in it (`solveRows`, this step's car). */
+export const S_LIFTING = 6;
 export const N = Array.from({ length: CONTACTS }, () => new THREE.Vector3());
 /** Per contact: the direction its impulse and its lift go: up for a tyre on a face it can climb, else the face's normal. */
 export const DIR = Array.from({ length: CONTACTS }, () => UP);
@@ -311,7 +314,7 @@ export function carrier(surf: CarSurfaces, n: number, own: number, mass: number)
   }
   HELD[n] = o;
   RATIO[n] = mass / o.deform.totalMass;
-  ARM[n]!.copy(centreOfMass).add(R[n]!).sub(o.group.position).sub(_r.set(0, o.frame.comY, 0).applyQuaternion(o.group.quaternion));
+  ARM[n]!.copy(centreOfMass).add(R[n]!).sub(o.group.position).sub(_r.set(0, centreY(o), 0).applyQuaternion(o.group.quaternion));
 }
 
 /** World inverse inertia (body orientation `q`, its inverse `qi`; `inertia` its inverse inertia per unit mass about its own axes) applied to `x` in place. */
