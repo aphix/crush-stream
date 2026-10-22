@@ -585,7 +585,7 @@ const SAIL_SINK = 0.002;
 const SAIL_LID_SHUT = 0.004;
 /** A sail section's Bézier control point lies this share of the foot-to-head run out along the foot's tangent. */
 const SAIL_CONTROL = 0.5;
-/** A flat sail (`cPillar.flat`) eases into the roof end's rolled section over this run (m) behind it: on the coupe, from its rear ring over its two haunch gaps. */
+/** A flat sail (`cPillar.flat`) eases into the roof end's rolled section over this run (m) behind it unless `cPillar.blend` says otherwise. */
 const SAIL_ROLL_BLEND = 0.45;
 /** Points along a sail section's outer face (foot to head) and its inner face, and the chords each of its rounded edges spends (30° each). */
 const SAIL_OUTER = 6;
@@ -761,7 +761,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   const rings = zs.map((z): Pt[] => {
     const ring = section(z);
     const letGo = pinch > 0 ? 1 - ((z - roofEndZ) / (front - roofEndZ)) ** 2 : 1 - THREE.MathUtils.smoothstep(z, roofEndZ, front);
-    const w = !rollEnd || z === roofEndZ ? 0 : z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - SAIL_ROLL_BLEND, roofEndZ) : letGo;
+    const w = !rollEnd || z === roofEndZ ? 0 : z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - (style.cPillar?.blend ?? SAIL_ROLL_BLEND), roofEndZ) : letGo;
     if (w === 0) return ring;
     const [a, b] = [rollEnd![0]!, rollEnd![SAIL_OUTER - 1]!];
     const endRun = hypot2(b.x - a.x, b.y - a.y);
