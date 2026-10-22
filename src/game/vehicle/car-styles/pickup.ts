@@ -86,7 +86,7 @@ export const PICKUP: BodyStyle = {
     st(1.92, 0.62, 0.96),
   ],
   roofZ: [-0.5, 0.5],
-  windshieldTop: [1.64, 0.5],
+  windshieldTop: [1.6, 0.5],
   rearGlass: { base: [1.24, -0.55], top: [1.6, -0.45], wBase: 1.3, wTop: 1.12 },
   privacyGlass: { rear: true },
   quarter: { zRearBot: -0.46, zRearTop: -0.44 },
