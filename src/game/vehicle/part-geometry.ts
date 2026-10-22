@@ -92,7 +92,7 @@ export class PartSeat extends THREE.Object3D {
   /** The shape the sim measures; `drawn` is what shows (a style's own part, `drawnPart`), in the same seat space. */
   readonly geometry: THREE.BufferGeometry;
   drawn: THREE.BufferGeometry;
-  /** `drawn`'s variant in the batch's geometry for its kind (`partBatchGeometry`); 0 for the platform part. */
+  /** `drawn`'s variant among its kind's batch draws (`partBatchGeometries`); 0 for the platform part. */
   variant = 0;
   /** The paint (linear) its `painted` vertices take: its panel's (a mirror's door, the grille's body). */
   readonly tint = new THREE.Color(1, 1, 1);

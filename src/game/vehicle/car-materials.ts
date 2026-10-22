@@ -54,7 +54,7 @@ function withPrimer<T extends THREE.MeshStandardMaterial>(m: T): T {
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\nroughnessFactor *= ${PAINT_ROUGHNESS_TONE};\n${BARE_METAL_FRAGMENT.roughness}\n${GLOSS_BLACK.roughness}`)
       .replace("#include <metalnessmap_fragment>", `#include <metalnessmap_fragment>\n${BARE_METAL_FRAGMENT.metalness}\n${GLOSS_BLACK.metalness}`)
       .replace("#include <color_fragment>", `#include <color_fragment>\n${BARE_METAL_FRAGMENT.color}\n${GLOSS_BLACK.color}`)
-      .replace("#include <lights_physical_fragment>", `#include <lights_physical_fragment>\n${BARE_METAL_FRAGMENT.clearcoat}`);
+      .replace("#include <lights_physical_fragment>", `#include <lights_physical_fragment>\n${BARE_METAL_FRAGMENT.clearcoat}\n${GLOSS_BLACK.clearcoat}`);
   };
   m.customProgramCacheKey = () => "car-paint-primer";
   return m;
@@ -102,35 +102,28 @@ export function makeWheelMaterial(): THREE.MeshStandardMaterial {
   return m;
 }
 
-/** Per vertex: the style variant it belongs to (`part-variants.ts`); per instance: the variant its car draws. */
-export const PART_VARIANT_ATTRIBUTE = "partVariant";
-export const INSTANCE_PART_VARIANT_ATTRIBUTE = "instancePartVariant";
 /** Per vertex 1 where a part takes its panel's paint (the instance colour), else 0. */
 export const PAINTED_ATTRIBUTE = "painted";
 
-/**
- * `m` drawing a batch whose one geometry holds every style's variant of a part: an instance draws only its own variant (the others
- * collapse to a point) and, with an instance colour, paints its `painted` vertices that colour. Chains `m`'s compile hook and key.
- */
-export function withPartVariants<T extends THREE.MeshStandardMaterial>(m: T): T {
+/** `m` painting its `painted` vertices with the instance colour (a styled part's panel paint). Chains `m`'s compile hook and key. */
+function withPaintedInstances<T extends THREE.MeshStandardMaterial>(m: T): T {
   const hook = m.onBeforeCompile;
   const key = m.customProgramCacheKey;
   m.onBeforeCompile = (shader, renderer) => {
     hook.call(m, shader, renderer);
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", `#include <common>\nattribute float ${PART_VARIANT_ATTRIBUTE};\nattribute float ${INSTANCE_PART_VARIANT_ATTRIBUTE};\nattribute float ${PAINTED_ATTRIBUTE};`)
+      .replace("#include <common>", `#include <common>\nattribute float ${PAINTED_ATTRIBUTE};`)
       .replace(
         "#include <color_vertex>",
         `vColor = vec4(color, 1.0);\n#ifdef USE_INSTANCING_COLOR\nvColor.rgb *= mix(vec3(1.0), instanceColor.rgb, ${PAINTED_ATTRIBUTE});\n#endif`,
-      )
-      .replace("#include <begin_vertex>", `#include <begin_vertex>\nif (abs(${PART_VARIANT_ATTRIBUTE} - ${INSTANCE_PART_VARIANT_ATTRIBUTE}) > 0.5) transformed = vec3(0.0);`);
+      );
   };
-  m.customProgramCacheKey = () => `${key.call(m)}|part-variants`;
+  m.customProgramCacheKey = () => `${key.call(m)}|painted-instances`;
   return m;
 }
 
-/** The part batch's material for a kind drawn in style variants (mirrors, grille, tail trim). */
-export const variantPartsMaterial = once((): THREE.MeshStandardMaterial => withPartVariants(makePartsMaterial()));
+/** The part batch's material for a kind drawn in style variants (mirrors, grille, tail trim): one draw per variant, painted per instance. */
+export const variantPartsMaterial = once((): THREE.MeshStandardMaterial => withPaintedInstances(makePartsMaterial()));
 
 /**
  * A car material's draw class: opaque draws of one class need one shader program, so `sortByDrawClass` (present/draw-order.ts)
@@ -192,14 +185,24 @@ function glslTone(hex: number): string {
   return `vec3(${c.r}, ${c.g}, ${c.b})`;
 }
 
+/** A `CABIN_TRIM` vertex's tone [sRGB, roughness, metalness]: the drawn cabin's own matte trim (`interior-geometry.ts`). */
+const CABIN_TONE = [0x16191d, 0.85, 0.05] as const;
+
 /**
- * A `BLACKOUT` vertex (primer below 0) on the paint: the black trim's colour, as smooth as gloss trim, under the paint's own clear coat:
- * the references' blacked-out pillars, cowls and roof rails are piano black with crisp highlights, not bare steel or satin plastic.
+ * A `BLACKOUT` vertex (primer -1) on the paint: the black trim's colour, as smooth as gloss trim, under the paint's own clear coat: the
+ * references' blacked-out pillars, cowls and roof rails are piano black with crisp highlights, not bare steel or satin plastic. A
+ * `CABIN_TRIM` vertex (primer -2): the cabin's matte dark trim, its clear coat off.
  */
 const GLOSS_BLACK = {
-  color: `float glossW = smoothstep(0.3, 0.6, -vPrimer);\ndiffuseColor.rgb = mix(diffuseColor.rgb, ${glslTone(TRIM_BLACK)}, glossW);`,
-  roughness: `roughnessFactor = mix(roughnessFactor, ${glslFloat(TRIM_FINISH.gloss.roughness)}, glossW);`,
-  metalness: `metalnessFactor = mix(metalnessFactor, ${glslFloat(TRIM_FINISH.gloss.metalness)}, glossW);`,
+  color: [
+    "float glossW = smoothstep(0.3, 0.6, -vPrimer) - smoothstep(1.3, 1.6, -vPrimer);",
+    "float cabinW = smoothstep(1.3, 1.6, -vPrimer);",
+    `diffuseColor.rgb = mix(diffuseColor.rgb, ${glslTone(TRIM_BLACK)}, glossW);`,
+    `diffuseColor.rgb = mix(diffuseColor.rgb, ${glslTone(CABIN_TONE[0])}, cabinW);`,
+  ].join("\n"),
+  roughness: `roughnessFactor = mix(mix(roughnessFactor, ${glslFloat(TRIM_FINISH.gloss.roughness)}, glossW), ${glslFloat(CABIN_TONE[1])}, cabinW);`,
+  metalness: `metalnessFactor = mix(mix(metalnessFactor, ${glslFloat(TRIM_FINISH.gloss.metalness)}, glossW), ${glslFloat(CABIN_TONE[2])}, cabinW);`,
+  clearcoat: "#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= 1.0 - cabinW;\n#endif",
 };
 
 /** Fittings drawn in the trim's one mesh: a `FITTING_ATTRIBUTE` vertex (0 on a mesh without one) of a `FITTING_TONE` takes that tone's colour and finish. Wraps `capHighlights`' compile hook. */

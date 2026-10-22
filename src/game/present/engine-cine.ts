@@ -584,10 +584,12 @@ export class Cinematics {
 
   /**
    * Every car in the scene wears the paint finish on the tiers that draw it (`finishForTier`); a new or re-dressed car gets the tier's
-   * state from `dressCar`. A change queues the draw warm-up, which links and draws both states, so the next frame links nothing.
+   * state from `dressCar`. A change queues the draw warm-up, which links and draws both states, so the next frame links nothing. Not
+   * for Ultra: its pick linked and drew the finish it wears before switching (`EngineWarm.warmUltra`), and a warm-up here would link the
+   * canvas and finish-off variants of its look, which it never draws, in the frames right after the switch.
    */
   private dressCarFinish(tier: FxTier): void {
-    if (applyCarFinish(this.scene, finishForTier(tier))) this.queueWarm();
+    if (applyCarFinish(this.scene, finishForTier(tier)) && tier !== "ultra") this.queueWarm();
   }
 
   /** Sim time multiplier for this frame: eased below 1 during a hit-stop (`WARP_IN`/`WARP_OUT`). */

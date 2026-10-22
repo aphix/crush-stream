@@ -1,15 +1,13 @@
 import type { BodyStyle } from "../car-variants.ts";
+import { pullHandle } from "./platform.ts";
 
 type Details = NonNullable<BodyStyle["details"]>;
 type Line = Details["lines"][number];
 type Patch = Details["patches"][number];
 
-const GAP = { width: 0.006, depth: -0.004, profile: "v", cavity: 0.85 } as const;
+const GAP = { width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 } as const;
 const CREASE = { width: 0.02, depth: 0.003, profile: "u", cavity: 0 } as const;
 const SEAL = { width: 0.012, depth: 0.002, profile: "u", cavity: 0.3 } as const;
-const HANDLE = { width: 0.008, depth: -0.004, profile: "v", cavity: 0.7 } as const;
-const LAMP = { width: 0.008, depth: -0.004, profile: "v", cavity: 0.6 } as const;
-const LAMP_INNER = { width: 0.008, depth: 0.002, profile: "u", cavity: 0 } as const;
 const TRIM = { width: 0.01, depth: -0.003, profile: "u", cavity: 0.4 } as const;
 const VENT = { depth: -0.005, rim: 0.006, pattern: { kind: "hslats", pitch: 0.012, bar: 0.004, depth: 0.003 }, cavity: 0.7 } as const;
 const BADGE = { depth: 0.002, rim: 0.003, cavity: 0 } as const;
@@ -17,28 +15,20 @@ const BADGE = { depth: 0.002, rim: 0.003, cavity: 0 } as const;
 const SHARED_LINES: readonly Line[] = [
   // The hood's side shut line on the drawn lid's edge (hw - 0.07, CarGreenhouse3's ca1dce92) from its rear edge (0.99) to the nose; the lid's straight rear edge is its own seam.
   { view: "top", points: [[0.99, 0.72], [1.235, 0.72], [1.481, 0.695], [1.642, 0.679], [1.734, 0.676], [1.82, 0.622], [1.898, 0.504], [1.96, 0.435]], ...GAP },
-  { view: "front", points: [[0.63, 0.58], [0.62, 0.52], [0.62, 0.45], [0.62, 0.38], [0.62, 0.3], [0.64, 0.26]], ...GAP },
   { view: "front", points: [[0.4, 0.345], [0.55, 0.345], [0.62, 0.345]], ...GAP, width: 0.008 },
-  { view: "side", points: [[0.69, 0.89], [0.705, 0.84], [0.72, 0.78], [0.727, 0.65], [0.73, 0.5], [0.727, 0.38], [0.72, 0.27], [0.71, 0.245]], ...GAP },
   { view: "side", points: [[0.71, 0.245], [0.4, 0.25], [0, 0.25], [-0.22, 0.25]], ...GAP },
-  { view: "side", points: [[-0.215, 0.27], [-0.224, 0.52], [-0.243, 0.8], [-0.265, 0.91]], ...GAP },
   { view: "side", points: [[-1.05, 0.95], [-1.086, 0.86], [-1.085, 0.8], [-1.056, 0.75], [-1, 0.66], [-0.94, 0.59], [-0.9, 0.505], [-0.84, 0.4], [-0.795, 0.3], [-0.77, 0.26]], ...GAP },
   { view: "side", points: [[-0.77, 0.255], [-0.5, 0.252], [-0.22, 0.25]], ...GAP },
-  { view: "side", points: [[-1.81, 0.75], [-1.8, 0.67], [-1.76, 0.625], [-1.69, 0.59], [-1.62, 0.575]], ...GAP },
-  { view: "rear", points: [[0.75, 0.52], [0.73, 0.535], [0.68, 0.555], [0.6, 0.57], [0.45, 0.575]], ...GAP },
-  { view: "rear", points: [[0.45, 0.925], [0.3, 0.93], [0.15, 0.935], [0, 0.935]], ...GAP },
-  { view: "top", points: [[-1.62, 0.52], [-1.72, 0.56], [-1.84, 0.6], [-1.95, 0.62], [-2.02, 0.6]], ...GAP },
   { view: "side", points: [[1.52, 0.7], [1.37, 0.742], [1.2, 0.786], [1.02, 0.816], [0.84, 0.83], [0.73, 0.835]], ...CREASE },
-  { view: "side", points: [[0.73, 0.85], [0.4, 0.86], [0, 0.875], [-0.22, 0.89], [-0.6, 0.9], [-0.9, 0.92], [-1.06, 0.93]], ...CREASE },
+  // The shoulder along both doors: the reference's highlight peaks at y ~0.82, level from the front door to the rear one (silver-sedan-1.png,
+  // 70.1 px/m), 8 cm under the glass; it meets the front fender's crease at the door's front edge and the quarter's behind the rear door.
+  { view: "side", points: [[0.73, 0.835], [0.4, 0.828], [0, 0.822], [-0.5, 0.825], [-0.9, 0.84], [-1.09, 0.855]], ...CREASE },
   { view: "side", points: [[-1.06, 0.945], [-1.3, 0.94], [-1.5, 0.935], [-1.7, 0.94], [-1.9, 0.95], [-2, 0.955]], ...CREASE },
   { view: "side", points: [[-1.09, 0.855], [-1.3, 0.85], [-1.5, 0.85], [-1.7, 0.855]], ...CREASE },
   { view: "side", points: [[0.72, 0.405], [0.4, 0.395], [0, 0.385], [-0.22, 0.385], [-0.5, 0.385], [-0.75, 0.39]], ...CREASE, profile: "step", depth: -0.003 },
   { view: "side", points: [[1.61, 0.16], [1.605, 0.335], [1.593, 0.427], [1.557, 0.513], [1.501, 0.586], [1.428, 0.642], [1.342, 0.678], [1.25, 0.69], [1.158, 0.678], [1.073, 0.642], [0.999, 0.586], [0.943, 0.513], [0.907, 0.427], [0.895, 0.335], [0.89, 0.16]], ...CREASE },
   { view: "side", points: [[-0.89, 0.16], [-0.895, 0.335], [-0.907, 0.427], [-0.943, 0.513], [-0.999, 0.586], [-1.073, 0.642], [-1.158, 0.678], [-1.25, 0.69], [-1.342, 0.678], [-1.428, 0.642], [-1.501, 0.586], [-1.557, 0.513], [-1.593, 0.427], [-1.605, 0.335], [-1.61, 0.16]], ...CREASE },
   { view: "top", points: [[0.28, 0.52], [0.1, 0.505], [-0.2, 0.5], [-0.5, 0.495], [-0.8, 0.495], [-1, 0.495], [-1.1, 0.49]], ...CREASE, depth: -0.003 },
-  { view: "rear", points: [[0.67, 0.535], [0.65, 0.51], [0.63, 0.46], [0.6, 0.45], [0.58, 0.5], [0.62, 0.535]], closed: true, ...LAMP },
-  { view: "side", points: [[0.04, 0.735], [0.04, 0.785], [-0.15, 0.785], [-0.15, 0.735]], closed: true, ...HANDLE },
-  { view: "side", points: [[-0.8, 0.765], [-0.8, 0.8], [-0.965, 0.8], [-0.965, 0.765]], closed: true, ...HANDLE },
   { view: "side", points: [[0.66, 0.885], [0.6, 0.93], [0.52, 0.985], [0.43, 1.04], [0.32, 1.1], [0.21, 1.16], [0.1, 1.2], [0, 1.225], [-0.12, 1.235], [-0.285, 1.24], [-0.4, 1.24], [-0.67, 1.235], [-0.885, 1.2], [-1, 1.18], [-1.12, 1.13], [-1.205, 1.085], [-1.26, 1.045]], ...SEAL },
   { view: "side", points: [[0.66, 0.885], [0.4, 0.895], [0, 0.905], [-0.22, 0.915], [-0.5, 0.93], [-0.9, 0.945], [-1.02, 0.965], [-1.12, 0.99], [-1.2, 1.02], [-1.26, 1.045]], ...SEAL },
   { view: "side", points: [[-0.265, 0.89], [-0.31, 1.235], [-0.385, 1.235], [-0.35, 0.92]], closed: true, ...SEAL },
@@ -53,49 +43,21 @@ const SHARED_LINES: readonly Line[] = [
   { view: "top", points: [[2.02, 0], [2.01, 0.25], [1.955, 0.4]], ...GAP },
   { view: "top", points: [[2, 0.3], [1.86, 0.36], [1.7, 0.42], [1.5, 0.47], [1.25, 0.52], [1, 0.56], [0.9, 0.57]], ...CREASE, profile: "step" },
   { view: "front", points: [[0, 0.195], [0.3, 0.195], [0.45, 0.19], [0.58, 0.185], [0.66, 0.18], [0.72, 0.175]], ...TRIM },
-  { view: "rear", points: [[0, 0.812], [0.2, 0.81], [0.4, 0.806]], ...SEAL },
-  { view: "rear", points: [[0, 0.775], [0.2, 0.775], [0.4, 0.776]], ...GAP },
-  { view: "top", points: [[-1.64, 0], [-1.635, 0.3], [-1.62, 0.5], [-1.6, 0.62]], ...GAP },
   { view: "top", points: [[-2.08, 0], [-2.075, 0.25], [-2.05, 0.45], [-1.99, 0.58]], ...CREASE },
   { view: "top", points: [[-2.03, 0], [-2.03, 0.25], [-2.015, 0.5]], ...CREASE, depth: -0.003 },
   { view: "rear", points: [[0, 0.755], [0.26, 0.755], [0.26, 0.63], [0, 0.63]], ...TRIM },
-  { view: "rear", points: [[0, 0.6], [0.25, 0.6], [0.45, 0.6], [0.62, 0.6], [0.74, 0.6], [0.78, 0.6], [0.8, 0.62]], ...GAP },
   { view: "side", points: [[-1.65, 0.285], [-1.8, 0.31], [-1.95, 0.35], [-2.06, 0.385], [-2.12, 0.41]], ...CREASE },
 ];
 
 const SEDAN_LINES: readonly Line[] = [
-  { view: "front", points: [[0.4, 0.585], [0.45, 0.585], [0.53, 0.59], [0.64, 0.6], [0.68, 0.6], [0.72, 0.61], [0.745, 0.66], [0.76, 0.7], [0.75, 0.7], [0.74, 0.7], [0.68, 0.685], [0.6, 0.665], [0.53, 0.66], [0.43, 0.61]], closed: true, ...LAMP },
-  { view: "front", points: [[0.45, 0.585], [0.53, 0.59], [0.64, 0.6], [0.68, 0.61], [0.72, 0.635], [0.76, 0.7]], ...LAMP_INNER },
-  { view: "front", points: [[0.64, 0.64], [0.69, 0.64]], ...LAMP_INNER },
-  { view: "front", points: [[0.64, 0.62], [0.69, 0.62]], ...LAMP_INNER },
-  { view: "rear", points: [[0.74, 0.855], [0.72, 0.865], [0.69, 0.87], [0.62, 0.88], [0.52, 0.885], [0.45, 0.875], [0.45, 0.77], [0.55, 0.765], [0.65, 0.765], [0.7, 0.765], [0.72, 0.78], [0.735, 0.82]], closed: true, ...LAMP },
-  { view: "rear", points: [[0.72, 0.835], [0.66, 0.835], [0.6, 0.83], [0.52, 0.82]], ...LAMP_INNER },
   { view: "top", points: [[-0.88, 0], [-0.88, 0.027], [-1.03, 0.027], [-1.03, 0]], ...TRIM },
   { view: "top", points: [[2.03, 0], [2.015, 0.25], [1.97, 0.4]], ...SEAL },
-  { view: "front", points: [[0, 0.55], [0.2, 0.548], [0.37, 0.545], [0.37, 0.49], [0.355, 0.38], [0.34, 0.33], [0.3, 0.308], [0.2, 0.303], [0, 0.302]], ...CREASE },
-  { view: "front", points: [[0.42, 0.575], [0.52, 0.572], [0.62, 0.576], [0.7, 0.585], [0.75, 0.605], [0.78, 0.65], [0.785, 0.7], [0.76, 0.69], [0.73, 0.682], [0.7, 0.675], [0.65, 0.665], [0.58, 0.645], [0.5, 0.62], [0.42, 0.6]], closed: true, ...LAMP },
-  { view: "front", points: [[0.43, 0.583], [0.52, 0.58], [0.62, 0.584], [0.7, 0.593], [0.75, 0.612], [0.78, 0.655], [0.785, 0.695]], ...LAMP_INNER },
-  { view: "front", points: [[0.64, 0.668], [0.72, 0.668]], ...LAMP_INNER },
-  { view: "front", points: [[0.64, 0.652], [0.72, 0.652]], ...LAMP_INNER },
-  { view: "front", points: [[0.64, 0.636], [0.72, 0.636]], ...LAMP_INNER },
-  { view: "front", points: [[0.58, 0.597], [0.574, 0.611], [0.56, 0.617], [0.546, 0.611], [0.54, 0.597], [0.546, 0.583], [0.56, 0.577], [0.574, 0.583]], closed: true, ...LAMP_INNER },
   { view: "front", points: [[0, 0.205], [0.2, 0.205], [0.4, 0.205]], ...SEAL },
-  { view: "front", points: [[0.621, 0.295], [0.615, 0.315], [0.6, 0.323], [0.585, 0.315], [0.579, 0.295], [0.585, 0.275], [0.6, 0.267], [0.615, 0.275]], closed: true, ...LAMP },
-  { view: "rear", points: [[0.745, 0.851], [0.725, 0.86], [0.69, 0.866], [0.63, 0.866], [0.55, 0.862], [0.45, 0.851], [0.4, 0.838]], ...LAMP_INNER },
-  { view: "rear", points: [[0.725, 0.81], [0.718, 0.822], [0.7, 0.828], [0.682, 0.822], [0.675, 0.81], [0.682, 0.798], [0.7, 0.792], [0.718, 0.798]], closed: true, ...LAMP_INNER },
-  { view: "rear", points: [[0.625, 0.815], [0.618, 0.827], [0.6, 0.833], [0.582, 0.827], [0.575, 0.815], [0.582, 0.803], [0.6, 0.797], [0.618, 0.803]], closed: true, ...LAMP_INNER },
-  { view: "rear", points: [[0.525, 0.815], [0.518, 0.827], [0.5, 0.833], [0.482, 0.827], [0.475, 0.815], [0.482, 0.803], [0.5, 0.797], [0.518, 0.803]], closed: true, ...LAMP_INNER },
 ];
 
 const POLICE_LINES: readonly Line[] = [
-  { view: "front", points: [[0.44, 0.55], [0.66, 0.55], [0.66, 0.4], [0.44, 0.4]], closed: true, ...LAMP },
-  { view: "front", points: [[0.66, 0.55], [0.78, 0.55], [0.78, 0.4], [0.66, 0.4]], closed: true, ...LAMP },
-  { view: "front", points: [[0.44, 0.475], [0.66, 0.475]], ...LAMP_INNER },
   { view: "front", points: [[0, 0.29], [0.2, 0.29], [0.45, 0.29], [0.6, 0.29], [0.7, 0.29], [0.74, 0.29]], ...TRIM },
   { view: "top", points: [[-0.978, 0], [-0.984, 0.016], [-1, 0.022], [-1.016, 0.016], [-1.022, 0]], ...TRIM },
-  { view: "rear", points: [[0.42, 0.85], [0.52, 0.85], [0.62, 0.85], [0.7, 0.85], [0.72, 0.82], [0.72, 0.67], [0.7, 0.64], [0.62, 0.64], [0.52, 0.64], [0.42, 0.64], [0.4, 0.66], [0.4, 0.83]], closed: true, ...LAMP },
-  { view: "rear", points: [[0.42, 0.85], [0.7, 0.85], [0.7, 0.775], [0.42, 0.775]], closed: true, ...LAMP_INNER },
-  { view: "rear", points: [[0.42, 0.7], [0.52, 0.7], [0.52, 0.64], [0.42, 0.64]], closed: true, ...LAMP_INNER },
   { view: "rear", points: [[0, 0.745], [0.15, 0.745], [0.15, 0.6], [0, 0.6]], ...TRIM },
   { view: "rear", points: [[0, 0.4], [0.45, 0.4], [0.66, 0.4], [0.76, 0.4]], ...TRIM },
 ];
@@ -108,31 +70,28 @@ const SHARED_PATCHES: readonly Patch[] = [
 
 const SEDAN_PATCHES: readonly Patch[] = [
   { view: "top", points: [[1.99, 0], [1.984, 0.014], [1.97, 0.02], [1.956, 0.014], [1.95, 0]], ...BADGE },
-  { view: "front", points: [[0, 0.533], [0.352, 0.531], [0.352, 0.4], [0.34, 0.335], [0.3, 0.318], [0, 0.316]], depth: -0.006, rim: 0.01, pattern: { kind: "vslats", pitch: 0.036, bar: 0.006, depth: 0.004 }, cavity: 0.8 },
-  { view: "front", points: [[0, 0.3], [0.3, 0.298], [0.46, 0.296], [0.47, 0.27], [0.4, 0.216], [0.2, 0.213], [0, 0.212]], depth: -0.005, rim: 0.006, cavity: 0.7 },
-  { view: "front", points: [[0.5, 0.345], [0.7, 0.345], [0.7, 0.245], [0.5, 0.245]], ...VENT },
   { view: "side", points: [[1.79, 0.5], [1.745, 0.5], [1.73, 0.31], [1.775, 0.31]], ...VENT },
   { view: "rear", points: [[0, 0.88], [0.035, 0.88], [0.035, 0.93], [0, 0.93]], ...BADGE },
 ];
 
 const POLICE_PATCHES: readonly Patch[] = [
-  { view: "front", points: [[0, 0.548], [0.29, 0.545], [0.29, 0.335], [0, 0.333]], depth: -0.006, rim: 0.01, pattern: { kind: "hslats", pitch: 0.031, bar: 0.006, depth: 0.004 }, cavity: 0.8 },
-  { view: "front", points: [[0, 0.467], [0.019, 0.459], [0.027, 0.44], [0.019, 0.421], [0, 0.413]], ...BADGE },
   { view: "front", points: [[0, 0.27], [0.38, 0.27], [0.38, 0.21], [0, 0.21]], ...VENT },
-  { view: "front", points: [[0.52, 0.27], [0.66, 0.27], [0.66, 0.225], [0.52, 0.225]], ...VENT },
   { view: "rear", points: [[0, 0.82], [0.025, 0.795], [0, 0.77]], ...BADGE },
   // The roof's black antenna dome on the centre line (cop isos; R ~22 mm at z -1.0): a raised dark disc in the roof's height map.
   { view: "top", points: [[-0.978, 0], [-0.984, 0.0156], [-1.0, 0.022], [-1.016, 0.0156], [-1.022, 0]], depth: 0.006, rim: 0.012, cavity: 0.9 },
 ];
 
+/** The door pull handles at the reference's places (gridded side, 430 px/m): front z +0.08..-0.11 at y 0.762, rear -0.742..-0.932 at 0.777. */
+const HANDLES = [pullHandle(0.08, -0.11, 0.762, 0.04), pullHandle(-0.742, -0.932, 0.777, 0.035)];
+
 /** Every sedan flank, top, nose and tail detail the two measurement scouts reported. */
 export const SEDAN_DETAILS: Details = {
-  lines: [...SHARED_LINES, ...SEDAN_LINES],
-  patches: [...SHARED_PATCHES, ...SEDAN_PATCHES],
+  lines: [...SHARED_LINES, ...SEDAN_LINES, ...HANDLES.flatMap((h) => h.lines)],
+  patches: [...SHARED_PATCHES, ...SEDAN_PATCHES, ...HANDLES.flatMap((h) => h.patches)],
 };
 
 /** The sedan body with the cop's own front fascia and tail lamps swapped in for the sedan's (exhaust tips are geometry: `exhaust`). */
 export const POLICE_DETAILS: Details = {
-  lines: [...SHARED_LINES, ...POLICE_LINES],
-  patches: [...SHARED_PATCHES, ...POLICE_PATCHES],
+  lines: [...SHARED_LINES, ...POLICE_LINES, ...HANDLES.flatMap((h) => h.lines)],
+  patches: [...SHARED_PATCHES, ...POLICE_PATCHES, ...HANDLES.flatMap((h) => h.patches)],
 };
