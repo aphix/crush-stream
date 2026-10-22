@@ -479,13 +479,10 @@ function ringLowest(style: BodyStyle, z: number, source: "drawn" | "cage"): numb
   return sectionPoints(sampleSlice(z, style.profile), style, source).reduce((m, p) => Math.min(m, p.y), Infinity);
 }
 
-/** The door skin's outer x (car frame) at the mirror's seat: the widest drawn triangle covering its height and z, which beats the slab's inner face. Throws, naming the style, with no triangle there. */
-function doorSkinAtMirror(style: BodyStyle): number {
-  const d = style.door;
-  const geo = makeDoorGeometry(1, style);
+/** The widest x of `geo`'s triangles covering (z, y) in its own frame, by barycentrics in the z-y plane; -Infinity with none there. */
+function widestAt(geo: THREE.BufferGeometry, zT: number, yT: number): number {
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   const index = geo.index!;
-  const [zT, yT] = [-(d.mirrorZ ?? 0) - doorSkinZ(style), d.mirrorY];
   let widest = -Infinity;
   for (let k = 0; k < index.count; k += 3) {
     const [a, b, c] = [index.getX(k), index.getX(k + 1), index.getX(k + 2)];
@@ -498,8 +495,23 @@ function doorSkinAtMirror(style: BodyStyle): number {
     if (wa < -1e-6 || wb < -1e-6 || wc < -1e-6) continue;
     widest = Math.max(widest, wa * pos.getX(a) + wb * pos.getX(b) + wc * pos.getX(c));
   }
+  return widest;
+}
+
+/** The door skin's outer x (car frame) at the mirror's seat: the widest drawn triangle covering its height and z, which beats the slab's inner face. Throws, naming the style, with no triangle there. */
+function doorSkinAtMirror(style: BodyStyle): number {
+  const d = style.door;
+  const [zT, yT] = [-(d.mirrorZ ?? 0) - doorSkinZ(style), d.mirrorY];
+  const widest = widestAt(makeDoorGeometry(1, style), zT, yT);
   assert.ok(widest > -Infinity, `${style.id}: no door skin triangle at the mirror's z ${zT} and height ${yT}`);
   return d.hingeX + widest;
+}
+
+/** The drawn right door glass's outer x (car frame) at car (z, y); NaN off the pane. */
+function paneXAt(style: BodyStyle, z: number, y: number): number {
+  const { hingeX, hingeY, hingeZ } = style.door;
+  const widest = widestAt(makeSideGlass(1, style), z - hingeZ - DOOR_GLASS_SEAT.z, y - hingeY - DOOR_GLASS_SEAT.y);
+  return widest > -Infinity ? hingeX + DOOR_GLASS_SEAT.x + widest : NaN;
 }
 
 /**
@@ -511,6 +523,7 @@ function bodySideAtMirror(style: BodyStyle): number {
   const d = style.door;
   const mirrorY = d.hingeY + d.mirrorY;
   const mirrorZ = d.hingeZ - (d.mirrorZ ?? 0);
+  if (d.mirror?.mount === "glass") return paneXAt(style, mirrorZ, mirrorY);
   if (doorAperture(mirrorZ, style) > 0) return doorSkinAtMirror(style);
   const geo = makeChassisGeometry(style, "drawn");
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
@@ -1480,6 +1493,49 @@ describe("given a body style's P2 parts", () => {
     assert.ok(Math.abs(up.inner - bodySideAtMirror(lifted)) < MIRROR_SEAT_TOL, `the foot starts at x ${up.inner}, the drawn skin at ${bodySideAtMirror(lifted)}`);
     assert.ok(mirrorSeatX(lifted) === mirrorSeatX(mirrorStyle(spec)), "the seat is unchanged");
     assert.ok(cageHash(lifted) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
+  });
+
+  it("when a mirror is mounted on the door glass, then its foot lies on the drawn pane up its height and nowhere sinks into it, the pane's lean followed, which the same seat on the skin does not", () => {
+    /** Every drawn mirror vertex over the drawn pane, as [its gap (m) out from the pane, its height] (car frame). */
+    const paneGaps = (style: BodyStyle): [number, number][] => {
+      const d = style.door;
+      const [seatX, scaleX] = [d.hingeX + mirrorSeatX(style), d.mirrorReach / MIRROR_REACH];
+      const pos = drawnPart(PART_KIND.mirrorR, style).geometry.getAttribute("position");
+      const gaps: [number, number][] = [];
+      for (let i = 0; i < pos.count; i++) {
+        const y = d.hingeY + d.mirrorY + pos.getY(i);
+        const pane = paneXAt(style, d.hingeZ - (d.mirrorZ ?? 0) + pos.getZ(i), y);
+        if (!Number.isNaN(pane)) gaps.push([seatX + pos.getX(i) * scaleX - pane, y]);
+      }
+      return gaps;
+    };
+    /** The heights (mm) at which vertices lie on the pane, and the deepest gap (m) into it. */
+    const reading = (gaps: [number, number][]) => ({
+      on: new Set(gaps.filter(([g]) => Math.abs(g) < MIRROR_SEAT_TOL).map(([, y]) => Math.round(y * 1000))).size,
+      deepest: Math.min(...gaps.map(([g]) => g)),
+    });
+    // The drawn pane is a coarse chord of the glass surface the foot follows: up to 1.2 cm off it at the foot's corners by the A-post.
+    const PANE_CHORD_TOL = 0.015;
+    const seated = ({ on, deepest }: { on: number; deepest: number }) => on >= 3 && deepest > -PANE_CHORD_TOL;
+    const words = ({ on, deepest }: { on: number; deepest: number }) => `on the pane at ${on} heights, the deepest ${deepest.toFixed(4)} m into it`;
+    for (const id of ["pickup", "monster"] as const) {
+      const style = CAR_STYLES[id];
+      assert.ok(style.door.mirror?.mount === "glass", `${id}: its tow mirror is glass-mounted`);
+      const mounted = reading(paneGaps(style));
+      assert.ok(seated(mounted), `${id}: ${words(mounted)}`);
+      // The foot's inner face (within 1 cm of the glass surface; its outer face stands 1.6 cm out) lies on that surface, 2 mm sunk, at every row up its height.
+      const d = style.door;
+      const [seatX, scaleX] = [d.hingeX + mirrorSeatX(style), d.mirrorReach / MIRROR_REACH];
+      const pos = drawnPart(PART_KIND.mirrorR, style).geometry.getAttribute("position");
+      const inner: number[] = [];
+      for (let i = 0; i < pos.count; i++) {
+        const gap = seatX + pos.getX(i) * scaleX - glassX(d.hingeZ - (d.mirrorZ ?? 0) + pos.getZ(i), d.hingeY + d.mirrorY + pos.getY(i), style);
+        if (Math.abs(gap) < 0.01) inner.push(gap);
+      }
+      assert.ok(inner.length >= 8 && inner.every((g) => Math.abs(g + 0.002) < 0.001), `${id}: the foot's inner face stands ${[...new Set(inner.map((g) => g.toFixed(4)))].join(", ")} m off the glass surface`);
+      const onSkin = reading(paneGaps({ ...style, door: { ...style.door, mirror: { ...style.door.mirror!, mount: undefined } } }));
+      assert.ok(!seated(onSkin), `${id} on the skin: ${words(onSkin)}`);
+    }
   });
 
   it("when a mirror's finish is black or chrome, then its cap wears that tone and nothing takes paint, a black one gloss as the references' are; when it is body, its cap carries the paint's tone for its door's colour", () => {

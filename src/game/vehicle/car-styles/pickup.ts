@@ -16,8 +16,8 @@ const TRUCK_FRONT_FASCIA = [
   [-0.14, -0.07],
 ] as const;
 
-/** The trucks' tall gloss-black tow-style mirror housing, read off their isos ([out from the door, height, length along the car] m). */
-export const TOW_MIRROR = { cap: "box", finish: "black", size: [0.07, 0.22, 0.16] } as const;
+/** The trucks' tall gloss-black tow-style mirror housing on the door glass's front corner, read off their isos ([out from the door, height, length along the car] m). */
+export const TOW_MIRROR = { cap: "box", finish: "black", size: [0.07, 0.22, 0.16], mount: "glass" } as const;
 /** The cab door's slim pull, 15 x 4 cm. */
 const DOOR_PULL = pullHandle(-0.2, -0.35, 0.995, 0.04);
 /** Pickup's own lamps and bumper lamps, read off its reference isos and side/top crops. */
@@ -61,7 +61,7 @@ export const PICKUP: BodyStyle = {
   belt: { x: 0.73, y: [[0, 1.12]] },
   rocker: { y: 0.45 },
   underside: [[-2.17, 0.52], [-1.96, 0.42], [-1.75, 0.38], [-1.5, 0.34], [1.6, 0.34], [1.76, 0.35], [1.93, 0.38]],
-  door: { hingeX: 0.74, hingeY: 0.785, hingeZ: 0.7, length: 0.93, halfHeight: 0.335, mirrorY: 0.31, mirrorZ: 0.08, mirrorReach: 0.15, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69], mirror: TOW_MIRROR },
+  door: { hingeX: 0.74, hingeY: 0.785, hingeZ: 0.7, length: 0.93, halfHeight: 0.335, mirrorY: 0.405, mirrorZ: 0.19, mirrorReach: 0.15, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69], mirror: TOW_MIRROR },
   aPillarFoot: 0.7,
   aPillarTop: 0.41,
   bPillar: { rear: -0.3, front: -0.23 },

@@ -17,7 +17,7 @@ import {
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, PLATE_RISE, type PartKind } from "./part-geometry.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
+import { glassX, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { bootPivot } from "./hinge-spec.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
 
@@ -62,6 +62,8 @@ const MIRROR_CAP_ROUND = 0.35;
 const MIRROR_FOOT = { out: 0.018, share: 0.7 } as const;
 /** The foot's inner face sits this far (m) into the skin, so no crack shows where the skin curves away from the pad. */
 const MIRROR_FOOT_SINK = 0.002;
+/** A glass-mounted foot's rows of vertices up its height, so its lean follows the pane's bend at the belt instead of cutting through it. */
+const GLASS_FOOT_ROWS = 4;
 /** The stalk from the foot to the cap: [h, d] (m). */
 const MIRROR_STALK = [0.028, 0.034] as const;
 /** The glass on the cap's rear face: its share of the cap's w and h, and how far (m) behind the face it stands. */
@@ -91,7 +93,9 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const cap = spec.finish === "black" ? dark(capShape, TRIM_BLACK, TRIM_FINISH.gloss.roughness, TRIM_FINISH.gloss.metalness) : finished(capShape, spec.finish);
   const parts = [cap.translate(sign * (reach - w / 2), capY, 0)];
   const footOut = MIRROR_FOOT.out + MIRROR_FOOT_SINK;
-  parts.push(fitting(new THREE.BoxGeometry(footOut, h * MIRROR_FOOT.share + lift, d * MIRROR_FOOT.share)).translate(sign * (root - MIRROR_FOOT_SINK + footOut / 2), MIRROR_CAP_Y + lift / 2, 0));
+  const footRows = spec.mount === "glass" ? GLASS_FOOT_ROWS : 1;
+  const foot = fitting(new THREE.BoxGeometry(footOut, h * MIRROR_FOOT.share + lift, d * MIRROR_FOOT.share, 1, footRows, 1)).translate(sign * (root - MIRROR_FOOT_SINK + footOut / 2), MIRROR_CAP_Y + lift / 2, 0);
+  parts.push(spec.mount === "glass" ? alongGlass(foot, style, sign) : foot);
   const [stalkFrom, stalkTo] = [root + MIRROR_FOOT.out, reach - w + MIRROR_FOOT.out / 2];
   if (stalkTo > stalkFrom) parts.push(fitting(new THREE.BoxGeometry(stalkTo - stalkFrom, ...MIRROR_STALK)).translate((sign * (stalkFrom + stalkTo)) / 2, capY, 0));
   const glass = dark(new THREE.PlaneGeometry(w * MIRROR_GLASS.share[0], h * MIRROR_GLASS.share[1]), 0x9aa8b4, 0.08, 0.7).rotateY(Math.PI);
@@ -99,7 +103,24 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   return mergeToned(parts, "style mirror").scale(1 / scaleX, 1, 1);
 }
 
-const mirrorKey = (style: BodyStyle): string | null => (style.door.mirror ? `${JSON.stringify(style.door.mirror)}|${style.door.mirrorReach}` : null);
+/** `geo` (seat space, real size) with each vertex's x moved by the door glass's lean away from the seat's x: a glass-mounted foot lies on the pane. */
+function alongGlass(geo: THREE.BufferGeometry, style: BodyStyle, sign: number): THREE.BufferGeometry {
+  const d = style.door;
+  const [z0, y0] = [d.hingeZ - (d.mirrorZ ?? 0), d.hingeY + d.mirrorY];
+  const x0 = glassX(z0, y0, style);
+  const pos = geo.getAttribute("position");
+  for (let i = 0; i < pos.count; i++) pos.setX(i, pos.getX(i) + sign * (glassX(z0 + pos.getZ(i), y0 + pos.getY(i), style) - x0));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** A style mirror's variant key: its spec and reach, and for a glass mount the style and seat, whose pane its foot follows. */
+const mirrorKey = (style: BodyStyle): string | null => {
+  const d = style.door;
+  if (!d.mirror) return null;
+  const seat = d.mirror.mount === "glass" ? `|${style.id}|${d.mirrorY}|${d.mirrorZ ?? 0}` : "";
+  return `${JSON.stringify(d.mirror)}|${d.mirrorReach}${seat}`;
+};
 
 // ---- grille ----------------------------------------------------------------------------------------------------------------
 
