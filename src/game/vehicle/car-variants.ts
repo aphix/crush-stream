@@ -382,10 +382,15 @@ export interface BodyStyle {
   aPillarKnee?: number;
   /** Side glass top: its drop under the roof (m, absent 0.075), the roof's side lip ending there too; or [z, y] stations (ascending, linear, held past the ends) under a 0.075 lip, painted fill between them and the lip. */
   glassTop?: number | readonly (readonly [number, number])[];
-  /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it; `rise` (drawn only, absent 1) the opening's crown height over the hub as a fraction of `radius`: an elliptic opening, as wide at hub height, its lip following it under the round fender flare. */
-  arch: { radius: number; lip?: ArchLip; wellWall?: number; rise?: number };
+  /**
+   * Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it; `rise` (drawn only, absent 1) the opening's crown height over the hub as a fraction of `radius`: an elliptic opening, as wide at hub height, its lip following it under the round fender flare.
+   * `feet` (drawn only): each opening's legs get a ring either side of them (the nearest plain station within 6 cm outside moving onto the outer one), so they drop straight to the rocker under the lip's; absent, a leg spans the gap between its nearest stations, leaning out.
+   */
+  arch: { radius: number; lip?: ArchLip; wellWall?: number; rise?: number; feet?: boolean };
   /** Drawn only: [z0, z1] (m): each body loft gap whose middle lies in it gets a ring there, where the flank turns hard between stations (an arch's flare); the cage keeps its rings. */
   ringSplit?: readonly [z0: number, z1: number];
+  /** Drawn only: inside the front door's cut (between its feathered edges) the loft keeps only its knots' rings, no plain stations: there it is the bare sill and floor, straight along z, under the door skin. The cage keeps its rings. */
+  bareDoorCut?: boolean;
   /**
    * Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`.
    * `groove` [out, down] (m, drawn only): over the open bay the fender's deck edge beside a lid hood stands `out` outboard of the hood's edge and `down` lower, a shut-line slot onto the bay wall.
@@ -397,8 +402,8 @@ export interface BodyStyle {
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;
-  /** Side glass behind the B-pillar: rear edge z at the belt and at the top. */
-  quarter: { zRearBot: number; zRearTop: number };
+  /** Side glass behind the B-pillar: rear edge z at the belt and at the top. `drawn` (drawn only): the drawn pane, sail and trim's own; the cage's post and rail and the dummies' pane keep these. */
+  quarter: { zRearBot: number; zRearTop: number; drawn?: { zRearBot: number; zRearTop: number } };
   /** Extra pillar splitting the quarter glass (wagon C-pillar), or null. */
   midPillarZ: number | null;
   /**
@@ -432,10 +437,13 @@ export interface BodyStyle {
    * rear glass corners, a flush sail's head at the roof's end laps the glass's side edge this share of the way round its top corner's arc
    * (0 its side end, 1 its top end), so the head covers the arc above that point; absent 0.5, mid-arc. `pinch` (m): the side window's
    * line rounds over from its foot at the belt into the glass's top line this far ahead of `quarter.zRearTop` (one quadratic through that
-   * corner), so the window narrows to a point at the sail instead of ending on a straight rear edge; absent, the straight edge. `blend`
-   * (m): a flat sail takes on the roof end's roll over this run behind the roof's rear end (the rest of its haunch straight); absent 0.45.
+   * corner), so the window narrows to a point at the sail instead of ending on a straight rear edge; absent, the straight edge. `sweep`
+   * (m): behind the window's point the sail's foot sweeps out onto the shoulder over this run; absent 0.15. `bead` (drawn only): ahead of a
+   * pinched window's corner the sail's head is a bead, and its inner face holds the head's depth to mid-face; absent, a post's round head.
+   * `blend` (m): a flat sail takes on the roof end's roll over this run behind the roof's rear end (the rest of its haunch straight); absent 0.45.
+   * `railRun` (m, drawn only): the belt rail runs on this far behind the quarter glass's rear point, under the sail's foot; absent, it ends at the point.
    */
-  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; blend?: number };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; sweep?: number; bead?: boolean; blend?: number; railRun?: number };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Drawn only: the body paint's base roughness, clear coat and clear coat roughness (`makePaintMaterial`); absent the platform paint's (0.42, 0.72, 0.24). */
