@@ -466,8 +466,7 @@ describe("given every style's cabin as its glass shows it", () => {
   const THROUGH_M = 0.005;
   /** Styles whose seat data still puts a seat through a pane, with their owner and the reading: the owning lane's ticket turns them live. */
   const OPEN_FIT: Partial<Record<CarStyleId, string>> = {
-    pickup: "CarTrucks2: the front seat back stands 7.4 cm through the cab's rear window at (0.27, 1.36, -0.59)",
-    monster: "CarTrucks2: the rear bench stands 3.5 cm through the rear window at (-0.23, 1.26, -0.77)",
+    monster: "CarTrucks2: the rear bench back stands 3.5 cm through the rear window at (-0.23, 1.26, -0.77); `benchDepth` fits it to the back wall and the roof line, not the rear glass, so seats.rear z doesn't move it",
   };
   /** The z of the pane line from `base` to `top` ([y, z] each) at height `y`. */
   const paneZ = (y: number, [y0, z0]: readonly [number, number], [y1, z1]: readonly [number, number]): number => z0 + ((y - y0) / (y1 - y0)) * (z1 - z0);
