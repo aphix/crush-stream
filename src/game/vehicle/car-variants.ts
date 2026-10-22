@@ -94,6 +94,10 @@ interface HoodBulge {
   rise: number;
   /** Rolled pod (m): each flank rolls from the lid up to the crest over this width in an S-curve (level at both ends) instead of the 5 cm chamfer; the crest spans ±(width/2 - round). The scoop stands on the crest: scoop.width/2 <= width/2 - round. */
   round?: number;
+  /** Its cowl end (z0) eases into the lid over this run (m) instead of the front end's 0.15, so a long pod fades toward the windshield; absent = 0.15. */
+  cowlRamp?: number;
+  /** Its width (m) at the cowl end (z0), narrowing linearly to `width` at z1, for a pod that widens toward the windshield; absent = `width` throughout. */
+  cowlWidth?: number;
   /** Scoop on the bulge rising from its cowl end to a mouth facing forward at z `z`, `width` across, `height` (m) over the bulge: one opening, or two either side of a centre rib. */
   scoop?: { inlets: 1 | 2; z: number; width: number; height: number };
 }
@@ -300,9 +304,10 @@ export interface BodyStyle {
     aperture: readonly [number, number];
     /**
      * `lift` (m): head, glass and stalk stand this far higher than the seat, the foot growing up to meet them (default 0), for a mirror on a pedestal above the door skin's top.
+     * `stalk` (m): the foot's length along the car, a slim post under the head; absent = 0.7 of the cap's depth.
      * `mount` "glass": the seat stands on the door glass's plane at its z and height (`mirrorY` may stand over `halfHeight`), its foot leaning with the pane, as a tow mirror on the glass's front corner; absent, on the skin.
      */
-    mirror?: { cap: "rounded" | "box"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; mount?: "glass" };
+    mirror?: { cap: "rounded" | "box"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; mount?: "glass" };
     hingeTop?: number;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
