@@ -3,7 +3,7 @@ import { hypot2, detSin } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { splitCreases } from "./car-crease.ts";
-import { CREASE_DEGREES, SEDAN, drawnSideRing, drawnSideX, glassX, sampleSlice, sideX } from "./car-mesh.ts";
+import { CREASE_DEGREES, SEDAN, drawnSideRing, drawnSideX, glassX, sampleSlice, shoulderDrop, sideX } from "./car-mesh.ts";
 import { rockerAt } from "./car-lines.ts";
 import { MIRROR_REACH, MIRROR_ROOT } from "./part-geometry.ts";
 import { doorCardGeometry } from "./interior-geometry.ts";
@@ -49,7 +49,7 @@ export function mirrorSeatX(style: BodyStyle): number {
   if (!Number.isNaN(onDoor)) return onDoor - armRoot;
   const z = d.hingeZ - (d.mirrorZ ?? 0);
   const sl = sampleSlice(z, style.profile);
-  return sideX(d.hingeY + d.mirrorY, sl.hw, sl.yBelt, rockerAt(z, style)) + (d.proud ?? DOOR_PROUD) - d.hingeX - armRoot;
+  return sideX(d.hingeY + d.mirrorY, sl.hw, sl.yBelt, rockerAt(z, style), shoulderDrop(z, style)) + (d.proud ?? DOOR_PROUD) - d.hingeX - armRoot;
 }
 /**
  * Outer-face columns before the edge rolls are added. The face's rows between its edge rolls are the body ring's side rows, and over
@@ -164,10 +164,18 @@ function lowestRingY(style: BodyStyle, grid: DoorGrid, z: number): number | unde
   return row === undefined ? undefined : style.door.hingeY + ringRowY(style, grid, row.ring, z);
 }
 
-/** `doorStand` for what rides on the skin (the chrome strips) at car-local `z` and height `y`, before the cut-end taper. */
+/** How far the skin's stand has come up at door-space `z`: 0 at each cut end, easing to 1 over `DOOR_TAPER`. */
+function cutTaper(grid: DoorGrid, z: number): number {
+  return THREE.MathUtils.clamp((Math.min(z + grid.halfLength, grid.halfLength - z) - DOOR_SKIN_OVERLAP) / DOOR_TAPER, 0, 1);
+}
+
+/** `doorStand` for what rides on the skin (the chrome strips) at car-local `z` and height `y`: the skin's own stand, cut-end taper included. */
 export function doorSkinStand(style: BodyStyle): (z: number, y: number) => number {
   const grid = doorGrid(style);
-  return (z, y) => doorStand(style.door, lowestRingY(style, grid, z - style.door.hingeZ - doorSkinZ(style)), y);
+  return (z, y) => {
+    const local = z - style.door.hingeZ - doorSkinZ(style);
+    return doorStand(style.door, lowestRingY(style, grid, local), y) * cutTaper(grid, local);
+  };
 }
 
 /**
@@ -189,20 +197,20 @@ function doorFaceVertex(style: BodyStyle, grid: DoorGrid, row: DoorRow, z: numbe
   } else {
     station = y = Math.min(ringRowY(style, grid, row.ring, z), doorFaceVertex(style, grid, h - DOOR_EDGE_RADIUS, z).y - DOOR_EDGE_CLEARANCE);
   }
-  const intoCut = Math.min(z + halfLength, halfLength - z) - DOOR_SKIN_OVERLAP;
   const [zCar, yCar] = [d.hingeZ + doorSkinZ(style) + z, d.hingeY + y];
   const sl = sampleSlice(zCar, style.profile);
   const rockerY = rockerAt(zCar, style);
+  const crestDrop = shoulderDrop(zCar, style);
   // On the ring's chords over the span of the ring rows the face carries, so it meets the body there; above and below it, on the side's
   // curve, held continuous at the span's ends.
   const ringRows = grid.rows.filter((r): r is { ring: number } => typeof r !== "number");
   const bottom = lowestRingY(style, grid, z);
-  const proud = doorStand(d, bottom, yCar) * THREE.MathUtils.clamp(intoCut / DOOR_TAPER, 0, 1);
-  let side = sideX(yCar, sl.hw, sl.yBelt, rockerY);
+  const proud = doorStand(d, bottom, yCar) * cutTaper(grid, z);
+  let side = sideX(yCar, sl.hw, sl.yBelt, rockerY, crestDrop);
   if (bottom !== undefined) {
     const top = d.hingeY + ringRowY(style, grid, ringRows[ringRows.length - 1]!.ring, z);
     const held = THREE.MathUtils.clamp(yCar, bottom, top);
-    side += drawnSideX(zCar, held, style) - sideX(held, sl.hw, sl.yBelt, rockerY);
+    side += drawnSideX(zCar, held, style) - sideX(held, sl.hw, sl.yBelt, rockerY, crestDrop);
   }
   const outer = side + proud - d.hingeX;
   const drop = doorEdgeDrop(Math.min(station + h, h - station), Math.min(z + halfLength, halfLength - z));

@@ -1485,7 +1485,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Re-pinned for its curved roof (`roofSection` .4/.6) and narrower rear glass top (`rearGlass.wTop` .92): the raked panes fall with the dome and the glass panel's cage-skinned rest moved.
   // Re-pinned for its belt's crest under the sail's foot dropped (profile z -1.49) and its quarter glass's point moved back (`quarter.zRearBot` -0.981, the belt's rear knots with it): the skin rows there and the glass panel's cage-skinned rest moved.
   // Re-pinned for its quarter glass's sill rising to the window's point (`belt.y` -0.981 .925) and its shoulder held level behind it (profile z -1.49 to -1.023 at .924-.93): the glass, its rail and the skin there moved.
-  { id: "coupe", digest: "034d75e5f0cc1b5c87f50f5e31114d29b2baef9c78452522b8d1dedf009c0c39" },
+  // Re-pinned for its haunch's crest (`shoulder`: the widest line 5-9 cm under the belt from the tail to the door), its quarter sill dipping behind the door and its roof's rear corner 2 cm wider (cabinHw .49/.50): 034d75e5 -> f8bbd431.
+  { id: "coupe", digest: "f8bbd431e847b5a411c620434fb14ae68c24e461661fc1e479124c283d2c0657" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open; both trucks for the greenhouse's dome-following panes and posts.

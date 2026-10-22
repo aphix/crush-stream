@@ -337,6 +337,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * cracks the windshield. A sedan dropped on its roof keeps its rear glass (its fastback frame stands clear of the crushed roof). A wreck
  * struck again re-arms its hit on the slice's hardest contact, whichever touched first, and a graze too soft to arm no longer shuts the
  * window on the face behind it: a derby sedan's 25 km/h side hits wear its drivetrain out in 6 (each counted its graze's 8 of 36, or none).
+ * The coupe's flanks carry their widest line 5-9 cm under the belt from its tail to its door (its reference's haunch crest), its quarter sill dips
+ * behind the door and rises to the window's point, and its roof's rear corner stands 2 cm wider.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
