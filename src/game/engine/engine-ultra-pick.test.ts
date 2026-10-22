@@ -20,6 +20,11 @@ const HELD_FRAMES = 3;
 /** Ms between polls of the engine's state, and the most a row waits for it. */
 const POLL_MS = 5;
 const WAIT_LIMIT_MS = 10_000;
+/** New programs one step of Ultra's warm-up links (`ULTRA_STEP_PROGRAMS` in engine-warm.ts), and the frames drawn after its draws (`ULTRA_STEP_FRAMES`). */
+const STEP_PROGRAMS = 3;
+const STEP_FRAMES = 2;
+/** Course surfaces Ultra never wore, added before the stepped pick: more new programs than two steps link. */
+const FRESH_SURFACES = 8;
 
 /**
  * The headless context with parallel linking: a program made while `hold(true)` is on reads as still linking (`COMPLETION_STATUS_KHR`
@@ -71,8 +76,10 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
   let engine: CrashEngine;
   let hold: (on: boolean) => void;
   let framing = false;
-  /** What the frames drawn while `framing` drew: the materials whose program had not linked yet, and the programs they made. */
-  const drawn = { unlinked: new Set<string>(), made: 0 };
+  /** What the frames drawn while `framing` drew: the materials whose program had not linked yet, the programs they made and drew. */
+  const drawn = { unlinked: new Set<string>(), made: 0, programs: new Set<unknown>() };
+  /** Frames drawn, and the frame count when the warm-up last drew the scene (its zero-scissor draws, outside a frame). */
+  const tally = { frames: 0, warmDrawAt: -1 };
   const programCount = (): number => (engine["renderer"].info.programs ?? []).length;
   const until = async (done: () => boolean, what: string): Promise<void> => {
     for (let waited = 0; !done(); waited += POLL_MS) {
@@ -81,14 +88,28 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     }
   };
   const warmsDone = (): Promise<void> => until(() => engine["warmsInFlight"] === 0, "warms still in flight");
-  /** Draw `frames` engine frames; the materials they drew unlinked (names, joined) and the programs they made. */
+  /** Draw `frames` engine frames; the materials they drew unlinked (names, joined) and the programs they made (`drawn.programs`: drew). */
   const drawFrames = (frames: number): { unlinked: string; made: number } => {
     drawn.unlinked.clear();
     drawn.made = 0;
+    drawn.programs.clear();
     framing = true;
     engine.advance(frames / FRAME_HZ, { frameDt: 1 / FRAME_HZ, render: true });
+    tally.frames += frames;
     framing = false;
     return { unlinked: [...drawn.unlinked].sort().join(), made: drawn.made };
+  };
+  /** `until`, drawing a frame each poll the way a running loop would; the programs made between two frames are pushed to `between`. */
+  const untilFramed = async (done: () => boolean, what: string, between: number[]): Promise<void> => {
+    let last = programCount();
+    for (let waited = 0; !done(); waited += POLL_MS) {
+      if (waited > WAIT_LIMIT_MS) assert.fail(`${what} after ${WAIT_LIMIT_MS} ms`);
+      await sleep(POLL_MS);
+      between.push(programCount() - last);
+      if (done()) return;
+      drawFrames(1);
+      last = programCount();
+    }
   };
   /** Pick Ultra with its programs held linking, and give the pick the turns it would take in a browser. */
   const pickHeld = async (): Promise<void> => {
@@ -105,9 +126,17 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     const compile = engine["renderer"].compile.bind(engine["renderer"]);
     // A frame's draw links what it draws: the main scene's programs as three picks them for this frame's state.
     const render = (scene: THREE.Scene, camera: THREE.Camera): void => {
-      if (!framing || scene !== engine["scene"]) return;
+      if (scene !== engine["scene"]) return;
+      if (!framing) {
+        tally.warmDrawAt = tally.frames;
+        return;
+      }
       const before = programCount();
-      for (const m of compile(scene, camera)) if (!drawsLinked(engine["renderer"].properties.get(m))) drawn.unlinked.add(m.name || m.type);
+      for (const m of compile(scene, camera)) {
+        const built = engine["renderer"].properties.get(m);
+        if (!drawsLinked(built)) drawn.unlinked.add(m.name || m.type);
+        if (typeof built === "object" && built !== null && "currentProgram" in built) drawn.programs.add(built.currentProgram);
+      }
       drawn.made += programCount() - before;
     };
     Object.assign(engine["renderer"], { render });
@@ -154,5 +183,29 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     assert.equal(engine["cine"].tier, "low");
     assert.ok(engine["scene"].environment === env, "the scene's environment is the tier's own");
     assert.ok(late.material.map === ownMap, "the late surface wears its own map");
+  });
+
+  it("when Ultra is picked from Low (no car finish) on a running loop, then no two frames have more than a step's programs linked between them, frames are drawn between the warm-up's last draws and the switch, and the pick makes only programs the Ultra frames draw", async () => {
+    engine.setFxTier("low");
+    await warmsDone();
+    for (let i = 0; i < FRESH_SURFACES; i++) engine["scene"].add(surface(`ultra-pick-step-${i}`));
+    drawFrames(1);
+    const before = new Set(engine["renderer"].info.programs ?? []);
+    const madeBetweenFrames: number[] = [];
+    engine["loopDraws"] = true;
+    try {
+      engine.setFxTier("ultra");
+      await untilFramed(() => engine["cine"].tier === "ultra", "Ultra never switched in", madeBetweenFrames);
+    } finally {
+      engine["loopDraws"] = false;
+    }
+    const framesBeforeSwitch = tally.frames - tally.warmDrawAt;
+    const first = drawFrames(1);
+    const made = (engine["renderer"].info.programs ?? []).filter((p) => !before.has(p));
+    assert.ok(made.length > 2 * STEP_PROGRAMS, `programs the pick made: ${made.length}, more than two steps link`);
+    assert.ok(Math.max(...madeBetweenFrames) <= STEP_PROGRAMS, `programs made between two frames: ${madeBetweenFrames.join()}`);
+    assert.ok(framesBeforeSwitch >= STEP_FRAMES, `frames between the warm-up's last draws and the switch: ${framesBeforeSwitch}`);
+    assert.equal(made.filter((p) => !drawn.programs.has(p)).length, 0, "programs the pick made that the first Ultra frame does not draw");
+    assert.equal(first.made, 0, "programs the first Ultra frame linked");
   });
 });

@@ -45,6 +45,8 @@ export abstract class EngineInput extends EngineRigs {
   protected abstract tickInner(now: number): void;
   /** The last FX pick is Ultra (a pick of another tier, or Auto, while it loads cancels the switch). */
   private ultraWanted = false;
+  /** Counts the picks of Ultra: a warm-up and its switch belong to the pick that started them, not to an earlier one still stepping. */
+  private ultraPicks = 0;
   private ultraLoad: Promise<boolean> | null = null;
   private readonly pickAt = new THREE.Vector3();
 
@@ -198,13 +200,15 @@ export abstract class EngineInput extends EngineRigs {
    * may hold content Ultra never wore since its last pick), then switch if it is still the player's last pick and still the loaded look.
    */
   private async pickUltra(): Promise<void> {
+    const pick = ++this.ultraPicks;
+    const current = (): boolean => this.ultraWanted && this.ultraPicks === pick;
     this.fxLoading = true;
     this.emitHud();
     await this.loadUltra();
     const ultra = this.cine.ultra;
-    if (this.ultraWanted && ultra !== null) await this.warmUltra(ultra);
-    this.fxLoading = false;
-    if (this.ultraWanted && ultra !== null && this.cine.ultra === ultra && this.cine.tier !== "ultra") {
+    if (current() && ultra !== null) await this.warmUltra(ultra, current);
+    if (this.ultraPicks === pick) this.fxLoading = false;
+    if (current() && ultra !== null && this.cine.ultra === ultra && this.cine.tier !== "ultra") {
       this.autoFx.auto = false;
       this.cine.setTier("ultra");
     }
