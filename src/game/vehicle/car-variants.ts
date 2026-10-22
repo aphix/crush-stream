@@ -374,6 +374,8 @@ export interface BodyStyle {
   bayFloor?: number;
   /** The engine bay trough's front end (m, car z, `bayTub`); absent, 8 cm inside the hood's nose edge (`hood.z1`). A hood wrapping a nose on the profile's own nose rings keeps its bay off them. */
   bayFront?: number;
+  /** How much of the roof's dome a raked pane's top edge falls with (`domeFall`, 0..1), and its posts with it; absent, 1. A flat-roofed cab takes less, so its panes' corners twist less. */
+  domeFall?: number;
   /** A bed's wheel tubs (both builds): over each wheel whose liner stands in a tub floor, a half cylinder `rise` (m) over the floor and `length` along the car, `width` in from the bed's side wall; absent, a drawn-only hump hugs the liner. */
   wheelTub?: { rise: number; length: number; width: number };
   /** A tub's rim width (m): its side wall's top edge stands this far in from the body side (its foot stays 6 cm in); absent, 6 cm. */

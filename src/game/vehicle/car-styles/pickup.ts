@@ -90,6 +90,8 @@ export const PICKUP: BodyStyle = {
   roofZ: [-0.5, 0.45],
   windshieldTop: [1.6, 0.45],
   rearGlass: { base: [1.24, -0.55], top: [1.6, -0.45], wBase: 1.3, wTop: 1.12 },
+  // Its boxy cab's panes take a quarter of the roof's dome: at the full dome the windshield's top corners turned 3.1° and mirrored the garage's key light.
+  domeFall: 0.25,
   privacyGlass: { rear: true },
   quarter: { zRearBot: -0.3, zRearTop: -0.285 },
   midPillarZ: null,

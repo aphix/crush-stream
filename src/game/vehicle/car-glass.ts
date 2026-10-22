@@ -32,7 +32,8 @@ function quadPoint(q: BowedQuad, xn: number, t: number): THREE.Vector3 {
 /** How far (m) a raked pane whose top edge lies at `topZ` falls under its flat quad at car `x`, `t` up from its base: its top edge follows the roof's dome across the car (none at the centre line), fading to the base. */
 export function domeFall(style: BodyStyle, topZ: number): (x: number, t: number) => number {
   const crown = roofTopY(0, topZ, style);
-  return (x, t) => t * (crown - roofTopY(x, topZ, style));
+  const share = style.domeFall ?? 1;
+  return (x, t) => share * t * (crown - roofTopY(x, topZ, style));
 }
 
 /** How a raked pane is drawn: its grid (columns across, rows up), and `facing`, the way its outward normal runs along z. */
