@@ -362,16 +362,18 @@ const PRIVACY_OPACITY = 0.93;
 /**
  * The one material every pane in `look` and `color` wears: a pane changes look by changing material, never by editing its own,
  * so a car's six panes and every other car's share it (the renderer re-sends a material's uniforms each time the draw
- * changes material, and a car's panes were six copies of one). `privacy` panes are near-opaque. Never edit what this returns.
+ * changes material, and a car's panes were six copies of one). `privacy` panes are near-opaque; `frit` panes draw their vertex
+ * colours (a framed rear glass's black band). Never edit what this returns.
  */
-export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR, privacy = false): THREE.MeshStandardMaterial {
-  const key = `${look}:${color}:${privacy}`;
+export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR, privacy = false, frit = false): THREE.MeshStandardMaterial {
+  const key = `${look}:${color}:${privacy}:${frit}`;
   let m = glassByLook.get(key);
   if (m === undefined) {
     m = makeGlassMaterial();
     m.color.setHex(color);
     m.opacity = privacy ? Math.max(GLASS_LOOKS[look].opacity, PRIVACY_OPACITY) : GLASS_LOOKS[look].opacity;
     m.roughness = GLASS_LOOKS[look].roughness;
+    m.vertexColors = frit;
     if (look === "cracked") m.map = getCrackMap();
     m.userData.shared = true;
     glassByLook.set(key, m);

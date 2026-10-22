@@ -293,7 +293,8 @@ export function sideX(y: number, hw: number, yb: number, rockerY: number): numbe
     const sin = Math.min((y - yF) / SHOULDER[1], detSin(SHOULDER_TOP));
     return hw + SIDE_OUT - SHOULDER[0] * (1 - Math.sqrt(1 - sin * sin));
   }
-  const v = Math.min((yF - y) / (yF - rockerY), 1);
+  // A low nose's feature line can fall under its rocker (a bumper read past the nose, where the underside rises): fully tucked there.
+  const v = yF > rockerY ? Math.min((yF - y) / (yF - rockerY), 1) : 1;
   return hw + SIDE_OUT - TUCK * v * v;
 }
 

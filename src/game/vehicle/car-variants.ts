@@ -38,6 +38,8 @@ export interface GlassQuad {
   top: YZ;
   wBase: number;
   wTop: number;
+  /** Drawn only (the rear glass): the clear pane drawn in by [side, bottom, top] (m; sides across, bottom and top along its slope), the band out to the outline the glass's black frit. */
+  frame?: readonly [number, number, number];
 }
 
 /** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
@@ -330,6 +332,8 @@ export interface BodyStyle {
     count?: number;
     badge?: number;
     finish: "black" | "chrome" | "body";
+    /** Its top leaning back (rad) about its centre line, onto a raked face; absent, upright. */
+    lean?: number;
   };
   /**
    * Seats (m, car space): the driver's H-point [x, y, z], x across from the centre line on `DRIVER_SIDE` (the passenger mirrors him),

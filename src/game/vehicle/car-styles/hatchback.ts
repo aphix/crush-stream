@@ -1,5 +1,5 @@
 import type { BodyStyle } from "../car-variants.ts";
-import { st } from "./platform.ts";
+import { pullHandle, st } from "./platform.ts";
 
 /** Hatchback's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const HATCHBACK_LAMP_SHAPES = {
@@ -45,6 +45,9 @@ const HATCHBACK_LAMP_SHAPES = {
     lens: "red",
   },
 } as const;
+
+/** The door pull handles at the reference's places: front z 0..-0.18, rear -0.8..-0.97, both at y 0.7575. */
+const HANDLES = [pullHandle(0, -0.18, 0.7575, 0.025), pullHandle(-0.8, -0.97, 0.7575, 0.025)];
 
 /** Compact five-door: boxy face, near-vertical hatch under a roof spoiler. */
 export const HATCHBACK: BodyStyle = {
@@ -111,7 +114,7 @@ export const HATCHBACK: BodyStyle = {
   ],
   roofZ: [-1.151, 0.421],
   windshieldTop: [1.162, 0.421],
-  rearGlass: { base: [0.94, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9 },
+  rearGlass: { base: [0.94, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9, frame: [0.05, 0.06, 0.11] },
   quarter: { zRearBot: -1.174, zRearTop: -1.07 },
   midPillarZ: -0.86,
   rearBulkhead: { z: -0.95, yTop: 0.8 },
@@ -121,7 +124,7 @@ export const HATCHBACK: BodyStyle = {
     kind: "tailgate",
     y0: 0.57,
     origin: [0.94, -1.615],
-    z0: -1.76,
+    z0: -1.75,
     pivot: [1.277, -1.15],
     // The reference's gate seam: ±.62-.66 above the tail lamps, stepping in to ±.43 between them.
     outline: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84], [0.43, 0.8], [0.43, 0.6]],
@@ -186,13 +189,10 @@ export const HATCHBACK: BodyStyle = {
       { view: "rear", points: [[0.68, 0.64], [0.68, 0.76]], width: 0.03, depth: -0.006, profile: "step", cavity: 0.85 },
       { view: "rear", points: [[0, 0.98], [0.17, 0.98]], width: 0.02, depth: 0.006, profile: "u", cavity: 0.7 },
       { view: "rear", points: [[0.58, 0.5], [0.6, 0.5]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[0, 0.742], [-0.18, 0.742]], width: 0.006, depth: -0.003, profile: "v", cavity: 0.6 },
-      { view: "side", points: [[-0.8, 0.742], [-0.97, 0.742]], width: 0.006, depth: -0.003, profile: "v", cavity: 0.6 },
+      ...HANDLES.flatMap((h) => h.lines),
     ],
     patches: [
       { view: "side", points: [[0.8025, 0.6175], [0.7575, 0.6175], [0.7575, 0.6425], [0.8025, 0.6425]], depth: 0.004, rim: 0.004, cavity: 0 },
-      { view: "side", points: [[0, 0.745], [-0.18, 0.745], [-0.18, 0.77], [0, 0.77]], depth: 0.004, rim: 0.004, cavity: 0 },
-      { view: "side", points: [[-0.8, 0.745], [-0.97, 0.745], [-0.97, 0.77], [-0.8, 0.77]], depth: 0.004, rim: 0.004, cavity: 0 },
       { view: "top", points: [[-0.815, 0], [-0.815, 0.0225], [-0.945, 0.0225], [-0.945, 0]], depth: 0.006, rim: 0.004, cavity: 0 },
       { view: "front", points: [[0, 0.63], [0.36, 0.63], [0.36, 0.52], [0, 0.52]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.02, bar: 0.008, depth: -0.006 }, cavity: 0.8 },
       { view: "front", points: [[0, 0.6], [0.0225, 0.57], [0, 0.54]], depth: 0.006, rim: 0.004, cavity: 0 },
@@ -208,6 +208,7 @@ export const HATCHBACK: BodyStyle = {
       { view: "rear", points: [[0, 0.2], [0.62, 0.2], [0.62, 0.3], [0, 0.3]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.02, bar: 0.008, depth: -0.006 }, cavity: 0.85 },
       { view: "rear", points: [[0.36, 0.27], [0.39, 0.235], [0.51, 0.235], [0.54, 0.27], [0.51, 0.305], [0.39, 0.305]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0.55, 0.31], [0.74, 0.31], [0.74, 0.35], [0.55, 0.35]], depth: -0.003, rim: 0.004, cavity: 0 },
+      ...HANDLES.flatMap((h) => h.patches),
     ],
   },
 };

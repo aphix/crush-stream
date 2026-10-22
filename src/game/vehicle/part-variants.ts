@@ -193,7 +193,9 @@ function styleGrille(style: BodyStyle): THREE.BufferGeometry {
     ...fill.map((f) => finished(f.translate(0, 0, barZ), g.finish)),
   ];
   if (g.badge) parts.push(finished(new THREE.CylinderGeometry(g.badge, g.badge, GRILLE.badge, 24).rotateX(Math.PI / 2).translate(0, 0, face), "chrome"));
-  return mergeToned(parts, "style grille").translate(0, g.y - seat.y - GRILLE_SEAT.y, 0);
+  const geo = mergeToned(parts, "style grille");
+  if (g.lean) geo.translate(0, 0, -face).rotateX(-g.lean).translate(0, 0, face);
+  return geo.translate(0, g.y - seat.y - GRILLE_SEAT.y, 0);
 }
 
 /** The front bumper's drawn fittings in the grille seat's space: the style's grille (or the platform's) and its front bumper lamps. */

@@ -673,7 +673,7 @@ export abstract class CarCore {
         skin,
       };
       this.glassPanes.push(pane);
-      if (privacy) this.wearGlass(pane, "fresh");
+      if (privacy || mesh.geometry.hasAttribute("color")) this.wearGlass(pane, "fresh");
     };
     const glassMat = glassMaterial("fresh");
     const style = this.style;
@@ -795,7 +795,8 @@ export abstract class CarCore {
 
   protected wearGlass(g: GlassPane, look: GlassLook): void {
     g.look = look;
-    g.mesh.material = glassMaterial(look, g.privacy ? _shade.setHex(g.tint).multiplyScalar(PRIVACY_SHADE).getHex() : g.tint, g.privacy);
+    const tint = g.privacy ? _shade.setHex(g.tint).multiplyScalar(PRIVACY_SHADE).getHex() : g.tint;
+    g.mesh.material = glassMaterial(look, tint, g.privacy, g.mesh.geometry.hasAttribute("color"));
   }
 
   /** The paints (sRGB) a style's body-colour parts take (`finish` "body"): the grille the body's, the mirror caps the doors'. */
