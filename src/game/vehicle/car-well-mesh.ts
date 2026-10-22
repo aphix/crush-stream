@@ -31,6 +31,8 @@ export function makeWellLiners(style: BodyStyle, source: BodySource, loft?: THRE
   const r = style.arch.radius;
   return carFrame(style).wheels.map(([wx, wy, wz]) => {
     const x = linerX(wx, wz, style);
+    const wall = source === "drawn" && x !== wx ? style.arch.wellWall : undefined;
+    const widen = wall === undefined ? 0 : Math.abs(x) - WELL_LINER_WIDTH / 2 - wall;
     // Drawn, each foot ends at the rocker over it where that stands above the hub, so no liner hangs below the body side.
     const foot = (sign: number) => {
       const c = source === "drawn" ? Math.min(1, (rockerAt(wz + sign * r, style) - wy) / r) : 0;
@@ -38,10 +40,10 @@ export function makeWellLiners(style: BodyStyle, source: BodySource, loft?: THRE
     };
     // θ 0 is the front foot on the right side, the rear foot on the left (turned about y).
     const [start, end] = wx > 0 ? [foot(1), foot(-1)] : [foot(-1), foot(1)];
-    const geo = new THREE.CylinderGeometry(r, r, WELL_LINER_WIDTH, 14, 1, true, start, Math.PI - start - end);
+    const geo = new THREE.CylinderGeometry(r, r, WELL_LINER_WIDTH + widen, 14, 1, true, start, Math.PI - start - end);
     geo.rotateZ(Math.PI / 2);
     geo.rotateY(wx > 0 ? 0 : Math.PI);
-    geo.translate(x, wy, wz);
+    geo.translate(x - (Math.sign(wx) * widen) / 2, wy, wz);
     if (source === "cage") return withLinerUv(geo);
     if (!loft) throw new Error(`${style.id}: a drawn liner needs the drawn loft its ends fit inside`);
     tuckOuterEnd(geo, loft, Math.sign(wx), Math.abs(x), wy, wz, r);
@@ -55,9 +57,14 @@ export function makeWellLiners(style: BodyStyle, source: BodySource, loft?: THRE
     const parts: THREE.BufferGeometry[] = [geo, inside];
     if (x !== wx) {
       // A half disc over the hub, facing out through the opening, its feet trimmed as the liner's (θ 0 is the rear foot on the right).
-      const end = wellFloor(style, source, wy, wz) < Infinity ? sampleSlice(wz, style.profile).hw - BED_WALL_INSET + 2 * HUMP_SINK : Math.abs(x) - WELL_LINER_WIDTH / 2;
+      const floor = wellFloor(style, source, wy, wz);
+      const bedWall = sampleSlice(wz, style.profile).hw - BED_WALL_INSET + 2 * HUMP_SINK;
+      const end = wall ?? (floor < Infinity ? bedWall : Math.abs(x) - WELL_LINER_WIDTH / 2);
       const [capStart, capEnd] = wx > 0 ? [foot(-1), foot(1)] : [foot(1), foot(-1)];
-      const cap = new THREE.CircleGeometry(r, 14, capStart, Math.PI - capStart - capEnd).rotateY((Math.sign(wx) * Math.PI) / 2);
+      const turn = (Math.sign(wx) * Math.PI) / 2;
+      const cap = new THREE.CircleGeometry(r, 14, capStart, Math.PI - capStart - capEnd).rotateY(turn);
+      // An inboard wall stands behind the bed's side wall: over the bed floor the opening still meets a cap at that wall.
+      if (wall !== undefined && floor < Infinity) parts.push(overFloor(r, floor - wy).rotateY(turn).translate(Math.sign(wx) * bedWall, wy, wz));
       parts.push(cap.translate(Math.sign(wx) * end, wy, wz));
     }
     const liner = mergeGeometries(parts, false);
@@ -65,6 +72,12 @@ export function makeWellLiners(style: BodyStyle, source: BodySource, loft?: THRE
     for (const g of parts) g.dispose();
     return withLinerUv(liner);
   });
+}
+
+/** The segment of a disc of radius `r` about the origin (in the x-y plane, as `CircleGeometry`) over the chord at y = `above`. */
+function overFloor(r: number, above: number): THREE.BufferGeometry {
+  const from = detAtan2(above, Math.sqrt(r * r - above * above));
+  return new THREE.ShapeGeometry(new THREE.Shape().absarc(0, 0, r, from, Math.PI - from, false), 7);
 }
 
 function withLinerUv(geo: THREE.BufferGeometry): THREE.BufferGeometry {

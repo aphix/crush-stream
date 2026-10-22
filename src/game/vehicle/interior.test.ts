@@ -245,6 +245,28 @@ describe("given a monster truck of its class at rest on flat ground", () => {
     assert.ok(worst <= 0, `a frame vertex at ${at} stands ${(worst * 100).toFixed(1)} cm past the body side`);
   });
 
+  test("when each drawn well is looked into from the side at its springs' height, then the first well surface stands inboard of the springs, so they show against it", () => {
+    /** The springs' band in body space (m): over the bracket boxes, under the top mount. */
+    const SPRING = { low: 0.3, high: 0.6, inboard: 0.5, along: 0.25 } as const;
+    const frame = partGeometry(PART_KIND.ladderFrame).getAttribute("position");
+    const body = makeChassisGeometry(monster.style);
+    const liners = makeWellLiners(monster.style, "drawn", body);
+    const look = new THREE.Raycaster();
+    for (const [k, wheel] of carFrame(monster.style).wheels.entries()) {
+      const side = Math.sign(wheel[0]);
+      let spring = Infinity;
+      for (let i = 0; i < frame.count; i++) {
+        v.fromBufferAttribute(frame, i);
+        if (v.x * side < SPRING.inboard || v.y < SPRING.low || v.y > SPRING.high || Math.abs(v.z - wheel[2]) > SPRING.along) continue;
+        spring = Math.min(spring, v.x * side);
+      }
+      look.set(new THREE.Vector3(side * 2, (SPRING.low + SPRING.high) / 2, wheel[2]), new THREE.Vector3(-side, 0, 0));
+      const hit = look.intersectObject(new THREE.Mesh(liners[k], new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })))[0];
+      const wall = hit ? hit.point.x * side : -Infinity;
+      assert.ok(spring < Infinity && hit && wall < spring, `wheel ${k}: first well surface at |x| ${wall.toFixed(3)}, innermost spring at ${spring.toFixed(3)}`);
+    }
+  });
+
   test("when its front-left wheel pops off, then the front axle still draws, its stub on the gone wheel's rest hub where it stood", () => {
     const popped = build("monster");
     const own = new PartBatch(1);
