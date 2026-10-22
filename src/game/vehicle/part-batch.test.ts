@@ -3,7 +3,7 @@ import { after, describe, test } from "node:test";
 import * as THREE from "three";
 import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
 import { DeformableCar } from "./car.ts";
-import { BUMPER_F } from "./constants.ts";
+import { BUMPER_F, DRIVER_SIDE } from "./constants.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
@@ -28,7 +28,7 @@ const DENT_REACH = 0.26;
 /** Seats of a kind one car at rest draws: its `PART_PER_CAR`, and none of the bay or the crash bars (hood and bumpers on), nor a lifted truck's undercarriage (a sedan has none). */
 const atRest = (kind: number): number => (kind === PART_KIND.engineBay || kind === PART_KIND.crashBar || kind === PART_KIND.ladderFrame || kind === PART_KIND.axle ? 0 : PART_PER_CAR[kind]!);
 /** The kinds a style may draw its own way: `PartBatch.styled` draws them, their variants lying in `styled.variants` in this order. */
-const STYLED: readonly PartKind[] = [PART_KIND.mirrorL, PART_KIND.mirrorR, PART_KIND.grille, PART_KIND.tailTrim];
+const STYLED: readonly PartKind[] = [PART_KIND.mirrorL, PART_KIND.mirrorR, PART_KIND.grille, PART_KIND.tailTrim, PART_KIND.wipers];
 
 /** Where styled `kind`'s variants lie in `PartBatch.styled.variants` ([first, end)): after those of the styled kinds before it, the platform part first. */
 function variantRange(kind: PartKind): [number, number] {
@@ -119,7 +119,7 @@ describe("given the part batch and a few cars near the camera", () => {
     assertSameNumbers(matrix.elements, seat.matrixWorld.elements, "the mirror row is the seat's world matrix", FLOAT32_SLACK);
   });
 
-  test("when every kind's draws are read, then it draws the kind's one shared geometry (a door card's: the one inside every door skin), or, for a kind a style draws its own way (mirrors, grille, tail trim), has no draw of its own and its variants in the one styled draw start with the platform part", () => {
+  test("when every kind's draws are read, then it draws the kind's one shared geometry (a door card's: the one inside every door skin), or, for a kind a style draws its own way (mirrors, grille, tail trim, wipers), has no draw of its own and its variants in the one styled draw start with the platform part", () => {
     const { batch } = stage();
     for (const kind of PART_KINDS) {
       const mesh = batch.kinds[kind];
@@ -158,6 +158,60 @@ describe("given the part batch and one car of each style", () => {
         expected += n * own;
       }
       assert.equal(batch.styled.triangles, expected, `${id}: the styled draw bills ${batch.styled.triangles} triangles for ${expected} of its own`);
+      batch.dispose();
+    }
+  });
+});
+
+describe("given the part batch and one car of each style, its windshield whole and then shattered", () => {
+  /** Off the glass (m): nothing of the wipers deeper than this into it, and the pivot cap, standing highest, under the other. */
+  const [INTO_GLASS, OVER_GLASS] = [0.001, 0.06];
+
+  /** Each vertex of `part`'s geometry against the glass `pane` draws (both in the pane's space): how far out of the glass it stands, nearest facet's side. */
+  const offGlass = (part: THREE.BufferGeometry, pane: THREE.BufferGeometry): number[] => {
+    const [pos, glass, index] = [part.getAttribute("position"), pane.getAttribute("position"), pane.index!];
+    const tri = new THREE.Triangle();
+    const [p, q, n] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    const out: number[] = [];
+    for (let v = 0; v < pos.count; v++) {
+      p.fromBufferAttribute(pos, v);
+      let [best, off] = [Infinity, 0];
+      for (let t = 0; t < index.count; t += 3) {
+        tri.setFromAttributeAndIndices(glass, index.getX(t), index.getX(t + 1), index.getX(t + 2));
+        const d = tri.closestPointToPoint(p, q).distanceTo(p);
+        if (d >= best) continue;
+        tri.getNormal(n);
+        if (n.z < 0) n.negate();
+        [best, off] = [d, p.clone().sub(q).dot(n) >= 0 ? d : -d];
+      }
+      out.push(off);
+    }
+    return out;
+  };
+
+  test(`when each car is synced, then its own wipers draw (one seat, its style's variant, riding the windshield): each blade parked along the glass's base, its tip toward the driver's side (x +${DRIVER_SIDE}), a share of the base width, the whole part on the glass's outside within ${OVER_GLASS * 100} cm of it; once the windshield shatters, they are gone with it`, () => {
+    for (const id of CAR_STYLE_IDS) {
+      const { batch, car, draw } = stage(1);
+      const only = car(10, id);
+      const style = CAR_STYLES[id];
+      draw([only]);
+      const seat = only.partSeats[PART_KIND.wipers]!;
+      const pane = only.glassPanes.find((g) => g.name === "windshield")!.mesh;
+      assert.equal(`${batch.drawn(PART_KIND.wipers)} ${rowsOf(batch, PART_KIND.wipers).length} ${seat.variant > 0} ${seat.parent === pane}`, "1 1 true true", `${id}: one wiper seat drawn in the styled draw, its style's own, on the windshield`);
+      const blades = seat.drawn.userData.blades as { pivot: number[]; tip: number[] }[];
+      assert.equal(blades.length, style.wipers?.count ?? 2, `${id}: blades`);
+      for (const { pivot, tip } of blades) {
+        assert.ok(Math.sign(tip[0]! - pivot[0]!) === (style.wipers?.park ?? DRIVER_SIDE), `${id}: a blade parks from x ${pivot[0]!.toFixed(2)} to ${tip[0]!.toFixed(2)}`);
+        const share = Math.abs(tip[0]! - pivot[0]!) / style.windshield.wBase;
+        assert.ok(share > 0.25 && share < 0.55, `${id}: a blade spans ${share.toFixed(2)} of the base width`);
+        assert.ok(pivot[1]! > style.windshield.base[0] && pivot[1]! < style.windshield.base[0] + 0.06, `${id}: a pivot at y ${pivot[1]!.toFixed(3)}, just over the glass's base ${style.windshield.base[0]}`);
+      }
+      const off = offGlass(seat.drawn, pane.geometry);
+      const [low, high] = [Math.min(...off), Math.max(...off)];
+      assert.ok(low > -INTO_GLASS && high < OVER_GLASS, `${id}: the wipers stand ${(low * 1000).toFixed(1)} to ${(high * 1000).toFixed(1)} mm off the glass`);
+      only.smashGlass("windshield");
+      draw([only]);
+      assert.equal(`${batch.drawn(PART_KIND.wipers)} ${rowsOf(batch, PART_KIND.wipers).length}`, "0 0", `${id}: wipers drawn over a shattered windshield`);
       batch.dispose();
     }
   });

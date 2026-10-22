@@ -84,6 +84,11 @@ export function makeWindshield(style: BodyStyle = SEDAN): THREE.BufferGeometry {
   return makeGlassQuad(windshieldQuad(style), WINDSHIELD_DRAW);
 }
 
+/** A point of `style`'s windshield in car space: `xn` −1…1 across, `t` 0…1 its base to its top, on its bow and its dome's fall (a fresh vector). */
+export function windshieldPoint(style: BodyStyle, xn: number, t: number): THREE.Vector3 {
+  return quadPoint(windshieldQuad(style), xn, t).clone();
+}
+
 /** Glass quad `q` drawn in by its `frame` ([side, bottom, top], m: sides across, bottom and top along its slope), bowed and fallen as `q`. */
 function framedQuad(q: BowedQuad, [side, bottom, top]: readonly [number, number, number]): BowedQuad {
   const len = hypot2(q.top[0] - q.base[0], q.top[1] - q.base[1]);

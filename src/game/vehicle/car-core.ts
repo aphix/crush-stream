@@ -544,6 +544,8 @@ export abstract class CarCore {
     this.setPartPaint(livery?.body ?? paint.body, livery?.doors ?? paint.body);
 
     this.addGlass();
+    // The wipers ride the windshield pane (their geometry is in its car space): they go where it goes, and hide with it once it shatters.
+    this.glassPanes.find((g) => g.name === "windshield")!.mesh.add(this.partSeats[PART_KIND.wipers]!);
     this.registerParts();
     this.cabin.watch(this.parts);
     this.buildHullHelper();
