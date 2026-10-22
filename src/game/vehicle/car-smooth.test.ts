@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId, type DrawnTwin } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
-import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantX, cantY, glassTopY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
+import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantX, cantY, glassTopY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofArc, roofTopY, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
 import { beltX, beltY } from "./car-lines.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
@@ -796,6 +796,8 @@ const SAIL_ROOF_COVER = 0.001;
 const SAIL_FLAT_BOW = 0.001;
 const SAIL_SINK_TEST = 0.002;
 const SAIL_OUTER_POINTS = 6;
+/** A sail ahead of its roof end (`cPillar.reachLip`) leaves at most this far (m) of the roof's cant lip past its outer face: the owner's 5 mm. */
+const SAIL_LIP_GAP = 0.005;
 
 /** The coupe on a curved roof section (`roofSection`): the sail rows read it beside every style as built. */
 const DOMED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, roofSection: { crown: 0.5, blend: 0.5 } };
@@ -815,6 +817,30 @@ const WINDOW_POINT_RUN = 0.1;
 const WINDOW_POINT_STEP = 0.001;
 /** At a pinched sail's front ring, where the window's line has rounded into the glass's top line, the sail reaches at most this far (m) under that line: two beads' span, not a post's depth cutting the rounded corner off. */
 const PINCH_FRONT_UNDER = 0.035;
+
+/** `style`'s +x sail's rings (every vertex of each section), rear to front. */
+function sailRings(style: BodyStyle): THREE.Vector3[][] {
+  const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+  const { ring, slices } = loftOf(sail);
+  return Array.from({ length: slices }, (_, s) => Array.from({ length: ring }, (_, k) => positionAt(sail, s * ring + k)));
+}
+
+/** A section's outer points' offsets (m, + outboard) off its foot-to-head chord. */
+function chordOffsets(section: THREE.Vector3[]): number[] {
+  const [foot, head] = [section[0]!, section[SAIL_OUTER_POINTS - 1]!];
+  const run = Math.hypot(head.x - foot.x, head.y - foot.y);
+  return section.slice(0, SAIL_OUTER_POINTS).map((p) => ((p.x - foot.x) * (head.y - foot.y) - (p.y - foot.y) * (head.x - foot.x)) / run);
+}
+
+/** How far (m) the roof's cant lip at the section's z stands outboard of its outer face where that face crosses the lip's height; NaN if it never does. */
+function lipGap(style: BodyStyle, section: THREE.Vector3[]): number {
+  const lip = roofArc(section[0]!.z, style)!(1);
+  for (let k = 1; k < SAIL_OUTER_POINTS; k++) {
+    const [a, b] = [section[k - 1]!, section[k]!];
+    if ((a.y - lip.y) * (b.y - lip.y) <= 0) return lip.x - THREE.MathUtils.lerp(a.x, b.x, (lip.y - a.y) / (b.y - a.y));
+  }
+  return NaN;
+}
 
 /**
  * Side view of `style`'s +x window point: how far (m) ahead of the point (where the window's line, tip to the glass's top corner,
@@ -965,6 +991,41 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       assert.ok(off.length === 0, `${id}: the outer face folds across ${off.join("; ")}`);
     });
   }
+  it(`when the coupe's flat sail sets \`cPillar.reachLip\`, then ahead of its roof end every section's outer face meets the roof's cant lip within ${SAIL_LIP_GAP * 1000} mm at the lip's height, not a chord to a head under the roof's edge`, () => {
+    const stock = CAR_STYLES.coupe;
+    const reach: BodyStyle = { ...stock, cPillar: { ...stock.cPillar!, reachLip: 1 } };
+    const ahead = (style: BodyStyle) => sailRings(style).filter(([foot]) => foot!.z > style.roofZ[0] && foot!.z <= drawnQuarter(style).zRearTop);
+    const gaps = ahead(reach).map((section) => lipGap(reach, section));
+    assert.ok(gaps.length >= 2, `${gaps.length} sections ahead of the roof end up to the quarter's top`);
+    assert.ok(gaps.every((gap) => Math.abs(gap) <= SAIL_LIP_GAP), `lip past the face (mm): ${gaps.map((gap) => (gap * 1000).toFixed(1)).join(", ")}`);
+    const control = lipGap(stock, ahead(stock)[0]!);
+    assert.ok(control > SAIL_LIP_GAP, `the stock coupe's lip overhangs: the row would not catch it (${(control * 1000).toFixed(1)} mm)`);
+  });
+  it("when the coupe's flat sail sets `cPillar.rollShare` 0.5, then each ring behind its roof end carries half the stock's offset off its chord and every vertex at or ahead of the roof end is the stock's", () => {
+    const stock = CAR_STYLES.coupe;
+    const [base, halved] = [stock, { ...stock, cPillar: { ...stock.cPillar!, rollShare: 0.5 } }].map(sailRings);
+    const atEnd = stock.roofZ[0] - SAIL_ROOF_GAP;
+    const off: string[] = [];
+    let [behind, carried] = [0, 0];
+    for (let s = 0; s < base.length; s++) {
+      const [stockRing, halfRing] = [base[s]!, halved[s]!];
+      const z = stockRing[0]!.z;
+      if (z >= atEnd) {
+        const [kept, changed] = [stockRing, halfRing].map((ring) => ring.map((p) => `${p.x.toFixed(6)} ${p.y.toFixed(6)} ${p.z.toFixed(6)}`).join());
+        if (kept !== changed) off.push(`z ${z.toFixed(3)} at or ahead of the roof end differs from the stock's`);
+        continue;
+      }
+      behind++;
+      const [whole, half] = [stockRing, halfRing].map(chordOffsets);
+      for (let k = 1; k < SAIL_OUTER_POINTS - 1; k++) {
+        carried = Math.max(carried, Math.abs(whole[k]!));
+        if (Math.abs(half[k]! - 0.5 * whole[k]!) > 1e-6) off.push(`z ${z.toFixed(3)} point ${k}: ${(half[k]! * 1000).toFixed(2)} mm off its chord, the stock's ${(whole[k]! * 1000).toFixed(2)} mm`);
+      }
+    }
+    assert.ok(behind >= 2, `${behind} rings behind the roof end`);
+    assert.ok(carried > 0.001, `the stock's roll offsets stand at most ${(carried * 1000).toFixed(2)} mm off the chord: the row would not catch a wrong share`);
+    assert.ok(off.length === 0, off.join("; "));
+  });
   for (const [id, style] of SAIL_STYLES.filter(([, s]) => (s.cPillar?.pinch ?? 0) > 0)) {
     it(`when a ${id}'s pinched side window is read in the side view, then its glass shows within ${WINDOW_POINT_SHOWS * 1000} mm of the window's point: the sail never cuts across it`, () => {
       const blunt = windowPointCover(UNPINCHED_COUPE);

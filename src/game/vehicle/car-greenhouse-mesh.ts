@@ -826,12 +826,13 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   // the flat haunch meets the roll, nor where the roll meets the post.
   const rollEnd = style.cPillar?.flat === true && roofEndZ < style.roofZ[0] ? section(roofEndZ) : null;
   const front = zs[zs.length - 1]!;
+  const reachLip = style.cPillar?.reachLip ?? 0;
   // Ahead of the roof end a pinched window's mid ring stands mid-run, where a smoothstep let-go turns fastest: that sail keeps the roll
   // level off the roof end and lets it go toward its front ring, where the section narrows to the post's sliver anyway.
   const rings = zs.map((z): Pt[] => {
     const ring = section(z);
     const letGo = pinch > 0 ? 1 - ((z - roofEndZ) / (front - roofEndZ)) ** 2 : 1 - THREE.MathUtils.smoothstep(z, roofEndZ, front);
-    const w = !rollEnd || z === roofEndZ ? 0 : z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - (style.cPillar?.blend ?? SAIL_ROLL_BLEND), roofEndZ) : letGo;
+    const w = !rollEnd || z === roofEndZ ? 0 : z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - (style.cPillar?.blend ?? SAIL_ROLL_BLEND), roofEndZ) * (style.cPillar?.rollShare ?? 1) : letGo;
     if (w === 0) return ring;
     const [a, b] = [rollEnd![0]!, rollEnd![SAIL_OUTER - 1]!];
     const endRun = hypot2(b.x - a.x, b.y - a.y);
@@ -845,6 +846,19 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
       const [t, n] = [((p.x - a.x) * eu + (p.y - a.y) * ev) / endRun, eu * (p.y - a.y) - ev * (p.x - a.x)];
       const s = lerp(((q.x - foot.x) * ux + (q.y - foot.y) * uy) / run, t, w);
       ring[k] = { x: foot.x + s * run * ux - w * n * uy, y: foot.y + s * run * uy + w * n * ux };
+    }
+    // `reachLip`: ahead of the roof end the face takes the roll end's own shape, carried from its foot, cant lip and head onto this ring's
+    // foot, the roof's cant point at its z and its head: it reaches the lip at the cant line, not a chord to a head tucked under the roof.
+    const roofLip = reachLip > 0 && z > roofEndZ ? roofArc(z, style)?.(1) : undefined;
+    if (roofLip) {
+      const l = rollEnd![1]!;
+      const det = (l.x - a.x) * (b.y - a.y) - (l.y - a.y) * (b.x - a.x);
+      const [lx, ly] = [sign * roofLip.x - foot.x, roofLip.y - foot.y];
+      for (let k = 1; k < SAIL_OUTER - 1; k++) {
+        const [px, py] = [rollEnd![k]!.x - a.x, rollEnd![k]!.y - a.y];
+        const [m, n] = [(px * (b.y - a.y) - py * (b.x - a.x)) / det, ((l.x - a.x) * py - (l.y - a.y) * px) / det];
+        ring[k] = { x: lerp(ring[k]!.x, foot.x + m * lx + n * (head.x - foot.x), reachLip), y: lerp(ring[k]!.y, foot.y + m * ly + n * (head.y - foot.y), reachLip) };
+      }
     }
     return ring;
   });

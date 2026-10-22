@@ -445,8 +445,10 @@ export interface BodyStyle {
    * pinched window's corner the sail's head is a bead, and its inner face holds the head's depth to mid-face; absent, a post's round head.
    * `blend` (m): a flat sail takes on the roof end's roll over this run behind the roof's rear end (the rest of its haunch straight); absent 0.45.
    * `railRun` (m, drawn only): the belt rail runs on this far behind the quarter glass's rear point, under the sail's foot; absent, it ends at the point.
+   * `rollShare` (0..1, drawn only): the share of the roof end's roll a flat sail's rings behind the roof end carry (absent 1); less keeps a widened roof end's bulge off the haunch.
+   * `reachLip` (0..1, drawn only, a flat sail on a `roofSection`): ahead of the roof end the sail's outer face reaches the roof's cant lip at the cant line (the roll end's own section carried onto each ring), not a chord under the roof's edge; absent 0.
    */
-  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; sweep?: number; bead?: boolean; blend?: number; railRun?: number };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; sweep?: number; bead?: boolean; blend?: number; railRun?: number; reachLip?: number; rollShare?: number };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Drawn only: the body paint's base roughness, clear coat and clear coat roughness (`makePaintMaterial`); absent the platform paint's (0.42, 0.72, 0.24). */
