@@ -33,11 +33,19 @@ export interface ProfileStation {
 /** [y, z] in car space. */
 export type YZ = readonly [number, number];
 
+/** A raked pane's plan bow (m, along z, + forward): how far its centre line stands off its edges' line at the base and at the top. */
+export interface GlassBow {
+  base: number;
+  top: number;
+}
+
+/** A raked pane: its edges' base and top [y, z] and widths; `bow` its centre line's plan bow (default `REAR_GLASS_BOW`). */
 export interface GlassQuad {
   base: YZ;
   top: YZ;
   wBase: number;
   wTop: number;
+  bow?: GlassBow;
   /** Drawn only (the rear glass): the clear pane drawn in by [side, bottom, top] (m; sides across, bottom and top along its slope), the band out to the outline the glass's black frit. */
   frame?: readonly [number, number, number];
 }
@@ -261,8 +269,14 @@ export interface BodyStyle {
   profile: readonly ProfileStation[];
   /** Roof panel [rear, front] z. */
   roofZ: readonly [number, number];
-  /** Windshield: base [y, z] of its centre line and its widths at the base and the top (`windshieldTop`). */
-  windshield: { base: YZ; wBase: number; wTop: number };
+  /**
+   * Drawn only: over this run (m) in from each end the drawn roof rolls onto that end's glass top in a quarter ellipse, its crown
+   * settling to the glass top's height and its whole section dropping where the glass top sits under the dome's edge (`roofDome`);
+   * unset, the roof ends in its full section.
+   */
+  roofEnds?: { rear?: number; front?: number };
+  /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
+  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;
   /** B-pillar z band. */
   bPillar: { rear: number; front: number };

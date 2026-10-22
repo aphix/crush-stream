@@ -23,8 +23,8 @@ export function finishForTier(tier: FinishTierName): boolean {
 const PAINT_MAP_SIZE = 256;
 /** Trim grain map edge (texels): one channel at 0.6 mm a texel over `TRIM_TILE_M`; a stipple needs no more. */
 const TRIM_MAP_SIZE = 128;
-/** Anisotropic filtering on both maps: a flank is seen at a grazing angle, where plain trilinear blurs the relief away. Three clamps it to the GPU's limit. */
-const MAP_ANISOTROPY = 8;
+/** Anisotropic filtering on the car's surface maps (the finish's and the detail atlas): a flank or a hood is seen at a grazing angle, where plain trilinear blurs the relief and the shut lines away. Three clamps it to the GPU's limit. */
+export const MAP_ANISOTROPY = 8;
 
 /** One layer of value noise: `cells` lattice cells across the tile, each added at `weight`. */
 type NoiseOctave = { readonly cells: number; readonly weight: number };

@@ -59,12 +59,14 @@ export abstract class CarGlass extends CarCore {
     return true;
   }
 
-  /** World centre of pane `name` (its rest shape's box centre on its current seat). */
+  /** World centre of pane `name` on its current seat: a raked pane's bowed centre (`userData.centre`), else its rest shape's box centre. */
   glassWorld(name: GlassName, out: THREE.Vector3): THREE.Vector3 {
     const g = this.glassPanes.find((p) => p.name === name)!;
     const geo = g.mesh.geometry;
-    if (!geo.boundingBox) geo.computeBoundingBox();
     g.mesh.updateWorldMatrix(true, false);
+    const centre = geo.userData.centre as readonly [number, number, number] | undefined;
+    if (centre) return out.fromArray(centre).applyMatrix4(g.mesh.matrixWorld);
+    if (!geo.boundingBox) geo.computeBoundingBox();
     return geo.boundingBox!.getCenter(out).applyMatrix4(g.mesh.matrixWorld);
   }
 }

@@ -7,6 +7,7 @@ import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { DeformableCar } from "./car.ts";
 import { applyDetailMap, REST_FRAME_ATTRIBUTES } from "./car-detail-map.ts";
 import { compileHooks, detailPaint, detailReader, switchFinish } from "./car-detail-map.test-util.ts";
+import { MAP_ANISOTROPY } from "./car-finish.ts";
 import { makePaintMaterial } from "./car-materials.ts";
 import { CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
@@ -204,6 +205,13 @@ describe("given the detail compile hook on a paint material", () => {
     assert.ok(fragmentShader.includes("uniform sampler2D detailMap;"), "the sampler is declared");
     assert.ok(fragmentShader.includes("float detailNear = finishMeshNear();"), "the detail reads the finish's mesh distance gate");
     assert.ok(fragmentShader.includes("float detailX = abs(vDetailPos.x);"), "the top and end tiles are read at |x|, mirroring the x >= 0 strokes");
+  });
+
+  it("when its atlas is read, then it is mip-mapped and anisotropically filtered as the finish's maps are: a hood seen from the chase camera and a flank seen edge-on keep their shut lines and vents instead of taking the blurred mip", () => {
+    const texture = compileHooks(detailPaint(style)).uniforms.detailMap!.value as THREE.DataTexture;
+    assert.equal(texture.minFilter, THREE.LinearMipmapLinearFilter, "trilinear");
+    assert.ok(texture.generateMipmaps, "mip-mapped");
+    assert.equal(texture.anisotropy, MAP_ANISOTROPY, "anisotropic as the finish's maps");
   });
 
   it("when the finish is on, then the bump's slope comes from texel differences along each tile, never from the screen derivative of the filtered height", () => {
