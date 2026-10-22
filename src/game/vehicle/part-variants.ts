@@ -78,15 +78,15 @@ const MIRROR_FITTING = [0x1c1e22, 0.5, 0.3] as const;
 /** A tear cap's section at its rear face (a nose cap's at its front face) as a share of the full section: the sedan's mirror sweeps in toward its glass, the hatch's and SUV's toward their noses. */
 const MIRROR_TEAR = 0.6;
 
-/** `geo` (a centred w x h x d rounded box, outward +`sign`) tapered linearly to `MIRROR_TEAR` at its rear face (`toward` -1: a tear) or its front face (+1: a nose), its inner face held; normals by the taper's inverse transpose. */
-function taperCap(geo: THREE.BufferGeometry, sign: number, w: number, d: number, toward: -1 | 1): THREE.BufferGeometry {
+/** `geo` (a centred w x h x d rounded box, outward +`sign`) tapered linearly to `small` (a share of its section) at its rear face (`toward` -1: a tear) or its front face (+1: a nose), its inner face held; normals by the taper's inverse transpose. */
+function taperCap(geo: THREE.BufferGeometry, sign: number, w: number, d: number, toward: -1 | 1, small: number): THREE.BufferGeometry {
   const pos = geo.getAttribute("position");
   const nrm = geo.getAttribute("normal");
-  const ds = (-toward * (1 - MIRROR_TEAR)) / d;
+  const ds = (-toward * (1 - small)) / d;
   const n = new THREE.Vector3();
   for (let i = 0; i < pos.count; i++) {
     const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
-    const s = MIRROR_TEAR + ds * (z - (toward * d) / 2);
+    const s = small + ds * (z - (toward * d) / 2);
     n.set(nrm.getX(i) / s, nrm.getY(i) / s, nrm.getZ(i) - (ds * (x + (sign * w) / 2) * nrm.getX(i) + ds * y * nrm.getY(i)) / s).normalize();
     pos.setXYZ(i, s * x - sign * (w / 2) * (1 - s), s * y, z);
     nrm.setXYZ(i, n.x, n.y, n.z);
@@ -122,11 +122,12 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const scaleX = reach / MIRROR_REACH;
   const root = MIRROR_ROOT * scaleX;
   const lift = spec.lift ?? 0;
+  const small = spec.taper ?? MIRROR_TEAR;
   const capY = MIRROR_CAP_Y + lift;
   const fitting = (geo: THREE.BufferGeometry) => (spec.finish === "chrome" ? finished(geo, "chrome") : dark(geo, ...MIRROR_FITTING));
   // RoundedBoxGeometry comes unindexed; the other pieces are indexed, and a merge takes one kind.
   const rounded = spec.cap === "box" ? null : withoutRearFace(mergeVertices(new RoundedBoxGeometry(w, h, d, 2, (spec.round ?? MIRROR_CAP_ROUND) * Math.min(w, h, d))), d);
-  const capShape = rounded ? (spec.cap === "tear" ? taperCap(rounded, sign, w, d, -1) : spec.cap === "nose" ? taperCap(rounded, sign, w, d, 1) : rounded) : new THREE.BoxGeometry(w, h, d);
+  const capShape = rounded ? (spec.cap === "tear" ? taperCap(rounded, sign, w, d, -1, small) : spec.cap === "nose" ? taperCap(rounded, sign, w, d, 1, small) : rounded) : new THREE.BoxGeometry(w, h, d);
   // A black housing is gloss (the references' piano black), not the grilles' and bumpers' satin plastic.
   const cap = spec.finish === "black" ? dark(capShape, TRIM_BLACK, TRIM_FINISH.gloss.roughness, TRIM_FINISH.gloss.metalness) : finished(capShape, spec.finish);
   const parts = [cap.translate(sign * (reach - w / 2), capY, 0)];
@@ -139,8 +140,8 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const [stalkFrom, stalkTo] = [root + MIRROR_FOOT.out, reach - w + MIRROR_FOOT.out / 2];
   if (stalkTo > stalkFrom) parts.push(fitting(new THREE.BoxGeometry(stalkTo - stalkFrom, ...MIRROR_STALK)).translate((sign * (stalkFrom + stalkTo)) / 2, capY, 0));
   const tear = spec.cap === "tear";
-  const [glassW, glassH] = tear ? [w * MIRROR_TEAR * MIRROR_GLASS.share[0], h * MIRROR_TEAR * MIRROR_GLASS.share[1]] : [w * MIRROR_GLASS.share[0], h * MIRROR_GLASS.share[1]];
-  const glassCx = tear ? sign * (reach - w / 2) - sign * (w / 2) * (1 - MIRROR_TEAR) : sign * (reach - w / 2);
+  const [glassW, glassH] = tear ? [w * small * MIRROR_GLASS.share[0], h * small * MIRROR_GLASS.share[1]] : [w * MIRROR_GLASS.share[0], h * MIRROR_GLASS.share[1]];
+  const glassCx = tear ? sign * (reach - w / 2) - sign * (w / 2) * (1 - small) : sign * (reach - w / 2);
   const glass = dark(new THREE.PlaneGeometry(glassW, glassH), 0x9aa8b4, 0.08, 0.7).rotateY(Math.PI);
   parts.push(glass.translate(glassCx, capY, -d / 2 - MIRROR_GLASS.proud));
   return mergeToned(parts, "style mirror").scale(1 / scaleX, 1, 1);

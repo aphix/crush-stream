@@ -99,8 +99,8 @@ export const WAGON: BodyStyle = {
       band: [0.43, 0.53],
     },
   },
-  // The reference's mirror: a black head tapering to its nose, standing clear over the belt on a slim neck, about 4 cm past the body side, 17 cm along it.
-  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.065, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "nose", finish: "black", size: [0.06, 0.13, 0.17], lift: 0.09, neck: 0.035, stalk: 0.06, round: 0.48 } },
+  // The reference's mirror: a black pod tapering gently to its nose, standing clear over the belt on a slim neck, about 4 cm past the body side, 19 cm along it; its inner face clear of the foot's.
+  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.065, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "nose", finish: "black", size: [0.055, 0.135, 0.19], lift: 0.09, neck: 0.015, stalk: 0.06, round: 0.48, taper: 0.8 } },
   aPillarFoot: 0.66,
   aPillarTop: 0.17,
   glassTop: 0.05,
