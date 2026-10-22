@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { once } from "../kernel/scalar.ts";
-import { detCos, detSin } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import {
   LAMP_BULB_UV,
   makeLampUnit,
@@ -855,7 +855,7 @@ function styleWipers(style: BodyStyle): THREE.BufferGeometry {
   const { count, length, park } = { ...WIPER_DEFAULT, ...style.wipers };
   const { base, wBase, wTop } = style.windshield;
   const top = style.windshieldTop;
-  const t = WIPER_PARK_UP / Math.hypot(top[0] - base[0], top[1] - base[1]);
+  const t = WIPER_PARK_UP / hypot2(top[0] - base[0], top[1] - base[1]);
   const half = (wBase + (wTop - wBase) * t) / 2;
   const pivots = count === 2 ? WIPER_PAIR_PIVOTS.map((s) => s * wBase) : [(-length * wBase) / 2];
   const parts: THREE.BufferGeometry[] = [];
