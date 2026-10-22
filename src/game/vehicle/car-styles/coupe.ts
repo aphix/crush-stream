@@ -153,7 +153,8 @@ export const COUPE: BodyStyle = {
   rearBulkhead: { z: -0.9, yTop: 0.89 },
   tubs: [[-0.9, 0.7, 0.3]],
   rearDoorSeam: null,
-  boot: { kind: "lid", z0: -1.5, z1: -2.04, origin: [0.975, -1.5], lip: { rise: 0.02, depth: 0.08 }, flush: true },
+  /** Reference top plate: the deck lid's seam stands at |x| .54 from the glass base to the tail. */
+  boot: { kind: "lid", z0: -1.5, z1: -2.04, origin: [0.975, -1.5], lip: { rise: 0.02, depth: 0.08 }, flush: true, halfWidth: 0.54 },
   lamps: {
     head: [0.5, 0.59],
     tail: [0.37, 0.675],
