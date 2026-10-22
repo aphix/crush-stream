@@ -29,10 +29,7 @@ export class SeatDraw {
   /** Seats packed by the last sync. */
   count = 0;
   private readonly data: Float32Array;
-  /** The seats' matrices and looks; it uploads only on a sync that changed them (a resting field uploads nothing). */
-  readonly texture: THREE.DataTexture;
-  /** Whether this sync wrote seat data the texture does not hold yet. */
-  private dirty = false;
+  private readonly texture: THREE.DataTexture;
   /** Variant per seat, packed this sync and as the geometry holds them. */
   private readonly packed: Int32Array;
   private readonly built: Int32Array;
@@ -73,44 +70,28 @@ export class SeatDraw {
     const row = this.count;
     if (row >= this.capacity) return false;
     const at = row * SEAT_TEXELS * 4;
-    const e = matrix.elements;
-    for (let k = 0; k < 16; k++) this.store(at + k, e[k]!);
-    this.store(at + 16, color.r);
-    this.store(at + 17, color.g);
-    this.store(at + 18, color.b);
-    if (glow) {
-      this.store(at + 20, glow.r);
-      this.store(at + 21, glow.g);
-      this.store(at + 22, glow.b);
-    }
+    matrix.toArray(this.data, at);
+    color.toArray(this.data, at + 16);
+    if (glow) glow.toArray(this.data, at + 20);
     this.packed[row] = variant;
     this.count = row + 1;
     return true;
   }
 
-  /** Publish this sync's seats: rebuild the geometry if the packed variants changed, upload the seats' texture rows if their data did. */
+  /** Publish this sync's seats: rebuild the geometry if the packed variants changed, upload the seats' texture rows. */
   end(): void {
     const n = this.count;
     let same = n === this.builtCount;
     for (let i = 0; same && i < n; i++) same = this.packed[i] === this.built[i];
     if (!same) this.rebuild(n);
     this.mesh.visible = this.mesh.geometry.drawRange.count > 0;
-    if (!this.dirty) return;
-    this.dirty = false;
+    if (n === 0) return;
     const t = this.texture;
     const floats = n * SEAT_TEXELS * 4;
     const row = SEAT_TEXTURE_WIDTH * 4;
     t.clearUpdateRanges();
     for (let s = 0; s < floats; s += row) t.addUpdateRange(s, Math.min(row, floats - s));
     t.needsUpdate = true;
-  }
-
-  /** Seat datum `i` set to `v` as the texture stores it (float32), marking the texture stale when it changes. */
-  private store(i: number, v: number): void {
-    const f = Math.fround(v);
-    if (this.data[i] === f) return;
-    this.data[i] = f;
-    this.dirty = true;
   }
 
   /** Seat `i`'s world matrix as packed. */
