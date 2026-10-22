@@ -194,7 +194,8 @@ const ROLLED_EDGE_LIMIT_DEGREES = 50;
 const FLAT_CURVE_LIMIT_DEGREES = 5;
 
 const lidCreaseTable = [
-  { it: "a bonnet's shut line and lip corners (ring points 0, 4, 6 to 11)", style: "sedan", part: "bonnet", creaseLines: [0, 4, 6, 7, 8, 9, 10, 11], smoothLines: [1, 2, 3, 5, 12], creaseDegrees: CREASE_DEGREES.deckLid },
+  // The sedan's hood is crowned (`hood.crown`): its ring carries 3 dome points a side (17 points), so the shut line and lip corners sit at 0, 8, 10 to 15.
+  { it: "a bonnet's shut line and lip corners (ring points 0, 8, 10 to 15)", style: "sedan", part: "bonnet", creaseLines: [0, 8, 10, 11, 12, 13, 14, 15], smoothLines: [1, 2, 3, 4, 5, 6, 7, 9, 16], creaseDegrees: CREASE_DEGREES.deckLid },
   { it: "a sedan boot lid's shut line and lip corners (ring points 0, 4, 6 to 11)", style: "sedan", part: "boot", creaseLines: [0, 4, 6, 7, 8, 9, 10, 11], smoothLines: [1, 2, 3, 5, 12], creaseDegrees: CREASE_DEGREES.deckLid },
   { it: "a hatchback's tailgate edges (ring points 0, 4, 5, 6)", style: "hatchback", part: "boot", creaseLines: [0, 4, 5, 6], smoothLines: [1, 2, 3], creaseDegrees: CREASE_DEGREES.tailgate },
 ] as const;
