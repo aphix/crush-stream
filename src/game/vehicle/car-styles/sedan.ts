@@ -3,11 +3,12 @@ import { CABIN_TUB, PLATFORM_CAMERA, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } f
 import { SEDAN_DETAILS } from "./sedan-details.ts";
 
 /**
- * The reference's mirror: a rounded body-colour housing seated on the door. Off the gridded side and top: the cap stands y 0.85-0.975 (h 0.12),
- * runs about 0.10 along the car, and reaches |x| 0.88 from the skin at 0.752: the door's mirrorReach 0.128. Its 0.12 width leaves the cap's
- * inner face 8 mm off the seat, over the foot (a cap wider than reach - 0.005 buries itself in the door).
+ * The reference's mirror: a long, slim, rounded body-colour housing on a stalk at the door glass's front corner. Off the gridded side
+ * (430 px/m along z, 421 up): the housing runs z 0.42-0.565 (0.145 along the car) and stands about 0.095 tall over its stalk; off the
+ * top it reaches |x| 0.88 from the skin at 0.752: the door's mirrorReach 0.128. Its 0.12 width leaves the cap's inner face 8 mm off the
+ * seat, over the foot (a cap wider than reach - 0.005 buries itself in the door).
  */
-export const SEDAN_MIRROR = { cap: "rounded", finish: "body", size: [0.12, 0.12, 0.1] } as const;
+export const SEDAN_MIRROR = { cap: "rounded", finish: "body", size: [0.12, 0.095, 0.145] } as const;
 
 export const SEDAN: BodyStyle = {
   id: "sedan",
