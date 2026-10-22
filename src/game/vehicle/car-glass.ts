@@ -206,13 +206,16 @@ function roundedOutline(q: BowedQuad, round: number, segX: number): [number, num
   ];
 }
 
+/** A round-outlined pane's frit corners stand this far (m) in behind its plane: a dark backing seen only through the gaps the body leaves round its arcs (the cabin showed there). */
+const ROUND_BACKING_INSET = 0.01;
+
 /**
  * An unframed pane whose clear glass has `round` (m) corners: its grid gains `ROUND_STEPS` lines through each corner's square, whose
  * points map onto the corner's quarter circle (each square ring about the circle's centre onto the circle of its size); a black frit
  * fan fills each square corner out to the arc, so the glass's outline stays square, while the chrome bead follows the arcs. With
- * `roundOutline` there are no fans: the glass's outline is the arcs.
+ * `roundOutline` the fans stand `ROUND_BACKING_INSET` in behind the pane: the glass's outline is the arcs, the fans a backing.
  */
-function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): THREE.BufferGeometry {
+function roundedGlass(q: BowedQuad, round: number, { segX, segY, facing }: QuadDraw): THREE.BufferGeometry {
   const { rS, rT, lines, arc, rim: cornerRim } = roundCorners(q, round);
   const at = (s: number, t: number) => quadPoint(q, s * 2 - 1, t);
   const [ss, ts] = [lines(segX, rS), lines(segY, rT)];
@@ -225,7 +228,7 @@ function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): TH
     }
   }
   const pane = paneGeometry(ts.flatMap((t) => ss.map((s) => arc(s, t))), at, grid, 0);
-  const fans = (q.roundOutline ? [] : [0, 1]).flatMap((sEdge) =>
+  const fans = [0, 1].flatMap((sEdge) =>
     [0, 1].map((tEdge) => {
       const rim = cornerRim(sEdge, tEdge);
       // Counter-clockwise in (s, t), as the grid's triangles are.
@@ -234,6 +237,11 @@ function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): TH
       return paneGeometry([[sEdge, tEdge], ...rim], at, rim.slice(1).flatMap((_, k) => [0, k + 1, k + 2]), 1);
     }),
   );
+  if (q.roundOutline) {
+    // In along the pane's inward normal (the flat pane's: the bow and fall tilt it under a millimetre over a corner).
+    const inward = new THREE.Vector3(0, q.base[1] - q.top[1], q.top[0] - q.base[0]).normalize().multiplyScalar(-facing * ROUND_BACKING_INSET);
+    for (const fan of fans) fan.translate(inward.x, inward.y, inward.z);
+  }
   const geo = mergeGeometries([pane, ...fans], false);
   if (!geo) throw new Error("Failed to merge the rounded rear glass");
   geo.userData.centre = quadPoint(q, 0, 0.5).toArray();

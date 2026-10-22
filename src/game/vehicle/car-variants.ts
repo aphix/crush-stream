@@ -50,7 +50,8 @@ export interface GlassQuad {
   frame?: readonly [number, number, number];
   /**
    * Drawn only (an unframed rear glass): the clear pane's corners rounded to this radius (m), the chrome bead round them with it; the glass's
-   * black frit fills out to the square outline, unless `roundOutline` rounds the glass's own outline too (no frit: the body shows up to the bead).
+   * black frit fills out to the square outline, unless `roundOutline` rounds the glass's own outline too: the frit corners stand 1 cm in
+   * behind it, a dark backing seen only through the gaps round the arcs, and the body shows up to the bead.
    */
   round?: number;
   roundOutline?: boolean;
