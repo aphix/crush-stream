@@ -439,8 +439,10 @@ export function wheelsAt(car: DeformableCar, within: number): number {
     _hub[0] = p.x + _e[0]! * hx + _e[3]! * r + _e[6]! * hz;
     _hub[1] = p.y + _e[1]! * hx + _e[4]! * r + _e[7]! * hz;
     _hub[2] = p.z + _e[2]! * hx + _e[5]! * r + _e[8]! * hz;
-    // The footprint's tread rings are the platform tyre's: scaled to this car's radius, so its tread reaches the ground its hub stands over.
-    wheelContact(_hub, _e, sc * (car.frame.rig.tyre.r / PLATFORM_TYRE.r), car.slot, _hit);
+    // The footprint's tread rings are the platform tyre's: scaled to this car's radius and its width, so its tread reaches the ground its
+    // hub stands over across the whole drawn tread.
+    const { r: tyreR, halfW } = car.frame.rig.tyre;
+    wheelContact(_hub, _e, sc * (tyreR / PLATFORM_TYRE.r), sc * (halfW / PLATFORM_TYRE.halfW), car.slot, _hit);
     TYRE_HUB.set(_hub, i * 3);
     TYRE_DIM[2 * i] = r;
     TYRE_DIM[2 * i + 1] = car.frame.rig.tyre.halfW * sc;

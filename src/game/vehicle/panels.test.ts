@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { INNER_PANEL } from "./constants.ts";
+import { BLACKOUT, INNER_PANEL } from "./constants.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { makeShell, PANEL_NAMES, panelRegions, poseShell } from "./car-panels.ts";
 import { DENT_MAX, newDentState, recordDent } from "./loose-dent.ts";
@@ -12,12 +12,12 @@ import { runWall, type CrashResult } from "../contact/crash-scenarios.test-util.
 import { assertSameNumbers, DT, paint } from "./test-support.ts";
 import { LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts";
 
-/** The body's paint attribute, joined: 0 paint, 1 primer, `INNER_PANEL` the unpainted bay trough. */
+/** The body's paint attribute, joined: 0 paint, 1 primer, `INNER_PANEL` the unpainted bay trough, `BLACKOUT` gloss-black trim. */
 const primerOf = (car: DeformableCar): string => Array.from(car.body.geometry.getAttribute("primer").array).join();
-/** The rest build's: paint, the roof fittings' dark primer and the trough's inner panel only. */
+/** The rest build's: paint, the headliner's primer, the trough's inner panel and the blacked-out trim (roof fittings, pillars, cowl) only. */
 const restPrimer = (car: DeformableCar): string => {
   const rest = Array.from(makeChassisGeometry(car.style).getAttribute("primer").array);
-  assert.ok(rest.every((v) => v === 0 || v === 1 || v === INNER_PANEL), "a rest body holds only paint, primer and inner panel");
+  assert.ok(rest.every((v) => v === 0 || v === 1 || v === INNER_PANEL || v === BLACKOUT), "a rest body holds only paint, primer, inner panel and blackout");
   return rest.join();
 };
 
