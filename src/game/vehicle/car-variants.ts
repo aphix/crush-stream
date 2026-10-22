@@ -346,9 +346,10 @@ export interface BodyStyle {
    * the side window's line; absent, a flat post. `tip` ([y, z]): where that line ends at the belt behind the quarter glass, the gloss-black
    * triangle between them filling the gap; absent, the line is the quarter glass's own rear edge. `flush`: the sail's head laps the rear
    * glass's side edge, standing on the glass and arriving level across it (one broad pillar rolling into the glass), not a rounded
-   * buttress beside it.
+   * buttress beside it. `flat`: on the haunch each section runs straight from its head down to where it touches the body's section
+   * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point.
    */
-  cPillar?: { tip?: YZ; flush?: boolean };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
   privacyGlass?: { rear?: boolean; quarter?: boolean };
   /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */

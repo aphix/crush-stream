@@ -742,11 +742,16 @@ const SAIL_HAUNCH_SECTIONS = 2;
 const SAIL_ROOF_GAP = 0.003;
 /** A roof end skin point the sail's section misses by at most this much (m) still reads as covered: a pixel at the shot's closest range. */
 const SAIL_ROOF_COVER = 0.001;
+/** A flat sail's outer face (its first `SAIL_OUTER_POINTS` ring points) bows at most this far (m) off its foot-to-head line; the body under it stands at most the sail's foot sink (m) outside that line. */
+const SAIL_FLAT_BOW = 0.001;
+const SAIL_SINK_TEST = 0.002;
+const SAIL_OUTER_POINTS = 6;
 
 describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", () => {
   for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar)) {
-    it(`when a ${id}'s sail is read along its haunch, then each section's foot sits on the body's shoulder and its face leaves it within ${SAIL_LEAN_DEGREES}° of the shoulder's tangent`, () => {
+    it(`when a ${id}'s sail is read along its haunch, then each section's foot sits on the body's shoulder and its face leaves it within ${SAIL_LEAN_DEGREES}° of the shoulder's tangent`, (t) => {
       const style = CAR_STYLES[id];
+      if (style.cPillar?.flat) return t.skip("a flat sail leaves the body where its line touches the section: its own row");
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
       const { ring, slices } = loftOf(sail);
@@ -795,6 +800,33 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         assert.ok(inside || near <= SAIL_ROOF_COVER, `${id}: the roof end's skin at (x ${x.toFixed(3)}, y ${y.toFixed(3)}) stands ${(near * 1000).toFixed(1)} mm outside the sail's section`);
       }
       assert.ok(read > 0, `${id}: no roof end skin outboard of the rear glass read`);
+    });
+  }
+
+  for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar?.flat)) {
+    it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm, no body point stands outside it by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
+      const style = CAR_STYLES[id];
+      const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+      const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
+      const { ring, slices } = loftOf(sail);
+      const off: string[] = [];
+      let read = 0;
+      for (let s = 0; s < slices; s++) {
+        const foot = positionAt(sail, s * ring);
+        if (foot.z > haunchZ) continue;
+        read++;
+        const face = Array.from({ length: SAIL_OUTER_POINTS }, (_, k) => positionAt(sail, s * ring + k));
+        const head = face.at(-1)!;
+        const [ux, uy] = [(head.x - foot.x) / Math.hypot(head.x - foot.x, head.y - foot.y), (head.y - foot.y) / Math.hypot(head.x - foot.x, head.y - foot.y)];
+        // Signed distance outboard of the foot-to-head line (+x side: the line's normal turned up and out).
+        const outside = (x: number, y: number) => (x - foot.x) * uy - (y - foot.y) * ux;
+        const bow = Math.max(...face.map((p) => Math.abs(outside(p.x, p.y))));
+        const body = sectionPoints(sampleSlice(foot.z, style.profile), style, "drawn").filter((p) => p.x > 0 && p.y < head.y);
+        const proud = Math.max(...body.map((p) => outside(p.x, p.y)));
+        if (bow > SAIL_FLAT_BOW || proud > SAIL_SINK_TEST + 1e-4 || proud < 0) off.push(`z ${foot.z.toFixed(3)}: face bows ${(bow * 1000).toFixed(1)} mm, body stands ${(proud * 1000).toFixed(1)} mm outside its line`);
+      }
+      assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
+      assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
     });
   }
 });

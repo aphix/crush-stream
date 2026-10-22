@@ -120,8 +120,8 @@ export const COUPE: BodyStyle = {
   windshieldTop: [1.255, 0.12],
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96, bow: { base: -0.02, top: -0.04 } },
   quarter: { zRearBot: -0.96, zRearTop: -0.74 },
-  /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle. */
-  cPillar: { flush: true },
+  /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle: one broad flat fastback panel lapping the rear glass. */
+  cPillar: { flush: true, flat: true },
   midPillarZ: null,
   windowTrim: "chrome",
   chromeStrips: [
