@@ -36,7 +36,7 @@ const WAGON_LAMP_SHAPES = {
   front: {
     loops: [{ points: [[0.52, 0.36], [0.72, 0.36], [0.72, 0.48], [0.52, 0.48]] }],
     lens: "dark",
-    strips: [{ line: { points: [[0.52, 0.38], [0.72, 0.38]] }, width: 0.01, tone: "chrome" }],
+    strips: [{ line: { points: [[0.52, 0.465], [0.72, 0.465]] }, width: 0.012, tone: "chrome" }],
   },
   rear: {
     loops: [{ points: [[0.48, 0.45], [0.64, 0.45], [0.64, 0.47], [0.48, 0.47]] }],
