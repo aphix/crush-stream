@@ -150,10 +150,24 @@ export function withHoodBulge(hood: THREE.BufferGeometry, style: BodyStyle): THR
   return markSkinDynamic(merged(parts, "hood bulge"));
 }
 
+/** The black inlay just proud of `front`'s bumper face over its fascia rows within `band` (a diffuser band, a truck's valance), in bumper space. */
+function bandInlay(front: boolean, style: BodyStyle, band: readonly [number, number]): THREE.BufferGeometry {
+  const { seat, fascia } = front ? style.bumpers.front : style.bumpers.rear;
+  const rows = fascia.flatMap(([y], i) => (seat.y + y >= band[0] - BAND_EPS && seat.y + y <= band[1] + BAND_EPS ? [i] : []));
+  if (rows.length < 2) throw new Error(`${style.id}: ${front ? "front" : "rear"} bumper band [${band[0]}, ${band[1]}] covers fewer than 2 fascia rows`);
+  return withTone(makeBumperGeometry(front, style, [rows[0]!, rows[rows.length - 1]!], BAND_PROUD), FITTING_ATTRIBUTE, FITTING_TONE.black);
+}
+
+/** `bumper` (the drawn front bumper, in bumper space) with its `band` inlay merged in; without one, `bumper` itself. */
+export function withFrontBand(bumper: THREE.BufferGeometry, style: BodyStyle): THREE.BufferGeometry {
+  const { band } = style.bumpers.front;
+  return band ? merged([withTone(bumper, FITTING_ATTRIBUTE, 0), bandInlay(true, style, band)], "front bumper band") : bumper;
+}
+
 /** `bumper` (the drawn rear bumper, `makeBumperGeometry`, in bumper space) with `style`'s exhaust tips, tow hitch and diffuser band (a black inlay over its fascia rows) merged in, so they tear off with it. Without any, `bumper` itself. */
 export function withRearFittings(bumper: THREE.BufferGeometry, style: BodyStyle): THREE.BufferGeometry {
   const { exhaust } = style;
-  const { seat, fascia, hitch, band } = style.bumpers.rear;
+  const { seat, hitch, band } = style.bumpers.rear;
   if (!exhaust && !hitch && !band) return bumper;
   bumper.computeBoundingBox();
   const { min } = bumper.boundingBox!;
@@ -180,11 +194,7 @@ export function withRearFittings(bumper: THREE.BufferGeometry, style: BodyStyle)
     const receiver = new THREE.BoxGeometry(HITCH.size, HITCH.size, HITCH.length).translate(0, min.y + HITCH.tuck - HITCH.size / 2, min.z - HITCH.reach + HITCH.length / 2);
     parts.push(withTone(receiver, FITTING_ATTRIBUTE, FITTING_TONE.black));
   }
-  if (band) {
-    const rows = fascia.flatMap(([y], i) => (seat.y + y >= band[0] - BAND_EPS && seat.y + y <= band[1] + BAND_EPS ? [i] : []));
-    if (rows.length < 2) throw new Error(`${style.id}: rear bumper band [${band[0]}, ${band[1]}] covers fewer than 2 fascia rows`);
-    parts.push(withTone(makeBumperGeometry(false, style, [rows[0]!, rows[rows.length - 1]!], BAND_PROUD), FITTING_ATTRIBUTE, FITTING_TONE.black));
-  }
+  if (band) parts.push(bandInlay(false, style, band));
   return merged(parts, "rear bumper fittings");
 }
 

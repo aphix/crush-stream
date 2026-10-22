@@ -216,7 +216,7 @@ interface BumperSpec {
   plate?: number;
   /** A rear plate's seating (drawn only): its rear face `out` (m, as `fascia`'s) behind the seat and its `color` (sRGB); absent, the platform plate's (0.09, cream). */
   plateFace?: { out?: number; color?: number };
-  /** Drawn only: the fascia rows whose height (m, car y) lies in [bottom, top] carry a black inlay just proud of the face, a diffuser band. */
+  /** Drawn only: the fascia rows whose height (m, car y) lies in [bottom, top] carry a black inlay just proud of the face (a rear diffuser band, a truck's front valance). */
   band?: readonly [bottom: number, top: number];
   /** A rear bumper drawn without the platform plate (its reference shows none): its tail trim is its rear bumper lamps alone. */
   plateless?: boolean;

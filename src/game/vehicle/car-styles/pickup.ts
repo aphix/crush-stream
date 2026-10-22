@@ -32,9 +32,10 @@ const PICKUP_LAMP_SHAPES = {
     lens: "lit",
     bezel: "chrome",
     recess: 0.015,
+    // The amber corner lamps sit beside the lower head lamp only, as the reference's front iso shows.
     cells: [
-      { loop: { points: [[0.62, 0.75], [0.68, 0.75], [0.68, 0.95], [0.62, 0.95]] }, tone: "amber" },
-      { loop: { side: true, points: [[1.9, 0.75], [1.82, 0.75], [1.82, 0.95], [1.9, 0.95]] }, tone: "amber" },
+      { loop: { points: [[0.62, 0.75], [0.67, 0.75], [0.67, 0.85], [0.62, 0.85]] }, tone: "amber" },
+      { loop: { side: true, points: [[1.9, 0.75], [1.84, 0.75], [1.84, 0.85], [1.9, 0.85]] }, tone: "amber" },
     ],
   },
   tail: {
@@ -48,7 +49,8 @@ const PICKUP_LAMP_SHAPES = {
     cells: [{ loop: { points: [[0.56, 0.87], [0.66, 0.87], [0.66, 0.95], [0.56, 0.95]] }, tone: "clear" }],
   },
   front: {
-    loops: [{ points: [[0.585, 0.55], [0.655, 0.55], [0.655, 0.61], [0.585, 0.61]] }],
+    // Its bumper lamps sit in the black valance under the chrome bar.
+    loops: [{ points: [[0.585, 0.44], [0.655, 0.44], [0.655, 0.5], [0.585, 0.5]] }],
     lens: "dark",
   },
 } as const;
@@ -70,7 +72,7 @@ export const PICKUP: BodyStyle = {
   arch: { radius: 0.46, lip: { flare: 0.024, width: 0.065, square: true } },
   hood: { z0: 1.03, z1: 1.92, origin: [1.2, 1.01], nose: [0.034, 0.02] },
   bumpers: {
-    front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.73, wrap: { from: 0.55, back: 0.12 }, fascia: TRUCK_FRONT_FASCIA, trim: "chrome" },
+    front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.73, wrap: { from: 0.55, back: 0.12 }, fascia: TRUCK_FRONT_FASCIA, trim: "chrome", band: [0.41, 0.51] },
     rear: { ...bumpers.rear, seat: { y: 0.57, z: 2.13 }, span: 0.74, wrap: { from: 0.65, back: 0.05 }, trim: "chrome", hitch: true },
   },
   profile: [
