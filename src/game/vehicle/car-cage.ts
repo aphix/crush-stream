@@ -182,8 +182,13 @@ export interface CageStyle {
   readonly u0: number;
   readonly v0: number;
   readonly vertexCount: number;
-  /** Of `vertexCount`, the underside points the decimation held over `CAGE_VERTICES` (`decimate`'s `held`). */
+  /**
+   * Of `vertexCount`, the underside points the decimation held over `CAGE_VERTICES` (`decimate`'s `held`), `heldCount` of them from
+   * `heldFrom` on. Only a wreck stands on them (`loadPoints`): the lip a car with a wheel gone rests on; a car on its tyres never does, and
+   * read every slice they cost an intact 16-car race 8.5-12 % of its step.
+   */
   readonly heldCount: number;
+  readonly heldFrom: number;
   /**
    * The sill samples (`CageSource.sill`) follow the hull's vertices in the per-vertex tables and in `pos`: skinned as they are, on no
    * triangle, so no field reads them. A wreck's rigid step rests on them too (`loadPoints`): a crushed sill bends between the hull's
@@ -689,7 +694,7 @@ function sillOffHull(src: CageSource, hull: Int32Array): Int32Array {
  * The hull: `src`'s body and panels decimated to `CAGE_VERTICES` (and the underside points it holds over that) exactly as the same body
  * without its wheel tubs, then the tubs' vertices (welded) and triangles after it, so the tubs cost the hull none of its budget.
  */
-function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array; held: number } {
+function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array; held: number; heldFrom: number } {
   const { from, count } = src.tubs;
   if (count === 0) return decimate(src.rest, src.index, src.group, CAGE_VERTICES, src.loft);
   const to = from + count;
@@ -730,7 +735,7 @@ function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGr
   }
   const room = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_TUB_VERTICES;
   if (source.length > room) throw new Error(`${source.length} hull vertices, room for ${room}`);
-  return { source: Int32Array.from(source), tris: Uint16Array.from(tris), triGroup: Uint8Array.from(triGroup), held: hull.held };
+  return { source: Int32Array.from(source), tris: Uint16Array.from(tris), triGroup: Uint8Array.from(triGroup), held: hull.held, heldFrom: hull.heldFrom };
 }
 
 function buildStyle(src: CageSource, step: number): CageStyle {
@@ -758,6 +763,7 @@ function buildStyle(src: CageSource, step: number): CageStyle {
     v0: -src.lattice.z,
     vertexCount: n,
     heldCount: body.held,
+    heldFrom: body.heldFrom,
     sillCount: points - n,
     triCount: tris.length / 3,
     source,

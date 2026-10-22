@@ -35,10 +35,10 @@ const BOUNDARY_WEIGHT = 100;
  * chord between two others is never the lowest at any pitch; one on the hull is at some, and the cage carries the ground on its
  * vertices alone. Without them the quadric collapsed a nose lip's low points onto the rocker corner above them, and a wreck down on its
  * nose rested on that corner: the sedan's drawn lip at the front-left stood 3 cm in the ground (hatchback 4.4 cm, the SUV 2.8). The
- * loft is the first `lofted` of the mesh's vertices (`reps` their mesh ids). Of equal heights at a station the outermost. Returns how
- * many it held that `held` did not hold already.
+ * loft is the first `lofted` of the mesh's vertices (`reps` their mesh ids). Of equal heights at a station the outermost. Those `held`
+ * did not hold already go in `under` too; returns how many.
  */
-function holdUnderside(px: Float64Array, py: Float64Array, pz: Float64Array, reps: readonly number[], lofted: number, held: Uint8Array): number {
+function holdUnderside(px: Float64Array, py: Float64Array, pz: Float64Array, reps: readonly number[], lofted: number, held: Uint8Array, under: Uint8Array): number {
   const lowest = new Map<string, number>();
   for (let v = 0; v < px.length; v++) {
     if (reps[v]! >= lofted || Math.abs(px[v]!) < 1e-4) continue;
@@ -61,8 +61,10 @@ function holdUnderside(px: Float64Array, py: Float64Array, pz: Float64Array, rep
       hull.push(c);
     }
     for (const v of hull) {
-      if (held[v] === 0) added++;
+      if (held[v] !== 0) continue;
+      added++;
       held[v] = 1;
+      under[v] = 1;
     }
   }
   return added;
@@ -74,10 +76,10 @@ function holdUnderside(px: Float64Array, py: Float64Array, pz: Float64Array, rep
  * vertex of the drawn mesh and takes that vertex's skin weights as they are. Vertices at one rest position are one
  * (the mesh splits them for its normals). `lofted`: the body loft's vertices, the first of the mesh, whose underside a body rests on
  * is held (`holdUnderside`), over the `target`: held within it, they cost the vertices that stood elsewhere (an upside-down sedan lost its
- * cowl's sides, rested on the drawn A-pillar's foot 7.3 cm in the ground). `held`: how many. Build-time only: allocates freely, runs
- * once per style.
+ * cowl's sides, rested on the drawn A-pillar's foot 7.3 cm in the ground). They come last in `source`, from `heldFrom` (`held` of them),
+ * so a reader may leave them out where only a wreck stands on them. Build-time only: allocates freely, runs once per style.
  */
-export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Uint8Array, target: number, lofted = 0): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array; held: number } {
+export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Uint8Array, target: number, lofted = 0): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array; held: number; heldFrom: number } {
   const meshVertices = rest.length / 3;
   // Weld by rest position, within one mesh (a panel's vertex at the body's is not the body's).
   const weld = new Int32Array(meshVertices);
@@ -205,7 +207,8 @@ export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Ui
     if (group[reps[v]!] !== 0) continue;
     if (pz[v]! > zFront - 1e-4 || (pz[v]! < zBack + 1e-4 && py[v]! < (tailLow + tailHigh) / 2)) noseCap[v] = 1;
   }
-  const held = holdUnderside(px, py, pz, reps, lofted, noseCap);
+  const under = new Uint8Array(nv);
+  const held = holdUnderside(px, py, pz, reps, lofted, noseCap, under);
 
   const tmp = new Float64Array(QUADRIC);
   /** Cost of moving `from` onto `to`: the merged quadric at `to`'s place; Infinity when a neighbouring triangle would fold over. */
@@ -351,10 +354,14 @@ export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Ui
 
   const slot = new Int32Array(nv).fill(-1);
   const source: number[] = [];
-  for (let v = 0; v < nv; v++) {
-    if (!vertexAlive[v]) continue;
-    slot[v] = source.length;
-    source.push(reps[v]!);
+  let heldFrom = 0;
+  for (const pass of [0, 1]) {
+    if (pass === 1) heldFrom = source.length;
+    for (let v = 0; v < nv; v++) {
+      if (!vertexAlive[v] || under[v] !== pass) continue;
+      slot[v] = source.length;
+      source.push(reps[v]!);
+    }
   }
   const out: number[] = [];
   const outGroup: number[] = [];
@@ -367,7 +374,7 @@ export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Ui
     out.push(a, b, c);
     outGroup.push(group[reps[tv[t * 3]!]!]!);
   }
-  return { source: Int32Array.from(source), tris: Uint16Array.from(out), triGroup: Uint8Array.from(outGroup), held };
+  return { source: Int32Array.from(source), tris: Uint16Array.from(out), triGroup: Uint8Array.from(outGroup), held, heldFrom };
 }
 
 /**
