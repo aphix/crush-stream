@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
-import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
+import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
@@ -616,6 +616,10 @@ const SAIL_FOOT_OFF = 0.005;
 const SAIL_LEAN_DEGREES = 10;
 /** Sections read along the haunch, behind the run where the sail's foot sweeps in onto the side window's line: at least this many (its rear end and the sweep's start). */
 const SAIL_HAUNCH_SECTIONS = 2;
+/** The sail's section at the roof's rear end stands at most this far (m) behind it, so the roof's end outboard of the rear glass never shows past the sail's head. */
+const SAIL_ROOF_GAP = 0.003;
+/** A roof end skin point the sail's section misses by at most this much (m) still reads as covered: a pixel at the shot's closest range. */
+const SAIL_ROOF_COVER = 0.001;
 
 describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", () => {
   for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar)) {
@@ -635,6 +639,40 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         assert.ok(off <= SAIL_FOOT_OFF && lean < SAIL_LEAN_DEGREES, `${id} z ${foot.z.toFixed(3)}: foot ${(off * 1000).toFixed(1)} mm off the shoulder, face ${lean.toFixed(1)}° off its tangent`);
       }
       assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
+    });
+    it(`when a ${id}'s sail is read at the roof's rear end, then a section stands within ${SAIL_ROOF_GAP * 1000} mm behind it, none of its points stands over the roof's skin (no flap) and it covers the roof end's skin outboard of the rear glass (no slit)`, () => {
+      const style = CAR_STYLES[id];
+      const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+      const roofZ = style.roofZ[0];
+      const { ring, slices } = loftOf(sail);
+      const ends = Array.from({ length: slices }, (_, s) => s).filter((s) => {
+        const z = positionAt(sail, s * ring).z;
+        return z < roofZ && z >= roofZ - SAIL_ROOF_GAP;
+      });
+      assert.ok(ends.length === 1, `${id}: ${ends.length} sections within ${SAIL_ROOF_GAP * 1000} mm behind the roof's rear end (z ${roofZ})`);
+      for (let k = 0; k < ring; k++) {
+        const p = positionAt(sail, ends[0]! * ring + k);
+        const over = p.y - roofTopY(Math.abs(p.x), roofZ, style);
+        assert.ok(over <= 1e-4, `${id} point ${k} (x ${p.x.toFixed(3)}, y ${p.y.toFixed(3)}): ${(over * 1000).toFixed(1)} mm over the roof's skin`);
+      }
+      const section = Array.from({ length: ring }, (_, k) => positionAt(sail, ends[0]! * ring + k));
+      const roof = makeRoofGeometry(style).getAttribute("position") as THREE.BufferAttribute;
+      let read = 0;
+      for (let i = 0; i < roof.count; i++) {
+        const [x, y] = [roof.getX(i), roof.getY(i)];
+        if (Math.abs(roof.getZ(i) - roofZ) > 1e-4 || x <= style.rearGlass.wTop / 2 + 1e-3) continue;
+        read++;
+        let inside = false;
+        let near = Infinity;
+        for (let k = 0, j = ring - 1; k < ring; j = k++) {
+          const [a, b] = [section[j]!, section[k]!];
+          if (a.y > y !== b.y > y && x < a.x + ((y - a.y) * (b.x - a.x)) / (b.y - a.y)) inside = !inside;
+          const t = THREE.MathUtils.clamp(((x - a.x) * (b.x - a.x) + (y - a.y) * (b.y - a.y)) / ((b.x - a.x) ** 2 + (b.y - a.y) ** 2 || 1), 0, 1);
+          near = Math.min(near, Math.hypot(x - a.x - t * (b.x - a.x), y - a.y - t * (b.y - a.y)));
+        }
+        assert.ok(inside || near <= SAIL_ROOF_COVER, `${id}: the roof end's skin at (x ${x.toFixed(3)}, y ${y.toFixed(3)}) stands ${(near * 1000).toFixed(1)} mm outside the sail's section`);
+      }
+      assert.ok(read > 0, `${id}: no roof end skin outboard of the rear glass read`);
     });
   }
 });
