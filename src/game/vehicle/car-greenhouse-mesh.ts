@@ -289,10 +289,10 @@ function roundedPillarAlong(
   return geo;
 }
 
-/** A drawn post's unit section (u across its `thick` depth, the outer face at 1; w across its `width`): `POST_ROUND` corners, the outer face crowned. */
-export function postSection(thick: number, width: number): Pt[] {
+/** A drawn post's unit section (u across its `thick` depth, the outer face at 1; w across its `width`): `POST_ROUND` corners, the outer face crowned `crown` (m). */
+export function postSection(thick: number, width: number, crown = PILLAR_CROWN): Pt[] {
   const radius = POST_ROUND * thick;
-  return filletedUnitSection(filletShare(thick, radius), filletShare(width, radius), POST_ROUND_STEPS, PILLAR_CROWN / thick);
+  return filletedUnitSection(filletShare(thick, radius), filletShare(width, radius), POST_ROUND_STEPS, crown / thick);
 }
 
 /**
@@ -311,6 +311,8 @@ function roundedPillarFromCorners(sign: number, c: { fb: V3; rb: V3; rt: V3; ft:
 
 /** The drawn A-post's depth inward (m): a slim post, not a slab. */
 const A_POST_THICK = 0.03;
+/** The drawn A-post's face crowns this share of its width: its normals fan ±30° across it, turning from the side glass to the windshield, not a flat plank. */
+const A_POST_CROWN = 0.13;
 /**
  * The drawn A-post's stations, base to top, as shares of its run: sixths, the fifth left out. Its rails run straight up to the cant
  * line, so the lower five show under every style's roof side; the top runs up into the roof. The fifth stands past the cant on some
@@ -352,7 +354,9 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
     const y = lerp(footY, aTopY, t);
     const postZ = aPostRearZ(y, style);
     const edge = lerp(edgeFoot, 1, t);
-    const [frontY, frontZ] = [lerp(base[0], topY, edge) - A_POST_LIFT * uz, lerp(base[1], topZ, edge) + A_POST_LIFT * uy];
+    // The top station runs into the roof: its front is held inside the roof's span, where the roof's tuck holds it, not a blade past its end.
+    const frontZ = Math.min(lerp(base[1], topZ, edge) + A_POST_LIFT * uy, t === 1 ? style.roofZ[1] - ROOF_TUCK : Infinity);
+    const frontY = lerp(base[0], topY, edge) - A_POST_LIFT * uz;
     const [frontX, rearX] = [lerp(wBase, wTop, edge) / 2 + A_POST_LIFT, glassPlaneX(y) + A_POST_LIFT];
     const roofZ = THREE.MathUtils.clamp(postZ, style.roofZ[0], style.roofZ[1]);
     const rear: V3 = [underRoofSide(rearX, y, roofZ, style), y, postZ];
