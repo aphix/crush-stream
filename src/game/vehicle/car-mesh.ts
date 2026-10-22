@@ -589,8 +589,8 @@ export const ROOF_CROWN = 0.026;
 /** The dome's shoulder: [share of the roof half-width, rise above the cant line (m)]. */
 export const ROOF_SHOULDER = [0.45, 0.018] as const;
 
-/** A deck lid's top stands `DECK_RISE` (m) over its station's belt, `DECK_INSET` (m) inside its half-width, domed `DECK_DOME` (m) at the centre line and 0.7 of that at `DECK_SHOULDER` of its half-width. */
-const DECK_RISE = 0.016;
+/** A deck lid's top stands `LID_RISE` (m) over its station's belt, `DECK_INSET` (m) inside its half-width, domed `DECK_DOME` (m) at the centre line and 0.7 of that at `DECK_SHOULDER` of its half-width. */
+const LID_RISE = 0.016;
 const DECK_INSET = 0.075;
 const DECK_DOME = 0.012;
 const DECK_SHOULDER = 0.45;
@@ -623,8 +623,8 @@ function domeAt(dome: Dome, u: number): number {
 /** A deck lid's half-width, its top's heights (car frame, m) at `z` at its edge and at its crown, and its dome. The drawn hood's edge rests on the fender beside it. */
 function lidSection(z: number, style: BodyStyle, hood: boolean): { w: number; edge: number; crown: number; dome: Dome } {
   const sl = sampleSlice(z, style.profile);
-  const crown = sl.yBelt + DECK_RISE + DECK_DOME;
-  if (!hood) return { w: sl.hw - DECK_INSET, edge: sl.yBelt + DECK_RISE, crown, dome: DECK_DOME_POINTS };
+  const crown = sl.yBelt + LID_RISE + DECK_DOME;
+  if (!hood) return { w: sl.hw - DECK_INSET, edge: sl.yBelt + LID_RISE, crown, dome: DECK_DOME_POINTS };
   const w = sl.hw - HOOD_INSET;
   // A rigid lid: its edge keeps the fender's height where a cabin tub's blend runs under its rear end (the coupe's and monster's), never bending into it.
   const edge = deckEdgeY(sl.yBelt, 0) + HOOD_SEAT;
@@ -705,7 +705,7 @@ function makeDeckPanel(
     const sl = sampleSlice(z, style.profile);
     const lid = lidSection(z, style, hood);
     const kick = lipKick(Math.abs(zEnd - z), lip);
-    const r = ring(lid.w, sl.yBelt + DECK_RISE - oy, lid.edge - oy + kick, lid.crown - oy + kick, lid.dome);
+    const r = ring(lid.w, sl.yBelt + LID_RISE - oy, lid.edge - oy + kick, lid.crown - oy + kick, lid.dome);
     if (clamshell) wrapShoulder(r, sectionPoints(sl, style, "drawn"), oy, tk);
     rings.push(r);
     zs.push(z - oz);
@@ -713,7 +713,7 @@ function makeDeckPanel(
   // The fold and the face are lofted straight on past the deck's end (z = path length), then bent onto the tail below.
   const end = sampleSlice(zEnd, style.profile);
   const wEnd = end.hw - DECK_INSET;
-  const yc = end.yBelt + DECK_RISE - oy - fold;
+  const yc = end.yBelt + LID_RISE - oy - fold;
   const zA = zEnd - oz;
   const arc = (fold * Math.PI) / 2;
   if (drop) {
