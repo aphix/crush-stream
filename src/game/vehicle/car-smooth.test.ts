@@ -1190,7 +1190,8 @@ function cageSourceDigest(car: DeformableCar): string {
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // CarSedan's shape data and arch radius (as the sim digests above): sedan b9e9e98b... -> df8e0b97... -> 720053fe...; police 2466b278... -> 5e59494a... -> 23142cfa....
   // Sedan and police re-pinned for the door glass's top-front corner kept in under the slim A-post (`aPillarTop` 0.143): 8540eed1 -> 2fc92389; police 5af761d2 -> d97239fa.
-  { id: "sedan", digest: "2fc92389770b8e00c4d7ebdaf8f4ce146f46123d137c520c85c1fb310107b324" },
+  // Then 0.13, so the cage's A-pillar box keeps the dummies' roof proxy off the windshield: 2fc92389 -> d4d091d3; police d97239fa -> 26d74836.
+  { id: "sedan", digest: "d4d091d341462054e7c1523669ee8ab44478da0b0159eae2674628794c3e97e8" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
@@ -1202,7 +1203,7 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open; both trucks for the greenhouse's dome-following panes and posts.
   { id: "pickup", digest: "214a0ec7b44e78d9b257b9268b841eb1c735d784cc50f39bd855dde83a55aa2e" },
-  { id: "police", digest: "d97239fa21b9cf10f9ed7c91095314b375d0f236bc2b81c311dd2e1b1147b81e" },
+  { id: "police", digest: "26d74836366ea758cb090a8f2908702c95392a9fe06faecc1d598e2f9b13404e" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55).
   { id: "monster", digest: "c8582ab81c488237ba16228a0283e255e6ba884cd464d4c46441ee8611a79eb2" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
