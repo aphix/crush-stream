@@ -2239,14 +2239,15 @@ const _w = new Float64Array(HIT_SIZE);
 const _x = new Float64Array(HIT_SIZE);
 const _pq = new Float64Array(PQ_SIZE);
 /**
- * The footprint's pose `tread` reads: its turn in the rolling plane (cos, sin), the wheel's scale and the highest the surfaces stand
- * over the footprint (`Infinity`: unbounded) (no boxed doubles cross the call).
+ * The footprint's pose `tread` reads: its turn in the rolling plane (cos, sin), the wheel's scale along its radius and across its tread,
+ * and the highest the surfaces stand over the footprint (`Infinity`: unbounded) (no boxed doubles cross the call).
  */
-const _foot = new Float64Array(4);
+const _foot = new Float64Array(5);
 const FOOT_COS = 0;
 const FOOT_SIN = 1;
 const FOOT_SCALE = 2;
 const FOOT_TOP = 3;
+const FOOT_ACROSS = 4;
 /** Per footprint point of the last `wheelContact`: its rise, the patch that sets it (`patchOf`) and the point (world x, y, z). */
 const _rise = new Float64Array(FOOT);
 const _pid = new Float64Array(FOOT);
@@ -2473,7 +2474,7 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
   const c = _foot[FOOT_COS]!;
   const s = _foot[FOOT_SIN]!;
   const scale = _foot[FOOT_SCALE]!;
-  const lx = FX[k]! * scale;
+  const lx = FX[k]! * _foot[FOOT_ACROSS]!;
   const ly = (FY[k]! * c + FZ[k]! * s) * scale;
   const lz = (FZ[k]! * c - FY[k]! * s) * scale;
   const px = hub[0]! + axes[0]! * lx + axes[3]! * ly + axes[6]! * lz;
@@ -2500,7 +2501,9 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
 
 /**
  * A wheel's contact with the surfaces: its tread's footprint swept over the store. `hub` is the hub's world position (x, y, z),
- * `axes` the body's rotation (world x, y, z axes, 9 numbers), `scale` the wheel's size.
+ * `axes` the body's rotation (world x, y, z axes, 9 numbers), `scale` the wheel's size along its radius and `across` across its tread
+ * (the platform tyre's rings stretched to the drawn tyre's width: a monster's 0.63 m tread read 0.42 m wide on the radius' scale, its
+ * drawn shoulders 2.1 cm in a 20° slope banked 10°).
  * `out` = [rise, nx, ny, nz, grip, surface, owner, footprint index, aux, footprint point x, y, z, touch]: `rise` the greatest height
  * any footprint point must lift to clear the surface under it (the tread gap is `-rise`; `-Infinity` with nothing under the wheel),
  * the rest as `pointContact`'s at the point that sets it (the hub itself with nothing under the wheel), so a wheel riding up a lip
@@ -2508,15 +2511,15 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
  * `C_PZ`): where the tyre rests, whichever side of the hub that is. `touch` is `rise` or, when a face too high to mount is pressed by
  * the tread, how far that is in it.
  */
-export function wheelContact(hub: Float64Array, axes: Float64Array, scale: number, skip: number, out: Float64Array): void {
+export function wheelContact(hub: Float64Array, axes: Float64Array, scale: number, across: number, skip: number, out: Float64Array): void {
   const t = GQ.on ? gqEnter(G.wheelContact) : -1;
   if (GQ.check) {
     const baked = BAKE.on;
     BAKE.on = false;
-    wheelContactRead(hub, axes, scale, skip, _live);
+    wheelContactRead(hub, axes, scale, across, skip, _live);
     BAKE.on = baked;
   }
-  wheelContactRead(hub, axes, scale, skip, out);
+  wheelContactRead(hub, axes, scale, across, skip, out);
   if (GQ.check) {
     const v = GQ.verify;
     v.compared[WHEEL_KIND] = v.compared[WHEEL_KIND]! + 1;
@@ -2530,7 +2533,7 @@ export function wheelContact(hub: Float64Array, axes: Float64Array, scale: numbe
   if (t >= 0) gqLeave(G.wheelContact, t);
 }
 
-function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, skip: number, out: Float64Array): void {
+function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, across: number, skip: number, out: Float64Array): void {
   out[C_NX] = 0;
   out[C_NY] = 1;
   out[C_NZ] = 0;
@@ -2571,6 +2574,7 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
   _pq[PQ_Z] = z;
   _pq[PQ_Y] = y;
   _foot[FOOT_SCALE] = scale;
+  _foot[FOOT_ACROSS] = across;
   treadReach.tops = tops !== null && edgeIn(tops, _pq, skip) ? tops : null;
   const n = treadReach.tops !== null || (live.statics !== null && edgeIn(live.statics, _pq, skip)) || (live.solids !== null && edgeIn(live.solids, _pq, skip)) ? FOOT : BASE;
   // The footprint turns in the rolling plane to face the surface under the hub: each ring's bottom is then its point nearest that
