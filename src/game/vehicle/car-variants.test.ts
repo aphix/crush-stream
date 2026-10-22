@@ -6,9 +6,9 @@ import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
-import { CREASE_DEGREES, ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
+import { CREASE_DEGREES, ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, shoulderDrop, sideX, tailgateHalf } from "./car-mesh.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, sideBowZ, tubWall } from "./car-lines.ts";
-import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
+import { doorSkinStand, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
@@ -1258,6 +1258,29 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(frontSill <= BELT_TOP && tipY >= POINT_LOW && over <= OVER_POINT, `sill ${frontSill.toFixed(3)} ahead of z -0.6, point ${tipY.toFixed(3)} at z ${tipZ.toFixed(3)}, shoulder ${(over * 1000).toFixed(0)} mm over it`);
   });
 
+  it("when the coupe's drawn side is read at the tail, over the rear arch and at the quarter window's point, then its widest line (the haunch's crest) stands within 6 cm under the belt at the point and has risen at least 6 cm from the tail to it, not the default 10 cm under the belt", () => {
+    /** The crest stands at most this far (m) under the belt at the quarter window's point: the reference side plate runs the haunch's bulge line up to that pinched point; the default FEATURE_DROP (.1) would leave it 10 cm under. */
+    const CREST_UNDER_POINT = 0.06;
+    /** The crest has risen at least this far (m) from the tail's top corner to the window's point: the reference's crest climbs about 8 cm up the haunch; the default drop gives about 5. */
+    const CREST_RISE = 0.06;
+    /** Ring points further than this (m) under the profile belt are the tuck-under and the arch lip's flare, which can stand wider than the crest; the crest, even at the default drop, lies inside the band. */
+    const CREST_BAND = 0.15;
+    const coupe = CAR_STYLES.coupe;
+    const crestY = (z: number) => {
+      const slice = sampleSlice(z, coupe.profile);
+      let widest = { x: -Infinity, y: NaN };
+      for (const p of sectionPoints(slice, coupe, "drawn")) if (p.y > slice.yBelt - CREST_BAND && p.x > widest.x) widest = p;
+      return widest.y;
+    };
+    const zs = [-1.97, -1.5, -1.0];
+    const ys = zs.map(crestY);
+    const [tail, point] = [ys[0]!, ys[2]!];
+    const belt = beltY(coupe.quarter.zRearBot, coupe);
+    const readings = zs.map((z, i) => `z ${z} y ${ys[i]!.toFixed(3)}`).join(", ");
+    assert.ok(belt - point <= CREST_UNDER_POINT, `the crest stands ${((belt - point) * 100).toFixed(1)} cm under the belt (${belt.toFixed(3)}) at the window's point, ${CREST_UNDER_POINT * 100} cm asked: ${readings}`);
+    assert.ok(point - tail >= CREST_RISE, `the crest rises ${((point - tail) * 100).toFixed(1)} cm from the tail to the window's point, ${CREST_RISE * 100} cm asked: ${readings}`);
+  });
+
   it("when the coupe's door is drawn, then its skin is flush with the body side inside its cut (door.proud 0), not a lit 3 mm step at the shut line", () => {
     /** Flush within this (m): the skin's chords between its rows. */
     const FLUSH = 0.001;
@@ -1302,6 +1325,42 @@ describe("given a body style's H2 hardpoints", () => {
     for (const { z, y, clear } of control) t.diagnostic(`control ramp clear z=${z.toFixed(3)} y=${y.toFixed(2)} mm=${(clear * 1000).toFixed(2)}`);
     for (const { z, y, clear } of stock) assert.ok(clear >= MIN_CLEAR, `the skin stands ${(clear * 1000).toFixed(2)} mm off the ramp at z ${z.toFixed(3)} y ${y}, ${MIN_CLEAR * 1000} mm asked`);
     assert.ok(Math.min(...control.map((r) => r.clear)) < MIN_CLEAR, "the control: without lowProud the skin lies within the ramp's z-fight band");
+  });
+
+  it("when a lowProud door's chrome strips are read at their own ends and 2 cm in, then the stand they lose toward the end is the drawn door face's own within 1 mm (the face's stand tapers to nothing at its cut ends), not the full stand held to it", () => {
+    /** The strip's stand drop and the drawn face's agree within this (m). The drop, not the stand itself: below the door's lowest ring row the face is flat triangles, its chord about 1 mm under the smooth side line the strip follows, the same at both readings. */
+    const AGREE = 0.001;
+    /** The second reading is this far (m) inside the strip's end, past the cut-end taper's run (2 cm), where the stand is full. */
+    const FULL_IN = 0.02;
+    let reads = 0;
+    let fullest = -Infinity;
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const { hingeX, hingeY, hingeZ, aperture, lowProud } = style.door;
+      if (lowProud === undefined) continue;
+      const door = new THREE.Mesh(makeDoorGeometry(1, style), SIDED);
+      door.position.set(hingeX, hingeY, hingeZ + doorSkinZ(style));
+      door.updateMatrixWorld();
+      const stand = doorSkinStand(style);
+      const faceStand = (z: number, y: number) => {
+        const hit = bodyHit(door, [2, y, z], [-1, 0, 0], 3);
+        assert.ok(hit, `${id}: the drawn door face is met at z ${z.toFixed(3)} y ${y}`);
+        return hit.x - drawnSideX(z, y, style);
+      };
+      const riding = (style.chromeStrips ?? []).filter((strip) => strip.points.every(([z]) => z >= aperture[0] && z <= aperture[1]));
+      for (const { points } of riding) {
+        const [first, last] = [points[0]!, points[points.length - 1]!];
+        for (const [[zEnd, y], [zOther]] of [[first, last], [last, first]] as const) {
+          const zIn = zEnd + Math.sign(zOther - zEnd) * FULL_IN;
+          const [stripDrop, faceDrop] = [stand(zIn, y) - stand(zEnd, y), faceStand(zIn, y) - faceStand(zEnd, y)];
+          assert.ok(Math.abs(stripDrop - faceDrop) <= AGREE, `${id}: from z ${zIn.toFixed(3)} to the strip's end z ${zEnd.toFixed(3)} at y ${y}, the strip's stand falls ${(stripDrop * 1000).toFixed(2)} mm, the drawn door face's ${(faceDrop * 1000).toFixed(2)} mm`);
+          fullest = Math.max(fullest, stand(zIn, y));
+          reads++;
+        }
+      }
+    }
+    assert.ok(reads > 0, "a lowProud door's chrome strips are read");
+    assert.ok(fullest > AGREE, `the fullest strip stand 2 cm in is ${(fullest * 1000).toFixed(2)} mm, ${AGREE * 1000} mm asked: no taper to read`);
   });
 
   it("when the coupe's drawn A-post is seated on its deck (pillars.aSeat), then no level ray in from the side between the fender's top and the belt under the post's foot sees into the cabin, and the cage is unchanged", () => {
@@ -1663,7 +1722,7 @@ describe("given a body style's H2 hardpoints", () => {
         if (pos.getZ(i) > rear + 0.005) continue;
         const [z, y] = [front.seat.z + pos.getZ(i), front.seat.y + pos.getY(i)];
         const slice = sampleSlice(z, coupe.profile);
-        stand = Math.max(stand, Math.abs(pos.getX(i)) - sideX(y, slice.hw, slice.yBelt, rockerAt(z, coupe)));
+        stand = Math.max(stand, Math.abs(pos.getX(i)) - sideX(y, slice.hw, slice.yBelt, rockerAt(z, coupe), shoulderDrop(z, coupe)));
       }
       return { rear: front.seat.z + rear, stand };
     };
@@ -2498,7 +2557,7 @@ describe("given a body style's P1 parts", () => {
         const rocker = rockerAt(z, style);
         if (x <= wrap.from || z < tail || y < rocker || y > slice.yBelt) continue;
         read++;
-        const proud = x - sideX(y, slice.hw, slice.yBelt, rocker);
+        const proud = x - sideX(y, slice.hw, slice.yBelt, rocker, shoulderDrop(z, style));
         if (proud > worst) [worst, at] = [proud, `x ${x.toFixed(3)} y ${y.toFixed(3)} z ${z.toFixed(3)}`];
       }
       assert.ok(read > 0 && worst <= BUMPER_FLUSH, `${id}: of ${read} corner and run vertices the proudest stands ${(worst * 1000).toFixed(1)} mm out of the body side, at ${at}`);
@@ -3937,13 +3996,14 @@ describe("given every style's doors and the shared door card", () => {
           const z = end * (half - inside);
           const zCar = d.hingeZ + doorSkinZ(style) + z;
           const sl = sampleSlice(zCar, style.profile);
+          const crestDrop = shoulderDrop(zCar, style);
           const face = faceColumn(pos, style, z);
           const [top, bottom] = [face[carried[0]!]!.y, face[carried[carried.length - 1]!]!.y];
           let proud = -Infinity;
           for (const p of face) {
             if (Math.abs(p.y - d.hingeY) > d.halfHeight - ROW_EDGE) continue;
             const held = THREE.MathUtils.clamp(p.y, bottom, top);
-            const body = sideX(p.y, sl.hw, sl.yBelt, rockerAt(zCar, style)) + drawnSideX(zCar, held, style) - sideX(held, sl.hw, sl.yBelt, rockerAt(zCar, style));
+            const body = sideX(p.y, sl.hw, sl.yBelt, rockerAt(zCar, style), crestDrop) + drawnSideX(zCar, held, style) - sideX(held, sl.hw, sl.yBelt, rockerAt(zCar, style), crestDrop);
             proud = Math.max(proud, p.x - body);
           }
           const stand = want ?? d.proud ?? 0.003;
