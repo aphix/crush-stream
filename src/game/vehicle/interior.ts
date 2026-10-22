@@ -74,11 +74,12 @@ export function driverSeat(style: BodyStyle): DriverPlace {
   return seat;
 }
 
-/** Seat `seat` at `p`, leaned back `lean` past the seat's own recline (rad), scaled `sx` across. */
-function place(seat: PartSeat, x: number, y: number, z: number, lean = 0, sx = 1): void {
+/** Seat `seat` at `p`, leaned back `lean` past the seat's own recline (rad), scaled `sx` across and `sz` deep. */
+function place(seat: PartSeat, x: number, y: number, z: number, lean = 0, sx = 1, sz = 1): void {
   seat.position.set(x, y, z);
   seat.rotation.set(-lean, 0, 0);
-  seat.scale.set(sx, 1, 1);
+  seat.scale.set(sx, 1, sz);
+  seat.updateMatrix();
 }
 
 /** `seat` mapping `ref`'s box onto [x0..x1, y0..y1, z0..z1] half-width `halfX`. */
@@ -87,6 +88,7 @@ function fitBox(seat: PartSeat, ref: { halfX: number; y0: number; y1: number; z0
   const sz = (z1 - z0) / (ref.z1 - ref.z0);
   seat.scale.set(halfX / ref.halfX, sy, sz);
   seat.position.set(0, y0 - ref.y0 * sy, z0 - ref.z0 * sz);
+  seat.updateMatrix();
 }
 
 /** Half the cab's back wall (m): its drawn box is 4.5 cm deep about `rearBulkhead.z`. */
@@ -166,11 +168,11 @@ export class CarCabin {
     place(passenger!, -seat.hip.x, seat.hip.y, seat.hip.z, lean);
     wheel!.position.copy(seat.wheel);
     wheel!.rotation.set(WHEEL_TILT, 0, 0);
+    wheel!.updateMatrix();
     this.pose.add(cabin!, driver!, passenger!, wheel!);
     const back = style.seats.rear;
     if (back) {
-      place(rear!, 0, back[0], back[1], 0, halfX / REF_CABIN.halfX);
-      rear!.scale.z = benchDepth(rear!.geometry, back, style);
+      place(rear!, 0, back[0], back[1], 0, halfX / REF_CABIN.halfX, benchDepth(rear!.geometry, back, style));
       this.pose.add(rear!);
     }
 
@@ -186,6 +188,8 @@ export class CarCabin {
     bars[0]!.position.set(0, front.seat.y, front.seat.z);
     bars[1]!.position.set(0, tail.seat.y, -tail.seat.z);
     bars[1]!.rotation.set(0, Math.PI, 0);
+    bars[0]!.updateMatrix();
+    bars[1]!.updateMatrix();
     group.add(this.pose, bay!, ...bars);
 
     this.under = [bay!, ...bars];
@@ -226,6 +230,7 @@ export class CarCabin {
     const sz = (zFront + Math.min(engine!, nose!) - zRear - engine!) / (REF_BAY.front - REF_BAY.rear);
     bay.scale.z = sz;
     bay.position.z = zRear + engine! - REF_BAY.rear * sz;
+    for (let k = 0; k < this.under.length; k++) this.under[k]!.updateMatrix();
   }
 
   /** The shell squeezes by the roof mass's drop to `roofY` (car space; null: at rest), a load's crush too: its dash and screen stand 0.3 m under the roof line, less than a 0.4 m crush. */
@@ -236,6 +241,7 @@ export class CarCabin {
     const sy = (top + sink - floor) / (REF_CABIN.roof - REF_CABIN.floor);
     this.shell.scale.y = sy;
     this.shell.position.y = floor - REF_CABIN.floor * sy;
+    this.shell.updateMatrix();
   }
 }
 
