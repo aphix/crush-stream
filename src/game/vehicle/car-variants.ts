@@ -178,6 +178,8 @@ interface BumperSpec {
   edge?: readonly (readonly [number, number])[];
   /** A rear bumper's number plate centre height (m, car frame); absent, `PLATE_RISE` over the seat. */
   plate?: number;
+  /** A rear plate's seating (drawn only): its rear face `out` (m, as `fascia`'s) behind the seat and its `color` (sRGB); absent, the platform plate's (0.09, cream). */
+  plateFace?: { out?: number; color?: number };
 }
 
 type DetailView = "side" | "top" | "front" | "rear" | "bottom";
@@ -345,7 +347,7 @@ export interface BodyStyle {
    * The front grille (drawn only; it tears off with the front bumper): centre height `y` and face `z` (m, car frame; z absent: the platform
    * grille's face); `size` [w at the top, h], `bottom` its width at the bottom (a trapezoid; absent, w), corners rounded `round` (m); `kind`
    * horizontal bars, vertical slats, a mesh of both or a diagonal (hex) mesh, `count` bars or slats (absent, at the default pitch); a round
-   * `badge` of that radius at its centre; in `finish` (body: the body's paint). Absent: the platform grille.
+   * `badge` of that radius at its centre, a chrome `bezel` framing its edge; in `finish` (body: the body's paint). Absent: the platform grille.
    */
   grille?: {
     y: number;
@@ -356,6 +358,8 @@ export interface BodyStyle {
     kind: "bars" | "mesh" | "slats" | "hex";
     count?: number;
     badge?: number;
+    /** A chrome frame this wide (m) round the grille's outer edge, its face standing out past the grille's (drawn only). */
+    bezel?: number;
     finish: "black" | "chrome" | "body";
   };
   /**

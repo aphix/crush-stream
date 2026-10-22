@@ -77,7 +77,7 @@ export const COUPE: BodyStyle = {
   bumpers: {
     // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin.
     front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.3, back: 0.24, end: { corner: 0.15, stand: 0.03 } }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
-    rear: { ...bumpers.rear, seat: { y: 0.425, z: 2.0475 }, span: 0.72, wrap: { from: 0.45, back: 0.2, end: { corner: 0.1, stand: 0.03 } }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome", plate: 0.37 },
+    rear: { ...bumpers.rear, seat: { y: 0.425, z: 2.0475 }, span: 0.72, wrap: { from: 0.45, back: 0.2, end: { corner: 0.1, stand: 0.03 } }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome", plate: 0.29, plateFace: { out: 0.015, color: 0x1c1e22 } },
   },
   profile: [
     st(-2.054, 0.62, 0.857),
@@ -143,7 +143,7 @@ export const COUPE: BodyStyle = {
       { at: [0.54, -1.73], size: [0.08, 0.035] },
     ],
   },
-  grille: { y: 0.585, size: [0.78, 0.17], kind: "bars", count: 6, badge: 0.03, finish: "black" },
+  grille: { y: 0.585, size: [0.75, 0.14], kind: "bars", count: 6, badge: 0.03, finish: "black", bezel: 0.015 },
   exhaust: { tips: 2, x: 0.45, y: 0.24, size: [0.085, 0.06], shape: "round" },
   camera: { hood: [1.12, 1.0], third: { dist: 6.1, height: 1.95, aimUp: 0.95 }, far: { dist: 9.9, height: 3.25, aimUp: 1.1 } },
   details: {

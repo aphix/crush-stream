@@ -105,8 +105,8 @@ const mirrorKey = (style: BodyStyle): string | null => (style.door.mirror ? `${J
 
 type GrilleSpec = NonNullable<BodyStyle["grille"]>;
 
-/** Grille build (m): the surround's `rim` width and depth, the dark backing set `backingSet` behind the face, its bars/slats `bar` wide at `pitch` (without a `count`), `barDepth` deep and standing `inset` behind the face; a mesh's finer `meshBar` at `meshPitch`; the badge's depth. */
-const GRILLE = { rim: 0.022, rimDepth: 0.03, backingSet: 0.012, bar: 0.012, pitch: 0.045, barDepth: 0.014, inset: 0.004, meshBar: 0.006, meshPitch: 0.03, badge: 0.008 } as const;
+/** Grille build (m): the surround's `rim` width and depth, the dark backing set `backingSet` behind the face, its bars/slats `bar` wide at `pitch` (without a `count`), `barDepth` deep and standing `inset` behind the face; a mesh's finer `meshBar` at `meshPitch`; the badge's depth; a bezel's front stands `bezelProud` over the face. */
+const GRILLE = { rim: 0.022, rimDepth: 0.03, backingSet: 0.012, bar: 0.012, pitch: 0.045, barDepth: 0.014, inset: 0.004, meshBar: 0.006, meshPitch: 0.03, badge: 0.008, bezelProud: 0.003 } as const;
 /** Points along each rounded corner of a grille outline. */
 const GRILLE_CORNER_STEPS = 4;
 /** A hex grille's bars cross at ± this angle (rad) from the horizontal: a diamond lattice. */
@@ -172,7 +172,7 @@ function grilleBars(poly: readonly THREE.Vector2[], angle: number, count: number
   return bars;
 }
 
-/** `style.grille` in the grille seat's space (`GRILLE_SEAT` on the front bumper): a surround in its finish round a dark backing, its bars, slats or mesh in the finish, a chrome badge. */
+/** `style.grille` in the grille seat's space (`GRILLE_SEAT` on the front bumper): a surround in its finish round a dark backing, its bars, slats or mesh in the finish, a chrome badge, a chrome bezel. */
 function styleGrille(style: BodyStyle): THREE.BufferGeometry {
   const g: GrilleSpec = style.grille!;
   const seat = style.bumpers.front.seat;
@@ -193,6 +193,12 @@ function styleGrille(style: BodyStyle): THREE.BufferGeometry {
     ...fill.map((f) => finished(f.translate(0, 0, barZ), g.finish)),
   ];
   if (g.badge) parts.push(finished(new THREE.CylinderGeometry(g.badge, g.badge, GRILLE.badge, 24).rotateX(Math.PI / 2).translate(0, 0, face), "chrome"));
+  if (g.bezel) {
+    // ponytail: a uniform offset is exact for a rectangle; a trapezoid's slanted sides widen by sec(slope) of it, under 1 mm at a 3 cm bezel.
+    const frame = new THREE.Shape(grilleOutline(w + 2 * g.bezel, bottom + 2 * g.bezel, h + 2 * g.bezel, round > 0 ? round + g.bezel : 0));
+    frame.holes.push(new THREE.Path(grilleOutline(w, bottom, h, round)));
+    parts.push(finished(indexed(new THREE.ExtrudeGeometry(frame, { depth: GRILLE.rimDepth + GRILLE.bezelProud, bevelEnabled: false })).translate(0, 0, face - GRILLE.rimDepth), "chrome"));
+  }
   return mergeToned(parts, "style grille").translate(0, g.y - seat.y - GRILLE_SEAT.y, 0);
 }
 
@@ -204,10 +210,16 @@ function frontFittings(style: BodyStyle): THREE.BufferGeometry {
   return mergeToned([grille, bothSides(builtLamp(style, "front").body).translate(0, -seat.y - GRILLE_SEAT.y, -seat.z - GRILLE_SEAT.z)], "front bumper fittings");
 }
 
-/** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height) and the style's rear bumper lamps. */
+/** The platform plate's rear face (m) behind its seat: `tailTrim`'s centre 0.08 back plus half its 0.02 depth. */
+const PLATFORM_PLATE_OUT = 0.09;
+/** The platform plate's roughness and metalness: a recoloured plate keeps its sheen. */
+const PLATE_SHEEN = [0.6, 0.1] as const;
+
+/** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height, its face and colour seated by `plateFace`) and the style's rear bumper lamps. */
 function rearFittings(style: BodyStyle): THREE.BufferGeometry {
-  const { seat, plate } = style.bumpers.rear;
-  const trim = withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0).translate(0, plate === undefined ? 0 : plate - seat.y - PLATE_RISE, 0);
+  const { seat, plate, plateFace } = style.bumpers.rear;
+  const trim = withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0).translate(0, plate === undefined ? 0 : plate - seat.y - PLATE_RISE, plateFace?.out === undefined ? 0 : PLATFORM_PLATE_OUT - plateFace.out);
+  if (plateFace?.color !== undefined) toned(trim, plateFace.color, ...PLATE_SHEEN);
   if (!style.lamps.shapes?.rear) return trim;
   const lamps = bothSides(builtLamp(style, "rear").body).translate(0, -seat.y, seat.z);
   return mergeToned([trim, lamps], "rear bumper fittings");
@@ -216,7 +228,7 @@ function rearFittings(style: BodyStyle): THREE.BufferGeometry {
 const frontKey = (style: BodyStyle): string | null =>
   style.grille || style.lamps.shapes?.front ? `${style.id}|${JSON.stringify(style.grille)}|${JSON.stringify(style.lamps.shapes?.front)}|${JSON.stringify(style.bumpers.front)}` : null;
 const rearKey = (style: BodyStyle): string | null =>
-  style.lamps.shapes?.rear || style.bumpers.rear.plate !== undefined ? `${style.id}|${JSON.stringify(style.lamps.shapes?.rear)}|${JSON.stringify(style.bumpers.rear)}` : null;
+  style.lamps.shapes?.rear || style.bumpers.rear.plate !== undefined || style.bumpers.rear.plateFace ? `${style.id}|${JSON.stringify(style.lamps.shapes?.rear)}|${JSON.stringify(style.bumpers.rear)}` : null;
 
 // ---- lamps -----------------------------------------------------------------------------------------------------------------
 

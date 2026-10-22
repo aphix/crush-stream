@@ -1538,6 +1538,25 @@ describe("given a body style's P2 parts", () => {
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 
+  it("when a grille sets a bezel, then a chrome frame of that width rings it, its front over the face, and without the field the grille has no chrome", () => {
+    const sedan = CAR_STYLES.sedan;
+    const bezel = 0.015;
+    const grille = { y: 0.48, size: [0.6, 0.12], kind: "bars", count: 3, finish: "black" } as const;
+    const lamps = { ...sedan.lamps, shapes: undefined };
+    const chromeBox = (g: THREE.BufferGeometry): THREE.Box3 => {
+      const [pos, colour] = [g.getAttribute("position"), g.getAttribute("color")];
+      const chrome = new THREE.Color(TRIM_CHROME);
+      const box = new THREE.Box3();
+      for (let i = 0; i < pos.count; i++) if (Math.abs(colour.getX(i) - chrome.r) < 1e-6) box.expandByPoint(new THREE.Vector3().fromBufferAttribute(pos, i));
+      return box;
+    };
+    const framed = chromeBox(drawnPart(PART_KIND.grille, { ...sedan, grille: { ...grille, bezel }, lamps }).geometry);
+    const size = framed.getSize(new THREE.Vector3());
+    assertSameNumbers([size.x, size.y], [grille.size[0] + 2 * bezel, grille.size[1] + 2 * bezel], "the chrome frame's w and h", POSITION_TOL);
+    assert.ok(chromeBox(drawnPart(PART_KIND.grille, { ...sedan, grille, lamps }).geometry).isEmpty(), "without the field, no chrome");
+    assert.ok(cageHash({ ...sedan, grille: { ...grille, bezel } }) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
   it("when a rear bumper sets its plate's height, then the plate's centre stands at it (unset: where the platform puts it), and the cage builds are unchanged", () => {
     const sedan = CAR_STYLES.sedan;
     const plain: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: undefined } };
@@ -1546,6 +1565,24 @@ describe("given a body style's P2 parts", () => {
     const box = partBox(drawnPart(PART_KIND.tailTrim, style).geometry);
     assertSameNumbers([box.getCenter(new THREE.Vector3()).y + sedan.bumpers.rear.seat.y], [plate], "the plate's centre height", POSITION_TOL);
     assert.ok(drawnPart(PART_KIND.tailTrim, plain).geometry === partGeometry(PART_KIND.tailTrim), "without the field, the platform plate");
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a rear bumper sets its plate's face and colour, then the plate's rear face stands that far out of the seat in that colour, and the cage builds are unchanged", () => {
+    const sedan = CAR_STYLES.sedan;
+    const plain: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: undefined } };
+    const plateFace = { out: 0.015, color: 0x1c1e22 };
+    const rear = { ...plain.bumpers.rear, plate: 0.4 };
+    const style: BodyStyle = { ...plain, bumpers: { ...plain.bumpers, rear: { ...rear, plateFace } } };
+    const box = partBox(drawnPart(PART_KIND.tailTrim, style).geometry);
+    assertSameNumbers([box.min.z, box.max.z - box.min.z], [-plateFace.out, 0.02], "the plate's rear face (bumper space z) and depth", POSITION_TOL);
+    const colour = drawnPart(PART_KIND.tailTrim, style).geometry.getAttribute("color");
+    const want = new THREE.Color(plateFace.color);
+    let off = 0;
+    for (let i = 0; i < colour.count; i++) off = Math.max(off, Math.abs(colour.getX(i) - want.r));
+    assert.ok(off < 1e-6, `every plate vertex is the dark tone (off by ${off})`);
+    const bare = partBox(drawnPart(PART_KIND.tailTrim, { ...plain, bumpers: { ...plain.bumpers, rear } }).geometry);
+    assertSameNumbers([bare.min.z], [-0.09], "without the field, the platform plate's face", POSITION_TOL);
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 
