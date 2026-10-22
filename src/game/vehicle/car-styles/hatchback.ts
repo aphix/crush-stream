@@ -4,12 +4,15 @@ import { pullHandle, st } from "./platform.ts";
 /** Hatchback's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const HATCHBACK_LAMP_SHAPES = {
   head: {
-    loops: [{ points: [[0.4, 0.48], [0.68, 0.48], [0.7, 0.6], [0.4, 0.61]] }],
+    // The lens's foot 1.5 cm over the bumper's top (.47 + its 1 cm crown there), so the bezel's foot clears the bumper running under it.
+    loops: [{ points: [[0.4, 0.495], [0.68, 0.495], [0.7, 0.6], [0.4, 0.61]] }],
     lens: "lit",
     bezel: "black",
     recess: 0.01,
     // The amber at the lens's outer end, round the corner (the lens's edge at z 1.649 foot, 1.631 top).
-    cells: [{ loop: { side: true, points: [[1.675, 0.48], [1.652, 0.48], [1.635, 0.598], [1.66, 0.6]] }, tone: "amber" }],
+    cells: [{ loop: { side: true, points: [[1.675, 0.495], [1.652, 0.495], [1.635, 0.598], [1.66, 0.6]] }, tone: "amber" }],
+    // The reference's reflector split: a grey bar across the lens a little under its middle.
+    strips: [{ line: { points: [[0.41, 0.535], [0.665, 0.535]] }, width: 0.01, tone: "smoked" }],
   },
   // A slim band split at the gate's outline (the gate's piece inboard of x .43) and again at the infill's step wall (x .621 → .635 up the
   // band): the outer lens starts on the wall's top edge and falls down it in front of the wall, then wraps the corner onto the quarter.
@@ -46,7 +49,8 @@ const HATCHBACK_LAMP_SHAPES = {
     ],
   },
   front: {
-    loops: [{ points: [[0.575, 0.305], [0.665, 0.305], [0.665, 0.335], [0.575, 0.335]] }],
+    // The reference's orange reflector on the lip under the black band's outer end, inboard of the bumper's corner roll.
+    loops: [{ points: [[0.47, 0.305], [0.56, 0.305], [0.56, 0.33], [0.47, 0.33]] }],
     lens: "amber",
     onBody: true,
   },
@@ -76,7 +80,10 @@ export const HATCHBACK: BodyStyle = {
       seat: { y: 0.38, z: 1.7245 },
       fascia: [[0.09, -0.07], [0.09, 0.02], [0.079, 0.062], [0.045, 0.08], [0.016, 0.074], [-0.011, 0.062], [-0.045, 0.064], [-0.063, 0.088], [-0.09, 0.075], [-0.09, -0.07]],
       span: 0.7,
-      wrap: { from: 0.25, back: 0.19 },
+      // The reference's face runs straight to its corners, wraps them and runs back along the fender to its seam; its recessed lower
+      // face (between the dip and the lip's crest) is the black intake band.
+      wrap: { from: 0.45, back: 0.3, end: { corner: 0.15, stand: 0.008 } },
+      band: [0.33, 0.4],
       trim: "body",
       top: [[0, 0.462], [0.4, 0.462], [0.62, 0.462]],
       edge: [[1.72, 0.462], [1.45, 0.462], [1.485, 0.38], [1.5, 0.3]],
