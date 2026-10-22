@@ -285,8 +285,8 @@ describe("given the lamp batch and one car of each style", () => {
       const off = read();
       car.drive.brake = 1;
       const on = read();
-      assert.deepEqual([off.tails, off.shares, off.high], [[2, 0], [shares, 0], [0, high]], `${id} off the brakes`);
-      assert.deepEqual([on.tails, on.shares, on.high], [[0, 2], [0, shares], [high, 0]], `${id} on the brakes`);
+      assert.equal([off.tails, off.shares, off.high].join(" "), `2,0 ${shares},0 0,${high}`, `${id} off the brakes`);
+      assert.equal([on.tails, on.shares, on.high].join(" "), `0,2 0,${shares} ${high},0`, `${id} on the brakes`);
       assert.ok(off.glow > 0 && on.glow > 2 * off.glow, `${id}: tail glows ${off.glow.toFixed(3)} off the brakes, ${on.glow.toFixed(3)} on them`);
       batch.dispose();
     }
