@@ -40,6 +40,9 @@ const COUPE_LAMP_SHAPES = {
       { line: { points: [[0.487, 0.59], [0.487, 0.76]] }, width: 0.004, tone: "dark" },
       { line: { points: [[0, 0.772], [0.26, 0.772]] }, width: 0.006, tone: "chrome" },
       { line: { points: [[0, 0.578], [0.26, 0.578]] }, width: 0.006, tone: "chrome" },
+      // Reference side view: the corner lens in three segments too.
+      { line: { side: true, points: [[-2.045, 0.643], [-2.0, 0.643]] }, width: 0.004, tone: "dark" },
+      { line: { side: true, points: [[-2.045, 0.707], [-2.0, 0.707]] }, width: 0.004, tone: "dark" },
     ],
   },
 } as const;
