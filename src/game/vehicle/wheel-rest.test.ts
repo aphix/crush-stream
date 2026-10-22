@@ -27,6 +27,8 @@ const NAMES = ["FL", "FR", "RL", "RR"];
 /** Wheel sets lost: one corner, a front, rear and side pair, a diagonal pair. */
 const SETS: readonly (readonly number[])[] = [[0], [3], [0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]];
 const _v = new THREE.Vector3();
+/** How far (m) in plan from a hub its body corner is read over a body whose side stands over its tyres: about the corner's own extent. */
+const CORNER_REACH = 0.6;
 
 type Rest = { low: number; corners: number[]; fresh: number[]; all: number[]; speed: number; drift: number };
 
@@ -58,6 +60,9 @@ function tick(w: World, cars: readonly DeformableCar[]): void {
 /** A parked car hit once (so it is a wreck), its wheels `lost` popped, run `secs` s; then the body mesh read. */
 function rest(cls: VehicleClassId, lost: readonly number[], secs = 5): Rest {
   const car = struck(cls, 0, 0);
+  // A hub standing out past the drawn side (the monster's 2.39 m track on its 1.71 m body: 0.34 m) has its corner that much farther in.
+  const { track, width } = CAR_STYLES[CLASSES[cls].style].dims;
+  const reach = CORNER_REACH + Math.max(0, (track - width) / 2);
   const bodyY = (): number[] => {
     car.group.updateMatrixWorld(true);
     car.body.updateWorldMatrix(true, false);
@@ -67,7 +72,7 @@ function rest(cls: VehicleClassId, lost: readonly number[], secs = 5): Rest {
     for (let k = 0; k < pos.count; k++) {
       _v.fromBufferAttribute(pos, k).applyMatrix4(car.body.matrixWorld);
       low[4] = Math.min(low[4]!, _v.y);
-      for (let i = 0; i < 4; i++) if (Math.hypot(_v.x - hubs[i]!.x, _v.z - hubs[i]!.z) < 0.6) low[i] = Math.min(low[i]!, _v.y);
+      for (let i = 0; i < 4; i++) if (Math.hypot(_v.x - hubs[i]!.x, _v.z - hubs[i]!.z) < reach) low[i] = Math.min(low[i]!, _v.y);
     }
     return low;
   };
@@ -95,7 +100,7 @@ function rest(cls: VehicleClassId, lost: readonly number[], secs = 5): Rest {
 
 describe("given a parked car of each vehicle class, hit once so it is a wreck, with some of its wheels popped off", () => {
   for (const cls of VEHICLE_CLASS_IDS) {
-    it(`when a ${cls} loses one corner, a front, rear or side pair, or a diagonal pair of wheels and settles for 5 s, then it is still, its body lies on the ground without sinking into it or hovering over it, and no empty corner hovers`, () => {
+    it(`when a ${cls} loses one corner, a front, rear or side pair, or a diagonal pair of wheels and settles for 5 s, then it is still, its body lies on the ground without sinking into it or hovering over it, and no empty corner hovers`, (t) => {
       for (const lost of SETS) {
         const r = rest(cls, lost);
         // A lifted body is held up on its standing tyres' arches before its underside reaches the ground, most of all on
@@ -121,6 +126,7 @@ describe("given a parked car of each vehicle class, hit once so it is a wreck, w
         const tipped = 2 * Math.max(...lost.map((i) => r.fresh[i]!)) - low + 0.01;
         const bound = diagonal && CLASSES[cls].lift > 0.3 ? tipped : 0.1 + 0.2 * rise + (diagonal ? 0.2 : 0);
         const down = 0.03 + 0.12 * rise;
+        t.diagnostic(`${tag}: body low ${(r.low * 100).toFixed(1)} cm, empty corners ${r.corners.map((c) => (c * 100).toFixed(1)).join("/")} cm (bound ${(bound * 100).toFixed(1)}), speed ${r.speed.toFixed(3)} m/s`);
         if (diagonal) assert.ok(low < down, `${tag}: no empty corner down, the lower at ${(low * 100).toFixed(1)} cm`);
         assert.ok(hover < bound, `${tag}: an empty corner hovers ${(hover * 100).toFixed(1)} cm (bound ${(bound * 100).toFixed(1)} cm)`);
       }

@@ -14,7 +14,7 @@ import { CABIN_TRIM, PRIMER_ATTRIBUTE } from "./constants.ts";
 export const DOOR = { ...PLATFORM_HARDPOINTS.door, mirrorX: 0.06 } as const;
 
 /** Door skin over the body side at its outer face (m). */
-const DOOR_PROUD = 0.003;
+export const DOOR_PROUD = 0.003;
 /** The door skin is a slab this thick (m) inboard of its outer face. */
 const DOOR_THICKNESS = 0.05;
 /** The skin covers the door cut with this much (m) past each end. */

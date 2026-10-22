@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
-import type { BodyStyle, PillarSpan } from "./car-variants.ts";
+import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands } from "./car-lines.ts";
 import { quarterSillZs } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
@@ -16,6 +16,7 @@ import {
   loftFromRings,
   roofAt,
   roofTopY,
+  shoulderTop,
   type BodySource,
   type Pt,
   type V3,
@@ -431,6 +432,114 @@ function drawnBeltRail(sign: number, style: BodyStyle): THREE.BufferGeometry {
   return rail;
 }
 
+/** The sail is as deep (m) as the post it replaces; its two edges roll round at half that. */
+const SAIL_DEPTH = 0.05;
+/** Behind the side window's line the sail's foot sweeps out from the glass onto the haunch's shoulder over this run (m), in `SAIL_SWEEP_CHORDS`. */
+export const SAIL_SWEEP = 0.15;
+const SAIL_SWEEP_CHORDS = 2;
+/** The sail's stations along the haunch stand at most this far apart (m): the shoulder turns under 1 cm along it, so its foot keeps to it between them. */
+const SAIL_STEP = 0.35;
+/** The sail's foot sits this far (m) under the shoulder it leaves, so where the two touch they never fight over a pixel. */
+const SAIL_SINK = 0.002;
+/** The sail's rear end stands this far (m) ahead of a deck lid's front edge. */
+const SAIL_LID_SHUT = 0.004;
+/** A sail section's Bézier control point lies this share of the foot-to-head run out along the foot's tangent. */
+const SAIL_CONTROL = 0.5;
+/** Points along a sail section's outer face (foot to head) and its inner face, and the chords each of its rounded edges spends (30° each). */
+const SAIL_OUTER = 5;
+const SAIL_INNER = 4;
+const SAIL_EDGE_CHORDS = 6;
+/** The triangle behind the quarter glass laps this far (m) over the glass's rear edge and this far under the sail's foot. */
+const TIP_LAP = 0.01;
+/** The triangle stands this far (m) out of the side glass's plane, over the quarter glass it laps. */
+const TIP_PROUD = 0.004;
+
+/**
+ * The drawn C-pillar as a sail (`cPillar`): lofted along z through sections that each run as a quadratic Bézier from a foot to a head,
+ * `SAIL_DEPTH` deep with rounded edges. The head follows the flat post's top edge (`rb` → `rt` → `ft`); the foot leaves the haunch's
+ * shoulder along its tangent, then sweeps in onto the side window's line (`tip` up to the quarter glass's rear top corner), proud of the glass.
+ */
+function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; rt: V3; ft: V3 }): THREE.BufferGeometry {
+  const q = style.quarter;
+  const [tipY, tipZ] = style.cPillar?.tip ?? [beltY(q.zRearBot, style), q.zRearBot];
+  const [topY, topZ] = [glassTopY(q.zRearTop, style), q.zRearTop];
+  const sweepZ = tipZ - SAIL_SWEEP;
+  // Its rear end stops a shut line ahead of a deck lid's front edge: lying on over the lid, or flush with its face, the two skins would cross.
+  const rear = style.boot.kind === "lid" ? Math.max(rb[2], style.boot.z0 + SAIL_LID_SHUT) : rb[2];
+  const haunch = Math.max(1, Math.ceil((sweepZ - rear) / SAIL_STEP));
+  const zs = [
+    ...Array.from({ length: haunch }, (_, k) => lerp(rear, sweepZ, k / haunch)),
+    ...Array.from({ length: SAIL_SWEEP_CHORDS + 1 }, (_, k) => lerp(sweepZ, tipZ, k / SAIL_SWEEP_CHORDS)),
+    rt[2],
+    topZ,
+  ]
+    .filter((z) => z >= rear && z <= topZ)
+    .sort((a, b) => a - b)
+    .filter((z, k, all) => k === 0 || z - all[k - 1]! > 1e-6);
+  const r = SAIL_DEPTH / 2;
+  const rings = zs.map((z): Pt[] => {
+    // The head's rounded edge ends at the post's top corner (`r` over the section's end), buried in the roof's side like the post's top.
+    const corner = z <= rt[2] ? [lerp(rb[0], rt[0], (z - rb[2]) / (rt[2] - rb[2])), lerp(rb[1], rt[1], (z - rb[2]) / (rt[2] - rb[2]))] : [lerp(rt[0], ft[0], (z - rt[2]) / (ft[2] - rt[2])), lerp(rt[1], ft[1], (z - rt[2]) / (ft[2] - rt[2]))];
+    const head = [corner[0]!, corner[1]! - r] as const;
+    // Where the window's line closes on the roof the section keeps a span of its depth, never folding to a point.
+    const lineY = Math.min(z >= tipZ ? lerp(tipY, topY, (z - tipZ) / (topZ - tipZ)) : tipY, head[1]! - SAIL_DEPTH - r);
+    const [upX, upY] = [cantX(z, style) - beltX(z, style), cantY(z, style) - beltY(z, style)];
+    const up = [upX / hypot2(upX, upY), upY / hypot2(upX, upY)] as const;
+    const shoulder = shoulderTop(z, style);
+    const [tx, ty] = shoulder.tangent;
+    // 0 on the window's line, 1 on the haunch: the foot's point and its tangent blend between the glass (its round edge's bottom on the line) and the shoulder.
+    const f = THREE.MathUtils.smoothstep(tipZ - z, 0, SAIL_SWEEP);
+    const p0 = [lerp(onGlassPlane(z, lineY, style, ROOF_DRIP) + up[0] * r, shoulder.x - SAIL_SINK * ty, f), lerp(lineY + up[1] * r, shoulder.y + SAIL_SINK * tx, f)] as const;
+    const [dx, dy] = [lerp(up[0], tx, f), lerp(up[1], ty, f)];
+    const reach = (SAIL_CONTROL * hypot2(head[0]! - p0[0], head[1]! - p0[1])) / hypot2(dx, dy);
+    const c = [p0[0] + dx * reach, p0[1] + dy * reach] as const;
+    // The section's point at `s` along its Bézier, `depth` in along its normal (+x side: the tangent turned down, into the body).
+    const at = (s: number, depth: number, roll = 0): Pt => {
+      const [ax, ay] = [2 * (1 - s) * (c[0] - p0[0]) + 2 * s * (head[0]! - c[0]), 2 * (1 - s) * (c[1] - p0[1]) + 2 * s * (head[1]! - c[1])];
+      const run = hypot2(ax, ay);
+      const [ux, uy] = [ax / run, ay / run];
+      const [x, y] = [(1 - s) ** 2 * p0[0] + 2 * s * (1 - s) * c[0] + s * s * head[0]!, (1 - s) ** 2 * p0[1] + 2 * s * (1 - s) * c[1] + s * s * head[1]!];
+      // A rounded edge: `roll` (0..π) turns from the outer face round past the end (forward at the head, back at the foot) to the inner face.
+      const [along, inward] = [r * detSin(roll) * (s === 0 ? -1 : 1), roll === 0 ? depth : r - r * detCos(roll)];
+      return { x: sign * (x + along * ux - inward * uy), y: y + along * uy + inward * ux };
+    };
+    const edge = (s: number) => Array.from({ length: SAIL_EDGE_CHORDS - 1 }, (_, j) => at(s, 0, (Math.PI * (j + 1)) / SAIL_EDGE_CHORDS));
+    return [
+      ...Array.from({ length: SAIL_OUTER }, (_, k) => at(k / (SAIL_OUTER - 1), 0)),
+      ...edge(1),
+      ...Array.from({ length: SAIL_INNER }, (_, k) => at(1 - k / (SAIL_INNER - 1), SAIL_DEPTH)),
+      ...edge(0).reverse(),
+    ];
+  });
+  const sail = loftFromRings(rings, zs, 0, 1);
+  ensureOutwardNormals(sail);
+  return sail;
+}
+
+/** The triangle behind the quarter glass goes by this name. */
+const C_PILLAR_TIP = "cPillarTip";
+/** The gloss-black triangle on the side glass's plane between the quarter glass's rear edge and the side window's line down to `tip` ([y, z]) (drawn only). */
+function cPillarTip(sign: number, style: BodyStyle, [tipY, tipZ]: YZ): THREE.BufferGeometry {
+  const q = style.quarter;
+  const [topY, topZ] = [glassTopY(q.zRearTop, style), q.zRearTop];
+  const front = Math.max(q.zRearBot, q.zRearTop) + TIP_LAP;
+  const zs = [tipZ, ...style.belt.y.map(([z]) => z).filter((z) => z > tipZ && z < front), front];
+  const rings = zs.map((z): Pt[] => {
+    const [low, high] = [beltY(z, style) - RAIL_FOOT, lerp(tipY, topY, Math.min((z - tipZ) / (topZ - tipZ), 1)) + TIP_LAP];
+    const [lowX, highX] = [onGlassPlane(z, low, style, TIP_PROUD), onGlassPlane(z, high, style, TIP_PROUD)];
+    return [
+      { x: sign * lowX, y: low },
+      { x: sign * highX, y: high },
+      { x: sign * (highX - GLASS_FILL_THICK), y: high },
+      { x: sign * (lowX - GLASS_FILL_THICK), y: low },
+    ];
+  });
+  const tip = loftFromRings(rings, zs, 0, 1);
+  ensureOutwardNormals(tip);
+  tip.userData.blackout = true;
+  return insideRoof(tip, style, C_PILLAR_TIP);
+}
+
 export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry[] {
   const pillarFromCorners = source === "cage" ? boxFromCorners : roundedPillarFromCorners;
   const parts: THREE.BufferGeometry[] = [];
@@ -496,7 +605,9 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       rt: [rg.wTop / 2 + 0.02, rg.top[0] + 0.01, rg.top[1] - 0.01],
       ft: [topX(q.zRearTop, cantY(q.zRearTop, style) + PILLAR_TOP_RISE, ROOF_DRIP, cantX(q.zRearTop, style)), cantY(q.zRearTop, style) + PILLAR_TOP_RISE, q.zRearTop],
     } as const;
-    parts.push(pillar(source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : roundedPillarFromCorners(sign, rearPillar, 0.05, true), "rear"));
+    const sail = source === "drawn" ? style.cPillar : undefined;
+    parts.push(pillar(source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : sail ? cPillarSail(sign, style, rearPillar) : roundedPillarFromCorners(sign, rearPillar, 0.05, true), "rear"));
+    if (sail?.tip) parts.push(cPillarTip(sign, style, sail.tip));
     if (m !== null) {
       const topZ = divider.z?.[1] ?? m;
       const { belt: [dRear, dFront], top: [dTopRear, dTopFront] } = pillarBands(divider, m);
