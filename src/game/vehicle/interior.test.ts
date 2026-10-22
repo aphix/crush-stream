@@ -287,6 +287,24 @@ describe("given a monster truck of its class at rest on flat ground", () => {
     const moved = Math.max(...m.elements.map((e, i) => Math.abs(e - before.elements[i]!)));
     assert.ok(moved < 1e-4, `the front axle moved ${moved.toFixed(5)} off its rest place`);
   });
+
+  test("when its wheels are gone and it lies on its right side, then its axle stubs stand clear of the ground that side lies on", () => {
+    const lying = build("monster");
+    for (const [i, hub] of (["hubFL", "hubFR", "hubRL", "hubRR"] as const).entries()) lying["dropWheel"](i, hub);
+    lying.group.rotation.z = -Math.PI / 2;
+    lying.group.position.y = lying.style.dims.width / 2;
+    lying.group.updateMatrixWorld(true);
+    const own = new PartBatch(1);
+    own.sync([lying]);
+    const mesh = own.kinds[PART_KIND.axle]![0]!;
+    const pos = partGeometry(PART_KIND.axle).getAttribute("position");
+    let low = Infinity;
+    for (let k = 0; k < mesh.count; k++) {
+      mesh.getMatrixAt(k, m);
+      for (let i = 0; i < pos.count; i++) low = Math.min(low, v.fromBufferAttribute(pos, i).applyMatrix4(m).y);
+    }
+    assert.ok(low >= 0, `lowest axle vertex at ${low.toFixed(3)} m`);
+  });
 });
 
 describe("given a car whose front bumper is torn off", () => {
