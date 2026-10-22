@@ -5,7 +5,7 @@ import { armTops, C_H, C_OWNER, HIT_SIZE, pointContact, PQ_SIZE, PQ_X, PQ_Y, PQ_
 import { cageLift } from "./car-cage-rig.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
 import { DeformableCar } from "./car.ts";
-import type { CarStyleId } from "./car-variants.ts";
+import { CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { paint } from "./test-support.ts";
 import { armKill, assignClass, killClass, type VehicleClassId } from "./vehicle-classes.ts";
@@ -130,6 +130,12 @@ export const TOP_PARTS = {
   cabin: { x0: -0.4, x1: 0.4, z0: -0.5, z1: 0.45 },
   deck: { x0: -0.6, x1: 0.6, z0: -2.0, z1: -1.0 },
 } as const satisfies Record<string, Region>;
+
+/** `TOP_PARTS` for `style`: the cabin is its own roof's span (`roofZ`), not the platform roof's, which reads the sedan's windshield once a head-on shatters its drawn pane. */
+export function topParts(style: CarStyleId): Record<keyof typeof TOP_PARTS, Region> {
+  const [z0, z1] = CAR_STYLES[style].roofZ;
+  return { ...TOP_PARTS, cabin: { x0: TOP_PARTS.cabin.x0, x1: TOP_PARTS.cabin.x1, z0, z1 } };
+}
 
 /** The underside between the wheels (the belly a car rests on another's roof by). */
 export const BELLY: Region = { x0: -0.5, x1: 0.5, z0: -1, z1: 1 };
