@@ -214,7 +214,7 @@ export class DeformableCar extends CarParts {
       if (keepTorn && loose.loose) continue;
       if (loose.loose) {
         this.world.remove(w);
-        this.group.add(w);
+        this.hubParent().add(w);
         loose.loose = false;
         loose.velocity.set(0, 0, 0);
         loose.angular.set(0, 0, 0);
@@ -240,7 +240,7 @@ export class DeformableCar extends CarParts {
         this.world.remove(p.object);
         if (p.name === "mirrorL") this.doorL.add(p.object);
         else if (p.name === "mirrorR") this.doorR.add(p.object);
-        else if (!p.region) this.group.add(p.object);
+        else if (!p.region) this.bodyParent().add(p.object);
       }
       if (p.region) this.closePanel(p);
       p.detached = false;
@@ -779,7 +779,7 @@ export class DeformableCar extends CarParts {
           if (p.region) this.closePanel(p);
           else if (p.name === "mirrorL") this.doorL.add(p.object);
           else if (p.name === "mirrorR") this.doorR.add(p.object);
-          else this.group.add(p.object);
+          else this.bodyParent().add(p.object);
           p.detached = false;
         }
       }
@@ -802,9 +802,9 @@ export class DeformableCar extends CarParts {
       const lw = this.looseWheels[i]!;
       const loose = ((parts.wheelLoose >> i) & 1) !== 0;
       if (loose !== lw.loose) {
-        // Back under the class hub group (assignClass), where resetVisual's re-dress puts it.
+        // Back under the class hub group (assignClass), as resetVisual puts it.
         if (loose) this.world.add(w);
-        else (this.group.getObjectByName(CLASS_HUBS) ?? this.group).add(w);
+        else this.hubParent().add(w);
         lw.loose = loose;
         lw.velocity.set(0, 0, 0);
         lw.angular.set(0, 0, 0);
@@ -878,6 +878,22 @@ export class DeformableCar extends CarParts {
   /** The class body the ride moves (`null` for a car with no class), found once. */
   private classBodyObject(): THREE.Object3D | null {
     return (this.classBody ??= this.group.getObjectByName(CLASS_LIFT) ?? null);
+  }
+
+  /**
+   * Where a part put back on goes: the class body it rode before it tore off (`assignClass`), or the group of a car with no class. Put
+   * on the group, a monster's re-attached part stood 0.48 m under its body until something re-dressed the car.
+   */
+  private bodyParent(): THREE.Object3D {
+    return this.classBodyObject() ?? this.group;
+  }
+
+  /**
+   * Where a wheel put back on goes: the class's hub group, raised by its bigger tyres (`assignClass`), or the group of a car with no
+   * class. Put on the group, a monster's re-attached wheel was drawn 22 cm under its hub, its tread in the ground.
+   */
+  private hubParent(): THREE.Object3D {
+    return this.group.getObjectByName(CLASS_HUBS) ?? this.group;
   }
 
   /**
