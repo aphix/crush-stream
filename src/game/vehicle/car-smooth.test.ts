@@ -606,7 +606,7 @@ const BASELINE_BY_STYLE = [
   { id: "sedan", drawCalls: 13, triangles: 5266, bodyVertices: 1587 },
   { id: "hatchback", drawCalls: 13, triangles: 5064, bodyVertices: 1587 },
   { id: "wagon", drawCalls: 13, triangles: 5088, bodyVertices: 1635 },
-  { id: "coupe", drawCalls: 13, triangles: 5152, bodyVertices: 1530 },
+  { id: "coupe", drawCalls: 16, triangles: 5152, bodyVertices: 1530 },
   { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
   { id: "police", drawCalls: 14, triangles: 5338, bodyVertices: 1587 },
   { id: "monster", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },

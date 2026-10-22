@@ -620,15 +620,14 @@ function domeAt(dome: Dome, u: number): number {
   return 0;
 }
 
-/** A deck lid's half-width, its top's heights (car frame, m) at `z` at its edge and at its crown, and its dome. The drawn hood's edge rests on the fender beside it. */
-function lidSection(z: number, style: BodyStyle, hood: boolean): { w: number; edge: number; crown: number; dome: Dome } {
+/** A deck lid's half-width, its top's heights (car frame, m) at `z` at its edge and at its crown, and its dome. A `seated` lid's edge (the drawn hood's, a flush boot lid's) rests on the deck edge beside it; `crowned` domes it as `hood.crown`. */
+function lidSection(z: number, style: BodyStyle, seated: boolean, crowned: BodyStyle["hood"]["crown"]): { w: number; edge: number; crown: number; dome: Dome } {
   const sl = sampleSlice(z, style.profile);
   const crown = sl.yBelt + DECK_RISE + DECK_DOME;
-  if (!hood) return { w: sl.hw - DECK_INSET, edge: sl.yBelt + DECK_RISE, crown, dome: DECK_DOME_POINTS };
+  if (!seated) return { w: sl.hw - DECK_INSET, edge: sl.yBelt + DECK_RISE, crown, dome: DECK_DOME_POINTS };
   const w = sl.hw - HOOD_INSET;
   // A rigid lid: its edge keeps the fender's height where a cabin tub's blend runs under its rear end (the coupe's and monster's), never bending into it.
   const edge = deckEdgeY(sl.yBelt, 0) + HOOD_SEAT;
-  const crowned = style.hood.crown;
   if (crowned !== undefined) return { w, edge, crown: edge + crowned[0] * (w / crowned[1]) ** 2, dome: CROWN_DOME };
   // The deck dome's chord from its shoulder to the edge passes within a millimetre of the closed deck's crown point: the dome steps out over it.
   const u = (sl.hw - DECK_CROWN.inset) / w;
@@ -638,7 +637,7 @@ function lidSection(z: number, style: BodyStyle, hood: boolean): { w: number; ed
 
 /** Height (car frame, m) of a deck lid's top at (`x`, `z`), as `makeDeckPanel` lofts it: the drawn `hood`'s, or a plain lid's. */
 export function deckTopY(x: number, z: number, style: BodyStyle, hood: boolean): number {
-  const { w, edge, crown, dome } = lidSection(z, style, hood);
+  const { w, edge, crown, dome } = lidSection(z, style, hood, hood ? style.hood.crown : undefined);
   return lerp(edge, crown, domeAt(dome, Math.min(Math.abs(x) / w, 1)));
 }
 
@@ -672,7 +671,7 @@ function makeDeckPanel(
   z1: number,
   origin: YZ,
   source: BodySource,
-  { hood = false, clamshell = false, lip, drop }: { hood?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop } = {},
+  { hood = false, seated = hood, clamshell = false, lip, drop }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop } = {},
 ): THREE.BufferGeometry {
   const segs = 10;
   const tk = 0.04;
@@ -703,7 +702,7 @@ function makeDeckPanel(
   const stations = panelStations(segs, lip, Math.abs(zEnd - z0)).map((t) => lerp(z0, zEnd, t));
   for (const z of hood ? noseRefined(stations, style.profile) : stations) {
     const sl = sampleSlice(z, style.profile);
-    const lid = lidSection(z, style, hood);
+    const lid = lidSection(z, style, seated, hood ? style.hood.crown : undefined);
     const kick = lipKick(Math.abs(zEnd - z), lip);
     const r = ring(lid.w, sl.yBelt + DECK_RISE - oy, lid.edge - oy + kick, lid.crown - oy + kick, lid.dome);
     if (clamshell) wrapShoulder(r, sectionPoints(sl, style, "drawn"), oy, tk);
@@ -915,7 +914,7 @@ export function makeHoodGeometry(style: BodyStyle = SEDAN, source: BodySource = 
 export function makeTrunkGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const b = style.boot;
   const lip = source === "drawn" ? b.lip : undefined;
-  const g = b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, { lip, drop: b.drop }) : makeTailgate(style, b, source, lip);
+  const g = b.kind === "lid" ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, { lip, drop: b.drop, seated: source === "drawn" && b.flush === true }) : makeTailgate(style, b, source, lip);
   const [py, pz] = bootPivot(b);
   if (py !== b.origin[0] || pz !== b.origin[1]) g.translate(0, b.origin[0] - py, b.origin[1] - pz);
   return markSkinDynamic(g);

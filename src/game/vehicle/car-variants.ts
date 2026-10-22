@@ -63,7 +63,13 @@ export type BootSpec = (
    * half-width less the corners the lamps stand in.
    */
   | { kind: "tailgate"; y0: number; origin: YZ; z0?: number; outline?: readonly (readonly [number, number])[] }
-) & { lip?: BootLip; pivot?: YZ; swing?: LidSwing };
+) & {
+  lip?: BootLip;
+  pivot?: YZ;
+  swing?: LidSwing;
+  /** A drawn lid seated on the deck like the hood (its edge a groove over the deck edge, not a step up off it). Drawn only: the cage keeps the plain lid. */
+  flush?: boolean;
+};
 
 /** Raised centre bulge on the drawn hood from z `z0` (cowl end) to `z1`, `width` (m) across, its top `rise` (m) over the lid's; it ramps into the lid at both ends. */
 interface HoodBulge {
@@ -285,6 +291,10 @@ export interface BodyStyle {
   blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean; cowl?: boolean };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
   privacyGlass?: { rear?: boolean; quarter?: boolean };
+  /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */
+  windowTrim?: "chrome";
+  /** Chrome strips on the body side (drawn only, with `windowTrim`): side-view polylines [z, y] (m), `width` (m) tall, on the skin's +x and -x. A strip whose points all lie inside the door aperture rides the door; any other rides the body. */
+  chromeStrips?: readonly { points: readonly (readonly [number, number])[]; width: number }[];
   rearBulkhead: { z: number; yTop: number };
   /** Open floors visible through the glass: [zRear, zFront, floorY]. */
   tubs: readonly (readonly [number, number, number])[];

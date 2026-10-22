@@ -20,39 +20,38 @@ const MUSCLE_FRONT_FASCIA = [
 /** Coupe's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const COUPE_LAMP_SHAPES = {
   head: {
-    loops: [{ points: [[0.4, 0.485], [0.6, 0.485], [0.6, 0.665], [0.4, 0.665]] }],
+    loops: [{ points: [[0.4, 0.51], [0.6, 0.51], [0.6, 0.67], [0.4, 0.67]] }],
     lens: "lit",
     bezel: "chrome",
     recess: 0.024,
   },
   tail: {
     loops: [
-      { points: [[0.22, 0.67], [0.55, 0.67], [0.55, 0.81], [0.22, 0.81]] },
-      { side: true, points: [[-2.045, 0.67], [-2.0, 0.67], [-2.0, 0.81], [-2.045, 0.81]] },
+      { points: [[0.22, 0.58], [0.55, 0.58], [0.55, 0.77], [0.22, 0.77]] },
+      { side: true, points: [[-2.045, 0.58], [-2.0, 0.58], [-2.0, 0.77], [-2.045, 0.77]] },
     ],
     lens: "lit",
     bezel: "chrome",
     recess: 0.015,
-    cells: [{ loop: { points: [[0, 0.67], [0.22, 0.67], [0.22, 0.81], [0, 0.81]] }, tone: "dark" }],
+    cells: [{ loop: { points: [[0, 0.58], [0.22, 0.58], [0.22, 0.77], [0, 0.77]] }, tone: "dark" }],
     strips: [
-      { line: { points: [[0.23, 0.71], [0.51, 0.71]] }, width: 0.004, tone: "dark" },
-      { line: { points: [[0.23, 0.74], [0.51, 0.74]] }, width: 0.004, tone: "dark" },
-      { line: { points: [[0.23, 0.77], [0.51, 0.77]] }, width: 0.004, tone: "dark" },
-      { line: { points: [[0, 0.812], [0.22, 0.812]] }, width: 0.006, tone: "chrome" },
+      { line: { points: [[0.23, 0.643], [0.51, 0.643]] }, width: 0.004, tone: "dark" },
+      { line: { points: [[0.23, 0.707], [0.51, 0.707]] }, width: 0.004, tone: "dark" },
+      { line: { points: [[0, 0.772], [0.22, 0.772]] }, width: 0.006, tone: "chrome" },
     ],
   },
 } as const;
 
-/** Chrome rear bar under the tail-lamp band: 12 cm tall, 6 cm proud, rounded top and bottom, no splitter ([y, out] m, top to bottom). */
+/** Chrome rear bar right under the tail lamps: 19 cm tall, 6 cm proud, rounded top and bottom, no splitter ([y, out] m, top to bottom). */
 const MUSCLE_REAR_FASCIA = [
-  [0.06, -0.06],
-  [0.06, 0.02],
-  [0.05, 0.05],
-  [0.02, 0.06],
-  [-0.02, 0.06],
-  [-0.05, 0.05],
-  [-0.06, 0.02],
-  [-0.06, -0.06],
+  [0.095, -0.06],
+  [0.095, 0.02],
+  [0.08, 0.05],
+  [0.04, 0.06],
+  [-0.04, 0.06],
+  [-0.08, 0.05],
+  [-0.095, 0.02],
+  [-0.095, -0.06],
 ] as const;
 
 /** Small rounded bullet mirror in the body colour, as the reference's ([out, height, length] m). */
@@ -72,10 +71,10 @@ export const COUPE: BodyStyle = {
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.0225, width: 0.06 } },
-  hood: { z0: 0.7, z1: 1.93, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.74, width: 0.62, rise: 0.03, scoop: { inlets: 2, z: 1.6, width: 0.52, height: 0.025 } } },
+  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.72, z1: 1.74, width: 0.62, rise: 0.03, scoop: { inlets: 2, z: 1.6, width: 0.52, height: 0.025 } } },
   bumpers: {
-    front: { ...bumpers.front, seat: { y: 0.39, z: 1.925 }, span: 0.66, wrap: { from: 0.52, back: 0.12 }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
-    rear: { ...bumpers.rear, seat: { y: 0.44, z: 2.0475 }, span: 0.72, wrap: { from: 0.5, back: 0.1 }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome" },
+    front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.52, back: 0.2 }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },
+    rear: { ...bumpers.rear, seat: { y: 0.425, z: 2.0475 }, span: 0.72, wrap: { from: 0.45, back: 0.2 }, fascia: MUSCLE_REAR_FASCIA, trim: "chrome", plate: 0.37 },
   },
   profile: [
     st(-2.054, 0.62, 0.857),
@@ -111,6 +110,7 @@ export const COUPE: BodyStyle = {
     st(1.84, 0.708, 0.768),
     st(1.9, 0.68, 0.752),
     st(1.93, 0.662, 0.735),
+    st(1.945, 0.652, 0.728),
     st(1.957, 0.64, 0.57),
   ],
   roofZ: [-1.04, 0.1],
@@ -118,20 +118,27 @@ export const COUPE: BodyStyle = {
   rearGlass: { base: [0.975, -1.5], top: [1.23, -1.04], wBase: 1.02, wTop: 0.96 },
   quarter: { zRearBot: -0.96, zRearTop: -0.74 },
   midPillarZ: null,
+  windowTrim: "chrome",
+  chromeStrips: [
+    { points: [[-0.79, 0.305], [-0.495, 0.305]], width: 0.016 },
+    { points: [[-0.485, 0.305], [0.05, 0.3], [0.595, 0.305]], width: 0.016 },
+    { points: [[0.605, 0.305], [0.8, 0.305]], width: 0.016 },
+    { points: [[-0.44, 0.745], [-0.3, 0.745]], width: 0.022 },
+  ],
   rearBulkhead: { z: -0.9, yTop: 0.89 },
   tubs: [[-0.9, 0.7, 0.3]],
   rearDoorSeam: null,
-  boot: { kind: "lid", z0: -1.5, z1: -2.04, origin: [0.975, -1.5], lip: { rise: 0.02, depth: 0.08 } },
+  boot: { kind: "lid", z0: -1.5, z1: -2.04, origin: [0.975, -1.5], lip: { rise: 0.02, depth: 0.08 }, flush: true },
   lamps: {
-    head: [0.5, 0.575],
-    tail: [0.37, 0.74],
+    head: [0.5, 0.59],
+    tail: [0.37, 0.675],
     shapes: COUPE_LAMP_SHAPES,
     sideMarkers: [
-      { at: [0.58, 1.78], size: [0.05, 0.045] },
-      { at: [0.62, -1.88], size: [0.05, 0.04] },
+      { at: [0.52, 1.6], size: [0.05, 0.045] },
+      { at: [0.55, -1.73], size: [0.05, 0.04] },
     ],
   },
-  grille: { y: 0.575, size: [0.56, 0.18], kind: "mesh", badge: 0.03, finish: "black" },
+  grille: { y: 0.585, size: [0.78, 0.17], kind: "mesh", badge: 0.03, finish: "black" },
   exhaust: { tips: 2, x: 0.45, y: 0.24, size: [0.085, 0.06], shape: "round" },
   camera: { hood: [1.12, 1.0], third: { dist: 6.1, height: 1.95, aimUp: 0.95 }, far: { dist: 9.9, height: 3.25, aimUp: 1.1 } },
   details: {
@@ -165,7 +172,6 @@ export const COUPE: BodyStyle = {
     ],
     patches: [
       { view: "side", points: [[-0.307, 0.756], [-0.435, 0.756], [-0.435, 0.727], [-0.307, 0.727]], depth: -0.004, rim: 0.004, cavity: 0.5 },
-      { view: "side", points: [[-0.278, 0.777], [-0.463, 0.777], [-0.463, 0.699], [-0.278, 0.699]], depth: -0.004, rim: 0.004, cavity: 0.5 },
       { view: "side", points: [[0.734, 0.435], [0.663, 0.435], [0.663, 0.406], [0.734, 0.406]], depth: 0.0015, rim: 0.002, cavity: 0.1 },
       { view: "side", points: [[1.689, 0.535], [1.618, 0.535], [1.618, 0.478], [1.689, 0.478]], depth: -0.002, rim: 0.003, cavity: 0.3 },
       { view: "side", points: [[-1.661, 0.556], [-1.746, 0.556], [-1.746, 0.52], [-1.661, 0.52]], depth: -0.002, rim: 0.003, cavity: 0.3 },
