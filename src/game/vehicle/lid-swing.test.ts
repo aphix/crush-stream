@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { DeformableCar } from "./car.ts";
-import type { CarStyleId } from "./car-variants.ts";
+import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { LID } from "./constants.ts";
 import { paint } from "./test-support.ts";
 
@@ -16,6 +16,12 @@ import { paint } from "./test-support.ts";
 
 const H = 1 / FINE_HZ;
 const LIDS: readonly CarStyleId[] = ["sedan", "hatchback", "wagon", "pickup", "monster"];
+/** The owner's open-hood photos, hood against belt line in their side views: a real hood stands this far up (degrees). */
+const HOOD_OPEN_DEG = [27, 34] as const;
+/** The hood's rear edge may rise this far (m) above its rest top as it turns (its own thickness): no visible gap at the cowl. */
+const HOOD_EDGE_RISE = 0.015;
+/** The rear-edge band (m, from the hood's rearmost point) read as its hinge line. */
+const EDGE_BAND = 0.01;
 
 function parked(id: CarStyleId): DeformableCar {
   const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
@@ -149,4 +155,33 @@ describe("given a car's rear window and its lid (docs/DOOR_RIG.md, Lids)", () =>
       else assert.ok(moved === 0 && up === car.group, `${id} pane moved ${moved} m, on the body ${up !== null}`);
     });
   }
+});
+
+describe("given every style parked and posed open for show (`showPose`)", () => {
+  it("when its hood is read, then it stands up as far as the owner's open-hood photos show, turned about its rear edge, which stays down on the cowl", () => {
+    const rows: string[] = [];
+    const bad: string[] = [];
+    const at = new THREE.Vector3();
+    for (const id of CAR_STYLE_IDS) {
+      const car = parked(id);
+      car.group.updateMatrixWorld(true);
+      const hood = car["parts"].find((p) => p.hinge === "cowl")!.object as THREE.Mesh;
+      const pos = hood.geometry.getAttribute("position") as THREE.BufferAttribute;
+      let zMin = Infinity;
+      for (let i = 0; i < pos.count; i++) zMin = Math.min(zMin, pos.getZ(i));
+      const edge: number[] = [];
+      for (let i = 0; i < pos.count; i++) if (pos.getZ(i) < zMin + EDGE_BAND) edge.push(i);
+      const topY = (): number => Math.max(...edge.map((i) => at.fromBufferAttribute(pos, i).applyMatrix4(hood.matrixWorld).y));
+      const restTop = topY();
+      const axis = at.setFromMatrixPosition(hood.matrixWorld).y - restTop;
+      car.showPose("open");
+      car.group.updateMatrixWorld(true);
+      const rise = topY() - restTop;
+      const nose = at.set(0, 0, 1).transformDirection(hood.matrixWorld);
+      const deg = THREE.MathUtils.radToDeg(Math.asin(nose.y));
+      rows.push(`${id}: hinge axis ${(axis * 1000).toFixed(0)} mm over the rear edge at rest; open, the edge rises ${(rise * 1000).toFixed(0)} mm and the hood stands ${deg.toFixed(1)} deg`);
+      if (rise > HOOD_EDGE_RISE || deg < HOOD_OPEN_DEG[0] || deg > HOOD_OPEN_DEG[1]) bad.push(id);
+    }
+    assert.equal(bad.join(","), "", rows.join("\n"));
+  });
 });

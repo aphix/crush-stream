@@ -149,7 +149,7 @@ describe("given the real engine booted on #scene=showcase", () => {
     for (let s = 0; s < art().slots; s++) assert.ok(standing(s), `slot ${s} is back on its mark`);
   });
 
-  it("when the set stands, then behind the people three rows of cars stand, one of each style in each: as built, every door and lid at its stop with the hood popped, and every part and pane off, each with its cabin drawn and nobody in it", () => {
+  it("when the set stands, then behind the people three rows of cars stand, one of each style in each: as built, every door and lid at its stop with the hood up on its rear edge, and every part and pane off, each with its cabin drawn and nobody in it", () => {
     const cars = engine["showcase"]!.cars;
     const styles = CAR_STYLE_IDS.length;
     assert.equal(cars.length, 3 * styles, "three rows of every style");
@@ -157,16 +157,19 @@ describe("given the real engine booted on #scene=showcase", () => {
     for (let k = 0; k < cars.length; k++) {
       const car = cars[k]!;
       const row = Math.floor(k / styles);
-      const parts: { name: string; hinge: string; hingeT: number; detached: boolean; object: { visible: boolean } }[] = car["parts"];
+      const parts: { name: string; hinge: string; hingeT: number; detached: boolean; restQuat: THREE.Quaternion; object: { visible: boolean; quaternion: THREE.Quaternion } }[] = car["parts"];
       const hood = parts.find((p) => p.hinge === "cowl")!;
       const id = `row ${row} ${car.style.id}`;
       if (row === 0) assert.equal(`${car.doorAngle(-1)} ${car.doorAngle(1)} ${car.lidAngle()} ${hood.hingeT} ${parts.every((p) => !p.detached && p.object.visible)} ${car.glassPanes.every((g) => g.mesh.visible)}`, "0 0 0 0 true true", `${id}: as built`);
-      if (row === 1) assert.equal(`${car.doorAngle(-1) === car.doorHinge(-1).spec.stop} ${car.doorAngle(1) === car.doorHinge(1).spec.stop} ${car.lidAngle() === car.lidHinge().spec.stop} ${hood.hingeT} ${parts.every((p) => !p.detached)}`, "true true true 0.78 true", `${id}: doors ${car.doorAngle(-1).toFixed(3)}/${car.doorAngle(1).toFixed(3)}, lid ${car.lidAngle().toFixed(3)} at their stops, the hood popped`);
+      if (row === 1) {
+        const turned = THREE.MathUtils.radToDeg(hood.object.quaternion.angleTo(hood.restQuat));
+        assert.equal(`${car.doorAngle(-1) === car.doorHinge(-1).spec.stop} ${car.doorAngle(1) === car.doorHinge(1).spec.stop} ${car.lidAngle() === car.lidHinge().spec.stop} ${hood.hingeT} ${turned >= 27 && turned <= 34} ${parts.every((p) => !p.detached)}`, "true true true 0 true true", `${id}: doors ${car.doorAngle(-1).toFixed(3)}/${car.doorAngle(1).toFixed(3)}, lid ${car.lidAngle().toFixed(3)} at their stops, the hood up ${turned.toFixed(1)} deg on its rear edge`);
+      }
       if (row === 2) assert.equal(`${parts.filter((p) => !p.detached || p.object.visible).map((p) => p.name)} ${car.glassPanes.filter((g) => g.mesh.visible).length}`, " 0", `${id}: parts or panes still drawn`);
       assert.ok(car.group.visible && car.group.parent === engine["scene"], `${id}: in the scene`);
     }
     const batch = engine["partBatch"];
     batch.sync(engine["drawnCars"]());
-    assert.equal(`${batch.drawn(PART_KIND.interior)} ${batch.drawn(PART_KIND.seatFront)} ${batch.drawn(PART_KIND.mirrorL)} ${batch.drawn(PART_KIND.liningL)}`, `${3 * styles} ${2 * 3 * styles} ${2 * styles} ${2 * styles}`, "every car's cabin and both front seats drawn; mirrors and door linings on the first two rows only");
+    assert.equal(`${batch.drawn(PART_KIND.interior)} ${batch.drawn(PART_KIND.seatFront)} ${batch.drawn(PART_KIND.mirrorL)} ${batch.drawn(PART_KIND.liningL)} ${batch.drawn(PART_KIND.engineBay)}`, `${3 * styles} ${2 * 3 * styles} ${2 * styles} ${2 * styles} ${2 * styles}`, "every car's cabin and both front seats drawn; mirrors and door linings on the first two rows only; the bay under every open and stripped hood");
   });
 });
