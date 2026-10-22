@@ -1516,6 +1516,12 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(wrapped.stand <= 0, `the plain wrap's end stands ${wrapped.stand} m off the skin: held inside it`);
   });
 
+  it("when the hatchback's front bumper is built, then its face runs straight across to its corners as the reference's: at |x| 0.40-0.45 within 1 cm of its middle's reach", () => {
+    const hatch = makeBumperGeometry(true, CAR_STYLES.hatchback);
+    const gap = bumperReachAt(hatch, 0, 0.05) - bumperReachAt(hatch, 0.4, 0.45);
+    assert.ok(Math.abs(gap) < 0.01, `the bumper's face at |x| 0.40-0.45 stands ${gap.toFixed(3)} m behind its middle`);
+  });
+
   it("when its door hinge moves with the door's trailing edge kept, then the door glass stays in the same window: it rides on its door's own hinge", () => {
     const moved: BodyStyle = { ...sedan, door: { ...sedan.door, hingeX: 0.8, hingeY: 0.79, hingeZ: 0.7, length: sedan.door.length + 0.15 } };
     const inCar = (style: BodyStyle) => {
@@ -2102,6 +2108,21 @@ describe("given a body style's P1 parts", () => {
     assert.ok(all.count > 0 && dark.count === 0, `${all.count} roof-part vertices, ${dark.count} of them dark`);
     assertSameNumbers([...all.box.min.toArray(), ...all.box.max.toArray()], [-0.5, 1.15, -0.95, 0.5, 1.22, -0.8], "the spoiler's box", POSITION_TOL);
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a spoiler's ends slope and taper, then its top's ends stand `slope` inboard of its underside's and its tip's `taper` inboard of its front edge's", () => {
+    const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5, ends: [0.06, 0.1] } as const;
+    const { body, from } = roofParts({ spoiler });
+    const pos = body.getAttribute("position");
+    // The widest |x| of the front edge's top, the front edge's underside and the tip's underside.
+    const widest = [0, 0, 0];
+    for (let i = from; i < pos.count; i++) {
+      const under = Math.abs(pos.getY(i) - spoiler.y[0]) < POSITION_TOL;
+      const front = Math.abs(pos.getZ(i) - spoiler.z[1]) < POSITION_TOL;
+      const k = front ? (under ? 1 : 0) : under ? 2 : -1;
+      if (k >= 0) widest[k] = Math.max(widest[k]!, Math.abs(pos.getX(i)));
+    }
+    assertSameNumbers(widest, [0.44, 0.5, 0.4], "the front top's, front underside's and tip underside's half-widths", POSITION_TOL);
   });
 
   it("when a bumper's trim is chrome, black or body, then it wears chrome, black plastic or the body's colour (unset: the car's accent trim), and no bumper or cage build changes", () => {

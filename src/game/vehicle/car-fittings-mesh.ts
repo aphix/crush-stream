@@ -235,17 +235,18 @@ function glassPanelGeometry(panel: NonNullable<RoofParts["glassPanel"]>, style: 
   return hardEdged(loftFromRings(rings, zs, 0, 1));
 }
 
-/** A wedge off the roof's rear end: flat underside, its top falling from the front edge to the tip. */
+/** A wedge off the roof's rear end: flat underside, its top falling from the front edge to the tip, its side ends sloped and tapered by `ends`. */
 function spoilerGeometry(spoiler: NonNullable<RoofParts["spoiler"]>): THREE.BufferGeometry {
   const [under, top] = spoiler.y;
-  const hw = spoiler.halfWidth;
-  const ring = (y: number): Pt[] => [
+  const [slope, taper] = spoiler.ends ?? [0, 0];
+  const ring = (y: number, hw: number): Pt[] => [
     { x: -hw, y: under },
-    { x: -hw, y },
-    { x: hw, y },
+    { x: -(hw - slope), y },
+    { x: hw - slope, y },
     { x: hw, y: under },
   ];
-  return hardEdged(loftFromRings([ring(lerp(under, top, SPOILER_TIP)), ring(top)], [...spoiler.z], 0, 1));
+  const hw = spoiler.halfWidth;
+  return hardEdged(loftFromRings([ring(lerp(under, top, SPOILER_TIP), hw - taper), ring(top, hw)], [...spoiler.z], 0, 1));
 }
 
 /** `style.roof`'s rails, glass panel and spoiler as one geometry (car frame) for the drawn body, its first `dark` vertices (rails, panel) drawn primer-dark; null without roof parts. */

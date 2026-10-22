@@ -756,7 +756,7 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
 /** A sail's foot stands at most this far (m) off the body's shoulder point it leaves, its face within `SAIL_LEAN_DEGREES` of the shoulder's tangent there (a flat post's foot stands 7-15 cm inboard, 35-45° off). */
 const SAIL_FOOT_OFF = 0.005;
 const SAIL_LEAN_DEGREES = 10;
-/** A flat sail eases into the roof end's roll over this run (m) behind the roof's rear end, its face's shape off its chord changing at most this many m per m of length on the way: the haunch-to-roll line a jump of 4.8 cm over 7 cm made. */
+/** A flat sail eases into the roof end's roll over this run (m) behind the roof's rear end unless its `cPillar.blend` says otherwise, its face's shape off its chord changing at most this many m per m of length on the way: the haunch-to-roll line a jump of 4.8 cm over 7 cm made. */
 const SAIL_ROLL_BLEND_TEST = 0.45;
 const SAIL_SHAPE_RATE = 0.25;
 /** A flat sail's outer face folds at most this much (°) across any of its sections: the coupe's head jumping back out ahead of its roof end folded 54°, and a sweep station 7 cm behind the roof end, where the head turns in round the glass's corner, 40°: hard lines. */
@@ -876,7 +876,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
   }
 
   for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.flat)) {
-    it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm behind its ${SAIL_ROLL_BLEND_TEST * 100} cm ease into the roof end's roll, no body point stands outside its line by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
+    it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm behind its ${(style.cPillar?.blend ?? SAIL_ROLL_BLEND_TEST) * 100} cm ease into the roof end's roll, no body point stands outside its line by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
       const { ring, slices } = loftOf(sail);
@@ -894,7 +894,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         const bow = Math.max(...face.map((p) => Math.abs(outside(p.x, p.y))));
         const body = sectionPoints(sampleSlice(foot.z, style.profile), style, "drawn").filter((p) => p.x > 0 && p.y < head.y);
         const proud = Math.max(...body.map((p) => outside(p.x, p.y)));
-        const straight = foot.z <= style.roofZ[0] - SAIL_ROLL_BLEND_TEST - SAIL_ROOF_GAP;
+        const straight = foot.z <= style.roofZ[0] - (style.cPillar?.blend ?? SAIL_ROLL_BLEND_TEST) - SAIL_ROOF_GAP;
         if ((straight && bow > SAIL_FLAT_BOW) || proud > SAIL_SINK_TEST + 1e-4 || proud < 0) off.push(`z ${foot.z.toFixed(3)}: face bows ${(bow * 1000).toFixed(1)} mm, body stands ${(proud * 1000).toFixed(1)} mm outside its line`);
       }
       assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
@@ -954,6 +954,62 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       assert.ok(under <= PINCH_FRONT_UNDER, `${id}: at z ${points[0]!.z.toFixed(3)} the sail reaches ${(under * 1000).toFixed(1)} mm under the glass's top line`);
     });
   }
+  it("when a truck cab (a curved roof square to its cant at the rear, an upright quarter window edge on the monster) sets any sail, then the sail builds whole: every vertex finite", () => {
+    const off: string[] = [];
+    for (const id of ["pickup", "monster"] as const)
+      for (const cPillar of [{}, { flat: true }, { flush: true }, { flat: true, flush: true }]) {
+        const sail = makeGreenhouseFrame({ ...CAR_STYLES[id], cPillar }, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+        const pos = sail.getAttribute("position");
+        let bad = 0;
+        for (let i = 0; i < pos.count; i++) if (!Number.isFinite(pos.getX(i) + pos.getY(i) + pos.getZ(i))) bad++;
+        if (bad > 0) off.push(`${id} ${JSON.stringify(cPillar)}: ${bad} of ${pos.count} vertices not finite`);
+      }
+    assert.ok(off.length === 0, off.join("; "));
+  });
+});
+
+/** A glass bar (`pillars.glassBar`) stands at most this far (m) off the side glass's plane, never under it; its ends keep their width and centre within this (m). */
+const GLASS_BAR_STAND = 0.003;
+const GLASS_BAR_FIT = 0.001;
+/** The sedan with the reference side view's 2.2 cm black bar on its rear door's glass. */
+const BARRED_SEDAN: BodyStyle = {
+  ...CAR_STYLES.sedan,
+  pillars: { ...CAR_STYLES.sedan.pillars, glassBar: { width: [0.022, 0.022], z: [-0.866, -0.884] } },
+  blackout: { ...CAR_STYLES.sedan.blackout, divider: true },
+};
+
+describe("given a style that stands a bar on its side glass (`pillars.glassBar`)", () => {
+  it(`when its drawn greenhouse is read, then each side carries one black strip on the glass, within ${GLASS_BAR_STAND * 1000} mm off its plane and never under it, its width about its centre line at the belt and at the top; the cage carries none`, () => {
+    const { width, z } = BARRED_SEDAN.pillars!.glassBar!;
+    const bars = makeGreenhouseFrame(BARRED_SEDAN, "drawn").filter((g) => g.name === "glassBar");
+    assert.ok(bars.length === 2, `${bars.length} bars drawn`);
+    assert.ok(makeGreenhouseFrame(BARRED_SEDAN, "cage").every((g) => g.name !== "glassBar"), "the cage carries a bar");
+    const off: string[] = [];
+    for (const bar of bars) {
+      if (bar.userData.blackout !== true) off.push("not toned black");
+      const p = Array.from({ length: bar.getAttribute("position").count }, (_, i) => positionAt(bar, i));
+      // Its surface, not only its corners: points over each triangle on a 4-step grid, read where the glass is.
+      const idx = bar.getIndex()!.array;
+      for (let t = 0; t < idx.length; t += 3) {
+        const [a, b, c] = [p[idx[t]!]!, p[idx[t + 1]!]!, p[idx[t + 2]!]!];
+        for (let i = 0; i <= 4; i++)
+          for (let j = 0; j <= 4 - i; j++) {
+            const v = a.clone().multiplyScalar(1 - (i + j) / 4).addScaledVector(b, i / 4).addScaledVector(c, j / 4);
+            if (v.y > glassTopY(v.z, BARRED_SEDAN) + 1e-4) continue;
+            const plane = THREE.MathUtils.lerp(beltX(v.z, BARRED_SEDAN), cantX(v.z, BARRED_SEDAN), (v.y - beltY(v.z, BARRED_SEDAN)) / (cantY(v.z, BARRED_SEDAN) - beltY(v.z, BARRED_SEDAN)));
+            const stand = Math.abs(v.x) - plane;
+            if (stand < 0 || stand > GLASS_BAR_STAND) off.push(`(${v.x.toFixed(3)}, ${v.y.toFixed(3)}, ${v.z.toFixed(3)}) stands ${(stand * 1000).toFixed(1)} mm off the glass`);
+          }
+      }
+      const ends = [p.filter((v) => v.y < beltY(v.z, BARRED_SEDAN) - 0.01), p.filter((v) => Math.abs(v.y - glassTopY(v.z, BARRED_SEDAN)) < 1e-4)];
+      for (const [k, end] of ends.entries()) {
+        const [lo, hi] = [Math.min(...end.map((v) => v.z)), Math.max(...end.map((v) => v.z))];
+        if (end.length !== 2 || Math.abs(hi - lo - width[k]!) > GLASS_BAR_FIT || Math.abs((hi + lo) / 2 - z[k]!) > GLASS_BAR_FIT)
+          off.push(`${k === 0 ? "belt" : "top"} end: ${end.length} points, z ${lo.toFixed(4)} to ${hi.toFixed(4)}`);
+      }
+    }
+    assert.ok(off.length === 0, off.join("; "));
+  });
 });
 
 /** A flush sail's head (`cPillar.flush`) stands at most this far (m) over the drawn rear glass (a chrome bead's 5 mm, its rounded edge's 2.5 mm radius where the section rises steeply into it, and a mm), and laps at least this far in over its side edge, so the glass's edge lies under the sail. */

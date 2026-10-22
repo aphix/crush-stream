@@ -120,8 +120,11 @@ interface HoodBulge {
 interface RoofParts {
   /** Two black rails, |x| from `x[0]` to `x[1]`, their tops `rise` (m) over the roof skin, sloping into it at both ends. */
   rails?: { x: readonly [number, number]; z: readonly [number, number]; rise: number };
-  /** Body-colour lip off the roof's rear end, ±`halfWidth`: its underside at y `y[0]`, its top `y[1]` at the front edge falling to the tip. */
-  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number };
+  /**
+   * Body-colour lip off the roof's rear end, ±`halfWidth`: its underside at y `y[0]`, its top `y[1]` at the front edge falling to the tip.
+   * `ends` [slope, taper] (m): the top's side ends stand `slope` inboard of the underside's, and the tip's ends `taper` inboard of the front edge's.
+   */
+  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number] };
   /** Dark glass panel over the front seats, `width` (m) across, standing just proud of the roof skin. */
   glassPanel?: { z: readonly [number, number]; width: number };
 }
@@ -154,6 +157,8 @@ interface LampShape {
   rounds?: readonly { at: LampPoint; side?: boolean; r: number; tone: LampTone }[];
   /** Bumper lamps only: also met on the body skin, the outermost hit winning, where a wrapped fascia corner is held inside the body. */
   onBody?: boolean;
+  /** The lens and cells' longest fill edge (m) before it is split onto the skin: shorter where a lens wraps a corner tighter than its chords. */
+  fill?: number;
 }
 
 /** Exhaust tips under the rear bumper: one at `x`, or two at ±`x`, centred at height `y`; `size` [w, h] (m) of the round (oval) or rectangular tip. */
@@ -390,9 +395,10 @@ export interface BodyStyle {
    * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` [x, y] (m): a point on the body's shoulder beside the
    * rear glass's base; the plank rear post's (no `cPillar`) foot fans out to it, covering the cabin's opening there; absent, no fan. `aSeat`
    * (y, m): a deck under the drawn A-post's foot lower than the belt; a skirt of the post's own section hangs from the foot down to it,
-   * so the cabin never shows through the gap; absent, none.
+   * so the cabin never shows through the gap; absent, none. `glassBar`: a slim divider bar standing on the side glass, belt to roof,
+   * `width` [belt, top] about its centre line at `z` [belt, top], toned by `blackout.divider`; a flat strip with no cage post; absent, none.
    */
-  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number };
+  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number; glassBar?: Required<PillarSpan> };
   /**
    * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
    * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.
@@ -409,9 +415,10 @@ export interface BodyStyle {
    * rear glass corners, a flush sail's head at the roof's end laps the glass's side edge this share of the way round its top corner's arc
    * (0 its side end, 1 its top end), so the head covers the arc above that point; absent 0.5, mid-arc. `pinch` (m): the side window's
    * line rounds over from its foot at the belt into the glass's top line this far ahead of `quarter.zRearTop` (one quadratic through that
-   * corner), so the window narrows to a point at the sail instead of ending on a straight rear edge; absent, the straight edge.
+   * corner), so the window narrows to a point at the sail instead of ending on a straight rear edge; absent, the straight edge. `blend`
+   * (m): a flat sail takes on the roof end's roll over this run behind the roof's rear end (the rest of its haunch straight); absent 0.45.
    */
-  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; blend?: number };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Drawn only: the body paint's base roughness, clear coat and clear coat roughness (`makePaintMaterial`); absent the platform paint's (0.42, 0.72, 0.24). */
