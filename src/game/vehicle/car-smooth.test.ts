@@ -1133,11 +1133,11 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   { id: "coupe", digest: "f05f17b9c4439ecfc4790a7ab1f5b6602bd0988ee49277882ea24625f2c04d00" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
-  // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open.
-  { id: "pickup", digest: "8e5ebddbf567475038ee9ce45fa69665dc289e9688ef2d1933723c0c508f34fb" },
+  // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open; both trucks for the greenhouse's dome-following panes and posts.
+  { id: "pickup", digest: "214a0ec7b44e78d9b257b9268b841eb1c735d784cc50f39bd855dde83a55aa2e" },
   { id: "police", digest: "5af761d2cd219ffa91bbabcd7d0dad28fc102b3ef1411cd90380345f3c4db455" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55).
-  { id: "monster", digest: "c65d404f7c8e7192ee638a27bdcc4ffdac32abd2238dda2a0ef092b76098449c" },
+  { id: "monster", digest: "c8582ab81c488237ba16228a0283e255e6ba884cd464d4c46441ee8611a79eb2" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {
