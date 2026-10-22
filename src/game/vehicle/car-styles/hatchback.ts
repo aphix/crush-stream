@@ -138,7 +138,7 @@ export const HATCHBACK: BodyStyle = {
     sideMarkers: [{ at: [0.62, 0.8], size: [0.045, 0.022] }],
   },
   grille: { y: 0.575, size: [0.72, 0.11], kind: "bars", count: 4, badge: 0.025, finish: "black" },
-  seats: { front: [0.35, 0.41, -0.1], rear: [0.41, -0.7] },
+  seats: { front: [0.35, 0.41, -0.1], rear: [0.47, -0.7] },
   pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] } },
   blackout: { b: true, divider: true },
   privacyGlass: { rear: true, quarter: true },
