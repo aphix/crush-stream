@@ -723,6 +723,8 @@ function panelStations(count: number, lip: BootLip | undefined, span: number): n
 const LID_FOLD_R = 0.08;
 const LID_FOLD_STEPS = 3;
 const LID_FACE_STEPS = 2;
+/** A profile station this close (m) to a nose-wrapping hood's own ring is that ring's: no sliver of a gap. */
+const LID_KINK_MERGE = 0.005;
 
 /**
  * The right side's rolled corner (`edgeRoll`) where a panel's top, coming in from `inner`, meets its upright side at (`w`, `top`): one
@@ -795,7 +797,11 @@ function makeDeckPanel(
   const zEnd = z1 - dir * fold;
   const rings: Pt[][] = [];
   const zs: number[] = [];
-  const stations = panelStations(segs, lip, Math.abs(zEnd - z0)).map((t) => lerp(z0, zEnd, t));
+  const panel = panelStations(segs, lip, Math.abs(zEnd - z0)).map((t) => lerp(z0, zEnd, t));
+  // A nose-wrapping hood's deck ends short of the nose, where the profile turns down hardest: it takes a ring at each profile station
+  // too, so its chords never cut under the deck across a kink.
+  const kinks = nose ? style.profile.map((p) => p.z).filter((z) => z > z0 && z < zEnd && panel.every((s) => Math.abs(s - z) > LID_KINK_MERGE)) : [];
+  const stations = kinks.length > 0 ? [...panel, ...kinks].sort((a, b) => a - b) : panel;
   let endRise = DECK_DOME;
   let endLid = { w: 0, base: 0, edge: 0, dome: DECK_DOME_POINTS };
   for (const z of hood ? noseRefined(stations, style.profile) : stations) {
@@ -846,7 +852,7 @@ function makeDeckPanel(
 /**
  * Bends the straight run lofted past `zA` (its z the path length along `dir`, its y the offset off the panel) a quarter turn down over
  * the end edge on a `radius` bend about the fold's centre (`yc`, `zA`), then down the face, `lean` m of z per m down; x scales to `wFace` ×
- * on the way round. A bend tighter than the skirt pinches the skirt and underside onto its axis, inside the body.
+ * on the way round. On a bend tighter than the skirt the skirt and underside turn on past its axis, behind the face inside the body.
  */
 function bendOverEnd(pos: THREE.BufferAttribute, zA: number, yc: number, wFace: number, lean: number, radius: number, dir: number): void {
   const arc = (radius * Math.PI) / 2;
@@ -854,7 +860,7 @@ function bendOverEnd(pos: THREE.BufferAttribute, zA: number, yc: number, wFace: 
     const s = dir * (pos.getZ(i) - zA);
     if (s < 1e-9) continue;
     const turn = Math.min(s / radius, Math.PI / 2);
-    const r = Math.max(0, radius + pos.getY(i));
+    const r = radius + pos.getY(i);
     const down = Math.max(0, s - arc);
     pos.setXYZ(i, pos.getX(i) * lerp(1, wFace, turn / (Math.PI / 2)), yc + r * detCos(turn) - down, zA + dir * r * detSin(turn) + lean * down);
   }
