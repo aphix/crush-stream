@@ -79,4 +79,17 @@ describe("given the real engine drawing a city race and then the derby", () => {
     await run(1);
     assert.equal(arenaDrawn, true);
   });
+
+  it("when no car is cut at the scene's parking pass, then the cover draws stay in the graph for the frame a cut car shows them", () => {
+    const covers = engine["coverBatch"];
+    covers.sync([]);
+    assert.equal(covers.meshes.map((mesh) => mesh.visible).join(), "false,false", "the control: hidden at the pass");
+    scene().sync(true);
+    const inGraph = (mesh: THREE.Object3D): boolean => {
+      let p: THREE.Object3D | null = mesh;
+      while (p && p !== scene()) p = p.parent;
+      return p === scene();
+    };
+    assert.equal(covers.meshes.map(inGraph).join(), "true,true");
+  });
 });

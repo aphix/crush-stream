@@ -7,7 +7,7 @@ import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import { CREASE_DEGREES, SHUT_RAMP, bayAt, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
-import { archLipGeometry, wellHumpGeometry } from "./car-well-mesh.ts";
+import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
 import { makeGreenhouseFrame, makeRoofGeometry, postSection } from "./car-greenhouse-mesh.ts";
 import { DeformableCar } from "./car.ts";
@@ -607,27 +607,37 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
   for (const [kind, n] of byKind) assert.ok(n <= ROOF_FITTING_VERTICES[kind], `${id} ${kind}: ${n} vertices against ${ROOF_FITTING_VERTICES[kind]}`);
 }
 
-/** Each style's drawn wheel-well parts, its boot cut's loft rings, its nose's own rings (`noseRefined`, the roll's third chord), its tub walls' own top vertices and its curved posts' section points past the chamfered box's as built, merged into the body on top of its loft: red if one grows. */
-const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number }> = {
-  sedan: { lips: 360, humps: 0, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
-  hatchback: { lips: 360, humps: 94, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 96 },
-  wagon: { lips: 360, humps: 94, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 96 },
-  coupe: { lips: 360, humps: 94, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 64 },
-  pickup: { lips: 260, humps: 94, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 64 },
-  police: { lips: 360, humps: 0, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
-  monster: { lips: 312, humps: 94, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 64 },
+/**
+ * Each style's drawn wheel-well parts (lips, humps, liner sides), its boot cut's loft rings, its nose's own rings (`noseRefined`, the
+ * roll's third chord), its tub walls' own top vertices and its curved posts' section points past the chamfered box's as built, merged
+ * into the body on top of its loft: red if one grows.
+ */
+const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number }> = {
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
+  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 96 },
+  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 96 },
+  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 64 },
+  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 64 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
+  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 64 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn B-, C- and divider posts had before they curved. */
 const CHAMFERED_POST_RING = 11;
 
-/** `style`'s arch lips' and wheel humps' vertices (`archLipGeometry`, `wellHumpGeometry`), the rings its boot cut and its nose add to the loft, its walls' top copies, and its posts' section points past `CHAMFERED_POST_RING`. */
-function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number } {
+/**
+ * `style`'s arch lips' and wheel humps' vertices (`archLipGeometry`, `wellHumpGeometry`), its drawn liners' over the cage's one-sided
+ * liners (`makeWellLiners`: their insides and end caps), the rings its boot cut and its nose add to the loft, its walls' top copies, and
+ * its posts' section points past `CHAMFERED_POST_RING`.
+ */
+function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number } {
   const body = makeChassisGeometry(style);
   const rings = (bootOpen: boolean, noseFill: boolean) => sliceZs(style, "drawn", bootOpen, noseFill).length;
+  const liners = (source: "drawn" | "cage") => makeWellLiners(style, source).reduce((n, g) => n + g.getAttribute("position").count, 0);
   const posts = makeGreenhouseFrame(style, "drawn").filter((g) => POST_NAMES.includes(g.name));
   return {
     lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,
     humps: wellHumpGeometry(style, "drawn")?.getAttribute("position").count ?? 0,
+    liners: liners("drawn") - liners("cage"),
     bootRings: (rings(true, true) - rings(false, true)) * loftOf(body).ring,
     noseRings: (rings(true, true) - rings(true, false)) * loftOf(body).ring,
     wallTops: body.userData.wallTops as number,
@@ -637,7 +647,7 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; bo
 
 describe("given every body style's car built whole", () => {
   for (const testCase of BASELINE_BY_STYLE) {
-    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting, arch lip, wheel hump, boot cut, nose ring, wall top and curved post within its own count`, () => {
+    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting, arch lip, wheel hump, liner side, boot cut, nose ring, wall top and curved post within its own count`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, testCase.id);
       let drawCalls = 0;
       let triangles = 0;
@@ -651,7 +661,7 @@ describe("given every body style's car built whole", () => {
       assert.ok(triangles <= testCase.triangles * TRIANGLE_BUDGET, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`);
       const fittings = roofFittingVertices(car.style);
       const wells = wellAndCutVertices(car.style);
-      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.bootRings - wells.noseRings - wells.wallTops - wells.curvedPosts;
+      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.liners - wells.bootRings - wells.noseRings - wells.wallTops - wells.curvedPosts;
       assert.ok(loft <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
       assertRoofFittingCaps(testCase.id, fittings.byKind);
       const cap = WELL_AND_CUT_VERTICES[testCase.id];
@@ -744,6 +754,7 @@ describe("given every body style crashed into the wall at 48 km/h by the engine'
  * Every rest-only table `cageSourceOf` hands the cage (the cage mesh is decimated from them, so they fix the contact shape of every
  * hit, not only the scripted one), hashed as raw bytes in field order. Re-pinned for the sill following the cell's clusters: only the
  * sill vertices' cluster tables (skinN, skinXf, skinW) changed. Re-pinned for the sill samples a wreck rests on (`sill`, the last table).
+ * Re-pinned for the driver's side (`DRIVER_SIDE`, the steering wheel moved to +x): only `interiorRest` changed.
  */
 function cageSourceDigest(car: DeformableCar): string {
   const source = cageSourceOf(car);
@@ -758,7 +769,7 @@ function cageSourceDigest(car: DeformableCar): string {
 }
 
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
-  { id: "sedan", digest: "505b4c4fe9c4f34f8f3350c3530634eff8ae353dcfa168b128b9525112f4d52a" },
+  { id: "sedan", digest: "8d0ca6fec24787b820976ef5beb3b9bc33abd7d28ee2e89cdd0159374addc6cd" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   { id: "hatchback", digest: "ba4c934973909383e4f766d12db1f27bcd4798c25b2755e5eec2079791a13d9f" },

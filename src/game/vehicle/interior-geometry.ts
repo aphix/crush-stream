@@ -3,7 +3,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
-import { INTERIOR_MESH } from "./constants.ts";
+import { DRIVER_SIDE, INTERIOR_MESH } from "./constants.ts";
 import { mergeToned, toned } from "./car-materials.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
@@ -65,8 +65,8 @@ function onBack(geo: THREE.BufferGeometry, x: number, up: number, back: number):
 }
 
 /**
- * The cage's interior box, byte-for-byte the shape the first shared interior had: the cage field reads its up-facing triangles
- * through a gone pane, so the drawn kit can change without moving the sim. Built once, never disposed.
+ * The cage's interior box, the shape the first shared interior had with its wheel on the driver's side (`DRIVER_SIDE`): the cage
+ * field reads its up-facing triangles through a gone pane, so the drawn kit can change without moving the sim. Built once, never disposed.
  */
 export const cageInterior = once((): THREE.BufferGeometry => {
   const dark = [0x14161c, 0.94, 0.04] as const;
@@ -79,7 +79,7 @@ export const cageInterior = once((): THREE.BufferGeometry => {
     part(0.82, 0.2, 0.24, dark, 0, 0.6, 0.48),
     part(0.78, 0.02, 1.05, vinyl, 0, 1.08, 0.02),
     part(0.8, 0.55, 0.04, vinyl, 0, 0.62, -0.62),
-    toned(new THREE.TorusGeometry(0.11, 0.016, 8, 16), 0x2a2c32, 0.55, 0.2).rotateX(0.55).translate(-0.22, 0.68, 0.36),
+    toned(new THREE.TorusGeometry(0.11, 0.016, 8, 16), 0x2a2c32, 0.55, 0.2).rotateX(0.55).translate(DRIVER_SIDE * 0.22, 0.68, 0.36),
   ];
   for (const x of [-0.2, 0.2]) {
     parts.push(part(0.3, 0.08, 0.36, seat, x, 0.4, 0.06));
@@ -100,8 +100,8 @@ export function cabinGeometry(): THREE.BufferGeometry {
     rounded(1.56, 0.18, 0.42, 0.04, TRIM).translate(0, 0.73, 0.62),
     box(1.56, 0.05, 0.5, SOFT, 0, 0.835, 0.65, 0.08),
     box(1.3, 0.012, 0.01, ACCENT, 0, 0.79, 0.41),
-    box(0.36, 0.08, 0.16, SOFT, -0.36, 0.89, 0.5),
-    box(0.3, 0.06, 0.01, GLOSS, -0.36, 0.875, 0.42, -0.2),
+    box(0.36, 0.08, 0.16, SOFT, DRIVER_SIDE * 0.36, 0.89, 0.5),
+    box(0.3, 0.06, 0.01, GLOSS, DRIVER_SIDE * 0.36, 0.875, 0.42, -0.2),
     box(0.26, 0.15, 0.015, GLOSS, 0, 0.93, 0.47, -0.25),
   ];
   for (const sign of [-1, 1]) {
@@ -190,7 +190,7 @@ export function engineBayGeometry(): THREE.BufferGeometry {
     rounded(0.24, 0.15, 0.26, 0.03, PLASTIC).translate(0.43, 0.6, 1.66),
     box(1.2, 0.26, 0.05, BLACK, 0, 0.5, 1.85),
     box(1.36, 0.04, 0.07, ALU, 0, 0.66, 1.85),
-    along(toned(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 18), ...PLASTIC)).translate(0, 0.5, 1.8),
+    along(toned(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 18), ...PLASTIC)).translate(0, 0.53, 1.8),
     rounded(0.18, 0.16, 0.22, 0.02, PLASTIC).translate(-0.44, 0.53, 1.66),
     box(0.03, 0.02, 0.03, [0xa8231c, 0.5, 0.2], -0.49, 0.62, 1.6),
     box(0.03, 0.02, 0.03, ALU, -0.39, 0.62, 1.6),

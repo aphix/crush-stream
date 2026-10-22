@@ -204,6 +204,8 @@ function cut(car: DeformableCar, part: THREE.Object3D): boolean {
 export class CoverBatch {
   /** The doors, then the glass. */
   readonly meshes: readonly THREE.SkinnedMesh[];
+  /** The one object the scene holds: the draws under a group that is never hidden, so `ParkingScene` keeps a draw hidden at its pass that `sync` then shows. */
+  readonly group = new THREE.Group();
   private readonly doors: CoverLane;
   private readonly glass: CoverLane;
 
@@ -212,6 +214,7 @@ export class CoverBatch {
     this.glass = new CoverLane(makeGlassMaterial(), cars * 6, PANE_VERTICES, PANE_INDICES);
     this.glass.mesh.renderOrder = 2;
     this.meshes = [this.doors.mesh, this.glass.mesh];
+    this.group.add(...this.meshes);
   }
 
   /** Pack the cut doors and panes of `cars` (world matrices must be current). */

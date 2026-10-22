@@ -146,8 +146,11 @@ far distance (by `INTERIOR_MESH`), the door cards and crash bars with the small 
   windshield's foot to inside the nose, floor at 0.28 m), one more `tubs` entry for the drawn loft only. The bay set fills it
   wall to wall up to the hood's underside: a dark block and black cover with bare-aluminium heads, intake, plenum and strut
   caps, steel rails and manifolds, black radiator, airbox and battery.
-- **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor, the wheel liners and
-  the hood's underside are set so at build, on the drawn body only. No texture, no draw.
+- **Unpainted panels:** `primer` = `INNER_PANEL` (2) draws dark bare steel: the trough's walls and floor, the wheel liners, each
+  well's ceiling inside its arch, an arch lip's roll underside and return, and the hood's underside are set so at build, on the drawn
+  body only (a panel torn and put back gets its rest tone, `PanelRegion.rest`). The drawn liners are two-sided (the paint culls back
+  faces), and over a tyre standing outboard of the body (the monster's) a half disc closes each well up to its crown, at a bed's wall
+  where one stands over the wheel. No texture, no draw.
 - **Bare metal:** the paint's `primer` attribute draws procedural riveted steel (`bare-metal.ts`: object-space seams, rivet
   rows, a tint per sheet), so a torn panel's or bumper's under-panel bends with the body and costs no texture or draw. A torn
   bumper bares the painted body it covered (`bumperBare`), a reset paints it again.
