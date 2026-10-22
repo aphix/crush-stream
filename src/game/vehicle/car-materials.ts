@@ -6,6 +6,7 @@ import { detSin, detCos } from "../kernel/physics-core.js";
 import { applyFinish, glslFloat } from "./car-finish.ts";
 import { BARE_METAL_FRAGMENT, BARE_METAL_VERTEX } from "./bare-metal.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE } from "./constants.ts";
+import type { BodySource } from "./car-mesh.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
 /** The shared car textures and materials (paint, tone grid, glass, crack map, lamp mask) and the multi-tone part helpers; the small parts built on them are in `part-geometry.ts`. */
@@ -496,11 +497,12 @@ function lightBarPart(g: THREE.BufferGeometry, x: number, y: number, tone: numbe
   return g;
 }
 
-/** A lens module [width, height, depth] (m), centred `LENS_Y` up in bar space, its edges rounded over `LENS_ROUND` (m) in this many segments: a domed lens, as the reference's, not a brick. */
+/** A lens module [width, height, depth] (m), centred `LENS_Y` up in bar space, its edges rounded over `LENS_ROUND` (m) in one segment (two chords a
+ *  round, 108 triangles a lens; three segments cost 588 and broke the police's triangle budget): a domed lens, as the reference's, not a brick. */
 const LENS_SIZE = [0.42, 0.075, 0.23] as const;
 const LENS_Y = 0.1;
 const LENS_ROUND = 0.035;
-const LENS_ROUND_SEGMENTS = 3;
+const LENS_ROUND_SEGMENTS = 1;
 /** The white lamp cell at each lens's centre [width, height] (m): it stands 2 mm proud of the lens's front and back, as the reference's white hot spot. */
 const LENS_CELL = [0.07, 0.03] as const;
 
@@ -512,20 +514,28 @@ function domeLens(x: number, tone: number, texel: 1 | 2): THREE.BufferGeometry {
 
 /** Roof light bar in bar space (+z forward, so +x is the car's left): housing on two feet (`LIGHT_BAR_FOOT`), a domed red lens on
  *  the car's left (+x) and a blue one on its right (−x), each with a white lamp cell at its centre, as the reference cruiser's, with a
- *  clear takedown module between, one draw. `LIGHT_BAR_LENS` lists each lens's vertices. */
-export function makeLightBar(): THREE.BufferGeometry {
+ *  clear takedown module between, one draw. `LIGHT_BAR_LENS` lists each lens's vertices. The `cage` build (the bar's cage panel) keeps
+ *  brick lenses and no cells: the dome is drawn only. */
+export function makeLightBar(source: BodySource = "drawn"): THREE.BufferGeometry {
   const box = (w: number, h: number, d: number, x: number, y: number, tone: number, texel: 0 | 1 | 2) => lightBarPart(new THREE.BoxGeometry(w, h, d), x, y, tone, texel);
   const [cellW, cellH] = LENS_CELL;
+  const [lensW, lensH, lensD] = LENS_SIZE;
+  const lenses =
+    source === "cage"
+      ? [box(lensW, lensH, lensD, 0.3, LENS_Y, 0x8c1218, 1), box(lensW, lensH, lensD, -0.3, LENS_Y, 0x1a36a8, 2)]
+      : [
+          domeLens(0.3, 0x8c1218, 1),
+          domeLens(-0.3, 0x1a36a8, 2),
+          box(cellW, cellH, lensD + 0.004, 0.3, LENS_Y, 0xf2f4f6, 0),
+          box(cellW, cellH, lensD + 0.004, -0.3, LENS_Y, 0xf2f4f6, 0),
+        ];
   return mergeToned(
     [
       box(1.04, 0.045, 0.26, 0, 0.04, 0x16181c, 0),
       box(0.16, 0.07, 0.22, 0, 0.1, 0xd8dce2, 0),
       box(0.08, -2 * LIGHT_BAR_FOOT.sole, 2 * LIGHT_BAR_FOOT.z, -LIGHT_BAR_FOOT.x, 0, 0x16181c, 0),
       box(0.08, -2 * LIGHT_BAR_FOOT.sole, 2 * LIGHT_BAR_FOOT.z, LIGHT_BAR_FOOT.x, 0, 0x16181c, 0),
-      domeLens(0.3, 0x8c1218, 1),
-      domeLens(-0.3, 0x1a36a8, 2),
-      box(cellW, cellH, LENS_SIZE[2] + 0.004, 0.3, LENS_Y, 0xf2f4f6, 0),
-      box(cellW, cellH, LENS_SIZE[2] + 0.004, -0.3, LENS_Y, 0xf2f4f6, 0),
+      ...lenses,
     ],
     "light bar",
   );
