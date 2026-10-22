@@ -20,30 +20,29 @@ describe("given an AI derby driver and a rival car close beside or ahead of it",
     assert.ok(input.ebrake && input.throttle === 0 && input.steer < -0.5, JSON.stringify(input));
   });
 
-  it("when an oncoming car passes 2.6 m to its left, then the driver sideswipes it, steering right with the throttle on, but does not when the car shows its driver's door instead", () => {
+  it("when an oncoming car passes 2.6 m to its right, then the driver sideswipes it, steering right with the throttle on, but does not when the car shows its driver's door instead", () => {
     const brain = new DerbyBrain();
     const me = car(0, { vz: 9 });
-    // Oncoming, 2.6 m to our left: we pass its passenger side.
-    const passenger = car(1, { x: 2.6, z: 1, yaw: Math.PI, vz: -8 });
+    // Oncoming, 2.6 m to our right: we pass its passenger side.
+    const passenger = car(1, { x: -2.6, z: 1, yaw: Math.PI, vz: -8 });
     const input = decide(brain, me, [me, passenger]);
     assert.equal(brain.tacticOf(0), "sideswipe");
-    assert.ok(input.steer > 0.3 && input.throttle > 0.5, JSON.stringify(input));
+    assert.ok(input.steer < -0.3 && input.throttle > 0.5, JSON.stringify(input));
     // Mirror it: now its driver's door (the steering-wheel side) is the side we'd rub.
     const doorBrain = new DerbyBrain();
-    const driverSide = car(1, { x: -2.6, z: 1, yaw: Math.PI, vz: -8 });
+    const driverSide = car(1, { x: 2.6, z: 1, yaw: Math.PI, vz: -8 });
     decide(doorBrain, me, [me, driverSide]);
     assert.notEqual(doorBrain.tacticOf(0), "sideswipe");
   });
 
-  it("when the driver backs toward a car parked broadside 16 m off, then it reverses and steers its tail toward that car's nose, turning harder when the car shows its driver's side so the tail aims at the bumper corner clear of the door", () => {
+  it("when the driver backs toward a car parked broadside 16 m off, then it reverses and steers its tail toward that car's nose, the same turn whichever side the car shows, so the field's play does not hang on the seat's side", () => {
     // Tail toward a car parked broadside 16 m off; once its driver's side faces us, once its passenger side.
     const me = car(0, { z: -16, yaw: Math.PI, vz: 0 });
-    const doorSide = decide(new DerbyBrain(), me, [me, car(1, { yaw: -Math.PI / 2, vz: 0 })]);
-    const passengerSide = decide(new DerbyBrain(), me, [me, car(1, { yaw: Math.PI / 2, vz: 0 })]);
+    const doorSide = decide(new DerbyBrain(), me, [me, car(1, { yaw: Math.PI / 2, vz: 0 })]);
+    const passengerSide = decide(new DerbyBrain(), me, [me, car(1, { yaw: -Math.PI / 2, vz: 0 })]);
     assert.ok(doorSide.throttle < 0 && passengerSide.throttle < 0, "not backing in");
-    // Each steers the tail toward that car's nose; the door side has further to go.
-    assert.ok(doorSide.steer < 0 && passengerSide.steer > 0, `${doorSide.steer} / ${passengerSide.steer}`);
-    assert.ok(-doorSide.steer > passengerSide.steer + 0.02, `door side ${doorSide.steer.toFixed(2)} vs ${passengerSide.steer.toFixed(2)}`);
+    assert.ok(doorSide.steer > 0 && passengerSide.steer < 0, `${doorSide.steer} / ${passengerSide.steer}`);
+    assert.ok(Math.abs(doorSide.steer + passengerSide.steer) < 1e-6, `door side ${doorSide.steer} vs passenger side ${passengerSide.steer}`);
   });
 });
 

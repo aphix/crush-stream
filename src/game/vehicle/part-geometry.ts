@@ -150,6 +150,7 @@ export function mirrorBatchGeometry(sign: number, capacity: number): THREE.Buffe
   return geo;
 }
 
+
 /** Grille slats in front-bumper space; the headlamps sit on the body (`makeLampUnit`). */
 function grille(): THREE.BufferGeometry {
   return toned(new THREE.BoxGeometry(0.72, 0.16, 0.06, 4, 2, 1), 0x1a1c20, 0.55, 0.45);

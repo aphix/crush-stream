@@ -3,7 +3,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
-import { INTERIOR_MESH } from "./constants.ts";
+import { DRIVER_SIDE, INTERIOR_MESH } from "./constants.ts";
 import { mergeToned, toned } from "./car-materials.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
@@ -65,8 +65,8 @@ function onBack(geo: THREE.BufferGeometry, x: number, up: number, back: number):
 }
 
 /**
- * The cage's interior box, byte-for-byte the shape the first shared interior had: the cage field reads its up-facing triangles
- * through a gone pane, so the drawn kit can change without moving the sim. Built once, never disposed.
+ * The cage's interior box, the shape the first shared interior had with its wheel on the driver's side (`DRIVER_SIDE`): the cage
+ * field reads its up-facing triangles through a gone pane, so the drawn kit can change without moving the sim. Built once, never disposed.
  */
 export const cageInterior = once((): THREE.BufferGeometry => {
   const dark = [0x14161c, 0.94, 0.04] as const;
@@ -79,7 +79,7 @@ export const cageInterior = once((): THREE.BufferGeometry => {
     part(0.82, 0.2, 0.24, dark, 0, 0.6, 0.48),
     part(0.78, 0.02, 1.05, vinyl, 0, 1.08, 0.02),
     part(0.8, 0.55, 0.04, vinyl, 0, 0.62, -0.62),
-    toned(new THREE.TorusGeometry(0.11, 0.016, 8, 16), 0x2a2c32, 0.55, 0.2).rotateX(0.55).translate(-0.22, 0.68, 0.36),
+    toned(new THREE.TorusGeometry(0.11, 0.016, 8, 16), 0x2a2c32, 0.55, 0.2).rotateX(0.55).translate(DRIVER_SIDE * 0.22, 0.68, 0.36),
   ];
   for (const x of [-0.2, 0.2]) {
     parts.push(part(0.3, 0.08, 0.36, seat, x, 0.4, 0.06));

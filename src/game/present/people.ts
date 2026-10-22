@@ -552,8 +552,8 @@ export class VipEscort {
     const car = cars[this.car];
     if (!car) return this.reset();
     if (this.runOver(cars, throwFigure)) return;
-    _door.set(DOOR_OUT, 0, 0).applyQuaternion(car.group.quaternion);
-    car.glassWorld("doorR", _pane).add(_door);
+    _door.set(-DRIVER_SIDE * DOOR_OUT, 0, 0).applyQuaternion(car.group.quaternion);
+    car.glassWorld(PASSENGER_PANE, _pane).add(_door);
     const dx = _pane.x - this.x;
     const dz = _pane.z - this.z;
     const left = hypot2(dx, dz);
@@ -599,7 +599,7 @@ export class VipEscort {
 
 /** `at` (the driver's torso place, just out of `car`) moved to where his passenger is thrown from: off it by `BESIDE` or `BEHIND`, toward the passenger side. */
 export function passengerThrow(car: DeformableCar, at: THREE.Vector3): void {
-  if (car.driverOut === "windshield" || car.driverOut === null) _off.set(BESIDE, 0, 0);
+  if (car.driverOut === "windshield" || car.driverOut === null) _off.set(-DRIVER_SIDE * BESIDE, 0, 0);
   else _off.set(car.driverOut === "doorL" ? BEHIND : -BEHIND, 0, 0);
   at.add(_off.applyQuaternion(car.group.quaternion));
 }

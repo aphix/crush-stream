@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import type { ExitPane } from "./car-core.ts";
+import { DRIVER_SIDE } from "./constants.ts";
 import { CLASSES, killClass, killTravel } from "./vehicle-classes.ts";
 
 /** Samples per car, one per `SAMPLE` s of sim time (`SAMPLE_HZ`): 0.53 s, past `PRE`. */
@@ -158,11 +159,11 @@ function launch(car: DeformableCar, i: number, exit: ExitPane, v: THREE.Vector3,
   _out.set(side, 0, side === 0 ? 1 : 0).applyQuaternion(g.quaternion);
   e.dir.copy(_out);
   f32(e.dir);
-  // Car-local: on the pane's height (a windshield's on the driver's side, -x), the torso down the lean behind it,
+  // Car-local: on the pane's height (a windshield's on the driver's side, `DRIVER_SIDE`), the torso down the lean behind it,
   // so he leaves through the opening, clear of the bonnet or door below and the roof above.
   car.glassWorld(exit, _p).sub(g.position).applyQuaternion(_inv.copy(g.quaternion).invert());
   const paneY = _p.y;
-  if (side === 0) _p.x -= 0.25;
+  if (side === 0) _p.x += DRIVER_SIDE * 0.25;
   _p.addScaledVector(_up.set(0, 1, 0).applyQuaternion(_qx), -HEAD_UP);
   _p.y = paneY;
   e.local.copy(_p);

@@ -37,7 +37,7 @@ describe("given two cars crashing, where a disabling head-on or side hit, or a d
     assert.equal(b.driverOut, "windshield");
   });
 
-  it("when a T-bone finishes a worn-out car, then its driver is thrown out of the struck right-hand side's window and the striking car's driver stays in", () => {
+  it("when a T-bone finishes a worn-out car, then its driver is thrown out of the struck side's window (doorR: +x, the car's left and the driver's own door) and the striking car's driver stays in", () => {
     const struck = worn(makeCar());
     const bullet = makeCar();
     launch(struck, 0, 0, 0, 0, 0);
@@ -149,6 +149,12 @@ describe("given a throw (the ejection event: everything a dummy needs to be laun
       for (const v of [e.pos, e.local, e.dir, e.rel, e.carVel, e.spin]) for (const x of v.toArray()) assert.equal(Math.fround(x), x, "f32-exact");
       for (const x of e.quat.toArray()) assert.equal(Math.fround(x), x, "f32-exact");
     }
+  });
+
+  it("when two cars crash head-on at 56 km/h each, then each driver leaves the windshield on his own side, the car's left (+x), where the steering wheel is", () => {
+    const { seen } = observed();
+    assert.equal(seen.length, 2);
+    for (const e of seen) assert.ok(e.exit === "windshield" && e.local.x > 0.15, `out of ${e.exit} at car-local x ${e.local.x.toFixed(2)}`);
   });
 
   it("when the same crash is run twice, then it gives the very same throws, since the decision is deterministic simulation state", () => {
