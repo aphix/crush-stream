@@ -608,7 +608,7 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     for (const night of [read[0]!, read[2]!]) assert.ok(/^glows 12, head spots 4, tail spots 4, pools [1-9]/.test(night), `at night: ${night}`);
   });
 
-  it("when it is day, then a braking car's tail lamps still glow and take real lights, and a police car's sirens still flash, while every head lamp stays off", () => {
+  it("when it is day, then a braking car's tail lamps still glow, take real lights and draw lit lenses, and a police car's sirens still flash, while every head lamp and running tail stays off, its lens unlit", () => {
     const { lights, scene, camera, far, near } = rig();
     const cop = new DeformableCar(paint(), scene, null, "police");
     cop.spawnFacing(-3, 8, 0, 0);
@@ -619,6 +619,25 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     const siren = lights.tailSpots.filter((p) => p.intensity > 1).length;
     // The followed car's two braking tails and the one siren lit at t = 0.1: three glows, three tail spots; no head spot.
     assert.equal(`${shows(lights)}, siren spots ${siren}`, "glows 3, head spots 0, tail spots 3, pools 0, siren spots 1");
+
+    // The lens looks the lamp batch draws (`LAMP_SLOTS`): lit head 0, running tail 2, braking tail 10, high brake lit 4, hood share 6,
+    // boot share running 7 and braking 11; their unlit day looks 13 (head), 14 (tail), 15 (hood share), 16 (boot share).
+    const cars = [far, near, cop];
+    for (const c of cars) c.group.updateMatrixWorld(true);
+    const batch = new LampBatch(cars.length);
+    const lenses = (night: boolean): string => {
+      batch.night = night;
+      batch.sync(cars);
+      const d = (b: number) => batch.drawn(b);
+      return `heads ${d(0)} lit ${d(13)} unlit, running tails ${d(2)} lit ${d(14)} unlit, braking tails ${d(10)}, high brake ${d(4)}, hood shares ${d(6)} lit ${d(15)} unlit, boot shares ${d(7)} lit ${d(16)} unlit ${d(11)} braking`;
+    };
+    const count = (list: readonly DeformableCar[], kind: string) => list.reduce((n, c) => n + c.lamps.filter((l) => l.kind === kind).length + c.lampFittings.filter((f) => f.kind === kind).length, 0);
+    const [heads, running, braking, high, hoods, boots, brakingBoots] = [count(cars, "head"), count([near, cop], "tail"), count([far], "tail"), count([far], "brake"), count(cars, "hood"), count([near, cop], "boot"), count([far], "boot")];
+    const want = (day: boolean) =>
+      `heads ${day ? 0 : heads} lit ${day ? heads : 0} unlit, running tails ${day ? 0 : running} lit ${day ? running : 0} unlit, braking tails ${braking}, high brake ${high}, hood shares ${day ? 0 : hoods} lit ${day ? hoods : 0} unlit, boot shares ${day ? 0 : boots} lit ${day ? boots : 0} unlit ${brakingBoots} braking`;
+    assert.equal(`day: ${lenses(false)}; night: ${lenses(true)}`, `day: ${want(true)}; night: ${want(false)}`);
+    assert.ok(heads > 0 && running > 0 && braking > 0, `the cars carry ${heads} heads, ${running} running tails, ${braking} braking tails`);
+    batch.dispose();
   });
 
   it("when the pool is the phone's, then it holds 2 head spots and 2 tail spots, the followed car's two headlamps take both spots, and every intact lamp still glows", () => {

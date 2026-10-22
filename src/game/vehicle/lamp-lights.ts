@@ -713,7 +713,8 @@ const FITTING_BRAKING = { brake: 4, marker: 5, hood: 6, boot: 11 } as const;
 const TAIL_BRAKING = 10;
 
 /** Per slot, the lamp family its seats draw and its look: head lit, head broken, tail running, tail broken, high brake lamp lit, marker,
- *  the heads' shares on the hood, the tails' on the boot lid, those two shares broken, the tails and their share braking, high brake dark. */
+ *  the heads' shares on the hood, the tails' on the boot lid, those two shares broken, the tails and their share braking, high brake dark,
+ *  and by day (`BY_DAY`) the head, running tail and their shares unlit. */
 const LAMP_SLOTS = [
   ["head", LAMP_LOOK.head],
   ["head", LAMP_LOOK.broken],
@@ -728,7 +729,15 @@ const LAMP_SLOTS = [
   ["tail", LAMP_LOOK.tail],
   ["boot", LAMP_LOOK.tail],
   ["brake", LAMP_LOOK.off],
+  ["head", LAMP_LOOK.off],
+  ["tail", LAMP_LOOK.off],
+  ["hood", LAMP_LOOK.off],
+  ["boot", LAMP_LOOK.off],
 ] as const;
+
+/** Each slot's by day: a lit head lamp, a running tail and their lid shares draw their unlit lens; every other slot (broken, braking, the high brake lamp, a marker) is its own. */
+const UNLIT_BY_DAY = new Map([[0, 13], [2, 14], [6, 15], [7, 16]]);
+const BY_DAY = Int8Array.from(LAMP_SLOTS, (_, b) => UNLIT_BY_DAY.get(b) ?? b);
 
 /** Whether `seat` shows: on the camera's layer (distance detail) and visible up its parent chain. */
 function seatShown(seat: THREE.Object3D): boolean {
@@ -747,6 +756,8 @@ export class LampBatch {
   /** Every draw, for the scene. */
   readonly meshes: readonly THREE.Mesh[];
   readonly draw: SeatDraw;
+  /** Night (`WorldStage.night`, as `LampLights.night`; the engine sets both every frame): by day the head and running tail lenses are unlit (`BY_DAY`). */
+  night = true;
   /** Per slot (`LAMP_SLOTS`), the seats packed this sync. */
   private readonly n = new Int32Array(LAMP_SLOTS.length);
   /** Per slot, its family's first variant in the draw and how many it has. */
@@ -807,8 +818,9 @@ export class LampBatch {
     return this.n[b]!;
   }
 
-  private put(b: number, seat: THREE.Object3D, variant: number, tint?: THREE.Color | null): void {
+  private put(slot: number, seat: THREE.Object3D, variant: number, tint?: THREE.Color | null): void {
     seat.updateWorldMatrix(false, false);
+    const b = this.night ? slot : BY_DAY[slot]!;
     const [color, glow] = this.looks[b]!;
     const look = tint ? _tint.copy(color).multiply(tint) : color;
     if (this.draw.put(this.first[b]! + (this.variants[b] === 1 ? 0 : variant), seat.matrixWorld, look, glow)) this.n[b]!++;
