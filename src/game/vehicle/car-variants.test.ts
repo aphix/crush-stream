@@ -2723,6 +2723,38 @@ describe("given every body style's door mirror and wipers", () => {
   });
 });
 
+describe("given the trucks' drawn hoods, whose nose folds tighter than its skirt", () => {
+  it("when their triangles are compared pairwise, then no two face the same way in one plane over each other (the skirt doubled back over the hood's side walls)", () => {
+    const first: string[] = [];
+    let count = 0;
+    for (const id of ["pickup", "monster"] as const) {
+      for (const at of buriedFaces(partTriangles(makeHoodGeometry(drawnStyle(CAR_STYLES[id]))))) {
+        count++;
+        if (first.length < BURIED_SHOWN) first.push(`${id} hood at (${at.x.toFixed(3)}, ${at.y.toFixed(3)}, ${at.z.toFixed(3)})`);
+      }
+    }
+    assert.ok(count === 0, `${count} buried coplanar pairs: ${first.join("; ")}`);
+  });
+});
+
+/** How far (m) over the belt a truck's black sail may reach: the mirror head's top, a small triangle at the post's foot. */
+const TRUCK_SAIL_RISE = 0.2;
+
+describe("given the trucks' drawn A-posts", () => {
+  it("when the door glass knees onto the post, then the sail under the knee is black and tops out at the knee, within 20 cm of the belt: the post alone shows body colour above it", () => {
+    for (const id of ["pickup", "monster"] as const) {
+      const style = drawnStyle(CAR_STYLES[id]);
+      const knee = style.aPillarKnee;
+      assert.ok(knee !== undefined, `${id}: the drawn door glass knees onto the post`);
+      const sail = aPillarParts(style)[1];
+      assert.ok(sail !== undefined && sail.userData.blackout === true, `${id}: the sail is drawn black`);
+      const top = partBox(sail).max.y;
+      const belt = beltY(style.aPillarFoot, style);
+      assert.ok(Math.abs(top - knee) < 1e-5 && knee - belt <= TRUCK_SAIL_RISE, `${id}: the sail tops out at y ${top}, knee ${knee}, ${(knee - belt).toFixed(3)} m over the belt ${belt}`);
+    }
+  });
+});
+
 describe("given a body style's P2 parts", () => {
   it("when a door carries its own mirror, then its cap is its own size, unsquashed, its outer face at the door's mirror reach, its foot on the drawn skin at the seat, and the seat and cage builds are unchanged", () => {
     const size = [0.14, 0.09, 0.07] as const;

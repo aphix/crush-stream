@@ -832,6 +832,8 @@ const LID_FOLD_STEPS = 3;
 const LID_FACE_STEPS = 2;
 /** A profile station this close (m) to a nose-wrapping hood's own ring is that ring's: no sliver of a gap. */
 const LID_KINK_MERGE = 0.005;
+/** How far (m) each fold ring's held skirt stands past the ring before it: a strip of zero length is a zero-area face, which has no normal and glues the creases it touches. */
+const HOLD_STEP = 0.001;
 
 /** The rolled edge's run at a ring: its plan taper and rise (m per m along the loft) and the x scale its ring takes after the build (a drop's fold). */
 type RollEdge = { taper: number; rise: number; scale: number };
@@ -1011,7 +1013,10 @@ function makeDeckPanel(
   if (drop) {
     const lean = ((drop.z ?? z1) - z1) / (yc - (drop.y - oy));
     bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, wFace, lean, fold, dir);
-  } else if (nose) bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, 1, 0, fold, dir);
+  } else if (nose) {
+    bendOverEnd(geo.getAttribute("position") as THREE.BufferAttribute, zA, yc, 1, 0, fold, dir);
+    holdUnderAxis(geo.getAttribute("position") as THREE.BufferAttribute, rings, deckRings, fold, dir);
+  }
   ensureOutwardNormals(geo);
   // The deck's own rings come first; a fold's follow them.
   geo.userData.deckRings = deckRings;
@@ -1027,7 +1032,7 @@ function makeDeckPanel(
 /**
  * Bends the straight run lofted past `zA` (its z the path length along `dir`, its y the offset off the panel) a quarter turn down over
  * the end edge on a `radius` bend about the fold's centre (`yc`, `zA`), then down the face, `lean` m of z per m down; x scales to `wFace` ×
- * on the way round. On a bend tighter than the skirt the skirt and underside turn on past its axis, behind the face inside the body.
+ * on the way round. On a bend tighter than the skirt, `holdUnderAxis` keeps the skirt and underside out of the fold.
  */
 function bendOverEnd(pos: THREE.BufferAttribute, zA: number, yc: number, wFace: number, lean: number, radius: number, dir: number): void {
   const arc = (radius * Math.PI) / 2;
@@ -1038,6 +1043,21 @@ function bendOverEnd(pos: THREE.BufferAttribute, zA: number, yc: number, wFace: 
     const r = radius + pos.getY(i);
     const down = Math.max(0, s - arc);
     pos.setXYZ(i, pos.getX(i) * lerp(1, wFace, turn / (Math.PI / 2)), yc + r * detCos(turn) - down, zA + dir * r * detSin(turn) + lean * down);
+  }
+}
+
+/**
+ * A nose fold tighter than the skirt turns the skirt and underside points under its axis (`radius` + y < 0) back over the deck's side walls:
+ * they are held on the deck's last ring instead, `HOLD_STEP` further on along the run for each fold ring, so the skirt runs straight on behind the nose.
+ */
+function holdUnderAxis(pos: THREE.BufferAttribute, rings: readonly Pt[][], deckRings: number, radius: number, dir: number): void {
+  const n = rings[0]!.length;
+  const deck = (deckRings - 1) * n;
+  for (let s = deckRings; s < rings.length; s++) {
+    for (let c = 0; c < n; c++) {
+      if (radius + rings[s]![c]!.y >= 0) continue;
+      pos.setXYZ(s * n + c, pos.getX(deck + c), pos.getY(deck + c), pos.getZ(deck + c) + dir * (s - deckRings + 1) * HOLD_STEP);
+    }
   }
 }
 
