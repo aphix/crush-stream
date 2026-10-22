@@ -23,6 +23,16 @@ export const LOOK = {
 export const SURFACE_METRES: Readonly<Record<SurfaceRole, number>> = { asphalt: 2.08, concrete: 3, ground: 2.48 };
 
 /**
+ * `1 / mean linear colour` of each role's diffuse photograph (the 1024² one drawn at 256², as `gainOf` measures a procedural map),
+ * measured when the set was encoded: a compressed texture has no picture to measure at load.
+ */
+export const DIFF_GAIN: Readonly<Record<SurfaceRole, readonly [number, number, number]>> = {
+  asphalt: [9.7923, 12.4775, 15.5981],
+  concrete: [10.6589, 10.5879, 10.959],
+  ground: [3.44, 6.2619, 13.262],
+};
+
+/**
  * The Y rotation (rad) `scene.environmentRotation` needs so the HDRI's sun disc lies on the same side as the sun light `sunDir`
  * (the sun's position less its target's). A material samples the environment at the inverse rotation of the world direction.
  */
