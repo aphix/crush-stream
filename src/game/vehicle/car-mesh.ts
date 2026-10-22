@@ -379,10 +379,11 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   const edge = wellEdge(z, hw, tub.t, floorClear, well, style, source);
   // The deck edge drops into the style's own tubs (cabin, bed), not into the drawn bay: there it stays the fender's top under the hood's edge.
   const deckTub = tubAt(z, style, style.tubs).t;
+  const [grooveOut, grooveDown] = source === "drawn" && style.hood.groove ? style.hood.groove.map((g) => g * bayAt(z, style)) : [0, 0];
   // The ring's half: deck crown and edge, the shoulder, the feature line, the tuck-under, the rocker, then the sill and the floor.
   const half: [number, number][] = [
     [lerp(hw - DECK_CROWN.inset, edge ?? hw - 0.06, tub.t), lerp(yb + DECK_CROWN.rise, tub.floor, tub.t)],
-    [lerp(hw - 0.07, hw - 0.06, deckTub), deckEdgeY(yb, deckTub)],
+    [lerp(hw - 0.07, hw - 0.06, deckTub) + grooveOut!, deckEdgeY(yb, deckTub) - grooveDown!],
     ...SHOULDER_RING.map((a) => side(yF + SHOULDER[1] * detSin(a))),
     side(yF),
     ...Array.from({ length: tuckRows }, (_, row) => side(lerp(yF, rockerY, (row + 1) / (tuckRows + 1)))),
