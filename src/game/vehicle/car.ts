@@ -6,7 +6,7 @@ import { DOOR } from "./car-door-mesh.ts";
 import { activeGround } from "../world/ground.ts";
 import { CarParts } from "./car-parts.ts";
 import { END_WINDOW, type PartNetState, REARM_QUIET_S } from "./car-core.ts";
-import { REST_SPEED } from "./car-air-body.ts";
+import { REST_SPEED, _s, S_LIFTING } from "./car-air-body.ts";
 import { FLIGHT_BORNE, FLIGHT_CONTACT, FLIGHT_DOWN, FLIGHT_DRIFT, FLIGHT_END_AGO, FLIGHT_END_REACH, FLIGHT_END_SQUEEZE, FLIGHT_EULER, FLIGHT_INV_YAW, FLIGHT_POSITION, FLIGHT_QUATERNION, FLIGHT_RAMPS, FLIGHT_REST, FLIGHT_SLEEP, FLIGHT_SPIN, FLIGHT_STALL, FLIGHT_VELOCITY, FLIGHT_WHEEL_RATE, FLIGHT_WHEEL_SPIN } from "./car-flight.ts";
 import { onWreckTop, readContact } from "./car-air-points.ts";
 import { stepFree, wreckCentre, wreckInvI } from "./car-air.ts";
@@ -35,6 +35,12 @@ const _wantQuaternion = new THREE.Quaternion();
 
 /** A wreck rests this long (s) before it sleeps: a toppling pile pauses on the way over, and a monster settling on a bank creeps to its pose for most of a second after it first slows under `REST_SPEED`. */
 const WRECK_REST_S = 1;
+/**
+ * How deep (m) a wreck at rest may still stand in the world's ground and sleep. It parts from it at `GROUND_LIFT_V`, under
+ * `REST_SPEED`: a monster rolled onto its side (its body's lift fading onto its frame, `cageLift`) slept rising at 5 cm/s with its
+ * drawn body 18.6 cm in the ground.
+ */
+const SLEEP_SINK = 0.01;
 /** How far (m) a hub's car-frame place re-derived from its world place may be from the place its clamp pinned, in the slice a freeze starts in, before the pin is kept (`integrateWreck`). */
 const HUB_PIN_MAX = 0.3;
 /** Each wheel's contact standing on level road, as built and at a spawn (`resetContact`): no lift, the normal up, full grip, the world's. */
@@ -540,9 +546,9 @@ export class DeformableCar extends CarParts {
     this.stepLooseParts(dt, this.slot, this.surfaces);
   }
 
-  /** A wreck at rest for `WRECK_REST_S` on three wheels or more, and not crushing, falls asleep where it lies. */
+  /** A wreck at rest for `WRECK_REST_S` on three wheels or more, not crushing and out of the ground (`SLEEP_SINK`), falls asleep where it lies. */
   private restOrSleep(dt: number): void {
-    const rest = !this.moving;
+    const rest = !this.moving && _s[S_LIFTING]! <= SLEEP_SINK;
     if (!this.deform.crushing && this.contacts >= 3 && rest) {
       if ((this.restS += dt) >= WRECK_REST_S) {
         this.velocity.set(0, 0, 0);
