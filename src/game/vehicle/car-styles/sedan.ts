@@ -21,17 +21,23 @@ export const SEDAN: BodyStyle = {
    * rear door, tapering to ~0.63 where the rear pillar's foot meets the haunch at z -1.2): one 0.74 stood the rear pillar's foot on the
    * body side where the tail narrows to hw 0.72-0.76.
    */
+  /**
+   * The belt (the side glass's sill) runs at 0.90 to the door glass's front edge, then down to the cowl's corner at 0.86 by the
+   * windshield's foot, as the reference's A-pillar foot meets its fender (the crowned hood's fender line).
+   */
   belt: {
     x: [[-1.2, 0.64], [-0.88, 0.7], [-0.5, 0.72], [0.4, 0.74]],
-    y: [[-1.23, 1.0], [-1.15, 0.98], [-0.9, 0.948], [-0.5, 0.913], [0.4, 0.9], [0.92, 0.9]],
+    y: [[-1.23, 1.0], [-1.15, 0.98], [-0.9, 0.948], [-0.5, 0.913], [0.4, 0.9], [0.66, 0.9], [0.95, 0.86]],
   },
   rocker: { y: 0.21 },
   arch: { radius: 0.405, lip: { flare: 0.008, width: 0.035 } },
   /**
    * The hood's rear edge stands ahead of the windshield's foot (0.95), as the reference's: in its top view the bonnet ends ~1.0 on
    * the centre line, the dark cowl and wipers (`blackout.cowl`) between it and the glass. Hinged 2 cm behind that edge, as before.
+   * Crowned as the reference's, one soft dome falling 6 cm from the centre line to |x| 0.66: the stations under it sit the fenders that
+   * much under the centre line, which stays on the reference's side silhouette (yBelt = old + 0.021 - 0.06 ((hw - 0.07) / 0.66)^2).
    */
-  hood: { z0: 0.99, z1: 1.97, origin: [0.81, 0.97] },
+  hood: { z0: 0.99, z1: 1.97, origin: [0.81, 0.97], crown: [0.06, 0.66] },
   /** Body-colour fascias, as the reference's: its black is the lower intake, grille and diffuser (`details`, grille, tail trim), not the bumper. */
   bumpers: {
     front: { ...PLATFORM_HARDPOINTS.bumpers.front, seat: { y: 0.34, z: 1.965 }, span: 0.74, wrap: { from: 0.33, back: 0.242 }, trim: "body" },
@@ -77,14 +83,14 @@ export const SEDAN: BodyStyle = {
     st(0.572, 0.815, 0.89, 1.17, 0.5, 1),
     st(0.751, 0.808, 0.9, 1.085, 0.5, 1),
     st(0.886, 0.795, 0.904, 1.03, 0.5, 0.5),
-    st(0.986, 0.79, 0.906, 0.922, 0.5, 0.25),
-    st(1.235, 0.79, 0.873),
-    st(1.481, 0.765, 0.832),
-    st(1.642, 0.749, 0.79),
-    st(1.734, 0.746, 0.758),
-    st(1.82, 0.692, 0.712),
-    st(1.898, 0.574, 0.674),
-    st(1.995, 0.467, 0.605),
+    st(0.986, 0.79, 0.856, 0.922, 0.5, 0.25),
+    st(1.235, 0.79, 0.823),
+    st(1.481, 0.765, 0.787),
+    st(1.642, 0.749, 0.748),
+    st(1.734, 0.746, 0.716),
+    st(1.82, 0.692, 0.68),
+    st(1.898, 0.574, 0.66),
+    st(1.995, 0.467, 0.604),
   ],
   roofZ: [-1.159, 0.15],
   windshieldTop: [1.285, 0.15],
