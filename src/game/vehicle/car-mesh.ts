@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { hypot2, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type BumperEnd, type HoodNose, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
-import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, tubWall } from "./car-lines.ts";
+import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, roofDrip, tubWall } from "./car-lines.ts";
 import { splitCreases } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import { carFrame } from "./car-rig.ts";
@@ -115,9 +115,43 @@ export function roofDome(z: number, style: BodyStyle): { drop: number; crown: nu
   return { drop: 0, crown: ROOF_CROWN, reach: 1 };
 }
 
+/** `roofArc`'s drawn samples, its crown (0) to its cant line (1): closer toward the cant, where the curve turns hardest, its last chord steep enough that the cant's normal points out (no grey band). */
+export const ROOF_ARC_T = [0, 0.35, 0.6, 0.8, 0.94, 1] as const;
+
+/**
+ * The drawn roof's half-section (+x) at `z` on `style.roofSection`, `t` 0 at its crown to 1 at its cant line (`roofDome`'s drop, crown
+ * and reach kept): a cubic Bézier leaving the crown level and arriving along the side glass's plane; null unset.
+ */
+export function roofArc(z: number, style: BodyStyle): ((t: number) => Pt) | null {
+  const section = style.roofSection;
+  if (section === undefined) return null;
+  const r = roofAt(z, style);
+  const { drop, crown, reach } = roofDome(z, style);
+  const top = r.y - drop + crown;
+  const cant = { x: r.x + reach * (ROOF_LIP_OUT + roofDrip(style)), y: r.y - drop - cantDrop(style) };
+  const [ux, uy] = [cantX(z, style) - beltX(z, style), cantY(z, style) - beltY(z, style)];
+  const handle = (section.blend * (top - cant.y)) / hypot2(ux, uy);
+  const [p1x, p2x, p2y] = [section.crown * cant.x, cant.x + handle * ux, cant.y + handle * uy];
+  return (t) => {
+    const s = 1 - t;
+    return { x: 3 * s * s * t * p1x + 3 * s * t * t * p2x + t * t * t * cant.x, y: (s * s * s + 3 * s * s * t) * top + 3 * s * t * t * p2y + t * t * t * cant.y };
+  };
+}
+
+/** The height of a half-section's `points` (crown first, x rising) at `x`, held at the last point's past it. */
+function arcY(points: readonly Pt[], x: number): number {
+  for (let k = 1; k < points.length; k++) {
+    const [a, b] = [points[k - 1]!, points[k]!];
+    if (x <= b.x) return lerp(a.y, b.y, (x - a.x) / (b.x - a.x));
+  }
+  return points[points.length - 1]!.y;
+}
+
 /** Height of the roof panel's top at (`x`, `z`), the top ring of `makeRoofGeometry`: the centre-line crown, the dome's
- *  shoulder, then down to the cant line at the roof's half-width; rolled onto the glass at the ends (`roofDome`). */
+ *  shoulder, then down to the cant line at the roof's half-width; rolled onto the glass at the ends (`roofDome`); on its chords with `roofSection`. */
 export function roofTopY(x: number, z: number, style: BodyStyle): number {
+  const arc = roofArc(z, style);
+  if (arc) return arcY(ROOF_ARC_T.map(arc), Math.abs(x));
   const r = roofAt(z, style);
   const { drop, crown } = roofDome(z, style);
   const [us] = ROOF_SHOULDER;
@@ -139,7 +173,7 @@ export function glassTopY(z: number, style: BodyStyle): number {
 }
 
 export function cantX(z: number, style: BodyStyle): number {
-  return roofAt(z, style).x + 0.08;
+  return roofAt(z, style).x + ROOF_LIP_OUT;
 }
 
 /** Tumblehome: side glass leans in from the belt to the roof cant. */
@@ -654,6 +688,8 @@ export function ensureOutwardNormals(geo: THREE.BufferGeometry): void {
 export const ROOF_CROWN = 0.026;
 /** The dome's shoulder: [share of the roof half-width, rise above the cant line (m)]. */
 export const ROOF_SHOULDER = [0.45, 0.018] as const;
+/** The cant line's reach (m) past the roof's half-width, where the side glass's plane meets the roof. */
+export const ROOF_LIP_OUT = 0.08;
 
 /** A deck lid's top stands `LID_RISE` (m) over its station's belt, `DECK_INSET` (m) inside its half-width, domed `DECK_DOME` (m) at the centre line and 0.7 of that at `DECK_SHOULDER` of its half-width. */
 const LID_RISE = 0.016;

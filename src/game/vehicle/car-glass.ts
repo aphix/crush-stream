@@ -81,6 +81,38 @@ function rearGlassQuad(style: BodyStyle): BowedQuad {
   return { ...style.rearGlass, bow: style.rearGlass.bow ?? REAR_GLASS_BOW, fall: domeFall(style, style.rearGlass.top[1]) };
 }
 
+/** Fixed-point steps solving where a bowed pane's side edge crosses a car z: the bow shifts a round corner's points under 2 cm, so three settle it. */
+const SIDE_SOLVE_STEPS = 3;
+
+/** Where raked quad `q`'s side edge (+x) crosses car `z`: `t` up its slant and `xn` across, on its top corners' arcs (a sail laps those; the lower ones sit at a deck's shut line). */
+function sideAt(q: BowedQuad, z: number): { t: number; xn: number } {
+  const { rS, rT } = q.round ? roundCorners(q, q.round) : { rS: 0, rT: 1 };
+  let [t, xn] = [0, 1];
+  for (let k = 0; k < SIDE_SOLVE_STEPS; k++) {
+    const bow = lerp(q.bow.base, q.bow.top, t) * (1 - xn * xn);
+    t = THREE.MathUtils.clamp((z - bow - q.base[1]) / (q.top[1] - q.base[1]), 0, 1);
+    const dt = Math.max(t - 1 + rT, 0) / rT;
+    xn = 2 * (1 - rS + rS * Math.sqrt(1 - dt * dt)) - 1;
+  }
+  return { t, xn };
+}
+
+/** The point (a fresh vector) on `style`'s drawn rear glass `inset` (m) in from its side edge (+x) where that edge crosses car `z`, round at the top corners. */
+export function rearGlassInset(style: BodyStyle, z: number, inset: number): THREE.Vector3 {
+  const q = rearGlassQuad(style);
+  const { t, xn } = sideAt(q, z);
+  return quadPoint(q, xn - (2 * inset) / lerp(q.wBase, q.wTop, t), t).clone();
+}
+
+/** The car z where `style`'s drawn rear glass's side edge (+x) stands mid-way round its top corner's arc; null for square corners. */
+export function rearGlassCornerZ(style: BodyStyle): number | null {
+  const q = rearGlassQuad(style);
+  if (!q.round) return null;
+  const { rS, rT } = roundCorners(q, q.round);
+  const [t, xn] = [1 - rT + rT * Math.SQRT1_2, 1 - 2 * rS + 2 * rS * Math.SQRT1_2];
+  return lerp(q.base[1], q.top[1], t) + lerp(q.bow.base, q.bow.top, t) * (1 - xn * xn);
+}
+
 export function makeWindshield(style: BodyStyle = SEDAN): THREE.BufferGeometry {
   return makeGlassQuad(windshieldQuad(style), WINDSHIELD_DRAW);
 }
