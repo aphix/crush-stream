@@ -446,3 +446,22 @@ describe("given the part batch is disposed", () => {
     for (const kind of PART_KINDS) assert.ok(partGeometry(kind).getAttribute("position").array.length > 0, `kind ${kind} keeps its positions`);
   });
 });
+
+describe("given the part batch over a resting field", () => {
+  test("when it syncs again with nothing moved, then no draw uploads; when the cars move, every kind, caster and the styled draw upload again", () => {
+    const { batch, car, draw } = stage();
+    const cars = [car(8), car(12, "wagon")];
+    draw(cars);
+    const instanced = [...batch.kinds.filter((m): m is THREE.InstancedMesh => m !== null && m.count > 0), ...batch.casters.filter((m) => m.count > 0)];
+    assert.ok(instanced.length > 0 && batch.styled.count > 0, "the control: the field draws instanced kinds, a caster and styled parts");
+    const versions = () => [...instanced.map((m) => m.instanceMatrix.version), batch.styled.texture.version].join(",");
+    const before = versions();
+    draw(cars);
+    assert.equal(versions(), before, "a resting field re-uploaded matrices");
+    for (const c of cars) c.group.position.x += 0.5;
+    draw(cars);
+    const after = versions().split(",").map(Number);
+    const was = before.split(",").map(Number);
+    assert.ok(after.every((v, i) => v > was[i]!), `a moved car's draws must upload again: ${before} -> ${after.join(",")}`);
+  });
+});
