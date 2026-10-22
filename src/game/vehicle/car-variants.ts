@@ -48,6 +48,8 @@ export interface GlassQuad {
   bow?: GlassBow;
   /** Drawn only (the rear glass): the clear pane drawn in by [side, bottom, top] (m; sides across, bottom and top along its slope), the band out to the outline the glass's black frit. */
   frame?: readonly [number, number, number];
+  /** Drawn only (an unframed rear glass): the clear pane's corners rounded to this radius (m), the glass's black frit filling out to the square outline. */
+  round?: number;
 }
 
 /** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
@@ -97,6 +99,12 @@ interface HoodBulge {
   rise: number;
   /** Rolled pod (m): each flank rolls from the lid up to the crest over this width in an S-curve (level at both ends) instead of the 5 cm chamfer; the crest spans ±(width/2 - round). The scoop stands on the crest: scoop.width/2 <= width/2 - round. */
   round?: number;
+  /** Its cowl end (z0) eases into the lid over this run (m) instead of the front end's 0.15, so a long pod fades toward the windshield; absent = 0.15. */
+  cowlRamp?: number;
+  /** Its width (m) at the cowl end (z0), narrowing linearly to `width` at z1, for a pod that widens toward the windshield; absent = `width` throughout. */
+  cowlWidth?: number;
+  /** A twin pod: a V groove this deep (m), 6 mm wide, down the crest's centre line, in line with a twin scoop's rib; absent none. */
+  groove?: number;
   /** Scoop on the bulge rising from its cowl end to a mouth facing forward at z `z`, `width` across, `height` (m) over the bulge: one opening, or two either side of a centre rib. */
   scoop?: { inlets: 1 | 2; z: number; width: number; height: number };
 }
@@ -307,9 +315,10 @@ export interface BodyStyle {
     aperture: readonly [number, number];
     /**
      * `lift` (m): head, glass and stalk stand this far higher than the seat, the foot growing up to meet them (default 0), for a mirror on a pedestal above the door skin's top.
+     * `stalk` (m): the foot's length along the car, a slim post under the head; absent = 0.7 of the cap's depth.
      * `mount` "glass": the seat stands on the door glass's plane at its z and height (`mirrorY` may stand over `halfHeight`), its foot leaning with the pane, as a tow mirror on the glass's front corner; absent, on the skin.
      */
-    mirror?: { cap: "rounded" | "box" | "tear"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; mount?: "glass" };
+    mirror?: { cap: "rounded" | "box" | "tear"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; mount?: "glass" };
     hingeTop?: number;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
@@ -351,9 +360,10 @@ export interface BodyStyle {
    * the side window's line; absent, a flat post. `tip` ([y, z]): where that line ends at the belt behind the quarter glass, the gloss-black
    * triangle between them filling the gap; absent, the line is the quarter glass's own rear edge. `flush`: the sail's head laps the rear
    * glass's side edge, standing on the glass and arriving level across it (one broad pillar rolling into the glass), not a rounded
-   * buttress beside it.
+   * buttress beside it. `flat`: on the haunch each section runs straight from its head down to where it touches the body's section
+   * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point.
    */
-  cPillar?: { tip?: YZ; flush?: boolean };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
   privacyGlass?: { rear?: boolean; quarter?: boolean };
   /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */
@@ -372,7 +382,7 @@ export interface BodyStyle {
   /**
    * Where the dummies' world takes the cabin to start (m, the cage's frame; `ragdoll-proxy.ts` `BELT_Y`): a cage top under it is a column
    * from under the ground (a hood, a deck, a bed), one over it a roof slab. Absent, `BELT_Y`'s 1 m: every car's hood and deck under it,
-   * every roof over it, but a truck's.
+   * every roof over it, but a truck's and the SUV's.
    */
   proxyBelt?: number;
   /** Rear door shut line on four-door bodies, or null. */
@@ -383,8 +393,9 @@ export interface BodyStyle {
    * on the tail panel, standing upright in its corners beside a tailgate. `shapes` (drawn only): `head` / `tail` each kind's own lamp
    * riding its seat (a tail's share that lands on the boot lid rides the lid, lit with the tails); `front` / `rear` lamps, reflectors and
    * pods on that bumper's fascia (unlit, torn off with it). Absent, the platform housing (`LAMP_HOUSING`, standing 4.5 cm proud).
-   * `brake`: a high-mount brake lamp `size` [w, h] met on the skin from behind at [x, y] (a pickup's cab); `sideMarkers`: amber markers
-   * on each side met from outboard at [y, z]. Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
+   * `brake`: a high-mount brake lamp `size` [w, h] met on the skin or the rear glass from behind at [x, y] (a pickup's cab glass); `sideMarkers`:
+   * amber markers on each side met from outboard at [y, z]. Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
+   * `bulb`: the head lamps' light, warm halogen or cool-white LED, in their lit lens pieces and glow; absent, the neutral white.
    */
   lamps: {
     head: readonly [number, number];
@@ -392,6 +403,7 @@ export interface BodyStyle {
     shapes?: { head?: LampShape; tail?: LampShape; front?: LampShape; rear?: LampShape };
     brake?: { at: readonly [number, number]; size: readonly [number, number] };
     sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number] }[];
+    bulb?: "halogen" | "led";
   };
   /**
    * The front grille (drawn only; it tears off with the front bumper): centre height `y` and face `z` (m, car frame; z absent: the platform

@@ -243,6 +243,9 @@ export class CarCabin {
 const AXLE_ENDS = [[1, 0, Math.PI], [2, 3, 0]] as const;
 /** A gone wheel's axle end stands at least this far (m) over the ground under it: the tube's 6.5 cm radius and its tip 5 cm inboard of the hub. */
 const STUB_CLEAR = 0.08;
+/** The ground under a gone wheel's axle end is looked up from this far (m) over it: a stub already in a slope finds no floor under itself. */
+// ponytail: under a bridge deck within this of the stub, the lookup finds the deck; fine for a wreck's side.
+const STUB_PROBE = 1.5;
 const _p = new THREE.Vector3();
 const _q = new THREE.Vector3();
 
@@ -286,7 +289,7 @@ export class CarUnderbody {
     const e = hubs.matrixWorld.elements;
     const { x, y, z } = out.copy(this.rests[i]!);
     const wy = e[1]! * x + e[5]! * y + e[9]! * z + e[13]!;
-    const ground = activeGround().heightAt(e[0]! * x + e[4]! * y + e[8]! * z + e[12]!, e[2]! * x + e[6]! * y + e[10]! * z + e[14]!, wy);
+    const ground = activeGround().heightAt(e[0]! * x + e[4]! * y + e[8]! * z + e[12]!, e[2]! * x + e[6]! * y + e[10]! * z + e[14]!, wy + STUB_PROBE);
     const rise = ground === NO_FLOOR ? 0 : ground + STUB_CLEAR - wy;
     // The world's up in the hubs' frame: the matrix's row 1 (the hub group carries no scale).
     if (rise > 0) out.set(x + rise * e[1]!, y + rise * e[5]!, z + rise * e[9]!);

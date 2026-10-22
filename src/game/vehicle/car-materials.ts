@@ -455,12 +455,20 @@ export function makeLampUnit(kind: LampKind): THREE.BufferGeometry {
   return mergeToned([housing.translate(0, 0, 0.015), lens.translate(0, 0, 0.03)], "lamp unit");
 }
 
-/** 2×1 emissive mask for `makeLampUnit`: black housing texel, white lens texel. Shared, never disposed. */
+/** The head bulbs' lens texels (sRGB bytes) under the head lamp's white emissive: halogen warm, LED cool white, as the references light them. */
+const LAMP_BULB_TEXEL = { halogen: [255, 238, 226], led: [240, 247, 255] } as const;
+/**
+ * 2×2 emissive mask for the lamps, by (u, v): housing (.25, .25) black, lens (.75, .75) white, and the head bulbs' lens texels, halogen
+ * (.75, .25) warm and LED (.25, .75) cool (`LAMP_BULB_UV`). Shared, never disposed.
+ */
 export const lampEmissiveMap = once((): THREE.DataTexture => {
-  const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255, 255, 255, 255, 255]), 2, 1);
+  const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255, ...LAMP_BULB_TEXEL.halogen, 255, ...LAMP_BULB_TEXEL.led, 255, 255, 255, 255, 255]), 2, 2);
   t.needsUpdate = true;
   return t;
 });
+
+/** Where a head lens with its `lamps.bulb` samples `lampEmissiveMap` ([u, v]). */
+export const LAMP_BULB_UV = { halogen: [0.75, 0.25], led: [0.25, 0.75] } as const;
 
 /** Light bar lens texels in `sirenEmissiveMap` order: housing, red lens, blue lens. */
 const SIREN_U = [1 / 6, 3 / 6, 5 / 6] as const;
@@ -734,8 +742,8 @@ const HUB = [0x8a909a, 0.35, 0.8] as const;
 const DARK_HUB = [0x232428, 0.55, 0.45] as const;
 /** The muscle car's polished rim lip. */
 const CHROME = [0xeef0f3, 0.12, 1] as const;
-/** The muscle car's mag dish: a satin alloy darker than `ALLOY`, so its polished lip reads brighter round it. */
-const MAG_DISH = [0x8e939a, 0.3, 0.92] as const;
+/** The muscle car's mag centre cap (reference: a big grey dome): 7.8 cm in radius, standing 4 cm over the dish ([r, x] m, lathed). */
+const MAG_CAP = [[0, -0.1], [0.05, -0.092], [0.078, -0.07], [0.078, 0.07], [0.05, 0.092], [0, 0.1]] as const;
 
 /** Bead and crown radius (m) of `TYRE_PROFILE`: the `tyre` weight runs 0 at the bead to 1 at the crown. */
 const ROAD_TYRE: readonly [number, number] = [0.205, 0.32];
@@ -834,7 +842,7 @@ function rimFace(design: WheelDesign): THREE.BufferGeometry[] {
     case "split10":
       return [...disc, ...spokes(5, [0.16, 0.15, 0.018], ALLOY, 0.2), hub(0.055, HUB)];
     case "mag5":
-      return [...slottedDish(5, 0.19, 0.06, MAG_DISH, [0.07, 0.175, 0.5, 0.62, 0.15]), ...faceRings(0.18, 0.222, 0.1, CHROME), hub(0.05, CHROME)];
+      return [...slottedDish(5, 0.19, 0.06, ALLOY, [0.075, 0.175, 0.45, 0.85, 0.15]), ...faceRings(0.18, 0.222, 0.1, CHROME), smeared(latheX(MAG_CAP, 10, null, 1, HUB), 0)];
     case "six":
       return [...disc, ...spokes(6, [0.15, 0.15, 0.075], ALLOY), hub(0.08, DARK_HUB)];
     case "beadlock":
