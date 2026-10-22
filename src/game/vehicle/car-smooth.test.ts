@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
-import { CREASE_DEGREES, SHUT_RAMP, bayAt, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
@@ -440,25 +440,66 @@ const roundedPartCases = [
 /** At the cant line the drawn roof's side keeps normals of its own, pointing out at least this much (x share), not down with its underside's. */
 const ROOF_SIDE_NORMAL_X = 0.8;
 
-/** The drawn posts the curved section (`postSection`) builds: the B-pillar, the C-pillar ("rear") and the divider. */
-const POST_NAMES = ["b", "rear", "divider"];
+/** The drawn posts the curved section (`postSection`) builds: the A-post, the B-pillar, the C-pillar ("rear") and the divider. */
+const POST_NAMES = ["a", "b", "rear", "divider"];
 /** A drawn post's section: at least this many points, each chord turning under `POST_TURN_DEGREES` from the one before, and its depth sides' chords under a third of its depth (its corners rounded, not chamfered). */
 const POST_MIN_POINTS = 12;
 const POST_TURN_DEGREES = 35;
+/** At least this many of the A-post's stations show under the roof's side (the rest run up into it). */
+const A_POST_STATIONS_SHOWN = 5;
+/** The drawn A-post laps the windshield's side edge within this (m) at every station, and in side view its section's centre keeps its offset from that edge within this along the post: it follows the edge, never twisting off it. */
+const A_POST_EDGE_FOLLOW = 0.01;
 
-describe("given every body style's drawn B-, C- and divider posts", () => {
+/** Distance (m) from `p` to the line through `a` and `b`. */
+function distanceToLine(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): number {
+  const along = b.clone().sub(a).normalize();
+  const off = p.clone().sub(a);
+  return off.sub(along.multiplyScalar(off.dot(along))).length();
+}
+
+describe("given every body style's drawn A-, B-, C- and divider posts", () => {
   for (const id of CAR_STYLE_IDS) {
-    it(`when a ${id}'s posts are read at the belt, then each section has ${POST_MIN_POINTS} points or more and every chord turns under ${POST_TURN_DEGREES}° from the one before`, () => {
-      const posts = makeGreenhouseFrame(CAR_STYLES[id], "drawn").filter((g) => POST_NAMES.includes(g.name));
-      assert.ok(posts.length >= 4, `${id}: ${posts.length} posts`);
+    it(`when a ${id}'s posts are read at every station under the roof, then each section has ${POST_MIN_POINTS} points or more and every chord turns under ${POST_TURN_DEGREES}° from the one before`, () => {
+      const style = CAR_STYLES[id];
+      const posts = makeGreenhouseFrame(style, "drawn").filter((g) => POST_NAMES.includes(g.name));
+      assert.ok(posts.filter((g) => g.name === "a").length === 2 && posts.length >= 6, `${id}: ${posts.length} posts`);
+      // A station reaching up past the cant line into the roof's side has its points held in under the roof (`insideRoof`).
+      const held = (p: THREE.Vector3) => p.z >= style.roofZ[0] && p.z <= style.roofZ[1] && p.y > cantY(p.z, style);
       for (const post of posts) {
-        const { ring } = loftOf(post);
+        const { ring, slices } = loftOf(post);
         assert.ok(ring >= POST_MIN_POINTS, `${id} ${post.name}: ${ring} section points`);
-        const at = (k: number) => positionAt(post, (k + ring) % ring);
-        for (let k = 0; k < ring; k++) {
-          const turn = angleBetweenDegrees(at(k).sub(at(k - 1)).normalize(), at(k + 1).sub(at(k)).normalize());
-          assert.ok(turn < POST_TURN_DEGREES, `${id} ${post.name} section point ${k} turns ${turn.toFixed(1)}°`);
+        let read = 0;
+        for (let slice = 0; slice < slices; slice++) {
+          const at = (k: number) => positionAt(post, slice * ring + ((k + ring) % ring));
+          if (Array.from({ length: ring }, (_, k) => at(k)).some(held)) continue;
+          read++;
+          for (let k = 0; k < ring; k++) {
+            const turn = angleBetweenDegrees(at(k).sub(at(k - 1)).normalize(), at(k + 1).sub(at(k)).normalize());
+            assert.ok(turn < POST_TURN_DEGREES, `${id} ${post.name} station ${slice} section point ${k} turns ${turn.toFixed(1)}°`);
+          }
         }
+        assert.ok(read > 0 && (post.name !== "a" || read >= A_POST_STATIONS_SHOWN), `${id} ${post.name}: ${read} stations read under the roof`);
+      }
+    });
+
+    it(`when a ${id}'s A-posts are laid along its windshield, then each laps the windshield's side edge within ${A_POST_EDGE_FOLLOW * 100} cm at every station under the roof and in side view its centre's offset from that edge varies under ${A_POST_EDGE_FOLLOW * 100} cm`, () => {
+      const { base, wBase, wTop } = CAR_STYLES[id].windshield;
+      const [topY, topZ] = CAR_STYLES[id].windshieldTop;
+      for (const post of makeGreenhouseFrame(CAR_STYLES[id], "drawn").filter((g) => g.name === "a")) {
+        const { ring, slices } = loftOf(post);
+        const side = Math.sign(positionAt(post, 0).x);
+        const [edgeBase, edgeTop] = [new THREE.Vector3((side * wBase) / 2, base[0], base[1]), new THREE.Vector3((side * wTop) / 2, topY, topZ)];
+        const sideView = (p: THREE.Vector3) => p.clone().setX(0);
+        const offsets: number[] = [];
+        for (let slice = 0; slice < slices - 1; slice++) {
+          const section = Array.from({ length: ring }, (_, k) => positionAt(post, slice * ring + k));
+          const lap = Math.min(...section.map((p) => distanceToLine(p, edgeBase, edgeTop)));
+          assert.ok(lap <= A_POST_EDGE_FOLLOW, `${id} station ${slice}: the post stands ${(lap * 100).toFixed(1)} cm off the windshield's edge`);
+          const centre = section.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(ring);
+          offsets.push(distanceToLine(sideView(centre), sideView(edgeBase), sideView(edgeTop)));
+        }
+        const drift = Math.max(...offsets) - Math.min(...offsets);
+        assert.ok(drift < A_POST_EDGE_FOLLOW, `${id}: the post's centre runs ${offsets.map((d) => (d * 100).toFixed(1)).join(", ")} cm off the edge`);
       }
     });
   }
@@ -613,21 +654,22 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
  * into the body on top of its loft: red if one grows.
  */
 const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number }> = {
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
-  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 96 },
-  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 96 },
-  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 64 },
-  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 64 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
-  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 64 },
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 264 },
+  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 296 },
+  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 296 },
+  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 264 },
+  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 264 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 264 },
+  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 264 },
 };
-/** The chamfered box section (eight corner points, three crown points) the drawn B-, C- and divider posts had before they curved. */
+/** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and the A-post's stations then. */
 const CHAMFERED_POST_RING = 11;
+const CHAMFERED_A_POST_STATIONS = 3;
 
 /**
  * `style`'s arch lips' and wheel humps' vertices (`archLipGeometry`, `wellHumpGeometry`), its drawn liners' over the cage's one-sided
  * liners (`makeWellLiners`: their insides and end caps), the rings its boot cut and its nose add to the loft, its walls' top copies, and
- * its posts' section points past `CHAMFERED_POST_RING`.
+ * its posts' vertices past the chamfered posts' (`CHAMFERED_POST_RING` a station, the A-post on `CHAMFERED_A_POST_STATIONS`).
  */
 function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number } {
   const body = makeChassisGeometry(style);
@@ -641,7 +683,7 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; li
     bootRings: (rings(true, true) - rings(false, true)) * loftOf(body).ring,
     noseRings: (rings(true, true) - rings(true, false)) * loftOf(body).ring,
     wallTops: body.userData.wallTops as number,
-    curvedPosts: posts.reduce((n, g) => n + (loftOf(g).ring - CHAMFERED_POST_RING) * loftOf(g).slices, 0),
+    curvedPosts: posts.reduce((n, g) => n + loftOf(g).ring * loftOf(g).slices - CHAMFERED_POST_RING * (g.name === "a" ? CHAMFERED_A_POST_STATIONS : loftOf(g).slices), 0),
   };
 }
 
