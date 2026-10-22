@@ -657,6 +657,7 @@ export class DeformableCar extends CarParts {
     if (this.crashed) {
       if (this.deform.skinnedThisFrame) this.skinPanels();
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
+      if (this.deform.skinnedThisFrame) this.poseOpenShells();
       this.followGlass();
     }
     // A load crushes the roof's skin with the masses at rest: the headliner follows it too.
@@ -673,6 +674,7 @@ export class DeformableCar extends CarParts {
     if (this.crashed) {
       this.skinPanels();
       this.holdSkinOffTyres(true);
+      this.poseOpenShells();
     }
     this.fitInterior();
   }
@@ -689,7 +691,7 @@ export class DeformableCar extends CarParts {
     if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten);
   }
 
-  /** Bonnet, boot lid, the police light bar and the skinned glass follow the body skin. */
+  /** Bonnet, boot lid, door skins, the police light bar and the skinned glass follow the body skin; a door's hinge pose turns its skin after. */
   private skinPanels(): void {
     let hood = true;
     let trunk = true;
@@ -700,12 +702,18 @@ export class DeformableCar extends CarParts {
     }
     if (hood) this.deform.skinPanel(this.hood.geometry, this.hoodRest, "bonnet", this.hoodOrigin);
     if (trunk) this.deform.skinPanel(this.trunk.geometry, this.trunkRest, "boot", this.trunkOrigin);
+    if (!this.doorParts[0]!.detached) this.deform.skinPoints(this.doorMeshL.geometry, this.doorLRest, this.doorLSkin, "doorLeft", this.doorLOrigin);
+    if (!this.doorParts[1]!.detached) this.deform.skinPoints(this.doorMeshR.geometry, this.doorRRest, this.doorRSkin, "doorRight", this.doorROrigin);
     if (this.lightBar && !this.lightBarPart!.detached) this.deform.skinPanel(this.lightBar.geometry, this.lightBarRest!, "roof", this.lightBarOrigin);
-    for (const p of this.parts) if (p.region && p.open && !p.detached) this.shellPose(p);
     for (const g of this.glassPanes) {
       if (!g.skin || !g.restVerts || g.state === "shattered") continue;
       this.deform.skinPanel(g.mesh.geometry, g.restVerts, g.skin, _zero);
     }
+  }
+
+  /** Each hinged panel's shell, posed on the body skin as the tyres hold it (`holdSkinOffTyres`): posed on the skin before the hold, an arch flare's lip stood in its tyre. */
+  private poseOpenShells(): void {
+    for (const p of this.parts) if (p.region && p.open && !p.detached) this.shellPose(p);
   }
 
   /** `drop`: a popped hub throws its wheel (host); a netplay client takes loose wheels from snapshots. */
@@ -766,9 +774,9 @@ export class DeformableCar extends CarParts {
     return { body: this.body, bodyPaint: this.bodyMat, hood: this.hood, trunk: this.trunk, doors: [this.doorMeshL, this.doorMeshR], glass: this.glassPanes.map((g) => g.mesh), bumpers: this.bumperMeshes };
   }
 
-  /** The meshes the crush skin writes (`updateSkin`): the body, the lids, the light bar and the skinned panes. */
+  /** The meshes the crush skin writes (`updateSkin`): the body, the lids, the door skins, the light bar and the skinned panes. */
   skinGeometries(): THREE.BufferGeometry[] {
-    const geometries = [this.body.geometry, this.hood.geometry, this.trunk.geometry];
+    const geometries = [this.body.geometry, this.hood.geometry, this.trunk.geometry, this.doorMeshL.geometry, this.doorMeshR.geometry];
     if (this.lightBar) geometries.push(this.lightBar.geometry);
     for (const pane of this.glassPanes) if (pane.skin) geometries.push(pane.mesh.geometry);
     return geometries;
