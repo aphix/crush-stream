@@ -29,8 +29,10 @@ const TRUCK_REAR_FASCIA = [
 
 /** The trucks' tall gloss-black tow-style mirror housing on the door glass's front corner, read off their isos ([out from the door, height, length along the car] m). */
 export const TOW_MIRROR = { cap: "box", finish: "black", size: [0.07, 0.22, 0.16], mount: "glass" } as const;
+/** The pickup mirror head's lift (m) over its foot, as the side plate's head stands. */
+const PICKUP_MIRROR_LIFT = 0.02;
 /** The pickup's mirror (side plate): a rounded black head about 13 cm tall, centred 1.22 m up on a short arm to the glass sill. */
-const PICKUP_MIRROR = { ...TOW_MIRROR, cap: "rounded", size: [0.07, 0.135, 0.15], lift: 0.02, neck: 0.04, stalk: 0.045 } as const;
+const PICKUP_MIRROR = { ...TOW_MIRROR, cap: "rounded", size: [0.07, 0.135, 0.15], lift: PICKUP_MIRROR_LIFT, neck: 0.04, stalk: 0.045 } as const;
 /** The trucks' cab roofs roll onto their rear glass's and windshield's tops (reference isos: no flat cap overhanging either; run m), the rear
  *  corners tucking flush over the posts along the C-posts' chamfered tops (quarter glass to rear glass, 15-17 cm), no ear past them. */
 export const TRUCK_ROOF_ENDS = { rear: 0.17, front: 0.09, flush: { rear: 1 } } as const;
