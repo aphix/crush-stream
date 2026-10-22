@@ -232,18 +232,31 @@ describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, hal
     return { rgb: lights.glow.geometry.getAttribute("color").array, n: lights.glow.geometry.drawRange.count };
   };
 
+  /** Each bulb's lit lens texels as `[r, g, b]` triples read off the emissive map where its drawn head lens samples it. */
+  const litTexels = (bulb: (typeof BULBS)[number]): number[] => {
+    const map = lampEmissiveMap().image.data as Float32Array;
+    const uv = drawnLamp(styled(bulb), "head", 1).geometry.getAttribute("uv");
+    const texels: number[] = [];
+    for (let i = 0; i < uv.count; i++) {
+      const at = (Math.floor(uv.getY(i) * 2) * 2 + Math.floor(uv.getX(i) * 2)) * 4;
+      if (map[at]! + map[at + 1]! + map[at + 2]! > 0) texels.push(map[at]!, map[at + 1]!, map[at + 2]!);
+    }
+    return texels;
+  };
+
   it("when its lens is drawn, then the lit lens samples an emissive texel bluer from halogen to the neutral white to LED", () => {
-    const map = lampEmissiveMap().image.data as Uint8Array;
     const ratios = BULBS.map((bulb) => {
-      const uv = drawnLamp(styled(bulb), "head", 1).geometry.getAttribute("uv");
-      const texels: number[] = [];
-      for (let i = 0; i < uv.count; i++) {
-        const at = (Math.floor(uv.getY(i) * 2) * 2 + Math.floor(uv.getX(i) * 2)) * 4;
-        if (map[at]! + map[at + 1]! + map[at + 2]! > 0) texels.push(map[at]!, map[at + 1]!, map[at + 2]!);
-      }
+      const texels = litTexels(bulb);
       return bluest(texels, texels.length / 3);
     });
     assert.ok(ratios[1]! < ratios[0]! && ratios[0]! < ratios[2]!, `lit texel blue/red, none/halogen/led: ${ratios.map((r) => r.toFixed(3)).join("/")}`);
+  });
+
+  it("when a halogen lens is drawn, then its texel's red, under the head lens's emissive (0.905 linear x 1.15), clears the post's bloom threshold, so it glows with a halo; the neutral lens stays under 1", () => {
+    /** The post's bloom threshold (engine-post GRADE) over the head lens's emissive red (0xf4 linear 0.905 x emissiveIntensity 1.15). */
+    const BLOOM_RED_TEXEL = 1.6 / (0.905 * 1.15);
+    const [halogen, neutral] = [Math.max(...litTexels("halogen")), Math.max(...litTexels(undefined))];
+    assert.ok(halogen > BLOOM_RED_TEXEL && neutral <= 1, `lit texel peak: halogen ${halogen.toFixed(3)} (bloom at ${BLOOM_RED_TEXEL.toFixed(3)}), neutral ${neutral.toFixed(3)}`);
   });
 
   it("when the pool lights it, then its head glow is bluer from halogen to the neutral white to LED", () => {

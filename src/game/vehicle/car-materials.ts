@@ -455,14 +455,14 @@ export function makeLampUnit(kind: LampKind): THREE.BufferGeometry {
   return mergeToned([housing.translate(0, 0, 0.015), lens.translate(0, 0, 0.03)], "lamp unit");
 }
 
-/** The head bulbs' lens texels (sRGB bytes) under the head lamp's white emissive: halogen warm, LED cool white, as the references light them. */
-const LAMP_BULB_TEXEL = { halogen: [255, 238, 226], led: [240, 247, 255] } as const;
+/** The head bulbs' lens texels (linear multipliers of the head lamp's white emissive): halogen an amber past the post's bloom threshold, so its lens glows warm with a halo as the references light it; LED cool white. */
+const LAMP_BULB_TEXEL = { halogen: [2.4, 1.6, 0.8], led: [240 / 255, 247 / 255, 1] } as const;
 /**
- * 2×2 emissive mask for the lamps, by (u, v): housing (.25, .25) black, lens (.75, .75) white, and the head bulbs' lens texels, halogen
- * (.75, .25) warm and LED (.25, .75) cool (`LAMP_BULB_UV`). Shared, never disposed.
+ * 2×2 emissive mask for the lamps (float, so a bulb can sit over 1), by (u, v): housing (.25, .25) black, lens (.75, .75) white, and
+ * the head bulbs' lens texels, halogen (.75, .25) and LED (.25, .75) (`LAMP_BULB_UV`). Shared, never disposed.
  */
 export const lampEmissiveMap = once((): THREE.DataTexture => {
-  const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255, ...LAMP_BULB_TEXEL.halogen, 255, ...LAMP_BULB_TEXEL.led, 255, 255, 255, 255, 255]), 2, 2);
+  const t = new THREE.DataTexture(new Float32Array([0, 0, 0, 1, ...LAMP_BULB_TEXEL.halogen, 1, ...LAMP_BULB_TEXEL.led, 1, 1, 1, 1, 1]), 2, 2, THREE.RGBAFormat, THREE.FloatType);
   t.needsUpdate = true;
   return t;
 });
