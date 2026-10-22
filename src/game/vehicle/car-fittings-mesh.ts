@@ -136,9 +136,15 @@ export function withRearFittings(bumper: THREE.BufferGeometry, style: BodyStyle)
   if (exhaust) {
     const [w, h] = exhaust.size;
     const round = exhaust.shape === "round";
-    const end = min.z + TIP.recess;
+    // A tip in the bumper ends at its face behind it (a wrapped corner sits centimetres forward of the rearmost point); one hung under
+    // the bumper, in the diffuser, ends level with the rearmost point.
+    const face = new THREE.Mesh(bumper, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    const ray = new THREE.Raycaster();
     for (const x of exhaust.tips === 2 ? [-exhaust.x, exhaust.x] : [exhaust.x]) {
       const y = exhaust.y - seat.y;
+      ray.set(new THREE.Vector3(x, y, min.z - 1), new THREE.Vector3(0, 0, 1));
+      const hit = ray.intersectObject(face, false)[0];
+      const end = (hit ? hit.point.z : min.z) + TIP.recess;
       const tube = round ? new THREE.CylinderGeometry(0.5, 0.5, TIP.length, TIP.segments).rotateX(Math.PI / 2).scale(w, h, 1) : new THREE.BoxGeometry(w, h, TIP.length);
       const throat = (round ? new THREE.CircleGeometry(0.5, TIP.segments) : new THREE.PlaneGeometry(1, 1)).scale(w * TIP.throat, h * TIP.throat, 1).rotateY(Math.PI);
       parts.push(withTone(tube.translate(x, y, end + TIP.length / 2), FITTING_ATTRIBUTE, FITTING_TONE.chrome));

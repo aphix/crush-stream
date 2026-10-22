@@ -162,6 +162,8 @@ interface BumperSpec {
    */
   top?: readonly (readonly [number, number])[];
   edge?: readonly (readonly [number, number])[];
+  /** A rear bumper's number plate centre height (m, car frame); absent, `PLATE_RISE` over the seat. */
+  plate?: number;
 }
 
 type DetailView = "side" | "top" | "front" | "rear";

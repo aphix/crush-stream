@@ -1092,14 +1092,19 @@ function overRoof(body: THREE.BufferGeometry, from: number, style: BodyStyle, x:
 
 const EXHAUST_CASES = [
   {
-    it: "when a rear bumper carries twin round tips, then a chrome oval with a dark rear-facing throat stands at each of ±x at its y, its size across, ending at the bumper's face (none past it), and the cage builds are unchanged",
+    it: "when a rear bumper carries twin round tips, then a chrome oval with a dark rear-facing throat stands at each of ±x at its y, its size across, ending at the bumper's face behind it (none past it, round the wrapped corner too), and the cage builds are unchanged",
     exhaust: { tips: 2, x: 0.55, y: 0.22, size: [0.09, 0.06], shape: "round" },
     expectedXs: [-0.55, 0.55],
   },
   {
-    it: "when a rear bumper carries one rectangular tip, then one chrome box with a dark rear-facing throat stands at its x and y, its size across, ending at the bumper's face (none past it), and the cage builds are unchanged",
+    it: "when a rear bumper carries one rectangular tip, then one chrome box with a dark rear-facing throat stands at its x and y, its size across, ending at the bumper's face behind it (none past it), and the cage builds are unchanged",
     exhaust: { tips: 1, x: 0.4, y: 0.25, size: [0.12, 0.06], shape: "rect" },
     expectedXs: [0.4],
+  },
+  {
+    it: "when a rear bumper carries twin round tips in its band at the wrapped corner, then each ends at the face behind it, centimetres forward of the bumper's rearmost point, not standing out of the corner",
+    exhaust: { tips: 2, x: 0.55, y: 0.47, size: [0.09, 0.05], shape: "round" },
+    expectedXs: [-0.55, 0.55],
   },
 ] as const;
 /** A round tip's 14-sided tube spans this share of its width (its widest chord). */
@@ -1247,7 +1252,10 @@ describe("given a body style's P1 parts", () => {
         const centre = tip.getCenter(new THREE.Vector3());
         assertSameNumbers([centre.x, centre.y, size.y], [x, exhaust.y - sedan.bumpers.rear.seat.y, h], `the tip at x ${x}: middle x, y and height`, 1e-4);
         assert.ok(size.x > w * (exhaust.shape === "round" ? ROUND_TIP_SPAN : 1) - 1e-4 && size.x < w + 1e-4, `the tip at x ${x} is ${size.x.toFixed(4)} m wide of ${w}`);
-        assert.ok(tip.min.z >= face.min.z && tip.min.z < face.min.z + TIP_FLUSH && throats > 0 && throatBack < -0.99, `the tip ends at z ${tip.min.z.toFixed(3)}, the face at ${face.min.z.toFixed(3)}; ${throats} throat vertices, normal z up to ${throatBack.toFixed(3)}`);
+        // The face behind this tip (a wrapped corner stands forward of the rearmost point); under the bumper, the rearmost point.
+        const hit = new THREE.Raycaster(new THREE.Vector3(x, centre.y, face.min.z - 1), new THREE.Vector3(0, 0, 1)).intersectObject(new THREE.Mesh(makeBumperGeometry(false, sedan), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), false)[0];
+        const behind = hit ? hit.point.z : face.min.z;
+        assert.ok(tip.min.z >= behind && tip.min.z < behind + TIP_FLUSH && throats > 0 && throatBack < -0.99, `the tip ends at z ${tip.min.z.toFixed(3)}, the face behind it at ${behind.toFixed(3)} (rearmost ${face.min.z.toFixed(3)}); ${throats} throat vertices, normal z up to ${throatBack.toFixed(3)}`);
         assert.ok(toneBox(fitted, null, 0).box.min.z >= face.min.z, "nothing of the fittings stands past the bumper's face");
       }
       assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
@@ -1368,6 +1376,17 @@ describe("given a body style's P2 parts", () => {
     assert.ok(Array.from({ length: colour.count }, (_, i) => i).some((i) => Math.abs(colour.getX(i) - chrome.r) < 1e-6), "its surround and bars are chrome");
     const plain: BodyStyle = { ...style, grille: undefined };
     assert.ok(drawnPart(PART_KIND.grille, plain).geometry === partGeometry(PART_KIND.grille), "without the field, the platform grille");
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
+  it("when a rear bumper sets its plate's height, then the plate's centre stands at it (unset: where the platform puts it), and the cage builds are unchanged", () => {
+    const sedan = CAR_STYLES.sedan;
+    const plain: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: undefined } };
+    const plate = 0.4;
+    const style: BodyStyle = { ...plain, bumpers: { ...plain.bumpers, rear: { ...plain.bumpers.rear, plate } } };
+    const box = partBox(drawnPart(PART_KIND.tailTrim, style).geometry);
+    assertSameNumbers([box.getCenter(new THREE.Vector3()).y + sedan.bumpers.rear.seat.y], [plate], "the plate's centre height", POSITION_TOL);
+    assert.ok(drawnPart(PART_KIND.tailTrim, plain).geometry === partGeometry(PART_KIND.tailTrim), "without the field, the platform plate");
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 

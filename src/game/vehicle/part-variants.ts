@@ -17,7 +17,7 @@ import {
   type LampKind,
 } from "./car-materials.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
-import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, type PartKind } from "./part-geometry.ts";
+import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, PLATE_RISE, type PartKind } from "./part-geometry.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { bootPivot } from "./hinge-spec.ts";
@@ -202,16 +202,19 @@ function frontFittings(style: BodyStyle): THREE.BufferGeometry {
   return mergeToned([grille, bothSides(builtLamp(style, "front").body).translate(0, -seat.y - GRILLE_SEAT.y, -seat.z - GRILLE_SEAT.z)], "front bumper fittings");
 }
 
-/** The rear bumper's drawn trim in its space: the platform strip and plate, and the style's rear bumper lamps. */
+/** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height) and the style's rear bumper lamps. */
 function rearFittings(style: BodyStyle): THREE.BufferGeometry {
-  const { seat } = style.bumpers.rear;
+  const { seat, plate } = style.bumpers.rear;
+  const trim = withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0).translate(0, plate === undefined ? 0 : plate - seat.y - PLATE_RISE, 0);
+  if (!style.lamps.shapes?.rear) return trim;
   const lamps = bothSides(builtLamp(style, "rear").body).translate(0, -seat.y, seat.z);
-  return mergeToned([withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0), lamps], "rear bumper fittings");
+  return mergeToned([trim, lamps], "rear bumper fittings");
 }
 
 const frontKey = (style: BodyStyle): string | null =>
   style.grille || style.lamps.shapes?.front ? `${style.id}|${JSON.stringify(style.grille)}|${JSON.stringify(style.lamps.shapes?.front)}|${JSON.stringify(style.bumpers.front)}` : null;
-const rearKey = (style: BodyStyle): string | null => (style.lamps.shapes?.rear ? `${style.id}|${JSON.stringify(style.lamps.shapes.rear)}|${JSON.stringify(style.bumpers.rear)}` : null);
+const rearKey = (style: BodyStyle): string | null =>
+  style.lamps.shapes?.rear || style.bumpers.rear.plate !== undefined ? `${style.id}|${JSON.stringify(style.lamps.shapes?.rear)}|${JSON.stringify(style.bumpers.rear)}` : null;
 
 // ---- lamps -----------------------------------------------------------------------------------------------------------------
 

@@ -54,12 +54,14 @@ function grille(): THREE.BufferGeometry {
   return toned(new THREE.BoxGeometry(0.72, 0.16, 0.06, 4, 2, 1), 0x1a1c20, 0.55, 0.45);
 }
 
+/** The plate's centre over the rear bumper's seat (m) where the bumper sets no `plate` height. */
+export const PLATE_RISE = 0.03;
 /**
  * The number plate in rear-bumper space; the tail lamps sit on the body, a style's bumper lamps and diffuser join it (`part-variants.ts`).
  * The bumper's seat is 0.05 m inside the body's tail station, so the plate stands 8 cm behind the seat, 2 cm proud of the tail face.
  */
 function tailTrim(): THREE.BufferGeometry {
-  return toned(new THREE.BoxGeometry(0.36, 0.11, 0.02), 0xd8d4cc, 0.6, 0.1).translate(0, 0.03, -0.08);
+  return toned(new THREE.BoxGeometry(0.36, 0.11, 0.02), 0xd8d4cc, 0.6, 0.1).translate(0, PLATE_RISE, -0.08);
 }
 
 /** Built once, shared by every car; a car's dispose skips it (engine teardown frees only its GPU copy). */
