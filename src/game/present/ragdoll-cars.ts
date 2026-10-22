@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { Collider, ColliderDesc, RigidBody, World } from "@dimforge/rapier3d-simd";
+import type { Collider, RigidBody, World } from "@dimforge/rapier3d-simd";
 import type { CageView, RagCar } from "./ragdoll-car-view.ts";
 import { CLASS_LIFT } from "../vehicle/constants.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
@@ -53,11 +53,18 @@ const GLASS_SEE = 0.15;
 const GLASS_SEP = 0.03;
 /** A torso this near (m) a pane, past what it closes in one step, is on it: Rapier's contacts start within millimetres. */
 const GLASS_SKIN = 0.005;
+/**
+ * A touch strikes a pane only this square to its glass (cos of the angle between the contact's normal and the slab's face normal): a
+ * blow on the face (head-on, 1; a torso flat on a tilted door window, 0.97) breaks it, a graze of the slab's edge or padding (0.41, the
+ * windshield's corner met by a door strike) does not. 45°.
+ */
+const FACE_COS = Math.SQRT1_2;
 
 const _cq = new THREE.Quaternion();
 const _qb = new THREE.Quaternion();
 const _qx = new THREE.Quaternion();
 const _c = new THREE.Vector3();
+const _out = new THREE.Vector3();
 const _v = { x: 0, y: 0, z: 0 };
 const _rot = { x: 0, y: 0, z: 0, w: 1 };
 
@@ -89,10 +96,16 @@ export class CarProxies {
   /** Each car's leaves, `PROXY_BOXES` per car, and how many are fitted: its lower box, columns and slabs (`ProxyFitter`). */
   private readonly shapes: (Collider | null)[] = Array.from({ length: MAX_CARS * PROXY_BOXES }, () => null);
   private readonly shapeN = new Uint8Array(MAX_CARS);
-  /** Each car's pane slabs, `PANES` per car, in `GLASS_NAMES` order. */
+  /**
+   * Each car's pane slabs, `PANES` per car, in `GLASS_NAMES` order: its glass's own hull, built once a fit (`showPane`) and kept while
+   * the fit stands, in the world (`paneIn`) or out of it (disabled), so a dummy flying past 32 cars builds no collider for each pane he
+   * nears. Null: not built since its fit moved, or its pane is gone.
+   */
   private readonly panes: (Collider | null)[] = Array.from({ length: MAX_CARS * PANES }, () => null);
-  /** Each pane's hull as its fit stands (`addPane` builds it once a fit, a pane coming back into the world reuses it); null: not built since the fit moved, false: no volume. */
-  private readonly paneDescs: (ColliderDesc | null | false)[] = Array.from({ length: MAX_CARS * PANES }, () => null);
+  /** Per pane, 1 while its slab is in the world (enabled). */
+  private readonly paneIn = new Uint8Array(MAX_CARS * PANES);
+  /** Per pane, 1 when its fit spans no volume (a pane crushed flat): no hull, until the fit moves. */
+  private readonly paneFlat = new Uint8Array(MAX_CARS * PANES);
   private readonly fitter = new ProxyFitter();
   /** Each car's fitted leaves (`BOX_FLOATS` each) and pane slabs (`PANE_FLOATS` each), kept for `cull`, which puts those near a dummy in the world. */
   private readonly leafFits = new Float64Array(MAX_CARS * PROXY_BOXES * BOX_FLOATS);
@@ -273,21 +286,47 @@ export class CarProxies {
     return this.world!.createCollider(desc, this.carBodies[i]!);
   }
 
-  /** Car `i`'s pane `p` slab (`paneFits`, `PANE_FLOATS`: its 8 corners) as a new collider of its proxy, its glass's own quad; null when its corners span no volume (a pane crushed flat). */
-  private addPane(i: number, p: number): Collider | null {
+  /**
+   * Car `i`'s pane `p` slab into the world: its hull (`paneFits`, `PANE_FLOATS`: its 8 corners, its glass's own quad) built the first time
+   * its fit is wanted, enabled again after. False when its corners span no volume (a pane crushed flat): no slab.
+   */
+  private showPane(i: number, p: number): boolean {
     const s = i * PANES + p;
-    let desc = this.paneDescs[s]!;
-    if (desc === null) {
+    const c = this.panes[s];
+    if (c) {
+      c.setEnabled(true);
+    } else {
+      if (this.paneFlat[s] === 1) return false;
       const R = this.R!;
       const o = s * PANE_FLOATS + PANE_CORNERS;
-      desc = R.ColliderDesc.convexHull(Float32Array.from(this.paneFits.subarray(o, o + 24))) ?? false;
-      if (desc) desc.setCollisionGroups(carGroups(i)).setRestitution(PANE_BOUNCE).setRestitutionCombineRule(R.CoefficientCombineRule.Max);
-      this.paneDescs[s] = desc;
+      const desc = R.ColliderDesc.convexHull(Float32Array.from(this.paneFits.subarray(o, o + 24)));
+      if (!desc) {
+        this.paneFlat[s] = 1;
+        return false;
+      }
+      desc.setCollisionGroups(carGroups(i)).setRestitution(PANE_BOUNCE).setRestitutionCombineRule(R.CoefficientCombineRule.Max);
+      this.panes[s] = this.world!.createCollider(desc, this.carBodies[i]!);
     }
-    return desc ? this.world!.createCollider(desc, this.carBodies[i]!) : null;
+    this.paneIn[s] = 1;
+    return true;
   }
 
-  /** Car `i`'s proxy out of the world (its leaves and slabs removed); `fitProxy` builds it again when a dummy or prop comes near. */
+  /** Car `i`'s pane `p` slab out of the world, its hull kept for its fit (disabled). */
+  private hidePane(s: number): void {
+    this.panes[s]?.setEnabled(false);
+    this.paneIn[s] = 0;
+  }
+
+  /** Pane slot `s`'s hull dropped: its fit moved. Its next `showPane` builds it again. */
+  private forgetPane(s: number): void {
+    const c = this.panes[s];
+    if (c) this.world!.removeCollider(c, false);
+    this.panes[s] = null;
+    this.paneIn[s] = 0;
+    this.paneFlat[s] = 0;
+  }
+
+  /** Car `i`'s proxy out of the world (its leaves removed, its slabs out with their hulls kept); `fitProxy` builds it again when a dummy or prop comes near. */
   drop(i: number): void {
     const world = this.world!;
     for (let k = 0; k < this.shapeN[i]!; k++) {
@@ -297,12 +336,7 @@ export class CarProxies {
       this.shapes[i * PROXY_BOXES + k] = null;
     }
     this.shapeN[i] = 0;
-    for (let p = 0; p < PANES; p++) {
-      const c = this.panes[i * PANES + p];
-      if (!c) continue;
-      world.removeCollider(c, false);
-      this.panes[i * PANES + p] = null;
-    }
+    for (let p = 0; p < PANES; p++) this.hidePane(i * PANES + p);
     this.paneBits[i] = -1;
     this.fitted[i] = null;
   }
@@ -369,26 +403,33 @@ export class CarProxies {
     const paneO = i * PANES * PANE_FLOATS;
     for (let p = 0; p < PANES; p++) {
       if (((this.paneBits[i]! >> (2 * p)) & 3) === PANE_GONE) continue;
-      const c = this.panes[i * PANES + p];
+      const s = i * PANES + p;
+      const shown = this.paneIn[s] === 1;
       const o = paneO + p * PANE_FLOATS;
-      const want = everything || this.within(this.paneFits[o]!, this.paneFits[o + 1]!, this.paneFits[o + 2]!, this.paneFits[o + 3]!, m, c ? NEAR_HOLD : 0);
-      if (want && !c) this.panes[i * PANES + p] = this.addPane(i, p);
-      else if (!want && c) {
-        this.world!.removeCollider(c, false);
-        this.panes[i * PANES + p] = null;
-      }
+      const want = everything || this.paneNear(o, m, shown ? NEAR_HOLD : 0);
+      if (want && !shown) this.showPane(i, p);
+      else if (!want && shown) this.hidePane(s);
     }
   }
 
   /** Is the cuboid at float offset `o` of `boxes` (its bounding sphere) within `hold` of any of `cull`'s `m` dummy points (car frame, reach)? */
   private reaches(boxes: Float64Array, o: number, m: number, hold: number): boolean {
-    return this.within(boxes[o]!, boxes[o + 1]!, boxes[o + 2]!, hypot3(boxes[o + 3]!, boxes[o + 4]!, boxes[o + 5]!), m, hold);
+    const rad = hypot3(boxes[o + 3]!, boxes[o + 4]!, boxes[o + 5]!);
+    for (let j = 0; j < m; j++) {
+      if (hypot3(this.pts[4 * j]! - boxes[o]!, this.pts[4 * j + 1]! - boxes[o + 1]!, this.pts[4 * j + 2]! - boxes[o + 2]!) - rad < this.pts[4 * j + 3]! + hold) return true;
+    }
+    return false;
   }
 
-  /** Is the sphere about (`x`, `y`, `z`) of radius `rad` within `hold` of any of `cull`'s `m` dummy points (car frame, reach)? */
-  private within(x: number, y: number, z: number, rad: number, m: number, hold: number): boolean {
+  /**
+   * Is the pane slab at float offset `o` of `paneFits` (its bounding sphere: centre, radius) within `hold` of any of `cull`'s `m` dummy
+   * points (car frame, reach)? Read from the array here: the sphere passed in as four numbers, a call per pane, boxed each one, 14 KB a
+   * frame of the dummies' heap with a driver flying past 32 cars.
+   */
+  private paneNear(o: number, m: number, hold: number): boolean {
+    const f = this.paneFits;
     for (let j = 0; j < m; j++) {
-      if (hypot3(this.pts[4 * j]! - x, this.pts[4 * j + 1]! - y, this.pts[4 * j + 2]! - z) - rad < this.pts[4 * j + 3]! + hold) return true;
+      if (hypot3(this.pts[4 * j]! - f[o]!, this.pts[4 * j + 1]! - f[o + 1]!, this.pts[4 * j + 2]! - f[o + 2]!) - f[o + 3]! < this.pts[4 * j + 3]! + hold) return true;
     }
     return false;
   }
@@ -416,7 +457,6 @@ export class CarProxies {
         this.paneFits[paneO + n] = fitter.panes[n]!;
         moved |= 1 << p;
       }
-      if (((moved >> p) & 1) !== 0) this.paneDescs[i * PANES + p] = null;
     }
     this.shapeN[i] = fitter.count;
     // Those in the world now: refitted, or out of it past the fitted count (and a pane that is gone).
@@ -429,13 +469,17 @@ export class CarProxies {
         this.shapes[i * PROXY_BOXES + k] = null;
       }
     }
-    // A slab in the world is its pane's hull: built again when its fit moved, or out with its pane.
+    // A slab's hull is its fit's: dropped when the fit moved (and built again at once if it was in the world), and with its pane when it
+    // is gone. Disabled instead, a shattered windshield still stood in the step it shattered in (Rapier keeps a disabled collider's
+    // contacts that step) and the torso that shattered it bounced off it.
     for (let p = 0; p < PANES; p++) {
-      const c = this.panes[i * PANES + p];
+      const s = i * PANES + p;
       const gone = ((paneBits >> (2 * p)) & 3) === PANE_GONE;
-      if (!c || (!gone && ((moved >> p) & 1) === 0)) continue;
-      this.world!.removeCollider(c, false);
-      this.panes[i * PANES + p] = gone ? null : this.addPane(i, p);
+      if (((moved >> p) & 1) !== 0 || gone) {
+        const shown = this.paneIn[s] === 1;
+        this.forgetPane(s);
+        if (shown && !gone) this.showPane(i, p);
+      }
     }
     const width = Math.max(-f.planBox[0]!, f.planBox[1]!);
     const length = Math.max(-f.planBox[2]!, f.planBox[3]!);
@@ -487,7 +531,7 @@ export class CarProxies {
         for (let p = 0; p < PANES; p++) {
           if (((this.paneBits[i]! >> (2 * p)) & 3) === 2) continue;
           const bit = 1 << p;
-          const pane = this.panes[i * PANES + p];
+          const pane = this.paneIn[i * PANES + p] === 1 ? this.panes[i * PANES + p] : null;
           const c = pane ? pane.contactCollider(torso, GLASS_SEE) : null;
           const held = (this.touching[t]! & bit) !== 0;
           if (c === null || (held && c.distance > GLASS_SEP)) {
@@ -501,12 +545,25 @@ export class CarProxies {
           // Not on the pane within this step yet.
           if (c.distance > Math.max(0, closing) * STEP + GLASS_SKIN) continue;
           this.touching[t] = this.touching[t]! | bit;
-          if (closing < GLASS_FLOOR || !authority) continue;
+          if (closing < GLASS_FLOOR || !this.onFace(i, p, c.normal2) || !authority) continue;
           const car = cars[i]!;
           this.struck(i, p);
           this.fitProxy(i, car);
         }
       }
     }
+  }
+
+  /**
+   * Is a touch with exterior normal `normal2` (the torso's, world) on car `i`'s pane `p` square to its glass, within `FACE_COS` of the
+   * slab's outward face normal (its outer corner less its inner, `paneFits`, turned with the car)? Glass breaks to a blow on its face,
+   * not one on the slab's edge: a torso thrown down-and-in at a sedan's door window at 10 m/s met the windshield slab's padded top corner
+   * over the door's front (its contact normal 66° off the windshield's face), and cracked the windshield.
+   */
+  private onFace(i: number, p: number, normal2: THREE.Vector3Like): boolean {
+    const f = this.paneFits;
+    const o = (i * PANES + p) * PANE_FLOATS + PANE_CORNERS;
+    _out.set(f[o]! - f[o + 12]!, f[o + 1]! - f[o + 13]!, f[o + 2]! - f[o + 14]!).normalize().applyQuaternion(this.frames[i]!.quaternion);
+    return -(normal2.x * _out.x + normal2.y * _out.y + normal2.z * _out.z) >= FACE_COS;
   }
 }
