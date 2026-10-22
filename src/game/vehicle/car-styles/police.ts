@@ -73,18 +73,20 @@ export const POLICE: BodyStyle = {
   livery: COP_LIVERY,
   lightBar: true,
   pushBar: true,
-  lamps: { head: [0.55, 0.515], tail: [0.596, 0.745], shapes: POLICE_LAMP_SHAPES },
+  // The cruiser's head lamps are warm halogen reflectors (front iso).
+  lamps: { head: [0.55, 0.515], tail: [0.596, 0.745], shapes: POLICE_LAMP_SHAPES, bulb: "halogen" },
   grille: { y: 0.44, size: [0.58, 0.21], kind: "bars", count: 6, badge: 0.025, finish: "black" },
   details: POLICE_DETAILS,
   /** The cruiser's mirrors are black plastic: a body-colour cap would take the white door paint. */
   door: { ...SEDAN.door, mirror: { ...SEDAN_MIRROR, finish: "black" } },
   /**
    * The cruiser's bumpers are black plastic, front and rear (both references). The sedan's seams frame its own lamps; the cop's sit lower,
-   * inside its bumper corners, so its bumpers draw no seam of the sedan's.
+   * inside its bumper corners, so its bumpers draw no seam of the sedan's, and no diffuser band on the black. Its plate sits on the lid's
+   * tail face in its recess (y 0.6-0.745).
    */
   bumpers: {
     front: { ...SEDAN.bumpers.front, trim: "black", top: undefined, edge: undefined },
-    rear: { ...SEDAN.bumpers.rear, trim: "black", top: undefined, edge: undefined },
+    rear: { ...SEDAN.bumpers.rear, trim: "black", top: undefined, edge: undefined, band: undefined, plate: 0.67 },
   },
   /** The cruiser's two small round tips under the black bumper, one each side (rear iso: |x| ~0.5; inboard 0.4 on the sedan body's narrower tail floor). */
   exhaust: { tips: 2, x: 0.4, y: 0.3, size: [0.1, 0.06], shape: "round" },

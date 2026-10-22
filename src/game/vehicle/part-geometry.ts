@@ -5,7 +5,7 @@ import { INTERIOR_MESH, SMALL_PART_SEAT } from "./constants.ts";
 import { loosePartsMaterial, mergeToned, PAINTED_ATTRIBUTE, toned } from "./car-materials.ts";
 import { cabinGeometry, crashBarGeometry, doorCardGeometry, engineBayGeometry, frontSeatGeometry, ladderFrameGeometry, rearSeatGeometry, solidAxleGeometry, wheelGeometry } from "./interior-geometry.ts";
 
-/** A car's static parts, in `PartBatch.meshes` order: the cabin shell, door cards, mirrors, grille, tail trim, then the interior kit and the bay set (`CarCabin`), then a lifted truck's undercarriage (`CarUnderbody`). */
+/** A car's static parts, in `PartBatch.meshes` order: the cabin shell, door cards, mirrors, grille, tail trim, then the interior kit and the bay set (`CarCabin`), then a lifted truck's undercarriage (`CarUnderbody`), then the wipers on the windshield. */
 export const PART_KIND = {
   interior: 0,
   liningL: 1,
@@ -21,6 +21,7 @@ export const PART_KIND = {
   crashBar: 11,
   ladderFrame: 12,
   axle: 13,
+  wipers: 14,
 } as const;
 export type PartKind = (typeof PART_KIND)[keyof typeof PART_KIND];
 export const PART_KINDS: readonly PartKind[] = Object.values(PART_KIND);
@@ -64,6 +65,11 @@ function tailTrim(): THREE.BufferGeometry {
   return toned(new THREE.BoxGeometry(0.36, 0.11, 0.02), 0xd8d4cc, 0.6, 0.1).translate(0, PLATE_RISE, -0.08);
 }
 
+/** The platform wipers: two black blades 0.55 m long side by side at the seat; every style draws its own, laid on its windshield (`styleWipers`). */
+function wipers(): THREE.BufferGeometry {
+  return mergeToned([-0.3, 0.3].map((x) => toned(new THREE.BoxGeometry(0.55, 0.012, 0.022), 0x121316, 0.6, 0.3).translate(x, 0, 0)), "platform wipers");
+}
+
 /** Built once, shared by every car; a car's dispose skips it (engine teardown frees only its GPU copy). */
 const GEOMETRY = [
   once(cabinGeometry),
@@ -80,6 +86,7 @@ const GEOMETRY = [
   once(crashBarGeometry),
   once(ladderFrameGeometry),
   once(solidAxleGeometry),
+  once(wipers),
 ] as const;
 
 export const partGeometry = (kind: PartKind): THREE.BufferGeometry => GEOMETRY[kind]();

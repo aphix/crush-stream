@@ -143,16 +143,21 @@ export class CarStage {
 }
 
 /** The drawn car's box and dimensions (m): every shown mesh, wheels, lamps and parts from their batches; ground under the tyres. */
-function measureCar({ scene, car, batch }) {
+function measureCar({ scene, car, batch, lamps, parts }) {
   const box = new THREE.Box3();
   const body = new THREE.Box3();
   const piece = new THREE.Box3();
   const notBody = new Set([...batch.wheels, ...batch.parts, car.lightBar]);
+  const seats = new Map([lamps.draw, parts.styled].map((d) => [d.mesh, d]));
   scene.traverseVisible((o) => {
     if (!o.isMesh || (o.isInstancedMesh && o.count === 0)) return;
-    if (o.isInstancedMesh) o.computeBoundingBox();
-    else o.geometry.computeBoundingBox();
-    piece.copy(o.isInstancedMesh ? o.boundingBox : o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+    const seated = seats.get(o);
+    if (seated) seatBox(seated, piece);
+    else {
+      if (o.isInstancedMesh) o.computeBoundingBox();
+      else o.geometry.computeBoundingBox();
+      piece.copy(o.isInstancedMesh ? o.boundingBox : o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+    }
     box.union(piece);
     if (!notBody.has(o)) body.union(piece);
   });
@@ -190,6 +195,19 @@ function measureCar({ scene, car, batch }) {
   };
 }
 
+/** The world box of a `SeatDraw`'s packed seats: each seat's variant bound where the seat stands. */
+function seatBox(draw, out) {
+  out.makeEmpty();
+  const m = new THREE.Matrix4();
+  const b = new THREE.Box3();
+  for (let i = 0; i < draw.count; i++) {
+    const g = draw.variants[draw.variantAt(i)];
+    g.computeBoundingBox();
+    out.union(b.copy(g.boundingBox).applyMatrix4(draw.matrixAt(i, m)));
+  }
+  return out;
+}
+
 /** A W x H headless GL canvas with a three renderer on it; `draw` returns the frame's RGBA, rows top-down. */
 export class ViewPort {
   constructor(game, W, H) {
@@ -223,11 +241,13 @@ export function alphaMask(rgba, W, H) {
 /** The car's glass as the camera sees it, the body in front of it hiding it: one flat pass, glass white, the rest black. */
 export function glassMask(port, stage, camera) {
   const glass = new Set(stage.car.lookMeshes().glass);
+  const seats = new Map([stage.lamps.draw, stage.parts.styled].map((d) => [d.mesh, d]));
   const saved = new Map();
   stage.scene.traverse((o) => {
     if (!o.isMesh) return;
     saved.set(o, o.material);
-    o.material = glass.has(o) ? FLAT.glass : FLAT.body;
+    const flat = glass.has(o) ? FLAT.glass : FLAT.body;
+    o.material = seats.get(o)?.seated(flat) ?? flat;
   });
   const rgba = port.draw(stage.scene, camera);
   for (const [o, m] of saved) o.material = m;

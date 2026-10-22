@@ -54,7 +54,7 @@ describe("given two opaque draws in one frame", () => {
 
 const fleetStyles: CarStyleId[] = ["sedan", "pickup", "hatchback", "wagon", "coupe", "police"];
 
-/** Every opaque, plain mesh of `cars` as the render list would hold it, in scene order, then the part batch's seven instanced draws (the seats' parts are no meshes). */
+/** Every opaque, plain mesh of `cars` as the render list would hold it, in scene order, then the part batch's draws: the plain kinds' instanced meshes and the one styled-kinds `SeatDraw` mesh (the seats' parts are no meshes). */
 function opaqueDraws(cars: DeformableCar[]): RenderItem[] {
   const out: RenderItem[] = [];
   for (const car of cars) {

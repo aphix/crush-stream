@@ -4,7 +4,7 @@ import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { splitCreases } from "./car-crease.ts";
-import { CREASE_DEGREES, deckTopY, ensureOutwardNormals, lerp, loftFromRings, roofTopY, type Pt } from "./car-mesh.ts";
+import { CREASE_DEGREES, deckTopY, ensureOutwardNormals, lerp, loftFromRings, makeBumperGeometry, roofTopY, type Pt } from "./car-mesh.ts";
 
 /**
  * A style's drawn add-ons: never in a cage build, so the sim never sees them. Each is merged into the mesh it stands on and moves with
@@ -39,6 +39,10 @@ const SPOILER_TIP = 0.35;
 const TIP = { length: 0.14, recess: 0.004, throat: 0.72, throatProud: 0.002, segments: 14 } as const;
 /** Tow-hitch receiver: `size` (m) square, `length` long, reaching `reach` (m) past the bumper face, its top `tuck` (m) up into the bumper. */
 const HITCH = { size: 0.06, length: 0.3, reach: 0.09, tuck: 0.01 } as const;
+/** A fascia band's inlay stands this far (m) out of the face: just proud so it never z-fights it, thin enough to read as paint. */
+const BAND_PROUD = 0.0015;
+/** Slack (m) when matching fascia rows to a band's heights: rows are authored on the band's edges. */
+const BAND_EPS = 1e-6;
 
 /** `geo` with a per-vertex `name` attribute: `value` from vertex `from` on, 0 before it. */
 function withTone(geo: THREE.BufferGeometry, name: string, value: number, from = 0): THREE.BufferGeometry {
@@ -146,11 +150,11 @@ export function withHoodBulge(hood: THREE.BufferGeometry, style: BodyStyle): THR
   return markSkinDynamic(merged(parts, "hood bulge"));
 }
 
-/** `bumper` (the drawn rear bumper, `makeBumperGeometry`, in bumper space) with `style`'s exhaust tips and tow hitch merged in, so they tear off with it. Without either, `bumper` itself. */
+/** `bumper` (the drawn rear bumper, `makeBumperGeometry`, in bumper space) with `style`'s exhaust tips, tow hitch and diffuser band (a black inlay over its fascia rows) merged in, so they tear off with it. Without any, `bumper` itself. */
 export function withRearFittings(bumper: THREE.BufferGeometry, style: BodyStyle): THREE.BufferGeometry {
   const { exhaust } = style;
-  const { seat, hitch } = style.bumpers.rear;
-  if (!exhaust && !hitch) return bumper;
+  const { seat, fascia, hitch, band } = style.bumpers.rear;
+  if (!exhaust && !hitch && !band) return bumper;
   bumper.computeBoundingBox();
   const { min } = bumper.boundingBox!;
   const parts = [withTone(bumper, FITTING_ATTRIBUTE, 0)];
@@ -175,6 +179,11 @@ export function withRearFittings(bumper: THREE.BufferGeometry, style: BodyStyle)
   if (hitch) {
     const receiver = new THREE.BoxGeometry(HITCH.size, HITCH.size, HITCH.length).translate(0, min.y + HITCH.tuck - HITCH.size / 2, min.z - HITCH.reach + HITCH.length / 2);
     parts.push(withTone(receiver, FITTING_ATTRIBUTE, FITTING_TONE.black));
+  }
+  if (band) {
+    const rows = fascia.flatMap(([y], i) => (seat.y + y >= band[0] - BAND_EPS && seat.y + y <= band[1] + BAND_EPS ? [i] : []));
+    if (rows.length < 2) throw new Error(`${style.id}: rear bumper band [${band[0]}, ${band[1]}] covers fewer than 2 fascia rows`);
+    parts.push(withTone(makeBumperGeometry(false, style, [rows[0]!, rows[rows.length - 1]!], BAND_PROUD), FITTING_ATTRIBUTE, FITTING_TONE.black));
   }
   return merged(parts, "rear bumper fittings");
 }

@@ -308,13 +308,15 @@ describe("given every style's detachable panels as they read once they come off"
       const [pos, primer] = [body.getAttribute("position"), body.getAttribute(PRIMER_ATTRIBUTE)];
       let [held, of] = [0, 0];
       for (let s = 0; s < slices; s++) {
-        if (bootCutAt(pos.getZ(s * ring), cut).open < 1) continue;
+        // A wrapped lid's tail ring (slice 0) is the tail cap's too: its corners stay paint.
+        if ((s === 0 && cut.face) || bootCutAt(pos.getZ(s * ring), cut).open < 1) continue;
         for (const v of [s * ring, s * ring + ring - 1]) {
           of++;
           if (primer.getX(v) === CABIN_TRIM) held++;
         }
       }
       assert.ok(of > 0 && held === of, `${id}: ${held} of ${of} boot floor corners cabin trim`);
+      if (cut.face) assert.ok(primer.getX(0) === 0 && primer.getX(ring - 1) === 0, `${id}: the tail cap's corners tone ${primer.getX(0)}, ${primer.getX(ring - 1)}, not paint`);
       lined++;
     }
     assert.ok(lined > 0, "some style has a deck lid's boot");

@@ -1535,6 +1535,26 @@ describe("given a body style's P1 parts", () => {
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 
+  it("when a crowned hood sets its inset, then its side edge stands that far inside the station's side, the cowl's at z0 and the nose's at z1, at the plain edge's height under the plain crown, and the cage builds are unchanged", () => {
+    const plain: BodyStyle = { ...sedan, hood: { ...sedan.hood, inset: undefined } };
+    const [nose, cowl] = sedan.hood.inset!;
+    const halfWidth = (style: BodyStyle, z: number): number => {
+      const pos = makeHoodGeometry(style).getAttribute("position");
+      let w = 0;
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) + style.hood.origin[1] - z) < POSITION_TOL) w = Math.max(w, Math.abs(pos.getX(i)));
+      return w;
+    };
+    const { z0, z1 } = sedan.hood;
+    assertSameNumbers([halfWidth(plain, z0) - halfWidth(sedan, z0), halfWidth(plain, z1) - halfWidth(sedan, z1)], [cowl - 0.07, nose - 0.07], "the inset past the plain 0.07 at the cowl and the nose", 1e-4);
+    for (const z of [z0, (z0 + z1) / 2]) {
+      const hw = sampleSlice(z, sedan.profile).hw;
+      const edge = hw - lerp(cowl, nose, (z - z0) / (z1 - z0));
+      const heights = [deckTopY(edge, z, sedan, true), deckTopY(0, z, sedan, true)];
+      assertSameNumbers(heights, [deckTopY(hw - 0.07, z, plain, true), deckTopY(0, z, plain, true)], `at z ${z} the inset edge and the crown against the plain hood's`, 1e-6);
+    }
+    assert.ok(cageHash(sedan) === cageHash(plain), "the cage builds are unchanged");
+  });
+
   it("when a hood bulge is rolled, then its flanks roll up from the lid in steps outside its crest, the crest stays inside the roll, and the cage builds are unchanged", () => {
     const bulge = { z0: 0.9, z1: 1.8, width: 0.6, rise: 0.04, round: 0.1 } as const;
     const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge } };
@@ -1784,7 +1804,8 @@ describe("given a body style's P1 parts", () => {
   for (const testCase of EXHAUST_CASES) {
     it(testCase.it, () => {
       const { exhaust } = testCase;
-      const style: BodyStyle = { ...sedan, exhaust };
+      // Without the sedan's diffuser band: its black inlay would read as throat.
+      const style: BodyStyle = { ...sedan, bumpers: { ...sedan.bumpers, rear: { ...sedan.bumpers.rear, band: undefined } }, exhaust };
       const face = partBox(makeBumperGeometry(false, sedan)).clone();
       const fitted = withRearFittings(makeBumperGeometry(false, style), style);
       const pos = fitted.getAttribute("position");
@@ -1816,6 +1837,18 @@ describe("given a body style's P1 parts", () => {
       assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
     });
   }
+
+  it("when a rear bumper sets a band, then the fascia rows in it carry a black inlay across the face between its heights, and the cage builds are unchanged", () => {
+    const { seat, band, wrap } = sedan.bumpers.rear;
+    const plain: BodyStyle = { ...sedan, bumpers: { ...sedan.bumpers, rear: { ...sedan.bumpers.rear, band: undefined } } };
+    const [inlay, bare] = [sedan, plain].map((style) => toneBox(withRearFittings(makeBumperGeometry(false, style), style), FITTING_ATTRIBUTE, FITTING_TONE.black));
+    assert.ok(inlay!.count > bare!.count, `${inlay!.count} black vertices with the band, ${bare!.count} without`);
+    const [bottom, top] = band!.map((y) => y - seat.y);
+    // The fascia's top crown lifts its rows up to 2 cm at the centre line.
+    assert.ok(inlay!.box.min.y >= bottom! - POSITION_TOL && inlay!.box.max.y <= top! + 0.02 + POSITION_TOL, `black y ${inlay!.box.min.y.toFixed(3)}..${inlay!.box.max.y.toFixed(3)}, the band ${bottom!.toFixed(3)}..${top!.toFixed(3)}`);
+    assert.ok(inlay!.box.max.x - inlay!.box.min.x > 2 * wrap.from, `the band spans ${(inlay!.box.max.x - inlay!.box.min.x).toFixed(3)} m across`);
+    assert.ok(cageHash(sedan) === cageHash(plain), "the cage builds are unchanged");
+  });
 });
 
 type MirrorSpec = NonNullable<BodyStyle["door"]["mirror"]>;
@@ -1880,6 +1913,24 @@ describe("given a body style's P2 parts", () => {
     assert.ok(Math.abs(inner - skin) < MIRROR_SEAT_TOL, `the foot starts at x ${inner}, the drawn skin at ${skin}`);
     assert.ok(mirrorSeatX(style) === mirrorSeatX({ ...style, door: { ...CAR_STYLES.sedan.door, mirrorReach: style.door.mirrorReach } }), "the seat is the platform mirror's at that reach");
     assert.ok(cageHash(style) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
+  });
+
+  it("when a mirror's cap is a tear, then its section tapers to its rear face, its inner face held, and the seat and cage builds are unchanged", () => {
+    const size = [0.12, 0.095, 0.145] as const;
+    const [w, , d] = size;
+    const [tear, rounded] = (["tear", "rounded"] as const).map((cap) => {
+      const style = mirrorStyle({ cap, finish: "body", size });
+      const { cap: box } = readMirror(style);
+      const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
+      const [pos, painted] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE)];
+      const scaleX = style.door.mirrorReach / MIRROR_REACH;
+      const rear = new THREE.Box3();
+      for (let i = 0; i < pos.count; i++) if (painted.getX(i) === 1 && pos.getZ(i) <= box.min.z + 0.1 * d) rear.expandByPoint(new THREE.Vector3(pos.getX(i) * scaleX, pos.getY(i), pos.getZ(i)));
+      return { style, inner: box.min.x, rear: rear.max.x - rear.min.x };
+    });
+    assert.ok(tear!.rear < 0.65 * w && rounded!.rear > 0.8 * w, `the cap's rear tenth spans ${tear!.rear.toFixed(3)} m (tear), ${rounded!.rear.toFixed(3)} m (rounded) of its ${w}`);
+    assertSameNumbers([tear!.inner], [rounded!.inner], "the cap's inner face", 1e-4);
+    assert.ok(mirrorSeatX(tear!.style) === mirrorSeatX(rounded!.style) && cageHash(tear!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
   });
 
   it("when a mirror is lifted, then its cap rises that far over the seat while its foot still starts on the drawn skin, and the seat and cage builds are unchanged", () => {
@@ -2033,7 +2084,7 @@ describe("given a body style's P2 parts", () => {
 
   it("when a rear bumper sets its plate's height, then the plate's centre stands at it (unset: where the platform puts it), and the cage builds are unchanged", () => {
     const sedan = CAR_STYLES.sedan;
-    const plain: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: undefined } };
+    const plain: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: undefined }, bumpers: { ...sedan.bumpers, rear: { ...sedan.bumpers.rear, plate: undefined, plateFace: undefined } } };
     const plate = 0.4;
     const style: BodyStyle = { ...plain, bumpers: { ...plain.bumpers, rear: { ...plain.bumpers.rear, plate } } };
     const box = partBox(drawnPart(PART_KIND.tailTrim, style).geometry);
@@ -2044,7 +2095,7 @@ describe("given a body style's P2 parts", () => {
 
   it("when a rear bumper sets its plate's face and colour, then the plate's rear face stands that far out of the seat in that colour, and the cage builds are unchanged", () => {
     const sedan = CAR_STYLES.sedan;
-    const plain: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: undefined } };
+    const plain: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: undefined }, bumpers: { ...sedan.bumpers, rear: { ...sedan.bumpers.rear, plate: undefined, plateFace: undefined } } };
     const plateFace = { out: 0.015, color: 0x1c1e22 };
     const rear = { ...plain.bumpers.rear, plate: 0.4 };
     const style: BodyStyle = { ...plain, bumpers: { ...plain.bumpers, rear: { ...rear, plateFace } } };
@@ -2064,7 +2115,8 @@ describe("given a body style's P2 parts", () => {
     const sedan = CAR_STYLES.sedan;
     const [x, y] = [0.53, 0.51];
     const loop = { points: [[x - 0.08, y - 0.03], [x + 0.08, y - 0.03], [x + 0.08, y + 0.03], [x - 0.08, y + 0.03]] } as const;
-    const style: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, head: [x, y], shapes: { head: { loops: [loop], lens: "lit", bezel: "chrome" } } } };
+    // The neutral bulb: its lit lens is the tone (u 0.75) this row reads.
+    const style: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, bulb: undefined, head: [x, y], shapes: { head: { loops: [loop], lens: "lit", bezel: "chrome" } } } };
     const skin = new THREE.Mesh(makeChassisGeometry(style));
     const ray = new THREE.Raycaster();
     const lens = [-1, 1].map((side) => {
@@ -2191,6 +2243,18 @@ describe("given a body style's P2 parts", () => {
     assert.ok(plate.boundingBox!.max.x - plate.boundingBox!.min.x < 0.4, `the platform tail trim is the plate alone, ${(plate.boundingBox!.max.x - plate.boundingBox!.min.x).toFixed(2)} m wide`);
   });
 
+  it("when a bumper lamp is met on the body too, then its lens stands proud of the body skin where the fascia's wrapped corner is held inside it", () => {
+    const sedan = CAR_STYLES.sedan;
+    const { seat } = sedan.bumpers.front;
+    const shapes = sedan.lamps.shapes!;
+    const off: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: { ...shapes, front: { ...shapes.front!, onBody: undefined } } } };
+    const meetZ = (geo: THREE.BufferGeometry): number =>
+      new THREE.Raycaster(new THREE.Vector3(0.64, 0.28, 5), new THREE.Vector3(0, 0, -1)).intersectObject(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), false)[0]?.point.z ?? -Infinity;
+    const skin = meetZ(makeChassisGeometry(sedan));
+    const [lens, buried] = [sedan, off].map((style) => meetZ(drawnPart(PART_KIND.grille, style).geometry.clone().translate(0, seat.y + GRILLE_SEAT.y, seat.z + GRILLE_SEAT.z)));
+    assert.ok(lens! > skin + 0.001 && buried! < skin, `the fog pod's lens at z ${lens!.toFixed(4)} (without the field ${buried!.toFixed(4)}), the body skin at ${skin.toFixed(4)}`);
+  });
+
   it("when a tail lamp's outline runs onto the boot lid, then the lid carries that share and opens with it, and the body keeps the rest", () => {
     const car = new DeformableCar(PAINT, new THREE.Scene(), null, "hatchback");
     const lid = car.lampFittings.find((f) => f.kind === "boot");
@@ -2224,10 +2288,12 @@ describe("given a body style's P2 parts", () => {
     car.group.updateMatrixWorld(true);
     const batch = new LampBatch(2);
     batch.sync([car]);
-    const got = new THREE.Matrix4();
-    const lidDraws = batch.slots[7]!;
-    lidDraws[lidDraws.length === 1 ? 0 : lid.variant]!.getMatrixAt(0, got);
+    // Rows pack the lamps, then the fittings in order (all shown here): the lid's row follows the lamps and the fittings before it.
+    const row = car.lamps.length + car.lampFittings.indexOf(lid);
+    const got = batch.draw.matrixAt(row, new THREE.Matrix4());
     for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!) < 1e-6, `the opened lid's pose, element ${k}`);
+    const drawnShare = batch.draw.variants[batch.draw.variantAt(row)]!.getIndex()!.count;
+    assert.equal(drawnShare, drawnLamp(car.style, "boot", lid.share!.lamp.side).geometry.getIndex()!.count, "the lid's row draws its own share");
   });
 
   it("when a bumper carries its seam, then it is the skin up to the seam on the end face and round the corner on both sides (rays from outside meet it 2 cm under the seam and the body 2 cm over), and a bumper without one draws as before", () => {

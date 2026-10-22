@@ -20,7 +20,8 @@ import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, PLATE_
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { glassX, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { bootPivot } from "./hinge-spec.ts";
-import { FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
+import { DRIVER_SIDE, FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
+import { windshieldPoint } from "./car-glass.ts";
 
 /**
  * A style's own drawn part where its spec asks for one (`door.mirror`, `grille`, `lamps.units`), in the seat's space: the seat, and the
@@ -74,6 +75,25 @@ const MIRROR_CAP_Y = 0.01;
 /** Mirror feet and stalks: black plastic, unless the mirror is chrome. */
 const MIRROR_FITTING = [0x1c1e22, 0.5, 0.3] as const;
 
+/** A tear cap's section at its rear face as a share of its nose's, as the reference's sedan mirror sweeps in toward its glass. */
+const MIRROR_TEAR = 0.6;
+
+/** `geo` (a centred w x h x d rounded box, outward +`sign`) tapered linearly to `MIRROR_TEAR` at its rear face (z -d/2), its inner face held; normals by the taper's inverse transpose. */
+function tearCap(geo: THREE.BufferGeometry, sign: number, w: number, d: number): THREE.BufferGeometry {
+  const pos = geo.getAttribute("position");
+  const nrm = geo.getAttribute("normal");
+  const ds = (1 - MIRROR_TEAR) / d;
+  const n = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+    const s = MIRROR_TEAR + ds * (z + d / 2);
+    n.set(nrm.getX(i) / s, nrm.getY(i) / s, nrm.getZ(i) - (ds * (x + (sign * w) / 2) * nrm.getX(i) + ds * y * nrm.getY(i)) / s).normalize();
+    pos.setXYZ(i, s * x - sign * (w / 2) * (1 - s), s * y, z);
+    nrm.setXYZ(i, n.x, n.y, n.z);
+  }
+  return geo;
+}
+
 /**
  * `style`'s own mirror on side `sign`: a foot on the skin at the arm root, a stalk out to the cap where the cap leaves room, the cap in its
  * finish with its outer face at `mirrorReach`, the glass on its rear face. Built at its real size, then divided by the seat's x-scale (kept
@@ -89,7 +109,8 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const capY = MIRROR_CAP_Y + lift;
   const fitting = (geo: THREE.BufferGeometry) => (spec.finish === "chrome" ? finished(geo, "chrome") : dark(geo, ...MIRROR_FITTING));
   // RoundedBoxGeometry comes unindexed; the other pieces are indexed, and a merge takes one kind.
-  const capShape = spec.cap === "rounded" ? mergeVertices(new RoundedBoxGeometry(w, h, d, 2, MIRROR_CAP_ROUND * Math.min(w, h, d))) : new THREE.BoxGeometry(w, h, d);
+  const rounded = spec.cap === "box" ? null : mergeVertices(new RoundedBoxGeometry(w, h, d, 2, MIRROR_CAP_ROUND * Math.min(w, h, d)));
+  const capShape = rounded ? (spec.cap === "tear" ? tearCap(rounded, sign, w, d) : rounded) : new THREE.BoxGeometry(w, h, d);
   // A black housing is gloss (the references' piano black), not the grilles' and bumpers' satin plastic.
   const cap = spec.finish === "black" ? dark(capShape, TRIM_BLACK, TRIM_FINISH.gloss.roughness, TRIM_FINISH.gloss.metalness) : finished(capShape, spec.finish);
   const parts = [cap.translate(sign * (reach - w / 2), capY, 0)];
@@ -99,8 +120,11 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   parts.push(spec.mount === "glass" ? alongGlass(foot, style, sign) : foot);
   const [stalkFrom, stalkTo] = [root + MIRROR_FOOT.out, reach - w + MIRROR_FOOT.out / 2];
   if (stalkTo > stalkFrom) parts.push(fitting(new THREE.BoxGeometry(stalkTo - stalkFrom, ...MIRROR_STALK)).translate((sign * (stalkFrom + stalkTo)) / 2, capY, 0));
-  const glass = dark(new THREE.PlaneGeometry(w * MIRROR_GLASS.share[0], h * MIRROR_GLASS.share[1]), 0x9aa8b4, 0.08, 0.7).rotateY(Math.PI);
-  parts.push(glass.translate(sign * (reach - w / 2), capY, -d / 2 - MIRROR_GLASS.proud));
+  const tear = spec.cap === "tear";
+  const [glassW, glassH] = tear ? [w * MIRROR_TEAR * MIRROR_GLASS.share[0], h * MIRROR_TEAR * MIRROR_GLASS.share[1]] : [w * MIRROR_GLASS.share[0], h * MIRROR_GLASS.share[1]];
+  const glassCx = tear ? sign * (reach - w / 2) - sign * (w / 2) * (1 - MIRROR_TEAR) : sign * (reach - w / 2);
+  const glass = dark(new THREE.PlaneGeometry(glassW, glassH), 0x9aa8b4, 0.08, 0.7).rotateY(Math.PI);
+  parts.push(glass.translate(glassCx, capY, -d / 2 - MIRROR_GLASS.proud));
   return mergeToned(parts, "style mirror").scale(1 / scaleX, 1, 1);
 }
 
@@ -644,11 +668,12 @@ function builtLamp(style: BodyStyle, which: keyof LampShapes, side = 1): BuiltLa
   const body: SkinSource = { geo: bodySkin(style), offset: new THREE.Vector3(), lid: false, mirror };
   const bumper = which === "front" || which === "rear";
   const seat = style.bumpers[front ? "front" : "rear"].seat;
+  const shape = style.lamps.shapes![which]!;
   const sources: SkinSource[] = bumper
-    ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false, mirror }]
+    ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false, mirror }, ...(shape.onBody ? [body] : [])]
     : [{ geo: front ? makeHoodGeometry(style) : makeTrunkGeometry(style), offset: new THREE.Vector3(0, ...(front ? style.hood.origin : bootPivot(style.boot))), lid: true, mirror }, body];
   const skin = new LampSkin(sources, zEnd, front ? 1 : -1, `${style.id} ${which} lamp${mirror ? " (left)" : ""}`);
-  const built = buildShape(style.lamps.shapes![which]!, skin, zEnd, (geo, t) => (bumper ? bumperTone(geo, t, kind) : lampTone(geo, t, kind, style.lamps.bulb)));
+  const built = buildShape(shape, skin, zEnd, (geo, t) => (bumper ? bumperTone(geo, t, kind) : lampTone(geo, t, kind, style.lamps.bulb)));
   if (!BUILT.has(style)) BUILT.set(style, new Map());
   BUILT.get(style)!.set(id, built);
   return built;
@@ -777,6 +802,90 @@ export const brakeLampUnit = once(() =>
 /** A side marker, 1 m square (its seat scales it to a `lamps.sideMarkers` size): an unlit amber lens. Shared, never disposed. */
 export const sideMarkerUnit = once(() => lampTone(new THREE.BoxGeometry(1, 1, 0.012).translate(0, 0, 0.004), "amber", "head"));
 
+// ---- wipers ----------------------------------------------------------------------------------------------------------------
+
+/** Where the parked blades lie: this far (m) up the windshield's slope from its base, over the cowl's lip. */
+const WIPER_PARK_UP = 0.035;
+/** Each blade's rubber [width up the glass, height off it] and its gap off the glass (m); the arm over it, and how far along the blade it reaches. */
+const WIPER_BLADE = { w: 0.018, h: 0.01, gap: 0.004 } as const;
+const WIPER_ARM = { w: 0.012, h: 0.008, reach: 0.85 } as const;
+/** The pivot cap's edge (m), standing on the arm's root. */
+const WIPER_PIVOT = 0.028;
+/** Stations along a blade: it follows the glass's bow across the car. */
+const WIPER_STATIONS = 8;
+/** Where each of a pair's pivots stands across the glass's base width (car x over the width; the tips run toward `park`). */
+const WIPER_PAIR_PIVOTS = [-0.44, -0.02] as const;
+/** A style's wipers where it sets none: two blades, each 0.42 of the glass base, parked toward the driver. */
+const WIPER_DEFAULT = { count: 2, length: 0.42, park: DRIVER_SIDE } as const;
+
+/**
+ * A tube of rectangular section swept along `centres`, each station's section spanned by its own `w` (across the tube, up the glass) and
+ * `n` (out of the glass) unit axes: four sides and two end caps.
+ */
+function sweptBar(centres: readonly THREE.Vector3[], ws: readonly THREE.Vector3[], ns: readonly THREE.Vector3[], width: number, height: number): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const;
+  for (let i = 0; i < centres.length; i++) {
+    for (const [a, b] of corners) {
+      const p = centres[i]!.clone().addScaledVector(ws[i]!, (a * width) / 2).addScaledVector(ns[i]!, (b * height) / 2);
+      positions.push(p.x, p.y, p.z);
+    }
+  }
+  const index: number[] = [];
+  for (let i = 0; i < centres.length - 1; i++) {
+    for (let k = 0; k < 4; k++) {
+      const [a, b, c, d] = [i * 4 + k, i * 4 + ((k + 1) % 4), (i + 1) * 4 + ((k + 1) % 4), (i + 1) * 4 + k];
+      index.push(a, b, c, a, c, d);
+    }
+  }
+  const last = (centres.length - 1) * 4;
+  index.push(0, 2, 1, 0, 3, 2, last, last + 1, last + 2, last, last + 2, last + 3);
+  const geo = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(positions, 3)).setIndex(index);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * `style`'s wipers, in car space (their seat rides the windshield pane at its origin): each blade parked `WIPER_PARK_UP` up the glass from its
+ * base, its rubber on the glass's bow across the car, its arm over it from the pivot, a cap on the pivot; black plastic. `userData.blades`:
+ * each blade's pivot and tip on the glass.
+ */
+function styleWipers(style: BodyStyle): THREE.BufferGeometry {
+  const { count, length, park } = { ...WIPER_DEFAULT, ...style.wipers };
+  const { base, wBase, wTop } = style.windshield;
+  const top = style.windshieldTop;
+  const t = WIPER_PARK_UP / Math.hypot(top[0] - base[0], top[1] - base[1]);
+  const half = (wBase + (wTop - wBase) * t) / 2;
+  const pivots = count === 2 ? WIPER_PAIR_PIVOTS.map((s) => s * wBase) : [(-length * wBase) / 2];
+  const parts: THREE.BufferGeometry[] = [];
+  const blades: { pivot: number[]; tip: number[] }[] = [];
+  for (const from of pivots) {
+    const xs = Array.from({ length: WIPER_STATIONS + 1 }, (_, i) => park * (from + (length * wBase * i) / WIPER_STATIONS));
+    const at = xs.map((x) => windshieldPoint(style, x / half, t));
+    const ws = xs.map((x) => windshieldPoint(style, x / half, t + 0.01).sub(windshieldPoint(style, x / half, t)).normalize());
+    const ns = at.map((p, i) => {
+      const along = at[Math.min(i + 1, at.length - 1)]!.clone().sub(at[Math.max(i - 1, 0)]!);
+      const n = along.cross(ws[i]!).normalize();
+      return n.z < 0 ? n.negate() : n;
+    });
+    const lifted = (lift: number, upTo = 1) => at.slice(0, Math.round(WIPER_STATIONS * upTo) + 1).map((p, i) => p.clone().addScaledVector(ns[i]!, lift));
+    const rubber = lifted(WIPER_BLADE.gap + WIPER_BLADE.h / 2);
+    const arm = lifted(WIPER_BLADE.gap + WIPER_BLADE.h + WIPER_ARM.h / 2, WIPER_ARM.reach);
+    parts.push(sweptBar(rubber, ws, ns, WIPER_BLADE.w, WIPER_BLADE.h), sweptBar(arm, ws, ns, WIPER_ARM.w, WIPER_ARM.h));
+    parts.push(sweptBar([0, 1].map((k) => at[0]!.clone().addScaledVector(ns[0]!, WIPER_BLADE.gap + WIPER_BLADE.h + k * WIPER_PIVOT)), [ws[0]!, ws[0]!], [at[1]!.clone().sub(at[0]!).normalize(), at[1]!.clone().sub(at[0]!).normalize()], WIPER_PIVOT, WIPER_PIVOT));
+    blades.push({ pivot: at[0]!.toArray(), tip: at[WIPER_STATIONS]!.toArray() });
+  }
+  const geo = mergeToned(
+    parts.map((g) => dark(g, TRIM_BLACK, TRIM_FINISH.plastic.roughness, TRIM_FINISH.plastic.metalness)),
+    "style wipers",
+  );
+  geo.userData.blades = blades;
+  return geo;
+}
+
+/** A style's wipers' variant key: they lie on its own windshield (its data and its dome's fall), so every style draws its own. */
+const wipersKey = (style: BodyStyle): string => `${style.id}|${JSON.stringify([style.windshield, style.windshieldTop, style.wipers ?? null])}`;
+
 // ---- the variant table -----------------------------------------------------------------------------------------------------
 
 /** A batch drawn in style variants: its platform geometry, the sides its seats stand on, and a style's key (null: the platform part) and build. */
@@ -796,6 +905,7 @@ const SLOTS = {
   tail: { base: once(() => makeLampUnit("tail")), sides: [-1, 1], key: (style, side) => lampKey(style, "tail", side), build: (style, side) => styleLamp(style, "tail", side) },
   boot: { base: noLidLamp, sides: [-1, 1], key: (style, side) => lampKey(style, "tail", side), build: (style, side) => lidLamp(style, "tail", side) },
   hood: { base: noLidLamp, sides: [-1, 1], key: (style, side) => lampKey(style, "head", side), build: (style, side) => lidLamp(style, "head", side) },
+  wipers: { base: () => partGeometry(PART_KIND.wipers), sides: [0], key: wipersKey, build: styleWipers },
 } as const satisfies Record<string, Slot>;
 type SlotName = keyof typeof SLOTS;
 
@@ -804,6 +914,7 @@ const PART_SLOT: Partial<Record<PartKind, SlotName>> = {
   [PART_KIND.mirrorR]: "mirrorR",
   [PART_KIND.grille]: "grille",
   [PART_KIND.tailTrim]: "tailTrim",
+  [PART_KIND.wipers]: "wipers",
 };
 
 /** Per slot: its variants (0 the platform geometry, then one per distinct key the fleet table asks for) and their keys. */
