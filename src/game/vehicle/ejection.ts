@@ -143,15 +143,6 @@ const f32 = (v: THREE.Vector3): THREE.Vector3 => v.set(Math.fround(v.x), Math.fr
 /** A police car's driver wears the uniform, seated and thrown. */
 export const copDriver = (car: DeformableCar): boolean => car.style.id === "police";
 
-/** His lean out of the pane on `side` (the windshield 0, the left door -1, the right +1), car frame: `launch` and `thrownFrom` in lockstep. */
-const leanOut = (side: number, out: THREE.Quaternion): THREE.Quaternion => out.setFromAxisAngle(Y, (side * Math.PI) / 2).multiply(LEAN);
-
-/** The car's frame (world position and turn) as `e` threw its driver, from the event's own numbers: `launch` undone. */
-export function thrownFrom(e: Ejection, pos: THREE.Vector3, quat: THREE.Quaternion): void {
-  quat.copy(e.quat).multiply(leanOut(e.exit === "windshield" ? 0 : e.exit === "doorL" ? -1 : 1, _qx).invert());
-  pos.copy(e.local).applyQuaternion(quat).negate().add(e.pos);
-}
-
 /** Car `i`'s driver leaving through `exit`, as the sim has the car now, with his seat's motion at the hit: the car's centre velocity `v` and turn rate `w` (world) then. */
 function launch(car: DeformableCar, i: number, exit: ExitPane, v: THREE.Vector3, w: THREE.Vector3): Ejection {
   const e = blankEjection();
@@ -162,7 +153,7 @@ function launch(car: DeformableCar, i: number, exit: ExitPane, v: THREE.Vector3,
   // The way out: z out of the pane (a side throw is the windshield's turned a quarter about the car's up). Leaning
   // out along it, his shoulders stay level, so they fit the side window's height.
   const side = exit === "windshield" ? 0 : exit === "doorL" ? -1 : 1;
-  leanOut(side, _qx);
+  _qx.setFromAxisAngle(Y, (side * Math.PI) / 2).multiply(LEAN);
   e.quat.copy(g.quaternion).multiply(_qx);
   e.quat.set(Math.fround(e.quat.x), Math.fround(e.quat.y), Math.fround(e.quat.z), Math.fround(e.quat.w));
   _out.set(side, 0, side === 0 ? 1 : 0).applyQuaternion(g.quaternion);

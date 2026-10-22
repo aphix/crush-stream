@@ -54,7 +54,6 @@ interface ThrowMessage {
   purse: boolean;
   armsDown: boolean;
   loose: boolean;
-  seat: Float32Array | null;
   lookSeed: number;
 }
 

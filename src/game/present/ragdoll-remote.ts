@@ -138,7 +138,6 @@ export class RagdollRemote {
       purse,
       armsDown: t.armsDown ?? false,
       loose: t.loose ?? false,
-      seat: t.seat ?? null,
       lookSeed,
     });
     return id;
