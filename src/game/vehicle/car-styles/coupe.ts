@@ -157,8 +157,8 @@ export const COUPE: BodyStyle = {
   },
   /** Reference front iso: the grille sits in the nose face between the lamps (face 1.1 cm proud of the skin at z 1.957), not out on the bumper. */
   grille: { y: 0.585, z: 1.968, size: [0.75, 0.14], kind: "bars", count: 6, badge: 0.03, finish: "black", bezel: 0.015 },
-  /** Reference rear iso: big round tips, about 12 cm across. */
-  exhaust: { tips: 2, x: 0.45, y: 0.24, size: [0.12, 0.085], shape: "round" },
+  /** Reference rear iso: big round tips, about 12 cm across, their tops tucked against the bar's underside (y .33). */
+  exhaust: { tips: 2, x: 0.45, y: 0.29, size: [0.12, 0.085], shape: "round" },
   camera: { hood: [1.12, 1.0], third: { dist: 6.1, height: 1.95, aimUp: 0.95 }, far: { dist: 9.9, height: 3.25, aimUp: 1.1 } },
   details: {
     lines: [
