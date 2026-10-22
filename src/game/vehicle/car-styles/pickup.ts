@@ -106,7 +106,6 @@ export const PICKUP: BodyStyle = {
       { view: "top", points: [[-1.059, 0.74], [-1.968, 0.74]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
       { view: "front", points: [[0, 0.95], [0.6, 0.95]], width: 0.008, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "front", points: [[0, 0.52], [0.76, 0.52]], width: 0.008, depth: -0.003, profile: "v", cavity: 0.6 },
-      { view: "rear", points: [[0, 0.58], [0.63, 0.58], [0.63, 1.17], [0, 1.17]], width: 0.008, depth: -0.004, profile: "v", cavity: 0.85 },
     ],
     patches: [
       { view: "side", points: [[-0.171, 1.034], [-0.349, 1.034], [-0.349, 0.948], [-0.171, 0.948]], depth: -0.004, rim: 0.004, cavity: 0.5 },
