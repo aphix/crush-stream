@@ -1,5 +1,6 @@
 import type { BodyStyle } from "../car-variants.ts";
 import { PLATFORM_HARDPOINTS, st } from "./platform.ts";
+import { TOW_MIRROR } from "./pickup.ts";
 
 const { bumpers } = PLATFORM_HARDPOINTS;
 /** Black steel bar bumper, 28 cm tall with a flat face 9 cm proud ([y, out] m, top to bottom). */
@@ -23,7 +24,7 @@ export const MONSTER: BodyStyle = {
   belt: { x: 0.8, y: [[0, 1.0]] },
   rocker: { y: 0.4 },
   underside: [[-2.4, 0.38], [-2.1, 0.34], [2.1, 0.34]],
-  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, mirrorY: 0.29, mirrorZ: 0.2, mirrorReach: 0.1, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75] },
+  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, mirrorY: 0.29, mirrorZ: 0.2, mirrorReach: 0.16, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75], mirror: TOW_MIRROR },
   aPillarFoot: 0.74,
   aPillarTop: 0.41,
   bPillar: { rear: -0.19, front: -0.12 },
