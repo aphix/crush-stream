@@ -206,11 +206,15 @@ interface DetailPatch {
   cavity: number;
 }
 
-/** A wheel arch's drawn lip: it stands `flare` (m) proud of the body side at the opening's edge, rolls into the well there and fairs into the skin `width` (m) out; `square` squares its outline and face (a box flare). */
+/**
+ * A wheel arch's drawn lip: it stands `flare` (m) proud of the body side at the opening's edge, rolls into the well there and fairs into
+ * the skin `width` (m) out; `square` squares its outline and face (a box flare), `band` gives the round outline that stepped face (a raised flare band).
+ */
 interface ArchLip {
   flare: number;
   width: number;
   square?: boolean;
+  band?: boolean;
 }
 
 /** A chase eye: `dist` behind and `height` over the car's origin, aimed `aimUp` over it (m). */
@@ -270,8 +274,8 @@ export interface BodyStyle {
   aPillarKnee?: number;
   /** Side glass top: its drop under the roof (m, absent 0.075), the roof's side lip ending there too; or [z, y] stations (ascending, linear, held past the ends) under a 0.075 lip, painted fill between them and the lip. */
   glassTop?: number | readonly (readonly [number, number])[];
-  /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening). */
-  arch: { radius: number; lip?: ArchLip };
+  /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it. */
+  arch: { radius: number; lip?: ArchLip; wellWall?: number };
   /** Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`. */
   hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number] };
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
@@ -289,6 +293,12 @@ export interface BodyStyle {
   pillars?: { b?: PillarSpan; divider?: PillarSpan };
   /** Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar, and the cowl (the deck between the hood's rear edge and the windshield's foot). */
   blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean; cowl?: boolean };
+  /**
+   * Drawn only: the C-pillar as a sail lofted from the haunch's shoulder, tangent to it, up to the rear glass and the roof, its front on
+   * the side window's line; absent, a flat post. `tip` ([y, z]): where that line ends at the belt behind the quarter glass, the gloss-black
+   * triangle between them filling the gap; absent, the line is the quarter glass's own rear edge.
+   */
+  cPillar?: { tip?: YZ };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
   privacyGlass?: { rear?: boolean; quarter?: boolean };
   /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */

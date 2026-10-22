@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
-import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, st } from "./car-styles/platform.ts";
+import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
 import { ROCKER, cantY, deckTopY, doorAperture, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, rockerAt, tubWall } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
@@ -15,7 +15,7 @@ import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./c
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, glassCorners, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
-import { makeWellLiners } from "./car-well-mesh.ts";
+import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, trimMaterial } from "./car-materials.ts";
 import { BOX_HALVES, boxShape, newLooseShape, partMass, stepLoose } from "./loose-step.ts";
 import { armSolids, Surface } from "../world/surfaces.ts";
@@ -913,7 +913,7 @@ describe("given a body style's H2 hardpoints", () => {
   it("when its tyres stand outboard of the body, then the wheel-well liners stay inside the body side", () => {
     const moved: BodyStyle = { ...sedan, dims: { ...sedan.dims, track: 2.2 } };
     const wheels = carFrame(moved).wheels;
-    for (const [k, liner] of makeWellLiners(moved, "drawn").entries()) {
+    for (const [k, liner] of makeWellLiners(moved, "drawn", makeChassisGeometry(moved)).entries()) {
       const wz = wheels[k]![2];
       const side = sampleSlice(wz, moved.profile).hw;
       const box = partBox(liner);
@@ -921,6 +921,67 @@ describe("given a body style's H2 hardpoints", () => {
       assert.ok(reach <= side + 0.02, `liner ${k} reaches x ${reach} on a 2.2 m track, the body side ${side} at its wheel (z ${wz})`);
     }
   });
+
+  /** A drawn liner's outer end stands at least this far (m) inside the body side 5 to 8 cm past its opening (nearer, the edge rolls in). */
+  const LINER_END_INSIDE = 0.005;
+  for (const id of CAR_STYLE_IDS) {
+    it(`when the ${id} is drawn, then no wheel-well liner hangs below the rocker and each one's outer end stands inside the body side 5 to 8 cm past its opening, so no end shows outboard of the body`, () => {
+      const style = CAR_STYLES[id];
+      const body = makeChassisGeometry(style);
+      const { ring, slices } = body.userData.loft as { ring: number; slices: number };
+      const skin = new THREE.BufferGeometry().setAttribute("position", body.getAttribute("position"));
+      skin.setIndex(Array.from(body.getIndex()!.array.subarray(0, (slices - 1) * ring * 6)));
+      const loft = new THREE.Mesh(skin, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+      const ray = new THREE.Raycaster();
+      const r = style.arch.radius;
+      let worst = -Infinity;
+      let where = "";
+      let below = 0;
+      let belowAt = "";
+      for (const [k, liner] of makeWellLiners(style, "drawn", body).entries()) {
+        const [wx, wy, wz] = carFrame(style).wheels[k]!;
+        const side = Math.sign(wx);
+        const pos = liner.getAttribute("position");
+        let inner = Infinity;
+        for (let v = 0; v < pos.count; v++) inner = Math.min(inner, pos.getX(v) * side);
+        for (let v = 0; v < pos.count; v++) {
+          const x = pos.getX(v) * side;
+          const [y, z] = [pos.getY(v), pos.getZ(v)];
+          if (x <= inner + 0.01 || Math.abs(Math.hypot(y - wy, z - wz) - r) > 1e-4) continue;
+          if (rockerAt(z, style) - y > below) [below, belowAt] = [rockerAt(z, style) - y, `liner ${k} at z ${z.toFixed(3)}`];
+          let skinX = Infinity;
+          for (let seek = 0.05; seek <= 0.08 + 1e-9; seek += 0.005) {
+            const at = new THREE.Vector3(3 * side, y + ((y - wy) / r) * seek, z + ((z - wz) / r) * seek);
+            ray.set(at, new THREE.Vector3(-side, 0, 0));
+            const hit = ray.intersectObject(loft)[0];
+            if (hit && hit.point.x * side > inner) skinX = Math.min(skinX, hit.point.x * side);
+          }
+          if (skinX !== Infinity && x - skinX > worst) [worst, where] = [x - skinX, `liner ${k} at y ${y.toFixed(3)} z ${z.toFixed(3)}`];
+        }
+      }
+      assert.ok(below <= 0.001, `${id}: ${belowAt} hangs ${(below * 100).toFixed(1)} cm below the rocker`);
+      assert.ok(worst <= -LINER_END_INSIDE, `${id}: ${where} stands ${(worst * 100).toFixed(1)} cm outboard of the body side (bar: ${LINER_END_INSIDE * 100} cm inside)`);
+    });
+  }
+
+  for (const id of CAR_STYLE_IDS) {
+    it(`when the ${id}'s arch lips are drawn, then their dark underside stands only over the round opening, never as a dark fin over the painted skin`, () => {
+      const style = CAR_STYLES[id];
+      const lips = archLipGeometry(style, makeChassisGeometry(style));
+      if (!lips) return;
+      const pos = lips.getAttribute("position");
+      const tone = lips.userData.tone as Float32Array;
+      const r = style.arch.radius;
+      let worst = 0;
+      for (let v = 0; v < pos.count; v++) {
+        if (tone[v] === 0) continue;
+        const [y, z] = [pos.getY(v), pos.getZ(v)];
+        const past = Math.min(...carFrame(style).wheels.map(([, wy, wz]) => (y < wy ? Math.abs(z - wz) : Math.hypot(y - wy, z - wz)))) - r;
+        worst = Math.max(worst, past);
+      }
+      assert.ok(worst <= 0.01, `${id}: a dark lip vertex stands ${(worst * 100).toFixed(1)} cm out past the opening, over painted skin`);
+    });
+  }
 
   it("when a cabin tub's floor is set under the body's floor, then the floor holds the body's", () => {
     const moved: BodyStyle = { ...sedan, tubs: [[-0.7, 0.7, ride - 0.1]] };
@@ -1531,7 +1592,8 @@ describe("given a body style's P2 parts", () => {
     const batch = new LampBatch(2);
     batch.sync([car]);
     const got = new THREE.Matrix4();
-    batch.meshes[7]!.getMatrixAt(0, got);
+    const lidDraws = batch.slots[7]!;
+    lidDraws[lidDraws.length === 1 ? 0 : lid.variant]!.getMatrixAt(0, got);
     for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!) < 1e-6, `the opened lid's pose, element ${k}`);
   });
 
@@ -2019,6 +2081,26 @@ describe("given a style with privacy glass", () => {
     } finally {
       hatch.privacyGlass = was;
     }
+  });
+});
+
+describe("given a pull handle for a style's side details", () => {
+  it("when it is drawn from z 0.04 to -0.15 at y 0.76, 5 cm tall, then its pocket is a recessed pill (rounded ends, no corner sharper than 35°) filling that span, with a raised rounded bar along its middle", () => {
+    const [z0, z1, y, h] = [0.04, -0.15, 0.76, 0.05];
+    const { patches, lines } = pullHandle(z0, z1, y, h);
+    const [pocket] = patches;
+    const [bar] = lines;
+    assert.ok(pocket !== undefined && pocket.view === "side" && pocket.depth < 0 && pocket.cavity > 0, "one recessed, darkened side pocket");
+    const pts = pocket.points;
+    const zs = pts.map(([z]) => z);
+    const ys = pts.map(([, py]) => py);
+    assertSameNumbers([Math.min(...zs), Math.max(...zs), Math.min(...ys), Math.max(...ys)], [z1, z0, y - h / 2, y + h / 2], "the pocket fills the span", 1e-6);
+    for (let i = 0; i < pts.length; i++) {
+      const [a, b, c] = [pts[(i + pts.length - 1) % pts.length]!, pts[i]!, pts[(i + 1) % pts.length]!];
+      const turn = (new THREE.Vector2(b[0] - a[0], b[1] - a[1]).angleTo(new THREE.Vector2(c[0] - b[0], c[1] - b[1])) * 180) / Math.PI;
+      assert.ok(turn <= 35, `the outline turns ${turn.toFixed(1)}° at point ${i}: a corner, not a rounded end`);
+    }
+    assert.ok(bar !== undefined && bar.profile === "u" && bar.depth > 0 && bar.points.every(([z, py]) => py === y && z >= z1 && z <= z0), "a raised rounded bar inside the pocket, along its middle");
   });
 });
 

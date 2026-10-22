@@ -56,7 +56,7 @@ describe("given 4 cars in a row and a camera orbiting them slowly at night", () 
       cam.updateMatrixWorld(true);
       lights.update(cars, cam, null, f * DT, undefined, DT);
       assert.equal(lightCount(scene), lit, `the light count changed at frame ${f}`);
-      assert.equal(lights.spots.length + lights.points.length, 8);
+      assert.equal(lights.spots.length + lights.tailSpots.length, 8);
       for (let c = 0; c < 4; c++) {
         for (const i of HEADS) {
           const s = shares(lights, cars[c]!, i);

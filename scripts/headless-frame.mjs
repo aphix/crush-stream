@@ -15,7 +15,8 @@
  * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--view hood|chase|far` follows the hash's car
  * (`car=<id>`) in that drive view instead, e.g. `--hash 'scene=race&car=coupe'`; `--at` is the sim seconds before the drawn frames.
  * `--tear` tears the named parts (`DetachPart.name`: hood, bumperF, archFL, ...) off every car before the framing and hides them, to
- * show what is under them (the engine bay, the crash bars, the bare metal).
+ * show what is under them (the engine bay, the crash bars, the bare metal). `--open doorL,doorR,trunk,quarterL,quarterR` swings those
+ * doors and the lid to their stops and peels those quarter panels as the Doors scene does, on every car, to show their inner faces.
  * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,
  * `trace-camera.mjs`: car space, orthographic for side and top), at the spec's size, so the shot lines up with trace-car's overlay;
  * `scripts/landing-shots.mjs` runs the pair. `--backdrop <colour>` draws the car alone over that colour (no garage room, no fog).
@@ -82,6 +83,7 @@ const { values } = parseArgs({
     draw: { type: "string" },
     scale: { type: "string" },
     shadow: { type: "string" },
+    open: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -253,6 +255,18 @@ for (const name of values.tear?.split(",") ?? []) {
     car["detachPart"](part, 0);
     part.object.visible = false;
   }
+}
+/** `--open`'s poses: a door or the lid at its stop (the swing clamps), a quarter panel peeled the Doors scene's way. */
+const OPEN = {
+  doorL: (car) => car.setDoorOpen(-1, Math.PI),
+  doorR: (car) => car.setDoorOpen(1, Math.PI),
+  trunk: (car) => car.setLidOpen(Math.PI),
+  quarterL: (car) => car.setPanelOpen(-1, 0.45),
+  quarterR: (car) => car.setPanelOpen(1, 0.45),
+};
+for (const name of values.open?.split(",") ?? []) {
+  if (!(name in OPEN)) throw new Error(`--open ${name}: one of ${Object.keys(OPEN).join(", ")}`);
+  for (const car of engine["live"]()) OPEN[name](car);
 }
 if (camera !== undefined) {
   const [radius, pitch, angle] = camera;
