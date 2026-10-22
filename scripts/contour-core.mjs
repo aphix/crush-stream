@@ -58,12 +58,15 @@ export function surfaceOf(car) {
   return { tri: Float64Array.from(tris), kind: Uint8Array.from(kinds), fit: Uint8Array.from(fits) };
 }
 
-/** The box (world) of the surface's triangles of `kinds`, optionally only those with z on one side (`zSign`). */
-export function boxOf(s, kinds, zSign = 0) {
+/**
+ * The box (world) of the surface's triangles of `kinds`, optionally only those with z on one side (`zSign`) and, with `ownOnly`, not
+ * a merged fitting's (`fit`: an exhaust tip under a bumper is not the bumper).
+ */
+export function boxOf(s, kinds, zSign = 0, ownOnly = false) {
   const box = new THREE.Box3();
   const v = new THREE.Vector3();
   for (let t = 0; t < s.kind.length; t++) {
-    if (!kinds.includes(s.kind[t])) continue;
+    if (!kinds.includes(s.kind[t]) || (ownOnly && s.fit[t])) continue;
     for (let c = 0; c < 3; c++) {
       v.fromArray(s.tri, t * 9 + c * 3);
       if (zSign === 0 || Math.sign(v.z) === zSign) box.expandByPoint(v);

@@ -417,7 +417,8 @@ export function contourOf(stage, styleId, probe = null) {
   const style = car.style;
   const lift = stage.game.CLASSES[stage.game.STYLE_CLASS[styleId]].lift;
   const whole = surfaceOf(car);
-  const bumper = boxOf(whole, [K.bumper], -1);
+  // The bumper's own triangles: its lip and bar cuts stand on the bar, not on the exhaust tips or hitch merged under it.
+  const bumper = boxOf(whole, [K.bumper], -1, true);
   // The small fittings (exhaust tips, tow hitch) are fine as they are: no score reads them.
   const s = dropBoxes(whole, smallFittings(style, bumper, lift));
   const glass = boxOf(s, [K.side]);
