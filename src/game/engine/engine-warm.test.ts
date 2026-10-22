@@ -117,15 +117,22 @@ describe("given the engine warming its programs before the loop starts", () => {
     assert.ok(paintKey().includes(FINISH_KEY_MARK), `key ${paintKey()}`);
   });
 
-  it("when the context is lost and restored, then the warm-up links and draws the whole scene again and both load windows start over", async () => {
-    const windows = [engine["autoFx"]["win"], engine["detailGov"]["win"]];
+  it("when the context is lost and restored, then the warm-up links and draws the whole scene again, every load window starts over (FX tier, distance detail, Auto render scale) and the player's quality knobs stay in force", async () => {
+    const windows = [engine["autoFx"]["win"], engine["detailGov"]["win"], engine["quality"].scaleGov["win"]];
     for (const win of windows) win.add(PAST_SETTLE_MS, 0, 0, -1);
+    engine.setDrawDistance("far");
+    engine.setRenderScale("2");
+    engine.setShadows("high");
+    const knobs = (): string => `${engine["camera"].far} ${engine["renderer"].getPixelRatio()} ${engine["sun"].shadow.mapSize.x}`;
+    const knobsBefore = knobs();
     await warmsDone();
     drawnMaterials.clear();
     fire("webglcontextlost");
     fire("webglcontextrestored");
     await warmsDone();
     assert.equal(drawnMaterials.has(engine["live"]()[0]!.lookMeshes().bodyPaint), true, "car paint was not drawn again");
-    assert.equal(windows.map((win) => win.settling).join(), "true,true");
+    assert.equal(windows.map((win) => win.settling).join(), "true,true,true");
+    assert.equal(knobsBefore, "270 2 2048", "the knobs were put in force");
+    assert.equal(knobs(), knobsBefore, "the knobs after the restore");
   });
 });

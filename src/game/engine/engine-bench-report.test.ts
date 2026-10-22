@@ -296,6 +296,38 @@ describe("given the bench result of a race that ran the sky A/B", () => {
   });
 });
 
+describe("given a card whose run held draw max and scale 2 pinned by the URL", () => {
+  test("when it is described, then its quality line says so", () => {
+    const settings = { ...RESULT.settings, quality: { draw: "max", scale: "2", shadow: "auto", pinned: "draw scale" } };
+    const lines = describeBench({ ...RESULT, settings });
+    assert.ok(lines.includes("quality: draw max, scale 2, shadows auto (the URL pinned draw scale)"), lines.join("\n"));
+    assert.ok(!describeBench(RESULT).some((l) => l.startsWith("quality:")), "a card from before the knobs has no quality line");
+  });
+});
+
+describe("given an extended card with quality A/B blocks", () => {
+  test("when it is described, then each knob prints its Auto and Max arms", () => {
+    const lines = describeBench({
+      ...RESULT,
+      abDraw: { auto: B(50, null), max: B(44, null) },
+      abScale: { auto: B(52, null), max: B(38, null) },
+      abShadow: { auto: B(53, null), max: B(49, null) },
+    });
+    const knobs = [
+      { title: "A/B draw distance pinned: ", auto: "auto 50.0 fps", top: "max 44.0 fps" },
+      { title: "A/B render scale pinned: ", auto: "auto 52.0 fps", top: "2 38.0 fps" },
+      { title: "A/B shadows pinned: ", auto: "auto 53.0 fps", top: "max 49.0 fps" },
+    ];
+    for (const knob of knobs) {
+      const at = lines.findIndex((l) => l.startsWith(knob.title));
+      assert.ok(at >= 0, `${knob.title} is printed`);
+      assert.ok(lines[at]!.startsWith(`${knob.title}${knob.auto}`), `${knob.title} Auto arm: ${lines[at]}`);
+      assert.ok(lines[at + 1]!.startsWith(`${" ".repeat(knob.title.length)}${knob.top}`), `${knob.title} top arm: ${lines[at + 1]}`);
+    }
+    assert.ok(!describeBench(RESULT).some((l) => l.startsWith("A/B draw distance") || l.startsWith("A/B render scale") || l.startsWith("A/B shadows")), "a card without the blocks prints none");
+  });
+});
+
 /** A value with the digits a measured one has (a card's size must be judged with them, not with round numbers). */
 const measured = (x: number): number => x + 0.123456789012345;
 const ragdollOf = (steps: number): RagdollCost => ({ steps, stepMs: { mean: measured(0.2), p95: measured(0.5) }, colliders: 340, bodies: 52 });

@@ -943,6 +943,7 @@ function detailFaults(style: BodyStyle): string[] {
   const boxes = {
     side: [[zMin, zMax], [0, dims.height]],
     top: [[zMin, zMax], [0, halfWidth]],
+    bottom: [[zMin, zMax], [0, halfWidth]],
     front: [[0, halfWidth], [0, dims.height]],
     rear: [[0, halfWidth], [0, dims.height]],
   } as const;
