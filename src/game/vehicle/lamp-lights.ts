@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { hypot2 } from "../kernel/physics-core.js";
 import { lampEmissiveMap, makeLampUnit, type LampKind } from "./car-materials.ts";
 import { brakeLampUnit, lampBatchGeometries, sideMarkerUnit } from "./part-variants.ts";
+import { SeatDraw } from "./seat-draw.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 
@@ -694,13 +695,31 @@ interface LampCar {
   }[];
 }
 
-/** Each lamp fitting's mesh in `LampBatch.meshes`, a lid share's broken one, and its draw while the car brakes (the tails' share and the
+/** Each lamp fitting's slot in `LampBatch`, a lid share's broken one, and its slot while the car brakes (the tails' share and the
  *  high brake lamp burn bright; off the brakes the share is a running light and the high brake lamp dark). */
 const FITTING_MESH = { brake: 12, marker: 5, hood: 6, boot: 7 } as const;
 const SHARE_BROKEN = { brake: -1, marker: -1, hood: 8, boot: 9 } as const;
 const FITTING_BRAKING = { brake: 4, marker: 5, hood: 6, boot: 11 } as const;
-/** A tail lamp's draw while its car brakes. */
+/** A tail lamp's slot while its car brakes. */
 const TAIL_BRAKING = 10;
+
+/** Per slot, the lamp family its seats draw and its look: head lit, head broken, tail running, tail broken, high brake lamp lit, marker,
+ *  the heads' shares on the hood, the tails' on the boot lid, those two shares broken, the tails and their share braking, high brake dark. */
+const LAMP_SLOTS = [
+  ["head", LAMP_LOOK.head],
+  ["head", LAMP_LOOK.broken],
+  ["tail", LAMP_LOOK.running],
+  ["tail", LAMP_LOOK.broken],
+  ["brake", LAMP_LOOK.tail],
+  ["marker", LAMP_LOOK.head],
+  ["hood", LAMP_LOOK.head],
+  ["boot", LAMP_LOOK.running],
+  ["hood", LAMP_LOOK.broken],
+  ["boot", LAMP_LOOK.broken],
+  ["tail", LAMP_LOOK.tail],
+  ["boot", LAMP_LOOK.tail],
+  ["brake", LAMP_LOOK.off],
+] as const;
 
 /** Whether `seat` shows: on the camera's layer (distance detail) and visible up its parent chain. */
 function seatShown(seat: THREE.Object3D): boolean {
@@ -710,51 +729,55 @@ function seatShown(seat: THREE.Object3D): boolean {
 }
 
 /**
- * Every car's lamp units as instanced draws (head / tail × lit / broken) instead of four meshes per car. A car keeps a bare Object3D per
- * lamp that it seats on the skin, parented to the class lift but out of the scene graph; `sync` brings each shown seat's world matrix
- * current from the lift's and copies it into the draw for the lamp's kind, state and unit variant (styles that draw their own lamps,
- * `lamps.shapes`, take a draw per variant; an empty one issues no draw call). Brake lamps, side markers and the lamps' shares on the
- * hood and boot lid take more, drawn only while a car on screen has them.
+ * Every car's lamp units as ONE draw (`SeatDraw`) instead of four meshes per car. A car keeps a bare Object3D per lamp that it seats on
+ * the skin, parented to the class lift but out of the scene graph; `sync` brings each shown seat's world matrix current from the lift's
+ * and packs it with the unit variant its style draws (`lamps.shapes`) and its slot's look, so braking or a broken lamp only changes the
+ * look. Brake lamps, side markers and the lamps' shares on the hood and boot lid are seats too.
  */
 export class LampBatch {
   /** Every draw, for the scene. */
-  readonly meshes: readonly THREE.InstancedMesh[];
-  /** Per slot (head lit, head broken, tail running, tail broken, high brake lamp lit, marker, the heads' shares on the hood, the tails'
-   *  on the boot lid, those two shares broken, then the tail lamps and their lid shares braking and the high brake lamp dark), its draws
-   *  by variant. */
-  readonly slots: readonly (readonly THREE.InstancedMesh[])[];
-  /** Per slot and variant, the instances packed this sync. */
-  private readonly n: Int32Array[];
+  readonly meshes: readonly THREE.Mesh[];
+  readonly draw: SeatDraw;
+  /** Per slot (`LAMP_SLOTS`), the seats packed this sync. */
+  private readonly n = new Int32Array(LAMP_SLOTS.length);
+  /** Per slot, its family's first variant in the draw and how many it has. */
+  private readonly first: Int32Array;
+  private readonly variants: Int32Array;
+  /** Per slot, its look's diffuse and emissive colours. */
+  private readonly looks: readonly (readonly [THREE.Color, THREE.Color])[];
   /** Geometries the batch built (the fittings' are shared). */
-  private readonly own: THREE.BufferGeometry[] = [];
+  private readonly own: THREE.BufferGeometry[];
 
+  /** `capacity`: each slot's worth of seats (two per car), as many again for the side markers. */
   constructor(capacity: number) {
-    const mat = (look: (typeof LAMP_LOOK)[keyof typeof LAMP_LOOK]) =>
-      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.25, emissiveMap: lampEmissiveMap(), ...look });
-    const plain = { head: mat(LAMP_LOOK.head), tail: mat(LAMP_LOOK.tail), running: mat(LAMP_LOOK.running), off: mat(LAMP_LOOK.off), broken: mat(LAMP_LOOK.broken) };
-    const slots: THREE.InstancedMesh[][] = [];
-    const unit = { head: lampBatchGeometries("head") ?? [makeLampUnit("head")], tail: lampBatchGeometries("tail") ?? [makeLampUnit("tail")] };
-    for (const kind of ["head", "tail"] as const) {
-      this.own.push(...unit[kind]);
-      for (const m of [kind === "head" ? plain.head : plain.running, plain.broken]) slots.push(unit[kind].map((geo) => lampDraw(geo, m, capacity)));
+    const families = {
+      head: lampBatchGeometries("head") ?? [makeLampUnit("head")],
+      tail: lampBatchGeometries("tail") ?? [makeLampUnit("tail")],
+      brake: [brakeLampUnit()],
+      marker: [sideMarkerUnit()],
+      hood: lampBatchGeometries("hood") ?? [new THREE.BufferGeometry()],
+      boot: lampBatchGeometries("boot") ?? [new THREE.BufferGeometry()],
+    };
+    this.own = [...families.head, ...families.tail, ...families.hood, ...families.boot];
+    const variants: THREE.BufferGeometry[] = [];
+    const first = new Map<keyof typeof families, number>();
+    for (const [family, geos] of Object.entries(families) as [keyof typeof families, THREE.BufferGeometry[]][]) {
+      first.set(family, variants.length);
+      variants.push(...geos);
     }
-    slots.push([lampDraw(brakeLampUnit(), plain.tail, capacity)], [lampDraw(sideMarkerUnit(), plain.head, capacity * 2)]);
-    const shares = (["hood", "boot"] as const).map((slot) => {
-      const geos = lampBatchGeometries(slot) ?? [new THREE.BufferGeometry()];
-      this.own.push(...geos);
-      return geos;
-    });
-    for (const [k, look] of [plain.head, plain.running].entries()) slots.push(shares[k]!.map((geo) => lampDraw(geo, look, capacity)));
-    for (const geos of shares) slots.push(geos.map((geo) => lampDraw(geo, plain.broken, capacity)));
-    slots.push(unit.tail.map((geo) => lampDraw(geo, plain.tail, capacity)), shares[1]!.map((geo) => lampDraw(geo, plain.tail, capacity)), [lampDraw(brakeLampUnit(), plain.off, capacity)]);
-    this.slots = slots;
-    this.meshes = slots.flat();
-    this.n = slots.map((s) => new Int32Array(s.length));
+    this.first = Int32Array.from(LAMP_SLOTS, ([family]) => first.get(family)!);
+    this.variants = Int32Array.from(LAMP_SLOTS, ([family]) => families[family].length);
+    this.looks = LAMP_SLOTS.map(([, look]) => [new THREE.Color(look.color), new THREE.Color(look.emissive).multiplyScalar(look.emissiveIntensity)] as const);
+    // White in both: each seat's look multiplies them.
+    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.25, emissiveMap: lampEmissiveMap(), emissive: 0xffffff });
+    this.draw = new SeatDraw(variants, material, capacity * (LAMP_SLOTS.length + 1), "lamp");
+    this.meshes = [this.draw.mesh];
   }
 
   /** Pack the shown lamps of `cars` (the cars' own world matrices must be current). A seat off layer 0 (distance detail) is hidden. */
   sync(cars: readonly LampCar[]): void {
-    for (const c of this.n) c.fill(0);
+    this.n.fill(0);
+    this.draw.begin();
     for (const car of cars) {
       for (const l of car.lamps) {
         if (!seatShown(l.seat)) continue;
@@ -767,46 +790,22 @@ export class LampBatch {
         this.put(dark ? SHARE_BROKEN[f.kind] : car.braking ? FITTING_BRAKING[f.kind] : FITTING_MESH[f.kind], f.seat, f.variant);
       }
     }
-    for (let b = 0; b < this.slots.length; b++) {
-      for (let v = 0; v < this.slots[b]!.length; v++) {
-        const mesh = this.slots[b]![v]!;
-        const n = this.n[b]![v]!;
-        if (n === 0 && mesh.count === 0) continue;
-        mesh.count = n;
-        // An empty instanced draw still costs the scene walk, the upload and the program switch before three skips it.
-        mesh.visible = n > 0;
-        mesh.instanceMatrix.clearUpdateRanges();
-        mesh.instanceMatrix.addUpdateRange(0, n * 16);
-        mesh.instanceMatrix.needsUpdate = true;
-      }
-    }
+    this.draw.end();
+  }
+
+  /** Seats packed into slot `b` by the last sync. */
+  drawn(b: number): number {
+    return this.n[b]!;
   }
 
   private put(b: number, seat: THREE.Object3D, variant: number): void {
-    const draws = this.slots[b]!;
-    const v = draws.length === 1 ? 0 : variant;
-    const mesh = draws[v]!;
-    const i = this.n[b]![v]!;
-    if (i >= mesh.instanceMatrix.count) return;
     seat.updateWorldMatrix(false, false);
-    mesh.setMatrixAt(i, seat.matrixWorld);
-    this.n[b]![v] = i + 1;
+    const [color, glow] = this.looks[b]!;
+    if (this.draw.put(this.first[b]! + (this.variants[b] === 1 ? 0 : variant), seat.matrixWorld, color, glow)) this.n[b]!++;
   }
 
   dispose(): void {
     for (const g of this.own) g.dispose();
-    for (const m of new Set(this.meshes.map((mesh) => mesh.material as THREE.Material))) m.dispose();
-    for (const m of this.meshes) m.dispose();
+    this.draw.dispose();
   }
-}
-
-/** One instanced lamp draw of `geo` in `m` for `capacity` instances. */
-function lampDraw(geo: THREE.BufferGeometry, m: THREE.Material, capacity: number): THREE.InstancedMesh {
-  const mesh = new THREE.InstancedMesh(geo, m, capacity);
-  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  // Instances span the pad and move every frame; a stale bound would cull live lamps.
-  mesh.frustumCulled = false;
-  mesh.count = 0;
-  mesh.visible = false;
-  return mesh;
 }
