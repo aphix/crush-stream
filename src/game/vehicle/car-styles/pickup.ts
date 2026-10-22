@@ -58,14 +58,14 @@ export const PICKUP: BodyStyle = {
   midPillarZ: null,
   rearBulkhead: { z: -0.56, yTop: 1.2 },
   tubs: [[-0.55, 0.85, 0.5], [-2.12, -0.62, 0.8]],
-  rearDoorSeam: null,
+  rearDoorSeam: -0.41,
   boot: { kind: "tailgate", y0: 0.6, origin: [1.18, -2.15], pivot: [0.6, -2.15] },
   lamps: { head: [0.5, 0.85], tail: [0.58, 0.86] },
   camera: { hood: [1.42, 1.25], third: { dist: 6.4, height: 2.3, aimUp: 1.2 }, far: { dist: 10.3, height: 3.62, aimUp: 1.35 } },
   details: {
     lines: [
       { view: "side", points: [[0.706, 1.128], [0.699, 0.461]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
-      { view: "side", points: [[-0.406, 1.59], [-0.421, 0.478]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.41, 1.142], [-0.421, 0.478]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[0.699, 0.462], [-0.414, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.428, 0.462], [-0.556, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.592, 1.142], [-0.599, 0.446]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
