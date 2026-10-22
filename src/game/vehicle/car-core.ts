@@ -934,7 +934,11 @@ export abstract class CarCore {
     if (fl > 1e-6) this.fwdFlat.set(this.forward.x / fl, 0, this.forward.z / fl);
     else this.fwdFlat.set(0, 0, 1);
     this.rightFlat.set(this.fwdFlat.z, 0, -this.fwdFlat.x);
-    this.deform.liftOffset.set(0, centreLift(this), 0).applyQuaternion(this.group.quaternion);
+    const lift = centreLift(this);
+    const off = this.deform.liftOffset;
+    // Unlifted (every class but the monster, and the monster lying over) the offset is zero: set once, not turned each call.
+    if (lift !== 0) off.set(0, lift, 0).applyQuaternion(this.group.quaternion);
+    else if (off.x !== 0 || off.y !== 0 || off.z !== 0) off.set(0, 0, 0);
   }
 
   /** The drive back as built: a car put on a spot carries no wheel, pedals, wheelspin, drift, grip or ramps over from where it was. */

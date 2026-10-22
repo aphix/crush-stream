@@ -537,8 +537,9 @@ export class DeformableCar extends CarParts {
     g.updateWorldMatrix(false, false);
     // The masses go back about the centre at the body's new pose: a lifted wreck's (`centreLift`) moves along its frame as the body tips.
     // `velocity` is its centre of mass's, which that inner shift leaves as it was. Carried to the new centre (`velocity` += ω × the shift),
-    // a monster wreck tumbling at 9 rad/s gained 4.9 m/s upward in free fall each time its lift faded or came back.
-    const turned = wreckCentre(this);
+    // a monster wreck tumbling at 9 rad/s gained 6.1 m/s upward in free fall as its lift faded. An unlifted one's stays where it was (its
+    // masses stand still in the frame through the step), so it is not read again.
+    const turned = CLASSES[carClass(this)].lift === 0 ? centre : wreckCentre(this);
     _c.copy(turned).applyMatrix4(g.matrixWorld);
     for (const m of ms) {
       m.world.copy(m.local).applyMatrix4(g.matrixWorld);
