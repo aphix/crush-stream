@@ -140,10 +140,11 @@ export class PartBatch {
 
 /** Show `mesh`'s first `n` instances, uploading them only if their count or a matrix (`moved`) changed. */
 function publish(mesh: THREE.InstancedMesh, n: number, moved: boolean): void {
-  if (n === mesh.count && !moved) return;
-  mesh.count = n;
+  // Every sync, before the skip: the boot warm shows hidden draws and hides them again after its own sync, so a resting draw would stay hidden.
   // An empty instanced draw still costs the scene walk, the upload and the program switch before three skips it.
   mesh.visible = n > 0;
+  if (n === mesh.count && !moved) return;
+  mesh.count = n;
   mesh.instanceMatrix.clearUpdateRanges();
   mesh.instanceMatrix.addUpdateRange(0, n * 16);
   mesh.instanceMatrix.needsUpdate = true;

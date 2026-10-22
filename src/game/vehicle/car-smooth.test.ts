@@ -10,7 +10,7 @@ import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
 import { SAIL_SWEEP, makeGreenhouseFrame, makeRoofGeometry, postSection } from "./car-greenhouse-mesh.ts";
-import { makeWindshield } from "./car-glass.ts";
+import { makeWindshield, rearGlassCornerZ, rearGlassInset } from "./car-glass.ts";
 import { DeformableCar } from "./car.ts";
 import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
 import { cageSourceOf } from "./car-cage-rig.ts";
@@ -767,10 +767,13 @@ const SAIL_FLAT_BOW = 0.001;
 const SAIL_SINK_TEST = 0.002;
 const SAIL_OUTER_POINTS = 6;
 
+/** The coupe on a curved roof section (`roofSection`): the sail rows read it beside every style as built. */
+const DOMED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, roofSection: { crown: 0.5, blend: 0.5 } };
+const SAIL_STYLES = [...CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar).map((id) => [id, CAR_STYLES[id]] as const), ["domed coupe", DOMED_COUPE] as const];
+
 describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", () => {
-  for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar)) {
+  for (const [id, style] of SAIL_STYLES) {
     it(`when a ${id}'s sail is read along its haunch, then each section's foot sits on the body's shoulder and its face leaves it within ${SAIL_LEAN_DEGREES}° of the shoulder's tangent`, (t) => {
-      const style = CAR_STYLES[id];
       if (style.cPillar?.flat) return t.skip("a flat sail leaves the body where its line touches the section: its own row");
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
@@ -788,7 +791,6 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
     });
     it(`when a ${id}'s sail is read at the roof's rear end, then a section stands within ${SAIL_ROOF_GAP * 1000} mm behind it, none of its points stands over the roof's skin (no flap) and it covers the roof end's skin outboard of the rear glass (no slit)`, () => {
-      const style = CAR_STYLES[id];
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const roofZ = style.roofZ[0];
       const { ring, slices } = loftOf(sail);
@@ -823,9 +825,8 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
     });
   }
 
-  for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar?.flat)) {
+  for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.flat)) {
     it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm behind its ${SAIL_ROLL_BLEND_TEST * 100} cm ease into the roof end's roll, no body point stands outside its line by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
-      const style = CAR_STYLES[id];
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
       const { ring, slices } = loftOf(sail);
@@ -850,7 +851,6 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
     });
     it(`when a ${id}'s flat sail is read from its rear end to its front, then its outer face's shape off its chord changes at most ${SAIL_SHAPE_RATE} m per m of length between sections (no line where the flat haunch meets the roof's roll, nor where the roll meets the post ahead of it)`, () => {
-      const style = CAR_STYLES[id];
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const { ring, slices } = loftOf(sail);
       // Each section's outer points' offsets (m, + outboard) off its foot-to-head chord, up to and including the roof end's section.
@@ -875,14 +875,13 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
   }
 });
 
-/** A flush sail's head (`cPillar.flush`) stands at most this far (m) over the rear glass's side edge (a chrome bead's 5 mm, its rounded edge's 2.5 mm radius where the section rises steeply into it, and a mm), and laps at least this far in over it, so the glass's edge lies under the sail. */
+/** A flush sail's head (`cPillar.flush`) stands at most this far (m) over the drawn rear glass (a chrome bead's 5 mm, its rounded edge's 2.5 mm radius where the section rises steeply into it, and a mm), and laps at least this far in over its side edge, so the glass's edge lies under the sail. */
 const SAIL_FLUSH_HEIGHT = 0.0085;
 const SAIL_FLUSH_LAP_MIN = 0.005;
 
 describe("given every body style whose drawn sail laps the rear glass (`cPillar.flush`)", () => {
-  for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar?.flush)) {
-    it(`when a ${id}'s sail is read along the rear glass, then each section's head stands within ${SAIL_FLUSH_HEIGHT * 1000} mm over the glass and laps its side edge by at least ${SAIL_FLUSH_LAP_MIN * 1000} mm`, () => {
-      const style = CAR_STYLES[id];
+  for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.flush)) {
+    it(`when a ${id}'s sail is read along the rear glass, then each section's head stands within ${SAIL_FLUSH_HEIGHT * 1000} mm over the drawn glass (fallen with the dome) and laps its side edge (round at the top corners) by at least ${SAIL_FLUSH_LAP_MIN * 1000} mm`, () => {
       const rg = style.rearGlass;
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const { ring, slices } = loftOf(sail);
@@ -893,13 +892,37 @@ describe("given every body style whose drawn sail laps the rear glass (`cPillar.
         if (z < rg.base[1] || z >= style.roofZ[0] - SAIL_ROOF_GAP) continue;
         read++;
         const head = Array.from({ length: ring }, (_, k) => positionAt(sail, s * ring + k)).reduce((a, b) => (b.y > a.y ? b : a));
-        const u = THREE.MathUtils.clamp((z - rg.base[1]) / (rg.top[1] - rg.base[1]), 0, 1);
-        const over = head.y - THREE.MathUtils.lerp(rg.base[0], rg.top[0], u);
-        const lap = THREE.MathUtils.lerp(rg.wBase, rg.wTop, u) / 2 - head.x;
+        const lap = rearGlassInset(style, z, 0).x - head.x;
+        const over = head.y - rearGlassInset(style, z, lap).y;
         if (!(over > 0 && over <= SAIL_FLUSH_HEIGHT && lap >= SAIL_FLUSH_LAP_MIN)) off.push(`z ${z.toFixed(3)}: head ${(over * 1000).toFixed(1)} mm over the glass, ${(lap * 1000).toFixed(1)} mm in over its edge`);
       }
       assert.ok(read > 0, `${id}: no sail section along the rear glass`);
       assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
+    });
+  }
+
+  for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.flush && s.roofSection && s.rearGlass.round)) {
+    it(`when a ${id}'s sail is read at its curved roof's rear end, then its head reaches in over the rear glass's round top corner's mid-arc by at least ${SAIL_FLUSH_LAP_MIN * 1000} mm (the ring behind follows the arc's lower half, the roof end meets its upper half: no notch), and that section stands behind the roof's bowed end at every point (no skin over skin)`, () => {
+      const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
+      const { ring, slices } = loftOf(sail);
+      const end = Array.from({ length: slices }, (_, s) => s).find((s) => positionAt(sail, s * ring).z < style.roofZ[0] && positionAt(sail, s * ring).z >= style.roofZ[0] - SAIL_ROOF_GAP);
+      assert.ok(end !== undefined, `${id}: no section at the roof's rear end`);
+      const section = Array.from({ length: ring }, (_, k) => positionAt(sail, end * ring + k));
+      const head = section.reduce((a, b) => (b.y > a.y ? b : a));
+      const lap = rearGlassInset(style, rearGlassCornerZ(style)!, 0).x - head.x;
+      assert.ok(lap >= SAIL_FLUSH_LAP_MIN, `${id}: the roof end's head (x ${head.x.toFixed(3)}) ${(lap * 1000).toFixed(1)} mm in over the corner's mid-arc`);
+      // The roof's rear end (its end ring, bowed with the glass top) as z by x, +x side.
+      const roof = makeRoofGeometry(style).getAttribute("position") as THREE.BufferAttribute;
+      const endRing = Array.from({ length: roof.count }, (_, v) => [roof.getX(v), roof.getZ(v)] as const)
+        .filter(([x, z]) => x >= 0 && z <= style.roofZ[0] + 1e-6)
+        .sort((a, b) => a[0] - b[0]);
+      for (const p of section) {
+        const k = endRing.findIndex(([x]) => x >= p.x);
+        if (k <= 0) continue;
+        const [[xa, za], [xb, zb]] = [endRing[k - 1]!, endRing[k]!];
+        const roofEnd = xb === xa ? za : THREE.MathUtils.lerp(za, zb, (p.x - xa) / (xb - xa));
+        assert.ok(p.z < roofEnd, `${id}: sail point (x ${p.x.toFixed(3)}, z ${p.z.toFixed(4)}) stands ${((p.z - roofEnd) * 1000).toFixed(1)} mm into the roof's end (z ${roofEnd.toFixed(4)})`);
+      }
     });
   }
 });
