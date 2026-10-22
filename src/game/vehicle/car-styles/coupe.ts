@@ -29,7 +29,6 @@ const COUPE_LAMP_SHAPES = {
     // Rear iso: deep red lenses in chrome bezels rounded about a quarter of their height at each corner, three segments each, a black centre band between them edged in chrome.
     loops: [
       { points: [[0.305, 0.58], [0.555, 0.58], [0.5775, 0.586], [0.594, 0.6025], [0.6, 0.625], [0.6, 0.725], [0.594, 0.7475], [0.5775, 0.764], [0.555, 0.77], [0.305, 0.77], [0.2825, 0.764], [0.266, 0.7475], [0.26, 0.725], [0.26, 0.625], [0.266, 0.6025], [0.2825, 0.586]] },
-      { side: true, points: [[-2.045, 0.58], [-2.0, 0.58], [-2.0, 0.77], [-2.045, 0.77]] },
     ],
     lens: "red",
     bezel: "chrome",
@@ -40,9 +39,6 @@ const COUPE_LAMP_SHAPES = {
       { line: { points: [[0.487, 0.59], [0.487, 0.76]] }, width: 0.004, tone: "dark" },
       { line: { points: [[0, 0.772], [0.26, 0.772]] }, width: 0.006, tone: "chrome" },
       { line: { points: [[0, 0.578], [0.26, 0.578]] }, width: 0.006, tone: "chrome" },
-      // Reference side view: the corner lens in three segments too.
-      { line: { side: true, points: [[-2.045, 0.643], [-2.0, 0.643]] }, width: 0.004, tone: "dark" },
-      { line: { side: true, points: [[-2.045, 0.707], [-2.0, 0.707]] }, width: 0.004, tone: "dark" },
     ],
   },
 } as const;
