@@ -16,7 +16,7 @@ import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
-import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, trimMaterial } from "./car-materials.ts";
+import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
 import { BOX_HALVES, boxShape, newLooseShape, partMass, stepLoose } from "./loose-step.ts";
 import { armSolids, Surface } from "../world/surfaces.ts";
 import { wearCarLook } from "../present/car-look.ts";
@@ -2193,9 +2193,23 @@ describe("given a body style's P2 parts", () => {
       const c = drawnPart(PART_KIND.tailTrim, CAR_STYLES[id]).geometry.getAttribute("color");
       return Array.from({ length: c.count }, (_, i) => [c.getX(i), c.getY(i), c.getZ(i)].join()).filter((k) => k === cream).length;
     };
-    assert.equal(creams("hatchback"), 0, "plate vertices in the hatchback's tail trim");
-    assert.ok(CAR_STYLES.hatchback.bumpers.rear.plateless, "the hatchback's reference shows no plate");
+    for (const id of ["hatchback", "wagon"] as const) {
+      assert.equal(creams(id), 0, `plate vertices in the ${id}'s tail trim`);
+      assert.ok(CAR_STYLES[id].bumpers.rear.plateless, `the ${id}'s reference shows no plate on its bumper`);
+    }
     assert.ok(creams("sedan") > 0, "the control: the sedan's trim carries the plate");
+  });
+
+  it("when a bumper lamp's lens is black, then the hatchback's and the SUV's diffuser bands are the trim's matte black plastic, not a glossy dark lens", () => {
+    const plastic = toned(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3)), TRIM_BLACK, TRIM_FINISH.plastic.roughness, TRIM_FINISH.plastic.metalness);
+    const [black, texel] = [Array.from(plastic.getAttribute("color").array).join(), plastic.getAttribute("uv").getX(0)];
+    for (const id of ["hatchback", "wagon"] as const) {
+      const trim = drawnPart(PART_KIND.tailTrim, CAR_STYLES[id]).geometry;
+      const [c, uv] = [trim.getAttribute("color"), trim.getAttribute("uv")];
+      const band = Array.from({ length: c.count }, (_, i) => i).filter((i) => [c.getX(i), c.getY(i), c.getZ(i)].join() === black);
+      assert.ok(band.length > 0, `${id}: no black plastic in the tail trim`);
+      assert.equal(band.filter((i) => uv.getX(i) !== texel).length, 0, `${id}: black vertices off the plastic finish's texel`);
+    }
   });
 
   it("when a tail lamp's outline runs onto the boot lid, then the lid carries that share and opens with it, and the body keeps the rest", () => {

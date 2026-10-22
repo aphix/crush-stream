@@ -126,8 +126,8 @@ interface LampLoop {
   side?: boolean;
   points: readonly LampPoint[];
 }
-/** A lens tone: `lit` the kind's lit lens (head white, tail red); the rest never glow. */
-type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "chrome";
+/** A lens tone: `lit` the kind's lit lens (head white, tail red); `black` the trim's matte black plastic (a valance or diffuser band); the rest never glow. */
+type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "black" | "chrome";
 
 /**
  * A lamp drawn to its outline (drawn only), met on the skin: its lens filling `loops` (a wrap round the corner is another loop) a few mm

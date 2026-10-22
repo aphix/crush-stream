@@ -280,7 +280,7 @@ const LAMP_SEAM_NUDGE = [0, 0.01, -0.01, 0.02, -0.02, 0.03, -0.03, 0.04, -0.04] 
 const LAMP_REFINE_PASSES = 8;
 /** The lit lenses (sRGB): head white, tail red; the other tones (`SHAPE_TONE`) never glow. */
 const LAMP_TONE = { head: 0xf4f1e8, tail: 0xc4121c } as const;
-const SHAPE_TONE: Record<Exclude<LampTone, "lit">, number> = { clear: 0xd8dde2, red: 0x8a0c12, amber: 0xff9a1a, smoked: 0x2a1a1c, dark: 0x0e0f11, chrome: TRIM_CHROME };
+const SHAPE_TONE: Record<Exclude<LampTone, "lit">, number> = { clear: 0xd8dde2, red: 0x8a0c12, amber: 0xff9a1a, smoked: 0x2a1a1c, dark: 0x0e0f11, black: TRIM_BLACK, chrome: TRIM_CHROME };
 /** u on the lamp emissive mask (`lampEmissiveMap`): the dark housing texel and the lit lens texel. */
 const LAMP_TEXEL = { housing: 0.25, lens: 0.75 } as const;
 /** How far out (m) a lamp point's ray starts to meet the skin: past any body. */
@@ -303,9 +303,10 @@ function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind, bul
   return geo;
 }
 
-/** A bumper lamp's tone in the part batch (never lit): chrome in the trim's finish, the rest glossy in their colour. */
+/** A bumper lamp's tone in the part batch (never lit): chrome and black in the trim's finishes, the rest glossy in their colour. */
 function bumperTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind): THREE.BufferGeometry {
-  return tone === "chrome" ? finished(geo, "chrome") : dark(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0.3, 0.1);
+  if (tone === "chrome" || tone === "black") return finished(geo, tone);
+  return dark(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0.3, 0.1);
 }
 
 /** A lamp point met on the skin: where, the skin's outward normal there, and whether it lies on the boot lid. */
