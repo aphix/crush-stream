@@ -4,11 +4,12 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
-import { CREASE_DEGREES, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { CREASE_DEGREES, SHUT_RAMP, bayAt, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
+import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
-import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
+import { makeGreenhouseFrame, makeRoofGeometry, postSection } from "./car-greenhouse-mesh.ts";
 import { DeformableCar } from "./car.ts";
 import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
 import { cageSourceOf } from "./car-cage-rig.ts";
@@ -290,6 +291,146 @@ describe("given every body style's chassis, whose nose and tail roll into the en
   }
 });
 
+/** A drawn nose's chord may sag this far (m) off the curve it spans at its middle: the body's deck edge and shoulder lines (ring points 1 to 4) off the station table's section, the hood's edge off its plan line. */
+const NOSE_CHORD_SAG = 0.005;
+/** How far back from the nose (m) its chords are read, and how far ahead of it the roll's own rings take over. */
+const NOSE_READ = 0.25;
+const NOSE_ROLL = 0.03;
+
+describe("given every body style's drawn nose, whose plan and fender line turn hardest there", () => {
+  for (const id of CAR_STYLE_IDS) {
+    it(`when a ${id}'s deck edge, shoulder and hood edge chords over its last ${NOSE_READ * 100} cm are read, then each lies within ${NOSE_CHORD_SAG * 1000} mm of the curve at its middle`, () => {
+      const style = CAR_STYLES[id];
+      const noseZ = style.profile[style.profile.length - 1]!.z;
+      const body = makeChassisGeometry(style);
+      const loft = loftOf(body);
+      for (let slice = 0; slice < loft.slices - 1; slice++) {
+        const [a, b] = [positionAt(body, slice * loft.ring), positionAt(body, (slice + 1) * loft.ring)];
+        if (a.z < noseZ - NOSE_READ || b.z > noseZ - NOSE_ROLL) continue;
+        const section = sectionPoints(sampleSlice((a.z + b.z) / 2, style.profile), style, "drawn");
+        for (let point = 1; point <= 4; point++) {
+          const line = loft.ring - 1 - point;
+          const chord = positionAt(body, slice * loft.ring + line).add(positionAt(body, (slice + 1) * loft.ring + line)).multiplyScalar(0.5);
+          const sag = Math.hypot(chord.x - section[line]!.x, chord.y - section[line]!.y);
+          assert.ok(sag <= NOSE_CHORD_SAG, `${id} ring point ${point} between z ${a.z.toFixed(3)} and ${b.z.toFixed(3)}: ${(sag * 1000).toFixed(1)} mm off the section`);
+        }
+      }
+      const hood = makeHoodGeometry(style);
+      const hoodLoft = loftOf(hood);
+      const [, oz] = style.hood.origin;
+      // The edge (ring point 4) stands a fixed inset inside the station's half-width: its chord's middle against the half-width there.
+      const inset = (v: THREE.Vector3) => sampleSlice(v.z + oz, style.profile).hw - v.x;
+      for (let slice = 0; slice < hoodLoft.slices - 1; slice++) {
+        const [a, b] = [positionAt(hood, slice * hoodLoft.ring + 4), positionAt(hood, (slice + 1) * hoodLoft.ring + 4)];
+        if (b.z + oz < noseZ - NOSE_READ) continue;
+        const sag = Math.abs(inset(a.clone().add(b).multiplyScalar(0.5)) - inset(a));
+        assert.ok(sag <= NOSE_CHORD_SAG, `${id} hood edge between z ${(a.z + oz).toFixed(3)} and ${(b.z + oz).toFixed(3)}: ${(sag * 1000).toFixed(1)} mm off its plan line`);
+      }
+    });
+  }
+});
+
+/** Where the bay is open, the fender strip's wall-top vertex faces up and out with the strip (normal y over this), not sideways with the bay's wall. */
+const WALL_TOP_NORMAL_Y = 0.5;
+/** The drawn hood's edge stands at most this far (m) over the fender 2 mm outboard of it: a groove, not a step. */
+const HOOD_EDGE_STEP = 0.005;
+/** A clamshell's top edge and skirt (ring points 4, 5, 6) stand off the body's deck edge and shoulder by more than 0 and at most this (m): flush, never coincident. */
+const CLAMSHELL_LAP = 0.002;
+/** Under a clamshell's side shut line the body's 30° point stands at least this far (m) inboard of the line the lid's edge laps: a groove. */
+const SHUT_GROOVE = 0.0025;
+/** The SUV with a clamshell nose, its hood otherwise its own. */
+const CLAMSHELL_SUV: BodyStyle = { ...CAR_STYLES.wagon, hood: { ...CAR_STYLES.wagon.hood, kind: "clamshell" } };
+
+/** Distance (m) from `p` to the polyline `chain`. */
+function distanceToChain(p: { x: number; y: number }, chain: readonly { x: number; y: number }[]): number {
+  let best = Infinity;
+  for (let k = 1; k < chain.length; k++) {
+    const [a, b] = [chain[k - 1]!, chain[k]!];
+    const [dx, dy] = [b.x - a.x, b.y - a.y];
+    const t = THREE.MathUtils.clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy), 0, 1);
+    best = Math.min(best, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
+  }
+  return best;
+}
+
+describe("given every body style's drawn hood over its open engine bay", () => {
+  for (const id of CAR_STYLE_IDS) {
+    it(`when a ${id}'s fender strip beside the hood is read where the bay is open, then its wall-top vertex is painted and faces up (normal y over ${WALL_TOP_NORMAL_Y})`, () => {
+      const style = CAR_STYLES[id];
+      const body = makeChassisGeometry(style);
+      const loft = loftOf(body);
+      const normal = body.getAttribute("normal");
+      const primer = body.getAttribute(PRIMER_ATTRIBUTE);
+      let read = 0;
+      for (let slice = 0; slice < loft.slices; slice++) {
+        if (bayAt(positionAt(body, slice * loft.ring).z, style) < 0.5) continue;
+        for (const point of [1, loft.ring - 2]) {
+          const v = slice * loft.ring + point;
+          assert.ok(normal.getY(v) > WALL_TOP_NORMAL_Y && primer.getX(v) === 0, `${id} slice ${slice} ring point ${point}: normal y ${normal.getY(v).toFixed(3)}, primer ${primer.getX(v)}`);
+          read++;
+        }
+      }
+      assert.ok(read > 0, `${id}: no slice over the open bay`);
+    });
+
+    it(`when a ${id}'s drawn hood is laid on its body, then its edge stands 0 to ${HOOD_EDGE_STEP * 1000} mm over the fender just outboard of it at every station`, (t) => {
+      const style = CAR_STYLES[id];
+      if (style.hood.kind === "clamshell") return t.skip("a clamshell wraps the fender instead");
+      const hood = makeHoodGeometry(style);
+      const loft = loftOf(hood);
+      const [oy, oz] = style.hood.origin;
+      for (let slice = 1; slice < loft.slices - 1; slice++) {
+        const edge = positionAt(hood, slice * loft.ring + 4);
+        const z = edge.z + oz;
+        // The section's right half, outward from its deck edge (ring point 1): the fender's top line the edge looks over.
+        const section = sectionPoints(sampleSlice(z, style.profile), style, "drawn");
+        const top = section.slice(-5, -1).reverse();
+        const x = edge.x + 0.002;
+        const k = top.findIndex((p, i) => i > 0 && p.x >= x);
+        const fender = x <= top[0]!.x || k < 0 ? top[0]!.y : top[k - 1]!.y + ((top[k]!.y - top[k - 1]!.y) * (x - top[k - 1]!.x)) / (top[k]!.x - top[k - 1]!.x);
+        const step = edge.y + oy - fender;
+        assert.ok(step >= 0 && step <= HOOD_EDGE_STEP, `${id} hood edge at z ${z.toFixed(3)}: ${(step * 1000).toFixed(1)} mm over the fender`);
+      }
+    });
+  }
+
+  it(`when an SUV's clamshell is laid on its body, then its top edge and skirt stand within ${CLAMSHELL_LAP * 1000} mm of the body's deck edge and shoulder at every station, both ends included`, () => {
+    const hood = makeHoodGeometry(CLAMSHELL_SUV);
+    const loft = loftOf(hood);
+    const [oy, oz] = CLAMSHELL_SUV.hood.origin;
+    for (let slice = 0; slice < loft.slices; slice++) {
+      const z = positionAt(hood, slice * loft.ring).z + oz;
+      // The section's right half from its 30° shoulder point up to its deck edge.
+      const chain = sectionPoints(sampleSlice(z, CLAMSHELL_SUV.profile), CLAMSHELL_SUV, "drawn").slice(-4, -1);
+      for (const k of [4, 5, 6]) {
+        const p = positionAt(hood, slice * loft.ring + k);
+        const off = distanceToChain({ x: p.x, y: p.y + oy }, chain);
+        assert.ok(off > 0 && off <= CLAMSHELL_LAP, `z ${z.toFixed(3)} ring point ${k}: ${(off * 1000).toFixed(2)} mm off the body`);
+      }
+    }
+  });
+
+  it(`when an SUV's body is read under its clamshell's side shut line, then its 30° shoulder point steps ${SHUT_GROOVE * 1000} mm or more in, and not at all on the slice at the lid's rear end`, () => {
+    const body = makeChassisGeometry(CLAMSHELL_SUV);
+    const loft = loftOf(body);
+    const { z0, z1 } = CLAMSHELL_SUV.hood;
+    const shut = loft.ring - 4;
+    let [grooved, rearEnd] = [0, 0];
+    for (let slice = 0; slice < loft.slices; slice++) {
+      const v = positionAt(body, slice * loft.ring + shut);
+      const step = sectionPoints(sampleSlice(v.z, CLAMSHELL_SUV.profile), CLAMSHELL_SUV, "drawn")[shut]!.x - v.x;
+      if (Math.abs(v.z - z0) < 1e-6) {
+        assert.ok(Math.abs(step) < 1e-6, `the slice at the lid's rear end steps ${(step * 1000).toFixed(2)} mm`);
+        rearEnd++;
+      } else if (v.z > z0 + SHUT_RAMP && v.z < z1 - SHUT_RAMP) {
+        assert.ok(step >= SHUT_GROOVE, `z ${v.z.toFixed(3)}: the shut line steps ${(step * 1000).toFixed(2)} mm in`);
+        grooved++;
+      }
+    }
+    assert.ok(rearEnd === 1 && grooved > 0, `${rearEnd} slices at the lid's rear end, ${grooved} under its shut line`);
+  });
+});
+
 /** Of each side's greenhouse parts the B pillar and the rail are the near-rectangular ones (the A and C pillars lean in plan, so their section is a sheared parallelogram). */
 const roundedPartCases = [
   { name: "B pillar", pick: (parts: THREE.BufferGeometry[]) => parts[1]! },
@@ -298,6 +439,43 @@ const roundedPartCases = [
 
 /** At the cant line the drawn roof's side keeps normals of its own, pointing out at least this much (x share), not down with its underside's. */
 const ROOF_SIDE_NORMAL_X = 0.8;
+
+/** The drawn posts the curved section (`postSection`) builds: the B-pillar, the C-pillar ("rear") and the divider. */
+const POST_NAMES = ["b", "rear", "divider"];
+/** A drawn post's section: at least this many points, each chord turning under `POST_TURN_DEGREES` from the one before, and its depth sides' chords under a third of its depth (its corners rounded, not chamfered). */
+const POST_MIN_POINTS = 12;
+const POST_TURN_DEGREES = 35;
+
+describe("given every body style's drawn B-, C- and divider posts", () => {
+  for (const id of CAR_STYLE_IDS) {
+    it(`when a ${id}'s posts are read at the belt, then each section has ${POST_MIN_POINTS} points or more and every chord turns under ${POST_TURN_DEGREES}° from the one before`, () => {
+      const posts = makeGreenhouseFrame(CAR_STYLES[id], "drawn").filter((g) => POST_NAMES.includes(g.name));
+      assert.ok(posts.length >= 4, `${id}: ${posts.length} posts`);
+      for (const post of posts) {
+        const { ring } = loftOf(post);
+        assert.ok(ring >= POST_MIN_POINTS, `${id} ${post.name}: ${ring} section points`);
+        const at = (k: number) => positionAt(post, (k + ring) % ring);
+        for (let k = 0; k < ring; k++) {
+          const turn = angleBetweenDegrees(at(k).sub(at(k - 1)).normalize(), at(k + 1).sub(at(k)).normalize());
+          assert.ok(turn < POST_TURN_DEGREES, `${id} ${post.name} section point ${k} turns ${turn.toFixed(1)}°`);
+        }
+      }
+    });
+  }
+
+  it("when a post's section is read across depths and widths, then the chords along its depth sides are each under a third of its depth", () => {
+    for (const thick of [0.03, 0.04, 0.05]) {
+      for (const width of [0.04, 0.08, 0.17, 0.5]) {
+        const metric = postSection(thick, width).map((p) => ({ depth: p.x * thick, across: p.y * width }));
+        for (let k = 0; k < metric.length; k++) {
+          const [a, b] = [metric[k]!, metric[(k + 1) % metric.length]!];
+          const [depth, across] = [Math.abs(b.depth - a.depth), Math.abs(b.across - a.across)];
+          if (depth > across) assert.ok(Math.hypot(depth, across) < thick / 3, `depth ${thick}, width ${width}: chord ${k} along the depth side is ${(Math.hypot(depth, across) * 1000).toFixed(1)} mm`);
+        }
+      }
+    }
+  });
+});
 
 describe("given every body style's greenhouse frame", () => {
   for (const id of CAR_STYLE_IDS) {
@@ -429,35 +607,47 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
   for (const [kind, n] of byKind) assert.ok(n <= ROOF_FITTING_VERTICES[kind], `${id} ${kind}: ${n} vertices against ${ROOF_FITTING_VERTICES[kind]}`);
 }
 
-/** Each style's drawn wheel-well parts and its boot cut's loft rings as built, merged into the body on top of its loft: red if one grows. */
-const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number }> = {
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63 },
-  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42 },
-  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42 },
-  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42 },
-  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 63 },
-  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42 },
+/**
+ * Each style's drawn wheel-well parts (lips, humps, liner sides), its boot cut's loft rings, its nose's own rings (`noseRefined`, the
+ * roll's third chord), its tub walls' own top vertices and its curved posts' section points past the chamfered box's as built, merged
+ * into the body on top of its loft: red if one grows.
+ */
+const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number }> = {
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
+  hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 18, curvedPosts: 96 },
+  wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, wallTops: 30, curvedPosts: 96 },
+  coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, wallTops: 46, curvedPosts: 64 },
+  pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, wallTops: 16, curvedPosts: 64 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, wallTops: 50, curvedPosts: 64 },
+  monster: { lips: 312, humps: 94, liners: 184, bootRings: 42, noseRings: 42, wallTops: 26, curvedPosts: 64 },
 };
+/** The chamfered box section (eight corner points, three crown points) the drawn B-, C- and divider posts had before they curved. */
+const CHAMFERED_POST_RING = 11;
 
 /**
  * `style`'s arch lips' and wheel humps' vertices (`archLipGeometry`, `wellHumpGeometry`), its drawn liners' over the cage's one-sided
- * liners (`makeWellLiners`: their insides and end caps), and the rings its boot cut adds to the loft.
+ * liners (`makeWellLiners`: their insides and end caps), the rings its boot cut and its nose add to the loft, its walls' top copies, and
+ * its posts' section points past `CHAMFERED_POST_RING`.
  */
-function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number } {
+function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; wallTops: number; curvedPosts: number } {
   const body = makeChassisGeometry(style);
+  const rings = (bootOpen: boolean, noseFill: boolean) => sliceZs(style, "drawn", bootOpen, noseFill).length;
   const liners = (source: "drawn" | "cage") => makeWellLiners(style, source).reduce((n, g) => n + g.getAttribute("position").count, 0);
+  const posts = makeGreenhouseFrame(style, "drawn").filter((g) => POST_NAMES.includes(g.name));
   return {
     lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,
     humps: wellHumpGeometry(style, "drawn")?.getAttribute("position").count ?? 0,
     liners: liners("drawn") - liners("cage"),
-    bootRings: (sliceZs(style, "drawn").length - sliceZs(style, "drawn", false).length) * loftOf(body).ring,
+    bootRings: (rings(true, true) - rings(false, true)) * loftOf(body).ring,
+    noseRings: (rings(true, true) - rings(true, false)) * loftOf(body).ring,
+    wallTops: body.userData.wallTops as number,
+    curvedPosts: posts.reduce((n, g) => n + (loftOf(g).ring - CHAMFERED_POST_RING) * loftOf(g).slices, 0),
   };
 }
 
 describe("given every body style's car built whole", () => {
   for (const testCase of BASELINE_BY_STYLE) {
-    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting, arch lip, wheel hump, liner side and boot cut within its own count`, () => {
+    it(`when a ${testCase.id} is built, then it draws ${testCase.drawCalls} meshes, under ${TRIANGLE_BUDGET} x its ${testCase.triangles} triangles, with a body loft under ${BODY_VERTEX_BUDGET} x its ${testCase.bodyVertices} vertices and each roof fitting, arch lip, wheel hump, liner side, boot cut, nose ring, wall top and curved post within its own count`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, testCase.id);
       let drawCalls = 0;
       let triangles = 0;
@@ -471,11 +661,12 @@ describe("given every body style's car built whole", () => {
       assert.ok(triangles <= testCase.triangles * TRIANGLE_BUDGET, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`);
       const fittings = roofFittingVertices(car.style);
       const wells = wellAndCutVertices(car.style);
-      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.liners - wells.bootRings;
+      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.liners - wells.bootRings - wells.noseRings - wells.wallTops - wells.curvedPosts;
       assert.ok(loft <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
       assertRoofFittingCaps(testCase.id, fittings.byKind);
       const cap = WELL_AND_CUT_VERTICES[testCase.id];
-      assert.ok(wells.lips <= cap.lips && wells.humps <= cap.humps && wells.liners <= cap.liners && wells.bootRings <= cap.bootRings, `${testCase.id} ${JSON.stringify(wells)} against ${JSON.stringify(cap)}`);
+      const within = (Object.keys(cap) as (keyof typeof cap)[]).every((part) => wells[part] <= cap[part]);
+      assert.ok(within, `${testCase.id} ${JSON.stringify(wells)} against ${JSON.stringify(cap)}`);
     });
   }
 
