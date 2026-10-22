@@ -7,7 +7,7 @@ import { beltX, floorY } from "./car-lines.ts";
 import { bayTub, roofAt, sampleSlice } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import type { BodyStyle } from "./car-variants.ts";
-import { BUMPER_F, DRIVER_SIDE, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { BUMPER_F, DRIVER_SIDE, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { AXLE_HALF_SPAN, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 
@@ -96,11 +96,13 @@ const BENCH_GAP = 0.01;
 const BENCH_STEP = 0.01;
 
 /**
- * The depth (z) scale, at most 1, that keeps the bench seated at `back` ([y, z]) in the cab: ahead of the back wall under its top,
- * and under the roof line over it (a pickup cab's ends at its back glass, the bed's wall top behind it). A 2+2's or a crew cab's shallow bench.
+ * The depth (z) scale, at most 1, that keeps the bench seated at `back` ([y, z]) in the cab: ahead of the back wall under its top, ahead
+ * of the rear glass over it (a crew cab's back glass leans forward over the wall), and under the roof line over it (a pickup cab's ends at
+ * its back glass, the bed's wall top behind it). A 2+2's or a crew cab's shallow bench.
  */
 function benchDepth(bench: THREE.BufferGeometry, [y, z]: readonly [number, number], style: BodyStyle): number {
   const wall = style.rearBulkhead;
+  const { base, top } = style.rearGlass;
   const pos = bench.getAttribute("position");
   let depth = 1;
   for (let i = 0; i < pos.count; i++) {
@@ -108,12 +110,13 @@ function benchDepth(bench: THREE.BufferGeometry, [y, z]: readonly [number, numbe
     if (behind <= 0) continue;
     const at = y + pos.getY(i);
     let room = at < wall.yTop ? z - wall.z - WALL_HALF - BENCH_GAP : behind;
+    if (at >= wall.yTop && at > base[0] && at < top[0]) room = Math.min(room, z - (base[1] + ((at - base[0]) / (top[0] - base[0])) * (top[1] - base[1])) - BENCH_GAP);
     for (let r = 0; r < room; r += BENCH_STEP) {
       if (roofAt(z - r, style).y >= at + BENCH_GAP) continue;
       room = Math.max(0, r - BENCH_STEP);
       break;
     }
-    depth = Math.min(depth, room / behind);
+    depth = Math.min(depth, Math.max(0, room) / behind);
   }
   return depth;
 }
@@ -287,9 +290,9 @@ export function bumperBare(style: BodyStyle, body: THREE.BufferGeometry, front: 
   return Int32Array.from(out);
 }
 
-/** The body at `verts` bare metal (`on`) or paint again, by the paint's `primer` attribute. */
+/** The body at `verts` the unpainted inner panel a torn bumper bares (`on`), or paint again, by the paint's `primer` attribute. */
 export function setBare(verts: Int32Array, body: THREE.BufferGeometry, on: boolean): void {
   const attr = body.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
-  for (let k = 0; k < verts.length; k++) attr.setX(verts[k]!, on ? 1 : 0);
+  for (let k = 0; k < verts.length; k++) attr.setX(verts[k]!, on ? INNER_PANEL : 0);
   attr.needsUpdate = true;
 }

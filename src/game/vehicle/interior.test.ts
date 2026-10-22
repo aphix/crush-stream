@@ -296,14 +296,14 @@ describe("given a car whose front bumper is torn off", () => {
     return on;
   };
 
-  test("when it tears, then the body it covered turns bare metal, and a reset paints it again", () => {
+  test("when it tears, then the body it covered turns dark unpainted inner panel, and a reset paints it again", () => {
     const car = new Probe(paint(), new THREE.Scene(), null, "sedan");
     car.spawn(0, 0, 0);
     const bare = car.part(BUMPER_F).bare!;
     assert.ok(bare.length > 20, `the nose under the bumper: ${bare.length} vertices`);
     assert.equal(primer(car, bare), 0);
     car.tear(BUMPER_F);
-    assert.equal(primer(car, bare), bare.length);
+    assert.equal(primer(car, bare), bare.length * INNER_PANEL);
     car.resetVisual();
     assert.equal(primer(car, bare), 0);
   });
@@ -537,7 +537,7 @@ describe("given every style's cabin as its glass shows it", () => {
   const THROUGH_M = 0.005;
   /** Styles whose seat data still puts a seat through a pane, with their owner and the reading: the owning lane's ticket turns them live. */
   const OPEN_FIT: Partial<Record<CarStyleId, string>> = {
-    monster: "CarTrucks2: the rear bench back stands 3.5 cm through the rear window at (-0.23, 1.26, -0.77); `benchDepth` fits it to the back wall and the roof line, not the rear glass, so seats.rear z doesn't move it",
+
   };
   /** The z of the pane line from `base` to `top` ([y, z] each) at height `y`. */
   const paneZ = (y: number, [y0, z0]: readonly [number, number], [y1, z1]: readonly [number, number]): number => z0 + ((y - y0) / (y1 - y0)) * (z1 - z0);
