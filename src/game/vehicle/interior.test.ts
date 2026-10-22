@@ -447,10 +447,11 @@ describe("given every style's drawn body and hood", () => {
       const style = CAR_STYLES[id];
       if (style.hood.kind === "clamshell") continue;
       const hood = makeHoodGeometry(style);
-      const { ring, slices } = hood.userData.loft as { ring: number; slices: number };
+      // Its deck's rings only: a nose fold (`hood.nose`) turns its edge down the nose's face.
+      const { ring } = hood.userData.loft as { ring: number };
       const pos = hood.getAttribute("position");
       const [oy, oz] = style.hood.origin;
-      for (let s = 0; s < slices; s++) {
+      for (let s = 0; s < (hood.userData.deckRings as number); s++) {
         for (const point of [0, hood.userData.lidEdge as number]) {
           const v = new THREE.Vector3().fromBufferAttribute(pos, s * ring + point);
           const over = v.y + oy - sampleSlice(v.z + oz, style.profile).yBelt;

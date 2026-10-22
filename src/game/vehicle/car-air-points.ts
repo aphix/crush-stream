@@ -292,13 +292,17 @@ export function loadPoints(car: DeformableCar): number {
     return memo.bellyFrom;
   }
   const { pos, panelOn } = car.cage.fields;
-  const { vertexCount, vertexGroup, sillCount } = car.cage.style;
+  const { vertexCount, vertexGroup, sillCount, heldFrom, heldCount } = car.cage.style;
   const { belly } = car.frame;
   // The reach about the body's centre (`centreY`), its points lifted with the drawn body (`lift`).
   const comY = car.frame.comY + centreLift(car);
   let reach2 = 0;
   let n = 0;
+  // The underside's held points (`CageStyle.heldFrom`) and the sill samples are a wreck's alone: a car on its tyres stands on neither.
+  const heldTo = wreck ? heldFrom : heldFrom + heldCount;
   for (let k = 0, end = vertexCount + (wreck ? sillCount : 0); k < end; k++) {
+    if (k === heldFrom && heldTo > heldFrom) k = heldTo;
+    if (k >= end) break;
     const g = vertexGroup[k]!;
     if (g > 0 && panelOn[g - 1] === 0) continue;
     const x = pos[k * 3]!;
