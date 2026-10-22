@@ -801,7 +801,7 @@ export class LampBatch {
   }
 
   private put(b: number, seat: THREE.Object3D, variant: number, tint?: THREE.Color | null): void {
-    seat.updateWorldMatrix(false, false);
+    seat.updateWorldMatrix(false, false, true);
     const [color, glow] = this.looks[b]!;
     const look = tint ? _tint.copy(color).multiply(tint) : color;
     if (this.draw.put(this.first[b]! + (this.variants[b] === 1 ? 0 : variant), seat.matrixWorld, look, glow)) this.n[b]!++;

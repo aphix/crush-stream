@@ -158,7 +158,7 @@ describe("given every body style fitted with its own lamps", () => {
       const dir = new THREE.Vector3();
       for (const [i, l] of car.lamps.entries()) {
         const name = `${l.kind}${l.side < 0 ? "L" : "R"}`;
-        l.seat.updateWorldMatrix(true, false);
+        l.seat.updateWorldMatrix(true, false, true);
         const m = l.seat.matrixWorld;
         axis.setFromMatrixColumn(m, 2).normalize();
         assert.ok(axis.z * (l.kind === "head" ? 1 : -1) > 0.99, `${name} faces ${axis.toArray().map((v) => v.toFixed(2))}`);
@@ -342,6 +342,43 @@ describe("given a monster-class car, whose lamp seats ride its lift", () => {
       const unit = batch.draw.variants[batch.draw.variantAt(row)]!;
       assert.equal(trianglesOf(unit), trianglesOf(drawnLamp(car.style, l.kind, l.side).geometry), `${l.kind} ${l.side} draws its own unit`);
     }
+  });
+
+  it("when the car moves and its lamps are read and packed again, then no lamp seat composes its matrix, and each still follows the lift", () => {
+    const car = dressed();
+    const batch = new LampBatch(8);
+    const pos = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    for (let i = 0; i < car.lamps.length; i++) car.lampWorld(i, pos, dir);
+    batch.sync([car]);
+    let composed = 0;
+    for (const seat of [...car.lamps.map((l) => l.seat), ...car.lampFittings.map((f) => f.seat)]) {
+      const own = seat.updateMatrix.bind(seat);
+      seat.updateMatrix = () => {
+        composed++;
+        own();
+      };
+    }
+    const lift = car.group.getObjectByName(CLASS_LIFT)!;
+    const seatInLift = new THREE.Matrix4();
+    const expected = new THREE.Vector3();
+    const inLift = (l: (typeof car.lamps)[number]) => expected.setFromMatrixPosition(seatInLift.compose(l.seat.position, l.seat.quaternion, l.seat.scale).premultiply(lift.matrixWorld));
+    // Read alone, then packed alone after a second move: each must bring the seat's world matrix current itself.
+    car.group.position.x += 3;
+    car.group.updateMatrixWorld(true);
+    for (const [i, l] of car.lamps.entries()) {
+      car.lampWorld(i, pos, dir);
+      assert.ok(pos.distanceTo(inLift(l)) < 1e-6, `${l.kind} ${l.side} lights from ${pos.distanceTo(expected).toFixed(3)} m off its seat in the moved lift`);
+    }
+    car.group.position.z += 2;
+    car.group.updateMatrixWorld(true);
+    batch.sync([car]);
+    const packed = new THREE.Matrix4();
+    for (const [i, l] of car.lamps.entries()) {
+      const drawnAt = pos.setFromMatrixPosition(batch.draw.matrixAt(i, packed));
+      assert.ok(drawnAt.distanceTo(inLift(l)) < 1e-5, `${l.kind} ${l.side} drawn ${drawnAt.distanceTo(expected).toFixed(3)} m off its seat in the moved lift`);
+    }
+    assert.equal(composed, 0, "lamp seat matrices composed on a frame the skin did not move");
   });
 });
 
@@ -691,7 +728,7 @@ describe("given the hatchback, whose tail lamp crosses the step from the infill 
     const car = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
     car.group.updateMatrixWorld(true);
     const tail = car.lamps.find((l) => l.kind === "tail" && l.side > 0)!;
-    tail.seat.updateWorldMatrix(true, false);
+    tail.seat.updateWorldMatrix(true, false, true);
     const lens = new THREE.Mesh(drawnLamp(car.style, "tail", 1).geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
     lens.matrixAutoUpdate = false;
     lens.matrixWorld.copy(tail.seat.matrixWorld);
