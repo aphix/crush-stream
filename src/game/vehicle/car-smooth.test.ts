@@ -852,9 +852,10 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   { id: "hatchback", digest: "ce63b76a30c823bfbb334938b043b0f30e1fbc3d33255ddeb254d45733b1737b" },
   { id: "wagon", digest: "eb9db693294fddf0470fba46a10bf8c4181d12a8d392ef892fc4beb6c843f908" },
   { id: "coupe", digest: "fae75944c9d7c46dfa25624af496ca874cff628595859acd29f6d585ae2456b7" },
-  { id: "pickup", digest: "365bfae1e11bf43392fd4c981a39922a5b1f686fdc8860a0d1737e6a743cd583" },
+  // Pickup and monster re-pinned for their thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
+  { id: "pickup", digest: "5e914ede89c07ac21bec7b8997641fe25db9f1eb75035ee912c4a0dd48b928cf" },
   { id: "police", digest: "23142cfaa9b3170558c726feb09a56cb9782d946cbb1ab7ecdefd3610cebc58b" },
-  { id: "monster", digest: "6bd3fbfd9838eebbee51077c0a1a413e5c5baa06b6a2b904cb5ebdae5fa78bfd" },
+  { id: "monster", digest: "ea8b2e2587a915177f279a2edfac3611fdd253740d9418000e6d99144f32c7fe" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {
