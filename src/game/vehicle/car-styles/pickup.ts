@@ -19,7 +19,7 @@ const TRUCK_FRONT_FASCIA = [
 /** 80s regular-cab long-bed pickup (Toyota Pickup proportions): boxy cab, flat hood, open bed; the trunk part is the tailgate. */
 export const PICKUP: BodyStyle = {
   id: "pickup",
-  dims: { wheelbase: 2.575, overhang: { front: 0.683, rear: 0.93 }, track: 1.3, width: 1.573, height: 1.691, rideHeight: 0.34, wheel: { radius: 0.38, width: 0.24 } },
+  dims: { wheelbase: 2.575, overhang: { front: 0.683, rear: 0.93 }, track: 1.3, width: 1.584, height: 1.691, rideHeight: 0.34, wheel: { radius: 0.38, width: 0.24 } },
   ...PLATFORM_HARDPOINTS,
   windshield: { base: [1.21, 0.9], wBase: 1.36, wTop: 1.18 },
   belt: { x: 0.73, y: [[0, 1.12]] },
@@ -30,7 +30,7 @@ export const PICKUP: BodyStyle = {
   aPillarTop: 0.41,
   bPillar: { rear: -0.3, front: -0.23 },
   arch: { radius: 0.46, lip: { flare: 0.024, width: 0.065, square: true } },
-  hood: { z0: 0.92, z1: 1.9, origin: [1.2, 0.9] },
+  hood: { z0: 1.03, z1: 1.86, origin: [1.2, 1.01] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.76, wrap: { from: 0.55, back: 0.12 }, fascia: TRUCK_FRONT_FASCIA, trim: "chrome" },
     rear: { ...bumpers.rear, seat: { y: 0.57, z: 2.13 }, span: 0.74, wrap: { from: 0.65, back: 0.05 }, trim: "chrome" },
