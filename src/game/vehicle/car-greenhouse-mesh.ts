@@ -332,6 +332,17 @@ function roundedPillarFromCorners(sign: number, c: { fb: V3; rb: V3; rt: V3; ft:
   return roundedPillarAlong(sign, rails, thick, { open: true, section: (width) => postSection(thick, width) });
 }
 
+/** The plank rear post's foot plate (+x side; sign -1 mirrors): one up-facing triangle from its bottom edge (`rb` to `fb`) out to `foot` on the shoulder. */
+function rearFootPlate(sign: number, rb: V3, fb: V3, foot: V3): THREE.BufferGeometry {
+  const corners = sign > 0 ? [rb, fb, foot] : [rb, foot, fb];
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(corners.flatMap(([x, y, z]) => [sign * x, y, z]), 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(6), 2));
+  geo.setIndex([0, 1, 2]);
+  geo.computeVertexNormals();
+  return geo;
+}
+
 /** The drawn A-post's depth inward (m): a slim post, not a slab. */
 const A_POST_THICK = 0.03;
 /** The drawn A-post's face crowns this share of its width: its normals fan ±30° across it, turning from the side glass to the windshield, not a flat plank. */
@@ -627,7 +638,10 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     const onGlass = flush && z < roofEndZ;
     // The head's rounded edge ends at the post's top corner (`r` over the section's end), buried in the roof's side like the post's top.
     const corner = z <= rt[2] ? [lerp(rb[0], rt[0], (z - rb[2]) / (rt[2] - rb[2])), lerp(rb[1], rt[1], (z - rb[2]) / (rt[2] - rb[2]))] : [lerp(rt[0], ft[0], (z - rt[2]) / (ft[2] - rt[2])), lerp(rt[1], ft[1], (z - rt[2]) / (ft[2] - rt[2]))];
-    const head = atRoofEnd ? endHead : onGlass ? glassHead(z) : ([corner[0]!, corner[1]! - r] as const);
+    const post = [corner[0]!, corner[1]! - r] as const;
+    // A flat sail's head eases from the roof end's out to the post's top over the run ahead, so its rings never jump back out under the roof.
+    const ahead = style.cPillar?.flat === true && roofEnd !== null && z > roofEndZ ? (z - roofEndZ) / (topZ - roofEndZ) : 1;
+    const head = atRoofEnd ? endHead : onGlass ? glassHead(z) : ([lerp(endHead[0], post[0], ahead), lerp(endHead[1], post[1], ahead)] as const);
     // The roof end's outer face from the cant line up to the head: the roof's roll, or a curved roof's chords outboard of the head.
     const endFace = !atRoofEnd
       ? null
@@ -829,10 +843,11 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     // A drawn post's head follows the rear glass's top corner down the dome (`domeFall`), held inside the roof's span, where the
     // roof's clamp takes its whole top ring, not half of it.
     const [rtX, rtY, rtZ] = rearPillar.rt;
-    const [rbX, rbY, rbZ] = rearPillar.rb;
-    const heldPillar = { ...rearPillar, rb: [rbX, style.pillars?.rearFoot ?? rbY, rbZ], rt: [rtX, rtY - domeFall(style, rg.top[1])(rg.wTop / 2, 1), Math.max(rtZ, style.roofZ[0] + ROOF_TUCK)] } as const;
+    const heldPillar = { ...rearPillar, rt: [rtX, rtY - domeFall(style, rg.top[1])(rg.wTop / 2, 1), Math.max(rtZ, style.roofZ[0] + ROOF_TUCK)] } as const;
     const sail = source === "drawn" ? style.cPillar : undefined;
     parts.push(pillar(source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : sail ? cPillarSail(sign, style, rearPillar) : roundedPillarFromCorners(sign, heldPillar, 0.05, true), "rear"));
+    const rearFoot = source === "drawn" && !sail ? style.pillars?.rearFoot : undefined;
+    if (rearFoot) parts.push(rearFootPlate(sign, rearPillar.rb, rearPillar.fb, [rearFoot[0], rearFoot[1], rearPillar.rb[2]]));
     if (sail?.tip) parts.push(cPillarTip(sign, style, sail.tip));
     if (m !== null) {
       const topZ = divider.z?.[1] ?? m;

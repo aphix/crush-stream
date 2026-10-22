@@ -158,7 +158,9 @@ export const HATCHBACK: BodyStyle = {
   // A flush band on the nose's flat front (skin z 1.74), as the reference's: no box side showing.
   grille: { y: 0.575, z: 1.748, size: [0.72, 0.11], kind: "bars", count: 4, badge: 0.025, finish: "black" },
   seats: { front: [0.35, 0.41, -0.1], rear: [0.47, -0.7] },
-  pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] } },
+  // The D-pillar's foot on the shoulder's top beside the gate's corner (x .680, y .895 at z -1.61): at the glass's corner it left the
+  // cabin's opening open between its bottom edge and the shoulder, a dark wedge up to 4 cm wide at z -1.5.
+  pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] }, rearFoot: [0.68, 0.895] },
   blackout: { b: true, divider: true },
   privacyGlass: { rear: true, quarter: true },
   roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.5 } },
