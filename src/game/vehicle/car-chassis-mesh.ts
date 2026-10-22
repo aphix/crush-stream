@@ -161,6 +161,37 @@ function splitWallTops(body: THREE.BufferGeometry, ring: number, inner: readonly
   return copies;
 }
 
+/**
+ * The door cut's end rings (`door.shutCrease`): the ramp into the cut gets its own copy of each ring point down to the rocker, so the
+ * panel beside it shades from its own faces up to the shut line instead of rolling off into a round cap. Returns each copy and its original.
+ */
+function splitShutRings(body: THREE.BufferGeometry, ring: number, zs: readonly number[], [a0, a1]: readonly [number, number]): [number, number][] {
+  const pos = body.getAttribute("position");
+  const uv = body.getAttribute("uv");
+  const index = body.getIndex()!.array;
+  const positions = Array.from(pos.array);
+  const uvs = Array.from(uv.array);
+  const copies: [number, number][] = [];
+  // The ramp runs ahead of the rear end's ring and behind the front end's.
+  for (const [s, quad] of [[zs.indexOf(a0), zs.indexOf(a0)], [zs.indexOf(a1), zs.indexOf(a1) - 1]] as const) {
+    if (s < 0 || quad < 0 || quad >= zs.length - 1) continue;
+    for (let i = 0; i <= ROCKER; i++) {
+      for (const point of [i, ring - 1 - i]) {
+        const v = s * ring + point;
+        const copy = positions.length / 3;
+        positions.push(pos.getX(v), pos.getY(v), pos.getZ(v));
+        uvs.push(uv.getX(v), uv.getY(v));
+        for (let k = quad * ring * 6; k < (quad + 1) * ring * 6; k++) if (index[k] === v) index[k] = copy;
+        copies.push([copy, v]);
+      }
+    }
+  }
+  body.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  body.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  body.computeVertexNormals();
+  return copies;
+}
+
 /** A `blackout.cowl` darkens the deck from this far (m) under the windshield's foot to as far under the hood's rear edge. */
 const COWL_LAP = 0.05;
 
@@ -185,6 +216,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const trim = bay.map((b, s) => (b > 0 ? 0 : boot[s]! > 0 ? boot[s]! : cabinAt(zs[s]!, style)));
   const tone = (s: number): number => (trim[s]! > 0 ? CABIN_TRIM * trim[s]! : INNER_PANEL * bay[s]!);
   const wallTops = source === "drawn" ? splitWallTops(body, n, bay.map((b, s) => Math.max(b, boot[s]!))) : [];
+  const shutCopies = source === "drawn" && style.door.shutCrease === true ? splitShutRings(body, n, zs, style.door.aperture) : [];
   const roof = makeRoofGeometry(style, source);
   const parts: THREE.BufferGeometry[] = [body, roof];
   parts.push(...makeWellLiners(style, source, body));
@@ -234,6 +266,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   // The loft is merged first: its vertex `s * ring + i` and its first (slices - 1) * ring * 2 triangles (`panelRegions` cuts panels out of them).
   merged.userData.loft = { ring: n, slices: zs.length };
   merged.userData.wallTops = wallTops.length;
+  merged.userData.shutCopies = shutCopies.length;
   if (lips) merged.userData.archLips = { from: lipIndex, perWheel: lips.userData.perWheel as number[] };
   const roofFrom = body.getAttribute("position").count;
   const roofTwins: unknown = roof.userData.shellTwins;
@@ -271,6 +304,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
     // The floor pan (each ring's floor-outer points and keel) is bare underseal, as a car on its roof shows it; the sill corners keep the paint the side shows.
     const h = (n - 1) / 2;
     for (let s = 0; s < zs.length; s++) for (const i of [h - 1, h, h + 1]) primer[s * n + i] = INNER_PANEL;
+    for (const [copy, v] of shutCopies) primer[copy] = primer[v]!;
     primer.fill(WELL_PANEL, linerFrom, linerTo);
   }
   merged.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(primer, 1));

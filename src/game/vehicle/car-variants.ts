@@ -307,9 +307,11 @@ export interface BodyStyle {
   /**
    * Drawn only: the roof's section from its crown down to its cant line as one curve (`roofArc`), a cubic Bézier leaving the crown level
    * and arriving along the side glass's plane: `crown`, its crown handle's share of the half-width (more: a broader top); `blend`, its
-   * side handle's share of the section's height (more: a softer roll into the glass). Absent, the dome's flat top and its rolled side lip.
+   * side handle's share of the section's height (more: a softer roll into the glass); `squareFront` (m), a run back from the front end
+   * over which it eases into the dome's flat top and rolled lip, so a flat windshield's top corners stay under the roof. Absent, the
+   * dome's flat top and its rolled side lip.
    */
-  roofSection?: { crown: number; blend: number };
+  roofSection?: { crown: number; blend: number; squareFront?: number };
   /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
   windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;
@@ -350,6 +352,10 @@ export interface BodyStyle {
      */
     mirror?: { cap: "rounded" | "box" | "tear"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass" };
     hingeTop?: number;
+    /** Drawn only: the door skin's outer face stands this far (m) over the body side inside its cut (absent `DOOR_PROUD`, 3 mm); 0: flush, the shut line a groove only. */
+    proud?: number;
+    /** Drawn only: the body's rings at its cut's ends shade the panel either side from its own faces, a crease at the shut line, not rounded off by the cut's ramp; absent, one smooth normal across it. */
+    shutCrease?: boolean;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
   aPillarFoot: number;
@@ -380,10 +386,12 @@ export interface BodyStyle {
   /**
    * Drawn only: side-view pillar bands (`PillarSpan`). `a`: the A-post's width behind the windshield edge (absent 0.06). `b`: the
    * B-pillar, centred on its `bPillar` band unless it leans. `divider`: the post at `midPillarZ`. Absent: the `bPillar` band (its top
-   * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` (y, m): the plank rear post's (no `cPillar`) foot
-   * corner, dropped onto the belt beside the rear glass's base; absent, the glass's base y.
+   * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` [x, y] (m): a point on the body's shoulder beside the
+   * rear glass's base; the plank rear post's (no `cPillar`) foot fans out to it, covering the cabin's opening there; absent, no fan. `aSeat`
+   * (y, m): a deck under the drawn A-post's foot lower than the belt; a skirt of the post's own section hangs from the foot down to it,
+   * so the cabin never shows through the gap; absent, none.
    */
-  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: number };
+  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number };
   /**
    * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
    * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.
@@ -395,13 +403,16 @@ export interface BodyStyle {
    * triangle between them filling the gap; absent, the line is the quarter glass's own rear edge. `flush`: the sail's head laps the rear
    * glass's side edge, standing on the glass and arriving level across it (one broad pillar rolling into the glass), not a rounded
    * buttress beside it. `flat`: on the haunch each section runs straight from its head down to where it touches the body's section
-   * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point. `corner`: on a curved roof with round
+   * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point; on a curved roof its head eases from the
+   * roof end's out to the post's top over the run ahead, not back out in one ring. `corner`: on a curved roof with round
    * rear glass corners, a flush sail's head at the roof's end laps the glass's side edge this share of the way round its top corner's arc
    * (0 its side end, 1 its top end), so the head covers the arc above that point; absent 0.5, mid-arc.
    */
   cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
+  /** Drawn only: the body paint's base roughness, clear coat and clear coat roughness (`makePaintMaterial`); absent the platform paint's (0.42, 0.72, 0.24). */
+  paintFinish?: { roughness: number; clearcoat: number; clearcoatRoughness: number };
   /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */
   windowTrim?: "chrome";
   /** Chrome strips on the body side (drawn only, with `windowTrim`): side-view polylines [z, y] (m), `width` (m) tall, on the skin's +x and -x. A strip whose points all lie inside the door aperture rides the door; any other rides the body. */

@@ -1,10 +1,12 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { once } from "../kernel/scalar.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { applyFinish, glslFloat } from "./car-finish.ts";
 import { BARE_METAL_FRAGMENT, BARE_METAL_VERTEX } from "./bare-metal.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE } from "./constants.ts";
+import type { BodySource } from "./car-mesh.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
 /** The shared car textures and materials (paint, tone grid, glass, crack map, lamp mask) and the multi-tone part helpers; the small parts built on them are in `part-geometry.ts`. */
@@ -141,7 +143,10 @@ export function drawClassOf(m: THREE.Material): number {
   return (m.userData.drawClass as number | undefined) ?? 0;
 }
 
-export function makePaintMaterial(color: number): THREE.MeshPhysicalMaterial {
+/** The platform paint's finish: a glossy base under a sharp clear coat. A style's `paintFinish` replaces it. */
+const PAINT_FINISH = { roughness: 0.42, clearcoat: 0.72, clearcoatRoughness: 0.24 } as const;
+
+export function makePaintMaterial(color: number, finish: NonNullable<BodyStyle["paintFinish"]> = PAINT_FINISH): THREE.MeshPhysicalMaterial {
   return classed(
     applyFinish(
       withPrimer(
@@ -149,9 +154,9 @@ export function makePaintMaterial(color: number): THREE.MeshPhysicalMaterial {
           new THREE.MeshPhysicalMaterial({
             color,
             metalness: 0.2,
-            roughness: 0.42,
-            clearcoat: 0.72,
-            clearcoatRoughness: 0.24,
+            roughness: finish.roughness,
+            clearcoat: finish.clearcoat,
+            clearcoatRoughness: finish.clearcoatRoughness,
             side: THREE.FrontSide,
           }),
         ),
@@ -484,27 +489,56 @@ const SIREN_U = [1 / 6, 3 / 6, 5 / 6] as const;
 /** The light bar's two feet in bar space: at ±`x`, their soles `sole` below the origin, `2z` deep (front to back). They rest on the roof. */
 export const LIGHT_BAR_FOOT = { x: 0.4, sole: -0.03, z: 0.09 } as const;
 
-/** Roof light bar in bar space (+z forward, so +x is the car's left): housing on two feet (`LIGHT_BAR_FOOT`), a red lens on
- *  the car's left (+x) and a blue one on its right (−x), as the reference cruiser's, with a clear takedown module between,
- *  one draw. `LIGHT_BAR_LENS` lists each lens's vertices. */
-export function makeLightBar(): THREE.BufferGeometry {
-  const box = (w: number, h: number, d: number, x: number, y: number, tone: number, texel: 0 | 1 | 2) => {
-    const g = toned(new THREE.BoxGeometry(w, h, d), tone, 0, 0).translate(x, y, 0);
-    const uv = g.getAttribute("uv").array as Float32Array;
-    for (let i = 0; i < uv.length; i += 2) {
-      uv[i] = SIREN_U[texel];
-      uv[i + 1] = 0.5;
-    }
-    return g;
-  };
+/** A light bar part in bar space at (`x`, `y`, 0): one tone, every vertex on its `sirenEmissiveMap` texel. */
+function lightBarPart(g: THREE.BufferGeometry, x: number, y: number, tone: number, texel: 0 | 1 | 2): THREE.BufferGeometry {
+  toned(g, tone, 0, 0).translate(x, y, 0);
+  const uv = g.getAttribute("uv").array as Float32Array;
+  for (let i = 0; i < uv.length; i += 2) {
+    uv[i] = SIREN_U[texel];
+    uv[i + 1] = 0.5;
+  }
+  return g;
+}
+
+/** A lens module [width, height, depth] (m), centred `LENS_Y` up in bar space, its edges rounded over `LENS_ROUND` (m) in one segment (two chords a
+ *  round, 108 triangles a lens; three segments cost 588 and broke the police's triangle budget): a domed lens, as the reference's, not a brick. */
+const LENS_SIZE = [0.42, 0.075, 0.23] as const;
+const LENS_Y = 0.1;
+const LENS_ROUND = 0.035;
+const LENS_ROUND_SEGMENTS = 1;
+/** The white lamp cell at each lens's centre [width, height] (m): it stands 2 mm proud of the lens's front and back, as the reference's white hot spot. */
+const LENS_CELL = [0.07, 0.03] as const;
+
+/** A domed lens at `x` (RoundedBoxGeometry comes unindexed; the bar's other parts are indexed, and a merge takes one kind). */
+function domeLens(x: number, tone: number, texel: 1 | 2): THREE.BufferGeometry {
+  const [w, h, d] = LENS_SIZE;
+  return mergeVertices(lightBarPart(new RoundedBoxGeometry(w, h, d, LENS_ROUND_SEGMENTS, LENS_ROUND), x, LENS_Y, tone, texel));
+}
+
+/** Roof light bar in bar space (+z forward, so +x is the car's left): housing on two feet (`LIGHT_BAR_FOOT`), a domed red lens on
+ *  the car's left (+x) and a blue one on its right (−x), each with a white lamp cell at its centre, as the reference cruiser's, with a
+ *  clear takedown module between, one draw. `LIGHT_BAR_LENS` lists each lens's vertices. The `cage` build (the bar's cage panel) keeps
+ *  brick lenses and no cells: the dome is drawn only. */
+export function makeLightBar(source: BodySource = "drawn"): THREE.BufferGeometry {
+  const box = (w: number, h: number, d: number, x: number, y: number, tone: number, texel: 0 | 1 | 2) => lightBarPart(new THREE.BoxGeometry(w, h, d), x, y, tone, texel);
+  const [cellW, cellH] = LENS_CELL;
+  const [lensW, lensH, lensD] = LENS_SIZE;
+  const lenses =
+    source === "cage"
+      ? [box(lensW, lensH, lensD, 0.3, LENS_Y, 0x8c1218, 1), box(lensW, lensH, lensD, -0.3, LENS_Y, 0x1a36a8, 2)]
+      : [
+          domeLens(0.3, 0x8c1218, 1),
+          domeLens(-0.3, 0x1a36a8, 2),
+          box(cellW, cellH, lensD + 0.004, 0.3, LENS_Y, 0xf2f4f6, 0),
+          box(cellW, cellH, lensD + 0.004, -0.3, LENS_Y, 0xf2f4f6, 0),
+        ];
   return mergeToned(
     [
       box(1.04, 0.045, 0.26, 0, 0.04, 0x16181c, 0),
       box(0.16, 0.07, 0.22, 0, 0.1, 0xd8dce2, 0),
       box(0.08, -2 * LIGHT_BAR_FOOT.sole, 2 * LIGHT_BAR_FOOT.z, -LIGHT_BAR_FOOT.x, 0, 0x16181c, 0),
       box(0.08, -2 * LIGHT_BAR_FOOT.sole, 2 * LIGHT_BAR_FOOT.z, LIGHT_BAR_FOOT.x, 0, 0x16181c, 0),
-      box(0.42, 0.075, 0.23, 0.3, 0.1, 0x8c1218, 1),
-      box(0.42, 0.075, 0.23, -0.3, 0.1, 0x1a36a8, 2),
+      ...lenses,
     ],
     "light bar",
   );
@@ -542,10 +576,17 @@ export function withPushBar(bumper: THREE.BufferGeometry): THREE.BufferGeometry 
   return geo;
 }
 
-/** [first vertex, count] of the red and blue lens in `makeLightBar` (a box is 24 vertices). */
+/** A domed lens's vertex count (`domeLens`). */
+const LENS_VERTICES = (() => {
+  const lens = domeLens(0, 0, 1);
+  const n = lens.getAttribute("position").count;
+  lens.dispose();
+  return n;
+})();
+/** [first vertex, count] of the red and blue lens in `makeLightBar`, after its four boxes (24 vertices each). */
 export const LIGHT_BAR_LENS = [
-  [96, 24],
-  [120, 24],
+  [96, LENS_VERTICES],
+  [96 + LENS_VERTICES, LENS_VERTICES],
 ] as const;
 
 /** 3×1 emissive mask for `makeLightBar`: black housing, pure red lens, pure blue lens. The bar material's

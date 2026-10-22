@@ -312,15 +312,26 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * pane's middle, with his seat's turn velocity from there; the VIP rides in, and is thrown from, the -x seat; the derby AI's driver's door is the +x one,
  * and its reverse run-in aims 1.6 m out from a target's nose on either side (2.1 on the driver's). Every windshield throw and every derby car moves
  * differently. A clip of 156 or before no longer reads.
- * 158: a driver thrown out of the windshield leaves from the pane's bowed middle (`userData.centre`), not its box's centre: 1 cm further forward on
- * every car, and the coupe's pane bows deeper at its top; each raked pane's top corners fall onto the roof's dome (`domeFall`, about 2 cm), which
- * moves the panes' cage-skinned rest on every car. A car's collision cage keeps the underside it rests on out to its nose and tail lips (over its
- * vertex budget, read once it is a wreck), so a wreck that loses a front wheel rests and sleeps on its lip instead of rocking 3-4 cm in the ground,
- * and a car pitched over another meets it as deep as the two cages stand (it read 10 cm shallow at some poses). The hatchback's windshield reaches
- * its reference's glass top (17 cm further back, 8 cm higher, 1.03 m wide there) and its roof ends there, so its cage's pane, A-posts and header
- * stand there too; its rear glass base and tailgate top drop .94 → .905, moving its cage source again. Every windshield throw moves differently,
- * a hatch's cabin front and tailgate are struck on its new cage, and wrecks on their noses and tails and pitched pairs come to rest and push
- * differently. A clip of 157 or before no longer reads.
+ * 158: the car overhaul (every car to its reference design). Each car's soft-body rig is carried from the platform's onto its own body: its cages,
+ * sensors and masses move with its own dims (axles, ends, width, floor, roof; hubs on its wheels), its roof, windscreen, rear-glass, bonnet and boot
+ * cages fit its own panels, and every style's cage source follows its new shape (the sedan and police from their reference, wheel arches .405 → .375;
+ * the monster and truck at their reference dims, with wheel tubs in the truck's bed; the wagon, coupe, pickup and hatchback reshaped; the muscle's and
+ * pickup's bonnets spanning their panel seams). The hatchback and wagon drive as their own classes (hatch, SUV: mass, power, grip, springs, voice); the
+ * muscle and truck stand on their true tyres and the truck no longer rides lifted. A tyre's footprint reads the ground at its own radius across its whole
+ * drawn tread, and meets a solid's sides (a wall, the slab, a prism's flank) at four hub-height points through the shared crash path, giving over its
+ * class's spring travel before the face holds it (a monster whose keel clears the slab stops on its tyres); the slab keeps each car off it by its own
+ * box, a car on its side drags that side's tyres, and a wreck pressed into the ground stays awake until it is out. A lifted car (the monster) turns,
+ * lands and is thrown about a centre risen by its sprung share of the lift (0.81 of the monster's 0.87 m), and a respawn re-attaches it there. Trunk
+ * lids, hatches, the SUV liftgate and the pickup's drop gate swing on hinges: a rear crush pops the latch, a slam re-latches it, a hard stop, slam,
+ * crush or hit tears it off (a loose lid weighs its car's share), struts raise a lid to its stop and a drop gate falls level on its cables; the
+ * hatch's and SUV's rear glass rides its gate. Door glass ends 1 cm under its B-pillar's front edge; a mirror keeps its style's reach (sedan 0.128 m,
+ * hatchback 0.075, SUV 0.065; it stood at the platform's 0.21) through a reset and every crash pose; a sedan's torn bumper flies as the box of
+ * everything it draws, its seam cover included; the sedan's hood ends at z 0.99; the police light bar sits over the B-pillars. A driver thrown out
+ * of the windshield leaves from the pane's bowed middle (`userData.centre`, 1 cm further forward), each raked pane's top corners fall onto the roof's
+ * dome (`domeFall`, about 2 cm), and the hatchback's windshield reaches its reference's glass top (17 cm further back, 8 cm higher) with its rear glass
+ * base and tailgate top at .905. A car's collision cage keeps the underside it rests on out to its nose and tail lips (read once it is a wreck), so a
+ * wreck that loses a front wheel rests on its lip instead of rocking 3-4 cm in the ground, and a car pitched over another meets it as deep as the two
+ * cages stand. Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
 const REPLAY_VERSION = 158;

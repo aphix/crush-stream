@@ -8,6 +8,7 @@ import { CarCage, type CageLive, type CageSource, P_CAP, P_CUT_X, P_CUT_Y, P_CUT
 import type { DeformableCar } from "./car.ts";
 import { hingePose, INTERIOR_MASSES } from "./part-pose.ts";
 import { makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
+import { makeLightBar } from "./car-materials.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import type { DetachPart } from "./car-core.ts";
 import { bodyLift } from "./car-suspension.ts";
@@ -65,12 +66,13 @@ function panelsOf(car: DeformableCar): Panel[] {
   return panels;
 }
 
-/** `panelsOf(car)` with the lids' meshes and rest shapes the cage build draws (`makeHoodGeometry`, `makeTrunkGeometry` as `cage`). */
+/** `panelsOf(car)` with the lids' and light bar's meshes and rest shapes the cage build draws (`makeHoodGeometry`, `makeTrunkGeometry`, `makeLightBar` as `cage`). */
 function cagePanelsOf(car: DeformableCar): Panel[] {
   const cageLid = (panel: Panel, geometry: THREE.BufferGeometry): Panel => ({ ...panel, mesh: new THREE.Mesh(geometry), rest: Float32Array.from(geometry.getAttribute("position").array) });
   return panelsOf(car).map((panel) => {
     if (panel.part === "bonnet") return cageLid(panel, makeHoodGeometry(car.style, "cage"));
     if (panel.part === "boot") return cageLid(panel, makeTrunkGeometry(car.style, "cage"));
+    if (panel.mesh === car[LIGHT_BAR]) return cageLid(panel, makeLightBar("cage"));
     return panel;
   });
 }

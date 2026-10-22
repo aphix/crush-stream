@@ -147,11 +147,24 @@ function arcY(points: readonly Pt[], x: number): number {
   return points[points.length - 1]!.y;
 }
 
+/** The share (0..1) of the drawn roof's dome section over its `roofSection` arc at `z`: rising to 1 at its front end over `squareFront`. */
+export function roofSquareShare(z: number, style: BodyStyle): number {
+  const run = style.roofSection?.squareFront;
+  return run === undefined ? 0 : THREE.MathUtils.smoothstep(z, style.roofZ[1] - run, style.roofZ[1]);
+}
+
 /** Height of the roof panel's top at (`x`, `z`), the top ring of `makeRoofGeometry`: the centre-line crown, the dome's
  *  shoulder, then down to the cant line at the roof's half-width; rolled onto the glass at the ends (`roofDome`); on its chords with `roofSection`. */
 export function roofTopY(x: number, z: number, style: BodyStyle): number {
   const arc = roofArc(z, style);
-  if (arc) return arcY(ROOF_ARC_T.map(arc), Math.abs(x));
+  if (!arc) return domeTopY(x, z, style);
+  const onArc = arcY(ROOF_ARC_T.map(arc), Math.abs(x));
+  const share = roofSquareShare(z, style);
+  return share === 0 ? onArc : lerp(onArc, domeTopY(x, z, style), share);
+}
+
+/** `roofTopY` on the dome's flat top, held at its edge's height past its half-width. */
+function domeTopY(x: number, z: number, style: BodyStyle): number {
   const r = roofAt(z, style);
   const { drop, crown } = roofDome(z, style);
   const [us] = ROOF_SHOULDER;

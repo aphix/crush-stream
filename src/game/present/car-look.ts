@@ -83,9 +83,9 @@ function firstWear(car: DeformableCar): Worn {
   const base = baseOf(car);
   const w: Worn = {
     uniforms: sprayUniforms(CAR_SPRAY, BARE_SPRAY, 1),
-    hood: makePaintMaterial(base.body),
-    trunk: makePaintMaterial(base.body),
-    doors: makePaintMaterial(base.doors),
+    hood: makePaintMaterial(base.body, car.style.paintFinish),
+    trunk: makePaintMaterial(base.body, car.style.paintFinish),
+    doors: makePaintMaterial(base.doors, car.style.paintFinish),
     bumpers: m.bumpers,
     base,
   };

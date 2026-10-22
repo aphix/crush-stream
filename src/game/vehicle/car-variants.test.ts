@@ -1067,26 +1067,99 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
-  it("when a style drops its plank rear post's foot (pillars.rearFoot), then the drawn post's lowest point at the rear glass's base falls by the foot's drop, and the cage is unchanged", () => {
-    /** A foot dropped this far (m) under the hatchback's rear glass base. */
-    const DROP = 0.035;
+  it("when the hatchback's plank rear post fans its foot onto the shoulder (pillars.rearFoot), then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening behind the quarter glass, and the cage is unchanged", () => {
+    /** A ray down that hits under this height (m) has passed the body's top into the cabin: the shoulder stands at 0.86-0.91 there. */
+    const FLOOR_Y = 0.8;
+    /** The D-pillar's zone behind the quarter glass [x, z] (m): from the rear glass's base edge out to the shoulder, glass base to the quarter's rear. */
+    const ZONE = { x: [0.55, 0.7], z: [-1.62, -1.2] } as const;
     const hatch = CAR_STYLES.hatchback;
-    const dropped: BodyStyle = { ...hatch, pillars: { ...hatch.pillars, rearFoot: hatch.rearGlass.base[0] - DROP } };
-    const footY = (s: BodyStyle) => {
-      const posts = makeGreenhouseFrame(s, "drawn").filter((g) => g.name === "rear");
-      assert.ok(posts.length === 2, `${posts.length} rear posts`);
-      let low = Infinity;
-      for (const post of posts) {
-        const pos = post.getAttribute("position");
-        // The foot corner stands 1 cm behind the rear glass's base: the post's points behind the base are its foot's.
-        for (let i = 0; i < pos.count; i++) if (pos.getZ(i) < s.rearGlass.base[1]) low = Math.min(low, pos.getY(i));
+    const seen = (s: BodyStyle) => {
+      const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+      const gate = new THREE.Mesh(makeTrunkGeometry(s), material);
+      const [py, pz] = bootPivot(s.boot);
+      gate.position.set(0, py, pz);
+      gate.updateMatrixWorld();
+      const meshes = [new THREE.Mesh(makeChassisGeometry(s, "drawn"), material), new THREE.Mesh(makeRearGlass(s), material), gate];
+      const ray = new THREE.Raycaster();
+      let floor = 0;
+      for (let z = ZONE.z[0]; z <= ZONE.z[1]; z += 0.01) {
+        for (let x = ZONE.x[0]; x <= ZONE.x[1]; x += 0.005) {
+          ray.set(new THREE.Vector3(x, 3, z), new THREE.Vector3(0, -1, 0));
+          const hit = ray.intersectObjects(meshes)[0];
+          if (hit !== undefined && hit.point.y < FLOOR_Y) floor++;
+        }
       }
-      return low;
+      return floor;
     };
-    const fall = footY(hatch) - footY(dropped);
-    assert.ok(Math.abs(fall - DROP) < 0.001, `the post's foot falls ${(fall * 1000).toFixed(1)} mm, want ${DROP * 1000}`);
+    const without: BodyStyle = { ...hatch, pillars: { ...hatch.pillars, rearFoot: undefined } };
+    assert.ok(seen(without) > 0, "the control: without the foot the opening shows");
+    assert.ok(seen(hatch) === 0, `${seen(hatch)} rays see the cabin's floor between the D-pillar and the shoulder`);
     const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
-    assert.ok(bits(makeChassisGeometry(dropped, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
+    assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
+  });
+
+  it("when the coupe's door is drawn, then its skin is flush with the body side inside its cut (door.proud 0), not a lit 3 mm step at the shut line", () => {
+    /** Flush within this (m): the skin's chords between its rows. */
+    const FLUSH = 0.001;
+    const coupe = CAR_STYLES.coupe;
+    const { hingeX, hingeY, hingeZ, aperture } = coupe.door;
+    const [y, z] = [0.7, aperture[1] - 0.03];
+    const proudOf = (s: BodyStyle) => {
+      const door = new THREE.Mesh(makeDoorGeometry(1, s), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+      door.position.set(hingeX, hingeY, hingeZ + doorSkinZ(s));
+      door.updateMatrixWorld();
+      const hit = new THREE.Raycaster(new THREE.Vector3(2, y, z), new THREE.Vector3(-1, 0, 0)).intersectObject(door)[0]!;
+      return hit.point.x - drawnSideX(z, y, s);
+    };
+    assert.ok(Math.abs(proudOf(coupe)) <= FLUSH, `the door skin stands ${(proudOf(coupe) * 1000).toFixed(1)} mm off the body side`);
+    assert.ok(proudOf({ ...coupe, door: { ...coupe.door, proud: undefined } }) > FLUSH, "the control: the platform's skin stands proud");
+  });
+
+  it("when the coupe's drawn A-post is seated on its deck (pillars.aSeat), then no level ray in from the side between the fender's top and the belt under the post's foot sees into the cabin, and the cage is unchanged", () => {
+    /** The post's foot ahead of the door's cut [z] (m), and the band between the deck there (.876-.887) and the belt (.913) [y]. */
+    const ZONE = { z: [0.65, 0.73], y: [0.88, 0.91] } as const;
+    /** A level ray in from the side whose first hit lies inboard of this (m) has passed under the post (its inner face x .656) into the cabin. */
+    const CABIN_X = 0.6;
+    const coupe = CAR_STYLES.coupe;
+    const seen = (s: BodyStyle) => {
+      const body = new THREE.Mesh(makeChassisGeometry(s, "drawn"), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+      const ray = new THREE.Raycaster();
+      let cabin = 0;
+      for (let z = ZONE.z[0]; z <= ZONE.z[1]; z += 0.005) {
+        for (let y = ZONE.y[0]; y <= ZONE.y[1]; y += 0.005) {
+          ray.set(new THREE.Vector3(2, y, z), new THREE.Vector3(-1, 0, 0));
+          const hit = ray.intersectObject(body)[0];
+          if (hit === undefined || hit.point.x < CABIN_X) cabin++;
+        }
+      }
+      return cabin;
+    };
+    const without: BodyStyle = { ...coupe, pillars: { ...coupe.pillars, aSeat: undefined } };
+    assert.ok(seen(without) > 0, "the control: without the seat the gap under the foot shows the cabin");
+    assert.ok(seen(coupe) === 0, `${seen(coupe)} level rays under the A-post's foot see into the cabin`);
+    const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
+    assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(coupe, "cage")), "the cage moved with the drawn seat");
+  });
+
+  it("when the coupe's body is drawn (door.shutCrease), then at each end of its door cut the side's shoulder and feature line keep the panel's own normal up to the shut line, not rolled off by the cut's ramp into a round cap", () => {
+    /** Within this (°) of the same points one ring further onto the panel: the ramp's faces tilted them 17-73°. */
+    const PANEL_TURN = 10;
+    /** The side's ring points from the shoulder down to the feature line (half-ring points 2 to 4, +x side). */
+    const SIDE = [2, 3, 4] as const;
+    const coupe = CAR_STYLES.coupe;
+    const turns = (s: BodyStyle) => {
+      const body = makeChassisGeometry(s, "drawn");
+      const { ring, slices } = body.userData.loft as { ring: number; slices: number };
+      const [pos, normal] = [body.getAttribute("position"), body.getAttribute("normal")];
+      const zs = Array.from({ length: slices }, (_, k) => pos.getZ(k * ring));
+      return s.door.aperture.flatMap((z, end) => {
+        const at = zs.findIndex((v) => Math.abs(v - z) < 1e-6);
+        const panel = end === 0 ? at - 1 : at + 1;
+        return SIDE.map((j) => THREE.MathUtils.radToDeg(new THREE.Vector3().fromBufferAttribute(normal, at * ring + ring - 1 - j).angleTo(new THREE.Vector3().fromBufferAttribute(normal, panel * ring + ring - 1 - j))));
+      });
+    };
+    assert.ok(Math.max(...turns({ ...coupe, door: { ...coupe.door, shutCrease: undefined } })) > PANEL_TURN, "the control: without the crease the ramp rolls the panel's end off");
+    assert.ok(Math.max(...turns(coupe)) <= PANEL_TURN, `the panel's end turns ${turns(coupe).map((t) => t.toFixed(1)).join(", ")}° off its next ring`);
   });
 
   it("when a drawn A-post 10 cm wide or more is read at a station under the roof, then its outer face turns 25° or more across its width, outboard on both sides: a curved post from the side glass to the windshield, not a flat plank (the plank turned 15-20°)", () => {
@@ -3062,6 +3135,24 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       }
     });
   }
+
+  /** A squashed drawn opening (`arch.rise`) keeps this much (m) over a tyre risen to its spring's stop: the cage keeps the round one, so nothing else stops the tyre showing through the fender. */
+  const CROWN_CLEAR = 0.02;
+  for (const id of CAR_STYLE_IDS) {
+    const style = CAR_STYLES[id];
+    const rise = style.arch.rise;
+    if (rise === undefined) continue;
+    it(`when a ${id}'s tyres are risen to their spring's stop, then each tyre's top stands ${CROWN_CLEAR} m or more under its drawn arch's crown (${rise} of its radius over the hub)`, () => {
+      const cls = STYLE_CLASS[id];
+      const { lift, wheelScale } = CLASSES[cls];
+      const bump = SPRINGS[cls].travel / 2;
+      for (const [wx, wy, wz] of carFrame(style).wheels) {
+        const top = wy + style.dims.wheel.radius * (wheelScale - 1) - lift + bump + style.dims.wheel.radius * wheelScale;
+        const crown = wy + style.arch.radius * rise;
+        assert.ok(top + CROWN_CLEAR <= crown, `${id} wheel at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: its tyre's top at ${top.toFixed(3)} m stands ${(crown - top).toFixed(3)} m under the crown at ${crown.toFixed(3)} m`);
+      }
+    });
+  }
 });
 
 describe("given every style's doors and the shared door card", () => {
@@ -3097,9 +3188,9 @@ describe("given every style's doors and the shared door card", () => {
     return [...outerAt].map(([y, x]) => ({ x, y })).sort((a, b) => b.y - a.y);
   };
 
-  it("when a door skin is built, then its face meets the drawn body side (its ring's chords over the ring rows it carries, the side's curve past them) at both cut ends (hinge and latch slices: a shut line, not a step) and stands 3 mm proud 2 cm inside them", () => {
-    /** The face's stand-off (m) over the body side at a cut end, and 2 cm inside it. */
-    const WANT = [[0, 0], [0.02, 0.003]] as const;
+  it("when a door skin is built, then its face meets the drawn body side (its ring's chords over the ring rows it carries, the side's curve past them) at both cut ends (hinge and latch slices: a shut line, not a step) and stands its style's proud (3 mm unless `door.proud`) 2 cm inside them", () => {
+    /** The face's stand-off (m) over the body side at a cut end, and 2 cm inside it (null: the style's `door.proud`, else `DOOR_PROUD`). */
+    const WANT = [[0, 0], [0.02, null]] as const;
     /** Rows this near (m) the skin's top or bottom roll over its edge: left out. */
     const ROW_EDGE = 0.05;
     for (const id of CAR_STYLE_IDS) {
@@ -3124,7 +3215,8 @@ describe("given every style's doors and the shared door card", () => {
             const body = sideX(p.y, sl.hw, sl.yBelt, rockerAt(zCar, style)) + drawnSideX(zCar, held, style) - sideX(held, sl.hw, sl.yBelt, rockerAt(zCar, style));
             proud = Math.max(proud, p.x - body);
           }
-          assert.ok(Math.abs(proud - want) < 1e-5, `${id}: ${inside * 100} cm inside the ${end > 0 ? "hinge" : "latch"} end the skin stands ${proud * 1000} mm proud, want ${want * 1000}`);
+          const stand = want ?? d.proud ?? 0.003;
+          assert.ok(Math.abs(proud - stand) < 1e-5, `${id}: ${inside * 100} cm inside the ${end > 0 ? "hinge" : "latch"} end the skin stands ${proud * 1000} mm proud, want ${stand * 1000}`);
         }
       }
     }
@@ -3265,5 +3357,17 @@ describe("given a style with chrome window trim", () => {
       assert.ok(out(trim.geometry.boundingBox!) > out(pane.geometry.boundingBox!), "the trim stands proud of the glass");
     }
     assert.equal(trims(cars.sedan).length, 0, "the control: a style without trim draws none");
+  });
+});
+
+describe("given a style's paint finish (paintFinish)", () => {
+  it("when the coupe (which sets one) and the sedan (which does not) are built, then the coupe's body paint takes its roughness and clear coat and the sedan's keeps the platform paint's", () => {
+    const finish = CAR_STYLES.coupe.paintFinish!;
+    const read = (id: CarStyleId) => {
+      const m = cars[id].lookMeshes().bodyPaint;
+      return `${m.roughness}/${m.clearcoat}/${m.clearcoatRoughness}`;
+    };
+    assert.ok(read("coupe") === `${finish.roughness}/${finish.clearcoat}/${finish.clearcoatRoughness}`, `coupe paint ${read("coupe")}`);
+    assert.ok(read("sedan") === "0.42/0.72/0.24", `sedan paint ${read("sedan")}`);
   });
 });

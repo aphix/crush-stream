@@ -1,6 +1,6 @@
 import type { BodyStyle } from "../car-variants.ts";
 import { PLATFORM_HARDPOINTS, pullHandle, st } from "./platform.ts";
-import { TOW_MIRROR, TRUCK_ROOF_ENDS } from "./pickup.ts";
+import { TOW_MIRROR, TRUCK_ROOF_ENDS, TRUCK_ROOF_SECTION } from "./pickup.ts";
 
 /** The crew cab's slim front and rear door pulls, 15 x 4 cm. */
 const DOOR_PULLS = [pullHandle(0.055, -0.095, 0.838, 0.04), pullHandle(-0.47, -0.62, 0.834, 0.04)];
@@ -89,6 +89,8 @@ export const MONSTER: BodyStyle = {
   ],
   roofZ: [-0.7, 0.45],
   roofEnds: TRUCK_ROOF_ENDS,
+  roofSection: TRUCK_ROOF_SECTION,
+  roofDrip: 0,
   windshieldTop: [1.46, 0.45],
   rearGlass: { base: [1.02, -0.78], top: [1.45, -0.7], wBase: 1.36, wTop: 1.18 },
   privacyGlass: { rear: true },

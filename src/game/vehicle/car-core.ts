@@ -459,8 +459,8 @@ export abstract class CarCore {
     this.group.name = paint.name;
 
     const livery = this.style.livery;
-    this.bodyMat = makePaintMaterial(livery?.body ?? paint.body);
-    const doorMat = livery ? makePaintMaterial(livery.doors) : this.bodyMat;
+    this.bodyMat = makePaintMaterial(livery?.body ?? paint.body, this.style.paintFinish);
+    const doorMat = livery ? makePaintMaterial(livery.doors, this.style.paintFinish) : this.bodyMat;
     const bodyGeo = makeChassisGeometry(this.style);
     this.regions = panelRegions(this.style, bodyGeo);
     this.body = new THREE.Mesh(bodyGeo, this.bodyMat);
