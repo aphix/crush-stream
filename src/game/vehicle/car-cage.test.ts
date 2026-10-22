@@ -143,6 +143,10 @@ describe("given a pristine sedan's cage", () => {
 describe("given a car dropped on its roof, whose glass is gone and whose crushed roof the drawn interior pokes through", () => {
   it("when its cage is fitted with the glass off and as if it were on, then the tops differ over a gone pane's opening alone, never over the roof between them", () => {
     const car = carInState("rolled", "sedan", "sedan");
+    // The reference sedan's 2 m drop shatters no pane on its own (the laminated windshield stands in the cage either way): the fixture takes
+    // the rear glass off, a pane of the frame (a door's glass rides its door, no glass panel of the cage).
+    const rear = car.glassPanes.find((g) => g.name === "rear")!;
+    if (rear.state !== "shattered") car["shatterGlass"](rear);
     const off = cageOf(car);
     fitToDrawn(car, off);
     const live = cageLiveOf(car);
