@@ -346,6 +346,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * behind the door and rises to the window's point, and its roof's rear corner stands 2 cm wider.
  * A solid placed or rewritten where it already stands (a wall, the slab, a ramp or rig synced each step) stirs the wrecks near it only on the step
  * it changes: a wreck at rest beside one sleeps (it was woken every slice for good).
+ * A popped wheel flies as a disk of its own tyre's width (the sedan's 0.22 m, the hatchback's 0.17, the monster's 0.364 before its wheel
+ * scale), not the platform's 0.24 on every car.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

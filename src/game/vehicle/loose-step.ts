@@ -8,7 +8,7 @@ import { body, centreOfMass, moveBody, placeBody, standAtCentre, bindBody, type 
 import { loadShape, readPoints } from "./car-air-points.ts";
 import { openRows, solveRows } from "./car-air.ts";
 import { DENT_MIN_DV, recordDent, type DentState } from "./loose-dent.ts";
-import type { DetachPart, LooseBody, LooseShape } from "./car-core.ts";
+import type { DetachPart, LooseBody, LooseShape, LooseWheel } from "./car-core.ts";
 
 const _c = new THREE.Vector3();
 const _dv = new THREE.Vector3();
@@ -281,12 +281,9 @@ function wheelShape(shape: LooseShape, radius: number, width: number): void {
   shape.restFor = 0;
 }
 
-/** A tyre's width (m) at wheel scale 1: a popped wheel flies as a disk this wide. */
-const TYRE_WIDTH = 0.24;
-
 /** `wheel`'s shape as the disk it flies as (`wheelShape`) at its own scale: a popped wheel's, whether it left its hub in a step or a keyframe put it loose. */
-export function fitWheelShape(wheel: LooseBody): void {
-  wheelShape(wheel.shape, wheel.radius * wheel.object.scale.x, TYRE_WIDTH * wheel.object.scale.x);
+export function fitWheelShape(wheel: LooseWheel): void {
+  wheelShape(wheel.shape, wheel.radius * wheel.object.scale.x, wheel.width * wheel.object.scale.x);
 }
 
 /** Air at sea level (kg/m³, the ISA standard atmosphere). */

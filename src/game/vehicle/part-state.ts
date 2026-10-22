@@ -1,4 +1,4 @@
-import type { DetachPart, LooseBody } from "./car-core.ts";
+import type { DetachPart, LooseBody, LooseWheel } from "./car-core.ts";
 import type { CarParts } from "./car-parts.ts";
 import { DENT_MAX, type DentState } from "./loose-dent.ts";
 import { fitWheelShape, keyedShape, SHAPE_POINTS } from "./loose-step.ts";
@@ -72,9 +72,6 @@ export function partState(car: CarParts, parts: readonly DetachPart[], buf: Floa
   }
 }
 
-/** A popped wheel: a loose body with the flag the car keeps of it. */
-type LooseWheel = LooseBody & { loose: boolean };
-
 /**
  * Numbers a loose body takes in a keyframe's loose block: pose (position, quaternion), velocity, spin, the flags, the sleep place (x, z), the
  * dents' count and their hits, a part's shape (its middle and box half extents, 0: not measured yet), how long it has rested (`restFor`), then
@@ -116,7 +113,7 @@ export function looseState(parts: readonly DetachPart[], wheels: readonly LooseW
     const loose = part ? part.detached : (wheel?.loose ?? false);
     if (write) {
       if (((recorded >> i) & 1) === 0) continue;
-      if (loose) putLooseBody((part ?? wheel)!, wheel !== undefined, part?.dent, buf, at);
+      if (loose) putLooseBody((part ?? wheel)!, wheel, part?.dent, buf, at);
     } else {
       if (!loose) continue;
       readLooseBody((part ?? wheel)!, part?.dent, buf, at);
@@ -146,14 +143,14 @@ function readLooseBody(body: LooseBody, dent: DentState | undefined, buf: Float6
   for (let k = 0; k < SHAPE_POINTS * 3; k++) buf[at + LOOSE_POINTS + k] = s.points[k]!;
 }
 
-function putLooseBody(body: LooseBody, isWheel: boolean, dent: DentState | undefined, buf: Float64Array, at: number): void {
+function putLooseBody(body: LooseBody, wheel: LooseWheel | undefined, dent: DentState | undefined, buf: Float64Array, at: number): void {
   const o = body.object;
   o.position.fromArray(buf, at);
   o.quaternion.fromArray(buf, at + 3);
   body.velocity.fromArray(buf, at + 7);
   body.angular.fromArray(buf, at + 10);
   // Before the flags: shaping wakes it and says it flies. A part flies as the shape it was measured as when it first flew, not its shell drawn now.
-  if (isWheel) fitWheelShape(body);
+  if (wheel) fitWheelShape(wheel);
   else if (buf[at + LOOSE_BOX + 3] === 0) body.shape.count = 0;
   else {
     body.shape.centre.fromArray(buf, at + LOOSE_BOX);

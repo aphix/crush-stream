@@ -338,6 +338,9 @@ export interface LooseBody {
   shape: LooseShape;
 }
 
+/** A popped wheel: a loose body with the flag the car keeps of it and its tyre's width (m, at wheel scale 1), the disk it flies as. */
+export type LooseWheel = LooseBody & { loose: boolean; width: number };
+
 /** The car's state and build. Layers stack `CarCore` → `CarParts` → `DeformableCar` (the one anything constructs). */
 export abstract class CarCore {
   readonly group = new THREE.Group();
@@ -349,7 +352,7 @@ export abstract class CarCore {
   readonly frame: CarFrame;
   readonly wheels: THREE.Group[] = [];
   /** Per wheel: off its popped hub and loose in the world (`dropWheel`), with its own motion. */
-  protected readonly looseWheels: (LooseBody & { loose: boolean })[] = [];
+  protected readonly looseWheels: LooseWheel[] = [];
   readonly velocity = new THREE.Vector3();
   readonly angular = new THREE.Vector3();
   readonly forward = new THREE.Vector3(0, 0, 1);
@@ -586,7 +589,7 @@ export abstract class CarCore {
       w.position.set(x, y, z);
       this.group.add(w);
       this.wheels.push(w);
-      this.looseWheels.push({ object: w, velocity: new THREE.Vector3(), angular: new THREE.Vector3(), radius: this.frame.rig.tyre.r, shape: newLooseShape(), loose: false });
+      this.looseWheels.push({ object: w, velocity: new THREE.Vector3(), angular: new THREE.Vector3(), radius: this.frame.rig.tyre.r, width: 2 * this.frame.rig.tyre.halfW, shape: newLooseShape(), loose: false });
     }
     this.underbody = this.style.underbody ? new CarUnderbody(this.partSeats, this.group, this.wheels) : null;
     this.group.castShadow = true;
