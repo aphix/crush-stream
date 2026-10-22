@@ -77,6 +77,8 @@ interface HoodBulge {
   z1: number;
   width: number;
   rise: number;
+  /** Rolled pod (m): each flank rolls from the lid up to the crest over this width in an S-curve (level at both ends) instead of the 5 cm chamfer; the crest spans ±(width/2 - round). The scoop stands on the crest: scoop.width/2 <= width/2 - round. */
+  round?: number;
   /** Scoop on the bulge rising from its cowl end to a mouth facing forward at z `z`, `width` across, `height` (m) over the bulge: one opening, or two either side of a centre rib. */
   scoop?: { inlets: 1 | 2; z: number; width: number; height: number };
 }
@@ -270,7 +272,8 @@ export interface BodyStyle {
     mirrorReach: number;
     mirrorHalfDepth: number;
     aperture: readonly [number, number];
-    mirror?: { cap: "rounded" | "box"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number] };
+    /** `lift` (m): head, glass and stalk stand this far higher than the seat, the foot growing up to meet them (default 0), for a mirror on a pedestal above the door skin's top. */
+    mirror?: { cap: "rounded" | "box"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number };
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
   aPillarFoot: number;

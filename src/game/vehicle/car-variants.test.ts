@@ -1231,6 +1231,27 @@ describe("given a body style's P1 parts", () => {
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 
+  it("when a hood bulge is rolled, then its flanks roll up from the lid in steps outside its crest, the crest stays inside the roll, and the cage builds are unchanged", () => {
+    const bulge = { z0: 0.9, z1: 1.8, width: 0.6, rise: 0.04, round: 0.1 } as const;
+    const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge } };
+    const hood = withHoodBulge(makeHoodGeometry(style), style);
+    const [oy, oz] = style.hood.origin;
+    const zMid = (bulge.z0 + bulge.z1) / 2;
+    const pos = hood.getAttribute("position");
+    const raised: { x: number; y: number }[] = [];
+    for (let i = 0; i < pos.count; i++) {
+      const [x, y, z] = [pos.getX(i), pos.getY(i) + oy, pos.getZ(i) + oz];
+      if (Math.abs(z - zMid) < 1e-3 && y - deckTopY(x, z, style, true) > RAISED_M) raised.push({ x: Math.abs(x), y });
+    }
+    const steps = [...new Set(raised.map((v) => Math.round(v.x * 1000)))].sort((a, b) => a - b);
+    assert.ok(steps.length >= 2, `the roll stands at one |x| only: ${steps.join(", ")} mm`);
+    const top = Math.max(...raised.map((v) => v.y));
+    for (const v of raised) {
+      if (top - v.y < 1e-4) assert.ok(v.x <= bulge.width / 2 - bulge.round + POSITION_TOL, `the crest reaches |x| ${v.x.toFixed(4)}, outside its ${(bulge.width / 2 - bulge.round).toFixed(4)}`);
+    }
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
   it("when a hood is a clamshell, then its sides wrap over the body's shoulder to a shut line on the fender top, clear of the body there, and the cage builds are unchanged", () => {
     const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, kind: "clamshell" } };
     const z = lerp(sedan.hood.z0, sedan.hood.z1, 0.5);
@@ -1448,6 +1469,17 @@ describe("given a body style's P2 parts", () => {
     assert.ok(Math.abs(inner - skin) < MIRROR_SEAT_TOL, `the foot starts at x ${inner}, the drawn skin at ${skin}`);
     assert.ok(mirrorSeatX(style) === mirrorSeatX({ ...style, door: { ...CAR_STYLES.sedan.door, mirrorReach: style.door.mirrorReach } }), "the seat is the platform mirror's at that reach");
     assert.ok(cageHash(style) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
+  });
+
+  it("when a mirror is lifted, then its cap rises that far over the seat while its foot still starts on the drawn skin, and the seat and cage builds are unchanged", () => {
+    const spec = { cap: "rounded", finish: "body", size: [0.1, 0.07, 0.1] } as const;
+    const flat = readMirror(mirrorStyle(spec));
+    const lifted = mirrorStyle({ ...spec, lift: 0.05 });
+    const up = readMirror(lifted);
+    assertSameNumbers([up.cap.min.y - flat.cap.min.y, up.cap.max.y - flat.cap.max.y], [0.05, 0.05], "the cap's rise", POSITION_TOL);
+    assert.ok(Math.abs(up.inner - bodySideAtMirror(lifted)) < MIRROR_SEAT_TOL, `the foot starts at x ${up.inner}, the drawn skin at ${bodySideAtMirror(lifted)}`);
+    assert.ok(mirrorSeatX(lifted) === mirrorSeatX(mirrorStyle(spec)), "the seat is unchanged");
+    assert.ok(cageHash(lifted) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
   });
 
   it("when a mirror's finish is black or chrome, then its cap wears that tone and nothing takes paint, a black one gloss as the references' are; when it is body, its cap carries the paint's tone for its door's colour", () => {

@@ -829,8 +829,8 @@ const SIM_DIGEST_BY_STYLE = [
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams.
   { id: "hatchback", digest: "674fca85d7893ab736a28bcff660adad5f319d6471bcd301a6bfa60bc8f7983e" },
   { id: "wagon", digest: "728e19f0a34f06b705de92b836b11640013dff0bc01857f6bd173b0308be8b37" },
-  // The coupe re-pinned for its crisper nose: the hood's lip reaches z 1.945 over a held station there.
-  { id: "coupe", digest: "e1f4d131860fc9399df4a841b9396cbc374c5460d7ef44939560ff9c71defc1a" },
+  // The coupe re-pinned for its nose crown at z 1.9 dropped 2.5 mm, so the hood's last chord clears the deck it covers.
+  { id: "coupe", digest: "ddb38853702981fec0ab7f975ad3c023108290dee79372fbc8c3eb8268123379" },
   { id: "pickup", digest: "8ac3348022ccf861dcc32220681d991fadaba4b58f4cd87233f0374f7bfb5731" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
@@ -882,8 +882,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and blunt nose, bumpers wrapped to their seams, the hatch's C-pillar top.
   { id: "hatchback", digest: "ce63b76a30c823bfbb334938b043b0f30e1fbc3d33255ddeb254d45733b1737b" },
   { id: "wagon", digest: "eb9db693294fddf0470fba46a10bf8c4181d12a8d392ef892fc4beb6c843f908" },
-  // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945).
-  { id: "coupe", digest: "07208a77ebde9a8441a8671d73a84a547a27d6f70ed1813fd327a5db15fa93fa" },
+  // The coupe re-pinned for its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above).
+  { id: "coupe", digest: "dfb31ee99ed4563c406b2ebb2f8647e1fac4148e8c45f0c9909061dc7b63ba44" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   { id: "pickup", digest: "1c94ef0982232d8ed7a9c59f2cc37d17d0e14cc4f344c8b25399f48c7c16e8a3" },

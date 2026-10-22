@@ -74,7 +74,7 @@ const MIRROR_FITTING = [0x1c1e22, 0.5, 0.3] as const;
 /**
  * `style`'s own mirror on side `sign`: a foot on the skin at the arm root, a stalk out to the cap where the cap leaves room, the cap in its
  * finish with its outer face at `mirrorReach`, the glass on its rear face. Built at its real size, then divided by the seat's x-scale (kept
- * for the sim), so it draws unsquashed.
+ * for the sim), so it draws unsquashed. A `lift` stands the cap, glass and stalk that far (m) higher than the seat, the foot growing up to meet them.
  */
 function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const spec: MirrorSpec = style.door.mirror!;
@@ -82,18 +82,20 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const [w, h, d] = spec.size ?? MIRROR_CAP_SIZE;
   const scaleX = reach / MIRROR_REACH;
   const root = MIRROR_ROOT * scaleX;
+  const lift = spec.lift ?? 0;
+  const capY = MIRROR_CAP_Y + lift;
   const fitting = (geo: THREE.BufferGeometry) => (spec.finish === "chrome" ? finished(geo, "chrome") : dark(geo, ...MIRROR_FITTING));
   // RoundedBoxGeometry comes unindexed; the other pieces are indexed, and a merge takes one kind.
   const capShape = spec.cap === "rounded" ? mergeVertices(new RoundedBoxGeometry(w, h, d, 2, MIRROR_CAP_ROUND * Math.min(w, h, d))) : new THREE.BoxGeometry(w, h, d);
   // A black housing is gloss (the references' piano black), not the grilles' and bumpers' satin plastic.
   const cap = spec.finish === "black" ? dark(capShape, TRIM_BLACK, TRIM_FINISH.gloss.roughness, TRIM_FINISH.gloss.metalness) : finished(capShape, spec.finish);
-  const parts = [cap.translate(sign * (reach - w / 2), MIRROR_CAP_Y, 0)];
+  const parts = [cap.translate(sign * (reach - w / 2), capY, 0)];
   const footOut = MIRROR_FOOT.out + MIRROR_FOOT_SINK;
-  parts.push(fitting(new THREE.BoxGeometry(footOut, h * MIRROR_FOOT.share, d * MIRROR_FOOT.share)).translate(sign * (root - MIRROR_FOOT_SINK + footOut / 2), MIRROR_CAP_Y, 0));
+  parts.push(fitting(new THREE.BoxGeometry(footOut, h * MIRROR_FOOT.share + lift, d * MIRROR_FOOT.share)).translate(sign * (root - MIRROR_FOOT_SINK + footOut / 2), MIRROR_CAP_Y + lift / 2, 0));
   const [stalkFrom, stalkTo] = [root + MIRROR_FOOT.out, reach - w + MIRROR_FOOT.out / 2];
-  if (stalkTo > stalkFrom) parts.push(fitting(new THREE.BoxGeometry(stalkTo - stalkFrom, ...MIRROR_STALK)).translate((sign * (stalkFrom + stalkTo)) / 2, MIRROR_CAP_Y, 0));
+  if (stalkTo > stalkFrom) parts.push(fitting(new THREE.BoxGeometry(stalkTo - stalkFrom, ...MIRROR_STALK)).translate((sign * (stalkFrom + stalkTo)) / 2, capY, 0));
   const glass = dark(new THREE.PlaneGeometry(w * MIRROR_GLASS.share[0], h * MIRROR_GLASS.share[1]), 0x9aa8b4, 0.08, 0.7).rotateY(Math.PI);
-  parts.push(glass.translate(sign * (reach - w / 2), MIRROR_CAP_Y, -d / 2 - MIRROR_GLASS.proud));
+  parts.push(glass.translate(sign * (reach - w / 2), capY, -d / 2 - MIRROR_GLASS.proud));
   return mergeToned(parts, "style mirror").scale(1 / scaleX, 1, 1);
 }
 
