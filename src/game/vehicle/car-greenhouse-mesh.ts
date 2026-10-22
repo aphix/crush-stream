@@ -60,11 +60,12 @@ function shellRing(skin: Pt[], cant: number, inset: number): Pt[] {
   return [...skin, ...inner];
 }
 
-/** The drawn roof's ends that bow in plan past the default bow (`WINDSHIELD_BOW`, `REAR_GLASS_BOW`) its flat ends already cover: z, bow (m), the glass top's half-width. */
+/** The drawn roof's ends that bow in plan past the default bow (`WINDSHIELD_BOW`, `REAR_GLASS_BOW`) its flat ends already cover, or with the glass's whole bow (`roofEnds.glassBow`): z, bow (m), the glass top's half-width. */
 function roofEndBows(style: BodyStyle): { z: number; bow: number; half: number }[] {
+  const whole = style.roofEnds?.glassBow;
   return [
-    { z: style.roofZ[1], bow: (style.windshield.bow ?? WINDSHIELD_BOW).top - WINDSHIELD_BOW.top, half: style.windshield.wTop / 2 },
-    { z: style.roofZ[0], bow: (style.rearGlass.bow ?? REAR_GLASS_BOW).top - REAR_GLASS_BOW.top, half: style.rearGlass.wTop / 2 },
+    { z: style.roofZ[1], bow: (style.windshield.bow ?? WINDSHIELD_BOW).top - (whole?.front ? 0 : WINDSHIELD_BOW.top), half: style.windshield.wTop / 2 },
+    { z: style.roofZ[0], bow: (style.rearGlass.bow ?? REAR_GLASS_BOW).top - (whole?.rear ? 0 : REAR_GLASS_BOW.top), half: style.rearGlass.wTop / 2 },
   ].filter((end) => end.bow !== 0);
 }
 

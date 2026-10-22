@@ -7,7 +7,7 @@ import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
 import { ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, sideX, tailgateHalf } from "./car-mesh.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, rockerAt, tubWall } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, tubWall } from "./car-lines.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
@@ -399,6 +399,22 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
         if (z >= rolled.roofZ[0] && z <= rolled.roofZ[1]) assert.ok(y <= roofTopY(x, z, rolled) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the rolled roof (${roofTopY(x, z, rolled)})`);
       }
     }
+  });
+
+  it("when its roof's rear end bows with the rear glass's whole bow (roofEnds.glassBow.rear), then its crown meets the glass top's centre in plan (no slit), where the plain end stands the default bow ahead of it", () => {
+    // The roof's rear crown z (its centre-line skin's rearmost) less the rear glass top's centre z.
+    const endGap = (style: BodyStyle): number => {
+      const [roof, glass] = [makeRoofGeometry(style).getAttribute("position"), makeRearGlass(style).getAttribute("position")];
+      let roofZ = Infinity;
+      for (let v = 0; v < roof.count; v++) if (Math.abs(roof.getX(v)) < 1e-6) roofZ = Math.min(roofZ, roof.getZ(v));
+      let [topY, topZ] = [-Infinity, 0];
+      for (let i = 0; i < glass.count; i++) if (Math.abs(glass.getX(i)) < 1e-6 && glass.getY(i) > topY) [topY, topZ] = [glass.getY(i), glass.getZ(i)];
+      return roofZ - topZ;
+    };
+    const plain: BodyStyle = { ...coupe, roofEnds: { ...coupe.roofEnds, glassBow: undefined } };
+    const met: BodyStyle = { ...plain, roofEnds: { ...plain.roofEnds, glassBow: { rear: true } } };
+    const [open, shut] = [endGap(plain), endGap(met)];
+    assert.ok(Math.abs(shut) < 1e-4 && Math.abs(open + REAR_GLASS_BOW.top) < 1e-4, `rear crown ${(shut * 1000).toFixed(1)} mm ahead of the glass top with glassBow, ${(open * 1000).toFixed(1)} mm without`);
   });
 });
 
