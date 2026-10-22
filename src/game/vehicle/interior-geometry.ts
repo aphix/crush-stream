@@ -190,7 +190,7 @@ export function engineBayGeometry(): THREE.BufferGeometry {
     rounded(0.24, 0.15, 0.26, 0.03, PLASTIC).translate(0.43, 0.6, 1.66),
     box(1.2, 0.26, 0.05, BLACK, 0, 0.5, 1.85),
     box(1.36, 0.04, 0.07, ALU, 0, 0.66, 1.85),
-    along(toned(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 18), ...PLASTIC)).translate(0, 0.5, 1.8),
+    along(toned(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 18), ...PLASTIC)).translate(0, 0.53, 1.8),
     rounded(0.18, 0.16, 0.22, 0.02, PLASTIC).translate(-0.44, 0.53, 1.66),
     box(0.03, 0.02, 0.03, [0xa8231c, 0.5, 0.2], -0.49, 0.62, 1.6),
     box(0.03, 0.02, 0.03, ALU, -0.39, 0.62, 1.6),

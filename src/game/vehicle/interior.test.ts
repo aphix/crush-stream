@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
+import { floorY } from "./car-lines.ts";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { BUMPER_F, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
@@ -117,6 +118,17 @@ describe("given every style's seats", () => {
       const cushion = new THREE.Box3().setFromPoints(placed(bench, (y) => y < 0));
       const inCushion = front.flatMap((s) => placed(s, () => true)).filter((p) => cushion.containsPoint(p));
       assert.equal(inCushion.length, 0, `${id}: ${inCushion.length} front seat vertices inside the bench's cushion`);
+    }
+  });
+
+  test("when each cabin is built, then no point of its engine bay stands under the floor pan, as the drawn trough it sits in never does", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
+      const seats = carPartSeats();
+      new CarCabin(style, seats, new THREE.Group());
+      const bay = seats.find((s) => s.kind === PART_KIND.engineBay)!;
+      const under = placed(bay, () => true).filter((p) => p.y < floorY(p.z, style) - 1e-6);
+      assert.equal(under.length, 0, `${id}: ${under.length} bay vertices under the floor pan, the lowest at y ${Math.min(...under.map((p) => p.y)).toFixed(3)}`);
     }
   });
 });

@@ -3,7 +3,7 @@ import type { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import type { MassName } from "../kernel/rig-spec.ts";
 import type { DetachPart } from "./car-core.ts";
-import { beltX } from "./car-lines.ts";
+import { beltX, floorY } from "./car-lines.ts";
 import { roofAt, sampleSlice } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import type { BodyStyle } from "./car-variants.ts";
@@ -88,8 +88,9 @@ function fitBox(seat: PartSeat, ref: { halfX: number; y0: number; y1: number; z0
   seat.position.set(0, y0 - ref.y0 * sy, z0 - ref.z0 * sz);
 }
 
-/** Half the cab's back wall (m): its drawn box is 4.5 cm deep about `rearBulkhead.z` (`makeChassisGeometry`). The bench's back stands this far off its face (m). */
+/** Half the cab's back wall (m): its drawn box is 4.5 cm deep about `rearBulkhead.z`. */
 const WALL_HALF = 0.0225;
+/** Air (m) between the bench's back and the wall's face, so the two never z-fight. */
 const BENCH_GAP = 0.01;
 
 /** The depth (z) scale, at most 1, that keeps the bench seated at `back` ([y, z]) ahead of the back wall under its top: a 2+2 coupe's shallow bench. */
@@ -156,9 +157,11 @@ export class CarCabin {
       this.pose.add(rear!);
     }
 
-    const [zRear, zFront, bayFloor] = bayTub(style);
+    const [zRear, zFront, troughFloor] = bayTub(style);
     let bayHalf = Infinity;
     for (let z = zRear; z <= zFront; z += 0.1) bayHalf = Math.min(bayHalf, sampleSlice(z, style.profile).hw - BAY_INSET);
+    // On the floor pan where it rides over the trough's floor, as the drawn trough is (`tubAt`); over a bay the pan only rises toward the nose.
+    const bayFloor = Math.max(troughFloor, floorY(zRear, style), floorY(zFront, style));
     const bayTop = sampleSlice((zRear + zFront) * 0.5, style.profile).yBelt - HOOD_UNDER;
     fitBox(bay!, { halfX: REF_BAY.halfX, y0: REF_BAY.floor, y1: REF_BAY.top, z0: REF_BAY.rear, z1: REF_BAY.front }, bayHalf, bayFloor, bayTop, zRear, zFront);
     this.bayZ = [zRear, zFront];
