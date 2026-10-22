@@ -47,6 +47,9 @@ const PICKUP_LAMP_SHAPES = {
   },
 } as const;
 
+/** The trucks' tall gloss-black tow-style mirror housing, read off their isos ([out from the door, height, length along the car] m). */
+export const TOW_MIRROR = { cap: "box", finish: "black", size: [0.07, 0.22, 0.16] } as const;
+
 /** 80s regular-cab long-bed pickup (Toyota Pickup proportions): boxy cab, flat hood, open bed; the trunk part is the tailgate. */
 export const PICKUP: BodyStyle = {
   id: "pickup",
@@ -56,14 +59,14 @@ export const PICKUP: BodyStyle = {
   belt: { x: 0.73, y: [[0, 1.12]] },
   rocker: { y: 0.45 },
   underside: [[-2.17, 0.52], [-1.96, 0.42], [-1.75, 0.38], [-1.5, 0.34], [1.6, 0.34], [1.76, 0.35], [1.93, 0.38]],
-  door: { hingeX: 0.74, hingeY: 0.785, hingeZ: 0.7, length: 0.93, halfHeight: 0.335, mirrorY: 0.31, mirrorZ: 0.08, mirrorReach: 0.08, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69] },
+  door: { hingeX: 0.74, hingeY: 0.785, hingeZ: 0.7, length: 0.93, halfHeight: 0.335, mirrorY: 0.31, mirrorZ: 0.08, mirrorReach: 0.15, mirrorHalfDepth: 0.08, aperture: [-0.22, 0.69], mirror: TOW_MIRROR },
   aPillarFoot: 0.7,
   aPillarTop: 0.41,
   bPillar: { rear: -0.3, front: -0.23 },
   arch: { radius: 0.46, lip: { flare: 0.024, width: 0.065, square: true } },
   hood: { z0: 1.03, z1: 1.86, origin: [1.2, 1.01] },
   bumpers: {
-    front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.76, wrap: { from: 0.55, back: 0.12 }, fascia: TRUCK_FRONT_FASCIA, trim: "chrome" },
+    front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.73, wrap: { from: 0.55, back: 0.12 }, fascia: TRUCK_FRONT_FASCIA, trim: "chrome" },
     rear: { ...bumpers.rear, seat: { y: 0.57, z: 2.13 }, span: 0.74, wrap: { from: 0.65, back: 0.05 }, trim: "chrome" },
   },
   profile: [
