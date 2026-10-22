@@ -15,10 +15,6 @@ import { CageStrain, maxCompression, sensorsByPart } from "./cage-measure.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { CORNER_BLEND, CORNER_CENTRED, FAR_SIDE_DOT, MIN_IMPACT_ZONE, MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
 
-/** Packed bumper-to-block-centre length (m): bumper beam and radiator crushed flat ahead of a
- *  0.36 m block. Nose crush past the 0.84 m rest gap minus this shoves the engine back. */
-export const ENGINE_PACK_GAP = 0.54;
-
 /** How far (m) a single nose hit's dynamic crush peaks short of its stroke: single 48–54 km/h hits at
  *  squash 0.32 and 0.4 all peak the block at the stroke's reach (stroke − 0.30) minus 0.06 ± 0.01 m. */
 const STROKE_SHORTFALL = 0.06;
@@ -236,7 +232,7 @@ export abstract class DeformState extends DeformHit {
     // under the nose, whose crush reached the block 0.225 m at a monster's 55 m/s slab hit (alive at 0.58) where
     // its body's own hit on a wall packed it 0.54 m and killed it.
     if (noseHit) {
-      const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(el.rest.z, er.rest.z) - ENGINE_PACK_GAP;
+      const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(el.rest.z, er.rest.z) - this.rig.packGap;
       const energy = this.hitStroke() - crumple - STROKE_SHORTFALL;
       travel = this.energyTravel ? energy : Math.min(travel, energy);
     }

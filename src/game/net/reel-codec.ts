@@ -419,6 +419,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * a parked car's door stops at its face, where it ended 1.02 m inside it.
  * A hit's centre follows the pair's patch for its first 15 ms and its snap to the nearest mass has no step at 0.2 m off the centre line: a T-bone's nose
  * no longer crushes 0.38 m or 0.74 m with where in a 1/240 s slice the first touch fell (now within 0.09 m), and a pair's crush spreads over a flat face.
+ * Each car's nose packs to its own length ahead of its engine block, leaving the platform's 0.30 m of crumple on every body (the sedan's
+ * was 0.287, the wagon's 0.318, the monster's 0.255, the hatchback's and pickup's 0.18), so a nose hit reaches the block and kills the
+ * engine at the same speed whatever the car.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

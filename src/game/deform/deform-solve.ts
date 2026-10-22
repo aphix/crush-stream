@@ -19,7 +19,7 @@ import { ENGINE_SLACK } from "./deform-contact.ts";
 import { DeformFreeze } from "./deform-freeze.ts";
 import { HUB_OVERRUN, type MassNode } from "./deform-rig.ts";
 import { FACE_TOP } from "./load-crush.ts";
-import { ENGINE_PACK_GAP, PLANT_QUIET } from "./deform-state.ts";
+import { PLANT_QUIET } from "./deform-state.ts";
 import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn-hold.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
  import { CONTACT_WINDOW, MIN_INV_MASS, SQUASH_REACH } from "./constants.ts";
@@ -327,8 +327,8 @@ export abstract class DeformSolve extends DeformFreeze {
    *  stroke's reach let a 43 km/h hit creep the block 0.045 m with 0.58 m of nose left. */
   private engineMountDz(m: MassNode, dz: number, bz: number, stroke: number): number {
     const nose = Math.min(this.at.bumperFL.local.z, this.at.bumperFR.local.z);
-    const pushed = nose - ENGINE_PACK_GAP - m.rest.z;
-    const reach = Math.max(ENGINE_SLACK, stroke - (Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - m.rest.z - ENGINE_PACK_GAP));
+    const pushed = nose - this.rig.packGap - m.rest.z;
+    const reach = Math.max(ENGINE_SLACK, stroke - (Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - m.rest.z - this.rig.packGap));
     const floor = Math.max(-reach, Math.min(Math.min(0, bz) - ENGINE_SLACK, pushed));
     if (dz < floor) dz = floor;
     if (dz > pushed) dz = pushed;

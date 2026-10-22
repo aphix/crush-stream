@@ -16,7 +16,7 @@ function blockTravel(car: DeformableCar): number {
   return Math.max(mass(car.deform, "engineL").rest.z - mass(car.deform, "engineL").local.z, mass(car.deform, "engineR").rest.z - mass(car.deform, "engineR").local.z);
 }
 
-/** Nose-to-block length (m): 0.84 at rest, 0.54 packed (ENGINE_PACK_GAP: beam and radiator flat ahead of the block). */
+/** Nose-to-block length (m): the sedan's 0.827 at rest, packed to its rig's `packGap` 0.527 (beam and radiator flat ahead of the block). */
 function noseGap(car: DeformableCar): number {
   const d = car.deform;
   return Math.min(mass(d, "bumperFL").local.z, mass(d, "bumperFR").local.z) - Math.max(mass(d, "engineL").local.z, mass(d, "engineR").local.z);
@@ -42,7 +42,7 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
       for (const kph of [20, 25, 30, 35, 40, 43]) {
         const car = makeCar("shape", squash);
         runWall(kph, 1, "front", { car });
-        if (noseGap(car) > 0.56) assert.ok(blockTravel(car) <= 0.045, `squash ${squash}, ${kph} km/h: block moved ${blockTravel(car).toFixed(4)} m with ${noseGap(car).toFixed(3)} m of nose left`);
+        if (noseGap(car) > car.frame.rig.packGap + 0.02) assert.ok(blockTravel(car) <= 0.045, `squash ${squash}, ${kph} km/h: block moved ${blockTravel(car).toFixed(4)} m with ${noseGap(car).toFixed(3)} m of nose left`);
       }
     }
   });
@@ -56,7 +56,7 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
       runWall(52, 1, "front", { car });
       const gap = noseGap(car);
       const block = blockTravel(car);
-      assert.ok(gap <= 0.545, `squash ${squash} fixture: 52 km/h left ${gap.toFixed(3)} m of nose, not packed to 0.54`);
+      assert.ok(gap <= car.frame.rig.packGap + 0.005, `squash ${squash} fixture: 52 km/h left ${gap.toFixed(3)} m of nose, not packed to ${car.frame.rig.packGap.toFixed(3)}`);
       runWall(35, 1, "front", { car });
       assert.ok(gap - noseGap(car) < 0.02, `squash ${squash}: the packed nose shortened ${(gap - noseGap(car)).toFixed(3)} m more`);
       assert.ok(blockTravel(car) - block > 0.04, `squash ${squash}: the block took ${(blockTravel(car) - block).toFixed(3)} m of the second hit`);

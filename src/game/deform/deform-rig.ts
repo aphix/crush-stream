@@ -29,7 +29,7 @@ export type DeformMode = "shape" | "lattice";
 /** Rearward engine travel (m, vs the cell, along the hit) that leaves the car undriveable.
  *  ESV 98S3P12: a rigid full-width barrier overloads the front above ~50 km/h
  *  and leaves the safety cell intact below that. With the slab stopping the
- *  nose (A1) the block is reached once the nose packs (ENGINE_PACK_GAP): about
+ *  nose (A1) the block is reached once the nose packs (RigTables.packGap): about
  *  0.03 m at 35 km/h, 0.11 m at 56 km/h, 0.15 m at 64 km/h and 0.23 m at 80.
  *  A tail-first hit does not reach the block (it lives in the nose), so the
  *  same threshold stays driveable from the rear well past 80 km/h. */
@@ -60,6 +60,8 @@ export interface RigTables {
   readonly tyreReach: number;
   /** How far (m) the front bumper's particles stand behind the nose a solid's face meets: a push bar's reach, which the hold on a face (`faceHits`) adds to those particles' own. */
   readonly noseReach: number;
+  /** Packed bumper-to-block-centre length (m): bumper beam and radiator crushed flat ahead of the block. The nose's rest gap less this is its crumple, 0.30 m on every body; crush past it shoves the engine back. */
+  readonly packGap: number;
 }
 /** Platform bonnet top (m): where the top band starts following the roof's crush. */
 const PLATFORM_BONNET_TOP = CAGES.find((cage) => cage.name === "bonnet")!.max[1];
@@ -81,6 +83,7 @@ export const PLATFORM_RIG: RigTables = {
   },
   tyreReach: 0.42,
   noseReach: 0,
+  packGap: 0.54,
 };
 /** Depth (m) inside the chassisCell span's front/rear face over which non-cell skin weight blends back in. */
 const CELL_FACE_BLEND = 0.3;

@@ -1637,6 +1637,7 @@ const SIM_CRASH_KPH = 48;
 // Re-pinned (sedan to police, the monster still rocking) when a placed wall no longer stirs a wreck at rest beside it every step: each ends asleep.
 // Every style again when a quiet wreck standing on its planted tyres had its hubs' springs critically damped (CarRig rig-entry): its hubs
 // settle a centimetre or two off where they stood and the rest of the wreck follows by millimetres.
+// Every style's digest moves again for its own pack gap (`RigTables.packGap`: 0.30 m of crumple on every body, CarSimDims 8a5f1567); re-derived with the union.
 const SIM_DIGEST_BY_STYLE = [
   // CarSedan's shape data on top of CarRig's re-pin (sedan and police alike): crowned hood and its stations (f3ba51c8), the sedan's own front
   // fascia (e17b83ac), mirror reach .128 (28843919), then the reference's arch radius .405 -> .375. Sedan 3b05ae33... -> 26331e81... (shape

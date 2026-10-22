@@ -7,7 +7,7 @@ import {
   crushStroke,
   hypot2,
 } from "./physics-util.ts";
-import { DeformState, ENGINE_PACK_GAP, PLANT_QUIET } from "./deform-state.ts";
+import { DeformState, PLANT_QUIET } from "./deform-state.ts";
 import { BodyFit } from "./body-fit.ts";
 import { detSin, detCos, detAtan2, sinCosAt } from "../kernel/physics-core.js";
 import { CONTACT_REF_SLICE, MIN_IMPACT_ZONE, MIN_INERTIA, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
@@ -621,8 +621,8 @@ export abstract class DeformContact extends DeformState {
     const into = -(cell.vel.x * rx + cell.vel.z * rz) * side;
     if (into < 0.3 && !this.bidirectional && this.hitSpeed >= 0 && -this.impactInward.z > Math.abs(this.impactInward.x)) {
       this.thaw();
-      const front = Math.min(this.at.bumperFL.local.z, this.at.bumperFR.local.z) - ENGINE_PACK_GAP;
-      const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(this.at.engineL.rest.z, this.at.engineR.rest.z) - ENGINE_PACK_GAP;
+      const front = Math.min(this.at.bumperFL.local.z, this.at.bumperFR.local.z) - this.rig.packGap;
+      const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(this.at.engineL.rest.z, this.at.engineR.rest.z) - this.rig.packGap;
       const reach = Math.max(ENGINE_SLACK, this.hitStroke() - crumple);
       for (const m of [this.at.engineL, this.at.engineR]) {
         const back = Math.min(m.local.z - front, m.local.z - (m.rest.z - reach));

@@ -245,6 +245,7 @@ function rigOf(style: BodyStyle, w: Warp, wheels: readonly V3[]): RigTables {
     faceBands: bandsOf(w, cages, masses),
     tyreReach: P.tyreReach + (r - PLATFORM_TYRE.r),
     noseReach: style.pushBar ? PUSH_BAR_REACH : 0,
+    packGap: P.packGap + (named(masses, "bumperFL").rest[2] - named(P.masses, "bumperFL").rest[2]) - (named(masses, "engineL").rest[2] - named(P.masses, "engineL").rest[2]),
   };
 }
 
