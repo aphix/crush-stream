@@ -13,19 +13,26 @@ const HATCHBACK_LAMP_SHAPES = {
       { loop: { side: true, points: [[1.72, 0.49], [1.62, 0.49], [1.62, 0.59], [1.72, 0.61]] }, tone: "amber" },
     ],
   },
+  // Split on the gate's outline: the gate's share inboard of x .43, the infill's under the outline's slant, the corner's past the infill's edge (a 1-6 cm step).
   tail: {
     loops: [
-      { points: [[0.43, 0.645], [0.6, 0.625], [0.66, 0.62], [0.66, 0.82], [0.62, 0.83], [0.43, 0.82]] },
-      { points: [[0.27, 0.66], [0.43, 0.64], [0.43, 0.8], [0.27, 0.8]] },
+      { points: [[0.445, 0.645], [0.6, 0.627], [0.6, 0.815], [0.445, 0.785]] },
+      { points: [[0.635, 0.625], [0.665, 0.62], [0.665, 0.815], [0.635, 0.82]] },
+      { points: [[0.27, 0.66], [0.42, 0.645], [0.42, 0.79], [0.27, 0.79]] },
       { side: true, points: [[-1.69, 0.625], [-1.6, 0.63], [-1.58, 0.8], [-1.63, 0.82]] },
     ],
     lens: "lit",
     bezel: "black",
     recess: 0.01,
-    strips: [{ line: { points: [[0.27, 0.79], [0.43, 0.81], [0.62, 0.82], [0.66, 0.81]] }, width: 0.02, tone: "lit" }],
+    strips: [
+      { line: { points: [[0.28, 0.775], [0.41, 0.772]] }, width: 0.02, tone: "lit" },
+      { line: { points: [[0.455, 0.772], [0.59, 0.8]] }, width: 0.02, tone: "lit" },
+      { line: { points: [[0.64, 0.802], [0.66, 0.8]] }, width: 0.02, tone: "lit" },
+    ],
     cells: [
       { loop: { points: [[0.27, 0.66], [0.35, 0.655], [0.35, 0.78], [0.27, 0.78]] }, tone: "clear" },
-      { loop: { points: [[0.43, 0.65], [0.66, 0.625], [0.66, 0.7], [0.43, 0.7]] }, tone: "smoked" },
+      { loop: { points: [[0.445, 0.65], [0.6, 0.632], [0.6, 0.7], [0.445, 0.7]] }, tone: "smoked" },
+      { loop: { points: [[0.635, 0.628], [0.665, 0.625], [0.665, 0.7], [0.635, 0.7]] }, tone: "smoked" },
     ],
   },
   front: {
