@@ -44,11 +44,12 @@ const GLOW_TAIL = [0.55, 0.03, 0.015] as const;
 const TAIL_RUNNING = 0.35;
 const GLOW_RED = [1, 0.06, 0.04] as const;
 const GLOW_BLUE = [0.08, 0.2, 1] as const;
+/** A headlamp whose drawn lens is not lit (a dark lens with a lit DRL or projectors) glows this share: the full white sprite washed its
+ *  whole lens white. A tail's red glow over a smoked lens reads as the lit lens it is, so tails keep theirs. */
+const GLOW_DARK_LENS = 0.3;
 /** A body lamp's glow fades with the cosine between its lens axis and the camera: full to about 70° off the axis, gone past 95° (a
  *  lamp's lens is seen from its side, never from behind). */
 const GLOW_FACE = [-0.1, 0.35] as const;
-/** A lamp whose drawn lens is not lit (a dark lens with a lit DRL or projectors) glows this share: the full sprite washed its whole lens white. */
-const GLOW_DARK_LENS = 0.3;
 
 /** Fake pools, shaped like the real spot's pool on the road (dark at the lamp, brightest about a fifth along, then a fading fan). A headlamp's
  *  quad runs from the lamp's foot POOL_LEN times the way to where its beam meets the ground (to at most POOL_MAX m), POOL_WIDTH as wide as
@@ -350,10 +351,10 @@ export class LampLights {
         const c = kind === "head" ? GLOW_HEAD[car.style.lamps.bulb ?? "neutral"] : kind === "tail" ? GLOW_TAIL : kind === "red" ? GLOW_RED : GLOW_BLUE;
         const bright = kind === "tail" && !car.braking ? TAIL_RUNNING : 1;
         const lens = kind === "head" ? car.style.lamps.shapes?.head?.lens : undefined;
-        const k = lens === undefined || lens === "lit" ? 1 : GLOW_DARK_LENS;
+        const dark = lens === undefined || lens === "lit" ? 1 : GLOW_DARK_LENS;
         // A body lamp's glow shows only on the side its lens faces: seen from behind the lens (past the body, through the cabin's glass)
         // it is dark. A siren shows all round.
-        const shown = (kind === "head" || kind === "tail" ? THREE.MathUtils.smoothstep(_e.subVectors(_cam, _pos).normalize().dot(_dir), GLOW_FACE[0], GLOW_FACE[1]) : 1) * bright * k;
+        const shown = (kind === "head" || kind === "tail" ? THREE.MathUtils.smoothstep(_e.subVectors(_cam, _pos).normalize().dot(_dir), GLOW_FACE[0], GLOW_FACE[1]) : 1) * bright * dark;
         gc[n * 3] = c[0] * shown;
         gc[n * 3 + 1] = c[1] * shown;
         gc[n * 3 + 2] = c[2] * shown;

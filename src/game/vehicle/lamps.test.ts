@@ -215,15 +215,16 @@ describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, hal
     for (let i = 0; i < n; i++) best = Math.max(best, rgb[i * 3 + 2]! / Math.max(rgb[i * 3]!, 1e-6));
     return best;
   };
-  /** The glow colours a lone car in `style` gets from the pool, head L and head R first. */
+  /** The glow colours a lone car in `style` gets from the pool, head L and head R first, seen from ahead (a glow shows its lens's side only). */
   const glowOf = (style: BodyStyle): { rgb: ArrayLike<number>; n: number } => {
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
+
     const car = new DeformableCar(paint(), scene, null, "hatchback");
     const restyled: { style: BodyStyle } = car; // `style` is readonly only to game code; the glow reads it per update
     restyled.style = style;
     car.spawnFacing(0, 10, 0, 0);
-    // Ahead of the car: a lamp's glow fades out seen from behind its lens.
+    car.group.updateMatrixWorld(true);
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
     camera.position.copy(car.group.position).addScaledVector(car.forward, 8).setY(1.5);
     camera.lookAt(car.group.position);
     const lights = new LampLights(scene, 12, FULL_POOL);
@@ -316,6 +317,18 @@ describe("given the lamp batch and one car of each style", () => {
     }
   });
 
+  it("when one hatchback is packed, then every lamp and part draw left empty is hidden (no scene walk, upload or program switch) and every filled one shows", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
+    car.group.updateMatrixWorld(true);
+    const [lamps, parts] = [new LampBatch(8), new PartBatch(8)];
+    lamps.sync([car]);
+    parts.sync([car]);
+    const wrong = [...lamps.meshes, ...parts.meshes, ...parts.casters].filter((m) => m.visible !== m.count > 0);
+    assert.equal(wrong.length, 0, `draws shown while empty or hidden while filled: ${wrong.map((m) => `${m.name || m.geometry.name || "?"} (${m.count})`).join(", ")}`);
+    assert.ok(lamps.meshes.some((m) => m.count > 0) && parts.meshes.some((m) => m.count > 0), "nothing was packed");
+    lamps.dispose();
+    parts.dispose();
+  });
   it("when a car is on its brakes, then its tail lamps and their lid shares draw bright and its high brake lamp lights; off the brakes the tails are dim running lights and the high brake lamp is dark; the tail glows brighten with them", () => {
     let highs = 0;
     for (const id of CAR_STYLE_IDS) {
@@ -379,19 +392,7 @@ describe("given the lamp batch and one car of each style", () => {
       }
     }
     assert.ok(lids >= 4, `${lids} lids carry lamp shares`);
-  });
 
-  it("when one hatchback is packed, then every lamp and part draw left empty is hidden (no scene walk, upload or program switch) and every filled one shows", () => {
-    const car = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
-    car.group.updateMatrixWorld(true);
-    const [lamps, parts] = [new LampBatch(8), new PartBatch(8)];
-    lamps.sync([car]);
-    parts.sync([car]);
-    const wrong = [...lamps.meshes, ...parts.meshes, ...parts.casters].filter((m) => m.visible !== m.count > 0);
-    assert.equal(wrong.length, 0, `draws shown while empty or hidden while filled: ${wrong.map((m) => `${m.name || m.geometry.name || "?"} (${m.count})`).join(", ")}`);
-    assert.ok(lamps.meshes.some((m) => m.count > 0) && parts.meshes.some((m) => m.count > 0), "nothing was packed");
-    lamps.dispose();
-    parts.dispose();
   });
 });
 
