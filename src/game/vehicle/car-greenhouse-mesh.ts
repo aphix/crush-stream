@@ -250,12 +250,12 @@ function roundedPillarFromCorners(sign: number, c: { fb: V3; rb: V3; rt: V3; ft:
 
 /** The drawn A-post's depth inward (m): a slim post, not a slab. */
 const A_POST_THICK = 0.03;
-/** Stations along the drawn A-post: its rails run straight up to the cant line, so all but the last spread evenly up to it and the last runs up into the roof. */
-const A_POST_STATIONS = 6;
-/** The A-post's last station under the roof stands this far (m) under the cant line, so none of its points reaches into the roof. */
-const A_POST_CANT_CLEAR = 0.005;
-/** Halvings that find where the A-post's rails reach the cant line: 20 put it within a micron. */
-const A_POST_CANT_STEPS = 20;
+/**
+ * The drawn A-post's stations, base to top, as shares of its run: sixths, the fifth left out. Its rails run straight up to the cant
+ * line, so the lower five show under every style's roof side; the top runs up into the roof. The fifth stands past the cant on some
+ * styles (held in the roof) and in the last few cm under it on the rest, where the chord to the top covers it.
+ */
+const A_POST_STATIONS = [0, 1, 2, 3, 4, 6].map((k) => k / 6);
 /** The drawn A-post stands this far (m) off the windshield's edge and the side glass, outward, so neither glass shows through it. */
 const A_POST_LIFT = 0.004;
 /** A drawn pillar's top runs this far (m) up past the cant line, buried in the roof's side. */
@@ -300,24 +300,7 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
     const [dx, dz] = [front[0] - rear[0], front[2] - rear[2]];
     return { rear, front, inward: [dz / hypot2(dx, dz), dx / hypot2(dx, dz)] };
   };
-  // Every point of the station's section stays under the cant line wherever the roof spans, on either side (`roundedPillarAlong`'s left
-  // mapping takes its depth from u, the right's from 1 - u).
-  const underCant = (t: number) => {
-    const { rear, front, inward = [1, 0] } = railAt(t);
-    return postSection(A_POST_THICK, hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2])).every(({ x: u, y: w }) =>
-      [u, 1 - u].every((depth) => {
-        const [y, z] = [lerp(rear[1], front[1], w), lerp(rear[2], front[2], w) + depth * A_POST_THICK * inward[1]];
-        return z < style.roofZ[0] || z > style.roofZ[1] || y < cantY(z, style) - A_POST_CANT_CLEAR;
-      }),
-    );
-  };
-  let [shownTop, heldFrom] = [0, 1];
-  for (let k = 0; k < A_POST_CANT_STEPS; k++) {
-    const mid = (shownTop + heldFrom) / 2;
-    if (underCant(mid)) shownTop = mid;
-    else heldFrom = mid;
-  }
-  const post = [...Array.from({ length: A_POST_STATIONS - 1 }, (_, k) => railAt((k / (A_POST_STATIONS - 2)) * shownTop)), railAt(1)];
+  const post = A_POST_STATIONS.map(railAt);
   const sail: Rail[] = [];
   let sailWidth = 0;
   for (let k = 0; k < SAIL_STATIONS; k++) {
