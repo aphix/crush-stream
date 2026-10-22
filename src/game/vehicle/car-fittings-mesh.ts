@@ -152,10 +152,10 @@ export function withHoodBulge(hood: THREE.BufferGeometry, style: BodyStyle): THR
 
 /** The black inlay just proud of `front`'s bumper face over its fascia rows within `band` (a diffuser band, a truck's valance), in bumper space. */
 function bandInlay(front: boolean, style: BodyStyle, band: readonly [number, number]): THREE.BufferGeometry {
-  const { seat, fascia } = front ? style.bumpers.front : style.bumpers.rear;
+  const { seat, fascia, bandHalfWidth } = front ? style.bumpers.front : style.bumpers.rear;
   const rows = fascia.flatMap(([y], i) => (seat.y + y >= band[0] - BAND_EPS && seat.y + y <= band[1] + BAND_EPS ? [i] : []));
   if (rows.length < 2) throw new Error(`${style.id}: ${front ? "front" : "rear"} bumper band [${band[0]}, ${band[1]}] covers fewer than 2 fascia rows`);
-  return withTone(makeBumperGeometry(front, style, [rows[0]!, rows[rows.length - 1]!], BAND_PROUD), FITTING_ATTRIBUTE, FITTING_TONE.black);
+  return withTone(makeBumperGeometry(front, style, [rows[0]!, rows[rows.length - 1]!], BAND_PROUD, bandHalfWidth), FITTING_ATTRIBUTE, FITTING_TONE.black);
 }
 
 /** `bumper` (the drawn front bumper, in bumper space) with its `band` inlay merged in; without one, `bumper` itself. */

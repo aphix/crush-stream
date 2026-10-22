@@ -133,8 +133,9 @@ interface LampLoop {
   side?: boolean;
   points: readonly LampPoint[];
 }
-/** A lens tone: `lit` the kind's lit lens (head white, tail red); `black` the trim's matte black plastic (a valance or diffuser band); the rest never glow. */
-type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "black" | "chrome";
+/** A lens tone: `lit` the kind's lit lens (head white, tail red); `black` the trim's matte black plastic (a valance or diffuser band); `cavity` the grille
+ *  backing's matte near-black (an open intake reading as a hole, not a gloss panel mirroring the road); the rest never glow. */
+type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "black" | "chrome" | "cavity";
 
 /**
  * A lamp drawn to its outline (drawn only), met on the skin: its lens filling `loops` (a wrap round the corner is another loop) a few mm
@@ -218,6 +219,8 @@ interface BumperSpec {
   plateFace?: { out?: number; color?: number };
   /** Drawn only: the fascia rows whose height (m, car y) lies in [bottom, top] carry a black inlay just proud of the face (a rear diffuser band, a truck's front valance). */
   band?: readonly [bottom: number, top: number];
+  /** With `band` on a lofted-end bumper (`wrap.end`): the inlay stops at the last ring whose face point stands within this |x| (m), so the corners stay body colour; absent, it runs the bumper's whole width. */
+  bandHalfWidth?: number;
   /** A rear bumper drawn without the platform plate (its reference shows none): its tail trim is its rear bumper lamps alone. */
   plateless?: boolean;
 }
