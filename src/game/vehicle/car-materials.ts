@@ -27,9 +27,30 @@ float capM = max(outgoingLight.r, max(outgoingLight.g, outgoingLight.b));
 if (capM > 0.7) outgoingLight *= (0.7 + 0.4 * (1.0 - exp((0.7 - capM) / 0.4))) / capM;
 #include <opaque_fragment>`;
 
+/**
+ * Specular anti-aliasing for the normals a car hook perturbs (the finish's waviness, peel, flake and trim grain; the detail map's grooves
+ * and vents): three widens roughness by the screen-space change of the unperturbed vertex normal only (`geometryRoughness`), so a
+ * perturbation finer than a pixel at play distance aliased into sparkle and crawl along feature lines and shut lines. The perturbation's
+ * own screen-space variance widens each lobe instead (Tokuyoshi and Kaplanyan's kernel, on alpha = roughness²): `SPEC_AA_SIGMA2` the pixel
+ * filter's variance, `SPEC_AA_KAPPA` the most any lobe widens. A surface no hook perturbs is untouched.
+ */
+const SPEC_AA_SIGMA2 = 0.25;
+const SPEC_AA_KAPPA = 0.18;
+const SPECULAR_AA = /* glsl */ `#include <lights_physical_fragment>
+vec3 specAaDx = dFdx( normal - nonPerturbedNormal );
+vec3 specAaDy = dFdy( normal - nonPerturbedNormal );
+float specAaAlpha = pow2( material.roughness );
+material.roughness = min( sqrt( sqrt( pow2( specAaAlpha ) + min( ${SPEC_AA_SIGMA2 * 2} * ( dot( specAaDx, specAaDx ) + dot( specAaDy, specAaDy ) ), ${SPEC_AA_KAPPA} ) ) ), 1.0 );
+#ifdef USE_CLEARCOAT
+specAaDx = dFdx( clearcoatNormal - nonPerturbedNormal );
+specAaDy = dFdy( clearcoatNormal - nonPerturbedNormal );
+specAaAlpha = pow2( material.clearcoatRoughness );
+material.clearcoatRoughness = min( sqrt( sqrt( pow2( specAaAlpha ) + min( ${SPEC_AA_SIGMA2 * 2} * ( dot( specAaDx, specAaDx ) + dot( specAaDy, specAaDy ) ), ${SPEC_AA_KAPPA} ) ) ), 1.0 );
+#endif`;
+
 function capHighlights<T extends THREE.MeshStandardMaterial>(m: T): T {
   m.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace("#include <opaque_fragment>", HIGHLIGHT_CAP);
+    shader.fragmentShader = shader.fragmentShader.replace("#include <opaque_fragment>", HIGHLIGHT_CAP).replace("#include <lights_physical_fragment>", SPECULAR_AA);
   };
   m.customProgramCacheKey = () => "car-highlight-cap";
   return m;
