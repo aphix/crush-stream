@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { store3f } from "../kernel/store.ts";
 import { BUST } from "./dummy-fit.ts";
 import { ORBS_AT, ROLE, ROW_TEXELS, smooth } from "./dummy-rig.ts";
 
@@ -72,8 +73,8 @@ export class BustSprings {
       _anchor.y += rows[torso + 1]!;
       _anchor.z += rows[torso + 2]!;
       if (this.seeded[s] === 0) {
-        _anchor.toArray(this.at, o);
-        _anchor.toArray(this.anchors, o);
+        store3f(this.at, o, _anchor);
+        store3f(this.anchors, o, _anchor);
         this.vel.fill(0, o, o + 3);
       }
       _prev.fromArray(this.anchors, o);
@@ -94,13 +95,13 @@ export class BustSprings {
         _v.copy(_anchorV);
         _rel.set(0, 0, 0);
       }
-      _x.toArray(this.at, o);
-      _v.toArray(this.vel, o);
-      _anchor.toArray(this.anchors, o);
+      store3f(this.at, o, _x);
+      store3f(this.vel, o, _v);
+      store3f(this.anchors, o, _anchor);
       _rel.applyQuaternion(_inverse);
       const lag = (s * ROW_TEXELS + ORBS_AT + side) * 4;
       changed ||= rows[lag] !== _rel.x || rows[lag + 1] !== _rel.y || rows[lag + 2] !== _rel.z;
-      _rel.toArray(rows, lag);
+      store3f(rows, lag, _rel);
     }
     this.seeded[s] = 1;
     return changed;
