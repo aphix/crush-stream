@@ -36,17 +36,24 @@ const WAGON_LAMP_SHAPES = {
   front: {
     loops: [{ points: [[0.52, 0.36], [0.72, 0.36], [0.72, 0.48], [0.52, 0.48]] }],
     lens: "dark",
+    onBody: true,
     // The corner intake's bright blade, 2/3 of its width, and the silver splitter along the fascia's bottom lip (diffuse silver: chrome reads dark there).
     strips: [
       { line: { points: [[0.553, 0.43], [0.687, 0.43]] }, width: 0.018, tone: "clear" },
       { line: { points: [[0.006, 0.345], [0.2, 0.345], [0.35, 0.345], [0.5, 0.345], [0.64, 0.345]] }, width: 0.008, tone: "clear" },
     ],
   },
-  // The black diffuser band across the rear bumper's foot, its red reflector in it.
+  // The black diffuser band across the rear bumper's foot from its lip's crest up, its red reflector in it, in three tiles: one long ring
+  // round the bumper's wrap fills with holes.
   rear: {
-    loops: [{ points: [[0.006, 0.475], [0.64, 0.475], [0.64, 0.54], [0.006, 0.54]] }],
-    lens: "dark",
-    cells: [{ loop: { points: [[0.48, 0.48], [0.64, 0.48], [0.64, 0.5], [0.48, 0.5]] }, tone: "red" }],
+    loops: [
+      { points: [[0.006, 0.487], [0.2, 0.487], [0.2, 0.54], [0.006, 0.54]] },
+      { points: [[0.2, 0.487], [0.4, 0.487], [0.4, 0.54], [0.2, 0.54]] },
+      { points: [[0.4, 0.487], [0.64, 0.487], [0.64, 0.54], [0.4, 0.54]] },
+    ],
+    lens: "black",
+    onBody: true,
+    cells: [{ loop: { points: [[0.48, 0.49], [0.64, 0.49], [0.64, 0.51], [0.48, 0.51]] }, tone: "red" }],
   },
 } as const;
 
@@ -81,6 +88,7 @@ export const WAGON: BodyStyle = {
       trim: "body",
       top: [[0, 0.62], [0.55, 0.62], [0.62, 0.615]],
       edge: [[-2, 0.615], [-1.85, 0.6], [-1.68, 0.6], [-1.725, 0.45], [-1.735, 0.38]],
+      plateless: true,
     },
   },
   door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.09, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "rounded", finish: "black", size: [0.09, 0.13, 0.1] } },
@@ -136,7 +144,7 @@ export const WAGON: BodyStyle = {
   proxyBelt: 1.19,
   rearDoorSeam: -1.23,
   boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE, edgeRoll: 0.02 },
-  lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES },
+  lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES, bulb: "led" },
   grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 9, finish: "black", rim: "chrome", lean: 0.387 },
   seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },
   pillars: { b: { width: [0.088, 0.088] }, divider: { width: [0.105, 0.105] } },

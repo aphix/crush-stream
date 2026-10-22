@@ -128,14 +128,15 @@ interface LampLoop {
   side?: boolean;
   points: readonly LampPoint[];
 }
-/** A lens tone: `lit` the kind's lit lens (head white, tail red); the rest never glow. */
-type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "chrome";
+/** A lens tone: `lit` the kind's lit lens (head white, tail red); `black` the trim's matte black plastic (a valance or diffuser band); the rest never glow. */
+type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "black" | "chrome";
 
 /**
  * A lamp drawn to its outline (drawn only), met on the skin: its lens filling `loops` (a wrap round the corner is another loop) a few mm
  * proud of it, in `lens`; a `bezel` lip round each loop cresting `recess` (m) over the lens, so the lens sits in its own pocket and no face
  * lies on the skin's; `cells` (sections, a reverse or smoked cell, a band) over the lens in their own tones; `strips` (a DRL or LED line,
- * ribs) along open lines `width` wide; `rounds` (projector cells, fog lenses) of radius `r`.
+ * ribs) along open lines `width` wide; `rounds` (projector cells, fog lenses) of radius `r`. `onBody`: a bumper lamp met on the body's
+ * skin too, the nearer one winning, where the nose or tail corner stands proud of the fascia (the fascia alone hides it there).
  */
 interface LampShape {
   loops: readonly LampLoop[];
@@ -212,6 +213,8 @@ interface BumperSpec {
   plateFace?: { out?: number; color?: number };
   /** Drawn only: the fascia rows whose height (m, car y) lies in [bottom, top] carry a black inlay just proud of the face, a diffuser band. */
   band?: readonly [bottom: number, top: number];
+  /** A rear bumper drawn without the platform plate (its reference shows none): its tail trim is its rear bumper lamps alone. */
+  plateless?: boolean;
 }
 
 type DetailView = "side" | "top" | "front" | "rear" | "bottom";
@@ -405,7 +408,8 @@ export interface BodyStyle {
    * riding its seat (a tail's share that lands on the boot lid rides the lid, lit with the tails); `front` / `rear` lamps, reflectors and
    * pods on that bumper's fascia (unlit, torn off with it). Absent, the platform housing (`LAMP_HOUSING`, standing 4.5 cm proud).
    * `brake`: a high-mount brake lamp `size` [w, h] met on the skin or the rear glass from behind at [x, y] (a pickup's cab glass); `sideMarkers`:
-   * amber markers on each side met from outboard at [y, z]. Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
+   * amber markers on each side met from outboard at [y, z], `tint` (sRGB) multiplied into the shared amber lens (absent, the amber as is).
+   * Brake lamp and markers are drawn only, lit (brake) with the tails, never broken.
    * `bulb`: the head lamps' light, warm halogen or cool-white LED, in their lit lens pieces and glow; absent, the neutral white.
    */
   lamps: {
@@ -413,7 +417,7 @@ export interface BodyStyle {
     tail: readonly [number, number];
     shapes?: { head?: LampShape; tail?: LampShape; front?: LampShape; rear?: LampShape };
     brake?: { at: readonly [number, number]; size: readonly [number, number] };
-    sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number] }[];
+    sideMarkers?: readonly { at: readonly [number, number]; size: readonly [number, number]; tint?: number }[];
     bulb?: "halogen" | "led";
   };
   /**

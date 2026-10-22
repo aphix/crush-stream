@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { makeGlassMaterial, makePaintMaterial } from "./car-materials.ts";
+import { makeGlassMaterial, makePaintMaterial, PRIVACY_SHADE } from "./car-materials.ts";
+import { GLASS_ATTRIBUTE } from "./constants.ts";
 import type { DeformableCar } from "./car.ts";
 
 /** A door's room in its lane at first (vertices, indices; the sedan's is 280 and 1038); a lane grows when a field outgrows it. */
@@ -57,7 +58,7 @@ class CoverLane {
     this.frame++;
   }
 
-  /** Draw `part` this frame where it stands, in its material's colour. */
+  /** Draw `part` this frame where it stands, in its material's colour (a privacy pane's darkened, a frit's black: its `GLASS_ATTRIBUTE`). */
   add(part: THREE.Mesh): void {
     const source = part.geometry;
     const version = (source.attributes.position as THREE.BufferAttribute).version;
@@ -128,7 +129,11 @@ class CoverLane {
     cover.color.copy(color);
     const to = this.mesh.geometry.attributes.color as THREE.BufferAttribute;
     const vertices = cover.source.attributes.position!.count;
-    for (let v = cover.vertexStart; v < cover.vertexStart + vertices; v++) to.setXYZ(v, color.r, color.g, color.b);
+    const tone = cover.source.attributes[GLASS_ATTRIBUTE];
+    for (let i = 0; i < vertices; i++) {
+      const lit = tone ? 1 - Math.max(tone.getX(i), tone.getY(i) * (1 - PRIVACY_SHADE)) : 1;
+      to.setXYZ(cover.vertexStart + i, color.r * lit, color.g * lit, color.b * lit);
+    }
     to.addUpdateRange(cover.vertexStart * 3, vertices * 3);
     to.needsUpdate = true;
   }

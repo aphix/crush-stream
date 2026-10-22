@@ -209,6 +209,35 @@ describe("given each style with a high-mount brake lamp", () => {
   }
 });
 
+describe("given the monster's side markers with and without a `tint`", () => {
+  it("when the lamp batch packs them, then a tinted marker's colour is its look times the tint and an untinted one keeps the look", () => {
+    const plain = CAR_STYLES.monster;
+    const tint = 0x806040;
+    const markers = plain.lamps.sideMarkers ?? [];
+    assert.ok(markers.length > 0, "the control: the monster carries side markers");
+    const colours = (style: BodyStyle): string => {
+      const styles: Record<CarStyleId, BodyStyle> = CAR_STYLES;
+      styles.monster = style;
+      try {
+        const car = new DeformableCar(paint(), new THREE.Scene(), null, "monster");
+        car.group.updateMatrixWorld(true);
+        const batch = new LampBatch(2);
+        batch.sync([car]);
+        const rows = car.lampFittings.flatMap((f, i) => (f.kind === "marker" ? [car.lamps.length + i] : []));
+        const out = rows.map((row) => batch.draw.colorAt(row, new THREE.Color()).toArray().map((c) => c.toFixed(4)).join(" ")).join(", ");
+        batch.dispose();
+        return out;
+      } finally {
+        styles.monster = plain;
+      }
+    };
+    const want = new THREE.Color(tint).toArray().map((c) => c.toFixed(4)).join(" ");
+    assert.equal(colours(plain), Array.from({ length: markers.length * 2 }, () => "1.0000 1.0000 1.0000").join(", "), "untinted markers keep the head look's white");
+    const tinted: BodyStyle = { ...plain, lamps: { ...plain.lamps, sideMarkers: markers.map((m) => ({ ...m, tint })) } };
+    assert.equal(colours(tinted), Array.from({ length: markers.length * 2 }, () => want).join(", "), "tinted markers take the tint");
+  });
+});
+
 describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, halogen, LED), and under a dark lens", () => {
   const BULBS = [undefined, "halogen", "led"] as const;
   const styled = (bulb: (typeof BULBS)[number]): BodyStyle => ({ ...CAR_STYLES.hatchback, lamps: { ...CAR_STYLES.hatchback.lamps, bulb } });
@@ -654,4 +683,25 @@ describe("given a device class and the page's ?lamps setting", () => {
       assert.equal(pool.tails, testCase.tails, "tails");
     });
   }
+});
+
+describe("given the hatchback, whose tail lamp crosses the step from the infill to the quarter", () => {
+  it("when its right tail lamp is met from behind along its band, then every ray from the gate's edge to the corner meets the lens, with no body showing at the step", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "hatchback");
+    car.group.updateMatrixWorld(true);
+    const tail = car.lamps.find((l) => l.kind === "tail" && l.side > 0)!;
+    tail.seat.updateWorldMatrix(true, false);
+    const lens = new THREE.Mesh(drawnLamp(car.style, "tail", 1).geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    lens.matrixAutoUpdate = false;
+    lens.matrixWorld.copy(tail.seat.matrixWorld);
+    const ray = new THREE.Raycaster();
+    const gaps: string[] = [];
+    for (const y of [0.72, 0.75, 0.78]) {
+      for (let x = 0.45; x <= 0.66; x += 0.001) {
+        ray.set(new THREE.Vector3(x, y, -5), new THREE.Vector3(0, 0, 1));
+        if (ray.intersectObjects([car.body, lens], false)[0]?.object !== lens) gaps.push(`${x.toFixed(4)},${y}`);
+      }
+    }
+    assert.equal(gaps.join(" "), "", "rays along the band that meet the body before the lens, by x,y");
+  });
 });
