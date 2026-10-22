@@ -1496,11 +1496,13 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // rear end over its rear glass's top (`roofZ[0]` -0.5 -> -0.46), its mid-cab roof 5 mm up to its dims' height.
   // The pickup's again for its rear glass's bowed top standing just ahead of the roof's end (`rearGlass.top`), so none shows past it.
   // The pickup's again for its cab narrowed to the top plate's roof edge (profile cabinHw) and its rear glass's top narrowed inside the roof's end.
-  { id: "pickup", digest: "c50231fa9a7dd766eb8fddf521f622dfdea5da2e3ba1a1a3fa7e04b50bed1c71" },
+  // Again for its door run back to the side plate's seam (`door.aperture`) with the B and rear post boxes behind it (`bPillar`, `quarter`).
+  { id: "pickup", digest: "47b06c11ceba2cb94ee2f16796aa9561d710a2ed9f04d043215dd095d1d282f2" },
   { id: "police", digest: "bb93a9082d0393e646fbc226fdb075fbda6f19d81cb54b371de3da40ef8becbc" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55); again for its windshield base at the side
   // plate's (`windshield.base` [1.0, .92] -> [1.05, .98]) and its door glass starting back at .60 (`aPillarFoot` .74 -> .6): the glass-front and A-post boxes moved.
-  { id: "monster", digest: "f52b18f7c2f6f4e1a77020397c5841a894e2d773b4a3a38c80b123faee458a80" },
+  // Again for its roof's flatter crown and tighter edge roll (`roofSection` crown .75, blend .8), as the pickup's.
+  { id: "monster", digest: "1893488550b96f86cc190274a321644a40d1aefe80848f9af60be73778d103ea" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {

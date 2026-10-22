@@ -655,18 +655,20 @@ export abstract class CarCore {
     const { brake, sideMarkers } = this.style.lamps;
     const skin = new THREE.Mesh(this.body.geometry);
     const ray = new THREE.Raycaster();
-    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number], targets: THREE.Object3D[], tint?: number) => {
+    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number], targets: THREE.Object3D[], tint?: number, inset?: number) => {
       ray.set(from, toward);
       const hit = ray.intersectObjects(targets, false)[0];
       if (!hit) throw new Error(`${this.style.id}: no skin for its ${kind} lamp from ${from.toArray().join()}`);
       const seat = this.lampSeat();
       seat.scale.set(size[0], size[1], 1);
-      const anchor = anchorOnSkin(this.body.geometry, hit.point, _lampQ.setFromAxisAngle(_up, yaw));
+      // Recessed along the probe ray, into the car; absent, the hit point itself (no float math on the unrecessed lamps).
+      const point = inset ? hit.point.clone().addScaledVector(toward, inset) : hit.point;
+      const anchor = anchorOnSkin(this.body.geometry, point, _lampQ.setFromAxisAngle(_up, yaw));
       this.lampFittings.push({ seat, kind, anchor, variant: 0, share: null, tint: tint === undefined ? null : new THREE.Color(tint) });
     };
     if (brake) {
       const glass = new THREE.Mesh(makeRearGlass(this.style), GLASS_PROBE);
-      seatAt("brake", new THREE.Vector3(brake.at[0], brake.at[1], -LAMP_PROBE_REACH), new THREE.Vector3(0, 0, 1), Math.PI, brake.size, [skin, glass]);
+      seatAt("brake", new THREE.Vector3(brake.at[0], brake.at[1], -LAMP_PROBE_REACH), new THREE.Vector3(0, 0, 1), Math.PI, brake.size, [skin, glass], undefined, brake.inset);
       glass.geometry.dispose();
     }
     for (const marker of sideMarkers ?? []) {

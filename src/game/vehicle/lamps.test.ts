@@ -5,7 +5,7 @@ import { DeformableCar } from "./car.ts";
 import { beltY } from "./car-lines.ts";
 import { roofAt } from "./car-mesh.ts";
 import { FULL_POOL, LampBatch, LampLights, type LampPool, lampPoolFor, PHONE_POOL } from "./lamp-lights.ts";
-import { drawnLamp } from "./part-variants.ts";
+import { brakeLampUnit, drawnLamp } from "./part-variants.ts";
 import { PartBatch } from "./part-batch.ts";
 import { type BodyStyle, CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { lampEmissiveMap } from "./car-materials.ts";
@@ -265,9 +265,37 @@ describe("given each style with a high-mount brake lamp", () => {
       const hit = new THREE.Raycaster(new THREE.Vector3(seat.x, seat.y, -5), new THREE.Vector3(0, 0, 1)).intersectObjects([car.body, glass], false)[0];
       assert.ok(hit, `${style}: nothing behind its brake lamp`);
       const name = hit.object === glass ? "the rear glass" : "the body";
-      assert.ok(Math.abs(hit.point.z - seat.z) < 0.01, `${style}: brake lamp at z ${seat.z.toFixed(3)}, ${name} met from behind at z ${hit.point.z.toFixed(3)}`);
+      assert.ok(Math.abs(hit.point.z + (CAR_STYLES[style].lamps.brake!.inset ?? 0) - seat.z) < 0.01, `${style}: brake lamp at z ${seat.z.toFixed(3)}, ${name} met from behind at z ${hit.point.z.toFixed(3)}`);
     });
   }
+});
+
+const BRAKE_NUB_TOL = 0.003; // a lamp standing more than 3 mm proud of the glass or skin it sits on reads as a nub in side view
+const BRAKE_GLASS_SHARE = 0.27; // the rear iso's high-mount lamp spans about 25-27 % of the rear glass's top width
+
+describe("given the pickup's high-mount stop lamp", () => {
+  it("when it is seated on its rear glass, then it stands at most 3 mm proud of the surface it sits on (no nub past the cab in side view) and spans no more than 27 % of the glass's top width (the rear iso's lamp ~25-27 %)", () => {
+    const style = CAR_STYLES.pickup;
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "pickup");
+    const brake = car.lampFittings.find((f) => f.kind === "brake")!;
+    car.group.updateMatrixWorld(true);
+    brake.seat.updateWorldMatrix(true, false, true);
+    // The drawn unit's every vertex at the seat's world pose: its rearmost point, housing and lens both.
+    const unit = brakeLampUnit().getAttribute("position");
+    const v = new THREE.Vector3();
+    let rear = Infinity;
+    for (let i = 0; i < unit.count; i++) rear = Math.min(rear, v.fromBufferAttribute(unit, i).applyMatrix4(brake.seat.matrixWorld).z);
+    // The surface the lamp is seated on: the first body or rear-glass hit from behind at the lamp's `at` (as the seat row above).
+    const glass = car.glassPanes.find((p) => p.name === "rear")!.mesh;
+    const seat = brake.seat.position;
+    const hit = new THREE.Raycaster(new THREE.Vector3(seat.x, seat.y, -5), new THREE.Vector3(0, 0, 1)).intersectObjects([car.body, glass], false)[0];
+    assert.ok(hit, `pickup: nothing behind its stop lamp at y ${seat.y.toFixed(3)}`);
+    const surfaceZ = hit.point.z;
+    assert.ok(rear >= surfaceZ - BRAKE_NUB_TOL, `pickup: the stop lamp's rearmost point z ${rear.toFixed(4)}, the surface it sits on z ${surfaceZ.toFixed(4)}: ${((surfaceZ - rear) * 1000).toFixed(1)} mm proud (at most ${(BRAKE_NUB_TOL * 1000).toFixed(0)} mm)`);
+    const size = style.lamps.brake!.size[0];
+    const ratio = size / style.rearGlass.wTop;
+    assert.ok(ratio <= BRAKE_GLASS_SHARE, `pickup: the stop lamp ${size} m wide over the glass's ${style.rearGlass.wTop} m top is ${(ratio * 100).toFixed(1)} % (at most ${(BRAKE_GLASS_SHARE * 100).toFixed(0)} %)`);
+  });
 });
 
 describe("given the monster's side markers with and without a `tint`", () => {
