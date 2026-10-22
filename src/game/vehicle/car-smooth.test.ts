@@ -236,7 +236,7 @@ function lidEdgeAt(lid: THREE.BufferGeometry, slice: number, rolled: boolean): T
 }
 
 /** The sedan with the reference's hood crown: its top 6 cm under the centre line at |x| .66, its edge at the plain inset (`hood.inset` steepens the dome). */
-const CROWNED_SEDAN: BodyStyle = { ...CAR_STYLES.sedan, hood: { ...CAR_STYLES.sedan.hood, crown: [0.06, 0.66], inset: undefined } };
+const CROWNED_SEDAN: BodyStyle = { ...CAR_STYLES.sedan, hood: { ...CAR_STYLES.sedan.hood, crown: [0.06, 0.66], inset: undefined, followGlass: undefined } };
 
 describe("given the lids as built", () => {
   for (const testCase of lidCreaseTable) {
@@ -1285,12 +1285,13 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
 const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; splitRings: number; wallTops: number; shutCopies: number; curvedPosts: number }> = {
   // Sedan and police: curvedPosts 378 -> 430: the pinched quarter window's mid ring (`cPillar.pinch`) and the sail's sweep ring 2 cm behind
   // the window's point (`cPillar.sweep`), one 20-point sail ring a side each.
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 52, shutCopies: 0, curvedPosts: 430 },
+  // wallTops 52 -> 54: the drawn windshield seated on the hood (`drawn.windshield.seat`, `hood.followGlass`).
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 54, shutCopies: 0, curvedPosts: 430 },
   hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 18, shutCopies: 0, curvedPosts: 258 },
   wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, splitRings: 0, wallTops: 30, shutCopies: 0, curvedPosts: 258 },
   coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 46, shutCopies: 32, curvedPosts: 416 },
   pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, splitRings: 0, wallTops: 16, shutCopies: 0, curvedPosts: 226 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 52, shutCopies: 0, curvedPosts: 430 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 54, shutCopies: 0, curvedPosts: 430 },
   monster: { lips: 312, humps: 94, liners: 214, bootRings: 42, noseRings: 42, splitRings: 0, wallTops: 26, shutCopies: 0, curvedPosts: 226 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and their stations then (the A-post's, every other post's). */
