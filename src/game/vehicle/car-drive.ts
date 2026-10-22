@@ -583,6 +583,14 @@ export function mayRecoverFlipped(car: Pick<DeformableCar, "group" | "deform">):
   return !(car.group.matrixWorld.elements[5]! > 0.5) && car.deform.drivetrainAlive;
 }
 
+/** R for `car` (the player's or a derby AI's): back on its wheels where it stands, at rest and repaired, when `may` lets it. */
+export function recoverInPlace(car: DeformableCar, may: (car: DeformableCar) => boolean): boolean {
+  car.refreshBasis();
+  if (!may(car)) return false;
+  car.spawnFacing(car.group.position.x, car.group.position.z, detAtan2(car.fwdFlat.x, car.fwdFlat.z), 0);
+  return true;
+}
+
 type SeatMode = "global" | "follow" | "drive";
 export type SeatView = "third" | "far" | "first";
 const VIEWS: readonly SeatView[] = ["third", "far", "first"];
