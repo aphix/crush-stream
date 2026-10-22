@@ -405,8 +405,25 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
 describe("given a coupe whose rear glass has round corners (rearGlass.round)", () => {
   const ROUND = 0.09;
   const coupe = CAR_STYLES.coupe;
-  const square: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: undefined } };
-  const rounded: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: ROUND } };
+  const square: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: undefined, roundOutline: undefined } };
+  const rounded: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: ROUND, roundOutline: undefined } };
+  const outlined: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: ROUND, roundOutline: true } };
+
+  it("when its rear glass is built with a round outline (roundOutline: the coupe's), then no vertex is black frit and the glass keeps the corner's arc in from each square corner, as the bead does", () => {
+    const geo = makeRearGlass(outlined);
+    const pos = geo.getAttribute("position");
+    const tone = geo.getAttribute(GLASS_ATTRIBUTE);
+    let frit = 0;
+    for (let i = 0; i < pos.count; i++) if (tone.getX(i) !== 0) frit++;
+    assert.ok(frit === 0, `${frit} vertices of black frit`);
+    const squarePos = makeRearGlass(square).getAttribute("position");
+    for (const k of [0, 8, 54, 62]) {
+      const corner = new THREE.Vector3().fromBufferAttribute(squarePos, k);
+      let near = Infinity;
+      for (let i = 0; i < pos.count; i++) near = Math.min(near, corner.distanceTo(new THREE.Vector3().fromBufferAttribute(pos, i)));
+      assert.ok(near > 0.9 * ROUND * (Math.SQRT2 - 1), `corner ${k}: the glass reaches ${near.toFixed(4)} m off it`);
+    }
+  });
 
   it("when its rear glass is built, then the clear pane keeps a corner's arc in from each square corner (the arc's middle lies r(√2 − 1) off it), black frit fills out to the corner, and the outline and the pane's centre stay the square pane's", () => {
     const geo = makeRearGlass(rounded);
