@@ -37,7 +37,16 @@ const interiorThroughRoof =
  */
 const noseFaceUnderLeaf =
   "hood p95 0.06 m against the 0.05 m bar on the sedan, wagon and pickup head-on rows: the cage reaches the crushed nose's front rows (0.10 m under the hood in one node, under CLIFF, in the rim), which no cut splits off a leaf with an inside, so the leaf over them stands 6.6 cm over the drawn nose face; after the plan (Stage 5): the proxy fitter takes the crushed nose's front as a surface of its own";
-const todoCause: Record<string, string> = { cabin: interiorThroughRoof, hood: noseFaceUnderLeaf };
+
+/**
+ * The wagon's deck rows, whose proxy the cage leaves a hole in: the decimation loses the roof's rear corners (|x| .50-.60, z
+ * -1.75..-1.90), the cage's top reads 0.38 m there under the drawn roof's 1.46 (car-cage.test.ts's wagon deck todo), and the ray
+ * falls to a column 1.0-1.1 m down. Measured (union d4781954): deck p95 0.059-0.072 and worst 1.00-1.02 m under on the untouched,
+ * loaded, head-on and rolled rows; the airborne one p95 0.040, worst 0.317 m under.
+ */
+const roofCornerHole =
+  "deck worst 1.0 m under on the wagon (0.32 m airborne), p95 0.06-0.07 m: the cage's top has a hole at the roof's rear corners (0.38 m under the drawn 1.46), so no roof leaf stands there; after the overhaul: CarRig rig-hole 987f1739, then the roof outline's corners held";
+const todoCause: Record<string, string> = { cabin: interiorThroughRoof, hood: noseFaceUnderLeaf, deck: roofCornerHole };
 
 const proxyCases = BODIES.flatMap((b) =>
   STATES.map((s) => ({
@@ -48,7 +57,10 @@ const proxyCases = BODIES.flatMap((b) =>
     state: s.id,
     stateText: s.text,
     /** The parts of this row held to the bars as a todo (`todoCause`), the others as plain tests. */
-    todoParts: s.id === "rolled" && (b.style === "pickup" || b.style === "monster") ? ["cabin"] : s.id === "headon" && b.cls !== "monster" ? ["hood"] : [],
+    todoParts: [
+      ...(s.id === "rolled" && (b.style === "pickup" || b.style === "monster") ? ["cabin"] : s.id === "headon" && b.cls !== "monster" ? ["hood"] : []),
+      ...(b.style === "wagon" ? ["deck"] : []),
+    ],
   })),
 );
 
