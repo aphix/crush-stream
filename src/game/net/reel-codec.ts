@@ -318,8 +318,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * vertex budget, read once it is a wreck), so a wreck that loses a front wheel rests and sleeps on its lip instead of rocking 3-4 cm in the ground,
  * and a car pitched over another meets it as deep as the two cages stand (it read 10 cm shallow at some poses). The hatchback's windshield reaches
  * its reference's glass top (17 cm further back, 8 cm higher, 1.03 m wide there) and its roof ends there, so its cage's pane, A-posts and header
- * stand there too. Every windshield throw moves differently, a hatch's cabin front is struck on its new cage, and wrecks on their noses and tails
- * and pitched pairs come to rest and push differently. A clip of 157 or before no longer reads.
+ * stand there too; its rear glass base and tailgate top drop .94 → .905, moving its cage source again. Every windshield throw moves differently,
+ * a hatch's cabin front and tailgate are struck on its new cage, and wrecks on their noses and tails and pitched pairs come to rest and push
+ * differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
 const REPLAY_VERSION = 158;
