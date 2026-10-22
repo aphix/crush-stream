@@ -158,6 +158,13 @@ function frameAt(pos: ArrayLike<number>, [a, b, c]: readonly [number, number, nu
   _m.makeBasis(_t, _d.crossVectors(_n, _t), _n);
 }
 
+/** `v` into `out` at `at`. Not `Vector3.toArray`: the cars' build feeds that one shared function every array kind, so its stores go megamorphic. */
+function store3(out: Float32Array, at: number, v: THREE.Vector3): void {
+  out[at] = v.x;
+  out[at + 1] = v.y;
+  out[at + 2] = v.z;
+}
+
 /** What the pool reads from a car; `DeformableCar` satisfies it. */
 interface LampHost {
   readonly group: THREE.Object3D;
@@ -355,7 +362,7 @@ export class LampLights {
           continue;
         }
         if (n * 3 >= gp.length) continue;
-        _e.copy(_pos).addScaledVector(_dir, GLOW_OUT).toArray(gp, n * 3);
+        store3(gp, n * 3, _e.copy(_pos).addScaledVector(_dir, GLOW_OUT));
         const c = kind === "head" ? GLOW_HEAD[car.style.lamps.bulb ?? "neutral"] : kind === "tail" ? GLOW_TAIL : kind === "red" ? GLOW_RED : GLOW_BLUE;
         const bright = kind === "tail" && !car.braking ? TAIL_RUNNING : 1;
         const lens = kind === "head" ? car.style.lamps.shapes?.head?.lens : undefined;
@@ -368,8 +375,8 @@ export class LampLights {
         gc[n * 3 + 2] = c[2] * shown;
         n++;
         if (kind === "head" || kind === "tail") {
-          _pos.toArray(st, ns * 6);
-          _dir.toArray(st, ns * 6 + 3);
+          store3(st, ns * 6, _pos);
+          store3(st, ns * 6 + 3, _dir);
           const q = bonus > 0 ? 1 : this.realness(_pos);
           const score = q > 0 ? q + bonus : 0;
           this.stashHead[ns] = kind === "head" ? 1 : 0;
@@ -819,7 +826,7 @@ export class LampBatch {
   }
 
   private put(slot: number, seat: THREE.Object3D, variant: number, tint?: THREE.Color | null): void {
-    seat.updateWorldMatrix(false, false);
+    seat.updateWorldMatrix(false, false, true);
     const b = this.night ? slot : BY_DAY[slot]!;
     const [color, glow] = this.looks[b]!;
     const look = tint ? _tint.copy(color).multiply(tint) : color;

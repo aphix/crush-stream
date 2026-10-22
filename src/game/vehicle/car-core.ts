@@ -213,7 +213,7 @@ export interface GlassPane {
 
 /** Housing + lens on the body skin (never the bumper): breaks only from its own corner's crush. */
 export interface Lamp {
-  /** Its pose on the skin (`poseLamps`), in the class lift's frame (`assignClass` seats it). Parented for its world matrix, never a child: the scene's matrix pass and traversals skip it, `LampBatch.sync` and `lampWorld` bring its world matrix current. */
+  /** Its pose on the skin (`poseLamps`, which also composes its `matrix`), in the class lift's frame (`assignClass` seats it). Parented for its world matrix, never a child: the scene's matrix pass and traversals skip it, `LampBatch.sync` and `lampWorld` bring its world matrix current (forced: its `matrix` is static). */
   seat: THREE.Object3D;
   intact: boolean;
   kind: LampKind;
@@ -643,6 +643,8 @@ export abstract class CarCore {
     const seat = new THREE.Object3D();
     seat.name = LAMP_SEAT;
     seat.parent = this.group;
+    // Posed only when the skin moves (`poseLamps` composes it then), so its world matrix needs no compose a frame.
+    seat.matrixAutoUpdate = false;
     return seat;
   }
 
@@ -857,8 +859,15 @@ export abstract class CarCore {
 
   protected poseLamps(): void {
     const pos = (this.body.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
-    for (const l of this.lamps) poseOnSkin(l.anchor, pos, l.seat.position, l.seat.quaternion);
-    for (const f of this.lampFittings) if (f.anchor) poseOnSkin(f.anchor, pos, f.seat.position, f.seat.quaternion);
+    for (const l of this.lamps) {
+      poseOnSkin(l.anchor, pos, l.seat.position, l.seat.quaternion);
+      l.seat.updateMatrix();
+    }
+    for (const f of this.lampFittings) {
+      if (!f.anchor) continue;
+      poseOnSkin(f.anchor, pos, f.seat.position, f.seat.quaternion);
+      f.seat.updateMatrix();
+    }
   }
 
   get lampCount(): number {
@@ -875,7 +884,7 @@ export abstract class CarCore {
   lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3): GlowKind | null {
     const l = this.lamps[i];
     if (!l) return this.sirenWorld(i - this.lamps.length, pos, dir);
-    l.seat.updateWorldMatrix(true, false);
+    l.seat.updateWorldMatrix(true, false, true);
     pos.setFromMatrixPosition(l.seat.matrixWorld);
     dir.setFromMatrixColumn(l.seat.matrixWorld, 2).normalize();
     return l.intact ? l.kind : null;

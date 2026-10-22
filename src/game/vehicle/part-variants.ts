@@ -893,7 +893,9 @@ function styleWipers(style: BodyStyle): THREE.BufferGeometry {
     const arm = lifted(WIPER_BLADE.gap + WIPER_BLADE.h + WIPER_ARM.h / 2, WIPER_ARM.reach);
     parts.push(sweptBar(rubber, ws, ns, WIPER_BLADE.w, WIPER_BLADE.h), sweptBar(arm, ws, ns, WIPER_ARM.w, WIPER_ARM.h));
     parts.push(sweptBar([0, 1].map((k) => at[0]!.clone().addScaledVector(ns[0]!, WIPER_BLADE.gap + WIPER_BLADE.h + k * WIPER_PIVOT.h)), [ws[0]!, ws[0]!], [at[1]!.clone().sub(at[0]!).normalize(), at[1]!.clone().sub(at[0]!).normalize()], WIPER_PIVOT.w, WIPER_PIVOT.w));
-    blades.push({ pivot: at[0]!.toArray(), tip: at[WIPER_STATIONS]!.toArray() });
+    const [pivot, tip] = [at[0]!, at[WIPER_STATIONS]!];
+    // Not `toArray()`: growing a fresh array through that shared three function sends its stores megamorphic for every per-frame caller.
+    blades.push({ pivot: [pivot.x, pivot.y, pivot.z], tip: [tip.x, tip.y, tip.z] });
   }
   const geo = mergeToned(
     parts.map((g) => dark(g, TRIM_BLACK, TRIM_FINISH.plastic.roughness, TRIM_FINISH.plastic.metalness)),

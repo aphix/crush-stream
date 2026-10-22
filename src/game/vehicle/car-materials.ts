@@ -922,8 +922,8 @@ function rimFace(design: WheelDesign): THREE.BufferGeometry[] {
       // The pickup's polished six-slot alloy, its black centre.
       return [...slottedDish(6, 0.19, 0.07, ALLOY, [0.09, 0.17, 0.42, 0.62, 0.2]), hub(0.075, DARK_HUB)];
     case "beadlock":
-      // The monster's polished deep dish, eight slots 5 cm in under its chrome lip ring.
-      return [...slottedDish(8, 0.19, 0.055, ALLOY, [0.105, 0.168, 0.32, 0.42, 0.25], BEADLOCK_DISH_BEND), ...faceRings(0.17, 0.222, 0.104, CHROME), hub(0.05, HUB)];
+      // The monster's deep dish, six slots (its side plate's) 5 cm in under its chrome lip ring; `STYLE_WHEELS` tints it gunmetal.
+      return [...slottedDish(6, 0.19, 0.055, ALLOY, [0.105, 0.168, 0.32, 0.42, 0.25], BEADLOCK_DISH_BEND), ...faceRings(0.17, 0.222, 0.104, CHROME), hub(0.05, HUB)];
   }
 }
 
