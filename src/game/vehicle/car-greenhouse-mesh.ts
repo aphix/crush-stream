@@ -68,14 +68,16 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
 }
 
 /**
- * Each lengthwise edge of a greenhouse pillar, rail or header is cut by one 45° chamfer (`PILLAR_FILLET_STEPS` = 1 chord of a
- * quarter circle of radius `PILLAR_FILLET`, m; at most `PILLAR_FILLET_SHARE` of the section side it cuts), so the section is an
- * octagon and the vertex normals roll round the edge in two 45° steps instead of turning 90° at once. A chamfer's middle sits
- * r / √2 = 4.95 mm inside the sharp corner it replaces: within the 5 mm silhouette allowance; the section never grows past the box.
+ * Each lengthwise edge of a greenhouse rail or the A-post is cut by one 45° chamfer (`PILLAR_FILLET_STEPS` = 1 chord of a quarter
+ * circle of radius `PILLAR_FILLET`, m; at most `PILLAR_FILLET_SHARE` of the section side it cuts), so the vertex normals roll round the
+ * edge in two 45° steps instead of turning 90° at once; the section never grows past the box.
  */
 const PILLAR_FILLET = 0.007;
-const PILLAR_FILLET_SHARE = 0.3;
+const PILLAR_FILLET_SHARE = 0.45;
 const PILLAR_FILLET_STEPS = 1;
+/** A drawn post's (B, C, divider) corners round at this share of its depth in `POST_ROUND_STEPS` chords: a curved section, 30° a chord, its depth sides all but rounded off. */
+const POST_ROUND = 0.45;
+const POST_ROUND_STEPS = 3;
 /** Quarter-circle corners of the unit section, counter-clockwise from the corner at (1, 0): the corner, the arc's centre sign and its start angle (rad). */
 const FILLET_CORNERS = [
   { x: 1, y: 0, startAngle: -Math.PI / 2 },
@@ -89,7 +91,7 @@ function filletShare(side: number, radius = PILLAR_FILLET): number {
   return side > 0 ? Math.min(radius, PILLAR_FILLET_SHARE * side) / side : 0;
 }
 
-/** A crowned pillar's outer face bulges this far (m) at its middle over its edges, through points at these shares of its width: it reads curved, not a flat box. */
+/** A crowned pillar's outer face bulges this far (m) at its middle over its edges, through points at these shares of its flat between the corners: it reads curved, not a flat box. */
 const PILLAR_CROWN = 0.008;
 const CROWN_POINTS = [0.25, 0.5, 0.75] as const;
 
@@ -106,8 +108,8 @@ function filletedUnitSection(radiusU: number, radiusW: number, steps = PILLAR_FI
       const angle = corner.startAngle + (step / steps) * (Math.PI / 2);
       section.push({ x: centreU + radiusU * detCos(angle), y: centreW + radiusW * detSin(angle) });
     }
-    // The outer face runs from this corner's last point to the next one's first.
-    if (crownU > 0 && corner.x === 1 && corner.y === 0) for (const w of CROWN_POINTS) section.push({ x: 1, y: w });
+    // The outer face runs from this corner's last point to the next one's first, its crown points spread over the flat between the arcs.
+    if (crownU > 0 && corner.x === 1 && corner.y === 0) for (const w of CROWN_POINTS) section.push({ x: 1, y: radiusW + w * (1 - 2 * radiusW) });
   }
   if (crownU > 0) for (const p of section) if (p.x > 0.5) p.x += crownU * (1 - (2 * p.y - 1) ** 2);
   return section;
@@ -141,21 +143,25 @@ function boxFromCorners(
 type Rail = { rear: V3; front: V3; inward?: readonly [number, number] };
 
 /**
- * Pillar lofted through `rails` (belt to top), thickness inward, its corners rounded at `radius` (m) in `steps` chords, its outer
- * face bulged `crown` (m); sign -1 mirrors to the left without flipping the winding. `ownCaps`: its end caps get their own rings
- * (`loftFromRings`); a pillar whose ends are buried in the body and the roof shares them.
+ * Pillar lofted through `rails` (belt to top), thickness inward, its unit `section` at each rail's width (default: corners rounded at
+ * `radius` (m) in `steps` chords, the outer face bulged `crown` (m)); sign -1 mirrors to the left without flipping the winding.
+ * `ownCaps`: its end caps get their own rings (`loftFromRings`); a pillar whose ends are buried in the body and the roof shares them.
  */
 function roundedPillarAlong(
   sign: number,
   rails: readonly Rail[],
   thick: number,
-  { radius = PILLAR_FILLET, steps = PILLAR_FILLET_STEPS, ownCaps = true, crown = 0 } = {},
+  {
+    radius = PILLAR_FILLET,
+    steps = PILLAR_FILLET_STEPS,
+    ownCaps = true,
+    crown = 0,
+    section = (width: number) => filletedUnitSection(filletShare(thick, radius), filletShare(width, radius), steps, crown / thick),
+  }: { radius?: number; steps?: number; ownCaps?: boolean; crown?: number; section?: (width: number) => Pt[] } = {},
 ): THREE.BufferGeometry {
   const last = rails.length - 1;
   const stations = rails.map((_, k) => k / last);
-  const sections = rails.map(({ rear, front }) =>
-    filletedUnitSection(filletShare(thick, radius), filletShare(hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2]), radius), steps, crown / thick),
-  );
+  const sections = rails.map(({ rear, front }) => section(hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2])));
   const geo = loftFromRings(sections, stations, 0, 1, ownCaps);
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
@@ -169,21 +175,24 @@ function roundedPillarAlong(
   return geo;
 }
 
-/** Crowned pillar mapped onto four outer-face corners (+x side), thickness inward; sign -1 mirrors to the left without flipping the winding. */
-function roundedPillarFromCorners(
-  sign: number,
-  c: { fb: V3; rb: V3; rt: V3; ft: V3 },
-  thick: number,
-  hs = 1,
-): THREE.BufferGeometry {
-  const rails = Array.from({ length: hs + 1 }, (_, k): Rail => {
-    const v = k / hs;
-    return {
-      rear: [lerp(c.rb[0], c.rt[0], v), lerp(c.rb[1], c.rt[1], v), lerp(c.rb[2], c.rt[2], v)],
-      front: [lerp(c.fb[0], c.ft[0], v), lerp(c.fb[1], c.ft[1], v), lerp(c.fb[2], c.ft[2], v)],
-    };
+/** A drawn post's unit section (u across its `thick` depth, the outer face at 1; w across its `width`): `POST_ROUND` corners, the outer face crowned. */
+export function postSection(thick: number, width: number): Pt[] {
+  const radius = POST_ROUND * thick;
+  return filletedUnitSection(filletShare(thick, radius), filletShare(width, radius), POST_ROUND_STEPS, PILLAR_CROWN / thick);
+}
+
+/**
+ * Drawn post (`postSection`) mapped onto four outer-face corners (+x side), its depth straight in, or square to its face in plan when
+ * `square` (the C-pillar, whose face turns toward the tail); sign -1 mirrors to the left without flipping the winding.
+ */
+function roundedPillarFromCorners(sign: number, c: { fb: V3; rb: V3; rt: V3; ft: V3 }, thick: number, square = false): THREE.BufferGeometry {
+  const rails = [0, 1].map((v): Rail => {
+    const rear: V3 = [lerp(c.rb[0], c.rt[0], v), lerp(c.rb[1], c.rt[1], v), lerp(c.rb[2], c.rt[2], v)];
+    const front: V3 = [lerp(c.fb[0], c.ft[0], v), lerp(c.fb[1], c.ft[1], v), lerp(c.fb[2], c.ft[2], v)];
+    const [dx, dz] = [front[0] - rear[0], front[2] - rear[2]];
+    return square ? { rear, front, inward: [dz / hypot2(dx, dz), dx / hypot2(dx, dz)] } : { rear, front };
   });
-  return roundedPillarAlong(sign, rails, thick, { ownCaps: false, crown: PILLAR_CROWN });
+  return roundedPillarAlong(sign, rails, thick, { ownCaps: false, section: (width) => postSection(thick, width) });
 }
 
 /** The drawn A-post's depth inward (m): a slim post, not a slab. */
@@ -416,21 +425,13 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
         "b",
       ),
     );
-    parts.push(
-      pillar(
-        pillarFromCorners(
-          sign,
-          {
-            fb: [beltXAt(q.zRearBot), belt(q.zRearBot) - 0.02, q.zRearBot],
-            rb: [rg.wBase / 2 + 0.02, rg.base[0], rg.base[1] - 0.01],
-            rt: [rg.wTop / 2 + 0.02, rg.top[0] + 0.01, rg.top[1] - 0.01],
-            ft: [topX(q.zRearTop, cantY(q.zRearTop, style) + PILLAR_TOP_RISE, ROOF_DRIP, cantX(q.zRearTop, style)), cantY(q.zRearTop, style) + PILLAR_TOP_RISE, q.zRearTop],
-          },
-          0.05,
-        ),
-        "rear",
-      ),
-    );
+    const rearPillar = {
+      fb: [beltXAt(q.zRearBot), belt(q.zRearBot) - 0.02, q.zRearBot],
+      rb: [rg.wBase / 2 + 0.02, rg.base[0], rg.base[1] - 0.01],
+      rt: [rg.wTop / 2 + 0.02, rg.top[0] + 0.01, rg.top[1] - 0.01],
+      ft: [topX(q.zRearTop, cantY(q.zRearTop, style) + PILLAR_TOP_RISE, ROOF_DRIP, cantX(q.zRearTop, style)), cantY(q.zRearTop, style) + PILLAR_TOP_RISE, q.zRearTop],
+    } as const;
+    parts.push(pillar(source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : roundedPillarFromCorners(sign, rearPillar, 0.05, true), "rear"));
     if (m !== null) {
       const topZ = divider.z?.[1] ?? m;
       const { belt: [dRear, dFront], top: [dTopRear, dTopFront] } = pillarBands(divider, m);
