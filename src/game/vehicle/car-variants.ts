@@ -228,6 +228,8 @@ interface ArchLip {
   width: number;
   square?: boolean;
   band?: boolean;
+  /** The whole lip stands this far (m) in from the opening's edge, over it, so the opening reads smaller than the arch it covers (drawn only). */
+  inset?: number;
 }
 
 /** A chase eye: `dist` behind and `height` over the car's origin, aimed `aimUp` over it (m). */
