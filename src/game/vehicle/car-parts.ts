@@ -31,7 +31,7 @@ import {
   windWear,
 } from "./car-wear.ts";
 import { LOOSE_BODIES, looseState, partState, PART_SLOTS } from "./part-state.ts";
-import { PART_KIND, looseOnCamera, partGeometry } from "./part-geometry.ts";
+import { PART_KIND, PartSeat, looseOnCamera, partGeometry } from "./part-geometry.ts";
 
 const _interior = new Float64Array(4);
 const DOOR_LEFT: GlassPart = "doorLeft";
@@ -46,6 +46,22 @@ const _q = new THREE.Quaternion();
 const _doorW = new THREE.Vector3();
 const _c = new THREE.Vector3();
 const _com = new THREE.Vector3();
+const _drawn = new THREE.Box3();
+
+/**
+ * Grows `box` by what `o` and its descendants draw, at their world matrices as they stand: a visible mesh's geometry, a part seat's `drawn`
+ * part. A part seat's `geometry` is the platform part the sim measures, not where the style draws its own (`Box3.setFromObject` read it: a
+ * pickup's bumper box reached 4.2 m off the bumper, and the bumper was lifted 2.6 m to clear the road under that phantom).
+ */
+function growDrawn(o: THREE.Object3D, box: THREE.Box3): void {
+  if (!o.visible) return;
+  const geometry = o instanceof PartSeat ? o.drawn : o instanceof THREE.Mesh ? (o.geometry as THREE.BufferGeometry) : null;
+  if (geometry !== null) {
+    if (geometry.boundingBox === null) geometry.computeBoundingBox();
+    box.union(_drawn.copy(geometry.boundingBox!).applyMatrix4(o.matrixWorld));
+  }
+  for (let i = 0; i < o.children.length; i++) growDrawn(o.children[i]!, box);
+}
 const _bumpW = new THREE.Vector3();
 /** A mirror the ground crushes off its car leaves with this much speed straight up (m/s, world). */
 const MIRROR_POP = 0.5;
@@ -314,10 +330,10 @@ export abstract class CarParts extends CarGlass {
       const sign = p.name === "doorL" ? -1 : 1;
       p.object.rotation.y = -sign * Math.max(t * p.swing!.spec.jam, p.swing!.theta);
       p.object.position.x += sign * t * 0.06;
-      p.object.updateWorldMatrix(true, false);
+      p.object.updateWorldMatrix(true, true);
       // Keep the door's bottom off the ground under it (not where there is none: off the fleet disc's rim), by a lift along the car's up: only on its wheels, where that is up (on its side or roof it points into the ground).
       if (this.group.matrixWorld.elements[5]! >= UPRIGHT_UP_Y) {
-        _box.setFromObject(p.object);
+        growDrawn(p.object, _box.makeEmpty());
         const g = _doorW.setFromMatrixPosition(p.object.matrixWorld);
         const gy = activeGround().heightAt(g.x, g.z, g.y);
         if (gy !== NO_FLOOR && _box.min.y < gy + 0.04) p.object.position.y += gy + 0.04 - _box.min.y;
@@ -343,6 +359,8 @@ export abstract class CarParts extends CarGlass {
    * sagging with its hinge value. The road is under the free end: its box stays `BUMPER_CLEAR` above the ground there, so the roll is the
    * largest one up to `roll` that lets it rest on the road (a bumper 0.16 m off the road hangs a few degrees, not 34), and a bumper crushed
    * down to the road is lifted by what it still lacks. A torn bumper leaves in this pose (`detachPart`), so it no longer starts under the road.
+   * Only on its wheels is the car's up the road's (as for the doors, `posePart`): lying over, it hangs at its full roll, unfitted (lifted along
+   * the car's up, an upside-down pickup's front bumper went 2.58 m the wrong way, 2.3 m into a 10° slope).
    */
   private hangBumper(p: DetachPart, roll: number, px: number): void {
     const o = p.object;
@@ -350,7 +368,7 @@ export abstract class CarParts extends CarGlass {
     const y0 = o.position.y - p.hingeT * BUMPER_SAG;
     // The ancestors' matrices do not change while the roll is searched: brought up to date once, each probe then poses `o` alone.
     o.parent?.updateWorldMatrix(true, false);
-    if (this.hungLack(o, x0, y0, px, roll) <= 0) return;
+    if (this.hungLack(o, x0, y0, px, roll) <= 0 || this.group.matrixWorld.elements[5]! < UPRIGHT_UP_Y) return;
     const flat = this.hungLack(o, x0, y0, px, 0);
     if (flat > 0) {
       o.position.y += flat;
@@ -371,8 +389,8 @@ export abstract class CarParts extends CarGlass {
     o.rotation.z = r;
     o.position.x = x0 + px * (1 - detCos(r));
     o.position.y = y0 - px * detSin(r);
-    o.updateWorldMatrix(false, false);
-    _box.setFromObject(o);
+    o.updateWorldMatrix(false, true);
+    growDrawn(o, _box.makeEmpty());
     _bumpW.setFromMatrixPosition(o.matrixWorld);
     const gy = activeGround().heightAt(_bumpW.x, _bumpW.z, _bumpW.y);
     return gy === NO_FLOOR ? 0 : gy + BUMPER_CLEAR - _box.min.y;
