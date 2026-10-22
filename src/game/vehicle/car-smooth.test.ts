@@ -517,6 +517,19 @@ describe("given every body style whose drawn body splits its loft gaps over a z 
   }
 });
 
+describe("given every body style whose drawn loft keeps only its knots' rings inside the front door's cut (`bareDoorCut`)", () => {
+  for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].bareDoorCut)) {
+    it(`when a ${id}'s loft stations are read, then inside the door cut the drawn build drops plain stations and adds none, and the cage keeps every ring`, () => {
+      const style = CAR_STYLES[id];
+      const plain: BodyStyle = { ...style, bareDoorCut: undefined };
+      const [a0, a1] = style.door.aperture;
+      const [bare, full] = [style, plain].map((s) => sliceZs(s, "drawn").filter((z) => z > a0 && z < a1).map((z) => z.toFixed(4)));
+      assert.ok(bare!.length < full!.length && bare!.every((z) => full!.includes(z)), `${id}: door cut stations ${bare!.join(" ")} against ${full!.join(" ")}`);
+      assert.ok(sliceZs(style, "cage").join() === sliceZs(plain, "cage").join(), `${id}: the cage's stations moved`);
+    });
+  }
+});
+
 /** Where the bay is open, the fender strip's wall-top vertex faces up and out with the strip (normal y over this), not sideways with the bay's wall. */
 const WALL_TOP_NORMAL_Y = 0.5;
 /** The drawn hood's edge stands at most this far (m) over the fender 2 mm outboard of it: a groove, not a step. */
@@ -1096,12 +1109,12 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
  * chamfered box's as built, merged into the body on top of its loft: red if one grows.
  */
 const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; splitRings: number; wallTops: number; curvedPosts: number }> = {
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, splitRings: 46, wallTops: 50, curvedPosts: 378 },
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 52, curvedPosts: 378 },
   hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 18, curvedPosts: 258 },
   wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, splitRings: 0, wallTops: 30, curvedPosts: 258 },
   coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 46, curvedPosts: 416 },
   pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, splitRings: 0, wallTops: 16, curvedPosts: 226 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 63, noseRings: 147, splitRings: 46, wallTops: 50, curvedPosts: 378 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 52, curvedPosts: 378 },
   monster: { lips: 312, humps: 94, liners: 214, bootRings: 42, noseRings: 42, splitRings: 0, wallTops: 26, curvedPosts: 226 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and their stations then (the A-post's, every other post's). */
@@ -1274,7 +1287,9 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // CarSedan's shape data and arch radius (as the sim digests above): sedan b9e9e98b... -> df8e0b97... -> 720053fe...; police 2466b278... -> 5e59494a... -> 23142cfa....
   // Sedan and police re-pinned for the door glass's top-front corner kept in under the slim A-post (`aPillarTop` 0.143): 8540eed1 -> 2fc92389; police 5af761d2 -> d97239fa.
   // Then 0.13, so the cage's A-pillar box keeps the dummies' roof proxy off the windshield: 2fc92389 -> d4d091d3; police d97239fa -> 26d74836.
-  { id: "sedan", digest: "d4d091d341462054e7c1523669ee8ab44478da0b0159eae2674628794c3e97e8" },
+  // Again for the quarter glass pinched to the belt (`quarter` -1.23/-0.88: the cage's C-post foot at -1.23) and the tail widened to the
+  // reference's plan: d4d091d3 -> 960df952; police 26d74836 -> fa94e508.
+  { id: "sedan", digest: "960df952a2f43b56e0bf08203d8b294463d819046f6dbaa89dfe19659791c357" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
@@ -1293,7 +1308,7 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // the pickup's for its panes taking a quarter of the roof's dome (`domeFall` .25); both for their roofs rolling onto their glass tops (`roofEnds`), which the
   // panes' tops follow; the pickup's again for its rear glass's top back at z -0.45 (at -0.5 the crushed cab's dummy-world roof stood 8 cm off the drawn one).
   { id: "pickup", digest: "e65c828a688d9635d6aad5b64db21090cfc7257dc7d33c31eb08d1a7c27f3527" },
-  { id: "police", digest: "26d74836366ea758cb090a8f2908702c95392a9fe06faecc1d598e2f9b13404e" },
+  { id: "police", digest: "fa94e5082cc4bc28593d0557a5cec59cda78fbde1d0a0361b976f2d82c40084b" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55).
   { id: "monster", digest: "f2ef66a28dd2081b6ddc96ea24f743f6d8b978d5ee983b17faaa66d7c4200489" },
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];

@@ -106,9 +106,9 @@ const SEDAN_LAMP_SHAPES = {
     rounds: [{ at: [0.565, 0.305], r: 0.018, tone: "clear" }],
     onBody: true,
   },
-  // The reference's rear reflectors: thin red strips low on the bumper's corners (rear iso; side y ~0.49), not blocks.
+  // The reference's rear reflectors: thin red strips low on the bumper's corners (rear iso; side y ~0.49), not blocks, round the corner's turn.
   rear: {
-    loops: [{ points: [[0.48, 0.47], [0.63, 0.47], [0.63, 0.5], [0.48, 0.5]] }],
+    loops: [{ points: [[0.42, 0.47], [0.56, 0.47], [0.56, 0.5], [0.42, 0.5]] }],
     lens: "red",
     onBody: true,
   },
@@ -116,7 +116,7 @@ const SEDAN_LAMP_SHAPES = {
 
 /**
  * The reference's mirror: a long, slim, rounded body-colour housing on a black foot at the door glass's front corner, its top at the
- * A-post knee (1.0). Its width stays inside reach 0.128 less the arm root (0.012): a wider cap buries itself in the door.
+ * A-post knee (1.0), reaching 3 cm further out than the body's widest point in the top view, 5 cm behind the door's hinge.
  */
 export const SEDAN_MIRROR = { cap: "tear", finish: "body", size: [0.115, 0.125, 0.17], lift: 0.035 } as const;
 
@@ -141,9 +141,11 @@ export const SEDAN: BodyStyle = {
   },
   rocker: { y: 0.21 },
   /** The wheel opening about its hub as the reference's (.371, its top at .685); the lip overhangs it 1.5 cm so the dark well shows a thin gap. */
-  arch: { radius: 0.375, lip: { flare: 0.008, width: 0.035, inset: 0.015 } },
+  arch: { radius: 0.375, lip: { flare: 0.008, width: 0.035, inset: 0.015 }, feet: true },
   /** The flank under the feature line lifts onto the front arch's flare hardest over z 1.39-1.58, between 9-10 cm stations: split those two gaps. */
   ringSplit: [1.4, 1.57],
+  /** The front door's cut is bare sill under its skin: its rings pay for the arches' straight legs (`arch.feet`). */
+  bareDoorCut: true,
   /**
    * The hood's rear edge stands ahead of the windshield's foot (0.95), as the reference's: in its top view the bonnet ends ~1.0 on
    * the centre line, the dark cowl and wipers (`blackout.cowl`) between it and the glass. Hinged 2 cm behind that edge, as before.
@@ -194,8 +196,8 @@ export const SEDAN: BodyStyle = {
        * from 2 cm behind the tail panel at its top (0.62) in one straight lean (a rounded shoulder read as a bulge) to its rearmost (2.175,
        * the dims' tail) at y 0.45-0.50, 2 cm forward by 0.41 where the dark diffuser band starts (rows at its edges, y 0.41 and 0.23, for
        * the band's crisp edges), tucking 8 cm forward to its
-       * bottom at 0.23; flat across to |x| 0.42, then its corner turns onto the body side and runs along it (`wrap.end`): the plain wrap
-       * shrank its section into a pill. Its band rows (0.41-0.23) are the reference's black diffuser, ending on the tail face (|x| 0.55) with the
+       * bottom at 0.23; flat across to |x| 0.42, then its corner turns at the tail panel's end onto the body side and runs along it just
+       * inside the skin (`wrap.end`), no step: the plain wrap shrank its section into a pill. Its band rows (0.41-0.23) are the reference's black diffuser, ending on the tail face (|x| 0.55) with the
        * corners body colour; its plate sits on the lid's tail face in the lid's recess (y 0.63-0.755), its inner face on the face's 2.109 at |x| 0.18.
        */
       fascia: [
@@ -212,7 +214,7 @@ export const SEDAN: BodyStyle = {
         [-0.29, -0.07],
       ],
       span: 0.76,
-      wrap: { from: 0.42, back: 0.24, end: { corner: 0.12, stand: 0.007 } },
+      wrap: { from: 0.42, back: 0.24, end: { corner: 0.08, stand: -0.012 } },
       trim: "body",
       band: [0.23, 0.41],
       bandHalfWidth: 0.55,
@@ -223,7 +225,7 @@ export const SEDAN: BodyStyle = {
       edge: [[-1.83, 0.738], [-1.81, 0.7], [-1.8, 0.665], [-1.76, 0.625], [-1.71, 0.595], [-1.62, 0.58], [-1.66, 0.5], [-1.683, 0.42], [-1.69, 0.32]],
     },
   },
-  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.2, mirrorReach: 0.128, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
+  door: { hingeX: 0.815, hingeY: 0.57, hingeZ: 0.74, length: 0.98, halfHeight: 0.33, mirrorY: 0.33, mirrorZ: 0.25, mirrorReach: 0.157, mirrorHalfDepth: 0.08, aperture: [-0.26, 0.74], mirror: SEDAN_MIRROR },
   aPillarFoot: 0.66,
   /** The door glass's top-front corner, tucked under the slim A-post; past ~0.14 the cage's A-pillar box lifts the dummy proxy's roof over the windshield. */
   aPillarTop: 0.13,
@@ -245,10 +247,10 @@ export const SEDAN: BodyStyle = {
     [2.0, 0.2],
   ],
   profile: [
-    st(-2.095, 0.58, 0.925),
-    st(-2.06, 0.62, 0.955),
-    st(-2.034, 0.641, 0.958),
-    st(-1.948, 0.7, 0.962),
+    st(-2.095, 0.615, 0.925),
+    st(-2.06, 0.648, 0.955),
+    st(-2.034, 0.665, 0.958),
+    st(-1.948, 0.705, 0.962),
     st(-1.884, 0.715, 0.971),
     st(-1.755, 0.74, 0.986),
     st(-1.649, 0.725, 0.99, 1.06, 0.48, 0.25),
@@ -276,17 +278,18 @@ export const SEDAN: BodyStyle = {
   roofZ: [-1.159, 0.15],
   windshieldTop: [1.285, 0.15],
   rearGlass: { base: [1.02, -1.68], top: [1.235, -1.159], wBase: 1.05, wTop: 1.0 },
-  quarter: { zRearBot: -0.88, zRearTop: -0.88 },
+  /** The quarter glass narrows to a point on the belt at -1.23, its raked edge running up to the rear door glass's top corner (reference side view). */
+  quarter: { zRearBot: -1.23, zRearTop: -0.88 },
   midPillarZ: null,
   /**
    * The reference's B-pillar is gloss black and leans: 0.165 wide at the belt (z -0.21..-0.375), 0.105 at the roof (-0.27..-0.375), its
-   * rear edge upright, its front edge the front door frame's leaning rear edge. The sail and the A-post's glass trim are gloss black too;
-   * the rear pillar is body colour.
+   * rear edge upright, its front edge the front door frame's leaning rear edge. The sail under the A-post's knee is gloss black too; the
+   * A-post and the rear pillar are body colour.
    */
   pillars: { a: 0.035, b: { width: [0.165, 0.105], z: [-0.2925, -0.3225] } },
-  blackout: { a: true, sail: true, b: true, cowl: true },
-  /** The side window's line ends at the belt here, behind the quarter glass (reference side view); the C-pillar sails onto the haunch. */
-  cPillar: { tip: [0.99, -1.23] },
+  blackout: { sail: true, b: true, cowl: true },
+  /** The C-pillar sails onto the haunch from the quarter glass's raked edge. */
+  cPillar: {},
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,

@@ -320,7 +320,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * its reference's glass top (17 cm further back, 8 cm higher, 1.03 m wide there) and its roof ends there, so its cage's pane, A-posts and header
  * stand there too; its rear glass base and tailgate top drop .94 → .905, moving its cage source again. Every windshield throw moves differently,
  * a hatch's cabin front and tailgate are struck on its new cage, and wrecks on their noses and tails and pitched pairs come to rest and push
- * differently. A clip of 157 or before no longer reads.
+ * differently. The sedan's and the cruiser's mirrors reach 3 cm further out and sit 5 cm further back (a lying wreck tears them off by their
+ * new rest boxes), their quarter glass runs to a point on the belt (its cage post's foot with it) and their tails end 3.5 cm wider, moving
+ * their cage sources. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
 const REPLAY_VERSION = 158;

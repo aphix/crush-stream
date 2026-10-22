@@ -361,10 +361,15 @@ export interface BodyStyle {
   aPillarKnee?: number;
   /** Side glass top: its drop under the roof (m, absent 0.075), the roof's side lip ending there too; or [z, y] stations (ascending, linear, held past the ends) under a 0.075 lip, painted fill between them and the lip. */
   glassTop?: number | readonly (readonly [number, number])[];
-  /** Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it; `rise` (drawn only, absent 1) the opening's crown height over the hub as a fraction of `radius`: an elliptic opening, as wide at hub height, its lip following it under the round fender flare. */
-  arch: { radius: number; lip?: ArchLip; wellWall?: number; rise?: number };
+  /**
+   * Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it; `rise` (drawn only, absent 1) the opening's crown height over the hub as a fraction of `radius`: an elliptic opening, as wide at hub height, its lip following it under the round fender flare.
+   * `feet` (drawn only): each opening's legs get a ring either side of them (the nearest plain station within 6 cm outside moving onto the outer one), so they drop straight to the rocker under the lip's; absent, a leg spans the gap between its nearest stations, leaning out.
+   */
+  arch: { radius: number; lip?: ArchLip; wellWall?: number; rise?: number; feet?: boolean };
   /** Drawn only: [z0, z1] (m): each body loft gap whose middle lies in it gets a ring there, where the flank turns hard between stations (an arch's flare); the cage keeps its rings. */
   ringSplit?: readonly [z0: number, z1: number];
+  /** Drawn only: inside the front door's cut (between its feathered edges) the loft keeps only its knots' rings, no plain stations: there it is the bare sill and floor, straight along z, under the door skin. The cage keeps its rings. */
+  bareDoorCut?: boolean;
   /**
    * Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`.
    * `groove` [out, down] (m, drawn only): over the open bay the fender's deck edge beside a lid hood stands `out` outboard of the hood's edge and `down` lower, a shut-line slot onto the bay wall.

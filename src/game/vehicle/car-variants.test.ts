@@ -807,6 +807,9 @@ function bumperReachAt(geo: THREE.BufferGeometry, lo: number, hi: number): numbe
   return reach;
 }
 
+/** The cage A-pillar's rear top corner stands at least this far (m) behind the windshield's top: the sedan's 7 mm stood the dummies' roof proxy over the pane. */
+const A_PILLAR_TOP_CLEAR = 0.01;
+
 describe("given a body style's H2 hardpoints", () => {
   // The sedan's body on the platform's hardpoints and flat floor: the rows move one hardpoint from known values.
   const sedan: BodyStyle = { ...CAR_STYLES.sedan, ...PLATFORM_HARDPOINTS, underside: undefined };
@@ -954,6 +957,17 @@ describe("given a body style's H2 hardpoints", () => {
         }
       }
     }
+  });
+
+  it(`when any style's cage A-pillar box is read, then its rear top corner stands at least ${A_PILLAR_TOP_CLEAR * 100} cm behind the windshield's top edge, so the dummies' roof proxy stays off the pane`, () => {
+    // The cage's first part is the left A box; its rearmost vertex is its rear top corner.
+    const behind = (style: BodyStyle): number => style.windshieldTop[1] - partBox(makeGreenhouseFrame(style, "cage")[0]!).min.z;
+    for (const id of CAR_STYLE_IDS) {
+      const gap = behind(CAR_STYLES[id]);
+      assert.ok(gap >= A_PILLAR_TOP_CLEAR - 1e-6, `${id} aPillarTop ${aPillarTopZ(CAR_STYLES[id])}: the cage A-pillar's rear top corner stands ${gap.toFixed(4)} m behind the windshield's top (z ${CAR_STYLES[id].windshieldTop[1]})`);
+    }
+    const old = behind({ ...CAR_STYLES.sedan, aPillarTop: 0.143 });
+    assert.ok(old < A_PILLAR_TOP_CLEAR, `the sedan's old 0.143 reads ${old.toFixed(4)} m behind: the row would not catch it`);
   });
 
   it("when a style without a drip (roofDrip 0: the coupe's) is read, then its drawn roof's side stands nowhere out past the cant line (the side glass's plane): it rolls into the glass, no rail", () => {
@@ -1293,12 +1307,16 @@ describe("given a body style's H2 hardpoints", () => {
         // 1 mm over the lip for the inner face, carried a few mm along the sill where its depth runs square to a sill turning in.
         assert.ok(out <= RAIL_PROUD + 1e-6 && over <= RAIL_LIP + 1e-3, `${id} rail vertex ${i} at z ${z.toFixed(3)}: ${(out * 100).toFixed(1)} cm out of the glass's edge, ${(over * 100).toFixed(1)} cm over it`);
       }
-      // Each ring's top outer vertex, the lip on the glass plane: the rail's top line, read at every glass column.
+      // Each ring's top (its lip on the glass plane) at its station, the z of its outer face: where the sill tapers in plan, the top's
+      // fillet vertices stand a few mm along the rail from it. The rail's top line, read at every glass column.
       const { ring, slices } = rail.userData.loft as { ring: number; slices: number };
       const tops = Array.from({ length: slices }, (_, s) => {
-        let best = s * ring;
-        for (let i = best; i < (s + 1) * ring; i++) if (pos.getY(i) - pos.getY(best) > 1e-9 || (Math.abs(pos.getY(i) - pos.getY(best)) <= 1e-9 && Math.abs(pos.getX(i)) > Math.abs(pos.getX(best)))) best = i;
-        return [pos.getZ(best), pos.getY(best)] as const;
+        let [top, outer] = [s * ring, s * ring];
+        for (let i = s * ring; i < (s + 1) * ring; i++) {
+          if (pos.getY(i) > pos.getY(top)) top = i;
+          if (Math.abs(pos.getX(i)) > Math.abs(pos.getX(outer))) outer = i;
+        }
+        return [pos.getZ(outer), pos.getY(top)] as const;
       });
       for (const [z, y] of edge) {
         const k = Math.max(tops.findIndex(([tz]) => tz >= z - 1e-6), 1);
@@ -2058,6 +2076,28 @@ describe("given a body style's P1 parts", () => {
     assert.ok(cageHash(sedan) === cageHash(plain), "the cage builds are unchanged");
   });
 
+  for (const id of CAR_STYLE_IDS) {
+    const style = CAR_STYLES[id];
+    const { seat, wrap } = style.bumpers.rear;
+    const end = wrap.end;
+    if (!end || end.stand > 0) continue;
+    it(`when a ${id}'s rear bumper end tucks onto the body side (stand ${end.stand}), then no vertex of its corner or run stands proud of the body side forward of the tail panel's end, between the rocker and the belt`, () => {
+      const pos = makeBumperGeometry(false, style).getAttribute("position");
+      const tail = style.profile[0]!.z;
+      let [worst, at, read] = [-Infinity, "", 0];
+      for (let i = 0; i < pos.count; i++) {
+        const [x, y, z] = [Math.abs(pos.getX(i)), pos.getY(i) + seat.y, pos.getZ(i) - seat.z];
+        const slice = sampleSlice(z, style.profile);
+        const rocker = rockerAt(z, style);
+        if (x <= wrap.from || z < tail || y < rocker || y > slice.yBelt) continue;
+        read++;
+        const proud = x - sideX(y, slice.hw, slice.yBelt, rocker);
+        if (proud > worst) [worst, at] = [proud, `x ${x.toFixed(3)} y ${y.toFixed(3)} z ${z.toFixed(3)}`];
+      }
+      assert.ok(read > 0 && worst <= BUMPER_FLUSH, `${id}: of ${read} corner and run vertices the proudest stands ${(worst * 1000).toFixed(1)} mm out of the body side, at ${at}`);
+    });
+  }
+
   it("when the pickup's front bumper sets a band (its valance), then the fascia rows in it carry a black inlay across the face between its heights, and a front bumper without one is drawn as it was", () => {
     const pickup = CAR_STYLES.pickup;
     const { seat, band, wrap } = pickup.bumpers.front;
@@ -2490,7 +2530,7 @@ describe("given a body style's P2 parts", () => {
     for (const x of [-0.6, 0.6]) assert.ok(near(grille, grilleAt, new THREE.Vector3(x, 0.305, meet(true, Math.abs(x), 0.305))), `the fog lens at x ${x} on the fascia`);
     const trim = drawnPart(PART_KIND.tailTrim, sedan).geometry;
     const trimAt = new THREE.Vector3(0, rear.seat.y, -rear.seat.z);
-    for (const x of [-0.62, 0.62]) assert.ok(near(trim, trimAt, new THREE.Vector3(x, 0.495, meet(false, Math.abs(x), 0.495))), `the reflector at x ${x} on the fascia`);
+    for (const x of [-0.55, 0.55]) assert.ok(near(trim, trimAt, new THREE.Vector3(x, 0.495, meet(false, Math.abs(x), 0.495))), `the reflector at x ${x} on the fascia`);
     const plate = partGeometry(PART_KIND.tailTrim);
     plate.computeBoundingBox();
     assert.ok(plate.boundingBox!.max.x - plate.boundingBox!.min.x < 0.4, `the platform tail trim is the plate alone, ${(plate.boundingBox!.max.x - plate.boundingBox!.min.x).toFixed(2)} m wide`);
@@ -2783,6 +2823,12 @@ const WELL_GAP = [0.01, 0.02, 0.03] as const;
 const WELL_DARK = 1.5;
 /** Looking into an arch from the side, its rim (the lip and its return) is left out this far (m): the lip's own row covers it. */
 const WELL_RIM = 0.05;
+/** An arch's leg (`arch.feet`) is looked at this far (m) either side of the opening's edge. */
+const ARCH_LEG_SIGHT = 0.01;
+/** Inside a leg's edge the sight line runs at least this far (m) deeper than outside it, where it meets the body side. */
+const ARCH_LEG_DEPTH = 0.03;
+/** A tucked bumper end (`wrap.end.stand` ≤ 0) may stand this far (m) out of the body side: its section's rounding between rows. */
+const BUMPER_FLUSH = 0.002;
 const SIDED = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
 /** The paint's sidedness: a ray skips back faces, as the paint culls them. */
 const FRONT = new THREE.MeshBasicMaterial({ side: THREE.FrontSide });
@@ -2841,7 +2887,7 @@ function linerInnerEdge(style: BodyStyle, wx: number, wz: number): number {
 }
 
 /** A style without its arch lip. */
-const lipless = (style: BodyStyle): BodyStyle => ({ ...style, arch: { radius: style.arch.radius, rise: style.arch.rise } });
+const lipless = (style: BodyStyle): BodyStyle => ({ ...style, arch: { radius: style.arch.radius, rise: style.arch.rise, feet: style.arch.feet } });
 
 /** A bed's side wall stands this far (m) in from the body side at its foot (`halfRing`'s floor edge); its top edge at the style's `tubWall`. */
 const BED_WALL_INSET = 0.06;
@@ -3086,6 +3132,28 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         const [over, under] = [top + 0.01, top - 0.02].map((y) => toneHit(drawn, [s * 3, y, wz], [-s, 0, 0], 6)?.tone ?? NaN);
         assert.ok(over === 0 && under! >= WELL_DARK, `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: toned ${over} 1 cm over its crown, ${under} 2 cm under`);
       }
+    });
+  }
+
+  for (const id of CAR_STYLE_IDS) {
+    if (!CAR_STYLES[id].arch.feet) continue;
+    it(`when a ${id}'s lip-less arch legs are looked at from outside between the rocker and the hub, then each drops straight: ${ARCH_LEG_SIGHT * 100} cm outside the opening's edge a sight line meets the body side, ${ARCH_LEG_SIGHT * 100} cm inside it one goes ${ARCH_LEG_DEPTH * 100} cm deeper`, () => {
+      const style = lipless(CAR_STYLES[id]);
+      const drawn = new THREE.Mesh(makeChassisGeometry(style), FRONT);
+      const off: string[] = [];
+      let looked = 0;
+      for (const [wx, wy, wz] of carFrame(style).wheels) {
+        const s = Math.sign(wx);
+        for (const end of [-1, 1]) {
+          const edge = wz + end * style.arch.radius;
+          for (let y = rockerAt(edge, style) + 0.03; y < wy; y += 0.03) {
+            const [outside, inside] = [ARCH_LEG_SIGHT, -ARCH_LEG_SIGHT].map((d) => Math.abs(bodyHit(drawn, [s * 3, y, edge + end * d], [-s, 0, 0], 3)?.x ?? 0));
+            looked++;
+            if (outside! - inside! < ARCH_LEG_DEPTH) off.push(`z ${edge.toFixed(3)} y ${y.toFixed(2)}: |x| ${outside!.toFixed(3)} outside, ${inside!.toFixed(3)} inside`);
+          }
+        }
+      }
+      assert.ok(looked >= 16 && off.length === 0, `${id}: ${off.length} of ${looked} leg sight lines show no straight edge: ${off.slice(0, 6).join(", ")}`);
     });
   }
 });
