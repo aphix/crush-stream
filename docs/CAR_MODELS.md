@@ -138,7 +138,7 @@ The cabin is shared props, placed per car by its spec (`vehicle/interior.ts` `Ca
 | `engineBay` | 1 | Mapped from `REF_BAY` onto the trough under the hood; shown while the hood is off or open |
 | `crashBar` | 2 | Each bumper's seat; shown while that bumper is off or hanging |
 | `ladderFrame`: rails, crossmembers, transfer case, steering box, shock bodies | 0 or 1 | `underbody: true` (the monster): in the class-lift body's space, under the floor (`CarUnderbody`) |
-| `axle`: tube, diff, knuckles, shock shafts, trailing links, driveshaft, tie rod | 0 or 2 | `underbody: true`: each pair of drawn wheels' hub midpoint, tilted and spanned to them every sync; hung in the class hub group (`assignClass`); none while either wheel is off the car |
+| `axle`: tube, diff, knuckles, shock shafts, trailing links, driveshaft, tie rod | 0 or 2 | `underbody: true`: each pair of drawn wheels' hub midpoint, tilted and spanned to them every sync; hung in the class hub group (`assignClass`); a wheel that left the car leaves its end on its rest hub, raised along the world's up until the tube clears the ground by 8 cm (a wreck lying on that side) |
 
 Every prop kind is one `InstancedMesh` for the whole field (`PartBatch`, `PART_PER_CAR`): adding a car adds instances, never
 draws. At rest the interior costs six draws for the whole field (cabin, both door-card sides, front seats, rear bench, wheel) and the

@@ -10,6 +10,7 @@ import type { BodyStyle } from "./car-variants.ts";
 import { BUMPER_F, DRIVER_SIDE, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { AXLE_HALF_SPAN, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
+import { activeGround, NO_FLOOR } from "../world/ground.ts";
 
 /** Gap (m) between a seated head's top and the roof line over it (the roof skin, the headliner its inner face). */
 const HEAD_CLEAR = 0.05;
@@ -240,6 +241,10 @@ export class CarCabin {
 
 /** Each axle's wheels (`car.wheels` order FL, FR, RL, RR) from its −x end to its +x end: turned half round, the front one's +z points back, to the car's middle as the rear one's does. */
 const AXLE_ENDS = [[1, 0, Math.PI], [2, 3, 0]] as const;
+/** A gone wheel's axle end stands at least this far (m) over the ground under it: the tube's 6.5 cm radius and its tip 5 cm inboard of the hub. */
+const STUB_CLEAR = 0.08;
+const _p = new THREE.Vector3();
+const _q = new THREE.Vector3();
 
 /** A lifted truck's undercarriage, `PartBatch` seats: the ladder frame rides the body, an axle rides each pair of wheels where they are drawn. */
 export class CarUnderbody {
@@ -258,21 +263,34 @@ export class CarUnderbody {
     this.follow();
   }
 
-  /** Each axle onto its wheels' hubs, tilted with them; a wheel that left the car leaves its end on its rest hub. */
+  /** Each axle onto its wheels' hubs, tilted with them; a wheel that left the car leaves its end on its rest hub, lifted clear of the ground (`stub`). */
   follow(): void {
     for (let k = 0; k < 2; k++) {
       const axle = this.axles[k]!;
       const [from, to, turn] = AXLE_ENDS[k]!;
       const a = this.wheels[from]!;
       const b = this.wheels[to]!;
-      const p = a.parent === axle.parent ? a.position : this.rests[from]!;
-      const q = b.parent === axle.parent ? b.position : this.rests[to]!;
+      const p = a.parent === axle.parent ? a.position : this.stub(from, axle.parent!, _p);
+      const q = b.parent === axle.parent ? b.position : this.stub(to, axle.parent!, _q);
       const across = hypot2(q.x - p.x, q.z - p.z);
       axle.position.addVectors(p, q).multiplyScalar(0.5);
       axle.rotation.set(0, turn, detAtan2(q.y - p.y, across));
       axle.scale.set(hypot2(across, q.y - p.y) / (2 * AXLE_HALF_SPAN), 1, 1);
       axle.updateMatrixWorld();
     }
+  }
+
+  /** A gone wheel's axle end in `hubs`' frame (into `out`): its rest hub, raised along the world's up until the tube clears the ground by `STUB_CLEAR` (the monster's hubs stand 0.34 m outside its side, so a wreck lying on it drew the stub in the road). */
+  // ponytail: it rises along the world's up, not the tube, so a tilted wreck's tip lands a hair off clear; second order (0.5 cm at 10°).
+  private stub(i: number, hubs: THREE.Object3D, out: THREE.Vector3): THREE.Vector3 {
+    const e = hubs.matrixWorld.elements;
+    const { x, y, z } = out.copy(this.rests[i]!);
+    const wy = e[1]! * x + e[5]! * y + e[9]! * z + e[13]!;
+    const ground = activeGround().heightAt(e[0]! * x + e[4]! * y + e[8]! * z + e[12]!, e[2]! * x + e[6]! * y + e[10]! * z + e[14]!, wy);
+    const rise = ground === NO_FLOOR ? 0 : ground + STUB_CLEAR - wy;
+    // The world's up in the hubs' frame: the matrix's row 1 (the hub group carries no scale).
+    if (rise > 0) out.set(x + rise * e[1]!, y + rise * e[5]!, z + rise * e[9]!);
+    return out;
   }
 }
 
