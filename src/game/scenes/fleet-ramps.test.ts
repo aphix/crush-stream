@@ -16,7 +16,6 @@ import { fit } from "../vehicle/ground-probe.test-util.ts";
 
 /** Long enough for a car wedged between the ramps to stop sliding (main settles at about 6 s). */
 const SETTLE_S = 8;
-const TYRE_CENTRE = 0.32;
 const DEG = 180 / Math.PI;
 /** The springs have settled when no corner is out of its rest length by more than this (m); a landing they took moved them past it. */
 const SETTLED = 0.01;
@@ -80,7 +79,8 @@ function jump(v: number): Jump {
     car.group.updateWorldMatrix(true, true);
     for (const [i, wh] of car.wheels.entries()) {
       wh.getWorldPosition(wp);
-      gaps[i] = wp.y - TYRE_CENTRE - ramps.heightAt(wp.x, wp.z, wp.y);
+      // The tyre's bottom is its own radius under its hub (the car's tyre, at its wheel's scale): the sedan's is 0.342 m, not the platform's 0.32.
+      gaps[i] = wp.y - car.frame.rig.tyre.r * wh.scale.y - ramps.heightAt(wp.x, wp.z, wp.y);
     }
     sink = Math.max(sink, -Math.min(...gaps));
     peak = Math.max(peak, p.y);
