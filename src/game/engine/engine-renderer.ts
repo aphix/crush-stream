@@ -13,10 +13,14 @@ const lightsChunk = THREE.ShaderChunk.lights_fragment_begin;
 if (!lightsChunk.includes(RE_DIRECT)) throw new Error("three's lights_fragment_begin changed: re-check the dark-light skip");
 if (!lightsChunk.includes(SKIP_DARK)) THREE.ShaderChunk.lights_fragment_begin = lightsChunk.replaceAll(RE_DIRECT, SKIP_DARK);
 
-/** The page's renderer: sRGB out, ACES at the game's exposure, PCF shadows, MSAA only at device pixel ratio 1; its pixel ratio is the Render scale (`PlayerQuality`). */
+/**
+ * The page's renderer: sRGB out, ACES at the game's exposure, PCF shadows; its pixel ratio is the Render scale (`PlayerQuality`). The
+ * canvas has no MSAA: the post tiers draw the scene into their own target, antialiased at the tiers and device pixel ratios
+ * `sceneSamples` picks (`engine-post.ts`), and the plain tiers that draw straight to the canvas have none.
+ */
 export function makeRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
   // three r186 makes its own context with `alpha: true` whatever its `alpha` option says, compositing a transparent canvas.
-  const context = canvas.getContext("webgl2", { alpha: false, antialias: (window.devicePixelRatio || 1) <= 1, powerPreference: "high-performance" });
+  const context = canvas.getContext("webgl2", { alpha: false, antialias: false, powerPreference: "high-performance" });
   if (!context) throw new Error("WebGL2 is not available");
   const renderer = new THREE.WebGLRenderer({ canvas, context });
   renderer.setClearColor(0x12141a, 1);
