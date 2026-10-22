@@ -169,6 +169,8 @@ export class RagdollSystem {
   lookSeed = 0;
   /** A player's own driver for car `car` (the engine's looks: this browser's, or a netplay peer's), null for a drawn one. */
   lookOf: (car: number) => { person: PersonPick; personSpray: SprayBitmap } | null = () => null;
+  /** Each car's driver look as `carDriverLook` last built it, with what it was built from. */
+  private readonly carLooks = new Map<number, { seed: number; person: PersonPick | null; look: DriverLook }>();
   private purses: Purses | null = null;
   /** The course's or the scene's knockable props: standing fixed on their spots, knocked ones tumbling (`knockProp`); a car's front meets one over its lower box's height. */
   private readonly props = new PropBodies(knockedGroups, FIXED_GROUPS, GRACE, PROP_BAND_LOW, PROP_BAND_HIGH, (cx, cz, y, half) => this.patchAt(cx, cz, y, half));
@@ -778,10 +780,14 @@ export class RagdollSystem {
     return { look: this.carDriverLook(t.car, t.cop), spray: (t.cop ? null : this.lookOf(t.car))?.personSpray ?? null };
   }
 
-  /** Car `car`'s driver as he sits in it and is thrown from it: a player's own look when his car is a player's (`ownLook`, the same in every scene and seed), else the seed's drawn one; a cop wears the uniform over the drawn one. */
+  /** Car `car`'s driver as he sits in it and is thrown from it: a player's own look when his car is a player's (`ownLook`, the same in every scene and seed), else the seed's drawn one; a cop wears the uniform over the drawn one. Kept per car while its seed and pick stand (picks are replaced, never mutated): the seated drivers ask every frame. */
   carDriverLook(car: number, cop: boolean): DriverLook {
-    const own = cop ? null : this.lookOf(car);
-    return own ? ownLook(own.person) : driverLook(this.lookSeed, car);
+    const person = (cop ? null : this.lookOf(car))?.person ?? null;
+    const kept = this.carLooks.get(car);
+    if (kept && kept.seed === this.lookSeed && kept.person === person) return kept.look;
+    const look = person ? ownLook(person) : driverLook(this.lookSeed, car);
+    this.carLooks.set(car, { seed: this.lookSeed, person, look });
+    return look;
   }
 
   /**
