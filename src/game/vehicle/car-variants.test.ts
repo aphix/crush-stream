@@ -317,6 +317,49 @@ describe("given every body style's rig cage (the soft-body frame that wraps the 
   }
 });
 
+/** A windshield and a rear glass bowed deep in plan (m, the centre line off the edges' line at the base and the top): CarSedan's reference read. */
+const DEEP_BOWS = { windshield: { base: 0.22, top: 0.06 }, rear: { base: -0.11, top: -0.04 } } as const;
+/** The default bows (`WINDSHIELD_BOW`, `REAR_GLASS_BOW`) at the glass tops, which the drawn roof's flat ends already cover. */
+const DEFAULT_TOP_BOWS = { windshield: 0.02, rear: -0.015 } as const;
+
+describe("given a sedan whose windshield and rear glass bow deep in plan", () => {
+  const sedan = CAR_STYLES.sedan;
+  const style: BodyStyle = { ...sedan, windshield: { ...sedan.windshield, bow: DEEP_BOWS.windshield }, rearGlass: { ...sedan.rearGlass, bow: DEEP_BOWS.rear } };
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-5;
+
+  it("when its panes are built, then each centre line stands its bow off the edges' line at the base and the top, the edges stay on the style's lines, and the pane's centre (where an ejection launches) is the bowed one", () => {
+    const panes = [
+      { name: "windshield", geo: makeWindshield(style), base: sedan.windshield.base[1], top: sedan.windshieldTop[1], bow: DEEP_BOWS.windshield, segX: 10, segY: 8 },
+      { name: "rear glass", geo: makeRearGlass(style), base: sedan.rearGlass.base[1], top: sedan.rearGlass.top[1], bow: DEEP_BOWS.rear, segX: 8, segY: 6 },
+    ];
+    for (const { name, geo, base, top, bow, segX, segY } of panes) {
+      const pos = geo.getAttribute("position");
+      const z = (i: number, j: number) => pos.getZ(j * (segX + 1) + i);
+      assert.ok(near(z(segX / 2, 0), base + bow.base) && near(z(segX / 2, segY), top + bow.top), `${name}: its centre line at z ${z(segX / 2, 0)} (base) and ${z(segX / 2, segY)} (top)`);
+      assert.ok(near(z(0, 0), base) && near(z(segX, 0), base) && near(z(0, segY), top) && near(z(segX, segY), top), `${name}: its corners on the style's edge lines`);
+      const centre = geo.userData.centre as readonly [number, number, number];
+      assert.ok(near(centre[2], (base + top) / 2 + (bow.base + bow.top) / 2), `${name}: its centre at z ${centre[2]}`);
+    }
+  });
+
+  it("when it is at rest, then both panes sit inside their glass cages with no clamping: each cage reaches out as far as its pane's bow outgrows the default one", () => {
+    const d = new StreamedDeformation(makeChassisGeometry(style), carFrame(style).rig);
+    assert.ok(panelClamp(d, makeWindshield(style), "glassFront", new THREE.Vector3()) < 1e-4, "windshield");
+    assert.ok(panelClamp(d, makeRearGlass(style), "glassRear", new THREE.Vector3()) < 1e-4, "rear glass");
+  });
+
+  it("when its roof is drawn, then the roof's front and rear edges bow with the glass tops under them, past the default bows", () => {
+    const extentZ = (geo: THREE.BufferGeometry) => {
+      const pos = geo.getAttribute("position");
+      const zs = Array.from({ length: pos.count }, (_, v) => pos.getZ(v));
+      return [Math.min(...zs), Math.max(...zs)];
+    };
+    const [[flatRear, flatFront], [bowedRear, bowedFront]] = [extentZ(makeRoofGeometry(sedan)), extentZ(makeRoofGeometry(style))];
+    assert.ok(near(bowedFront - flatFront, DEEP_BOWS.windshield.top - DEFAULT_TOP_BOWS.windshield), `front edge bowed ${(bowedFront - flatFront).toFixed(4)} m`);
+    assert.ok(near(bowedRear - flatRear, DEEP_BOWS.rear.top - DEFAULT_TOP_BOWS.rear), `rear edge bowed ${(bowedRear - flatRear).toFixed(4)} m`);
+  });
+});
+
 /** The owner's lids (docs/DOOR_RIG.md, Lids): a sedan's lid hinged at the rear window's base wraps the tail down to its lamps; a hatch is a roof-hinged lid wrapping down a leaning tail face to just above the bumper. */
 const WRAPPED: readonly [string, BodyStyle][] = [
   ["sedan", CAR_STYLES.sedan],

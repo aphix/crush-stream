@@ -1,6 +1,11 @@
 import { hypot2 } from "../kernel/physics-core.js";
 import type { BodySource } from "./car-mesh.ts";
-import type { BodyStyle, PillarSpan } from "./car-variants.ts";
+import type { BodyStyle, GlassBow, PillarSpan } from "./car-variants.ts";
+
+/** A windshield's plan bow where its style sets none: 2 cm forward at the centre, base to top. */
+export const WINDSHIELD_BOW: GlassBow = { base: 0.02, top: 0.02 };
+/** A rear glass's plan bow where its style sets none: 1.5 cm back at the centre, base to top. */
+export const REAR_GLASS_BOW: GlassBow = { base: -0.015, top: -0.015 };
 
 /** Height at `z` along [z, y] stations in ascending z: linear between them, held past the ends. */
 function piecewise(stations: readonly (readonly [number, number])[], z: number): number {

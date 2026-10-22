@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan } from "./car-variants.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, WINDSHIELD_BOW } from "./car-lines.ts";
 import { quarterSillZs } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
@@ -53,6 +53,57 @@ function shellRing(skin: Pt[], cant: number, inset: number): Pt[] {
   return [...skin, ...inner];
 }
 
+/** The drawn roof's ends that bow in plan past the default bow (`WINDSHIELD_BOW`, `REAR_GLASS_BOW`) its flat ends already cover: z, bow (m), the glass top's half-width. */
+function roofEndBows(style: BodyStyle): { z: number; bow: number; half: number }[] {
+  return [
+    { z: style.roofZ[1], bow: (style.windshield.bow ?? WINDSHIELD_BOW).top - WINDSHIELD_BOW.top, half: style.windshield.wTop / 2 },
+    { z: style.roofZ[0], bow: (style.rearGlass.bow ?? REAR_GLASS_BOW).top - REAR_GLASS_BOW.top, half: style.rearGlass.wTop / 2 },
+  ].filter((end) => end.bow !== 0);
+}
+
+/**
+ * The drawn roof's `ends` bow in plan with the glass tops under them, fading to nothing at each glass's top corners. A headliner
+ * vertex (`twins`: each inner vertex, then the skin vertex it is inset from) moves as its skin vertex does, so it stays inset.
+ */
+function bowRoofEnds(geo: THREE.BufferGeometry, ends: readonly { z: number; bow: number; half: number }[], twins: readonly number[]): void {
+  const skinOf = new Map<number, number>();
+  for (let k = 0; k < twins.length; k += 2) skinOf.set(twins[k]!, twins[k + 1]!);
+  const pos = geo.getAttribute("position");
+  for (let v = 0; v < pos.count; v++) {
+    const end = ends.find((e) => Math.abs(pos.getZ(v) - e.z) < 1e-6);
+    if (!end) continue;
+    const xn = Math.min(1, Math.abs(pos.getX(skinOf.get(v) ?? v)) / end.half);
+    pos.setZ(v, end.z + end.bow * (1 - xn * xn));
+  }
+}
+
+/**
+ * Re-cuts the cap whose triangles start at index `first` (`ring`'s copy at vertex `base`) as a strip from the skin's arc to the
+ * headliner's points, keeping its facing: bowed, the ear-clip's skin-only slivers (crown to shoulders) fold the cap and tip its normals.
+ */
+function stripCap(index: THREE.BufferAttribute["array"], first: number, base: number, ring: readonly Pt[], cant: number): void {
+  const turn = (a: number, b: number, c: number) =>
+    (ring[b]!.x - ring[a]!.x) * (ring[c]!.y - ring[a]!.y) - (ring[b]!.y - ring[a]!.y) * (ring[c]!.x - ring[a]!.x);
+  const facing = Math.sign(turn(index[first]! - base, index[first + 1]! - base, index[first + 2]! - base));
+  const m = ring.length - HEADLINER_POINTS.length;
+  const inner = HEADLINER_POINTS.map((offset, j) => ({ v: m + j, skin: cant + offset })).reverse();
+  const tris: number[] = [];
+  let j = 0;
+  for (let i = 0; i < m - 1; i++) {
+    // Past the shoulder between two headliner points, the strip steps to the next one.
+    if (j + 1 < inner.length && 2 * i >= inner[j]!.skin + inner[j + 1]!.skin) {
+      tris.push(i, inner[j + 1]!.v, inner[j]!.v);
+      j++;
+    }
+    tris.push(i, i + 1, inner[j]!.v);
+  }
+  for (let t = 0; t < tris.length; t += 3) {
+    const [a, b, c] = [tris[t]!, tris[t + 1]!, tris[t + 2]!];
+    const swap = turn(a, b, c) * facing < 0;
+    index.set([base + a, base + (swap ? c : b), base + (swap ? b : c)], first + t);
+  }
+}
+
 /**
  * The roof panel. The cage keeps its knee-lip section down to a keel under the crown. The drawn roof's side rolls into the dome with
  * no shelf, and it is a thin shell: its inner face, inset `HEADLINER_INSET` from the skin's cants and crown, is the headliner
@@ -89,12 +140,22 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
   const geo = loftFromRings(rings, zs, 0.28, 0.72);
   ensureOutwardNormals(geo);
   if (source === "cage") return geo;
-  // The loft's rings, then each end cap's own copy of its ring (`loftFromRings`).
+  // The loft's rings, then each end cap's own copy of its ring: the shell's ring is concave, so `loftFromRings` ear-clips its caps
+  // and adds no centre between the copies.
   const n = rings[0]!.length;
   const cant = (n - HEADLINER_POINTS.length - 5) / 2;
   const twins: number[] = [];
-  for (const base of [...zs.map((_, s) => s * n), zs.length * n, zs.length * n + n + 1]) {
+  for (const base of [...zs.map((_, s) => s * n), zs.length * n, zs.length * n + n]) {
     for (let j = 0; j < HEADLINER_POINTS.length; j++) twins.push(base + n - HEADLINER_POINTS.length + j, base + cant + HEADLINER_POINTS[j]!);
+  }
+  const ends = roofEndBows(style);
+  bowRoofEnds(geo, ends, twins);
+  // Each cap's ear-clip (`n` - 2 triangles) follows the loft's quads: the rear cap at `zs[0]`, then the front.
+  const capStart = (zs.length - 1) * n * 6;
+  const index = geo.getIndex()!.array;
+  for (const end of ends) {
+    const front = end.z === z1;
+    stripCap(index, capStart + (front ? 3 * (n - 2) : 0), zs.length * n + (front ? n : 0), rings[front ? rings.length - 1 : 0]!, cant);
   }
   const unsplit = geo.getAttribute("position").count;
   splitCreases(geo, ROOF_CREASE_DEGREES);

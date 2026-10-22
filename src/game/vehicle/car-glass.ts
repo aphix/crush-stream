@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import type { GlassName } from "./car-core.ts";
-import { CAR_STYLES, type BodyStyle, type GlassQuad } from "./car-variants.ts";
+import { CAR_STYLES, type BodyStyle, type GlassBow, type GlassQuad } from "./car-variants.ts";
 import { glassTopY, glassX, lerp } from "./car-mesh.ts";
-import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ } from "./car-lines.ts";
+import { aPillarTopZ, bPillarBand, beltY, doorGlassFrontZ, REAR_GLASS_BOW, WINDSHIELD_BOW } from "./car-lines.ts";
 
 // Glass panes on the shared platform: windshield, rear glass, door and quarter glass, filling the greenhouse `car-greenhouse-mesh.ts` builds.
 
@@ -16,21 +16,24 @@ export const DOOR_GLASS_SEAT = { x: -0.02, y: 0.52, z: -0.28 } as const;
 
 const _pt = new THREE.Vector3();
 
-/** Point of raked quad `q` in car space: `xn` −1…1 across, `t` 0…1 base to top, bowed by `bow` along z at the centre line. */
-function quadPoint(q: GlassQuad, xn: number, t: number, bow: number): THREE.Vector3 {
+/** A raked pane with its bow resolved. */
+type BowedQuad = GlassQuad & { bow: GlassBow };
+
+/** Point of raked quad `q` in car space: `xn` −1…1 across, `t` 0…1 base to top, bowed along z at the centre line (none at the edges). */
+function quadPoint(q: BowedQuad, xn: number, t: number): THREE.Vector3 {
   const w = lerp(q.wBase, q.wTop, t);
-  return _pt.set(xn * w * 0.5, lerp(q.base[0], q.top[0], t), lerp(q.base[1], q.top[1], t) + bow * (1 - xn * xn));
+  return _pt.set(xn * w * 0.5, lerp(q.base[0], q.top[0], t), lerp(q.base[1], q.top[1], t) + lerp(q.bow.base, q.bow.top, t) * (1 - xn * xn));
 }
 
-/** Raked glass quad (windshield / rear glass), bowed by `bow` along z at the centre line. */
-function makeGlassQuad(q: GlassQuad, segX: number, segY: number, bow: number): THREE.BufferGeometry {
+/** Raked glass quad (windshield / rear glass), bowed along z at the centre line; `userData.centre` is its bowed centre (`glassWorld`). */
+function makeGlassQuad(q: BowedQuad, segX: number, segY: number): THREE.BufferGeometry {
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
   for (let j = 0; j <= segY; j++) {
     const t = j / segY;
     for (let i = 0; i <= segX; i++) {
-      const p = quadPoint(q, (i / segX) * 2 - 1, t, bow);
+      const p = quadPoint(q, (i / segX) * 2 - 1, t);
       positions.push(p.x, p.y, p.z);
       uvs.push(i / segX, t);
     }
@@ -47,21 +50,27 @@ function makeGlassQuad(q: GlassQuad, segX: number, segY: number, bow: number): T
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geo.setIndex(indices);
   geo.computeVertexNormals();
+  geo.userData.centre = quadPoint(q, 0, 0.5).toArray();
   return geo;
 }
 
-/** The windshield's quad on `style`: its base and widths, its top edge. */
-function windshieldQuad(style: BodyStyle): GlassQuad {
-  const { base, wBase, wTop } = style.windshield;
-  return { base, top: style.windshieldTop, wBase, wTop };
+/** The windshield's quad on `style`: its base and widths, its top edge, its bow. */
+function windshieldQuad(style: BodyStyle): BowedQuad {
+  const { base, wBase, wTop, bow = WINDSHIELD_BOW } = style.windshield;
+  return { base, top: style.windshieldTop, wBase, wTop, bow };
+}
+
+/** The rear glass's quad on `style`, its bow resolved. */
+function rearGlassQuad(style: BodyStyle): BowedQuad {
+  return { ...style.rearGlass, bow: style.rearGlass.bow ?? REAR_GLASS_BOW };
 }
 
 export function makeWindshield(style: BodyStyle = SEDAN): THREE.BufferGeometry {
-  return makeGlassQuad(windshieldQuad(style), 10, 8, 0.02);
+  return makeGlassQuad(windshieldQuad(style), 10, 8);
 }
 
 export function makeRearGlass(style: BodyStyle = SEDAN): THREE.BufferGeometry {
-  return makeGlassQuad(style.rearGlass, 8, 6, -0.015);
+  return makeGlassQuad(rearGlassQuad(style), 8, 6);
 }
 
 /** A side pane's edge z at the belt (`bot`) and at the top, rear → front; a kneed front edge (`front`, z at a height share) gets a row at its knee (`kneeT`). */
@@ -158,14 +167,14 @@ export function makeRearSideGlass(sign: number, style: BodyStyle = SEDAN): THREE
  */
 export function glassCorners(style: BodyStyle): Float32Array {
   const out = new Float32Array(GLASS_NAMES.length * 12);
-  const quads = [windshieldQuad(style), style.rearGlass];
+  const quads = [windshieldQuad(style), rearGlassQuad(style)];
   for (let p = 0; p < GLASS_NAMES.length; p++) {
     const name = GLASS_NAMES[p]!;
     const sign = name.endsWith("L") ? -1 : 1;
     for (let k = 0; k < 4; k++) {
       const across = k & 1;
       const t = k >> 1;
-      const v = p < 2 ? quadPoint(quads[p]!, across * 2 - 1, t, 0) : sidePoint(sign, style, name.startsWith(PART_FAMILY.door) ? doorSpan(style) : quarterSpan(style), across, t);
+      const v = p < 2 ? quadPoint(quads[p]!, across * 2 - 1, t) : sidePoint(sign, style, name.startsWith(PART_FAMILY.door) ? doorSpan(style) : quarterSpan(style), across, t);
       v.toArray(out, p * 12 + k * 3);
     }
   }

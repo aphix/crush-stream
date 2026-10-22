@@ -33,11 +33,19 @@ export interface ProfileStation {
 /** [y, z] in car space. */
 export type YZ = readonly [number, number];
 
+/** A raked pane's plan bow (m, along z, + forward): how far its centre line stands off its edges' line at the base and at the top. */
+export interface GlassBow {
+  base: number;
+  top: number;
+}
+
+/** A raked pane: its edges' base and top [y, z] and widths; `bow` its centre line's plan bow (default `REAR_GLASS_BOW`). */
 export interface GlassQuad {
   base: YZ;
   top: YZ;
   wBase: number;
   wTop: number;
+  bow?: GlassBow;
 }
 
 /** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
@@ -228,8 +236,8 @@ export interface BodyStyle {
   profile: readonly ProfileStation[];
   /** Roof panel [rear, front] z. */
   roofZ: readonly [number, number];
-  /** Windshield: base [y, z] of its centre line and its widths at the base and the top (`windshieldTop`). */
-  windshield: { base: YZ; wBase: number; wTop: number };
+  /** Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`). */
+  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow };
   windshieldTop: YZ;
   /** B-pillar z band. */
   bPillar: { rear: number; front: number };

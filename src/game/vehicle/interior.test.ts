@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
 import { beltY, floorY } from "./car-lines.ts";
+import { makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { roofAt } from "./car-mesh.ts";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle, type CarStyleId } from "./car-variants.ts";
@@ -414,6 +415,21 @@ describe("given every style's drawn headliner, the roof skin's inner face", () =
       }
     });
   }
+
+  test("when every style's roof is drawn, then each headliner vertex is paired with the skin vertex it is inset from: within 1 cm of it, at its z, end caps included", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const geo = makeRoofGeometry(CAR_STYLES[id]);
+      const twins: unknown = geo.userData.shellTwins;
+      assert.ok(twins instanceof Int32Array && twins.length > 0, `${id}: the drawn roof names its headliner's vertices`);
+      const pos = geo.getAttribute("position");
+      const [head, skin] = [new THREE.Vector3(), new THREE.Vector3()];
+      for (let k = 0; k < twins.length; k += 2) {
+        head.fromBufferAttribute(pos, twins[k]!);
+        skin.fromBufferAttribute(pos, twins[k + 1]!);
+        assert.ok(head.distanceTo(skin) < 0.01 && head.z === skin.z, `${id}: headliner vertex ${twins[k]} at ${mm(head)} paired with skin vertex ${twins[k + 1]} at ${mm(skin)}`);
+      }
+    }
+  });
 });
 
 describe("given the door cards", () => {
