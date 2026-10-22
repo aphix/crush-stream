@@ -36,11 +36,17 @@ const WAGON_LAMP_SHAPES = {
   front: {
     loops: [{ points: [[0.52, 0.36], [0.72, 0.36], [0.72, 0.48], [0.52, 0.48]] }],
     lens: "dark",
-    strips: [{ line: { points: [[0.52, 0.465], [0.72, 0.465]] }, width: 0.012, tone: "chrome" }],
+    // The corner intake's bright blade, 2/3 of its width, and the silver splitter along the fascia's bottom lip (diffuse silver: chrome reads dark there).
+    strips: [
+      { line: { points: [[0.553, 0.43], [0.687, 0.43]] }, width: 0.018, tone: "clear" },
+      { line: { points: [[0.006, 0.345], [0.2, 0.345], [0.35, 0.345], [0.5, 0.345], [0.64, 0.345]] }, width: 0.008, tone: "clear" },
+    ],
   },
+  // The black diffuser band across the rear bumper's foot, its red reflector in it.
   rear: {
-    loops: [{ points: [[0.48, 0.45], [0.64, 0.45], [0.64, 0.47], [0.48, 0.47]] }],
-    lens: "red",
+    loops: [{ points: [[0.006, 0.475], [0.64, 0.475], [0.64, 0.54], [0.006, 0.54]] }],
+    lens: "dark",
+    cells: [{ loop: { points: [[0.48, 0.48], [0.64, 0.48], [0.64, 0.5], [0.48, 0.5]] }, tone: "red" }],
   },
 } as const;
 
@@ -56,7 +62,7 @@ export const WAGON: BodyStyle = {
   belt: { x: [[-1.97, 0.64], [-1.8, 0.7], [-1.6, 0.74], [-1.4, 0.77], [-1.2, 0.785]], y: [[-2.033, 1.095], [0.024, 1.07], [0.887, 1.062]] },
   rocker: { y: 0.28 },
   arch: { radius: 0.455, lip: { flare: 0.016, width: 0.055 } },
-  hood: { z0: 0.86, z1: 1.93, origin: [0.96, 0.84], kind: "clamshell" },
+  hood: { z0: 0.86, z1: 1.93, origin: [0.96, 0.84], kind: "clamshell", crown: [0.03, 0.7] },
   bumpers: {
     front: {
       seat: { y: 0.48, z: 1.9785 },
@@ -64,7 +70,7 @@ export const WAGON: BodyStyle = {
       span: 0.78,
       wrap: { from: 0.25, back: 0.3 },
       trim: "body",
-      top: [[0, 0.555], [0.36, 0.555], [0.4, 0.7], [0.62, 0.775], [0.66, 0.785]],
+      top: [[0.4, 0.7], [0.62, 0.775], [0.66, 0.785]],
       edge: [[1.86, 0.785], [1.75, 0.775], [1.5, 0.74], [1.62, 0.6], [1.7, 0.42], [1.72, 0.36]],
     },
     rear: {
@@ -109,14 +115,14 @@ export const WAGON: BodyStyle = {
     st(0.958, 0.826, 1.07, 1.082, 0.506, 0.25),
     st(1.048, 0.825, 1.064),
     st(1.172, 0.823, 1.06),
-    st(1.339, 0.818, 1.036),
-    st(1.486, 0.81, 1.022),
-    st(1.568, 0.798, 0.994),
-    st(1.632, 0.781, 0.987),
-    st(1.718, 0.767, 0.962),
-    st(1.793, 0.744, 0.92),
-    st(1.86, 0.683, 0.906),
-    st(1.928, 0.557, 0.86),
+    st(1.339, 0.818, 1.04),
+    st(1.486, 0.81, 1.018),
+    st(1.568, 0.798, 1.001),
+    st(1.632, 0.781, 0.984),
+    st(1.718, 0.767, 0.957),
+    st(1.793, 0.744, 0.929),
+    st(1.86, 0.683, 0.898),
+    st(1.928, 0.557, 0.863),
     st(2.035, 0.36, 0.66),
   ],
   roofZ: [-1.84, 0.3],
@@ -190,8 +196,8 @@ export const WAGON: BodyStyle = {
     patches: [
       { view: "top", points: [[1.18, 0.47], [1.18, 0.55], [1, 0.55], [1, 0.47]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.02, bar: 0.006, depth: 0.004 }, cavity: 0.7 },
       { view: "front", points: [[0, 0.58], [0.025, 0.585], [0.035, 0.6], [0.025, 0.615], [0, 0.62]], depth: 0.003, rim: 0.004, cavity: 0 },
-      { view: "front", points: [[0, 0.5], [0.55, 0.5], [0.55, 0.31], [0, 0.31]], depth: -0.006, rim: 0.004, cavity: 0.7 },
-      { view: "front", points: [[0.58, 0.5], [0.7, 0.5], [0.7, 0.37], [0.58, 0.37]], depth: -0.006, rim: 0.004, cavity: 0.7 },
+      { view: "front", points: [[0, 0.5], [0.55, 0.5], [0.55, 0.31], [0, 0.31]], depth: -0.006, rim: 0.004, cavity: 0.95 },
+      { view: "front", points: [[0.58, 0.5], [0.7, 0.5], [0.7, 0.37], [0.58, 0.37]], depth: -0.006, rim: 0.004, cavity: 0.95 },
       { view: "front", points: [[0.485, 0.758], [0.555, 0.758], [0.555, 0.803], [0.485, 0.803]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "side", points: [[0.92, 0.89], [0.92, 0.925], [0.47, 0.925], [0.47, 0.89]], depth: -0.006, rim: 0.004, cavity: 0.7 },
       { view: "rear", points: [[0.5, 0.91], [0.8, 0.91], [0.8, 0.99], [0.5, 0.99]], depth: -0.004, rim: 0.004, cavity: 0 },
@@ -202,6 +208,8 @@ export const WAGON: BodyStyle = {
       { view: "rear", points: [[0, 0.68], [0.28, 0.68], [0.28, 0.82], [0, 0.82]], depth: -0.006, rim: 0.004, cavity: 0 },
       { view: "rear", points: [[0.475, 0.773], [0.525, 0.773], [0.525, 0.788], [0.475, 0.788]], depth: 0.002, rim: 0.004, cavity: 0 },
       { view: "rear", points: [[0, 0.3], [0.7, 0.3], [0.7, 0.445], [0, 0.445]], depth: -0.004, rim: 0.004, pattern: { kind: "hslats", pitch: 0.03, bar: 0.006, depth: -0.004 }, cavity: 0.85 },
+      // The black sill cladding between the arches, under the door bottoms' beads.
+      { view: "side", points: [[0.76, 0.26], [-0.76, 0.26], [-0.76, 0.345], [0.76, 0.345]], depth: 0, rim: 0.002, cavity: 0.9 },
       ...HANDLES.flatMap((h) => h.patches),
     ],
   },

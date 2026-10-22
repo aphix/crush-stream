@@ -40,9 +40,11 @@ const HATCHBACK_LAMP_SHAPES = {
     loops: [{ points: [[0.56, 0.3], [0.68, 0.3], [0.68, 0.34], [0.56, 0.34]] }],
     lens: "amber",
   },
+  // The black diffuser band across the rear bumper's foot, its red reflector in it.
   rear: {
-    loops: [{ points: [[0.48, 0.3], [0.64, 0.3], [0.64, 0.33], [0.48, 0.33]] }],
-    lens: "red",
+    loops: [{ points: [[0.006, 0.295], [0.64, 0.295], [0.64, 0.365], [0.006, 0.365]] }],
+    lens: "dark",
+    cells: [{ loop: { points: [[0.48, 0.3], [0.64, 0.3], [0.64, 0.33], [0.48, 0.33]] }, tone: "red" }],
   },
 } as const;
 

@@ -965,7 +965,7 @@ const SIM_DIGEST_BY_STYLE = [
   // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's boot foot.
   { id: "hatchback", digest: "d1b0dbd003d50435d78a1243c66bf76a5ec1ec028cf24e4fb18dca1ea3ea1ece" },
-  { id: "wagon", digest: "fc6cc21e004714d20934221b94eb6569779793efef30cb3fa48572c937cd1b88" },
+  { id: "wagon", digest: "1a7eff9992e80f8e83b536069ed0e6d91c71c41c5a70267b1d8d6bbe50865260" },
   // The coupe re-pinned for its crisper nose: the hood's lip reaches z 1.945 over a held station there.
   { id: "coupe", digest: "e1f4d131860fc9399df4a841b9396cbc374c5460d7ef44939560ff9c71defc1a" },
   { id: "pickup", digest: "8ac3348022ccf861dcc32220681d991fadaba4b58f4cd87233f0374f7bfb5731" },
@@ -1018,7 +1018,7 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
   { id: "hatchback", digest: "42b4ca457d2712b398a8e0066d64d641a7b4d4b690fad50702b7f14e488e0f4b" },
-  { id: "wagon", digest: "2d73e075b0b3df350ab6052aa084e24fb2b41a6a2d297ee7b6baa0ddb311118f" },
+  { id: "wagon", digest: "d759f5df96d2d2b5cc642c8c6b227522b35f76f0339d8239e1ddbb0e7bfc9497" },
   // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945).
   { id: "coupe", digest: "07208a77ebde9a8441a8671d73a84a547a27d6f70ed1813fd327a5db15fa93fa" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
