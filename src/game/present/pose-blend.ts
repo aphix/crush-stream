@@ -156,9 +156,17 @@ class PartTrack {
     return same(this.object, a, 0) && a[N] === s.x && a[N + 1] === s.y && a[N + 2] === s.z;
   }
 
-  /** A write since the last frame (the object is not as `cur`, or as `show` left it) becomes `cur`, as of step `steps`. */
+  /**
+   * A write since the last frame (the object is not as `cur`, or as `show` left it) becomes `cur`, as of step `steps`.
+   * A write within the step of the last one (the reel poses a swinging door, then `updateSkin` re-poses it) is that step's pose again: the segment keeps its start.
+   */
   take(steps: number): void {
     if (this.is(this.drawn ? this.out : this.cur)) return;
+    if (steps === this.to) {
+      this.grab(this.cur);
+      this.drawn = false;
+      return;
+    }
     const last = this.prev;
     this.prev = this.cur;
     this.cur = last;
