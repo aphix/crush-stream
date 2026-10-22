@@ -252,6 +252,7 @@ export interface BodyStyle {
   /**
    * Front door: hinge axis at the A-pillar (±hingeX, hingeY, hingeZ), `length` hinge to trailing edge, skin ±halfHeight about the hinge, `aperture` [z0, z1] the body's front-door cut (the skin overlaps it 0.02 each end), mirror seated `mirrorY` over the hinge and `mirrorZ` (default 0) behind it, reaching `mirrorReach` out, ±mirrorHalfDepth deep.
    * `mirror` (drawn only): its own mirror, `cap` rounded or box of `size` [w out, h, d along z] (default `MIRROR_CAP_SIZE`) in `finish` (body: the door's paint), its outer face at `mirrorReach`, its foot on the skin; absent = the platform mirror x-scaled to the reach.
+   * `hingeTop` (car y, m, drawn only): the skin's top edge at its hinge cut, its rows closing down to it over the hinge end's slope so the top meets the fender's deck edge there; absent = only the slope.
    */
   door: {
     hingeX: number;
@@ -265,6 +266,7 @@ export interface BodyStyle {
     mirrorHalfDepth: number;
     aperture: readonly [number, number];
     mirror?: { cap: "rounded" | "box"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number] };
+    hingeTop?: number;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
   aPillarFoot: number;
