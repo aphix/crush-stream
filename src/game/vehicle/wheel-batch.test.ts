@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
 import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
-import { makeWheelGeometry, treadNormalMap, WHEEL_DESIGNS, type WheelDesign } from "./car-materials.ts";
+import { makeWheelGeometry, RUBBER, treadNormalMap, WHEEL_DESIGNS, type WheelDesign } from "./car-materials.ts";
 import { DeformableCar } from "./car.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
 import { STYLE_WHEELS, WheelBatch } from "./wheel-batch.ts";
@@ -153,11 +153,11 @@ describe("given every body style's tyre (its dims' wheel), drawn by the one plat
   }
 });
 
-/** The rim each reference car shows: sedan and SUV split ten-spoke (both silver), hatch and police five-spoke, muscle slotted mag, pickup six-spoke steel, monster beadlock. */
+/** The rim each reference car shows: sedan and SUV split ten-spoke (both silver, the SUV's on a larger rim), hatch and police five-spoke, muscle slotted mag, pickup six-spoke steel, monster beadlock. */
 const REFERENCE_RIMS: Readonly<Record<CarStyleId, WheelDesign>> = {
   sedan: "split10",
   hatchback: "five",
-  wagon: "split10",
+  wagon: "split10l",
   coupe: "mag5",
   pickup: "six",
   police: "five",
@@ -174,6 +174,8 @@ const DISH_RADII = [0.178] as const;
 const WINDOW_RADIUS = 0.11;
 /** Barycentric slack: a sample on an edge every layer shares (all are 16-sided) must not fall out of both triangles by rounding. */
 const EDGE_TOL = 1e-9;
+/** The SUV reference's rim lip over its tyre's crown (side view: .74 against the tyre's height, .80 against its own); the road rim's is .675. */
+const SUV_RIM_LIP = 0.75;
 
 /** The +x face of `g` as seen from outside: whether the outermost +x-facing triangle over (y, z) is dark; throws where none covers it. */
 function outwardFaceDark(g: THREE.BufferGeometry): (y: number, z: number) => boolean {
@@ -218,6 +220,24 @@ describe("given the reference cars' rim designs", () => {
     });
     assert.equal(new Set(shapes).size, WHEEL_DESIGNS.length, shapes.join(" "));
     assert.ok(STYLE_WHEELS.wagon.tint.getHex() === STYLE_WHEELS.sedan.tint.getHex(), `SUV rim ${STYLE_WHEELS.wagon.tint.getHexString()} against the sedan's silver`);
+  });
+
+  test("when the SUV's rim is built, then its lip reaches the reference's share of the tyre and its tyre's bead sits inside the lip, the sedan's rim unchanged", () => {
+    const rubber = new THREE.Color(RUBBER[0]).toArray().map(Math.fround);
+    const reach = (design: WheelDesign): [number, number] => {
+      const g = makeWheelGeometry(design);
+      const [pos, col] = [g.getAttribute("position"), g.getAttribute("color")];
+      let [lip, bead] = [0, Infinity];
+      for (let i = 0; i < pos.count; i++) {
+        const r = Math.hypot(pos.getY(i), pos.getZ(i));
+        if (col.getX(i) === rubber[0] && col.getY(i) === rubber[1] && col.getZ(i) === rubber[2]) bead = Math.min(bead, r);
+        else lip = Math.max(lip, r);
+      }
+      return [lip / PLATFORM_TYRE.r, bead];
+    };
+    const [[suvLip, suvBead], [sedanLip]] = [reach("split10l"), reach("split10")];
+    assert.ok(suvLip >= SUV_RIM_LIP && suvBead < suvLip * PLATFORM_TYRE.r, `SUV lip ${suvLip.toFixed(3)} of the crown, bead ${suvBead.toFixed(4)} m`);
+    assert.ok(Math.abs(sedanLip - 0.216 / PLATFORM_TYRE.r) < 1e-6, `sedan lip ${sedanLip.toFixed(4)} of the crown`);
   });
 
   test("when the coupe's slotted mag is built, then its outward face is solid all round between its windows and its lip, and dark only in five windows inside", () => {

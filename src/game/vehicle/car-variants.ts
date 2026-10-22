@@ -371,8 +371,11 @@ export interface BodyStyle {
    * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`.
    */
   pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan };
-  /** Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar, and the cowl (the deck between the hood's rear edge and the windshield's foot). */
-  blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean; cowl?: boolean };
+  /**
+   * Drawn only: parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar,
+   * and the cowl (the deck between the hood's rear edge and the windshield's foot). A "matte" rear pillar is the black at plastic's roughness, its clear coat off.
+   */
+  blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean | "matte"; cowl?: boolean };
   /**
    * Drawn only: the C-pillar as a sail lofted from the haunch's shoulder, tangent to it, up to the rear glass and the roof, its front on
    * the side window's line; absent, a flat post. `tip` ([y, z]): where that line ends at the belt behind the quarter glass, the gloss-black
@@ -382,8 +385,8 @@ export interface BodyStyle {
    * (one broad flat fastback panel leaving the body tangent), not a curve from the shoulder point.
    */
   cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean };
-  /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
-  privacyGlass?: { rear?: boolean; quarter?: boolean };
+  /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
+  privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Chrome bead round every glass pane's border (drawn only): the door glass's rides its door, the rest the body. */
   windowTrim?: "chrome";
   /** Chrome strips on the body side (drawn only, with `windowTrim`): side-view polylines [z, y] (m), `width` (m) tall, on the skin's +x and -x. A strip whose points all lie inside the door aperture rides the door; any other rides the body. */

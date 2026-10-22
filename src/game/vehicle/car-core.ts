@@ -680,7 +680,7 @@ export abstract class CarCore {
     ) => {
       mesh.renderOrder = 2;
       parent.add(mesh);
-      const privacy = (name === "rear" && style.privacyGlass?.rear === true) || (name.startsWith("quarter") && style.privacyGlass?.quarter === true);
+      const privacy = name === "rear" ? style.privacyGlass?.rear : name.startsWith("quarter") ? style.privacyGlass?.quarter : undefined;
       const pane: GlassPane = {
         name,
         mesh,
@@ -693,7 +693,7 @@ export abstract class CarCore {
         skin,
       };
       this.glassPanes.push(pane);
-      if (privacy) privacyPane(mesh.geometry);
+      if (privacy !== undefined && privacy !== false) privacyPane(mesh.geometry, privacy === "matte");
     };
     const glassMat = glassMaterial("fresh");
     const style = this.style;
