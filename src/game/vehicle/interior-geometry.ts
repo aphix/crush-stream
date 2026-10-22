@@ -233,7 +233,7 @@ function coil(x: number, y: number, z: number): THREE.BufferGeometry[] {
   const bands = 2 * SPRING_TURNS - 1;
   const h = 0.36 / bands;
   return Array.from({ length: bands }, (_, i) =>
-    toned(new THREE.CylinderGeometry(i % 2 ? 0.075 : 0.085, i % 2 ? 0.075 : 0.085, h, 10, 1, true), ...(i % 2 ? BLACK : ALU)).translate(x, y - 0.18 + (i + 0.5) * h, z),
+    toned(new THREE.CylinderGeometry(i % 2 ? 0.075 : 0.085, i % 2 ? 0.075 : 0.085, h, 10, 1, true), ...(i % 2 ? BLACK : STEEL)).translate(x, y - 0.18 + (i + 0.5) * h, z),
   );
 }
 
@@ -247,6 +247,9 @@ export function ladderFrameGeometry(): THREE.BufferGeometry {
   for (const z of [1.75, 0.635, -0.635, -2.1]) parts.push(box(0.9, 0.08, 0.08, BLACK, 0, 0.28, z));
   for (const sign of [-1, 1]) {
     parts.push(box(0.09, 0.16, 4.1, BLACK, sign * 0.45, 0.26, -0.15));
+    // The side reference's lower rails at the hubs' height, stopping short of the axle tubes, braced up to the main rails by a V.
+    parts.push(box(0.07, 0.08, 2.4, BLACK, sign * 0.4, -0.13, 0));
+    for (const z of [-0.15, 0.15]) parts.push(rod([sign * 0.4, -0.13, z], [sign * 0.45, 0.22, z + Math.sign(z) * 0.28], 0.03, BLACK));
     for (const axle of [-1.385, 1.385]) {
       const mid = -Math.sign(axle);
       parts.push(box(0.32, 0.06, 0.34, BLACK, sign * 0.6, 0.26, axle));

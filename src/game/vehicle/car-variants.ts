@@ -342,9 +342,10 @@ export interface BodyStyle {
     /**
      * `lift` (m): head, glass and stalk stand this far higher than the seat, the foot growing up to meet them (default 0), for a mirror on a pedestal above the door skin's top.
      * `stalk` (m): the foot's length along the car, a slim post under the head; absent = 0.7 of the cap's depth.
+     * `neck` (m): the foot runs this far below the head's bottom, an arm holding the head up off the belt; absent = 0.7 of the cap's height, hidden behind it.
      * `mount` "glass": the seat stands on the door glass's plane at its z and height (`mirrorY` may stand over `halfHeight`), its foot leaning with the pane, as a tow mirror on the glass's front corner; absent, on the skin.
      */
-    mirror?: { cap: "rounded" | "box" | "tear"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; mount?: "glass" };
+    mirror?: { cap: "rounded" | "box" | "tear"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass" };
     hingeTop?: number;
   };
   /** Where the A-pillar's foot meets the belt (z, m): the door glass's front edge starts there. */
