@@ -56,8 +56,8 @@ const MUSCLE_REAR_FASCIA = [
   [-0.095, -0.06],
 ] as const;
 
-/** Bullet mirror in the body colour on a dark pedestal, as the reference's side view and iso: an 8.5 cm long, 6.5 cm tall head standing 6 cm over its seat on the door top ([out, height, length] m). */
-const COUPE_MIRROR = { cap: "rounded", finish: "body", size: [0.09, 0.065, 0.085], lift: 0.06 } as const;
+/** Bullet mirror in the body colour on a slim dark stalk, as the reference's side view and iso: an 8.5 cm long, 6.5 cm tall head standing 6 cm over its seat on the door top, the stalk 2.5 cm along the car ([out, height, length] m). */
+const COUPE_MIRROR = { cap: "rounded", finish: "body", size: [0.09, 0.065, 0.085], lift: 0.06, stalk: 0.025 } as const;
 
 /** Late-70s notchback muscle coupe (Celica Supra A40 proportions): long flat hood, flat roof, sloped rear glass, short ducktail deck. */
 export const COUPE: BodyStyle = {
@@ -73,7 +73,7 @@ export const COUPE: BodyStyle = {
   aPillarTop: 0.11,
   bPillar: { rear: -0.54, front: -0.48 },
   arch: { radius: 0.38, lip: { flare: 0.012, width: 0.05, band: true } },
-  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.8, z1: 1.76, width: 0.46, rise: 0.02, round: 0.04, scoop: { inlets: 2, z: 1.64, width: 0.38, height: 0.03 } }, groove: [0.004, 0.0016] },
+  hood: { z0: 0.7, z1: 1.945, origin: [0.8, 0.68], bulge: { z0: 0.74, z1: 1.71, width: 0.56, cowlWidth: 0.68, rise: 0.025, round: 0.04, cowlRamp: 0.3, scoop: { inlets: 2, z: 1.69, width: 0.48, height: 0.05 } }, groove: [0.004, 0.0016] },
   bumpers: {
     // Ends lofted round the corner and on along the side (reference: 24 cm on the fender, 20 cm on the quarter), standing off the skin.
     front: { ...bumpers.front, seat: { y: 0.405, z: 1.925 }, span: 0.66, wrap: { from: 0.3, back: 0.24, end: { corner: 0.15, stand: 0.03 } }, fascia: MUSCLE_FRONT_FASCIA, trim: "chrome" },

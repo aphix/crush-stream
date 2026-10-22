@@ -1296,6 +1296,32 @@ describe("given a body style's P1 parts", () => {
     assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
   });
 
+  it("when a hood bulge sets a cowl ramp and a cowl width, then it widens toward its cowl end and eases into the lid over that run there, its nose end as without them, and the cage builds are unchanged", () => {
+    const plainBulge = { z0: 0.9, z1: 1.8, width: 0.4, rise: 0.04 } as const;
+    const plain: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge: plainBulge } };
+    const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge: { ...plainBulge, cowlWidth: 0.6, cowlRamp: 0.4 } } };
+    /** On the bulge's ring `k` of 16: the most |x| standing over the lid, and the most it stands over the lid's centre line. */
+    const ring = (s: BodyStyle, k: number): { x: number; top: number } => {
+      const z = lerp(plainBulge.z0, plainBulge.z1, k / 16);
+      const [oy, oz] = s.hood.origin;
+      const pos = withHoodBulge(makeHoodGeometry(s), s).getAttribute("position");
+      let [x, top] = [0, -Infinity];
+      for (let i = 0; i < pos.count; i++) {
+        const [vx, vy, vz] = [pos.getX(i), pos.getY(i) + oy, pos.getZ(i) + oz];
+        if (Math.abs(vz - z) > 1e-4 || vy - deckTopY(vx, vz, s, true) <= RAISED_M) continue;
+        x = Math.max(x, Math.abs(vx));
+        top = Math.max(top, vy - deckTopY(0, vz, s, true));
+      }
+      return { x, top };
+    };
+    // Rings 4 and 12 sit a quarter and three quarters of the way from the cowl: 0.6 -> 0.4 wide narrows them 5 cm apart in half-width.
+    assertSameNumbers([ring(style, 4).x - ring(style, 12).x, ring(plain, 4).x - ring(plain, 12).x], [0.05, 0], "the crest's half-width at ring 4 over ring 12", 1e-6);
+    // Ring 4 is 0.225 m in from the cowl end: past the 0.15 m ramp at full rise, still on the 0.4 m one.
+    assert.ok(ring(style, 4).top < plainBulge.rise * 0.6 && Math.abs(ring(plain, 4).top - plainBulge.rise) < 1e-6, `ring 4 stands ${ring(style, 4).top.toFixed(4)} m with the cowl ramp, ${ring(plain, 4).top.toFixed(4)} without`);
+    assert.ok(ring(style, 15).top === ring(plain, 15).top, "the nose end eases in as before");
+    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+  });
+
   it("when a hood is a clamshell, then its sides wrap over the body's shoulder to a shut line on the fender top, clear of the body there, and the cage builds are unchanged", () => {
     const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, kind: "clamshell" } };
     const z = lerp(sedan.hood.z0, sedan.hood.z1, 0.5);
@@ -1562,6 +1588,26 @@ describe("given a body style's P2 parts", () => {
     assert.ok(Math.abs(up.inner - bodySideAtMirror(lifted)) < MIRROR_SEAT_TOL, `the foot starts at x ${up.inner}, the drawn skin at ${bodySideAtMirror(lifted)}`);
     assert.ok(mirrorSeatX(lifted) === mirrorSeatX(mirrorStyle(spec)), "the seat is unchanged");
     assert.ok(cageHash(lifted) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
+  });
+
+  it("when a mirror sets a stalk, then its foot runs that far along the car under the cap instead of 0.7 of the cap's depth, and the seat and cage builds are unchanged", () => {
+    const spec = { cap: "rounded", finish: "body", size: [0.1, 0.07, 0.1], lift: 0.05 } as const;
+    const slim = mirrorStyle({ ...spec, stalk: 0.025 });
+    /** The length along the car of the mirror's unpainted pieces under its cap: its foot. */
+    const footLength = (style: BodyStyle): number => {
+      const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
+      const [pos, painted] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE)];
+      const { cap } = readMirror(style);
+      let [lo, hi] = [Infinity, -Infinity];
+      for (let i = 0; i < pos.count; i++) {
+        if (painted.getX(i) === 1 || pos.getY(i) >= cap.min.y - POSITION_TOL) continue;
+        [lo, hi] = [Math.min(lo, pos.getZ(i)), Math.max(hi, pos.getZ(i))];
+      }
+      return hi - lo;
+    };
+    assertSameNumbers([footLength(mirrorStyle(spec)), footLength(slim)], [0.07, 0.025], "the foot's length along the car", POSITION_TOL);
+    assert.ok(mirrorSeatX(slim) === mirrorSeatX(mirrorStyle(spec)), "the seat is unchanged");
+    assert.ok(cageHash(slim) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
   });
 
   it("when a mirror is mounted on the door glass, then its foot lies on the drawn pane up its height and nowhere sinks into it, the pane's lean followed, which the same seat on the skin does not", () => {
