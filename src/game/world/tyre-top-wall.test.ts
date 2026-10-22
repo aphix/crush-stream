@@ -52,7 +52,7 @@ describe("given a sedan standing with a roof, and a tyre's hub over its crown", 
     hub[0] = 0;
     hub[1] = roof - OVER;
     hub[2] = 0;
-    wheelContact(hub, axes, 1, -1, out);
+    wheelContact(hub, axes, 1, 1, -1, out);
     // The only ground left is the road far under the tread: a gap of more than the hub's height over it, not a roof 0.5 m up the tread.
     assert.ok(out[C_H]! < -0.5 || out[C_OWNER] === -1, `rise ${out[C_H]} owner ${out[C_OWNER]} over a roof ${OVER} m above the hub`);
     assert.ok(!(out[C_OWNER]! >= 0), `the tyre took the roof as ground: owner ${out[C_OWNER]}`);
@@ -63,7 +63,7 @@ describe("given a sedan standing with a roof, and a tyre's hub over its crown", 
     hub[0] = 0;
     hub[1] = roof + 0.2;
     hub[2] = 0;
-    wheelContact(hub, axes, 1, -1, out);
+    wheelContact(hub, axes, 1, 1, -1, out);
     assert.ok(out[C_OWNER]! >= 0 && out[C_H]! > 0, `rise ${out[C_H]} owner ${out[C_OWNER]} over a roof 0.2 m under the hub`);
   });
 });
@@ -90,7 +90,7 @@ describe("given a prism standing on the plain, and a tyre whose hub is over its 
     hub[0] = -1;
     hub[1] = 0.6;
     hub[2] = 0;
-    wheelContact(hub, axes, 1, -1, out);
+    wheelContact(hub, axes, 1, 1, -1, out);
     // The contact is a rise over the tread point (`C_H`): the +x shoulder ring (`RINGS`, offset 0.082, radius 0.314) stands on the prism.
     const rise = PRISM_TOP - (hub[1]! - SHOULDER_RADIUS);
     assert.ok(Math.abs(out[C_H]! - rise) < 1e-6, `rise ${out[C_H]} over a prism ${PRISM_TOP} m high, the shoulder ring's bottom ${hub[1]! - SHOULDER_RADIUS} m up`);
