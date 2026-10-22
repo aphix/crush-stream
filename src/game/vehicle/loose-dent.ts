@@ -69,7 +69,7 @@ function captureMeshes(d: DentState, object: THREE.Object3D): void {
   d.rest = d.meshes.map((m) => Float32Array.from((m.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array));
 }
 
-/** Put the skin back as it was before the first dent. */
+/** Put the skin back as it was before the first dent, its record of hits empty as a new part's. */
 export function clearDents(d: DentState): void {
   if (d.meshes) {
     for (const [k, m] of d.meshes.entries()) {
@@ -80,6 +80,7 @@ export function clearDents(d: DentState): void {
       m.geometry.boundingSphere = null;
     }
   }
+  d.hits.fill(0);
   d.count = d.applied = 0;
   d.meshes = d.rest = null;
 }

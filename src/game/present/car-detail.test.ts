@@ -5,6 +5,7 @@ import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { INTERIOR_MESH, SMALL_PART_SEAT } from "../vehicle/constants.ts";
 import { PART_KIND, type PartSeat } from "../vehicle/part-geometry.ts";
+import { PartBatch } from "../vehicle/part-batch.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { CarDetail, DETAIL_LEVELS, PHONE_LEVEL } from "./car-detail.ts";
 
@@ -72,7 +73,9 @@ describe("given a car and the farthest rung (small parts beyond 35 m, only the b
     detail.update([probe], camera, null, null);
     const meshes = drawn(probe, camera);
     assert.equal(casters(meshes), 0, "nothing of its own drawn casts: its flush shadow is the style's batched caster");
-    assert.ok(probe.shadowCaster.castShadow && probe.shadowCaster.layers.isEnabled(0), "its shadow caster stays in the batch");
+    const batch = new PartBatch(1);
+    batch.sync([probe]);
+    assert.equal(batch.casters.reduce((n, m) => n + m.count, 0), 1, "its shadow caster stays in the batch");
     for (const part of probe.flushCasters) assert.ok(meshes.includes(part), "a flush part left the camera");
   });
 });

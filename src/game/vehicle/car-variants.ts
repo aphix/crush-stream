@@ -180,6 +180,12 @@ interface ChaseEye {
   aimUp: number;
 }
 
+/** A drawn pillar's side-view band: `width` [belt, top] (z, m) about its centre line at `z` [belt, top]; absent `z`, upright on its style's mark. */
+export interface PillarSpan {
+  width: readonly [number, number];
+  z?: readonly [number, number];
+}
+
 export interface BodyStyle {
   id: CarStyleId;
   /** What the reference was measured to; the tables below are built to it (`car-variants.test.ts`). */
@@ -236,11 +242,11 @@ export interface BodyStyle {
   /** Extra pillar splitting the quarter glass (wagon C-pillar), or null. */
   midPillarZ: number | null;
   /**
-   * Drawn only: side-view widths along z (m). `b`: the B-pillar, centred on its band, even from belt to top, the side panes
-   * tucked under it. `divider`: the post at `midPillarZ`, its widths and its z at the belt and at the top (a leaning post).
-   * Absent: the `bPillar` band (its top 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`.
+   * Drawn only: side-view pillar bands (`PillarSpan`). `b`: the B-pillar, centred on its `bPillar` band unless it leans, the side
+   * panes tucked under it. `divider`: the post at `midPillarZ`. Absent: the `bPillar` band (its top 3 cm narrower); a divider
+   * 0.08 / 0.07 wide, upright at `midPillarZ`.
    */
-  pillars?: { b?: number; divider?: { width: readonly [number, number]; z?: readonly [number, number] } };
+  pillars?: { b?: PillarSpan; divider?: PillarSpan };
   /** Drawn only: greenhouse parts in gloss black (the paint's primer-dark tone, no draw of their own): the A-post, its sail, the B-pillar, the divider, the rear pillar. */
   blackout?: { a?: boolean; sail?: boolean; b?: boolean; divider?: boolean; rear?: boolean };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass. */
