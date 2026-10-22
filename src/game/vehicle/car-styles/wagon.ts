@@ -53,7 +53,7 @@ export const WAGON: BodyStyle = {
   belt: { x: [[-1.97, 0.64], [-1.8, 0.7], [-1.6, 0.74], [-1.4, 0.77], [-1.2, 0.785]], y: [[-2.033, 1.095], [0.024, 1.07], [0.887, 1.062]] },
   rocker: { y: 0.28 },
   arch: { radius: 0.455, lip: { flare: 0.016, width: 0.055 } },
-  hood: { z0: 0.86, z1: 1.97, origin: [0.96, 0.84] },
+  hood: { z0: 0.86, z1: 1.97, origin: [0.96, 0.84], kind: "clamshell" },
   bumpers: {
     front: {
       seat: { y: 0.48, z: 1.9785 },
@@ -137,7 +137,6 @@ export const WAGON: BodyStyle = {
       { view: "top", points: [[1.97, 0], [1.95, 0.35], [1.9, 0.52], [1.82, 0.62]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[0.88, 0], [0.86, 0.4], [0.85, 0.65], [0.88, 0.72]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[1.03, 0], [0.99, 0.3], [0.88, 0.55], [0.8, 0.65]], width: 0.01, depth: 0.002, profile: "u", cavity: 0.7 },
-      { view: "side", points: [[1.92, 0.865], [1.65, 0.92], [1.3, 0.99], [0.95, 1.05], [0.88, 1.07]], width: 0.006, depth: -0.006, profile: "v", cavity: 0.85 },
       { view: "top", points: [[1.92, 0.4], [1.65, 0.43], [1.45, 0.46], [1.25, 0.49]], width: 0.05, depth: 0.003, profile: "u", cavity: 0 },
       { view: "top", points: [[1.85, 0.6], [1.55, 0.6], [1.2, 0.6]], width: 0.03, depth: 0.0015, profile: "u", cavity: 0 },
       { view: "top", points: [[1.22, 0.46], [1.22, 0.58], [0.94, 0.58], [0.94, 0.46]], closed: true, width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
