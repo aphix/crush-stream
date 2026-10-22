@@ -115,6 +115,8 @@ export const HATCHBACK: BodyStyle = {
     st(1.74, 0.45, 0.618),
   ],
   roofZ: [-1.151, 0.421],
+  // The windshield top stood 8 mm over the crown at the roof's front end, a raised strip: the crown rolls onto it.
+  roofEnds: { front: 0.12 },
   windshieldTop: [1.162, 0.421],
   rearGlass: { base: [0.94, -1.61], top: [1.277, -1.15], wBase: 1.174, wTop: 0.9, frame: [0.05, 0.06, 0.11] },
   quarter: { zRearBot: -1.174, zRearTop: -1.07 },
