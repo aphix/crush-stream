@@ -756,7 +756,7 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
 /** A sail's foot stands at most this far (m) off the body's shoulder point it leaves, its face within `SAIL_LEAN_DEGREES` of the shoulder's tangent there (a flat post's foot stands 7-15 cm inboard, 35-45° off). */
 const SAIL_FOOT_OFF = 0.005;
 const SAIL_LEAN_DEGREES = 10;
-/** A flat sail eases into the roof end's roll over this run (m) behind the roof's rear end, its face's shape off its chord changing at most this many m per m of length on the way: the haunch-to-roll line a jump of 4.8 cm over 7 cm made. */
+/** A flat sail eases into the roof end's roll over this run (m) behind the roof's rear end unless its `cPillar.blend` says otherwise, its face's shape off its chord changing at most this many m per m of length on the way: the haunch-to-roll line a jump of 4.8 cm over 7 cm made. */
 const SAIL_ROLL_BLEND_TEST = 0.45;
 const SAIL_SHAPE_RATE = 0.25;
 /** A flat sail's outer face folds at most this much (°) across any of its sections: the coupe's head jumping back out ahead of its roof end folded 54°, and a sweep station 7 cm behind the roof end, where the head turns in round the glass's corner, 40°: hard lines. */
@@ -876,7 +876,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
   }
 
   for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.flat)) {
-    it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm behind its ${SAIL_ROLL_BLEND_TEST * 100} cm ease into the roof end's roll, no body point stands outside its line by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
+    it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm behind its ${(style.cPillar?.blend ?? SAIL_ROLL_BLEND_TEST) * 100} cm ease into the roof end's roll, no body point stands outside its line by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? style.quarter.zRearBot) - SAIL_SWEEP);
       const { ring, slices } = loftOf(sail);
@@ -894,7 +894,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         const bow = Math.max(...face.map((p) => Math.abs(outside(p.x, p.y))));
         const body = sectionPoints(sampleSlice(foot.z, style.profile), style, "drawn").filter((p) => p.x > 0 && p.y < head.y);
         const proud = Math.max(...body.map((p) => outside(p.x, p.y)));
-        const straight = foot.z <= style.roofZ[0] - SAIL_ROLL_BLEND_TEST - SAIL_ROOF_GAP;
+        const straight = foot.z <= style.roofZ[0] - (style.cPillar?.blend ?? SAIL_ROLL_BLEND_TEST) - SAIL_ROOF_GAP;
         if ((straight && bow > SAIL_FLAT_BOW) || proud > SAIL_SINK_TEST + 1e-4 || proud < 0) off.push(`z ${foot.z.toFixed(3)}: face bows ${(bow * 1000).toFixed(1)} mm, body stands ${(proud * 1000).toFixed(1)} mm outside its line`);
       }
       assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
