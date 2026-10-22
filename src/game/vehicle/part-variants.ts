@@ -611,8 +611,8 @@ function buildShape(shape: LampShape, skin: LampSkin, zEnd: number, tone: (geo: 
   skin.narrow([...loops.flat(), ...cells.flat(), ...strips.flat(), ...rounds]);
   const rings = loops.map((l) => skin.densify(l, true));
   const pieces: Piece[] = [
-    ...rings.map((r): Piece => [lampFill(skin, r, zEnd), LAMP_SHAPE.lens, shape.lens]),
-    ...cells.map((c, i): Piece => [lampFill(skin, skin.densify(c, true), zEnd), LAMP_SHAPE.cell, shape.cells![i]!.tone]),
+    ...rings.map((r): Piece => [lampFill(skin, r, zEnd, shape.fill), LAMP_SHAPE.lens, shape.lens]),
+    ...cells.map((c, i): Piece => [lampFill(skin, skin.densify(c, true), zEnd, shape.fill), LAMP_SHAPE.cell, shape.cells![i]!.tone]),
     ...strips.map((s, i): Piece => {
       const { width, tone: t } = shape.strips![i]!;
       return [lampRibbon(skin, skin.densify(s, false), false, [[-width / 2, 0], [width / 2, 0]]), LAMP_SHAPE.inlay, t];

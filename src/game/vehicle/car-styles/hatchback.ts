@@ -34,6 +34,8 @@ const HATCHBACK_LAMP_SHAPES = {
     lens: "lit",
     bezel: "black",
     recess: 0.01,
+    // The outer lens's 5 cm fill chords cut 6 mm inside the tail corner's roll (the skin showed through as a notch): 3.5 cm ones follow it.
+    fill: 0.035,
     strips: [
       { line: { points: [[0.28, 0.775], [0.41, 0.772]] }, width: 0.02, tone: "lit" },
       { line: { points: [[0.455, 0.772], [0.59, 0.8], [0.616, 0.8]] }, width: 0.02, tone: "lit" },
@@ -165,8 +167,8 @@ export const HATCHBACK: BodyStyle = {
   pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] }, rearFoot: [0.68, 0.895] },
   blackout: { b: true, divider: true },
   privacyGlass: { rear: true, quarter: true },
-  // The spoiler spans the roof's rear end, its side ends flush over the D-pillars' tops.
-  roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.52 } },
+  // The spoiler spans the roof's rear end out to its side lip, its side ends sloping down over the lip's tuck onto the D-pillars' tops.
+  roof: { spoiler: { z: [-1.24, -1.12], y: [1.22, 1.28], halfWidth: 0.6, ends: [0.08, 0.04] } },
   exhaust: { tips: 2, x: 0.5, y: 0.24, size: [0.1, 0.045], shape: "round" },
   details: {
     lines: [
