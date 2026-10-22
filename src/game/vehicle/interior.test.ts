@@ -295,7 +295,7 @@ describe("given a monster truck of its class at rest on flat ground", () => {
     lying.group.updateMatrixWorld(true);
     const own = new PartBatch(1);
     own.sync([lying]);
-    const mesh = own.kinds[PART_KIND.axle]![0]!;
+    const mesh = own.kinds[PART_KIND.axle]!;
     const pos = partGeometry(PART_KIND.axle).getAttribute("position");
     let low = Infinity;
     for (let k = 0; k < mesh.count; k++) {
