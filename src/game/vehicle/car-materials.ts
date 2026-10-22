@@ -346,19 +346,21 @@ const GLASS_LOOKS = {
   cracked: { opacity: 0.55, roughness: 0.32 },
 } as const satisfies Record<GlassLook, { opacity: number; roughness: number }>;
 const glassByLook = new Map<string, THREE.MeshStandardMaterial>();
+/** A privacy pane's floor opacity: its tint alone still let ~28% of the cabin through, so the reference's black rear glass read clear. */
+const PRIVACY_OPACITY = 0.93;
 
 /**
  * The one material every pane in `look` and `color` wears: a pane changes look by changing material, never by editing its own,
  * so a car's six panes and every other car's share it (the renderer re-sends a material's uniforms each time the draw
- * changes material, and a car's panes were six copies of one). Never edit what this returns.
+ * changes material, and a car's panes were six copies of one). `privacy` panes are near-opaque. Never edit what this returns.
  */
-export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR): THREE.MeshStandardMaterial {
-  const key = `${look}:${color}`;
+export function glassMaterial(look: GlassLook, color: number = GLASS_COLOR, privacy = false): THREE.MeshStandardMaterial {
+  const key = `${look}:${color}:${privacy}`;
   let m = glassByLook.get(key);
   if (m === undefined) {
     m = makeGlassMaterial();
     m.color.setHex(color);
-    m.opacity = GLASS_LOOKS[look].opacity;
+    m.opacity = privacy ? Math.max(GLASS_LOOKS[look].opacity, PRIVACY_OPACITY) : GLASS_LOOKS[look].opacity;
     m.roughness = GLASS_LOOKS[look].roughness;
     if (look === "cracked") m.map = getCrackMap();
     m.userData.shared = true;
