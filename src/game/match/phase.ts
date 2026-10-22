@@ -29,6 +29,27 @@ export const THROW_HOLD_SIM = THROW_HOLD * IMPACT_SCALE;
 export const PRE_IMPACT_LEAD = 0.2;
 /** Wall s between the sparks and dust the engine and the reel put at the predicted contact point while the slow-mo eases in, before the cars meet. */
 export const FUDGE_GAP = 0.08;
+/** A fudge burst is whole once the drawn bodies of its hit's cars (both of a pair) are this close (m, plan) to the point: the cars are touching it. */
+export const FUDGE_FULL = 0.3;
+/** ...and is not thrown with one of them this far (m) off or farther: sparks there hang in empty air, or spray off a parked bumper, before the cars meet (owner, 2026-10-21). */
+export const FUDGE_NONE = 1;
+
+/** Plan distance (m) from (x, z) to `car`'s drawn body (its `planBox` in the body frame, the car where it stands; 0 inside it). */
+export function bodyGap(car: DeformableCar, x: number, z: number): number {
+  const dx = x - car.group.position.x;
+  const dz = z - car.group.position.z;
+  const lx = dx * car.right.x + dz * car.right.z;
+  const lz = dx * car.forward.x + dz * car.forward.z;
+  const box = car.cage.fields.planBox;
+  return hypot2(Math.max(box[0]! - lx, 0, lx - box[1]!), Math.max(box[2]! - lz, 0, lz - box[3]!));
+}
+
+/** Share (0..1) of a full fudge burst at (x, z) with the hit's cars `a` and `b` (null: a wall or the slab): its cars' farther drawn body within `FUDGE_FULL` gives 1, from `FUDGE_NONE` on 0. Both cars of a pair must be there: sparks off a parked car's bumper with the other still metres off are early too. */
+export function fudgeStrength(x: number, z: number, a: DeformableCar, b: DeformableCar | null): number {
+  const gap = b ? Math.max(bodyGap(a, x, z), bodyGap(b, x, z)) : bodyGap(a, x, z);
+  return Math.min(1, Math.max(0, (FUDGE_NONE - gap) / (FUDGE_NONE - FUDGE_FULL)));
+}
+
 /**
  * Wall seconds a thrown driver's exit plays at 1× before the slow-mo: the owner's FlatOut onset (2026-10-02), so
  * nobody watches him slowly pass through the bonnet. Fleet head-ons judge the throw 17–50 ms into the hit.
@@ -231,6 +252,8 @@ export function pairEta(cars: readonly DeformableCar[], hit?: PredictedHit, minC
         hit.z = a.group.position.z + a.velocity.z * t + nz * halfA;
         hit.nx = nx;
         hit.nz = nz;
+        hit.a = a;
+        hit.b = b;
       }
       eta = Math.min(eta, t);
     }

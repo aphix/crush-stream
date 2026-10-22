@@ -8,7 +8,7 @@ import { CREASE_DEGREES, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry
 import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { archLipGeometry, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
-import { makeGreenhouseFrame } from "./car-greenhouse-mesh.ts";
+import { makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { DeformableCar } from "./car.ts";
 import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
 import { cageSourceOf } from "./car-cage-rig.ts";
@@ -290,13 +290,14 @@ describe("given every body style's chassis, whose nose and tail roll into the en
   }
 });
 
-/** Of each side's greenhouse parts the B pillar and the rail are the near-rectangular ones (the A and C pillars lean in plan, so their section is a sheared parallelogram); the headers are the last two. */
+/** Of each side's greenhouse parts the B pillar and the rail are the near-rectangular ones (the A and C pillars lean in plan, so their section is a sheared parallelogram). */
 const roundedPartCases = [
   { name: "B pillar", pick: (parts: THREE.BufferGeometry[]) => parts[1]! },
-  { name: "side rail", pick: (parts: THREE.BufferGeometry[]) => parts[parts.length - 3]! },
-  { name: "windshield header", pick: (parts: THREE.BufferGeometry[]) => parts[parts.length - 2]! },
-  { name: "rear glass header", pick: (parts: THREE.BufferGeometry[]) => parts[parts.length - 1]! },
+  { name: "side rail", pick: (parts: THREE.BufferGeometry[]) => parts.find((g) => g.name === "beltRail")! },
 ] as const;
+
+/** At the cant line the drawn roof's side keeps normals of its own, pointing out at least this much (x share), not down with its underside's. */
+const ROOF_SIDE_NORMAL_X = 0.8;
 
 describe("given every body style's greenhouse frame", () => {
   for (const id of CAR_STYLE_IDS) {
@@ -310,6 +311,37 @@ describe("given every body style's greenhouse frame", () => {
         }
       });
     }
+  }
+});
+
+describe("given every body style's drawn roof and greenhouse", () => {
+  for (const id of CAR_STYLE_IDS) {
+    it(`when a ${id}'s drawn greenhouse is read, then no part of it crosses the centre line: the roof alone covers both glass tops, no header bar stands on it (the cage keeps its two boxes)`, () => {
+      const crossing = (source: "drawn" | "cage") =>
+        makeGreenhouseFrame(CAR_STYLES[id], source).filter((g) => {
+          g.computeBoundingBox();
+          return g.boundingBox!.min.x < 0 && g.boundingBox!.max.x > 0;
+        }).length;
+      assert.equal(crossing("cage"), 2, "the control: the cage's two header boxes");
+      assert.equal(crossing("drawn"), 0, `${id}: drawn parts across the roof`);
+    });
+
+    it(`when a ${id}'s drawn roof side is read at mid-roof, then its normals at the cant line point out (x over ${ROOF_SIDE_NORMAL_X}), not down with the underside's: no grey band along the roof's edge`, () => {
+      const style = CAR_STYLES[id];
+      const roof = makeRoofGeometry(style);
+      roof.computeVertexNormals();
+      const pos = roof.getAttribute("position") as THREE.BufferAttribute;
+      const normal = roof.getAttribute("normal") as THREE.BufferAttribute;
+      const z = (style.roofZ[0] + style.roofZ[1]) / 2;
+      // The right side's lowest ring point at the mid station (a loft station) is the cant line; a crease copy shares its position.
+      let cant = { y: Infinity, nx: -1 };
+      for (let i = 0; i < pos.count; i++) {
+        if (Math.abs(pos.getZ(i) - z) > 1e-5 || pos.getX(i) <= 1e-6) continue;
+        if (pos.getY(i) < cant.y) cant = { y: pos.getY(i), nx: normal.getX(i) };
+        else if (pos.getY(i) === cant.y) cant.nx = Math.max(cant.nx, normal.getX(i));
+      }
+      assert.ok(cant.nx > ROOF_SIDE_NORMAL_X, `${id}: the roof's side at the cant line (y ${cant.y}) has normal x ${cant.nx} at most`);
+    });
   }
 });
 
@@ -448,7 +480,8 @@ describe("given every body style's car built whole", () => {
     const fittings = roofFittingVertices({ ...wagon, roof });
     assert.equal(fittings.byKind.length, 3, "the control: every kind is built");
     assertRoofFittingCaps("wagon", fittings.byKind);
-    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.all, makeChassisGeometry(wagon).getAttribute("position").count, "the fittings are all the body gains");
+    // Against the wagon with no fittings at all: the style itself may carry some.
+    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.all, makeChassisGeometry({ ...wagon, roof: undefined }).getAttribute("position").count, "the fittings are all the body gains");
   });
 });
 
