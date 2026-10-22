@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { hypot2 } from "../kernel/physics-core.js";
-import { lampEmissiveMap, makeLampUnit, type LampKind } from "./car-materials.ts";
+import { INSTANCE_PART_VARIANT_ATTRIBUTE, lampEmissiveMap, makeLampUnit, withPartVariants, type LampKind } from "./car-materials.ts";
+import { brakeLampUnit, lampBatchGeometry, sideMarkerUnit } from "./part-variants.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 
 /**
@@ -644,65 +645,111 @@ const LAMP_LOOK = {
   broken: { color: 0x5a5c60, emissive: 0x1a1b1c, emissiveIntensity: 0.12 },
 } as const;
 
+/** A car as the lamp batch reads it: its lamps (seat, state, kind, unit variant) and its drawn-only lamp fittings. */
+interface LampCar {
+  readonly lamps: readonly { readonly seat: THREE.Object3D; readonly intact: boolean; readonly kind: LampKind; readonly variant: number }[];
+  readonly lampFittings: readonly { readonly seat: THREE.Object3D; readonly kind: keyof typeof FITTING_MESH; readonly variant: number }[];
+}
+
+/** Each lamp fitting's mesh in `LampBatch.meshes`. */
+const FITTING_MESH = { brake: 4, marker: 5, hood: 6, boot: 7 } as const;
+
+/** Whether `seat` shows: on the camera's layer (distance detail) and visible up its parent chain. */
+function seatShown(seat: THREE.Object3D): boolean {
+  let shown = seat.layers.isEnabled(0);
+  for (let p: THREE.Object3D | null = seat; p && shown; p = p.parent) shown = p.visible;
+  return shown;
+}
+
 /**
  * Every car's lamp units as four instanced draws (head / tail × lit / broken) instead of four meshes per car. A car
  * keeps a bare Object3D per lamp that it seats on the skin, parented to the class lift but out of the scene graph; `sync`
  * brings each shown seat's world matrix current from the lift's and copies it into the batch for the lamp's kind and state.
+ * Styles that draw their own lamps (`lamps.shapes`) are variants in the same draws (`withPartVariants`); brake lamps, side markers
+ * and the lamps' shares on the hood and boot lid take four more, drawn only while a car on screen has them.
  */
 export class LampBatch {
-  /** Head lit, head broken, tail lit, tail broken. */
+  /** Head lit, head broken, tail lit, tail broken, brake, marker, the heads on the hood, the tails on the boot lid. */
   readonly meshes: readonly THREE.InstancedMesh[];
-  private readonly n = [0, 0, 0, 0];
+  private readonly n = [0, 0, 0, 0, 0, 0, 0, 0];
+  /** Per mesh, its instances' unit variants; null where every unit is the platform's (and for the fittings). */
+  private readonly variants: (THREE.InstancedBufferAttribute | null)[] = [];
+  /** Per mesh, the per-instance attributes a sync uploads. */
+  private readonly uploads: THREE.BufferAttribute[][] = [];
+  /** Geometries the batch built (the fittings' are shared). */
+  private readonly own: THREE.BufferGeometry[] = [];
 
   constructor(capacity: number) {
     const mat = (look: (typeof LAMP_LOOK)[keyof typeof LAMP_LOOK]) =>
       new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.25, emissiveMap: lampEmissiveMap(), ...look });
-    const broken = mat(LAMP_LOOK.broken);
-    this.meshes = (["head", "tail"] as const).flatMap((kind) => {
-      const geo = makeLampUnit(kind);
-      return [mat(LAMP_LOOK[kind]), broken].map((m) => {
-        const mesh = new THREE.InstancedMesh(geo, m, capacity);
-        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        // Instances span the pad and move every frame; a stale bound would cull live lamps.
-        mesh.frustumCulled = false;
-        mesh.count = 0;
-        return mesh;
-      });
-    });
+    const plain = { head: mat(LAMP_LOOK.head), tail: mat(LAMP_LOOK.tail), broken: mat(LAMP_LOOK.broken) };
+    const meshes: THREE.InstancedMesh[] = [];
+    const add = (geo: THREE.BufferGeometry, m: THREE.Material, count: number, variants: THREE.InstancedBufferAttribute | null) => {
+      const mesh = new THREE.InstancedMesh(geo, m, count);
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      // Instances span the pad and move every frame; a stale bound would cull live lamps.
+      mesh.frustumCulled = false;
+      mesh.count = 0;
+      meshes.push(mesh);
+      this.variants.push(variants);
+      this.uploads.push(variants ? [mesh.instanceMatrix, variants] : [mesh.instanceMatrix]);
+    };
+    for (const kind of ["head", "tail"] as const) {
+      // Lit and broken pack their own instances: a styled kind's two meshes each own a geometry for its per-instance variants.
+      const styled = [lampBatchGeometry(kind, capacity), lampBatchGeometry(kind, capacity)];
+      const shared = styled[0] ? null : makeLampUnit(kind);
+      for (const [k, look] of (["lit", "broken"] as const).entries()) {
+        const geo = styled[k] ?? shared!;
+        const m = look === "lit" ? plain[kind] : plain.broken;
+        add(geo, styled[k] ? withPartVariants(m.clone()) : m, capacity, styled[k] ? (geo.getAttribute(INSTANCE_PART_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute) : null);
+      }
+      this.own.push(...(shared ? [shared] : (styled as THREE.BufferGeometry[])));
+    }
+    add(brakeLampUnit(), plain.tail, capacity, null);
+    add(sideMarkerUnit(), plain.head, capacity * 2, null);
+    for (const [slot, look] of [["hood", plain.head], ["boot", plain.tail]] as const) {
+      const styled = lampBatchGeometry(slot, capacity);
+      const geo = styled ?? new THREE.BufferGeometry();
+      add(geo, styled ? withPartVariants(look.clone()) : look, capacity, styled ? (styled.getAttribute(INSTANCE_PART_VARIANT_ATTRIBUTE) as THREE.InstancedBufferAttribute) : null);
+      this.own.push(geo);
+    }
+    this.meshes = meshes;
   }
 
   /** Pack the shown lamps of `cars` (the cars' own world matrices must be current). A seat off layer 0 (distance detail) is hidden. */
-  sync(cars: readonly { readonly lamps: readonly { readonly seat: THREE.Object3D; readonly intact: boolean; readonly kind: LampKind }[] }[]): void {
+  sync(cars: readonly LampCar[]): void {
     const n = this.n;
     n.fill(0);
     for (const car of cars) {
       for (const l of car.lamps) {
-        let shown = l.seat.layers.isEnabled(0);
-        for (let p: THREE.Object3D | null = l.seat; p && shown; p = p.parent) shown = p.visible;
-        if (!shown) continue;
-        const b = (l.kind === "head" ? 0 : 2) + (l.intact ? 0 : 1);
-        const mesh = this.meshes[b]!;
-        l.seat.updateWorldMatrix(false, false);
-        if (n[b]! < mesh.instanceMatrix.count) mesh.setMatrixAt(n[b]!++, l.seat.matrixWorld);
+        if (!seatShown(l.seat)) continue;
+        this.put((l.kind === "head" ? 0 : 2) + (l.intact ? 0 : 1), l.seat, l.variant);
       }
+      for (const f of car.lampFittings) if (seatShown(f.seat)) this.put(FITTING_MESH[f.kind], f.seat, f.variant);
     }
-    for (let b = 0; b < 4; b++) {
-      const mesh = this.meshes[b]!;
-      mesh.count = n[b]!;
-      const attr = mesh.instanceMatrix;
-      attr.clearUpdateRanges();
-      attr.addUpdateRange(0, n[b]! * 16);
-      attr.needsUpdate = true;
+    for (let b = 0; b < this.meshes.length; b++) {
+      this.meshes[b]!.count = n[b]!;
+      for (const attr of this.uploads[b]!) {
+        attr.clearUpdateRanges();
+        attr.addUpdateRange(0, n[b]! * attr.itemSize);
+        attr.needsUpdate = true;
+      }
     }
   }
 
+  private put(b: number, seat: THREE.Object3D, variant: number): void {
+    const mesh = this.meshes[b]!;
+    const i = this.n[b]!;
+    if (i >= mesh.instanceMatrix.count) return;
+    seat.updateWorldMatrix(false, false);
+    mesh.setMatrixAt(i, seat.matrixWorld);
+    this.variants[b]?.setX(i, variant);
+    this.n[b] = i + 1;
+  }
+
   dispose(): void {
-    const mats = new Set<THREE.Material>();
-    for (const m of this.meshes) {
-      m.geometry.dispose();
-      mats.add(m.material as THREE.Material);
-      m.dispose();
-    }
-    for (const m of mats) m.dispose();
+    for (const g of this.own) g.dispose();
+    for (const m of new Set(this.meshes.map((mesh) => mesh.material as THREE.Material))) m.dispose();
+    for (const m of this.meshes) m.dispose();
   }
 }

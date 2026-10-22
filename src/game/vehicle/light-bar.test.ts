@@ -5,6 +5,8 @@ import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
 import { LIGHT_BAR_FOOT, LIGHT_BAR_LENS, makeLightBar, withPushBar } from "./car-materials.ts";
 import { makeBumperGeometry } from "./car-mesh.ts";
+import { withRearFittings } from "./car-fittings-mesh.ts";
+import { withSeamCover } from "./part-variants.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { BAR_FOLD, hingePose } from "./part-pose.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
@@ -206,7 +208,7 @@ describe("given the light bar and the push bar as the reference cruiser wears th
     assert.equal(moved, 0, "the bumper's own vertices moved");
   });
 
-  it("when a police and a sedan are built, then the police's front bumper mesh carries its push bar and the sedan's is its bare fascia, their rear bumpers alike", () => {
+  it("when a police and a sedan are built, then the police's front bumper mesh carries its push bar and the sedan's is its bare fascia with its seam cover, and each rear bumper is its own fascia (the sedan's with its cover)", () => {
     const scene = new THREE.Scene();
     const [police, sedan] = (["police", "sedan"] as const).map((id) => new DeformableCar(paint(), scene, null, id));
     const box = (car: DeformableCar, i: 0 | 1): THREE.Box3 => {
@@ -214,12 +216,18 @@ describe("given the light bar and the push bar as the reference cruiser wears th
       geo.computeBoundingBox();
       return geo.boundingBox!;
     };
-    const bare = makeBumperGeometry(true, CAR_STYLES.sedan);
-    bare.computeBoundingBox();
+    const geoBox = (geo: THREE.BufferGeometry): THREE.Box3 => {
+      geo.computeBoundingBox();
+      return geo.boundingBox!;
+    };
+    const bare = geoBox(makeBumperGeometry(true, CAR_STYLES.sedan));
+    const covered = geoBox(withSeamCover(makeBumperGeometry(true, CAR_STYLES.sedan), CAR_STYLES.sedan, true));
     const [cop, plain] = [box(police!, 0), box(sedan!, 0)];
-    assert.ok(plain.max.z === bare.boundingBox!.max.z && plain.max.y === bare.boundingBox!.max.y, `sedan front bumper face ${plain.max.z}, top ${plain.max.y}: its fascia's`);
-    assert.ok(cop.max.z - plain.max.z > 0.08 && cop.max.y - plain.max.y > 0.15, `police front bumper face ${cop.max.z} (sedan ${plain.max.z}), top ${cop.max.y} (sedan ${plain.max.y})`);
+    assert.ok(plain.equals(covered), `sedan front bumper face ${plain.max.z}, top ${plain.max.y}: its fascia's with its seam cover`);
+    assert.ok(cop.max.z - bare.max.z > 0.08 && cop.max.y - bare.max.y > 0.15, `police front bumper face ${cop.max.z} (bare fascia ${bare.max.z}), top ${cop.max.y} (bare fascia ${bare.max.y})`);
     const [copRear, plainRear] = [box(police!, 1), box(sedan!, 1)];
-    assert.ok(Math.abs(copRear.max.z - plainRear.max.z) < 1e-6 && Math.abs(copRear.max.y - plainRear.max.y) < 1e-6, "the rear bumpers stand alike");
+    const copFascia = geoBox(withRearFittings(makeBumperGeometry(false, CAR_STYLES.police), CAR_STYLES.police));
+    const sedanDrawn = geoBox(withSeamCover(withRearFittings(makeBumperGeometry(false, CAR_STYLES.sedan), CAR_STYLES.sedan), CAR_STYLES.sedan, false));
+    assert.ok(copRear.equals(copFascia) && plainRear.equals(sedanDrawn), "each rear bumper is its own fascia, the sedan's with its seam cover");
   });
 });
