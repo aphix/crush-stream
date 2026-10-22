@@ -342,6 +342,29 @@ function rearFootPlate(sign: number, rb: V3, fb: V3, foot: V3): THREE.BufferGeom
   return geo;
 }
 
+/** A glass bar stands this far (m) off the side glass's plane: clear of the pane, flat on it. */
+const GLASS_BAR_PROUD = 0.002;
+/** A glass bar's foot runs this far (m) under the belt, into the belt seal, like a post's. */
+const GLASS_BAR_SINK = 0.02;
+
+/** The drawn glass bar (`pillars.glassBar`, +x side; sign -1 mirrors): a flat strip on the side glass from under the belt to the glass's top, then up into the roof's side. */
+function glassBar(sign: number, style: BodyStyle, { width: [wBelt, wTop], z: [zBelt, zTop] }: Required<PillarSpan>): THREE.BufferGeometry {
+  const at = (z: number, y: number): V3 => [sign * underRoofSide(onGlassPlane(z, y, style, GLASS_BAR_PROUD), y, z, style), y, z];
+  const row = (zc: number, w: number, y: (z: number) => number) => [at(zc - w / 2, y(zc - w / 2)), at(zc + w / 2, y(zc + w / 2))];
+  const corners = [
+    ...row(zBelt, wBelt, (z) => beltY(z, style) - GLASS_BAR_SINK),
+    ...row(zTop, wTop, (z) => glassTopY(z, style)),
+    ...row(zTop, wTop, (z) => cantY(z, style) + PILLAR_TOP_RISE),
+  ];
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(corners.flat(), 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(2 * corners.length), 2));
+  // Rows rear/front: (a, b) under (c, d); the +x side's quads wound outward, the mirror's reversed.
+  geo.setIndex([0, 2].flatMap((a) => (sign > 0 ? [a, a + 2, a + 3, a, a + 3, a + 1] : [a, a + 3, a + 2, a, a + 1, a + 3])));
+  geo.computeVertexNormals();
+  return geo;
+}
+
 /** The drawn A-post's depth inward (m): a slim post, not a slab. */
 const A_POST_THICK = 0.03;
 /** The drawn A-post's face crowns this share of its width: its normals fan ±30° across it, turning from the side glass to the windshield, not a flat plank. */
@@ -907,6 +930,8 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       );
     }
     if (aPost?.sail) parts.push(pillar(roundedPillarAlong(sign, aPost.sail, SAIL_THICK), "sail"));
+    const bar = source === "drawn" ? style.pillars?.glassBar : undefined;
+    if (bar) parts.push(Object.assign(pillar(glassBar(sign, style, bar), "divider"), { name: "glassBar" }));
     // The belt rail runs from the C-pillar to the B-pillar along the sill: the cage's box pitched straight between its ends, the drawn seal along the quarter glass's sill.
     if (source === "drawn") {
       parts.push(drawnBeltRail(sign, style), ...glassTopFill(sign, style, aTopZ));

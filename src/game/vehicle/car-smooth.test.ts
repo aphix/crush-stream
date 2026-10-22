@@ -968,6 +968,50 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
   });
 });
 
+/** A glass bar (`pillars.glassBar`) stands at most this far (m) off the side glass's plane, never under it; its ends keep their width and centre within this (m). */
+const GLASS_BAR_STAND = 0.003;
+const GLASS_BAR_FIT = 0.001;
+/** The sedan with the reference side view's 2.2 cm black bar on its rear door's glass. */
+const BARRED_SEDAN: BodyStyle = {
+  ...CAR_STYLES.sedan,
+  pillars: { ...CAR_STYLES.sedan.pillars, glassBar: { width: [0.022, 0.022], z: [-0.866, -0.884] } },
+  blackout: { ...CAR_STYLES.sedan.blackout, divider: true },
+};
+
+describe("given a style that stands a bar on its side glass (`pillars.glassBar`)", () => {
+  it(`when its drawn greenhouse is read, then each side carries one black strip on the glass, within ${GLASS_BAR_STAND * 1000} mm off its plane and never under it, its width about its centre line at the belt and at the top; the cage carries none`, () => {
+    const { width, z } = BARRED_SEDAN.pillars!.glassBar!;
+    const bars = makeGreenhouseFrame(BARRED_SEDAN, "drawn").filter((g) => g.name === "glassBar");
+    assert.ok(bars.length === 2, `${bars.length} bars drawn`);
+    assert.ok(makeGreenhouseFrame(BARRED_SEDAN, "cage").every((g) => g.name !== "glassBar"), "the cage carries a bar");
+    const off: string[] = [];
+    for (const bar of bars) {
+      if (bar.userData.blackout !== true) off.push("not toned black");
+      const p = Array.from({ length: bar.getAttribute("position").count }, (_, i) => positionAt(bar, i));
+      // Its surface, not only its corners: points over each triangle on a 4-step grid, read where the glass is.
+      const idx = bar.getIndex()!.array;
+      for (let t = 0; t < idx.length; t += 3) {
+        const [a, b, c] = [p[idx[t]!]!, p[idx[t + 1]!]!, p[idx[t + 2]!]!];
+        for (let i = 0; i <= 4; i++)
+          for (let j = 0; j <= 4 - i; j++) {
+            const v = a.clone().multiplyScalar(1 - (i + j) / 4).addScaledVector(b, i / 4).addScaledVector(c, j / 4);
+            if (v.y > glassTopY(v.z, BARRED_SEDAN) + 1e-4) continue;
+            const plane = THREE.MathUtils.lerp(beltX(v.z, BARRED_SEDAN), cantX(v.z, BARRED_SEDAN), (v.y - beltY(v.z, BARRED_SEDAN)) / (cantY(v.z, BARRED_SEDAN) - beltY(v.z, BARRED_SEDAN)));
+            const stand = Math.abs(v.x) - plane;
+            if (stand < 0 || stand > GLASS_BAR_STAND) off.push(`(${v.x.toFixed(3)}, ${v.y.toFixed(3)}, ${v.z.toFixed(3)}) stands ${(stand * 1000).toFixed(1)} mm off the glass`);
+          }
+      }
+      const ends = [p.filter((v) => v.y < beltY(v.z, BARRED_SEDAN) - 0.01), p.filter((v) => Math.abs(v.y - glassTopY(v.z, BARRED_SEDAN)) < 1e-4)];
+      for (const [k, end] of ends.entries()) {
+        const [lo, hi] = [Math.min(...end.map((v) => v.z)), Math.max(...end.map((v) => v.z))];
+        if (end.length !== 2 || Math.abs(hi - lo - width[k]!) > GLASS_BAR_FIT || Math.abs((hi + lo) / 2 - z[k]!) > GLASS_BAR_FIT)
+          off.push(`${k === 0 ? "belt" : "top"} end: ${end.length} points, z ${lo.toFixed(4)} to ${hi.toFixed(4)}`);
+      }
+    }
+    assert.ok(off.length === 0, off.join("; "));
+  });
+});
+
 /** A flush sail's head (`cPillar.flush`) stands at most this far (m) over the drawn rear glass (a chrome bead's 5 mm, its rounded edge's 2.5 mm radius where the section rises steeply into it, and a mm), and laps at least this far in over its side edge, so the glass's edge lies under the sail. */
 const SAIL_FLUSH_HEIGHT = 0.0085;
 const SAIL_FLUSH_LAP_MIN = 0.005;
