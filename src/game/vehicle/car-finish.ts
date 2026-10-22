@@ -214,12 +214,12 @@ const TRIM_FADE_START_M = 4;
 const TRIM_FADE_END_M = 16;
 /**
  * The peel is drawn 50 times its real relief so it survives the pixel at play distance; up close, where its 15 mm waves span many
- * pixels, that relief reads as hammered metal, so it keeps `PEEL_NEAR_SHARE` of its height nearer than `PEEL_NEAR_M`, rising to the
- * full tuned height at `PEEL_FULL_M` (the distance it was tuned at). Tuned from shots.
+ * pixels, that relief reads as hammered metal, so it keeps `PEEL_NEAR_SHARE` of its height nearer than `PEEL_NEAR_M`, rising to its
+ * full height only at `PEEL_FULL_M`, past the garage's opening orbit, where full height read hammered on silver and red hoods.
  */
 const PEEL_NEAR_SHARE = 0.25;
 const PEEL_NEAR_M = 2;
-const PEEL_FULL_M = 4.5;
+const PEEL_FULL_M = 9;
 /** Linear luma over which paint keeps its peel and flake: near-black albedo leaves their slopes as sparse glints that read as brown speckle. */
 const DARK_LUMA_FROM = 0.004;
 const DARK_LUMA_TO = 0.04;
