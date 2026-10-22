@@ -1369,7 +1369,9 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Both trucks re-pinned for their smooth roof crown (`roofSection`, square over the windshield) the panes' tops follow; the pickup's for its
   // rear glass's top raised under the roof's rolled end (y 1.6 -> 1.635) and its panes taking the whole dome.
   // The pickup's again for its door glass starting back where the side plate's does (`aPillarFoot` .7 -> .6, `aPillarTop` .41 -> .34): the A-post box moved.
-  { id: "pickup", digest: "0b9b6e97b2becde393bada56d59a0c480517bbc57b7692e2dc39ab47f131e85b" },
+  // The pickup's again for its windshield's foot forward to the side plate's edge (`windshield.base` z .9 -> .957: the A-post box moved) and its roof's
+  // rear end over its rear glass's top (`roofZ[0]` -0.5 -> -0.46), its mid-cab roof 5 mm up to its dims' height.
+  { id: "pickup", digest: "f1045fee690daedf443811ac8d243a6807f4829da983f7d47de113837b6236dd" },
   { id: "police", digest: "26d74836366ea758cb090a8f2908702c95392a9fe06faecc1d598e2f9b13404e" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55); again for its windshield base at the side
   // plate's (`windshield.base` [1.0, .92] -> [1.05, .98]) and its door glass starting back at .60 (`aPillarFoot` .74 -> .6): the glass-front and A-post boxes moved.

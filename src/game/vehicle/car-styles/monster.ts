@@ -69,6 +69,8 @@ export const MONSTER: BodyStyle = {
   aPillarFoot: 0.6,
   aPillarTop: 0.41,
   bPillar: { rear: -0.19, front: -0.12 },
+  // The side plate's B-post stands upright between the door glasses, z -.214 to -.128.
+  pillars: { b: { width: [0.086, 0.086], z: [-0.171, -0.171] } },
   arch: { radius: 0.47, rise: 0.83, lip: { flare: 0.028, width: 0.085, square: true, inset: 0.03 }, wellWall: 0.56 },
   hood: { z0: 0.94, z1: 2.1, origin: [0.96, 0.92], nose: [0.022, 0.02] },
   bumpers: {
