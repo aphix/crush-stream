@@ -645,12 +645,14 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
       ...edge(0).reverse(),
     ];
   };
-  // A flat sail takes on the roof end's roll over the run behind it: each outer point moves toward that section's own place off its chord,
-  // mapped onto the ring's chord, so no line stands where the flat haunch meets the roll.
+  // A flat sail takes on the roof end's roll over the run behind it, and lets it go over the run ahead of it to its front ring (the post's
+  // top): each outer point moves toward that section's own place off its chord, mapped onto the ring's chord, so no line stands where
+  // the flat haunch meets the roll, nor where the roll meets the post.
   const rollEnd = style.cPillar?.flat === true && roofEndZ < style.roofZ[0] ? section(roofEndZ) : null;
+  const front = zs[zs.length - 1]!;
   const rings = zs.map((z): Pt[] => {
     const ring = section(z);
-    const w = rollEnd && z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - SAIL_ROLL_BLEND, roofEndZ) : 0;
+    const w = !rollEnd || z === roofEndZ ? 0 : z < roofEndZ ? THREE.MathUtils.smoothstep(z, roofEndZ - SAIL_ROLL_BLEND, roofEndZ) : 1 - THREE.MathUtils.smoothstep(z, roofEndZ, front);
     if (w === 0) return ring;
     const [a, b] = [rollEnd![0]!, rollEnd![SAIL_OUTER - 1]!];
     const endRun = hypot2(b.x - a.x, b.y - a.y);

@@ -845,7 +845,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
       assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
     });
-    it(`when a ${id}'s flat sail is read from its rear end to the roof's rear end, then its outer face's shape off its chord changes at most ${SAIL_SHAPE_RATE} m per m of length between sections (no line where the flat haunch meets the roof's roll)`, () => {
+    it(`when a ${id}'s flat sail is read from its rear end to its front, then its outer face's shape off its chord changes at most ${SAIL_SHAPE_RATE} m per m of length between sections (no line where the flat haunch meets the roof's roll, nor where the roll meets the post ahead of it)`, () => {
       const style = CAR_STYLES[id];
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const { ring, slices } = loftOf(sail);
@@ -854,7 +854,8 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       for (let s = 0; s < slices; s++) {
         const face = Array.from({ length: SAIL_OUTER_POINTS }, (_, k) => positionAt(sail, s * ring + k));
         const [foot, head] = [face[0]!, face.at(-1)!];
-        if (foot.z >= style.roofZ[0]) break;
+        // The sail's front ring stands at the post's top under the roof: the window's line closes on the roof there and the section is the post's own.
+        if (s === slices - 1) break;
         const run = Math.hypot(head.x - foot.x, head.y - foot.y);
         profiles.push({ z: foot.z, offsets: face.map((p) => ((p.x - foot.x) * (head.y - foot.y) - (p.y - foot.y) * (head.x - foot.x)) / run) });
       }
@@ -1218,7 +1219,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   { id: "hatchback", digest: "a754e5e373f501c475d3f3900641113c9c2d1c1e90f5cef395ed9857bc1f3b55" },
   { id: "wagon", digest: "367e3e9f9994b45c27fa7de342de7c0deee14a978bb430438240e2f3d7c7f5bb" },
   // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above), and its drawn roof rolled onto the windshield's top (`roofEnds.front`).
-  { id: "coupe", digest: "83b21fbee58ab2628855d2917605f342099763f4c7a435e484fd02a5485af18c" },
+  // Re-pinned for its rear glass's round outline (`rearGlass.roundOutline`): the frit's corner fans are gone from the pane, whose drawn vertices are the glass panel's cage-skinned rest.
+  { id: "coupe", digest: "f15054751ec70f175582161b2cd001a09e3536ab748fd697deff1ddc4f128d82" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open; both trucks for the greenhouse's dome-following panes and posts.

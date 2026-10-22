@@ -209,7 +209,8 @@ function roundedOutline(q: BowedQuad, round: number, segX: number): [number, num
 /**
  * An unframed pane whose clear glass has `round` (m) corners: its grid gains `ROUND_STEPS` lines through each corner's square, whose
  * points map onto the corner's quarter circle (each square ring about the circle's centre onto the circle of its size); a black frit
- * fan fills each square corner out to the arc, so the glass's outline stays square, while the chrome bead follows the arcs.
+ * fan fills each square corner out to the arc, so the glass's outline stays square, while the chrome bead follows the arcs. With
+ * `roundOutline` there are no fans: the glass's outline is the arcs.
  */
 function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): THREE.BufferGeometry {
   const { rS, rT, lines, arc, rim: cornerRim } = roundCorners(q, round);
@@ -224,7 +225,7 @@ function roundedGlass(q: BowedQuad, round: number, { segX, segY }: QuadDraw): TH
     }
   }
   const pane = paneGeometry(ts.flatMap((t) => ss.map((s) => arc(s, t))), at, grid, 0);
-  const fans = [0, 1].flatMap((sEdge) =>
+  const fans = (q.roundOutline ? [] : [0, 1]).flatMap((sEdge) =>
     [0, 1].map((tEdge) => {
       const rim = cornerRim(sEdge, tEdge);
       // Counter-clockwise in (s, t), as the grid's triangles are.
