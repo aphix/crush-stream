@@ -2226,6 +2226,24 @@ describe("given a body style's P2 parts", () => {
     assert.ok(mirrorSeatX(nose!.style) === mirrorSeatX(rounded!.style) && cageHash(nose!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
   });
 
+  it("when a mirror's cap is rounder (`round`), then its outer face's flat run is shorter by twice the radius it grows, and the seat and cage builds are unchanged", () => {
+    const size = [0.06, 0.12, 0.15] as const;
+    const [w, h] = size;
+    const [plain, round] = ([undefined, 0.48] as const).map((share) => {
+      const style = mirrorStyle({ cap: "rounded", finish: "body", size, ...(share === undefined ? {} : { round: share }) });
+      const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
+      const [pos, painted] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE)];
+      const scaleX = style.door.mirrorReach / MIRROR_REACH;
+      let outer = 0;
+      for (let i = 0; i < pos.count; i++) if (painted.getX(i) === 1) outer = Math.max(outer, Math.abs(pos.getX(i)) * scaleX);
+      const face = new THREE.Box3();
+      for (let i = 0; i < pos.count; i++) if (painted.getX(i) === 1 && Math.abs(pos.getX(i)) * scaleX >= outer - 1e-4) face.expandByPoint(new THREE.Vector3(0, pos.getY(i), pos.getZ(i)));
+      return { style, run: face.max.y - face.min.y };
+    });
+    assertSameNumbers([plain!.run, round!.run], [h - 2 * 0.35 * w, h - 2 * 0.48 * w], "the outer face's flat run up the cap (default, round 0.48)", 1e-4);
+    assert.ok(mirrorSeatX(round!.style) === mirrorSeatX(plain!.style) && cageHash(round!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
+  });
+
   it("when a mirror is lifted, then its cap rises that far over the seat while its foot still starts on the drawn skin, and the seat and cage builds are unchanged", () => {
     const spec = { cap: "rounded", finish: "body", size: [0.1, 0.07, 0.1] } as const;
     const flat = readMirror(mirrorStyle(spec));

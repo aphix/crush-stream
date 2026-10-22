@@ -349,8 +349,9 @@ export interface BodyStyle {
      * `stalk` (m): the foot's length along the car, a slim post under the head; absent = 0.7 of the cap's depth.
      * `neck` (m): the foot runs this far below the head's bottom, an arm holding the head up off the belt; absent = 0.7 of the cap's height, hidden behind it.
      * `mount` "glass": the seat stands on the door glass's plane at its z and height (`mirrorY` may stand over `halfHeight`), its foot leaning with the pane, as a tow mirror on the glass's front corner; absent, on the skin.
+     * `round`: a rounded, tear or nose cap's edge radius as a share of its smallest side (absent `MIRROR_CAP_ROUND`, 0.35); toward 0.5 the outer end rounds right across that side.
      */
-    mirror?: { cap: "rounded" | "box" | "tear" | "nose"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass" };
+    mirror?: { cap: "rounded" | "box" | "tear" | "nose"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass"; round?: number };
     hingeTop?: number;
     /** Drawn only: the door skin's outer face stands this far (m) over the body side inside its cut (absent `DOOR_PROUD`, 3 mm); 0: flush, the shut line a groove only. */
     proud?: number;

@@ -91,7 +91,7 @@ export const HATCHBACK: BodyStyle = {
     },
   },
   // The reference's mirror: a body-colour head tapering to its nose, standing clear over the belt on a black sail in the glass's front corner, about 3 cm past the body side.
-  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.075, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62], mirror: { cap: "nose", finish: "body", size: [0.065, 0.12, 0.14], lift: 0.075, neck: 0.03, stalk: 0.1 } },
+  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.075, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62], mirror: { cap: "nose", finish: "body", size: [0.065, 0.12, 0.14], lift: 0.075, neck: 0.03, stalk: 0.1, round: 0.48 } },
   aPillarFoot: 0.73,
   aPillarTop: 0.212,
   glassTop: 0.045,

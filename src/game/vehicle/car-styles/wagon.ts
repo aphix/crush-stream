@@ -100,7 +100,7 @@ export const WAGON: BodyStyle = {
     },
   },
   // The reference's mirror: a black head tapering to its nose, standing clear over the belt on a slim neck, about 4 cm past the body side, 17 cm along it.
-  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.065, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "nose", finish: "black", size: [0.06, 0.13, 0.17], lift: 0.09, neck: 0.035, stalk: 0.06 } },
+  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.065, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "nose", finish: "black", size: [0.06, 0.13, 0.17], lift: 0.09, neck: 0.035, stalk: 0.06, round: 0.48 } },
   aPillarFoot: 0.66,
   aPillarTop: 0.17,
   glassTop: 0.05,
@@ -145,7 +145,8 @@ export const WAGON: BodyStyle = {
   roofZ: [-1.84, 0.3],
   windshieldTop: [1.45, 0.3],
   rearGlass: { base: [1.1, -2.065], top: [1.47, -1.79], wBase: 1.22, wTop: 0.92 },
-  quarter: { zRearBot: -1.945, zRearTop: -1.67 },
+  // The quarter glass runs back to a slim D-post, as the reference's rear iso.
+  quarter: { zRearBot: -1.995, zRearTop: -1.72 },
   midPillarZ: -1.2,
   rearBulkhead: { z: -1.3, yTop: 1.0 },
   tubs: [[-1.96, 0.7, 0.38]],
