@@ -168,6 +168,30 @@ export interface Beam {
   restDir: THREE.Vector3;
 }
 
+/** A5 skin tables (`DeformRig.buildSkinWeights`): per point its cluster count `sN`, cluster map offsets `sXf` and weights `sW` (`SKIN_K` slots), its parent mass offsets `rJ` (index × 3) and weights `rW` (`RES_SLOTS` slots), and their weighted rest centroid `rC`. */
+interface SkinPointTables {
+  readonly sN: Uint8Array;
+  readonly sXf: Int32Array;
+  readonly sW: Float64Array;
+  readonly rJ: Int32Array;
+  readonly rW: Float64Array;
+  readonly rC: Float64Array;
+}
+
+/** The A5 tables of a mesh outside the body skin (`DeformRig.bindPoints`), for its `count` vertices. */
+export interface PointSkin extends SkinPointTables {
+  readonly count: number;
+}
+
+/** The cabin section and the sill's rule for which skin follows only the cell (D1, `DeformRig.skinZones`). */
+interface SkinZones {
+  readonly span: Cage;
+  inCell(x: number, y: number, z: number): boolean;
+  cellOnly(x: number, y: number, z: number, hub: number): boolean;
+}
+
+type SkinParentRule = (rx: number, ry: number, rz: number, i: number, t: SkinPointTables) => void;
+
 type KeyMass = "cell" | "roof" | "engineL" | "engineR" | "axleR" | "doorL" | "doorR" | "hubFL" | "hubFR" | "hubRL" | "hubRR" | "bumperFL" | "bumperFR" | "bumperRL" | "bumperRR";
 
 /** The soft body's state and build. Layers stack `DeformRig` → `DeformHit` → `DeformState` → `DeformContact` → `DeformSolve` →
@@ -654,20 +678,9 @@ export abstract class DeformRig {
     }
   }
 
-  /** Rest-only skin tables: cluster weights per vertex and cage corner, the parent masses of every skin point (A5), the hub that plants each arch vertex. */
-  private buildSkinWeights(): void {
-    const n = this.vertexCount;
-    const points = n + this.cages.length * 8;
-    this.skinN = new Uint8Array(n);
-    this.skinXf = new Int32Array(n * SKIN_K);
-    this.skinW = new Float64Array(n * SKIN_K);
-    this.skinHub = new Int32Array(n).fill(-1);
-    this.resJ = new Int32Array(points * RES_SLOTS);
-    this.resW = new Float64Array(points * RES_SLOTS);
-    this.resC = new Float64Array(points * 3);
-    this.massPos = new Float64Array(this.masses.length * 3);
-    this.clusterXf = new Float64Array(this.clusters.length * 9);
-    const cms = this.clusters.map((c) => {
+  /** Each shape cluster's mass-weighted rest centroid: the centre its skin weights fall off from. */
+  private clusterCentres(): { x: number; y: number; z: number }[] {
+    return this.clusters.map((c) => {
       let x = 0,
         y = 0,
         z = 0,
@@ -682,20 +695,39 @@ export abstract class DeformRig {
       m = Math.max(m, 1e-8);
       return { x: x / m, y: y / m, z: z / m };
     });
-    // D1: skin in the cabin section (the chassisCell cage's z span, above its floor) follows only the clusters that
-    // hold the cell mass, so A-pillar and footwell skin cannot ride the crushed nose into the cabin. Within
-    // CELL_FACE_BLEND of the span's front or rear face up to CELL_FACE_SHARE of the nearest other cluster blends back in.
+  }
+
+  /**
+   * D1: skin in the cabin section (the chassisCell cage's z span, above its floor) follows only the clusters and masses that hold the cell, so
+   * A-pillar and footwell skin cannot ride the crushed nose into the cabin; within CELL_FACE_BLEND of the span's front or rear face up to
+   * CELL_FACE_SHARE of the nearest other cluster blends back in. The sill (skin below the arch top between the axles, outside the arches) is
+   * the cell's rocker and follows the cell's clusters too: on the nose's clusters, which a frontal crush turns, it swung into the standing front tyre.
+   */
+  private skinZones(): SkinZones {
     const span = this.cageByPart.get("chassisCell")!;
-    const cellMass = this.masses.indexOf(this.at.cell);
-    const holdsCell = this.clusters.map((c) => c.idx.includes(cellMass));
     const inCell = (x: number, y: number, z: number): boolean => z >= span.min.z && z <= span.max.z && y >= span.min.y;
-    // The sill (skin below the arch top between the axles, outside the arches) is the cell's rocker and follows the cell's clusters too:
-    // on the nose's clusters, which a frontal crush turns, it swung into the standing front tyre.
     const axleF = Math.max(...this.masses.filter((m) => m.hub).map((m) => m.rest.z));
     const axleR = Math.min(...this.masses.filter((m) => m.hub).map((m) => m.rest.z));
-    // A5 parents: the RES_K nearest non-hub masses by 1/(d² + RES_SOFT), less the (RES_K+1)th's weight so a
-    // parent fades out before it is swapped (no seam where the nearest set changes). A cabin point takes
-    // cabin masses only (D1), plus the cell-face share of the nearest other mass.
+    const { archTop } = this.rig;
+    return {
+      span,
+      inCell,
+      cellOnly: (x, y, z, hub) => inCell(x, y, z) || (y < archTop && z < axleF && z > axleR && hub < 0),
+    };
+  }
+
+  /** The hub (mass index) that plants a skin point at rest (x, y, z) as wheel arch: below `archTop`, within `archPlant` of its rest; else −1. */
+  private archHub(x: number, y: number, z: number): number {
+    const { archTop, archPlant } = this.rig;
+    return y < archTop ? this.masses.findIndex((m) => m.hub && hypot2(x - m.rest.x, z - m.rest.z) <= archPlant) : -1;
+  }
+
+  /**
+   * A5 parents: the RES_K nearest non-hub masses by 1/(d² + RES_SOFT), less the (RES_K+1)th's weight so a parent fades out before it is
+   * swapped (no seam where the nearest set changes). A cabin point takes cabin masses only (D1), plus the cell-face share of the nearest other mass.
+   */
+  private parentRule(zones: SkinZones): SkinParentRule {
+    const { span, inCell } = zones;
     const body = this.masses.flatMap((m, j) => (m.hub ? [] : [j]));
     const cabinBody = body.filter((j) => inCell(this.masses[j]!.rest.x, this.masses[j]!.rest.y, this.masses[j]!.rest.z));
     const outside = body.filter((j) => !cabinBody.includes(j));
@@ -706,7 +738,7 @@ export abstract class DeformRig {
           return { j, w: 1 / ((rx - r.x) ** 2 + (ry - r.y) ** 2 + (rz - r.z) ** 2 + RES_SOFT) };
         })
         .sort((a, b) => b.w - a.w);
-    const parents = (rx: number, ry: number, rz: number, i: number): void => {
+    return (rx, ry, rz, i, t) => {
       const cabin = inCell(rx, ry, rz);
       const ds = near(rx, ry, rz, cabin ? cabinBody : body);
       const floor = ds.length > RES_K ? ds[RES_K]!.w : 0;
@@ -723,25 +755,23 @@ export abstract class DeformRig {
       for (let k = 0; k < ds.length; k++) {
         const { j, w } = ds[k]!;
         const r = this.masses[j]!.rest;
-        this.resJ[i * RES_SLOTS + k] = j * 3;
-        this.resW[i * RES_SLOTS + k] = w;
-        this.resC[i * 3] += r.x * w;
-        this.resC[i * 3 + 1] += r.y * w;
-        this.resC[i * 3 + 2] += r.z * w;
+        t.rJ[i * RES_SLOTS + k] = j * 3;
+        t.rW[i * RES_SLOTS + k] = w;
+        t.rC[i * 3] += r.x * w;
+        t.rC[i * 3 + 1] += r.y * w;
+        t.rC[i * 3 + 2] += r.z * w;
       }
     };
-    const { archTop, archPlant } = this.rig;
-    // The roof skin takes no cluster from below the bonnet's top.
+  }
+
+  /** A skin point's cluster weights: the 4 nearest clusters within 1.45 m by exp(−2.35 d), a `cellOnly` point the cell's (D1); the roof skin takes none from below the bonnet's top. */
+  private clusterRule(zones: SkinZones, cms: readonly { x: number; y: number; z: number }[]): (rx: number, ry: number, rz: number, cellOnly: boolean, i: number, t: SkinPointTables) => void {
+    const { span, inCell } = zones;
+    const cellMass = this.masses.indexOf(this.at.cell);
+    const holdsCell = this.clusters.map((c) => c.idx.includes(cellMass));
     const roofFloor = this.cages.find((c) => c.spec.name === "roof")!.spec.min[1];
     const bonnetTop = this.cages.find((c) => c.spec.name === "bonnet")!.spec.max[1];
-    for (let i = 0; i < n; i++) {
-      const rx = this.restPos[i * 3]!;
-      const ry = this.restPos[i * 3 + 1]!;
-      const rz = this.restPos[i * 3 + 2]!;
-      parents(rx, ry, rz, i);
-      const cabin = inCell(rx, ry, rz);
-      if (ry < archTop) this.skinHub[i] = this.masses.findIndex((m) => m.hub && hypot2(rx - m.rest.x, rz - m.rest.z) <= archPlant);
-      const cellOnly = cabin || (ry < archTop && rz < axleF && rz > axleR && this.skinHub[i]! < 0);
+    return (rx, ry, rz, cellOnly, i, t) => {
       const scored: { ci: number; w: number }[] = [];
       let other = -1,
         otherW = 0;
@@ -766,25 +796,77 @@ export abstract class DeformRig {
       for (const s of scored) sum += s.w;
       if (sum > 1e-8) for (const s of scored) s.w /= sum;
       const face = Math.min(rz - span.min.z, span.max.z - rz);
-      if (cabin && other >= 0 && face < CELL_FACE_BLEND && scored.length > 0) {
+      if (inCell(rx, ry, rz) && other >= 0 && face < CELL_FACE_BLEND && scored.length > 0) {
         const share = CELL_FACE_SHARE * (1 - face / CELL_FACE_BLEND);
         for (const s of scored) s.w *= 1 - share;
         scored.push({ ci: other, w: share });
       }
-      this.skinN[i] = scored.length;
+      t.sN[i] = scored.length;
       for (let k = 0; k < scored.length; k++) {
-        this.skinXf[i * SKIN_K + k] = scored[k]!.ci * 9;
-        this.skinW[i * SKIN_K + k] = scored[k]!.w;
+        t.sXf[i * SKIN_K + k] = scored[k]!.ci * 9;
+        t.sW[i * SKIN_K + k] = scored[k]!.w;
       }
+    };
+  }
+
+  /**
+   * The body paint's A5 tables (`buildSkinWeights`) for the points of a mesh outside the body skin, `rest` in the mesh's frame seated at car-frame
+   * `origin`: a door shell skins by them as the paint around it does (`skinPoints`). Rest-only: built once per mesh.
+   */
+  bindPoints(rest: Float32Array, origin: THREE.Vector3): PointSkin {
+    const count = rest.length / 3;
+    const t: PointSkin = { count, sN: new Uint8Array(count), sXf: new Int32Array(count * SKIN_K), sW: new Float64Array(count * SKIN_K), rJ: new Int32Array(count * RES_SLOTS), rW: new Float64Array(count * RES_SLOTS), rC: new Float64Array(count * 3) };
+    const zones = this.skinZones();
+    const parents = this.parentRule(zones);
+    const clusters = this.clusterRule(zones, this.clusterCentres());
+    for (let i = 0; i < count; i++) {
+      const rx = rest[i * 3]! + origin.x;
+      const ry = rest[i * 3 + 1]! + origin.y;
+      const rz = rest[i * 3 + 2]! + origin.z;
+      parents(rx, ry, rz, i, t);
+      clusters(rx, ry, rz, zones.cellOnly(rx, ry, rz, this.archHub(rx, ry, rz)), i, t);
     }
-    // Cage corners follow the clusters within 1.4 m of their rest position (`solveCagesFromShape`).
+    return t;
+  }
+
+  /** Rest-only skin tables: cluster weights per vertex and cage corner, the parent masses of every skin point (A5), the hub that plants each arch vertex. */
+  private buildSkinWeights(): void {
+    const n = this.vertexCount;
+    const points = n + this.cages.length * 8;
+    this.skinN = new Uint8Array(n);
+    this.skinXf = new Int32Array(n * SKIN_K);
+    this.skinW = new Float64Array(n * SKIN_K);
+    this.skinHub = new Int32Array(n).fill(-1);
+    this.resJ = new Int32Array(points * RES_SLOTS);
+    this.resW = new Float64Array(points * RES_SLOTS);
+    this.resC = new Float64Array(points * 3);
+    this.massPos = new Float64Array(this.masses.length * 3);
+    this.clusterXf = new Float64Array(this.clusters.length * 9);
+    const t: SkinPointTables = { sN: this.skinN, sXf: this.skinXf, sW: this.skinW, rJ: this.resJ, rW: this.resW, rC: this.resC };
+    const cms = this.clusterCentres();
+    const zones = this.skinZones();
+    const parents = this.parentRule(zones);
+    const clusters = this.clusterRule(zones, cms);
+    for (let i = 0; i < n; i++) {
+      const rx = this.restPos[i * 3]!;
+      const ry = this.restPos[i * 3 + 1]!;
+      const rz = this.restPos[i * 3 + 2]!;
+      parents(rx, ry, rz, i, t);
+      this.skinHub[i] = this.archHub(rx, ry, rz);
+      clusters(rx, ry, rz, zones.cellOnly(rx, ry, rz, this.skinHub[i]!), i, t);
+    }
+    this.bindCorners(n, cms, parents, t);
+  }
+
+  /** Cage corners follow the clusters within 1.4 m of their rest position (`solveCagesFromShape`), and their A5 parents as skin points `n + j`. */
+  private bindCorners(n: number, cms: readonly { x: number; y: number; z: number }[], parents: SkinParentRule, t: SkinPointTables): void {
     const start: number[] = [0];
     const xf: number[] = [];
     const ws: number[] = [];
     this.cornerWsum = new Float64Array(this.cages.length * 8);
     for (let j = 0; j < this.cages.length * 8; j++) {
       const rest = this.cages[j >> 3]!.restCorners[j & 7]!;
-      parents(rest.x, rest.y, rest.z, n + j);
+      parents(rest.x, rest.y, rest.z, n + j, t);
       let wsum = 0;
       for (let ci = 0; ci < this.clusters.length; ci++) {
         const cm = cms[ci]!;

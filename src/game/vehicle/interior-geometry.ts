@@ -201,9 +201,12 @@ export function engineBayGeometry(): THREE.BufferGeometry {
   return mergeToned(parts, "engine bay");
 }
 
+/** The crash bar's half span (m) as built, before a car fits it between its wheels (`CarCabin`). */
+export const CRASH_BAR_HALF = 0.65;
+
 /** A bare bumper beam on the bumper's seat, its face where the bumper's was (+z out), so a crushed nose never pushes it past the body: shown once the bumper is gone. */
 export function crashBarGeometry(): THREE.BufferGeometry {
-  const parts = [rounded(1.3, 0.1, 0.06, 0.025, STEEL).translate(0, 0, -0.03)];
+  const parts = [rounded(2 * CRASH_BAR_HALF, 0.1, 0.06, 0.025, STEEL).translate(0, 0, -0.03)];
   for (const sign of [-1, 1]) parts.push(box(0.08, 0.08, 0.1, STEEL, sign * 0.5, 0, -0.11));
   return mergeToned(parts, "crash bar");
 }
