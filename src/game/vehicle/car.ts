@@ -230,7 +230,7 @@ export class DeformableCar extends CarParts {
     this.interior.scale.set(1, 1, 1);
     this.interior.position.set(0, 0, 0);
     this.cabin.fit(null);
-    this.cabin.sinkHeadliner(null);
+    this.cabin.squeezeUnderRoof(null);
 
     this.endAgo.fill(9);
     this.endReach = Infinity;

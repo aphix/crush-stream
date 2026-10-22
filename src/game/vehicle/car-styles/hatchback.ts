@@ -15,9 +15,9 @@ const HATCHBACK_LAMP_SHAPES = {
   },
   tail: {
     loops: [
-      { points: [[0.59, 0.612], [0.66, 0.605], [0.66, 0.82], [0.62, 0.83], [0.59, 0.828]] },
-      { points: [[0.27, 0.66], [0.43, 0.64], [0.56, 0.62], [0.56, 0.825], [0.43, 0.82], [0.27, 0.8]] },
-      { side: true, points: [[-1.69, 0.6], [-1.6, 0.62], [-1.58, 0.8], [-1.63, 0.82]] },
+      { points: [[0.43, 0.645], [0.6, 0.625], [0.66, 0.62], [0.66, 0.82], [0.62, 0.83], [0.43, 0.82]] },
+      { points: [[0.27, 0.66], [0.43, 0.64], [0.43, 0.8], [0.27, 0.8]] },
+      { side: true, points: [[-1.69, 0.625], [-1.6, 0.63], [-1.58, 0.8], [-1.63, 0.82]] },
     ],
     lens: "lit",
     bezel: "black",
@@ -25,8 +25,7 @@ const HATCHBACK_LAMP_SHAPES = {
     strips: [{ line: { points: [[0.27, 0.79], [0.43, 0.81], [0.62, 0.82], [0.66, 0.81]] }, width: 0.02, tone: "lit" }],
     cells: [
       { loop: { points: [[0.27, 0.66], [0.35, 0.655], [0.35, 0.78], [0.27, 0.78]] }, tone: "clear" },
-      { loop: { points: [[0.43, 0.645], [0.56, 0.625], [0.56, 0.7], [0.43, 0.7]] }, tone: "smoked" },
-      { loop: { points: [[0.59, 0.612], [0.66, 0.605], [0.66, 0.7], [0.59, 0.7]] }, tone: "smoked" },
+      { loop: { points: [[0.43, 0.65], [0.66, 0.625], [0.66, 0.7], [0.43, 0.7]] }, tone: "smoked" },
     ],
   },
   front: {
@@ -65,7 +64,7 @@ export const HATCHBACK: BodyStyle = {
       trim: "body",
     },
   },
-  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.86, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.21, 0.62] },
+  door: { hingeX: 0.76, hingeY: 0.53, hingeZ: 0.63, length: 0.905, halfHeight: 0.3, mirrorY: 0.27, mirrorZ: 0.185, mirrorReach: 0.1, mirrorHalfDepth: 0.07, aperture: [-0.255, 0.62] },
   aPillarFoot: 0.73,
   aPillarTop: 0.3,
   glassTop: 0.045,
@@ -106,7 +105,15 @@ export const HATCHBACK: BodyStyle = {
   rearBulkhead: { z: -0.95, yTop: 0.8 },
   tubs: [[-1.56, 0.7, 0.27]],
   rearDoorSeam: -0.88,
-  boot: { kind: "tailgate", y0: 0.57, origin: [0.94, -1.615], z0: -1.76, pivot: [1.277, -1.15] },
+  boot: {
+    kind: "tailgate",
+    y0: 0.57,
+    origin: [0.94, -1.615],
+    z0: -1.76,
+    pivot: [1.277, -1.15],
+    // The reference's gate seam: ±.62-.66 above the tail lamps, stepping in to ±.43 between them.
+    outline: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84], [0.43, 0.8], [0.43, 0.6]],
+  },
   lamps: { head: [0.545, 0.55], tail: [0.603, 0.718], shapes: HATCHBACK_LAMP_SHAPES },
   grille: { y: 0.53, size: [0.66, 0.1], kind: "bars", count: 4, badge: 0.025, finish: "black" },
   seats: { front: [-0.35, 0.4, -0.1], rear: [0.41, -0.85] },

@@ -327,7 +327,7 @@ async function shootAs(spec, backdrop) {
   const shotCamera = spec === null ? null : makeCamera(THREE, spec, car.group.matrixWorld);
   const flat = backdrop === undefined ? null : new THREE.Color(backdrop);
   // The car alone: its group, the batches that draw its wheels, lamps and parts, and the lights. The rest (room, sky dome, props) hides.
-  const kept = new Set([car.group, ...engine.wheels.meshes, ...engine.lampBatch.meshes, ...engine.partBatch.meshes]);
+  const kept = new Set([car.group, engine.wheels.group, ...engine.lampBatch.meshes, ...engine.partBatch.meshes]);
   const cine = engine.cine;
   const draw = cine.render.bind(cine);
   cine.render = (scene, viewCamera, ...rest) => {

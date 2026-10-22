@@ -87,6 +87,7 @@ export const MONSTER: BodyStyle = {
   midPillarZ: null,
   rearBulkhead: { z: -0.79, yTop: 1.03 },
   tubs: [[-0.76, 0.96, 0.5], [-2.26, -0.82, 0.62]],
+  wheelTub: { rise: 0.24, length: 0.82, width: 0.25 },
   rearDoorSeam: -0.15,
   boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3] },
   lamps: { head: [0.55, 0.7], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, sideMarkers: [{ at: [0.88, -2.1], size: [0.06, 0.03] }] },

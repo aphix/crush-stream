@@ -24,6 +24,7 @@ import {
   makePaintMaterial,
   makeSirenMaterial,
   type LampKind,
+  withPushBar,
 } from "./car-materials.ts";
 import { carPartSeats, GRILLE_SEAT, MIRROR_REACH, PART_KIND, PartSeat } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, LAMP_PROBE_REACH, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
@@ -574,7 +575,9 @@ export abstract class CarCore {
     const g = new THREE.Group();
     const spec = front ? this.style.bumpers.front : this.style.bumpers.rear;
     const fascia = makeBumperGeometry(front, this.style);
-    const mesh = new THREE.Mesh(withSeamCover(front ? fascia : withRearFittings(fascia, this.style), this.style, front), bumperMaterial(spec.trim, accent, body));
+    // A push bar is drawn only: merged into the front bumper, it follows the bumper's masses and tears off with it (its flying box is the bumper's as drawn).
+    const drawn = front ? (this.style.pushBar ? withPushBar(fascia) : fascia) : withRearFittings(fascia, this.style);
+    const mesh = new THREE.Mesh(withSeamCover(drawn, this.style, front), bumperMaterial(spec.trim, accent, body));
     this.bumperMeshes.push(mesh);
     mesh.castShadow = true;
     this.flushCasters.push(mesh);

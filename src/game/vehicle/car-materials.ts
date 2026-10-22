@@ -453,8 +453,12 @@ export function makeLightBar(): THREE.BufferGeometry {
 }
 
 /** A push bar stands this far (m) ahead of its bumper's face, `tube` thick; its uprights `x` either side of the middle reach
- *  `above` the bumper's top, carry a `plate` thick pad on their face, and its lower bar spans `span` either side: a cruiser's grille guard. */
-const PUSH_BAR = { gap: 0.04, tube: 0.05, x: 0.2, above: 0.3, span: 0.42, plate: 0.025 } as const;
+ *  `above` the bumper's top, carry a `plate` thick pad on their face, and its lower bar spans `span` either side: a cruiser's grille guard.
+ *  As the reference cruiser's (front iso): uprights at |x| 0.36 about 4 cm ahead of the face, the top bar at y ~0.62 just over the
+ *  hood's leading edge, the lower bar at the grille's foot. */
+const PUSH_BAR = { gap: 0.015, tube: 0.05, x: 0.36, above: 0.18, span: 0.38, plate: 0.025 } as const;
+/** How far (m) a push bar's pads stand ahead of its bumper's face: a car's length spec leaves it off, as its height leaves off the light bar. */
+export const PUSH_BAR_REACH = PUSH_BAR.gap + PUSH_BAR.tube + PUSH_BAR.plate;
 
 /** Front bumper `bumper` (bumper space, +z forward, indexed) with a push bar in front of its face: one geometry, so the bar
  *  draws in the bumper's trim and tears off with it. */

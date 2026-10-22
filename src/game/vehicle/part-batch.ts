@@ -17,7 +17,7 @@ const NO_CASTER = new THREE.BufferGeometry().setAttribute("position", new THREE.
  */
 export class PartBatch {
   readonly meshes: readonly THREE.InstancedMesh[];
-  /** Every undamaged car's sun shadow (`DeformableCar.restCaster`) as one draw per style, not one per car; three draws a shadow only for meshes the camera pass lists, so each also costs one colourless camera-pass draw. */
+  /** Every undamaged car's sun shadow (`DeformableCar.restCaster`) as one draw per style, not one per car; the engine hangs them under the wheel shadow prisms (`WheelBatch`), so only the shadow pass draws them. */
   readonly casters: readonly THREE.InstancedMesh[];
   private readonly casterCounts = new Int32Array(CAR_STYLE_IDS.length);
   /** The casters' own shadow depth material: on three's shared one, every instanced ↔ plain caster switch reselects the program. */

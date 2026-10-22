@@ -196,12 +196,30 @@ describe("given the light bar and the push bar as the reference cruiser wears th
     const guarded = withPushBar(bumper);
     guarded.computeBoundingBox();
     const after = guarded.boundingBox!;
-    assert.ok(after.max.z > before.max.z + 0.08 && after.max.z < before.max.z + 0.15, `face ${before.max.z} -> ${after.max.z}`);
-    assert.ok(after.max.y > before.max.y + 0.25, `top ${before.max.y} -> ${after.max.y}`);
+    // The reference cruiser's guard: its tubes 4 cm ahead of the face (their pads' face 9 cm), its top bar ~18 cm over the bumper's top (y ~0.62).
+    assert.ok(after.max.z - before.max.z > 0.08 && after.max.z - before.max.z < 0.1, `face ${before.max.z} -> ${after.max.z}`);
+    assert.ok(after.max.y - before.max.y > 0.15 && after.max.y - before.max.y < 0.21, `top ${before.max.y} -> ${after.max.y}`);
     assert.ok(after.min.y >= before.min.y - 1e-6, "the bar reaches below the bumper");
     const now = guarded.getAttribute("position").array;
     let moved = 0;
     for (let i = 0; i < rest.length; i++) moved = Math.max(moved, Math.abs(now[i]! - rest[i]!));
     assert.equal(moved, 0, "the bumper's own vertices moved");
+  });
+
+  it("when a police and a sedan are built, then the police's front bumper mesh carries its push bar and the sedan's is its bare fascia, their rear bumpers alike", () => {
+    const scene = new THREE.Scene();
+    const [police, sedan] = (["police", "sedan"] as const).map((id) => new DeformableCar(paint(), scene, null, id));
+    const box = (car: DeformableCar, i: 0 | 1): THREE.Box3 => {
+      const geo = (car["bumperMeshes"] as THREE.Mesh[])[i]!.geometry;
+      geo.computeBoundingBox();
+      return geo.boundingBox!;
+    };
+    const bare = makeBumperGeometry(true, CAR_STYLES.sedan);
+    bare.computeBoundingBox();
+    const [cop, plain] = [box(police!, 0), box(sedan!, 0)];
+    assert.ok(plain.max.z === bare.boundingBox!.max.z && plain.max.y === bare.boundingBox!.max.y, `sedan front bumper face ${plain.max.z}, top ${plain.max.y}: its fascia's`);
+    assert.ok(cop.max.z - plain.max.z > 0.08 && cop.max.y - plain.max.y > 0.15, `police front bumper face ${cop.max.z} (sedan ${plain.max.z}), top ${cop.max.y} (sedan ${plain.max.y})`);
+    const [copRear, plainRear] = [box(police!, 1), box(sedan!, 1)];
+    assert.ok(Math.abs(copRear.max.z - plainRear.max.z) < 1e-6 && Math.abs(copRear.max.y - plainRear.max.y) < 1e-6, "the rear bumpers stand alike");
   });
 });

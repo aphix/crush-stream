@@ -8,6 +8,8 @@ import { driverSeat } from "../vehicle/interior.ts";
 import { PART_KIND, partGeometry } from "../vehicle/part-geometry.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { driverLook } from "./driver-look.ts";
+import { BONES_ATTRIBUTE, LEFT_LEG } from "./dummy-rig.ts";
+import { seatedGeometry } from "./dummy-skin.ts";
 import { JOINTS, PARTS } from "./ragdoll-body.ts";
 import { SeatedDrivers } from "./seated-drivers.ts";
 
@@ -16,6 +18,8 @@ const SIT_HIGH = { min: 0.05, max: 0.1 } as const;
 /** How far (m) a hand may miss its grip on the rim, and the head must stay under the roof line. */
 const GRIP_MISS = 0.01;
 const HEAD_ROOM = 0.02;
+/** The seated drivers' draw holds every build's figure in its one index: a seated driver's triangle budget. */
+const SEATED_TRIANGLES = 2500;
 
 type Style = (typeof CAR_STYLES)[keyof typeof CAR_STYLES];
 const seatedCars = new Map<string, { car: DeformableCar; drivers: SeatedDrivers; toCabin: THREE.Matrix4 }>();
@@ -27,7 +31,7 @@ function seated(style: Style) {
     const car = new DeformableCar(paint(), new THREE.Scene(), null, style.id);
     car.spawn(0, 0, 0);
     car.group.updateMatrixWorld(true);
-    const drivers = new SeatedDrivers();
+    const drivers = new SeatedDrivers(() => false);
     drivers.sync([car], (c) => driverLook(1, c));
     s = { car, drivers, toCabin: car.interior.matrixWorld.clone().invert() };
     seatedCars.set(style.id, s);
@@ -57,7 +61,8 @@ describe("given every style's seated driver", () => {
     const style = CAR_STYLES[id];
 
     test(`when the ${id}'s driver sits, then his hips rest on the drawn cushion over its H-point`, () => {
-      const hip = carried(style, 6, joint(5)).add(carried(style, 8, joint(7))).multiplyScalar(0.5);
+      // The hip joints ride the torso (the thighs, cut from the seated body, hang from them).
+      const hip = carried(style, 0, joint(5).add(joint(7)).multiplyScalar(0.5));
       const ray = new THREE.Raycaster(hip.clone().setY(hip.y + 0.3), new THREE.Vector3(0, -1, 0));
       const hit = ray.intersectObject(drawnSeat(id))[0];
       assert.ok(hit, `no cushion under the ${id}'s hips at ${hip.toArray().join()}`);
@@ -78,15 +83,34 @@ describe("given every style's seated driver", () => {
   }
 });
 
+describe("given the seated driver's geometry", () => {
+  const index = Array.from(seatedGeometry().index!.array);
+  const bones = seatedGeometry().getAttribute(BONES_ATTRIBUTE);
+
+  test("when it is built, then every build's figure in it fits a seated driver's triangle budget at once", () => {
+    assert.ok(index.length / 3 <= SEATED_TRIANGLES, `${index.length / 3} triangles`);
+  });
+
+  test("when it is built, then no vertex rides a thigh or a shin: no leg or foot is drawn", () => {
+    const legs = index.filter((v) => bones.getX(v) >= LEFT_LEG || bones.getY(v) >= LEFT_LEG);
+    assert.equal(legs.length, 0, `${legs.length} corners on the legs`);
+  });
+});
+
 describe("given the seated drivers' batch and one car", () => {
-  test("when its driver is in, then one slot is drawn; thrown, or past the far cut, then none", () => {
+  test("when its driver is in, then one slot is drawn; thrown, past the mid cut (his glass cut) or past the far cut, then none", () => {
     const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
     car.spawn(0, 0, 0);
     car.group.updateMatrixWorld(true);
-    const drivers = new SeatedDrivers();
+    let glassCut = false;
+    const drivers = new SeatedDrivers(() => glassCut);
     const look = (car: number) => driverLook(1, car);
     drivers.sync([car], look);
     assert.equal(drivers.mesh.count, 1);
+    glassCut = true;
+    drivers.sync([car], look);
+    assert.equal(drivers.mesh.count, 0, "cut with the glass at mid distance");
+    glassCut = false;
     car.driverOut = "windshield";
     drivers.sync([car], look);
     assert.equal(drivers.mesh.count, 0, "the thrown driver is the ragdoll now");
@@ -94,6 +118,25 @@ describe("given the seated drivers' batch and one car", () => {
     car.partSeats[PART_KIND.seatFront]!.layers.disable(0);
     drivers.sync([car], look);
     assert.equal(drivers.mesh.count, 0, "cut with the cabin");
+    drivers.dispose();
+  });
+});
+
+describe("given the seated drivers' batch and two cars", () => {
+  test("when the first car's driver is thrown, then the other's is drawn alone: the draw holds one figure, none for the empty seat", () => {
+    const cars = [0, 5].map((x) => {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
+      car.spawn(x, 0, 0);
+      car.group.updateMatrixWorld(true);
+      return car;
+    });
+    const drivers = new SeatedDrivers(() => false);
+    const look = (car: number) => driverLook(1, car);
+    drivers.sync(cars, look);
+    assert.equal(drivers.mesh.count, 2);
+    cars[0]!.driverOut = "windshield";
+    drivers.sync(cars, look);
+    assert.equal(drivers.mesh.count, 1, "the thrown driver's slot is still drawn");
     drivers.dispose();
   });
 });
