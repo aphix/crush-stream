@@ -150,6 +150,9 @@ interface CarDims {
   wheel: { radius: number; width: number };
 }
 
+/** A bumper's lofted end (m): how far back its corner turns, and how far its face stands off the body side along the run. */
+export type BumperEnd = { corner: number; stand: number };
+
 /** A bumper: where its group sits and the section its fascia is lofted from. */
 interface BumperSpec {
   /** Group seat (m): its height, and its distance from the car's middle. */
@@ -158,8 +161,11 @@ interface BumperSpec {
   fascia: readonly (readonly [number, number])[];
   /** Half-width (m) of the fascia across the car. */
   span: number;
-  /** Fascia corner sweep: `from` the |x| (m) where it starts sweeping back, `back` how far (m) its end sweeps back from the face. */
-  wrap: { from: number; back: number };
+  /**
+   * Fascia corner sweep: `from` the |x| (m) where it starts sweeping back, `back` how far (m) its end sweeps back from the face.
+   * `end` (drawn only): a lofted end instead, its corner turning over `corner` (m) back from the face, then running along the body side to `back`, its face `stand` (m) off the skin.
+   */
+  wrap: { from: number; back: number; end?: BumperEnd };
   /** What the bumper is drawn in: the body's paint colour, chrome or black; absent, the car's accent trim. */
   trim?: "body" | "chrome" | "black";
   /**
