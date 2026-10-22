@@ -49,7 +49,7 @@ describe("given a style's detail table baked to its atlas", () => {
     assert.equal(left.cavity, right.cavity, "cavity at x -0.3");
   });
 
-  it("when any style's bottom tile is read on its exhaust run, then the pipe stands proud and dark on both sides, where its top tile has no pipe", () => {
+  it("when any style's bottom tile is read on its exhaust run, then the pipe stands proud and dark on both sides, and a car with no strokes of its own has it in no other tile", () => {
     for (const style of Object.values(CAR_STYLES)) {
       if (!style.details) continue;
       const read = detailReader(style);
@@ -58,8 +58,11 @@ describe("given a style's detail table baked to its atlas", () => {
         const under = read("bottom", -0.5, x);
         assert.ok(under.height >= 0.005 && under.cavity >= 0.4, `${style.id} at x ${x}: height ${under.height}, cavity ${under.cavity}`);
       }
-      assert.ok(read("top", -0.5, pipe).height < 0.005, `${style.id}: the top tile reads no pipe`);
     }
+    const bare = sedanWith({ lines: [], patches: [] });
+    const read = detailReader(bare);
+    const pipe = bare.exhaust?.x ?? 0.4;
+    assert.ok(read("bottom", -0.5, pipe).height >= 0.005 && read("top", -0.5, pipe).height === 0, "the pan's pipe lands in the bottom tile only");
   });
 
   it("when the shader is built, then a down-facing pixel reads the bottom tile in the top's place", () => {

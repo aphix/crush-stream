@@ -104,22 +104,22 @@ function tileLayout(dims: BodyStyle["dims"]): { tiles: Tile[]; width: number; he
  * subframe at each axle, the tank ahead of the rear one, and the exhaust run (on its tip's line) with its silencer behind it.
  */
 function panDetails(style: BodyStyle): Details {
-  const front = style.dims.wheelbase / 2;
-  const tail = -(front + style.dims.overhang.rear);
+  const axle = style.dims.wheelbase / 2;
+  const tail = -(axle + style.dims.overhang.rear);
   const pipe = style.exhaust?.x ?? 0.4;
   const rail = 0.75 * (style.dims.width / 2);
-  const ribs = Array.from({ length: Math.floor((2 * front - 1.2) / 0.35) }, (_, k) => front - 0.6 - 0.35 * k);
+  const ribs = Array.from({ length: Math.floor((2 * axle - 1.2) / 0.35) }, (_, k) => axle - 0.6 - 0.35 * k);
   const line = (points: [number, number][], width: number, depth: number, cavity: number): DetailLine => ({ view: "bottom", points, width, depth, profile: "u", cavity });
   const box = (z0: number, z1: number, x0: number, x1: number, depth: number, cavity: number): DetailPatch => ({ view: "bottom", points: [[z0, x0], [z1, x0], [z1, x1], [z0, x1]], depth, rim: 0.03, cavity });
   return {
     lines: [
-      line([[front - 0.1, rail], [-front + 0.1, rail]], 0.07, 0.005, 0.3),
+      line([[axle - 0.1, rail], [-axle + 0.1, rail]], 0.07, 0.005, 0.3),
       ...ribs.map((z) => line([[z, 0.18], [z, rail - 0.06]], 0.03, -0.003, 0.35)),
-      line([[front, 0], [front, rail + 0.1]], 0.09, 0.006, 0.45),
-      line([[-front, 0], [-front, rail + 0.1]], 0.09, 0.006, 0.45),
-      line([[front - 0.35, 0.1], [0, pipe], [tail + 0.12, pipe]], 0.06, 0.006, 0.5),
+      line([[axle, 0], [axle, rail + 0.1]], 0.09, 0.006, 0.45),
+      line([[-axle, 0], [-axle, rail + 0.1]], 0.09, 0.006, 0.45),
+      line([[axle - 0.35, 0.1], [0, pipe], [tail + 0.12, pipe]], 0.06, 0.006, 0.5),
     ],
-    patches: [box(front - 0.3, -front + 0.6, 0, 0.13, 0.005, 0.15), box(-front + 0.2, -front + 0.8, 0.15, Math.max(0.3, pipe - 0.1), 0.005, 0.25), box(tail + 0.35, -front - 0.15, pipe - 0.13, pipe + 0.13, 0.006, 0.3)],
+    patches: [box(axle - 0.3, -axle + 0.6, 0, 0.13, 0.005, 0.15), box(-axle + 0.2, -axle + 0.8, 0.15, Math.max(0.3, pipe - 0.1), 0.005, 0.25), box(tail + 0.35, -axle - 0.15, pipe - 0.13, pipe + 0.13, 0.006, 0.3)],
   };
 }
 
