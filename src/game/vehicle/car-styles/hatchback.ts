@@ -4,13 +4,13 @@ import { st } from "./platform.ts";
 /** Hatchback's own lamps and bumper lamps, read off its reference isos and side/top crops. */
 const HATCHBACK_LAMP_SHAPES = {
   head: {
-    loops: [{ points: [[0.4, 0.54], [0.68, 0.54], [0.7, 0.655], [0.4, 0.665]] }],
+    loops: [{ points: [[0.4, 0.48], [0.68, 0.48], [0.7, 0.6], [0.4, 0.61]] }],
     lens: "lit",
     bezel: "black",
     recess: 0.01,
     cells: [
-      { loop: { points: [[0.61, 0.54], [0.7, 0.54], [0.7, 0.655], [0.61, 0.657]] }, tone: "amber" },
-      { loop: { side: true, points: [[1.72, 0.54], [1.62, 0.54], [1.62, 0.64], [1.72, 0.655]] }, tone: "amber" },
+      { loop: { points: [[0.61, 0.48], [0.7, 0.48], [0.7, 0.6], [0.61, 0.602]] }, tone: "amber" },
+      { loop: { side: true, points: [[1.72, 0.48], [1.62, 0.48], [1.62, 0.59], [1.72, 0.6]] }, tone: "amber" },
     ],
   },
   // A slim band split on the gate's outline: the gate's piece inboard of x .43, the body's on the infill under the outline's slant, round
@@ -123,7 +123,7 @@ export const HATCHBACK: BodyStyle = {
     outline: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84], [0.43, 0.8], [0.43, 0.6]],
   },
   // The high brake lamp: a thin strip on the spoiler's trailing edge (2 cm tall there), as the reference's.
-  lamps: { head: [0.545, 0.6], tail: [0.603, 0.76], shapes: HATCHBACK_LAMP_SHAPES, brake: { at: [0, 1.231], size: [0.34, 0.012] } },
+  lamps: { head: [0.545, 0.545], tail: [0.603, 0.76], shapes: HATCHBACK_LAMP_SHAPES, brake: { at: [0, 1.231], size: [0.34, 0.012] } },
   grille: { y: 0.53, size: [0.66, 0.1], kind: "bars", count: 4, badge: 0.025, finish: "black" },
   seats: { front: [0.35, 0.41, -0.1], rear: [0.41, -0.7] },
   pillars: { b: { width: [0.08, 0.08] }, divider: { width: [0.056, 0.045], z: [-0.92, -0.87] } },
