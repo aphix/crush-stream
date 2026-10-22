@@ -8,7 +8,7 @@ import { sliceSpeed } from "../contact/sat.ts";
 import { SimPacer } from "../engine/sim-pace.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { makeCar as makeClassCar } from "../vehicle/ground-probe.test-util.ts";
-import { DOOR_LANES, RAM, type DoorScenario } from "./door-rig.ts";
+import { DOOR_LANES, laneFor, RAM, type DoorScenario, type RamShape } from "./door-rig.ts";
 import { fireRam, tyresStep } from "./door-rig.test-util.ts";
 import { firePiston, fitRigid } from "./piston-rig.test-util.ts";
 import { Ground, setGround } from "../world/ground.ts";
@@ -202,19 +202,34 @@ function runPass(w: CrashWorld, tyres: boolean, kph: number, passed: () => boole
   }
 }
 
+/** A head with a car body's height and width: what a car-shaped ram and a striker car sweep on a lane. */
+function carShape(a: DeformableCar): RamShape {
+  return { bottom: 0, top: 2 * a.frame.half.y, width: 2 * cageHalf().x };
+}
+
+/** `b` standing in for the ram, its mirrors off as the ram has none: a stand-in's mirror folding on the struck car's side pushes that car. */
+function standIn(b: DeformableCar): void {
+  for (const p of b["parts"]) {
+    if (p.name !== "mirrorL" && p.name !== "mirrorR") continue;
+    p.detached = true;
+    p.object.visible = false;
+  }
+}
+
 /**
  * A second car (its side face on the lane's inner edge, the lane's travel and speed) drives past
  * the parked car's `side`, its door set as the scenario sets it (`tyres`: both cars in neutral).
  */
 export function carDoorPass(scenario: DoorScenario, kph: number, tyres = false, side: -1 | 1 = 1): CarState {
-  const lane = DOOR_LANES[scenario];
   const a = parkCar();
+  const lane = laneFor(scenario, a, side, carShape(a));
   if (lane.part === "panel") a.setPanelOpen(side, lane.open);
   else a.setDoorOpen(side, lane.open);
   const b = pooledCar(1);
   const x = side * (lane.inner + cageHalf().x);
   // Leading face at the ram's start, so both runs cover the same ground.
   launch(b, x, -lane.dir * (RAM.start + cageHalf().z), lane.dir > 0 ? 0 : Math.PI, kph);
+  standIn(b);
   const w = makeWorld([a, b], false, false, null);
   runPass(w, tyres, kph, () => hasPassed(lane, a, b), () => readoutKey(a, side));
   return carState(a, side);
@@ -223,7 +238,7 @@ export function carDoorPass(scenario: DoorScenario, kph: number, tyres = false, 
 /** The Doors ram; `carShaped`: a head with a car body's length, height and width on the same lane. */
 export function ramDoorPass(scenario: DoorScenario, kph: number, kg: number, carShaped = false): CarState {
   const a = parkCar();
-  const shape = carShaped ? { bottom: 0, top: 2 * a.frame.half.y, width: 2 * cageHalf().x } : undefined;
+  const shape = carShaped ? carShape(a) : undefined;
   fireRam(a, scenario, { kph, kg, side: 1, length: carShaped ? 2 * cageHalf().z : RAM.length, shape, stillWhen: stillWatch(() => readoutKey(a)) });
   return carState(a);
 }
@@ -233,14 +248,15 @@ export function ramDoorPass(scenario: DoorScenario, kph: number, kg: number, car
  * on) into it at the same closing speed, brakes off, undriven (`tyres`: in neutral). Same relative start, so the same ground is covered.
  */
 function reversingDoorPass(scenario: DoorScenario, kph: number, tyres = false, side: -1 | 1 = 1): CarState {
-  const lane = DOOR_LANES[scenario];
   const u = kph / 3.6;
   const a = pooledCar(0);
+  const lane = laneFor(scenario, a, side, carShape(a));
   launchAt(a, 0, lane.dir * (RAM.start + cageHalf().z), 0, 0, -lane.dir * u);
   if (lane.part === "panel") a.setPanelOpen(side, lane.open);
   else a.setDoorOpen(side, lane.open);
   const b = pooledCar(1);
   b.spawnFacing(side * (lane.inner + cageHalf().x), 0, lane.dir > 0 ? 0 : Math.PI, 0);
+  standIn(b);
   const w = makeWorld([a, b], false, false, null);
   runPass(w, tyres, kph, () => hasPassed(lane, a, b), () => readoutKey(a, side));
   return carState(a, side);
@@ -262,7 +278,7 @@ export function doorHit(form: DoorForm, scenario: DoorScenario, kph: number, kg:
     if (form === "reversingCar") return reversingDoorPass(scenario, kph, grip, side);
     const a = parkCar();
     const carShaped = Math.abs(kg - a.deform.totalMass) < 1;
-    const shape = carShaped ? { bottom: 0, top: 2 * a.frame.half.y, width: 2 * cageHalf().x } : undefined;
+    const shape = carShaped ? carShape(a) : undefined;
     fireRam(a, scenario, { kph, kg, side, length: carShaped ? 2 * cageHalf().z : RAM.length, shape, carMoves: form === "carMoves", tyres: grip, stillWhen: stillWatch(() => readoutKey(a, side)) });
     return carState(a, side);
   });

@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
-import { DOOR_INERTIA, DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX, SLAM_TEAR_J } from "../vehicle/car-core.ts";
+import { DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX, SLAM_TEAR_J } from "../vehicle/car-core.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { DoorRig, type DoorScenario, type RamShot } from "./door-rig.ts";
@@ -89,9 +89,11 @@ describe("given a ram on a lane beside a parked car (mirror: A grazes the shut d
   }
 });
 
-describe("given a car's right door swung from half a radian open at a chosen opening rate", () => {
+describe("given a car's right door swung at a chosen rate from a quarter radian short of where it lands (its latch or its stop)", () => {
+  /** Swing travel (rad): short, so the hinge's damping and dry friction (`DOOR_DAMP`, `DOOR_DRY`) take little of the energy on the way. */
+  const TRAVEL = 0.25;
   /** Opening rate (rad/s) whose swing carries `share` × `energy` (J). */
-  const omegaFor = (share: number, energy: number): number => Math.sqrt((2 * share * energy) / DOOR_INERTIA);
+  const omegaFor = (share: number, energy: number): number => Math.sqrt((2 * share * energy) / makeCar().doorHinge(1).spec.inertia);
   const swing = (theta: number, omega: number) => {
     const car = makeCar();
     car.setDoorOpen(1, theta);
@@ -101,18 +103,17 @@ describe("given a car's right door swung from half a radian open at a chosen ope
   };
 
   it("when it is swung shut at 0.9× and then 1.1× the slam limit, then the first latches shut and the second tears the door off", () => {
-    const soft = swing(0.5, -omegaFor(0.9, SLAM_TEAR_J));
+    const soft = swing(TRAVEL, -omegaFor(0.9, SLAM_TEAR_J));
     assert.ok(!soft.partOff("doorR") && soft.doorHinge(1).latched && soft.doorHinge(1).theta === 0);
-    assert.ok(swing(0.5, -omegaFor(1.1, SLAM_TEAR_J)).partOff("doorR"), "1.1× slam energy kept the door on");
+    assert.ok(swing(TRAVEL, -omegaFor(1.1, SLAM_TEAR_J)).partOff("doorR"), "1.1× slam energy kept the door on");
   });
 
-  // The old 1.1× fling reached the stop with 220 J (measured), the limit itself, on viscous damping alone; the hinge's dry friction
-  // (DOOR_DRY, 2 rad/s²) takes it to 217 J. 1.2× is as far above the limit as the old 1.1× was meant to be.
+  // 1.2×: the hinge's friction still takes a little of the swing (the old 1.1× from half a radian reached the stop with 217 J).
   it("when it is flung open onto its stop at 0.9× and then 1.2× the hinge limit, then the first stays on at the stop and the second tears the door off together with its mirror", () => {
-    const soft = swing(0.5, omegaFor(0.9, HINGE_TEAR_J));
+    const soft = swing(DOOR_OPEN_MAX - TRAVEL, omegaFor(0.9, HINGE_TEAR_J));
     assert.ok(!soft.partOff("doorR"));
     assert.ok(Math.abs(soft.doorHinge(1).theta - DOOR_OPEN_MAX) < 0.05, `door at ${soft.doorHinge(1).theta * R2D}°`);
-    const hard = swing(0.5, omegaFor(1.2, HINGE_TEAR_J));
+    const hard = swing(DOOR_OPEN_MAX - TRAVEL, omegaFor(1.2, HINGE_TEAR_J));
     assert.ok(hard.partOff("doorR") && hard.partOff("mirrorR"), "door and its mirror should leave together");
   });
 });

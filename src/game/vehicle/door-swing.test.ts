@@ -5,7 +5,7 @@ import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { DeformableCar } from "./car.ts";
-import { DOOR_AJAR, DOOR_OPEN_MAX } from "./car-core.ts";
+import { DOOR_AJAR, DOOR_OPEN_MAX, SLAM_TEAR_J } from "./car-core.ts";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { swingAccel } from "./car-wear.ts";
 import { DT, paint } from "./test-support.ts";
@@ -64,19 +64,19 @@ describe("given swingAccel (the swing push the car's own acceleration puts on an
 });
 
 describe("given an unlatched open door that swings with the car's acceleration", () => {
-  it("when the car brakes at 6 m/s² for 0.4 s, then a door opened to 30° on either side swings forward past 50° and stays unlatched", () => {
+  it("when the car brakes at 6 m/s² for 0.6 s, then a door opened to 30° on either side swings forward past 50° and stays unlatched", () => {
     for (const side of [-1, 1] as const) {
       const car = open(30, side);
-      push(car, 0, -6, 0.4);
+      push(car, 0, -6, 0.6);
       assert.ok(deg(car, side) > 50, `side ${side} at ${deg(car, side).toFixed(1)}°`);
       assert.ok(!car.doorHinge(side).latched);
     }
   });
 
-  it("when the car accelerates at 6 m/s² for 0.7 s, then a door opened to 30° on either side swings back and latches shut, and stays on the car", () => {
+  it("when the car accelerates at 6 m/s² for 1 s, then a door opened to 40° on either side swings back and latches shut, and stays on the car", () => {
     for (const side of [-1, 1] as const) {
-      const car = open(30, side);
-      push(car, 0, 6, 0.7);
+      const car = open(40, side);
+      push(car, 0, 6, 1);
       const h = car.doorHinge(side);
       assert.ok(h.latched && h.theta === 0, `side ${side}: ${deg(car, side).toFixed(1)}° latched ${h.latched}`);
       assert.ok(!car.partOff(side < 0 ? "doorL" : "doorR"), "the door tore off");
@@ -136,16 +136,16 @@ describe("given an unlatched open door that swings with the car's acceleration",
     assert.ok(deg(car) <= DOOR_OPEN_MAX / D2R + 1e-9);
   });
 
-  it("when the open door swings shut at 15 rad/s then at 17.5 rad/s, then it latches at 15 and tears off at 17.5, as the Doors ram's slam rule says (past the slam-tear energy limit the door leaves)", () => {
-    // The rule is `closeSwing`, door-rig.test.ts "slam overload" pins its energies; here the car's own swing reaches it.
-    for (const [omega, off] of [
-      [-15, false],
-      [-17.5, true],
+  it("when the open door swings shut carrying 0.85× then 1.15× the slam-tear energy, then it latches at 0.85× and tears off at 1.15×, as the Doors ram's slam rule says (past the slam-tear energy limit the door leaves)", () => {
+    // The rule is `closeSwing` (door-rig.test.ts pins its energies); from 15° the hinge's friction takes little on the way.
+    for (const [share, off] of [
+      [0.85, false],
+      [1.15, true],
     ] as const) {
-      const car = open(30);
-      car.doorHinge(1).omega = omega;
+      const car = open(15);
+      car.doorHinge(1).omega = -Math.sqrt((2 * share * SLAM_TEAR_J) / SPEC.inertia);
       for (let k = 0; k < 240; k++) car.swingHinges(H);
-      assert.equal(car.partOff("doorR"), off, `${omega} rad/s`);
+      assert.equal(car.partOff("doorR"), off, `${share}× slam energy`);
       if (!off) assert.ok(car.doorHinge(1).latched);
     }
   });

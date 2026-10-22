@@ -898,7 +898,7 @@ export abstract class CarParts extends CarGlass {
   }
 
   /**
-   * Whether a car lying over has put mirror `i` into the ground: a mirror stands `DOOR.mirrorReach` out from the body side, so past `UPRIGHT_UP_Y` it is
+   * Whether a car lying over has put mirror `i` into the ground: a mirror stands its door's `mirrorReach` out from the body side, so past `UPRIGHT_UP_Y` it is
    * lower than the body it sits on. Sim state only (the rest box on the car's pose, as `scrapes`): the drawn door swings and sinks with the frame it is drawn at.
    */
   private mirrorUnderGround(i: number): boolean {

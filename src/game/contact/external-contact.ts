@@ -1,12 +1,13 @@
 import * as THREE from "three";
-import { DOOR, type DeformableCar } from "../vehicle/car.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
 import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import { detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { bodyContact, BODY_HARD, BODY_I, BODY_M, BODY_SIZE, BODY_VX, BODY_VZ, BODY_W, BODY_X, BODY_Z, CT_DEPTH, CT_E, CT_JMAX, CT_MU, CT_NX, CT_NZ, CT_SIZE, CT_X, CT_Z, OUT_EBS_A, OUT_PUSH_A, OUT_SIZE } from "./body-contact.ts";
 import { FACE_ROW } from "../deform/deform-contact.ts";
 import { ARM_CLOSING, SOLID_MU } from "./constants.ts";
 import { CRASH } from "../deform/physics-util.ts";
-import { outlineOf } from "./cage-outline.ts";
+import { OUTLINE_REACH, outlineOf } from "./cage-outline.ts";
+import { LEVEL } from "./hull-gap.ts";
 import { _lane, hitDoor, hitMirror, hitPanel, partHit, shutDoorsOnSolid, SIDES } from "./door-contact.ts";
 
 /**
@@ -80,6 +81,21 @@ export function solidFace(out: ContactBox, nx: number, nz: number, fx: number, f
 const _p = new THREE.Vector3();
 const _n = new THREE.Vector3();
 
+/**
+ * |x| (m, frame) of the body's edge on side `side` that a striker from `bottom` to `top` m over the car's ground meets: the plan box's where those
+ * heights cross the body's widest section (or the car leans past `LEVEL`: the plan alone), else that narrower section's outermost node and its
+ * reach (a ram above the shoulder meets the greenhouse); -Infinity where no body stands at those heights.
+ */
+export function bodyEdge(car: DeformableCar, side: -1 | 1, bottom: number, top: number): number {
+  const outline = outlineOf(car);
+  const plan = car.cage.fields.planBox;
+  const planEdge = side > 0 ? plan[1]! : -plan[0]!;
+  if (Math.abs(car.forward.y) > LEVEL || Math.abs(car.right.y) > LEVEL) return planEdge;
+  const lift = CLASSES[carClass(car)].lift;
+  const edge = outline.edgeAt(side, bottom - lift, top - lift);
+  return edge === (side > 0 ? outline.xHi : -outline.xLo) ? planEdge : edge + OUTLINE_REACH;
+}
+
 /** Outline nodes a gap from the face (the contact begins before the overlap) are as near as the nearest within this many metres. */
 const TIE_GAP = 0.02;
 /** Where the last `faceOverlap` found the face pushed: the depth-weighted centre of the car's outline nodes on it (plan). */
@@ -110,7 +126,18 @@ function faceOverlap(car: DeformableCar, box: ContactBox, point: THREE.Vector3):
   let best = -Infinity;
   let w = 0;
   let latSum = 0;
-  for (let n = 0; n < outline.count; n++) {
+  // A striker clear of the body's width at its heights meets no outline node: the side offset is linear in x and z, so the corners of that
+  // width over the outline's z span bound every node's.
+  const bottom = box.y - box.hy - p.y;
+  const top = box.y + box.hy - p.y;
+  const xHi = bodyEdge(car, 1, bottom, top);
+  const xLo = -bodyEdge(car, -1, bottom, top);
+  const sa = s0 + axr * xLo;
+  const sb = s0 + axr * xHi;
+  const za = azr * outline.zLo;
+  const zb = azr * outline.zHi;
+  const clear = !(xLo <= xHi) || Math.min(sa, sb) + Math.min(za, zb) > box.hx || Math.max(sa, sb) + Math.max(za, zb) < -box.hx;
+  for (let n = 0; n < (clear ? 0 : outline.count); n++) {
     const x = outline.xs[n]!;
     const z = outline.zs[n]!;
     const side = s0 + axr * x + azr * z;
@@ -556,7 +583,6 @@ export function partContact(car: DeformableCar, box: ContactBox, dt: number): ty
   const ax = car.rightFlat;
   const az = car.fwdFlat;
   const p = car.group.position;
-  const plan = car.cage.fields.planBox;
   const rx = box.x - p.x;
   const rz = box.z - p.z;
   const lx = rx * ax.x + rz * ax.z;
@@ -583,8 +609,8 @@ export function partContact(car: DeformableCar, box: ContactBox, dt: number): ty
     const side = SIDES[q]!;
     if (side * lx + ex <= 0) continue;
     lane.inner = side * lx - ex;
-    // Past the open door's trailing edge and the mirror cap: nothing to meet; inside the body's width is a body hit.
-    if (lane.inner > DOOR.hingeX + DOOR.length || lane.inner < (side > 0 ? plan[1]! : -plan[0]!)) continue;
+    // Past the open door's trailing edge and the mirror cap: nothing to meet; inside the body's width at the striker's heights is a body hit.
+    if (lane.inner > car.style.door.hingeX + car.style.door.length || lane.inner < bodyEdge(car, side, lane.bottom, lane.top)) continue;
     lane.width = 2 * ex;
     hitMirror(car, side, lane);
     hitDoor(car, side, lane);

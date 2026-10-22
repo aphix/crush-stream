@@ -6,7 +6,7 @@ import { solidsOf, type PropCollider } from "./placements.ts";
 import { propContact, type PropHits } from "../contact/prop-contact.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
-import { DeformableCar, DOOR } from "../vehicle/car.ts";
+import { DeformableCar } from "../vehicle/car.ts";
 import { DOOR_OPEN_MAX, type DetachPart } from "../vehicle/car-core.ts";
 import { PartSeat } from "../vehicle/part-geometry.ts";
 import { assertSameDigest, paint } from "../vehicle/test-support.ts";
@@ -17,8 +17,8 @@ import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
  * A door a crash left open sticks out past the car's tyres, where the wall's footprint test never looks. Owner clip "Wall hit,
  * 74 km/h" (muy7bjjp2c): the crushed car drove on past the end of a race wall with its left door hanging open at 75° and the
  * door's skin ended 0.58 m inside the wall's 0.6 m box. The wall below is that end: one 2 m piece whose end cap the car passes
- * at 35° to the wall's own line, the near corner of the cap 1.15 m off the car's side, between the body (0.9 m) and the door's
- * tip (1.4 m).
+ * at 35° to the wall's own line, the near corner of the cap 1.15 m off the car's side, between the body (0.82 m) and the sedan door's
+ * tip (1.72 m at its 68° stop).
  */
 
 const FRAME = 1 / FRAME_HZ;
@@ -153,8 +153,9 @@ const POST_RADIUS = 0.1;
 /** Where door `side`'s tip is (world, xz) at the angle the car draws it open. */
 function doorTip(car: Probe, side: -1 | 1): { x: number; z: number } {
   const theta = car.doorAngle(side);
-  const across = side * (DOOR.hingeX + DOOR.length * Math.sin(theta));
-  const along = DOOR.hingeZ - DOOR.length * Math.cos(theta);
+  const d = car.style.door;
+  const across = side * (d.hingeX + d.length * Math.sin(theta));
+  const along = d.hingeZ - d.length * Math.cos(theta);
   return { x: car.group.position.x + car.rightFlat.x * across + car.fwdFlat.x * along, z: car.group.position.z + car.rightFlat.z * across + car.fwdFlat.z * along };
 }
 

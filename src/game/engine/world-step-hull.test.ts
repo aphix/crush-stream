@@ -129,8 +129,6 @@ function threshold(closing: number, trim?: (a: DeformableCar, b: DeformableCar) 
   return hi;
 }
 
-/** The mirrors' tips of two cars side by side meet at this centre distance (m): the 1.13 m of each (`DOOR`: hinge 0.86 + mirror base 0.06 + cap 0.21). */
-const MIRRORS_MEET = 2.26;
 /** The most the clearance may ask beyond the mirrors meeting (m): the lattice's outline and the lean of two bodies (about 0.19 m) and the slack (0.03 m). */
 const MOST_BEYOND = 0.25;
 /** The least it asks beyond them (m): each car's outline half lattice step and level-bar lean (`OUTLINE_REACH`, `LEVEL`), less a hair. */
@@ -139,7 +137,10 @@ const LEAST_BEYOND = 0.17;
 describe("given two sedans abeam at 15 m/s, the step cut by a pair parked far off", () => {
   it("when their lateral closing speed is 0, then they stay lone from the distance their mirrors meet plus 0.17 to 0.25 m, and stay in the slices below it", () => {
     const s = threshold(0);
-    assert.ok(s >= MIRRORS_MEET + LEAST_BEYOND && s <= MIRRORS_MEET + MOST_BEYOND, `lone from ${s.toFixed(3)} m apart`);
+    const sedan = makeCar("shape");
+    /** The mirrors' tips of two sedans side by side meet at this centre distance (m): each car's own (`mirrorBaseX` + its door's `mirrorReach`). */
+    const meet = 2 * (sedan.mirrorBaseX + sedan.style.door.mirrorReach);
+    assert.ok(s >= meet + LEAST_BEYOND && s <= meet + MOST_BEYOND, `lone from ${s.toFixed(3)} m apart`);
     assert.equal(firstMask(s - 0.01, 0), 0, "10 mm inside the clearance neither is lone");
     assert.equal(firstMask(s + 0.01, 0), 0b11, "10 mm outside it both are");
   });

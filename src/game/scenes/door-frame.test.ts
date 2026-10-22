@@ -7,7 +7,7 @@ import { DeformableCar } from "../vehicle/car.ts";
 import type { DetachPart } from "../vehicle/car-core.ts";
 import { PANEL_SMUSH_MIN } from "../vehicle/car-wear.ts";
 import { assertSameDigest, DT, paint } from "../vehicle/test-support.ts";
-import type { DoorScenario, RamShot } from "./door-rig.ts";
+import { DOOR_LANES, laneFor, type DoorScenario, type RamShot } from "./door-rig.ts";
 import { fireRam } from "./door-rig.test-util.ts";
 
 /**
@@ -29,7 +29,7 @@ const SHOTS: Shot[] = [
   { scenario: "panelPush", kph: 1.5, kg: 60, note: "smushes the panel back" },
   { scenario: "panelPush", kph: 3, kg: 120, note: "smushes the panel back" },
   { scenario: "panelPush", kph: 12, kg: 300, note: "tears the panel off" },
-  { scenario: "panelPull", kph: 1.5, kg: 60, note: "opens the panel more, holds" },
+  { scenario: "panelPull", kph: 2, kg: 60, note: "opens the panel more, holds" },
   { scenario: "panelPull", kph: 4, kg: 300, note: "tears the panel off" },
 ];
 
@@ -113,7 +113,7 @@ function strike(part: "door" | "panel", dir: 1 | -1, kph: number, kg: number, ca
     p.folding = true;
   }
   const box = makeBox();
-  const inner = part === "door" ? 1.1 : 0.91;
+  const inner = part === "door" ? DOOR_LANES.shut.inner : laneFor("panelPush", car, 1).inner;
   box.hx = 0.3;
   box.hy = 0.225;
   box.hz = 0.25;
@@ -148,7 +148,7 @@ describe("given a still box with the car driven at it, and the same box driven a
     ["door torn off the other way", "door", 1, 15, 300, (r) => r.off.join() === "doorR"],
     ["panel pushed back", "panel", 1, 3, 120, (r) => r.off.length === 0 && r.panel < 0.4],
     ["panel torn off from behind", "panel", 1, 12, 300, (r) => r.off.join() === "quarterR"],
-    ["panel pulled out, soft", "panel", -1, 1.5, 60, (r) => r.off.length === 0 && r.panel > 0.8],
+    ["panel pulled out, soft", "panel", -1, 2, 60, (r) => r.off.length === 0 && r.panel > 0.8],
     ["panel torn off from the front", "panel", -1, 4, 300, (r) => r.off.join() === "quarterR"],
   ];
   for (const [name, part, dir, kph, kg, meaningful] of CASES) {
@@ -165,7 +165,7 @@ describe("given a still box with the car driven at it, and the same box driven a
 });
 
 describe("given a panel folded by the sim's step on a car no frame ever drew", () => {
-  for (const [name, dir, kph, kg] of [["pushed back", 1, 3, 120], ["torn off from behind", 1, 12, 300], ["pulled out, soft", -1, 1.5, 60]] as const) {
+  for (const [name, dir, kph, kg] of [["pushed back", 1, 3, 120], ["torn off from behind", 1, 12, 300], ["pulled out, soft", -1, 2, 60]] as const) {
     it(`when it is struck and ${name}, then it ends as the same panel posed by a frame does`, () => {
       const drawn = strike("panel", dir, kph, kg, true);
       const sim = strike("panel", dir, kph, kg, true, false);

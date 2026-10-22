@@ -11,7 +11,7 @@ import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-m
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { centreLift } from "./car-cage-rig.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { DOOR, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
+import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { DOOR_GLASS_SEAT, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane, windshieldPoint } from "./car-glass.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
@@ -104,8 +104,6 @@ export const BUMPER_TEAR_MPS = 30 / 3.6;
 // latch/hinge 8.9 kN transverse. Guessed: masses, stop angle, plastic travel, mirror numbers.
 /** Front-door assembly (kg), guessed inside the usual 20–30 kg. */
 const DOOR_MASS = 25;
-/** Thin slab about one edge, I = m·L²/3 (kg·m²). */
-export const DOOR_INERTIA = (DOOR_MASS * DOOR.length * DOOR.length) / 3;
 /** Check-strap stop (rad); 65–70° is typical. */
 export const DOOR_OPEN_MAX = (68 * Math.PI) / 180;
 /** Hinge energy past the stop that tears the door off (J): 11 kN at the pins is ~1.8 kN at the
@@ -125,12 +123,12 @@ const DOOR_JAM = 1.45;
 /** C1: a side hit that raises a door's hinge value past this at `DOOR_TEAR_MPS` tears it off. */
 const DOOR_TEAR_T = 0.58;
 
-/** The doors' hinge at this car's door hinge line; the swinging slab is the platform `DOOR`, as in the rest of the door sim. */
+/** The doors' hinge and swinging slab: this car's own door (`style.door`), a uniform slab of `DOOR_MASS` from the hinge to the trailing edge. */
 function doorSpec(door: BodyStyle["door"]): HingeSpec {
   return {
-    length: DOOR.length,
+    length: door.length,
     kg: DOOR_MASS,
-    inertia: (DOOR_MASS * DOOR.length * DOOR.length) / 3,
+    inertia: (DOOR_MASS * door.length * door.length) / 3,
     stop: DOOR_OPEN_MAX,
     jam: DOOR_JAM,
     ajar: DOOR_AJAR,
@@ -452,6 +450,10 @@ export abstract class CarCore {
   readonly underbody: CarUnderbody | null;
   private mirrorL: PartSeat;
   private mirrorR: PartSeat;
+  /** The mirror's base, m out from the car's axis: the door hinge plus the drawn mirror seat (`mirrorSeatX`); the sim's mirror folds about it and reaches `style.door.mirrorReach` past it. */
+  readonly mirrorBaseX: number;
+  /** The drawn mirror's lowest and highest point (m, car frame): the heights a striker meets it at. */
+  readonly mirrorSpanY: readonly [number, number];
   /** The static parts, drawn by PartBatch: one of each kind indexed by PartKind, then the further ones (`carPartSeats`). */
   readonly partSeats: readonly PartSeat[] = carPartSeats();
   /** Police roof light bar (skinned with the roof cage), its part, rest shape and seat; null on other styles. */
@@ -549,6 +551,7 @@ export abstract class CarCore {
     this.addLamps();
 
     const seatX = mirrorSeatX(this.style);
+    this.mirrorBaseX = door.hingeX + seatX;
     this.mirrorL = this.partSeats[PART_KIND.mirrorL]!;
     this.mirrorR = this.partSeats[PART_KIND.mirrorR]!;
     for (const [seat, sign, doorGroup] of [[this.mirrorL, -1, this.doorL], [this.mirrorR, 1, this.doorR]] as const) {
@@ -557,6 +560,8 @@ export abstract class CarCore {
       doorGroup.add(seat);
     }
     for (const seat of this.partSeats) ({ variant: seat.variant, geometry: seat.drawn } = drawnPart(seat.kind, drawnStyle(this.style)));
+    const cap = new THREE.Box3().setFromBufferAttribute(this.mirrorR.drawn.getAttribute("position") as THREE.BufferAttribute);
+    this.mirrorSpanY = [door.hingeY + door.mirrorY + cap.min.y, door.hingeY + door.mirrorY + cap.max.y];
     this.setPartPaint(livery?.body ?? paint.body, livery?.doors ?? paint.body);
 
     this.addGlass();
