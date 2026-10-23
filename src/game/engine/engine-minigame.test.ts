@@ -19,6 +19,7 @@ import { BAIL_WINDOW_SECONDS, bailRelease, type BailVerdict } from "../scenes/mi
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { minigameStore } from "./minigame-store.ts";
+import { BARRIER_HALF } from "../contact/sat.ts";
 
 /**
  * The Range's minigames in the real engine: each mode's start, throw, score and Retry, the dummy and camera held with no timer, the
@@ -38,6 +39,10 @@ const PARKED_CAR_EYE_DISTANCE_LIMIT = 30;
 /** A full-throttle long jump with no bail rests between these (m): mid-field, half a perfect bail's range; the landing is about 47-57 m and a 30 degree throw rests within a few metres of it. */
 const LONG_JUMP_NO_BAIL_MINIMUM = 40;
 const LONG_JUMP_NO_BAIL_MAXIMUM = 70;
+/** Sim seconds a full-throttle long jump takes from the pedal to past the barrier and down on the field. */
+const LONG_JUMP_PAST_S = 8;
+/** The driver cars the long jump throws: the monster flies its barrier and lands past it, its driver in (`minigame-profile.test.ts`). */
+const LONG_JUMP_CARS = DRIVER_CARS.filter((type) => type.id !== "monster");
 /** The eye of the parked-start shot: at least this far behind the car, at most this far off its line, looking this closely along its heading (cosine). */
 const PARKED_EYE_BEHIND_MIN = 4;
 const PARKED_EYE_ASIDE_MAX = 2;
@@ -417,6 +422,31 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
   describe("given the long jump driven from the parked start at full throttle by each driver car, with no bail", () => {
     for (const driverCar of DRIVER_CARS) {
+      if (driverCar.id === "monster") {
+        it("when a monster holds the throttle to the barrier and presses no bail, then it flies the barrier and lands past it with its driver in: nobody is thrown, the bail meets no hit, and the attempt ends as a no throw within the rest hold of its settling", () => {
+          engine.setPlayerCar("monster");
+          engine.startMinigame("longJump");
+          assert.equal(minigameHud().phase, "ready", "ready");
+          launches.length = 0;
+          engine["keys"].add(THROTTLE_KEY);
+          run(LONG_JUMP_PAST_S);
+          const x = engine["cars"][0]!.group.position.x - STATION_ANCHORS.longJump.x;
+          engine["keys"].delete(THROTTLE_KEY);
+          let restS = 0;
+          for (let frame = 0; frame < THROW_TIMEOUT_S * FRAME_HZ && minigameHud().phase !== "scored"; frame++) {
+            engine.advance(FRAME, { frameDt: FRAME });
+            restS = engine["carA"].moving ? 0 : restS + FRAME;
+          }
+          const card = minigameHud();
+          assert.equal(launches.length, 0, "nobody thrown");
+          assert.equal(engine["minigames"]["bail"]["hitAt"], null, "the bail met no hit");
+          assert.ok(x > BARRIER_HALF.x, `the monster stands at local x ${x.toFixed(1)} m, not past the barrier`);
+          assert.equal(card.phase, "scored", "the attempt ended");
+          assert.equal(card.noThrow, true, "as a no throw");
+          assert.ok(restS <= REST_HOLD + 2 * FRAME, `it scored ${restS.toFixed(2)} s after the monster settled, not within the rest hold`);
+        });
+        continue;
+      }
       it(`when a ${driverCar.id} holds the throttle to the barrier and presses no bail, then its driver is thrown exactly once and the throw scores the dummy's rest distance, mid-field`, (t) => {
         engine.setPlayerCar(driverCar.id);
         engine.startMinigame("longJump");
@@ -552,7 +582,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
   describe("given the long jump's bail pressed through the real boost key", () => {
     const BOOST_KEY = "ShiftLeft";
-    /** How far (s) the stamped press may be from the asked offset: a frame of sim time, slowed by the approach's slow-mo. */
+    /** How far (s) the stamped press may be from the asked offset: a frame of presented time (the press is stamped at the end of the frame that polled it). */
     const PRESS_TOLERANCE_S = 0.04;
     /** A perfect bail rests at least this much (m) past the same run with no press. */
     const PERFECT_OVER_NONE_M = 30;
@@ -563,18 +593,19 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     /** A wasted bail, whose throw goes at the hit with the no-press release, rests this near (m) a no-press run's (the car has moved on a quarter second by the no-press throw). */
     const WASTED_SCATTER_M = 6;
     const BOOST_HOLD_S = 1;
-    const FADE_CLASS_IDS = ["sedan", "monster"] as const;
+    /** The sedan and the farthest thrower, the muscle (the monster flies the barrier: no hit to bail on). */
+    const FADE_CLASS_IDS = ["sedan", "muscle"] as const;
     type BailRun = { verdict: BailVerdict; score: number; hitRelative: number };
 
-    /** A long jump at full throttle with the boost key tapped one frame when the sim has run `pressRelative` s since the throttle went down (null: never). */
+    /** A long jump at full throttle with the boost key tapped one frame when `pressRelative` s of presented time have run since the throttle went down (null: never). */
     const bailRun = (carId: string, pressRelative: number | null): BailRun => {
       engine.setPlayerCar(carId);
       engine.startMinigame("longJump");
-      const origin = engine["elapsedSim"];
+      const origin = engine["elapsedWall"];
       engine["keys"].add(THROTTLE_KEY);
       let pressed = false;
       for (let frame = 0; frame < THROW_TIMEOUT_S * FRAME_HZ && minigameHud().phase !== "scored"; frame++) {
-        if (pressRelative !== null && !pressed && engine["elapsedSim"] - origin >= pressRelative) {
+        if (pressRelative !== null && !pressed && engine["elapsedWall"] - origin >= pressRelative) {
           engine["keys"].add(BOOST_KEY);
           pressed = true;
         }
@@ -591,7 +622,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       return bailRun(carId, null);
     };
 
-    for (const driverCar of DRIVER_CARS) {
+    for (const driverCar of LONG_JUMP_CARS) {
       it(`when a ${driverCar.id} taps the boost key on the hit, then the bail is perfect and he rests at least ${PERFECT_OVER_NONE_M} m past the same run with no press`, () => {
         const none = baseline(driverCar.id);
         const perfect = bailRun(driverCar.id, none.hitRelative);
@@ -756,5 +787,68 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         assert.ok(Math.abs(run.verdict.offsetSeconds! - press.expectedOffsetS) < PRESS_TOLERANCE_S, `offset ${run.verdict.offsetSeconds} against ${press.expectedOffsetS}`);
       });
     }
+  });
+
+  describe("given a long jump attempt in which the barrier throws nobody (the car is lifted off the throttle short of it)", () => {
+    /** A run is read this long (s) after the car settles: the rest hold the dummy's own scoring waits, and a second to spare. */
+    const RESOLVE_AFTER_REST_S = REST_HOLD + 1;
+    const NO_THROW_TIMEOUT_S = 60;
+    /** The car has left its hilltop spot when it is this far (m) from it. */
+    const LEFT_START_M = 1;
+
+    /** A long jump at full throttle until the car passes `liftAtX`, then coasting, until it has lain at rest `RESOLVE_AFTER_REST_S` (or the timeout): the seconds it rested. */
+    const coastToRest = (liftAtX: number): number => {
+      const startX = engine["carA"].group.position.x;
+      engine["keys"].add(THROTTLE_KEY);
+      let left = false;
+      let restS = 0;
+      for (let frame = 0; frame < NO_THROW_TIMEOUT_S * FRAME_HZ && restS < RESOLVE_AFTER_REST_S; frame++) {
+        if (engine["carA"].group.position.x >= liftAtX) engine["keys"].delete(THROTTLE_KEY);
+        engine.advance(FRAME, { frameDt: FRAME });
+        left ||= Math.abs(engine["carA"].group.position.x - startX) > LEFT_START_M;
+        restS = left && !engine["carA"].moving ? restS + FRAME : 0;
+      }
+      engine["keys"].delete(THROTTLE_KEY);
+      return restS;
+    };
+
+    const cases = [
+      { it: "rolls into the barrier too slowly to throw him", liftAtX: -16 },
+      { it: "stops short of the barrier on the hill", liftAtX: -30 },
+    ] as const;
+    for (const testCase of cases) {
+      it(`when the throttle is let go at x ${testCase.liftAtX} and the car ${testCase.it}, then the attempt ends as no throw within ${RESOLVE_AFTER_REST_S} s of the car settling, with no score and no dummy launched`, () => {
+        engine.setPlayerCar("sedan");
+        engine.startMinigame("longJump");
+        const launched = launches.length;
+        const bestBefore = minigameHud().best.thisCar;
+        const restS = coastToRest(testCase.liftAtX);
+        const card = minigameHud();
+        assert.ok(restS >= RESOLVE_AFTER_REST_S, `the car never settled (rested ${restS.toFixed(2)} s)`);
+        assert.equal(card.phase, "scored", `${restS.toFixed(2)} s after the car settled at x ${engine["carA"].group.position.x.toFixed(2)}, the attempt is still ${card.phase}`);
+        assert.equal(card.noThrow, true, "the attempt is a no throw");
+        assert.equal(card.lastScore, null, "no score");
+        assert.equal(card.best.thisCar, bestBefore, "the best is untouched");
+        assert.equal(card.bail!.verdict, null, "no bail verdict: nobody was thrown");
+        assert.equal(launches.length, launched, "no dummy was launched");
+      });
+    }
+
+    it("when a no throw is retried, then the same attempt is ready again on the hilltop with the card cleared, and it can be thrown", () => {
+      engine.setPlayerCar("sedan");
+      engine.startMinigame("longJump");
+      coastToRest(-16);
+      const ended = minigameHud();
+      engine.retryMinigame();
+      const again = minigameHud();
+      assert.equal(again.phase, "ready", "Retry readies the next run");
+      assert.equal(again.noThrow, false, "the next run is not a no throw");
+      assert.equal(again.attempt, ended.attempt, "a no throw uses no attempt");
+      assert.ok(Math.abs(engine["carA"].group.position.x - engine["minigames"].stationStart().x) < START_TOLERANCE, "the car is back on the hilltop");
+      const samples = throwAndRead("longJump");
+      assert.ok(samples.length > 0, "the retried run threw him");
+      assert.equal(minigameHud().phase, "scored", "the retried run scored");
+      assert.equal(minigameHud().noThrow, false, "a throw is no no throw");
+    });
   });
 });

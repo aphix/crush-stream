@@ -290,15 +290,17 @@ function fly(range: RagdollRange, mode: MinigameMode, thrown: Capture, scale: Re
 type Measurement = { type: DriverCar; run: RunKind; thrown: Capture; flights: Flight[] };
 
 const measurements = new Map<string, Measurement[]>();
+/** The classes the long jump throws: the monster flies its barrier and lands past it, its driver in (`minigame-profile.test.ts`). */
+const LONG_JUMP_CARS = DRIVER_CARS.filter((type) => type.id !== "monster");
 
-/** Every class's best and mid run through `mode` with `scale`, each thrown `repeats` times. */
+/** Every class's best and mid run through `mode` with `scale`, each thrown `repeats` times; on the long jump, every class but the monster. */
 async function measure(mode: MinigameMode, scale: ReleaseScale, repeats: number): Promise<Measurement[]> {
   const key = `${mode}:${scale.forward}:${scale.upward}:${scale.elevation}:${repeats}`;
   let cached = measurements.get(key);
   if (cached === undefined) {
     const range = await rangeFor(mode);
     cached = [];
-    for (const type of DRIVER_CARS) {
+    for (const type of mode === "longJump" ? LONG_JUMP_CARS : DRIVER_CARS) {
       for (const run of ["best", "mid"] as const) {
         const thrown = capture(type, mode, run);
         cached.push({ type, run, thrown, flights: Array.from({ length: repeats }, (_, seed) => fly(range, mode, thrown, scale, seed)) });
@@ -418,7 +420,7 @@ function fadeViolations(byOffset: ReadonlyMap<number | null, readonly Measuremen
   const violations: string[] = [];
   const landingAt = (offset: number | null, id: string): number => bestRunsOf(byOffset.get(offset)!).find((row) => row.type.id === id)!.flights[0]!.landingDistance;
   const distances = [0, 0.05, 0.1, 0.2];
-  for (const type of DRIVER_CARS) {
+  for (const type of LONG_JUMP_CARS) {
     const stages = distances.map((distance) => (landingAt(-distance, type.id) + landingAt(distance, type.id)) / 2);
     stages.push(landingAt(null, type.id));
     for (let at = 1; at < stages.length; at++) {
@@ -573,7 +575,7 @@ const offsetName = (offset: number | null): string => (offset === null ? "no pre
 /** Per class, the best run's landing and rest (m) at every bail offset: one line a class. */
 function bailTable(byOffset: ReadonlyMap<number | null, readonly Measurement[]>): string {
   const header = `| class | ${BAIL_OFFSETS.map(offsetName).join(" | ")} |`;
-  const lines = DRIVER_CARS.map((type) => {
+  const lines = LONG_JUMP_CARS.map((type) => {
     const cells = BAIL_OFFSETS.map((offset) => {
       const flight = bestRunsOf(byOffset.get(offset)!).find((row) => row.type.id === type.id)!.flights[0]!;
       return `${metres(flight.landingDistance)} / ${metres(flight.restDistance)}`;
@@ -590,7 +592,7 @@ async function bailMeasurements(): Promise<Map<number | null, Measurement[]>> {
 }
 
 describe("given the long jump's timed bail with THROW_BOOST.longJump on the real ground, car, barrier and ragdoll", () => {
-  it("when every class's best and mid run is thrown at each bail offset, then the perfect bail lands the best class near the far end short of the last sign, every no-press run lands mid-field, and the metres fade smoothly and alike for an early and a late press", async (t) => {
+  it("when the best and mid run of every class the long jump throws (all but the monster, which flies the barrier) is thrown at each bail offset, then the perfect bail lands the best class near the far end short of the last sign, every no-press run lands mid-field, and the metres fade smoothly and alike for an early and a late press", async (t) => {
     const byOffset = await bailMeasurements();
     const perfect = byOffset.get(0)!;
     const none = byOffset.get(null)!;

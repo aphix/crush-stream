@@ -13,10 +13,13 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 export const COMPACTOR = {
   /** m/s each plate travels inward. */
   speed: 0.55,
-  /** The plates start this far (m) past the longer bumper's rest, stop this far past the hub centre-line (the wheel-well lip) and finish this far short of the rails' rest. */
+  /** The plates start this far (m) past the longer bumper's rest, and stop this far past the hub centre-line (the wheel-well lip). */
   startGap: 0.16,
   wellGap: 0.16,
-  railGap: 0.06,
+  /** Shape mode: the plates finish this far (m) inside the rails' rest; its shape-matched rails stall just under a 0.2 m fold until the plates are about 0.2 m in. */
+  shapeRailGap: 0.26,
+  /** Lattice mode: the plates finish this far (m) inside the rails' rest; deeper, its front keeps crushing while its rear stalls and the bumpers end uneven about the middle. */
+  latticeRailGap: 0.06,
 } as const;
 
 /** The plates' faces for one car: |z| (m) from its centre, off its own rig. */
@@ -26,7 +29,8 @@ function pressFaces(car: DeformableCar): PressFaces {
   const rest = (name: MassName): number => Math.abs(car.frame.rig.masses.find((m) => m.name === name)!.rest[2]);
   const bumperZ = Math.max(rest("bumperFL"), rest("bumperRL"));
   const hubZ = car.frame.halfBase;
-  return { bumperZ, hubZ, startFace: bumperZ + COMPACTOR.startGap, wellFace: hubZ + COMPACTOR.wellGap, midFace: hubZ, maxFace: rest("railL") - COMPACTOR.railGap };
+  const railGap = car.deform.mode === "shape" ? COMPACTOR.shapeRailGap : COMPACTOR.latticeRailGap;
+  return { bumperZ, hubZ, startFace: bumperZ + COMPACTOR.startGap, wellFace: hubZ + COMPACTOR.wellGap, midFace: hubZ, maxFace: rest("railL") - railGap };
 }
 
 /** Plate slab (m): half thickness along the travel, half width, half height and centre height. */

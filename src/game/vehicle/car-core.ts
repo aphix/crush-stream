@@ -3,6 +3,7 @@ import "../kernel/three-trig.ts";
 import * as THREE from "three";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
 import type { PointSkin } from "../deform/deform-rig.ts";
+import type { BodyPartName } from "../kernel/rig-spec.ts";
 import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
@@ -11,9 +12,9 @@ import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } fro
 import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { cageLift, centreLift } from "./car-cage-rig.ts";
-import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { makeChassisGeometry, withGateSurround } from "./car-chassis-mesh.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
-import { DOOR_GLASS_SEAT, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane, windshieldPoint } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, makeBodyGlassTrim, makeDoorChromeStrips, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane, windshieldPoint } from "./car-glass.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
   LIGHT_BAR_FOOT,
@@ -42,6 +43,10 @@ import { newLooseShape } from "./loose-step.ts";
 import { carClass, CLASSES, drivenAxles } from "./vehicle-classes.ts";
 import { bootPivot, lidSpec, roofHinged, type HingeSpec } from "./hinge-spec.ts";
 import { restShell } from "./shadow-caster.ts";
+/** What a chrome trim follows in a crush: the cage of the pane it frames, or (`strip`) the body paint's A5 rules about its seat, `cage` then the lattice mode's stand-in; `door` the door it rides. */
+type TrimKind = { cage: BodyPartName; door: 0 | 1 | null; strip: boolean };
+/** A trim mesh with its rest points (in its own frame, seated at `origin` in the car frame) and, for a strip, its paint tables. */
+type TrimFollow = Pick<TrimKind, "cage" | "door"> & { mesh: THREE.Mesh; rest: Float32Array; origin: THREE.Vector3; paint: PointSkin | null };
 const _inv = new THREE.Quaternion();
 const _lampQ = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
@@ -232,7 +237,7 @@ export interface Lamp {
 /**
  * A drawn-only lamp, no light of its own: on the skin (`lamps.brake`, `lamps.sideMarkers`; seated and lifted as a lamp, never broken), or
  * a head's share on the hood / a tail's on the boot lid (`hood` / `boot`: riding that lid, `anchor` null), drawn broken once its lamp
- * breaks or its lid tears off.
+ * breaks or its lid tears off; a roof-hinged gate's `lamps.brake` rides the gate (`anchor` null, no lamp) and goes dark when it tears off.
  */
 interface LampFitting {
   seat: THREE.Object3D;
@@ -240,8 +245,8 @@ interface LampFitting {
   anchor: SkinAnchor | null;
   /** Its variant in the lamp batch (`drawnLamp`); 0 for the shared brake and marker units. */
   variant: number;
-  /** A share's lamp on the body and its lid's part (set once the parts are registered); null on the brake and the markers. */
-  share: { lamp: Lamp; lid: DetachPart | null } | null;
+  /** A share's lamp on the body and its lid's part (set once the parts are registered); a hatch's high brake lamp on its gate has no lamp, only the lid; null on the other brake lamps and the markers. */
+  share: { lamp: Lamp | null; lid: DetachPart | null } | null;
   /** A marker's tint (`lamps.sideMarkers[].tint`), multiplied into its unit's colour; null for the rest. */
   tint: THREE.Color | null;
 }
@@ -457,6 +462,8 @@ export abstract class CarCore {
   protected doorROrigin: THREE.Vector3;
   protected doorLSkin: PointSkin;
   protected doorRSkin: PointSkin;
+  /** The chrome trims that follow a crushed body (`CarCore.addGlass`), written with the panels (`skinPanels`). */
+  protected readonly trims: TrimFollow[] = [];
   /** The cabin's pose, holding its shell, seats and wheel (`CarCabin`): `fitInterior` moves it with the crushed cell. */
   readonly interior: THREE.Group;
   /** The interior kit, the engine bay and the crash bars, placed by the style. */
@@ -508,7 +515,7 @@ export abstract class CarCore {
     this.hood.castShadow = true;
     this.hood.position.set(0, this.style.hood.origin[0], this.style.hood.origin[1]);
     this.group.add(this.hood);
-    this.trunk = new THREE.Mesh(makeTrunkGeometry(this.style), this.bodyMat);
+    this.trunk = new THREE.Mesh(withGateSurround(makeTrunkGeometry(this.style), drawn), this.bodyMat);
     this.trunk.castShadow = true;
     const [pivotY, pivotZ] = bootPivot(this.style.boot);
     this.trunk.position.set(0, pivotY, pivotZ);
@@ -689,12 +696,12 @@ export abstract class CarCore {
     return seat;
   }
 
-  /** `lamps.brake` on the skin or the rear glass met from behind at its [x, y], facing back; each of `lamps.sideMarkers` on both sides met from outboard at its [y, z], facing out. */
+  /** `lamps.brake` on the skin, the rear glass or a roof-hinged gate's spoiler (it rides the gate) met from behind at its [x, y], facing back; each of `lamps.sideMarkers` on both sides met from outboard at its [y, z], facing out. */
   private addLampFittings(): void {
     const { brake, sideMarkers } = this.style.lamps;
     const skin = new THREE.Mesh(this.body.geometry);
     const ray = new THREE.Raycaster();
-    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number], targets: THREE.Object3D[], tint?: number, inset?: number) => {
+    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number], targets: THREE.Object3D[], tint?: number, inset?: number, gate?: THREE.Object3D) => {
       ray.set(from, toward);
       const hit = ray.intersectObjects(targets, false)[0];
       if (!hit) throw new Error(`${this.style.id}: no skin for its ${kind} lamp from ${from.toArray().join()}`);
@@ -702,12 +709,31 @@ export abstract class CarCore {
       seat.scale.set(size[0], size[1], 1);
       // Recessed along the probe ray, into the car; absent, the hit point itself (no float math on the unrecessed lamps).
       const point = inset ? hit.point.clone().addScaledVector(toward, inset) : hit.point;
+      const color = tint === undefined ? null : new THREE.Color(tint);
+      if (hit.object === gate) {
+        // On the gate's spoiler: seated in the lid's frame, so it opens and tears with the gate.
+        seat.parent = this.trunk;
+        seat.position.copy(point).sub(this.trunk.position);
+        seat.quaternion.setFromAxisAngle(_up, yaw);
+        seat.updateMatrix();
+        this.lampFittings.push({ seat, kind, anchor: null, variant: 0, share: { lamp: null, lid: null }, tint: color });
+        return;
+      }
       const anchor = anchorOnSkin(this.body.geometry, point, _lampQ.setFromAxisAngle(_up, yaw));
-      this.lampFittings.push({ seat, kind, anchor, variant: 0, share: null, tint: tint === undefined ? null : new THREE.Color(tint) });
+      this.lampFittings.push({ seat, kind, anchor, variant: 0, share: null, tint: color });
     };
     if (brake) {
       const glass = new THREE.Mesh(makeRearGlass(this.style), GLASS_PROBE);
-      seatAt("brake", new THREE.Vector3(brake.at[0], brake.at[1], -LAMP_PROBE_REACH), new THREE.Vector3(0, 0, 1), Math.PI, brake.size, [skin, glass], undefined, brake.inset);
+      const targets: THREE.Object3D[] = [skin, glass];
+      let gate: THREE.Mesh | undefined;
+      if (this.trunk.geometry.userData.surround !== undefined) {
+        // Not `this.trunk` itself: its matrixWorld is stale in the ctor.
+        gate = new THREE.Mesh(this.trunk.geometry);
+        gate.position.copy(this.trunk.position);
+        gate.updateMatrixWorld();
+        targets.push(gate);
+      }
+      seatAt("brake", new THREE.Vector3(brake.at[0], brake.at[1], -LAMP_PROBE_REACH), new THREE.Vector3(0, 0, 1), Math.PI, brake.size, targets, undefined, brake.inset, gate);
       glass.geometry.dispose();
     }
     for (const marker of sideMarkers ?? []) {
@@ -768,15 +794,27 @@ export abstract class CarCore {
     if (style.windowTrim === "chrome") {
       const chrome = trimMaterial(TRIM_CHROME, "chrome");
       // Drawn only (no shadow, so the detail cut hides it with the glass); each rides its pane's parent at the pane's seat.
-      const addTrim = (geometry: THREE.BufferGeometry, parent: THREE.Object3D, at?: THREE.Vector3): void => {
+      const addTrim = (geometry: THREE.BufferGeometry, parent: THREE.Object3D, follow: TrimKind | null, at?: THREE.Vector3): void => {
         const mesh = new THREE.Mesh(geometry, chrome);
         mesh.name = "windowTrim";
         if (at) mesh.position.copy(at);
         parent.add(mesh);
+        if (!follow) return;
+        const rest = this.copyRest(geometry);
+        const origin = at ? parent.position.clone().add(at) : new THREE.Vector3();
+        this.trims.push({ cage: follow.cage, door: follow.door, mesh, rest, origin, paint: follow.strip ? this.deform.bindPoints(rest, origin) : null });
       };
-      addTrim(makeSideGlassFrame(-1, style), this.doorL, sideL.position);
-      addTrim(makeSideGlassFrame(1, style), this.doorR, sideR.position);
-      addTrim(makeBodyGlassFrames(style, !inGate), this.group);
+      // A pane's frame follows its pane (the skinned panes' cages; the rigid side and quarter glass keep their frames still), a strip the paint it stands on.
+      addTrim(makeSideGlassFrame(-1, style), this.doorL, null, sideL.position);
+      addTrim(makeSideGlassFrame(1, style), this.doorR, null, sideR.position);
+      const doorStrips = [makeDoorChromeStrips(-1, style), makeDoorChromeStrips(1, style)] as const;
+      if (doorStrips[0]) addTrim(doorStrips[0], this.doorL, { cage: "doorLeft", door: 0, strip: true }, sideL.position);
+      if (doorStrips[1]) addTrim(doorStrips[1], this.doorR, { cage: "doorRight", door: 1, strip: true }, sideR.position);
+      const body = makeBodyGlassTrim(style, !inGate);
+      addTrim(body.quarters, this.group, null);
+      addTrim(body.windshield, this.group, { cage: "glassFront", door: null, strip: false });
+      if (body.rear) addTrim(body.rear, this.group, { cage: "glassRear", door: null, strip: false });
+      if (body.strips) addTrim(body.strips, this.group, { cage: "chassisCell", door: null, strip: true });
     }
   }
 

@@ -1,11 +1,13 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
+import { roofHinged } from "./hinge-spec.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, ROOF_DRIP, roofDrip, sideBowZ } from "./car-lines.ts";
 import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset, windshieldSideBase, windshieldSideX } from "./car-glass.ts";
 import { splitCreases, splitLoftOnLowDiagonals } from "./car-crease.ts";
 import { drawnRoofTopY, roofEndAcross, roofEndBows, roofEndHeldZ, roofEndWeight, roofSourceZ, type RoofEnd } from "./car-roof-end.ts";
 import {
+  CREASE_DEGREES,
   ROOF_ARC_T,
   ROOF_CROWN,
   ROOF_LIP_OUT,
@@ -286,7 +288,7 @@ function boxFromCorners(
 type Rail = { rear: V3; front: V3; inward?: readonly [number, number] };
 
 /**
- * Pillar lofted through `rails` (belt to top), thickness inward, its unit `section` at each rail's width (default: corners rounded at
+ * Pillar lofted through `rails` (belt to top), thickness inward, its unit `section` at each rail's width and station `k` (default: corners rounded at
  * `radius` (m) in `steps` chords, the outer face bulged `crown` (m)); sign -1 mirrors to the left, its outer face still at u = 1.
  * Its end caps share the end rings; `open`: both ends are buried (in the body, the roof's side), so it draws no caps.
  */
@@ -300,11 +302,12 @@ function roundedPillarAlong(
     open = false,
     crown = 0,
     section = (width: number) => filletedUnitSection(filletShare(thick, radius), filletShare(width, radius), steps, crown / thick),
-  }: { radius?: number; steps?: number; open?: boolean; crown?: number; section?: (width: number) => Pt[] } = {},
+  }: { radius?: number; steps?: number; open?: boolean; crown?: number; section?: (width: number, k: number) => Pt[] } = {},
 ): THREE.BufferGeometry {
   const last = rails.length - 1;
   const stations = rails.map((_, k) => k / last);
-  const sections = rails.map(({ rear, front }) => section(hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2])));
+  const sections = rails.map(({ rear, front }, k) => section(hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2]), k));
+  if (sections.some((s) => s.length !== sections[0]!.length)) throw new Error("a pillar's sections have different point counts along it");
   const geo = loftFromRings(sections, stations, 0, 1, false);
   if (open) {
     // The loft's rings and side triangles come first, its caps' centres and fans after.
@@ -333,18 +336,48 @@ export function postSection(thick: number, width: number, crown = PILLAR_CROWN):
   return filletedUnitSection(filletShare(thick, radius), filletShare(width, radius), POST_ROUND_STEPS, crown / thick);
 }
 
+/** Where a post section's outline points start: its four corner arcs (`ARC_POINTS` each), the outer face's crown points after the first. The front corner's arc starts at `FRONT_ARC`, the inner corners' at `INNER_ARCS`. */
+const ARC_POINTS = POST_ROUND_STEPS + 1;
+const FRONT_ARC = ARC_POINTS + CROWN_POINTS.length;
+const INNER_ARCS = FRONT_ARC + 2 * ARC_POINTS;
+
+/**
+ * `postSection` cut along w = `share` (from the rear edge), its rear part (`gate`) or its front part (`body`): the corner arcs whole, the outer face's crown carried by one middle point
+ * each side of the cut, so the point count never depends on where the cut falls, and the cut is a flat chord from the outer face to the inner. Both parts compute the cut's two points
+ * from the same numbers, so they share them to the bit. The cut must lie on the outer face's flat, between the corner arcs.
+ */
+function cutSection(thick: number, width: number, share: number, side: "gate" | "body"): Pt[] {
+  const outline = postSection(thick, width);
+  const [rearFlat, frontFlat] = [outline[ARC_POINTS - 1]!.y, outline[FRONT_ARC]!.y];
+  if (!(share > rearFlat && share < frontFlat)) throw new Error(`a post's cut at ${share} is not on its outer face's flat (${rearFlat.toFixed(3)}..${frontFlat.toFixed(3)})`);
+  const crownU = PILLAR_CROWN / thick;
+  const crowned = (y: number): Pt => ({ x: 1 + crownU * (1 - (2 * y - 1) ** 2), y });
+  const [cutOuter, cutInner] = [crowned(share), { x: 0, y: share }];
+  return side === "gate"
+    ? [...outline.slice(0, ARC_POINTS), crowned((rearFlat + share) / 2), cutOuter, cutInner, ...outline.slice(INNER_ARCS)]
+    : [cutOuter, crowned((share + frontFlat) / 2), ...outline.slice(FRONT_ARC, INNER_ARCS), cutInner];
+}
+
 /**
  * Drawn post (`postSection`) mapped onto four outer-face corners (+x side), its depth straight in, or square to its face in plan when
- * `square` (the C-pillar, whose face turns toward the tail); sign -1 mirrors to the left.
+ * `square` (the C-pillar, whose face turns toward the tail); sign -1 mirrors to the left. `cut` keeps one `side` of the post's section cut at its [foot, head] `share`;
+ * the gate's side is closed at both ends, a whole post and the body's side are buried in the body and the roof.
  */
-function roundedPillarFromCorners(sign: number, c: { fb: V3; rb: V3; rt: V3; ft: V3 }, thick: number, square = false): THREE.BufferGeometry {
+function roundedPillarFromCorners(
+  sign: number,
+  c: PostCorners,
+  thick: number,
+  square = false,
+  cut?: { share: readonly [number, number]; side: "gate" | "body" },
+): THREE.BufferGeometry {
   const rails = [0, 1].map((v): Rail => {
     const rear: V3 = [lerp(c.rb[0], c.rt[0], v), lerp(c.rb[1], c.rt[1], v), lerp(c.rb[2], c.rt[2], v)];
     const front: V3 = [lerp(c.fb[0], c.ft[0], v), lerp(c.fb[1], c.ft[1], v), lerp(c.fb[2], c.ft[2], v)];
     const [dx, dz] = [front[0] - rear[0], front[2] - rear[2]];
     return square ? { rear, front, inward: [dz / hypot2(dx, dz), dx / hypot2(dx, dz)] } : { rear, front };
   });
-  return roundedPillarAlong(sign, rails, thick, { open: true, section: (width) => postSection(thick, width) });
+  const section = (width: number, k: number): Pt[] => (cut ? cutSection(thick, width, cut.share[k]!, cut.side) : postSection(thick, width));
+  return roundedPillarAlong(sign, rails, thick, { open: cut?.side !== "gate", section });
 }
 
 /** The plank rear post's foot plate (+x side; sign -1 mirrors): one up-facing triangle from its bottom edge (`rb` to `fb`) out to `foot` on the shoulder. */
@@ -957,6 +990,78 @@ function cPillarTip(sign: number, style: BodyStyle, [tipY, tipZ]: YZ): THREE.Buf
   return insideRoof(tip, style, C_PILLAR_TIP);
 }
 
+/** A drawn pillar's top corner sits on the side glass's plane, `proud` off it, in under the roof's side; the cage keeps `cageX`. */
+function postTopX(style: BodyStyle, source: BodySource): (z: number, y: number, proud: number, cageX: number) => number {
+  return (z, y, proud, cageX) => (source === "cage" ? cageX : underRoofSide(onGlassPlane(z, y, style, proud), y, z, style));
+}
+
+interface PostCorners {
+  fb: V3;
+  rb: V3;
+  rt: V3;
+  ft: V3;
+}
+
+/** A split post's head ends this far (m) up into the gate's slab (the spoiler's underside is its `y[0]`), so the post meets the slab and its end is hidden. */
+const POST_SLAB_TUCK = 0.001;
+
+/**
+ * The rear (D) post's corners (right side): the glass-edge box `rearPillar`, `held` its drawn form (head held inside the roof's span, a squared post's rear edge on the side glass's plane),
+ * and `share` the cut ([foot, head], shares of its width from its rear edge) when a roof-hinged gate carries part of it (drawn, not a sail or squared post), its head then ending
+ * in the gate's slab; the cage keeps the box.
+ */
+function rearPostCorners(style: BodyStyle, source: BodySource) {
+  const q = source === "drawn" ? drawnQuarter(style) : style.quarter;
+  const rg = style.rearGlass;
+  const topX = postTopX(style, source);
+  const rearPillar = {
+    fb: [beltX(q.zRearBot, style), beltY(q.zRearBot, style) - 0.02, q.zRearBot],
+    rb: [rg.wBase / 2 + 0.02, rg.base[0], rg.base[1] - 0.01],
+    rt: [rg.wTop / 2 + 0.02, rg.top[0] + 0.01, rg.top[1] - 0.01],
+    ft: [topX(q.zRearTop, cantY(q.zRearTop, style) + PILLAR_TOP_RISE, ROOF_DRIP, cantX(q.zRearTop, style)), cantY(q.zRearTop, style) + PILLAR_TOP_RISE, q.zRearTop],
+  } as const;
+  // A drawn post's head follows the rear glass's top corner down the dome (`domeFall`), held inside the roof's span, where the
+  // roof's clamp takes its whole top ring, not half of it.
+  const [rtX, rtY, rtZ] = rearPillar.rt;
+  const [heldY, heldZ] = [rtY - domeFall(style, rg.top[1])(rg.wTop / 2, 1), Math.max(rtZ, style.roofZ[0] + ROOF_TUCK)];
+  const sail = source === "drawn" ? style.cPillar : undefined;
+  // A squared post (`pillars.rearSquare`, a truck cab's back corner): its rear edge on the side glass's plane like its front, so its face never
+  // turns to the tail; a flat cab back panel closes the cab from inside it over the rear glass's side edge.
+  const squared = source === "drawn" && !sail && style.pillars?.rearSquare === true;
+  const share = source === "drawn" && !sail && !squared && roofHinged(style.boot) ? style.boot.postShare : undefined;
+  for (const s of share ?? []) if (!(s > 0 && s < 1)) throw new Error(`a post's share ${s} is not inside (0, 1)`);
+  const slab = share === undefined ? undefined : style.roof?.spoiler?.y[0];
+  const [rbX, rbY, rbZ] = rearPillar.rb;
+  const held: PostCorners = squared
+    ? { ...rearPillar, rb: [rearPillar.fb[0], rbY, rbZ], rt: [rearPillar.ft[0], heldY, heldZ] }
+    : slab === undefined
+      ? { ...rearPillar, rb: [rbX, rbY, rbZ], rt: [rtX, heldY, heldZ] }
+      : { ...rearPillar, rb: [rbX, rbY, rbZ], rt: [rtX, slab + POST_SLAB_TUCK, heldZ], ft: [rearPillar.ft[0], slab + POST_SLAB_TUCK, rearPillar.ft[2]] };
+  return { rearPillar, held, sail, squared, share };
+}
+
+/**
+ * One piece of a split D-post (`side`: the gate's rear share, the body's front share; right side, `sign` -1 its mirror): the post's one section cut at its `share` per
+ * station, so the pieces meet on the same cut points with a flat cut between them (a box section open) and no lap, groove or fight when shut. The gate's piece is
+ * closed (its ends show when it opens), the cut and ends hard-edged. Its head ends in the slab, not under the roof's clamp.
+ */
+function postPiece(sign: number, style: BodyStyle, held: PostCorners, share: readonly [number, number], side: "gate" | "body"): THREE.BufferGeometry {
+  const geo = roundedPillarFromCorners(sign, held, 0.05, true, { share, side });
+  splitLoftOnLowDiagonals(geo);
+  splitCreases(geo, CREASE_DEGREES.post);
+  const tone = style.blackout?.rear;
+  geo.userData.blackout = tone === true || tone === "matte";
+  geo.userData.matte = tone === "matte";
+  geo.name = "rear";
+  return geo;
+}
+
+/** A roof-hinged gate's share of each D-post (drawn, car frame, both sides) beside its glass, toned as the body's rear post; none unless `boot.postShare` splits it. */
+export function gatePosts(style: BodyStyle): THREE.BufferGeometry[] {
+  const { held, share } = rearPostCorners(style, "drawn");
+  return share ? [-1, 1].map((sign) => postPiece(sign, style, held, share, "gate")) : [];
+}
+
 export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry[] {
   const pillarFromCorners = source === "cage" ? boxFromCorners : roundedPillarFromCorners;
   const parts: THREE.BufferGeometry[] = [];
@@ -980,8 +1085,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     geo.userData.matte = black[name] === "matte";
     return insideRoof(geo, style, name);
   };
-  // A drawn pillar's top corner sits on the side glass's plane, `proud` off it, in under the roof's side; the cage keeps `cageX`.
-  const topX = (z: number, y: number, proud: number, cageX: number) => (source === "cage" ? cageX : underRoofSide(onGlassPlane(z, y, style, proud), y, z, style));
+  const topX = postTopX(style, source);
   for (const sign of [-1, 1]) {
     parts.push(
       aPost
@@ -1031,32 +1135,16 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
         "b",
       ),
     );
-    const rearPillar = {
-      fb: [beltXAt(q.zRearBot), belt(q.zRearBot) - 0.02, q.zRearBot],
-      rb: [rg.wBase / 2 + 0.02, rg.base[0], rg.base[1] - 0.01],
-      rt: [rg.wTop / 2 + 0.02, rg.top[0] + 0.01, rg.top[1] - 0.01],
-      ft: [topX(q.zRearTop, cantY(q.zRearTop, style) + PILLAR_TOP_RISE, ROOF_DRIP, cantX(q.zRearTop, style)), cantY(q.zRearTop, style) + PILLAR_TOP_RISE, q.zRearTop],
-    } as const;
-    // A drawn post's head follows the rear glass's top corner down the dome (`domeFall`), held inside the roof's span, where the
-    // roof's clamp takes its whole top ring, not half of it.
-    const [rtX, rtY, rtZ] = rearPillar.rt;
-    const [heldY, heldZ] = [rtY - domeFall(style, rg.top[1])(rg.wTop / 2, 1), Math.max(rtZ, style.roofZ[0] + ROOF_TUCK)];
-    const sail = source === "drawn" ? style.cPillar : undefined;
-    // A squared post (`pillars.rearSquare`, a truck cab's back corner): its rear edge on the side glass's plane like its front, so its face never
-    // turns to the tail; a flat cab back panel closes the cab from inside it over the rear glass's side edge.
-    const squared = source === "drawn" && !sail && style.pillars?.rearSquare === true;
-    const [rbX, rbY, rbZ] = rearPillar.rb;
-    const heldPillar = squared
-      ? ({ ...rearPillar, rb: [rearPillar.fb[0], rbY, rbZ], rt: [rearPillar.ft[0], heldY, heldZ] } as const)
-      : ({ ...rearPillar, rb: [rbX, rbY, rbZ], rt: [rtX, heldY, heldZ] } as const);
-    parts.push(pillar(source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : sail ? cPillarSail(sign, style, rearPillar) : roundedPillarFromCorners(sign, heldPillar, 0.05, true), "rear"));
+    const { rearPillar, held, sail, squared, share } = rearPostCorners(style, source);
+    const post = () => (source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : sail ? cPillarSail(sign, style, rearPillar) : roundedPillarFromCorners(sign, held, 0.05, true));
+    parts.push(share ? postPiece(sign, style, held, share, "body") : pillar(post(), "rear"));
     if (squared) {
-      const cabBack = pillar(cabBackPanel(sign, heldPillar.rb, heldPillar.rt, 0.05, rg), "rear");
+      const cabBack = pillar(cabBackPanel(sign, held.rb, held.rt, 0.05, style.rearGlass), "rear");
       cabBack.name = "cabBack";
       parts.push(cabBack);
     }
     const rearFoot = source === "drawn" && !sail ? style.pillars?.rearFoot : undefined;
-    if (rearFoot) parts.push(rearFootPlate(sign, heldPillar.rb, rearPillar.fb, [rearFoot[0], rearFoot[1], rearPillar.rb[2]]));
+    if (rearFoot) parts.push(rearFootPlate(sign, held.rb, rearPillar.fb, [rearFoot[0], rearFoot[1], rearPillar.rb[2]]));
     if (sail?.tip) parts.push(cPillarTip(sign, style, sail.tip));
     if (m !== null) {
       const topZ = divider.z?.[1] ?? m;

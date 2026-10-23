@@ -681,8 +681,8 @@ export class DeformableCar extends CarParts {
   /** A crushed skin drawn over a standing tyre stands on it (`TyreSkin`); a thrown wheel is the world's. */
   private holdSkinOffTyres(skinWritten: boolean): void {
     if (!tyresUnderSkin(carClass(this))) return;
-    this.bodyTyres ??= new TyreSkin(this.frame, this.body, this.deform.restSkin);
-    this.hoodTyres ??= new TyreSkin(this.frame, this.hood, this.hoodRest);
+    this.bodyTyres ??= new TyreSkin(this.frame, this.body, this.deform.restSkin, true);
+    this.hoodTyres ??= new TyreSkin(this.frame, this.hood, this.hoodRest, false);
     let gone = 0;
     for (let i = 0; i < this.wheels.length; i++) if (this.looseWheels[i]!.loose) gone |= 1 << i;
     const lift = CLASSES[carClass(this)].lift;
@@ -690,7 +690,7 @@ export class DeformableCar extends CarParts {
     if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten);
   }
 
-  /** Bonnet, boot lid, door skins, the police light bar and the skinned glass follow the body skin; a door's hinge pose turns its skin after. */
+  /** Bonnet, boot lid, door skins, the police light bar, the skinned glass and the chrome trims follow the body skin; a door's hinge pose turns its skin after. */
   private skinPanels(): void {
     let hood = true;
     let trunk = true;
@@ -700,13 +700,23 @@ export class DeformableCar extends CarParts {
       else if (p.name === LID.trunk) trunk = false;
     }
     if (hood) this.deform.skinPanel(this.hood.geometry, this.hoodRest, "bonnet", this.hoodOrigin);
-    if (trunk) this.deform.skinPanel(this.trunk.geometry, this.trunkRest, "boot", this.trunkOrigin);
+    if (trunk) {
+      // The gate's frame and spoiler (from `surround`) dent with the rear glass; the boot cage's ±15 % clamp would flatten them.
+      const surround = this.trunk.geometry.userData.surround as number | undefined;
+      this.deform.skinPanel(this.trunk.geometry, this.trunkRest, "boot", this.trunkOrigin, 0, surround);
+      if (surround !== undefined) this.deform.skinPanel(this.trunk.geometry, this.trunkRest, "glassRear", this.trunkOrigin, surround);
+    }
     if (!this.doorParts[0]!.detached) this.deform.skinPoints(this.doorMeshL.geometry, this.doorLRest, this.doorLSkin, "doorLeft", this.doorLOrigin);
     if (!this.doorParts[1]!.detached) this.deform.skinPoints(this.doorMeshR.geometry, this.doorRRest, this.doorRSkin, "doorRight", this.doorROrigin);
     if (this.lightBar && !this.lightBarPart!.detached) this.deform.skinPanel(this.lightBar.geometry, this.lightBarRest!, "roof", this.lightBarOrigin);
     for (const g of this.glassPanes) {
       if (!g.skin || !g.restVerts || g.state === "shattered") continue;
       this.deform.skinPanel(g.mesh.geometry, g.restVerts, g.skin, _zero);
+    }
+    for (const t of this.trims) {
+      if (t.door !== null && this.doorParts[t.door]!.detached) continue;
+      if (t.paint) this.deform.skinPoints(t.mesh.geometry, t.rest, t.paint, t.cage, t.origin);
+      else this.deform.skinPanel(t.mesh.geometry, t.rest, t.cage, t.origin);
     }
   }
 

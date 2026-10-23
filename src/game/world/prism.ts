@@ -49,11 +49,15 @@ export const PR_MASS = 26;
 /** A knockable prop's knock speed (m/s): a body closing on it slower than this meets it as a solid (a lamp post's fold speed); 0: any touch knocks it. */
 export const PR_KNOCK_V = 27;
 
-/** `exitFace`'s output row: depth (m) the point is inside, the face's outward unit normal (plan). */
+/**
+ * `exitFace`'s output row: depth (m) the point is inside, the face's outward unit normal (plan), and how long ago (s) a moving point
+ * crossed that face (`Infinity`: at rest, or it crossed none within `ENTRY_WINDOW`).
+ */
 export const F_DEPTH = 0;
 export const F_NX = 1;
 export const F_NZ = 2;
-export const F_SIZE = 3;
+export const F_TIME = 3;
+export const F_SIZE = 4;
 
 /** The rate at which a point closes on a face (m/s) under which it is not closing at all. */
 const NOT_CLOSING = 1e-6;
@@ -201,6 +205,7 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
   out[F_DEPTH] = depth;
   out[F_NX] = nx;
   out[F_NZ] = nz;
+  out[F_TIME] = moving ? time : Infinity;
   return IN_SIDE;
 }
 

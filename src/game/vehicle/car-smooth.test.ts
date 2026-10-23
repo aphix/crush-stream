@@ -10,7 +10,7 @@ import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
-import { SAIL_SWEEP, makeGreenhouseFrame, makeRoofGeometry, postSection } from "./car-greenhouse-mesh.ts";
+import { SAIL_SWEEP, gatePosts, makeGreenhouseFrame, makeRoofGeometry, postSection } from "./car-greenhouse-mesh.ts";
 import { drawnQuarter, makeWindshield, rearGlassCornerZ, rearGlassInset, windshieldBaseY } from "./car-glass.ts";
 import { DeformableCar } from "./car.ts";
 import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
@@ -20,6 +20,7 @@ import { WINDSHIELD_EDGE_STEPS, windshieldEdge } from "./windshield-edge.test-ut
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { tyresUnderSkin } from "./car-suspension.ts";
 import { STYLE_CLASS } from "./vehicle-classes.ts";
+import { roofHinged } from "./hinge-spec.ts";
 
 const DEGREES_PER_RADIAN = 180 / Math.PI;
 
@@ -698,6 +699,41 @@ function distanceToLine(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): n
   return off.sub(along.multiplyScalar(off.dot(along))).length();
 }
 
+/**
+ * `frame` with each D-post a roof-hinged gate shares (`boot.postShare`) read whole: the body's piece and the gate's meet on one cut, so their joined section
+ * (the gate's rear points to the cut's outer point, the body's, the cut's inner point to the gate's rest) is the post's own curved section, which the bars read.
+ */
+function wholePosts(style: BodyStyle, frame: THREE.BufferGeometry[]): THREE.BufferGeometry[] {
+  const gate = gatePosts(style);
+  if (gate.length === 0) return frame;
+  let side = 0;
+  return frame.map((body) => {
+    if (body.name !== "rear") return body;
+    const piece = gate[side++]!;
+    const [b, g] = [loftOf(body), loftOf(piece)];
+    const sameAt = (k: number, s: number, at: number): boolean => positionAt(body, s * b.ring + k).equals(positionAt(piece, s * g.ring + at));
+    const cutOuter = Array.from({ length: g.ring }, (_, i) => i).find((i) => sameAt(0, 0, i));
+    const cutInner = Array.from({ length: g.ring }, (_, i) => i).find((i) => sameAt(b.ring - 1, 0, i));
+    assert.ok(cutOuter !== undefined && cutInner !== undefined, `${style.id}: the gate's post piece does not meet the body's on its cut`);
+    const points: number[] = [];
+    let ring = 0;
+    for (let s = 0; s < b.slices; s++) {
+      const joined = [
+        ...Array.from({ length: cutOuter + 1 }, (_, i) => positionAt(piece, s * g.ring + i)),
+        ...Array.from({ length: b.ring - 2 }, (_, i) => positionAt(body, s * b.ring + 1 + i)),
+        ...Array.from({ length: g.ring - cutInner }, (_, i) => positionAt(piece, s * g.ring + cutInner + i)),
+      ];
+      ring = joined.length;
+      for (const p of joined) points.push(p.x, p.y, p.z);
+    }
+    const whole = new THREE.BufferGeometry();
+    whole.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
+    whole.userData.loft = { ring, slices: b.slices };
+    whole.name = body.name;
+    return whole;
+  });
+}
+
 /** The sedan's windshield as the reference draws it: its base bowed hard in plan, its side edge convex, the hood's rear edge following it. */
 const WRAPPED_SEDAN: BodyStyle = {
   ...CAR_STYLES.sedan,
@@ -712,7 +748,7 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
   for (const id of CAR_STYLE_IDS) {
     it(`when a ${id}'s posts are read at every station under the roof, then each section has ${POST_MIN_POINTS} points or more and every chord turns under ${POST_TURN_DEGREES}° from the one before`, () => {
       const style = CAR_STYLES[id];
-      const posts = makeGreenhouseFrame(style, "drawn").filter((g) => POST_NAMES.includes(g.name));
+      const posts = wholePosts(style, makeGreenhouseFrame(style, "drawn")).filter((g) => POST_NAMES.includes(g.name));
       assert.ok(posts.filter((g) => g.name === "a").length === 2 && posts.length >= 6, `${id}: ${posts.length} posts`);
       // A station reaching up past the cant line into the roof's side has its points held in under the roof (`insideRoof`).
       const held = (p: THREE.Vector3) => p.z >= style.roofZ[0] && p.z <= style.roofZ[1] && p.y > cantY(p.z, style);
@@ -1405,10 +1441,11 @@ const BASELINE_BY_STYLE = [
   // The sedan's re-pinned for its quarter window's round rear end (`cPillar.dEnd`) and the A-sail's glass-top station (`aPillarSailGlass`).
   { id: "sedan", drawCalls: 13, triangles: 5390, bodyVertices: 1587 },
   { id: "hatchback", drawCalls: 13, triangles: 5064, bodyVertices: 1587 },
-  // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's, and its drawn twin's front roll down onto the windshield top.
-  { id: "wagon", drawCalls: 13, triangles: 5152, bodyVertices: 1660 },
-  // The coupe's re-pinned for its hood pod's ramp rings (`BULGE_RAMP_RINGS`, four more rings of nine points): 8238 -> 8310 drawn triangles, the budget's 8243 -> 8310.
-  { id: "coupe", drawCalls: 16, triangles: 5194, bodyVertices: 1530 },
+  // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's, its drawn twin's front roll down onto the windshield top, and its liftgate's D-post pieces cut on one shared section under a spoiler flange (8242 -> 8338 triangles drawn).
+  { id: "wagon", drawCalls: 13, triangles: 5212, bodyVertices: 1660 },
+  // The coupe's chrome trim is eight meshes, not three: each follows what it frames (a pane's frame its pane, a strip its paint), 16 -> 21.
+  // Its triangles re-pinned for its hood pod's ramp rings (`BULGE_RAMP_RINGS`, four more rings of nine points): 8238 -> 8310 drawn triangles, the budget's 8243 -> 8310.
+  { id: "coupe", drawCalls: 21, triangles: 5194, bodyVertices: 1530 },
   // The pickup's re-pinned for its drawn windshield's round top corners (`windshield.round`): the A-post's rail takes two more stations a side along the arc.
   { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1572 },
   // The police carries the sedan's quarter window (pinch ring, sail sweep ring, round end), its divider bar and its belt rail's run-on under the sail.
@@ -1424,11 +1461,11 @@ const BODY_VERTEX_BUDGET = 1.2;
 const ROOF_FITTING_VERTICES = { rails: 220, glassPanel: 154, spoiler: 61 } as const;
 type RoofKind = keyof typeof ROOF_FITTING_VERTICES;
 
-/** `style`'s roof fittings' vertices, all together and per kind (each built alone). */
-function roofFittingVertices(style: BodyStyle): { all: number; byKind: [RoofKind, number][] } {
-  const count = (s: BodyStyle) => makeRoofFittings(s)?.geometry.getAttribute("position").count ?? 0;
+/** `style`'s roof fittings' vertices, all together, the body's share of them (a roof-hinged gate's spoiler share rides the gate) and per kind (each built alone). */
+function roofFittingVertices(style: BodyStyle): { all: number; body: number; byKind: [RoofKind, number][] } {
+  const count = (s: BodyStyle, share: "all" | "body" = "all") => makeRoofFittings(s, share)?.geometry.getAttribute("position").count ?? 0;
   const kinds = Object.keys(style.roof ?? {}) as RoofKind[];
-  return { all: count(style), byKind: kinds.map((kind) => [kind, count({ ...style, roof: { [kind]: style.roof![kind] } })]) };
+  return { all: count(style), body: count(style, "body"), byKind: kinds.map((kind) => [kind, count({ ...style, roof: { [kind]: style.roof![kind] } })]) };
 }
 
 function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
@@ -1468,6 +1505,8 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; li
   const rings = (bootOpen: boolean, noseFill: boolean) => sliceZs(style, "drawn", bootOpen, noseFill).length;
   const liners = (source: "drawn" | "cage") => makeWellLiners(style, source, body).reduce((n, g) => n + g.getAttribute("position").count, 0);
   const posts = makeGreenhouseFrame(style, "drawn").filter((g) => POST_NAMES.includes(g.name));
+  // A split D-post's hard cut copies its cut vertices (`splitCreases`): they are the post's, like its fillet points, not the loft's.
+  const postVertices = (g: THREE.BufferGeometry): number => (roofHinged(style.boot) && style.boot.postShare !== undefined && g.name === "rear" ? g.getAttribute("position").count : loftOf(g).ring * loftOf(g).slices);
   return {
     lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,
     humps: wellHumpGeometry(style, "drawn")?.getAttribute("position").count ?? 0,
@@ -1477,7 +1516,7 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; li
     splitRings: body.getAttribute("position").count - unsplit.getAttribute("position").count,
     wallTops: unsplit.userData.wallTops as number,
     shutCopies: body.userData.shutCopies as number,
-    curvedPosts: posts.reduce((n, g) => n + loftOf(g).ring * loftOf(g).slices - CHAMFERED_POST_RING * (g.name === "a" ? CHAMFERED_A_POST_STATIONS : CHAMFERED_POST_STATIONS), 0),
+    curvedPosts: posts.reduce((n, g) => n + postVertices(g) - CHAMFERED_POST_RING * (g.name === "a" ? CHAMFERED_A_POST_STATIONS : CHAMFERED_POST_STATIONS), 0),
   };
 }
 
@@ -1497,7 +1536,7 @@ describe("given every body style's car built whole", () => {
       assert.ok(triangles <= testCase.triangles * TRIANGLE_BUDGET, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`);
       const fittings = roofFittingVertices(car.style);
       const wells = wellAndCutVertices(car.style);
-      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.liners - wells.bootRings - wells.noseRings - wells.splitRings - wells.wallTops - wells.shutCopies - wells.curvedPosts;
+      const loft = car.body.geometry.getAttribute("position").count - fittings.body - wells.lips - wells.humps - wells.liners - wells.bootRings - wells.noseRings - wells.splitRings - wells.wallTops - wells.shutCopies - wells.curvedPosts;
       assert.ok(loft <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
       assertRoofFittingCaps(testCase.id, fittings.byKind);
       const cap = WELL_AND_CUT_VERTICES[testCase.id];
@@ -1506,14 +1545,14 @@ describe("given every body style's car built whole", () => {
     });
   }
 
-  it("when a body carries every roof fitting, then each adds at most its own count of vertices to the body", () => {
+  it("when a body carries every roof fitting, then each adds at most its own count of vertices to the body (a roof-hinged gate's spoiler share is the gate's, not the body's)", () => {
     const wagon = CAR_STYLES.wagon;
     const roof = { rails: { x: [0.5, 0.56], z: [-1.6, 0.12], rise: 0.045 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 }, spoiler: { z: [-1.85, -1.7], y: [1.52, 1.6], halfWidth: 0.6 } } as const;
     const fittings = roofFittingVertices({ ...wagon, roof });
     assert.equal(fittings.byKind.length, 3, "the control: every kind is built");
     assertRoofFittingCaps("wagon", fittings.byKind);
     // Against the wagon with no fittings at all: the style itself may carry some.
-    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.all, makeChassisGeometry({ ...wagon, roof: undefined }).getAttribute("position").count, "the fittings are all the body gains");
+    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.body, makeChassisGeometry({ ...wagon, roof: undefined }).getAttribute("position").count, "the fittings are all the body gains");
   });
 });
 

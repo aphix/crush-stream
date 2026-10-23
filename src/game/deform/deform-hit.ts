@@ -404,6 +404,11 @@ export abstract class DeformHit extends DeformRig {
     this.touchNow();
   }
 
+  /** The pair's stop packed this car's face: the hit's block travel is its EBS energy's outright, as a re-armed hit's (`updateDrivetrain`): a packed nose's geometric peak rides the slice it lands in and the structure's springback. */
+  notePacked(): void {
+    this.energyTravel = true;
+  }
+
   /** Marks a touch now, keeping the last touch before this slice (`touchedBefore`) for the slice's re-arm. */
   private touchNow(): void {
     if (this.lastContact !== this.elapsed) this.touchedBefore = this.lastContact;

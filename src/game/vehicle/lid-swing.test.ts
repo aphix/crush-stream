@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { DeformableCar } from "./car.ts";
-import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { LID } from "./constants.ts";
 import { paint } from "./test-support.ts";
 
@@ -153,6 +153,88 @@ describe("given a car's rear window and its lid (docs/DOOR_RIG.md, Lids)", () =>
       while (up !== null && up !== car.group) up = up.parent;
       if (gate) assert.ok(moved > 0.1 && up === null, `${id} pane moved ${moved.toFixed(3)} m, still on the body ${up !== null}`);
       else assert.ok(moved === 0 && up === car.group, `${id} pane moved ${moved} m, on the body ${up !== null}`);
+    });
+  }
+});
+
+/** The strip probed beside a gate's glass: this far (m) forward of the D-post's rear edge, in the post's share next to the glass. */
+const POST_STRIP = 0.015;
+/** The D-post's rear edge is found stepping forward this far (m) at a time from 5 cm behind the glass's side edge. */
+const EDGE_STEP = 0.0025;
+/** A body surface this near (m) to where the shut gate's was counts as left on the body. */
+const NEAR = 0.03;
+
+/**
+ * The probes (car frame) of a shut roof-hinged gate's frame and spoiler: where the gate carries a share of each D-post (`boot.postShare`), a ray in from outboard at three
+ * heights up each D-post, `POST_STRIP` forward of the first surface (body or gate) beside the rear glass's edge; and one down onto the spoiler behind its shut line.
+ */
+function gateProbes(car: DeformableCar, meshes: THREE.Object3D[]): { name: string; from: THREE.Vector3; toward: THREE.Vector3 }[] {
+  const { base, top } = car.style.rearGlass;
+  const spoiler = car.style.roof?.spoiler;
+  const gate = spoiler?.gate;
+  assert.ok(spoiler !== undefined && gate !== undefined, `${car.style.id}: its spoiler has no shut line on the gate`);
+  const ray = new THREE.Raycaster();
+  const out: { name: string; from: THREE.Vector3; toward: THREE.Vector3 }[] = [];
+  for (const side of car.style.boot.postShare === undefined ? [] : [-1, 1]) {
+    for (const t of [0.3, 0.5, 0.7]) {
+      const [y, edge] = [THREE.MathUtils.lerp(base[0], top[0], t), THREE.MathUtils.lerp(base[1], top[1], t)];
+      const toward = new THREE.Vector3(-side, 0, 0);
+      let z = edge - 0.05;
+      for (; z < edge + 0.15; z += EDGE_STEP) {
+        ray.set(new THREE.Vector3(side * 3, y, z), toward);
+        if (ray.intersectObjects(meshes, false).length > 0) break;
+      }
+      assert.ok(z < edge + 0.15, `${car.style.id}: no D-post beside the glass at ${t} on side ${side}`);
+      out.push({ name: `beside the glass at ${t} on side ${side}`, from: new THREE.Vector3(side * 3, y, z + POST_STRIP), toward });
+    }
+  }
+  out.push({ name: "on the spoiler behind its shut line", from: new THREE.Vector3(0, 3, (spoiler.z[0] + gate) / 2), toward: new THREE.Vector3(0, -1, 0) });
+  return out;
+}
+
+describe("given a roof-hinged gate's frame and spoiler (hatchback, wagon)", () => {
+  for (const id of ["hatchback", "wagon"] as const) {
+    it(`when the ${id}'s gate is shut, opened to its stop and torn off, then its spoiler behind the shut line (and the strip beside its glass, where it carries D-post shares) are the gate's: shut they are the lid's skin, open or torn nothing of them stays on the body`, () => {
+      const ray = new THREE.Raycaster();
+      const shut = parked(id);
+      const lid = shut["trunk"];
+      shut.group.updateMatrixWorld(true);
+      const probes = gateProbes(shut, [shut.body, lid]);
+      const at: THREE.Vector3[] = [];
+      for (const p of probes) {
+        ray.set(p.from, p.toward);
+        const hit = ray.intersectObjects([shut.body, lid], false)[0];
+        const met = hit === undefined ? "nothing" : hit.object === shut.body ? "the body" : "another mesh";
+        assert.ok(hit !== undefined && hit.object === lid, `${id} ${p.name}: the first hit is ${met}${hit ? ` at ${hit.point.toArray().map((v) => v.toFixed(3)).join()}` : ""}, not the gate's skin`);
+        at.push(hit.point.clone());
+      }
+      const leaves = (car: DeformableCar, what: string): void => {
+        car.group.updateMatrixWorld(true);
+        for (let i = 0; i < probes.length; i++) {
+          ray.set(probes[i]!.from, probes[i]!.toward);
+          for (const hit of ray.intersectObject(car.body, false)) {
+            const gap = hit.point.distanceTo(at[i]!);
+            assert.ok(gap >= NEAR, `${id} ${probes[i]!.name}, gate ${what}: the body has a surface at ${hit.point.toArray().map((v) => v.toFixed(3)).join()}, ${gap.toFixed(3)} m from where the gate's skin was (${at[i]!.toArray().map((v) => v.toFixed(3)).join()})`);
+          }
+        }
+      };
+      const open = parked(id);
+      open.showPose("open");
+      leaves(open, "opened to its stop");
+      const torn = parked(id);
+      torn.ripLid(new THREE.Vector3());
+      leaves(torn, "torn off");
+
+      // The frame and spoiler (`surround`..) skin on the rear glass's cage: the boot cage's clamp would flatten them.
+      const geometry = lid.geometry;
+      const attr = geometry.getAttribute("position") as THREE.BufferAttribute;
+      const surround = geometry.userData.surround;
+      assert.ok(typeof surround === "number" && surround < attr.count, `${id}: the gate's surround starts at ${String(surround)} of ${attr.count} vertices`);
+      const rest = Float32Array.from(attr.array);
+      shut.deform.skinPanel(geometry, rest, "glassRear", shut["trunkOrigin"], surround);
+      let drift = 0;
+      for (let i = surround * 3; i < rest.length; i++) drift = Math.max(drift, Math.abs(attr.array[i]! - rest[i]!));
+      assert.ok(drift < 1e-4, `${id}: the surround skinned on the rear glass's cage at rest moves ${drift.toExponential(1)} m`);
     });
   }
 });

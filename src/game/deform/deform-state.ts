@@ -196,10 +196,11 @@ export abstract class DeformState extends DeformHit {
    * Engine pushed back toward the cell along the hit; forward stretch is not a
    * dead block. `local` is the frame's: a live car's group sits on the cell, but a planted wreck's sits on
    * its hubs, so the cell's held offset in it (a flank scrape leaves the cabin 0.05–0.09 m back of the
-   * wheels) is not the block's travel.
+   * wheels) is not the block's travel. A dead block keeps counting through the hit: the slice that kills it samples the block
+   * mid-stroke, so its travel then would be the slice phase's, not the hit's.
    */
   updateDrivetrain(): void {
-    if (!this.drivetrainAlive || !this.massActive || this.quietTime() > PACK_QUIET) return;
+    if (!this.massActive || this.quietTime() > PACK_QUIET) return;
     const el = this.at.engineL;
     const er = this.at.engineR;
     // Only the block's travel along the car toward the cabin packs it into the firewall (measured along
@@ -509,7 +510,8 @@ export abstract class DeformState extends DeformHit {
     return false;
   }
 
-  skinPanel(geometry: THREE.BufferGeometry, rest: Float32Array, name: BodyPartName, origin: THREE.Vector3): void {
+  /** Skins vertices `[from, to)` of `geometry` (default all) to the cage `name`; the rest are left as they are. */
+  skinPanel(geometry: THREE.BufferGeometry, rest: Float32Array, name: BodyPartName, origin: THREE.Vector3, from = 0, to?: number): void {
     const cage = this.cageByPart.get(name);
     if (!cage) return;
     const attr = geometry.getAttribute("position") as THREE.BufferAttribute;
@@ -525,7 +527,7 @@ export abstract class DeformState extends DeformHit {
     const ox = origin.x - cage.min.x;
     const oy = origin.y - cage.min.y;
     const oz = origin.z - cage.min.z;
-    for (let r = 0; r < attr.count * 3; r += 3) {
+    for (let r = from * 3, end = (to ?? attr.count) * 3; r < end; r += 3) {
       const u = THREE.MathUtils.clamp((rest[r]! + ox) * isx, -0.15, 1.15);
       const v = THREE.MathUtils.clamp((rest[r + 1]! + oy) * isy, -0.15, 1.15);
       const w = THREE.MathUtils.clamp((rest[r + 2]! + oz) * isz, -0.15, 1.15);

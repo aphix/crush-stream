@@ -102,6 +102,8 @@ export type BootSpec = (
   flush?: boolean;
   /** Drawn only: the lid's or gate's side edges round over this radius (m) into its skirt or thickness, as the reference's; absent, a sharp corner. */
   edgeRoll?: number;
+  /** Drawn only, a roof-hinged gate: the share (0..1, exclusive) of each D-post's width, at its foot and at its head, from its rear-glass edge toward the quarter glass, that rides the gate beside its glass; the body keeps the rest. Absent, the whole post is the body's. */
+  postShare?: readonly [foot: number, head: number];
 };
 
 /** Raised centre bulge on the drawn hood from z `z0` (cowl end) to `z1`, `width` (m) across, its top `rise` (m) over the lid's; it ramps into the lid at both ends. */
@@ -134,8 +136,10 @@ interface RoofParts {
    * `round`: the tip's corners turn on a quarter ellipse in plan (`taper` across, the whole z run along) instead of the straight chamfer.
    * `crown` (m): the top's middle stands this much over its sloped ends' tops (a parabola across, carrying the roof's crown over it); absent, level.
    * `bow` (m): the front edge bows back in plan, its middle this far behind its ends on a parabola across (as a rear glass top's plan bow), easing to none at the tip; absent, straight.
+   * `gate` (m, a roof-hinged gate): z of the shut line across the spoiler; the share behind it (toward the tip) rides the gate, the share ahead stays on the roof; absent, all on the roof.
+   * `lip` (m, with `gate`): a flange on the gate's share hanging over the rear glass's top edge: a box `drop` under the underside and `depth` behind the shut line, ±`halfWidth` across; absent, none.
    */
-  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number]; round?: boolean; crown?: number; bow?: number };
+  spoiler?: { z: readonly [number, number]; y: readonly [number, number]; halfWidth: number; ends?: readonly [number, number]; round?: boolean; crown?: number; bow?: number; gate?: number; lip?: { drop: number; depth: number; halfWidth: number } };
   /** Dark glass panel over the front seats, `width` (m) across, standing just proud of the roof skin. */
   glassPanel?: { z: readonly [number, number]; width: number };
 }

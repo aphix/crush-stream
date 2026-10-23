@@ -1,8 +1,9 @@
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { SURFACE_IDS, SURFACES } from "./catalog.ts";
 import { SURFACE } from "./constants.ts";
-import { exitFace, F_DEPTH, F_NX, F_NZ, F_SIZE, IN_SIDE, IN_TOP, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, topAt } from "./prism.ts";
+import { exitFace, F_DEPTH, F_NX, F_NZ, F_SIZE, F_TIME, IN_SIDE, IN_TOP, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, topAt } from "./prism.ts"
 import { G, GQ, gqEnter, gqLeave } from "./ground-clock.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 
 /**
  * The one store of solid surfaces (docs/UNIFIED_CONTACT.md, Stage 1): everything a body can stand on answers one question,
@@ -47,16 +48,14 @@ export const HIT_SIZE = 14;
 export const MU_TYRE = 0.9;
 /**
  * The step a tyre mounts by grip alone, as a share of its radius: a step of height s puts the contact normal at the tyre's edge
- * asin(1 - s/r) over the horizontal, and the tyre climbs while that is steeper than the friction angle atan(1/mu): s <= r (1 - 1/sqrt(1 + mu^2)),
- * 0.26 r (a sedan's 0.32 m tyre mounts 8 cm, a monster's 0.54 m tyre 14 cm).
+ * asin(1 - s/r) over the horizontal, and the tyre climbs while that is steeper than the friction angle atan(1/mu): s <= r (1 - 1/sqrt(1 + mu^2)).
  */
 export const MOUNT = 1 - 1 / Math.sqrt(1 + MU_TYRE ** 2);
 /**
- * The tallest step (m) any class's tyre mounts by grip alone: `MOUNT` of the biggest tyre's radius (the monster's, 0.32 m × a wheel
- * scale of 1.7; `vehicle/vehicle-classes.ts`, held by `world/prism.test.ts`). What a surface that cannot tell the asking class
- * holds out as floor, and how far under a prism's top a tyre still stands on it: a higher face is a wall.
+ * The step (m) a surface holds out as floor to a reader that names no tyre (`PQ_MOUNT` 0): `MOUNT` of the biggest drawn tyre's radius,
+ * the biggest class's tyre radius (0.355 m) times its wheel scale (1.73).
  */
-export const STEP_MAX = MOUNT * 0.32 * 1.7;
+export const STEP_MAX = MOUNT * 0.355 * 1.73;
 
 /** No surface under the point: `pointContact` answers this height. */
 const NONE = -Infinity;
@@ -465,7 +464,7 @@ export class Surface {
   /**
    * A prism patch (`world/prism.ts`): a plan shape (a box of half extents `hx`, `hz`, or a circle of radius `hx`) turned by
    * `yaw`, from `base` up to a top `top` over its middle that rises `gu` per metre across and `gw` along. It is no floor
-   * to a tyre that is not within `STEP_MAX` of its top, and a wall to everything else: a body in it is answered the face
+   * to a tyre that is not within its mount (`PQ_MOUNT`, else `STEP_MAX`) of its top, and a wall to everything else: a body in it is answered the face
    * it entered by (`pointContact`). A prop that is knocked off its spot (`knock`) answers nothing here: only a body's
    * footprint meets it (`prop-contact.ts`).
    */
@@ -1257,9 +1256,11 @@ const _face = new Float64Array(F_SIZE);
 
 /**
  * Prism patch `i` at the point: a floor candidate (`_s[S_H]`, the top's height and its slope) where the point is inside the
- * plan and over the base, for a tyre not deeper under the top than it mounts (`P_REACH`), a body point (`PQ_BODY`: a cage vertex, a
- * belly row) no deeper under it than the face it is in is deep, or a point that came in through the top (`exitFace`: it landed); else
- * the face it entered by as the side answer if that is the deepest so far (`S_SDEPTH`).
+ * plan and over the base, for a tyre not deeper under the top than it mounts (`PQ_MOUNT`: its own; a reader that names none gets
+ * `P_REACH`, `STEP_MAX`) unless it is rolling into the side it came in by (`F_TIME`), a body point (`PQ_BODY`: a cage vertex, a belly
+ * row) no deeper under it than the face it is in is deep, or a point that came in through the top (`exitFace`: it landed; a tyre's
+ * reach under the top is then its radius, not unbounded); else the face it entered by as the side answer if that is the deepest so far
+ * (`S_SDEPTH`).
  * NaN: no candidate, outside the plan or under the base (a body passes beneath).
  */
 function prismAt(s: Surface, i: number, q: Float64Array): void {
@@ -1284,14 +1285,19 @@ function prismAt(s: Surface, i: number, q: Float64Array): void {
   _s[S_H] = top;
   _s[S_CG0] = P[o + PR_GU]! * c + P[o + PR_GW]! * sn;
   _s[S_CG1] = -P[o + PR_GU]! * sn + P[o + PR_GW]! * c;
-  const mounts = P[o + P_REACH]!;
+  const tyre = q[PQ_MOUNT]! > 0 && q[PQ_BODY] !== 1;
+  const mounts = tyre ? q[PQ_MOUNT]! : P[o + P_REACH]!;
   const body = q[PQ_BODY] === 1;
   const under = top - y;
   _s[S_CREACH] = mounts;
-  if (under <= (body ? 0 : mounts)) return;
+  if (under <= (body || tyre ? 0 : mounts)) return;
   const entered = exitFace(P, o, x, y, z, q[PQ_VX]!, q[PQ_VY]!, q[PQ_VZ]!, _face);
-  if (entered === IN_TOP) _s[S_CREACH] = Infinity;
+  if (entered === IN_TOP) _s[S_CREACH] = tyre ? mounts / MOUNT : Infinity;
   else if (entered === IN_SIDE) {
+    // A face whose top stands over the hub is a wall to a tyre rolling into it: it climbs only what meets its circle under the hub. Its
+    // mount over the hub is what a tyre at rest in the face stands on. Mounting it at any speed, a monster sliding sideways into the slab
+    // with its outer hubs raised by its roll read the slab's top as floor and drove up onto it.
+    if (tyre && under <= mounts && _face[F_TIME] === Infinity) return;
     if (body && under <= mounts && under <= _face[F_DEPTH]!) return;
     _s[S_CREACH] = 0;
     if (_face[F_DEPTH]! > _s[S_SDEPTH]!) {
@@ -1505,13 +1511,15 @@ export function heightGrip(): number {
 export const PQ_X = 0;
 export const PQ_Z = 1;
 export const PQ_Y = 2;
-export const PQ_SIZE = 7;
+export const PQ_SIZE = 8;
 /** The point's own velocity (m/s): the face it came in through is the one this opposes (`exitFace`); 0 for a point at rest or one that never asks a wall. */
 export const PQ_VX = 3;
 export const PQ_VZ = 4;
 export const PQ_VY = 5;
-/** 1 for a point of a body's own shape (a cage vertex, a belly row): a prism's side it is in answers the face, however shallow; 0 (a tyre) mounts a step within the prism's reach under its top. */
+/** 1 for a point of a body's own shape (a cage vertex, a belly row): a prism's side it is in answers the face, however shallow; 0 (a tyre) mounts a step within its `PQ_MOUNT` under the top. */
 export const PQ_BODY = 6;
+/** A tyre's own mount (m): `MOUNT` of its drawn radius, the step it climbs by grip. 0 (a body point, a reader that names no tyre): the prism's `P_REACH`. */
+export const PQ_MOUNT = 7;
 
 /**
  * The surface at plan (x, z) of the query point `q` (`PQ_X`, `PQ_Z`, `PQ_Y`) under a body asking from height y (`Infinity`: the
@@ -1891,7 +1899,7 @@ function look(s: Surface, q: Float64Array, need: number): number {
 // the drawn tyre does. Where no patch ends within the tyre's reach (`edgeIn`) the rings' bottoms, turned to face the surface, are the
 // whole footprint (`BASE`): over one patch's surface the arcs add nothing but queries.
 const RINGS: readonly (readonly [number, number])[] = [
-  [0, 0.32],
+  [0, PLATFORM_TYRE.r],
   [0.082, 0.314],
   [-0.082, 0.314],
   [0.104, 0.298],
@@ -1899,6 +1907,10 @@ const RINGS: readonly (readonly [number, number])[] = [
 ];
 const STEPS = 12;
 const FOOT = RINGS.length * (2 * STEPS + 1);
+/** The step (m) a tyre whose tread is the platform tyre's at `scale` mounts by grip: `MOUNT` of its drawn radius. */
+export function treadMount(scale: number): number {
+  return MOUNT * RINGS[0]![1] * scale;
+}
 /**
  * The footprint's first points, every ring's bottom, hold the tread's lowest point over one plane at any tilt: tilted φ across the axle
  * (up to π/2, a rolled car's tyre on its sidewall) the tread's lowest point is the bottom of the ring with the greatest
@@ -2273,6 +2285,19 @@ const FOOT_SIN = 1;
 const FOOT_SCALE = 2;
 const FOOT_TOP = 3;
 const FOOT_ACROSS = 4;
+/**
+ * The wheel's motion its tread's points ask with (`wheelContact`'s `motion`): the hub's plan velocity (x, z) and the body's spin (x, y, z);
+ * vertical motion is none, as a tyre's side points' (a pitching tyre's falling tread read a face's top as come in through). A point moving
+ * into a face whose top stands over the hub meets it as the side it came in by, not as a top it stands in: asked at rest, a wrecked
+ * monster's tyres read the slab's top over their hubs as floor once inside its plan, and it rode up onto it. Zero: a wheel read at rest
+ * (placing a car).
+ */
+const _motion = new Float64Array(5);
+const MOTION_VX = 0;
+const MOTION_VZ = 1;
+const MOTION_WX = 2;
+const MOTION_WY = 3;
+const MOTION_WZ = 4;
 /** Per footprint point of the last `wheelContact`: its rise, the patch that sets it (`patchOf`) and the point (world x, y, z). */
 const _rise = new Float64Array(FOOT);
 const _pid = new Float64Array(FOOT);
@@ -2509,6 +2534,8 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
   _pq[PQ_X] = px;
   _pq[PQ_Z] = pz;
   _pq[PQ_Y] = hub[1]!;
+  _pq[PQ_VX] = _motion[MOTION_VX]! + _motion[MOTION_WY]! * (pz - hub[2]!) - _motion[MOTION_WZ]! * (py - hub[1]!);
+  _pq[PQ_VZ] = _motion[MOTION_VZ]! + _motion[MOTION_WX]! * (py - hub[1]!) - _motion[MOTION_WY]! * (px - hub[0]!);
   seek(_pq, skip, treadReach.tops, treadReach.list, treadReach.count);
   const r = _s[S_BEST] - py;
   _rise[k] = r;
@@ -2536,7 +2563,9 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
  * `C_PZ`): where the tyre rests, whichever side of the hub that is. `touch` is `rise` or, when a face too high to mount is pressed by
  * the tread, how far that is in it.
  */
-export function wheelContact(hub: Float64Array, axes: Float64Array, scale: number, across: number, skip: number, out: Float64Array): void {
+export function wheelContact(hub: Float64Array, axes: Float64Array, scale: number, across: number, skip: number, out: Float64Array, motion: Float64Array | null = null): void {
+  if (motion === null) _motion.fill(0);
+  else _motion.set(motion);
   const t = GQ.on ? gqEnter(G.wheelContact) : -1;
   if (GQ.check) {
     const baked = BAKE.on;
@@ -2598,6 +2627,9 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
   _pq[PQ_X] = x;
   _pq[PQ_Z] = z;
   _pq[PQ_Y] = y;
+  _pq[PQ_VX] = _motion[MOTION_VX]!;
+  _pq[PQ_VZ] = _motion[MOTION_VZ]!;
+  _pq[PQ_MOUNT] = treadMount(scale);
   _foot[FOOT_SCALE] = scale;
   _foot[FOOT_ACROSS] = across;
   treadReach.tops = tops !== null && edgeIn(tops, _pq, skip) ? tops : null;
@@ -2632,6 +2664,8 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
   // neighbour on another patch is halved (`edgeCross`; a front tyre leaving the wedge's side read 1.6 cm lower at its nearest arc
   // than the drawn tyre's tread).
   if (n === FOOT) {
+    _pq[PQ_VX] = _motion[MOTION_VX]!;
+    _pq[PQ_VZ] = _motion[MOTION_VZ]!;
     const best = out[C_H]! - ARC_RISE * scale;
     for (let ring = 0; ring < RINGS.length; ring++) {
       let jb = 0;
@@ -2659,5 +2693,8 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
     }
   }
   live.topCap = Infinity;
+  _pq[PQ_MOUNT] = 0;
+  _pq[PQ_VX] = 0;
+  _pq[PQ_VZ] = 0;
   out[C_TOUCH] = out[C_H]!;
 }

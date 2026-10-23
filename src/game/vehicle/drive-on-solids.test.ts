@@ -4,13 +4,13 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DriveInput } from "./car-drive.ts";
 import { assignClass } from "./vehicle-classes.ts";
-import { CONTACT_HZ, G } from "./car-air-body.ts";
+import { CONTACT_HZ, G, GROUND_LIFT_V } from "./car-air-body.ts";
 import { paint } from "./test-support.ts";
 import { makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { BARRIER_TOP } from "../contact/sat.ts";
 import { FleetRamps, RAMP } from "../scenes/fleet-ramps.ts";
 import { Ground, setGround } from "../world/ground.ts";
-import { armSolids, RIG, Surface, WALL } from "../world/surfaces.ts";
+import { armSolids, MU_TYRE, RIG, Surface, WALL } from "../world/surfaces.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
@@ -280,5 +280,55 @@ describe("given a wrecked sedan with no tyres dropped onto a prism's top, no oth
       lowest = Math.min(lowest, centreY(car));
     }
     assert.ok(lowest >= SLAB_TOP + KEEP_OVER, `the centre of mass fell to ${lowest.toFixed(3)} m over a prism top at ${SLAB_TOP} m`);
+  });
+});
+
+/** A box under a monster's hubs but over the step its tyres mount by grip (m): its tyres must climb it along their circles. */
+const STEP_TOP = 0.5;
+/** Where (m, z) the box's face stands ahead of the monster's start. */
+const STEP_AT = 4;
+/** The most (m) one slice's rise may pass its bound by: the drive's change of the plan speed within the slice. */
+const RISE_SLACK = 1e-3;
+/** The fewest slices the climb must take: none of it in one. */
+const CLIMB_SLICES = 4;
+
+describe(`given a monster at full throttle from rest toward a box ${STEP_TOP} m tall ${STEP_AT} m ahead, under its hubs and over its grip's step`, () => {
+  afterEach(() => setGround(null));
+
+  it("when its tyres meet the box's face, then they climb it along their circles over many slices, its body never rising in one slice more than its plan speed times the tyres' grip and the rest lift allow, and it ends on the top", () => {
+    setGround(new Block(STEP_TOP, WALL, STEP_AT, LENGTH));
+    const c = new DeformableCar(paint(), new THREE.Scene());
+    assignClass(c, "monster");
+    c.spawnFacing(0, 0, 0, 0);
+    c.airborne = false;
+    c.parked = true;
+    const w = makeWorld([c], false, false);
+    settle(w, 1);
+    let worst = -Infinity;
+    let climbing = 0;
+    let y = c.group.position.y;
+    let plan = 0;
+    let vy = 0;
+    let last = 0;
+    const inner = w.world.beforeSlice!;
+    w.world.beforeSlice = (h) => {
+      if (last > 0) {
+        // The slice's rise over what its vertical speed (at either end) and its tyres' climb carry it (`solveRows`' bound on a tyre's lift).
+        const rise = c.group.position.y - y;
+        const climb = (MU_TYRE * plan + GROUND_LIFT_V) * last;
+        worst = Math.max(worst, rise - climb - Math.max(0, vy, c.velocity.y) * last);
+        if (rise > 0.5 * climb) climbing++;
+      }
+      y = c.group.position.y;
+      plan = Math.hypot(c.velocity.x, c.velocity.z);
+      vy = c.velocity.y;
+      last = h;
+      return inner(h);
+    };
+    w.pedals.set(c, FULL);
+    for (let f = 0; f < 2 / FRAME; f++) tickWorld(w, FRAME);
+    assert.ok(worst <= RISE_SLACK, `a slice rose ${(worst * 1000).toFixed(1)} mm over its climb's bound`);
+    assert.ok(climbing >= CLIMB_SLICES, `it climbed over ${climbing} slices`);
+    assert.ok(c.group.position.z > STEP_AT + 2 && Math.abs(c.group.position.y - STEP_TOP) < 0.05, `it ended at z ${c.group.position.z.toFixed(2)}, its origin ${c.group.position.y.toFixed(3)} m up`);
   });
 });

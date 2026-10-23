@@ -941,6 +941,18 @@ describe("given two cars driving head-on at each other, in shape deform mode", (
     for (const [i, r] of fast.entries()) assert.equal(r.drivetrainAlive, false, `car ${i}: engine pushed back ${r.engineMax.toFixed(3)} m, nose ${nose(r).toFixed(3)} m`);
   });
 
+  // The pair's stop lands the packed nose within a slice of PACKED_STROKE and the structure then springs it back by a few mm, a landing that moves
+  // with the slice the stop falls in: the block's travel is the hit's energy once it packs, so it rises with speed through the kill window.
+  it("when each car drives at 54.5, 55, 55.5, 56 and 56.5 km/h, then the engine block travels farther the faster they meet, and both engines die at 56", () => {
+    let slower = 0;
+    for (const kph of [54.5, 55, 55.5, 56, 56.5]) {
+      const [r] = runPair(kph, kph);
+      assert.ok(r.engineTravel > slower, `${kph} km/h: engine block ${r.engineTravel.toFixed(4)} m, the slower pair's ${slower.toFixed(4)} m`);
+      slower = r.engineTravel;
+      if (kph === 56) assert.equal(r.drivetrainAlive, false, `56 km/h: engine pushed back ${r.engineTravel.toFixed(4)} m`);
+    }
+  });
+
   it("when they hit at 28 km/h each with full overlap, then the impact point stays within 0.2 m of the centre line on both cars", () => {
     for (const r of slow) assert.ok(Math.abs(r.impactLocalX) < 0.2, `impactLocal.x=${r.impactLocalX.toFixed(3)}`);
   });

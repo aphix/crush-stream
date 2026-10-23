@@ -17,6 +17,7 @@ import { throwComing } from "../present/ragdoll-trigger.ts";
 import { displayFrames, rangeCar } from "../present/range-run.test-util.ts";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { JerseyBarrier } from "./engine-props.ts";
+import { BARRIER_HALF } from "../contact/sat.ts";
 import { RANGE_GROUND } from "./range.ts";
 
 /** Half the width (m) of the test ground's lane: well past a car's side. */
@@ -421,7 +422,7 @@ export async function driveIntoBarrier(type: DriverCar, ground: Ground | null, s
 export type BarrierHit = {
   /** Drivers the sim threw out of the car, over the hit and the second after it. */
   ejections: number;
-  /** The car's speed (m/s) and vertical speed (m/s) in the last frame before its first contact with the barrier. */
+  /** The car's speed (m/s) and vertical speed (m/s) in the last frame before it reached the barrier (`HIT_WATCH_SECONDS`). */
   arrivalSpeed: number;
   arrivalVertical: number;
   /** The car's centre went back (m) from its furthest x after the hit: a rebound. */
@@ -430,7 +431,11 @@ export type BarrierHit = {
   endX: number;
 };
 
-/** Sim seconds the car is watched after its first contact, and the wall seconds a run may last. */
+/**
+ * Sim seconds the car is watched after it reached the barrier, and the wall seconds a run may last. It reached it at its first contact,
+ * or when its centre passed the barrier's near face: a car flying the barrier meets nothing and is watched landing past it, not driving
+ * on off the ground's end.
+ */
 const HIT_WATCH_SECONDS = 1;
 const HIT_WALL_MAX = 40;
 
@@ -473,7 +478,7 @@ export function driveToBarrier(type: DriverCar, profile: DriveProfile, startOffs
     let hitAt = Infinity;
     let furthestX = -Infinity;
     for (let wall = 0; wall < HIT_WALL_MAX && simulated < hitAt + HIT_WATCH_SECONDS; wall += FRAME) {
-      if (!car.crashed) {
+      if (!car.crashed && car.group.position.x <= -BARRIER_HALF.x) {
         out.arrivalSpeed = car.speed;
         out.arrivalVertical = car.velocity.y;
       } else if (hitAt === Infinity) hitAt = simulated;

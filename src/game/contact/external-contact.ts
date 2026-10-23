@@ -3,7 +3,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import { detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { bodyContact, BODY_HARD, BODY_I, BODY_M, BODY_SIZE, BODY_VX, BODY_VZ, BODY_W, BODY_X, BODY_Z, CT_DEPTH, CT_E, CT_JMAX, CT_MU, CT_NX, CT_NZ, CT_SIZE, CT_X, CT_Z, OUT_EBS_A, OUT_PUSH_A, OUT_SIZE } from "./body-contact.ts";
-import { FACE_ROW } from "../deform/deform-contact.ts";
+import { FACE_ROW, type FaceSpan } from "../deform/deform-contact.ts";
 import { ARM_CLOSING, SOLID_MU } from "./constants.ts";
 import { CRASH } from "../deform/physics-util.ts";
 import { OUTLINE_REACH, outlineOf, type CageOutline } from "./cage-outline.ts";
@@ -460,6 +460,19 @@ export function holdOnFace(d: DeformableCar["deform"], cx: number, cz: number, h
   return taken;
 }
 
+const _span: FaceSpan = { x: 0, z: 0, rx: 0, rz: 0, hx: 0 };
+
+/** A fixed face with no open ends (a slab, a wall's hold face) presses only the masses under its span: a car half over a slab's end loads the corner on it. A solid with open ends may be narrower than the car and is fed beside its span. */
+function faceSpan(box: ContactBox): FaceSpan | undefined {
+  if (!box.fixed || box.openEnds) return undefined;
+  _span.x = box.x;
+  _span.z = box.z;
+  _span.rx = detCos(box.yaw);
+  _span.rz = -detSin(box.yaw);
+  _span.hx = box.hx;
+  return _span;
+}
+
 /**
  * A striker's contact with a car, one physics slice. The contact begins before the overlap: active while the face is nearer the hull
  * than this slice's closing travel, so the hit starts at 0 depth. The particles are held on the face (`holdOnFace`) and, with `crush`,
@@ -523,7 +536,7 @@ export function strikeCar(car: DeformableCar, box: ContactBox, dt: number, crush
       // a particle reaches its face: then the structure's stroke (`exchange`) spends the hit, and feeding both crushes the corner twice
       // (wing 0.188 m against 0.029 m). A fixed solid no particle reaches (a 0.4 m arm tip between the bumper particles) has the hulls
       // alone to crush the nose: the tip's 0.409 m of block travel against the slab's 0.499 at 55 m/s.
-      if (crush && overlap > 0 && (box.fixed || d.faceContacts === 0)) d.feedOverlap(_p, _n, overlap, closing, dt, 0, box.fixed && d.faceContacts === 0);
+      if (crush && overlap > 0 && (box.fixed || d.faceContacts === 0)) d.feedOverlap(_p, _n, overlap, closing, dt, 0, box.fixed && d.faceContacts === 0, faceSpan(box));
     }
     shiftVelocities(car, fx * ub, fz * ub);
     d.takeMotion(car.velocity, car.angular);

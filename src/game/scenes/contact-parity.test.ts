@@ -56,7 +56,7 @@ describe("given two cars driving into the nose and tail of a middle car, and a p
 
 describe("given two cars driving into the nose and tail of a middle car, and a press whose plates are pushed by the same force over time as the two cars pushed (not closed to a shortening)", () => {
   for (const kph of [10, 20, 30, 40, 60]) {
-    it(`when each car hits at ${kph} km/h, then the middle car's parts and crush match the force-driven press's`, { todo: "after the plan: give the force-driven press a crush force independent of the first slice's arming speed, or the sandwich the same law; at every speed 10-60 km/h the press tears quarterR off the middle car where the cars' sandwich tears none (parts off car [] vs rig [quarterR], 5 of 5 speeds red)" }, () => {
+    it(`when each car hits at ${kph} km/h, then the middle car's parts and crush match the force-driven press's`, { todo: "after the plan: give the force-driven press a crush force independent of the first slice's arming speed, or the sandwich the same law; the press tears no part the sandwich spares, but at 10 km/h it crushes the middle car's particles 0.39-1.66 m where the sandwich's travel 0-39 mm, and from 20 km/h it also kills the drivetrain the sandwich leaves alive (5 of 5 speeds red)" }, () => {
       const s = carSandwich(kph);
       const press = pressByForce(s.force).state;
       sameParts(s.a, press, `sandwich ${kph} km/h`);

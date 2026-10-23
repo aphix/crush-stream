@@ -189,7 +189,8 @@ export const HATCHBACK: BodyStyle = {
   privacyGlass: { rear: true, quarter: true },
   // The spoiler starts at the roof's rear end, its front edge bowed back with the glass top's plan bow: no run over the roof skin to fight it,
   // no glass top or frit poking over it. It ends on the roof end's tucked corners, its side ends sloping down onto the D-pillars' tops.
-  roof: { spoiler: { z: [-1.24, -1.149], y: [1.22, 1.2795], halfWidth: 0.53, ends: [0.1, 0.04], crown: 0.025, bow: 0.015 } },
+  // The gate carries the whole spoiler with it: the shut line is the spoiler's front edge, on the roof's rear end.
+  roof: { spoiler: { z: [-1.24, -1.149], y: [1.22, 1.2795], halfWidth: 0.53, ends: [0.1, 0.04], crown: 0.025, bow: 0.015, gate: -1.149 } },
   exhaust: { tips: 2, x: 0.5, y: 0.24, size: [0.1, 0.045], shape: "round" },
   details: {
     lines: [

@@ -29,6 +29,11 @@ import { QUIET_HZ } from "../kernel/constants.ts";
 
 const COURSE_JSON = [...TRACKS, ...OFF_MENU];
 
+/** The tilt of the nose-down row (rad), and how far (m) over the prop's top its centre stands: its lowest corner is then as far under the top as the car's nose reaches below its centre. */
+const NOSE_DOWN_DEGREES = 15;
+const NOSE_DOWN = NOSE_DOWN_DEGREES * (Math.PI / 180);
+const CENTRE_OVER = 0.22;
+
 /** The race stack headless with `id` loaded (Havana is off the race menu, so the lobby loads it), and every prop contact counted. */
 function course(id: string) {
   const w = makeWorld();
@@ -111,8 +116,10 @@ describe("given a prop on a course, solid (palm, wall, dumpster) or knockable (c
         assert.equal(hit(0, 0, true).touched, true);
       });
 
-      it("when it is nose down 15° with its centre more than 0.2 m over the top but its front underside corner 0.14 m under, then it hits the prop, while a level car at that centre height passes", () => {
-        const tilted = hit(-0.14, 15 * (Math.PI / 180));
+      it(`when it is nose down ${NOSE_DOWN_DEGREES}° with its centre ${CENTRE_OVER} m over the top, more than 0.2 m, but its front underside corner under it, then it hits the prop, while a level car at that centre height passes`, () => {
+        const probe = hit(0, NOSE_DOWN);
+        const reach = probe.car.group.position.y - probe.k.top(probe.c);
+        const tilted = hit(CENTRE_OVER - reach, NOSE_DOWN);
         const origin = tilted.car.group.position.y - tilted.k.top(tilted.c);
         assert.ok(origin > 0.2, `the origin is ${origin.toFixed(2)} m over the prop's top`);
         assert.equal(tilted.touched, true, "the corner is in it");

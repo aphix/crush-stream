@@ -19,7 +19,7 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 /**
  * Full-sanity run, not the per-commit suite (`npm run test:ai-long-run`): AI derby matches watched for anything going wrong: six-car matches at the arcade and the realistic knobs
  * (hits, nose to nose, wedged, the elimination rate over seeds 1-20, wrecking kills) and the owner's 9-car capture for zips. What pins each named failure in the per-commit suite:
- * accumulated wrecking (a re-armed hit adds its EBS²) is `vehicle/barrier.test.ts` (engine killed on the third 35 km/h hit) and `deform/crash-physics.test.ts` (`rearmHit`); a settled
+ * accumulated wrecking (a re-armed hit adds its EBS²) is `vehicle/barrier.test.ts` (engine killed on the third 33 km/h hit) and `deform/crash-physics.test.ts` (`rearmHit`); a settled
  * wreck that zips when hit again is `contact/pile-push.test.ts`; two AI cars meeting is `derby.test.ts`.
  */
 

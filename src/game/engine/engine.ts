@@ -844,10 +844,10 @@ export class CrashEngine extends EngineGarage {
     const ejected = this.ejection.take();
     for (let k = 0; k < ejected.length; k++) {
       const e = ejected[k]!;
-      if (this.minigameMode === MINIGAME_MODE.longJump) this.minigames.holdForBail(e, this.elapsedSim + dt);
+      if (this.minigameMode === MINIGAME_MODE.longJump) this.minigames.holdForBail(e, this.elapsedWall);
       else this.throwDriver(e, cars, this.minigameMode === null ? undefined : THROW_BOOST[this.minigameMode]);
     }
-    const bailed = this.minigameMode === MINIGAME_MODE.longJump ? this.minigames.bailThrowDue(this.elapsedSim + dt) : null;
+    const bailed = this.minigameMode === MINIGAME_MODE.longJump ? this.minigames.bailThrowDue(this.elapsedWall) : null;
     if (bailed !== null) this.throwDriver(bailed.event, cars, bailed.release);
     if (this.race.active) this.race.step(dt, w.shape, w.loners);
 
@@ -901,7 +901,7 @@ export class CrashEngine extends EngineGarage {
     stepPhase(this.clock, wallDt);
     // A minigame has no loop and no timer: the dummy lies where he lands, and the session waits for the player's Retry.
     if (this.minigameMode !== null) {
-      this.minigames.step(this.ragdolls, this.seat.mode === "drive" && this.seat.carIndex === 0);
+      this.minigames.step(this.ragdolls, this.seat.mode === "drive" && this.seat.carIndex === 0, this.carA, wallDt);
       return;
     }
     // A thrown range driver holds the loop until his landing has been shown (`RangeRun`); otherwise it runs as the

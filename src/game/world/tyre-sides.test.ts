@@ -6,8 +6,11 @@ import { BARRIER_HALF, BARRIER_TOP } from "../contact/sat.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { HUBS } from "../vehicle/car-air-body.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { SPRINGS } from "../vehicle/car-suspension.ts";
-import { STEP_MAX } from "./surfaces.ts";
+import { CLASSES } from "../vehicle/vehicle-classes.ts";
+import { MOUNT } from "./surfaces.ts";
 
 /**
  * Main, ruling (a) of the car overhaul: a tyre meets a solid's side faces, for every car. A monster stands on 1.23 m tyres with its
@@ -19,8 +22,8 @@ import { STEP_MAX } from "./surfaces.ts";
 
 /** Deepest a tyre may stand inside the slab (m): its stroke, and a centimetre of the slice that meets its end. */
 const TYRE_IN = SPRINGS.monster.travel + 0.01;
-/** Most the body may rise in a frame past what its own vertical speed carries it (m): a tyre mounting what it may (`STEP_MAX` over its hub), not a teleport. */
-const POP = STEP_MAX;
+/** Most the body may rise in a frame past what its own vertical speed carries it (m): a tyre mounting what it may (the monster's own mount over its hub), not a teleport. */
+const POP = MOUNT * carFrame(CAR_STYLES.monster).rig.tyre.r * CLASSES.monster.wheelScale;
 const SPEEDS = [5, 15, 30];
 
 const _hub = new THREE.Vector3();
@@ -66,6 +69,28 @@ describe("given a monster driven square into the range's slab, its body's keel o
       });
       assert.ok(deepest <= TYRE_IN, `${speed} m/s: a tyre stood ${(deepest * 100).toFixed(1)} cm inside the slab at frame ${frame}`);
       assert.ok(pop <= POP, `${speed} m/s: the body rose ${(pop * 100).toFixed(1)} cm past its own climb in a frame`);
+    });
+  }
+});
+
+describe("given a sedan driven square into the range's slab", () => {
+  for (const speed of SPEEDS) {
+    it(`when it meets the slab at ${speed} m/s, then it does not mount it: its tyres never stand on the slab's top`, () => {
+      let highest = -Infinity;
+      let frame = -1;
+      strikeSink("barrier", "sedan", speed, 0, (f, _sink, car) => {
+        for (const [i, wheel] of car.wheels.entries()) {
+          if (car.deform.hubPopped(HUBS[i]!)) continue;
+          wheel.getWorldPosition(_hub);
+          const foot = _hub.y - car.frame.rig.tyre.r * wheel.scale.x;
+          if (Math.abs(_hub.x) > BARRIER_HALF.x || Math.abs(_hub.z) > BARRIER_HALF.z || foot < BARRIER_TOP - 0.02) continue;
+          if (foot > highest) {
+            highest = foot;
+            frame = f;
+          }
+        }
+      });
+      assert.equal(highest, -Infinity, `${speed} m/s: a tyre stood on the slab's top at frame ${frame}, its foot ${highest} m`);
     });
   }
 });

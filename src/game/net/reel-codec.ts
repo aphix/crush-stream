@@ -371,6 +371,14 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A car's collision cage carries its bumpers' fascias, each a 12-point panel of its own past the body's budget (a push bar, tow hitch and exhaust
  * tips stay drawn only), so it meets cars, walls, figures and props at its drawn bumper faces, 3-15 cm past its nose's and tail's sheet metal,
  * until a bumper tears off; a pair's plan test reads a bumper at its own heights, never its body's behind it; the piston rig's faces rest clear of them.
+ * The tallest step a tyre mounts by grip, and how far under a prism's top a tyre still stands on it, is its own drawn radius's share (the
+ * sedan's 0.342 m tyre 0.088 m, the monster's 0.614 m 0.158 m), not 0.140 m sized for the platform's tyre on every car; a point that names no
+ * tyre keeps the biggest tyre's, and a tyre that landed on a prism's top counts it only within its radius.
+ * A tyre rolling into a face it came in by meets it as a wall even within that mount, so a face whose top stands over a moving tyre's hub is never
+ * climbed (a monster sliding sideways into the slab trips on its tyres and rolls over it, nobody thrown; off the long jump's crest it flies the slab
+ * and keeps its driver in, thrown only when it arrives too slow to clear it), and a tyre climbs what it rolls onto over many slices, rising no
+ * faster than its plan speed times its grip (a step no longer sets a car on its top in one slice). A car in the air clears the slab by its lifted
+ * body, as a wreck does, and a striker under a lifted body meets its tyres, not a body edge standing over it.
  * A lifted car's (the monster's) crash contact reaches its masses where they stand: a car-car hit's point, read off its lifted body, stood 0.8-0.9 m over
  * its nose masses, so it fed its bumper a thousandth of the crush and its engine none (a monster head-on at 40 m/s crushed 0.61 m and left its engine 0.42
  * healthy, where it crushed 0.84 m and killed it before the overhaul), and its plan contact reads its body's lift as drawn (faded as it lies over; it
@@ -379,9 +387,16 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * corners is taken back first, so an undriven 60 km/h head-on arms at its own closing (16.66 m/s, its engine blocks 0.165 m back; was
  * 15.70 m/s and 0.118 m).
  * A door a side hit presses onto its crush band's full depth keeps it (it is packed: nothing springs back), where it sprang 4 cm back once the face left.
- * A car's tyres meet the other car's tyres and body in a car-car contact, each its drawn radius and width from its mount up: a wreck's
- * tyre goes back into its well with its hub as far as its body has crushed and the rest holds rigid, so two sedans' tyres no longer
- * pass 4.8 cm through each other at 56 km/h head-on, nor a monster's front tyres into the tail of the car ahead.
+ * A pair whose stop packs a nose counts that car's engine block travel as the hit's own energy (a re-armed hit's rule), not the geometric peak the
+ * stop's slice leaves it (6-12 mm off with the phase): a sedan head-on's block travel now rises with speed through its kill window (56 km/h each:
+ * 0.1579 m, was 0.1461 beside 0.1521 at 55.5 and 0.1511 at 56.5).
+ * A killed engine block keeps counting its travel through the hit, so it reads the hit's peak rather than the kill slice's sample (a sedan at 55 m/s
+ * reads 0.608 m into the slab and every wall, where it read 0.46-0.58 by the slice's phase); a car half over the end of a slab or a wall's hold face is
+ * crushed only where the face presses it, not at the corner hanging past the end.
+ * The press closes its plates 0.26 m inside the rails' rest in shape deform mode (0.06 m in lattice), where every car class folds its rails
+ * past 0.2 m, not stalls at 0.183-0.199 m: a pressed sedan's rails fold 0.244 m, were 0.191.
+ * A torn hatchback gate flies as its glass and spoiler only (its D-posts stay on the body); a torn SUV liftgate flies with its D-post shares as
+ * closed pieces cut on one shared section and a flange under its slab.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

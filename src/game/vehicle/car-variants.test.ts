@@ -13,10 +13,10 @@ import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, doorGlassFrontZ, fl
 import { doorSkinStand, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, type PartSeat } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
-import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
-import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { makeRoofFittings, withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
-import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield, windshieldPoint, windshieldSideX } from "./car-glass.ts";
+import { RAIL_LIP, RAIL_PROUD, gatePosts, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
+import { makeChassisGeometry, withGateSurround } from "./car-chassis-mesh.ts";
+import { gateLip, gateSpoiler, makeRoofFittings, withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
+import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassTrim, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield, windshieldPoint, windshieldSideX } from "./car-glass.ts";
 import { windshieldEdge } from "./windshield-edge.test-util.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
@@ -712,7 +712,7 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
     /** The bead's nearest point to a square corner: at least half the arc's middle's r(√2 − 1) off it (a sharp mitre sits on it, the section's outward offset away). */
     const BEAD_ARC = 0.5 * ROUND * (Math.SQRT2 - 1);
     const near = (style: BodyStyle): number[] => {
-      const pos = makeBodyGlassFrames(style, true).getAttribute("position");
+      const pos = makeBodyGlassTrim(style, true).rear!.getAttribute("position");
       const rg = style.rearGlass;
       return [-1, 1].flatMap((sx) =>
         [rg.base, rg.top].map(([y, z], k) => {
@@ -1347,7 +1347,7 @@ describe("given a body style's H2 hardpoints", () => {
     const hatch = CAR_STYLES.hatchback;
     const seen = (s: BodyStyle) => {
       const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-      const gate = new THREE.Mesh(makeTrunkGeometry(s), material);
+      const gate = new THREE.Mesh(withGateSurround(makeTrunkGeometry(s), s), material);
       const [py, pz] = bootPivot(s.boot);
       gate.position.set(0, py, pz);
       gate.updateMatrixWorld();
@@ -1368,6 +1368,128 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(seen(hatch) === 0, `${seen(hatch)} rays see the cabin's floor between the D-pillar and the shoulder`);
     const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
     assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
+  });
+
+  it("when a roof-hinged gate's frame and spoiler are read for folds, then no vertex has a convex and a concave fold side by side (3 to 15 degrees, 6 or more each way): no ripple on the open or shut car", () => {
+    /** The fold band (degrees) a gentle fold each way beside the other reads as a wave in, and the size each must reach. */
+    const BAND = [3, 15] as const;
+    const WAVE = 6;
+    /** The vertices of `geo` from `from` on with a convex and a concave fold of the band side by side (positions welded to 0.01 mm, as the contour check reads them). */
+    const waves = (geo: THREE.BufferGeometry, from = 0): string[] => {
+      const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+      const index = geo.getIndex()!.array;
+      const ids = new Map<string, number>();
+      const points: THREE.Vector3[] = [];
+      const weld = (i: number): number => {
+        const p = new THREE.Vector3().fromBufferAttribute(pos, i);
+        const key = [p.x, p.y, p.z].map((v) => Math.round(v * 1e5)).join(",");
+        if (!ids.has(key)) ids.set(key, points.push(p) - 1);
+        return ids.get(key)!;
+      };
+      const faces: { w: number[]; n: THREE.Vector3 }[] = [];
+      const edges = new Map<number, { a: number; b: number; faces: number[] }>();
+      for (let t = 0; t < index.length; t += 3) {
+        if ([0, 1, 2].some((c) => index[t + c]! < from)) continue;
+        const w = [0, 1, 2].map((c) => weld(index[t + c]!));
+        if (new Set(w).size < 3) continue;
+        const n = points[w[1]!]!.clone().sub(points[w[0]!]!).cross(points[w[2]!]!.clone().sub(points[w[0]!]!)).normalize();
+        for (let c = 0; c < 3; c++) {
+          const [a, b] = [Math.min(w[c]!, w[(c + 1) % 3]!), Math.max(w[c]!, w[(c + 1) % 3]!)];
+          const edge = edges.get(a * 1e7 + b) ?? { a, b, faces: [] };
+          edge.faces.push(faces.length);
+          edges.set(a * 1e7 + b, edge);
+        }
+        faces.push({ w, n });
+      }
+      const [convex, concave] = [new Float64Array(points.length), new Float64Array(points.length)];
+      const near = points.map((): number[] => []);
+      for (const { a, b, faces: pair } of edges.values()) {
+        near[a]!.push(b);
+        near[b]!.push(a);
+        if (pair.length !== 2) continue;
+        const [fa, fb] = [faces[pair[0]!]!, faces[pair[1]!]!];
+        const turn = THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(fa.n.dot(fb.n), -1, 1)));
+        if (turn < BAND[0] || turn > BAND[1]) continue;
+        const far = points[fb.w.find((w) => w !== a && w !== b)!]!;
+        const folds = far.clone().sub(points[a]!).dot(fa.n) < 0 ? convex : concave;
+        for (const w of [a, b]) folds[w] = Math.max(folds[w]!, turn);
+      }
+      const found: string[] = [];
+      for (let w = 0; w < points.length; w++) {
+        const [up, down] = [Math.max(convex[w]!, ...near[w]!.map((u) => convex[u]!)), Math.max(concave[w]!, ...near[w]!.map((u) => concave[u]!))];
+        if (Math.min(up, down) >= WAVE) found.push(points[w]!.toArray().map((v) => v.toFixed(3)).join(","));
+      }
+      return found;
+    };
+    for (const id of ["hatchback", "wagon"] as const) {
+      const style = CAR_STYLES[id];
+      const gate = withGateSurround(makeTrunkGeometry(style), style);
+      const from = gate.userData.surround as number;
+      assert.ok(from > 0, `${id}: the gate carries a surround`);
+      const found = waves(gate, from);
+      assert.ok(found.length === 0, `${id}: the gate's frame and spoiler have a fold each way at ${found.join(" ")}`);
+    }
+  });
+
+  it("when the wagon's liftgate carries its share of each D-post, then the body's piece and the gate's meet on the same cut points a side to the bit (two at its foot, two at its head), the gate's is a closed solid whose head ends inside the slab, and the hatchback's gate carries no post", () => {
+    const wagon = CAR_STYLES.wagon;
+    /** The cut's points: two (outer face, inner face) at each of the post's two stations. */
+    const CUT_POINTS = 4;
+    const key = (pos: THREE.BufferAttribute, i: number): string => `${pos.getX(i)},${pos.getY(i)},${pos.getZ(i)}`;
+    const body = makeGreenhouseFrame(wagon, "drawn").filter((g) => g.name === "rear");
+    const gate = gatePosts(wagon);
+    assert.ok(body.length === 2 && gate.length === 2, `${body.length} body posts, ${gate.length} gate posts`);
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const slabs = [makeRoofFittings(wagon, "body")!.geometry, gateSpoiler(wagon)!].map((g) => new THREE.Mesh(g, material));
+    const ray = new THREE.Raycaster();
+    for (let side = 0; side < 2; side++) {
+      const [pa, pb] = [body[side]!.getAttribute("position") as THREE.BufferAttribute, gate[side]!.getAttribute("position") as THREE.BufferAttribute];
+      const [a, b] = [new Set(Array.from({ length: pa.count }, (_, i) => key(pa, i))), new Set(Array.from({ length: pb.count }, (_, i) => key(pb, i)))];
+      const shared = [...a].filter((k) => b.has(k));
+      assert.ok(shared.length === CUT_POINTS, `side ${side}: the pieces share ${shared.length} vertices, not the cut's ${CUT_POINTS}`);
+      // Closed: every edge of the welded gate piece has two faces (its ends are capped, its cut is a face).
+      const index = gate[side]!.getIndex()!.array;
+      const edges = new Map<string, number>();
+      for (let t = 0; t < index.length; t += 3) {
+        for (let c = 0; c < 3; c++) {
+          const [u, v] = [key(pb, index[t + c]!), key(pb, index[t + ((c + 1) % 3)]!)];
+          const edge = u < v ? `${u}|${v}` : `${v}|${u}`;
+          edges.set(edge, (edges.get(edge) ?? 0) + 1);
+        }
+      }
+      const open = [...edges.values()].filter((n) => n !== 2).length;
+      assert.ok(open === 0, `side ${side}: ${open} edges of the gate's post piece have not two faces: an uncapped end`);
+      // Its head (the top 5 mm) lies between the slab's underside and its top where the slab covers it.
+      let top = -Infinity;
+      for (let i = 0; i < pb.count; i++) top = Math.max(top, pb.getY(i));
+      const outside: string[] = [];
+      for (let i = 0; i < pb.count; i++) {
+        if (pb.getY(i) < top - 0.005) continue;
+        ray.set(new THREE.Vector3(pb.getX(i), 3, pb.getZ(i)), new THREE.Vector3(0, -1, 0));
+        const ys = ray.intersectObjects(slabs, false).map((h) => h.point.y);
+        if (ys.length > 0 && !(Math.min(...ys) < pb.getY(i) && pb.getY(i) < Math.max(...ys))) outside.push(`(${pb.getX(i).toFixed(3)}, ${pb.getY(i).toFixed(4)}, ${pb.getZ(i).toFixed(3)}) slab ${ys.map((y) => y.toFixed(4)).join("/")}`);
+      }
+      assert.ok(outside.length === 0, `side ${side}: gate post head vertices outside the slab's thickness: ${outside.join("; ")}`);
+    }
+    assert.ok(gatePosts(CAR_STYLES.hatchback).length === 0, "the hatchback's gate carries a D-post share");
+  });
+
+  it("when the wagon's rear glass top edge is read against the gate's slab and its flange, then every vertex of it is inside their thickness: no slit between the glass and the spoiler over its dome-fallen corners", () => {
+    const wagon = CAR_STYLES.wagon;
+    const glass = makeRearGlass(wagon).getAttribute("position") as THREE.BufferAttribute;
+    const slab = [gateSpoiler(wagon)!, gateLip(wagon)!].map((g) => new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })));
+    let top = -Infinity;
+    for (let i = 0; i < glass.count; i++) top = Math.max(top, glass.getY(i));
+    const ray = new THREE.Raycaster();
+    const outside: string[] = [];
+    for (let i = 0; i < glass.count; i++) {
+      if (glass.getY(i) < top - 0.03) continue;
+      // 0.1 mm behind the shut line, where the glass's corners stand on it.
+      ray.set(new THREE.Vector3(glass.getX(i), 3, glass.getZ(i) - 1e-4), new THREE.Vector3(0, -1, 0));
+      const ys = ray.intersectObjects(slab, false).map((h) => h.point.y);
+      if (!(ys.length > 0 && Math.min(...ys) < glass.getY(i) && glass.getY(i) < Math.max(...ys))) outside.push(`${glass.getX(i).toFixed(2)},${glass.getY(i).toFixed(3)} slab ${ys.map((y) => y.toFixed(3)).join("/")}`);
+    }
+    assert.ok(outside.length === 0, `glass top vertices outside the slab: ${outside.join("; ")}`);
   });
 
   it("when the pickup's cab back post fans its foot onto the shoulder (pillars.rearFoot), then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening beside the cab back, and the cage is unchanged", () => {
@@ -3331,7 +3453,7 @@ describe("given a body style's P2 parts", () => {
   });
 
   it("when the coupe is drawn, then a chrome badge rides each front fender ahead of its door where the reference side view has one (z .66-.73, y .42)", () => {
-    const pos = makeBodyGlassFrames(CAR_STYLES.coupe, true).getAttribute("position");
+    const pos = makeBodyGlassTrim(CAR_STYLES.coupe, true).strips!.getAttribute("position");
     const sides = new Set<number>();
     for (let i = 0; i < pos.count; i++) {
       const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
@@ -3772,7 +3894,7 @@ describe("given a body style's P2 parts", () => {
     const got = batch.draw.matrixAt(row, new THREE.Matrix4());
     for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!) < 1e-6, `the opened lid's pose, element ${k}`);
     const drawnShare = batch.draw.variants[batch.draw.variantAt(row)]!.getIndex()!.count;
-    assert.equal(drawnShare, drawnLamp(car.style, "boot", lid.share!.lamp.side).geometry.getIndex()!.count, "the lid's row draws its own share");
+    assert.equal(drawnShare, drawnLamp(car.style, "boot", lid.share!.lamp!.side).geometry.getIndex()!.count, "the lid's row draws its own share");
   });
 
   it("when a bumper carries its seam, then it is the skin up to the seam on the end face and round the corner on both sides (rays from outside meet it 2 cm under the seam and the body 2 cm over), and a bumper without one draws as before", () => {
@@ -4581,13 +4703,16 @@ describe("given a style with chrome window trim", () => {
     };
     assert.ok(trims(cars.coupe).every((m) => m.material === chrome), "every trim mesh wears the shared chrome");
     const coupe = cars.coupe;
+    // Split by what each follows in a crush: per door its glass frame and its chrome strips, on the body the quarter frames, the windshield's, the rear glass's and the strips.
     const parents = trims(coupe).map((m) => m.parent);
-    assert.equal(parents.length, 3, "three trim meshes: two doors and the body");
-    assert.ok(parents.includes(coupe["doorL"]) && parents.includes(coupe["doorR"]) && parents.includes(coupe.group), "one on each door, one on the body");
+    assert.equal(parents.length, 8, "eight trim meshes: two on each door, four on the body");
+    assert.equal(parents.filter((p) => p === coupe.group).length, 4, "four on the body");
     for (const door of [coupe["doorL"], coupe["doorR"]]) {
-      const trim = trims(coupe).find((m) => m.parent === door)!;
+      const onDoor = trims(coupe).filter((m) => m.parent === door);
+      assert.equal(onDoor.length, 2, "a frame and the strips on each door");
+      const trim = onDoor[0]!;
       const pane = coupe["glassPanes"].find((g) => g.mesh.parent === door)!.mesh;
-      assert.ok(trim.position.equals(pane.position), "the door's trim sits at its glass's seat");
+      assert.ok(onDoor.every((m) => m.position.equals(pane.position)), "the door's trims sit at its glass's seat");
       trim.geometry.computeBoundingBox();
       pane.geometry.computeBoundingBox();
       const out = (b: THREE.Box3) => Math.max(Math.abs(b.min.x), Math.abs(b.max.x));

@@ -17,6 +17,7 @@ const LONG_JUMP_READY: MinigameHudState = {
   setComplete: false,
   best: { thisCar: null, overall: null },
   bail: null,
+  noThrow: false,
 };
 const KEYBOARD_CONTROL = "Shift";
 const RING_SET_LENGTH = 5;
@@ -56,6 +57,27 @@ describe("given a long jump in each phase", () => {
     assert.equal(view.score, "31.3 m");
     assert.equal(view.bestThisCar, "31.3 m");
     assert.equal(view.bestOverall, "40.0 m");
+  });
+
+  it("when the attempt ended with nobody thrown, then Retry works, Reset run does not, and the card says no throw instead of a score", () => {
+    const view = minigamePanelView({ ...LONG_JUMP_READY, phase: "scored", noThrow: true, lastScore: 31.25, best: { thisCar: 31.25, overall: 40 } }, KEYBOARD_CONTROL);
+    assert.equal(view.retryEnabled, true, "Retry works");
+    assert.equal(view.resetEnabled, false, "Reset run does not");
+    assert.equal(view.noThrow, "No throw: nobody was thrown out", "the no-throw line");
+    assert.equal(view.score, null, "no Score line: the last score belongs to an earlier attempt");
+    assert.equal(view.bestThisCar, "31.3 m", "the best stays");
+  });
+
+  it("when the attempt was thrown and scored, then there is no no-throw line", () => {
+    const view = minigamePanelView({ ...LONG_JUMP_READY, phase: "scored", lastScore: 31.25 }, KEYBOARD_CONTROL);
+    assert.equal(view.noThrow, null);
+  });
+
+  it("when a Ring Fling attempt ended with nobody thrown, then Retry reads Retry, not Next throw, and the throw counter is unchanged", () => {
+    const view = minigamePanelView({ ...RING_READY, phase: "scored", noThrow: true, attempt: 3 }, KEYBOARD_CONTROL);
+    assert.equal(view.retryLabel, "Retry");
+    assert.equal(view.throwCounter, `Throw 3 / ${RING_SET_LENGTH}`);
+    assert.equal(view.scoreHint, null);
   });
 
   it("when it is not a Ring Fling, then there is no throw counter, set line or stepper", () => {

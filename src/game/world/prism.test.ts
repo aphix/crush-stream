@@ -1,10 +1,11 @@
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { armSolids, C_DEPTH, C_H, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, MOUNT, pointContact, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VZ, PQ_X, PQ_Y, PQ_Z, STEP_MAX, Surface, WALL } from "./surfaces.ts";
+import { armSolids, C_DEPTH, C_H, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, MOUNT, pointContact, PQ_BODY, PQ_MOUNT, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, STEP_MAX, Surface, WALL, wheelContact } from "./surfaces.ts";
 import "./ground.ts";
-import { CLASSES } from "../vehicle/vehicle-classes.ts";
+import { CLASSES, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import { carFrame } from "../vehicle/car-rig.ts";
-import { CAR_STYLES } from "../vehicle/car-variants.ts";
+import { CAR_STYLE_IDS, CAR_STYLES } from "../vehicle/car-variants.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { ENTRY_WINDOW, SOLID_AT_REST } from "./constants.ts";
 import { FF_NX, FF_NZ, FF_PEN, FF_SIZE, FOOT_FX, FOOT_FZ, FOOT_HL, FOOT_HW, FOOT_RX, FOOT_RZ, FOOT_SIZE, FOOT_X, FOOT_Z, footFace } from "./prism.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
@@ -20,15 +21,34 @@ function solids(...specs: Parameters<Surface["addPrism"]>[0][]): Surface {
 const q = new Float64Array(PQ_SIZE);
 const out = new Float64Array(HIT_SIZE);
 
-function ask(x: number, y: number, z: number, vx = 0, vz = 0, body = false): Float64Array {
+function ask(x: number, y: number, z: number, vx = 0, vz = 0, body = false, mount = 0, vy = 0): Float64Array {
   q[PQ_X] = x;
   q[PQ_Y] = y;
   q[PQ_Z] = z;
   q[PQ_VX] = vx;
+  q[PQ_VY] = vy;
   q[PQ_VZ] = vz;
   q[PQ_BODY] = body ? 1 : 0;
+  q[PQ_MOUNT] = mount;
   pointContact(q, -1, out);
   return out;
+}
+
+/** A tyre's own mount (m): `MOUNT` of its drawn radius, the step it climbs by grip. */
+const mountOf = (id: "sedan" | "monster") => MOUNT * carFrame(CAR_STYLES[id]).rig.tyre.r * CLASSES[STYLE_CLASS[id]].wheelScale;
+/** The scale its tread footprint is asked at: the drawn tyre over the platform's (`wheelsAt`). */
+const treadScale = (id: "sedan" | "monster") => CLASSES[STYLE_CLASS[id]].wheelScale * (carFrame(CAR_STYLES[id]).rig.tyre.r / PLATFORM_TYRE.r);
+const _hub = new Float64Array(3);
+/** The wheel's axes in the world (x across, y up, z along): the level wheel's. */
+const _axes = new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+
+/** The lift (m) a tyre's tread footprint reads at a hub 0.12 m under a 1 m top, over the middle of the armed solids' prism, rolling with `motion` (`wheelContact`'s). */
+function treadRead(id: "sedan" | "monster", motion: Float64Array | null = null): number {
+  _hub[0] = 0;
+  _hub[1] = 1 - 0.12;
+  _hub[2] = 0;
+  wheelContact(_hub, _axes, treadScale(id), treadScale(id), -1, out, motion);
+  return out[C_H]!;
 }
 
 /** A 2 m (across) by 4 m (along) box, 1 m tall, its middle at the origin, facing +z. */
@@ -166,10 +186,74 @@ describe("given a circle prism and a ramp prism", () => {
 });
 
 describe("given the step a tyre mounts", () => {
+  // A row that fails leaves no solids armed for the next one.
+  afterEach(() => armSolids(null));
+
   it("when it is derived from the classes then it is the biggest tyre's share of its radius", () => {
-    const biggest = Math.max(...Object.values(CLASSES).map((c) => c.wheelScale));
-    const tyreR = carFrame(CAR_STYLES.sedan).rig.tyre.r;
-    assert.ok(Math.abs(STEP_MAX - MOUNT * tyreR * biggest) < 1e-9, `${STEP_MAX} against ${MOUNT * tyreR * biggest}`);
+    const biggest = Math.max(...CAR_STYLE_IDS.map((id) => carFrame(CAR_STYLES[id]).rig.tyre.r * CLASSES[STYLE_CLASS[id]].wheelScale));
+    assert.ok(Math.abs(STEP_MAX - MOUNT * biggest) < 1e-9, `${STEP_MAX} against ${MOUNT * biggest}`);
+  });
+
+  it("when a sedan's tyre and a monster's are asked at the same point 0.12 m under a box prism's top, then the sedan's own mount reads a side and the monster's a floor", () => {
+    solids(BOX);
+    const y = 1 - 0.12;
+    const sedanHit = ask(0.9, y, 0, 0, 0, false, mountOf("sedan"))[C_H];
+    assert.equal(sedanHit, -Infinity, `sedan mount ${mountOf("sedan")}: read ${sedanHit}`);
+    const monsterHit = ask(0.9, y, 0, 0, 0, false, mountOf("monster"))[C_H];
+    assert.equal(monsterHit, 1, `monster mount ${mountOf("monster")}: read ${monsterHit}`);
+    armSolids(null);
+  });
+
+  it("when a monster's tyre 0.12 m under a box prism's top is rolling into the side it came in by, then that side is a wall to it; rolling along the side, or standing still, it stands on the top", () => {
+    solids(BOX);
+    const y = 1 - 0.12;
+    // 0.1 m inside the +x face, closing on it at 10 m/s: it came in through it a hundredth of a second ago.
+    const into = ask(0.9, y, 0, -10, 0, false, mountOf("monster"));
+    assert.equal(into[C_H], -Infinity, `rolling into the side: read ${into[C_H]}`);
+    assert.equal(into[C_NX], 1);
+    assert.ok(Math.abs(into[C_DEPTH]! - 0.1) < 1e-12, `depth ${into[C_DEPTH]}`);
+    // Along +z, the nearest face it closes on is the far end's, 2 m off: crossed longer ago than the entry window.
+    assert.equal(ask(0.9, y, 0, 0, 10, false, mountOf("monster"))[C_H], 1, "rolling along the side");
+    assert.equal(ask(0.9, y, 0, 0, 0, false, mountOf("monster"))[C_H], 1, "at rest");
+    armSolids(null);
+  });
+
+  it("when a body point is asked with a tyre's mount, then it reads as it does with none: only a tyre has a mount", () => {
+    solids(BOX);
+    // 0.12 m under the top, 0.15 m inside a face it closes on: a body point there stands on the top, as the biggest tyre's step lets it.
+    const bare = ask(0.85, 1 - 0.12, 0, -1, 0, true);
+    assert.equal(bare[C_H], 1, "a body point standing 0.12 m under the top, inside a deeper face");
+    const bareRead = [bare[C_H], bare[C_NY], bare[C_DEPTH]].join();
+    const mounted = ask(0.85, 1 - 0.12, 0, -1, 0, true, mountOf("sedan"));
+    assert.equal([mounted[C_H], mounted[C_NY], mounted[C_DEPTH]].join(), bareRead, `body point with the sedan's mount ${mountOf("sedan")}`);
+    armSolids(null);
+  });
+
+  it("when a tyre is 0.4 m under a box prism's top and falling, then the sedan's tyre (0.342 m) is not stood on the top, however it came in: it reads the ground under it; the monster's (0.614 m) is stood on it", () => {
+    solids(BOX);
+    const sedanHit = ask(0, 0.6, 0, 0, 0, false, mountOf("sedan"), -1)[C_H];
+    assert.equal(sedanHit, 0, `sedan mount ${mountOf("sedan")}: read ${sedanHit}`);
+    const monsterHit = ask(0, 0.6, 0, 0, 0, false, mountOf("monster"), -1)[C_H];
+    assert.equal(monsterHit, 1, `monster mount ${mountOf("monster")}: read ${monsterHit}`);
+    armSolids(null);
+  });
+
+  it("when a tyre's tread footprint stands 0.12 m under the top of a prism narrower than the tyre's step, then the sedan's reads the ground (the prism a wall to it) and the monster's the prism's top", () => {
+    const flat = { sedan: treadRead("sedan"), monster: treadRead("monster") };
+    solids({ ...BOX, hx: 0.1, hz: 3 });
+    assert.equal(treadRead("sedan"), flat.sedan, `sedan tread (scale ${treadScale("sedan").toFixed(3)}, mount ${mountOf("sedan").toFixed(3)})`);
+    const monster = treadRead("monster");
+    assert.ok(monster > flat.monster + 0.5, `monster tread (scale ${treadScale("monster").toFixed(3)}, mount ${mountOf("monster").toFixed(3)}): ${monster} over the ground's ${flat.monster}`);
+    armSolids(null);
+  });
+
+  it("when the monster's tread footprint stands 0.12 m under the top of a prism narrower than its step and the wheel rolls across it at 10 m/s, then it reads the ground: the side it came in by is a wall to it", () => {
+    const motion = new Float64Array([10, 0, 0, 0, 0]);
+    const flat = treadRead("monster", motion);
+    solids({ ...BOX, hx: 0.1, hz: 3 });
+    const rolling = treadRead("monster", motion);
+    assert.equal(rolling, flat, `monster tread rolling across (scale ${treadScale("monster").toFixed(3)}, mount ${mountOf("monster").toFixed(3)}): ${rolling} against the ground's ${flat}`);
+    armSolids(null);
   });
 
   it("when prisms are listed near a point then each one is listed once, and the ones far away are not", () => {
