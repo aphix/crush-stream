@@ -6,7 +6,7 @@ import { tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { pairEta, PRE_IMPACT_LEAD, preImpact } from "../match/phase.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { glassCorners } from "../vehicle/car-glass.ts";
-import { glassOf, paneFrame } from "../vehicle/car-glass.test-util.ts";
+import { glassOf } from "../vehicle/car-glass.test-util.ts";
 import { houseKnocked, labDollRig, labRig, leaveLab, runLab, throwAt, throwFlatDummyAt, throwLevelAt, type LabRig } from "./engine-lab.test-util.ts";
 import { WALL, type LabShot } from "./engine-lab.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
@@ -272,10 +272,19 @@ function inCabin(car: DeformableCar, p: THREE.Vector3): boolean {
   return box.containsPoint(local) && behind(0) && behind(12);
 }
 
+/** The outward unit normal (world) of `car`'s windshield as the dummies meet it: the cage style's pane (`glassCorners`, the ragdoll world's slab), never its drawn twin's mesh. */
+function windshieldOut(car: DeformableCar): THREE.Vector3 {
+  const c = glassCorners(car.style);
+  const corner = new THREE.Vector3(c[0], c[1], c[2]);
+  const across = new THREE.Vector3(c[3], c[4], c[5]).sub(corner);
+  const up = new THREE.Vector3(c[6], c[7], c[8]).sub(corner);
+  return across.cross(up).transformDirection(car.group.matrixWorld);
+}
+
 /** What the Glass set's dummy (item 0), put `distance` m out from its windshield's middle along the glass's outward normal and thrown flat at it at `speed` m/s, did over `seconds`. */
 function throwDummyAtWindshield(r: LabRig, distance: number, speed: number, seconds: number): { shot: LabShot; everInCabin: boolean; outAfterHit: number; endInCabin: boolean; endSpeed: number } {
   const car = r.cars[0]!;
-  const out = paneFrame(car, "windshield").out;
+  const out = windshieldOut(car);
   const slot = r.lab.dollOf[0]!;
   const p = new THREE.Vector3();
   const v = new THREE.Vector3();
