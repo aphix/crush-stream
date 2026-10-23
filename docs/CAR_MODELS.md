@@ -181,7 +181,7 @@ The cabin is shared props, placed per car by its spec (`vehicle/interior.ts` `Ca
 | `seatFront` | 2 | `seats.front`, the passenger mirrored |
 | `seatRear` | 0 or 1 | `seats.rear`, stretched to the cabin's width |
 | `wheel` | 1 | Ahead of the driver's H-point (`WHEEL_AT`), leaned `WHEEL_TILT` |
-| `liningL`, `liningR`: door cards | 1 each | Door space; each keeps the first lining's box exactly (a torn door's loose box is sim) |
+| `liningL`, `liningR`: door cards | 1 each | Door space; each keeps the first lining's box exactly (a torn door's loose box is sim). Drawn inside every style's door skin (`drawnDoorCard`); the batch draws it as one rigid shape, so its seat rides inboard by the deepest dent the door skin has taken over its footprint (`seatDoorCards`, `doorCardDent`) and a dented skin never stands under it: after a 25 m/s side hit it rides 0.18-0.24 m in and its worst vertex stands 3-51 mm under the skin's face (it stood 154-189 mm out) |
 | `engineBay` | 1 | Mapped from `REF_BAY` onto the trough under the hood; shown while the hood is off or open |
 | `crashBar` | 2 | Each bumper's seat; shown while that bumper is off or hanging |
 | `ladderFrame`: rails, crossmembers, transfer case, steering box, shock bodies | 0 or 1 | `underbody: true` (the monster): in the class-lift body's space, under the floor (`CarUnderbody`) |

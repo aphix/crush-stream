@@ -13,7 +13,7 @@ import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-m
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { cageLift, centreLift } from "./car-cage-rig.ts";
 import { makeChassisGeometry, withGateSurround } from "./car-chassis-mesh.ts";
-import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
+import { doorCardFace, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { DOOR_GLASS_SEAT, makeBodyGlassTrim, makeDoorChromeStrips, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane, windshieldPoint } from "./car-glass.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
@@ -464,6 +464,8 @@ export abstract class CarCore {
   protected doorROrigin: THREE.Vector3;
   protected doorLSkin: PointSkin;
   protected doorRSkin: PointSkin;
+  /** The door skin's face vertices each door card stands behind (`doorCardFace`), left then right. */
+  protected doorCardFaces: [Int32Array, Int32Array];
   /** The chrome trims that follow a crushed body (`CarCore.addGlass`), written with the panels (`skinPanels`). */
   protected readonly trims: TrimFollow[] = [];
   /** The cabin's pose, holding its shell, seats and wheel (`CarCabin`): `fitInterior` moves it with the crushed cell. */
@@ -566,6 +568,7 @@ export abstract class CarCore {
     this.doorROrigin = this.doorR.position.clone().add(this.doorMeshR.position);
     this.doorLSkin = this.deform.bindPoints(this.doorLRest, this.doorLOrigin);
     this.doorRSkin = this.deform.bindPoints(this.doorRRest, this.doorROrigin);
+    this.doorCardFaces = [doorCardFace(this.style, -1, this.doorLRest), doorCardFace(this.style, 1, this.doorRRest)];
     // The ground lift a hinged door's pose takes (`posePart`) reads its rest box, not the dent its skin writes.
     for (const mesh of [this.doorMeshL, this.doorMeshR]) mesh.geometry.computeBoundingBox();
     this.flushCasters.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);

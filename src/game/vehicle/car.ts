@@ -207,6 +207,7 @@ export class DeformableCar extends CarParts {
     this.restoreRest(this.trunk.geometry, this.trunkRest);
     this.restoreRest(this.doorMeshL.geometry, this.doorLRest);
     this.restoreRest(this.doorMeshR.geometry, this.doorRRest);
+    this.seatDoorCards();
     if (this.lightBar) this.restoreRest(this.lightBar.geometry, this.lightBarRest!);
     this.wheelSpin.fill(0);
     this.wheelRate.fill(0);
@@ -708,6 +709,7 @@ export class DeformableCar extends CarParts {
     }
     if (!this.doorParts[0]!.detached) this.deform.skinPoints(this.doorMeshL.geometry, this.doorLRest, this.doorLSkin, "doorLeft", this.doorLOrigin);
     if (!this.doorParts[1]!.detached) this.deform.skinPoints(this.doorMeshR.geometry, this.doorRRest, this.doorRSkin, "doorRight", this.doorROrigin);
+    this.seatDoorCards();
     if (this.lightBar && !this.lightBarPart!.detached) this.deform.skinPanel(this.lightBar.geometry, this.lightBarRest!, "roof", this.lightBarOrigin);
     for (const g of this.glassPanes) {
       if (!g.skin || !g.restVerts || g.state === "shattered") continue;
