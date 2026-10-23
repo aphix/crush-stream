@@ -52,9 +52,8 @@ export const MU_TYRE = 0.9;
  */
 export const MOUNT = 1 - 1 / Math.sqrt(1 + MU_TYRE ** 2);
 /**
- * The tallest step (m) any class's tyre mounts by grip alone: `MOUNT` of the biggest drawn tyre's radius (the monster's 0.355 m at its
- * wheel scale of 1.73, held by `world/prism.test.ts`). What a surface that cannot tell the asking class holds out as floor, and how far
- * under a prism's top a tyre still stands on it: a higher face is a wall.
+ * The step (m) a surface holds out as floor to a reader that names no tyre (`PQ_MOUNT` 0): `MOUNT` of the biggest drawn tyre's radius
+ * (the monster's 0.355 m at its wheel scale of 1.73, held by `world/prism.test.ts`).
  */
 export const STEP_MAX = MOUNT * 0.355 * 1.73;
 
@@ -465,7 +464,7 @@ export class Surface {
   /**
    * A prism patch (`world/prism.ts`): a plan shape (a box of half extents `hx`, `hz`, or a circle of radius `hx`) turned by
    * `yaw`, from `base` up to a top `top` over its middle that rises `gu` per metre across and `gw` along. It is no floor
-   * to a tyre that is not within `STEP_MAX` of its top, and a wall to everything else: a body in it is answered the face
+   * to a tyre that is not within its mount (`PQ_MOUNT`, else `STEP_MAX`) of its top, and a wall to everything else: a body in it is answered the face
    * it entered by (`pointContact`). A prop that is knocked off its spot (`knock`) answers nothing here: only a body's
    * footprint meets it (`prop-contact.ts`).
    */
@@ -1257,7 +1256,7 @@ const _face = new Float64Array(F_SIZE);
 
 /**
  * Prism patch `i` at the point: a floor candidate (`_s[S_H]`, the top's height and its slope) where the point is inside the
- * plan and over the base, for a tyre not deeper under the top than it mounts (`P_REACH`), a body point (`PQ_BODY`: a cage vertex, a
+ * plan and over the base, for a tyre not deeper under the top than it mounts (`PQ_MOUNT`, else `P_REACH`), a body point (`PQ_BODY`: a cage vertex, a
  * belly row) no deeper under it than the face it is in is deep, or a point that came in through the top (`exitFace`: it landed); else
  * the face it entered by as the side answer if that is the deepest so far (`S_SDEPTH`).
  * NaN: no candidate, outside the plan or under the base (a body passes beneath).
@@ -1284,7 +1283,8 @@ function prismAt(s: Surface, i: number, q: Float64Array): void {
   _s[S_H] = top;
   _s[S_CG0] = P[o + PR_GU]! * c + P[o + PR_GW]! * sn;
   _s[S_CG1] = -P[o + PR_GU]! * sn + P[o + PR_GW]! * c;
-  const mounts = P[o + P_REACH]!;
+  const own = q[PQ_MOUNT]!;
+  const mounts = own > 0 ? own : P[o + P_REACH]!;
   const body = q[PQ_BODY] === 1;
   const under = top - y;
   _s[S_CREACH] = mounts;
@@ -1505,13 +1505,15 @@ export function heightGrip(): number {
 export const PQ_X = 0;
 export const PQ_Z = 1;
 export const PQ_Y = 2;
-export const PQ_SIZE = 7;
+export const PQ_SIZE = 8;
 /** The point's own velocity (m/s): the face it came in through is the one this opposes (`exitFace`); 0 for a point at rest or one that never asks a wall. */
 export const PQ_VX = 3;
 export const PQ_VZ = 4;
 export const PQ_VY = 5;
-/** 1 for a point of a body's own shape (a cage vertex, a belly row): a prism's side it is in answers the face, however shallow; 0 (a tyre) mounts a step within the prism's reach under its top. */
+/** 1 for a point of a body's own shape (a cage vertex, a belly row): a prism's side it is in answers the face, however shallow; 0 (a tyre) mounts a step within its `PQ_MOUNT` under the top. */
 export const PQ_BODY = 6;
+/** A tyre's own mount (m): `MOUNT` of its drawn radius, the step it climbs by grip. 0 (a body point, a reader that names no tyre): the prism's `P_REACH`. */
+export const PQ_MOUNT = 7;
 
 /**
  * The surface at plan (x, z) of the query point `q` (`PQ_X`, `PQ_Z`, `PQ_Y`) under a body asking from height y (`Infinity`: the
@@ -2598,6 +2600,7 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
   _pq[PQ_X] = x;
   _pq[PQ_Z] = z;
   _pq[PQ_Y] = y;
+  _pq[PQ_MOUNT] = MOUNT * RINGS[0]![1] * scale;
   _foot[FOOT_SCALE] = scale;
   _foot[FOOT_ACROSS] = across;
   treadReach.tops = tops !== null && edgeIn(tops, _pq, skip) ? tops : null;
@@ -2659,5 +2662,6 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
     }
   }
   live.topCap = Infinity;
+  _pq[PQ_MOUNT] = 0;
   out[C_TOUCH] = out[C_H]!;
 }
