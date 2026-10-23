@@ -8,7 +8,7 @@ import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
 import { CREASE_DEGREES, ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, shoulderDrop, sideX, tailgateHalf } from "./car-mesh.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, sideBowZ, tubWall } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, doorGlassFrontZ, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, sideBowZ, tubWall } from "./car-lines.ts";
 import { doorSkinStand, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, type PartSeat } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
@@ -1503,6 +1503,35 @@ describe("given a body style's H2 hardpoints", () => {
     let front = -Infinity;
     for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) + hingeY + DOOR_GLASS_SEAT.y - knee) < 1e-5) front = Math.max(front, pos.getZ(i) + hingeZ + DOOR_GLASS_SEAT.z);
     assert.ok(Math.abs(front - (aPostRearZ(knee, kneed) + 0.01)) < 1e-5, `the door glass's front edge at the knee stands at z ${front}, 1 cm under the post's rear edge ${aPostRearZ(knee, kneed)}`);
+  });
+
+  it("when a style with no knee sets `aPillarSailGlass`, then no level ray in from the side, 5 mm ahead of the door glass's front edge, passes its drawn sail to the far side: the sail's rear edge follows the glass's straight front edge up to its top, not one chord from its middle to the post's top over a see-through wedge", () => {
+    // The drawn sedan: no knee, the glass's front edge straight from the belt to the post's top. The control is its twin with the field removed.
+    const stock = CAR_STYLES.sedan;
+    const sedan = drawnStyle(stock);
+    const control = drawnStyle({ ...stock, drawn: { ...stock.drawn, aPillarSailGlass: undefined } });
+    assert.ok(sedan.aPillarKnee === undefined && sedan.aPillarSailGlass === true && control.aPillarSailGlass === undefined, "the drawn sedan sets the field over a kneeless glass; the control does not");
+    const footY = beltY(sedan.aPillarFoot, sedan);
+    const glassTop = glassTopY(aPillarTopZ(sedan), sedan);
+    // The contour tool's pillar cuts (`PILLAR_AT` of the side glass's height, the belt up to the quarter glass's cant top).
+    const quarter = makeRearSideGlass(1, sedan).getAttribute("position") as THREE.BufferAttribute;
+    const topY = Math.max(...Array.from({ length: quarter.count }, (_, i) => quarter.getY(i)));
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const posts = (style: BodyStyle) => makeGreenhouseFrame(style, "drawn").filter((g) => g.name === "a" || g.name === "sail").map((g) => new THREE.Mesh(g, material));
+    const [sailed, plain] = [posts(sedan), posts(control)];
+    const ray = new THREE.Raycaster();
+    /** The x (m) of the first hit of a level ray in from x = 1.5 along -x at (y, z) on `meshes`; null: it passed through. */
+    const firstX = (meshes: THREE.Mesh[], y: number, z: number): number | null => {
+      ray.set(new THREE.Vector3(1.5, y, z), new THREE.Vector3(-1, 0, 0));
+      return ray.intersectObjects(meshes, false)[0]?.point.x ?? null;
+    };
+    for (const share of [0.6, 0.75, 0.9]) {
+      const y = footY + share * (topY - footY);
+      const z = doorGlassFrontZ(y, footY, glassTop, sedan) + 0.005;
+      const [now, was] = [firstX(sailed, y, z), firstX(plain, y, z)];
+      assert.ok(now !== null && now > 0.3, `${share} of the glass (y ${y.toFixed(3)}, z ${z.toFixed(3)}): the ray's first hit is at x ${now}, not on the near side`);
+      assert.ok(was === null || was < 0.3, `the control, ${share} of the glass (y ${y.toFixed(3)}): the ray first hits at x ${was}, so there is no wedge to see through`);
+    }
   });
 
   it("when a style blacks out greenhouse parts, then exactly their drawn vertices turn gloss black, and the drawn shape and the cage are unchanged", () => {
@@ -3874,6 +3903,55 @@ describe("given a body style's boot opening, its open floors and its arch lips (
     }
     assert.ok(wedges.length === 0, `the quarter top stands within ${QUARTER_UNDER_BELT * 1000} mm of the belt along the whole lid, but ${wedges.length} rays fell through (z@x:y): ${wedges.join(" ")}`);
     assert.ok(cageHash(coupe) === cageHash({ ...coupe, boot: { ...b, halfWidth: undefined } }), "the cage builds are unchanged");
+  });
+
+  /** A plain lid's edge stands this far (m) in from its station's half-width (`DECK_INSET`), a seated lid's (`HOOD_INSET`) this far. */
+  const LID_PLAIN_IN = 0.075;
+  const LID_SEAT_IN = 0.07;
+  /** The quarter's rim is the first body a ray down finds outboard of the lid's edge: from this far (m) past it, stepping out by it, up to `CORNER_RIM_REACH` (m) (a plain lid's hollow wall stands 1.5 cm out). */
+  const LID_RIM_OUT = 0.002;
+  const CORNER_RIM_REACH = 0.03;
+  /** The lid's top is read this far (m) inboard of where its edge roll starts (`boot.edgeRoll` in from the edge): the roll turns the top down some 2 cm in its last 5 mm, under the rim. */
+  const CORNER_READ_IN = 0.001;
+  /** The lid's sides stand at most this far (m) over the quarter's rim beside them: a step, not a shelf (owner 78a30d2d). */
+  const CORNER_STEP = 0.01;
+  /** The sides are read at this many stations, from where the hollow's ramp ends (`LID_RIM` behind the lid's front) to where the lip's kick begins (`depth` ahead of the fold's end); a ray starts `CORNER_RAY_UP` (m) over the belt. */
+  const CORNER_STATIONS = 8;
+  const CORNER_RAY_UP = 0.1;
+  it("when the sedan's boot lid is drawn, then the sedan's boot lid's sides meet the quarter's rim within 1 cm from the hollow's front ramp to the lip (no shelf)", () => {
+    const { sedan } = CAR_STYLES;
+    const b = sedan.boot;
+    assert.ok(b.kind === "lid" && b.flush === true && b.drop !== undefined && b.edgeRoll !== undefined && b.crown !== undefined && b.lip !== undefined, "the sedan's boot is a flush, rolled, crowned deck lid with a lip, wrapping the tail");
+    const [py, pz] = bootPivot(b);
+    const roll = b.edgeRoll;
+    const lipStart = b.z1 + LID_FOLD + b.lip.depth;
+    const stations = Array.from({ length: CORNER_STATIONS }, (_, k) => lerp(b.z0 - LID_RIM, lipStart, k / (CORNER_STATIONS - 1)));
+    // How far (m) the lid of `style`, read just inboard of its edge roll, stands over the body's rim just outboard of its edge, at each station.
+    const standOver = (style: BodyStyle): number[] => {
+      const lid = new THREE.Mesh(makeTrunkGeometry(style), SIDED);
+      lid.position.set(0, py, pz);
+      lid.updateMatrixWorld();
+      const body = new THREE.Mesh(makeChassisGeometry(style), SIDED);
+      const boot = style.boot;
+      return stations.map((z) => {
+        const { hw, yBelt } = sampleSlice(z, style.profile);
+        const edge = boot.kind === "lid" && boot.flush === true ? Math.min(hw - LID_SEAT_IN, boot.halfWidth ?? Infinity) : hw - LID_PLAIN_IN;
+        const down = (mesh: THREE.Mesh, x: number) => bodyHit(mesh, [x, yBelt + CORNER_RAY_UP, z], [0, -1, 0], OPEN_DEPTH);
+        const lidX = edge - roll - CORNER_READ_IN;
+        const rimXs = Array.from({ length: Math.round(CORNER_RIM_REACH / LID_RIM_OUT) }, (_, k) => edge + (k + 1) * LID_RIM_OUT);
+        const rimX = rimXs.find((x) => down(body, x) !== null) ?? edge + CORNER_RIM_REACH;
+        const [top, rim] = [down(lid, lidX), down(body, rimX)];
+        assert.ok(top !== null && rim !== null, `z ${z.toFixed(3)} (hw ${hw.toFixed(3)}, lid edge ${edge.toFixed(3)}): the lid's top at x ${lidX.toFixed(3)} ${top ? "found" : "MISSED"}, the quarter's rim at x ${rimX.toFixed(3)} ${rim ? "found" : "MISSED"}`);
+        return top.y - rim.y;
+      });
+    };
+    const overs = standOver(sedan);
+    const worst = Math.max(...overs);
+    assert.ok(worst <= CORNER_STEP, `the lid's sides stand over the quarter's rim by (mm, front to lip) ${overs.map((o) => (o * 1000).toFixed(1)).join(" ")}, over ${CORNER_STEP * 1000}`);
+    // The control: the unseated lid (its edge a step up off the deck, its crown 2 cm), over the body built for it, so the row cannot pass vacuously.
+    const control: BodyStyle = { ...sedan, boot: { ...b, flush: undefined, halfWidth: undefined, crown: [0.02, b.crown[1]] } };
+    const stepped = Math.max(...standOver(control));
+    assert.ok(stepped > CORNER_STEP, `the control: the unseated lid's sides stand up to ${(stepped * 1000).toFixed(1)} mm over their rim, over ${CORNER_STEP * 1000}`);
   });
 
   it("when the hatch's tailgate is built on its seam's outline, then its edge stands on the outline at each of the outline's corners, in the drawn and the cage build", () => {

@@ -817,6 +817,20 @@ const WINDOW_POINT_RUN = 0.1;
 const WINDOW_POINT_STEP = 0.001;
 /** At a pinched sail's front ring, where the window's line has rounded into the glass's top line, the sail reaches at most this far (m) under that line: two beads' span, not a post's depth cutting the rounded corner off. */
 const PINCH_FRONT_UNDER = 0.035;
+/** A rounded window end (`cPillar.dEnd`) is read on the sail's lower edge in the side view: no glass shows this far (m) over the arc, the sail covers it there. */
+const D_END_FIT = 0.0015;
+/** The arc's stations stand this far (m) apart, from its rearmost point to where it meets the window's line. */
+const D_END_STEP = 0.0005;
+/** Within this far (m) over the belt the belt rail stands under the sail's foot, so the arc is not read there. */
+const D_END_RAIL = 0.006;
+/** The row reads at least this many stations, or it would pass without reading a round end. */
+const D_END_MIN_READ = 3;
+/** The sail's visible lower edge is found by a ray scan down from this far (m) over the arc, in steps of `D_END_EDGE_STEP`, `D_END_EDGE_READS` of them. */
+const D_END_REACH = 0.005;
+const D_END_EDGE_STEP = 1e-4;
+const D_END_EDGE_READS = 150;
+/** The window's visible edge keeps one lap under the arc along the whole round, within this far (m): the round's shape, not its height (the bead's lap sets the height). */
+const D_END_SHAPE = 0.002;
 
 /** `style`'s +x sail's rings (every vertex of each section), rear to front. */
 function sailRings(style: BodyStyle): THREE.Vector3[][] {
@@ -844,7 +858,7 @@ function lipGap(style: BodyStyle, section: THREE.Vector3[]): number {
 
 /**
  * Side view of `style`'s +x window point: how far (m) ahead of the point (where the window's line, tip to the glass's top corner,
- * rises out of the body loft's top at the glass) its glass shows past the sail for good, read mid-height between that top and the line.
+ * rises out of the body loft's top at the glass; a rounded end's (`cPillar.dEnd`) rearmost point where that stands ahead of it) its glass shows past the sail for good, read mid-height between that top and the line.
  */
 function windowPointCover(style: BodyStyle): number {
   const q = drawnQuarter(style);
@@ -870,7 +884,20 @@ function windowPointCover(style: BodyStyle): number {
     if (ray.intersectObject(sail).length > 0) shows = NaN;
     else if (Number.isNaN(shows)) shows = z;
   }
+  // A rounded end's point is its rearmost, not where the straight line rises out of the sill.
+  if (style.cPillar?.dEnd) point = Math.max(point, style.cPillar.dEnd[1]);
   return shows - point;
+}
+
+/** Side view of `style`'s +x sail: whether it covers the side glass at car (`z`, `y`), a ray along +x from the glass's plane there hitting it. */
+function sailCovers(style: BodyStyle): (z: number, y: number) => boolean {
+  const sail = new THREE.Mesh(makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  const glassX = (z: number, y: number) => THREE.MathUtils.lerp(beltX(z, style), cantX(z, style), (y - beltY(z, style)) / (cantY(z, style) - beltY(z, style)));
+  const ray = new THREE.Raycaster();
+  return (z, y) => {
+    ray.set(new THREE.Vector3(glassX(z, y), y, z), new THREE.Vector3(1, 0, 0));
+    return ray.intersectObject(sail).length > 0;
+  };
 }
 
 describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", () => {
@@ -1039,6 +1066,38 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       const points = Array.from({ length: ring }, (_, k) => positionAt(sail, (slices - 1) * ring + k));
       const under = glassTopY(points[0]!.z, style) - Math.min(...points.map((p) => p.y));
       assert.ok(under <= PINCH_FRONT_UNDER, `${id}: at z ${points[0]!.z.toFixed(3)} the sail reaches ${(under * 1000).toFixed(1)} mm under the glass's top line`);
+    });
+  }
+  for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.dEnd)) {
+    it(`when a ${id}'s side window's rear end is read in the side view, then its glass's visible top edge keeps the D end's arc's shape within ${D_END_SHAPE * 1000} mm from its rearmost to the line: a round end, not a point`, () => {
+      const q = drawnQuarter(style);
+      const [tipY, tipZ] = style.cPillar?.tip ?? [beltY(q.zRearBot, style), q.zRearBot];
+      const [topY, topZ] = [glassTopY(q.zRearTop, style), q.zRearTop];
+      const [dR, dRear] = style.cPillar!.dEnd!;
+      const m = (topY - tipY) / (topZ - tipZ);
+      const slant = Math.sqrt(1 + m * m);
+      const dZ = dRear + dR;
+      const dY = tipY + m * (dZ - tipZ) - dR * slant;
+      const dTangent = dZ - (dR * m) / slant;
+      const arcY = (z: number) => dY + Math.sqrt(Math.max(0, dR * dR - (dZ - z) ** 2));
+      const lineY = (z: number) => tipY + m * (z - tipZ);
+      // Read where the arc stands over the belt's rail and more than the fit under the straight line: nearer the line a point reads the same.
+      const stations = Array.from({ length: Math.floor((dTangent - dRear) / D_END_STEP) + 1 }, (_, k) => dRear + k * D_END_STEP).filter(
+        (z) => arcY(z) - D_END_FIT >= beltY(z, style) + D_END_RAIL && lineY(z) - arcY(z) > D_END_FIT,
+      );
+      assert.ok(stations.length >= D_END_MIN_READ, `${id}: ${stations.length} stations read the arc over the belt's rail, under the line`);
+      // The sail's visible lower edge at each station (the highest y under the scan's top where the glass shows), as its offset (m) off the arc; NaN where the scan finds none.
+      const edgeOffsets = (covers: (z: number, y: number) => boolean) =>
+        stations.map((z) => (Array.from({ length: D_END_EDGE_READS }, (_, k) => arcY(z) + D_END_REACH - k * D_END_EDGE_STEP).find((y) => !covers(z, y)) ?? NaN) - arcY(z));
+      const spreadOf = (offsets: number[]) => Math.max(...offsets) - Math.min(...offsets);
+      const listed = (offsets: number[]) => stations.map((z, k) => `${z.toFixed(4)}: ${(offsets[k]! * 1000).toFixed(2)}`).join(", ");
+      const covers = sailCovers(style);
+      const bare = stations.filter((z) => !covers(z, arcY(z) + D_END_FIT));
+      assert.ok(bare.length === 0, `${id}: the glass shows over the arc at z ${bare.map((z) => z.toFixed(4)).join(", ")}`);
+      const offsets = edgeOffsets(covers);
+      assert.ok(spreadOf(offsets) <= D_END_SHAPE, `${id}: the sail's edge stands off the arc by (z: mm) ${listed(offsets)}`);
+      const straight = edgeOffsets(sailCovers({ ...style, cPillar: { ...style.cPillar, dEnd: undefined } }));
+      assert.ok(spreadOf(straight) > D_END_SHAPE, `${id}'s control: without the round end the sail's edge stands off the arc by (z: mm) ${listed(straight)}, within ${D_END_SHAPE * 1000} mm: the row would not catch a point`);
     });
   }
   it("when a truck cab (a curved roof square to its cant at the rear, an upright quarter window edge on the monster) sets any sail, then the sail builds whole: every vertex finite", () => {
@@ -1308,14 +1367,15 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
  * (the plain kinds one instanced draw each, the styled kinds one `SeatDraw` for every car), none of them the car's meshes.
  */
 const BASELINE_BY_STYLE = [
-  { id: "sedan", drawCalls: 13, triangles: 5266, bodyVertices: 1587 },
+  // The sedan's re-pinned for its quarter window's round rear end (`cPillar.dEnd`) and the A-sail's glass-top station (`aPillarSailGlass`).
+  { id: "sedan", drawCalls: 13, triangles: 5390, bodyVertices: 1587 },
   { id: "hatchback", drawCalls: 13, triangles: 5064, bodyVertices: 1587 },
   // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's.
   { id: "wagon", drawCalls: 13, triangles: 5117, bodyVertices: 1635 },
   { id: "coupe", drawCalls: 16, triangles: 5152, bodyVertices: 1530 },
   { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
-  // The police carries the sedan's quarter window (pinch ring, sail sweep ring), its divider bar and its belt rail's run-on under the sail.
-  { id: "police", drawCalls: 14, triangles: 5381, bodyVertices: 1587 },
+  // The police carries the sedan's quarter window (pinch ring, sail sweep ring, round end), its divider bar and its belt rail's run-on under the sail.
+  { id: "police", drawCalls: 14, triangles: 5535, bodyVertices: 1587 },
   { id: "monster", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
 ] as const satisfies readonly { id: CarStyleId; drawCalls: number; triangles: number; bodyVertices: number }[];
 /** The stated budget: a car's triangles at most 1.6 x the baseline. */
@@ -1344,15 +1404,15 @@ function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
  * ramp copies (`door.shutCrease`) and its curved posts' section points past the chamfered box's as built, merged into the body on top of its loft: red if one grows.
  */
 const WELL_AND_CUT_VERTICES: Record<CarStyleId, { lips: number; humps: number; liners: number; bootRings: number; noseRings: number; splitRings: number; wallTops: number; shutCopies: number; curvedPosts: number }> = {
-  // Sedan and police: curvedPosts 378 -> 430: the pinched quarter window's mid ring (`cPillar.pinch`) and the sail's sweep ring 2 cm behind
-  // the window's point (`cPillar.sweep`), one 20-point sail ring a side each.
+  // Sedan and police: curvedPosts 430 -> 550: the quarter window's round rear end (`cPillar.dEnd`) takes three 20-point sail rings a side
+  // (rearmost, mid-arc, tangent).
   // wallTops 52 -> 54: the drawn windshield seated on the hood (`drawn.windshield.seat`, `hood.followGlass`).
-  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 54, shutCopies: 0, curvedPosts: 430 },
+  sedan: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 54, shutCopies: 0, curvedPosts: 550 },
   hatchback: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 18, shutCopies: 0, curvedPosts: 258 },
   wagon: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 147, splitRings: 0, wallTops: 30, shutCopies: 0, curvedPosts: 258 },
   coupe: { lips: 360, humps: 94, liners: 120, bootRings: 42, noseRings: 105, splitRings: 0, wallTops: 46, shutCopies: 32, curvedPosts: 416 },
   pickup: { lips: 260, humps: 94, liners: 120, bootRings: 42, noseRings: 63, splitRings: 0, wallTops: 16, shutCopies: 0, curvedPosts: 226 },
-  police: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 54, shutCopies: 0, curvedPosts: 430 },
+  police: { lips: 360, humps: 0, liners: 120, bootRings: 84, noseRings: 168, splitRings: 46, wallTops: 54, shutCopies: 0, curvedPosts: 550 },
   monster: { lips: 312, humps: 94, liners: 214, bootRings: 42, noseRings: 42, splitRings: 0, wallTops: 26, shutCopies: 0, curvedPosts: 226 },
 };
 /** The chamfered box section (eight corner points, three crown points) the drawn posts had before they curved, and their stations then (the A-post's, every other post's). */
