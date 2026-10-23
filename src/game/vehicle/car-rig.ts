@@ -11,7 +11,7 @@ import type { FaceBands } from "../deform/load-crush.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { PLATFORM_CABIN, PLATFORM_DIMS, PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
 import { CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
-import { floorY, REAR_GLASS_BOW, WINDSHIELD_BOW } from "./car-lines.ts";
+import { floorY, REAR_GLASS_BOW, wheelsOf, WINDSHIELD_BOW } from "./car-lines.ts";
 import { sampleSlice, sectionPoints } from "./car-mesh.ts";
 
 type V3 = readonly [number, number, number];
@@ -326,13 +326,6 @@ function bellyOf(w: Warp, rows: readonly V3[], pan: readonly V3[], style: BodySt
   const absent = new Uint8Array(belly.length);
   for (let k = 0; k < drawn.length; k++) absent[k] = Number.isNaN(drawn[k]![1]) ? 1 : 0;
   return { belly, absent };
-}
-
-export function wheelsOf(d: Dims): V3[] {
-  const b = d.wheelbase / 2;
-  const t = d.track / 2;
-  const r = d.wheel.radius;
-  return [[-t, r, b], [t, r, b], [-t, r, -b], [t, r, -b]];
 }
 
 /** The body's box (half extents, m) and plan half length (m): the platform's grown by the car's own width, height and length over it. */

@@ -11,7 +11,7 @@ import { FACE_TOP, faceStrength } from "../deform/load-crush.ts";
 const BELLY_GAP = 0.02;
 /** How far (m) the sim's roof may stand off the law's: the energy the car gives is the energy the roof takes, up to the tyres' springs and the roof's skin share. */
 const LAW_BAR_M = 0.01;
-const SETTLE_S = 3;
+const DROP_RUN_S = 3;
 /** The lower car stands on its springs this long (s) before the upper is set down, so the gap is the one the upper falls. */
 const REST_S = 1;
 /** Where the upper car waits (m along x) while the lower settles: clear of it. */
@@ -44,7 +44,7 @@ function lawCrush(): number {
   return Infinity;
 }
 
-/** One sedan set `BELLY_GAP` over another's settled roof by its belly rows and dropped, simulated at `hz`: the lower roof's crush (m) after `SETTLE_S`. */
+/** One sedan set `BELLY_GAP` over another's settled roof by its belly rows and dropped, simulated at `hz`: the lower roof's crush (m) after `DROP_RUN_S`. */
 function roofUnderOneCar(hz: number): number {
   const under = new DeformableCar(paint(), new THREE.Scene());
   under.spawnFacing(0, 0, 0, 0);
@@ -60,7 +60,7 @@ function roofUnderOneCar(hz: number): number {
   upper.angular.set(0, 0, 0);
   upper.airborne = true;
   upper.group.updateMatrixWorld(true);
-  for (let f = 0; f < SETTLE_S * hz; f++) tickWorld(w, 1 / hz);
+  for (let f = 0; f < DROP_RUN_S * hz; f++) tickWorld(w, 1 / hz);
   return under.roofRestY - under.deform.massLocal("roof").y;
 }
 

@@ -7,6 +7,7 @@ import { paint } from "./test-support.ts";
 import { makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FACE_LEFT, FACE_NOSE, FACE_RIGHT, FACE_TAIL, FACE_TOP, faceMax, faceStrength, IMPRINT_NONE } from "../deform/load-crush.ts";
 import { crownY, keelY } from "./car-cage-rig.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
  * Load crush (docs/LOAD_CRUSH.md): a face yields under the load on it, so a stack of cars crushes each roof by the
@@ -145,7 +146,7 @@ describe("given one car resting on another car's roof by its belly", () => {
     const { cars, w } = stack(2);
     let fastest = 0;
     for (let f = 0; f < 180; f++) {
-      tickWorld(w, 1 / 60);
+      tickWorld(w, 1 / FRAME_HZ);
       fastest = Math.max(fastest, cars[1]!.velocity.length() + cars[1]!.angular.length());
     }
     assert.ok(fastest < STILL_SPEED, `the top car ends a frame at ${fastest.toExponential(2)} (speed plus spin)`);

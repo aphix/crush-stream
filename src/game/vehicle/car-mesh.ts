@@ -1,10 +1,9 @@
 import * as THREE from "three";
 import { hypot2, detAcos, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type BumperEnd, type HoodNose, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
-import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, roofDrip, shoulderDropAt, tubWall, WINDSHIELD_BOW } from "./car-lines.ts";
+import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, roofDrip, shoulderDropAt, tubWall, wheelsOf, WINDSHIELD_BOW } from "./car-lines.ts";
 import { splitCreases, splitLoftOnLowDiagonals } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
-import { wheelsOf } from "./car-rig.ts";
 import { DECK_RISE, INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { bootPivot, roofHinged } from "./hinge-spec.ts";
 
