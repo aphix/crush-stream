@@ -172,6 +172,10 @@ const _seg = new Float64Array(6);
 const _lim = new Float64Array(6);
 /** A height (m) no body reaches: a lifted container that stands on its wheels has cars pass under it, so no height is out of its reach. */
 const ANY_HEIGHT = 1e3;
+/** The part of `_seg` that `segmentMisses` left inside the box: its first and last parameter. */
+const _clip = new Float64Array(2);
+/** What the rows' envelope (`CageOutline.rowLows`, kept in 32 bits) may round by (m). */
+const ROW_SLACK = 1e-5;
 
 /** Whether the segment in `_seg` stays out of the box in `_lim`: its parameter range clipped by each axis's slab is empty. */
 function segmentMisses(): boolean {
@@ -197,6 +201,8 @@ function segmentMisses(): boolean {
     if (leave < t1) t1 = leave;
     if (t0 > t1) return true;
   }
+  _clip[0] = t0;
+  _clip[1] = t1;
   return false;
 }
 
@@ -263,6 +269,26 @@ function meet(plan: Float32Array, style: CageStyle, outlineB: CageOutline, field
 function meetAt(plan: Float32Array, style: CageStyle, outlineB: CageOutline, fields: CageFields): void {
   const at = _in[I_AT]!;
   _in[I_Y] = (at - _in[I_YC]!) / _ab[6]!;
+  if (_in[I_ROLLED]! > 0 && _in[I_HANG]! === 0) {
+    // A rolled placement past the end of the own column of the covered cell it lands in reads -Infinity there, and leaves that column for a re-placement: its plan depth and band need not be read.
+    const bx = _ab[0]! + _ab[1]! * _in[I_X]! + _ab[2]! * _in[I_Y]! + _ab[3]! * _in[I_Z]!;
+    const bz = _ab[8]! + _ab[9]! * _in[I_X]! + _ab[10]! * _in[I_Y]! + _ab[11]! * _in[I_Z]!;
+    const i = Math.round((bx - style.u0) / style.step) | 0;
+    const j = Math.round((bz - style.v0) / style.step) | 0;
+    if (i >= 0 && j >= 0 && i < style.nu && j < style.nv) {
+      const k = j * style.nu + i;
+      const lift = _in[I_LIFT_B]!;
+      if (fields.covered[k] !== 0 && fields.top[k]! - fields.bottom[k]! > VERTICAL_CLEAR && (at < fields.bottom[k]! + lift || at > fields.top[k]! + lift)) {
+        _meet[M_DEPTH] = -Infinity;
+        _meet[M_X] = bx;
+        _meet[M_Z] = bz;
+        _meet[M_COLUMN] = 1;
+        _meet[M_STAND_LOW] = fields.bottom[k]! + lift;
+        _meet[M_STAND_HIGH] = fields.top[k]! + lift;
+        return;
+      }
+    }
+  }
   meet(plan, style, outlineB, fields);
   if (_meet[M_BANDED] === 1 && (_meet[M_HIGH]! - _meet[M_LOW]! <= VERTICAL_CLEAR || at < _meet[M_STAND_LOW]! || at > _meet[M_STAND_HIGH]!)) _meet[M_DEPTH] = -Infinity;
 }
@@ -447,6 +473,21 @@ function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look
       _seg[4] = bz + _ab[10]! * yl;
       _seg[5] = bz + _ab[10]! * yh;
       if (segmentMisses()) continue;
+      if (_in[I_HANG]! === 0) {
+        // The part of the column inside the box, over or under every cell of the rows of `b` it spans: no placement of it is in a column.
+        const dz = _seg[5]! - _seg[4]!;
+        const dy = _seg[3]! - _seg[2]!;
+        const zA = _seg[4]! + _clip[0]! * dz, zB = _seg[4]! + _clip[1]! * dz;
+        const yA = _seg[2]! + _clip[0]! * dy, yB = _seg[2]! + _clip[1]! * dy;
+        const rFrom = Math.max(0, Math.round((Math.min(zA, zB) - style.v0) / style.step) - 1);
+        const rTo = Math.min(style.nv - 1, Math.round((Math.max(zA, zB) - style.v0) / style.step) + 1);
+        let under = Infinity, over = -Infinity;
+        for (let r = rFrom; r <= rTo; r++) {
+          if (outlineB.rowLows[r]! < under) under = outlineB.rowLows[r]!;
+          if (outlineB.rowHighs[r]! > over) over = outlineB.rowHighs[r]!;
+        }
+        if (Math.min(yA, yB) > over + _in[I_LIFT_B]! + ROW_SLACK || Math.max(yA, yB) < under + _in[I_LIFT_B]! - ROW_SLACK) continue;
+      }
     } else {
       x = outline.xs[m]!;
       z = outline.zs[m]!;
