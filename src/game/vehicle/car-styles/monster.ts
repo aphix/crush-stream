@@ -69,7 +69,7 @@ export const MONSTER: BodyStyle = {
   rocker: { y: 0.4 },
   underside: [[-2.4, 0.38], [-2.1, 0.34], [2.1, 0.34]],
   // The skin's top meets the fender's deck at the hinge cut (`hingeTop`): the door glass starts .60 back at the belt as the side plate's, a sail under the mirror.
-  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, hingeTop: 0.99, mirrorY: 0.315, mirrorZ: 0.27, mirrorReach: 0.16, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75], mirror: MONSTER_MIRROR },
+  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, hingeTop: 0.99, hingeRun: 0.2, mirrorY: 0.315, mirrorZ: 0.27, mirrorReach: 0.16, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75], mirror: MONSTER_MIRROR },
   aPillarFoot: 0.6,
   aPillarTop: 0.41,
   // The door glass's front edge knees onto the A-post's rear edge at the mirror head's top, so the post stays an even tube over a small black sail.

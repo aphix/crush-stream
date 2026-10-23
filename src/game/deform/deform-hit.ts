@@ -4,7 +4,10 @@ import { resetCluster } from "./shape-match.ts";
 import { DeformRig, type DeformMode, type MassNode } from "./deform-rig.ts";
 import { FACES, FACE_AXIS } from "./load-crush.ts";
 import { detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
-import { MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
+import { CORNER_BLEND, CORNER_CENTRED, MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
+
+/** How long (s) after a hit armed its centre follows the pair's patch (`aimHit`): a few fine slices. */
+const AIM_WINDOW = 0.015;
 
 /** Most (m/s) a wheel freed by the plant may slide off the body's speed (`seatHubs`). Goes with the plant hand-over: Stage 4 item 6 (wreck split). */
 const HUB_SLIP = 8;
@@ -356,9 +359,15 @@ export abstract class DeformHit extends DeformRig {
     this.impactLocal.copy(localPoint);
     this.impactInward.copy(localInward).normalize();
     const clamped = THREE.MathUtils.clamp(impulse, 4, 70);
-    if (this.hitSpeed < 0) {
+    const fresh = this.hitSpeed < 0;
+    if (fresh) {
+      const end = this.struckEnd();
+      this.armedEnd = end;
+      this.armedEnd2 = this.endEbs2[end]!;
+      this.armedWear = this.wear;
       this.hitSpeed = THREE.MathUtils.clamp(ebs, 0, 70);
-      this.endEbs2[this.struckEnd()] = this.hitSpeed * this.hitSpeed;
+      this.armedEbs = this.hitSpeed;
+      this.endEbs2[end] = this.hitSpeed * this.hitSpeed;
       this.wear = Math.min(this.hitSpeed * this.hitSpeed, WEAR_HIT);
     }
     this.impulse = clamped;
@@ -369,6 +378,7 @@ export abstract class DeformHit extends DeformRig {
     this.lastContact = 0;
     this.hitAt = 0;
     this.armedAt = -1;
+    if (!fresh) this.armedEbs = 0;
     this.cornerLow = Infinity;
     this.wrinkleAmp = 0;
     this.dirty = true;
@@ -432,10 +442,13 @@ export abstract class DeformHit extends DeformRig {
    * takes the hit over, what the softer one added undone (a 25 km/h side hit armed on a 2.8 m/s graze and dropped its 6.8 m/s face).
    * False when the contact belongs to the current hit or is too soft.
    */
-  rearmHit(localPoint: THREE.Vector3, localInward: THREE.Vector3, impulse: number, ebs: number): boolean {
+  rearmHit(localPoint: THREE.Vector3, localInward: THREE.Vector3, impulse: number, ebs: number, pair = false): boolean {
     if (!this.massActive || ebs < REARM_EBS) return false;
-    const again = this.armedAt === this.elapsed && this.hitAt === this.elapsed;
+    const young = pair && this.armedEbs > 0 && this.elapsed - this.hitAt < AIM_WINDOW;
+    const again = young || (this.armedAt === this.elapsed && this.hitAt === this.elapsed);
     if (again ? ebs <= this.armedEbs : this.sliceQuiet() < REARM_QUIET && ebs < HARDER_HIT * this.hitSpeed) return false;
+    // The same hit meeting squarely after its first slices met it aslant: the crush it has taken stays in its base, so its stroke is not taken twice.
+    const replaces = young && this.hitAt < this.elapsed;
     this.thaw();
     if (again) {
       this.endEbs2[this.armedEnd] = this.armedEnd2;
@@ -466,6 +479,7 @@ export abstract class DeformHit extends DeformRig {
     // 0.12 m cap) stays in the frame when the touch ends the plant. A base taken cell-relative left that offset
     // in every mass's travel, and the first live clamp dragged the whole body back by it (0.1 m in one call,
     // derby seed 19 car 6 at 80.22 s).
+    if (replaces) return true;
     for (const m of this.masses) {
       m.baseX = m.local.x - m.rest.x;
       m.baseZ = m.local.z - m.rest.z;
@@ -596,42 +610,61 @@ export abstract class DeformHit extends DeformRig {
     this.frameY -= this.frameVy * h;
   }
 
-  /** Pull impactLocal onto the nearest mass so L/R crush does not sit on the centerline. */
+  /**
+   * The pair's patch as the contact grows: a hit's first slices touch where the cages first meet (a node or two a millimetre in), which is
+   * not where the faces meet once they close, so the hit's centre follows the patch for `AIM_WINDOW` s after it armed, and the crush is spread
+   * as the face meets, not as its first corner touched.
+   */
+  aimHit(localPoint: THREE.Vector3): void {
+    if (!this.crushing || this.elapsed - this.hitAt >= AIM_WINDOW) return;
+    this.impactLocal.x = localPoint.x;
+    this.impactLocal.z = localPoint.z;
+    this.snapImpactToNearestMass();
+  }
+
+  /**
+   * Pull impactLocal onto the nearest mass so L/R crush does not sit on the centerline. A hit within `CORNER_CENTRED` of the centre line stays centred
+   * (snapping to bumperFL, first of two equal distances, turned every head-on into a left-corner crush) and is pulled in z only; one `CORNER_BLEND`
+   * further out is pulled onto the nearest mass of its own side in x as well, and between the two by the share of that distance it has gone: a step at
+   * 0.2 m sent a hit 1 cm either side of it to 0.20 or 0.40 m off centre, and a sedan's T-bone crushed its nose 0.45 m or 0.74 m with the step phase.
+   */
   private snapImpactToNearestMass(): void {
-    // A true centerline hit must stay centered — snapping to bumperFL (first of
-    // two equal distances) was turning every head-on into a left-corner crush.
-    if (Math.abs(this.impactLocal.x) < 0.2) {
-      let bestZ = this.impactLocal.z;
-      let bestD = Infinity;
-      for (const m of this.masses) {
-        if (m.name === "cell" || m.name === "roof") continue;
-        const dz = m.rest.z - this.impactLocal.z;
-        const d = dz * dz + m.rest.x * m.rest.x * 0.15;
-        if (d < bestD) {
-          bestD = d;
-          bestZ = m.rest.z;
-        }
+    const hit = this.impactLocal;
+    let bestZ = hit.z;
+    let bestD = Infinity;
+    for (const m of this.masses) {
+      if (m.name === "cell" || m.name === "roof") continue;
+      const dz = m.rest.z - hit.z;
+      const d = dz * dz + m.rest.x * m.rest.x * 0.15;
+      if (d < bestD) {
+        bestD = d;
+        bestZ = m.rest.z;
       }
-      this.impactLocal.z = this.impactLocal.z * 0.28 + bestZ * 0.72;
+    }
+    const centredZ = hit.z * 0.28 + bestZ * 0.72;
+    const side = THREE.MathUtils.clamp((Math.abs(hit.x) - CORNER_CENTRED) / CORNER_BLEND, 0, 1);
+    if (side === 0) {
+      hit.z = centredZ;
       return;
     }
     let best: MassNode | null = null;
-    let bestD = Infinity;
-    const hitSide = Math.sign(this.impactLocal.x);
+    bestD = Infinity;
+    const hitSide = Math.sign(hit.x);
     for (const m of this.masses) {
       if (m.name === "cell" || m.name === "roof") continue;
       if (hitSide !== 0 && Math.sign(m.rest.x) !== 0 && Math.sign(m.rest.x) !== hitSide) continue;
-      const dx = m.rest.x - this.impactLocal.x;
-      const dz = m.rest.z - this.impactLocal.z;
+      const dx = m.rest.x - hit.x;
+      const dz = m.rest.z - hit.z;
       const d = dx * dx + dz * dz;
       if (d < bestD) {
         bestD = d;
         best = m;
       }
     }
-    if (!best) return;
-    this.impactLocal.x = this.impactLocal.x * 0.28 + best.rest.x * 0.72;
-    this.impactLocal.z = this.impactLocal.z * 0.28 + best.rest.z * 0.72;
+    const sideX = best ? hit.x * 0.28 + best.rest.x * 0.72 : hit.x;
+    const sideZ = best ? hit.z * 0.28 + best.rest.z * 0.72 : hit.z;
+    hit.x += side * (sideX - hit.x);
+    hit.z = centredZ + side * (sideZ - centredZ);
   }
 
   get totalMass(): number {

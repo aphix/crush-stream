@@ -57,6 +57,23 @@ describe("given a sedan driving its nose into a parked sedan's right door at 20 
   });
 });
 
+/** Where in one 1/240 s slice of the approach (0.125 m at 30 m/s) the first touch falls: the striker started 0 to 120 mm further back, 10 mm apart. */
+const TOUCH_MM = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+/** Widest (m) the nose, and the door, may be crushed apart by where in a slice the first touch falls: the hit's centre follows the pair's patch while the faces close, its snap to the nearest mass has no step in its lateral position, and a hit armed on a corner's first aslant touch takes over the face-on one that follows (a patch 1 cm either side of 0.2 m off centre crushed the nose 0.38 m or 0.74 m; armed aslant at 10.3 m/s it crushed 0.34 m, face-on at 13.5 m/s 0.47 m). */
+const TOUCH_NOSE = 0.06;
+const TOUCH_DOOR = 0.1;
+describe("given a sedan driving its nose into a parked sedan's right door at 30 m/s, from first touches across one 1/240 s slice of travel", () => {
+  it("when the first touch falls 0 to 120 mm apart, then each car is crushed as far to within 0.06 m (nose) and 0.1 m (door) and the same driver is thrown", () => {
+    const hits = TOUCH_MM.map((mm) => tbone(30, false, (mm / 1000) * (QUIET_HZ / 30)));
+    const spread = (xs: number[]): number => Math.max(...xs) - Math.min(...xs);
+    const nose = hits.map((h) => h.strikerNose);
+    const door = hits.map((h) => h.struckDoor);
+    assert.ok(spread(nose) <= TOUCH_NOSE, `nose ${nose.map((v) => v.toFixed(2)).join(" ")} m over ${TOUCH_MM.join(" ")} mm back`);
+    assert.ok(spread(door) <= TOUCH_DOOR, `door ${door.map((v) => v.toFixed(2)).join(" ")} m over ${TOUCH_MM.join(" ")} mm back`);
+    assert.equal(new Set(hits.map((h) => `${h.strikerThrown} ${h.struckThrown}`)).size, 1, "one driver thrown at every touch");
+  });
+});
+
 /** A sedan at 56 km/h into the rigid wall, stepped at the coarse step with the contact cut to slices of `fine` s (the pacer's floor): how far its nose crumples (m). */
 function wallNose(fine: number): number {
   const car = classCar("sedan");

@@ -19,7 +19,7 @@ import { DeformParticleHelper, DeformRigHelper } from "./deform-helper.ts";
 import { bindLattice, buildRunStructures, INF_K, restoreInto, runTemplate, wrinkleSeeds } from "./deform-build.ts";
 import { FACES, faceFollow, IMPRINT_NONE, type FaceBands } from "./load-crush.ts";
 import { PushBudget } from "./push-budget.ts";
-import { hypot3, hypot2 } from "../kernel/physics-core.js";
+import { hypot3, hypot2, PART_FAMILY } from "../kernel/physics-core.js";
 
 /** Numbers a `simState` block spends on the rig’s scalar fields (`simScalarsOut`: 58 fields, one double each: nine are the epicenter freeze: `frozen`, `frozenReady`, `sinceThaw`, the cached centre and inertia; the last two the solids' hold of the slice, `solidHold`). */
 export const SIM_SCALAR_NUMBERS = 58;
@@ -29,7 +29,7 @@ export type DeformMode = "shape" | "lattice";
 /** Rearward engine travel (m, vs the cell, along the hit) that leaves the car undriveable.
  *  ESV 98S3P12: a rigid full-width barrier overloads the front above ~50 km/h
  *  and leaves the safety cell intact below that. With the slab stopping the
- *  nose (A1) the block is reached once the nose packs (ENGINE_PACK_GAP): about
+ *  nose (A1) the block is reached once the nose packs (RigTables.packGap): about
  *  0.03 m at 35 km/h, 0.11 m at 56 km/h, 0.15 m at 64 km/h and 0.23 m at 80.
  *  A tail-first hit does not reach the block (it lives in the nose), so the
  *  same threshold stays driveable from the rear well past 80 km/h. */
@@ -58,6 +58,10 @@ export interface RigTables {
   readonly faceBands: FaceBands;
   /** Plan reach (m) from its hub at which a crushed corner has hit the tyre: tyre radius plus the packed bumper beam. */
   readonly tyreReach: number;
+  /** How far (m) the front bumper's particles stand behind the nose a solid's face meets: a push bar's reach, which the hold on a face (`faceHits`) adds to those particles' own. */
+  readonly noseReach: number;
+  /** Packed bumper-to-block-centre length (m): bumper beam and radiator crushed flat ahead of the block. The nose's rest gap less this is its crumple, 0.30 m on every body; crush past it shoves the engine back. */
+  readonly packGap: number;
 }
 /** Platform bonnet top (m): where the top band starts following the roof's crush. */
 const PLATFORM_BONNET_TOP = CAGES.find((cage) => cage.name === "bonnet")!.max[1];
@@ -78,6 +82,8 @@ export const PLATFORM_RIG: RigTables = {
     side: [0.4, 0.4],
   },
   tyreReach: 0.42,
+  noseReach: 0,
+  packGap: 0.54,
 };
 /** Depth (m) inside the chassisCell span's front/rear face over which non-cell skin weight blends back in. */
 const CELL_FACE_BLEND = 0.3;
@@ -190,7 +196,7 @@ interface SkinZones {
   cellOnly(x: number, y: number, z: number, hub: number): boolean;
 }
 
-type SkinParentRule = (rx: number, ry: number, rz: number, i: number, t: SkinPointTables) => void;
+type SkinParentRule = (rx: number, ry: number, rz: number, i: number, t: SkinPointTables, hung?: boolean) => void;
 
 type KeyMass = "cell" | "roof" | "engineL" | "engineR" | "axleR" | "doorL" | "doorR" | "hubFL" | "hubFR" | "hubRL" | "hubRR" | "bumperFL" | "bumperFR" | "bumperRL" | "bumperRR";
 
@@ -392,9 +398,31 @@ export abstract class DeformRig {
   /** The drawn body's lift over the masses (m, world, along the car's up), kept by the car at its pose: zero for an unlifted class. */
   readonly bodyLift = new THREE.Vector3();
 
-  /** `world`, a point read off the drawn (lifted) cage, in the masses' frame: less the body's lift. */
-  massPoint(world: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
-    return out.copy(world).sub(this.bodyLift);
+  /** The lowest and highest rest height (m, the car's frame) of the masses that crush (all but the roof); NaN until `massPoint` first reads them. */
+  private bandLow = NaN;
+  private bandHigh = NaN;
+
+  /**
+   * `world`, a point read off the drawn (lifted) cage, in the masses' frame: less the body's lift, and held between the heights the crushing
+   * masses stand at over the car's origin height `originY`. A cage point's height is wherever the other body's overlap lands on it (a
+   * hood's lip, a windshield, a lifted tail's band) and moves with the slice the contact is first read in; the crush reads it only as a
+   * distance to those masses.
+   */
+  massPoint(world: THREE.Vector3, out: THREE.Vector3, originY: number): THREE.Vector3 {
+    if (Number.isNaN(this.bandLow)) {
+      let low = Infinity;
+      let high = -Infinity;
+      for (const m of this.masses) {
+        if (m.name === "roof") continue;
+        low = Math.min(low, m.rest.y);
+        high = Math.max(high, m.rest.y);
+      }
+      this.bandLow = low;
+      this.bandHigh = high;
+    }
+    out.copy(world).sub(this.bodyLift);
+    out.y = Math.min(originY + this.bandHigh, Math.max(originY + this.bandLow, out.y));
+    return out;
   }
 
   /** Share (0–1) of the read pitch/roll the frame takes, and the sim time it was last eased at (followGroup). */
@@ -732,11 +760,13 @@ export abstract class DeformRig {
 
   /**
    * A5 parents: the RES_K nearest non-hub masses by 1/(d² + RES_SOFT), less the (RES_K+1)th's weight so a parent fades out before it is
-   * swapped (no seam where the nearest set changes). A cabin point takes cabin masses only (D1), plus the cell-face share of the nearest other mass.
+   * swapped (no seam where the nearest set changes). A cabin point takes cabin masses only (D1), plus the cell-face share of the nearest other mass;
+   * a `hung` point (a door's frame, hinged to the A-pillar and latched to the B-pillar) takes the cabin masses wherever it stands, and no share.
+   * `only`: the masses a point may take (by index), for a part that rides a few of them (a push bar on its bumper's two).
    */
-  private parentRule(zones: SkinZones): SkinParentRule {
+  private parentRule(zones: SkinZones, only?: readonly number[]): SkinParentRule {
     const { span, inCell } = zones;
-    const body = this.masses.flatMap((m, j) => (m.hub ? [] : [j]));
+    const body = this.masses.flatMap((m, j) => (m.hub || (only && !only.includes(j)) ? [] : [j]));
     const cabinBody = body.filter((j) => inCell(this.masses[j]!.rest.x, this.masses[j]!.rest.y, this.masses[j]!.rest.z));
     const outside = body.filter((j) => !cabinBody.includes(j));
     const near = (rx: number, ry: number, rz: number, set: number[]) =>
@@ -746,9 +776,9 @@ export abstract class DeformRig {
           return { j, w: 1 / ((rx - r.x) ** 2 + (ry - r.y) ** 2 + (rz - r.z) ** 2 + RES_SOFT) };
         })
         .sort((a, b) => b.w - a.w);
-    return (rx, ry, rz, i, t) => {
+    return (rx, ry, rz, i, t, hung = false) => {
       const cabin = inCell(rx, ry, rz);
-      const ds = near(rx, ry, rz, cabin ? cabinBody : body);
+      const ds = near(rx, ry, rz, cabin || hung ? cabinBody : body);
       const floor = ds.length > RES_K ? ds[RES_K]!.w : 0;
       ds.length = Math.min(ds.length, RES_K);
       let sum = 0;
@@ -775,8 +805,7 @@ export abstract class DeformRig {
   /** A skin point's cluster weights: the 4 nearest clusters within 1.45 m by exp(−2.35 d), a `cellOnly` point the cell's (D1); the roof skin takes none from below the bonnet's top. */
   private clusterRule(zones: SkinZones, cms: readonly { x: number; y: number; z: number }[]): (rx: number, ry: number, rz: number, cellOnly: boolean, i: number, t: SkinPointTables) => void {
     const { span, inCell } = zones;
-    const cellMass = this.masses.indexOf(this.at.cell);
-    const holdsCell = this.clusters.map((c) => c.idx.includes(cellMass));
+    const holdsCell = this.clustersHoldingCell();
     const roofFloor = this.cages.find((c) => c.spec.name === "roof")!.spec.min[1];
     const bonnetTop = this.cages.find((c) => c.spec.name === "bonnet")!.spec.max[1];
     return (rx, ry, rz, cellOnly, i, t) => {
@@ -819,13 +848,14 @@ export abstract class DeformRig {
 
   /**
    * The body paint's A5 tables (`buildSkinWeights`) for the points of a mesh outside the body skin, `rest` in the mesh's frame seated at car-frame
-   * `origin`: a door shell skins by them as the paint around it does (`skinPoints`). Rest-only: built once per mesh.
+   * `origin`: a door shell skins by them as the paint around it does (`skinPoints`). Rest-only: built once per mesh. `only`: the masses (names) its
+   * points take as parents, where a part rides a few of them.
    */
-  bindPoints(rest: Float32Array, origin: THREE.Vector3): PointSkin {
+  bindPoints(rest: Float32Array, origin: THREE.Vector3, only?: readonly string[]): PointSkin {
     const count = rest.length / 3;
     const t: PointSkin = { count, sN: new Uint8Array(count), sXf: new Int32Array(count * SKIN_K), sW: new Float64Array(count * SKIN_K), rJ: new Int32Array(count * RES_SLOTS), rW: new Float64Array(count * RES_SLOTS), rC: new Float64Array(count * 3) };
     const zones = this.skinZones();
-    const parents = this.parentRule(zones);
+    const parents = this.parentRule(zones, only?.map((name) => this.masses.findIndex((m) => m.name === name)));
     const clusters = this.clusterRule(zones, this.clusterCentres());
     for (let i = 0; i < count; i++) {
       const rx = rest[i * 3]! + origin.x;
@@ -866,17 +896,31 @@ export abstract class DeformRig {
     this.bindCorners(n, cms, parents, t);
   }
 
-  /** Cage corners follow the clusters within 1.4 m of their rest position (`solveCagesFromShape`), and their A5 parents as skin points `n + j`. */
+  /** The clusters that hold the cell: what a cabin point's cluster weights are drawn from (D1). */
+  private clustersHoldingCell(): boolean[] {
+    const cell = this.masses.indexOf(this.at.cell);
+    return this.clusters.map((c) => c.idx.includes(cell));
+  }
+
+  /**
+   * Cage corners follow the clusters within 1.4 m of their rest position (`solveCagesFromShape`), and their A5 parents as skin points `n + j`.
+   * A door cage's corners hang on the cabin: its masses and its cell-holding clusters only, so the rear axle and tank, which a side hit's tyres
+   * hold back while the cabin is shoved, do not shear the far door's frame (and its glass) by centimetres.
+   */
   private bindCorners(n: number, cms: readonly { x: number; y: number; z: number }[], parents: SkinParentRule, t: SkinPointTables): void {
     const start: number[] = [0];
     const xf: number[] = [];
     const ws: number[] = [];
     this.cornerWsum = new Float64Array(this.cages.length * 8);
+    const holdsCell = this.clustersHoldingCell();
     for (let j = 0; j < this.cages.length * 8; j++) {
-      const rest = this.cages[j >> 3]!.restCorners[j & 7]!;
-      parents(rest.x, rest.y, rest.z, n + j, t);
+      const cage = this.cages[j >> 3]!;
+      const rest = cage.restCorners[j & 7]!;
+      const hung = cage.spec.name.startsWith(PART_FAMILY.door);
+      parents(rest.x, rest.y, rest.z, n + j, t, hung);
       let wsum = 0;
       for (let ci = 0; ci < this.clusters.length; ci++) {
+        if (hung && !holdsCell[ci]) continue;
         const cm = cms[ci]!;
         const d = hypot3(rest.x - cm.x, rest.y - cm.y, rest.z - cm.z);
         if (d > 1.4) continue;

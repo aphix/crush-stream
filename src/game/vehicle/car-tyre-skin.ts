@@ -9,6 +9,8 @@ const TYRE_GAP = 0.05;
 const FALL = 1;
 /** From this share of the tyre's radius out along the road its surface is steeper than a lip can stand on: a body vertex there leaves along the road when that is shorter than going over. */
 const ENDS_ZONE = 0.9;
+/** How far (m) a body vertex leaving a tyre's steep end stands clear of it: its edges there are short, so the chord gap (`TYRE_GAP`, the bonnet's 25 cm edges) is not owed. */
+const END_GAP = 0.01;
 /** How far (m) over the tyre's surface a skin point may rest and still be held: the hood and fenders, not the roof. */
 const REACH = 0.5;
 /** Rounding of the rest frame (m), rebuilt from matrices. */
@@ -252,8 +254,8 @@ export class TyreSkin {
       if (c >= 0) continue;
       const p = weld[v]!;
       const up = -c / uy;
-      // A vertex just inside the tyre's end (a lip beside it) leaves along the road, a few mm and the gap, not over the whole tyre (7 mm in took 18 cm of lift); the body skin only.
-      const out = this.frame.rig.tyre.r * scale - Math.abs(_read.ahead) + TYRE_GAP;
+      // A vertex just inside the tyre's end (a lip beside it) leaves along the road, the few mm that clear the steep end, not over the whole tyre (7 mm in took 18 cm of lift): the body skin only.
+      const out = this.frame.rig.tyre.r * scale - Math.abs(_read.ahead) + END_GAP;
       if (this.pushSide && Math.abs(_read.ahead) > ENDS_ZONE * this.frame.rig.tyre.r * scale && out < up) {
         if (out > this.push[p]!) {
           this.push[p] = out;

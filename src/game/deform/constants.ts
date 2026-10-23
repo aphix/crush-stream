@@ -14,6 +14,10 @@ export const MIN_INV_MASS = 1e-8;
 export const MIN_SLIDE = 1e-6;
 /** A point whose rest position projects on the hit's inward direction beyond this (m) lies on the far side of a one-ended hit. */
 export const FAR_SIDE_DOT = 0.18;
+/** A hit this far (m) off the car's centre line or less crushes the whole width alike; further out it crushes its own side more (`cornerWeight`). */
+export const CORNER_CENTRED = 0.2;
+/** The distance (m) past `CORNER_CENTRED` over which a hit's own side takes over from the whole width, in full beyond it. */
+export const CORNER_BLEND = 0.1;
 /** The crush reach (m) a hit's stroke gains per unit of the squash setting (on top of its 0.5 m base). */
 export const SQUASH_REACH = 1.15;
 /** Physics slice (s) the per-call contact shares (feedOverlap nibble and inbound-speed kill) were tuned at: a calibration reference, kept when the sim's own fine floor moves. */

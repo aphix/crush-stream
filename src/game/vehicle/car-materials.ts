@@ -576,6 +576,15 @@ export function withPushBar(bumper: THREE.BufferGeometry): THREE.BufferGeometry 
   return geo;
 }
 
+/** The box round `withPushBar`'s bar on front bumper `bumper`: between its uprights, from the bumper's lowest point to the bar's top, out to `PUSH_BAR_REACH`. */
+export function pushBarBox(bumper: THREE.BufferGeometry): THREE.BufferGeometry {
+  bumper.computeBoundingBox();
+  const { min, max } = bumper.boundingBox!;
+  const { tube, x, above } = PUSH_BAR;
+  const top = max.y + above;
+  return new THREE.BoxGeometry(2 * x + tube, top - min.y, PUSH_BAR_REACH).translate(0, (top + min.y) / 2, max.z + PUSH_BAR_REACH / 2);
+}
+
 /** A domed lens's vertex count (`domeLens`). */
 const LENS_VERTICES = (() => {
   const lens = domeLens(0, 0, 1);

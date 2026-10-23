@@ -14,8 +14,9 @@ const _rest = new THREE.Vector3();
 export const BAR_FOLD = 0.45;
 
 /**
- * Where a hinged lid (`cowl` hood, `tail` boot) or the light bar stands at hinge value `t = p.hingeT` (from rest, which turns nothing): position x, y, z
- * then quaternion x, y, z, w into `out` at `o`. The lids turn about x through their rest origin, the boot by its free swing too. The bar (`bar`) turns about x too, but about the line
+ * Where a hinged lid (`cowl` hood, `tail` boot), a door or the light bar stands at hinge value `t = p.hingeT` (from rest, which turns nothing): position x, y, z
+ * then quaternion x, y, z, w into `out` at `o`. The lids turn about x through their rest origin, the boot by its free swing too; a door turns about y through
+ * its hinge, by the crash's jam or its free swing, as `CarParts.posePart` draws it. The bar (`bar`) turns about x too, but about the line
  * along its base's edge on the side the car's inertia sends it (`deform.impactInward.z`: a hit on the nose, inward −z, tips it forward, a hit on the tail back):
  * the edge of both feet's soles stays where it is and the other edge rises, as a door's hinge side stays and its free edge swings. The bar is skinned
  * with the roof (`skinPanel`), which carries that edge down and back with the crushed roof (0.15 m back in a frontal crush: turning about its rest place
@@ -34,6 +35,18 @@ export function hingePose(p: DetachPart, deform: StreamedDeformation, out: Float
     z -= t * 0.08;
     y += t * 0.26;
     turn = -t * 0.5;
+  } else if (p.hinge === "door") {
+    // About y, sideways: the crash's jam or the free swing, whichever holds it further open, out from the hinge as the jam springs it.
+    const sign = p.name === "doorL" ? -1 : 1;
+    const half = (-sign * Math.max(t * p.swing!.spec.jam, p.swing!.theta)) / 2;
+    out[o] = x + sign * t * 0.06;
+    out[o + 1] = y;
+    out[o + 2] = z;
+    out[o + 3] = 0;
+    out[o + 4] = detSin(half);
+    out[o + 5] = 0;
+    out[o + 6] = detCos(half);
+    return;
   } else if (p.hinge === "tail") {
     z += t * 0.08;
     y += t * 0.22;

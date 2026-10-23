@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import * as THREE from "three";
 import { CAGE_PART_VERTICES, CAGE_STEP, CAGE_VERTICES, type CageSource, CarCage } from "./car-cage.ts";
-import { cageGaps, cageLiveOf, cageOf, cageSourceOf, fitToDrawn } from "./car-cage.test-util.ts";
-import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_WORST_M, topGapsOff, topParts } from "./drawn-body.test-util.ts";
+import { cageGaps, cageLiveOf, cageOf, cageSideX, cageSourceOf, drawnDoorX, fitToDrawn } from "./car-cage.test-util.ts";
+import { BODIES, buildCar, carInState, drawnField, drawnTriangles, STATES, stepFrames, TOP_P95_M, TOP_WORST_M, topGapsOff, topParts } from "./drawn-body.test-util.ts";
+import { makeBumperGeometry } from "./car-mesh.ts";
+import { cageLift } from "./car-cage-rig.ts";
+import { PUSH_BAR_REACH } from "./car-materials.ts";
+import type { DeformableCar } from "./car.ts";
+import { launch, makeWorld } from "../contact/crash-scenarios.test-util.ts";
 
 /**
  * docs/UNIFIED_CONTACT.md stage 3, "the cage is the body": the cage fitted to a car is the drawn body, in every state the body
@@ -53,19 +59,132 @@ for (const body of BODIES) {
 }
 
 describe("given the cage's vertex budget", () => {
-  it("when a style's cage is built, then it has its budget's vertices and the underside points held over it, about three hundred triangles, and its bumpers on their own budget past them", (t) => {
+  it("when a style's cage is built, then it has its budget's vertices and the underside points held over it, about three hundred triangles, and its two bumpers and two front doors on their own budget past them", (t) => {
     const car = carInState("untouched", "sedan", "sedan");
     const cage = cageOf(car);
     const { vertexCount, heldCount, triCount, source, tris } = cage.style;
-    const partFrom = cageSourceOf(car).apart[0]!.from;
+    const apart = cageSourceOf(car).apart;
+    const partFrom = apart[0]!.from;
     let parts = 0;
     for (let i = 0; i < vertexCount; i++) if (source[i]! >= partFrom) parts++;
     let partTris = 0;
     for (let k = 0; k < tris.length; k += 3) if (tris[k]! >= vertexCount - parts && tris[k]! < vertexCount) partTris++;
-    t.diagnostic(`${vertexCount} vertices (${heldCount} of them the underside held over the ${CAGE_VERTICES}, ${parts} the bumpers'), ${triCount} triangles (${partTris} the bumpers')`);
+    t.diagnostic(`${vertexCount} vertices (${heldCount} of them the underside held over the ${CAGE_VERTICES}, ${parts} the bumpers' and doors'), ${triCount} triangles (${partTris} theirs)`);
+    assert.equal(apart.length, 4, "two bumpers and two front doors, each decimated alone");
     assert.ok(vertexCount - parts <= CAGE_VERTICES + heldCount + 2 && vertexCount - parts >= CAGE_VERTICES / 2, `${vertexCount - parts} hull vertices, ${heldCount} held`);
     assert.ok(triCount - partTris >= 150 && triCount - partTris <= 330 + 2 * heldCount, `${triCount - partTris} hull triangles`);
-    assert.ok(parts > 0 && parts <= CAGE_PART_VERTICES && partTris <= 2 * CAGE_PART_VERTICES, `${parts} bumper vertices, ${partTris} triangles`);
+    assert.ok(parts > 0 && parts <= CAGE_PART_VERTICES && partTris <= 2 * CAGE_PART_VERTICES, `${parts} part vertices, ${partTris} triangles`);
+  });
+});
+
+/** How far (m) the cage's nose may stand behind the drawn nose: the bumper's face is the cage's, a push bar's box as far out as its pads. */
+const NOSE_REACH_M = 0.005;
+
+describe("given a cruiser with its push bar", () => {
+  it("when its cage's plan box is read, then the nose reaches the bar's drawn face, 9 cm past its bumper's", (t) => {
+    const car = carInState("untouched", "police", "sedan");
+    const nose = cageOf(car).fields.planBox[3]!;
+    const drawn = drawnTriangles(car);
+    let face = -Infinity;
+    for (let i = 2; i < drawn.length; i += 3) face = Math.max(face, drawn[i]!);
+    t.diagnostic(`cage nose ${nose.toFixed(3)} m, drawn nose ${face.toFixed(3)} m`);
+    assert.ok(face - nose <= NOSE_REACH_M, `the cage's nose stands ${(face - nose).toFixed(3)} m behind the bar`);
+  });
+});
+
+/** The speed (km/h) each car drives at in the head-on that crushes the cruiser's nose and leaves its bumper on. */
+const BAR_CRASH_KMH = 18;
+/** How far (m) a crashed cruiser's cage bar may stand off its place on the bumper (the drawn bar's, or its rest place). */
+const BAR_FOLLOW_M = 0.01;
+
+/** A cruiser after a head-on crash with a sedan, 5 s on, its front bumper still on, posed upright at the origin. */
+function crashedCruiser(): DeformableCar {
+  const car = buildCar("police", "sedan");
+  const other = buildCar("sedan", "sedan");
+  launch(car, -5, 0, Math.PI / 2, BAR_CRASH_KMH / 3.6, 0);
+  launch(other, 5, 0, -Math.PI / 2, -BAR_CRASH_KMH / 3.6, 0);
+  stepFrames(makeWorld([car, other], false, false, null), 5);
+  car.group.position.set(0, 0, 0);
+  car.group.rotation.set(0, 0, 0, "YXZ");
+  car.group.updateMatrixWorld(true);
+  const classBody = car.group.getObjectByName("classLift");
+  if (classBody) classBody.position.y = cageLift(car);
+  car.group.updateMatrixWorld(true);
+  return car;
+}
+
+/** Where a push bar stands on its bumper: how far (m) its pads' face is ahead of the bumper's face, and its top over the bumper's top. */
+type BarPlace = { ahead: number; over: number };
+
+/** The bar's place in the cage's vertices `pos`: the bar is the panel holding the nose-most rest vertex, its bumper the panel before it. */
+function cageBarPlace(style: CarCage["style"], pos: ArrayLike<number>): BarPlace {
+  let nose = 0;
+  for (let k = 1; k < style.vertexCount; k++) if (style.rest[k * 3 + 2]! > style.rest[nose * 3 + 2]!) nose = k;
+  const bar = style.vertexGroup[nose]!;
+  const reach = (group: number, axis: number): number => {
+    let top = -Infinity;
+    for (let k = 0; k < style.vertexCount; k++) if (style.vertexGroup[k] === group) top = Math.max(top, pos[k * 3 + axis]!);
+    return top;
+  };
+  return { ahead: reach(bar, 2) - reach(bar - 1, 2), over: reach(bar, 1) - reach(bar - 1, 1) };
+}
+
+/** How far (m) a drawn vertex may stand off the bumper's face and still be the fascia's own (the bar's vertices stand past it). */
+const FASCIA_EPS = 0.005;
+/** The drawn bar's pads' face ahead of the drawn bumper's face, at the crash: the bar's vertices are the drawn bumper mesh's past its fascia's face (`makeBumperGeometry`). */
+function drawnBarAhead(car: DeformableCar): number {
+  drawnTriangles(car);
+  const fascia = makeBumperGeometry(true, car.style);
+  fascia.computeBoundingBox();
+  const face = fascia.boundingBox!.max.z;
+  const mesh = car.lookMeshes().bumpers[0]!;
+  const at = mesh.geometry.getAttribute("position");
+  const v = new THREE.Vector3();
+  let pads = -Infinity;
+  let front = -Infinity;
+  for (let i = 0; i < at.count; i++) {
+    v.fromBufferAttribute(at, i);
+    const rest = v.z;
+    car.group.worldToLocal(v.applyMatrix4(mesh.matrixWorld));
+    if (rest > face + FASCIA_EPS) pads = Math.max(pads, v.z);
+    else if (rest > face - FASCIA_EPS) front = Math.max(front, v.z);
+  }
+  return pads - front;
+}
+
+/** The crashed cruiser, its cage fitted, and the bar's place in the cage at rest and after the crash (built once, by the first row that reads it). */
+type CrashedBar = { car: DeformableCar; cage: CarCage; rest: BarPlace; crashed: BarPlace };
+let crashedBar: CrashedBar | undefined;
+
+function barAfterCrash(): CrashedBar {
+  if (crashedBar) return crashedBar;
+  const car = crashedCruiser();
+  const cage = cageOf(car);
+  fitToDrawn(car, cage);
+  crashedBar = { car, cage, rest: cageBarPlace(cage.style, cage.style.rest), crashed: cageBarPlace(cage.style, cage.fields.pos) };
+  return crashedBar;
+}
+
+describe("given a cruiser after an 18 km/h head-on crash that leaves its front bumper on", () => {
+  it("when its cage's nose and bumper are read, then the bumper is on and crushed, so the bar is read where a crash puts it", (t) => {
+    const { car, cage, rest } = barAfterCrash();
+    t.diagnostic(`cage nose ${cage.fields.planBox[3]!.toFixed(3)} m at ${cage.style.pristine.planBox[3]!.toFixed(3)} at rest`);
+    assert.ok(car.crashed && !car["parts"].some((p) => p.bumper && p.cage === "bumperFront" && p.detached), "the cruiser is crashed with its front bumper on");
+    assert.ok(cage.fields.planBox[3]! < cage.style.pristine.planBox[3]! - 0.1, `the cage's nose stands ${cage.fields.planBox[3]!.toFixed(3)} m`);
+    assert.ok(Math.abs(rest.ahead - PUSH_BAR_REACH) < 1e-3, `the bar's rest face stands ${rest.ahead.toFixed(3)} m ahead of its bumper's, not its reach ${PUSH_BAR_REACH}`);
+  });
+
+  it("when the bar is read against its bumper, then its pads stand as far ahead of the bumper's face as the drawn bar's, within 1 cm", (t) => {
+    const { car, crashed } = barAfterCrash();
+    const drawn = drawnBarAhead(car);
+    t.diagnostic(`cage ${crashed.ahead.toFixed(3)} m ahead of its bumper's face, drawn ${drawn.toFixed(3)} m`);
+    assert.ok(Math.abs(crashed.ahead - drawn) <= BAR_FOLLOW_M, `the cage's bar face stands ${crashed.ahead.toFixed(3)} m ahead of its bumper's, the drawn bar's ${drawn.toFixed(3)} m`);
+  });
+
+  it("when the bar is read against its bumper, then its top stands as high over the bumper's top as at rest, within 1 cm", (t) => {
+    const { rest, crashed } = barAfterCrash();
+    t.diagnostic(`cage ${crashed.over.toFixed(3)} m over its bumper's top, ${rest.over.toFixed(3)} m at rest`);
+    assert.ok(Math.abs(crashed.over - rest.over) <= BAR_FOLLOW_M, `the cage's bar top stands ${crashed.over.toFixed(3)} m over its bumper's, ${rest.over.toFixed(3)} m at rest`);
   });
 });
 
@@ -189,5 +308,40 @@ describe("given a car dropped on its roof, whose glass is gone and whose crushed
     }
     assert.ok(differ > 0, "the opening read the same as the pane");
     assert.deepEqual(outside, []);
+  });
+});
+
+/** A struck shut door's cage stands within this of its drawn skin (m): the lattice's own read of the side plus the decimated door build. */
+const DOOR_SIDE_M = TOP_P95_M;
+/** Stations across the door's aperture as shares of its z span, clear of the cut ends where the body's own side takes over. */
+const DOOR_STATIONS = [0.1, 0.3, 0.5, 0.7, 0.9];
+/** The door heights read, as shares of `door.halfHeight` about `door.hingeY`: low, middle and high on the skin. */
+const DOOR_HEIGHTS = [-0.5, 0, 0.5];
+/** Half the height (m) the striker spans about each door height: a bumper-sized patch, a few lattice nodes tall. */
+const STRIKER_HALF = 0.075;
+
+describe("given a parked car of each body with its doors shut and latched, and its cage", () => {
+  it("when a striker is moved sideways into either flank at stations across the whole door aperture and at three door heights, then it first meets the cage within 5 cm of the drawn door's outer skin at every one", (t) => {
+    const wrong: string[] = [];
+    for (const body of BODIES) {
+      const car = carInState("untouched", body.style, body.cls);
+      const cage = cageOf(car);
+      const { step, v0 } = cage.style;
+      const { aperture, hingeY, halfHeight } = car.style.door;
+      for (const side of [1, -1] as const) {
+        for (const share of DOOR_STATIONS) {
+          const z = v0 + Math.round((aperture[0] + share * (aperture[1] - aperture[0]) - v0) / step) * step;
+          for (const h of DOOR_HEIGHTS) {
+            const y = hingeY + h * halfHeight;
+            const cageX = cageSideX(cage, side, z, y - STRIKER_HALF, y + STRIKER_HALF);
+            const skinX = drawnDoorX(car.style, side, y, z);
+            const text = `${body.body} ${side > 0 ? "right" : "left"} z ${z.toFixed(2)} y ${y.toFixed(2)}: cage ${cageX.toFixed(3)} against skin ${skinX.toFixed(3)} (${((cageX - skinX) * 100).toFixed(1)} cm)`;
+            t.diagnostic(text);
+            if (!(Math.abs(cageX - skinX) <= DOOR_SIDE_M)) wrong.push(text);
+          }
+        }
+      }
+    }
+    assert.deepEqual(wrong, []);
   });
 });

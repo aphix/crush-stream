@@ -313,8 +313,10 @@ export interface LooseShape {
   readonly points: Float64Array;
   count: number;
   readonly centre: THREE.Vector3;
-  /** The half extents (m) of its bounding box about `centre`, in its own axes: its inertia's box and its wind plate (`blow`). */
+  /** The half extents (m) of its bounding box about `centre`, in its own axes: its inertia's box and its wind plate's size (`blow`). */
   readonly half: THREE.Vector3;
+  /** The axis (0 x, 1 y, 2 z) its drawn surface faces most, by projected area: the normal of the plate the wind meets (`blow`). Measured with the box (`boxShape`). */
+  plate: 0 | 1 | 2;
   /** Its points are that box's corners and edge middles (`halfBox`); else they are the drawn shell's own (`boxShape`) or a wheel's rims. */
   box: boolean;
   /**
@@ -638,7 +640,7 @@ export abstract class CarCore {
     const g = new THREE.Group();
     const spec = front ? this.style.bumpers.front : this.style.bumpers.rear;
     const fascia = makeBumperGeometry(front, this.style);
-    // A push bar is drawn only: merged into the front bumper, it follows the bumper's masses and tears off with it (its flying box is the bumper's as drawn).
+    // A push bar is merged into the front bumper: it follows the bumper's masses and tears off with it (its flying box is the bumper's as drawn); the cage carries its box.
     const drawn = front ? withFrontBand(this.style.pushBar ? withPushBar(fascia) : fascia, this.style) : withRearFittings(fascia, this.style);
     const mesh = new THREE.Mesh(withSeamCover(drawn, this.style, front), bumperMaterial(spec.trim, accent, body));
     this.bumperMeshes.push(mesh);

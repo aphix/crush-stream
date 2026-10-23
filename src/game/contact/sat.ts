@@ -7,6 +7,7 @@ import { hypot2 } from "../deform/physics-util.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { OUTLINE_REACH, outlineOf, VERTICAL_CLEAR, type CageOutline } from "./cage-outline.ts";
+import { activeGround } from "../world/ground.ts";
 
 export const BARRIER_HALF = { x: 0.38, z: 1.96 };
 /** The slab's top (m): `makeJerseyBarrier`'s profile peak. A car whose every mass clears it flies over (a ramp jump). */
@@ -42,6 +43,9 @@ export function sliceSpeed(cars: readonly DeformableCar[]): number {
  */
 const NOSE_KEEP = 2.05;
 const CABIN_KEEP = 1.08;
+
+/** A lifted car whose origin stands this close (m) to the ground under it is on its wheels: its frame, axles and wheels, which the cage does not draw, reach from its body down to that ground. */
+const STANDS_WITHIN = 0.3;
 
 /** Keep the cabin from crossing the jersey face. leftover=1 → bumper still on the face. */
 export function clipCarToBarrier(
@@ -123,7 +127,7 @@ function frameInto(ea: readonly number[], eb: readonly number[]): void {
  * places: its frame x and z, the height up `a` it stands at, its band's low and high up `b`, how far short of the box and plan it may
  * be, the height up `b` of its frame's zero height, and the height up `b` `meetAt` places it at.
  */
-const _in = new Float64Array(16);
+const _in = new Float64Array(17);
 const I_LOW = 4;
 const I_HIGH = 5;
 const I_REACH = 6;
@@ -136,6 +140,7 @@ const I_A_HIGH = 12;
 const I_MARGIN = 13;
 const I_YC = 14;
 const I_AT = 15;
+const I_HANG = 16;
 /** What the last `meet` found: the node's depth in `b`'s plan, its place (x, z) in `b`'s frame, the heights the two bodies share there in `b`'s frame (the node's own where `b` has no band), whether `b` has one there (1), the heights `b` stands at there, and whether those are its own column's (1) or its band's. */
 const _meet = new Float64Array(9);
 const M_DEPTH = 0;
@@ -199,8 +204,10 @@ function meet(plan: Float32Array, style: CageStyle, outlineB: CageOutline, field
   const i = Math.round((bx - style.u0) / style.step) | 0;
   const j = Math.round((bz - style.v0) / style.step) | 0;
   outlineB.band(i, j, _band);
-  const banded = _band[0]! <= _band[1]!;
   const lift = _in[I_LIFT_B]!;
+  // A node of a car standing wholly under the heights of a lifted body that stands on its wheels meets it at its own heights.
+  const bridged = _in[I_HANG]! > 0 && _in[I_A_HIGH]! >= 0 && _band[0]! + lift > _in[I_A_HIGH]!;
+  const banded = _band[0]! <= _band[1]! && !bridged;
   _meet[M_BANDED] = banded ? 1 : 0;
   _meet[M_LOW] = banded ? Math.max(_in[I_A_LOW]!, _band[0]! + lift) : _in[I_A_LOW]!;
   _meet[M_HIGH] = banded ? Math.min(_in[I_A_HIGH]!, _band[1]! + lift) : _in[I_A_HIGH]!;
@@ -264,6 +271,12 @@ function endAt(at: number, dir: number, plan: Float32Array, style: CageStyle, ou
   if (_again[M_DEPTH]! > _meet[M_DEPTH]!) _meet.set(_again);
 }
 
+/** Whether lifted car `b`'s origin stands within `STANDS_WITHIN` of the ground under it. */
+function standsOnWheels(b: DeformableCar): boolean {
+  const e = b.group.matrixWorld.elements;
+  return e[13]! - activeGround().heightAt(e[12]!, e[14]!, e[13]!) <= STANDS_WITHIN;
+}
+
 /**
  * How deep (m) the nodes of `a`'s plan outline reach into `b`'s plan (the signed distance field, the outline half a step further out
  * than its node, and `look` further: the travel the pair's closing carries it in the slice, so a contact whose crush keeps its faces
@@ -288,6 +301,7 @@ function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look
   _in[I_LOW] = outline.low + liftA;
   _in[I_HIGH] = outline.high + liftA;
   _in[I_REACH] = reach;
+  _in[I_HANG] = standsOnWheels(b) ? cageLift(b) : 0;
   _in[I_LIFT_B] = cageLift(b);
   const eb = b.group.matrixWorld.elements;
   frameInto(a.group.matrixWorld.elements, eb);

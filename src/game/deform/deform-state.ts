@@ -13,11 +13,7 @@ import { DeformHit } from "./deform-hit.ts";
 import { RES_SLOTS, SKIN_K, type Beam, type MassNode, type PointSkin } from "./deform-rig.ts";
 import { CageStrain, maxCompression, sensorsByPart } from "./cage-measure.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
-import { FAR_SIDE_DOT, MIN_IMPACT_ZONE, MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
-
-/** Packed bumper-to-block-centre length (m): bumper beam and radiator crushed flat ahead of a
- *  0.36 m block. Nose crush past the 0.84 m rest gap minus this shoves the engine back. */
-export const ENGINE_PACK_GAP = 0.54;
+import { CORNER_BLEND, CORNER_CENTRED, FAR_SIDE_DOT, MIN_IMPACT_ZONE, MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
 
 /** How far (m) a single nose hit's dynamic crush peaks short of its stroke: single 48–54 km/h hits at
  *  squash 0.32 and 0.4 all peak the block at the stroke's reach (stroke − 0.30) minus 0.06 ± 0.01 m. */
@@ -236,7 +232,7 @@ export abstract class DeformState extends DeformHit {
     // under the nose, whose crush reached the block 0.225 m at a monster's 55 m/s slab hit (alive at 0.58) where
     // its body's own hit on a wall packed it 0.54 m and killed it.
     if (noseHit) {
-      const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(el.rest.z, er.rest.z) - ENGINE_PACK_GAP;
+      const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(el.rest.z, er.rest.z) - this.rig.packGap;
       const energy = this.hitStroke() - crumple - STROKE_SHORTFALL;
       travel = this.energyTravel ? energy : Math.min(travel, energy);
     }
@@ -329,19 +325,22 @@ export abstract class DeformState extends DeformHit {
     return this.massCornerW[m.index]!;
   }
 
-  /** `cornerWeight` of every mass for a hit at car-frame x `hitX`: it reads nothing else, and `exp` per mass per call was 6% of a derby-32 frame. */
+  /**
+   * `cornerWeight` of every mass for a hit at car-frame x `hitX`: it reads nothing else, and `exp` per mass per call was 6% of a derby-32 frame. A hit within
+   * `CORNER_CENTRED` of the centre line crushes the whole width alike; the further out, the more it crushes only its own side, in full from
+   * `CORNER_CENTRED + CORNER_BLEND`: a step at the first (a patch 1 cm either side of it crushed the nose 0.74 m or 0.45 m) moved a sedan's T-bone with
+   * the step phase.
+   */
   private fillCornerWeights(hitX: number): void {
+    const side = THREE.MathUtils.clamp((Math.abs(hitX) - CORNER_CENTRED) / CORNER_BLEND, 0, 1);
     for (let mi = 0; mi < this.masses.length; mi++) {
       const m = this.masses[mi]!;
-      if (Math.abs(hitX) < 0.2) {
-        this.massCornerW[mi] = 1;
-        continue;
-      }
       const lat = Math.abs(m.rest.x - hitX);
       const hitSide = Math.sign(hitX);
       const nodeSide = Math.sign(m.rest.x);
       const opposite = nodeSide !== 0 && nodeSide !== hitSide;
-      this.massCornerW[mi] = Math.exp(-lat * (opposite ? 4.6 : 1.8)) * (opposite ? 0.06 : 1);
+      const own = Math.exp(-lat * (opposite ? 4.6 : 1.8)) * (opposite ? 0.06 : 1);
+      this.massCornerW[mi] = 1 + side * (own - 1);
     }
     this.massCornerX = hitX;
   }

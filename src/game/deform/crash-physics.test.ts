@@ -95,11 +95,12 @@ describe("given the crash constants (the researched sedan barrier numbers every 
 const centredImpactCases = [
   { it: "when the hit lands dead centre (0 m off the centreline), then the hit point stays within 0.22 m of the centreline, so both front corners share the crush", impactX: 0 },
   { it: "when the hit lands 0.199 m off centre, just inside the 0.2 m centre band, then the hit point still counts as centred (within 0.22 m of the centreline)", impactX: 0.199 },
+  { it: "when the hit lands exactly 0.2 m off centre, at the edge of the centre band, then the hit point still counts as centred (within 0.22 m of the centreline): the pull to the nearest corner grows from there, it does not jump", impactX: 0.2 },
 ] as const;
 
 const rightImpactCases = [
   { it: "when the hit lands at the right-front corner (0.62 m right of the centreline), then the hit point stays on the right, more than 0.28 m from the centreline", impactX: 0.62, minSnappedX: 0.28 },
-  { it: "when the hit lands exactly 0.2 m right of the centreline, then it already counts as a right hit (more than 0.25 m right), because only offsets under 0.2 m count as centred", impactX: 0.2, minSnappedX: 0.25 },
+  { it: "when the hit lands 0.3 m right of the centreline, 0.1 m past the centre band, then it counts as a right hit in full (more than 0.25 m right)", impactX: 0.3, minSnappedX: 0.25 },
 ] as const;
 
 forModes("given a car hit at the front, where the hit point snaps to the centre or to the nearest front corner", (spawn) => {
@@ -125,6 +126,41 @@ forModes("given a car hit at the front, where the hit point snaps to the centre 
   it("when the hit lands dead centre and both front bumpers are equally far away, then the hit point is not pulled to the left-front corner (it stays right of -0.15 m), as it would be if ties went to the first bumper", () => {
     const { d } = spawn(0);
     assert.ok(d.impactLocal.x > -0.15, `head-on became a left-corner at x=${d.impactLocal.x}`);
+  });
+
+  it("when the hit lands from 0.18 m to 0.32 m right of the centreline in 1 cm steps, then its point never moves more than 5 cm between neighbours: a step at 0.2 m sent a hit 1 cm either side of it 0.2 m apart, and a sedan's T-bone crushed its nose 0.45 m or 0.74 m with the step phase", () => {
+    let last = spawn(0.18).d.impactLocal.x;
+    for (let cm = 19; cm <= 32; cm++) {
+      const x = spawn(cm / 100).d.impactLocal.x;
+      assert.ok(Math.abs(x - last) <= 0.05, `${cm} cm: the hit point moved ${(x - last).toFixed(3)} m from ${last.toFixed(3)}`);
+      last = x;
+    }
+  });
+
+  it("when a hit armed at the right-front corner finds the pair's patch on the centreline within 15 ms, then its centre follows it to within 0.22 m of the centreline, and after 15 ms it stays at the corner", () => {
+    const early = spawn(0.62).d;
+    early.aimHit(new THREE.Vector3(0, 0.36, 2.06));
+    assert.ok(Math.abs(early.impactLocal.x) < 0.22, `followed to x=${early.impactLocal.x}`);
+    const late = spawn(0.62).d;
+    late.stepStructure(0.02);
+    late.aimHit(new THREE.Vector3(0, 0.36, 2.06));
+    assert.ok(late.impactLocal.x > 0.28, `moved to x=${late.impactLocal.x} after the window`);
+  });
+
+  it("when a hit armed at 10 m/s meets squarely at 13 m/s within 15 ms, then the pair's contact takes it over (the hit speed is 13, not the two summed), whereas a wall's contact then, or the pair's after 15 ms, is under 1.5 times the hit's and changes nothing", () => {
+    const aslant = new THREE.Vector3(0, 0, -1);
+    const squarely = new THREE.Vector3(0, 0.36, 2.06);
+    const early = spawn(0, 10).d;
+    early.stepStructure(0.004);
+    assert.ok(early.rearmHit(squarely, aslant, 13, 13, true), "taken over within 15 ms");
+    assert.ok(Math.abs(early.hitSpeedValue - 13) < 1e-9, `hit speed ${early.hitSpeedValue}`);
+    const wall = spawn(0, 10).d;
+    wall.stepStructure(0.004);
+    assert.equal(wall.rearmHit(squarely, aslant, 13, 13), false, "a wall's contact is refused");
+    const late = spawn(0, 10).d;
+    late.stepStructure(0.02);
+    assert.equal(late.rearmHit(squarely, aslant, 13, 13, true), false, "refused after 15 ms");
+    assert.equal(late.hitSpeedValue, 10);
   });
 });
 

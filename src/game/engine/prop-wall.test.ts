@@ -14,6 +14,7 @@ import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { VEHICLE_CLASS_IDS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { newWorld, settleStep, stepWorld } from "./world-step.ts";
 import { STALL_S } from "../vehicle/constants.ts";
+import { UPRIGHT_UP_Y } from "../vehicle/car-suspension.ts";
 import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { COARSE, FINE, parkedPair } from "./world-step-lone.test-util.ts";
@@ -139,7 +140,8 @@ function hit(w: World, cls: VehicleClassId, o: { dw: number; alpha: number; vdir
     if (restart < 0 && f >= hitEndFrame && car.stalledS <= 0) restart = f;
   }
   const end = reach(car);
-  return { car, past, inside: end.inside, off: end.off, alive: car.deform.drivetrainAlive };
+  car.group.updateWorldMatrix(true, false);
+  return { car, past, inside: end.inside, off: end.off, alive: car.deform.drivetrainAlive, upY: car.group.matrixWorld.elements[5]! };
 }
 
 describe("given the Havana alley wall and a car swung into it with the handbrake and boost on, in each of nine ways (at a seam between panels, and at a panel's middle)", () => {
@@ -163,8 +165,8 @@ describe("given the Havana alley wall and a car swung into it with the handbrake
           const r = hit(w, cls, c, pinned);
           assert.ok(r.past < 0.02, `${JSON.stringify(c)}: ${r.past.toFixed(2)} m past the far face`);
           assert.ok(r.inside < 0.05, `${JSON.stringify(c)}: left ${r.inside.toFixed(2)} m inside the slab`);
-          // Alone, a car that lived through the hit drives out of the wall. (A pinned car can lose its wheel hubs to the cop; that is the pair contact's, not the wall's.)
-          if (!pinned && r.alive) assert.ok(r.off >= OFF_WALL, `${JSON.stringify(c)}: stuck, ${r.off.toFixed(2)} m off the wall's face ${RECOVER} s after the engine ran`);
+          // Alone, a car that lived through the hit and stands on its wheels drives out of the wall. (A pinned car can lose its wheel hubs to the cop; that is the pair contact's, not the wall's. A truck that rolled onto its side has no tyre to drive on: under `UPRIGHT_UP_Y` the sim itself takes its springs off.)
+          if (!pinned && r.alive && r.upY >= UPRIGHT_UP_Y) assert.ok(r.off >= OFF_WALL, `${JSON.stringify(c)}: stuck, ${r.off.toFixed(2)} m off the wall's face ${RECOVER} s after the engine ran`);
         }
       });
     }

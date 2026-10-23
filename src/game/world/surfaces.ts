@@ -43,6 +43,12 @@ export const C_TOUCH = 12;
  */
 export const C_DEPTH = 13;
 export const HIT_SIZE = 14;
+/** `Surface.flank`'s output row: the depth (m) a point is inside a car's side, and that face's outward unit normal. */
+export const FL_DEPTH = 0;
+export const FL_NX = 1;
+export const FL_NY = 2;
+export const FL_NZ = 3;
+const FL_SIZE = 4;
 
 /** Friction of a tyre across what it stands on and climbs. */
 export const MU_TYRE = 0.9;
@@ -354,6 +360,11 @@ export class Surface {
 
   /** Readies `always` for queries at plan (`x`, `z`) and up to `r` (m) about it, asked by body slot `skip`: every query tests a static surface's alike; the cars' tops list the roofs near the asker (`CarSurfaces`). */
   near(_skip: number, _x: number, _z: number, _r = 0): void {}
+
+  /** Patch `i`'s side for a point that stands under its top by more than its reach, asked only by a point with `PQ_FLANK`: into `out` (`FL_*`); false where the point is not in its body. */
+  flank(_i: number, _q: Float64Array, _out: Float64Array): boolean {
+    return false;
+  }
 
   /** A bilinear grid patch; returns its index. */
   addGrid(g: GridSpec): number {
@@ -987,7 +998,7 @@ export function armedSolids(): Surface | null {
  * (`S_TU`, `S_TV`) and height out (`S_CH`) and, for a best `plainOffer` found, the point in its grid (`S_PFU`, `S_PFV`; `S_PFU` −1 for
  * any other best), its node, factor and partials left to `plainRest`.
  */
-const _s = new Float64Array(23);
+const _s = new Float64Array(24);
 const S_BEST = 0;
 const S_PATCH = 1;
 const S_G0 = 2;
@@ -1013,6 +1024,8 @@ const S_SNZ = 20;
 const S_SPATCH = 21;
 /** The reach (m) the candidate prism's top counts from below: its patch's, or without limit for a point that came in through the top. */
 const S_CREACH = 22;
+/** The normal's y of the deepest side answer: 0 for a prism's face, a car's flank may lean. */
+const S_SNY = 23;
 /** `Surface.plainOne`: read `Surface.plainCells` per index cell. */
 const PLAIN_BY_CELL = -2;
 /** A `Surface.plainCells` entry: the index cell lists patches besides the one always-tested plain grid (`plainOutside`): `find` reads that grid plain, then offers the cell's patches in list order, as `offerAll` does. */
@@ -1241,7 +1254,11 @@ function offer(s: Surface, i: number, q: Float64Array, skip: number, need: numbe
   // for a tyre (`wheelContact`) only up to the hub's height (`live.topCap`): one above it is a wall.
   const y = q[PQ_Y]!;
   const reach = kind === PRISM ? _s[S_CREACH]! : P[o + P_REACH]!;
-  if (h !== h || h > y + (owner >= 0 && reach > live.topCap ? live.topCap : reach) || h < _s[S_BEST]) return;
+  if (h !== h || h < _s[S_BEST]) return;
+  if (h > y + (owner >= 0 && reach > live.topCap ? live.topCap : reach)) {
+    if (q[PQ_FLANK] === 1 && owner >= 0) flankSide(s, i, q);
+    return;
+  }
   _s[S_BEST] = h;
   live.surf = s;
   _s[S_PATCH] = i;
@@ -1250,6 +1267,19 @@ function offer(s: Surface, i: number, q: Float64Array, skip: number, need: numbe
   _s[S_NODE] = _s[S_CN];
   _s[S_AUX] = _s[S_CAUX];
   _s[S_PFU] = -1;
+}
+
+const _flank = new Float64Array(FL_SIZE);
+
+/** A point in a car's side under its top (`Surface.flank`) is that car's face: the side answer if it is the deepest so far, as a prism's is. */
+function flankSide(s: Surface, i: number, q: Float64Array): void {
+  if (!s.flank(i, q, _flank) || _flank[FL_DEPTH]! <= _s[S_SDEPTH]!) return;
+  _s[S_SDEPTH] = _flank[FL_DEPTH]!;
+  _s[S_SNX] = _flank[FL_NX]!;
+  _s[S_SNY] = _flank[FL_NY]!;
+  _s[S_SNZ] = _flank[FL_NZ]!;
+  _s[S_SPATCH] = i;
+  live.side = s;
 }
 
 const _face = new Float64Array(F_SIZE);
@@ -1304,6 +1334,7 @@ function prismAt(s: Surface, i: number, q: Float64Array): void {
       _s[S_SDEPTH] = _face[F_DEPTH]!;
       _s[S_SNX] = _face[F_NX]!;
       _s[S_SNZ] = _face[F_NZ]!;
+      _s[S_SNY] = 0;
       _s[S_SPATCH] = i;
       live.side = s;
     }
@@ -1511,7 +1542,7 @@ export function heightGrip(): number {
 export const PQ_X = 0;
 export const PQ_Z = 1;
 export const PQ_Y = 2;
-export const PQ_SIZE = 8;
+export const PQ_SIZE = 9;
 /** The point's own velocity (m/s): the face it came in through is the one this opposes (`exitFace`); 0 for a point at rest or one that never asks a wall. */
 export const PQ_VX = 3;
 export const PQ_VZ = 4;
@@ -1520,6 +1551,8 @@ export const PQ_VY = 5;
 export const PQ_BODY = 6;
 /** A tyre's own mount (m): `MOUNT` of its drawn radius, the step it climbs by grip. 0 (a body point, a reader that names no tyre): the prism's `P_REACH`. */
 export const PQ_MOUNT = 7;
+/** 1 for a point of a loose part: a car's side it is in answers its face (`Surface.flank`), as a prism's does; 0 for every other asker. */
+export const PQ_FLANK = 8;
 
 /**
  * The surface at plan (x, z) of the query point `q` (`PQ_X`, `PQ_Z`, `PQ_Y`) under a body asking from height y (`Infinity`: the
@@ -1646,12 +1679,13 @@ function answer(q: Float64Array, out: Float64Array): void {
   const qo = _s[S_SPATCH]! * Q_STRIDE;
   out[C_H] = NONE;
   out[C_NX] = _s[S_SNX]!;
-  out[C_NY] = 0;
+  out[C_NY] = _s[S_SNY]!;
   out[C_NZ] = _s[S_SNZ]!;
   out[C_DEPTH] = depth;
   out[C_SURF] = side.q[qo + Q_SURF]!;
   out[C_GRIP] = side.p[_s[S_SPATCH]! * P_STRIDE + P_GRIP]! * GRIPS[out[C_SURF]!]!;
-  out[C_OWNER] = -1;
+  // A prism's patch has no owner (-1); a car's flank names its car.
+  out[C_OWNER] = side.q[qo + Q_OWNER]!;
   out[C_ARG] = _s[S_SPATCH]!;
   out[C_AUX] = 1;
 }
@@ -1743,8 +1777,8 @@ function checkPoint(kind: number, q: Float64Array, out: Float64Array, far: boole
   if (v.first === "") v.first = `point kind ${kind} entry ${bad} far ${far}: baked ${out[bad]} live ${_live[bad]} at ${q[PQ_X]}, ${q[PQ_Z]}, ${q[PQ_Y]}`;
 }
 
-/** What `stirNear` asks of a car: whether it moves (speed or spin at or above rest). */
-export type StirCar = { readonly moving: boolean };
+/** What `stirNear` asks of a car: whether it moves (speed or spin at or above rest); a part's flank contact its velocity (m/s). */
+export type StirCar = { readonly moving: boolean; readonly velocity: { readonly x: number; readonly y: number; readonly z: number } };
 
 /**
  * Whether anything that moves or changes has its box over the square of half side `r` about plan (`x`, `z`): a static's or a solid's patch rewritten

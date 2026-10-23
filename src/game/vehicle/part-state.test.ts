@@ -64,7 +64,7 @@ describe("given a wreck whose arch flare tore off while its body was still crush
     const drawnNow = newLooseShape();
     boxShape(drawnNow, twinArch.object);
     assert.notEqual(drawnNow.reach, arch.shape.reach, "the control: the twin's shell, drawn on the skin as it is now, is the box of another size");
-    const [twinBox, liveBox] = [twinArch.shape, arch.shape].map((s) => [s.count, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
+    const [twinBox, liveBox] = [twinArch.shape, arch.shape].map((s) => [s.count, s.plate, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
     assertSameNumbers(twinBox!, liveBox!, "the twin's arch box");
   });
 });
@@ -80,7 +80,7 @@ describe("given a parked sedan whose front bumper tore off and flew, and a twin 
     assert.ok(bumper.shape.count > 0 && !bumper.shape.box, `the bumper flew as its shell's points: count ${bumper.shape.count}, box ${bumper.shape.box}`);
     const twin = twinFromKeyframe(car);
     const twinBumper = twin["parts"].find((p) => p.name === "bumperF")!;
-    const [twinShape, liveShape] = [twinBumper.shape, bumper.shape].map((s) => [s.count, s.box ? 1 : 0, s.reach, ...s.centre.toArray(), ...s.half.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
+    const [twinShape, liveShape] = [twinBumper.shape, bumper.shape].map((s) => [s.count, s.box ? 1 : 0, s.plate, s.reach, ...s.centre.toArray(), ...s.half.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
     assertSameNumbers(twinShape!, liveShape!, "the twin's bumper shape");
   });
 });
@@ -104,7 +104,7 @@ describe("given a sedan whose front bumper, carrying the style's own drawn grill
     const twinBumper = twin["parts"].find((p) => p.name === "bumperF")!;
     assert.ok(twinBumper.detached, "the client's bumper tore from the net state alone");
     boxShape(twinBumper.shape, twinBumper.object);
-    const [client, host] = [twinBumper.shape, bumper.shape].map((s) => [s.count, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
+    const [client, host] = [twinBumper.shape, bumper.shape].map((s) => [s.count, s.plate, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
     assertSameNumbers(client!, host!, "the client's torn bumper shape");
 
     const seats: PartSeat[] = [];

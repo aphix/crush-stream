@@ -13,6 +13,7 @@ import { PLATFORM_CABIN, PLATFORM_DIMS, PLATFORM_HARDPOINTS } from "./car-styles
 import { CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
 import { floorY, REAR_GLASS_BOW, wheelsOf, WINDSHIELD_BOW } from "./car-lines.ts";
 import { sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { PUSH_BAR_REACH } from "./car-materials.ts";
 
 type V3 = readonly [number, number, number];
 type Dims = BodyStyle["dims"];
@@ -249,6 +250,8 @@ function rigOf(style: BodyStyle, w: Warp, wheels: readonly V3[]): RigTables {
     roofClampY: P.roofClampY + (named(cages, "roof").min[1] - named(P.cages, "roof").min[1]),
     faceBands: bandsOf(w, cages, masses),
     tyreReach: P.tyreReach + (r - PLATFORM_TYRE.r),
+    noseReach: style.pushBar ? PUSH_BAR_REACH : 0,
+    packGap: P.packGap + (named(masses, "bumperFL").rest[2] - named(P.masses, "bumperFL").rest[2]) - (named(masses, "engineL").rest[2] - named(P.masses, "engineL").rest[2]),
   };
 }
 

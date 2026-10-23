@@ -19,7 +19,7 @@ import { ENGINE_SLACK } from "./deform-contact.ts";
 import { DeformFreeze } from "./deform-freeze.ts";
 import { HUB_OVERRUN, type MassNode } from "./deform-rig.ts";
 import { FACE_TOP } from "./load-crush.ts";
-import { ENGINE_PACK_GAP, PLANT_QUIET } from "./deform-state.ts";
+import { PLANT_QUIET } from "./deform-state.ts";
 import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn-hold.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
  import { CONTACT_WINDOW, MIN_INV_MASS, SQUASH_REACH } from "./constants.ts";
@@ -27,6 +27,9 @@ import { detSin, detCos } from "../kernel/physics-core.js";
 /** The body lies over below this up (y of its up axis): the car's own `UPRIGHT_UP_Y`, where its wheels stop being what it stands on. */
 const LYING_UP_Y = 0.5;
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+/** A hub's spring to its mount (N/m) and its damper (N s/m) while the wreck is moving; a quiet planted wreck's is critical (`stepSuspension`). */
+const SUSPENSION_K = 11000;
+const SUSPENSION_C = 260;
 /** Most of a crushed node's travel (m) that springs back; the rest is permanent set. */
 const SPRINGBACK = 0.08;
 /** A dent this shallow (m) springs back whole: a skin panel's elastic range. */
@@ -324,8 +327,8 @@ export abstract class DeformSolve extends DeformFreeze {
    *  stroke's reach let a 43 km/h hit creep the block 0.045 m with 0.58 m of nose left. */
   private engineMountDz(m: MassNode, dz: number, bz: number, stroke: number): number {
     const nose = Math.min(this.at.bumperFL.local.z, this.at.bumperFR.local.z);
-    const pushed = nose - ENGINE_PACK_GAP - m.rest.z;
-    const reach = Math.max(ENGINE_SLACK, stroke - (Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - m.rest.z - ENGINE_PACK_GAP));
+    const pushed = nose - this.rig.packGap - m.rest.z;
+    const reach = Math.max(ENGINE_SLACK, stroke - (Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - m.rest.z - this.rig.packGap));
     const floor = Math.max(-reach, Math.min(Math.min(0, bz) - ENGINE_SLACK, pushed));
     if (dz < floor) dz = floor;
     if (dz > pushed) dz = pushed;
@@ -808,18 +811,20 @@ export abstract class DeformSolve extends DeformFreeze {
   /**
    * The hubs' springs act along the body's up (`frameUp`), the way the strut runs (along the world's up they pulled a tumbling or lying
    * wreck's hubs sideways through its body), but along the world's up under a wreck standing on its planted tyres: tilted on three wheels,
-   * the spring's sideways share crept its planted hubs 2-3 mm a second.
+   * the spring's sideways share crept its planted hubs 2-3 mm a second. Under planted hubs the pair is critically damped for its masses
+   * (`c = 2 sqrt(k m)` at the reduced mass): at the crash's light damping a heavy wreck on three tyres kept rocking on them for as long as it
+   * lay, never still.
    */
   private stepSuspension(dt: number): void {
-    const k = 11000;
-    const c = 260;
-    const u = this.hubsPlanted() ? WORLD_UP : this.frameUp;
+    const planted = this.hubsPlanted();
+    const u = planted ? WORLD_UP : this.frameUp;
     for (let si = 0; si < this.suspension.length; si++) {
       const [hub, mount] = this.suspension[si]!;
       const restDy = hub.rest.y - mount.rest.y;
       const dy = (hub.world.x - mount.world.x) * u.x + (hub.world.y - mount.world.y) * u.y + (hub.world.z - mount.world.z) * u.z - restDy;
       const dv = (hub.vel.x - mount.vel.x) * u.x + (hub.vel.y - mount.vel.y) * u.y + (hub.vel.z - mount.vel.z) * u.z;
-      const f = (-k * dy - c * dv) * dt;
+      const c = planted ? 2 * Math.sqrt(SUSPENSION_K * ((hub.mass * mount.mass) / (hub.mass + mount.mass))) : SUSPENSION_C;
+      const f = (-SUSPENSION_K * dy - c * dv) * dt;
       if (hub.dynamic) hub.vel.addScaledVector(u, f / hub.mass);
       if (mount.dynamic) mount.vel.addScaledVector(u, -f / mount.mass);
     }

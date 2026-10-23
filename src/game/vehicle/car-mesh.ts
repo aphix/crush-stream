@@ -850,7 +850,7 @@ function lipKick(d: number, lip: BootLip | undefined): number {
 /** `count + 1` loft stations from 0 to 1, plus a lip's rings near the free end at 1 (`span` m long). */
 function panelStations(count: number, lip: BootLip | undefined, span: number): number[] {
   const ts = Array.from({ length: count + 1 }, (_, s) => s / count);
-  if (lip) for (const share of LIP_RINGS) ts.push(1 - (share * lip.depth) / span);
+  if (lip) for (const share of lip.rings ?? LIP_RINGS) ts.push(1 - (share * lip.depth) / span);
   return ts.sort((a, b) => a - b);
 }
 
@@ -962,9 +962,8 @@ function makeDeckPanel(
   z1: number,
   origin: YZ,
   source: BodySource,
-  { hood = false, seated = hood, clamshell = false, lip, drop, nose, crown, roll = 0, halfWidth = Infinity, calmPan = false }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop; nose?: HoodNose; crown?: readonly [number, number]; roll?: number; halfWidth?: number; calmPan?: boolean } = {},
+  { hood = false, seated = hood, clamshell = false, lip, drop, nose, crown, roll = 0, halfWidth = Infinity, calmPan = false, segs = 10 }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop; nose?: HoodNose; crown?: readonly [number, number]; roll?: number; halfWidth?: number; calmPan?: boolean; segs?: number } = {},
 ): THREE.BufferGeometry {
-  const segs = 10;
   const tk = 0.04;
   const skirt = 0.06;
   const [oy, oz] = origin;
@@ -1047,8 +1046,9 @@ function makeDeckPanel(
   const wFace = drop ? drop.w / wEnd : 1;
   if (drop || nose) {
     const run = drop ? arc + yc - (drop.y - oy) : arc + Math.max(0, nose![0] - fold);
-    const last = LID_FOLD_STEPS + LID_FACE_STEPS;
-    const pathAt = (k: number) => (k <= LID_FOLD_STEPS ? (k / LID_FOLD_STEPS) * arc : arc + ((k - LID_FOLD_STEPS) / LID_FACE_STEPS) * (run - arc));
+    const foldSteps = source === "drawn" ? (drop?.steps ?? LID_FOLD_STEPS) : LID_FOLD_STEPS;
+    const last = foldSteps + LID_FACE_STEPS;
+    const pathAt = (k: number) => (k <= foldSteps ? (k / foldSteps) * arc : arc + ((k - foldSteps) / LID_FACE_STEPS) * (run - arc));
     // The x scale `bendOverEnd` gives a ring `s` (m) round the fold: a drop narrows to its face's width there.
     const scaleAt = (s: number) => lerp(1, wFace, Math.min(s / fold, Math.PI / 2) / (Math.PI / 2));
     const foldRun = (k: number): RollEdge | undefined => {
@@ -1057,9 +1057,9 @@ function makeDeckPanel(
       return { taper: (wEnd * (scaleAt(b) - scaleAt(a))) / (b - a), rise: 0, scale: scaleAt(pathAt(k)) };
     };
     for (let k = 1; k <= last; k++) {
-      const folding = crown !== undefined && k <= LID_FOLD_STEPS;
+      const folding = crown !== undefined && k <= foldSteps;
       if (nose) rings.push(ring(endLid.w, endLid.base, 0, endRise, endLid.dome));
-      else rings.push(folding ? ring(wEnd, 0, 0, lerp(endRise, DECK_DOME, k / LID_FOLD_STEPS), BOOT_CROWN_DOME, foldRun(k)) : ring(wEnd, 0, 0, DECK_DOME, DECK_DOME_POINTS, foldRun(k)));
+      else rings.push(folding ? ring(wEnd, 0, 0, lerp(endRise, DECK_DOME, k / foldSteps), BOOT_CROWN_DOME, foldRun(k)) : ring(wEnd, 0, 0, DECK_DOME, DECK_DOME_POINTS, foldRun(k)));
       zs.push(zA + dir * pathAt(k));
     }
   }
@@ -1307,7 +1307,7 @@ export function makeTrunkGeometry(style: BodyStyle = SEDAN, source: BodySource =
   const roll = drawn ? (b.edgeRoll ?? 0) : 0;
   const g =
     b.kind === "lid"
-      ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, { lip, drop: b.drop, seated: drawn && b.flush === true, crown: drawn ? b.crown : undefined, roll, halfWidth: drawn ? flushLidCap(b) : undefined })
+      ? makeDeckPanel(style, b.z0, b.z1, b.origin, source, { lip, drop: b.drop, seated: drawn && b.flush === true, crown: drawn ? b.crown : undefined, roll, halfWidth: drawn ? flushLidCap(b) : undefined, segs: drawn ? b.deckRings : undefined })
       : makeTailgate(style, b, source, lip, roll);
   const [py, pz] = bootPivot(b);
   if (py !== b.origin[0] || pz !== b.origin[1]) g.translate(0, b.origin[0] - py, b.origin[1] - pz);
