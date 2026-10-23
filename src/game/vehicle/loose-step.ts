@@ -222,7 +222,6 @@ function cornersFilled(shape: LooseShape): boolean {
  */
 function supportShape(shape: LooseShape): void {
   const c = shape.centre;
-  let reach = 0;
   for (let k = 0; k < SHAPE_POINTS; k++) {
     const bx = shape.points[k * 3]!;
     const by = shape.points[k * 3 + 1]!;
@@ -242,16 +241,65 @@ function supportShape(shape: LooseShape): void {
         at = i;
       }
     }
-    const px = SHELL.xyz[at]! - c.x;
-    const py = SHELL.xyz[at + 1]! - c.y;
-    const pz = SHELL.xyz[at + 2]! - c.z;
-    shape.points[k * 3] = px;
-    shape.points[k * 3 + 1] = py;
-    shape.points[k * 3 + 2] = pz;
-    reach = Math.max(reach, Math.sqrt(px * px + py * py + pz * pz));
+    shape.points[k * 3] = SHELL.xyz[at]! - c.x;
+    shape.points[k * 3 + 1] = SHELL.xyz[at + 1]! - c.y;
+    shape.points[k * 3 + 2] = SHELL.xyz[at + 2]! - c.z;
   }
+  completeTwins(shape);
+  let reach = 0;
+  for (let k = 0; k < SHAPE_POINTS * 3; k += 3) reach = Math.max(reach, Math.sqrt(shape.points[k]! ** 2 + shape.points[k + 1]! ** 2 + shape.points[k + 2]! ** 2));
   shape.reach = reach;
   shape.box = false;
+}
+
+const CORNER_FILL_SQ = CORNER_FILL * CORNER_FILL;
+
+/** Whether a point of `shape` (about its middle) stands within `CORNER_FILL` of (`x`, `y`, `z`). */
+function supportNear(shape: LooseShape, x: number, y: number, z: number): boolean {
+  for (let k = 0; k < SHAPE_POINTS * 3; k += 3) {
+    if ((shape.points[k]! - x) ** 2 + (shape.points[k + 1]! - y) ** 2 + (shape.points[k + 2]! - z) ** 2 <= CORNER_FILL_SQ) return true;
+  }
+  return false;
+}
+
+/** The last slot of `shape` whose point an earlier slot holds as well (the farthest point along two ways is one), -1 where none repeats. */
+function repeatedSlot(shape: LooseShape): number {
+  for (let k = SHAPE_POINTS - 1; k > 0; k--) {
+    for (let j = 0; j < k; j++) {
+      if ((shape.points[k * 3]! - shape.points[j * 3]!) ** 2 + (shape.points[k * 3 + 1]! - shape.points[j * 3 + 1]!) ** 2 + (shape.points[k * 3 + 2]! - shape.points[j * 3 + 2]!) ** 2 < 1e-12) return k;
+    }
+  }
+  return -1;
+}
+
+/**
+ * A shell drawn the same either side of its car's middle plane (a bumper) is supported the same either side. The farthest point along a way
+ * can tie between a pair of mirror images (a bumper's two lower front ends) and one slot takes one of them, which left the part on a lone
+ * front point that tipped it forward end over end as it slid. A drawn mirror image of a chosen point that no chosen point stands at goes in
+ * a slot another repeats.
+ */
+function completeTwins(shape: LooseShape): void {
+  const c = shape.centre;
+  for (let k = 0; k < SHAPE_POINTS; k++) {
+    const x = -shape.points[k * 3]! - 2 * c.x;
+    const y = shape.points[k * 3 + 1]!;
+    const z = shape.points[k * 3 + 2]!;
+    if (supportNear(shape, x, y, z)) continue;
+    let near = CORNER_FILL_SQ;
+    let at = -1;
+    for (let i = 0; i < SHELL.n * 3; i += 3) {
+      const off = (SHELL.xyz[i]! - c.x - x) ** 2 + (SHELL.xyz[i + 1]! - c.y - y) ** 2 + (SHELL.xyz[i + 2]! - c.z - z) ** 2;
+      if (off <= near) {
+        near = off;
+        at = i;
+      }
+    }
+    const slot = at < 0 ? -1 : repeatedSlot(shape);
+    if (slot < 0) continue;
+    shape.points[slot * 3] = SHELL.xyz[at]! - c.x;
+    shape.points[slot * 3 + 1] = SHELL.xyz[at + 1]! - c.y;
+    shape.points[slot * 3 + 2] = SHELL.xyz[at + 2]! - c.z;
+  }
 }
 
 /** `shape` as a box of half extents `hx`, `hy`, `hz` about its `centre`: its eight corners and twelve edge middles, and the inverse inertia per unit mass of a solid box that size (a hood is a sheet: its spin about its own length is as easy as its tilt). */

@@ -402,6 +402,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A torn part that flies as its shell takes the wind on the broad face it draws (the axis its drawn triangles face most), not its box's shortest axis, which
  * a bumper's wrapped ends and seam cover tie with its height within 2 mm: a sedan's, hatchback's or wagon's front bumper, a monster's rear one and a
  * coupe's front arches met the wind edge-on and lifted where they should brake. The keyframe carries each loose part's plate axis with its flags.
+ * A torn part that flies as its shell is supported the same either side of its car's middle plane: the farthest point along a way tied between a
+ * bumper's two lower front ends and one slot took one, so a sedan's, hatchback's or wagon's front bumper rested on a lone point and tipped forward end
+ * over end at its first slide (73-85° in 0.4 s: 4.658 m where its box slides 4.39), where it now slides flat.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

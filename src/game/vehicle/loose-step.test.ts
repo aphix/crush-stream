@@ -146,6 +146,25 @@ describe("given a front bumper torn off a parked car, sliding along the road at 
   });
 });
 
+/** A mirror image is among the support points if one stands this near (m): two centimetres, as far as a drawn corner may be from the shell's own points. */
+const SAME_PLACE = 0.02;
+
+describe("given a front bumper torn off a parked car, flying as its drawn shell", () => {
+  it("when its support points are chosen, then every one has its mirror image about the car's middle plane among them: it rests on both lower front ends, not on one that tips it forward", () => {
+    const { part } = lot(false);
+    boxShape(part.shape, part.object);
+    const s = part.shape;
+    assert.ok(!s.box, "the control: it flies as its shell's own points");
+    const unpaired: number[] = [];
+    for (let k = 0; k < s.count; k++) {
+      const mirrored = (j: number): boolean =>
+        Math.hypot(s.points[j * 3]! + s.points[k * 3]! + 2 * s.centre.x, s.points[j * 3 + 1]! - s.points[k * 3 + 1]!, s.points[j * 3 + 2]! - s.points[k * 3 + 2]!) < SAME_PLACE;
+      if (!Array.from({ length: s.count }, (_, j) => j).some(mirrored)) unpaired.push(k);
+    }
+    assert.deepEqual(unpaired, [], `points with no mirror image among the ${s.count}: ${unpaired.join(",")}`);
+  });
+});
+
 /**
  * A torn bumper's shape: a broad face across x (1.5 wide, 0.38 high, facing z) with its two wrapped ends running 0.39 back, so its box is as
  * deep as it is tall (half 0.75, 0.19, 0.195) and its shortest half extent is y, not the face's normal z.
