@@ -327,8 +327,9 @@ export function solveRows(n: number): void {
       // A tyre climbs what it rolls onto along its own circle: rising at most its plan speed times the steepest its grip climbs (`MU_TYRE`,
       // as `MOUNT` is derived) and parting from a face it stands in as a body at rest does (`GROUND_LIFT_V`), over what the slice's closing
       // carried it in (a landing); the rest is read again from the next slice's pose. Unbounded, a monster leaning into a slab whose top its
-      // tread read as floor popped onto it in one slice.
-      const climbs = TYRE[c] && N[c]!.y > 0;
+      // tread read as floor popped onto it in one slice. A body at rest rolls into nothing: a tyre it stands in (a car set down on an edge)
+      // is put out by the whole lift, as before, not at the rate a wreck parts from the ground.
+      const climbs = TYRE[c] && N[c]!.y > 0 && !atRest;
       const reach = climbs ? Math.min(left, (CLOSING[c]! + MU_TYRE * hypot2(v.x, v.z) + GROUND_LIFT_V) * dt * N[c]!.y) : left;
       if (part || (driven && !body.wreck) || HUB[c] || left - CLOSING[c]! * dt <= SPECULATIVE_GAP) LEFT[c] = reach;
     }
