@@ -1,6 +1,7 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { armSolids, C_DEPTH, C_H, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, MOUNT, pointContact, PQ_BODY, PQ_MOUNT, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, STEP_MAX, Surface, WALL, wheelContact } from "./surfaces.ts";
+import { ASKER } from "./prism.ts";
 import "./ground.ts";
 import { CLASSES, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import { carFrame } from "../vehicle/car-rig.ts";
@@ -53,6 +54,8 @@ function treadRead(id: "sedan" | "monster", motion: Float64Array | null = null):
 
 /** A 2 m (across) by 4 m (along) box, 1 m tall, its middle at the origin, facing +z. */
 const BOX = { x: 0, z: 0, yaw: 0, hx: 1, hz: 2, base: 0, top: 1, id: 0 } as const;
+/** The box 3 m tall: a point 0.5 m up in it is far under its top, so only its sides are the way out. */
+const TALL = { ...BOX, top: 3 } as const;
 
 describe("given a box prism in the scene's solids", () => {
   it("when a point is above its top then it answers the top's height as a floor with a gap under it", () => {
@@ -128,6 +131,46 @@ describe("given a box prism in the scene's solids", () => {
     const hit = ask(0.7, 0.5, 1.95, -SOLID_AT_REST * 0.5, 0);
     assert.ok(Math.abs(hit[C_NZ]! - 1) < 1e-12);
     armSolids(null);
+  });
+
+  describe("when a body's point is at rest in the prism past its middle", () => {
+    afterEach(() => {
+      ASKER[0] = NaN;
+      ASKER[1] = NaN;
+    });
+
+    it("then it leaves by the face the body's centre is outside of, through the middle of the prism, not by the nearer far face", () => {
+      solids(TALL);
+      // 0.3 m past the middle of the 2 m wide box, toward -x: the -x face is the nearer (0.7 m), the body stands outside the +x face (1.3 m).
+      const alone = ask(-0.3, 0.5, 0, 0, 0);
+      assert.ok(Math.abs(alone[C_NX]! + 1) < 1e-12 && Math.abs(alone[C_DEPTH]! - 0.7) < 1e-12, `no body asks: ${alone[C_NX]} depth ${alone[C_DEPTH]}`);
+      ASKER[0] = 3;
+      ASKER[1] = 0;
+      const own = ask(-0.3, 0.5, 0, 0, 0);
+      assert.ok(Math.abs(own[C_NX]! - 1) < 1e-12 && Math.abs(own[C_DEPTH]! - 1.3) < 1e-12, `its body at +3: ${own[C_NX]} depth ${own[C_DEPTH]}`);
+      armSolids(null);
+    });
+
+    it("then a body over the prism, outside no face, leaves by the nearest, and a point moving fast enough to have come in keeps its entry face", () => {
+      solids(TALL);
+      ASKER[0] = 0;
+      ASKER[1] = 0;
+      const over = ask(-0.3, 0.5, 0, 0, 0);
+      assert.ok(Math.abs(over[C_NX]! + 1) < 1e-12, `a body over it: ${over[C_NX]}`);
+      ASKER[0] = 3;
+      const arrived = ask(0.7, 0.5, 0, -(0.3 / ENTRY_WINDOW) * 2, 0);
+      assert.ok(Math.abs(arrived[C_NX]! - 1) < 1e-12 && Math.abs(arrived[C_DEPTH]! - 0.3) < 1e-12, `moving in at +x: ${arrived[C_NX]} depth ${arrived[C_DEPTH]}`);
+      armSolids(null);
+    });
+
+    it("then in a circle prism it leaves out toward its body, the depth along that way", () => {
+      solids({ x: 3, z: 0, yaw: 0, hx: 0.5, hz: 0.5, circle: true, base: 0, top: 3, id: 0 });
+      ASKER[0] = 6;
+      ASKER[1] = 0;
+      const hit = ask(2.9, 1, 0, 0, 0);
+      assert.ok(Math.abs(hit[C_NX]! - 1) < 1e-12 && Math.abs(hit[C_DEPTH]! - 0.6) < 1e-12, `depth ${hit[C_DEPTH]} nx ${hit[C_NX]}`);
+      armSolids(null);
+    });
   });
 
   it("when the point is the same distance in however far along the step it started then the face it entered by is the same", () => {

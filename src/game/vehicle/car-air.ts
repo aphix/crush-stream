@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { C_AUX, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_PX, C_PY, C_PZ, EDGE_HIT, edgeCross, HIT_SIZE, MU_TYRE, ridgeCross, solidTop, staticTop, topsTop, topsTopLive, type Surface } from "../world/surfaces.ts";
+import { ASKER } from "../world/prism.ts";
 import { GQ } from "../world/ground-clock.ts";
 import { MIN_SLIDE } from "../deform/constants.ts";
 import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-util.ts";
@@ -736,6 +737,7 @@ export function stepFree(car: DeformableCar, dt: number): boolean {
   if (GQ.on) GQ.cells.epoch++;
   if (GQ.on) GQ.cells.inFree = true;
   const landed = stepFreeBody(car, dt);
+  ASKER[0] = NaN;
   GQ.cells.inFree = false;
   return landed;
 }

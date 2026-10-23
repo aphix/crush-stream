@@ -1621,8 +1621,10 @@ const SIM_DIGEST_BY_STYLE = [
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
   { id: "police", digest: "2691a21952fe8fbb0240da1e6800a4c98763189c285cfab77b1a260b127fc2ee" },
   // The monster is its own body style (its own dims, cage and lifted class body), no longer the pickup's.
-  // Again when a wreck's masses rode its lifted centre, not their centroid (CarRig rig-seat): 7a1610ef... -> db09b87c...; the other six unchanged.
-  { id: "monster", digest: "dfb82826e0f6aa14d0fe5c3eb7c9247b381e841c2ec48ac1ad080e8ddfec6895" },
+  // Again when a wreck's masses rode its lifted centre, not their centroid (CarRig rig-seat): the other six unchanged.
+  // Again when a point of a body at rest inside a solid left by the side its body stands on, not the nearest (CarRig rig-entry): the monster's front
+  // tyres no longer stand in the slab at the end, they are torn off by it and the truck vaults over; the other six unchanged.
+  { id: "monster", digest: "31ef13dc233a753da990eac92b903eeb9a330c8f969adb0b04fd0af1eca32c27" },
   // Every style re-pinned with its bumpers in the cage (`CageSource.apart`), each a window of its own (`CageFields.part`): the cage's nose and tail meet the drawn bumper faces.
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 

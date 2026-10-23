@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import { HIT_SIZE, PQ_BODY, PQ_SIZE, type StirCar } from "../world/surfaces.ts";
+import { ASKER } from "../world/prism.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
@@ -293,6 +294,8 @@ export function moveBody(): void {
   _vMove.copy(v);
   v.y -= G * dt;
   centreOfMass.copy(_r.copy(centre).applyQuaternion(q)).add(pos).addScaledVector(_vMove, dt);
+  ASKER[0] = body.part ? NaN : centreOfMass.x;
+  ASKER[1] = centreOfMass.z;
   const spin = w.length();
   if (spin > 1e-9) q.premultiply(_dq.setFromAxisAngle(_axis.copy(w).divideScalar(spin), spin * dt));
 }
