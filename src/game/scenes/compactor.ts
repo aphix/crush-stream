@@ -20,9 +20,9 @@ export const COMPACTOR = {
 } as const;
 
 /** The plates' faces for one car: |z| (m) from its centre, off its own rig. */
-export type PressFaces = { bumperZ: number; hubZ: number; startFace: number; wellFace: number; midFace: number; maxFace: number };
+type PressFaces = { bumperZ: number; hubZ: number; startFace: number; wellFace: number; midFace: number; maxFace: number };
 
-export function pressFaces(car: DeformableCar): PressFaces {
+function pressFaces(car: DeformableCar): PressFaces {
   const rest = (name: MassName): number => Math.abs(car.frame.rig.masses.find((m) => m.name === name)!.rest[2]);
   const bumperZ = Math.max(rest("bumperFL"), rest("bumperRL"));
   const hubZ = car.frame.halfBase;
