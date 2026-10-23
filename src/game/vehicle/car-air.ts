@@ -986,13 +986,12 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // asks: in list order the first spent it, and a coupe's two rear tyres landing on a wagon's roof took 6.2 and 2.3 of 6.2 each and rolled
   // it off the column.
   springPushes(frame, tyres, stiff, damp, dt, q, v, w);
-  // Past its droop a tyre on a car's top fades out over `TYRE_LIFT_BAND`, damped at the band's stiffness; the damper acts as a rubber's does, at most as hard as the spring pushes there, so a tyre dropping through the band in one slice gets no more than that slice's push.
+  // Past its droop a tyre on a car's top fades out over `TYRE_LIFT_BAND`, critically damped at the band's own stiffness.
   for (let c = 0; c < tyres; c++) {
     if (!SOFT[c] || PRESS[c]! > -spring) continue;
-    const push = ASK[c]!;
     const rate = -pointVel(c, v, w, _vp).dot(N[c]!) / N[c]!.y - G * dt;
-    const damper = dt * 1.35 * Math.sqrt(push / dt / TYRE_LIFT_BAND) * rate;
-    ASK[c] = Math.max(0, (push * (PRESS[c]! + spring + TYRE_LIFT_BAND)) / TYRE_LIFT_BAND + Math.max(-push, Math.min(push, damper)));
+    const fade = (PRESS[c]! + spring + TYRE_LIFT_BAND) / TYRE_LIFT_BAND;
+    ASK[c] = Math.max(0, ASK[c]! * fade + dt * 1.35 * Math.sqrt(ASK[c]! / dt / TYRE_LIFT_BAND) * rate);
   }
   // A wreck at rest: its tyres' closing counts at their stops too (below).
   const settling = body.wreck && bodyAtRest();
