@@ -13,7 +13,7 @@ import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift, centreLift } from "./car-cage-rig.ts";
 import { HUB_POP_MPS } from "../deform/deform-solve.ts";
-import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_POINTS, GROUND_LIFT_V, REST_SPEED, body, carrier, pointVel } from "./car-air-body.ts";
+import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_SAMPLE_GAP, TYRE_ALONG_MAX, GROUND_LIFT_V, REST_SPEED, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
 export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
@@ -518,11 +518,44 @@ function placeTyrePoint(hx: number, hy: number, hz: number, a: number, f: number
   TYRE_PQ[PQ_VZ] = v.z + w.x * ry - w.y * rx;
 }
 
+/** Per tyre of `readTyreSides`: the deepest shove past the stroke this slice and its face's normal (x, z), what `shoveWheel` is given. */
+const TYRE_OVER = new Float64Array(3);
+
+/**
+ * The row for the tyre sample `a` across and `f` along from the hub (`hx`, `hy`, `hz`), written at `n` when the sample stands in a face it
+ * cannot mount: the row past it, or `n` when it reads none. The tyre and its suspension give over `stroke` before the face holds the point
+ * rigid, the spring's push slowing its closing slice by slice (`spring`); a wreck's tyre bottomed on it shoves its hub (`TYRE_OVER`).
+ */
+function tyreSampleRow(n: number, hx: number, hy: number, hz: number, a: number, f: number, stroke: number, spring: number, wreck: boolean): number {
+  placeTyrePoint(hx, hy, hz, a, f);
+  pointContactSolids(TYRE_PQ, body.skip, TYRE_HIT);
+  if (TYRE_HIT[C_H] !== NO_FLOOR || !(TYRE_HIT[C_DEPTH]! > 0)) return n;
+  R[n]!.set(TYRE_PQ[PQ_X]! - centreOfMass.x, TYRE_PQ[PQ_Y]! - centreOfMass.y, TYRE_PQ[PQ_Z]! - centreOfMass.z);
+  _s[S_PEN] = TYRE_HIT[C_DEPTH]!;
+  bodyContact(n, TYRE_HIT, true);
+  TYRE[n] = true;
+  MU[n] = MU_TYRE;
+  // The tyre is no face of the body: the face it presses takes no load crush (a yielding face let the tyre sink 28 cm into the slab).
+  SLOT[n] = body.surf.slot(OWN[n]!, N[n]!, false, body.q, FOLLOW[n]!);
+  const depth = TYRE_HIT[C_DEPTH]!;
+  const shoved = wreck && depth >= stroke;
+  SINK[n] = shoved ? 0 : depth - stroke;
+  GAPV[n] = depth < stroke || shoved ? Math.max(CLOSING[n]! - spring * Math.min(depth, stroke) * body.dt, -GROUND_LIFT_V) : 0;
+  if (shoved && depth - stroke > TYRE_OVER[0]!) {
+    TYRE_OVER[0] = depth - stroke;
+    TYRE_OVER[1] = N[n]!.x;
+    TYRE_OVER[2] = N[n]!.z;
+  }
+  return n + 1;
+}
+
 /**
  * Rows for the bound body's tyres against side faces (a wall, a slab, a prism's flank) as `wheelsAt` last stood them (its hubs, on its axes `_e`), from row `n` on;
  * returns the row past the last. A tyre point standing inside a face it cannot mount meets it as a body point does: a lifted car's tyres
  * meet a slab its body clears, and a tyre never runs through a solid. Only where something taller than the tyre's mount stands within its
  * plan reach (the floor rows already hold it on everything lower).
+ * A tread's edge is read at its rear and front corners, and, where neither reads a face, at the samples between (no further apart than
+ * `TYRE_SAMPLE_GAP`): a wall thinner than the tyre is long stands between its corners while the tyre straddles it.
  * The tyre and its suspension give over the class's `stroke` (m, its spring travel) before the face holds the point rigid: a spring that
  * takes a hit at the speed that pops a hub (`HUB_POP_MPS`) in exactly that stroke, so a slower one stops inside it and a harder one
  * bottoms it out. Its push slows the point's closing slice by slice; once it has stopped, the tyre comes back out at no more than a body
@@ -533,7 +566,7 @@ function placeTyrePoint(hx: number, hy: number, hz: number, a: number, f: number
  * bumper) stopped its nose's crush dead once it passed them, at 14-20 m/s on the range's slab.
  */
 export function readTyreSides(car: DeformableCar, n: number, stroke: number): number {
-  const { v, dt, skip } = body;
+  const { v, dt } = body;
   const statics = activeGround();
   const travel = v.length() * dt;
   const spring = (HUB_POP_MPS / stroke) ** 2;
@@ -554,32 +587,17 @@ export function readTyreSides(car: DeformableCar, n: number, stroke: number): nu
     const ground = UNION_TOP[1]! <= mount ? -Infinity : staticTop(statics, hx - reach, hx + reach, hz - reach, hz + reach);
     if (Math.max(solids, ground) <= mount) continue;
     TYRE_PQ[PQ_MOUNT] = step;
-    let over = 0;
-    let ox = 0;
-    let oz = 0;
-    for (const [across, along] of TYRE_POINTS) {
-      placeTyrePoint(hx, hy, hz, across * half, along * r);
-      pointContactSolids(TYRE_PQ, skip, TYRE_HIT);
-      if (TYRE_HIT[C_H] !== NO_FLOOR || !(TYRE_HIT[C_DEPTH]! > 0)) continue;
-      R[n]!.set(TYRE_PQ[PQ_X]! - centreOfMass.x, TYRE_PQ[PQ_Y]! - centreOfMass.y, TYRE_PQ[PQ_Z]! - centreOfMass.z);
-      _s[S_PEN] = TYRE_HIT[C_DEPTH]!;
-      bodyContact(n, TYRE_HIT, true);
-      TYRE[n] = true;
-      MU[n] = MU_TYRE;
-      // The tyre is no face of the body: the face it presses takes no load crush (a yielding face let the tyre sink 28 cm into the slab).
-      SLOT[n] = body.surf.slot(OWN[n]!, N[n]!, false, body.q, FOLLOW[n]!);
-      const depth = TYRE_HIT[C_DEPTH]!;
-      const shoved = wreck && depth >= stroke;
-      SINK[n] = shoved ? 0 : depth - stroke;
-      GAPV[n] = depth < stroke || shoved ? Math.max(CLOSING[n]! - spring * Math.min(depth, stroke) * dt, -GROUND_LIFT_V) : 0;
-      if (shoved && depth - stroke > over) {
-        over = depth - stroke;
-        ox = N[n]!.x;
-        oz = N[n]!.z;
-      }
-      n++;
+    TYRE_OVER.fill(0);
+    const along = Math.min(TYRE_ALONG_MAX, Math.ceil((2 * r) / TYRE_SAMPLE_GAP) + 1);
+    for (let edge = 0; edge < 2; edge++) {
+      const a = edge === 0 ? -half : half;
+      const first = n;
+      n = tyreSampleRow(n, hx, hy, hz, a, -r, stroke, spring, wreck);
+      n = tyreSampleRow(n, hx, hy, hz, a, r, stroke, spring, wreck);
+      if (n > first) continue;
+      for (let k = 1; k < along - 1; k++) n = tyreSampleRow(n, hx, hy, hz, a, ((2 * k) / (along - 1) - 1) * r, stroke, spring, wreck);
     }
-    if (over > 0) car.deform.shoveWheel(HUBS[i]!, ox * over, oz * over);
+    if (TYRE_OVER[0]! > 0) car.deform.shoveWheel(HUBS[i]!, TYRE_OVER[1]! * TYRE_OVER[0]!, TYRE_OVER[2]! * TYRE_OVER[0]!);
   }
   return n;
 }

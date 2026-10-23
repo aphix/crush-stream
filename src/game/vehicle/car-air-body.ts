@@ -44,18 +44,17 @@ export const SEGS: Int16Array = (() => {
   return pairs.slice(0, m);
 })();
 /**
- * A tyre's points that meet side faces (`readTyreSides`), as (across, along) shares of its half-width and radius: its four corners in plan
- * at hub height. A face that stands no higher over the hub than the tyre mounts is its floor (`wheelContact` asks from the hub too); points
- * under the hub met a kerb the tread climbs as a wall.
+ * How far apart (m) a tyre's side-face samples (`readTyreSides`) lie along its length: no further than the thinnest solid the world places is
+ * across, so a solid never stands between two of them while the tyre straddles it (a wall thinner than the tyre is long stood between its
+ * four corners, and the rear pair rolled through it). They lie along both edges of its tread in plan, at hub height. A face that stands
+ * no higher over the hub than the tyre mounts is its floor (`wheelContact` asks from the hub too); points under the hub met a kerb the
+ * tread climbs as a wall.
  */
-export const TYRE_POINTS = [
-  [-1, -1],
-  [-1, 1],
-  [1, -1],
-  [1, 1],
-] as const;
-/** Contacts a body can hold in one slice: its four tyres' spring rows and every tyre point's side row, its points, and a belly segment's edge each. */
-export const CONTACTS = 4 * (1 + TYRE_POINTS.length) + POINT_CAPACITY + SEGS.length / 2;
+export const TYRE_SAMPLE_GAP = 0.2;
+/** Most samples along one edge of a tyre: the largest tyre's diameter over `TYRE_SAMPLE_GAP`, plus the end (`tyre-sides.test.ts` holds it for every class). */
+export const TYRE_ALONG_MAX = 8;
+/** Contacts a body can hold in one slice: its four tyres' spring rows and every tyre sample's side row, its points, and a belly segment's edge each. */
+export const CONTACTS = 4 * (1 + 2 * TYRE_ALONG_MAX) + POINT_CAPACITY + SEGS.length / 2;
 /** A wheel this close (m) to the ground counts as down. */
 export const TOUCH = 0.03;
 /** Restitution of a body point closing faster than `BOUNCE_V` (m/s); slower contacts and tyres (their springs,

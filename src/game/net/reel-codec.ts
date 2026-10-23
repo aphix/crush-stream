@@ -409,6 +409,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * hit no longer shears the far door's frame by 5-6 cm (a 30 km/h side hit read 55 mm, now 18; its glass burst), and a 50 km/h wall hit racks a door's frame 12 mm, not 26.
  * A windscreen's frame hangs on the cabin as a door's does, its base corners with half of the nearest wing's give (the cowl, where the nose meets the
  * cabin) in place of the rails' and engine's: a 35 km/h wall hit racks it 4.3 mm, not 6.5 (the pane cracked), and a 50 km/h one 5.4 mm, not 24.5 (it still cracks).
+ * A tyre meets a solid's side at both corners of each edge of its tread and, where an edge's corners read nothing, at samples 0.2 m apart between them: a
+ * wall thinner than the tyre is long (the oval's 0.6 m) no longer stands between its corners while the tyre straddles it, so a monster's rear pair that rolled
+ * through it at 56 m/s (two wheels still on, 24.9 m/s after the hit) is torn off at it (none left, 10.7 m/s). A point that came in by no face within the
+ * entry window leaves by the side its car stands on, as one at rest does, not by the nearest face (a car's tyre deep in a panel it was rebounding from was put out through its far face).
  * A torn part that flies as its shell takes the wind on the broad face it draws (the axis its drawn triangles face most), not its box's shortest axis, which
  * a bumper's wrapped ends and seam cover tie with its height within 2 mm: a sedan's, hatchback's or wagon's front bumper, a monster's rear one and a
  * coupe's front arches met the wind edge-on and lifted where they should brake. The keyframe carries each loose part's plate axis with its flags.

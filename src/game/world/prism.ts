@@ -136,10 +136,10 @@ export const ASKER = new Float64Array([NaN, NaN]);
  * through: of its faces (the sides, and the top) the one its velocity (`vx`, `vy`, `vz`, less the prism's own) closes on that it
  * crossed last, the one with the least `depth / closing`: how long ago it crossed it. That time stays the same as the point
  * goes deeper, so the face does not change with where in a step the point's first touch fell, and a point that came down onto
- * the top is not a point that came in at the side. A point at rest has no such motion: it leaves through the nearest face of the
- * side its body stands on (`ASKER`: the body's centre outside that face), else the nearest (a tyre that stopped past a thin wall's
- * middle left by the far face, through the wall, and the drive pushing the car back out was read as closing on it). A side is written to `out`
- * (`F_*`); a box's end that is a joint (`PR_ENDS`) is no face.
+ * the top is not a point that came in at the side. A point that came in by no face (at rest, or moving off one it is deep in) leaves through
+ * the nearest face of the side its body stands on (`ASKER`: the body's centre outside that face), else the nearest (a tyre that stopped past
+ * a thin wall's middle left by the far face, through the wall, and the drive pushing the car back out was read as closing on it). A side is
+ * written to `out` (`F_*`); a box's end that is a joint (`PR_ENDS`) is no face.
  */
 export function exitFace(P: Float64Array, o: number, x: number, y: number, z: number, vx: number, vy: number, vz: number, out: Float64Array): number {
   const dx = x - P[o + PR_X]!;
@@ -180,7 +180,7 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
       const ax = ASKER[0]! - P[o + PR_X]!;
       const az = ASKER[1]! - P[o + PR_Z]!;
       const al = hypot2(ax, az);
-      if (!moving && al > 1e-9) {
+      if (al > 1e-9) {
         // Out toward its body, which the point's depth along then is (a point past the middle leaves by the far side of the middle, not the near one).
         nx = ax / al;
         nz = az / al;
@@ -196,7 +196,7 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
     let nearFace = -1;
     let timeFace = -1;
     // Where the asking body's centre stands in the prism's frame: the faces it is outside of are the sides it can be left by.
-    const asked = !moving && ASKER[0]! === ASKER[0]!;
+    const asked = ASKER[0]! === ASKER[0]!;
     const au = asked ? (ASKER[0]! - P[o + PR_X]!) * c - (ASKER[1]! - P[o + PR_Z]!) * s : 0;
     const aw = asked ? (ASKER[0]! - P[o + PR_X]!) * s + (ASKER[1]! - P[o + PR_Z]!) * c : 0;
     let bodyDepth = Infinity;
@@ -231,7 +231,7 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
   }
   const topDepth = topAt(P, o, u, w) - y;
   // The top is the face it came in through when it was crossed more recently than every side (or, at rest, is the nearest).
-  const top = cameThroughTop(moving, vy, topDepth, moving ? depth : near, time);
+  const top = cameThroughTop(moving, vy, topDepth, moving && time < Infinity ? depth : near, time);
   if (top) return IN_TOP;
   out[F_DEPTH] = depth;
   out[F_NX] = nx;

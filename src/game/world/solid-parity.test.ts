@@ -64,19 +64,16 @@ describe("given a fixed solid (a course wall, a solid box prop, the flank of a m
   ];
   /**
    * The monster's lethal hit on the oval's wall: its body clears the wall (its keel stands over the wall's top), so only its tyres meet it.
-   * The wall is thinner than the slab (`WALL_PROFILE` against `BARRIER_HALF`) and than a tyre is long. A tyre meets a face at its four
-   * box corners, so a wall thinner than the tyre has no corner inside while the tyre straddles it: the rear pair rolls through at the
-   * speed below, where the slab holds and tears both pairs. The lethal speed's cell passes (every wheel torn) and is a bar; this one
-   * is a todo until a tyre is sampled closer than the thinnest solid it can meet.
+   * The wall is thinner than the slab (`WALL_PROFILE` against `BARRIER_HALF`) and than a tyre is long, so a tyre straddles it with neither
+   * corner inside: the rear pair rolled through it at the second speed below (two wheels still on, 24.9 m/s after the hit against the slab's
+   * 16.0) until a tyre's edge was read between its corners where they read nothing (`TYRE_SAMPLE_GAP`).
    */
   const THIN_WALL_MPS = 56;
-  const THIN_WALL_GAP = "a monster's rear tyres roll through the oval's 0.6 m wall at 56 m/s (two wheels still on, 24.9 m/s after the hit against the slab's 16.0): a tyre meets a face at its four box corners 1.2 m apart, so a wall thinner than the tyre sits between them while the tyre straddles it; closes when a tyre's samples are spaced closer than the thinnest solid it can meet";
   describe("when a car drives into it once", () => {
     for (const [target, classes] of CELLS) {
       for (const cls of classes) {
         for (const speed of cls === "monster" && target === "oval" ? [SURVIVABLE, LETHAL, THIN_WALL_MPS] : [SURVIVABLE, LETHAL]) {
-          const gap = speed === THIN_WALL_MPS ? { todo: THIN_WALL_GAP } : {};
-          it(`when a ${cls} drives into the ${target} at ${speed} m/s, then it throws the driver as the barrier does, crushes within ${HEALTH_BAND} of the barrier's drivetrain health, and the car comes off no faster`, gap, (t) => {
+          it(`when a ${cls} drives into the ${target} at ${speed} m/s, then it throws the driver as the barrier does, crushes within ${HEALTH_BAND} of the barrier's drivetrain health, and the car comes off no faster`, (t) => {
             const solid = strike(target, cls, speed);
             if (solid[0]!.staged > 0) t.diagnostic(`${cls} started ${solid[0]!.staged.toFixed(1)} m further out than the run-in: its footprint there met a solid`);
             matches(`${cls} ${target} ${speed}`, solid, strike("barrier", cls, speed));
