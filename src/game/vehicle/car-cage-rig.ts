@@ -7,6 +7,7 @@ import type { BodyPartName } from "../kernel/rig-spec.ts";
 import { CarCage, type CageLive, type CageSource, P_CAP, P_CUT_X, P_CUT_Y, P_CUT_Z, P_ROOF_CLAMP } from "./car-cage.ts";
 import type { DeformableCar } from "./car.ts";
 import { hingePose, INTERIOR_MASSES } from "./part-pose.ts";
+import { CAGE_DOOR_THICKNESS, doorSkinZ, makeDoorGeometry } from "./car-door-mesh.ts";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { makeWindshield } from "./car-glass.ts";
 import { makeLightBar, pushBarBox } from "./car-materials.ts";
@@ -24,7 +25,7 @@ import type { BodyStyle } from "./car-variants.ts";
  * rig's own protected fields) and the car's one cage: `CageRig` is the cage, the inputs it fits from (allocated once) and the refit.
  */
 
-/** A mesh over the body that the rig skins from one cage's lattice (`skinPanel`): the lids, the light bar, the skinned panes, the bumpers. */
+/** A mesh over the body that the rig skins from one cage's lattice (`skinPanel`): the lids, the light bar, the skinned panes, the bumpers, the doors. */
 interface Panel {
   mesh: THREE.Mesh;
   rest: Float32Array;
@@ -32,12 +33,12 @@ interface Panel {
   part: BodyPartName;
   /** Whether the panel is on the car now: its part not torn off, its pane not shattered (state, never the drawn mesh's parent). */
   on: () => boolean;
-  /** The part whose hinge poses it (`hingePose`); null for a skinned pane or a bumper, which stands at `seat`. */
+  /** The part whose hinge poses it (`hingePose`); null for a skinned pane or a bumper, which stands at `seat`. A door is posed by its hinge too. */
   hinged: DetachPart | null;
   seat: THREE.Vector3;
   /** Per vertex of its cage build (`cagePanelsOf`): 1 where the decimation may never collapse it (`CageSource.held`); absent, none. */
   held?: Uint8Array;
-  /** A part on the body (a bumper), decimated on its own budget (`CageSource.apart`); its panels come last. */
+  /** A part on the body (a bumper, a door), decimated on its own budget (`CageSource.apart`); its panels come last. */
   apart?: boolean;
   /** The push bar's box on the front bumper's own lattice cage, a part apart of its own that goes with the bumper. */
   bar?: boolean;
@@ -84,6 +85,21 @@ function facePoints(geometry: THREE.BufferGeometry, front: boolean): Uint8Array 
   return Uint8Array.from({ length: pos.count }, (_, i) => ((within(i, FACE_RING) && (at(pos.getX(i), lo) || at(pos.getX(i), hi))) || (within(i, 0) && at(Math.abs(pos.getX(i)), middle)) ? 1 : 0));
 }
 
+/** A door's slab corners (`Panel.held`): at each end of its length, its lowest and highest points on the outer and the inner face, so the decimated slab keeps its footprint. */
+function doorPoints(geometry: THREE.BufferGeometry): Uint8Array {
+  const pos = geometry.getAttribute("position");
+  const at = (a: number, b: number): boolean => Math.abs(a - b) < 1e-4;
+  const corners: [number, number][] = [];
+  for (const s of [-1, 1]) {
+    let z = -Infinity;
+    for (let i = 0; i < pos.count; i++) z = Math.max(z, s * pos.getZ(i));
+    let [lo, hi] = [Infinity, -Infinity];
+    for (let i = 0; i < pos.count; i++) if (at(s * pos.getZ(i), z)) [lo, hi] = [Math.min(lo, pos.getY(i)), Math.max(hi, pos.getY(i))];
+    corners.push([s * z, lo], [s * z, hi]);
+  }
+  return Uint8Array.from({ length: pos.count }, (_, i) => (corners.some(([z, y]) => at(pos.getZ(i), z) && at(pos.getY(i), y)) ? 1 : 0));
+}
+
 /** `car`'s panels, in the order its source lays them out. */
 function panelsOf(car: DeformableCar): Panel[] {
   const parts = car["parts"];
@@ -109,13 +125,15 @@ function panelsOf(car: DeformableCar): Panel[] {
     panels.push(partPanel(part, on));
     if (part.cage === "bumperFront" && car.style.pushBar) panels.push({ ...partPanel(part, on), bar: true });
   }
+  // The doors: the cage's side stands where the drawn door does while it hangs latched, posed about its hinge (`hingePose`).
+  for (const part of car["doorParts"]) panels.push({ ...partPanel(part, () => !part.detached && part.swing!.latched), hinged: part });
   return panels;
 }
 
 /**
- * `panelsOf(car)` with the lids', light bar's, windshield's and bumpers' meshes and rest shapes the cage build draws (`makeHoodGeometry`,
+ * `panelsOf(car)` with the lids', light bar's, windshield's, bumpers' and doors' meshes and rest shapes the cage build draws (`makeHoodGeometry`,
  * `makeTrunkGeometry`, `makeLightBar`; the style's own windshield, not its `drawn` twin; each bumper's plain fascia, not its drawn add-ons;
- * the push bar's box).
+ * the push bar's box; each door as a thick slab).
  */
 function cagePanelsOf(car: DeformableCar): Panel[] {
   const cageLid = (panel: Panel, geometry: THREE.BufferGeometry, held?: Uint8Array): Panel => ({ ...panel, mesh: new THREE.Mesh(geometry), rest: Float32Array.from(geometry.getAttribute("position").array), held });
@@ -131,6 +149,10 @@ function cagePanelsOf(car: DeformableCar): Panel[] {
     if (panel.part === "bumperFront" || panel.part === "bumperRear") {
       const bumper = makeBumperGeometry(panel.part === "bumperFront", car.style);
       return cageLid(panel, bumper, facePoints(bumper, panel.part === "bumperFront"));
+    }
+    if (panel.part === "doorLeft" || panel.part === "doorRight") {
+      const door = makeDoorGeometry(panel.part === "doorLeft" ? -1 : 1, car.style, CAGE_DOOR_THICKNESS).translate(0, 0, doorSkinZ(car.style));
+      return cageLid(panel, door, doorPoints(door));
     }
     return panel;
   });

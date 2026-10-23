@@ -13,6 +13,8 @@ import { CABIN_TRIM, PRIMER_ATTRIBUTE } from "./constants.ts";
 const DOOR_PROUD = 0.003;
 /** The door skin is a slab this thick (m) on average: its flat inner face stands this far inboard of the outer face's mean x, so it carries none of the side's waves. */
 const DOOR_THICKNESS = 0.05;
+/** The cage's door slab (m): thick enough that its inner face reaches inside the cage's own side at door heights, so no gap lies behind the face a side hit meets. */
+export const CAGE_DOOR_THICKNESS = 0.25;
 /** The skin covers the door cut with this much (m) past each end. */
 const DOOR_SKIN_OVERLAP = 0.02;
 /** The skin's face meets the body side at each cut end and stands `DOOR_PROUD` proud this far (m) inside it, so the hinge and latch slices read as shut lines, not steps. */
@@ -258,10 +260,12 @@ export function drawnDoorCard(sign: number): THREE.BufferGeometry {
 /**
  * Door skin in hinge-local space (parent at the A-pillar hinge, the skin centred on the door cut). The outer face
  * follows the body side (`sideX`) at each height and station, its rows on the body ring's side rows so its facets
- * meet the body's at each cut, and rolls over its perimeter in a rounded edge into a slab `DOOR_THICKNESS` thick
- * inboard, closed by a flat inner face.
+ * meet the body's at each cut, and rolls over its perimeter in a rounded edge into a slab inboard, closed by a flat
+ * inner face `DOOR_THICKNESS` inside the face's mean x. With `cageThickness` (m) the slab is the cage's: its inner
+ * face follows the outer face vertex by vertex that far in and each cell keeps its plain split, so what the sim meets is the skin
+ * as its grid gives it, whatever the drawn door does with its inner face and its cells' diagonals.
  */
-export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.BufferGeometry {
+export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN, cageThickness?: number): THREE.BufferGeometry {
   const grid = doorGrid(style);
   const { h, halfLength, skinLength, rows, columns } = grid;
   const positions: number[] = [];
@@ -288,7 +292,7 @@ export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.
       const a = r * columns.length + c;
       const b = a + 1;
       const above = a + columns.length;
-      if (mirrored && r < firstRingRow ? columns[c]! >= 0 : splitsOnLowDiagonal(vertexAt(a), vertexAt(b), vertexAt(above), vertexAt(above + 1), facing)) {
+      if (mirrored && r < firstRingRow ? columns[c]! >= 0 : cageThickness === undefined && splitsOnLowDiagonal(vertexAt(a), vertexAt(b), vertexAt(above), vertexAt(above + 1), facing)) {
         tri(a, b, above + 1, sign < 0);
         tri(a, above + 1, above, sign < 0);
       } else {
@@ -298,9 +302,9 @@ export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.
     }
   }
   const loop = gridPerimeter(columns.length, rows.length);
-  const slabX = outerX.reduce((sum, x) => sum + x, 0) / outerX.length - DOOR_THICKNESS;
+  const flatX = outerX.reduce((sum, x) => sum + x, 0) / outerX.length - DOOR_THICKNESS;
   const slabEdge = loop.map((faceVertex, k) => {
-    positions.push(sign * slabX, positions[faceVertex * 3 + 1]!, positions[faceVertex * 3 + 2]!);
+    positions.push(sign * (cageThickness === undefined ? flatX : outerX[faceVertex]! - cageThickness), positions[faceVertex * 3 + 1]!, positions[faceVertex * 3 + 2]!);
     uvs.push(uvs[faceVertex * 2]!, uvs[faceVertex * 2 + 1]!);
     return faceVertices + k;
   });

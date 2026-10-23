@@ -61,10 +61,10 @@ export const SILL_CAPACITY = Math.max(...BUILD_COUNTS.map((c) => c.sill));
 export const CAGE_HELD_VERTICES = Math.max(...BUILD_COUNTS.map((c) => 2 * c.stations));
 /** Room for a style's bed wheel tubs past its decimated hull (`CageSource.tubs`, kept whole): the most any style's cage build carries. */
 export const CAGE_TUB_VERTICES = Math.max(...CAR_STYLE_IDS.map((id) => wellHumpGeometry(CAR_STYLES[id], "cage")?.getAttribute("position").count ?? 0));
-/** A part decimated on a budget of its own (`CageSource.apart`: a bumper standing on the body), its held points within it: its vertex target. */
+/** A part decimated on a budget of its own (`CageSource.apart`: a bumper or a door standing on the body), its held points within it: its vertex target. */
 const PART_VERTICES = 12;
-/** Room for the parts decimated apart past the hull: the two bumpers. */
-export const CAGE_PART_VERTICES = 2 * PART_VERTICES;
+/** Room for the parts decimated apart past the hull: the two bumpers and the two doors. */
+export const CAGE_PART_VERTICES = 4 * PART_VERTICES;
 /** Room for a push bar's box, a part apart of its own (`pushBarBox`, its eight corners all held): the cruiser's. */
 export const CAGE_BAR_VERTICES = 8;
 /** The interior's vertex target: what shows through a gone pane (the dash, the headliner, the seats), a few boxes. */
@@ -110,15 +110,15 @@ export interface CageSource {
   /** Per source vertex: 0 the body mesh, k + 1 panel k; and the number of panels (at most 255). */
   readonly group: Uint8Array;
   readonly panelCount: number;
-  /** Per source vertex: 1 where the decimation may never collapse it (a bumper's face points: `cagePanelsOf`). */
+  /** Per source vertex: 1 where the decimation may never collapse it (a bumper's face points, a door's slab corners: `cagePanelsOf`). */
   readonly held: Uint8Array;
-  /** Ranges of `rest`, its tail, each decimated alone to `PART_VERTICES` and appended past the hull: a part on the body (a bumper) costs the hull none of its budget. */
+  /** Ranges of `rest`, its tail, each decimated alone to `PART_VERTICES` and appended past the hull: a part on the body (a bumper, a door) costs the hull none of its budget. */
   readonly apart: readonly { readonly from: number; readonly count: number }[];
   /** Per panel, the origin its mesh is skinned about (`skinPanel`'s), x, y, z. */
   readonly panelOrigin: Float64Array;
   /** A rest vertex over this height (m) is roof: the skin's roof clamp holds it (the rig's `roofClampY`). */
   readonly roofClampY: number;
-  /** Per panel: 1 for a glass pane, 0 for a lid, the light bar or a bumper. */
+  /** Per panel: 1 for a glass pane, 0 for a lid, the light bar, a bumper or a door. */
   readonly panelGlass: Uint8Array;
   /** The interior mesh's rest positions (x, y, z per vertex) and triangle indices: seen through a gone pane, so part of the body drawn. */
   readonly interiorRest: Float32Array;
@@ -233,7 +233,7 @@ export interface CageStyle {
   readonly panelOrigin: Float64Array;
   /** Every panel on, the fit of a pristine car. */
   readonly panelsOn: Uint8Array;
-  /** Per panel: 1 for a glass pane, 0 for a lid or a bumper (`CageSource.panelGlass`). */
+  /** Per panel: 1 for a glass pane, 0 for a lid, a bumper or a door (`CageSource.panelGlass`). */
   readonly panelGlass: Uint8Array;
   /** The interior's vertices follow the sill samples in `pos` (`vertexCount` is the body's alone: the rigid step's hull points are those), and its triangles the body's, in group `panelCount + 1`: never a lid, never cut by the roof imprint. */
   readonly interiorCount: number;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
 import { CAGE_PART_VERTICES, CAGE_STEP, CAGE_VERTICES, type CageSource, CarCage } from "./car-cage.ts";
-import { cageGaps, cageLiveOf, cageOf, cageSourceOf, fitToDrawn } from "./car-cage.test-util.ts";
+import { cageGaps, cageLiveOf, cageOf, cageSideX, cageSourceOf, drawnDoorX, fitToDrawn } from "./car-cage.test-util.ts";
 import { BODIES, buildCar, carInState, drawnField, drawnTriangles, STATES, stepFrames, TOP_P95_M, TOP_WORST_M, topGapsOff, topParts } from "./drawn-body.test-util.ts";
 import { makeBumperGeometry } from "./car-mesh.ts";
 import { cageLift } from "./car-cage-rig.ts";
@@ -59,19 +59,21 @@ for (const body of BODIES) {
 }
 
 describe("given the cage's vertex budget", () => {
-  it("when a style's cage is built, then it has its budget's vertices and the underside points held over it, about three hundred triangles, and its bumpers on their own budget past them", (t) => {
+  it("when a style's cage is built, then it has its budget's vertices and the underside points held over it, about three hundred triangles, and its two bumpers and two front doors on their own budget past them", (t) => {
     const car = carInState("untouched", "sedan", "sedan");
     const cage = cageOf(car);
     const { vertexCount, heldCount, triCount, source, tris } = cage.style;
-    const partFrom = cageSourceOf(car).apart[0]!.from;
+    const apart = cageSourceOf(car).apart;
+    const partFrom = apart[0]!.from;
     let parts = 0;
     for (let i = 0; i < vertexCount; i++) if (source[i]! >= partFrom) parts++;
     let partTris = 0;
     for (let k = 0; k < tris.length; k += 3) if (tris[k]! >= vertexCount - parts && tris[k]! < vertexCount) partTris++;
-    t.diagnostic(`${vertexCount} vertices (${heldCount} of them the underside held over the ${CAGE_VERTICES}, ${parts} the bumpers'), ${triCount} triangles (${partTris} the bumpers')`);
+    t.diagnostic(`${vertexCount} vertices (${heldCount} of them the underside held over the ${CAGE_VERTICES}, ${parts} the bumpers' and doors'), ${triCount} triangles (${partTris} theirs)`);
+    assert.equal(apart.length, 4, "two bumpers and two front doors, each decimated alone");
     assert.ok(vertexCount - parts <= CAGE_VERTICES + heldCount + 2 && vertexCount - parts >= CAGE_VERTICES / 2, `${vertexCount - parts} hull vertices, ${heldCount} held`);
     assert.ok(triCount - partTris >= 150 && triCount - partTris <= 330 + 2 * heldCount, `${triCount - partTris} hull triangles`);
-    assert.ok(parts > 0 && parts <= CAGE_PART_VERTICES && partTris <= 2 * CAGE_PART_VERTICES, `${parts} bumper vertices, ${partTris} triangles`);
+    assert.ok(parts > 0 && parts <= CAGE_PART_VERTICES && partTris <= 2 * CAGE_PART_VERTICES, `${parts} part vertices, ${partTris} triangles`);
   });
 });
 
@@ -306,5 +308,40 @@ describe("given a car dropped on its roof, whose glass is gone and whose crushed
     }
     assert.ok(differ > 0, "the opening read the same as the pane");
     assert.deepEqual(outside, []);
+  });
+});
+
+/** A struck shut door's cage stands within this of its drawn skin (m): the lattice's own read of the side plus the decimated door build. */
+const DOOR_SIDE_M = TOP_P95_M;
+/** Stations across the door's aperture as shares of its z span, clear of the cut ends where the body's own side takes over. */
+const DOOR_STATIONS = [0.1, 0.3, 0.5, 0.7, 0.9];
+/** The door heights read, as shares of `door.halfHeight` about `door.hingeY`: low, middle and high on the skin. */
+const DOOR_HEIGHTS = [-0.5, 0, 0.5];
+/** Half the height (m) the striker spans about each door height: a bumper-sized patch, a few lattice nodes tall. */
+const STRIKER_HALF = 0.075;
+
+describe("given a parked car of each body with its doors shut and latched, and its cage", () => {
+  it("when a striker is moved sideways into either flank at stations across the whole door aperture and at three door heights, then it first meets the cage within 5 cm of the drawn door's outer skin at every one", (t) => {
+    const wrong: string[] = [];
+    for (const body of BODIES) {
+      const car = carInState("untouched", body.style, body.cls);
+      const cage = cageOf(car);
+      const { step, v0 } = cage.style;
+      const { aperture, hingeY, halfHeight } = car.style.door;
+      for (const side of [1, -1] as const) {
+        for (const share of DOOR_STATIONS) {
+          const z = v0 + Math.round((aperture[0] + share * (aperture[1] - aperture[0]) - v0) / step) * step;
+          for (const h of DOOR_HEIGHTS) {
+            const y = hingeY + h * halfHeight;
+            const cageX = cageSideX(cage, side, z, y - STRIKER_HALF, y + STRIKER_HALF);
+            const skinX = drawnDoorX(car.style, side, y, z);
+            const text = `${body.body} ${side > 0 ? "right" : "left"} z ${z.toFixed(2)} y ${y.toFixed(2)}: cage ${cageX.toFixed(3)} against skin ${skinX.toFixed(3)} (${((cageX - skinX) * 100).toFixed(1)} cm)`;
+            t.diagnostic(text);
+            if (!(Math.abs(cageX - skinX) <= DOOR_SIDE_M)) wrong.push(text);
+          }
+        }
+      }
+    }
+    assert.deepEqual(wrong, []);
   });
 });

@@ -427,6 +427,7 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * Each car's nose packs to its own length ahead of its engine block, leaving the platform's 0.30 m of crumple on every body (the sedan's
  * was 0.287, the wagon's 0.318, the monster's 0.255, the hatchback's and pickup's 0.18), so a nose hit reaches the block and kills the
  * engine at the same speed whatever the car.
+ * A car's two front doors are cage panels of their own while they hang latched (a sprung or torn door leaves it), so a side striker meets the drawn door's skin, not the sill and belt behind it.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
