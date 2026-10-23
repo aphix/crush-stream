@@ -4207,7 +4207,8 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       const car = cars[id];
       const bare: DeformableCar = Object.assign(Object.create(car) as DeformableCar, { style: { ...car.style, wheelTub: undefined } });
       const [tubbed, plain] = [car, bare].map((c) => CarCage.shared({}, () => cageSourceOf(c)).style);
-      const n = plain!.vertexCount;
+      // The hull ends where the first part apart (a bumper) begins: the parts follow the tubs.
+      const n = plain!.vertexGroup.findIndex((g) => g >= plain!.partGroup);
       const hull = (pos: Float64Array): string => Array.from(pos.subarray(0, n * 3), (v) => v.toFixed(6)).join(",");
       assert.ok(tubbed!.vertexCount > n, `${id}: ${tubbed!.vertexCount} hull vertices, ${n} without its tubs`);
       assert.ok(hull(tubbed!.pristine.pos) === hull(plain!.pristine.pos), `${id}: the hull's first ${n} vertices are not the tub-less hull's`);
