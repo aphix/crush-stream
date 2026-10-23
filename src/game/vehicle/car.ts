@@ -559,11 +559,13 @@ export class DeformableCar extends CarParts {
     this.stepLooseParts(dt, this.slot, this.surfaces);
   }
 
-  /** A wreck at rest for `WRECK_REST_S` on three wheels or more, not crushing and out of the ground (`SLEEP_SINK`), falls asleep where it lies. */
+  /**
+   * A wreck at rest for `WRECK_REST_S` on three wheels or more and not crushing falls asleep where it lies, once out of the ground
+   * (`SLEEP_SINK`): its rest runs while it rises out (under `REST_SPEED`), so a shallow sink costs it no time and a deep one keeps it awake.
+   */
   private restOrSleep(dt: number): void {
-    const rest = !this.moving && _s[S_LIFTING]! <= SLEEP_SINK;
-    if (!this.deform.crushing && this.contacts >= 3 && rest) {
-      if ((this.restS += dt) >= WRECK_REST_S) {
+    if (!this.deform.crushing && this.contacts >= 3 && !this.moving) {
+      if ((this.restS += dt) >= WRECK_REST_S && _s[S_LIFTING]! <= SLEEP_SINK) {
         this.velocity.set(0, 0, 0);
         this.angular.set(0, 0, 0);
         this.asleep = true;

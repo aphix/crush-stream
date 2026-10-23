@@ -345,6 +345,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * tail trim or mirror flies and collides as its style draws it, not as the platform part.
  * The coupe's flanks carry their widest line 5-9 cm under the belt from its tail to its door (its reference's haunch crest), its quarter sill dips
  * behind the door and rises to the window's point, and its roof's rear corner stands 2 cm wider.
+ * A wreck rising out of the ground counts its second of rest while it rises and sleeps once it is out: one sunk a few centimetres sleeps
+ * as soon as it would on the road, one sunk deep stays awake until it is out.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
