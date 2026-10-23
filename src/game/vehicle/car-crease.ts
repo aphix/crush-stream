@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { hypot3, detCos } from "../kernel/physics-core.js";
+import { hypot3, detCos, detAcos } from "../kernel/physics-core.js";
 
 const RAD_PER_DEGREE = Math.PI / 180;
 /** A face thinner than this (its doubled area, m^2) has no normal worth comparing: it never decides a crease. */
@@ -147,4 +147,46 @@ export function splitCreases(geometry: THREE.BufferGeometry, creaseDegrees: numb
   geometry.setIndex(new THREE.BufferAttribute(remapped, 1));
   geometry.computeVertexNormals();
   return geometry;
+}
+
+/** A fold into a dent (concave seen from outside) counts this many times a bulge's: a dent beside the bulges around it reads as a ripple. */
+const DIAGONAL_DENT_WEIGHT = 3;
+
+/**
+ * Whether the quad `a`, `b` (along one grid line), `up`, `upNext` (the next line's) splits better on its a to upNext diagonal than on b
+ * to up: the split whose two triangles turn least, a dent counted `DIAGONAL_DENT_WEIGHT` times over. `facing` points out of the surface.
+ * A twisted quad split the wrong way folds its diagonal against the folds beside it.
+ */
+export function splitsOnLowDiagonal(a: THREE.Vector3, b: THREE.Vector3, up: THREE.Vector3, upNext: THREE.Vector3, facing: THREE.Vector3): boolean {
+  const normal = (p: THREE.Vector3, q: THREE.Vector3, r: THREE.Vector3) => {
+    const n = q.clone().sub(p).cross(r.clone().sub(p)).normalize();
+    return n.dot(facing) < 0 ? n.negate() : n;
+  };
+  const fold = (first: readonly [THREE.Vector3, THREE.Vector3, THREE.Vector3], second: readonly [THREE.Vector3, THREE.Vector3, THREE.Vector3], far: THREE.Vector3) => {
+    const n = normal(...first);
+    const dent = far.clone().sub(first[0]).dot(n) > 0;
+    return detAcos(THREE.MathUtils.clamp(n.dot(normal(...second)), -1, 1)) * (dent ? DIAGONAL_DENT_WEIGHT : 1);
+  };
+  return fold([a, b, upNext], [a, upNext, up], up) < fold([a, b, up], [b, upNext, up], upNext);
+}
+
+/** Re-splits every quad of a loft (`userData.loft`, from `loftFromRings`, wound outward and bent into place) on its better diagonal (`splitsOnLowDiagonal`), keeping each triangle's winding; the ring segments in `skip` stay as built. */
+export function splitLoftOnLowDiagonals(geometry: THREE.BufferGeometry, skip: ReadonlySet<number> = new Set()): void {
+  const { ring, slices } = geometry.userData.loft as { ring: number; slices: number };
+  const indices = geometry.getIndex()!.array;
+  const position = geometry.getAttribute("position");
+  const at = (v: number) => new THREE.Vector3().fromBufferAttribute(position, v);
+  for (let s = 0; s < slices - 1; s++) {
+    for (let i = 0; i < ring; i++) {
+      if (skip.has(i)) continue;
+      const first = (s * ring + i) * 6;
+      const [a, b, c, d] = [s * ring + i, s * ring + ((i + 1) % ring), (s + 1) * ring + i, (s + 1) * ring + ((i + 1) % ring)] as const;
+      const [pa, pb, pc, pd] = [at(a), at(b), at(c), at(d)];
+      const wound = indices[first + 1] === b;
+      const facing = pb.clone().sub(pa).cross(pc.clone().sub(pa)).multiplyScalar(wound ? 1 : -1);
+      if (!splitsOnLowDiagonal(pa, pb, pc, pd, facing)) continue;
+      indices.set(wound ? [a, b, d, a, d, c] : [a, d, b, a, c, d], first);
+    }
+  }
+  geometry.getIndex()!.needsUpdate = true;
 }

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { hypot2, detSin } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
-import { splitCreases } from "./car-crease.ts";
+import { splitCreases, splitsOnLowDiagonal } from "./car-crease.ts";
 import { CREASE_DEGREES, SEDAN, drawnSideRing, drawnSideX, glassX, sampleSlice, shoulderDrop, sideX } from "./car-mesh.ts";
 import { rockerAt } from "./car-lines.ts";
 import { MIRROR_REACH, MIRROR_ROOT } from "./part-geometry.ts";
@@ -11,7 +11,7 @@ import { CABIN_TRIM, PRIMER_ATTRIBUTE } from "./constants.ts";
 
 /** Door skin over the body side at its outer face (m). */
 const DOOR_PROUD = 0.003;
-/** The door skin is a slab this thick (m) inboard of its outer face. */
+/** The door skin is a slab this thick (m) on average: its flat inner face stands this far inboard of the outer face's mean x, so it carries none of the side's waves. */
 const DOOR_THICKNESS = 0.05;
 /** The skin covers the door cut with this much (m) past each end. */
 const DOOR_SKIN_OVERLAP = 0.02;
@@ -278,12 +278,14 @@ export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.
   const firstRingRow = rows.findIndex((row) => typeof row !== "number");
   // The lifted bottom row (door.lowProud) sits on the cell diagonal's low end at the latch end only; mirror the diagonal on the hinge half so the lift reaches the same share of both end cells.
   const mirrored = style.door.lowProud !== undefined;
+  const vertexAt = (v: number) => new THREE.Vector3(positions[v * 3]!, positions[v * 3 + 1]!, positions[v * 3 + 2]!);
+  const facing = new THREE.Vector3(sign, 0, 0);
   for (let r = 0; r < rows.length - 1; r++) {
     for (let c = 0; c < columns.length - 1; c++) {
       const a = r * columns.length + c;
       const b = a + 1;
       const above = a + columns.length;
-      if (mirrored && r < firstRingRow && columns[c]! >= 0) {
+      if (mirrored && r < firstRingRow ? columns[c]! >= 0 : splitsOnLowDiagonal(vertexAt(a), vertexAt(b), vertexAt(above), vertexAt(above + 1), facing)) {
         tri(a, b, above + 1, sign < 0);
         tri(a, above + 1, above, sign < 0);
       } else {
@@ -293,8 +295,9 @@ export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.
     }
   }
   const loop = gridPerimeter(columns.length, rows.length);
+  const slabX = outerX.reduce((sum, x) => sum + x, 0) / outerX.length - DOOR_THICKNESS;
   const slabEdge = loop.map((faceVertex, k) => {
-    positions.push(sign * (outerX[faceVertex]! - DOOR_THICKNESS), positions[faceVertex * 3 + 1]!, positions[faceVertex * 3 + 2]!);
+    positions.push(sign * slabX, positions[faceVertex * 3 + 1]!, positions[faceVertex * 3 + 2]!);
     uvs.push(uvs[faceVertex * 2]!, uvs[faceVertex * 2 + 1]!);
     return faceVertices + k;
   });

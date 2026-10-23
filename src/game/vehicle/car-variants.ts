@@ -406,8 +406,9 @@ export interface BodyStyle {
    * `nose` [drop, radius] (drawn only, `HoodNose`): the lid folds over the nose at z1 and runs down its face.
    * `inset` [nose, cowl] (m, drawn only, with `crown`): the side shut line's inset from the half-width, z1 to z0; the flat fender top runs in to it, the crown kept.
    * `followGlass` (m): drawn only, the hood's rear edge runs this far in front of the windshield's base along its plan bow (the cowl between them), fading into the lid; absent, straight at `z0`.
+   * `calmPan` (drawn only): the hidden inner pan (skirts, underside) lays its gentle folds flat, keeping the bends a stamped panel would; absent, it follows the lid's own curve.
    */
-  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; groove?: readonly [out: number, down: number]; nose?: HoodNose; inset?: readonly [nose: number, cowl: number]; followGlass?: number };
+  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; groove?: readonly [out: number, down: number]; nose?: HoodNose; inset?: readonly [nose: number, cowl: number]; followGlass?: number; calmPan?: boolean };
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;
