@@ -46,6 +46,11 @@ Treat model-written prose as leads, not facts; cite the listed sources.
 | `perplexity/2026-10-14-spidermonkey-hot-loop-pitfalls.md` | SpiderMonkey (Firefox, Android) JIT pitfalls in hot TypedArray loops vs V8: polymorphism, closures, `Math.hypot`, huge functions, GC nursery; profiling with JIT tiers (perf pass) |
 | `perplexity/2026-10-14-threejs-mobile-gpu-perf.md` | three.js on Adreno/Mali: batching, partial buffer uploads, packed normals, shadow and AA cost, pixel ratio, precision, recompiles, deformed-bounds culling (perf pass) |
 | `perplexity/2026-10-14-pileup-physics-cost.md` | Cutting physics cost in 20-30 car pile-ups: island sleep and wake, speculative contacts vs substeps, warm starting, broadphase choice, contact caching, adaptive iterations, physics LOD (perf pass) |
+| `perplexity/2026-10-23-monster-truck-travel-split.md` | Monster Jam suspension travel: ~30 in per corner documented; bump/droop split and static frame-rail height not published; droop held by limit straps (CarMonsterRide) |
+| `perplexity/2026-10-23-monster-truck-bump-clearance.md` | Tyre-to-body clearance at full bump (not published; ≥2–3 in engineering target), large rubber bump stops, 12+ in sidewall compression on landings, body mounted to the cage (CarMonsterRide) |
+| `perplexity/2026-10-23-monster-truck-shock-damping.md` | Monster truck mass ~12,000 lb, tyre+wheel 645 lb per corner, planetary hub ~140 lb, unsprung ~1,200–1,500 lb vs sprung ~1,500–1,800 lb per corner (estimates), two N2 shocks per corner at 250–450 psi (CarMonsterRide) |
+| `perplexity/2026-10-23-monster-truck-rollover-wheels.md` | Where a rolled monster truck's wheels sit: loaded corners tuck up to the bump stops, unloaded ones hang on straps; on the roof the cage carries the weight and the tyres stand away from the body (CarMonsterRide) |
+| `perplexity/2026-10-23-monster-truck-pitch-roll.md` | Monster truck body motion (video estimates): squat 2–5°, dive 2–4°, roll 3–7°; a landing settles in 0.8–1.5 s with 1–2 major cycles (CarMonsterRide) |
 
 ## Papers (`papers/`)
 
