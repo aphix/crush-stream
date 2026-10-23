@@ -209,8 +209,8 @@ function restCentroid(d: Internals, c: ShapeCluster): THREE.Vector3 {
 function referenceCageSolve(d: Internals): void {
   const cell = d.masses.findIndex((m) => m.name === "cell");
   for (const [ci, cage] of d.cages.entries()) {
-    // A door cage's corners hang on the cabin: only the clusters that hold the cell move them.
-    const hung = cage.spec.name.startsWith("door");
+    // A door cage's corners hang on the cabin, and the windscreen's: only the clusters that hold the cell move them.
+    const hung = cage.spec.name.startsWith("door") || cage.spec.name === "glassFront";
     for (let i = 0; i < 8; i++) {
       const rest = cage.restCorners[i]!;
       const a = anchor(d, d.vertexCount + ci * 8 + i);
