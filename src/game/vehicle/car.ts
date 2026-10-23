@@ -681,8 +681,8 @@ export class DeformableCar extends CarParts {
   /** A crushed skin drawn over a standing tyre stands on it (`TyreSkin`); a thrown wheel is the world's. */
   private holdSkinOffTyres(skinWritten: boolean): void {
     if (!tyresUnderSkin(carClass(this))) return;
-    this.bodyTyres ??= new TyreSkin(this.frame, this.body, this.deform.restSkin);
-    this.hoodTyres ??= new TyreSkin(this.frame, this.hood, this.hoodRest);
+    this.bodyTyres ??= new TyreSkin(this.frame, this.body, this.deform.restSkin, true);
+    this.hoodTyres ??= new TyreSkin(this.frame, this.hood, this.hoodRest, false);
     let gone = 0;
     for (let i = 0; i < this.wheels.length; i++) if (this.looseWheels[i]!.loose) gone |= 1 << i;
     const lift = CLASSES[carClass(this)].lift;
