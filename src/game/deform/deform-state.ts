@@ -196,10 +196,11 @@ export abstract class DeformState extends DeformHit {
    * Engine pushed back toward the cell along the hit; forward stretch is not a
    * dead block. `local` is the frame's: a live car's group sits on the cell, but a planted wreck's sits on
    * its hubs, so the cell's held offset in it (a flank scrape leaves the cabin 0.05–0.09 m back of the
-   * wheels) is not the block's travel.
+   * wheels) is not the block's travel. A dead block keeps counting through the hit: the slice that kills it samples the block
+   * mid-stroke, so its travel then would be the slice phase's, not the hit's.
    */
   updateDrivetrain(): void {
-    if (!this.drivetrainAlive || !this.massActive || this.quietTime() > PACK_QUIET) return;
+    if (!this.massActive || this.quietTime() > PACK_QUIET) return;
     const el = this.at.engineL;
     const er = this.at.engineR;
     // Only the block's travel along the car toward the cabin packs it into the firewall (measured along

@@ -382,6 +382,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A pair whose stop packs a nose counts that car's engine block travel as the hit's own energy (a re-armed hit's rule), not the geometric peak the
  * stop's slice leaves it (6-12 mm off with the phase): a sedan head-on's block travel now rises with speed through its kill window (56 km/h each:
  * 0.1579 m, was 0.1461 beside 0.1521 at 55.5 and 0.1511 at 56.5).
+ * A killed engine block keeps counting its travel through the hit, so it reads the hit's peak rather than the kill slice's sample (a sedan at 55 m/s
+ * reads 0.608 m into the slab and every wall, where it read 0.46-0.58 by the slice's phase); a car half over the end of a slab or a wall's hold face is
+ * crushed only where the face presses it, not at the corner hanging past the end.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

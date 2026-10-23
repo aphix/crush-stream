@@ -32,6 +32,8 @@ const STAND_SKIN = 0.05;
 const REAR_STROKE_GAIN = 1.08;
 /** Numbers per contact row of `faceHits`: x, z, nx, nz, depth. */
 export const FACE_ROW = 5;
+/** A face's span along its lateral axis (`rx`, `rz`) through (`x`, `z`), half `hx` wide: what a contact's crush is fed within (`feedOverlap`). */
+export type FaceSpan = { x: number; z: number; rx: number; rz: number; hx: number };
 
 const _a = new THREE.Vector3();
 /** followGroup's world→local: one invert per call, not one per mass (Object3D.worldToLocal). */
@@ -764,8 +766,9 @@ export abstract class DeformContact extends DeformState {
    * fixed slab's 0, or a car-car pair's common velocity, so the struck car's contact masses are driven
    * to it (its side crushes) rather than the bullet's nose stopping dead against a car that gets no momentum. `whole`: the overlap is
    * all of the crush (a fixed solid no particle reaches, so no particle held on its face takes the rest), not the 0.4 + 0.35·squash share.
+   * `span`: the face's extent; a mass beyond it is not under the face and takes none of its crush.
    */
-  feedOverlap(worldPoint: THREE.Vector3, inward: THREE.Vector3, overlap: number, closing: number, dt = 1 / FRAME_HZ, refVn = 0, whole = false): number {
+  feedOverlap(worldPoint: THREE.Vector3, inward: THREE.Vector3, overlap: number, closing: number, dt = 1 / FRAME_HZ, refVn = 0, whole = false, span?: FaceSpan): number {
     if (!this.massActive) return closing;
     this.overlapFrame = true;
     const leftover = leftoverCrumple(this.crumpleTravel());
@@ -802,6 +805,7 @@ export abstract class DeformContact extends DeformState {
       if (m.hub && !m.popped && !this.deepCrush) continue;
       const zone = this.impactWeight(m);
       if (zone < MIN_IMPACT_ZONE) continue;
+      if (span !== undefined && Math.abs((m.world.x - span.x) * span.rx + (m.world.z - span.z) * span.rz) > span.hx + m.radius * 0.5) continue;
       const d = m.world.distanceTo(worldPoint);
       const reach = 1.05 + s * 0.35;
       if (d > reach) continue;
