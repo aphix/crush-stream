@@ -40,23 +40,35 @@ export function roofEndWeight(end: RoofEnd, z: number): number {
   return d < end.run ? 1 - d / end.run : 0;
 }
 
+/** The rolled end whose run reaches station `z` in the drawn roof (its moved rings stand there), or undefined. */
+function runEndAt(z: number, style: BodyStyle): RoofEnd | undefined {
+  return roofEndBows(style).find((end) => end.run !== undefined && end.inward * (z - end.z) > -end.run);
+}
+
 /**
- * Height of the drawn roof's top at (`x`, `z`): `roofTopY` at the station its rolled ends moved to `z`. Each end's move is linear in z
- * over its run, so it inverts in closed form. A side vertex the pane's top row carried forward past the side lip is held on that lip
- * (`bowRoofEnds`) at its own cant's height. Drawn parts that stand on the roof read this; the cage and the glass read `roofTopY`.
+ * The drawn roof station a point at car (`x`, `z`) lies on: each rolled end's move is linear in z over its run, so it inverts in
+ * closed form; past the moved end the station runs on past the roof's end by the same shift, so a point ahead of the roof stays off it.
+ * Drawn parts that stand on or under the roof read through this; the cage and the glass read the unmoved stations.
+ */
+export function roofSourceZ(x: number, z: number, style: BodyStyle): number {
+  const end = runEndAt(z, style);
+  const run = end?.run;
+  if (end === undefined || run === undefined) return z;
+  const move = roofEndHeldZ(end, x) - end.z;
+  const start = end.z - end.inward * run;
+  const along = end.inward * (z - start);
+  const reach = run + end.inward * move;
+  return along <= reach ? start + (end.inward * along * run) / reach : z - move;
+}
+
+/**
+ * Height of the drawn roof's top at (`x`, `z`): `roofTopY` at its station (`roofSourceZ`). A side vertex the pane's top row carried
+ * forward past the side lip is held on that lip (`bowRoofEnds`) at its own cant's height.
  */
 export function drawnRoofTopY(x: number, z: number, style: BodyStyle): number {
-  for (const end of roofEndBows(style)) {
-    if (end.run === undefined) continue;
-    const start = end.z - end.inward * end.run;
-    const along = end.inward * (z - start);
-    if (along <= 0) continue;
-    const held = roofEndHeldZ(end, x);
-    const reach = end.run + end.inward * (held - end.z);
-    const from = start + (end.inward * Math.min(along, reach) * end.run) / reach;
-    const drip = roofDrip(style);
-    const onLip = held > end.z + end.bow * roofEndAcross(end, x) && Math.abs(x) >= cantX(z, style) + drip - 1e-9;
-    return roofTopY(onLip ? Math.max(Math.abs(x), cantX(from, style) + drip) : x, from, style);
-  }
-  return roofTopY(x, z, style);
+  const from = roofSourceZ(x, z, style);
+  const end = runEndAt(z, style);
+  const drip = roofDrip(style);
+  const onLip = end !== undefined && roofEndHeldZ(end, x) > end.z + end.bow * roofEndAcross(end, x) && Math.abs(x) >= cantX(z, style) + drip - 1e-9;
+  return roofTopY(onLip ? Math.max(Math.abs(x), cantX(from, style) + drip) : x, from, style);
 }

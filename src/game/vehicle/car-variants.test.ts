@@ -455,7 +455,7 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
     for (const c of inside) assert.ok(Math.abs(c.y - roofTopY(0, c.z, coupe)) < 1e-5, `crown at z ${c.z}: y ${c.y}, the plain coupe's ${roofTopY(0, c.z, coupe)}`);
   });
 
-  it("when its roof's dome is read, then every skin vertex over the dome (inside its edges) is at the drawn roof's height, and every drawn greenhouse part stays under roofTopY: the posts' clamp follows the rolled ends", () => {
+  it("when its roof's dome is read, then every skin vertex over the dome (inside its edges) is at the drawn roof's height, and every drawn greenhouse part stays under it: the posts' clamp follows the rolled ends", () => {
     for (let v = 0; v < pos.count; v++) {
       const [x, y, z] = [pos.getX(v), pos.getY(v), pos.getZ(v)];
       if (headliner.has(v) || z < rolled.roofZ[0] || z > rolled.roofZ[1] || Math.abs(x) > roofAt(z, rolled).x + 1e-6 || y < drawnRoofTopY(roofAt(z, rolled).x, z, rolled) - 1e-6) continue;
@@ -465,7 +465,7 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
       const at = part.getAttribute("position") as THREE.BufferAttribute;
       for (let i = 0; i < at.count; i++) {
         const [x, y, z] = [at.getX(i), at.getY(i), at.getZ(i)];
-        if (z >= rolled.roofZ[0] && z <= rolled.roofZ[1]) assert.ok(y <= roofTopY(x, z, rolled) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the rolled roof (${roofTopY(x, z, rolled)})`);
+        if (z >= rolled.roofZ[0] && z <= rolled.roofZ[1]) assert.ok(y <= drawnRoofTopY(x, z, rolled) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the rolled roof (${drawnRoofTopY(x, z, rolled)})`);
       }
     }
   });
@@ -536,7 +536,7 @@ describe("given a coupe whose roof's section is one curve from crown to cant (ro
     assert.ok(slopeAtHalf(dome) > DOME_SLOPE_DEGREES && slopeAtHalf(plain) < DOME_SLOPE_DEGREES, `chord at half the half-width: ${slopeAtHalf(dome).toFixed(1)}° (plain ${slopeAtHalf(plain).toFixed(1)}°)`);
   });
 
-  it("when its roof's skin is read, then every skin vertex between its ends is at the drawn roof's height, and every drawn greenhouse part stays under roofTopY: the posts' clamp follows the curve", () => {
+  it("when its roof's skin is read, then every skin vertex between its ends is at the drawn roof's height, and every drawn greenhouse part stays under it: the posts' clamp follows the curve", () => {
     const { pos, skin } = skinOf(domed);
     const inside = skin.filter((v) => pos.getZ(v) >= domed.roofZ[0] && pos.getZ(v) <= domed.roofZ[1]);
     assert.ok(inside.length > 0, "no skin vertex read");
@@ -545,7 +545,7 @@ describe("given a coupe whose roof's section is one curve from crown to cant (ro
       const at = part.getAttribute("position") as THREE.BufferAttribute;
       for (let i = 0; i < at.count; i++) {
         const [x, y, z] = [at.getX(i), at.getY(i), at.getZ(i)];
-        if (z >= domed.roofZ[0] && z <= domed.roofZ[1]) assert.ok(y <= roofTopY(x, z, domed) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the curved roof (${roofTopY(x, z, domed)})`);
+        if (z >= domed.roofZ[0] && z <= domed.roofZ[1]) assert.ok(y <= drawnRoofTopY(x, z, domed) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the curved roof (${drawnRoofTopY(x, z, domed)})`);
       }
     }
   });
@@ -1113,7 +1113,7 @@ describe("given a body style's H2 hardpoints", () => {
             const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
             if (z < style.roofZ[0] || z > style.roofZ[1]) continue;
             // 1e-6: float32 vertices, a ulp at 1.3 m is 1.2e-7.
-            assert.ok(y <= roofTopY(x, z, style) + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands over the roof skin there (${roofTopY(x, z, style)})`);
+            assert.ok(y <= drawnRoofTopY(x, z, style) + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands over the roof skin there (${drawnRoofTopY(x, z, style)})`);
             // The drawn roof's side runs 1 cm past the cant line, out to the pillars' faces.
             const lipX = roofAt(z, style).x + 0.09;
             assert.ok(y <= cantY(z, style) + 1e-6 || Math.abs(x) <= lipX + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands out past the roof's lip (x ${lipX}) over the cant line`);

@@ -4,7 +4,7 @@ import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, ROOF_DRIP, roofDrip, sideBowZ } from "./car-lines.ts";
 import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset, windshieldSideBase, windshieldSideX } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
-import { roofEndAcross, roofEndBows, roofEndHeldZ, roofEndWeight, type RoofEnd } from "./car-roof-end.ts";
+import { roofEndAcross, roofEndBows, roofEndHeldZ, roofEndWeight, roofSourceZ, type RoofEnd } from "./car-roof-end.ts";
 import {
   ROOF_ARC_T,
   ROOF_CROWN,
@@ -522,13 +522,14 @@ function roofHalf(z: number, style: BodyStyle): Pt[] {
   });
 }
 
-/** The drawn roof loft's skin height at (`x`, `z`): its section between the two rings round `z`, lerped point for point as the loft joins them, never above the analytic skin. */
+/** The drawn roof loft's skin height at (`x`, `z`): its section between the two rings round its station (`roofSourceZ`), lerped point for point as the loft joins them, never above the analytic skin. */
 function roofMeshY(x: number, z: number, style: BodyStyle): number {
-  const skin = roofHalf(z, style);
+  const at = roofSourceZ(x, z, style);
+  const skin = roofHalf(at, style);
   const zs = roofRingZs(style, "drawn");
-  const k = THREE.MathUtils.clamp(zs.findIndex((r) => r >= z), 1, zs.length - 1);
+  const k = THREE.MathUtils.clamp(zs.findIndex((r) => r >= at), 1, zs.length - 1);
   const [a, b] = [roofHalf(zs[k - 1]!, style), roofHalf(zs[k]!, style)];
-  const u = (z - zs[k - 1]!) / (zs[k]! - zs[k - 1]!);
+  const u = (at - zs[k - 1]!) / (zs[k]! - zs[k - 1]!);
   const chord = a.map((p, i) => ({ x: lerp(p.x, b[i]!.x, u), y: lerp(p.y, b[i]!.y, u) }));
   // Past the lerped section's lip (a rolled end narrowing its reach between rings) the loft doesn't cover `x`: the analytic skin only, never the lip's foot.
   const onSkin = arcY(skin, x);
@@ -546,14 +547,15 @@ function roofOutlineX(y: number, roofY: number, roofX: number, lip: number, drip
   return roofX;
 }
 
-/** `x` held `ROOF_TUCK` in under the drawn roof's side at (`y`, `z`); unchanged off the roof's z span or under its cant line. A curved roof
+/** `x` held `ROOF_TUCK` in under the drawn roof's side at (`y`, `z`), read at its station (`roofSourceZ`); unchanged off the roof's z span or under its cant line. A curved roof
  *  (`roofSection`) holds it inside the cant line only: over its shallow top a point drops onto the skin (`insideRoof`), never slides in. */
 function underRoofSide(x: number, y: number, z: number, style: BodyStyle): number {
-  if (z < style.roofZ[0] || z > style.roofZ[1]) return x;
-  const cant = roofArc(z, style)?.(1);
+  const at = roofSourceZ(x, z, style);
+  if (at < style.roofZ[0] || at > style.roofZ[1]) return x;
+  const cant = roofArc(at, style)?.(1);
   if (cant) return y <= cant.y ? x : Math.min(x, cant.x - ROOF_TUCK);
-  const roof = roofAt(z, style);
-  const { drop, reach } = roofDome(z, style);
+  const roof = roofAt(at, style);
+  const { drop, reach } = roofDome(at, style);
   return Math.min(x, roofOutlineX(y, roof.y - drop, roof.x, cantDrop(style), roofDrip(style), reach) - ROOF_TUCK);
 }
 
@@ -563,12 +565,13 @@ function onGlassPlane(z: number, y: number, style: BodyStyle, proud: number): nu
   return lerp(beltX(z, style), cantX(z, style), (y - belt) / (cant - belt)) + proud;
 }
 
-/** Holds every vertex of `geo` over the roof's z span inside the roof's section (in under its lip, under its skin as the loft draws it: its chords; its rolled side over a squared front too), so a pillar's top runs into the roof, not through it; names it `name`. */
+/** Holds every vertex of `geo` over the roof's z span (at its station, `roofSourceZ`) inside the roof's section (in under its lip, under its skin as the loft draws it: its chords; its rolled side over a squared front too), so a pillar's top runs into the roof, not through it; names it `name`. */
 function insideRoof(geo: THREE.BufferGeometry, style: BodyStyle, name: string): THREE.BufferGeometry {
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
     const z = pos.getZ(i);
-    if (z < style.roofZ[0] || z > style.roofZ[1]) continue;
+    const at = roofSourceZ(Math.abs(pos.getX(i)), z, style);
+    if (at < style.roofZ[0] || at > style.roofZ[1]) continue;
     const x = pos.getX(i);
     const half = underRoofSide(Math.abs(x), pos.getY(i), z, style);
     pos.setXY(i, Math.sign(x) * half, Math.min(pos.getY(i), roofMeshY(half, z, style) - ROOF_TUCK));
