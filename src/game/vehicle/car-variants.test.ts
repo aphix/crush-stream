@@ -160,6 +160,25 @@ function openRoofJoins(style: BodyStyle): string[] {
   return off;
 }
 
+/** The closest distance (m) from each of `style`'s drawn windshield top-edge reads (`PANE_TOP_READS` + 1 across, as `openRoofJoins` reads them) to its drawn roof, tucked under it or not. */
+function windshieldTopGaps(style: BodyStyle): { x: number; gap: number }[] {
+  const roof = makeRoofGeometry(style, "drawn");
+  const [pos, index] = [roof.getAttribute("position") as THREE.BufferAttribute, roof.getIndex()!];
+  const [tri, closest] = [new THREE.Triangle(), new THREE.Vector3()];
+  const topEnd = windshieldSideX(style, 1) / (style.windshield.wTop / 2);
+  return Array.from({ length: PANE_TOP_READS + 1 }, (_, i) => {
+    const p = windshieldPoint(style, topEnd * ((2 * i) / PANE_TOP_READS - 1), 1);
+    let gap = Infinity;
+    for (let t = 0; t < index.count; t += 3) {
+      tri.a.fromBufferAttribute(pos, index.getX(t));
+      tri.b.fromBufferAttribute(pos, index.getX(t + 1));
+      tri.c.fromBufferAttribute(pos, index.getX(t + 2));
+      gap = Math.min(gap, tri.closestPointToPoint(p, closest).distanceTo(p));
+    }
+    return { x: p.x, gap };
+  });
+}
+
 /** Max |skinned − rest| of a panel skinned against an undeformed rig: >0 only where the cage clamps it. */
 function panelClamp(deform: StreamedDeformation, geo: THREE.BufferGeometry, part: Parameters<StreamedDeformation["skinPanel"]>[2], origin: THREE.Vector3): number {
   const attr = geo.getAttribute("position") as THREE.BufferAttribute;
@@ -1202,6 +1221,19 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(open.some((text) => text.startsWith("windshield top")), `the wagon without its twin's roofEnds reads closed: ${open.join("; ")}`);
   });
 
+  it(`when any style's drawn windshield top edge is read across, then every read stands within ${ROOF_JOIN_M * 1000} mm of its drawn roof's skin by closest point, tucked under its lip or not: the pane's corner never stands a dome's fall under the roof the end rolls flat onto; the hatchback's twin without its pane's dome share reads open at its corners`, () => {
+    const off: string[] = [];
+    for (const id of CAR_STYLE_IDS) {
+      for (const { x, gap } of windshieldTopGaps(drawnStyle(CAR_STYLES[id]))) if (gap > ROOF_JOIN_M) off.push(`${id} x ${x.toFixed(3)}: ${(gap * 1000).toFixed(1)} mm`);
+    }
+    assert.equal(off.length, 0, off.join("; "));
+    // The control: the hatchback's drawn pane at the roof's whole dome stands 9 mm under the roof's rolled front at its corners.
+    const hatch = CAR_STYLES.hatchback;
+    assert.ok(hatch.drawn?.windshield?.domeFall !== undefined, "the hatchback's drawn windshield sets domeFall");
+    const whole = windshieldTopGaps(drawnStyle({ ...hatch, drawn: { ...hatch.drawn, windshield: { ...hatch.drawn.windshield, domeFall: undefined } } }));
+    assert.ok(whole.some(({ gap }) => gap > ROOF_JOIN_M), `the hatchback's pane at the whole dome reads closed: ${whole.map(({ gap }) => (gap * 1000).toFixed(1)).join(" ")}`);
+  });
+
   /** The pickup windshield's top-corner turn (°) from its flat pane: at 3.1° the corner mirrored the garage's key light into a bloom blob in the landing iso; at 0.76° (a quarter of the dome) it did not. */
   const PICKUP_CORNER_TURN_DEG = 1;
 
@@ -1217,7 +1249,7 @@ describe("given a body style's H2 hardpoints", () => {
       ];
       for (const [p, { name, top: [topY, topZ], geo, grid, segX, segY }] of panes.entries()) {
         const middle = topY - roofTopY(0, topZ, style);
-        const share = style.domeFall ?? 1;
+        const share = (p === 0 ? style.windshield.domeFall : undefined) ?? style.domeFall ?? 1;
         const overAt = (x: number, y: number) => y - roofTopY(x, topZ, style) - (1 - share) * (roofTopY(0, topZ, style) - roofTopY(x, topZ, style));
         const pos = geo.getAttribute("position");
         for (let i = 0; i < pos.count; i++) {

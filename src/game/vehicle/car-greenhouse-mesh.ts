@@ -459,7 +459,7 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const glassTop = glassTopY(aTopZ, style);
   const cantTop = cantY(aTopZ, style);
   const glassPlaneX = (y: number) => lerp(beltX(footZ, style), cantX(aTopZ, style), THREE.MathUtils.clamp((y - footY) / (cantTop - footY), 0, 1));
-  const glassFall = domeFall(style, topZ);
+  const glassFall = domeFall(style, topZ, style.windshield.domeFall);
   const railAt = (t: number): Rail => {
     const y = lerp(footY, aTopY, t);
     const edge = lerp(edgeFoot, 1, t);
