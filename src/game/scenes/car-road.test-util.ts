@@ -16,6 +16,8 @@ const SKIN_FOLLOW = 0.7;
 const FIT_PASSES = 5;
 /** Half the length (m) over which a pressed car's top is the layer's: out to about its bumper masses. */
 const TOP_HALF_M = 2;
+/** Samples per metre of the plane fitted to a layer's top. */
+const PLANE_PER_M = 5;
 
 /** A car's top and bottom surface (car-local y) at car-local z. */
 export type Layer = { top: (z: number) => number; bottom: (z: number) => number };
@@ -55,6 +57,21 @@ function reskin(car: DeformableCar): void {
   car.deform["loadDirty"][0] = 1;
   car.stepBreakage(FRAME);
   car.updateSkin();
+}
+
+/**
+ * The plane (height at z 0, rise per metre along z) that fits `layer`'s top over the judged span: the shape a pressed top takes is a plane
+ * in the body frame (`DeformRig.imprint`), and the skin above it is cut down to it, as a roof pressed under another body's is.
+ */
+function pressTop(car: DeformableCar, layer: Layer): void {
+  const zs: number[] = [];
+  for (let k = -PLANE_PER_M * TOP_HALF_M; k <= PLANE_PER_M * TOP_HALF_M; k++) zs.push(k / PLANE_PER_M);
+  const meanTop = zs.reduce((sum, z) => sum + layer.top(z), 0) / zs.length;
+  const spread = zs.reduce((sum, z) => sum + z * z, 0);
+  const rise = zs.reduce((sum, z) => sum + z * (layer.top(z) - meanTop), 0) / spread;
+  car.deform.imprint[0] = meanTop;
+  car.deform.imprint[1] = 0;
+  car.deform.imprint[2] = rise;
 }
 
 /**
@@ -98,6 +115,8 @@ export function shapeCar(layer: Layer, pose: Pose): Held {
     hold(car, pose);
     reskin(car);
   }
+  pressTop(car, layer);
+  reskin(car);
   return { car, pose };
 }
 
