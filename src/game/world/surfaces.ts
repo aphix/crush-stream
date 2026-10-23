@@ -48,15 +48,15 @@ export const MU_TYRE = 0.9;
 /**
  * The step a tyre mounts by grip alone, as a share of its radius: a step of height s puts the contact normal at the tyre's edge
  * asin(1 - s/r) over the horizontal, and the tyre climbs while that is steeper than the friction angle atan(1/mu): s <= r (1 - 1/sqrt(1 + mu^2)),
- * 0.26 r (a sedan's 0.342 m tyre mounts 9 cm, a monster's 0.614 m tyre 16 cm).
+ * 0.26 r (a sedan's 0.32 m tyre mounts 8 cm, a monster's 0.54 m tyre 14 cm).
  */
 export const MOUNT = 1 - 1 / Math.sqrt(1 + MU_TYRE ** 2);
 /**
- * The tallest step (m) any class's tyre mounts by grip alone: `MOUNT` of the biggest drawn tyre's radius (the monster's 0.355 m at its
- * wheel scale of 1.73, held by `world/prism.test.ts`). What a surface that cannot tell the asking class holds out as floor, and how far
- * under a prism's top a tyre still stands on it: a higher face is a wall.
+ * The tallest step (m) any class's tyre mounts by grip alone: `MOUNT` of the biggest tyre's radius (the monster's, 0.32 m × a wheel
+ * scale of 1.7; `vehicle/vehicle-classes.ts`, held by `world/prism.test.ts`). What a surface that cannot tell the asking class
+ * holds out as floor, and how far under a prism's top a tyre still stands on it: a higher face is a wall.
  */
-export const STEP_MAX = MOUNT * 0.355 * 1.73;
+export const STEP_MAX = MOUNT * 0.32 * 1.7;
 
 /** No surface under the point: `pointContact` answers this height. */
 const NONE = -Infinity;
