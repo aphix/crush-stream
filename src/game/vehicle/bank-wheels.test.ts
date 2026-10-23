@@ -22,6 +22,9 @@ import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 const BOUND = 0.02;
 const FRAME = 1 / FRAME_HZ;
 const DEG = 180 / Math.PI;
+/** An edge run drives this far (m) inside the road's edge, or this far (m) past the car's outer tread edge, whichever is farther in: the outer tread stays on the road's flat bank and off the convex crease. */
+const EDGE_INSET = 1;
+const OUTER_TREAD_CLEAR = 0.06;
 
 const courses = TRACKS.map((j) => new Track(j));
 const stunt = courses.find((t) => t.id === "stunt")!;
@@ -52,7 +55,7 @@ for (let a = 0; a < 48; a++) {
  * A `cls` car driven at 25 m/s along lateral `lat(half)` through the main loop's steepest bank (50 m either
  * side); the worst tread clearance (m, negative = sunk) of any drawn tyre on a grounded frame.
  */
-function bankRun(track: Track, cls: VehicleClassId, lat: (half: number) => number): { low: number; high: number; at: string } {
+function bankRun(track: Track, cls: VehicleClassId, lat: (half: number, inset: number) => number): { low: number; high: number; at: string } {
   const path = track.path;
   let kMax = 0;
   for (let k = 0; k < path.count; k++) if (Math.abs(path.bank[k]!) > Math.abs(path.bank[kMax]!)) kMax = k;
@@ -61,10 +64,11 @@ function bankRun(track: Track, cls: VehicleClassId, lat: (half: number) => numbe
   setGround(ground);
   const car = new DeformableCar(paint(), new THREE.Scene(), null, CLASSES[cls].style);
   assignClass(car, cls);
+  const inset = Math.max(EDGE_INSET, car.frame.halfTrack + car.frame.rig.tyre.halfW * CLASSES[cls].wheelScale + OUTER_TREAD_CLEAR);
   const pt = blankPoint();
   const at = (s: number) => {
     pointOn(path, s, pt);
-    const l = lat(pt.half);
+    const l = lat(pt.half, inset);
     return [pt.x + pt.tz * l, pt.z - pt.tx * l] as const;
   };
   pointOn(path, sMax - 50, pt);
@@ -161,9 +165,9 @@ for (const cls of ["sedan", "monster"] as const) {
     afterEach(() => setGround(null));
 
     for (const [name, lat] of [
-      ["the low edge", (h: number) => (h - 1) * LOW],
+      ["the low edge", (h: number, inset: number) => (h - inset) * LOW],
       ["the centre", () => 0],
-      ["the high edge", (h: number) => -(h - 1) * LOW],
+      ["the high edge", (h: number, inset: number) => -(h - inset) * LOW],
     ] as const) {
       describe(`when it drives along ${name} of the road`, () => {
         it(`then every tyre stays within ${BOUND * 100} cm of the ground`, (t) => {
