@@ -457,10 +457,11 @@ function hubMotion(): Float64Array {
 /**
  * Each wheel's contact (`wheelContact`: its tread's footprint on what is under it) with the body as posed, into
  * `car.wheelHit` (slot i at `i * HIT_SIZE`: the lift it needs, the normal, grip, surface, owner and the footprint point).
- * Returns the wheels reaching, bit i: the tread within `within` m above its surface (or in it). `moving`: in a step, each tread asks with
- * its hub's motion (`hubMotion`), so it meets a face it rolls into as a side; placing a car, at rest.
+ * Returns the wheels reaching, bit i: the tread within `within` m above its surface (or in it), `onTop` m above another car's top (its
+ * wheel does not hang down to meet one). `moving`: in a step, each tread asks with its hub's motion (`hubMotion`), so it meets a face it
+ * rolls into as a side; placing a car, at rest.
  */
-export function wheelsAt(car: DeformableCar, within: number, moving = false): number {
+export function wheelsAt(car: DeformableCar, within: number, moving = false, onTop = within): number {
   const p = car.group.position;
   basisOf(car.group.quaternion);
   const hit = car.wheelHit;
@@ -494,7 +495,7 @@ export function wheelsAt(car: DeformableCar, within: number, moving = false): nu
     TYRE_DIM[2 * i] = r;
     TYRE_DIM[2 * i + 1] = halfW * sc;
     for (let k = 0; k < HIT_SIZE; k++) hit[o + k] = _hit[k]!;
-    if (-_hit[C_TOUCH]! <= within && _hit[C_H]! > NO_FLOOR) mask |= 1 << i;
+    if (-_hit[C_TOUCH]! <= (_hit[C_OWNER]! >= 0 ? onTop : within) && _hit[C_H]! > NO_FLOOR) mask |= 1 << i;
   }
   return mask;
 }
@@ -647,7 +648,7 @@ export function readContact(car: DeformableCar): void {
   car.yielding = false;
   car.hardTouch = false;
   beginContacts(car);
-  const mask = wheelsAt(car, droop(carClass(car)) + TOUCH);
+  const mask = wheelsAt(car, droop(carClass(car)) + TOUCH, false, TOUCH);
   car.wheelsDown = mask;
   car.airborne = mask === 0;
 }

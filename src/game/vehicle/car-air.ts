@@ -801,7 +801,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // their flanks (`onTreads`: none whose tread meets the surface under it): driven there, none of its rows gripped, and a monster wreck on
   // its side with its brakes held rolled down a 10° slope on its two low tyres, 1.3 to 4.5 m/s over 9 s. Judged by the world's up, a sedan
   // up a kicker's steepest pitch lost its drive on its treads.
-  const near = wheelsAt(car, within, true);
+  const near = wheelsAt(car, within, true, TOUCH);
   const driving = (!wreck || car.deform.drivetrainAlive) && (near === 0 || onTreads(car, near, q) !== 0);
   const rolling = near !== 0 && (wreck || !car.crashed);
   const driven = rolling && !car.parked && driving;
@@ -825,9 +825,9 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   for (let i = 0; i < 4; i++) {
     const o = i * HIT_SIZE;
     const pen = hit[o + C_H]!;
-    if (!(pen > -spring)) continue;
-    if (onWreckTop(car, surf.cars, i)) continue;
     const own = hit[o + C_OWNER]!;
+    if (!(pen > (own >= 0 ? 0 : -spring))) continue;
+    if (onWreckTop(car, surf.cars, i)) continue;
     R[n]!.set(hit[o + C_PX]! - centreOfMass.x, hit[o + C_PY]! - centreOfMass.y, hit[o + C_PZ]! - centreOfMass.z);
     N[n]!.set(hit[o + C_NX]!, hit[o + C_NY]!, hit[o + C_NZ]!);
     TYRE[n] = true;
@@ -987,7 +987,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // The tyres in their springs push together, from the slice's state, and share each face's budget (`take`) in proportion to what each
   // asks: in list order the first spent it, and a coupe's two rear tyres landing on a wagon's roof took 6.2 and 2.3 of 6.2 each and rolled
   // it off the column.
-  springPushes(frame, tyres, stiff, damp, dt, q, v, w);
+  springPushes(frame, tyres, stiff, damp, spring, dt, q, v, w);
   // A wreck at rest: its tyres' closing counts at their stops too (below).
   const settling = body.wreck && bodyAtRest();
   for (let c = 0; c < tyres; c++) {
@@ -1063,7 +1063,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   for (let i = 0; i < 4; i++) {
     const o = i * HIT_SIZE + C_H;
     hit[o] = hit[o]! - dy;
-    if (-hit[o]! <= within) down |= 1 << i;
+    if (-hit[o]! <= (hit[i * HIT_SIZE + C_OWNER]! >= 0 ? TOUCH : within)) down |= 1 << i;
   }
   car.wheelsDown = down;
   car.airborne = down === 0 && n === 0;
