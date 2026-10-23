@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { ASK, G, N, OWN, PRESS, R, SHARE, SOFT, springPushes } from "./car-air-body.ts";
 import { droop, SPRINGS } from "./car-suspension.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 
@@ -40,7 +41,7 @@ const starts = [
 for (const { where, from, onCar } of starts) {
   describe(`given a tyre's wheel pressed up by a surface under it, its contact beginning at ${where}`, () => {
     it("when it is pressed a millimetre past the start, then it pushes under 15 % of its weight, and the push grows by no more than 5 % of its weight per quarter millimetre up to its weight", () => {
-      const dt = 1 / 240;
+      const dt = 1 / FRAME_HZ;
       const first = push(from + 0.001, dt, onCar);
       assert.ok(first < 0.15 * WEIGHT, `1 mm past the start of its contact the tyre pushes ${((100 * first) / WEIGHT).toFixed(0)} % of its weight`);
       let before = push(from + 0.0001, dt, onCar);
