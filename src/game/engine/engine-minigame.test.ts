@@ -552,7 +552,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
   describe("given the long jump's bail pressed through the real boost key", () => {
     const BOOST_KEY = "ShiftLeft";
-    /** How far (s) the stamped press may be from the asked offset: a frame of sim time, slowed by the approach's slow-mo. */
+    /** How far (s) the stamped press may be from the asked offset: a frame of presented time (the press is stamped at the end of the frame that polled it). */
     const PRESS_TOLERANCE_S = 0.04;
     /** A perfect bail rests at least this much (m) past the same run with no press. */
     const PERFECT_OVER_NONE_M = 30;
@@ -566,15 +566,15 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     const FADE_CLASS_IDS = ["sedan", "monster"] as const;
     type BailRun = { verdict: BailVerdict; score: number; hitRelative: number };
 
-    /** A long jump at full throttle with the boost key tapped one frame when the sim has run `pressRelative` s since the throttle went down (null: never). */
+    /** A long jump at full throttle with the boost key tapped one frame when `pressRelative` s of presented time have run since the throttle went down (null: never). */
     const bailRun = (carId: string, pressRelative: number | null): BailRun => {
       engine.setPlayerCar(carId);
       engine.startMinigame("longJump");
-      const origin = engine["elapsedSim"];
+      const origin = engine["elapsedWall"];
       engine["keys"].add(THROTTLE_KEY);
       let pressed = false;
       for (let frame = 0; frame < THROW_TIMEOUT_S * FRAME_HZ && minigameHud().phase !== "scored"; frame++) {
-        if (pressRelative !== null && !pressed && engine["elapsedSim"] - origin >= pressRelative) {
+        if (pressRelative !== null && !pressed && engine["elapsedWall"] - origin >= pressRelative) {
           engine["keys"].add(BOOST_KEY);
           pressed = true;
         }

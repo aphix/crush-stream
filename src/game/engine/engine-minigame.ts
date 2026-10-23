@@ -144,7 +144,7 @@ export class Minigames {
     if (boxes) ragdolls.setBoxes(boxes);
   }
 
-  /** The Long jump's boost control, once per frame: `down` is the control held, `tapped` a press the poll saw begin. The first press of a run is the bail, stamped at game time `now`; before the car moves it is nothing. */
+  /** The Long jump's boost control, once per frame: `down` is the control held, `tapped` a press the poll saw begin. The first press of a run is the bail, stamped at presented time `now` (the end of the frame that polled it); before the car moves it is nothing. */
   sampleBoost(down: boolean, tapped: boolean, now: number): void {
     const pressed = tapped || (down && !this.boostWasDown);
     this.boostWasDown = down;
@@ -153,13 +153,13 @@ export class Minigames {
     if (phase === "running" || phase === "thrown") this.bail.press(now);
   }
 
-  /** The barrier's throw at game time `now`: the dummy waits (up to the bail window) for a late press. */
+  /** The barrier's throw at presented time `now` (the end of its frame): the dummy waits (up to the bail window) for a late press. */
   holdForBail(event: Ejection, now: number): void {
     this.heldThrow = event;
     this.bail.hit(now);
   }
 
-  /** The held throw and its release once the bail has decided it at game time `now`, else null. */
+  /** The held throw and its release once the bail has decided it at presented time `now`, else null. */
   bailThrowDue(now: number): { event: Ejection; release: ReleaseScale } | null {
     if (this.heldThrow === null) return null;
     const verdict = this.bail.launchDue(now);

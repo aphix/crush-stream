@@ -833,7 +833,7 @@ export abstract class EngineInput extends EngineRigs {
     this.seat.detached = this.view.flying;
     this.seat.boostLocked = this.minigameMode === MINIGAME_MODE.longJump;
     if (this.seat.sample(this.keys, pad)) this.emitHud();
-    this.minigames.sampleBoost(this.seat.intent.boost, (pad.pressed & BOOST_PAD_MASK) !== 0, this.elapsedSim);
+    this.minigames.sampleBoost(this.seat.intent.boost, (pad.pressed & BOOST_PAD_MASK) !== 0, this.elapsedWall + wallDt);
     this.stepReset(this.race.active, (pad.held & (1 << PAD_BUTTON.down)) !== 0, wallDt, (pad.pressed & (1 << PAD_BUTTON.down)) !== 0);
     const hit = pad.pressed;
     if (hit === 0) return;

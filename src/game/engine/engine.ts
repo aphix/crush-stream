@@ -844,10 +844,10 @@ export class CrashEngine extends EngineGarage {
     const ejected = this.ejection.take();
     for (let k = 0; k < ejected.length; k++) {
       const e = ejected[k]!;
-      if (this.minigameMode === MINIGAME_MODE.longJump) this.minigames.holdForBail(e, this.elapsedSim + dt);
+      if (this.minigameMode === MINIGAME_MODE.longJump) this.minigames.holdForBail(e, this.elapsedWall);
       else this.throwDriver(e, cars, this.minigameMode === null ? undefined : THROW_BOOST[this.minigameMode]);
     }
-    const bailed = this.minigameMode === MINIGAME_MODE.longJump ? this.minigames.bailThrowDue(this.elapsedSim + dt) : null;
+    const bailed = this.minigameMode === MINIGAME_MODE.longJump ? this.minigames.bailThrowDue(this.elapsedWall) : null;
     if (bailed !== null) this.throwDriver(bailed.event, cars, bailed.release);
     if (this.race.active) this.race.step(dt, w.shape, w.loners);
 

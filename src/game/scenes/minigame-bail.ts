@@ -1,6 +1,6 @@
 /**
  * The Long jump's timed bail: the player presses the Boost control (the only meaning it has there) as the car meets the barrier, and
- * how close the press is to the hit sets the launch angle of the thrown driver. Pure, in game (sim) seconds: the engine stamps each
+ * how close the press is to the hit sets the launch angle of the thrown driver. Pure, in presented (wall) seconds, which the hit-stop and the slow-mo do not stretch: the engine stamps each
  * press and the hit and reads back the verdict. Ragdoll-side only: the sim's ejection is unchanged.
  *
  * Offsets are press minus hit: negative is early, positive late. A press more than `BAIL_WINDOW_SECONDS` before the hit is a wasted
@@ -84,19 +84,19 @@ export class LongJumpBail {
     return this.hitAt !== null && this.settled === null;
   }
 
-  /** A press at game time `now`; only the first of an attempt counts. */
+  /** A press at presented time `now`; only the first of an attempt counts. */
   press(now: number): void {
     if (this.pressedAt !== null) return;
     this.pressedAt = now;
     if (this.settled !== null && this.hitAt !== null) this.settled = bailVerdict(now - this.hitAt);
   }
 
-  /** The barrier hit threw the driver at game time `now`; only the first of an attempt counts. */
+  /** The barrier hit threw the driver at presented time `now`; only the first of an attempt counts. */
   hit(now: number): void {
     this.hitAt ??= now;
   }
 
-  /** The verdict the held throw launches with at game time `now`, or null while it waits for a late press. */
+  /** The verdict the held throw launches with at presented time `now`, or null while it waits for a late press. */
   launchDue(now: number): BailVerdict | null {
     if (this.hitAt === null || this.settled !== null) return null;
     if (this.pressedAt !== null) {
