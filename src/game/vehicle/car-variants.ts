@@ -79,7 +79,7 @@ export type BootSpec = (
    * Deck lid lofted on the profile from z0 to z1, hinged at origin; with `drop` it wraps the tail, its face standing at z1. `crown` [drop, at]
    * (m, drawn only): its top domes as a parabola across x, `drop` under its centre line at |x| `at`, its edge (the shut line) kept.
    * `halfWidth` (m, drawn only, `flush` lids only): |x| of the lid's side edge, held under the profile's own (half-width less 7 cm); the body's
-   * boot hollow narrows with it, its rim 1 cm outboard of the edge at the deck edge's height, so the quarter top outboard of the groove stands
+   * boot hollow narrows with it, its rim 1 cm outboard of the edge at the deck edge's height (a cap past the deck edge leaves it on the deck edge), so the quarter top outboard of the groove stands
    * 3 mm under the lid's edge, as the fender beside the hood does. Absent, the lid runs to the deck edge.
    */
   | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop; crown?: readonly [drop: number, at: number]; halfWidth?: number }
@@ -297,7 +297,7 @@ export interface PillarSpan {
 }
 
 /** Drawn only: the windshield and the door glass's front edge as the player sees them (`BodyStyle.drawn`, `drawnStyle`). */
-export type DrawnTwin = Partial<Pick<BodyStyle, "windshield" | "windshieldTop" | "aPillarFoot" | "aPillarTop" | "aPillarKnee">>;
+export type DrawnTwin = Partial<Pick<BodyStyle, "windshield" | "windshieldTop" | "aPillarFoot" | "aPillarTop" | "aPillarKnee" | "aPillarSailGlass">>;
 
 export interface BodyStyle {
   id: CarStyleId;
@@ -387,6 +387,8 @@ export interface BodyStyle {
   aPillarTop?: number;
   /** Where the door glass's front edge, rising from `aPillarFoot`, meets the A-post's rear edge (y, m); over it the edge runs in under the post to `aPillarTop`, under it the sail is a small triangle. Absent: one straight edge, the sail filling any gap to the post. */
   aPillarKnee?: number;
+  /** Drawn only: with no `aPillarKnee`, the A-post's sail gets a station where the door glass's straight front edge ends at the glass's top (`glassTopY` at `aPillarTop`), so its rear edge follows that edge, not one chord from its middle to the post's top over a see-through wedge. Absent: three stations (belt, middle, post's top). */
+  aPillarSailGlass?: boolean;
   /** Side glass top: its drop under the roof (m, absent 0.075), the roof's side lip ending there too; or [z, y] stations (ascending, linear, held past the ends) under a 0.075 lip, painted fill between them and the lip. */
   glassTop?: number | readonly (readonly [number, number])[];
   /**
@@ -451,8 +453,11 @@ export interface BodyStyle {
    * `railRun` (m, drawn only): the belt rail runs on this far behind the quarter glass's rear point, under the sail's foot; absent, it ends at the point.
    * `rollShare` (0..1, drawn only): the share of the roof end's roll a flat sail's rings behind the roof end carry (absent 1); less keeps a widened roof end's bulge off the haunch.
    * `reachLip` (0..1, drawn only, a flat sail on a `roofSection`): ahead of the roof end the sail's outer face reaches the roof's cant lip at the cant line (the roll end's own section carried onto each ring), not a chord under the roof's edge; absent 0.
+   * `dEnd` ([radius, z], m, drawn only, with `pinch`): the side window's rear end rounded: its line leaves the belt on an arc of `radius` tangent to the
+   * line's start (tip to the glass's top corner), the arc's rearmost point at car `z` (ahead of the tip); the sail covers the glass behind it; absent,
+   * the line meets the belt in a point at the tip.
    */
-  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; sweep?: number; bead?: boolean; blend?: number; railRun?: number; reachLip?: number; rollShare?: number };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; sweep?: number; bead?: boolean; blend?: number; railRun?: number; reachLip?: number; rollShare?: number; dEnd?: readonly [radius: number, z: number] };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Drawn only: the body paint's base roughness, clear coat and clear coat roughness (`makePaintMaterial`); absent the platform paint's (0.42, 0.72, 0.24). */

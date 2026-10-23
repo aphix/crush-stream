@@ -410,15 +410,15 @@ const SAIL_THICK = 0.02;
 const SAIL_MIN = 0.005;
 /** Where the door glass runs under the post the sail thins to this (m), never to nothing, so its faces keep their normals. */
 const SAIL_EDGE = 0.001;
-/** Stations along the sail, base to its top. */
-const SAIL_STATIONS = 3;
+/** Stations along the sail, as shares of its run from the base to its top (the glass's knee, else the post's top). */
+const SAIL_STATIONS = [0, 0.5, 1] as const;
 
 /**
  * The drawn A-post's rails and its sail's, base to top. The post's front rail runs along the windshield's edge (carried down the
  * edge's line to the belt when the belt lies under the windshield's base, so its foot lies level in the cowl); its rear rail runs
  * `aPostRearZ` behind it in side view, across the side glass's lean from the door glass's foot to its top-front corner; its depth runs
  * square to its face in plan. The sail fills from the post's rear edge to the door glass's front edge (`doorGlassFrontZ`) up to the
- * glass's knee (or the post's top), so no glass layout leaves a hole or a sliver.
+ * glass's knee (or the post's top; with `aPillarSailGlass` and no knee, also a station at the glass's top), so no glass layout leaves a hole or a sliver.
  */
 function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const { wBase, wTop } = style.windshield;
@@ -457,8 +457,10 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const post = A_POST_STATIONS.map(railAt);
   const sail: Rail[] = [];
   let sailWidth = 0;
-  for (let k = 0; k < SAIL_STATIONS; k++) {
-    const y = lerp(footY, style.aPillarKnee ?? aTopY, k / (SAIL_STATIONS - 1));
+  const sailYs = SAIL_STATIONS.map((share) => lerp(footY, style.aPillarKnee ?? aTopY, share));
+  // A kneeless glass's front edge is straight only up to the glass's top (held above it): one more station there (`aPillarSailGlass`) keeps the sail's rear edge on it, not on a chord to the post's top.
+  if (style.aPillarSailGlass === true && style.aPillarKnee === undefined) sailYs.push(glassTop);
+  for (const y of sailYs.sort((a, b) => a - b)) {
     const front = postRearmost(railAt((y - footY) / (aTopY - footY)), A_POST_THICK);
     const sailZ = Math.min(doorGlassFrontZ(y, footY, glassTop, style, base), front[2] - SAIL_EDGE);
     const rear: V3 = [glassX(sailZ, y, style), y, sailZ];
@@ -690,6 +692,13 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   const q = drawnQuarter(style);
   const [tipY, tipZ] = style.cPillar?.tip ?? [beltY(q.zRearBot, style), q.zRearBot];
   const [topY, topZ] = [glassTopY(q.zRearTop, style), q.zRearTop];
+  // A rounded end (`cPillar.dEnd`): the window line's start leaves the belt on an arc of radius `dR` tangent to it, rearmost at `dRear`.
+  const m = (topY - tipY) / (topZ - tipZ); // the window line's start slope (y per z)
+  const slant = Math.sqrt(1 + m * m);
+  const [dR, dRear] = style.cPillar?.dEnd ?? [0, tipZ];
+  const dZ = dRear + dR; // the D end arc's centre z
+  const dY = tipY + m * (dZ - tipZ) - dR * slant; // its centre y: the arc tangent to the line
+  const dTangent = dZ - (dR * m) / slant; // where the arc meets the line
   // A pinched window (`cPillar.pinch`): its line rounds over from the tip into the glass's top line `pinch` ahead of the corner, one
   // quadratic Bézier (tip, corner, front), so the sail runs forward to its end and takes a ring at its middle.
   const pinch = style.cPillar?.pinch ?? 0;
@@ -698,6 +707,7 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   const windowY = (z: number): number => {
     // At the tip itself too: an upright window edge (tip and top at one z) gives the front ring its whole run up from the belt.
     if (z <= tipZ) return tipY;
+    if (dR > 0 && z < dTangent) return Math.max(tipY, dY + Math.sqrt(Math.max(0, dR * dR - (dZ - z) ** 2)));
     if (pinch === 0) return lerp(tipY, topY, (z - tipZ) / (topZ - tipZ));
     // z(u) = (1 - u)² tipZ + 2u(1 - u) topZ + u² frontZ, solved for u; y rises as 1 - (1 - u)² (the corner and front share topY).
     const [a, b, c] = [tipZ - 2 * topZ + frontZ, 2 * (topZ - tipZ), tipZ - Math.min(z, frontZ)];
@@ -722,6 +732,8 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
     ...Array.from({ length: haunch }, (_, k) => lerp(rear, haunchEnd, k / haunch)),
     haunchEnd,
     tipZ,
+    // The D end's arc takes rings at its rearmost point, mid-arc and its tangent point, so the loft follows the round, not one chord.
+    ...(dR > 0 ? [dZ - dR, dZ - dR * detSin(Math.PI / 4 + detAtan2(m, 1) / 2), dTangent] : []),
     roofEndZ,
     ...(pinch > 0 ? [0.25 * tipZ + 0.5 * topZ + 0.25 * frontZ, frontZ] : [topZ]),
   ]
