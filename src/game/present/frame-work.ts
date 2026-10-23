@@ -38,6 +38,14 @@ const DROP_BUSY = 1;
  * tier costs at most 0.2 of the budget more than minimal (CPU and GPU, desktop and the 4x phone proxy), so it still sits under `DROP_BUSY`.
  */
 const ROOM_BUSY = 0.75;
+/**
+ * Owner's stopgap until the post-overhaul perf pass: a climb (FX tier, which the sky follows, and the draw/scale/shadow rungs)
+ * needs its streak's mean work to fit 30 % more and still have room, because a rolled-car pile costs up to 30 % more frame than
+ * the windows it was judged on (the rolled-car SAT: 10.9 → 14.4 ms on a 9-car pile). The streak's mean, not every window, so a
+ * calm desktop still climbs back (its windows read 0.38-0.62 of the budget). Hosting is judged on plain room. Retune or remove
+ * once the perf pass lands.
+ */
+const CLIMB_OVERHEAD = 1.3;
 /** Without a GPU reading the typical frame must be this short (ms) to count as room: 60 fps with 5 % for timer noise. */
 const ROOM_WALL_MS = 1000 / 57;
 
@@ -144,4 +152,9 @@ export class FrameWork {
   roomy(): boolean {
     return this.busy < ROOM_BUSY && (this.gpuMs >= 0 || this.wallMedMs - this.cutMs <= ROOM_WALL_MS);
   }
+}
+
+/** A climb's room (`CLIMB_OVERHEAD`) for windows whose busier side averaged `meanBusy` of the budget. */
+export function climbFits(meanBusy: number): boolean {
+  return meanBusy * CLIMB_OVERHEAD < ROOM_BUSY;
 }
