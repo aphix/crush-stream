@@ -598,8 +598,8 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
     const idleA = carA.deform.quietTime() >= REARM_QUIET_S;
     const idleB = carB.deform.quietTime() >= REARM_QUIET_S;
     if (!armPairWithRows(carA, carB, _p, n, closing, shareA, shareB)) {
-      brushA = !carA.applyImpact(carA.deform.massPoint(_p, _massPoint), n, closing, shareA) && idleA;
-      brushB = !carB.applyImpact(carB.deform.massPoint(_p, _massPoint), _w.copy(n).negate(), closing, shareB) && idleB;
+      brushA = !carA.applyImpact(carA.deform.massPoint(_p, _massPoint), n, closing, shareA, false, true) && idleA;
+      brushB = !carB.applyImpact(carB.deform.massPoint(_p, _massPoint), _w.copy(n).negate(), closing, shareB, false, true) && idleB;
     }
   }
 

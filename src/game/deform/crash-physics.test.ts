@@ -146,6 +146,22 @@ forModes("given a car hit at the front, where the hit point snaps to the centre 
     late.aimHit(new THREE.Vector3(0, 0.36, 2.06));
     assert.ok(late.impactLocal.x > 0.28, `moved to x=${late.impactLocal.x} after the window`);
   });
+
+  it("when a hit armed at 10 m/s meets squarely at 13 m/s within 15 ms, then the pair's contact takes it over (the hit speed is 13, not the two summed), whereas a wall's contact then, or the pair's after 15 ms, is under 1.5 times the hit's and changes nothing", () => {
+    const aslant = new THREE.Vector3(0, 0, -1);
+    const squarely = new THREE.Vector3(0, 0.36, 2.06);
+    const early = spawn(0, 10).d;
+    early.stepStructure(0.004);
+    assert.ok(early.rearmHit(squarely, aslant, 13, 13, true), "taken over within 15 ms");
+    assert.ok(Math.abs(early.hitSpeedValue - 13) < 1e-9, `hit speed ${early.hitSpeedValue}`);
+    const wall = spawn(0, 10).d;
+    wall.stepStructure(0.004);
+    assert.equal(wall.rearmHit(squarely, aslant, 13, 13), false, "a wall's contact is refused");
+    const late = spawn(0, 10).d;
+    late.stepStructure(0.02);
+    assert.equal(late.rearmHit(squarely, aslant, 13, 13, true), false, "refused after 15 ms");
+    assert.equal(late.hitSpeedValue, 10);
+  });
 });
 
 forModes("given a car meeting a wall at 20 m/s or more for the first time, where a bad contact solver could fling it off the map", (spawn, mode) => {

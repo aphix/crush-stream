@@ -359,9 +359,15 @@ export abstract class DeformHit extends DeformRig {
     this.impactLocal.copy(localPoint);
     this.impactInward.copy(localInward).normalize();
     const clamped = THREE.MathUtils.clamp(impulse, 4, 70);
-    if (this.hitSpeed < 0) {
+    const fresh = this.hitSpeed < 0;
+    if (fresh) {
+      const end = this.struckEnd();
+      this.armedEnd = end;
+      this.armedEnd2 = this.endEbs2[end]!;
+      this.armedWear = this.wear;
       this.hitSpeed = THREE.MathUtils.clamp(ebs, 0, 70);
-      this.endEbs2[this.struckEnd()] = this.hitSpeed * this.hitSpeed;
+      this.armedEbs = this.hitSpeed;
+      this.endEbs2[end] = this.hitSpeed * this.hitSpeed;
       this.wear = Math.min(this.hitSpeed * this.hitSpeed, WEAR_HIT);
     }
     this.impulse = clamped;
@@ -372,6 +378,7 @@ export abstract class DeformHit extends DeformRig {
     this.lastContact = 0;
     this.hitAt = 0;
     this.armedAt = -1;
+    if (!fresh) this.armedEbs = 0;
     this.cornerLow = Infinity;
     this.wrinkleAmp = 0;
     this.dirty = true;
@@ -435,10 +442,13 @@ export abstract class DeformHit extends DeformRig {
    * takes the hit over, what the softer one added undone (a 25 km/h side hit armed on a 2.8 m/s graze and dropped its 6.8 m/s face).
    * False when the contact belongs to the current hit or is too soft.
    */
-  rearmHit(localPoint: THREE.Vector3, localInward: THREE.Vector3, impulse: number, ebs: number): boolean {
+  rearmHit(localPoint: THREE.Vector3, localInward: THREE.Vector3, impulse: number, ebs: number, pair = false): boolean {
     if (!this.massActive || ebs < REARM_EBS) return false;
-    const again = this.armedAt === this.elapsed && this.hitAt === this.elapsed;
+    const young = pair && this.armedEbs > 0 && this.elapsed - this.hitAt < AIM_WINDOW;
+    const again = young || (this.armedAt === this.elapsed && this.hitAt === this.elapsed);
     if (again ? ebs <= this.armedEbs : this.sliceQuiet() < REARM_QUIET && ebs < HARDER_HIT * this.hitSpeed) return false;
+    // The same hit meeting squarely after its first slices met it aslant: the crush it has taken stays in its base, so its stroke is not taken twice.
+    const replaces = young && this.hitAt < this.elapsed;
     this.thaw();
     if (again) {
       this.endEbs2[this.armedEnd] = this.armedEnd2;
@@ -469,6 +479,7 @@ export abstract class DeformHit extends DeformRig {
     // 0.12 m cap) stays in the frame when the touch ends the plant. A base taken cell-relative left that offset
     // in every mass's travel, and the first live clamp dragged the whole body back by it (0.1 m in one call,
     // derby seed 19 car 6 at 80.22 s).
+    if (replaces) return true;
     for (const m of this.masses) {
       m.baseX = m.local.x - m.rest.x;
       m.baseZ = m.local.z - m.rest.z;

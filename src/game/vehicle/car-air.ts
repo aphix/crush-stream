@@ -589,8 +589,8 @@ export function armPairWithRows(a: DeformableCar, b: DeformableCar, point: THREE
     PENDING_B[i] = PENDING_B[queue.size]!;
   }
   if (!met) return false;
-  a.applyImpact(point, normal, closing, Math.sqrt(ebsA2));
-  b.applyImpact(point, _crushBack.copy(normal).negate(), closing, Math.sqrt(ebsB2));
+  a.applyImpact(point, normal, closing, Math.sqrt(ebsA2), false, true);
+  b.applyImpact(point, _crushBack.copy(normal).negate(), closing, Math.sqrt(ebsB2), false, true);
   return true;
 }
 
