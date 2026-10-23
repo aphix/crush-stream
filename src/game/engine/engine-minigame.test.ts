@@ -423,7 +423,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
   describe("given the long jump driven from the parked start at full throttle by each driver car, with no bail", () => {
     for (const driverCar of DRIVER_CARS) {
       if (driverCar.id === "monster") {
-        it("when a monster holds the throttle to the barrier and presses no bail, then it flies the barrier and lands past it with its driver in: nobody is thrown and the bail meets no hit", () => {
+        it("when a monster holds the throttle to the barrier and presses no bail, then it flies the barrier and lands past it with its driver in: nobody is thrown, the bail meets no hit, and the attempt ends as a no throw within the rest hold of its settling", () => {
           engine.setPlayerCar("monster");
           engine.startMinigame("longJump");
           assert.equal(minigameHud().phase, "ready", "ready");
@@ -431,10 +431,19 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
           engine["keys"].add(THROTTLE_KEY);
           run(LONG_JUMP_PAST_S);
           const x = engine["cars"][0]!.group.position.x - STATION_ANCHORS.longJump.x;
-          releaseThrottle();
+          engine["keys"].delete(THROTTLE_KEY);
+          let restS = 0;
+          for (let frame = 0; frame < THROW_TIMEOUT_S * FRAME_HZ && minigameHud().phase !== "scored"; frame++) {
+            engine.advance(FRAME, { frameDt: FRAME });
+            restS = engine["carA"].moving ? 0 : restS + FRAME;
+          }
+          const card = minigameHud();
           assert.equal(launches.length, 0, "nobody thrown");
           assert.equal(engine["minigames"]["bail"]["hitAt"], null, "the bail met no hit");
           assert.ok(x > BARRIER_HALF.x, `the monster stands at local x ${x.toFixed(1)} m, not past the barrier`);
+          assert.equal(card.phase, "scored", "the attempt ended");
+          assert.equal(card.noThrow, true, "as a no throw");
+          assert.ok(restS <= REST_HOLD + 2 * FRAME, `it scored ${restS.toFixed(2)} s after the monster settled, not within the rest hold`);
         });
         continue;
       }
