@@ -690,7 +690,7 @@ export class DeformableCar extends CarParts {
     if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten);
   }
 
-  /** Bonnet, boot lid, door skins, the police light bar and the skinned glass follow the body skin; a door's hinge pose turns its skin after. */
+  /** Bonnet, boot lid, door skins, the police light bar, the skinned glass and the chrome trims follow the body skin; a door's hinge pose turns its skin after. */
   private skinPanels(): void {
     let hood = true;
     let trunk = true;
@@ -707,6 +707,11 @@ export class DeformableCar extends CarParts {
     for (const g of this.glassPanes) {
       if (!g.skin || !g.restVerts || g.state === "shattered") continue;
       this.deform.skinPanel(g.mesh.geometry, g.restVerts, g.skin, _zero);
+    }
+    for (const t of this.trims) {
+      if (t.door !== null && this.doorParts[t.door]!.detached) continue;
+      if (t.paint) this.deform.skinPoints(t.mesh.geometry, t.rest, t.paint, t.cage, t.origin);
+      else this.deform.skinPanel(t.mesh.geometry, t.rest, t.cage, t.origin);
     }
   }
 

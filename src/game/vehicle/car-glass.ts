@@ -585,14 +585,18 @@ function makeChromeStrip(sign: number, strip: ChromeStrip, skinX: (z: number, y:
   return ribbonGeometry(positions, sign < 0, false);
 }
 
-/** Chrome trim round the door glass, with the door's chrome strips, in the glass's own space: car.ts parents it to the door at the pane's seat. */
+/** Chrome trim round the door glass, in the glass's own space: car.ts parents it to the door at the pane's seat. */
 export function makeSideGlassFrame(sign: number, style: BodyStyle): THREE.BufferGeometry {
-  const origin = doorGlassOrigin(sign, style);
-  const frame = makeSideGlassFrameFor(sign, style, doorSpan(style), origin);
+  return makeSideGlassFrameFor(sign, style, doorSpan(style), doorGlassOrigin(sign, style));
+}
+
+/** The door's chrome strips in the glass's own space (as `makeSideGlassFrame`), merged; null for a style whose strips all ride the body. */
+export function makeDoorChromeStrips(sign: number, style: BodyStyle): THREE.BufferGeometry | null {
   const strips = (style.chromeStrips ?? []).filter((strip) => ridesDoor(strip, style));
-  if (strips.length === 0) return frame;
+  if (strips.length === 0) return null;
   const stand = doorSkinStand(style);
-  return mergeToned([frame, ...strips.map((strip) => makeChromeStrip(sign, strip, (z, y) => doorSkinX(z, y, style, stand), origin))], "door window trim");
+  const origin = doorGlassOrigin(sign, style);
+  return mergeToned(strips.map((strip) => makeChromeStrip(sign, strip, (z, y) => doorSkinX(z, y, style, stand), origin)), "door chrome strips");
 }
 
 /** Chrome ribbon round a raked pane's border: the points its own grid draws (`quadPoint`), offset outward in the pane's plane and stood proud along its outward normal. */
@@ -623,16 +627,28 @@ function makeQuadGlassFrame(q: BowedQuad, { segX, facing }: QuadDraw): THREE.Buf
   return ribbonGeometry(positions, facing > 0);
 }
 
-/** Chrome trim round the body's glass, one geometry on the body (car local): both quarter glasses, the windshield, and the rear glass unless it rides the tailgate (`rearOnBody` false), then the body's chrome strips on both sides. */
-export function makeBodyGlassFrames(style: BodyStyle, rearOnBody: boolean): THREE.BufferGeometry {
-  const frames = [-1, 1].map((sign) => makeSideGlassFrameFor(sign, style, quarterSpan(style), [0, 0, 0]));
-  frames.push(makeQuadGlassFrame(windshieldQuad(style), WINDSHIELD_DRAW));
-  if (rearOnBody) frames.push(makeQuadGlassFrame(rearGlassQuad(style), REAR_GLASS_DRAW));
-  for (const strip of style.chromeStrips ?? []) {
-    if (ridesDoor(strip, style)) continue;
-    for (const sign of [-1, 1]) frames.push(makeChromeStrip(sign, strip, (z, y) => bodySkinX(z, y, style), [0, 0, 0]));
-  }
-  return mergeToned(frames, "body window trim");
+/** The body's chrome trim, a geometry per thing it follows in a crush (car local): see `makeBodyGlassTrim`. */
+export type BodyGlassTrim = {
+  /** Both quarter glasses' frames: the panes are rigid on the body. */
+  quarters: THREE.BufferGeometry;
+  /** The windshield's frame: it follows the windshield's skin. */
+  windshield: THREE.BufferGeometry;
+  /** The rear glass's frame, absent when the glass rides the tailgate (`rearOnBody` false); it follows the rear glass's skin. */
+  rear: THREE.BufferGeometry | null;
+  /** The body's chrome strips on both sides, absent for a style with none: they follow the body paint. */
+  strips: THREE.BufferGeometry | null;
+};
+
+/** Chrome trim round the body's glass and along its sides, split by what each follows in a crush: the panes' frames and the strips on the skin. */
+export function makeBodyGlassTrim(style: BodyStyle, rearOnBody: boolean): BodyGlassTrim {
+  const quarters = mergeToned([-1, 1].map((sign) => makeSideGlassFrameFor(sign, style, quarterSpan(style), [0, 0, 0])), "quarter window trim");
+  const strips = (style.chromeStrips ?? []).filter((strip) => !ridesDoor(strip, style)).flatMap((strip) => [-1, 1].map((sign) => makeChromeStrip(sign, strip, (z, y) => bodySkinX(z, y, style), [0, 0, 0])));
+  return {
+    quarters,
+    windshield: makeQuadGlassFrame(windshieldQuad(style), WINDSHIELD_DRAW),
+    rear: rearOnBody ? makeQuadGlassFrame(rearGlassQuad(style), REAR_GLASS_DRAW) : null,
+    strips: strips.length === 0 ? null : mergeToned(strips, "body chrome strips"),
+  };
 }
 
 /**

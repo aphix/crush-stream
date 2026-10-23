@@ -15,7 +15,7 @@ import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCov
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeRoofFittings, withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
-import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield, windshieldPoint, windshieldSideX } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassTrim, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield, windshieldPoint, windshieldSideX } from "./car-glass.ts";
 import { windshieldEdge } from "./windshield-edge.test-util.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
@@ -672,7 +672,7 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
     /** The bead's nearest point to a square corner: at least half the arc's middle's r(√2 − 1) off it (a sharp mitre sits on it, the section's outward offset away). */
     const BEAD_ARC = 0.5 * ROUND * (Math.SQRT2 - 1);
     const near = (style: BodyStyle): number[] => {
-      const pos = makeBodyGlassFrames(style, true).getAttribute("position");
+      const pos = makeBodyGlassTrim(style, true).rear!.getAttribute("position");
       const rg = style.rearGlass;
       return [-1, 1].flatMap((sx) =>
         [rg.base, rg.top].map(([y, z], k) => {
@@ -3278,7 +3278,7 @@ describe("given a body style's P2 parts", () => {
   });
 
   it("when the coupe is drawn, then a chrome badge rides each front fender ahead of its door where the reference side view has one (z .66-.73, y .42)", () => {
-    const pos = makeBodyGlassFrames(CAR_STYLES.coupe, true).getAttribute("position");
+    const pos = makeBodyGlassTrim(CAR_STYLES.coupe, true).strips!.getAttribute("position");
     const sides = new Set<number>();
     for (let i = 0; i < pos.count; i++) {
       const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
