@@ -393,6 +393,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A killed engine block keeps counting its travel through the hit, so it reads the hit's peak rather than the kill slice's sample (a sedan at 55 m/s
  * reads 0.608 m into the slab and every wall, where it read 0.46-0.58 by the slice's phase); a car half over the end of a slab or a wall's hold face is
  * crushed only where the face presses it, not at the corner hanging past the end.
+ * The press closes its plates 0.26 m inside the rails' rest in shape deform mode (0.06 m in lattice), where every car class folds its rails
+ * past 0.2 m, not stalls at 0.183-0.199 m: a pressed sedan's rails fold 0.244 m, were 0.191.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
