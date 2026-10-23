@@ -417,7 +417,9 @@ export interface BodyStyle {
   /** Extra pillar splitting the quarter glass (wagon C-pillar), or null. */
   midPillarZ: number | null;
   /**
-   * Drawn only: side-view pillar bands (`PillarSpan`). `a`: the A-post's width behind the windshield edge (absent 0.06). `b`: the
+   * Drawn only: side-view pillar bands (`PillarSpan`). `a`: the A-post's width behind the windshield edge (absent 0.06). `aCrown`: its outer
+   * face's crown as a share of its width (absent 0.13): the face's edge normals fan across it from the side glass to the windshield, less
+   * reads a flatter plank, more a rounder post. `b`: the
    * B-pillar, centred on its `bPillar` band unless it leans. `divider`: the post at `midPillarZ`. Absent: the `bPillar` band (its top
    * 3 cm narrower); a divider 0.08 / 0.07 wide, upright at `midPillarZ`. `rearFoot` [x, y] (m): a point on the body's shoulder beside the
    * rear glass's base; the plank rear post's (no `cPillar`) foot fans out to it, covering the cabin's opening there; absent, no fan. `aSeat`
@@ -428,7 +430,7 @@ export interface BodyStyle {
    * front, so its face never turns to the tail, and a flat cab back panel from inside it over the rear glass's side edge; absent, the
    * post's rear edge at the rear glass's corner.
    */
-  pillars?: { a?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number; glassBar?: Required<PillarSpan>; rearSquare?: boolean };
+  pillars?: { a?: number; aCrown?: number; b?: PillarSpan; divider?: PillarSpan; rearFoot?: readonly [number, number]; aSeat?: number; glassBar?: Required<PillarSpan>; rearSquare?: boolean };
   /** Drawn only: the windshield and the door glass's front edge as the player sees them, in place of the style's own for every drawn part (`drawnStyle`); the cage, the dummies' panes, the cabin, the sim and the windshield's centre (the thrown driver's exit point) keep the style's own. */
   drawn?: DrawnTwin;
   /**

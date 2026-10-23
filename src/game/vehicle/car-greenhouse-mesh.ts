@@ -395,8 +395,9 @@ function glassBar(sign: number, style: BodyStyle, { width: [wBelt, wTop], z: [zB
 
 /** The drawn A-post's depth inward (m): a slim post, not a slab. */
 const A_POST_THICK = 0.03;
-/** The drawn A-post's face crowns this share of its width: its normals fan ±30° across it, turning from the side glass to the windshield, not a flat plank. */
+/** The drawn A-post's face crowns this share of its width (`pillars.aCrown` overrides): its normals fan ±30° across it, turning from the side glass to the windshield, not a flat plank. */
 const A_POST_CROWN = 0.13;
+const aPostCrown = (style: BodyStyle): number => style.pillars?.aCrown ?? A_POST_CROWN;
 /**
  * The drawn A-post's stations, base to top, as shares of its run: sixths, the fifth left out. Its rails run straight up to the cant
  * line, so the lower five show under every style's roof side; the top runs up into the roof. The fifth stands past the cant on some
@@ -462,7 +463,7 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
     // The top station runs into the roof, its ring held where the roof's tuck holds all of it, not a blade past its end: the ring's front
     // goes right up to the roof's end less what its section reaches forward of it (its depth runs square to the face, its outer face crowns).
     const hold = (reach: number) => Math.max(0, Math.max(rearZ, edgeZ) - (style.roofZ[1] - ROOF_TUCK - reach));
-    return place(hold(postForwardReach(place(hold(0)))));
+    return place(hold(postForwardReach(place(hold(0)), aPostCrown(style))));
   };
   const post = A_POST_STATIONS.map(railAt);
   const sail: Rail[] = [];
@@ -491,10 +492,10 @@ function postRearmost({ rear, front, inward = [1, 0] }: Rail, thick: number): V3
   return rearmost;
 }
 
-/** How far (m) forward of its front rail `rail`'s drawn A-post section reaches: its depth runs square to the face in plan and its outer face crowns. */
-function postForwardReach({ rear, front, inward = [1, 0] }: Rail): number {
+/** How far (m) forward of its front rail `rail`'s drawn A-post section reaches: its depth runs square to the face in plan and its outer face crowns `crown` of its width. */
+function postForwardReach({ rear, front, inward = [1, 0] }: Rail, crown: number): number {
   const width = hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2]);
-  return Math.max(0, ...postSection(A_POST_THICK, width, A_POST_CROWN * width).map((p) => lerp(rear[2], front[2], p.y) + (1 - p.x) * A_POST_THICK * inward[1] - front[2]));
+  return Math.max(0, ...postSection(A_POST_THICK, width, crown * width).map((p) => lerp(rear[2], front[2], p.y) + (1 - p.x) * A_POST_THICK * inward[1] - front[2]));
 }
 
 /** The cage roof's side lip runs from the cant line (`ROOF_LIP_OUT`) up to its knee [past the half-width, under the roof] (m), then in to the dome's edge; the drawn roof's roll runs out to the cant line plus `roofDrip`. */
@@ -959,7 +960,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   for (const sign of [-1, 1]) {
     parts.push(
       aPost
-        ? pillar(roundedPillarAlong(sign, aPost.post, A_POST_THICK, { open: true, section: (width) => postSection(A_POST_THICK, width, A_POST_CROWN * width) }), "a")
+        ? pillar(roundedPillarAlong(sign, aPost.post, A_POST_THICK, { open: true, section: (width) => postSection(A_POST_THICK, width, aPostCrown(style) * width) }), "a")
         : boxFromCorners(
             sign,
             {
@@ -978,7 +979,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       // (on down the post's own line it would run 10 cm forward, off the gap).
       const foot = aPost!.post[0]!;
       const low = { ...foot, rear: [foot.rear[0], seatY, foot.rear[2]] as V3, front: [foot.front[0], seatY, foot.front[2]] as V3 };
-      const crown = A_POST_CROWN * hypot2(hypot2(foot.front[0] - foot.rear[0], foot.front[1] - foot.rear[1]), foot.front[2] - foot.rear[2]);
+      const crown = aPostCrown(style) * hypot2(hypot2(foot.front[0] - foot.rear[0], foot.front[1] - foot.rear[1]), foot.front[2] - foot.rear[2]);
       const section = () => [{ x: 1, y: 0 }, { x: 1 + crown / A_POST_THICK, y: 0.5 }, { x: 1, y: 1 }];
       const seat = roundedPillarAlong(sign, [low, foot], A_POST_THICK, { open: true, section });
       // Its two outer quads only: the closing chord behind them would share their vertices and bend their normals into the panel.

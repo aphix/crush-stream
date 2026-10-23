@@ -1515,11 +1515,36 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(Math.max(...turns(coupe)) <= PANEL_TURN, `the panel's end turns ${turns(coupe).map((t) => t.toFixed(1)).join(", ")}° off its next ring`);
   });
 
+  /** A post section's outer face in ring points (`postSection`: three chords a corner, then the crown's three points): its edges and the chords off them. */
+  const FACE = { edge: [3, 7], next: [4, 6] } as const;
+  /** A 10 cm post's outer face between its 13.5 mm corners (m): narrower posts read round at any crown. */
+  const WIDE_FACE = 0.073;
+  /** The turn (°) across the outer face of `style`'s drawn A-post at each of its stations under the roof wide enough to read. */
+  const faceTurns = (style: BodyStyle): number[] =>
+    makeGreenhouseFrame(style, "drawn")
+      .filter((g) => g.name === "a")
+      .flatMap((post) => {
+        const { ring, slices } = post.userData.loft as { ring: number; slices: number };
+        const pos = post.getAttribute("position") as THREE.BufferAttribute;
+        return Array.from({ length: slices }, (_, slice) => {
+          const at = (k: number) => new THREE.Vector3().fromBufferAttribute(pos, slice * ring + k);
+          const [a, b] = [at(FACE.edge[0]), at(FACE.edge[1])];
+          const under = Array.from({ length: ring }, (_, k) => at(k)).some((p) => p.z >= style.roofZ[0] && p.z <= style.roofZ[1] && p.y > cantY(p.z, style));
+          return under || a.distanceTo(b) < WIDE_FACE ? NaN : THREE.MathUtils.radToDeg(at(FACE.next[0]).sub(a).angleTo(b.clone().sub(at(FACE.next[1]))));
+        }).filter((turn) => !Number.isNaN(turn));
+      });
+
+  it("when a style sets `pillars.aCrown`, then the turn across its drawn A-post's outer face is that of a face crowned that share of its width (the plank's 15-20°, the default's 25° and over, the pickup's .25 at 40° and over)", () => {
+    const pickup = CAR_STYLES.pickup;
+    const plain: BodyStyle = { ...pickup, pillars: { ...pickup.pillars, aCrown: undefined } };
+    assert.ok(pickup.pillars?.aCrown === 0.25, "the pickup sets aCrown .25");
+    const [rounder, base] = [faceTurns(pickup), faceTurns(plain)];
+    assert.ok(base.length > 0 && rounder.length > 0, `${base.length} / ${rounder.length} stations 10 cm wide under the roof`);
+    assert.ok(Math.min(...base) < 40, `the control: the default crown turns ${Math.min(...base).toFixed(1)}° at its flattest station`);
+    assert.ok(Math.min(...rounder) >= 40, `the pickup's A-post turns ${Math.min(...rounder).toFixed(1)}° at its flattest station`);
+  });
+
   it("when a drawn A-post 10 cm wide or more is read at a station under the roof, then its outer face turns 25° or more across its width, outboard on both sides: a curved post from the side glass to the windshield, not a flat plank (the plank turned 15-20°)", () => {
-    /** A post section's outer face in ring points (`postSection`: three chords a corner, then the crown's three points): its edges and the chords off them. */
-    const FACE = { edge: [3, 7], next: [4, 6] } as const;
-    /** A 10 cm post's outer face between its 13.5 mm corners (m): narrower posts read round at any crown. */
-    const WIDE_FACE = 0.073;
     let read = 0;
     for (const id of CAR_STYLE_IDS) {
       const style = CAR_STYLES[id];

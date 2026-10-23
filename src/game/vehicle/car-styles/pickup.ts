@@ -95,7 +95,8 @@ export const PICKUP: BodyStyle = {
   blackout: { sail: true },
   bPillar: { rear: -0.33, front: -0.29 },
   // The regular cab's door runs back to the side plate's seam; its glass ends at the plate's -0.29 / -0.265 behind a slim 4 cm post band; the C-post's foot meets the cab-back shoulder, as the hatchback's.
-  pillars: { b: { z: [-0.31, -0.275], width: [0.04, 0.04] }, rearFoot: [0.718, 1.173] },
+  // The A-post's face is rounder than the default (owner: a slab, not a post): its edge normals fan 45°, not 27°, from the side glass to the windshield.
+  pillars: { aCrown: 0.25, b: { z: [-0.31, -0.275], width: [0.04, 0.04] }, rearFoot: [0.718, 1.173] },
   arch: { radius: 0.46, lip: { flare: 0.024, width: 0.065, square: true } },
   hood: { z0: 1.03, z1: 1.92, origin: [1.2, 1.01], nose: [0.034, 0.02] },
   bumpers: {
