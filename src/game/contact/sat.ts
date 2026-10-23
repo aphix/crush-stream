@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { SAMPLE, sampleAt, type CageFields, type CageStyle } from "../vehicle/car-cage.ts";
-import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
+import { cageLift } from "../vehicle/car-cage-rig.ts";
 import { PLATFORM_HALF } from "../vehicle/car-rig.ts";
 import { hypot2 } from "../deform/physics-util.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
@@ -280,7 +280,7 @@ function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look
   const style = b.cage.style;
   const box = b.cage.fields.planBox;
   const reach = OUTLINE_REACH + look;
-  const liftA = CLASSES[carClass(a)].lift;
+  const liftA = cageLift(a);
   _in[0] = box[0]! - reach;
   _in[1] = box[1]! + reach;
   _in[2] = box[2]! - reach;
@@ -288,7 +288,7 @@ function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look
   _in[I_LOW] = outline.low + liftA;
   _in[I_HIGH] = outline.high + liftA;
   _in[I_REACH] = reach;
-  _in[I_LIFT_B] = CLASSES[carClass(b)].lift;
+  _in[I_LIFT_B] = cageLift(b);
   const eb = b.group.matrixWorld.elements;
   frameInto(a.group.matrixWorld.elements, eb);
   found.fill(0);

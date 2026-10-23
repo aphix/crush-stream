@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { CAGE_STEP } from "../vehicle/car-cage.ts";
-import { assignClass, CLASSES, carClass, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
+import { cageLift } from "../vehicle/car-cage-rig.ts";
+import { assignClass, CLASSES, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { satCars } from "./sat.ts";
 import { OUTLINE_REACH, sampleField } from "./cage-outline.ts";
 
@@ -21,6 +22,11 @@ const RISES = [0.5, 1, 1.5];
 const SWEEP_FROM = 2.5;
 const SWEEP_TO = 4.8;
 const SWEEP_STEP = 0.1;
+/** The rolls (degrees) a lying monster is staged at: past the 60° where its body lift starts to fade, short of the steep ones where the plan SAT reads the cop's column as a thin band (0.19 m deeper than the cages at 75°; nothing near 90°, a lift-free police car's alike). Its centre stands `LYING_RISE` m up, the cop's centre `LYING_FROM` to `LYING_TO` m from it (the nose in its roof). */
+const ROLLS = [65, 70];
+const LYING_RISE = 1.1;
+const LYING_FROM = 2.4;
+const LYING_TO = 3.6;
 const scene = new THREE.Scene();
 const one = new THREE.Vector3(1, 1, 1);
 const toWorld = new THREE.Matrix4();
@@ -35,11 +41,11 @@ function build(cls: VehicleClassId): DeformableCar {
 
 /**
  * How deep (m) `a`'s cage stands in `b`'s, read as the SAT reads a node (`OUTLINE_REACH` less `b`'s plan field there): of every covered
- * node of `a` at `LEVELS` + 1 heights up its column (full poses, class lifts on) inside `b`'s cage column, the deepest; 0 when none is.
+ * node of `a` at `LEVELS` + 1 heights up its column (full poses, drawn body lifts on: `cageLift`) inside `b`'s cage column, the deepest; 0 when none is.
  */
 function cageDepthIn(a: DeformableCar, b: DeformableCar): number {
   const sa = a.cage.style, fa = a.cage.fields, sb = b.cage.style, fb = b.cage.fields;
-  const liftA = CLASSES[carClass(a)].lift, liftB = CLASSES[carClass(b)].lift;
+  const liftA = cageLift(a), liftB = cageLift(b);
   toWorld.compose(a.group.position, a.group.quaternion, one);
   toB.compose(b.group.position, b.group.quaternion, one).invert();
   const plan = b.cage.planField();
@@ -65,6 +71,17 @@ function stage(monster: DeformableCar, cop: DeformableCar, rise: number, back: n
   monster.group.rotation.set(-PITCH, 0, 0, "YXZ");
   monster.refreshBasis();
   cop.spawnFacing(0, -back, 0, 0);
+  cop.group.position.y = 0;
+  cop.refreshBasis();
+}
+
+/** The monster at the origin rolled `rollDeg` onto its left side, its roof facing -x, resting a cage half-width up; the cop level, facing +x into the roof from `back` m away. */
+function lieOver(monster: DeformableCar, cop: DeformableCar, rollDeg: number, back: number): void {
+  monster.spawnFacing(0, 0, 0, 0);
+  monster.group.position.y = LYING_RISE;
+  monster.group.rotation.set(0, 0, (rollDeg * Math.PI) / 180, "YXZ");
+  monster.refreshBasis();
+  cop.spawnFacing(-back, 0, Math.PI / 2, 0);
   cop.group.position.y = 0;
   cop.refreshBasis();
 }
@@ -111,5 +128,26 @@ describe("given a monster truck pitched 27° nose-up and a level cop facing its 
       }
     }
     assert.ok(worstOver <= CAGE_STEP, worst);
+  });
+});
+
+describe("given a monster truck lying rolled 65° or 70° over (its body lift faded with the tilt) and a level cop facing its roof", () => {
+  it("when the cop's nose goes into the roof, then the plan SAT reads the cages' 3D overlap to within a lattice step", () => {
+    for (const roll of ROLLS) {
+      let worst = "";
+      let worstOff = 0;
+      let deepest = 0;
+      for (let back = LYING_FROM; back <= LYING_TO + 1e-9; back += SWEEP_STEP) {
+        lieOver(monster, cop, roll, back);
+        const overlap = Math.max(cageDepthIn(cop, monster), cageDepthIn(monster, cop));
+        const sat = satCars(cop, monster, normal, contact, 0) ?? 0;
+        deepest = Math.max(deepest, overlap);
+        if (Math.abs(sat - overlap) <= worstOff) continue;
+        worstOff = Math.abs(sat - overlap);
+        worst = `${roll}° over, ${back.toFixed(1)} m back: SAT ${sat.toFixed(3)} m against ${overlap.toFixed(3)} m`;
+      }
+      assert.ok(deepest > 0.3, `${roll}° over: the sweep never gets the cop's nose into the roof (deepest ${deepest.toFixed(3)} m)`);
+      assert.ok(worstOff <= CAGE_STEP, worst);
+    }
   });
 });

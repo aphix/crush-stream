@@ -370,6 +370,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * The tallest step a tyre mounts by grip, and how far under a prism's top a tyre still stands on it, is its own drawn radius's share (the
  * sedan's 0.342 m tyre 0.088 m, the monster's 0.614 m 0.158 m), not 0.140 m sized for the platform's tyre on every car; a point that names no
  * tyre keeps the biggest tyre's, and a tyre that landed on a prism's top counts it only within its radius.
+ * A lifted car's (the monster's) crash contact reaches its masses where they stand: a car-car hit's point, read off its lifted body, stood 0.8-0.9 m over
+ * its nose masses, so it fed its bumper a thousandth of the crush and its engine none (a monster head-on at 40 m/s crushed 0.61 m and left its engine 0.42
+ * healthy, where it crushed 0.84 m and killed it before the overhaul), and its plan contact reads its body's lift as drawn (faded as it lies over; it
+ * stood at the whole 0.87 m up its tilted axis). Monster hits crush, kill, throw and push differently; a monster lying over meets cars where it is drawn.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
