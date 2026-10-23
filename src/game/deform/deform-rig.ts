@@ -19,7 +19,7 @@ import { DeformParticleHelper, DeformRigHelper } from "./deform-helper.ts";
 import { bindLattice, buildRunStructures, INF_K, restoreInto, runTemplate, wrinkleSeeds } from "./deform-build.ts";
 import { FACES, faceFollow, IMPRINT_NONE, type FaceBands } from "./load-crush.ts";
 import { PushBudget } from "./push-budget.ts";
-import { hypot3, hypot2 } from "../kernel/physics-core.js";
+import { hypot3, hypot2, PART_FAMILY } from "../kernel/physics-core.js";
 
 /** Numbers a `simState` block spends on the rig’s scalar fields (`simScalarsOut`: 58 fields, one double each: nine are the epicenter freeze: `frozen`, `frozenReady`, `sinceThaw`, the cached centre and inertia; the last two the solids' hold of the slice, `solidHold`). */
 export const SIM_SCALAR_NUMBERS = 58;
@@ -190,7 +190,7 @@ interface SkinZones {
   cellOnly(x: number, y: number, z: number, hub: number): boolean;
 }
 
-type SkinParentRule = (rx: number, ry: number, rz: number, i: number, t: SkinPointTables) => void;
+type SkinParentRule = (rx: number, ry: number, rz: number, i: number, t: SkinPointTables, hung?: boolean) => void;
 
 type KeyMass = "cell" | "roof" | "engineL" | "engineR" | "axleR" | "doorL" | "doorR" | "hubFL" | "hubFR" | "hubRL" | "hubRR" | "bumperFL" | "bumperFR" | "bumperRL" | "bumperRR";
 
@@ -732,7 +732,8 @@ export abstract class DeformRig {
 
   /**
    * A5 parents: the RES_K nearest non-hub masses by 1/(d² + RES_SOFT), less the (RES_K+1)th's weight so a parent fades out before it is
-   * swapped (no seam where the nearest set changes). A cabin point takes cabin masses only (D1), plus the cell-face share of the nearest other mass.
+   * swapped (no seam where the nearest set changes). A cabin point takes cabin masses only (D1), plus the cell-face share of the nearest other mass;
+   * a `hung` point (a door's frame, hinged to the A-pillar and latched to the B-pillar) takes the cabin masses wherever it stands, and no share.
    */
   private parentRule(zones: SkinZones): SkinParentRule {
     const { span, inCell } = zones;
@@ -746,9 +747,9 @@ export abstract class DeformRig {
           return { j, w: 1 / ((rx - r.x) ** 2 + (ry - r.y) ** 2 + (rz - r.z) ** 2 + RES_SOFT) };
         })
         .sort((a, b) => b.w - a.w);
-    return (rx, ry, rz, i, t) => {
+    return (rx, ry, rz, i, t, hung = false) => {
       const cabin = inCell(rx, ry, rz);
-      const ds = near(rx, ry, rz, cabin ? cabinBody : body);
+      const ds = near(rx, ry, rz, cabin || hung ? cabinBody : body);
       const floor = ds.length > RES_K ? ds[RES_K]!.w : 0;
       ds.length = Math.min(ds.length, RES_K);
       let sum = 0;
@@ -775,8 +776,7 @@ export abstract class DeformRig {
   /** A skin point's cluster weights: the 4 nearest clusters within 1.45 m by exp(−2.35 d), a `cellOnly` point the cell's (D1); the roof skin takes none from below the bonnet's top. */
   private clusterRule(zones: SkinZones, cms: readonly { x: number; y: number; z: number }[]): (rx: number, ry: number, rz: number, cellOnly: boolean, i: number, t: SkinPointTables) => void {
     const { span, inCell } = zones;
-    const cellMass = this.masses.indexOf(this.at.cell);
-    const holdsCell = this.clusters.map((c) => c.idx.includes(cellMass));
+    const holdsCell = this.clustersHoldingCell();
     const roofFloor = this.cages.find((c) => c.spec.name === "roof")!.spec.min[1];
     const bonnetTop = this.cages.find((c) => c.spec.name === "bonnet")!.spec.max[1];
     return (rx, ry, rz, cellOnly, i, t) => {
@@ -866,17 +866,31 @@ export abstract class DeformRig {
     this.bindCorners(n, cms, parents, t);
   }
 
-  /** Cage corners follow the clusters within 1.4 m of their rest position (`solveCagesFromShape`), and their A5 parents as skin points `n + j`. */
+  /** The clusters that hold the cell: what a cabin point's cluster weights are drawn from (D1). */
+  private clustersHoldingCell(): boolean[] {
+    const cell = this.masses.indexOf(this.at.cell);
+    return this.clusters.map((c) => c.idx.includes(cell));
+  }
+
+  /**
+   * Cage corners follow the clusters within 1.4 m of their rest position (`solveCagesFromShape`), and their A5 parents as skin points `n + j`.
+   * A door cage's corners hang on the cabin: its masses and its cell-holding clusters only, so the rear axle and tank, which a side hit's tyres
+   * hold back while the cabin is shoved, do not shear the far door's frame (and its glass) by centimetres.
+   */
   private bindCorners(n: number, cms: readonly { x: number; y: number; z: number }[], parents: SkinParentRule, t: SkinPointTables): void {
     const start: number[] = [0];
     const xf: number[] = [];
     const ws: number[] = [];
     this.cornerWsum = new Float64Array(this.cages.length * 8);
+    const holdsCell = this.clustersHoldingCell();
     for (let j = 0; j < this.cages.length * 8; j++) {
-      const rest = this.cages[j >> 3]!.restCorners[j & 7]!;
-      parents(rest.x, rest.y, rest.z, n + j, t);
+      const cage = this.cages[j >> 3]!;
+      const rest = cage.restCorners[j & 7]!;
+      const hung = cage.spec.name.startsWith(PART_FAMILY.door);
+      parents(rest.x, rest.y, rest.z, n + j, t, hung);
       let wsum = 0;
       for (let ci = 0; ci < this.clusters.length; ci++) {
+        if (hung && !holdsCell[ci]) continue;
         const cm = cms[ci]!;
         const d = hypot3(rest.x - cm.x, rest.y - cm.y, rest.z - cm.z);
         if (d > 1.4) continue;

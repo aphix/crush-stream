@@ -397,6 +397,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * past 0.2 m, not stalls at 0.183-0.199 m: a pressed sedan's rails fold 0.244 m, were 0.191.
  * A torn hatchback gate flies as its glass and spoiler only (its D-posts stay on the body); a torn SUV liftgate flies with its D-post shares as
  * closed pieces cut on one shared section and a flange under its slab.
+ * A door cage's corners hang on the cabin (its masses and the clusters that hold the cell), not on the tail and axle a side hit's tyres hold back: a side
+ * hit no longer shears the far door's frame by 5-6 cm (a 30 km/h side hit read 55 mm, now 18; its glass burst), and a 50 km/h wall hit racks a door's frame 12 mm, not 26.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
