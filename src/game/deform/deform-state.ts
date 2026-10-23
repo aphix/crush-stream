@@ -510,7 +510,8 @@ export abstract class DeformState extends DeformHit {
     return false;
   }
 
-  skinPanel(geometry: THREE.BufferGeometry, rest: Float32Array, name: BodyPartName, origin: THREE.Vector3): void {
+  /** Skins vertices `[from, to)` of `geometry` (default all) to the cage `name`; the rest are left as they are. */
+  skinPanel(geometry: THREE.BufferGeometry, rest: Float32Array, name: BodyPartName, origin: THREE.Vector3, from = 0, to?: number): void {
     const cage = this.cageByPart.get(name);
     if (!cage) return;
     const attr = geometry.getAttribute("position") as THREE.BufferAttribute;
@@ -526,7 +527,7 @@ export abstract class DeformState extends DeformHit {
     const ox = origin.x - cage.min.x;
     const oy = origin.y - cage.min.y;
     const oz = origin.z - cage.min.z;
-    for (let r = 0; r < attr.count * 3; r += 3) {
+    for (let r = from * 3, end = (to ?? attr.count) * 3; r < end; r += 3) {
       const u = THREE.MathUtils.clamp((rest[r]! + ox) * isx, -0.15, 1.15);
       const v = THREE.MathUtils.clamp((rest[r + 1]! + oy) * isy, -0.15, 1.15);
       const w = THREE.MathUtils.clamp((rest[r + 2]! + oz) * isz, -0.15, 1.15);

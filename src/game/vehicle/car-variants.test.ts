@@ -13,7 +13,7 @@ import { doorSkinStand, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX 
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, type PartSeat } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
-import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { makeChassisGeometry, withGateSurround } from "./car-chassis-mesh.ts";
 import { makeRoofFittings, withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassTrim, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield, windshieldPoint, windshieldSideX } from "./car-glass.ts";
 import { windshieldEdge } from "./windshield-edge.test-util.ts";
@@ -1294,7 +1294,7 @@ describe("given a body style's H2 hardpoints", () => {
     const hatch = CAR_STYLES.hatchback;
     const seen = (s: BodyStyle) => {
       const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-      const gate = new THREE.Mesh(makeTrunkGeometry(s), material);
+      const gate = new THREE.Mesh(withGateSurround(makeTrunkGeometry(s), s), material);
       const [py, pz] = bootPivot(s.boot);
       gate.position.set(0, py, pz);
       gate.updateMatrixWorld();
@@ -3719,7 +3719,7 @@ describe("given a body style's P2 parts", () => {
     const got = batch.draw.matrixAt(row, new THREE.Matrix4());
     for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!) < 1e-6, `the opened lid's pose, element ${k}`);
     const drawnShare = batch.draw.variants[batch.draw.variantAt(row)]!.getIndex()!.count;
-    assert.equal(drawnShare, drawnLamp(car.style, "boot", lid.share!.lamp.side).geometry.getIndex()!.count, "the lid's row draws its own share");
+    assert.equal(drawnShare, drawnLamp(car.style, "boot", lid.share!.lamp!.side).geometry.getIndex()!.count, "the lid's row draws its own share");
   });
 
   it("when a bumper carries its seam, then it is the skin up to the seam on the end face and round the corner on both sides (rays from outside meet it 2 cm under the seam and the body 2 cm over), and a bumper without one draws as before", () => {

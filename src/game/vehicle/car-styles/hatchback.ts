@@ -169,6 +169,8 @@ export const HATCHBACK: BodyStyle = {
     lip: { rise: -0.01, depth: 0.06 },
     // The reference's gate seam: ±.62-.66 above the tail lamps, stepping in to ±.43 between them.
     outline: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84], [0.43, 0.8], [0.43, 0.6]],
+    // The liftgate carries its share of each D-post when it opens or tears, as the reference's popped gates.
+    postShare: [0.15, 0.25],
   },
   // The high brake lamp: a thin strip on the spoiler's trailing edge (2 cm tall there); the amber side repeater on the front fender, as the reference's.
   lamps: {
@@ -189,7 +191,8 @@ export const HATCHBACK: BodyStyle = {
   privacyGlass: { rear: true, quarter: true },
   // The spoiler starts at the roof's rear end, its front edge bowed back with the glass top's plan bow: no run over the roof skin to fight it,
   // no glass top or frit poking over it. It ends on the roof end's tucked corners, its side ends sloping down onto the D-pillars' tops.
-  roof: { spoiler: { z: [-1.24, -1.149], y: [1.22, 1.2795], halfWidth: 0.53, ends: [0.1, 0.04], crown: 0.025, bow: 0.015 } },
+  // The gate carries the whole spoiler with it: the shut line is the spoiler's front edge, on the roof's rear end.
+  roof: { spoiler: { z: [-1.24, -1.149], y: [1.22, 1.2795], halfWidth: 0.53, ends: [0.1, 0.04], crown: 0.025, bow: 0.015, gate: -1.149 } },
   exhaust: { tips: 2, x: 0.5, y: 0.24, size: [0.1, 0.045], shape: "round" },
   details: {
     lines: [

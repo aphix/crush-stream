@@ -700,7 +700,12 @@ export class DeformableCar extends CarParts {
       else if (p.name === LID.trunk) trunk = false;
     }
     if (hood) this.deform.skinPanel(this.hood.geometry, this.hoodRest, "bonnet", this.hoodOrigin);
-    if (trunk) this.deform.skinPanel(this.trunk.geometry, this.trunkRest, "boot", this.trunkOrigin);
+    if (trunk) {
+      // The gate's frame and spoiler (from `surround`) dent with the rear glass; the boot cage's ±15 % clamp would flatten them.
+      const surround = this.trunk.geometry.userData.surround as number | undefined;
+      this.deform.skinPanel(this.trunk.geometry, this.trunkRest, "boot", this.trunkOrigin, 0, surround);
+      if (surround !== undefined) this.deform.skinPanel(this.trunk.geometry, this.trunkRest, "glassRear", this.trunkOrigin, surround);
+    }
     if (!this.doorParts[0]!.detached) this.deform.skinPoints(this.doorMeshL.geometry, this.doorLRest, this.doorLSkin, "doorLeft", this.doorLOrigin);
     if (!this.doorParts[1]!.detached) this.deform.skinPoints(this.doorMeshR.geometry, this.doorRRest, this.doorRSkin, "doorRight", this.doorROrigin);
     if (this.lightBar && !this.lightBarPart!.detached) this.deform.skinPanel(this.lightBar.geometry, this.lightBarRest!, "roof", this.lightBarOrigin);

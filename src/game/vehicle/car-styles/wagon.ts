@@ -162,7 +162,8 @@ export const WAGON: BodyStyle = {
   // Hood tops to 1.10 m and tail deck to 1.12 m, roof from 1.45 m: the cabin starts 7 cm over the highest, as the trucks' do.
   proxyBelt: 1.19,
   rearDoorSeam: -1.23,
-  boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE, edgeRoll: 0.02 },
+  // The liftgate carries its share of each D-post when it opens or tears, as the reference's popped gates.
+  boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE, edgeRoll: 0.02, postShare: [0.6, 0.6] },
   lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES, bulb: "led" },
   // The reference's wide diamond mesh: about nine across and four rows down.
   grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 11, angle: 0.37, finish: "black", rim: "chrome", lean: 0.387 },
@@ -173,7 +174,8 @@ export const WAGON: BodyStyle = {
   privacyGlass: { rear: true, quarter: "matte" },
   // The glass panel as the reference's isos: from 19 cm behind the windshield's top, 0.57 m long, 0.72 m across. The spoiler caps the roof's
   // last drawn chord from its ring (z -1.662) flush with the roof's crown, so no face stands over the sagging chord; trailing corners rounded.
-  roof: { rails: { x: [0.5, 0.56], z: [-1.64, 0.12], rise: 0.03 }, spoiler: { z: [-1.86, -1.662], y: [1.46, 1.516], halfWidth: 0.6, ends: [0.06, 0.1], round: true, crown: 0.026 }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
+  // The liftgate carries the spoiler's share behind the shut line at z -1.79, as the reference's popped gates.
+  roof: { rails: { x: [0.5, 0.56], z: [-1.64, 0.12], rise: 0.03 }, spoiler: { z: [-1.86, -1.662], y: [1.46, 1.516], halfWidth: 0.6, ends: [0.06, 0.1], round: true, crown: 0.026, gate: -1.79 }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
   exhaust: { tips: 2, x: 0.5, y: 0.42, size: [0.15, 0.05], shape: "round" },
   details: {
     lines: [

@@ -4,8 +4,8 @@ import { detSin } from "../kernel/physics-core.js";
 import { BLACKOUT, CABIN_TRIM, INNER_PANEL, MATTE_BLACKOUT, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
-import { makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
-import { makeRoofFittings } from "./car-fittings-mesh.ts";
+import { gatePosts, makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
+import { gateSpoiler, makeRoofFittings, withTone } from "./car-fittings-mesh.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import {
   bayAt,
@@ -31,6 +31,7 @@ import {
   type Pt,
 } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
+import { bootPivot } from "./hinge-spec.ts";
 
 /** Base loft stations: with SLICE_WARP ≈7 cm apart at nose/tail, 13 cm mid-cabin (8e2dc49 commit notes). */
 const BASE_SLICES = 40;
@@ -266,7 +267,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const linerFrom = body.getAttribute("position").count + parts[1]!.getAttribute("position").count;
   const linerTo = linerFrom + parts.slice(2, 2 + carFrame(style).wheels.length).reduce((n, g) => n + g.getAttribute("position").count, 0);
   // Last, so every other part keeps its vertex ids; the drawn body only (the cage never carries them).
-  const fittings = source === "drawn" ? makeRoofFittings(style) : null;
+  const fittings = source === "drawn" ? makeRoofFittings(style, "body") : null;
   const fittingCount = fittings?.geometry.getAttribute("position").count ?? 0;
   if (fittings) parts.push(fittings.geometry);
   const merged = mergeGeometries(parts, false);
@@ -333,5 +334,31 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
     primer.fill(WELL_PANEL, linerFrom, linerTo);
   }
   merged.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(primer, 1));
+  return markSkinDynamic(merged);
+}
+
+/**
+ * `lid` (the drawn roof-hinged gate, local to `bootPivot(style.boot)`) with its surround merged after it: the D-post and spoiler shares that ride the gate when it opens
+ * or tears (`userData.surround` is the surround's first vertex). Without any, `lid` itself.
+ */
+export function withGateSurround(lid: THREE.BufferGeometry, style: BodyStyle): THREE.BufferGeometry {
+  const posts = gatePosts(style);
+  const spoiler = gateSpoiler(style);
+  if (posts.length === 0 && !spoiler) return lid;
+  if (!lid.getAttribute("normal")) throw new Error(`${style.id}: the gate's lid has no normals`);
+  const [pivotY, pivotZ] = bootPivot(style.boot);
+  const tone = (g: THREE.BufferGeometry): number => (g.userData.blackout === true ? (g.userData.matte === true ? MATTE_BLACKOUT : BLACKOUT) : 0);
+  const surround = [...posts, ...(spoiler ? [spoiler] : [])].map((g) => {
+    for (const name of Object.keys(g.attributes)) if (name !== "position" && name !== "normal" && name !== "uv") g.deleteAttribute(name);
+    return withTone(g.translate(0, -pivotY, -pivotZ), PRIMER_ATTRIBUTE, tone(g));
+  });
+  const count = lid.getAttribute("position").count;
+  if (!lid.getAttribute(PRIMER_ATTRIBUTE)) withTone(lid, PRIMER_ATTRIBUTE, 0);
+  const merged = mergeGeometries([lid, ...surround], false);
+  if (!merged) throw new Error(`${style.id}: failed to merge the gate's surround`);
+  for (const g of [lid, ...surround]) g.dispose();
+  merged.userData = { ...lid.userData, surround: count };
+  merged.computeBoundingBox();
+  merged.computeBoundingSphere();
   return markSkinDynamic(merged);
 }

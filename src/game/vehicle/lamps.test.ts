@@ -256,15 +256,18 @@ describe("given each style with a high-mount brake lamp", () => {
   const styles = CAR_STYLE_IDS.filter((s) => CAR_STYLES[s].lamps.brake);
   it("the control: some style has one", () => assert.ok(styles.length > 0));
   for (const style of styles) {
-    it(`when a ${style} is built, then its brake lamp sits on the first surface met from behind, the body or the rear glass, not inside the cabin`, () => {
+    it(`when a ${style} is built, then its brake lamp sits on the first surface met from behind, the body, the rear glass or a roof-hinged gate's spoiler, not inside the cabin`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, style);
       const brake = car.lampFittings.find((f) => f.kind === "brake")!;
       car.group.updateMatrixWorld(true);
+      // A gate's lamp is seated in the lid's frame: its world pose (the car stands at the origin) is the car frame's.
+      brake.seat.updateWorldMatrix(true, false, true);
       const glass = car.glassPanes.find((p) => p.name === "rear")!.mesh;
-      const seat = brake.seat.position;
-      const hit = new THREE.Raycaster(new THREE.Vector3(seat.x, seat.y, -5), new THREE.Vector3(0, 0, 1)).intersectObjects([car.body, glass], false)[0];
+      const gate = car["trunk"];
+      const seat = new THREE.Vector3().setFromMatrixPosition(brake.seat.matrixWorld);
+      const hit = new THREE.Raycaster(new THREE.Vector3(seat.x, seat.y, -5), new THREE.Vector3(0, 0, 1)).intersectObjects([car.body, glass, gate], false)[0];
       assert.ok(hit, `${style}: nothing behind its brake lamp`);
-      const name = hit.object === glass ? "the rear glass" : "the body";
+      const name = hit.object === glass ? "the rear glass" : hit.object === gate ? "the gate" : "the body";
       assert.ok(Math.abs(hit.point.z + (CAR_STYLES[style].lamps.brake!.inset ?? 0) - seat.z) < 0.01, `${style}: brake lamp at z ${seat.z.toFixed(3)}, ${name} met from behind at z ${hit.point.z.toFixed(3)}`);
     });
   }
@@ -589,7 +592,7 @@ describe("given the lamp batch and one car of each style", () => {
         };
         assert.equal(drawn(), `${shares.length},0`, `${id} ${lid}: every share lit at rest`);
         car["breakLamp"](car.lamps.find((l) => l.kind === kind && l.side < 0)!);
-        const left = shares.filter((f) => f.share?.lamp.side === -1).length;
+        const left = shares.filter((f) => f.share?.lamp?.side === -1).length;
         assert.equal(drawn(), `${shares.length - left},${left}`, `${id} ${lid}: the left lamp broke`);
         car["detachPart"](car["parts"].find((p) => p.name === lid)!, 0);
         assert.equal(drawn(), `0,${shares.length}`, `${id} ${lid}: the lid tore off`);

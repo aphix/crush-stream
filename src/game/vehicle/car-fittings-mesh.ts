@@ -3,6 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detSin } from "../kernel/physics-core.js";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle } from "./car-variants.ts";
+import { roofHinged } from "./hinge-spec.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { splitCreases } from "./car-crease.ts";
 import { CREASE_DEGREES, deckTopY, ensureOutwardNormals, lerp, loftFromRings, makeBumperGeometry, roofTopY, type Pt } from "./car-mesh.ts";
@@ -50,7 +51,7 @@ const BAND_PROUD = 0.0015;
 const BAND_EPS = 1e-6;
 
 /** `geo` with a per-vertex `name` attribute: `value` from vertex `from` on, 0 before it. */
-function withTone(geo: THREE.BufferGeometry, name: string, value: number, from = 0): THREE.BufferGeometry {
+export function withTone(geo: THREE.BufferGeometry, name: string, value: number, from = 0): THREE.BufferGeometry {
   const tone = new Float32Array(geo.getAttribute("position").count);
   tone.fill(value, from);
   geo.setAttribute(name, new THREE.BufferAttribute(tone, 1));
@@ -257,12 +258,14 @@ function bowSpoilerFront(geo: THREE.BufferGeometry, spoiler: NonNullable<RoofPar
 /**
  * A wedge off the roof's rear end: flat underside, its top falling from the front edge to the tip, its side ends sloped and tapered by `ends`;
  * `round` turns the tip's corners on a quarter ellipse in plan, `crown` bows the top across, `bow` sweeps the front edge back in plan.
+ * `span` [from, to] (u, 0 the front edge to 1 the tip) keeps one share of a crowned or rounded wedge, its ends capped; a flat one does not split.
  */
-function spoilerGeometry(spoiler: NonNullable<RoofParts["spoiler"]>): THREE.BufferGeometry {
+function spoilerGeometry(spoiler: NonNullable<RoofParts["spoiler"]>, span: readonly [number, number] = [0, 1]): THREE.BufferGeometry {
   const [under, top] = spoiler.y;
   const [slope, taper] = spoiler.ends ?? [0, 0];
   const hw = spoiler.halfWidth;
   if (!spoiler.round && !spoiler.crown) {
+    if (span[0] !== 0 || span[1] !== 1) throw new Error("a flat spoiler does not split");
     const ring = (y: number, half: number): Pt[] => [
       { x: -half, y: under },
       { x: -(half - slope), y },
@@ -283,12 +286,31 @@ function spoilerGeometry(spoiler: NonNullable<RoofParts["spoiler"]>): THREE.Buff
     };
     return [{ x: -half, y: under }, ...shares.map((share) => ({ x: share * reach, y: topAt(share) })), { x: half, y: under }];
   };
-  const us = spoiler.round ? Array.from({ length: SPOILER_ROUND_RINGS + 1 }, (_, k) => detSin((Math.PI / 2) * ((SPOILER_ROUND_RINGS - k) / SPOILER_ROUND_RINGS))) : [1, 0];
+  const raw = spoiler.round ? Array.from({ length: SPOILER_ROUND_RINGS + 1 }, (_, k) => detSin((Math.PI / 2) * ((SPOILER_ROUND_RINGS - k) / SPOILER_ROUND_RINGS))) : [1, 0];
+  const us = span[0] === 0 && span[1] === 1 ? raw : [span[1], ...raw.filter((u) => u > span[0] && u < span[1]), span[0]];
   return hardEdged(bowSpoilerFront(loftFromRings(us.map(ringAt), us.map((u) => lerp(spoiler.z[1], spoiler.z[0], u)), 0, 1), spoiler));
 }
 
-/** `style.roof`'s rails, glass panel and spoiler as one geometry (car frame) for the drawn body, its first `dark` vertices (rails, panel) drawn primer-dark; null without roof parts. */
-export function makeRoofFittings(style: BodyStyle): { geometry: THREE.BufferGeometry; dark: number } | null {
+/** u (0 at the spoiler's front edge, 1 at its tip) of the shut line across a roof-hinged gate's spoiler; null when none rides the gate. */
+function gateShare(style: BodyStyle): number | null {
+  const spoiler = style.roof?.spoiler;
+  if (spoiler?.gate === undefined || !roofHinged(style.boot)) return null;
+  const [z0, z1] = spoiler.z;
+  return THREE.MathUtils.clamp((z1 - spoiler.gate) / (z1 - z0), 0, 1);
+}
+
+/** The share of a roof-hinged gate's spoiler behind its `gate` line (car frame), which rides the gate; null when the gate carries none. */
+export function gateSpoiler(style: BodyStyle): THREE.BufferGeometry | null {
+  const spoiler = style.roof?.spoiler;
+  const u = gateShare(style);
+  return spoiler && u !== null && u < 1 ? spoilerGeometry(spoiler, [u, 1]) : null;
+}
+
+/**
+ * `style.roof`'s rails, glass panel and spoiler as one geometry (car frame) for the drawn body, its first `dark` vertices (rails, panel) drawn primer-dark;
+ * null without roof parts. `share` "body" leaves out the spoiler's share behind a roof-hinged gate's `gate` line (`gateSpoiler`).
+ */
+export function makeRoofFittings(style: BodyStyle, share: "all" | "body" = "all"): { geometry: THREE.BufferGeometry; dark: number } | null {
   const roof = style.roof;
   if (!roof) return null;
   const dark: THREE.BufferGeometry[] = [];
@@ -296,6 +318,8 @@ export function makeRoofFittings(style: BodyStyle): { geometry: THREE.BufferGeom
   if (roof.glassPanel) dark.push(glassPanelGeometry(roof.glassPanel, style));
   let darkCount = 0;
   for (const g of dark) darkCount += g.getAttribute("position").count;
-  const paint = roof.spoiler ? [spoilerGeometry(roof.spoiler)] : [];
+  const u = share === "body" ? gateShare(style) : null;
+  const paint = roof.spoiler && u !== 0 ? [spoilerGeometry(roof.spoiler, u === null ? undefined : [0, u])] : [];
+  if (dark.length === 0 && paint.length === 0) return null;
   return { geometry: merged([...dark, ...paint], "roof fittings"), dark: darkCount };
 }

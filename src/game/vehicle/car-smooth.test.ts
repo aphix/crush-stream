@@ -1424,11 +1424,11 @@ const BODY_VERTEX_BUDGET = 1.2;
 const ROOF_FITTING_VERTICES = { rails: 220, glassPanel: 154, spoiler: 61 } as const;
 type RoofKind = keyof typeof ROOF_FITTING_VERTICES;
 
-/** `style`'s roof fittings' vertices, all together and per kind (each built alone). */
-function roofFittingVertices(style: BodyStyle): { all: number; byKind: [RoofKind, number][] } {
-  const count = (s: BodyStyle) => makeRoofFittings(s)?.geometry.getAttribute("position").count ?? 0;
+/** `style`'s roof fittings' vertices, all together, the body's share of them (a roof-hinged gate's spoiler share rides the gate) and per kind (each built alone). */
+function roofFittingVertices(style: BodyStyle): { all: number; body: number; byKind: [RoofKind, number][] } {
+  const count = (s: BodyStyle, share: "all" | "body" = "all") => makeRoofFittings(s, share)?.geometry.getAttribute("position").count ?? 0;
   const kinds = Object.keys(style.roof ?? {}) as RoofKind[];
-  return { all: count(style), byKind: kinds.map((kind) => [kind, count({ ...style, roof: { [kind]: style.roof![kind] } })]) };
+  return { all: count(style), body: count(style, "body"), byKind: kinds.map((kind) => [kind, count({ ...style, roof: { [kind]: style.roof![kind] } })]) };
 }
 
 function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
@@ -1497,7 +1497,7 @@ describe("given every body style's car built whole", () => {
       assert.ok(triangles <= testCase.triangles * TRIANGLE_BUDGET, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`);
       const fittings = roofFittingVertices(car.style);
       const wells = wellAndCutVertices(car.style);
-      const loft = car.body.geometry.getAttribute("position").count - fittings.all - wells.lips - wells.humps - wells.liners - wells.bootRings - wells.noseRings - wells.splitRings - wells.wallTops - wells.shutCopies - wells.curvedPosts;
+      const loft = car.body.geometry.getAttribute("position").count - fittings.body - wells.lips - wells.humps - wells.liners - wells.bootRings - wells.noseRings - wells.splitRings - wells.wallTops - wells.shutCopies - wells.curvedPosts;
       assert.ok(loft <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
       assertRoofFittingCaps(testCase.id, fittings.byKind);
       const cap = WELL_AND_CUT_VERTICES[testCase.id];
@@ -1506,14 +1506,14 @@ describe("given every body style's car built whole", () => {
     });
   }
 
-  it("when a body carries every roof fitting, then each adds at most its own count of vertices to the body", () => {
+  it("when a body carries every roof fitting, then each adds at most its own count of vertices to the body (a roof-hinged gate's spoiler share is the gate's, not the body's)", () => {
     const wagon = CAR_STYLES.wagon;
     const roof = { rails: { x: [0.5, 0.56], z: [-1.6, 0.12], rise: 0.045 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 }, spoiler: { z: [-1.85, -1.7], y: [1.52, 1.6], halfWidth: 0.6 } } as const;
     const fittings = roofFittingVertices({ ...wagon, roof });
     assert.equal(fittings.byKind.length, 3, "the control: every kind is built");
     assertRoofFittingCaps("wagon", fittings.byKind);
     // Against the wagon with no fittings at all: the style itself may carry some.
-    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.all, makeChassisGeometry({ ...wagon, roof: undefined }).getAttribute("position").count, "the fittings are all the body gains");
+    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.body, makeChassisGeometry({ ...wagon, roof: undefined }).getAttribute("position").count, "the fittings are all the body gains");
   });
 });
 

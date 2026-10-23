@@ -12,7 +12,7 @@ import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } fro
 import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { cageLift, centreLift } from "./car-cage-rig.ts";
-import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { makeChassisGeometry, withGateSurround } from "./car-chassis-mesh.ts";
 import { doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { DOOR_GLASS_SEAT, makeBodyGlassTrim, makeDoorChromeStrips, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane, windshieldPoint } from "./car-glass.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
@@ -237,7 +237,7 @@ export interface Lamp {
 /**
  * A drawn-only lamp, no light of its own: on the skin (`lamps.brake`, `lamps.sideMarkers`; seated and lifted as a lamp, never broken), or
  * a head's share on the hood / a tail's on the boot lid (`hood` / `boot`: riding that lid, `anchor` null), drawn broken once its lamp
- * breaks or its lid tears off.
+ * breaks or its lid tears off; a roof-hinged gate's `lamps.brake` rides the gate (`anchor` null, no lamp) and goes dark when it tears off.
  */
 interface LampFitting {
   seat: THREE.Object3D;
@@ -245,8 +245,8 @@ interface LampFitting {
   anchor: SkinAnchor | null;
   /** Its variant in the lamp batch (`drawnLamp`); 0 for the shared brake and marker units. */
   variant: number;
-  /** A share's lamp on the body and its lid's part (set once the parts are registered); null on the brake and the markers. */
-  share: { lamp: Lamp; lid: DetachPart | null } | null;
+  /** A share's lamp on the body and its lid's part (set once the parts are registered); a hatch's high brake lamp on its gate has no lamp, only the lid; null on the other brake lamps and the markers. */
+  share: { lamp: Lamp | null; lid: DetachPart | null } | null;
   /** A marker's tint (`lamps.sideMarkers[].tint`), multiplied into its unit's colour; null for the rest. */
   tint: THREE.Color | null;
 }
@@ -515,7 +515,7 @@ export abstract class CarCore {
     this.hood.castShadow = true;
     this.hood.position.set(0, this.style.hood.origin[0], this.style.hood.origin[1]);
     this.group.add(this.hood);
-    this.trunk = new THREE.Mesh(makeTrunkGeometry(this.style), this.bodyMat);
+    this.trunk = new THREE.Mesh(withGateSurround(makeTrunkGeometry(this.style), drawn), this.bodyMat);
     this.trunk.castShadow = true;
     const [pivotY, pivotZ] = bootPivot(this.style.boot);
     this.trunk.position.set(0, pivotY, pivotZ);
@@ -696,12 +696,12 @@ export abstract class CarCore {
     return seat;
   }
 
-  /** `lamps.brake` on the skin or the rear glass met from behind at its [x, y], facing back; each of `lamps.sideMarkers` on both sides met from outboard at its [y, z], facing out. */
+  /** `lamps.brake` on the skin, the rear glass or a roof-hinged gate's spoiler (it rides the gate) met from behind at its [x, y], facing back; each of `lamps.sideMarkers` on both sides met from outboard at its [y, z], facing out. */
   private addLampFittings(): void {
     const { brake, sideMarkers } = this.style.lamps;
     const skin = new THREE.Mesh(this.body.geometry);
     const ray = new THREE.Raycaster();
-    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number], targets: THREE.Object3D[], tint?: number, inset?: number) => {
+    const seatAt = (kind: LampFitting["kind"], from: THREE.Vector3, toward: THREE.Vector3, yaw: number, size: readonly [number, number], targets: THREE.Object3D[], tint?: number, inset?: number, gate?: THREE.Object3D) => {
       ray.set(from, toward);
       const hit = ray.intersectObjects(targets, false)[0];
       if (!hit) throw new Error(`${this.style.id}: no skin for its ${kind} lamp from ${from.toArray().join()}`);
@@ -709,12 +709,31 @@ export abstract class CarCore {
       seat.scale.set(size[0], size[1], 1);
       // Recessed along the probe ray, into the car; absent, the hit point itself (no float math on the unrecessed lamps).
       const point = inset ? hit.point.clone().addScaledVector(toward, inset) : hit.point;
+      const color = tint === undefined ? null : new THREE.Color(tint);
+      if (hit.object === gate) {
+        // On the gate's spoiler: seated in the lid's frame, so it opens and tears with the gate.
+        seat.parent = this.trunk;
+        seat.position.copy(point).sub(this.trunk.position);
+        seat.quaternion.setFromAxisAngle(_up, yaw);
+        seat.updateMatrix();
+        this.lampFittings.push({ seat, kind, anchor: null, variant: 0, share: { lamp: null, lid: null }, tint: color });
+        return;
+      }
       const anchor = anchorOnSkin(this.body.geometry, point, _lampQ.setFromAxisAngle(_up, yaw));
-      this.lampFittings.push({ seat, kind, anchor, variant: 0, share: null, tint: tint === undefined ? null : new THREE.Color(tint) });
+      this.lampFittings.push({ seat, kind, anchor, variant: 0, share: null, tint: color });
     };
     if (brake) {
       const glass = new THREE.Mesh(makeRearGlass(this.style), GLASS_PROBE);
-      seatAt("brake", new THREE.Vector3(brake.at[0], brake.at[1], -LAMP_PROBE_REACH), new THREE.Vector3(0, 0, 1), Math.PI, brake.size, [skin, glass], undefined, brake.inset);
+      const targets: THREE.Object3D[] = [skin, glass];
+      let gate: THREE.Mesh | undefined;
+      if (this.trunk.geometry.userData.surround !== undefined) {
+        // Not `this.trunk` itself: its matrixWorld is stale in the ctor.
+        gate = new THREE.Mesh(this.trunk.geometry);
+        gate.position.copy(this.trunk.position);
+        gate.updateMatrixWorld();
+        targets.push(gate);
+      }
+      seatAt("brake", new THREE.Vector3(brake.at[0], brake.at[1], -LAMP_PROBE_REACH), new THREE.Vector3(0, 0, 1), Math.PI, brake.size, targets, undefined, brake.inset, gate);
       glass.geometry.dispose();
     }
     for (const marker of sideMarkers ?? []) {

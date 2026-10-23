@@ -700,7 +700,7 @@ interface LampCar {
     readonly seat: THREE.Object3D;
     readonly kind: keyof typeof FITTING_MESH;
     readonly variant: number;
-    readonly share: { readonly lamp: { readonly intact: boolean }; readonly lid: { readonly detached: boolean } | null } | null;
+    readonly share: { readonly lamp: { readonly intact: boolean } | null; readonly lid: { readonly detached: boolean } | null } | null;
     readonly tint?: THREE.Color | null;
   }[];
 }
@@ -708,7 +708,7 @@ interface LampCar {
 /** Each lamp fitting's slot in `LampBatch`, a lid share's broken one, and its slot while the car brakes (the tails' share and the
  *  high brake lamp burn bright; off the brakes the share is a running light and the high brake lamp dark). */
 const FITTING_MESH = { brake: 12, marker: 5, hood: 6, boot: 7 } as const;
-const SHARE_BROKEN = { brake: -1, marker: -1, hood: 8, boot: 9 } as const;
+const SHARE_BROKEN = { brake: 12, marker: -1, hood: 8, boot: 9 } as const;
 const FITTING_BRAKING = { brake: 4, marker: 5, hood: 6, boot: 11 } as const;
 /** A tail lamp's slot while its car brakes. */
 const TAIL_BRAKING = 10;
@@ -806,8 +806,8 @@ export class LampBatch {
       }
       for (const f of car.lampFittings) {
         if (!seatShown(f.seat)) continue;
-        // A lid's share goes dark with its lamp, and once its lid has torn off.
-        const dark = f.share !== null && (!f.share.lamp.intact || f.share.lid?.detached === true);
+        // A lid's share goes dark with its lamp, and once its lid has torn off (the gate's high brake lamp has no lamp: only the lid).
+        const dark = f.share !== null && (f.share.lamp?.intact === false || f.share.lid?.detached === true);
         this.put(dark ? SHARE_BROKEN[f.kind] : car.braking ? FITTING_BRAKING[f.kind] : FITTING_MESH[f.kind], f.seat, f.variant, f.tint);
       }
     }
