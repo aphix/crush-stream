@@ -2,7 +2,10 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { SAMPLE, sampleAt, type CageFields, type CageStyle } from "../vehicle/car-cage.ts";
 import { cageLift } from "../vehicle/car-cage-rig.ts";
+import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import { PLATFORM_HALF } from "../vehicle/car-rig.ts";
+import { TYRE_POINTS } from "../vehicle/car-air-body.ts";
+import { MOUNT } from "../world/surfaces.ts";
 import { hypot2 } from "../deform/physics-util.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { FINE_HZ } from "../kernel/constants.ts";
@@ -97,6 +100,8 @@ const F_BEST = 6;
 const _inA = new Float64Array(7);
 const _inB = new Float64Array(7);
 const _grad = new Float64Array(2);
+/** `tyreIn`'s `found`: one tyre's corners in the other car. */
+const _inT = new Float64Array(7);
 
 /** `a`'s frame into `b`'s, both full poses (`frameInto`): per axis of `b` (x, y, z), its offset and its x, y, z coefficients on a point of `a`'s. */
 const _ab = new Float64Array(12);
@@ -156,11 +161,14 @@ const BAND_INSET = VERTICAL_CLEAR / 4;
 /** An end's own cell's end this close (m) to where the end was placed is the same place: no second placement. */
 const END_MOVED = 1e-4;
 
+/** The nodes `deepestIn` places in another car's plan: a cage's outline, or one tyre's plan corners (`tyreIn`). */
+type PlanNodes = Pick<CageOutline, "xs" | "zs" | "lows" | "highs" | "count" | "xLo" | "xHi" | "zLo" | "zHi" | "low" | "high">;
+
 /**
  * Whether every node of `outline` at a height in `a`'s range, placed in `b`'s frame by `_ab`, misses `b`'s box. A node's own sum adds
  * the same terms in the same order as these bounds, each monotone in its coordinate (and so is its rounding), so it never lies beyond.
  */
-function boxMissed(outline: CageOutline): boolean {
+function boxMissed(outline: PlanNodes): boolean {
   const yLo = _in[I_LOW]!;
   const yHi = _in[I_HIGH]!;
   for (let o = 0; o <= 8; o += 8) {
@@ -275,12 +283,11 @@ function endAt(at: number, dir: number, plan: Float32Array, style: CageStyle, ou
  * That depth goes to `found[F_BEST]`; every such node also adds to `found`'s sums with its depth as weight: the overlap patch's centre
  * and outward normal (b's outline) in `b`'s frame, and its height in the world (`addToPatch`). Both cars' world matrices are fresh.
  */
-function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look: number): void {
-  const outline = outlineOf(a);
+function deepestIn(a: DeformableCar, outline: PlanNodes, liftA: number, b: DeformableCar, found: Float64Array, look: number): void {
   const style = b.cage.style;
   const box = b.cage.fields.planBox;
   const reach = OUTLINE_REACH + look;
-  const liftA = cageLift(a);
+
   _in[0] = box[0]! - reach;
   _in[1] = box[1]! + reach;
   _in[2] = box[2]! - reach;
@@ -383,8 +390,8 @@ export function satCars(a: DeformableCar, b: DeformableCar, normalOut: THREE.Vec
 
   a.refreshBasis();
   b.refreshBasis();
-  deepestIn(a, b, _inA, look);
-  deepestIn(b, a, _inB, look);
+  deepestIn(a, outlineOf(a), cageLift(a), b, _inA, look);
+  deepestIn(b, outlineOf(b), cageLift(b), a, _inB, look);
   const depthA = _inA[F_BEST]!;
   const depthB = _inB[F_BEST]!;
   if (depthA <= 0 && depthB <= 0) return null;
@@ -426,4 +433,132 @@ export function satCars(a: DeformableCar, b: DeformableCar, normalOut: THREE.Vec
   contactOut.y = (_inA[F_Y]! + _inB[F_Y]!) / w;
   contactOut.z = (_inA[F_Z]! + _inB[F_Z]!) / w;
   return Math.max(depthA, depthB) - look;
+}
+
+/** One tyre's plan corners (`TYRE_POINTS`) in its car's frame, from its mount to its top: the nodes `tyreIn` places. */
+const TYRE_NODES: PlanNodes = {
+  xs: new Float64Array(TYRE_POINTS.length),
+  zs: new Float64Array(TYRE_POINTS.length),
+  lows: new Float32Array(TYRE_POINTS.length),
+  highs: new Float32Array(TYRE_POINTS.length),
+  count: TYRE_POINTS.length,
+  xLo: 0,
+  xHi: 0,
+  zLo: 0,
+  zHi: 0,
+  low: 0,
+  high: 0,
+};
+
+/** `placeTyres`' fields per tyre, `TYRE_STRIDE` apart: its hub's mass index, its hub's x and z in its car's frame, its middle in the world (x, y, z), its drawn radius and half-width (m). */
+export const TYRE_STRIDE = 8;
+export const TYRE_MASS = 0;
+const T_LX = 1;
+const T_LZ = 2;
+const T_X = 3;
+const T_Y = 4;
+const T_Z = 5;
+const T_R = 6;
+const T_HALF_W = 7;
+
+/**
+ * `car`'s tyres still on (`TYRE_STRIDE` fields each into `out`) as drawn: the rig's tyre at the class's wheel scale, on each hub as it
+ * stands (an intact car's at rest, a wreck's where its shove holds it), its bottom on the body's y = 0. Returns how many. The car's world
+ * matrix is fresh.
+ */
+export function placeTyres(car: DeformableCar, out: Float64Array): number {
+  const scale = CLASSES[carClass(car)].wheelScale;
+  const r = car.frame.rig.tyre.r * scale;
+  const halfW = car.frame.rig.tyre.halfW * scale;
+  const e = car.group.matrixWorld.elements;
+  const masses = car.deform.masses;
+  let n = 0;
+  for (let i = 0; i < masses.length; i++) {
+    const hub = masses[i]!;
+    if (!hub.hub || hub.popped) continue;
+    const at = car.deform.massActive ? hub.local : hub.rest;
+    const o = n * TYRE_STRIDE;
+    out[o + TYRE_MASS] = i;
+    out[o + T_LX] = at.x;
+    out[o + T_LZ] = at.z;
+    out[o + T_X] = e[12]! + e[0]! * at.x + e[4]! * r + e[8]! * at.z;
+    out[o + T_Y] = e[13]! + e[1]! * at.x + e[5]! * r + e[9]! * at.z;
+    out[o + T_Z] = e[14]! + e[2]! * at.x + e[6]! * r + e[10]! * at.z;
+    out[o + T_R] = r;
+    out[o + T_HALF_W] = halfW;
+    n++;
+  }
+  return n;
+}
+
+/**
+ * How deep (m, in `satCars`' terms) `a`'s tyre `k` (`placeTyres`' `tyres`) stands in `b`'s body, or null: its plan corners placed as
+ * `deepestIn` places an outline's nodes, from its mount (`MOUNT` of its radius: lower, it climbs what it meets) to its top. A corner is
+ * the tyre's own edge, not a node half a step in, so its true depth is the result less `OUTLINE_REACH`. `normalOut` is `b`'s outline
+ * normal there (out of `b`), `contactOut` the corners' depth-weighted centre. Both cars' world matrices are fresh.
+ */
+export function tyreIn(a: DeformableCar, tyres: Float64Array, k: number, b: DeformableCar, normalOut: THREE.Vector3, contactOut: THREE.Vector3, look: number): number | null {
+  const o = k * TYRE_STRIDE;
+  const x = tyres[o + T_LX]!;
+  const z = tyres[o + T_LZ]!;
+  const r = tyres[o + T_R]!;
+  const halfW = tyres[o + T_HALF_W]!;
+  for (let c = 0; c < TYRE_POINTS.length; c++) {
+    TYRE_NODES.xs[c] = x + TYRE_POINTS[c]![0] * halfW;
+    TYRE_NODES.zs[c] = z + TYRE_POINTS[c]![1] * r;
+    TYRE_NODES.lows[c] = MOUNT * r;
+    TYRE_NODES.highs[c] = 2 * r;
+  }
+  TYRE_NODES.xLo = x - halfW;
+  TYRE_NODES.xHi = x + halfW;
+  TYRE_NODES.zLo = z - r;
+  TYRE_NODES.zHi = z + r;
+  TYRE_NODES.low = MOUNT * r;
+  TYRE_NODES.high = 2 * r;
+  deepestIn(a, TYRE_NODES, 0, b, _inT, look);
+  if (!(_inT[F_BEST]! > 0)) return null;
+  const rb = b.rightFlat;
+  const fb = b.fwdFlat;
+  const nx = rb.x * _inT[F_NX]! + fb.x * _inT[F_NZ]!;
+  const nz = rb.z * _inT[F_NX]! + fb.z * _inT[F_NZ]!;
+  const len = hypot2(nx, nz);
+  if (len <= 1e-9) return null;
+  const w = _inT[F_W]!;
+  normalOut.set(nx / len, 0, nz / len);
+  contactOut.set(_inT[F_X]! / w, _inT[F_Y]! / w, _inT[F_Z]! / w);
+  return _inT[F_BEST]! - look;
+}
+
+/**
+ * How deep (m) `a`'s tyre `ka` and `b`'s tyre `kb` (`placeTyres`' `tyresA`, `tyresB`) overlap in the plan, negative for the gap, each a
+ * 2·radius × 2·half-width rectangle on its hub along its car; -Infinity where either stands no taller over the other's bottom than that
+ * one mounts (`MOUNT` of its radius: it climbs it). `normalOut` is the separating axis, b → a, `contactOut` midway between the hubs.
+ */
+export function tyresOverlap(a: DeformableCar, tyresA: Float64Array, ka: number, b: DeformableCar, tyresB: Float64Array, kb: number, normalOut: THREE.Vector3, contactOut: THREE.Vector3): number {
+  const oa = ka * TYRE_STRIDE;
+  const ob = kb * TYRE_STRIDE;
+  const rA = tyresA[oa + T_R]!;
+  const wA = tyresA[oa + T_HALF_W]!;
+  const rB = tyresB[ob + T_R]!;
+  const wB = tyresB[ob + T_HALF_W]!;
+  const dy = tyresA[oa + T_Y]! - tyresB[ob + T_Y]!;
+  if (dy + rA <= MOUNT * rB - rB || rB - dy <= MOUNT * rA - rA) return -Infinity;
+  const dx = tyresA[oa + T_X]! - tyresB[ob + T_X]!;
+  const dz = tyresA[oa + T_Z]! - tyresB[ob + T_Z]!;
+  // Each rectangle stands within its half-diagonal, no more than its radius and half-width together, of its hub.
+  const reachAll = rA + wA + rB + wB;
+  if (dx * dx + dz * dz >= reachAll * reachAll) return -Infinity;
+  const fa = a.fwdFlat, ra = a.rightFlat, fb = b.fwdFlat, rb = b.rightFlat;
+  let depth = Infinity;
+  for (let k = 0; k < 4; k++) {
+    const u = k === 0 ? fa : k === 1 ? ra : k === 2 ? fb : rb;
+    const along = dx * u.x + dz * u.z;
+    const reach = rA * Math.abs(fa.x * u.x + fa.z * u.z) + wA * Math.abs(ra.x * u.x + ra.z * u.z) + rB * Math.abs(fb.x * u.x + fb.z * u.z) + wB * Math.abs(rb.x * u.x + rb.z * u.z);
+    if (reach - Math.abs(along) >= depth) continue;
+    depth = reach - Math.abs(along);
+    const side = along >= 0 ? 1 : -1;
+    normalOut.set(u.x * side, 0, u.z * side);
+  }
+  contactOut.set(tyresB[ob + T_X]! + dx / 2, tyresB[ob + T_Y]! + dy / 2, tyresB[ob + T_Z]! + dz / 2);
+  return depth;
 }

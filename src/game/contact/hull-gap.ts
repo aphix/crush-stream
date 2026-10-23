@@ -1,10 +1,11 @@
 import type { DeformableCar } from "../vehicle/car.ts";
 import { hypot2 } from "../deform/physics-util.ts";
 import { OUTLINE_REACH } from "./cage-outline.ts";
+import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 
 /**
  * Plan hulls for the lone-car test of `stepWorld` (`loneCars`): two intact road cars that cannot meet over a step run it as one slice. A hull is the cage's plan box widened by
- * what stands out past it (outline, mirrors, a tilted body's lean), read once per car per step (`readHull`); two hulls are clear when a separating axis leaves a gap that
+ * what stands out past it (outline, mirrors, tyres, a tilted body's lean), read once per car per step (`readHull`); two hulls are clear when a separating axis leaves a gap that
  * closing speed, turn and slack do not eat (`hullsClear`).
  *
  * Fields of one car's hull in a `Float64Array`, `HULL_STRIDE` per car: centre, right and forward unit vectors, half sides along them, plan velocity, rim speed by turning.
@@ -43,9 +44,12 @@ export function readHull(car: DeformableCar, out: Float64Array, o: number): bool
   // How far the plan of a car-tall body reaches past the level box when it leans by `LEVEL`.
   const tilt = 2 * car.frame.half.y * LEVEL;
   const d = car.style.door;
+  // The tyres meet other cars (`tyreIn`): a wide-tracked class's stand past its body (a monster's by 0.28 m).
+  const scale = CLASSES[carClass(car)].wheelScale;
+  const tyre = car.frame.rig.tyre;
   // The mirror's tip from the car's axis (its own door's); a latched door reaches no further.
-  const hx = Math.max((plan[1]! - plan[0]!) / 2, car.mirrorBaseX + d.mirrorReach) + OUTLINE_REACH + tilt;
-  const hz = (plan[3]! - plan[2]!) / 2 + OUTLINE_REACH + tilt;
+  const hx = Math.max((plan[1]! - plan[0]!) / 2, car.mirrorBaseX + d.mirrorReach, car.frame.halfTrack + Math.abs(midX) + tyre.halfW * scale) + OUTLINE_REACH + tilt;
+  const hz = Math.max((plan[3]! - plan[2]!) / 2, car.frame.halfBase + Math.abs(midZ) + tyre.r * scale) + OUTLINE_REACH + tilt;
   const w = car.angular;
   out[o + H_CX] = p.x + r.x * midX + f.x * midZ;
   out[o + H_CZ] = p.z + r.z * midX + f.z * midZ;

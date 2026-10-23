@@ -244,6 +244,11 @@ stayed inside the follower's nose for seconds (the owner's "hooked cops"; any cl
 
 A clip saved before this rule replays its pairs' pushes the other way round: `REPLAY_VERSION` 13.
 
+Since tyres meet the other car (`UNIFIED_CONTACT.md` §12.15) the class-pair rows start from each car's own drawn rear corner and nose,
+walked on along the follower's nose until every tyre stands clear of the other car's tyres and body (the platform's 0.95 / 2.2 / 2.3 m
+put a sedan's tyre 0.33 m inside a monster's), and each also holds the follower's tyres out of the front car's body (≤ 1 cm); the SUV
+ahead of a monster, skipped while a monster's tyres ran 0.15 m into its tail, is a row again.
+
 ### A pair's axis that lies square to its centre line keeps its side (`REPLAY_VERSION` 72)
 
 Owner, live c5e5cba (seed 5449605, 12 cars): wrecks twitch through the slow-mo crash until they rest. Wrecks interlocked past the outline's reach (two sedans 3 m apart in one lane) have a mean outline normal square to the centre line, so `apart = n·(centre offset)` was the sign of a few mm of lateral offset: ±2 mm turned the axis 180° (`pair-hook.test.ts`, cos −0.99 before) and the push-out moved the pair 6 mm to and fro every slice. `satCars` now takes the centre line, pointing apart, for any axis within 17° of square to it (`PERPENDICULAR` 0.3).

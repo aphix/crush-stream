@@ -15,6 +15,7 @@ import type { SimPacer } from "../engine/sim-pace.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 import { RigSolids } from "../scenes/rig-solids.ts";
 import { armedSolids, armSolids } from "../world/surfaces.ts";
+import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 
 /**
  * Headless crash scenarios through the engine's own step (`stepWorld`) and phase clock, at
@@ -617,21 +618,23 @@ export function runPair(kphA: number, kphB: number, kind: "head-on" | "t-bone" =
 /** A pair's four tyre-rectangle axes (unit x, z) and both tyres' summed half-extent along each. */
 const tyreAxesOf = new Float64Array(12);
 
-/** A tyre seen from above is a 2·r × 2·halfW rectangle on its hub, along its car. */
-// ponytail: both cars' tyres read off carA's frame (one factor, bit-identical); split per car once styles differ in tyre size.
+/** A tyre seen from above is a 2·r × 2·halfW rectangle on its hub, along its car: each car's own tyre at its class's wheel scale. */
 function tyreAxes(carA: DeformableCar, carB: DeformableCar): void {
   const fA = carA.fwdFlat,
     rA = carA.rightFlat,
     fB = carB.fwdFlat,
     rB = carB.rightFlat;
-  const { r, halfW } = carA.frame.rig.tyre;
+  const scaleA = CLASSES[carClass(carA)].wheelScale;
+  const scaleB = CLASSES[carClass(carB)].wheelScale;
+  const tyreA = carA.frame.rig.tyre;
+  const tyreB = carB.frame.rig.tyre;
   for (let k = 0; k < 4; k++) {
     const u = k === 0 ? fA : k === 1 ? rA : k === 2 ? fB : rB;
     tyreAxesOf[k * 3] = u.x;
     tyreAxesOf[k * 3 + 1] = u.z;
     tyreAxesOf[k * 3 + 2] =
-      r * (Math.abs(fA.x * u.x + fA.z * u.z) + Math.abs(fB.x * u.x + fB.z * u.z)) +
-      halfW * (Math.abs(rA.x * u.x + rA.z * u.z) + Math.abs(rB.x * u.x + rB.z * u.z));
+      scaleA * (tyreA.r * Math.abs(fA.x * u.x + fA.z * u.z) + tyreA.halfW * Math.abs(rA.x * u.x + rA.z * u.z)) +
+      scaleB * (tyreB.r * Math.abs(fB.x * u.x + fB.z * u.z) + tyreB.halfW * Math.abs(rB.x * u.x + rB.z * u.z));
   }
 }
 

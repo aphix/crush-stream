@@ -379,6 +379,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * corners is taken back first, so an undriven 60 km/h head-on arms at its own closing (16.66 m/s, its engine blocks 0.165 m back; was
  * 15.70 m/s and 0.118 m).
  * A door a side hit presses onto its crush band's full depth keeps it (it is packed: nothing springs back), where it sprang 4 cm back once the face left.
+ * A car's tyres meet the other car's tyres and body in a car-car contact, each its drawn radius and width from its mount up: a wreck's
+ * tyre goes back into its well with its hub as far as its body has crushed and the rest holds rigid, so two sedans' tyres no longer
+ * pass 4.8 cm through each other at 56 km/h head-on, nor a monster's front tyres into the tail of the car ahead.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
