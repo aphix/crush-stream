@@ -517,3 +517,11 @@ ground can stand on at some pitch.
   count. Sixteen wrecks each with a front wheel popped: 0.67-0.72 ms a step against 2.07, because all 16 sleep on their lips
   against 6 of 16 before.
 - **Rows:** wheel-rest minus front-left goes green for the sedan, police, hatch and SUV, and so does tumbled-rest's roof row (its cowl kept).
+
+### 12.15 The cage carries each front door while it hangs latched (CarDoors3, REPLAY 158)
+
+At door heights the cage had no shut front door: its side stood at the sill and belt nodes (x 0.60-0.65 where the door is drawn at 0.815), so a side striker met the body 8-26 cm inside the drawn door (sedan 8-19, wagon 14-26). Each front door is now a cage panel on the per-part path the bumpers use (`CageSource.apart`, pushed after them): the style's own `makeDoorGeometry` as a `CAGE_DOOR_THICKNESS` (0.25 m) slab, its outer and inner corners held (`doorPoints`), decimated alone to `PART_VERTICES` (12) and appended past the hull, so the doors cost the hull none of its budget (`CAGE_PART_VERTICES` 4 x 12).
+
+- **On while latched.** The panel is on while the door is attached and latched, and posed about its hinge by `hingePose`'s door branch, the pose the drawn door takes. A sprung or torn door leaves the cage: the cage never stands where the door has gone.
+- **Row.** `car-cage.test.ts`: a striker moved sideways into either flank at 5 stations across the door aperture x 3 door heights meets the cage within `TOP_P95_M` (5 cm) of the drawn door's outer skin, for every body. `door-swing.test.ts`: after a 40 km/h side wall hit the cage drops the sprung door's panel and keeps the latched one's.
+- **Drawn skinning is untouched**: only the cage changes, so no undeformed car moves.

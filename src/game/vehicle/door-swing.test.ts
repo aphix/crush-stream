@@ -231,4 +231,17 @@ describe("given a car whose door a side hit has sprung open", () => {
     assert.ok(jam > DOOR_AJAR, `jam ${jam}`);
     assert.ok(car.doorHinge(sides[0]!).theta >= Math.min(jam * 1.45, DOOR_OPEN_MAX) - 1e-9, "the door hangs shut past its jam");
   });
+
+  it("when it hits a wall side-on at 40 km/h in shape deform mode, then its cage drops the sprung door's panel and keeps the latched door's (the doors are the cage's last two panels, left then right)", () => {
+    const car = new Probe(paint(), new THREE.Scene());
+    car.deform.setMode("shape");
+    runWall(40, 1, "side", { car });
+    car.refitCage();
+    const on = car.cage.fields.panelOn;
+    assert.ok(([-1, 1] as const).some((s) => !car.doorHinge(s).latched), "no door sprung");
+    for (const side of [-1, 1] as const) {
+      const flag = on[on.length - (side < 0 ? 2 : 1)];
+      assert.equal(flag, car.doorHinge(side).latched ? 1 : 0, `side ${side} latched ${car.doorHinge(side).latched}: its door panel ${flag}`);
+    }
+  });
 });

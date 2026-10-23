@@ -73,8 +73,8 @@ The hardpoints place the openings and the lower body, each per car:
 | `seats` | The driver's H-point `front` `[x, y, z]` (he sits on −x, the passenger mirrors him) and the rear bench's `rear` `[y, z]` on the centre line, or `null` with no rear row (the regular-cab truck). The drawn seats, the seated driver and the sim's seat read it |
 
 `car-styles/platform.ts` exports the values the first bodies shared as `PLATFORM_HARDPOINTS`; a table spreads it and overrides
-what its car changes. Every hardpoint but the bumper fascia reaches the collision cage or a sim reader (the greenhouse pillars,
-the sill, the arches, the hood's pose, a torn bumper's box), so moving one moves the sim: re-pin and bump `REPLAY_VERSION`.
+what its car changes. Every hardpoint but a push bar, tow hitch and exhaust tip reaches the collision cage or a sim reader (the greenhouse pillars,
+the sill, the arches, the hood's pose, the bumpers' fascia, the front doors' slab, a torn bumper's box), so moving one moves the sim: re-pin and bump `REPLAY_VERSION`.
 The greenhouse header bars follow the roof: a drawn header bar's top never stands above the roof skin over its ends. The drawn
 A-pillar is a rounded post along the windshield's edge, 6 cm wide in side view whatever `aPillarFoot` / `aPillarTop` say, its top
 held under the roof skin; where the door glass's front edge lies further back, a sail panel fills the gap at the same height (the
