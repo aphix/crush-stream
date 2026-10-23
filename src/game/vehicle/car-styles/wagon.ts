@@ -145,7 +145,13 @@ export const WAGON: BodyStyle = {
   roofZ: [-1.84, 0.3],
   windshieldTop: [1.45, 0.3],
   // The A-post upright and even as its reference side plate's band (drawn twin: the windshield's side edge bows back in plan to the roof's square front, the cage keeps the style's own).
-  drawn: { windshield: { base: [1.1, 0.73], wBase: 1.42, wTop: 0.98, bow: { base: 0.18, top: 0.023 }, seat: true }, aPillarFoot: 0.675, aPillarTop: 0.175 },
+  drawn: {
+    windshield: { base: [1.1, 0.73], wBase: 1.42, wTop: 0.98, bow: { base: 0.18, top: 0.023 }, seat: true },
+    aPillarFoot: 0.675,
+    aPillarTop: 0.175,
+    // The roof's front rolls down onto the windshield's top (its whole bow), so the dome's crown meets the pane's top edge: no see-through slot between them.
+    roofEnds: { front: 0.1, glassBow: { front: true } },
+  },
   // The rear glass's top as wide as the roof end lets it (its post-top clamp), so the D-post's edges run near parallel.
   rearGlass: { base: [1.1, -2.065], top: [1.47, -1.79], wBase: 1.22, wTop: 0.96 },
   // The quarter glass runs back to a slim D-post of even width, as the reference's rear iso.

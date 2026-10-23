@@ -1370,8 +1370,8 @@ const BASELINE_BY_STYLE = [
   // The sedan's re-pinned for its quarter window's round rear end (`cPillar.dEnd`) and the A-sail's glass-top station (`aPillarSailGlass`).
   { id: "sedan", drawCalls: 13, triangles: 5390, bodyVertices: 1587 },
   { id: "hatchback", drawCalls: 13, triangles: 5064, bodyVertices: 1587 },
-  // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's.
-  { id: "wagon", drawCalls: 13, triangles: 5117, bodyVertices: 1635 },
+  // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's, and its drawn twin's front roll down onto the windshield top.
+  { id: "wagon", drawCalls: 13, triangles: 5152, bodyVertices: 1660 },
   { id: "coupe", drawCalls: 16, triangles: 5152, bodyVertices: 1530 },
   { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
   // The police carries the sedan's quarter window (pinch ring, sail sweep ring, round end), its divider bar and its belt rail's run-on under the sail.

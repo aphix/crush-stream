@@ -296,8 +296,8 @@ export interface PillarSpan {
   z?: readonly [number, number];
 }
 
-/** Drawn only: the windshield and the door glass's front edge as the player sees them (`BodyStyle.drawn`, `drawnStyle`). */
-export type DrawnTwin = Partial<Pick<BodyStyle, "windshield" | "windshieldTop" | "aPillarFoot" | "aPillarTop" | "aPillarKnee" | "aPillarSailGlass">>;
+/** Drawn only: the windshield, the door glass's front edge and the roof's ends as the player sees them (`BodyStyle.drawn`, `drawnStyle`). */
+export type DrawnTwin = Partial<Pick<BodyStyle, "windshield" | "windshieldTop" | "aPillarFoot" | "aPillarTop" | "aPillarKnee" | "aPillarSailGlass" | "roofEnds">>;
 
 export interface BodyStyle {
   id: CarStyleId;
@@ -313,7 +313,7 @@ export interface BodyStyle {
    * unset, the roof ends in its full section. `flush` (0..1 per end, absent 0): the share of the side lip's reach past the dome's
    * edge that end tucks in at the end itself, fading out over its run, so a boxy cab's roof corners sit flush over its posts. `glassBow`
    * (per end): that end bows in plan with its glass top's whole bow, not only past the default bow, so a roof rolled level onto its glass
-   * top meets it with no slit between them.
+   * top meets it with no slit between them. Set or not, the front end never stands behind the windshield's top row in plan.
    */
   roofEnds?: { rear?: number; front?: number; flush?: { rear?: number; front?: number }; glassBow?: { rear?: boolean; front?: boolean } };
   /** Drawn only: how far (m) the roof's side rolls out past the cant line (the side glass's plane) at its bottom; absent 0.01 (a drip lip the pillars' faces meet flush); 0 rolls the roof flush into the glass, no drip rail. */
