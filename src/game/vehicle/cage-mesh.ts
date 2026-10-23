@@ -77,9 +77,10 @@ function holdUnderside(px: Float64Array, py: Float64Array, pz: Float64Array, rep
  * (the mesh splits them for its normals). `lofted`: the body loft's vertices, the first of the mesh, whose underside a body rests on
  * is held (`holdUnderside`), over the `target`: held within it, they cost the vertices that stood elsewhere (an upside-down sedan lost its
  * cowl's sides, rested on the drawn A-pillar's foot 7.3 cm in the ground). They come last in `source`, from `heldFrom` (`held` of them),
- * so a reader may leave them out where only a wreck stands on them. Build-time only: allocates freely, runs once per style.
+ * so a reader may leave them out where only a wreck stands on them. `keep` (per mesh vertex): 1 never collapses, within the `target`.
+ * Build-time only: allocates freely, runs once per style.
  */
-export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Uint8Array, target: number, lofted = 0): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array; held: number; heldFrom: number } {
+export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Uint8Array, target: number, lofted = 0, keep?: Uint8Array): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array; held: number; heldFrom: number } {
   const meshVertices = rest.length / 3;
   // Weld by rest position, within one mesh (a panel's vertex at the body's is not the body's).
   const weld = new Int32Array(meshVertices);
@@ -204,6 +205,7 @@ export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Ui
   }
   const noseCap = new Uint8Array(nv);
   for (let v = 0; v < nv; v++) {
+    if (keep?.[reps[v]!] === 1) noseCap[v] = 1;
     if (group[reps[v]!] !== 0) continue;
     if (pz[v]! > zFront - 1e-4 || (pz[v]! < zBack + 1e-4 && py[v]! < (tailLow + tailHigh) / 2)) noseCap[v] = 1;
   }

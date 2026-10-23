@@ -4,14 +4,14 @@ import { HIT_SIZE, PQ_BODY, PQ_SIZE } from "../world/surfaces.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
-import { CAGE_HELD_VERTICES, CAGE_TUB_VERTICES, CAGE_VERTICES, SILL_CAPACITY } from "./car-cage.ts";
+import { CAGE_HELD_VERTICES, CAGE_PART_VERTICES, CAGE_TUB_VERTICES, CAGE_VERTICES, SILL_CAPACITY } from "./car-cage.ts";
 import { centreY } from "./car-cage-rig.ts";
 
 export const G = 9.6;
 /** Sizes the per-slice tables and the unbound body: every frame's belly and wheels share the sedan's layout. */
 const PLATFORM = carFrame(CAR_STYLES.sedan);
-/** Room for a style's cage vertices at most (`CAGE_VERTICES`, the underside points held over it, `CAGE_HELD_VERTICES`, and its bed's tubs, `CAGE_TUB_VERTICES`), a wreck's sill samples (`SILL_CAPACITY`) and the belly: `loadPoints` fills it per body each slice. */
-const POINT_CAPACITY = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_TUB_VERTICES + SILL_CAPACITY + PLATFORM.belly.length;
+/** Room for a style's cage vertices at most (`CAGE_VERTICES`, the underside points held over it, `CAGE_HELD_VERTICES`, its bed's tubs, `CAGE_TUB_VERTICES`, and its parts apart, `CAGE_PART_VERTICES`), a wreck's sill samples (`SILL_CAPACITY`) and the belly: `loadPoints` fills it per body each slice. */
+const POINT_CAPACITY = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_TUB_VERTICES + CAGE_PART_VERTICES + SILL_CAPACITY + PLATFORM.belly.length;
 /** The loaded points as flat car-local x, y (class lift on), z rows: `hullPoint` reads them per slice without unpacking a tuple. */
 export const POINT_X = new Float64Array(POINT_CAPACITY);
 export const POINT_Y = new Float64Array(POINT_CAPACITY);

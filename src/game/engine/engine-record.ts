@@ -64,7 +64,7 @@ const KEY_SLOTS = 40;
 const MAX_EJECTED = 64;
 /** Figures run down remembered for the clips (a pathological run drops the oldest). */
 const MAX_STRUCK = 64;
-/** Numbers one more panel in a car's cage adds to its refit history (a police car's light bar over the civilian cars' hood, boot and two skinned panes: `CarCage.stateSize`), left in the keyframe's solver scratch. */
+/** Numbers one more panel in a car's cage adds to its refit history (a police car's light bar over the civilian cars' hood, boot, two skinned panes and two bumpers: `CarCage.stateSize`), left in the keyframe's solver scratch. */
 const CAGE_PANEL_SLACK = 8;
 /** Most slices one clip part stir runs (its length is a u16: a clip of 8192 steps of 8 slices holds a run longer than that). */
 const MAX_RUN_SLICES = 0xffff;

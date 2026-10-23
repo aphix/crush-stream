@@ -52,15 +52,17 @@ const _open = new Float64Array(OPEN_MAX * 4);
  * inside the body, and a roof the load crushes below it is the load law's to stop, not a prop's).
  */
 export function rasterise(style: CageStyle, f: CageFields, panelOn: Uint8Array, cutY: number, cutX: number, cutZ: number): void {
-  const { nu, nv, step, u0, v0, tris, triGroup } = style;
+  const { nu, nv, step, u0, v0, tris, triGroup, partGroup } = style;
   const pos = f.pos;
   const rawY = f.rawY;
   const top = f.top;
   const bottom = f.bottom;
   const covered = f.covered;
+  const part = f.part;
   top.fill(NaN);
   bottom.fill(NaN);
   covered.fill(0);
+  part.fill(0);
   const margin = EXPAND * step;
   const interiorGroup = style.panelCount + 1;
   const opens = gonePanes(style, f, panelOn);
@@ -139,7 +141,11 @@ export function rasterise(style: CageStyle, f: CageFields, panelOn: Uint8Array, 
         const k = j * nu + i;
         if (!(top[k]! >= y)) top[k] = y;
         if (!(bottom[k]! <= y)) bottom[k] = y;
-        if (eAB >= 0 && eBC >= 0 && eCA >= 0) covered[k] = 1;
+        if (eAB >= 0 && eBC >= 0 && eCA >= 0) {
+          if (group < partGroup || group === interiorGroup) part[k] = 0;
+          else if (covered[k] === 0) part[k] = group;
+          covered[k] = 1;
+        }
       }
     }
     heightMax = Math.max(heightMax, Math.abs(yLow), Math.abs(yHigh));

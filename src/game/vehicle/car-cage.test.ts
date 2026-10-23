@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { CAGE_STEP, CAGE_VERTICES, type CageSource, CarCage } from "./car-cage.ts";
+import { CAGE_PART_VERTICES, CAGE_STEP, CAGE_VERTICES, type CageSource, CarCage } from "./car-cage.ts";
 import { cageGaps, cageLiveOf, cageOf, cageSourceOf, fitToDrawn } from "./car-cage.test-util.ts";
 import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_WORST_M, topGapsOff, topParts } from "./drawn-body.test-util.ts";
 
@@ -53,13 +53,19 @@ for (const body of BODIES) {
 }
 
 describe("given the cage's vertex budget", () => {
-  it("when a style's cage is built, then it has its budget's vertices and the underside points held over it, and about three hundred triangles", (t) => {
+  it("when a style's cage is built, then it has its budget's vertices and the underside points held over it, about three hundred triangles, and its bumpers on their own budget past them", (t) => {
     const car = carInState("untouched", "sedan", "sedan");
     const cage = cageOf(car);
-    const { vertexCount, heldCount, triCount } = cage.style;
-    t.diagnostic(`${vertexCount} vertices (${heldCount} of them the underside held over the ${CAGE_VERTICES}), ${triCount} triangles`);
-    assert.ok(vertexCount <= CAGE_VERTICES + heldCount + 2 && vertexCount >= CAGE_VERTICES / 2, `${vertexCount} vertices, ${heldCount} held`);
-    assert.ok(triCount >= 150 && triCount <= 330 + 2 * heldCount, `${triCount} triangles`);
+    const { vertexCount, heldCount, triCount, source, tris } = cage.style;
+    const partFrom = cageSourceOf(car).apart[0]!.from;
+    let parts = 0;
+    for (let i = 0; i < vertexCount; i++) if (source[i]! >= partFrom) parts++;
+    let partTris = 0;
+    for (let k = 0; k < tris.length; k += 3) if (tris[k]! >= vertexCount - parts && tris[k]! < vertexCount) partTris++;
+    t.diagnostic(`${vertexCount} vertices (${heldCount} of them the underside held over the ${CAGE_VERTICES}, ${parts} the bumpers'), ${triCount} triangles (${partTris} the bumpers')`);
+    assert.ok(vertexCount - parts <= CAGE_VERTICES + heldCount + 2 && vertexCount - parts >= CAGE_VERTICES / 2, `${vertexCount - parts} hull vertices, ${heldCount} held`);
+    assert.ok(triCount - partTris >= 150 && triCount - partTris <= 330 + 2 * heldCount, `${triCount - partTris} hull triangles`);
+    assert.ok(parts > 0 && parts <= CAGE_PART_VERTICES && partTris <= 2 * CAGE_PART_VERTICES, `${parts} bumper vertices, ${partTris} triangles`);
   });
 });
 

@@ -357,6 +357,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * no longer leaves a kicker's lip, or a slope on one tyre, at over 100 m/s up, and every car climbs a kicker's last metres differently.
  * A wreck rising out of the ground counts its second of rest while it rises and sleeps once it is out: one sunk a few centimetres sleeps
  * as soon as it would on the road, one sunk deep stays awake until it is out.
+ * A car's collision cage carries its bumpers' fascias, each a 12-point panel of its own past the body's budget (a push bar, tow hitch and exhaust
+ * tips stay drawn only), so it meets cars, walls, figures and props at its drawn bumper faces, 3-15 cm past its nose's and tail's sheet metal,
+ * until a bumper tears off; a pair's plan test reads a bumper at its own heights, never its body's behind it; the piston rig's faces rest clear of them.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
