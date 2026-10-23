@@ -33,6 +33,21 @@ function tyreRoom(car: DeformableCar, mi: number): number {
   return Math.max(0, crushedSoFar(car.deform) - hypot2(hub.shoveX, hub.shoveZ));
 }
 
+/**
+ * `car`'s tyre on mass `mi` goes back into its well with its hub (`pushMass`: the shove its pop rule reads) by the part of `depth` m of
+ * overlap on the unit (`nx`, `nz`) (the way it is pushed out) that lies along its car's axis, where the well opens, as far as its room
+ * (`tyreRoom`); the part across it holds (pushed sideways, a sedan's front hub went 13 cm into its body and the narrowed wreck rolled over
+ * off a 5.6 m/s side hit). Returns the depth it cleared along (`nx`, `nz`).
+ */
+function goBack(car: DeformableCar, mi: number, nx: number, nz: number, depth: number): number {
+  const along = car.fwdFlat.x * nx + car.fwdFlat.z * nz;
+  const travel = Math.min(depth * Math.abs(along), tyreRoom(car, mi));
+  if (!(travel > 0)) return 0;
+  const shove = Math.sign(along) * travel;
+  car.deform.pushMass(mi, car.fwdFlat.x * shove, car.fwdFlat.z * shove);
+  return travel * Math.abs(along);
+}
+
 /** `_rigid` takes the rigid contact `rigid` deep (`satCars`' terms) at `_tp` on the normal `_tn` turned b → a by `side`. */
 function addRigid(rigid: number, look: number, side: number): void {
   if (!(rigid + look > 0)) return;
@@ -46,25 +61,22 @@ function addRigid(rigid: number, look: number, side: number): void {
 }
 
 /**
- * `car`'s tyres (`tyres`, `count` of them) in `other`'s body (`tyreIn`), as the body meets it: a tyre goes back with its hub out of
- * `other` by its depth (`pushMass`: the shove its pop rule reads) as far as its structure has crushed (`tyreRoom`); the rest holds rigid
- * (`addRigid`, turned b → a by `side`).
+ * `car`'s tyres (`tyres`, `count` of them) in `other`'s body (`tyreIn`), as the body meets it: a tyre goes back into its well by its
+ * depth as far as it can (`goBack`); the rest holds rigid (`addRigid`, turned b → a by `side`).
  */
 function tyresInBody(car: DeformableCar, tyres: Float64Array, count: number, other: DeformableCar, look: number, side: number): void {
   for (let k = 0; k < count; k++) {
     const hit = tyreIn(car, tyres, k, other, _tn, _tp, look);
     if (hit === null) continue;
-    const mi = tyres[k * TYRE_STRIDE + TYRE_MASS]!;
-    const back = Math.min(Math.max(0, hit - OUTLINE_REACH), tyreRoom(car, mi));
-    if (back > 0) car.deform.pushMass(mi, _tn.x * back, _tn.z * back);
+    const back = goBack(car, tyres[k * TYRE_STRIDE + TYRE_MASS]!, _tn.x, _tn.z, hit - OUTLINE_REACH);
     addRigid(hit - back, look, side);
   }
 }
 
 /**
  * The pair's tyres against the other car's tyres and body: no tyre is in its car's cage, so the cages' outlines alone let them pass
- * through each other. Two overlapping tyres go back by their overlap, half each as far as each has room (`tyreRoom`), the rest holding
- * rigid (`tyresInBody`'s rule; each kept for `planTyrePushes`). Returns the deepest rigid tyre contact in `satCars`' terms, with the
+ * through each other. Two overlapping tyres go back by their overlap, half each as far as each can (`goBack`), the rest holding rigid
+ * (`tyresInBody`'s rule; each kept for `planTyrePushes`). Returns the deepest rigid tyre contact in `satCars`' terms, with the
  * normal (b → a) and centre of the patch they make in `normalOut` and `contactOut`; -Infinity for none. Both cars' world matrices are fresh.
  */
 export function meetTyres(carA: DeformableCar, carB: DeformableCar, look: number, normalOut: THREE.Vector3, contactOut: THREE.Vector3): number {
@@ -76,16 +88,14 @@ export function meetTyres(carA: DeformableCar, carB: DeformableCar, look: number
     for (let kb = 0; kb < countB; kb++) {
       const depth = tyresOverlap(carA, _tyresA, ka, carB, _tyresB, kb, _tn, _tp);
       if (depth === -Infinity) continue;
-      const overlap = Math.max(0, depth);
       const miA = _tyresA[ka * TYRE_STRIDE + TYRE_MASS]!;
       const miB = _tyresB[kb * TYRE_STRIDE + TYRE_MASS]!;
-      const roomB = tyreRoom(carB, miB);
-      const backA = Math.min(tyreRoom(carA, miA), Math.max(overlap / 2, overlap - roomB));
-      const backB = Math.min(roomB, overlap - backA);
-      if (backA > 0) carA.deform.pushMass(miA, _tn.x * backA, _tn.z * backA);
-      if (backB > 0) carB.deform.pushMass(miB, -_tn.x * backB, -_tn.z * backB);
-      moved ||= backA > 0 || backB > 0;
-      addRigid(depth - backA - backB + OUTLINE_REACH, look, 1);
+      const overlap = Math.max(0, depth);
+      let back = goBack(carA, miA, _tn.x, _tn.z, overlap / 2);
+      back += goBack(carB, miB, -_tn.x, -_tn.z, overlap - back);
+      back += goBack(carA, miA, _tn.x, _tn.z, overlap - back);
+      moved ||= back > 0;
+      addRigid(depth - back + OUTLINE_REACH, look, 1);
     }
   }
   if (moved) {

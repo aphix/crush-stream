@@ -534,8 +534,10 @@ before the front tyres meet, the old one 0.49), and a monster's front tyres ran 
   places an outline's nodes, its band from its mount (`MOUNT` × its own drawn radius: anything lower it climbs) to its top. A tyre
   that stands no taller over the other's bottom than that one mounts is climbed, not met.
 - **The response (`contact/tyre-contact.ts` `meetTyres`, in `resolveCarPair`).** A tyre goes back into its well with its hub
-  (`pushMass`, the shove the hub pop rule reads: torn off past a wheel's diameter) as far as its car's structure has crushed in the hit
-  still on (`tyreRoom`: `crushedSoFar` less the shove it has taken), two meeting tyres half each. What is left is rigid. The rigid
+  (`goBack` → `pushMass`, the shove the hub pop rule reads: torn off past a wheel's diameter) by the part of its overlap along its car's
+  axis, where the well opens, as far as its car's structure has crushed in the hit still on (`tyreRoom`: `crushedSoFar` less the shove
+  it has taken), two meeting tyres half each; the part across the axis holds (shoved sideways, a front hub went 13 cm into a sedan's
+  body and the narrowed wreck rolled over in the 16-car pile off a 5.6 m/s side hit). What is left is rigid. The rigid
   contacts make one patch, as `satCars`' nodes do (each weighted by how far it reaches into the look-ahead; one picked contact went to
   one side of a mirror head-on by a hair and turned the pair, noses 0.763 / 0.774 m at 100 km/h), whose deepest competes with the
   cages' as the pair's hit (normal, point, arming, exchange). A tyre does not crush, so all of each rigid contact's overlap is a push on
