@@ -65,6 +65,8 @@ export const CAGE_TUB_VERTICES = Math.max(...CAR_STYLE_IDS.map((id) => wellHumpG
 const PART_VERTICES = 12;
 /** Room for the parts decimated apart past the hull: the two bumpers. */
 export const CAGE_PART_VERTICES = 2 * PART_VERTICES;
+/** Room for a push bar's box, a part apart of its own (`pushBarBox`, its eight corners all held): the cruiser's. */
+export const CAGE_BAR_VERTICES = 8;
 /** The interior's vertex target: what shows through a gone pane (the dash, the headliner, the seats), a few boxes. */
 const INTERIOR_VERTICES = 32;
 
@@ -745,7 +747,7 @@ function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGr
     triGroup.push(src.group[tubTris[k]!]!);
   }
   appendParts(src, end, source, tris, triGroup);
-  const room = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_TUB_VERTICES + CAGE_PART_VERTICES;
+  const room = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_TUB_VERTICES + CAGE_PART_VERTICES + CAGE_BAR_VERTICES;
   if (source.length > room) throw new Error(`${source.length} hull vertices, room for ${room}`);
   return { source: Int32Array.from(source), tris: Uint16Array.from(tris), triGroup: Uint8Array.from(triGroup), held: hull.held, heldFrom: hull.heldFrom };
 }

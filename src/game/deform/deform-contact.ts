@@ -562,7 +562,7 @@ export abstract class DeformContact extends DeformState {
       if (m.world.y - (planted ? tyre.r : m.radius * 0.5) >= topY - STAND_SKIN) continue;
       const ox = m.world.x - cx;
       const oz = m.world.z - cz;
-      let r = m.radius * 0.5;
+      let r = m.radius * 0.5 + (m.bumper && m.rest.z > 0 ? this.rig.noseReach : 0);
       let rEnd = r;
       if (planted) {
         // The face meets the tyre: its tread (radius) along the car, its sidewall across it.

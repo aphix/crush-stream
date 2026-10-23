@@ -368,9 +368,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * no longer leaves a kicker's lip, or a slope on one tyre, at over 100 m/s up, and every car climbs a kicker's last metres differently.
  * A wreck rising out of the ground counts its second of rest while it rises and sleeps once it is out: one sunk a few centimetres sleeps
  * as soon as it would on the road, one sunk deep stays awake until it is out.
- * A car's collision cage carries its bumpers' fascias, each a 12-point panel of its own past the body's budget (a push bar, tow hitch and exhaust
- * tips stay drawn only), so it meets cars, walls, figures and props at its drawn bumper faces, 3-15 cm past its nose's and tail's sheet metal,
- * until a bumper tears off; a pair's plan test reads a bumper at its own heights, never its body's behind it; the piston rig's faces rest clear of them.
+ * A car's collision cage carries its bumpers' fascias, each a 12-point panel of its own past the body's budget, and a cruiser's push bar as one
+ * box of its own riding its bumper's two masses (tow hitch and exhaust tips stay drawn only), so it meets cars, walls, figures and props at its
+ * drawn bumper faces, 3-15 cm past its nose's and tail's sheet metal, until a bumper tears off; a pair's plan test reads a bumper at its own
+ * heights, never its body's behind it; the piston rig's faces rest clear of them. A wall holds a cruiser's bumper particles a bar's reach (9 cm)
+ * further back than a sedan's, so the bar's box is no deeper in the face than a bumper's is: its front wings crush as a sedan's do.
  * The tallest step a tyre mounts by grip, and how far under a prism's top a tyre still stands on it, is its own drawn radius's share (the
  * sedan's 0.342 m tyre 0.088 m, the monster's 0.614 m 0.158 m), not 0.140 m sized for the platform's tyre on every car; a point that names no
  * tyre keeps the biggest tyre's, and a tyre that landed on a prism's top counts it only within its radius.

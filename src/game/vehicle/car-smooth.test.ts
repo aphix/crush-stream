@@ -1619,7 +1619,8 @@ const SIM_DIGEST_BY_STYLE = [
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
-  { id: "police", digest: "2691a21952fe8fbb0240da1e6800a4c98763189c285cfab77b1a260b127fc2ee" },
+  // Again for its push bar's box in the cage and the wall's hold on its bumper's particles a bar's reach back (`noseReach`): 2691a219... -> 30a73a14...; the other six unchanged.
+  { id: "police", digest: "30a73a14bd30aad908d642bd919e18fbb4f4165f297cf0e64f974d28e91b84d1" },
   // The monster is its own body style (its own dims, cage and lifted class body), no longer the pickup's.
   // Again when a wreck's masses rode its lifted centre, not their centroid (CarRig rig-seat): 7a1610ef... -> db09b87c...; the other six unchanged.
   { id: "monster", digest: "dfb82826e0f6aa14d0fe5c3eb7c9247b381e841c2ec48ac1ad080e8ddfec6895" },
@@ -1701,7 +1702,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // The pickup's again for its cab narrowed to the top plate's roof edge (profile cabinHw) and its rear glass's top narrowed inside the roof's end.
   // Again for its door run back to the side plate's seam (`door.aperture`) with the B and rear post boxes behind it (`bPillar`, `quarter`).
   { id: "pickup", digest: "f59f3a60a1f7339e6b550aa99968a8dfbc7a14cf534140582c6a4c39f08e20a0" },
-  { id: "police", digest: "64de4e9ece74a7ec7b4a4507ecc2c82750440baece8eeca74e54f264b2df89f9" },
+  // The police's again for its push bar's box in the cage, skinned to its bumper's two masses (`pushBarBox`, a part apart of its own): 64de4e9e... -> d088c1af...; the other six unchanged.
+  { id: "police", digest: "d088c1af91131e5ccf3b398f67af64e847a7775814ddc8a98e7747c1cfea9c32" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55); again for its windshield base at the side
   // plate's (`windshield.base` [1.0, .92] -> [1.05, .98]) and its door glass starting back at .60 (`aPillarFoot` .74 -> .6): the glass-front and A-post boxes moved.
   // Again for its roof's flatter crown and tighter edge roll (`roofSection` crown .75, blend .8), as the pickup's.

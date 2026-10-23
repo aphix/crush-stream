@@ -9,7 +9,7 @@ import type { DeformableCar } from "./car.ts";
 import { hingePose, INTERIOR_MASSES } from "./part-pose.ts";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { makeWindshield } from "./car-glass.ts";
-import { makeLightBar } from "./car-materials.ts";
+import { makeLightBar, pushBarBox } from "./car-materials.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import type { DetachPart } from "./car-core.ts";
 import { bodyLift } from "./car-suspension.ts";
@@ -39,6 +39,8 @@ interface Panel {
   held?: Uint8Array;
   /** A part on the body (a bumper), decimated on its own budget (`CageSource.apart`); its panels come last. */
   apart?: boolean;
+  /** The push bar's box on the front bumper's own lattice cage, a part apart of its own that goes with the bumper. */
+  bar?: boolean;
 }
 
 const ZERO = new THREE.Vector3();
@@ -59,6 +61,9 @@ function partPanel(part: DetachPart, on: () => boolean): Panel {
 
 /** How far (m) behind a bumper's face its plan ends may stand: its first corner ring (a sedan's 9.8 mm back) reaches 10 cm wider than the face's flat. */
 const FACE_RING = 0.01;
+
+/** The masses a cruiser's push bar rides: its front bumper's two, so the bar's box keeps its reach from the bumper's face as the bumper crushes. */
+const BAR_MASSES = ["bumperFL", "bumperFR"] as const;
 
 /** A bumper's plan points (`Panel.held`): its face's middle and the two ends of its face with its first corner ring (`FACE_RING`), frontmost (`front`) or rearmost. Decimated freely, the face went 1-1.5 cm back. */
 function facePoints(geometry: THREE.BufferGeometry, front: boolean): Uint8Array {
@@ -98,13 +103,19 @@ function panelsOf(car: DeformableCar): Panel[] {
     panels.push({ mesh: pane.mesh, rest: pane.restVerts, origin: ZERO, part: pane.skin, on: () => (holds || pane.state !== "shattered") && !carrier?.detached, hinged: null, seat: ZERO });
   }
   // The bumpers stand proud of the body's nose and tail: the cage reaches the drawn face while they are on, the body's once one tears off.
-  for (const part of parts) if (part.bumper) panels.push(partPanel(part, () => !part.detached));
+  for (const part of parts) {
+    if (!part.bumper) continue;
+    const on = () => !part.detached;
+    panels.push(partPanel(part, on));
+    if (part.cage === "bumperFront" && car.style.pushBar) panels.push({ ...partPanel(part, on), bar: true });
+  }
   return panels;
 }
 
 /**
  * `panelsOf(car)` with the lids', light bar's, windshield's and bumpers' meshes and rest shapes the cage build draws (`makeHoodGeometry`,
- * `makeTrunkGeometry`, `makeLightBar` as `cage`; the style's own windshield, not its `drawn` twin; each bumper's plain fascia, not its drawn add-ons).
+ * `makeTrunkGeometry`, `makeLightBar`; the style's own windshield, not its `drawn` twin; each bumper's plain fascia, not its drawn add-ons;
+ * the push bar's box).
  */
 function cagePanelsOf(car: DeformableCar): Panel[] {
   const cageLid = (panel: Panel, geometry: THREE.BufferGeometry, held?: Uint8Array): Panel => ({ ...panel, mesh: new THREE.Mesh(geometry), rest: Float32Array.from(geometry.getAttribute("position").array), held });
@@ -113,6 +124,10 @@ function cagePanelsOf(car: DeformableCar): Panel[] {
     if (panel.part === "boot") return cageLid(panel, makeTrunkGeometry(car.style, "cage"));
     if (panel.mesh === car[LIGHT_BAR]) return cageLid(panel, makeLightBar("cage"));
     if (panel.part === "glassFront" && car.style.drawn !== undefined) return cageLid(panel, makeWindshield(car.style));
+    if (panel.bar) {
+      const box = pushBarBox(makeBumperGeometry(true, car.style));
+      return cageLid(panel, box, new Uint8Array(box.getAttribute("position").count).fill(1));
+    }
     if (panel.part === "bumperFront" || panel.part === "bumperRear") {
       const bumper = makeBumperGeometry(panel.part === "bumperFront", car.style);
       return cageLid(panel, bumper, facePoints(bumper, panel.part === "bumperFront"));
@@ -259,12 +274,23 @@ export function cageSourceOf(car: DeformableCar): CageSource {
     const inverse = new THREE.Vector3(1 / (cage.size.x || 1), 1 / (cage.size.y || 1), 1 / (cage.size.z || 1));
     const into = new THREE.Vector3().copy(panel.origin).sub(cage.min);
     const count = panel.rest.length / 3;
+    // The bar's box stands outside its bumper's lattice cell, past what the uvw clamp reaches: it rides the bumper's two masses, as the drawn bar does.
+    const bound = panel.bar ? rig.bindPoints(panel.rest, panel.origin, BAR_MASSES) : null;
     for (let i = 0; i < count; i++) {
       const v = vertex + i;
       group[v] = k + 1;
       rest[v * 3] = panel.rest[i * 3]! + panel.origin.x;
       rest[v * 3 + 1] = panel.rest[i * 3 + 1]! + panel.origin.y;
       rest[v * 3 + 2] = panel.rest[i * 3 + 2]! + panel.origin.z;
+      if (bound) {
+        skinN[v] = bound.sN[i]!;
+        skinXf.set(bound.sXf.subarray(i * SKIN_K, (i + 1) * SKIN_K), v * SKIN_K);
+        skinW.set(bound.sW.subarray(i * SKIN_K, (i + 1) * SKIN_K), v * SKIN_K);
+        resJ.set(bound.rJ.subarray(i * RES_SLOTS, (i + 1) * RES_SLOTS), v * RES_SLOTS);
+        resW.set(bound.rW.subarray(i * RES_SLOTS, (i + 1) * RES_SLOTS), v * RES_SLOTS);
+        resC.set(bound.rC.subarray(i * 3, i * 3 + 3), v * 3);
+        continue;
+      }
       infN[v] = 1;
       infCo[v * INF_K] = cageIndex * 24;
       infUvw[v * INF_K * 4] = THREE.MathUtils.clamp((panel.rest[i * 3]! + into.x) * inverse.x, -0.15, 1.15);

@@ -794,6 +794,20 @@ describe("given the police cruiser", () => {
     assert.ok(moved > 0.005 && moved < 0.3, `bar skin moved ${moved.toFixed(3)} m with the roof`);
   });
 
+  it("when it hits a wall square-on at 56 km/h, then its front wings crush as far as a sedan's do, within 3 cm: its push bar's box stands ahead of its bumper's particles, which the wall holds a bar's reach further back", (t) => {
+    const wingCrush = (id: "police" | "sedan"): number => {
+      const car = new DeformableCar(PAINT, new THREE.Scene(), null, id);
+      car.deform.setMode("shape");
+      runWall(56, 1, "front", { car });
+      const wing = car.deform.masses.find((m) => m.name === "wingFL")!;
+      return wing.rest.z - wing.local.z;
+    };
+    const cop = wingCrush("police");
+    const sedan = wingCrush("sedan");
+    t.diagnostic(`wing crush: police ${cop.toFixed(3)} m, sedan ${sedan.toFixed(3)} m`);
+    assert.ok(Math.abs(cop - sedan) <= 0.03, `the cruiser's wing crushed ${cop.toFixed(3)} m, the sedan's ${sedan.toFixed(3)} m`);
+  });
+
   it("when it hits a wall square-on at 64 km/h, then the light bar is thrown clear onto the ground with its sirens dark, and the rest tears as it does on a sedan", () => {
     const { car, detached, bar } = copThroughWall(64);
     assert.ok(detached.includes("lightBar"), `parts off: ${detached}`);

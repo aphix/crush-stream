@@ -638,7 +638,7 @@ export abstract class CarCore {
     const g = new THREE.Group();
     const spec = front ? this.style.bumpers.front : this.style.bumpers.rear;
     const fascia = makeBumperGeometry(front, this.style);
-    // A push bar is drawn only: merged into the front bumper, it follows the bumper's masses and tears off with it (its flying box is the bumper's as drawn).
+    // A push bar is merged into the front bumper: it follows the bumper's masses and tears off with it (its flying box is the bumper's as drawn); the cage carries its box.
     const drawn = front ? withFrontBand(this.style.pushBar ? withPushBar(fascia) : fascia, this.style) : withRearFittings(fascia, this.style);
     const mesh = new THREE.Mesh(withSeamCover(drawn, this.style, front), bumperMaterial(spec.trim, accent, body));
     this.bumperMeshes.push(mesh);

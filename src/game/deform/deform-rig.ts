@@ -58,6 +58,8 @@ export interface RigTables {
   readonly faceBands: FaceBands;
   /** Plan reach (m) from its hub at which a crushed corner has hit the tyre: tyre radius plus the packed bumper beam. */
   readonly tyreReach: number;
+  /** How far (m) the front bumper's particles stand behind the nose a solid's face meets: a push bar's reach, which the hold on a face (`faceHits`) adds to those particles' own. */
+  readonly noseReach: number;
 }
 /** Platform bonnet top (m): where the top band starts following the roof's crush. */
 const PLATFORM_BONNET_TOP = CAGES.find((cage) => cage.name === "bonnet")!.max[1];
@@ -78,6 +80,7 @@ export const PLATFORM_RIG: RigTables = {
     side: [0.4, 0.4],
   },
   tyreReach: 0.42,
+  noseReach: 0,
 };
 /** Depth (m) inside the chassisCell span's front/rear face over which non-cell skin weight blends back in. */
 const CELL_FACE_BLEND = 0.3;
@@ -733,10 +736,11 @@ export abstract class DeformRig {
   /**
    * A5 parents: the RES_K nearest non-hub masses by 1/(d² + RES_SOFT), less the (RES_K+1)th's weight so a parent fades out before it is
    * swapped (no seam where the nearest set changes). A cabin point takes cabin masses only (D1), plus the cell-face share of the nearest other mass.
+   * `only`: the masses a point may take (by index), for a part that rides a few of them (a push bar on its bumper's two).
    */
-  private parentRule(zones: SkinZones): SkinParentRule {
+  private parentRule(zones: SkinZones, only?: readonly number[]): SkinParentRule {
     const { span, inCell } = zones;
-    const body = this.masses.flatMap((m, j) => (m.hub ? [] : [j]));
+    const body = this.masses.flatMap((m, j) => (m.hub || (only && !only.includes(j)) ? [] : [j]));
     const cabinBody = body.filter((j) => inCell(this.masses[j]!.rest.x, this.masses[j]!.rest.y, this.masses[j]!.rest.z));
     const outside = body.filter((j) => !cabinBody.includes(j));
     const near = (rx: number, ry: number, rz: number, set: number[]) =>
@@ -819,13 +823,14 @@ export abstract class DeformRig {
 
   /**
    * The body paint's A5 tables (`buildSkinWeights`) for the points of a mesh outside the body skin, `rest` in the mesh's frame seated at car-frame
-   * `origin`: a door shell skins by them as the paint around it does (`skinPoints`). Rest-only: built once per mesh.
+   * `origin`: a door shell skins by them as the paint around it does (`skinPoints`). Rest-only: built once per mesh. `only`: the masses (names) its
+   * points take as parents, where a part rides a few of them.
    */
-  bindPoints(rest: Float32Array, origin: THREE.Vector3): PointSkin {
+  bindPoints(rest: Float32Array, origin: THREE.Vector3, only?: readonly string[]): PointSkin {
     const count = rest.length / 3;
     const t: PointSkin = { count, sN: new Uint8Array(count), sXf: new Int32Array(count * SKIN_K), sW: new Float64Array(count * SKIN_K), rJ: new Int32Array(count * RES_SLOTS), rW: new Float64Array(count * RES_SLOTS), rC: new Float64Array(count * 3) };
     const zones = this.skinZones();
-    const parents = this.parentRule(zones);
+    const parents = this.parentRule(zones, only?.map((name) => this.masses.findIndex((m) => m.name === name)));
     const clusters = this.clusterRule(zones, this.clusterCentres());
     for (let i = 0; i < count; i++) {
       const rx = rest[i * 3]! + origin.x;
