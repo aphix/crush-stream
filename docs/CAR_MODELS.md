@@ -385,6 +385,10 @@ the same region on the other cars, not against a fixed bar.
     - `noGlass`: there is no glass edge;
     - `seeThrough`: the cut sees through to the far side (no surface on the near side there; pickup A-pillar top, hatchback D-pillar);
     - `tooWide`: the band is over 0.6 m.
+  - A see-through run whose near samples either side are within 3 cm is a hairline crack in the mesh (rays slip between a pillar
+    and a pane's edge), not the cut seeing through: the band still reads across it, and `crackedBands` counts the heights it
+    happened at (sedan and police A-pillars: 10 of 12, cracks 2-6 mm, 15 mm at the pillar top, between the body and the side
+    glass or windshield; they are under `GAP_MIN`, so `gaps` does not list them).
 - `bumper` / `lowerLip`: horizontal cuts behind the rear arch, at 35–80 % of the rear bumper's height and at its bottom 4–22 %.
   `turn` is the squarest wrap corner. `projSpreadMm` is how much the outset over the face above changes round the wrap (p5–p95);
   `stepMm` the change between neighbouring cuts.

@@ -55,6 +55,8 @@ const ARC_M = 0.04;
 const STEP_M = 0.05;
 /** A pillar band wider than this (m) is not a pillar: the cut missed a glass edge at that height. */
 const BAND_MAX_M = 0.6;
+/** A see-through run in a pillar band whose near samples either side are this close (m) is a hairline crack in the mesh, not the cut seeing through. */
+const BAND_CRACK_M = 0.03;
 /** A pillar band's samples stand at least this far (m) out on their own side: one past it is the far side, seen through the near. */
 const NEAR_SIDE = 0.3;
 /** A jump between neighbouring lengthwise samples round the hood's rear edge and the windshield base over this (m) is an open seam. */
@@ -275,6 +277,26 @@ function roofEdge(s, style, belt, glassTop, width, intended) {
 }
 
 /**
+ * A pillar band without its see-through runs: a run of samples that are not on this side (rays slipped through a slit in the mesh and
+ * met the far side) whose near samples either side are within BAND_CRACK_M (m) of each other is a crack, left out of the band; a
+ * wider one is the cut seeing through, and the band is null.
+ */
+function sealCracks(band, near) {
+  const kept = [];
+  for (let i = 0; i < band.length; i++) {
+    if (near(band[i])) {
+      kept.push(band[i]);
+      continue;
+    }
+    let j = i;
+    while (j + 1 < band.length && !near(band[j + 1])) j++;
+    if (Math.hypot(band[i - 1].u - band[j + 1].u, band[i - 1].v - band[j + 1].v) > BAND_CRACK_M) return null;
+    i = j;
+  }
+  return kept;
+}
+
+/**
  * Pillars: horizontal cuts through the side glass's height, the body band between the windshield (rear glass) and the side glass. The
  * fans stand on `zc`, the hubs' midpoint: a centre no glass edit moves, so where its samples land on a pillar's crease (and the turn
  * read there) changes only with the pillar.
@@ -284,6 +306,8 @@ function pillars(s, glassBox, front, zc) {
   const flagsTurn = [];
   /** Why a height's band reads n/a, counted over both sides: no glass edge there, the cut sees through to the far side, wider than BAND_MAX_M. */
   const reasons = { noGlass: 0, seeThrough: 0, tooWide: 0 };
+  /** Heights (over both sides) whose band had a hairline crack in it: `sealCracks`; `contour-defects.mjs` reports the crack itself. */
+  let cracked = 0;
   const curves = [];
   for (const f of PILLAR_AT) {
     const y = glassBox.min.y + f * (glassBox.max.y - glassBox.min.y);
@@ -302,17 +326,19 @@ function pillars(s, glassBox, front, zc) {
       const first = samples.findIndex((p) => near(p) && p.kind === (front ? K.side : K.rear));
       let last = -1;
       for (let i = 0; i < first; i++) if (near(samples[i]) && samples[i].kind === (front ? K.windshield : K.side)) last = i;
-      const band = first < 0 || last < 0 ? [] : samples.slice(last, first + 1);
-      if (!band.length || band.some((p) => p.miss)) {
+      const raw = first < 0 || last < 0 ? [] : samples.slice(last, first + 1);
+      if (!raw.length || raw.some((p) => p.miss)) {
         perSide.push(null);
         reasons.noGlass++;
         continue;
       }
-      if (band.some((p) => !near(p))) {
+      const band = sealCracks(raw, near);
+      if (band === null) {
         perSide.push(null);
         reasons.seeThrough++;
         continue;
       }
+      if (band.length < raw.length) cracked++;
       let width = 0;
       for (let i = 1; i < band.length; i++) width += Math.hypot(band[i].u - band[i - 1].u, band[i].v - band[i - 1].v);
       if (width > BAND_MAX_M) {
@@ -361,6 +387,7 @@ function pillars(s, glassBox, front, zc) {
       leanDeg: leansOk.length ? r1(leansOk.reduce((a, b) => a + b, 0) / leansOk.length) : null,
       turn: r1(maxOf(stations.flatMap((st) => st.sides.filter(Boolean).map((sd) => sd.turn)))),
       naReasons: reasons,
+      crackedBands: cracked,
     },
     flags: worstOf(flags),
     curves,
@@ -573,7 +600,7 @@ function scoreLines(style, regions, defects) {
   const top = (list, fmt) => [...list].sort((a, b) => b.level - a.level || b.score - a.score).slice(0, 4).map(fmt).join("; ") || "none";
   const gaps = defects.gaps.map((g) => ({ ...g, score: g.mm }));
   const zf = defects.zfight.map((z) => ({ ...z, score: z.areaCm2 }));
-  const na = (p) => (p.score.widthMm.some((w) => w === null) ? `  n/a: ${Object.entries(p.score.naReasons).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ")}` : "");
+  const na = (p) => (p.score.widthMm.some((w) => w === null) ? `  n/a: ${Object.entries(p.score.naReasons).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ")}` : "") + (p.score.crackedBands ? `  ${p.score.crackedBands} bands read across a hairline crack` : "");
   return [
     `roofEdge   turn across ${f(r.roofEdge.score.turnAcross, "°")} along ${f(r.roofEdge.score.turnAlong, "°")}  ledge ${f(r.roofEdge.score.ledgeMm, " mm")}  shelf ${f(r.roofEdge.score.shelfMm, " mm")}  crown ${f(r.roofEdge.score.crownMm, " mm")}  spoiler off roof ${f(r.roofEdge.score.offRoofMm, " mm")}  hood/windshield seam ${f(r.roofEdge.score.hoodBaseStepMm, " mm")}`,
     `aPillar    width ${r.aPillar.score.widthMm.map((w) => f(w)).join("/")} mm  spread ${f(r.aPillar.score.spreadPct, "%")}  jump ${f(r.aPillar.score.jumpMm, " mm")}  lean ${f(r.aPillar.score.leanDeg, "°")}  turn ${f(r.aPillar.score.turn, "°")}${na(r.aPillar)}`,
