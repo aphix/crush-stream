@@ -413,6 +413,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * wall thinner than the tyre is long (the oval's 0.6 m) no longer stands between its corners while the tyre straddles it, so a monster's rear pair that rolled
  * through it at 56 m/s (two wheels still on, 24.9 m/s after the hit) is torn off at it (none left, 10.7 m/s). A point that came in by no face within the
  * entry window leaves by the side its car stands on, as one at rest does, not by the nearest face (a car's tyre deep in a panel it was rebounding from was put out through its far face).
+ * A wreck's tyre springs hold its weight at the hubs where its hit has left them in its body (a planted hub keeps its place on the ground while the body is
+ * driven back off it, and the body seats on it again over the next second), not at the stock wheel places: a monster's axles were loaded 1.3 % of its weight unevenly 1.2 s after a
+ * 20 m/s hit, which the springs took up as a pitch the wreck kept if it fell asleep before it had seated (0.5° nose-off on flat ground, 2.2° on a 10° bank, more with a harder hit), now none (0.0° and 0.1°).
  * A torn part that flies as its shell takes the wind on the broad face it draws (the axis its drawn triangles face most), not its box's shortest axis, which
  * a bumper's wrapped ends and seam cover tie with its height within 2 mm: a sedan's, hatchback's or wagon's front bumper, a monster's rear one and a
  * coupe's front arches met the wind edge-on and lifted where they should brake. The keyframe carries each loose part's plate axis with its flags.

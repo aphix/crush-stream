@@ -8,12 +8,13 @@ import { G, GQ } from "../world/ground-clock.ts";
 import { CRASH, hypot2 } from "../deform/physics-util.ts";
 import { droop } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
+import type { CarFrame } from "./car-rig.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift, centreLift } from "./car-cage-rig.ts";
 import { HUB_POP_MPS } from "../deform/deform-solve.ts";
-import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_SAMPLE_GAP, TYRE_ALONG_MAX, GROUND_LIFT_V, REST_SPEED, body, carrier, pointVel } from "./car-air-body.ts";
+import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, SHARE, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_SAMPLE_GAP, TYRE_ALONG_MAX, GROUND_LIFT_V, REST_SPEED, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
 export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
@@ -405,6 +406,8 @@ const _hit = new Float64Array(HIT_SIZE);
 /** Each wheel's hub (world x, y, z) and tyre (radius, half-width; radius 0: no tyre, its hub popped) as `wheelsAt` last stood them. */
 const TYRE_HUB = new Float64Array(12);
 const TYRE_DIM = new Float64Array(8);
+/** Each wheel's hub in the body's frame (x, z) as `wheelsAt` last stood them: a wreck's hubs stand where its hits left them, which is no longer the stock place. */
+const TYRE_LOCAL = new Float64Array(8);
 /** Each wheel's mount (m): the step its tyre climbs by grip, as its tread's footprint asked it (`treadMount`). */
 const TYRE_STEP = new Float64Array(4);
 /** A tyre point's query: the tyre's law (a face within its own `PQ_MOUNT` of the point is floor, so it climbs it; a taller one is side). */
@@ -478,6 +481,8 @@ export function wheelsAt(car: DeformableCar, within: number, moving = false): nu
     const at = wreck ? car.deform.massLocal(HUBS[i]!) : null;
     const hx = at === null ? car.frame.wx[i]! : at.x;
     const hz = at === null ? car.frame.wz[i]! : at.z;
+    TYRE_LOCAL[2 * i] = hx;
+    TYRE_LOCAL[2 * i + 1] = hz;
     // The hub on its rest ride: the tyre's bottom is the body's y = 0 for every class.
     _hub[0] = p.x + _e[0]! * hx + _e[3]! * r + _e[6]! * hz;
     _hub[1] = p.y + _e[1]! * hx + _e[4]! * r + _e[7]! * hz;
@@ -497,6 +502,43 @@ export function wheelsAt(car: DeformableCar, within: number, moving = false): nu
     if (-_hit[C_TOUCH]! <= within && _hit[C_H]! > NO_FLOOR) mask |= 1 << i;
   }
   return mask;
+}
+
+/** Per tyre row of the spring system: the wheel it stands for (`CarFrame`'s `wx`, `wz` index). */
+export const ROW_WHEEL = new Int8Array(4);
+
+/**
+ * The four tyre rows' `SHARE` of a wreck: the weight each spring holds at the rest ride is what the centre of mass's levers over the hubs give,
+ * in the body's own frame (the front axle holds the rear lever over the wheelbase, the +x side the -x side's over the track: a rectangle's
+ * statics with no warp), with the hubs where they stand, not where the stock frame puts them. A hit shoves a wreck's hubs along its body
+ * (a planted hub keeps its place on the ground while the body is driven back off it) and leaves them there for the second it takes the
+ * body to seat on them again; the stock shares then loaded one axle light, and the springs took up the difference as a pitch that the
+ * wreck kept if it fell asleep before it had seated (the pitch grew with the hit, 0.3 to 2.2 degrees on a bank). With the hubs at their stock
+ * places these are the stock shares.
+ */
+export function wreckShares(frame: CarFrame): void {
+  let front = 0;
+  let rear = 0;
+  let right = 0;
+  let left = 0;
+  for (let c = 0; c < 4; c++) {
+    const i = ROW_WHEEL[c]!;
+    if (frame.wz[i]! > 0) front += TYRE_LOCAL[2 * i + 1]!;
+    else rear += TYRE_LOCAL[2 * i + 1]!;
+    if (frame.wx[i]! > 0) right += TYRE_LOCAL[2 * i]!;
+    else left += TYRE_LOCAL[2 * i]!;
+  }
+  // Two hubs to an axle and a side: each sum is twice its mean, and the shares are ratios of them.
+  const wheelbase = front - rear;
+  const track = right - left;
+  if (wheelbase < 0.4 || track < 0.4) return;
+  const { x, z } = body.centre;
+  for (let c = 0; c < 4; c++) {
+    const i = ROW_WHEEL[c]!;
+    const axle = frame.wz[i]! > 0 ? (2 * z - rear) / wheelbase : (front - 2 * z) / wheelbase;
+    const side = frame.wx[i]! > 0 ? (2 * x - left) / track : (right - 2 * x) / track;
+    SHARE[c] = axle * side;
+  }
 }
 
 /**
