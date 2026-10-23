@@ -11,7 +11,7 @@ import { bootCut, bootCutAt, makeHoodGeometry } from "./car-mesh.ts";
 import { DENT_MAX, newDentState, recordDent } from "./loose-dent.ts";
 import { runWall, type CrashResult } from "../contact/crash-scenarios.test-util.ts";
 import { assertSameNumbers, DT, paint } from "./test-support.ts";
-import { LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts";
+import { LIES_FLAT, lowest, RESTS, plateUp } from "./loose-step.test-util.ts";
 
 /** The body's paint attribute, joined: 0 paint, 1 primer, `INNER_PANEL` the unpainted bay trough, `WELL_PANEL` the wheel wells, `BLACKOUT` gloss-black trim, `CABIN_TRIM` the cabin. */
 const primerOf = (car: DeformableCar): string => Array.from(car.body.geometry.getAttribute("primer").array).join();

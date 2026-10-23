@@ -313,8 +313,10 @@ export interface LooseShape {
   readonly points: Float64Array;
   count: number;
   readonly centre: THREE.Vector3;
-  /** The half extents (m) of its bounding box about `centre`, in its own axes: its inertia's box and its wind plate (`blow`). */
+  /** The half extents (m) of its bounding box about `centre`, in its own axes: its inertia's box and its wind plate's size (`blow`). */
   readonly half: THREE.Vector3;
+  /** The axis (0 x, 1 y, 2 z) its drawn surface faces most, by projected area: the normal of the plate the wind meets (`blow`). Measured with the box (`boxShape`). */
+  plate: 0 | 1 | 2;
   /** Its points are that box's corners and edge middles (`halfBox`); else they are the drawn shell's own (`boxShape`) or a wheel's rims. */
   box: boolean;
   /**

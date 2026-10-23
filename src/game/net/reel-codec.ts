@@ -399,6 +399,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * closed pieces cut on one shared section and a flange under its slab.
  * A door cage's corners hang on the cabin (its masses and the clusters that hold the cell), not on the tail and axle a side hit's tyres hold back: a side
  * hit no longer shears the far door's frame by 5-6 cm (a 30 km/h side hit read 55 mm, now 18; its glass burst), and a 50 km/h wall hit racks a door's frame 12 mm, not 26.
+ * A torn part that flies as its shell takes the wind on the broad face it draws (the axis its drawn triangles face most), not its box's shortest axis, which
+ * a bumper's wrapped ends and seam cover tie with its height within 2 mm: a sedan's, hatchback's or wagon's front bumper, a monster's rear one and a
+ * coupe's front arches met the wind edge-on and lifted where they should brake. The keyframe carries each loose part's plate axis with its flags.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

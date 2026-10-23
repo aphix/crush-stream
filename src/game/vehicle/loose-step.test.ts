@@ -14,7 +14,7 @@ import { crownY } from "./car-cage-rig.ts";
 import { SKIN } from "./car-surfaces.ts";
 import { MU_BODY, RESTITUTION, invInertia } from "./car-air-body.ts";
 import { AIR_DENSITY, boxShape, newLooseShape, partMass, PLATE_CN_BROADSIDE, stepLoose } from "./loose-step.ts";
-import { corner, highest, LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts";
+import { corner, highest, LIES_FLAT, lowest, plateUp, RESTS } from "./loose-step.test-util.ts";
 import { assertSameDigest, paint } from "./test-support.ts";
 
 const H = 1 / QUIET_HZ;
@@ -146,6 +146,32 @@ describe("given a front bumper torn off a parked car, sliding along the road at 
   });
 });
 
+/**
+ * A torn bumper's shape: a broad face across x (1.5 wide, 0.38 high, facing z) with its two wrapped ends running 0.39 back, so its box is as
+ * deep as it is tall (half 0.75, 0.19, 0.195) and its shortest half extent is y, not the face's normal z.
+ */
+function wrappedFace(): THREE.Group {
+  const part = new THREE.Group();
+  part.add(new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.38)));
+  for (const x of [-0.75, 0.75]) part.add(new THREE.Mesh(new THREE.PlaneGeometry(0.39, 0.38).rotateY(Math.PI / 2).translate(x, 0, -0.195)));
+  return part;
+}
+
+describe("given a torn part whose box is as deep as it is tall because its ends wrap back", () => {
+  it("when it flies as its drawn shell, then its wind plate faces its broad face's normal (z), not its shortest box axis (y)", () => {
+    const shape = newLooseShape(true);
+    boxShape(shape, wrappedFace());
+    assert.ok(shape.half.y < shape.half.z, `the control: its shortest half extent is y (${shape.half.y.toFixed(3)} < ${shape.half.z.toFixed(3)})`);
+    assert.equal(shape.plate, 2, "its plate normal");
+  });
+
+  it("when it flies as its box (a mirror's pod, the light bar), then its plate faces the box's shortest axis", () => {
+    const shape = newLooseShape(false);
+    boxShape(shape, wrappedFace());
+    assert.equal(shape.plate, 1, "its plate normal");
+  });
+});
+
 /** The part dropped this high (m) over car B's roof crown. */
 const DROP = 0.5;
 /** Pushed across the roof at this speed (m/s): its slide friction stops it after v²/(2 μ g) ≈ 2.2 m, past the roof's edge. */
@@ -259,8 +285,8 @@ function dropHood(dt: number): DetachPart {
 describe("given a torn hood let go a metre over the road, spinning", () => {
   it("when three seconds have passed, then its lowest point rests on the road (within a centimetre) and its thin axis is up", () => {
     const hood = dropHood(H);
-    const up = thinAxisUp(hood);
-    assert.ok(up > LIES_FLAT, `its thin axis is ${up.toFixed(3)} up`);
+    const up = plateUp(hood);
+    assert.ok(up > LIES_FLAT, `its plate normal is ${up.toFixed(3)} up`);
     const low = lowest(hood);
     assert.ok(low >= -1e-9 && low <= RESTS, `its lowest point is ${low.toFixed(4)} m over the road`);
   });
@@ -483,16 +509,15 @@ const TORN_AT = 31;
 /** A part's lowest point this high (m) over the road has left it. */
 const LIFTED = 0.05;
 
-/** Part `name` torn off a parked car and laid flat on the road (its box's thinnest axis up), sliding at `speed` along +z turned `yawDeg` toward +x. */
+/** Part `name` torn off a parked car and laid flat on the road (its plate normal up), sliding at `speed` along +z turned `yawDeg` toward +x. */
 function laidFlat(name: string, speed: number, yawDeg = 0): DetachPart {
   const car = new DeformableCar(paint(), new THREE.Scene());
   car.spawnFacing(0, 0, 0, 0);
   const part = car["parts"].find((p) => p.name === name)!;
   car["detachPart"](part, 0, new THREE.Vector3());
   boxShape(part.shape, part.object);
-  const h = part.shape.half.toArray();
-  const thin = h[0]! <= h[1]! && h[0]! <= h[2]! ? 0 : h[1]! <= h[2]! ? 1 : 2;
-  part.object.quaternion.setFromUnitVectors(new THREE.Vector3(thin === 0 ? 1 : 0, thin === 1 ? 1 : 0, thin === 2 ? 1 : 0), new THREE.Vector3(0, 1, 0));
+  const n = part.shape.plate;
+  part.object.quaternion.setFromUnitVectors(new THREE.Vector3(n === 0 ? 1 : 0, n === 1 ? 1 : 0, n === 2 ? 1 : 0), new THREE.Vector3(0, 1, 0));
   part.object.position.set(0, 0, 0);
   part.object.position.y -= lowest(part) - 0.001;
   const yaw = (yawDeg * Math.PI) / 180;
@@ -520,7 +545,7 @@ describe(`given a torn sheet panel lying flat on the road, sliding at ${TORN_AT}
       let left = Infinity;
       for (let t = H; t <= 2.6 + H / 2; t += H) {
         stepTorn(part);
-        if (left === Infinity && (thinAxisUp(part) < LIES_FLAT || lowest(part) > LIFTED)) left = t;
+        if (left === Infinity && (plateUp(part) < LIES_FLAT || lowest(part) > LIFTED)) left = t;
       }
       assert.ok(left <= 1, `it left the flat slide (tilted past ${LIES_FLAT} or rose ${LIFTED} m) at ${left.toFixed(2)} s`);
       assert.ok(part.velocity.length() < TORN_AT / 2, `speed at 2.6 s: ${part.velocity.length().toFixed(1)} m/s`);
@@ -532,9 +557,9 @@ describe(`given a torn sheet panel lying flat on the road, sliding at ${TORN_AT}
     let flattest = 1;
     for (let t = H; t <= 1 + H / 2; t += H) {
       stepTorn(door);
-      flattest = Math.min(flattest, thinAxisUp(door));
+      flattest = Math.min(flattest, plateUp(door));
     }
-    assert.ok(flattest >= LIES_FLAT, `its thin axis turned to ${flattest.toFixed(3)} of up`);
+    assert.ok(flattest >= LIES_FLAT, `its plate normal turned to ${flattest.toFixed(3)} of up`);
     assert.ok(lowest(door) <= RESTS, `its lowest point is ${lowest(door).toFixed(3)} m over the road`);
   });
 });
