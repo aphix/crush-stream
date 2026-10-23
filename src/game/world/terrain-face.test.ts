@@ -30,8 +30,8 @@ import { FRAME_HZ } from "../kernel/constants.ts";
  * k = 1 + I (r x dir)^2 (I the body's inverse inertia per unit mass about the pitch axis). The nose stops dead while
  * MU_BODY nh / kn >= ny / kt, that is ny / nh <= MU_BODY kt / kn: the sedan's lever (2.0 m forward, 0.52 m down, I 0.56) makes kt
  * 3.2 against kn 1.5 and the limit ny 0.71, not 0.51. Measured on this tree the sedan at 12 m/s stops at every face up to ny 0.66
- * and rides onto a ny 0.72 one (the point-mass limit's ny 0.58 flank sticks: -1.94 m past the foot, 0.33 m up). The hull rows answer a
- * terrain cell by this one law (a terrain grid reaches without limit: a tyre's mount limits a prism's top, not a grid's), so the
+ * and rides onto a ny 0.72 one (the point-mass limit's ny 0.58 flank sticks: -1.94 m past the foot, 0.33 m up). The hull rows and
+ * the tyres' footprint answer a terrain cell by this one law (the tyre's `STEP_MAX` makes a higher face a wall to it), so the
  * terrain needs no side rule of its own. `.bench/uc2/cliff.ts`, which found the sedan climbing 5 to 9 m, launched it horizontally off
  * the top of the flank: it flew.
  * Mutation: body friction 0 in `stepFree` (both caps) fails the ny 0.30, 0.40 and 0.50 faces (the sedan rides 4 to 9 m up them).
