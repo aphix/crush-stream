@@ -8,7 +8,7 @@ import { bayTub, roofAt, sampleSlice } from "./car-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { BUMPER_F, DRIVER_SIDE, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
-import { AXLE_HALF_SPAN, CRASH_BAR_HALF, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
+import { AXLE_HALF_SPAN, CRASH_BAR_HALF, FRAME_RAIL_LENGTH, FRAME_RAIL_Z, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 
@@ -126,6 +126,38 @@ function benchDepth(bench: THREE.BufferGeometry, [y, z]: readonly [number, numbe
 
 const _bay = new THREE.Vector3();
 const _mass = new THREE.Vector3();
+const _corner = new THREE.Vector3();
+const _seatWorld = new THREE.Matrix4();
+/** A wreck's rigid under-part stands at least this far (m) over the ground under it (`restOnGround`), as a hanging bumper does. */
+const PART_CLEAR = 0.04;
+/** The ground under a part's corner is looked up from this far (m) over it: a corner already in a slope finds no floor under itself. */
+const PART_PROBE = 1.5;
+
+/**
+ * Lifts `seat` along the world's up (in its parent's frame, which carries no scale) until every bottom corner of its drawn box stands
+ * `PART_CLEAR` over the ground under it: a rigid part hanging under its car's cage (a pickup's bay over its V-shaped underside, the
+ * monster's frame under its lifted body) rests on the road the wreck rests on, not through it.
+ */
+function restOnGround(seat: PartSeat): void {
+  const parent = seat.parent;
+  if (parent === null) return;
+  const drawn = seat.drawn;
+  if (drawn.boundingBox === null) drawn.computeBoundingBox();
+  const box = drawn.boundingBox!;
+  seat.updateMatrix();
+  parent.updateWorldMatrix(true, false);
+  _seatWorld.multiplyMatrices(parent.matrixWorld, seat.matrix);
+  const ground = activeGround();
+  let rise = 0;
+  for (let k = 0; k < 4; k++) {
+    _corner.set(k & 1 ? box.max.x : box.min.x, box.min.y, k & 2 ? box.max.z : box.min.z).applyMatrix4(_seatWorld);
+    const floor = ground.heightAt(_corner.x, _corner.z, _corner.y + PART_PROBE);
+    if (floor !== NO_FLOOR) rise = Math.max(rise, floor + PART_CLEAR - _corner.y);
+  }
+  if (rise <= 0) return;
+  const e = parent.matrixWorld.elements;
+  seat.position.set(seat.position.x + rise * e[1]!, seat.position.y + rise * e[5]!, seat.position.z + rise * e[9]!);
+}
 
 /**
  * A car's interior kit and engine bay, all `PartBatch` seats of the shared props, placed by its style: the cabin shell, both front
@@ -219,7 +251,10 @@ export class CarCabin {
     this.under[2]!.showIf = () => rear.detached || rear.hingeT > BAR_OPEN;
   }
 
-  /** The bay rides the engine masses through a crush, its front no further out than the nose (the front bumper's masses), and each bar its bumper's, none sideways into a wheel: once a frame on a crashed car, at rest without (`deform` null). */
+  /**
+   * The bay rides the engine masses through a crush, its front no further out than the nose (the front bumper's masses), and each bar
+   * its bumper's, none sideways into a wheel: once a frame on a crashed car, at rest without (`deform` null). On a wreck the bay then rests on the ground under it.
+   */
   fit(deform: StreamedDeformation | null): void {
     for (let k = 0; k < this.under.length; k++) {
       const seat = this.under[k]!;
@@ -240,6 +275,7 @@ export class CarCabin {
     const sz = (zFront + Math.min(engine!, nose!) - zRear - engine!) / (REF_BAY.front - REF_BAY.rear);
     bay.scale.z = sz;
     bay.position.z = zRear + engine! - REF_BAY.rear * sz;
+    if (deform !== null) restOnGround(bay);
     for (let k = 0; k < this.under.length; k++) this.under[k]!.updateMatrix();
   }
 
@@ -265,24 +301,63 @@ const STUB_PROBE = 1.5;
 const _p = new THREE.Vector3();
 const _q = new THREE.Vector3();
 
+/** The frame's rear and front ends (m, car z) at rest. */
+const FRAME_REAR = FRAME_RAIL_Z - FRAME_RAIL_LENGTH / 2;
+const FRAME_FRONT = FRAME_RAIL_Z + FRAME_RAIL_LENGTH / 2;
+
 /** A lifted truck's undercarriage, `PartBatch` seats: the ladder frame rides the body, an axle rides each pair of wheels where they are drawn. */
 export class CarUnderbody {
   /** Front, rear; they ride with the wheels (`assignClass` hangs them in the hub group). */
   readonly axles: readonly PartSeat[];
+  private readonly frame: PartSeat;
   private readonly wheels: readonly THREE.Object3D[];
   /** Each wheel's rest hub: where a popped wheel's end of its axle stays. */
   private readonly rests: readonly THREE.Vector3[];
+  /** Rest positions of the masses the frame rides: its rails, the rear axle, the nose (front bumper), each [left, right] (the axle's twice). */
+  private readonly massRest: readonly (readonly [MassName, THREE.Vector3])[];
 
-  constructor(seats: readonly PartSeat[], group: THREE.Object3D, wheels: readonly THREE.Object3D[]) {
-    const frame = seats.find((s) => s.kind === PART_KIND.ladderFrame)!;
+  constructor(style: BodyStyle, seats: readonly PartSeat[], group: THREE.Object3D, wheels: readonly THREE.Object3D[]) {
+    this.frame = seats.find((s) => s.kind === PART_KIND.ladderFrame)!;
     this.axles = seats.filter((s) => s.kind === PART_KIND.axle);
     this.wheels = wheels;
     this.rests = wheels.map((w) => w.position.clone());
-    group.add(frame, ...this.axles);
+    const rig = carFrame(style).rig.masses;
+    const restOf = (name: MassName): readonly [MassName, THREE.Vector3] => [name, new THREE.Vector3(...rig.find((m) => m.name === name)!.rest)];
+    this.massRest = (["railL", "railR", "axleR", "axleR", "bumperFL", "bumperFR"] as const).map(restOf);
+    group.add(this.frame, ...this.axles);
     this.follow();
   }
 
-  /** Each axle onto its wheels' hubs, tilted with them; a wheel that left the car leaves its end on its rest hub, lifted clear of the ground (`stub`). */
+  /** The mean drift (car space, into `out`) of `massRest` pair `k` this frame. */
+  private drift(deform: StreamedDeformation, k: number, out: THREE.Vector3): THREE.Vector3 {
+    const [l, lRest] = this.massRest[2 * k]!;
+    const [r, rRest] = this.massRest[2 * k + 1]!;
+    out.copy(deform.massLocal(l)).sub(lRest);
+    return out.add(_mass.copy(deform.massLocal(r)).sub(rRest)).multiplyScalar(0.5);
+  }
+
+  /**
+   * The frame rides its rails through a crush: its rear end the rear axle's, its front the rails' and no further out than the nose (the
+   * front bumper's masses), so a nose crushed back never leaves the rigid frame standing out of it, and it rests on the ground under it;
+   * once a frame on a crashed car, at rest without (`deform` null).
+   */
+  fit(deform: StreamedDeformation | null): void {
+    const f = this.frame;
+    f.position.set(0, 0, 0);
+    f.scale.set(1, 1, 1);
+    if (deform !== null) {
+      const rails = this.drift(deform, 0, _p);
+      const back = this.drift(deform, 1, _q).z;
+      const nose = this.drift(deform, 2, _bay).z;
+      const sz = (FRAME_FRONT + Math.min(rails.z, nose) - FRAME_REAR - back) / (FRAME_FRONT - FRAME_REAR);
+      f.position.set(rails.x, rails.y, FRAME_REAR + back - FRAME_REAR * sz);
+      f.scale.z = sz;
+      restOnGround(f);
+    }
+    f.updateMatrix();
+  }
+
+  /** Each axle onto its wheels' hubs, tilted with them; a wheel that left the car leaves its end on its rest hub, lifted clear of the ground (`stub`), and the axle (its diff and links under the tube) rests on the ground under it. */
   follow(): void {
     for (let k = 0; k < 2; k++) {
       const axle = this.axles[k]!;
@@ -295,6 +370,7 @@ export class CarUnderbody {
       axle.position.addVectors(p, q).multiplyScalar(0.5);
       axle.rotation.set(0, turn, detAtan2(q.y - p.y, across));
       axle.scale.set(hypot2(across, q.y - p.y) / (2 * AXLE_HALF_SPAN), 1, 1);
+      restOnGround(axle);
       axle.updateMatrixWorld();
     }
   }

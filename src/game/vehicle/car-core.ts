@@ -591,7 +591,7 @@ export abstract class CarCore {
       this.wheels.push(w);
       this.looseWheels.push({ object: w, velocity: new THREE.Vector3(), angular: new THREE.Vector3(), radius: this.frame.rig.tyre.r, width: 2 * this.frame.rig.tyre.halfW, shape: newLooseShape(), loose: false });
     }
-    this.underbody = this.style.underbody ? new CarUnderbody(this.partSeats, this.group, this.wheels) : null;
+    this.underbody = this.style.underbody ? new CarUnderbody(this.style, this.partSeats, this.group, this.wheels) : null;
     this.group.castShadow = true;
   }
 

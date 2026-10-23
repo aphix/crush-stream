@@ -216,6 +216,9 @@ const RED: Tone = [0xa8231c, 0.5, 0.2];
 export const AXLE_HALF_SPAN = 1.195;
 /** The coil-overs' line across the car (m), both axles: inboard under the flare, inside the arch lip's shadow and 11 cm clear of the tyre's inner face. */
 const COILOVER_X = 0.68;
+/** The frame's main rails: their middle's z and their length (m), the frame's whole length (`CarUnderbody.fit` shortens it with a crush). */
+export const FRAME_RAIL_Z = -0.15;
+export const FRAME_RAIL_LENGTH = 4.1;
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _dir = new THREE.Vector3();
@@ -249,7 +252,7 @@ export function ladderFrameGeometry(): THREE.BufferGeometry {
   const parts = [box(0.24, 0.14, 0.3, RED, 0, 0.02, 0), box(0.14, 0.14, 0.18, BLACK, 0.36, 0.2, 1.6)];
   for (const z of [1.75, 0.635, -0.635, -2.1]) parts.push(box(0.9, 0.08, 0.08, BLACK, 0, 0.28, z));
   for (const sign of [-1, 1]) {
-    parts.push(box(0.09, 0.16, 4.1, BLACK, sign * 0.45, 0.26, -0.15));
+    parts.push(box(0.09, 0.16, FRAME_RAIL_LENGTH, BLACK, sign * 0.45, 0.26, FRAME_RAIL_Z));
     // The side reference's lower rails at the hubs' height, stopping short of the axle tubes, braced up to the main rails by a V.
     parts.push(box(0.07, 0.08, 2.4, BLACK, sign * 0.4, -0.13, 0));
     for (const z of [-0.15, 0.15]) parts.push(rod([sign * 0.4, -0.13, z], [sign * 0.45, 0.22, z + Math.sign(z) * 0.28], 0.03, BLACK));

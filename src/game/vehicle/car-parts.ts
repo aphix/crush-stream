@@ -807,6 +807,7 @@ export abstract class CarParts extends CarGlass {
       this.interior.scale.set(1, 1, 1);
       this.interior.position.set(0, 0, 0);
       this.cabin.fit(null);
+      this.underbody?.fit(null);
       this.cabin.squeezeUnderRoof(this.deform.massLocal("roof").y);
       return;
     }
@@ -817,6 +818,7 @@ export abstract class CarParts extends CarGlass {
     this.interior.scale.x = _interior[0]!;
     this.interior.position.set(_interior[1]!, _interior[2]!, _interior[3]!);
     this.cabin.fit(this.deform);
+    this.underbody?.fit(this.deform);
     this.cabin.squeezeUnderRoof(this.deform.massLocal("roof").y);
   }
 
