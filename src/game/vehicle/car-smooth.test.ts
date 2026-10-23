@@ -1441,8 +1441,8 @@ const BASELINE_BY_STYLE = [
   // The sedan's re-pinned for its quarter window's round rear end (`cPillar.dEnd`) and the A-sail's glass-top station (`aPillarSailGlass`).
   { id: "sedan", drawCalls: 13, triangles: 5390, bodyVertices: 1587 },
   { id: "hatchback", drawCalls: 13, triangles: 5064, bodyVertices: 1587 },
-  // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's, and its drawn twin's front roll down onto the windshield top.
-  { id: "wagon", drawCalls: 13, triangles: 5152, bodyVertices: 1660 },
+  // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's, its drawn twin's front roll down onto the windshield top, and its liftgate's D-post pieces cut on one shared section under a spoiler flange (8242 -> 8338 triangles drawn).
+  { id: "wagon", drawCalls: 13, triangles: 5212, bodyVertices: 1660 },
   // The coupe's chrome trim is eight meshes, not three: each follows what it frames (a pane's frame its pane, a strip its paint), 16 -> 21.
   { id: "coupe", drawCalls: 21, triangles: 5152, bodyVertices: 1530 },
   // The pickup's re-pinned for its drawn windshield's round top corners (`windshield.round`): the A-post's rail takes two more stations a side along the arc.
