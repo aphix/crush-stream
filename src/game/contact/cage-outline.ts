@@ -112,6 +112,27 @@ export class CageOutline {
     out[0] = this.bands[2 * k]!;
     out[1] = this.bands[2 * k + 1]!;
   }
+
+  /**
+   * |x| (m, frame) of the outermost covered node on side `side` whose own height span meets `bottom`..`top` (frame heights, no class lift):
+   * the body's width at those heights, the outline's own extreme where they cross its widest section. -Infinity where no body stands there.
+   */
+  edgeAt(side: -1 | 1, bottom: number, top: number): number {
+    const { nu, nv, step, u0 } = this.cage!.style;
+    const { covered, top: tops, bottom: bottoms } = this.cage!.fields;
+    const widest = side > 0 ? this.xHi : this.xLo;
+    for (let n = 0; n < this.count; n++) {
+      const k = this.nodes[n]!;
+      if (this.xs[n] === widest && bottoms[k]! < top && tops[k]! > bottom) return side * widest;
+    }
+    for (let i = Math.round((widest - u0) / step) - side; i >= 0 && i < nu; i -= side) {
+      for (let j = 0; j < nv; j++) {
+        const k = j * nu + i;
+        if (covered[k] !== 0 && bottoms[k]! < top && tops[k]! > bottom) return side * (u0 + i * step);
+      }
+    }
+    return -Infinity;
+  }
 }
 
 const OUTLINES = new WeakMap<CarCage, CageOutline>();

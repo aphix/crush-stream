@@ -1,8 +1,10 @@
 import * as THREE from "three";
-import { DOOR, type DeformableCar } from "../vehicle/car.ts";
-import { DOOR_INERTIA, DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
+import { DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
+import type { BodyStyle } from "../vehicle/car-variants.ts";
+import { MIRROR_REACH } from "../vehicle/part-geometry.ts";
 import { PANEL_BEND_NM, PANEL_FRAGILE_J, PANEL_FRAGILE_T, PANEL_PULL_J, PANEL_SLAM_J } from "../vehicle/car-wear.ts";
-import { detSin, detCos } from "../kernel/physics-core.js";
+import { detAcos, detSin, detCos } from "../kernel/physics-core.js";
 import type { ContactBox } from "./external-contact.ts";
 
 /** The sideways kick (m/s) a broken mirror leaves with, away from its side of the car. */
@@ -26,6 +28,8 @@ type Lane = {
   kg: number;
 };
 
+type Door = BodyStyle["door"];
+
 export const _lane: Lane = { dir: 1, inner: 0, width: 0, bottom: 0, top: 0, face: 0, length: 0, u: 0, kg: 0 };
 const _push = new THREE.Vector3();
 export const SIDES = [-1, 1] as const;
@@ -43,10 +47,13 @@ export const partHit = {
   nz: 0,
 };
 
-/** How far along the run the mirror cap's trailing face has swung at fold `phi` (m, from the base): pinned where the lane's inner edge (`gap` out) crosses it, never inboard of the cap (0.11 m). */
-function mirrorSweep(phi: number, gap: number): number {
-  const r = Math.max(gap / detCos(phi), 0.11);
-  return r * detSin(phi) - DOOR.mirrorHalfDepth * detCos(phi);
+/** The cap's trailing face's inboard reach from the base (m) on a mirror of `MIRROR_REACH`; a style's scales with its own `mirrorReach`. */
+const CAP_INBOARD = 0.11;
+
+/** How far along the run the mirror cap's trailing face has swung at fold `phi` (m, from the base): pinned where the lane's inner edge (`gap` out) crosses it, never inboard of the cap. */
+function mirrorSweep(phi: number, gap: number, d: Door): number {
+  const r = Math.max(gap / detCos(phi), CAP_INBOARD * (d.mirrorReach / MIRROR_REACH));
+  return r * detSin(phi) - d.mirrorHalfDepth * detCos(phi);
 }
 
 /**
@@ -57,25 +64,32 @@ export function hitMirror(car: DeformableCar, side: -1 | 1, lane: Lane): void {
   if (car.partOff(side < 0 ? "mirrorL" : "mirrorR")) return;
   const door = car.doorHinge(side);
   if (door.theta > 1e-4) return;
-  const y = DOOR.hingeY + DOOR.mirrorY;
-  if (lane.bottom > y + 0.05 || lane.top < y - 0.04) return;
-  const gap = lane.inner - (DOOR.hingeX + DOOR.mirrorX);
+  const d = car.style.door;
+  if (lane.bottom > car.mirrorSpanY[1] || lane.top < car.mirrorSpanY[0]) return;
+  const gap = lane.inner - car.mirrorBaseX;
   const s = lane.dir;
-  // Face travel past the base along the run, against how far the cap's trailing face has swung.
-  const reach = s * (lane.face - DOOR.hingeZ);
+  // Face travel past the base along the run (the seat stands `mirrorZ` behind the hinge), against how far the cap's trailing face has swung.
+  const reach = s * (lane.face - (d.hingeZ - (d.mirrorZ ?? 0)));
   const fold = Math.abs(door.mirrorFold);
-  if (reach <= mirrorSweep(fold, gap) || gap / detCos(fold) > DOOR.mirrorReach) return;
-  if (reach - lane.length > DOOR.mirrorReach) return;
+  if (reach <= mirrorSweep(fold, gap, d) || gap / detCos(fold) > d.mirrorReach) return;
+  if (reach - lane.length > d.mirrorReach) return;
   partHit.touched = true;
-  if (reach <= mirrorSweep(MIRROR_FOLD_MAX, gap)) {
+  // The cap's tip slides along the face and clears it at `clear`; short of the stop the striker passes there, however far a slice carried it.
+  const clear = gap > 0 ? detAcos(gap / d.mirrorReach) : MIRROR_FOLD_MAX;
+  const most = Math.min(clear, MIRROR_FOLD_MAX);
+  if (reach <= mirrorSweep(most, gap, d)) {
     let lo = fold;
-    let hi = MIRROR_FOLD_MAX;
+    let hi = most;
     for (let k = 0; k < 16; k++) {
       const mid = (lo + hi) * 0.5;
-      if (mirrorSweep(mid, gap) < reach) lo = mid;
+      if (mirrorSweep(mid, gap, d) < reach) lo = mid;
       else hi = mid;
     }
     car.setMirrorFold(side, -side * s * hi);
+    return;
+  }
+  if (most < MIRROR_FOLD_MAX) {
+    car.setMirrorFold(side, -side * s * Math.max(fold, most));
     return;
   }
   // Folded flat and still in the lane: the stop takes the striker.
@@ -88,18 +102,18 @@ export function hitMirror(car: DeformableCar, side: -1 | 1, lane: Lane): void {
   car.breakMirror(side, _push.set(side * MIRROR_PUSH_X, 0.6, s * lane.u));
 }
 
-/** The point `radius` m along a door's plan line from its hinge, the door open `theta` rad, in the car's frame: `across` outward from the car's middle, `along` forward (m). */
+/** The point `radius` m along door `d`'s plan line from its hinge, the door open `theta` rad, in the car's frame: `across` outward from the car's middle, `along` forward (m). */
 const doorPoint = { across: 0, along: 0 };
 
-function doorPointAt(radius: number, theta: number): typeof doorPoint {
-  doorPoint.across = DOOR.hingeX + radius * detSin(theta);
-  doorPoint.along = DOOR.hingeZ - radius * detCos(theta);
+function doorPointAt(d: Door, radius: number, theta: number): typeof doorPoint {
+  doorPoint.across = d.hingeX + radius * detSin(theta);
+  doorPoint.along = d.hingeZ - radius * detCos(theta);
   return doorPoint;
 }
 
-/** Whether a body from `bottom` to `top` (m above the car's ground) reaches the door's own heights. */
-function doorInHeights(bottom: number, top: number): boolean {
-  return bottom <= DOOR.hingeY + DOOR.halfHeight && top >= DOOR.hingeY - DOOR.halfHeight;
+/** Whether a body from `bottom` to `top` (m above the car's ground) reaches door `d`'s own heights. */
+function doorInHeights(d: Door, bottom: number, top: number): boolean {
+  return bottom <= d.hingeY + d.halfHeight && top >= d.hingeY - d.halfHeight;
 }
 
 /**
@@ -108,17 +122,18 @@ function doorInHeights(bottom: number, top: number): boolean {
  */
 export function hitDoor(car: DeformableCar, side: -1 | 1, lane: Lane): void {
   if (car.partOff(side < 0 ? "doorL" : "doorR")) return;
-  if (!doorInHeights(lane.bottom, lane.top)) return;
+  const d = car.style.door;
+  if (!doorInHeights(d, lane.bottom, lane.top)) return;
   const door = car.doorHinge(side);
   const sin = detSin(door.theta);
   if (sin < 1e-3) return;
-  const rLo = (lane.inner - DOOR.hingeX) / sin;
-  const rHi = Math.min(DOOR.length, (lane.inner + lane.width - DOOR.hingeX) / sin);
+  const rLo = (lane.inner - d.hingeX) / sin;
+  const rHi = Math.min(d.length, (lane.inner + lane.width - d.hingeX) / sin);
   if (rLo > rHi || rHi <= 0) return;
   const s = lane.dir;
   // A rear→front face meets the trailing (lowest-z) end of the slab in the lane first.
   const r = s > 0 ? rHi : Math.max(rLo, 0);
-  const depth = s * (lane.face - doorPointAt(r, door.theta).along);
+  const depth = s * (lane.face - doorPointAt(d, r, door.theta).along);
   if (depth <= 0 || depth > lane.length) return;
   partHit.touched = true;
   const k = Math.max(r * sin, 0.02);
@@ -137,10 +152,10 @@ export function hitDoor(car: DeformableCar, side: -1 | 1, lane: Lane): void {
     return;
   }
   if (closing > 0) {
-    const mEff = DOOR_INERTIA / (k * k);
+    const mEff = door.spec.inertia / (k * k);
     const j = ((1 + DOOR_RESTITUTION) * closing) / (1 / lane.kg + 1 / mEff);
     lane.u -= j / lane.kg;
-    door.omega += (s * j * k) / DOOR_INERTIA;
+    door.omega += (s * j * k) / door.spec.inertia;
   }
   // Push the slab out of the face.
   door.theta = THREE.MathUtils.clamp(door.theta + (s * depth) / k, 0, DOOR_OPEN_MAX);
@@ -186,9 +201,9 @@ export function hitPanel(car: DeformableCar, side: -1 | 1, lane: Lane): void {
   lane.u = moved > 0 ? Math.sqrt(Math.max(0, lane.u * lane.u - (2 * PANEL_BEND_NM * moved) / lane.kg)) : 0;
 }
 
-/** Plan samples along a door, hinge to trailing edge, a fixed solid is asked about: a door is 0.57 m long, a lamp post 0.17 m across. */
+/** Plan samples along a door, hinge to trailing edge, a fixed solid is asked about: dense enough that no thin solid (a lamp post) fits between two. */
 const DOOR_SAMPLES = 8;
-/** The door skin's reach (m) past its plan line, the angle step (rad) a door is walked shut by (1.7 cm of trailing edge) and the halvings that then find the angle it clears at. */
+/** The door skin's reach (m) past its plan line, the angle step (rad) a door is walked shut by (a small step of trailing edge, so the walk cannot jump a thin solid) and the halvings that then find the angle it clears at. */
 const DOOR_SKIN = 0.03;
 const DOOR_STEP = 0.03;
 const DOOR_HALVINGS = 6;
@@ -198,10 +213,11 @@ const DOOR_SHUT = 0.02;
 /** Whether door `side`, open `angle` rad, has a point of its plan line inside the fixed solid `box` (its heights taken as read). */
 function doorMeetsSolid(car: DeformableCar, side: -1 | 1, angle: number, box: ContactBox): boolean {
   const p = car.group.position;
+  const d = car.style.door;
   const c = detCos(box.yaw);
   const n = detSin(box.yaw);
   for (let k = 1; k <= DOOR_SAMPLES; k++) {
-    const point = doorPointAt((DOOR.length * k) / DOOR_SAMPLES, angle);
+    const point = doorPointAt(d, (d.length * k) / DOOR_SAMPLES, angle);
     const lx = side * point.across;
     const dx = p.x + car.rightFlat.x * lx + car.fwdFlat.x * point.along - box.x;
     const dz = p.z + car.rightFlat.z * lx + car.fwdFlat.z * point.along - box.z;
@@ -236,7 +252,7 @@ function angleClearingSolid(car: DeformableCar, side: -1 | 1, angle: number, box
  */
 export function shutDoorsOnSolid(car: DeformableCar, box: ContactBox, dt: number): void {
   const groundY = car.group.position.y;
-  if (!doorInHeights(box.y - box.hy - groundY, box.y + box.hy - groundY)) return;
+  if (!doorInHeights(car.style.door, box.y - box.hy - groundY, box.y + box.hy - groundY)) return;
   for (let q = 0; q < SIDES.length; q++) {
     const side = SIDES[q]!;
     const angle = car.doorAngle(side);

@@ -1,5 +1,4 @@
 import type { DeformableCar } from "../vehicle/car.ts";
-import { DOOR } from "../vehicle/car-door-mesh.ts";
 import { hypot2 } from "../deform/physics-util.ts";
 import { OUTLINE_REACH } from "./cage-outline.ts";
 
@@ -25,8 +24,6 @@ export const HULL_STRIDE = 11;
 
 /** The largest `|y|` of the car's forward and right vectors (2.9 degrees) at which it is still read as its plan box. */
 export const LEVEL = 0.05;
-/** The mirror's tip from the car's axis (m); a latched door reaches no further. */
-const MIRROR_TIP = DOOR.hingeX + DOOR.mirrorX + DOOR.mirrorReach;
 /** The most a car's velocity changes over a step (m/s²): a position error of half that times the step squared per car. Measured across classes in `world-step-hull.test.ts`: the worst is 56 (a muscle car braking to a stop). */
 export const ACCEL_BOUND = 60;
 /** What the speeds do not say a step may move a hull by (m): the ride's pitch and the contact passes' capped pushes. */
@@ -45,7 +42,9 @@ export function readHull(car: DeformableCar, out: Float64Array, o: number): bool
   const r = car.rightFlat;
   // How far the plan of a car-tall body reaches past the level box when it leans by `LEVEL`.
   const tilt = 2 * car.frame.half.y * LEVEL;
-  const hx = Math.max((plan[1]! - plan[0]!) / 2, MIRROR_TIP) + OUTLINE_REACH + tilt;
+  const d = car.style.door;
+  // The mirror's tip from the car's axis (its own door's); a latched door reaches no further.
+  const hx = Math.max((plan[1]! - plan[0]!) / 2, car.mirrorBaseX + d.mirrorReach) + OUTLINE_REACH + tilt;
   const hz = (plan[3]! - plan[2]!) / 2 + OUTLINE_REACH + tilt;
   const w = car.angular;
   out[o + H_CX] = p.x + r.x * midX + f.x * midZ;

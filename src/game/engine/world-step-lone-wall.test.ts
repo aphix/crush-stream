@@ -106,7 +106,7 @@ describe("given a sedan driven at 40 m/s at Havana's alley wall from 11 m, on th
   });
 });
 
-/** Cars `abeam` m apart, the far one on the side away from the wall: just outside the hulls' clearance (2.45 m) so the test calls them clear. */
+/** Cars `abeam` m apart, the far one on the side away from the wall: just outside the two hulls' clearance so the test calls them clear. */
 const ABEAM = 2.6;
 /** The grazing car's steer toward the wall (of full lock): a firm lean in, pressing the wall below a crash's 5.5 m/s (`WALL_CRUSH`), so no `nearHit` holds it and the wall's push is the course's alone. */
 const WALLWARD_STEER = 0.4;
