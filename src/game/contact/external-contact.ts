@@ -488,10 +488,6 @@ export function strikeCar(car: DeformableCar, box: ContactBox, dt: number, crush
   const resting = box.fixed && closing <= CRASH.grazeMps;
   const overlap = faceOverlap(car, box, _p);
   const near = overlap > -Math.max(0, closing) * dt;
-  if (process.env.SLABDBG6 && box.fixed && closing > 3 && overlap > -0.3) {
-    const lat = (_p.x - car.group.position.x) * car.rightFlat.x + (_p.z - car.group.position.z) * car.rightFlat.z;
-    console.log(`SDBG6 fixed hx=${box.hx.toFixed(2)} hz=${box.hz.toFixed(2)} round=${box.round ? 1 : 0} ovl=${overlap.toFixed(3)} lat=${lat.toFixed(3)} close=${closing.toFixed(2)} yaw=${car.yaw.toFixed(3)} ang=${car.angular.y.toFixed(3)} crashed=${car.crashed ? 1 : 0} dt=${dt.toFixed(5)} crush=${crush ? 1 : 0}`);
-  }
   _n.set(fx, 0, fz);
   bodyHit.touching = near;
   bodyHit.depth = overlap;
