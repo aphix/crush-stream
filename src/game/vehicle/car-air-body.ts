@@ -339,24 +339,50 @@ export function pointVel(c: number, v: THREE.Vector3, w: THREE.Vector3, out: THR
   return out;
 }
 
+/** Numbers `GIVEN` keeps per contact: what its impulses changed this solve, each a velocity then a spin (3 + 3): the stepping body, the car under it at once, that car's borne weight. */
+export const GIVEN_STRIDE = 18;
+/** Per contact with a car under it: the change its impulses made this solve (`snapshotRows` clears it), which `rewindRows` takes back. */
+export const GIVEN = new Float64Array(CONTACTS * GIVEN_STRIDE);
+
+/** `GIVEN[at..at + 2]` plus `k` of `x`. */
+function accumulate(at: number, x: THREE.Vector3, k: number): void {
+  GIVEN[at] = GIVEN[at]! + x.x * k;
+  GIVEN[at + 1] = GIVEN[at + 1]! + x.y * k;
+  GIVEN[at + 2] = GIVEN[at + 2]! + x.z * k;
+}
+
 /**
  * Impulse `j` along unit `dir` at contact `c` on the stepping body (unit mass `v`, `w`, orientation `q`), and its reaction at the same
  * point on the car under it (`HELD`), centre and spin both: the part `jd` that stops closing beyond this slice's weight at once, the
  * weight's part (`j - jd`) borne on it for its next step (`CarSurfaces.bear`), which its own contacts then hold and bear on. Taken at
  * that car's centre alone, a load off the middle of its roof never turned it, and a car turning back under a still rider lifted it
- * 48 mm in 0.1 s (329 J) on 54 J of its own spin.
+ * 48 mm in 0.1 s (329 J) on 54 J of its own spin. What a contact with a car under it changes is kept in `GIVEN`.
  */
 export function give(c: number, v: THREE.Vector3, w: THREE.Vector3, q: THREE.Quaternion, dir: THREE.Vector3, surf: CarSurfaces): void {
   const j = _s[S_J]!;
   const jd = _s[S_JD]!;
-  push(v, w, q, R[c]!, dir);
   const o = HELD[c];
-  if (o === null) return;
+  if (o === null) {
+    push(v, w, q, R[c]!, dir);
+    return;
+  }
+  const g = c * GIVEN_STRIDE;
+  accumulate(g, v, -1);
+  accumulate(g + 3, w, -1);
+  push(v, w, q, R[c]!, dir);
+  accumulate(g, v, 1);
+  accumulate(g + 3, w, 1);
   const oq = o.group.quaternion;
   invInertia(_rn.crossVectors(ARM[c]!, dir), oq, _qo.copy(oq).invert(), o.frame.invI);
-  o.velocity.addScaledVector(dir, -jd * RATIO[c]!);
-  o.angular.addScaledVector(_rn, -jd * RATIO[c]!);
-  if (j !== jd) surf.bear(OWN[c]!, dir, _rn, (jd - j) * RATIO[c]!);
+  const now = -jd * RATIO[c]!;
+  const borne = (jd - j) * RATIO[c]!;
+  o.velocity.addScaledVector(dir, now);
+  o.angular.addScaledVector(_rn, now);
+  accumulate(g + 6, dir, now);
+  accumulate(g + 9, _rn, now);
+  accumulate(g + 12, dir, borne);
+  accumulate(g + 15, _rn, borne);
+  if (j !== jd) surf.bear(OWN[c]!, dir, _rn, borne);
 }
 
 /**

@@ -8,7 +8,7 @@ import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-ut
 import { droop, SPRINGS, UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
+import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
 import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop, readTyreSides } from "./car-air-points.ts";
 import { centreLift, centreY } from "./car-cage-rig.ts";
 import { store3d } from "../kernel/store.ts";
@@ -372,7 +372,13 @@ const P_TYRE = 22;
 /** The tyre side rows' points summed by their closing (x, y, z) and that closing's sum: where a tyre hit lands. */
 const P_TX = 23;
 const P_TW = 26;
-const PENDING_STRIDE = 27;
+/** What the rows' impulses against the other car changed (`GIVEN`, summed over those rows): the stepping car's velocity and spin, the other's at once, and the weight it bears for its next step. */
+const P_GAVE_A = 27;
+const P_GAVE_B = 33;
+const P_BORNE = 39;
+/** 1 once the other car has taken its borne weight into its motion (its own step came after the rows'): `rewindRows` then takes it from the velocity, else from what is waiting. */
+const P_TAKEN = 45;
+const PENDING_STRIDE = 46;
 const PENDING = new Float64Array(PENDING_CAPACITY * PENDING_STRIDE);
 const PENDING_A: (DeformableCar | null)[] = new Array(PENDING_CAPACITY).fill(null);
 const PENDING_B: (DeformableCar | null)[] = new Array(PENDING_CAPACITY).fill(null);
@@ -386,15 +392,32 @@ const _postW = new THREE.Vector3();
 const _centre = new THREE.Vector3();
 const _massPoint = new THREE.Vector3();
 
+/** `car`'s velocity and spin into `out` at `at` (3 + 3 numbers). */
+function storeMotion(out: Float64Array, at: number, car: DeformableCar): void {
+  store3d(out, at, car.velocity);
+  store3d(out, at + 3, car.angular);
+}
+
 /** What the stepping car and the cars its rows rest on move at, before the solve gives them any impulse: the speeds their crush is armed with. */
 function snapshotRows(car: DeformableCar, n: number): void {
-  store3d(PRE_A, 0, car.velocity);
-  store3d(PRE_A, 3, car.angular);
+  storeMotion(PRE_A, 0, car);
   for (let c = 0; c < n; c++) {
     const o = HELD[c];
     if (o === null || o === undefined) continue;
-    store3d(PRE_B, c * 6, o.velocity);
-    store3d(PRE_B, c * 6 + 3, o.angular);
+    storeMotion(PRE_B, c * 6, o);
+  }
+  GIVEN.fill(0, 0, n * GIVEN_STRIDE);
+}
+
+/** Adds to the pending hit at `at` what the rows of `n` that rest on `other` gave this solve (`GIVEN`). */
+function noteGiven(at: number, n: number, other: DeformableCar): void {
+  for (let c = 0; c < n; c++) {
+    if (HELD[c] !== other) continue;
+    for (let k = 0; k < 6; k++) {
+      PENDING[at + P_GAVE_A + k] = PENDING[at + P_GAVE_A + k]! + GIVEN[c * GIVEN_STRIDE + k]!;
+      PENDING[at + P_GAVE_B + k] = PENDING[at + P_GAVE_B + k]! + GIVEN[c * GIVEN_STRIDE + 6 + k]!;
+      PENDING[at + P_BORNE + k] = PENDING[at + P_BORNE + k]! + GIVEN[c * GIVEN_STRIDE + 12 + k]!;
+    }
   }
 }
 
@@ -423,7 +446,10 @@ function collectCrush(car: DeformableCar, n: number): void {
       PENDING_B[slot] = other;
       PENDING.fill(0, slot * PENDING_STRIDE, (slot + 1) * PENDING_STRIDE);
       PENDING.set(PRE_A, slot * PENDING_STRIDE + P_PRE_A);
-      if (other !== null) PENDING.set(PRE_B.subarray(c * 6, c * 6 + 6), slot * PENDING_STRIDE + P_PRE_B);
+      if (other !== null) {
+        PENDING.set(PRE_B.subarray(c * 6, c * 6 + 6), slot * PENDING_STRIDE + P_PRE_B);
+        noteGiven(slot * PENDING_STRIDE, n, other);
+      }
     }
     const f = slot * PENDING_STRIDE;
     PENDING[f + P_EBS_A2] = Math.max(PENDING[f + P_EBS_A2]!, ebsA * ebsA);
@@ -478,46 +504,86 @@ function commonSpeed(a: DeformableCar, b: DeformableCar, n: THREE.Vector3): numb
   return (massA * a.velocity.dot(n) + massB * b.velocity.dot(n)) / (massA + massB);
 }
 
+/** What `rewindRows` takes back, per car of a pair (`a` then `b`: velocity, spin) from its motion (0), and from the weight waiting on it (12). */
+const REWIND = new Float64Array(24);
+/** A car's borne weight (`CarSurfaces.borneState`), read and written back by `rewindRows`. */
+const BORNE = new Float64Array(6);
+
 /**
- * The pair contact's hit (cars `a` and `b` at `point`, `normal` out of `b` into `a`, closing at `closing`, barrier speeds `shareA`,
- * `shareB`), when the rows of the rigid step had met the same cars this slice (`collectCrush`): one contact, armed once, as it stood
- * before the rows' exchange and at the larger of the two readings of it (the rows read the whole approach, the pair contact what their
- * exchange left of it). The rows' hit is spent. False when the rows saw no such contact: the pair contact arms it alone.
+ * Takes back the exchange the rows of the rigid step made between cars `a` and `b` this slice (`collectCrush`), so the pair contact
+ * reads and takes the one contact as it stood before it: a nose corner on the other's sloped bonnet is a row, and its rigid stop of
+ * the closing leaves the pair's masses little to crush with. Only what those rows gave is taken back (`GIVEN`): the cars' own steps
+ * and their rows against anything else stand. Moves nothing, and returns false, when the rows met no such pair or the pair did not
+ * close on `n` (unit, out of `b` into `a`) faster than `floor` (m/s) before them.
  */
-export function armPairWithRows(a: DeformableCar, b: DeformableCar, point: THREE.Vector3, normal: THREE.Vector3, closing: number, shareA: number, shareB: number): boolean {
-  let first = -1;
-  let ebsA2 = shareA * shareA;
-  let ebsB2 = shareB * shareB;
+export function rewindRows(a: DeformableCar, b: DeformableCar, n: THREE.Vector3, floor: number): boolean {
+  REWIND.fill(0);
+  let met = false;
   for (let i = 0; i < queue.size; i++) {
     const same = PENDING_A[i] === a && PENDING_B[i] === b;
     if (!same && !(PENDING_A[i] === b && PENDING_B[i] === a)) continue;
-    if (first < 0) first = i;
+    met = true;
+    const f = i * PENDING_STRIDE;
+    const steps = same ? 0 : 6;
+    const rests = same ? 6 : 0;
+    const taken = PENDING[f + P_TAKEN] === 1;
+    for (let k = 0; k < 6; k++) {
+      REWIND[steps + k] = REWIND[steps + k]! + PENDING[f + P_GAVE_A + k]!;
+      REWIND[rests + k] = REWIND[rests + k]! + PENDING[f + P_GAVE_B + k]!;
+      const waiting = taken ? rests : 12 + rests;
+      REWIND[waiting + k] = REWIND[waiting + k]! + PENDING[f + P_BORNE + k]!;
+    }
+  }
+  if (!met) return false;
+  const closing = -((a.velocity.x - REWIND[0]! - b.velocity.x + REWIND[6]!) * n.x + (a.velocity.z - REWIND[2]! - b.velocity.z + REWIND[8]!) * n.z);
+  if (closing <= floor) return false;
+  for (let k = 0; k < 3; k++) {
+    a.velocity.setComponent(k, a.velocity.getComponent(k) - REWIND[k]!);
+    a.angular.setComponent(k, a.angular.getComponent(k) - REWIND[3 + k]!);
+    b.velocity.setComponent(k, b.velocity.getComponent(k) - REWIND[6 + k]!);
+    b.angular.setComponent(k, b.angular.getComponent(k) - REWIND[9 + k]!);
+  }
+  takeBackBorne(a, 12);
+  takeBackBorne(b, 18);
+  return true;
+}
+
+/** Takes the weight `REWIND` holds at `at` (6 numbers) off what waits on `car` for its next step. */
+function takeBackBorne(car: DeformableCar, at: number): void {
+  let waits = false;
+  for (let k = 0; k < 6; k++) if (REWIND[at + k] !== 0) waits = true;
+  if (!waits || car.surfaces === null) return;
+  car.surfaces.borneState(car.slot, BORNE, 0, false);
+  for (let k = 0; k < 6; k++) BORNE[k] = BORNE[k]! - REWIND[at + k]!;
+  car.surfaces.borneState(car.slot, BORNE, 0, true);
+}
+
+/**
+ * The pair contact's hit (cars `a` and `b` at `point`, `normal` out of `b` into `a`, closing at `closing`, barrier speeds `shareA`,
+ * `shareB`), when the rows of the rigid step had met the same cars this slice (`collectCrush`): one contact, armed once, at the larger
+ * of the two readings of it (the rows read the closing at their point and normal, the pair contact at the cars' centres), the pair
+ * rewound to before the rows' exchange (`rewindRows`) so the masses start at the speed they met at. The rows' hit is spent. False
+ * when the rows saw no such contact: the pair contact arms it alone.
+ */
+export function armPairWithRows(a: DeformableCar, b: DeformableCar, point: THREE.Vector3, normal: THREE.Vector3, closing: number, shareA: number, shareB: number): boolean {
+  let met = false;
+  let ebsA2 = shareA * shareA;
+  let ebsB2 = shareB * shareB;
+  for (let i = queue.size - 1; i >= 0; i--) {
+    const same = PENDING_A[i] === a && PENDING_B[i] === b;
+    if (!same && !(PENDING_A[i] === b && PENDING_B[i] === a)) continue;
+    met = true;
     ebsA2 = Math.max(ebsA2, PENDING[i * PENDING_STRIDE + (same ? P_EBS_A2 : P_EBS_B2)]!);
     ebsB2 = Math.max(ebsB2, PENDING[i * PENDING_STRIDE + (same ? P_EBS_B2 : P_EBS_A2)]!);
-  }
-  if (first < 0) return false;
-  const swapped = PENDING_A[first] !== a;
-  const common = commonSpeed(a, b, normal);
-  _crushBack.copy(normal).negate();
-  armAtExchange(a, first * PENDING_STRIDE + (swapped ? P_PRE_B : P_PRE_A), point, normal, closing, Math.sqrt(ebsA2), common, false);
-  armAtExchange(b, first * PENDING_STRIDE + (swapped ? P_PRE_A : P_PRE_B), point, _crushBack, closing, Math.sqrt(ebsB2), -common, false);
-  for (let i = queue.size - 1; i >= 0; i--) {
-    if (!((PENDING_A[i] === a && PENDING_B[i] === b) || (PENDING_A[i] === b && PENDING_B[i] === a))) continue;
     queue.size--;
     PENDING.copyWithin(i * PENDING_STRIDE, queue.size * PENDING_STRIDE, (queue.size + 1) * PENDING_STRIDE);
     PENDING_A[i] = PENDING_A[queue.size]!;
     PENDING_B[i] = PENDING_B[queue.size]!;
   }
+  if (!met) return false;
+  a.applyImpact(point, normal, closing, Math.sqrt(ebsA2));
+  b.applyImpact(point, _crushBack.copy(normal).negate(), closing, Math.sqrt(ebsB2));
   return true;
-}
-
-/** The largest closing (m/s) the rigid step's rows read for the pair `a`, `b` this slice, before their exchange (0 when they met none): what the pair met with, which the pair contact finds already traded in part. */
-export function rowsClosing(a: DeformableCar, b: DeformableCar): number {
-  let closing = 0;
-  for (let i = 0; i < queue.size; i++) {
-    if ((PENDING_A[i] === a && PENDING_B[i] === b) || (PENDING_A[i] === b && PENDING_B[i] === a)) closing = Math.max(closing, PENDING[i * PENDING_STRIDE + P_CLOSING]!);
-  }
-  return closing;
 }
 
 /**
@@ -709,6 +775,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   body.surf = surf;
   // The weight the cars on its top bore on it since its last step, taken after its move so its contacts hold it (no sinking under it).
   surf.takeBorne(car.slot, _lv, _lw);
+  for (let i = 0; i < queue.size; i++) if (PENDING_B[i] === car) PENDING[i * PENDING_STRIDE + P_TAKEN] = 1;
   v.add(_lv);
   w.add(_lw);
   const cls = carClass(car);

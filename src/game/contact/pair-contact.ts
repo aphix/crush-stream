@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { REARM_QUIET_S } from "../vehicle/car-core.ts";
-import { armPairWithRows, rowsClosing, wreckCentre, wreckInvI } from "../vehicle/car-air.ts";
+import { armPairWithRows, rewindRows, wreckCentre, wreckInvI } from "../vehicle/car-air.ts";
 import { MU_BODY, REST_SPEED, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { leftoverCrumple, satPushCap, hypot2, CRASH } from "../deform/physics-util.ts";
 import { satCars } from "./sat.ts";
@@ -567,12 +567,11 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   const n = _n;
   n.y = 0;
   if (n.lengthSq() > 1e-8) n.normalize();
-  const rel = _v.copy(carA.velocity).sub(carB.velocity);
-  const closing = -rel.dot(n);
+  let closing = -_v.copy(carA.velocity).sub(carB.velocity).dot(n);
   if (hit === null || hit < -(Math.max(0, closing) * dt + eaten)) return null;
 
-  // What the pair met with: the rows of the rigid step that met it this slice have traded part of it already (read before `armPairWithRows` takes them).
-  const met = Math.max(closing, rowsClosing(carA, carB));
+  // The rows of the rigid step that met this pair this slice (a nose corner on the other's sloped bonnet) traded part of the approach already: it is the pair's to take whole.
+  if (rewindRows(carA, carB, n, ARM_CLOSING)) closing = -_v.copy(carA.velocity).sub(carB.velocity).dot(n);
 
   // Where the contact masses of both cars are driven to along the normal: the speed each car's contact point has once the plastic
   // exchange at the patch is done (the pair's common speed when the hit goes through both centres).
@@ -584,9 +583,8 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   let brushB = false;
   if (closing > ARM_CLOSING) {
     // Equivalent barrier speed: each car takes the share of the pair's plastic exchange the kernel gives it at the contact point (a hit
-    // through both centres: the closing times the other's mass share). The rows of the rigid step that met this pair in this slice (a
-    // car's nose on the other's top) read the same contact from before their exchange: it is armed once, at the larger reading, as it
-    // stood before it (`armPairWithRows`).
+    // through both centres: the closing times the other's mass share). The rows that met this pair arm with it, once, at the larger
+    // reading (`armPairWithRows`).
     // Before notifyContact: a wreck's re-arm reads how long it has been quiet.
     loadPair(carA, carB, n, _p, faces[0]!, faces[1]!, 0);
     bodyContact(pairRows, 0, BODY_SIZE, pairContact, pairResult);
@@ -655,8 +653,8 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   if (extra > 0) pushApart(carA, carB, n.x, n.z, Math.min(extra + 0.006, satPushCap(dt)), dt);
 
   if (spent && closing > 0 && dist > 1e-4) holdComGap(carA, carB, leftoverA, leftoverB, dist, dt);
-  _hit.impulse = Math.max(met, hit * 6);
-  _hit.closing = met;
+  _hit.closing = Math.max(0, closing);
+  _hit.impulse = Math.max(_hit.closing, hit * 6);
   _hit.contact.copy(_p);
   _hit.normal.copy(n);
   return _hit;

@@ -378,6 +378,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * its nose masses, so it fed its bumper a thousandth of the crush and its engine none (a monster head-on at 40 m/s crushed 0.61 m and left its engine 0.42
  * healthy, where it crushed 0.84 m and killed it before the overhaul), and its plan contact reads its body's lift as drawn (faded as it lies over; it
  * stood at the whole 0.87 m up its tilted axis). Monster hits crush, kill, throw and push differently; a monster lying over meets cars where it is drawn.
+ * A pair whose nose corners meet each other's sloped bonnet is one contact, taken whole by the pair: the rigid step's exchange at those
+ * corners is taken back first, so an undriven 60 km/h head-on arms at its own closing (16.66 m/s, its engine blocks 0.165 m back; was
+ * 15.70 m/s and 0.118 m).
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

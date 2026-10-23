@@ -1,7 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import * as THREE from "three";
 import { classCar } from "./ejection.test-util.ts";
-import { launch, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { launch, makeCar, makeWorld, Probe, run, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { layOnGround } from "./car-air-points.ts";
 
 /**
  * The rigid step's rows meet a car's top with the other car's body points, and what the rows' impulse takes out of the pair is that
@@ -16,6 +18,10 @@ const EQUAL_MASS_SHARE = HEAD_ON_MPS;
 const SHARE_TOLERANCE = 0.1;
 /** A T-bone's striker meets the flank of the car it hits: it must not climb it. The cage's own fit (cm) is the most a crush may lift it. */
 const MOST_LIFT_M = 0.05;
+/** Each sedan's launch speed (km/h) in the undriven head-on: the kill window's low side, its middle, and past it. */
+const UNDRIVEN_KPH = [56, 58, 60] as const;
+/** How far (relative) an undriven sedan's armed hit may sit from the speed it launched at: a head-on through both centres reads the whole of it. */
+const LAUNCH_TOLERANCE = 0.02;
 
 describe("given a sedan driving head-on into a monster truck, each at 40 m/s", () => {
   it("when the nose meets the truck's bonnet, then each car's crush is armed at its share of the closing (the speed it would crush a rigid wall with)", () => {
@@ -45,5 +51,30 @@ describe("given a sedan driving its nose into a parked sedan's door at 55 m/s", 
       highest = Math.max(highest, striker.group.position.y);
     }
     assert.ok(highest <= MOST_LIFT_M, `the striker rose ${highest.toFixed(3)} m`);
+  });
+});
+
+describe("given two sedans, undriven, driving head-on at each other at 56, 58 and 60 km/h each", () => {
+  it("when their noses meet, then each car's hit is read at its launch speed and the engine block travels farther the faster they meet", () => {
+    let slower = 0;
+    for (const kph of UNDRIVEN_KPH) {
+      const a = makeCar();
+      const b = makeCar();
+      launch(a, -5, 0, Math.PI / 2, kph / 3.6, 0);
+      launch(b, 5, 0, -Math.PI / 2, -kph / 3.6, 0);
+      layOnGround(a);
+      layOnGround(b);
+      const world = makeWorld([a, b], false, false, null);
+      const probe = new Probe(a, new THREE.Vector3(1, 0, 0));
+      run(world, [probe, new Probe(b, new THREE.Vector3(-1, 0, 0))], 1.5);
+      const travel = probe.finish().engineTravel;
+      const want = kph / 3.6;
+      for (const [name, car] of [["a", a], ["b", b]] as const) {
+        const armed = car.deform.hitSpeedValue;
+        assert.ok(Math.abs(armed - want) <= LAUNCH_TOLERANCE * want, `${kph} km/h: car ${name}'s hit read ${armed.toFixed(2)} m/s, it met at ${want.toFixed(2)}`);
+      }
+      assert.ok(travel > slower, `${kph} km/h: engine block ${travel.toFixed(4)} m, the slower pair's ${slower.toFixed(4)} m`);
+      slower = travel;
+    }
   });
 });
