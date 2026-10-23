@@ -36,11 +36,13 @@ function torsoAt(x: number, y: number, z: number, still: number): TorsoSample {
   return { x, y, z, still };
 }
 
-const PEDAL: MinigameFrame = { pedalPressed: true, thrown: false, torso: null };
-const THROW: MinigameFrame = { pedalPressed: false, thrown: true, torso: null };
+/** The car has stood on the hilltop this long (s) as the pedal goes down: a parked car is at rest, not moving. */
+const PARKED_STILL = 5;
+const PEDAL: MinigameFrame = { pedalPressed: true, thrown: false, torso: null, carStill: PARKED_STILL };
+const THROW: MinigameFrame = { pedalPressed: false, thrown: true, torso: null, carStill: 0 };
 
 function flying(torso: TorsoSample): MinigameFrame {
-  return { pedalPressed: false, thrown: true, torso };
+  return { pedalPressed: false, thrown: true, torso, carStill: 0 };
 }
 
 /** Pedal, ejection, then the torso lying still at (x, 0, z) for the rest hold: the attempt scores on the last frame. */
@@ -55,7 +57,7 @@ describe("given a long jump session", () => {
   it("when no pedal is pressed, then it stays ready, even when the ejection flag is up", () => {
     const session = new MinigameSession(fakeBests());
     session.begin("longJump", LONG_JUMP_OPTIONS);
-    session.step({ pedalPressed: false, thrown: false, torso: null });
+    session.step({ pedalPressed: false, thrown: false, torso: null, carStill: 0 });
     session.step(THROW);
     assert.equal(session.hud().phase, "ready", "phase without a pedal press");
   });
@@ -65,7 +67,7 @@ describe("given a long jump session", () => {
     session.begin("longJump", LONG_JUMP_OPTIONS);
     session.step(PEDAL);
     assert.equal(session.hud().phase, "running", "phase after the pedal");
-    session.step({ pedalPressed: false, thrown: false, torso: null });
+    session.step({ pedalPressed: false, thrown: false, torso: null, carStill: 0 });
     assert.equal(session.hud().phase, "running", "phase while driving on");
     session.step(THROW);
     assert.equal(session.hud().phase, "thrown", "phase after the ejection");
@@ -113,7 +115,7 @@ describe("given a long jump session", () => {
     throwAndRestAt(session, 20);
     const before = session.hud();
     for (let frame = 0; frame < FRAMES_AFTER_SCORING; frame++) {
-      assert.equal(session.step({ pedalPressed: frame % 2 === 0, thrown: true, torso: torsoAt(90 + frame, 9, 0, REST_HOLD + frame) }), null, "frame after scoring");
+      assert.equal(session.step({ pedalPressed: frame % 2 === 0, thrown: true, torso: torsoAt(90 + frame, 9, 0, REST_HOLD + frame), carStill: frame }), null, "frame after scoring");
     }
     assert.equal(JSON.stringify(session.hud()), JSON.stringify(before), "card after the idle frames");
     assert.equal(bests.recorded.length, 1, "nothing recorded again");
@@ -172,6 +174,75 @@ describe("given a long jump session", () => {
     assert.deepEqual(session.hud().best, { thisCar: 31, overall: 44 }, "best before the throw");
     throwAndRestAt(session, 36);
     assert.deepEqual(session.hud().best, { thisCar: 36, overall: 44 }, "best after a throw that beats this car's but not the overall");
+  });
+
+  describe("given the car drives and nobody is thrown", () => {
+    const DRIVING: MinigameFrame = { pedalPressed: false, thrown: false, torso: null, carStill: 0 };
+    const atRest = (carStill: number): MinigameFrame => ({ pedalPressed: false, thrown: false, torso: null, carStill });
+
+    it("when the car that drove has lain still the rest hold, then the attempt is scored as a no throw: no score, nothing recorded, the earlier score and attempt kept", () => {
+      const bests = fakeBests();
+      const session = new MinigameSession(bests);
+      session.begin("longJump", LONG_JUMP_OPTIONS);
+      throwAndRestAt(session, 20);
+      session.retry();
+      session.step(PEDAL);
+      session.step(DRIVING);
+      assert.equal(session.step(atRest(REST_HOLD - 0.01)), null, "a frame short of the rest hold");
+      assert.equal(session.hud().phase, "running", "still running just short of it");
+      assert.equal(session.step(atRest(REST_HOLD)), null, "no score on the resting frame");
+      const card = session.hud();
+      assert.equal(card.phase, "scored", "phase");
+      assert.equal(card.noThrow, true, "no throw");
+      assert.equal(card.attempt, 2, "attempt");
+      assert.equal(card.lastScore, 20, "the earlier throw's score stays on the card");
+      assert.equal(bests.recorded.length, 1, "no best recorded for the no throw");
+    });
+
+    it("when the car has not moved since the pedal, then resting is no attempt: it stays running however long it rests", () => {
+      const session = new MinigameSession(fakeBests());
+      session.begin("longJump", LONG_JUMP_OPTIONS);
+      session.step(PEDAL);
+      for (let frame = 0; frame < FRAMES_AFTER_SCORING; frame++) session.step(atRest(REST_HOLD + frame));
+      assert.equal(session.hud().phase, "running");
+    });
+
+    it("when a car that drove rests for the hold after he was thrown, then it is the dummy's rest that scores, not a no throw", () => {
+      const session = new MinigameSession(fakeBests());
+      session.begin("longJump", LONG_JUMP_OPTIONS);
+      session.step(PEDAL);
+      session.step(DRIVING);
+      session.step(THROW);
+      session.step({ pedalPressed: false, thrown: true, torso: torsoAt(40, 0, 0, STILL_BEFORE_REST), carStill: REST_HOLD + 1 });
+      assert.equal(session.hud().phase, "thrown", "the car's rest does not end a thrown attempt");
+      assert.deepEqual(session.step({ pedalPressed: false, thrown: true, torso: torsoAt(40, 0, 0, REST_HOLD), carStill: REST_HOLD + 1 }), { scored: 40 }, "the dummy's rest scores it");
+      assert.equal(session.hud().noThrow, false, "a throw");
+    });
+
+    it("when a no throw is retried, then the same attempt is ready again with the card clear, and a run that is thrown scores as usual", () => {
+      const session = new MinigameSession(fakeBests());
+      session.begin("longJump", LONG_JUMP_OPTIONS);
+      session.step(PEDAL);
+      session.step(DRIVING);
+      session.step(atRest(REST_HOLD));
+      session.retry();
+      const card = session.hud();
+      assert.equal(card.phase, "ready", "phase");
+      assert.equal(card.noThrow, false, "the card is clear");
+      assert.equal(card.attempt, 1, "a no throw uses no attempt");
+      assert.equal(throwAndRestAt(session, 33)?.scored, 33, "the retried attempt scores");
+    });
+
+    it("when the run is reset after the car drove, then it is ready again and nothing was a no throw", () => {
+      const session = new MinigameSession(fakeBests());
+      session.begin("longJump", LONG_JUMP_OPTIONS);
+      session.step(PEDAL);
+      session.step(DRIVING);
+      session.resetRun();
+      session.step(PEDAL);
+      session.step(atRest(REST_HOLD));
+      assert.equal(session.hud().phase, "running", "the car that has not moved since the new pedal is no attempt");
+    });
   });
 });
 

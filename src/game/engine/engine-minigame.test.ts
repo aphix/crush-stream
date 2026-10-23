@@ -779,4 +779,67 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       });
     }
   });
+
+  describe("given a long jump attempt in which the barrier throws nobody (the car is lifted off the throttle short of it)", () => {
+    /** A run is read this long (s) after the car settles: the rest hold the dummy's own scoring waits, and a second to spare. */
+    const RESOLVE_AFTER_REST_S = REST_HOLD + 1;
+    const NO_THROW_TIMEOUT_S = 60;
+    /** The car has left its hilltop spot when it is this far (m) from it. */
+    const LEFT_START_M = 1;
+
+    /** A long jump at full throttle until the car passes `liftAtX`, then coasting, until it has lain at rest `RESOLVE_AFTER_REST_S` (or the timeout): the seconds it rested. */
+    const coastToRest = (liftAtX: number): number => {
+      const startX = engine["carA"].group.position.x;
+      engine["keys"].add(THROTTLE_KEY);
+      let left = false;
+      let restS = 0;
+      for (let frame = 0; frame < NO_THROW_TIMEOUT_S * FRAME_HZ && restS < RESOLVE_AFTER_REST_S; frame++) {
+        if (engine["carA"].group.position.x >= liftAtX) engine["keys"].delete(THROTTLE_KEY);
+        engine.advance(FRAME, { frameDt: FRAME });
+        left ||= Math.abs(engine["carA"].group.position.x - startX) > LEFT_START_M;
+        restS = left && !engine["carA"].moving ? restS + FRAME : 0;
+      }
+      engine["keys"].delete(THROTTLE_KEY);
+      return restS;
+    };
+
+    const cases = [
+      { it: "rolls into the barrier too slowly to throw him", liftAtX: -16 },
+      { it: "stops short of the barrier on the hill", liftAtX: -30 },
+    ] as const;
+    for (const testCase of cases) {
+      it(`when the throttle is let go at x ${testCase.liftAtX} and the car ${testCase.it}, then the attempt ends as no throw within ${RESOLVE_AFTER_REST_S} s of the car settling, with no score and no dummy launched`, () => {
+        engine.setPlayerCar("sedan");
+        engine.startMinigame("longJump");
+        const launched = launches.length;
+        const bestBefore = minigameHud().best.thisCar;
+        const restS = coastToRest(testCase.liftAtX);
+        const card = minigameHud();
+        assert.ok(restS >= RESOLVE_AFTER_REST_S, `the car never settled (rested ${restS.toFixed(2)} s)`);
+        assert.equal(card.phase, "scored", `${restS.toFixed(2)} s after the car settled at x ${engine["carA"].group.position.x.toFixed(2)}, the attempt is still ${card.phase}`);
+        assert.equal(card.noThrow, true, "the attempt is a no throw");
+        assert.equal(card.lastScore, null, "no score");
+        assert.equal(card.best.thisCar, bestBefore, "the best is untouched");
+        assert.equal(card.bail!.verdict, null, "no bail verdict: nobody was thrown");
+        assert.equal(launches.length, launched, "no dummy was launched");
+      });
+    }
+
+    it("when a no throw is retried, then the same attempt is ready again on the hilltop with the card cleared, and it can be thrown", () => {
+      engine.setPlayerCar("sedan");
+      engine.startMinigame("longJump");
+      coastToRest(-16);
+      const ended = minigameHud();
+      engine.retryMinigame();
+      const again = minigameHud();
+      assert.equal(again.phase, "ready", "Retry readies the next run");
+      assert.equal(again.noThrow, false, "the next run is not a no throw");
+      assert.equal(again.attempt, ended.attempt, "a no throw uses no attempt");
+      assert.ok(Math.abs(engine["carA"].group.position.x - engine["minigames"].stationStart().x) < START_TOLERANCE, "the car is back on the hilltop");
+      const samples = throwAndRead("longJump");
+      assert.ok(samples.length > 0, "the retried run threw him");
+      assert.equal(minigameHud().phase, "scored", "the retried run scored");
+      assert.equal(minigameHud().noThrow, false, "a throw is no no throw");
+    });
+  });
 });

@@ -901,7 +901,7 @@ export class CrashEngine extends EngineGarage {
     stepPhase(this.clock, wallDt);
     // A minigame has no loop and no timer: the dummy lies where he lands, and the session waits for the player's Retry.
     if (this.minigameMode !== null) {
-      this.minigames.step(this.ragdolls, this.seat.mode === "drive" && this.seat.carIndex === 0);
+      this.minigames.step(this.ragdolls, this.seat.mode === "drive" && this.seat.carIndex === 0, this.carA, wallDt);
       return;
     }
     // A thrown range driver holds the loop until his landing has been shown (`RangeRun`); otherwise it runs as the
