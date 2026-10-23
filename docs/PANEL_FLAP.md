@@ -56,8 +56,9 @@ An unlatched door is a uniform slab hinged at (±0.86, 0.55) swinging along u = 
 F = −a + ω² p − α × p gives its opening acceleration (`swingAccel`): braking (a_z < 0) swings it forward (open), accelerating
 shuts it, the outside of a turn opens it, the inside shuts it; a shut door has no torque from braking. a is the change of the
 car's velocity since the last sample, rotated into the car frame and capped at 1.5 g (a crash's spike saturates; the crash rules
-C1 tear or spare a door), α the same for the yaw rate. Hinge friction: 0.8/s viscous plus `DOOR_DRY` = 2 rad/s² dry, so a jostle
-leaves a door hanging. Because only Δv enters, a car carried at any constant speed, or turned any way, swings the same.
+C1 tear or spare a door), α the same for the yaw rate. Hinge friction: 0.8/s viscous plus a dry detent: a door's holds it against a
+car-frame push of up to 0.76 m/s² across its slab whatever its length (`DOOR_DETENT_ACC`, as the swing it drives: 3/(2L) rad/s² per
+m/s²); a lid's is 2 rad/s² (`LID_DRY`), so a jostle leaves either hanging. Because only Δv enters, a car carried at any constant speed, or turned any way, swings the same.
 
 The door ends on the check-strap stop (`loadDoorStop`), on its crash jam, or in the latch: `closeDoor` is the one rule for
 reaching shut, used by the car's own swing and by the Doors ram alike (latched below `SLAM_TEAR_J`, wrenched off above it).

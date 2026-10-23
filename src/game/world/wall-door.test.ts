@@ -16,9 +16,9 @@ import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 /**
  * A door a crash left open sticks out past the car's tyres, where the wall's footprint test never looks. Owner clip "Wall hit,
  * 74 km/h" (muy7bjjp2c): the crushed car drove on past the end of a race wall with its left door hanging open at 75° and the
- * door's skin ended 0.58 m inside the wall's 0.6 m box. The wall below is that end: one 2 m piece whose end cap the car passes
- * at 35° to the wall's own line, the near corner of the cap 1.15 m off the car's side, between the body (0.82 m) and the sedan door's
- * tip (1.72 m at its 68° stop).
+ * door's skin ended well inside the wall's box. The wall below is that end: one short piece whose end cap the car passes at a skew to
+ * the wall's own line, the near corner of the cap between the body's side and the sedan door's tip at its stop (`WALL` holds the
+ * cap's figures).
  */
 
 const FRAME = 1 / FRAME_HZ;

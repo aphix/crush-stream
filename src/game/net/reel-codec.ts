@@ -341,9 +341,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * box leaves a corner empty: every torn part but the mirrors and the light bar. A bumper, door, quarter or arch no longer rests on a corner
  * where nothing is drawn (12-73 cm off its shell), and the keyframe carries each loose part's twenty points and its shell flag. A torn grille,
  * tail trim or mirror flies and collides as its style draws it, not as the platform part.
- * A door swings, is struck and is shut by a solid as its style draws it (the sedan's 0.98 m door, 8.0 kg·m² about its hinge, not the platform's
- * 0.57 m and 2.7), a mirror is met at its drawn seat and heights and folds only until its tip clears the striker, a striker above a car's shoulder
- * meets the body only where it stands at those heights, and two cars side by side read each other's own mirror tips.
+ * A door swings, is struck and is shut by a solid as its style draws it (its own length and inertia about its hinge, not the platform's),
+ * a mirror is met at its drawn seat and heights and folds only until its tip clears the striker, a striker above a car's shoulder
+ * meets the body only where it stands at those heights, and two cars side by side read each other's own mirror tips; a door's hinge detent
+ * holds it against the same car-frame jostle whatever its length.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

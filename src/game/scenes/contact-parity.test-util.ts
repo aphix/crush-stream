@@ -207,15 +207,6 @@ function carShape(a: DeformableCar): RamShape {
   return { bottom: 0, top: 2 * a.frame.half.y, width: 2 * cageHalf().x };
 }
 
-/** `b` standing in for the ram, its mirrors off as the ram has none: a stand-in's mirror folding on the struck car's side pushes that car. */
-function standIn(b: DeformableCar): void {
-  for (const p of b["parts"]) {
-    if (p.name !== "mirrorL" && p.name !== "mirrorR") continue;
-    p.detached = true;
-    p.object.visible = false;
-  }
-}
-
 /**
  * A second car (its side face on the lane's inner edge, the lane's travel and speed) drives past
  * the parked car's `side`, its door set as the scenario sets it (`tyres`: both cars in neutral).
@@ -229,7 +220,6 @@ export function carDoorPass(scenario: DoorScenario, kph: number, tyres = false, 
   const x = side * (lane.inner + cageHalf().x);
   // Leading face at the ram's start, so both runs cover the same ground.
   launch(b, x, -lane.dir * (RAM.start + cageHalf().z), lane.dir > 0 ? 0 : Math.PI, kph);
-  standIn(b);
   const w = makeWorld([a, b], false, false, null);
   runPass(w, tyres, kph, () => hasPassed(lane, a, b), () => readoutKey(a, side));
   return carState(a, side);
@@ -256,7 +246,6 @@ function reversingDoorPass(scenario: DoorScenario, kph: number, tyres = false, s
   else a.setDoorOpen(side, lane.open);
   const b = pooledCar(1);
   b.spawnFacing(side * (lane.inner + cageHalf().x), 0, lane.dir > 0 ? 0 : Math.PI, 0);
-  standIn(b);
   const w = makeWorld([a, b], false, false, null);
   runPass(w, tyres, kph, () => hasPassed(lane, a, b), () => readoutKey(a, side));
   return carState(a, side);

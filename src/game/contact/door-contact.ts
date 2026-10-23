@@ -47,9 +47,12 @@ export const partHit = {
   nz: 0,
 };
 
-/** How far along the run the mirror cap's trailing face has swung at fold `phi` (m, from the base): pinned where the lane's inner edge (`gap` out) crosses it, never inboard of the cap (0.11 m on the platform mirror's 0.21 m reach, x-scaled with the seat to the style's `mirrorReach`). */
+/** The cap's trailing face's inboard reach from the base (m) on a mirror of `MIRROR_REACH`; a style's scales with its own `mirrorReach`. */
+const CAP_INBOARD = 0.11;
+
+/** How far along the run the mirror cap's trailing face has swung at fold `phi` (m, from the base): pinned where the lane's inner edge (`gap` out) crosses it, never inboard of the cap. */
 function mirrorSweep(phi: number, gap: number, d: Door): number {
-  const r = Math.max(gap / detCos(phi), 0.11 * (d.mirrorReach / MIRROR_REACH));
+  const r = Math.max(gap / detCos(phi), CAP_INBOARD * (d.mirrorReach / MIRROR_REACH));
   return r * detSin(phi) - d.mirrorHalfDepth * detCos(phi);
 }
 
@@ -86,7 +89,7 @@ export function hitMirror(car: DeformableCar, side: -1 | 1, lane: Lane): void {
     return;
   }
   if (most < MIRROR_FOLD_MAX) {
-    car.setMirrorFold(side, -side * s * most);
+    car.setMirrorFold(side, -side * s * Math.max(fold, most));
     return;
   }
   // Folded flat and still in the lane: the stop takes the striker.
@@ -198,9 +201,9 @@ export function hitPanel(car: DeformableCar, side: -1 | 1, lane: Lane): void {
   lane.u = moved > 0 ? Math.sqrt(Math.max(0, lane.u * lane.u - (2 * PANEL_BEND_NM * moved) / lane.kg)) : 0;
 }
 
-/** Plan samples along a door, hinge to trailing edge, a fixed solid is asked about: a door is 0.88-1.1 m long (11-14 cm between samples), a lamp post 0.17 m across. */
+/** Plan samples along a door, hinge to trailing edge, a fixed solid is asked about: dense enough that no thin solid (a lamp post) fits between two. */
 const DOOR_SAMPLES = 8;
-/** The door skin's reach (m) past its plan line, the angle step (rad) a door is walked shut by (2.6-3.3 cm of trailing edge) and the halvings that then find the angle it clears at. */
+/** The door skin's reach (m) past its plan line, the angle step (rad) a door is walked shut by (a small step of trailing edge, so the walk cannot jump a thin solid) and the halvings that then find the angle it clears at. */
 const DOOR_SKIN = 0.03;
 const DOOR_STEP = 0.03;
 const DOOR_HALVINGS = 6;

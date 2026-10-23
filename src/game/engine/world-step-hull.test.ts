@@ -213,6 +213,28 @@ describe("given two sedans abeam at a hull-clear distance the circle of the old 
   });
 });
 
+describe("given two sedans abeam at 15 m/s a race lane's gap apart (up to 2.4 m: past their drawn mirrors' reach), the step cut by a pair parked far off", () => {
+  it("when they are their mirrors' meeting plus the most the clearance asks, and then 2.4 m apart, then both step lone in every step, no overlap is missed, and they end where the sliced run puts them", () => {
+    const sedan = makeCar("shape");
+    const meet = 2 * (sedan.mirrorBaseX + sedan.style.door.mirrorReach);
+    dispose([sedan]);
+    assert.ok(meet + MOST_BEYOND < 2.4, `the clearance ends by ${(meet + MOST_BEYOND).toFixed(3)} m`);
+    for (const apart of [meet + MOST_BEYOND, 2.4]) {
+      const on = pairField(abeam(apart, 0), true);
+      const off = pairField(abeam(apart, 0), false);
+      const rows = run(on.w, 80, COARSE);
+      run(off.w, 80, COARSE);
+      const masks = [...new Set(rows.map((r) => r.loners & 0b11))].join();
+      assert.ok(
+        rows.every((r) => (r.loners & 0b11) === 0b11 && r.slices === SLICES_PER_STEP && r.missed === 0),
+        `${apart} m apart: lone masks seen ${masks}, missed ${rows.reduce((n, r) => n + r.missed, 0)}`,
+      );
+      samePose(on, off);
+      dispose([...on.cars, ...off.cars]);
+    }
+  });
+});
+
 describe("given a car of each class leaning as far as the level bar lets it (a roll and a pitch of 0.048)", () => {
   for (const cls of VEHICLE_CLASS_IDS) {
     it(`when it is a ${cls}, then every vertex of its cage lies inside its hull box`, () => {

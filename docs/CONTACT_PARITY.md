@@ -11,7 +11,7 @@ Probes: `src/game/scenes/contact-parity.test-util.ts` (scenarios, `carState` mea
 
 | Pair | Scene rig | Car-car | Equivalence |
 | --- | --- | --- | --- |
-| Mirror swipe (Doors A) | `fireRam(car, "mirror")`, 858 kg ram, 12 km/h | a 858 kg car, its left side on the lane's inner edge (x = 0.95 m), rear→front at 12 km/h past the parked car's right side | Same lane geometry (inner edge, travel, start and end), speed and striker mass |
+| Mirror swipe (Doors A) | `fireRam(car, "mirror")`, 858 kg ram, 12 km/h | a 858 kg car with its own mirrors, its side on the lane's inner edge (the struck car's own lane, `laneFor`: 0.03 m outside its mirror base, or outside its body's edge at the head's heights where that is further out), rear→front at 12 km/h past the parked car's right side | Same lane geometry (inner edge, travel, start and end), speed and striker mass |
 | Open door pushed past its stop (Doors B) | `fireRam(car, "overOpen")`, door 55° | same car on the B lane (x = 0.95 m), rear→front | as above |
 | Open door driven shut (Doors C) | `fireRam(car, "shut")`, door 55° | same car on the C lane (x = 1.10 m), front→rear | as above |
 | Stretched quarter panel pushed back / pulled out (Doors D, E) | `fireRam(car, "panelPush" / "panelPull")`, panel hinge 0.45 | the same striker through `partContact` (`hitPanel`), the panel's mirror image of the door | as above ([`PANEL_FLAP.md`](PANEL_FLAP.md)) |
@@ -41,7 +41,7 @@ cabin intrusion within the same band.
 | A / B / C at 30 km/h | as at 12 km/h | mirror off / door torn off / slammed shut hard enough to tear off |
 
 Body Δ is 0 mm on both paths in all six runs (the ram never meets body particles; the car-car
-pass never reaches the hulls: lane x 0.95 vs hull 0.86).
+pass never reached the hulls: the lane stood at x 0.95 for every car, the hull at 0.86; lanes are now each struck car's own, `laneFor`).
 
 ### Sandwich vs press (middle car)
 

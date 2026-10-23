@@ -114,6 +114,8 @@ export const HINGE_TEAR_J = 220;
 export const SLAM_TEAR_J = 360;
 /** Hinge friction (1/s). */
 export const DOOR_DAMP = 0.8;
+/** The hinge's detent holds a door against a car-frame push across its slab up to this (m/s²): a jostle leaves it where it hangs. */
+export const DOOR_DETENT_ACC = 0.76;
 /** The mirror folds about its base up to this (rad) before its stop loads. */
 export const MIRROR_FOLD_MAX = (75 * Math.PI) / 180;
 /** Energy the mirror's fold stop takes before the mirror snaps off (J), guessed. */
@@ -129,6 +131,8 @@ function doorSpec(door: BodyStyle["door"]): HingeSpec {
     length: door.length,
     kg: DOOR_MASS,
     inertia: (DOOR_MASS * door.length * door.length) / 3,
+    // The detent's push as the swing it drives (`swingAccel`: 3/(2L) rad/s² per m/s²), so every door length shrugs off the same jostle.
+    dry: (3 * DOOR_DETENT_ACC) / (2 * door.length),
     stop: DOOR_OPEN_MAX,
     jam: DOOR_JAM,
     ajar: DOOR_AJAR,

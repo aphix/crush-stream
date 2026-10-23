@@ -50,7 +50,7 @@ export const DOOR_LANES: Readonly<Record<DoorScenario, RamLane>> = {
   overOpen: { dir: 1, inner: 0.95, width: 0.6, bottom: 0.3, top: 0.75, open: (55 * Math.PI) / 180 },
   // Outside the mirror head on the open door, so the ram meets the slab first.
   shut: { dir: -1, inner: 1.1, width: 0.6, bottom: 0.3, top: 0.75, open: (55 * Math.PI) / 180 },
-  // A quarter panel at hinge 0.45 (the sedan's free end 0.879 m out); `laneFor` puts the inner edge outside the car's own body.
+  // A quarter panel standing out (hinge 0.45); `laneFor` puts the inner edge outside the car's own body.
   panelPush: { dir: 1, inner: 0, width: 0.6, bottom: 0.3, top: 0.75, open: 0.45, part: "panel" },
   panelPull: { dir: -1, inner: 0, width: 0.6, bottom: 0.3, top: 0.75, open: 0.45, part: "panel" },
   lidPop: { ...TAIL_LANE, open: 0 },
@@ -63,7 +63,7 @@ const BODY_LANE_GAP = 0.03;
 const MIRROR_LANE_GAP = 0.03;
 /** The mirror lane's bottom stands this far (m) under the drawn mirror's top: clear of the belt and pillars under it, which a taller ram would dent. */
 const MIRROR_LANE_CATCH = 0.02;
-/** The mirror lane's height (m). */
+/** The mirror lane runs from just under the drawn mirror's top up this far (m): a head over the cap, never down onto the belt and the door below. */
 const MIRROR_LANE_TALL = 0.6;
 
 /** A head's shape on a lane: a car-shaped striker for docs/CONTACT_PARITY.md. */
@@ -208,17 +208,18 @@ export class DoorRig {
   step(dt: number): void {
     const car = this.car;
     if (!car) return;
+    const lane = this.lane;
     const n = Math.max(1, Math.ceil(dt / RAM.substep));
     const h = dt / n;
     for (let i = 0; i < n; i++) {
       if (this.phase === "run") {
-        this.face += this.lane.dir * this.u * h;
-        this.hit(car, h);
+        this.face += lane.dir * this.u * h;
+        this.hit(car, h, lane);
         if (this.u <= 0.01) {
           this.u = 0;
           this.stopped = true;
           this.phase = "settle";
-        } else if (this.lane.dir * this.face - this.length > RAM.end - RAM.length) {
+        } else if (lane.dir * this.face - this.length > RAM.end - RAM.length) {
           this.phase = "settle";
         }
       } else if (this.phase === "settle") {
@@ -235,8 +236,7 @@ export class DoorRig {
   }
 
   /** Ram centre (car space) for the visuals. */
-  centre(out: THREE.Vector3): THREE.Vector3 {
-    const lane = this.lane;
+  centre(out: THREE.Vector3, lane = this.lane): THREE.Vector3 {
     return out.set(
       this.side * (lane.inner + lane.width * 0.5),
       (lane.bottom + lane.top) * 0.5,
@@ -280,10 +280,9 @@ export class DoorRig {
    * The ram as a striker box riding the car's frame (its kinematic travel plus the speed it
    * keeps), through the same door, mirror and body contact every scene uses.
    */
-  private hit(car: DeformableCar, h: number): void {
-    const lane = this.lane;
+  private hit(car: DeformableCar, h: number, lane: RamLane): void {
     const box = this.box;
-    this.centre(_c);
+    this.centre(_c, lane);
     const p = car.group.position;
     const r = car.rightFlat;
     const f = car.fwdFlat;

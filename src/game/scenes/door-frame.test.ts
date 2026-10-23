@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { makeBox, partContact } from "../contact/external-contact.ts";
+import { outlineOf } from "../contact/cage-outline.ts";
+import { bodyHit, makeBox, partContact, strikeCar } from "../contact/external-contact.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { DetachPart } from "../vehicle/car-core.ts";
@@ -174,4 +175,40 @@ describe("given a panel folded by the sim's step on a car no frame ever drew", (
       assert.equal(sim.panel, drawn.panel, "panel hinge");
     });
   }
+});
+
+describe("given a striker whose heights cross the car's widest section, so its body edge is the plan box's", () => {
+  it("when its inner edge is swept across the plan edge in 1 cm steps, then the depth the striker reads equals the plain loop over every outline node at each step", () => {
+    const car = makeCar();
+    car.spawnFacing(0, 0, 0, 0);
+    assert.ok(car.rightFlat.x === 1 && car.fwdFlat.z === 1, "the oracle below reads a car at yaw 0");
+    const outline = outlineOf(car);
+    const p = car.group.position;
+    const planEdge = car.cage.fields.planBox[1]!;
+    const box = makeBox();
+    box.hx = 0.3;
+    box.hz = 0.25;
+    box.hy = 0.75;
+    box.y = p.y + 0.85;
+    let met = 0;
+    let missed = 0;
+    for (let k = -12; k <= 12; k++) {
+      const edge = planEdge + k * 0.01;
+      box.x = edge + box.hx;
+      strikeCar(car, box, DT, false);
+      const ox = p.x - box.x;
+      const oz = p.z - box.z;
+      let want = -Infinity;
+      for (let n = 0; n < outline.count; n++) {
+        if (Math.abs(ox + outline.xs[n]!) > box.hx) continue;
+        const along = oz + outline.zs[n]!;
+        if (along < -box.hz) continue;
+        want = Math.max(want, box.hz - along);
+      }
+      assert.ok(bodyHit.depth === want, `inner edge ${edge.toFixed(2)} m: the striker reads depth ${bodyHit.depth}, the loop over every node ${want}`);
+      if (want === -Infinity) missed++;
+      else met++;
+    }
+    assert.ok(met > 0 && missed > 0, `the sweep met nodes at ${met} edges and none at ${missed}: it must cross the body's edge`);
+  });
 });

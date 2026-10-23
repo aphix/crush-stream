@@ -6,7 +6,7 @@ import { bodyContact, BODY_HARD, BODY_I, BODY_M, BODY_SIZE, BODY_VX, BODY_VZ, BO
 import { FACE_ROW } from "../deform/deform-contact.ts";
 import { ARM_CLOSING, SOLID_MU } from "./constants.ts";
 import { CRASH } from "../deform/physics-util.ts";
-import { OUTLINE_REACH, outlineOf } from "./cage-outline.ts";
+import { OUTLINE_REACH, outlineOf, type CageOutline } from "./cage-outline.ts";
 import { LEVEL } from "./hull-gap.ts";
 import { _lane, hitDoor, hitMirror, hitPanel, partHit, shutDoorsOnSolid, SIDES } from "./door-contact.ts";
 
@@ -101,6 +101,22 @@ const TIE_GAP = 0.02;
 /** Where the last `faceOverlap` found the face pushed: the depth-weighted centre of the car's outline nodes on it (plan). */
 const pressure = { x: 0, z: 0 };
 /**
+ * Whether a striker is clear of the body's width at its heights, so it meets no outline node: the side offset is linear in x and z, so
+ * the corners of that width over the outline's z span bound every node's.
+ */
+function clearOfBody(car: DeformableCar, box: ContactBox, outline: CageOutline, s0: number, axr: number, azr: number): boolean {
+  const bottom = box.y - box.hy - car.group.position.y;
+  const top = box.y + box.hy - car.group.position.y;
+  const xHi = bodyEdge(car, 1, bottom, top);
+  const xLo = -bodyEdge(car, -1, bottom, top);
+  const sa = s0 + axr * xLo;
+  const sb = s0 + axr * xHi;
+  const za = azr * outline.zLo;
+  const zb = azr * outline.zHi;
+  return !(xLo <= xHi) || Math.min(sa, sb) + Math.min(za, zb) > box.hx || Math.max(sa, sb) + Math.max(za, zb) < -box.hx;
+}
+
+/**
  * How far the box's leading face (its +z end) has pushed into the car's cage outline along its travel (m, ≤ 0 clear: the gap), the
  * contact point in `point`: the depth-weighted centre of the outline nodes across the face's span (the patch's pressure centre); before
  * any node is in, the nearest nodes'.
@@ -126,17 +142,7 @@ function faceOverlap(car: DeformableCar, box: ContactBox, point: THREE.Vector3):
   let best = -Infinity;
   let w = 0;
   let latSum = 0;
-  // A striker clear of the body's width at its heights meets no outline node: the side offset is linear in x and z, so the corners of that
-  // width over the outline's z span bound every node's.
-  const bottom = box.y - box.hy - p.y;
-  const top = box.y + box.hy - p.y;
-  const xHi = bodyEdge(car, 1, bottom, top);
-  const xLo = -bodyEdge(car, -1, bottom, top);
-  const sa = s0 + axr * xLo;
-  const sb = s0 + axr * xHi;
-  const za = azr * outline.zLo;
-  const zb = azr * outline.zHi;
-  const clear = !(xLo <= xHi) || Math.min(sa, sb) + Math.min(za, zb) > box.hx || Math.max(sa, sb) + Math.max(za, zb) < -box.hx;
+  const clear = clearOfBody(car, box, outline, s0, axr, azr);
   for (let n = 0; n < (clear ? 0 : outline.count); n++) {
     const x = outline.xs[n]!;
     const z = outline.zs[n]!;

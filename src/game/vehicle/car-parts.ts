@@ -19,7 +19,6 @@ import { CarGlass } from "./car-glass-break.ts";
 import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, type Lamp, type PartNetState } from "./car-core.ts";
 import {
   DOOR_ACC_MAX,
-  DOOR_DRY,
   DOOR_QUIET_S,
   DOOR_YAW_ACC_MAX,
   flapAmp,
@@ -579,7 +578,7 @@ export abstract class CarParts extends CarGlass {
     const jam = Math.min(p.hingeT * s.jam, s.stop);
     const resting = h.theta >= s.stop;
     h.omega += this.hingeAccel(p) * dt;
-    const dry = DOOR_DRY * dt;
+    const dry = s.dry * dt;
     h.omega = Math.abs(h.omega) <= dry ? 0 : h.omega - Math.sign(h.omega) * dry;
     h.theta += h.omega * dt;
     h.omega *= Math.exp(-DOOR_DAMP * dt);
