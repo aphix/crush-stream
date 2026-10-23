@@ -40,6 +40,7 @@ import type { Fountains } from "./engine-fountains.ts";
 import type { GameAudio } from "../present/game-audio.ts";
 import { FX_REACH, Witness } from "../present/witness.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
+import type { OnFootDirector } from "./engine-onfoot.ts";
 import { ChaseCamera } from "../present/engine-camera.ts";
 import { CompactorPress, JerseyBarrier, buildRampBalls, type LampPole, type PredictedHit, type RampBall } from "../scenes/engine-props.ts";
 import type { FleetRamps } from "../scenes/fleet-ramps.ts";
@@ -245,6 +246,8 @@ export abstract class EngineCore {
   protected glassDots!: GlassDotSystem;
   protected smoke!: TireSmokeSystem;
   protected ragdolls!: RagdollSystem;
+  /** The player's trip out of the car and back (the offline fleet's): built after the ragdolls it stands up. */
+  protected onFoot!: OnFootDirector;
   protected audio!: GameAudio;
   protected hudAcc = 0;
   protected resizeObs!: ResizeObserver;
@@ -377,6 +380,7 @@ export abstract class EngineCore {
   /** Empties every system a run leaves behind (`clearTransients`). Add a new debris-like system here and to `Transients`. */
   protected clearLocal(): void {
     clearTransients({ cars: this.cars, poles: this.poles, debris: this.debris, sparks: this.sparks, fountains: this.fountains, glassDots: this.glassDots, smoke: this.smoke, ragdolls: this.ragdolls, rangeRun: this.rangeRun, cine: this.cine });
+    this.onFoot?.reset();
   }
 
   /** A scene change, loop, reset or race start: the scene is emptied, the ejection watch forgets its history and netplay clients are told (their snapshots carry `clearGen`). */

@@ -255,4 +255,6 @@ export type Doll = {
   speed: number;
   /** Torso velocity (m/s, world) at the end of the last frame: the ride-along's pick and shot read it. */
   vel: Float32Array;
+  /** The player's walker holds his joints and torso (on foot): the pool does not damp, sleep or retire him. */
+  driven: boolean;
 };

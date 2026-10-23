@@ -13,8 +13,7 @@ import { LabFlick } from "./lab-flick.ts";
 import { Garage } from "./garage.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import { Showcase } from "./showcase.ts";
-import { SHOWCASE_CAR, SHOWCASE_EYE, SHOWCASE_KNOCK, SHOWCASE_LIGHT } from "../present/showcase-art.ts";
-import { PARTS } from "../present/ragdoll-body.ts";
+import { SHOWCASE_CAR, SHOWCASE_EYE, SHOWCASE_LIGHT } from "../present/showcase-art.ts";
 import { ownLook } from "../present/driver-look.ts";
 import { heldPose, type LabPresetId } from "../scenes/lab.ts";
 import { CORKSCREW } from "../scenes/corkscrew.ts";
@@ -39,9 +38,6 @@ import { MINIGAME_MODE } from "../scenes/minigame-constants.ts";
 import type { SimPacer } from "./sim-pace.ts";
 
 const _v = new THREE.Vector3();
-const _w = new THREE.Vector3();
-const _spin = new THREE.Vector3();
-const _q = new THREE.Quaternion();
 
 /** Race commands a netplay client may run: viewing only (the host starts, pauses and ends races). */
 const CLIENT_RACE_COMMANDS: ReadonlySet<RaceCommand["type"]> = new Set(["fullUi", "cycle", "watch", "spectate"]);
@@ -382,7 +378,7 @@ export abstract class EngineScenes extends EngineMinigames {
     }
     if (this.garage) this.garage.art.group.visible = this.showGarage;
     if (this.showShowcase && !this.showcase) {
-      this.showcase = new Showcase(this.camera, () => this.canvas.getBoundingClientRect(), (slot) => this.knockShowcase(slot));
+      this.showcase = new Showcase(this.camera, () => this.canvas.getBoundingClientRect(), this.ragdolls);
       this.scene.add(this.showcase.art.group);
       this.queueWarm();
     }
@@ -508,7 +504,7 @@ export abstract class EngineScenes extends EngineMinigames {
     const car = this.carA;
     car.group.visible = false;
     car.spawnFacing(SHOWCASE_CAR.x, SHOWCASE_CAR.z, 0, 0);
-    this.showcase!.art.stand();
+    this.showcase!.reset();
   }
 
   /** The free eye on the front row, entering the scene (`FreeCam` starts from the camera's pose). */
@@ -516,14 +512,6 @@ export abstract class EngineScenes extends EngineMinigames {
     this.camera.position.set(SHOWCASE_EYE.x, SHOWCASE_EYE.y, SHOWCASE_EYE.z);
     this.camera.lookAt(SHOWCASE_EYE.lookX, SHOWCASE_EYE.lookY, SHOWCASE_EYE.lookZ);
     this.view.enterFree();
-  }
-
-  /** Figure `slot` of the showcase is knocked over: his torso where it stands, thrown away from the eye. Whether the ragdoll world took him (not while Rapier loads). */
-  private knockShowcase(slot: number): boolean {
-    const art = this.showcase!.art;
-    art.markOf(slot, _v).y += PARTS[0]!.c[1];
-    const figure = art.figureOf(slot);
-    return this.ragdolls.place(_v, _q.identity(), _w.set(0, SHOWCASE_KNOCK.up, -SHOWCASE_KNOCK.away), _spin.set(0, 0, 0), Infinity, -1, { cop: figure.cop, look: figure.look }) >= 0;
   }
 
   private spawnDerby(): void {
@@ -833,8 +821,8 @@ export abstract class EngineScenes extends EngineMinigames {
       else if (act === "vaporize") this.setVaporized(i, true);
       else if (act === "respawn") this.respawnOnDisc(i);
     }
-    // No hit ever ends the run once every car has driven off the rim: the loop's own reset (`updatePhase`) waits on a crash.
-    if (this.looping && !this.net.client && !this.showLab && !this.showGarage && fleetEmptied(cars, this.vaporAt, this.elapsedWall)) this.randomizeAndReset();
+    // No hit ever ends the run once every car has driven off the rim: the loop's own reset (`updatePhase`) waits on a crash. The showcase parks its car off the rim, out of sight: that is no run to end, and a reset would stand the knocked figures up before they walk home.
+    if (this.looping && !this.net.client && !this.showLab && !this.showGarage && !this.showShowcase && fleetEmptied(cars, this.vaporAt, this.elapsedWall)) this.randomizeAndReset();
   }
 
   /** Car `i` bursts into smoke and leaves the sim (`on`): hidden, repaired and frozen where it vanished; `off` puts it back as it stands. A netplay client mirrors the host's flag through here. */

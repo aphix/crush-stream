@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import type { CrashEngine } from "@/game/engine/engine";
 import { SCENE_KEY_BINDINGS } from "@/game/engine/engine-keys";
 import { audioLevels } from "@/game/hud/audio-levels";
-import { driveKeys } from "@/game/hud/drive-keys";
+import { driveKeys, footKeys } from "@/game/hud/drive-keys";
 import { showsPrevNext } from "@/game/hud/watch-cycle";
 import { freeHelp } from "@/game/hud/free-help";
 import { watchCalm, type CalmWatch } from "@/game/hud/hud-collapse";
@@ -113,6 +113,7 @@ const CAMERA_KEYS: [string, string][] = [
 ];
 
 function seatHint(state: CrashHudState): { title: string; keys: string } {
+  if (state.foot?.out) return { title: "On foot", keys: footKeys(state.pad !== null, state.foot.prompt) };
   if (state.race && state.seat === "drive") {
     return {
       title: `Racing · ${CAM_LABEL[state.view]}`,
@@ -122,7 +123,8 @@ function seatHint(state: CrashHudState): { title: string; keys: string } {
     };
   }
   if (state.seat === "drive") {
-    return { title: `Driving · ${CAM_LABEL[state.view]}`, keys: driveKeys(state.pad !== null, state.minigame?.bail == null) };
+    const keys = driveKeys(state.pad !== null, state.minigame?.bail == null);
+    return { title: `Driving · ${CAM_LABEL[state.view]}`, keys: state.foot?.prompt ? `${keys} · ${state.foot.prompt}` : keys };
   }
   if (state.cam === "free") return { title: `${state.seat === "global" ? "Whole field" : "Watching"} · ${CAM_LABEL.free}`, keys: freeHelp(state.pad !== null, false) };
   if (state.seat === "follow") {

@@ -31,6 +31,8 @@ import { GameAudio } from "../present/game-audio.ts";
 import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { VIP_LOOK } from "../present/dummy-dress.ts";
+import { OnFootDirector } from "./engine-onfoot.ts";
+import { ownLook } from "../present/driver-look.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
 import { ChaseCamera, centroid, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
 import { blankFreeInput, sceneExtent } from "../present/free-cam.ts";
@@ -232,6 +234,17 @@ export class CrashEngine extends EngineGarage {
     this.ragdolls.poles = this.poles;
     this.ragdolls.lookOf = (car) => this.looks.of(car, this.ownCar());
     this.lab.dolls = this.ragdolls;
+    this.onFoot = new OnFootDirector({
+      ragdolls: this.ragdolls,
+      seat: this.seat,
+      view: this.view,
+      camera: this.camera,
+      keys: this.keys,
+      pad: this.pad.state,
+      cars: () => this.live(),
+      available: () => this.sceneId === "fleet" && this.net.role === "off" && !this.highlights.playing && this.playing && !this.warming && this.sceneFade.pending === null,
+      look: () => ownLook(this.looks.mine.person),
+    });
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
     const fxParam = FX_TIERS.find((t) => t === new URLSearchParams(window.location.search).get(SETTING_KEY.fx));
@@ -593,6 +606,8 @@ export class CrashEngine extends EngineGarage {
       const sandbox = !this.race.active && !this.derbyMode;
       // Who the drivers look like: the clip on screen's race, else this race's, this derby round's, or this run's scene seed.
       this.ragdolls.lookSeed = this.highlights.look ?? (this.race.active ? this.race.look : this.derbyMode ? this.derbyRound : this.sceneSeed);
+      this.onFoot.frame(wallDt);
+      if (this.showShowcase) this.showcase!.step(wallDt);
       this.ragdolls.update(simDt, cars, !this.net.client, sandbox, this.barrierUp ? this.barrier.group : null);
       for (let i = 0; i < cars.length; i++) {
         const car = cars[i]!;
@@ -897,7 +912,7 @@ export class CrashEngine extends EngineGarage {
     // fleet's, after any ride-along with thrown drivers. The Lab never loops: the wreckage stays until the player resets.
     const still = this.showRange ? this.ragdolls.latest(_v) : -1;
     const shown = this.showRange && this.rangeRun.step(still >= 0, this.ragdolls.latestSettled, _v.x, wallDt);
-    if (this.looping && !this.showLab && !this.showGarage && (shown || (still < 0 && settled && !this.ragdolls.rideAlong && !this.showPistons && this.clock.wallSinceImpact > (this.showCompactor ? 14 : 10.4)))) this.randomizeAndReset();
+    if (this.looping && !this.onFoot.active && !this.showLab && !this.showGarage && !this.showShowcase && (shown || (still < 0 && settled && !this.ragdolls.rideAlong && !this.showPistons && this.clock.wallSinceImpact > (this.showCompactor ? 14 : 10.4)))) this.randomizeAndReset();
   }
 
   /** `aimRigs`'s derby centroid set, refilled per frame. */
@@ -934,7 +949,7 @@ export class CrashEngine extends EngineGarage {
     this.aimRigs(wallDt);
     this.ragdolls.fadeRide(this.camera, wallDt, !this.highlights.playing);
     if (this.highlights.playing) return;
-    const back = this.view.rear && !this.view.flying ? this.followedCar() : null;
+    const back = this.view.rear && !this.view.flying && !this.onFoot.active ? this.followedCar() : null;
     if (back?.group.visible) this.view.lookBack(back, this.chaseSight(true), wallDt);
   }
 
@@ -958,6 +973,7 @@ export class CrashEngine extends EngineGarage {
     // The crash cam plays its cuts first (letterbox, bars and clock too); a thrown driver's ride-along, which opens on his
     // exit's windshield and then frames the dummy, waits for its window to close (the range's own dummy cam rides at once).
     // A drag hands the ride to the orbit around the dummy, the ride's cuts waiting; the ride then picks up from the user's view.
+    if (this.onFoot.aim(wallDt)) return;
     const cut = this.cine.direct(this.camera, wallDt, !this.view.flying && !this.view.userFramed && this.seat.mode !== "drive");
     if (this.view.flying) {
       this.flyFree(wallDt);

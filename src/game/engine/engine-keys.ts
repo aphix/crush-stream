@@ -9,6 +9,8 @@ export const SEAT_KEYS = {
   previousCar: "KeyQ",
   nextCar: "KeyE",
   reset: "KeyR",
+  /** Get out of the car, and into one: the walker's control (the pad's is B). */
+  onFoot: "Enter",
   stepOut: "Escape",
   lookBack: "Backquote",
   mouseLook: "Semicolon",
