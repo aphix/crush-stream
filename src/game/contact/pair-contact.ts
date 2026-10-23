@@ -474,17 +474,19 @@ function crushedSoFar(d: DeformableCar["deform"]): number {
 }
 
 /**
- * Share (0-1) of this slice's stroke travel that fits in the room a crashed car's struck face has left before `PACKED_STROKE`, both read
- * off its masses as they stand now, this slice's feed in (`strokeAt`); 1 when all of it fits.
+ * Share (0-1) of the next slice's stroke travel that fits in the room a crashed car's struck face has left before `PACKED_STROKE`, read off
+ * its masses as they stand now, this slice's feed in (`strokeAt`). The travel is its masses' at their velocities and the next slice's feed,
+ * as deep as this one's at `closingLeft` of its closing: that feed crushes before the next slice's exchange can stop the pair.
  */
-function roomShare(car: DeformableCar, dt: number): number {
+function roomShare(car: DeformableCar, dt: number, closingLeft: number): number {
   const d = car.deform;
   if (!car.crashed || !d.massActive) return 1;
   const q = car.group.quaternion;
   const now = d.strokeAt(q, 0);
   const room = PACKED_STROKE * d.hitStroke() - now;
   if (room <= 0) return 0;
-  const travel = d.strokeAt(q, dt) - now;
+  const fed = Math.max(0, now - d.strokeUsed() * d.hitStroke());
+  const travel = d.strokeAt(q, dt) - now + fed * closingLeft;
   return travel > room ? room / travel : 1;
 }
 
@@ -521,11 +523,12 @@ function blendVelocities(carA: DeformableCar, carB: DeformableCar, base: Float64
 }
 
 /**
- * The exchange of the slice in which the pair packs: the share of the slice's stroke travel that fits in the room left before
- * `PACKED_STROKE` (`roomShare`, read after the crush-limited exchange) stays crush-limited (`maxJ`), the rest is rigid, so the pair stops
- * at the packed stroke, not up to one slice's travel past it (the check reads the stroke the last slice left).
+ * The exchange of the slice in which the pair packs: the share of the next slice's stroke travel that fits in the room left before
+ * `PACKED_STROKE` (`roomShare`, read after the crush-limited exchange, at the share of this slice's `closing` that exchange left) stays
+ * crush-limited (`maxJ`), the rest is rigid, so the pair stops at the packed stroke, not up to one slice's travel past it (the check reads
+ * the stroke the last slice left).
  */
-function splitExchange(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3, p: THREE.Vector3, maxJ: number, dt: number): void {
+function splitExchange(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3, p: THREE.Vector3, maxJ: number, dt: number, closing: number): void {
   const need = 12 + 3 * (carA.deform.masses.length + carB.deform.masses.length);
   if (split.start.length < need) {
     split.start = new Float64Array(need);
@@ -536,7 +539,8 @@ function splitExchange(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector
   holdVelocities(carA, carB, split.rigid);
   blendVelocities(carA, carB, split.start, 0);
   exchangePair(carA, carB, n, p, maxJ);
-  blendVelocities(carA, carB, split.rigid, Math.max(roomShare(carA, dt), roomShare(carB, dt)));
+  const left = Math.max(0, -_v.copy(carA.velocity).sub(carB.velocity).dot(n)) / closing;
+  blendVelocities(carA, carB, split.rigid, Math.max(roomShare(carA, dt, left), roomShare(carB, dt, left)));
 }
 
 /**
@@ -634,7 +638,7 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
     const crushes = closing > CRASH.grazeMps && !spent && !(stiffA && stiffB);
     const force = Math.min(stiffA ? Infinity : crushForce(carA.deform), stiffB ? Infinity : crushForce(carB.deform));
     const maxJ = crushes ? Math.max(0, force * dt - Math.max(0, killed)) : Infinity;
-    if (crushes && Math.max(roomShare(carA, dt), roomShare(carB, dt)) < 1) splitExchange(carA, carB, n, _p, maxJ, dt);
+    if (crushes && Math.max(roomShare(carA, dt, 1), roomShare(carB, dt, 1)) < 1) splitExchange(carA, carB, n, _p, maxJ, dt, closing);
     else exchangePair(carA, carB, n, _p, maxJ);
   }
   // The crush layer's kills are the lattice's, not an exchange: the pair's momentum is the one it had, the kernel's impulse the only

@@ -349,6 +349,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * it changes: a wreck at rest beside one sleeps (it was woken every slice for good).
  * A popped wheel flies as a disk of its own tyre's width (the sedan's 0.22 m, the hatchback's 0.17, the monster's 0.364 before its wheel
  * scale), not the platform's 0.24 on every car.
+ * A car's nose closing on another car's steep face (a sloped bonnet corner) faster than a crash, read against that car's own motion, is the pair's
+ * hit: a head-on no longer arms on one corner at the rigid step's sideways reading (28 km/h each: 0.237 m of even nose crush, was 0.092 on one corner).
+ * A pair that packs its noses stops at the packed stroke with the next slice's crush feed counted, not up to that feed past it (200 km/h
+ * each: 0.904 of the stroke, was 0.916).
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
