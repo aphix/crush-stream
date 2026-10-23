@@ -29,7 +29,6 @@ const OPEN: Readonly<Partial<Record<CarStyleId, Readonly<Record<string, string>>
   hatchback: {
     "doorL outer rippleDeg": "a concave row-edge where the shoulder rows meet the top roll, door columns z 0 to 0.31",
     "doorR outer rippleDeg": "as the left door",
-    "roof inner rippleDeg": "the rear run is 1.9 cm under a 1.5 cm bow, a 1.8x stretch at the crown: the headliner's chords at x ±0.4 fold gently each way beside it",
   },
 };
 

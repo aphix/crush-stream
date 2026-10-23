@@ -33,32 +33,55 @@ export function roofEndHeldZ(end: RoofEnd, x: number): number {
   return end.paneTop === undefined ? bowed : Math.max(bowed, end.paneTop.z + end.paneTop.bow * across);
 }
 
-/** The share (0..1) of `end`'s move a drawn roof station `z` takes: 1 at the end, fading linearly to 0 at its roll run's start, so every ring of the roll moves with the end and keeps its slope; with no run, the end ring alone. */
+/**
+ * A rolled end whose run is shorter than this many times its move at the centre line can't share the move along the run (its roll's
+ * slope drops by run/(run + move) at the centre and not at the corners): its whole roll moves instead. The hatch's rear (1.27) folds
+ * its headliner at 13.8°; the coupe's front (1.82) shares it at 7.9°, where moving its whole roll reads 9.5°.
+ */
+const SHORT_RUN_MOVES = 1.5;
+/** Such an end's move fades out over this much (m) of the dome behind its roll. */
+const ROOF_BOW_FADE = 0.15;
+
+/**
+ * How a rolled end's move spreads over the drawn roof's stations: whole for `hold` (m) from the end, then fading linearly to 0 over
+ * `fade`. A run long against its move fades over the run itself; a short one holds the whole move over the run and fades over the dome.
+ */
+function roofEndSpread(end: RoofEnd, run: number): { hold: number; fade: number } {
+  return run < SHORT_RUN_MOVES * Math.abs(roofEndHeldZ(end, 0) - end.z) ? { hold: run, fade: ROOF_BOW_FADE } : { hold: 0, fade: run };
+}
+
+/** The share (0..1) of `end`'s move a drawn roof station `z` takes (`roofEndSpread`), so every ring of the roll moves with the end and keeps its slope; with no run, the end ring alone. */
 export function roofEndWeight(end: RoofEnd, z: number): number {
   const d = Math.abs(z - end.z);
   if (end.run === undefined) return d < 1e-6 ? 1 : 0;
-  return d < end.run ? 1 - d / end.run : 0;
+  const { hold, fade } = roofEndSpread(end, end.run);
+  if (d <= hold) return 1;
+  return d < hold + fade ? 1 - (d - hold) / fade : 0;
 }
 
-/** The rolled end whose run reaches station `z` in the drawn roof (its moved rings stand there), or undefined. */
+/** The rolled end whose moved stations reach `z` in the drawn roof, or undefined. */
 function runEndAt(z: number, style: BodyStyle): RoofEnd | undefined {
-  return roofEndBows(style).find((end) => end.run !== undefined && end.inward * (z - end.z) > -end.run);
+  return roofEndBows(style).find((end) => {
+    if (end.run === undefined) return false;
+    const { hold, fade } = roofEndSpread(end, end.run);
+    return end.inward * (z - end.z) > -(hold + fade);
+  });
 }
 
 /**
- * The drawn roof station a point at car (`x`, `z`) lies on: each rolled end's move is linear in z over its run, so it inverts in
- * closed form; past the moved end the station runs on past the roof's end by the same shift, so a point ahead of the roof stays off it.
- * Drawn parts that stand on or under the roof read through this; the cage and the glass read the unmoved stations.
+ * The drawn roof station a point at car (`x`, `z`) lies on: each rolled end's move is linear in z over its fade and whole over its
+ * hold, so it inverts in closed form; past the moved end the station runs on past the roof's end by the same shift, so a point ahead
+ * of the roof stays off it. Drawn parts that stand on or under the roof read through this; the cage and the glass read the unmoved stations.
  */
 export function roofSourceZ(x: number, z: number, style: BodyStyle): number {
   const end = runEndAt(z, style);
-  const run = end?.run;
-  if (end === undefined || run === undefined) return z;
-  const move = roofEndHeldZ(end, x) - end.z;
-  const start = end.z - end.inward * run;
+  if (end?.run === undefined) return z;
+  const { hold, fade } = roofEndSpread(end, end.run);
+  const move = end.inward * (roofEndHeldZ(end, x) - end.z);
+  const start = end.z - end.inward * (hold + fade);
   const along = end.inward * (z - start);
-  const reach = run + end.inward * move;
-  return along <= reach ? start + (end.inward * along * run) / reach : z - move;
+  const source = along <= fade + move ? (along * fade) / (fade + move) : along - move;
+  return start + end.inward * source;
 }
 
 /**
