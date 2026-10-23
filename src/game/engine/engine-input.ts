@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { detAtan2 } from "../kernel/physics-core.js";
+import { recoverInPlace } from "../vehicle/car-drive.ts";
 import Stats from "three/addons/libs/stats.module.js";
 import { PISTON_DEFAULTS, PISTON_IDS } from "../scenes/piston-rig.ts";
 import { RAM_DEFAULTS } from "../scenes/door-rig.ts";
@@ -906,10 +906,7 @@ export abstract class EngineInput extends EngineRigs {
    * repaired. In a derby only a flipped car that still runs may, so it is no free heal.
    */
   protected recoverCar(car: DeformableCar): void {
-    car.refreshBasis();
-    if (!this.mayRecover(car)) return;
-    car.spawnFacing(car.group.position.x, car.group.position.z, detAtan2(car.fwdFlat.x, car.fwdFlat.z), 0);
-    this.dressCar(car);
+    if (recoverInPlace(car, (c) => this.mayRecover(c))) this.dressCar(car);
   }
 
   /**

@@ -238,11 +238,24 @@ function fullScreenTriangle(): THREE.Mesh {
 const QUAD_CAMERA = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
 /**
+ * MSAA samples of the HDR scene target per FX tier, [on a device whose pixel ratio is 1 or less, above it]: the desktop tiers (high,
+ * ultra) always; low only at a pixel ratio of 1, where a CSS pixel is one drawn pixel and its edges stair the most (as the canvas's
+ * MSAA gave it before). The plain tiers have no scene target: they draw straight to the canvas and take its MSAA, which a ratio-1
+ * device's has (`makeRenderer`), so at a ratio of 1 every tier's edges are antialiased, as before, and above it high and ultra's are.
+ */
+const SCENE_SAMPLES: Readonly<Record<FxTier, readonly [number, number]>> = { off: [0, 0], minimal: [0, 0], low: [4, 0], high: [4, 4], ultra: [4, 4] };
+
+/** The scene target's MSAA samples at `tier` on a device of pixel ratio `deviceRatio` (`SCENE_SAMPLES`). */
+export function sceneSamples(tier: FxTier, deviceRatio: number): number {
+  return SCENE_SAMPLES[tier][deviceRatio <= 1 ? 0 : 1];
+}
+
+/**
  * Post chain behind one `render(scene, camera)` call. The scene renders linear HDR into a half-float target
- * (MSAA when the canvas had it), bloom is a dual-filter mip chain, and one composite pass writes the canvas.
+ * (MSAA at the tiers and device pixel ratios `sceneSamples` gives it), bloom is a dual-filter mip chain, and one composite pass writes the canvas.
  * `flash` / `punch` / `radial` are per-frame drive values the director (`engine-cine.ts`) sets.
  * Targets are allocated once and only resized with the canvas, and each tier has its own composite, so a tier
- * switch allocates and compiles nothing.
+ * switch compiles nothing; a switch into or out of the MSAA tiers reallocates the scene target's storage once.
  */
 export class PostFX {
   /** 0–1+: exposure lift for a hit flash. */
@@ -266,6 +279,8 @@ export class PostFX {
   /** The grain amplitude now: eases to the tier's (`TIER`) after a switch. */
   private grain = DITHER;
   private readonly renderer: THREE.WebGLRenderer;
+  /** The device's pixel ratio (`window.devicePixelRatio`, not the Render scale): low draws with MSAA only at 1 (`sceneSamples`). */
+  private readonly deviceRatio: number;
   /** Read at every tier switch: a switch changes the passes drawn and the programs a car's paint uses. */
   readonly glErrors = new GlErrors();
   /** The low / high tiers' HDR scene target (the warm-up draws into it once). */
@@ -279,8 +294,9 @@ export class PostFX {
   private width = 1;
   private height = 1;
 
-  constructor(renderer: THREE.WebGLRenderer) {
+  constructor(renderer: THREE.WebGLRenderer, deviceRatio: number) {
     this.renderer = renderer;
+    this.deviceRatio = deviceRatio;
     const blit = (frag: string, extra: Record<string, THREE.IUniform>, defines: Record<string, string> = {}) =>
       new THREE.ShaderMaterial({
         vertexShader: VERT,
@@ -327,10 +343,9 @@ export class PostFX {
     // Ultra's chain is the high chain: one material, so no extra program.
     const high = composite(TIER.high);
     this.composites = { low: composite(TIER.low), high, ultra: high };
-    // Match the canvas: the renderer asked for MSAA only at a device pixel ratio of 1.
-    const samples = renderer.getContextAttributes()?.antialias ? 4 : 0;
-    // Nothing reads the scene's depth after the draw: skip the per-frame MSAA depth resolve.
-    this.sceneRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples, depthBuffer: true, stencilBuffer: false, resolveDepthBuffer: false });
+    // The tier is `off` until the engine sets one (`setTier` gives the target its samples). Nothing reads the scene's depth after the
+    // draw: skip the per-frame MSAA depth resolve.
+    this.sceneRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: sceneSamples("off", deviceRatio), depthBuffer: true, stencilBuffer: false, resolveDepthBuffer: false });
     for (let i = 0; i < CHAIN; i++) {
       this.mips.push(new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false }));
     }
@@ -340,12 +355,21 @@ export class PostFX {
     return this.tierNow;
   }
 
-  /** A tier with no post chain (`off`, `minimal`) leaves the strengths at nothing, so the next post tier fades in from the plain frame; a switch between post tiers keeps them and eases the grain. */
+  /**
+   * A tier with no post chain (`off`, `minimal`) leaves the strengths at nothing, so the next post tier fades in from the plain frame; a
+   * switch between post tiers keeps them and eases the grain. The scene target takes the tier's MSAA samples on this device
+   * (`sceneSamples`): three rebuilds a disposed target's storage, at its size, on its next draw.
+   */
   setTier(tier: FxTier): void {
     this.glErrors.read(this.renderer.getContext());
     if (tier === "off" || tier === "minimal") {
       this.fade = 0;
       this.grain = DITHER;
+    }
+    const samples = sceneSamples(tier, this.deviceRatio);
+    if (this.sceneRT.samples !== samples) {
+      this.sceneRT.samples = samples;
+      this.sceneRT.dispose();
     }
     this.tierNow = tier;
   }

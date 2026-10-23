@@ -400,3 +400,20 @@ describe("given a front arch shell hanging off a wreck sitting low on the road (
     assertSameNumbers(shape(low), shape(high), "torn shell vertices");
   });
 });
+
+describe("given a crashed car lying on its left side on the road, its left door jammed open by the crush (a drawn pose: the door is not what it lies on)", () => {
+  it("when the door is posed, then it stands out of the road under it, not through it", () => {
+    const car = crashed();
+    // Turned a quarter about its length, left side down, and stood with the closed door's lowest point on the road.
+    car.group.rotateOnAxis(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+    const door = car.hang("doorL", 0);
+    const lowest = (): number => {
+      door.object.updateWorldMatrix(true, true);
+      return new THREE.Box3().setFromObject(door.object).min.y;
+    };
+    car.group.position.y -= lowest();
+    car.group.updateMatrixWorld(true);
+    car.hang("doorL", 0.2);
+    assert.ok(lowest() >= -1e-6, `the jammed door's low end stands ${lowest().toFixed(3)} m over the road`);
+  });
+});

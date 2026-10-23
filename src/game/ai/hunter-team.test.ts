@@ -7,6 +7,7 @@ import { HAVANA } from "../world/tracks/havana.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { copsWanted, HUNT, HunterBrain, huntCap, huntUnits } from "./hunter.ts";
 import type { HunterWorld } from "./cop-brain.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 
 const track = new Track(HAVANA);
 const spec = track.survival!;
@@ -39,6 +40,7 @@ function rig(humans: number, at: (k: number) => { x: number; z: number } = (k) =
     store: (id) => Object.assign(cars[id]!, { x: FAR, z: FAR }),
     hidden,
     down: (id) => down.has(id),
+    speed: (id) => hypot2(cars[id]!.vx, cars[id]!.vz),
     sirens: () => {},
   };
   const brain = new HunterBrain(track, [], humans, humans, count, 5);

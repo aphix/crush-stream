@@ -208,6 +208,8 @@ export interface PoliceWorld {
   store(id: number): void;
   /** Car `id` is knocked out: drivetrain dead or upside down too long. */
   down(id: number): boolean;
+  /** Car `id`'s speed (m/s) now: its body's, every way (a rolled car sliding or rocking moves too). */
+  speed(id: number): number;
   /** Car `id`'s sirens on or off. */
   sirens(id: number, on: boolean): void;
 }

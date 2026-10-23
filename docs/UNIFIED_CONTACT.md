@@ -498,7 +498,7 @@ direction on a 7.6 m/s hit. Now a contact reading `HARDER_HIT` (1.5) times the a
   wake rules 2.249 / 2.186 / 2.362 / 3.158 / 2.379 / 2.476 s. In seed 4 the hatchback slept at 2.151 s. A pickup rocking at
   0.167 rad/s (rest is 0.163) within reach, not touching it, then woke it.
 
-### 12.14 A wreck rests on its nose or tail lip; a pitched pair meets as deep as its cages stand (CarRig rig-lip, REPLAY 158)
+### 12.14 A wreck rests on its nose or tail lip; a pitched pair meets as deep as its cages stand (CarRig rig-lip, REPLAY 159)
 
 The quadric decimation (`cage-mesh.ts` `decimate`) collapsed a nose lip's low points onto the rocker corner above them, so a wreck
 that lost a front wheel rested on that corner with the drawn lip 3 cm in the ground (hatchback 4.4, SUV 2.8). `holdUnderside` now

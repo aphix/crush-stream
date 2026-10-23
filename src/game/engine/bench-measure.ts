@@ -8,7 +8,7 @@ import type { DetailGovernor } from "../present/detail-governor.ts";
 import type { Cinematics } from "../present/engine-cine.ts";
 import type { PlayerQuality } from "../present/player-quality.ts";
 import { probeDepth } from "../present/depth-probe.ts";
-import { describePost, FX_TIERS, type FxTier } from "../present/engine-post.ts";
+import { describePost, FX_TIERS, sceneSamples, type FxTier } from "../present/engine-post.ts";
 import type { DriverSeat } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { BenchPlan } from "./engine-bench-plan.ts";
@@ -501,7 +501,7 @@ export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top:
     pixelRatio: renderer.getPixelRatio(),
     deviceRatio: Math.round(devicePixelRatio * 1000) / 1000,
     canvas: `${size.width}x${size.height}`,
-    antialias: renderer.getContext().getContextAttributes()?.antialias === true,
+    antialias: renderer.getContext().getContextAttributes()?.antialias === true || sceneSamples(parts.cine.tier, devicePixelRatio) > 0,
     toneMapping: renderer.toneMapping,
     night: hud[SETTING_KEY.night] === true,
     wet: hud[SETTING_KEY.wet] === true,

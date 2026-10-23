@@ -312,7 +312,14 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * pane's middle, with his seat's turn velocity from there; the VIP rides in, and is thrown from, the -x seat; the derby AI's driver's door is the +x one,
  * and its reverse run-in aims 1.6 m out from a target's nose on either side (2.1 on the driver's). Every windshield throw and every derby car moves
  * differently. A clip of 156 or before no longer reads.
- * 158: the car overhaul (every car to its reference design). Each car's soft-body rig is carried from the platform's onto its own body: its cages,
+ * 158: a car's roof takes its imprint plane (the top other cars stand on, which the skin flattens to) only from a belly within 5 cm of the roof, above or
+ * below; a car set down inside another (placed on its spot, or driven through it) no longer cuts the other's roof, pillars and upper sides to its own ride
+ * height. A wreck's hub springs act along its body's up (they acted along the world's), and its hubs stay planted only while it stands on its
+ * wheels: a wreck lying over or tumbling carries its hubs where its wheels are drawn (a monster on its side held them 0.4-0.9 m off, its
+ * wheels drawn in the ground), and a door jammed open on a wreck lying over stands out of the ground under it. Every crash moves differently.
+ * A cop knocked out near a racer is put away only once its body has stopped every way (it was by its plan speed at the slice's start): a race
+ * with police puts its cops away at other times. Every car another car is set inside moves differently. A clip of 157 or before no longer reads.
+ * 159: the car overhaul (every car to its reference design). Each car's soft-body rig is carried from the platform's onto its own body: its cages,
  * sensors and masses move with its own dims (axles, ends, width, floor, roof; hubs on its wheels), its roof, windscreen, rear-glass, bonnet and boot
  * cages fit its own panels, and every style's cage source follows its new shape (the sedan and police from their reference, wheel arches .405 → .375;
  * the monster and truck at their reference dims, with wheel tubs in the truck's bed; the wagon, coupe, pickup and hatchback reshaped; the muscle's and
@@ -360,10 +367,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A car's collision cage carries its bumpers' fascias, each a 12-point panel of its own past the body's budget (a push bar, tow hitch and exhaust
  * tips stay drawn only), so it meets cars, walls, figures and props at its drawn bumper faces, 3-15 cm past its nose's and tail's sheet metal,
  * until a bumper tears off; a pair's plan test reads a bumper at its own heights, never its body's behind it; the piston rig's faces rest clear of them.
- * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
+ * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 158;
+const REPLAY_VERSION = 159;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

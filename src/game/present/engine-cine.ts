@@ -549,7 +549,7 @@ export class Cinematics {
     this.fx = fx;
     this.reduceMotion = reduceMotion;
     this.crash = new CrashCam(reduceMotion);
-    this.post = new PostFX(renderer);
+    this.post = new PostFX(renderer, window.devicePixelRatio || 1);
     this.marks = new SkidMarks(maxCars);
     this.tyreSmoke = new TireSmokeSystem(scene, 360, true);
     this.pvx = new Float32Array(maxCars);

@@ -89,8 +89,8 @@ function gridAt(style: CageStyle, g: Float32Array, x: number, z: number): number
  * lowest point, then lower to the roof wherever it stands under the plane (a domed roof's shoulders are 10-20 mm under its crown: the
  * dome snaps flat under the belly, which stands on its full width and not on the crown line, on which it rolled 3° each way). The tilt
  * is the belly's, not the pose the car pressed with: a car rocking on a roof it is still crushing walked the imprint's tilt with it, and
- * the stack with it. The plane never rises, and one well over the roof is a tyre's or a corner's press and leaves it. ponytail: one
- * plane per roof, unbounded in plan.
+ * the stack with it. The plane never rises; one well over the roof is a tyre's or a corner's press, and one well under it is a body
+ * inside this one (a car set down through it), no belly on it: both leave it. ponytail: one plane per roof, unbounded in plan.
  */
 function imprint(presser: DeformableCar, pressed: DeformableCar): void {
   _mi.copy(pressed.group.matrixWorld).invert();
@@ -119,7 +119,7 @@ function imprint(presser: DeformableCar, pressed: DeformableCar): void {
     let surface = gridAt(style, top, x, z) - drop * gridAt(style, follow, x, z);
     if (old) surface = Math.min(surface, im[0]! - drop + im[1]! * x + im[2]! * z);
     const gap = c + a * x + b * z - surface;
-    if (!(gap <= IMPRINT_REACH)) continue;
+    if (!(Math.abs(gap) <= IMPRINT_REACH)) continue;
     overRoof = true;
     if (gap > relief) relief = gap;
   }

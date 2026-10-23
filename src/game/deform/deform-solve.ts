@@ -24,6 +24,9 @@ import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn
 import { detSin, detCos } from "../kernel/physics-core.js";
  import { CONTACT_WINDOW, MIN_INV_MASS, SQUASH_REACH } from "./constants.ts";
 
+/** The body lies over below this up (y of its up axis): the car's own `UPRIGHT_UP_Y`, where its wheels stop being what it stands on. */
+const LYING_UP_Y = 0.5;
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
 /** Most of a crushed node's travel (m) that springs back; the rest is permanent set. */
 const SPRINGBACK = 0.08;
 /** A dent this shallow (m) springs back whole: a skin panel's elastic range. */
@@ -94,7 +97,7 @@ export abstract class DeformSolve extends DeformFreeze {
     }
     const sideHit = Math.abs(ix) > Math.abs(iz);
     this.yawMomentum(0, false);
-    const pinned = !this.deepCrush && this.quietTime() > PLANT_QUIET;
+    const pinned = this.hubsPlanted();
     // A squeeze's plates pin the shape in the world frame and planted tyres pin a quiet wreck: both keep the plain write-back.
     // Undoing its turn on a planted wreck turned the body against its hubs each call and let a capped door drift 36–118 µm off
     // its cap (left piston 60–80 km/h).
@@ -789,17 +792,32 @@ export abstract class DeformSolve extends DeformFreeze {
     b.vel.z -= nz * rel * wb;
   }
 
+  /**
+   * A quiet wreck not deep-crushed, standing on its wheels (`LYING_UP_Y`), stands on its planted tyres: their hubs keep their place in the
+   * world (`clampMass`). Lying over, its hubs are no tyres it stands on and ride the body: planted, a monster on its side or roof held
+   * them 0.4-0.9 m off their seats, where its wheels and axles are drawn (0.33 m in the slope it lay on).
+   */
+  private hubsPlanted(): boolean {
+    return !this.deepCrush && this.quietTime() > PLANT_QUIET && this.frameUp.y >= LYING_UP_Y;
+  }
+
+  /**
+   * The hubs' springs act along the body's up (`frameUp`), the way the strut runs (along the world's up they pulled a tumbling or lying
+   * wreck's hubs sideways through its body), but along the world's up under a wreck standing on its planted tyres: tilted on three wheels,
+   * the spring's sideways share crept its planted hubs 2-3 mm a second.
+   */
   private stepSuspension(dt: number): void {
     const k = 11000;
     const c = 260;
+    const u = this.hubsPlanted() ? WORLD_UP : this.frameUp;
     for (let si = 0; si < this.suspension.length; si++) {
       const [hub, mount] = this.suspension[si]!;
       const restDy = hub.rest.y - mount.rest.y;
-      const dy = hub.world.y - mount.world.y - restDy;
-      const dv = hub.vel.y - mount.vel.y;
+      const dy = (hub.world.x - mount.world.x) * u.x + (hub.world.y - mount.world.y) * u.y + (hub.world.z - mount.world.z) * u.z - restDy;
+      const dv = (hub.vel.x - mount.vel.x) * u.x + (hub.vel.y - mount.vel.y) * u.y + (hub.vel.z - mount.vel.z) * u.z;
       const f = (-k * dy - c * dv) * dt;
-      if (hub.dynamic) hub.vel.y += f / hub.mass;
-      if (mount.dynamic) mount.vel.y -= f / mount.mass;
+      if (hub.dynamic) hub.vel.addScaledVector(u, f / hub.mass);
+      if (mount.dynamic) mount.vel.addScaledVector(u, -f / mount.mass);
     }
   }
 }
