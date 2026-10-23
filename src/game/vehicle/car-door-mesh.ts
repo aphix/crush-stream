@@ -7,7 +7,11 @@ import { CREASE_DEGREES, SEDAN, drawnSideRing, drawnSideX, glassX, sampleSlice, 
 import { rockerAt } from "./car-lines.ts";
 import { MIRROR_REACH, MIRROR_ROOT } from "./part-geometry.ts";
 import { doorCardGeometry } from "./interior-geometry.ts";
+import { PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
 import { CABIN_TRIM, PRIMER_ATTRIBUTE } from "./constants.ts";
+
+/** The platform door as the sim readers still take it (door contact, hull gap, wear, car-parts) until they read `style.door`; `mirrorX` is its mirror base out from the hinge. */
+export const DOOR = { ...PLATFORM_HARDPOINTS.door, mirrorX: 0.06 } as const;
 
 /** Door skin over the body side at its outer face (m). */
 const DOOR_PROUD = 0.003;

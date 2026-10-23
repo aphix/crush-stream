@@ -16,13 +16,13 @@ function carSlices(w: World): number {
   return work[WORK.liveCarSlices]! + work[WORK.wreckCarSlices]! + work[WORK.asleepCarSlices]!;
 }
 
-/** The parked pair's mirrors overlap this far (m), far off: their hulls meet, so every step of the world is cut to its fine slices whatever else is in it. */
-const PARKED_OVERLAP = 0.06;
+/** Two cars parked this far apart (m) side by side, far off: their hulls meet (mirrors and lean), so every step of the world is cut to its fine slices whatever else is in it. */
+const PARKED_APART = 2.2;
 export function parkedPair(): DeformableCar[] {
   const a = makeCar("shape");
   const b = makeCar("shape");
   launch(a, 2000, 0, 0, 0, 0);
-  launch(b, 2000 + 2 * (a.mirrorBaseX + a.style.door.mirrorReach) - PARKED_OVERLAP, 0, 0, 0, 0);
+  launch(b, 2000 + PARKED_APART, 0, 0, 0, 0);
   return [a, b];
 }
 

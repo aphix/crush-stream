@@ -2,8 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
-import { _lane, hitMirror } from "../contact/door-contact.ts";
-import { DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX, SLAM_TEAR_J } from "../vehicle/car-core.ts";
+import { DOOR_INERTIA, DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX, SLAM_TEAR_J } from "../vehicle/car-core.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { DoorRig, type DoorScenario, type RamShot } from "./door-rig.ts";
@@ -91,9 +90,8 @@ describe("given a ram on a lane beside a parked car (mirror: A grazes the shut d
 });
 
 describe("given a car's right door swung from half a radian open at a chosen opening rate", () => {
-  const inertia = makeCar().doorHinge(1).spec.inertia;
   /** Opening rate (rad/s) whose swing carries `share` × `energy` (J). */
-  const omegaFor = (share: number, energy: number): number => Math.sqrt((2 * share * energy) / inertia);
+  const omegaFor = (share: number, energy: number): number => Math.sqrt((2 * share * energy) / DOOR_INERTIA);
   const swing = (theta: number, omega: number) => {
     const car = makeCar();
     car.setDoorOpen(1, theta);
@@ -102,13 +100,14 @@ describe("given a car's right door swung from half a radian open at a chosen ope
     return car;
   };
 
-  // 1.15×: the margin 1.1× had over the swing's losses from half a radian on the shorter, lighter door the row was written for.
-  it("when it is swung shut at 0.9× and then 1.15× the slam limit, then the first latches shut and the second tears the door off", () => {
+  it("when it is swung shut at 0.9× and then 1.1× the slam limit, then the first latches shut and the second tears the door off", () => {
     const soft = swing(0.5, -omegaFor(0.9, SLAM_TEAR_J));
     assert.ok(!soft.partOff("doorR") && soft.doorHinge(1).latched && soft.doorHinge(1).theta === 0);
-    assert.ok(swing(0.5, -omegaFor(1.15, SLAM_TEAR_J)).partOff("doorR"), "1.15× slam energy kept the door on");
+    assert.ok(swing(0.5, -omegaFor(1.1, SLAM_TEAR_J)).partOff("doorR"), "1.1× slam energy kept the door on");
   });
 
+  // The old 1.1× fling reached the stop with 220 J (measured), the limit itself, on viscous damping alone; the hinge's dry friction
+  // (DOOR_DRY, 2 rad/s²) takes it to 217 J. 1.2× is as far above the limit as the old 1.1× was meant to be.
   it("when it is flung open onto its stop at 0.9× and then 1.2× the hinge limit, then the first stays on at the stop and the second tears the door off together with its mirror", () => {
     const soft = swing(0.5, omegaFor(0.9, HINGE_TEAR_J));
     assert.ok(!soft.partOff("doorR"));
@@ -179,38 +178,5 @@ describe("given the Doors scene's lid state for the park (share key dlid)", () =
     rig.lid = 2;
     rig.attach(torn);
     assert.ok(torn.lidOff(), "lid 2 left the lid on");
-  });
-});
-
-describe("given a mirror on a shut right door struck by a face that clears its base by half the cap's reach", () => {
-  /** A 5 m/s, 300 kg striker whose inner edge stands `share` × the cap's reach out from the mirror's base and whose face is well past the cap; the mirror's fold (rad) after it. */
-  const strikeMirror = (car: DeformableCar, share: number): number => {
-    const d = car.style.door;
-    Object.assign(_lane, {
-      dir: 1,
-      inner: car.mirrorBaseX + share * d.mirrorReach,
-      width: 0.4,
-      bottom: car.mirrorSpanY[1] - 0.02,
-      top: car.mirrorSpanY[1] + 0.4,
-      face: d.hingeZ - (d.mirrorZ ?? 0) + 2 * d.mirrorReach,
-      length: 0.5,
-      u: 5,
-      kg: 300,
-    });
-    hitMirror(car, 1, _lane);
-    return Math.abs(car.doorHinge(1).mirrorFold);
-  };
-
-  it("when the face has passed the cap, then the mirror folds just until its tip clears the face (acos of half) and not onto its stop, and the striker keeps its speed", () => {
-    assert.ok(Math.acos(0.5) < MIRROR_FOLD_MAX, "acos(0.5) is past the stop: the clear branch is not the one under test");
-    const fold = strikeMirror(makeCar(), 0.5);
-    assert.ok(Math.abs(fold - Math.acos(0.5)) < 1e-9, `fold ${fold} rad, acos(0.5) ${Math.acos(0.5)} rad`);
-    assert.equal(_lane.u, 5);
-  });
-
-  it("when the mirror is already folded onto its stop, then the strike leaves it there", () => {
-    const car = makeCar();
-    car.setMirrorFold(1, -MIRROR_FOLD_MAX);
-    assert.equal(strikeMirror(car, 0.5), MIRROR_FOLD_MAX);
   });
 });

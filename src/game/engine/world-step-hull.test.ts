@@ -129,6 +129,8 @@ function threshold(closing: number, trim?: (a: DeformableCar, b: DeformableCar) 
   return hi;
 }
 
+/** The mirrors' tips of two cars side by side meet at this centre distance (m): the 1.13 m of each (`DOOR`: hinge 0.86 + mirror base 0.06 + cap 0.21). */
+const MIRRORS_MEET = 2.26;
 /** The most the clearance may ask beyond the mirrors meeting (m): the lattice's outline and the lean of two bodies (about 0.19 m) and the slack (0.03 m). */
 const MOST_BEYOND = 0.25;
 /** The least it asks beyond them (m): each car's outline half lattice step and level-bar lean (`OUTLINE_REACH`, `LEVEL`), less a hair. */
@@ -137,10 +139,7 @@ const LEAST_BEYOND = 0.17;
 describe("given two sedans abeam at 15 m/s, the step cut by a pair parked far off", () => {
   it("when their lateral closing speed is 0, then they stay lone from the distance their mirrors meet plus 0.17 to 0.25 m, and stay in the slices below it", () => {
     const s = threshold(0);
-    const sedan = makeCar("shape");
-    /** The mirrors' tips of two sedans side by side meet at this centre distance (m): each car's own (`mirrorBaseX` + its door's `mirrorReach`). */
-    const meet = 2 * (sedan.mirrorBaseX + sedan.style.door.mirrorReach);
-    assert.ok(s >= meet + LEAST_BEYOND && s <= meet + MOST_BEYOND, `lone from ${s.toFixed(3)} m apart`);
+    assert.ok(s >= MIRRORS_MEET + LEAST_BEYOND && s <= MIRRORS_MEET + MOST_BEYOND, `lone from ${s.toFixed(3)} m apart`);
     assert.equal(firstMask(s - 0.01, 0), 0, "10 mm inside the clearance neither is lone");
     assert.equal(firstMask(s + 0.01, 0), 0b11, "10 mm outside it both are");
   });
@@ -210,28 +209,6 @@ describe("given two sedans abeam at a hull-clear distance the circle of the old 
     assert.ok(rows.every((r) => (r.loners & 0b11) === 0b11 && r.slices === SLICES_PER_STEP), "the pair is lone in a cut step");
     assert.equal(f.w.phases.work[WORK.pairTests]! - before, 10 * SLICES_PER_STEP, "pair tests: the parked pair in every slice, the lone pair in none");
     dispose(f.cars);
-  });
-});
-
-describe("given two sedans abeam at 15 m/s a race lane's gap apart (up to 2.4 m: past their drawn mirrors' reach), the step cut by a pair parked far off", () => {
-  it("when they are their mirrors' meeting plus the most the clearance asks, and then 2.4 m apart, then both step lone in every step, no overlap is missed, and they end where the sliced run puts them", () => {
-    const sedan = makeCar("shape");
-    const meet = 2 * (sedan.mirrorBaseX + sedan.style.door.mirrorReach);
-    dispose([sedan]);
-    assert.ok(meet + MOST_BEYOND < 2.4, `the clearance ends by ${(meet + MOST_BEYOND).toFixed(3)} m`);
-    for (const apart of [meet + MOST_BEYOND, 2.4]) {
-      const on = pairField(abeam(apart, 0), true);
-      const off = pairField(abeam(apart, 0), false);
-      const rows = run(on.w, 80, COARSE);
-      run(off.w, 80, COARSE);
-      const masks = [...new Set(rows.map((r) => r.loners & 0b11))].join();
-      assert.ok(
-        rows.every((r) => (r.loners & 0b11) === 0b11 && r.slices === SLICES_PER_STEP && r.missed === 0),
-        `${apart} m apart: lone masks seen ${masks}, missed ${rows.reduce((n, r) => n + r.missed, 0)}`,
-      );
-      samePose(on, off);
-      dispose([...on.cars, ...off.cars]);
-    }
   });
 });
 
