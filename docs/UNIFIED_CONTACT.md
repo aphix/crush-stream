@@ -520,6 +520,19 @@ ground can stand on at some pitch.
   `loadPoints` reads them only on a `massActive` car, as it does the sill samples.
 - **Pitched pair (`sat.ts` `endAt`).** A band whose end lands in a real column (`M_COLUMN`) standing short of the probe re-probes that
   end, so a raised tail over a hood meets it as deep as the two cages stand: it read 10 cm shallow at some poses (`sat-pose.test.ts`).
+- **Rolled pair (`sat.ts` `deepestIn`, `ROLLED_UP_Y`).** A pair tilted 30° to 150° against each other (the ups' dot under cos 30°, the same from
+  either car) reads every covered node of the lattice with its own column, not the outline nodes with their stretched bands: a slanted
+  column stood the band's heights along the other car's way in, and read a monster rolled 70° with a cop's nose in its roof 0.253 m shallow,
+  and a one-level graze of the other's top as a contact up to 0.75 m deep (44-59.5° of tilt). A node's column is a segment in the other's
+  frame: it is dropped where the segment misses the other's box (`segmentMisses`) or lies over or under every cell of the rows it spans
+  (`CageOutline.rowLows`), and the others are placed at the middle, at the heights the other's cell stands at (`deeperEnd`, up to
+  `ROLLED_CLIMBS` re-placements at the landing cell's column end) and at its own column's ends, sharing heights with the other's own
+  column (more than `VERTICAL_CLEAR` of height, or no plan contact). Pairs tilted less (a car pitched 27° on a tier) read as before, bit
+  for bit. `sat-pose.test.ts` reads the rolled rows against an oracle that counts a node only where its column shares more than
+  `VERTICAL_CLEAR` with the other's cell column (65°-75° within 0.04 m, was 0.253 m at 70°); the pitched rows keep the graze-counting
+  oracle and record the outline's old graze over-read (27°, 1 m up, 3.6 m back: 0.750 m) as a todo.
+- **Rolled-pair cost** (worker, shadow pile: 9 cars, 14 pairs tilted past 30°, identical trajectories, only the rolled read added): 17.2 → 20.9 ms
+  a frame (+21 %); a touching pair reads 150-260 µs against 17-35 µs. A perf pass follows the landing.
 - **Cost** (worker, `ab-stage/stepw.mjs`: 16 cars, identical state in both arms, only `stepWorld` timed): cruising −0.7 / +1.5 %,
   parked +0.5 / −2.3 %, so flat. City16 races, seeds 1-3, both arm orders: mean 0.999 (0.969-1.032), each run tracking its arm's wreck
   count. Sixteen wrecks each with a front wheel popped: 0.67-0.72 ms a step against 2.07, because all 16 sleep on their lips

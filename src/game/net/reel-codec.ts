@@ -445,6 +445,7 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * already held on it), and as the moment of that impulse about the car's centre: a resting sedan struck 1 m ahead of its middle with most of its mass already on
  * the face took 556 of the exchange's 1713 N·s and spun 2.14 rad/s, now 0.67; a wreck turning with its drawn vertex in a face takes the rigid plastic impulse there
  * (recoil and spin), where its spin went with no momentum taken: a sedan hitting a palm's trunk 0.6 m off its middle turns toward it (+0.09 rad, was +0.03).
+ * A pair tilted 30° to 150° against each other (a car on its side beside one on its wheels or on its roof) reads the plan overlap from every node of the cages with its own column, not from the outline's stretched band: a monster rolled 70° with a cop's nose in its roof read 0.253 m shallow (0.021 m against 0.274 m) and a one-level graze of the other's top counted as a contact up to 0.75 m deep, and now reads the cages' overlap to within 0.04 m; pairs tilted less (a car pitched 27° on a tier) or turned over flat read as before.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
