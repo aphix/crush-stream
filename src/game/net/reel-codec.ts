@@ -384,6 +384,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A car's point at rest inside a wall, a slab or a prop leaves by the side its car stands on, not the nearest: a tyre that stopped past a thin
  * wall's middle was pushed on through the wall, and the drive pushing the car back out was read as closing on it, so a car pinned to a wall at
  * 0.1 m/s stayed there for seconds (a monster on a slab ends with its front tyres torn off and over it, where it stood on its nose with them in it).
+ * A quiet wreck standing on its planted tyres has its hubs' springs critically damped (they were damped a little over a quarter of critical),
+ * so a truck on three tyres comes to rest and sleeps instead of rocking on them for as long as it lies; every wreck's hubs settle a
+ * centimetre or two off where they stood.
  * A lifted car's (the monster's) crash contact reaches its masses where they stand: a car-car hit's point, read off its lifted body, stood 0.8-0.9 m over
  * its nose masses, so it fed its bumper a thousandth of the crush and its engine none (a monster head-on at 40 m/s crushed 0.61 m and left its engine 0.42
  * healthy, where it crushed 0.84 m and killed it before the overhaul), and its plan contact reads its body's lift as drawn (faded as it lies over; it
