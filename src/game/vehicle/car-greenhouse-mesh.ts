@@ -62,20 +62,26 @@ function shellRing(skin: Pt[], cant: number, inset: number): Pt[] {
   return [...skin, ...inner];
 }
 
-/** The drawn roof's ends that bow in plan past the default bow (`WINDSHIELD_BOW`, `REAR_GLASS_BOW`) its flat ends already cover, or with the glass's whole bow (`roofEnds.glassBow`): z, bow (m), the glass top's half-width. */
-function roofEndBows(style: BodyStyle): { z: number; bow: number; half: number }[] {
+/** A drawn roof end that bows in plan: z, bow (m), the glass top's half-width; the front's `paneTop` is the windshield's top row (z, bow), which the roof never stands behind. */
+type RoofEnd = { z: number; bow: number; half: number; paneTop?: { z: number; bow: number } };
+
+/** The drawn roof's ends that bow in plan past the default bow (`WINDSHIELD_BOW`, `REAR_GLASS_BOW`) its flat ends already cover, or with the glass's whole bow (`roofEnds.glassBow`); the front always, held to its pane's top row so no slit lies ahead of the glass. */
+function roofEndBows(style: BodyStyle): RoofEnd[] {
   const whole = style.roofEnds?.glassBow;
-  return [
-    { z: style.roofZ[1], bow: (style.windshield.bow ?? WINDSHIELD_BOW).top - (whole?.front ? 0 : WINDSHIELD_BOW.top), half: style.windshield.wTop / 2 },
+  const { bow = WINDSHIELD_BOW, wTop } = style.windshield;
+  const ends: RoofEnd[] = [
+    { z: style.roofZ[1], bow: bow.top - (whole?.front ? 0 : WINDSHIELD_BOW.top), half: wTop / 2, paneTop: { z: style.windshieldTop[1], bow: bow.top } },
     { z: style.roofZ[0], bow: (style.rearGlass.bow ?? REAR_GLASS_BOW).top - (whole?.rear ? 0 : REAR_GLASS_BOW.top), half: style.rearGlass.wTop / 2 },
-  ].filter((end) => end.bow !== 0);
+  ];
+  return ends.filter((end) => end.bow !== 0 || end.paneTop !== undefined);
 }
 
 /**
  * The drawn roof's `ends` bow in plan with the glass tops under them, fading to nothing at each glass's top corners. A headliner
  * vertex (`twins`: each inner vertex, then the skin vertex it is inset from) moves as its skin vertex does, so it stays inset.
+ * A vertex the pane's top row pulls forward is held inside the roof's side lip at its new z, where the cabin narrows.
  */
-function bowRoofEnds(geo: THREE.BufferGeometry, ends: readonly { z: number; bow: number; half: number }[], twins: readonly number[]): void {
+function bowRoofEnds(geo: THREE.BufferGeometry, ends: readonly RoofEnd[], twins: readonly number[], style: BodyStyle): void {
   const skinOf = new Map<number, number>();
   for (let k = 0; k < twins.length; k += 2) skinOf.set(twins[k]!, twins[k + 1]!);
   const pos = geo.getAttribute("position");
@@ -83,7 +89,12 @@ function bowRoofEnds(geo: THREE.BufferGeometry, ends: readonly { z: number; bow:
     const end = ends.find((e) => Math.abs(pos.getZ(v) - e.z) < 1e-6);
     if (!end) continue;
     const xn = Math.min(1, Math.abs(pos.getX(skinOf.get(v) ?? v)) / end.half);
-    pos.setZ(v, end.z + end.bow * (1 - xn * xn));
+    const across = 1 - xn * xn;
+    const bowed = end.z + end.bow * across;
+    const held = end.paneTop === undefined ? bowed : Math.max(bowed, end.paneTop.z + end.paneTop.bow * across);
+    pos.setZ(v, held);
+    const [x, lip] = [pos.getX(v), cantX(held, style) + roofDrip(style)];
+    if (held > bowed && Math.abs(x) > lip) pos.setX(v, Math.sign(x) * lip);
   }
 }
 
@@ -136,31 +147,23 @@ function roofRingZs(style: BodyStyle, source: BodySource): number[] {
 export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry {
   const [, z1] = style.roofZ;
   const lip = cantDrop(style);
-  const drip = roofDrip(style);
   const rings: Pt[][] = [];
   const zs = roofRingZs(style, source);
   for (const z of zs) {
-    const { y: roofY, x } = roofAt(z, style);
-    const { drop, crown, reach } = source === "drawn" ? roofDome(z, style) : { drop: 0, crown: ROOF_CROWN, reach: 1 };
-    const y = roofY - drop;
-    const side: Pt[] =
-      source === "cage"
-        ? [
-            { x: x + ROOF_LIP_OUT, y: y - lip },
-            { x: x + ROOF_LIP_KNEE[0], y: y - ROOF_LIP_KNEE[1] },
-          ]
-        : roofRoll(x, y, lip, drip, ROOF_ROLL, reach).slice(0, -1);
-    const shoulder = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
-    // The dome's right half, crown to cant line: as many points as `ROOF_ARC_T`, so `roofSquareShare` eases an arc into it point for point.
-    const dome = [{ x: 0, y: y + crown }, { x: x * ROOF_SHOULDER[0], y: y + shoulder }, { x, y }, ...[...side].reverse()];
-    const half = source === "drawn" ? roofHalf(z, style) : null;
-    if (half) {
+    if (source === "drawn") {
+      const half = roofHalf(z, style);
       const skin = [...half.slice(1).reverse().map((p) => ({ x: -p.x, y: p.y })), ...half];
       rings.push(shellRing(skin, (skin.length - 5) / 2, HEADLINER_INSET));
       continue;
     }
+    const { y, x } = roofAt(z, style);
+    const side: Pt[] = [
+      { x: x + ROOF_LIP_OUT, y: y - lip },
+      { x: x + ROOF_LIP_KNEE[0], y: y - ROOF_LIP_KNEE[1] },
+    ];
+    const dome = [{ x: 0, y: y + ROOF_CROWN }, { x: x * ROOF_SHOULDER[0], y: y + ROOF_SHOULDER[1] }, { x, y }, ...[...side].reverse()];
     const skin = [...dome.slice(1).reverse().map((p) => ({ x: -p.x, y: p.y })), ...dome];
-    rings.push(source === "drawn" ? shellRing(skin, side.length, HEADLINER_INSET) : [...skin, { x: 0, y: y - 0.085 }]);
+    rings.push([...skin, { x: 0, y: y - 0.085 }]);
   }
   const geo = loftFromRings(rings, zs, 0.28, 0.72);
   ensureOutwardNormals(geo);
@@ -174,7 +177,7 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
     for (let j = 0; j < HEADLINER_POINTS.length; j++) twins.push(base + n - HEADLINER_POINTS.length + j, base + cant + HEADLINER_POINTS[j]!);
   }
   const ends = roofEndBows(style);
-  bowRoofEnds(geo, ends, twins);
+  bowRoofEnds(geo, ends, twins, style);
   // Each cap's ear-clip (`n` - 2 triangles) follows the loft's quads: the rear cap at `zs[0]`, then the front.
   const capStart = (zs.length - 1) * n * 6;
   const index = geo.getIndex()!.array;
@@ -449,7 +452,10 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
     const [frontX, rearX] = [lerp(wBase, wTop, edge) / 2 + A_POST_LIFT, glassPlaneX(y - fall) + A_POST_LIFT];
     const roofZ = THREE.MathUtils.clamp(postZ, style.roofZ[0], style.roofZ[1]);
     const rear: V3 = [underRoofSide(rearX, y - fall, roofZ, style), y - fall, postZ];
-    const front: V3 = [underRoofSide(frontX, frontY, frontZ, style), frontY, frontZ];
+    const frontHalf = underRoofSide(frontX, frontY, frontZ, style);
+    // The top station reaches the roof's skin: `back` moved it in under a roof that stands over the windshield's top, where its open end would show.
+    const frontTopY = t === 1 ? Math.max(frontY, roofMeshY(frontHalf, frontZ, style) - ROOF_TUCK) : frontY;
+    const front: V3 = [frontHalf, frontTopY, frontZ];
     // Square to the face after the roof's tuck: squaring it before shears the top stations' corners past 35°.
     const [dx, dz] = [front[0] - rear[0], front[2] - rear[2]];
     return { rear, front, inward: [dz / hypot2(dx, dz), dx / hypot2(dx, dz)] };
@@ -486,16 +492,17 @@ const ROOF_LIP_KNEE = [0.07, 0.03] as const;
 /** A pillar's top stops this far (m) inside the roof's surface, so the two never fight over a pixel. */
 const ROOF_TUCK = 0.002;
 
-/** The drawn roof's skin half-section (+x, crown to cant) at `z`, as `makeRoofGeometry` builds it on a `roofSection`: its arc, eased point for point into the dome's rolled side over a squared front (`roofSquareShare`); null without a `roofSection`. */
-function roofHalf(z: number, style: BodyStyle): Pt[] | null {
-  const arc = roofArc(z, style);
-  if (!arc) return null;
+/** The drawn roof's skin half-section (+x, crown to cant) at `z`, as `makeRoofGeometry` builds it: on a `roofSection` its arc, eased point for point into the dome's rolled side over a squared front (`roofSquareShare`); else the dome itself. */
+function roofHalf(z: number, style: BodyStyle): Pt[] {
   const { y: roofY, x } = roofAt(z, style);
   const { drop, crown, reach } = roofDome(z, style);
   const y = roofY - drop;
   const side = roofRoll(x, y, cantDrop(style), roofDrip(style), ROOF_ROLL, reach).slice(0, -1);
   const shoulder = ROOF_SHOULDER[1] * (crown / ROOF_CROWN);
+  // The dome's right half, crown to cant line: as many points as `ROOF_ARC_T`, so `roofSquareShare` eases an arc into it point for point.
   const dome = [{ x: 0, y: y + crown }, { x: x * ROOF_SHOULDER[0], y: y + shoulder }, { x, y }, ...[...side].reverse()];
+  const arc = roofArc(z, style);
+  if (!arc) return dome;
   const share = roofSquareShare(z, style);
   return ROOF_ARC_T.map((t, i) => {
     const p = arc(t);
@@ -503,13 +510,12 @@ function roofHalf(z: number, style: BodyStyle): Pt[] | null {
   });
 }
 
-/** The drawn roof loft's skin height at (`x`, `z`): its section between the two rings round `z`, lerped point for point as the loft joins them, never above the analytic skin; null without a `roofSection`. */
-function roofMeshY(x: number, z: number, style: BodyStyle): number | null {
+/** The drawn roof loft's skin height at (`x`, `z`): its section between the two rings round `z`, lerped point for point as the loft joins them, never above the analytic skin. */
+function roofMeshY(x: number, z: number, style: BodyStyle): number {
   const skin = roofHalf(z, style);
-  if (!skin) return null;
   const zs = roofRingZs(style, "drawn");
   const k = THREE.MathUtils.clamp(zs.findIndex((r) => r >= z), 1, zs.length - 1);
-  const [a, b] = [roofHalf(zs[k - 1]!, style)!, roofHalf(zs[k]!, style)!];
+  const [a, b] = [roofHalf(zs[k - 1]!, style), roofHalf(zs[k]!, style)];
   const u = (z - zs[k - 1]!) / (zs[k]! - zs[k - 1]!);
   const chord = a.map((p, i) => ({ x: lerp(p.x, b[i]!.x, u), y: lerp(p.y, b[i]!.y, u) }));
   // Past the lerped section's lip (a rolled end narrowing its reach between rings) the loft doesn't cover `x`: the analytic skin only, never the lip's foot.
@@ -553,8 +559,7 @@ function insideRoof(geo: THREE.BufferGeometry, style: BodyStyle, name: string): 
     if (z < style.roofZ[0] || z > style.roofZ[1]) continue;
     const x = pos.getX(i);
     const half = underRoofSide(Math.abs(x), pos.getY(i), z, style);
-    const skin = roofMeshY(half, z, style);
-    pos.setXY(i, Math.sign(x) * half, Math.min(pos.getY(i), (skin ?? roofTopY(half, z, style)) - ROOF_TUCK));
+    pos.setXY(i, Math.sign(x) * half, Math.min(pos.getY(i), roofMeshY(half, z, style) - ROOF_TUCK));
   }
   geo.name = name;
   return geo;
