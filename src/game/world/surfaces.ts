@@ -108,7 +108,7 @@ const D_RUNR = 11;
 const D_TAN = 12;
 
 /** Patch integers, `Q_STRIDE` each. */
-export const Q_STRIDE = 10;
+export const Q_STRIDE = 11;
 export const Q_KIND = 0;
 export const Q_NU = 1;
 export const Q_NV = 2;
@@ -126,6 +126,8 @@ export const Q_SOLID = 7;
 const Q_DYN = 8;
 /** 1: a prism that moves after the seal (`movePrism`): every query tests it, the cells list only what stays. */
 const Q_MOVES = 9;
+/** 1: the patch is in `Surface.dyn` (changed since the last step's end). */
+const Q_STIR = 10;
 
 /** A patch's slots grow by this many at a time. */
 const GROW = 8;
@@ -295,7 +297,7 @@ export class Surface {
   rasterBuilt = false;
   /** Patches whose box or drop changed after the raster was built (a slab top riding its car): read one by one, never rastered. */
   readonly moving: number[] = [];
-  /** The patches changed after the seal (`Q_DYN`), `nDyn` of them valid, in the order they first changed (`stirNear` reads only these). */
+  /** The patches changed since the last step's end (`Q_STIR`, `calm`), `nDyn` of them valid, in the order they first changed (`stirNear` reads only these). */
   dyn = new Int32Array(0);
   nDyn = 0;
   /** Static triangle-mesh solids the scene has that are not height fields (the corkscrew's channel walls): world-space vertices and indices. */
@@ -516,20 +518,26 @@ export class Surface {
     this.moved(i);
   }
 
-  /** A moving prism's pose and plan velocity (a press plate, the slab): rewritten in place each step, no allocation. Its spec said `moves`. */
+  /** A moving prism's pose and plan velocity (a press plate, the slab): rewritten in place each step, no allocation. Its spec said `moves`. A rewrite to the same pose is no change, so nothing is stirred. */
   movePrism(i: number, x: number, z: number, yaw: number, vx: number, vz: number): void {
     const o = i * P_STRIDE;
-    this.p[o + PR_VX] = vx;
-    this.p[o + PR_VZ] = vz;
-    this.shapePrism(i, x, z, yaw, this.p[o + PR_HX]!, this.p[o + PR_HZ]!);
+    const P = this.p;
+    if (this.sealed && this.inPlay(i) && Object.is(P[o + PR_X], x) && Object.is(P[o + PR_Z], z) && Object.is(P[o + PR_YAW], yaw) && Object.is(P[o + PR_VX], vx) && Object.is(P[o + PR_VZ], vz)) return;
+    P[o + PR_VX] = vx;
+    P[o + PR_VZ] = vz;
+    this.shapePrism(i, x, z, yaw, P[o + PR_HX]!, P[o + PR_HZ]!);
   }
 
-  /** Prism `i`'s half extents again (a slab's dented width) and its heights. */
+  /** Prism `i`'s half extents again (a slab's dented width) and its heights. The same ones are no change: nothing is stirred. */
   resizePrism(i: number, hx: number, hz: number, base: number, top: number): void {
     const o = i * P_STRIDE;
-    this.p[o + PR_BASE] = base;
-    this.p[o + PR_TOP] = top;
-    this.shapePrism(i, this.p[o + PR_X]!, this.p[o + PR_Z]!, this.p[o + PR_YAW]!, hx, hz);
+    const P = this.p;
+    // A circle keeps no `hz` of its own (it takes `hx`).
+    const sameHz = P[o + PR_R]! > 0 || Object.is(P[o + PR_HZ], hz);
+    if (this.sealed && this.inPlay(i) && Object.is(P[o + PR_HX], hx) && sameHz && Object.is(P[o + PR_BASE], base) && Object.is(P[o + PR_TOP], top)) return;
+    P[o + PR_BASE] = base;
+    P[o + PR_TOP] = top;
+    this.shapePrism(i, P[o + PR_X]!, P[o + PR_Z]!, P[o + PR_YAW]!, hx, hz);
   }
 
   /**
@@ -776,8 +784,9 @@ export class Surface {
     this.box(i);
   }
 
-  /** Empty patch `i`'s box: it answers nothing until its frame is set again. */
+  /** Empty patch `i`'s box: it answers nothing until its frame is set again. Already empty after the seal is no change: nothing is stirred. */
   disable(i: number): void {
+    if (this.sealed && !this.inPlay(i)) return;
     const o = i * P_STRIDE;
     this.p[o + P_MINX] = Infinity;
     this.p[o + P_MAXX] = -Infinity;
@@ -844,20 +853,30 @@ export class Surface {
     return level && open && !Object.is(P[o + P_OY], -0) && this.q[qo + Q_KIND] === GRID && this.q[qo + Q_DYN] === 0 && this.q[qo + Q_OWNER] === -1 && this.auxs[i]!.length === 0;
   }
 
-  /** Patch `i` changed after the seal (`Q_DYN`): no cell reads it as plain from then on, every one that did tests its candidates. */
+  /** Patch `i` changed after the seal: it is listed in `dyn` until the step's end (`Q_STIR`), and no cell reads it as plain from then on (`Q_DYN`), every one that did tests its candidates. */
   private unplain(i: number): void {
     const qo = i * Q_STRIDE;
-    if (!this.sealed || this.q[qo + Q_DYN] === 1) return;
-    this.q[qo + Q_DYN] = 1;
-    if (this.nDyn === this.dyn.length) {
-      const grown = new Int32Array(this.nDyn + GROW);
-      grown.set(this.dyn);
-      this.dyn = grown;
+    if (!this.sealed) return;
+    if (this.q[qo + Q_STIR] !== 1) {
+      this.q[qo + Q_STIR] = 1;
+      if (this.nDyn === this.dyn.length) {
+        const grown = new Int32Array(this.nDyn + GROW);
+        grown.set(this.dyn);
+        this.dyn = grown;
+      }
+      this.dyn[this.nDyn++] = i;
     }
-    this.dyn[this.nDyn++] = i;
+    if (this.q[qo + Q_DYN] === 1) return;
+    this.q[qo + Q_DYN] = 1;
     if (this.plainOne === i) this.plainOne = -1;
     if (this.plainOutside === i) this.plainOutside = -1;
     for (let c = 0; c < this.plainCells.length; c++) if (this.plainCells[c] === i) this.plainCells[c] = -1;
+  }
+
+  /** A step's end: the patches changed so far are no longer news (`dyn` empties), the next change lists its patch again. */
+  calm(): void {
+    for (let k = 0; k < this.nDyn; k++) this.q[this.dyn[k]! * Q_STRIDE + Q_STIR] = 0;
+    this.nDyn = 0;
   }
 
   private indexBoxes(): void {
@@ -950,6 +969,12 @@ export function armTops(t: Surface | null): void {
 export function armSolids(s: Surface | null): void {
   if (s !== null && !s.sealed) s.seal();
   live.solids = s;
+}
+
+/** A step's end: the armed static surface's and solids' changes so far are no longer news (`Surface.calm`). */
+export function calmSolids(): void {
+  live.solids?.calm();
+  live.statics?.calm();
 }
 
 /** The scene's armed solids (`armSolids`), null when none: where the bench reads the prism counters. */
@@ -1715,7 +1740,7 @@ export type StirCar = { readonly moving: boolean };
 
 /**
  * Whether anything that moves or changes has its box over the square of half side `r` about plan (`x`, `z`): a static's or a solid's patch rewritten
- * since the seal (a press plate, a ramp slid into place, a prism put out) or a car's top but the asker `skip`'s own. A body at rest there is
+ * since the last step's end (a press plate, a ramp slid into place, a prism put out) or a car's top but the asker `skip`'s own. A body at rest there is
  * answered what it was the step before when this is false: the queries read nothing else. With `cars` (the world's, a top's owner being its slot) a
  * top whose car does not move (asleep, or resting under rest speed) is not a change either: neighbours settling together all fall asleep.
  */
@@ -1723,7 +1748,7 @@ export function stirNear(x: number, z: number, r: number, skip: number, cars: re
   return stirIn(live.statics, x, z, r, -2, null) || stirIn(live.solids, x, z, r, -2, null) || stirIn(live.tops, x, z, r, skip, cars);
 }
 
-/** `stirNear` over `s`: every patch but `skip`'s own when `skip` is a slot (-1 or more), else only those changed since the seal (`Surface.dyn`). */
+/** `stirNear` over `s`: every patch but `skip`'s own when `skip` is a slot (-1 or more), else only those changed since the last step's end (`Surface.dyn`). */
 function stirIn(s: Surface | null, x: number, z: number, r: number, skip: number, cars: readonly StirCar[] | null): boolean {
   if (s === null) return false;
   const P = s.p;

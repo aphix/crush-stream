@@ -1462,27 +1462,28 @@ const SIM_CRASH_KPH = 48;
 // CarRig's single re-pin (union 1d751bfc with the tread as wide as drawn): sedan, coupe, pickup, police and monster moved with the car overhaul's
 // sim (each style's own frame and rig, its own cages and lids, the lifted centre, the tyre side rows and footprint), red on the union since
 // e4f74c6e; hatch and SUV were re-pinned by their lane and are unchanged here.
+// Re-pinned (sedan to police, the monster still rocking) when a placed wall no longer stirs a wreck at rest beside it every step: each ends asleep.
 const SIM_DIGEST_BY_STYLE = [
   // CarSedan's shape data on top of CarRig's re-pin (sedan and police alike): crowned hood and its stations (f3ba51c8), the sedan's own front
   // fascia (e17b83ac), mirror reach .128 (28843919), then the reference's arch radius .405 -> .375. Sedan 3b05ae33... -> 26331e81... (shape
   // data) -> 92a72440... (arch); police 70734ab6... -> 2fe405f6... -> 1071e0a8....
-  { id: "sedan", digest: "92a72440a4cf53f0f791dfc487c995cf30328490e14f8a5581291e14918f68bf" },
+  { id: "sedan", digest: "22f69a44cb9f70b6ed0871034f867b2981d0e4c95defbf566e818f02a724b30f" },
   // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's boot foot.
   // The hatchback's again when the cage kept the underside a body rests on, over its vertex budget (CarRig rig-lip): d1b0dbd0... ->
   // ace6af8c...; the other six unchanged.
   // The hatchback's again for its roof rolling round into its side glass (`roofSection` .4/.9, as the coupe's): the panes' tops and roof cage follow it: ace6af8c... -> b1cfea45....
-  { id: "hatchback", digest: "b1cfea451ddc28abcd42af60e60da25c12c281370e5eeb67795bb75e5acef309" },
-  { id: "wagon", digest: "1a7eff9992e80f8e83b536069ed0e6d91c71c41c5a70267b1d8d6bbe50865260" },
+  { id: "hatchback", digest: "94c99232d847dea6f9d0c5536b301d0e2efc09fb8c5ce24cb4886b5e449ff470" },
+  { id: "wagon", digest: "49d33db49722f0411fd428430880f661733e106b752d3e5cc603f5653f4017d3" },
   // The coupe re-pinned for its nose deck lowered 0.5-2.8 cm over z 1.76-1.945 to the reference's side line.
-  { id: "coupe", digest: "65a78223ec46889380f64c822f52c7f005d3fc135df3982a0eacc74dcc28635c" },
+  { id: "coupe", digest: "0781178e38b20a869fa33aecf6bf43328818048e8b83965a58b4440d81b2b520" },
   // The pickup re-pinned for its hood wrapping the nose (`hood.z1` 1.86 -> 1.92): its hood's cage reaches the nose the wall meets.
   // Its cab roof narrowed to the top plate's (profile cabinHw) brings the wall hit back to the same crush as before its mid-cab roof rose.
-  { id: "pickup", digest: "2882c1543a80d731c8d0bc7fea0385a5fff906c4840f069772703abc9069c59f" },
+  { id: "pickup", digest: "cc12a032070e0e61f7d3ff29682911acbf028d9468518bbaa23c9d8eb1f84f31" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
-  { id: "police", digest: "1071e0a8d52794a5b4df7b49cdf4e644455f5bf36fa869a247892e9055a5a481" },
+  { id: "police", digest: "f8bfc83f5a8ec50a5b892b82152157ca1afeaba176c7bca7b90e0f0e406d5810" },
   // The monster is its own body style (its own dims, cage and lifted class body), no longer the pickup's.
   // Again when a wreck's masses rode its lifted centre, not their centroid (CarRig rig-seat): 7a1610ef... -> db09b87c...; the other six unchanged.
   { id: "monster", digest: "db09b87c25c1d4e2c03d0f9a902d0f055f412591c298fb2878c3827357453f39" },
