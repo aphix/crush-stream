@@ -407,6 +407,15 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * closed pieces cut on one shared section and a flange under its slab.
  * A door cage's corners hang on the cabin (its masses and the clusters that hold the cell), not on the tail and axle a side hit's tyres hold back: a side
  * hit no longer shears the far door's frame by 5-6 cm (a 30 km/h side hit read 55 mm, now 18; its glass burst), and a 50 km/h wall hit racks a door's frame 12 mm, not 26.
+ * A windscreen's frame hangs on the cabin as a door's does, its base corners with half of the nearest wing's give (the cowl, where the nose meets the
+ * cabin) in place of the rails' and engine's: a 35 km/h wall hit racks it 4.3 mm, not 6.5 (the pane cracked), and a 50 km/h one 5.4 mm, not 24.5 (it still cracks).
+ * A tyre meets a solid's side at both corners of each edge of its tread and, where an edge's corners read nothing, at samples 0.2 m apart between them: a
+ * wall thinner than the tyre is long (the oval's 0.6 m) no longer stands between its corners while the tyre straddles it, so a monster's rear pair that rolled
+ * through it at 56 m/s (two wheels still on, 24.9 m/s after the hit) is torn off at it (none left, 10.7 m/s). A point that came in by no face within the
+ * entry window leaves by the side its car stands on, as one at rest does, not by the nearest face (a car's tyre deep in a panel it was rebounding from was put out through its far face).
+ * A wreck's tyre springs hold its weight at the hubs where its hit has left them in its body (a planted hub keeps its place on the ground while the body is
+ * driven back off it, and the body seats on it again over the next second), not at the stock wheel places: a monster's axles were loaded 1.3 % of its weight unevenly 1.2 s after a
+ * 20 m/s hit, which the springs took up as a pitch the wreck kept if it fell asleep before it had seated (0.5° nose-off on flat ground, 2.2° on a 10° bank, more with a harder hit), now none (0.0° and 0.1°).
  * A torn part that flies as its shell takes the wind on the broad face it draws (the axis its drawn triangles face most), not its box's shortest axis, which
  * a bumper's wrapped ends and seam cover tie with its height within 2 mm: a sedan's, hatchback's or wagon's front bumper, a monster's rear one and a
  * coupe's front arches met the wind edge-on and lifted where they should brake. The keyframe carries each loose part's plate axis with its flags.
@@ -428,6 +437,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * was 0.287, the wagon's 0.318, the monster's 0.255, the hatchback's and pickup's 0.18), so a nose hit reaches the block and kills the
  * engine at the same speed whatever the car.
  * A car's two front doors are cage panels of their own while they hang latched (a sprung or torn door leaves it), so a side striker meets the drawn door's skin, not the sill and belt behind it.
+ * A hood's and a trunk lid's heights in the cage reach a lattice step past their triangles (they reached half of one), so the drawn lid's wrapped nose and rolled edge, which stand 1-2 cm past the plain cage lid, have a cage under them: a tyre meets hood up to 5 cm past the lid's true edge.
+ * A pair's patch reads every node of the other outline that reads a depth: the plan field's edge stands half a lattice step past the outermost node, beyond the drawn triangles' box that gated them, so a door's nodes
+ * at a nose's edge joined the patch at once and moved its centre 2.1 or 11.2 cm in a millimetre of closing (a T-bone's door crushed 0.706 m or 0.753 m by 2 mm of start, now 0.750-0.753 m).
+ * A skin point standing more than 0.35 m from its parents' rest centroid turns with its clusters' maps only as far as it would at 0.35 m, the rest of its offset going with the parents alone (a rear pillar 0.75 m over the tail's masses was swung 0.198 m by their 0.1-0.2 rad rolls where the particles moved 0.140: now 0.171), so the cage cut from the crushed skin differs on every crushed car's upper rear and the contacts that read it with it.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

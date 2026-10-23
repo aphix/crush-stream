@@ -454,13 +454,13 @@ export const STATES = [
   { id: "airborne", text: "airborne, pitched 25 degrees and rolled 15 degrees" },
 ] as const;
 
-/** A `style` body of class `cls` in the state `id`, posed upright at the origin (the airborne one tilted 3 m up). */
-export function carInState(id: (typeof STATES)[number]["id"], style: CarStyleId, cls: VehicleClassId): DeformableCar {
+/** A `style` body of class `cls` in the state `id`, posed upright at the origin (the airborne one tilted 3 m up); the head-on's cars each drive at `kph`. */
+export function carInState(id: (typeof STATES)[number]["id"], style: CarStyleId, cls: VehicleClassId, kph = 50): DeformableCar {
   const car = buildCar(style, cls);
   if (id === "headon") {
     const other = buildCar(style, "sedan");
-    launch(car, -5, 0, Math.PI / 2, 50 / 3.6, 0);
-    launch(other, 5, 0, -Math.PI / 2, -50 / 3.6, 0);
+    launch(car, -5, 0, Math.PI / 2, kph / 3.6, 0);
+    launch(other, 5, 0, -Math.PI / 2, -kph / 3.6, 0);
     stepFrames(makeWorld([car, other], false, false, null), 5);
   } else if (id === "rolled") {
     car.spawnFacing(0, 0, 0, 0);

@@ -89,9 +89,18 @@ export const PLATFORM_RIG: RigTables = {
 const CELL_FACE_BLEND = 0.3;
 /** Largest non-cell skin weight at the span face (D1): the A-pillar foot still creases. */
 const CELL_FACE_SHARE = 0.25;
+/** Share of the nearest nose mass in a windscreen base corner (`parentRule`'s `foot`): the cowl is where the nose meets the cabin, so the pane's frame rides the cabin and half the nose's give. Hung wholly on the cabin the pane never cracks in a wall hit hard enough to crack it; on the nearest four masses it cracks in a lighter one. */
+const WINDSCREEN_FOOT_SHARE = 0.5;
 
 /** Most cluster weights a skin vertex keeps: the 4 nearest plus the cell-face share. */
 export const SKIN_K = 5;
+/** `skinN` packs a point's cluster count into this many low bits (`SKIN_K` ≤ 7), and its lever share (`SKIN_LEVER_STEPS` of them at most) into the rest. */
+export const SKIN_COUNT_BITS = 3;
+export const SKIN_COUNT_MASK = 7;
+/** Steps of a skin point's lever share: `skinN >> SKIN_COUNT_BITS` of these is the share (31 fits the five bits left in a byte). */
+export const SKIN_LEVER_STEPS = 31;
+/** How far (m) from its parents' rest centroid a skin point still turns with its clusters' maps in full: the maps are fitted on clusters half a metre across, so past this lever they are carried no further than at it. */
+const SKIN_LEVER_REACH = 0.35;
 /** Parent masses per skin point (A5): the paint rides these particles. */
 const RES_K = 4;
 /** Parent slots: RES_K plus the cell-face share of the nearest non-cabin mass (D1). */
@@ -196,7 +205,7 @@ interface SkinZones {
   cellOnly(x: number, y: number, z: number, hub: number): boolean;
 }
 
-type SkinParentRule = (rx: number, ry: number, rz: number, i: number, t: SkinPointTables, hung?: boolean) => void;
+type SkinParentRule = (rx: number, ry: number, rz: number, i: number, t: SkinPointTables, hung?: boolean, foot?: boolean) => void;
 
 type KeyMass = "cell" | "roof" | "engineL" | "engineR" | "axleR" | "doorL" | "doorR" | "hubFL" | "hubFR" | "hubRL" | "hubRR" | "bumperFL" | "bumperFR" | "bumperRL" | "bumperRR";
 
@@ -761,7 +770,8 @@ export abstract class DeformRig {
   /**
    * A5 parents: the RES_K nearest non-hub masses by 1/(d² + RES_SOFT), less the (RES_K+1)th's weight so a parent fades out before it is
    * swapped (no seam where the nearest set changes). A cabin point takes cabin masses only (D1), plus the cell-face share of the nearest other mass;
-   * a `hung` point (a door's frame, hinged to the A-pillar and latched to the B-pillar) takes the cabin masses wherever it stands, and no share.
+   * a `hung` point (a door's frame, hinged to the A-pillar and latched to the B-pillar) takes the cabin masses wherever it stands, and no share;
+   * a `foot` point (the windscreen's frame, standing on the A-pillar's foot) takes the share at the cell's face or past it, as the skin there does.
    * `only`: the masses a point may take (by index), for a part that rides a few of them (a push bar on its bumper's two).
    */
   private parentRule(zones: SkinZones, only?: readonly number[]): SkinParentRule {
@@ -776,7 +786,7 @@ export abstract class DeformRig {
           return { j, w: 1 / ((rx - r.x) ** 2 + (ry - r.y) ** 2 + (rz - r.z) ** 2 + RES_SOFT) };
         })
         .sort((a, b) => b.w - a.w);
-    return (rx, ry, rz, i, t, hung = false) => {
+    return (rx, ry, rz, i, t, hung = false, foot = false) => {
       const cabin = inCell(rx, ry, rz);
       const ds = near(rx, ry, rz, cabin || hung ? cabinBody : body);
       const floor = ds.length > RES_K ? ds[RES_K]!.w : 0;
@@ -785,8 +795,8 @@ export abstract class DeformRig {
       for (const d of ds) sum += d.w - floor;
       for (const d of ds) d.w = (d.w - floor) / sum;
       const face = Math.min(rz - span.min.z, span.max.z - rz);
-      if (cabin && face < CELL_FACE_BLEND) {
-        const share = CELL_FACE_SHARE * (1 - face / CELL_FACE_BLEND);
+      if ((cabin || foot) && face < CELL_FACE_BLEND) {
+        const share = (foot ? WINDSCREEN_FOOT_SHARE : CELL_FACE_SHARE) * Math.min(1, 1 - face / CELL_FACE_BLEND);
         for (const d of ds) d.w *= 1 - share;
         ds.push({ j: near(rx, ry, rz, outside)[0]!.j, w: share });
       }
@@ -838,7 +848,9 @@ export abstract class DeformRig {
         for (const s of scored) s.w *= 1 - share;
         scored.push({ ci: other, w: share });
       }
-      t.sN[i] = scored.length;
+      // The share of its clusters' maps this point takes: past `SKIN_LEVER_REACH` from its parents' rest centroid the maps' turn is carried only as far as at that reach.
+      const lever = Math.min(1, SKIN_LEVER_REACH / hypot3(rx - t.rC[i * 3]!, ry - t.rC[i * 3 + 1]!, rz - t.rC[i * 3 + 2]!));
+      t.sN[i] = scored.length | (scored.length > 0 ? Math.round(lever * SKIN_LEVER_STEPS) << SKIN_COUNT_BITS : 0);
       for (let k = 0; k < scored.length; k++) {
         t.sXf[i * SKIN_K + k] = scored[k]!.ci * 9;
         t.sW[i * SKIN_K + k] = scored[k]!.w;
@@ -905,7 +917,8 @@ export abstract class DeformRig {
   /**
    * Cage corners follow the clusters within 1.4 m of their rest position (`solveCagesFromShape`), and their A5 parents as skin points `n + j`.
    * A door cage's corners hang on the cabin: its masses and its cell-holding clusters only, so the rear axle and tank, which a side hit's tyres
-   * hold back while the cabin is shoved, do not shear the far door's frame (and its glass) by centimetres.
+   * hold back while the cabin is shoved, do not shear the far door's frame (and its glass) by centimetres. The windscreen's hang there too, with
+   * the A-pillar foot's share of the nose (`parentRule`'s `foot`): its base corners took the rails' and the engine's masses, which a nose hit moves before the cabin has moved at all.
    */
   private bindCorners(n: number, cms: readonly { x: number; y: number; z: number }[], parents: SkinParentRule, t: SkinPointTables): void {
     const start: number[] = [0];
@@ -916,8 +929,9 @@ export abstract class DeformRig {
     for (let j = 0; j < this.cages.length * 8; j++) {
       const cage = this.cages[j >> 3]!;
       const rest = cage.restCorners[j & 7]!;
-      const hung = cage.spec.name.startsWith(PART_FAMILY.door);
-      parents(rest.x, rest.y, rest.z, n + j, t, hung);
+      const foot = cage.spec.name === "glassFront";
+      const hung = foot || cage.spec.name.startsWith(PART_FAMILY.door);
+      parents(rest.x, rest.y, rest.z, n + j, t, hung, foot);
       let wsum = 0;
       for (let ci = 0; ci < this.clusters.length; ci++) {
         if (hung && !holdsCell[ci]) continue;

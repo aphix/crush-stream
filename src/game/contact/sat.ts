@@ -290,14 +290,16 @@ function standsOnWheels(b: DeformableCar): boolean {
  */
 function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look: number): void {
   const outline = outlineOf(a);
+  const outlineB = outlineOf(b);
   const style = b.cage.style;
-  const box = b.cage.fields.planBox;
   const reach = OUTLINE_REACH + look;
   const liftA = cageLift(a);
-  _in[0] = box[0]! - reach;
-  _in[1] = box[1]! + reach;
-  _in[2] = box[2]! - reach;
-  _in[3] = box[3]! + reach;
+  // The field's zero stands OUTLINE_REACH out from the outermost outline node, which the drawn triangles' box does not reach: a node there reads a depth at once, not one that grows from nothing.
+  const bound = OUTLINE_REACH + reach;
+  _in[0] = outlineB.xLo - bound;
+  _in[1] = outlineB.xHi + bound;
+  _in[2] = outlineB.zLo - bound;
+  _in[3] = outlineB.zHi + bound;
   _in[I_LOW] = outline.low + liftA;
   _in[I_HIGH] = outline.high + liftA;
   _in[I_REACH] = reach;
@@ -307,7 +309,6 @@ function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look
   frameInto(a.group.matrixWorld.elements, eb);
   found.fill(0);
   if (boxMissed(outline)) return;
-  const outlineB = outlineOf(b);
   const plan = b.cage.planField();
   const fields = b.cage.fields;
   const ty = _ab[4]!, kyx = _ab[5]!, kyy = _ab[6]!, kyz = _ab[7]!;

@@ -1,7 +1,7 @@
 import { IMPRINT_NONE } from "../deform/load-crush.ts";
 import { INF_K } from "../deform/deform-build.ts";
 import { cageAxis } from "../deform/deform-state.ts";
-import { archKeep, RES_SLOTS, SKIN_K } from "../deform/deform-rig.ts";
+import { archKeep, RES_SLOTS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS } from "../deform/deform-rig.ts";
 import { interiorPose } from "./part-pose.ts";
 import { decimate, upFacing } from "./cage-mesh.ts";
 import { planFieldOf, rasterise } from "./cage-fields.ts";
@@ -278,14 +278,20 @@ function skinCage(style: CageStyle, live: CageLive, out: CageFields): void {
     const dx = rx - resC[r]!;
     const dy = ry - resC[r + 1]!;
     const dz = rz - resC[r + 2]!;
-    if (skinN[i]! > 0) {
-      for (let k = i * SKIN_K, e = k + skinN[i]!; k < e; k++) {
+    const packed = skinN[i]!;
+    const n = packed & SKIN_COUNT_MASK;
+    if (n > 0) {
+      for (let k = i * SKIN_K, e = k + n; k < e; k++) {
         const o = skinXf[k]!;
         const w = skinW[k]!;
         px += (X[o]! * dx + X[o + 1]! * dy + X[o + 2]! * dz) * w;
         py += (X[o + 3]! * dx + X[o + 4]! * dy + X[o + 5]! * dz) * w;
         pz += (X[o + 6]! * dx + X[o + 7]! * dy + X[o + 8]! * dz) * w;
       }
+      const lever = (packed >> SKIN_COUNT_BITS) / SKIN_LEVER_STEPS;
+      px = lever * px + (1 - lever) * dx;
+      py = lever * py + (1 - lever) * dy;
+      pz = lever * pz + (1 - lever) * dz;
       for (let k = i * RES_SLOTS, e = k + RES_SLOTS; k < e; k++) {
         const j = resJ[k]!;
         const w = resW[k]!;

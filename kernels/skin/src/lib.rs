@@ -7,6 +7,10 @@
 
 // deform-rig.ts `ARCH_YIELD`: an arch vertex's plan travel (m) off its plant at which the plant has let go.
 const ARCH_YIELD: f64 = 0.15;
+// deform-rig.ts `SKIN_COUNT_BITS`, `SKIN_COUNT_MASK`, `SKIN_LEVER_STEPS`: how `skinN` packs a point's cluster count and lever share.
+const SKIN_COUNT_BITS: usize = 3;
+const SKIN_COUNT_MASK: usize = 7;
+const SKIN_LEVER_STEPS: f64 = 31.0;
 
 #[inline(always)]
 unsafe fn f(p: *const f64, i: usize) -> f64 {
@@ -55,9 +59,11 @@ pub unsafe extern "C" fn skin_shape(
         let mut px = 0.0f64;
         let mut py = 0.0f64;
         let mut pz = 0.0f64;
-        let n = if shape { *s_n.add(i) as usize } else { 0 };
+        // `skinN` packs the cluster count (low bits) with the lever share (the rest, in `SKIN_LEVER_STEPS`): deform-rig.ts `SKIN_COUNT_BITS`.
+        let packed = if shape { *s_n.add(i) as usize } else { 0 };
+        let n = packed & SKIN_COUNT_MASK;
         if n > 0 {
-            // A5: the parents' positions plus the blended cluster map on the offset from their rest centroid.
+            // A5: the parents' positions plus the blended cluster map on the offset from their rest centroid, as far as its lever share.
             let dx = rx - f(r_c, r);
             let dy = ry - f(r_c, r + 1);
             let dz = rz - f(r_c, r + 2);
@@ -71,6 +77,10 @@ pub unsafe extern "C" fn skin_shape(
                 pz += (f(x, o + 6) * dx + f(x, o + 7) * dy + f(x, o + 8) * dz) * w;
                 k += 1;
             }
+            let lever = (packed >> SKIN_COUNT_BITS) as f64 / SKIN_LEVER_STEPS;
+            px = lever * px + (1.0 - lever) * dx;
+            py = lever * py + (1.0 - lever) * dy;
+            pz = lever * pz + (1.0 - lever) * dz;
             let mut k = i * 5;
             let e = k + 5;
             while k < e {

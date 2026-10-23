@@ -9,7 +9,8 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 import { carFrame } from "../vehicle/car-rig.ts";
 import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { SPRINGS } from "../vehicle/car-suspension.ts";
-import { CLASSES } from "../vehicle/vehicle-classes.ts";
+import { CLASSES, VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
+import { TYRE_ALONG_MAX, TYRE_SAMPLE_GAP } from "../vehicle/car-air-body.ts";
 import { MOUNT } from "./surfaces.ts";
 
 /**
@@ -118,5 +119,24 @@ describe("given a monster whose tyres alone meet the range's slab", () => {
     const [tyre] = strike("barrier", "monster", 55);
     const [body] = strike("stucco", "monster", 55);
     assert.ok(Math.abs(tyre!.health - body!.health) <= HEALTH_BAND && tyre!.ejected === body!.ejected, `tyre hit ${JSON.stringify(tyre)} against the body hit ${JSON.stringify(body)}`);
+  });
+});
+
+/**
+ * A tyre meets a face at both corners of each edge of its tread and, where an edge's corners read nothing, between them (`readTyreSides`): a wall
+ * thinner than the tyre is long stands between its corners while the tyre straddles it, and the rear pair rolled through the oval's.
+ */
+describe("given a monster whose tyres alone meet the oval's wall, thinner than a tyre is long", () => {
+  it("when it meets the wall at 56 m/s, then every wheel is torn off at it: none rolls through", () => {
+    const [hit] = strike("oval", "monster", 56);
+    assert.equal(hit!.wheels, 0, JSON.stringify(hit));
+  });
+
+  it("when each class's tyre is sampled, then its edge's samples are no further apart than the gap and the most a body holds rows for covers the largest tyre", () => {
+    for (const cls of VEHICLE_CLASS_IDS) {
+      const r = carFrame(CAR_STYLES[CLASSES[cls].style]).rig.tyre.r * CLASSES[cls].wheelScale;
+      const along = Math.ceil((2 * r) / TYRE_SAMPLE_GAP) + 1;
+      assert.ok(along <= TYRE_ALONG_MAX, `${cls}: a ${(2 * r).toFixed(2)} m tyre needs ${along} samples along an edge, room for ${TYRE_ALONG_MAX}`);
+    }
   });
 });

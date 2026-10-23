@@ -10,7 +10,7 @@ import {
 import type { BodyPartName, MassName } from "../kernel/rig-spec.ts";
 import { DeformParticleHelper, DeformRigHelper } from "./deform-helper.ts";
 import { DeformHit } from "./deform-hit.ts";
-import { RES_SLOTS, SKIN_K, type Beam, type MassNode, type PointSkin } from "./deform-rig.ts";
+import { RES_SLOTS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS, type Beam, type MassNode, type PointSkin } from "./deform-rig.ts";
 import { CageStrain, maxCompression, sensorsByPart } from "./cage-measure.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { CORNER_BLEND, CORNER_CENTRED, FAR_SIDE_DOT, MIN_IMPACT_ZONE, MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
@@ -557,7 +557,8 @@ export abstract class DeformState extends DeformHit {
       const dx = rest[r]! + origin.x - rC[r]!;
       const dy = rest[r + 1]! + origin.y - rC[r + 1]!;
       const dz = rest[r + 2]! + origin.z - rC[r + 2]!;
-      const n = sN[i]!;
+      const packed = sN[i]!;
+      const n = packed & SKIN_COUNT_MASK;
       let px = n > 0 ? 0 : dx,
         py = n > 0 ? 0 : dy,
         pz = n > 0 ? 0 : dz;
@@ -567,6 +568,12 @@ export abstract class DeformState extends DeformHit {
         px += (X[o]! * dx + X[o + 1]! * dy + X[o + 2]! * dz) * w;
         py += (X[o + 3]! * dx + X[o + 4]! * dy + X[o + 5]! * dz) * w;
         pz += (X[o + 6]! * dx + X[o + 7]! * dy + X[o + 8]! * dz) * w;
+      }
+      if (n > 0) {
+        const lever = (packed >> SKIN_COUNT_BITS) / SKIN_LEVER_STEPS;
+        px = lever * px + (1 - lever) * dx;
+        py = lever * py + (1 - lever) * dy;
+        pz = lever * pz + (1 - lever) * dz;
       }
       for (let k = i * RES_SLOTS, e = k + RES_SLOTS; k < e; k++) {
         const j = rJ[k]!;

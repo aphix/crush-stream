@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { computeNormalsFast } from "./fast-normals.ts";
 import { matchSkinLocal, type ShapeCluster } from "./shape-match.ts";
 import { DeformSolve } from "./deform-solve.ts";
-import { archKeep, RES_SLOTS, SIM_SCALAR_NUMBERS, SKIN_K, type Beam, type MassNode, type RigTables, type Sensor } from "./deform-rig.ts";
+import { archKeep, RES_SLOTS, SIM_SCALAR_NUMBERS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS, type Beam, type MassNode, type RigTables, type Sensor } from "./deform-rig.ts";
 import { INF_K } from "./deform-build.ts";
 import { cageAxis, cageCoeffs } from "./deform-state.ts";
 import { skinKernel, skinKey, type SkinDynamic, type SkinKernel, type SkinStatic, type SkinTables } from "./skin-kernel.ts";
@@ -544,9 +544,10 @@ export class StreamedDeformation extends DeformSolve {
       let px = 0,
         py = 0,
         pz = 0;
-      const n = shape ? sN[i]! : 0;
+      const packed = shape ? sN[i]! : 0;
+      const n = packed & SKIN_COUNT_MASK;
       if (n > 0) {
-        // A5: parents' positions + the blended cluster map on the offset from their rest centroid.
+        // A5: parents' positions + the blended cluster map on the offset from their rest centroid, as far as its lever share (a point far from its parents is carried less by the maps' turn).
         const dx = rx - rC[r]!;
         const dy = ry - rC[r + 1]!;
         const dz = rz - rC[r + 2]!;
@@ -557,6 +558,10 @@ export class StreamedDeformation extends DeformSolve {
           py += (X[o + 3]! * dx + X[o + 4]! * dy + X[o + 5]! * dz) * w;
           pz += (X[o + 6]! * dx + X[o + 7]! * dy + X[o + 8]! * dz) * w;
         }
+        const lever = (packed >> SKIN_COUNT_BITS) / SKIN_LEVER_STEPS;
+        px = lever * px + (1 - lever) * dx;
+        py = lever * py + (1 - lever) * dy;
+        pz = lever * pz + (1 - lever) * dz;
         for (let k = i * RES_SLOTS, e = k + RES_SLOTS; k < e; k++) {
           const j = rJ[k]!;
           const w = rW[k]!;

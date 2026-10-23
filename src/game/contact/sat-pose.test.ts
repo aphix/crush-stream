@@ -30,7 +30,7 @@ const ROLLS = [65, 70];
  * rolled car those heights lie along the other car's way in, and the depth at the other car's ridge moves with where the side stands. It
  * grows with the roll and changes sign with the other car's shape (over at one distance, under at another); at 65° it is inside the step.
  */
-const ROLL_GAPS = new Map<number, string>([[70, "the plan SAT reads a monster rolled 70° over off the cages' overlap by more than a lattice step (0.845 m against 0.755 m with a cop 2.7 m back; its outline node's band spans 0.95-2.07 m where the node's own column spans 0.96-1.03 m): after the plan, a rolled car's side is read from its interior nodes, not its stretched outline"]]);
+const ROLL_GAPS = new Map<number, string>([[70, "the plan SAT reads a monster rolled 70° over off the cages' overlap by more than a lattice step (0.845 m against 0.755 m with a cop 2.7 m back; its outline node's band spans 0.95-2.07 m where the node's own column spans 0.96-1.03 m): post-overhaul lane: interior-node SAT for tilted cars, with perf bars, rolled-pile digests and REPLAY (after the plan, a rolled car's side is read from its interior nodes, not its stretched outline)"]]);
 const LYING_RISE = 1.1;
 const LYING_FROM = 2.4;
 const LYING_TO = 3.6;

@@ -7,7 +7,7 @@ import { doorShell, firePiston, pistonLocality, PISTON_DENT_RADIUS, PISTON_FAR, 
 import { transformSkinPointInto } from "../deform/shape-match.test-util.ts";
 import { REST_SHIFT, type ShapeCluster } from "../deform/shape-match.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { RES_SLOTS, type DeformMode, type MassNode, type RigTables } from "../deform/deform-rig.ts";
+import { RES_SLOTS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_LEVER_STEPS, type DeformMode, type MassNode, type RigTables } from "../deform/deform-rig.ts";
 import { forModes } from "../vehicle/test-support.ts";
 
 /** The deformer internals the reference skin reads (private in production). */
@@ -111,7 +111,7 @@ function referenceSkin(d: Internals): Float32Array {
     const rx = d.restPos[i * 3]!;
     const ry = d.restPos[i * 3 + 1]!;
     const rz = d.restPos[i * 3 + 2]!;
-    const ws = Array.from({ length: d.skinN[i]! }, (_, k) => ({ ci: d.skinXf[i * 5 + k]! / 9, w: d.skinW[i * 5 + k]! }));
+    const ws = Array.from({ length: d.skinN[i]! & SKIN_COUNT_MASK }, (_, k) => ({ ci: d.skinXf[i * 5 + k]! / 9, w: d.skinW[i * 5 + k]! }));
     const infs = Array.from({ length: d.infN[i]! }, (_, k) => {
       const s = i * 4 + k;
       return { part: d.infCo[s]! / 24, u: d.infUvw[s * 4]!, v: d.infUvw[s * 4 + 1]!, w: d.infUvw[s * 4 + 2]!, weight: d.infUvw[s * 4 + 3]! };
@@ -122,20 +122,25 @@ function referenceSkin(d: Internals): Float32Array {
     let wsum = 0;
     if (shape && ws.length > 0) {
       const a = anchor(d, i);
-      px = a.x;
-      py = a.y;
-      pz = a.z;
+      let cx = 0,
+        cy = 0,
+        cz = 0;
       for (const inf of ws) {
         const p = transformSkinPointInto(d.clusters[inf.ci]!, rx, ry, rz);
-        px += p.x * inf.w;
-        py += p.y * inf.w;
-        pz += p.z * inf.w;
+        cx += p.x * inf.w;
+        cy += p.y * inf.w;
+        cz += p.z * inf.w;
         const q = transformSkinPointInto(d.clusters[inf.ci]!, a.cx, a.cy, a.cz);
-        px -= q.x * inf.w;
-        py -= q.y * inf.w;
-        pz -= q.z * inf.w;
+        cx -= q.x * inf.w;
+        cy -= q.y * inf.w;
+        cz -= q.z * inf.w;
         wsum += inf.w;
       }
+      // The clusters' maps carry the point only as far as its lever share; the rest of its offset from its parents' centroid goes with the parents alone.
+      const lever = (d.skinN[i]! >> SKIN_COUNT_BITS) / SKIN_LEVER_STEPS;
+      px = a.x + lever * cx + (1 - lever) * (rx - a.cx);
+      py = a.y + lever * cy + (1 - lever) * (ry - a.cy);
+      pz = a.z + lever * cz + (1 - lever) * (rz - a.cz);
     }
     if (!shape || wsum < 1e-8) {
       for (const inf of infs) {
@@ -209,8 +214,8 @@ function restCentroid(d: Internals, c: ShapeCluster): THREE.Vector3 {
 function referenceCageSolve(d: Internals): void {
   const cell = d.masses.findIndex((m) => m.name === "cell");
   for (const [ci, cage] of d.cages.entries()) {
-    // A door cage's corners hang on the cabin: only the clusters that hold the cell move them.
-    const hung = cage.spec.name.startsWith("door");
+    // A door cage's corners hang on the cabin, and the windscreen's: only the clusters that hold the cell move them.
+    const hung = cage.spec.name.startsWith("door") || cage.spec.name === "glassFront";
     for (let i = 0; i < 8; i++) {
       const rest = cage.restCorners[i]!;
       const a = anchor(d, d.vertexCount + ci * 8 + i);

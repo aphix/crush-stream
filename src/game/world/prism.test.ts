@@ -182,6 +182,18 @@ describe("given a box prism in the scene's solids", () => {
       assert.ok(Math.abs(hit[C_NX]! - 1) < 1e-12 && Math.abs(hit[C_DEPTH]! - 1.3) < 1e-12, `its body's side: ${hit[C_NX]} depth ${hit[C_DEPTH]}`);
       armSolids(null);
     });
+
+    it("then a point moving slowly in it, which came in by no face within the entry window, leaves by the face its body stands on too, and by the nearest with no body asking", () => {
+      solids(TALL);
+      // 0.3 m past the middle toward -x, moving +x at 0.5 m/s: the -x face it would have entered by is 1.4 s back, outside the window.
+      const alone = ask(-0.3, 0.5, 0, 0.5, 0);
+      assert.ok(Math.abs(alone[C_NX]! + 1) < 1e-12 && Math.abs(alone[C_DEPTH]! - 0.7) < 1e-12, `no body asks: ${alone[C_NX]} depth ${alone[C_DEPTH]}`);
+      ASKER[0] = 3;
+      ASKER[1] = 0;
+      const own = ask(-0.3, 0.5, 0, 0.5, 0);
+      assert.ok(Math.abs(own[C_NX]! - 1) < 1e-12 && Math.abs(own[C_DEPTH]! - 1.3) < 1e-12, `its body at +3: ${own[C_NX]} depth ${own[C_DEPTH]}`);
+      armSolids(null);
+    });
   });
 
   it("when the point is the same distance in however far along the step it started then the face it entered by is the same", () => {
