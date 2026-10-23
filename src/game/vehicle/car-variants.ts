@@ -306,7 +306,7 @@ export interface PillarSpan {
 }
 
 /** Drawn only: the windshield, the door glass's front edge and the roof's ends as the player sees them (`BodyStyle.drawn`, `drawnStyle`). */
-export type DrawnTwin = Partial<Pick<BodyStyle, "windshield" | "windshieldTop" | "aPillarFoot" | "aPillarTop" | "aPillarKnee" | "aPillarSailGlass" | "roofEnds">>;
+export type DrawnTwin = Partial<Pick<BodyStyle, "windshield" | "windshieldTop" | "aPillarFoot" | "aPillarTop" | "aPillarKnee" | "aPillarSailGlass" | "aPillarOneLoft" | "roofEnds">>;
 
 export interface BodyStyle {
   id: CarStyleId;
@@ -341,8 +341,9 @@ export interface BodyStyle {
    * `seat`: drawn only, set it in a `drawn` twin's `windshield`: the base row sits `WINDSHIELD_SEAT` over the hood's top at every column (the hood as `hood.followGlass` bends it, or straight at `hood.z0`), never above `base[0]`; the A-post and the door glass's foot follow it.
    * `round` (m): drawn only, set it in a `drawn` twin's `windshield` (the cage's pane keeps its plain grid): the pane's top corners round to this radius, the glass's own outline (the base corners stay square on the cowl), and the A-post's front rail follows the arc into the roof.
    * `domeFall`: this pane's share of the roof's dome its top edge falls with (absent: the style's `domeFall`, else 1); set in a `drawn` twin's `windshield`, where the roof's front lands flat on the glass's top, so the pane's corners stand under its skin by the roof's thickness and not the dome's fall.
+   * `postUnder` (m): drawn only; the A-post's front rail tucks this far in under the pane's side edge, under its plane, so the glass's edge lies over the post: no slit, the post no wider; absent, the post stands 4 mm over and off the edge.
    */
-  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow; sideBow?: number; seat?: boolean; round?: number; domeFall?: number };
+  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow; sideBow?: number; seat?: boolean; round?: number; domeFall?: number; postUnder?: number };
   windshieldTop: YZ;
   /**
    * Windshield wipers parked along the glass's base (`styleWipers`): `count` blades (default 2), each `length` of the glass's base width
@@ -402,6 +403,8 @@ export interface BodyStyle {
   aPillarKnee?: number;
   /** Drawn only: with no `aPillarKnee`, the A-post's sail gets a station where the door glass's straight front edge ends at the glass's top (`glassTopY` at `aPillarTop`), so its rear edge follows that edge, not one chord from its middle to the post's top over a see-through wedge. Absent: three stations (belt, middle, post's top). */
   aPillarSailGlass?: boolean;
+  /** Drawn only: with no `aPillarKnee`, the A-post and its sail are one loft (named "a", no "sail" part), one ring a station across the post's face and the sail's, so no crease or seam runs between them; it takes the post's blackout tone for both. Absent: two lofts. */
+  aPillarOneLoft?: boolean;
   /** Side glass top: its drop under the roof (m, absent 0.075), the roof's side lip ending there too; or [z, y] stations (ascending, linear, held past the ends) under a 0.075 lip, painted fill between them and the lip. */
   glassTop?: number | readonly (readonly [number, number])[];
   /**

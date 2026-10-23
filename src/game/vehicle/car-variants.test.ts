@@ -1798,10 +1798,10 @@ describe("given a body style's H2 hardpoints", () => {
   });
 
   it("when a style with no knee sets `aPillarSailGlass`, then no level ray in from the side, 5 mm ahead of the door glass's front edge, passes its drawn sail to the far side: the sail's rear edge follows the glass's straight front edge up to its top, not one chord from its middle to the post's top over a see-through wedge", () => {
-    // The drawn sedan: no knee, the glass's front edge straight from the belt to the post's top. The control is its twin with the field removed.
+    // The drawn sedan: no knee, the glass's front edge straight from the belt to the post's top. The control is its twin with the field and the one loft (whose stations sample the glass's edge) removed.
     const stock = CAR_STYLES.sedan;
     const sedan = drawnStyle(stock);
-    const control = drawnStyle({ ...stock, drawn: { ...stock.drawn, aPillarSailGlass: undefined } });
+    const control = drawnStyle({ ...stock, drawn: { ...stock.drawn, aPillarSailGlass: undefined, aPillarOneLoft: undefined } });
     assert.ok(sedan.aPillarKnee === undefined && sedan.aPillarSailGlass === true && control.aPillarSailGlass === undefined, "the drawn sedan sets the field over a kneeless glass; the control does not");
     const footY = beltY(sedan.aPillarFoot, sedan);
     const glassTop = glassTopY(aPillarTopZ(sedan), sedan);
@@ -1824,6 +1824,11 @@ describe("given a body style's H2 hardpoints", () => {
       assert.ok(now !== null && now > 0.3, `${share} of the glass (y ${y.toFixed(3)}, z ${z.toFixed(3)}): the ray's first hit is at x ${now}, not on the near side`);
       assert.ok(was === null || was < 0.3, `the control, ${share} of the glass (y ${y.toFixed(3)}): the ray first hits at x ${was}, so there is no wedge to see through`);
     }
+  });
+
+  it("when the sedan and the police are drawn, then no ray in from outside slips between the A-pillar and the windshield or the door glass: every horizontal ray at the A-pillar's heights, fanned from the windshield's middle back past the door glass's front edge, first meets the near side's skin or glass", () => {
+    const off = (["sedan", "police"] as const).flatMap((id) => aPillarLeaks(cars[id], drawnStyle(CAR_STYLES[id])).map((line) => `${id} ${line}`));
+    assert.ok(off.length === 0, off.join("; "));
   });
 
   it("when a style blacks out greenhouse parts, then exactly their drawn vertices turn gloss black, and the drawn shape and the cage are unchanged", () => {
@@ -3094,6 +3099,62 @@ function tornMirror(car: DeformableCar, i: 0 | 1): LooseShape {
   const torn = newLooseShape();
   boxShape(torn, mirrorSeat(car, i));
   return torn;
+}
+
+/** Rays per side and height in `aPillarLeaks`' fan: ~0.03° apart, finer than the contour tool's 0.25°, so a 2 mm slit is met. */
+const A_PILLAR_FAN_RAYS = 1600;
+/** The fans' centres stand these far (m) behind the door glass's front edge, in the cabin: a slit shows along one sight line only, so three. */
+const A_PILLAR_FAN_BACKS = [0.15, 0.3, 0.6];
+/** The fan runs round to this far (m) behind the door glass's front edge. */
+const A_PILLAR_FAN_PAST = 0.08;
+/** A first hit within this (m) of the fan's centre, or past it, came in through the near side. */
+const A_PILLAR_NEAR = 0.25;
+
+/**
+ * Where light gets through `car`'s drawn A-pillar band (`style` drawn), one line per side, height and fan: horizontal rays in from 3 m
+ * out at a cabin centre, swept from the centre line ahead round past the door glass's front edge, each read on the drawn skin and glass.
+ */
+function aPillarLeaks(car: DeformableCar, style: BodyStyle): string[] {
+  const footY = beltY(style.aPillarFoot, style);
+  const glassTop = glassTopY(aPillarTopZ(style), style);
+  car.group.updateMatrixWorld(true);
+  const toCar = car.group.matrixWorld.clone().invert();
+  const look = car.lookMeshes();
+  // The drawn skin and glass round the A-pillar as car-space triangles (9 floats each).
+  const tris: number[] = [];
+  const v = new THREE.Vector3();
+  for (const mesh of [look.body, look.hood, ...look.doors, ...car.glassPanes.map((g) => g.mesh)]) {
+    const local = toCar.clone().multiply(mesh.matrixWorld);
+    const [pos, index] = [mesh.geometry.getAttribute("position"), mesh.geometry.index];
+    for (let i = 0; i < (index ? index.count : pos.count); i++) tris.push(...v.fromBufferAttribute(pos, index ? index.getX(i) : i).applyMatrix4(local).toArray());
+  }
+  const [ray, a, b, c, hit, reach] = [new THREE.Ray(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), 3];
+  const off: string[] = [];
+  for (let y = footY + 0.04; y <= glassTop - 0.005; y += 0.015) {
+    const slab: number[] = [];
+    for (let t = 0; t < tris.length; t += 9) if (Math.min(tris[t + 1]!, tris[t + 4]!, tris[t + 7]!) <= y && Math.max(tris[t + 1]!, tris[t + 4]!, tris[t + 7]!) >= y) slab.push(t);
+    const front = doorGlassFrontZ(y, footY, glassTop, style);
+    const past = front - A_PILLAR_FAN_PAST;
+    const plane = glassX(front, y, style);
+    for (const [sign, back] of [-1, 1].flatMap((s) => A_PILLAR_FAN_BACKS.map((d) => [s, d] as const))) {
+      const cz = front - back;
+      const [first, last] = [Math.PI / 2, Math.atan2(past - cz, sign * glassX(past, y, style))];
+      // Each leaking ray, named by where it crosses the door glass's plane: z (m).
+      const through: string[] = [];
+      for (let k = 0; k <= A_PILLAR_FAN_RAYS; k++) {
+        const angle = lerp(first, last, k / A_PILLAR_FAN_RAYS);
+        ray.origin.set(Math.cos(angle) * reach, y, cz + Math.sin(angle) * reach);
+        ray.direction.set(-Math.cos(angle), 0, -Math.sin(angle));
+        let nearest = Infinity;
+        for (const t of slab) {
+          if (ray.intersectTriangle(a.fromArray(tris, t), b.fromArray(tris, t + 3), c.fromArray(tris, t + 6), false, hit) !== null) nearest = Math.min(nearest, hit.distanceTo(ray.origin));
+        }
+        if (nearest > reach - A_PILLAR_NEAR) through.push(`${(cz + sign * plane * Math.tan(angle)).toFixed(3)}/x.58z${(cz + 0.58 * Math.tan(angle) * sign).toFixed(3)}`);
+      }
+      if (through.length > 0) off.push(`${sign > 0 ? "right" : "left"} y ${y.toFixed(3)}, fan ${back} m back: ${through.length} rays through, crossing the side glass's plane at z ${through[0]}..${through.at(-1)}`);
+    }
+  }
+  return off;
 }
 
 /** Two faces z-fight when they face within this (deg) of each other: contour-defects' z-fight test reads 4. */

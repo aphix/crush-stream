@@ -381,6 +381,9 @@ function quarterSpan(style: BodyStyle, quarter = drawnQuarter(style)): SideSpan 
   return { bot: [quarter.zRearBot, band.belt[0] + PANE_TUCK], top: [quarter.zRearTop, band.top[0] + PANE_TUCK] };
 }
 
+/** A side pane is drawn in this many bands, belt to top: straight between its rows, so a part meeting its edge samples it at the rows. */
+export const SIDE_PANE_ROWS = 3;
+
 /** A side pane is this many columns long, rear to front: its belt edge is a polyline through the belt at their z. */
 const SIDE_PANE_COLUMNS = 6;
 
@@ -399,9 +402,9 @@ function sidePoint(sign: number, style: BodyStyle, span: SideSpan, s: number, t:
   return _pt.set(sign * glassX(z, y, style), y, z);
 }
 
-/** A side pane's rows, belt to top (`t`): in thirds, and the front edge's knee. */
+/** A side pane's rows, belt to top (`t`): evenly (`SIDE_PANE_ROWS` bands), and the front edge's knee. */
 function rowTs(span: SideSpan): number[] {
-  const ts = [0, 1 / 3, 2 / 3, 1];
+  const ts = Array.from({ length: SIDE_PANE_ROWS + 1 }, (_, k) => k / SIDE_PANE_ROWS);
   if (span.kneeT !== undefined && span.kneeT > 0 && span.kneeT < 1 && !ts.includes(span.kneeT)) ts.splice(ts.findIndex((t) => t > span.kneeT!), 0, span.kneeT);
   return ts;
 }

@@ -247,12 +247,14 @@ export const SEDAN: BodyStyle = {
    * the cage's 1.16 stood them ~6 cm outside it).
    */
   drawn: {
-    windshield: { base: [0.95, 0.88], wBase: 1.4, wTop: 1.06, bow: { base: 0.165, top: WINDSHIELD_BOW.top }, sideBow: 0.036, seat: true },
+    windshield: { base: [0.95, 0.88], wBase: 1.4, wTop: 1.06, bow: { base: 0.165, top: WINDSHIELD_BOW.top }, sideBow: 0.036, seat: true, postUnder: 0.02 },
     aPillarFoot: 0.64,
     aPillarTop: 0.05,
     aPillarKnee: undefined,
     // The sail takes a station at the door glass's top, so its rear edge follows the straight glass edge instead of cutting a see-through wedge.
     aPillarSailGlass: true,
+    // The post and its sail drawn as one surface: no hairline crease down the pillar.
+    aPillarOneLoft: true,
   },
   underside: [
     [-2.14, 0.35],

@@ -689,6 +689,10 @@ const POST_MIN_POINTS = 12;
 const POST_TURN_DEGREES = 35;
 /** At least this many of the A-post's stations show under the roof's side (the rest run up into it). */
 const A_POST_STATIONS_SHOWN = 5;
+/** An A-post and sail drawn as one loft: the sail's outer face turns into the post's by under this (deg) at the join. */
+const ONE_LOFT_JOIN_DEGREES = 25;
+/** At least this many quads along the join are read (past the foot, under the roof's side). */
+const ONE_LOFT_JOINS_READ = 3;
 /** The drawn A-post laps the windshield's side edge within this (m) at every station, and in side view its section's centre keeps its offset from that edge within this along the post: it follows the edge, never twisting off it. */
 const A_POST_EDGE_FOLLOW = 0.01;
 
@@ -770,6 +774,34 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
     });
   }
 
+  for (const id of ["sedan", "police"] as const) {
+    it(`when a ${id}'s A-post and sail are drawn as one loft, then no sail part stands beside it, every shown station's chords turn under ${POST_TURN_DEGREES}° and the sail's face turns into the post's under ${ONE_LOFT_JOIN_DEGREES}° past the foot: no crease runs down the pillar`, () => {
+      const style = drawnStyle(CAR_STYLES[id]);
+      const frame = makeGreenhouseFrame(style, "drawn");
+      assert.ok(!frame.some((g) => g.name === "sail"), `${id}: a sail part stands beside the post`);
+      const posts = frame.filter((g) => g.name === "a");
+      assert.ok(posts.length === 2 && posts.every((g) => g.userData.postRing !== undefined), `${id}: ${posts.length} A-posts, one loft each`);
+      const held = (p: THREE.Vector3) => p.z >= style.roofZ[0] && p.z <= style.roofZ[1] && p.y > cantY(p.z, style);
+      for (const post of posts) {
+        const { ring, slices } = loftOf(post);
+        const [join] = post.userData.postRing as [number, number];
+        const shown = (slice: number) => !Array.from({ length: ring }, (_, k) => positionAt(post, slice * ring + k)).some(held);
+        for (let slice = 0; slice < slices; slice++) {
+          if (!shown(slice)) continue;
+          for (let k = 0; k < ring; k++) {
+            const at = (j: number) => positionAt(post, slice * ring + ((j + ring) % ring));
+            const turn = angleBetweenDegrees(at(k).sub(at(k - 1)).normalize(), at(k + 1).sub(at(k)).normalize());
+            assert.ok(turn < POST_TURN_DEGREES, `${id} station ${slice} section point ${k} turns ${turn.toFixed(1)}°`);
+          }
+        }
+        // The foot's first quad rises out of the cowl, where the post's own section turns to meet it.
+        const turns = ringLineDihedrals(post, join, (slice) => slice > 0 && shown(slice) && shown(slice + 1));
+        assert.ok(turns.length >= ONE_LOFT_JOINS_READ, `${id}: ${turns.length} quads read at the join`);
+        assert.ok(Math.max(...turns) < ONE_LOFT_JOIN_DEGREES, `${id}: the sail's face turns into the post's by ${turns.map((t) => t.toFixed(1)).join(", ")}°`);
+      }
+    });
+  }
+
   for (const [id, style] of [...CAR_STYLE_IDS.map((id) => [id, drawnStyle(CAR_STYLES[id])] as const), ["wrapped sedan", WRAPPED_SEDAN] as const]) {
     it(`when a ${id}'s A-posts are laid along its windshield, then each laps the windshield's side edge within ${A_POST_EDGE_FOLLOW * 100} cm at every station under the roof and in side view its centre's offset from that edge varies under ${A_POST_EDGE_FOLLOW * 100} cm`, () => {
       const last = WINDSHIELD_EDGE_STEPS;
@@ -787,9 +819,12 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
         };
         const sideView = (p: THREE.Vector3) => p.clone().setX(0);
         const offsets: number[] = [];
+        // A post and its sail drawn as one loft name the span of their ring on the post: its centre is the post's, not the sail wing's.
+        const [postFirst, postLast] = (post.userData.postRing as [number, number] | undefined) ?? [0, ring - 1];
         for (let slice = 0; slice < slices - 1; slice++) {
           const section = Array.from({ length: ring }, (_, k) => positionAt(post, slice * ring + k));
-          const centre = section.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(ring);
+          const own = section.slice(postFirst, postLast + 1);
+          const centre = own.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(own.length);
           const [edgeBase, edgeTop] = chordAt(centre);
           const lap = Math.min(...section.map((p) => distanceToLine(p, edgeBase, edgeTop)));
           assert.ok(lap <= A_POST_EDGE_FOLLOW, `${id} station ${slice}: the post stands ${(lap * 100).toFixed(1)} cm off the windshield's edge`);

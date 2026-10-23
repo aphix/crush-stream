@@ -1,10 +1,11 @@
 import * as THREE from "three";
-import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
 import { roofHinged } from "./hinge-spec.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, ROOF_DRIP, roofDrip, sideBowZ } from "./car-lines.ts";
-import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset, windshieldSideBase, windshieldSideX } from "./car-glass.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, ROOF_DRIP, roofDrip, sideBowZ, WINDSHIELD_BOW } from "./car-lines.ts";
+import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset, SIDE_PANE_ROWS, windshieldSideBase, windshieldSideX } from "./car-glass.ts";
 import { splitCreases, splitLoftOnLowDiagonals } from "./car-crease.ts";
+import { bowPointAt, bowTurnSteps, type Bow } from "./car-curve.ts";
 import { drawnRoofTopY, roofEndAcross, roofEndBows, roofEndHeldZ, roofEndWeight, roofSourceZ, type RoofEnd } from "./car-roof-end.ts";
 import {
   CREASE_DEGREES,
@@ -287,6 +288,21 @@ function boxFromCorners(
 /** A pillar section's outer-face rear and front points at one station along it (+x side), and the plan direction [x share, z share] its depth runs in along (absent: straight in, -x). */
 type Rail = { rear: V3; front: V3; inward?: readonly [number, number] };
 
+/** The +x-side point of `rail`'s section at unit-square point `p` (u across `thick`, the outer face at 1; w from the rear rail to the front one). */
+function railPoint({ rear, front, inward = [1, 0] }: Rail, thick: number, { x: u, y: w }: Pt): V3 {
+  const depth = (1 - u) * thick;
+  return [lerp(rear[0], front[0], w) - depth * inward[0], lerp(rear[1], front[1], w), lerp(rear[2], front[2], w) + depth * inward[1]];
+}
+
+/** Drops a loft's two end caps (`loftFromRings` with `capsOwnRings` false): its rings and side triangles come first, its caps' centres and fans after. */
+function openEnds(geo: THREE.BufferGeometry, ring: number, slices: number): void {
+  geo.setIndex(Array.from(geo.index!.array.subarray(0, (slices - 1) * ring * 6)));
+  for (const name of ["position", "uv"]) {
+    const attribute = geo.getAttribute(name);
+    geo.setAttribute(name, new THREE.Float32BufferAttribute(attribute.array.slice(0, slices * ring * attribute.itemSize), attribute.itemSize));
+  }
+}
+
 /**
  * Pillar lofted through `rails` (belt to top), thickness inward, its unit `section` at each rail's width and station `k` (default: corners rounded at
  * `radius` (m) in `steps` chords, the outer face bulged `crown` (m)); sign -1 mirrors to the left, its outer face still at u = 1.
@@ -309,22 +325,11 @@ function roundedPillarAlong(
   const sections = rails.map(({ rear, front }, k) => section(hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2]), k));
   if (sections.some((s) => s.length !== sections[0]!.length)) throw new Error("a pillar's sections have different point counts along it");
   const geo = loftFromRings(sections, stations, 0, 1, false);
-  if (open) {
-    // The loft's rings and side triangles come first, its caps' centres and fans after.
-    const ring = sections[0]!.length;
-    geo.setIndex(Array.from(geo.index!.array.subarray(0, last * ring * 6)));
-    for (const name of ["position", "uv"]) {
-      const attribute = geo.getAttribute(name);
-      geo.setAttribute(name, new THREE.Float32BufferAttribute(attribute.array.slice(0, rails.length * ring * attribute.itemSize), attribute.itemSize));
-    }
-  }
+  if (open) openEnds(geo, sections[0]!.length, rails.length);
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
-    const u = pos.getX(i);
-    const w = pos.getY(i);
-    const { rear, front, inward = [1, 0] } = rails[Math.round(pos.getZ(i) * last)]!;
-    const depth = (1 - u) * thick;
-    pos.setXYZ(i, sign * (lerp(rear[0], front[0], w) - depth * inward[0]), lerp(rear[1], front[1], w), lerp(rear[2], front[2], w) + depth * inward[1]);
+    const [x, y, z] = railPoint(rails[Math.round(pos.getZ(i) * last)]!, thick, { x: pos.getX(i), y: pos.getY(i) });
+    pos.setXYZ(i, sign * x, y, z);
   }
   ensureOutwardNormals(geo);
   return geo;
@@ -461,6 +466,11 @@ function aPostStations(style: BodyStyle, edgeFoot: number): number[] {
 
 /** The drawn A-post stands this far (m) off the windshield's edge and the side glass, outward, so neither glass shows through it. */
 const A_POST_LIFT = 0.004;
+/** With `windshield.postUnder` the post's front rail ends this far (m) under the pane's plane: nearer z-fights the pane's back, farther opens a slot between them that light finds at the pane's top corners. */
+const POST_UNDER_PLANE = 0.002;
+/** `postUnder`'s tuck in under the pane's edge comes in over this share of the post's run from its foot (so the foot still meets the cowl); the rail's drop under the pane's plane, over its lowest sixth. */
+const POST_UNDER_RUN = 1 / 3;
+const POST_UNDER_PLANE_RUN = 1 / 6;
 /** A drawn pillar's top runs this far (m) up past the cant line, buried in the roof's side. */
 const PILLAR_TOP_RISE = 0.03;
 /** The sail (the panel between the A-post and the door glass) is this thick (m), on the side glass plane. */
@@ -469,8 +479,16 @@ const SAIL_THICK = 0.02;
 const SAIL_MIN = 0.005;
 /** Where the door glass runs under the post the sail thins to this (m), never to nothing, so its faces keep their normals. */
 const SAIL_EDGE = 0.001;
+/** A kneeless sail over a straight glass edge (`aPillarSailGlass`) runs this far (m) back under the door glass: its 7 mm rear chamfer (`PILLAR_FILLET`) dives under the glass, whose edge lies on the sail's flat face, so no groove opens between them. */
+const SAIL_TUCK = 0.008;
+/** ...its rail standing this far (m) over the glass's plane there, so that face meets the glass's edge rather than leaving a channel under it. */
+const SAIL_SEAT = 0.0005;
 /** Stations along the sail, as shares of its run from the base to its top (the glass's knee, else the post's top). */
 const SAIL_STATIONS = [0, 0.5, 1] as const;
+/** The windshield edge's side bow is sampled every this much turn (rad), so the one-loft post's rings land where the edge bends and the pane's edge and the post meet on the same curve. */
+const ONE_LOFT_TURN = THREE.MathUtils.degToRad(8);
+/** One-loft stations closer than this share of the post's run (under a millimetre) are one station, so no sliver of loft opens between them. */
+const ONE_LOFT_MERGE = 1e-3;
 
 /**
  * The drawn A-post's rails and its sail's, base to top. The post's front rail runs along the windshield's edge (carried down the
@@ -478,8 +496,10 @@ const SAIL_STATIONS = [0, 0.5, 1] as const;
  * `aPostRearZ` behind it in side view, across the side glass's lean from the door glass's foot to its top-front corner; its depth runs
  * square to its face in plan. The sail fills from the post's rear edge to the door glass's front edge (`doorGlassFrontZ`) up to the
  * glass's knee (or the post's top; with `aPillarSailGlass` and no knee, also a station at the glass's top), so no glass layout leaves a hole or a sliver.
+ * With `aPillarOneLoft` and no knee (`one`) both share one set of stations, a sail rail per post rail, for `aPostSailLoft`: the sail's, the door pane's rows' and the windshield edge's bow's by turn.
  */
-function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
+function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null; one: boolean } {
+  const { wBase, wTop, bow = WINDSHIELD_BOW, postUnder = 0 } = style.windshield;
   const base = windshieldSideBase(style);
   const [topY, topZ] = style.windshieldTop;
   const run = hypot2(topZ - base[1], topY - base[0]);
@@ -496,12 +516,16 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
   const railAt = (t: number): Rail => {
     const y = lerp(footY, aTopY, t);
     const edge = lerp(edgeFoot, 1, t);
-    const [rearZ, edgeZ] = [aPostRearZ(y, style, base), lerp(base[1], topZ, edge) + A_POST_LIFT * uy + sideBowZ(style.windshield.sideBow ?? 0, edge)];
+    // With `postUnder` the front rail tucks under the pane, its edge over the post; the tuck rides in along the pane's plan bow (slope 4 bow / width at the edge).
+    const under = postUnder * THREE.MathUtils.clamp(t / POST_UNDER_RUN, 0, 1);
+    const frontLift = postUnder > 0 ? lerp(A_POST_LIFT, -POST_UNDER_PLANE, THREE.MathUtils.clamp(t / POST_UNDER_PLANE_RUN, 0, 1)) : A_POST_LIFT;
+    const underZ = (under * 4 * lerp(bow.base, bow.top, THREE.MathUtils.clamp(edge, 0, 1))) / lerp(wBase, wTop, edge);
+    const [rearZ, edgeZ] = [aPostRearZ(y, style, base), lerp(base[1], topZ, edge) + frontLift * uy + sideBowZ(style.windshield.sideBow ?? 0, edge) + underZ];
     const half = windshieldSideX(style, edge);
     // Under its top (which the roof holds), the station rides down with the windshield's edge as it falls with the dome (`domeFall`).
     const fall = t < 1 ? glassFall(half, Math.max(0, edge)) : 0;
-    const frontY = lerp(base[0], topY, edge) - fall - A_POST_LIFT * uz;
-    const [frontX, rearX] = [half + A_POST_LIFT, glassPlaneX(y - fall) + A_POST_LIFT];
+    const frontY = lerp(base[0], topY, edge) - fall - frontLift * uz;
+    const [frontX, rearX] = [half + frontLift - under, glassPlaneX(y - fall) + A_POST_LIFT];
     const place = (back: number): Rail => {
       const [postZ, frontZ] = [rearZ - back, edgeZ - back];
       const roofZ = THREE.MathUtils.clamp(postZ, style.roofZ[0], style.roofZ[1]);
@@ -520,20 +544,66 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
     const hold = (reach: number) => Math.max(0, Math.max(rearZ, edgeZ) - (style.roofZ[1] - ROOF_TUCK - reach));
     return place(hold(postForwardReach(place(hold(0)), aPostCrown(style))));
   };
-  const post = aPostStations(style, edgeFoot).map(railAt);
+  const stations = aPostStations(style, edgeFoot);
+  const sailYs = SAIL_STATIONS.map((share) => lerp(footY, style.aPillarKnee ?? aTopY, share));
+  // A kneeless glass's front edge is straight only up to the glass's top (held above it): one more station there (`aPillarSailGlass`) keeps the sail's rear edge on it, not on a chord to the post's top; that sail tucks under the glass and meets the post where it is drawn (on its chords between stations).
+  const tucks = style.aPillarSailGlass === true && style.aPillarKnee === undefined;
+  if (tucks) sailYs.push(glassTop);
+  const sailRailAt = (y: number, front: V3, seam = 0): Rail => {
+    const glassZ = Math.min(doorGlassFrontZ(y, footY, glassTop, style, base), front[2] - SAIL_EDGE);
+    const sailZ = tucks ? glassZ - SAIL_TUCK : glassZ;
+    return { rear: [glassX(sailZ, y, style) + (tucks ? SAIL_SEAT : 0) + seam, y, sailZ], front };
+  };
+  // The door pane is straight between its rows: its front edge stands off the glass's plane (`glassX`) by a few millimetres between them.
+  const edgeX = (y: number) => glassX(doorGlassFrontZ(y, footY, glassTop, style, base), y, style);
+  const paneRowYs = Array.from({ length: SIDE_PANE_ROWS + 1 }, (_, k) => lerp(footY, glassTop, k / SIDE_PANE_ROWS));
+  const paneSeam = (y: number) => {
+    if (y >= glassTop) return 0;
+    const band = Math.min(Math.floor(((y - footY) / (glassTop - footY)) * SIDE_PANE_ROWS), SIDE_PANE_ROWS - 1);
+    const [y0, y1] = [paneRowYs[band]!, paneRowYs[band + 1]!];
+    return lerp(edgeX(y0), edgeX(y1), (y - y0) / (y1 - y0)) - edgeX(y);
+  };
+  const sailSpan = ({ rear, front }: Rail) => hypot2(front[0] - rear[0], front[2] - rear[2]);
+  const one = style.aPillarOneLoft === true && style.aPillarKnee === undefined;
+  if (one) {
+    const [from, mid, to] = [railAt(0).front, railAt(0.5).front, railAt(1).front] as const;
+    const chord = new THREE.Vector3(...to).sub(new THREE.Vector3(...from));
+    const side = new THREE.Vector3(...mid).sub(new THREE.Vector3(...from)).addScaledVector(chord, -0.5);
+    const across = side.clone().addScaledVector(chord, -side.dot(chord) / chord.lengthSq());
+    const edge: Bow = { from, to, bow: hypot3(across.x, across.y, across.z), toward: [side.x, side.y, side.z] };
+    const share = (y: number) => (y - footY) / (aTopY - footY);
+    // `bowTurnSteps` are the edge's curve parameters, not heights: each turn step stands at the height its point on the curve has.
+    const onEdge = new THREE.Vector3();
+    const edgeShare = (u: number) => (bowPointAt(edge, u, onEdge).y - from[1]) / (to[1] - from[1]);
+    const ts: number[] = [];
+    for (const t of [...sailYs.map(share), ...paneRowYs.map(share), ...Array.from(bowTurnSteps(edge, ONE_LOFT_TURN), edgeShare)]) {
+      if (ts.every((s) => Math.abs(s - t) >= ONE_LOFT_MERGE)) ts.push(t);
+    }
+    ts.sort((a, b) => a - b);
+    const post = ts.map(railAt);
+    const sail = post.map((rail, k) => {
+      const y = lerp(footY, aTopY, ts[k]!);
+      return sailRailAt(y, postRearmost(rail, A_POST_THICK), paneSeam(y));
+    });
+    return Math.max(...sail.map(sailSpan)) > SAIL_MIN ? { post, sail, one } : { post: stations.map(railAt), sail: null, one: false };
+  }
+  const post = stations.map(railAt);
   const sail: Rail[] = [];
   let sailWidth = 0;
-  const sailYs = SAIL_STATIONS.map((share) => lerp(footY, style.aPillarKnee ?? aTopY, share));
-  // A kneeless glass's front edge is straight only up to the glass's top (held above it): one more station there (`aPillarSailGlass`) keeps the sail's rear edge on it, not on a chord to the post's top.
-  if (style.aPillarSailGlass === true && style.aPillarKnee === undefined) sailYs.push(glassTop);
+  const rearmosts = post.map((rail) => postRearmost(rail, A_POST_THICK));
+  const drawnRearmost = (t: number): V3 => {
+    const k = Math.max(1, Math.min(stations.findIndex((s) => s >= t), stations.length - 1));
+    const f = (t - stations[k - 1]!) / (stations[k]! - stations[k - 1]!);
+    const [a, b] = [rearmosts[k - 1]!, rearmosts[k]!];
+    return [lerp(a[0], b[0], f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)];
+  };
   for (const y of sailYs.sort((a, b) => a - b)) {
-    const front = postRearmost(railAt((y - footY) / (aTopY - footY)), A_POST_THICK);
-    const sailZ = Math.min(doorGlassFrontZ(y, footY, glassTop, style, base), front[2] - SAIL_EDGE);
-    const rear: V3 = [glassX(sailZ, y, style), y, sailZ];
-    sail.push({ rear, front });
-    sailWidth = Math.max(sailWidth, hypot2(front[0] - rear[0], front[2] - rear[2]));
+    const t = (y - footY) / (aTopY - footY);
+    const rail = sailRailAt(y, tucks ? drawnRearmost(t) : postRearmost(railAt(t), A_POST_THICK));
+    sail.push(rail);
+    sailWidth = Math.max(sailWidth, sailSpan(rail));
   }
-  return { post, sail: sailWidth > SAIL_MIN ? sail : null };
+  return { post, sail: sailWidth > SAIL_MIN ? sail : null, one: false };
 }
 
 /** The point of `rail`'s drawn post section (`postSection`, +x side) on its rear side furthest back: where the sail behind the post meets it. */
@@ -551,6 +621,44 @@ function postRearmost({ rear, front, inward = [1, 0] }: Rail, thick: number): V3
 function postForwardReach({ rear, front, inward = [1, 0] }: Rail, crown: number): number {
   const width = hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2]);
   return Math.max(0, ...postSection(A_POST_THICK, width, crown * width).map((p) => lerp(rear[2], front[2], p.y) + (1 - p.x) * A_POST_THICK * inward[1] - front[2]));
+}
+
+/** Where the one-loft ring leaves the sail's flat outer face for the post's section: its index along the post's rear outer arc (0..3), the arc's tangent there nearly on the glass's plane, so the two faces shade as one surface. */
+const A_ONE_JOIN = 1;
+
+/**
+ * The one-loft A-post's ring at one station (+x side): the sail's rear outer arc, the post's section from `A_ONE_JOIN` round to the third point of
+ * its inner-front arc, then the sail's rear inner arc; the hidden inner side runs straight between them (leaving the arc a point early keeps that
+ * chord's turn under the section's bar at every station), the sail's front and the post's rear face left out.
+ */
+function aPostSailRing(post: Rail, sail: Rail, crown: number): V3[] {
+  const width = ({ rear, front }: Rail) => hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2]);
+  const postUnit = postSection(A_POST_THICK, width(post), crown * width(post));
+  const sailUnit = filletedUnitSection(filletShare(SAIL_THICK), filletShare(width(sail)), POST_ROUND_STEPS);
+  return [
+    ...sailUnit.slice(0, ARC_POINTS).map((p) => railPoint(sail, SAIL_THICK, p)),
+    ...postUnit.slice(A_ONE_JOIN, postUnit.length - ARC_POINTS - 1).map((p) => railPoint(post, A_POST_THICK, p)),
+    ...sailUnit.slice(3 * ARC_POINTS).map((p) => railPoint(sail, SAIL_THICK, p)),
+  ];
+}
+
+/** The drawn A-post and its sail as one loft (+x side; sign -1 mirrors): one `aPostSailRing` per station, the post's face crowned `crown` of its width; `userData.postRing` is the span [first, last] of its ring points on the post. */
+function aPostSailLoft(sign: number, post: readonly Rail[], sail: readonly Rail[], crown: number): THREE.BufferGeometry {
+  const rings = post.map((rail, k) => aPostSailRing(rail, sail[k]!, crown));
+  const [ring, slices] = [rings[0]!.length, rings.length];
+  // Topology and uv only: the points are placed below.
+  const geo = loftFromRings(rings.map((points) => points.map((_, i) => ({ x: 0, y: i }))), rings.map((_, k) => k / (slices - 1)), 0, 1, false);
+  openEnds(geo, ring, slices);
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  for (let k = 0; k < slices; k++) {
+    for (let i = 0; i < ring; i++) {
+      const [x, y, z] = rings[k]![i]!;
+      pos.setXYZ(k * ring + i, sign * x, y, z);
+    }
+  }
+  ensureOutwardNormals(geo);
+  geo.userData.postRing = [ARC_POINTS, ring - ARC_POINTS - 1];
+  return geo;
 }
 
 /** The cage roof's side lip runs from the cant line (`ROOF_LIP_OUT`) up to its knee [past the half-width, under the roof] (m), then in to the dome's edge; the drawn roof's roll runs out to the cant line plus `roofDrip`. */
@@ -1089,7 +1197,12 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   for (const sign of [-1, 1]) {
     parts.push(
       aPost
-        ? pillar(roundedPillarAlong(sign, aPost.post, A_POST_THICK, { open: true, section: (width) => postSection(A_POST_THICK, width, aPostCrown(style) * width) }), "a")
+        ? pillar(
+            aPost.one
+              ? aPostSailLoft(sign, aPost.post, aPost.sail!, aPostCrown(style))
+              : roundedPillarAlong(sign, aPost.post, A_POST_THICK, { open: true, section: (width) => postSection(A_POST_THICK, width, aPostCrown(style) * width) }),
+            "a",
+          )
         : boxFromCorners(
             sign,
             {
@@ -1166,7 +1279,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
         ),
       );
     }
-    if (aPost?.sail) parts.push(pillar(roundedPillarAlong(sign, aPost.sail, SAIL_THICK), "sail"));
+    if (aPost?.sail && !aPost.one) parts.push(pillar(roundedPillarAlong(sign, aPost.sail, SAIL_THICK), "sail"));
     const bar = source === "drawn" ? style.pillars?.glassBar : undefined;
     if (bar) parts.push(Object.assign(pillar(glassBar(sign, style, bar), "divider"), { name: "glassBar" }));
     // The belt rail runs from the C-pillar to the B-pillar along the sill: the cage's box pitched straight between its ends, the drawn seal along the quarter glass's sill.
