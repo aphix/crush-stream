@@ -155,8 +155,9 @@ export const SEDAN: BodyStyle = {
    * Crowned as the reference's, one soft dome falling 6 cm from the centre line to |x| 0.66: the stations under it sit the fenders that
    * much under the centre line, which stays on the reference's side silhouette (yBelt = old + 0.021 - 0.06 ((hw - 0.07) / 0.66)^2).
    * Its shut lines run onto the fender tops as the reference's: 9 cm inside the side at the nose, 18 at the cowl (top view, front iso).
+   * Drawn, its rear edge runs along the glass's plan bow and tucks 5.5 cm under the pane's base (`followGlass` = z0 - (drawn base z + bow), the reference's hood running clean under the glass), the pane seated on it.
    */
-  hood: { z0: 0.99, z1: 1.97, origin: [0.81, 0.97], crown: [0.06, 0.66], inset: [0.09, 0.18] },
+  hood: { z0: 0.99, z1: 1.97, origin: [0.81, 0.97], crown: [0.06, 0.66], inset: [0.09, 0.18], followGlass: -0.055 },
   // Body-colour fascias, as the reference's: its black is the lower intake, grille and diffuser (`details`, grille, tail trim), not the
   // bumper. Seams off the gridded side reference: the front bumper up to the head lamp's lower edge and round to the front arch, the rear
   // one up to the tail lamp's lower edge (under the lid, its shut line) and round the quarter to the rear arch; both follow their arch's lip.
@@ -238,6 +239,17 @@ export const SEDAN: BodyStyle = {
   /** The door glass's front edge rises from the foot to the A-post at y 1.0 (the mirror cap's top), as the reference's: only the foot's small triangle below is the black sail. */
   aPillarKnee: 1.0,
   glassTop: 0.05,
+  /**
+   * Drawn only: the reference's glass base bows forward in plan (1.044 on the centre line, ~.88 at the corners) and its side edge is
+   * convex in side view; its base seats on the hood at every column; the door glass's front edge runs straight from the belt to the
+   * A-post's top, without the cage's knee.
+   */
+  drawn: {
+    windshield: { base: [0.95, 0.88], wBase: 1.4, wTop: 1.16, bow: { base: 0.165, top: 0.02 }, sideBow: 0.036, seat: true },
+    aPillarFoot: 0.64,
+    aPillarTop: 0.05,
+    aPillarKnee: undefined,
+  },
   underside: [
     [-2.14, 0.35],
     [-2.04, 0.275],
@@ -292,12 +304,12 @@ export const SEDAN: BodyStyle = {
   midPillarZ: null,
   /**
    * The reference's B-pillar is gloss black and leans: 0.165 wide at the belt (z -0.21..-0.375), 0.105 at the roof (-0.27..-0.375), its
-   * rear edge upright, its front edge the front door frame's leaning rear edge. The sail under the A-post's knee is gloss black too; the
-   * A-post and the rear pillar are body colour. A slim black bar (side view: ~2 cm, z -0.86 at the belt to -0.88 at the top) parts the
+   * rear edge upright, its front edge the front door frame's leaning rear edge. The A-post (with the sail between it and the door glass's
+   * straight front edge) and the rear pillar are body colour. A slim black bar (side view: ~2 cm, z -0.86 at the belt to -0.88 at the top) parts the
    * rear door's glass from the quarter window.
    */
   pillars: { a: 0.035, b: { width: [0.165, 0.105], z: [-0.2925, -0.3225] }, glassBar: { width: [0.02, 0.018], z: [-0.86, -0.88] } },
-  blackout: { sail: true, b: true, cowl: true, divider: true },
+  blackout: { sail: false, b: true, cowl: true, divider: true },
   /**
    * The C-pillar sails onto the haunch from the quarter glass's rounded top (reference side view: y 1.18 at z -1.0, 1.131 at -1.1), lapping
    * it with a bead so the post's round never hangs under the rounded corner. Its foot drops onto the shoulder 2 cm behind the window's
