@@ -63,8 +63,8 @@ function reskin(car: DeformableCar): void {
  * and top less the pristine skin's own reach under the lowest mass (to the ride height) and over the highest (to the roof line);
  * the frame may yield (`deepCrush`), or the roof stays within 0.14 m of rest. The skin follows the masses at only `SKIN_FOLLOW`
  * of their travel and the hood, roof and boot differ, so a few passes then lift or sink every mass by what the drawn top is still
- * off the layer's top at its z, each held inside its band: a mass driven under it levers its cluster's far end up (the tail
- * bumper over a sunk rear axle), which the next pass reads as skin too high and sinks it further.
+ * off the layer's top at its z, each held inside the layer at its own z: a mass driven under the ground levers its cluster's far
+ * end up (the tail bumper over a sunk rear axle), which the next pass reads as skin too high and sinks it further.
  */
 export function shapeCar(layer: Layer, pose: Pose): Held {
   const car = makeCar("sedan");
@@ -89,11 +89,11 @@ export function shapeCar(layer: Layer, pose: Pose): Held {
   reskin(car);
   for (let pass = 0; pass < FIT_PASSES; pass++) {
     const tops = skinTops(car, 10);
-    for (const [i, m] of car.deform.masses.entries()) {
+    for (const m of car.deform.masses) {
       // A mass past the judged span (a bumper) is fitted on its edge bin: the skin's rounded end beyond it is no top.
       const k = THREE.MathUtils.clamp(Math.round(m.local.z * 10), -10 * TOP_HALF_M, 10 * TOP_HALF_M);
       const y = tops.get(k) ?? tops.get(k - 1) ?? tops.get(k + 1);
-      if (y !== undefined) m.local.y = THREE.MathUtils.clamp(m.local.y - (y - layer.top(k / 10)) / SKIN_FOLLOW, bands[i]!.lo, bands[i]!.hi);
+      if (y !== undefined) m.local.y = THREE.MathUtils.clamp(m.local.y - (y - layer.top(k / 10)) / SKIN_FOLLOW, layer.bottom(m.rest.z), layer.top(m.rest.z));
     }
     hold(car, pose);
     reskin(car);
