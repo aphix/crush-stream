@@ -324,7 +324,13 @@ export function solveRows(n: number): void {
       // this slice, so the stop holds it and the lift does not set the body up on a top it did not land on (a wreck's cage edge 7 cm
       // inside a ramp's end was lifted 7.9 cm onto it).
       const left = SINK[c]! - 0.5 * dt * _dvSolve.dot(N[c]!);
-      if (part || (driven && !body.wreck) || HUB[c] || left - CLOSING[c]! * dt <= SPECULATIVE_GAP) LEFT[c] = left;
+      // A tyre climbs what it rolls onto along its own circle: rising at most its plan speed times the steepest its grip climbs (`MU_TYRE`,
+      // as `MOUNT` is derived) and parting from a face it stands in as a body at rest does (`GROUND_LIFT_V`), over what the slice's closing
+      // carried it in (a landing); the rest is read again from the next slice's pose. Unbounded, a monster leaning into a slab whose top its
+      // tread read as floor popped onto it in one slice.
+      const climbs = TYRE[c] && N[c]!.y > 0;
+      const reach = climbs ? Math.min(left, (CLOSING[c]! + MU_TYRE * hypot2(v.x, v.z) + GROUND_LIFT_V) * dt * N[c]!.y) : left;
+      if (part || (driven && !body.wreck) || HUB[c] || left - CLOSING[c]! * dt <= SPECULATIVE_GAP) LEFT[c] = reach;
     }
   }
   centreOfMass.addScaledVector(_dvSolve, 0.5 * dt);
@@ -791,7 +797,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // their flanks (`onTreads`: none whose tread meets the surface under it): driven there, none of its rows gripped, and a monster wreck on
   // its side with its brakes held rolled down a 10° slope on its two low tyres, 1.3 to 4.5 m/s over 9 s. Judged by the world's up, a sedan
   // up a kicker's steepest pitch lost its drive on its treads.
-  const near = wheelsAt(car, within);
+  const near = wheelsAt(car, within, true);
   const driving = (!wreck || car.deform.drivetrainAlive) && (near === 0 || onTreads(car, near, q) !== 0);
   const rolling = near !== 0 && (wreck || !car.crashed);
   const driven = rolling && !car.parked && driving;

@@ -183,13 +183,13 @@ export class JerseyBarrier {
    * The slab meets a car until the car is over it: a driven car clears while a wheel that is down stands higher than the slab's top
    * (up a fleet ramp beside the slab's end, on its top: that wheel's contact point, `wheelHit`) or while the slab's top, where it is
    * under the car's plan, is under the car's underside (a car straddling a ramp's edge crosses the slab's end with its high side, its
-   * low wheels still on the floor beside it); a body with no wheel contact to read clears by its origin's height, a wreck on the ground by
-   * its origin's height less its class's lift (a monster's body rides 0.87 m over its origin: its tyres' side hit made it a wreck, and the
-   * slab then met the plan of a body whose keel stood 0.4 m over it and stopped it from 55 m/s in one slice). A car on the ground never clears.
+   * low wheels still on the floor beside it); a body with no wheel contact to read (in the air, or a wreck on the ground) clears by its
+   * origin's height less its class's lift (a monster's body rides 0.87 m over its origin: its tyres' side hit made it a wreck, and the
+   * slab then met the plan of a body whose keel stood 0.4 m over it and stopped it from 55 m/s in one slice; in the air off the long
+   * jump's crest, read by its origin alone, it was stopped dead short of the slab, its tyres not yet at it). A car on the ground never clears.
    */
   private over(car: DeformableCar): boolean {
-    if (car.airborne) return car.group.position.y > FLIGHT_CLEAR;
-    if (car.deform.massActive) return car.group.position.y + cageLift(car) > FLIGHT_CLEAR;
+    if (car.airborne || car.deform.massActive) return car.group.position.y + cageLift(car) > FLIGHT_CLEAR;
     for (let i = 0; i < 4; i++) if (((car.wheelsDown >> i) & 1) !== 0 && car.wheelHit[i * HIT_SIZE + C_PY]! > BARRIER_TOP) return true;
     const o = this.group.position;
     const p = car.group.position;

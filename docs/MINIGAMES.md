@@ -20,7 +20,7 @@ Each station is laid out in its own frame (`scenes/minigame-constants.ts`): +x i
 
 Start pad (6 m) -> start hill (falls 3 m over `START_HILL_LENGTH`: 11 / 24 / 24 m) -> run-up (`RUN_UP_LENGTH`: 0 / 40 / 30 m) -> climb or kicker -> lip. The parked car faces +x.
 
-- **Long jump**: lip = world origin, because the jersey barrier is origin-bound. The barrier throws the driver by a hit. Incline 7 degrees, 2 m, crest radius 100 m, flat for x in [-5, 0]. The barrier rebounds without ejecting above ~31.4 m/s arrival (lowest failing speed, phase dependent). The monster rides over the barrier on its tyres (its keel clears the top) and keeps its driver below ~22.5 m/s arrival (thrown at every phase from 22.52, not at 22.48); every other class is thrown at every phase from ~17.6 m/s (the truck, the last: not at 17.18, at 17.63; sedan, police, hatch from 15.7). So the approach is tuned: arrival at full throttle on the shipped approach sedan 24.7-24.9, muscle 26.7-26.8, truck 24.4-24.5, monster 27.2-27.5, police 24.7-24.8, hatch 24.6-24.8, suv 24.4-24.6 m/s (was 36-39), every class thrown once at every phase; the window floor is each class's own slowest ejecting arrival + 3 m/s. The field is 110 m with a sign every 10 m to 110 (`RANGE.signs`), so the signs run past the best landing.
+- **Long jump**: lip = world origin, because the jersey barrier is origin-bound. The barrier throws the driver by a hit. Incline 7 degrees, 2 m, crest radius 100 m, flat for x in [-5, 0]. The barrier rebounds without ejecting above ~31.4 m/s arrival (lowest failing speed, phase dependent). The monster flies the barrier off the crest and lands past it with its driver in from ~22.5 m/s arrival (at every phase from 22.8); under it its tyres meet the slab's face, which stands over their hubs (0.81 m against 0.614 m) and so is a wall to a tyre rolling into it, and its driver is thrown (at every phase at 22.0). Every other class is thrown at every phase from ~17.6 m/s (the truck, the last: not at 17.18, at 17.63; sedan, police, hatch from 15.7). So the approach is tuned: arrival at full throttle on the shipped approach sedan 24.7-24.9, muscle 26.7-26.8, truck 24.4-24.5, monster 27.8-27.9 (read where its centre passes the barrier's near face: it touches nothing), police 24.7-24.8, hatch 24.6-24.8, suv 24.4-24.6 m/s (was 36-39), every class but the monster thrown once at every phase and the monster flying the barrier; the window floor is each class's own slowest ejecting arrival (the monster's flying one) + 3 m/s. The field is 110 m with a sign every 10 m to 110 (`RANGE.signs`), so the signs run past the best landing.
 - **High jump**: one R25 m arc kicker tangent to the run-up, lip pitch 60 degrees, lip 9.5 m up, run-up 40 m, hill 24 m. All 7 classes reach the lip at full throttle.
   Radius sweep at 60 degrees (lip height; sedan / muscle / truck / monster unboosted apex m; ratio): R20 7.0 m 60/142/110/219 3.64 | R22 8.0 m 127/146/123/213 1.81 | R25 9.5 m 135/158/125/200 1.67 | R28 11.0 m 125/151/127/207 1.66 | R30 12.0 m 136/154/125/218 1.75. R25 was chosen (R20 is a cliff for the sedan: lip speed 18.9 vs 27 m/s). After the climb fix the R20 cliff no longer holds (R20 at 60 degrees: sedan lip 26.8 m/s; R15 26.4; R10 26.0), so the 'can fail' controls are the shipped radius one 5-degree step past the sweep's end (80 degrees: sedan 14.0 m/s, under the 17 floor; the sweep ends at 75 where it reads 18.0), a 15 m radius at 60 degrees for the climb bar (26.42 under 26.5), and a 3 m radius at 85 degrees for the apex ratio (10.4: the sedan family cliffs, the monster carries).
 - **Ring Fling**: 5 degree incline plus a 4 m ball-hop quarter wave (1.005 m, the machine's 3.35 in on 120 in), lip 1.31 m high, hill 24 m, run-up 30 m; the board starts 6 m past the lip.
@@ -93,19 +93,20 @@ The table above and its bars are measured on the free pad: the posts and slats a
 
 Sedan speed-share sweep (share of full-throttle lip speed -> cup): 0.72-0.86 -> 10, 0.88-0.94 -> 20, 0.96-1.00 -> 30; below 0.70 no cup.
 
-**Long jump** (the timed bail; `THROW_BOOST.longJump` forward 1.13; best run of each class: landing / rest in m by press offset from the hit, early and late alike, seed 0 of `minigame-sizing.test.ts`)
+**Long jump** (the timed bail; `THROW_BOOST.longJump` forward 1.13; best run of each class it throws, landing / rest in m by press offset from the hit, early and late alike, seed 0 of `minigame-sizing.test.ts`; the monster flies the barrier and throws nobody)
 
 | Class | Perfect | ±0.05 s | ±0.10 s | ±0.20 s | No press |
 |---|---|---|---|---|---|
-| sedan, hatchback, wagon | 88.0 / 90.2 | 84.5 / 86.5 | 75.6 / 78.4 | 56.7 / 59.9 | 47.0 / 50.6 |
-| muscle | 99.3 / 101.1 | 95.8 / 97.7 | 85.6 / 88.1 | 64.4 / 68.0 | 53.2 / 57.2 |
-| truck | 86.6 / 88.3 | 83.3 / 85.3 | 74.5 / 76.7 | 56.2 / 59.5 | 46.2 / 49.9 |
-| monster | 104.7 / 106.3 | 100.7 / 103.0 | 90.6 / 92.8 | 68.8 / 72.4 | 57.1 / 60.9 |
-| police | 88.2 / 90.2 | 85.0 / 86.8 | 76.0 / 78.7 | 56.8 / 60.2 | 47.1 / 50.8 |
+| sedan | 88.0 / 90.0 | 84.9 / 86.8 | 75.9 / 78.8 | 57.1 / 60.2 | 47.0 / 50.7 |
+| muscle | 99.5 / 101.3 | 95.7 / 97.8 | 85.8 / 88.2 | 64.7 / 68.1 | 53.4 / 57.2 |
+| truck | 85.8 / 87.3 | 82.9 / 84.5 | 73.9 / 76.1 | 55.8 / 59.1 | 46.3 / 49.7 |
+| police | 88.0 / 89.9 | 84.5 / 86.6 | 75.8 / 78.5 | 56.7 / 60.0 | 47.0 / 50.6 |
+| hatch | 88.0 / 89.6 | 84.5 / 86.4 | 75.6 / 78.2 | 56.7 / 59.9 | 47.1 / 50.6 |
+| suv | 86.5 / 88.1 | 83.3 / 85.2 | 74.5 / 76.9 | 56.0 / 59.5 | 46.6 / 50.0 |
 
-Mid run (85% of the approach, perfect bail / no press): sedan 68.2 / 36.1, muscle 76.6 / 40.8, truck 66.0 / 35.0, monster 77.4 / 41.9, police 67.7 / 36.0. A slower run lands shorter for every class at every offset. Through the real engine, keys and all, at full throttle with no press: sedan 49.9, muscle 58.2, truck 48.8, monster 63.0, police 49.7, hatchback 49.7, wagon 49.9 m.
+Mid run (85% of the approach, perfect bail / no press): sedan 68.2 / 36.1, muscle 76.6 / 40.8, truck 66.0 / 35.0, police 67.7 / 36.0. A slower run lands shorter for every class at every offset. Through the real engine, keys and all, at full throttle with no press: sedan 49.9, muscle 58.2, truck 48.8, police 49.7, hatchback 49.7, wagon 49.9 m.
 
-The barrier throws no driver below ~18 m/s horizontal. The sizing bars (`minigame-sizing.test.ts`): the perfect bail lands the farthest class 97-108 m (the last sign, 110 m, is the field's end) and every class past 85 m; a run with no press lands every class 42-58 m; the metres fall by at least 8 m from perfect to 0.1 s, to 0.2 s and to no press, never rise with the distance, and an early press lands within 4 m of a late one of its distance. The monster's ±0.05 s rest of 124.9 m is a skid past the field's end: the landing (104.5 m) is what is sized, the rest is a lottery of up to ~35 m.
+The barrier throws no driver below ~18 m/s horizontal. The sizing bars (`minigame-sizing.test.ts`): the perfect bail lands the farthest class 97-108 m (the last sign, 110 m, is the field's end) and every class past 85 m; a run with no press lands every class 42-58 m; the metres fall by at least 8 m from perfect to 0.1 s, to 0.2 s and to no press, never rise with the distance, and an early press lands within 4 m of a late one of its distance. The farthest class is the muscle; the monster, which landed 104.7 m with a perfect bail and skidded up to ~35 m on, no longer throws here.
 
 ## 8. Determinism and replay impact
 

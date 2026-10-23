@@ -358,7 +358,7 @@ describe("given the high jump's run-up made shorter", () => {
   });
 });
 
-describe("given the long jump's thrown driver, the best car type (the monster truck) driven at full throttle into the jersey barrier at the world origin", () => {
+describe("given the long jump's driver in the monster truck, driven at full throttle into the jersey barrier at the world origin", () => {
   const monster = DRIVER_CARS.find((type) => type.id === "monster")!;
   /** Where (local x, m) the driver lifts his foot, best of: the range's cars coast into the barrier in neutral. */
   const LIFT_CHOICES = [-30, -15, -8, -4, -2];
@@ -374,25 +374,24 @@ describe("given the long jump's thrown driver, the best car type (the monster tr
     return best;
   };
 
-  /** The farthest signs (m) the incline's unboosted throw reaches, without and with the vertical carry: the limp dummy lands and stops on the sand where the old stiff one skidded on. The game's reach is `THROW_BOOST.longJump`'s, pinned in `minigame-sizing.test.ts`. */
-  const FARTHEST_SIGN_INCLINE = 40;
-  const FARTHEST_SIGN_WITH_CARRY = 50;
   /**
    * The farthest sign (m) the flat range's throw may reach, the monster's (Main, the owner's ruling: keep its throw): its lifted body and
    * own class throw it 51.9 m on the flat (sign 50; the bar was 40, below the 50 sign), on the union f2a8062d.
    */
   const FARTHEST_SIGN_FLAT = 50;
-  it(`when he is thrown from the flat range and from the incline, then the flat range throws him no farther than the ${FARTHEST_SIGN_FLAT} sign, the incline past the ${FARTHEST_SIGN_INCLINE} sign, and with the ejection carrying the car's climb he is past the ${FARTHEST_SIGN_WITH_CARRY} sign`, async (t) => {
+  // Off the incline's crest the monster flies the slab: its tyres never meet the face (a wall over their hubs, as on the flat range), it
+  // lands past it and its driver stays in. It was thrown at the 40 and 50 signs while its tyres read the slab's top as a floor.
+  it(`when it is driven into the barrier on the flat range, then he is thrown no farther than the ${FARTHEST_SIGN_FLAT} sign, and driven down the incline, with or without the ejection's vertical carry, it flies the barrier and nobody is thrown`, async (t) => {
     const flat = await bestDistance(false, false);
     const incline = await bestDistance(true, false);
     const inclineWithCarry = await bestDistance(true, true);
-    t.diagnostic(`long jump, best of lifts at ${LIFT_CHOICES.join(", ")}: flat ${flat.toFixed(1)} m (sign ${farthestSign(flat)}), incline ${incline.toFixed(1)} m (sign ${farthestSign(incline)}), incline with the vertical carry ${inclineWithCarry.toFixed(1)} m (sign ${farthestSign(inclineWithCarry)})`);
-    assert.ok(farthestSign(flat) <= FARTHEST_SIGN_FLAT, `flat sign ${farthestSign(flat)}`);
-    assert.ok(farthestSign(incline) >= FARTHEST_SIGN_INCLINE, `incline sign ${farthestSign(incline)}`);
-    assert.ok(farthestSign(inclineWithCarry) >= FARTHEST_SIGN_WITH_CARRY, `incline with carry sign ${farthestSign(inclineWithCarry)}`);
+    t.diagnostic(`long jump, best of lifts at ${LIFT_CHOICES.join(", ")}: flat ${flat.toFixed(1)} m (sign ${farthestSign(flat)}), incline ${incline.toFixed(1)} m, incline with the vertical carry ${inclineWithCarry.toFixed(1)} m`);
+    assert.ok(flat > 0 && farthestSign(flat) <= FARTHEST_SIGN_FLAT, `flat ${flat.toFixed(1)} m, sign ${farthestSign(flat)}`);
+    assert.equal(incline, 0, `incline: thrown ${incline.toFixed(1)} m`);
+    assert.equal(inclineWithCarry, 0, `incline with the carry: thrown ${inclineWithCarry.toFixed(1)} m`);
   });
 
-  it("when he is thrown from the flat range and from the incline, then the incline throws him over 3 m farther", { todo: "after the overhaul: the incline out-throws the flat range; union f2a8062d: flat 51.9 m, incline 49.4 m (the monster's flat throw kept, Main)" }, async () => {
+  it("when he is thrown from the flat range and from the incline, then the incline throws him over 3 m farther", { todo: "after the overhaul: the monster flies the incline's barrier (nobody thrown), so the incline's throw is the best class thrown there; union f2a8062d: flat 51.9 m, incline 49.4 m (the monster's flat throw kept, Main)" }, async () => {
     const flat = await bestDistance(false, false);
     const incline = await bestDistance(true, false);
     assert.ok(incline > flat + 3, `incline ${incline} against flat ${flat}`);
@@ -404,15 +403,18 @@ describe("given each of the 7 car types released at full throttle from the long 
   const LOWEST_FAILING_ARRIVAL = 31.4;
   /** The slowest arrival speed (m/s) every class but the monster is thrown at, at every start phase: the truck's, the last of them thrown. */
   const MINIMUM_EJECTING_ARRIVAL = 17.6;
-  /** The monster's: under it the monster rides over the barrier on its tyres (its keel clears the top) and its driver stays in. */
-  const MONSTER_EJECTING_ARRIVAL = 22.5;
+  /**
+   * The monster's arrival (m/s) over which it flies the barrier at every start phase, lands past it and keeps its driver in; under it its
+   * tyres meet the slab's face, a wall over their hubs, and its driver is thrown once.
+   */
+  const MONSTER_FLYING_ARRIVAL = 22.5;
   /** The arrival speeds are kept this far (m/s) inside that window, on each side. */
   const SAFETY_MARGIN = 3;
-  /** A class's window floor: its slowest ejecting arrival and the margin. */
-  const floorOf = (id: string): number => (id === "monster" ? MONSTER_EJECTING_ARRIVAL : MINIMUM_EJECTING_ARRIVAL) + SAFETY_MARGIN;
+  /** A class's window floor: its slowest ejecting arrival (the monster's flying one) and the margin. */
+  const floorOf = (id: string): number => (id === "monster" ? MONSTER_FLYING_ARRIVAL : MINIMUM_EJECTING_ARRIVAL) + SAFETY_MARGIN;
   const ARRIVAL_CEILING = LOWEST_FAILING_ARRIVAL - SAFETY_MARGIN;
   const START_PHASES = [0, 0.13, 0.27, 0.41, 0.55];
-  /** The speed caps (m/s) the minimum-ejecting pins hold a car to: under, and over, its slowest ejecting arrival. */
+  /** The speed caps (m/s) the pins hold a car to: under, and over, its slowest ejecting arrival (the monster's flying one). */
   const SLOW_CAP = 17;
   const FAST_ENOUGH_CAP = 18.5;
   const MONSTER_SLOW_CAP = 22.4;
@@ -431,35 +433,38 @@ describe("given each of the 7 car types released at full throttle from the long 
     rows
       .map(({ id, hits }) => `${id.padEnd(9)} arrival ${Math.min(...hits.map((hit) => hit.arrivalSpeed)).toFixed(2)} to ${Math.max(...hits.map((hit) => hit.arrivalSpeed)).toFixed(2)} m/s, vertical ${hits[0]!.arrivalVertical.toFixed(2)} m/s, thrown once ${hits.filter((hit) => hit.ejections === 1).length} of ${hits.length}`)
       .join("\n");
-  const allThrownOnce = (rows: readonly ClassHits[]): boolean => rows.every(({ hits }) => hits.every((hit) => hit.ejections === 1));
+  /** The monster flew the slab: nobody thrown, its centre past the far face. `asPinned`: every other class's driver is thrown once. */
+  const flew = (hit: BarrierHit): boolean => hit.ejections === 0 && hit.endX > BARRIER_HALF.x;
+  const asPinned = (id: string, hit: BarrierHit): boolean => (id === "monster" ? flew(hit) : hit.ejections === 1);
+  const allAsPinned = (rows: readonly ClassHits[]): boolean => rows.every(({ id, hits }) => hits.every((hit) => asPinned(id, hit)));
   const fastest = (rows: readonly ClassHits[]): number => Math.max(...rows.flatMap(({ hits }) => hits.map((hit) => hit.arrivalSpeed)));
   const slowest = (rows: readonly ClassHits[]): number => Math.min(...rows.flatMap(({ hits }) => hits.map((hit) => hit.arrivalSpeed)));
   const shippedHits = hitsOf(longJumpVariant(shipped), Infinity);
 
-  it("when each is released at full throttle on the shipped approach, then every class is thrown exactly once at every phase, the slowest arrives at least 3 m/s over the slowest speed it throws at and the fastest at least 3 m/s under the lowest it fails at", (t) => {
+  it("when each is released at full throttle on the shipped approach, then every class but the monster is thrown exactly once at every phase and the monster flies the barrier and lands past it, its driver in, the slowest arrives at least 3 m/s over the slowest speed it throws at (the monster's flying one) and the fastest at least 3 m/s under the lowest it fails at", (t) => {
     t.diagnostic(`shipped approach (hill ${shipped.hillLength} m, run-up ${shipped.runUp} m, incline ${shipped.inclineLength} m, crest radius ${shipped.crestRadius} m), window ${floorOf("sedan")} (the monster ${floorOf("monster")}) to ${ARRIVAL_CEILING.toFixed(1)} m/s:\n${hitTable(shippedHits)}`);
     for (const { id, hits } of shippedHits) {
       for (const [index, hit] of hits.entries()) {
-        assert.equal(hit.ejections, 1, `${id} at phase ${START_PHASES[index]}: ${hit.ejections} throws (arrival ${hit.arrivalSpeed})`);
+        assert.ok(asPinned(id, hit), `${id} at phase ${START_PHASES[index]}: ${hit.ejections} throws, at x ${hit.endX.toFixed(1)} (arrival ${hit.arrivalSpeed})`);
         assert.ok(hit.arrivalSpeed >= floorOf(id), `${id} arrives at ${hit.arrivalSpeed}, under ${floorOf(id)}`);
         assert.ok(hit.arrivalSpeed <= ARRIVAL_CEILING, `${id} arrives at ${hit.arrivalSpeed}, over ${ARRIVAL_CEILING}`);
       }
     }
   });
 
-  it("when the approach is the pre-retune one, then every class is thrown once at every phase, its truck at 31.4 m/s too, but the fastest arrives over the ceiling", (t) => {
+  it("when the approach is the pre-retune one, then every class but the monster is thrown once at every phase, its truck at 31.4 m/s too, the monster flies the barrier, but the fastest arrives over the ceiling", (t) => {
     const old = hitsOf(longJumpVariant(PRE_RETUNE), Infinity);
     t.diagnostic(`pre-retune approach:\n${hitTable(old)}`);
-    assert.ok(allThrownOnce(old), "a class not thrown once on the old approach");
+    assert.ok(allAsPinned(old), "a class not thrown once, or the monster not flying the barrier, on the old approach");
     assert.ok(fastest(old) > ARRIVAL_CEILING, `the old fastest arrival ${fastest(old)}`);
   });
 
-  it("when the monster is held to 22.4 m/s and to 23.2 m/s on the shipped approach, then under its slowest ejecting speed it rides over the barrier on its tyres at every phase, its driver in, and over it is thrown once at every phase", () => {
+  it("when the monster is held to 22.4 m/s and to 23.2 m/s on the shipped approach, then under its flying speed its tyres meet the slab's face (its 0.81 m top stands over their 0.614 m hubs: a wall) and it is thrown once at every phase, and over it it flies the barrier and lands past it at every phase, its driver in", () => {
     const slow = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, MONSTER_SLOW_CAP));
     const fast = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, MONSTER_FAST_CAP));
     const read = (hits: readonly BarrierHit[]): string => hits.map((hit) => `${hit.arrivalSpeed.toFixed(2)}/${hit.ejections} at x ${hit.endX.toFixed(1)}`).join(" ");
-    assert.ok(slow.every((hit) => hit.arrivalSpeed < MONSTER_EJECTING_ARRIVAL && hit.ejections === 0 && hit.endX > BARRIER_HALF.x), `held to ${MONSTER_SLOW_CAP}: ${read(slow)}`);
-    assert.ok(fast.every((hit) => hit.arrivalSpeed >= MONSTER_EJECTING_ARRIVAL && hit.ejections === 1), `held to ${MONSTER_FAST_CAP}: ${read(fast)}`);
+    assert.ok(slow.every((hit) => hit.arrivalSpeed < MONSTER_FLYING_ARRIVAL && hit.ejections === 1), `held to ${MONSTER_SLOW_CAP}: ${read(slow)}`);
+    assert.ok(fast.every((hit) => hit.arrivalSpeed >= MONSTER_FLYING_ARRIVAL && flew(hit)), `held to ${MONSTER_FAST_CAP}: ${read(fast)}`);
   });
 
   it("when the truck is held to 17 m/s and to 18.5 m/s on the shipped approach, then it is not thrown at any phase under the slowest ejecting speed and is thrown once at every phase over it", () => {

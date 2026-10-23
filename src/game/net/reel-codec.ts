@@ -374,6 +374,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * The tallest step a tyre mounts by grip, and how far under a prism's top a tyre still stands on it, is its own drawn radius's share (the
  * sedan's 0.342 m tyre 0.088 m, the monster's 0.614 m 0.158 m), not 0.140 m sized for the platform's tyre on every car; a point that names no
  * tyre keeps the biggest tyre's, and a tyre that landed on a prism's top counts it only within its radius.
+ * A tyre rolling into a face it came in by meets it as a wall even within that mount, so a face whose top stands over a moving tyre's hub is never
+ * climbed (a monster sliding sideways into the slab trips on its tyres and rolls over it, nobody thrown; off the long jump's crest it flies the slab
+ * and keeps its driver in, thrown only when it arrives too slow to clear it), and a tyre climbs what it rolls onto over many slices, rising no
+ * faster than its plan speed times its grip (a step no longer sets a car on its top in one slice). A car in the air clears the slab by its lifted
+ * body, as a wreck does, and a striker under a lifted body meets its tyres, not a body edge standing over it.
  * A lifted car's (the monster's) crash contact reaches its masses where they stand: a car-car hit's point, read off its lifted body, stood 0.8-0.9 m over
  * its nose masses, so it fed its bumper a thousandth of the crush and its engine none (a monster head-on at 40 m/s crushed 0.61 m and left its engine 0.42
  * healthy, where it crushed 0.84 m and killed it before the overhaul), and its plan contact reads its body's lift as drawn (faded as it lies over; it

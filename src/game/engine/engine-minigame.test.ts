@@ -19,6 +19,7 @@ import { BAIL_WINDOW_SECONDS, bailRelease, type BailVerdict } from "../scenes/mi
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { minigameStore } from "./minigame-store.ts";
+import { BARRIER_HALF } from "../contact/sat.ts";
 
 /**
  * The Range's minigames in the real engine: each mode's start, throw, score and Retry, the dummy and camera held with no timer, the
@@ -38,6 +39,10 @@ const PARKED_CAR_EYE_DISTANCE_LIMIT = 30;
 /** A full-throttle long jump with no bail rests between these (m): mid-field, half a perfect bail's range; the landing is about 47-57 m and a 30 degree throw rests within a few metres of it. */
 const LONG_JUMP_NO_BAIL_MINIMUM = 40;
 const LONG_JUMP_NO_BAIL_MAXIMUM = 70;
+/** Sim seconds a full-throttle long jump takes from the pedal to past the barrier and down on the field. */
+const LONG_JUMP_PAST_S = 8;
+/** The driver cars the long jump throws: the monster flies its barrier and lands past it, its driver in (`minigame-profile.test.ts`). */
+const LONG_JUMP_CARS = DRIVER_CARS.filter((type) => type.id !== "monster");
 /** The eye of the parked-start shot: at least this far behind the car, at most this far off its line, looking this closely along its heading (cosine). */
 const PARKED_EYE_BEHIND_MIN = 4;
 const PARKED_EYE_ASIDE_MAX = 2;
@@ -417,6 +422,22 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
   describe("given the long jump driven from the parked start at full throttle by each driver car, with no bail", () => {
     for (const driverCar of DRIVER_CARS) {
+      if (driverCar.id === "monster") {
+        it("when a monster holds the throttle to the barrier and presses no bail, then it flies the barrier and lands past it with its driver in: nobody is thrown and the bail meets no hit", () => {
+          engine.setPlayerCar("monster");
+          engine.startMinigame("longJump");
+          assert.equal(minigameHud().phase, "ready", "ready");
+          launches.length = 0;
+          engine["keys"].add(THROTTLE_KEY);
+          run(LONG_JUMP_PAST_S);
+          const x = engine["cars"][0]!.group.position.x - STATION_ANCHORS.longJump.x;
+          releaseThrottle();
+          assert.equal(launches.length, 0, "nobody thrown");
+          assert.equal(engine["minigames"]["bail"]["hitAt"], null, "the bail met no hit");
+          assert.ok(x > BARRIER_HALF.x, `the monster stands at local x ${x.toFixed(1)} m, not past the barrier`);
+        });
+        continue;
+      }
       it(`when a ${driverCar.id} holds the throttle to the barrier and presses no bail, then its driver is thrown exactly once and the throw scores the dummy's rest distance, mid-field`, (t) => {
         engine.setPlayerCar(driverCar.id);
         engine.startMinigame("longJump");
@@ -563,7 +584,8 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     /** A wasted bail, whose throw goes at the hit with the no-press release, rests this near (m) a no-press run's (the car has moved on a quarter second by the no-press throw). */
     const WASTED_SCATTER_M = 6;
     const BOOST_HOLD_S = 1;
-    const FADE_CLASS_IDS = ["sedan", "monster"] as const;
+    /** The sedan and the farthest thrower, the muscle (the monster flies the barrier: no hit to bail on). */
+    const FADE_CLASS_IDS = ["sedan", "muscle"] as const;
     type BailRun = { verdict: BailVerdict; score: number; hitRelative: number };
 
     /** A long jump at full throttle with the boost key tapped one frame when `pressRelative` s of presented time have run since the throttle went down (null: never). */
@@ -591,7 +613,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       return bailRun(carId, null);
     };
 
-    for (const driverCar of DRIVER_CARS) {
+    for (const driverCar of LONG_JUMP_CARS) {
       it(`when a ${driverCar.id} taps the boost key on the hit, then the bail is perfect and he rests at least ${PERFECT_OVER_NONE_M} m past the same run with no press`, () => {
         const none = baseline(driverCar.id);
         const perfect = bailRun(driverCar.id, none.hitRelative);

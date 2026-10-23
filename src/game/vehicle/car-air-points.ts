@@ -427,12 +427,30 @@ function basisOf(q: THREE.Quaternion): void {
   _e[8] = 1 - (xx + yy);
 }
 
+/** A hub's motion for its tread's queries (`wheelContact`): its plan velocity (x, z) and the body's spin (x, y, z). */
+const _motion = new Float64Array(5);
+
+/** `_motion` ← the bound body's motion at hub `_hub` (a step's `body`, about its centre of mass). */
+function hubMotion(): Float64Array {
+  const { v, w } = body;
+  const rx = _hub[0]! - centreOfMass.x;
+  const ry = _hub[1]! - centreOfMass.y;
+  const rz = _hub[2]! - centreOfMass.z;
+  _motion[0] = v.x + w.y * rz - w.z * ry;
+  _motion[1] = v.z + w.x * ry - w.y * rx;
+  _motion[2] = w.x;
+  _motion[3] = w.y;
+  _motion[4] = w.z;
+  return _motion;
+}
+
 /**
  * Each wheel's contact (`wheelContact`: its tread's footprint on what is under it) with the body as posed, into
  * `car.wheelHit` (slot i at `i * HIT_SIZE`: the lift it needs, the normal, grip, surface, owner and the footprint point).
- * Returns the wheels reaching, bit i: the tread within `within` m above its surface (or in it).
+ * Returns the wheels reaching, bit i: the tread within `within` m above its surface (or in it). `moving`: in a step, each tread asks with
+ * its hub's motion (`hubMotion`), so it meets a face it rolls into as a side; placing a car, at rest.
  */
-export function wheelsAt(car: DeformableCar, within: number): number {
+export function wheelsAt(car: DeformableCar, within: number, moving = false): number {
   const p = car.group.position;
   basisOf(car.group.quaternion);
   const hit = car.wheelHit;
@@ -458,7 +476,7 @@ export function wheelsAt(car: DeformableCar, within: number): number {
     // hub stands over across the whole drawn tread.
     const { r: tyreR, halfW } = car.frame.rig.tyre;
     const tread = sc * (tyreR / PLATFORM_TYRE.r);
-    wheelContact(_hub, _e, tread, sc * (halfW / PLATFORM_TYRE.halfW), car.slot, _hit);
+    wheelContact(_hub, _e, tread, sc * (halfW / PLATFORM_TYRE.halfW), car.slot, _hit, moving ? hubMotion() : null);
     TYRE_STEP[i] = treadMount(tread);
     TYRE_HUB[i * 3] = _hub[0]!;
     TYRE_HUB[i * 3 + 1] = _hub[1]!;

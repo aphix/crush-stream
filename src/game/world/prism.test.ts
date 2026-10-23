@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { armSolids, C_DEPTH, C_H, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, MOUNT, pointContact, PQ_BODY, PQ_MOUNT, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, STEP_MAX, Surface, WALL, wheelContact } from "./surfaces.ts";
 import "./ground.ts";
@@ -42,12 +42,12 @@ const _hub = new Float64Array(3);
 /** The wheel's axes in the world (x across, y up, z along): the level wheel's. */
 const _axes = new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
 
-/** The lift (m) a tyre's tread footprint reads at a hub 0.12 m under a 1 m top, over the middle of the armed solids' prism. */
-function treadRead(id: "sedan" | "monster"): number {
+/** The lift (m) a tyre's tread footprint reads at a hub 0.12 m under a 1 m top, over the middle of the armed solids' prism, rolling with `motion` (`wheelContact`'s). */
+function treadRead(id: "sedan" | "monster", motion: Float64Array | null = null): number {
   _hub[0] = 0;
   _hub[1] = 1 - 0.12;
   _hub[2] = 0;
-  wheelContact(_hub, _axes, treadScale(id), treadScale(id), -1, out);
+  wheelContact(_hub, _axes, treadScale(id), treadScale(id), -1, out, motion);
   return out[C_H]!;
 }
 
@@ -186,6 +186,9 @@ describe("given a circle prism and a ramp prism", () => {
 });
 
 describe("given the step a tyre mounts", () => {
+  // A row that fails leaves no solids armed for the next one.
+  afterEach(() => armSolids(null));
+
   it("when it is derived from the classes then it is the biggest tyre's share of its radius", () => {
     const biggest = Math.max(...CAR_STYLE_IDS.map((id) => carFrame(CAR_STYLES[id]).rig.tyre.r * CLASSES[STYLE_CLASS[id]].wheelScale));
     assert.ok(Math.abs(STEP_MAX - MOUNT * biggest) < 1e-9, `${STEP_MAX} against ${MOUNT * biggest}`);
@@ -198,6 +201,20 @@ describe("given the step a tyre mounts", () => {
     assert.equal(sedanHit, -Infinity, `sedan mount ${mountOf("sedan")}: read ${sedanHit}`);
     const monsterHit = ask(0.9, y, 0, 0, 0, false, mountOf("monster"))[C_H];
     assert.equal(monsterHit, 1, `monster mount ${mountOf("monster")}: read ${monsterHit}`);
+    armSolids(null);
+  });
+
+  it("when a monster's tyre 0.12 m under a box prism's top is rolling into the side it came in by, then that side is a wall to it; rolling along the side, or standing still, it stands on the top", () => {
+    solids(BOX);
+    const y = 1 - 0.12;
+    // 0.1 m inside the +x face, closing on it at 10 m/s: it came in through it a hundredth of a second ago.
+    const into = ask(0.9, y, 0, -10, 0, false, mountOf("monster"));
+    assert.equal(into[C_H], -Infinity, `rolling into the side: read ${into[C_H]}`);
+    assert.equal(into[C_NX], 1);
+    assert.ok(Math.abs(into[C_DEPTH]! - 0.1) < 1e-12, `depth ${into[C_DEPTH]}`);
+    // Along +z, the nearest face it closes on is the far end's, 2 m off: crossed longer ago than the entry window.
+    assert.equal(ask(0.9, y, 0, 0, 10, false, mountOf("monster"))[C_H], 1, "rolling along the side");
+    assert.equal(ask(0.9, y, 0, 0, 0, false, mountOf("monster"))[C_H], 1, "at rest");
     armSolids(null);
   });
 
@@ -227,6 +244,15 @@ describe("given the step a tyre mounts", () => {
     assert.equal(treadRead("sedan"), flat.sedan, `sedan tread (scale ${treadScale("sedan").toFixed(3)}, mount ${mountOf("sedan").toFixed(3)})`);
     const monster = treadRead("monster");
     assert.ok(monster > flat.monster + 0.5, `monster tread (scale ${treadScale("monster").toFixed(3)}, mount ${mountOf("monster").toFixed(3)}): ${monster} over the ground's ${flat.monster}`);
+    armSolids(null);
+  });
+
+  it("when the monster's tread footprint stands 0.12 m under the top of a prism narrower than its step and the wheel rolls across it at 10 m/s, then it reads the ground: the side it came in by is a wall to it", () => {
+    const motion = new Float64Array([10, 0, 0, 0, 0]);
+    const flat = treadRead("monster", motion);
+    solids({ ...BOX, hx: 0.1, hz: 3 });
+    const rolling = treadRead("monster", motion);
+    assert.equal(rolling, flat, `monster tread rolling across (scale ${treadScale("monster").toFixed(3)}, mount ${mountOf("monster").toFixed(3)}): ${rolling} against the ground's ${flat}`);
     armSolids(null);
   });
 
