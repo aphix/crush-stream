@@ -421,8 +421,6 @@ const SPRING_PUSHING = Array.from({ length: WHEELS }, () => false);
 const SPRING_ROW = new Int32Array(WHEELS);
 const SPRING_AUGMENTED = new Float64Array(WHEELS * AUGMENTED_STRIDE);
 const SPRING_SOLUTION = new Float64Array(WHEELS);
-/** Per tyre: the rate (m/s) its surface presses up at, at the slice's start (the damper's input). */
-const SPRING_RATE = new Float64Array(WHEELS);
 /** Per tyre: the spin one unit of impulse straight up at it gives the body (the body's inverse inertia on its arm × up). */
 const SPIN_PER_PUSH = Array.from({ length: WHEELS }, () => new THREE.Vector3());
 
@@ -451,8 +449,6 @@ function solveSpringSystem(tyres: number): void {
 
 /** How far (m) a tyre flattens under its car's weight on it: a centimetre under a quarter of a car. */
 const TYRE_SAG = 0.01;
-/** The damping ratio of that flattening: left at the suspension's own damper, the stiff tread rang for seconds. */
-const TYRE_DAMP_RATIO = 0.5;
 
 /**
  * The tyres in their springs push together, `ASK[c]` each (impulse per unit mass): `dt (G share + stiff x + damp u)` with u the press rate
@@ -473,7 +469,6 @@ export function springPushes(frame: CarFrame, tyres: number, stiff: number, damp
     const rising = N[c]!.y > 0;
     const gravityRate = rising ? G * dt : 0;
     const startRate = rising ? -pointVel(c, v, w, _vp).dot(N[c]!) / N[c]!.y - G * dt : 0;
-    SPRING_RATE[c] = startRate;
     SPRING_RHS[c] = dt * (SHARE[c]! * G + stiff * (PRESS[c]! + 0.5 * dt * gravityRate) + damp * startRate);
     for (let d = 0; d < tyres; d++) {
       const response = rising && SOFT[d] ? (N[c]!.y + _k.crossVectors(SPIN_PER_PUSH[d]!, R[c]!).dot(N[c]!)) / N[c]!.y : 0;
@@ -495,6 +490,6 @@ export function springPushes(frame: CarFrame, tyres: number, stiff: number, damp
     if (!SPRING_PUSHING[c]) continue;
     const flat = PRESS[c]! + (OWN[c]! >= 0 ? 0 : travel);
     const k = (SHARE[c]! * G) / TYRE_SAG;
-    ASK[c] = Math.max(0, Math.min(ASK[c]!, dt * (k * flat + 2 * TYRE_DAMP_RATIO * Math.sqrt(k) * Math.min(1, flat / TYRE_SAG) * SPRING_RATE[c]!)));
+    ASK[c] = Math.max(0, Math.min(ASK[c]!, dt * k * flat));
   }
 }

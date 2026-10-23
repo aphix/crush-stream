@@ -64,7 +64,8 @@ export function openRows(n: number): void {
     NOTED[c] = 0;
     CLOSE_FIRST[c] = 0;
     FRA[c]!.set(0, 0, 0);
-    if (SOFT[c]) REST[c] = SHARE[c]! * G * dt;
+    // A tyre in its springs rests at its share of the weight borne on its car too: only the push past that goes into the car under at once, the rest is borne on it for its next step.
+    if (SOFT[c]) REST[c] = SHARE[c]! * (G * dt - _lv.y);
     else {
       weightClosing(c);
       REST[c] = _s[S_WEIGHT]!;
