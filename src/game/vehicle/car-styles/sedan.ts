@@ -247,12 +247,14 @@ export const SEDAN: BodyStyle = {
    * the cage's 1.16 stood them ~6 cm outside it).
    */
   drawn: {
-    windshield: { base: [0.95, 0.88], wBase: 1.4, wTop: 1.06, bow: { base: 0.165, top: WINDSHIELD_BOW.top }, sideBow: 0.036, seat: true },
+    windshield: { base: [0.95, 0.88], wBase: 1.4, wTop: 1.06, bow: { base: 0.165, top: WINDSHIELD_BOW.top }, sideBow: 0.036, seat: true, postUnder: 0.02 },
     aPillarFoot: 0.64,
     aPillarTop: 0.05,
     aPillarKnee: undefined,
     // The sail takes a station at the door glass's top, so its rear edge follows the straight glass edge instead of cutting a see-through wedge.
     aPillarSailGlass: true,
+    // The post and its sail drawn as one surface: no hairline crease down the pillar.
+    aPillarOneLoft: true,
   },
   underside: [
     [-2.14, 0.35],
@@ -333,7 +335,7 @@ export const SEDAN: BodyStyle = {
    * (side IoU .977 -> .9759). Seated (`flush`, `halfWidth` past its edge, so the quarter's rim keeps the deck edge's height under it): its
    * sides stand at most 1 cm over the quarter ahead of the lip, no shelf; the crown holds the centre line on the seated lid.
    */
-  boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45 }, lip: { rise: DECK_RISE, depth: 0.06 }, crown: [0.0275, 0.6], edgeRoll: 0.03, flush: true, halfWidth: 0.7 },
+  boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45, steps: 5 }, lip: { rise: DECK_RISE, depth: 0.06, rings: [0.25, 0.5, 0.75, 1] }, deckRings: 6, crown: [0.0275, 0.6], edgeRoll: 0.03, flush: true, halfWidth: 0.7 },
   // The reference's head lamps are cool-white LED strips.
   lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES, bulb: "led" },
   // The reference's shield: 0.74 across at the top, tapering to 0.66 at its rounded bottom corners, its top up under the hood's front edge

@@ -187,7 +187,10 @@ function doorFaceVertex(style: BodyStyle, grid: DoorGrid, row: DoorRow, z: numbe
     station = y = row;
     const intoFront = z - (halfLength - DOOR_FRONT_SLOPE.fromEdge);
     if (intoFront > 0) y += intoFront * DOOR_FRONT_SLOPE.rise;
-    const hingeClosing = THREE.MathUtils.clamp(intoFront / (DOOR_FRONT_SLOPE.fromEdge - DOOR_SKIN_OVERLAP), 0, 1);
+    const slopeRun = DOOR_FRONT_SLOPE.fromEdge - DOOR_SKIN_OVERLAP;
+    const closeRun = d.hingeRun ?? slopeRun;
+    const closed = THREE.MathUtils.clamp((intoFront + closeRun - slopeRun) / closeRun, 0, 1);
+    const hingeClosing = d.hingeRun === undefined ? closed : THREE.MathUtils.smoothstep(closed, 0, 1);
     y -= hingeClosing * ((station + h) / (2 * h)) * hingeDrop;
     if (z < -(halfLength - DOOR_REAR_SLOPE.fromEdge)) y += (-(halfLength - DOOR_REAR_SLOPE.fromEdge) - z) * DOOR_REAR_SLOPE.rise;
   } else {

@@ -8,6 +8,7 @@ import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
 import { CREASE_DEGREES, ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, shoulderDrop, sideX, tailgateHalf } from "./car-mesh.ts";
+import { drawnRoofTopY } from "./car-roof-end.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, doorGlassFrontZ, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, sideBowZ, tubWall } from "./car-lines.ts";
 import { doorSkinStand, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, type PartSeat } from "./part-geometry.ts";
@@ -157,6 +158,25 @@ function openRoofJoins(style: BodyStyle): string[] {
     if (!(under >= -1e-6 && under <= ROOF_JOIN_M)) off.push(`A-post front-top vertex (${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)}): ${hit === undefined ? "no roof over it" : `${(under * 1000).toFixed(1)} mm under the roof`}`);
   }
   return off;
+}
+
+/** The closest distance (m) from each of `style`'s drawn windshield top-edge reads (`PANE_TOP_READS` + 1 across, as `openRoofJoins` reads them) to its drawn roof, tucked under it or not. */
+function windshieldTopGaps(style: BodyStyle): { x: number; gap: number }[] {
+  const roof = makeRoofGeometry(style, "drawn");
+  const [pos, index] = [roof.getAttribute("position") as THREE.BufferAttribute, roof.getIndex()!];
+  const [tri, closest] = [new THREE.Triangle(), new THREE.Vector3()];
+  const topEnd = windshieldSideX(style, 1) / (style.windshield.wTop / 2);
+  return Array.from({ length: PANE_TOP_READS + 1 }, (_, i) => {
+    const p = windshieldPoint(style, topEnd * ((2 * i) / PANE_TOP_READS - 1), 1);
+    let gap = Infinity;
+    for (let t = 0; t < index.count; t += 3) {
+      tri.a.fromBufferAttribute(pos, index.getX(t));
+      tri.b.fromBufferAttribute(pos, index.getX(t + 1));
+      tri.c.fromBufferAttribute(pos, index.getX(t + 2));
+      gap = Math.min(gap, tri.closestPointToPoint(p, closest).distanceTo(p));
+    }
+    return { x: p.x, gap };
+  });
 }
 
 /** Max |skinned − rest| of a panel skinned against an undeformed rig: >0 only where the cage clamps it. */
@@ -454,17 +474,37 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
     for (const c of inside) assert.ok(Math.abs(c.y - roofTopY(0, c.z, coupe)) < 1e-5, `crown at z ${c.z}: y ${c.y}, the plain coupe's ${roofTopY(0, c.z, coupe)}`);
   });
 
-  it("when its roof's dome is read, then every skin vertex over the dome (inside its edges) is at roofTopY, and every drawn greenhouse part stays under roofTopY: the posts' clamp follows the rolled ends", () => {
+  it("when its roof's dome is read, then every skin vertex over the dome (inside its edges) is at the drawn roof's height, and every drawn greenhouse part stays under it: the posts' clamp follows the rolled ends", () => {
     for (let v = 0; v < pos.count; v++) {
       const [x, y, z] = [pos.getX(v), pos.getY(v), pos.getZ(v)];
-      if (headliner.has(v) || z < rolled.roofZ[0] || z > rolled.roofZ[1] || Math.abs(x) > roofAt(z, rolled).x + 1e-6 || y < roofTopY(roofAt(z, rolled).x, z, rolled) - 1e-6) continue;
-      assert.ok(Math.abs(y - roofTopY(x, z, rolled)) < 1e-5, `dome vertex (${x}, ${y}, ${z}): roofTopY ${roofTopY(x, z, rolled)}`);
+      if (headliner.has(v) || z < rolled.roofZ[0] || z > rolled.roofZ[1] || Math.abs(x) > roofAt(z, rolled).x + 1e-6 || y < drawnRoofTopY(roofAt(z, rolled).x, z, rolled) - 1e-6) continue;
+      assert.ok(Math.abs(y - drawnRoofTopY(x, z, rolled)) < 1e-5, `dome vertex (${x}, ${y}, ${z}): drawnRoofTopY ${drawnRoofTopY(x, z, rolled)}`);
     }
     for (const part of makeGreenhouseFrame(rolled, "drawn")) {
       const at = part.getAttribute("position") as THREE.BufferAttribute;
       for (let i = 0; i < at.count; i++) {
         const [x, y, z] = [at.getX(i), at.getY(i), at.getZ(i)];
-        if (z >= rolled.roofZ[0] && z <= rolled.roofZ[1]) assert.ok(y <= roofTopY(x, z, rolled) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the rolled roof (${roofTopY(x, z, rolled)})`);
+        if (z >= rolled.roofZ[0] && z <= rolled.roofZ[1]) assert.ok(y <= drawnRoofTopY(x, z, rolled) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the rolled roof (${drawnRoofTopY(x, z, rolled)})`);
+      }
+    }
+  });
+
+  it("when its crown line is read over each rolled end, then every chord falls at least as steeply as the one before it toward the end: the bowed end ring never folds the roll back", () => {
+    const crown: { y: number; z: number }[] = [];
+    // Each end ring has a cap copy at the same point: read each station once.
+    for (let v = 0; v < pos.count; v++) if (Math.abs(pos.getX(v)) < 1e-6 && !headliner.has(v) && crown.every((c) => Math.abs(c.z - pos.getZ(v)) > 1e-9)) crown.push({ y: pos.getY(v), z: pos.getZ(v) });
+    const ends = [
+      { name: "front", points: crown.filter((c) => c.z >= rolled.roofZ[1] - RUNS.front - 1e-6).sort((a, b) => a.z - b.z) },
+      { name: "rear", points: crown.filter((c) => c.z <= rolled.roofZ[0] + RUNS.rear + 1e-6).sort((a, b) => b.z - a.z) },
+    ];
+    for (const end of ends) {
+      assert.ok(end.points.length >= 3, `${end.name}: ${end.points.length} crown points over the roll`);
+      let previousFall = -Infinity;
+      for (let k = 1; k < end.points.length; k++) {
+        const [a, b] = [end.points[k - 1]!, end.points[k]!];
+        const fall = (a.y - b.y) / Math.abs(b.z - a.z);
+        assert.ok(fall >= previousFall - 1e-9, `${end.name} chord ${k} at z ${b.z.toFixed(4)} falls ${fall.toFixed(4)} m per m after ${previousFall.toFixed(4)}`);
+        previousFall = fall;
       }
     }
   });
@@ -515,16 +555,16 @@ describe("given a coupe whose roof's section is one curve from crown to cant (ro
     assert.ok(slopeAtHalf(dome) > DOME_SLOPE_DEGREES && slopeAtHalf(plain) < DOME_SLOPE_DEGREES, `chord at half the half-width: ${slopeAtHalf(dome).toFixed(1)}° (plain ${slopeAtHalf(plain).toFixed(1)}°)`);
   });
 
-  it("when its roof's skin is read, then every skin vertex between its ends is at roofTopY, and every drawn greenhouse part stays under roofTopY: the posts' clamp follows the curve", () => {
+  it("when its roof's skin is read, then every skin vertex between its ends is at the drawn roof's height, and every drawn greenhouse part stays under it: the posts' clamp follows the curve", () => {
     const { pos, skin } = skinOf(domed);
     const inside = skin.filter((v) => pos.getZ(v) >= domed.roofZ[0] && pos.getZ(v) <= domed.roofZ[1]);
     assert.ok(inside.length > 0, "no skin vertex read");
-    for (const v of inside) assert.ok(Math.abs(pos.getY(v) - roofTopY(pos.getX(v), pos.getZ(v), domed)) < 1e-5, `skin vertex ${v} (${pos.getX(v)}, ${pos.getY(v)}, ${pos.getZ(v)}): roofTopY ${roofTopY(pos.getX(v), pos.getZ(v), domed)}`);
+    for (const v of inside) assert.ok(Math.abs(pos.getY(v) - drawnRoofTopY(pos.getX(v), pos.getZ(v), domed)) < 1e-5, `skin vertex ${v} (${pos.getX(v)}, ${pos.getY(v)}, ${pos.getZ(v)}): drawnRoofTopY ${drawnRoofTopY(pos.getX(v), pos.getZ(v), domed)}`);
     for (const part of makeGreenhouseFrame(domed, "drawn")) {
       const at = part.getAttribute("position") as THREE.BufferAttribute;
       for (let i = 0; i < at.count; i++) {
         const [x, y, z] = [at.getX(i), at.getY(i), at.getZ(i)];
-        if (z >= domed.roofZ[0] && z <= domed.roofZ[1]) assert.ok(y <= roofTopY(x, z, domed) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the curved roof (${roofTopY(x, z, domed)})`);
+        if (z >= domed.roofZ[0] && z <= domed.roofZ[1]) assert.ok(y <= drawnRoofTopY(x, z, domed) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the curved roof (${drawnRoofTopY(x, z, domed)})`);
       }
     }
   });
@@ -1106,7 +1146,7 @@ describe("given a body style's H2 hardpoints", () => {
             const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
             if (z < style.roofZ[0] || z > style.roofZ[1]) continue;
             // 1e-6: float32 vertices, a ulp at 1.3 m is 1.2e-7.
-            assert.ok(y <= roofTopY(x, z, style) + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands over the roof skin there (${roofTopY(x, z, style)})`);
+            assert.ok(y <= drawnRoofTopY(x, z, style) + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands over the roof skin there (${drawnRoofTopY(x, z, style)})`);
             // The drawn roof's side runs 1 cm past the cant line, out to the pillars' faces.
             const lipX = roofAt(z, style).x + 0.09;
             assert.ok(y <= cantY(z, style) + 1e-6 || Math.abs(x) <= lipX + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands out past the roof's lip (x ${lipX}) over the cant line`);
@@ -1195,6 +1235,19 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(open.some((text) => text.startsWith("windshield top")), `the wagon without its twin's roofEnds reads closed: ${open.join("; ")}`);
   });
 
+  it(`when any style's drawn windshield top edge is read across, then every read stands within ${ROOF_JOIN_M * 1000} mm of its drawn roof's skin by closest point, tucked under its lip or not: the pane's corner never stands a dome's fall under the roof the end rolls flat onto; the hatchback's twin without its pane's dome share reads open at its corners`, () => {
+    const off: string[] = [];
+    for (const id of CAR_STYLE_IDS) {
+      for (const { x, gap } of windshieldTopGaps(drawnStyle(CAR_STYLES[id]))) if (gap > ROOF_JOIN_M) off.push(`${id} x ${x.toFixed(3)}: ${(gap * 1000).toFixed(1)} mm`);
+    }
+    assert.equal(off.length, 0, off.join("; "));
+    // The control: the hatchback's drawn pane at the roof's whole dome stands 9 mm under the roof's rolled front at its corners.
+    const hatch = CAR_STYLES.hatchback;
+    assert.ok(hatch.drawn?.windshield?.domeFall !== undefined, "the hatchback's drawn windshield sets domeFall");
+    const whole = windshieldTopGaps(drawnStyle({ ...hatch, drawn: { ...hatch.drawn, windshield: { ...hatch.drawn.windshield, domeFall: undefined } } }));
+    assert.ok(whole.some(({ gap }) => gap > ROOF_JOIN_M), `the hatchback's pane at the whole dome reads closed: ${whole.map(({ gap }) => (gap * 1000).toFixed(1)).join(" ")}`);
+  });
+
   /** The pickup windshield's top-corner turn (°) from its flat pane: at 3.1° the corner mirrored the garage's key light into a bloom blob in the landing iso; at 0.76° (a quarter of the dome) it did not. */
   const PICKUP_CORNER_TURN_DEG = 1;
 
@@ -1210,7 +1263,7 @@ describe("given a body style's H2 hardpoints", () => {
       ];
       for (const [p, { name, top: [topY, topZ], geo, grid, segX, segY }] of panes.entries()) {
         const middle = topY - roofTopY(0, topZ, style);
-        const share = style.domeFall ?? 1;
+        const share = (p === 0 ? style.windshield.domeFall : undefined) ?? style.domeFall ?? 1;
         const overAt = (x: number, y: number) => y - roofTopY(x, topZ, style) - (1 - share) * (roofTopY(0, topZ, style) - roofTopY(x, topZ, style));
         const pos = geo.getAttribute("position");
         for (let i = 0; i < pos.count; i++) {
@@ -1759,10 +1812,10 @@ describe("given a body style's H2 hardpoints", () => {
   });
 
   it("when a style with no knee sets `aPillarSailGlass`, then no level ray in from the side, 5 mm ahead of the door glass's front edge, passes its drawn sail to the far side: the sail's rear edge follows the glass's straight front edge up to its top, not one chord from its middle to the post's top over a see-through wedge", () => {
-    // The drawn sedan: no knee, the glass's front edge straight from the belt to the post's top. The control is its twin with the field removed.
+    // The drawn sedan: no knee, the glass's front edge straight from the belt to the post's top. The control is its twin with the field and the one loft (whose stations sample the glass's edge) removed.
     const stock = CAR_STYLES.sedan;
     const sedan = drawnStyle(stock);
-    const control = drawnStyle({ ...stock, drawn: { ...stock.drawn, aPillarSailGlass: undefined } });
+    const control = drawnStyle({ ...stock, drawn: { ...stock.drawn, aPillarSailGlass: undefined, aPillarOneLoft: undefined } });
     assert.ok(sedan.aPillarKnee === undefined && sedan.aPillarSailGlass === true && control.aPillarSailGlass === undefined, "the drawn sedan sets the field over a kneeless glass; the control does not");
     const footY = beltY(sedan.aPillarFoot, sedan);
     const glassTop = glassTopY(aPillarTopZ(sedan), sedan);
@@ -1785,6 +1838,11 @@ describe("given a body style's H2 hardpoints", () => {
       assert.ok(now !== null && now > 0.3, `${share} of the glass (y ${y.toFixed(3)}, z ${z.toFixed(3)}): the ray's first hit is at x ${now}, not on the near side`);
       assert.ok(was === null || was < 0.3, `the control, ${share} of the glass (y ${y.toFixed(3)}): the ray first hits at x ${was}, so there is no wedge to see through`);
     }
+  });
+
+  it("when the sedan and the police are drawn, then no ray in from outside slips between the A-pillar and the windshield or the door glass: every horizontal ray at the A-pillar's heights, fanned from the windshield's middle back past the door glass's front edge, first meets the near side's skin or glass", () => {
+    const off = (["sedan", "police"] as const).flatMap((id) => aPillarLeaks(cars[id], drawnStyle(CAR_STYLES[id])).map((line) => `${id} ${line}`));
+    assert.ok(off.length === 0, off.join("; "));
   });
 
   it("when a style blacks out greenhouse parts, then exactly their drawn vertices turn gloss black, and the drawn shape and the cage are unchanged", () => {
@@ -3055,6 +3113,62 @@ function tornMirror(car: DeformableCar, i: 0 | 1): LooseShape {
   const torn = newLooseShape();
   boxShape(torn, mirrorSeat(car, i));
   return torn;
+}
+
+/** Rays per side and height in `aPillarLeaks`' fan: ~0.03° apart, finer than the contour tool's 0.25°, so a 2 mm slit is met. */
+const A_PILLAR_FAN_RAYS = 1600;
+/** The fans' centres stand these far (m) behind the door glass's front edge, in the cabin: a slit shows along one sight line only, so three. */
+const A_PILLAR_FAN_BACKS = [0.15, 0.3, 0.6];
+/** The fan runs round to this far (m) behind the door glass's front edge. */
+const A_PILLAR_FAN_PAST = 0.08;
+/** A first hit within this (m) of the fan's centre, or past it, came in through the near side. */
+const A_PILLAR_NEAR = 0.25;
+
+/**
+ * Where light gets through `car`'s drawn A-pillar band (`style` drawn), one line per side, height and fan: horizontal rays in from 3 m
+ * out at a cabin centre, swept from the centre line ahead round past the door glass's front edge, each read on the drawn skin and glass.
+ */
+function aPillarLeaks(car: DeformableCar, style: BodyStyle): string[] {
+  const footY = beltY(style.aPillarFoot, style);
+  const glassTop = glassTopY(aPillarTopZ(style), style);
+  car.group.updateMatrixWorld(true);
+  const toCar = car.group.matrixWorld.clone().invert();
+  const look = car.lookMeshes();
+  // The drawn skin and glass round the A-pillar as car-space triangles (9 floats each).
+  const tris: number[] = [];
+  const v = new THREE.Vector3();
+  for (const mesh of [look.body, look.hood, ...look.doors, ...car.glassPanes.map((g) => g.mesh)]) {
+    const local = toCar.clone().multiply(mesh.matrixWorld);
+    const [pos, index] = [mesh.geometry.getAttribute("position"), mesh.geometry.index];
+    for (let i = 0; i < (index ? index.count : pos.count); i++) tris.push(...v.fromBufferAttribute(pos, index ? index.getX(i) : i).applyMatrix4(local).toArray());
+  }
+  const [ray, a, b, c, hit, reach] = [new THREE.Ray(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), 3];
+  const off: string[] = [];
+  for (let y = footY + 0.04; y <= glassTop - 0.005; y += 0.015) {
+    const slab: number[] = [];
+    for (let t = 0; t < tris.length; t += 9) if (Math.min(tris[t + 1]!, tris[t + 4]!, tris[t + 7]!) <= y && Math.max(tris[t + 1]!, tris[t + 4]!, tris[t + 7]!) >= y) slab.push(t);
+    const front = doorGlassFrontZ(y, footY, glassTop, style);
+    const past = front - A_PILLAR_FAN_PAST;
+    const plane = glassX(front, y, style);
+    for (const [sign, back] of [-1, 1].flatMap((s) => A_PILLAR_FAN_BACKS.map((d) => [s, d] as const))) {
+      const cz = front - back;
+      const [first, last] = [Math.PI / 2, Math.atan2(past - cz, sign * glassX(past, y, style))];
+      // Each leaking ray, named by where it crosses the door glass's plane: z (m).
+      const through: string[] = [];
+      for (let k = 0; k <= A_PILLAR_FAN_RAYS; k++) {
+        const angle = lerp(first, last, k / A_PILLAR_FAN_RAYS);
+        ray.origin.set(Math.cos(angle) * reach, y, cz + Math.sin(angle) * reach);
+        ray.direction.set(-Math.cos(angle), 0, -Math.sin(angle));
+        let nearest = Infinity;
+        for (const t of slab) {
+          if (ray.intersectTriangle(a.fromArray(tris, t), b.fromArray(tris, t + 3), c.fromArray(tris, t + 6), false, hit) !== null) nearest = Math.min(nearest, hit.distanceTo(ray.origin));
+        }
+        if (nearest > reach - A_PILLAR_NEAR) through.push(`${(cz + sign * plane * Math.tan(angle)).toFixed(3)}/x.58z${(cz + 0.58 * Math.tan(angle) * sign).toFixed(3)}`);
+      }
+      if (through.length > 0) off.push(`${sign > 0 ? "right" : "left"} y ${y.toFixed(3)}, fan ${back} m back: ${through.length} rays through, crossing the side glass's plane at z ${through[0]}..${through.at(-1)}`);
+    }
+  }
+  return off;
 }
 
 /** Two faces z-fight when they face within this (deg) of each other: contour-defects' z-fight test reads 4. */

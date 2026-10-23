@@ -381,6 +381,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * and keeps its driver in, thrown only when it arrives too slow to clear it), and a tyre climbs what it rolls onto over many slices, rising no
  * faster than its plan speed times its grip (a step no longer sets a car on its top in one slice). A car in the air clears the slab by its lifted
  * body, as a wreck does, and a striker under a lifted body meets its tyres, not a body edge standing over it.
+ * A car's point at rest inside a wall, a slab or a prop leaves by the side its car stands on, not the nearest: a tyre that stopped past a thin
+ * wall's middle was pushed on through the wall, and the drive pushing the car back out was read as closing on it, so a car pinned to a wall at
+ * 0.1 m/s stayed there for seconds (a monster on a slab ends with its front tyres torn off and over it, where it stood on its nose with them in it).
  * A lifted car's (the monster's) crash contact reaches its masses where they stand: a car-car hit's point, read off its lifted body, stood 0.8-0.9 m over
  * its nose masses, so it fed its bumper a thousandth of the crush and its engine none (a monster head-on at 40 m/s crushed 0.61 m and left its engine 0.42
  * healthy, where it crushed 0.84 m and killed it before the overhaul), and its plan contact reads its body's lift as drawn (faded as it lies over; it
@@ -399,6 +402,18 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * past 0.2 m, not stalls at 0.183-0.199 m: a pressed sedan's rails fold 0.244 m, were 0.191.
  * A torn hatchback gate flies as its glass and spoiler only (its D-posts stay on the body); a torn SUV liftgate flies with its D-post shares as
  * closed pieces cut on one shared section and a flange under its slab.
+ * A door cage's corners hang on the cabin (its masses and the clusters that hold the cell), not on the tail and axle a side hit's tyres hold back: a side
+ * hit no longer shears the far door's frame by 5-6 cm (a 30 km/h side hit read 55 mm, now 18; its glass burst), and a 50 km/h wall hit racks a door's frame 12 mm, not 26.
+ * A torn part that flies as its shell takes the wind on the broad face it draws (the axis its drawn triangles face most), not its box's shortest axis, which
+ * a bumper's wrapped ends and seam cover tie with its height within 2 mm: a sedan's, hatchback's or wagon's front bumper, a monster's rear one and a
+ * coupe's front arches met the wind edge-on and lifted where they should brake. The keyframe carries each loose part's plate axis with its flags.
+ * A torn part that flies as its shell is supported the same either side of its car's middle plane: the farthest point along a way tied between a
+ * bumper's two lower front ends and one slot took one, so a sedan's, hatchback's or wagon's front bumper rested on a lone point and tipped forward end
+ * over end at its first slide (73-85° in 0.4 s: 4.658 m where its box slides 4.39), where it now slides flat.
+ * A loose point (a torn part's, a popped wheel's) more than a car's roof reach (0.25 m) under its top, inside its drawn plan and over its underside is in
+ * that car's flank and is put out along the plan outline's normal, where it passed through any car whose top stood out of its reach (a door cage's 0.9 m
+ * shelf): a bumper a car is driven into at 2 m/s is shoved 0.67 m (0.51 m riding the sill top; 0.002 m under the door cages, now 0.82), and one flying at
+ * a parked car's door stops at its face, where it ended 1.02 m inside it.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

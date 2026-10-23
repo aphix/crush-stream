@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { C_AUX, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_PX, C_PY, C_PZ, EDGE_HIT, edgeCross, HIT_SIZE, MU_TYRE, ridgeCross, solidTop, staticTop, topsTop, topsTopLive, type Surface } from "../world/surfaces.ts";
+import { ASKER } from "../world/prism.ts";
 import { GQ } from "../world/ground-clock.ts";
 import { MIN_SLIDE } from "../deform/constants.ts";
 import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-util.ts";
@@ -327,8 +328,9 @@ export function solveRows(n: number): void {
       // A tyre climbs what it rolls onto along its own circle: rising at most its plan speed times the steepest its grip climbs (`MU_TYRE`,
       // as `MOUNT` is derived) and parting from a face it stands in as a body at rest does (`GROUND_LIFT_V`), over what the slice's closing
       // carried it in (a landing); the rest is read again from the next slice's pose. Unbounded, a monster leaning into a slab whose top its
-      // tread read as floor popped onto it in one slice.
-      const climbs = TYRE[c] && N[c]!.y > 0;
+      // tread read as floor popped onto it in one slice. A body at rest rolls into nothing: a tyre it stands in (a car set down on an edge)
+      // is put out by the whole lift, as before, not at the rate a wreck parts from the ground.
+      const climbs = TYRE[c] && N[c]!.y > 0 && !atRest;
       const reach = climbs ? Math.min(left, (CLOSING[c]! + MU_TYRE * hypot2(v.x, v.z) + GROUND_LIFT_V) * dt * N[c]!.y) : left;
       if (part || (driven && !body.wreck) || HUB[c] || left - CLOSING[c]! * dt <= SPECULATIVE_GAP) LEFT[c] = reach;
     }
@@ -735,6 +737,7 @@ export function stepFree(car: DeformableCar, dt: number): boolean {
   if (GQ.on) GQ.cells.epoch++;
   if (GQ.on) GQ.cells.inFree = true;
   const landed = stepFreeBody(car, dt);
+  ASKER[0] = NaN;
   GQ.cells.inFree = false;
   return landed;
 }

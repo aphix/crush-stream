@@ -1,4 +1,4 @@
-import type { DetachPart, LooseBody, LooseWheel } from "./car-core.ts";
+import type { DetachPart, LooseBody, LooseShape, LooseWheel } from "./car-core.ts";
 import type { CarParts } from "./car-parts.ts";
 import { DENT_MAX, type DentState } from "./loose-dent.ts";
 import { fitWheelShape, keyedShape, SHAPE_POINTS } from "./loose-step.ts";
@@ -85,6 +85,8 @@ const LOOSE_AIRBORNE = 2;
 const LOOSE_SHOWN = 4;
 /** Its shape is its shell's own points, not its box's (`boxShape`). */
 const LOOSE_SHELL = 8;
+/** The axis its drawn surface faces (`LooseShape.plate`: 0, 1, 2) rides the flags above this bit. */
+const LOOSE_PLATE = 16;
 /** Most numbers a loose block takes: its mask, then every body's. */
 export const LOOSE_STATE_MAX = 1 + LOOSE_BODIES * LOOSE_EACH;
 
@@ -132,7 +134,7 @@ function readLooseBody(body: LooseBody, dent: DentState | undefined, buf: Float6
   body.velocity.toArray(buf, at + 7);
   body.angular.toArray(buf, at + 10);
   const s = body.shape;
-  buf[at + 13] = (s.asleep ? LOOSE_ASLEEP : 0) | (s.airborne ? LOOSE_AIRBORNE : 0) | (o.visible ? LOOSE_SHOWN : 0) | (s.count > 0 && !s.box ? LOOSE_SHELL : 0);
+  buf[at + 13] = (s.asleep ? LOOSE_ASLEEP : 0) | (s.airborne ? LOOSE_AIRBORNE : 0) | (o.visible ? LOOSE_SHOWN : 0) | (s.count > 0 && !s.box ? LOOSE_SHELL : 0) | (s.count > 0 ? s.plate * LOOSE_PLATE : 0);
   buf[at + 14] = s.sleepX;
   buf[at + 15] = s.sleepZ;
   buf[at + 16] = dent?.count ?? 0;
@@ -149,16 +151,16 @@ function putLooseBody(body: LooseBody, wheel: LooseWheel | undefined, dent: Dent
   o.quaternion.fromArray(buf, at + 3);
   body.velocity.fromArray(buf, at + 7);
   body.angular.fromArray(buf, at + 10);
+  const flags = buf[at + 13]!;
   // Before the flags: shaping wakes it and says it flies. A part flies as the shape it was measured as when it first flew, not its shell drawn now.
   if (wheel) fitWheelShape(wheel);
   else if (buf[at + LOOSE_BOX + 3] === 0) body.shape.count = 0;
   else {
     body.shape.centre.fromArray(buf, at + LOOSE_BOX);
-    const box = (buf[at + 13]! & LOOSE_SHELL) === 0;
-    keyedShape(body.shape, buf[at + LOOSE_BOX + 3]!, buf[at + LOOSE_BOX + 4]!, buf[at + LOOSE_BOX + 5]!, box, buf, at + LOOSE_POINTS);
+    const plate = Math.floor(flags / LOOSE_PLATE) as LooseShape["plate"];
+    keyedShape(body.shape, buf[at + LOOSE_BOX + 3]!, buf[at + LOOSE_BOX + 4]!, buf[at + LOOSE_BOX + 5]!, plate, (flags & LOOSE_SHELL) === 0, buf, at + LOOSE_POINTS);
   }
   const s = body.shape;
-  const flags = buf[at + 13]!;
   s.asleep = (flags & LOOSE_ASLEEP) !== 0;
   s.airborne = (flags & LOOSE_AIRBORNE) !== 0;
   s.sleepX = buf[at + 14]!;

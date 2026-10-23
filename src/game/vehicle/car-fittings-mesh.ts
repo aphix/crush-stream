@@ -6,7 +6,8 @@ import type { BodyStyle } from "./car-variants.ts";
 import { roofHinged } from "./hinge-spec.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { splitCreases, splitLoftOnLowDiagonals } from "./car-crease.ts";
-import { CREASE_DEGREES, deckTopY, ensureOutwardNormals, lerp, loftFromRings, makeBumperGeometry, roofTopY, type Pt } from "./car-mesh.ts";
+import { CREASE_DEGREES, deckTopY, ensureOutwardNormals, lerp, loftFromRings, makeBumperGeometry, type Pt } from "./car-mesh.ts";
+import { drawnRoofTopY } from "./car-roof-end.ts";
 
 /**
  * A style's drawn add-ons: never in a cage build, so the sim never sees them. Each is merged into the mesh it stands on and moves with
@@ -22,6 +23,8 @@ const SINK = 0.005;
 /** Rings along a hood bulge; its ends ease in over `BULGE_RAMP` (m); its flanks lean in `BULGE_FLANK` (m) from foot to top unless it is rolled (`round`). */
 const BULGE_STATIONS = 16;
 const BULGE_RAMP = 0.15;
+/** Each ramp (the cowl end's, and the nose end's unless it is a `mouth`) takes this many ring intervals: the flank's slope rises 30° over it, so six keep each ring's turn under 9° (two intervals twisted its cells 14-17°, four 11°). */
+const BULGE_RAMP_RINGS = 6;
 const BULGE_FLANK = 0.05;
 /** Chords per flank of a rolled bulge (`round`): the fewest whose turns stay under the fitting crease angle, so it shades round. */
 const POD_STEPS = 2;
@@ -91,14 +94,29 @@ function podRing(half: number, round: number, foot: number, top: number): Pt[] {
   return [...left, ...right];
 }
 
+/** A ramp station this close (m) to an even one is that one: no sliver of a gap. */
+const BULGE_STATION_MERGE = 0.004;
+
+/** The z of a bulge's rings: `BULGE_STATIONS` even ones, plus each ramp (the cowl end's, the nose end's unless it is a `mouth`) split in `BULGE_RAMP_RINGS`. */
+function bulgeStations(b: HoodBulge): number[] {
+  const zs = Array.from({ length: BULGE_STATIONS + 1 }, (_, s) => lerp(b.z0, b.z1, s / BULGE_STATIONS));
+  const ramps = [{ from: b.z0, run: b.cowlRamp ?? BULGE_RAMP }, ...(b.mouth ? [] : [{ from: b.z1 - BULGE_RAMP, run: BULGE_RAMP }])];
+  for (const { from, run } of ramps) {
+    for (let k = 1; k < BULGE_RAMP_RINGS; k++) {
+      const z = from + (run * k) / BULGE_RAMP_RINGS;
+      if (zs.every((other) => Math.abs(other - z) > BULGE_STATION_MERGE)) zs.push(z);
+    }
+  }
+  return zs.sort((a, c) => a - c);
+}
+
 function bulgeGeometry(b: HoodBulge, style: BodyStyle): THREE.BufferGeometry {
   const [oy, oz] = style.hood.origin;
   const [rearHalf, frontHalf] = [(b.cowlWidth ?? b.width) / 2, b.width / 2];
   const rings: Pt[][] = [];
   const zs: number[] = [];
-  for (let s = 0; s <= BULGE_STATIONS; s++) {
-    const z = lerp(b.z0, b.z1, s / BULGE_STATIONS);
-    const half = lerp(rearHalf, frontHalf, s / BULGE_STATIONS);
+  for (const z of bulgeStations(b)) {
+    const half = lerp(rearHalf, frontHalf, (z - b.z0) / (b.z1 - b.z0));
     const top = bulgeTopY(b, z, style) - oy;
     const foot = deckTopY(half, z, style, true) - SINK - oy;
     const ring = b.round
@@ -213,12 +231,12 @@ function railGeometry(rail: NonNullable<RoofParts["rails"]>, side: number, style
   for (let s = 0; s <= RAIL_STATIONS; s++) {
     const z = lerp(rear, front, s / RAIL_STATIONS);
     const ease = THREE.MathUtils.smoothstep(Math.min(z - rear, front - z), 0, RAIL_RAMP);
-    const top = roofTopY(inner, z, style) - SINK + (rail.rise + SINK) * ease;
+    const top = drawnRoofTopY(inner, z, style) - SINK + (rail.rise + SINK) * ease;
     rings.push([
-      { x: side * inner, y: roofTopY(inner, z, style) - SINK },
+      { x: side * inner, y: drawnRoofTopY(inner, z, style) - SINK },
       { x: side * inner, y: top },
       { x: side * outer, y: top },
-      { x: side * outer, y: roofTopY(outer, z, style) - SINK },
+      { x: side * outer, y: drawnRoofTopY(outer, z, style) - SINK },
     ]);
     zs.push(z);
   }
@@ -233,8 +251,8 @@ function glassPanelGeometry(panel: NonNullable<RoofParts["glassPanel"]>, style: 
   const zs: number[] = [];
   for (let s = 0; s <= PANEL_STATIONS; s++) {
     const z = lerp(panel.z[0], panel.z[1], s / PANEL_STATIONS);
-    const top = xs.map((x) => ({ x, y: roofTopY(x, z, style) + PANEL_PROUD }));
-    const under = [half, -half].map((x) => ({ x, y: roofTopY(x, z, style) - SINK }));
+    const top = xs.map((x) => ({ x, y: drawnRoofTopY(x, z, style) + PANEL_PROUD }));
+    const under = [half, -half].map((x) => ({ x, y: drawnRoofTopY(x, z, style) - SINK }));
     rings.push([...top, ...under]);
     zs.push(z);
   }

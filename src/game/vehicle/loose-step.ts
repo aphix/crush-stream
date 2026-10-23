@@ -75,7 +75,7 @@ export const SHAPE_POINTS = 20;
 
 /** A shape for a body of at most `SHAPE_POINTS` points, empty until `boxShape` or `wheelShape` fills it; `shell`: it may fly as its drawn shell's own points (`LooseShape.shell`). */
 export function newLooseShape(shell = false): LooseShape {
-  return { points: new Float64Array(3 * SHAPE_POINTS), count: 0, centre: new THREE.Vector3(), half: new THREE.Vector3(), box: false, shell, invI: new THREE.Vector3(), reach: 0, asleep: false, sleepX: 0, sleepZ: 0, airborne: false, restFor: 0 };
+  return { points: new Float64Array(3 * SHAPE_POINTS), count: 0, centre: new THREE.Vector3(), half: new THREE.Vector3(), plate: 0, box: false, shell, invI: new THREE.Vector3(), reach: 0, asleep: false, sleepX: 0, sleepZ: 0, airborne: false, restFor: 0 };
 }
 
 /** `shape` as `newLooseShape` made it: not measured, awake, no sleep place. A body back on its car (`resetVisual`) flies afresh when next torn, as a new car's would. */
@@ -84,6 +84,7 @@ export function clearShape(shape: LooseShape): void {
   shape.count = 0;
   shape.centre.set(0, 0, 0);
   shape.half.set(0, 0, 0);
+  shape.plate = 0;
   shape.box = false;
   shape.invI.set(0, 0, 0);
   shape.reach = 0;
@@ -110,6 +111,10 @@ const _size = new THREE.Vector3();
 const _p = new THREE.Vector3();
 /** The drawn points a shape is measured over, in the part's own frame (x, y, z), grown as needed: measured once per flight. */
 const SHELL = { xyz: new Float64Array(3 * 1024), n: 0 };
+/** A shell's drawn triangles' area projected on each of the part's axes (|x|, |y|, |z| of each area vector summed), measured with `SHELL`. */
+const FACING = new Float64Array(3);
+const _tri = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+const _cross = new THREE.Vector3();
 
 function shellPush(p: THREE.Vector3): void {
   if (SHELL.n * 3 + 3 > SHELL.xyz.length) {
@@ -123,17 +128,35 @@ function shellPush(p: THREE.Vector3): void {
 
 /**
  * `object`'s meshes' bounds in its own frame, unioned into `_box` (`m`: the frame of `o` in `object`'s), and with `shell` their points into
- * `SHELL`: a mesh's vertices, or the corners of its bounding box where that is not its vertices' (a geometry whose box was set apart from
- * them; no torn part's is today).
+ * `SHELL` and their triangles' facing into `FACING`: a mesh's vertices, or the corners of its bounding box where that is not its vertices'
+ * (a geometry whose box was set apart from them; no torn part's is today).
  */
 function growBox(o: THREE.Object3D, m: THREE.Matrix4, shell: boolean): void {
   if (o instanceof THREE.Mesh) {
     const geo = o.geometry as THREE.BufferGeometry;
     if (geo.boundingBox === null) geo.computeBoundingBox();
     _box.union(_geoBox.copy(geo.boundingBox!).applyMatrix4(m));
-    if (shell) shellOf(geo, m);
+    if (shell) {
+      facingOf(geo, m);
+      shellOf(geo, m);
+    }
   }
   for (const child of o.children) growBox(child, new THREE.Matrix4().multiplyMatrices(m, child.matrix), shell);
+}
+
+/** `geo`'s triangles' area projected on each axis of the part's frame (`m`), added into `FACING`: a sheet faces its broad side, as a bumper's face does however far its ends wrap back. */
+function facingOf(geo: THREE.BufferGeometry, m: THREE.Matrix4): void {
+  const pos = geo.getAttribute("position");
+  if (!pos) return;
+  const index = geo.index;
+  const triangles = (index ? index.count : pos.count) / 3;
+  for (let t = 0; t < triangles; t++) {
+    for (let c = 0; c < 3; c++) _tri[c]!.fromBufferAttribute(pos, index ? index.getX(3 * t + c) : 3 * t + c).applyMatrix4(m);
+    _cross.subVectors(_tri[1]!, _tri[0]!).cross(_p.subVectors(_tri[2]!, _tri[0]!));
+    FACING[0]! += Math.abs(_cross.x);
+    FACING[1]! += Math.abs(_cross.y);
+    FACING[2]! += Math.abs(_cross.z);
+  }
 }
 
 /** `geo`'s points into `SHELL` in the part's frame (`m`): its vertices, or its bounding box's corners where that box is not its vertices'. */
@@ -157,12 +180,24 @@ function shellOf(geo: THREE.BufferGeometry, m: THREE.Matrix4): void {
 export function boxShape(shape: LooseShape, object: THREE.Object3D): void {
   _box.makeEmpty();
   SHELL.n = 0;
+  FACING.fill(0);
   growBox(object, new THREE.Matrix4(), shape.shell);
   if (_box.isEmpty()) _box.set(_size.set(-MIN_HALF, -MIN_HALF, -MIN_HALF), _geoBox.max.set(MIN_HALF, MIN_HALF, MIN_HALF));
   _box.getCenter(shape.centre);
   _box.getSize(_size).multiplyScalar(0.5);
   halfBox(shape, Math.max(MIN_HALF, _size.x), Math.max(MIN_HALF, _size.y), Math.max(MIN_HALF, _size.z));
+  shape.plate = plateOf(shape);
   if (shape.shell && SHELL.n > 0 && !cornersFilled(shape)) supportShape(shape);
+}
+
+/**
+ * The axis `shape`'s wind plate faces: for a part that flies as its shell, the axis its drawn triangles face most (a torn bumper's wrapped ends
+ * and seam cover make its box as deep as it is tall, its face still the broad side); for one that flies as its box (a mirror's pod, the light bar), its thinnest.
+ */
+function plateOf(shape: LooseShape): LooseShape["plate"] {
+  if (shape.shell && SHELL.n > 0) return FACING[1]! > FACING[0]! ? (FACING[2]! > FACING[1]! ? 2 : 1) : FACING[2]! > FACING[0]! ? 2 : 0;
+  const { x, y, z } = shape.half;
+  return x <= y && x <= z ? 0 : y <= z ? 1 : 2;
 }
 
 /** Whether a point of `SHELL` stands within `CORNER_FILL` of each of the eight corners of `shape`'s box. */
@@ -187,7 +222,6 @@ function cornersFilled(shape: LooseShape): boolean {
  */
 function supportShape(shape: LooseShape): void {
   const c = shape.centre;
-  let reach = 0;
   for (let k = 0; k < SHAPE_POINTS; k++) {
     const bx = shape.points[k * 3]!;
     const by = shape.points[k * 3 + 1]!;
@@ -207,16 +241,65 @@ function supportShape(shape: LooseShape): void {
         at = i;
       }
     }
-    const px = SHELL.xyz[at]! - c.x;
-    const py = SHELL.xyz[at + 1]! - c.y;
-    const pz = SHELL.xyz[at + 2]! - c.z;
-    shape.points[k * 3] = px;
-    shape.points[k * 3 + 1] = py;
-    shape.points[k * 3 + 2] = pz;
-    reach = Math.max(reach, Math.sqrt(px * px + py * py + pz * pz));
+    shape.points[k * 3] = SHELL.xyz[at]! - c.x;
+    shape.points[k * 3 + 1] = SHELL.xyz[at + 1]! - c.y;
+    shape.points[k * 3 + 2] = SHELL.xyz[at + 2]! - c.z;
   }
+  completeTwins(shape);
+  let reach = 0;
+  for (let k = 0; k < SHAPE_POINTS * 3; k += 3) reach = Math.max(reach, Math.sqrt(shape.points[k]! ** 2 + shape.points[k + 1]! ** 2 + shape.points[k + 2]! ** 2));
   shape.reach = reach;
   shape.box = false;
+}
+
+const CORNER_FILL_SQ = CORNER_FILL * CORNER_FILL;
+
+/** Whether a point of `shape` (about its middle) stands within `CORNER_FILL` of (`x`, `y`, `z`). */
+function supportNear(shape: LooseShape, x: number, y: number, z: number): boolean {
+  for (let k = 0; k < SHAPE_POINTS * 3; k += 3) {
+    if ((shape.points[k]! - x) ** 2 + (shape.points[k + 1]! - y) ** 2 + (shape.points[k + 2]! - z) ** 2 <= CORNER_FILL_SQ) return true;
+  }
+  return false;
+}
+
+/** The last slot of `shape` whose point an earlier slot holds as well (the farthest point along two ways is one), -1 where none repeats. */
+function repeatedSlot(shape: LooseShape): number {
+  for (let k = SHAPE_POINTS - 1; k > 0; k--) {
+    for (let j = 0; j < k; j++) {
+      if ((shape.points[k * 3]! - shape.points[j * 3]!) ** 2 + (shape.points[k * 3 + 1]! - shape.points[j * 3 + 1]!) ** 2 + (shape.points[k * 3 + 2]! - shape.points[j * 3 + 2]!) ** 2 < 1e-12) return k;
+    }
+  }
+  return -1;
+}
+
+/**
+ * A shell drawn the same either side of its car's middle plane (a bumper) is supported the same either side. The farthest point along a way
+ * can tie between a pair of mirror images (a bumper's two lower front ends) and one slot takes one of them, which left the part on a lone
+ * front point that tipped it forward end over end as it slid. A drawn mirror image of a chosen point that no chosen point stands at goes in
+ * a slot another repeats.
+ */
+function completeTwins(shape: LooseShape): void {
+  const c = shape.centre;
+  for (let k = 0; k < SHAPE_POINTS; k++) {
+    const x = -shape.points[k * 3]! - 2 * c.x;
+    const y = shape.points[k * 3 + 1]!;
+    const z = shape.points[k * 3 + 2]!;
+    if (supportNear(shape, x, y, z)) continue;
+    let near = CORNER_FILL_SQ;
+    let at = -1;
+    for (let i = 0; i < SHELL.n * 3; i += 3) {
+      const off = (SHELL.xyz[i]! - c.x - x) ** 2 + (SHELL.xyz[i + 1]! - c.y - y) ** 2 + (SHELL.xyz[i + 2]! - c.z - z) ** 2;
+      if (off <= near) {
+        near = off;
+        at = i;
+      }
+    }
+    const slot = at < 0 ? -1 : repeatedSlot(shape);
+    if (slot < 0) continue;
+    shape.points[slot * 3] = SHELL.xyz[at]! - c.x;
+    shape.points[slot * 3 + 1] = SHELL.xyz[at + 1]! - c.y;
+    shape.points[slot * 3 + 2] = SHELL.xyz[at + 2]! - c.z;
+  }
 }
 
 /** `shape` as a box of half extents `hx`, `hy`, `hz` about its `centre`: its eight corners and twelve edge middles, and the inverse inertia per unit mass of a solid box that size (a hood is a sheet: its spin about its own length is as easy as its tilt). */
@@ -244,8 +327,9 @@ function halfBox(shape: LooseShape, hx: number, hy: number, hz: number): void {
   shape.restFor = 0;
 }
 
-/** `shape` as a keyframe carries it (`part-state.ts`): its box of half extents `hx`, `hy`, `hz`, and its shell's twenty points from `src` at `at` unless it flies as the box. */
-export function keyedShape(shape: LooseShape, hx: number, hy: number, hz: number, box: boolean, src: Float64Array, at: number): void {
+/** `shape` as a keyframe carries it (`part-state.ts`): its box of half extents `hx`, `hy`, `hz` facing `plate`, and its shell's twenty points from `src` at `at` unless it flies as the box. */
+export function keyedShape(shape: LooseShape, hx: number, hy: number, hz: number, plate: LooseShape["plate"], box: boolean, src: Float64Array, at: number): void {
+  shape.plate = plate;
   halfBox(shape, hx, hy, hz);
   if (box) return;
   let reach = 0;
@@ -325,7 +409,7 @@ const _air = new THREE.Vector3();
 const _arm = new THREE.Vector3();
 
 /**
- * One slice of the wind on a torn part of `mass` kg flying as a flat plate: its box's two largest extents, the normal its thinnest axis.
+ * One slice of the wind on a torn part of `mass` kg flying as a flat plate: its box's two extents across its facing (`LooseShape.plate`), the normal that axis.
  * The relative wind's normal force (½ρv²A C_N, C_N with the incidence α) pushes along that normal at the centre of pressure ahead of the
  * middle toward the leading edge, so it lifts, drags, pitches and tumbles the plate; one lying on a surface also takes the wind's uplift
  * over its top (`SHEET_LIFTOFF_CF`), which raises its leading edge once the wind is fast enough to carry its weight.
@@ -338,18 +422,18 @@ function blow(p: LooseBody, mass: number, dt: number): void {
   const hx = s.half.x;
   const hy = s.half.y;
   const hz = s.half.z;
-  const thin = hx <= hy && hx <= hz ? 0 : hy <= hz ? 1 : 2;
-  const a = thin === 0 ? hy : hx;
-  const b = thin === 2 ? hy : hz;
+  const normal = s.plate;
+  const a = normal === 0 ? hy : hx;
+  const b = normal === 2 ? hy : hz;
   const q = p.object.quaternion;
   _vb.copy(v).applyQuaternion(_qi.copy(q).invert());
-  const vn = thin === 0 ? _vb.x : thin === 1 ? _vb.y : _vb.z;
-  const va = thin === 0 ? _vb.y : _vb.x;
-  const vc = thin === 2 ? _vb.y : _vb.z;
+  const vn = normal === 0 ? _vb.x : normal === 1 ? _vb.y : _vb.z;
+  const va = normal === 0 ? _vb.y : _vb.x;
+  const vc = normal === 2 ? _vb.y : _vb.z;
   const speed = Math.sqrt(speed2);
   const sinA = Math.min(1, Math.abs(vn) / speed);
   // The world's up component of the plate's normal: the share of the plate facing the sky.
-  const up = thin === 0 ? 2 * (q.x * q.y + q.w * q.z) : thin === 1 ? 1 - 2 * (q.x * q.x + q.z * q.z) : 2 * (q.y * q.z - q.w * q.x);
+  const up = normal === 0 ? 2 * (q.x * q.y + q.w * q.z) : normal === 1 ? 1 - 2 * (q.x * q.x + q.z * q.z) : 2 * (q.y * q.z - q.w * q.x);
   const cn = (vn > 0 ? -1 : 1) * Math.min(PLATE_CN_SLOPE * sinA, PLATE_CN_BROADSIDE) + (s.airborne ? 0 : SHEET_LIFTOFF_CF * up);
   const force = (0.5 * AIR_DENSITY * speed2 * 4 * a * b * cn) / mass;
   const along = Math.sqrt(va * va + vc * vc);
@@ -360,9 +444,9 @@ function blow(p: LooseBody, mass: number, dt: number): void {
     // The chord through the middle along the wind's run over the plate, from the half extents it crosses first.
     ahead = (share * 2 * Math.min((a * along) / Math.abs(va), (b * along) / Math.abs(vc))) / along;
   }
-  _air.set(thin === 0 ? force : 0, thin === 1 ? force : 0, thin === 2 ? force : 0);
+  _air.set(normal === 0 ? force : 0, normal === 1 ? force : 0, normal === 2 ? force : 0);
   // The arm to the centre of pressure, in the plate's axes: along the in-plane wind, ahead of the middle.
-  _arm.set(thin === 0 ? 0 : va * ahead, thin === 0 ? va * ahead : thin === 1 ? 0 : vc * ahead, thin === 2 ? 0 : vc * ahead);
+  _arm.set(normal === 0 ? 0 : va * ahead, normal === 0 ? va * ahead : normal === 1 ? 0 : vc * ahead, normal === 2 ? 0 : vc * ahead);
   _arm.cross(_air).multiply(s.invI).multiplyScalar(dt).applyQuaternion(q);
   p.angular.add(_arm);
   v.add(_air.multiplyScalar(dt).applyQuaternion(q));
@@ -395,6 +479,7 @@ export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentSta
   if (mass > 0) blow(p, mass, dt);
   bindBody(object, v, w, shape.centre, shape.invI, skip, true, dt);
   if (met) body.met = met;
+  if (cars !== null) body.cars = cars;
   body.panel = mass > 0;
   moveBody();
   // Its spin dies in the air as it always did.

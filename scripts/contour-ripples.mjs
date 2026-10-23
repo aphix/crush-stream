@@ -123,28 +123,32 @@ export function panelsOf(car) {
 
 const angleOf = (a, b) => deg(Math.acos(Math.min(1, Math.max(-1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))));
 
-/** The readings of the triangles `keep` selects of mesh data `d` (`other` selects the other skin's): `{ripple, shade, seam}` each `{deg, at: [x, y, z]}` at its worst vertex (null where none), the flags and the vertex count. */
-function readSkin(d, keep, other) {
+/** The readings of the triangles `keep` selects of mesh data `d` (`fan`: every triangle of the same skin, in the zone or not; `other` selects the other skin's; `hidden`: the skin is the inner one): `{ripple, shade, seam}` each `{deg, at: [x, y, z]}` at its worst vertex (null where none), the flags and the vertex count. */
+function readSkin(d, keep, fan, other, hidden) {
   const vert = d.p.length / 3;
   const tris = [];
-  for (let t = 0; t < keep.length; t++) if (keep[t]) tris.push(t);
+  const fanTris = [];
+  for (let t = 0; t < keep.length; t++) {
+    if (keep[t]) tris.push(t);
+    if (fan[t]) fanTris.push(t);
+  }
   const fn = new Float64Array(keep.length * 3);
   const fa = new Float64Array(keep.length);
   const f = [0, 0, 0];
-  for (const t of tris) {
+  for (const t of fanTris) {
     fa[t] = faceOf(d, t, f);
     fn.set(f, t * 3);
   }
-  // Drawn normal against the triangles that use the vertex.
+  // Drawn normal against the triangles that use the vertex: the skin's whole fan there, so a vertex on a zone's edge is not read against half its faces.
   const sum = new Float64Array(vert * 3);
   const used = new Uint8Array(vert);
-  for (const t of tris) {
+  for (const t of fanTris) {
     for (let c = 0; c < 3; c++) {
       const i = d.tris[t * 3 + c];
-      used[i] = 1;
       for (let a = 0; a < 3; a++) sum[i * 3 + a] += fn[t * 3 + a] * fa[t];
     }
   }
+  for (const t of tris) for (let c = 0; c < 3; c++) used[d.tris[t * 3 + c]] = 1;
   // A vertex the other skin uses too (a rim, a window edge) has one drawn normal for both: not read.
   const shared = new Uint8Array(vert);
   for (let t = 0; t < other.length; t++) if (other[t]) for (let c = 0; c < 3; c++) shared[d.tris[t * 3 + c]] = 1;
@@ -190,11 +194,12 @@ function readSkin(d, keep, other) {
       e.tris.push(t);
     }
   }
-  // A seam: split drawn normals the faces round the position do not account for.
+  // A seam: split drawn normals the faces round the position do not account for. On the hidden skin a vertex the outer skin uses too is drawn
+  // by the outer faces (its normal is theirs, as for shade): not read there.
   const seam = { deg: 0, at: null };
   for (const [w, set] of indices.entries()) {
-    if (set.size < 2) continue;
-    const ids = [...set];
+    const ids = [...set].filter((id) => !(hidden && shared[id]));
+    if (ids.length < 2) continue;
     let jump = 0;
     for (let a = 0; a < ids.length; a++) {
       for (let b = a + 1; b < ids.length; b++) jump = Math.max(jump, angleOf([d.n[ids[a] * 3], d.n[ids[a] * 3 + 1], d.n[ids[a] * 3 + 2]], [d.n[ids[b] * 3], d.n[ids[b] * 3 + 1], d.n[ids[b] * 3 + 2]]));
@@ -257,9 +262,11 @@ export function ripplesOf(panels) {
       for (const [skin, inner] of [["outer", 0], ["inner", 1]]) {
         const keep = new Uint8Array(panel.inner.length);
         for (let t = 0; t < keep.length; t++) keep[t] = !d.fit[t] && panel.inner[t] === inner && (zone === null || panel.zone[t] === zone) ? 1 : 0;
+        const fan = new Uint8Array(keep.length);
+        for (let t = 0; t < fan.length; t++) fan[t] = !d.fit[t] && panel.inner[t] === inner ? 1 : 0;
         const other = new Uint8Array(keep.length);
         for (let t = 0; t < other.length; t++) other[t] = !d.fit[t] && panel.inner[t] !== inner ? 1 : 0;
-        const r = readSkin(d, keep, other);
+        const r = readSkin(d, keep, fan, other, inner === 1);
         const count = (kind) => r.flags.filter((f) => f.kind === kind).length;
         out[name][skin] = { verts: r.verts, rippleDeg: r1(r.ripple.deg), rippleN: count("ripple"), shadeDeg: r1(r.shade.deg), shadeN: count("shade"), seamDeg: r1(r.seam.deg), seamN: count("seam") };
         const mine = r.flags.map((f) => ({ p: f.p, level: f.deg >= RIPPLE_FLAG[`${f.kind}Deg`][1] ? 2 : 1, score: f.deg, colour: "ripple", panel: name, skin, kind: f.kind }));

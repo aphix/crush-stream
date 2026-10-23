@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
-import { physicsSlice } from "../contact/sat.ts";
+import { BARRIER_HALF, BARRIER_TOP, physicsSlice } from "../contact/sat.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
 import { mass, paint } from "./test-support.ts";
 import { makeCar, makeWorld, pooledCar, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -91,6 +91,19 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
       };
       const [a, b] = [alive(TWO_HITS_KPH), alive(THREE_HITS_KPH)];
       assert.ok(a && !b, `squash ${squash}: ${TWO_HITS_KPH.toFixed(1)} km/h alive ${a}, ${THREE_HITS_KPH.toFixed(1)} km/h alive ${b}`);
+    }
+  });
+
+  // A tyre that stopped past the slab's middle was pushed on through it (its point at rest left by the nearest face, the far one) and the
+  // car stood on its nose with its front hubs inside the slab; it leaves by the side the car stands on, so the slab tears the tyres off
+  // and the truck goes over it.
+  it("when a monster hits the slab at 48 km/h, then none of its hubs ends inside the slab", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "monster");
+    car.deform.setMode("shape");
+    runWall(48, 1, "front", { car });
+    for (const name of ["hubFL", "hubFR", "hubRL", "hubRR"]) {
+      const at = mass(car.deform, name).world;
+      assert.ok(Math.abs(at.x) >= BARRIER_HALF.x || Math.abs(at.z) >= BARRIER_HALF.z || at.y >= BARRIER_TOP, `${name} at (${at.x.toFixed(2)}, ${at.y.toFixed(2)}, ${at.z.toFixed(2)}) inside the slab`);
     }
   });
 });
