@@ -628,7 +628,7 @@ function makeQuadGlassFrame(q: BowedQuad, { segX, facing }: QuadDraw): THREE.Buf
 }
 
 /** The body's chrome trim, a geometry per thing it follows in a crush (car local): see `makeBodyGlassTrim`. */
-export type BodyGlassTrim = {
+type BodyGlassTrim = {
   /** Both quarter glasses' frames: the panes are rigid on the body. */
   quarters: THREE.BufferGeometry;
   /** The windshield's frame: it follows the windshield's skin. */
