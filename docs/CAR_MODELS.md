@@ -348,6 +348,7 @@ name either with `--car`):
 CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
   scripts/contour-sections.mjs --root <tree> --car <style> [--png <out>]          # JSON lines on stdout
   scripts/contour-sections.mjs --root <tree> --all --sheet <png> [--curves <png>]  # every body
+  scripts/contour-sections.mjs --root <tree> --ripples [--car <style>] [--png <out>]  # rest ripples alone, all seven cars
 ```
 
 How to read it. Each car prints one JSON line with its region scores, `gaps` and `zfight`. After it come zero or more
@@ -356,6 +357,7 @@ the left side's findings and the scores under the views:
 - Yellow, orange and red rings are shape findings: mild, bad, and the worst in that region.
 - Cyan rings are gaps and stand-offs: bigger and bolder when bad.
 - Magenta rings are z-fighting.
+- Lime rings are rest ripples (`ripples` below), only where the vertex is in view.
 
 Then the raw section curves: blue for glass, dark for trim, and cool to warm by turn elsewhere. Read the region numbers against
 the same region on the other cars, not against a fixed bar.
@@ -402,3 +404,22 @@ the same region on the other cars, not against a fixed bar.
     units in depth steps. It is printed only when every range measured and some range needs an offset.
   - Gaps, stand-offs and turns print no suggestion yet; nothing is printed when unsure.
   - The lines are data for a lane, or later a builder, to take or leave; no builder reads them.
+- `ripples` (`contour-ripples.mjs`): the rest-ripple check, on an undeformed car: surface noise a reference does not show. It reads
+  each drawn panel (hood, boot, each door, the bumpers, the body, and its roof zone over the side glass top), each skin apart. A
+  face is on the outer skin or the inner one (the underside, the cabin side), told once on the shut car by whether a ray along
+  its normal leaves the panels. Merged fittings (exhaust tips, hitch) are left out. Three readings per skin, each the worst
+  degrees and the number of vertices past the mild level:
+  - `rippleDeg` / `rippleN`: a vertex or a neighbour has a gentle fold (3-15°) each way, convex and concave. Smooth and creased
+    panels fold one way along a line, so a fold each way side by side is a wave. Folds over 15° are crisp edges and not read.
+    Mild 6°, bad 12°.
+  - `shadeDeg` / `shadeN`: the drawn normal against the area-weighted normal of the triangles that use the vertex; a normal the
+    surface does not give. Not read at a vertex both skins use (a rim). Mild 10°, bad 20°.
+  - `seamDeg` / `seamN`: a position drawn twice whose normals differ by more than the faces there do. Mild 8°, bad 16°.
+
+  `--ripples` prints one `{"kind":"ripples","car","state","panels","worst"}` line per car for `shut` then `open` (posed as the
+  showcase's `showPose`), on all seven cars unless `--car` names one; `worst` lists each skin's three worst flags with a world
+  point. A pose moves each panel rigidly, so the open readings equal the shut ones; the open car's `--png` / `--sheet` shows
+  where they are (the hood's and boot's inner faces under a camera light, and the front three-quarter), with lime rings only
+  where the vertex is in view. The default and `--all` runs add the same readings to each car's line as `ripples`. The body's
+  skins read hundreds of vertices on every car: its beads, arch lips and window frames fold both ways by design, so read a body
+  count against the other cars'; the lids, doors and roof are the panels with a clean outer skin to hold to.

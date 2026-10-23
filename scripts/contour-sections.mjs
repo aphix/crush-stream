@@ -6,6 +6,7 @@
  *   CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
  *     scripts/contour-sections.mjs --root <tree> --car <style> [--png <out.png>]
  *   ... scripts/contour-sections.mjs --root <tree> --all --sheet <out.png>     (the five bodies: one JSON line each, one sheet)
+ *   ... scripts/contour-sections.mjs --root <tree> --ripples [--car <style>] [--png <out.png>]   (the rest-ripple check alone, all seven cars)
  *
  * The surface: the body, lids, door skins, bumpers, glass panes and window trim as drawn (`lookMeshes`, `glassPanes`), less the style's
  * small fittings (`smallFittings`: exhaust tips, tow hitch); no wheels, lamps or batched parts. Each station cuts every triangle with a
@@ -36,7 +37,8 @@
  * Prints one JSON line per car, with its exterior `gaps` and `zfight` (`contour-defects.mjs`), then a `{"kind":"suggest"}` line per
  * fix certain enough to print. `--curves <png>`: every car's section curves, raw samples coloured by turn. `--png`: the car in game
  * shading from the rear and the front three-quarters (its left side), rings at the flagged samples: yellow mild, orange bad, red the
- * region's worst, cyan a gap or stand-off, magenta z-fighting; scores under it. `--sheet`: every car's panel and its curves, stacked.
+ * region's worst, cyan a gap or stand-off, magenta z-fighting, lime a rest ripple; scores under it. `--sheet`: every car's panel and its curves, stacked.
+ * `--ripples` (`contour-ripples.mjs`): per panel (hood, boot, doors, roof, body, bumpers), outer and inner skin apart, the surface noise a reference does not show on the undeformed car, shut and posed open.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -45,6 +47,7 @@ import * as THREE from "three";
 import { CarStage, ViewPort, openGame } from "./trace-core.mjs";
 import { GLASS, K, boxOf, cut, deg, dropBoxes, intendedAt, intendedEdges, mm, r1, sampleColour, smallFittings, stackCanvases, surfaceOf, threeQuarter, world } from "./contour-core.mjs";
 import { defectsOf } from "./contour-defects.mjs";
+import { RIPPLE_FLAG, panelsOf, ripplesOf } from "./contour-ripples.mjs";
 
 /** Fan ray spacing (degrees), the turn window (m) and the neighbour jump (m) that splits a contour as a step. */
 const FAN_STEP = 0.25;
@@ -70,12 +73,18 @@ const LIP_AT = [0.04, 0.1, 0.16, 0.22];
 const TAIL_ABOVE = 0.05;
 /** The bumper and lip window starts this far (m) behind the rear arch opening's lip. */
 const ARCH_CLEAR = 0.02;
+/** The rest-ripple check's cars: all seven, the police and the monster too (each has parts and a stance of its own). */
+const SEVEN = ["sedan", "hatchback", "wagon", "coupe", "pickup", "police", "monster"];
+/** Flags each panel and skin lists in the ripple JSON line. */
+const RIPPLE_WORST = 3;
 /** Neutral paint for the screenshots: the rings stand out on it. */
 const PAINT = 0xa4a8ae;
 const SHOT = [900, 560];
 const RING = { 1: "rgba(255,220,0,0.9)", 2: "rgba(255,140,0,0.95)", 3: "rgba(230,20,20,1)" };
-/** Defect rings: a gap or stand-off cyan, z-fighting magenta (bigger rings, bolder when bad). */
-const DEFECT_RING = { gap: "rgba(0,200,255,0.95)", zfight: "rgba(255,0,220,0.95)" };
+/** Defect rings: a gap or stand-off cyan, z-fighting magenta (bigger rings, bolder when bad), a rest ripple lime. */
+const DEFECT_RING = { gap: "rgba(0,200,255,0.95)", zfight: "rgba(255,0,220,0.95)", ripple: "rgba(60,255,0,1)" };
+/** A ripple's ring shows only where its vertex is no more than this (m) behind the first surface the eye meets. */
+const RING_VISIBLE_M = 0.03;
 
 /**
  * Rays in the cut's plane from `R` m out toward (cu, cv), one every FAN_STEP degrees from `a0` to `a1`: each sample the outermost hit
@@ -443,21 +452,32 @@ export function contourOf(stage, styleId, probe = null) {
   return { regions, defects: defectsOf(stage, style, lift, bumper, glass.min.y, probe) };
 }
 
-/** The car's panel: rear and front three-quarter views in game shading with the flags as rings, its scores in lines under them. */
-async function panel(game, stage, port, style, { regions, defects }) {
+/**
+ * A panel: `views` ([label, camera]) in game shading with the flags as rings (a ripple's ring only where its vertex is in view, not
+ * behind a panel), `lines` of scores under them.
+ */
+function panel(game, stage, port, title, flags, lines, views, headlight = false) {
   const [W, H] = SHOT;
-  const box = new THREE.Box3().setFromObject(stage.car.group);
-  const lines = scoreLines(style, regions, defects);
-  const canvas = game.createCanvas(W * 2 + 10, H + 22 + lines.length * 18 + 8);
+  const canvas = game.createCanvas((W + 10) * views.length - 10, H + 22 + lines.length * 18 + 8);
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#000";
   ctx.font = "bold 18px sans-serif";
-  ctx.fillText(`${style}: surface contour sections (left side shown; scores cover both sides)`, 6, 17);
-  for (const [k, rear] of [true, false].entries()) {
-    const cam = threeQuarter(box, rear, W, H);
+  ctx.fillText(title, 6, 17);
+  const ray = new THREE.Raycaster();
+  const v = new THREE.Vector3();
+  const dir = new THREE.Vector3();
+  for (const [k, [label, cam]] of views.entries()) {
+    // The inner faces stand in shadow: a light on the camera, for this shot only.
+    const lamp = headlight ? new THREE.DirectionalLight(0xffffff, 2.2) : null;
+    if (lamp) {
+      lamp.position.copy(cam.position);
+      lamp.target.position.copy(cam.position).add(cam.getWorldDirection(dir));
+      stage.scene.add(lamp, lamp.target);
+    }
     const rgba = port.draw(stage.scene, cam);
+    if (lamp) stage.scene.remove(lamp, lamp.target);
     const img = new game.ImageData(rgba, W, H);
     const tmp = game.createCanvas(W, H);
     tmp.getContext("2d").putImageData(img, 0, 0);
@@ -465,28 +485,38 @@ async function panel(game, stage, port, style, { regions, defects }) {
     ctx.fillStyle = "#eef0f2";
     ctx.fillRect(ox, 22, W, H);
     ctx.drawImage(tmp, ox, 22);
-    const v = new THREE.Vector3();
-    const all = [...Object.values(regions).flatMap((r) => r?.flags ?? []), ...defects.flags];
     for (const level of [1, 2, 3]) {
-      for (const f of all) {
+      for (const f of flags) {
         // The left side's rings (the shot shows it), and every defect ring on the centre line.
         if (f.level !== level || f.p[0] < -0.05) continue;
+        if (f.colour === "ripple") {
+          const dist = dir.fromArray(f.p).sub(cam.position).length();
+          ray.set(cam.position, dir.normalize());
+          if ((ray.intersectObject(stage.car.group, true)[0]?.distance ?? Infinity) < dist - RING_VISIBLE_M) continue;
+        }
         v.fromArray(f.p).project(cam);
+        if (v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) continue;
         const [u, w] = [ox + ((v.x + 1) / 2) * W, 22 + ((1 - v.y) / 2) * H];
         ctx.strokeStyle = f.colour ? DEFECT_RING[f.colour] : RING[level];
         ctx.lineWidth = level >= 2 ? 3 : 2;
         ctx.beginPath();
-        ctx.arc(u, w, f.colour ? 7 + level * 2 : level === 3 ? 8 : 5, 0, Math.PI * 2);
+        ctx.arc(u, w, f.colour === "ripple" ? 3 + level * 2 : f.colour ? 7 + level * 2 : level === 3 ? 8 : 5, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
     ctx.fillStyle = "#000";
     ctx.font = "14px sans-serif";
-    ctx.fillText(rear ? "rear three-quarter" : "front three-quarter", ox + 6, 22 + H - 8);
+    ctx.fillText(label, ox + 6, 22 + H - 8);
   }
   ctx.font = "15px monospace";
   for (const [i, line] of lines.entries()) ctx.fillText(line, 6, H + 22 + 18 * (i + 1));
   return canvas;
+}
+
+/** The contour panel's views: the car's rear and front three-quarters. */
+function threeQuarters(stage) {
+  const box = new THREE.Box3().setFromObject(stage.car.group);
+  return [["rear three-quarter", threeQuarter(box, true, SHOT[0], SHOT[1])], ["front three-quarter", threeQuarter(box, false, SHOT[0], SHOT[1])]];
 }
 
 /** Plot axes per cut: across the roof (x right, y up), along it (front at the left, y up), the horizontal cuts in plan (front at the left, the car's left up). */
@@ -556,11 +586,45 @@ function scoreLines(style, regions, defects) {
   ];
 }
 
+/** The ripple readings as score lines, a panel's two skins each: the worst degrees / the vertices past the mild level. */
+function rippleLines(r) {
+  const f = (s) => `ripple ${s.rippleDeg}°/${s.rippleN} shade ${s.shadeDeg}°/${s.shadeN} seam ${s.seamDeg}°/${s.seamN}`;
+  return [
+    ...Object.entries(r.panels).map(([name, p]) => `${name.padEnd(8)} outer ${f(p.outer)} | inner ${f(p.inner)}`),
+    `rings (lime), worst of each panel's skin first: ripple = a fold each way ≥ ${RIPPLE_FLAG.rippleDeg[0]}° side by side, shade = a drawn normal ≥ ${RIPPLE_FLAG.shadeDeg[0]}° off its triangles, seam = a split normal ≥ ${RIPPLE_FLAG.seamDeg[0]}° off its faces`,
+  ];
+}
+
+/** One JSON line of the ripple check: each panel's skins and the worst few flags of each. */
+function rippleJson(style, state, r) {
+  const worst = {};
+  for (const f of r.flags) {
+    const list = (worst[`${f.panel} ${f.skin}`] ??= []);
+    if (list.length < RIPPLE_WORST) list.push({ kind: f.kind, deg: r1(f.score), at: f.p.map((x) => Math.round(x * 1000) / 1000) });
+  }
+  return { kind: "ripples", car: style, state, panels: r.panels, worst };
+}
+
+/** The open car's lid views: the raised hood's inner face from ahead and the boot lid's from behind, a headlight on each (the inner faces stand in shadow). */
+function lidViews(stage) {
+  const look = stage.car.lookMeshes();
+  const view = (mesh, label, side) => {
+    const c = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+    const cam = new THREE.PerspectiveCamera(30, SHOT[0] / SHOT[1], 0.05, 50);
+    cam.position.set(c.x + 0.7, c.y - 0.1, c.z + side * 1.9);
+    cam.lookAt(c);
+    cam.updateMatrixWorld(true);
+    return [label, cam];
+  };
+  return [view(look.hood, "hood inner (open)", 1), view(look.trunk, "boot inner (open)", -1), ...threeQuarters(stage).slice(1)];
+}
+
 const { values } = parseArgs({
   options: {
     root: { type: "string" },
     car: { type: "string" },
     all: { type: "boolean", default: false },
+    ripples: { type: "boolean", default: false },
     png: { type: "string" },
     sheet: { type: "string" },
     curves: { type: "string" },
@@ -574,8 +638,9 @@ async function stack(canvases, out) {
 }
 
 const game = await openGame(values.root);
-// The police car is the sedan's body and the monster the pickup's: `--all` draws the five bodies; `--car` takes any style.
-const styles = values.all ? ["sedan", "hatchback", "wagon", "coupe", "pickup"] : [values.car ?? "sedan"];
+// The police car is the sedan's body and the monster the pickup's: `--all` draws the five bodies, `--ripples` all seven cars (each
+// has parts and a stance of its own); `--car` takes any style.
+const styles = values.ripples ? (values.car ? [values.car] : SEVEN) : values.all ? ["sedan", "hatchback", "wagon", "coupe", "pickup"] : [values.car ?? "sedan"];
 const stage = new CarStage(game, PAINT);
 const port = values.png || values.sheet ? new ViewPort(game, SHOT[0], SHOT[1]) : null;
 // The z-fighting offset measure's window (`offsetNeeded`): its own small canvas, so the shots' frame is not drawn over.
@@ -584,14 +649,32 @@ const panels = [];
 const plots = [];
 for (const style of styles) {
   stage.build(style, game.STYLE_CLASS[style]);
+  const skins = panelsOf(stage.car);
+  if (values.ripples) {
+    // The ripple check alone: shut, then posed open as the showcase's (`showPose`) so the lids' inner faces are in view. A pose moves
+    // each panel rigidly, so the readings are the same; the open car's picture shows where they are.
+    for (const state of ["shut", "open"]) {
+      if (state === "open") {
+        stage.car.showPose("open");
+        stage.car.updateSkin();
+        stage.show([]);
+      }
+      const r = ripplesOf(skins);
+      console.log(JSON.stringify(rippleJson(style, state, r)));
+      if (state === "open" && port) panels.push(panel(game, stage, port, `${style}: rest ripples, posed open (left side shown; readings cover both sides)`, r.flags, rippleLines(r), lidViews(stage), true));
+    }
+    continue;
+  }
   const found = contourOf(stage, style, probe);
   const { regions, defects } = found;
-  console.log(JSON.stringify({ car: style, ...Object.fromEntries(Object.entries(regions).map(([k, r]) => [k, r?.score ?? null])), gaps: defects.gaps, zfight: defects.zfight, skipped: defects.skipped }));
+  const rest = ripplesOf(skins);
+  console.log(JSON.stringify({ car: style, ...Object.fromEntries(Object.entries(regions).map(([k, r]) => [k, r?.score ?? null])), gaps: defects.gaps, zfight: defects.zfight, skipped: defects.skipped, ripples: rest.panels }));
   for (const s of defects.suggest) console.log(JSON.stringify({ kind: "suggest", car: style, ...s }));
   const plot = values.curves || values.sheet ? sectionPanel(game, style, regions) : null;
   if (values.curves) plots.push(plot);
   if (port) {
-    const canvas = await panel(game, stage, port, style, found);
+    const lines = [...scoreLines(style, regions, defects), `rest ripples (lime): ${rest.flags.length} flagged; the readings are in the JSON (--ripples shows them)`];
+    const canvas = panel(game, stage, port, `${style}: surface contour sections (left side shown; scores cover both sides)`, [...Object.values(regions).flatMap((r) => r?.flags ?? []), ...defects.flags, ...rest.flags], lines, threeQuarters(stage));
     if (values.png) {
       mkdirSync(dirname(values.png), { recursive: true });
       writeFileSync(values.png, await canvas.encode("png"));
@@ -599,6 +682,7 @@ for (const style of styles) {
     panels.push(canvas, plot);
   }
 }
+if (values.ripples && values.png && panels.length) await stack(panels, values.png);
 if (values.sheet && panels.length) await stack(panels, values.sheet);
 if (values.curves && plots.length) await stack(plots, values.curves);
 process.exit(0);
