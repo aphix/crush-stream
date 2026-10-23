@@ -43,19 +43,15 @@ function clearOver(tyre: CarFrame["rig"]["tyre"], pos: ArrayLike<number>, i: num
   const along = dx * a[0]! + dy * a[1]! + dz * a[2]!;
   const r = tyre.r * scale;
   const top = Math.sqrt(Math.max(0, r * r - ahead * ahead)) - FALL * (Math.max(0, Math.abs(ahead) - r) + Math.max(0, Math.abs(along) - tyre.halfW * scale));
-  _up = up;
-  _ahead = ahead;
-  _fx = fx;
-  _fz = fz;
+  _read.up = up;
+  _read.ahead = ahead;
+  _read.fx = fx;
+  _read.fz = fz;
   return up - top - gap;
 }
 
-/** The height over the hub (m, up the tyre's frame) of the point `clearOver` read last. */
-let _up = 0;
-/** The distance (m) along the road from the hub of the point `clearOver` read last. */
-let _ahead = 0;
-let _fx = 0;
-let _fz = 0;
+/** What `clearOver` read last, for its caller: the point's height over the hub (m, up the tyre's frame), its distance along the road from the hub (m) and the road's direction in x and z. */
+const _read = { up: 0, ahead: 0, fx: 0, fz: 0 };
 
 const _h = new Float64Array(3);
 const _a = new Float64Array(3);
@@ -186,7 +182,7 @@ export class TyreSkin {
       const restUp = (this.restUp[w] ??= new Float32Array(this.rest.length / 3));
       for (let i = 0; i < this.rest.length; i += 3) {
         const c = clearOver(this.frame.rig.tyre, this.rest, i, _h, _a, scale, 0);
-        restUp[i / 3] = _up;
+        restUp[i / 3] = _read.up;
         over[i / 3] = c >= -REST_SLACK && c < REACH ? c : NaN;
       }
     }
@@ -257,14 +253,14 @@ export class TyreSkin {
       const p = weld[v]!;
       const up = -c / uy;
       // A vertex just inside the tyre's end (a lip beside it) leaves along the road, a few mm and the gap, not over the whole tyre (7 mm in took 18 cm of lift); the body skin only.
-      const out = this.frame.rig.tyre.r * scale - Math.abs(_ahead) + TYRE_GAP;
-      if (this.pushSide && Math.abs(_ahead) > ENDS_ZONE * this.frame.rig.tyre.r * scale && out < up) {
+      const out = this.frame.rig.tyre.r * scale - Math.abs(_read.ahead) + TYRE_GAP;
+      if (this.pushSide && Math.abs(_read.ahead) > ENDS_ZONE * this.frame.rig.tyre.r * scale && out < up) {
         if (out > this.push[p]!) {
           this.push[p] = out;
-          const sign = Math.sign(_ahead);
-          this.pushDir[p * 3] = sign * _fx;
+          const sign = Math.sign(_read.ahead);
+          this.pushDir[p * 3] = sign * _read.fx;
           this.pushDir[p * 3 + 1] = 0;
-          this.pushDir[p * 3 + 2] = sign * _fz;
+          this.pushDir[p * 3 + 2] = sign * _read.fz;
         }
       } else this.lift[p] = Math.max(this.lift[p]!, up);
     }
