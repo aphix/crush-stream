@@ -5,7 +5,7 @@ import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { BLACKOUT, CABIN_TRIM, INNER_PANEL, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
-import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, drawnStyle, type CarStyleId } from "./car-variants.ts";
 import { makeShell, PANEL_NAMES, panelRegions, poseShell, setPrimer } from "./car-panels.ts";
 import { bootCut, bootCutAt, makeHoodGeometry } from "./car-mesh.ts";
 import { DENT_MAX, newDentState, recordDent } from "./loose-dent.ts";
@@ -15,9 +15,9 @@ import { LIES_FLAT, lowest, RESTS, thinAxisUp } from "./loose-step.test-util.ts"
 
 /** The body's paint attribute, joined: 0 paint, 1 primer, `INNER_PANEL` the unpainted bay trough, `WELL_PANEL` the wheel wells, `BLACKOUT` gloss-black trim, `CABIN_TRIM` the cabin. */
 const primerOf = (car: DeformableCar): string => Array.from(car.body.geometry.getAttribute("primer").array).join();
-/** The rest build's: paint, the trough's inner panel, the wells, the blacked-out trim (roof fittings, pillars, cowl) and the cabin's trim (blended at its tub's ends) only. */
+/** The rest build's (the drawn style's, as the car builds its body): paint, the trough's inner panel, the wells, the blacked-out trim (roof fittings, pillars, cowl) and the cabin's trim (blended at its tub's ends) only. */
 const restPrimer = (car: DeformableCar): string => {
-  const rest = Array.from(makeChassisGeometry(car.style).getAttribute("primer").array);
+  const rest = Array.from(makeChassisGeometry(drawnStyle(car.style)).getAttribute("primer").array);
   assert.ok(rest.every((v) => v === 0 || v === 1 || v === INNER_PANEL || v === WELL_PANEL || v === BLACKOUT || (v < 0 && v >= CABIN_TRIM)), "a rest body holds only paint, primer, inner panel, wells, blackout and cabin trim");
   return rest.join();
 };
@@ -76,7 +76,7 @@ const worst = (r: CrashResult, kind: "quarter" | "arch") => Math.max(...PANEL_NA
 const torn = (r: CrashResult, kind: "quarter" | "arch") => r.detached.filter((n) => n.startsWith(kind));
 
 describe("given every car body style, whose panels are cut from each body's own skin", () => {
-  const bodies = CAR_STYLE_IDS.map((id) => ({ id, body: makeChassisGeometry(CAR_STYLES[id]) }));
+  const bodies = CAR_STYLE_IDS.map((id) => ({ id, body: makeChassisGeometry(drawnStyle(CAR_STYLES[id])) }));
 
   it("when each body's panels are cut, then every body has all six panels and no triangle belongs to two of them", () => {
     for (const { id, body } of bodies) {
