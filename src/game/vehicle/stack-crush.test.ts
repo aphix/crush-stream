@@ -18,8 +18,16 @@ import type { CarStyleId } from "./car-variants.ts";
  */
 /** Belly-to-roof gap of a car above (m): its belly starts this far over the drawn roof of the car below. */
 const GAP = 0.02;
-/** The car the stacks are built of, each turned 180° from the one under it: the wagon's long flat roof carries the car above (an aligned stack of the sedan, whose roof sits 0.45 m behind its belly pan, leans). */
-const STACK_CAR: CarStyleId = "wagon";
+/** What a stack is built of: the car, whether each is turned 180° from the one under it, and whether it is read once the roofs stop crushing (else once every car stands still). */
+interface StackRig {
+  readonly style: CarStyleId;
+  readonly turn: boolean;
+  readonly still: boolean;
+}
+/** The stacks of the crush claims: wagons, whose long flat roof carries the car above, each turned from the one under it (an aligned stack of the sedan, whose roof sits 0.45 m behind its belly pan, leans). */
+const WAGONS: StackRig = { style: "wagon", turn: true, still: false };
+/** The pair of the stillness row: aligned sedans, read once both stand still. */
+const SEDAN_PAIR: StackRig = { style: "sedan", turn: false, still: true };
 /** A stack has settled once no roof's crush moves `SETTLE_SINK` in `STILL_S`: the crush the claims read is done. It has done so within this many seconds of the drop (measured about 1 s). */
 const SETTLE_S = 8;
 const SETTLE_SINK = 1e-3;
@@ -46,6 +54,17 @@ function settle(w: CrashWorld, cars: readonly DeformableCar[], hz: number): void
   throw new Error(`the roofs were still crushing after ${SETTLE_S} s`);
 }
 
+/** Run `w` until every car's speed and spin stay under `STILL_SPEED` for `STILL_S`: the pair the stillness row reads. One that never does fails here, not as a wrong number below. */
+function settleStill(w: CrashWorld, cars: readonly DeformableCar[], hz: number): void {
+  let still = 0;
+  for (let f = 0; f < SETTLE_S * hz; f++) {
+    tickWorld(w, 1 / hz);
+    still = cars.some((c) => c.velocity.length() + c.angular.length() > STILL_SPEED) ? 0 : still + 1;
+    if (still >= STILL_S * hz) return;
+  }
+  throw new Error(`the stack did not stand still within ${SETTLE_S} s`);
+}
+
 /** How far (m) the car's roof mass stands under its own rest height. */
 function roofSink(c: DeformableCar): number {
   return c.roofRestY - c.deform.massLocal("roof").y;
@@ -56,11 +75,11 @@ function run(w: CrashWorld, seconds: number, hz = 60): void {
 }
 
 /** `n` cars one above the other, bottom first: the bottom on the ground, the rest falling from `GAP` over the drawn roof below. */
-function stack(n: number, hz = 60, style: CarStyleId = STACK_CAR): { cars: DeformableCar[]; w: CrashWorld } {
+function stack(n: number, hz = 60, rig: StackRig = WAGONS): { cars: DeformableCar[]; w: CrashWorld } {
   const cars: DeformableCar[] = [];
   for (let i = 0; i < n; i++) {
-    const c = makeCar(style);
-    c.spawnFacing(0, 0, i % 2 === 1 ? Math.PI : 0, 0);
+    const c = makeCar(rig.style);
+    c.spawnFacing(0, 0, rig.turn && i % 2 === 1 ? Math.PI : 0, 0);
     if (i > 0) {
       const under = cars[i - 1]!;
       c.group.position.y = under.group.position.y + crownY(under) - keelY(c) + GAP;
@@ -70,7 +89,8 @@ function stack(n: number, hz = 60, style: CarStyleId = STACK_CAR): { cars: Defor
     cars.push(c);
   }
   const w = makeWorld(cars, false, false);
-  settle(w, cars, hz);
+  if (rig.still) settleStill(w, cars, hz);
+  else settle(w, cars, hz);
   return { cars, w };
 }
 
@@ -96,17 +116,26 @@ function drop(kind: keyof typeof ORIENT, h: number, hz = 60): DeformableCar {
   return c;
 }
 
-/** The stack's claims (a settled stack, and again 5 s on): each roof crushed more than the one above it, the top car's roof not at all, the bottom roof in the FMVSS 216 band, no car slid off. */
+const _roofMid = new THREE.Vector3();
+/** The stack's claims (a settled stack, and again 5 s on): each roof crushed more than the one above it, the top car's roof not at all, the bottom roof in the FMVSS 216 band, the base car where it was set, and every other car still on the roof under it. */
 function assertStands(cars: readonly DeformableCar[]): void {
   const sink = cars.map(roofSink);
   for (let i = 1; i < 4; i++) assert.ok(sink[i - 1]! > sink[i]! + 0.02, `car ${i - 1} (${sink[i - 1]!.toFixed(3)} m) is not under a clearly worse roof than car ${i} (${sink[i]!.toFixed(3)} m)`);
   assert.ok(sink[3]! < 0.002, `the top car's roof is crushed ${sink[3]!.toFixed(3)} m with nothing on it`);
   assert.ok(sink[0]! > 0.12 && sink[0]! < 0.26, `the bottom roof took ${sink[0]!.toFixed(3)} m under three cars (FMVSS 216 band: 0.12-0.26 m with the drop's overshoot)`);
-  for (const c of cars) assert.ok(Math.hypot(c.group.position.x, c.group.position.z) < 0.02, `a car slid ${Math.hypot(c.group.position.x, c.group.position.z).toFixed(3)} m off the stack`);
+  assert.ok(Math.hypot(cars[0]!.group.position.x, cars[0]!.group.position.z) < 0.02, `the base car slid ${Math.hypot(cars[0]!.group.position.x, cars[0]!.group.position.z).toFixed(3)} m on the pad`);
+  // A car stands while its origin is within half the roof's length of the middle of the roof under it (the lower roof's `roofZ` span, turned with the car).
+  for (let i = 1; i < 4; i++) {
+    const lower = cars[i - 1]!;
+    const [rear, front] = lower.style.roofZ;
+    _roofMid.set(0, 0, 0.5 * (rear + front)).applyQuaternion(lower.group.quaternion).add(lower.group.position);
+    const off = Math.hypot(cars[i]!.group.position.x - _roofMid.x, cars[i]!.group.position.z - _roofMid.z);
+    assert.ok(off < 0.5 * (front - rear), `car ${i} stands ${off.toFixed(3)} m from the middle of the roof under it, which carries it within ${(0.5 * (front - rear)).toFixed(3)} m`);
+  }
 }
 
 describe("given a stack of cars dropped one on the next on the flat pad, each roof yielding under the weight above it", () => {
-  it("when a stack of four settles, then each roof is crushed more than the one above it, the top car's roof not at all, the bottom roof 0.12 to 0.26 m, no car has slid off the stack, and the stack still stands so 5 s on", () => {
+  it("when a stack of four settles, then each roof is crushed more than the one above it, the top car's roof not at all, the bottom roof 0.12 to 0.26 m, every car still stands on the roof under it, and the stack still stands so 5 s on", () => {
     const { cars, w } = stack(4);
     assertStands(cars);
     run(w, 5);
@@ -132,7 +161,7 @@ describe("given a stack of cars dropped one on the next on the flat pad, each ro
     assert.ok(live.slice(0, 3).every((c) => c.crashed), "a load-crushed car is not a wreck (it would not ride the replay's and netplay's wreck sections)");
     // The keyframe: pose, flight and solver state of each car (`engine-record` writes the same three), into fresh cars.
     const restored = live.map((src) => {
-      const c = makeCar(STACK_CAR);
+      const c = makeCar(WAGONS.style);
       c.spawnFacing(0, 0, 0, 0);
       const sim = new Float64Array(src.solverSize());
       src.solverState(sim, false);
@@ -158,7 +187,7 @@ describe("given a stack of cars dropped one on the next on the flat pad, each ro
 
 describe("given one car resting on another car's roof by its belly", () => {
   it("when the pair has settled, then the top car ends every frame of the next 3 s at rest, not one slice of gravity short of it", () => {
-    const { cars, w } = stack(2, 60, "sedan");
+    const { cars, w } = stack(2, 60, SEDAN_PAIR);
     let fastest = 0;
     for (let f = 0; f < 180; f++) {
       tickWorld(w, 1 / FRAME_HZ);
