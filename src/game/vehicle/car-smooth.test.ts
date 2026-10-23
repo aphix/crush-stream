@@ -798,6 +798,8 @@ const SAIL_SINK_TEST = 0.002;
 const SAIL_OUTER_POINTS = 6;
 /** A sail ahead of its roof end (`cPillar.reachLip`) leaves at most this far (m) of the roof's cant lip past its outer face: the owner's 5 mm. */
 const SAIL_LIP_GAP = 0.005;
+/** The coupe's sail ahead of its roof end leaves at most this far (m) of the roof's cant lip past its outer face: the fin's share the shape-rate row leaves room for. */
+const COUPE_FIN_GAP = 0.012;
 
 /** The coupe on a curved roof section (`roofSection`): the sail rows read it beside every style as built. */
 const DOMED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, roofSection: { crown: 0.5, blend: 0.5 } };
@@ -1019,7 +1021,8 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
     });
   }
   it(`when the coupe's flat sail sets \`cPillar.reachLip\`, then ahead of its roof end every section's outer face meets the roof's cant lip within ${SAIL_LIP_GAP * 1000} mm at the lip's height, not a chord to a head under the roof's edge`, () => {
-    const stock = CAR_STYLES.coupe;
+    const coupe = CAR_STYLES.coupe;
+    const stock: BodyStyle = { ...coupe, cPillar: { ...coupe.cPillar!, reachLip: undefined } };
     const reach: BodyStyle = { ...stock, cPillar: { ...stock.cPillar!, reachLip: 1 } };
     const ahead = (style: BodyStyle) => sailRings(style).filter(([foot]) => foot!.z > style.roofZ[0] && foot!.z <= drawnQuarter(style).zRearTop);
     const gaps = ahead(reach).map((section) => lipGap(reach, section));
@@ -1028,8 +1031,15 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
     const control = lipGap(stock, ahead(stock)[0]!);
     assert.ok(control > SAIL_LIP_GAP, `the stock coupe's lip overhangs: the row would not catch it (${(control * 1000).toFixed(1)} mm)`);
   });
+  it(`when the coupe's sail is read ahead of its roof end, then the roof's cant lip stands at most ${COUPE_FIN_GAP * 1000} mm past its outer face where it crosses the lip's height (a fin over the quarter)`, () => {
+    const coupe = CAR_STYLES.coupe;
+    const first = sailRings(coupe).find(([foot]) => foot!.z > coupe.roofZ[0])!;
+    const gap = lipGap(coupe, first);
+    assert.ok(gap <= COUPE_FIN_GAP, `the lip stands ${(gap * 1000).toFixed(1)} mm past the face at z ${first[0]!.z.toFixed(3)}`);
+  });
   it("when the coupe's flat sail sets `cPillar.rollShare` 0.5, then each ring behind its roof end carries half the stock's offset off its chord and every vertex at or ahead of the roof end is the stock's", () => {
-    const stock = CAR_STYLES.coupe;
+    const coupe = CAR_STYLES.coupe;
+    const stock: BodyStyle = { ...coupe, cPillar: { ...coupe.cPillar!, rollShare: undefined } };
     const [base, halved] = [stock, { ...stock, cPillar: { ...stock.cPillar!, rollShare: 0.5 } }].map(sailRings);
     const atEnd = stock.roofZ[0] - SAIL_ROOF_GAP;
     const off: string[] = [];

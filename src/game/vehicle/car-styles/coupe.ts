@@ -138,7 +138,15 @@ export const COUPE: BodyStyle = {
   /** Reference side view: the quarter glass's rear point at z -0.95..-0.97, its rear edge leaning about 45°. */
   quarter: { zRearBot: -0.981, zRearTop: -0.74 },
   /** A body-colour sail from the quarter glass's rear edge onto the quarter's shoulder (reference rear iso), no dark triangle: one broad fastback panel lapping the rear glass, its roof end covering the glass corner's upper arc, the roll eased in from the deck up (`blend` .55: the reference's sail is one smooth surface, no straight crease; .9 lifts the rear head off the glass, and with the roof end's waist eased .6 bulges the haunch over the rear glass). The window's line rounds into its top line .074 ahead of the corner (reference side view: tangent at z -0.666). */
-  cPillar: { flush: true, flat: true, corner: 0.8, pinch: 0.074, blend: 0.55 },
+  cPillar: {
+    flush: true,
+    flat: true,
+    corner: 0.8,
+    pinch: 0.074,
+    blend: 0.55,
+    // Ahead of the roof end the sail takes the roll's own shape most of the way to the roof's cant lip, so less of the lip overhangs its face as a fin; more reads over the shape-rate row's bar.
+    reachLip: 0.45,
+  },
   midPillarZ: null,
   /** Reference iso: the A-post comes down onto the cowl and the fender's top, under the belt at its foot, with no dark gap beneath it. */
   pillars: { aSeat: 0.87 },
