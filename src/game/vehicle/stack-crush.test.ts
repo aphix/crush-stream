@@ -6,7 +6,6 @@ import { FLIGHT } from "./car-flight.ts";
 import { paint } from "./test-support.ts";
 import { makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FACE_LEFT, FACE_NOSE, FACE_RIGHT, FACE_TAIL, FACE_TOP, faceMax, faceStrength, IMPRINT_NONE } from "../deform/load-crush.ts";
-import { MASS_SPECS } from "../kernel/rig-spec.ts";
 import { crownY, keelY } from "./car-cage-rig.ts";
 
 /**
