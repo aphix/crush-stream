@@ -102,7 +102,7 @@ const label = (f: Fit) =>
  * stand where they did); on flat ground the same hit leaves it 0.8° off. The cause of the pitch is not isolated.
  */
 const LEANS: Record<string, string> = {
-  "monster on a 10° bank": "a monster wrecked at 20 m/s on a 10° bank rests 2.6° off the intact car's pitch with its tyres on the ground (0.4° at a 10 m/s hit): the lean is the hit's, not isolated",
+  "monster on a 10° bank": "a monster wrecked at 20 m/s on a 10° bank rests 2.2-2.6° off the intact car's pitch with its tyres on the ground (0.5° at a 10 m/s hit, 0.3° at a 6 m/s one; flat ground 0.5° at 20 m/s): no hub is shoved (0.000 on all four) and no tyre side row exists on a plane; the pitch is the tyre spring rows' equilibrium (the rows' pens predict it to 0.07° in all four bank hits and the flat ones): their weight share takes the centre of mass at the mass centroid over the wheels, but the world centre of mass the rows' levers use stands 0.206 m ahead of the hubs' middle at a 6 m/s hit and 0.045 m at a 20 m/s one (the body-frame centroid holds at 0.22 / 0.21), and 0.044 m behind the masses' own world centroid at 20 m/s (0.005 at 6): the group's frame and the masses' differ once the wreck pitches; flat the pitch is linear in the crush's mass shift (0.35° a cm); on the bank linear to a 0.13 m crush (0.27°) and then climbs (0.5° at 0.27 m, 1.5° at 0.32 m, 2.2° at 0.36 m): closes with the world centre of mass read from the masses"
 };
 
 describe("given a car struck head-on while standing on flat ground, a slope, a bank or the stunt road, so that it becomes a wreck", () => {
