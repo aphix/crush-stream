@@ -9,6 +9,8 @@ export interface HingeSpec {
   kg: number;
   /** A uniform slab about one edge, m·L²/3 (kg·m²). */
   inertia: number;
+  /** Dry friction and detent in the hinge (rad/s²): a swing drive under this moves nothing. */
+  dry: number;
   /** The stop (rad open). */
   stop: number;
   /** Open angle (rad) the crash jams it at per unit of `hingeT`. */
@@ -49,6 +51,8 @@ export interface LidSwing {
 
 /** Open angle per unit of crash hinge value: the crushed lid's turn since before lids swung. */
 const LID_JAM = 0.5;
+/** Dry friction and detent in a lid's hinge (rad/s²): a jostle leaves the lid where it hangs. */
+const LID_DRY = 2;
 
 /** Latch and tear bars shared by the presets: the doors' (C1), a rear hit for a side one. */
 const LID_LATCH = { ajar: 0.2, tearT: 0.5, tearMps: 12.5 } as const;
@@ -105,6 +109,7 @@ export function lidSpec(boot: BootSpec): HingeSpec {
     length,
     kg: s.kg,
     inertia: (s.kg * length * length) / 3,
+    dry: LID_DRY,
     stop: dir * (s.rise - detAtan2(uy, -uz)),
     jam: LID_JAM,
     ajar: s.ajar,

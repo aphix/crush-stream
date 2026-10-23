@@ -58,8 +58,6 @@ export const DOOR_ACC_MAX = 15;
 export const DOOR_YAW_ACC_MAX = 30;
 /** The pendulum feels the car's acceleration only after contact has been quiet this long (s): a crash's jolts are the crash rules' (C1). */
 export const DOOR_QUIET_S = 0.3;
-/** Dry friction and detent in the hinge (rad/s²): a pendulum drive under this moves nothing, so a jostle leaves the door where it hangs. */
-export const DOOR_DRY = 2;
 
 /** Plastic moment of a quarter panel's crease (N·m ≈ 200 MPa × 1.2 mm² × 0.5 m / 4): the work a striker pays per rad it bends it. */
 export const PANEL_BEND_NM = 36;

@@ -360,6 +360,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * hit: a head-on no longer arms on one corner at the rigid step's sideways reading (28 km/h each: 0.237 m of even nose crush, was 0.092 on one corner).
  * A pair that packs its noses stops at the packed stroke with the next slice's crush feed counted, not up to that feed past it (200 km/h
  * each: 0.904 of the stroke, was 0.916).
+ * A door swings, is struck and is shut by a solid as its style draws it (its own length and inertia about its hinge, not the platform's),
+ * a mirror is met at its drawn seat and heights and folds only until its tip clears the striker, a striker above a car's shoulder
+ * meets the body only where it stands at those heights, and two cars side by side read each other's own mirror tips; a door's hinge detent
+ * holds it against the same car-frame jostle whatever its length.
  * A tyre climbing a steep face pushes its car straight up only while that push lifts its tread off the face (else along the face): a monster
  * no longer leaves a kicker's lip, or a slope on one tyre, at over 100 m/s up, and every car climbs a kicker's last metres differently.
  * A wreck rising out of the ground counts its second of rest while it rises and sleeps once it is out: one sunk a few centimetres sleeps

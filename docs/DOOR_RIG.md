@@ -30,8 +30,8 @@ headless `fireRam` in `door-rig.test-util.ts`.
 
 Each door has a `DoorHinge`: open angle θ, rate ω, `latched`, the energy `load` its hinges have
 taken at the stop, and its mirror's fold. The door is a thin slab about its front edge:
-I = m·L²/3, with m = 25 kg and L = 0.57 m (the model's hinge-to-trailing-edge length), so
-I = 2.71 kg·m².
+I = m·L²/3, with m = 25 kg and L the car's own door length (`style.door.length`): the sedan's
+L = 0.98 m, so I = 8.00 kg·m².
 
 `swingHinges(dt)` runs the free swing of every unlatched door and lid:
 
@@ -60,8 +60,9 @@ never touches the hinge state. The test `door-rig.test.ts` "given a car driven a
 ### Mirror
 
 The mirror folds about its base. In lane A the ram face pins the trailing face of the mirror cap,
-so the fold follows the ram (`mirrorSweep`). At the fold stop (75°) the cap still sits in the
-lane, so the stop must take the ram:
+so the fold follows the ram (`mirrorSweep`). The fold stops where the cap's tip clears the face
+(acos(gap/reach)); short of the 75° stop the ram passes there. At the fold stop (75°) the cap
+still sits in the lane, so the stop must take the ram:
 
 - If ½·m_ram·v² < `MIRROR_BREAK_J`, the ram stops and the mirror stays on, folded.
 - Otherwise the mirror snaps off with the ram's speed, and the ram goes on minus that energy.
@@ -134,9 +135,10 @@ across the travel. Then the slab is pushed out of the face.
 
 | lane | travel | inner edge \|x\| | width | height (m) | door at start |
 |---|---|---|---|---|---|
-| A `mirror` | rear→front | 0.95 (4 cm off the shut skin, 3 cm off the mirror base) | 0.4 | 0.50–1.10 | shut, latched |
+| A `mirror` | rear→front | mirror base + 0.03 (`laneFor`; sedan 0.772) | 0.4 | from 2 cm under the drawn mirror's top, 0.6 tall (sedan 0.98–1.58) | shut, latched |
 | B `overOpen` | rear→front | 0.95 | 0.6 | 0.30–0.75 (below the mirror) | 55° |
 | C `shut` | front→rear | 1.10 (outside the open door's mirror) | 0.6 | 0.30–0.75 | 55° |
+| D/E `panelPush`, `panelPull` | rear→front, front→rear | body edge at the head's heights + 0.03 (`laneFor`; sedan 0.846) | 0.6 | 0.30–0.75 | panel at hinge 0.45 |
 | F `lidPop` | rear→front, into the tail | centred (x −0.6…0.6) | 1.2 | 0.30–0.90 | lid shut, latched |
 | G `lidTear` | rear→front, into the tail | centred | 1.2 | 0.30–0.90 | lid on its stop |
 

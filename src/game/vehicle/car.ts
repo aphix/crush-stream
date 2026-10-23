@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { detAtan2 } from "../kernel/physics-core.js";
 import type { DeformNetState } from "../deform/streamed-deform.ts";
 import { applyGroundFriction, CRASH, FRICTION_G, hypot2 } from "../deform/physics-util.ts";
-import { DOOR } from "./car-door-mesh.ts";
 import { activeGround } from "../world/ground.ts";
 import { CarParts } from "./car-parts.ts";
 import { END_WINDOW, type PartNetState, REARM_QUIET_S } from "./car-core.ts";
@@ -22,8 +21,6 @@ import { CageRig, centreY } from "./car-cage-rig.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
-
-export { DOOR };
 
 const _p = new THREE.Vector3();
 const _m = new THREE.Matrix4();

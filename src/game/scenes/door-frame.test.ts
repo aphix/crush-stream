@@ -1,13 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { makeBox, partContact } from "../contact/external-contact.ts";
+import { outlineOf } from "../contact/cage-outline.ts";
+import { bodyHit, makeBox, partContact, strikeCar } from "../contact/external-contact.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { DetachPart } from "../vehicle/car-core.ts";
 import { PANEL_SMUSH_MIN } from "../vehicle/car-wear.ts";
 import { assertSameDigest, DT, paint } from "../vehicle/test-support.ts";
-import type { DoorScenario, RamShot } from "./door-rig.ts";
+import { DOOR_LANES, laneFor, type DoorScenario, type RamShot } from "./door-rig.ts";
 import { fireRam } from "./door-rig.test-util.ts";
 
 /**
@@ -29,7 +30,7 @@ const SHOTS: Shot[] = [
   { scenario: "panelPush", kph: 1.5, kg: 60, note: "smushes the panel back" },
   { scenario: "panelPush", kph: 3, kg: 120, note: "smushes the panel back" },
   { scenario: "panelPush", kph: 12, kg: 300, note: "tears the panel off" },
-  { scenario: "panelPull", kph: 1.5, kg: 60, note: "opens the panel more, holds" },
+  { scenario: "panelPull", kph: 2, kg: 60, note: "opens the panel more, holds" },
   { scenario: "panelPull", kph: 4, kg: 300, note: "tears the panel off" },
 ];
 
@@ -113,7 +114,7 @@ function strike(part: "door" | "panel", dir: 1 | -1, kph: number, kg: number, ca
     p.folding = true;
   }
   const box = makeBox();
-  const inner = part === "door" ? 1.1 : 0.91;
+  const inner = part === "door" ? DOOR_LANES.shut.inner : laneFor("panelPush", car, 1).inner;
   box.hx = 0.3;
   box.hy = 0.225;
   box.hz = 0.25;
@@ -148,7 +149,7 @@ describe("given a still box with the car driven at it, and the same box driven a
     ["door torn off the other way", "door", 1, 15, 300, (r) => r.off.join() === "doorR"],
     ["panel pushed back", "panel", 1, 3, 120, (r) => r.off.length === 0 && r.panel < 0.4],
     ["panel torn off from behind", "panel", 1, 12, 300, (r) => r.off.join() === "quarterR"],
-    ["panel pulled out, soft", "panel", -1, 1.5, 60, (r) => r.off.length === 0 && r.panel > 0.8],
+    ["panel pulled out, soft", "panel", -1, 2, 60, (r) => r.off.length === 0 && r.panel > 0.8],
     ["panel torn off from the front", "panel", -1, 4, 300, (r) => r.off.join() === "quarterR"],
   ];
   for (const [name, part, dir, kph, kg, meaningful] of CASES) {
@@ -165,7 +166,7 @@ describe("given a still box with the car driven at it, and the same box driven a
 });
 
 describe("given a panel folded by the sim's step on a car no frame ever drew", () => {
-  for (const [name, dir, kph, kg] of [["pushed back", 1, 3, 120], ["torn off from behind", 1, 12, 300], ["pulled out, soft", -1, 1.5, 60]] as const) {
+  for (const [name, dir, kph, kg] of [["pushed back", 1, 3, 120], ["torn off from behind", 1, 12, 300], ["pulled out, soft", -1, 2, 60]] as const) {
     it(`when it is struck and ${name}, then it ends as the same panel posed by a frame does`, () => {
       const drawn = strike("panel", dir, kph, kg, true);
       const sim = strike("panel", dir, kph, kg, true, false);
@@ -174,4 +175,40 @@ describe("given a panel folded by the sim's step on a car no frame ever drew", (
       assert.equal(sim.panel, drawn.panel, "panel hinge");
     });
   }
+});
+
+describe("given a striker whose heights cross the car's widest section, so its body edge is the plan box's", () => {
+  it("when its inner edge is swept across the plan edge in 1 cm steps, then the depth the striker reads equals the plain loop over every outline node at each step", () => {
+    const car = makeCar();
+    car.spawnFacing(0, 0, 0, 0);
+    assert.ok(car.rightFlat.x === 1 && car.fwdFlat.z === 1, "the oracle below reads a car at yaw 0");
+    const outline = outlineOf(car);
+    const p = car.group.position;
+    const planEdge = car.cage.fields.planBox[1]!;
+    const box = makeBox();
+    box.hx = 0.3;
+    box.hz = 0.25;
+    box.hy = 0.75;
+    box.y = p.y + 0.85;
+    let met = 0;
+    let missed = 0;
+    for (let k = -12; k <= 12; k++) {
+      const edge = planEdge + k * 0.01;
+      box.x = edge + box.hx;
+      strikeCar(car, box, DT, false);
+      const ox = p.x - box.x;
+      const oz = p.z - box.z;
+      let want = -Infinity;
+      for (let n = 0; n < outline.count; n++) {
+        if (Math.abs(ox + outline.xs[n]!) > box.hx) continue;
+        const along = oz + outline.zs[n]!;
+        if (along < -box.hz) continue;
+        want = Math.max(want, box.hz - along);
+      }
+      assert.ok(bodyHit.depth === want, `inner edge ${edge.toFixed(2)} m: the striker reads depth ${bodyHit.depth}, the loop over every node ${want}`);
+      if (want === -Infinity) missed++;
+      else met++;
+    }
+    assert.ok(met > 0 && missed > 0, `the sweep met nodes at ${met} edges and none at ${missed}: it must cross the body's edge`);
+  });
 });
