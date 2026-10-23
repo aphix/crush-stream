@@ -957,7 +957,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
       if (!(BPATCH[a]! >= 0) || a < panFrom || b < panFrom) continue;
       if (wreckTop(BPATCH[a]!)) continue;
       pen = ridgeCross(BX[a]!, BY[a]!, BZ[a]!, BX[b]!, BY[b]!, BZ[b]!, car.slot, BPATCH[a]!);
-      if (!(pen > 0 && pen > BRISE[a]! && pen > BRISE[b]!)) continue;
+      if (!(pen > -SPECULATIVE_GAP && pen > BRISE[a]! && pen > BRISE[b]!)) continue;
       EDGE_HIT[C_NX] = _up.x;
       EDGE_HIT[C_NY] = _up.y;
       EDGE_HIT[C_NZ] = _up.z;
@@ -969,12 +969,14 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
       if (BRISE[a] === NO_FLOOR) continue;
       if (BPATCH[a]! >= 0 && wreckTop(BPATCH[a]!)) continue;
       pen = edgeCross(BX[a]!, BY[a]!, BZ[a]!, BX[b]!, BY[b]!, BZ[b]!, 0, 0, 0, 0, NaN, car.slot, BPATCH[a]!);
-      if (!(pen > 0)) continue;
+      if (!(pen > -SPECULATIVE_GAP)) continue;
     }
     R[n]!.set(EDGE_HIT[C_PX]! - centreOfMass.x, EDGE_HIT[C_PY]! - centreOfMass.y, EDGE_HIT[C_PZ]! - centreOfMass.z);
     if (!body.part && EDGE_HIT[C_OWNER]! >= 0 && ((body.wreck && body.surf.cars[EDGE_HIT[C_OWNER]!]!.deform.massActive) || crossedPlanFromSide(EDGE_HIT, pen, R[n]!))) continue;
     _s[S_PEN] = pen;
     bodyContact(n, EDGE_HIT, false);
+    // As a body point's row: an edge a speculative gap above the belly is held there (`GAPV`), not left for the next slice's gravity.
+    if (pen <= 0) GAPV[n] = GAPV[n]! + (-pen * EDGE_HIT[C_NY]!) / dt;
     n++;
   }
 

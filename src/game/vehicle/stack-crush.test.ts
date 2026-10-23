@@ -140,6 +140,18 @@ describe("given a stack of cars dropped one on the next on the flat pad, each ro
   });
 });
 
+describe("given one car resting on another car's roof by its belly", () => {
+  it("when the pair has settled, then the top car ends every frame of the next 3 s at rest, not one slice of gravity short of it", () => {
+    const { cars, w } = stack(2);
+    let fastest = 0;
+    for (let f = 0; f < 180; f++) {
+      tickWorld(w, 1 / 60);
+      fastest = Math.max(fastest, cars[1]!.velocity.length() + cars[1]!.angular.length());
+    }
+    assert.ok(fastest < STILL_SPEED, `the top car ends a frame at ${fastest.toExponential(2)} (speed plus spin)`);
+  });
+});
+
 describe("given a car dropped onto one of its faces on the flat pad", () => {
   it("when it is dropped upside-down from 0.5, 1 and 2 m, then the roof crushes at 0.5 m, crushes more from higher, and no further than its packed depth", () => {
     const sink = [0.5, 1, 2].map((h) => roofSink(drop("roof", h)));
