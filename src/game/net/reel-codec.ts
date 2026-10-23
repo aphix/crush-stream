@@ -435,6 +435,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * engine at the same speed whatever the car.
  * A car's two front doors are cage panels of their own while they hang latched (a sprung or torn door leaves it), so a side striker meets the drawn door's skin, not the sill and belt behind it.
  * A hood's and a trunk lid's heights in the cage reach a lattice step past their triangles (they reached half of one), so the drawn lid's wrapped nose and rolled edge, which stand 1-2 cm past the plain cage lid, have a cage under them: a tyre meets hood up to 5 cm past the lid's true edge.
+ * A pair's patch reads every node of the other outline that reads a depth: the plan field's edge stands half a lattice step past the outermost node, beyond the drawn triangles' box that gated them, so a door's nodes
+ * at a nose's edge joined the patch at once and moved its centre 2.1 or 11.2 cm in a millimetre of closing (a T-bone's door crushed 0.706 m or 0.753 m by 2 mm of start, now 0.750-0.753 m).
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
