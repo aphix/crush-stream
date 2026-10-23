@@ -345,6 +345,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * tail trim or mirror flies and collides as its style draws it, not as the platform part.
  * The coupe's flanks carry their widest line 5-9 cm under the belt from its tail to its door (its reference's haunch crest), its quarter sill dips
  * behind the door and rises to the window's point, and its roof's rear corner stands 2 cm wider.
+ * A car's nose closing on another car's steep face (a sloped bonnet corner) faster than a crash, read against that car's own motion, is the pair's
+ * hit: a head-on no longer arms on one corner at the rigid step's sideways reading (28 km/h each: 0.237 m of even nose crush, was 0.092 on one corner).
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

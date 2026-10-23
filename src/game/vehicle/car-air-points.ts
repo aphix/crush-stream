@@ -242,7 +242,7 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
     // hood driven onto).
     if (!part && HIT[C_OWNER]! >= 0) {
       if (body.wreck && body.surf.cars[HIT[C_OWNER]!]!.deform.massActive) continue;
-      _vp.crossVectors(w, r).add(v);
+      _vp.crossVectors(w, r).add(v).sub(body.surf.cars[HIT[C_OWNER]!]!.velocity);
       if (i < bellyFrom && HIT[C_NY]! < HOLDING_NY && -(_vp.x * HIT[C_NX]! + _vp.y * HIT[C_NY]! + _vp.z * HIT[C_NZ]!) > WALL_CRUSH) continue;
       if (crossedPlanFromSide(HIT, pen, r)) continue;
     }
