@@ -97,8 +97,10 @@ function behindWindshieldEdge(geo: THREE.BufferGeometry, style: BodyStyle): numb
 
 /** A drawn pane's top edge may stand this far (m) from the roof it should run in under, and a post's top this far under its skin. */
 const ROOF_JOIN_M = 0.005;
+/** A drawn pane's side edge in its top three-eighths may stand this far (m) from the A-post and roof beside it: the post's chord to the roof leaves no slit along it. */
+const PANE_EDGE_STAND_M = 0.01;
 
-/** What of `style`'s drawn windshield top (inside the roof's dome edge) and A-post tops stands off its drawn roof, one reading each. */
+/** What of `style`'s drawn windshield top and side edge near it and A-post tops stands off its drawn roof and A-posts, one reading each. */
 function openRoofJoins(style: BodyStyle): string[] {
   const [segX, segY] = [10, 8];
   const up = new THREE.Vector3(0, 1, 0);
@@ -108,32 +110,39 @@ function openRoofJoins(style: BodyStyle): string[] {
   const off: string[] = [];
   const geo = makeRoofGeometry(style, "drawn");
   const roof = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
-  const [rp, ri] = [geo.getAttribute("position") as THREE.BufferAttribute, geo.getIndex()!];
-  const gapTo = (at: THREE.Vector3): number => {
+  const posts = makeGreenhouseFrame(style, "drawn").filter((g) => g.name === "a");
+  const gapTo = (at: THREE.Vector3, geos: readonly THREE.BufferGeometry[]): number => {
     let best = Infinity;
-    for (let t = 0; t < ri.count; t += 3) {
-      tri.a.fromBufferAttribute(rp, ri.getX(t));
-      tri.b.fromBufferAttribute(rp, ri.getX(t + 1));
-      tri.c.fromBufferAttribute(rp, ri.getX(t + 2));
-      best = Math.min(best, tri.closestPointToPoint(at, closest).distanceTo(at));
+    for (const g of geos) {
+      const [gp, gi] = [g.getAttribute("position") as THREE.BufferAttribute, g.getIndex()!];
+      for (let t = 0; t < gi.count; t += 3) {
+        tri.a.fromBufferAttribute(gp, gi.getX(t));
+        tri.b.fromBufferAttribute(gp, gi.getX(t + 1));
+        tri.c.fromBufferAttribute(gp, gi.getX(t + 2));
+        best = Math.min(best, tri.closestPointToPoint(at, closest).distanceTo(at));
+      }
     }
     return best;
   };
   const pane = makeWindshield(style);
   const [pos, normal] = [pane.getAttribute("position") as THREE.BufferAttribute, pane.getAttribute("normal") as THREE.BufferAttribute];
-  // A corner past the dome's edge stands out in the roof's roll, not in under its end: not read here.
-  const domeEdge = roofAt(style.roofZ[1], style).x;
   for (let i = 0; i <= segX; i++) {
     const k = segY * (segX + 1) + i;
     p.fromBufferAttribute(pos, k);
-    if (Math.abs(p.x) > domeEdge) continue;
     n.fromBufferAttribute(normal, k);
     if (n.z < 0) n.negate();
     ray.set(from.copy(p).addScaledVector(n, 1e-4), n);
-    const gap = ray.intersectObject(roof, false).length > 0 ? 0 : gapTo(p);
+    const gap = ray.intersectObject(roof, false).length > 0 ? 0 : gapTo(p, [geo]);
     if (gap > ROOF_JOIN_M) off.push(`windshield top x ${p.x.toFixed(3)}: ${(gap * 1000).toFixed(1)} mm from the drawn roof, not tucked under it`);
   }
-  for (const post of makeGreenhouseFrame(style, "drawn").filter((g) => g.name === "a")) {
+  for (const j of [segY - 3, segY - 2, segY - 1, segY]) {
+    for (const i of [0, segX]) {
+      p.fromBufferAttribute(pos, j * (segX + 1) + i);
+      const gap = gapTo(p, [geo, ...posts]);
+      if (gap > PANE_EDGE_STAND_M) off.push(`windshield side edge (${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)}): ${(gap * 1000).toFixed(1)} mm from the A-post and roof`);
+    }
+  }
+  for (const post of posts) {
     const { ring, slices } = post.userData.loft as { ring: number; slices: number };
     const at = post.getAttribute("position") as THREE.BufferAttribute;
     let front = (slices - 1) * ring;
@@ -1158,7 +1167,7 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
-  it(`when any style's drawn windshield top (inside the roof's dome edge) and A-post tops are read against its drawn roof, then each pane top vertex is tucked under the roof (a ray along the pane's outward normal meets it) or within ${ROOF_JOIN_M * 1000} mm of it, and each post's front-top vertex stands under the roof's skin within ${ROOF_JOIN_M * 1000} mm: no see-through slot ahead of the roof, no post top open under it or through it; the wagon without its twin's roofEnds reads open`, () => {
+  it(`when any style's drawn windshield top and A-post tops are read against its drawn roof, then each pane top vertex (corners too) is tucked under the roof (a ray along the pane's outward normal meets it) or within ${ROOF_JOIN_M * 1000} mm of it, and each post's front-top vertex stands under the roof's skin within ${ROOF_JOIN_M * 1000} mm: no see-through slot ahead of the roof, no corner standing out of its roll, no post top open under it or through it; the wagon without its twin's roofEnds reads open`, () => {
     const off: string[] = [];
     for (const id of CAR_STYLE_IDS) off.push(...openRoofJoins(drawnStyle(CAR_STYLES[id])).map((text) => `${id} ${text}`));
     assert.equal(off.length, 0, off.join("; "));

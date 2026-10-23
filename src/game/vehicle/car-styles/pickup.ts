@@ -73,14 +73,15 @@ const PICKUP_LAMP_SHAPES = {
   },
 } as const;
 
+/** The side plate's windshield edge: z .913 at its foot (y 1.248), .713 at y 1.39. */
+const PICKUP_WINDSHIELD: BodyStyle["windshield"] = { base: [1.21, 0.957], wBase: 1.36, wTop: 1.18 };
 
 /** 80s regular-cab long-bed pickup (Toyota Pickup proportions): boxy cab, flat hood, open bed; the trunk part is the tailgate. */
 export const PICKUP: BodyStyle = {
   id: "pickup",
   dims: { wheelbase: 2.575, overhang: { front: 0.683, rear: 0.93 }, track: 1.3, width: 1.584, height: 1.691, rideHeight: 0.34, wheel: { radius: 0.38, width: 0.24 } },
   ...PLATFORM_HARDPOINTS,
-  // The side plate's windshield edge: z .913 at its foot (y 1.248), .713 at y 1.39.
-  windshield: { base: [1.21, 0.957], wBase: 1.36, wTop: 1.18 },
+  windshield: PICKUP_WINDSHIELD,
   belt: { x: 0.73, y: [[0, 1.12]] },
   rocker: { y: 0.45 },
   underside: [[-2.17, 0.52], [-1.96, 0.42], [-1.75, 0.38], [-1.5, 0.34], [1.6, 0.34], [1.76, 0.35], [1.93, 0.38]],
@@ -89,7 +90,8 @@ export const PICKUP: BodyStyle = {
   aPillarFoot: 0.6,
   aPillarTop: 0.34,
   // Drawn, the glass's front edge knees onto the A-post's rear edge at the mirror head's top, so the post stays an even tube over a small black sail.
-  drawn: { aPillarKnee: 1.28, aPillarTop: 0.38 },
+  // Its pane's top corners stand 5 mm inside the roof dome's edge (|x| .505): the cage's 1.18 stands them out past the roof's roll.
+  drawn: { windshield: { ...PICKUP_WINDSHIELD, wTop: 1.0 }, aPillarKnee: 1.28, aPillarTop: 0.38 },
   blackout: { sail: true },
   bPillar: { rear: -0.33, front: -0.29 },
   // The regular cab's door runs back to the side plate's seam; its glass ends at the plate's -0.29 / -0.265 behind a slim 4 cm post band; the C-post's foot meets the cab-back shoulder, as the hatchback's.

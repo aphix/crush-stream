@@ -56,13 +56,15 @@ const MONSTER_LAMP_SHAPES = {
   },
 } as const;
 
+/** The side plate's windshield edge stands .80 back at y 1.19 and .55 at 1.40: its base 2 cm over the hood's crown, 6 cm further forward. */
+const MONSTER_WINDSHIELD: BodyStyle["windshield"] = { base: [1.05, 0.98], wBase: 1.46, wTop: 1.3 };
+
 /** The truck family as a crew cab, squatter and longer than the pickup; the monster class lifts it onto its big wheels. */
 export const MONSTER: BodyStyle = {
   id: "monster",
   dims: { wheelbase: 2.77, overhang: { front: 0.755, rear: 1.065 }, track: 2.39, width: 1.712, height: 1.511, rideHeight: 0.34, wheel: { radius: 0.355, width: 0.364 } },
   ...PLATFORM_HARDPOINTS,
-  // The side plate's windshield edge stands .80 back at y 1.19 and .55 at 1.40: its base 2 cm over the hood's crown, 6 cm further forward.
-  windshield: { base: [1.05, 0.98], wBase: 1.46, wTop: 1.3 },
+  windshield: MONSTER_WINDSHIELD,
   belt: { x: 0.8, y: [[0, 1.0]] },
   rocker: { y: 0.4 },
   underside: [[-2.4, 0.38], [-2.1, 0.34], [2.1, 0.34]],
@@ -72,6 +74,8 @@ export const MONSTER: BodyStyle = {
   aPillarTop: 0.41,
   // The door glass's front edge knees onto the A-post's rear edge at the mirror head's top, so the post stays an even tube over a small black sail.
   aPillarKnee: 1.15,
+  // Drawn, its pane's top is the roof dome's width (|x| .617): the cage's 1.3 stands the corners out past the roof's roll.
+  drawn: { windshield: { ...MONSTER_WINDSHIELD, wTop: 1.234 } },
   blackout: { sail: true },
   bPillar: { rear: -0.19, front: -0.12 },
   // The side plate's B-post stands upright between the door glasses, z -.214 to -.128.

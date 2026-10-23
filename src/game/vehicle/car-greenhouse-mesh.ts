@@ -442,23 +442,27 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
     const y = lerp(footY, aTopY, t);
     const edge = lerp(edgeFoot, 1, t);
     const [rearZ, edgeZ] = [aPostRearZ(y, style, base), lerp(base[1], topZ, edge) + A_POST_LIFT * uy + sideBowZ(style.windshield.sideBow ?? 0, edge)];
-    // The top station runs into the roof: its ring is moved back to lie a post's depth (its section's reach in z) inside the roof's
-    // span, where the roof's tuck holds all of it, not a blade past its end.
-    const back = t === 1 ? Math.max(0, Math.max(rearZ, edgeZ) - (style.roofZ[1] - ROOF_TUCK - A_POST_THICK)) : 0;
-    const [postZ, frontZ] = [rearZ - back, edgeZ - back];
     // Under its top (which the roof holds), the station rides down with the windshield's edge as it falls with the dome (`domeFall`).
     const fall = t < 1 ? glassFall(lerp(wBase, wTop, edge) / 2, Math.max(0, edge)) : 0;
     const frontY = lerp(base[0], topY, edge) - fall - A_POST_LIFT * uz;
     const [frontX, rearX] = [lerp(wBase, wTop, edge) / 2 + A_POST_LIFT, glassPlaneX(y - fall) + A_POST_LIFT];
-    const roofZ = THREE.MathUtils.clamp(postZ, style.roofZ[0], style.roofZ[1]);
-    const rear: V3 = [underRoofSide(rearX, y - fall, roofZ, style), y - fall, postZ];
-    const frontHalf = underRoofSide(frontX, frontY, frontZ, style);
-    // The top station reaches the roof's skin: `back` moved it in under a roof that stands over the windshield's top, where its open end would show.
-    const frontTopY = t === 1 ? Math.max(frontY, roofMeshY(frontHalf, frontZ, style) - ROOF_TUCK) : frontY;
-    const front: V3 = [frontHalf, frontTopY, frontZ];
-    // Square to the face after the roof's tuck: squaring it before shears the top stations' corners past 35°.
-    const [dx, dz] = [front[0] - rear[0], front[2] - rear[2]];
-    return { rear, front, inward: [dz / hypot2(dx, dz), dx / hypot2(dx, dz)] };
+    const place = (back: number): Rail => {
+      const [postZ, frontZ] = [rearZ - back, edgeZ - back];
+      const roofZ = THREE.MathUtils.clamp(postZ, style.roofZ[0], style.roofZ[1]);
+      const rear: V3 = [underRoofSide(rearX, y - fall, roofZ, style), y - fall, postZ];
+      const frontHalf = underRoofSide(frontX, frontY, frontZ, style);
+      // The top station reaches the roof's skin: `back` moved it in under a roof that stands over the windshield's top, where its open end would show.
+      const frontTopY = t === 1 ? Math.max(frontY, roofMeshY(frontHalf, frontZ, style) - ROOF_TUCK) : frontY;
+      const front: V3 = [frontHalf, frontTopY, frontZ];
+      // Square to the face after the roof's tuck: squaring it before shears the top stations' corners past 35°.
+      const [dx, dz] = [front[0] - rear[0], front[2] - rear[2]];
+      return { rear, front, inward: [dz / hypot2(dx, dz), dx / hypot2(dx, dz)] };
+    };
+    if (t < 1) return place(0);
+    // The top station runs into the roof, its ring held where the roof's tuck holds all of it, not a blade past its end: the ring's front
+    // goes right up to the roof's end less what its section reaches forward of it (its depth runs square to the face, its outer face crowns).
+    const hold = (reach: number) => Math.max(0, Math.max(rearZ, edgeZ) - (style.roofZ[1] - ROOF_TUCK - reach));
+    return place(hold(postForwardReach(place(hold(0)))));
   };
   const post = A_POST_STATIONS.map(railAt);
   const sail: Rail[] = [];
@@ -485,6 +489,12 @@ function postRearmost({ rear, front, inward = [1, 0] }: Rail, thick: number): V3
     if (p.y < 1e-6 && rear[2] + depth * inward[1] < rearmost[2]) rearmost = [rear[0] - depth * inward[0], rear[1], rear[2] + depth * inward[1]];
   }
   return rearmost;
+}
+
+/** How far (m) forward of its front rail `rail`'s drawn A-post section reaches: its depth runs square to the face in plan and its outer face crowns. */
+function postForwardReach({ rear, front, inward = [1, 0] }: Rail): number {
+  const width = hypot2(hypot2(front[0] - rear[0], front[1] - rear[1]), front[2] - rear[2]);
+  return Math.max(0, ...postSection(A_POST_THICK, width, A_POST_CROWN * width).map((p) => lerp(rear[2], front[2], p.y) + (1 - p.x) * A_POST_THICK * inward[1] - front[2]));
 }
 
 /** The cage roof's side lip runs from the cant line (`ROOF_LIP_OUT`) up to its knee [past the half-width, under the roof] (m), then in to the dome's edge; the drawn roof's roll runs out to the cant line plus `roofDrip`. */
