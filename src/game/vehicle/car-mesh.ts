@@ -4,7 +4,7 @@ import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type BumperEnd
 import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, roofDrip, shoulderDropAt, tubWall, WINDSHIELD_BOW } from "./car-lines.ts";
 import { splitCreases, splitLoftOnLowDiagonals } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
-import { carFrame } from "./car-rig.ts";
+import { wheelsOf } from "./car-rig.ts";
 import { DECK_RISE, INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { bootPivot, roofHinged } from "./hinge-spec.ts";
 
@@ -463,7 +463,7 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   const rockerY = rockerAt(z, style);
   const floor = floorY(z, style);
   const tub = tubAt(z, style, bodyTubs(style, source));
-  const { wheels } = carFrame(style);
+  const wheels = wheelsOf(style.dims);
   // The drawn opening may stand lower than the cage's (`arch.rise`), under the round fender flare; the cage keeps the round one.
   const well = wheelWell(z, wheels, style.arch.radius) * (source === "drawn" ? (style.arch.rise ?? 1) : 1);
   const archY = wheels[0]![1] + well;
@@ -555,7 +555,7 @@ export const WELL_LINER_WIDTH = 0.24;
 function wellEdge(z: number, hw: number, tubT: number, floorClear: boolean, well: number, style: BodyStyle, source: BodySource): number | null {
   if (tubT === 0 || floorClear || well < 0.03 || (source === "drawn" && bayAt(z, style) >= tubT)) return null;
   // A tub only grazing an arch (the coupe's cabin floor ramping out over its rear arch's front edge) keeps the arch's lift.
-  const wheel = carFrame(style).wheels.find(([wx, , wz]) => Math.abs(z - wz) < style.arch.radius && Math.abs(wx) <= hw && style.tubs.some(([a, b]) => wz > a && wz < b));
+  const wheel = wheelsOf(style.dims).find(([wx, , wz]) => Math.abs(z - wz) < style.arch.radius && Math.abs(wx) <= hw && style.tubs.some(([a, b]) => wz > a && wz < b));
   return wheel ? Math.min(hw - 0.06, Math.abs(wheel[0]) - WELL_LINER_WIDTH / 2) : null;
 }
 

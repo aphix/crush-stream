@@ -16,7 +16,7 @@ const POINT_CAPACITY = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_TUB_VERTICES + 
 export const POINT_X = new Float64Array(POINT_CAPACITY);
 export const POINT_Y = new Float64Array(POINT_CAPACITY);
 export const POINT_Z = new Float64Array(POINT_CAPACITY);
-/** Per belly point this slice: 1 while a wreck has no drawn body over it (the cage's bottom has no node there: a bumper's rounded corner), so it is no point. */
+/** Per belly point this slice: 1 while the body has no drawn body over it (a wreck's cage bottom, an intact car's `bellyAbsent`: a bumper's rounded corner has no node there), so it is no point. */
 export const BELLY_ABSENT = new Uint8Array(PLATFORM.belly.length);
 export const HUBS = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
 /** Neighbouring belly points as belly index pairs (along x at one z, along z at one x): where the two stand on different patches,

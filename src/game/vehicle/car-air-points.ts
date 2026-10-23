@@ -325,8 +325,8 @@ export function loadPoints(car: DeformableCar): number {
     SAMPLE[0] = x;
     SAMPLE[1] = z;
     sampleAt(bottom, car.cage.style);
-    BELLY_ABSENT[k] = wreck && Number.isNaN(SAMPLE[2]!) ? 1 : 0;
-    // A wreck's belly is the cage's own bottom (the drawn body, crushed as drawn), not the stock underside table.
+    BELLY_ABSENT[k] = (wreck ? Number.isNaN(SAMPLE[2]!) : car.frame.bellyAbsent[k] === 1) ? 1 : 0;
+    // A wreck's belly is the cage's own bottom (crushed as drawn); an intact car's is its frame's, read off the drawn body; a row with nothing drawn over it is no point.
     const h = (wreck && BELLY_ABSENT[k] === 0 ? SAMPLE[2]! : y) + lift;
     POINT_X[bellyFrom + k] = x;
     POINT_Y[bellyFrom + k] = h;
