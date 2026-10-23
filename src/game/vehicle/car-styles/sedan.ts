@@ -250,6 +250,8 @@ export const SEDAN: BodyStyle = {
     aPillarFoot: 0.64,
     aPillarTop: 0.05,
     aPillarKnee: undefined,
+    // The sail takes a station at the door glass's top, so its rear edge follows the straight glass edge instead of cutting a see-through wedge.
+    aPillarSailGlass: true,
   },
   underside: [
     [-2.14, 0.35],
@@ -315,9 +317,9 @@ export const SEDAN: BodyStyle = {
    * The C-pillar sails onto the haunch from the quarter glass's rounded top (reference side view: y 1.18 at z -1.0, 1.131 at -1.1), lapping
    * it with a bead so the post's round never hangs under the rounded corner. Its foot drops onto the shoulder 2 cm behind the window's
    * point, which stands over the deck there: a long sweep left a see-through wedge under it. Its belt rail runs on 1.5 cm behind the point
-   * (`railRun`), so no side ray passes under the sail's foot.
+   * (`railRun`), so no side ray passes under the sail's foot. The window's rear end rounds (`dEnd`), not a triangular notch.
    */
-  cPillar: { pinch: 0.08, sweep: 0.02, bead: true, railRun: 0.015 },
+  cPillar: { pinch: 0.08, sweep: 0.02, bead: true, railRun: 0.015, dEnd: [0.0275, -1.249] },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,
@@ -326,10 +328,11 @@ export const SEDAN: BodyStyle = {
    * (rear iso) runs down the tail face through each tail lamp's inner third (|x| ~0.53 at the lamps) to the plate recess's bottom
    * (y ~0.62), its bottom corners at |x| ~0.45; the face stands on the tail at -2.10. The ducktail: the deck dips into a shallow groove
    * and kicks up into the lip at its rear edge (gridded side: crest y 0.955 over z -2.0..-2.09, ~1.2 cm proud of the deck line). Its
-   * crown 2 cm over the edge at |x| 0.6: at CarPanels3's 3 cm its centre line stood up to 3.9 cm over the side reference's deck
-   * (side IoU .977 -> .9759).
+   * crown 2.75 cm over the edge at |x| 0.6: at CarPanels3's 3 cm its centre line stood up to 3.9 cm over the side reference's deck
+   * (side IoU .977 -> .9759). Seated (`flush`, `halfWidth` past its edge, so the quarter's rim keeps the deck edge's height under it): its
+   * sides stand at most 1 cm over the quarter ahead of the lip, no shelf; the crown holds the centre line on the seated lid.
    */
-  boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45 }, lip: { rise: DECK_RISE, depth: 0.06 }, crown: [0.02, 0.6], edgeRoll: 0.03 },
+  boot: { kind: "lid", z0: -1.65, z1: -2.1, origin: [0.97, -1.62], pivot: [1.02, -1.68], drop: { y: 0.62, w: 0.45 }, lip: { rise: DECK_RISE, depth: 0.06 }, crown: [0.0275, 0.6], edgeRoll: 0.03, flush: true, halfWidth: 0.7 },
   // The reference's head lamps are cool-white LED strips.
   lamps: { head: [0.637, 0.631], tail: [0.599, 0.815], shapes: SEDAN_LAMP_SHAPES, bulb: "led" },
   // The reference's shield: 0.74 across at the top, tapering to 0.66 at its rounded bottom corners, its top up under the hood's front edge

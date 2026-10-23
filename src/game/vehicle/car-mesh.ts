@@ -294,7 +294,7 @@ interface BootCut {
 const BOOT_GAP = 0.005;
 /** A face's opening stays this far (m) inside the panel that shuts it: the panel's edge closes over body, never over the hole. */
 const BOOT_LAP = 0.01;
-/** A flush deck lid's edge stands this far (m) inside the hollow's rim beside it: the 1 cm groove (the deck edge's hw - 0.07 against the rim's hw - 0.06). */
+/** A capped flush deck lid's `halfWidth` stands this far (m) inside the hollow's rim beside it: the 1 cm groove; a cap that does not bind leaves the rim on the closed deck's edge (`hw - 0.07`), under the lid's own edge. */
 const LID_GROOVE = 0.01;
 /** The face's cut runs at least this far (m) in from the tail: the opening's sill is the tail panel's top. */
 const FACE_DEPTH = 0.06;
@@ -508,9 +508,9 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
     const bottom = lerp(hollow, Math.max(boot.face?.sill ?? 0, hollow), cut.face);
     half[0] = [lerp(half[0]![0], wall, cut.open), lerp(half[0]![1], bottom, cut.open)];
     // The wall's top takes the tub's rim (`tubWall`) as far as the cage's has dropped into the tub.
-    const inner = lerp(lidWall, hw - tubWall(style), deckTub);
+    const inner = lerp(Number.isFinite(lidCap) ? Math.min(lidWall, half[1]![0]) : lidWall, hw - tubWall(style), deckTub);
     const rim = lerp(inner, Math.min(boot.face?.wall ?? hw, inner), cut.face);
-    // A capped lid's rim keeps the closed deck edge's height: the quarter top beside the groove stands `HOOD_SEAT` under the lid's edge, as the fender beside the hood does.
+    // A capped lid's rim keeps the closed deck edge's height and never stands outboard of it: the lid's edge then stands `HOOD_SEAT` over it, as the hood over the fender.
     half[1] = [lerp(half[1]![0], rim, cut.open), Number.isFinite(lidCap) ? half[1]![1] : lerp(half[1]![1], yb - 0.006, cut.open)];
   }
   // The door cut: every point above the rocker drops onto the sill's top, the last tuck row onto its far edge.
