@@ -5,7 +5,7 @@ import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { roofHinged } from "./hinge-spec.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
-import { splitCreases } from "./car-crease.ts";
+import { splitCreases, splitLoftOnLowDiagonals } from "./car-crease.ts";
 import { CREASE_DEGREES, deckTopY, ensureOutwardNormals, lerp, loftFromRings, makeBumperGeometry, roofTopY, type Pt } from "./car-mesh.ts";
 
 /**
@@ -241,7 +241,11 @@ function glassPanelGeometry(panel: NonNullable<RoofParts["glassPanel"]>, style: 
   return hardEdged(loftFromRings(rings, zs, 0, 1));
 }
 
-/** `geo` (a spoiler's loft) with its front edge bowed back in plan by `spoiler.bow` at its middle, a parabola across its half-width, easing to none at the tip. */
+/**
+ * `geo` (a spoiler's loft) with its front edge bowed back in plan by `spoiler.bow` at its middle, a parabola across its half-width, easing to none at the tip.
+ * The bowed front cap is a faceted cylinder, not a plane: it is cut into vertical strips from each top point to a foot under it, each flat, where a fan from a centre
+ * vertex off the surface folds every way and reads as a wave.
+ */
 function bowSpoilerFront(geo: THREE.BufferGeometry, spoiler: NonNullable<RoofParts["spoiler"]>): THREE.BufferGeometry {
   const bow = spoiler.bow ?? 0;
   if (!bow) return geo;
@@ -252,6 +256,18 @@ function bowSpoilerFront(geo: THREE.BufferGeometry, spoiler: NonNullable<RoofPar
     const z = pos.getZ(i);
     pos.setZ(i, z - bow * (1 - x * x) * ((z - tip) / (front - tip)));
   }
+  const { ring, slices } = geo.userData.loft as { ring: number; slices: number };
+  // The loft's rings, the tip cap's rim and centre, then the front cap's rim (bottom corner, tops, bottom corner) and centre (last, replaced by the feet).
+  const [rim, tops] = [(slices + 1) * ring + 1, ring - 2];
+  const foot = (k: number): number => rim + ring + k - 1;
+  const strips = [[rim, rim + 1, foot(1)]];
+  for (let k = 1; k < tops; k++) strips.push([rim + k, rim + k + 1, foot(k + 1)], [rim + k, foot(k + 1), foot(k)]);
+  strips.push([rim + tops, rim + tops + 1, foot(tops)]);
+  geo.setIndex([...geo.getIndex()!.array.subarray(0, geo.getIndex()!.count - ring * 3), ...strips.flat()]);
+  const feet = Array.from({ length: tops }, (_, k) => [pos.getX(rim + k + 1), spoiler.y[0], pos.getZ(rim + k + 1)]).flat();
+  const uv = geo.getAttribute("uv");
+  geo.setAttribute("position", new THREE.Float32BufferAttribute([...pos.array.slice(0, -3), ...feet], 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute([...uv.array.slice(0, -2), ...Array.from({ length: tops }, () => [1, 0.5]).flat()], 2));
   return geo;
 }
 
@@ -288,7 +304,10 @@ function spoilerGeometry(spoiler: NonNullable<RoofParts["spoiler"]>, span: reado
   };
   const raw = spoiler.round ? Array.from({ length: SPOILER_ROUND_RINGS + 1 }, (_, k) => detSin((Math.PI / 2) * ((SPOILER_ROUND_RINGS - k) / SPOILER_ROUND_RINGS))) : [1, 0];
   const us = span[0] === 0 && span[1] === 1 ? raw : [span[1], ...raw.filter((u) => u > span[0] && u < span[1]), span[0]];
-  return hardEdged(bowSpoilerFront(loftFromRings(us.map(ringAt), us.map((u) => lerp(spoiler.z[1], spoiler.z[0], u)), 0, 1), spoiler));
+  const wedge = bowSpoilerFront(loftFromRings(us.map(ringAt), us.map((u) => lerp(spoiler.z[1], spoiler.z[0], u)), 0, 1), spoiler);
+  ensureOutwardNormals(wedge);
+  splitLoftOnLowDiagonals(wedge);
+  return hardEdged(wedge);
 }
 
 /** u (0 at the spoiler's front edge, 1 at its tip) of the shut line across a roof-hinged gate's spoiler; null when none rides the gate. */

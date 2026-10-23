@@ -4,7 +4,7 @@ import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
 import { roofHinged } from "./hinge-spec.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, ROOF_DRIP, roofDrip, sideBowZ, WINDSHIELD_BOW } from "./car-lines.ts";
 import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset, windshieldSideBase, windshieldSideX } from "./car-glass.ts";
-import { splitCreases } from "./car-crease.ts";
+import { splitCreases, splitLoftOnLowDiagonals } from "./car-crease.ts";
 import {
   ROOF_ARC_T,
   ROOF_CROWN,
@@ -1014,6 +1014,7 @@ export function gatePosts(style: BodyStyle): THREE.BufferGeometry[] {
     geo.userData.matte = tone === "matte";
     // The body's posts take their normals after the merge; the gate's merge keeps each part's own, so they are fitted to the clamped head here.
     insideRoof(geo, style, "rear");
+    splitLoftOnLowDiagonals(geo);
     geo.computeVertexNormals();
     return geo;
   });
@@ -1093,7 +1094,10 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       ),
     );
     const { rearPillar, held, sail, squared, split } = rearPostCorners(style, source);
-    parts.push(pillar(source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : sail ? cPillarSail(sign, style, rearPillar) : roundedPillarFromCorners(sign, split?.body ?? held, 0.05, true), "rear"));
+    const post = source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : sail ? cPillarSail(sign, style, rearPillar) : roundedPillarFromCorners(sign, split?.body ?? held, 0.05, true);
+    const rear = pillar(post, "rear");
+    if (split) splitLoftOnLowDiagonals(rear);
+    parts.push(rear);
     if (squared) {
       const cabBack = pillar(cabBackPanel(sign, held.rb, held.rt, 0.05, style.rearGlass), "rear");
       cabBack.name = "cabBack";

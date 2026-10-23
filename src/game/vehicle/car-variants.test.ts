@@ -1317,6 +1317,67 @@ describe("given a body style's H2 hardpoints", () => {
     assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
   });
 
+  it("when a roof-hinged gate's frame and spoiler are read for folds, then no vertex has a convex and a concave fold side by side (3 to 15 degrees, 6 or more each way): no ripple on the open or shut car", () => {
+    /** The fold band (degrees) a gentle fold each way beside the other reads as a wave in, and the size each must reach. */
+    const BAND = [3, 15] as const;
+    const WAVE = 6;
+    /** The vertices of `geo` from `from` on with a convex and a concave fold of the band side by side (positions welded to 0.01 mm, as the contour check reads them). */
+    const waves = (geo: THREE.BufferGeometry, from = 0): string[] => {
+      const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+      const index = geo.getIndex()!.array;
+      const ids = new Map<string, number>();
+      const points: THREE.Vector3[] = [];
+      const weld = (i: number): number => {
+        const p = new THREE.Vector3().fromBufferAttribute(pos, i);
+        const key = [p.x, p.y, p.z].map((v) => Math.round(v * 1e5)).join(",");
+        if (!ids.has(key)) ids.set(key, points.push(p) - 1);
+        return ids.get(key)!;
+      };
+      const faces: { w: number[]; n: THREE.Vector3 }[] = [];
+      const edges = new Map<number, { a: number; b: number; faces: number[] }>();
+      for (let t = 0; t < index.length; t += 3) {
+        if ([0, 1, 2].some((c) => index[t + c]! < from)) continue;
+        const w = [0, 1, 2].map((c) => weld(index[t + c]!));
+        if (new Set(w).size < 3) continue;
+        const n = points[w[1]!]!.clone().sub(points[w[0]!]!).cross(points[w[2]!]!.clone().sub(points[w[0]!]!)).normalize();
+        for (let c = 0; c < 3; c++) {
+          const [a, b] = [Math.min(w[c]!, w[(c + 1) % 3]!), Math.max(w[c]!, w[(c + 1) % 3]!)];
+          const edge = edges.get(a * 1e7 + b) ?? { a, b, faces: [] };
+          edge.faces.push(faces.length);
+          edges.set(a * 1e7 + b, edge);
+        }
+        faces.push({ w, n });
+      }
+      const [convex, concave] = [new Float64Array(points.length), new Float64Array(points.length)];
+      const near = points.map((): number[] => []);
+      for (const { a, b, faces: pair } of edges.values()) {
+        near[a]!.push(b);
+        near[b]!.push(a);
+        if (pair.length !== 2) continue;
+        const [fa, fb] = [faces[pair[0]!]!, faces[pair[1]!]!];
+        const turn = THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(fa.n.dot(fb.n), -1, 1)));
+        if (turn < BAND[0] || turn > BAND[1]) continue;
+        const far = points[fb.w.find((w) => w !== a && w !== b)!]!;
+        const folds = far.clone().sub(points[a]!).dot(fa.n) < 0 ? convex : concave;
+        for (const w of [a, b]) folds[w] = Math.max(folds[w]!, turn);
+      }
+      const found: string[] = [];
+      for (let w = 0; w < points.length; w++) {
+        const [up, down] = [Math.max(convex[w]!, ...near[w]!.map((u) => convex[u]!)), Math.max(concave[w]!, ...near[w]!.map((u) => concave[u]!))];
+        if (Math.min(up, down) >= WAVE) found.push(points[w]!.toArray().map((v) => v.toFixed(3)).join(","));
+      }
+      return found;
+    };
+    for (const id of ["hatchback", "wagon"] as const) {
+      const style = CAR_STYLES[id];
+      const gate = withGateSurround(makeTrunkGeometry(style), style);
+      const from = gate.userData.surround as number;
+      assert.ok(from > 0, `${id}: the gate carries a surround`);
+      const found = waves(gate, from);
+      assert.ok(found.length === 0, `${id}: the gate's frame and spoiler have a fold each way at ${found.join(" ")}`);
+    }
+  });
+
   it("when the pickup's cab back post fans its foot onto the shoulder (pillars.rearFoot), then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening beside the cab back, and the cage is unchanged", () => {
     /** A ray down that hits under this height (m) has passed the body's top into the cabin: the shoulder stands at 1.17 beside the cab back. */
     const FLOOR_Y = 0.8;

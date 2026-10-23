@@ -8,6 +8,7 @@ import { boxShape, newLooseShape } from "./loose-step.ts";
 import { PART_KIND, PartSeat, partGeometry } from "./part-geometry.ts";
 import { LOOSE_STATE_MAX } from "./part-state.ts";
 import { assertSameNumbers } from "./test-support.ts";
+import { LID } from "./constants.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 import { makeCarFrame } from "../net/codec.ts";
@@ -119,4 +120,32 @@ describe("given a sedan whose front bumper, carrying the style's own drawn grill
     if (platform.boundingBox === null) platform.computeBoundingBox();
     assert.ok(!platform.boundingBox!.equals(flies), "the control: the sedan's drawn grille is the platform grille's box");
   });
+});
+
+describe("given a rear-ended hatch or SUV whose roof-hinged gate, carrying its D-post shares and spoiler, tore off, and a netplay client's twin that tears it from the net state alone", () => {
+  for (const id of ["hatch", "suv"] as const) {
+    it(`when each measures the torn ${id} gate's loose shape, then the client's is the host's to the bit`, (t) => {
+      const car = makeCar(id);
+      car.spawnFacing(0, 0, 0, 0);
+      car.group.updateMatrixWorld(true);
+      car.updateSkin();
+      car.applyImpact(car.group.position.clone().addScaledVector(car.forward, -1.85), car.forward.clone(), 0.5, 0.5);
+      car.updateSkin();
+      const gate = car["parts"].find((p) => p.name === LID.trunk)!;
+      car["detachPart"](gate, 0);
+      boxShape(gate.shape, gate.object);
+      const frame = makeCarFrame(carLayout(car));
+      car.deform.readNetState(frame.deform);
+      car.readPartNetState(frame.parts);
+      const twin = makeCar(id);
+      twin.spawnFacing(car.group.position.x, car.group.position.z, car.yaw, 0);
+      twin.writeNetState(frame.deform, frame.parts);
+      const twinGate = twin["parts"].find((p) => p.name === LID.trunk)!;
+      assert.ok(twinGate.detached, "the client's gate tore from the net state alone");
+      boxShape(twinGate.shape, twinGate.object);
+      const [client, host] = [twinGate.shape, gate.shape].map((s) => [s.count, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
+      t.diagnostic(`${id} torn gate: count ${gate.shape.count}, reach ${gate.shape.reach.toFixed(4)}, centre ${gate.shape.centre.toArray().map((v) => v.toFixed(4))}, invI ${gate.shape.invI.toArray().map((v) => v.toFixed(3))}`);
+      assertSameNumbers(client!, host!, `the client's torn ${id} gate shape`);
+    });
+  }
 });
