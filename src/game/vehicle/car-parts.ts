@@ -12,6 +12,7 @@ import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox, shel
 import { setBare } from "./interior.ts";
 import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
+import { doorCardDent } from "./car-door-mesh.ts";
 import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
 import type { TopMet } from "./car-air-body.ts";
 import { rigidCentre } from "./car-air.ts";
@@ -975,6 +976,19 @@ export abstract class CarParts extends CarGlass {
     lamp.intact = false;
   }
 
+  /** Each door card rides in with the dent its door's skin has taken (`doorCardDent`): the batch draws it as one rigid shape, which a dented skin otherwise leaves standing out through it. A torn or restored door's has none. */
+  protected seatDoorCards(): void {
+    for (const side of [0, 1] as const) {
+      const sign = side === 0 ? -1 : 1;
+      const mesh = side === 0 ? this.doorMeshL : this.doorMeshR;
+      const dent = this.doorParts[side]!.detached ? 0 : doorCardDent(this.doorCardFaces[side]!, sign, side === 0 ? this.doorLRest : this.doorRRest, mesh.geometry.getAttribute("position").array);
+      const seat = this.partSeats[side === 0 ? PART_KIND.liningL : PART_KIND.liningR]!;
+      if (seat.position.x === -sign * dent) continue;
+      seat.position.x = -sign * dent;
+      seat.updateMatrix();
+    }
+  }
+
   /** Hand a part to the world. `push` (car-space m/s on top of the car's velocity) replaces the
    *  crash launch: outward from the body by `impulse`, popped up by `hingeT`. */
   protected detachPart(p: DetachPart, impulse: number, push?: THREE.Vector3): void {
@@ -987,6 +1001,7 @@ export abstract class CarParts extends CarGlass {
     // ponytail: a torn door flies as its rest shell (its loose shape is sim and is read off the shell drawn, `boxShape`); flying dented moves the sim.
     if (p === this.doorParts[0]) this.restoreRest(this.doorMeshL.geometry, this.doorLRest);
     else if (p === this.doorParts[1]) this.restoreRest(this.doorMeshR.geometry, this.doorRRest);
+    this.seatDoorCards();
     this.group.updateMatrixWorld();
     const wpos = new THREE.Vector3();
     const wquat = new THREE.Quaternion();

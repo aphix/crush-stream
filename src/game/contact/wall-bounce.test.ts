@@ -54,7 +54,7 @@ const SOLID_HALF_THICK = 1;
 
 /** The turn on the spot (rad/s) that sweeps the door into a face: the derby wreck's while its nose swept a tyre stack's face (3.6-4.5 rad/s). */
 const TURN_RAD_S = 4;
-/** The most of that sweep one slice's face may leave: it stops each mass it reaches at the face's speed (`shiftBody`) and pushes none out, so a slice takes most of the sweep, not all. */
+/** The most of the deepest vertex's closing on the face that one slice's plastic impulse may leave: it stops the vertex dead (the centre takes the rest as recoil). */
 const SWEEP_LEFT = 0.2;
 
 /** A side-hit sedan wreck at the origin moving at `vx` m/s along x, its drawn door the body's lead toward -x: the wreck and the door's plan point. */
@@ -99,10 +99,11 @@ function turningWreckAtFace(): { car: DeformableCar; face: ContactBox } {
   return { car, face: solidFace(makeBox(), END_NX, 0, faceX, 0, faceX, 0, SOLID_HALF_SPAN, SOLID_HALF_THICK) };
 }
 
-/** The speed (m/s) the body's turn gives the drawn body's deepest vertex (the last `faceDepth`'s, `faceExit`) along the unit (nx, nz): negative sweeps it into the face. */
-function turnAtDeepest(car: DeformableCar, nx: number, nz: number): number {
+/** The speed (m/s) of the drawn body's deepest vertex (the last `faceDepth`'s, `faceExit`) along the unit (nx, nz): the centre's and the turn's. Negative closes on the face. */
+function vertexAlong(car: DeformableCar, nx: number, nz: number): number {
   const centre = wreckCentre(car).clone().applyQuaternion(car.group.quaternion);
-  return car.angular.y * ((faceExit.offZ - centre.z) * nx - (faceExit.offX - centre.x) * nz);
+  const turn = car.angular.y * ((faceExit.offZ - centre.z) * nx - (faceExit.offX - centre.x) * nz);
+  return car.velocity.x * nx + car.velocity.z * nz + turn;
 }
 
 describe("given a side-hit sedan wreck driving at 15 m/s into the open end of a 2 m thick solid (a monument's arm), its drawn door 4 cm round the end and no mass on the solid", () => {
@@ -131,13 +132,13 @@ describe(`given a side-hit sedan wreck turning on the spot at ${TURN_RAD_S} rad/
     assert.ok(massLead > face.x + SOLID_HALF_THICK, `a mass's face sphere reaches ${(face.x + SOLID_HALF_THICK - massLead).toFixed(3)} m into the solid`);
     const depth = faceDepth(car, face);
     assert.ok(Math.abs(depth - PAST_END) < 1e-6 && !faceExit.atEnd, `drawn body ${depth.toFixed(3)} m in, ${faceExit.atEnd ? "round the end" : "through the face"}`);
-    const sweepBefore = turnAtDeepest(car, END_NX, 0);
-    assert.ok(sweepBefore < 0, `the turn moves the door out of the face at ${sweepBefore.toFixed(2)} m/s`);
+    const closingBefore = vertexAlong(car, END_NX, 0);
+    assert.ok(closingBefore < 0, `the turn moves the door out of the face at ${closingBefore.toFixed(2)} m/s`);
     const x0 = car.group.position.x;
     wallBounce(car, face, END_NX, 0, PAST_END, H, false);
     assert.equal(car.deform.faceContacts, 0, "a mass met the solid: its exchange held the wreck");
     assert.ok(car.group.position.x > x0, "the slice shoved the wreck out through the face");
-    const sweepAfter = turnAtDeepest(car, END_NX, 0);
-    assert.ok(sweepAfter >= SWEEP_LEFT * sweepBefore, `the turn still sweeps the door into the face at ${(-sweepAfter).toFixed(2)} m/s (${(-sweepBefore).toFixed(2)} before the slice)`);
+    const closingAfter = vertexAlong(car, END_NX, 0);
+    assert.ok(closingAfter >= SWEEP_LEFT * closingBefore, `the door's deepest vertex still closes on the face at ${(-closingAfter).toFixed(2)} m/s (${(-closingBefore).toFixed(2)} before the slice)`);
   });
 });

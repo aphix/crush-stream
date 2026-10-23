@@ -4,7 +4,7 @@
 // one is the user's pick, on every device class); a match keeps the tier and is not judged until 3 s after green. A
 // manual pick turns it off. Whether the device may host a public match is judged on the main thread's total, sim included.
 import type { FxTier } from "./engine-post.ts";
-import { FRAME_BUDGET_MS, FrameWork, type Judge } from "./frame-work.ts";
+import { climbFits, FRAME_BUDGET_MS, FrameWork, type Judge } from "./frame-work.ts";
 
 const SOFTWARE_GPU = /swiftshader|llvmpipe|softpipe|basic render/i;
 
@@ -71,6 +71,8 @@ export class AutoFx {
   private readonly win: FrameWork;
   private slow = 0;
   private upRun = 0;
+  /** The busier sides summed over `upRun`'s windows: a climb needs their mean to fit `climbFits`. */
+  private upBusy = 0;
   private upNeed = UP_STREAK;
   /** Finished windows so far, and the counts at the last step down and the last climb (-1000: never). */
   private windows = 0;
@@ -127,13 +129,16 @@ export class AutoFx {
     this.windows++;
     const roomy = w.roomy();
     if (this.ceiling === null) {
-      // A load burst is not the device: minimal is decided only by `MISS_WINDOWS` windows without room in a row.
-      if (!roomy && ++this.slow < MISS_WINDOWS) return null;
-      this.ceiling = roomy ? "high" : "minimal";
+      // A load burst is not the device: minimal is decided only by `MISS_WINDOWS` windows without room in a row. The tier policy
+      // lifts only with the climb overhead to spare (an unfit window counts as one without room); its host judge (`host` null in
+      // itself) reads plain room.
+      const lift = roomy && (this.host === null || climbFits(w.busy));
+      if (!lift && ++this.slow < MISS_WINDOWS) return null;
+      this.ceiling = lift ? "high" : "minimal";
       return this.switch(this.ceiling);
     }
     if (w.slow(DROP_FPS)) {
-      this.upRun = 0;
+      this.upRun = this.upBusy = 0;
       const down = STEP_DOWN[this.tier];
       if (++this.slow < MISS_WINDOWS || down === undefined) return null;
       if (this.windows - this.climbedAt <= REVERSAL_WINDOWS) this.upNeed = Math.min(MAX_UP_STREAK, this.upNeed * 2);
@@ -144,10 +149,11 @@ export class AutoFx {
     this.slow = 0;
     const up = STEP_UP[this.tier];
     if (up === undefined || !roomy) {
-      this.upRun = 0;
+      this.upRun = this.upBusy = 0;
       return null;
     }
-    if (++this.upRun < this.upNeed || this.windows - this.downAt < REVERSAL_WINDOWS) return null;
+    this.upBusy += w.busy;
+    if (++this.upRun < this.upNeed || this.windows - this.downAt < REVERSAL_WINDOWS || !climbFits(this.upBusy / this.upRun)) return null;
     this.climbedAt = this.windows;
     this.ceiling = up;
     return this.switch(up);
@@ -179,7 +185,7 @@ export class AutoFx {
   private dropWindow(): void {
     this.win.restart();
     this.slow = 0;
-    this.upRun = 0;
+    this.upRun = this.upBusy = 0;
   }
 
   private switch(to: FxTier): FxTier | null {

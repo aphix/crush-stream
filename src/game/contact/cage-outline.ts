@@ -26,6 +26,9 @@ export class CageOutline {
   /** Per outline node: the body's lowest and highest height around it (`bandAround`). */
   lows: Float32Array = new Float32Array(0);
   highs: Float32Array = new Float32Array(0);
+  /** Per lattice row (z): the lowest bottom and the highest top (m, no class lift) of its covered nodes; Infinity, -Infinity where it has none. */
+  rowLows: Float32Array = new Float32Array(0);
+  rowHighs: Float32Array = new Float32Array(0);
   count = 0;
   /** The outline nodes' frame bounds (m): x min, x max, z min, z max. */
   xLo = 0;
@@ -61,14 +64,22 @@ export class CageOutline {
       this.bands = new Float64Array(2 * nu * nv);
       this.bandStamp = new Int32Array(nu * nv);
     }
+    if (this.rowLows.length < nv) {
+      this.rowLows = new Float32Array(nv);
+      this.rowHighs = new Float32Array(nv);
+    }
     let count = 0;
     let low = Infinity;
     let high = -Infinity;
     for (let j = 0; j < nv; j++) {
+      let rowLow = Infinity;
+      let rowHigh = -Infinity;
       for (let i = 0; i < nu; i++) {
         const k = j * nu + i;
         if (covered[k] === 0) continue;
         if (bottom[k]! < low) low = bottom[k]!;
+        if (bottom[k]! < rowLow) rowLow = bottom[k]!;
+        if (top[k]! > rowHigh) rowHigh = top[k]!;
         if (top[k]! > high) high = top[k]!;
         const edge = i === 0 || j === 0 || i === nu - 1 || j === nv - 1 || covered[k - 1] === 0 || covered[k + 1] === 0 || covered[k - nu] === 0 || covered[k + nu] === 0;
         if (!edge) continue;
@@ -80,6 +91,8 @@ export class CageOutline {
         this.highs[count] = _window[1]!;
         count++;
       }
+      this.rowLows[j] = rowLow;
+      this.rowHighs[j] = rowHigh;
     }
     this.count = count;
     let xLo = Infinity, xHi = -Infinity, zLo = Infinity, zHi = -Infinity;

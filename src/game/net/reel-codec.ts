@@ -441,6 +441,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A pair's patch reads every node of the other outline that reads a depth: the plan field's edge stands half a lattice step past the outermost node, beyond the drawn triangles' box that gated them, so a door's nodes
  * at a nose's edge joined the patch at once and moved its centre 2.1 or 11.2 cm in a millimetre of closing (a T-bone's door crushed 0.706 m or 0.753 m by 2 mm of start, now 0.750-0.753 m).
  * A skin point standing more than 0.35 m from its parents' rest centroid turns with its clusters' maps only as far as it would at 0.35 m, the rest of its offset going with the parents alone (a rear pillar 0.75 m over the tail's masses was swung 0.198 m by their 0.1-0.2 rad rolls where the particles moved 0.140: now 0.171), so the cage cut from the crushed skin differs on every crushed car's upper rear and the contacts that read it with it.
+ * A hit's spin and friction reach a car's masses only in the share of the exchange's impulse those masses took (the face's impulse cannot reach masses
+ * already held on it), and as the moment of that impulse about the car's centre: a resting sedan struck 1 m ahead of its middle with most of its mass already on
+ * the face took 556 of the exchange's 1713 N·s and spun 2.14 rad/s, now 0.67; a wreck turning with its drawn vertex in a face takes the rigid plastic impulse there
+ * (recoil and spin), where its spin went with no momentum taken: a sedan hitting a palm's trunk 0.6 m off its middle turns toward it (+0.09 rad, was +0.03).
+ * A pair tilted 30° to 150° against each other (a car on its side beside one on its wheels or on its roof) reads the plan overlap from every node of the cages with its own column, not from the outline's stretched band: a monster rolled 70° with a cop's nose in its roof read 0.253 m shallow (0.021 m against 0.274 m) and a one-level graze of the other's top counted as a contact up to 0.75 m deep, and now reads the cages' overlap to within 0.04 m; pairs tilted less (a car pitched 27° on a tier) or turned over flat read as before.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

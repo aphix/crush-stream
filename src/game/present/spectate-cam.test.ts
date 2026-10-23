@@ -8,10 +8,11 @@ import { parseTrack } from "../world/track-schema.ts";
 import { blankPoint, blankProjection, projectPath, Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { FRAME, frame, makeWorld } from "../world/race-world.test-util.ts";
-import { aheadPoints, camUsable, CINE, CineCam, CLEAR, clearSpot, DutchCam, occluder, raceSight, SightLines, type Sight } from "./spectate-cam.ts";
+import { addCars, aheadPoints, camUsable, CINE, CineCam, CLEAR, clearSpot, DutchCam, occluder, raceSight, sightLine, SightLines, type Occluder, type Sight } from "./spectate-cam.ts";
 import { AutoCam, type AutoScene } from "./auto-cam.ts";
 import { carFrame } from "../vehicle/car-rig.ts";
 import { CAR_STYLES } from "../vehicle/car-variants.ts";
+import { BELT_Y } from "./ragdoll-proxy.ts";
 import { eyeProblems } from "./spectate-cam.test-util.ts";
 
 /** The dutch cam's mounts: each wheel well, looking forward and back. */
@@ -429,5 +430,27 @@ describe("given the Auto spectator camera (the shot director that cuts between s
       t.diagnostic(`${hz} Hz: the eye steps at most ${worst.toFixed(4)} m a frame beyond the car's own`);
       assert.ok(worst < 0.1, `${hz} Hz: the eye steps ${worst.toFixed(3)} m a frame beyond the car's own`);
     }
+  });
+});
+
+describe("given the cars as the cinematic eye's solids", () => {
+  it("when a line runs sideways across a sedan at belt height, then its body holds it under the belt, over the hood it is clear, its cabin holds it over the cabin's span, and a line a car-length-radius from its centre is clear", () => {
+    const car = new DeformableCar({ body: 0x808080, accent: 0x404040, name: "solid" }, scene, null);
+    assert.ok(car.fwdFlat.z > 0.99, "the car faces +z");
+    const occ: Occluder[] = [];
+    addCars(occ, [car], null);
+    const sight: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ };
+    const { half, comY } = car.frame;
+    const { rearGlass, windshield } = car.style;
+    const hood = (windshield.base[1] + half.z) / 2;
+    const cabin = (rearGlass.base[1] + windshield.base[1]) / 2;
+    const across = (y: number, z: number): number => sightLine(sight, 6, y, z, -6, y, z);
+    const belt = car.style.proxyBelt ?? BELT_Y;
+    const margin = 0.5;
+    assert.ok(across(belt - margin, hood) < 0, "under the belt the hood holds the line");
+    assert.ok(across(belt + margin, hood) >= 0, "over the hood the line is clear");
+    assert.ok(across(comY + half.y - margin, cabin) < 0, "the cabin holds the line under its roof");
+    assert.ok(across(belt - margin, half.z + margin * 2) >= 0, "past the nose the line is clear");
+    assert.ok(sightLine(sight, half.z - 0.1, 0.5, 0, half.z + 3, 0.5, 0) >= 0, "the old cylinder stood as wide as the car is long: a line along the beam's far side is clear");
   });
 });

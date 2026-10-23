@@ -43,6 +43,8 @@ export const BUMPER_F = "bumperF";
 export const LAMP_SEAT = "lampSeat";
 /** The name of the six small part seats (`Object3D.name`): `CarDetail`'s mid cut finds them. */
 export const SMALL_PART_SEAT = "partSeat";
+/** The name of a lifted truck's ladder frame and axle seats: no distance cut takes them, so the underframe draws whenever the car does (a far monster's body floated over its wheels without it). */
+export const UNDERBODY_SEAT = "underbodySeat";
 /** The paint of a throwaway car (warm-up, a layout read): mid grey body, dark grey accent. */
 export const STOCK_PAINT = { body: 0x808080, accent: 0x404040 };
 

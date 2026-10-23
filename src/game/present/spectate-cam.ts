@@ -9,6 +9,7 @@ import { projectGrid, roadGrid, type RoadGrid } from "./road-grid.ts";
 import { GANTRY_BEAM, RoadIndex, sampleAt, TUNNEL_GAP, TUNNEL_SIDE } from "./track-mesh.ts";
 import { levelAt, sections } from "../world/track-sections.ts";
 import { pillarPieces } from "./track-structures.ts";
+import { BELT_Y } from "./ragdoll-proxy.ts";
 
 /**
  * Spectator cams beyond the chase views: the trackside cinematic (a fixed eye ahead of the car that tracks it past, then cuts
@@ -24,12 +25,25 @@ export function occluder(x: number, z: number, yaw: number, hx: number, hz: numb
   return { x, z, cos: Math.cos(yaw), sin: Math.sin(yaw), hx, hz, circle, y0, y1 };
 }
 
-/** Every visible car but `except` (not vaporized) into `occ` as a solid the eye may not stand in or look through: an upright cylinder over its body. */
+/** The cars' solids reach this far (m) under their origin. */
+const CAR_SIGHT_BELOW = 0.3;
+/**
+ * Every visible car but `except` (not vaporized) into `occ` as the solids the eye may not stand in or look through: its body
+ * (the `frame.half` footprint turned with its flat heading, up to the style's belt, where hoods and decks end) and its cabin
+ * (the greenhouse's span, up to the roof). A dummy flying over a hood is clear of it, as he is of the real car.
+ */
 export function addCars(occ: Occluder[], cars: readonly DeformableCar[], except: DeformableCar | null): void {
   for (const c of cars) {
     if (c === except || c.vaporized || !c.group.visible) continue;
     const p = c.group.position;
-    occ.push(occluder(p.x, p.z, 0, c.frame.half.z, c.frame.half.z, true, p.y - 0.3, p.y + 1.6));
+    const { half, comY } = c.frame;
+    const cos = c.fwdFlat.z;
+    const sin = c.fwdFlat.x;
+    occ.push({ x: p.x, z: p.z, cos, sin, hx: half.x, hz: half.z, circle: false, y0: p.y - CAR_SIGHT_BELOW, y1: p.y + (c.style.proxyBelt ?? BELT_Y) });
+    const back = c.style.rearGlass.base[1];
+    const front = c.style.windshield.base[1];
+    const mid = (back + front) / 2;
+    occ.push({ x: p.x + sin * mid, z: p.z + cos * mid, cos, sin, hx: half.x, hz: (front - back) / 2, circle: false, y0: p.y - CAR_SIGHT_BELOW, y1: p.y + comY + half.y });
   }
 }
 

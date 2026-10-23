@@ -32,6 +32,8 @@ const BLEND_MAX = 3;
 const LEAVE_T = 1;
 /** 0 to 1 over b in [0, 1], flat at both ends. */
 const smoother = (b: number): number => b * b * b * (b * (b * 6 - 15) + 10);
+/** `smoother`'s steepest slope: its turn at the middle runs this many times the mean rate. */
+const SMOOTHER_PEAK = 1.875;
 /** An eye further than this (m) from the camera's is cut to, not flown to. */
 const CUT_FAR = 90;
 /** A dummy flying faster than this (m/s, the sim's) is across the frame (about 2 m at the follow distance) within the shortest ease: with a `Framing.lead` the shot change cuts instead. */
@@ -123,6 +125,10 @@ const _aim = new THREE.Vector3();
 const _eye = new THREE.Vector3();
 const _probe = new THREE.Vector3();
 const _vel = new THREE.Vector3();
+const _fwd = new THREE.Vector3();
+const _prevQ = new THREE.Quaternion();
+const _deltaQ = new THREE.Quaternion();
+const _axis = new THREE.Vector3();
 
 /** Is the ground or a solid at `eye`, or on the straight line from it to `target` (up to `VIEW_STOP` m short of it)? */
 function viewBlocked(sight: Sight, eye: THREE.Vector3, target: THREE.Vector3): boolean {
@@ -161,6 +167,8 @@ export class RideCam {
   private blend = 1;
   private blendT = BLEND_T;
   private readonly from = new THREE.Vector3();
+  /** The blend's turn from `fromQ` to the aim as last frame's, kept on one side of the double cover so the turn never flips direction mid-blend. */
+  private readonly turnQ = new THREE.Quaternion();
   private readonly fromQ = new THREE.Quaternion();
   /** The aim's orientation, turned toward the look-at at most `MAX_TURN` rad/s (a dummy flying past the eye cannot whip it). */
   private readonly aimQ = new THREE.Quaternion();
@@ -290,6 +298,9 @@ export class RideCam {
     const fly = this.from.distanceTo(this.pos);
     this.blend = fly > CUT_FAR || (f.lead > 0 && hypot3(f.vx, f.vy, f.vz) > OUTRUN_SPEED * f.n) ? 1 : 0;
     this.blendT = THREE.MathUtils.clamp(fly / FLY_SPEED, BLEND_T, BLEND_MAX);
+    this.turnQ.identity();
+    // The ease's turn runs at most `SMOOTHER_PEAK` x its mean rate: long enough that its peak stays within `MAX_TURN`.
+    if (f.lead === 0) this.blendT = Math.max(this.blendT, (SMOOTHER_PEAK * _fwd.set(0, 0, -1).applyQuaternion(this.fromQ).angleTo(_aim.copy(this.look).sub(this.pos))) / MAX_TURN);
   }
 
   /** The first frame with a lead: ease from the camera's pose to the follow eye over `LEAD_OPEN_BLEND_T`. */
@@ -370,6 +381,7 @@ export class RideCam {
     // A new shot placed at once (no ease from the old pose) is a cut: its lens cuts with it, or the old shot's (a crash cam
     // zoomed to 20°) frames the new eye's aim, the thrown drivers out at the frame's edge.
     const cut = this.snap && this.blend >= 1;
+    _prevQ.copy(camera.quaternion);
     if (this.shot === "follow") {
       this.probeAge += dt;
       if (f.lead > 0 && this.probeAge >= LEAD_PROBE_T) this.probeFollowLift(f);
@@ -387,9 +399,28 @@ export class RideCam {
       const w = smoother(b);
       camera.position.lerpVectors(this.from, this.pos, w);
       if (f.lead > 0) camera.lookAt(this.look);
-      else camera.quaternion.slerpQuaternions(this.fromQ, this.aimQ, w);
+      else {
+        this.turnToward(camera.quaternion, w);
+        // The ease may not turn the aim faster than a free aim: a shot change never whips it.
+        if (!cut) camera.quaternion.copy(_prevQ.rotateTowards(camera.quaternion, MAX_TURN * dt));
+      }
     }
     easeFov(camera, this.shot === "trackside" ? this.probe.fov : f.lens, cut ? Infinity : dt);
+  }
+
+  /** Set `out` to `fromQ` turned the share `w` of the way to the aim, the long way round if the last frames were going that way (a plain slerp flips to the short way as the aim passes half a turn from `fromQ`, a whip). */
+  private turnToward(out: THREE.Quaternion, w: number): void {
+    _deltaQ.copy(this.fromQ).invert().multiply(this.aimQ);
+    if (_deltaQ.dot(this.turnQ) < 0) _deltaQ.set(-_deltaQ.x, -_deltaQ.y, -_deltaQ.z, -_deltaQ.w);
+    this.turnQ.copy(_deltaQ);
+    const half = Math.acos(THREE.MathUtils.clamp(_deltaQ.w, -1, 1));
+    const s = Math.sin(half);
+    if (s < 1e-6) {
+      out.copy(this.fromQ);
+      return;
+    }
+    _axis.set(_deltaQ.x, _deltaQ.y, _deltaQ.z).divideScalar(s);
+    out.copy(this.fromQ).multiply(_deltaQ.setFromAxisAngle(_axis, 2 * half * w));
   }
 
   /** The follow shot's eye: ahead of or behind the heads' travel, to the side and up (with a lead: `LEAD_STANDOFF_*` back, `LEAD_SIDE` aside, the rest and probe lifts more), over the ground. */

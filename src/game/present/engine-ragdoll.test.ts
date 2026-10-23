@@ -14,7 +14,7 @@ import { COP_LOOK } from "./dummy-dress.ts";
 import type { DummyMesh } from "./ragdoll-mesh.ts";
 import { ROLE } from "./dummy-rig.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
-import { occluder, sightLine, solid, type Occluder, type Sight } from "./spectate-cam.ts";
+import { addCars, occluder, sightLine, solid, type Occluder, type Sight } from "./spectate-cam.ts";
 import { BELT_Y, SILL_Y, UNDER } from "./ragdoll-proxy.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -260,15 +260,13 @@ describe("given a head-on crash where one car is a police car", () => {
   });
 });
 
-/** The two cars as the engine's `spectateSight` sees them: upright cylinders the cinematic eye may not stand in. */
+/** The two cars as the engine's `sceneSight` sees them (`addCars`): the solids the cinematic eye may not stand in or look through. */
 function carSight(cars: readonly DeformableCar[]): () => Sight {
-  return () => ({
-    ground: FLAT_GROUND,
-    path: null,
-    wallTop: 0,
-    rim: Infinity,
-    occ: cars.map((c) => occluder(c.group.position.x, c.group.position.z, 0, c.frame.half.z, c.frame.half.z, true, c.group.position.y - 0.3, c.group.position.y + 1.6)),
-  });
+  return () => {
+    const occ: Occluder[] = [];
+    addCars(occ, cars, null);
+    return { ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ };
+  };
 }
 
 describe("given the ride-along camera following a driver thrown in a head-on at 26 m/s", () => {
@@ -398,7 +396,7 @@ describe("given the ride-along camera following a driver thrown in a head-on at 
 });
 
 /** Rides the thrown driver in `cars` through every shot change, the dummy kept "moving" so the ride outlasts his landing. */
-async function rideShots(cars: DeformableCar[], barrier: boolean): Promise<{ riding: number; shots: string[]; jumps: string[]; maxTurn: number }> {
+async function rideShots(cars: DeformableCar[], barrier: boolean): Promise<{ riding: number; shots: string[]; jumps: string[]; maxTurn: number; worst: string }> {
   const ragdolls: RagdollSystem = new RagdollSystem(new THREE.Scene(), () => ragdolls.follow(), () => {});
   await ragdolls.preload();
   const w = makeWorld(cars, barrier, false, FREEWHEEL);
@@ -411,6 +409,7 @@ async function rideShots(cars: DeformableCar[], barrier: boolean): Promise<{ rid
   let shot = "";
   let riding = 0;
   let maxTurn = 0;
+  let worst = "";
   const jumps: string[] = [];
   const shots = new Set<string>();
   for (let f = 0; f < 900 && riding < 480; f++) {
@@ -425,7 +424,9 @@ async function rideShots(cars: DeformableCar[], barrier: boolean): Promise<{ rid
     const now = ragdolls["ride"].cam.shot;
     shots.add(now);
     if (riding > 0) {
-      maxTurn = Math.max(maxTurn, dir.angleTo(prevDir));
+      const turn = dir.angleTo(prevDir);
+      if (turn > maxTurn) worst = `ride frame ${riding}, ${shot === now ? now : `${shot}->${now}`} shot`;
+      maxTurn = Math.max(maxTurn, turn);
       if (now !== shot && camera.position.distanceTo(prevPos) > 0.1) jumps.push(`${shot}->${now} moved ${camera.position.distanceTo(prevPos).toFixed(2)} m`);
     }
     shot = now;
@@ -434,7 +435,7 @@ async function rideShots(cars: DeformableCar[], barrier: boolean): Promise<{ rid
     riding++;
   }
   ragdolls.dispose();
-  return { riding, shots: [...shots], jumps, maxTurn };
+  return { riding, shots: [...shots], jumps, maxTurn, worst };
 }
 
 describe("given the ride-along camera following a driver thrown in a head-on at 26 m/s", () => {
@@ -442,7 +443,7 @@ describe("given the ride-along camera following a driver thrown in a head-on at 
     const r = await rideShots(headOn(26), false);
     assert.ok(r.riding > 300, `rode ${r.riding} frames`);
     assert.deepEqual(r.jumps, []);
-    assert.ok(r.maxTurn < 4 * FRAME * 1.1, `turned ${r.maxTurn.toFixed(3)} rad in one frame`);
+    assert.ok(r.maxTurn < 4 * FRAME * 1.1, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`);
   });
 });
 
@@ -454,7 +455,25 @@ describe("given the ride-along camera following a driver thrown by a car into th
     assert.ok(r.riding > 300, `rode ${r.riding} frames`);
     assert.deepEqual(r.shots.slice(0, 3), ["glass", "follow", "trackside"], "opens on the windshield, follows, then the trackside turn");
     assert.deepEqual(r.jumps, []);
-    assert.ok(r.maxTurn < 4 * FRAME * 1.1, `turned ${r.maxTurn.toFixed(3)} rad in one frame`);
+    assert.ok(r.maxTurn < 4 * FRAME * 1.1, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`);
+  });
+});
+
+describe("given the ride-along camera following a driver whose throw flies a different path each time the sim changes", () => {
+  const turnBar = 4 * FRAME * 1.1;
+  for (const mps of [22, 30, 40]) {
+    it(`when a head-on at ${mps} m/s throws him under the eye, then the aim never turns faster than 4 rad/s`, async () => {
+      const r = await rideShots(headOn(mps), false);
+      assert.ok(r.riding > 300, `rode ${r.riding} frames`);
+      assert.ok(r.maxTurn < turnBar, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`);
+    });
+  }
+  it("when a car hits the barrier at 12 m/s and throws him 60 m/s up, then the aim never turns faster than 4 rad/s", async () => {
+    const car = fleetCar();
+    launch(car, 12, 0, -Math.PI / 2, -60, 0);
+    const r = await rideShots([car], true);
+    assert.ok(r.riding > 300, `rode ${r.riding} frames`);
+    assert.ok(r.maxTurn < turnBar, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`);
   });
 });
 

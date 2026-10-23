@@ -181,7 +181,7 @@ The cabin is shared props, placed per car by its spec (`vehicle/interior.ts` `Ca
 | `seatFront` | 2 | `seats.front`, the passenger mirrored |
 | `seatRear` | 0 or 1 | `seats.rear`, stretched to the cabin's width |
 | `wheel` | 1 | Ahead of the driver's H-point (`WHEEL_AT`), leaned `WHEEL_TILT` |
-| `liningL`, `liningR`: door cards | 1 each | Door space; each keeps the first lining's box exactly (a torn door's loose box is sim) |
+| `liningL`, `liningR`: door cards | 1 each | Door space; each keeps the first lining's box exactly (a torn door's loose box is sim). Drawn inside every style's door skin (`drawnDoorCard`); the batch draws it as one rigid shape, so its seat rides inboard by the deepest dent the door skin has taken over its footprint (`seatDoorCards`, `doorCardDent`) and a dented skin never stands under it: after a 25 m/s side hit it rides 0.18-0.24 m in and its worst vertex stands 3-51 mm under the skin's face (it stood 154-189 mm out) |
 | `engineBay` | 1 | Mapped from `REF_BAY` onto the trough under the hood; shown while the hood is off or open |
 | `crashBar` | 2 | Each bumper's seat; shown while that bumper is off or hanging |
 | `ladderFrame`: rails, crossmembers, transfer case, steering box, shock bodies | 0 or 1 | `underbody: true` (the monster): in the class-lift body's space, under the floor (`CarUnderbody`) |
@@ -190,8 +190,8 @@ The cabin is shared props, placed per car by its spec (`vehicle/interior.ts` `Ca
 Every plain prop kind is one `InstancedMesh` for the whole field (`PartBatch`, `PART_PER_CAR`): adding a car adds instances, never
 draws. At rest the interior costs six draws for the whole field (cabin, both door-card sides, front seats, rear bench, wheel) and the
 seated drivers one more; the bay and the crash bars draw only while exposed, the undercarriage (two draws) only while a monster is in
-the field. `CarDetail` takes the cabin, seats, wheel and bay at its far distance (by `INTERIOR_MESH`), the door cards, crash bars
-and undercarriage with the small parts at mid distance. The undercarriage is drawn only: the cage, hull and contact shapes never
+the field. `CarDetail` takes the cabin, seats, wheel and bay at its far distance (by `INTERIOR_MESH`), the door cards and crash bars
+with the small parts at mid distance; the undercarriage (`UNDERBODY_SEAT`) is in neither cut, so a far monster's body never floats over its wheels. The undercarriage is drawn only: the cage, hull and contact shapes never
 see it; each axle's shock shafts slide into the frame's shock bodies, so the pair telescopes through the suspension's travel.
 
 - **Seat lean:** seats and the seated driver lean `SEAT_RECLINE` back; under a low roof the seat leans further (to
