@@ -48,6 +48,8 @@ const CORNER_HIT_MPS = 28;
 const CORNER_HIT_EBS = 24;
 /** Height (m) of the corner hit: the front guard's, as the platform's wing stands. */
 const CORNER_Y = 0.4;
+/** A height (m) no road reaches: the car read at it has nothing under it to fit its doors and bumpers to. */
+const CLEAR_OF_ROAD_M = 1000;
 
 type Part = DeformableCar["parts"][number];
 /** A part's place, turn and scale on the car. */
@@ -60,7 +62,11 @@ function partState(car: DeformableCar, p: Part): PartState {
   if (p.detached) return { detached: true, pose: [], rest: [] };
   // Hinged panels and bumpers flutter with the car's speed (`flapAngle`); the podium's cars stand still.
   car.flapSpeed = 0;
+  // The podium stands clear of the road: a door's lift off the road under a tilted finish is not a pose the level copy can show.
+  car.group.position.y += CLEAR_OF_ROAD_M;
   car["posePart"](p);
+  car.group.position.y -= CLEAR_OF_ROAD_M;
+  car.group.updateMatrixWorld(true);
   return { detached: false, pose: poseOf(p), rest: [...p.restPos.toArray(), ...p.restQuat.toArray(), ...p.restScale.toArray()] };
 }
 
