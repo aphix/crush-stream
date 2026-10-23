@@ -1,3 +1,4 @@
+import { WINDSHIELD_BOW } from "../car-lines.ts";
 import type { BodyStyle } from "../car-variants.ts";
 import { DECK_RISE } from "../constants.ts";
 import { CABIN_TUB, PLATFORM_CAMERA, PLATFORM_HARDPOINTS, PLATFORM_WHEEL, st } from "./platform.ts";
@@ -245,7 +246,7 @@ export const SEDAN: BodyStyle = {
    * A-post's top, without the cage's knee.
    */
   drawn: {
-    windshield: { base: [0.95, 0.88], wBase: 1.4, wTop: 1.16, bow: { base: 0.165, top: 0.02 }, sideBow: 0.036, seat: true },
+    windshield: { base: [0.95, 0.88], wBase: 1.4, wTop: 1.16, bow: { base: 0.165, top: WINDSHIELD_BOW.top }, sideBow: 0.036, seat: true },
     aPillarFoot: 0.64,
     aPillarTop: 0.05,
     aPillarKnee: undefined,
