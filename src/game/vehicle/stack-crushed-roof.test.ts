@@ -8,6 +8,8 @@ import type { DriveInput } from "./car-drive.ts";
 import { BELLY, buildCar, cellX, cellZ, drawnField, drawnRange, NX, NZ, stepFrames, TOP_PARTS } from "./drawn-body.test-util.ts";
 import { fit } from "./ground-probe.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { C_H, C_NX, C_NY, C_NZ, HIT_SIZE } from "../world/surfaces.ts";
+import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 
 /**
  * The owner's stuck stack (docs/UNIFIED_CONTACT.md 10.6): a sedan resting on another sedan whose roof the load has crushed
@@ -109,7 +111,15 @@ for (const testCase of crushDepths) {
       const { lower, upper, world } = crushedStack(testCase.crush);
       lower.group.updateMatrixWorld(true);
       const gaps = fit(upper, new DrawnTop(drawnField(lower).top, lower.group.matrixWorld.elements)).gaps.filter(Number.isFinite);
-      const tyresStand = Math.min(...gaps) <= SINK_M;
+      // The car stands on its tyres, not its belly, when three of them press a face the drive can use (`onTreads`' rule) in the sim's own read: three is the sim's "back on its wheels". A tyre within 5 cm of the drawn body is not one pressing it.
+      const e = upper.group.matrixWorld.elements;
+      const treads = [0, 1, 2, 3].map((i) => {
+        const o = i * HIT_SIZE;
+        const h = upper.wheelHit;
+        return h[o + C_H]! > 0 && h[o + C_NX]! * e[4]! + h[o + C_NY]! * e[5]! + h[o + C_NZ]! * e[6]! >= UPRIGHT_UP_Y;
+      });
+      const tyresStand = treads.filter((on) => on).length >= 3;
+      const simRead = `lifts ${[0, 1, 2, 3].map((i) => upper.wheelHit[i * HIT_SIZE + C_H]!.toFixed(3)).join(" ")} m, normal up ${[0, 1, 2, 3].map((i) => upper.wheelHit[i * HIT_SIZE + C_NY]!.toFixed(2)).join(" ")}`;
       const y = upper.group.position.y;
       const top = driveOff(world, upper);
       setGround(new Platform(y));
@@ -119,7 +129,7 @@ for (const testCase of crushDepths) {
       const platform = makeWorld([flat], false, false);
       stepFrames(platform, 5);
       const ref = driveOff(platform, flat);
-      t.diagnostic(`rest y ${y.toFixed(3)}, tyres stand on the body below ${tyresStand}; on the roof ${top.speeds.map((s) => s.toFixed(2)).join("/")} m/s, airborne early ${top.airEarly}; on the platform ${ref.speeds.map((s) => s.toFixed(2)).join("/")} m/s`);
+      t.diagnostic(`rest y ${y.toFixed(3)}, treads on the body below ${treads.map((on) => (on ? 1 : 0)).join("")} (sim's ${simRead}; drawn gaps ${gaps.map((g) => g.toFixed(3)).join(" ")} m); on the roof ${top.speeds.map((s) => s.toFixed(2)).join("/")} m/s, airborne early ${top.airEarly}; on the platform ${ref.speeds.map((s) => s.toFixed(2)).join("/")} m/s`);
       assert.ok(!top.airEarly, "flagged airborne in its first 0.2 s with its belly on the car below");
       for (const [k, at] of READ_AT.entries()) {
         const off = Math.abs(top.speeds[k]! - ref.speeds[k]!);
