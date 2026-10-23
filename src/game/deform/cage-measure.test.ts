@@ -114,14 +114,13 @@ describe("given a car's glazed cages (the windscreen's, the rear glass's and the
     return [...found];
   }
 
-  test("when each door cage's corners' parent masses are listed, then every one is a cabin mass (its rest inside the cell cage's span above its floor), whereas the windscreen's base corners follow masses outside it", () => {
+  test("when each door cage's corners' parent masses are listed, then every one is a cabin mass (its rest inside the cell cage's span above its floor), and the windscreen's are cabin masses and the two wings (the foot's share of the nose), never a rail or the engine, whereas the bonnet's follow masses outside the cabin", () => {
     const rig = new DeformableCar(paint(), new THREE.Scene()).deform;
     const cell = rig["cageByPart"].get("chassisCell")!.spec;
     const inCabin = (m: MassNode): boolean => m.rest.z >= cell.min[2] && m.rest.z <= cell.max[2] && m.rest.y >= cell.min[1];
-    for (const name of ["doorLeft", "doorRight"] as const) {
-      const outside = parentsOf(rig, name).filter((m) => !inCabin(m));
-      assert.deepEqual(outside.map((m) => m.name), [], `${name}'s corners follow masses outside the cabin`);
-    }
-    assert.ok(parentsOf(rig, "glassFront").some((m) => !inCabin(m)), "the control: the windscreen's corners follow the nose");
+    const outside = (name: BodyPartName): string[] => parentsOf(rig, name).filter((m) => !inCabin(m)).map((m) => m.name).sort();
+    for (const name of ["doorLeft", "doorRight"] as const) assert.deepEqual(outside(name), [], `${name}'s corners follow masses outside the cabin`);
+    assert.deepEqual(outside("glassFront"), ["wingFL", "wingFR"], "the windscreen's corners follow the cabin and the wings' share alone");
+    assert.ok(outside("bonnet").length > 0, "the control: the bonnet's corners follow the nose");
   });
 });
