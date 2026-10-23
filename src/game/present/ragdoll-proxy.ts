@@ -255,10 +255,11 @@ export class ProxyFitter {
 
   /**
    * Node `n`'s height as leaf `k`'s spread reads it: its top when it counts, `OPEN_Y` (the ground: nothing there) for a node under a
-   * gone pane, so no leaf spans the opening a dummy falls through and every cut across one splits it off; NaN for the rest.
+   * gone pane, and for a roof leaf under a standing one too, so no leaf spans the opening a dummy falls through nor a slab the glass
+   * between its pillars (cut where they stand at one height, it would float over the pane) and every cut across one splits it off; NaN for the rest.
    */
   private sample(k: number, f: CageFields, n: number): number {
-    if (this.glassNode[n] === OPEN && f.covered[n] === 1) return OPEN_Y;
+    if (f.covered[n] === 1 && (this.glassNode[n] === OPEN || (this.glassNode[n] !== 0 && this.roof[k] === 1))) return OPEN_Y;
     return this.counts(k, f, n) ? f.top[n]! : NaN;
   }
 
@@ -579,7 +580,10 @@ export class ProxyFitter {
     const cx = (k[0]! + k[3]! + k[6]! + k[9]!) / 4;
     const cy = (k[1]! + k[4]! + k[7]! + k[10]!) / 4;
     const cz = (k[2]! + k[5]! + k[8]! + k[11]!) / 4;
-    if (_z.x * (cx - mx) + _z.y * (cy - my) + _z.z * (cz - mz) < 0) _z.negate();
+    // A lying pane (a windshield, a rear window, a crushed roof's glass) faces up, whatever its height against the mean of all the glass (a
+    // crushed roof's flat pane stood under that mean and its slab grew 6 cm up over it); an upright one faces away from the mean.
+    const faceUp = Math.abs(_z.y) >= GLASS_LYING;
+    if (faceUp ? _z.y < 0 : _z.x * (cx - mx) + _z.y * (cy - my) + _z.z * (cz - mz) < 0) _z.negate();
     const out = this.panes;
     const o = p * PANE_FLOATS;
     for (let c = 0; c < 4; c++) {

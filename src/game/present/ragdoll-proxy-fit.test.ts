@@ -37,7 +37,7 @@ const interiorThroughRoof =
  * rim rows off a leaf with an inside (`ProxyFitter.cut`), and the leaf over z 1.65-1.75 stands 6.6 cm over the drawn nose face.
  */
 const noseFaceUnderLeaf =
-  "hood p95 0.06 m against the 0.05 m bar on the sedan, wagon and pickup head-on rows: the cage reaches the crushed nose's front rows (0.10 m under the hood in one node, under CLIFF, in the rim), which no cut splits off a leaf with an inside, so the leaf over them stands 6.6 cm over the drawn nose face; after the plan (Stage 5): the proxy fitter takes the crushed nose's front as a surface of its own";
+  "hood p95 0.06 m against the 0.05 m bar on the wagon and pickup head-on rows (the sedan's reads 0.036 and is a plain row): the cage reaches the crushed nose's front rows (0.10 m under the hood in one node, under CLIFF, in the rim), which no cut splits off a leaf with an inside, so the leaf over them stands 6.6 cm over the drawn nose face; after the plan (Stage 5): the proxy fitter takes the crushed nose's front as a surface of its own";
 
 /**
  * The wagon's deck rows, whose proxy the cage leaves a hole in: the decimation loses the roof's rear corners (|x| .50-.60, z
@@ -50,18 +50,6 @@ const roofCornerHole =
 /** The pickup's airborne deck row (25°): the fitter's one leaf over the bed floor and the cab's rear wall, a cut or leaf budget, not the cage. */
 const bedFrontLeaf =
   "CarRig: a dummy-proxy leaf spans the bed floor (0.80) and the cab's rear wall at the bed front, airborne 25°: deck worst +0.12 m at (0.43, -1.08..-1.18), up .072 before the door/C-post step; the fitter's cut or leaf budget, not the door data";
-/**
- * The sedan's deck, every state (red since the first union read): the cage's top has one row over the deck's start (1.291 m flat across, where
- * the drawn deck stands 1.205-1.234 crowned: 5.7 cm over at the middle). The fitter keeps it as a leaf of its own at the cage's top plus
- * `TOP_BIAS` (a ridge row between lower ones), 7-12 cm over the drawn deck at 24 of the untouched row's 504 cells, and the two edge
- * columns (|x| 0.575) stand 9 cm under their leaves. `TOP_BIAS` 0 to 0.01 and `GLASS_OVER` 0.06 to 0.1 leave the rows red. Read on the
- * untouched row; the other three rows' worst cells are on the same z.
- */
-const deckRidgeRow =
-  "deck p95 0.055-0.074 m on the sedan (untouched, head-on, dropped, airborne): the cage's top has a ridge row (1.291 m) over the deck's start where the drawn deck is 1.205-1.234 m, kept as a leaf of its own 7-12 cm over the drawn deck at 24 of the untouched row's 504 cells; after the plan: the cage's top at that row held to the drawn deck";
-/** The sedan airborne's hood (p95 0.051): its worst cells are the two edge columns (|x| 0.57), which stand 12.5 cm under the leaf over the hood's middle. */
-const hoodEdgeColumns =
-  "hood p95 0.051 m against the 0.05 m bar on the sedan airborne (25° pitch, 15° roll): the worst cells are the edge columns at |x| 0.57, 12.5 cm under the leaf over the hood's middle; the cause is not isolated";
 const todoCause: Record<string, string> = { cabin: interiorThroughRoof, hood: noseFaceUnderLeaf, deck: roofCornerHole };
 
 const proxyCases = BODIES.flatMap((b) =>
@@ -74,13 +62,11 @@ const proxyCases = BODIES.flatMap((b) =>
     stateText: s.text,
     /** The parts of this row held to the bars as a todo (`todoCause`, or the row's own `todoCauses`), the others as plain tests. */
     todoParts: [
-      ...(s.id === "rolled" && (b.style === "pickup" || b.style === "monster") ? ["cabin"] : s.id === "headon" && b.cls !== "monster" ? ["hood"] : s.id === "airborne" && b.style === "sedan" ? ["hood"] : []),
-      ...(b.style === "wagon" || b.style === "sedan" || (b.style === "pickup" && s.id === "airborne") ? ["deck"] : []),
+      ...(s.id === "rolled" && (b.style === "pickup" || b.style === "monster") ? ["cabin"] : s.id === "headon" && b.cls !== "monster" && b.style !== "sedan" ? ["hood"] : []),
+      ...(b.style === "wagon" || (s.id === "airborne" && b.style === "pickup") ? ["deck"] : []),
     ],
     todoCauses: {
       ...(b.style === "pickup" && s.id === "airborne" ? { deck: bedFrontLeaf } : {}),
-      ...(b.style === "sedan" ? { deck: deckRidgeRow } : {}),
-      ...(b.style === "sedan" && s.id === "airborne" ? { hood: hoodEdgeColumns } : {}),
     } as Partial<Record<string, string>>,
   })),
 );
