@@ -12,9 +12,9 @@ import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, doorGlassFrontZ, fl
 import { doorSkinStand, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, type PartSeat } from "./part-geometry.ts";
 import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
-import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
+import { RAIL_LIP, RAIL_PROUD, gatePosts, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry, withGateSurround } from "./car-chassis-mesh.ts";
-import { makeRoofFittings, withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
+import { gateLip, gateSpoiler, makeRoofFittings, withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
 import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassTrim, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield, windshieldPoint, windshieldSideX } from "./car-glass.ts";
 import { windshieldEdge } from "./windshield-edge.test-util.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
@@ -1376,6 +1376,67 @@ describe("given a body style's H2 hardpoints", () => {
       const found = waves(gate, from);
       assert.ok(found.length === 0, `${id}: the gate's frame and spoiler have a fold each way at ${found.join(" ")}`);
     }
+  });
+
+  it("when the wagon's liftgate carries its share of each D-post, then the body's piece and the gate's meet on the same cut points a side to the bit (two at its foot, two at its head), the gate's is a closed solid whose head ends inside the slab, and the hatchback's gate carries no post", () => {
+    const wagon = CAR_STYLES.wagon;
+    /** The cut's points: two (outer face, inner face) at each of the post's two stations. */
+    const CUT_POINTS = 4;
+    const key = (pos: THREE.BufferAttribute, i: number): string => `${pos.getX(i)},${pos.getY(i)},${pos.getZ(i)}`;
+    const body = makeGreenhouseFrame(wagon, "drawn").filter((g) => g.name === "rear");
+    const gate = gatePosts(wagon);
+    assert.ok(body.length === 2 && gate.length === 2, `${body.length} body posts, ${gate.length} gate posts`);
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const slabs = [makeRoofFittings(wagon, "body")!.geometry, gateSpoiler(wagon)!].map((g) => new THREE.Mesh(g, material));
+    const ray = new THREE.Raycaster();
+    for (let side = 0; side < 2; side++) {
+      const [pa, pb] = [body[side]!.getAttribute("position") as THREE.BufferAttribute, gate[side]!.getAttribute("position") as THREE.BufferAttribute];
+      const [a, b] = [new Set(Array.from({ length: pa.count }, (_, i) => key(pa, i))), new Set(Array.from({ length: pb.count }, (_, i) => key(pb, i)))];
+      const shared = [...a].filter((k) => b.has(k));
+      assert.ok(shared.length === CUT_POINTS, `side ${side}: the pieces share ${shared.length} vertices, not the cut's ${CUT_POINTS}`);
+      // Closed: every edge of the welded gate piece has two faces (its ends are capped, its cut is a face).
+      const index = gate[side]!.getIndex()!.array;
+      const edges = new Map<string, number>();
+      for (let t = 0; t < index.length; t += 3) {
+        for (let c = 0; c < 3; c++) {
+          const [u, v] = [key(pb, index[t + c]!), key(pb, index[t + ((c + 1) % 3)]!)];
+          const edge = u < v ? `${u}|${v}` : `${v}|${u}`;
+          edges.set(edge, (edges.get(edge) ?? 0) + 1);
+        }
+      }
+      const open = [...edges.values()].filter((n) => n !== 2).length;
+      assert.ok(open === 0, `side ${side}: ${open} edges of the gate's post piece have not two faces: an uncapped end`);
+      // Its head (the top 5 mm) lies between the slab's underside and its top where the slab covers it.
+      let top = -Infinity;
+      for (let i = 0; i < pb.count; i++) top = Math.max(top, pb.getY(i));
+      const outside: string[] = [];
+      for (let i = 0; i < pb.count; i++) {
+        if (pb.getY(i) < top - 0.005) continue;
+        ray.set(new THREE.Vector3(pb.getX(i), 3, pb.getZ(i)), new THREE.Vector3(0, -1, 0));
+        const ys = ray.intersectObjects(slabs, false).map((h) => h.point.y);
+        if (ys.length > 0 && !(Math.min(...ys) < pb.getY(i) && pb.getY(i) < Math.max(...ys))) outside.push(`(${pb.getX(i).toFixed(3)}, ${pb.getY(i).toFixed(4)}, ${pb.getZ(i).toFixed(3)}) slab ${ys.map((y) => y.toFixed(4)).join("/")}`);
+      }
+      assert.ok(outside.length === 0, `side ${side}: gate post head vertices outside the slab's thickness: ${outside.join("; ")}`);
+    }
+    assert.ok(gatePosts(CAR_STYLES.hatchback).length === 0, "the hatchback's gate carries a D-post share");
+  });
+
+  it("when the wagon's rear glass top edge is read against the gate's slab and its flange, then every vertex of it is inside their thickness: no slit between the glass and the spoiler over its dome-fallen corners", () => {
+    const wagon = CAR_STYLES.wagon;
+    const glass = makeRearGlass(wagon).getAttribute("position") as THREE.BufferAttribute;
+    const slab = [gateSpoiler(wagon)!, gateLip(wagon)!].map((g) => new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })));
+    let top = -Infinity;
+    for (let i = 0; i < glass.count; i++) top = Math.max(top, glass.getY(i));
+    const ray = new THREE.Raycaster();
+    const outside: string[] = [];
+    for (let i = 0; i < glass.count; i++) {
+      if (glass.getY(i) < top - 0.03) continue;
+      // 0.1 mm behind the shut line, where the glass's corners stand on it.
+      ray.set(new THREE.Vector3(glass.getX(i), 3, glass.getZ(i) - 1e-4), new THREE.Vector3(0, -1, 0));
+      const ys = ray.intersectObjects(slab, false).map((h) => h.point.y);
+      if (!(ys.length > 0 && Math.min(...ys) < glass.getY(i) && glass.getY(i) < Math.max(...ys))) outside.push(`${glass.getX(i).toFixed(2)},${glass.getY(i).toFixed(3)} slab ${ys.map((y) => y.toFixed(3)).join("/")}`);
+    }
+    assert.ok(outside.length === 0, `glass top vertices outside the slab: ${outside.join("; ")}`);
   });
 
   it("when the pickup's cab back post fans its foot onto the shoulder (pillars.rearFoot), then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening beside the cab back, and the cage is unchanged", () => {

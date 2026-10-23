@@ -326,6 +326,18 @@ export function gateSpoiler(style: BodyStyle): THREE.BufferGeometry | null {
 }
 
 /**
+ * The flange a roof-hinged gate's slab hangs over the rear glass's top edge (car frame): a box `drop` under the slab's underside and `depth` behind its shut line, its top on the underside, ±`halfWidth`;
+ * the slab's own rings stay the roof's share's, so the shut line is one set of points. Null when the style sets no `spoiler.lip` or the gate carries no slab.
+ */
+export function gateLip(style: BodyStyle): THREE.BufferGeometry | null {
+  const spoiler = style.roof?.spoiler;
+  const u = gateShare(style);
+  if (!spoiler?.lip || spoiler.gate === undefined || u === null || u >= 1) return null;
+  const { drop, depth, halfWidth } = spoiler.lip;
+  return new THREE.BoxGeometry(2 * halfWidth, drop, depth).translate(0, spoiler.y[0] - drop / 2, spoiler.gate - depth / 2);
+}
+
+/**
  * `style.roof`'s rails, glass panel and spoiler as one geometry (car frame) for the drawn body, its first `dark` vertices (rails, panel) drawn primer-dark;
  * null without roof parts. `share` "body" leaves out the spoiler's share behind a roof-hinged gate's `gate` line (`gateSpoiler`).
  */

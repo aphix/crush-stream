@@ -5,7 +5,7 @@ import { BLACKOUT, CABIN_TRIM, INNER_PANEL, MATTE_BLACKOUT, PRIMER_ATTRIBUTE, WE
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
 import { gatePosts, makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
-import { gateSpoiler, makeRoofFittings, withTone } from "./car-fittings-mesh.ts";
+import { gateLip, gateSpoiler, makeRoofFittings, withTone } from "./car-fittings-mesh.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import {
   bayAt,
@@ -344,11 +344,12 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
 export function withGateSurround(lid: THREE.BufferGeometry, style: BodyStyle): THREE.BufferGeometry {
   const posts = gatePosts(style);
   const spoiler = gateSpoiler(style);
+  const lip = gateLip(style);
   if (posts.length === 0 && !spoiler) return lid;
   if (!lid.getAttribute("normal")) throw new Error(`${style.id}: the gate's lid has no normals`);
   const [pivotY, pivotZ] = bootPivot(style.boot);
   const tone = (g: THREE.BufferGeometry): number => (g.userData.blackout === true ? (g.userData.matte === true ? MATTE_BLACKOUT : BLACKOUT) : 0);
-  const surround = [...posts, ...(spoiler ? [spoiler] : [])].map((g) => {
+  const surround = [...posts, ...(spoiler ? [spoiler] : []), ...(lip ? [lip] : [])].map((g) => {
     for (const name of Object.keys(g.attributes)) if (name !== "position" && name !== "normal" && name !== "uv") g.deleteAttribute(name);
     return withTone(g.translate(0, -pivotY, -pivotZ), PRIMER_ATTRIBUTE, tone(g));
   });

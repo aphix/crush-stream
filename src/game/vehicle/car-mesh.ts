@@ -21,10 +21,11 @@ export const SEDAN = CAR_STYLES.sedan;
  * - bumper: the fascia's splitter lip and back turn 73° and 90° (the lip's lower chord 67°); its rounded top and intake recess turn
  *   49° at most a chord. A quad the corner wrap warps folds 63° along its diagonal, which no fan of vertices can keep hard, so the angle sits above that.
  * - fitting: a style's drawn add-ons (hood bulge, scoop, roof rails, spoiler, glass panel) are boxes and wedges: their edges turn 70-90°, their tops under 10° a chord.
+ * - post: a roof-hinged gate's split D-post meets its flat cut (and a closed end) at 90° to its faces; its fillet chords turn 30° at most.
  * The body loft is never split (`panelRegions` primes and peels it by vertex id: a copy would stay painted while its original tears
  * to primer), but for a tub's wall top, which no panel takes; the greenhouse pillars, roof, liners and bulkheads are parts with their own vertices, hard against each other.
  */
-export const CREASE_DEGREES = { deckLid: 45, tailgate: 45, door: 60, bumper: 70, fitting: 50 } as const;
+export const CREASE_DEGREES = { deckLid: 45, tailgate: 45, door: 60, bumper: 70, fitting: 50, post: 60 } as const;
 
 /**
  * Which build of a body part a builder draws. `drawn`: the smoothed mesh the player sees. `cage`: the plain build the collision

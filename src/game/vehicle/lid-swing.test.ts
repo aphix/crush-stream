@@ -165,8 +165,8 @@ const EDGE_STEP = 0.0025;
 const NEAR = 0.03;
 
 /**
- * The probes (car frame) of a shut roof-hinged gate's frame and spoiler: a ray in from outboard at three heights up each D-post, `POST_STRIP`
- * forward of the first surface (body or gate) beside the rear glass's edge, and one down onto the spoiler behind its shut line.
+ * The probes (car frame) of a shut roof-hinged gate's frame and spoiler: where the gate carries a share of each D-post (`boot.postShare`), a ray in from outboard at three
+ * heights up each D-post, `POST_STRIP` forward of the first surface (body or gate) beside the rear glass's edge; and one down onto the spoiler behind its shut line.
  */
 function gateProbes(car: DeformableCar, meshes: THREE.Object3D[]): { name: string; from: THREE.Vector3; toward: THREE.Vector3 }[] {
   const { base, top } = car.style.rearGlass;
@@ -175,7 +175,7 @@ function gateProbes(car: DeformableCar, meshes: THREE.Object3D[]): { name: strin
   assert.ok(spoiler !== undefined && gate !== undefined, `${car.style.id}: its spoiler has no shut line on the gate`);
   const ray = new THREE.Raycaster();
   const out: { name: string; from: THREE.Vector3; toward: THREE.Vector3 }[] = [];
-  for (const side of [-1, 1]) {
+  for (const side of car.style.boot.postShare === undefined ? [] : [-1, 1]) {
     for (const t of [0.3, 0.5, 0.7]) {
       const [y, edge] = [THREE.MathUtils.lerp(base[0], top[0], t), THREE.MathUtils.lerp(base[1], top[1], t)];
       const toward = new THREE.Vector3(-side, 0, 0);
@@ -194,7 +194,7 @@ function gateProbes(car: DeformableCar, meshes: THREE.Object3D[]): { name: strin
 
 describe("given a roof-hinged gate's frame and spoiler (hatchback, wagon)", () => {
   for (const id of ["hatchback", "wagon"] as const) {
-    it(`when the ${id}'s gate is shut, opened to its stop and torn off, then the strip beside its glass and its spoiler behind the shut line are the gate's: shut they are the lid's skin, open or torn nothing of them stays on the body`, () => {
+    it(`when the ${id}'s gate is shut, opened to its stop and torn off, then its spoiler behind the shut line (and the strip beside its glass, where it carries D-post shares) are the gate's: shut they are the lid's skin, open or torn nothing of them stays on the body`, () => {
       const ray = new THREE.Raycaster();
       const shut = parked(id);
       const lid = shut["trunk"];

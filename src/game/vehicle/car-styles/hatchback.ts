@@ -169,8 +169,6 @@ export const HATCHBACK: BodyStyle = {
     lip: { rise: -0.01, depth: 0.06 },
     // The reference's gate seam: ±.62-.66 above the tail lamps, stepping in to ±.43 between them.
     outline: [[0.58, 1.24], [0.64, 1.05], [0.66, 0.92], [0.62, 0.84], [0.43, 0.8], [0.43, 0.6]],
-    // The liftgate carries its share of each D-post when it opens or tears, as the reference's popped gates.
-    postShare: [0.15, 0.25],
   },
   // The high brake lamp: a thin strip on the spoiler's trailing edge (2 cm tall there); the amber side repeater on the front fender, as the reference's.
   lamps: {

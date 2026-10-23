@@ -10,7 +10,7 @@ import { makeChassisGeometry, sliceZs } from "./car-chassis-mesh.ts";
 import { PRIMER_ATTRIBUTE } from "./constants.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
-import { SAIL_SWEEP, makeGreenhouseFrame, makeRoofGeometry, postSection } from "./car-greenhouse-mesh.ts";
+import { SAIL_SWEEP, gatePosts, makeGreenhouseFrame, makeRoofGeometry, postSection } from "./car-greenhouse-mesh.ts";
 import { drawnQuarter, makeWindshield, rearGlassCornerZ, rearGlassInset, windshieldBaseY } from "./car-glass.ts";
 import { DeformableCar } from "./car.ts";
 import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
@@ -20,6 +20,7 @@ import { WINDSHIELD_EDGE_STEPS, windshieldEdge } from "./windshield-edge.test-ut
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { tyresUnderSkin } from "./car-suspension.ts";
 import { STYLE_CLASS } from "./vehicle-classes.ts";
+import { roofHinged } from "./hinge-spec.ts";
 
 const DEGREES_PER_RADIAN = 180 / Math.PI;
 
@@ -698,6 +699,41 @@ function distanceToLine(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): n
   return off.sub(along.multiplyScalar(off.dot(along))).length();
 }
 
+/**
+ * `frame` with each D-post a roof-hinged gate shares (`boot.postShare`) read whole: the body's piece and the gate's meet on one cut, so their joined section
+ * (the gate's rear points to the cut's outer point, the body's, the cut's inner point to the gate's rest) is the post's own curved section, which the bars read.
+ */
+function wholePosts(style: BodyStyle, frame: THREE.BufferGeometry[]): THREE.BufferGeometry[] {
+  const gate = gatePosts(style);
+  if (gate.length === 0) return frame;
+  let side = 0;
+  return frame.map((body) => {
+    if (body.name !== "rear") return body;
+    const piece = gate[side++]!;
+    const [b, g] = [loftOf(body), loftOf(piece)];
+    const sameAt = (k: number, s: number, at: number): boolean => positionAt(body, s * b.ring + k).equals(positionAt(piece, s * g.ring + at));
+    const cutOuter = Array.from({ length: g.ring }, (_, i) => i).find((i) => sameAt(0, 0, i));
+    const cutInner = Array.from({ length: g.ring }, (_, i) => i).find((i) => sameAt(b.ring - 1, 0, i));
+    assert.ok(cutOuter !== undefined && cutInner !== undefined, `${style.id}: the gate's post piece does not meet the body's on its cut`);
+    const points: number[] = [];
+    let ring = 0;
+    for (let s = 0; s < b.slices; s++) {
+      const joined = [
+        ...Array.from({ length: cutOuter + 1 }, (_, i) => positionAt(piece, s * g.ring + i)),
+        ...Array.from({ length: b.ring - 2 }, (_, i) => positionAt(body, s * b.ring + 1 + i)),
+        ...Array.from({ length: g.ring - cutInner }, (_, i) => positionAt(piece, s * g.ring + cutInner + i)),
+      ];
+      ring = joined.length;
+      for (const p of joined) points.push(p.x, p.y, p.z);
+    }
+    const whole = new THREE.BufferGeometry();
+    whole.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
+    whole.userData.loft = { ring, slices: b.slices };
+    whole.name = body.name;
+    return whole;
+  });
+}
+
 /** The sedan's windshield as the reference draws it: its base bowed hard in plan, its side edge convex, the hood's rear edge following it. */
 const WRAPPED_SEDAN: BodyStyle = {
   ...CAR_STYLES.sedan,
@@ -712,7 +748,7 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
   for (const id of CAR_STYLE_IDS) {
     it(`when a ${id}'s posts are read at every station under the roof, then each section has ${POST_MIN_POINTS} points or more and every chord turns under ${POST_TURN_DEGREES}° from the one before`, () => {
       const style = CAR_STYLES[id];
-      const posts = makeGreenhouseFrame(style, "drawn").filter((g) => POST_NAMES.includes(g.name));
+      const posts = wholePosts(style, makeGreenhouseFrame(style, "drawn")).filter((g) => POST_NAMES.includes(g.name));
       assert.ok(posts.filter((g) => g.name === "a").length === 2 && posts.length >= 6, `${id}: ${posts.length} posts`);
       // A station reaching up past the cant line into the roof's side has its points held in under the roof (`insideRoof`).
       const held = (p: THREE.Vector3) => p.z >= style.roofZ[0] && p.z <= style.roofZ[1] && p.y > cantY(p.z, style);
@@ -1468,6 +1504,8 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; li
   const rings = (bootOpen: boolean, noseFill: boolean) => sliceZs(style, "drawn", bootOpen, noseFill).length;
   const liners = (source: "drawn" | "cage") => makeWellLiners(style, source, body).reduce((n, g) => n + g.getAttribute("position").count, 0);
   const posts = makeGreenhouseFrame(style, "drawn").filter((g) => POST_NAMES.includes(g.name));
+  // A split D-post's hard cut copies its cut vertices (`splitCreases`): they are the post's, like its fillet points, not the loft's.
+  const postVertices = (g: THREE.BufferGeometry): number => (roofHinged(style.boot) && style.boot.postShare !== undefined && g.name === "rear" ? g.getAttribute("position").count : loftOf(g).ring * loftOf(g).slices);
   return {
     lips: archLipGeometry(style, body)?.getAttribute("position").count ?? 0,
     humps: wellHumpGeometry(style, "drawn")?.getAttribute("position").count ?? 0,
@@ -1477,7 +1515,7 @@ function wellAndCutVertices(style: BodyStyle): { lips: number; humps: number; li
     splitRings: body.getAttribute("position").count - unsplit.getAttribute("position").count,
     wallTops: unsplit.userData.wallTops as number,
     shutCopies: body.userData.shutCopies as number,
-    curvedPosts: posts.reduce((n, g) => n + loftOf(g).ring * loftOf(g).slices - CHAMFERED_POST_RING * (g.name === "a" ? CHAMFERED_A_POST_STATIONS : CHAMFERED_POST_STATIONS), 0),
+    curvedPosts: posts.reduce((n, g) => n + postVertices(g) - CHAMFERED_POST_RING * (g.name === "a" ? CHAMFERED_A_POST_STATIONS : CHAMFERED_POST_STATIONS), 0),
   };
 }
 

@@ -174,8 +174,9 @@ export const WAGON: BodyStyle = {
   privacyGlass: { rear: true, quarter: "matte" },
   // The glass panel as the reference's isos: from 19 cm behind the windshield's top, 0.57 m long, 0.72 m across. The spoiler caps the roof's
   // last drawn chord from its ring (z -1.662) flush with the roof's crown, so no face stands over the sagging chord; trailing corners rounded.
-  // The liftgate carries the spoiler's share behind the shut line at z -1.79, as the reference's popped gates.
-  roof: { rails: { x: [0.5, 0.56], z: [-1.64, 0.12], rise: 0.03 }, spoiler: { z: [-1.86, -1.662], y: [1.46, 1.516], halfWidth: 0.6, ends: [0.06, 0.1], round: true, crown: 0.026, gate: -1.79 }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
+  // The liftgate carries the spoiler's share behind the shut line at z -1.79, as the reference's popped gates; a 3 cm flange (`lip`) under it hangs over the rear glass's top,
+  // which falls 2.4 cm at the corners (dome): no slit between them, and the shut line stays one ring.
+  roof: { rails: { x: [0.5, 0.56], z: [-1.64, 0.12], rise: 0.03 }, spoiler: { z: [-1.86, -1.662], y: [1.46, 1.516], halfWidth: 0.6, ends: [0.06, 0.1], round: true, crown: 0.026, gate: -1.79, lip: { drop: 0.03, depth: 0.04, halfWidth: 0.496 } }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
   exhaust: { tips: 2, x: 0.5, y: 0.42, size: [0.15, 0.05], shape: "round" },
   details: {
     lines: [
