@@ -5,7 +5,6 @@ import { armPairWithRows, rewindRows, wreckCentre, wreckInvI } from "../vehicle/
 import { MU_BODY, REST_SPEED, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { leftoverCrumple, satPushCap, hypot2, CRASH } from "../deform/physics-util.ts";
 import { satCars } from "./sat.ts";
-import { crushedSoFar, meetTyres, planTyrePushes, TYRE_PUSH, tyrePushes } from "./tyre-contact.ts";
 import { bandsMeet, OUTLINE_REACH } from "./cage-outline.ts";
 import { strikeCar, faceDepth, faceExit, carRow, takeRow, moveAsOneBody, bodyHit, type ContactBox } from "./external-contact.ts";
 import { bodyContact, BODY_SIZE, BODY_VX, BODY_VZ, BODY_W, BODY_X, BODY_Z, CT_DEPTH, CT_E, CT_JMAX, CT_MU, CT_NX, CT_NZ, CT_SIZE, CT_X, CT_Z, OUT_EBS_A, OUT_EBS_B, OUT_PUSH_A, OUT_PUSH_B, OUT_SIZE } from "./body-contact.ts";
@@ -21,9 +20,6 @@ const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _massPoint = new THREE.Vector3();
 const _tn = new THREE.Vector3();
-/** `meetTyres`' rigid tyre contact: its normal (b → a) and point. */
-const _rigidN = new THREE.Vector3();
-const _rigidP = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _turnCentre = new THREE.Vector3();
 
@@ -473,6 +469,11 @@ function momentumAlong(car: DeformableCar, nx: number, nz: number): number {
   return p;
 }
 
+/** How far (m) a car's structure has crushed in the hit that is still on (`crushing`: a contact within the last 0.28 s), 0 for a car with none. */
+function crushedSoFar(d: DeformableCar["deform"]): number {
+  return d.massActive && d.crushing ? d.hitStroke() * d.strokeUsed() : 0;
+}
+
 /**
  * Share (0-1) of the next slice's stroke travel that fits in the room a crashed car's struck face has left before `PACKED_STROKE`, read off
  * its masses as they stand now, this slice's feed in (`strokeAt`). The travel is its masses' at their velocities and the next slice's feed,
@@ -562,15 +563,7 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // pair closes in this slice, and, once the hit is on, by less than the crush has taken both faces back (a crush that keeps up with
   // the closing leaves the faces apart by what it has eaten: the contact does not end where it works), the hit goes on.
   const eaten = crushedSoFar(carA.deform) + crushedSoFar(carB.deform);
-  const look = hypot2(carA.velocity.x - carB.velocity.x, carA.velocity.z - carB.velocity.z) * dt + eaten;
-  let hit = satCars(carA, carB, _n, _p, look);
-  const tyreHit = meetTyres(carA, carB, look, _rigidN, _rigidP);
-  const onTyre = tyreHit > (hit ?? -Infinity);
-  if (onTyre) {
-    hit = tyreHit;
-    _n.copy(_rigidN);
-    _p.copy(_rigidP);
-  }
+  const hit = satCars(carA, carB, _n, _p, hypot2(carA.velocity.x - carB.velocity.x, carA.velocity.z - carB.velocity.z) * dt + eaten);
   const n = _n;
   n.y = 0;
   if (n.lengthSq() > 1e-8) n.normalize();
@@ -654,18 +647,10 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // While the pair closes, the cage's overlap is the crush's to take (`feedOverlap`): this slice's travel (`closing * dt`) or, while it closes faster than `REST_SPEED`
   // (a crush takes nothing at a creep: a resting pair closing 1 mm/s kept 4 cm of overlap as room), the stroke the face it presses on has left (`strokeLeftOn`); only
   // what is deeper is a push, by position. A pair that no longer closes feeds no crush, so it has no stroke to take the overlap (cars rested 10-21 cm into each other).
-  // A tyre does not crush: what of its overlap its hub has not gone back (`meetTyres`) is all a push, each contact on its own normal
-  // (`planTyrePushes`; with the slice's travel as give, a monster closing at 5 m/s held its tyre 2.5 cm inside the tail of the car it caught).
-  let pushed = 0;
-  if (!onTyre) {
-    const room = closing > REST_SPEED ? Math.max(strokeLeftOn(carA, n.x, n.z), strokeLeftOn(carB, -n.x, -n.z)) : 0;
-    const give = closing > 0 ? Math.max(room, closing * dt) : 0;
-    const extra = Math.max(0, hit - OUTLINE_REACH - give);
-    pushed = extra > 0 ? Math.min(extra + 0.006, satPushCap(dt)) : 0;
-    if (pushed > 0) pushApart(carA, carB, n.x, n.z, pushed, dt);
-  }
-  const pushes = planTyrePushes(n.x, n.z, pushed, satPushCap(dt));
-  for (let k = 0; k < pushes; k++) pushApart(carA, carB, tyrePushes[k * TYRE_PUSH]!, tyrePushes[k * TYRE_PUSH + 1]!, tyrePushes[k * TYRE_PUSH + 2]!, dt);
+  const room = closing > REST_SPEED ? Math.max(strokeLeftOn(carA, n.x, n.z), strokeLeftOn(carB, -n.x, -n.z)) : 0;
+  const give = closing > 0 ? Math.max(room, closing * dt) : 0;
+  const extra = Math.max(0, hit - OUTLINE_REACH - give);
+  if (extra > 0) pushApart(carA, carB, n.x, n.z, Math.min(extra + 0.006, satPushCap(dt)), dt);
 
   if (spent && closing > 0 && dist > 1e-4) holdComGap(carA, carB, leftoverA, leftoverB, dist, dt);
   _hit.closing = Math.max(0, closing);

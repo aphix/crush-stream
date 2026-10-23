@@ -521,34 +521,3 @@ ground can stand on at some pitch.
 ### 12.15 A door pressed onto its crush band's full depth rests on it (CarDoors3, REPLAY 159)
 
 `DeformSolve.clampMass` trimmed a side door only where it went past its cap (the band's `max`, 0.2784 m, measured from the cell it rides on), so a door the last slices no longer pressed past it rested under it: `piston-rig.test.ts` read the door 5.6, 5.3, 13.2, 14.7, 15.9, 18.0, 18.9, 20.1 and 12.6 µm under the cap at 40-80 km/h (its bar: 10 µm, the plateau), already so right after the last clamp (not a later turn's shift); bases of the door and cell 0. A door on the band's `max` is packed (`nodePacked`): no elastic part is left, so its set is the cap itself (no springback taken off it; the stroke-limited cap below `max` keeps its springback), `crushSet` holds it there and the rest shift takes the full depth. The same door read 0.0 µm at every speed after. The row is `piston-rig`'s "crush never shrinks as the energy grows" (left and right).
-
-### 12.16 A tyre meets the other car (lane CarTyreContact, REPLAY 159)
-
-No tyre is in its car's cage, so the pair contact (`satCars`, the cages' outlines) let two cars' tyres pass through each other and
-through each other's bodies: a sedan pair's tyres overlapped 4.8 cm at 56 km/h head-on (the overhauled nose leaves 0.462 m of crush
-before the front tyres meet, the old one 0.49), and a monster's front tyres ran 0.15 m into an SUV's tail.
-
-- **The shapes (`contact/sat.ts`).** `placeTyres` stands each tyre still on as drawn: the rig's radius and half-width at the class's
-  wheel scale, on its hub as it stands (an intact car's at rest, a wreck's where its shove holds it). `tyresOverlap` reads two tyres as
-  plan rectangles (the four axes of both); `tyreIn` places a tyre's four plan corners in the other car's plan field as `deepestIn`
-  places an outline's nodes, its band from its mount (`MOUNT` × its own drawn radius: anything lower it climbs) to its top. A tyre
-  that stands no taller over the other's bottom than that one mounts is climbed, not met.
-- **The response (`contact/tyre-contact.ts` `meetTyres`, in `resolveCarPair`).** A tyre goes back into its well with its hub
-  (`goBack` → `pushMass`, the shove the hub pop rule reads: torn off past a wheel's diameter) by the part of its overlap along its car's
-  axis, where the well opens, as far as its car's structure has crushed in the hit still on (`tyreRoom`: `crushedSoFar` less the shove
-  it has taken), two meeting tyres half each; the part across the axis holds (shoved sideways, a front hub went 13 cm into a sedan's
-  body and the narrowed wreck rolled over in the 16-car pile off a 5.6 m/s side hit). What is left is rigid. The rigid
-  contacts make one patch, as `satCars`' nodes do (each weighted by how far it reaches into the look-ahead; one picked contact went to
-  one side of a mirror head-on by a hair and turned the pair, noses 0.763 / 0.774 m at 100 km/h), whose deepest competes with the
-  cages' as the pair's hit (normal, point, arming, exchange). A tyre does not crush, so all of each rigid contact's overlap is a push on
-  its own normal, deepest first (`planTyrePushes`: no stroke and no slice's travel as give; with the travel, a monster closing at 5 m/s held
-  its tyre 2.5 cm inside the tail of the car it caught).
-- **Cheap.** Each car's tyres are placed once per pair call; a tyre pair whose hubs stand farther apart than their radii and
-  half-widths together is skipped before its axes; a tyre's corners take `deepestIn`'s plan-box early out. The lone hull
-  (`hull-gap.ts` `readHull`) reaches the tyres too: a monster's stand 0.29 m past its body.
-- **Rows.** `crash-parts` sedan head-on tyre overlap 56 / 64 / 80 km/h 0.048 / 0.039 / 0.113 → 0.0048 / 0.0026 / 0.0056 m (bar 0.01);
-  its front hub pops, nose crush and stroke readings unchanged, the pair as symmetric as before (`symmetry.test.ts`). `pair-hook`'s
-  class pairs start from each car's own drawn corner and nose with every tyre clear of the other car's tyres and body (a sedan's tyre
-  stood 0.33 m inside a monster's, a hatch's rear tyre 0.40 m inside an SUV's nose), and every pair also holds the follower's tyres out
-  of the front car's body (≤ 1 cm): the SUV ahead of a monster is a live row (contact 0.53 s, centres 4.06 → 6.04 m).
-
