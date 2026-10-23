@@ -379,6 +379,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * corners is taken back first, so an undriven 60 km/h head-on arms at its own closing (16.66 m/s, its engine blocks 0.165 m back; was
  * 15.70 m/s and 0.118 m).
  * A door a side hit presses onto its crush band's full depth keeps it (it is packed: nothing springs back), where it sprang 4 cm back once the face left.
+ * A pair whose stop packs a nose counts that car's engine block travel as the hit's own energy (a re-armed hit's rule), not the geometric peak the
+ * stop's slice leaves it (6-12 mm off with the phase): a sedan head-on's block travel now rises with speed through its kill window (56 km/h each:
+ * 0.1579 m, was 0.1461 beside 0.1521 at 55.5 and 0.1511 at 56.5).
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

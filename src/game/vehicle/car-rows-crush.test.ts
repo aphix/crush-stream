@@ -55,7 +55,7 @@ describe("given a sedan driving its nose into a parked sedan's door at 55 m/s", 
 });
 
 describe("given two sedans, undriven, driving head-on at each other at 56, 58 and 60 km/h each", () => {
-  it("when their noses meet, then each car's hit is read at its launch speed and the engine block travels farther the faster they meet", () => {
+  it("when their noses meet, then each car's hit is read at its launch speed and the nose crushes deeper the faster they meet", () => {
     let slower = 0;
     for (const kph of UNDRIVEN_KPH) {
       const a = makeCar();
@@ -67,14 +67,14 @@ describe("given two sedans, undriven, driving head-on at each other at 56, 58 an
       const world = makeWorld([a, b], false, false, null);
       const probe = new Probe(a, new THREE.Vector3(1, 0, 0));
       run(world, [probe, new Probe(b, new THREE.Vector3(-1, 0, 0))], 1.5);
-      const travel = probe.finish().engineTravel;
+      const crush = probe.finish().noseShortL;
       const want = kph / 3.6;
       for (const [name, car] of [["a", a], ["b", b]] as const) {
         const armed = car.deform.hitSpeedValue;
         assert.ok(Math.abs(armed - want) <= LAUNCH_TOLERANCE * want, `${kph} km/h: car ${name}'s hit read ${armed.toFixed(2)} m/s, it met at ${want.toFixed(2)}`);
       }
-      assert.ok(travel > slower, `${kph} km/h: engine block ${travel.toFixed(4)} m, the slower pair's ${slower.toFixed(4)} m`);
-      slower = travel;
+      assert.ok(crush > slower, `${kph} km/h: nose ${crush.toFixed(4)} m, the slower pair's ${slower.toFixed(4)} m`);
+      slower = crush;
     }
   });
 });

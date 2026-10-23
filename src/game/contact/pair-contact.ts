@@ -527,7 +527,7 @@ function blendVelocities(carA: DeformableCar, carB: DeformableCar, base: Float64
  * The exchange of the slice in which the pair packs: the share of the next slice's stroke travel that fits in the room left before
  * `PACKED_STROKE` (`roomShare`, read after the crush-limited exchange, at the share of this slice's `closing` that exchange left) stays
  * crush-limited (`maxJ`), the rest is rigid, so the pair stops at the packed stroke, not up to one slice's travel past it (the check reads
- * the stroke the last slice left).
+ * the stroke the last slice left). A face the stop packs counts its block travel as the hit's energy (`notePacked`).
  */
 function splitExchange(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3, p: THREE.Vector3, maxJ: number, dt: number, closing: number): void {
   const need = 12 + 3 * (carA.deform.masses.length + carB.deform.masses.length);
@@ -541,7 +541,11 @@ function splitExchange(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector
   blendVelocities(carA, carB, split.start, 0);
   exchangePair(carA, carB, n, p, maxJ);
   const left = Math.max(0, -_v.copy(carA.velocity).sub(carB.velocity).dot(n)) / closing;
-  blendVelocities(carA, carB, split.rigid, Math.max(roomShare(carA, dt, left), roomShare(carB, dt, left)));
+  const roomA = roomShare(carA, dt, left);
+  const roomB = roomShare(carB, dt, left);
+  if (roomA < 1) carA.deform.notePacked();
+  if (roomB < 1) carB.deform.notePacked();
+  blendVelocities(carA, carB, split.rigid, Math.max(roomA, roomB));
 }
 
 /**
