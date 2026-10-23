@@ -3,8 +3,8 @@ import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, ROOF_DRIP, roofDrip, sideBowZ } from "./car-lines.ts";
 import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset, windshieldSideBase, windshieldSideX } from "./car-glass.ts";
-import { splitCreases } from "./car-crease.ts";
-import { roofEndAcross, roofEndBows, roofEndHeldZ, roofEndWeight, roofSourceZ, type RoofEnd } from "./car-roof-end.ts";
+import { splitCreases, splitLoftOnLowDiagonals } from "./car-crease.ts";
+import { drawnRoofTopY, roofEndAcross, roofEndBows, roofEndHeldZ, roofEndWeight, roofSourceZ, type RoofEnd } from "./car-roof-end.ts";
 import {
   ROOF_ARC_T,
   ROOF_CROWN,
@@ -63,16 +63,23 @@ function shellRing(skin: Pt[], cant: number, inset: number): Pt[] {
   return [...skin, ...inner];
 }
 
+/** The front end's skin points between two headliner points move at most this far (m) in z onto their chord (scaled by the ring's share of the end's move): the windshield's top row under them stays within 5 mm of the roof. */
+const FRONT_CHORD_PULL = 0.003;
+
 /**
  * The drawn roof's `ends` bow in plan with the glass tops under them, fading to nothing at each glass's top corners, and every ring of a
  * rolled end's run moves with it (`roofEndWeight`), so the roll keeps its slope instead of folding back at the bowed end ring. A
  * headliner vertex (`twins`: each inner vertex, then the skin vertex it is inset from) moves as its skin vertex does, so it stays inset.
  * A vertex the pane's top row pulls forward is held inside the roof's side lip at its new z, where the cabin narrows.
+ * On every moved ring (`ringLength` a ring) the skin points between two headliner points are then pulled onto the chord of those two (the
+ * front's by at most `FRONT_CHORD_PULL` times the ring's weight) and stay on the drawn roof (`drawnRoofTopY`): the cap's strip across
+ * them twists less under the bow's arc over the straight headliner.
  */
-function bowRoofEnds(geo: THREE.BufferGeometry, ends: readonly RoofEnd[], twins: readonly number[], style: BodyStyle): void {
+function bowRoofEnds(geo: THREE.BufferGeometry, ends: readonly RoofEnd[], twins: readonly number[], ringLength: number, style: BodyStyle): void {
   const skinOf = new Map<number, number>();
   for (let k = 0; k < twins.length; k += 2) skinOf.set(twins[k]!, twins[k + 1]!);
   const pos = geo.getAttribute("position");
+  const bowed = new Map<number, { end: RoofEnd; weight: number }>();
   for (let v = 0; v < pos.count; v++) {
     const z = pos.getZ(v);
     const end = ends.find((e) => roofEndWeight(e, z) > 0);
@@ -82,8 +89,21 @@ function bowRoofEnds(geo: THREE.BufferGeometry, ends: readonly RoofEnd[], twins:
     const held = roofEndHeldZ(end, skinX);
     const moved = z + (held - end.z) * weight;
     pos.setZ(v, moved);
+    bowed.set(v, { end, weight });
     const [x, lip] = [pos.getX(v), cantX(moved, style) + roofDrip(style)];
     if (held > end.z + end.bow * roofEndAcross(end, skinX) && Math.abs(x) > lip) pos.setX(v, Math.sign(x) * lip);
+  }
+  const skins = [...skinOf.values()].sort((a, b) => a - b);
+  for (let k = 1; k < skins.length; k++) {
+    const [a, b] = [skins[k - 1]!, skins[k]!];
+    const ring = bowed.get(a);
+    if (ring === undefined || Math.floor(a / ringLength) !== Math.floor(b / ringLength)) continue;
+    const pull = ring.end.paneTop === undefined ? Infinity : FRONT_CHORD_PULL * ring.weight;
+    for (let m = a + 1; m < b; m++) {
+      const z = THREE.MathUtils.clamp(lerp(pos.getZ(a), pos.getZ(b), (pos.getX(m) - pos.getX(a)) / (pos.getX(b) - pos.getX(a))), pos.getZ(m) - pull, pos.getZ(m) + pull);
+      pos.setZ(m, z);
+      pos.setY(m, drawnRoofTopY(pos.getX(m), z, style));
+    }
   }
 }
 
@@ -166,7 +186,8 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
     for (let j = 0; j < HEADLINER_POINTS.length; j++) twins.push(base + n - HEADLINER_POINTS.length + j, base + cant + HEADLINER_POINTS[j]!);
   }
   const ends = roofEndBows(style);
-  bowRoofEnds(geo, ends, twins, style);
+  bowRoofEnds(geo, ends, twins, n, style);
+  splitLoftOnLowDiagonals(geo);
   // Each cap's ear-clip (`n` - 2 triangles) follows the loft's quads: the rear cap at `zs[0]`, then the front.
   const capStart = (zs.length - 1) * n * 6;
   const index = geo.getIndex()!.array;
