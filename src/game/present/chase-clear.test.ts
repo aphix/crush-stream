@@ -318,6 +318,30 @@ function rivalAt(t: number, tailGap: number): { gap: number; side: number } {
   return { gap, side: PULL_OUT * s * s * (3 - 2 * s) };
 }
 
+/** How far (m) a tailgating rival's roof stands over the bare eye's line to the car, at its nose: just over it, so the eye must lift to clear it. */
+const ROOF_OVER_LINE = 0.033;
+
+/** The bare rig's settled eye line to the car at `RACE_SPEED` (read where the rival reaches the tail): its height (m) over the subject's per metre behind the car's origin. */
+function eyeLineRise(): number {
+  const car = newCar(0, 0, 0);
+  const bare = chaseRig(0, 0, 0);
+  let z = 0;
+  for (let f = 0; f < (HOLD + RIVAL_BACK / CLOSING) / DT; f++) {
+    z = RACE_SPEED * f * DT;
+    car.group.position.set(0, 0, z);
+    car.velocity.set(0, 0, RACE_SPEED);
+    bare.view.frameDrive(car, null, DT, false);
+  }
+  const eye = bare.camera.position;
+  return (eye.y - PLATFORM_CAMERA.third.aimUp) / (z - eye.z);
+}
+
+/** The tail gap (m) at which a rival's roof stands `ROOF_OVER_LINE` over the bare eye's line: the line rises toward the eye, the roof is the rival's own box top. */
+function tailGapUnderRoofline(): number {
+  const { half } = newCar(0, 0, 0).frame;
+  return (2 * half.y - PLATFORM_CAMERA.third.aimUp - ROOF_OVER_LINE) / eyeLineRise() - half.z;
+}
+
 /**
  * Every frame of a rival overtaking the driven car from behind after tailgating `tailGap` m off its tail, with one chase camera
  * keeping clear and a bare one beside it: the most the clear eye stood off the bare one to the side, in along its line and up,
@@ -364,8 +388,11 @@ function overtake(tailGap: number) {
 }
 
 describe("given the chase camera on a car racing down a flat straight, a rival closing from behind, tailgating, pulling out and passing", () => {
-  it("when the rival's nose sits 0.3 m off the tail, on the eye's line to the car, then the eye lifts over it: never into the car, in along the line or out to the side, and never off the rig's path faster than the rival closes", () => {
-    const run = overtake(0.3);
+  it(`when the rival tailgates with its roof ${(ROOF_OVER_LINE * 100).toFixed(1)} cm over the eye's line to the car, then the eye lifts over it: never into the car, in along the line or out to the side, and never off the rig's path faster than the rival closes`, (t) => {
+    const gap = tailGapUnderRoofline();
+    const run = overtake(gap);
+    t.diagnostic(`tail gap ${gap.toFixed(3)} m, eye lifted ${run.lift.toFixed(3)} m`);
+    assert.ok(gap > 0, `the rival's nose stands ${gap.toFixed(2)} m behind the car's tail: no tailgate sits its roof ${ROOF_OVER_LINE} m over the eye's line`);
     assert.ok(run.bareHidden > 30, `frames with the rival on the bare eye's line: ${run.bareHidden} (the tailgate must hide the car)`);
     assert.equal(run.hidden, 0, "frames with the rival on the eye's line");
     assert.equal(run.inCar, 0, "frames with the eye inside the driven car");
