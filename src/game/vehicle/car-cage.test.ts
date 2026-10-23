@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import * as THREE from "three";
 import { CAGE_PART_VERTICES, CAGE_STEP, CAGE_VERTICES, type CageSource, CarCage } from "./car-cage.ts";
 import { cageGaps, cageLiveOf, cageOf, cageSideX, cageSourceOf, drawnDoorX, fitToDrawn } from "./car-cage.test-util.ts";
+import { rasterise } from "./cage-fields.ts";
+import { IMPRINT_NONE } from "../deform/load-crush.ts";
 import { BODIES, buildCar, carInState, drawnField, drawnTriangles, STATES, stepFrames, TOP_P95_M, TOP_WORST_M, topGapsOff, topParts } from "./drawn-body.test-util.ts";
 import { makeBumperGeometry } from "./car-mesh.ts";
 import { cageLift } from "./car-cage-rig.ts";
@@ -57,6 +59,91 @@ for (const body of BODIES) {
     });
   }
 }
+
+/** The head-on speeds (km/h) the nose-wrapped hoods are read at: the drawn lid's front, which the crash puts at another place against the 5 cm lattice at each. */
+const HOOD_SPEEDS = [40, 44, 48, 50, 52];
+
+describe("given a pickup truck and a monster pickup after head-ons at 40 to 52 km/h", () => {
+  for (const body of BODIES.filter((b) => b.style === "pickup" || b.style === "monster")) {
+    it(`when the ${body.body}'s cage top is read over its hood, then it lies within the bars of the drawn top and answers over the drawn lid at every speed, wherever its front stands against the lattice`, () => {
+      const wrong: string[] = [];
+      for (const kph of HOOD_SPEEDS) {
+        const car = carInState("headon", body.style, body.cls, kph);
+        const cage = cageOf(car);
+        fitToDrawn(car, cage);
+        wrong.push(...topGapsOff("hood", cageGaps(car, cage, drawnField(car), topParts(body.style).hood)).map((off) => `${kph} km/h: ${off}`));
+      }
+      assert.deepEqual(wrong, []);
+    });
+  }
+});
+
+/** The hood's group in a cage's panels (`cagePanelsOf`: the hood first). */
+const HOOD_GROUP = 1;
+
+/** Whether plan point (x, z) lies in a triangle of a panel that is on (the interior's apart), edges included: `rasterise`'s `covered`, read from the triangles alone. */
+function inPlanOf(style: CarCage["style"], pos: Float64Array, panelOn: Uint8Array, x: number, z: number): boolean {
+  for (let t = 0; t < style.triCount * 3; t += 3) {
+    const group = style.triGroup[t / 3]!;
+    if (group === style.panelCount + 1 || (group > 0 && panelOn[group - 1] === 0)) continue;
+    const [a, b, c] = [style.tris[t]! * 3, style.tris[t + 1]! * 3, style.tris[t + 2]! * 3];
+    const d1 = (pos[b]! - pos[a]!) * (z - pos[a + 2]!) - (pos[b + 2]! - pos[a + 2]!) * (x - pos[a]!);
+    const d2 = (pos[c]! - pos[b]!) * (z - pos[b + 2]!) - (pos[c + 2]! - pos[b + 2]!) * (x - pos[b]!);
+    const d3 = (pos[a]! - pos[c]!) * (z - pos[c + 2]!) - (pos[a + 2]! - pos[c + 2]!) * (x - pos[c]!);
+    if ((d1 >= 0 && d2 >= 0 && d3 >= 0) || (d1 <= 0 && d2 <= 0 && d3 <= 0)) return true;
+  }
+  return false;
+}
+
+describe("given a crushed pickup's cage with its hood moved forward along its length in 5 mm steps", () => {
+  const crushed = (): { cage: CarCage; fields: CarCage["fields"]; front: number; centre: number } => {
+    const car = carInState("headon", "pickup", "truck");
+    const cage = cageOf(car);
+    fitToDrawn(car, cage);
+    const { style, fields } = cage;
+    let front = -Infinity;
+    let x = 0;
+    for (let i = 0; i < style.vertexCount; i++) {
+      if (style.vertexGroup[i] === HOOD_GROUP && fields.pos[i * 3 + 2]! > front) [front, x] = [fields.pos[i * 3 + 2]!, fields.pos[i * 3]!];
+    }
+    return { cage, fields, front, centre: Math.round((x - style.u0) / style.step) };
+  };
+
+  it("when the cage's top is read ahead of the hood's front, then it answers one step past it and no further (the lid's nodes reach a step, the rest of the body half of one), at every place of the front against the lattice", () => {
+    const { cage, fields, front, centre } = crushed();
+    const { style } = cage;
+    const wrong: string[] = [];
+    for (let mm = 0; mm < 50; mm += 5) {
+      const shift = mm === 0 ? 0 : 0.005;
+      for (let i = 0; i < style.vertexCount; i++) if (style.vertexGroup[i] === HOOD_GROUP) fields.pos[i * 3 + 2] = fields.pos[i * 3 + 2]! + shift;
+      rasterise(style, fields, fields.panelOn, IMPRINT_NONE, 0, 0);
+      let last = -Infinity;
+      for (let j = 0; j < style.nv; j++) if (Number.isFinite(fields.top[j * style.nu + centre]!)) last = style.v0 + j * style.step;
+      const at = front + mm / 1000;
+      if (!(last > at && last <= at + style.step + 1e-9)) wrong.push(`front at z ${at.toFixed(3)}: the last node with a height is at ${last.toFixed(3)}, not in (${at.toFixed(3)}, ${(at + style.step).toFixed(3)}]`);
+    }
+    assert.deepEqual(wrong, []);
+  });
+
+  it("when the cage's coverage and plan box are read, then they are the triangles' own: the nodes inside a triangle and the vertices' extent, whatever the lids' reach", () => {
+    const { cage, fields } = crushed();
+    const { style } = cage;
+    rasterise(style, fields, style.panelsOn, IMPRINT_NONE, 0, 0);
+    const wrong: string[] = [];
+    for (let j = 0; j < style.nv; j++) {
+      for (let i = 0; i < style.nu; i++) {
+        const inside = inPlanOf(style, fields.pos, style.panelsOn, style.u0 + i * style.step, style.v0 + j * style.step);
+        if (inside !== (fields.covered[j * style.nu + i] === 1)) wrong.push(`node (${(style.u0 + i * style.step).toFixed(2)}, ${(style.v0 + j * style.step).toFixed(2)}) ${inside ? "is inside a triangle and not covered" : "is covered and in no triangle"}`);
+      }
+    }
+    assert.deepEqual(wrong.slice(0, 5), []);
+    let zMax = -Infinity;
+    for (let t = 0; t < style.triCount * 3; t++) {
+      if (style.triGroup[Math.floor(t / 3)] !== style.panelCount + 1) zMax = Math.max(zMax, fields.pos[style.tris[t]! * 3 + 2]!);
+    }
+    assert.ok(Math.abs(fields.planBox[3]! - zMax) < 1e-9, `the plan box ends at z ${fields.planBox[3]!.toFixed(3)}, the triangles' vertices at ${zMax.toFixed(3)}`);
+  });
+});
 
 describe("given the cage's vertex budget", () => {
   it("when a style's cage is built, then it has its budget's vertices and the underside points held over it, about three hundred triangles, and its two bumpers and two front doors on their own budget past them", (t) => {

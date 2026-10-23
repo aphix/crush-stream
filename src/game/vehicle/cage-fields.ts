@@ -2,6 +2,15 @@ import type { CageFields, CageStyle } from "./car-cage.ts";
 
 /** A node this far (in steps) outside a triangle still takes its height (clamped to the triangle's), so an edge never leaves a gap. */
 const EXPAND = 0.5;
+/** The cage's first panels are its two lids, the hood and the trunk (`panelsOf`). */
+const LID_GROUPS = 2;
+/**
+ * The hood's and the trunk's heights reach this far (in steps) past their triangles. The drawn lid wraps its nose over, domes and rolls its edge past the plain
+ * lid the cage is built from (a pickup's hood stands 2.1 cm past it, 1.6 cm after a head-on, plus the accordion fold the cage leaves out), and the cage answers
+ * over all of the drawn lid: a drawn cell needs its two nodes either side, so the half step let a lid edge 5 mm short leave a row of them unanswered. The
+ * accepted bound: a tyre can meet hood up to 5 cm past the lid's true edge (the fit rows' own cell). Only heights reach: `covered`, and with it the outline, is as it was.
+ */
+const LID_EXPAND = 1;
 
 /**
  * The plan boxes (x min, x max, z min, z max) of the glass panes that are gone, into `_open`: how many. A shattered pane's mesh is
@@ -63,6 +72,7 @@ export function rasterise(style: CageStyle, f: CageFields, panelOn: Uint8Array, 
   bottom.fill(NaN);
   covered.fill(0);
   part.fill(0);
+  const lidMargin = LID_EXPAND * step;
   const margin = EXPAND * step;
   const interiorGroup = style.panelCount + 1;
   const opens = gonePanes(style, f, panelOn);
@@ -99,10 +109,11 @@ export function rasterise(style: CageStyle, f: CageFields, panelOn: Uint8Array, 
     xMax = Math.max(xMax, ax, bx, cx);
     zMin = Math.min(zMin, az, bz, cz);
     zMax = Math.max(zMax, az, bz, cz);
-    const xLow = Math.min(ax, bx, cx) - margin;
-    const xHigh = Math.max(ax, bx, cx) + margin;
-    const zLow = Math.min(az, bz, cz) - margin;
-    const zHigh = Math.max(az, bz, cz) + margin;
+    const reach = group >= 1 && group <= LID_GROUPS ? lidMargin : margin;
+    const xLow = Math.min(ax, bx, cx) - reach;
+    const xHigh = Math.max(ax, bx, cx) + reach;
+    const zLow = Math.min(az, bz, cz) - reach;
+    const zHigh = Math.max(az, bz, cz) + reach;
     const i0 = Math.max(0, Math.ceil((xLow - u0) / step));
     const i1 = Math.min(nu - 1, Math.floor((xHigh - u0) / step));
     const j0 = Math.max(0, Math.ceil((zLow - v0) / step));
@@ -132,7 +143,7 @@ export function rasterise(style: CageStyle, f: CageFields, panelOn: Uint8Array, 
         const eAB = nxAB * x + rowAB;
         const eBC = nxBC * x + rowBC;
         const eCA = nxCA * x + rowCA;
-        if (eAB < -margin || eBC < -margin || eCA < -margin) continue;
+        if (eAB < -reach || eBC < -reach || eCA < -reach) continue;
         if (group === interiorGroup && !inOpening(opens, x, z, margin)) continue;
         let y = eBC * wA * ay + eCA * wB * by + eAB * wC * cy;
         if (y < yLow) y = yLow;

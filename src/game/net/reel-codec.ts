@@ -430,6 +430,7 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * was 0.287, the wagon's 0.318, the monster's 0.255, the hatchback's and pickup's 0.18), so a nose hit reaches the block and kills the
  * engine at the same speed whatever the car.
  * A car's two front doors are cage panels of their own while they hang latched (a sprung or torn door leaves it), so a side striker meets the drawn door's skin, not the sill and belt behind it.
+ * A hood's and a trunk lid's heights in the cage reach a lattice step past their triangles (they reached half of one), so the drawn lid's wrapped nose and rolled edge, which stand 1-2 cm past the plain cage lid, have a cage under them: a tyre meets hood up to 5 cm past the lid's true edge.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
