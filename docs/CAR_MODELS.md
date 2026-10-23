@@ -190,8 +190,8 @@ The cabin is shared props, placed per car by its spec (`vehicle/interior.ts` `Ca
 Every plain prop kind is one `InstancedMesh` for the whole field (`PartBatch`, `PART_PER_CAR`): adding a car adds instances, never
 draws. At rest the interior costs six draws for the whole field (cabin, both door-card sides, front seats, rear bench, wheel) and the
 seated drivers one more; the bay and the crash bars draw only while exposed, the undercarriage (two draws) only while a monster is in
-the field. `CarDetail` takes the cabin, seats, wheel and bay at its far distance (by `INTERIOR_MESH`), the door cards, crash bars
-and undercarriage with the small parts at mid distance. The undercarriage is drawn only: the cage, hull and contact shapes never
+the field. `CarDetail` takes the cabin, seats, wheel and bay at its far distance (by `INTERIOR_MESH`), the door cards and crash bars
+with the small parts at mid distance; the undercarriage (`UNDERBODY_SEAT`) is in neither cut, so a far monster's body never floats over its wheels. The undercarriage is drawn only: the cage, hull and contact shapes never
 see it; each axle's shock shafts slide into the frame's shock bodies, so the pair telescopes through the suspension's travel.
 
 - **Seat lean:** seats and the seated driver lean `SEAT_RECLINE` back; under a low roof the seat leans further (to

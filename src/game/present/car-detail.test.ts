@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import * as THREE from "three";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { DeformableCar } from "../vehicle/car.ts";
-import { INTERIOR_MESH, SMALL_PART_SEAT } from "../vehicle/constants.ts";
+import { INTERIOR_MESH, SMALL_PART_SEAT, UNDERBODY_SEAT } from "../vehicle/constants.ts";
 import { BEHIND_GLASS, PART_KIND, type PartSeat } from "../vehicle/part-geometry.ts";
 import { PartBatch } from "../vehicle/part-batch.ts";
 import { paint } from "../vehicle/test-support.ts";
@@ -144,6 +144,19 @@ describe("given a car 100 m away", () => {
     assert.equal(names.length, 2);
     assert.ok(names.includes("lightBar"));
   });
+
+  test("when it is a lifted monster truck past the far cut, then the batch still draws its ladder frame and both axles under the body; a sedan there has none", () => {
+    const { camera, detail, car } = stage();
+    const monster = car(100, "monster");
+    const sedan = car(100);
+    detail.update([monster, sedan], camera, null, null);
+    assert.equal(drawn(monster, camera).length, 1, "the far cut is in force: the body alone");
+    const batch = new PartBatch(2);
+    batch.sync([monster, sedan]);
+    assert.equal(batch.drawn(PART_KIND.ladderFrame), 1, "the frame the lifted body stands on");
+    assert.equal(batch.drawn(PART_KIND.axle), 2, "front and rear axle between the wheels");
+    assert.equal(batch.drawn(PART_KIND.crashBar), 0, "the small parts stay cut");
+  });
 });
 
 describe("given a car that crosses the far distance", () => {
@@ -199,9 +212,11 @@ describe("given a car's batched part seats", () => {
     const probe = car(10, "monster");
     const interior = probe.partSeats.filter((s) => s.name === INTERIOR_MESH);
     const small = probe.partSeats.filter((s) => s.name === SMALL_PART_SEAT);
+    const under = probe.partSeats.filter((s) => s.name === UNDERBODY_SEAT);
     assert.equal(interior.map((s) => s.kind).join(), [PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.engineBay, PART_KIND.seatFront].join(), "the cabin, both front seats, the rear bench, the wheel and the bay go with the far cut");
-    assert.equal(small.length + interior.length, probe.partSeats.length, "every seat is one or the other");
-    assert.equal(small.length, 12, "door cards, mirrors, grille, tail trim, the two crash bars, a lifted truck's frame and two axles, and the wipers are the small-part seats the mid cut takes by name");
+    assert.equal(under.map((s) => s.kind).join(), [PART_KIND.ladderFrame, PART_KIND.axle, PART_KIND.axle].join(), "a lifted truck's frame and two axles are the undercarriage seats no cut takes");
+    assert.equal(small.length + interior.length + under.length, probe.partSeats.length, "every seat is one of the three");
+    assert.equal(small.length, 9, "door cards, mirrors, grille, tail trim, the two crash bars and the wipers are the small-part seats the mid cut takes by name");
     const move = (at: number): void => {
       probe.group.position.z = at;
       probe.group.updateMatrixWorld(true);
@@ -218,6 +233,7 @@ describe("given a car's batched part seats", () => {
     move(80);
     assert.ok(enabled(interior).every((on) => !on), "the far cut takes the interior kit");
     assert.ok(enabled(small).every((on) => !on));
+    assert.ok(enabled(under).every(Boolean), "the undercarriage is never cut");
     move(10);
     assert.ok(enabled(small).every(Boolean) && enabled(interior).every(Boolean), "give puts them all back");
   });

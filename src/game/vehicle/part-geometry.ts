@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { once } from "../kernel/scalar.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
-import { INTERIOR_MESH, SMALL_PART_SEAT } from "./constants.ts";
+import { INTERIOR_MESH, SMALL_PART_SEAT, UNDERBODY_SEAT } from "./constants.ts";
 import { loosePartsMaterial, mergeToned, PAINTED_ATTRIBUTE, toned } from "./car-materials.ts";
 import { cabinGeometry, crashBarGeometry, doorCardGeometry, engineBayGeometry, frontSeatGeometry, ladderFrameGeometry, rearSeatGeometry, solidAxleGeometry, wheelGeometry } from "./interior-geometry.ts";
 
@@ -27,8 +27,9 @@ export type PartKind = (typeof PART_KIND)[keyof typeof PART_KIND];
 export const PART_KINDS: readonly PartKind[] = Object.values(PART_KIND);
 /** Seats of each kind on one car (`PartBatch` sizes each kind's draw by it): two front seats, a crash bar at each end, two axles. */
 export const PART_PER_CAR: readonly number[] = PART_KINDS.map((k) => (k === PART_KIND.seatFront || k === PART_KIND.crashBar || k === PART_KIND.axle ? 2 : 1));
-/** The kinds the far distance cut takes with the cabin (`CarDetail`, by `INTERIOR_MESH`); the rest are small parts, cut at mid distance. */
+/** The kinds the far distance cut takes with the cabin (`CarDetail`, by `INTERIOR_MESH`); the rest are small parts, cut at mid distance, bar the undercarriage (`UNDERBODY_SEAT`), which no cut takes. */
 const INTERIOR_KINDS: ReadonlySet<number> = new Set([PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.engineBay]);
+const UNDERBODY_KINDS: ReadonlySet<number> = new Set([PART_KIND.ladderFrame, PART_KIND.axle]);
 /** The interior kit seen only through the glass: the mid cut takes it with the glass, as it takes the seated driver (`CarDetail`). */
 export const BEHIND_GLASS: ReadonlySet<number> = new Set([PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel]);
 
@@ -113,7 +114,7 @@ export class PartSeat extends THREE.Object3D {
     this.kind = kind;
     this.geometry = partGeometry(kind);
     this.drawn = this.geometry;
-    this.name = INTERIOR_KINDS.has(kind) ? INTERIOR_MESH : SMALL_PART_SEAT;
+    this.name = INTERIOR_KINDS.has(kind) ? INTERIOR_MESH : UNDERBODY_KINDS.has(kind) ? UNDERBODY_SEAT : SMALL_PART_SEAT;
     // Each writer of a static seat's pose calls `updateMatrix`; mirrors are posed every frame (`PoseBlend`, `posePart`), axles by `CarUnderbody.follow`.
     this.matrixAutoUpdate = kind === PART_KIND.mirrorL || kind === PART_KIND.mirrorR || kind === PART_KIND.axle;
   }
