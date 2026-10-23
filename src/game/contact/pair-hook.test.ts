@@ -35,19 +35,38 @@ function touching(a: DeformableCar, b: DeformableCar, n: THREE.Vector3, p: THREE
   return satCars(a, b, n, p) !== null || tyreOverlap(a, b) > 0;
 }
 
+/** A car's cage extent in its own frame, its length and width (m). */
+function cageSize(car: DeformableCar): { length: number; width: number } {
+  car.refitCage();
+  const box = car.cage.fields.planBox;
+  return { length: box[3]! - box[2]!, width: box[1]! - box[0]! };
+}
+
+/** The pose grid of the first row, in the cages' own size: A ahead of B by these shares of the cage length, to the right of it by these shares of its width (both inside the cages' overlap), turned by these yaws (rad). */
+const GAP_SHARES = Array.from({ length: 8 }, (_, i) => 0.38 + 0.08 * i);
+const LATERAL_SHARES = Array.from({ length: 20 }, (_, j) => -0.9 + (1.8 * j) / 19);
+const YAWS = [-0.8, -0.4, 0, 0.4, 0.8];
+/** The least overlapping poses of the grid for the row to say anything. */
+const MIN_OVERLAPPING_POSES = 500;
+/** How far (m) the stacked cars' cages overlap along the lane in the second row. */
+const LANE_OVERLAP = 1.22;
+
 describe("given two cars hooked together (the front car's rear corner inside the follower's nose, as a cop car hooks onto the car it chases)", () => {
-  it("when the pair's contact axis is read over a grid of overlapping poses, then it never pushes the two cars' centres together", () => {
+  it("when the pair's contact axis is read over a grid of overlapping poses, then it never pushes the two cars' centres together", (t) => {
     const a = build("sedan");
     const b = build("sedan");
+    const { length, width } = cageSize(b);
     const n = new THREE.Vector3();
     const p = new THREE.Vector3();
     let hits = 0;
     let together = 0;
     let first = "";
     // A ahead of B by `gap` m along B's nose, `lat` m to its right and turned `yaw` rad: every overlap of the grid.
-    for (let gap = 1.6; gap <= 4.6; gap += 0.4) {
-      for (let lat = -1.9; lat <= 1.9; lat += 0.2) {
-        for (let yaw = -0.8; yaw <= 0.8; yaw += 0.4) {
+    for (const gapShare of GAP_SHARES) {
+      for (const lateralShare of LATERAL_SHARES) {
+        for (const yaw of YAWS) {
+          const gap = gapShare * length;
+          const lat = lateralShare * width;
           b.spawnFacing(0, 0, 0, 0);
           a.spawnFacing(lat, gap, yaw, 0);
           const dx = a.group.position.x - b.group.position.x;
@@ -57,26 +76,28 @@ describe("given two cars hooked together (the front car's rear corner inside the
           // `satCars`' axis runs b → a: against a − b it would push the cars deeper in.
           if (n.x * dx + n.z * dz < 0) {
             together++;
-            first ||= `gap ${gap.toFixed(1)} lat ${lat.toFixed(1)} yaw ${yaw.toFixed(1)}`;
+            first ||= `gap ${gap.toFixed(2)} lat ${lat.toFixed(2)} yaw ${yaw.toFixed(1)}`;
           }
         }
       }
     }
-    assert.ok(hits > 500, `only ${hits} overlapping poses: the grid missed the cars`);
+    t.diagnostic(`cage ${length.toFixed(3)} x ${width.toFixed(3)} m: ${hits} of ${GAP_SHARES.length * LATERAL_SHARES.length * YAWS.length} poses overlap`);
+    assert.ok(hits > MIN_OVERLAPPING_POSES, `only ${hits} overlapping poses: the grid missed the cars`);
     assert.equal(together, 0, `${together} of ${hits} contact axes pushed the cars' centres together, first at ${first}`);
   });
 
-  it("when two cars lie stacked in one lane, 3 m apart along it, and one moves 4 mm across the other's axis, then the contact axis does not turn", () => {
+  it(`when two cars lie stacked in one lane, their cages overlapping ${LANE_OVERLAP} m along it, and one moves 4 mm across the other's axis, then the contact axis does not turn`, () => {
     // The pair is interlocked past the outline's reach: its mean outline normal is square to the centre line, so which side it points to
     // was the sign of the lateral offset, and a pile of wrecks flipped it every slice (the push-out moved them 6 mm to and fro, drawn).
     const a = build("sedan");
     const b = build("sedan");
+    const apart = cageSize(b).length - LANE_OVERLAP;
     const n = new THREE.Vector3();
     const p = new THREE.Vector3();
     const axes: THREE.Vector3[] = [];
     for (const lat of [-0.002, 0.002]) {
       b.spawnFacing(0, 0, 0, 0);
-      a.spawnFacing(lat, 3, 0, 0);
+      a.spawnFacing(lat, apart, 0, 0);
       assert.ok(satCars(a, b, n, p) !== null, `no contact at lat ${lat}`);
       axes.push(n.clone());
     }
