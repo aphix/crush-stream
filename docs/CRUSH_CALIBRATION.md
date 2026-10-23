@@ -39,8 +39,8 @@ NCAP / IIHS full-frontal targets, run at both crumple settings (0.4 and the cali
 | 56 km/h square | both front corners 0.25–0.50 m permanent crush; no crush-model point > 5 cm past the wall face; 0.35–0.60 m travel after contact; pulse 60–150 ms; corners within 25 % of each other |
 | 35 / 56 / 80 km/h | travel after contact grows with speed |
 | 20–43 km/h | the engine block stays on its mounts while the nose has not packed |
-| repeated 35 km/h | the block moves back every hit; the third kills the engine |
-| one hit of 2× / 3× the 35 km/h energy (49.5 / 60.6 km/h) | the first leaves the engine running, the second kills it |
+| repeated 33 km/h | the block moves back every hit; the third kills the engine (35 km/h killed on the second at squash 0.4: its two hits' energy passed the sedan's single-hit kill) |
+| one hit of 2× / 3× the 33 km/h energy (46.7 / 57.2 km/h) | the first leaves the engine running, the second kills it |
 | reverse 50 km/h | tail ≥ 0.15 m, nose ≤ 3 cm; tail 0.6–1.0 × the 50 km/h nose; cabin in < 6 cm |
 | reverse 40 km/h | block survives, car stays driveable (the rear kill is about 80 km/h, the front about 50) |
 | side 50 km/h | door 0.12–0.28 m; nose and tail each < 10 cm; cabin shift < 12 cm |
