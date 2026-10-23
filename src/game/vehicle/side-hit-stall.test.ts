@@ -25,11 +25,8 @@ function struck(id: PistonId, kph: number) {
   return car;
 }
 
-/** The speed of the t-bone's struck sedan on its +z heading, and the bullet's (km/h): the staging of the slide rows. */
+/** The speed of the t-bone's struck sedan on its +z heading (km/h): the staging of the slide rows. */
 const STRUCK_KPH = 60;
-/** The bullet's speed that leaves the engine running (`FUEL_CUTOFF_G`), and the next whole km/h, which cuts it. */
-const BULLET_UNDER_SENSOR_KPH = 49;
-const BULLET_PAST_SENSOR_KPH = 50;
 /** Seconds after the hit the slide is followed: far past the stop of either. */
 const SLIDE_WATCH_S = 4;
 
@@ -72,6 +69,22 @@ function slideAfterTBone(bulletKph: number, fuelRestored = false): { metres: num
     z = at.z;
   }
   return { metres, stalledAtHit };
+}
+
+/** The sensor's slowest and fastest bullets searched (km/h): the 8 km/h tap leaves the engine running, an 80 km/h hit cuts the fuel. */
+const SENSOR_SEARCH_KPH = [8, 80] as const;
+
+/** The first whole km/h of the bullet that cuts the struck sedan's fuel (`FUEL_CUTOFF_G`), bisected on its own side. */
+function sensorEdgeKph(): number {
+  let [under, past] = SENSOR_SEARCH_KPH;
+  assert.equal(slideAfterTBone(under).stalledAtHit, 0, `a ${under} km/h bullet is under the sensor`);
+  assert.ok(slideAfterTBone(past).stalledAtHit > 0, `a ${past} km/h bullet is past the sensor`);
+  while (past - under > 1) {
+    const mid = Math.floor((under + past) / 2);
+    if (slideAfterTBone(mid).stalledAtHit > 0) past = mid;
+    else under = mid;
+  }
+  return past;
 }
 
 /** An uncrashed sedan rolling on the flat ground at `kph` on its +z heading with `stalledS` seconds of fuel cut, its wheels read. */
@@ -169,10 +182,11 @@ describe("given a sedan rolling on flat ground with its fuel cut", () => {
 
 describe("given a sedan t-boned at its door while rolling at 60 km/h, its pedals zero after the hit", () => {
   it("when the bullet is just past the crash sensor, then the engine stalls and the struck car slides no farther than a running one's few metres", () => {
-    const running = slideAfterTBone(BULLET_UNDER_SENSOR_KPH);
-    const stalled = slideAfterTBone(BULLET_PAST_SENSOR_KPH);
-    assert.equal(running.stalledAtHit, 0, "the hit just under the sensor leaves the engine running");
-    assert.equal(stalled.stalledAtHit, STALL_S, "the next km/h cuts the fuel");
+    const edge = sensorEdgeKph();
+    const running = slideAfterTBone(edge - 1);
+    const stalled = slideAfterTBone(edge);
+    assert.equal(running.stalledAtHit, 0, `the hit just under the sensor (${edge - 1} km/h) leaves the engine running`);
+    assert.equal(stalled.stalledAtHit, STALL_S, `the next km/h (${edge}) cuts the fuel`);
     // The two hits are one km/h apart, so the same tyres on the same slide: a dragged wreck went 4x as far.
     assert.ok(stalled.metres < 1.5 * running.metres, `stalled ${stalled.metres.toFixed(2)} m vs running ${running.metres.toFixed(2)} m`);
   });

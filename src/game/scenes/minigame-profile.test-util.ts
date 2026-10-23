@@ -23,6 +23,38 @@ import { RANGE_GROUND } from "./range.ts";
 const LANE_HALF_WIDTH = 3;
 /** Plan cell (m) of the grid that stands for the analytic profile: fine enough for the bilinear height to be within 2 mm of it. */
 export const FINE_CELL = 0.05;
+
+/** Per station and car type (`DRIVER_CARS` ids): the least speed (m/s) its centre may have at the climb's foot and as it reaches the lip, measured with 0.5 m/s of room. One table for the profile's 5 cm grid and the real ground. */
+export const MINIMUM_SPEED: Readonly<Record<MinigameMode, Readonly<Record<string, { foot: number; lip: number }>>>> = {
+  longJump: {
+    sedan: { foot: 17.5, lip: 25 },
+    muscle: { foot: 18, lip: 27 },
+    truck: { foot: 17.5, lip: 24.5 },
+    monster: { foot: 19, lip: 26.5 },
+    police: { foot: 17.5, lip: 24.5 },
+    hatch: { foot: 17.5, lip: 25 },
+    suv: { foot: 17.5, lip: 25 },
+  },
+  highJump: {
+    sedan: { foot: 31, lip: 26.5 },
+    muscle: { foot: 34, lip: 29.5 },
+    truck: { foot: 31, lip: 26 },
+    monster: { foot: 34.5, lip: 35 },
+    police: { foot: 31, lip: 26.5 },
+    hatch: { foot: 31, lip: 26.5 },
+    suv: { foot: 31, lip: 26.5 },
+  },
+  ringFling: {
+    sedan: { foot: 29.5, lip: 32 },
+    muscle: { foot: 32, lip: 35.5 },
+    truck: { foot: 29, lip: 32 },
+    monster: { foot: 32.5, lip: 37.5 },
+    police: { foot: 29.5, lip: 32 },
+    hatch: { foot: 29.5, lip: 32 },
+    suv: { foot: 29.5, lip: 32 },
+  },
+};
+
 /** Seconds the parked car is left alone before the release, to see it hold on the pad. */
 const HOLD_SECONDS = 2;
 /** The car stands still when slower than this (m/s). */

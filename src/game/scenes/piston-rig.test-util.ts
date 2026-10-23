@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { paintPoints, PISTON, PISTON_IDS, PistonHead, PistonRig, type PistonConfig, type PistonId } from "./piston-rig.ts";
-import type { MassNode } from "../deform/deform-rig.ts";
+import type { MassNode, PointSkin } from "../deform/deform-rig.ts";
 import { closedOn, mass } from "../vehicle/test-support.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -120,7 +120,7 @@ export type PistonShotResult = {
   names: string[];
   particleRest: Float32Array;
   particles: Float32Array;
-  /** Paint vertex rest and fitted car-frame xyz (`paintPoints`; NaN for a torn part): the body's first, `bodyVerts` of them, then the flush parts'. */
+  /** Paint vertex rest and fitted car-frame xyz (`shellPaint`; NaN for a torn part): the body's first, `bodyVerts` of them, then the flush parts'. */
   skinRest: Float32Array;
   skin: Float32Array;
   bodyVerts: number;
@@ -186,6 +186,28 @@ export function pistonLocality(shot: PistonShotResult, tap: PistonShotResult): P
   return out;
 }
 
+const _v = new THREE.Vector3();
+
+/** The door skin `mesh` is, with its car-frame rest seat and its A5 tables; null for any other flush part. */
+export function doorShell(car: DeformableCar, mesh: THREE.Object3D): { origin: THREE.Vector3; skin: PointSkin } | null {
+  if (mesh === car["doorMeshL"]) return { origin: car["doorLOrigin"], skin: car["doorLSkin"] };
+  if (mesh === car["doorMeshR"]) return { origin: car["doorROrigin"], skin: car["doorRSkin"] };
+  return null;
+}
+
+/** `paintPoints` with each door skin read in its own hinge frame (its pose removed): the panel's dent, not the door's swing. */
+function shellPaint(car: DeformableCar): Float32Array {
+  const out = paintPoints(car);
+  let at = car.body.geometry.getAttribute("position").count * 3;
+  for (const mesh of car.flushCasters) {
+    const pos = mesh.geometry.getAttribute("position");
+    const origin = doorShell(car, mesh)?.origin;
+    if (origin && Number.isFinite(out[at]!)) for (let i = 0; i < pos.count; i++) _v.fromBufferAttribute(pos, i).add(origin).toArray(out, at + i * 3);
+    at += pos.count * 3;
+  }
+  return out;
+}
+
 /**
  * Park `car` at the origin, fire one piston with `shot`, run the engine's
  * frame order (2 slices of a 1/60 s frame, cutDrive, one skin update per frame)
@@ -196,7 +218,7 @@ export function firePiston(car: DeformableCar, id: PistonId, shot: PistonShot = 
   const rig = new PistonRig(shot);
   car.spawnFacing(0, 0, 0, 0);
   rig.attach(car);
-  const rest = paintPoints(car);
+  const rest = shellPaint(car);
   const head = rig.head(id);
   if (shot.carMoves) {
     head.fire(0, rig.honey);
@@ -265,7 +287,7 @@ function measureShot(car: DeformableCar, rig: PistonRig, id: PistonId, rest: Flo
   const hubs = d.masses.filter((m) => m.hub);
   const arch = (x: number, z: number) => hubs.some((m) => Math.hypot(x - m.rest.x, z - m.rest.z) < PISTON_ARCH);
 
-  const now = paintPoints(car);
+  const now = shellPaint(car);
   const bodyVerts = car.body.geometry.getAttribute("position").count;
   const skin = new Float32Array(rest.length);
   let farSkin = 0;

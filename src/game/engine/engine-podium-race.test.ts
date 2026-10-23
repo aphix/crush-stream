@@ -46,6 +46,8 @@ const WHEEL_SEAT_TOLERANCE = 0.01;
 /** The corner hit every field car takes: closing speed (m/s) and equivalent barrier speed (`DeformableCar.applyImpact`). */
 const CORNER_HIT_MPS = 28;
 const CORNER_HIT_EBS = 24;
+/** Height (m) of the corner hit: the front guard's, as the platform's wing stands. */
+const CORNER_Y = 0.4;
 
 type Part = DeformableCar["parts"][number];
 /** A part's place, turn and scale on the car. */
@@ -98,7 +100,8 @@ describe("given the real engine and a race ended with every car dented", () => {
     run(5);
     // Every racer takes a hard hit on its front left corner (a hub shoved) and loses what `wreck` takes; then the race is closed where it stands.
     for (const car of live().slice(0, 4)) {
-      const corner = car.group.localToWorld(new THREE.Vector3(-0.7, 0.4, 2.2));
+      // The car's own front left corner: its left hub's line, its cage's nose face.
+      const corner = car.group.localToWorld(new THREE.Vector3(car.frame.wheels[0]![0], CORNER_Y, car.cage.fields.planBox[3]!));
       car.applyImpact(corner, car.forward.clone().negate(), CORNER_HIT_MPS, CORNER_HIT_EBS);
     }
     run(1);
@@ -114,7 +117,7 @@ describe("given the real engine and a race ended with every car dented", () => {
       partsAtTheFinish.set(row.id, car["parts"].map((p) => partState(car, p)));
       wheelSeatsAtTheFinish.set(
         row.id,
-        car["wheels"].map((w, i) => (car["looseWheels"][i]!.loose ? null : w.position.clone())),
+        car["wheels"].map((_, i) => (car["looseWheels"][i]!.loose ? null : car.deform.massLocal(HUBS[i]!).clone())),
       );
     }
     // The results reel respawns the field's cars from its clips: stand in for it, so a podium that read the live cars would show none of the damage.
@@ -163,7 +166,7 @@ describe("given the real engine and a race ended with every car dented", () => {
       for (const [i, wheel] of car["wheels"].entries()) {
         const want = seats[i];
         if (!want) continue;
-        // Along the ground only: the seat's height is the suspension's ride, which a car standing level has at rest.
+        // Along the ground only: the podium's wheel stands on its hub mass's x and z (`followHubs`), not on the live car's suspension seat.
         const gap = Math.hypot(wheel.position.x - want.x, wheel.position.z - want.z);
         assert.ok(gap <= WHEEL_SEAT_TOLERANCE, `place ${k + 1}, wheel ${i}: ${wheel.position.toArray()} against the finish's ${want.toArray()}`);
         checked++;

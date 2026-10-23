@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { PISTON, PISTON_IDS } from "./piston-rig.ts";
-import { firePiston, pistonLocality, PISTON_DENT_RADIUS, PISTON_FAR, type PistonLocality, type PistonShot, type PistonShotResult } from "./piston-rig.test-util.ts";
+import { doorShell, firePiston, pistonLocality, PISTON_DENT_RADIUS, PISTON_FAR, type PistonLocality, type PistonShot, type PistonShotResult } from "./piston-rig.test-util.ts";
 import { transformSkinPointInto } from "../deform/shape-match.test-util.ts";
 import { REST_SHIFT, type ShapeCluster } from "../deform/shape-match.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -353,6 +353,19 @@ function onSkinAnchors(car: DeformableCar, shot: PistonShotResult, tap: PistonSh
       if (Math.hypot(shot.particleRest[j * 3]! - sx, shot.particleRest[j * 3 + 2]! - sz) <= PISTON_FAR) farParents = false;
     }
     if (farParents) farSkin = Math.max(farSkin, Math.hypot(shot.skin[k]! - tap.skin[k]!, shot.skin[k + 1]! - tap.skin[k + 1]!, shot.skin[k + 2]! - tap.skin[k + 2]!));
+  }
+  let at = shot.bodyVerts;
+  for (const mesh of car.flushCasters) {
+    const count = mesh.geometry.getAttribute("position").count;
+    const skin = doorShell(car, mesh)?.skin;
+    for (let v = 0, k = at * 3; skin && v < count; v++, k += 3) {
+      if (Math.hypot(shot.skinRest[k]! - sx, shot.skinRest[k + 1]! - PISTON.faceY, shot.skinRest[k + 2]! - sz) >= PISTON_DENT_RADIUS) continue;
+      for (let s = v * RES_SLOTS; s < (v + 1) * RES_SLOTS; s++) {
+        const q = struck.indexOf(skin.rJ[s]! / 3);
+        if (q >= 0) share[q] += skin.rW[s]!;
+      }
+    }
+    at += count;
   }
   let weight = 0;
   let particle = 0;
