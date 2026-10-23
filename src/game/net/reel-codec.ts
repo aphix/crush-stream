@@ -440,6 +440,7 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A hood's and a trunk lid's heights in the cage reach a lattice step past their triangles (they reached half of one), so the drawn lid's wrapped nose and rolled edge, which stand 1-2 cm past the plain cage lid, have a cage under them: a tyre meets hood up to 5 cm past the lid's true edge.
  * A pair's patch reads every node of the other outline that reads a depth: the plan field's edge stands half a lattice step past the outermost node, beyond the drawn triangles' box that gated them, so a door's nodes
  * at a nose's edge joined the patch at once and moved its centre 2.1 or 11.2 cm in a millimetre of closing (a T-bone's door crushed 0.706 m or 0.753 m by 2 mm of start, now 0.750-0.753 m).
+ * A skin point standing more than 0.35 m from its parents' rest centroid turns with its clusters' maps only as far as it would at 0.35 m, the rest of its offset going with the parents alone (a rear pillar 0.75 m over the tail's masses was swung 0.198 m by their 0.1-0.2 rad rolls where the particles moved 0.140: now 0.171), so the cage cut from the crushed skin differs on every crushed car's upper rear and the contacts that read it with it.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

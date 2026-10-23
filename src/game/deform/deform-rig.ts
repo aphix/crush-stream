@@ -94,6 +94,13 @@ const WINDSCREEN_FOOT_SHARE = 0.5;
 
 /** Most cluster weights a skin vertex keeps: the 4 nearest plus the cell-face share. */
 export const SKIN_K = 5;
+/** `skinN` packs a point's cluster count into this many low bits (`SKIN_K` ≤ 7), and its lever share (`SKIN_LEVER_STEPS` of them at most) into the rest. */
+export const SKIN_COUNT_BITS = 3;
+export const SKIN_COUNT_MASK = 7;
+/** Steps of a skin point's lever share: `skinN >> SKIN_COUNT_BITS` of these is the share (31 fits the five bits left in a byte). */
+export const SKIN_LEVER_STEPS = 31;
+/** How far (m) from its parents' rest centroid a skin point still turns with its clusters' maps in full: the maps are fitted on clusters half a metre across, so past this lever they are carried no further than at it. */
+const SKIN_LEVER_REACH = 0.35;
 /** Parent masses per skin point (A5): the paint rides these particles. */
 const RES_K = 4;
 /** Parent slots: RES_K plus the cell-face share of the nearest non-cabin mass (D1). */
@@ -841,7 +848,9 @@ export abstract class DeformRig {
         for (const s of scored) s.w *= 1 - share;
         scored.push({ ci: other, w: share });
       }
-      t.sN[i] = scored.length;
+      // The share of its clusters' maps this point takes: past `SKIN_LEVER_REACH` from its parents' rest centroid the maps' turn is carried only as far as at that reach.
+      const lever = Math.min(1, SKIN_LEVER_REACH / hypot3(rx - t.rC[i * 3]!, ry - t.rC[i * 3 + 1]!, rz - t.rC[i * 3 + 2]!));
+      t.sN[i] = scored.length | (scored.length > 0 ? Math.round(lever * SKIN_LEVER_STEPS) << SKIN_COUNT_BITS : 0);
       for (let k = 0; k < scored.length; k++) {
         t.sXf[i * SKIN_K + k] = scored[k]!.ci * 9;
         t.sW[i * SKIN_K + k] = scored[k]!.w;
