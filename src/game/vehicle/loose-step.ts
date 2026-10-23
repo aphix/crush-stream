@@ -479,6 +479,7 @@ export function stepLoose(p: LooseBody, dt: number, skip: number, dent?: DentSta
   if (mass > 0) blow(p, mass, dt);
   bindBody(object, v, w, shape.centre, shape.invI, skip, true, dt);
   if (met) body.met = met;
+  if (cars !== null) body.cars = cars;
   body.panel = mass > 0;
   moveBody();
   // Its spin dies in the air as it always did.

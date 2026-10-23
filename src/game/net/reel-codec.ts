@@ -405,6 +405,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A torn part that flies as its shell is supported the same either side of its car's middle plane: the farthest point along a way tied between a
  * bumper's two lower front ends and one slot took one, so a sedan's, hatchback's or wagon's front bumper rested on a lone point and tipped forward end
  * over end at its first slide (73-85° in 0.4 s: 4.658 m where its box slides 4.39), where it now slides flat.
+ * A loose point (a torn part's, a popped wheel's) more than a car's roof reach (0.25 m) under its top, inside its drawn plan and over its underside is in
+ * that car's flank and is put out along the plan outline's normal, where it passed through any car whose top stood out of its reach (a door cage's 0.9 m
+ * shelf): a bumper a car is driven into at 2 m/s is shoved 0.67 m (0.51 m riding the sill top; 0.002 m under the door cages, now 0.82), and one flying at
+ * a parked car's door stops at its face, where it ended 1.02 m inside it.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

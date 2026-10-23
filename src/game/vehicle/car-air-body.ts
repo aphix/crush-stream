@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
-import { HIT_SIZE, PQ_BODY, PQ_SIZE } from "../world/surfaces.ts";
+import { HIT_SIZE, PQ_BODY, PQ_SIZE, type StirCar } from "../world/surfaces.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
@@ -217,6 +217,7 @@ export const _crushBack = new THREE.Vector3();
 /** A torn part or popped wheel of car `own` met car `top`'s top (`stepLoose`): what moved it is in the world, which a highlight clip with `own` must keep. */
 export type TopMet = (own: number, top: number) => void;
 const NO_MET: TopMet = () => {};
+const NO_CARS: readonly StirCar[] = [];
 
 /**
  * The body the rigid step moves, set by `bindBody`. Every body takes the same step (`moveBody`, `placeBody`, `readPoints`, `openRows`,
@@ -225,7 +226,7 @@ const NO_MET: TopMet = () => {};
  * its own frame, `invI` its inverse inertia per unit mass about its own axes, `skip` its slot asked of the world, `surf` the faces it
  * shares with other cars, `mass` its mass over theirs. `driven`, `parked`, `powered` are a car's drive state (its tyres' friction),
  * `nearing` that a point not yet in a surface reaches it within the slice at its closing speed, `met` what a part's point on a car's top reports,
- * `panel` that the part is a torn panel (`stepLoose` with its mass), not a popped wheel.
+ * `panel` that the part is a torn panel (`stepLoose` with its mass), not a popped wheel, `cars` the world's cars a part's points may meet the flank of.
  */
 export const body = {
   q: new THREE.Quaternion(),
@@ -246,6 +247,7 @@ export const body = {
   nearing: false,
   met: NO_MET,
   panel: false,
+  cars: NO_CARS,
 };
 
 /**
@@ -273,6 +275,7 @@ export function bindBody(object: THREE.Object3D, v: THREE.Vector3, w: THREE.Vect
   body.nearing = false;
   body.met = NO_MET;
   body.panel = false;
+  body.cars = NO_CARS;
   // No car under it bears weight onto it (`takeBorne` sets these for a car).
   if (part) {
     _lv.set(0, 0, 0);

@@ -12,7 +12,7 @@ import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { crownY } from "./car-cage-rig.ts";
 import { SKIN } from "./car-surfaces.ts";
-import { MU_BODY, RESTITUTION, invInertia } from "./car-air-body.ts";
+import { MU_BODY, REST_SPEED, RESTITUTION, invInertia } from "./car-air-body.ts";
 import { AIR_DENSITY, boxShape, newLooseShape, partMass, PLATE_CN_BROADSIDE, stepLoose } from "./loose-step.ts";
 import { corner, highest, LIES_FLAT, lowest, plateUp, RESTS } from "./loose-step.test-util.ts";
 import { assertSameDigest, paint } from "./test-support.ts";
@@ -101,8 +101,11 @@ const planSpeed = (p: DetachPart): number => Math.hypot(p.velocity.x, p.velocity
 /** A part sliding at this speed (m/s) along the road. */
 const SLIDE_V = 8;
 
-/** Where the bumper slides: beside B's flank (and clear of A's), along +z from z = 0. */
-const SLIDE_X = B_X - carFrame(CAR_STYLES.sedan).half.x - 0.3;
+/** A torn sedan bumper's half width (m): its middle stands this far in from each end. */
+const BUMPER_HALF_X = 0.77;
+
+/** Where the bumper slides: its nearer end a hand's width (0.3 m) off B's flank, the bumper not over B's body, along +z from z = 0. */
+const SLIDE_X = B_X - carFrame(CAR_STYLES.sedan).half.x - 0.3 - BUMPER_HALF_X;
 
 /** How far (m) a part sliding straight may drift sideways: a millimetre. */
 const STRAIGHT = 1e-3;
@@ -281,6 +284,69 @@ describe("given a front bumper torn off a parked car, asleep on the road a hand'
     stirredSteps(l, QUIET_HZ - 1);
     const moved = l.part.object.position.distanceTo(at);
     assert.ok(moved >= SHOVED, `shoved ${moved.toFixed(3)} m`);
+  });
+});
+
+/** A bumper let fly at the far flank of car B (the side away from A) at this speed (m/s), level with B's front door (z) and starting this far (m) off it. */
+const FLANK_V = 4;
+const DOOR_Z = -0.8;
+const FLANK_GAP = 0.5;
+/** B's door face stands within this (m) of its body's widest: a bumper flying at it stops no deeper in. */
+const DOOR_FACE_SLACK = 0.1;
+
+describe("given a front bumper torn off a parked car, flying along the road at the front door of a second car parked beside it", () => {
+  for (const wreck of [false, true]) {
+    it(`when it meets the door of ${wreck ? "a wreck (its masses run)" : "a car that is whole"} at ${FLANK_V} m/s, then it stops at the door's face: its leading end is no more than ${DOOR_FACE_SLACK} m inside B's side (a point more than ${SKIN} m under a car's top is in its flank, not on its roof)`, () => {
+      const l = besideB();
+      const b = l.cars[1]!;
+      b.deform.massActive = wreck;
+      const side = B_X + b.frame.half.x;
+      l.part.shape.asleep = false;
+      throwPart(l, side + FLANK_GAP + l.part.shape.half.x, 0.3, DOOR_Z, new THREE.Vector3(-FLANK_V, 0, 0), 1.5);
+      const lead = -farthest(l.part, new THREE.Vector3(-1, 0, 0));
+      assert.ok(side - lead <= DOOR_FACE_SLACK, `its leading end reached x ${lead.toFixed(3)} m, ${(side - lead).toFixed(3)} m inside B's side at ${side.toFixed(3)} m`);
+    });
+  }
+});
+
+/** A bumper let down this far (m) inside the door's face of a parked car. */
+const SUNK = 0.2;
+/** The flank has put it out of the car's side within this long (s). */
+const PUT_OUT_S = 1;
+/** Out of the flank to within one cage lattice step (m). */
+const FACE_TOL = 0.05;
+/** The car beside it driven away from its door at this speed (m/s): the flank closes on the sunk bumper at it. */
+const DRIVE_AWAY = 8;
+
+/** The bumper let down `SUNK` inside the far flank of car B, B's velocity `drive` (x); the bumper's leading end's distance inside B's side (m) after `PUT_OUT_S`, and the most (m) one step moved it in x. */
+function sunkBumper(drive: number): { inside: number; widest: number } {
+  const l = besideB();
+  const side = B_X + l.cars[1]!.frame.half.x;
+  l.part.shape.asleep = false;
+  l.part.object.position.set(side - SUNK + l.part.shape.half.x, 0.3, DOOR_Z);
+  l.part.object.quaternion.identity();
+  l.part.velocity.set(0, 0, 0);
+  l.cars[1]!.velocity.set(drive, 0, 0);
+  let x = l.part.object.position.x;
+  let widest = 0;
+  for (let s = 0; s < PUT_OUT_S * QUIET_HZ; s++) {
+    stepWorld(l.w, H);
+    widest = Math.max(widest, Math.abs(l.part.object.position.x - x));
+    x = l.part.object.position.x;
+  }
+  return { inside: side + farthest(l.part, new THREE.Vector3(-1, 0, 0)), widest };
+}
+
+describe("given a front bumper lying 0.2 m inside the front door's face of a second car parked beside it", () => {
+  it(`when that car stays parked, then the flank puts the bumper out of its side within ${PUT_OUT_S} s, as a wall puts a part out`, () => {
+    const { inside } = sunkBumper(0);
+    assert.ok(inside <= FACE_TOL, `its leading end is ${inside.toFixed(3)} m inside B's side after ${PUT_OUT_S} s`);
+  });
+
+  it(`when that car is driven away from it at ${DRIVE_AWAY} m/s, then no step moves the bumper farther than that closing carries it with the rest lift on top: it is pushed out as the door comes, not flung over the car`, () => {
+    const { widest } = sunkBumper(DRIVE_AWAY);
+    const most = (DRIVE_AWAY + REST_SPEED) * H;
+    assert.ok(widest <= most * 1.05, `one step moved it ${widest.toFixed(4)} m, more than the ${most.toFixed(4)} m the closing and the rest lift carry`);
   });
 });
 
