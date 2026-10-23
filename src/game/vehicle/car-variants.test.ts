@@ -8,6 +8,7 @@ import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, FLEET_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_CAMERA, PLATFORM_HARDPOINTS, pullHandle, st } from "./car-styles/platform.ts";
 import { CREASE_DEGREES, ROCKER, cantX, cantY, deckTopY, doorAperture, drawnSideX, glassTopY, glassX, lerp, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofAt, roofTopY, sampleSlice, sectionPoints, shoulderDrop, sideX, tailgateHalf } from "./car-mesh.ts";
+import { drawnRoofTopY } from "./car-roof-end.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, doorGlassFrontZ, floorY, pillarBands, REAR_GLASS_BOW, rockerAt, sideBowZ, tubWall } from "./car-lines.ts";
 import { doorSkinStand, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, type PartSeat } from "./part-geometry.ts";
@@ -454,17 +455,37 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
     for (const c of inside) assert.ok(Math.abs(c.y - roofTopY(0, c.z, coupe)) < 1e-5, `crown at z ${c.z}: y ${c.y}, the plain coupe's ${roofTopY(0, c.z, coupe)}`);
   });
 
-  it("when its roof's dome is read, then every skin vertex over the dome (inside its edges) is at roofTopY, and every drawn greenhouse part stays under roofTopY: the posts' clamp follows the rolled ends", () => {
+  it("when its roof's dome is read, then every skin vertex over the dome (inside its edges) is at the drawn roof's height, and every drawn greenhouse part stays under roofTopY: the posts' clamp follows the rolled ends", () => {
     for (let v = 0; v < pos.count; v++) {
       const [x, y, z] = [pos.getX(v), pos.getY(v), pos.getZ(v)];
-      if (headliner.has(v) || z < rolled.roofZ[0] || z > rolled.roofZ[1] || Math.abs(x) > roofAt(z, rolled).x + 1e-6 || y < roofTopY(roofAt(z, rolled).x, z, rolled) - 1e-6) continue;
-      assert.ok(Math.abs(y - roofTopY(x, z, rolled)) < 1e-5, `dome vertex (${x}, ${y}, ${z}): roofTopY ${roofTopY(x, z, rolled)}`);
+      if (headliner.has(v) || z < rolled.roofZ[0] || z > rolled.roofZ[1] || Math.abs(x) > roofAt(z, rolled).x + 1e-6 || y < drawnRoofTopY(roofAt(z, rolled).x, z, rolled) - 1e-6) continue;
+      assert.ok(Math.abs(y - drawnRoofTopY(x, z, rolled)) < 1e-5, `dome vertex (${x}, ${y}, ${z}): drawnRoofTopY ${drawnRoofTopY(x, z, rolled)}`);
     }
     for (const part of makeGreenhouseFrame(rolled, "drawn")) {
       const at = part.getAttribute("position") as THREE.BufferAttribute;
       for (let i = 0; i < at.count; i++) {
         const [x, y, z] = [at.getX(i), at.getY(i), at.getZ(i)];
         if (z >= rolled.roofZ[0] && z <= rolled.roofZ[1]) assert.ok(y <= roofTopY(x, z, rolled) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the rolled roof (${roofTopY(x, z, rolled)})`);
+      }
+    }
+  });
+
+  it("when its crown line is read over each rolled end, then every chord falls at least as steeply as the one before it toward the end: the bowed end ring never folds the roll back", () => {
+    const crown: { y: number; z: number }[] = [];
+    // Each end ring has a cap copy at the same point: read each station once.
+    for (let v = 0; v < pos.count; v++) if (Math.abs(pos.getX(v)) < 1e-6 && !headliner.has(v) && crown.every((c) => Math.abs(c.z - pos.getZ(v)) > 1e-9)) crown.push({ y: pos.getY(v), z: pos.getZ(v) });
+    const ends = [
+      { name: "front", points: crown.filter((c) => c.z >= rolled.roofZ[1] - RUNS.front - 1e-6).sort((a, b) => a.z - b.z) },
+      { name: "rear", points: crown.filter((c) => c.z <= rolled.roofZ[0] + RUNS.rear + 1e-6).sort((a, b) => b.z - a.z) },
+    ];
+    for (const end of ends) {
+      assert.ok(end.points.length >= 3, `${end.name}: ${end.points.length} crown points over the roll`);
+      let previousFall = -Infinity;
+      for (let k = 1; k < end.points.length; k++) {
+        const [a, b] = [end.points[k - 1]!, end.points[k]!];
+        const fall = (a.y - b.y) / Math.abs(b.z - a.z);
+        assert.ok(fall >= previousFall - 1e-9, `${end.name} chord ${k} at z ${b.z.toFixed(4)} falls ${fall.toFixed(4)} m per m after ${previousFall.toFixed(4)}`);
+        previousFall = fall;
       }
     }
   });
@@ -515,11 +536,11 @@ describe("given a coupe whose roof's section is one curve from crown to cant (ro
     assert.ok(slopeAtHalf(dome) > DOME_SLOPE_DEGREES && slopeAtHalf(plain) < DOME_SLOPE_DEGREES, `chord at half the half-width: ${slopeAtHalf(dome).toFixed(1)}° (plain ${slopeAtHalf(plain).toFixed(1)}°)`);
   });
 
-  it("when its roof's skin is read, then every skin vertex between its ends is at roofTopY, and every drawn greenhouse part stays under roofTopY: the posts' clamp follows the curve", () => {
+  it("when its roof's skin is read, then every skin vertex between its ends is at the drawn roof's height, and every drawn greenhouse part stays under roofTopY: the posts' clamp follows the curve", () => {
     const { pos, skin } = skinOf(domed);
     const inside = skin.filter((v) => pos.getZ(v) >= domed.roofZ[0] && pos.getZ(v) <= domed.roofZ[1]);
     assert.ok(inside.length > 0, "no skin vertex read");
-    for (const v of inside) assert.ok(Math.abs(pos.getY(v) - roofTopY(pos.getX(v), pos.getZ(v), domed)) < 1e-5, `skin vertex ${v} (${pos.getX(v)}, ${pos.getY(v)}, ${pos.getZ(v)}): roofTopY ${roofTopY(pos.getX(v), pos.getZ(v), domed)}`);
+    for (const v of inside) assert.ok(Math.abs(pos.getY(v) - drawnRoofTopY(pos.getX(v), pos.getZ(v), domed)) < 1e-5, `skin vertex ${v} (${pos.getX(v)}, ${pos.getY(v)}, ${pos.getZ(v)}): drawnRoofTopY ${drawnRoofTopY(pos.getX(v), pos.getZ(v), domed)}`);
     for (const part of makeGreenhouseFrame(domed, "drawn")) {
       const at = part.getAttribute("position") as THREE.BufferAttribute;
       for (let i = 0; i < at.count; i++) {

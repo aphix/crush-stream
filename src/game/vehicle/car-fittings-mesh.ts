@@ -5,7 +5,8 @@ import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { splitCreases } from "./car-crease.ts";
-import { CREASE_DEGREES, deckTopY, ensureOutwardNormals, lerp, loftFromRings, makeBumperGeometry, roofTopY, type Pt } from "./car-mesh.ts";
+import { CREASE_DEGREES, deckTopY, ensureOutwardNormals, lerp, loftFromRings, makeBumperGeometry, type Pt } from "./car-mesh.ts";
+import { drawnRoofTopY } from "./car-roof-end.ts";
 
 /**
  * A style's drawn add-ons: never in a cage build, so the sim never sees them. Each is merged into the mesh it stands on and moves with
@@ -212,12 +213,12 @@ function railGeometry(rail: NonNullable<RoofParts["rails"]>, side: number, style
   for (let s = 0; s <= RAIL_STATIONS; s++) {
     const z = lerp(rear, front, s / RAIL_STATIONS);
     const ease = THREE.MathUtils.smoothstep(Math.min(z - rear, front - z), 0, RAIL_RAMP);
-    const top = roofTopY(inner, z, style) - SINK + (rail.rise + SINK) * ease;
+    const top = drawnRoofTopY(inner, z, style) - SINK + (rail.rise + SINK) * ease;
     rings.push([
-      { x: side * inner, y: roofTopY(inner, z, style) - SINK },
+      { x: side * inner, y: drawnRoofTopY(inner, z, style) - SINK },
       { x: side * inner, y: top },
       { x: side * outer, y: top },
-      { x: side * outer, y: roofTopY(outer, z, style) - SINK },
+      { x: side * outer, y: drawnRoofTopY(outer, z, style) - SINK },
     ]);
     zs.push(z);
   }
@@ -232,8 +233,8 @@ function glassPanelGeometry(panel: NonNullable<RoofParts["glassPanel"]>, style: 
   const zs: number[] = [];
   for (let s = 0; s <= PANEL_STATIONS; s++) {
     const z = lerp(panel.z[0], panel.z[1], s / PANEL_STATIONS);
-    const top = xs.map((x) => ({ x, y: roofTopY(x, z, style) + PANEL_PROUD }));
-    const under = [half, -half].map((x) => ({ x, y: roofTopY(x, z, style) - SINK }));
+    const top = xs.map((x) => ({ x, y: drawnRoofTopY(x, z, style) + PANEL_PROUD }));
+    const under = [half, -half].map((x) => ({ x, y: drawnRoofTopY(x, z, style) - SINK }));
     rings.push([...top, ...under]);
     zs.push(z);
   }

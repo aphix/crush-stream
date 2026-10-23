@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
-import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, ROOF_DRIP, roofDrip, sideBowZ, WINDSHIELD_BOW } from "./car-lines.ts";
+import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, ROOF_DRIP, roofDrip, sideBowZ } from "./car-lines.ts";
 import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset, windshieldSideBase, windshieldSideX } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
+import { roofEndAcross, roofEndBows, roofEndHeldZ, roofEndWeight, type RoofEnd } from "./car-roof-end.ts";
 import {
   ROOF_ARC_T,
   ROOF_CROWN,
@@ -62,23 +63,10 @@ function shellRing(skin: Pt[], cant: number, inset: number): Pt[] {
   return [...skin, ...inner];
 }
 
-/** A drawn roof end that bows in plan: z, bow (m), the glass top's half-width; the front's `paneTop` is the windshield's top row (z, bow), which the roof never stands behind. */
-type RoofEnd = { z: number; bow: number; half: number; paneTop?: { z: number; bow: number } };
-
-/** The drawn roof's ends that bow in plan past the default bow (`WINDSHIELD_BOW`, `REAR_GLASS_BOW`) its flat ends already cover, or with the glass's whole bow (`roofEnds.glassBow`); the front always, held to its pane's top row so no slit lies ahead of the glass. */
-function roofEndBows(style: BodyStyle): RoofEnd[] {
-  const whole = style.roofEnds?.glassBow;
-  const { bow = WINDSHIELD_BOW, wTop } = style.windshield;
-  const ends: RoofEnd[] = [
-    { z: style.roofZ[1], bow: bow.top - (whole?.front ? 0 : WINDSHIELD_BOW.top), half: wTop / 2, paneTop: { z: style.windshieldTop[1], bow: bow.top } },
-    { z: style.roofZ[0], bow: (style.rearGlass.bow ?? REAR_GLASS_BOW).top - (whole?.rear ? 0 : REAR_GLASS_BOW.top), half: style.rearGlass.wTop / 2 },
-  ];
-  return ends.filter((end) => end.bow !== 0 || end.paneTop !== undefined);
-}
-
 /**
- * The drawn roof's `ends` bow in plan with the glass tops under them, fading to nothing at each glass's top corners. A headliner
- * vertex (`twins`: each inner vertex, then the skin vertex it is inset from) moves as its skin vertex does, so it stays inset.
+ * The drawn roof's `ends` bow in plan with the glass tops under them, fading to nothing at each glass's top corners, and every ring of a
+ * rolled end's run moves with it (`roofEndWeight`), so the roll keeps its slope instead of folding back at the bowed end ring. A
+ * headliner vertex (`twins`: each inner vertex, then the skin vertex it is inset from) moves as its skin vertex does, so it stays inset.
  * A vertex the pane's top row pulls forward is held inside the roof's side lip at its new z, where the cabin narrows.
  */
 function bowRoofEnds(geo: THREE.BufferGeometry, ends: readonly RoofEnd[], twins: readonly number[], style: BodyStyle): void {
@@ -86,15 +74,16 @@ function bowRoofEnds(geo: THREE.BufferGeometry, ends: readonly RoofEnd[], twins:
   for (let k = 0; k < twins.length; k += 2) skinOf.set(twins[k]!, twins[k + 1]!);
   const pos = geo.getAttribute("position");
   for (let v = 0; v < pos.count; v++) {
-    const end = ends.find((e) => Math.abs(pos.getZ(v) - e.z) < 1e-6);
+    const z = pos.getZ(v);
+    const end = ends.find((e) => roofEndWeight(e, z) > 0);
     if (!end) continue;
-    const xn = Math.min(1, Math.abs(pos.getX(skinOf.get(v) ?? v)) / end.half);
-    const across = 1 - xn * xn;
-    const bowed = end.z + end.bow * across;
-    const held = end.paneTop === undefined ? bowed : Math.max(bowed, end.paneTop.z + end.paneTop.bow * across);
-    pos.setZ(v, held);
-    const [x, lip] = [pos.getX(v), cantX(held, style) + roofDrip(style)];
-    if (held > bowed && Math.abs(x) > lip) pos.setX(v, Math.sign(x) * lip);
+    const weight = roofEndWeight(end, z);
+    const skinX = pos.getX(skinOf.get(v) ?? v);
+    const held = roofEndHeldZ(end, skinX);
+    const moved = z + (held - end.z) * weight;
+    pos.setZ(v, moved);
+    const [x, lip] = [pos.getX(v), cantX(moved, style) + roofDrip(style)];
+    if (held > end.z + end.bow * roofEndAcross(end, skinX) && Math.abs(x) > lip) pos.setX(v, Math.sign(x) * lip);
   }
 }
 
