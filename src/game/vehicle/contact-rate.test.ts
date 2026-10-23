@@ -34,10 +34,12 @@ describe("given a car on flat ground, its tyres in their springs", () => {
 });
 
 describe("given a car whose belly is in the ground", () => {
-  it("when a sedan rolls at 3 m/s with its body 4 cm below its rest ride, then it asks for a finer slice", () => {
+  /** How far (m) the lowest belly point is under the ground in the row below. */
+  const BELLY_IN = 0.008;
+  it(`when a sedan rolls at 3 m/s with its lowest belly point ${BELLY_IN * 1000} mm under the road, then it asks for a finer slice`, () => {
     const car = makeCar("sedan");
     car.spawnFacing(0, 0, 0, 3);
-    car.group.position.y = -0.04;
+    car.group.position.y = -BELLY_IN - Math.min(...car.frame.belly.map(([, y]) => y));
     stepFree(car, 1 / SLICE_HZ);
     assert.ok(contactHz(car) > 0, "the rate a sedan with its belly in the road asks for");
   });
