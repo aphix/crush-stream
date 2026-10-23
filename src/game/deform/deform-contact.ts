@@ -50,6 +50,10 @@ const _settled = { mark: new Uint8Array(64) };
 /** `markMotion`'s mass motion (x, y, z, spin) and `takeMotion`'s: a mark is always taken on the same car before another car's mark. */
 const _marked = new Float64Array(4);
 const _motionNow = new Float64Array(4);
+/** What a driving mass at `vn` along the face's normal takes of the push (m/s): none once it moves as fast as the face (`refVn`), never past it. */
+function drivenCut(vn: number, refVn: number, push: number): number {
+  return vn >= refVn ? 0 : Math.min(refVn - vn, push);
+}
 
 /**
  * Contact: pair collision, the structure step, following the group, pose measurement, stroke, pushes and the impact entry.
@@ -469,11 +473,14 @@ export abstract class DeformContact extends DeformState {
 
   /**
    * A contact's change of the body's motion (`bodyContact`'s increment): the whole body's velocity change (`dvx`, `dvz`) and yaw-rate
-   * change `dw` about (`cx`, `cz`) go onto every dynamic mass as one rigid body (v += dv + dw × r). The part along the face's normal
-   * (`nx`, `nz`) is carried by the masses still driving into the face, those moving along it slower than the face (`refVn`): a mass
-   * held on the face is at rest on it and the face's impulse cannot reach it, so the driving masses carry the whole normal momentum
-   * (dv scaled by the mass over their mass) and none is taken past the face's speed. The rigid body (`velocity`, `angular`) takes the
-   * momentum and spin the masses took; what is left of them in the masses against it is the crush. Returns the normal momentum taken (N·s).
+   * change `dw` about (`cx`, `cz`). The part along the face's normal (`nx`, `nz`) is carried by the masses still driving into the face,
+   * those moving along it slower than the face (`refVn`): a mass held on the face is at rest on it and the face's impulse cannot reach
+   * it, so the driving masses carry the normal momentum (dv scaled by the mass over their mass), none taken past the face's speed.
+   * The spin is only the share the masses took (`taken` of the `dvn · all` asked), the moment of the impulse they took about the
+   * centre whichever masses carried it (the uneven push's own moment is taken out of the rotation field, so it is not counted twice).
+   * The tangential part stays whole: friction stops the contact's sliding whatever share of the normal impulse the masses took.
+   * The rigid body (`velocity`, `angular`) takes the momentum and spin the masses took; what is left of them in the masses against
+   * it is the crush. Returns the normal momentum taken (N·s).
    */
   shiftBody(velocity: THREE.Vector3, angular: THREE.Vector3, dvx: number, dvz: number, dw: number, cx: number, cz: number, nx: number, nz: number, refVn: number): number {
     if (!this.massActive) return 0;
@@ -496,35 +503,43 @@ export abstract class DeformContact extends DeformState {
     }
     const dvn = dvx * nx + dvz * nz;
     const push = driving > 1e-6 ? (dvn * all) / driving : 0;
-    const tx = dvx - dvn * nx;
-    const tz = dvz - dvn * nz;
     let taken = 0;
-    let px = 0;
-    let pz = 0;
-    let spin = 0;
+    let moment = 0;
     for (let mi = 0; mi < this.masses.length; mi++) {
       const m = this.masses[mi]!;
       if (!m.dynamic) continue;
-      const vn = m.vel.x * nx + m.vel.z * nz;
-      const cut = vn >= refVn ? 0 : Math.min(refVn - vn, push);
-      const rx = m.world.x - cx;
-      const rz = m.world.z - cz;
-      const ux = tx + nx * cut + dw * rz;
-      const uz = tz + nz * cut - dw * rx;
+      const cut = drivenCut(m.vel.x * nx + m.vel.z * nz, refVn, push);
+      taken += cut * m.mass;
+      moment += cut * m.mass * ((m.world.z - cz) * nx - (m.world.x - cx) * nz);
+    }
+    const asked = dvn * all;
+    const share = asked > taken && asked > 1e-6 ? taken / asked : 1;
+    let lean = 0;
+    if (all > 1e-6) {
+      inertia -= (sx * sx + sz * sz) / all;
+      if (inertia > MIN_INERTIA) lean = (moment - (taken * (sz * nx - sx * nz)) / all) / inertia;
+    }
+    const field = dw * share - lean;
+    const tx = dvx - dvn * nx;
+    const tz = dvz - dvn * nz;
+    let px = 0;
+    let pz = 0;
+    for (let mi = 0; mi < this.masses.length; mi++) {
+      const m = this.masses[mi]!;
+      if (!m.dynamic) continue;
+      const cut = drivenCut(m.vel.x * nx + m.vel.z * nz, refVn, push);
+      const ux = tx + nx * cut + field * (m.world.z - cz);
+      const uz = tz + nz * cut - field * (m.world.x - cx);
       m.vel.x += ux;
       m.vel.z += uz;
-      taken += cut * m.mass;
       px += ux * m.mass;
       pz += uz * m.mass;
-      spin += m.mass * (rz * ux - rx * uz);
     }
     if (all > 1e-6) {
       velocity.x += px / all;
       velocity.z += pz / all;
-      inertia -= (sx * sx + sz * sz) / all;
-      spin -= (sz * px - sx * pz) / all;
     }
-    if (inertia > MIN_INERTIA) angular.y += spin / inertia;
+    if (inertia > MIN_INERTIA) angular.y += dw * share;
     return taken;
   }
 

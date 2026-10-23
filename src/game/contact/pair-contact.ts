@@ -148,7 +148,7 @@ function stopTurnInto(car: DeformableCar, nx: number, nz: number): void {
   if (sweep >= 0) return;
   const dvn = -sweep / (1 + lever * lever * wreckInvI.y);
   const pos = car.group.position;
-  car.deform.shiftBody(car.velocity, car.angular, nx * dvn, nz * dvn, dvn * lever * wreckInvI.y, pos.x + centre.x, pos.z + centre.z, nx, nz, 0);
+  car.deform.shiftBody(car.velocity, car.angular, nx * dvn, nz * dvn, dvn * lever * wreckInvI.y, pos.x + centre.x, pos.z + centre.z, nx, nz, Infinity);
 }
 
 /**
