@@ -171,6 +171,17 @@ describe("given a box prism in the scene's solids", () => {
       assert.ok(Math.abs(hit[C_NX]! - 1) < 1e-12 && Math.abs(hit[C_DEPTH]! - 0.6) < 1e-12, `depth ${hit[C_DEPTH]} nx ${hit[C_NX]}`);
       armSolids(null);
     });
+
+    it("then the top is the way out only when it is nearer than the nearest side, whichever side its body then takes it out by", () => {
+      solids(BOX);
+      // 0.3 m past the middle of the 1 m tall box and 0.1 m up in it: the top is 0.9 m over it, the -x face 0.7 m, the +x face its body's side, 1.3 m.
+      ASKER[0] = 3;
+      ASKER[1] = 0;
+      const hit = ask(-0.3, 0.1, 0, 0, 0);
+      assert.equal(hit[C_H], -Infinity, `no floor: the top read as the way out, ${hit[C_H]}`);
+      assert.ok(Math.abs(hit[C_NX]! - 1) < 1e-12 && Math.abs(hit[C_DEPTH]! - 1.3) < 1e-12, `its body's side: ${hit[C_NX]} depth ${hit[C_DEPTH]}`);
+      armSolids(null);
+    });
   });
 
   it("when the point is the same distance in however far along the step it started then the face it entered by is the same", () => {

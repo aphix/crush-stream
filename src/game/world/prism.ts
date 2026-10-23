@@ -153,6 +153,8 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
   const w = dx * s + dz * c;
   const moving = rvx * rvx + vy * vy + rvz * rvz > SOLID_AT_REST * SOLID_AT_REST;
   let depth = Infinity;
+  // The depth of the nearest side: what a point at rest weighs its top against, whichever side it then leaves by (the top is the way out when it is nearer than every side).
+  let near = Infinity;
   let time = Infinity;
   let nx = 0;
   let nz = 0;
@@ -172,6 +174,7 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
     if (!entered) {
       time = Infinity;
       depth = r - d;
+      near = depth;
       nx = d > 1e-9 ? dx / d : 1;
       nz = d > 1e-9 ? dz / d : 0;
       const ax = ASKER[0]! - P[o + PR_X]!;
@@ -223,11 +226,12 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
     depth = face === 0 ? hx - u : face === 1 ? hx + u : face === 2 ? hz - w : hz + w;
     nx = face === 0 ? c : face === 1 ? -c : face === 2 ? s : -s;
     nz = face === 0 ? -s : face === 1 ? s : face === 2 ? c : -c;
+    near = nearDepth;
     if (face !== timeFace) time = Infinity;
   }
   const topDepth = topAt(P, o, u, w) - y;
   // The top is the face it came in through when it was crossed more recently than every side (or, at rest, is the nearest).
-  const top = cameThroughTop(moving, vy, topDepth, depth, time);
+  const top = cameThroughTop(moving, vy, topDepth, moving ? depth : near, time);
   if (top) return IN_TOP;
   out[F_DEPTH] = depth;
   out[F_NX] = nx;
