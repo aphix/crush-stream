@@ -665,6 +665,21 @@ export function stepFree(car: DeformableCar, dt: number): boolean {
   return landed;
 }
 
+/**
+ * Whether an up push at arm `r` leaves contact `n`'s closing to fall: the push's pitch (about the body's lateral axis, `_e`'s first
+ * column, which `wheelsAt` set) and the closing that pitch adds at the point agree in sign. A tread pair's roll and yaw cancel and their
+ * pitches add: under and ahead of the centre on a steep face (a monster's rear treads as it tips over a kicker's lip) the pair's push
+ * pitched both back in and their solve fed itself.
+ */
+function pitchHolds(r: THREE.Vector3, n: THREE.Vector3): boolean {
+  const ax = _e[0]!;
+  const ay = _e[1]!;
+  const az = _e[2]!;
+  const push = az * r.x - ax * r.z;
+  const closes = ax * (r.y * n.z - r.z * n.y) + ay * (r.z * n.x - r.x * n.z) + az * (r.x * n.y - r.y * n.x);
+  return push * closes >= 0;
+}
+
 function stepFreeBody(car: DeformableCar, dt: number): boolean {
   const q = car.group.quaternion;
   const pos = car.group.position;
@@ -740,7 +755,11 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     HUB[n] = false;
     MU[n] = MU_TYRE;
     OWN[n] = own;
-    DIR[n] = N[n]!.y >= CLIMB_NY ? UP : N[n]!;
+    // Up while it lifts the tread off the face (`pitchHolds`, and alone its whole spin adds to the lift: a lone tread under a rolled
+    // monster's high centre on a slope rolled it back in, and on until it flew), else along the face's normal.
+    const climb = N[n]!.y >= CLIMB_NY && pitchHolds(R[n]!, N[n]!);
+    if (climb) reach(n, UP, N[n]!, q, false);
+    DIR[n] = climb && 1 / _s[S_REACH]! >= N[n]!.y ? UP : N[n]!;
     UNDER[n] = false;
     FOLLOW[n] = own >= 0 ? hit[o + C_AUX]! : 1;
     SLOT[n] = surf.slot(own, N[n]!, false, q, FOLLOW[n]!);

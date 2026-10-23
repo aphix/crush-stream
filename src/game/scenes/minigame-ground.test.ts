@@ -55,6 +55,7 @@ const LONG_JUMP_REACH_X = -1.5;
 /** The slowest (m/s) any class may carry through the high jump's last stretch, below its bar. */
 const CLIMB_STALL_ALLOWANCE = 1;
 
+
 /** The dummy's frame of reference: the ragdoll steps at the render frame, and a part's centre may sit this far (m) inside a solid before it is called through it. */
 const RAGDOLL_FRAME = 1 / FRAME_HZ;
 const SOAK = 0.15;

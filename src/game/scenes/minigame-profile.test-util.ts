@@ -39,7 +39,7 @@ export const MINIMUM_SPEED: Readonly<Record<MinigameMode, Readonly<Record<string
     sedan: { foot: 31, lip: 26.5 },
     muscle: { foot: 34, lip: 29.5 },
     truck: { foot: 31, lip: 26 },
-    monster: { foot: 34.5, lip: 35 },
+    monster: { foot: 34.5, lip: 28.5 },
     police: { foot: 31, lip: 26.5 },
     hatch: { foot: 31, lip: 26.5 },
     suv: { foot: 31, lip: 26.5 },
@@ -426,6 +426,8 @@ export type BarrierHit = {
   arrivalVertical: number;
   /** The car's centre went back (m) from its furthest x after the hit: a rebound. */
   reboundDistance: number;
+  /** The car's centre's x (m) when the watch ends: past the barrier's far face when it rode over it. */
+  endX: number;
 };
 
 /** Sim seconds the car is watched after its first contact, and the wall seconds a run may last. */
@@ -463,7 +465,7 @@ export function driveToBarrier(type: DriverCar, profile: DriveProfile, startOffs
       world.pedals.set(car, input);
       return inner(slice);
     };
-    const out: BarrierHit = { ejections: 0, arrivalSpeed: 0, arrivalVertical: 0, reboundDistance: 0 };
+    const out: BarrierHit = { ejections: 0, arrivalSpeed: 0, arrivalVertical: 0, reboundDistance: 0, endX: 0 };
     world.onEject = () => {
       out.ejections++;
     };
@@ -485,6 +487,7 @@ export function driveToBarrier(type: DriverCar, profile: DriveProfile, startOffs
         out.reboundDistance = Math.max(out.reboundDistance, furthestX - car.group.position.x);
       }
     }
+    out.endX = car.group.position.x;
     return out;
   } finally {
     car.dispose();

@@ -37,6 +37,7 @@ import {
   type LongJumpDesign,
   MINIMUM_SPEED,
 } from "./minigame-profile.test-util.ts";
+import { BARRIER_HALF } from "../contact/sat.ts";
 import { RANGE } from "./range.ts";
 
 /** High jump: the least ballistic apex (m above the lip) any driver car's unboosted throw must reach at full throttle: every class gets over several boards. */
@@ -52,6 +53,7 @@ const PARKED_SLIDE_LIMIT = 0.5;
 const PARKED_HOLD_DEGREES = 20;
 /** The slowest (m/s) any class may carry through the climb's last stretch, below its bar: it never stalls. */
 const CLIMB_STALL_ALLOWANCE = 1;
+
 
 function table(rows: readonly (readonly [string, ClimbRun])[]): string {
   return rows.map(([label, run]) => `${label.padEnd(9)} reached ${run.reachedLip} foot ${run.footSpeed.toFixed(1)} lip nose ${run.lipSpeed.toFixed(1)} centre ${run.lipCentreSpeed.toFixed(1)} slowest ${run.slowestOnClimb.toFixed(1)} m/s`).join("\n");
@@ -219,13 +221,13 @@ describe("given each of the 7 car types parked on the pad of each station and re
 describe("given the high jump's kicker made steeper, an arc of the shipped radius", () => {
   /**
    * The sweep's pitches (deg), and the speed (m/s) under which a car is called to have lost the climb at the lip: the plan's lowest lip speed.
-   * The sweep stops at 80°: past it the face bears under cos 80° = 17 % of the car's weight, and the tyres' drive fades with what the surface
-   * carries (`standingBite`), so an 85° face is a wall by the drive model (the sedan reaches its lip at 12 m/s).
+   * The sweep stops at the steepest 5° step the sedan still climbs over that speed: one step steeper the face bears too little of the car's
+   * weight for the tyres' drive (`standingBite`), and the next pitch is a wall by the drive model.
    */
-  const SWEEP_DEGREES = [HIGH_JUMP_KICKER.lipPitchDegrees, 65, 70, 75, 80];
+  const SWEEP_DEGREES = [HIGH_JUMP_KICKER.lipPitchDegrees, 65, 70, 75];
   const LIP_SPEED_FLOOR = 17;
-  /** A radius (m) tight enough to cliff the sedan's climb (the old 20 m did the platform sedan's; the sedan's own higher keel clears it). */
-  const TIGHT_RADIUS = 9;
+  /** The largest radius (m), in 5 m steps under the shipped one, at which the sedan reaches the shipped pitch's lip under its bar. */
+  const TIGHT_RADIUS = 15;
   const sedan = DRIVER_CARS.find((type) => type.id === "sedan")!;
 
   it("when every car type climbs each pitch, then all reach the lip at any of them (no tyre treats the face as a wall) and the sedan's lip speed falls with the pitch yet stays over the floor even at the steepest", (t) => {
@@ -244,17 +246,17 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
     assert.ok(sedanCentre[sedanCentre.length - 1]! >= LIP_SPEED_FLOOR, `the sedan's lip speed at the steepest swept pitch ${sedanCentre[sedanCentre.length - 1]}: the climb has no wall in the sweep`);
   });
 
-  it(`when a tight radius of ${TIGHT_RADIUS} m is swept to the same steepest pitch, then the sedan's lip speed is under the floor: the floor row can fail`, () => {
-    const steepest = SWEEP_DEGREES[SWEEP_DEGREES.length - 1]!;
-    const run = driveToLip(sedan, highJumpVariant(TIGHT_RADIUS, steepest, RUN_UP_LENGTH.highJump), FINE_CELL);
-    assert.ok(run.lipCentreSpeed < LIP_SPEED_FLOOR, `tight-radius sedan at ${steepest} deg: ${run.lipCentreSpeed}`);
+  it("when the shipped radius is swept one 5° step past the steepest pitch, then the sedan's lip speed is under the floor: the floor row can fail", () => {
+    const past = SWEEP_DEGREES[SWEEP_DEGREES.length - 1]! + 5;
+    const run = driveToLip(sedan, highJumpVariant(HIGH_JUMP_KICKER.radius, past, RUN_UP_LENGTH.highJump), FINE_CELL);
+    assert.ok(run.reachedLip && run.lipCentreSpeed < LIP_SPEED_FLOOR, `sedan at ${past} deg: ${run.lipCentreSpeed}, reached ${run.reachedLip}`);
   });
 
-  it(`when the shipped pitch is given a tight radius of ${TIGHT_RADIUS} m, then the sedan reaches the lip under the speed the shipped kicker gives it: the climb row can fail`, () => {
+  it("when the shipped pitch is given a radius of 15 m, then the sedan reaches the lip under the speed the shipped kicker gives it: the climb row can fail", () => {
     const shipped = driveToLip(sedan, stationDriveProfile("highJump"), FINE_CELL);
     const tighter = driveToLip(sedan, highJumpVariant(TIGHT_RADIUS, HIGH_JUMP_KICKER.lipPitchDegrees, RUN_UP_LENGTH.highJump), FINE_CELL);
     assert.ok(shipped.lipCentreSpeed >= MINIMUM_SPEED.highJump.sedan!.lip, "shipped meets its bar");
-    assert.ok(tighter.lipCentreSpeed < MINIMUM_SPEED.highJump.sedan!.lip, `the tight radius gives ${tighter.lipCentreSpeed}`);
+    assert.ok(tighter.reachedLip && tighter.lipCentreSpeed < MINIMUM_SPEED.highJump.sedan!.lip, `a ${TIGHT_RADIUS} m radius gives ${tighter.lipCentreSpeed}, reached ${tighter.reachedLip}`);
   });
 
   it("when the sweep's builder is given the shipped numbers, then its floor is the shipped floor", () => {
@@ -286,10 +288,13 @@ describe("given each of the 7 car types released at full throttle from the high 
   /** The mid run's lip speed is this share of the full-throttle one, within this share. */
   const MID_SHARE = 0.7;
   const MID_SHARE_TOLERANCE = 0.03;
-  /** The mutations the apex rows must fail: a kicker too shallow to throw high (deg), and the old radius (m) at a steeper pitch (deg), where its sedan family cliffs. */
+  /**
+   * The mutations the apex rows must fail: a kicker too shallow to throw high (deg), and one tight and steep enough (radius m, pitch deg)
+   * that the sedan family's climb cliffs while the monster's tyres carry it, found by a sweep of radius, pitch and run-up.
+   */
   const SHALLOW_DEGREES = 36;
-  const OLD_RADIUS = 20;
-  const OLD_RADIUS_STEEPER_DEGREES = 65;
+  const CLIFF_RADIUS = 3;
+  const CLIFF_DEGREES = 85;
   const shipped = flightsOn(stationDriveProfile("highJump"));
 
   it("when each is thrown at the shipped kicker's lip, then every class's unboosted apex is at least the minimum", (t) => {
@@ -301,11 +306,11 @@ describe("given each of the 7 car types released at full throttle from the high 
     assert.ok(spreadOf(shipped) <= MOST_SPREAD, `best over worst apex ${spreadOf(shipped)}`);
   });
 
-  it("when the shipped radius is given a shallow pitch, then a class is under the minimum apex; and when the old radius is given a steeper one, then the ratio is over 4: the apex rows can fail", () => {
+  it("when the shipped radius is given a shallow pitch, then a class is under the minimum apex; and when a 3 m radius is given 85 degrees, then the ratio is over 4: the apex rows can fail", () => {
     const shallow = flightsOn(highJumpVariant(HIGH_JUMP_KICKER.radius, SHALLOW_DEGREES, RUN_UP_LENGTH.highJump));
-    const cliffed = flightsOn(highJumpVariant(OLD_RADIUS, OLD_RADIUS_STEEPER_DEGREES, RUN_UP_LENGTH.highJump));
+    const cliffed = flightsOn(highJumpVariant(CLIFF_RADIUS, CLIFF_DEGREES, RUN_UP_LENGTH.highJump));
     assert.ok(Math.min(...apexesOf(shallow)) < HIGH_JUMP_MIN_APEX, `${SHALLOW_DEGREES} degrees: ${apexesOf(shallow).join(", ")}`);
-    assert.ok(spreadOf(cliffed) > MOST_SPREAD, `old radius at ${OLD_RADIUS_STEEPER_DEGREES} degrees: ratio ${spreadOf(cliffed)}`);
+    assert.ok(spreadOf(cliffed) > MOST_SPREAD, `a ${CLIFF_RADIUS} m radius at ${CLIFF_DEGREES} degrees: ratio ${spreadOf(cliffed)}`);
   });
 
   it("when each is governed to about 70 percent of its full-throttle lip speed, then it still reaches the lip, at that speed, and flies lower and shorter than at full throttle", (t) => {
@@ -397,16 +402,21 @@ describe("given the long jump's thrown driver, the best car type (the monster tr
 describe("given each of the 7 car types released at full throttle from the long jump's hilltop into the jersey barrier, from 5 start phases (the pad's start moved 0 to 0.55 m, so each slice meets the barrier differently)", () => {
   /** The lowest arrival speed (m/s) at which any class was not thrown while a running car's barrier hit threw only once it packed the block, in a sweep of 20 start phases over speed caps 24 to 34 m/s on the pre-retune long jump (the truck, 31.4; nothing below failed): the shipped window keeps its margin under it, though the hit now throws by the speed it lost (`ejection.ts`). */
   const LOWEST_FAILING_ARRIVAL = 31.4;
-  /** The slowest arrival speed (m/s) every class is thrown at, at every start phase: at 19.6 the monster is not thrown, at 20.57 it is (the sweep's other classes were thrown at 19.6 already). */
-  const MINIMUM_EJECTING_ARRIVAL = 20.5;
+  /** The slowest arrival speed (m/s) every class but the monster is thrown at, at every start phase: the truck's, the last of them thrown. */
+  const MINIMUM_EJECTING_ARRIVAL = 17.6;
+  /** The monster's: under it the monster rides over the barrier on its tyres (its keel clears the top) and its driver stays in. */
+  const MONSTER_EJECTING_ARRIVAL = 22.5;
   /** The arrival speeds are kept this far (m/s) inside that window, on each side. */
   const SAFETY_MARGIN = 3;
-  const ARRIVAL_FLOOR = MINIMUM_EJECTING_ARRIVAL + SAFETY_MARGIN;
+  /** A class's window floor: its slowest ejecting arrival and the margin. */
+  const floorOf = (id: string): number => (id === "monster" ? MONSTER_EJECTING_ARRIVAL : MINIMUM_EJECTING_ARRIVAL) + SAFETY_MARGIN;
   const ARRIVAL_CEILING = LOWEST_FAILING_ARRIVAL - SAFETY_MARGIN;
   const START_PHASES = [0, 0.13, 0.27, 0.41, 0.55];
-  /** The speed caps (m/s) the minimum-ejecting pin holds the monster to: under, and over, `MINIMUM_EJECTING_ARRIVAL`. */
-  const SLOW_CAP = 20;
-  const FAST_ENOUGH_CAP = 21;
+  /** The speed caps (m/s) the minimum-ejecting pins hold a car to: under, and over, its slowest ejecting arrival. */
+  const SLOW_CAP = 17;
+  const FAST_ENOUGH_CAP = 18.5;
+  const MONSTER_SLOW_CAP = 22.4;
+  const MONSTER_FAST_CAP = 23.2;
   /** The pre-retune approach: the start hill 24 m, the run-up 36 m, the incline 24 m and the crest's radius 180 m. */
   const PRE_RETUNE: LongJumpDesign = { hillLength: 24, runUp: 36, inclineLength: 24, crestRadius: 180 };
   const shipped: LongJumpDesign = { hillLength: START_HILL_LENGTH.longJump, runUp: RUN_UP_LENGTH.longJump, inclineLength: LONG_JUMP_INCLINE.length, crestRadius: LONG_JUMP_INCLINE.crestRadius };
@@ -427,11 +437,11 @@ describe("given each of the 7 car types released at full throttle from the long 
   const shippedHits = hitsOf(longJumpVariant(shipped), Infinity);
 
   it("when each is released at full throttle on the shipped approach, then every class is thrown exactly once at every phase, the slowest arrives at least 3 m/s over the slowest speed it throws at and the fastest at least 3 m/s under the lowest it fails at", (t) => {
-    t.diagnostic(`shipped approach (hill ${shipped.hillLength} m, run-up ${shipped.runUp} m, incline ${shipped.inclineLength} m, crest radius ${shipped.crestRadius} m), window ${ARRIVAL_FLOOR} to ${ARRIVAL_CEILING.toFixed(1)} m/s:\n${hitTable(shippedHits)}`);
+    t.diagnostic(`shipped approach (hill ${shipped.hillLength} m, run-up ${shipped.runUp} m, incline ${shipped.inclineLength} m, crest radius ${shipped.crestRadius} m), window ${floorOf("sedan")} (the monster ${floorOf("monster")}) to ${ARRIVAL_CEILING.toFixed(1)} m/s:\n${hitTable(shippedHits)}`);
     for (const { id, hits } of shippedHits) {
       for (const [index, hit] of hits.entries()) {
         assert.equal(hit.ejections, 1, `${id} at phase ${START_PHASES[index]}: ${hit.ejections} throws (arrival ${hit.arrivalSpeed})`);
-        assert.ok(hit.arrivalSpeed >= ARRIVAL_FLOOR, `${id} arrives at ${hit.arrivalSpeed}, under ${ARRIVAL_FLOOR}`);
+        assert.ok(hit.arrivalSpeed >= floorOf(id), `${id} arrives at ${hit.arrivalSpeed}, under ${floorOf(id)}`);
         assert.ok(hit.arrivalSpeed <= ARRIVAL_CEILING, `${id} arrives at ${hit.arrivalSpeed}, over ${ARRIVAL_CEILING}`);
       }
     }
@@ -444,12 +454,20 @@ describe("given each of the 7 car types released at full throttle from the long 
     assert.ok(fastest(old) > ARRIVAL_CEILING, `the old fastest arrival ${fastest(old)}`);
   });
 
-  it("when the monster is held to 20 m/s and to 21 m/s on the shipped approach, then it is not thrown at any phase under the slowest ejecting speed and is thrown once at every phase over it", () => {
-    const slow = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, SLOW_CAP));
-    const fast = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, FAST_ENOUGH_CAP));
+  it("when the monster is held to 22.4 m/s and to 23.2 m/s on the shipped approach, then under its slowest ejecting speed it rides over the barrier on its tyres at every phase, its driver in, and over it is thrown once at every phase", () => {
+    const slow = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, MONSTER_SLOW_CAP));
+    const fast = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, MONSTER_FAST_CAP));
+    const read = (hits: readonly BarrierHit[]): string => hits.map((hit) => `${hit.arrivalSpeed.toFixed(2)}/${hit.ejections} at x ${hit.endX.toFixed(1)}`).join(" ");
+    assert.ok(slow.every((hit) => hit.arrivalSpeed < MONSTER_EJECTING_ARRIVAL && hit.ejections === 0 && hit.endX > BARRIER_HALF.x), `held to ${MONSTER_SLOW_CAP}: ${read(slow)}`);
+    assert.ok(fast.every((hit) => hit.arrivalSpeed >= MONSTER_EJECTING_ARRIVAL && hit.ejections === 1), `held to ${MONSTER_FAST_CAP}: ${read(fast)}`);
+  });
+
+  it("when the truck is held to 17 m/s and to 18.5 m/s on the shipped approach, then it is not thrown at any phase under the slowest ejecting speed and is thrown once at every phase over it", () => {
+    const slow = START_PHASES.map((phase) => driveToBarrier(truck, longJumpVariant(shipped), phase, SLOW_CAP));
+    const fast = START_PHASES.map((phase) => driveToBarrier(truck, longJumpVariant(shipped), phase, FAST_ENOUGH_CAP));
     assert.ok(slow.every((hit) => hit.arrivalSpeed < MINIMUM_EJECTING_ARRIVAL && hit.ejections === 0), `held to ${SLOW_CAP}: ${slow.map((hit) => `${hit.arrivalSpeed.toFixed(2)}/${hit.ejections}`).join(" ")}`);
     assert.ok(fast.every((hit) => hit.arrivalSpeed >= MINIMUM_EJECTING_ARRIVAL && hit.ejections === 1), `held to ${FAST_ENOUGH_CAP}: ${fast.map((hit) => `${hit.arrivalSpeed.toFixed(2)}/${hit.ejections}`).join(" ")}`);
-    assert.ok(slowest(shippedHits) >= ARRIVAL_FLOOR, "the slowest class on the shipped approach is over the floor");
+    assert.ok(slowest(shippedHits) >= floorOf("sedan"), "the slowest class on the shipped approach is over the floor");
   });
 
   it("when the truck is held to 32 m/s at start phase 0.55 on the pre-retune approach, then it arrives at the old lowest failing speed and is thrown: the barrier hit throws by the speed it lost, its block packed or not", () => {

@@ -357,6 +357,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * a mirror is met at its drawn seat and heights and folds only until its tip clears the striker, a striker above a car's shoulder
  * meets the body only where it stands at those heights, and two cars side by side read each other's own mirror tips; a door's hinge detent
  * holds it against the same car-frame jostle whatever its length.
+ * A tyre climbing a steep face pushes its car straight up only while that push lifts its tread off the face (else along the face): a monster
+ * no longer leaves a kicker's lip, or a slope on one tyre, at over 100 m/s up, and every car climbs a kicker's last metres differently.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
