@@ -359,6 +359,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * holds it against the same car-frame jostle whatever its length.
  * A tyre climbing a steep face pushes its car straight up only while that push lifts its tread off the face (else along the face): a monster
  * no longer leaves a kicker's lip, or a slope on one tyre, at over 100 m/s up, and every car climbs a kicker's last metres differently.
+ * A wreck rising out of the ground counts its second of rest while it rises and sleeps once it is out: one sunk a few centimetres sleeps
+ * as soon as it would on the road, one sunk deep stays awake until it is out.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 157 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
