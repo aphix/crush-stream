@@ -70,7 +70,7 @@ export class StackRig {
 
 const _support = new THREE.Vector3();
 /** The world point over the middle of `car`'s roof (y is its origin's): every style's roof sits behind its belly pan, so a car above stands over it, not over the lower car's origin. */
-export function roofSupport(car: DeformableCar): THREE.Vector3 {
+function roofSupport(car: DeformableCar): THREE.Vector3 {
   const [rear, front] = car.style.roofZ;
   return _support.set(0, 0, 0.5 * (rear + front)).applyQuaternion(car.group.quaternion).add(car.group.position);
 }

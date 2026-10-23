@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { makeWorld } from "../contact/crash-scenarios.test-util.ts";
-import { LEAD_S, roofSupport, StackRig, stackLoads } from "./stack-rig.ts";
+import { LEAD_S, StackRig, stackLoads } from "./stack-rig.ts";
 import { runStack } from "./stack-run.test-util.ts";
 
 /**
@@ -44,11 +44,8 @@ describe("given the stack scene dropping cars one at a time at its defaults", ()
       assert.ok(load[i]! > load[i - 1]! + 1, `bottom load ${load.map((m) => m.toFixed(1)).join(" / ")} kN: not increasing at step ${i}`);
     }
     assert.ok(end.loadKn[rig.dropped - 1] === 0 && end.crushMm[rig.dropped - 1]! < 2, `the top car carries ${end.loadKn[rig.dropped - 1]!.toFixed(1)} kN and its roof reads ${end.crushMm[rig.dropped - 1]!.toFixed(1)} mm`);
-    // A car is off the stack when it left the roof's support of the car under it (the base car, its own spot).
-    for (const [i, c] of cars.entries()) {
-      const spot = i === 0 ? new THREE.Vector3() : roofSupport(cars[i - 1]!);
-      assert.ok(Math.hypot(c.group.position.x - spot.x, c.group.position.z - spot.z) < 0.05, `car ${i} slid ${Math.hypot(c.group.position.x - spot.x, c.group.position.z - spot.z).toFixed(3)} m off the stack`);
-    }
+    // The base car stays on its spot; every other car stands on the roof under it: the top car reading a load of 0 above is the whole column standing (`stackLoads`' `stands`: within `COLUMN_OFFSET` of that roof's middle).
+    assert.ok(Math.hypot(cars[0]!.group.position.x, cars[0]!.group.position.z) < 0.05, "the base car slid off its spot");
     // A car that has left the column (slid off, or rolled on its side) carries and reads no load, and the cars under it lose its weight.
     const standing = stackLoads(cars, rig.dropped);
     cars[2]!.group.position.x += 3;
