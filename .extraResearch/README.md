@@ -51,6 +51,9 @@ Treat model-written prose as leads, not facts; cite the listed sources.
 | `perplexity/2026-10-23-monster-truck-shock-damping.md` | Monster truck mass ~12,000 lb, tyre+wheel 645 lb per corner, planetary hub ~140 lb, unsprung ~1,200–1,500 lb vs sprung ~1,500–1,800 lb per corner (estimates), two N2 shocks per corner at 250–450 psi (CarMonsterRide) |
 | `perplexity/2026-10-23-monster-truck-rollover-wheels.md` | Where a rolled monster truck's wheels sit: loaded corners tuck up to the bump stops, unloaded ones hang on straps; on the roof the cage carries the weight and the tyres stand away from the body (CarMonsterRide) |
 | `perplexity/2026-10-23-monster-truck-pitch-roll.md` | Monster truck body motion (video estimates): squat 2–5°, dive 2–4°, roll 3–7°; a landing settles in 0.8–1.5 s with 1–2 major cycles (CarMonsterRide) |
+| `perplexity/2026-10-23-monster-truck-wheel-separation.md` | Monster Jam wheel loss: no public frequency or teardown data; one documented case was a sheared six-bolt wheel restraint; planetary hubs from heavy military/commercial axles; no published hub/stud ratings (CarMonsterRide) |
+| `perplexity/2026-10-23-passenger-car-wheel-separation.md` | Sedan suspension failure loads (engineering-order estimates): ball joint 25–60 kN, control arm 30–80 kN, knuckle 50–120 kN, tie rods 15–45 kN; IIHS small overlap 64 km/h, 25 %; no detachment rate published (CarMonsterRide) |
+| `perplexity/2026-10-23-monster-truck-vs-sedan-wheel-mass.md` | Monster Jam tyre ~211 kg, tyre+wheel ~293 kg, with planetary hub ~350–410 kg per corner, gross ~5,443 kg (3.6× a 1,500 kg sedan); sedan wheel+tyre 16–25 kg, unsprung ~40 kg per corner (CarMonsterRide) |
 
 ## Papers (`papers/`)
 
