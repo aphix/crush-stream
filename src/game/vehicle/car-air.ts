@@ -272,8 +272,8 @@ export function solveRows(n: number): void {
       give(c, v, w, q, _fd.divideScalar(fj), surf);
     }
     for (let c = 0; c < n; c++) if (FIRST[c] === c) SUMF[c] = 0;
-    // A contact's belly follows `FOLLOW` of the face's crush, so the work it does on the face is its impulse times that: the budget meets the weighted sum.
-    for (let c = 0; c < n; c++) if (FIRST[c]! >= 0) SUMF[FIRST[c]!] = SUMF[FIRST[c]!]! + ACC[c]! * FOLLOW[c]!;
+    // The face's crush grows by pen/follow, so a contact's dynamic impulse does only `FOLLOW` of its crush's work on the face (virtual work): the budget meets that. The weight a contact bears (`RIMP`) stays at the law's force, so one car's weight still settles a roof at the law's depth.
+    for (let c = 0; c < n; c++) if (FIRST[c]! >= 0) SUMF[FIRST[c]!] = SUMF[FIRST[c]!]! + RIMP[c]! + DYN[c]! * FOLLOW[c]!;
     for (let c = 0; c < n; c++) {
       const f = FIRST[c]!;
       if (f < 0) continue;
@@ -1013,7 +1013,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     for (let k = 0; k < c; k++) if (SOFT[k] && SLOT[k] === s) seen = true;
     if (seen) continue;
     let sum = 0;
-    for (let k = c; k < tyres; k++) if (SOFT[k] && SLOT[k] === s) sum += ASK[k]! * FOLLOW[k]!;
+    for (let k = c; k < tyres; k++) if (SOFT[k] && SLOT[k] === s) sum += ASK[k]!;
     if (sum === 0) continue;
     const share = surf.take(s, sum, G, dt) / sum;
     for (let k = c; k < tyres; k++) if (SOFT[k] && SLOT[k] === s) ASK[k] = ASK[k]! * share;
