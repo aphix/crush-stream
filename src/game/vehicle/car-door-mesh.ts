@@ -13,8 +13,6 @@ import { CABIN_TRIM, PRIMER_ATTRIBUTE } from "./constants.ts";
 const DOOR_PROUD = 0.003;
 /** The door skin is a slab this thick (m) on average: its flat inner face stands this far inboard of the outer face's mean x, so it carries none of the side's waves. */
 const DOOR_THICKNESS = 0.05;
-/** The cage's door slab (m): thick enough that its inner face reaches inside the cage's own side at door heights, so no gap lies behind the face a side hit meets. */
-export const CAGE_DOOR_THICKNESS = 0.25;
 /** The skin covers the door cut with this much (m) past each end. */
 const DOOR_SKIN_OVERLAP = 0.02;
 /** The skin's face meets the body side at each cut end and stands `DOOR_PROUD` proud this far (m) inside it, so the hinge and latch slices read as shut lines, not steps. */
@@ -257,10 +255,10 @@ export function drawnDoorCard(sign: number): THREE.BufferGeometry {
 /**
  * Door skin in hinge-local space (parent at the A-pillar hinge, the skin centred on the door cut). The outer face
  * follows the body side (`sideX`) at each height and station, its rows on the body ring's side rows so its facets
- * meet the body's at each cut, and rolls over its perimeter in a rounded edge into a slab `thickness` (m, the drawn `DOOR_THICKNESS` by default; the cage's
- * is `CAGE_DOOR_THICKNESS`) thick inboard, closed by a flat inner face.
+ * meet the body's at each cut, and rolls over its perimeter in a rounded edge into a slab `DOOR_THICKNESS` thick
+ * inboard, closed by a flat inner face.
  */
-export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN, thickness = DOOR_THICKNESS): THREE.BufferGeometry {
+export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN): THREE.BufferGeometry {
   const grid = doorGrid(style);
   const { h, halfLength, skinLength, rows, columns } = grid;
   const positions: number[] = [];
@@ -297,7 +295,7 @@ export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN, thickne
     }
   }
   const loop = gridPerimeter(columns.length, rows.length);
-  const slabX = outerX.reduce((sum, x) => sum + x, 0) / outerX.length - thickness;
+  const slabX = outerX.reduce((sum, x) => sum + x, 0) / outerX.length - DOOR_THICKNESS;
   const slabEdge = loop.map((faceVertex, k) => {
     positions.push(sign * slabX, positions[faceVertex * 3 + 1]!, positions[faceVertex * 3 + 2]!);
     uvs.push(uvs[faceVertex * 2]!, uvs[faceVertex * 2 + 1]!);
