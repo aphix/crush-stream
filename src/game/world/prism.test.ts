@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { armSolids, C_DEPTH, C_H, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, MOUNT, pointContact, PQ_BODY, PQ_MOUNT, PQ_SIZE, PQ_VX, PQ_VZ, PQ_X, PQ_Y, PQ_Z, STEP_MAX, Surface, WALL } from "./surfaces.ts";
+import { armSolids, C_DEPTH, C_H, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, MOUNT, pointContact, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VZ, PQ_X, PQ_Y, PQ_Z, STEP_MAX, Surface, WALL } from "./surfaces.ts";
 import "./ground.ts";
 import { CLASSES, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import { carFrame } from "../vehicle/car-rig.ts";
@@ -20,14 +20,13 @@ function solids(...specs: Parameters<Surface["addPrism"]>[0][]): Surface {
 const q = new Float64Array(PQ_SIZE);
 const out = new Float64Array(HIT_SIZE);
 
-function ask(x: number, y: number, z: number, vx = 0, vz = 0, body = false, mount = 0): Float64Array {
+function ask(x: number, y: number, z: number, vx = 0, vz = 0, body = false): Float64Array {
   q[PQ_X] = x;
   q[PQ_Y] = y;
   q[PQ_Z] = z;
   q[PQ_VX] = vx;
   q[PQ_VZ] = vz;
   q[PQ_BODY] = body ? 1 : 0;
-  q[PQ_MOUNT] = mount;
   pointContact(q, -1, out);
   return out;
 }
@@ -170,23 +169,6 @@ describe("given the step a tyre mounts", () => {
   it("when it is derived from the classes then it is the biggest tyre's share of its radius", () => {
     const biggest = Math.max(...CAR_STYLE_IDS.map((id) => carFrame(CAR_STYLES[id]).rig.tyre.r * CLASSES[STYLE_CLASS[id]].wheelScale));
     assert.ok(Math.abs(STEP_MAX - MOUNT * biggest) < 1e-9, `${STEP_MAX} against ${MOUNT * biggest}`);
-  });
-
-  it("when a sedan's tyre and a monster's are asked at the same point 0.12 m under a box prism's top, then the sedan's own mount reads a side and the monster's a floor, and a body point is not changed by a mount", () => {
-    const mountOf = (id: "sedan" | "monster") => MOUNT * carFrame(CAR_STYLES[id]).rig.tyre.r * CLASSES[STYLE_CLASS[id]].wheelScale;
-    const sedan = mountOf("sedan");
-    const monster = mountOf("monster");
-    solids(BOX);
-    const y = 1 - 0.12;
-    const sedanHit = ask(0.9, y, 0, 0, 0, false, sedan)[C_H];
-    assert.equal(sedanHit, -Infinity, `sedan mount ${sedan}: read ${sedanHit}`);
-    const monsterHit = ask(0.9, y, 0, 0, 0, false, monster)[C_H];
-    assert.equal(monsterHit, 1, `monster mount ${monster}: read ${monsterHit}`);
-    const bare = ask(0.9, y, 0, 0, 0, true);
-    const bareRead = [bare[C_H], bare[C_NY], bare[C_DEPTH]].join();
-    const mounted = ask(0.9, y, 0, 0, 0, true, monster);
-    assert.equal([mounted[C_H], mounted[C_NY], mounted[C_DEPTH]].join(), bareRead, `body point with the monster's mount ${monster}`);
-    armSolids(null);
   });
 
   it("when prisms are listed near a point then each one is listed once, and the ones far away are not", () => {

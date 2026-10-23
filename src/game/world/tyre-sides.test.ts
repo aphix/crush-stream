@@ -70,28 +70,6 @@ describe("given a monster driven square into the range's slab, its body's keel o
   }
 });
 
-describe("given a sedan driven square into the range's slab", () => {
-  for (const speed of SPEEDS) {
-    it(`when it meets the slab at ${speed} m/s, then it does not mount it: its tyres never stand on the slab's top`, () => {
-      let highest = -Infinity;
-      let frame = -1;
-      strikeSink("barrier", "sedan", speed, 0, (f, _sink, car) => {
-        for (const [i, wheel] of car.wheels.entries()) {
-          if (car.deform.hubPopped(HUBS[i]!)) continue;
-          wheel.getWorldPosition(_hub);
-          const foot = _hub.y - car.frame.rig.tyre.r * wheel.scale.x;
-          if (Math.abs(_hub.x) > BARRIER_HALF.x || Math.abs(_hub.z) > BARRIER_HALF.z || foot < BARRIER_TOP - 0.02) continue;
-          if (foot > highest) {
-            highest = foot;
-            frame = f;
-          }
-        }
-      });
-      assert.equal(highest, -Infinity, `${speed} m/s: a tyre stood on the slab's top at frame ${frame}, its foot ${highest} m`);
-    });
-  }
-});
-
 /** How far apart (drivetrain health, 0 … 1) two hits of the same equivalent barrier speed may end: `solid-parity.test.ts`'s band for a solid's crush against the slab's. */
 const HEALTH_BAND = 0.2;
 

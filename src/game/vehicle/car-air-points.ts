@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import type { LooseShape } from "./car-core.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, MOUNT, MU_TYRE, patchOf, pointContact, pointContactHeld, pointContactNear, pointContactSolids, PQ_BODY, PQ_MOUNT, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, topsTop, topsTopLive, topsTopNear, wheelContact, type Surface } from "../world/surfaces.ts";
+import { BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, MU_TYRE, patchOf, pointContact, pointContactHeld, pointContactNear, pointContactSolids, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, STEP_MAX, staticTop, topsTop, topsTopLive, topsTopNear, wheelContact, type Surface } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { G, GQ } from "../world/ground-clock.ts";
 import { CRASH, hypot2 } from "../deform/physics-util.ts";
@@ -395,7 +395,7 @@ const _hit = new Float64Array(HIT_SIZE);
 /** Each wheel's hub (world x, y, z) and tyre (radius, half-width; radius 0: no tyre, its hub popped) as `wheelsAt` last stood them. */
 const TYRE_HUB = new Float64Array(12);
 const TYRE_DIM = new Float64Array(8);
-/** A tyre point's query: the tyre's law (a face within its own `PQ_MOUNT` of the point is floor, so it climbs it; a taller one is side). */
+/** A tyre point's query: the tyre's law (a face within its mount of the point is floor, so it climbs it; a taller one is side). */
 const TYRE_PQ = new Float64Array(PQ_SIZE);
 /** Its answer: its own, so the body points' `HIT` keeps what their reads left in it (a far answer fills only part of it). */
 const TYRE_HIT = new Float64Array(HIT_SIZE);
@@ -496,13 +496,11 @@ export function readTyreSides(car: DeformableCar, n: number, stroke: number): nu
     const hy = TYRE_HUB[3 * i + 1]!;
     const hz = TYRE_HUB[3 * i + 2]!;
     const reach = r + half + travel;
-    const step = MOUNT * r;
-    const mount = hy - r + step;
+    const mount = hy - r + STEP_MAX;
     // A surface whose bound over all four tyres' boxes (`unionTops`) is under this tyre's mount is under it over its own box too: not asked.
     const solids = UNION_TOP[0]! <= mount ? -Infinity : solidTop(hx - reach, hx + reach, hz - reach, hz + reach);
     const ground = UNION_TOP[1]! <= mount ? -Infinity : staticTop(statics, hx - reach, hx + reach, hz - reach, hz + reach);
     if (Math.max(solids, ground) <= mount) continue;
-    TYRE_PQ[PQ_MOUNT] = step;
     let over = 0;
     let ox = 0;
     let oz = 0;
