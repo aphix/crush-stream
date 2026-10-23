@@ -14,7 +14,7 @@ import { COP_LOOK } from "./dummy-dress.ts";
 import type { DummyMesh } from "./ragdoll-mesh.ts";
 import { ROLE } from "./dummy-rig.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
-import { occluder, sightLine, solid, type Occluder, type Sight } from "./spectate-cam.ts";
+import { addCars, occluder, sightLine, solid, type Occluder, type Sight } from "./spectate-cam.ts";
 import { BELT_Y, SILL_Y, UNDER } from "./ragdoll-proxy.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -260,15 +260,13 @@ describe("given a head-on crash where one car is a police car", () => {
   });
 });
 
-/** The two cars as the engine's `spectateSight` sees them: upright cylinders the cinematic eye may not stand in. */
+/** The two cars as the engine's `sceneSight` sees them (`addCars`): the solids the cinematic eye may not stand in or look through. */
 function carSight(cars: readonly DeformableCar[]): () => Sight {
-  return () => ({
-    ground: FLAT_GROUND,
-    path: null,
-    wallTop: 0,
-    rim: Infinity,
-    occ: cars.map((c) => occluder(c.group.position.x, c.group.position.z, 0, c.frame.half.z, c.frame.half.z, true, c.group.position.y - 0.3, c.group.position.y + 1.6)),
-  });
+  return () => {
+    const occ: Occluder[] = [];
+    addCars(occ, cars, null);
+    return { ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ };
+  };
 }
 
 describe("given the ride-along camera following a driver thrown in a head-on at 26 m/s", () => {
