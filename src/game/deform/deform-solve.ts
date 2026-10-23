@@ -236,8 +236,10 @@ export abstract class DeformSolve extends DeformFreeze {
       // cell (to the cabin's own cap), not back into the face, which pushed it in again every clamp (50 km/h wall: door 0.299 m, band 0.12-0.28).
       const door = sideHit && (m.name === "doorL" || m.name === "doorR");
       let into = 0;
+      let packed = false;
       if (door) {
         cap = Math.min(cap, m.bands.max);
+        packed = cap === m.bands.max;
         const c = this.at.cell;
         into = (c.local.x - c.rest.x - c.baseX) * ix + (c.local.z - c.rest.z - c.baseZ) * iz;
       }
@@ -262,7 +264,8 @@ export abstract class DeformSolve extends DeformFreeze {
       if (!cabin && this.hitSpeed >= 0) {
         // Sheet metal keeps its set: only the elastic part of the crush springs back. Only a loading contact's crush sets, within its contact hold:
         // unloaded, each set's rest shift drew its mass (and the seated frame) on in, which read as more crush: a ratchet.
-        const set = along - Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * along);
+        // A door pressed onto its band's max is packed (`nodePacked`): no elastic part is left, so it rests on its cap.
+        const set = along - (packed && along >= cap ? 0 : Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * along));
         if (set > m.crushSet && this.quietTime() <= CONTACT_HOLD) {
           if (this.mode === "shape") {
             REST_SHIFT[1] = (set - m.crushSet) * ix;
