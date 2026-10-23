@@ -16,6 +16,7 @@ import { DeformableCar } from "./car.ts";
 import { panelRegions, PANEL_NAMES } from "./car-panels.ts";
 import { cageSourceOf } from "./car-cage-rig.ts";
 import { assertSameDigest, paint } from "./test-support.ts";
+import { WINDSHIELD_EDGE_STEPS, windshieldEdge } from "./windshield-edge.test-util.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { tyresUnderSkin } from "./car-suspension.ts";
 import { STYLE_CLASS } from "./vehicle-classes.ts";
@@ -735,17 +736,17 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
 
   for (const [id, style] of [...CAR_STYLE_IDS.map((id) => [id, drawnStyle(CAR_STYLES[id])] as const), ["wrapped sedan", WRAPPED_SEDAN] as const]) {
     it(`when a ${id}'s A-posts are laid along its windshield, then each laps the windshield's side edge within ${A_POST_EDGE_FOLLOW * 100} cm at every station under the roof and in side view its centre's offset from that edge varies under ${A_POST_EDGE_FOLLOW * 100} cm`, () => {
-      const glass = makeWindshield(style).getAttribute("position");
+      const last = WINDSHIELD_EDGE_STEPS;
       for (const post of makeGreenhouseFrame(style, "drawn").filter((g) => g.name === "a")) {
         const { ring, slices } = loftOf(post);
         const side = Math.sign(positionAt(post, 0).x);
-        // The pane's side edge as drawn, base to top (its 10 × 8 grid): it falls with the roof's dome toward its top.
-        const edge = Array.from({ length: 9 }, (_, j) => new THREE.Vector3().fromBufferAttribute(glass, j * 11 + (side > 0 ? 10 : 0)));
-        const run = edge[8]!.clone().sub(edge[0]!);
+        // The pane's side edge as drawn, base to top: it falls with the roof's dome toward its top, and rounds with its top corner.
+        const edge = windshieldEdge(style, side > 0 ? 1 : -1);
+        const run = edge[last]!.clone().sub(edge[0]!);
         // The edge's chord beside `p` (its first or last carried on past the pane's base or top).
         const chordAt = (p: THREE.Vector3) => {
           const k = edge.findIndex((e) => e.clone().sub(p).dot(run) >= 0);
-          const end = k < 0 ? 8 : Math.max(1, k);
+          const end = k < 0 ? last : Math.max(1, k);
           return [edge[end - 1]!, edge[end]!] as const;
         };
         const sideView = (p: THREE.Vector3) => p.clone().setX(0);
@@ -763,6 +764,30 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
       }
     });
   }
+
+  it("when a drawn windshield rounds its top corners (`windshield.round`), then the A-post's rail follows the arc: each station under the roof laps the rounded edge within the follow bar, and its top ring's front stands over 2 cm further in than a post laid along the straight edge's", () => {
+    const style = drawnStyle(CAR_STYLES.pickup);
+    assert.ok(style.windshield.round !== undefined, "the pickup's drawn windshield rounds its top corners");
+    // The post's foot starts at the belt, below the pane's base: the edge's first chord carried on down past it.
+    const edge = windshieldEdge(style, 1);
+    edge.unshift(edge[0]!.clone().addScaledVector(edge[1]!.clone().sub(edge[0]!), -WINDSHIELD_EDGE_STEPS / 2));
+    const segments = edge.slice(1).map((end, k) => new THREE.Line3(edge[k]!, end));
+    const closest = new THREE.Vector3();
+    const postOf = (laid: BodyStyle) => makeGreenhouseFrame(laid, "drawn").find((g) => g.name === "a" && positionAt(g, 0).x > 0)!;
+    const post = postOf(style);
+    const { ring, slices } = loftOf(post);
+    const section = (geo: THREE.BufferGeometry, slice: number) => Array.from({ length: ring }, (_, k) => positionAt(geo, slice * ring + k));
+    for (let slice = 0; slice < slices - 1; slice++) {
+      const lap = Math.min(...section(post, slice).map((p) => Math.min(...segments.map((segment) => segment.closestPointToPoint(p, true, closest).distanceTo(p)))));
+      assert.ok(lap <= A_POST_EDGE_FOLLOW, `station ${slice}: the post stands ${(lap * 1000).toFixed(1)} mm off the rounded edge`);
+    }
+    const frontX = (geo: THREE.BufferGeometry) => {
+      const { ring: n, slices: count } = loftOf(geo);
+      return Array.from({ length: n }, (_, k) => positionAt(geo, (count - 1) * n + k)).reduce((front, p) => (p.z > front.z ? p : front)).x;
+    };
+    const straight = postOf({ ...style, windshield: { ...style.windshield, round: undefined } });
+    assert.ok(frontX(straight) - frontX(post) > 0.02, `the top ring's front stands at x ${frontX(post).toFixed(3)}, the straight edge's post's at ${frontX(straight).toFixed(3)}`);
+  });
 
   it("when a post's section is read across depths and widths, then the chords along its depth sides are each under a third of its depth", () => {
     for (const thick of [0.03, 0.04, 0.05]) {
@@ -1383,7 +1408,8 @@ const BASELINE_BY_STYLE = [
   // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's, and its drawn twin's front roll down onto the windshield top.
   { id: "wagon", drawCalls: 13, triangles: 5152, bodyVertices: 1660 },
   { id: "coupe", drawCalls: 16, triangles: 5152, bodyVertices: 1530 },
-  { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },
+  // The pickup's re-pinned for its drawn windshield's round top corners (`windshield.round`): the A-post's rail takes two more stations a side along the arc.
+  { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1572 },
   // The police carries the sedan's quarter window (pinch ring, sail sweep ring, round end), its divider bar and its belt rail's run-on under the sail.
   { id: "police", drawCalls: 14, triangles: 5535, bodyVertices: 1587 },
   { id: "monster", drawCalls: 13, triangles: 5026, bodyVertices: 1568 },

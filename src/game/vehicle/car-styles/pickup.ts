@@ -90,8 +90,8 @@ export const PICKUP: BodyStyle = {
   aPillarFoot: 0.6,
   aPillarTop: 0.34,
   // Drawn, the glass's front edge knees onto the A-post's rear edge at the mirror head's top, so the post stays an even tube over a small black sail.
-  // Its pane's top corners stand 5 mm inside the roof dome's edge (|x| .505): the cage's 1.18 stands them out past the roof's roll.
-  drawn: { windshield: { ...PICKUP_WINDSHIELD, wTop: 1.0 }, aPillarKnee: 1.28, aPillarTop: 0.38 },
+  // Its pane's top corners stand 5 mm inside the roof dome's edge (|x| .505): the cage's 1.18 stands them out past the roof's roll; they round to .09, the A-post's rail following the arc into the roof.
+  drawn: { windshield: { ...PICKUP_WINDSHIELD, wTop: 1.0, round: 0.09 }, aPillarKnee: 1.28, aPillarTop: 0.38 },
   blackout: { sail: true },
   bPillar: { rear: -0.33, front: -0.29 },
   // The regular cab's door runs back to the side plate's seam; its glass ends at the plate's -0.29 / -0.265 behind a slim 4 cm post band; the C-post's foot meets the cab-back shoulder, as the hatchback's.

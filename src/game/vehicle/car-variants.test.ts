@@ -15,7 +15,8 @@ import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCov
 import { RAIL_LIP, RAIL_PROUD, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeRoofFittings, withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
-import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassFrames, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield, windshieldPoint, windshieldSideX } from "./car-glass.ts";
+import { windshieldEdge } from "./windshield-edge.test-util.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
 import { boxShape, newLooseShape, partMass, stepLoose } from "./loose-step.ts";
@@ -99,10 +100,14 @@ function behindWindshieldEdge(geo: THREE.BufferGeometry, style: BodyStyle): numb
 const ROOF_JOIN_M = 0.005;
 /** A drawn pane's side edge in its top three-eighths may stand this far (m) from the A-post and roof beside it: the post's chord to the roof leaves no slit along it. */
 const PANE_EDGE_STAND_M = 0.01;
+/** The pane's top edge is read at this many equal steps across, its side edge at these rises (shares of its slant), and a rounded corner's arc at these more. */
+const PANE_TOP_READS = 10;
+const PANE_EDGE_READS = [0.625, 0.75, 0.875, 1] as const;
+const PANE_ARC_READS = [0.9, 0.95, 0.98] as const;
 
 /** What of `style`'s drawn windshield top and side edge near it and A-post tops stands off its drawn roof and A-posts, one reading each. */
 function openRoofJoins(style: BodyStyle): string[] {
-  const [segX, segY] = [10, 8];
+  const { base, wBase, wTop } = style.windshield;
   const up = new THREE.Vector3(0, 1, 0);
   const ray = new THREE.Raycaster();
   const [p, n, from, closest] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
@@ -124,20 +129,18 @@ function openRoofJoins(style: BodyStyle): string[] {
     }
     return best;
   };
-  const pane = makeWindshield(style);
-  const [pos, normal] = [pane.getAttribute("position") as THREE.BufferAttribute, pane.getAttribute("normal") as THREE.BufferAttribute];
-  for (let i = 0; i <= segX; i++) {
-    const k = segY * (segX + 1) + i;
-    p.fromBufferAttribute(pos, k);
-    n.fromBufferAttribute(normal, k);
-    if (n.z < 0) n.negate();
+  // The flat pane's outward normal (the bow and the dome's fall tilt the drawn pane's under a degree); its top row ends where a rounded corner's arc does.
+  n.set(0, base[1] - style.windshieldTop[1], style.windshieldTop[0] - base[0]).normalize();
+  const topEnd = windshieldSideX(style, 1) / (wTop / 2);
+  for (let i = 0; i <= PANE_TOP_READS; i++) {
+    p.copy(windshieldPoint(style, topEnd * ((2 * i) / PANE_TOP_READS - 1), 1));
     ray.set(from.copy(p).addScaledVector(n, 1e-4), n);
     const gap = ray.intersectObject(roof, false).length > 0 ? 0 : gapTo(p, [geo]);
     if (gap > ROOF_JOIN_M) off.push(`windshield top x ${p.x.toFixed(3)}: ${(gap * 1000).toFixed(1)} mm from the drawn roof, not tucked under it`);
   }
-  for (const j of [segY - 3, segY - 2, segY - 1, segY]) {
-    for (const i of [0, segX]) {
-      p.fromBufferAttribute(pos, j * (segX + 1) + i);
+  for (const t of style.windshield.round === undefined ? PANE_EDGE_READS : [...PANE_EDGE_READS, ...PANE_ARC_READS]) {
+    for (const side of [-1, 1]) {
+      p.copy(windshieldPoint(style, (side * windshieldSideX(style, t)) / (lerp(wBase, wTop, t) / 2), t));
       const gap = gapTo(p, [geo, ...posts]);
       if (gap > PANE_EDGE_STAND_M) off.push(`windshield side edge (${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)}): ${(gap * 1000).toFixed(1)} mm from the A-post and roof`);
     }
@@ -1188,7 +1191,7 @@ describe("given a body style's H2 hardpoints", () => {
       const style = drawnStyle(plain);
       const corners = glassCorners(plain);
       const panes = [
-        { name: "windshield", top: style.windshieldTop, geo: makeWindshield(style), grid: true, segX: 10, segY: 8 },
+        { name: "windshield", top: style.windshieldTop, geo: makeWindshield(style), grid: !style.windshield.round, segX: 10, segY: 8 },
         { name: "rear glass", top: style.rearGlass.top, geo: makeRearGlass(style), grid: !style.rearGlass.frame && !style.rearGlass.round, segX: 8, segY: 6 },
       ];
       for (const [p, { name, top: [topY, topZ], geo, grid, segX, segY }] of panes.entries()) {
@@ -1232,11 +1235,9 @@ describe("given a body style's H2 hardpoints", () => {
       const [baseY, baseZ] = style.windshield.base;
       const [topY, topZ] = style.windshieldTop;
       const along = (y: number, z: number) => (y - baseY) * (topY - baseY) + (z - baseZ) * (topZ - baseZ);
-      const glass = makeWindshield(style);
-      const glassBehind = behindWindshieldEdge(glass, style);
-      const gp = glass.getAttribute("position");
-      // The pane's right column, base to top (its 10 × 8 grid).
-      const edge = Array.from({ length: 9 }, (_, j) => j * 11 + 10).map((i) => ({ s: along(gp.getY(i), gp.getZ(i)), behind: glassBehind[i]! }));
+      const edgePoints = windshieldEdge(style, 1);
+      const edgeBehind = behindWindshieldEdge(new THREE.BufferGeometry().setFromPoints(edgePoints), style);
+      const edge = edgePoints.map((q, i) => ({ s: along(q.y, q.z), behind: edgeBehind[i]! }));
       const [post] = aPillarParts(style);
       const pos = post!.getAttribute("position");
       const behind = behindWindshieldEdge(post!, style);
@@ -1250,6 +1251,25 @@ describe("given a body style's H2 hardpoints", () => {
       }
       assert.ok(proud < 0.006, `${id}: the A-post stands ${(proud * 1000).toFixed(1)} mm proud of the windshield's drawn edge`);
     }
+  });
+
+  it("when a windshield rounds its top corners (`windshield.round`), then its clear glass stands off the square top corner by the arc's cut and keeps its base corners square, and the cage's plain pane keeps its 10 x 8 grid", () => {
+    const style = drawnStyle(CAR_STYLES.pickup);
+    const { round } = style.windshield;
+    assert.ok(round !== undefined, "the pickup's drawn windshield rounds its top corners");
+    const clear = (laid: BodyStyle): THREE.Vector3[] => {
+      const geo = makeWindshield(laid);
+      const [pos, tone] = [geo.getAttribute("position"), geo.getAttribute(GLASS_ATTRIBUTE)];
+      return Array.from({ length: pos.count }, (_, i) => i).filter((i) => tone === undefined || tone.getX(i) === 0).map((i) => new THREE.Vector3().fromBufferAttribute(pos, i));
+    };
+    const nearest = (points: THREE.Vector3[], to: THREE.Vector3) => Math.min(...points.map((p) => p.distanceTo(to)));
+    const [rounded, square] = [clear(style), clear({ ...style, windshield: { ...style.windshield, round: undefined } })];
+    // A quarter circle of radius `round` in the corner leaves its middle this far (m) from the square corner, less a tenth for the pane's bow.
+    const cut = round! * (Math.SQRT2 - 1) * 0.9;
+    assert.ok(nearest(square, windshieldPoint(style, 1, 1)) < 1e-3, "the control: the square pane reaches its top corner");
+    assert.ok(nearest(rounded, windshieldPoint(style, 1, 1)) >= cut, `the rounded pane's clear glass stands ${(nearest(rounded, windshieldPoint(style, 1, 1)) * 1000).toFixed(1)} mm off the square corner, under ${(cut * 1000).toFixed(1)}`);
+    assert.ok(nearest(rounded, windshieldPoint(style, 1, 0)) < 1e-3, "its base corner stays square on the cowl");
+    assert.equal(makeWindshield(CAR_STYLES.pickup).getAttribute("position").count, 99, "the cage's pane keeps its 10 x 8 grid");
   });
 
   it("when any style's drawn rear post (no sail) is read, then its top ring lies inside the roof's z span, so the roof takes all of it down the dome: no fold where half of it stood over the roof", () => {

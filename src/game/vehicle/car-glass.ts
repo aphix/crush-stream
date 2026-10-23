@@ -20,8 +20,8 @@ export const DOOR_GLASS_SEAT = { x: -0.02, y: 0.52, z: -0.28 } as const;
 
 const _pt = new THREE.Vector3();
 
-/** A raked pane with its bow resolved, `fall`: how far (m) its point at car `x`, `t` up from the base, sits under the flat quad, and `ahead`: how far (z, m) its row `t` stands forward of it. */
-type BowedQuad = GlassQuad & { bow: GlassBow; fall: (x: number, t: number) => number; ahead?: (t: number) => number };
+/** A raked pane with its bow resolved, `fall`: how far (m) its point at car `x`, `t` up from the base, sits under the flat quad, `ahead`: how far (z, m) its row `t` stands forward of it, and `roundTop`: with `round`, only its top corners round (a windshield's base corners sit square on the cowl). */
+type BowedQuad = GlassQuad & { bow: GlassBow; fall: (x: number, t: number) => number; ahead?: (t: number) => number; roundTop?: boolean };
 
 /** Point of raked quad `q` in car space: `xn` −1…1 across, `t` 0…1 base to top, bowed along z at the centre line (none at the edges). */
 function quadPoint(q: BowedQuad, xn: number, t: number): THREE.Vector3 {
@@ -75,6 +75,16 @@ export function windshieldSideBase(style: BodyStyle): YZ {
   return [windshieldBaseY(style, 1), style.windshield.base[1]];
 }
 
+/** The windshield pane's side edge (+x half-width, m) `t` up its slant (0 base .. 1 top, carried on past the base): straight, or on its top corner's arc where `windshield.round` rounds it; the A-post's front rail follows it. */
+export function windshieldSideX(style: BodyStyle, t: number): number {
+  const { base, wBase, wTop, round } = style.windshield;
+  const half = lerp(wBase, wTop, t) / 2;
+  if (round === undefined) return half;
+  const rT = round / hypot2(style.windshieldTop[0] - base[0], style.windshieldTop[1] - base[1]);
+  const dt = THREE.MathUtils.clamp((t - 1 + rT) / rT, 0, 1);
+  return half * (1 - (2 * round * (1 - Math.sqrt(1 - dt * dt))) / Math.min(wBase, wTop));
+}
+
 /** How a raked pane is drawn: its grid (columns across, rows up), and `facing`, the way its outward normal runs along z. */
 type QuadDraw = { segX: number; segY: number; facing: 1 | -1 };
 const WINDSHIELD_DRAW: QuadDraw = { segX: 10, segY: 8, facing: 1 };
@@ -111,14 +121,14 @@ function makeGlassQuad(q: BowedQuad, { segX, segY }: QuadDraw): THREE.BufferGeom
   return geo;
 }
 
-/** The windshield's quad on `style`: its base and widths, its top edge, its bow. */
+/** The windshield's quad on `style`: its base and widths, its top edge, its bow; `windshield.round` rounds its top corners, the glass's own outline. */
 function windshieldQuad(style: BodyStyle): BowedQuad {
-  const { base, wBase, wTop, bow = WINDSHIELD_BOW, sideBow, seat } = style.windshield;
+  const { base, wBase, wTop, bow = WINDSHIELD_BOW, sideBow, seat, round } = style.windshield;
   const ahead = sideBow === undefined ? undefined : (t: number) => sideBowZ(sideBow, t);
   const dome = domeFall(style, style.windshieldTop[1]);
   // quadPoint lays x = xn * lerp(wBase, wTop, t) / 2: dividing it out gives the column's xn; the seat's drop fades to nothing at the top.
   const fall = seat !== true ? dome : (x: number, t: number) => dome(x, t) + (1 - t) * (base[0] - windshieldBaseY(style, x / (lerp(wBase, wTop, t) / 2)));
-  return { base, top: style.windshieldTop, wBase, wTop, bow, fall, ahead };
+  return { base, top: style.windshieldTop, wBase, wTop, bow, fall, ahead, ...(round === undefined ? {} : { round, roundOutline: true, roundTop: true }) };
 }
 
 /** The rear glass's quad on `style`, its bow and fall resolved. */
@@ -160,7 +170,8 @@ export function rearGlassCornerZ(style: BodyStyle, share: number): number | null
 }
 
 export function makeWindshield(style: BodyStyle = SEDAN): THREE.BufferGeometry {
-  return makeGlassQuad(windshieldQuad(style), WINDSHIELD_DRAW);
+  const quad = windshieldQuad(style);
+  return quad.round ? roundedGlass(quad, quad.round, WINDSHIELD_DRAW) : makeGlassQuad(quad, WINDSHIELD_DRAW);
 }
 
 /** A point of `style`'s windshield in car space: `xn` −1…1 across, `t` 0…1 its base to its top, on its bow and its dome's fall (a fresh vector). */
@@ -252,26 +263,27 @@ function paneGeometry(points: readonly (readonly [number, number])[], at: (s: nu
   return geo;
 }
 
-/** `round` (m) corners on `q`'s (s, t) square: the zones' lines (`ROUND_STEPS + 1` per corner), `arc` mapping a corner-square point onto its quarter circle, `rim` a corner's arc from its horizontal-edge tangent point to its vertical-edge one. */
+/** `round` (m) corners on `q`'s (s, t) square (the top ones only with `roundTop`): the zones' lines (`ROUND_STEPS + 1` per corner), `arc` mapping a corner-square point onto its quarter circle, `rim` a corner's arc from its horizontal-edge tangent point to its vertical-edge one. */
 function roundCorners(q: BowedQuad, round: number) {
   const len = hypot2(q.top[0] - q.base[0], q.top[1] - q.base[1]);
   const [rS, rT] = [round / Math.min(q.wBase, q.wTop), round / len];
+  const bottom = q.roundTop !== true;
   // A zone's lines, from its inner line out to the edge at 0 or 1.
   const zone = (r: number, edge: number) => Array.from({ length: ROUND_STEPS + 1 }, (_, k) => (edge ? 1 - r + (k * r) / ROUND_STEPS : r - (k * r) / ROUND_STEPS));
-  const lines = (n: number, r: number) => [
-    ...zone(r, 0).reverse(),
-    ...Array.from({ length: n + 1 }, (_, k) => k / n).filter((s) => s > r + 0.5 / n && s < 1 - r - 0.5 / n),
+  const lines = (n: number, r: number, low = true) => [
+    ...(low ? zone(r, 0).reverse() : [0]),
+    ...Array.from({ length: n + 1 }, (_, k) => k / n).filter((s) => s > (low ? r : 0) + 0.5 / n && s < 1 - r - 0.5 / n),
     ...zone(r, 1),
   ];
   const arc = (s: number, t: number): [number, number] => {
-    const [ds, dt] = [Math.max(rS - s, s - 1 + rS, 0) / rS, Math.max(rT - t, t - 1 + rT, 0) / rT];
+    const [ds, dt] = [Math.max(rS - s, s - 1 + rS, 0) / rS, Math.max(bottom ? rT - t : 0, t - 1 + rT, 0) / rT];
     if (ds === 0 || dt === 0) return [s, t];
     const k = Math.max(ds, dt) / hypot2(ds, dt);
     return [s < 0.5 ? rS * (1 - ds * k) : 1 - rS * (1 - ds * k), t < 0.5 ? rT * (1 - dt * k) : 1 - rT * (1 - dt * k)];
   };
   const rim = (sEdge: number, tEdge: number): [number, number][] =>
     [...zone(rS, sEdge).map((s): [number, number] => [s, tEdge]), ...zone(rT, tEdge).reverse().slice(1).map((t): [number, number] => [sEdge, t])].map(([s, t]) => arc(s, t));
-  return { rS, rT, lines, arc, rim };
+  return { rS, rT, bottom, lines, arc, rim };
 }
 
 /** The chrome bead takes every this-many'th point of a corner's arc: 34° chords on the coupe's 9 cm round (4 mm sag), which keeps the coupe under its triangle budget. */
@@ -279,14 +291,14 @@ const BEAD_ARC_STRIDE = 2;
 
 /** The rounded pane's chrome outline in (s, t), counter-clockwise from its left edge's lower tangent point: each corner's arc (`BEAD_ARC_STRIDE`), and the grid's columns along the bottom and top (the bow and the dome's fall curve them). */
 function roundedOutline(q: BowedQuad, round: number, segX: number): [number, number][] {
-  const { rS, lines, rim } = roundCorners(q, round);
+  const { rS, bottom, lines, rim } = roundCorners(q, round);
   const corner = (sEdge: number, tEdge: number) => rim(sEdge, tEdge).filter((_, k) => k % BEAD_ARC_STRIDE === 0);
   // `lines` runs the left corner zone, the columns, the right corner zone: only the columns lie between the arcs.
   const columns = lines(segX, rS).slice(ROUND_STEPS + 1, -(ROUND_STEPS + 1));
   return [
-    ...corner(0, 0).reverse(),
+    ...(bottom ? corner(0, 0).reverse() : [[0, 0] as [number, number]]),
     ...columns.map((s): [number, number] => [s, 0]),
-    ...corner(1, 0),
+    ...(bottom ? corner(1, 0) : [[1, 0] as [number, number]]),
     ...corner(1, 1).reverse(),
     ...[...columns].reverse().map((s): [number, number] => [s, 1]),
     ...corner(0, 1),
@@ -303,9 +315,9 @@ const ROUND_BACKING_INSET = 0.01;
  * `roundOutline` the fans stand `ROUND_BACKING_INSET` in behind the pane: the glass's outline is the arcs, the fans a backing.
  */
 function roundedGlass(q: BowedQuad, round: number, { segX, segY, facing }: QuadDraw): THREE.BufferGeometry {
-  const { rS, rT, lines, arc, rim: cornerRim } = roundCorners(q, round);
+  const { rS, rT, bottom, lines, arc, rim: cornerRim } = roundCorners(q, round);
   const at = (s: number, t: number) => quadPoint(q, s * 2 - 1, t);
-  const [ss, ts] = [lines(segX, rS), lines(segY, rT)];
+  const [ss, ts] = [lines(segX, rS), lines(segY, rT, bottom)];
   const row = ss.length;
   const grid: number[] = [];
   for (let j = 0; j < ts.length - 1; j++) {
@@ -316,7 +328,7 @@ function roundedGlass(q: BowedQuad, round: number, { segX, segY, facing }: QuadD
   }
   const pane = paneGeometry(ts.flatMap((t) => ss.map((s) => arc(s, t))), at, grid, 0);
   const fans = [0, 1].flatMap((sEdge) =>
-    [0, 1].map((tEdge) => {
+    (bottom ? [0, 1] : [1]).map((tEdge) => {
       const rim = cornerRim(sEdge, tEdge);
       // Counter-clockwise in (s, t), as the grid's triangles are.
       const [[s0, t0], [s1, t1]] = [rim[0]!, rim[1]!];

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BodyStyle, PillarSpan, YZ } from "./car-variants.ts";
 import { aPillarTopZ, aPostRearZ, bPillarBand, beltX, beltY, cantDrop, doorGlassFrontZ, pillarBands, REAR_GLASS_BOW, ROOF_DRIP, roofDrip, sideBowZ, WINDSHIELD_BOW } from "./car-lines.ts";
-import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset, windshieldSideBase } from "./car-glass.ts";
+import { domeFall, drawnQuarter, quarterSillZs, rearGlassCornerZ, rearGlassInset, windshieldSideBase, windshieldSideX } from "./car-glass.ts";
 import { splitCreases } from "./car-crease.ts";
 import {
   ROOF_ARC_T,
@@ -404,6 +404,18 @@ const aPostCrown = (style: BodyStyle): number => style.pillars?.aCrown ?? A_POST
  * styles (held in the roof) and in the last few cm under it on the rest, where the chord to the top covers it.
  */
 const A_POST_STATIONS = [0, 1, 2, 3, 4, 6].map((k) => k / 6);
+
+/** Where `windshield.round` rounds the pane's top corner, the post's front rail follows its arc: a station at each of these turns (shares of its quarter turn) before the top, which is the arc's end. */
+const A_POST_ARC_TURNS = [0.3, 0.55] as const;
+
+/** The A-post's stations as shares of its run: `A_POST_STATIONS`, with the arc's `A_POST_ARC_TURNS` before the top where the pane's top corner rounds (the arc starts above the fifth station). */
+function aPostStations(style: BodyStyle, edgeFoot: number): number[] {
+  const { base, round } = style.windshield;
+  if (round === undefined) return A_POST_STATIONS;
+  const rT = round / hypot2(style.windshieldTop[0] - base[0], style.windshieldTop[1] - base[1]);
+  return [...A_POST_STATIONS.slice(0, -1), ...A_POST_ARC_TURNS.map((turn) => (1 - rT + rT * detSin((turn * Math.PI) / 2) - edgeFoot) / (1 - edgeFoot)), 1];
+}
+
 /** The drawn A-post stands this far (m) off the windshield's edge and the side glass, outward, so neither glass shows through it. */
 const A_POST_LIFT = 0.004;
 /** A drawn pillar's top runs this far (m) up past the cant line, buried in the roof's side. */
@@ -425,7 +437,6 @@ const SAIL_STATIONS = [0, 0.5, 1] as const;
  * glass's knee (or the post's top; with `aPillarSailGlass` and no knee, also a station at the glass's top), so no glass layout leaves a hole or a sliver.
  */
 function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
-  const { wBase, wTop } = style.windshield;
   const base = windshieldSideBase(style);
   const [topY, topZ] = style.windshieldTop;
   const run = hypot2(topZ - base[1], topY - base[0]);
@@ -443,10 +454,11 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
     const y = lerp(footY, aTopY, t);
     const edge = lerp(edgeFoot, 1, t);
     const [rearZ, edgeZ] = [aPostRearZ(y, style, base), lerp(base[1], topZ, edge) + A_POST_LIFT * uy + sideBowZ(style.windshield.sideBow ?? 0, edge)];
+    const half = windshieldSideX(style, edge);
     // Under its top (which the roof holds), the station rides down with the windshield's edge as it falls with the dome (`domeFall`).
-    const fall = t < 1 ? glassFall(lerp(wBase, wTop, edge) / 2, Math.max(0, edge)) : 0;
+    const fall = t < 1 ? glassFall(half, Math.max(0, edge)) : 0;
     const frontY = lerp(base[0], topY, edge) - fall - A_POST_LIFT * uz;
-    const [frontX, rearX] = [lerp(wBase, wTop, edge) / 2 + A_POST_LIFT, glassPlaneX(y - fall) + A_POST_LIFT];
+    const [frontX, rearX] = [half + A_POST_LIFT, glassPlaneX(y - fall) + A_POST_LIFT];
     const place = (back: number): Rail => {
       const [postZ, frontZ] = [rearZ - back, edgeZ - back];
       const roofZ = THREE.MathUtils.clamp(postZ, style.roofZ[0], style.roofZ[1]);
@@ -465,7 +477,7 @@ function aPostRails(style: BodyStyle): { post: Rail[]; sail: Rail[] | null } {
     const hold = (reach: number) => Math.max(0, Math.max(rearZ, edgeZ) - (style.roofZ[1] - ROOF_TUCK - reach));
     return place(hold(postForwardReach(place(hold(0)), aPostCrown(style))));
   };
-  const post = A_POST_STATIONS.map(railAt);
+  const post = aPostStations(style, edgeFoot).map(railAt);
   const sail: Rail[] = [];
   let sailWidth = 0;
   const sailYs = SAIL_STATIONS.map((share) => lerp(footY, style.aPillarKnee ?? aTopY, share));

@@ -330,8 +330,9 @@ export interface BodyStyle {
    * Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`).
    * `sideBow` (m): the pane bulges this far forward (z) at mid-height, none at its base and top: a convex side edge in side view; absent, straight.
    * `seat`: drawn only, set it in a `drawn` twin's `windshield`: the base row sits `WINDSHIELD_SEAT` over the hood's top at every column (the hood as `hood.followGlass` bends it, or straight at `hood.z0`), never above `base[0]`; the A-post and the door glass's foot follow it.
+   * `round` (m): drawn only, set it in a `drawn` twin's `windshield` (the cage's pane keeps its plain grid): the pane's top corners round to this radius, the glass's own outline (the base corners stay square on the cowl), and the A-post's front rail follows the arc into the roof.
    */
-  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow; sideBow?: number; seat?: boolean };
+  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow; sideBow?: number; seat?: boolean; round?: number };
   windshieldTop: YZ;
   /**
    * Windshield wipers parked along the glass's base (`styleWipers`): `count` blades (default 2), each `length` of the glass's base width
